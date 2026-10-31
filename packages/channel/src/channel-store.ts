@@ -5,7 +5,7 @@ import { ChannelGone } from "@kiwi/core/client/relay-errors.ts";
 import type { HumanSession, RoomsSetting, SendOptions } from "@kiwi/core/client.ts";
 import type { JoinRequest, Member } from "@kiwi/core/membership.ts";
 import { SNAPSHOT_TOO_LARGE, type Message } from "@kiwi/core/protocol.ts";
-import { fold, type ChannelState, type FoldBase, type GuardFloor, type Roster } from "@kiwi/core/state.ts";
+import { fold, fullyTrusted, type ChannelState, type FoldBase, type GuardFloor, type Roster } from "@kiwi/core/state.ts";
 import { errorOf, linkOf, watches, type ChannelLink, type FollowEvent } from "./channel-ops.ts";
 import { openCached, planCached, readKept, rememberKept, rememberRow, rememberRows } from "./history.ts";
 import { markOnce } from "./marks.ts";
@@ -102,6 +102,8 @@ export class ChannelStore {
   private readonly head: ReadonlySignal<number>;
   private readonly count: ReadonlySignal<number>;
   private readonly reconcileDue: ReadonlySignal<string>;
+  private readonly pruneDue: ReadonlySignal<string>;
+  private pruning = false;
   private syncing = false;
   private readonly checksDue: ReadonlySignal<string>;
   private readonly rulesDue: ReadonlySignal<string>;
@@ -145,6 +147,7 @@ export class ChannelStore {
     const bitsKey = computed(() => this.roster.value.map((m) => `${m.pk}:${m.readOnly ? 0 : 1}`).join("|"));
     const repoList = computed(() => this.state.value.repos.join(","));
     this.reconcileDue = computed(() => `${scopesKey.value}\n${bitsKey.value}\n${this.caughtUp.value}`);
+    this.pruneDue = computed(() => `${[...this.keyOf.value.values()].sort().join(",")}\n${this.caughtUp.value}`);
     this.checksDue = computed(() => `${this.head.value}\n${this.caughtUp.value}`);
     this.rulesDue = computed(() => `${this.caughtUp.value}\n${repoList.value}`);
     const pkOf = computed(() => {
@@ -223,6 +226,7 @@ export class ChannelStore {
       this.follow(),
       on(this.count, () => this.trimSoon()),
       on(this.reconcileDue, () => this.reconcile()),
+      on(this.pruneDue, () => this.pruneRooms()),
       on(this.checksDue, () => this.syncSettings()),
       on(this.head, (head) => this.snapshotIfDue(head)),
       on(this.checksDue, () => this.postReviewChecks()),
@@ -511,6 +515,18 @@ export class ChannelStore {
         () => {},
       )
       .finally(() => (this.syncing = false));
+  }
+
+  private pruneRooms(): void {
+    const s = this.state.peek();
+    const me = [...s.members.values()].find((m) => m.pk === this.ch.pk);
+    if (!this.caughtUp.peek() || this.pruning || ![...s.rooms.values()].some((r) => r.members)) return;
+    if (!this.ch.isOwner && !fullyTrusted(me)) return;
+    this.pruning = true;
+    this.ch
+      .pruneRooms()
+      .catch(() => [])
+      .finally(() => (this.pruning = false));
   }
 
   private reconcile(): void {
