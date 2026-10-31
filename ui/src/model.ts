@@ -1,3 +1,4 @@
+import type { TextFont } from "@kiwi/app/theme.ts"
 import type { HookHarness, HookState } from "@kiwi/core/harnesses.ts"
 import type { Personality } from "@kiwi/core/personality.ts"
 import type { GithubNote, Step, StepReply } from "@kiwi/core/protocol.ts"
@@ -515,6 +516,7 @@ export interface CustomTheme {
 export interface Prefs {
   theme: Theme
   textSize: number
+  font: TextFont
   reduceMotion: boolean
   notify: "all" | "mentions" | "none"
   enterSends: boolean

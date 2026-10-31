@@ -31,6 +31,7 @@ export const DEMO_ACCOUNT: Account = {
 export const DEMO_PREFS: Prefs = {
   theme: "system",
   textSize: 0,
+  font: "system",
   reduceMotion: false,
   notify: "mentions",
   enterSends: true,
