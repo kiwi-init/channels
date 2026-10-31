@@ -1,7 +1,7 @@
 import { execFileSync, spawn } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { startLocalRelay } from "../../scripts/local-relay.ts";
 import { appExecutable, attach, launch, stop, testEnv } from "./eb-drive.ts";
 import { firstChannel, sendMessage } from "./eb-first-run.ts";
@@ -143,7 +143,7 @@ try {
   await later(20_000);
   results.idle = await measure("idle, a channel open, nothing new", app.pid!);
   const main = processes(app.pid!).find((p) => p.role === "main (bun)")?.pid;
-  const traced = main ? await straceFor(main, 20, join(profile ?? root, "strace-idle.txt")) : null;
+  const traced = main ? await straceFor(main, 20, json ? join(dirname(resolve(json)), "strace-idle.txt") : join(root, "strace-idle.txt")) : null;
   console.log(traced ? `\nmain's syscalls over 20 s idle:\n${traced.split("\n").slice(0, 16).join("\n")}` : "\nno strace (sudo -n strace not allowed here)");
   let n = 0;
   results.busy = await measure("busy, a message every 3 s", app.pid!, async () => {
@@ -161,5 +161,8 @@ try {
   await stop(app);
   relay.kill();
 }
-if (json) writeFileSync(json, JSON.stringify({ seconds, results }, null, 2));
+if (json) {
+  mkdirSync(dirname(resolve(json)), { recursive: true });
+  writeFileSync(json, JSON.stringify({ seconds, results }, null, 2));
+}
 if (profile && existsSync(profile)) console.log(`\nprofiles: ${readdirSync(profile).join(", ") || "none written"}`);
