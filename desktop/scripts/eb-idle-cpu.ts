@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -61,9 +61,45 @@ function processes(session: number): Proc[] {
     });
 }
 
+function threads(pid: number): Map<string, number> {
+  const out = new Map<string, number>();
+  const tids = (() => {
+    try {
+      return readdirSync(`/proc/${pid}/task`);
+    } catch {
+      return [];
+    }
+  })();
+  for (const tid of tids) {
+    try {
+      const stat = readFileSync(`/proc/${pid}/task/${tid}/stat`, "utf8");
+      const name = stat.slice(stat.indexOf("(") + 1, stat.lastIndexOf(")"));
+      const rest = stat.slice(stat.lastIndexOf(")") + 2).split(" ");
+      out.set(`${name} [${tid}]`, Number(rest[11]) + Number(rest[12]));
+    } catch {
+      continue;
+    }
+  }
+  return out;
+}
+
+function straceFor(pid: number, secs: number, file: string): Promise<string | null> {
+  return new Promise((done) => {
+    const p = spawn("sudo", ["-n", "strace", "-c", "-f", "-o", file, "-p", String(pid)], { stdio: "ignore" });
+    const t = setTimeout(() => p.kill("SIGINT"), secs * 1000);
+    p.on("error", () => (clearTimeout(t), done(null)));
+    p.on("exit", () => {
+      clearTimeout(t);
+      setTimeout(() => done(existsSync(file) ? readFileSync(file, "utf8") : null), 500);
+    });
+  });
+}
+
 async function measure(phase: string, session: number, during?: () => Promise<void>): Promise<Record<string, number>> {
   const procs = processes(session);
   const start = new Map(procs.map((p) => [p.pid, ticks(p.pid)]));
+  const main = procs.find((p) => p.role === "main (bun)")?.pid;
+  const before = main ? threads(main) : new Map<string, number>();
   const t0 = performance.now();
   const end = t0 + seconds * 1000;
   while (performance.now() < end) {
@@ -80,6 +116,14 @@ async function measure(phase: string, session: number, during?: () => Promise<vo
   }
   console.log(`\n${phase}, ${secs.toFixed(0)} s:`);
   for (const [role, pct] of Object.entries(out).sort((x, y) => y[1] - x[1])) console.log(`  ${pct.toFixed(2).padStart(6)}%  ${role}`);
+  if (main) {
+    const after = threads(main);
+    const busy = [...after]
+      .map(([name, t]): [string, number] => [name, ((t - (before.get(name) ?? t)) / TICK / secs) * 100])
+      .filter(([, pct]) => pct >= 0.05)
+      .sort((x, y) => y[1] - x[1]);
+    console.log(`  main's threads: ${busy.map(([name, pct]) => `${name} ${pct.toFixed(2)}%`).join(", ") || "none above 0.05%"}`);
+  }
   return out;
 }
 
@@ -93,9 +137,14 @@ const app = launch(exe, testEnv(root, join(root, "driver.sock"), `http://127.0.0
 const results: Record<string, Record<string, number>> = {};
 try {
   const d = await attach(join(root, "driver.sock"));
+  await later(15_000);
+  results.firstRun = await measure("idle on the first-run screen, no channel", app.pid!);
   await firstChannel(d, 3);
   await later(20_000);
   results.idle = await measure("idle, a channel open, nothing new", app.pid!);
+  const main = processes(app.pid!).find((p) => p.role === "main (bun)")?.pid;
+  const traced = main ? await straceFor(main, 20, join(profile ?? root, "strace-idle.txt")) : null;
+  console.log(traced ? `\nmain's syscalls over 20 s idle:\n${traced.split("\n").slice(0, 16).join("\n")}` : "\nno strace (sudo -n strace not allowed here)");
   let n = 0;
   results.busy = await measure("busy, a message every 3 s", app.pid!, async () => {
     n += 1;
@@ -103,6 +152,10 @@ try {
     for (let i = 0; i < 10 && !(await d.evaluate(sendMessage, text, 2_000).catch(() => false)); i++) await later(200);
   });
   results.after = await measure("idle again, after the burst", app.pid!);
+  if (profile) {
+    await d.main("exitForTest").catch(() => undefined);
+    await later(5_000);
+  }
   d.close();
 } finally {
   await stop(app);
