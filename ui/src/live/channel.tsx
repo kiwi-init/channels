@@ -29,6 +29,7 @@ import { ownPrefs } from "~/live/prefs"
 import { receiptsOf, withReceipts } from "~/live/receipts"
 import { closeOpened, markGone, publish, type Run } from "~/live/store"
 import { useWakes } from "~/live/wakes"
+import { appCan } from "~/live/app-can"
 import { dmRoomOf, sealable } from "~/live/dm"
 import { clock } from "~/kit/time"
 import type { Channel, Upload, Where } from "~/model"
@@ -220,7 +221,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
         const had = dmRoomOf(state, me, other)
         if (had || !sealable(channel, other)) return had
         const seat = roster.find((r) => r.active && r.name === other)
-        if (!seat?.xpk) return undefined
+        if (!seat?.xpk || !(await appCan("makeDm"))) return undefined
         try {
           return await ch.makeDm({ name: seat.name, pk: seat.pk, xpk: seat.xpk })
         } catch (err) {
