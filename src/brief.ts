@@ -40,8 +40,8 @@ function directs(askHuman: string, stepHuman?: string): string[] {
   ];
 }
 
-function voice(ack: string, gif = ""): string {
-  return `Write like a teammate in a Slack or Teams channel: short and plain, answer or ask first, lists and links over walls of text, and no names or arrows up front (Kiwi shows who sent it and to whom). When you name a member, write their @handle (for example @gentle-otter, not gentle-otter): people see it as the nickname they know, while a bare handle reads as a random name; inside a command, keep the plain handle. Put a command, a path or anything to copy in backticks or a code block, so a person can copy it with one click. Speak only to add something; skip greetings and thanks, and if someone already said it, ${ack}.${gif}`;
+function voice(ack: string): string {
+  return `Write like a teammate in a Slack or Teams channel: short and plain, answer or ask first, lists and links over walls of text, and no names or arrows up front (Kiwi shows who sent it and to whom). When you name a member, write their @handle (for example @gentle-otter, not gentle-otter): people see it as the nickname they know, while a bare handle reads as a random name; inside a command, keep the plain handle. Put a command, a path or anything to copy in backticks or a code block, so a person can copy it with one click. Speak only to add something; skip greetings and thanks, and if someone already said it, ${ack}.`;
 }
 
 export interface Brief {
@@ -81,7 +81,7 @@ export function briefText(b: Brief): string {
       : null,
     b.listen,
     `Each task has its own thread: while you're doing one, what you send goes there, among the agents working it. Say where with \`${COMMANDS.sendTo(b.mc)}\`: #general, #room, T7, @name (a direct thread) or #123 (a reply). You're sent #general, the threads of tasks you work on or have posted in, rooms you've posted in, and anything that @mentions you; read the rest with \`${COMMANDS.log(b.mc)}\`. ${ROOM_RULE}${b.contextLine ? ` Your session may be cleared between turns, so while a task is yours, write where it stands at each milestone with \`${COMMANDS.checkpoint(b.mc)}\` (branch, last commit, done, next, traps); a new session of yours starts from it.` : ""}`,
-    `\`${COMMANDS.status(b.mc)}\` shows who's here and what's open. Answer with \`${COMMANDS.reply(b.mc)}\` and post with \`${COMMANDS.send(b.mc)}\`. When a message went to several of you, run \`${COMMANDS.answering(b.mc)}\` before answering it; if someone else already is, leave it to them. What only one of you should do at a time (a build, a release) takes a lease: \`${COMMANDS.lock(b.mc)}\`. ${voice(`react with \`${b.mc} react N 👍\` instead of repeating it`, ` A GIF reaction (\`${b.mc} react N ok/trailer\`, \`${b.mc} react --list\`) is for a real moment, a win, a blocker, a thanks: not every message, and never in place of an answer.`)} The rest: \`${COMMANDS.help(b.mc)}\`.`,
+    `\`${COMMANDS.status(b.mc)}\` shows who's here and what's open. Answer with \`${COMMANDS.reply(b.mc)}\` and post with \`${COMMANDS.send(b.mc)}\`. When a message went to several of you, run \`${COMMANDS.answering(b.mc)}\` before answering it; if someone else already is, leave it to them. What only one of you should do at a time (a build, a release) takes a lease: \`${COMMANDS.lock(b.mc)}\`. ${voice(`react with \`${b.mc} react N 👍\` instead of repeating it`)} The rest: \`${COMMANDS.help(b.mc)}\`.`,
   ]
     .filter(Boolean)
     .join("\n");
