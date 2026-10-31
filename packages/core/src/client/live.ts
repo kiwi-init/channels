@@ -438,7 +438,8 @@ export class ChannelLive {
           return null;
         case "msg": {
           if (f.seq <= at.seq) return null;
-          const m = yield* this.ch.fx.decrypt(f);
+          const got = yield* this.ch.fx.decrypt(f);
+          const m = got && (yield* this.ch.fx.settle(got));
           at.seq = f.seq;
           return m
             ? ({ _tag: "Message", message: m, envelope: f } satisfies Live)
@@ -450,7 +451,8 @@ export class ChannelLive {
           if (f.seq <= at.seq) return null;
           at.seq = f.seq;
           const own = ownMessage(f.payload, f.seq, f.ts);
-          const m = own && (yield* this.ch.fx.unseal(own));
+          const open = own && (yield* this.ch.fx.unseal(own));
+          const m = open && (yield* this.ch.fx.settle(open));
           return m && ({ _tag: "Message", message: m } satisfies Live);
         }
         case "eph":

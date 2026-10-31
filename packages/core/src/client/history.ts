@@ -2,7 +2,7 @@ import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import { open } from "../crypto.ts";
-import { openLetter, openRoomKey, openRoomMeta } from "../private-room.ts";
+import { MAX_ROOM_SEALS, openLetter, stepRoom, type RoomNow, type RoomSeal } from "../private-room.ts";
 import { verify } from "../identity.ts";
 import { isEvent, PAGE_LIMIT, rasterAttachment, wellFormed, type Envelope, type Message, type WirePayload } from "../protocol.ts";
 import type { FoldBase, SecretRoom } from "../state.ts";
@@ -26,6 +26,7 @@ export interface HistoryFx {
   markRead(seq: number): Effect.Effect<void, never, Relay>;
   decrypt(env: Envelope): Effect.Effect<Message | null, never, Relay>;
   unseal(m: Message): Effect.Effect<Message | null>;
+  settle(m: Message): Effect.Effect<Message>;
   openRooms(base: FoldBase): Effect.Effect<FoldBase>;
   history(since: number): Effect.Effect<{ head: number; messages: Message[]; first: number | null; through: number }, MemberRefusal, Relay>;
   page(since: number, limit: number): Effect.Effect<Message[], MemberRefusal, Relay>;
@@ -36,6 +37,27 @@ export class ChannelHistory {
   private marksUnknown = false;
 
   constructor(private readonly ch: ChannelCore) {}
+
+  private replay(id: string) {
+    return Effect.gen({ self: this }, function* () {
+      const xsk = this.ch.identity.xsk;
+      const accepted: RoomSeal[] = [];
+      let now: RoomNow | undefined;
+      for (const { seq, seal } of this.ch.roomSeals.get(id) ?? []) {
+        const step = yield* Effect.promise(() => stepRoom(this.ch.roomId, now, [...accepted, seal], xsk));
+        if (!step) {
+          this.ch.sealSteps.set(seq, { proven: false });
+          continue;
+        }
+        accepted.push(seal);
+        now = step.now;
+        if (now.key) this.ch.roomKeys.set(`${id}/${now.n}`, now.key);
+        this.ch.sealSteps.set(seq, { ...(step.proven !== undefined ? { proven: step.proven } : {}), ...(step.proven && now.meta ? { opened: now.meta } : {}) });
+      }
+      if (now) this.ch.roomNow.set(id, now);
+      return now;
+    });
+  }
 
   readonly fx: HistoryFx = {
     head: Effect.fn("Channel.head")({ self: this }, function* (this: ChannelHistory) {
@@ -59,35 +81,37 @@ export class ChannelHistory {
     }),
 
     openRooms: Effect.fn("Channel.openRooms")({ self: this }, function* (this: ChannelHistory, base: FoldBase) {
-      const xsk = this.ch.identity.xsk;
-      if (!this.ch.opensRooms || !xsk || !base.secret?.length) return base;
+      if (!this.ch.opensRooms || !base.secret?.length) return base;
       const secret: [string, SecretRoom][] = [];
       const rooms = new Map(base.rooms.map((r) => [r.id, r]));
       for (const [id, room] of base.secret) {
-        this.ch.roomLatest.set(id, Math.max(this.ch.roomLatest.get(id) ?? 0, room.n));
-        const at = `${id}/${room.n}`;
-        const key = this.ch.roomKeys.get(at) ?? (yield* Effect.promise(() => openRoomKey(this.ch.roomId, room.seal, xsk)));
-        const meta = room.meta ?? (key ? yield* Effect.promise(() => openRoomMeta(this.ch.roomId, room.seal, key)) : null);
-        if (key) this.ch.roomKeys.set(at, key);
-        secret.push([id, meta ? { ...room, meta } : room]);
-        if (meta) rooms.set(id, { ...(rooms.get(id) ?? { id, createdBy: null, at: 0 }), name: meta.name, members: meta.members });
+        const had = this.ch.roomSeals.get(id) ?? [];
+        const from = room.seals.map((seal, i) => ({ seq: -(room.seals.length - i), seal }));
+        this.ch.roomSeals.set(id, [...from, ...had.filter((x) => x.seq > 0)]);
+        const now = yield* this.replay(id);
+        secret.push([id, { n: now?.n ?? room.n, seals: room.seals, ...(now?.meta ? { meta: now.meta } : {}) }]);
+        if (now?.meta) rooms.set(id, { ...(rooms.get(id) ?? { id, createdBy: null, at: 0 }), name: now.meta.name, members: now.meta.members });
+        else if (now?.key === undefined && room.meta) rooms.delete(id);
       }
       return { ...base, secret, rooms: [...rooms.values()] };
     }),
 
+    settle: Effect.fn("Channel.settle")({ self: this }, function* (this: ChannelHistory, m: Message) {
+      const ev = m.ev;
+      if (ev?.op !== "room.seal" || !this.ch.opensRooms) return m;
+      const done = this.ch.sealSteps.get(m.seq);
+      if (!done) {
+        const seal = { id: ev.id, n: ev.n, keys: ev.keys, meta: ev.meta, ...(ev.proof ? { proof: ev.proof } : {}) };
+        const list = [...(this.ch.roomSeals.get(ev.id) ?? []).filter((x) => x.seq !== m.seq), { seq: m.seq, seal }].sort((a, b) => a.seq - b.seq);
+        this.ch.roomSeals.set(ev.id, list.slice(-MAX_ROOM_SEALS));
+        yield* this.replay(ev.id);
+      }
+      const step = this.ch.sealSteps.get(m.seq) ?? {};
+      return { ...m, ...(step.proven !== undefined ? { proven: step.proven } : {}), ...(step.opened ? { opened: step.opened } : {}) };
+    }),
+
     unseal: Effect.fn("Channel.unseal")({ self: this }, function* (this: ChannelHistory, m: Message) {
       const ev = m.ev;
-      if (ev?.op === "room.seal") {
-        const xsk = this.ch.identity.xsk;
-        if (!this.ch.opensRooms || !xsk) return m;
-        const at = `${ev.id}/${ev.n}`;
-        this.ch.roomLatest.set(ev.id, Math.max(this.ch.roomLatest.get(ev.id) ?? 0, ev.n));
-        const key = this.ch.roomKeys.get(at) ?? (yield* Effect.promise(() => openRoomKey(this.ch.roomId, ev, xsk)));
-        if (!key) return m;
-        this.ch.roomKeys.set(at, key);
-        const opened = yield* Effect.promise(() => openRoomMeta(this.ch.roomId, ev, key));
-        return opened ? { ...m, opened } : m;
-      }
       if (ev?.op !== "room.msg") return m;
       const key = this.ch.opensRooms ? this.ch.roomKeys.get(`${ev.room}/${ev.n}`) : undefined;
       if (!key) {
@@ -109,6 +133,10 @@ export class ChannelHistory {
         Effect.gen({ self: this }, function* () {
           const known = this.ch.roomKeys.size;
           const decrypted = yield* Effect.forEach(envelopes, (e) => this.ch.fx.decrypt(e), { concurrency: "unbounded" });
+          for (let i = 0; i < decrypted.length; i++) {
+            const m = decrypted[i];
+            if (m?.ev?.op === "room.seal") decrypted[i] = yield* this.ch.fx.settle(m);
+          }
           if (this.ch.roomKeys.size > known) for (let i = 0; i < envelopes.length; i++) if (!decrypted[i]) decrypted[i] = yield* this.ch.fx.decrypt(envelopes[i]!);
           for (let i = 0; i < envelopes.length; i++) {
             const at = envelopes[i]!.seq;

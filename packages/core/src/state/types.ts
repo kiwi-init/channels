@@ -244,7 +244,7 @@ export interface Room {
 
 export interface SecretRoom {
   n: number;
-  seal: RoomSeal;
+  seals: RoomSeal[];
   meta?: RoomMeta;
 }
 

@@ -10,7 +10,7 @@ import { newRoomKey, openRoomKey, openRoomMeta, sealRoom, type RoomMeta } from "
 import { fold, rosterOf } from "@kiwi/core/state.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { runAgent } from "../src/agent.ts";
-import { joinAgent, pairComputer, setupChannel, type OwnerSetup } from "./owner.ts";
+import { joinAgent, joinPerson, pairComputer, setupChannel, type OwnerSetup } from "./owner.ts";
 
 setDefaultTimeout(120_000);
 
@@ -19,6 +19,9 @@ let server: ReturnType<typeof startRelay>;
 let s: OwnerSetup;
 let ana: { id: Identity; ch: Channel; member: Member };
 let bo: { id: Identity; ch: Channel; member: Member };
+let tia: { id: Identity; ch: Channel; member: Member };
+let tib: { id: Identity; ch: Channel; member: Member };
+const ALL = { addsAgents: true, answersDecisions: true, managesAgents: true };
 
 beforeAll(async () => {
   server = startRelay({ port: 0, hostname: "127.0.0.1", dataDir });
@@ -26,6 +29,8 @@ beforeAll(async () => {
   const computer = await pairComputer(s.person);
   ana = await joinAgent(s, "ana", computer);
   bo = await joinAgent(s, "bo", computer);
+  tia = await joinPerson(s, "tia", await generateIdentity("tia-person"), ALL);
+  tib = await joinPerson(s, "tib", await generateIdentity("tib-person"), ALL);
 });
 
 afterAll(() => {
@@ -33,7 +38,7 @@ afterAll(() => {
   rmSync(dataDir, { recursive: true, force: true });
 });
 
-async function sealFor(id: string, n: number, key: string, name: string, who: { name: string; pk: string; xpk: string }[]) {
+async function sealFor(id: string, n: number, key: string, name: string, who: { name: string; pk: string; xpk: string }[], replaces?: string) {
   const meta: RoomMeta = { name, members: who.map((w) => ({ name: w.name, pk: w.pk })) };
   return sealRoom(
     s.roomId,
@@ -42,6 +47,7 @@ async function sealFor(id: string, n: number, key: string, name: string, who: { 
     key,
     meta,
     who.map((w) => w.xpk),
+    replaces,
   );
 }
 
@@ -95,7 +101,7 @@ describe("a private room's key and what it hides (T681)", () => {
     await s.ownerCh.send("made a private room", { kind: "event", ev: { op: "room.seal", ...(await sealFor(id, 1, one, "ops", [owner, anaIn, boIn])) } });
     await bo.ch.history(0);
     const before = await bo.ch.send("before", { room: id });
-    await s.ownerCh.send("changed a private room", { kind: "event", ev: { op: "room.seal", ...(await sealFor(id, 2, newRoomKey(), "ops", [owner, anaIn])) } });
+    await s.ownerCh.send("changed a private room", { kind: "event", ev: { op: "room.seal", ...(await sealFor(id, 2, newRoomKey(), "ops", [owner, anaIn], one)) } });
     await bo.ch.history(0);
     await expect(bo.ch.send("after", { room: id })).rejects.toThrow("not in that private room");
     await ana.ch.history(0);
@@ -144,5 +150,28 @@ describe("a private room's key and what it hides (T681)", () => {
     ]);
     const seq = await bo.ch.send("made a private room", { kind: "event", ev: { op: "room.seal", ...sealed } });
     expect((await state(s.ownerCh)).rejected.get(seq)).toBe("only the owner, or a person they fully trust, makes private rooms");
+  });
+
+  test("a fully trusted person outside the room can't move it to a key of their own: its members keep reading and writing, live or from the owner's snapshot", async () => {
+    const id = newRoomId();
+    const key = newRoomKey();
+    const tiaIn = { name: "tia", pk: tia.id.pk, xpk: tia.id.xpk! };
+    const anaIn = { name: "ana", pk: ana.id.pk, xpk: ana.id.xpk! };
+    await tia.ch.send("made a private room", { kind: "event", ev: { op: "room.seal", ...(await sealFor(id, 1, key, "tia-and-ana", [tiaIn, anaIn])) } });
+    const forged = await sealFor(id, 2, newRoomKey(), "mine now", [{ name: "tib", pk: tib.id.pk, xpk: tib.id.xpk! }], newRoomKey());
+    const takeover = await tib.ch.send("changed a private room", { kind: "event", ev: { op: "room.seal", ...forged } });
+    await ana.ch.history(0);
+    const still = await ana.ch.send("still ours", { room: id });
+    const live = await state(ana.ch);
+    expect(live.rejected.get(takeover)).toBe("that change to a private room doesn't hold the room's key");
+    expect([live.rejected.get(still), live.rooms.get(id)?.name]).toEqual([undefined, "tia-and-ana"]);
+
+    expect(await runAgent(s.ownerCh.fx.snapshotIfDue(1))).toBeGreaterThan(0);
+    const fresh = new Channel(ana.ch.access, s.relay, ana.id);
+    const base = (await fresh.snapshot())!;
+    expect(base.rooms.find((r) => r.id === id)?.name).toBe("tia-and-ana");
+    const again = await fresh.send("from the snapshot", { room: id });
+    const after = fold((await fresh.history(base.n)).messages, rosterOf(await s.ownerCh.members()), Date.now(), null, null, base);
+    expect([after.rejected.get(again), after.rooms.get(id)?.name]).toEqual([undefined, "tia-and-ana"]);
   });
 });

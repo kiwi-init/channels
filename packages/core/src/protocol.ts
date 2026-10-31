@@ -278,7 +278,7 @@ export type Event =
   | { op: "mode.set"; coordinatorOnly: boolean; strict: boolean }
   /** Owner only: a room in this channel. Its id never changes; the name is a label (room.rename). */
   | { op: "room.create"; id: string; name: string }
-  | { op: "room.seal"; id: string; n: number; keys: string[]; meta: { iv: string; ct: string } }
+  | { op: "room.seal"; id: string; n: number; keys: string[]; meta: { iv: string; ct: string }; proof?: string }
   | { op: "room.msg"; room: string; n: number; iv: string; ct: string }
   /** Owner only: a room's new name ("general" included; its id stays). */
   | { op: "room.rename"; id: string; name: string }
@@ -779,6 +779,7 @@ export const decodedWhole = (page: { head: number; messages: readonly { seq: num
 export interface Message extends Payload {
   newer?: NewerEvent;
   opened?: RoomMeta;
+  proven?: boolean;
   sealed?: { room: string; n: number };
   seq: number;
   /** When the relay stored it (one clock for everyone, unlike `ts`). */
@@ -986,7 +987,8 @@ function eventCheck(ev: unknown): boolean | null {
         e.keys.length >= 1 &&
         e.keys.length <= MAX_ROOM_MEMBERS &&
         e.keys.every((k) => str(k, 400)) &&
-        sealedBox(e.meta)
+        sealedBox(e.meta) &&
+        opt(e.proof, (x): x is string => str(x, 100))
       );
     case "room.msg":
       return roomId(e.room) && Number.isSafeInteger(e.n) && (e.n as number) >= 1 && str(e.iv, 32) && str(e.ct, MAX_BODY_LENGTH * 2);

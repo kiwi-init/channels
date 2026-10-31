@@ -159,9 +159,10 @@ export class ChannelSending {
         );
       if (payload.stepReply && !wellFormed(payload)) return yield* new Rejected("a step answer needs a reply target and either Done with optional output, or Can't do it or Not needed with a reason");
       if ((payload.permission || payload.perm || payload.settled) && !wellFormed(payload)) return yield* new Rejected("a permission prompt, its answer or its close is malformed");
-      const n = opts.room ? this.ch.roomLatest.get(opts.room) : undefined;
-      const roomKey = opts.room && n ? this.ch.roomKeys.get(`${opts.room}/${n}`) : undefined;
-      if (n && !roomKey) return yield* new Rejected("you're not in that private room anymore");
+      const now = opts.room ? this.ch.roomNow.get(opts.room) : undefined;
+      const n = now?.n;
+      const roomKey = now?.key;
+      if (now && !roomKey) return yield* new Rejected("you're not in that private room anymore");
       if (roomKey && ((opts.ev && opts.ev.op !== "react") || opts.task)) return yield* new Rejected(PRIVATE_EVENTS);
       const inner = yield* Effect.promise(() => sign(this.ch.identity, payload));
       const signed =
@@ -206,7 +207,8 @@ export class ChannelSending {
         if (this.onSent) {
           const p: unknown = JSON.parse(JSON.stringify(signed));
           const got = typeof stored.ts === "number" && Number.isFinite(stored.ts) && wellFormed(p) ? received(p, stored.seq, stored.ts, yield* Effect.promise(() => verify(p))) : null;
-          const kept = got && (yield* this.ch.fx.unseal(got));
+          const open = got && (yield* this.ch.fx.unseal(got));
+          const kept = open && (yield* this.ch.fx.settle(open));
           this.onSent(stored.seq, kept);
         }
         return stored.seq;

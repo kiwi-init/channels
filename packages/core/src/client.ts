@@ -426,7 +426,7 @@ export class Channel {
   }
 
   async learnRooms(messages: readonly Message[]): Promise<void> {
-    for (const m of messages) if (m.ev?.op === "room.seal") await run(this.fx.unseal(m));
+    for (const m of [...messages].sort((a, b) => a.seq - b.seq)) if (m.ev?.op === "room.seal") await run(this.fx.settle(m));
   }
 
   openRooms(base: FoldBase): Promise<FoldBase> {
