@@ -1,3 +1,4 @@
+import { Notification01Icon } from "@hugeicons/core-free-icons"
 import "~/styles/channel-panel.css"
 import "~/styles/new-room.css"
 
@@ -408,7 +409,7 @@ function Rooms({ channel, own }: { channel: Channel; own: boolean }) {
               aria-pressed={!!r.muted}
               onClick={() => app.actions.setMute(channel.code, r.id, !r.muted)}
             >
-              {r.muted ? <GlyphIcon glyph={NotificationOff01Icon} /> : <Icon name="bell" />}
+              {r.muted ? <GlyphIcon glyph={NotificationOff01Icon} /> : <GlyphIcon glyph={Notification01Icon} />}
             </button>
           </span>
           {r.members && <RoomPeople channel={channel} id={r.id} members={r.members} own={own} />}
