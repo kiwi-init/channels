@@ -560,6 +560,7 @@ export interface Actions {
   exportHistory(code: string, kind: "transcript" | "log"): Promise<void>
   setGoal(code: string, goal: string): void
   setHold(code: string, on: boolean, note?: string): void
+  askCompact(code: string): void
   approveCompact(code: string, proposal: number): void
   addRepo(code: string, repo: string): void
   myRepos(): Promise<string[]>
