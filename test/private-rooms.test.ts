@@ -204,4 +204,34 @@ describe("a private room's key and what it hides (T681)", () => {
     expect(rooms).toContain(`#launch-plan (id `);
     expect(rooms).toMatch(new RegExp(`#launch-plan \\(id [0-9a-f]+\\) · private: ${s.owner.name}, ana · `));
   });
+
+  test("two trusted members rotating on the same departure at once end everyone on one key (T681)", async () => {
+    const cy = await joinAgent(s, "cy", await pairComputer(s.person));
+    const pick = (x: { id: Identity }, name: string) => ({ name, pk: x.id.pk, xpk: x.id.xpk! });
+    const id = await tia.ch.makeRoom("race", [pick(tib, "tib"), pick(ana, "ana"), pick(cy, "cy")]);
+    for (const ch of [tia.ch, tib.ch, ana.ch]) await ch.history(0);
+    await s.ownerCh.remove(cy.id.pk);
+    await Promise.all([tia.ch.history(0), tib.ch.history(0)]);
+    await Promise.all([tia.ch.pruneRooms(), tib.ch.pruneRooms()]);
+    const said: number[] = [];
+    for (const [ch, text] of [
+      [tia.ch, "from tia"],
+      [tib.ch, "from tib"],
+      [ana.ch, "from ana"],
+    ] as const) {
+      await ch.history(0);
+      said.push(await ch.send(text, { room: id }));
+    }
+    expect(await runAgent(s.ownerCh.fx.snapshotIfDue(1))).toBeGreaterThan(0);
+    const fresh = new Channel(ana.ch.access, s.relay, ana.id);
+    const base = (await fresh.snapshot())!;
+    const views = [await state(tia.ch), await state(tib.ch), await state(ana.ch), fold((await fresh.history(base.n)).messages, rosterOf(await s.ownerCh.members()), Date.now(), null, null, base)];
+    for (const v of views) {
+      expect(v.secret.get(id)?.n).toBe(2);
+      expect(v.rooms.get(id)?.members?.map((m) => m.name)).toEqual(["tia", "tib", "ana"]);
+    }
+    for (const v of views.slice(0, 3)) for (const seq of said) expect([seq, v.rejected.get(seq)]).toEqual([seq, undefined]);
+    const opened = (await tib.ch.history(0)).messages.filter((m) => said.includes(m.seq)).map((m) => m.body);
+    expect(opened).toEqual(["from tia", "from tib", "from ana"]);
+  });
 });

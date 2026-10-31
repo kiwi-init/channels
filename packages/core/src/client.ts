@@ -476,9 +476,9 @@ export class Channel {
     return true;
   }
 
-  async pruneRooms(): Promise<string[]> {
+  async pruneRooms(only?: readonly string[]): Promise<string[]> {
     const pruned: string[] = [];
-    for (const [id, now] of this.core.roomNow) if (now.key && now.meta && (await this.changeRoom(id, {}))) pruned.push(id);
+    for (const [id, now] of this.core.roomNow) if ((!only || only.includes(id)) && now.key && now.meta && (await this.changeRoom(id, {}))) pruned.push(id);
     return pruned;
   }
 

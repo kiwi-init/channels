@@ -5,7 +5,7 @@ import { ChannelGone } from "@kiwi/core/client/relay-errors.ts";
 import type { HumanSession, RoomsSetting, SendOptions } from "@kiwi/core/client.ts";
 import type { JoinRequest, Member } from "@kiwi/core/membership.ts";
 import { SNAPSHOT_TOO_LARGE, type Message } from "@kiwi/core/protocol.ts";
-import { fold, fullyTrusted, type ChannelState, type FoldBase, type GuardFloor, type Roster } from "@kiwi/core/state.ts";
+import { fold, type ChannelState, type FoldBase, type GuardFloor, type Roster } from "@kiwi/core/state.ts";
 import { errorOf, linkOf, watches, type ChannelLink, type FollowEvent } from "./channel-ops.ts";
 import { openCached, planCached, readKept, rememberKept, rememberRow, rememberRows } from "./history.ts";
 import { markOnce } from "./marks.ts";
@@ -103,7 +103,7 @@ export class ChannelStore {
   private readonly count: ReadonlySignal<number>;
   private readonly reconcileDue: ReadonlySignal<string>;
   private readonly pruneDue: ReadonlySignal<string>;
-  private pruning = false;
+
   private syncing = false;
   private readonly checksDue: ReadonlySignal<string>;
   private readonly rulesDue: ReadonlySignal<string>;
@@ -227,6 +227,7 @@ export class ChannelStore {
       on(this.count, () => this.trimSoon()),
       on(this.reconcileDue, () => this.reconcile()),
       on(this.pruneDue, () => this.pruneRooms()),
+      () => void import("./prune-plan.ts").then((m) => m.stopPruning(this.ch)),
       on(this.checksDue, () => this.syncSettings()),
       on(this.head, (head) => this.snapshotIfDue(head)),
       on(this.checksDue, () => this.postReviewChecks()),
@@ -518,15 +519,7 @@ export class ChannelStore {
   }
 
   private pruneRooms(): void {
-    const s = this.state.peek();
-    const me = [...s.members.values()].find((m) => m.pk === this.ch.pk);
-    if (!this.caughtUp.peek() || this.pruning || ![...s.rooms.values()].some((r) => r.members)) return;
-    if (!this.ch.isOwner && !fullyTrusted(me)) return;
-    this.pruning = true;
-    this.ch
-      .pruneRooms()
-      .catch(() => [])
-      .finally(() => (this.pruning = false));
+    if (this.caughtUp.peek() && [...this.state.peek().rooms.values()].some((r) => r.members)) void import("./prune-plan.ts").then((m) => m.prune(this.ch, () => this.state.peek()));
   }
 
   private reconcile(): void {
