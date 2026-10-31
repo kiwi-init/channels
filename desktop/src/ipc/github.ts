@@ -43,7 +43,13 @@ let face: { id: number; picture: Promise<MemberPicture | null> } | null = null;
 function picture(): Promise<MemberPicture | null> {
   const id = store.github?.id;
   if (id === undefined) return Promise.resolve(null);
-  if (face?.id !== id) face = { id, picture: avatar(id).catch(() => null) };
+  if (face?.id !== id) {
+    const asked = { id, picture: avatar(id).catch(() => null) };
+    face = asked;
+    void asked.picture.then((p) => {
+      if (!p && face === asked) face = null;
+    });
+  }
   return face.picture;
 }
 
