@@ -317,7 +317,7 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
 - Focus: `:focus-visible` draws a 2px `ink` outline, 2px out.
 - Selection: `--selection` (ink at 28%). Scrollbars: thin, `line-3` thumb on
   transparent.
-- Text size (Settings: Small, Default, Large, Larger) sets `--text-scale`,
+- Text size (Settings: Small, Default, Large, Larger, Largest) sets `--text-scale`,
   which every type step multiplies; layout sizes don't scale.
 - Reduced motion: the OS setting and Settings' own toggle both cut motion
   (section 6).
@@ -335,8 +335,9 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
 
 ## 13. Do and don't
 
-Do: use the tokens, Paper Mono for the machine's words and the system font
-for people's, tabular numerals for counts and times, one `is-primary` button
+Do: use the tokens, Paper Mono for the machine's words and the text font
+(the system font unless Settings > Appearance > Font picks another) for
+people's, tabular numerals for counts and times, one `is-primary` button
 per view, state colours only for states, hairlines and fill steps to separate
 surfaces.
 Don't: hard-code hex, add a font outside the Font setting, add glass, blur or decorative gradients,
