@@ -192,6 +192,7 @@ export interface ChannelState {
   rejected: Map<number, string>;
   scopeSets: Map<string, { seq: number; scopes: Scope[]; persona?: Persona | null }>;
   roleSets: Map<string, { seq: number; role: string | null; about?: string | null }>;
+  gone: Map<string, number>;
   openAsks: Message[];
   askHeads: Map<number, AskHead>;
   threadOf: Map<number, number>;
@@ -277,6 +278,7 @@ export interface FoldBase {
   scopesByKey: [string, Scope[]][];
   scopeSets: [string, { seq: number; scopes: Scope[]; persona?: Persona | null }][];
   roleSets: [string, { seq: number; role: string | null; about?: string | null }][];
+  gone?: [string, number][];
   tasks: Task[];
   facts: Fact[];
   leases: Lease[];

@@ -30,6 +30,7 @@ export interface FoldCtx {
   scopesByKey: Map<string, Scope[]>;
   scopeSets: Map<string, { seq: number; scopes: Scope[] }>;
   roleSets: Map<string, { seq: number; role: string | null; about?: string | null }>;
+  gone: Map<string, number>;
   setRole: (target: FoldMember, role: string | null, about: string | null | undefined) => void;
   tasks: Map<number, Task>;
   facts: Map<string, Fact>;
@@ -75,6 +76,20 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       else if (nameTaken(name)) reject(`a room is already called ${name}`);
       else if (rooms.size >= MAX_ROOMS) reject(`a channel holds at most ${MAX_ROOMS} rooms`);
       else rooms.set(ev.id, { id: ev.id, name, createdBy: m.from, at });
+      break;
+    }
+
+    case "member.gone": {
+      if (!member.owner && m.pk !== ev.pk) reject("only the owner, or the key itself, says a key is gone");
+      else if (!c.keysByName.get(ev.member)?.has(ev.pk)) reject(`that key isn't one of ${ev.member}'s`);
+      else if (!c.gone.has(ev.pk)) c.gone.set(ev.pk, m.seq);
+      break;
+    }
+
+    case "member.back": {
+      if (!member.owner) reject("only the owner lets a removed key back in");
+      else if (!c.keysByName.get(ev.member)?.has(ev.pk)) reject(`that key isn't one of ${ev.member}'s`);
+      else c.gone.delete(ev.pk);
       break;
     }
 

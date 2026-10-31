@@ -43,6 +43,8 @@ export class ChannelMembers {
 
   readonly fx: MembersFx = {
     leave: Effect.fn("Channel.leave")({ self: this }, function* (this: ChannelMembers) {
+      const me = this.ch.identity;
+      yield* Effect.ignore(this.ch.fx.send(`left`, { kind: "event", ev: { op: "member.gone", member: me.name, pk: me.pk } }));
       yield* this.ch.request("/members/me", { method: "DELETE" });
     }),
 
@@ -157,6 +159,8 @@ export class ChannelMembers {
 
     remove: Effect.fn("Channel.remove")({ self: this }, function* (this: ChannelMembers, pk: string) {
       yield* this.ch.ownerOnly();
+      const who = (yield* this.ch.fx.members()).find((m) => m.pk === pk);
+      if (who) yield* this.ch.fx.send(`removed ${who.name}`, { kind: "event", ev: { op: "member.gone", member: who.name, pk } });
       yield* this.ch.request(`/members/${pk}`, { method: "DELETE" });
       yield* Effect.ignore(Effect.try({ try: () => this.info.markGone(pk), catch: (err) => err }));
       yield* this.rotation(pk);
@@ -176,6 +180,7 @@ export class ChannelMembers {
       if (!cut.length && !dropped.length) return cut;
       for (const d of dropped) yield* this.ch.fx.undelegate(d.delegate);
       for (const m of cut) {
+        yield* this.ch.fx.send(`removed ${m.name}`, { kind: "event", ev: { op: "member.gone", member: m.name, pk: m.pk } });
         yield* this.ch.request(`/members/${m.pk}`, { method: "DELETE" });
         yield* Effect.ignore(Effect.try({ try: () => this.info.markGone(m.pk), catch: (err) => err }));
       }
