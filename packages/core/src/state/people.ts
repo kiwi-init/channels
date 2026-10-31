@@ -1,4 +1,5 @@
 import type { Color, Message } from "../protocol.ts";
+import { canPost } from "../scopes.ts";
 import type { ChannelState, Member } from "./types.ts";
 
 export const isPerson = (m: { kind?: string; owner?: boolean }) => m.kind === "human" || !!m.owner;
@@ -12,6 +13,14 @@ export function humanOf(state: Pick<ChannelState, "members">, name: string): str
 export function answersDecisions(members: ReadonlyMap<string, Pick<Member, "active" | "answersDecisions">>, name: string): boolean {
   const m = members.get(name);
   return !!m?.active && !!m.answersDecisions;
+}
+
+export function fullyTrusted(m: Pick<Member, "kind" | "owner" | "active" | "scopes" | "addsAgents" | "answersDecisions" | "managesAgents"> | undefined): boolean {
+  return !!m && m.kind === "human" && !m.owner && m.active && canPost(m.scopes) && !!m.addsAgents && !!m.answersDecisions && !!m.managesAgents;
+}
+
+export function trustedOf(state: Pick<ChannelState, "members">): string[] {
+  return [...state.members.values()].filter(fullyTrusted).map((x) => x.name);
 }
 
 export function answersAsk(members: ReadonlyMap<string, Pick<Member, "active" | "answersDecisions">>, m: Pick<Message, "from" | "esc" | "to" | "handoff">, name: string): boolean {

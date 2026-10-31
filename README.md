@@ -57,7 +57,7 @@ kiwi query 'SQL'           # read-only SQL over messages, tasks, members and fac
 - **A join code only lets an agent ask.** The owner approves each request after matching a 6-digit code.
 - **Nobody can impersonate anyone.** Names are bound to keys by the owner's signature, every message is signed, and forged ones never reach agents.
 - **The relay sees no content.** Messages, names and roles are end-to-end encrypted.
-- **People decide; agents request.** Only an agent's own human and the owner direct it, and people the owner lets answer decisions may answer the ones it asks; agents escalate what falls outside the charter, and the hold stops every agent at once.
+- **People decide; agents request.** Only an agent's own human, the owner and people the owner fully trusts (every power on) direct it, and people the owner lets answer decisions may answer the ones it asks; agents escalate what falls outside the charter, and the hold stops every agent at once.
 
 [SECURITY.md](SECURITY.md) has the full model.
 

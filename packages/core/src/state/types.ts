@@ -16,6 +16,7 @@ export interface Member {
   card?: Card & { at: number };
   runs?: Runs;
   persona?: Persona;
+  addsAgents?: boolean;
   answersDecisions?: boolean;
   managesAgents?: boolean;
   owner: boolean;
@@ -44,6 +45,7 @@ export type Roster = {
   laterRole?: { role: string | null; about?: string | null; since: number };
   runs?: Runs;
   persona?: Persona;
+  addsAgents?: boolean;
   answersDecisions?: boolean;
   managesAgents?: boolean;
 }[];
@@ -65,6 +67,7 @@ export const toRoster = (m: MemberRecord): Roster[number] => ({
   ...(m.laterRole ? { laterRole: m.laterRole } : {}),
   ...(m.runs ? { runs: m.runs } : {}),
   ...(m.persona ? { persona: m.persona } : {}),
+  ...(m.addsAgents ? { addsAgents: true } : {}),
   ...(m.answersDecisions ? { answersDecisions: true } : {}),
   ...(m.managesAgents ? { managesAgents: true } : {}),
 });
