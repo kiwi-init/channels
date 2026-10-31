@@ -49,6 +49,8 @@ export function loginArgv(shell: string, argv: readonly string[], env: Record<st
   return ["/usr/bin/env", ...SESSION_MARKERS.flatMap((key) => ["-u", key]), ...pairs(env), ...login, ...argv];
 }
 
-export function quote(word: string): string {
+function quote(word: string): string {
   return `'${word.replace(/'/g, "'\\''")}'`;
 }
+
+export const shellWord = (w: string): string => (/^[\w@%+=:,./-]+$/.test(w) ? w : quote(w));

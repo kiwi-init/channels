@@ -42,6 +42,7 @@ export interface TmuxSeat {
   room?: string;
   socket: string;
   pane: string;
+  attach?: string;
 }
 
 export type PlacedSeat = ({ place: "rex" } & RexSeat) | ({ place: "tmux" | "hosted" } & TmuxSeat);
@@ -126,7 +127,8 @@ function readTmuxSeat(x: unknown): TmuxSeat | null {
   const pane = typeof s?.pane === "string" && PANE.test(s.pane) ? s.pane : undefined;
   if (!alias || !agent || !socket?.startsWith("/") || CONTROL.test(socket) || !pane) return null;
   const room = text(s?.room, 128);
-  return { alias, agent, ...(room ? { room } : {}), socket, pane };
+  const attach = text(s?.attach, 8192);
+  return { alias, agent, ...(room ? { room } : {}), socket, pane, ...(attach && !CONTROL.test(attach) ? { attach } : {}) };
 }
 
 export function readPlacedSeat(x: unknown): PlacedSeat | null {

@@ -57,6 +57,7 @@ export interface Person {
   readOnly?: boolean
   wakes?: boolean
   seat?: PlacedSeat["place"]
+  attach?: string
   addsAgents?: boolean
   answersDecisions?: boolean
   lastSeen: number

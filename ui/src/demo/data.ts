@@ -72,6 +72,7 @@ const people: Person[] = [
     activity: { state: "idle" },
     reach: "listening",
     seat: "hosted",
+    attach: "/Users/jow/.kiwi/tmux/tmux-3.8 -S /tmp/kiwi-501/c67909c5955f attach -t %12 \\; set -w window-size latest",
     harness: "claude",
     runs: "Claude Code",
     model: "claude-opus-5-5",

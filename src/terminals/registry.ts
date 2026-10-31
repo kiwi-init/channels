@@ -1,6 +1,7 @@
 import type { PlacedSeat, ShowResult } from "@kiwi/core/terminals.ts";
 import { loadConfig, type Config, type SeatRecord } from "../config.ts";
 import { loginShell } from "../launch/shell.ts";
+import { attachArgv, attachLine, hostedTmuxBin, showHosted, type TerminalOpener } from "./hosted.ts";
 import type { PlaceTools, SeatPlace, TerminalId, TerminalManifest, TerminalPlugin } from "./plugin.ts";
 import { placeFrom, rexBinary } from "./rex/locate.ts";
 import { rexManifest } from "./rex/manifest.ts";
@@ -67,12 +68,24 @@ function showing(from: Plugins, on: (id: TerminalId) => boolean): Promise<Termin
   return Promise.all(ids.map((id) => from.load(id)));
 }
 
-export async function seatPlaces(cfg: Config = loadConfig(), from: Plugins = BUILT_IN): Promise<PlacedSeat[]> {
-  const hosted = hostedSeats(cfg).map((seat): PlacedSeat => ({ place: "hosted", ...seat }));
+export async function seatPlaces(cfg: Config = loadConfig(), from: Plugins = BUILT_IN, tmux?: string): Promise<PlacedSeat[]> {
+  const listed = hostedSeats(cfg);
+  const bin = listed.length ? (tmux ?? (await hostedTmuxBin())) : "tmux";
+  const hosted = listed.map((seat): PlacedSeat => ({ place: "hosted", ...seat, attach: attachLine(attachArgv(bin, seat)) }));
   return [...hosted, ...(await showing(from, (id) => helpersOn(id, cfg))).flatMap((plugin) => plugin.seats?.(cfg) ?? [])];
 }
 
-export async function showSeat(seat: PlacedSeat, cfg: Config = loadConfig(), from: Plugins = BUILT_IN): Promise<ShowResult> {
+export interface HostedShow {
+  tmux: string;
+  opener: TerminalOpener;
+}
+
+export async function showSeat(seat: PlacedSeat, cfg: Config = loadConfig(), from: Plugins = BUILT_IN, hosted?: HostedShow): Promise<ShowResult> {
+  if (seat.place === "hosted") {
+    const mine = hostedSeats(cfg).find((s) => s.socket === seat.socket && s.pane === seat.pane);
+    if (!mine) return { ok: false, why: "failed" };
+    return showHosted(mine, hosted?.tmux ?? (await hostedTmuxBin()), hosted?.opener);
+  }
   for (const plugin of await showing(from, () => true)) {
     const mine = plugin.seats?.(cfg).find((s) => samePlace(s, seat));
     if (mine && plugin.show) return plugin.show(placeOf(mine));

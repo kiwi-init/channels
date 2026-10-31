@@ -96,7 +96,7 @@ export const terminalCommands: Record<string, Command> = {
       }
       if (sub === "seats") {
         const seats = yield* Effect.promise(() => seatPlaces());
-        return out(opt.json ? JSON.stringify(seats) : seats.map((s) => `${s.alias} ${s.agent} ${PLACE_NAMES[s.place]}`).join("\n"));
+        return out(opt.json ? JSON.stringify(seats) : seats.map((s) => `${s.alias} ${s.agent} ${PLACE_NAMES[s.place]}${s.place !== "rex" && s.attach ? `: ${s.attach}` : ""}`).join("\n"));
       }
       return yield* die(USAGE);
     }),

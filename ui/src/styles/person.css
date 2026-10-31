@@ -205,3 +205,22 @@
   transform: translateY(-50%);
   pointer-events: none;
 }
+
+.person-term {
+  display: grid;
+  gap: 10px;
+}
+
+.person-term > .heading {
+  padding: 0;
+  margin: 0;
+}
+
+.person-term-note {
+  color: var(--ink-2);
+  font: var(--t-meta) / 1.55 var(--ui);
+}
+
+.person-term-note kbd {
+  font-size: var(--t-meta);
+}
