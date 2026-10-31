@@ -111,3 +111,7 @@
   background: var(--decide-wash);
   color: var(--decide);
 }
+
+.room-pick .room-ready + .start-hint {
+  margin-top: 0;
+}
