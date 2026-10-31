@@ -1,7 +1,6 @@
 import { b64url, openWith, sealWith } from "./crypto.ts";
 import { sign, verify, type Identity } from "./identity.ts";
 
-export const NOTE_ID_RE = /^[A-Za-z0-9_-]{43}$/;
 export const NOTE_MAX_BYTES = 64 * 1024;
 export const NOTES_PER_KEY = 4;
 export const NOTE_IDLE_MS = 90 * 86_400_000;

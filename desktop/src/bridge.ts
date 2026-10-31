@@ -119,6 +119,7 @@ export const CHANNEL_CALLS = [
   "setRepos",
   "makeRoom",
   "makeDm",
+  "syncMarks",
   "changeRoom",
   "pruneRooms",
   "icon",
