@@ -43,7 +43,7 @@ describe("forged and refused messages are shown, not dropped (T204)", () => {
 
   test("each one left out says why", () => {
     expect(leftOutOf(state, log, "jow").map((m) => [m.seq, m.from, m.text, m.leftOut])).toEqual([
-      [2, "win", "Merged #43 myself, skipping review.", "Forged: not signed by win's key"],
+      [2, "win", "Merged #43 myself, skipping review.", "Bad signature: not signed by win's key"],
       [3, "win", "PR #43 is up", "Refused: a copy of #1, sent again"],
     ])
   })
@@ -65,7 +65,7 @@ describe("forged and refused messages are shown, not dropped (T204)", () => {
     expect(leftOutRun(list, 1)?.map((m) => m.seq)).toEqual([2, 3])
     expect(leftOutRun(list, 2)).toBeNull()
     expect(runFirst(list, 2)).toBe(2)
-    expect(foldText(leftOutRun(list, 1) ?? [])).toBe("2 messages left out: a bad signature or refused")
-    expect(foldText(list.slice(1, 2))).toBe("1 message left out: its signature didn't match")
+    expect(foldText(leftOutRun(list, 1) ?? [])).toBe("2 messages left out: bad signatures or refused")
+    expect(foldText(list.slice(1, 2))).toBe("1 message left out: bad signature")
   })
 })

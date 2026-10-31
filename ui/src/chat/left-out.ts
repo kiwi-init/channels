@@ -24,7 +24,7 @@ export function runFirst(list: readonly Message[], i: number): number {
 }
 
 export function foldText(run: readonly Message[]): string {
-  const forged = run.filter((m) => m.leftOut?.startsWith("Forged")).length
-  const why = forged === run.length ? "its signature didn't match" : forged === 0 ? "refused" : "a bad signature or refused"
+  const forged = run.filter((m) => m.leftOut?.startsWith("Bad signature")).length
+  const why = forged === run.length ? (run.length === 1 ? "bad signature" : "bad signatures") : forged === 0 ? "refused" : "bad signatures or refused"
   return `${run.length === 1 ? "1 message" : `${run.length} messages`} left out: ${why}`
 }

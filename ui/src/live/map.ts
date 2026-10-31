@@ -276,7 +276,7 @@ function eventText(m: Wire, state: ChannelState): string {
     case "charter.set":
       return ev.text ? `${who} set the goal` : `${who} cleared the goal`
     case "role.set":
-      return ev.role ? `${nameIn(state, ev.member)} is ${ev.role.toLowerCase()} now` : `${nameIn(state, ev.member)} has no role now`
+      return ev.role ? `${nameIn(state, ev.member)} is ${ev.role} now` : `${nameIn(state, ev.member)} has no role now`
     default:
       return `${who} ${describeEvent(m, state, (handle) => nameIn(state, handle))}`
   }
@@ -440,7 +440,7 @@ export function leftOutOf(state: ChannelState, messages: readonly Wire[], me: st
     const trust = state.trust.get(m.seq)
     if (!ignored(trust) || isOverlay(m)) continue
     const why = state.rejected.get(m.seq) ?? (trust === "forged" ? `not signed by ${m.from}'s key` : "not allowed here")
-    const leftOut = `${trust === "forged" ? "Forged" : "Refused"}: ${why}`
+    const leftOut = `${trust === "forged" ? "Bad signature" : "Refused"}: ${why}`
     if (m.kind === "event")
       out.push({
         seq: m.seq,
