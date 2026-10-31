@@ -362,7 +362,7 @@ export function AboutSection() {
     <Page title="About" lede="Channels by Kiwi Init.">
       <Group>
         <Row label="Version">
-          <span className="set-value">{account.version}</span>
+          <span className="set-value set-mono">{account.version}</span>
         </Row>
         {account.desktop ? (
           <RelayRow relay={account.relay ?? ""} />

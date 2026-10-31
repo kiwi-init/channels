@@ -517,7 +517,7 @@
   color: var(--on-ink);
 }
 
-.tabs .is-needs {
+.tabs button.is-needs {
   color: var(--decide);
 }
 
@@ -603,7 +603,8 @@
   border-radius: var(--r-row);
   background: var(--bg-3);
   color: var(--ink-2);
-  font: 500 var(--t-meta) var(--ui);
+  font: 500 var(--t-meta) var(--mono);
+  letter-spacing: -0.01em;
 }
 
 .top-hold {

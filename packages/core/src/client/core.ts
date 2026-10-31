@@ -26,6 +26,7 @@ export class ChannelCore {
   rotating = false;
   readonly roomKeys = new Map<string, string>();
   readonly hidden = new Set<number>();
+  readonly publicRooms = new Set<string>();
   readonly roomNow = new Map<string, RoomNow>();
   readonly roomSeals = new Map<string, { seq: number; seal: RoomSeal }[]>();
   readonly sealSteps = new Map<number, { proven?: boolean; opened?: RoomMeta }>();
