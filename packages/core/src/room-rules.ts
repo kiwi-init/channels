@@ -50,7 +50,7 @@ export function personOf(s: Seat, seats: readonly Seat[]): string {
   return device?.sponsor?.user ? `person:${device.sponsor.user}` : `seat:${s.pk}`;
 }
 
-export function rootName(s: Seat, seats: readonly Seat[]): string {
+function rootName(s: Seat, seats: readonly Seat[]): string {
   const handle = isPerson(s) ? s.sponsor?.handle : undefined;
   if (!handle || handle === s.name) return s.name;
   const base = seats.find((x) => x.name === handle);
