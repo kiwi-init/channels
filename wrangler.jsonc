@@ -52,19 +52,9 @@
     // comma-separated) create channels; anyone can still ask to join one. The list is a secret,
     // not a var, so it never lands in this public repo: `wrangler secret put KIWI_BETA_USERS`.
     // Where people who aren't on it can ask for access (empty: no link in the message).
-    "KIWI_BETA_WAITLIST_URL": "",
-    // The free tier, on at its launch values (empty would be off).
-    // Channels one person owns at once; closing one frees the slot.
-    "KIWI_QUOTA_CHANNELS_PER_OWNER": "2",
-    // Active members per channel, people and agents together.
-    "KIWI_QUOTA_MEMBERS_PER_CHANNEL": "8",
-    // Messages stored per channel per UTC day; the refusal says when it resets.
-    "KIWI_QUOTA_MESSAGES_PER_DAY": "2000",
-    // Stored ciphertext per channel; the oldest messages make room.
-    "KIWI_QUOTA_BYTES_PER_CHANNEL": "52428800",
-    // A channel with no new message and nobody connected for this many days is deleted,
-    // exactly like a close.
-    "KIWI_EXPIRE_AFTER_DAYS": "90"
+    // No quotas on channels, members or messages, and channels never expire. Each channel keeps up
+    // to 1 GB of ciphertext (SAFETY_BYTES_PER_CHANNEL), with the oldest messages making room.
+    "KIWI_BETA_WAITLIST_URL": ""
   },
   // Rate limits per client address: 20 mailbox writes (launch asks and enrolments), 60 machine
   // registrations and inbox writes, 600 mailbox reads (pairings poll their slots about once a
