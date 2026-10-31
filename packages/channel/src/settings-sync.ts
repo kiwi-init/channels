@@ -12,7 +12,7 @@ const same = (a: readonly string[], b: readonly string[]): boolean => a.length =
 export function settingsSync(state: Pick<ChannelState, "repos" | "charter" | "rooms" | "head">, guard: GuardFloor | null, rooms: RoomsFloor | null): SettingsSync {
   const since = state.head;
   const charter = state.charter?.text ?? null;
-  const roomList = [...state.rooms.values()].map((r) => ({ id: r.id, name: r.name }));
+  const roomList = [...state.rooms.values()].filter((r) => !r.members).map((r) => ({ id: r.id, name: r.name }));
   const key = (list: readonly { id: string; name: string }[]) => list.map((r) => `${r.id}\u0000${r.name}`).sort();
   return {
     ...(!same(state.repos, guard?.repos?.list ?? []) ? { repos: { list: [...state.repos], since } } : {}),

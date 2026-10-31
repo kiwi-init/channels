@@ -63,6 +63,7 @@ export const SHOTS: Record<string, Shot> = {
   palette: kiwi({ dialog: "palette" }),
   "new-channel": kiwi({ dialog: "new-channel" }),
   join: kiwi({ dialog: "join" }),
+  "new-room": kiwi({ dialog: "new-room" }),
   enroll: { scenario: "enroll", channel: "kiwi" },
   "enroll-digits": { scenario: "enroll-digits", channel: "kiwi" },
   "enroll-desktop": { scenario: "enroll-desktop", channel: null },

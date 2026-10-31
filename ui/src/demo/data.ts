@@ -679,6 +679,7 @@ export const DEMO_CHANNEL: Channel = {
     { id: "general", name: "general", unread: 0, mentions: 0 },
     { id: "releases", name: "releases", unread: 2, mentions: 0 },
     { id: "design", name: "design", unread: 0, mentions: 0 },
+    { id: "launch-plan", name: "launch-plan", unread: 1, mentions: 0, members: ["jow", "maya", "atlas"] },
   ],
   directs: [
     { with: "atlas", unread: 0, last: m(29) },

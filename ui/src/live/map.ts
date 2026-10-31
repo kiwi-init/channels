@@ -184,7 +184,14 @@ export function roomsOf(state: ChannelState, messages: readonly Wire[], me: stri
   }
   const rooms = [...state.rooms.values()]
   const list = rooms.some((r) => r.id === GENERAL_ROOM) ? rooms : [{ id: GENERAL_ROOM, name: GENERAL_ROOM }, ...rooms]
-  return list.map((r) => ({ id: r.id, name: r.name, unread: unread.get(r.id) ?? 0, mentions: mentions.get(r.id) ?? 0, seen: seen[roomSeenKey(r.id)] ?? (r.id === GENERAL_ROOM ? 0 : from) }))
+  return list.map((r) => ({
+    id: r.id,
+    name: r.name,
+    unread: unread.get(r.id) ?? 0,
+    mentions: mentions.get(r.id) ?? 0,
+    seen: seen[roomSeenKey(r.id)] ?? (r.id === GENERAL_ROOM ? 0 : from),
+    ...("members" in r && r.members ? { members: r.members.map((m) => m.name) } : {}),
+  }))
 }
 
 export function directsOf(state: ChannelState, messages: readonly Wire[], me: string, seen: Seen): Direct[] {

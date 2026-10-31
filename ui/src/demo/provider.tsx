@@ -529,12 +529,13 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
           following = false
         }
       },
-      addRoom: (code, name) => {
-        edit(code, (c) => ({ ...c, rooms: [...c.rooms, { id: name, name, unread: 0, mentions: 0 }] }))
+      addRoom: (code, name, members) => {
+        edit(code, (c) => ({ ...c, rooms: [...c.rooms, { id: name, name, unread: 0, mentions: 0, ...(members?.length ? { members: ["jow", ...members] } : {}) }] }))
         return Promise.resolve(name)
       },
       setGithubWrite: (code, on) => edit(code, (c) => ({ ...c, githubWrite: on || undefined })),
       setBranchPrefix: (code, prefix) => edit(code, (c) => ({ ...c, branchPrefix: prefix?.trim() || undefined })),
+      setRoomMembers: (code, id, members) => edit(code, (c) => ({ ...c, rooms: c.rooms.map((r) => (r.id === id ? { ...r, members } : r)) })),
       renameRoom: (code, id, name) => edit(code, (c) => ({ ...c, rooms: c.rooms.map((r) => (r.id === id ? { ...r, name: name.trim().replace(/^#/, "") } : r)) })),
       setIcon: (code, file) => {
         const icon = file ? URL.createObjectURL(file) : undefined

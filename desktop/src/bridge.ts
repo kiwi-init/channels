@@ -117,6 +117,8 @@ export const CHANNEL_CALLS = [
   "setHold",
   "setRooms",
   "setRepos",
+  "makeRoom",
+  "changeRoom",
   "icon",
   "setIcon",
   "close",

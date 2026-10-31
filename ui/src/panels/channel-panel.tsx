@@ -1,8 +1,9 @@
 import "~/styles/channel-panel.css"
+import "~/styles/new-room.css"
 
 import { useEffect, useId, useRef, useState, type ReactNode } from "react"
 
-import { Field, Heading, IconButton } from "~/kit/bits"
+import { Avatar, cx, Field, Heading, IconButton } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
 import type { Channel } from "~/model"
@@ -375,9 +376,68 @@ function Rooms({ channel, own }: { channel: Channel; own: boolean }) {
           ) : (
             <span className="cpanel-value">#{r.name}</span>
           )}
+          {r.members && <RoomPeople channel={channel} id={r.id} members={r.members} own={own} />}
         </li>
       ))}
     </ul>
+  )
+}
+
+function RoomPeople({ channel, id, members, own }: { channel: Channel; id: string; members: string[]; own: boolean }) {
+  const { app } = useApp()
+  const [editing, setEditing] = useState<ReadonlySet<string> | null>(null)
+  const others = channel.people.filter((p) => !p.you && !p.left)
+  const names = members.filter((m) => m !== channel.you).map((m) => nickname(channel, m))
+  if (!editing)
+    return (
+      <p className="cpanel-hint room-in">
+        <Icon name="lock" size={12} />
+        <span>Private: you{names.length ? `, ${names.join(", ")}` : ""}</span>
+        {own && (
+          <button type="button" className="btn is-quiet is-small" onClick={() => setEditing(new Set(members))}>
+            Change who's in
+          </button>
+        )}
+      </p>
+    )
+  const flip = (name: string, on: boolean) =>
+    setEditing((was) => {
+      const next = new Set(was)
+      if (on) next.add(name)
+      else next.delete(name)
+      return next
+    })
+  const out = members.some((m) => m !== channel.you && !editing.has(m))
+  return (
+    <div className="room-pick">
+      {others.map((p) => (
+        <label key={p.name} className={cx("room-member", editing.has(p.name) && "is-on")}>
+          <input type="checkbox" checked={editing.has(p.name)} onChange={(e) => flip(p.name, e.target.checked)} />
+          <Avatar person={p} size="sm" />
+          <span className="room-member-name">{shown(p)}</span>
+        </label>
+      ))}
+      <p className="cpanel-hint">{out ? "Whoever you take out keeps what they could read, and nothing after: the room moves to a new key." : "Whoever you add reads the room's history."}</p>
+      <div className="room-edit-foot">
+        <button type="button" className="btn is-quiet is-small" onClick={() => setEditing(null)}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          className="btn is-primary is-small"
+          onClick={() => {
+            app.actions.setRoomMembers(
+              channel.code,
+              id,
+              [...editing].filter((m) => m !== channel.you)
+            )
+            setEditing(null)
+          }}
+        >
+          Save
+        </button>
+      </div>
+    </div>
   )
 }
 

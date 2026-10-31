@@ -171,6 +171,7 @@ export interface Room {
   unread: number
   mentions: number
   seen?: number
+  members?: string[]
 }
 
 export interface Direct {
@@ -568,8 +569,9 @@ export interface Actions {
   closeMyTerm(pane: string): Promise<TermTab[]>
   choicesOn(code: string, computer: string): Promise<ComputerChoices>
   chooseFolder(): Promise<string | null>
-  addRoom(code: string, name: string): Promise<string | null>
+  addRoom(code: string, name: string, members?: string[]): Promise<string | null>
   renameRoom(code: string, id: string, name: string): void
+  setRoomMembers(code: string, id: string, members: string[]): void
   setIcon(code: string, file: File | null): void
   renameChannel(code: string, title: string): void
   clearFact(code: string, key: string): void

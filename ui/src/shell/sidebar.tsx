@@ -1,5 +1,4 @@
 import { useState } from "react"
-import { roomProblem } from "@kiwi/app/rooms.ts"
 import { liveOf, restOf } from "~/doing"
 
 import { Avatar, Count, cx, Heading, IconButton, STATUS_WORDS } from "~/kit/bits"
@@ -12,9 +11,7 @@ import { between, nickname, shown } from "~/names"
 import { SideFoot } from "~/shell/updates"
 
 export function Sidebar({ channel }: { channel: Channel }) {
-  const { nav, go, app } = useApp()
-  const [adding, setAdding] = useState(false)
-  const [problem, setProblem] = useState<string | null>(null)
+  const { nav, go } = useApp()
   const humans = channel.people.filter((p) => p.kind === "human")
   const agents = channel.people.filter((p) => p.kind === "agent").sort((a, b) => rank(a) - rank(b))
   const onChat = nav.tab === "chat"
@@ -25,7 +22,7 @@ export function Sidebar({ channel }: { channel: Channel }) {
   return (
     <div ref={sideRef} className="side">
       <section aria-label="Rooms">
-        <Heading action={channel.youOwn || channel.youTrusted ? <IconButton icon="plus" label="New room" onClick={() => setAdding(true)} /> : undefined}>Rooms</Heading>
+        <Heading action={channel.youOwn || channel.youTrusted ? <IconButton icon="plus" label="New room" onClick={() => go({ to: "dialog", dialog: "new-room" })} /> : undefined}>Rooms</Heading>
         <ul>
           {channel.rooms.map((r) => {
             const where = { kind: "room", room: r.id } as const
@@ -33,55 +30,13 @@ export function Sidebar({ channel }: { channel: Channel }) {
             return (
               <li key={r.id}>
                 <button type="button" className={cx("side-row", on && "is-on", r.unread > 0 && "is-news")} aria-current={on ? "page" : undefined} onClick={() => go({ to: "where", where })}>
-                  <span className="side-hash">#</span>
+                  <span className="side-hash">{r.members ? <Icon name="lock" size={12} /> : "#"}</span>
                   <span className="side-label">{r.name}</span>
                   <Count n={r.mentions || r.unread} loud={r.mentions > 0} />
                 </button>
               </li>
             )
           })}
-          {adding && (
-            <li>
-              <form
-                className="side-new"
-                onSubmit={(e) => {
-                  e.preventDefault()
-                  const name = roomName(new FormData(e.currentTarget).get("room")?.toString() ?? "")
-                  const wrong = roomProblem(channel.rooms, name)
-                  if (wrong) return setProblem(wrong)
-                  setAdding(false)
-                  void app.actions.addRoom(channel.code, name).then((id) => id && go({ to: "where", where: { kind: "room", room: id } }))
-                }}
-              >
-                <span className="side-hash">#</span>
-                <input
-                  name="room"
-                  autoFocus
-                  className="side-input"
-                  placeholder="room-name"
-                  aria-label="New room name"
-                  aria-invalid={problem ? true : undefined}
-                  aria-describedby={problem ? "side-new-problem" : undefined}
-                  onChange={(e) => setProblem(e.target.value.trim() ? roomProblem(channel.rooms, roomName(e.target.value)) : null)}
-                  onBlur={(e) => {
-                    if (e.target.value) return
-                    setAdding(false)
-                    setProblem(null)
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key !== "Escape") return
-                    setAdding(false)
-                    setProblem(null)
-                  }}
-                />
-              </form>
-              {problem && (
-                <p className="side-problem" id="side-new-problem" role="alert">
-                  {problem}
-                </p>
-              )}
-            </li>
-          )}
         </ul>
       </section>
 
@@ -167,8 +122,6 @@ export function Sidebar({ channel }: { channel: Channel }) {
     </div>
   )
 }
-
-const roomName = (typed: string): string => typed.trim().toLowerCase().replace(/\s+/g, "-")
 
 const rank = (p: Person): number => (p.role === "lead" ? 0 : p.presence === "offline" ? 2 : 1)
 
