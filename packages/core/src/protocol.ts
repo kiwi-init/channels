@@ -314,7 +314,9 @@ export type Event =
    */
   | { op: "react"; seq: number; emoji: string | null }
   | { op: "msg.edit"; seq: number; body: string }
-  | { op: "msg.delete"; seq: number };
+  | { op: "msg.delete"; seq: number }
+  | { op: "member.gone"; member: string; pk: string }
+  | { op: "member.back"; member: string; pk: string };
 
 /** The longest reaction, in UTF-16 units: one emoji, family sequences and flags included. */
 const MAX_REACTION = 16;
@@ -348,6 +350,8 @@ const QUIET_OPS: ReadonlySet<string> = new Set([
   "react",
   "msg.edit",
   "msg.delete",
+  "member.gone",
+  "member.back",
   "fact.set",
   "fact.del",
   "lease.take",
@@ -759,7 +763,7 @@ export interface NewerEvent {
 
 export type WirePayload = Omit<Payload, "ev"> & { ev?: Event | NewerEvent };
 
-export const EVENT_OPS_VERSION = 11;
+export const EVENT_OPS_VERSION = 12;
 
 export const PRIVATE_ROOM_OPS = 9;
 
@@ -785,7 +789,7 @@ export function asSent(m: Message): Omit<Message, "newer" | "ev"> & { ev?: Event
 
 export const outgrown = (base: { folded?: number; skipped?: true }): boolean => base.skipped === true && (base.folded ?? 0) < EVENT_OPS_VERSION;
 
-export const FOLD_RULES = 11;
+export const FOLD_RULES = 12;
 
 export const olderRules = (base: { rules?: number }): boolean => (base.rules ?? 0) < FOLD_RULES;
 
@@ -1062,6 +1066,9 @@ function eventCheck(ev: unknown): boolean | null {
       return n(e.seq) && (e.seq as number) > 0 && str(e.body, MAX_BODY_LENGTH) && (e.body as string).trim().length > 0;
     case "msg.delete":
       return n(e.seq) && (e.seq as number) > 0;
+    case "member.gone":
+    case "member.back":
+      return str(e.member, 64) && str(e.pk, 64);
     case "ask.name":
       return n(e.ask) && (e.ask as number) > 0 && (e.name === null || str(e.name, MAX_GOAL_NAME * 4));
     case "ask.close":
