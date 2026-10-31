@@ -11,7 +11,7 @@ import { isPerson } from "./people.ts";
 import { roomName } from "./rooms.ts";
 import { currentState, openRound, reviewClaimRefusal, reviewMoveRefusal, revisedOut, taskId, verdictRefusal, worked } from "./tasks.ts";
 import type { Charter, Compact, Fact, FoldMember, Hold, Lease, PersonaLead, Room, SecretRoom, Task } from "./types.ts";
-import { inRoom, MAX_ROOM_SEALS } from "../room-rules.ts";
+import { inRoom } from "../room-rules.ts";
 
 const trustOnly = (what: string): string => `only the owner, or a person they fully trust, ${what}`;
 
@@ -86,7 +86,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       else if (!known && (ev.id === GENERAL_ROOM || rooms.has(ev.id))) reject(`there's already a room ${ev.id}`);
       else if (opened && !inRoom(opened, member.name, m.pk)) reject("whoever changes a private room stays in it");
       else {
-        const seals = [...(known?.seals ?? []), { id: ev.id, n: ev.n, keys: ev.keys, meta: ev.meta, ...(ev.proof ? { proof: ev.proof } : {}) }].slice(-MAX_ROOM_SEALS);
+        const seals = [...(known?.seals ?? []), { id: ev.id, n: ev.n, keys: ev.keys, meta: ev.meta, ...(ev.proof ? { proof: ev.proof } : {}) }];
         const n = m.proven || !known ? ev.n : known.n;
         c.secret.set(ev.id, { n, seals, ...(opened ? { meta: opened } : !m.proven && known?.meta ? { meta: known.meta } : {}) });
         if (opened) rooms.set(ev.id, { ...(rooms.get(ev.id) ?? { id: ev.id, createdBy: m.from, at }), name: opened.name, members: opened.members });
