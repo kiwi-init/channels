@@ -1,12 +1,12 @@
 // The sealed history cache: ciphertext at rest, one member's rows stay theirs,
 // and a hole or a seq past the relay head is thrown out instead of shown.
 
-import { afterAll, beforeEach, expect, test } from "bun:test";
+import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { b64url, seal } from "@kiwi/core/crypto.ts";
 import { generateIdentity, sign } from "@kiwi/core/identity.ts";
 import { PROTOCOL_VERSION, type Message } from "@kiwi/core/protocol.ts";
 import { openKept, openRow, openRows, packKept, packRow, packEnvelope } from "@kiwi/core/cache-row.ts";
-import { forgetAllHistory, forgetHistory, readCached, readKept, rememberKept, rememberRow, rememberRows, useHistoryDb, type CachedKept, type CachedRow, type HistoryDb } from "./history.ts";
+import { backfill, forgetAllHistory, forgetHistory, readCached, readKept, rememberKept, rememberRow, rememberRows, useHistoryDb, type CachedKept, type CachedRow, type HistoryDb } from "./history.ts";
 
 const SENTINEL = "SENTINEL-plain-text-should-not-rest";
 const ROOM = "a".repeat(32);
@@ -20,6 +20,7 @@ let key: string;
 function memoryDb(): HistoryDb {
   const rows = new Map<string, CachedRow>();
   const kept = new Map<string, CachedKept>();
+  const floors = new Set<string>();
   const id = (room: string, pk: string, seq: number) => `${room}\0${pk}\0${seq}`;
   const list = (room: string, pk: string) =>
     [...rows.entries()]
@@ -35,6 +36,10 @@ function memoryDb(): HistoryDb {
       for (const row of list(room, pk)) if (row.seq < oldest) rows.delete(id(room, pk, row.seq));
     },
     rows: async (room, pk) => list(room, pk),
+    newest: async (room, pk, count) => list(room, pk).slice(-count),
+    oldest: async (room, pk) => list(room, pk)[0]?.seq ?? null,
+    floor: async (room, pk) => floors.has(`${room}\0${pk}`),
+    putFloor: async (room, pk) => void floors.add(`${room}\0${pk}`),
     trimBelow: async (room, pk, oldest) => {
       for (const row of list(room, pk)) if (row.seq < oldest) rows.delete(id(room, pk, row.seq));
     },
@@ -44,6 +49,7 @@ function memoryDb(): HistoryDb {
     drop: async (room, pk) => {
       for (const row of list(room, pk)) rows.delete(id(room, pk, row.seq));
       kept.delete(`${room}\0${pk}`);
+      floors.delete(`${room}\0${pk}`);
     },
     dropAll: async () => {
       rows.clear();
@@ -68,8 +74,8 @@ function msg(seq: number, body: string): Message {
   };
 }
 
-async function rememberMessage(room: string, pk: string, epoch: number, k: string, m: Message, limit: number): Promise<void> {
-  await rememberRow(room, pk, await packRow(k, room, epoch, m), limit);
+async function rememberMessage(room: string, pk: string, epoch: number, k: string, m: Message, _limit?: number): Promise<void> {
+  await rememberRow(room, pk, await packRow(k, room, epoch, m));
 }
 
 beforeEach(() => {
@@ -159,25 +165,27 @@ test("a seq past the relay head is dropped and cannot return later", async () =>
   expect((await store.rows(ROOM, PK_A)).map((r) => r.seq)).toEqual([1, 2]);
 });
 
-test("only the newest limit messages stay, in seq order", async () => {
+test("a reload shows the newest limit messages, in seq order, and keeps the older ones as the archive (T977)", async () => {
   const keys = { "1": key };
-  for (let seq = 1; seq <= 5; seq++) await rememberMessage(ROOM, PK_A, 1, key, msg(seq, `m${seq}`), 3);
+  for (let seq = 1; seq <= 5; seq++) await rememberMessage(ROOM, PK_A, 1, key, msg(seq, `m${seq}`));
 
   const out = await readCached(ROOM, PK_A, (rows) => openRows(rows, ROOM, keys), 5, 3);
   expect(out.messages.map((m) => m.seq)).toEqual([3, 4, 5]);
   expect(out.since).toBe(5);
+  expect((await store.rows(ROOM, PK_A)).map((r) => r.seq)).toEqual([1, 2, 3, 4, 5]);
 });
 
-test("a batch of messages is one write that keeps only the newest limit", async () => {
+test("a batch of messages is one write, and every row stays (T977)", async () => {
   const keys = { "1": key };
   let writes = 0;
   const counted = { ...store, putRows: (...a: Parameters<HistoryDb["putRows"]>) => (writes++, store.putRows(...a)) };
   useHistoryDb(counted);
-  await rememberRows(ROOM, PK_A, await Promise.all([1, 2, 3, 4, 5].map((seq) => packRow(key, ROOM, 1, msg(seq, `m${seq}`)))), 3);
-  await rememberRows(ROOM, PK_A, [], 3);
+  await rememberRows(ROOM, PK_A, await Promise.all([1, 2, 3, 4, 5].map((seq) => packRow(key, ROOM, 1, msg(seq, `m${seq}`)))));
+  await rememberRows(ROOM, PK_A, []);
   expect(writes).toBe(1);
   const out = await readCached(ROOM, PK_A, (rows) => openRows(rows, ROOM, keys), 5, 3);
   expect(out.messages.map((m) => m.seq)).toEqual([3, 4, 5]);
+  expect((await store.rows(ROOM, PK_A)).length).toBe(5);
 });
 
 test("leave drops one member; sign-out drops every row", async () => {
@@ -258,4 +266,56 @@ test("a kept state never opens as a message row, and a row never opens as a kept
   expect(await openRow({ seq: 1, ...kept }, ROOM, keys)).toBeNull();
   const row = await packRow(key, ROOM, 1, msg(1, "a"));
   expect(await openKept({ e: row.e, iv: row.iv, ct: row.ct }, ROOM, keys)).toBeNull();
+});
+
+describe("the archive fills in from the relay, a page at a time (T977)", () => {
+  const relay = (from: number, to: number) => Promise.all(Array.from({ length: to - from + 1 }, (_, i) => packRow(key, ROOM, 1, msg(from + i, `old ${from + i}`))));
+  const older = (floor: number) => async (before: number, limit: number) => {
+    const since = Math.max(floor - 1, before - 1 - limit);
+    return { rows: before - 1 > since ? await relay(since + 1, before - 1) : [], done: since <= floor - 1 };
+  };
+  const quick = { hidden: () => false, wait: async () => {}, stopped: () => false };
+
+  test("it pages down to the relay's first message, then remembers it has everything", async () => {
+    await rememberRows(ROOM, PK_A, await relay(1200, 1205));
+    let asks = 0;
+    const ask = older(1);
+    expect(await backfill(ROOM, PK_A, { ...quick, older: (b, l) => (asks++, ask(b, l)) })).toBe("done");
+    expect((await store.rows(ROOM, PK_A)).map((r) => r.seq)).toEqual(Array.from({ length: 1205 }, (_, i) => i + 1));
+    expect(asks).toBe(3);
+    expect(await backfill(ROOM, PK_A, { ...quick, older: async () => (asks++, { rows: [], done: true }) })).toBe("done");
+    expect(asks).toBe(3);
+  });
+
+  test("it stops where the relay forgot, and resumes where it left off after a stop", async () => {
+    await rememberRows(ROOM, PK_A, await relay(2000, 2001));
+    let left = 2;
+    expect(await backfill(ROOM, PK_A, { ...quick, stopped: () => left-- <= 0, older: older(1001) })).toBe("stopped");
+    const after = (await store.rows(ROOM, PK_A))[0]!.seq;
+    expect(after).toBe(1500);
+    expect(await backfill(ROOM, PK_A, { ...quick, older: older(1001) })).toBe("done");
+    expect((await store.rows(ROOM, PK_A))[0]!.seq).toBe(1001);
+  });
+
+  test("a refused page waits longer each time and gives up after a few, without losing what it has", async () => {
+    await rememberRows(ROOM, PK_A, await relay(50, 51));
+    const waits: number[] = [];
+    const out = await backfill(ROOM, PK_A, { ...quick, wait: async (ms) => void waits.push(ms), older: () => Promise.reject(new Error("too many page requests; slow down")) });
+    expect(out).toBe("failed");
+    expect(waits.length).toBe(5);
+    expect(waits).toEqual([...waits].sort((a, b) => a - b));
+    expect((await store.rows(ROOM, PK_A)).map((r) => r.seq)).toEqual([50, 51]);
+  });
+
+  test("it waits while the app is hidden, and a dropped cache forgets that it had everything", async () => {
+    await rememberRows(ROOM, PK_A, await relay(3, 4));
+    let hidden = 2;
+    let asked = 0;
+    expect(await backfill(ROOM, PK_A, { ...quick, hidden: () => hidden-- > 0, older: async (b, l) => (asked++, older(1)(b, l)) })).toBe("done");
+    expect(asked).toBe(1);
+    await forgetHistory(ROOM, PK_A);
+    await rememberRows(ROOM, PK_A, await relay(9, 9));
+    expect(await backfill(ROOM, PK_A, { ...quick, older: older(1) })).toBe("done");
+    expect((await store.rows(ROOM, PK_A)).length).toBe(9);
+  });
 });

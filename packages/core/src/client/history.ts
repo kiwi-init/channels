@@ -31,6 +31,7 @@ export interface HistoryFx {
   openRooms(base: FoldBase): Effect.Effect<FoldBase>;
   history(since: number): Effect.Effect<{ head: number; messages: Message[]; first: number | null; through: number }, MemberRefusal, Relay>;
   page(since: number, limit: number): Effect.Effect<Message[], MemberRefusal, Relay>;
+  envelopes(since: number, limit: number): Effect.Effect<{ head: number; messages: Envelope[] }, MemberRefusal, Relay>;
 }
 
 export class ChannelHistory {
@@ -132,6 +133,10 @@ export class ChannelHistory {
         if (since <= from || since >= head) break;
       }
       return { head, messages, first, through };
+    }),
+
+    envelopes: Effect.fn("Channel.envelopes")({ self: this }, function* (this: ChannelHistory, since: number, limit: number) {
+      return yield* this.ch.request<{ head: number; messages: Envelope[] }>("/messages", {}, { since, limit });
     }),
 
     page: Effect.fn("Channel.page")({ self: this }, function* (this: ChannelHistory, since: number, limit: number) {

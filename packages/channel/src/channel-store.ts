@@ -7,7 +7,7 @@ import type { JoinRequest, Member } from "@kiwi/core/membership.ts";
 import { SNAPSHOT_TOO_LARGE, type Message } from "@kiwi/core/protocol.ts";
 import { fold, type ChannelState, type FoldBase, type GuardFloor, type Roster } from "@kiwi/core/state.ts";
 import { errorOf, linkOf, watches, type ChannelLink, type FollowEvent } from "./channel-ops.ts";
-import { openCached, planCached, readKept, rememberKept, rememberRow, rememberRows } from "./history.ts";
+import { backfill, openCached, planCached, readKept, rememberKept, rememberRow, rememberRows } from "./history.ts";
 import { markOnce } from "./marks.ts";
 import { ICON_LIVE } from "./icon-event.ts";
 import { addMarks, type Marks } from "./receipts.ts";
@@ -340,7 +340,6 @@ export class ChannelStore {
           ch.roomId,
           ch.pk,
           batched.flatMap((b) => (b.row ? [b.row] : [])),
-          HISTORY,
         ).catch(() => {});
       }, 30);
     };
@@ -362,7 +361,7 @@ export class ChannelStore {
           return enqueue(ev.message, ev.row);
         case "Unread":
           this.unread.value = [...this.unread.peek(), ev.seq].slice(-HISTORY);
-          if (ev.row) void rememberRow(ch.roomId, ch.pk, ev.row, HISTORY).catch(() => {});
+          if (ev.row) void rememberRow(ch.roomId, ch.pk, ev.row).catch(() => {});
           return;
         case "Presence":
           this.online.value = hear(this.online.peek(), ev.presence, Date.now());
@@ -402,7 +401,7 @@ export class ChannelStore {
       requests: this.refreshRequests,
       rotate: () => (ch.isOwner ? ch.rotateIfDue().catch((err: unknown) => (this.onGone(err), false)) : Promise.resolve(false)),
       cache: () =>
-        openCached(ch.roomId, ch.pk, ch.openRows)
+        openCached(ch.roomId, ch.pk, ch.openRows, HISTORY)
           .then((opened) => (markOnce("kiwi:cache-open"), opened))
           .catch(() => null),
       plan: (opened, head) => planCached(ch.roomId, ch.pk, opened, head, HISTORY).catch(() => null),
@@ -459,6 +458,12 @@ export class ChannelStore {
           if (base || earlyBase) this.base.value = base;
           this.ready.value = true;
         });
+        void backfill(ch.roomId, ch.pk, {
+          older: (before, limit) => ch.olderRows(before, limit),
+          hidden: () => typeof document !== "undefined" && document.hidden,
+          wait: (ms) => new Promise((done) => setTimeout(done, ms)),
+          stopped: () => closed,
+        }).catch(() => {});
       },
     });
     warmUp(steps, was, HISTORY);
