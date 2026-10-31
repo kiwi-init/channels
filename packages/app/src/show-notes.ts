@@ -28,7 +28,20 @@ function tmuxNote(why: ShowRefusal): string {
   }
 }
 
-const NOTES: Record<PlacedSeat["place"], (why: ShowRefusal) => string> = { rex: rexNote, tmux: tmuxNote, hosted: () => "Its terminal didn't open." };
+function hostedNote(why: ShowRefusal): string {
+  switch (why) {
+    case "no-server":
+      return "It isn't running in Channels' tmux anymore.";
+    case "no-app":
+      return "No terminal app opened it: copy the command and run it in yours.";
+    case "no-rex":
+    case "remote-control":
+    case "failed":
+      return "Your terminal didn't open: copy the command and run it in yours.";
+  }
+}
+
+const NOTES: Record<PlacedSeat["place"], (why: ShowRefusal) => string> = { rex: rexNote, tmux: tmuxNote, hosted: hostedNote };
 
 export function showNote(place: PlacedSeat["place"], result: ShowResult): string | null {
   return result.ok ? null : NOTES[place](result.why);

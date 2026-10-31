@@ -92,7 +92,7 @@ function keepHeight(h: number): void {
 }
 
 export default function TermDrawer({ channel, of }: { channel: Channel; of: TermOf }) {
-  const { app, go } = useApp()
+  const { app, go, toast } = useApp()
   const name = of.kind === "agent" ? of.name : null
   const person = name ? memberOf(channel, name) : undefined
   const title = name === null ? "Your terminal" : person ? shown(person) : name
@@ -268,6 +268,7 @@ export default function TermDrawer({ channel, of }: { channel: Channel; of: Term
           {size && <span className="term-size"> · {size}</span>}
           {phase.kind === "ended" && <span className="term-ended"> · exited</span>}
         </span>
+        {name !== null && <IconButton icon="external" label="Open in your terminal" onClick={() => void app.actions.showAgent(channel.code, name).then((note) => note && toast(note))} />}
         <IconButton
           icon="close"
           label={name === null ? "Close the terminal (your shell keeps running)" : "Close the terminal (the agent keeps running)"}

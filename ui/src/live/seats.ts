@@ -10,7 +10,7 @@ const seats = store<readonly PlacedSeat[]>([])
 export function seated(people: Person[], placed: readonly PlacedSeat[], room: string): Person[] {
   return people.map((p) => {
     const seat = p.kind === "agent" ? placed.find((s) => s.room === room && s.agent === p.name) : undefined
-    return seat ? { ...p, seat: seat.place } : p
+    return seat ? { ...p, seat: seat.place, ...(seat.place !== "rex" && seat.attach ? { attach: seat.attach } : {}) } : p
   })
 }
 

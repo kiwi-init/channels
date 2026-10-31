@@ -52,3 +52,5 @@ export function loginArgv(shell: string, argv: readonly string[], env: Record<st
 export function quote(word: string): string {
   return `'${word.replace(/'/g, "'\\''")}'`;
 }
+
+export const shellWord = (w: string): string => (/^[\w@%+=:,./-]+$/.test(w) ? w : quote(w));

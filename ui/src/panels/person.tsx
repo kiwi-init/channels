@@ -14,6 +14,7 @@ import { ShowAgent } from "~/kit/show-agent"
 import { contextOf, liveOf, restOf } from "~/doing"
 import { PanelHead } from "~/panels/frame"
 import { InlineEdit } from "~/settings/controls"
+import { CopyBox } from "~/panels/invite"
 
 const since = (at: number, on = "on "): string => {
   const a = ago(at)
@@ -39,6 +40,7 @@ export function PersonPanel({ channel, name }: { channel: Channel; name: string 
         <Hero person={person} />
         <Now channel={channel} person={person} />
         {!person.left && <Doors channel={channel} person={person} />}
+        {!person.left && person.seat === "hosted" && <Terminal channel={channel} person={person} />}
         <Facts channel={channel} person={person} />
         {channel.youOwn && !person.you && !person.owner && !person.left && <Manage channel={channel} person={person} />}
       </div>
@@ -141,8 +143,44 @@ function Doors({ channel, person }: { channel: Channel; person: Person }) {
       >
         Message privately
       </button>
-      <ShowAgent channel={channel} person={person} />
+      {person.seat !== "hosted" && <ShowAgent channel={channel} person={person} />}
     </div>
+  )
+}
+
+function Terminal({ channel, person }: { channel: Channel; person: Person }) {
+  const { app, nav, go, toast } = useApp()
+  const [busy, setBusy] = useState(false)
+  const here = nav.term?.kind === "agent" && nav.term.name === person.name
+  return (
+    <section className="person-term" aria-label="Terminal">
+      <Heading>Terminal</Heading>
+      <p className="person-term-note">It runs in Channels' own tmux on this computer.</p>
+      <div className="actions">
+        <button type="button" className="btn" aria-pressed={here} onClick={() => go({ to: "term", term: here ? null : { kind: "agent", name: person.name } })}>
+          Open here
+        </button>
+        <button
+          type="button"
+          className="btn"
+          disabled={busy}
+          onClick={() => {
+            setBusy(true)
+            void app.actions
+              .showAgent(channel.code, person.name)
+              .then((note) => note && toast(note))
+              .finally(() => setBusy(false))
+          }}
+        >
+          <Icon name="external" size={14} />
+          Open in your terminal
+        </button>
+      </div>
+      {person.attach && <CopyBox text={person.attach} label="Copy the command" wrap />}
+      <p className="person-term-note">
+        To leave it running, press <kbd>Ctrl-b</kbd> then <kbd>d</kbd>.
+      </p>
+    </section>
   )
 }
 
