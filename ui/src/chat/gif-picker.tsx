@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 
-import { gifByKey, gifFile, gifGroups, type Gif } from "~/chat/gifs"
+import { gifByKey, gifFile, gifGroups, gifHost, useGifSrc, type Gif } from "~/chat/gifs"
 import { cx } from "~/kit/bits"
 import type { Channel, Message, Reaction } from "~/model"
-import { useAct } from "~/nav"
+import { useAct, useApp } from "~/nav"
 import { nickname } from "~/names"
 
 interface ForCompose {
@@ -18,7 +18,8 @@ interface ForMessage {
 }
 
 export default function Gifs(props: ForCompose | ForMessage) {
-  if (!("m" in props)) return <GifPicker className="gifs-on-compose" onClose={props.onClose} onPick={(g) => void gifFile(g).then(props.onFile, () => props.onFile(null))} />
+  const host = gifHost(useApp().app.account?.relay)
+  if (!("m" in props)) return <GifPicker className="gifs-on-compose" onClose={props.onClose} onPick={(g) => void gifFile(host, g).then(props.onFile, () => props.onFile(null))} />
   return props.r ? <GifReaction channel={props.channel} m={props.m} r={props.r} /> : <GifTool channel={props.channel} m={props.m} />
 }
 
@@ -80,7 +81,7 @@ function GifPicker({ className, onClose, onPick }: { className: string; onClose:
               onPick(g)
             }}
           >
-            <img src={g.url} alt="" loading="lazy" />
+            <GifImg g={g} />
             <span className="gifs-feeling">{g.feeling}</span>
           </button>
         ))}
@@ -90,9 +91,18 @@ function GifPicker({ className, onClose, onPick }: { className: string; onClose:
 }
 
 function GifReaction({ channel, m, r }: { channel: Channel; m: Message; r: Reaction }) {
-  const { actions } = useAct()
   const gif = gifByKey(r.emoji)
   if (!gif) return null
+  return <GifChip channel={channel} m={m} r={r} gif={gif} />
+}
+
+function GifImg({ g }: { g: Gif }) {
+  const src = useGifSrc(gifHost(useApp().app.account?.relay), g)
+  return src ? <img src={src} alt="" /> : <span className="gif-wait" aria-hidden="true" />
+}
+
+function GifChip({ channel, m, r, gif }: { channel: Channel; m: Message; r: Reaction; gif: Gif }) {
+  const { actions } = useAct()
   const who = r.by.map((b) => nickname(channel, b)).join(", ")
   const mine = r.by.includes(channel.you)
   return (
@@ -105,7 +115,7 @@ function GifReaction({ channel, m, r }: { channel: Channel; m: Message; r: React
       disabled={m.where.kind === "theirs"}
       onClick={() => actions.react(channel.code, m.seq, r.emoji)}
     >
-      <img src={gif.url} alt="" />
+      <GifImg g={gif} />
       <span className="react-gif-who">{who}</span>
     </button>
   )

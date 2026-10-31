@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import pack from "../assets/reactions/index.json";
+import pack from "../site/reactions/index.json";
 import { isGifReaction, wellFormedEvent, wellFormedReaction } from "@kiwi/core/protocol.ts";
 
 describe("gif reactions", () => {
@@ -29,11 +29,11 @@ describe("gif reactions", () => {
     for (const g of pack) {
       expect(isGifReaction(`${g.reaction}/${g.name}`)).toBe(true);
       expect(g.feeling.length).toBeGreaterThan(0);
-      const file = Bun.file(join(import.meta.dir, "..", "assets", "reactions", g.reaction, `${g.name}.webp`));
+      const file = Bun.file(join(import.meta.dir, "..", "site", "reactions", g.reaction, `${g.name}.webp`));
       expect(await file.exists()).toBe(true);
       expect(file.size).toBeLessThanOrEqual(256 * 1024);
     }
-    const files = readdirSync(join(import.meta.dir, "..", "assets", "reactions"), { recursive: true }).filter((f) => String(f).endsWith(".webp"));
+    const files = readdirSync(join(import.meta.dir, "..", "site", "reactions"), { recursive: true }).filter((f) => String(f).endsWith(".webp"));
     expect(files.length).toBe(pack.length);
   });
 

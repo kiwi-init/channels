@@ -4,7 +4,7 @@ import { oneLook } from "../../agent.ts";
 import { saveImages } from "../../attach.ts";
 import { home } from "../../config.ts";
 import { alsoAnswers, formatShown, missingImages, parseDuration } from "@kiwi/core/format.ts";
-import reactionPack from "../../../assets/reactions/index.json";
+import reactionPack from "../../../site/reactions/index.json";
 import {
   CHAT_KINDS,
   CHOICE_MAX_LENGTH,

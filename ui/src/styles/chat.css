@@ -928,6 +928,14 @@ button.msg-image-spot:hover {
   border-radius: var(--r-card);
 }
 
+.react-gif .gif-wait {
+  display: block;
+  width: 170px;
+  height: 128px;
+  border-radius: var(--r-card);
+  background: var(--bg-3);
+}
+
 .react-gif.is-mine {
   box-shadow: 0 0 0 2px var(--accent);
 }
@@ -1055,7 +1063,9 @@ button.msg-image-spot:hover {
   background: var(--wash-2);
 }
 
-.gifs-item img {
+.gifs-item img,
+.gifs-item .gif-wait {
+  display: block;
   width: 100%;
   aspect-ratio: 4 / 3;
   border-radius: var(--r-row);

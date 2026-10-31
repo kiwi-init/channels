@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import { MAX_IMAGE_BYTES, RASTER_MIMES } from "@kiwi/core/protocol.ts"
 import { fileDrag, takeDropped } from "@kiwi/app/dropped.ts"
@@ -140,7 +140,6 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
   const [files, setFiles] = useState<Upload[]>([])
   const [dropping, setDropping] = useState(false)
   const [gifs, setGifs] = useState(false)
-  const closeGifs = useCallback(() => setGifs(false), [])
   const enterSends = app.prefs.enterSends
   const stash = useStash(key)
   const [cueOf, setCue] = useState<Cue | null>(() => (STASH_SHOT === "stash" ? { key, back: false, left: stash.list.length } : null))
@@ -299,7 +298,7 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
     <div className="compose" ref={box}>
       {gifs && (
         <Suspense fallback={null}>
-          <Gifs onClose={closeGifs} onFile={(file) => (file ? attach([file]) : toast("That GIF couldn't be loaded"))} />
+          <Gifs onClose={() => setGifs(false)} onFile={(file) => (file ? attach([file]) : toast("That GIF couldn't be loaded"))} />
         </Suspense>
       )}
       {listed.length > 0 && (
