@@ -517,7 +517,7 @@
   color: var(--on-ink);
 }
 
-.tabs .is-needs {
+.tabs button.is-needs {
   color: var(--decide);
 }
 

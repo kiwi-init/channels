@@ -482,6 +482,10 @@ kbd {
   color: var(--alert);
 }
 
+.tone-quiet {
+  color: var(--ink-2);
+}
+
 @keyframes rise {
   from {
     opacity: 0;
