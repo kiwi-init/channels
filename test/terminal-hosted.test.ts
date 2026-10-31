@@ -63,24 +63,25 @@ describe("the command that shows an app-started agent in the person's own termin
   });
 
   test.skipIf(!TMUX || !SCRIPT)("run in a real terminal, it lands on the agent's window and the window takes the terminal's size", async () => {
-    const socket = join(temp("kiwi-attach-"), "s");
+    const socket = `/tmp/kiwi-attach-${process.pid}`;
+    const log = join(temp("kiwi-attach-log-"), "client");
     const tmux = (...args: string[]) => spawnSync(TMUX!, ["-S", socket, "-f", "/dev/null", ...args], { encoding: "utf8" });
     try {
       tmux("new-session", "-d", "-s", "_kiwi", "-x", "80", "-y", "24", "sleep 60");
       tmux("new-window", "-d", "-t", "_kiwi", "sleep 60");
       const pane = tmux("list-panes", "-s", "-t", "_kiwi", "-F", "#{pane_id}").stdout.trim().split("\n").at(-1)!;
       tmux("resize-window", "-t", pane, "-x", "70", "-y", "20");
-      const line = attachLine(attachArgv(TMUX!, { socket, pane }));
-      const run = `stty cols 140 rows 45; ${line}`;
-      const argv = process.platform === "darwin" ? [SCRIPT!, "-q", "/dev/null", "sh", "-c", run] : [SCRIPT!, "-qc", run, "/dev/null"];
-      const client = Bun.spawn(argv, { stdin: "pipe", stdout: "ignore", stderr: "ignore", env: { ...process.env, TERM: "xterm" } });
+      const run = `stty cols 140 rows 45; ${attachLine(attachArgv(TMUX!, { socket, pane }))}`;
+      const inner = process.platform === "darwin" ? 'script -q /dev/null sh -c "$1"' : 'script -qfc "$1" /dev/null';
+      const client = Bun.spawn(["sh", "-c", `sleep 30 | ${inner} > "$0" 2>&1`, log, run], { stdin: "ignore", stdout: "ignore", stderr: "ignore", env: { ...process.env, TERM: "xterm-256color" } });
       let seen = "";
       for (let i = 0; i < 50 && !seen; i++) {
         await Bun.sleep(100);
         seen = tmux("list-clients", "-F", "#{window_id}").stdout.trim();
       }
       await Bun.sleep(300);
-      expect(seen).toBe(tmux("display-message", "-p", "-t", pane, "#{window_id}").stdout.trim());
+      const said = (await Bun.file(log).exists()) ? (await Bun.file(log).text()).slice(0, 500) : "";
+      expect({ seen, said: seen ? "" : said }).toEqual({ seen: tmux("display-message", "-p", "-t", pane, "#{window_id}").stdout.trim(), said: "" });
       expect(tmux("display-message", "-p", "-t", pane, "#{window_width}x#{window_height}").stdout.trim()).toBe("140x44");
       client.kill();
     } finally {
