@@ -221,3 +221,11 @@ describe("what a notification says and opens (#1351)", () => {
     expect(hashTarget("#mc2-abc?m=x")).toEqual({ hash: "#mc2-abc", seq: null })
   })
 })
+
+describe("a mention reaches only the whole name (T947)", () => {
+  test("@jow notifies jow, @jowl and an email address don't", () => {
+    expect(worthTelling(msg({ body: "ask @jow." }), "jow", "mentions", false)).toBe(true)
+    expect(worthTelling(msg({ body: "@jowl can you look?" }), "jow", "mentions", false)).toBe(false)
+    expect(worthTelling(msg({ body: "mail x@jow.com" }), "jow", "mentions", false)).toBe(false)
+  })
+})

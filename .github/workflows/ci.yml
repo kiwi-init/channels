@@ -217,6 +217,9 @@ jobs:
       - name: ui stash clicks in WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-stash-click.ts --dist ui/dist
+      - name: ui Esc in search keeps the panel, and Settings doesn't offer a name change, in WebKit
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-esc-and-name.ts --dist ui/dist
       - name: ui top bar in Chromium moves the window only from its background
         if: ${{ !cancelled() }}
         run: bun scripts/ui-drag-regions.ts --dist ui/dist

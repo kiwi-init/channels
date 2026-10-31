@@ -72,7 +72,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
         e.preventDefault()
         toggleSide()
       }
-      if (e.key === "Escape" && !document.querySelector("dialog[open]")) {
+      if (e.key === "Escape" && !e.defaultPrevented && !document.querySelector("dialog[open]")) {
         if (drawer) setDrawer(false)
         else if (nav.panel) go({ to: "panel", panel: null })
       }

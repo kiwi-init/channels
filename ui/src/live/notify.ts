@@ -1,5 +1,6 @@
 import { GENERAL_ROOM, type Message as Wire } from "@kiwi/core/protocol.ts"
 import { preview } from "~/chat/preview"
+import { mentions } from "~/live/mention"
 import type { Channel, Prefs } from "~/model"
 
 const NOTE_BODY = 200
@@ -9,7 +10,7 @@ const isDecision = (m: Wire): boolean => (m.kind === "ask" || m.kind === "blocki
 export function worthTelling(m: Wire, me: string, notify: Prefs["notify"], decides: boolean): boolean {
   if (m.kind === "event" || m.from === me || notify === "none") return false
   if (notify === "all") return true
-  return !!m.to?.includes(me) || m.body.includes(`@${me}`) || (decides && !!m.esc && isDecision(m))
+  return !!m.to?.includes(me) || mentions(m.body, me) || (decides && !!m.esc && isDecision(m))
 }
 
 export const elsewhere = (): boolean => document.hidden || !document.hasFocus()
