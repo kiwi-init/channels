@@ -71,7 +71,9 @@ describe("the command that shows an app-started agent in the person's own termin
       const pane = tmux("list-panes", "-s", "-t", "_kiwi", "-F", "#{pane_id}").stdout.trim().split("\n").at(-1)!;
       tmux("resize-window", "-t", pane, "-x", "70", "-y", "20");
       const line = attachLine(attachArgv(TMUX!, { socket, pane }));
-      const client = Bun.spawn([SCRIPT!, "-qc", `stty cols 140 rows 45; ${line}`, "/dev/null"], { stdin: "pipe", stdout: "ignore", stderr: "ignore", env: { ...process.env, TERM: "xterm" } });
+      const run = `stty cols 140 rows 45; ${line}`;
+      const argv = process.platform === "darwin" ? [SCRIPT!, "-q", "/dev/null", "sh", "-c", run] : [SCRIPT!, "-qc", run, "/dev/null"];
+      const client = Bun.spawn(argv, { stdin: "pipe", stdout: "ignore", stderr: "ignore", env: { ...process.env, TERM: "xterm" } });
       let seen = "";
       for (let i = 0; i < 50 && !seen; i++) {
         await Bun.sleep(100);
