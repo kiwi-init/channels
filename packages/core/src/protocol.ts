@@ -5,6 +5,7 @@
 // coordination events, signatures) lives inside the encrypted payload.
 
 import { DEVICE_LIST_MAX, type DeviceLink } from "./devices.ts";
+import { cleanPersona, type Persona } from "./personality.ts";
 import { permissionChoices, wellFormedPermission, wellFormedPermReply, wellFormedSettled, type PermissionReply, type PermissionSettled, type PermissionShown } from "./permission.ts";
 
 export const PROTOCOL_VERSION = 1;
@@ -249,10 +250,11 @@ export type Event =
   | { op: "fact.del"; key: string }
   | { op: "lease.take"; name: string; ttl: number; note?: string }
   | { op: "lease.free"; name: string }
-  /** Owner only: set a member's role (and rules), or allow the one they asked for. */
+  /** The owner, or a person who manages agents (on an agent): set a member's role (and rules), or allow the one they asked for. */
   | { op: "role.set"; member: string; role: string | null; about?: string | null }
-  /** Owner only: turn down the role a member asked for. */
+  /** The owner, or a person who manages agents (on an agent): turn down the role a member asked for. */
   | { op: "role.refuse"; member: string }
+  | { op: "power.set"; member: string; pk: string; managesAgents: boolean; was: boolean }
   /** Owner only: a member's seat moved to a new key (fingerprints, for the record). */
   | { op: "seat.reclaim"; member: string; from: string; to: string }
   /** A person's colour (null clears it): set by that person, or by the owner for anyone. */
@@ -263,7 +265,7 @@ export type Event =
    * Owner only: what a member may do besides read (null: everything). Names the member's key
    * too, so it never carries over to someone admitted under the same name later.
    */
-  | { op: "scope.set"; member: string; pk: string; scopes: string[] | null; lead?: boolean; wasLead?: boolean; keepLead?: true }
+  | { op: "scope.set"; member: string; pk: string; scopes: string[] | null; lead?: boolean; wasLead?: boolean; keepLead?: true; persona?: Persona | null }
   /** Coordinator-only mode is gone. Older logs still carry these; they fold to nothing. */
   | { op: "mode.set"; coordinatorOnly: boolean; strict: boolean }
   /** Owner only: a room in this channel. Its id never changes; the name is a label (room.rename). */
@@ -737,7 +739,7 @@ export interface NewerEvent {
 
 export type WirePayload = Omit<Payload, "ev"> & { ev?: Event | NewerEvent };
 
-export const EVENT_OPS_VERSION = 7;
+export const EVENT_OPS_VERSION = 8;
 const NEWER_OP_RE = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/;
 
 export const knownOp = (op: string): boolean => eventCheck({ op }) !== null;
@@ -757,7 +759,7 @@ export function asSent(m: Message): Omit<Message, "newer" | "ev"> & { ev?: Event
 
 export const outgrown = (base: { folded?: number; skipped?: true }): boolean => base.skipped === true && (base.folded ?? 0) < EVENT_OPS_VERSION;
 
-export const FOLD_RULES = 3;
+export const FOLD_RULES = 4;
 
 export const olderRules = (base: { rules?: number }): boolean => (base.rules ?? 0) < FOLD_RULES;
 
@@ -939,6 +941,8 @@ function eventCheck(ev: unknown): boolean | null {
       return str(e.member, 64) && (e.role === null || str(e.role, 200)) && (e.about === undefined || e.about === null || str(e.about, 2000));
     case "role.refuse":
       return str(e.member, 64);
+    case "power.set":
+      return str(e.member, 64) && str(e.pk, 64) && typeof e.managesAgents === "boolean" && typeof e.was === "boolean";
     case "seat.reclaim":
       return str(e.member, 64) && str(e.from, 64) && str(e.to, 64);
     case "color.set":
@@ -951,7 +955,8 @@ function eventCheck(ev: unknown): boolean | null {
         str(e.pk, 64) &&
         (e.scopes === null || strs(e.scopes, 32)) &&
         (e.keepLead === undefined || (e.keepLead === true && e.lead === undefined)) &&
-        (e.lead === undefined ? e.wasLead === undefined : typeof e.lead === "boolean" && typeof e.wasLead === "boolean")
+        (e.lead === undefined ? e.wasLead === undefined : typeof e.lead === "boolean" && typeof e.wasLead === "boolean") &&
+        (e.persona === undefined || e.persona === null || cleanPersona(e.persona) !== null)
       );
     case "mode.set":
       return typeof e.coordinatorOnly === "boolean" && typeof e.strict === "boolean";

@@ -12,7 +12,7 @@ import { ago } from "~/kit/time"
 import type { Channel, Task, Upload, Where } from "~/model"
 import { useApp } from "~/nav"
 import { nickname, shown } from "~/names"
-import { mentionNames, withNames } from "~/chat/linked"
+import { mentionNames, withNames, type Picks } from "~/chat/linked"
 
 const MENTION = /(^|\s)@([\p{L}\p{N}_.-]*)$/u
 const TASK_REF = /(^|\s)#([^#\n]{0,40})$/u
@@ -38,6 +38,14 @@ function taskMatches(tasks: readonly Task[], query: string): Task[] {
 }
 
 const drafts = new Map<string, string>()
+const picked = new Map<string, Picks>()
+function picksFor(key: string): Picks {
+  const have = picked.get(key)
+  if (have) return have
+  const made: Picks = new Map()
+  picked.set(key, made)
+  return made
+}
 
 type Cue = { key: string; back: boolean; left: number }
 
@@ -240,14 +248,15 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
     const body = value.trim() || files.map((f) => f.name).join(", ")
     if (!body) return
     const opts = { ...(inThread !== undefined ? { inThread } : {}), ...(replyTo ? { replyTo: replyTo.seq } : {}), ...(files.length ? { images: files } : {}) }
-    app.actions.send(channel.code, where, mentions.sent(body), Object.keys(opts).length ? opts : undefined)
+    app.actions.send(channel.code, where, mentions.sent(body, picksFor(key)), Object.keys(opts).length ? opts : undefined)
+    picked.delete(key)
     replying?.set(null)
     setFiles([])
     setCue(null)
     update("")
   }
   const ready = !!text.trim() || files.length > 0
-  const complete = (name: string) => insert(text.slice(0, caret).replace(MENTION, (_all, pre: string) => `${pre}@${mentions.typed(name)} `))
+  const complete = (name: string) => insert(text.slice(0, caret).replace(MENTION, (_all, pre: string) => `${pre}@${mentions.typed(name, picksFor(key))} `))
   const completeTask = (id: number) => insert(text.slice(0, caret).replace(TASK_REF, (_all, pre: string) => `${pre}T${id} `))
   const insert = (before: string) => {
     const next = before + text.slice(caret)

@@ -74,6 +74,12 @@ export function CopyBox({ text, label, disabled, wrap }: { text: string | null; 
 const POWERS = [
   { id: "addsAgents", label: "Can add agents", on: "Their agents join on their own from computers paired with their Kiwi app.", off: "Their agents wait for you to let them in." },
   { id: "answersDecisions", label: "Can answer decisions", on: "They answer agents' decisions in Needs you, as you do.", off: "Agents' decisions go to you and each agent's own person." },
+  {
+    id: "managesAgents",
+    label: "Can manage agents",
+    on: "They pick agents' personalities and roles, the lead included. Never people's, and never their own.",
+    off: "Only you change agents' personalities and roles.",
+  },
 ] as const
 
 const CAN = [
@@ -85,7 +91,7 @@ export function InvitePanel({ channel }: { channel: Channel }) {
   const { app } = useApp()
   const { link, failed, retry } = useInviteLink(channel.code)
   const can = channel.newMembers ?? "write"
-  const powers = channel.newPowers ?? { addsAgents: false, answersDecisions: false }
+  const powers = channel.newPowers ?? { addsAgents: false, answersDecisions: false, managesAgents: false }
   return (
     <>
       <PanelHead title="Invite people" />

@@ -6,15 +6,20 @@ import { addRelease, applyGithub, repoKey, type GithubState } from "./github.ts"
 import { reposOf } from "./repos.ts";
 import { omit } from "../omit.ts";
 import { readScopes, SCOPES, type Scope } from "../scopes.ts";
+import { cleanPersona } from "../personality.ts";
 import { isPerson } from "./people.ts";
 import { roomName } from "./rooms.ts";
 import { currentState, openRound, reviewClaimRefusal, reviewMoveRefusal, revisedOut, taskId, verdictRefusal, worked } from "./tasks.ts";
 import type { Charter, Compact, Fact, FoldMember, Hold, Lease, PersonaLead, Room, Task } from "./types.ts";
 
+const managesAgent = (holds: boolean, by: FoldMember, target: FoldMember | undefined): boolean =>
+  holds && !by.owner && by.kind === "human" && !!target && target.kind === "agent" && !target.owner && target.name !== by.name;
+
 export interface FoldCtx {
   members: Map<string, FoldMember>;
   signed: ReadonlySet<string>;
   personaLead: Map<string, PersonaLead>;
+  managers: Map<string, boolean>;
   leads: (member: FoldMember) => boolean;
   keysByName: Map<string, Set<string>>;
   scopesByKey: Map<string, Scope[]>;
@@ -180,11 +185,11 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
 
     case "role.set":
     case "role.refuse": {
-      if (!member.owner) {
-        reject("only the owner decides roles");
+      const target = members.get(ev.member);
+      if (!member.owner && !managesAgent(c.managers.get(member.name) ?? !!member.managesAgents, member, target)) {
+        reject("only the owner, or a person who manages agents, decides an agent's role");
         break;
       }
-      const target = members.get(ev.member);
       if (!target) {
         reject(`no member named ${ev.member}`);
         break;
@@ -197,8 +202,8 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
     }
 
     case "scope.set": {
-      if (!member.owner) {
-        reject("only the owner sets what members may do");
+      if (!member.owner && !managesAgent(c.managers.get(member.name) ?? !!member.managesAgents, member, members.get(ev.member))) {
+        reject("only the owner, or a person who manages agents, sets what an agent may do");
         break;
       }
       if (!keysByName.get(ev.member)?.has(ev.pk)) {
@@ -211,9 +216,18 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       }
       const scopes = ev.scopes === null ? [...SCOPES] : (readScopes(ev.scopes) ?? []);
       scopesByKey.set(ev.pk, scopes);
-      scopeSets.set(ev.pk, { seq: m.seq, scopes });
+      scopeSets.set(ev.pk, { seq: m.seq, scopes, ...(ev.persona !== undefined ? { persona: ev.persona === null ? null : cleanPersona(ev.persona) } : {}) });
       if (ev.lead !== undefined) c.personaLead.set(ev.member, ev.lead);
       else if (!ev.keepLead) c.personaLead.set(ev.member, "roster");
+      break;
+    }
+
+    case "power.set": {
+      const target = members.get(ev.member);
+      if (!member.owner) reject("only the owner gives or takes a power");
+      else if (!target || !keysByName.get(ev.member)?.has(ev.pk)) reject(target ? `that key isn't ${ev.member}'s` : `no member named ${ev.member}`);
+      else if (target.owner || target.kind !== "human") reject("only a person holds a power");
+      else c.managers.set(ev.member, ev.managesAgents);
       break;
     }
 

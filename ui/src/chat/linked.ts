@@ -35,7 +35,12 @@ const MARKUP = /[\\`*[\]<>|~]|^_|_$/
 
 type Named = { name: string; display?: string | undefined }
 
-export function mentionNames(people: readonly Named[], former: readonly Named[] = []): { typed: (handle: string) => string; sent: (text: string) => string } {
+export type Picks = Map<string, string>
+
+export function mentionNames(
+  people: readonly Named[],
+  former: readonly Named[] = []
+): { typed: (handle: string, picks?: Picks) => string; sent: (text: string, picks?: ReadonlyMap<string, string>) => string } {
   const fold = (s: string) => s.toLowerCase()
   const taken = new Map<string, number>()
   const count = (key: string) => taken.set(key, (taken.get(key) ?? 0) + 1)
@@ -43,16 +48,16 @@ export function mentionNames(people: readonly Named[], former: readonly Named[] 
     count(fold(p.name))
     if (p.display && fold(p.display) !== fold(p.name)) count(fold(p.display))
   }
-  const nicks = people
-    .flatMap((p) => (p.display && fold(p.display) !== fold(p.name) && taken.get(fold(p.display)) === 1 ? [{ display: p.display, handle: p.name }] : []))
-    .sort((a, b) => b.display.length - a.display.length)
-  const sent = (text: string) => {
+  const nicks = people.flatMap((p) => (p.display && fold(p.display) !== fold(p.name) && taken.get(fold(p.display)) === 1 ? [{ display: p.display, handle: p.name }] : []))
+  const displayOf = new Map(people.map((p) => [p.name, p.display]))
+  const sent = (text: string, picks: ReadonlyMap<string, string> = new Map()) => {
+    const known = [...[...picks].map(([display, handle]) => ({ display, handle })), ...nicks.filter((n) => !picks.has(fold(n.display)))].sort((a, b) => b.display.length - a.display.length)
     let result = ""
     let from = 0
     for (const span of spansOf(text)) {
       for (let at = text.indexOf("@", span.start); at !== -1 && at < span.end; at = text.indexOf("@", at + 1)) {
         if (NAME_BEFORE.test(text.slice(0, at))) continue
-        const hit = nicks.find(({ display }) => {
+        const hit = known.find(({ display }) => {
           const end = at + 1 + display.length
           NAME_GOES_ON.lastIndex = end
           return end <= span.end && fold(text.slice(at + 1, end)) === fold(display) && !NAME_GOES_ON.test(text)
@@ -65,9 +70,17 @@ export function mentionNames(people: readonly Named[], former: readonly Named[] 
     }
     return result + text.slice(from)
   }
-  const typed = (handle: string) => {
-    const display = nicks.find((n) => n.handle === handle)?.display
-    return display && !MARKUP.test(display) && sent(`@${display} x`) === `@${handle} x` ? display : handle
+  const typed = (handle: string, picks?: Picks) => {
+    const display = displayOf.get(handle)
+    if (!display || fold(display) === fold(handle) || MARKUP.test(display)) return handle
+    const key = fold(display)
+    const held = picks?.get(key)
+    if (held !== undefined && held !== handle) return handle
+    const trial = new Map(picks ?? [])
+    if (picks) trial.set(key, handle)
+    if (sent(`@${display} x`, trial) !== `@${handle} x`) return handle
+    picks?.set(key, handle)
+    return display
   }
   return { typed, sent }
 }

@@ -42,7 +42,7 @@ export function PersonPanel({ channel, name }: { channel: Channel; name: string 
         {!person.left && <Doors channel={channel} person={person} />}
         {!person.left && person.seat === "hosted" && <Terminal channel={channel} person={person} />}
         <Facts channel={channel} person={person} />
-        {channel.youOwn && !person.you && !person.owner && !person.left && <Manage channel={channel} person={person} />}
+        {(channel.youOwn || (channel.youManageAgents && person.kind === "agent")) && !person.you && !person.owner && !person.left && <Manage channel={channel} person={person} />}
       </div>
     </>
   )
@@ -187,7 +187,7 @@ function Terminal({ channel, person }: { channel: Channel; person: Person }) {
 function Facts({ channel, person }: { channel: Channel; person: Person }) {
   const { app, go } = useApp()
   const persona = personaOf(app.personas, person.persona)
-  const editable = channel.youOwn && !person.you && !person.owner
+  const editable = (channel.youOwn || (!!channel.youManageAgents && person.kind === "agent")) && !person.you && !person.owner
   const sponsor = person.sponsor ? memberOf(channel, person.sponsor) : undefined
   const rows: [string, ReactNode][] =
     person.kind === "agent"
@@ -250,6 +250,7 @@ function Manage({ channel, person }: { channel: Channel; person: Person }) {
   const roles = [...new Set(["lead", ...(person.role ? [person.role] : [])])]
   const persona = personaOf(app.personas, person.persona)
   const it = agent ? "It" : "They"
+  const owns = channel.youOwn
   const remove = () => {
     app.actions.removeMember(channel.code, person.name)
     setConfirm(false)
@@ -290,46 +291,53 @@ function Manage({ channel, person }: { channel: Channel; person: Person }) {
           )}
         </Row>
       )}
-      {agent && (
+      {owns && agent && (
         <Row label="Nickname" hint="The name people see. Its handle stays the same." stack>
           {() => <InlineEdit value={person.display ?? ""} label="Nickname" verb="Change" onSave={(v) => app.actions.setNickname(channel.code, person.name, v || null)} />}
         </Row>
       )}
-      <Row label="Can only read" hint={`${agent ? "It reads" : "They read"} messages but can't post or take tasks.`}>
-        {(id) => <Toggle id={id} on={!!person.readOnly} onChange={(on) => app.actions.setReadOnly(channel.code, person.name, on)} />}
-      </Row>
-      {agent && person.wakes !== undefined && (
-        <Row label="Wake it on new messages" hint={person.wakes ? "It starts working when someone writes." : "Off: it reads them on its next run."}>
-          {(id) => <Toggle id={id} on={person.wakes === true} onChange={(on) => app.actions.setWake(channel.code, person.name, on)} />}
-        </Row>
-      )}
-      {!agent && (
+      {owns && (
         <>
-          <Row label="Can add agents" hint={person.addsAgents ? "Their agents come in without waiting for you." : "Their agents wait for you to let them in."}>
-            {(id) => <Toggle id={id} on={!!person.addsAgents} onChange={(on) => app.actions.setPowers(channel.code, person.name, { addsAgents: on })} />}
+          <Row label="Can only read" hint={`${agent ? "It reads" : "They read"} messages but can't post or take tasks.`}>
+            {(id) => <Toggle id={id} on={!!person.readOnly} onChange={(on) => app.actions.setReadOnly(channel.code, person.name, on)} />}
           </Row>
-          <Row label="Can answer decisions" hint="Agents' questions and approvals can go to them as well as you.">
-            {(id) => <Toggle id={id} on={!!person.answersDecisions} onChange={(on) => app.actions.setPowers(channel.code, person.name, { answersDecisions: on })} />}
-          </Row>
+          {agent && person.wakes !== undefined && (
+            <Row label="Wake it on new messages" hint={person.wakes ? "It starts working when someone writes." : "Off: it reads them on its next run."}>
+              {(id) => <Toggle id={id} on={person.wakes === true} onChange={(on) => app.actions.setWake(channel.code, person.name, on)} />}
+            </Row>
+          )}
+          {!agent && (
+            <>
+              <Row label="Can add agents" hint={person.addsAgents ? "Their agents come in without waiting for you." : "Their agents wait for you to let them in."}>
+                {(id) => <Toggle id={id} on={!!person.addsAgents} onChange={(on) => app.actions.setPowers(channel.code, person.name, { addsAgents: on })} />}
+              </Row>
+              <Row label="Can answer decisions" hint="Agents' questions and approvals can go to them as well as you.">
+                {(id) => <Toggle id={id} on={!!person.answersDecisions} onChange={(on) => app.actions.setPowers(channel.code, person.name, { answersDecisions: on })} />}
+              </Row>
+              <Row label="Can manage agents" hint="They pick agents' personalities and roles, the lead included. Never people's, and never their own.">
+                {(id) => <Toggle id={id} on={!!person.managesAgents} onChange={(on) => app.actions.setPowers(channel.code, person.name, { managesAgents: on })} />}
+              </Row>
+            </>
+          )}
+          <div className="person-remove">
+            <button type="button" className="btn is-danger" onClick={() => setConfirm(true)}>
+              Remove from channel
+            </button>
+          </div>
+          <Dialog open={confirm} onClose={() => setConfirm(false)} label={`Remove ${shown(person)}`}>
+            <DialogHead title={`Remove ${shown(person)}?`} onClose={() => setConfirm(false)} />
+            <p className="person-confirm">{it} loses access to this channel's messages from now on.</p>
+            <div className="dialog-foot">
+              <button type="button" className="btn" onClick={() => setConfirm(false)}>
+                Cancel
+              </button>
+              <button type="button" className="btn is-danger" onClick={remove}>
+                Remove
+              </button>
+            </div>
+          </Dialog>
         </>
       )}
-      <div className="person-remove">
-        <button type="button" className="btn is-danger" onClick={() => setConfirm(true)}>
-          Remove from channel
-        </button>
-      </div>
-      <Dialog open={confirm} onClose={() => setConfirm(false)} label={`Remove ${shown(person)}`}>
-        <DialogHead title={`Remove ${shown(person)}?`} onClose={() => setConfirm(false)} />
-        <p className="person-confirm">{it} loses access to this channel's messages from now on.</p>
-        <div className="dialog-foot">
-          <button type="button" className="btn" onClick={() => setConfirm(false)}>
-            Cancel
-          </button>
-          <button type="button" className="btn is-danger" onClick={remove}>
-            Remove
-          </button>
-        </div>
-      </Dialog>
     </section>
   )
 }

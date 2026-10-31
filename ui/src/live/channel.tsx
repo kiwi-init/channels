@@ -140,6 +140,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       title,
       ...(icon ? { icon } : {}),
       youOwn: isOwner,
+      ...(!isOwner && people.some((p) => p.you && p.managesAgents) ? { youManageAgents: true } : {}),
       you: me,
       ...(state.lead ? { lead: state.lead } : {}),
       ...(state.charter ? { goal: state.charter.text } : {}),

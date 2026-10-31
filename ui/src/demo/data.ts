@@ -738,6 +738,7 @@ export const DEMO_GUEST: Channel = {
   code: "studio",
   title: "studio",
   youOwn: false,
+  youManageAgents: true,
   you: "jow",
   lead: "quill",
   goal: "A calm first-run for the Interlinked studio app: one screen, no setup steps.",

@@ -202,6 +202,7 @@ export class ChannelRequests {
       const scopes = persona ? personaScopes(persona) : (as?.scopes ?? inherited);
       const authority = !!same && (same.owner || !!same.addsAgents);
       const decides = !!same && (same.owner || !!same.answersDecisions);
+      const manages = !!same && (same.owner || !!same.managesAgents);
       const info: MemberInfo = {
         name: as?.name ?? req.name,
         kind,
@@ -211,6 +212,7 @@ export class ChannelRequests {
         ...(device ? { person: device.person, device: { pk: device.pk, label: device.label, as: device.as } } : {}),
         ...(kind === "human" && (as?.addsAgents ?? authority) ? { addsAgents: true } : {}),
         ...(kind === "human" && (as?.answersDecisions ?? decides) ? { answersDecisions: true } : {}),
+        ...(kind === "human" && (as?.managesAgents ?? manages) ? { managesAgents: true } : {}),
         ...(kind === "agent" && req.computer ? { from: { pk: req.computer.pk, label: req.computer.label } } : {}),
         ...(kind === "agent" && req.runs ? { runs: req.runs } : {}),
         ...(persona ? { persona } : {}),

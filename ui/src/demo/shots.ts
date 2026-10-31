@@ -104,6 +104,7 @@ export const SHOTS: Record<string, Shot> = {
   "settings-update-available": { scenario: "update-available", channel: "kiwi", nav: { page: "settings", section: "updates" } },
   "settings-about": kiwi({ page: "settings", section: "about" }),
   "channel-settings-guest": { scenario: "full", channel: "studio", nav: { panel: { kind: "channel" } } },
+  "agent-manager": { scenario: "full", channel: "studio", nav: { panel: { kind: "person", name: "quill" } } },
   updates: { scenario: "updates", channel: "kiwi" },
   "first-run": { scenario: "signed-out", channel: null },
   "github-sign-in": { scenario: "github-sign-in", channel: null },
