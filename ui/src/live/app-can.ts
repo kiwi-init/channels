@@ -15,7 +15,7 @@ export async function callsServedBy(b: Pick<KiwiBridge, "capabilities"> | null):
 
 let served: Promise<ReadonlySet<string> | null> | null = null
 
-export async function appCan(call: string): Promise<boolean> {
+async function appCan(call: string): Promise<boolean> {
   served ??= callsServedBy(bridge())
   const calls = await served
   return calls === null || calls.has(call)

@@ -58,7 +58,8 @@ describe("the UI contract", () => {
 
   test("a channel call newer than contract 1.10.0 is listed, and the UI checks the app serves it before using it (#1118)", () => {
     const CALLS_AT_1_10 = 46;
-    expect(CHANNEL_CALLS.length).toBe(CALLS_AT_1_10 + Object.values(CHANNEL_CALLS_SINCE).flat().length);
+    const total: number = CHANNEL_CALLS.length;
+    expect(total).toBe(CALLS_AT_1_10 + Object.values(CHANNEL_CALLS_SINCE).flat().length);
     for (const v of Object.keys(CHANNEL_CALLS_SINCE)) expect(UI_SURFACES[v]).toBeDefined();
     const ui = (dir: string): string[] =>
       readdirSync(dir).flatMap((f) => {
