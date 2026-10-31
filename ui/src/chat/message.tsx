@@ -201,7 +201,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
     if (m.pending || m.failed !== undefined || m.leftOut || m.deleted || editing) return
     const target = e.target
     const reply = replying && m.where.kind !== "theirs" ? () => replying.set(m) : null
-    showMenu(e, "Message", (x) => x.messageGroups({ channel, go, toast }, m, target, { openImage, reply, inThread: !!inThread })
+    showMenu(e, "Message", (x) => x.messageGroups({ channel, go, toast }, m, target, { openImage, reply, inThread: !!inThread }))
   }
 
   return (
@@ -227,7 +227,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
               type="button"
               className="msg-name"
               onClick={() => go({ to: "panel", panel: { kind: "person", name: m.from } })}
-              onContextMenu={(e) => who && showMenu(e, nickname(channel, m.from), () => import("~/chat/menus").then((x) => [x.personItems({ channel, go, toast }, who)]))}
+              onContextMenu={(e) => who && showMenu(e, nickname(channel, m.from), (x) => [x.personItems({ channel, go, toast }, who)])}
             >
               {nickname(channel, m.from)}
             </button>

@@ -38,7 +38,6 @@ export function Root({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => voi
               <FirstRun />
             </Suspense>
           </Boundary>
-          <ContextMenus />
           <Toasts toasts={toasts} />
         </ActContext>
       </AppContext>
@@ -82,6 +81,7 @@ export function Root({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => voi
           </Suspense>
         )}
         <Palette />
+        <ContextMenus />
         <Toasts toasts={toasts} />
       </ActContext>
     </AppContext>

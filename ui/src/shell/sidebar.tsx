@@ -36,7 +36,7 @@ export function Sidebar({ channel }: { channel: Channel }) {
                   className={cx("side-row", on && "is-on", r.unread > 0 && "is-news")}
                   aria-current={on ? "page" : undefined}
                   onClick={() => go({ to: "where", where })}
-                  onContextMenu={(e) => showMenu(e, `#${r.name}`, (x) => x.roomGroups({ channel, go, toast }, actions, r)}
+                  onContextMenu={(e) => showMenu(e, `#${r.name}`, (x) => x.roomGroups({ channel, go, toast }, actions, r))}
                 >
                   <span className="side-hash">{r.members ? <Icon name="lock" size={12} /> : "#"}</span>
                   <span className="side-label">{r.name}</span>
@@ -63,7 +63,7 @@ export function Sidebar({ channel }: { channel: Channel }) {
                     className={cx("side-row", on && "is-on", d.unread > 0 && "is-news")}
                     aria-current={on ? "page" : undefined}
                     onClick={() => go({ to: "where", where })}
-                    onContextMenu={(e) => showMenu(e, nickname(channel, d.with), (x) => x.directGroups({ channel, go, toast }, actions, d, who)}
+                    onContextMenu={(e) => showMenu(e, nickname(channel, d.with), (x) => x.directGroups({ channel, go, toast }, actions, d, who))}
                   >
                     <Avatar person={who} size="sm" />
                     <span className="side-label">{nickname(channel, d.with)}</span>
@@ -170,7 +170,7 @@ function Member({ person, channel }: { person: Person; channel: Channel }) {
         type="button"
         className={cx("side-member", quiet && "is-quiet", on && "is-on", person.presence === "offline" && "is-off")}
         onClick={() => go({ to: "panel", panel: on ? null : { kind: "person", name: person.name } })}
-        onContextMenu={(e) => showMenu(e, shown(person), () => import("~/chat/menus").then((x) => [x.personItems({ channel, go, toast }, person)]))}
+        onContextMenu={(e) => showMenu(e, shown(person), (x) => [x.personItems({ channel, go, toast }, person)])}
       >
         <Avatar person={person} size="sm" pip />
         <span className="side-name">

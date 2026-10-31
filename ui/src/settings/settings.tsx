@@ -1,8 +1,9 @@
+import { Notification01Icon, PaintBoardIcon } from "@hugeicons/core-free-icons"
 import { useEffect } from "react"
 
 import { cx } from "~/kit/bits"
 import { useGlide } from "~/kit/glide"
-import { Icon, type IconName } from "~/kit/icons"
+import { GlyphIcon, Icon, type Glyph, type IconName } from "~/kit/icons"
 import { useApp, type Section } from "~/nav"
 import { AgentsSection } from "~/settings/agents"
 import { ComputersSection } from "~/settings/computers"
@@ -10,10 +11,10 @@ import { AboutSection, AccountSection, AppearanceSection, NotificationsSection, 
 import { useSideways } from "~/settings/sideways"
 import { SideCards } from "~/shell/updates"
 
-const SECTIONS: readonly (readonly [Section, string, IconName])[] = [
+const SECTIONS: readonly (readonly [Section, string, IconName | Glyph])[] = [
   ["account", "Account", "account"],
-  ["appearance", "Appearance", "paint"],
-  ["notifications", "Notifications", "bell"],
+  ["appearance", "Appearance", PaintBoardIcon],
+  ["notifications", "Notifications", Notification01Icon],
   ["computers", "Computers and phones", "devices"],
   ["agents", "Agents", "agent"],
   ["updates", "Updates", "download"],
@@ -50,9 +51,7 @@ export function Settings() {
             return (
               <li key={id}>
                 <button type="button" className={cx("side-row", on && "is-on")} aria-current={on ? "page" : undefined} onClick={() => go({ to: "settings", section: id })}>
-                  <span className="side-icon">
-                    <Icon name={icon} />
-                  </span>
+                  <span className="side-icon">{typeof icon === "string" ? <Icon name={icon} /> : <GlyphIcon glyph={icon} />}</span>
                   <span className="side-label">{label}</span>
                 </button>
               </li>

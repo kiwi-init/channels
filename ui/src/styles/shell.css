@@ -347,6 +347,7 @@
 
 .rail-menu.is-at-pointer {
   z-index: 60;
+  outline: none;
 }
 
 .menu-group {

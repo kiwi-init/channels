@@ -48,7 +48,7 @@ export function personItems({ channel, go }: MenuContext, person: Person): MenuI
 export function messageGroups(ctx: MenuContext, m: Message, target: EventTarget, more: { openImage: (url: string, alt: string) => void; reply: (() => void) | null; inThread: boolean }): MenuGroups {
   const { channel, go, toast } = ctx
   const link = webLinkAt(target)
-  const picture = (target as Partial<Element>).closest?.("img") ?? null
+  const picture = (target as Partial<Element>).closest?.<HTMLImageElement>(".msg-image img, .msg-text img") ?? null
   return [
     link
       ? [

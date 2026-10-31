@@ -25,7 +25,7 @@ export default function Menu({ menu }: { menu: OpenMenu }) {
   useLayoutEffect(() => {
     const rect = box.current?.getBoundingClientRect()
     if (rect) setPlace(fitted(menu.x, menu.y, rect.width, rect.height, window.innerWidth, window.innerHeight))
-    box.current?.querySelector("button")?.focus()
+    box.current?.focus()
   }, [menu])
   useEffect(() => {
     const close = () => openMenu.set(null)
@@ -57,7 +57,7 @@ export default function Menu({ menu }: { menu: OpenMenu }) {
     }
   }, [])
   return (
-    <div ref={box} className="rail-menu is-at-pointer" role="menu" aria-label={menu.label} style={place}>
+    <div ref={box} tabIndex={-1} className="rail-menu is-at-pointer" role="menu" aria-label={menu.label} style={place}>
       {menu.groups.map((group, g) => (
         <div key={g} className="menu-group" role="group">
           {group.map((item) => (
