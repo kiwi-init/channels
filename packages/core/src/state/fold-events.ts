@@ -1,4 +1,4 @@
-import { GENERAL_ROOM, MAX_CHARTER, MAX_ROOMS, MAX_TAGS, PROOF_MAX, TASK_TITLE_MAX_LENGTH, type Event, type Message } from "../protocol.ts";
+import { GENERAL_ROOM, MAX_CHARTER, MAX_ROOMS, MAX_TAGS, PROOF_MAX, TASK_TITLE_MAX_LENGTH, type Event, type Message, type Power, powerChange } from "../protocol.ts";
 import { free, take } from "./leases.ts";
 import { unnamedTasks } from "./compact.ts";
 import { leadCheckpointKeyRefusal } from "./lead.ts";
@@ -12,6 +12,8 @@ import { roomName } from "./rooms.ts";
 import { currentState, openRound, reviewClaimRefusal, reviewMoveRefusal, revisedOut, taskId, verdictRefusal, worked } from "./tasks.ts";
 import type { Charter, Compact, Fact, FoldMember, Hold, Lease, PersonaLead, Room, Task } from "./types.ts";
 
+const trustOnly = (what: string): string => `only the owner, or a person they fully trust, ${what}`;
+
 const managesAgent = (holds: boolean, by: FoldMember, target: FoldMember | undefined): boolean =>
   holds && !by.owner && by.kind === "human" && !!target && target.kind === "agent" && !target.owner && target.name !== by.name;
 
@@ -19,7 +21,9 @@ export interface FoldCtx {
   members: Map<string, FoldMember>;
   signed: ReadonlySet<string>;
   personaLead: Map<string, PersonaLead>;
-  managers: Map<string, boolean>;
+  held: (pk: string, power: Power) => boolean;
+  trusted: (pk: string, member: FoldMember) => boolean;
+  powers: Map<string, Partial<Record<Power, boolean>>>;
   leads: (member: FoldMember) => boolean;
   keysByName: Map<string, Set<string>>;
   scopesByKey: Map<string, Scope[]>;
@@ -54,8 +58,8 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
     }
 
     case "room.create": {
-      if (!member.owner) {
-        reject("only the owner makes rooms");
+      if (!member.owner && !c.trusted(m.pk ?? "", member)) {
+        reject(trustOnly("makes rooms"));
         break;
       }
       const known = rooms.get(ev.id);
@@ -73,8 +77,8 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
     }
 
     case "room.rename": {
-      if (!member.owner) {
-        reject("only the owner names rooms");
+      if (!member.owner && !c.trusted(m.pk ?? "", member)) {
+        reject(trustOnly("names rooms"));
         break;
       }
       const room = rooms.get(ev.id);
@@ -91,8 +95,8 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       break;
 
     case "charter.set": {
-      if (!member.owner) {
-        reject("only the owner sets the charter");
+      if (!member.owner && !c.trusted(m.pk ?? "", member)) {
+        reject(trustOnly("sets the charter"));
         break;
       }
       const text = ev.text?.trim().slice(0, MAX_CHARTER);
@@ -144,8 +148,8 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
     }
 
     case "repos.set": {
-      if (!member.owner) {
-        reject("only the owner sets the channel's repos");
+      if (!member.owner && !c.trusted(m.pk ?? "", member)) {
+        reject(trustOnly("sets the channel's repos"));
         break;
       }
       c.repos = reposOf(ev.repos);
@@ -175,8 +179,8 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
     }
 
     case "branch.prefix.set": {
-      if (!member.owner) {
-        reject("only the owner sets the branch prefix");
+      if (!member.owner && !c.trusted(m.pk ?? "", member)) {
+        reject(trustOnly("sets the branch prefix"));
         break;
       }
       c.branchPrefix = ev.prefix;
@@ -186,7 +190,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
     case "role.set":
     case "role.refuse": {
       const target = members.get(ev.member);
-      if (!member.owner && !managesAgent(c.managers.get(member.name) ?? !!member.managesAgents, member, target)) {
+      if (!member.owner && !managesAgent(c.held(m.pk ?? "", "managesAgents"), member, target)) {
         reject("only the owner, or a person who manages agents, decides an agent's role");
         break;
       }
@@ -202,7 +206,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
     }
 
     case "scope.set": {
-      if (!member.owner && !managesAgent(c.managers.get(member.name) ?? !!member.managesAgents, member, members.get(ev.member))) {
+      if (!member.owner && !managesAgent(c.held(m.pk ?? "", "managesAgents"), member, members.get(ev.member))) {
         reject("only the owner, or a person who manages agents, sets what an agent may do");
         break;
       }
@@ -227,7 +231,10 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       if (!member.owner) reject("only the owner gives or takes a power");
       else if (!target || !keysByName.get(ev.member)?.has(ev.pk)) reject(target ? `that key isn't ${ev.member}'s` : `no member named ${ev.member}`);
       else if (target.owner || target.kind !== "human") reject("only a person holds a power");
-      else c.managers.set(ev.member, ev.managesAgents);
+      else {
+        const { power, on } = powerChange(ev);
+        c.powers.set(ev.pk, { ...c.powers.get(ev.pk), [power]: on });
+      }
       break;
     }
 

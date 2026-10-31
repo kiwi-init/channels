@@ -391,6 +391,7 @@ export interface Channel {
   icon?: string
   youOwn: boolean
   youManageAgents?: boolean
+  youTrusted?: boolean
   you: string
   lead?: string
   goal?: string

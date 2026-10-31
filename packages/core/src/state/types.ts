@@ -2,8 +2,8 @@ import type { Member as MemberRecord, Runs } from "../membership.ts";
 import type { Card, Color, IssueRef, MemberPicture, Message, TaskState, Trust, Verdict } from "../protocol.ts";
 import type { GithubCheck, GithubIssue, GithubPr, GithubRelease, GithubRules, GithubState } from "./github.ts";
 import type { Persona } from "../personality.ts";
+import type { Power } from "../protocol.ts";
 import type { Scope } from "../scopes.ts";
-
 export interface Member {
   name: string;
   kind?: "human" | "agent" | "computer";
@@ -271,7 +271,7 @@ export interface FoldBase {
   hw?: number;
   placesBefore?: [Place, number, number][];
   personaLeads?: [string, PersonaLead][];
-  managers?: [string, boolean][];
+  powers?: [string, Partial<Record<Power, boolean>>][];
   asks: Message[];
   askHeads?: AskHead[];
   answered: [number, string[]][];

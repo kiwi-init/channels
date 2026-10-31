@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 
 import type { SendOptions } from "@kiwi/core/client.ts"
 import { GENERAL_ROOM, type Message as Wire } from "@kiwi/core/protocol.ts"
-import { answersDecisions, dmPlace, placeKey, type ChannelState } from "@kiwi/core/state.ts"
+import { answersDecisions, dmPlace, fullyTrusted, placeKey, type ChannelState } from "@kiwi/core/state.ts"
 import { channelTitle, loadRecent, saveRecent } from "@kiwi/channel/recent.ts"
 import { useChannel } from "@kiwi/channel/use-channel.ts"
 import { useKnownChannels } from "@kiwi/channel/list.ts"
@@ -134,6 +134,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const next = nextOf(state)
   const mergedAt = useMemo(() => [...state.github.prs.values()].flatMap((p) => (p.state === "merged" ? [p.at] : [])), [state.github.prs])
 
+  const trusted = !isOwner && fullyTrusted(state.members.get(me))
   const channel = useMemo(
     (): Channel => ({
       code,
@@ -141,6 +142,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       ...(icon ? { icon } : {}),
       youOwn: isOwner,
       ...(!isOwner && people.some((p) => p.you && p.managesAgents) ? { youManageAgents: true } : {}),
+      ...(trusted ? { youTrusted: true } : {}),
       you: me,
       ...(state.lead ? { lead: state.lead } : {}),
       ...(state.charter ? { goal: state.charter.text } : {}),
@@ -201,6 +203,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       asks.asks,
       connection,
       ready,
+      trusted,
     ]
   )
 

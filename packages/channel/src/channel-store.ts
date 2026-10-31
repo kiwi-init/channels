@@ -102,6 +102,7 @@ export class ChannelStore {
   private readonly head: ReadonlySignal<number>;
   private readonly count: ReadonlySignal<number>;
   private readonly reconcileDue: ReadonlySignal<string>;
+  private syncing = false;
   private readonly checksDue: ReadonlySignal<string>;
   private readonly rulesDue: ReadonlySignal<string>;
 
@@ -222,6 +223,7 @@ export class ChannelStore {
       this.follow(),
       on(this.count, () => this.trimSoon()),
       on(this.reconcileDue, () => this.reconcile()),
+      on(this.checksDue, () => this.syncSettings()),
       on(this.head, (head) => this.snapshotIfDue(head)),
       on(this.checksDue, () => this.postReviewChecks()),
       this.every(60_000, () => this.drainGithub()),
@@ -492,6 +494,23 @@ export class ChannelStore {
       this.messages.value = this.messages.peek().filter((m) => m.seq > next.n);
       this.unread.value = this.unread.peek().filter((seq) => seq > next.n);
     });
+  }
+
+  private syncSettings(): void {
+    if (!this.ch.isOwner || !this.caughtUp.peek() || !this.guardIn || !this.roomsIn || this.syncing) return;
+    this.syncing = true;
+    void import("./settings-sync.ts")
+      .then((m) => m.syncSettings(this.ch, this.state.peek(), this.guardFloor.peek(), this.roomsFloor.peek()))
+      .then(
+        (got) =>
+          got &&
+          batch(() => {
+            this.guardFloor.value = got.guard;
+            this.roomsFloor.value = got.rooms;
+          }),
+        () => {},
+      )
+      .finally(() => (this.syncing = false));
   }
 
   private reconcile(): void {

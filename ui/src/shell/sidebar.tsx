@@ -25,7 +25,7 @@ export function Sidebar({ channel }: { channel: Channel }) {
   return (
     <div ref={sideRef} className="side">
       <section aria-label="Rooms">
-        <Heading action={channel.youOwn ? <IconButton icon="plus" label="New room" onClick={() => setAdding(true)} /> : undefined}>Rooms</Heading>
+        <Heading action={channel.youOwn || channel.youTrusted ? <IconButton icon="plus" label="New room" onClick={() => setAdding(true)} /> : undefined}>Rooms</Heading>
         <ul>
           {channel.rooms.map((r) => {
             const where = { kind: "room", room: r.id } as const

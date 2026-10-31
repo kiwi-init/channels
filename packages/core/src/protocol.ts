@@ -8,6 +8,10 @@ import { DEVICE_LIST_MAX, type DeviceLink } from "./devices.ts";
 import { cleanPersona, type Persona } from "./personality.ts";
 import { permissionChoices, wellFormedPermission, wellFormedPermReply, wellFormedSettled, type PermissionReply, type PermissionSettled, type PermissionShown } from "./permission.ts";
 
+export const POWERS = ["addsAgents", "answersDecisions", "managesAgents"] as const;
+export type Power = (typeof POWERS)[number];
+
+export const powerChange = (ev: { power?: Power; on?: boolean; managesAgents?: boolean }): { power: Power; on: boolean } => ({ power: ev.power ?? "managesAgents", on: ev.on ?? !!ev.managesAgents });
 export const PROTOCOL_VERSION = 1;
 
 /** Largest ciphertext (base64) the relay accepts for a single message. */
@@ -254,7 +258,7 @@ export type Event =
   | { op: "role.set"; member: string; role: string | null; about?: string | null }
   /** The owner, or a person who manages agents (on an agent): turn down the role a member asked for. */
   | { op: "role.refuse"; member: string }
-  | { op: "power.set"; member: string; pk: string; managesAgents: boolean; was: boolean }
+  | { op: "power.set"; member: string; pk: string; power?: Power; on?: boolean; managesAgents?: boolean; was: boolean }
   /** Owner only: a member's seat moved to a new key (fingerprints, for the record). */
   | { op: "seat.reclaim"; member: string; from: string; to: string }
   /** A person's colour (null clears it): set by that person, or by the owner for anyone. */
@@ -759,7 +763,7 @@ export function asSent(m: Message): Omit<Message, "newer" | "ev"> & { ev?: Event
 
 export const outgrown = (base: { folded?: number; skipped?: true }): boolean => base.skipped === true && (base.folded ?? 0) < EVENT_OPS_VERSION;
 
-export const FOLD_RULES = 5;
+export const FOLD_RULES = 6;
 
 export const olderRules = (base: { rules?: number }): boolean => (base.rules ?? 0) < FOLD_RULES;
 
@@ -942,7 +946,12 @@ function eventCheck(ev: unknown): boolean | null {
     case "role.refuse":
       return str(e.member, 64);
     case "power.set":
-      return str(e.member, 64) && str(e.pk, 64) && typeof e.managesAgents === "boolean" && typeof e.was === "boolean";
+      return (
+        str(e.member, 64) &&
+        str(e.pk, 64) &&
+        typeof e.was === "boolean" &&
+        (e.power === undefined ? typeof e.managesAgents === "boolean" : (POWERS as readonly unknown[]).includes(e.power) && typeof e.on === "boolean")
+      );
     case "seat.reclaim":
       return str(e.member, 64) && str(e.from, 64) && str(e.to, 64);
     case "color.set":

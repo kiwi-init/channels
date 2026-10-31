@@ -19,6 +19,7 @@ export function ChannelPanel({ channel }: { channel: Channel }) {
   const { app, go, toast } = useApp()
   const { actions } = app
   const own = channel.youOwn
+  const sets = own || !!channel.youTrusted
   const owner = channel.people.find((p) => p.owner && !p.you)
   const [ending, setEnding] = useState(false)
 
@@ -46,18 +47,18 @@ export function ChannelPanel({ channel }: { channel: Channel }) {
         </Part>
 
         <Part title="Rooms">
-          <Rooms channel={channel} own={own} />
+          <Rooms channel={channel} own={sets} />
         </Part>
 
-        <Part title="Goal">{own ? <GoalEditor channel={channel} /> : channel.goal ? <p className="cpanel-goal">{channel.goal}</p> : <p className="cpanel-none">No goal yet.</p>}</Part>
+        <Part title="Goal">{sets ? <GoalEditor channel={channel} /> : channel.goal ? <p className="cpanel-goal">{channel.goal}</p> : <p className="cpanel-none">No goal yet.</p>}</Part>
 
         <Part title="Repos">
           <Repos channel={channel} />
         </Part>
 
-        {(own ? channel.repos.length > 0 : channel.githubWrite || channel.branchPrefix) && (
+        {(sets ? channel.repos.length > 0 : channel.githubWrite || channel.branchPrefix) && (
           <Part title="GitHub">
-            <GitHub channel={channel} own={own} />
+            <GitHub channel={channel} own={own} sets={sets} />
           </Part>
         )}
 
@@ -154,7 +155,7 @@ function GoalEditor({ channel }: { channel: Channel }) {
 
 function Repos({ channel }: { channel: Channel }) {
   const { app } = useApp()
-  const own = channel.youOwn
+  const own = channel.youOwn || !!channel.youTrusted
   const [draft, setDraft] = useState("")
   const [mine, setMine] = useState<string[]>([])
   const valid = REPO.test(draft.trim())
@@ -292,7 +293,7 @@ function End({ channel, open, onClose, onDone }: { channel: Channel; open: boole
   )
 }
 
-function GitHub({ channel, own }: { channel: Channel; own: boolean }) {
+function GitHub({ channel, own, sets }: { channel: Channel; own: boolean; sets: boolean }) {
   const { app } = useApp()
   const write = !!channel.githubWrite
   const prefix = channel.branchPrefix
@@ -305,7 +306,7 @@ function GitHub({ channel, own }: { channel: Channel; own: boolean }) {
       <p className="cpanel-hint">{write ? "Kiwi links new PRs and issues to their tasks, and a task closing closes its issue." : "Kiwi doesn't comment on or close anything in your repos."}</p>
       <div className="cpanel-row">
         <span className="cpanel-value">Branch prefix</span>
-        {own ? (
+        {sets ? (
           <span className="cpanel-prefix">
             <InlineEdit value={prefix ?? ""} label="Branch prefix" verb={prefix ? "Change" : "Set"} onSave={(v) => app.actions.setBranchPrefix(channel.code, v)} />
             {prefix && (

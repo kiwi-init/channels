@@ -60,7 +60,7 @@ describe("a person who manages agents (T443)", () => {
 
   test("what they did while they held the power stands after it's taken away, or after they leave, folded whole or from a snapshot", async () => {
     const set = await ev("mia", { op: "role.set", member: "bot", role: "lead" });
-    const took = await ev("jow", { op: "power.set", member: "mia", pk: ids.mia!.pk, managesAgents: false, was: true });
+    const took = await ev("jow", { op: "power.set", member: "mia", pk: ids.mia!.pk, power: "managesAgents", on: false, was: true });
     const late = await ev("mia", { op: "role.set", member: "pix", role: "lead" });
     const log = [set, took, late];
     const revoked = roster.map((r) => (r.name === "mia" ? { ...r, managesAgents: undefined } : r));
@@ -79,10 +79,10 @@ describe("a person who manages agents (T443)", () => {
 
   test("a power given after joining counts from where it lands, and only the owner gives it, only to a person", async () => {
     const before = await ev("bo", { op: "role.set", member: "bot", role: "lead" });
-    const gave = await ev("jow", { op: "power.set", member: "bo", pk: ids.bo!.pk, managesAgents: true, was: false });
+    const gave = await ev("jow", { op: "power.set", member: "bo", pk: ids.bo!.pk, power: "managesAgents", on: true, was: false });
     const after = await ev("bo", { op: "role.set", member: "pix", role: "reviewer" });
-    const self = await ev("mia", { op: "power.set", member: "bo", pk: ids.bo!.pk, managesAgents: true, was: false });
-    const agent = await ev("jow", { op: "power.set", member: "bot", pk: ids.bot!.pk, managesAgents: true, was: false });
+    const self = await ev("mia", { op: "power.set", member: "bo", pk: ids.bo!.pk, power: "managesAgents", on: true, was: false });
+    const agent = await ev("jow", { op: "power.set", member: "bot", pk: ids.bot!.pk, power: "managesAgents", on: true, was: false });
     const granted = roster.map((r) => (r.name === "bo" ? { ...r, managesAgents: true } : r));
     const s = fold([before, gave, after, self, agent], granted);
     expect(s.rejected.has(before.seq)).toBe(true);
