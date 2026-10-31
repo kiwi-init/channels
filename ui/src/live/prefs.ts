@@ -28,22 +28,19 @@ let own: Own | null = null
 
 type Store = Pick<Storage, "getItem" | "setItem">
 
-const minuteOfDay = (x: unknown, fallback: number): number => (typeof x === "number" && Number.isInteger(x) && x >= 0 && x < 1440 ? x : fallback)
+const minute = (x: unknown, fallback: number): number => (Number.isInteger(x) && (x as number) >= 0 && (x as number) < 1440 ? (x as number) : fallback)
 
-function quietOf(x: unknown): Quiet {
-  const q = x && typeof x === "object" ? (x as Partial<Record<keyof Quiet, unknown>>) : {}
-  return { on: q.on === true, from: minuteOfDay(q.from, DEFAULTS.quiet.from), to: minuteOfDay(q.to, DEFAULTS.quiet.to) }
-}
+const quietOf = (q: Partial<Quiet> | undefined): Quiet => ({ on: q?.on === true, from: minute(q?.from, 1320), to: minute(q?.to, 480) })
 
 export function readPrefs(store: Store): Own {
   const raw = JSON.parse(store.getItem(KEY) ?? "{}") as Partial<Own>
   const moved = store.getItem(MOVED) === "1"
   const read: Own = {
     notify: raw.notify === "all" || raw.notify === "none" || raw.notify === "mentions" ? raw.notify : DEFAULTS.notify,
-    muted: Array.isArray(raw.muted) ? [...new Set(raw.muted.filter((k): k is string => typeof k === "string" && k.length > 0 && k.length <= 200))].slice(0, 500) : [],
-    snoozeUntil: typeof raw.snoozeUntil === "number" && Number.isFinite(raw.snoozeUntil) ? raw.snoozeUntil : null,
+    muted: Array.isArray(raw.muted) ? [...new Set(raw.muted.filter((k): k is string => typeof k === "string" && !!k))].slice(0, 500) : [],
+    snoozeUntil: typeof raw.snoozeUntil === "number" ? raw.snoozeUntil : null,
     quiet: quietOf(raw.quiet),
-    mentionSound: typeof raw.mentionSound === "boolean" ? raw.mentionSound : DEFAULTS.mentionSound,
+    mentionSound: raw.mentionSound !== false,
     enterSends: typeof raw.enterSends === "boolean" ? raw.enterSends : DEFAULTS.enterSends,
     darkTheme: typeof raw.darkTheme === "string" ? movedDark(raw.darkTheme, moved) : DEFAULTS.darkTheme,
     lightTheme: typeof raw.lightTheme === "string" ? raw.lightTheme : DEFAULTS.lightTheme,

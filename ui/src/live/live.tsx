@@ -39,20 +39,16 @@ function useTiles(rows: ChannelRow[], notify: "all" | "mentions" | "none", muted
   const marks = useMarks()
   const openNews = useOpenNews()
   const icons = useIcons()
-  const news = useMemo(() => rows.map((r) => rowNews(r, marks, openNews)), [rows, marks, openNews])
-  useEffect(() => startMarks(rows), [rows])
-  const hushed = useMemo(() => rows.map((r) => isMuted(muted, r.code)), [rows, muted])
-  useTabNews(
-    newsTotal(news),
-    badgeTotal(
-      news.filter((_, i) => !hushed[i]),
-      notify
-    ) +
-      badgeTotal(
-        news.filter((_, i) => hushed[i]),
-        notify === "none" ? "none" : "mentions"
-      )
+  const news = useMemo(
+    () =>
+      rows.map((r) => {
+        const n = rowNews(r, marks, openNews)
+        return isMuted(muted, r.code) ? { ...n, fresh: false, count: n.mentions, muted: true } : n
+      }),
+    [rows, marks, openNews, muted]
   )
+  useEffect(() => startMarks(rows), [rows])
+  useTabNews(newsTotal(news), badgeTotal(news, notify))
   return useMemo(
     () =>
       rows.map((r, i): ChannelTile => {
@@ -63,13 +59,13 @@ function useTiles(rows: ChannelRow[], notify: "all" | "mentions" | "none", muted
           title: r.state === "pending" ? pendingTitle(r.code) : r.title,
           ...(icon ? { icon } : {}),
           state: STATE[r.state],
-          unread: n ? (hushed[i] ? (n.open ? n.mentions : 0) : n.open ? n.count : n.fresh ? 1 : 0) : 0,
+          unread: n ? (n.open ? n.count : n.fresh ? 1 : 0) : 0,
           needsYou: n?.needs ?? 0,
           last: r.ts,
-          ...(hushed[i] ? { muted: true as const } : {}),
+          ...(n && "muted" in n ? { muted: true as const } : {}),
         }
       }),
-    [rows, news, icons, hushed]
+    [rows, news, icons]
   )
 }
 

@@ -3,20 +3,7 @@ import { mentions } from "~/live/mention"
 import { worthTelling } from "~/live/notify"
 import type { Prefs, Quiet } from "~/model"
 
-export type SnoozeFor = "1h" | "8h" | "tomorrow"
-
-export const muteKey = (code: string, room?: string | null): string => (room ? `${code}/${room}` : code)
-
-export const isMuted = (muted: readonly string[], code: string, room?: string | null): boolean => muted.includes(code) || (!!room && muted.includes(muteKey(code, room)))
-
-export function snoozeEnd(choice: SnoozeFor, now: number): number {
-  if (choice === "1h") return now + 3_600_000
-  if (choice === "8h") return now + 8 * 3_600_000
-  const at = new Date(now)
-  at.setDate(at.getDate() + 1)
-  at.setHours(9, 0, 0, 0)
-  return at.getTime()
-}
+export const isMuted = (muted: readonly string[], code: string, room?: string | null): boolean => muted.includes(code) || (!!room && muted.includes(`${code}/${room}`))
 
 export function inQuietHours(quiet: Quiet, now: number): boolean {
   if (!quiet.on || quiet.from === quiet.to) return false
@@ -34,8 +21,3 @@ export function tells(m: Wire, me: string, prefs: Pick<Prefs, "notify" | "muted"
   if (!isMuted(prefs.muted, code, m.room ?? GENERAL_ROOM)) return true
   return forYou(m, me) || (decides && !!m.esc)
 }
-
-export const pausedLabel = (prefs: Pick<Prefs, "snoozeUntil">): string =>
-  prefs.snoozeUntil !== null && prefs.snoozeUntil > Date.now()
-    ? `Notifications paused until ${new Date(prefs.snoozeUntil).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
-    : "Quiet hours: notifications paused"

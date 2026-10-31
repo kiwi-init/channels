@@ -33,11 +33,11 @@ export function Sidebar({ channel }: { channel: Channel }) {
                   type="button"
                   className={cx("side-row", on && "is-on", (r.muted ? r.mentions : r.unread) > 0 && "is-news", r.muted && "is-muted")}
                   aria-current={on ? "page" : undefined}
+                  title={r.muted ? `#${r.name} is muted` : undefined}
                   onClick={() => go({ to: "where", where })}
                 >
                   <span className="side-hash">{r.members ? <Icon name="lock" size={12} /> : "#"}</span>
                   <span className="side-label">{r.name}</span>
-                  {r.muted && <Icon name="bellOff" size={12} label="Muted" />}
                   <Count n={r.muted ? r.mentions : r.mentions || r.unread} loud={r.mentions > 0} />
                 </button>
               </li>

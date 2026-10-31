@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test"
 import type { Message as Wire } from "@kiwi/core/protocol.ts"
 import { readPrefs } from "~/live/prefs"
-import { inQuietHours, isMuted, muteKey, silentNow, snoozeEnd, tells } from "~/live/quiet"
+import { inQuietHours, isMuted, silentNow, tells } from "~/live/quiet"
+import { muteKey, snoozeEnd } from "~/live/snooze"
 
 const at = (h: number, m = 0): number => new Date(2026, 10, 2, h, m).getTime()
 const msg = (over: Partial<Wire>): Wire => ({ v: 1, id: "1", seq: 1, from: "atlas", kind: "msg", body: "build is green", ts: 1, rts: 1, sigOk: true, sig: "", ...over }) as Wire

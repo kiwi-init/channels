@@ -5,7 +5,8 @@ import { useEffect, useId, useRef, useState, type ReactNode } from "react"
 import { RoomReadyNotes } from "~/shell/room-ready"
 
 import { Avatar, cx, Field, Heading, IconButton } from "~/kit/bits"
-import { Icon } from "~/kit/icons"
+import { NotificationOff01Icon } from "@hugeicons/core-free-icons"
+import { GlyphIcon, Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
 import type { Channel } from "~/model"
 import { nickname, roomPeople, seatRoot, shown } from "~/names"
@@ -399,12 +400,16 @@ function Rooms({ channel, own }: { channel: Channel; own: boolean }) {
             ) : (
               <span className="cpanel-value">#{r.name}</span>
             )}
-            <IconButton
-              icon={r.muted ? "bellOff" : "bell"}
-              label={r.muted ? `Unmute #${r.name}` : `Mute #${r.name}`}
-              pressed={!!r.muted}
+            <button
+              type="button"
+              className="icon-btn"
+              aria-label={r.muted ? `Unmute #${r.name}` : `Mute #${r.name}`}
+              title={r.muted ? `Unmute #${r.name}` : `Mute #${r.name}`}
+              aria-pressed={!!r.muted}
               onClick={() => app.actions.setMute(channel.code, r.id, !r.muted)}
-            />
+            >
+              {r.muted ? <GlyphIcon glyph={NotificationOff01Icon} /> : <Icon name="bell" />}
+            </button>
           </span>
           {r.members && <RoomPeople channel={channel} id={r.id} members={r.members} own={own} />}
         </li>

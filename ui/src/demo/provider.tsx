@@ -11,7 +11,7 @@ import { demoShell, demoShells, demoTerm } from "~/demo/term"
 import type { Account, Actions, AgentStarts, App, Enrolling, Finding, GithubSignIn, Launching, ThisComputer, Channel, ChannelTile, GoneChannel, Message, Prefs, Task } from "~/model"
 import { deletedTheme, savedTheme } from "~/theme/themes"
 import { announce } from "~/kit/toasts"
-import { muteKey, snoozeEnd } from "~/live/quiet"
+import { muteKey, snoozeEnd } from "~/live/snooze"
 
 interface State {
   account: Account | null

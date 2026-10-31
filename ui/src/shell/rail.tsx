@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useEffectEvent, useState, type CSSProperties, type DragEvent } from "react"
+import { lazy, Suspense, useEffect, useEffectEvent, useState, type CSSProperties, type DragEvent } from "react"
 
 import { nextWithNews } from "@kiwi/channel/news.ts"
 import { cx } from "~/kit/bits"
@@ -9,7 +9,9 @@ import { useApp } from "~/nav"
 import { useNow } from "~/kit/time"
 import type { Menu } from "~/shell/rail-menu"
 import { railItems, type DropTarget } from "~/shell/rail-items"
-import { pausedLabel, silentNow } from "~/live/quiet"
+
+const Paused = lazy(() => import("~/shell/paused"))
+import { silentNow } from "~/live/quiet"
 
 const RailMenu = later(() => import("~/shell/rail-menu").then((m) => m.default))
 const FolderTile = later(() => import("~/shell/rail-folder").then((m) => m.default))
@@ -146,9 +148,9 @@ export function Rail() {
       </ul>
       <div className="rail-foot">
         {silentNow(app.prefs, now) && (
-          <button type="button" className="rail-gear is-quiet" aria-label={pausedLabel(app.prefs)} title={pausedLabel(app.prefs)} onClick={() => go({ to: "settings", section: "notifications" })}>
-            <Icon name="moon" size={16} />
-          </button>
+          <Suspense fallback={null}>
+            <Paused />
+          </Suspense>
         )}
         <button
           type="button"
