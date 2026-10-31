@@ -2,6 +2,26 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 2026.10.14 — 2026-10-31
+
+- **Search: a click on a result opens it; the results no longer move the window (#1354)** ([#1358](https://github.com/kiwi-init/channels/pull/1358))
+- **Notifications: say where the message is, show plain text, and open the message from View (#1351)** ([#1360](https://github.com/kiwi-init/channels/pull/1360))
+- **Composer: a slash lists commands again, and /compact asks the lead for a summary (T429)** ([#1364](https://github.com/kiwi-init/channels/pull/1364))
+- **Brief: a message from a room is answered in that room (T460)** ([#1366](https://github.com/kiwi-init/channels/pull/1366))
+- **Agents the app started open in your own terminal, with the command to copy (T428)** ([#1365](https://github.com/kiwi-init/channels/pull/1365))
+- **A person may manage agents: their role, the lead and their personality (T443)** ([#1367](https://github.com/kiwi-init/channels/pull/1367))
+- **Composer: a picked mention shows the nickname, even when it's shared (T509)** ([#1368](https://github.com/kiwi-init/channels/pull/1368))
+- **Invite: a Full trust switch gives a new person every power at once (T471)** ([#1369](https://github.com/kiwi-init/channels/pull/1369))
+- **Rail: channels group into folders, Discord-style (T496)** ([#1370](https://github.com/kiwi-init/channels/pull/1370))
+- **Profile: Full trust on a person who's already in, not only at join (T547)** ([#1371](https://github.com/kiwi-init/channels/pull/1371))
+- **Brief: a person the owner fully trusts directs agents, like their human and the owner (T548)** ([#1372](https://github.com/kiwi-init/channels/pull/1372))
+- **Presence: a person's app says it's here, so people show online to each other (T560)** ([#1373](https://github.com/kiwi-init/channels/pull/1373))
+- **Faces: your GitHub picture is published once GitHub is linked, not only when the channel opens** ([#1374](https://github.com/kiwi-init/channels/pull/1374))
+- **Hosted relay: no limits on channels, members, messages, or how long a channel lives (T604)** ([#1375](https://github.com/kiwi-init/channels/pull/1375))
+- **GIFs are back: a picker in the composer, GIF reactions under messages, kiwi react --list (T585)** ([#1376](https://github.com/kiwi-init/channels/pull/1376))
+- **A person the owner fully trusts sets up the channel: repos, rooms, charter, branch prefix (T632)** ([#1377](https://github.com/kiwi-init/channels/pull/1377))
+- **Main green: the brief drops the GIF line, and the composer's GIF button leaves the first load (T654)** ([#1378](https://github.com/kiwi-init/channels/pull/1378))
+
 ## 2026.10.13 — 2026-10-30
 
 - **Phones: an @handle in a message reads as the member's nickname, as on desktop (#1251)** ([#1291](https://github.com/kiwi-init/channels/pull/1291))
