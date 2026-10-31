@@ -161,10 +161,18 @@ export class ChannelSending {
         );
       if (payload.stepReply && !wellFormed(payload)) return yield* new Rejected("a step answer needs a reply target and either Done with optional output, or Can't do it or Not needed with a reason");
       if ((payload.permission || payload.perm || payload.settled) && !wellFormed(payload)) return yield* new Rejected("a permission prompt, its answer or its close is malformed");
+      const named = opts.room && opts.room !== GENERAL_ROOM ? opts.room : undefined;
+      if (named && !this.ch.roomNow.get(named)?.key && !this.ch.publicRooms.has(named)) {
+        const listed = yield* this.settings.fx.rooms().pipe(Effect.catchCause(() => Effect.succeed(null)));
+        for (const r of listed?.list ?? []) this.ch.publicRooms.add(r.id);
+        if (!this.ch.publicRooms.has(named)) yield* this.ch.fx.history(listed?.since ?? 0).pipe(Effect.catchCause(() => Effect.succeed(null)));
+      }
       const now = opts.room ? this.ch.roomNow.get(opts.room) : undefined;
       const n = now?.n;
       const roomKey = now?.key;
       if (now && !roomKey) return yield* new Rejected("you're not in that private room anymore");
+      if (named && !roomKey && this.ch.roomSeals.has(named)) return yield* new Rejected("you're not in that private room");
+      if (named && !roomKey && !this.ch.publicRooms.has(named)) return yield* new Rejected(`this app doesn't know a room ${named} yet, so it won't send there: fetch the channel and try again`);
       if (roomKey && ((opts.ev && !OVERLAY_OPS.has(opts.ev.op)) || opts.task)) return yield* new Rejected(PRIVATE_EVENTS);
       const inner = yield* Effect.promise(() => sign(this.ch.identity, payload));
       const signed =
