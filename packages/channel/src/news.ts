@@ -20,6 +20,7 @@ export interface OpenNews {
   /** Arrived while this tab was in the background, or in a room of it that isn't in view. */
   unread: number;
   needs: number;
+  mentions: number;
 }
 
 /** Put polled heads onto list rows so unread dots can compare `head` to the mark. */
@@ -36,6 +37,7 @@ export interface RowNews {
   /** Exact, for the open channel only. */
   count: number;
   needs: number;
+  mentions: number;
 }
 
 const KEY = "mc.news";
@@ -93,7 +95,7 @@ export function startMarks(heads: { room: string; head?: number }[]) {
 }
 
 export function setOpenNews(next: OpenNews | null) {
-  if (open === next || (open && next && open.room === next.room && open.unread === next.unread && open.needs === next.needs)) return;
+  if (open === next || (open && next && open.room === next.room && open.unread === next.unread && open.needs === next.needs && open.mentions === next.mentions)) return;
   open = next;
   emit();
 }
@@ -103,9 +105,9 @@ export const useOpenNews = () => useSyncExternalStore(subscribe, () => open);
 
 /** What a channel row shows: the open channel counts, the others compare their head with the mark. */
 export function rowNews(row: { room: string; head?: number }, marks: Record<string, Mark>, open: OpenNews | null): RowNews {
-  if (open?.room === row.room) return { open: true, fresh: open.unread > 0, count: open.unread, needs: open.needs };
+  if (open?.room === row.room) return { open: true, fresh: open.unread > 0, count: open.unread, needs: open.needs, mentions: open.mentions };
   const mark = marks[row.room];
-  return { open: false, fresh: !!mark && row.head !== undefined && row.head > mark.seen, count: 0, needs: mark?.needs ?? 0 };
+  return { open: false, fresh: !!mark && row.head !== undefined && row.head > mark.seen, count: 0, needs: mark?.needs ?? 0, mentions: 0 };
 }
 
 /** The tab's number: what's unread in the open channel, plus one for each other channel with news. */
@@ -113,8 +115,14 @@ export function newsTotal(news: RowNews[]): number {
   return news.reduce((n, r) => n + (r.open ? r.count : r.fresh || r.needs ? 1 : 0), 0);
 }
 
+export function badgeTotal(news: RowNews[], notify: "all" | "mentions" | "none"): number {
+  if (notify === "none") return 0;
+  if (notify === "all") return newsTotal(news);
+  return news.reduce((n, r) => n + (r.open ? r.mentions + r.needs : r.needs ? 1 : 0), 0);
+}
+
 /** The next channel with news after `from`, going `dir` through the list and around. */
-export function nextWithNews<T>(rows: T[], news: RowNews[], from: number, dir: 1 | -1): T | null {
+export function nextWithNews<T>(rows: T[], news: Pick<RowNews, "open" | "fresh" | "needs">[], from: number, dir: 1 | -1): T | null {
   const len = rows.length;
   // Nothing open: start just outside the list, so the first step lands on its first (or last) row.
   if (from < 0) from = dir === 1 ? -1 : len;
@@ -127,14 +135,16 @@ export function nextWithNews<T>(rows: T[], news: RowNews[], from: number, dir: 1
 }
 
 /** The total in the tab: its title, and a dot on its icon. */
-export function useTabNews(total: number) {
+export function useTabNews(total: number, badge: number) {
   useEffect(() => {
     document.title = total > 0 ? `(${total}) Channels` : "Channels";
     void markIcon(total > 0);
-    void bridge()
-      ?.setBadge(total)
-      .catch(() => undefined);
   }, [total]);
+  useEffect(() => {
+    void bridge()
+      ?.setBadge(badge)
+      .catch(() => undefined);
+  }, [badge]);
 }
 
 let plainIcon: string | null = null;

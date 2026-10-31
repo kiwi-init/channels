@@ -4,7 +4,8 @@ import { useEffect, useId, useState, type ReactNode } from "react"
 
 import { TOO_MANY_REQUESTS } from "@kiwi/core/sas.ts"
 
-import { PrChip, QuestionCard, TaskChip } from "~/chat/cards"
+import { PrChip, TaskChip } from "~/chat/cards"
+import QuestionCard from "~/chat/question-card"
 import type { Jump } from "~/chat/search-box"
 import { Avatar, Empty, Loading, Toggle } from "~/kit/bits"
 import { Icon } from "~/kit/icons"

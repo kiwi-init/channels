@@ -64,6 +64,7 @@ import type {
   Upload,
   Where,
 } from "~/model"
+import { mentions } from "~/live/mention"
 import { phraseOf } from "~/live/said"
 
 type Seen = Readonly<Record<string, number>>
@@ -227,10 +228,8 @@ export function theirsOf(state: ChannelState, messages: readonly Wire[], me: str
   return [...at.values()].sort((a, b) => b.last - a.last)
 }
 
-const LEADING_MENTION = (me: string) => new RegExp(`(^|[^\\p{L}\\p{N}_.-])@${me.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\p{L}\\p{N}_-])`, "u")
-
 function mentionsYou(m: Wire, me: string): boolean {
-  return m.from !== me && (!!m.to?.includes(me) || LEADING_MENTION(me).test(m.body))
+  return m.from !== me && (!!m.to?.includes(me) || mentions(m.body, me))
 }
 
 const SUMMARISED = (m: Wire): boolean => m.ev?.op === "task.add" || (m.ev?.op === "task.update" && !!m.ev.state)

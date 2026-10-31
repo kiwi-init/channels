@@ -293,7 +293,8 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   useEffect(() => {
     if (top > 0 && shown) markSeen(roomId, top, needs)
   }, [roomId, top, needs, shown])
-  useEffect(() => setOpenNews({ room: roomId, unread: unreadHere, needs }), [roomId, unreadHere, needs])
+  const mentionsHere = rooms.reduce((n, r) => n + r.mentions, 0) + directs.reduce((n, d) => n + d.unread, 0)
+  useEffect(() => setOpenNews({ room: roomId, unread: unreadHere, needs, mentions: mentionsHere }), [roomId, unreadHere, needs, mentionsHere])
   useEffect(() => () => setOpenNews(null), [roomId])
 
   useEffect(() => {

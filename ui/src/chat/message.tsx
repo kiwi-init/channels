@@ -2,7 +2,7 @@ import { lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo,
 
 import { isGifReaction } from "@kiwi/core/protocol.ts"
 
-import { PrChip, QuestionCard, TaskChip } from "~/chat/cards"
+import { PrChip, TaskChip } from "~/chat/cards"
 import { parsedFor } from "~/chat/parsed"
 import { preview, useReplying } from "~/chat/reply"
 import { Avatar, cx } from "~/kit/bits"
@@ -17,6 +17,7 @@ const Markdown = lazy(() => import("~/chat/markdown"))
 const Annotator = lazy(() => import("~/chat/annotator"))
 const Gifs = lazy(() => import("~/chat/gif-picker"))
 const PermissionCard = lazy(() => import("~/chat/permission-card"))
+const QuestionCard = lazy(() => import("~/chat/question-card"))
 
 const QUICK = ["👍", "🔥", "👀", "✅"]
 const CLAMP_PX = 12 * 22
@@ -257,7 +258,11 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
             <PermissionCard channel={channel} ask={ask} />
           </Suspense>
         )}
-        {ask?.kind === "question" && <QuestionCard channel={channel} ask={ask} />}
+        {ask?.kind === "question" && (
+          <Suspense fallback={null}>
+            <QuestionCard channel={channel} ask={ask} />
+          </Suspense>
+        )}
         {(m.reactions?.length ?? 0) > 0 && (
           <div className="reacts">
             {m.reactions?.map((r) =>
