@@ -134,6 +134,7 @@ function folding(
       if (p.card) m.card = p.card;
       m.lastSeen = Math.max(m.lastSeen, p.lastSeen);
       m.messages = p.messages;
+      if (p.ops) m.ops = { ...p.ops };
     }
   }
   const ownerName = [...members.values()].find((x) => x.owner)?.name ?? "owner";
@@ -335,6 +336,7 @@ function folding(
         rejected.set(m.seq, member ? `not signed by ${m.from}'s key` : `${m.from} isn't a member`);
         continue;
       }
+      (member.ops ??= {})[m.pk!] = m.ops ?? 0;
       const first = sent.get(m.id) ?? (old.size ? old.get(idHash(m.id)) : undefined);
       if (first !== undefined && first !== m.seq) {
         trust.set(m.seq, "refused");
@@ -541,7 +543,17 @@ function folding(
   keep?.(
     structuredClone({
       n: head,
-      members: [...members.values()].map((m) => ({ name: m.name, role: m.role, about: m.about, color: m.color, picture: m.picture, card: m.card, lastSeen: m.lastSeen, messages: m.messages })),
+      members: [...members.values()].map((m) => ({
+        name: m.name,
+        role: m.role,
+        about: m.about,
+        color: m.color,
+        picture: m.picture,
+        card: m.card,
+        lastSeen: m.lastSeen,
+        messages: m.messages,
+        ...(m.ops ? { ops: { ...m.ops } } : {}),
+      })),
       lead,
       charter: ctx.charter,
       compact: ctx.compact,

@@ -25,6 +25,7 @@ export interface Member {
   active: boolean;
   lastSeen: number;
   messages: number;
+  ops?: Record<string, number>;
 }
 
 export type FoldMember = Member & { role?: string; about?: string };
@@ -252,7 +253,7 @@ export type PersonaLead = boolean | "roster";
 
 export interface FoldBase {
   n: number;
-  members: { name: string; role?: string; about?: string; color?: Color; picture?: MemberPicture; card?: Card & { at: number }; lastSeen: number; messages: number }[];
+  members: { name: string; role?: string; about?: string; color?: Color; picture?: MemberPicture; card?: Card & { at: number }; lastSeen: number; messages: number; ops?: Record<string, number> }[];
   lead: string | null;
   charter: Charter | null;
   repos?: string[];

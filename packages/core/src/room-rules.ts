@@ -36,3 +36,12 @@ export const inRoom = (meta: Pick<RoomMeta, "members">, name: string, pk: string
 
 export const publicView = <M extends { sealed?: unknown; opened?: unknown; proven?: unknown }>(messages: readonly M[]): M[] =>
   messages.flatMap((m) => (m.sealed ? [] : m.opened || m.proven !== undefined ? [Object.fromEntries(Object.entries(m).filter(([k]) => k !== "opened" && k !== "proven")) as M] : [m]));
+
+export type RoomReadiness = "ready" | "old" | "unseen";
+
+export function roomReadiness(signed: Readonly<Record<string, number>> | undefined, live: readonly number[], needs: number): RoomReadiness {
+  if (live.some((v) => v >= needs)) return "ready";
+  const known = Object.values(signed ?? {}).filter((v) => v > 0);
+  if (known.some((v) => v < needs)) return "old";
+  return known.length ? "ready" : "unseen";
+}

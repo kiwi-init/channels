@@ -689,6 +689,7 @@ export interface Payload {
   v: typeof PROTOCOL_VERSION;
   id: string;
   from: string;
+  ops?: number;
   /** Recipients by agent name; omitted means everyone. */
   to?: string[];
   kind: Kind;
@@ -750,6 +751,10 @@ export interface NewerEvent {
 export type WirePayload = Omit<Payload, "ev"> & { ev?: Event | NewerEvent };
 
 export const EVENT_OPS_VERSION = 9;
+
+export const PRIVATE_ROOM_OPS = 9;
+
+export const opsVersion = (x: unknown): x is number => Number.isSafeInteger(x) && (x as number) >= 1 && (x as number) <= 10_000;
 const NEWER_OP_RE = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/;
 
 export const knownOp = (op: string): boolean => eventCheck({ op }) !== null;
@@ -769,7 +774,7 @@ export function asSent(m: Message): Omit<Message, "newer" | "ev"> & { ev?: Event
 
 export const outgrown = (base: { folded?: number; skipped?: true }): boolean => base.skipped === true && (base.folded ?? 0) < EVENT_OPS_VERSION;
 
-export const FOLD_RULES = 7;
+export const FOLD_RULES = 8;
 
 export const olderRules = (base: { rules?: number }): boolean => (base.rules ?? 0) < FOLD_RULES;
 
@@ -857,6 +862,7 @@ export interface Presence {
   reach?: Reach;
   readAt?: number;
   wake?: string;
+  ops?: number;
   ts: number;
   pk?: string;
   sig?: string;
@@ -1064,6 +1070,7 @@ export function wellFormed(p: unknown): p is WirePayload {
     typeof m.kind === "string" &&
     (KINDS as readonly string[]).includes(m.kind) &&
     time(m.ts) &&
+    opt(m.ops, opsVersion) &&
     opt(m.to, (x): x is string[] => strs(x, 50)) &&
     opt(m.re, (x): x is number[] => nums(x, 20)) &&
     opt(m.room, roomId) &&

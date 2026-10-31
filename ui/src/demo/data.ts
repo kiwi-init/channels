@@ -51,6 +51,7 @@ const people: Person[] = [
   { name: "jow", kind: "human", color: "teal", owner: true, you: true, role: "owner", presence: "online", lastSeen: now, joined: m(60 * 24 * 30), messages: 812 },
   {
     name: "maya",
+    opsLive: 9,
     kind: "human",
     color: "pink",
     picture:
@@ -65,6 +66,7 @@ const people: Person[] = [
   },
   {
     name: "atlas",
+    ops: { atlasKey: 9 },
     kind: "agent",
     owner: false,
     you: false,
@@ -92,6 +94,7 @@ const people: Person[] = [
   },
   {
     name: "win",
+    ops: { winMac: 9 },
     kind: "agent",
     owner: false,
     you: false,
@@ -114,6 +117,7 @@ const people: Person[] = [
   },
   {
     name: "pixel",
+    ops: { pixelKey: 8 },
     kind: "agent",
     owner: false,
     you: false,
