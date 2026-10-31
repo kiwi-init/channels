@@ -17,13 +17,13 @@ import { SIDEBAR_KEYS, useSidebarHidden } from "@kiwi/app/sidebar-hidden.ts"
 import { usePanelWidth } from "~/shell/panel-width"
 import { isSideKey, setDrawer, toggleSide, useDrawer, useTall } from "~/shell/side"
 import { Sidebar } from "~/shell/sidebar"
-import { Waiting } from "~/start/waiting"
 import { openTasks } from "~/tasks/open"
 import { headerLine } from "~/now"
 import { between, nickname } from "~/names"
 
 const TermDrawer = lazy(() => import("~/term/drawer"))
 const TallPage = lazy(() => import("~/shell/tall"))
+const Waiting = later(() => import("~/start/waiting").then((m) => m.Waiting))
 const SearchBox = later(() => import("~/chat/search-box").then((m) => m.SearchBox))
 const Board = later(() => import("~/tasks/board").then((m) => m.Board))
 const Lanes = later(() => import("~/tasks/lanes").then((m) => m.Lanes))
@@ -86,7 +86,12 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
     return () => window.removeEventListener("keydown", onKey)
   }, [nav.panel, go, drawer])
 
-  if (channel.waiting) return <Waiting channel={channel} />
+  if (channel.waiting)
+    return (
+      <Suspense fallback={null}>
+        <Waiting channel={channel} />
+      </Suspense>
+    )
 
   const needs = openAsks(channel).length
   const tasks = openTasks(channel).length

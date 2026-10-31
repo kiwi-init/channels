@@ -191,7 +191,7 @@ const picks = (run: Run, names: readonly string[]) =>
 const open = (rooms: Iterable<{ id: string; name: string; members?: unknown }>) => [...rooms].filter((r) => !r.members)
 
 const updateFirst = (err: unknown): never => {
-  throw new Error(/not a call|unknown call|makeRoom|changeRoom/i.test(say(err)) ? "update Channels to make private rooms" : say(err))
+  throw new Error(/no such call|not a call|unknown call|makeRoom|changeRoom/i.test(say(err)) ? "update Channels to make private rooms" : say(err))
 }
 
 export async function addRoom(code: string, typed: string, members?: string[]): Promise<string> {

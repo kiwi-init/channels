@@ -9,6 +9,7 @@ import type { Channel } from "~/model"
 import { useApp } from "~/nav"
 import { roomPeople, shown } from "~/names"
 import { RoomReadyNotes } from "~/shell/room-ready"
+import { useAppCan } from "~/live/app-can"
 
 const roomName = (typed: string): string => typed.trim().replace(/^#/, "").trim().toLowerCase().replace(/\s+/g, "-")
 
@@ -26,7 +27,9 @@ export function NewRoomDialog({ channel }: { channel: Channel }) {
 function NewRoomForm({ channel, onClose }: { channel: Channel; onClose: () => void }) {
   const { app, go } = useApp()
   const [typed, setTyped] = useState("")
-  const [only, setOnly] = useState(false)
+  const [wantsOnly, setOnly] = useState(false)
+  const canPrivate = useAppCan("makeRoom")
+  const only = wantsOnly && canPrivate
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set())
   const [busy, setBusy] = useState(false)
   const name = roomName(typed)
@@ -85,13 +88,17 @@ function NewRoomForm({ channel, onClose }: { channel: Channel; onClose: () => vo
             <button type="button" aria-pressed={!only} onClick={() => setOnly(false)}>
               Everyone
             </button>
-            <button type="button" aria-pressed={only} onClick={() => setOnly(true)}>
+            <button type="button" aria-pressed={only} disabled={!canPrivate} title={canPrivate ? undefined : "Update Channels to make private rooms"} onClick={() => setOnly(true)}>
               Only who I pick
             </button>
           </Track>
         </Field>
         <p className="start-hint">
-          {only ? "It has its own key: only who you pick can read it. Everyone else doesn't see it, and neither does the relay." : "Everyone in the channel, people and agents, sees and reads it."}
+          {only
+            ? "It has its own key: only who you pick can read it. Everyone else doesn't see it, and neither does the relay."
+            : canPrivate
+              ? "Everyone in the channel, people and agents, sees and reads it."
+              : "Everyone in the channel, people and agents, sees and reads it. Update Channels to make private rooms."}
         </p>
         {only && (
           <div className="room-pick">

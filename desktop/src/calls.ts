@@ -104,6 +104,7 @@ export function makeBridge(t: BridgeTransport): KiwiBridge {
     onTextStep: (cb) => t.listen("textStep", cb),
     onFrost: (cb) => t.listen("frost", cb),
     getAccentColor: () => t.call("getAccentColor"),
+    capabilities: () => t.call("capabilities"),
     onAccent: (cb) => t.listen("accent", cb),
     setPersonalities: (list) => t.call("setPersonalities", list),
     seatPlaces: () => t.call("seatPlaces"),
