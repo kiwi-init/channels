@@ -250,6 +250,7 @@ export interface Room {
   posters?: string[];
   members?: RoomMember[];
   dm?: true;
+  self?: true;
 }
 
 export interface SecretRoom {

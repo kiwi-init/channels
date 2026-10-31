@@ -11,7 +11,7 @@ import { isPerson } from "./people.ts";
 import { roomName } from "./rooms.ts";
 import { currentState, openRound, reviewClaimRefusal, reviewMoveRefusal, revisedOut, taskId, verdictRefusal, worked } from "./tasks.ts";
 import type { Charter, Compact, Fact, FoldMember, Hold, Lease, PersonaLead, Room, SecretRoom, Task } from "./types.ts";
-import { dmPair, inRoom } from "../room-rules.ts";
+import { dmPair, inRoom, selfOnly } from "../room-rules.ts";
 
 const trustOnly = (what: string): string => `only the owner, or a person they fully trust, ${what}`;
 
@@ -89,10 +89,15 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
         break;
       }
       const isDm = opened?.dm === true;
+      const isSelf = opened?.self === true;
+      const wasSelf = known?.meta?.self === true;
       if (isDm && opened && !dmPair(opened, member.name, c.members)) reject("a direct message's room is between exactly two people");
-      else if (!trusted && !isDm && !(wasDm && !opened && m.proven)) reject(trustOnly("makes private rooms"));
+      else if (isSelf && opened && !selfOnly(opened, member.name, c.members)) reject("a person's own room holds only that person's devices");
+      else if (!trusted && !isDm && !isSelf && !((wasDm || wasSelf) && !opened && m.proven)) reject(trustOnly("makes private rooms"));
       else if (wasDm && opened && !isDm) reject("a direct message's room stays one");
+      else if (wasSelf && opened && !isSelf) reject("a person's own room stays theirs");
       else if (isDm && known?.meta && !wasDm) reject("a room can't become a direct message");
+      else if (isSelf && known?.meta && !wasSelf) reject("a room can't become a person's own");
       else if (m.proven === false || (known?.meta && !m.proven)) reject("that change to a private room doesn't hold the room's key");
       else if (!known && (ev.id === GENERAL_ROOM || rooms.has(ev.id))) reject(`there's already a room ${ev.id}`);
       else if (opened && !inRoom(opened, member.name, m.pk)) reject("whoever changes a private room stays in it");
@@ -100,7 +105,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
         const seals = [...(known?.seals ?? []), { id: ev.id, n: ev.n, keys: ev.keys, meta: ev.meta, ...(ev.proof ? { proof: ev.proof } : {}) }];
         const n = m.proven || !known ? ev.n : known.n;
         c.secret.set(ev.id, { n, seals, ...(opened ? { meta: opened } : !m.proven && known?.meta ? { meta: known.meta } : {}) });
-        if (opened) rooms.set(ev.id, { ...(rooms.get(ev.id) ?? { id: ev.id, createdBy: m.from, at }), name: opened.name, members: opened.members, ...(opened.dm ? { dm: true as const } : {}) });
+        if (opened) rooms.set(ev.id, { ...(rooms.get(ev.id) ?? { id: ev.id, createdBy: m.from, at }), name: opened.name, members: opened.members, ...(opened.dm ? { dm: true as const } : {}), ...(opened.self ? { self: true as const } : {}) });
         else if (m.proven) rooms.delete(ev.id);
       }
       break;
