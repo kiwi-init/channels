@@ -5,6 +5,7 @@ import { later } from "~/kit/later"
 import { Toasts, useToasts } from "~/kit/toasts"
 import type { App } from "~/model"
 import { ActContext, AppContext, type Go, type Nav } from "~/nav"
+import { ContextMenus } from "~/kit/context-menu"
 import { Palette } from "~/palette/palette"
 import { ChannelScreen } from "~/shell/channel"
 import { Rail } from "~/shell/rail"
@@ -37,6 +38,7 @@ export function Root({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => voi
               <FirstRun />
             </Suspense>
           </Boundary>
+          <ContextMenus />
           <Toasts toasts={toasts} />
         </ActContext>
       </AppContext>

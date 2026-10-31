@@ -548,6 +548,7 @@ export interface Actions {
   retry(code: string, seq: number): void
   loadImage(code: string, spot: string): void
   discard(code: string, seq: number): void
+  markRead(code: string, where: Where): void
   react(code: string, seq: number, emoji: string): void
   answerPermission(code: string, id: string, allow: boolean): void
   answerQuestion(code: string, id: string, text: string): void

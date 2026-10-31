@@ -345,6 +345,21 @@
   background: var(--wash-2);
 }
 
+.rail-menu.is-at-pointer {
+  z-index: 60;
+}
+
+.menu-group {
+  display: grid;
+  gap: 2px;
+}
+
+.menu-group + .menu-group {
+  margin-top: 2px;
+  padding-top: 4px;
+  border-top: 1px solid var(--wash-2);
+}
+
 .rail-menu-name label {
   display: grid;
   gap: 4px;
