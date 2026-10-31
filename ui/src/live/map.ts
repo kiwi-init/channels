@@ -139,6 +139,7 @@ function personOf(state: ChannelState, m: StateMember, record: RosterMember | un
     owner: m.owner,
     you: m.name === me,
     ...seatOfIn(state, m),
+    ...(human ? {} : { face: m.name === state.lead ? "lead" : m.persona?.role }),
     presence: m.name === me || here ? (human && here?.activity?.state === "idle" ? "away" : "online") : "offline",
     ...(activity ? { activity } : {}),
     ...(reach && reach !== "unknown" ? { reach } : {}),

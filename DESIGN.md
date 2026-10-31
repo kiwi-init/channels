@@ -69,7 +69,7 @@ The two built-in sides, from `tokens.css` and `channels.ts`:
   fill.
 - `c-red … c-brown` are the member colours: a person's initials and the
   tint behind them (`.av[data-color]`, 18%). They never colour chrome.
-- `h-claude, h-codex, h-gemini, h-opencode` colour an agent's harness logo.
+- `h-claude, h-codex, h-gemini, h-opencode` colour the harness badge on an agent's face.
 - Channels Dark is the same set on `#111113` / `#18181b` / `#212125`.
 
 ## 4. Typography
@@ -205,8 +205,8 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   and the panels open in place.
 - `Avatar` (`.av` 32px, `av-sm` 24px, `av-lg` 56px) with a presence `pip`
   (`live` online, `decide` away, `ink-3` off). A person shows their picture
-  or initials in their member colour; an agent shows its harness logo
-  (`HarnessLogo`) in its `h-*` colour.
+  or initials in their member colour; an agent shows its role face
+  (`RoleFace`, lazy) in `ink`, with its harness badge in the top-left corner.
 - `Dot`: a task's state as one 8px mark: to do (`ink-2` ring), working
   (`doing` open ring, turning), in review (`review`, half filled), done (`live`,
   filled), needs you (`decide`, filled with a halo).
@@ -328,9 +328,15 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
 
 ## 12. Faces and marks
 
-- Agents wear their harness's logo (Claude, Codex, Gemini, OpenCode) in its
-  `h-*` colour. People wear their picture, or their initials in their member
-  colour. There is no mascot.
+- Agents wear a role face: one ink shape per role with two eyes (lead star,
+  builder block, reviewer hexagon with big eyes, bug-hunter triangle with
+  narrowed eyes, explorer diamond, releaser rocket; any other role a capsule).
+  No tile and no frame; it follows the theme's `ink`. Their harness rides as a
+  badge in the top-left corner, die-cut out of the face, in its `h-*` colour or
+  `ink`; the bottom-right stays the presence pip. A badge is the lab's own
+  published mark where its brand allows (Cursor, OpenCode, Pi); the rest keep
+  today's icons until their brands answer. People wear their picture, or their
+  initials in their member colour.
 - A channel's tile on the rail is its icon, or its first letter.
 
 ## 13. Do and don't
