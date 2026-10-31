@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { MAX_IMAGE_BYTES, RASTER_MIMES } from "@kiwi/core/protocol.ts"
 import { fileDrag, takeDropped } from "@kiwi/app/dropped.ts"
 import { takePasted } from "@kiwi/app/pasted.ts"
+import { matchCommands, parseCommand, type Command } from "~/chat/commands"
 import { preview, useReplying } from "~/chat/reply"
 import { STASH_SHOT, useStash, type Stashed } from "~/chat/stash"
 import { Avatar, cx, Dot, STATUS_WORDS } from "~/kit/bits"
@@ -115,7 +116,7 @@ const readBase64 = (file: File): Promise<string> =>
   })
 
 export function Composer({ channel, where, placeholder, inThread }: { channel: Channel; where: Where; placeholder: string; inThread?: number }) {
-  const { app, toast } = useApp()
+  const { app, go, toast } = useApp()
   const replying = useReplying()
   const replyTo = replying?.to ?? null
   const key = `${channel.code}:${JSON.stringify(where)}:${inThread ?? ""}`
@@ -206,7 +207,20 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
           .sort((a, b) => Number(b.presence === "online") - Number(a.presence === "online"))
           .slice(0, 6)
   const taskOptions = taskQuery === undefined ? [] : taskMatches(channel.tasks, taskQuery)
-  const options = matches.length || taskOptions.length
+  const commands = useMemo<Command[]>(() => {
+    if (inThread !== undefined) return []
+    const code = channel.code
+    const owner = channel.youOwn
+    return [
+      { name: "compact", summary: "Ask the lead for a summary to fold the history behind", run: () => app.actions.askCompact(code) },
+      { name: "tasks", summary: "Open the tasks", run: () => go({ to: "tab", tab: "tasks" }) },
+      ...(owner && !channel.hold ? [{ name: "pause", summary: "Pause the agents", args: "note", run: (note: string) => app.actions.setHold(code, true, note || undefined) }] : []),
+      ...(owner && channel.hold ? [{ name: "resume", summary: "Let the agents work again", run: () => app.actions.setHold(code, false) }] : []),
+    ]
+  }, [inThread, channel.code, channel.youOwn, channel.hold, app.actions, go])
+  const listed = closed || query !== undefined || taskQuery !== undefined ? [] : matchCommands(commands, text)
+  const running = files.length ? null : parseCommand(commands, text)
+  const options = matches.length || taskOptions.length || listed.length
   const mentions = useMemo(() => mentionNames(channel.people, channel.former), [channel.people, channel.former])
 
   const update = (value: string, at = value.length) => {
@@ -217,6 +231,12 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
     drafts.set(key, value)
   }
   const send = (value = text) => {
+    if (running && value === text) {
+      running.command.run(running.args)
+      setCue(null)
+      update("")
+      return
+    }
     const body = value.trim() || files.map((f) => f.name).join(", ")
     if (!body) return
     const opts = { ...(inThread !== undefined ? { inThread } : {}), ...(replyTo ? { replyTo: replyTo.seq } : {}), ...(files.length ? { images: files } : {}) }
@@ -264,6 +284,19 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
 
   return (
     <div className="compose" ref={box}>
+      {listed.length > 0 && (
+        <ul className="mentions" role="listbox" aria-label="Commands" id={`${key}-commands`}>
+          {listed.map((c, i) => (
+            <li key={c.name} role="option" aria-selected={i === pick}>
+              <button type="button" tabIndex={-1} className={cx("mention-row task-row", i === pick && "is-on")} onMouseDown={(e) => e.preventDefault()} onClick={() => insert(`/${c.name} `)}>
+                <span className="command-name">/{c.name}</span>
+                {c.args && <span className="task-row-id">{c.args}</span>}
+                <span className="task-row-title dim">{c.summary}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
       {taskOptions.length > 0 && (
         <ul className="mentions" role="listbox" aria-label="Tasks" id={`${key}-tasks`}>
           {taskOptions.map((t, i) => (
@@ -402,7 +435,7 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
             aria-label="Message"
             aria-autocomplete="list"
             aria-expanded={options > 0}
-            aria-controls={matches.length > 0 ? `${key}-people` : taskOptions.length > 0 ? `${key}-tasks` : undefined}
+            aria-controls={matches.length > 0 ? `${key}-people` : taskOptions.length > 0 ? `${key}-tasks` : listed.length > 0 ? `${key}-commands` : undefined}
             placeholder={replyTo ? `Reply to ${nickname(channel, replyTo.from)}` : placeholder}
             onChange={(e) => {
               setCue(null)
@@ -437,8 +470,11 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
                   e.preventDefault()
                   const p = matches[pick]
                   const t = taskOptions[pick]
+                  const c = listed[pick]
                   if (p) complete(p.name)
                   else if (t) completeTask(t.id)
+                  else if (c && e.key === "Enter" && running?.command === c) send()
+                  else if (c) insert(`/${c.name} `)
                   return
                 }
                 if (e.key === "Escape") {
@@ -465,6 +501,12 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
           </button>
         </div>
       </form>
+      {running && !cue && (
+        <p className="compose-hint" role="status">
+          <b>/{running.command.name}</b> <span>·</span> {running.command.summary} <span>·</span> <kbd>{enterSends ? "↩" : "⌘↩"}</kbd> runs it
+          {running.command.args && !running.args ? ` · ${running.command.args}` : ""}
+        </p>
+      )}
       {cue && (
         <p className="compose-hint" role="status">
           <b>{cue.back ? "Back from the stash" : "Stashed"}</b> <span>·</span>{" "}

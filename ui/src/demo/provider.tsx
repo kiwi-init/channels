@@ -546,6 +546,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       },
       setGoal: (code, goal) => edit(code, (c) => ({ ...c, goal: goal || undefined })),
       setHold: (code, on, note) => edit(code, (c) => ({ ...c, hold: on ? { note, by: c.you, at: Date.now() } : undefined })),
+      askCompact: (code) => edit(code, (c) => (c.proposal ? c : withCompact(c, false))),
       approveCompact: (code, proposal) => edit(code, (c) => (c.proposal?.seq === proposal ? { ...c, compact: { ...c.proposal, by: c.you, at: Date.now() }, proposal: undefined } : c)),
       myRepos: async () => ["kiwi-init/channels", "kiwi-init/electrobun-livewire", "kiwi-init/landing", "ojowwalker77/dotfiles"],
       addRepo: (code, repo) => edit(code, (c) => ({ ...c, repos: [...new Set([...c.repos, repo])] })),

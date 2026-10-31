@@ -44,6 +44,9 @@ import { setWake } from "~/live/wakes"
 import { rememberOwner } from "~/live/invites"
 import type { Actions, InviteInfo, JoinChoice, NewAgent, TaskStatus, TermOpened, TermWatch } from "~/model"
 
+const COMPACT_ASK =
+  "Please draft a /compact summary of the history so far: name every open task (T7) and open question (#123) by its id, then run `kiwi compact --file summary.md`. I'll approve it in the app."
+
 const say = (err: unknown): string => (err instanceof Error ? err.message : String(err))
 
 function attempt(what: string, run: () => Promise<unknown>): void {
@@ -593,6 +596,13 @@ export function makeActions(): Actions {
         const ev = { op: "hold.set" as const, on, ...(note ? { note } : {}) }
         const since = await event(run, on ? `on hold${note ? `: ${note}` : ""}` : "hold lifted", ev)
         await run.ch.setHold({ on, ...(note ? { note } : {}), since })
+      }),
+    askCompact: (code) =>
+      attempt("Not asked", async () => {
+        const run = need(code)
+        const lead = run.state.lead && run.state.lead !== run.me ? run.state.lead : null
+        await run.send(COMPACT_ASK, lead ? { to: [lead], kind: "ask" } : { kind: "ask" })
+        announce(lead ? `Asked ${memberName(run.state.members.get(lead), lead)} for a summary` : "Asked the agents for a summary")
       }),
     approveCompact: (code, proposal) =>
       attempt("Not compacted", async () => {

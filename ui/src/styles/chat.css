@@ -1634,6 +1634,11 @@ button.msg-image-spot:hover {
   font: var(--t-stamp) var(--mono);
 }
 
+.command-name {
+  flex: none;
+  font: var(--t-ui) var(--mono);
+}
+
 .task-row-title {
   flex: 1;
   min-width: 0;
