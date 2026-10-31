@@ -1599,3 +1599,16 @@ html .rail-gear.is-on {
 .tall-work .board-list .board-owner {
   grid-row: 1;
 }
+
+.side-row.is-muted .side-label,
+.side-row.is-muted .icon {
+  color: var(--ink-3);
+}
+
+.tile.is-muted {
+  opacity: 0.55;
+}
+
+.rail-gear.is-quiet {
+  color: var(--ink-2);
+}

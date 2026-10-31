@@ -1,6 +1,8 @@
 import { afterAll, beforeEach, describe, expect, mock, setSystemTime, test } from "bun:test"
 
-void mock.module("~/live/prefs", () => ({ ownPrefs: () => ({ notify: "mentions" }) }))
+let snoozeUntil: number | null = null
+let plays = 0
+void mock.module("~/live/prefs", () => ({ ownPrefs: () => ({ notify: "mentions", snoozeUntil, quiet: { on: false, from: 0, to: 0 } }) }))
 
 const { chime } = await import("~/live/alerts")
 
@@ -32,6 +34,7 @@ Reflect.set(
       played.elements++
     }
     play(): Promise<void> {
+      plays++
       return Promise.resolve()
     }
   }
@@ -99,5 +102,18 @@ describe("the Needs-you chime (#1278)", () => {
     shell("mac")
     await ring()
     expect(played).toEqual({ elements: 1, contexts: 0, decodes: 0, resumes: 0, started: 0 })
+  })
+})
+
+describe("a paused computer stays quiet (T972)", () => {
+  test("while notifications are paused the chime doesn't ring, and it rings again once the pause is over", async () => {
+    shell("mac")
+    const before = plays
+    snoozeUntil = at + 60_000
+    await ring()
+    expect(plays).toBe(before)
+    snoozeUntil = null
+    await ring()
+    expect(plays).toBe(before + 1)
   })
 })

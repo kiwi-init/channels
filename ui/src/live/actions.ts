@@ -1,7 +1,7 @@
 import { handleFor } from "@kiwi/core/membership.ts"
-import { permissionReply } from "@kiwi/core/permission.ts"
 import { ROBOT_FACES, TASK_TITLE_MAX_LENGTH } from "@kiwi/core/protocol.ts"
 import { taskId } from "@kiwi/core/state.ts"
+import { assignTask, type TaskSend } from "@kiwi/channel/task-actions.ts"
 import { tokenForCreate } from "@kiwi/app/auth.ts"
 import { askToJoin, createChannel, inviteInfo } from "@kiwi/channel/join.ts"
 import { forgetChannel, forgetPending, isJoinCode, loadMember, loadPending, renameChannel } from "@kiwi/channel/store.ts"
@@ -9,11 +9,9 @@ import { linkOf, type ChannelLink } from "@kiwi/channel/channel-ops.ts"
 import { joinCodeFromLink } from "@kiwi/app/deep-link.ts"
 import { relayUrl } from "@kiwi/secrets/relay.ts"
 import { noteFor, showSeat, type ShowResult } from "@kiwi/app/show-seat.ts"
-import { ALLOW_ONCE, DENY } from "@kiwi/app/permission-settled.ts"
 import { savePersonalities } from "@kiwi/app/personalities.ts"
 import { createPerson, bridge, secrets } from "@kiwi/secrets/secrets.ts"
 import { isSignInGone } from "@kiwi/channel/session.ts"
-import { approveTask, assignTask, closedDigest, sendBackTask, type TaskSend } from "@kiwi/channel/task-actions.ts"
 import { announce } from "~/kit/toasts"
 import { enrollAnswer, enrollBegin, enrollCancel, enrollConfirm, enrollDeny, enrollKeep, forgetDevice, linkGithub, renewDevice, unlinkGithub, type EnrollDone } from "~/live/account"
 import { loadPicture } from "~/live/pictures"
@@ -31,7 +29,7 @@ const rare = () => import("~/live/rare")
 import { downloadAndRestart } from "~/live/update"
 import { setWake } from "~/live/wakes"
 import { rememberOwner } from "~/live/invites"
-import type { Actions, InviteInfo, TaskStatus } from "~/model"
+import type { Actions, InviteInfo } from "~/model"
 
 async function tried<T>(what: string, run: () => Promise<T>): Promise<T | null> {
   try {
@@ -54,8 +52,6 @@ function link(code: string): ChannelLink {
 async function sends(run: Run, ...all: TaskSend[]): Promise<void> {
   for (const { body, opts } of all) await run.send(body, opts)
 }
-
-const STATES: Partial<Record<TaskStatus, "todo" | "doing" | "review" | "done">> = { todo: "todo", doing: "doing", review: "review", done: "done" }
 
 function joinCodeOf(typed: string): string | null {
   const raw = typed.trim()
@@ -149,15 +145,7 @@ export function makeActions(): Actions {
       }),
     editMessage: (code, seq, text) => attempt("Not edited", async () => (await rare()).change(code, seq, text)),
     deleteMessage: (code, seq) => attempt("Not deleted", async () => (await rare()).change(code, seq, null)),
-    answerPermission: (code, id, allow) =>
-      attempt("Not answered", async () => {
-        const run = need(code)
-        const m = run.messages.find((x) => x.seq === Number(id))
-        if (!m) throw new Error("that request is gone")
-        const perm = permissionReply(m, allow, run.state)
-        if (!perm) throw new Error("this one can only be answered in the terminal")
-        await run.send(allow ? ALLOW_ONCE : DENY, { to: [m.from], re: [m.seq], kind: "msg", perm })
-      }),
+    answerPermission: (code, id, allow) => attempt("Not answered", async () => (await rare()).answerPermission(code, id, allow)),
     answerQuestion: (code, id, text) =>
       attempt("Not answered", async () => {
         const run = need(code)
@@ -167,14 +155,7 @@ export function makeActions(): Actions {
       }),
     answerStep: (code, id, reply) => attempt("Not answered", async () => (await rare()).answerStep(code, id, reply)),
     answerJoin: (code, id, yes, choice) => attempt(yes ? "Couldn't let them in" : "Couldn't turn them away", async () => (await manage()).answerJoin(code, id, yes, choice)),
-    approveTask: (code, id, approve, why) =>
-      attempt(approve ? "Not approved" : "Not sent back", async () => {
-        const run = need(code)
-        const t = run.state.tasks.get(id)
-        if (!t) throw new Error(`no task ${taskId(id)}`)
-        if (approve) await sends(run, approveTask(t), closedDigest(run.state, [...run.messages], t, { by: run.me }))
-        else await sends(run, sendBackTask(t, why?.trim() || "sent back for another look"))
-      }),
+    approveTask: (code, id, approve, why) => attempt(approve ? "Not approved" : "Not sent back", async () => (await rare()).approveTask(code, id, approve, why)),
     addTask: (code, title, taskOwner) =>
       attempt("Task not added", async () => {
         const run = need(code)
@@ -182,16 +163,7 @@ export function makeActions(): Actions {
         if (!clean) throw new Error("a task needs a title")
         await event(run, `task: ${clean}`, { op: "task.add", title: clean, ...(taskOwner ? { owner: taskOwner } : {}) }, taskOwner ? [taskOwner] : undefined)
       }),
-    setTaskStatus: (code, id, status) =>
-      attempt("Status not changed", async () => {
-        const run = need(code)
-        const t = run.state.tasks.get(id)
-        if (!t) throw new Error(`no task ${taskId(id)}`)
-        const state = STATES[status]
-        if (!state) throw new Error("a task waits on its own, when something holds it")
-        const to = t.owner && t.owner !== run.me ? [t.owner] : undefined
-        await event(run, `${taskId(id)} ${state}`, { op: "task.update", task: id, state }, to)
-      }),
+    setTaskStatus: (code, id, status) => attempt("Status not changed", async () => (await rare()).setTaskStatus(code, id, status)),
     cancelTask: (code, id, why) => attempt("Not cancelled", async () => (await rare()).cancelTask(code, id, why)),
     assignTask: (code, id, to, why) =>
       attempt("Not assigned", async () => {
@@ -314,6 +286,8 @@ export function makeActions(): Actions {
         await createPerson(name.trim())
       }),
     setPrefs,
+    setMute: (code, room, on) => void rare().then((r) => r.setMute(code, room, on)),
+    snooze: (until) => void rare().then((r) => r.snooze(until)),
     forgetComputer: (id) => void manage().then((m) => m.forgetComputer(id)),
     linkGithub: () => attempt("GitHub not linked", linkGithub),
     signInWithGithub: () => attempt("Not signed in with GitHub", linkGithub),
@@ -322,18 +296,7 @@ export function makeActions(): Actions {
       void bridge()
         ?.windowControl(action)
         .catch(() => {}),
-    checkUpdate: async () => {
-      const b = bridge()
-      if (!b) return null
-      try {
-        const u = await b.checkUpdate()
-        if (u.state === "current" || u.state === "failed") return u
-        return { state: u.state, version: u.version, ...(u.blocked ? { blocked: true } : {}) }
-      } catch {
-        // A check that throws is shown the same as one that couldn't reach GitHub.
-        return { state: "failed" }
-      }
-    },
+    checkUpdate: async () => (await rare()).checkUpdate(),
     setRelay: async (url) => {
       const b = bridge()
       if (!b) return "only the desktop app can change its relay"

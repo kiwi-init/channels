@@ -677,3 +677,16 @@ html .set-body {
 .set-device-actions-inline > .btn.is-quiet:last-child {
   margin-right: -8px;
 }
+
+.set-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.set-buttons .input {
+  width: auto;
+  height: var(--ctl-sm);
+  padding: 0 8px;
+  font: var(--t-ui) var(--mono);
+}

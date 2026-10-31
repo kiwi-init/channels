@@ -11,6 +11,7 @@ import { joinCodeFromLink } from "@kiwi/app/deep-link.ts"
 import { adoptThisComputer } from "@kiwi/app/computers.ts"
 import { useIcons, useMemberIcons } from "@kiwi/app/icons.ts"
 import { lastChannel, rememberChannel, reopenable } from "@kiwi/app/last-channel.ts"
+import { isMuted } from "~/live/quiet"
 import { badgeTotal, newsTotal, rowNews, startMarks, useMarks, useOpenNews, useTabNews } from "@kiwi/channel/news.ts"
 import { useOwnPersonalities } from "@kiwi/app/personalities.ts"
 import { bridge, useSecrets } from "@kiwi/secrets/secrets.ts"
@@ -34,11 +35,18 @@ import type { Go } from "~/nav"
 
 const STATE: Record<ChannelRow["state"], ChannelTile["state"]> = { member: "member", pending: "waiting", agents: "gone", elsewhere: "gone" }
 
-function useTiles(rows: ChannelRow[], notify: "all" | "mentions" | "none"): ChannelTile[] {
+function useTiles(rows: ChannelRow[], notify: "all" | "mentions" | "none", muted: readonly string[]): ChannelTile[] {
   const marks = useMarks()
   const openNews = useOpenNews()
   const icons = useIcons()
-  const news = useMemo(() => rows.map((r) => rowNews(r, marks, openNews)), [rows, marks, openNews])
+  const news = useMemo(
+    () =>
+      rows.map((r) => {
+        const n = rowNews(r, marks, openNews)
+        return isMuted(muted, r.code) ? { ...n, fresh: false, count: n.mentions, muted: true } : n
+      }),
+    [rows, marks, openNews, muted]
+  )
   useEffect(() => startMarks(rows), [rows])
   useTabNews(newsTotal(news), badgeTotal(news, notify))
   return useMemo(
@@ -54,6 +62,7 @@ function useTiles(rows: ChannelRow[], notify: "all" | "mentions" | "none"): Chan
           unread: n ? (n.open ? n.count : n.fresh ? 1 : 0) : 0,
           needsYou: n?.needs ?? 0,
           last: r.ts,
+          ...(n && "muted" in n ? { muted: true as const } : {}),
         }
       }),
     [rows, news, icons]
@@ -102,7 +111,7 @@ export function useLive(open: string | null): App {
   const account = useAccount()
   const rows = useChannelList()
   const prefs = usePrefs()
-  const channels = useTiles(rows, prefs.notify)
+  const channels = useTiles(rows, prefs.notify, prefs.muted)
   useDuties(rows, useSecrets().person?.pk, open)
   const opened = useOpened()
   const harnesses = useHarnesses()

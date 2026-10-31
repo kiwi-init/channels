@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 
 import { ownPrefs } from "~/live/prefs"
+import { silentNow } from "~/live/quiet"
 import type { Ask } from "~/model"
 
 const SOUND = "/sounds/needs-you.wav"
@@ -40,7 +41,8 @@ function playElement(): Promise<void> {
 }
 
 export function chime(): void {
-  if (ownPrefs().notify === "none") return
+  const prefs = ownPrefs()
+  if (prefs.notify === "none" || silentNow(prefs, Date.now())) return
   const now = Date.now()
   if (now - rang < GAP_MS) return
   rang = now
