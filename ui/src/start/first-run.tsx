@@ -71,7 +71,7 @@ function NameForm() {
           <input
             id={inputId}
             aria-label="Your name"
-            className="input is-mono"
+            className="input"
             autoFocus
             autoComplete="nickname"
             autoCapitalize="off"

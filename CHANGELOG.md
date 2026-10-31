@@ -2,6 +2,33 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 2026.10.15 — 2026-10-31
+
+- **Status indicators stop animating forever: an idle app draws nothing (T704, #1379)** ([#1382](https://github.com/kiwi-init/channels/pull/1382))
+- **GIFs: the app shows only what the relay serves, and never attaches a page (T778)** ([#1383](https://github.com/kiwi-init/channels/pull/1383))
+- **Core: private rooms, with their own key, sealed to who's in them (T681)** ([#1384](https://github.com/kiwi-init/channels/pull/1384))
+- **Needs you: a decision put to someone else says so (T809)** ([#1385](https://github.com/kiwi-init/channels/pull/1385))
+- **Private rooms in the app: pick who's in when making a room, change it later, and see which rooms are private (T681)** ([#1386](https://github.com/kiwi-init/channels/pull/1386))
+- **Private rooms: leaving the channel takes you out of its rooms, and agents know which rooms are private (T681)** ([#1387](https://github.com/kiwi-init/channels/pull/1387))
+- **Settings: a normal wheel scrolls the tabs sideways when the window is narrow, and the cut edge fades (T849)** ([#1388](https://github.com/kiwi-init/channels/pull/1388))
+- **Private rooms: no 200-change cap on tracing a room's history (T868)** ([#1389](https://github.com/kiwi-init/channels/pull/1389))
+- **Private rooms: the New room dialog says who can't open them yet (T869)** ([#1390](https://github.com/kiwi-init/channels/pull/1390))
+- **Polling: seat and device timers pause while the app is hidden (T917) (#1380)** ([#1391](https://github.com/kiwi-init/channels/pull/1391))
+- **No browser menu or developer tools in the shipped app (T1009)** ([#1394](https://github.com/kiwi-init/channels/pull/1394))
+- **Direct messages say who can read them: the whole channel, not only the two of you (T945)** ([#1392](https://github.com/kiwi-init/channels/pull/1392))
+- **Settings and notifications: four small fixes from the chat audit (T947)** ([#1393](https://github.com/kiwi-init/channels/pull/1393))
+- **Composer: drafts, images and failed sends stay in their room, and an image sends without a file name (T946)** ([#1396](https://github.com/kiwi-init/channels/pull/1396))
+- **Faces: a GitHub photo served as PNG still goes out, at 48px or 32px** ([#1399](https://github.com/kiwi-init/channels/pull/1399))
+- **Private rooms open on every device of a person, not one seat per name (T1046)** ([#1395](https://github.com/kiwi-init/channels/pull/1395))
+- **Appearance: pick a font (Inter, Lato, Atkinson) and bigger text sizes (#1397)** ([#1398](https://github.com/kiwi-init/channels/pull/1398))
+- **Desktop: build on Livewire 2026.10.2, with no web inspector in shipped apps (T928, T1009)** ([#1402](https://github.com/kiwi-init/channels/pull/1402))
+- **A DM is between two people, whichever of their devices they write from (T966)** ([#1401](https://github.com/kiwi-init/channels/pull/1401))
+- **Agents wear a role face, with their harness as a badge in the corner (T904)** ([#1404](https://github.com/kiwi-init/channels/pull/1404))
+- **Phones: no false text, no room leak into #general, and no getting stuck (T948)** ([#1405](https://github.com/kiwi-init/channels/pull/1405))
+- **Edit and delete your own messages (T971)** ([#1403](https://github.com/kiwi-init/channels/pull/1403))
+- **The UI hides what the installed app can't run (T1122)** ([#1400](https://github.com/kiwi-init/channels/pull/1400))
+- **Message toolbar: the GIF button fits its mark (T1237)** ([#1408](https://github.com/kiwi-init/channels/pull/1408))
+
 ## 2026.10.14 — 2026-10-31
 
 - **Search: a click on a result opens it; the results no longer move the window (#1354)** ([#1358](https://github.com/kiwi-init/channels/pull/1358))

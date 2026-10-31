@@ -130,7 +130,14 @@
 }
 
 .set-key {
+  font-family: var(--mono);
   letter-spacing: 0.06em;
+}
+
+.set-mono,
+.set-harness-version {
+  font-family: var(--mono);
+  letter-spacing: -0.01em;
 }
 
 .set-inline {
@@ -311,7 +318,8 @@
 
 .set-pair-what {
   color: var(--ink-3);
-  font: var(--t-stamp) var(--ui);
+  font: var(--t-stamp) var(--mono);
+  letter-spacing: -0.01em;
 }
 
 .set-pair-line {
@@ -530,7 +538,8 @@
 }
 
 .set-fine.set-warning {
-  padding: 8px 12px;
+  margin-bottom: 12px;
+  padding: 8px 16px;
   border-radius: var(--r-ctl);
   color: var(--ink-2);
   background: var(--alert-wash);

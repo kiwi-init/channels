@@ -112,8 +112,10 @@ const text = (v: unknown, max: number): v is string => typeof v === "string" && 
 
 function readMeta(x: unknown): RoomMeta | null {
   if (!x || typeof x !== "object") return null;
-  const m = x as { name?: unknown; members?: unknown; prev?: unknown };
-  if (!text(m.name, 80) || !Array.isArray(m.members) || m.members.length === 0 || m.members.length > MAX_ROOM_MEMBERS) return null;
+  const m = x as { name?: unknown; members?: unknown; prev?: unknown; dm?: unknown };
+  const dm = m.dm === true;
+  if (dm ? m.name !== "" : !text(m.name, 80)) return null;
+  if (!Array.isArray(m.members) || m.members.length === 0 || m.members.length > MAX_ROOM_MEMBERS) return null;
   if (m.prev !== undefined && !text(m.prev, 100)) return null;
   const members: RoomMember[] = [];
   for (const r of m.members) {
@@ -121,7 +123,7 @@ function readMeta(x: unknown): RoomMeta | null {
     if (!e || !text(e.name, 64) || !text(e.pk, 64)) return null;
     members.push({ name: e.name, pk: e.pk });
   }
-  return { name: m.name, members, ...(m.prev ? { prev: m.prev } : {}) };
+  return { name: dm ? "" : (m.name as string), members, ...(m.prev ? { prev: m.prev } : {}), ...(dm ? { dm: true as const } : {}) };
 }
 
 export interface RoomCache {
@@ -175,7 +177,7 @@ export async function openBaseRooms(c: RoomCache, base: FoldBase): Promise<FoldB
     c.roomSeals.set(id, [...room.seals.map((seal, i) => ({ seq: -(room.seals.length - i), seal })), ...had.filter((x) => x.seq > 0)]);
     const now = await replay(c, id);
     secret.push([id, { n: now?.n ?? room.n, seals: room.seals, ...(now?.meta ? { meta: now.meta } : {}) }]);
-    if (now?.meta) rooms.set(id, { ...(rooms.get(id) ?? { id, createdBy: null, at: 0 }), name: now.meta.name, members: now.meta.members });
+    if (now?.meta) rooms.set(id, { ...(rooms.get(id) ?? { id, createdBy: null, at: 0 }), name: now.meta.name, members: now.meta.members, ...(now.meta.dm ? { dm: true as const } : {}) });
     else if (room.meta) rooms.delete(id);
   }
   return { ...base, secret, rooms: [...rooms.values()] };

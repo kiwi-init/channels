@@ -67,6 +67,7 @@ export function Sidebar({ channel }: { channel: Channel }) {
                   >
                     <Avatar person={who} size="sm" />
                     <span className="side-label">{nickname(channel, d.with)}</span>
+                    {d.locked && <Icon name="lock" size={12} label="Private" />}
                     <Count n={d.unread} loud />
                   </button>
                 </li>

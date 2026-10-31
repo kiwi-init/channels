@@ -163,7 +163,6 @@
   display: grid;
   align-content: start;
   gap: 6px;
-  min-height: 168px;
   padding: 16px;
   border: 1px solid var(--line-3);
   border-radius: var(--r-card);
@@ -184,7 +183,7 @@
   place-items: center;
   width: 34px;
   height: 34px;
-  margin-bottom: 24px;
+  margin-bottom: 12px;
   border: 1px solid var(--line-3);
   border-radius: var(--r-ctl);
   color: var(--ink-2);
@@ -254,7 +253,7 @@
   padding: 16px 24px 16px 32px;
   border: 1px solid var(--line-3);
   border-radius: var(--r-card);
-  font: 600 56px / 1 var(--ui);
+  font: 500 56px / 1 var(--mono);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.16em;
   user-select: all;

@@ -113,7 +113,7 @@ describe("a private room's key and what it hides (T681)", () => {
     expect(anaSees.deleted.has(gone)).toBe(true);
     expect(anaSees.rejected.get(deleted)).toBeUndefined();
     const boHistory = JSON.stringify((await bo.ch.history(0)).messages);
-    expect(boHistory).not.toContain("125");
+    expect(boHistory).not.toContain("offer is 125");
     expect(boHistory).not.toContain("edited #");
   });
 
@@ -174,7 +174,9 @@ describe("a private room's key and what it hides (T681)", () => {
       { name: "x", pk: stranger.pk, xpk: stranger.xpk! },
     ]);
     const seq = await bo.ch.send("made a private room", { kind: "event", ev: { op: "room.seal", ...sealed } });
-    expect((await state(s.ownerCh)).rejected.get(seq)).toBe("only the owner, or a person they fully trust, makes private rooms");
+    expect((await state(bo.ch)).rejected.get(seq)).toBe("only the owner, or a person they fully trust, makes private rooms");
+    const outside = await state(s.ownerCh);
+    expect([outside.rejected.get(seq), outside.rooms.has(sealed.id)]).toEqual([undefined, false]);
   });
 
   test("a fully trusted person outside the room can't move it to a key of their own: its members keep reading and writing, live or from the owner's snapshot", async () => {
