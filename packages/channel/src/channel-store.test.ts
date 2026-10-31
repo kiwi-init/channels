@@ -4,7 +4,8 @@ import type { Member } from "@kiwi/core/membership.ts";
 import { PROTOCOL_VERSION, SNAPSHOT_EVERY, SNAPSHOT_TOO_LARGE, type Message } from "@kiwi/core/protocol.ts";
 import type { ChannelOps, FollowEvent } from "../../../desktop/src/bridge.ts";
 import { ChannelLink } from "./channel-ops.ts";
-import { ChannelStore } from "./channel-store.ts";
+import { APP_BEACON_MS, ChannelStore } from "./channel-store.ts";
+import { PRESENCE_TTL } from "./online.ts";
 import type { StoredMember } from "./store.ts";
 import { dropWarm } from "./warm.ts";
 
@@ -28,6 +29,7 @@ function relay(head = 0, opts: { owner?: boolean; answers?: Record<string, Answe
   const lent = { emitted: [] as string[], released: 0 };
   const calls: { op: string; args: unknown[] }[] = [];
   const kept: { at: number; state: object }[] = [];
+  const beacons: { client: string; query?: boolean }[] = [];
   const answers: Record<string, Answer> = {
     head: () => head,
     members: () => roster,
@@ -51,7 +53,10 @@ function relay(head = 0, opts: { owner?: boolean; answers?: Record<string, Answe
       calls.push({ op, args });
       return (await answers[op]?.(...args)) ?? null;
     },
-    presence: () => Promise.resolve(),
+    presence: (_code: string, p: { client: string; query?: boolean }) => {
+      beacons.push(p);
+      return Promise.resolve();
+    },
     openRows: () => Promise.resolve([]),
     keep: (_code: string, state: object) => {
       kept.push({ at: Date.now(), state });
@@ -78,7 +83,7 @@ function relay(head = 0, opts: { owner?: boolean; answers?: Record<string, Answe
   };
   const changedAt = () => rosterAt;
   const called = (op: string) => calls.filter((c) => c.op === op);
-  return { link, lend, follows, lent, live, say, setRoster, changedAt, called, kept };
+  return { link, lend, follows, lent, live, say, setRoster, changedAt, called, kept, beacons };
 }
 
 const opened = async (r: ReturnType<typeof relay>, human?: null) => {
@@ -311,5 +316,39 @@ describe("the GitHub chores", () => {
     expect(r.called("syncGithubRules")).toHaveLength(0);
     expect(r.called("syncGithubReleases")).toHaveLength(0);
     close();
+  });
+});
+
+describe("a person's own presence (T560)", () => {
+  const probe = (from: string): FollowEvent => ({
+    _tag: "Presence",
+    presence: { v: PROTOCOL_VERSION, type: "presence", from, client: "probe", query: true, ts: Date.now(), pk: `pk-${from}`, sigOk: true },
+  });
+
+  test("going live, the app asks who's here and says it's here itself, so other people see it online", async () => {
+    const r = relay(0);
+    const { close } = await opened(r);
+    r.say({ _tag: "Open" });
+    expect(r.beacons).toEqual([{ client: "probe", query: true }, { client: "app" }]);
+    close();
+  });
+
+  test("someone else asking who's here gets an answer, once for a burst of asks, and never from a closed store", async () => {
+    const r = relay(0);
+    const { close } = await opened(r);
+    r.say({ _tag: "Open" });
+    r.beacons.length = 0;
+    await sleep(600);
+    r.say(probe("ana"));
+    r.say(probe("bo"));
+    expect(r.beacons).toEqual([{ client: "app" }]);
+    close();
+    await sleep(600);
+    r.say(probe("ana"));
+    expect(r.beacons).toEqual([{ client: "app" }]);
+  });
+
+  test("it says so again well before others forget it", () => {
+    expect(APP_BEACON_MS * 2).toBeLessThan(PRESENCE_TTL);
   });
 });

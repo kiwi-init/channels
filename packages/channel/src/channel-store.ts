@@ -31,6 +31,8 @@ const CLOCK_MS = 15_000;
 
 type Connection = "connecting" | "live" | "reconnecting";
 
+export const APP_BEACON_MS = 60_000;
+const ANSWER_GAP_MS = 500;
 export interface ChannelHandle {
   ch: ChannelLink;
   connection: Connection;
@@ -308,6 +310,13 @@ export class ChannelStore {
     let flush: ReturnType<typeof setTimeout> | undefined;
     let stopLive: (() => void) | null = null;
     let closed = false;
+    let beat: ReturnType<typeof setInterval> | undefined;
+    let answeredAt = 0;
+    const here = () => {
+      if (closed) return;
+      answeredAt = Date.now();
+      void ch.presence({ client: "app" }).catch(() => {});
+    };
     const enqueue = (message: Message, row: CachedRow | null) => {
       pending.push({ message, row });
       flush ??= setTimeout(() => {
@@ -339,6 +348,8 @@ export class ChannelStore {
             void this.refreshRoster();
           }
           void ch.presence({ client: "probe", query: true }).catch(() => {});
+          here();
+          beat ??= setInterval(here, APP_BEACON_MS);
           return;
         case "Message":
           return enqueue(ev.message, ev.row);
@@ -348,6 +359,7 @@ export class ChannelStore {
           return;
         case "Presence":
           this.online.value = hear(this.online.peek(), ev.presence, Date.now());
+          if (ev.presence.query && ev.presence.pk !== ch.pk && Date.now() - answeredAt >= ANSWER_GAP_MS) here();
           return;
         case "Roster":
           void this.refreshRequests();
@@ -462,6 +474,7 @@ export class ChannelStore {
       closed = true;
       stopLive?.();
       clearTimeout(flush);
+      clearInterval(beat);
       lent.release();
     };
   }
