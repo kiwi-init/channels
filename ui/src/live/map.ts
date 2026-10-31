@@ -148,6 +148,7 @@ function personOf(state: ChannelState, m: StateMember, record: RosterMember | un
     ...(!human && wakes.has(m.name) ? { wakes: wakes.get(m.name) === true } : {}),
     ...(human && record?.addsAgents ? { addsAgents: true } : {}),
     ...(human && record?.answersDecisions ? { answersDecisions: true } : {}),
+    ...(human && record?.managesAgents ? { managesAgents: true } : {}),
     lastSeen: here?.at ?? m.lastSeen,
     joined: m.joined,
     messages: m.messages,

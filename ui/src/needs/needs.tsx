@@ -304,6 +304,11 @@ const POWER_WORDS: Record<keyof Powers, { label: string; on: string; off: string
     on: "They answer agents' decisions in Needs you, as you do.",
     off: "Agents' decisions go to you and each agent's own person.",
   },
+  managesAgents: {
+    label: "Can manage agents",
+    on: "They pick agents' personalities and roles, the lead included. Never people's, and never their own.",
+    off: "Only you change agents' personalities and roles.",
+  },
 }
 
 function Opt({ label, hint, children }: { label: string; hint?: string; children: (id: string) => ReactNode }) {
@@ -356,7 +361,7 @@ function JoinAskCard({ channel, ask, link }: { channel: Channel; ask: JoinAsk; l
   const pinGone = agent && persona === undefined && !!ask.pin && ask.pin.persona === null
   const label = app.personas.find((p) => p.id === chosen)?.label
   const only = readOnly ?? channel.newMembers === "read"
-  const can = powers ?? channel.newPowers ?? { addsAgents: false, answersDecisions: false }
+  const can = powers ?? channel.newPowers ?? { addsAgents: false, answersDecisions: false, managesAgents: false }
   const blocked = pinWaits || pinGone
   const letIn = () =>
     app.actions.answerJoin(channel.code, ask.id, true, {
@@ -466,7 +471,7 @@ function JoinAskCard({ channel, ask, link }: { channel: Channel; ask: JoinAsk; l
             </Opt>
           )}
           {!agent &&
-            (["addsAgents", "answersDecisions"] as const).map((power) => (
+            (["addsAgents", "answersDecisions", "managesAgents"] as const).map((power) => (
               <Opt key={power} label={POWER_WORDS[power].label} hint={can[power] ? POWER_WORDS[power].on : POWER_WORDS[power].off}>
                 {(id) => <Toggle id={id} on={can[power]} onChange={(on) => setPowers({ ...can, [power]: on })} />}
               </Opt>
