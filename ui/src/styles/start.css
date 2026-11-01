@@ -92,6 +92,14 @@
   margin-left: -10px;
 }
 
+.start-others {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin-top: 24px;
+  margin-left: -10px;
+}
+
 .start-asking {
   display: flex;
   gap: 10px;

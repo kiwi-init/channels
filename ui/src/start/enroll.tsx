@@ -52,7 +52,7 @@ function Check({ person }: { person: { name: string; fingerprint: string } }) {
   )
 }
 
-export default function Enroll({ enrolling }: { enrolling: Enrolling }) {
+export default function Enroll({ enrolling }: { enrolling: Extract<Enrolling, { stage: "asking" | "digits" | "check" }> }) {
   const { app } = useApp()
   return (
     <div className="start-first-box">
@@ -64,9 +64,14 @@ export default function Enroll({ enrolling }: { enrolling: Enrolling }) {
       {enrolling.stage === "digits" && <Digits digits={enrolling.digits} />}
       {enrolling.stage === "check" && <Check person={enrolling.person} />}
       {enrolling.stage !== "check" && (
-        <button type="button" className="btn is-quiet start-other" onClick={() => app.actions.enrollCancel()}>
-          Cancel
-        </button>
+        <div className="start-others">
+          <button type="button" className="btn is-quiet" onClick={() => app.actions.recoverBegin()}>
+            Lost your other devices? Use your recovery key
+          </button>
+          <button type="button" className="btn is-quiet" onClick={() => app.actions.enrollCancel()}>
+            Cancel
+          </button>
+        </div>
       )}
     </div>
   )

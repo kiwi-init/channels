@@ -290,8 +290,8 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const lastHere = useMemo(() => (where ? lastIn(messages, state, me, where) : 0), [messages, state, me, where])
   useEffect(() => {
     if (!where || !lastHere || !shown) return
-    markSeenIn(roomId, { [seenKeyOf(where, me)]: lastHere })
-  }, [where, lastHere, roomId, me, shown])
+    markSeenIn(roomId, { [seenKeyOf(state, where, me)]: lastHere })
+  }, [where, lastHere, roomId, me, shown, state])
   const task = view.task
   const lastInTask = useMemo(() => (task === null ? 0 : (state.places.get(placeKey({ kind: "task", task }))?.last ?? 0)), [task, state.places])
   useEffect(() => {

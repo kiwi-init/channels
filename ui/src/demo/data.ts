@@ -1,4 +1,4 @@
-import type { Account, Ask, Channel, ChannelTile, Device, Message, Person, Prefs, Task, TaskGroup } from "~/model"
+import type { Account, Ask, Channel, ChannelTile, Device, Enrolling, Message, Person, Prefs, Task, TaskGroup } from "~/model"
 import { nicknamesOf } from "~/names"
 
 const now = Date.now()
@@ -13,6 +13,12 @@ export const DEMO_DEVICES: Device[] = [
   { id: "dev-box", label: "build-box", os: "Linux", as: "computer", until: Date.now() - 2 * DEMO_DAY, thisOne: false },
 ]
 
+export const DEMO_WELCOME: Enrolling = {
+  stage: "welcome",
+  name: "jow",
+  devices: DEMO_DEVICES.filter((d) => !d.thisOne).map((d) => ({ id: d.id, label: d.label, os: d.os, as: d.as, lost: d.as !== "computer" })),
+  channels: ["studio", "kiwi", "landing"],
+}
 export const DEMO_WORDS = "orbit velvet canyon mango ladder silent harvest pilot frozen museum tribe anchor gravity olive wagon pepper rocket glimpse marble tunnel coyote bamboo dinner shield".split(
   " "
 )

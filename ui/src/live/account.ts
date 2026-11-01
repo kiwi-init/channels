@@ -8,7 +8,7 @@ import { useUpdate } from "@kiwi/app/update.ts"
 import { announce } from "~/kit/toasts"
 import { deviceNews, postDevicesNow } from "~/live/devices"
 import { store, type Listener } from "~/live/value"
-import type { Account, Computer, Device, EnrollAsk, Enrolling, GithubSignIn, RecoverySaved, RecoveryState } from "~/model"
+import type { Account, Computer, Device, EnrollAsk, Enrolling, GithubSignIn, RecoverTrouble, RecoverySaved, RecoveryState } from "~/model"
 import { version } from "../../../package.json"
 
 const github = store<{ login: string } | null>(null)
@@ -91,12 +91,49 @@ export async function enrollKeep(): Promise<void> {
 export async function enrollCancel(): Promise<void> {
   if (enrollTimer) clearTimeout(enrollTimer)
   enrollTimer = null
+  const was = recoveringNow()
   enrollRun = null
   const shown = selfEnroll.get()
   selfEnroll.set(null)
+  if (was) return void (await recoverBridge().recoverCancel())
   await enrollBridge().enrollCancel()
   if (shown?.stage === "check")
     announce(`Kept nothing. If your other computer never showed ${shown.person.fingerprint}, someone else answered this computer. It may still list this computer under Devices: remove it there.`)
+}
+
+const recoveringNow = (): boolean => {
+  const stage = selfEnroll.get()?.stage
+  return stage === "recover" || stage === "welcome"
+}
+
+const recoverBridge = () => {
+  const b = bridge()
+  if (!b?.recover) throw new Error("recovering with your recovery key needs the next Channels update")
+  return b
+}
+
+export async function recoverBegin(): Promise<void> {
+  const b = recoverBridge()
+  if (enrollTimer) clearTimeout(enrollTimer)
+  enrollTimer = null
+  enrollRun = null
+  selfEnroll.set({ stage: "recover" })
+  await b.enrollCancel()
+}
+
+export async function recoverOpen(words: string): Promise<RecoverTrouble | null> {
+  const r = await recoverBridge().recover(words)
+  if (!r.ok) return { why: r.why, ...(r.word !== undefined ? { word: r.word } : {}) }
+  if (recoveringNow()) selfEnroll.set({ stage: "welcome", name: r.name, devices: r.devices, channels: r.channels })
+  return null
+}
+
+export async function recoverFinish(lost: string[]): Promise<void> {
+  const r = await recoverBridge().recoverFinish(lost)
+  selfEnroll.set(null)
+  const back = r.channels ? ` ${r.channels === 1 ? "1 channel is" : `${r.channels} channels are`} coming back.` : ""
+  const forgot = r.forgot ? ` Forgot ${r.forgot === 1 ? "1 device" : `${r.forgot} devices`}.` : ""
+  announce(`Welcome back, ${r.name}.${back}${forgot}`)
 }
 
 export const enrollingNow = (): Enrolling | null => selfEnroll.get()
@@ -461,7 +498,17 @@ export function useAccount(): Account | null {
       ...(moveRefused ? { githubMove: moveRefused } : {}),
       computers: [...computers.map((c) => computerOf(c, online, agents)), ...phones.map(phoneOf)],
       version,
-      ...(update && !update.blocked ? { update: { version: update.version, ready: update.state === "ready", state: update.state } } : {}),
+      ...(update
+        ? {
+            update: {
+              version: update.version,
+              ready: update.state === "ready",
+              state: update.state,
+              ...(update.state === "downloading" && update.progress !== undefined ? { progress: update.progress } : {}),
+              ...(update.blocked ? { blocked: true as const } : {}),
+            },
+          }
+        : {}),
       ...(look ? { uiUpdate: look } : {}),
       key: person.pk.slice(0, 8),
       personPk: person.pk,

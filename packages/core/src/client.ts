@@ -578,6 +578,28 @@ export class Channel {
     return true;
   }
 
+  async leaveRoom(id: string): Promise<number> {
+    if (!this.core.roomNow.get(id)?.key) throw new Error("you're not in that private room");
+    return this.send("left the room", { kind: "event", room: id, ev: { op: "room.leave", id } });
+  }
+
+  async sealOutLeavers(id: string, leavers: readonly string[]): Promise<boolean> {
+    const now = this.core.roomNow.get(id);
+    if (!now?.key || !now.meta || !leavers.length) return false;
+    const staying = now.meta.members.filter((m) => !leavers.includes(m.name));
+    if (staying.length === now.meta.members.length || !staying.some((m) => m.pk === this.core.identity.pk)) return false;
+    const here = new Map((await this.members()).filter((r) => r.active).map((r) => [r.pk, r]));
+    const xpks = staying.map((m) => here.get(m.pk)?.xpk);
+    if (xpks.some((x) => !x)) return false;
+    const { newRoomKey, ownSeal, sealRoom } = await import("./private-room.ts");
+    const n = now.n + 1;
+    const key = newRoomKey();
+    const meta = { name: now.meta.name, members: staying };
+    const sealed = await sealRoom(this.roomId, id, n, key, meta, xpks as string[], now.key);
+    ownSeal(this.core, id, await this.send("changed a private room", { kind: "event", ev: { op: "room.seal", ...sealed } }), sealed, { n, key, meta });
+    return true;
+  }
+
   async pruneRooms(only?: readonly string[]): Promise<string[]> {
     const pruned: string[] = [];
     for (const [id, now] of this.core.roomNow) if ((!only || only.includes(id)) && now.key && now.meta && (await this.changeRoom(id, {}))) pruned.push(id);

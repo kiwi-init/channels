@@ -22,6 +22,9 @@ import {
   enrollKeep,
   forgetDevice,
   linkGithub,
+  recoverBegin,
+  recoverFinish,
+  recoverOpen,
   recoveryDrop,
   recoverySave,
   recoveryWords,
@@ -157,7 +160,7 @@ export function makeActions(): Actions {
     markRead: (code, where) => {
       const run = need(code)
       const last = lastIn(run.messages, run.state, run.me, where)
-      if (last) markSeenIn(run.roomId, { [seenKeyOf(where, run.me)]: last })
+      if (last) markSeenIn(run.roomId, { [seenKeyOf(run.state, where, run.me)]: last })
     },
     react: (code, seq, emoji) =>
       attempt("Couldn't react", async () => {
@@ -377,6 +380,9 @@ export function makeActions(): Actions {
       ),
     enrollKeep: () => attempt("Couldn't join as one of your devices", enrollKeep),
     enrollCancel: () => attempt("Couldn't take the ask back", enrollCancel),
+    recoverBegin: () => attempt("Couldn't start the recovery", recoverBegin),
+    recoverOpen: (words) => tried("Couldn't open your recovery vault", () => recoverOpen(words)),
+    recoverFinish: async (lost) => void (await tried("Couldn't finish the recovery", () => recoverFinish(lost))),
     saveTheme,
     deleteTheme,
     addStartFolder: () => attempt("Couldn't add the folder", addStartFolder),

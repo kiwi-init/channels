@@ -2,6 +2,7 @@
 // main-eb.ts and preload-eb.ts; renderer-neutral on purpose (no node imports),
 // so ui/ can type against it without touching this process.
 
+import type { FoldInputs, Searched } from "./search-types.ts";
 import type { ComputerSettings } from "@kiwi/core/computer-settings.ts";
 import type { DeviceLink } from "@kiwi/core/devices.ts";
 import type { HarnessRow, HookHarness, HookRow, KnownHarness } from "@kiwi/core/harnesses.ts";
@@ -160,10 +161,19 @@ export interface ChannelOps {
   presence(code: string, p: PresenceFields): Promise<void>;
   openRows(code: string, rows: CachedRow[]): Promise<(Message | Unread | null)[]>;
   olderRows(code: string, before: number, limit: number): Promise<OlderRows>;
+  indexRows(code: string, rows: CachedRow[], inputs: FoldInputs): Promise<number | null>;
+  searchHistory(code: string, ask: HistorySearch): Promise<Searched | null>;
   keep(code: string, state: object): Promise<CachedKept | null>;
   openKept(code: string, sealed: CachedKept): Promise<unknown>;
   follow(code: string, since: number, on: (e: FollowEvent) => void, opts?: FollowOptions): () => void;
   nudge(): void;
+}
+
+export interface HistorySearch {
+  query: string;
+  rooms: string[];
+  limit: number;
+  head: number;
 }
 
 export interface OlderRows {
@@ -190,6 +200,8 @@ export type KeysAsk =
   | { op: "presence"; code: string; p: Wire }
   | { op: "openRows"; code: string; rows: Wire }
   | { op: "olderRows"; code: string; before: number; limit: number }
+  | { op: "indexRows"; code: string; rows: Wire; inputs: Wire }
+  | { op: "searchHistory"; code: string; ask: Wire }
   | { op: "keep"; code: string; state: Wire }
   | { op: "openKept"; code: string; sealed: Wire }
   | { op: "follow"; code: string; since: number; watch?: boolean }
@@ -288,6 +300,16 @@ export interface RecoveryView {
 }
 
 export type RecoverySaveView = { ok: true; at: number } | { ok: false; wrong: number[] };
+
+export type RecoverOpenView =
+  | { ok: true; name: string; devices: (Pick<DeviceView, "id" | "label" | "os" | "as"> & { lost: boolean })[]; channels: string[] }
+  | { ok: false; why: string; word?: number };
+
+export interface RecoverDoneView {
+  name: string;
+  channels: number;
+  forgot: number;
+}
 
 export type EnrollConfirmView = { ok: true; label: string } | { ok: false; left: number };
 
@@ -408,6 +430,9 @@ export interface KiwiBridge {
   recoveryWords(): Promise<string[]>;
   recoverySave(typed: { at: number; word: string }[]): Promise<RecoverySaveView>;
   recoveryDrop(): Promise<void>;
+  recover(words: string): Promise<RecoverOpenView>;
+  recoverFinish(lost: string[]): Promise<RecoverDoneView>;
+  recoverCancel(): Promise<void>;
   daemonStatus(): Promise<DaemonStatus>;
   doctor(): Promise<DoctorFinding[] | null>;
   /** Certify this machine's daemon key with the person key and hand the cert back. */
@@ -422,7 +447,7 @@ export interface KiwiBridge {
   getUpdate(): Promise<UpdateView | null>;
   onUpdate(cb: (u: UpdateView) => void): () => void;
   /** Restart into the downloaded update. */
-  installUpdate(): Promise<void>;
+  installUpdate(): Promise<boolean>;
   checkUpdate(): Promise<UpdateCheckView>;
   notify(title: string, body: string, link?: string): Promise<void>;
   openExternal(url: string): Promise<void>;
@@ -501,6 +526,7 @@ export interface UpdateView {
   /** The release's page. */
   url: string;
   blocked?: true;
+  progress?: number;
 }
 
 export type UpdateCheckView = UpdateView | { state: "current"; version: string } | { state: "failed" };

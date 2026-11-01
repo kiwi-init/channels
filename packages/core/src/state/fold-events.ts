@@ -11,7 +11,7 @@ import { isPerson } from "./people.ts";
 import { roomName } from "./rooms.ts";
 import { currentState, openRound, reviewClaimRefusal, reviewMoveRefusal, revisedOut, taskId, verdictRefusal, worked } from "./tasks.ts";
 import type { Charter, Compact, Fact, FoldMember, Hold, Lease, PersonaLead, Room, SecretRoom, Task } from "./types.ts";
-import { dmPair, inRoom, selfOnly } from "../room-rules.ts";
+import { dmPair, inRoom, leaveSeal, rootOf, selfOnly } from "../room-rules.ts";
 
 const trustOnly = (what: string): string => `only the owner, or a person they fully trust, ${what}`;
 
@@ -108,7 +108,8 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       const wasSelf = known?.meta?.self === true;
       if (isDm && opened && !dmPair(opened, member.name, c.members)) reject("a direct message's room is between exactly two people");
       else if (isSelf && opened && !selfOnly(opened, member.name, c.members)) reject("a person's own room holds only that person's devices");
-      else if (!trusted && !isDm && !isSelf && !((wasDm || wasSelf) && !opened && m.proven)) reject(trustOnly("makes private rooms"));
+      else if (!trusted && !isDm && !isSelf && !((wasDm || wasSelf) && !opened && m.proven) && !(opened && m.proven && leaveSeal(known, opened, ev.n, c.members)))
+        reject(trustOnly("makes private rooms"));
       else if (wasDm && opened && !isDm) reject("a direct message's room stays one");
       else if (wasSelf && opened && !isSelf) reject("a person's own room stays theirs");
       else if (isDm && known?.meta && !wasDm) reject("a room can't become a direct message");
@@ -119,7 +120,9 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       else {
         const seals = [...(known?.seals ?? []), { id: ev.id, n: ev.n, keys: ev.keys, meta: ev.meta, ...(ev.proof ? { proof: ev.proof } : {}) }];
         const n = m.proven || !known ? ev.n : known.n;
-        c.secret.set(ev.id, { n, seals, ...(opened ? { meta: opened } : !m.proven && known?.meta ? { meta: known.meta } : {}) });
+        const meta = opened ?? (!m.proven ? known?.meta : undefined);
+        const leaving = known?.leaving?.filter((who) => meta?.members.some((x) => rootOf(x.name, c.members) === who));
+        c.secret.set(ev.id, { n, seals, ...(meta ? { meta } : {}), ...(leaving?.length ? { leaving } : {}) });
         if (opened)
           rooms.set(ev.id, {
             ...(rooms.get(ev.id) ?? { id: ev.id, createdBy: m.from, at }),
@@ -136,6 +139,17 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
     case "room.msg":
       reject("a private room's message this app couldn't open");
       break;
+
+    case "room.leave": {
+      const room = c.secret.get(ev.id);
+      if (m.sealed?.room !== ev.id || !room?.meta) reject("a person leaves a private room from inside it");
+      else if (room.meta.dm || room.meta.self) reject("a direct message or a person's own room has nobody to leave to");
+      else {
+        const who = rootOf(m.from, c.members);
+        if (!room.leaving?.includes(who)) c.secret.set(ev.id, { ...room, leaving: [...(room.leaving ?? []), who] });
+      }
+      break;
+    }
 
     case "room.rename": {
       if (!member.owner && !c.trusted(m.pk ?? "", member)) {
