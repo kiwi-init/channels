@@ -1,0 +1,132 @@
+.since-rows {
+  display: grid;
+  margin: 0;
+}
+
+.since-row {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+
+.since-row:first-child {
+  border-top: 0;
+}
+
+.since-label {
+  overflow: hidden;
+  color: var(--ink-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.since-what {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  min-width: 0;
+  margin: 0;
+}
+
+.since-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.since-link:hover {
+  color: var(--accent);
+}
+
+.since-last {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-3);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.since-caret {
+  color: var(--ink-3);
+}
+
+.since-waiting {
+  color: var(--decide);
+}
+
+.since-tasks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.since-task {
+  padding: 0 6px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: none;
+  color: var(--ink-2);
+  font: var(--t-stamp) var(--mono);
+  cursor: pointer;
+}
+
+.since-task:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.since-dms {
+  display: grid;
+  flex-basis: 100%;
+  margin: 4px 0 0;
+  padding: 4px;
+  border-radius: var(--r-ctl);
+  background: var(--bg-3);
+  list-style: none;
+}
+
+.since-dm {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr) auto;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: var(--r-ctl);
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.since-dm:hover {
+  background: var(--bg-2);
+}
+
+.since-dm-text {
+  overflow: hidden;
+  color: var(--ink-3);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.since-dm-n {
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 560px) {
+  .since-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+}

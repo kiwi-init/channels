@@ -319,27 +319,6 @@ export class ChannelStore {
     let closed = false;
     let beat: ReturnType<typeof setInterval> | undefined;
     let answeredAt = 0;
-    let filling: "idle" | "running" | "over" = "idle";
-    const fill = () => {
-      if (filling !== "idle" || closed) return;
-      filling = "running";
-      void import("./history-fill.ts")
-        .then(({ backfill }) =>
-          backfill(ch.roomId, ch.pk, {
-            older: (before, limit) => ch.olderRows(before, limit),
-            hidden: () => typeof document !== "undefined" && document.hidden,
-            wait: (ms) => new Promise((done) => setTimeout(done, ms)),
-            stopped: () => closed,
-          }),
-        )
-        .then(
-          (out) => {
-            filling = out === "stopped" && !closed ? "idle" : "over";
-            if (out === "done") index();
-          },
-          () => void (filling = "over"),
-        );
-    };
     let indexing: "idle" | "running" | "again" | "off" = "idle";
     const index = () => {
       if (closed || indexing === "off") return;
@@ -385,7 +364,7 @@ export class ChannelStore {
           ch.pk,
           batched.flatMap((b) => (b.row ? [b.row] : [])),
         ).then(
-          () => (fill(), index()),
+          () => index(),
           () => {},
         );
       }, 30);
@@ -408,7 +387,11 @@ export class ChannelStore {
           return enqueue(ev.message, ev.row);
         case "Unread":
           this.unread.value = [...this.unread.peek(), ev.seq].slice(-HISTORY);
-          if (ev.row) void rememberRow(ch.roomId, ch.pk, ev.row).then(fill, () => {});
+          if (ev.row)
+            void rememberRow(ch.roomId, ch.pk, ev.row).then(
+              () => index(),
+              () => {},
+            );
           return;
         case "Presence":
           this.online.value = hear(this.online.peek(), ev.presence, Date.now());
@@ -505,7 +488,7 @@ export class ChannelStore {
           if (base || earlyBase) this.base.value = base;
           this.ready.value = true;
         });
-        fill();
+        index();
       },
     });
     warmUp(steps, was, HISTORY);

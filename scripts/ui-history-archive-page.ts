@@ -2,7 +2,8 @@ import { packRow } from "@kiwi/core/cache-row.ts";
 import { b64url } from "@kiwi/core/crypto.ts";
 import { openRows } from "@kiwi/core/cache-row.ts";
 import { PROTOCOL_VERSION, type Message } from "@kiwi/core/protocol.ts";
-import { backfill, forgetHistory, openCached, readCached, rememberRows } from "../packages/channel/src/history.ts";
+import { backfill } from "../packages/channel/src/history-fill.ts";
+import { forgetHistory, openCached, readCached, rememberRows } from "../packages/channel/src/history.ts";
 
 const ROOM = "e".repeat(32);
 const PK = "pk-archive";
