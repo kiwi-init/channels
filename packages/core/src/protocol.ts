@@ -82,9 +82,6 @@ export const MAX_IMAGES = 8;
 /** Largest ephemeral (unstored) frame. */
 export const MAX_EPH_LENGTH = 4 * 1024;
 
-/** How many messages a room keeps before pruning the oldest. */
-export const ROOM_RETENTION = 10_000;
-
 /** Most messages returned by one history read or replayed on connect. */
 export const PAGE_LIMIT = 1_000;
 
@@ -282,6 +279,8 @@ export type Event =
   | { op: "room.msg"; room: string; n: number; iv: string; ct: string }
   /** Owner only: a room's new name ("general" included; its id stays). */
   | { op: "room.rename"; id: string; name: string }
+  /** Sealed inside a private room: its sender is leaving, and any member still in it may seal them out. */
+  | { op: "room.leave"; id: string }
   /**
    * Owner only: what this channel is for and where its limits are (null clears it). Every agent is
    * shown it as the scope it works within; a request outside it is escalated to a person, not done.
@@ -333,7 +332,7 @@ export function isGifReaction(x: string): boolean {
   return GIF_REACTION_RE.test(x);
 }
 
-export const OVERLAY_OPS: ReadonlySet<string> = new Set(["react", "msg.edit", "msg.delete"]);
+export const OVERLAY_OPS: ReadonlySet<string> = new Set(["react", "msg.edit", "msg.delete", "room.leave"]);
 
 export function isOverlay(m: Pick<Message, "kind" | "ev">): boolean {
   return m.kind === "event" && !!m.ev && OVERLAY_OPS.has(m.ev.op);
@@ -763,7 +762,7 @@ export interface NewerEvent {
 
 export type WirePayload = Omit<Payload, "ev"> & { ev?: Event | NewerEvent };
 
-export const EVENT_OPS_VERSION = 12;
+export const EVENT_OPS_VERSION = 13;
 
 export const PRIVATE_ROOM_OPS = 9;
 
@@ -789,7 +788,7 @@ export function asSent(m: Message): Omit<Message, "newer" | "ev"> & { ev?: Event
 
 export const outgrown = (base: { folded?: number; skipped?: true }): boolean => base.skipped === true && (base.folded ?? 0) < EVENT_OPS_VERSION;
 
-export const FOLD_RULES = 12;
+export const FOLD_RULES = 17;
 
 export const olderRules = (base: { rules?: number }): boolean => (base.rules ?? 0) < FOLD_RULES;
 
@@ -1066,6 +1065,8 @@ function eventCheck(ev: unknown): boolean | null {
       return n(e.seq) && (e.seq as number) > 0 && str(e.body, MAX_BODY_LENGTH) && (e.body as string).trim().length > 0;
     case "msg.delete":
       return n(e.seq) && (e.seq as number) > 0;
+    case "room.leave":
+      return str(e.id, 64);
     case "member.gone":
     case "member.back":
       return str(e.member, 64) && str(e.pk, 64);

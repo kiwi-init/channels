@@ -98,6 +98,7 @@ const OPS: Record<Event["op"], true> = {
   react: true,
   "msg.edit": true,
   "msg.delete": true,
+  "room.leave": true,
   "member.gone": true,
   "member.back": true,
 };
@@ -160,6 +161,24 @@ const OPS_AT: Record<number, readonly string[]> = {
     "msg.delete",
     "member.gone",
     "member.back",
+  ],
+  13: [
+    ...V1,
+    "branch.prefix.set",
+    "github.rules",
+    "github.release",
+    "ask.name",
+    "ask.close",
+    "devices",
+    "task.first",
+    "power.set",
+    "room.seal",
+    "room.msg",
+    "msg.edit",
+    "msg.delete",
+    "member.gone",
+    "member.back",
+    "room.leave",
   ],
 };
 

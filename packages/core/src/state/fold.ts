@@ -31,6 +31,7 @@ import { carriedPersona } from "../personality.ts";
 import { permissionAnswer } from "../permission.ts";
 import type { AskHead, ChannelState, Edit, Fact, FoldBase, FoldMember, GuardFloor, Lease, Member, PersonaLead, Place, Reaction, Room, RoomsFloor, Roster, SecretRoom, Task } from "./types.ts";
 import { inRoom } from "../room-rules.ts";
+import { packAuthors, unpackAuthors } from "./authors.ts";
 
 const STALE_MS = 24 * 3_600_000;
 const SENT_WINDOW_MS = 2 * STALE_MS;
@@ -248,7 +249,7 @@ function folding(
   const leases = new Map<string, Lease>(from?.leases.map((l) => [l.name, l]));
   const reactions = new Map<number, Map<string, Reaction>>(from?.reactions.map(([seq, by]) => [seq, new Map(by)]));
   const reactSeqs = new Set<number>(from?.reactSeqs);
-  const chatBy = new Map<number, string>(from?.chatBy);
+  const chatBy = new Map<number, string>(unpackAuthors(from?.authors) ?? from?.chatBy);
   const edits = new Map<number, Edit>(from?.edits);
   const deleted = new Map<number, number>(from?.deleted);
   let skipped = from?.skipped === true;
@@ -396,9 +397,11 @@ function folding(
         const why =
           !room?.meta || room.n !== m.sealed.n || !inRoom(room.meta, m.from, m.pk)
             ? `${m.from} wasn't in that private room, or wrote with a key it no longer uses`
-            : m.kind === "event" && !isOverlay(m)
-              ? "a private room keeps to messages, reactions, edits and deletes: tasks, notes and other channel events would be seen by everyone"
-              : null;
+            : room.meta.self
+              ? "a person's own room carries no messages"
+              : m.kind === "event" && !isOverlay(m)
+                ? "a private room keeps to messages, reactions, edits and deletes: tasks, notes and other channel events would be seen by everyone"
+                : null;
         if (why) {
           trust.set(m.seq, "refused");
           rejected.set(m.seq, why);
@@ -619,8 +622,9 @@ function folding(
       reactions: recent(reactions).map(([seq, by]): [number, [string, Reaction][]] => [seq, [...by]]),
       reactSeqs: [...reactSeqs].filter((seq) => seq > cut),
       chatBy: recent(chatBy),
+      authors: packAuthors(chatBy),
       edits: recent(edits),
-      deleted: recent(deleted),
+      deleted: [...deleted],
       trust: recent(trust),
       rejected: recent(rejected),
       sent: keptSent,

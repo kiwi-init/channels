@@ -28,9 +28,13 @@ import { isMuted, tells } from "~/live/quiet"
 import { tellMessage } from "~/live/notes"
 import { ownPrefs, usePrefs } from "~/live/prefs"
 import { receiptsOf, withReceipts } from "~/live/receipts"
+import { announce } from "~/kit/toasts"
+import { arrivals } from "~/live/persona-later"
+import { lastIn, seenKeyOf } from "~/live/seen-place"
 import { closeOpened, markGone, publish, type Run } from "~/live/store"
 import { useWakes } from "~/live/wakes"
 import { appCan } from "~/live/app-can"
+import { useMarksSync } from "~/live/read-sync"
 import { dmRoomOf, sealable } from "~/live/dm"
 import { clock } from "~/kit/time"
 import type { Channel, Upload, Where } from "~/model"
@@ -62,25 +66,6 @@ function sendOptions(state: ChannelState, messages: readonly Wire[], me: string,
   return where.room === GENERAL_ROOM ? base : { ...base, room: where.room }
 }
 
-function seenKeyOf(where: Where, me: string): string {
-  if (where.kind === "room") return roomSeenKey(where.room)
-  if (where.kind === "dm") return placeKey(dmPlace(me, where.with))
-  if (where.kind === "theirs") return placeKey(dmPlace(...where.between))
-  return placeKey({ kind: "task", task: where.task })
-}
-
-function lastIn(messages: readonly Wire[], state: ChannelState, me: string, where: Where): number {
-  const key = seenKeyOf(where, me)
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const m = messages[i]
-    if (!m || m.kind === "event") continue
-    const place = state.placeOf.get(m.seq) ?? { kind: "main" as const }
-    const at = place.kind === "main" ? roomSeenKey(state.roomOf.get(m.seq) ?? m.room ?? GENERAL_ROOM) : placeKey(place)
-    if (at === key) return m.seq
-  }
-  return 0
-}
-
 function useShown(): boolean {
   return useSyncExternalStore(
     (l) => {
@@ -102,6 +87,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const newMembers = useNewMembers(roomId)
   const newPowers = useNewPowers(roomId)
   const pictures = usePictures(code, ch, messages)
+  useMarksSync(ch, roomId)
   const known = useKnownChannels()
   const icon = iconUrl(useIcons().get(roomId) ?? null)
   useLiveIcon(member)
@@ -295,12 +281,17 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
     })
   }, [firstVisit, messages, state, roomId])
 
+  useEffect(() => {
+    for (const { name, persona } of arrivals(code, people))
+      void import("~/live/manage").then((m) => m.setPersona(code, name, persona)).catch((e: unknown) => announce(`Personality not set on ${name}: ${e instanceof Error ? e.message : String(e)}`))
+  }, [code, people])
+
   const where = view.where
   const lastHere = useMemo(() => (where ? lastIn(messages, state, me, where) : 0), [messages, state, me, where])
   useEffect(() => {
     if (!where || !lastHere || !shown) return
-    markSeenIn(roomId, { [seenKeyOf(where, me)]: lastHere })
-  }, [where, lastHere, roomId, me, shown])
+    markSeenIn(roomId, { [seenKeyOf(state, where, me)]: lastHere })
+  }, [where, lastHere, roomId, me, shown, state])
   const task = view.task
   const lastInTask = useMemo(() => (task === null ? 0 : (state.places.get(placeKey({ kind: "task", task }))?.last ?? 0)), [task, state.places])
   useEffect(() => {

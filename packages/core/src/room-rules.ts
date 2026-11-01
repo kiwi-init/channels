@@ -10,6 +10,7 @@ export interface RoomMeta {
   members: RoomMember[];
   prev?: string;
   dm?: true;
+  self?: true;
 }
 
 export interface RoomSeal {
@@ -64,6 +65,14 @@ export function rootOf(name: string, members: ReadonlyMap<string, Seat>): string
   return seat ? rootName(seat, [...members.values()]) : name;
 }
 
+export function leaveSeal(known: { n: number; meta?: RoomMeta; leaving?: string[] } | undefined, opened: RoomMeta, n: number, members: ReadonlyMap<string, Seat>): boolean {
+  if (!known?.meta || !known.leaving?.length || known.meta.dm || known.meta.self || opened.dm || opened.self) return false;
+  if (n !== known.n + 1 || opened.name !== known.meta.name) return false;
+  const staying = known.meta.members.filter((m) => !known.leaving?.includes(rootOf(m.name, members)));
+  if (staying.length === known.meta.members.length || staying.length !== opened.members.length) return false;
+  return staying.every((m) => opened.members.some((o) => o.name === m.name && o.pk === m.pk));
+}
+
 export function dmPair(meta: Pick<RoomMeta, "members">, sender: string, members: ReadonlyMap<string, Seat>): boolean {
   const seats = [...members.values()];
   const people = new Set<string>();
@@ -73,6 +82,18 @@ export function dmPair(meta: Pick<RoomMeta, "members">, sender: string, members:
     people.add(rootName(seat, seats));
   }
   return people.size === 2 && people.has(rootOf(sender, members));
+}
+
+export function selfOnly(meta: Pick<RoomMeta, "members">, sender: string, members: ReadonlyMap<string, Seat>): boolean {
+  const seats = [...members.values()];
+  const mine = rootOf(sender, members);
+  return (
+    meta.members.length > 0 &&
+    meta.members.every((m) => {
+      const seat = members.get(m.name);
+      return !!seat && seat.pk === m.pk && isPerson(seat) && rootName(seat, seats) === mine;
+    })
+  );
 }
 
 export function withSeats<P extends { name: string; pk: string }, S extends Seat>(seats: readonly S[], picked: readonly P[], pickOf: (s: S) => P): P[] {

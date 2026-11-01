@@ -456,7 +456,7 @@ export interface Account {
   githubMove?: string
   computers: Computer[]
   version: string
-  update?: { version: string; ready: boolean; state?: "downloading" | "ready" | "available" }
+  update?: { version: string; ready: boolean; state?: "downloading" | "ready" | "available"; progress?: number; blocked?: true }
   uiUpdate?: { version: string }
   key?: string
   personPk?: string
@@ -591,6 +591,7 @@ export interface Actions {
   retry(code: string, seq: number): void
   loadImage(code: string, spot: string): void
   discard(code: string, seq: number): void
+  markRead(code: string, where: Where): void
   react(code: string, seq: number, emoji: string): void
   editMessage(code: string, seq: number, text: string): void
   deleteMessage(code: string, seq: number): void

@@ -145,6 +145,8 @@ export function describeEvent(m: Message, state?: ChannelState, nameOf: (handle:
       return "wrote in a private room";
     case "room.create":
       return `made the room #${inlineText(ev.name, 40)}`;
+    case "room.leave":
+      return "left a private room";
     case "room.rename": {
       // Rooms are named by id in the event; say which one it was, by its name now if it has another.
       const now = state?.rooms.get(ev.id)?.name;

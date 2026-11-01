@@ -14,6 +14,7 @@ import { newRoomId, type ChannelAccess } from "./crypto.ts";
 import type { Identity } from "./identity.ts";
 import type { JoinClaims, JoinRequest, Member, MemberInfo, PersonPowers } from "./membership.ts";
 import { withSeats } from "./room-rules.ts";
+import type { Marks } from "./note.ts";
 import type { ChannelIcon, Envelope, ImageAttachment, Message } from "./protocol.ts";
 import type { Scope } from "./scopes.ts";
 import type { ChannelState, FoldBase, GithubRelease, GithubRules, GuardFloor } from "./state.ts";
@@ -476,6 +477,61 @@ export class Channel {
     return id;
   }
 
+  async makeSelf(): Promise<string> {
+    const { newRoomKey, sealRoom } = await import("./private-room.ts");
+    const id = newRoomId();
+    const who = everySeat(await this.members(), withMe(this.core.identity, []));
+    const key = newRoomKey();
+    const meta = { name: "", members: who.map(({ name, pk }) => ({ name, pk })), self: true as const };
+    const sealed = await sealRoom(
+      this.roomId,
+      id,
+      1,
+      key,
+      meta,
+      who.map((w) => w.xpk),
+    );
+    (await import("./private-room.ts")).ownSeal(this.core, id, await this.send("keeps a private note", { kind: "event", ev: { op: "room.seal", ...sealed } }), sealed, { n: 1, key, meta });
+    return id;
+  }
+
+  async syncMarks(local: Marks, opts: { write?: boolean } = {}): Promise<Marks | null> {
+    const write = opts.write ?? true;
+    const own = () => [...this.core.roomNow].find(([, r]) => r.key && r.meta?.self && r.meta.members.some((m) => m.pk === this.core.identity.pk));
+    let found = own();
+    if (!found && write) {
+      await this.makeSelf();
+      found = own();
+    }
+    const [roomId, room] = found ?? [];
+    if (!roomId || !room?.key || !room.meta) return null;
+    const { mergeMarks, noteId, openNote, sealNote } = await import("./note.ts");
+    const key = room.key;
+    const mine = new Set(room.meta.members.map((m) => m.pk));
+    const id = await noteId(this.roomId, key);
+    const prevKey = room.meta.prev ?? this.core.roomKeys.get(`${roomId}/${room.n - 1}`);
+    for (let tries = 0; tries < 5; tries++) {
+      const had = await run(this.fx.getNote(id));
+      let theirs: Marks = {};
+      if (had) {
+        const opened = await openNote(key, this.roomId, id, had.box);
+        if (opened && mine.has(opened.pk)) theirs = opened.marks;
+      } else if (prevKey) {
+        const prev = prevKey;
+        const oldId = await noteId(this.roomId, prev);
+        const old = await run(this.fx.getNote(oldId));
+        const opened = old ? await openNote(prev, this.roomId, oldId, old.box) : null;
+        if (opened) theirs = opened.marks;
+      }
+      const merged = mergeMarks(theirs, local);
+      const moved = Object.entries(merged).some(([k, v]) => (theirs[k] ?? -1) !== v);
+      if (!write || (had && !moved)) return merged;
+      const put = await run(this.fx.putNote(id, await sealNote(key, this.roomId, id, this.core.identity, merged), had?.version ?? null));
+      if (!put.conflict) return merged;
+    }
+    return null;
+  }
+
   async changeRoom(id: string, change: { name?: string; members?: readonly RoomPick[] }): Promise<boolean> {
     const now = this.core.roomNow.get(id);
     if (!now?.key || !now.meta) throw new Error("you're not in that private room");
@@ -503,7 +559,12 @@ export class Channel {
     const { newRoomKey, sealRoom } = await import("./private-room.ts");
     const n = out ? now.n + 1 : now.n;
     const key = out ? newRoomKey() : now.key;
-    const meta = { name: change.name ?? now.meta.name, members: who.map(({ name, pk }) => ({ name, pk })), ...(now.meta.dm ? { dm: true as const } : {}) };
+    const meta = {
+      name: change.name ?? now.meta.name,
+      members: who.map(({ name, pk }) => ({ name, pk })),
+      ...(now.meta.dm ? { dm: true as const } : {}),
+      ...(now.meta.self ? { self: true as const } : {}),
+    };
     const sealed = await sealRoom(
       this.roomId,
       id,
@@ -514,6 +575,28 @@ export class Channel {
       now.key,
     );
     (await import("./private-room.ts")).ownSeal(this.core, id, await this.send("changed a private room", { kind: "event", ev: { op: "room.seal", ...sealed } }), sealed, { n, key, meta });
+    return true;
+  }
+
+  async leaveRoom(id: string): Promise<number> {
+    if (!this.core.roomNow.get(id)?.key) throw new Error("you're not in that private room");
+    return this.send("left the room", { kind: "event", room: id, ev: { op: "room.leave", id } });
+  }
+
+  async sealOutLeavers(id: string, leavers: readonly string[]): Promise<boolean> {
+    const now = this.core.roomNow.get(id);
+    if (!now?.key || !now.meta || !leavers.length) return false;
+    const staying = now.meta.members.filter((m) => !leavers.includes(m.name));
+    if (staying.length === now.meta.members.length || !staying.some((m) => m.pk === this.core.identity.pk)) return false;
+    const here = new Map((await this.members()).filter((r) => r.active).map((r) => [r.pk, r]));
+    const xpks = staying.map((m) => here.get(m.pk)?.xpk);
+    if (xpks.some((x) => !x)) return false;
+    const { newRoomKey, ownSeal, sealRoom } = await import("./private-room.ts");
+    const n = now.n + 1;
+    const key = newRoomKey();
+    const meta = { name: now.meta.name, members: staying };
+    const sealed = await sealRoom(this.roomId, id, n, key, meta, xpks as string[], now.key);
+    ownSeal(this.core, id, await this.send("changed a private room", { kind: "event", ev: { op: "room.seal", ...sealed } }), sealed, { n, key, meta });
     return true;
   }
 
@@ -537,6 +620,10 @@ export class Channel {
 
   page(since: number, limit: number): Promise<Message[]> {
     return run(this.fx.page(since, limit));
+  }
+
+  envelopes(since: number, limit: number): Promise<{ head: number; messages: Envelope[] }> {
+    return run(this.fx.envelopes(since, limit));
   }
 
   snapshotAt(): Promise<number | null> {

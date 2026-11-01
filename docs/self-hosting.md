@@ -66,19 +66,19 @@ built `site/`.
 
 `bun src/relay/bun.ts --help` (or `kiwi relay --help`) prints these:
 
-| Flag | Env | Default | What it does |
-| --- | --- | --- | --- |
-| `--port <n>` | `PORT` | `8787` | Port to listen on |
-| `--hostname <addr>` | `KIWI_HOSTNAME` | `0.0.0.0` | Address to bind. Use `127.0.0.1` behind a reverse proxy |
-| `--data <dir>` | `KIWI_DATA` | `.relay-data` | Where channels are stored |
-| `--web <dir>` | `KIWI_WEB` | `site/` if present | Serve the static site from this folder |
-| `--no-web` | | | Don't serve the static site |
-| `--workos-client-id <id>` | `WORKOS_CLIENT_ID` | | Turn on sign-in, the create gate, with your WorkOS app ([below](#sign-in-with-your-own-workos-app)) |
-| `--workos-authkit-domain <url>` | `WORKOS_AUTHKIT_DOMAIN` | | Your AuthKit domain. Comma-separate two while moving to your own ([below](#your-own-sign-in-domain)) |
-| | `WORKOS_API_KEY` | | Secret, env only: lets the relay show the creator's real name |
-| `--dev-sign-in` | | | Testing only: the token `dev:<name>` signs in as `<name>`, no password. Refused unless `--hostname` is `127.0.0.1` or `localhost`, and refused with `--trust-proxy` ([below](#testing-a-relay)) |
-| `--dev-no-rate-limits` | | | Testing only: no per-minute cap on a member's messages or history reads (load tests such as `scripts/perf-scale.ts`), for requests made on this machine directly. Like dev sign-in, a request a proxy passed on keeps the caps. Refused unless `--hostname` is `127.0.0.1` or `localhost`, refused with `--trust-proxy`, and no environment setting turns it on |
-| `--trust-proxy [addr,cidr]` | `KIWI_TRUST_PROXY` | off | Trust a reverse proxy. Bare or `1` trusts a loopback peer. An address or CIDR (comma-separated, or the flag repeated) also trusts that peer, for example `172.17.0.1` or `172.16.0.0/12`. A trusted peer's last `X-Forwarded-For` entry is the client. If that entry is not an address, the registration counts as the proxy; earlier entries are ignored. Any other peer ignores the header. A prefix of `/0` is refused |
+| Flag                            | Env                     | Default            | What it does                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ------------------------------- | ----------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--port <n>`                    | `PORT`                  | `8787`             | Port to listen on                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `--hostname <addr>`             | `KIWI_HOSTNAME`         | `0.0.0.0`          | Address to bind. Use `127.0.0.1` behind a reverse proxy                                                                                                                                                                                                                                                                                                                                                                   |
+| `--data <dir>`                  | `KIWI_DATA`             | `.relay-data`      | Where channels are stored                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `--web <dir>`                   | `KIWI_WEB`              | `site/` if present | Serve the static site from this folder                                                                                                                                                                                                                                                                                                                                                                                    |
+| `--no-web`                      |                         |                    | Don't serve the static site                                                                                                                                                                                                                                                                                                                                                                                               |
+| `--workos-client-id <id>`       | `WORKOS_CLIENT_ID`      |                    | Turn on sign-in, the create gate, with your WorkOS app ([below](#sign-in-with-your-own-workos-app))                                                                                                                                                                                                                                                                                                                       |
+| `--workos-authkit-domain <url>` | `WORKOS_AUTHKIT_DOMAIN` |                    | Your AuthKit domain. Comma-separate two while moving to your own ([below](#your-own-sign-in-domain))                                                                                                                                                                                                                                                                                                                      |
+|                                 | `WORKOS_API_KEY`        |                    | Secret, env only: lets the relay show the creator's real name                                                                                                                                                                                                                                                                                                                                                             |
+| `--dev-sign-in`                 |                         |                    | Testing only: the token `dev:<name>` signs in as `<name>`, no password. Refused unless `--hostname` is `127.0.0.1` or `localhost`, and refused with `--trust-proxy` ([below](#testing-a-relay))                                                                                                                                                                                                                           |
+| `--dev-no-rate-limits`          |                         |                    | Testing only: no per-minute cap on a member's messages or history reads (load tests such as `scripts/perf-scale.ts`), for requests made on this machine directly. Like dev sign-in, a request a proxy passed on keeps the caps. Refused unless `--hostname` is `127.0.0.1` or `localhost`, refused with `--trust-proxy`, and no environment setting turns it on                                                           |
+| `--trust-proxy [addr,cidr]`     | `KIWI_TRUST_PROXY`      | off                | Trust a reverse proxy. Bare or `1` trusts a loopback peer. An address or CIDR (comma-separated, or the flag repeated) also trusts that peer, for example `172.17.0.1` or `172.16.0.0/12`. A trusted peer's last `X-Forwarded-For` entry is the client. If that entry is not an address, the registration counts as the proxy; earlier entries are ignored. Any other peer ignores the header. A prefix of `/0` is refused |
 
 A flag's value comes after a space (`--trust-proxy 172.17.0.1`): the relay refuses `--flag=value`, which it would otherwise ignore.
 
@@ -220,13 +220,13 @@ nothing.
    - in `vars`, replace `WORKOS_CLIENT_ID` and `WORKOS_AUTHKIT_DOMAIN` with yours, or
      delete both to run without sign-in;
    - set the limits you want ([table below](#limits-and-the-private-beta)).
-   Leave `migrations` exactly as it is: they create the Durable Object classes, and
-   changing a past entry can delete stored channels.
-   Leave `ratelimits` too: it caps pairing-mailbox writes at 20 per minute per
-   client address (`CF-Connecting-IP`). The binding only allows a 10-second or
-   60-second period, which is why this is per minute and the Bun relay is 20 per
-   10 minutes. `namespace_id` must be unique in your Cloudflare account; change it
-   if `870202` is already taken. Deleting the binding turns the cap off.
+     Leave `migrations` exactly as it is: they create the Durable Object classes, and
+     changing a past entry can delete stored channels.
+     Leave `ratelimits` too: it caps pairing-mailbox writes at 20 per minute per
+     client address (`CF-Connecting-IP`). The binding only allows a 10-second or
+     60-second period, which is why this is per minute and the Bun relay is 20 per
+     10 minutes. `namespace_id` must be unique in your Cloudflare account; change it
+     if `870202` is already taken. Deleting the binding turns the cap off.
 2. Deploy:
    ```bash
    bunx wrangler login
@@ -243,7 +243,7 @@ the next day. The Paid plan has no daily cap and bills per request and per store
 GB. Check [Cloudflare's pricing](https://developers.cloudflare.com/workers/platform/pricing/)
 for current numbers.
 
-**Keep the bill bounded.** On Paid, set a usage notification under *Notifications*
+**Keep the bill bounded.** On Paid, set a usage notification under _Notifications_
 in the Cloudflare dashboard, and set the quotas below, which are what bound
 storage and messages per person. A
 [rate limiting rule](https://developers.cloudflare.com/waf/rate-limiting-rules/) on
@@ -290,8 +290,8 @@ by default. WorkOS can serve it from a domain of yours instead (`auth.example.co
 WorkOS add-on, for production environments only. WorkOS's pricing page lists custom domains as
 an extra monthly fee (reported as $99/month).
 
-1. In the WorkOS dashboard, with the **production** environment selected: *Domains* →
-   *Configure AuthKit domain*, and enter it (`auth.example.com`).
+1. In the WorkOS dashboard, with the **production** environment selected: _Domains_ →
+   _Configure AuthKit domain_, and enter it (`auth.example.com`).
 2. Add the CNAME record it shows at your DNS provider. On Cloudflare, make it **DNS only** (grey
    cloud) until WorkOS has verified it, which it keeps retrying for up to 72 hours.
 3. Once it's verified, the device sign-in page and its tokens come from the new domain. Tokens
@@ -308,18 +308,18 @@ an extra monthly fee (reported as $99/month).
 Everything here is off unless set, except the byte cap. The Bun relay reads these
 from its environment, the Worker from `vars` (or secrets).
 
-| Setting | Default | Public relay | What it does |
-| --- | --- | --- | --- |
-| `KIWI_BETA_USERS` | off | set (secret) | Comma-separated WorkOS user ids, emails or `@domain`s. Only they create channels; anyone may still ask to join. Needs sign-in. |
-| `KIWI_BETA_WAITLIST_URL` | none | | Link shown to people who aren't on the list |
-| `KIWI_QUOTA_CHANNELS_PER_OWNER` | off | off | Channels one person owns at once; closing one frees the slot |
-| `KIWI_QUOTA_MEMBERS_PER_CHANNEL` | off | off | Active members per channel, people and agents together |
-| `KIWI_QUOTA_MESSAGES_PER_DAY` | off | off | Messages stored per channel per UTC day. Over the limit: 429, with when it resets |
-| `KIWI_QUOTA_BYTES_PER_CHANNEL` | 1 GB | 1 GB (unset) | Stored ciphertext per channel. The oldest messages make room, so a busy channel never freezes; only a single message bigger than the allowance is refused (413) |
-| `KIWI_EXPIRE_AFTER_DAYS` | off | off | Delete a channel with no new message and nobody connected for this many days, exactly like a close |
-| `KIWI_PAGE_KEY` | off | set (secret) | Old history pages served from the cache. A random secret of at least 32 characters (`openssl rand -base64 32`; on Cloudflare, `bunx wrangler secret put KIWI_PAGE_KEY`). See [Cached history pages](#cached-history-pages) |
+| Setting                          | Default | Public relay | What it does                                                                                                                                                                                                               |
+| -------------------------------- | ------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `KIWI_BETA_USERS`                | off     | set (secret) | Comma-separated WorkOS user ids, emails or `@domain`s. Only they create channels; anyone may still ask to join. Needs sign-in.                                                                                             |
+| `KIWI_BETA_WAITLIST_URL`         | none    |              | Link shown to people who aren't on the list                                                                                                                                                                                |
+| `KIWI_QUOTA_CHANNELS_PER_OWNER`  | off     | off          | Channels one person owns at once; closing one frees the slot                                                                                                                                                               |
+| `KIWI_QUOTA_MEMBERS_PER_CHANNEL` | off     | off          | Active members per channel, people and agents together                                                                                                                                                                     |
+| `KIWI_QUOTA_MESSAGES_PER_DAY`    | off     | off          | Messages stored per channel per UTC day. Over the limit: 429, with when it resets                                                                                                                                          |
+| `KIWI_QUOTA_BYTES_PER_CHANNEL`   | 1 GB    | 1 GB (unset) | Stored ciphertext per channel. The oldest messages make room, so a busy channel never freezes; only a single message bigger than the allowance is refused (413)                                                            |
+| `KIWI_EXPIRE_AFTER_DAYS`         | off     | off          | Delete a channel with no new message and nobody connected for this many days, exactly like a close                                                                                                                         |
+| `KIWI_PAGE_KEY`                  | off     | set (secret) | Old history pages served from the cache. A random secret of at least 32 characters (`openssl rand -base64 32`; on Cloudflare, `bunx wrangler secret put KIWI_PAGE_KEY`). See [Cached history pages](#cached-history-pages) |
 
-These are always on, everywhere: a channel keeps its last 10,000 messages; one
+These are always on, everywhere: a channel keeps its whole history, bounded only by its stored bytes; one
 message is at most 512 KB of ciphertext; a channel holds at most 20 pending join
 requests; each member sends a bounded number of messages per minute.
 

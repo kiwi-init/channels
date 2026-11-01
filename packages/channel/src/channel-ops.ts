@@ -28,6 +28,7 @@ function lazyLocalOps(): ChannelOps {
     forget: (code) => local().then((o) => o.forget(code)),
     presence: (code, p) => local().then((o) => o.presence(code, p)),
     openRows: (code, rows) => local().then((o) => o.openRows(code, rows)),
+    olderRows: (code, before, limit) => local().then((o) => o.olderRows(code, before, limit)),
     keep: (code, state) => local().then((o) => o.keep(code, state)),
     openKept: (code, sealed) => local().then((o) => o.openKept(code, sealed)),
     nudge: () => {
@@ -114,6 +115,7 @@ export class ChannelLink {
   setRooms = (...a: Args<"setRooms">) => this.c("setRooms", ...a);
   makeRoom = (...a: Args<"makeRoom">) => this.c("makeRoom", ...a);
   makeDm = (...a: Args<"makeDm">) => this.c("makeDm", ...a);
+  syncMarks = (...a: Args<"syncMarks">) => this.c("syncMarks", ...a);
   changeRoom = (...a: Args<"changeRoom">) => this.c("changeRoom", ...a);
   pruneRooms = (...a: Args<"pruneRooms">) => this.c("pruneRooms", ...a);
   setRepos = (...a: Args<"setRepos">) => this.c("setRepos", ...a);
@@ -126,6 +128,7 @@ export class ChannelLink {
   history = (...a: Args<"history">) => this.c("history", ...a);
   presence = (p: PresenceFields) => this.via.presence(this.code, p);
   openRows = (rows: CachedRow[]) => this.via.openRows(this.code, rows);
+  olderRows = (before: number, limit: number) => this.via.olderRows(this.code, before, limit);
   keep = (state: object) => this.via.keep(this.code, state);
   openKept = (sealed: CachedKept) => this.via.openKept(this.code, sealed);
   follow = (since: number, on: (e: FollowEvent) => void) => this.via.follow(this.code, since, on);
