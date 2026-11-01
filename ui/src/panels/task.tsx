@@ -1,6 +1,5 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react"
 
-import { CHECKS } from "~/chat/cards"
 import { Composer } from "~/chat/composer"
 import { compactAt, quoteOf, useNames, useTaskIds } from "~/chat/conversation"
 import { named } from "~/chat/linked"
@@ -14,6 +13,7 @@ import { ago } from "~/kit/time"
 import { memberOf, type Ask, type Channel, type PermissionAsk, type Person, type PullRequest, type QuestionAsk, type ReviewRound, type Task, type TaskEvent } from "~/model"
 import { useApp } from "~/nav"
 import { nickname } from "~/names"
+import { IssueMark, issueWord, PrCard } from "~/github/parts"
 import { PanelHead } from "~/panels/frame"
 import { moveWords, someone } from "~/panels/task-moves"
 import { TONES } from "~/tasks/board"
@@ -21,8 +21,6 @@ import { SendBack } from "~/tasks/send-back"
 
 const ROUND_WORDS: Record<ReviewRound["result"], string> = { open: "reviewing", approved: "approved", rejected: "sent back", withdrawn: "withdrawn" }
 const ROUND_TONES: Record<ReviewRound["result"], string> = { open: "tone-review", approved: "tone-live", rejected: "", withdrawn: "" }
-const CHECK_TONES: Record<PullRequest["checks"], string> = { pass: "tone-quiet", fail: "tone-alert", running: "tone-decide", none: "" }
-const STATE_TONES: Record<PullRequest["state"], string> = { open: "", draft: "dim", merged: "tone-live", closed: "tone-alert" }
 
 function since(at: number): string {
   const a = ago(at)
@@ -76,7 +74,8 @@ export function TaskPanel({ channel, id }: { channel: Channel; id: number }) {
           {may && task.suggested && !task.owner && <Suggested channel={channel} task={task} suggested={task.suggested} />}
         </section>
         {waits.length > 0 && <Waits channel={channel} waits={waits} />}
-        {task.pr && <Pr pr={task.pr} />}
+        {task.pr && <Pr channel={channel} pr={task.pr} />}
+        <LinkedIssue channel={channel} id={task.id} />
         <Review key={`review-${task.id}`} channel={channel} task={task} />
         {task.history.length > 0 && <Activity key={`activity-${task.id}`} channel={channel} history={task.history} />}
         {may && <Footer key={`foot-${task.id}`} channel={channel} task={task} />}
@@ -298,36 +297,28 @@ function Waits({ channel, waits }: { channel: Channel; waits: (PermissionAsk | Q
   )
 }
 
-function Pr({ pr }: { pr: PullRequest }) {
+function Pr({ channel, pr }: { channel: Channel; pr: PullRequest }) {
   return (
     <section className="panel-section">
       <Heading>Pull request</Heading>
-      <div className="task-box task-pr">
-        <p className="task-pr-title">
-          <Icon name="pr" size={14} />
-          <span>
-            <span className="dim">#{pr.number}</span> {pr.title}
-          </span>
-        </p>
-        <p className="task-pr-meta">
-          {pr.additions !== undefined && (
-            <>
-              <span className="tone-live num">+{pr.additions}</span> <span className="tone-alert num">−{pr.deletions ?? 0}</span>
-              {" · "}
-            </>
-          )}
-          <span className={CHECK_TONES[pr.checks]}>{CHECKS[pr.checks]}</span>
-          {" · "}
-          <span className={STATE_TONES[pr.state]}>{pr.state}</span>
-        </p>
-        <p className="task-pr-foot">
-          <span className="dimmer">{pr.repo}</span>
-          <a href={pr.url} target="_blank" rel="noreferrer noopener" className="task-pr-link">
-            Open on GitHub
-            <Icon name="external" size={12} />
-          </a>
-        </p>
-      </div>
+      <PrCard channel={channel} pr={pr} />
+    </section>
+  )
+}
+
+function LinkedIssue({ channel, id }: { channel: Channel; id: number }) {
+  const { go } = useApp()
+  const issue = channel.issues?.find((i) => i.task === id)
+  if (!issue) return null
+  return (
+    <section className="panel-section">
+      <Heading>Issue</Heading>
+      <button type="button" className="gh-task" onClick={() => go({ to: "panel", panel: { kind: "issue", repo: issue.repo, number: issue.number } })}>
+        <IssueMark issue={issue} size={14} />
+        <span className="gh-task-id num">#{issue.number}</span>
+        <span className="gh-task-title">{issue.title}</span>
+        <span className="gh-task-who">{issueWord(issue)}</span>
+      </button>
     </section>
   )
 }

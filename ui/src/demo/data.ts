@@ -1,4 +1,4 @@
-import type { Account, Ask, Channel, ChannelTile, Device, Enrolling, Message, Person, Prefs, Task, TaskGroup } from "~/model"
+import type { Account, Ask, Channel, ChannelTile, Device, Enrolling, Issue, Message, Person, Prefs, PullRequest, Task, TaskGroup } from "~/model"
 import { nicknamesOf } from "~/names"
 
 const now = Date.now()
@@ -184,8 +184,21 @@ const pr43 = {
   state: "open",
   checks: "pass",
   ticks: { passed: 6, running: 0, failed: [] },
+  list: [
+    { name: "android / build", state: "pass", word: "passed" },
+    { name: "build / bundles", state: "pass", word: "passed" },
+    { name: "ci-ok", state: "pass", word: "passed", required: true, url: "https://github.com/kiwi-init/channels/actions/runs/1" },
+    { name: "desktop / linux", state: "pass", word: "passed" },
+    { name: "repo / static", state: "pass", word: "passed" },
+    { name: "test / unit", state: "pass", word: "passed" },
+  ],
   additions: 182,
   deletions: 40,
+  files: 7,
+  branch: "T12-dark-mode",
+  by: "atlas-bot",
+  at: m(40),
+  task: 12,
 } as const
 const pr44 = {
   repo: "kiwi-init/channels",
@@ -195,8 +208,20 @@ const pr44 = {
   state: "open",
   checks: "running",
   ticks: { passed: 3, running: 2, failed: [] },
+  list: [
+    { name: "build / shots", state: "running", word: "running", url: "https://github.com/kiwi-init/channels/actions/runs/2" },
+    { name: "ci-ok", state: "waiting", word: "queued", required: true },
+    { name: "build / bundles", state: "pass", word: "passed" },
+    { name: "repo / static", state: "pass", word: "passed" },
+    { name: "test / unit", state: "pass", word: "passed" },
+  ],
   additions: 96,
   deletions: 71,
+  files: 12,
+  branch: "T14-channel-icons",
+  by: "pixel-bot",
+  at: m(12),
+  task: 14,
 } as const
 const pr45 = {
   repo: "kiwi-init/channels",
@@ -206,8 +231,21 @@ const pr45 = {
   state: "open",
   checks: "fail",
   ticks: { passed: 5, running: 0, failed: ["desktop / linux"] },
+  list: [
+    { name: "desktop / linux", state: "fail", word: "failed", url: "https://github.com/kiwi-init/channels/actions/runs/3" },
+    { name: "build / bundles", state: "pass", word: "passed" },
+    { name: "ci-ok", state: "pass", word: "passed", required: true },
+    { name: "repo / static", state: "pass", word: "passed" },
+    { name: "test / unit", state: "pass", word: "passed" },
+    { name: "perf / scale", state: "skipped", word: "skipped" },
+  ],
   additions: 64,
   deletions: 210,
+  files: 9,
+  branch: "T11-first-load",
+  by: "win-bot",
+  at: m(25),
+  task: 11,
 } as const
 
 const general = { kind: "room", room: "general" } as const
@@ -695,6 +733,123 @@ const asks: Ask[] = [
   },
 ]
 
+const demoPrs: PullRequest[] = [
+  pr44,
+  pr45,
+  pr43,
+  {
+    repo: "kiwi-init/electrobun-livewire",
+    number: 18,
+    title: "Wayland: keep the window's size across a scale change",
+    url: "https://github.com/kiwi-init/electrobun-livewire/pull/18",
+    state: "open",
+    checks: "none",
+    additions: 23,
+    deletions: 4,
+    files: 2,
+    branch: "wayland-scale",
+    by: "maya-dev",
+    at: m(60 * 5),
+  },
+  {
+    repo: "kiwi-init/channels",
+    number: 42,
+    title: "Restore composer spell checking",
+    url: "https://github.com/kiwi-init/channels/pull/42",
+    state: "merged",
+    checks: "pass",
+    mergedAt: m(50),
+    additions: 31,
+    deletions: 6,
+    branch: "T16-spellcheck",
+    by: "atlas-bot",
+    at: m(50),
+    task: 16,
+  },
+  {
+    repo: "kiwi-init/channels",
+    number: 41,
+    title: "Fold duplicate event rows",
+    url: "https://github.com/kiwi-init/channels/pull/41",
+    state: "merged",
+    checks: "pass",
+    mergedAt: m(60 * 20),
+    additions: 140,
+    deletions: 88,
+    branch: "T9-fold-events",
+    by: "win-bot",
+    at: m(60 * 20),
+    task: 9,
+  },
+  {
+    repo: "kiwi-init/channels",
+    number: 39,
+    title: "Try a second relay region",
+    url: "https://github.com/kiwi-init/channels/pull/39",
+    state: "closed",
+    checks: "pass",
+    additions: 410,
+    deletions: 12,
+    branch: "relay-region",
+    by: "ridge-bot",
+    at: m(60 * 30),
+  },
+]
+
+const demoIssues: Issue[] = [
+  {
+    repo: "kiwi-init/channels",
+    number: 57,
+    title: "Dark mode: the code blocks stay light",
+    url: "https://github.com/kiwi-init/channels/issues/57",
+    state: "open",
+    by: "maya-dev",
+    at: m(35),
+    task: 12,
+  },
+  {
+    repo: "kiwi-init/channels",
+    number: 55,
+    title: "Channel icons look blurry on a 1x screen",
+    url: "https://github.com/kiwi-init/channels/issues/55",
+    state: "open",
+    by: "jow",
+    at: m(60 * 3),
+    task: 14,
+  },
+  {
+    repo: "kiwi-init/electrobun-livewire",
+    number: 9,
+    title: "The window jumps when a second monitor is plugged in",
+    url: "https://github.com/kiwi-init/electrobun-livewire/issues/9",
+    state: "open",
+    by: "someone-else",
+    at: m(60 * 7),
+  },
+  {
+    repo: "kiwi-init/channels",
+    number: 53,
+    title: "First load feels slow on a cold cache",
+    url: "https://github.com/kiwi-init/channels/issues/53",
+    state: "open",
+    by: "jow",
+    at: m(60 * 26),
+    task: 11,
+  },
+  {
+    repo: "kiwi-init/channels",
+    number: 50,
+    title: "Duplicate rows when an agent rejoins",
+    url: "https://github.com/kiwi-init/channels/issues/50",
+    state: "closed",
+    reason: "completed",
+    by: "win-bot",
+    at: m(60 * 20),
+    task: 9,
+  },
+  { repo: "kiwi-init/channels", number: 48, title: "Support Windows", url: "https://github.com/kiwi-init/channels/issues/48", state: "closed", reason: "not_planned", by: "jow", at: m(60 * 48) },
+]
+
 export const DEMO_CHANNEL: Channel = {
   code: "kiwi",
   title: "kiwi",
@@ -703,6 +858,8 @@ export const DEMO_CHANNEL: Channel = {
   lead: "atlas",
   goal: "Ship the Livewire app to everyone by Friday.",
   repos: ["kiwi-init/channels", "kiwi-init/electrobun-livewire"],
+  prs: demoPrs,
+  issues: demoIssues,
   rooms: [
     { id: "general", name: "general", unread: 0, mentions: 0 },
     { id: "releases", name: "releases", unread: 2, mentions: 0, muted: true },

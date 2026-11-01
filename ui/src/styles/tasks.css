@@ -414,53 +414,6 @@
   font: var(--t-meta) var(--ui);
 }
 
-.task-pr {
-  gap: 6px;
-  font: var(--t-ui) var(--ui);
-}
-
-.task-pr-title {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  overflow-wrap: anywhere;
-}
-
-.task-pr-title .icon {
-  align-self: center;
-  color: var(--ink-2);
-}
-
-.task-pr-meta {
-  padding-left: 24px;
-  color: var(--ink-2);
-  font-size: var(--t-meta);
-}
-
-.task-pr-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 6px;
-  padding-top: 10px;
-  font-size: var(--t-meta);
-}
-
-.task-pr-foot > span {
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.task-pr-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex: none;
-}
-
 .task-review-ask {
   font: var(--t-ui) var(--ui);
 }

@@ -28,6 +28,10 @@ const Waiting = later(() => import("~/start/waiting").then((m) => m.Waiting))
 const SearchBox = later(() => import("~/chat/search-box").then((m) => m.SearchBox))
 const Board = later(() => import("~/tasks/board").then((m) => m.Board))
 const Lanes = later(() => import("~/tasks/lanes").then((m) => m.Lanes))
+const PullRequests = later(() => import("~/github/lists").then((m) => m.PullRequests))
+const Issues = later(() => import("~/github/lists").then((m) => m.Issues))
+const PrPanel = later(() => import("~/github/panel").then((m) => m.PrPanel))
+const IssuePanel = later(() => import("~/github/panel").then((m) => m.IssuePanel))
 const NeedsYou = later(() => import("~/needs/needs").then((m) => m.NeedsYou))
 const TaskPanel = later(() => import("~/panels/task").then((m) => m.TaskPanel))
 const PersonPanel = later(() => import("~/panels/person").then((m) => m.PersonPanel))
@@ -98,6 +102,10 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   const needs = openAsks(channel).length
   const tasks = openTasks(channel).length
   const agents = channel.people.some((p) => p.kind === "agent" && !p.left)
+  const github = channel.repos.length > 0 || !!channel.prs?.length || !!channel.issues?.length
+  const openPrs = channel.prs?.filter((p) => p.state === "open" || p.state === "draft") ?? []
+  const red = openPrs.some((p) => p.checks === "fail" || !!p.ticks?.failed.length)
+  const openIssues = channel.issues?.filter((i) => i.state === "open").length ?? 0
   const line = channel.loading ? [] : headerLine(channel, 0)
   const here =
     nav.where.kind === "room"
@@ -153,6 +161,19 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
               Agents
             </button>
           )}
+          {!tall && (github || nav.tab === "prs") && (
+            <button type="button" aria-pressed={nav.tab === "prs"} onClick={() => go({ to: "tab", tab: "prs" })} title={red ? "A pull request's checks failed" : undefined}>
+              <Icon name="pr" size={14} />
+              Pull requests <Count n={openPrs.length} />
+              {red && <span className="tab-red" aria-label="checks failed" />}
+            </button>
+          )}
+          {!tall && (github || nav.tab === "issues") && (
+            <button type="button" aria-pressed={nav.tab === "issues"} onClick={() => go({ to: "tab", tab: "issues" })}>
+              <Icon name="issue" size={14} />
+              Issues <Count n={openIssues} />
+            </button>
+          )}
           {(needs > 0 || nav.tab === "needs") && (
             <button type="button" className="is-needs" aria-pressed={nav.tab === "needs"} onClick={() => go({ to: "tab", tab: "needs" })}>
               <Icon name="needs" size={14} />
@@ -201,6 +222,10 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
               <Board channel={channel} needs={needs} />
             ) : nav.tab === "agents" ? (
               <Lanes channel={channel} />
+            ) : nav.tab === "prs" ? (
+              <PullRequests channel={channel} />
+            ) : nav.tab === "issues" ? (
+              <Issues channel={channel} />
             ) : nav.tab === "needs" ? (
               <NeedsYou channel={channel} onJump={setJump} />
             ) : (
@@ -251,6 +276,10 @@ function PanelView({ channel }: { channel: Channel }) {
           <ThreadPanel channel={channel} seq={nav.panel.seq} focus={nav.panel.focus} />
         ) : nav.panel.kind === "task" ? (
           <TaskPanel channel={channel} id={nav.panel.task} />
+        ) : nav.panel.kind === "pr" ? (
+          <PrPanel channel={channel} repo={nav.panel.repo} number={nav.panel.number} />
+        ) : nav.panel.kind === "issue" ? (
+          <IssuePanel channel={channel} repo={nav.panel.repo} number={nav.panel.number} />
         ) : nav.panel.kind === "person" ? (
           <PersonPanel channel={channel} name={nav.panel.name} />
         ) : nav.panel.kind === "channel" ? (

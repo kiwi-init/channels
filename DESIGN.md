@@ -247,7 +247,9 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   The top bar spans the sidebar and the main area (`--top-h`): the sidebar
   toggle first at the left edge, then the channel switcher, both in the same
   place whether the sidebar is open or collapsed; the views in the middle
-  (`# room`, Tasks with its count, Agents, Needs you in `decide` with its
+  (`# room`, Tasks with its count, Agents, Pull requests and Issues with
+  their open counts once a repo is linked, a dot in `alert` on Pull requests
+  while an open one's checks failed, Needs you in `decide` with its
   count), the open one on `wash-2`; on the right a mono summary
   (`2 working · 1 merged today · 7 need you`), Search and the terminal.
   No borders between the columns.
@@ -276,6 +278,15 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   as the heading, who and `from #N` under it, then a two-line row per task
   (its `Dot`, the title in `t-body`, a mono line of id, owner, state and
   age), with its PR number, diff bar, additions and checks on the right.
+- **Pull requests and Issues.** Open and Closed as one segment control,
+  the repos as another when there are several, then a two-line row per item:
+  its GitHub state mark (open `live`, merged or done `review`, closed or not
+  planned `ink-2`), the title, a mono line of number, repo, author and age;
+  on the right a PR's diff bar, additions and checks, and the task it belongs
+  to as a `Dot` and its id. A row opens its panel: the PR card (state, branch,
+  size, every check with its link, failing and running ones first and the
+  passing ones folded into one line) and the task, or the issue and its task.
+  A task's panel shows the same PR card and its issue.
 - **Needs you.** A mono count line, then one card per thing waiting (the same
   card as Tasks), oldest first: who and what (a `decide` chip for a permission), the detail (a
   command or a diff in mono boxes), and the answers as buttons, the main one

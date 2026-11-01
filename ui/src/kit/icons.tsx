@@ -39,6 +39,11 @@ import { createElement } from "react"
 
 export type Glyph = readonly (readonly [string, { readonly [key: string]: string | number }])[]
 
+export const ISSUE: Glyph = [
+  ["circle", { cx: "12", cy: "12", r: "8.5", stroke: "currentColor", strokeWidth: "1.5" }],
+  ["circle", { cx: "12", cy: "12", r: "2", fill: "currentColor" }],
+]
+
 const GLYPHS = {
   send: ArrowUp02Icon,
   plus: Add01Icon,
@@ -59,6 +64,7 @@ const GLYPHS = {
   copy: Copy01Icon,
   folder: Folder01Icon,
   pr: GitPullRequestIcon,
+  issue: ISSUE,
   lock: LockIcon,
   home: Home01Icon,
   at: AtIcon,
