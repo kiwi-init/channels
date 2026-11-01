@@ -169,8 +169,7 @@ describe("message ciphertext stored as bytes", () => {
     expect((mem.query("SELECT typeof(ct) AS t FROM msgs ORDER BY seq").all() as { t: string }[]).map((r) => r.t)).toEqual(["text", "text", "text", "text", "blob", "blob", "text", "blob"]);
     const chars = (xs: string[]): number => xs.reduce((n, s) => n + s.length, 0);
     expect(db.storedBytes()).toBe(chars(all));
-    expect(db.dropThrough(2)).toBe(chars(all.slice(0, 2)));
-    expect(db.dropOldest(chars(all.slice(2, 5)))).toBe(chars(all.slice(2, 5)));
+    expect(db.dropOldest(chars(all.slice(0, 5)))).toBe(chars(all.slice(0, 5)));
     expect(db.since(0).map((m) => m.ct)).toEqual(all.slice(5));
     mem.close();
   });

@@ -1,7 +1,7 @@
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import { blobId } from "@kiwi/core/crypto.ts";
-import { MAX_BLOB_BYTES, MAX_CT_LENGTH, ROOM_RETENTION, type Envelope, type ReadMark, type SlotTake } from "@kiwi/core/protocol.ts";
+import { MAX_BLOB_BYTES, MAX_CT_LENGTH, type Envelope, type ReadMark, type SlotTake } from "@kiwi/core/protocol.ts";
 import { BadRequest, Conflict, ReadOnly, Taken, TooLarge, TooMany } from "../failures.ts";
 import { Policy } from "../policy.ts";
 import { fits, StoredEnvelope } from "../schema.ts";
@@ -10,7 +10,7 @@ import { RoomStore, type RoomServices } from "./db.ts";
 import type { Effects } from "./directory.ts";
 import { formatBytes, untilUtcMidnight, utcDay } from "./limits.ts";
 
-const READ_ONLY = "the owner lets you only read in this channel";
+export const READ_ONLY = "the owner lets you only read in this channel";
 const SEND_MEMORY_MS = 3_600_000;
 
 interface Repeat {
@@ -57,11 +57,7 @@ export const append = Effect.fn("Room.append")(function* (iv: string, ct: string
   if (slots.free?.length) db.freeSlots(slots.free, sender);
   if (slots.take) db.takeSlot(slots.take.id, sender, seq, ts + slots.take.ttl, ts);
   bytes += ct.length;
-  if (seq % 100 === 0) {
-    const freed = db.dropThrough(seq - ROOM_RETENTION);
-    if (freed) bytes -= freed + db.pruneBlobs();
-    db.pruneSends(ts - SEND_MEMORY_MS);
-  }
+  if (seq % 100 === 0) db.pruneSends(ts - SEND_MEMORY_MS);
   db.setCounters({ bytes, day, n: today + 1, head: seq });
   const stored: Envelope = { seq, ts, iv, ct, e };
   return stored;

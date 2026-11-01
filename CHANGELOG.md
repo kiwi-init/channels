@@ -2,6 +2,19 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 2026.10.16 — 2026-11-01
+
+- **Private-room edit test: check for the edit's phrase, not "125" (T1246)** ([#1409](https://github.com/kiwi-init/channels/pull/1409))
+- **A DM between two people has its own key, sealed to every device of both (T1149)** ([#1407](https://github.com/kiwi-init/channels/pull/1407))
+- **Task panel and tabs: self-review copy, Now card label, Needs you tab colour, PR check words (#1411)** ([#1412](https://github.com/kiwi-init/channels/pull/1412))
+- **A client that hasn't synced a private room seals its message or refuses it, never sends it plain (T1234)** ([#1415](https://github.com/kiwi-init/channels/pull/1415))
+- **Fonts: machine words in mono, section heads in mono, people's names in the text font (#1416)** ([#1417](https://github.com/kiwi-init/channels/pull/1417))
+- **Desktop polish: panel footers, theme names, message header dots, banner width, home cards (#1418)** ([#1419](https://github.com/kiwi-init/channels/pull/1419))
+- **Narrow windows: tabs, tables and code, device rows, segmented controls, panel edge (#1413)** ([#1414](https://github.com/kiwi-init/channels/pull/1414))
+- **Failed message band, status fonts and four copy fixes (#1420)** ([#1421](https://github.com/kiwi-init/channels/pull/1421))
+- **Notification controls: mute channels and rooms, pause, quiet hours, and a sound for mentions (T972)** ([#1423](https://github.com/kiwi-init/channels/pull/1423))
+- **A removed key can't speak after its removal: the owner logs member.gone, and fold refuses what it signs later (T1106)** ([#1422](https://github.com/kiwi-init/channels/pull/1422))
+
 ## 2026.10.15 — 2026-10-31
 
 - **Status indicators stop animating forever: an idle app draws nothing (T704, #1379)** ([#1382](https://github.com/kiwi-init/channels/pull/1382))
