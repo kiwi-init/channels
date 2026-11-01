@@ -81,14 +81,14 @@ export function messageGroups(ctx: MenuContext, m: Message, target: EventTarget,
   ]
 }
 
-function hideItem(ctx: MenuContext, actions: Actions, where: Extract<Where, { kind: "room" | "dm" }>, name: string, open: boolean): MenuItem {
+function hideItem(ctx: MenuContext, actions: Actions, where: Extract<Where, { kind: "room" | "dm" }>, name: string, open: boolean, keep = false): MenuItem {
   const key = hiddenKey(ctx.channel.code, where)
   const hidden = hiddenPlaces.get().includes(key)
   return {
-    label: `${hidden ? "Show" : "Hide"} ${name}`,
+    label: keep ? `Keep ${name} hidden` : `${hidden ? "Show" : "Hide"} ${name}`,
     run: () => {
       if (!hidden) actions.markRead(ctx.channel.code, where)
-      setHidden(key, !hidden)
+      setHidden(key, !hidden, keep)
       if (!hidden && open) ctx.go({ to: "where", where: { kind: "room", room: GENERAL_ROOM } })
     },
   }
@@ -101,6 +101,9 @@ export function roomGroups(ctx: MenuContext, actions: Actions, open: boolean, ro
       ...(room.unread > 0 ? [{ label: "Mark as read", run: () => actions.markRead(channel.code, { kind: "room", room: room.id }) }] : []),
       { label: `${room.muted ? "Unmute" : "Mute"} #${room.name}`, run: () => actions.setMute(channel.code, room.id, !room.muted) },
       ...(room.id === GENERAL_ROOM ? [] : [hideItem(ctx, actions, { kind: "room", room: room.id }, `#${room.name}`, open)]),
+      ...(room.id === GENERAL_ROOM || hiddenPlaces.get().includes(hiddenKey(channel.code, { kind: "room", room: room.id }))
+        ? []
+        : [hideItem(ctx, actions, { kind: "room", room: room.id }, `#${room.name}`, open, true)]),
     ],
     channel.youOwn || channel.youTrusted ? [{ label: "Room settings", run: () => go({ to: "panel", panel: { kind: "channel" } }) }] : [],
     [{ label: "Copy name", run: copier(toast, `#${room.name}`) }],
