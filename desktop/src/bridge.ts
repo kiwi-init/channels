@@ -301,7 +301,7 @@ export interface RecoveryView {
   here: boolean;
 }
 
-export type RecoverySaveView = { ok: true; at: number } | { ok: false; wrong: number[] };
+export type RecoverySaveView = { ok: true; at: number; from?: number } | { ok: false; wrong: number[] };
 
 export type RecoverOpenView =
   | { ok: true; name: string; devices: (Pick<DeviceView, "id" | "label" | "os" | "as"> & { lost: boolean })[]; channels: string[] }
