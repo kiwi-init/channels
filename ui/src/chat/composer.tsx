@@ -12,7 +12,7 @@ import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
 import type { Channel, Task, Upload, Where } from "~/model"
 import { sameWhere, useApp } from "~/nav"
-import { nickname, shown } from "~/names"
+import { nickname, onePerPerson, shown } from "~/names"
 import { mentionNames, withNames, type Picks } from "~/chat/linked"
 
 const Gifs = lazy(() => import("~/chat/gif-picker"))
@@ -227,7 +227,7 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
   const matches =
     query === undefined
       ? []
-      : channel.people
+      : onePerPerson(channel.people)
           .filter((p) => !p.you && (p.name.toLowerCase().startsWith(query.toLowerCase()) || p.display?.toLowerCase().startsWith(query.toLowerCase())))
           .sort((a, b) => Number(b.presence === "online") - Number(a.presence === "online"))
           .slice(0, 6)
@@ -246,7 +246,7 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
   const listed = closed || query !== undefined || taskQuery !== undefined ? [] : matchCommands(commands, text)
   const running = files.length ? null : parseCommand(commands, text)
   const options = matches.length || taskOptions.length || listed.length
-  const mentions = useMemo(() => mentionNames(channel.people, channel.former), [channel.people, channel.former])
+  const mentions = useMemo(() => mentionNames(onePerPerson(channel.people), channel.former), [channel.people, channel.former])
 
   const update = (value: string, at = value.length) => {
     setText(value)

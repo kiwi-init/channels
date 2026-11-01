@@ -16,6 +16,7 @@ import { removeComputer } from "@kiwi/app/computers.ts"
 import { loadMember } from "@kiwi/channel/store.ts"
 import { inviteLine } from "@kiwi/app/join-line.ts"
 import type { Permission } from "@kiwi/core/launch-options.ts"
+import { wantPersona } from "~/live/persona-later"
 import { openedChannel, openedRun, type Run } from "~/live/store"
 import type { Actions, JoinChoice, NewAgent, Powers } from "~/model"
 import { BRANCH_PREFIX_RE, POWERS, ROOM_ID_RE, type Power } from "@kiwi/core/protocol.ts"
@@ -28,8 +29,8 @@ function agentManager(code: string, name: string): { run: Run; m: RosterMember }
   const run = need(code)
   const m = memberOf(run, name)
   if (run.isOwner) return { run, m }
-  const me = run.roster.find((r) => r.active && r.name === run.me)
-  if (!me?.managesAgents || m.kind !== "agent" || m.owner || m.name === run.me) throw new Error("only the owner, or a person who manages agents, changes an agent's role or personality")
+  const me = run.state.members.get(run.me)
+  if (!me?.active || !me.managesAgents || m.kind !== "agent" || m.owner || m.name === run.me) throw new Error("only the owner, or a person who manages agents, changes an agent's role or personality")
   return { run, m }
 }
 
@@ -262,6 +263,7 @@ export const addAgent: Actions["addAgent"] = (code, agent, seen) => {
     if (!harness) throw new Error("pick a harness Channels knows how to start")
     const p = agent.persona ? personalities().find((x) => x.id === agent.persona) : undefined
     const pin = p && run.isOwner ? await run.ch.pinPersona(p) : undefined
+    if (p && !run.isOwner) wantPersona(code, agent.name, p.id)
     const here = secrets().computers.find((c) => c.own)?.machinePk
     const r = await b.launchAgent({
       ...(agent.computer && agent.computer !== here && agent.computer !== "this" ? { machinePk: agent.computer } : {}),

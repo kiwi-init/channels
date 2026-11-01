@@ -10,6 +10,21 @@ export const shown = (person: { name: string; display?: string | undefined }): s
 
 export const seatRoot = (channel: Pick<Channel, "people">, name: string): string => channel.people.find((p) => p.name === name)?.seatOf ?? name
 
+export const devicesOf = (people: readonly Person[], person: Pick<Person, "name">): Person[] => {
+  const seats = people.filter((p) => p.seatOf === person.name)
+  const self = people.find((p) => p.name === person.name)
+  return seats.length && self ? [self, ...seats] : []
+}
+
+export const onePerPerson = (people: readonly Person[]): Person[] =>
+  people
+    .filter((p) => !p.seatOf)
+    .map((p) => {
+      const all = devicesOf(people, p)
+      if (!all.length) return p
+      return { ...p, you: all.some((d) => d.you), presence: all.find((d) => d.presence === "online")?.presence ?? p.presence }
+    })
+
 export const roomPeople = (channel: Pick<Channel, "people" | "you">): Person[] => {
   const mine = seatRoot(channel, channel.you)
   return channel.people.filter((p) => !p.you && !p.left && !p.seatOf && p.name !== mine)
