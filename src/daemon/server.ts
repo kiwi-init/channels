@@ -1,10 +1,11 @@
 import { chmodSync, existsSync, mkdirSync, renameSync, rmSync, statSync } from "node:fs";
+import { getRandomValues, timingSafeEqual } from "node:crypto";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { Socket } from "bun";
 import type { Channel, PresenceFields, Probe } from "@kiwi/core/client.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
-import { DEFAULT_RELAY, hasKiwiState, home, identitiesIn, loadConfig, loadIdentity, saveAccess, type Config } from "../config.ts";
+import { DEFAULT_RELAY, hasKiwiState, home, identitiesIn, loadConfig, loadIdentity, saveAccess, writePrivate, type Config } from "../config.ts";
 import { readCursor } from "../config/cursors.ts";
 import { saveMachine, takeDeviceList } from "../machine.ts";
 import { isNewerList, listedComputer, readDeviceList, type DeviceLink } from "@kiwi/core/devices.ts";
@@ -13,14 +14,13 @@ import { VERSION } from "../version.ts";
 import { compareVersions } from "@kiwi/core/versions.ts";
 import { listenedPath, pullsWake, viaOf } from "@kiwi/core/wake.ts";
 import { ensureMachine, loadPairedMachine, PairError, type PairedMachine, type PairedPerson } from "./pair.ts";
-import { DAEMON_PROTOCOL, daemonSock, readListener, type DaemonEvent, type DaemonRead, type DaemonSeat, type DaemonVerb } from "./protocol.ts";
+import { DAEMON_PROTOCOL, daemonSock, daemonToken, readListener, type DaemonEvent, type DaemonRead, type DaemonSeat, type DaemonVerb } from "./protocol.ts";
 import { activityEnv, reachOf, readsRex, seatRecordFor, wakeOn, type Attached } from "./reach.ts";
 import { readRexInto } from "./rex-reads.ts";
 import type { RexActivity, RexPlace, SeatPlace, TerminalPlugin } from "../terminals/plugin.ts";
 import { helpersOn, marking, remoteBypassOn, terminalPlugin } from "../terminals/registry.ts";
-import { dropTmuxHelpers } from "../terminals/tmux/leftovers.ts";
 import { pruneHookFiles } from "../hooks/delivered.ts";
-import { launchFolders, seatFolders } from "../launch/folders.ts";
+import { launchFolders, remoteFolders, seatFolders } from "../launch/folders.ts";
 import { hooksRows } from "../hooks/install/extra.ts";
 import { computerSettings } from "./settings.ts";
 import { harnessInventory } from "../launch/harnesses.ts";
@@ -53,6 +53,8 @@ const SYNC_ON_REQUEST_MS = 2_000;
 
 class NotAgentSeat extends Error {}
 
+const NO_SOCKET_BYPASS = "a bypass agent needs kiwi launches bypass on here first (the app's Allow bypass from your other devices setting)";
+
 export interface Daemon {
   readonly sock: string;
   stop(): Promise<void>;
@@ -80,7 +82,7 @@ const LISTENER_GRACE_MS = 60_000;
 
 export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promise<Daemon> {
   const sock = daemonSock(dir);
-  if (await tryHello(sock)) throw new Error(`a daemon is already answering on ${sock}`);
+  if (await tryHello(sock, dir)) throw new Error(`a daemon is already answering on ${sock}`);
   const existed = existsSync(dir);
   const ours = existed && hasKiwiState(dir);
   mkdirSync(dir, { recursive: true, mode: 0o700 });
@@ -94,6 +96,13 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     }
   }
   await ensureMachine(process.env.KIWI_RELAY ?? DEFAULT_RELAY);
+  const token = Buffer.from(getRandomValues(new Uint8Array(32))).toString("base64url");
+  writePrivate(daemonToken(dir), token);
+  const tokenOk = (sent: string): boolean => {
+    const a = Buffer.from(sent);
+    const b = Buffer.from(token);
+    return a.length === b.length && timingSafeEqual(a, b);
+  };
   if (process.platform !== "win32" && (!existed || ours)) {
     try {
       chmodSync(dir, 0o700);
@@ -104,7 +113,6 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
 
   const hosted = new HostedTmux(dir);
   void hosted.resume().catch(() => {});
-  void dropTmuxHelpers().catch(() => {});
   const seats = new Map<string, Seat>();
   const admitter = startAdmitter(() => {
     const m = loadPairedMachine();
@@ -617,6 +625,40 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
 
   const seatSync = throttled(syncSeats, SYNC_ON_REQUEST_MS);
 
+  let pairingBusy: Promise<unknown> = Promise.resolve();
+  const adoptOn = async (conn: ConnState, id: number, params: Record<string, unknown>): Promise<void> => {
+    const person = params.person as Partial<PairedPerson> | null;
+    if (!person || typeof person.pk !== "string" || typeof person.xpk !== "string" || typeof person.name !== "string") {
+      throw new Error("adopt needs {cert or links, person: {pk, xpk, name}}");
+    }
+    const named = { pk: person.pk, xpk: person.xpk, name: person.name };
+    const m = await ensureMachine(process.env.KIWI_RELAY ?? DEFAULT_RELAY);
+    let paired: PairedMachine;
+    if (Array.isArray(params.links)) {
+      const read = await readDeviceList(params.links);
+      if (!read.ok) throw new Error(`that device list doesn't check out: ${read.why}`);
+      if (read.list.person !== named.pk) throw new Error("that device list is another person's than the one named");
+      if (!listedComputer(read.list, m.identity.pk)) throw new Error("that device list doesn't list this computer");
+      const kept = m.device?.person.pk === named.pk ? await readDeviceList(m.device.links) : null;
+      if (kept?.ok && isNewerList(kept.list, read.list)) throw new Error("this computer already holds a newer device list");
+      const device = { person: named, links: params.links as DeviceLink[] };
+      paired = m.cert?.pk === named.pk ? { ...m, device } : { identity: m.identity, label: m.label, relay: m.relay, device };
+    } else {
+      const cert = await readMachineCert(params.cert);
+      if (!cert) throw new Error("that cert doesn't check out (wrong signature or shape)");
+      if (named.pk !== cert.pk) throw new Error("that cert is by another person than the one named");
+      if (cert.machine !== m.identity.pk) throw new Error("that cert is for another computer");
+      paired = { ...m, cert, person: named };
+    }
+    const pairedTo = m.person?.pk ?? m.device?.person.pk ?? null;
+    if (pairedTo && pairedTo !== named.pk) {
+      const pairedName = m.person?.name ?? m.device?.person.name ?? "someone else";
+      throw new Error(`this computer is already paired with ${pairedName}; unpair it first (kiwi unpair)`);
+    }
+    saveMachine(paired);
+    sendLine(conn, JSON.stringify({ id, ok: true }));
+  };
+
   const onRequest = async (conn: ConnState, raw: string): Promise<void> => {
     let req: { id?: unknown; verb?: unknown } & Record<string, unknown>;
     try {
@@ -628,6 +670,10 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     const id = req.id;
     const verb = req.verb;
     const params: Record<string, unknown> = req;
+    if (typeof req.token !== "string" || !tokenOk(req.token)) {
+      sendLine(conn, JSON.stringify({ id, ok: false, error: "this daemon answers only a caller holding its token" }));
+      return;
+    }
     seatSync.soon();
     try {
       switch (verb as DaemonVerb) {
@@ -652,31 +698,9 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
           break;
         }
         case "adopt": {
-          const person = params.person as Partial<PairedPerson> | null;
-          if (!person || typeof person.pk !== "string" || typeof person.xpk !== "string" || typeof person.name !== "string") {
-            throw new Error("adopt needs {cert or links, person: {pk, xpk, name}}");
-          }
-          const named = { pk: person.pk, xpk: person.xpk, name: person.name };
-          const m = await ensureMachine(process.env.KIWI_RELAY ?? DEFAULT_RELAY);
-          let paired: PairedMachine;
-          if (Array.isArray(params.links)) {
-            const read = await readDeviceList(params.links);
-            if (!read.ok) throw new Error(`that device list doesn't check out: ${read.why}`);
-            if (read.list.person !== named.pk) throw new Error("that device list is another person's than the one named");
-            if (!listedComputer(read.list, m.identity.pk)) throw new Error("that device list doesn't list this computer");
-            const kept = m.device?.person.pk === named.pk ? await readDeviceList(m.device.links) : null;
-            if (kept?.ok && isNewerList(kept.list, read.list)) throw new Error("this computer already holds a newer device list");
-            const device = { person: named, links: params.links as DeviceLink[] };
-            paired = m.cert?.pk === named.pk ? { ...m, device } : { identity: m.identity, label: m.label, relay: m.relay, device };
-          } else {
-            const cert = await readMachineCert(params.cert);
-            if (!cert) throw new Error("that cert doesn't check out (wrong signature or shape)");
-            if (named.pk !== cert.pk) throw new Error("that cert is by another person than the one named");
-            if (cert.machine !== m.identity.pk) throw new Error("that cert is for another computer");
-            paired = { ...m, cert, person: named };
-          }
-          saveMachine(paired);
-          sendLine(conn, JSON.stringify({ id, ok: true }));
+          const run = pairingBusy.then(() => adoptOn(conn, id, params));
+          pairingBusy = run.catch(() => undefined);
+          await run;
           break;
         }
         case "listen":
@@ -755,6 +779,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
         case "launch": {
           const launch = readLaunchRequest(params);
           if (!launch) throw new Error('launch needs {"harness", "folder", "code", "relay"?, "nick"?, "persona"?, "launch"?: an id of 8 to 64 of A-Z a-z 0-9 _ -}');
+          if (launch.permission === "bypass" && !remoteBypassOn(loadConfig())) throw new Error(NO_SOCKET_BYPASS);
           sendLine(conn, JSON.stringify({ id, ok: true, launched: await launchAgent(launch, { hosted }) }));
           break;
         }
@@ -825,31 +850,37 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     }
   };
 
-  const server = Bun.listen({
-    unix: sock,
-    socket: {
-      open(socket) {
-        conns.add({ socket: socket as Socket, decoder: new TextDecoder(), buf: "", subs: new Set(), held: new Set(), dead: false, out: [], queued: 0 });
+  const umaskWas = process.platform !== "win32" ? process.umask(0o077) : null;
+  let server: ReturnType<typeof Bun.listen>;
+  try {
+    server = Bun.listen({
+      unix: sock,
+      socket: {
+        open(socket) {
+          conns.add({ socket: socket as Socket, decoder: new TextDecoder(), buf: "", subs: new Set(), held: new Set(), dead: false, out: [], queued: 0 });
+        },
+        drain(socket) {
+          const conn = [...conns].find((c) => c.socket === socket);
+          if (conn && !conn.dead) flushOrDrop(conn);
+        },
+        data(socket, data) {
+          const conn = [...conns].find((c) => c.socket === socket);
+          if (!conn || conn.dead) return;
+          conn.buf += conn.decoder.decode(data, { stream: true });
+          const lines = conn.buf.split("\n");
+          conn.buf = lines.pop() ?? "";
+          for (const line of lines) if (line.trim()) void onRequest(conn, line);
+        },
+        close(socket) {
+          const conn = [...conns].find((c) => c.socket === socket);
+          if (conn) killConn(conn);
+        },
+        error() {},
       },
-      drain(socket) {
-        const conn = [...conns].find((c) => c.socket === socket);
-        if (conn && !conn.dead) flushOrDrop(conn);
-      },
-      data(socket, data) {
-        const conn = [...conns].find((c) => c.socket === socket);
-        if (!conn || conn.dead) return;
-        conn.buf += conn.decoder.decode(data, { stream: true });
-        const lines = conn.buf.split("\n");
-        conn.buf = lines.pop() ?? "";
-        for (const line of lines) if (line.trim()) void onRequest(conn, line);
-      },
-      close(socket) {
-        const conn = [...conns].find((c) => c.socket === socket);
-        if (conn) killConn(conn);
-      },
-      error() {},
-    },
-  });
+    });
+  } finally {
+    if (umaskWas !== null) process.umask(umaskWas);
+  }
   if (process.platform !== "win32") {
     try {
       chmodSync(sock, 0o600);
@@ -874,11 +905,16 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     return (await Promise.all(relays.map(answers))).every((up) => !up);
   };
   let statusWatch: { stop(): void } | null = null;
+  let relayForget: Promise<unknown> = Promise.resolve();
   const unpairHere = async (): Promise<void> => {
     const m = loadPairedMachine();
     if (m?.cert || m?.device) {
-      await forgetAtRelay(m);
       saveMachine({ identity: m.identity, label: m.label, relay: m.relay });
+      relayForget = relayForget
+        .then(() => forgetAtRelay(m))
+        .catch(() => {
+          // The relay forgets this machine when it next hears from it; local pairing is already gone.
+        });
     }
     inbox.close();
   };
@@ -887,9 +923,10 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     machine: loadPairedMachine,
     unpaired: unpairHere,
     listed: async (links) => (await takeDeviceList(links)) === "longer",
+    settled: () => relayForget,
     run: remoteRunner({
       inventory: () => harnessInventory(),
-      folders: (room) => launchFolders(loadConfig(), room),
+      folders: (room) => remoteFolders(loadConfig(), room),
       launch: (req) => launchAgent(req, { hosted }),
       bypass: () => remoteBypassOn(loadConfig()),
       settings: async () => computerSettings(loadConfig(), hooksRows()),
@@ -1077,9 +1114,9 @@ export async function runDaemonForeground(dir = home()): Promise<void> {
     process.once("SIGINT", () => resolve());
   });
   const sock = daemonSock(dir);
-  const live = await tryHello(sock);
+  const live = await tryHello(sock, dir);
   if (live && compareVersions(live.version, VERSION) >= 0) throw new PairError(`a kiwi ${live.version} daemon is already running (pid ${live.pid}) on ${sock}`);
-  if (live) await stopDaemon(sock);
+  if (live) await stopDaemon(sock, dir);
   const serving = await startDaemon(dir);
   process.stdout.write(`kiwi daemon ${VERSION} on ${sock} (pid ${process.pid})\n`);
   await Promise.race([goodbye, serving.stopped]);

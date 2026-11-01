@@ -1,11 +1,13 @@
 import { useEffect } from "react"
 
 import { cx } from "~/kit/bits"
+import { useGlide } from "~/kit/glide"
 import { Icon, type IconName } from "~/kit/icons"
 import { useApp, type Section } from "~/nav"
 import { AgentsSection } from "~/settings/agents"
 import { ComputersSection } from "~/settings/computers"
 import { AboutSection, AccountSection, AppearanceSection, NotificationsSection, UpdatesSection } from "~/settings/sections"
+import { useSideways } from "~/kit/sideways"
 import { SideCards } from "~/shell/updates"
 
 const SECTIONS: readonly (readonly [Section, string, IconName])[] = [
@@ -19,7 +21,9 @@ const SECTIONS: readonly (readonly [Section, string, IconName])[] = [
 ]
 
 export function Settings() {
+  const navRef = useGlide<HTMLElement>(".side-row.is-on")
   const { nav, go } = useApp()
+  useSideways(navRef, nav.section)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape" || e.defaultPrevented || document.querySelector("dialog[open]")) return
@@ -32,16 +36,14 @@ export function Settings() {
   return (
     <div className="set">
       <header className="top set-top">
-        <h1 className="set-top-title">Settings</h1>
-        <span />
-        <div className="top-tools">
-          <button type="button" className="btn is-quiet is-small set-back" title="Back (Esc)" onClick={() => go({ to: "back" })}>
+        <h1 className="set-top-title">
+          <button type="button" className="set-back" title="Back (Esc)" onClick={() => go({ to: "back" })}>
             <Icon name="back" size={14} />
-            Back
+            Settings
           </button>
-        </div>
+        </h1>
       </header>
-      <nav className="set-nav" aria-label="Settings sections">
+      <nav ref={navRef} className="set-nav" aria-label="Settings sections">
         <ul>
           {SECTIONS.map(([id, label, icon]) => {
             const on = nav.section === id

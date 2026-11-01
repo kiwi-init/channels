@@ -93,7 +93,7 @@ describe("scopes in fold", () => {
       await ev("full", { op: "task.add", title: "too late" }),
     ];
     const s = fold(ms, roster);
-    expect(s.rejected.get(ms[0]!.seq)).toBe("only the owner sets what members may do");
+    expect(s.rejected.get(ms[0]!.seq)).toBe("only the owner, or a person who manages agents, sets what an agent may do");
     expect(s.trust.get(ms[1]!.seq)).toBe("refused");
     expect(s.trust.get(ms[3]!.seq)).toBe("verified");
     expect(s.trust.get(ms[5]!.seq)).toBe("refused");

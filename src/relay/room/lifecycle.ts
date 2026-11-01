@@ -120,6 +120,16 @@ export const directory: Effect.Effect<DirectoryUpdate[], ChannelGone, RoomStore>
   return [{ user: owner, room: db.roomId, entry: { room: db.roomId, code, owner: true, member: true, agents: 0, at } }];
 });
 
+export const reown = (from: string, to: string): Effect.Effect<DirectoryUpdate[], ChannelGone, RoomStore> =>
+  Effect.gen(function* () {
+    const db = yield* RoomStore;
+    if (!db.exists() || db.isLegacy()) return [];
+    const owner = db.ownerUser();
+    if (owner !== from && owner !== to) return [];
+    db.set("owner_user", to);
+    return [{ user: from, room: db.roomId, entry: null }, ...(yield* directory)];
+  });
+
 export interface CreateBody {
   title?: { iv: string; ct: string };
   owner: { pk: string; xpk: string; sig: string; titlesSig?: string };

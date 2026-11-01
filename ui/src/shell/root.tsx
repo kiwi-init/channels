@@ -8,17 +8,18 @@ import { ActContext, AppContext, type Go, type Nav } from "~/nav"
 import { Palette } from "~/palette/palette"
 import { ChannelScreen } from "~/shell/channel"
 import { Rail } from "~/shell/rail"
-import { FirstRun } from "~/start/first-run"
-import { EnrollDialog } from "~/settings/enroll"
-import { Gone } from "~/start/gone"
-import { NewChannelDialog } from "~/start/new-channel"
-import { Welcome } from "~/start/welcome"
 import { applyTheme, colorsOf, usePreview, useSystemDark } from "~/theme/apply"
 import { loadRex, useRex } from "~/theme/rex"
 import { activeTheme, wantsRex } from "~/theme/themes"
 
 const Settings = later(() => import("~/settings/settings").then((m) => m.Settings))
+const FirstRun = later(() => import("~/start/first-run").then((m) => m.FirstRun))
+const Gone = later(() => import("~/start/gone").then((m) => m.Gone))
+const NewChannelDialog = later(() => import("~/start/new-channel").then((m) => m.NewChannelDialog))
+const EnrollDialog = later(() => import("~/settings/enroll").then((m) => m.EnrollDialog))
 const JoinDialog = later(() => import("~/start/join").then((m) => m.JoinDialog))
+const NewRoomDialog = later(() => import("~/shell/new-room").then((m) => m.NewRoomDialog))
+const Welcome = later(() => import("~/start/welcome").then((m) => m.Welcome))
 
 export function Root({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => void }) {
   const [toasts, toast] = useToasts()
@@ -27,12 +28,14 @@ export function Root({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => voi
   usePaletteKey(useCallback(() => go({ to: "dialog", dialog: nav.dialog === "palette" ? null : "palette" }), [go, nav.dialog]))
   useTheme(app)
 
-  if (!app.account)
+  if (!app.account || app.signIn?.stage === "sign-in")
     return (
       <AppContext value={ctx}>
         <ActContext value={act}>
           <Boundary>
-            <FirstRun />
+            <Suspense fallback={null}>
+              <FirstRun />
+            </Suspense>
           </Boundary>
           <Toasts toasts={toasts} />
         </ActContext>
@@ -51,18 +54,31 @@ export function Root({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => voi
               </Suspense>
             ) : app.channel ? (
               <ChannelScreen key={app.channel.code} channel={app.channel} />
-            ) : app.gone ? (
-              <Gone gone={app.gone} />
             ) : (
-              <Welcome />
+              <Suspense fallback={null}>{app.gone ? <Gone gone={app.gone} /> : <Welcome />}</Suspense>
             )}
           </Boundary>
         </div>
-        <NewChannelDialog />
-        <Suspense fallback={null}>
-          <JoinDialog />
-        </Suspense>
-        <EnrollDialog />
+        {nav.dialog === "new-channel" && (
+          <Suspense fallback={null}>
+            <NewChannelDialog />
+          </Suspense>
+        )}
+        {nav.dialog === "new-room" && app.channel && (
+          <Suspense fallback={null}>
+            <NewRoomDialog channel={app.channel} />
+          </Suspense>
+        )}
+        {nav.dialog === "join" && (
+          <Suspense fallback={null}>
+            <JoinDialog />
+          </Suspense>
+        )}
+        {app.account?.enrollAsk && (
+          <Suspense fallback={null}>
+            <EnrollDialog />
+          </Suspense>
+        )}
         <Palette />
         <Toasts toasts={toasts} />
       </ActContext>

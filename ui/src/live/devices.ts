@@ -4,9 +4,11 @@ import { loadMember } from "@kiwi/channel/store.ts"
 import { linkOf } from "@kiwi/channel/channel-ops.ts"
 import { bridge, type DeviceNewsView } from "@kiwi/secrets/secrets.ts"
 import { announce } from "~/kit/toasts"
+import { whileShown } from "~/live/shown"
 import { store } from "~/live/value"
 
 const POST_EVERY_MS = 30_000
+const POST_HIDDEN_EVERY_MS = 600_000
 const TOLD_KEY = "mc.devices.told"
 
 export const deviceNews = store<DeviceNewsView | null>(null)
@@ -75,11 +77,11 @@ export function useDeviceLists(codes: readonly string[]): void {
     }
     kick = () => void pass()
     void pass()
-    const timer = setInterval(() => void pass(), POST_EVERY_MS)
+    const stop = whileShown(() => void pass(), POST_EVERY_MS, POST_HIDDEN_EVERY_MS)
     return () => {
       live = false
       kick = null
-      clearInterval(timer)
+      stop()
     }
   }, [key])
 }

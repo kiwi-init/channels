@@ -42,6 +42,7 @@ import {
   putDelegation,
   errorResponse,
   frame,
+  gone,
   keysFor,
   markRead,
   MESSAGES_PER_MINUTE,
@@ -149,10 +150,13 @@ const owner = Effect.gen(function* () {
 
 /** The owner, or a key the owner delegated admitting its own agents to. */
 const admitter = Effect.gen(function* () {
+  const db = yield* RoomStore;
   const pk = yield* requester;
-  if (pk === (yield* readMeta).ownerPk) return yield* owner;
-  if (!(yield* liveDelegation(pk))) return yield* new NotOwner({ message: "only the channel owner can do that" });
-  return pk;
+  const meta = yield* readMeta;
+  if (pk === meta.ownerPk) return yield* owner;
+  if (yield* liveDelegation(pk)) return pk;
+  if (!db.isMember(pk)) return yield* gone();
+  return yield* new NotOwner({ message: "only the channel owner can do that" });
 });
 
 /** A member, or a delegate, which holds the channel's keys too. */
@@ -747,8 +751,9 @@ const routes: RoomRoute[] = [
     guard: "owner",
     run: () =>
       Effect.gen(function* () {
-        const b = yield* json<{ epoch: number; keys: Record<string, string> }>();
-        yield* rotate(b.epoch, b.keys);
+        const b = yield* json<{ epoch: number; keys: Record<string, string>; owner?: { pk: string; xpk: string; sig: string }; older?: Record<string, Record<string, string>> }>();
+        if (!b || !Number.isSafeInteger(b.epoch) || b.epoch < 0 || typeof b.keys !== "object" || b.keys === null) return yield* new BadRequest({ message: "bad epoch" });
+        yield* rotate(b.epoch, b.keys, b.owner, b.older);
         return { data: { epoch: b.epoch }, fx: { broadcast: [frame({ t: "epoch", epoch: b.epoch })] } };
       }),
   },

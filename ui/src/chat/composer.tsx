@@ -1,17 +1,21 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import { MAX_IMAGE_BYTES, RASTER_MIMES } from "@kiwi/core/protocol.ts"
 import { fileDrag, takeDropped } from "@kiwi/app/dropped.ts"
 import { takePasted } from "@kiwi/app/pasted.ts"
+import { matchCommands, parseCommand, type Command } from "~/chat/commands"
+import { startEditing } from "~/chat/editing"
 import { preview, useReplying } from "~/chat/reply"
 import { STASH_SHOT, useStash, type Stashed } from "~/chat/stash"
 import { Avatar, cx, Dot, STATUS_WORDS } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
 import type { Channel, Task, Upload, Where } from "~/model"
-import { useApp } from "~/nav"
+import { sameWhere, useApp } from "~/nav"
 import { nickname, shown } from "~/names"
-import { mentionNames, withNames } from "~/chat/linked"
+import { mentionNames, withNames, type Picks } from "~/chat/linked"
+
+const Gifs = lazy(() => import("~/chat/gif-picker"))
 
 const MENTION = /(^|\s)@([\p{L}\p{N}_.-]*)$/u
 const TASK_REF = /(^|\s)#([^#\n]{0,40})$/u
@@ -37,6 +41,15 @@ function taskMatches(tasks: readonly Task[], query: string): Task[] {
 }
 
 const drafts = new Map<string, string>()
+const attached = new Map<string, Upload[]>()
+const picked = new Map<string, Picks>()
+function picksFor(key: string): Picks {
+  const have = picked.get(key)
+  if (have) return have
+  const made: Picks = new Map()
+  picked.set(key, made)
+  return made
+}
 
 type Cue = { key: string; back: boolean; left: number }
 
@@ -114,8 +127,14 @@ const readBase64 = (file: File): Promise<string> =>
     reader.readAsDataURL(file)
   })
 
-export function Composer({ channel, where, placeholder, inThread }: { channel: Channel; where: Where; placeholder: string; inThread?: number }) {
-  const { app, toast } = useApp()
+type ComposerProps = { channel: Channel; where: Where; placeholder: string; inThread?: number }
+
+export function Composer(props: ComposerProps) {
+  return <ComposerIn key={`${props.channel.code}:${JSON.stringify(props.where)}:${props.inThread ?? ""}`} {...props} />
+}
+
+function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
+  const { app, go, toast } = useApp()
   const replying = useReplying()
   const replyTo = replying?.to ?? null
   const key = `${channel.code}:${JSON.stringify(where)}:${inThread ?? ""}`
@@ -126,7 +145,14 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
   const area = useRef<HTMLTextAreaElement>(null)
   const box = useRef<HTMLDivElement>(null)
   const picker = useRef<HTMLInputElement>(null)
-  const [files, setFiles] = useState<Upload[]>([])
+  const [files, setFilesNow] = useState<Upload[]>(() => attached.get(key) ?? [])
+  const setFiles = (next: Upload[] | ((now: Upload[]) => Upload[])) =>
+    setFilesNow((now) => {
+      const list = typeof next === "function" ? next(now) : next
+      if (list.length) attached.set(key, list)
+      else attached.delete(key)
+      return list
+    })
   const [dropping, setDropping] = useState(false)
   const enterSends = app.prefs.enterSends
   const stash = useStash(key)
@@ -206,7 +232,20 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
           .sort((a, b) => Number(b.presence === "online") - Number(a.presence === "online"))
           .slice(0, 6)
   const taskOptions = taskQuery === undefined ? [] : taskMatches(channel.tasks, taskQuery)
-  const options = matches.length || taskOptions.length
+  const commands = useMemo<Command[]>(() => {
+    if (inThread !== undefined) return []
+    const code = channel.code
+    const owner = channel.youOwn
+    return [
+      { name: "compact", summary: "Ask the lead for a summary to fold the history behind", run: () => app.actions.askCompact(code) },
+      { name: "tasks", summary: "Open the tasks", run: () => go({ to: "tab", tab: "tasks" }) },
+      ...(owner && !channel.hold ? [{ name: "pause", summary: "Pause the agents", args: "note", run: (note: string) => app.actions.setHold(code, true, note || undefined) }] : []),
+      ...(owner && channel.hold ? [{ name: "resume", summary: "Let the agents work again", run: () => app.actions.setHold(code, false) }] : []),
+    ]
+  }, [inThread, channel.code, channel.youOwn, channel.hold, app.actions, go])
+  const listed = closed || query !== undefined || taskQuery !== undefined ? [] : matchCommands(commands, text)
+  const running = files.length ? null : parseCommand(commands, text)
+  const options = matches.length || taskOptions.length || listed.length
   const mentions = useMemo(() => mentionNames(channel.people, channel.former), [channel.people, channel.former])
 
   const update = (value: string, at = value.length) => {
@@ -217,17 +256,24 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
     drafts.set(key, value)
   }
   const send = (value = text) => {
-    const body = value.trim() || files.map((f) => f.name).join(", ")
-    if (!body) return
+    if (running && value === text) {
+      running.command.run(running.args)
+      setCue(null)
+      update("")
+      return
+    }
+    const body = value.trim()
+    if (!body && !files.length) return
     const opts = { ...(inThread !== undefined ? { inThread } : {}), ...(replyTo ? { replyTo: replyTo.seq } : {}), ...(files.length ? { images: files } : {}) }
-    app.actions.send(channel.code, where, mentions.sent(body), Object.keys(opts).length ? opts : undefined)
+    app.actions.send(channel.code, where, mentions.sent(body, picksFor(key)), Object.keys(opts).length ? opts : undefined)
+    picked.delete(key)
     replying?.set(null)
     setFiles([])
     setCue(null)
     update("")
   }
   const ready = !!text.trim() || files.length > 0
-  const complete = (name: string) => insert(text.slice(0, caret).replace(MENTION, (_all, pre: string) => `${pre}@${mentions.typed(name)} `))
+  const complete = (name: string) => insert(text.slice(0, caret).replace(MENTION, (_all, pre: string) => `${pre}@${mentions.typed(name, picksFor(key))} `))
   const completeTask = (id: number) => insert(text.slice(0, caret).replace(TASK_REF, (_all, pre: string) => `${pre}T${id} `))
   const insert = (before: string) => {
     const next = before + text.slice(caret)
@@ -264,6 +310,19 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
 
   return (
     <div className="compose" ref={box}>
+      {listed.length > 0 && (
+        <ul className="mentions" role="listbox" aria-label="Commands" id={`${key}-commands`}>
+          {listed.map((c, i) => (
+            <li key={c.name} role="option" aria-selected={i === pick}>
+              <button type="button" tabIndex={-1} className={cx("mention-row task-row", i === pick && "is-on")} onMouseDown={(e) => e.preventDefault()} onClick={() => insert(`/${c.name} `)}>
+                <span className="command-name">/{c.name}</span>
+                {c.args && <span className="task-row-id">{c.args}</span>}
+                <span className="task-row-title dim">{c.summary}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
       {taskOptions.length > 0 && (
         <ul className="mentions" role="listbox" aria-label="Tasks" id={`${key}-tasks`}>
           {taskOptions.map((t, i) => (
@@ -384,6 +443,9 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
           <button type="button" className="compose-attach" aria-label="Attach images" title="Attach images" onClick={() => picker.current?.click()}>
             <Icon name="plus" />
           </button>
+          <Suspense fallback={<span className="compose-attach" />}>
+            <Gifs onFile={(file) => (file ? attach([file]) : toast("That GIF couldn't be loaded"))} />
+          </Suspense>
           <input
             ref={picker}
             type="file"
@@ -402,7 +464,7 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
             aria-label="Message"
             aria-autocomplete="list"
             aria-expanded={options > 0}
-            aria-controls={matches.length > 0 ? `${key}-people` : taskOptions.length > 0 ? `${key}-tasks` : undefined}
+            aria-controls={matches.length > 0 ? `${key}-people` : taskOptions.length > 0 ? `${key}-tasks` : listed.length > 0 ? `${key}-commands` : undefined}
             placeholder={replyTo ? `Reply to ${nickname(channel, replyTo.from)}` : placeholder}
             onChange={(e) => {
               setCue(null)
@@ -427,6 +489,16 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
                 else putAway()
                 return
               }
+              if (e.key === "ArrowUp" && !options && !text && !files.length && !e.shiftKey && !e.altKey && !e.metaKey && !e.ctrlKey) {
+                const last = channel.messages.findLast(
+                  (m) => m.canChange && sameWhere(m.where, where) && (inThread === undefined ? m.inThread === undefined : m.inThread === inThread || m.seq === inThread)
+                )
+                if (last) {
+                  e.preventDefault()
+                  startEditing(channel.code, last.seq)
+                  return
+                }
+              }
               if (options) {
                 if (e.key === "ArrowDown" || e.key === "ArrowUp") {
                   e.preventDefault()
@@ -437,8 +509,11 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
                   e.preventDefault()
                   const p = matches[pick]
                   const t = taskOptions[pick]
+                  const c = listed[pick]
                   if (p) complete(p.name)
                   else if (t) completeTask(t.id)
+                  else if (c && e.key === "Enter" && running?.command === c) send()
+                  else if (c) insert(`/${c.name} `)
                   return
                 }
                 if (e.key === "Escape") {
@@ -465,6 +540,12 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
           </button>
         </div>
       </form>
+      {running && !cue && (
+        <p className="compose-hint" role="status">
+          <b>/{running.command.name}</b> <span>·</span> {running.command.summary} <span>·</span> <kbd>{enterSends ? "↩" : "⌘↩"}</kbd> runs it
+          {running.command.args && !running.args ? ` · ${running.command.args}` : ""}
+        </p>
+      )}
       {cue && (
         <p className="compose-hint" role="status">
           <b>{cue.back ? "Back from the stash" : "Stashed"}</b> <span>·</span>{" "}

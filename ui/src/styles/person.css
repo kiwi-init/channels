@@ -1,7 +1,7 @@
 .person {
   display: grid;
   align-content: start;
-  gap: 22px;
+  gap: 24px;
 }
 
 .person-hero {
@@ -77,7 +77,7 @@
   padding-left: 12px;
   border-left: 2px solid var(--line-3);
   color: var(--ink-2);
-  font: calc(14px * var(--text-scale, 1)) / 1.5 var(--sans);
+  font: var(--t-ui) / 1.5 var(--sans);
 }
 
 .person-doing {
@@ -107,7 +107,7 @@
 }
 
 .person-facts {
-  padding-top: 18px;
+  padding-top: 16px;
 }
 
 .person-prop {
@@ -115,7 +115,7 @@
 }
 
 .person-prop code {
-  font-size: calc(12.5px * var(--text-scale, 1));
+  font-size: var(--t-meta);
 }
 
 .person-ref {
@@ -133,7 +133,7 @@
 }
 
 .person-manage {
-  padding-top: 18px;
+  padding-top: 16px;
 }
 
 .person-manage > .heading {
@@ -160,7 +160,7 @@
 
 .person-row-text {
   display: grid;
-  gap: 3px;
+  gap: 4px;
   min-width: 0;
 }
 
@@ -178,7 +178,7 @@
 }
 
 .person-remove {
-  padding-top: 14px;
+  padding-top: 16px;
 }
 
 .person-confirm {
@@ -193,7 +193,7 @@
 
 .person-select select {
   appearance: none;
-  padding-right: 34px;
+  padding-right: 32px;
   cursor: pointer;
 }
 
@@ -204,4 +204,33 @@
   color: var(--ink-2);
   transform: translateY(-50%);
   pointer-events: none;
+}
+
+.person-term {
+  display: grid;
+  gap: 10px;
+}
+
+.person-term > .heading {
+  padding: 0;
+  margin: 0;
+}
+
+.person-term-note {
+  color: var(--ink-2);
+  font: var(--t-meta) / 1.55 var(--ui);
+}
+
+.person-term-note kbd {
+  font-size: var(--t-meta);
+}
+
+.person-trust {
+  padding: 0 12px;
+  border-radius: var(--r-ctl);
+  background: var(--bg-3);
+}
+
+.person-trust .person-row-label {
+  font-weight: 600;
 }

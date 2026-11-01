@@ -1,0 +1,141 @@
+.start-recover {
+  width: min(560px, 100%);
+}
+
+.recover-words {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 24px;
+  padding: 0;
+  list-style: none;
+}
+
+.recover-word {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-ctl);
+  transition: border-color var(--fast);
+}
+
+.recover-word:focus-within {
+  border-color: var(--ink-2);
+}
+
+.recover-word.is-wrong {
+  border-color: var(--alert);
+}
+
+.recover-n {
+  flex: none;
+  width: 2ch;
+  color: var(--ink-3);
+  font: var(--t-meta) var(--mono);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.recover-field {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.recover-input,
+.recover-ghost {
+  font: var(--t-ui) var(--mono);
+}
+
+.recover-input {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--ink);
+}
+
+.recover-ghost {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  color: var(--ink-3);
+  white-space: pre;
+  pointer-events: none;
+}
+
+.recover-typed {
+  color: transparent;
+}
+
+.recover-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 24px;
+}
+
+.recover-foot .btn.is-quiet {
+  margin-left: -10px;
+}
+
+.recover-devices {
+  display: grid;
+  gap: 2px;
+  margin: 0 -10px;
+  padding: 0;
+  list-style: none;
+}
+
+.recover-device {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: var(--r-row);
+  cursor: pointer;
+  transition: background var(--fast);
+}
+
+.recover-device:hover {
+  background: var(--wash);
+}
+
+.recover-device input {
+  accent-color: var(--ink);
+}
+
+.recover-device-name {
+  min-width: 0;
+  overflow: hidden;
+  font: var(--t-ui) var(--ui);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recover-device-kind {
+  margin-left: auto;
+  color: var(--ink-3);
+  font: var(--t-meta) var(--ui);
+  white-space: nowrap;
+}
+
+.recover-back {
+  margin-top: 20px;
+  color: var(--ink-2);
+  font: var(--t-ui) / 1.5 var(--ui);
+}
+
+@media (max-width: 520px) {
+  .recover-words {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}

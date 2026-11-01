@@ -129,6 +129,7 @@ parent.on("message", (e) => {
       seats = m.seats;
       person = m.person;
       mine = m.mine;
+      if (seats.some((c) => c.creating && !c.access)) void keyring.finishCreating().catch(() => {});
       return;
     case "flush":
       writeMemory();

@@ -284,7 +284,7 @@ private fun NeedsYouRow(model: AppModel, room: RoomView, ask: AskView) {
             )
             Text(ask.label, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = tone.decide)
         }
-        Markdown(ask.body, Inks(MaterialTheme.colorScheme.onSurface, MaterialTheme.colorScheme.primary, tone.wash2, false))
+        Markdown(ask.shown, Inks(MaterialTheme.colorScheme.onSurface, MaterialTheme.colorScheme.primary, tone.wash2, false))
         for (choice in ask.choices) {
             Row(
                 Modifier.fillMaxWidth()

@@ -1,5 +1,3 @@
-import { cx } from "~/kit/bits"
-import { Icon } from "~/kit/icons"
 import { useApp } from "~/nav"
 
 type Card = { key: string; text: string; act?: string; onAct?: () => void }
@@ -46,14 +44,9 @@ export function SideCards() {
 }
 
 export function SideFoot() {
-  const { nav, go } = useApp()
   return (
     <div className="side-foot">
       <SideCards />
-      <button type="button" className={cx("side-row", nav.page === "settings" && "is-on")} onClick={() => go({ to: "settings" })}>
-        <Icon name="gear" />
-        <span className="side-label">Settings</span>
-      </button>
     </div>
   )
 }

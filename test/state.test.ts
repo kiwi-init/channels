@@ -217,7 +217,7 @@ describe("roles", () => {
     const self = await msg(pixel, "pixel", { ev: { op: "role.set", member: "pixel", role: "reviewer" } });
     s = foldWith([ask, self], r);
     expect(s.members.get("pixel")?.persona?.name).toBe("designer");
-    expect(s.rejected.get(self.seq)).toBe("only the owner decides roles");
+    expect(s.rejected.get(self.seq)).toBe("only the owner, or a person who manages agents, decides an agent's role");
 
     const set = await msg(boss, "boss", { ev: { op: "role.set", member: "pixel", role: "reviewer", about: "reads every PR" } });
     const refuse = await msg(boss, "boss", { ev: { op: "role.refuse", member: "pixel" } });

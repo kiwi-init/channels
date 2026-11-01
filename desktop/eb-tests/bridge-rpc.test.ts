@@ -61,7 +61,7 @@ describe("window.kiwi over Electrobun's RPC, both ends as the app wires them", (
   test("calls reach main's handlers with their arguments, and answers and errors come back", async () => {
     await kiwi.notify("T436", "over RPC");
     expect(await kiwi.chooseFolder()).toBe("/Users/someone/app");
-    await expect(kiwi.terminalHelpers("vim" as "rex", "on")).rejects.toThrow("terminalHelpers takes rex, and on or off");
+    await expect(kiwi.terminalHelpers("vim" as "rex", "on")).rejects.toThrow("terminalHelpers takes rex or tmux, and on or off");
     await expect(kiwi.openExternal("file:///etc/passwd")).rejects.toThrow("only http(s) links open outside");
     expect(shell.did).toEqual(["notify T436: over RPC"]);
   });

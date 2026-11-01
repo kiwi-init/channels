@@ -95,6 +95,27 @@ try {
   check(direct === 0, "the page never calls WorkOS itself, so CORS can't block it");
   await ask({ op: "enrollCancel" });
 
+  await tab.unroute("http://localhost/v1/config");
+  await tab.route("http://localhost/v1/config", (r) =>
+    r.fulfill({ contentType: "application/json", body: JSON.stringify({ workosClientId: "client_bridge", githubSignIn: true, githubClientId: "Iv23bridge" }) }),
+  );
+  let directGithub = 0;
+  await tab.route("https://github.com/**", (r) => (directGithub++, r.abort()));
+  const seen = pushes.length;
+  const github = ask<{ url: string | null; code: string }>({ op: "enrollBegin", relay: "http://localhost/", label: "Android bridge check", os: "Android", waitMs: 10_000 });
+  let gh: Extract<Push, { type: "fetch" }> | undefined;
+  for (let i = 0; i < 200 && !gh; i++) {
+    gh = pushes.slice(seen).find((p): p is Extract<Push, { type: "fetch" }> => p.type === "fetch");
+    if (!gh) await Bun.sleep(50);
+  }
+  check(gh?.url === "https://github.com/login/device/code", "on a relay with GitHub sign-in, sign-in asks the app to make GitHub's device call");
+  const ghDevice = { device_code: "dc", user_code: "WDJB-MJHT", verification_uri: "https://github.com/login/device", interval: 60 };
+  if (gh) await tab.evaluate(`kiwi.fetched(${JSON.stringify(JSON.stringify({ id: gh.id, status: 200, body: JSON.stringify(ghDevice) }))})`);
+  const ghSignIn = await github.catch(() => null);
+  check(ghSignIn?.code === "WDJB-MJHT" && ghSignIn.url === ghDevice.verification_uri, "the app's answer opens GitHub's sign-in page");
+  check(directGithub === 0, "the page never calls GitHub itself, so CORS can't block it");
+  await ask({ op: "enrollCancel" });
+
   check((await ask<number>({ op: "start", saved })) === 1, "start opens one room");
 
   const live = await room((r) => r.connection === "live" && r.messages.length > 5 && r.asks.length > 0);

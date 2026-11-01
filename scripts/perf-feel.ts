@@ -8,13 +8,14 @@ import { daemonSock } from "../src/daemon/protocol.ts";
 import { stopDaemon } from "../src/daemon/rpc.ts";
 import { startLocalRelay } from "./local-relay.ts";
 import { firstRun, letIn, newChannel, panel, ROWS, view } from "./perf-ui.ts";
+import { harnessDist } from "./ui-harness.ts";
 
 if (process.argv.includes("--help")) {
   console.log(`What a person feels, measured: one channel with PERF_MESSAGES messages (400) and PERF_TASKS tasks (12), behind a relay PERF_RTT_MS away (0).
 Times sending (Enter to the composer emptied, and to the bubble on screen), opening a task, switching views, scrolling the whole channel (frames over 33 ms, blank frames),
 typing, and a reload to the first screen and to a live composer, each PERF_REPS times (5), plus every layout shift. --shots DIR saves a filmstrip of the reload and the send.
 
-  bun run ui:build && bun scripts/perf-feel.ts [--json out.json] [--shots DIR]
+  bun scripts/ui-harness.ts && bun scripts/perf-feel.ts [--json out.json] [--shots DIR]
 
 Needs Playwright's Chromium: bunx playwright-core install --only-shell chromium (or SMOKE_CHROMIUM=<Chrome binary>).`);
   process.exit(0);
@@ -74,7 +75,7 @@ const median = (xs: number[]) => {
 const later = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 const log = (...xs: unknown[]) => console.log(`[${new Date().toISOString().slice(11, 19)}]`, ...xs);
 
-const { relay, port: relayPort } = await startLocalRelay(join(data, "relay"), join(ROOT, "ui/dist"), { rateLimits: false });
+const { relay, port: relayPort } = await startLocalRelay(join(data, "relay"), harnessDist(), { rateLimits: false });
 const UPSTREAM = `http://127.0.0.1:${relayPort}`;
 const half = RTT / 2;
 interface Pipe {

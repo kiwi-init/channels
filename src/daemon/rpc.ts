@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
-import { existsSync, statSync, utimesSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { existsSync, readFileSync, statSync, utimesSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import type { Socket } from "bun";
 import type { Info, MemberRow } from "@kiwi/core/client.ts";
 import { readHarnessRow, type HarnessRow } from "@kiwi/core/harnesses.ts";
@@ -19,6 +19,17 @@ import type { AdmitRoom } from "./admit.ts";
 import { DAEMON_PROTOCOL, daemonSock, isDaemonEvent, readListener, withDeadline, type DaemonEvent, type DaemonHello, type DaemonListener, type DaemonPeek, type DaemonSeat } from "./protocol.ts";
 
 const PEEK_MS = 300;
+
+function daemonTokenFor(sock: string, dir?: string): string | null {
+  const file = process.platform === "win32" ? join(dir ?? home(), "daemon.token") : join(dirname(sock), "daemon.token");
+  try {
+    const read = readFileSync(file, "utf8").trim();
+    return read || null;
+  } catch {
+    // No token file: a daemon from before it answered without one, and frames still carry ours.
+    return null;
+  }
+}
 
 type Reply = { id: number; ok: true; [k: string]: unknown } | { id: number; ok: false; error: string };
 
@@ -42,9 +53,10 @@ interface Pending extends SideLines {
   live?: boolean;
 }
 
-async function openConn(sock: string, timeoutMs = 15_000): Promise<DaemonConn> {
+async function openConn(sock: string, timeoutMs = 15_000, dir?: string): Promise<DaemonConn> {
   let buf = "";
   const decoder = new TextDecoder();
+  const token = daemonTokenFor(sock, dir);
   const pending = new Map<number, Pending>();
   let closed = false;
   const failAll = (err: Error): void => {
@@ -130,7 +142,7 @@ async function openConn(sock: string, timeoutMs = 15_000): Promise<DaemonConn> {
       onStatus: entry.onStatus,
     });
     try {
-      socket.write(JSON.stringify({ id, ...body }) + "\n");
+      socket.write(JSON.stringify({ id, ...body, ...(token ? { token } : {}) }) + "\n");
     } catch (err) {
       pending.delete(id);
       clearTimeout(timer);
@@ -158,9 +170,9 @@ async function openConn(sock: string, timeoutMs = 15_000): Promise<DaemonConn> {
   };
 }
 
-export async function tryHello(sock: string): Promise<DaemonHello | null> {
+export async function tryHello(sock: string, dir?: string): Promise<DaemonHello | null> {
   try {
-    const c = await openConn(sock, 2_000);
+    const c = await openConn(sock, 2_000, dir);
     try {
       const r = await c.call("hello");
       return {
@@ -199,14 +211,15 @@ export function claimSpawn(dir: string, now = Date.now()): boolean {
 
 export async function ensureDaemon(dir = home(), argv?: string[]): Promise<DaemonHello> {
   const sock = daemonSock(dir);
+  const where = resolve(dir);
   const current = (h: DaemonHello | null): h is DaemonHello => !!h && compareVersions(h.version, VERSION) >= 0 && h.protocol >= DAEMON_PROTOCOL;
-  const live = await tryHello(sock);
+  const live = await tryHello(sock, where);
   if (current(live)) return live;
-  if (live) await stopDaemon(sock);
-  if (live || claimSpawn(resolve(dir))) spawnDaemon(dir, argv);
+  if (live) await stopDaemon(sock, where);
+  if (live || claimSpawn(where)) spawnDaemon(dir, argv);
   const until = Date.now() + 15_000;
   for (;;) {
-    const hello = await tryHello(sock);
+    const hello = await tryHello(sock, where);
     if (current(hello)) return hello;
     if (Date.now() > until) throw new Error(`kiwi daemon didn't start on ${sock} within 15s: run \`kiwi daemon\` in a terminal to see why`);
     await Bun.sleep(100);
@@ -458,9 +471,9 @@ export async function reportRead(channel: string, agent: string, session: string
   }
 }
 
-export async function stopDaemon(sock = daemonSock()): Promise<void> {
+export async function stopDaemon(sock = daemonSock(), dir?: string): Promise<void> {
   try {
-    const c = await openConn(sock, 2_000);
+    const c = await openConn(sock, 2_000, dir);
     try {
       await c.call("stop");
     } finally {

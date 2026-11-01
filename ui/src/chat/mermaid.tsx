@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent, type ReactNode } from "react"
+import { sanitizeMarkdownUrl } from "@kiwi/app/markdown.ts"
 
 type Mermaid = (typeof import("mermaid"))["default"]
 export type Drawn = { kind: "svg"; svg: string } | { kind: "error"; message: string } | null
@@ -94,11 +95,30 @@ export function errorLine(e: unknown): string {
   )
 }
 
+const ADDRESS = /\s(?:xlink:href|href|src)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/g
+const OPENED = /^(?:https?:\/\/|mailto:)/i
+
+const unescaped = (value: string): string =>
+  value
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&")
+    .trim()
+
+const keeping = (attrs: string, kept: (address: string) => boolean): string =>
+  attrs.replace(ADDRESS, (all: string, double?: string, single?: string, bare?: string) => (kept(unescaped(double ?? single ?? bare ?? "")) ? all : ""))
+
 export function linksApart(svg: string): string {
-  return svg.replace(
-    /<a\b([^>]*?)(\/?)>/g,
-    (_, attrs: string, close: string) => `<a${attrs.replace(/\s(?:target|rel)\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/g, "")} target="_blank" rel="noopener noreferrer"${close}>`
-  )
+  return svg.replace(/<a\b([^>]*?)(\/?)>/g, (_, attrs: string, close: string) => {
+    const opened = keeping(attrs.replace(/\s(?:target|rel)\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/g, ""), (url) => OPENED.test(url) && !!sanitizeMarkdownUrl(url))
+    return `<a${opened} target="_blank" rel="noopener noreferrer"${close}>`
+  })
+}
+
+export function picturesOff(svg: string): string {
+  return svg.replace(/<(image|img)\b([^>]*?)(\/?)>/gi, (_, tag: string, attrs: string, close: string) => `<${tag}${keeping(attrs, (url) => /^data:/i.test(url))}${close}>`)
 }
 
 function draw(source: string): Promise<Drawn> {
@@ -140,7 +160,7 @@ function draw(source: string): Promise<Drawn> {
     try {
       await m.parse(source)
       const { svg } = await m.render(`kiwi-mermaid-${next++}`, source)
-      return { kind: "svg", svg: linksApart(svg) }
+      return { kind: "svg", svg: picturesOff(linksApart(svg)) }
     } catch (e) {
       return { kind: "error", message: errorLine(e) }
     }
@@ -171,7 +191,7 @@ export function drawCached(source: string, scheme: string, render: (source: stri
 function useScheme(): string {
   const read = () => {
     const root = document.documentElement
-    return `${root.dataset.theme ?? ""}:${matchMedia("(prefers-color-scheme: dark)").matches}:${root.style.cssText}`
+    return `${root.dataset.theme ?? ""}:${root.dataset.font ?? ""}:${matchMedia("(prefers-color-scheme: dark)").matches}:${root.style.cssText}`
   }
   const [scheme, setScheme] = useState("")
   useEffect(() => {
@@ -180,7 +200,7 @@ function useScheme(): string {
     const media = matchMedia("(prefers-color-scheme: dark)")
     media.addEventListener("change", update)
     const watch = new MutationObserver(update)
-    watch.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "style"] })
+    watch.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "data-font", "style"] })
     return () => {
       media.removeEventListener("change", update)
       watch.disconnect()

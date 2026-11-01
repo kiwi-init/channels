@@ -1,5 +1,5 @@
 {
-  "electrobun": "2026.10.1",
+  "electrobun": "2026.10.2",
   "releasesBaseUrl": "https://github.com/kiwi-init/electrobun-livewire/releases/download",
   "hutch": {
     "version": "0.28.2-canary.8",
@@ -37,23 +37,23 @@
     }
   },
   "devkit": {
-    "macos-arm64": "2bad27a84cd58ae87137583c64a2e98a507b88caba3aeb5e9c67b19edf85e8a3",
-    "linux-x64": "2bad27a84cd58ae87137583c64a2e98a507b88caba3aeb5e9c67b19edf85e8a3",
-    "linux-arm64": "2bad27a84cd58ae87137583c64a2e98a507b88caba3aeb5e9c67b19edf85e8a3"
+    "macos-arm64": "8ff6c0ba28a327ee043215698ba08fcca7fbe427eaad6d7f3e7c59691bc014bb",
+    "linux-x64": "8ff6c0ba28a327ee043215698ba08fcca7fbe427eaad6d7f3e7c59691bc014bb",
+    "linux-arm64": "8ff6c0ba28a327ee043215698ba08fcca7fbe427eaad6d7f3e7c59691bc014bb"
   },
   "app": {
     "macos-arm64": {
       "Contents/MacOS/launcher": "cb56c4ccfa6d2c1a3596e44d143af212b5af3e196199a83c19d511506f28ff4f",
       "Contents/MacOS/bun": "0a2237cdcfa0d16ef501d9acca9f0026309ef348bea7393a64e8d1e3609565cc",
-      "Contents/MacOS/libElectrobunCore.dylib": "fabb7954d71f66f508422fc0c432ba9ccde36394b9ccab02a8ba4aeaaa597243",
-      "Contents/MacOS/libNativeWrapper.dylib": "7204f65d6743289904eab8a61a8ce0f7e01c9c7397df2d7783b99524482fa0f5",
+      "Contents/MacOS/libElectrobunCore.dylib": "84fa116ae14d209dd0ec5b75f12c69663aa65d73eb08d4fcb0ebfdd88131d9de",
+      "Contents/MacOS/libNativeWrapper.dylib": "3d6866727a427da9253e1e73c59f9027256d26ba4483114203ebbba12302aa24",
       "Contents/MacOS/libasar.dylib": "775e92fed7238ea1da09ec5ae54a72a19baaccf602a4467f16bb2e36cff9cfbc",
       "Contents/MacOS/zig-zstd": "581944e9e8cac153581cf17109f1f58b5b87202524909d11803bfce2402c2548",
       "Contents/MacOS/bspatch": "a722fd1cf674012f25eb192c84b154bb753ec62422eb5d568907c44405cc81dd",
       "Contents/Resources/main.js": "8afb61682280f0f2bd82abaad23996d043781cf23cd132a2bbfa2a8b8cd001c7",
-      "Contents/Resources/preload-full.js": "0c9f9ff20749edffc2768f4a89c08bd5af916d3471dda8af6e5d05510a9630ac",
+      "Contents/Resources/preload-full.js": "0de49cdec806dfc7f7e55da5ad02ce69a7211be6e9d656b2b10c06af691d6a3c",
       "Contents/Resources/preload-sandboxed.js": "d358fa4e85148ae6059eca9cfb398faf7a6c0710a03cdc972275f6a61670f3f9",
-      "Contents/Resources/uninstall": "3a398ad837952d529e83b540d807d015593a74f61ac71265c5443042a515c383"
+      "Contents/Resources/uninstall": "be11a753f315733d2bf6616b479422767d767919b088c11c2ca664fb5cfa9a93"
     }
   }
 }

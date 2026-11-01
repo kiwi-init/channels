@@ -1,6 +1,5 @@
 import { Fragment, startTransition, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
-import { HistoryFold, ProposalCard } from "~/chat/compact"
 import { Composer } from "~/chat/composer"
 import { EventRun } from "~/chat/events"
 import { continuesRun, eventRun } from "~/chat/fold-events"
@@ -11,13 +10,17 @@ import { flash, jumpTo, ReplyContext, type Replying } from "~/chat/reply"
 import type { Jump } from "~/chat/search-box"
 import { paintHits } from "~/chat/search-paint"
 import { Loading } from "~/kit/bits"
+import { land } from "~/kit/glide"
 import { later } from "~/kit/later"
 import { day, sameDay } from "~/kit/time"
 import type { Channel, Message, Person, Where } from "~/model"
 import { liveOf, workingIn } from "~/doing"
 import { sameWhere, useApp, whereKey } from "~/nav"
 import { between, nickname, shown } from "~/names"
+import { dmBlocker, sealable } from "~/live/dm"
 
+const HistoryFold = later(() => import("~/chat/compact").then((m) => m.HistoryFold))
+const ProposalCard = later(() => import("~/chat/compact").then((m) => m.ProposalCard))
 const AddAgentCard = later(() => import("~/panels/add-agent").then((m) => m.AddAgentCard))
 
 const GROUP_MS = 5 * 60_000
@@ -172,11 +175,8 @@ export function Conversation({ channel, jump }: { channel: Channel; jump: Jump |
     <ReplyContext.Provider value={replying}>
       {channel.hold && <HoldBanner channel={channel} hold={channel.hold} />}
       <Feed key={key} channel={channel} where={where} jump={jump && sameWhere(jump.m.where, where) ? jump : null} />
-      {where.kind === "theirs" ? (
-        <ReadOnly channel={channel} between={where.between} />
-      ) : (
-        <Composer channel={channel} where={where} placeholder={where.kind === "dm" ? `Message ${placeName} privately` : `Message ${placeName}`} />
-      )}
+      {where.kind === "dm" && <DmNote channel={channel} other={where.with} />}
+      {where.kind === "theirs" ? <ReadOnly channel={channel} between={where.between} /> : <Composer channel={channel} where={where} placeholder={`Message ${placeName}`} />}
     </ReplyContext.Provider>
   )
 }
@@ -269,6 +269,13 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
     const before = lastSeq.current
     lastSeq.current = last?.seq ?? 0
     if (!last || last.seq === before) return
+    const arriving = before ? list.filter((m) => m.seq > before) : []
+    if (arriving.length <= 3) {
+      for (const m of arriving) {
+        if (m.from === channel.you && !m.pending) continue
+        land(content.current?.querySelector(`[data-seq="${m.seq}"]`), m.from === channel.you ? 16 : 8)
+      }
+    }
     if (last.from === channel.you && !live.current) {
       latest.current = true
       queueMicrotask(() => setSpan({ top: null, bottom: null }))
@@ -277,7 +284,7 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
     if (last.from === channel.you) toBottom(false)
     else if (!stuck.current) setFresh((n) => n + list.filter((m) => m.seq > before && m.from !== channel.you && !m.system && !m.leftOut).length)
     settle()
-  }, [last, list, channel.you, toBottom, settle, stuck, live])
+  }, [last, list, channel.you, toBottom, settle, stuck, live, content])
 
   const onScroll = () => {
     remember()
@@ -417,15 +424,26 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
                       <span>{day(m.at)}</span>
                     </p>
                   )}
+                  {m.locked && !list[i - 1]?.locked && where.kind === "dm" && (
+                    <p className="day" role="separator">
+                      <span>From here on, just you and {nickname(channel, where.with)} can read new messages</span>
+                    </p>
+                  )}
                   {m.seq === mark && (
                     <p className="feed-new" role="separator">
                       <span>New</span>
                     </p>
                   )}
-                  {compact && m.seq === foldAt && <HistoryFold channel={channel} compact={compact} earlier={earlier} onToggle={toggleEarlier} names={names} tasks={tasks} onQuote={onQuote} />}
+                  {compact && m.seq === foldAt && (
+                    <Suspense fallback={null}>
+                      <HistoryFold channel={channel} compact={compact} earlier={earlier} onToggle={toggleEarlier} names={names} tasks={tasks} onQuote={onQuote} />
+                    </Suspense>
+                  )}
                   {run && <Fold run={run} open={open} onToggle={() => toggleRun(m.seq)} />}
                   {m.seq === proposalAt && proposal ? (
-                    <ProposalCard channel={channel} proposal={proposal} names={names} tasks={tasks} onQuote={onQuote} />
+                    <Suspense fallback={null}>
+                      <ProposalCard channel={channel} proposal={proposal} names={names} tasks={tasks} onQuote={onQuote} />
+                    </Suspense>
                   ) : events ? (
                     <EventRun channel={channel} run={events} here={where.kind === "task" ? where.task : null} jump={jump?.m.seq ?? null} />
                   ) : (
@@ -445,8 +463,16 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
               )
             })
           )}
-          {compact && foldAt === undefined && <HistoryFold channel={channel} compact={compact} earlier={earlier} onToggle={toggleEarlier} names={names} tasks={tasks} onQuote={onQuote} />}
-          {proposal && proposalAt === undefined && end === list.length && <ProposalCard channel={channel} proposal={proposal} names={names} tasks={tasks} onQuote={onQuote} />}
+          {compact && foldAt === undefined && (
+            <Suspense fallback={null}>
+              <HistoryFold channel={channel} compact={compact} earlier={earlier} onToggle={toggleEarlier} names={names} tasks={tasks} onQuote={onQuote} />
+            </Suspense>
+          )}
+          {proposal && proposalAt === undefined && end === list.length && (
+            <Suspense fallback={null}>
+              <ProposalCard channel={channel} proposal={proposal} names={names} tasks={tasks} onQuote={onQuote} />
+            </Suspense>
+          )}
           {working.length > 0 && <Working people={working} />}
         </div>
       </div>
@@ -506,7 +532,9 @@ function Start({ channel, where }: { channel: Channel; where: Where }) {
         {where.kind === "room"
           ? `This is the start of #${channel.rooms.find((r) => r.id === where.room)?.name ?? where.room}.`
           : where.kind === "dm"
-            ? `Only you and ${nickname(channel, where.with)} read this.`
+            ? sealable(channel, where.with)
+              ? `This is the start of your messages with ${nickname(channel, where.with)}. Just you and ${nickname(channel, where.with)} can read them: not the channel, not the relay.`
+              : `This is the start of your messages with ${nickname(channel, where.with)}. Everyone in the channel can read them.`
             : where.kind === "theirs"
               ? `This is the start of ${between(channel, where.between)}.`
               : "Nothing here yet."}
@@ -520,6 +548,12 @@ function Start({ channel, where }: { channel: Channel; where: Where }) {
       )}
     </div>
   )
+}
+
+function DmNote({ channel, other }: { channel: Channel; other: string }) {
+  const blocker = dmBlocker(channel, other)
+  if (!blocker || channel.directs.find((d) => d.with === other)?.locked) return null
+  return <p className="dm-note">{`${blocker.charAt(0).toUpperCase()}${blocker.slice(1)} can't open private messages yet, so everyone in the channel can read these.`}</p>
 }
 
 function Working({ people }: { people: Person[] }) {
