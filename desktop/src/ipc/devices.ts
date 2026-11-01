@@ -3,6 +3,7 @@ import type { Serves } from "../calls.ts";
 import { publicPerson } from "../guard.ts";
 import { publicAccess } from "../public-channel.ts";
 import { createDeviceHost, createEnrollee, type DeviceHost } from "../devices.ts";
+import { createRecoveryHost } from "../recovery.ts";
 import { freshToken } from "../signin.ts";
 import { mutate, store, upsertComputer } from "../store.ts";
 
@@ -11,12 +12,13 @@ const OS_NAMES: Partial<Record<NodeJS.Platform, string>> = { darwin: "macOS", li
 const label = () => os.hostname().split(".")[0] || "this computer";
 export const osName = (): string => OS_NAMES[process.platform] ?? process.platform;
 const who = () => publicPerson(store.person) ?? store.enrolled ?? null;
+const person = () => (store.person ? { name: store.person.name, pk: store.person.pk, sk: store.person.sk, xpk: store.person.xpk, xsk: store.person.xsk } : null);
 
 export function storeDeviceHost(): DeviceHost {
   return createDeviceHost({
     relayUrl: () => store.relayUrl,
     token: () => freshToken(),
-    person: () => (store.person ? { name: store.person.name, pk: store.person.pk, sk: store.person.sk, xpk: store.person.xpk, xsk: store.person.xsk } : null),
+    person,
     who,
     device: () => store.device ?? null,
     saveDevice: (d) => mutate((s) => (s.device = d)),
@@ -39,7 +41,37 @@ export function storeDeviceHost(): DeviceHost {
 
 export function devicesCalls(
   host: DeviceHost,
-): Serves<"enrollPoll" | "enrollAnswer" | "enrollConfirm" | "enrollDeny" | "enrollBegin" | "enrollStatus" | "enrollKeep" | "enrollCancel" | "devices" | "forgetDevice" | "renewDevice" | "deviceNews"> {
+): Serves<
+  | "enrollPoll"
+  | "enrollAnswer"
+  | "enrollConfirm"
+  | "enrollDeny"
+  | "enrollBegin"
+  | "enrollStatus"
+  | "enrollKeep"
+  | "enrollCancel"
+  | "devices"
+  | "forgetDevice"
+  | "renewDevice"
+  | "deviceNews"
+  | "recovery"
+  | "recoveryWords"
+  | "recoverySave"
+  | "recoveryDrop"
+> {
+  const recovery = createRecoveryHost({
+    session: () => host.session(),
+    person,
+    links: () => store.deviceLinks ?? [],
+    owned: () =>
+      store.channels.flatMap((c) =>
+        c.code && publicAccess(c.access)?.ownerPk === c.pk
+          ? [{ label: c.label, code: c.code, owner: { name: c.idName ?? c.label, pk: c.pk, sk: c.sk, ...(c.xpk && c.xsk ? { xpk: c.xpk, xsk: c.xsk } : {}) } }]
+          : [],
+      ),
+    kept: () => store.recovery ?? null,
+    keep: (k) => mutate((s) => (s.recovery = k)),
+  });
   const enrollee = createEnrollee({
     relayUrl: () => store.relayUrl,
     token: () => freshToken(),
@@ -54,7 +86,13 @@ export function devicesCalls(
     os: osName,
   });
   return {
-    enrollPoll: () => host.poll(),
+    enrollPoll: async () => {
+      const ask = await host.poll();
+      await recovery.keepCurrent().catch(() => {
+        // The relay is away or another app sealed first: the owners stay unsealed here, so the next poll seals again.
+      });
+      return ask;
+    },
     enrollAnswer: (id: string) => host.answer(id),
     enrollConfirm: (id: string, digits: string) => host.confirm(id, digits),
     enrollDeny: (id: string) => host.deny(id),
@@ -66,5 +104,9 @@ export function devicesCalls(
     forgetDevice: (id: string) => host.forget(id),
     renewDevice: (id: string) => host.renew(id),
     deviceNews: () => host.news(),
+    recovery: () => recovery.status(),
+    recoveryWords: () => recovery.words(),
+    recoverySave: (typed: { at: number; word: string }[]) => recovery.save(typed),
+    recoveryDrop: () => recovery.drop(),
   };
 }

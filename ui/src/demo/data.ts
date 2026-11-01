@@ -13,6 +13,10 @@ export const DEMO_DEVICES: Device[] = [
   { id: "dev-box", label: "build-box", os: "Linux", as: "computer", until: Date.now() - 2 * DEMO_DAY, thisOne: false },
 ]
 
+export const DEMO_WORDS = "orbit velvet canyon mango ladder silent harvest pilot frozen museum tribe anchor gravity olive wagon pepper rocket glimpse marble tunnel coyote bamboo dinner shield".split(
+  " "
+)
+
 export const DEMO_ACCOUNT: Account = {
   name: "jow",
   handle: "ojowwalker77",
@@ -163,6 +167,7 @@ const people: Person[] = [
     joined: m(60 * 24 * 8),
     messages: 61,
   },
+  { name: "maya-2", kind: "human", seatOf: "maya", owner: false, you: false, presence: "online", lastSeen: m(1), joined: m(60 * 24), messages: 9 },
 ]
 
 const pr43 = {

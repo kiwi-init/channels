@@ -10,7 +10,7 @@ import { RoomStore, type RoomServices } from "./db.ts";
 import type { Effects } from "./directory.ts";
 import { formatBytes, untilUtcMidnight, utcDay } from "./limits.ts";
 
-const READ_ONLY = "the owner lets you only read in this channel";
+export const READ_ONLY = "the owner lets you only read in this channel";
 const SEND_MEMORY_MS = 3_600_000;
 
 interface Repeat {

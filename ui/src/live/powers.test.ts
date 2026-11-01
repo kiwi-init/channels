@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test"
+import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts"
+import type { Event, Message } from "@kiwi/core/protocol.ts"
 import { fold, type Roster } from "@kiwi/core/state.ts"
 import { peopleOf } from "~/live/map"
 
@@ -20,5 +22,28 @@ describe("a person's powers show on their profile (T380)", () => {
     expect(by("lin")?.addsAgents).toBeUndefined()
     expect(by("lin")?.answersDecisions).toBeUndefined()
     expect(by("patient-otter")?.addsAgents).toBeUndefined()
+  })
+})
+
+describe("a power given after someone joined shows, whatever the roster record says (T1656)", () => {
+  const signedEvent = async (who: Identity, name: string, seq: number, ev: Event): Promise<Message> => {
+    const p = await sign(who, { v: 1 as const, id: crypto.randomUUID(), ts: seq * 1000, from: name, kind: "event" as const, body: "", ev })
+    return { ...p, seq, rts: seq * 1000, sigOk: await verify(p) } as Message
+  }
+
+  test("the owner's later grant counts, and so does taking it back", async () => {
+    const owner = await generateIdentity("jow")
+    const maya = await generateIdentity("maya")
+    const list: Roster = [
+      { name: "jow", pk: owner.pk, owner: true, at: 0, active: true, kind: "human" },
+      { name: "maya", pk: maya.pk, owner: false, at: 0, active: true, kind: "human" },
+    ]
+    const give = await signedEvent(owner, "jow", 1, { op: "power.set", member: "maya", pk: maya.pk, power: "managesAgents", on: true, was: false } as Event)
+    const given = fold([give], list, 2000)
+    expect(given.members.get("maya")?.managesAgents).toBe(true)
+    expect(peopleOf(given, list, new Map(), "maya", new Map()).find((p) => p.name === "maya")?.managesAgents).toBe(true)
+    const take = await signedEvent(owner, "jow", 2, { op: "power.set", member: "maya", pk: maya.pk, power: "managesAgents", on: false, was: true } as Event)
+    const taken = fold([give, take], [{ ...list[0]! }, { ...list[1]!, managesAgents: true }], 3000)
+    expect(peopleOf(taken, list, new Map(), "maya", new Map()).find((p) => p.name === "maya")?.managesAgents).toBeUndefined()
   })
 })

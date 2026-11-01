@@ -28,10 +28,13 @@ import { isMuted, tells } from "~/live/quiet"
 import { tellMessage } from "~/live/notes"
 import { ownPrefs, usePrefs } from "~/live/prefs"
 import { receiptsOf, withReceipts } from "~/live/receipts"
+import { announce } from "~/kit/toasts"
+import { arrivals } from "~/live/persona-later"
 import { lastIn, seenKeyOf } from "~/live/seen-place"
 import { closeOpened, markGone, publish, type Run } from "~/live/store"
 import { useWakes } from "~/live/wakes"
 import { appCan } from "~/live/app-can"
+import { useMarksSync } from "~/live/read-sync"
 import { dmRoomOf, sealable } from "~/live/dm"
 import { clock } from "~/kit/time"
 import type { Channel, Upload, Where } from "~/model"
@@ -84,6 +87,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const newMembers = useNewMembers(roomId)
   const newPowers = useNewPowers(roomId)
   const pictures = usePictures(code, ch, messages)
+  useMarksSync(ch, roomId)
   const known = useKnownChannels()
   const icon = iconUrl(useIcons().get(roomId) ?? null)
   useLiveIcon(member)
@@ -276,6 +280,11 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       ...Object.fromEntries([...roomLast(state, messages)].map(([id, seq]) => [roomSeenKey(id), seq])),
     })
   }, [firstVisit, messages, state, roomId])
+
+  useEffect(() => {
+    for (const { name, persona } of arrivals(code, people))
+      void import("~/live/manage").then((m) => m.setPersona(code, name, persona)).catch((e: unknown) => announce(`Personality not set on ${name}: ${e instanceof Error ? e.message : String(e)}`))
+  }, [code, people])
 
   const where = view.where
   const lastHere = useMemo(() => (where ? lastIn(messages, state, me, where) : 0), [messages, state, me, where])
