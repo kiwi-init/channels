@@ -8,13 +8,13 @@ import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
 import { memberOf, type Channel, type Person } from "~/model"
 import { sameWhere, useAct, useApp } from "~/nav"
-import { between, nickname, shown } from "~/names"
+import { between, nickname, onePerPerson, shown } from "~/names"
 import { SideFoot } from "~/shell/updates"
 
 export function Sidebar({ channel }: { channel: Channel }) {
   const { nav, go } = useApp()
   const { actions, toast } = useAct()
-  const humans = channel.people.filter((p) => p.kind === "human")
+  const humans = onePerPerson(channel.people.filter((p) => p.kind === "human"))
   const agents = channel.people.filter((p) => p.kind === "agent").sort((a, b) => rank(a) - rank(b))
   const onChat = nav.tab === "chat"
   const [openTheirs, setOpenTheirs] = useState(false)
