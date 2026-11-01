@@ -294,6 +294,13 @@ export interface DeviceNewsView {
   removed: { wiped: boolean; by: string } | null;
 }
 
+export interface RecoveryView {
+  at: number | null;
+  here: boolean;
+}
+
+export type RecoverySaveView = { ok: true; at: number } | { ok: false; wrong: number[] };
+
 export type EnrollConfirmView = { ok: true; label: string } | { ok: false; left: number };
 
 export interface EnrollPersonView {
@@ -409,6 +416,10 @@ export interface KiwiBridge {
   forgetDevice(id: string): Promise<void>;
   renewDevice(id: string): Promise<void>;
   deviceNews(): Promise<DeviceNewsView | null>;
+  recovery(): Promise<RecoveryView | null>;
+  recoveryWords(): Promise<string[]>;
+  recoverySave(typed: { at: number; word: string }[]): Promise<RecoverySaveView>;
+  recoveryDrop(): Promise<void>;
   daemonStatus(): Promise<DaemonStatus>;
   doctor(): Promise<DoctorFinding[] | null>;
   /** Certify this machine's daemon key with the person key and hand the cert back. */

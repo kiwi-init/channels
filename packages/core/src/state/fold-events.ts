@@ -295,6 +295,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       else {
         const { power, on } = powerChange(ev);
         c.powers.set(ev.pk, { ...c.powers.get(ev.pk), [power]: on });
+        members.set(ev.member, on ? { ...target, [power]: true } : omit(target, power));
       }
       break;
     }
