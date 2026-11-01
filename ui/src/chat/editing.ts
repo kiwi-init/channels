@@ -10,6 +10,20 @@ export function startEditing(code: string, seq: number): void {
   emit()
 }
 
+let deleting: string | null = null
+
+export function askDelete(code: string, seq: number): void {
+  deleting = `${code}:${seq}`
+  emit()
+}
+
+export function stopAskingDelete(): void {
+  deleting = null
+  emit()
+}
+
+export const useAskingDelete = (code: string, seq: number): boolean => useSyncExternalStore(subscribe, () => deleting === `${code}:${seq}`)
+
 export function stopEditing(): void {
   editing = null
   emit()

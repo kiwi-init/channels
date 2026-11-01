@@ -1,4 +1,4 @@
-import { lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import { lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react"
 
 import { isGifReaction } from "@kiwi/core/protocol.ts"
 
@@ -13,6 +13,7 @@ import { memberOf, type Channel, type ImageSpot, type Message, type Person } fro
 import { useAct } from "~/nav"
 import { nickname } from "~/names"
 import { linked, named, withNames } from "~/chat/linked"
+import { showMenu } from "~/kit/menu-open"
 
 const Markdown = lazy(() => import("~/chat/markdown"))
 const Annotator = lazy(() => import("~/chat/annotator"))
@@ -171,7 +172,7 @@ function sameRow(a: RowProps, b: RowProps): boolean {
 }
 
 export const MessageRow = memo(function MessageRow({ channel, m, compact, names, tasks, inThread, quote, onQuote }: RowProps) {
-  const { actions, go } = useAct()
+  const { actions, go, toast } = useAct()
   const replying = useReplying()
   const [image, setImage] = useState<{ url: string; alt: string } | null>(null)
   const openImage = useCallback((url: string, alt: string) => setImage({ url, alt }), [])
@@ -196,8 +197,16 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
       </p>
     )
 
+  const onMenu = (e: MouseEvent<HTMLElement>) => {
+    if (m.pending || m.failed !== undefined || m.leftOut || m.deleted || editing) return
+    const target = e.target
+    const reply = replying && m.where.kind !== "theirs" ? () => replying.set(m) : null
+    showMenu(e, "Message", (x) => x.messageGroups({ channel, go, toast }, m, target, { openImage, reply, inThread: !!inThread }))
+  }
+
   return (
     <article
+      onContextMenu={onMenu}
       className={cx("msg", compact && "is-compact", m.mentionsYou && "is-for-you", m.pending && "is-pending", m.failed !== undefined && "is-failed", m.leftOut && "is-left-out")}
       data-seq={m.seq}
       aria-label={`${nickname(channel, m.from)}, ${clock(m.at)}`}
@@ -214,7 +223,12 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
       <div className="msg-body">
         {!compact && (
           <p className="msg-head">
-            <button type="button" className="msg-name" onClick={() => go({ to: "panel", panel: { kind: "person", name: m.from } })}>
+            <button
+              type="button"
+              className="msg-name"
+              onClick={() => go({ to: "panel", panel: { kind: "person", name: m.from } })}
+              onContextMenu={(e) => who && showMenu(e, nickname(channel, m.from), (x) => [x.personItems({ channel, go, toast }, who)])}
+            >
               {nickname(channel, m.from)}
             </button>
             {who?.role && who.role.toLowerCase() !== nickname(channel, m.from).toLowerCase() && <span className="msg-role">{who.role}</span>}
@@ -351,7 +365,18 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
               <Icon name="thread" size={14} />
             </button>
           )}
-          <button type="button" className="msg-tool" aria-label="Copy text" title="Copy text" onClick={() => void navigator.clipboard?.writeText(m.text)}>
+          <button
+            type="button"
+            className="msg-tool"
+            aria-label="Copy text"
+            title="Copy text"
+            onClick={() =>
+              void navigator.clipboard?.writeText(m.text).then(
+                () => toast("Copied"),
+                () => {}
+              )
+            }
+          >
             <Icon name="copy" size={14} />
           </button>
         </div>
