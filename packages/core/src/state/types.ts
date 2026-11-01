@@ -259,6 +259,7 @@ export interface SecretRoom {
   n: number;
   seals: RoomSeal[];
   meta?: RoomMeta;
+  leaving?: string[];
 }
 
 export type PersonaLead = boolean | "roster";
