@@ -160,6 +160,22 @@ describe("recovering on a new desktop", () => {
     expect((await old.desk.host.news())?.removed).toEqual({ wiped: false, by: "your person key" });
   });
 
+  test("a channel sealed in by another desktop between open and finish stays in the vault", async () => {
+    const old = await lostAccount();
+    const fresh = newDesktop(old.token);
+    expect((await fresh.recoverer.open(old.words.join(" "))).ok).toBe(true);
+    old.owned.push({ label: "late", code: "mc2-late", owner: await key("late") });
+    await old.recovery.keepCurrent();
+    expect(await fresh.recoverer.finish([])).toEqual({ name: "Jow", channels: 2, forgot: 0 });
+    const r = fresh.restored.value!;
+    expect(r.channels.map((c) => c.label)).toEqual(["general", "late"]);
+    expect(r.kept.version).toBe(3);
+    const phrase = await readRecoveryPhrase(old.words.join(" "));
+    if (!phrase.ok) throw new Error(phrase.why);
+    const got = await accountClient(relay, async () => old.token, fresh.device()!).vault();
+    expect((await openVault(got.vault as Vault, await recoveryKey(phrase.entropy)))?.channels.map((c) => c.label)).toEqual(["general", "late"]);
+  });
+
   test("keeping every old device forgets none and still adds this desktop", async () => {
     const old = await lostAccount();
     const fresh = newDesktop(old.token);

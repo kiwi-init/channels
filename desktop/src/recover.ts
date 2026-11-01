@@ -37,6 +37,7 @@ interface Opened {
   device: Identity;
   person: Restored["person"];
   contents: VaultContents;
+  key: Awaited<ReturnType<typeof recoveryKey>>;
 }
 
 const fmt = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" });
@@ -81,7 +82,7 @@ export function createRecoverer(deps: RecovererDeps): Recoverer {
       if (!contents) throw new Error("your recovery vault didn't open with those words");
       const { person } = contents;
       if (!person.xpk || !person.xsk) throw new Error("the person key in your vault has no exchange half");
-      opened = { client, device, person: { ...person, xpk: person.xpk, xsk: person.xsk }, contents };
+      opened = { client, device, person: { ...person, xpk: person.xpk, xsk: person.xsk }, contents, key };
       const devices = list.devices.filter((d) => d.device !== device.pk).map((d) => ({ id: d.device, label: d.label, os: d.os, as: d.as, lost: d.as !== "computer" }));
       return { ok: true, name: person.name, devices, channels: contents.channels.map((c) => c.label) };
     },
@@ -89,7 +90,7 @@ export function createRecoverer(deps: RecovererDeps): Recoverer {
     async finish(lost) {
       const o = opened;
       if (!o) throw new Error("type your recovery words again");
-      const { client, device, person, contents } = o;
+      const { client, device, person, key } = o;
       let links = (await client.links()) as DeviceLink[];
       let list = await listOf(links);
       if (list.person !== person.pk) throw new Error("this account's device list belongs to another person key");
@@ -109,6 +110,14 @@ export function createRecoverer(deps: RecovererDeps): Recoverer {
       const got = await client.vault();
       const read = await readRecovery(got.recovery, list, now());
       if (!read.ok) throw new Error(`your recovery key doesn't hold up: ${read.why}`);
+      let contents = o.contents;
+      if (got.vault !== null) {
+        const bad = await checkVault(got.vault, list);
+        if (bad) throw new Error(`the relay's recovery vault doesn't hold up: ${bad}`);
+        const fresh = await openVault(got.vault as Vault, key);
+        if (!fresh || fresh.person.pk !== person.pk) throw new Error("your recovery vault changed and no longer opens with those words: type them again");
+        contents = fresh;
+      }
       const version = got.vault === null ? 1 : (got.vault as Vault).version + 1;
       await client.keepVault({ vault: await sealVault(person, read.recovery, version, contents, now()) });
       opened = null;
