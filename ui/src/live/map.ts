@@ -343,6 +343,7 @@ function prOf(state: ChannelState, pr: GithubPr | { repo: string; number: number
   const ticks = real ? checksOf(state, real) : undefined
   const list = real ? checkList(state, real) : []
   const task = real ? taskOfPr(state, real) : undefined
+  const shipped = real ? releaseOf(state.github, real) : undefined
   return {
     repo: pr.repo,
     number: pr.number,
@@ -360,6 +361,7 @@ function prOf(state: ChannelState, pr: GithubPr | { repo: string; number: number
     ...(real?.by ? { by: real.by } : {}),
     ...(real ? { at: real.at } : {}),
     ...(task !== undefined ? { task } : {}),
+    ...(shipped ? { release: versionName(shipped.tag) } : {}),
   }
 }
 

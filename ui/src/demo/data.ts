@@ -780,6 +780,12 @@ const demoPrs: PullRequest[] = [
     by: "win-bot",
     at: m(60 * 20),
     task: 9,
+    release: "2026.10.18",
+    list: [
+      { name: "ci-ok", state: "pass", word: "passed", required: true },
+      { name: "repo / static", state: "pass", word: "passed" },
+      { name: "test / unit", state: "pass", word: "passed" },
+    ],
   },
   {
     repo: "kiwi-init/channels",

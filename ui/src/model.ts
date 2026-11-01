@@ -97,6 +97,7 @@ export interface PullRequest {
   by?: string
   at?: number
   task?: number
+  release?: string
 }
 
 export interface Issue {

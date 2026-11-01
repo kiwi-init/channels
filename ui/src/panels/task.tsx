@@ -74,7 +74,7 @@ export function TaskPanel({ channel, id }: { channel: Channel; id: number }) {
           {may && task.suggested && !task.owner && <Suggested channel={channel} task={task} suggested={task.suggested} />}
         </section>
         {waits.length > 0 && <Waits channel={channel} waits={waits} />}
-        {task.pr && <Pr channel={channel} pr={task.pr} />}
+        {task.pr && <Pr pr={task.pr} />}
         <LinkedIssue channel={channel} id={task.id} />
         <Review key={`review-${task.id}`} channel={channel} task={task} />
         {task.history.length > 0 && <Activity key={`activity-${task.id}`} channel={channel} history={task.history} />}
@@ -297,11 +297,11 @@ function Waits({ channel, waits }: { channel: Channel; waits: (PermissionAsk | Q
   )
 }
 
-function Pr({ channel, pr }: { channel: Channel; pr: PullRequest }) {
+function Pr({ pr }: { pr: PullRequest }) {
   return (
     <section className="panel-section">
       <Heading>Pull request</Heading>
-      <PrCard channel={channel} pr={pr} />
+      <PrCard pr={pr} />
     </section>
   )
 }

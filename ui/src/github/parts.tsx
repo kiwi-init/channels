@@ -16,20 +16,22 @@ import {
 
 import { useState } from "react"
 
-import { cx, Dot } from "~/kit/bits"
+import { Avatar, cx, Dot } from "~/kit/bits"
 import { GlyphIcon, Icon, ISSUE, type Glyph } from "~/kit/icons"
+import { announce } from "~/kit/toasts"
 import { ago } from "~/kit/time"
-import type { Channel, Check, Issue, PullRequest } from "~/model"
+import { memberOf, type Channel, type Check, type Issue, type PullRequest } from "~/model"
 import { useApp } from "~/nav"
 import { nickname } from "~/names"
 
 const PR_GLYPHS: Record<PullRequest["state"], Glyph> = { open: GitPullRequestIcon, draft: GitPullRequestDraftIcon, merged: GitMergeIcon, closed: GitPullRequestClosedIcon }
-const PR_TONES: Record<PullRequest["state"], string> = { open: "tone-live", draft: "tone-quiet", merged: "tone-review", closed: "tone-quiet" }
+export const PR_TONES: Record<PullRequest["state"], string> = { open: "tone-live", draft: "tone-quiet", merged: "tone-review", closed: "tone-quiet" }
+export const PR_WORDS: Record<PullRequest["state"], string> = { open: "Open", draft: "Draft", merged: "Merged", closed: "Closed" }
 
 export function PrMark({ pr, size = 16 }: { pr: PullRequest; size?: number }) {
   return (
     <span className={cx("gh-mark", PR_TONES[pr.state])}>
-      <GlyphIcon glyph={PR_GLYPHS[pr.state]} size={size} label={pr.state} />
+      <GlyphIcon glyph={PR_GLYPHS[pr.state]} size={size} label={PR_WORDS[pr.state]} />
     </span>
   )
 }
@@ -38,10 +40,12 @@ const issueDone = (i: Issue): boolean => i.state === "closed" && i.reason !== "n
 
 export const issueWord = (i: Issue): string => (i.state === "open" ? "open" : i.reason === "not_planned" ? "not planned" : "closed")
 
+export const issueTone = (i: Issue): string => (i.state === "open" ? "tone-live" : issueDone(i) ? "tone-review" : "tone-quiet")
+
 export function IssueMark({ issue, size = 16 }: { issue: Issue; size?: number }) {
   const glyph = issue.state === "open" ? ISSUE : issueDone(issue) ? CheckmarkCircle02Icon : UnavailableIcon
   return (
-    <span className={cx("gh-mark", issue.state === "open" ? "tone-live" : issueDone(issue) ? "tone-review" : "tone-quiet")}>
+    <span className={cx("gh-mark", issueTone(issue))}>
       <GlyphIcon glyph={glyph} size={size} label={issueWord(issue)} />
     </span>
   )
@@ -58,12 +62,25 @@ export function checksLine(pr: PullRequest): { text: string; tone: string } | nu
     const total = t.passed + t.running + t.failed.length
     if (t.failed.length) return { text: t.failed.length === 1 ? `${t.failed[0]} failed` : `${t.failed.length} checks failed`, tone: "tone-alert" }
     if (t.running) return { text: `${t.passed} of ${total} checks`, tone: "tone-doing" }
-    if (total) return { text: "checks passed", tone: "" }
+    if (total) return { text: total === 1 ? "1 check passed" : `${total} checks passed`, tone: "" }
   }
   if (pr.checks === "fail") return { text: "checks failed", tone: "tone-alert" }
   if (pr.checks === "running") return { text: "checks running", tone: "tone-doing" }
   if (pr.checks === "pass") return { text: "checks passed", tone: "" }
   return null
+}
+
+const MAX_TICKS = 12
+
+export function Ticks({ list }: { list: readonly Check[] }) {
+  const shown = list.slice(0, MAX_TICKS)
+  return (
+    <span className="gh-ticks" aria-hidden="true">
+      {shown.map((c) => (
+        <span key={c.name} className={cx("gh-tick", `is-${c.state}`)} />
+      ))}
+    </span>
+  )
 }
 
 function CheckRow({ c }: { c: Check }) {
@@ -85,8 +102,8 @@ function CheckRow({ c }: { c: Check }) {
   )
 }
 
-export function Checks({ list }: { list: readonly Check[] }) {
-  const [open, setOpen] = useState(false)
+export function Checks({ list, fold = true }: { list: readonly Check[]; fold?: boolean }) {
+  const [open, setOpen] = useState(!fold)
   const quiet = list.filter((c) => c.state === "pass" || c.state === "skipped")
   const loud = list.filter((c) => c.state !== "pass" && c.state !== "skipped")
   const passed = quiet.filter((c) => c.state === "pass").length
@@ -97,7 +114,7 @@ export function Checks({ list }: { list: readonly Check[] }) {
       {loud.map((c) => (
         <CheckRow key={c.name} c={c} />
       ))}
-      {quiet.length > 0 && (
+      {fold && quiet.length > 0 && (
         <li>
           <button type="button" className="gh-check is-fold" aria-expanded={open} onClick={() => setOpen(!open)}>
             <span className={cx("gh-check-mark", passed ? "tone-live" : "tone-quiet")}>
@@ -126,6 +143,43 @@ export function DiffBar({ additions, deletions }: { additions: number; deletions
   )
 }
 
+export function Size({ pr }: { pr: PullRequest }) {
+  if (pr.additions === undefined || pr.deletions === undefined) return null
+  return (
+    <span className="gh-size num">
+      <DiffBar additions={pr.additions} deletions={pr.deletions} />
+      <span className="tone-live">+{pr.additions}</span>
+      <span className="tone-alert">−{pr.deletions}</span>
+      {pr.files !== undefined && <span className="dim">{pr.files === 1 ? "1 file" : `${pr.files} files`}</span>}
+    </span>
+  )
+}
+
+export function Branch({ name, copy }: { name: string; copy?: boolean }) {
+  return (
+    <span className="gh-branch" title={name}>
+      <GlyphIcon glyph={GitBranchIcon} size={13} />
+      <span className="gh-branch-name">{name}</span>
+      {copy && (
+        <button
+          type="button"
+          className="gh-copy"
+          aria-label={`Copy ${name}`}
+          title="Copy the branch name"
+          onClick={() =>
+            void navigator.clipboard?.writeText(name).then(
+              () => announce("Branch name copied"),
+              () => announce("Couldn't copy. Select it and copy by hand.")
+            )
+          }
+        >
+          <Icon name="copy" size={13} />
+        </button>
+      )}
+    </span>
+  )
+}
+
 export function TaskLink({ channel, id }: { channel: Channel; id: number }) {
   const { go } = useApp()
   const task = channel.tasks.find((t) => t.id === id)
@@ -135,48 +189,41 @@ export function TaskLink({ channel, id }: { channel: Channel; id: number }) {
       <Dot status={task.cancelled ? "todo" : task.status} />
       <span className="gh-task-id num">T{id}</span>
       <span className="gh-task-title">{task.title}</span>
-      {task.owner && <span className="gh-task-who">{nickname(channel, task.owner)}</span>}
+      {task.owner && (
+        <span className="gh-task-who">
+          <Avatar person={memberOf(channel, task.owner)} size="sm" />
+          {nickname(channel, task.owner)}
+        </span>
+      )}
     </button>
   )
 }
 
-export function PrCard({ channel, pr, withTask }: { channel: Channel; pr: PullRequest; withTask?: boolean }) {
+export function PrCard({ pr }: { pr: PullRequest }) {
+  const { go } = useApp()
   const line = checksLine(pr)
-  const sized = pr.additions !== undefined && pr.deletions !== undefined
   return (
     <div className="gh-card">
-      <p className="gh-card-title">
+      <button type="button" className="gh-card-title" onClick={() => go({ to: "panel", panel: { kind: "pr", repo: pr.repo, number: pr.number } })}>
         <PrMark pr={pr} />
         <span>
           <span className="dim num">#{pr.number}</span> {pr.title}
         </span>
-      </p>
+      </button>
       <p className="gh-card-meta num">
-        <span className={PR_TONES[pr.state]}>{pr.state}</span>
+        <span className={PR_TONES[pr.state]}>{PR_WORDS[pr.state].toLowerCase()}</span>
+        {pr.release && <span>shipped in {pr.release}</span>}
         {pr.by && <span>{pr.by}</span>}
         {pr.at !== undefined && <span>{ago(pr.at)}</span>}
         {line && !pr.list?.length && pr.state !== "merged" && pr.state !== "closed" && <span className={line.tone}>{line.text}</span>}
       </p>
-      {(pr.branch || sized) && (
-        <p className="gh-card-row num">
-          {pr.branch && (
-            <span className="gh-branch" title={pr.branch}>
-              <GlyphIcon glyph={GitBranchIcon} size={13} />
-              <span>{pr.branch}</span>
-            </span>
-          )}
-          {sized && (
-            <span className="gh-size">
-              <DiffBar additions={pr.additions ?? 0} deletions={pr.deletions ?? 0} />
-              <span className="tone-live">+{pr.additions}</span>
-              <span className="tone-alert">−{pr.deletions}</span>
-              {pr.files !== undefined && <span className="dim">{pr.files === 1 ? "1 file" : `${pr.files} files`}</span>}
-            </span>
-          )}
+      {(pr.branch || pr.additions !== undefined) && (
+        <p className="gh-card-row">
+          {pr.branch && <Branch name={pr.branch} />}
+          <Size pr={pr} />
         </p>
       )}
       {pr.list && pr.list.length > 0 && <Checks list={pr.list} />}
-      {withTask && pr.task !== undefined && <TaskLink channel={channel} id={pr.task} />}
       <p className="gh-card-foot">
         <span className="dimmer">{pr.repo}</span>
         <span className="gh-card-links">

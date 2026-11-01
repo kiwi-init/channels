@@ -247,10 +247,10 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   The top bar spans the sidebar and the main area (`--top-h`): the sidebar
   toggle first at the left edge, then the channel switcher, both in the same
   place whether the sidebar is open or collapsed; the views in the middle
-  (`# room`, Tasks with its count, Agents, Pull requests and Issues with
-  their open counts once a repo is linked, a dot in `alert` on Pull requests
-  while an open one's checks failed, Needs you in `decide` with its
-  count), the open one on `wash-2`; on the right a mono summary
+  (`# room`, Tasks with its count, Agents, GitHub with its open pull
+  requests once a repo is linked and a dot in `alert` while an open one's
+  checks failed, Needs you in `decide` with its count), the open one on
+  `wash-2`; on the right a mono summary
   (`2 working · 1 merged today · 7 need you`), Search and the terminal.
   No borders between the columns.
 - **Sidebar.** Every row's text starts on one edge, after a 24px icon column
@@ -278,15 +278,21 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   as the heading, who and `from #N` under it, then a two-line row per task
   (its `Dot`, the title in `t-body`, a mono line of id, owner, state and
   age), with its PR number, diff bar, additions and checks on the right.
-- **Pull requests and Issues.** Open and Closed as one segment control,
-  the repos as another when there are several, then a two-line row per item:
-  its GitHub state mark (open `live`, merged or done `review`, closed or not
-  planned `ink-2`), the title, a mono line of number, repo, author and age;
-  on the right a PR's diff bar, additions and checks, and the task it belongs
-  to as a `Dot` and its id. A row opens its panel: the PR card (state, branch,
-  size, every check with its link, failing and running ones first and the
-  passing ones folded into one line) and the task, or the issue and its task.
-  A task's panel shows the same PR card and its issue.
+- **GitHub.** Pull requests and Issues as one segment control with their
+  open counts, a filter field beside it (title, number, author, branch), then
+  Open and Closed and, with several repos, the repos as segments. Items sit in
+  cards like Tasks, by what needs attention: open pull requests by their checks
+  (failed, with an `alert` dot and label, running in `doing`, ready, no checks
+  yet), closed ones as merged and closed; issues as not picked up and being
+  worked on, then done and not planned. A row: the GitHub state mark (open
+  `live`, merged or done `review`, closed or not planned `ink-2`), the title,
+  a mono line of number, repo, author and age; on the right the checks as
+  ticks and a short word, the diff bar when there is room, and the task as a
+  `Dot`, its id and its owner's face; an external link shows on hover. A row
+  opens its panel: the title, the state line, props (repo, branch with copy,
+  author, size, when), every check with its link (failing on `alert-wash`
+  first), the task, and Open on GitHub as the one primary button. A task's
+  panel shows a compact PR card with passing checks folded, and its issue.
 - **Needs you.** A mono count line, then one card per thing waiting (the same
   card as Tasks), oldest first: who and what (a `decide` chip for a permission), the detail (a
   command or a diff in mono boxes), and the answers as buttons, the main one
