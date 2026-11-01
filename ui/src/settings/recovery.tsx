@@ -65,7 +65,7 @@ export function RecoveryKey({ recovery }: { recovery: RecoveryState }) {
       <div className="heading">
         <h3>Recovery key</h3>
       </div>
-      <p className="set-group-hint">24 words on paper that bring back your account if you lose every computer.</p>
+      <p className="set-group-hint">24 words on paper, and the only way back to your account if you lose every computer. Keep them safe and offline.</p>
       <div className={recovery.at ? "set-rows" : "set-rows set-recovery-nudge"}>
         <Row label={recovery.at ? `Set up ${day(recovery.at)}` : "Not set up yet"} hint={hintFor(recovery)}>
           {recovery.here &&
@@ -98,7 +98,7 @@ export function RecoveryKey({ recovery }: { recovery: RecoveryState }) {
           <>
             <DialogHead
               title="Write down these 24 words"
-              sub="On paper, in order. Anyone with them can take over your account: keep them somewhere safe and never type them into a website."
+              sub="These words are the only way back to your account: once you've checked them, this computer lets go of your person key. Write them on paper, in order, and keep them safe and offline. Anyone with them can take over your account, so never type them into a website."
               onClose={close}
             />
             <div className="set-confirm">

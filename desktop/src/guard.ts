@@ -7,9 +7,6 @@ import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
-import { decodeJoinCode } from "@kiwi/core/crypto.ts";
-import type { Identity } from "@kiwi/core/identity.ts";
-import { provePerson, type PersonClaim } from "@kiwi/core/person.ts";
 import type { ChannelIdentityView, ComputerView, PendingItem, PersonView, PhoneView, PublicPerson, StoreSnapshot } from "./bridge.ts";
 import { publicChannel } from "./seats.ts";
 
@@ -132,8 +129,3 @@ export function writePrivate(file: string, raw: Buffer, platform: NodeJS.Platfor
 }
 
 export const errorText = (e: unknown): string => (e instanceof Error ? e.message : String(e)) || "an error with no message";
-
-export function claimFor(person: Identity, code: unknown, memberPk: unknown): Promise<PersonClaim> {
-  if (typeof code !== "string" || typeof memberPk !== "string") throw new Error("bad person claim request");
-  return provePerson(person, decodeJoinCode(code).roomId, memberPk);
-}

@@ -204,6 +204,11 @@ export interface VaultContents {
   channels: VaultChannel[];
 }
 
+export interface SealedPerson {
+  rxpk: string;
+  box: string;
+}
+
 export interface Vault {
   kind: "kiwi-vault";
   v: 1;
@@ -217,10 +222,19 @@ export interface Vault {
 
 const VAULT_FIELDS = "at,box,kind,person,pk,sig,v,version";
 const vaultInfo = (v: { person: string; version: number; at: number }) => `kiwi-vault\n${v.person}\n${v.version}\n${v.at}`;
+const personInfo = (person: string, rxpk: string) => `kiwi-vault-person\n${person}\n${rxpk}`;
 
-export async function sealVault(signer: Identity, recovery: Recovery, version: number, contents: VaultContents, at = Date.now()): Promise<Vault> {
+export async function sealPerson(recovery: Recovery, person: Identity): Promise<SealedPerson> {
+  if (person.pk !== recovery.person) throw new Error("that person key isn't the one this recovery key is for");
+  return { rxpk: recovery.rxpk, box: await sealTo(recovery.rxpk, JSON.stringify(person), personInfo(person.pk, recovery.rxpk)) };
+}
+
+export async function sealVault(signer: Identity, recovery: Recovery, version: number, contents: { person: Identity | SealedPerson; channels: VaultChannel[] }, at = Date.now()): Promise<Vault> {
+  const held = contents.person;
+  if ("box" in held && held.rxpk !== recovery.rxpk) throw new Error("the person key is sealed to an earlier recovery key");
   const head = { person: recovery.person, version, at };
-  return sign(signer, { kind: "kiwi-vault" as const, v: 1 as const, ...head, box: await sealTo(recovery.rxpk, JSON.stringify(contents), vaultInfo(head)) });
+  const inner = { person: "box" in held ? held.box : held, channels: contents.channels };
+  return sign(signer, { kind: "kiwi-vault" as const, v: 1 as const, ...head, box: await sealTo(recovery.rxpk, JSON.stringify(inner), vaultInfo(head)) });
 }
 
 export async function checkVault(raw: unknown, list: DeviceList, known = 0): Promise<string | null> {
@@ -237,27 +251,36 @@ export async function checkVault(raw: unknown, list: DeviceList, known = 0): Pro
   return null;
 }
 
+const isKey = (k: unknown): k is Identity =>
+  !!k && typeof k === "object" && typeof (k as Identity).pk === "string" && typeof (k as Identity).sk === "string" && typeof (k as Identity).name === "string";
+
 function contentsOf(x: unknown, person: string): VaultContents | null {
   if (!x || typeof x !== "object") return null;
   const c = x as Partial<VaultContents>;
-  const key = (k: unknown): k is Identity =>
-    !!k && typeof k === "object" && typeof (k as Identity).pk === "string" && typeof (k as Identity).sk === "string" && typeof (k as Identity).name === "string";
-  if (!key(c.person) || c.person.pk !== person || !Array.isArray(c.channels)) return null;
+  if (!isKey(c.person) || c.person.pk !== person || !Array.isArray(c.channels)) return null;
   for (const ch of c.channels as unknown[]) {
     const v = ch as Partial<VaultChannel> | null;
-    if (!v || typeof v.label !== "string" || typeof v.code !== "string" || !key(v.owner)) return null;
+    if (!v || typeof v.label !== "string" || typeof v.code !== "string" || !isKey(v.owner)) return null;
   }
   return c as VaultContents;
 }
 
-export async function openVault(vault: Vault, key: Identity): Promise<VaultContents | null> {
-  if (!key.xsk) return null;
-  const text = await openFrom(key.xsk, vault.box, vaultInfo(vault));
+async function opened(xsk: string, box: string, info: string): Promise<unknown> {
+  const text = await openFrom(xsk, box, info);
   if (text === null) return null;
   try {
-    return contentsOf(JSON.parse(text), vault.person);
+    return JSON.parse(text);
   } catch {
     // A box that opens but holds no JSON was sealed wrong; there's nothing in it to restore.
     return null;
   }
+}
+
+export async function openVault(vault: Vault, key: Identity): Promise<VaultContents | null> {
+  if (!key.xsk) return null;
+  const inner = await opened(key.xsk, vault.box, vaultInfo(vault));
+  if (!inner || typeof inner !== "object") return null;
+  const held = (inner as { person?: unknown }).person;
+  const person = typeof held === "string" ? await opened(key.xsk, held, personInfo(vault.person, key.xpk ?? "")) : held;
+  return contentsOf({ ...inner, person }, vault.person);
 }
