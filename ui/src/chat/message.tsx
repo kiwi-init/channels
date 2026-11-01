@@ -12,7 +12,7 @@ import { ago, clock } from "~/kit/time"
 import { memberOf, type Channel, type ImageSpot, type Message, type Person } from "~/model"
 import { useAct } from "~/nav"
 import { nickname } from "~/names"
-import { linked, named, withNames } from "~/chat/linked"
+import { linked, named, useMentionParser, withNames } from "~/chat/linked"
 import { showMenu } from "~/kit/menu-open"
 
 const Markdown = lazy(() => import("~/chat/markdown"))
@@ -41,7 +41,8 @@ export function Body({
   onMessage: (seq: number) => void
 }) {
   const { go, toast } = useAct()
-  const markdown = useMemo(() => linked(text, names, tasks, seq), [text, names, tasks, seq])
+  const parser = useMentionParser()
+  const { markdown } = useMemo(() => ({ parser, markdown: linked(text, names, tasks, seq) }), [parser, text, names, tasks, seq])
   const [shown, setShown] = useState(false)
   const onShown = useCallback(() => setShown(true), [])
   const onMention = useCallback((name: string) => go({ to: "panel", panel: { kind: "person", name } }), [go])
