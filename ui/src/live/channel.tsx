@@ -30,6 +30,7 @@ import { ownPrefs, usePrefs } from "~/live/prefs"
 import { receiptsOf, withReceipts } from "~/live/receipts"
 import { announce } from "~/kit/toasts"
 import { arrivals } from "~/live/persona-later"
+import { leaversToSeal } from "~/live/leaving"
 import { lastIn, seenKeyOf } from "~/live/seen-place"
 import { closeOpened, markGone, publish, type Run } from "~/live/store"
 import { useWakes } from "~/live/wakes"
@@ -285,6 +286,24 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
     for (const { name, persona } of arrivals(code, people))
       void import("~/live/manage").then((m) => m.setPersona(code, name, persona)).catch((e: unknown) => announce(`Personality not set on ${name}: ${e instanceof Error ? e.message : String(e)}`))
   }, [code, people])
+
+  const toSeal = leaversToSeal(state, me)
+    .map((r) => `${r.id}\0${r.names.join(",")}`)
+    .join("\n")
+  useEffect(() => {
+    if (!toSeal) return
+    const timer = setTimeout(() => {
+      for (const line of toSeal.split("\n")) {
+        const [id = "", names = ""] = line.split("\0")
+        void import("~/live/manage")
+          .then((m) => m.sealOutLeavers(code, id, names.split(",")))
+          .catch(() => {
+            // Another member may have sealed first, or this app is older: whoever is in the room next tries again.
+          })
+      }
+    }, Math.random() * 5_000)
+    return () => clearTimeout(timer)
+  }, [code, toSeal])
 
   const where = view.where
   const lastHere = useMemo(() => (where ? lastIn(messages, state, me, where) : 0), [messages, state, me, where])

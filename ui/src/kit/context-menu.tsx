@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 
-import { openMenu, type OpenMenu } from "~/kit/menu-open"
+import { Dialog, DialogHead } from "~/kit/bits"
+import { openMenu, type MenuItem, type OpenMenu } from "~/kit/menu-open"
 
 const GUTTER = 8
 
@@ -22,6 +23,7 @@ export function stepped(key: string, at: number, count: number): number | null {
 export default function Menu({ menu }: { menu: OpenMenu }) {
   const box = useRef<HTMLDivElement>(null)
   const [place, setPlace] = useState({ left: menu.x, top: menu.y })
+  const [asking, setAsking] = useState<MenuItem | null>(null)
   useLayoutEffect(() => {
     const rect = box.current?.getBoundingClientRect()
     if (rect) setPlace(fitted(menu.x, menu.y, rect.width, rect.height, window.innerWidth, window.innerHeight))
@@ -30,9 +32,11 @@ export default function Menu({ menu }: { menu: OpenMenu }) {
   useEffect(() => {
     const close = () => openMenu.set(null)
     const away = (e: PointerEvent) => {
+      if (document.querySelector("dialog[open]")) return
       if (!(e.target instanceof Node) || !box.current?.contains(e.target)) close()
     }
     const key = (e: KeyboardEvent) => {
+      if (document.querySelector("dialog[open]")) return
       if (e.key === "Escape" || e.key === "Tab") {
         e.preventDefault()
         e.stopPropagation()
@@ -56,6 +60,27 @@ export default function Menu({ menu }: { menu: OpenMenu }) {
       window.removeEventListener("resize", close)
     }
   }, [])
+  if (asking?.confirm)
+    return (
+      <Dialog open onClose={() => openMenu.set(null)} label={asking.confirm.title}>
+        <DialogHead title={asking.confirm.title} sub={asking.confirm.sub} onClose={() => openMenu.set(null)} />
+        <div className="dialog-foot">
+          <button type="button" className="btn" onClick={() => openMenu.set(null)}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="btn is-danger"
+            onClick={() => {
+              openMenu.set(null)
+              asking.run()
+            }}
+          >
+            {asking.confirm.yes}
+          </button>
+        </div>
+      </Dialog>
+    )
   return (
     <div ref={box} tabIndex={-1} className="rail-menu is-at-pointer" role="menu" aria-label={menu.label} style={place}>
       {menu.groups.map((group, g) => (
@@ -66,6 +91,7 @@ export default function Menu({ menu }: { menu: OpenMenu }) {
               type="button"
               role="menuitem"
               onClick={() => {
+                if (item.confirm) return setAsking(item)
                 openMenu.set(null)
                 item.run()
               }}

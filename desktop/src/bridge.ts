@@ -121,6 +121,8 @@ export const CHANNEL_CALLS = [
   "makeRoom",
   "makeDm",
   "syncMarks",
+  "leaveRoom",
+  "sealOutLeavers",
   "changeRoom",
   "pruneRooms",
   "icon",

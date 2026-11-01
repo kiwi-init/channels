@@ -158,6 +158,11 @@ export function makeActions(): Actions {
       }),
     loadImage: (code, spot) => loadPicture(code, spot),
     discard: (code, seq) => attempt("Couldn't remove it", async () => need(code).discard(-seq)),
+    leaveRoom: (code, room) =>
+      attempt("Couldn't leave the room", async () => {
+        await (await manage()).leaveRoom(code, room)
+        announce("You've left. It's fully closed once someone else in the room is online.")
+      }),
     markRead: (code, where) => {
       const run = need(code)
       const last = lastIn(run.messages, run.state, run.me, where)

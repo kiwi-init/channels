@@ -13,9 +13,10 @@ export const CHANNEL_CALLS_SINCE: Readonly<Record<string, readonly string[]>> = 
   "1.11.0": ["makeRoom", "changeRoom", "pruneRooms"],
   "1.12.0": ["makeDm"],
   "1.13.0": ["syncMarks"],
+  "1.14.0": ["leaveRoom", "sealOutLeavers"],
 };
 
-export const CHANNEL_CALLS_BACKGROUND: readonly string[] = ["pruneRooms", "syncMarks"];
+export const CHANNEL_CALLS_BACKGROUND: readonly string[] = ["pruneRooms", "syncMarks", "sealOutLeavers"];
 
 export const UI_SURFACES: Readonly<Record<string, readonly string[]>> = {
   "1.0.0": [

@@ -222,6 +222,7 @@ export type Scenario =
   | "long"
   | "step"
   | "asked-of"
+  | "since"
   | "left-out"
   | "events"
   | "handoff"
@@ -262,21 +263,27 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
         ? longFeed(DEMO_CHANNEL)
         : scenario === "step"
           ? withStep(DEMO_CHANNEL)
-          : scenario === "asked-of"
-            ? { ...DEMO_CHANNEL, asks: DEMO_CHANNEL.asks.map((a) => (a.kind === "question" ? { ...a, label: a.label.replace(/ for you$/, ""), askedOf: ["maya"] } : a)) }
-            : scenario === "left-out"
-              ? withLeftOut(DEMO_CHANNEL)
-              : scenario === "events"
-                ? withEvents(DEMO_CHANNEL)
-                : scenario === "handoff"
-                  ? withHandoff(DEMO_CHANNEL)
-                  : scenario === "opening"
-                    ? { ...DEMO_CHANNEL, messages: [], tasks: [], asks: [], connection: "connecting" as const, loading: true }
-                    : scenario === "held"
-                      ? { ...DEMO_CHANNEL, hold: { note: "Waiting on the release key.", by: "jow", at: Date.now() - 40 * 60_000 } }
-                      : scenario === "compact" || scenario === "compacted"
-                        ? withCompact(DEMO_CHANNEL, scenario === "compacted")
-                        : DEMO_CHANNEL,
+          : scenario === "since"
+            ? {
+                ...DEMO_CHANNEL,
+                rooms: DEMO_CHANNEL.rooms.map((r) => (r.id === "general" ? { ...r, unread: 9, seen: 109 } : r.id === "launch-plan" ? { ...r, seen: 109 } : r)),
+                directs: DEMO_CHANNEL.directs.map((d) => (d.unread ? { ...d, seen: 109 } : d)),
+              }
+            : scenario === "asked-of"
+              ? { ...DEMO_CHANNEL, asks: DEMO_CHANNEL.asks.map((a) => (a.kind === "question" ? { ...a, label: a.label.replace(/ for you$/, ""), askedOf: ["maya"] } : a)) }
+              : scenario === "left-out"
+                ? withLeftOut(DEMO_CHANNEL)
+                : scenario === "events"
+                  ? withEvents(DEMO_CHANNEL)
+                  : scenario === "handoff"
+                    ? withHandoff(DEMO_CHANNEL)
+                    : scenario === "opening"
+                      ? { ...DEMO_CHANNEL, messages: [], tasks: [], asks: [], connection: "connecting" as const, loading: true }
+                      : scenario === "held"
+                        ? { ...DEMO_CHANNEL, hold: { note: "Waiting on the release key.", by: "jow", at: Date.now() - 40 * 60_000 } }
+                        : scenario === "compact" || scenario === "compacted"
+                          ? withCompact(DEMO_CHANNEL, scenario === "compacted")
+                          : DEMO_CHANNEL,
       DEMO_EMPTY,
       DEMO_WAITING,
       { ...DEMO_EMPTY, code: "interlinked", title: "interlinked" },
@@ -377,6 +384,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       },
       retry: (code, seq) => edit(code, (c) => ({ ...c, messages: c.messages.map((m) => (m.seq === seq ? { ...m, failed: undefined } : m)) })),
       loadImage: () => {},
+      leaveRoom: (code, room) => edit(code, (c) => ({ ...c, rooms: c.rooms.filter((r) => r.id !== room) })),
       markRead: (code, where) =>
         edit(code, (c) => ({
           ...c,

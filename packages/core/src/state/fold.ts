@@ -201,6 +201,12 @@ function folding(
   }
   const recordOf = new Map(roster.map((r) => [r.pk, r]));
   const held = (pk: string, power: Power): boolean => powers.get(pk)?.[power] ?? !!recordOf.get(pk)?.[power];
+  for (const member of members.values()) {
+    if (member.kind !== "human" || member.owner) continue;
+    for (const power of POWERS)
+      if (held(member.pk, power)) member[power] = true;
+      else delete member[power];
+  }
   const trusted = (pk: string, member: FoldMember): boolean => member.kind === "human" && !member.owner && canPost(scopesByKey.get(pk) ?? []) && POWERS.every((p) => held(pk, p));
   const logged = (member: FoldMember): boolean | undefined => {
     const lead = personaLead.get(member.name);
