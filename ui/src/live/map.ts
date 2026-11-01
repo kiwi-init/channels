@@ -133,7 +133,7 @@ function personOf(state: ChannelState, m: StateMember, record: RosterMember | un
   const raw = m.runs?.harness ?? m.card?.harness
   const harness = human ? undefined : harnessOf(raw)
   const sponsor = human ? undefined : (humanOf(state, m.name) ?? m.sponsor?.handle ?? m.sponsor?.name)
-  const color: Color | null = colorOf(state, m.name)
+  const color: Color | null = human ? colorOf(state, m.name) : (m.color ?? null)
   const activity = human ? undefined : activityOf(here)
   const reach = human ? null : howHere(here)
   const specs = m.card ? specsOf(m.card) : ""

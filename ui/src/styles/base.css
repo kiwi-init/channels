@@ -1162,3 +1162,32 @@ html .person-kind {
 .feed-start-title {
   letter-spacing: -0.01em;
 }
+
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.swatch {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--member);
+  transition: transform var(--fast);
+}
+
+.swatch:hover {
+  transform: scale(1.12);
+}
+
+.swatch[aria-pressed="true"] {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.av-face[data-color] {
+  background: none;
+}
