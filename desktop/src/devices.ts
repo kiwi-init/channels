@@ -48,7 +48,7 @@ async function readList(links: unknown[]): Promise<DeviceList> {
   return read.list;
 }
 
-async function myDevice(deps: Pick<DeviceHostDeps, "device" | "saveDevice">, name: string): Promise<Identity> {
+export async function myDevice(deps: Pick<DeviceHostDeps, "device" | "saveDevice">, name: string): Promise<Identity> {
   const held = deps.device();
   if (held?.xsk) return held;
   const made = await withExchangeKey(await generateIdentity(name));

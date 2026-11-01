@@ -289,6 +289,16 @@ export interface RecoveryView {
 
 export type RecoverySaveView = { ok: true; at: number } | { ok: false; wrong: number[] };
 
+export type RecoverOpenView =
+  | { ok: true; name: string; devices: (Pick<DeviceView, "id" | "label" | "os" | "as"> & { lost: boolean })[]; channels: string[] }
+  | { ok: false; why: string; word?: number };
+
+export interface RecoverDoneView {
+  name: string;
+  channels: number;
+  forgot: number;
+}
+
 export type EnrollConfirmView = { ok: true; label: string } | { ok: false; left: number };
 
 export interface EnrollPersonView {
@@ -408,6 +418,9 @@ export interface KiwiBridge {
   recoveryWords(): Promise<string[]>;
   recoverySave(typed: { at: number; word: string }[]): Promise<RecoverySaveView>;
   recoveryDrop(): Promise<void>;
+  recover(words: string): Promise<RecoverOpenView>;
+  recoverFinish(lost: string[]): Promise<RecoverDoneView>;
+  recoverCancel(): Promise<void>;
   daemonStatus(): Promise<DaemonStatus>;
   doctor(): Promise<DoctorFinding[] | null>;
   /** Certify this machine's daemon key with the person key and hand the cert back. */

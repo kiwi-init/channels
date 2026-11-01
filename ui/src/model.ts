@@ -481,7 +481,25 @@ export interface EnrollAsk {
   fingerprint?: string | null
 }
 
-export type Enrolling = { stage: "asking" } | { stage: "digits"; digits: string } | { stage: "check"; person: { name: string; fingerprint: string } }
+export type Enrolling =
+  | { stage: "asking" }
+  | { stage: "digits"; digits: string }
+  | { stage: "check"; person: { name: string; fingerprint: string } }
+  | { stage: "recover" }
+  | { stage: "welcome"; name: string; devices: RecoverDevice[]; channels: string[] }
+
+export interface RecoverDevice {
+  id: string
+  label: string
+  os: string
+  as: "desktop" | "phone" | "computer"
+  lost: boolean
+}
+
+export interface RecoverTrouble {
+  why: string
+  word?: number
+}
 
 export interface Device {
   id: string
@@ -652,6 +670,9 @@ export interface Actions {
   enrollBegin(): void
   enrollKeep(): void
   enrollCancel(): void
+  recoverBegin(): void
+  recoverOpen(words: string): Promise<RecoverTrouble | null>
+  recoverFinish(lost: string[]): Promise<void>
   closeChannel(code: string): void
   saveTheme(theme: CustomTheme): void
   deleteTheme(id: string): void
