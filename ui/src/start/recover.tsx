@@ -2,7 +2,7 @@ import "~/styles/recover.css"
 
 import { useRef, useState, type ClipboardEvent, type KeyboardEvent } from "react"
 
-import { RECOVERY_WORDS } from "@kiwi/core/recovery-words.ts"
+import { recoveryWords } from "@kiwi/core/recovery-words.ts"
 import { cx } from "~/kit/bits"
 import type { Enrolling, RecoverDevice, RecoverTrouble } from "~/model"
 import { useApp } from "~/nav"
@@ -19,7 +19,7 @@ const wordsIn = (text: string): string[] =>
 function completion(typed: string): string | null {
   const t = typed.trim().toLowerCase()
   if (t.length < 2) return null
-  return RECOVERY_WORDS.find((w) => w.startsWith(t)) ?? null
+  return recoveryWords().find((w) => w.startsWith(t)) ?? null
 }
 
 function Words() {
