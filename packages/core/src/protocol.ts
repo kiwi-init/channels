@@ -315,7 +315,16 @@ export type Event =
   | { op: "msg.edit"; seq: number; body: string }
   | { op: "msg.delete"; seq: number }
   | { op: "member.gone"; member: string; pk: string }
-  | { op: "member.back"; member: string; pk: string };
+  | { op: "member.back"; member: string; pk: string }
+  | { op: "spec.set"; ask: number; text: string }
+  | { op: "spec.approve"; ask: number; v: number }
+  | { op: "spec.result"; ask: number; verdict: SpecVerdict; note?: string };
+
+export type SpecVerdict = "accepted" | "back" | "dropped";
+
+export const MAX_SPEC = 20_000;
+
+export const MAX_SPEC_NOTE = 2000;
 
 /** The longest reaction, in UTF-16 units: one emoji, family sequences and flags included. */
 const MAX_REACTION = 16;
@@ -361,6 +370,7 @@ const QUIET_OPS: ReadonlySet<string> = new Set([
   "github.rules",
   "github.release",
   "devices",
+  "spec.set",
 ]);
 
 export const isRunning = (i: GithubNote): boolean => (i.event === "check_run" || i.event === "workflow_run") && i.conclusion === undefined;
@@ -762,7 +772,7 @@ export interface NewerEvent {
 
 export type WirePayload = Omit<Payload, "ev"> & { ev?: Event | NewerEvent };
 
-export const EVENT_OPS_VERSION = 13;
+export const EVENT_OPS_VERSION = 14;
 
 export const PRIVATE_ROOM_OPS = 9;
 
@@ -1074,6 +1084,18 @@ function eventCheck(ev: unknown): boolean | null {
       return n(e.ask) && (e.ask as number) > 0 && (e.name === null || str(e.name, MAX_GOAL_NAME * 4));
     case "ask.close":
       return n(e.ask) && (e.ask as number) > 0 && (e.why === undefined || str(e.why, 500));
+    case "spec.set":
+      return n(e.ask) && (e.ask as number) > 0 && str(e.text, MAX_SPEC) && (e.text as string).trim().length > 0;
+    case "spec.approve":
+      return n(e.ask) && (e.ask as number) > 0 && n(e.v) && (e.v as number) > 0;
+    case "spec.result":
+      return (
+        n(e.ask) &&
+        (e.ask as number) > 0 &&
+        (e.verdict === "accepted" || e.verdict === "back" || e.verdict === "dropped") &&
+        opt(e.note, (x): x is string => str(x, MAX_SPEC_NOTE)) &&
+        (e.verdict !== "back" || (typeof e.note === "string" && e.note.trim().length > 0))
+      );
     case "devices":
       return Array.isArray(e.links) && e.links.length > 0 && e.links.length <= DEVICE_LIST_MAX && e.links.every((l) => !!l && typeof l === "object" && !Array.isArray(l));
     default:

@@ -14,6 +14,24 @@ export { outsideRepos, reposOf } from "./state/repos.ts";
 export { LEASE_WAIT_MS, nextIn, placeIn } from "./state/leases.ts";
 export { unnamedAsks, unnamedTasks } from "./state/compact.ts";
 export { leadCheckpointKey } from "./state/lead.ts";
+export {
+  changedSinceApproval,
+  doneWhen,
+  freeAgents,
+  judgesSpec,
+  setAsideBySpec,
+  specLease,
+  specOfTask,
+  specPlanner,
+  specQueue,
+  specStage,
+  specTasks,
+  specTitle,
+  specTitleOf,
+  tickDoneWhen,
+  type DoneWhen,
+  type SpecStage,
+} from "./state/specs.ts";
 export { findRoom, newRoomId } from "./state/rooms.ts";
 export { bareAt, memberNamed, readsAsHandle } from "./state/mentions.ts";
 export { currentState, openRound, parseTaskId, reviewClaimRefusal, reviewMoveRefusal, revisedOut, similarOpenTasks, taskId, titlesLookAlike } from "./state/tasks.ts";
@@ -32,5 +50,7 @@ export {
   type ReviewRound,
   type RoomsFloor,
   type Roster,
+  type Spec,
+  type SpecMark,
   type Task,
 } from "./state/types.ts";

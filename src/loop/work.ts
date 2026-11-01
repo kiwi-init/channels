@@ -1,12 +1,28 @@
 import { inlineText } from "@kiwi/core/membership.ts";
 import { reentryText } from "@kiwi/core/reentry.ts";
-import { openRound, taskId, type ChannelState, type Task } from "@kiwi/core/state.ts";
+import { planningText } from "@kiwi/core/spec-lines.ts";
+import { changedSinceApproval, openRound, setAsideBySpec, specPlanner, specQueue, specStage, taskId, type ChannelState, type Task } from "@kiwi/core/state.ts";
 
-export type Work = { kind: "coding"; task: number } | { kind: "reviewing"; task: number; round: number } | { kind: "answering" };
+export type Work = { kind: "coding"; task: number } | { kind: "reviewing"; task: number; round: number } | { kind: "answering" } | { kind: "planning"; ask: number };
 
 const live = (t: Task | undefined): t is Task => !!t && t.state !== "done" && !t.archived;
 
-const openTasks = (state: ChannelState) => [...state.tasks.values()].filter(live).sort((a, b) => a.id - b.id);
+const openTasks = (state: ChannelState) => [...state.tasks.values()].filter((t) => live(t) && !setAsideBySpec(state, t.id)).sort((a, b) => a.id - b.id);
+
+function openSpecTask(state: ChannelState, me: string, setAside: ReadonlySet<string>): Task | undefined {
+  return openTasks(state).find((t) => {
+    const spec = t.ask === undefined ? undefined : state.specs.get(t.ask);
+    if (!spec?.approved || spec.result || changedSinceApproval(spec)) return false;
+    return !t.owner && t.state === "todo" && !openRound(t) && !setAside.has(taskId(t.id)) && (t.review === undefined || t.review !== me);
+  });
+}
+
+function specToPlan(state: ChannelState, me: string, setAside: ReadonlySet<string>): number | undefined {
+  return specQueue(state).find((s) => {
+    const planner = specPlanner(state, s.ask);
+    return (planner === undefined || planner === me) && !setAside.has(`#${s.ask}'s spec`);
+  })?.ask;
+}
 
 const awaitingVerdict = (t: Task) => !!openRound(t);
 
@@ -31,18 +47,24 @@ export function nextWork(state: ChannelState, me: string, unreadForMe: number, s
   if (review) return review;
   const coding = mine.find((t) => !awaitingVerdict(t)) ?? mine[0];
   if (coding) return { kind: "coding", task: coding.id };
-  return unreadForMe > 0 ? { kind: "answering" } : null;
+  if (unreadForMe > 0) return { kind: "answering" };
+  const planned = specQueue(state).find((s) => specPlanner(state, s.ask) === me);
+  if (planned) return { kind: "planning", ask: planned.ask };
+  const open = openSpecTask(state, me, setAside);
+  if (open) return { kind: "coding", task: open.id };
+  const ask = specToPlan(state, me, setAside);
+  return ask === undefined ? null : { kind: "planning", ask };
 }
 
 export function waitingBehind(work: Work, state: ChannelState, me: string, setAside: ReadonlySet<string> = new Set()): Work[] {
-  const held = work.kind === "answering" ? null : work.task;
+  const held = work.kind === "coding" || work.kind === "reviewing" ? work.task : null;
   const open = openTasks(state).filter((t) => t.id !== held);
   const reviews = open.flatMap((t): Work[] => {
     const round = openRound(t);
     const review: Work | null = round ? { kind: "reviewing", task: t.id, round: round.n } : null;
     return review && owesReview(t, me) && !(t.review === "*" && setAside.has(workName(review))) ? [review] : [];
   });
-  if (work.kind === "answering") return reviews;
+  if (work.kind === "answering" || work.kind === "planning") return reviews;
   const coding = open.filter((t) => t.owner === me && !awaitingVerdict(t)).map((t): Work => ({ kind: "coding", task: t.id }));
   return [...coding, ...reviews];
 }
@@ -70,13 +92,15 @@ export function waitTellsTo(state: ChannelState, me: string): string[] {
 }
 
 export function waitingText(waiting: Work, session: Work, minutes: number, mc = "kiwi"): string {
-  const held = session.kind === "answering" ? "messages" : taskId(session.task);
+  const held = workName(session);
   const free =
     session.kind === "coding"
       ? `approve it, mark it done, or hand it on with \`${mc} task assign ${held} NAME\``
       : session.kind === "reviewing"
         ? `give round ${session.round}'s verdict or move its review to someone else`
-        : "answer what's waiting";
+        : session.kind === "planning"
+          ? `file its tasks and take one`
+          : "answer what's waiting";
   return `${workName(waiting)} has waited ${minutes} minutes behind my ${workName(session)} session, which is still running: my loop starts it only when that work is over. To start ${workName(waiting)} now, ${free}.`;
 }
 
@@ -92,6 +116,10 @@ export function workOver(work: Work, state: ChannelState, me: string, setAside: 
     }
     case "answering":
       return false;
+    case "planning": {
+      const spec = state.specs.get(work.ask);
+      return !spec || specStage(state, spec) !== "queued" || specPlanner(state, work.ask) !== me;
+    }
     default: {
       const never: never = work;
       return never;
@@ -104,7 +132,11 @@ export type Step = { kind: "keep"; work: Work } | { kind: "over" } | { kind: "fr
 export function step(work: Work, state: ChannelState, me: string, freshFor: number | null, setAside: ReadonlySet<string> = new Set()): Step {
   if (work.kind === "answering") {
     const taken = nextWork(state, me, 0, setAside);
-    return taken?.kind === "coding" ? { kind: "fresh", work: taken, why: "took" } : { kind: "keep", work };
+    return taken?.kind === "coding" && state.tasks.get(taken.task)?.owner === me ? { kind: "fresh", work: taken, why: "took" } : { kind: "keep", work };
+  }
+  if (work.kind === "planning" && workOver(work, state, me, setAside)) {
+    const taken = nextWork(state, me, 0, setAside);
+    return taken?.kind === "coding" && state.tasks.get(taken.task)?.owner === me ? { kind: "fresh", work: taken, why: "took" } : { kind: "over" };
   }
   if (workOver(work, state, me, setAside)) return { kind: "over" };
   if (work.kind === "coding" && freshFor === work.task) return { kind: "fresh", work, why: "checkpoint" };
@@ -119,6 +151,8 @@ export function workName(work: Work): string {
       return `${taskId(work.task)} round ${work.round}`;
     case "answering":
       return "messages";
+    case "planning":
+      return `#${work.ask}'s spec`;
     default: {
       const never: never = work;
       return never;
@@ -147,6 +181,11 @@ function focus(work: Work, state: ChannelState, me: string, mc: string): string 
     case "reviewing": {
       const id = taskId(work.task);
       return `This session is for reviewing round ${work.round} of ${id}. Read it with \`${mc} task show ${id}\`, check the work at the round's commit, and give your verdict with \`${mc} task approve ${id} --round ${work.round} "note"\` or \`${mc} task reject ${id} --round ${work.round} "what to fix"\`. Answer messages for you as they come; your own tasks wait for their own session, even if one of them is rejected meanwhile. The session ends when the round closes.`;
+    }
+    case "planning": {
+      const spec = state.specs.get(work.ask);
+      const plan = spec ? planningText(state, spec, mc) : `Spec #${work.ask} is approved and waiting for an agent: read it with \`${mc} spec show ${work.ask}\`.`;
+      return `${plan}\n\nThis session is for planning it. It ends once the spec has tasks and you've taken one with \`${mc} task start T…\`: your task then gets a fresh session of its own. Answer messages for you as they come.`;
     }
     case "answering":
       return `This session is for messages waiting on you. Read them with \`${mc} listen --now --for-me\`. Reply only to a message that asks you something or needs something from you; react with 👍 (\`${mc} react N 👍\`) to one you've only noted, and never post an acknowledgement or thanks. The session ends when you're idle with nothing unread; if you take on a task, end your turn once it's yours, and a fresh session starts for it.`;

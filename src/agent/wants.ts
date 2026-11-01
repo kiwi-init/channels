@@ -1,7 +1,7 @@
 import { personaAnswers } from "@kiwi/core/personality.ts";
 import { isDirectedAt, isForAgent } from "@kiwi/core/client.ts";
 import { GENERAL_ROOM, ignored, type Message } from "@kiwi/core/protocol.ts";
-import { openRound, threadMembers, type ChannelState, type Task } from "@kiwi/core/state.ts";
+import { freeAgents, openRound, threadMembers, type ChannelState, type Task } from "@kiwi/core/state.ts";
 import type { Delivery } from "./shared.ts";
 
 import { mentionsOf } from "@kiwi/core/changes.ts";
@@ -27,6 +27,8 @@ function wantsWhileWaiting(me: string, m: Message, state: ChannelState | null, t
   return isDirectedAt(m, me) || mentionsOf(m.body).has(me.toLowerCase()) || inMyThread || (place?.kind === "task" && place.task === task);
 }
 
+const startsSpec = (m: Message): boolean => m.ev?.op === "spec.approve" || (m.ev?.op === "spec.result" && m.ev.verdict === "back");
+
 export function wants(me: string, m: Message, state: ChannelState | null, d: Delivery = {}): boolean {
   if (m.from === me) return false;
   if (ignored(state?.trust.get(m.seq))) return false;
@@ -40,7 +42,16 @@ export function wants(me: string, m: Message, state: ChannelState | null, d: Del
   const persona = state?.members.get(me)?.persona;
   const addressed = isDirectedAt(m, me) || !!m.to?.includes("*") || !!m.to?.some((t) => t.startsWith("role:") && personaAnswers(persona, t.slice(5)));
   if (m.kind === "event")
-    return addressed || m.ev?.op === "hello" || m.ev?.op === "room.create" || m.ev?.op === "room.rename" || m.ev?.op === "charter.set" || m.ev?.op === "repos.set" || m.ev?.op === "hold.set";
+    return (
+      addressed ||
+      m.ev?.op === "hello" ||
+      m.ev?.op === "room.create" ||
+      m.ev?.op === "room.rename" ||
+      m.ev?.op === "charter.set" ||
+      m.ev?.op === "repos.set" ||
+      m.ev?.op === "hold.set" ||
+      (startsSpec(m) && !!state && !state.rejected.has(m.seq) && freeAgents(state).includes(me))
+    );
   if (d.chat) return true;
   if (mentionsOf(m.body).has(me.toLowerCase())) return true;
   const place = state?.placeOf.get(m.seq);

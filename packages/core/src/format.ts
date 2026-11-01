@@ -28,6 +28,8 @@ import {
   type Task,
 } from "./state.ts";
 import { evidenceOf, prLines, refText, stageOf, stageText } from "./stage.ts";
+import { specTitleOf } from "./state/specs.ts";
+import { specLine } from "./spec-lines.ts";
 import { rulesText } from "./prs.ts";
 import { statusOf, statusWord } from "./status.ts";
 import { isWakeVia, wakesInSession, wakeWords, type WakeVia } from "./wake.ts";
@@ -234,6 +236,16 @@ export function describeEvent(m: Message, state?: ChannelState, nameOf: (handle:
       return ev.why ? `closed #${ev.ask}: ${inlineText(ev.why, 160)}` : `closed #${ev.ask}`;
     case "devices":
       return "updated their list of devices";
+    case "spec.set":
+      return `wrote the spec of #${ev.ask}: ${inlineText(specTitleOf(ev.text) ?? ev.text, 120)}`;
+    case "spec.approve":
+      return `approved the spec of #${ev.ask}: agents start it as soon as one is free`;
+    case "spec.result":
+      return ev.verdict === "accepted"
+        ? `accepted what #${ev.ask}'s spec delivered${note(ev.note)}`
+        : ev.verdict === "back"
+          ? `sent #${ev.ask}'s spec back${note(ev.note)}`
+          : `dropped #${ev.ask}'s spec${note(ev.note)}`;
   }
 }
 
@@ -573,6 +585,12 @@ export function formatStatus({ alias, me, state, online, unread, now = Date.now(
   if (mine.length) {
     out.push("", `your unanswered questions (${mine.length}):`);
     for (const a of mine) out.push(`  #${a.seq} → ${a.to?.join(",") ?? "all"}: ${inlineText(a.body, 140)}`);
+  }
+
+  const specs = [...state.specs.values()].filter((sp) => !sp.result).sort((a, b) => a.ask - b.ask);
+  if (specs.length) {
+    out.push("", `specs (${specs.length} open) — read one with: kiwi spec show N`);
+    for (const sp of specs) out.push(`  ${specLine(state, sp)}`);
   }
 
   const tasks = [...state.tasks.values()];
