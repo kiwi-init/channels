@@ -33,6 +33,12 @@ describe("agents talking among themselves fold into one line for people, and not
     expect(chatterRuns(channel, list).size).toBe(0)
   })
 
+  test("one agent reporting to the room isn't talk between agents, so it stays", () => {
+    const list = [say(1, "win", "B1: measuring"), say(2, "win", "B2: down 38 KB"), say(3, "win", "B3: icons next")]
+    expect(chatterRuns(channel, list).size).toBe(0)
+    expect(chatterRuns(channel, [say(1, "win", "@pixel ready?", { to: ["pixel"] }), say(2, "win", "pushing")]).size).toBe(2)
+  })
+
   test("only rooms fold: a task's thread and a DM show every message", () => {
     const list = [say(1, "win", "a", { where: { kind: "task", task: 3 } }), say(2, "pixel", "b", { where: { kind: "task", task: 3 } })]
     expect(chatterRuns(channel, list).size).toBe(0)

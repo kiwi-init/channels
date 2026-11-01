@@ -39,7 +39,8 @@ export function chatterRuns(channel: Who, list: readonly Message[]): Map<number,
     let end = i
     while (end < list.length && isChatter(channel, list[end]!, bySeq)) end++
     const run = list.slice(i, end)
-    if (run.length >= RUN_MIN) {
+    const between = new Set(run.map((m) => m.from)).size > 1 || run.some((m) => m.to?.some((n) => isAgent(channel, n)))
+    if (run.length >= RUN_MIN && between) {
       const r = { first: run[0]!.seq, run }
       for (const m of run) out.set(m.seq, r)
     }

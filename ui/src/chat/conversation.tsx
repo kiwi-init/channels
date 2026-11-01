@@ -213,14 +213,17 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
   const proposal = general ? channel.proposal : undefined
   const through = compact?.through
   const [earlier, setEarlier] = useState(false)
-  const list = useMemo(() => (through === undefined || earlier ? all : all.filter((m) => m.seq > through)), [all, through, earlier])
+  const unfolded = useMemo(() => (through === undefined || earlier ? all : all.filter((m) => m.seq > through)), [all, through, earlier])
+  const chatter = useMemo(() => (where.kind === "room" ? chatterRuns(channel, unfolded) : new Map<number, ChatterRun>()), [channel, unfolded, where.kind])
+  const [shownChatter, setShownChatter] = useState<ReadonlySet<number>>(() => new Set())
+  const toggleChatter = useCallback((first: number) => setShownChatter((was) => (was.has(first) ? new Set([...was].filter((s) => s !== first)) : new Set([...was, first]))), [])
+  const jumpSeq = jump?.m.seq
+  const talkOpen = useCallback((r: ChatterRun | undefined) => !r || shownChatter.has(r.first) || (jumpSeq !== undefined && r.run.some((x) => x.seq === jumpSeq)), [shownChatter, jumpSeq])
+  const list = useMemo(() => unfolded.filter((m) => talkOpen(chatter.get(m.seq)) || chatter.get(m.seq)?.first === m.seq), [unfolded, chatter, talkOpen])
   const foldAt = through === undefined ? undefined : list.find((m) => m.seq > through)?.seq
   const proposalAt = proposal && list.some((m) => m.seq === proposal.seq) ? proposal.seq : undefined
   const [shownRuns, setShownRuns] = useState<ReadonlySet<number>>(() => new Set())
   const toggleRun = useCallback((first: number) => setShownRuns((was) => (was.has(first) ? new Set([...was].filter((s) => s !== first)) : new Set([...was, first]))), [])
-  const chatter = useMemo(() => (where.kind === "room" ? chatterRuns(channel, list) : new Map<number, ChatterRun>()), [channel, list, where.kind])
-  const [shownChatter, setShownChatter] = useState<ReadonlySet<number>>(() => new Set())
-  const toggleChatter = useCallback((first: number) => setShownChatter((was) => (was.has(first) ? new Set([...was].filter((s) => s !== first)) : new Set([...was, first]))), [])
   const bySeq = useMemo(() => new Map(channel.messages.map((m) => [m.seq, m])), [channel.messages])
   const names = useNames(channel)
   const tasks = useTaskIds(channel)
@@ -438,8 +441,9 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
               const run = leftOutRun(list, i)
               const open = !m.leftOut || shownRuns.has(runFirst(list, i))
               const talk = chatter.get(m.seq)
-              const talkOpen = !talk || shownChatter.has(talk.first) || (!!jump && talk.run.some((x) => x.seq === jump.m.seq))
-              if (talk && talk.first !== m.seq && !talkOpen) return null
+              const talkShown = talkOpen(talk)
+              const prev = list[i - 1]
+              const afterFold = !!prev && !talkOpen(chatter.get(prev.seq))
               return (
                 <Fragment key={m.seq}>
                   {(i === 0 || !sameDay(list[i - 1]?.at ?? 0, m.at)) && (
@@ -463,7 +467,7 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
                     </Suspense>
                   )}
                   {run && <Fold run={run} open={open} onToggle={() => toggleRun(m.seq)} />}
-                  {talk && talk.first === m.seq && <ChatterFold channel={channel} run={talk.run} open={talkOpen} onToggle={() => toggleChatter(talk.first)} />}
+                  {talk && talk.first === m.seq && <ChatterFold channel={channel} run={talk.run} open={talkShown} onToggle={() => toggleChatter(talk.first)} />}
                   {m.seq === proposalAt && proposal ? (
                     <Suspense fallback={null}>
                       <ProposalCard channel={channel} proposal={proposal} names={names} tasks={tasks} onQuote={onQuote} />
@@ -472,11 +476,11 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
                     <EventRun channel={channel} run={events} here={where.kind === "task" ? where.task : null} jump={jump?.m.seq ?? null} />
                   ) : (
                     open &&
-                    talkOpen && (
+                    talkShown && (
                       <MessageRow
                         channel={channel}
                         m={m}
-                        compact={m.seq !== mark && m.seq !== foldAt && compactAt(list, i)}
+                        compact={m.seq !== mark && m.seq !== foldAt && !afterFold && compactAt(list, i)}
                         names={names}
                         tasks={tasks}
                         quote={quoteOf(list, i, bySeq)}
