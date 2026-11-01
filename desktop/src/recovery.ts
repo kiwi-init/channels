@@ -3,6 +3,7 @@ import { readDeviceList, type DeviceLink, type DeviceList } from "@kiwi/core/dev
 import type { Identity } from "@kiwi/core/identity.ts";
 import {
   checkVault,
+  openVault,
   newRecoveryPhrase,
   readRecovery,
   readRecoveryPhrase,
@@ -25,6 +26,7 @@ export interface RecoveryKept {
   version: number;
   owners: string[];
   person?: SealedPerson;
+  proven?: number;
 }
 
 export interface RecoveryHostDeps {
@@ -114,8 +116,19 @@ export function createRecoveryHost(deps: RecoveryHostDeps): RecoveryHost {
     return next;
   };
 
-  const letGo = async (chain: readonly unknown[], recovery: Recovery): Promise<void> => {
-    if (deps.person() && !recovery.pending && typedHere(chain, recovery) && deps.kept()?.person?.rxpk === recovery.rxpk) await deps.letGo();
+  const letGo = async (chain: readonly unknown[], recovery: Recovery, version: number): Promise<void> => {
+    const k = deps.kept();
+    if (deps.person() && !recovery.pending && typedHere(chain, recovery) && k?.person?.rxpk === recovery.rxpk && k.proven === version) await deps.letGo();
+  };
+
+  const proveBack = async (client: AccountClient, devices: DeviceList, version: number, key: Identity, person: Identity): Promise<void> => {
+    const got = await client.vault();
+    const bad = got.vault === null ? "the relay kept none" : await checkVault(got.vault, devices, version);
+    if (bad) throw new Error(`your recovery vault didn't come back as sealed (${bad}), so this app keeps your person key`);
+    const back = got.vault as Vault;
+    const inside = back.version === version ? await openVault(back, key) : null;
+    if (!inside || inside.person.pk !== person.pk || inside.person.sk !== person.sk)
+      throw new Error("the vault on the relay doesn't open to your person key with these words, so this app keeps it: make new words");
   };
 
   const signedIn = async () => {
@@ -159,7 +172,9 @@ export function createRecoveryHost(deps: RecoveryHostDeps): RecoveryHost {
       if (!read.ok) throw new Error(`the new recovery key doesn't hold up: ${read.why}`);
       const done = await seal(session, read.recovery, chain, before.version, link.at, chain);
       held = null;
-      await letGo(chain, read.recovery).catch(() => {
+      await proveBack(session.client, devices, done.version, key, person);
+      deps.keep({ ...done, proven: done.version });
+      await letGo(chain, read.recovery, done.version).catch(() => {
         // The words are saved either way; the next enrollPoll lists the computers and lets the person key go.
       });
       return { ok: true, at: done.at };
@@ -180,8 +195,8 @@ export function createRecoveryHost(deps: RecoveryHostDeps): RecoveryHost {
       const before = await kept(s.client, await list());
       looked = true;
       if (!before.recovery) return;
-      if (!current || !was?.person || was.version !== before.version) await seal(s, before.recovery, before.chain, before.version, before.at ?? now());
-      await letGo(before.chain, before.recovery);
+      const version = !current || !was?.person || was.version !== before.version ? (await seal(s, before.recovery, before.chain, before.version, before.at ?? now())).version : before.version;
+      await letGo(before.chain, before.recovery, version);
     },
   };
 }
