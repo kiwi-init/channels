@@ -4,6 +4,7 @@ import { Dialog, DialogHead, Field } from "~/kit/bits"
 import type { RecoveryState } from "~/model"
 import { useApp } from "~/nav"
 import { Confirm, Row } from "~/settings/controls"
+import { WordsForm } from "~/start/recover"
 
 const SHOT = new URLSearchParams(location.search).get("shot")
 
@@ -34,6 +35,7 @@ export function RecoveryKey({ recovery }: { recovery: RecoveryState }) {
   const { app } = useApp()
   const [step, setStep] = useState<Step | null>(null)
   const [renew, setRenew] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
   const { recoveryWords } = app.actions
 
   useEffect(() => {
@@ -79,6 +81,13 @@ export function RecoveryKey({ recovery }: { recovery: RecoveryState }) {
               </button>
             ))}
         </Row>
+        {recovery.pending && (
+          <Row label={`New words take over ${day(recovery.pending.from)}`} hint={`Made by ${recovery.pending.by}. Until then your current words still work.`}>
+            <button type="button" className="btn is-danger is-small" onClick={() => setCancelling(true)}>
+              Not you? Cancel
+            </button>
+          </Row>
+        )}
       </div>
 
       <Confirm
@@ -158,6 +167,22 @@ export function RecoveryKey({ recovery }: { recovery: RecoveryState }) {
             </form>
           </>
         )}
+      </Dialog>
+
+      <Dialog open={cancelling} onClose={() => setCancelling(false)} label="Cancel the new words" wide>
+        <WordsForm
+          className="set-recover-cancel"
+          title="Cancel with your current words"
+          lede="Type the 24 words you have now, in order, or paste them all into the first box. The new words are dropped, and yours stay."
+          action="Cancel the new words"
+          busyLabel="Cancelling…"
+          onSubmit={async (words) => {
+            const trouble = await app.actions.recoveryCancel(words)
+            if (!trouble) setCancelling(false)
+            return trouble
+          }}
+          onCancel={() => setCancelling(false)}
+        />
       </Dialog>
     </section>
   )

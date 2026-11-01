@@ -664,6 +664,10 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
         return { ok: true }
       },
       recoveryDrop: () => {},
+      recoveryCancel: async () => {
+        setState((s) => (s.account?.recovery ? { ...s, account: { ...s.account, recovery: { at: s.account.recovery.at, here: s.account.recovery.here } } } : s))
+        return null
+      },
       signInWithGithub: () => {
         setState((s) => ({ ...s, signIn: { stage: "sign-in", code: { code: "8F3A-29KD", url: "https://github.com/login/device" }, problem: null } }))
         setTimeout(() => setState((s) => (s.signIn ? { ...s, signIn: s.account ? null : { stage: "signed-in", login: "ojowwalker77" } } : s)), 1500)

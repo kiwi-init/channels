@@ -513,6 +513,7 @@ export interface Device {
 export interface RecoveryState {
   at: number | null
   here: boolean
+  pending?: { from: number; by: string }
 }
 
 export type RecoverySaved = { ok: true } | { ok: false; wrong: number[] }
@@ -667,6 +668,7 @@ export interface Actions {
   recoveryWords(): Promise<string[] | null>
   recoverySave(typed: { at: number; word: string }[]): Promise<RecoverySaved | null>
   recoveryDrop(): void
+  recoveryCancel(words: string): Promise<RecoverTrouble | null>
   enrollBegin(): void
   enrollKeep(): void
   enrollCancel(): void

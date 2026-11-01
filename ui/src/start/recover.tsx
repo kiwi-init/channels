@@ -22,8 +22,23 @@ function completion(typed: string): string | null {
   return RECOVERY_WORDS.find((w) => w.startsWith(t)) ?? null
 }
 
-function Words() {
-  const { app } = useApp()
+export function WordsForm({
+  className,
+  title,
+  lede,
+  action,
+  busyLabel,
+  onSubmit,
+  onCancel,
+}: {
+  className: string
+  title: string
+  lede: string
+  action: string
+  busyLabel: string
+  onSubmit: (words: string) => Promise<RecoverTrouble | null>
+  onCancel: () => void
+}) {
   const [words, setWords] = useState<string[]>(() => Array.from({ length: COUNT }, () => ""))
   const [trouble, setTrouble] = useState<RecoverTrouble | null>(null)
   const [busy, setBusy] = useState(false)
@@ -67,7 +82,7 @@ function Words() {
   const submit = () => {
     if (busy || filled < COUNT) return
     setBusy(true)
-    void app.actions.recoverOpen(words.map((w) => w.trim()).join(" ")).then((t) => {
+    void onSubmit(words.map((w) => w.trim()).join(" ")).then((t) => {
       setBusy(false)
       setTrouble(t)
       if (t?.word !== undefined) boxes.current[t.word]?.focus()
@@ -76,18 +91,15 @@ function Words() {
 
   return (
     <form
-      className="start-first-box start-recover"
+      className={className}
       noValidate
       onSubmit={(e) => {
         e.preventDefault()
         submit()
       }}
     >
-      <span className="start-mark">
-        <img src="/icon.svg" width={40} height={40} alt="" />
-      </span>
-      <h1 className="start-word">Use your recovery key</h1>
-      <p className="start-lede">Type the 24 words you wrote down, in order, or paste them all into the first box.</p>
+      <h1 className="start-word">{title}</h1>
+      <p className="start-lede">{lede}</p>
       <ol className="recover-words">
         {words.map((w, i) => {
           const hit = completion(w)
@@ -129,14 +141,34 @@ function Words() {
         {trouble ? `${trouble.why[0]!.toUpperCase()}${trouble.why.slice(1)}.` : filled < COUNT ? `${filled} of ${COUNT} words` : "All 24 words in."}
       </p>
       <div className="recover-foot">
-        <button type="button" className="btn is-quiet" onClick={() => app.actions.enrollCancel()}>
+        <button type="button" className="btn is-quiet" onClick={onCancel}>
           Cancel
         </button>
         <button type="submit" className="btn is-primary" disabled={busy || filled < COUNT}>
-          {busy ? "Opening…" : "Recover"}
+          {busy ? busyLabel : action}
         </button>
       </div>
     </form>
+  )
+}
+
+function Words() {
+  const { app } = useApp()
+  return (
+    <div className="start-first-box start-recover">
+      <span className="start-mark">
+        <img src="/icon.svg" width={40} height={40} alt="" />
+      </span>
+      <WordsForm
+        className="recover-form"
+        title="Use your recovery key"
+        lede="Type the 24 words you wrote down, in order, or paste them all into the first box."
+        action="Recover"
+        busyLabel="Opening…"
+        onSubmit={(words) => app.actions.recoverOpen(words)}
+        onCancel={() => app.actions.enrollCancel()}
+      />
+    </div>
   )
 }
 
