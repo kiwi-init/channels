@@ -17,7 +17,7 @@ export function askHeadOf(m: Pick<Message, "seq" | "from" | "body">, at: number)
   };
 }
 
-function askOfMessage(look: Lookup, seq: number): number | undefined {
+export function askOfMessage(look: Lookup, seq: number): number | undefined {
   const root = look.threadOf.get(seq) ?? seq;
   for (const said of root === seq ? [seq] : [seq, root]) {
     const place = look.placeOf.get(said);

@@ -3,7 +3,21 @@ import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identi
 import { wellFormed, type Event, type Message } from "@kiwi/core/protocol.ts";
 import { formatSpec, formatSpecs, planningText } from "@kiwi/core/spec-lines.ts";
 import { describeEvent, formatStatus } from "@kiwi/core/format.ts";
-import { changedSinceApproval, doneWhen, fold, freeAgents, specLease, specQueue, specStage, specTitle, tickDoneWhen, type ChannelState, type FoldBase, type Roster } from "@kiwi/core/state.ts";
+import {
+  changedSinceApproval,
+  doneWhen,
+  fold,
+  freeAgents,
+  specLease,
+  specQueue,
+  specStage,
+  specTitle,
+  taskSpecRefusal,
+  tickDoneWhen,
+  type ChannelState,
+  type FoldBase,
+  type Roster,
+} from "@kiwi/core/state.ts";
 import { firstPrompt, nextWork, step, workName, workOver } from "../src/loop/work.ts";
 
 const T0 = 1_700_000_000_000;
@@ -31,6 +45,8 @@ const add = (from: string, title: string, re: number) => ev(from, { op: "task.ad
 const claim = (from: string, task: number) => ev(from, { op: "task.claim", task });
 const done = (from: string, task: number) => ev(from, { op: "task.update", task, state: "done" });
 const lease = (from: string, name: string) => ev(from, { op: "lease.take", name, ttl: 1800 });
+const only = (from: string, on: boolean) => ev(from, { op: "specs.only.set", on });
+const follow = (from: string, title: string, parent: number) => ev(from, { op: "task.add", title, from: parent });
 
 const tickBox = (text: string, words: string): string => {
   const r = tickDoneWhen(text, words);
@@ -249,5 +265,61 @@ describe("Done when", () => {
     expect(tickDoneWhen(SPEC, "zzz")).toEqual({ why: "no box in the spec says “zzz”" });
     expect(tickDoneWhen("- [ ] a b\n- [ ] a c", "a")).toEqual({ why: "2 boxes say “a”: use more of the line" });
     expect(tickDoneWhen("- [x] a", "a", false)).toEqual({ text: "- [ ] a" });
+  });
+});
+
+describe("Tasks only from approved specs: once the owner turns it on, every task is a step of an approved spec", () => {
+  test("before the switch, a task goes under any person's message; only the owner turns it on", async () => {
+    const log = await signedLog([say("ana", "export please"), add("dev", "writer", 1), only("ana", true), only("jow", true), add("dev", "csv", 1)]);
+    const s = fold(log, roster, T0);
+    expect(s.tasks.has(2)).toBe(true);
+    expect(s.rejected.get(3)).toContain("only the owner");
+    expect(s.specsOnly).toBe(4);
+    expect(s.rejected.get(5)).toContain("#1 has no spec yet");
+    expect(s.tasks.has(5)).toBe(false);
+  });
+
+  test("a draft holds no task, an approved spec takes them, its tasks' follow-ups too, and a change or a verdict stops new ones", async () => {
+    const log = await signedLog([
+      only("jow", true),
+      say("ana", "export please"),
+      write("lead", 2, SPEC),
+      add("dev", "too early", 2),
+      approve("ana", 2, 3),
+      add("dev", "writer", 2),
+      follow("dev", "fix the writer", 6),
+      write("dev", 2, `${SPEC}\n- and PDFs`),
+      add("dev", "pdf", 2),
+      approve("ana", 2, 8),
+      add("dev", "pdf", 2),
+      judge("ana", 2, "accepted"),
+      add("dev", "one more", 2),
+      ev("ana", { op: "task.add", title: "mine, with no message" }),
+    ]);
+    const s = fold(log, roster, T0);
+    expect(s.rejected.get(4)).toContain("isn't approved yet");
+    expect(s.tasks.get(6)?.ask).toBe(2);
+    expect(s.tasks.get(7)?.ask).toBe(2);
+    expect(s.rejected.get(9)).toContain("changed since it was approved");
+    expect(s.tasks.has(11)).toBe(true);
+    expect(s.rejected.get(13)).toContain("is accepted: no new work");
+    expect(s.rejected.get(14)).toContain("a task is a step of a spec");
+    expect([...s.tasks.keys()]).toEqual([6, 7, 11]);
+  });
+
+  test("the CLI and the app refuse it before sending, with the fold's words", async () => {
+    const log = await signedLog([only("jow", true), say("ana", "export please"), write("lead", 2, SPEC)]);
+    const s = fold(log, roster, T0);
+    expect(taskSpecRefusal(s, { re: 2 })).toBe("#2's spec isn't approved yet: a person approves it, then its tasks are filed");
+    expect(taskSpecRefusal(fold(log.slice(1), roster, T0), { re: 1 })).toBeNull();
+    expect(describeEvent(log[0]!, s)).toContain("turned on Tasks only from approved specs");
+  });
+
+  test("the switch lives through the cached base", async () => {
+    const log = await signedLog([only("jow", true), say("ana", "export please"), add("dev", "writer", 2)]);
+    let base: FoldBase | null = null;
+    fold(log.slice(0, 2), roster, T0, null, null, null, (b) => void (base = b));
+    expect(base!.specsOnly).toBe(1);
+    expect(fold(log, roster, T0, base).rejected.get(3)).toContain("#2 has no spec yet");
   });
 });

@@ -26,7 +26,6 @@ const TermDrawer = lazy(() => import("~/term/drawer"))
 const TallPage = lazy(() => import("~/shell/tall"))
 const Waiting = later(() => import("~/start/waiting").then((m) => m.Waiting))
 const SearchBox = later(() => import("~/chat/search-box").then((m) => m.SearchBox))
-const Board = later(() => import("~/tasks/board").then((m) => m.Board))
 const Lanes = later(() => import("~/tasks/lanes").then((m) => m.Lanes))
 const GithubView = later(() => import("~/github/view").then((m) => m.GithubView))
 const SpecsView = later(() => import("~/specs/view").then((m) => m.SpecsView))
@@ -119,7 +118,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
           : `T${nav.where.task}`
 
   const news = drawerNews(channel)
-  const paged = tall && nav.tab !== "needs" && nav.tab !== "github" && nav.tab !== "specs"
+  const paged = tall && nav.tab !== "needs" && nav.tab !== "github"
 
   return (
     <div className={cx("chan", nav.panel && !paged && "has-panel", drawer && "is-drawer", hidden && "is-bare")} style={{ "--panel-w": `${panel.width}px` } as CSSProperties}>
@@ -152,17 +151,16 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
           <button type="button" aria-pressed={nav.tab === "chat" || paged} onClick={() => go({ to: "tab", tab: "chat" })}>
             {here}
           </button>
-          {(specs.length > 0 || nav.tab === "specs" || !!channel.lead) && (
-            <button type="button" aria-pressed={nav.tab === "specs"} onClick={() => go({ to: "spec", ask: null })} title={specsNeed ? `${specsNeed} waiting on you` : `${specs.length} open specs`}>
+          {!tall && (
+            <button
+              type="button"
+              aria-pressed={nav.tab === "specs" || nav.tab === "tasks"}
+              onClick={() => go({ to: "spec", ask: null })}
+              title={specsNeed ? `${specsNeed} waiting on you` : `${specs.length} open specs, ${tasks} open tasks`}
+            >
               <Icon name="spec" size={14} />
               Specs <Count n={specs.length} />
               {specsNeed > 0 && <span className="tab-red is-decide" role="img" aria-label="waiting on you" />}
-            </button>
-          )}
-          {!tall && (
-            <button type="button" aria-pressed={nav.tab === "tasks"} onClick={() => go({ to: "tab", tab: "tasks" })}>
-              <Icon name="tasks" size={14} />
-              Tasks <Count n={tasks} />
             </button>
           )}
           {!tall && (agents || nav.tab === "agents") && (
@@ -218,7 +216,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
               <TallPage
                 channel={channel}
                 jump={jump}
-                work={<Board channel={channel} needs={needs} tall />}
+                work={<SpecsView channel={channel} tall />}
                 open={
                   nav.panel ? (
                     <div className="panel">
@@ -227,13 +225,11 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
                   ) : null
                 }
               />
-            ) : nav.tab === "tasks" ? (
-              <Board channel={channel} needs={needs} />
             ) : nav.tab === "agents" ? (
               <Lanes channel={channel} />
             ) : nav.tab === "github" ? (
               <GithubView channel={channel} />
-            ) : nav.tab === "specs" ? (
+            ) : nav.tab === "specs" || nav.tab === "tasks" ? (
               <SpecsView channel={channel} />
             ) : nav.tab === "needs" ? (
               <NeedsYou channel={channel} onJump={setJump} />

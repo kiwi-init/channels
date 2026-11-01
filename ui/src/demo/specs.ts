@@ -342,6 +342,7 @@ export function withSpecs(c: Channel, changed = false): Channel {
     messages: merged(c.messages, MESSAGES),
     tasks: [...c.tasks, ...TASKS],
     specs: changed ? drifted(SPECS) : SPECS,
+    specsOnly: true,
     free: [],
     asks: [...c.asks, { kind: "spec", id: "spec:150:approve", at: m(6), ask: 150, why: "approve" }, { kind: "spec", id: "spec:170:result", at: m(38), ask: 170, why: "result" }],
   }

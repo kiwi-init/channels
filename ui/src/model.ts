@@ -219,7 +219,7 @@ export interface SpecAsk {
   why: "approve" | "changed" | "result"
 }
 
-export type TaskGroupHead =
+type TaskGroupHead =
   | { kind: "ask"; id: number; by: string; words: string; goal?: string; mayName: boolean }
   | { kind: "unfiled" }
   | { kind: "next"; name?: string }
@@ -499,6 +499,7 @@ export interface Channel {
   tasks: Task[]
   taskGroups: TaskGroup[]
   specs?: Spec[]
+  specsOnly?: true
   free?: string[]
   asks: Ask[]
   connection: "connecting" | "live" | "reconnecting"
@@ -672,7 +673,7 @@ export interface Actions {
   answerStep(code: string, id: string, reply: StepReply): void
   answerJoin(code: string, id: string, letIn: boolean, choice?: JoinChoice): void
   approveTask(code: string, task: number, approve: boolean, why?: string): void
-  addTask(code: string, title: string, owner?: string): void
+  addTask(code: string, ask: number, title: string): void
   setTaskStatus(code: string, task: number, status: TaskStatus): void
   cancelTask(code: string, task: number, why: string): void
   assignTask(code: string, task: number, to: string, why: string): void
@@ -682,6 +683,7 @@ export interface Actions {
   writeSpec(code: string, ask: number, text: string): void
   approveSpec(code: string, ask: number, v: number): void
   judgeSpec(code: string, ask: number, verdict: "accepted" | "back" | "dropped", note?: string): void
+  setSpecsOnly(code: string, on: boolean): void
   setRole(code: string, name: string, role: string | null): void
   removeMember(code: string, name: string): void
   setPersona(code: string, name: string, persona: string | null): void

@@ -62,7 +62,7 @@ import {
   type Message,
 } from "@kiwi/core/protocol.ts";
 import { inlineText } from "@kiwi/core/membership.ts";
-import { askRefusal, chooseThread, parseTaskId, similarOpenTasks, taskId, wentTo } from "@kiwi/core/state.ts";
+import { askRefusal, chooseThread, parseTaskId, similarOpenTasks, taskId, taskSpecRefusal, wentTo } from "@kiwi/core/state.ts";
 import { detectCard } from "./card.ts";
 import { VERSION } from "./version.ts";
 
@@ -685,6 +685,8 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
     tool(({ title, detail, owner, review, issue, from, ask, goal }) =>
       Effect.gen(function* () {
         const anchors = { ...(from !== undefined ? { from } : {}), ...(ask !== undefined ? { re: ask } : {}) };
+        const unspecced = taskSpecRefusal((yield* s.state()).state, anchors);
+        if (unspecced) return yield* new Rejected(unspecced);
         if (issue !== undefined) {
           const made = yield* s.taskFromIssue(issue, { title, detail, owner, review, ...anchors });
           const { state: after } = yield* s.state();

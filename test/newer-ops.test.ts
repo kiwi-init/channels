@@ -94,6 +94,7 @@ const OPS: Record<Event["op"], true> = {
   "spec.set": true,
   "spec.approve": true,
   "spec.result": true,
+  "specs.only.set": true,
   devices: true,
   "task.first": true,
   "hold.set": true,
@@ -203,6 +204,7 @@ const OPS_AT: Record<number, readonly string[]> = {
     "spec.set",
     "spec.approve",
     "spec.result",
+    "specs.only.set",
   ],
 };
 

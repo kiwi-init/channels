@@ -4,16 +4,21 @@ import "~/styles/specs.css"
 
 import { useState, type ReactNode } from "react"
 
-import { Avatar, cx, Empty } from "~/kit/bits"
+import { Avatar, cx, Empty, Loading } from "~/kit/bits"
 import { Track } from "~/kit/glide"
 import { Icon } from "~/kit/icons"
 import { later } from "~/kit/later"
 import { ago } from "~/kit/time"
-import type { Channel, Spec } from "~/model"
+import type { Channel, Spec, Task } from "~/model"
 import { useApp } from "~/nav"
 import { nickname } from "~/names"
 import { SpecMark } from "~/specs/card"
-import { boxesOf, faceOf, freeCount, lastMove, needsYou, stageLine, workersOf } from "~/specs/read"
+import { openAsks } from "~/needs/open"
+import { boxesOf, faceOf, freeCount, lastMove, needsYou, stageLine, tasksOf, workersOf } from "~/specs/read"
+import { NowCard } from "~/tasks/now"
+import { TaskRow } from "~/tasks/row"
+
+const LOOSE_SHOWN = 5
 
 const SpecPage = later(() => import("~/specs/page").then((m) => m.SpecPage))
 const NewSpec = later(() => import("~/specs/new").then((m) => m.NewSpec))
@@ -59,22 +64,26 @@ function groupsOf(channel: Channel, shown: Shown): Group[] {
   ].filter((g) => g.rows.length)
 }
 
-export function SpecsView({ channel }: { channel: Channel }) {
+export function SpecsView({ channel, tall }: { channel: Channel; tall?: boolean }) {
   const { nav } = useApp()
   const spec = nav.spec !== undefined ? channel.specs?.find((s) => s.ask === nav.spec) : undefined
   if (spec) return <SpecPage channel={channel} spec={spec} />
-  return <SpecList channel={channel} />
+  return <SpecList channel={channel} tall={!!tall} />
 }
 
-function SpecList({ channel }: { channel: Channel }) {
+function SpecList({ channel, tall }: { channel: Channel; tall: boolean }) {
   const [shown, setShown] = useState<Shown>("open")
   const [making, setMaking] = useState(false)
   const specs = channel.specs ?? []
   const open = specs.filter((s) => !s.result).length
   const groups = groupsOf(channel, shown)
+  const inSpecs = new Set(specs.flatMap((s) => s.tasks))
+  const loose = channel.tasks.filter((t) => !inSpecs.has(t.id) && !t.archived && t.status !== "done")
+  const live = channel.tasks.some((t) => !t.archived)
   return (
     <div className="board">
       <div className="board-list gh-list specs-list">
+        {live && !tall && <NowCard channel={channel} needs={openAsks(channel).length} />}
         <div className="gh-top">
           <Track className="seg" role="group" aria-label="Open or done">
             <button type="button" aria-pressed={shown === "open"} onClick={() => setShown("open")}>
@@ -90,8 +99,12 @@ function SpecList({ channel }: { channel: Channel }) {
             New spec
           </button>
         </div>
-        {groups.length ? (
-          groups.map((g) => <GroupCard key={g.key} channel={channel} group={g} />)
+        {groups.map((g) => (
+          <GroupCard key={g.key} channel={channel} group={g} />
+        ))}
+        {shown === "open" && loose.length > 0 && <Loose channel={channel} tasks={loose} specsOnly={!!channel.specsOnly} />}
+        {groups.length || (shown === "open" && loose.length) ? null : channel.loading ? (
+          <Loading />
         ) : (
           <Empty title={shown === "open" ? "No open specs." : "Nothing finished yet."} icon="spec">
             {shown === "open"
@@ -124,6 +137,69 @@ function GroupCard({ channel, group }: { channel: Channel; group: Group }) {
         ))}
       </ul>
     </section>
+  )
+}
+
+function Loose({ channel, tasks, specsOnly }: { channel: Channel; tasks: Task[]; specsOnly: boolean }) {
+  const { nav } = useApp()
+  const [all, setAll] = useState(false)
+  const on = nav.panel?.kind === "task" ? nav.panel.task : null
+  const rows = all ? tasks : tasks.slice(0, LOOSE_SHOWN)
+  return (
+    <section className="board-group gh-group is-loose" aria-label="Not in a spec">
+      <div className="board-head">
+        <h2 className="board-h">
+          <span className="board-label">Not in a spec</span>
+          <span className="board-n num">{tasks.length}</span>
+        </h2>
+        <p className="board-sub">
+          <span>
+            {specsOnly
+              ? "From before specs. Every new task is a step of an approved spec."
+              : "Tasks filed before this channel worked from specs. Turn on Tasks only from approved specs in the channel's settings."}
+          </span>
+        </p>
+      </div>
+      <ul className="board-rows">
+        {rows.map((t) => (
+          <li key={t.id}>
+            <TaskRow channel={channel} t={t} on={t.id === on} />
+          </li>
+        ))}
+      </ul>
+      {tasks.length > LOOSE_SHOWN && (
+        <button type="button" className="board-more" onClick={() => setAll(!all)}>
+          {all ? "Show fewer" : `Show all ${tasks.length}`}
+        </button>
+      )}
+    </section>
+  )
+}
+
+function SpecTasks({ channel, spec }: { channel: Channel; spec: Spec }) {
+  const { nav } = useApp()
+  const on = nav.panel?.kind === "task" ? nav.panel.task : null
+  const tasks = tasksOf(channel, spec).filter((t) => !t.archived && !t.cancelled)
+  const open = tasks.filter((t) => t.status !== "done")
+  const done = tasks.length - open.length
+  if (!tasks.length || spec.result) return null
+  return (
+    <div className="spec-steps">
+      {open.length > 0 && (
+        <ul className="board-rows">
+          {open.map((t) => (
+            <li key={t.id}>
+              <TaskRow channel={channel} t={t} on={t.id === on} />
+            </li>
+          ))}
+        </ul>
+      )}
+      {done > 0 && (
+        <p className="spec-steps-done num">
+          {done} of {tasks.length} {tasks.length === 1 ? "task" : "tasks"} done
+        </p>
+      )}
+    </div>
   )
 }
 
@@ -161,6 +237,7 @@ function SpecRow({ channel, spec }: { channel: Channel; spec: Spec }) {
           <span className={cx("spec-word", line.tone)}>{line.word}</span>
         </span>
       </button>
+      <SpecTasks channel={channel} spec={spec} />
     </li>
   )
 }

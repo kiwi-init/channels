@@ -24,6 +24,18 @@ export async function newChannel(page: Page, title: string): Promise<string> {
   return code;
 }
 
+export async function approveSpec(page: Page, timeoutMs = 60000): Promise<void> {
+  const views = page.getByRole("navigation", { name: "Views" });
+  const needs = views.getByRole("button", { name: /^Needs you/ });
+  await needs.waitFor({ timeout: timeoutMs });
+  await needs.click();
+  const approve = page.locator("article.spec-need").getByRole("button", { name: "Approve", exact: true }).first();
+  await approve.waitFor({ timeout: timeoutMs });
+  await approve.click();
+  await approve.waitFor({ state: "detached", timeout: timeoutMs });
+  await views.getByRole("button", { name: /general/ }).click();
+}
+
 export async function letIn(page: Page, waiting: () => boolean, timeoutMs = 120000): Promise<void> {
   const views = page.getByRole("navigation", { name: "Views" });
   const needs = views.getByRole("button", { name: /^Needs you/ });

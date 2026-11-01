@@ -28,6 +28,7 @@ const board = (tasks: Task[]): ChannelState =>
     openAsks: [],
     askHeads: new Map(),
     specs: new Map(),
+    specsOnly: null,
     threadOf: new Map(),
     threadPeople: new Map(),
     lead: null,

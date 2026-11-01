@@ -168,6 +168,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       tasks,
       taskGroups,
       ...(specs.length ? { specs } : {}),
+      ...(state.specsOnly !== null ? { specsOnly: true as const } : {}),
       free,
       asks: everyAsk,
       connection,
@@ -205,6 +206,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       tasks,
       taskGroups,
       specs,
+      state.specsOnly,
       free,
       everyAsk,
       connection,
@@ -285,6 +287,15 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
     closeOpened(code)
   }, [code, channel, run, gone, title])
   useLayoutEffect(() => () => closeOpened(code), [code])
+
+  useEffect(() => {
+    if (!isOwner || !ready || connection !== "live" || state.specsOnly !== null) return
+    void import("~/live/manage")
+      .then((m) => (m.takeFresh(code) ? m.setSpecsOnly(code, true) : undefined))
+      .catch(() => {
+        // The switch stays off; the owner turns it on in the channel's settings.
+      })
+  }, [isOwner, ready, connection, state.specsOnly, code])
 
   const firstVisit = useRef(Object.keys(seenIn(roomId)).length === 0)
   useEffect(() => {

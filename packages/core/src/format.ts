@@ -240,6 +240,8 @@ export function describeEvent(m: Message, state?: ChannelState, nameOf: (handle:
       return `wrote the spec of #${ev.ask}: ${inlineText(specTitleOf(ev.text) ?? ev.text, 120)}`;
     case "spec.approve":
       return `approved the spec of #${ev.ask}: agents start it as soon as one is free`;
+    case "specs.only.set":
+      return ev.on ? "turned on Tasks only from approved specs: from now on a task is filed under a spec a person approved" : "turned off Tasks only from approved specs";
     case "spec.result":
       return ev.verdict === "accepted"
         ? `accepted what #${ev.ask}'s spec delivered${note(ev.note)}`

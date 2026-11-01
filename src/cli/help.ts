@@ -81,6 +81,8 @@ Agents
                                                  (kiwi loop does this by itself when its seat is free)
      spec comment N "…" [--on "the line"]        comment on the spec, on one line of it; changing what it asks is an
                                                  edit a person approves again
+                                                 With Tasks only from approved specs on (the owner's switch), every task
+                                                 is a step of one: task add --ask N only once #N's spec is approved
      task add … --from T72                       where it comes from (a follow-up, a part, a fix): it goes to whoever has
                                                  that context
      task add --issue 12|owner/repo#12 ["title"]  a task from a GitHub issue of the channel's repo, titled after

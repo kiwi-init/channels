@@ -1,6 +1,6 @@
 import { handleFor } from "@kiwi/core/membership.ts"
 import { ROBOT_FACES, TASK_TITLE_MAX_LENGTH } from "@kiwi/core/protocol.ts"
-import { taskId } from "@kiwi/core/state.ts"
+import { taskId, taskSpecRefusal } from "@kiwi/core/state.ts"
 import { assignTask, type TaskSend } from "@kiwi/channel/task-actions.ts"
 import { tokenForCreate } from "@kiwi/app/auth.ts"
 import { askToJoin, createChannel, inviteInfo } from "@kiwi/channel/join.ts"
@@ -97,6 +97,7 @@ async function newChannel(title: string): Promise<string> {
     if (isSignInGone(err) && bridge()) return make(true)
     throw err
   })
+  void manage().then((x) => x.freshChannel(m.code))
   await linkOf(m)
     .setIcon({ kind: "robot", robot: ROBOT_FACES[Math.floor(Math.random() * ROBOT_FACES.length)] ?? "blue" })
     .catch(() => {
@@ -187,13 +188,16 @@ export function makeActions(): Actions {
     answerStep: (code, id, reply) => attempt("Not answered", async () => (await rare()).answerStep(code, id, reply)),
     answerJoin: (code, id, yes, choice) => attempt(yes ? "Couldn't let them in" : "Couldn't turn them away", async () => (await manage()).answerJoin(code, id, yes, choice)),
     approveTask: (code, id, approve, why) => attempt(approve ? "Not approved" : "Not sent back", async () => (await rare()).approveTask(code, id, approve, why)),
-    addTask: (code, title, taskOwner) =>
+    addTask: (code, ask, title) =>
       attempt("Task not added", async () => {
         const run = need(code)
         const clean = title.trim().slice(0, TASK_TITLE_MAX_LENGTH)
         if (!clean) throw new Error("a task needs a title")
-        await event(run, `task: ${clean}`, { op: "task.add", title: clean, ...(taskOwner ? { owner: taskOwner } : {}) }, taskOwner ? [taskOwner] : undefined)
+        const why = taskSpecRefusal(run.state, { re: ask })
+        if (why) throw new Error(why)
+        await run.send(`task: ${clean}`, { kind: "event", ev: { op: "task.add", title: clean }, re: [ask] })
       }),
+    setSpecsOnly: (code, on) => attempt("Not changed", async () => (await manage()).setSpecsOnly(code, on)),
     setTaskStatus: (code, id, status) => attempt("Status not changed", async () => (await rare()).setTaskStatus(code, id, status)),
     cancelTask: (code, id, why) => attempt("Not cancelled", async () => (await rare()).cancelTask(code, id, why)),
     assignTask: (code, id, to, why) =>

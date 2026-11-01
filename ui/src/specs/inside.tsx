@@ -4,6 +4,7 @@ import { PrChip } from "~/chat/cards"
 import { compactAt, useNames, useTaskIds } from "~/chat/conversation"
 import { MessageRow } from "~/chat/message"
 import { Avatar, cx, Dot, Empty, statusWord } from "~/kit/bits"
+import { Icon } from "~/kit/icons"
 import { ago, clock } from "~/kit/time"
 import type { Channel, Spec } from "~/model"
 import { useAct } from "~/nav"
@@ -98,8 +99,9 @@ export function Inside({ channel, spec }: { channel: Channel; spec: Spec }) {
             ))}
           </ul>
         ) : (
-          <p className="inside-none">{spec.stage === "draft" ? "No work yet: it starts once someone approves the spec." : "No tasks yet: the first free agent splits the spec into tasks."}</p>
+          <p className="inside-none">{spec.stage === "draft" ? "No work yet: tasks come once a person approves the spec." : "No tasks yet: the first free agent splits the spec into tasks."}</p>
         )}
+        {spec.approved && !spec.result && !spec.changed && <AddStep channel={channel} spec={spec} />}
       </section>
 
       <section className="inside-story" aria-label="What happened">
@@ -141,5 +143,28 @@ export function Inside({ channel, spec }: { channel: Channel; spec: Spec }) {
           ))}
       </section>
     </div>
+  )
+}
+
+function AddStep({ channel, spec }: { channel: Channel; spec: Spec }) {
+  const { actions } = useAct()
+  const [title, setTitle] = useState("")
+  return (
+    <form
+      className="board-new inside-add"
+      onSubmit={(e) => {
+        e.preventDefault()
+        const text = title.trim()
+        if (!text) return
+        actions.addTask(channel.code, spec.ask, text)
+        setTitle("")
+      }}
+    >
+      <Icon name="plus" />
+      <input className="board-new-input" value={title} aria-label="Add a task to this spec" placeholder="Add a task to this spec" onChange={(e) => setTitle(e.target.value)} />
+      <button type="submit" className="btn is-small" disabled={!title.trim()}>
+        Add
+      </button>
+    </form>
   )
 }

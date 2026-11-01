@@ -1,4 +1,5 @@
 import type { Message, SpecVerdict } from "../protocol.ts";
+import { askOfMessage } from "./asks.ts";
 import { answersDecisions, isPerson, sameAuthor } from "./people.ts";
 import { openRound } from "./tasks.ts";
 import type { AskHead, ChannelState, Member, Spec, Task } from "./types.ts";
@@ -11,6 +12,22 @@ export type SpecStage = "draft" | "queued" | "working" | "delivered" | "accepted
 type SpecEvent = { op: "spec.set"; ask: number; text: string } | { op: "spec.approve"; ask: number; v: number } | { op: "spec.result"; ask: number; verdict: SpecVerdict; note?: string };
 
 export const specLease = (ask: number): string => `spec/${ask}`;
+
+export function specGate(specs: ReadonlyMap<number, Spec>, ask: number | undefined): string | null {
+  if (ask === undefined) return "a task is a step of a spec: file it under the person's message whose approved spec it serves (--ask N)";
+  const spec = specs.get(ask);
+  if (!spec) return `#${ask} has no spec yet: write one (kiwi spec write ${ask} --file spec.md), and a person approves it before any task is filed`;
+  if (spec.result) return `#${ask}'s spec is ${spec.result.verdict === "accepted" ? "accepted" : "dropped"}: no new work goes under it`;
+  if (!spec.approved) return `#${ask}'s spec isn't approved yet: a person approves it, then its tasks are filed`;
+  if (changedSinceApproval(spec)) return `#${ask}'s spec changed since it was approved: a person approves the change before new work goes under it`;
+  return null;
+}
+
+export function taskSpecRefusal(state: Pick<ChannelState, "specs" | "specsOnly" | "askHeads" | "threadOf" | "placeOf" | "tasks">, anchors: { re?: number; from?: number }): string | null {
+  if (state.specsOnly === null) return null;
+  const ask = anchors.re !== undefined ? askOfMessage(state, anchors.re) : anchors.from !== undefined ? state.tasks.get(anchors.from)?.ask : undefined;
+  return specGate(state.specs, ask);
+}
 
 export function judgesSpec(members: ReadonlyMap<string, Member>, head: Pick<AskHead, "by">, name: string): boolean {
   const m = members.get(name);

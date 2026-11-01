@@ -477,18 +477,30 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
               : t
           ),
         })),
-      addTask: (code, title, owner) =>
+      addTask: (code, ask, title) =>
         edit(code, (c) => {
           const id = Math.max(0, ...c.tasks.map((t) => t.id)) + 1
-          const unfiled = c.taskGroups.some((g) => g.head.kind === "unfiled")
           return {
             ...c,
-            taskGroups: unfiled
-              ? c.taskGroups.map((g) => (g.head.kind === "unfiled" ? { ...g, tasks: [id, ...g.tasks] } : g))
-              : [...c.taskGroups, { key: "unfiled", head: { kind: "unfiled" }, tasks: [id] }],
-            tasks: [...c.tasks, { id, title, owner, status: "todo", createdBy: c.you, createdAt: Date.now(), updatedAt: Date.now(), notes: [], rounds: [], history: [], archived: false }],
+            specs: c.specs?.map((sp) => (sp.ask === ask ? { ...sp, tasks: [...sp.tasks, id], stage: sp.stage === "queued" ? ("working" as const) : sp.stage, queue: undefined } : sp)),
+            tasks: [
+              ...c.tasks,
+              {
+                id,
+                title,
+                status: "todo",
+                createdBy: c.you,
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                notes: [],
+                rounds: [],
+                history: [{ seq: id, by: c.you, at: Date.now(), what: "created" }],
+                archived: false,
+              },
+            ],
           }
         }),
+      setSpecsOnly: (code, on) => edit(code, (c) => ({ ...c, specsOnly: on ? (true as const) : undefined })),
       setTaskStatus: (code, id, status) => editTask(code, id, (t) => ({ ...t, status, updatedAt: Date.now() })),
       cancelTask: (code, id, why) =>
         edit(code, (c, seq) => ({

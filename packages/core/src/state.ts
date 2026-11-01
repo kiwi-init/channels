@@ -20,6 +20,7 @@ export {
   freeAgents,
   judgesSpec,
   setAsideBySpec,
+  taskSpecRefusal,
   specLease,
   specPlanner,
   specQueue,

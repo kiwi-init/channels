@@ -217,6 +217,7 @@ export interface ChannelState {
   openAsks: Message[];
   askHeads: Map<number, AskHead>;
   specs: Map<number, Spec>;
+  specsOnly: number | null;
   threadOf: Map<number, number>;
   threadPeople: Map<number, Set<string>>;
   lead: string | null;
@@ -324,6 +325,7 @@ export interface FoldBase {
   asks: Message[];
   askHeads?: AskHead[];
   specs?: Spec[];
+  specsOnly?: number | null;
   answered: [number, string[]][];
   threadOf: [number, number][];
   threadPeople: [number, string[]][];

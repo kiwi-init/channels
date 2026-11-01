@@ -90,7 +90,7 @@ async function seed(alias: string, prefix: string): Promise<void> {
     ask = String(said.find((m) => m.body?.startsWith("Plan the "))?.seq ?? "");
     if (!ask) await new Promise((r) => setTimeout(r, 300));
   }
-  await kiwi(alias, ["-c", alias, "--as", "atlas", "task", "add", `${prefix} board: the first screen of ${alias}`, "--ask", ask]);
+  await kiwi(alias, ["-c", alias, "--as", "atlas", "spec", "write", ask, `# ${prefix} board\n\n## Done when\n- [ ] the first screen of ${alias} shows`]);
   for (let i = 0; i < MESSAGES; i += 10) await Promise.all(Array.from({ length: Math.min(10, MESSAGES - i) }, (_, j) => send(`${prefix}${i + j}: ${texts[(i + j) % texts.length]}`)));
 }
 

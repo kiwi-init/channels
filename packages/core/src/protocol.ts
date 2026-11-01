@@ -318,7 +318,8 @@ export type Event =
   | { op: "member.back"; member: string; pk: string }
   | { op: "spec.set"; ask: number; text: string }
   | { op: "spec.approve"; ask: number; v: number }
-  | { op: "spec.result"; ask: number; verdict: SpecVerdict; note?: string };
+  | { op: "spec.result"; ask: number; verdict: SpecVerdict; note?: string }
+  | { op: "specs.only.set"; on: boolean };
 
 export type SpecVerdict = "accepted" | "back" | "dropped";
 
@@ -1088,6 +1089,8 @@ function eventCheck(ev: unknown): boolean | null {
       return n(e.ask) && (e.ask as number) > 0 && str(e.text, MAX_SPEC) && (e.text as string).trim().length > 0;
     case "spec.approve":
       return n(e.ask) && (e.ask as number) > 0 && n(e.v) && (e.v as number) > 0;
+    case "specs.only.set":
+      return typeof e.on === "boolean";
     case "spec.result":
       return (
         n(e.ask) &&
