@@ -45,6 +45,9 @@ import {
   gone,
   keysFor,
   markRead,
+  getNote,
+  putNote,
+  NOTES_PER_MINUTE,
   MESSAGES_PER_MINUTE,
   missingFingerprint,
   msgFrame,
@@ -203,6 +206,7 @@ type RoomRoute = Route<Guard, Who, Effects, Services>;
 const ID = "([0-9a-f-]{36})";
 
 const BLOB = /^\/blobs\/([0-9a-f]{64})$/;
+const NOTE = /^\/note\/([A-Za-z0-9_-]{43})$/;
 
 /** A handler that only reads the room. */
 const withRoom = <A>(f: (db: RoomDb) => A) => Effect.map(RoomStore, f);
@@ -376,6 +380,29 @@ const routes: RoomRoute[] = [
         const b = yield* json<{ seq?: unknown }>();
         const mark = yield* markRead(me, b.seq);
         return { data: { seq: mark?.seq ?? null }, fx: mark ? { readers: [frame({ t: "read", ...mark })] } : undefined };
+      }),
+  },
+  {
+    method: "GET",
+    path: NOTE,
+    guard: "member",
+    run: (_, m) =>
+      Effect.gen(function* () {
+        const note = yield* getNote(m[1]!);
+        if (!note) return yield* new NotFound({ message: "no note yet" });
+        return { data: note };
+      }),
+  },
+  {
+    method: "PUT",
+    path: NOTE,
+    guard: "member",
+    run: ({ me }, m) =>
+      Effect.gen(function* () {
+        const db = yield* RoomStore;
+        if (!allow(`note:${db.roomId}:${me}`, NOTES_PER_MINUTE)) return yield* new TooMany({ message: "too many note writes; one every few seconds is plenty" });
+        const b = yield* json<{ box?: unknown; prev?: unknown }>();
+        return { data: yield* putNote(m[1]!, me, b) };
       }),
   },
   {

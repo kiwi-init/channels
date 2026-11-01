@@ -345,6 +345,22 @@
   background: var(--wash-2);
 }
 
+.rail-menu.is-at-pointer {
+  z-index: 60;
+  outline: none;
+}
+
+.menu-group {
+  display: grid;
+  gap: 2px;
+}
+
+.menu-group + .menu-group {
+  margin-top: 2px;
+  padding-top: 4px;
+  border-top: 1px solid var(--wash-2);
+}
+
 .rail-menu-name label {
   display: grid;
   gap: 4px;
@@ -679,6 +695,29 @@
 
 .side-card-text {
   line-height: 1.35;
+}
+
+.side-card-pct {
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.side-card-bar {
+  grid-column: 1 / -1;
+  display: block;
+  block-size: 3px;
+  margin-inline-end: 4px;
+  border-radius: 999px;
+  background: var(--line-2);
+  overflow: hidden;
+}
+
+.side-card-fill {
+  display: block;
+  block-size: 100%;
+  border-radius: inherit;
+  background: var(--doing);
+  transition: inline-size var(--slow) var(--ease);
 }
 
 .side-row,

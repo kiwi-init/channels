@@ -16,9 +16,7 @@ import {
   Download01Icon,
   Folder01Icon,
   GitPullRequestIcon,
-  HashtagIcon,
   Home01Icon,
-  InboxCheckIcon,
   InboxIcon,
   InformationCircleIcon,
   Link01Icon,
@@ -26,8 +24,6 @@ import {
   LinkSquare02Icon,
   MinusSignIcon,
   Moon02Icon,
-  Notification01Icon,
-  PaintBoardIcon,
   Search01Icon,
   Settings02Icon,
   SidebarLeftIcon,
@@ -41,7 +37,7 @@ import {
 } from "@hugeicons/core-free-icons"
 import { createElement } from "react"
 
-type Glyph = readonly (readonly [string, { readonly [key: string]: string | number }])[]
+export type Glyph = readonly (readonly [string, { readonly [key: string]: string | number }])[]
 
 const GLYPHS = {
   send: ArrowUp02Icon,
@@ -63,7 +59,6 @@ const GLYPHS = {
   copy: Copy01Icon,
   folder: Folder01Icon,
   pr: GitPullRequestIcon,
-  hash: HashtagIcon,
   lock: LockIcon,
   home: Home01Icon,
   at: AtIcon,
@@ -77,10 +72,7 @@ const GLYPHS = {
   tasks: TaskDone01Icon,
   agent: BotIcon,
   needs: UserQuestion01Icon,
-  clear: InboxCheckIcon,
   account: UserCircleIcon,
-  paint: PaintBoardIcon,
-  bell: Notification01Icon,
   devices: ComputerPhoneSyncIcon,
   info: InformationCircleIcon,
 } satisfies Record<string, Glyph>

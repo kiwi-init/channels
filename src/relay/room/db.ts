@@ -81,13 +81,14 @@ interface Warm {
   members: Map<string, { active: boolean; readOnly: boolean } | null>;
   reads: Map<string, number>;
   blobs: boolean | null;
+  notes: boolean | null;
 }
 
 const warmRooms = new WeakMap<Sql, Warm>();
 
 type Revised = "roster" | "info";
 
-const coldRoom = (): Warm => ({ exists: null, meta: new Map(), head: null, members: new Map(), reads: new Map(), blobs: null });
+const coldRoom = (): Warm => ({ exists: null, meta: new Map(), head: null, members: new Map(), reads: new Map(), blobs: null, notes: null });
 
 export function forgetRoom(sql: Sql): void {
   warmRooms.delete(sql);
@@ -122,7 +123,7 @@ export class RoomDb {
   }
 
   init(): void {
-    warmRooms.set(this.sql, { ...coldRoom(), exists: true, head: 0, blobs: false });
+    warmRooms.set(this.sql, { ...coldRoom(), exists: true, head: 0, blobs: false, notes: false });
     this.sql.run("CREATE TABLE meta (k TEXT PRIMARY KEY, v TEXT NOT NULL)");
     this.sql.run("CREATE TABLE msgs (seq INTEGER PRIMARY KEY, ts INTEGER NOT NULL, iv TEXT NOT NULL, ct TEXT NOT NULL, e INTEGER NOT NULL)");
     this.sql.run(
@@ -288,13 +289,6 @@ export class RoomDb {
     return this.sql.all<{ n: number }>(`SELECT COALESCE(SUM(${CT_CHARS}), 0) AS n FROM msgs WHERE seq <= ?`, seq)[0]?.n ?? 0;
   }
 
-  dropThrough(seq: number): number {
-    if (seq <= 0) return 0;
-    const freed = this.bytesThrough(seq);
-    if (freed) this.sql.run("DELETE FROM msgs WHERE seq <= ?", seq);
-    return freed;
-  }
-
   dropOldest(need: number, upTo = Number.MAX_SAFE_INTEGER): number {
     let freed = 0;
     let through = 0;
@@ -308,6 +302,37 @@ export class RoomDb {
       if (batch.length < DROP_BATCH) break;
     }
     if (through) this.sql.run("DELETE FROM msgs WHERE seq <= ?", through);
+    return freed;
+  }
+
+  private hasNotes(): boolean {
+    const w = this.warm;
+    w.notes ??= this.sql.all("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'notes'").length > 0;
+    return w.notes;
+  }
+
+  note(id: string): { box: string; version: number; writer: string } | null {
+    if (!this.hasNotes()) return null;
+    return this.sql.all<{ box: string; version: number; writer: string }>("SELECT box, version, writer FROM notes WHERE id = ?", id)[0] ?? null;
+  }
+
+  notesBy(writer: string): number {
+    if (!this.hasNotes()) return 0;
+    return this.sql.all<{ n: number }>("SELECT COUNT(*) AS n FROM notes WHERE writer = ?", writer)[0]?.n ?? 0;
+  }
+
+  putNote(id: string, writer: string, version: number, box: string, at: number): void {
+    if (!this.hasNotes()) {
+      this.sql.run("CREATE TABLE IF NOT EXISTS notes (id TEXT PRIMARY KEY, writer TEXT NOT NULL, version INTEGER NOT NULL, box TEXT NOT NULL, at INTEGER NOT NULL)");
+      this.warm.notes = true;
+    }
+    this.sql.run("INSERT OR REPLACE INTO notes (id, writer, version, box, at) VALUES (?, ?, ?, ?, ?)", id, writer, version, box, at);
+  }
+
+  dropNotesBefore(at: number): number {
+    if (!this.hasNotes()) return 0;
+    const freed = this.sql.all<{ n: number }>("SELECT COALESCE(SUM(LENGTH(box)), 0) AS n FROM notes WHERE at < ?", at)[0]?.n ?? 0;
+    if (freed) this.sql.run("DELETE FROM notes WHERE at < ?", at);
     return freed;
   }
 

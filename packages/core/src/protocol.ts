@@ -82,9 +82,6 @@ export const MAX_IMAGES = 8;
 /** Largest ephemeral (unstored) frame. */
 export const MAX_EPH_LENGTH = 4 * 1024;
 
-/** How many messages a room keeps before pruning the oldest. */
-export const ROOM_RETENTION = 10_000;
-
 /** Most messages returned by one history read or replayed on connect. */
 export const PAGE_LIMIT = 1_000;
 
@@ -789,7 +786,7 @@ export function asSent(m: Message): Omit<Message, "newer" | "ev"> & { ev?: Event
 
 export const outgrown = (base: { folded?: number; skipped?: true }): boolean => base.skipped === true && (base.folded ?? 0) < EVENT_OPS_VERSION;
 
-export const FOLD_RULES = 12;
+export const FOLD_RULES = 14;
 
 export const olderRules = (base: { rules?: number }): boolean => (base.rules ?? 0) < FOLD_RULES;
 

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import type { Person } from "~/model"
-import { roomPeople, seatRoot } from "~/names"
+import { devicesOf, onePerPerson, roomPeople, seatRoot } from "~/names"
 
 const person = (name: string, more: Partial<Person> = {}): Person => ({ name, kind: "human", owner: false, you: false, presence: "online", ...more })
 
@@ -18,5 +18,20 @@ describe("a private room's picker shows each person once, whatever devices they'
     const channel = { you: "jow-2", people: people.map((p) => (p.name === "jow-2" ? { ...p, you: true } : p)) }
     expect(roomPeople(channel).map((p) => p.name)).toEqual(["tia", "ana"])
     expect(seatRoot(channel, channel.you)).toBe("jow")
+  })
+})
+
+describe("one person, however many devices (T1386)", () => {
+  test("a device's seat is listed once, under its person", () => {
+    const people = [person("ana"), person("ana-2", { seatOf: "ana" }), person("bo")]
+    expect(onePerPerson(people).map((p) => p.name)).toEqual(["ana", "bo"])
+    expect(devicesOf(people, { name: "ana" }).map((p) => p.name)).toEqual(["ana", "ana-2"])
+    expect(devicesOf(people, { name: "bo" })).toEqual([])
+  })
+
+  test("the person is you, and online, if any of their devices is", () => {
+    const [ana] = onePerPerson([person("ana"), person("ana-2", { seatOf: "ana", you: true, presence: "online" })])
+    expect(ana?.you).toBe(true)
+    expect(ana?.presence).toBe("online")
   })
 })

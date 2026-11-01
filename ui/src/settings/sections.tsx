@@ -320,10 +320,10 @@ export function UpdatesSection() {
                 {update.version} is out
               </span>
             }
-            hint="Channels downloads it, then closes and opens again on the new version."
+            hint={update.blocked ? "This copy can't replace itself where it is, so the release page has the new one." : "Channels downloads it, then closes and opens again on the new version."}
           >
             <button type="button" className="btn is-primary is-small" onClick={app.actions.installUpdate}>
-              Download and restart
+              {update.blocked ? "Get it" : "Download and restart"}
             </button>
           </Row>
         ) : update ? (
@@ -331,7 +331,8 @@ export function UpdatesSection() {
             label={
               <span className="set-state tone-doing">
                 <span className="set-state-dot is-doing" aria-hidden="true" />
-                Downloading {update.version}…
+                Downloading {update.version}
+                {update.progress ? ` · ${Math.round(update.progress * 100)}%` : "…"}
               </span>
             }
             hint="You can keep working. We ask before restarting."

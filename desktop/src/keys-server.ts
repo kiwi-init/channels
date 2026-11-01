@@ -52,6 +52,8 @@ export function serveKeys(k: Keyring, push: (p: KeysPush) => void): KeysSession 
         const rows = fromWire(r.rows);
         return k.openRows(text(r.code), Array.isArray(rows) ? rows : []);
       }
+      case "olderRows":
+        return k.olderRows(text(r.code), Number(r.before), Number(r.limit));
       case "keep": {
         const state = fromWire(r.state);
         if (!state || typeof state !== "object" || Array.isArray(state)) throw new Error("bad request");

@@ -234,6 +234,8 @@ export type Scenario =
   | "updates"
   | "update-ready"
   | "update-available"
+  | "update-downloading"
+  | "update-blocked"
   | "enroll"
   | "enroll-digits"
   | "devices"
@@ -284,6 +286,10 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
     return { account: { ...DEMO_ACCOUNT, uiUpdate: { version: "dev-1542" }, update: { version: "2026.10.7", ready: true, state: "ready" } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
   if (scenario === "update-ready") return { account: { ...DEMO_ACCOUNT, update: { version: "2026.10.7", ready: true } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
   if (scenario === "link-stuck") return { account: { ...DEMO_ACCOUNT, enrollError: "this app isn't in your device list any more" }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
+  if (scenario === "update-downloading")
+    return { account: { ...DEMO_ACCOUNT, update: { version: "2026.10.8", ready: false, state: "downloading", progress: 0.42 } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
+  if (scenario === "update-blocked")
+    return { account: { ...DEMO_ACCOUNT, update: { version: "2026.10.8", ready: false, state: "available", blocked: true } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
   if (scenario === "update-available") return { account: { ...DEMO_ACCOUNT, update: { version: "2026.10.8", ready: false, state: "available" } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
   if (scenario === "enroll" || scenario === "enroll-digits")
     return {
@@ -362,6 +368,12 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       },
       retry: (code, seq) => edit(code, (c) => ({ ...c, messages: c.messages.map((m) => (m.seq === seq ? { ...m, failed: undefined } : m)) })),
       loadImage: () => {},
+      markRead: (code, where) =>
+        edit(code, (c) => ({
+          ...c,
+          rooms: where.kind === "room" ? c.rooms.map((r) => (r.id === where.room ? { ...r, unread: 0, mentions: 0 } : r)) : c.rooms,
+          directs: where.kind === "dm" ? c.directs.map((d) => (d.with === where.with ? { ...d, unread: 0 } : d)) : c.directs,
+        })),
       discard: (code, seq) => edit(code, (c) => ({ ...c, messages: c.messages.filter((m) => m.seq !== seq) })),
       react: (code, seq, emoji) =>
         edit(code, (c) => ({

@@ -119,6 +119,7 @@ export const CHANNEL_CALLS = [
   "setRepos",
   "makeRoom",
   "makeDm",
+  "syncMarks",
   "changeRoom",
   "pruneRooms",
   "icon",
@@ -158,10 +159,16 @@ export interface ChannelOps {
   forget(code: string): Promise<void>;
   presence(code: string, p: PresenceFields): Promise<void>;
   openRows(code: string, rows: CachedRow[]): Promise<(Message | Unread | null)[]>;
+  olderRows(code: string, before: number, limit: number): Promise<OlderRows>;
   keep(code: string, state: object): Promise<CachedKept | null>;
   openKept(code: string, sealed: CachedKept): Promise<unknown>;
   follow(code: string, since: number, on: (e: FollowEvent) => void, opts?: FollowOptions): () => void;
   nudge(): void;
+}
+
+export interface OlderRows {
+  rows: CachedRow[];
+  done: boolean;
 }
 
 export interface FollowOptions {
@@ -182,6 +189,7 @@ export type KeysAsk =
   | { op: "forget"; code: string }
   | { op: "presence"; code: string; p: Wire }
   | { op: "openRows"; code: string; rows: Wire }
+  | { op: "olderRows"; code: string; before: number; limit: number }
   | { op: "keep"; code: string; state: Wire }
   | { op: "openKept"; code: string; sealed: Wire }
   | { op: "follow"; code: string; since: number; watch?: boolean }
@@ -427,7 +435,7 @@ export interface KiwiBridge {
   getUpdate(): Promise<UpdateView | null>;
   onUpdate(cb: (u: UpdateView) => void): () => void;
   /** Restart into the downloaded update. */
-  installUpdate(): Promise<void>;
+  installUpdate(): Promise<boolean>;
   checkUpdate(): Promise<UpdateCheckView>;
   notify(title: string, body: string, link?: string): Promise<void>;
   openExternal(url: string): Promise<void>;
@@ -506,6 +514,7 @@ export interface UpdateView {
   /** The release's page. */
   url: string;
   blocked?: true;
+  progress?: number;
 }
 
 export type UpdateCheckView = UpdateView | { state: "current"; version: string } | { state: "failed" };
