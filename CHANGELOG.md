@@ -2,6 +2,20 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 2026.10.18 — 2026-11-01
+
+- **Old edits and deletes are accepted however the fold started (T1784)** ([#1436](https://github.com/kiwi-init/channels/pull/1436))
+- **CI: the dead-pane launch test gives a slow runner time (T1856)** ([#1440](https://github.com/kiwi-init/channels/pull/1440))
+- **Private rooms: a member can leave, and anyone still in can seal them out (T1768)** ([#1441](https://github.com/kiwi-init/channels/pull/1441))
+- **Recovery: a new desktop recovers with the 24 words (T825)** ([#1276](https://github.com/kiwi-init/channels/pull/1276))
+- **Full history, PR 2: main folds the archive in a worker and keeps a sealed search index (T977)** ([#1433](https://github.com/kiwi-init/channels/pull/1433))
+- **Launch: an agent that dies with no exit status isn't reported as started (T1874)** ([#1442](https://github.com/kiwi-init/channels/pull/1442))
+- **Sidebar: keep a room hidden through new messages (T1768)** ([#1439](https://github.com/kiwi-init/channels/pull/1439))
+- **Recovery: the first desktop lets go of the person key (T899)** ([#1282](https://github.com/kiwi-init/channels/pull/1282))
+- **Agent managers: a power given before a channel's snapshot counts too (T1656)** ([#1444](https://github.com/kiwi-init/channels/pull/1444))
+- **Since you left: a modal that opens once when you come back to a channel, with what happened while you were away (T1605)** ([#1437](https://github.com/kiwi-init/channels/pull/1437))
+- **No automatic backfill: older history comes from the relay only when asked (T977)** ([#1445](https://github.com/kiwi-init/channels/pull/1445))
+
 ## 2026.10.17 — 2026-11-01
 
 - **Right-click menus on messages, links, images, people, rooms and DMs (T974)** ([#1406](https://github.com/kiwi-init/channels/pull/1406))
