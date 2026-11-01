@@ -72,6 +72,14 @@ export interface Person {
   left?: boolean
 }
 
+export interface Check {
+  name: string
+  state: "pass" | "fail" | "running" | "waiting" | "skipped"
+  word: string
+  required?: boolean
+  url?: string
+}
+
 export interface PullRequest {
   repo: string
   number: number
@@ -80,9 +88,28 @@ export interface PullRequest {
   state: "open" | "draft" | "merged" | "closed"
   checks: "pass" | "fail" | "running" | "none"
   ticks?: { passed: number; running: number; failed: readonly string[] }
+  list?: readonly Check[]
   mergedAt?: number
   additions?: number
   deletions?: number
+  files?: number
+  branch?: string
+  by?: string
+  at?: number
+  task?: number
+  release?: string
+}
+
+export interface Issue {
+  repo: string
+  number: number
+  title: string
+  url: string
+  state: "open" | "closed"
+  reason?: string
+  by?: string
+  at: number
+  task?: number
 }
 
 interface TaskNote {
@@ -419,6 +446,8 @@ export interface Channel {
   newMembers?: "read" | "write"
   newPowers?: Powers
   repos: string[]
+  prs?: PullRequest[]
+  issues?: Issue[]
   githubWrite?: boolean
   branchPrefix?: string
   rooms: Room[]

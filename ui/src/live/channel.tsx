@@ -17,7 +17,7 @@ import { useAskChime } from "~/live/alerts"
 import { useNewMembers, useNewPowers } from "~/live/defaults"
 import { kept } from "~/live/keep"
 import { changeUnsent, nextUnsentKey, unsentIn } from "~/live/unsent"
-import { asksOf, directsOf, groupsOf, leftOutOf, messagesOf, formerOf, nextOf, peopleOf, roomsOf, tasksOf, theirsOf, type Pending } from "~/live/map"
+import { asksOf, directsOf, groupsOf, issuesOf, leftOutOf, messagesOf, formerOf, nextOf, peopleOf, prsOf, roomsOf, tasksOf, theirsOf, type Pending } from "~/live/map"
 import { iconUrl } from "~/live/icon"
 import { usePinsHere } from "~/live/pins"
 import { usePublishFace } from "~/live/face"
@@ -124,6 +124,8 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
 
   const facts = useMemo(() => [...state.facts.values()].sort((a, b) => a.key.localeCompare(b.key)).map((f) => ({ key: f.key, value: f.value, by: f.by, at: f.ts })), [state.facts])
   const next = nextOf(state)
+  const prs = useMemo(() => prsOf(state), [state])
+  const issues = useMemo(() => issuesOf(state), [state])
   const mergedAt = useMemo(() => [...state.github.prs.values()].flatMap((p) => (p.state === "merged" ? [p.at] : [])), [state.github.prs])
 
   const trusted = !isOwner && fullyTrusted(state.members.get(me))
@@ -147,6 +149,8 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       newMembers,
       newPowers,
       repos: state.repos,
+      prs,
+      issues,
       ...(state.githubWrite !== null ? { githubWrite: true } : {}),
       ...(state.branchPrefix ? { branchPrefix: state.branchPrefix } : {}),
       rooms,
@@ -180,6 +184,8 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       newMembers,
       newPowers,
       state.repos,
+      prs,
+      issues,
       state.githubWrite,
       state.branchPrefix,
       rooms,

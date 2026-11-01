@@ -5,7 +5,7 @@ import type { Card, Event } from "@kiwi/core/protocol.ts"
 import { permissionAnswer } from "@kiwi/core/permission.ts"
 import { describeEvent, proofLabel } from "@kiwi/core/format.ts"
 import { memberLoad, showsLoad } from "@kiwi/core/load.ts"
-import { checksOf, FAILED, prLinks, taskPr } from "@kiwi/core/prs.ts"
+import { checksOf, FAILED, prLinks, taskOfBranch, taskPr } from "@kiwi/core/prs.ts"
 import { stageOf } from "@kiwi/core/stage.ts"
 import { editable, GENERAL_ROOM, ignored, isQuiet, isRasterMime, isOverlay, type Message as Wire } from "@kiwi/core/protocol.ts"
 import { rootOf } from "@kiwi/core/room-rules.ts"
@@ -30,12 +30,13 @@ import {
   prChecks,
   prKey,
   releaseOf,
+  rulesOf,
   sameAuthor,
   tasksAwaitingPeople,
   type ChannelState,
   type Task as CoreTask,
 } from "@kiwi/core/state.ts"
-import type { GithubPr } from "@kiwi/core/state/github.ts"
+import type { GithubCheck, GithubIssue, GithubPr } from "@kiwi/core/state/github.ts"
 import { decisionLabel } from "@kiwi/app/asks.ts"
 import { handoffLabel } from "@kiwi/app/handoff.ts"
 import { permissionCode, permissionNotes, permissionTitle, visibleText } from "@kiwi/app/permission-view.ts"
@@ -48,11 +49,13 @@ import { howHere } from "@kiwi/channel/presence.ts"
 import type {
   Activity,
   Ask,
+  Check,
   Color,
   Direct,
   Harness,
   Image,
   ImageSpot,
+  Issue,
   JoinAsk,
   Load,
   Message,
@@ -306,12 +309,41 @@ function eventTask(m: Wire): number | undefined {
   return "task" in ev && typeof ev.task === "number" ? ev.task : undefined
 }
 
+const FAIL_WORDS: Readonly<Record<string, string>> = { failure: "failed", timed_out: "timed out", cancelled: "cancelled", action_required: "needs action", startup_failure: "didn't start" }
+const QUEUED = new Set(["queued", "waiting", "pending", "requested"])
+const CHECK_ORDER: Record<Check["state"], number> = { fail: 0, running: 1, waiting: 2, pass: 3, skipped: 4 }
+
+function checkOf(c: GithubCheck, required: boolean): Check {
+  const base = { name: c.name, ...(required ? { required: true } : {}), ...(c.url ? { url: c.url } : {}) }
+  if (!c.conclusion) return QUEUED.has(c.status ?? "") ? { ...base, state: "waiting", word: "queued" } : { ...base, state: "running", word: "running" }
+  if (c.conclusion === "success") return { ...base, state: "pass", word: "passed" }
+  if (FAILED.has(c.conclusion)) return { ...base, state: "fail", word: FAIL_WORDS[c.conclusion] ?? "failed" }
+  return { ...base, state: "skipped", word: c.conclusion.replace(/_/g, " ") }
+}
+
+function checkList(state: ChannelState, pr: GithubPr): Check[] {
+  const ran = prChecks(state.github, pr)
+  const required = new Set(rulesOf(state.github, pr.repo)?.required ?? [])
+  const list = ran.map((c) => checkOf(c, required.has(c.name)))
+  const seen = new Set(ran.map((c) => c.name))
+  for (const name of required) if (!seen.has(name)) list.push({ name, state: "waiting", word: "not started", required: true })
+  return list.sort((a, b) => CHECK_ORDER[a.state] - CHECK_ORDER[b.state] || a.name.localeCompare(b.name))
+}
+
+function taskOfPr(state: ChannelState, pr: GithubPr): number | undefined {
+  const id = taskOfBranch(pr.branch, state.branchPrefix)
+  return id !== null && state.tasks.has(id) ? id : undefined
+}
+
 function prOf(state: ChannelState, pr: GithubPr | { repo: string; number: number; url: string }): PullRequest {
   const real = "state" in pr ? pr : state.github.prs.get(prKey(pr.repo, pr.number))
   const checks = real ? prChecks(state.github, real) : []
   const failed = checks.some((c) => !!c.conclusion && FAILED.has(c.conclusion))
   const running = checks.some((c) => c.conclusion === undefined)
   const ticks = real ? checksOf(state, real) : undefined
+  const list = real ? checkList(state, real) : []
+  const task = real ? taskOfPr(state, real) : undefined
+  const shipped = real ? releaseOf(state.github, real) : undefined
   return {
     repo: pr.repo,
     number: pr.number,
@@ -320,10 +352,43 @@ function prOf(state: ChannelState, pr: GithubPr | { repo: string; number: number
     state: real?.state ?? "open",
     checks: !checks.length ? "none" : failed ? "fail" : running ? "running" : "pass",
     ...(ticks ? { ticks: { passed: ticks.passed, running: ticks.running, failed: ticks.failed } } : {}),
+    ...(list.length ? { list } : {}),
     ...(real?.state === "merged" ? { mergedAt: real.at } : {}),
     ...(real?.additions !== undefined ? { additions: real.additions } : {}),
     ...(real?.deletions !== undefined ? { deletions: real.deletions } : {}),
+    ...(real?.files !== undefined ? { files: real.files } : {}),
+    ...(real?.branch ? { branch: real.branch } : {}),
+    ...(real?.by ? { by: real.by } : {}),
+    ...(real ? { at: real.at } : {}),
+    ...(task !== undefined ? { task } : {}),
+    ...(shipped ? { release: versionName(shipped.tag) } : {}),
   }
+}
+
+const OPEN_FIRST = <T extends { state: string; at?: number }>(a: T, b: T): number => Number(b.state === "open") - Number(a.state === "open") || (b.at ?? 0) - (a.at ?? 0)
+
+export function prsOf(state: ChannelState): PullRequest[] {
+  return [...state.github.prs.values()].map((p) => prOf(state, p)).sort(OPEN_FIRST)
+}
+
+function issueView(i: GithubIssue, task: number | undefined): Issue {
+  return {
+    repo: i.repo,
+    number: i.number,
+    title: i.title ?? `${i.repo}#${i.number}`,
+    url: i.url ?? `https://github.com/${i.repo}/issues/${i.number}`,
+    state: i.state,
+    at: i.at,
+    ...(i.reason ? { reason: i.reason } : {}),
+    ...(i.by ? { by: i.by } : {}),
+    ...(task !== undefined ? { task } : {}),
+  }
+}
+
+export function issuesOf(state: ChannelState): Issue[] {
+  const taskOf = new Map<string, number>()
+  for (const t of state.tasks.values()) if (t.issue && !taskOf.has(prKey(t.issue.repo, t.issue.number))) taskOf.set(prKey(t.issue.repo, t.issue.number), t.id)
+  return [...state.github.issues.values()].map((i) => issueView(i, taskOf.get(prKey(i.repo, i.number)))).sort(OPEN_FIRST)
 }
 
 export interface Pending {
