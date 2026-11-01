@@ -508,7 +508,7 @@ describe("an agent that stops as it starts", () => {
     mkdirSync(join(dir, "tmux-home"), { recursive: true });
     const hosted = new HostedTmux(join(dir, "tmux-home"));
     try {
-      const r = await launchAgent({ harness: "claude", folder, code, nick: "lead" }, { PATH: `${bins}:/usr/bin:/bin`, hosted, config: {} });
+      const r = await launchAgent({ harness: "claude", folder, code, nick: "lead" }, { PATH: `${bins}:/usr/bin:/bin`, hosted, config: {}, watch: { startMs: 30_000 } });
       expect(r).toMatchObject({ ok: false, why: "failed" });
       if (r.ok) return;
       expect(r.detail.split("\n")).toEqual(["Claude Code stopped as it started (exit 1):", said]);
