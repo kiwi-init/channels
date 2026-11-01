@@ -7,7 +7,7 @@ import { hostname } from "node:os";
 import { join } from "node:path";
 import { home, writePrivate } from "./config.ts";
 import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
-import { claimDevice, listedComputer, readDeviceList, type DeviceClaim, type DeviceLink } from "@kiwi/core/devices.ts";
+import { claimDevice, isNewerList, listedComputer, readDeviceList, type DeviceClaim, type DeviceLink } from "@kiwi/core/devices.ts";
 import { claimComputer, type ComputerClaim, type MachineCert } from "@kiwi/core/person.ts";
 
 export interface EnrolledDevice {
@@ -93,7 +93,7 @@ async function takeNow(links: unknown): Promise<"longer" | "revoked" | null> {
     return "longer";
   }
   const kept = await readDeviceList(m.device.links);
-  if (kept.ok && read.list.version <= kept.list.version) return null;
+  if (kept.ok && !isNewerList(read.list, kept.list)) return null;
   if (read.list.revoked.includes(m.identity.pk)) {
     const next: MachineFile = { ...m };
     delete next.device;

@@ -299,13 +299,12 @@ For each phone:
 2. Re-key: a new person key and a new member key in every channel it joined. This is the one time
    "rejoin with a new member key" is needed (#524).
 
-The re-key cascades:
+The re-key cascades (the re-root, section 6, T827):
 
-- A new person key orphans every `kp1` `MachineCert` v1, and the `person` field in your member
-  records.
-  - Your computers are re-certified in the new list.
-  - Records are owner-signed, so in channels you don't own, the owner's app re-signs yours when it
-    sees the hand-over.
+- A new person key orphans every `kp1` `MachineCert` v1. The person's first key stays their name: the
+  `person` field in member records and the account keep it, so records need no re-signing.
+  - Your computers carry over as listed computers in the re-rooted list; an old cert alone counts for
+    nothing once an owner has seen the re-root, and the owner's app cuts the agents it vouched for.
 - **Which hand-over wins.** The hand-over link is signed by the old person key, which the phone also
   holds. A thief could therefore sign a competing one.
   - A hand-over must also be signed by the **recovery key** (section 6), which a phone never holds.
@@ -340,6 +339,20 @@ For when every app is gone, or a thief revoked your other devices first. The rec
   vault must be version kept + 1, signed by the person key or a current approving device, and at most
   512 KB. Links and vaults from revoked devices are refused.
 - In the code (T693, T823): `packages/core/src/recovery.ts`, `src/relay/account.ts`.
+- **Re-root** (T827), when the person key itself may be stolen: a `reroot {root, keep[]}` link in the
+  device list, signed by the new person key, with the recovery key's signature over it (`rsig`) and
+  the recovery chain it was checked against. From that link on:
+  - `list.person` stays the person's name; `list.root` is the key that speaks for them. The old key
+    signs no more links, recovery links or vaults, and machine asks and the relay's computer routes
+    refuse it.
+  - Every device not in `keep` is revoked. The owner's app cuts those devices, and the agents of
+    computers only an old `kp1` cert vouched for; join claims by the old key or its certs stop
+    counting.
+  - A list with more re-roots beats a longer one with fewer, so a fork the old key grows can't win.
+  - The relay takes a re-root only with its own time and the exact recovery chain it keeps, so words
+    replaced since can't re-root. A later re-root must carry a chain that extends the one before.
+  - An app still holding the old key lets it go, and a sealed person box from before the re-root is
+    never sealed into a new vault version.
 - **Passkeys later:** per-passkey wrapping where native passkey PRF exists (macOS 15 and iOS 18 through
   AuthenticationServices; Android Credential Manager). Never in a page the relay serves, which would
   see the unlock key.
@@ -358,6 +371,8 @@ For when every app is gone, or a thief revoked your other devices first. The rec
   device claim alone.
 - After that, new words need the old ones (or a re-root, T827): no app holds the person key to seal
   to a new recovery key.
+- Re-rooting (T827) is in core, the relay, the daemon and the channel cascade. The desktop doesn't
+  offer it yet: that screen builds on the recover flow (T825).
 - Whoever holds the person key can re-root the list. Keeping it offline means a stolen desktop can't
   beat the vault.
 - Re-rooting, and the `kl1` migration, then need the recovery key in hand.

@@ -100,8 +100,11 @@ export class ChannelRequests {
         } catch {
           // Info that isn't JSON: the request still shows, named "?".
         }
-        const paired = yield* Effect.promise(() => verifiedComputer(this.ch.roomId, r.pk, info.computer));
-        const person = yield* Effect.promise(() => verifiedPerson(this.ch.roomId, r.pk, info.person));
+        const rerooted = (p: string | null | undefined): boolean => !!p && !!opts.lists?.get(p)?.reroots.length;
+        const certified = yield* Effect.promise(() => verifiedComputer(this.ch.roomId, r.pk, info.computer));
+        const paired = rerooted(certified?.person) ? null : certified;
+        const claimed = yield* Effect.promise(() => verifiedPerson(this.ch.roomId, r.pk, info.person));
+        const person = rerooted(claimed) ? null : claimed;
         const device = person ? null : yield* Effect.promise(() => verifiedDevice(this.ch.roomId, r.pk, info.device, (p) => opts.lists?.get(p)));
         const app = device && device.as !== "computer" ? device : null;
         const enrolled = device?.as === "computer" ? { pk: device.pk, label: device.label, person: device.person, personName: personNameOf(seats, device.person) } : null;

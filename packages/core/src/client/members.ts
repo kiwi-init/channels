@@ -1,5 +1,5 @@
 import { delegationLive } from "../delegation.ts";
-import type { DeviceList } from "../devices.ts";
+import { listedComputer, type DeviceList } from "../devices.ts";
 import { cleanPersona, personaScopes, type Persona } from "../personality.ts";
 import * as Effect from "effect/Effect";
 import { newChannelKey } from "../crypto.ts";
@@ -169,12 +169,13 @@ export class ChannelMembers {
     cutDevices: Effect.fn("Channel.cutDevices")({ self: this }, function* (this: ChannelMembers, list: DeviceList) {
       yield* this.ch.ownerOnly();
       const revoked = new Set(list.revoked);
+      const certOnly = (pk: string): boolean => !!list.reroots.length && !listedComputer(list, pk);
       const cut = (yield* this.ch.fx.members()).filter(
         (m) =>
           m.active &&
           !m.owner &&
           !m.unverified &&
-          ((!!m.device?.pk && revoked.has(m.device.pk) && m.person === list.person) || (!!m.from && revoked.has(m.from.pk) && m.sponsor?.user === list.person)),
+          ((!!m.device?.pk && revoked.has(m.device.pk) && m.person === list.person) || (!!m.from && (revoked.has(m.from.pk) || certOnly(m.from.pk)) && m.sponsor?.user === list.person)),
       );
       const dropped = (yield* this.ch.fx.delegations().pipe(Effect.catchCause(() => Effect.succeed([])))).filter((d) => d.person === list.person && revoked.has(d.delegate));
       if (!cut.length && !dropped.length) return cut;

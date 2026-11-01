@@ -63,7 +63,7 @@ export async function tendLists(code: string, own: readonly DeviceLink[], api: L
   cutFor.set(code, done);
   const cut: Member[] = [];
   for (const list of lists.values()) {
-    if (!list.revoked.length || done.get(list.person) === list.version) continue;
+    if ((!list.revoked.length && !list.reroots.length) || done.get(list.person) === list.version) continue;
     try {
       cut.push(...(await api.cutDevices(list)));
       done.set(list.person, list.version);

@@ -12,7 +12,7 @@ function device(pk: string, as: Device["as"], until = NOW + 1): Device {
 }
 
 function list(devices: Device[]): DeviceList {
-  return { person: k("p"), version: 1, head: "h", devices, revoked: [], revokes: [] };
+  return { person: k("p"), root: k("p"), reroots: [], version: 1, head: "h", devices, revoked: [], revokes: [] };
 }
 
 describe("ownComputers", () => {

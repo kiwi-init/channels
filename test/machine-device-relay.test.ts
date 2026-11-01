@@ -3,12 +3,13 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { signRequest } from "@kiwi/core/auth.ts";
-import { certUntil, nextLink, readDeviceList, rootLink, type DeviceLink, type DeviceLinkBody } from "@kiwi/core/devices.ts";
+import { certUntil, nextLink, readDeviceList, rerootLink, rootLink, type DeviceLink, type DeviceLinkBody } from "@kiwi/core/devices.ts";
 import { accountScope } from "@kiwi/core/enroll.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
 import { ASK_FRESH_MS, makeAsk, readAsk } from "@kiwi/core/machine-ask.ts";
 import { newSecret } from "@kiwi/core/mailbox.ts";
 import { certifyMachine } from "@kiwi/core/person.ts";
+import { recoveryKey, recoveryLink } from "@kiwi/core/recovery.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { devHumanAuth } from "../src/relay/human.ts";
 import { machineScope, personScope } from "../src/relay/machine.ts";
@@ -251,6 +252,33 @@ describe("the account telling its computers", () => {
     const again = await call(old, old, "PUT", base(old), { cert });
     expect(again.status).toBe(200);
     expect(((await again.json()) as { links: unknown[] }).links).toEqual(named);
+  });
+
+  test("a re-root moves its computers to the new person key: the old one asks and lists nothing, and the cut desktop is out", async () => {
+    const p = await people();
+    const a = account();
+    expect((await publish(a, p.desk, p.links)).status).toBe(204);
+    expect((await call(p.box, p.box, "PUT", base(p.box), { links: p.links })).status).toBe(204);
+    expect((await call(p.other, p.other, "PUT", base(p.other), { links: p.links })).status).toBe(204);
+    const paper = await recoveryKey(new Uint8Array(32).fill(31));
+    const chain = [await recoveryLink(p.person, p.person.pk, null, { pk: paper.pk, xpk: paper.xpk! }, t)];
+    const text = JSON.stringify({ recovery: chain });
+    const auth = await signRequest(p.desk, accountScope(a.user), "PUT", "/v1/account/vault", text);
+    const kept = await fetch(`${relay}/v1/account/vault`, { method: "PUT", headers: { "x-human-token": a.token, authorization: `Bearer ${auth}`, "content-type": "application/json" }, body: text });
+    expect(kept.status).toBe(204);
+    const list = await readDeviceList(p.links);
+    if (!list.ok) throw new Error(list.why);
+    const next = await key("next");
+    expect((await publish(a, next, [...p.links, await rerootLink(list.list, paper, chain, next, [p.desk.pk, p.box.pk], t)])).status).toBe(204);
+
+    expect((await ask(p.person, p.box)).status).toBe(403);
+    expect((await ask(p.laptop, p.box)).status).toBe(403);
+    expect((await ask(next, p.box)).status).toBe(202);
+    expect((await ask(p.desk, p.box)).status).toBe(202);
+    expect((await listMachines(p.person, p.person.pk)).status).toBe(403);
+    const listed = await listMachines(next, p.person.pk);
+    expect(listed.status).toBe(200);
+    expect(((await listed.json()) as { machines: { key: string }[] }).machines.map((m) => m.key)).toEqual([p.box.pk]);
   });
 
   test("another person's list naming a cert-paired computer gives their devices nothing", async () => {

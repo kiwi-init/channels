@@ -88,6 +88,15 @@ export function devicesCalls(
         s.person = null;
       });
     },
+    forget: () => {
+      const who = publicPerson(store.person);
+      if (!who) return;
+      mutate((s) => {
+        s.enrolled = who;
+        s.person = null;
+        delete s.recovery;
+      });
+    },
   });
   const recoverer = createRecoverer({
     relayUrl: () => store.relayUrl,

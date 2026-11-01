@@ -3,9 +3,9 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { accountClient } from "@kiwi/core/account.ts";
-import { readDeviceList, type DeviceLink } from "@kiwi/core/devices.ts";
+import { readDeviceList, rerootLink, type DeviceLink } from "@kiwi/core/devices.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
-import { openVault, readRecovery, readRecoveryPhrase, recoveryKey, recoveryLink, type RecoveryLink, type Vault, type VaultContents } from "@kiwi/core/recovery.ts";
+import { openVault, readRecovery, readRecoveryPhrase, recoveryKey, recoveryLink, sealPerson, sealVault, type RecoveryLink, type Vault, type VaultContents } from "@kiwi/core/recovery.ts";
 import { createDeviceHost, type DeviceHost } from "../desktop/src/devices.ts";
 import { createRecoveryHost, type RecoveryHost, type RecoveryKept } from "../desktop/src/recovery.ts";
 import { startRelay } from "../src/relay/bun.ts";
@@ -89,6 +89,10 @@ async function app(opts: { person?: boolean } = {}): Promise<App> {
     letGo: async () => {
       if (listing.fails) throw new Error("the relay is away");
       holds.value = false;
+    },
+    forget: () => {
+      holds.value = false;
+      kept.value = null;
     },
     now: () => Date.now() + clock.ahead,
   });
@@ -358,5 +362,60 @@ describe("letting go of the person key once the words are checked (T899)", () =>
     await b.recovery.keepCurrent();
     expect(b.kept.value).toBeNull();
     expect((await relayVault(b)).vault).toBeNull();
+  });
+});
+
+describe("after a re-root elsewhere (T827)", () => {
+  async function reroot(a: App, words: string[]): Promise<Identity> {
+    const s = await a.host.session();
+    if (!s) throw new Error("not signed in");
+    const read = await readRecoveryPhrase(words.join(" "));
+    if (!read.ok) throw new Error(read.why);
+    const links = (await s.client.links()) as DeviceLink[];
+    const list = await readDeviceList(links);
+    if (!list.ok) throw new Error(list.why);
+    const next = await key("next");
+    const got = await relayVault(a);
+    const chain = got.recovery as RecoveryLink[];
+    const paper = await recoveryKey(read.entropy);
+    const rerooted = [...links, await rerootLink(list.list, paper, chain, next, [s.device.pk])];
+    await s.client.publish(rerooted);
+    const after = await readDeviceList(rerooted);
+    if (!after.ok) throw new Error(after.why);
+    const recovery = await readRecovery(chain, after.list);
+    if (!recovery.ok) throw new Error(recovery.why);
+    const inside = await openVault(got.vault!, paper);
+    await s.client.keepVault({ vault: await sealVault(next, recovery.recovery, got.vault!.version + 1, { person: await sealPerson(recovery.recovery, next), channels: inside?.channels ?? [] }) });
+    await a.host.poll();
+    return next;
+  }
+
+  test("an app still holding the old person key lets it go, without sealing it again", async () => {
+    const a = await app();
+    a.listing.fails = true;
+    const words = await a.recovery.words();
+    await a.recovery.save(typed(words, [3, 13, 23]));
+    expect(a.holds.value).toBe(true);
+    await reroot(a, words);
+    a.owned.push(await channel("later"));
+    await a.recovery.keepCurrent();
+    expect(a.holds.value).toBe(false);
+    expect(a.kept.value).toBeNull();
+    expect((await relayVault(a)).vault?.version).toBe(2);
+  });
+
+  test("an app that carries the old person key boxed refuses to seal it into a new version", async () => {
+    const a = await app();
+    const words = await a.recovery.words();
+    await a.recovery.save(typed(words, [5, 6, 7]));
+    expect(a.holds.value).toBe(false);
+    const next = await reroot(a, words);
+    a.owned.push(await channel("later"));
+    await expect(a.recovery.keepCurrent()).rejects.toThrow("replaced by a re-root");
+    const got = await relayVault(a);
+    expect(got.vault?.version).toBe(2);
+    const read = await readRecoveryPhrase(words.join(" "));
+    if (!read.ok) throw new Error(read.why);
+    expect((await openVault(got.vault!, await recoveryKey(read.entropy), next.pk))?.person.pk).toBe(next.pk);
   });
 });
