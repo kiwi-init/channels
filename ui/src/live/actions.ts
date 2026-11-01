@@ -25,6 +25,7 @@ import {
   recoverBegin,
   recoverFinish,
   recoverOpen,
+  recoveryCancel,
   recoveryDrop,
   recoverySave,
   recoveryWords,
@@ -377,6 +378,7 @@ export function makeActions(): Actions {
     recoveryWords: () => tried("Couldn't make the recovery words", recoveryWords),
     recoverySave: (typed) => tried("Couldn't set up the recovery key", () => recoverySave(typed)),
     recoveryDrop: () => attempt("Couldn't put the words away", recoveryDrop),
+    recoveryCancel: (words) => tried("Couldn't cancel the new words", () => recoveryCancel(words)),
     enrollBegin: () =>
       attempt("Couldn't sign in as one of your devices", () =>
         enrollBegin(

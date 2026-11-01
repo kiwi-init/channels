@@ -249,6 +249,7 @@ export type Scenario =
   | "forgot-here"
   | "link-stuck"
   | "recovery-set"
+  | "recovery-pending"
   | "github-sign-in"
   | "github-code"
   | "github-signed-in"
@@ -307,6 +308,14 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
       seq: 1000,
     }
   if (scenario === "devices") return { account: { ...DEMO_ACCOUNT, devices: DEMO_DEVICES, recovery: { at: null, here: true } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
+  if (scenario === "recovery-pending")
+    return {
+      account: { ...DEMO_ACCOUNT, devices: DEMO_DEVICES, recovery: { at: Date.now() - 30 * 86_400_000, here: true, pending: { from: Date.now() + 5 * 86_400_000, by: "studio" } } },
+      tiles: DEMO_TILES,
+      channels,
+      prefs,
+      seq: 1000,
+    }
   if (scenario === "recovery-set")
     return { account: { ...DEMO_ACCOUNT, devices: DEMO_DEVICES, recovery: { at: Date.now() - 3 * 86_400_000, here: true } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
   if (scenario === "devices-forgotten")
@@ -673,6 +682,10 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
         return { ok: true }
       },
       recoveryDrop: () => {},
+      recoveryCancel: async () => {
+        setState((s) => (s.account?.recovery ? { ...s, account: { ...s.account, recovery: { at: s.account.recovery.at, here: s.account.recovery.here } } } : s))
+        return null
+      },
       signInWithGithub: () => {
         setState((s) => ({ ...s, signIn: { stage: "sign-in", code: { code: "8F3A-29KD", url: "https://github.com/login/device" }, problem: null } }))
         setTimeout(() => setState((s) => (s.signIn ? { ...s, signIn: s.account ? null : { stage: "signed-in", login: "ojowwalker77" } } : s)), 1500)

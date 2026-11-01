@@ -1574,6 +1574,7 @@ export const UI_SURFACES: Readonly<Record<string, readonly string[]>> = {
     "kiwi.recoverCancel",
     "kiwi.recoverFinish",
     "kiwi.recovery",
+    "kiwi.recoveryCancel",
     "kiwi.recoveryDrop",
     "kiwi.recoverySave",
     "kiwi.recoveryWords",

@@ -59,6 +59,7 @@ export function devicesCalls(
   | "recoveryWords"
   | "recoverySave"
   | "recoveryDrop"
+  | "recoveryCancel"
   | "recover"
   | "recoverFinish"
   | "recoverCancel"
@@ -146,6 +147,7 @@ export function devicesCalls(
     recoveryWords: () => recovery.words(),
     recoverySave: (typed: { at: number; word: string }[]) => recovery.save(typed),
     recoveryDrop: () => recovery.drop(),
+    recoveryCancel: (words: string) => recovery.cancelPending(words),
     recover: (words: string) => recoverer.open(words),
     recoverFinish: (lost: string[]) => recoverer.finish(lost),
     recoverCancel: async () => recoverer.cancel(),

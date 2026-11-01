@@ -238,6 +238,16 @@ export async function renewDevice(id: string): Promise<void> {
   postDevicesNow()
 }
 
+const warned = new Set<number>()
+
+function warnPending(state: RecoveryState | null): void {
+  const p = state?.pending
+  if (!p || warned.has(p.from)) return
+  warned.add(p.from)
+  const day = new Date(p.from).toLocaleDateString(undefined, { day: "numeric", month: "short" })
+  announce(`New recovery words, made by ${p.by}, take over on ${day}. Not you? Cancel them in Settings → Recovery key with your current words.`)
+}
+
 const recovery = (() => {
   let value: RecoveryState | null = null
   const listeners = new Set<Listener>()
@@ -247,6 +257,7 @@ const recovery = (() => {
     if (!b?.recovery) return
     try {
       value = await b.recovery()
+      warnPending(value)
     } catch {
       // Not signed in, or the relay is unreachable: the page shows what it last showed, and focus loads it again.
       return
@@ -286,6 +297,16 @@ export async function recoverySave(typed: { at: number; word: string }[]): Promi
 }
 
 export const recoveryDrop = (): Promise<void> => recovering().recoveryDrop()
+
+export async function recoveryCancel(words: string): Promise<RecoverTrouble | null> {
+  const b = bridge()
+  if (!b?.recoveryCancel) throw new Error("cancelling new words needs the next Channels update")
+  const r = await b.recoveryCancel(words)
+  if (!r.ok) return { why: r.why, ...(r.word !== undefined ? { word: r.word } : {}) }
+  announce("Cancelled: your current words stay")
+  await recovery.load()
+  return null
+}
 
 const enrolling = () => {
   const b = bridge()

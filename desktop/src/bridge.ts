@@ -299,7 +299,10 @@ export interface DeviceNewsView {
 export interface RecoveryView {
   at: number | null;
   here: boolean;
+  pending?: { from: number; by: string };
 }
+
+export type RecoveryCancelView = { ok: true } | { ok: false; why: string; word?: number };
 
 export type RecoverySaveView = { ok: true; at: number; from?: number } | { ok: false; wrong: number[] };
 
@@ -432,6 +435,7 @@ export interface KiwiBridge {
   recoveryWords(): Promise<string[]>;
   recoverySave(typed: { at: number; word: string }[]): Promise<RecoverySaveView>;
   recoveryDrop(): Promise<void>;
+  recoveryCancel(words: string): Promise<RecoveryCancelView>;
   recover(words: string): Promise<RecoverOpenView>;
   recoverFinish(lost: string[]): Promise<RecoverDoneView>;
   recoverCancel(): Promise<void>;

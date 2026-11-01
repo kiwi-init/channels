@@ -2,6 +2,10 @@
   width: min(560px, 100%);
 }
 
+.recover-form {
+  display: contents;
+}
+
 .recover-words {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -138,4 +142,29 @@
   .recover-words {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+}
+
+.set-recover-cancel {
+  padding: 24px;
+}
+
+.set-recover-cancel .start-word {
+  font: 600 var(--t-title) var(--ui);
+}
+
+.set-recover-cancel .start-lede {
+  margin-top: 4px;
+  color: var(--ink-2);
+  font: var(--t-ui) / 1.5 var(--ui);
+}
+
+.set-recover-cancel .start-hint {
+  min-height: 18px;
+  margin-top: 8px;
+  color: var(--ink-3);
+  font: var(--t-meta) / 1.5 var(--ui);
+}
+
+.set-recover-cancel .start-hint.is-error {
+  color: var(--alert);
 }
