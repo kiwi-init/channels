@@ -363,6 +363,57 @@
   font: var(--t-ui) / 1.5 var(--ui);
 }
 
+.set-recovery-nudge .set-row {
+  padding: 12px;
+  border-radius: var(--r-ctl);
+  background: color-mix(in srgb, var(--alert) 12%, transparent);
+}
+
+.set-words {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  user-select: text;
+}
+
+.set-words li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-row);
+  color: var(--ink);
+  font: var(--t-ui) var(--mono);
+}
+
+.set-words li span {
+  min-width: 2ch;
+  color: var(--ink-3);
+  font: var(--t-meta) var(--mono);
+  text-align: right;
+}
+
+.set-word-checks {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 560px) {
+  .set-words {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .set-word-checks {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .input.set-enroll-digits {
   font: 600 var(--t-display) var(--ui);
   letter-spacing: 0.3em;

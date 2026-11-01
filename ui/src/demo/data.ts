@@ -13,6 +13,10 @@ export const DEMO_DEVICES: Device[] = [
   { id: "dev-box", label: "build-box", os: "Linux", as: "computer", until: Date.now() - 2 * DEMO_DAY, thisOne: false },
 ]
 
+export const DEMO_WORDS = "orbit velvet canyon mango ladder silent harvest pilot frozen museum tribe anchor gravity olive wagon pepper rocket glimpse marble tunnel coyote bamboo dinner shield".split(
+  " "
+)
+
 export const DEMO_ACCOUNT: Account = {
   name: "jow",
   handle: "ojowwalker77",
