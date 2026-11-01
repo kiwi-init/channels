@@ -293,7 +293,18 @@ try {
   await mark("tasks added");
 
   await post(early, perSender);
-  await patiently(() => runAgent(oneLook(seats[0]!.send(SEEDED, { kind: "msg" }))));
+  const seeder = seats[0]!;
+  await patiently(() =>
+    runAgent(
+      oneLook(
+        Effect.gen(function* () {
+          const { state } = yield* seeder.state();
+          const owner = [...state.members.values()].find((m) => m.owner)?.name;
+          return yield* seeder.send(SEEDED, { kind: "msg", ...(owner ? { to: [owner] } : {}) });
+        }),
+      ),
+    ),
+  );
   report.seedSeconds = Math.round((Date.now() - seedStart) / 1000);
   const live = await drain(page);
   report["while seeding (page open on the channel)"] = { longTasks: live.longTasks, longMs: live.longMs, worstMs: live.worstMs, perMessageMs: Math.round((live.longMs / MESSAGES) * 10) / 10 };
