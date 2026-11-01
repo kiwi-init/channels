@@ -76,7 +76,7 @@ async function lostAccount(): Promise<Old> {
   const person = await key("Jow");
   const d = desk(token, () => person, "studio");
   const owned: VaultContents["channels"] = [{ label: "general", code: "mc2-general", owner: await key("general") }];
-  const recovery = createRecoveryHost({ session: () => d.host.session(), person: () => person, links: d.links, owned: () => owned, kept: () => null, keep: () => {} });
+  const recovery = createRecoveryHost({ session: () => d.host.session(), person: () => person, links: d.links, owned: () => owned, kept: () => null, keep: () => {}, letGo: async () => {} });
   await d.host.poll();
   const s = (await d.host.session())!;
   const phone = await key("phone");

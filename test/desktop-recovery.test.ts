@@ -3,9 +3,9 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { accountClient } from "@kiwi/core/account.ts";
-import type { DeviceLink } from "@kiwi/core/devices.ts";
+import { readDeviceList, type DeviceLink } from "@kiwi/core/devices.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
-import { openVault, readRecoveryPhrase, recoveryKey, type Vault, type VaultContents } from "@kiwi/core/recovery.ts";
+import { openVault, readRecovery, readRecoveryPhrase, recoveryKey, recoveryLink, type RecoveryLink, type Vault, type VaultContents } from "@kiwi/core/recovery.ts";
 import { createDeviceHost, type DeviceHost } from "../desktop/src/devices.ts";
 import { createRecoveryHost, type RecoveryHost, type RecoveryKept } from "../desktop/src/recovery.ts";
 import { startRelay } from "../src/relay/bun.ts";
@@ -30,6 +30,8 @@ afterAll(() => {
 
 const key = async (name: string) => withExchangeKey(await generateIdentity(name));
 
+const DAY = 86_400_000;
+
 interface App {
   host: DeviceHost;
   recovery: RecoveryHost;
@@ -37,19 +39,27 @@ interface App {
   token: string;
   owned: VaultContents["channels"];
   kept: { value: RecoveryKept | null };
-  swap: { vault: string | null };
+  swap: { vault: string | null; skip: number };
+  holds: { value: boolean };
+  listing: { fails: boolean };
+  clock: { ahead: number };
 }
 
 async function app(opts: { person?: boolean } = {}): Promise<App> {
   const token = `dev:recover${++users}`;
   const person = await key("Jow");
-  const holds = opts.person !== false;
+  const holds: App["holds"] = { value: opts.person !== false };
+  const listing: App["listing"] = { fails: false };
+  const clock: App["clock"] = { ahead: 0 };
   let device: Identity | null = null;
   let links: DeviceLink[] = [];
-  const swap: App["swap"] = { vault: null };
+  const swap: App["swap"] = { vault: null, skip: 0 };
   const fetchImpl = (async (input: string | URL | Request, init?: RequestInit) => {
     const url = new URL(input instanceof Request ? input.url : input);
-    if (swap.vault && url.pathname === "/v1/account/vault" && (init?.method ?? "GET") === "GET") return new Response(swap.vault, { headers: { "content-type": "application/json" } });
+    if (swap.vault && url.pathname === "/v1/account/vault" && (init?.method ?? "GET") === "GET") {
+      if (swap.skip > 0) swap.skip--;
+      else return new Response(swap.vault, { headers: { "content-type": "application/json" } });
+    }
     return fetch(input, init);
   }) as typeof fetch;
   const host = createDeviceHost({
@@ -71,13 +81,18 @@ async function app(opts: { person?: boolean } = {}): Promise<App> {
   const kept: App["kept"] = { value: null };
   const recovery = createRecoveryHost({
     session: () => host.session(),
-    person: () => (holds ? person : null),
+    person: () => (holds.value ? person : null),
     links: () => links,
     owned: () => owned,
     kept: () => kept.value,
     keep: (k) => void (kept.value = k),
+    letGo: async () => {
+      if (listing.fails) throw new Error("the relay is away");
+      holds.value = false;
+    },
+    now: () => Date.now() + clock.ahead,
   });
-  return { host, recovery, person, token, owned, kept, swap };
+  return { host, recovery, person, token, owned, kept, swap, holds, listing, clock };
 }
 
 async function relayVault(a: App): Promise<{ recovery: unknown[]; vault: Vault | null; text: string }> {
@@ -94,6 +109,19 @@ async function opened(words: string[], vault: Vault): Promise<VaultContents | nu
 }
 
 const typed = (words: string[], at: number[]) => at.map((i) => ({ at: i, word: words[i]! }));
+
+async function propose(a: App): Promise<void> {
+  const s = await a.host.session();
+  if (!s) throw new Error("not signed in");
+  const got = await relayVault(a);
+  const list = await readDeviceList((await s.client.links()) as DeviceLink[]);
+  if (!list.ok) throw new Error(list.why);
+  const read = await readRecovery(got.recovery, list.list);
+  if (!read.ok) throw new Error(read.why);
+  const theirs = await recoveryKey(crypto.getRandomValues(new Uint8Array(32)));
+  const link = await recoveryLink(s.device, a.person.pk, read.recovery, { pk: theirs.pk, xpk: theirs.xpk! });
+  await s.client.keepVault({ recovery: [...(got.recovery as RecoveryLink[]), link] });
+}
 
 async function channel(label: string): Promise<VaultContents["channels"][number]> {
   return { label, code: `mc2-${label}`, owner: await key(label) };
@@ -132,7 +160,7 @@ describe("setting up the recovery key on the desktop", () => {
     const inside = await opened(words, got.vault!);
     expect(inside?.person.sk).toBe(a.person.sk);
     expect(inside?.channels.map((c) => c.label)).toEqual(["general"]);
-    expect(a.kept.value).toEqual({ at: saved.ok ? saved.at : 0, version: 1, owners: [a.owned[0]!.owner.pk] });
+    expect(a.kept.value).toMatchObject({ at: saved.ok ? saved.at : 0, version: 1, owners: [a.owned[0]!.owner.pk] });
     expect((await a.recovery.status())?.at).toBe(saved.ok ? saved.at : 0);
     await expect(a.recovery.save(typed(words, [0, 1, 2]))).rejects.toThrow("start the recovery key again");
   });
@@ -148,17 +176,22 @@ describe("setting up the recovery key on the desktop", () => {
     await a.recovery.keepCurrent();
     const got = await relayVault(a);
     expect(got.vault?.version).toBe(2);
-    expect((await opened(words, got.vault!))?.channels.map((c) => c.label)).toEqual(["design"]);
+    const inside = await opened(words, got.vault!);
+    expect(inside?.channels.map((c) => c.label)).toEqual(["design"]);
+    expect(inside?.person.sk).toBe(a.person.sk);
   });
 
-  test("an app that lost its local note reseals once from what the relay keeps", async () => {
+  test("an app that lost its local note reseals once from what the relay keeps, and keeps the person key it can't prove", async () => {
     const a = await app();
+    a.listing.fails = true;
     const words = await a.recovery.words();
     await a.recovery.save(typed(words, [4, 5, 6]));
     a.kept.value = null;
+    a.listing.fails = false;
     await a.recovery.keepCurrent();
     expect((await relayVault(a)).vault?.version).toBe(2);
     expect(a.kept.value).toMatchObject({ version: 2 });
+    expect(a.holds.value).toBe(true);
   });
 
   test("a relay handing back an older vault is refused, and nothing is sealed over it", async () => {
@@ -186,6 +219,7 @@ describe("setting up the recovery key on the desktop", () => {
 
   test("new words replace the old at once: the next vault opens only with them", async () => {
     const a = await app();
+    a.listing.fails = true;
     const old = await a.recovery.words();
     await a.recovery.save(typed(old, [0, 1, 2]));
     a.recovery.drop();
@@ -196,7 +230,7 @@ describe("setting up the recovery key on the desktop", () => {
     expect(got.recovery).toHaveLength(2);
     expect(got.vault?.version).toBe(2);
     expect(await opened(old, got.vault!)).toBeNull();
-    expect((await opened(fresh, got.vault!))?.person.pk).toBe(a.person.pk);
+    expect((await opened(fresh, got.vault!))?.person.sk).toBe(a.person.sk);
   });
 
   test("another person's app can't read this account's recovery state", async () => {
@@ -205,5 +239,124 @@ describe("setting up the recovery key on the desktop", () => {
     await a.recovery.save(typed(words, [0, 1, 2]));
     const stranger = accountClient(relay, async () => "dev:stranger", await key("stranger"));
     expect((await stranger.vault()).recovery).toEqual([]);
+  });
+});
+
+describe("letting go of the person key once the words are checked (T899)", () => {
+  test("saving the words drops the person key here; the vault still opens to all of it, and this app can't make new words", async () => {
+    const a = await app();
+    const words = await a.recovery.words();
+    expect((await a.recovery.save(typed(words, [0, 9, 18]))).ok).toBe(true);
+    expect(a.holds.value).toBe(false);
+    expect(a.kept.value?.person?.rxpk).toBeTruthy();
+    expect(a.kept.value?.person?.box).not.toContain(a.person.sk);
+    expect((await opened(words, (await relayVault(a)).vault!))?.person).toMatchObject({ pk: a.person.pk, sk: a.person.sk, xsk: a.person.xsk });
+    expect((await a.recovery.status())?.here).toBe(false);
+    await expect(a.recovery.words()).rejects.toThrow("first signed in");
+  });
+
+  test("after that, a new owned channel is sealed by this app's device key, with the person key carried over", async () => {
+    const a = await app();
+    const words = await a.recovery.words();
+    await a.recovery.save(typed(words, [1, 2, 3]));
+    a.owned.push(await channel("after"));
+    await a.recovery.keepCurrent();
+    const got = await relayVault(a);
+    const device = (await a.host.session())!.device;
+    expect(got.vault).toMatchObject({ version: 2, pk: device.pk });
+    const inside = await opened(words, got.vault!);
+    expect(inside?.person.sk).toBe(a.person.sk);
+    expect(inside?.channels.map((c) => c.label)).toEqual(["after"]);
+  });
+
+  test("an app that can't list its computers yet keeps the key, and lets it go on the next poll without a new version", async () => {
+    const a = await app();
+    a.listing.fails = true;
+    const words = await a.recovery.words();
+    expect((await a.recovery.save(typed(words, [4, 5, 6]))).ok).toBe(true);
+    expect(a.holds.value).toBe(true);
+    await expect(a.recovery.keepCurrent()).rejects.toThrow("relay is away");
+    expect(a.holds.value).toBe(true);
+    a.listing.fails = false;
+    await a.recovery.keepCurrent();
+    expect(a.holds.value).toBe(false);
+    expect((await relayVault(a)).vault?.version).toBe(1);
+  });
+
+  test("a vault that doesn't come back as sealed keeps the person key here", async () => {
+    const gone = await app();
+    gone.swap.vault = JSON.stringify({ recovery: [], vault: null });
+    gone.swap.skip = 1;
+    const once = await gone.recovery.words();
+    await expect(gone.recovery.save(typed(once, [0, 1, 2]))).rejects.toThrow("keeps your person key");
+    expect(gone.holds.value).toBe(true);
+    gone.swap.vault = null;
+    await gone.recovery.keepCurrent();
+    expect(gone.holds.value).toBe(true);
+
+    const old = await app();
+    old.listing.fails = true;
+    await old.recovery.save(typed(await old.recovery.words(), [3, 4, 5]));
+    const first = (await relayVault(old)).text;
+    old.listing.fails = false;
+    old.swap.vault = first;
+    old.swap.skip = 1;
+    const again = await old.recovery.words();
+    await expect(old.recovery.save(typed(again, [6, 7, 8]))).rejects.toThrow("keeps your person key");
+    old.swap.vault = null;
+    await old.recovery.keepCurrent();
+    expect(old.holds.value).toBe(true);
+  });
+
+  test("words set up before this update: the next poll reseals with the person key boxed, and keeps it, since no words were checked against the relay", async () => {
+    const a = await app();
+    a.listing.fails = true;
+    const words = await a.recovery.words();
+    await a.recovery.save(typed(words, [7, 8, 9]));
+    const was = a.kept.value!;
+    a.kept.value = { at: was.at, version: was.version, owners: was.owners };
+    a.listing.fails = false;
+    await a.recovery.keepCurrent();
+    expect(a.holds.value).toBe(true);
+    const got = await relayVault(a);
+    expect(got.vault?.version).toBe(2);
+    expect((await opened(words, got.vault!))?.person.sk).toBe(a.person.sk);
+  });
+
+  test("a recovery key a device proposed: the key stays while it waits, and once it takes over the person key isn't sealed to it", async () => {
+    const a = await app();
+    a.listing.fails = true;
+    const words = await a.recovery.words();
+    await a.recovery.save(typed(words, [10, 11, 12]));
+    a.listing.fails = false;
+    await propose(a);
+    a.owned.push(await channel("waiting"));
+    await a.recovery.keepCurrent();
+    expect(a.holds.value).toBe(true);
+    expect((await opened(words, (await relayVault(a)).vault!))?.channels.map((c) => c.label)).toEqual(["waiting"]);
+    a.clock.ahead = 8 * DAY;
+    a.owned.push(await channel("taken"));
+    await expect(a.recovery.keepCurrent()).rejects.toThrow("replaced by a device's proposal");
+    expect(a.holds.value).toBe(true);
+    expect((await relayVault(a)).vault?.version).toBe(2);
+  });
+
+  test("after letting go, a recovery key that changed is refused rather than sealed without the person key", async () => {
+    const a = await app();
+    const words = await a.recovery.words();
+    await a.recovery.save(typed(words, [13, 14, 15]));
+    await propose(a);
+    a.clock.ahead = 8 * DAY;
+    a.owned.push(await channel("lost"));
+    await expect(a.recovery.keepCurrent()).rejects.toThrow("type the old words");
+    expect((await relayVault(a)).vault?.version).toBe(1);
+  });
+
+  test("an app that never held the person key has nothing to seal or let go", async () => {
+    const b = await app({ person: false });
+    b.owned.push(await channel("mine"));
+    await b.recovery.keepCurrent();
+    expect(b.kept.value).toBeNull();
+    expect((await relayVault(b)).vault).toBeNull();
   });
 });
