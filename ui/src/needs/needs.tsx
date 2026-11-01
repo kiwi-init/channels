@@ -1,6 +1,8 @@
 import "~/styles/needs.css"
 
 import { useEffect, useId, useState, type ReactNode } from "react"
+import type { Color } from "@kiwi/core/protocol.ts"
+import { Swatches } from "~/kit/swatches"
 
 import { TOO_MANY_REQUESTS } from "@kiwi/core/sas.ts"
 
@@ -355,6 +357,7 @@ function JoinAskCard({ channel, ask, link }: { channel: Channel; ask: JoinAsk; l
   const [persona, setPersona] = useState<string | null | undefined>(undefined)
   const [readOnly, setReadOnly] = useState<boolean | undefined>(undefined)
   const [powers, setPowers] = useState<Powers | undefined>(undefined)
+  const [color, setColor] = useState<Color | null>(null)
   const face: Face = { name: ask.name, kind: ask.who, harness: ask.harness, presence: "online" }
   const ready = (ask.check ?? "ready") === "ready" && ask.code !== ""
   const unchecked = ask.check === "unchecked"
@@ -369,7 +372,7 @@ function JoinAskCard({ channel, ask, link }: { channel: Channel; ask: JoinAsk; l
   const letIn = () =>
     app.actions.answerJoin(channel.code, ask.id, true, {
       ...(ask.freeName ? { as: ask.freeName } : {}),
-      ...(agent ? { persona: chosen } : { powers: can }),
+      ...(agent ? { persona: chosen, ...(color ? { color } : {}) } : { powers: can }),
       ...(chosen ? {} : { readOnly: only }),
     })
   return (
@@ -441,6 +444,11 @@ function JoinAskCard({ channel, ask, link }: { channel: Channel; ask: JoinAsk; l
       </div>
       {ready && (
         <div className="needs-opts">
+          {agent && (
+            <Opt label="Colour" hint="Its face takes this colour.">
+              {() => <Swatches color={color ?? undefined} onPick={setColor} />}
+            </Opt>
+          )}
           {agent && (
             <Opt label="Personality" hint={app.personas.find((p) => p.id === chosen)?.about ?? "Works the way its harness does by default."}>
               {(id) => (
