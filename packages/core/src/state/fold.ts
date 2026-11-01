@@ -396,9 +396,11 @@ function folding(
         const why =
           !room?.meta || room.n !== m.sealed.n || !inRoom(room.meta, m.from, m.pk)
             ? `${m.from} wasn't in that private room, or wrote with a key it no longer uses`
-            : m.kind === "event" && !isOverlay(m)
-              ? "a private room keeps to messages, reactions, edits and deletes: tasks, notes and other channel events would be seen by everyone"
-              : null;
+            : room.meta.self
+              ? "a person's own room carries no messages"
+              : m.kind === "event" && !isOverlay(m)
+                ? "a private room keeps to messages, reactions, edits and deletes: tasks, notes and other channel events would be seen by everyone"
+                : null;
         if (why) {
           trust.set(m.seq, "refused");
           rejected.set(m.seq, why);

@@ -12,9 +12,10 @@ export const UI_DATA_SCHEMA = 1;
 export const CHANNEL_CALLS_SINCE: Readonly<Record<string, readonly string[]>> = {
   "1.11.0": ["makeRoom", "changeRoom", "pruneRooms"],
   "1.12.0": ["makeDm"],
+  "1.13.0": ["syncMarks"],
 };
 
-export const CHANNEL_CALLS_BACKGROUND: readonly string[] = ["pruneRooms"];
+export const CHANNEL_CALLS_BACKGROUND: readonly string[] = ["pruneRooms", "syncMarks"];
 
 export const UI_SURFACES: Readonly<Record<string, readonly string[]>> = {
   "1.0.0": [

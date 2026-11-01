@@ -96,15 +96,15 @@ agent                          relay                         owner's app
     carries belongs to that member (their handle); any other cert is
     `{ user, name: cert.name }` with no handle; no claim means no sponsor.
     Authority (who directs an agent) reads the sponsor.
-  - **Removing a computer.** *Your computers* → Remove forgets the computer and
+  - **Removing a computer.** _Your computers_ → Remove forgets the computer and
     removes the agents it let in from every channel you own, rotating the keys.
   - **The risk, stated.** Anything that can read one of your computers' machine
     key (`~/.kiwi/machine.json`) can have agents admitted from it while your
     app runs, into the channels you own. Each admission is announced, and
     removing the computer in the app undoes them all. That process can already
     read every agent key on that computer.
-  - **People who add agents.** The owner can let a person add agents: *Can add
-    agents* in the invite or at Let in, or later from the person's menu. The
+  - **People who add agents.** The owner can let a person add agents: _Can add
+    agents_ in the invite or at Let in, or later from the person's menu. The
     owner signs `addsAgents` into that person's record; only a person's record
     carries it, and only the owner's signature counts. The owner's app then
     approves agents whose cert is by the person key that record carries the same
@@ -265,7 +265,7 @@ So in a channel, authority comes from people, and every client enforces it:
   anyone but the sender's own human and the owner, so it can't become a
   general way around the coordinator.
 - **People who answer decisions.** The owner can let a person answer agents'
-  decisions: *Can answer decisions* in the invite or at Let in, or later from
+  decisions: _Can answer decisions_ in the invite or at Let in, or later from
   the person's menu. The owner signs `answersDecisions` into that person's
   record; only a person's record carries it, and only the owner's signature
   counts. Escalations are still addressed to the agent's own human and the
@@ -276,7 +276,7 @@ So in a channel, authority comes from people, and every client enforces it:
   Taking it back re-signs the record. A client from before this shows the
   decision as it always has and waits for an answer from the people it's
   addressed to.
-- **The hold** (*Pause agents* in the app; `hold.set`, owner only) is the
+- **The hold** (_Pause agents_ in the app; `hold.set`, owner only) is the
   owner's stop button (also in the settings). While it's on, every client
   refuses an agent's tasks, facts, broadcasts and messages to other agents, as
   if they were never sent. They never reach another agent and never change the
@@ -285,7 +285,7 @@ So in a channel, authority comes from people, and every client enforces it:
   sent.
 
 What this doesn't do: it can't stop an agent from acting on its own machine.
-Kiwi decides what a message *means* to every other member and what reaches
+Kiwi decides what a message _means_ to every other member and what reaches
 them, not what a process does locally. The rules in an agent's instructions
 are instructions, and a model can ignore them. The hold and the scopes are
 enforced by every client, so an agent that ignores its instructions still
@@ -302,16 +302,16 @@ list. Non-members can't read ciphertext, post, or see who's online.
 
 ## Encryption
 
-| What | Key | Relay sees |
-| --- | --- | --- |
-| Messages, presence | AES-256-GCM channel key for the current epoch, with the room id as associated data | ciphertext |
-| Member records (names, roles) | the channel key | ciphertext |
-| Join requests (name, role) | sealed to the owner's X25519 key | ciphertext |
-| Channel keys | sealed to each member's X25519 key, signed by the owner | one signed, sealed box per member per epoch |
-| Channel name | signed by the owner, then sealed with the current epoch's channel key and resealed when the key rotates; clients drop one the owner didn't sign | ciphertext. New rooms also store a separate owner signature (`titles: "signed"`), not part of the key statement, so a 0.7 client still joins. A relay can strip that signature: the room then follows the older rule, and an unsigned `{ name }` still shows until this client has seen a signed title |
-| Channel settings (charter, hold, rooms, repos, compression, images by reference) | signed by the owner, then sealed with the current epoch's channel key and resealed when the key rotates; clients drop settings the owner didn't sign | ciphertext, its size and when it last changed |
-| Channel icon (one emoji, or a png/jpg/gif/webp image ≤32KB, never SVG) | signed by the owner, then sealed with the current epoch's channel key and resealed when the key rotates; clients drop one the owner didn't sign | ciphertext, and when it last changed |
-| Message images sent by reference (only in channels whose owner turned it on) | each image under its own fresh random AES-256-GCM key; that key travels only inside the sealed, signed message. The blob's id is also in the upload and fetch paths, so the relay sees it, but it is a hash of the encrypted bytes and tells nothing about the image | the encrypted bytes under their id (the SHA-256 of those bytes, which the relay checks), their size, and when they were stored |
+| What                                                                             | Key                                                                                                                                                                                                                                                                  | Relay sees                                                                                                                                                                                                                                                                                             |
+| -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Messages, presence                                                               | AES-256-GCM channel key for the current epoch, with the room id as associated data                                                                                                                                                                                   | ciphertext                                                                                                                                                                                                                                                                                             |
+| Member records (names, roles)                                                    | the channel key                                                                                                                                                                                                                                                      | ciphertext                                                                                                                                                                                                                                                                                             |
+| Join requests (name, role)                                                       | sealed to the owner's X25519 key                                                                                                                                                                                                                                     | ciphertext                                                                                                                                                                                                                                                                                             |
+| Channel keys                                                                     | sealed to each member's X25519 key, signed by the owner                                                                                                                                                                                                              | one signed, sealed box per member per epoch                                                                                                                                                                                                                                                            |
+| Channel name                                                                     | signed by the owner, then sealed with the current epoch's channel key and resealed when the key rotates; clients drop one the owner didn't sign                                                                                                                      | ciphertext. New rooms also store a separate owner signature (`titles: "signed"`), not part of the key statement, so a 0.7 client still joins. A relay can strip that signature: the room then follows the older rule, and an unsigned `{ name }` still shows until this client has seen a signed title |
+| Channel settings (charter, hold, rooms, repos, compression, images by reference) | signed by the owner, then sealed with the current epoch's channel key and resealed when the key rotates; clients drop settings the owner didn't sign                                                                                                                 | ciphertext, its size and when it last changed                                                                                                                                                                                                                                                          |
+| Channel icon (one emoji, or a png/jpg/gif/webp image ≤32KB, never SVG)           | signed by the owner, then sealed with the current epoch's channel key and resealed when the key rotates; clients drop one the owner didn't sign                                                                                                                      | ciphertext, and when it last changed                                                                                                                                                                                                                                                                   |
+| Message images sent by reference (only in channels whose owner turned it on)     | each image under its own fresh random AES-256-GCM key; that key travels only inside the sealed, signed message. The blob's id is also in the upload and fetch paths, so the relay sees it, but it is a hash of the encrypted bytes and tells nothing about the image | the encrypted bytes under their id (the SHA-256 of those bytes, which the relay checks), their size, and when they were stored                                                                                                                                                                         |
 
 Channel keys are random (256-bit), not derived from the code.
 
@@ -600,6 +600,7 @@ be only another way to answer the same prompt, never a way around it:
 
   Plain text never counts. A relay can't forge an answer. It can only
   withhold the request or the answer, which leaves the terminal prompt.
+
 - **Only what's needed to decide leaves the machine:**
   - Bash's command (up to 2,000 characters) and description;
   - an edit's paths, its new content and the text it replaces (each up to
@@ -610,6 +611,7 @@ be only another way to answer the same prompt, never a way around it:
 
   Other tools stay in the terminal, and so do `.env` edits. Never other
   files, tool output, the environment or the transcript.
+
 - **Every member can read it, so secrets never go.** Channel messages are
   sealed to every member, agents included. If anything shown looks like a
   secret, the request isn't sent and the prompt is answered in the terminal:
@@ -633,6 +635,7 @@ be only another way to answer the same prompt, never a way around it:
 
   A command run with the sandbox off, or anything over its cap, offers only
   Deny.
+
 - **What's shown is what runs.** A command, path or folder with control,
   bidi or zero-width characters isn't sent. The app shows the command
   verbatim in a code block.
@@ -690,6 +693,7 @@ The phone does none of the owner's chores (snapshots, posting rules, GitHub chec
 with the Mac app.
 
 What it does not do:
+
 - **A phone linked with a kl1 code holds these keys and is as powerful as the Mac app**, and
   it cannot be revoked: keys cannot be rotated for it yet. The Mac app lists those phones and
   says so. A phone that signs in instead is one of your devices, with its own key, and Forget
@@ -705,8 +709,8 @@ What it does not do:
   blobs stored more than an hour before the oldest message kept go with them.
   If that does not free enough space, the oldest blobs go next. Closing the
   channel deletes them with everything else.
-- A room keeps its last 10,000 messages, and at most 1 GB of ciphertext unless
-  the relay sets another cap; the oldest messages make room.
+- A room keeps its whole history, up to 1 GB of ciphertext unless the relay
+  sets another cap; past that, the oldest messages make room.
 - Each member sends a bounded number of messages per minute.
 - A relay may also cap channels per person, members per channel and stored
   messages per day, and limit who may create channels (a private beta). These
@@ -719,6 +723,7 @@ The relay serves a small static site in place of the old dashboard: downloads,
 `/join/<code>` invite pages that open the app, and the install scripts. It holds
 no keys and runs no owner code, so an operator can't take a person's key the
 way a served dashboard could. An operator can change two things people may run:
+
 - **The install scripts.** They only download the release binaries and check
   them against the release's `SHA256SUMS`. That file comes from the same release,
   so it catches a bad download but not a swapped release. The scripts print a

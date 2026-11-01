@@ -114,6 +114,7 @@ export class ChannelLink {
   setRooms = (...a: Args<"setRooms">) => this.c("setRooms", ...a);
   makeRoom = (...a: Args<"makeRoom">) => this.c("makeRoom", ...a);
   makeDm = (...a: Args<"makeDm">) => this.c("makeDm", ...a);
+  syncMarks = (...a: Args<"syncMarks">) => this.c("syncMarks", ...a);
   changeRoom = (...a: Args<"changeRoom">) => this.c("changeRoom", ...a);
   pruneRooms = (...a: Args<"pruneRooms">) => this.c("pruneRooms", ...a);
   setRepos = (...a: Args<"setRepos">) => this.c("setRepos", ...a);

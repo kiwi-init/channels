@@ -28,9 +28,11 @@ import { isMuted, tells } from "~/live/quiet"
 import { tellMessage } from "~/live/notes"
 import { ownPrefs, usePrefs } from "~/live/prefs"
 import { receiptsOf, withReceipts } from "~/live/receipts"
+import { lastIn, seenKeyOf } from "~/live/seen-place"
 import { closeOpened, markGone, publish, type Run } from "~/live/store"
 import { useWakes } from "~/live/wakes"
 import { appCan } from "~/live/app-can"
+import { useMarksSync } from "~/live/read-sync"
 import { dmRoomOf, sealable } from "~/live/dm"
 import { clock } from "~/kit/time"
 import type { Channel, Upload, Where } from "~/model"
@@ -62,25 +64,6 @@ function sendOptions(state: ChannelState, messages: readonly Wire[], me: string,
   return where.room === GENERAL_ROOM ? base : { ...base, room: where.room }
 }
 
-function seenKeyOf(where: Where, me: string): string {
-  if (where.kind === "room") return roomSeenKey(where.room)
-  if (where.kind === "dm") return placeKey(dmPlace(me, where.with))
-  if (where.kind === "theirs") return placeKey(dmPlace(...where.between))
-  return placeKey({ kind: "task", task: where.task })
-}
-
-function lastIn(messages: readonly Wire[], state: ChannelState, me: string, where: Where): number {
-  const key = seenKeyOf(where, me)
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const m = messages[i]
-    if (!m || m.kind === "event") continue
-    const place = state.placeOf.get(m.seq) ?? { kind: "main" as const }
-    const at = place.kind === "main" ? roomSeenKey(state.roomOf.get(m.seq) ?? m.room ?? GENERAL_ROOM) : placeKey(place)
-    if (at === key) return m.seq
-  }
-  return 0
-}
-
 function useShown(): boolean {
   return useSyncExternalStore(
     (l) => {
@@ -102,6 +85,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const newMembers = useNewMembers(roomId)
   const newPowers = useNewPowers(roomId)
   const pictures = usePictures(code, ch, messages)
+  useMarksSync(ch, roomId)
   const known = useKnownChannels()
   const icon = iconUrl(useIcons().get(roomId) ?? null)
   useLiveIcon(member)
