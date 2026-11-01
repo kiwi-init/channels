@@ -504,6 +504,17 @@ describe("an agent that stops as it starts", () => {
     expect(log().at(-1)).toMatch(/\tstaysUp_0123456789ab\tclaude\tstopped \d+s after it started, exit 2: Not logged in$/);
   });
 
+  test("a pane that died with no exit status still fails the launch, without inventing one (T1874)", async () => {
+    const hosted: Hosted = {
+      ready: async () => null,
+      open: async () => ({ ok: true, place: "hosted", socket: "/tmp/kiwi-1/abc", window: "@5", pane: "%5" }),
+      pane: () => null,
+      ended: async () => ({ code: null, tail: [said] }),
+    };
+    const r = await launchAgent({ harness: "claude", folder, code }, { PATH: `${bins}:/usr/bin:/bin`, hosted, config: {} });
+    expect(r).toMatchObject({ ok: false, why: "failed", detail: `Claude Code stopped as it started:\n${said}` });
+  });
+
   test.if(process.platform !== "win32" && !!Bun.which("tmux"))("in Channels' own tmux, the dead pane's exit and words come back", async () => {
     mkdirSync(join(dir, "tmux-home"), { recursive: true });
     const hosted = new HostedTmux(join(dir, "tmux-home"));
@@ -511,7 +522,9 @@ describe("an agent that stops as it starts", () => {
       const r = await launchAgent({ harness: "claude", folder, code, nick: "lead" }, { PATH: `${bins}:/usr/bin:/bin`, hosted, config: {}, watch: { startMs: 30_000 } });
       expect(r).toMatchObject({ ok: false, why: "failed" });
       if (r.ok) return;
-      expect(r.detail.split("\n")).toEqual(["Claude Code stopped as it started (exit 1):", said]);
+      const [first, ...rest] = r.detail.split("\n");
+      expect(first).toMatch(/^Claude Code stopped as it started( \(exit 1\))?:$/);
+      expect(rest).toEqual([said]);
     } finally {
       await hosted.kill();
     }
