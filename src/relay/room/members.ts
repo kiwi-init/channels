@@ -1,5 +1,6 @@
 import * as Effect from "effect/Effect";
 import type { GoneHow } from "@kiwi/core/protocol.ts";
+import { verify } from "@kiwi/core/identity.ts";
 import { BadRequest, Conflict, NotFound, TooLarge, TooMany } from "../failures.ts";
 import { Policy } from "../policy.ts";
 import { fits, MAX_RECORD, MAX_WRAPPED, MemberRecord } from "../schema.ts";
@@ -45,7 +46,7 @@ export const approve = Effect.fn("Room.approve")(function* (body: MemberBody & {
   }
   yield* putMember(body, epoch, delegation);
   db.changed("roster");
-  if (body.request) db.sql.run("UPDATE requests SET status = 'approved' WHERE id = ? AND pk = ?", body.request, body.pk);
+  if (body.request) db.sql.run("UPDATE requests SET status = 'approved', received = ? WHERE id = ? AND pk = ?", Date.now(), body.request, body.pk);
 });
 
 export const keysFor = Effect.fn("Room.keysFor")(function* (pk: string) {
@@ -98,17 +99,40 @@ export const remove = Effect.fn("Room.remove")(function* (pk: string, how: GoneH
   db.changed("info");
 });
 
-export const rotate = Effect.fn("Room.rotate")(function* (epoch: number, keys: Record<string, string>) {
+export const rotate = Effect.fn("Room.rotate")(function* (
+  epoch: number,
+  keys: Record<string, string>,
+  owner?: { pk: string; xpk: string; sig: string },
+  older?: Record<string, Record<string, string>>,
+) {
   const db = yield* RoomStore;
+  const stated = yield* readMeta;
+  if (owner) {
+    const restated =
+      owner.pk === stated.ownerPk && owner.xpk === stated.ownerXpk && (yield* Effect.promise(async () => verify({ room: db.roomId, pk: owner.pk, xpk: owner.xpk, v: 2, sig: owner.sig })));
+    if (!restated) return yield* new BadRequest({ message: "bad owner statement" });
+  }
   const meta = yield* readMeta;
   if (epoch !== meta.epoch + 1) return yield* new Conflict({ message: `next epoch is ${meta.epoch + 1}` });
   const members = db.members().filter((m) => m.active);
   for (const m of members) if (!keys[m.pk]) return yield* new BadRequest({ message: `missing wrapped key for ${m.pk.slice(0, 8)}` });
   for (const m of members) if (typeof keys[m.pk] !== "string" || keys[m.pk]!.length > MAX_WRAPPED) return yield* new BadRequest({ message: "bad wrapped key" });
+  const known = new Set(members.map((m) => m.pk));
+  for (const r of db.sql.all<{ pk: string }>("SELECT pk FROM delegations")) known.add(r.pk);
+  const prior: { pk: string; e: number; box: string }[] = [];
+  for (const [pk, boxes] of Object.entries(older ?? {})) {
+    if (!known.has(pk) || !boxes || typeof boxes !== "object" || Array.isArray(boxes)) return yield* new BadRequest({ message: "bad wrapped key" });
+    for (const [e, box] of Object.entries(boxes)) {
+      if (!/^\d{1,9}$/.test(e) || Number(e) >= epoch || typeof box !== "string" || box.length > MAX_WRAPPED) return yield* new BadRequest({ message: "bad wrapped key" });
+      prior.push({ pk, e: Number(e), box });
+    }
+  }
   for (const m of members) db.sql.run("INSERT OR REPLACE INTO keys (pk, e, wrapped) VALUES (?, ?, ?)", m.pk, epoch, keys[m.pk]!);
+  for (const p of prior) db.sql.run("INSERT OR REPLACE INTO keys (pk, e, wrapped) VALUES (?, ?, ?)", p.pk, p.e, p.box);
   yield* rotateDelegations(epoch, keys);
   db.set("epoch", epoch);
   db.set("rotate", 0);
+  if (owner) db.set("owner_sig", owner.sig);
   db.changed("info");
 });
 

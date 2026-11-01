@@ -192,7 +192,7 @@ describe("the branch prefix: the owner's choice of which branches link PRs to ta
     const theirs = await ev("jon", opened(501, `kiwi/KW-${add.seq}-login`, 2));
     const old = await ev("jon", opened(502, `T${add.seq}-login`, 3));
     let s = fold([forged, set, add, theirs, old], roster);
-    expect(s.rejected.get(forged.seq)).toBe("only the owner sets the branch prefix");
+    expect(s.rejected.get(forged.seq)).toBe("only the owner, or a person they fully trust, sets the branch prefix");
     expect(s.branchPrefix).toBe("kiwi/KW-");
     expect(taskPr(s, add.seq)?.pr.number).toBe(501);
     const cleared = await ev("jon", { op: "branch.prefix.set", prefix: null });

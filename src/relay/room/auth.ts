@@ -34,7 +34,7 @@ interface Meta {
   rotate: boolean;
 }
 
-const gone = () => new ChannelGone({ message: "no such channel" });
+export const gone = () => new ChannelGone({ message: "no such channel" });
 
 export const readMeta = Effect.gen(function* () {
   const db = yield* RoomStore;
@@ -55,16 +55,18 @@ function goneOf(db: RoomDb, pk: string): GoneHow | null {
   return how === "owner" || how === "left" ? how : null;
 }
 
-export const authenticate = Effect.fn("Room.authenticate")(function* (req: Request, method: string, path: string, body: string) {
+export const authenticate = Effect.fn("Room.authenticate")(function* (req: Request, method: string, path: string, body: string, olderPath?: string) {
   const db = yield* RoomStore;
-  if (!db.exists()) return yield* gone();
-  const pk = yield* Effect.promise(() => verifyRequest(requestToken(req), db.roomId, method, path, body));
+  const token = requestToken(req);
+  let pk = yield* Effect.promise(() => verifyRequest(token, db.roomId, method, path, body));
+  if (!pk && olderPath !== undefined) pk = yield* Effect.promise(() => verifyRequest(token, db.roomId, method, olderPath, body));
   if (!pk) return yield* new Unauthorized({ message: "bad or expired signature" });
+  if (!db.exists()) return yield* gone();
   if (!db.isMember(pk)) {
     const how = goneOf(db, pk);
-    return yield* how ? new NotMember({ message: `not a member of this channel: ${GONE_WORDS[how]}` }) : new NotMember({ message: "not a member of this channel" });
+    return yield* how ? new NotMember({ message: `not a member of this channel: ${GONE_WORDS[how]}` }) : gone();
   }
   return pk;
 });
 
-export const authenticateSocket = (req: Request) => authenticate(req, "GET", "/ws", "");
+export const authenticateSocket = (req: Request) => authenticate(req, "GET", "/ws" + new URL(req.url).search, "", "/ws");

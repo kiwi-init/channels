@@ -5,8 +5,8 @@ import { join } from "node:path";
 import { signRequest } from "@kiwi/core/auth.ts";
 import { Channel } from "@kiwi/core/client.ts";
 import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
-import { cleanGithubNote } from "@kiwi/core/protocol.ts";
-import { prKey } from "@kiwi/core/state.ts";
+import { cleanGithubNote, type GithubNote } from "@kiwi/core/protocol.ts";
+import { fold, prKey, type FoldBase, type Roster } from "@kiwi/core/state.ts";
 import { applyGithub, type GithubState } from "@kiwi/core/state/github.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { githubItem, githubLinks, githubRepos, GITHUB_WEBHOOK_PATH } from "../src/relay/github.ts";
@@ -222,6 +222,54 @@ describe("what's kept of an event", () => {
     const g: GithubState = { prs: new Map(), checks: new Map(), issues: new Map(), rules: new Map(), releases: new Map() };
     applyGithub(g, [note!], 5);
     expect(g.prs.get(prKey("o/r", 7))).toMatchObject({ additions: 30, deletions: 0, files: 2 });
+  });
+
+  test("a note's link is a plain https link, or the note is dropped", () => {
+    const at = { event: "pull_request", repo: "o/r", at: 1 };
+    expect(cleanGithubNote({ ...at, url: "https://github.com/o/r/pull/7" })).toMatchObject({ url: "https://github.com/o/r/pull/7" });
+    expect(cleanGithubNote({ ...at, url: "javascript:alert(1)" })).toBeNull();
+    expect(cleanGithubNote({ ...at, url: "http://github.com/o/r/pull/7" })).toBeNull();
+    expect(cleanGithubNote({ ...at, url: "https://user:pw@github.com/o/r" })).toBeNull();
+    expect(cleanGithubNote({ ...at, url: "not a url" })).toBeNull();
+  });
+
+  test("a snapshot saved before that check keeps its PRs, checks and issues, minus any link that isn't plain https", async () => {
+    const lead = await generateIdentity("lead");
+    const roster: Roster = [{ name: "lead", pk: lead.pk, owner: true, at: 0, active: true, kind: "human" }];
+    const items: GithubNote[] = [
+      { event: "pull_request", repo: "o/r", number: 7, state: "open", url: "https://github.com/o/r/pull/7", at: 1 },
+      { event: "issues", repo: "o/r", number: 8, state: "open", url: "https://github.com/o/r/issues/8", at: 1 },
+      { event: "check_run", repo: "o/r", sha: "a".repeat(40), name: "ci", status: "completed", conclusion: "success", url: "https://github.com/o/r/runs/1", at: 1 },
+    ];
+    const kept: { base?: FoldBase } = {};
+    fold(
+      [{ v: 1, id: "m1", from: "lead", pk: lead.pk, sigOk: true, kind: "event", body: "GitHub", ts: 1, rts: 1, seq: 1, ev: { op: "github", items } }],
+      roster,
+      2,
+      null,
+      null,
+      null,
+      (b) => (kept.base = b),
+    );
+    const base = kept.base;
+    if (!base?.github) throw new Error("the fold kept no GitHub state");
+    const bad = "javascript:alert(1)";
+    const old: FoldBase = {
+      ...base,
+      github: {
+        ...base.github,
+        prs: base.github.prs.map((p) => ({ ...p, url: bad })),
+        issues: (base.github.issues ?? []).map((i) => ({ ...i, url: bad })),
+        checks: base.github.checks.map(([k, runs]) => [k, runs.map((r) => ({ ...r, url: bad }))]),
+      },
+    };
+    const good = fold([], roster, 3, null, null, base).github;
+    expect(good.prs.get(prKey("o/r", 7))?.url).toBe("https://github.com/o/r/pull/7");
+    const g = fold([], roster, 3, null, null, old).github;
+    expect(g.prs.get(prKey("o/r", 7))).toMatchObject({ number: 7, state: "open" });
+    expect(g.prs.get(prKey("o/r", 7))?.url).toBeUndefined();
+    expect(g.issues.get(prKey("o/r", 8))?.url).toBeUndefined();
+    expect([...g.checks.values()].flatMap((runs) => [...runs.values()]).map((r) => r.url)).toEqual([undefined]);
   });
 
   test("repos are owner/name, lowercased, at most 20; links say what was added and removed", () => {

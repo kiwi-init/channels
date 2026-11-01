@@ -67,6 +67,8 @@ data class MessageView(
     val images: Int = 0,
     val task: Int? = null,
     val reactions: List<ReactionView> = emptyList(),
+    val shown: String = body,
+    val plain: String = body,
 ) {
     val myReaction: String? get() = reactions.firstOrNull { it.mine }?.emoji
     val millis: Long get() = at.toLong()
@@ -95,6 +97,8 @@ data class AskView(
     val choices: List<String> = emptyList(),
     val task: Int? = null,
     val place: String? = null,
+    val shown: String = body,
+    val plain: String = body,
 ) {
     val millis: Long get() = at.toLong()
 }
@@ -212,6 +216,9 @@ data class EnrollStart(val url: String? = null, val code: String = "")
 
 @Serializable
 data class EnrollDigits(val digits: String)
+
+@Serializable
+data class EnrollPerson(val name: String, val fingerprint: String)
 
 @Serializable
 sealed interface Push {

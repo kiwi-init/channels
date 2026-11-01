@@ -487,7 +487,7 @@ export class RoomDb {
   }
 
   deny(id: string): void {
-    this.sql.run("UPDATE requests SET status = 'denied' WHERE id = ?", id);
+    this.sql.run("UPDATE requests SET status = 'denied', received = ? WHERE id = ?", Date.now(), id);
   }
 }
 

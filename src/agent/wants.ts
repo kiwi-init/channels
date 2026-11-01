@@ -4,11 +4,7 @@ import { GENERAL_ROOM, ignored, type Message } from "@kiwi/core/protocol.ts";
 import { openRound, threadMembers, type ChannelState, type Task } from "@kiwi/core/state.ts";
 import type { Delivery } from "./shared.ts";
 
-const MENTION_RE = /(?:^|[^\w@/.-])@([a-z0-9][a-z0-9._-]*[a-z0-9]|[a-z0-9])/gi;
-
-function mentionsOf(body: string): Set<string> {
-  return new Set([...body.matchAll(MENTION_RE)].map((m) => m[1]!.toLowerCase()));
-}
+import { mentionsOf } from "@kiwi/core/changes.ts";
 
 export function narrows(d: Delivery): boolean {
   return d.thread !== undefined || d.room !== undefined || !!d.forMe || !!d.loop;

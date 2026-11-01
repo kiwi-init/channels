@@ -48,6 +48,7 @@ export function devicesCalls(
   | "enrollDeny"
   | "enrollBegin"
   | "enrollStatus"
+  | "enrollKeep"
   | "enrollCancel"
   | "devices"
   | "forgetDevice"
@@ -75,10 +76,9 @@ export function devicesCalls(
     relayUrl: () => store.relayUrl,
     token: () => freshToken(),
     who,
-    device: () => store.device ?? null,
-    saveDevice: (d) => mutate((s) => (s.device = d)),
-    enrolled: (grant) =>
+    enrolled: (grant, device) =>
       mutate((s) => {
+        s.device = device;
         s.enrolled = grant.person;
         s.deviceLinks = grant.links;
       }),
@@ -98,6 +98,7 @@ export function devicesCalls(
     enrollDeny: (id: string) => host.deny(id),
     enrollBegin: () => enrollee.begin(),
     enrollStatus: () => enrollee.status(),
+    enrollKeep: () => enrollee.keep(),
     enrollCancel: () => enrollee.cancel(),
     devices: () => host.list(),
     forgetDevice: (id: string) => host.forget(id),

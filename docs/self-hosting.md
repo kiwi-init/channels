@@ -308,15 +308,15 @@ an extra monthly fee (reported as $99/month).
 Everything here is off unless set, except the byte cap. The Bun relay reads these
 from its environment, the Worker from `vars` (or secrets).
 
-| Setting | Default | Public relay at launch | What it does |
+| Setting | Default | Public relay | What it does |
 | --- | --- | --- | --- |
 | `KIWI_BETA_USERS` | off | set (secret) | Comma-separated WorkOS user ids, emails or `@domain`s. Only they create channels; anyone may still ask to join. Needs sign-in. |
 | `KIWI_BETA_WAITLIST_URL` | none | | Link shown to people who aren't on the list |
-| `KIWI_QUOTA_CHANNELS_PER_OWNER` | off | 2 | Channels one person owns at once; closing one frees the slot |
-| `KIWI_QUOTA_MEMBERS_PER_CHANNEL` | off | 8 | Active members per channel, people and agents together |
-| `KIWI_QUOTA_MESSAGES_PER_DAY` | off | 2000 | Messages stored per channel per UTC day. Over the limit: 429, with when it resets |
-| `KIWI_QUOTA_BYTES_PER_CHANNEL` | 1 GB | 50 MB (52428800) | Stored ciphertext per channel. The oldest messages make room, so a busy channel never freezes; only a single message bigger than the allowance is refused (413) |
-| `KIWI_EXPIRE_AFTER_DAYS` | off | 90 | Delete a channel with no new message and nobody connected for this many days, exactly like a close |
+| `KIWI_QUOTA_CHANNELS_PER_OWNER` | off | off | Channels one person owns at once; closing one frees the slot |
+| `KIWI_QUOTA_MEMBERS_PER_CHANNEL` | off | off | Active members per channel, people and agents together |
+| `KIWI_QUOTA_MESSAGES_PER_DAY` | off | off | Messages stored per channel per UTC day. Over the limit: 429, with when it resets |
+| `KIWI_QUOTA_BYTES_PER_CHANNEL` | 1 GB | 1 GB (unset) | Stored ciphertext per channel. The oldest messages make room, so a busy channel never freezes; only a single message bigger than the allowance is refused (413) |
+| `KIWI_EXPIRE_AFTER_DAYS` | off | off | Delete a channel with no new message and nobody connected for this many days, exactly like a close |
 | `KIWI_PAGE_KEY` | off | set (secret) | Old history pages served from the cache. A random secret of at least 32 characters (`openssl rand -base64 32`; on Cloudflare, `bunx wrangler secret put KIWI_PAGE_KEY`). See [Cached history pages](#cached-history-pages) |
 
 These are always on, everywhere: a channel keeps its last 10,000 messages; one
@@ -406,6 +406,10 @@ bun run build          # dist/kiwi, a single file
   not your backups or disk snapshots.
 - **Keep the data folder private.** Anyone who reads it sees what the relay sees, and
   can delete channels.
+- **Don't log request bodies.** With a GitHub App configured, an owner's app sends
+  its GitHub link token in the body of `PUT /github/repos` so the relay can check
+  push access. The relay keeps nothing of it, but a proxy or logger in front of the
+  relay that records bodies would keep a token that acts as that person on GitHub.
 - **Don't expose the relay's port directly.** Clients sign every request, but tokens
   and timing travel in the clear without TLS.
 

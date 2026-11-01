@@ -1,11 +1,9 @@
-import { existsSync, readFileSync, realpathSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
-import { allSeats, loadConfig, updateConfig } from "../../config.ts";
-import { loginPath } from "../../launch/shell.ts";
-import { replaceFile, withoutLine } from "../shared/files.ts";
+import { hasLine, put, replaceFile, withLine, withoutLine } from "../shared/files.ts";
 import { run } from "../shared/run.ts";
-import { onHostedSocket, tmuxSocket } from "../shared/tmux.ts";
+import { tmuxSocket } from "../shared/tmux.ts";
 
 type Env = Record<string, string | undefined>;
 
@@ -17,15 +15,35 @@ export const MARK_FORMAT = "#{?@kiwi, #{@kiwi},}";
 
 const quoted = (s: string): string => `"${s.replace(/[\\"$]/g, (c) => `\\${c}`)}"`;
 
-function tmuxConfigs(env: Env = process.env, home = homedir()): string[] {
+export function tmuxConfigs(env: Env = process.env, home = homedir()): string[] {
   const explicit = env.KIWI_TMUX_CONF?.trim();
   if (explicit) return [explicit];
   const xdg = env.XDG_CONFIG_HOME?.trim();
   return [...new Set([join(home, ".tmux.conf"), ...(xdg ? [join(xdg, "tmux", "tmux.conf")] : []), join(home, ".config", "tmux", "tmux.conf")])];
 }
 
+export function kiwiConfPath(conf: string): string {
+  return join(dirname(conf), NAME);
+}
+
 export function sourceLine(conf: string): string {
-  return `source-file -q ${quoted(join(dirname(conf), NAME))} ${MARK}`;
+  return `source-file -q ${quoted(kiwiConfPath(conf))} ${MARK}`;
+}
+
+function carries(conf: string): boolean {
+  return existsSync(conf) && hasLine(readFileSync(conf, "utf8"), sourceLine(conf));
+}
+
+export function tmuxConfigPath(env: Env = process.env, home = homedir()): string {
+  const confs = tmuxConfigs(env, home);
+  return confs.find(carries) ?? confs.findLast((c) => existsSync(c)) ?? confs[0]!;
+}
+
+export function kiwiConf(kiwi: string): string {
+  const formats = FORMATS.map((f) => `%if "#{==:#{m:*@kiwi*,#{${f}}},0}"\nset -ga ${f} ${quoted(MARK_FORMAT)}\n%endif`);
+  const show = quoted(`${kiwi} ${SHOW}`.replaceAll("#", "##"));
+  const key = `if-shell -b "! tmux -S '#{socket_path}' list-keys -T prefix K >/dev/null 2>&1" {\n  bind-key -T prefix K run-shell -b ${show}\n}`;
+  return `${[...formats, key].join("\n")}\n`;
 }
 
 export function liveSockets(seats: readonly string[], env: Env = process.env): string[] {
@@ -42,6 +60,22 @@ export function liveSockets(seats: readonly string[], env: Env = process.env): s
   return [...new Set([tmuxSocket(env), own, ...seats].flatMap((s) => (s ? real(s) : [])))];
 }
 
+interface Live {
+  tmux: string;
+  sockets: readonly string[];
+}
+
+export async function downloadTmuxHelpers(kiwi: string, live: Live, conf = tmuxConfigPath()): Promise<{ conf: string; file: string; changed: boolean }> {
+  const file = kiwiConfPath(conf);
+  mkdirSync(dirname(conf), { recursive: true, mode: 0o700 });
+  const wrote = put(file, kiwiConf(kiwi));
+  const before = existsSync(conf) ? readFileSync(conf, "utf8") : "";
+  const linked = hasLine(before, sourceLine(conf));
+  if (!linked) replaceFile(conf, withLine(before, sourceLine(conf)));
+  for (const socket of live.sockets) await run([live.tmux, "-u", "-S", socket, "source-file", "-q", file], 5_000);
+  return { conf, file, changed: wrote || !linked };
+}
+
 async function takeBack(tmux: string, socket: string): Promise<void> {
   const cmd = (...args: string[]) => run([tmux, "-u", "-S", socket, ...args], 5_000);
   const windows = await cmd("list-windows", "-a", "-F", "#{window_id}");
@@ -56,27 +90,14 @@ async function takeBack(tmux: string, socket: string): Promise<void> {
   if (key.status === 0 && key.stdout.includes(SHOW)) await cmd("unbind-key", "-T", "prefix", "K");
 }
 
-export async function forgetTmuxHelpers(live: { tmux: string | null; sockets: readonly string[] }, confs: readonly string[] = tmuxConfigs()): Promise<void> {
+export async function removeTmuxHelpers(live: Live, confs: readonly string[] = tmuxConfigs()): Promise<void> {
   for (const conf of confs) {
-    rmSync(join(dirname(conf), NAME), { force: true });
+    rmSync(kiwiConfPath(conf), { force: true });
     if (!existsSync(conf)) continue;
     const before = readFileSync(conf, "utf8");
     const after = withoutLine(before, sourceLine(conf));
     if (!after) rmSync(conf, { force: true });
     else if (after !== before) replaceFile(conf, after);
   }
-  if (live.tmux) for (const socket of live.sockets) await takeBack(live.tmux, socket);
-}
-
-export async function dropTmuxHelpers(env: Env = process.env, tmux?: string | null): Promise<boolean> {
-  const cfg = loadConfig();
-  if (cfg.terminals?.helpers?.tmux === undefined) return false;
-  const seats = allSeats(cfg).flatMap((r) => (r.tmux && !onHostedSocket(r.tmux.socket) ? [r.tmux.socket] : []));
-  await forgetTmuxHelpers({ tmux: tmux === undefined ? Bun.which("tmux", { PATH: await loginPath() }) : tmux, sockets: liveSockets(seats, env) }, tmuxConfigs(env));
-  updateConfig((c) => {
-    const helpers = { ...c.terminals?.helpers };
-    delete helpers.tmux;
-    c.terminals = { ...c.terminals, helpers };
-  });
-  return true;
+  for (const socket of live.sockets) await takeBack(live.tmux, socket);
 }

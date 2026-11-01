@@ -5,11 +5,14 @@ import type { Signed, SigningBudget } from "@kiwi/core/sas.ts";
 
 import type { ChannelOps, PersonView } from "../../../desktop/src/bridge.ts";
 import { Keyring } from "../../../desktop/src/keyring.ts";
-import { read, readLocal, writeLocal } from "./local-store.ts";
+import { CHECKS_PREFIX, RECORD_PREFIX, read, readLocal, writeLocal } from "./local-store.ts";
 import { personClaimFor } from "./person-claim.ts";
-import { relayUrl } from "./relay.ts";
+import { devBuild, relayUrl } from "./relay.ts";
+
+export const NO_BROWSER_KEYS = "a plain browser keeps keys only in a development build; run the desktop app";
 
 export async function makeLocalPerson(name: string): Promise<PersonView> {
+  if (!devBuild()) throw new Error(NO_BROWSER_KEYS);
   const id = await generateIdentity(name);
   if (!id.xpk || !id.xsk) throw new Error("the person key has no exchange key");
   const p: PersonView = { name: id.name, pk: id.pk, sk: id.sk, xpk: id.xpk, xsk: id.xsk };
@@ -19,12 +22,12 @@ export async function makeLocalPerson(name: string): Promise<PersonView> {
 
 const budget: SigningBudget = {
   load: (roomId) => {
-    const t = read<unknown>(`mc.checks.${roomId}`);
+    const t = read<unknown>(`${CHECKS_PREFIX}${roomId}`);
     return Array.isArray(t) ? (t as Signed[]) : [];
   },
   save: (roomId, signed) => {
     try {
-      localStorage.setItem(`mc.checks.${roomId}`, JSON.stringify(signed));
+      localStorage.setItem(`${CHECKS_PREFIX}${roomId}`, JSON.stringify(signed));
     } catch {
       return;
     }
@@ -32,9 +35,10 @@ const budget: SigningBudget = {
 };
 
 export function localOps(): ChannelOps {
+  if (!devBuild()) throw new Error(NO_BROWSER_KEYS);
   keepRecordsIn({
-    get: (room, pk) => read<Member>(`mc.rec.${room}.${pk}`),
-    set: (room, pk, m) => localStorage.setItem(`mc.rec.${room}.${pk}`, JSON.stringify(m)),
+    get: (room, pk) => read<Member>(`${RECORD_PREFIX}${room}.${pk}`),
+    set: (room, pk, m) => localStorage.setItem(`${RECORD_PREFIX}${room}.${pk}`, JSON.stringify(m)),
   });
   const seats = () => readLocal().channels;
   const keyring = new Keyring({

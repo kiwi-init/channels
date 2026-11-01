@@ -1,6 +1,9 @@
 import { lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react"
 
-import { PermissionCard, PrChip, QuestionCard, TaskChip } from "~/chat/cards"
+import { isGifReaction } from "@kiwi/core/protocol.ts"
+
+import { PrChip, TaskChip } from "~/chat/cards"
+import { useEditing } from "~/chat/editing"
 import { parsedFor } from "~/chat/parsed"
 import { preview, useReplying } from "~/chat/reply"
 import { Avatar, cx } from "~/kit/bits"
@@ -13,6 +16,10 @@ import { linked, named, withNames } from "~/chat/linked"
 
 const Markdown = lazy(() => import("~/chat/markdown"))
 const Annotator = lazy(() => import("~/chat/annotator"))
+const Gifs = lazy(() => import("~/chat/gif-picker"))
+const Changes = lazy(() => import("~/chat/changes"))
+const PermissionCard = lazy(() => import("~/chat/permission-card"))
+const QuestionCard = lazy(() => import("~/chat/question-card"))
 
 const QUICK = ["👍", "🔥", "👀", "✅"]
 const CLAMP_PX = 12 * 22
@@ -176,6 +183,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
     [onQuote, go, channel.messages]
   )
   const who = memberOf(channel, m.from)
+  const editing = useEditing(channel.code, m.seq)
   const ask = m.ask ? channel.asks.find((a) => a.id === m.ask) : undefined
 
   if (m.system)
@@ -209,16 +217,34 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
             <button type="button" className="msg-name" onClick={() => go({ to: "panel", panel: { kind: "person", name: m.from } })}>
               {nickname(channel, m.from)}
             </button>
-            {who?.role && <span className="msg-role">{who.role}</span>}
-            {who?.runs && <span className="msg-runs">· {who.runs}</span>}
+            {who?.role && who.role.toLowerCase() !== nickname(channel, m.from).toLowerCase() && <span className="msg-role">{who.role}</span>}
+            {who?.runs && <span className="msg-runs">{who.runs}</span>}
             {m.said && <span className={cx("msg-said", `is-${m.said.tone}`)}>{m.said.text}</span>}
             <time className="msg-time" dateTime={new Date(m.at).toISOString()}>
               {clock(m.at)}
             </time>
+            {m.edited !== undefined && (
+              <span className="msg-edited" title={`Edited ${clock(m.edited)}`}>
+                edited
+              </span>
+            )}
           </p>
         )}
         {typeof quote === "number" ? <Earlier /> : quote && <Quote quoted={quote} who={nickname(channel, quote.from)} names={names} onClick={onQuote ? () => onQuote(quote.seq) : undefined} />}
-        <Clamp on={who?.kind === "agent" && !inThread}>{m.text && <Body text={m.text} seq={m.seq} names={names} tasks={tasks} onImage={openImage} onMessage={openMessage} />}</Clamp>
+        {m.deleted ? (
+          <p className="msg-deleted">Message deleted</p>
+        ) : editing ? (
+          <Suspense fallback={null}>
+            <Changes kind="editor" channel={channel} m={m} />
+          </Suspense>
+        ) : (
+          <Clamp on={who?.kind === "agent" && !inThread}>{m.text && <Body text={m.text} seq={m.seq} names={names} tasks={tasks} onImage={openImage} onMessage={openMessage} />}</Clamp>
+        )}
+        {compact && m.edited !== undefined && !editing && (
+          <span className="msg-edited" title={`Edited ${clock(m.edited)}`}>
+            edited
+          </span>
+        )}
         {m.images && (
           <div className="msg-images">
             {m.images.map((img) =>
@@ -248,23 +274,37 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
         {m.prs?.map((pr) => (
           <PrChip key={pr.url} pr={pr} />
         ))}
-        {ask?.kind === "permission" && <PermissionCard channel={channel} ask={ask} />}
-        {ask?.kind === "question" && <QuestionCard channel={channel} ask={ask} />}
+        {ask?.kind === "permission" && (
+          <Suspense fallback={null}>
+            <PermissionCard channel={channel} ask={ask} />
+          </Suspense>
+        )}
+        {ask?.kind === "question" && (
+          <Suspense fallback={null}>
+            <QuestionCard channel={channel} ask={ask} />
+          </Suspense>
+        )}
         {(m.reactions?.length ?? 0) > 0 && (
           <div className="reacts">
-            {m.reactions?.map((r) => (
-              <button
-                key={r.emoji}
-                type="button"
-                className={cx("react", r.by.includes(channel.you) && "is-mine")}
-                title={r.by.map((b) => nickname(channel, b)).join(", ")}
-                aria-pressed={r.by.includes(channel.you)}
-                disabled={m.where.kind === "theirs"}
-                onClick={() => actions.react(channel.code, m.seq, r.emoji)}
-              >
-                {r.emoji} <span className="num">{r.by.length}</span>
-              </button>
-            ))}
+            {m.reactions?.map((r) =>
+              isGifReaction(r.emoji) ? (
+                <Suspense key={r.emoji} fallback={null}>
+                  <Gifs channel={channel} m={m} r={r} />
+                </Suspense>
+              ) : (
+                <button
+                  key={r.emoji}
+                  type="button"
+                  className={cx("react", r.by.includes(channel.you) && "is-mine")}
+                  title={r.by.map((b) => nickname(channel, b)).join(", ")}
+                  aria-pressed={r.by.includes(channel.you)}
+                  disabled={m.where.kind === "theirs"}
+                  onClick={() => actions.react(channel.code, m.seq, r.emoji)}
+                >
+                  {r.emoji} <span className="num">{r.by.length}</span>
+                </button>
+              )
+            )}
           </div>
         )}
         {m.receipt && (
@@ -283,7 +323,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
           </button>
         )}
       </div>
-      {!m.pending && m.failed === undefined && !m.leftOut && (
+      {!m.pending && m.failed === undefined && !m.leftOut && !m.deleted && !editing && (
         <div className="msg-tools" role="toolbar" aria-label="Message actions">
           {m.where.kind !== "theirs" &&
             QUICK.map((e) => (
@@ -291,6 +331,16 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
                 {e}
               </button>
             ))}
+          {m.where.kind !== "theirs" && (
+            <Suspense fallback={null}>
+              <Gifs channel={channel} m={m} />
+            </Suspense>
+          )}
+          {m.canChange && (
+            <Suspense fallback={null}>
+              <Changes kind="tools" channel={channel} m={m} />
+            </Suspense>
+          )}
           {replying && m.where.kind !== "theirs" && (
             <button type="button" className="msg-tool" aria-label="Reply" title="Reply" onClick={() => replying.set(m)}>
               <Icon name="reply" size={14} />

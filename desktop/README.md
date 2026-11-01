@@ -78,6 +78,12 @@ bun run typecheck:eb                                  # fetches the devkit into 
   `eb-driver-check.ts --release` and `scripts/linux-packages-check.sh`, probed extracted
   (`scripts/package-probe.ts`) and started under Xvfb. Linux support is Arch only: there is
   no .deb, and CI checks the AppImage on a stock Arch container (`scripts/distro-check`).
+  There is no pacman package either: it would lose the AppImage's self-update and gain
+  nothing, since the app already uses Arch's own WebKitGTK.
+  WebKitGTK plays sound through the system's GStreamer: without `gst-plugins-good`
+  (`autoaudiosink`, `wavparse`) even making an `<audio>` element crashes its web process,
+  so on Linux the UI plays the Needs-you chime through WebAudio, which stays silent instead.
+  The distro check proves both.
 
 ## Layout
 
@@ -90,6 +96,10 @@ bun run typecheck:eb                                  # fetches the devkit into 
   shape the daemon side must match (documented at the top of the file); starting the daemon
   on the app's relay (`spawnDaemon`).
 - `src/updater.ts` — checks GitHub releases for a newer app.
+- `src/linux-entry.ts` — on every start from an AppImage, keeps the person's
+  `channels-desktop.desktop`, its hicolor icons and the `kiwi://` default pointed at that
+  AppImage (the app menu, links and the dock badge need them); with no `fusermount` the
+  entry extracts and runs it.
 - `src/move.ts` — moves a download over the file it replaces, across filesystems too (the
   AppImage update).
 - `build/icon.svg` — the app icon, and `build/tray.svg` — its one-color tray mark.

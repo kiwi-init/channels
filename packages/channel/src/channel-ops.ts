@@ -112,6 +112,10 @@ export class ChannelLink {
   setCharter = (...a: Args<"setCharter">) => this.c("setCharter", ...a);
   setHold = (...a: Args<"setHold">) => this.c("setHold", ...a);
   setRooms = (...a: Args<"setRooms">) => this.c("setRooms", ...a);
+  makeRoom = (...a: Args<"makeRoom">) => this.c("makeRoom", ...a);
+  makeDm = (...a: Args<"makeDm">) => this.c("makeDm", ...a);
+  changeRoom = (...a: Args<"changeRoom">) => this.c("changeRoom", ...a);
+  pruneRooms = (...a: Args<"pruneRooms">) => this.c("pruneRooms", ...a);
   setRepos = (...a: Args<"setRepos">) => this.c("setRepos", ...a);
   icon = () => this.c("icon");
   setIcon = (...a: Args<"setIcon">) => this.c("setIcon", ...a);

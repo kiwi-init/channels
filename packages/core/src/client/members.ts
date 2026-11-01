@@ -3,6 +3,7 @@ import type { DeviceList } from "../devices.ts";
 import { cleanPersona, personaScopes, type Persona } from "../personality.ts";
 import * as Effect from "effect/Effect";
 import { newChannelKey } from "../crypto.ts";
+import { sign } from "../identity.ts";
 import { inlineText, makeRecord, sealRecord, type Member, type PersonPowers } from "../membership.ts";
 import { omit } from "../omit.ts";
 import { Rejected } from "../refusals.ts";
@@ -11,7 +12,7 @@ import type { ChannelState } from "../state.ts";
 import type { ChannelCore } from "./core.ts";
 import { RelayError, type MemberRefusal, type Refused } from "./errors.ts";
 import type { ChannelInfo, MemberRow } from "./info.ts";
-import { wrapFor } from "./keys.ts";
+import { ownerStatement, wrapFor } from "./keys.ts";
 import type { Relay } from "./relay.ts";
 import { newestEpoch, stale } from "./sealed.ts";
 
@@ -42,6 +43,8 @@ export class ChannelMembers {
 
   readonly fx: MembersFx = {
     leave: Effect.fn("Channel.leave")({ self: this }, function* (this: ChannelMembers) {
+      const me = this.ch.identity;
+      yield* Effect.ignore(this.ch.fx.send(`left`, { kind: "event", ev: { op: "member.gone", member: me.name, pk: me.pk } }));
       yield* this.ch.request("/members/me", { method: "DELETE" });
     }),
 
@@ -104,14 +107,23 @@ export class ChannelMembers {
     updatePowers: Effect.fn("Channel.updatePowers")({ self: this }, function* (this: ChannelMembers, m: Member, powers: PersonPowers) {
       yield* this.ch.ownerOnly();
       if (m.unverified) return yield* new Rejected(NO_RECORD);
-      if (m.owner || m.kind !== "human") return yield* new Rejected("only a person's record says whether they add agents or answer decisions");
+      if (m.owner || m.kind !== "human") return yield* new Rejected("only a person's record says whether they add agents, answer decisions or manage agents");
       const e = this.ch.access.epoch;
       const key = this.ch.access.keys[String(e)]!;
-      const info = omit(m, "active", "readOnly", "unverified", "at", "addsAgents", "answersDecisions");
+      const info = omit(m, "active", "readOnly", "unverified", "at", "addsAgents", "answersDecisions", "managesAgents");
       const addsAgents = powers.addsAgents ?? !!m.addsAgents;
       const answersDecisions = powers.answersDecisions ?? !!m.answersDecisions;
+      const managesAgents = powers.managesAgents ?? !!m.managesAgents;
       const rec = yield* Effect.promise(async () =>
-        sealRecord(key, await makeRecord(this.ch.identity, this.ch.roomId, { ...info, ...(addsAgents ? { addsAgents } : {}), ...(answersDecisions ? { answersDecisions } : {}) })),
+        sealRecord(
+          key,
+          await makeRecord(this.ch.identity, this.ch.roomId, {
+            ...info,
+            ...(addsAgents ? { addsAgents } : {}),
+            ...(answersDecisions ? { answersDecisions } : {}),
+            ...(managesAgents ? { managesAgents } : {}),
+          }),
+        ),
       );
       const scopes = m.later?.scopes ?? scopesOf(m);
       yield* this.ch.request(`/members/${m.pk}/record`, { method: "PUT", body: JSON.stringify({ rec, e, post: canPost(scopes) }) });
@@ -132,7 +144,8 @@ export class ChannelMembers {
         }
         const set = state.scopeSets.get(m.pk);
         if (set && (m.later?.since ?? -1) < set.seq) {
-          yield* this.ch.fx.updateScopes(m, set.scopes, set.seq);
+          if (set.persona !== undefined && m.kind === "agent") yield* this.ch.fx.updatePersona(m, set.persona, set.seq);
+          else yield* this.ch.fx.updateScopes(m, set.scopes, set.seq);
           if (!changed.includes(m.pk)) changed.push(m.pk);
           continue;
         }
@@ -146,6 +159,8 @@ export class ChannelMembers {
 
     remove: Effect.fn("Channel.remove")({ self: this }, function* (this: ChannelMembers, pk: string) {
       yield* this.ch.ownerOnly();
+      const who = (yield* this.ch.fx.members()).find((m) => m.pk === pk);
+      if (who) yield* this.ch.fx.send(`removed ${who.name}`, { kind: "event", ev: { op: "member.gone", member: who.name, pk } });
       yield* this.ch.request(`/members/${pk}`, { method: "DELETE" });
       yield* Effect.ignore(Effect.try({ try: () => this.info.markGone(pk), catch: (err) => err }));
       yield* this.rotation(pk);
@@ -165,6 +180,7 @@ export class ChannelMembers {
       if (!cut.length && !dropped.length) return cut;
       for (const d of dropped) yield* this.ch.fx.undelegate(d.delegate);
       for (const m of cut) {
+        yield* this.ch.fx.send(`removed ${m.name}`, { kind: "event", ev: { op: "member.gone", member: m.name, pk: m.pk } });
         yield* this.ch.request(`/members/${m.pk}`, { method: "DELETE" });
         yield* Effect.ignore(Effect.try({ try: () => this.info.markGone(m.pk), catch: (err) => err }));
       }
@@ -190,14 +206,15 @@ export class ChannelMembers {
       if (!this.ch.isOwner) return false;
       this.info.forgetInfo();
       const info = yield* this.ch.fx.info();
-      if (!info.rotate) {
+      const legacy = (yield* Effect.promise(() => ownerStatement(this.ch.roomId, info))) === "legacy";
+      if (!info.rotate && !legacy) {
         if (stale(info, this.ch.access.keys)) {
           yield* Effect.ignoreCause(this.ch.fx.resealTitle());
           yield* Effect.ignoreCause(this.ch.fx.resealSettings());
         }
         return false;
       }
-      yield* this.ch.fx.rotate();
+      yield* this.rotation(undefined, legacy);
       return true;
     }),
 
@@ -207,28 +224,45 @@ export class ChannelMembers {
     }),
   };
 
-  private rotation(without?: string): Effect.Effect<number, Refused, Relay> {
+  private rotation(without?: string, restate?: boolean): Effect.Effect<number, Refused, Relay> {
     return Effect.gen({ self: this }, function* () {
       yield* this.ch.ownerOnly();
       const rows = yield* this.ch.fx.memberRows();
       const members = (yield* this.ch.fx.members(rows)).filter((m) => m.active && !m.unverified && m.pk !== without);
       this.info.forgetInfo();
-      const { epoch } = yield* this.ch.fx.info();
+      const { epoch, ownerXpk } = yield* this.ch.fx.info();
       const next = Math.max(epoch, newestEpoch(this.ch.access.keys)) + 1;
       if (!Number.isSafeInteger(next) || this.ch.access.keys[String(next)]) return yield* new Rejected(`the relay named epoch ${epoch}, which can't be the channel's next key: not rotating`);
+      if (restate && (!this.ch.identity.xpk || this.ch.identity.xpk !== ownerXpk)) {
+        return yield* new Rejected("the relay names another exchange key for this channel's owner than the one held here: not restating");
+      }
       const key = newChannelKey();
+      const stated = restate ? yield* Effect.promise(() => sign(this.ch.identity, { room: this.ch.roomId, xpk: this.ch.identity.xpk!, v: 2 })) : null;
       const delegates = (yield* this.ch.fx.delegations().pipe(Effect.catchCause(() => Effect.succeed([])))).filter((d) => delegationLive(d));
-      const keys = yield* Effect.promise(async () => {
-        const out: Record<string, string> = {};
-        for (const m of members) out[m.pk] = await wrapFor(this.ch.identity, this.ch.roomId, next, m.pk, m.xpk, key);
-        for (const d of delegates) out[d.delegate] ??= await wrapFor(this.ch.identity, this.ch.roomId, next, d.delegate, d.dxpk, key);
-        return out;
+      const holders: { pk: string; xpk: string }[] = members.map((m) => ({ pk: m.pk, xpk: m.xpk }));
+      for (const d of delegates) if (!holders.some((h) => h.pk === d.delegate)) holders.push({ pk: d.delegate, xpk: d.dxpk });
+      const { keys, older } = yield* Effect.promise(async () => {
+        const wrapped: Record<string, string> = {};
+        const prior: Record<string, Record<string, string>> = {};
+        for (const h of holders) {
+          wrapped[h.pk] = await wrapFor(this.ch.identity, this.ch.roomId, next, h.pk, h.xpk, key);
+          if (restate) {
+            prior[h.pk] = {};
+            for (const [e, k] of Object.entries(this.ch.access.keys)) if (Number(e) < next) prior[h.pk]![e] = await wrapFor(this.ch.identity, this.ch.roomId, e, h.pk, h.xpk, k);
+          }
+        }
+        return { keys: wrapped, older: restate ? prior : undefined };
       });
-      yield* this.ch.request("/epochs", { method: "POST", body: JSON.stringify({ epoch: next, keys }) }).pipe(
-        Effect.mapError((err) => this.stillListed(err, rows, without)),
-        Effect.ensuring(Effect.sync(() => this.info.forgetInfo())),
-      );
-      this.ch.access = { ...this.ch.access, epoch: next, keys: { ...this.ch.access.keys, [String(next)]: key } };
+      yield* this.ch
+        .request("/epochs", {
+          method: "POST",
+          body: JSON.stringify({ epoch: next, keys, ...(older ? { older } : {}), ...(stated ? { owner: { pk: this.ch.identity.pk, xpk: this.ch.identity.xpk!, sig: stated.sig } } : {}) }),
+        })
+        .pipe(
+          Effect.mapError((err) => this.stillListed(err, rows, without)),
+          Effect.ensuring(Effect.sync(() => this.info.forgetInfo())),
+        );
+      this.ch.access = { ...this.ch.access, epoch: next, keys: { ...this.ch.access.keys, [String(next)]: key }, ...(restate ? { signedKeys: true } : {}) };
       this.ch.onAccess?.(this.ch.access);
       this.ch.rotating = true;
       yield* Effect.all([Effect.ignoreCause(this.ch.fx.resealTitle()), Effect.ignoreCause(this.ch.fx.resealSettings()), Effect.ignoreCause(this.ch.fx.resealIcon())]).pipe(

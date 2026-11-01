@@ -1,4 +1,5 @@
-import type { GithubNote, MergeMethod } from "../protocol.ts";
+import { omit } from "../omit.ts";
+import { handoffUrl, type GithubNote, type MergeMethod } from "../protocol.ts";
 
 export interface GithubCheck {
   name: string;
@@ -146,6 +147,10 @@ export const repoKey = (repo: string): string => repo.toLowerCase();
 
 export function rulesOf(g: GithubState, repo: string): GithubRules | undefined {
   return g.rules.get(repoKey(repo));
+}
+
+export function linkSafe<T extends { url?: string }>(x: T): Omit<T, "url"> & { url?: string } {
+  return x.url === undefined || handoffUrl(x.url) ? x : omit(x, "url");
 }
 
 export function releasesFrom(list: readonly GithubRelease[] | undefined): Map<string, GithubRelease[]> {

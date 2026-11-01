@@ -252,6 +252,27 @@ describe("review", () => {
     expect(fold([open, set], roster).tasks.get(open.seq)!.review).toBe("mac");
   });
 
+  test("a review open to anyone is claimed by a seat that hasn't worked on it, for itself only, and only while it's still open to anyone (#1244)", async () => {
+    const add = await ev("jon", { op: "task.add", title: "anyone's", owner: "win", review: "*" });
+    const round = await ev("win", { op: "task.update", task: add.seq, state: "review", at: "abc1234" });
+    const byOwner = await ev("win", { op: "task.update", task: add.seq, review: "win", claim: true });
+    const forAnother = await ev("mac", { op: "task.update", task: add.seq, review: "linux", claim: true });
+    const unmarked = await ev("mac", { op: "task.update", task: add.seq, review: "mac" });
+    const take = await ev("mac", { op: "task.update", task: add.seq, review: "mac", claim: true });
+    const late = await ev("linux", { op: "task.update", task: add.seq, review: "linux", claim: true });
+    const messages = [add, round, byOwner, forAnother, unmarked, take, late];
+    const roleLead: Roster = roster.map((r) => (r.name === "linux" ? { ...r, role: "lead" } : r));
+    for (const now of [roster, roleLead]) {
+      const s = fold(messages, now);
+      expect(s.rejected.get(byOwner.seq)).toBe(`win has worked on T${add.seq}, so someone else reviews it`);
+      expect(s.rejected.get(forAnother.seq)).toBe(`a claim takes T${add.seq}'s review for the one claiming it`);
+      expect(s.rejected.get(unmarked.seq)).toBe(`only a person, the lead or a reviewer changes who reviews T${add.seq}`);
+      expect(s.rejected.has(take.seq)).toBe(false);
+      expect(s.rejected.get(late.seq)).toBe(`T${add.seq}'s review isn't open to anyone: mac reviews it`);
+      expect(s.tasks.get(add.seq)).toMatchObject({ review: "mac", rounds: [{ n: 1, at: "abc1234", result: { kind: "open" } }] });
+    }
+  });
+
   test("a role or signed-persona lead reassigns an open round without changing its number or commit", async () => {
     const add = await ev("jon", { op: "task.add", title: "stalled", owner: "win", review: "mac" });
     const round = await ev("win", { op: "task.update", task: add.seq, state: "review", at: "abc123" });
