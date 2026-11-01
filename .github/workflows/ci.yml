@@ -229,6 +229,9 @@ jobs:
       - name: ui edit and delete your own message (toolbar, Enter, ↑, Esc, the delete confirm), in WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-edit-delete.ts --dist ui/dist
+      - name: ui history archive (newest window on reload, rows kept below it, backfill, leave), on WebKit's IndexedDB
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-history-archive.ts
       - name: ui top bar in Chromium moves the window only from its background
         if: ${{ !cancelled() }}
         run: bun scripts/ui-drag-regions.ts --dist ui/dist
