@@ -31,6 +31,7 @@ import { carriedPersona } from "../personality.ts";
 import { permissionAnswer } from "../permission.ts";
 import type { AskHead, ChannelState, Edit, Fact, FoldBase, FoldMember, GuardFloor, Lease, Member, PersonaLead, Place, Reaction, Room, RoomsFloor, Roster, SecretRoom, Task } from "./types.ts";
 import { inRoom } from "../room-rules.ts";
+import { packAuthors, unpackAuthors } from "./authors.ts";
 
 const STALE_MS = 24 * 3_600_000;
 const SENT_WINDOW_MS = 2 * STALE_MS;
@@ -248,7 +249,7 @@ function folding(
   const leases = new Map<string, Lease>(from?.leases.map((l) => [l.name, l]));
   const reactions = new Map<number, Map<string, Reaction>>(from?.reactions.map(([seq, by]) => [seq, new Map(by)]));
   const reactSeqs = new Set<number>(from?.reactSeqs);
-  const chatBy = new Map<number, string>(from?.chatBy);
+  const chatBy = new Map<number, string>(unpackAuthors(from?.authors) ?? from?.chatBy);
   const edits = new Map<number, Edit>(from?.edits);
   const deleted = new Map<number, number>(from?.deleted);
   let skipped = from?.skipped === true;
@@ -510,8 +511,7 @@ function folding(
       }
       if (ev.op === "msg.edit" || ev.op === "msg.delete") {
         const author = ev.seq < m.seq ? chatBy.get(ev.seq) : undefined;
-        if (ev.seq < m.seq && ev.seq <= m.seq - KEEP_SEQS) reject(`#${ev.seq} is too far back to edit or delete`);
-        else if (author === undefined) reject(`no message #${ev.seq} that can be edited or deleted`);
+        if (author === undefined) reject(`no message #${ev.seq} that can be edited or deleted`);
         else if (!sameAuthor(members.get(author), member)) reject(`only who wrote #${ev.seq} edits or deletes it`);
         else if (deleted.has(ev.seq)) reject(`#${ev.seq} is already deleted`);
         else if (ev.op === "msg.edit") edits.set(ev.seq, { body: ev.body, at, seq: m.seq });
@@ -622,8 +622,9 @@ function folding(
       reactions: recent(reactions).map(([seq, by]): [number, [string, Reaction][]] => [seq, [...by]]),
       reactSeqs: [...reactSeqs].filter((seq) => seq > cut),
       chatBy: recent(chatBy),
+      authors: packAuthors(chatBy),
       edits: recent(edits),
-      deleted: recent(deleted),
+      deleted: [...deleted],
       trust: recent(trust),
       rejected: recent(rejected),
       sent: keptSent,
