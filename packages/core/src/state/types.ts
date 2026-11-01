@@ -1,3 +1,4 @@
+import type { Authors } from "./authors.ts";
 import type { Member as MemberRecord, Runs } from "../membership.ts";
 import type { Card, Color, IssueRef, MemberPicture, Message, TaskState, Trust, Verdict } from "../protocol.ts";
 import type { GithubCheck, GithubIssue, GithubPr, GithubRelease, GithubRules, GithubState } from "./github.ts";
@@ -286,6 +287,7 @@ export interface FoldBase {
   reactions: [number, [string, Reaction][]][];
   reactSeqs: number[];
   chatBy: [number, string][];
+  authors?: Authors;
   edits: [number, Edit][];
   deleted: [number, number][];
   trust: [number, Trust][];
