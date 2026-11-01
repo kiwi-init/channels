@@ -182,6 +182,7 @@ export function RecoveryKey({ recovery }: { recovery: RecoveryState }) {
             return trouble
           }}
           onCancel={() => setCancelling(false)}
+          back="Not now"
         />
       </Dialog>
     </section>

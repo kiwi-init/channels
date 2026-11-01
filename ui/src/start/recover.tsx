@@ -30,6 +30,7 @@ export function WordsForm({
   busyLabel,
   onSubmit,
   onCancel,
+  back = "Cancel",
 }: {
   className: string
   title: string
@@ -38,6 +39,7 @@ export function WordsForm({
   busyLabel: string
   onSubmit: (words: string) => Promise<RecoverTrouble | null>
   onCancel: () => void
+  back?: string
 }) {
   const [words, setWords] = useState<string[]>(() => Array.from({ length: COUNT }, () => ""))
   const [trouble, setTrouble] = useState<RecoverTrouble | null>(null)
@@ -142,7 +144,7 @@ export function WordsForm({
       </p>
       <div className="recover-foot">
         <button type="button" className="btn is-quiet" onClick={onCancel}>
-          Cancel
+          {back}
         </button>
         <button type="submit" className="btn is-primary" disabled={busy || filled < COUNT}>
           {busy ? busyLabel : action}
