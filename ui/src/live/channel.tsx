@@ -37,6 +37,7 @@ import { useWakes } from "~/live/wakes"
 import { appCan } from "~/live/app-can"
 import { useMarksSync } from "~/live/read-sync"
 import { dmRoomOf, sealable } from "~/live/dm"
+import { freeOf, specAsksOf, specsOf } from "~/live/specs"
 import { clock } from "~/kit/time"
 import type { Channel, Upload, Where } from "~/model"
 import { nicknamesOf } from "~/names"
@@ -111,6 +112,9 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const leftOut = useMemo(() => (isOwner ? leftOutOf(state, messages, me) : []), [isOwner, state, messages, me])
   const tasks = useMemo(() => tasksOf(state, asks.held, me, messages), [state, asks.held, me, messages])
   const taskGroups = useMemo(() => groupsOf(state, me), [state, me])
+  const specs = useMemo(() => specsOf(state, me), [state, me])
+  const free = useMemo(() => freeOf(state), [state])
+  const everyAsk = useMemo(() => [...asks.asks, ...specAsksOf(specs)], [asks.asks, specs])
   const from = roomsFrom(roomId)
   const { muted } = usePrefs()
   const rooms = useMemo(() => roomsOf(state, messages, me, seen, from).map((r) => (isMuted(muted, code, r.id) ? { ...r, muted: true as const } : r)), [state, messages, me, seen, from, muted, code])
@@ -163,7 +167,9 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       ...(leftOut.length ? { leftOut } : {}),
       tasks,
       taskGroups,
-      asks: asks.asks,
+      ...(specs.length ? { specs } : {}),
+      free,
+      asks: everyAsk,
       connection,
       ...(ready ? {} : { loading: true }),
     }),
@@ -198,7 +204,9 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       leftOut,
       tasks,
       taskGroups,
-      asks.asks,
+      specs,
+      free,
+      everyAsk,
       connection,
       ready,
       trusted,

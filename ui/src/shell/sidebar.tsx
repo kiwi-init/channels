@@ -1,4 +1,4 @@
-import { useEffect, useState, useSyncExternalStore } from "react"
+import { Suspense, useEffect, useState, useSyncExternalStore } from "react"
 import { liveOf, restOf } from "~/doing"
 
 import { Avatar, Count, cx, Heading, IconButton, STATUS_WORDS } from "~/kit/bits"
@@ -12,6 +12,9 @@ import { sameWhere, useAct, useApp } from "~/nav"
 import { between, nickname, onePerPerson, shown } from "~/names"
 import { comingBack, hiddenKey, hiddenPlaces, keptHidden, setHidden } from "~/shell/hidden-places"
 import { SideFoot } from "~/shell/updates"
+import { later } from "~/kit/later"
+
+const SpecSide = later(() => import("~/specs/view").then((m) => m.SpecSide))
 
 export function Sidebar({ channel }: { channel: Channel }) {
   const { nav, go } = useApp()
@@ -133,6 +136,14 @@ export function Sidebar({ channel }: { channel: Channel }) {
         </section>
       )}
 
+      {(channel.specs ?? []).some((sp) => !sp.result) && (
+        <section aria-label="Specs">
+          <Heading action={<IconButton icon="chevron" label="All specs" onClick={() => go({ to: "spec", ask: null })} />}>Specs</Heading>
+          <Suspense fallback={null}>
+            <SpecSide channel={channel} />
+          </Suspense>
+        </section>
+      )}
       <section aria-label="People">
         <Heading>People</Heading>
         <ul>

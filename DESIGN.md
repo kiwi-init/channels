@@ -293,6 +293,25 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   author, size, when), every check with its link (failing on `alert-wash`
   first), the task, and Open on GitHub as the one primary button. A task's
   panel shows a compact PR card with passing checks folded, and its issue.
+- **Specs.** A segment for Open and Done, a quiet line and New spec as the
+  view's one primary button, then cards like GitHub's by what each spec needs
+  (Needs you in `decide`, Working in `doing`, Waiting for an agent with how
+  many are free, Drafts). A row: the spec's mark (a dashed ring for a draft,
+  a ring once approved, an open `doing` ring while working, `decide` filled
+  with a halo when delivered, `live` when accepted), the title, a mono line
+  of ask, who asked, age, boxes done and where it stands, and the faces of
+  the agents on it. A spec opens in the main area: back to Specs, the title
+  at `t-display` with a mono stage chip, a mono sub line, the person's words
+  quoted as written, then the gate card (`decide-wash` while it waits on a
+  person, with Approve as the primary button) and a segment for Spec, Inside
+  and Result. Spec is the markdown in a card with comments in a margin rail,
+  each beside the line it quotes; selecting words offers Comment. A change
+  after approval shows as a line diff (`live` added, `alert` removed). Inside
+  is one mono glance line, the alarms (`alert-wash` or `decide-wash`), the
+  work as task rows with their PR chips, the story with mono times, and every
+  message behind one quiet line. Under the person's message in #general a
+  spec card on `bg-2` follows the stage, and a run of messages between agents
+  folds into one mono line with their faces and Show.
 - **Needs you.** A mono count line, then one card per thing waiting (the same
   card as Tasks), oldest first: who and what (a `decide` chip for a permission), the detail (a
   command or a diff in mono boxes), and the answers as buttons, the main one

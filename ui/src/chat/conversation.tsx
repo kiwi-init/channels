@@ -4,16 +4,17 @@ import { Composer } from "~/chat/composer"
 import { EventRun } from "~/chat/events"
 import { continuesRun, eventRun } from "~/chat/fold-events"
 import { foldText, leftOutRun, runFirst, withLeftOut } from "~/chat/left-out"
+import { chatterLine, chatterRuns, type ChatterRun } from "~/chat/chatter"
 import { MessageRow } from "~/chat/message"
 import { linked } from "~/chat/linked"
 import { flash, jumpTo, ReplyContext, type Replying } from "~/chat/reply"
 import type { Jump } from "~/chat/search-box"
 import { paintHits } from "~/chat/search-paint"
-import { Loading } from "~/kit/bits"
+import { Avatar, cx, Loading } from "~/kit/bits"
 import { land } from "~/kit/glide"
 import { later } from "~/kit/later"
 import { day, sameDay } from "~/kit/time"
-import type { Channel, Message, Person, Where } from "~/model"
+import { memberOf, type Channel, type Message, type Person, type Where } from "~/model"
 import { liveOf, workingIn } from "~/doing"
 import { sameWhere, useApp, whereKey } from "~/nav"
 import { between, nickname, shown } from "~/names"
@@ -198,13 +199,14 @@ export function Conversation({ channel, jump }: { channel: Channel; jump: Jump |
 
 function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: Jump | null }) {
   const { go } = useApp()
+  const specAsks = useMemo(() => new Set((channel.specs ?? []).map((s) => s.ask)), [channel.specs])
   const all = useMemo(
     () =>
       withLeftOut(
-        channel.messages.filter((m) => sameWhere(m.where, where)),
+        channel.messages.filter((m) => sameWhere(m.where, where) && (where.kind !== "room" || m.inThread === undefined || !specAsks.has(m.inThread))),
         (channel.leftOut ?? []).filter((m) => sameWhere(m.where, where))
       ),
-    [channel.messages, channel.leftOut, where]
+    [channel.messages, channel.leftOut, where, specAsks]
   )
   const general = where.kind === "room" && where.room === "general"
   const compact = general ? channel.compact : undefined
@@ -216,6 +218,9 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
   const proposalAt = proposal && list.some((m) => m.seq === proposal.seq) ? proposal.seq : undefined
   const [shownRuns, setShownRuns] = useState<ReadonlySet<number>>(() => new Set())
   const toggleRun = useCallback((first: number) => setShownRuns((was) => (was.has(first) ? new Set([...was].filter((s) => s !== first)) : new Set([...was, first]))), [])
+  const chatter = useMemo(() => (where.kind === "room" ? chatterRuns(channel, list) : new Map<number, ChatterRun>()), [channel, list, where.kind])
+  const [shownChatter, setShownChatter] = useState<ReadonlySet<number>>(() => new Set())
+  const toggleChatter = useCallback((first: number) => setShownChatter((was) => (was.has(first) ? new Set([...was].filter((s) => s !== first)) : new Set([...was, first]))), [])
   const bySeq = useMemo(() => new Map(channel.messages.map((m) => [m.seq, m])), [channel.messages])
   const names = useNames(channel)
   const tasks = useTaskIds(channel)
@@ -432,6 +437,9 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
               const events = eventRun(list, i, end, breaks)
               const run = leftOutRun(list, i)
               const open = !m.leftOut || shownRuns.has(runFirst(list, i))
+              const talk = chatter.get(m.seq)
+              const talkOpen = !talk || shownChatter.has(talk.first) || (!!jump && talk.run.some((x) => x.seq === jump.m.seq))
+              if (talk && talk.first !== m.seq && !talkOpen) return null
               return (
                 <Fragment key={m.seq}>
                   {(i === 0 || !sameDay(list[i - 1]?.at ?? 0, m.at)) && (
@@ -455,6 +463,7 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
                     </Suspense>
                   )}
                   {run && <Fold run={run} open={open} onToggle={() => toggleRun(m.seq)} />}
+                  {talk && talk.first === m.seq && <ChatterFold channel={channel} run={talk.run} open={talkOpen} onToggle={() => toggleChatter(talk.first)} />}
                   {m.seq === proposalAt && proposal ? (
                     <Suspense fallback={null}>
                       <ProposalCard channel={channel} proposal={proposal} names={names} tasks={tasks} onQuote={onQuote} />
@@ -462,7 +471,8 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
                   ) : events ? (
                     <EventRun channel={channel} run={events} here={where.kind === "task" ? where.task : null} jump={jump?.m.seq ?? null} />
                   ) : (
-                    open && (
+                    open &&
+                    talkOpen && (
                       <MessageRow
                         channel={channel}
                         m={m}
@@ -497,6 +507,23 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
           <span aria-hidden="true"> ↓</span>
         </button>
       )}
+    </div>
+  )
+}
+
+function ChatterFold({ channel, run, open, onToggle }: { channel: Channel; run: readonly Message[]; open: boolean; onToggle: () => void }) {
+  const who = [...new Set(run.map((m) => m.from))]
+  return (
+    <div className={cx("chatter", open && "is-open")} data-seq={run[0]?.seq}>
+      <span className="chatter-faces" aria-hidden="true">
+        {who.slice(0, 4).map((n) => (
+          <Avatar key={n} person={memberOf(channel, n)} size="sm" />
+        ))}
+      </span>
+      <span className="chatter-text">{chatterLine(run, (n) => nickname(channel, n))}</span>
+      <button type="button" className="fold-act" aria-expanded={open} onClick={onToggle}>
+        {open ? "Fold" : "Show"}
+      </button>
     </div>
   )
 }

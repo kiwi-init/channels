@@ -29,6 +29,7 @@ const SearchBox = later(() => import("~/chat/search-box").then((m) => m.SearchBo
 const Board = later(() => import("~/tasks/board").then((m) => m.Board))
 const Lanes = later(() => import("~/tasks/lanes").then((m) => m.Lanes))
 const GithubView = later(() => import("~/github/view").then((m) => m.GithubView))
+const SpecsView = later(() => import("~/specs/view").then((m) => m.SpecsView))
 const PrPanel = later(() => import("~/github/panel").then((m) => m.PrPanel))
 const IssuePanel = later(() => import("~/github/panel").then((m) => m.IssuePanel))
 const NeedsYou = later(() => import("~/needs/needs").then((m) => m.NeedsYou))
@@ -105,6 +106,8 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   const openPrs = channel.prs?.filter((p) => p.state === "open" || p.state === "draft") ?? []
   const red = openPrs.some((p) => p.checks === "fail" || !!p.ticks?.failed.length)
   const openIssues = channel.issues?.filter((i) => i.state === "open").length ?? 0
+  const specs = channel.specs?.filter((s) => !s.result) ?? []
+  const specsNeed = specs.filter((s) => s.canJudge && (s.stage === "draft" || s.stage === "delivered" || s.changed)).length
   const line = channel.loading ? [] : headerLine(channel, 0)
   const here =
     nav.where.kind === "room"
@@ -116,7 +119,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
           : `T${nav.where.task}`
 
   const news = drawerNews(channel)
-  const paged = tall && nav.tab !== "needs" && nav.tab !== "github"
+  const paged = tall && nav.tab !== "needs" && nav.tab !== "github" && nav.tab !== "specs"
 
   return (
     <div className={cx("chan", nav.panel && !paged && "has-panel", drawer && "is-drawer", hidden && "is-bare")} style={{ "--panel-w": `${panel.width}px` } as CSSProperties}>
@@ -149,6 +152,13 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
           <button type="button" aria-pressed={nav.tab === "chat" || paged} onClick={() => go({ to: "tab", tab: "chat" })}>
             {here}
           </button>
+          {(specs.length > 0 || nav.tab === "specs" || !!channel.lead) && (
+            <button type="button" aria-pressed={nav.tab === "specs"} onClick={() => go({ to: "spec", ask: null })} title={specsNeed ? `${specsNeed} waiting on you` : `${specs.length} open specs`}>
+              <Icon name="spec" size={14} />
+              Specs <Count n={specs.length} />
+              {specsNeed > 0 && <span className="tab-red is-decide" role="img" aria-label="waiting on you" />}
+            </button>
+          )}
           {!tall && (
             <button type="button" aria-pressed={nav.tab === "tasks"} onClick={() => go({ to: "tab", tab: "tasks" })}>
               <Icon name="tasks" size={14} />
@@ -223,6 +233,8 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
               <Lanes channel={channel} />
             ) : nav.tab === "github" ? (
               <GithubView channel={channel} />
+            ) : nav.tab === "specs" ? (
+              <SpecsView channel={channel} />
             ) : nav.tab === "needs" ? (
               <NeedsYou channel={channel} onJump={setJump} />
             ) : (

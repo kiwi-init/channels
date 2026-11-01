@@ -206,6 +206,18 @@ export function makeActions(): Actions {
       }),
     setReviewer: (code, id, reviewer) => attempt("Reviewer not changed", async () => (await rare()).setReviewer(code, id, reviewer)),
     nameGoal: (code, ask, name) => attempt("Goal not named", async () => (await rare()).nameGoal(code, ask, name)),
+    newSpec: async (code, words, text) => {
+      try {
+        return await (await rare()).newSpec(code, words, text)
+      } catch (err) {
+        announce(`Spec not started: ${say(err)}`)
+        return null
+      }
+    },
+    writeSpec: (code, ask, text) => attempt("Spec not saved", async () => (await rare()).writeSpec(code, ask, text)),
+    approveSpec: (code, ask, v) => attempt("Not approved", async () => (await rare()).approveSpec(code, ask, v)),
+    judgeSpec: (code, ask, verdict, note) =>
+      attempt(verdict === "accepted" ? "Not accepted" : verdict === "back" ? "Not sent back" : "Not dropped", async () => (await rare()).judgeSpec(code, ask, verdict, note)),
     setRole: (code, name, role) => attempt("Role not changed", async () => (await manage()).setRole(code, name, role)),
     removeMember: (code, name) => attempt(`Couldn't remove ${name}`, async () => (await manage()).removeMember(code, name)),
     setPersona: (code, name, id) => attempt("Personality not changed", async () => (await manage()).setPersona(code, name, id)),

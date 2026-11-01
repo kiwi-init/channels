@@ -476,6 +476,7 @@ export function messagesOf(state: ChannelState, messages: readonly Wire[], me: s
       at: m.ts,
       text,
       where,
+      ...(m.to?.length ? { to: m.to } : {}),
       ...(state.rooms.get(roomOfMessage(state, m))?.dm ? { locked: true as const } : {}),
       ...(gone ? { deleted: true as const } : changed ? { edited: changed.at } : {}),
       ...(!gone && editable(m) && sameAuthor(state.members.get(m.from), state.members.get(me)) ? { canChange: true as const } : {}),
