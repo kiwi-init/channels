@@ -9,7 +9,7 @@ import { ago } from "~/kit/time"
 import { memberOf, type Channel, type Person } from "~/model"
 import { sameWhere, useAct, useApp } from "~/nav"
 import { between, nickname, onePerPerson, shown } from "~/names"
-import { comingBack, hiddenKey, hiddenPlaces, setHidden } from "~/shell/hidden-places"
+import { comingBack, hiddenKey, hiddenPlaces, keptHidden, setHidden } from "~/shell/hidden-places"
 import { SideFoot } from "~/shell/updates"
 
 export function Sidebar({ channel }: { channel: Channel }) {
@@ -23,12 +23,17 @@ export function Sidebar({ channel }: { channel: Channel }) {
   const theirsShown = openTheirs || onTheirs
   const sideRef = useGlide<HTMLDivElement>(".side-row.is-on")
   const hidden = useSyncExternalStore(hiddenPlaces.subscribe, hiddenPlaces.get)
+  const kept = useSyncExternalStore(keptHidden.subscribe, keptHidden.get)
   const [showHidden, setShowHidden] = useState(false)
   const roomKey = (room: string) => hiddenKey(channel.code, { kind: "room", room })
   const dmKey = (who: string) => hiddenKey(channel.code, { kind: "dm", with: who })
   const back = comingBack(
-    [...channel.rooms.map((r) => ({ key: roomKey(r.id), news: (r.muted ? r.mentions : r.unread) > 0 })), ...channel.directs.map((d) => ({ key: dmKey(d.with), news: d.unread > 0 }))],
-    hidden
+    [
+      ...channel.rooms.map((r) => ({ key: roomKey(r.id), news: (r.muted ? r.mentions : r.unread) > 0, mention: r.mentions > 0 })),
+      ...channel.directs.map((d) => ({ key: dmKey(d.with), news: d.unread > 0 })),
+    ],
+    hidden,
+    kept
   ).join(" ")
   useEffect(() => {
     for (const key of back ? back.split(" ") : []) setHidden(key, false)
