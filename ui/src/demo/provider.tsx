@@ -368,6 +368,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       },
       retry: (code, seq) => edit(code, (c) => ({ ...c, messages: c.messages.map((m) => (m.seq === seq ? { ...m, failed: undefined } : m)) })),
       loadImage: () => {},
+      leaveRoom: (code, room) => edit(code, (c) => ({ ...c, rooms: c.rooms.filter((r) => r.id !== room) })),
       markRead: (code, where) =>
         edit(code, (c) => ({
           ...c,
