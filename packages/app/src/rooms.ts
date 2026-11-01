@@ -1,7 +1,7 @@
 import { GENERAL_ROOM, MAX_ROOMS, type Message } from "@kiwi/core/protocol.ts";
 import type { Unread } from "@kiwi/core/standup.ts";
 import { MAIN } from "@kiwi/core/state.ts";
-import { roomName } from "@kiwi/core/state/rooms.ts";
+import { roomName, roomOfMessage } from "@kiwi/core/state/rooms.ts";
 import type { ChannelState, Room } from "@kiwi/core/state/types.ts";
 import { visible } from "@kiwi/core/work.ts";
 
@@ -27,7 +27,7 @@ export function roomsAfter(rooms: Iterable<Pick<Room, "id" | "name">>, change: R
   return [...next.values()];
 }
 
-export const roomOfMessage = (state: Pick<ChannelState, "roomOf">, m: Pick<Message, "seq" | "room">): string => state.roomOf.get(m.seq) ?? m.room ?? GENERAL_ROOM;
+export { roomOfMessage };
 
 export const roomSeenKey = (id: string): string => (id === GENERAL_ROOM ? "main" : `room:${id}`);
 

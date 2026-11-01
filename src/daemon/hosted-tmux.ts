@@ -28,6 +28,7 @@ const MINE = "@kiwi-mine";
 const MINE_FORMAT = `#{${MINE}}\t#{window_id}\t#{pane_id}\t#{pane_dead}\t#{pane_current_command}`;
 const DEAD_LINE = /^Pane is dead\b/;
 const TAIL_LINES = 6;
+const DEAD_NO_STATUS_MS = 1_500;
 const TAIL_WIDTH = 200;
 
 export const HOSTED_CONF = [
@@ -131,6 +132,7 @@ export class HostedTmux {
   private readonly lines = new Set<HostedLine>();
   private readonly outputs = new Map<string, Set<HostedOutput>>();
   private readonly typed = new Map<string, number>();
+  private readonly deadSeen = new Map<string, number>();
   private closing = false;
   private ensuring: Promise<HostedState> | null = null;
   private attaching: Promise<void> | null = null;
@@ -271,7 +273,13 @@ export class HostedTmux {
     const r = await this.tmux(st, ["display-message", "-p", "-t", pane, "#{pane_dead}\t#{pane_dead_status}\t#{pane_dead_signal}"]);
     const [dead, status, signal] = r.stdout.replace(/\n$/, "").split("\t");
     const code = /^\d+$/.test(status ?? "") ? Number(status) : /^\d+$/.test(signal ?? "") ? 128 + Number(signal) : null;
-    if (r.status !== 0 || dead !== "1" || code === null) return null;
+    if (r.status !== 0 || dead !== "1") return null;
+    if (code === null) {
+      const first = this.deadSeen.get(pane) ?? Date.now();
+      this.deadSeen.set(pane, first);
+      if (Date.now() - first < DEAD_NO_STATUS_MS) return null;
+    }
+    this.deadSeen.delete(pane);
     const shown = await this.tmux(st, ["capture-pane", "-p", "-J", "-S", "-", "-t", pane]);
     return { code, tail: lastLines(shown.status === 0 ? shown.stdout : "") };
   }

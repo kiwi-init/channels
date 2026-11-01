@@ -1,6 +1,8 @@
 import { inlineText } from "../membership.ts";
-import { MAX_ROOM_NAME } from "../protocol.ts";
+import { GENERAL_ROOM, MAX_ROOM_NAME, type Message } from "../protocol.ts";
 import type { ChannelState, Room } from "./types.ts";
+
+export const roomOfMessage = (state: Pick<ChannelState, "roomOf">, m: Pick<Message, "seq" | "room">): string => state.roomOf.get(m.seq) ?? m.room ?? GENERAL_ROOM;
 
 export function roomName(name: unknown): string {
   return inlineText(name, MAX_ROOM_NAME);

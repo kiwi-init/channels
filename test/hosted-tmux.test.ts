@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, describe, expect, setSystemTime, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
@@ -422,5 +422,46 @@ describe("a hosted pane that has ended", () => {
 
   test("one killed by a signal ends as a shell says it, 128 and the signal", async () => {
     expect(await new Scripted(["1\t\t9\n"]).ended("%3")).toEqual({ code: 137, tail: ["Not logged in"] });
+  });
+});
+
+describe("a dead pane tmux gives no exit status for (T1874)", () => {
+  afterEach(() => void setSystemTime());
+
+  const paneThatSays = (answer: () => string) => {
+    const hosted = new HostedTmux(tmpdir());
+    Object.assign(hosted, {
+      state: () => ({ bin: "tmux", socket: "/tmp/none" }),
+      tmux: async (_st: unknown, args: readonly string[]) => ({ status: 0, stdout: args[0] === "capture-pane" ? "it stopped\n" : answer(), stderr: "" }),
+    });
+    return hosted;
+  };
+
+  test("the status gets a moment to arrive, and wins if it does", async () => {
+    setSystemTime(new Date(1_000_000));
+    let answer = "1\t\t\n";
+    const hosted = paneThatSays(() => answer);
+    expect(await hosted.ended("%1")).toBeNull();
+    setSystemTime(new Date(1_000_500));
+    answer = "1\t1\t\n";
+    expect(await hosted.ended("%1")).toEqual({ code: 1, tail: ["it stopped"] });
+  });
+
+  test("when it never comes the pane still counts as ended, with no code", async () => {
+    setSystemTime(new Date(1_000_000));
+    const hosted = paneThatSays(() => "1\t\t\n");
+    expect(await hosted.ended("%1")).toBeNull();
+    setSystemTime(new Date(1_001_400));
+    expect(await hosted.ended("%1")).toBeNull();
+    setSystemTime(new Date(1_001_600));
+    expect(await hosted.ended("%1")).toEqual({ code: null, tail: ["it stopped"] });
+  });
+
+  test("a live pane is never ended, however long it runs", async () => {
+    setSystemTime(new Date(1_000_000));
+    const hosted = paneThatSays(() => "0\t\t\n");
+    expect(await hosted.ended("%1")).toBeNull();
+    setSystemTime(new Date(1_100_000));
+    expect(await hosted.ended("%1")).toBeNull();
   });
 });
