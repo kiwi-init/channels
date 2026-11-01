@@ -1,4 +1,5 @@
-import { Fragment, startTransition, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { GENERAL_ROOM } from "@kiwi/core/protocol.ts"
+import { Fragment, lazy, startTransition, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import { Composer } from "~/chat/composer"
 import { EventRun } from "~/chat/events"
@@ -156,6 +157,20 @@ export function useStick(following = true) {
   return { scroller, content, stuck, live, remember, settle, toBottom, toOffset, unstick }
 }
 
+const SinceStrip = lazy(() => import("~/chat/since-strip"))
+
+const unread = (channel: Channel): boolean => channel.rooms.some((r) => r.unread > 0 && !r.muted) || channel.directs.some((d) => d.unread > 0)
+
+function Since({ channel }: { channel: Channel }) {
+  const [show] = useState(() => unread(channel))
+  if (!show) return null
+  return (
+    <Suspense fallback={null}>
+      <SinceStrip channel={channel} />
+    </Suspense>
+  )
+}
+
 export function Conversation({ channel, jump }: { channel: Channel; jump: Jump | null }) {
   const { nav } = useApp()
   const where: Where = nav.where
@@ -174,6 +189,7 @@ export function Conversation({ channel, jump }: { channel: Channel; jump: Jump |
   return (
     <ReplyContext.Provider value={replying}>
       {channel.hold && <HoldBanner channel={channel} hold={channel.hold} />}
+      {where.kind === "room" && where.room === GENERAL_ROOM && <Since key={channel.code} channel={channel} />}
       <Feed key={key} channel={channel} where={where} jump={jump && sameWhere(jump.m.where, where) ? jump : null} />
       {where.kind === "dm" && <DmNote channel={channel} other={where.with} />}
       {where.kind === "theirs" ? <ReadOnly channel={channel} between={where.between} /> : <Composer channel={channel} where={where} placeholder={`Message ${placeName}`} />}
