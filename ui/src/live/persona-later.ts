@@ -1,6 +1,6 @@
 import type { Person } from "~/model"
 
-export interface WantedPersona {
+interface WantedPersona {
   nick: string
   persona: string
   since: number
