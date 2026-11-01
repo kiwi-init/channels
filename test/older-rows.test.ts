@@ -45,6 +45,7 @@ test("older rows come from the relay sealed like cached ones, a page at a time, 
   const { host, seats } = memHost();
   const keyring = new Keyring(host);
   const { code } = await keyring.create("archive", null, null);
+  if (!code) throw new Error("no join code");
   const said: number[] = [];
   for (let i = 1; i <= 12; i++) said.push((await keyring.call(code, "send", `secret line ${i}`)) as number);
   const head = Math.max(...said);

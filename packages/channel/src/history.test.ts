@@ -31,18 +31,13 @@ function memoryDb(): HistoryDb {
     put: async (room, pk, row) => {
       rows.set(id(room, pk, row.seq), row);
     },
-    putRows: async (room, pk, batch, oldest) => {
+    putRows: async (room, pk, batch) => {
       for (const row of batch) rows.set(id(room, pk, row.seq), row);
-      for (const row of list(room, pk)) if (row.seq < oldest) rows.delete(id(room, pk, row.seq));
     },
-    rows: async (room, pk) => list(room, pk),
     newest: async (room, pk, count) => list(room, pk).slice(-count),
     oldest: async (room, pk) => list(room, pk)[0]?.seq ?? null,
     floor: async (room, pk) => floors.has(`${room}\0${pk}`),
     putFloor: async (room, pk) => void floors.add(`${room}\0${pk}`),
-    trimBelow: async (room, pk, oldest) => {
-      for (const row of list(room, pk)) if (row.seq < oldest) rows.delete(id(room, pk, row.seq));
-    },
     trimAbove: async (room, pk, newest) => {
       for (const row of list(room, pk)) if (row.seq > newest) rows.delete(id(room, pk, row.seq));
     },
@@ -74,7 +69,7 @@ function msg(seq: number, body: string): Message {
   };
 }
 
-async function rememberMessage(room: string, pk: string, epoch: number, k: string, m: Message, _limit?: number): Promise<void> {
+async function rememberMessage(room: string, pk: string, epoch: number, k: string, m: Message): Promise<void> {
   await rememberRow(room, pk, await packRow(k, room, epoch, m));
 }
 
@@ -109,16 +104,16 @@ test("a signed message still verifies after a cache round trip", async () => {
     body: "signed",
     ts: 10,
   });
-  await rememberMessage(ROOM, PK_A, 1, key, { ...signed, seq: 1, rts: 20, sigOk: true }, 10);
+  await rememberMessage(ROOM, PK_A, 1, key, { ...signed, seq: 1, rts: 20, sigOk: true });
   const out = await readCached(ROOM, PK_A, (rows) => openRows(rows, ROOM, { "1": key }), 1, 10);
   expect(out.messages.map((m) => ({ body: m.body, seq: m.seq, sigOk: m.sigOk, pk: m.pk }))).toEqual([{ body: "signed", seq: 1, sigOk: true, pk: id.pk }]);
 });
 
 test("two members and two rooms do not read each other's rows", async () => {
   const keys = { "1": key };
-  await rememberMessage(ROOM, PK_A, 1, key, msg(1, "a-in-room"), 10);
-  await rememberMessage(ROOM, PK_B, 1, key, msg(1, "b-in-room"), 10);
-  await rememberMessage(ROOM_B, PK_A, 1, key, msg(1, "a-in-other"), 10);
+  await rememberMessage(ROOM, PK_A, 1, key, msg(1, "a-in-room"));
+  await rememberMessage(ROOM, PK_B, 1, key, msg(1, "b-in-room"));
+  await rememberMessage(ROOM_B, PK_A, 1, key, msg(1, "a-in-other"));
 
   const a = await readCached(ROOM, PK_A, (rows) => openRows(rows, ROOM, keys), 1, 10);
   expect(a.messages.map((m) => m.body)).toEqual(["a-in-room"]);
@@ -130,39 +125,39 @@ test("two members and two rooms do not read each other's rows", async () => {
 
 test("a row that does not open is a hole, so the cache is dropped", async () => {
   const keys = { "1": key };
-  await rememberMessage(ROOM, PK_A, 1, key, msg(1, "one"), 10);
-  await rememberMessage(ROOM, PK_A, 1, key, msg(2, "two"), 10);
-  await rememberMessage(ROOM, PK_A, 1, key, msg(3, "three"), 10);
-  const rows = await store.rows(ROOM, PK_A);
+  await rememberMessage(ROOM, PK_A, 1, key, msg(1, "one"));
+  await rememberMessage(ROOM, PK_A, 1, key, msg(2, "two"));
+  await rememberMessage(ROOM, PK_A, 1, key, msg(3, "three"));
+  const rows = await store.newest(ROOM, PK_A, Infinity);
   const broken = rows.find((r) => r.seq === 2)!;
   await store.put(ROOM, PK_A, { ...broken, ct: "not-ciphertext" });
 
   const out = await readCached(ROOM, PK_A, (rows) => openRows(rows, ROOM, keys), 3, 10);
   expect(out).toEqual({ messages: [], unread: [], firstSeq: undefined, since: 0 });
-  expect(await store.rows(ROOM, PK_A)).toEqual([]);
+  expect(await store.newest(ROOM, PK_A, Infinity)).toEqual([]);
 });
 
 test("a hole drops the cache and asks for the usual window", async () => {
   const keys = { "1": key };
-  await rememberMessage(ROOM, PK_A, 1, key, msg(1, "one"), 10);
-  await rememberMessage(ROOM, PK_A, 1, key, msg(3, "three"), 10);
+  await rememberMessage(ROOM, PK_A, 1, key, msg(1, "one"));
+  await rememberMessage(ROOM, PK_A, 1, key, msg(3, "three"));
 
   const out = await readCached(ROOM, PK_A, (rows) => openRows(rows, ROOM, keys), 3, 10);
   expect(out).toEqual({ messages: [], unread: [], firstSeq: undefined, since: 0 });
-  expect(await store.rows(ROOM, PK_A)).toEqual([]);
+  expect(await store.newest(ROOM, PK_A, Infinity)).toEqual([]);
 });
 
 test("a seq past the relay head is dropped and cannot return later", async () => {
   const keys = { "1": key };
-  await rememberMessage(ROOM, PK_A, 1, key, msg(1, "one"), 10);
-  await rememberMessage(ROOM, PK_A, 1, key, msg(2, "two"), 10);
-  await rememberMessage(ROOM, PK_A, 1, key, msg(9, "nine"), 10);
+  await rememberMessage(ROOM, PK_A, 1, key, msg(1, "one"));
+  await rememberMessage(ROOM, PK_A, 1, key, msg(2, "two"));
+  await rememberMessage(ROOM, PK_A, 1, key, msg(9, "nine"));
 
   const out = await readCached(ROOM, PK_A, (rows) => openRows(rows, ROOM, keys), 2, 10);
   expect(out.messages.map((m) => m.seq)).toEqual([1, 2]);
   expect(out.messages.map((m) => m.body)).toEqual(["one", "two"]);
   expect(out.since).toBe(2);
-  expect((await store.rows(ROOM, PK_A)).map((r) => r.seq)).toEqual([1, 2]);
+  expect((await store.newest(ROOM, PK_A, Infinity)).map((r) => r.seq)).toEqual([1, 2]);
 });
 
 test("a reload shows the newest limit messages, in seq order, and keeps the older ones as the archive (T977)", async () => {
@@ -172,7 +167,7 @@ test("a reload shows the newest limit messages, in seq order, and keeps the olde
   const out = await readCached(ROOM, PK_A, (rows) => openRows(rows, ROOM, keys), 5, 3);
   expect(out.messages.map((m) => m.seq)).toEqual([3, 4, 5]);
   expect(out.since).toBe(5);
-  expect((await store.rows(ROOM, PK_A)).map((r) => r.seq)).toEqual([1, 2, 3, 4, 5]);
+  expect((await store.newest(ROOM, PK_A, Infinity)).map((r) => r.seq)).toEqual([1, 2, 3, 4, 5]);
 });
 
 test("a batch of messages is one write, and every row stays (T977)", async () => {
@@ -185,20 +180,20 @@ test("a batch of messages is one write, and every row stays (T977)", async () =>
   expect(writes).toBe(1);
   const out = await readCached(ROOM, PK_A, (rows) => openRows(rows, ROOM, keys), 5, 3);
   expect(out.messages.map((m) => m.seq)).toEqual([3, 4, 5]);
-  expect((await store.rows(ROOM, PK_A)).length).toBe(5);
+  expect((await store.newest(ROOM, PK_A, Infinity)).length).toBe(5);
 });
 
 test("leave drops one member; sign-out drops every row", async () => {
   const keys = { "1": key };
-  await rememberMessage(ROOM, PK_A, 1, key, msg(1, "a"), 10);
-  await rememberMessage(ROOM, PK_B, 1, key, msg(1, "b"), 10);
+  await rememberMessage(ROOM, PK_A, 1, key, msg(1, "a"));
+  await rememberMessage(ROOM, PK_B, 1, key, msg(1, "b"));
 
   await forgetHistory(ROOM, PK_A);
   expect((await readCached(ROOM, PK_A, (rows) => openRows(rows, ROOM, keys), 1, 10)).messages).toEqual([]);
   expect((await readCached(ROOM, PK_B, (rows) => openRows(rows, ROOM, keys), 1, 10)).messages.map((m) => m.body)).toEqual(["b"]);
 
   await forgetAllHistory();
-  expect(await store.rows(ROOM, PK_B)).toEqual([]);
+  expect(await store.newest(ROOM, PK_B, Infinity)).toEqual([]);
 });
 
 test("a row sealed before the keys left the window still opens", async () => {
@@ -217,17 +212,17 @@ async function sealedPayload(k: string, payload: object): Promise<{ iv: string; 
 
 test("a message this build can't read is kept as an unread row: no hole, so the cache survives", async () => {
   const keys = { "1": key };
-  await rememberMessage(ROOM, PK_A, 1, key, msg(1, "one"), 10);
+  await rememberMessage(ROOM, PK_A, 1, key, msg(1, "one"));
   const malformed = await sealedPayload(key, { ...msg(2, ""), kind: "event", ev: { op: "task.add" } });
-  await rememberRow(ROOM, PK_A, await packEnvelope(key, ROOM, 1, { seq: 2, ts: 30, e: 1, ...malformed }), 10);
-  await rememberMessage(ROOM, PK_A, 1, key, msg(3, "three"), 10);
+  await rememberRow(ROOM, PK_A, await packEnvelope(key, ROOM, 1, { seq: 2, ts: 30, e: 1, ...malformed }));
+  await rememberMessage(ROOM, PK_A, 1, key, msg(3, "three"));
 
   const out = await readCached(ROOM, PK_A, (rows) => openRows(rows, ROOM, keys), 3, 10);
   expect(out.messages.map((m) => m.body)).toEqual(["one", "three"]);
   expect(out.unread).toEqual([2]);
   expect(out.firstSeq).toBe(1);
   expect(out.since).toBe(3);
-  expect((await store.rows(ROOM, PK_A)).map((r) => r.seq)).toEqual([1, 2, 3]);
+  expect((await store.newest(ROOM, PK_A, Infinity)).map((r) => r.seq)).toEqual([1, 2, 3]);
 });
 
 test("an unread row opens as the message once the build can read it, and a moved one doesn't open", async () => {
@@ -281,7 +276,7 @@ describe("the archive fills in from the relay, a page at a time (T977)", () => {
     let asks = 0;
     const ask = older(1);
     expect(await backfill(ROOM, PK_A, { ...quick, older: (b, l) => (asks++, ask(b, l)) })).toBe("done");
-    expect((await store.rows(ROOM, PK_A)).map((r) => r.seq)).toEqual(Array.from({ length: 1205 }, (_, i) => i + 1));
+    expect((await store.newest(ROOM, PK_A, Infinity)).map((r) => r.seq)).toEqual(Array.from({ length: 1205 }, (_, i) => i + 1));
     expect(asks).toBe(3);
     expect(await backfill(ROOM, PK_A, { ...quick, older: async () => (asks++, { rows: [], done: true }) })).toBe("done");
     expect(asks).toBe(3);
@@ -291,10 +286,10 @@ describe("the archive fills in from the relay, a page at a time (T977)", () => {
     await rememberRows(ROOM, PK_A, await relay(2000, 2001));
     let left = 2;
     expect(await backfill(ROOM, PK_A, { ...quick, stopped: () => left-- <= 0, older: older(1001) })).toBe("stopped");
-    const after = (await store.rows(ROOM, PK_A))[0]!.seq;
+    const after = (await store.newest(ROOM, PK_A, Infinity))[0]!.seq;
     expect(after).toBe(1500);
     expect(await backfill(ROOM, PK_A, { ...quick, older: older(1001) })).toBe("done");
-    expect((await store.rows(ROOM, PK_A))[0]!.seq).toBe(1001);
+    expect((await store.newest(ROOM, PK_A, Infinity))[0]!.seq).toBe(1001);
   });
 
   test("a refused page waits longer each time and gives up after a few, without losing what it has", async () => {
@@ -304,7 +299,7 @@ describe("the archive fills in from the relay, a page at a time (T977)", () => {
     expect(out).toBe("failed");
     expect(waits.length).toBe(5);
     expect(waits).toEqual([...waits].sort((a, b) => a - b));
-    expect((await store.rows(ROOM, PK_A)).map((r) => r.seq)).toEqual([50, 51]);
+    expect((await store.newest(ROOM, PK_A, Infinity)).map((r) => r.seq)).toEqual([50, 51]);
   });
 
   test("it waits while the app is hidden, and a dropped cache forgets that it had everything", async () => {
@@ -316,6 +311,6 @@ describe("the archive fills in from the relay, a page at a time (T977)", () => {
     await forgetHistory(ROOM, PK_A);
     await rememberRows(ROOM, PK_A, await relay(9, 9));
     expect(await backfill(ROOM, PK_A, { ...quick, older: older(1) })).toBe("done");
-    expect((await store.rows(ROOM, PK_A)).length).toBe(9);
+    expect((await store.newest(ROOM, PK_A, Infinity)).length).toBe(9);
   });
 });

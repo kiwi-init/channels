@@ -23,14 +23,12 @@ export type OpenRows = (rows: CachedRow[]) => Promise<(Message | Unread | null)[
 
 export interface HistoryDb {
   put(roomId: string, memberPk: string, row: CachedRow): Promise<void>;
-  putRows(roomId: string, memberPk: string, rows: CachedRow[], oldestKept: number): Promise<void>;
-  rows(roomId: string, memberPk: string): Promise<CachedRow[]>;
+  putRows(roomId: string, memberPk: string, rows: CachedRow[]): Promise<void>;
   newest(roomId: string, memberPk: string, count: number): Promise<CachedRow[]>;
   oldest(roomId: string, memberPk: string): Promise<number | null>;
   floor(roomId: string, memberPk: string): Promise<boolean>;
   putFloor(roomId: string, memberPk: string): Promise<void>;
   /** Delete seqs below `oldestKept` for this room and member. */
-  trimBelow(roomId: string, memberPk: string, oldestKept: number): Promise<void>;
   /** Delete seqs above `newestKept` for this room and member. */
   trimAbove(roomId: string, memberPk: string, newestKept: number): Promise<void>;
   drop(roomId: string, memberPk: string): Promise<void>;
@@ -103,12 +101,10 @@ function idb(): HistoryDb {
 
   return {
     put: (roomId, memberPk, row) => run<void>("readwrite", (s) => void s.put(row, [roomId, memberPk, row.seq])),
-    putRows: (roomId, memberPk, rows, oldestKept) =>
+    putRows: (roomId, memberPk, rows) =>
       run<void>("readwrite", (s) => {
         for (const row of rows) s.put(row, [roomId, memberPk, row.seq]);
-        s.delete(range(roomId, memberPk, oldestKept, true));
       }),
-    rows: (roomId, memberPk) => run<CachedRow[]>("readonly", (s) => s.getAll(range(roomId, memberPk, Number.MAX_SAFE_INTEGER, false))),
     newest: async (roomId, memberPk, count) => {
       const db = await openDb();
       return new Promise<CachedRow[]>((resolve, reject) => {
@@ -133,7 +129,6 @@ function idb(): HistoryDb {
     },
     floor: async (roomId, memberPk) => (await run<unknown>("readonly", (s) => s.get([roomId, memberPk, FLOOR]), KEPT)) === true,
     putFloor: (roomId, memberPk) => run<void>("readwrite", (s) => void s.put(true, [roomId, memberPk, FLOOR]), KEPT),
-    trimBelow: (roomId, memberPk, oldestKept) => run<void>("readwrite", (s) => void s.delete(range(roomId, memberPk, oldestKept, true))),
     trimAbove: (roomId, memberPk, newestKept) => run<void>("readwrite", (s) => void s.delete(rangeAbove(roomId, memberPk, newestKept))),
     drop: async (roomId, memberPk) => {
       await run<void>("readwrite", (s) => void s.delete(range(roomId, memberPk, Number.MAX_SAFE_INTEGER, false)));
@@ -167,7 +162,7 @@ export function useHistoryDb(next: HistoryDb | null): void {
 export async function rememberRows(roomId: string, memberPk: string, rows: CachedRow[]): Promise<void> {
   const kept = rows.filter((row) => Number.isSafeInteger(row.seq) && row.seq > 0);
   if (!kept.length) return;
-  await db().putRows(roomId, memberPk, kept, 0);
+  await db().putRows(roomId, memberPk, kept);
 }
 
 export const rememberRow = (roomId: string, memberPk: string, row: CachedRow): Promise<void> => rememberRows(roomId, memberPk, [row]);
@@ -237,14 +232,14 @@ export async function forgetAllHistory(): Promise<void> {
   await db().dropAll();
 }
 
-export interface Backfill {
+interface Backfill {
   older(before: number, limit: number): Promise<OlderRows>;
   hidden(): boolean;
   wait(ms: number): Promise<void>;
   stopped(): boolean;
 }
 
-export const BACKFILL_PAGE = 500;
+const BACKFILL_PAGE = 500;
 const BACKFILL_GAP_MS = 2_000;
 const BACKFILL_MAX_WAIT_MS = 5 * 60_000;
 const BACKFILL_TRIES = 6;
@@ -278,7 +273,7 @@ export async function backfill(roomId: string, memberPk: string, b: Backfill): P
     failures = 0;
     pause = BACKFILL_GAP_MS;
     if (b.stopped()) return "stopped";
-    if (page.rows.length) await db().putRows(roomId, memberPk, page.rows, 0);
+    if (page.rows.length) await db().putRows(roomId, memberPk, page.rows);
     if (page.done) {
       await db().putFloor(roomId, memberPk);
       return "done";

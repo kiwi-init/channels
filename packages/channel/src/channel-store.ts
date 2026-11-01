@@ -319,6 +319,20 @@ export class ChannelStore {
     let closed = false;
     let beat: ReturnType<typeof setInterval> | undefined;
     let answeredAt = 0;
+    let filling: "idle" | "running" | "over" = "idle";
+    const fill = () => {
+      if (filling !== "idle" || closed) return;
+      filling = "running";
+      void backfill(ch.roomId, ch.pk, {
+        older: (before, limit) => ch.olderRows(before, limit),
+        hidden: () => typeof document !== "undefined" && document.hidden,
+        wait: (ms) => new Promise((done) => setTimeout(done, ms)),
+        stopped: () => closed,
+      }).then(
+        (out) => void (filling = out === "stopped" && !closed ? "idle" : "over"),
+        () => void (filling = "over"),
+      );
+    };
     const here = () => {
       if (closed) return;
       answeredAt = Date.now();
@@ -340,7 +354,7 @@ export class ChannelStore {
           ch.roomId,
           ch.pk,
           batched.flatMap((b) => (b.row ? [b.row] : [])),
-        ).catch(() => {});
+        ).then(fill, () => {});
       }, 30);
     };
     const onEvent = (ev: FollowEvent) => {
@@ -361,7 +375,7 @@ export class ChannelStore {
           return enqueue(ev.message, ev.row);
         case "Unread":
           this.unread.value = [...this.unread.peek(), ev.seq].slice(-HISTORY);
-          if (ev.row) void rememberRow(ch.roomId, ch.pk, ev.row).catch(() => {});
+          if (ev.row) void rememberRow(ch.roomId, ch.pk, ev.row).then(fill, () => {});
           return;
         case "Presence":
           this.online.value = hear(this.online.peek(), ev.presence, Date.now());
@@ -458,12 +472,7 @@ export class ChannelStore {
           if (base || earlyBase) this.base.value = base;
           this.ready.value = true;
         });
-        void backfill(ch.roomId, ch.pk, {
-          older: (before, limit) => ch.olderRows(before, limit),
-          hidden: () => typeof document !== "undefined" && document.hidden,
-          wait: (ms) => new Promise((done) => setTimeout(done, ms)),
-          stopped: () => closed,
-        }).catch(() => {});
+        fill();
       },
     });
     warmUp(steps, was, HISTORY);
