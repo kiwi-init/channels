@@ -2,11 +2,12 @@
 // pairing; adopt stores the cert; listening names the subscribers; stop quiets the socket.
 
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
-import { chmodSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { adoptDaemon, daemonHello, daemonListening, daemonSock, ensureDaemon, loadPairedMachine, startDaemon, stopDaemon, type Daemon } from "../src/daemon.ts";
-import { generateIdentity } from "@kiwi/core/identity.ts";
+import { adoptDaemon, daemonHello, daemonLaunch, daemonListening, daemonSock, ensureDaemon, loadPairedMachine, startDaemon, stopDaemon, type Daemon } from "../src/daemon.ts";
+import { certUntil, nextLink, readDeviceList, rootLink } from "@kiwi/core/devices.ts";
+import { generateIdentity, withExchangeKey } from "@kiwi/core/identity.ts";
 import { saveMachine } from "../src/machine.ts";
 import { certifyMachine } from "@kiwi/core/person.ts";
 import { VERSION } from "../src/version.ts";
@@ -50,7 +51,7 @@ describe("the daemon socket", () => {
     const h0 = await daemonHello();
     const person = await generateIdentity("Ada Lovelace");
     const cert = await certifyMachine(person, { pk: h0.machine!, xpk: h0.mxpk!, label: "sock-test" });
-    await adoptDaemon(cert, { pk: person.pk, xpk: person.xpk!, name: "Ada Lovelace" });
+    await adoptDaemon({ cert }, { pk: person.pk, xpk: person.xpk!, name: "Ada Lovelace" });
     const h1 = await daemonHello();
     expect(h1.certified).toBe(true);
     expect(h1.person).toEqual({ pk: person.pk, xpk: person.xpk!, name: "Ada Lovelace" });
@@ -59,7 +60,41 @@ describe("the daemon socket", () => {
     const mallory = await generateIdentity("Mallory");
     const other = await generateIdentity("someone-else");
     const foreign = await certifyMachine(mallory, { pk: other.pk, xpk: other.xpk!, label: "x" });
-    await expect(adoptDaemon(foreign, { pk: mallory.pk, xpk: mallory.xpk!, name: "M" })).rejects.toThrow(/another computer/);
+    await expect(adoptDaemon({ cert: foreign }, { pk: mallory.pk, xpk: mallory.xpk!, name: "M" })).rejects.toThrow(/another computer/);
+    const take = await certifyMachine(mallory, { pk: h0.machine!, xpk: h0.mxpk!, label: "takeover" });
+    await expect(adoptDaemon({ cert: take }, { pk: mallory.pk, xpk: mallory.xpk!, name: "M" })).rejects.toThrow(/already paired with Ada Lovelace/);
+    const paired = loadPairedMachine()!;
+    saveMachine({ identity: paired.identity, label: paired.label, relay: paired.relay });
+  });
+
+  test("adopt takes a device list that lists this computer, and refuses one that doesn't", async () => {
+    const h0 = await daemonHello();
+    const person = await withExchangeKey(await generateIdentity("Grace Hopper"));
+    const desk = await withExchangeKey(await generateIdentity("desk"));
+    const root = [await rootLink(person, { pk: desk.pk, xpk: desk.xpk!, label: "desk", os: "macOS", as: "desktop" })];
+    const read = await readDeviceList(root);
+    if (!read.ok) throw new Error(read.why);
+    const named = { pk: person.pk, xpk: person.xpk!, name: "Grace Hopper" };
+    await expect(adoptDaemon({ links: root }, named)).rejects.toThrow(/doesn't list this computer/);
+    const links = [
+      ...root,
+      await nextLink(read.list, desk, { op: "add", device: h0.machine!, dxpk: h0.mxpk!, label: "sock-test", os: "macOS", as: "computer", approve: false, until: certUntil(Date.now()) }),
+    ];
+    const stranger = await generateIdentity("Mallory");
+    await expect(adoptDaemon({ links }, { pk: stranger.pk, xpk: stranger.xpk!, name: "M" })).rejects.toThrow(/another person's/);
+    await expect(adoptDaemon({ links: links.map((l, i) => (i === 1 ? { ...l, label: "renamed" } : l)) }, named)).rejects.toThrow(/doesn't check out/);
+    await adoptDaemon({ links }, named);
+    const h1 = await daemonHello();
+    expect(h1.certified).toBe(true);
+    expect(h1.person).toEqual(named);
+    expect(loadPairedMachine()?.device?.links).toEqual(links);
+    const after = await readDeviceList(links);
+    if (!after.ok) throw new Error(after.why);
+    const renewed = [...links, await nextLink(after.list, desk, { op: "renew", device: h0.machine!, until: certUntil(Date.now()) + 1 })];
+    await adoptDaemon({ links: renewed }, named);
+    await expect(adoptDaemon({ links }, named)).rejects.toThrow(/newer device list/);
+    expect(loadPairedMachine()?.device?.links).toEqual(renewed);
+    expect(loadPairedMachine()?.cert).toBeUndefined();
   });
 
   test("hello re-reads machine.json: no cached pairing", async () => {
@@ -70,6 +105,66 @@ describe("the daemon socket", () => {
     expect(h.machine).toBe(paired.identity.pk);
     expect(h.certified).toBe(false);
     expect(h.person).toBeNull();
+  });
+
+  test("two adoptions racing for different people leave one standing", async () => {
+    const h0 = await daemonHello();
+    const ada = await generateIdentity("Ada Lovelace");
+    const grace = await withExchangeKey(await generateIdentity("Grace Hopper"));
+    const cert = await certifyMachine(ada, { pk: h0.machine!, xpk: h0.mxpk!, label: "race" });
+    const desk = await withExchangeKey(await generateIdentity("desk"));
+    const root = [await rootLink(grace, { pk: desk.pk, xpk: desk.xpk!, label: "desk", os: "macOS", as: "desktop" })];
+    const read = await readDeviceList(root);
+    if (!read.ok) throw new Error(read.why);
+    const links = [
+      ...root,
+      await nextLink(read.list, desk, { op: "add", device: h0.machine!, dxpk: h0.mxpk!, label: "race", os: "macOS", as: "computer", approve: false, until: certUntil(Date.now()) }),
+    ];
+    const results = await Promise.allSettled([
+      adoptDaemon({ cert }, { pk: ada.pk, xpk: ada.xpk!, name: "Ada Lovelace" }),
+      adoptDaemon({ links }, { pk: grace.pk, xpk: grace.xpk!, name: "Grace Hopper" }),
+    ]);
+    const settled = results.map((r) => (r.status === "fulfilled" ? "ok" : "rejected"));
+    expect(settled.sort()).toEqual(["ok", "rejected"]);
+    const standing = loadPairedMachine()!.person?.pk ?? loadPairedMachine()!.device?.person.pk;
+    if (!standing) throw new Error("the race left no pairing standing");
+    expect([ada.pk, grace.pk]).toContain(standing);
+  });
+
+  test("the socket answers only a caller holding the daemon's token", async () => {
+    const token = readFileSync(join(home, "daemon.token"), "utf8").trim();
+    expect(token.length).toBeGreaterThanOrEqual(32);
+    const ask = (frame: Record<string, unknown>): Promise<{ id: number; ok: boolean; error?: string }> =>
+      new Promise((resolve, reject) => {
+        void (async () => {
+          const socket = await Bun.connect({
+            unix: daemonSock(),
+            socket: {
+              data(_s, data) {
+                try {
+                  const first = new TextDecoder().decode(data).split("\n")[0] ?? "";
+                  resolve(JSON.parse(first) as { id: number; ok: boolean; error?: string });
+                } catch (err) {
+                  reject(err instanceof Error ? err : new Error(String(err)));
+                }
+              },
+              error(_s, e) {
+                reject(e instanceof Error ? e : new Error(String(e)));
+              },
+            },
+          });
+          socket.write(JSON.stringify(frame) + "\n");
+        })().catch((err: unknown) => reject(err instanceof Error ? err : new Error(String(err))));
+      });
+    await expect(ask({ id: 1, verb: "listening" })).resolves.toEqual({ id: 1, ok: false, error: expect.stringMatching(/token/) });
+    await expect(ask({ id: 1, verb: "listening", token: "not-the-one" })).resolves.toEqual({ id: 1, ok: false, error: expect.stringMatching(/token/) });
+    await expect(ask({ id: 1, verb: "launch", token: "not-the-one" })).resolves.toEqual({ id: 1, ok: false, error: expect.stringMatching(/token/) });
+    await expect(ask({ id: 1, verb: "term", pane: "nope", cols: 80, rows: 24, token })).resolves.toEqual({ id: 1, ok: false, error: expect.stringMatching(/term needs/) });
+    await expect(ask({ id: 1, verb: "listening", token })).resolves.toMatchObject({ ok: true });
+  });
+
+  test("a launch asking for bypass is refused while kiwi launches bypass is off", async () => {
+    await expect(daemonLaunch({ harness: "codex", folder: "/tmp", code: "mc2-00000000-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", permission: "bypass" })).rejects.toThrow(/launches bypass/);
   });
 
   test("listening is empty, and stop quiets the socket", async () => {
@@ -138,6 +233,7 @@ describe("the daemon socket", () => {
       d = await startDaemon(dir);
       expect(statSync(dir).mode & 0o777).toBe(0o700);
       expect(statSync(daemonSock(dir)).mode & 0o777).toBe(0o600);
+      expect(statSync(join(dir, "daemon.token")).mode & 0o777).toBe(0o600);
     } finally {
       await d?.stop().catch(() => {});
       rmSync(dir, { recursive: true, force: true });

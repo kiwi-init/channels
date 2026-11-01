@@ -53,7 +53,9 @@ export function NowCard({ channel, needs }: { channel: Channel; needs: number })
   const [folded, setFolded] = useState(readFolded)
   const now = nowOf(channel)
   const working = now.working.length + now.more
-  const summary = [working ? `${working} working` : "nobody working", needs ? `${needs} ${needs === 1 ? "needs" : "need"} you` : "nothing needs you", `${now.doneCount} done today`].join(" · ")
+  const summary = [working ? `${working} in progress` : "nothing in progress", needs ? `${needs} ${needs === 1 ? "needs" : "need"} you` : "nothing needs you", `${now.doneCount} done today`].join(
+    " · "
+  )
   const fold = () => {
     setFolded(!folded)
     keepFolded(!folded)
@@ -67,7 +69,7 @@ export function NowCard({ channel, needs }: { channel: Channel; needs: number })
       </button>
       {!folded && (
         <div className="now-body">
-          <Line label="Working">
+          <Line label="In progress">
             {now.working.length ? (
               <>
                 {now.working.map((t) => (
@@ -76,7 +78,7 @@ export function NowCard({ channel, needs }: { channel: Channel; needs: number })
                 {now.more > 0 && <span className="now-more">+{now.more} more</span>}
               </>
             ) : (
-              <span className="now-quiet">nobody right now</span>
+              <span className="now-quiet">nothing right now</span>
             )}
           </Line>
           {needs > 0 && (

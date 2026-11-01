@@ -22,8 +22,9 @@ import type {
   UpdateView,
 } from "../../../desktop/src/bridge.ts";
 import { publicChannel } from "../../../desktop/src/public-channel.ts";
-import { onLocalChange, readLocal, writeLocal, type Local } from "./local-store.ts";
+import { onLocalChange, readLocal, sweepBrowserKeys, writeLocal, type Local } from "./local-store.ts";
 import { persistQueue } from "./persist-queue.ts";
+import { devBuild } from "./relay.ts";
 
 export type { ChannelView, ComputerView, DeviceNewsView, GithubRepoView, KeysAtRest, KiwiBridge, PhoneView, PublicPerson, StoreSnapshot, TermEvent, TermOpenView, UpdateCheckView, UpdateView };
 
@@ -47,7 +48,12 @@ const publicOf = (l: Local): StoreSnapshot => ({
   personalities: l.personalities,
 });
 
+export function prepareBrowserStore(): void {
+  if (!bridge() && !devBuild()) sweepBrowserKeys();
+}
+
 let snapshot: StoreSnapshot = (() => {
+  prepareBrowserStore();
   const b = bridge();
   return b ? b.getSnapshot() : publicOf(readLocal());
 })();
@@ -104,6 +110,7 @@ export async function saveChannels(channels: ChannelView[]): Promise<void> {
 export async function migrateChannels(entries: ChannelIdentityView[]): Promise<number> {
   const b = bridge();
   if (b) return b.migrateChannels(entries);
+  if (!devBuild()) return 0;
   const { migrateEntries } = await import("../../../desktop/src/seats.ts");
   const { channels, added } = migrateEntries(readLocal().channels, entries);
   if (added) writeLocal({ channels });

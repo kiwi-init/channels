@@ -33,7 +33,7 @@ describe("a launch's answer", () => {
   });
 
   test("each place is named the same in the CLI and the app, and the CLI says how to watch it with Channels' own tmux", () => {
-    expect(PLACE_NAMES).toEqual({ rex: "Rex", hosted: "Channels" });
+    expect(PLACE_NAMES).toEqual({ rex: "Rex", tmux: "tmux", hosted: "Channels" });
     expect(launchedText({ ok: true, launch, placed: bare })).toMatch(
       new RegExp(`^started in Channels' own tmux, window @3 \\(to watch it: \\S+ -S /tmp/kiwi-501/0123456789ab attach -t _kiwi\\); it joins with launch ${launch}$`),
     );
@@ -138,16 +138,17 @@ describe("a seat in a terminal that can show it", () => {
     expect(readPlacedSeat({ ...seat, extra: "dropped" })).toEqual(seat);
   });
 
-  test("a seat in Channels' own tmux reads back with its socket and pane, and a pane or socket tmux wouldn't give, or a seat in the person's tmux, is refused", () => {
+  test("a seat in Channels' own tmux or the person's reads back with its socket and pane, and a pane or socket tmux wouldn't give is refused", () => {
     const pane: PlacedSeat = { place: "hosted", alias: seat.alias, agent: seat.agent, room: "abc", socket: "/private/tmp/tmux-501/default", pane: "%12" };
     expect(readPlacedSeat(JSON.parse(JSON.stringify(pane)))).toEqual(pane);
+    expect(readPlacedSeat({ ...pane, place: "tmux" })).toEqual({ ...pane, place: "tmux" });
     for (const bad of [
       { ...pane, pane: "12" },
       { ...pane, pane: "%1;rm" },
       { ...pane, socket: "tmp/default" },
       { ...pane, socket: "/tmp/a\nb" },
       { ...pane, place: "rex" },
-      { ...pane, place: "tmux" },
+      { ...pane, place: "terminal" },
     ])
       expect(readPlacedSeat(bad)).toBeNull();
   });

@@ -1,14 +1,29 @@
 import * as Effect from "effect/Effect";
-import { makeDelegation, readDelegation, type Delegation } from "../delegation.ts";
+import * as Exit from "effect/Exit";
+import { delegationDue, makeDelegation, readDelegation, type Delegation } from "../delegation.ts";
+import { makeRecord, sealRecord } from "../membership.ts";
+import { omit } from "../omit.ts";
 import type { ChannelCore } from "./core.ts";
 import type { Refused } from "./errors.ts";
 import { wrapAllFor } from "./keys.ts";
 import type { Relay } from "./relay.ts";
 
+export interface Computer {
+  pk: string;
+  xpk: string;
+}
+
+export interface Tended {
+  issued: string[];
+  dropped: string[];
+  adopted: string[];
+}
+
 export interface DelegationsFx {
   delegate(device: { pk: string; xpk: string }, person: string): Effect.Effect<Delegation, Refused, Relay>;
   undelegate(pk: string): Effect.Effect<void, Refused, Relay>;
   delegations(): Effect.Effect<Delegation[], Refused, Relay>;
+  tendDelegations(computers: readonly Computer[], person: string): Effect.Effect<Tended, Refused, Relay>;
 }
 
 export class ChannelDelegations {
@@ -37,6 +52,32 @@ export class ChannelDelegations {
         if (d) out.push(d);
       }
       return out;
+    }),
+
+    tendDelegations: Effect.fn("Channel.tendDelegations")({ self: this }, function* (this: ChannelDelegations, computers: readonly Computer[], person: string) {
+      yield* this.ch.ownerOnly();
+      const now = Date.now();
+      const held = yield* this.ch.fx.delegations();
+      const mine = new Set(computers.map((c) => c.pk));
+      const issued: string[] = [];
+      for (const c of computers) {
+        const d = held.find((h) => h.delegate === c.pk);
+        if (d && d.person === person && d.dxpk === c.xpk && !delegationDue(d, now)) continue;
+        if (Exit.isSuccess(yield* Effect.exit(this.ch.fx.delegate(c, person)))) issued.push(c.pk);
+      }
+      const stale = held.filter((d) => !mine.has(d.delegate)).map((d) => d.delegate);
+      const dropped = stale.length ? yield* this.ch.fx.dropDelegates(stale) : [];
+      const adopted: string[] = [];
+      for (const m of yield* this.ch.fx.members()) {
+        if (!m.active || m.unverified || m.owner || !m.signedBy || !mine.has(m.signedBy)) continue;
+        const e = this.ch.access.epoch;
+        const key = this.ch.access.keys[String(e)]!;
+        const info = omit(m, "active", "readOnly", "unverified", "at", "signedBy");
+        const rec = yield* Effect.promise(async () => sealRecord(key, await makeRecord(this.ch.identity, this.ch.roomId, info)));
+        yield* this.ch.request(`/members/${m.pk}/record`, { method: "PUT", body: JSON.stringify({ rec, e, post: !m.readOnly }) });
+        adopted.push(m.pk);
+      }
+      return { issued, dropped, adopted } satisfies Tended;
     }),
   };
 }

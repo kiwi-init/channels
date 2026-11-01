@@ -1,9 +1,12 @@
 import { accountClient, type AccountClient } from "@kiwi/core/account.ts";
-import { certUntil, dueForRenewal, nextLink, readDeviceList, rootLink, type DeviceLink, type DeviceLinkBody, type DeviceList } from "@kiwi/core/devices.ts";
+import { approvingDevice, certUntil, dueForRenewal, listedComputer, nextLink, readDeviceList, rootLink, type DeviceLink, type DeviceLinkBody, type DeviceList } from "@kiwi/core/devices.ts";
 import { askToEnroll, enrollDigits, enrollMailbox, enrollNonce, readEnrollGrant, revealMatches, type EnrollGrant, type Enrollment } from "@kiwi/core/enroll.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
+import { personFingerprint } from "@kiwi/core/fingerprint.ts";
+import type { Mailbox } from "@kiwi/core/mailbox.ts";
+import { inlineText } from "@kiwi/core/membership.ts";
 import { certifyMachine } from "@kiwi/core/person.ts";
-import type { ComputerView, DeviceNewsView, DeviceView, EnrollAskView, EnrollConfirmView, EnrollStatusView, PublicPerson } from "./bridge.ts";
+import type { ComputerView, DeviceNewsView, DeviceView, EnrollAskView, EnrollConfirmView, EnrollKeptView, EnrollPersonView, EnrollStatusView, PublicPerson } from "./bridge.ts";
 
 const TRIES = 3;
 const RENEW_EVERY_MS = 6 * 3_600_000;
@@ -35,6 +38,7 @@ export interface DeviceHost {
   forget(device: string): Promise<void>;
   renew(device: string): Promise<void>;
   news(): Promise<DeviceNewsView | null>;
+  addComputer(m: { pk: string; xpk: string; label: string; os: string }): Promise<DeviceLink[] | null>;
   session(): Promise<{ client: AccountClient; device: Identity } | null>;
 }
 
@@ -170,7 +174,9 @@ export function createDeviceHost(deps: DeviceHostDeps): DeviceHost {
       }
       const mine = e.answer?.device === s.device.pk && answered.has(e.id);
       const stage = !e.answer ? "new" : !mine ? "elsewhere" : e.reveal ? "digits" : "waiting";
-      return { id: e.id, label: e.ask.label, os: e.ask.os, as: e.ask.as, at: e.at, stage };
+      const who = deps.who();
+      const fingerprint = who ? await personFingerprint(who.pk) : null;
+      return { id: e.id, label: e.ask.label, os: e.ask.os, as: e.ask.as, at: e.at, stage, fingerprint };
     },
 
     async answer(id) {
@@ -223,7 +229,7 @@ export function createDeviceHost(deps: DeviceHostDeps): DeviceHost {
       };
       const mailbox = await enrollMailbox(deps.relayUrl(), device, { ...e, answer: { ...answer, at: e.answer.at } }, deps.fetchImpl);
       await mailbox.put("b", grant);
-      if (cert) deps.computer?.({ label: e.ask.label, os: e.ask.os, machinePk: e.ask.device, machineXpk: e.ask.dxpk, personPk: cert.pk, at: now() });
+      if (e.ask.as === "computer") deps.computer?.({ label: e.ask.label, os: e.ask.os, machinePk: e.ask.device, machineXpk: e.ask.dxpk, personPk: who.pk, at: now() });
       answered.delete(id);
       await client.drop(id).catch(() => {});
       return { ok: true, label: e.ask.label };
@@ -254,6 +260,23 @@ export function createDeviceHost(deps: DeviceHostDeps): DeviceHost {
       await extend(client, device, { op: "renew", device: target, until: certUntil(now()) });
     },
 
+    async addComputer(m) {
+      const s = await sync();
+      if (!s || !(await refresh(s))) return null;
+      const list = await readList(deps.links());
+      if (!approvingDevice(list, s.device.pk, now())) return null;
+      if (list.revoked.includes(m.pk)) throw new Error("this computer was removed from your devices: it needs a new kiwi key before it can be added again");
+      if (listedComputer(list, m.pk, now())) return deps.links();
+      const listed = list.devices.find((d) => d.device === m.pk);
+      if (listed && listed.as !== "computer") throw new Error("this computer's key is listed as another kind of device");
+      if (listed) {
+        const { links } = await extend(s.client, s.device, { op: "renew", device: m.pk, until: certUntil(now()) });
+        return links;
+      }
+      const { links } = await extend(s.client, s.device, { op: "add", device: m.pk, dxpk: m.xpk, label: m.label, os: m.os, as: "computer", approve: false, until: certUntil(now()) });
+      return links;
+    },
+
     async news() {
       if (removed) return { links: [], revokes: [], removed };
       const links = deps.links();
@@ -271,9 +294,7 @@ export interface EnrolleeDeps {
   relayUrl: () => string;
   token: () => Promise<string | null>;
   who: () => PublicPerson | null;
-  device: () => Identity | null;
-  saveDevice: (d: Identity) => void;
-  enrolled: (grant: EnrollGrant) => void;
+  enrolled: (grant: EnrollGrant, device: Identity) => void;
   label: () => string;
   os: () => string;
   as?: "desktop" | "phone";
@@ -283,6 +304,7 @@ export interface EnrolleeDeps {
 export interface Enrollee {
   begin(): Promise<void>;
   status(): Promise<EnrollStatusView | null>;
+  keep(): Promise<EnrollKeptView>;
   cancel(): Promise<void>;
 }
 
@@ -293,29 +315,40 @@ interface Asking {
   client: AccountClient;
   device: Identity;
   seen: Enrollment | null;
+  check: { grant: EnrollGrant; mailbox: Mailbox; person: EnrollPersonView } | null;
 }
+
+const someone = (name: string): string => inlineText(name, 60) || "someone";
 
 export function createEnrollee(deps: EnrolleeDeps): Enrollee {
   let asking: Asking | null = null;
+
+  const letGo = async () => {
+    const a = asking;
+    asking = null;
+    if (!a) return;
+    await a.client.drop(a.id).catch(() => {});
+    await a.check?.mailbox.drop().catch(() => {});
+  };
 
   return {
     async begin() {
       if (deps.who()) throw new Error("this app already holds your person");
       const token = await deps.token();
       if (!token) throw new Error("sign in first, with the account your other computer uses");
-      if (asking) await asking.client.drop(asking.id).catch(() => {});
-      asking = null;
+      await letGo();
       const relay = deps.relayUrl();
-      const device = await myDevice(deps, deps.label());
+      const device = await withExchangeKey(await generateIdentity(deps.label()));
       const client = accountClient(relay, async () => (await deps.token()) ?? token, device, deps.fetchImpl);
       const { ask, nonce } = await askToEnroll(device, { label: deps.label(), os: deps.os(), as: deps.as ?? "desktop" });
       const id = await client.ask(ask);
-      asking = { id, nonce, relay, client, device, seen: null };
+      asking = { id, nonce, relay, client, device, seen: null, check: null };
     },
 
     async status() {
       const a = asking;
       if (!a) return null;
+      if (a.check) return { stage: "check", person: a.check.person };
       if (!a.seen) {
         const e = await a.client.enrollment();
         if (asking !== a) return null;
@@ -343,16 +376,27 @@ export function createEnrollee(deps: EnrolleeDeps): Enrollee {
       }
       const grant = await readEnrollGrant(raw, a.device.pk);
       if (!grant) throw new Error("the grant your other computer sent doesn't hold up");
+      const person = { name: someone(grant.person.name), fingerprint: await personFingerprint(grant.person.pk) };
+      if (asking !== a) return null;
+      a.check = { grant, mailbox, person };
+      return { stage: "check", person };
+    },
+
+    async keep() {
+      const a = asking;
+      if (!a?.check) throw new Error("check your person's key before this app keeps it");
       asking = null;
-      deps.enrolled(grant);
-      await mailbox.drop();
+      const { grant, mailbox } = a.check;
+      const held = deps.who();
+      if (held) {
+        await mailbox.drop().catch(() => {});
+        throw new Error(`kept nothing: while this waited, this app became one of ${someone(held.name)}'s devices (key ${await personFingerprint(held.pk)})`);
+      }
+      deps.enrolled(grant, a.device);
+      await mailbox.drop().catch(() => {});
       return { stage: "done", person: grant.person, channels: grant.channels };
     },
 
-    async cancel() {
-      const a = asking;
-      asking = null;
-      if (a) await a.client.drop(a.id).catch(() => {});
-    },
+    cancel: letGo,
   };
 }

@@ -126,7 +126,16 @@ reveal.
      reveal; there is no code to carry it.
    - The answer holds `{cert, relay, the person's public key and name, the channels it may join
      (codes, not keys)}`, never a secret key.
-7. **Join.**
+7. **Check the person's key.**
+   - Only the approving app checks the digits, so a relay that answers the ask itself, with a
+     device and person it controls, would otherwise get the new device to join that person.
+   - The new device shows the person's name and key (`personFingerprint`), the same key the
+     approving app shows next to the digits and in Settings. It writes nothing (its device key, the
+     list, the person) until you confirm they match. Turning it down drops the grant, and the next
+     ask uses a new device key.
+   - A device that already holds a person refuses another, and checks again right before it saves.
+     `kiwi login` follows the same rules.
+8. **Join.**
    - The device asks to join each channel with its `DeviceClaim`.
    - Owners' clients admit it on their own; channels you own admit it immediately.
 
@@ -145,9 +154,29 @@ gets one pending ask at most. Approving it needs your app in your hand and the d
 | `PUT /v1/account/ask/<id>/answer` `{device, dxpk, nonce}` | an app that approves | once, with the app's own listed keys |
 | `PUT /v1/account/ask/<id>/reveal` `{nonce}` | the asking device | once, after the answer; checked against the commitment |
 | `DELETE /v1/account/ask/<id>` | the asking device, an app that approves | turns the ask away |
+| `POST /v1/account/move` `{to}` | the person key or an app that approves, with a GitHub sign-in in `x-human-token-to` | moves a WorkOS account to `github_<id>` once (`src/relay/move.ts`) |
+
+**Moving to GitHub sign-in** (T261). A WorkOS account moves to the `github_<id>` account of the
+GitHub sign-in sent with it: the device list, the recovery chain, the vault and the owned channels
+the quota counts. The move freezes the WorkOS account (reads still answer, writes wait), copies it
+into the GitHub account in one step, and only if that account holds nothing, then marks it moved.
+From then on the WorkOS account's routes answer from the GitHub one, so older apps keep working, and
+channels they create count against the GitHub account. Every step can run again: a repeat changes
+nothing, and a freeze nobody finishes ends after 10 minutes, as moved if the copy went through and
+untouched if it didn't. Nothing under the WorkOS id is deleted. A GitHub account that already holds
+devices, a device waiting to join, or a signer the list doesn't approve is refused, and the WorkOS
+account stays as it was.
 
 A key revoked in a published list is refused on every account route, can't ask again, and loses its
-computer inbox at once (`/v1/machine/<key>` answers 403 and its socket closes). The digits come from
+computer inbox at once (`/v1/machine/<key>` answers 403 and its socket closes).
+
+A computer can also register its inbox with the device list instead of a `MachineCert`
+(`PUT /v1/machine/<key>` `{links}`), when that list has it as a current computer. The person key, or
+any current approving device in that list, then counts as its person: asks, unpairing, the online
+check and `/v1/person/<pk>/machines`. The relay never rolls the kept list back. Each list the account
+accepts reaches its computers, so a revoked or expired desktop stops counting at once. The daemon
+checks asks the same way (`readAsk` with the list). Under decision A, this is what lets a desktop
+without the person key start agents. The digits come from
 `enrollDigits` in `packages/core/src/enroll.ts`.
 
 ## 3. Admitting agents without an app open (delegation)
@@ -176,6 +205,13 @@ owner-signed **delegation** lets the `kiwi` daemon admit its own computer's agen
   this computer pokes it (`admit` verb, while the request waits), when one of its seats gets a
   `request` frame, and once per known channel at start. It keeps looking while a request of its
   own waits on the joiner's reveal, for up to 30 minutes.
+- In the owner's app (T684): `packages/app/src/delegations.ts` runs `tendDelegations`
+  (`packages/core/src/client/delegations.ts`) in the approval loop for each owned channel, at most
+  hourly unless the computers change. The computers are the app's own and approved ones, plus the
+  device list's current `computer` entries. It delegates to each one without a delegation, or
+  with fewer than 7 days left; drops the rest and rotates; and re-signs the records a delegate
+  signed with the owner key. Forget computer calls `dropDelegates` before removing its agents, so
+  their removal rotates past it.
 
 ## 4. Revocation and expiry
 

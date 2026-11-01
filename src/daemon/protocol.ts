@@ -17,6 +17,10 @@ export function daemonSock(dir = home()): string {
   return join(dir, "daemon.sock");
 }
 
+export function daemonToken(dir = home()): string {
+  return join(dir, "daemon.token");
+}
+
 export type DaemonVerb =
   | "hello"
   | "adopt"
@@ -42,7 +46,7 @@ export type DaemonVerb =
   | "unpair"
   | "stop";
 
-export const DAEMON_PROTOCOL = 7;
+export const DAEMON_PROTOCOL = 9;
 
 export type DaemonEvent = "open" | "roster" | "info" | "request";
 

@@ -32,10 +32,12 @@ final class Engine: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
     private var loaded: CheckedContinuation<Void, Error>?
     private let decoder = JSONDecoder()
     private let logger = Logger(subsystem: "com.kiwiinit.channels", category: "engine")
-    private static let workos: Set<String> = [
+    private static let signIn: Set<String> = [
         "https://api.workos.com/user_management/authorize/device", "https://api.workos.com/user_management/authenticate",
+        "https://github.com/login/device/code", "https://github.com/login/oauth/access_token",
     ]
     var onPush: (Push) -> Void = { _ in }
+    var onLost: () -> Void = {}
 
     override init() {
         let config = WKWebViewConfiguration()
@@ -54,6 +56,10 @@ final class Engine: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
         let source = try String(contentsOf: url, encoding: .utf8)
         web.configuration.userContentController.addUserScript(
             WKUserScript(source: source, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
+        try await open()
+    }
+
+    func open() async throws {
         try await withCheckedThrowingContinuation { (done: CheckedContinuation<Void, Error>) in
             loaded = done
             web.loadHTMLString("<!doctype html><meta charset=utf-8><title>Channels engine</title>", baseURL: URL(string: "http://localhost/"))
@@ -77,10 +83,11 @@ final class Engine: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
 
     private func fetchForEngine(_ id: Int, _ url: String, _ body: String) async {
         var answer: [String: Any] = ["id": id]
-        if Self.workos.contains(url), let target = URL(string: url) {
+        if Self.signIn.contains(url), let target = URL(string: url) {
             var request = URLRequest(url: target, timeoutInterval: 20)
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "content-type")
+            request.setValue("application/json", forHTTPHeaderField: "accept")
             request.httpBody = Data(body.utf8)
             do {
                 let (data, response) = try await URLSession.shared.data(for: request)
@@ -91,7 +98,7 @@ final class Engine: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
                 answer["error"] = error.localizedDescription
             }
         } else {
-            answer["error"] = "this app only makes WorkOS's sign-in calls"
+            answer["error"] = "this app only makes its sign-in calls"
         }
         guard let blob = try? JSONSerialization.data(withJSONObject: answer), let json = String(data: blob, encoding: .utf8) else { return }
         do {
@@ -113,6 +120,9 @@ final class Engine: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
 
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         onPush(.log("engine restarted"))
+        loaded?.resume(throwing: EngineError.garbled)
+        loaded = nil
+        onLost()
     }
 
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {

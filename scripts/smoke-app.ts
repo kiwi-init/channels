@@ -1,13 +1,13 @@
 import { spawn } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium } from "playwright-core";
 import { startLocalRelay } from "./local-relay.ts";
+import { harnessDist } from "./ui-harness.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
-const DIST = resolve(process.argv[2] ?? join(ROOT, "ui/dist"));
-if (!existsSync(join(DIST, "index.html"))) throw new Error(`no index.html in ${DIST}: run bun run ui:build first`);
+const DIST = harnessDist(process.argv[2]);
 
 const data = mkdtempSync(join(tmpdir(), "kiwi-app-smoke-"));
 const cli = join(data, "cli");

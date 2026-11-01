@@ -195,10 +195,10 @@ describe("unpairing", () => {
   test("by the app's Forget: unpairAt signs the DELETE with the person key, and an unknown machine is already gone (T526)", async () => {
     const m = await registered("unpair-forget");
     const inbox = await openInbox(m, m);
-    expect(await unpairAt({ person, relay }, m.pk)).toBe(true);
+    expect(await unpairAt({ signer: person, person: person.pk, relay }, m.pk)).toBe(true);
     expect(await inbox.closed).toBe(4000);
     expect((await call(person, m, "GET", base(m))).status).toBe(403);
-    expect(await unpairAt({ person: stranger, relay }, (await registered("not-theirs")).pk)).toBe(false);
+    expect(await unpairAt({ signer: stranger, person: stranger.pk, relay }, (await registered("not-theirs")).pk)).toBe(false);
   });
 
   test("by the machine itself does the same", async () => {

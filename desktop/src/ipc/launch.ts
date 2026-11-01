@@ -7,7 +7,7 @@ import { daemonHarnesses, daemonHello, daemonLaunch } from "../daemon-client.ts"
 import type { Host } from "../host.ts";
 import { launchRequestOf, MACHINE_PK } from "../launch-view.ts";
 import { foldersOn, harnessesOn, launchOn, machineOnline, settingsOn, type Asker } from "../remote.ts";
-import { requirePerson, store } from "../store.ts";
+import { personSigner, store } from "../store.ts";
 import { runKiwi } from "./kiwi.ts";
 
 const ROOM = /^[A-Za-z0-9_-]{1,128}$/;
@@ -45,7 +45,7 @@ async function launchRoots(args: string[]): Promise<string[]> {
   return Array.isArray(roots) ? roots.filter((f): f is string => typeof f === "string" && f.startsWith("/")) : [];
 }
 
-const asker = (): Asker => ({ person: requirePerson(), relay: store.relayUrl });
+const asker = (): Asker => ({ ...personSigner(), relay: store.relayUrl });
 
 function paired(machinePk: unknown): ComputerView | null {
   if (typeof machinePk !== "string" || !MACHINE_PK.test(machinePk)) return null;

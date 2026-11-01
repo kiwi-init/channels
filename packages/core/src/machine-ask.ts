@@ -1,5 +1,6 @@
 import { b64url, openFrom, sealTo } from "./crypto.ts";
 import { isKnownHarness, type KnownHarness } from "./harnesses.ts";
+import { speaksForPerson, type DeviceList } from "./devices.ts";
 import { sign, verify, type Identity } from "./identity.ts";
 import { joinLineRefusal } from "./join-line.ts";
 import { CHOICE_KEYS, readLaunchChoices, type LaunchChoices } from "./launch-options.ts";
@@ -70,7 +71,7 @@ function readAskBody(x: unknown): (MachineAsk & { pk: string; sig: string }) | n
 export async function readAsk(
   machine: Identity,
   box: string,
-  expect: { person: string; now?: number; claim: (id: string) => boolean },
+  expect: { person: string; list?: DeviceList | null; now?: number; claim: (id: string) => boolean },
 ): Promise<{ ok: true; ask: MachineAsk } | { ok: false; why: AskRefusal }> {
   if (box.length > ASK_MAX_BYTES) return { ok: false, why: "too-big" };
   const opened = machine.xsk ? await openFrom(machine.xsk, box, ASK_INFO) : null;
@@ -85,8 +86,11 @@ export async function readAsk(
   const signed = readAskBody(parsed);
   if (!signed) return { ok: false, why: "malformed" };
   if (!(await verify(signed))) return { ok: false, why: "unsigned" };
-  if (signed.pk !== expect.person || signed.machine !== machine.pk) return { ok: false, why: "not-yours" };
-  if (Math.abs((expect.now ?? Date.now()) - signed.at) > ASK_FRESH_MS) return { ok: false, why: "stale" };
+  const now = expect.now ?? Date.now();
+  const list = expect.list?.person === expect.person ? expect.list : null;
+  const yours = signed.pk === expect.person || (!!list && speaksForPerson(list, signed.pk, now));
+  if (!yours || signed.machine !== machine.pk) return { ok: false, why: "not-yours" };
+  if (Math.abs(now - signed.at) > ASK_FRESH_MS) return { ok: false, why: "stale" };
   if (!expect.claim(signed.id)) return { ok: false, why: "replayed" };
   return { ok: true, ask: { kind: signed.kind, v: signed.v, machine: signed.machine, verb: signed.verb, args: signed.args, id: signed.id, at: signed.at, reply: signed.reply } };
 }

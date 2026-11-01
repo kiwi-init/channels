@@ -179,5 +179,7 @@ export const openOwnerSession = Effect.fn("OwnerSession.open")(function* (alias:
   keepAnswersIn(keys.answers ?? null);
   const identity = yield* keys.identity(name, cfg.roomId);
   if (identity.pk !== cfg.ownerPk) return yield* new Rejected(`${name} isn't this channel's owner key`);
-  return new OwnerSession(alias, cfg, identity, (a) => Effect.runSync(keys.saveAccess(alias, a)));
+  const session = new OwnerSession(alias, cfg, identity, (a) => Effect.runSync(keys.saveAccess(alias, a)));
+  session.ownerCh.opensRooms = false;
+  return session;
 });

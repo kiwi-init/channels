@@ -2,8 +2,9 @@ import { Fragment, useEffect, useState } from "react"
 
 import "~/styles/people-add.css"
 import { cx, Heading, Toggle } from "~/kit/bits"
+import { Track } from "~/kit/glide"
 import { Icon } from "~/kit/icons"
-import type { Channel } from "~/model"
+import { ALL_POWERS, NO_POWERS, trusted, type Channel } from "~/model"
 import { useApp } from "~/nav"
 import { PanelHead } from "~/panels/frame"
 
@@ -73,6 +74,12 @@ export function CopyBox({ text, label, disabled, wrap }: { text: string | null; 
 const POWERS = [
   { id: "addsAgents", label: "Can add agents", on: "Their agents join on their own from computers paired with their Kiwi app.", off: "Their agents wait for you to let them in." },
   { id: "answersDecisions", label: "Can answer decisions", on: "They answer agents' decisions in Needs you, as you do.", off: "Agents' decisions go to you and each agent's own person." },
+  {
+    id: "managesAgents",
+    label: "Can manage agents",
+    on: "They pick agents' personalities and roles, the lead included. Never people's, and never their own.",
+    off: "Only you change agents' personalities and roles.",
+  },
 ] as const
 
 const CAN = [
@@ -84,7 +91,8 @@ export function InvitePanel({ channel }: { channel: Channel }) {
   const { app } = useApp()
   const { link, failed, retry } = useInviteLink(channel.code)
   const can = channel.newMembers ?? "write"
-  const powers = channel.newPowers ?? { addsAgents: false, answersDecisions: false }
+  const powers = channel.newPowers ?? NO_POWERS
+  const trust = can === "write" && trusted(powers)
   return (
     <>
       <PanelHead title="Invite people" />
@@ -106,13 +114,31 @@ export function InvitePanel({ channel }: { channel: Channel }) {
         {channel.youOwn && (
           <section className="panel-section" aria-label="New people can">
             <Heading>New people can</Heading>
-            <div className="seg invite-seg" role="group" aria-label="New people can">
+            <div className="invite-power invite-trust">
+              <div className="invite-power-text">
+                <span className="invite-power-label">Full trust</span>
+                <p className="invite-note">
+                  {trust
+                    ? "They write and work, add agents, answer decisions and manage agents. The channel stays yours."
+                    : "Every power at once, for someone you'd trust with your life. The channel stays yours."}
+                </p>
+              </div>
+              <Toggle
+                label="Full trust"
+                on={trust}
+                onChange={(on) => {
+                  if (on) app.actions.setNewMembers(channel.code, "write")
+                  app.actions.setNewPowers(channel.code, on ? ALL_POWERS : NO_POWERS)
+                }}
+              />
+            </div>
+            <Track className="seg invite-seg" role="group" aria-label="New people can">
               {CAN.map((c) => (
                 <button key={c.id} type="button" aria-pressed={can === c.id} onClick={() => app.actions.setNewMembers(channel.code, c.id)}>
                   {c.label}
                 </button>
               ))}
-            </div>
+            </Track>
             <p className="invite-note">{CAN.find((c) => c.id === can)?.says}</p>
             {POWERS.map((power) => (
               <div key={power.id} className="invite-power">

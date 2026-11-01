@@ -3,7 +3,7 @@
 // At 1x and with the CPU throttled 4x, a channel's first visit and its later ones, plus a profile of
 // the slowest. With PERF_BUDGET_MS set it fails when the median revisit at 4x is over it.
 //
-//   bun run ui:build && bun scripts/perf-switch.ts [--json out.json]
+//   bun scripts/ui-harness.ts && bun scripts/perf-switch.ts [--json out.json]
 //
 // Needs Playwright's Chromium: bunx playwright-core install --only-shell chromium
 // (or set SMOKE_CHROMIUM to a Chrome binary).
@@ -15,6 +15,7 @@ import { join, resolve } from "node:path";
 import { chromium, type CDPSession, type Page } from "playwright-core";
 import { startLocalRelay } from "./local-relay.ts";
 import { firstRun, letIn, newChannel } from "./perf-ui.ts";
+import { harnessDist } from "./ui-harness.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
 const MESSAGES = Number(process.env.PERF_MESSAGES ?? 400);
@@ -45,7 +46,7 @@ const median = (xs: number[]) => {
   return s.length ? s[Math.floor(s.length / 2)]! : 0;
 };
 
-const { relay, port } = await startLocalRelay(join(data, "relay"), join(ROOT, "ui/dist"));
+const { relay, port } = await startLocalRelay(join(data, "relay"), harnessDist());
 const BASE = `http://localhost:${port}/`;
 
 const browser = await chromium.launch({ executablePath: process.env.SMOKE_CHROMIUM || undefined });

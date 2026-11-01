@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readDeviceList, type DeviceLink } from "@kiwi/core/devices.ts";
+import { personFingerprint } from "@kiwi/core/fingerprint.ts";
 import { withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
 import { createDeviceHost, type DeviceHost } from "../desktop/src/devices.ts";
 import type { EnrollStart, Push, Reply, Saved } from "../ios/engine/wire.ts";
@@ -95,6 +96,8 @@ describe("the phone engine signs in and enrolls (T640)", () => {
     expect(digits).toMatch(/^\d{6}$/);
     expect(await host.confirm(id, digits)).toEqual({ ok: true, label: "Pixel 9" });
 
+    expect(await ask({ op: "enrollCheck" })).toEqual({ name: "Jow", fingerprint: await personFingerprint(person.pk) });
+    expect(pushes.some((p) => p.type === "saved")).toBe(false);
     const saved = await ask<Saved>({ op: "enrollFinish" });
     expect(saved.person).toBeNull();
     expect(saved.device?.person).toEqual({ name: "Jow", pk: person.pk, xpk: person.xpk! });
@@ -125,6 +128,7 @@ describe("the phone engine signs in and enrolls (T640)", () => {
     const waiting = ask<{ digits: string }>({ op: "enrollWait" });
     const id = await answered(host);
     await host.confirm(id, (await waiting).digits);
+    await ask({ op: "enrollCheck" });
     const saved = await ask<Saved>({ op: "enrollFinish" });
     const phone = saved.device!.key.pk;
     await letIn(s, () => pushes.some((p) => p.type === "room" && p.room.code === s.code && p.room.connection === "live"));
@@ -155,6 +159,43 @@ describe("the phone engine signs in and enrolls (T640)", () => {
     const id = await answered(host);
     await host.deny(id);
     await expect(waiting).rejects.toThrow("turned this phone away");
+  });
+
+  test("the phone keeps nothing until its person's key is confirmed, and a turned-down key leaves nothing behind (#1323)", async () => {
+    await ask({ op: "start", saved: { relay, person: null, seats: [] } });
+    const s = await setupChannel(relay, { personName: "Jow", human: "dev:phone4" });
+    const person = await withExchangeKey(s.person);
+    const host = desktop(person, "phone4", [{ label: "onemouse", code: s.code }]);
+    await host.poll();
+    await ask({ op: "enrollBegin", relay, label: "Pixel 9", os: "Android 16", user: "phone4" });
+    const waiting = ask<{ digits: string }>({ op: "enrollWait" });
+    const id = await answered(host);
+    await host.confirm(id, (await waiting).digits);
+    const before = pushes.length;
+    await expect(ask({ op: "enrollFinish" })).rejects.toThrow("check your person's key");
+    expect(await ask({ op: "enrollCheck" })).toEqual({ name: "Jow", fingerprint: await personFingerprint(person.pk) });
+    await ask({ op: "enrollCancel" });
+    await expect(ask({ op: "enrollFinish" })).rejects.toThrow("signing in hasn't started");
+    expect(pushes.slice(before).some((p) => p.type === "saved")).toBe(false);
+    await s.ownerCh.close();
+  });
+
+  test("a cancel that lands while the phone keeps its person wins, and nothing is saved (#1323)", async () => {
+    await ask({ op: "start", saved: { relay, person: null, seats: [] } });
+    const s = await setupChannel(relay, { personName: "Jow", human: "dev:phone5" });
+    const host = desktop(await withExchangeKey(s.person), "phone5", [{ label: "onemouse", code: s.code }]);
+    await host.poll();
+    await ask({ op: "enrollBegin", relay, label: "Pixel 9", os: "Android 16", user: "phone5" });
+    const waiting = ask<{ digits: string }>({ op: "enrollWait" });
+    const id = await answered(host);
+    await host.confirm(id, (await waiting).digits);
+    await ask({ op: "enrollCheck" });
+    const before = pushes.length;
+    const finishing = ask({ op: "enrollFinish" });
+    await ask({ op: "enrollCancel" });
+    await expect(finishing).rejects.toThrow("cancelled, so this phone kept nothing");
+    expect(pushes.slice(before).some((p) => p.type === "saved")).toBe(false);
+    await s.ownerCh.close();
   });
 
   test("a dev relay needs the sign-in name", async () => {
@@ -222,6 +263,42 @@ describe("the phone engine's sign-in opens or says why (T13)", () => {
     } finally {
       noHost();
       workos.stop(true);
+    }
+  });
+
+  test("on a relay that takes GitHub sign-in, the app makes GitHub's calls, shows its code, and a check cut off in the browser is asked again (T254)", async () => {
+    const both = configOnly(async () => Response.json({ workosClientId: "client_test", githubSignIn: true, githubClientId: "Iv23phoneTest" }));
+    asHost();
+    try {
+      const before = pushes.length;
+      const started = ask<EnrollStart>({ op: "enrollBegin", relay: both.url.origin, label: "iPhone", os: "iOS 27", waitMs: 5_000 });
+      const call = await asked(before);
+      expect(call.url).toBe("https://github.com/login/device/code");
+      expect(JSON.parse(call.body)).toEqual({ client_id: "Iv23phoneTest" });
+      const answer = { device_code: "dc", user_code: "WDJB-MJHT", verification_uri: "https://github.com/login/device", expires_in: 900, interval: 0.05 };
+      engine.fetched(JSON.stringify({ id: call.id, status: 200, body: JSON.stringify(answer) }));
+      expect(await started).toEqual({ url: "https://github.com/login/device", code: "WDJB-MJHT" });
+      ask({ op: "enrollAsk" }).catch(() => {});
+
+      const cut = pushes.length;
+      const first = await asked(cut);
+      expect(first.url).toBe("https://github.com/login/oauth/access_token");
+      expect(JSON.parse(first.body)).toEqual({ client_id: "Iv23phoneTest", device_code: "dc", grant_type: "urn:ietf:params:oauth:grant-type:device_code" });
+      engine.fetched(JSON.stringify({ id: first.id, error: "The network connection was lost." }));
+
+      const next = pushes.length;
+      const pending = await asked(next);
+      engine.fetched(JSON.stringify({ id: pending.id, status: 200, body: JSON.stringify({ error: "authorization_pending" }) }));
+      const last = pushes.length;
+      const granted = await asked(last);
+      engine.fetched(JSON.stringify({ id: granted.id, status: 200, body: JSON.stringify({ access_token: `ghu_${"p".repeat(36)}`, token_type: "bearer" }) }));
+      for (let i = 0; i < 200 && !pushes.slice(last).some((p) => p.type === "log" && p.line === "sign-in: signed in, asking your computer"); i++) await Bun.sleep(10);
+      expect(pushes.slice(last).some((p) => p.type === "log" && p.line === "sign-in: signed in, asking your computer")).toBe(true);
+      expect(pushes.slice(before).some((p) => p.type === "fetch" && p.url.startsWith("https://api.workos.com"))).toBe(false);
+      await ask({ op: "enrollCancel" });
+    } finally {
+      noHost();
+      both.stop(true);
     }
   });
 

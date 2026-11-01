@@ -1,0 +1,117 @@
+.room-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.room-name .input {
+  flex: 1;
+  min-width: 0;
+}
+
+.room-hash {
+  color: var(--ink-3);
+  font: var(--t-ui) var(--mono);
+}
+
+.room-who {
+  width: 100%;
+}
+
+.room-who button {
+  flex: 1;
+}
+
+.room-pick {
+  display: grid;
+  gap: 12px;
+}
+
+.room-group {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.room-group legend {
+  margin-bottom: 4px;
+  color: var(--ink-3);
+  font: 600 var(--t-meta) var(--ui);
+}
+
+.room-member {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--ctl);
+  padding: 0 8px;
+  border-radius: var(--r-row);
+  font: var(--t-ui) var(--ui);
+  cursor: pointer;
+}
+
+.room-member:hover {
+  background: var(--wash);
+}
+
+.room-member.is-on {
+  background: var(--wash-2);
+}
+
+.room-member input {
+  margin: 0;
+  accent-color: var(--ink);
+}
+
+.room-member-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.room-member-role {
+  color: var(--ink-3);
+  font: var(--t-meta) var(--ui);
+}
+
+.room-in {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.room-in .btn {
+  margin-left: auto;
+}
+
+.room-edit-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.room-ready {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--ink-2);
+  font: var(--t-meta) / 1.5 var(--ui);
+}
+
+.room-ready li {
+  padding: 8px 12px;
+  border-radius: var(--r-ctl);
+  background: var(--wash);
+}
+
+.room-ready li.is-old {
+  background: var(--decide-wash);
+  color: var(--decide);
+}
+
+.room-pick .room-ready + .start-hint {
+  margin-top: 0;
+}

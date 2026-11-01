@@ -28,6 +28,7 @@ import { commitTo, joinCheckCode, ownerNonceStatement, spendAuto, type SigningBu
 import { canPost, scopesOf, wireScopes } from "../scopes.ts";
 import type { ChannelCore } from "./core.ts";
 import type { MemberRefusal, Refused } from "./errors.ts";
+import { wasRemoved } from "./info.ts";
 import { requestInfo, wrapAllFor } from "./keys.ts";
 import type { DeviceList } from "../devices.ts";
 import type { Relay } from "./relay.ts";
@@ -202,6 +203,7 @@ export class ChannelRequests {
       const scopes = persona ? personaScopes(persona) : (as?.scopes ?? inherited);
       const authority = !!same && (same.owner || !!same.addsAgents);
       const decides = !!same && (same.owner || !!same.answersDecisions);
+      const manages = !!same && (same.owner || !!same.managesAgents);
       const info: MemberInfo = {
         name: as?.name ?? req.name,
         kind,
@@ -211,6 +213,7 @@ export class ChannelRequests {
         ...(device ? { person: device.person, device: { pk: device.pk, label: device.label, as: device.as } } : {}),
         ...(kind === "human" && (as?.addsAgents ?? authority) ? { addsAgents: true } : {}),
         ...(kind === "human" && (as?.answersDecisions ?? decides) ? { answersDecisions: true } : {}),
+        ...(kind === "human" && (as?.managesAgents ?? manages) ? { managesAgents: true } : {}),
         ...(kind === "agent" && req.computer ? { from: { pk: req.computer.pk, label: req.computer.label } } : {}),
         ...(kind === "agent" && req.runs ? { runs: req.runs } : {}),
         ...(persona ? { persona } : {}),
@@ -221,7 +224,9 @@ export class ChannelRequests {
       const keys = yield* Effect.promise(() => wrapAllFor(this.ch.identity, this.ch.roomId, this.ch.access.keys, req.pk, req.xpk));
       const post = canPost(scopesOf(info));
       const sealed = yield* Effect.promise(() => sealRecord(current, rec));
+      const back = wasRemoved(this.ch.roomId, req.pk);
       yield* this.ch.request("/members", { method: "POST", body: JSON.stringify({ pk: req.pk, xpk: req.xpk, rec: sealed, keys, request: req.id, ...(post ? {} : { post }) }) });
+      if (back) yield* this.ch.fx.send(`let ${info.name} back in`, { kind: "event", ev: { op: "member.back", member: info.name, pk: req.pk } });
       return { pk: req.pk, xpk: req.xpk, ...info, owner: false, at: rec.at, active: true } satisfies Member;
     }),
 

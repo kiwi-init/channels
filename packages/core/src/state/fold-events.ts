@@ -1,4 +1,4 @@
-import { GENERAL_ROOM, MAX_CHARTER, MAX_ROOMS, MAX_TAGS, PROOF_MAX, TASK_TITLE_MAX_LENGTH, type Event, type Message } from "../protocol.ts";
+import { GENERAL_ROOM, MAX_CHARTER, MAX_ROOMS, MAX_TAGS, PROOF_MAX, TASK_TITLE_MAX_LENGTH, type Event, type Message, type Power, powerChange } from "../protocol.ts";
 import { free, take } from "./leases.ts";
 import { unnamedTasks } from "./compact.ts";
 import { leadCheckpointKeyRefusal } from "./lead.ts";
@@ -6,25 +6,37 @@ import { addRelease, applyGithub, repoKey, type GithubState } from "./github.ts"
 import { reposOf } from "./repos.ts";
 import { omit } from "../omit.ts";
 import { readScopes, SCOPES, type Scope } from "../scopes.ts";
+import { cleanPersona } from "../personality.ts";
 import { isPerson } from "./people.ts";
 import { roomName } from "./rooms.ts";
-import { currentState, openRound, reviewMoveRefusal, revisedOut, taskId, verdictRefusal, worked } from "./tasks.ts";
-import type { Charter, Compact, Fact, FoldMember, Hold, Lease, PersonaLead, Room, Task } from "./types.ts";
+import { currentState, openRound, reviewClaimRefusal, reviewMoveRefusal, revisedOut, taskId, verdictRefusal, worked } from "./tasks.ts";
+import type { Charter, Compact, Fact, FoldMember, Hold, Lease, PersonaLead, Room, SecretRoom, Task } from "./types.ts";
+import { dmPair, inRoom } from "../room-rules.ts";
+
+const trustOnly = (what: string): string => `only the owner, or a person they fully trust, ${what}`;
+
+const managesAgent = (holds: boolean, by: FoldMember, target: FoldMember | undefined): boolean =>
+  holds && !by.owner && by.kind === "human" && !!target && target.kind === "agent" && !target.owner && target.name !== by.name;
 
 export interface FoldCtx {
   members: Map<string, FoldMember>;
   signed: ReadonlySet<string>;
   personaLead: Map<string, PersonaLead>;
+  held: (pk: string, power: Power) => boolean;
+  trusted: (pk: string, member: FoldMember) => boolean;
+  powers: Map<string, Partial<Record<Power, boolean>>>;
   leads: (member: FoldMember) => boolean;
   keysByName: Map<string, Set<string>>;
   scopesByKey: Map<string, Scope[]>;
   scopeSets: Map<string, { seq: number; scopes: Scope[] }>;
   roleSets: Map<string, { seq: number; role: string | null; about?: string | null }>;
+  gone: Map<string, number>;
   setRole: (target: FoldMember, role: string | null, about: string | null | undefined) => void;
   tasks: Map<number, Task>;
   facts: Map<string, Fact>;
   leases: Map<string, Lease>;
   rooms: Map<string, Room>;
+  secret: Map<string, SecretRoom>;
   roomsSince: number;
   nameTaken: (name: string, except?: string) => boolean;
   charter: Charter | null;
@@ -49,8 +61,8 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
     }
 
     case "room.create": {
-      if (!member.owner) {
-        reject("only the owner makes rooms");
+      if (!member.owner && !c.trusted(m.pk ?? "", member)) {
+        reject(trustOnly("makes rooms"));
         break;
       }
       const known = rooms.get(ev.id);
@@ -67,9 +79,55 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       break;
     }
 
+    case "member.gone": {
+      if (!member.owner && m.pk !== ev.pk) reject("only the owner, or the key itself, says a key is gone");
+      else if (!c.keysByName.get(ev.member)?.has(ev.pk)) reject(`that key isn't one of ${ev.member}'s`);
+      else if (!c.gone.has(ev.pk)) c.gone.set(ev.pk, m.seq);
+      break;
+    }
+
+    case "member.back": {
+      if (!member.owner) reject("only the owner lets a removed key back in");
+      else if (!c.keysByName.get(ev.member)?.has(ev.pk)) reject(`that key isn't one of ${ev.member}'s`);
+      else c.gone.delete(ev.pk);
+      break;
+    }
+
+    case "room.seal": {
+      const known = c.secret.get(ev.id);
+      const opened = m.opened;
+      const trusted = member.owner || c.trusted(m.pk ?? "", member);
+      const wasDm = known?.meta?.dm === true;
+      if (!trusted && !opened && !known?.meta) {
+        if (ev.id !== GENERAL_ROOM && !rooms.has(ev.id))
+          c.secret.set(ev.id, { n: known ? known.n : ev.n, seals: [...(known?.seals ?? []), { id: ev.id, n: ev.n, keys: ev.keys, meta: ev.meta, ...(ev.proof ? { proof: ev.proof } : {}) }] });
+        break;
+      }
+      const isDm = opened?.dm === true;
+      if (isDm && opened && !dmPair(opened, member.name, c.members)) reject("a direct message's room is between exactly two people");
+      else if (!trusted && !isDm && !(wasDm && !opened && m.proven)) reject(trustOnly("makes private rooms"));
+      else if (wasDm && opened && !isDm) reject("a direct message's room stays one");
+      else if (isDm && known?.meta && !wasDm) reject("a room can't become a direct message");
+      else if (m.proven === false || (known?.meta && !m.proven)) reject("that change to a private room doesn't hold the room's key");
+      else if (!known && (ev.id === GENERAL_ROOM || rooms.has(ev.id))) reject(`there's already a room ${ev.id}`);
+      else if (opened && !inRoom(opened, member.name, m.pk)) reject("whoever changes a private room stays in it");
+      else {
+        const seals = [...(known?.seals ?? []), { id: ev.id, n: ev.n, keys: ev.keys, meta: ev.meta, ...(ev.proof ? { proof: ev.proof } : {}) }];
+        const n = m.proven || !known ? ev.n : known.n;
+        c.secret.set(ev.id, { n, seals, ...(opened ? { meta: opened } : !m.proven && known?.meta ? { meta: known.meta } : {}) });
+        if (opened) rooms.set(ev.id, { ...(rooms.get(ev.id) ?? { id: ev.id, createdBy: m.from, at }), name: opened.name, members: opened.members, ...(opened.dm ? { dm: true as const } : {}) });
+        else if (m.proven) rooms.delete(ev.id);
+      }
+      break;
+    }
+
+    case "room.msg":
+      reject("a private room's message this app couldn't open");
+      break;
+
     case "room.rename": {
-      if (!member.owner) {
-        reject("only the owner names rooms");
+      if (!member.owner && !c.trusted(m.pk ?? "", member)) {
+        reject(trustOnly("names rooms"));
         break;
       }
       const room = rooms.get(ev.id);
@@ -86,8 +144,8 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       break;
 
     case "charter.set": {
-      if (!member.owner) {
-        reject("only the owner sets the charter");
+      if (!member.owner && !c.trusted(m.pk ?? "", member)) {
+        reject(trustOnly("sets the charter"));
         break;
       }
       const text = ev.text?.trim().slice(0, MAX_CHARTER);
@@ -139,8 +197,8 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
     }
 
     case "repos.set": {
-      if (!member.owner) {
-        reject("only the owner sets the channel's repos");
+      if (!member.owner && !c.trusted(m.pk ?? "", member)) {
+        reject(trustOnly("sets the channel's repos"));
         break;
       }
       c.repos = reposOf(ev.repos);
@@ -170,8 +228,8 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
     }
 
     case "branch.prefix.set": {
-      if (!member.owner) {
-        reject("only the owner sets the branch prefix");
+      if (!member.owner && !c.trusted(m.pk ?? "", member)) {
+        reject(trustOnly("sets the branch prefix"));
         break;
       }
       c.branchPrefix = ev.prefix;
@@ -180,11 +238,11 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
 
     case "role.set":
     case "role.refuse": {
-      if (!member.owner) {
-        reject("only the owner decides roles");
+      const target = members.get(ev.member);
+      if (!member.owner && !managesAgent(c.held(m.pk ?? "", "managesAgents"), member, target)) {
+        reject("only the owner, or a person who manages agents, decides an agent's role");
         break;
       }
-      const target = members.get(ev.member);
       if (!target) {
         reject(`no member named ${ev.member}`);
         break;
@@ -197,8 +255,8 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
     }
 
     case "scope.set": {
-      if (!member.owner) {
-        reject("only the owner sets what members may do");
+      if (!member.owner && !managesAgent(c.held(m.pk ?? "", "managesAgents"), member, members.get(ev.member))) {
+        reject("only the owner, or a person who manages agents, sets what an agent may do");
         break;
       }
       if (!keysByName.get(ev.member)?.has(ev.pk)) {
@@ -211,9 +269,21 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       }
       const scopes = ev.scopes === null ? [...SCOPES] : (readScopes(ev.scopes) ?? []);
       scopesByKey.set(ev.pk, scopes);
-      scopeSets.set(ev.pk, { seq: m.seq, scopes });
+      scopeSets.set(ev.pk, { seq: m.seq, scopes, ...(ev.persona !== undefined ? { persona: ev.persona === null ? null : cleanPersona(ev.persona) } : {}) });
       if (ev.lead !== undefined) c.personaLead.set(ev.member, ev.lead);
       else if (!ev.keepLead) c.personaLead.set(ev.member, "roster");
+      break;
+    }
+
+    case "power.set": {
+      const target = members.get(ev.member);
+      if (!member.owner) reject("only the owner gives or takes a power");
+      else if (!target || !keysByName.get(ev.member)?.has(ev.pk)) reject(target ? `that key isn't ${ev.member}'s` : `no member named ${ev.member}`);
+      else if (target.owner || target.kind !== "human") reject("only a person holds a power");
+      else {
+        const { power, on } = powerChange(ev);
+        c.powers.set(ev.pk, { ...c.powers.get(ev.pk), [power]: on });
+      }
       break;
     }
 
@@ -300,7 +370,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
         break;
       }
       const lead = c.leads(member);
-      const reviewRefused = reviewMoveRefusal(task, { name: m.from, person: isPerson(member), lead }, ev.review);
+      const reviewRefused = ev.claim ? reviewClaimRefusal(task, m.from, ev.review) : reviewMoveRefusal(task, { name: m.from, person: isPerson(member), lead }, ev.review);
       if (reviewRefused) {
         reject(reviewRefused);
         break;

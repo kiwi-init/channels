@@ -2,11 +2,13 @@ import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { accountClient } from "@kiwi/core/account.ts";
 import { signRequest } from "@kiwi/core/auth.ts";
 import { readDeviceList, rootLink, type DeviceLink } from "@kiwi/core/devices.ts";
 import { accountScope, askToEnroll, enrollDigits, enrollMailbox, readEnrollGrant, type Enrollment } from "@kiwi/core/enroll.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
-import type { PublicPerson } from "../desktop/src/bridge.ts";
+import { personFingerprint } from "@kiwi/core/fingerprint.ts";
+import type { ComputerView, PublicPerson } from "../desktop/src/bridge.ts";
 import { createDeviceHost, createEnrollee, type DeviceHost } from "../desktop/src/devices.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { devHumanAuth } from "../src/relay/human.ts";
@@ -32,9 +34,10 @@ const device = async (name: string) => withExchangeKey(await generateIdentity(na
 
 interface App {
   host: DeviceHost;
+  who: PublicPerson;
   token: string;
   user: string;
-  held: { device: Identity | null; links: DeviceLink[]; wiped: boolean };
+  held: { device: Identity | null; links: DeviceLink[]; wiped: boolean; computers: ComputerView[] };
 }
 
 interface Enrolled {
@@ -48,7 +51,7 @@ async function app(opts: { fetchImpl?: typeof fetch; person?: Identity; enrolled
   const token = opts.token ?? `dev:${name}`;
   const person = opts.enrolled ? null : (opts.person ?? (await device("Jow")));
   const who = opts.enrolled?.who ?? { name: person!.name, pk: person!.pk, xpk: person!.xpk! };
-  const held: App["held"] = { device: opts.enrolled?.device ?? null, links: opts.enrolled?.links ?? [], wiped: false };
+  const held: App["held"] = { device: opts.enrolled?.device ?? null, links: opts.enrolled?.links ?? [], wiped: false, computers: [] };
   const host = createDeviceHost({
     relayUrl: () => relay,
     token: async () => token,
@@ -59,6 +62,7 @@ async function app(opts: { fetchImpl?: typeof fetch; person?: Identity; enrolled
     links: () => held.links,
     saveLinks: (l) => void (held.links = l),
     channels: () => [{ label: "general", code: "mc2-code" }],
+    computer: (c) => void held.computers.push(c),
     label: () => "desk",
     os: () => "macOS",
     wipe: () => {
@@ -69,7 +73,7 @@ async function app(opts: { fetchImpl?: typeof fetch; person?: Identity; enrolled
     ...(opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {}),
     ...(opts.now ? { now: opts.now } : {}),
   });
-  return { host, token, user: token.replace(/^dev:/, "dev_"), held };
+  return { host, who, token, user: token.replace(/^dev:/, "dev_"), held };
 }
 
 async function call(a: App, id: Identity, method: string, path: string, body?: unknown): Promise<Response> {
@@ -78,7 +82,7 @@ async function call(a: App, id: Identity, method: string, path: string, body?: u
   return fetch(relay + path, { method, headers, ...(text ? { body: text } : {}) });
 }
 
-async function newDevice(a: App, as: "desktop" | "phone" = "desktop") {
+async function newDevice(a: App, as: "desktop" | "phone" | "computer" = "desktop") {
   const laptop = await device("laptop");
   const { ask, nonce } = await askToEnroll(laptop, { label: "laptop", os: "Linux", as });
   expect((await call(a, laptop, "POST", "/v1/account/ask", { ask })).status).toBe(202);
@@ -192,7 +196,7 @@ describe("the desktop approves a new device (T636)", () => {
   });
 });
 
-async function enrolled(a: App, as: "desktop" | "phone" = "desktop") {
+async function enrolled(a: App, as: "desktop" | "phone" | "computer" = "desktop") {
   await a.host.poll();
   const d = await newDevice(a, as);
   const { id } = (await a.host.poll())!;
@@ -264,14 +268,16 @@ describe("Settings → Devices: the signed list, forget and renew (T836)", () =>
 });
 
 function newDesktop(a: App) {
-  const held: { device: Identity | null; enrolled: Enrolled | null } = { device: null, enrolled: null };
+  const held: { device: Identity | null; enrolled: Enrolled | null; writes: number } = { device: null, enrolled: null, writes: 0 };
   const enrollee = createEnrollee({
     relayUrl: () => relay,
     token: async () => a.token,
     who: () => held.enrolled?.who ?? null,
-    device: () => held.device,
-    saveDevice: (d) => void (held.device = d),
-    enrolled: (grant) => void (held.enrolled = { who: grant.person, device: held.device!, links: grant.links }),
+    enrolled: (grant, device) => {
+      held.writes++;
+      held.device = device;
+      held.enrolled = { who: grant.person, device, links: grant.links };
+    },
     label: () => "studio",
     os: () => "Linux",
   });
@@ -294,7 +300,8 @@ describe("a new desktop enrolls with no person key (T837)", () => {
     expect((await a.host.poll())?.stage).toBe("digits");
     expect(await a.host.confirm(asking!.id, shown!.stage === "digits" ? shown!.digits : "")).toEqual({ ok: true, label: "studio" });
 
-    const done = await b.enrollee.status();
+    expect(await b.enrollee.status()).toEqual({ stage: "check", person: { name: "Jow", fingerprint: await personFingerprint(a.who.pk) } });
+    const done = await b.enrollee.keep();
     const person = (await readDeviceList(a.held.links)).ok ? a.held.links[0]!.person : "";
     expect(done).toEqual({ stage: "done", person: { name: "Jow", pk: person, xpk: expect.any(String) }, channels: [{ label: "general", code: "mc2-code" }] });
     const read = await readDeviceList(b.held.enrolled!.links);
@@ -314,6 +321,7 @@ describe("a new desktop enrolls with no person key (T837)", () => {
     const shown = await b.enrollee.status();
     await a.host.confirm(id, shown?.stage === "digits" ? shown.digits : "");
     await b.enrollee.status();
+    await b.enrollee.keep();
 
     const c = await app({ token: a.token, enrolled: b.held.enrolled! });
     const laptop = await enrolled(c, "phone");
@@ -346,8 +354,111 @@ describe("a new desktop enrolls with no person key (T837)", () => {
   });
 
   test("a new desktop that isn't signed in can't ask", async () => {
-    const e = createEnrollee({ relayUrl: () => relay, token: async () => null, who: () => null, device: () => null, saveDevice: () => {}, enrolled: () => {}, label: () => "x", os: () => "y" });
+    const e = createEnrollee({ relayUrl: () => relay, token: async () => null, who: () => null, enrolled: () => {}, label: () => "x", os: () => "y" });
     await expect(e.begin()).rejects.toThrow("sign in first");
+  });
+});
+
+async function toCheck(a: App, b: ReturnType<typeof newDesktop>): Promise<string> {
+  await a.host.poll();
+  await b.enrollee.begin();
+  await b.enrollee.status();
+  const { id } = (await a.host.poll())!;
+  await a.host.answer(id);
+  const shown = await b.enrollee.status();
+  const approving = await a.host.poll();
+  await a.host.confirm(id, shown?.stage === "digits" ? shown.digits : "");
+  return approving?.fingerprint ?? "";
+}
+
+describe("a new device keeps nothing until its person confirms the key (#1323)", () => {
+  const own = mkdtempSync(join(tmpdir(), "kiwi-desktop-keycheck-"));
+  let mine: ReturnType<typeof startRelay>;
+  let shared = "";
+  beforeAll(() => {
+    mine = startRelay({ port: 0, hostname: "127.0.0.1", dataDir: own, human: devHumanAuth() });
+    shared = relay;
+    relay = mine.url.origin;
+  });
+  afterAll(() => {
+    relay = shared;
+    mine.stop(true);
+    rmSync(own, { recursive: true, force: true });
+  });
+
+  test("the new desktop shows the key the approving app showed, and writes nothing before keep", async () => {
+    const a = await app();
+    const b = newDesktop(a);
+    const approving = await toCheck(a, b);
+    expect(approving).toBe(await personFingerprint(a.who.pk));
+    const check = await b.enrollee.status();
+    expect(check).toEqual({ stage: "check", person: { name: "Jow", fingerprint: approving } });
+    expect(await b.enrollee.status()).toEqual(check!);
+    expect(b.held).toEqual({ device: null, enrolled: null, writes: 0 });
+
+    await b.enrollee.keep();
+    expect(b.held.writes).toBe(1);
+    expect(b.held.enrolled?.who.pk).toBe(a.who.pk);
+  });
+
+  test("the approving app shows the key for desktops and phones, not only computers", async () => {
+    const a = await app();
+    await a.host.poll();
+    const b = newDesktop(a);
+    await b.enrollee.begin();
+    expect((await a.host.poll())?.fingerprint).toBe(await personFingerprint(a.who.pk));
+  });
+
+  test("a grant from someone else's person shows their key, and turning it down keeps nothing and drops the grant", async () => {
+    const mine = await app();
+    const theirs = await app();
+    const b = newDesktop(theirs);
+    await toCheck(theirs, b);
+    const check = await b.enrollee.status();
+    const shown = check?.stage === "check" ? check.person.fingerprint : "";
+    expect(shown).toBe(await personFingerprint(theirs.who.pk));
+    expect(shown).not.toBe(await personFingerprint(mine.who.pk));
+
+    await b.enrollee.cancel();
+    expect(b.held).toEqual({ device: null, enrolled: null, writes: 0 });
+    expect(await b.enrollee.status()).toBeNull();
+    await expect(b.enrollee.keep()).rejects.toThrow("check your person's key");
+  });
+
+  test("keep before the key check refuses, and writes nothing", async () => {
+    const a = await app();
+    const b = newDesktop(a);
+    await a.host.poll();
+    await b.enrollee.begin();
+    await expect(b.enrollee.keep()).rejects.toThrow("check your person's key");
+    expect(b.held.writes).toBe(0);
+  });
+
+  test("a device that took a person while it waited refuses another, naming the one it holds", async () => {
+    const a = await app();
+    const other = await app();
+    const b = newDesktop(a);
+    await toCheck(a, b);
+    await b.enrollee.status();
+    b.held.enrolled = { who: other.who, device: await device("held"), links: [] };
+    await expect(b.enrollee.keep()).rejects.toThrow(`kept nothing: while this waited, this app became one of Jow's devices (key ${await personFingerprint(other.who.pk)})`);
+    expect(b.held.writes).toBe(0);
+    expect(b.held.enrolled.who.pk).toBe(other.who.pk);
+    await expect(b.enrollee.begin()).rejects.toThrow("already holds your person");
+  });
+
+  test("every ask uses a new device key, so a turned-down grant's key is never reused", async () => {
+    const a = await app();
+    const b = newDesktop(a);
+    await toCheck(a, b);
+    const look = accountClient(relay, async () => a.token, a.held.device!);
+    await b.enrollee.cancel();
+    await b.enrollee.begin();
+    const first = (await look.enrollment())!.ask.device;
+    await b.enrollee.cancel();
+    await b.enrollee.begin();
+    expect((await look.enrollment())!.ask.device).not.toBe(first);
+    await b.enrollee.cancel();
   });
 });
 
@@ -361,6 +472,7 @@ async function secondDesktop(a: App): Promise<App> {
   const shown = await b.enrollee.status();
   await a.host.confirm(id, shown?.stage === "digits" ? shown.digits : "");
   await b.enrollee.status();
+  await b.enrollee.keep();
   return app({ token: a.token, enrolled: b.held.enrolled! });
 }
 
@@ -420,5 +532,58 @@ describe("revoke, renew and wipe on the desktop (T1006)", () => {
     const news = (await c.host.news())!;
     expect(news.revokes.map((r) => [r.label, r.by, r.older])).toEqual([["desk", "studio", true]]);
     expect(news.links).toEqual(c.held.links);
+  });
+});
+
+describe("computers, from a desktop with no person key (T898)", () => {
+  const ownDir = mkdtempSync(join(tmpdir(), "kiwi-desktop-computers-"));
+  let own: ReturnType<typeof startRelay>;
+  beforeAll(() => {
+    own = startRelay({ port: 0, hostname: "127.0.0.1", dataDir: ownDir, human: devHumanAuth() });
+    relay = own.url.origin;
+  });
+  afterAll(() => {
+    own.stop(true);
+    rmSync(ownDir, { recursive: true, force: true });
+  });
+
+  test("an enrolled desktop approves a computer with no cert, and keeps it as one of yours", async () => {
+    const a = await app();
+    const c = await secondDesktop(a);
+    await c.host.poll();
+    const d = await newDevice(c, "computer");
+    const { id } = (await c.host.poll())!;
+    await c.host.answer(id);
+    const digits = await d.reveal();
+    const seen = await d.read();
+    expect(await c.host.confirm(id, digits)).toMatchObject({ ok: true });
+    const grant = await readEnrollGrant(await (await enrollMailbox(relay, d.laptop, seen)).wait("b", { timeoutMs: 5_000 }), d.laptop.pk);
+    expect(grant?.cert).toBeUndefined();
+    const read = await readDeviceList(grant!.links);
+    expect(read.ok && read.list.devices.find((x) => x.device === d.laptop.pk)).toMatchObject({ as: "computer", approve: false });
+    expect(c.held.computers).toEqual([expect.objectContaining({ machinePk: d.laptop.pk, machineXpk: d.laptop.xpk!, personPk: read.ok ? read.list.person : "" })]);
+  });
+
+  test("this computer goes in the list once, and a removed key can't come back", async () => {
+    const a = await app();
+    const c = await secondDesktop(a);
+    const box = await device("box");
+    const links = await c.host.addComputer({ pk: box.pk, xpk: box.xpk!, label: "studio", os: "macOS" });
+    const read = await readDeviceList(links ?? []);
+    expect(read.ok && read.list.devices.find((x) => x.device === box.pk)).toMatchObject({ as: "computer", approve: false, label: "studio" });
+    expect(await c.host.addComputer({ pk: box.pk, xpk: box.xpk!, label: "studio", os: "macOS" })).toEqual(links);
+    expect((await a.host.list())?.map((x) => x.id)).toContain(box.pk);
+    await c.host.forget(box.pk);
+    await expect(c.host.addComputer({ pk: box.pk, xpk: box.xpk!, label: "studio", os: "macOS" })).rejects.toThrow("removed from your devices");
+    await expect(c.host.addComputer({ pk: c.held.device!.pk, xpk: c.held.device!.xpk!, label: "studio", os: "macOS" })).rejects.toThrow("another kind of device");
+  });
+
+  test("a phone can't add a computer", async () => {
+    const a = await app();
+    const c = await secondDesktop(a);
+    const phone = await enrolled(c, "phone");
+    const p = await app({ token: a.token, enrolled: { who: c.who, device: phone, links: c.held.links } });
+    const box = await device("box");
+    expect(await p.host.addComputer({ pk: box.pk, xpk: box.xpk!, label: "studio", os: "macOS" })).toBeNull();
   });
 });

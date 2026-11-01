@@ -1,13 +1,15 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import type { DeviceLink } from "@kiwi/core/devices.ts";
 import { certifyMachine } from "@kiwi/core/person.ts";
 import type { ComputerView } from "./bridge.ts";
 import { compareVersions } from "@kiwi/core/versions.ts";
 import { ensureOnPath, keepCli, place, type KeptCli } from "./cli.ts";
-import { daemonAdopt, daemonHello, daemonSocketPath, daemonStop, kiwiHome, noteDaemon, spawnDaemon, type HelloResult } from "./daemon-client.ts";
+import { daemonAdopt, daemonHello, daemonSocketPath, daemonStop, daemonUnpair, kiwiHome, noteDaemon, spawnDaemon, type HelloResult } from "./daemon-client.ts";
 import { keepAlive } from "./daemon-keeper.ts";
 import { host } from "./host.ts";
+import { publicPerson } from "./guard.ts";
 import { requirePerson, store, upsertComputer } from "./store.ts";
 import { keepTmux } from "./tmux.ts";
 
@@ -64,15 +66,31 @@ async function ensureDaemon(): Promise<HelloResult | null> {
   }
 }
 
-export async function adoptDaemon(): Promise<ComputerView> {
-  const person = requirePerson();
+type ListComputer = (m: { pk: string; xpk: string; label: string }) => Promise<DeviceLink[] | null>;
+
+export async function adoptDaemon(listComputer: ListComputer): Promise<ComputerView> {
+  const who = publicPerson(store.person) ?? store.enrolled ?? null;
+  if (!who) throw new Error("make your person key first");
   const home = kiwiHome();
   const hello = (await daemonHello(home)) ?? (await ensureDaemon());
   if (!hello) throw new Error(`no daemon answers at ${daemonSocketPath(home)}`);
   const label = os.hostname().split(".")[0] || "this computer";
-  const cert = await certifyMachine(person, { pk: hello.machine.pk, xpk: hello.machine.xpk, label });
-  await daemonAdopt(home, { cert, person: { pk: person.pk, xpk: person.xpk as string, name: person.name } });
-  const c: ComputerView = { label, os: process.platform, machinePk: hello.machine.pk, machineXpk: hello.machine.xpk, personPk: person.pk, at: Date.now(), own: true };
+  const named = { pk: who.pk, xpk: who.xpk, name: who.name };
+  if (hello.paired && hello.paired.person !== named.pk) await daemonUnpair(home);
+  let links: DeviceLink[] | null;
+  try {
+    links = await listComputer({ pk: hello.machine.pk, xpk: hello.machine.xpk, label });
+  } catch (err) {
+    if (!store.person) throw err;
+    // The person key still certifies this computer when the device list can't be reached or changed.
+    links = null;
+  }
+  if (links) await daemonAdopt(home, { links, person: named });
+  else {
+    const person = requirePerson();
+    await daemonAdopt(home, { cert: await certifyMachine(person, { pk: hello.machine.pk, xpk: hello.machine.xpk, label }), person: named });
+  }
+  const c: ComputerView = { label, os: process.platform, machinePk: hello.machine.pk, machineXpk: hello.machine.xpk, personPk: who.pk, at: Date.now(), own: true };
   upsertComputer(c);
   return c;
 }
@@ -93,7 +111,11 @@ export async function keepDaemon(stopped: () => boolean): Promise<void> {
     try {
       await keepOwnCli();
     } catch {
-      // The daemon still runs from the app's own copy below.
+      // The daemon still runs from the app's own copy, and an older one must give way to it.
+      kiwiBin = await runnableKiwi().then(
+        (bin) => ({ path: bin, version: host().app.version() }),
+        () => null,
+      );
     }
   }
   const tmux = bundledTmux();

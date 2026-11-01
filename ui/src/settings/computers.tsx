@@ -6,6 +6,7 @@ import { ago } from "~/kit/time"
 import type { Account, Computer, Device } from "~/model"
 import { useApp } from "~/nav"
 import { Confirm } from "~/settings/controls"
+import { RecoveryKey } from "~/settings/recovery"
 import { Page } from "~/settings/sections"
 
 type Kind = "computer" | "phone"
@@ -120,8 +121,10 @@ function SignedDevices({ devices }: { devices: Device[] }) {
                 {d.thisOne && <span className="set-tag">this app</span>}
               </span>
               <span className="set-device-meta">
-                {KIND[d.as]}
-                {d.os ? ` · ${d.os}` : ""} · {expiry(d.until)}
+                <span className="set-device-status">
+                  {KIND[d.as]}
+                  {d.os ? ` · ${d.os}` : ""} · {expiry(d.until)}
+                </span>
               </span>
             </span>
             <span className="set-device-actions-inline">
@@ -199,6 +202,7 @@ export function ComputersSection() {
       {account.devices && account.devices.length > 0 && (
         <>
           <SignedDevices devices={account.devices} />
+          {account.recovery && <RecoveryKey recovery={account.recovery} />}
           <section className="set-group" aria-label="Paired with a code">
             <div className="heading">
               <h3>Paired with a code</h3>
@@ -219,8 +223,10 @@ export function ComputersSection() {
               </span>
               <span className="set-device-meta">
                 <span className={cx("set-pip", c.online && "is-online")} aria-hidden="true" />
-                {c.online ? "online" : `offline · ${ago(c.lastSeen)}`}
-                {!isPhone(c) && <span> · {c.agents === 0 ? "no agents" : c.agents === 1 ? "1 agent" : `${c.agents} agents`}</span>}
+                <span className="set-device-status">
+                  {c.online ? "online" : `offline · ${ago(c.lastSeen)}`}
+                  {!isPhone(c) && ` · ${c.agents === 0 ? "no agents" : c.agents === 1 ? "1 agent" : `${c.agents} agents`}`}
+                </span>
               </span>
             </span>
             {!c.thisOne && (
@@ -254,7 +260,7 @@ export function ComputersSection() {
           <div className="set-pair-foot">
             {account.enrollError ? (
               <span className="set-pair-wait is-stuck" role="alert">
-                Can't see the {linking}: {account.enrollError}
+                Can't see the {linking}: {account.enrollError.replace(/[.\s]+$/, "")}.
               </span>
             ) : (
               <span className="set-pair-wait">

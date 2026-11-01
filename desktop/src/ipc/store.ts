@@ -4,7 +4,7 @@ import type { Serves } from "../calls.ts";
 import { mergePublicChannels, migrateEntries, movedRelay, normalizeRelay, publicComputer, publicPerson } from "../guard.ts";
 import type { Host } from "../host.ts";
 import { unpairAt } from "../remote.ts";
-import { mutate, requirePerson, store } from "../store.ts";
+import { mutate, personSigner, store } from "../store.ts";
 
 let makingPerson = false;
 
@@ -55,9 +55,9 @@ export function storeCalls(host: Host): Serves<"setRelayUrl" | "createPerson" | 
       const kept = new Set(computers.map((c) => c.machinePk));
       const gone = store.computers.filter((c) => !c.own && !kept.has(c.machinePk));
       mutate((s) => (s.computers = computers.map(publicComputer)));
-      if (!store.person || !gone.length) return;
-      const person = requirePerson();
-      for (const c of gone) void unpairAt({ person, relay: store.relayUrl }, c.machinePk);
+      if (!gone.length || (!store.person && !store.enrolled)) return;
+      const asker = { ...personSigner(), relay: store.relayUrl };
+      for (const c of gone) void unpairAt(asker, c.machinePk);
     },
     setPending: (pending: PendingItem[]) => mutate((s) => (s.pending = pending)),
   };

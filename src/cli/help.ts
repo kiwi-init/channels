@@ -47,7 +47,9 @@ Agents
   kiwi reply N "text"                            answer message #N: to its sender, in its room
   kiwi answering N                               before answering a message sent to several: says you're on it, so
                                                  the others stay quiet (10 minutes); "X is answering #N" if you lost
-  kiwi react N 👍 [--clear]                     react to message #N with one emoji
+  kiwi react N ok/trailer [--clear]              react to message #N with one emoji, or a GIF (kiwi react --list shows them)
+                                                 for a real moment: a win, a blocker, a thanks; never in place of an answer
+  kiwi edit N "text" · kiwi delete N             change or remove your own message #N; whoever it reached hears of it
   kiwi show N [dir]                              message #N in full, with its whole thread; its images saved
      --raw                                       only its body, exactly as sent: no header, nothing cut or added
   kiwi log [-n 30] [--all] [--room R] [--task T7]   recent history (marks nothing read); a room's or a
@@ -110,18 +112,20 @@ Agents
 
 This computer
   kiwi setup                                     set it up once: Claude Code's hooks, the PATH, and how to add it to your devices
-  kiwi login [--user NAME]                       add it to your devices: sign in, then type the digits it shows in your Channels app;
+  kiwi login [--user NAME] [--fingerprint KEY]   add it to your devices: sign in, then type the digits it shows in your Channels app;
                                                  its agents get in on their own and the app can start agents here: it starts kiwi's
-                                                 daemon, which keeps this computer reachable (--user: a dev relay's sign-in name)
+                                                 daemon, which keeps this computer reachable. Before it keeps anything it shows your key
+                                                 to check against your app's (--fingerprint KEY: check it without asking; --user: a
+                                                 dev relay's sign-in name). A computer that is someone else's device refuses until kiwi unpair
   kiwi unpair                                    stop taking asks from your app: the relay forgets this computer
   kiwi upgrade                                   install the latest stable CLI release (alias: kiwi update)
   kiwi cleanup [--quiet]                         remove what older installs and updates left behind (the installer runs it)
   kiwi daemon                                    this computer's hub: key, cert, and every agent's seat (starts on its own)
   kiwi context-line on|off|status                past 250k tokens, the Stop hook asks a seat for its checkpoints (off by default)
-  kiwi terminal [status] [--json]                Rex on this computer, its helpers, and whether creating new agents is on
-  kiwi terminal download|remove rex              Rex's helpers: they mark a seat that needs you in its Rex tab (off by default)
+  kiwi terminal [status] [--json]                Rex and tmux on this computer, their helpers, and whether creating new agents is on
+  kiwi terminal download|remove rex|tmux         a terminal's helpers: Rex and tmux mark a seat that needs you (off by default)
   kiwi terminal show --needs-you                 go to the seat with the oldest question for a person, else the oldest task
-                                                 waiting for review, in Rex
+                                                 waiting for review, in Rex or tmux (tmux's prefix K runs it)
   kiwi launches on|off|status                    whether new agents can be started on this computer, from here or another of your devices (on)
      launches bypass on|off|status               whether a launch from your phone or another computer may skip its harness's
                                                  permission prompts here (off)
@@ -135,7 +139,8 @@ This computer
                                                  and version, whether kiwi launch starts it, with which options, and whether Kiwi can wake it
   kiwi folders [--room ROOM] [--json]            the folders an agent can be started in on this computer: where its seats work
                                                  (a channel's with --room, most recently seen first), the folders you added, and
-                                                 the git repos in your home folder, three levels down
+                                                 the git repos in your home folder, three levels down. Another of your devices
+                                                 starts agents only where its seats work and in the folders you added
      folders add|remove DIR                      let agents be started in DIR and the folders inside it, from this
                                                  computer or another of your devices; or stop that
   kiwi launch HARNESS --code CODE [--folder DIR] [--nick NAME] [--persona TOKEN]   start an agent in Channels' own

@@ -1,5 +1,6 @@
 import { verifyRequest } from "@kiwi/core/auth.ts";
 import { b64url } from "@kiwi/core/crypto.ts";
+import { listedComputer, newestLists, readDeviceList, speaksForPerson, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
 import { ASK_MAX_BYTES } from "@kiwi/core/machine-ask.ts";
 import { readMachineCert } from "@kiwi/core/person.ts";
 import { BadRequest, Conflict, Forbidden, NotFound, TooLarge, TooMany, Unauthorized, UpdateRequired } from "./failures.ts";
@@ -37,6 +38,8 @@ export interface MachineStore {
   bind(mpk: string, b: MachineBinding): Promise<void>;
   seen(mpk: string, at: number): Promise<void>;
   unbind(mpk: string): Promise<void>;
+  links(mpk: string): Promise<unknown[] | null>;
+  keepLinks(mpk: string, links: unknown[] | null): Promise<void>;
   pending(mpk: string, since: number): Promise<number>;
   boxes(mpk: string, since: number): Promise<MachineBox[]>;
   addBox(mpk: string, b: MachineBox): Promise<void>;
@@ -57,6 +60,7 @@ export interface PersonMachine {
 
 export interface PersonMachinesStore {
   machines(person: string): Promise<PersonMachine[]>;
+  lists(person: string): Promise<unknown[][]>;
 }
 
 export type MachineOutcome = Response | { upgrade: string } | null;
@@ -90,6 +94,62 @@ function parse(text: string): Record<string, unknown> | null {
     // Not JSON: refused as a bad request by the caller.
     return null;
   }
+}
+
+async function listOf(links: unknown[] | null): Promise<DeviceList | null> {
+  if (!links) return null;
+  const read = await readDeviceList(links);
+  return read.ok ? read.list : null;
+}
+
+async function keptList(store: MachineStore, mpk: string, person: string): Promise<DeviceList | null> {
+  const list = await listOf(await store.links(mpk));
+  return list?.person === person ? list : null;
+}
+
+async function speaksForMachine(store: MachineStore, mpk: string, signer: string, now: number): Promise<boolean> {
+  const bound = await store.binding(mpk);
+  if (!bound) return false;
+  if (signer === bound.person) return true;
+  const list = await keptList(store, mpk, bound.person);
+  return !!list && speaksForPerson(list, signer, now);
+}
+
+export async function takeNewerList(store: MachineStore, mpk: string, links: unknown[], now: number): Promise<void> {
+  const bound = await store.binding(mpk);
+  const kept = bound ? await keptList(store, mpk, bound.person) : null;
+  const next = await listOf(links);
+  if (!bound || !kept || !next || next.person !== kept.person || next.version <= kept.version) return;
+  if (!listedComputer(next, mpk, now)) {
+    await store.unbind(mpk);
+    store.close(mpk);
+    return;
+  }
+  await store.keepLinks(mpk, links);
+}
+
+async function register(store: MachineStore, mpk: string, body: Record<string, unknown> | null, now: number): Promise<Response> {
+  const bound = await store.binding(mpk);
+  const floor = await store.floor(mpk);
+  const links = body?.["links"];
+  if (Array.isArray(links)) {
+    const list = await listOf(links);
+    const computer = list ? listedComputer(list, mpk, now) : null;
+    if (!list || !computer) return refuse(new BadRequest({ message: "a machine registers with a device list that lists it as a current computer" }));
+    const certAt = (links[links.length - 1] as DeviceLink).at;
+    const kept = bound ? await keptList(store, mpk, list.person) : null;
+    if (kept && list.version < kept.version) return refuse(new Conflict({ message: "a newer device list was registered for this machine" }));
+    if (!kept && (bound ? certAt < bound.certAt : floor > 0 && certAt <= floor)) return refuse(new Conflict({ message: "a newer cert was registered for this machine" }));
+    await store.bind(mpk, { person: list.person, mxpk: computer.dxpk, label: computer.label, certAt: Math.max(certAt, kept ? bound!.certAt : 0), seenAt: now });
+    await store.keepLinks(mpk, links);
+    return done();
+  }
+  const cert = await readMachineCert(body?.["cert"]);
+  if (!cert || cert.machine !== mpk) return refuse(new BadRequest({ message: "a machine registers with its own cert" }));
+  if (bound ? cert.at < bound.certAt : floor > 0 && cert.at <= floor) return refuse(new Conflict({ message: "a newer cert was registered for this machine" }));
+  await store.bind(mpk, { person: cert.pk, mxpk: cert.mxpk, label: cert.label, certAt: cert.at, seenAt: now });
+  await store.keepLinks(mpk, null);
+  return done();
 }
 
 export interface MachineRequest {
@@ -130,18 +190,13 @@ export async function onMachineHttp(
   if (await store.revoked(mpk)) return refuse(new Forbidden({ message: "this computer was removed from its person's devices" }));
   const bound = await store.binding(mpk);
   const isMachine = signer === mpk;
-  const isPerson = !!bound && signer === bound.person;
+  const isPerson = await speaksForMachine(store, mpk, signer, now);
   const writes = (req.method === "PUT" || req.method === "POST") && opts.perAddress && !(await opts.perAddress());
   if (writes) return refuse(new TooMany({ message: "too many machine requests from this address; try again in a few minutes" }));
 
   if (!sub && req.method === "PUT") {
     if (!isMachine) return refuse(new Forbidden({ message: "only the machine registers itself" }));
-    const cert = await readMachineCert(parse(body)?.cert);
-    if (!cert || cert.machine !== mpk) return refuse(new BadRequest({ message: "a machine registers with its own cert" }));
-    const floor = await store.floor(mpk);
-    if (bound ? cert.at < bound.certAt : floor > 0 && cert.at <= floor) return refuse(new Conflict({ message: "a newer cert was registered for this machine" }));
-    await store.bind(mpk, { person: cert.pk, mxpk: cert.mxpk, label: cert.label, certAt: cert.at, seenAt: now });
-    return done();
+    return register(store, mpk, parse(body), now);
   }
   if (!sub && req.method === "DELETE") {
     if (!isMachine && !isPerson) return refuse(new Forbidden({ message: "only the machine or its person unpairs it" }));
@@ -183,7 +238,7 @@ export async function onMachineHttp(
   return refuse(new NotFound({ message: "not found" }));
 }
 
-export async function signedPersonRequest(req: Request, now: number): Promise<string | Response | null> {
+export async function signedPersonRequest(req: Request, now: number): Promise<{ pk: string; signer: string } | Response | null> {
   const url = new URL(req.url);
   const m = PERSON_PATH.exec(url.pathname);
   if (!m) return null;
@@ -192,15 +247,21 @@ export async function signedPersonRequest(req: Request, now: number): Promise<st
   const token = requestToken(req);
   const signer = token ? await verifyRequest(token, personScope(pk), "GET", url.pathname, "", now) : null;
   if (!signer) return refuse(new Unauthorized({ message: "sign this request for this person and path" }));
-  if (signer !== pk) return refuse(new Forbidden({ message: "only the person lists their own computers" }));
-  return pk;
+  return { pk, signer };
 }
 
 export async function onPersonHttp(req: Request, store: PersonMachinesStore, opts: { now?: () => number } = {}): Promise<Response | null> {
   if (!PERSON_PATH.test(new URL(req.url).pathname)) return null;
   if (req.method === "OPTIONS") return corsPreflight();
-  const pk = await signedPersonRequest(req, (opts.now ?? Date.now)());
-  if (pk === null || pk instanceof Response) return pk;
+  const now = (opts.now ?? Date.now)();
+  const signed = await signedPersonRequest(req, now);
+  if (signed === null || signed instanceof Response) return signed;
+  const { pk, signer } = signed;
+  if (signer !== pk) {
+    const lists = await newestLists(await store.lists(pk));
+    const list = lists.get(pk);
+    if (!list || !speaksForPerson(list, signer, now)) return refuse(new Forbidden({ message: "only the person or one of their current approving devices lists their computers" }));
+  }
   const machines = await store.machines(pk);
   return answer({ machines: machines.sort((a, b) => a.label.localeCompare(b.label) || a.key.localeCompare(b.key)) });
 }

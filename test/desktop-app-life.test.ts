@@ -225,6 +225,12 @@ describe("the tray and the app menu say what Electron's did (T438)", () => {
     expect(view.at(-1)).toEqual({ role: "toggleFullScreen", accelerator: "Ctrl+Cmd+f" });
   });
 
+  test("a packaged app ships no developer tools in View; reload stays (#1002)", () => {
+    const actions = sub(appMenu("darwin", true), "View").flatMap((i) => ("action" in i ? [i.action] : []));
+    expect(actions).toEqual(["reload", "text-reset", "text-bigger", "text-smaller"]);
+    expect(sub(appMenu("linux", true), "View").some((i) => "action" in i && i.action === "devtools")).toBe(false);
+  });
+
   test("the Mac's app and window roles carry their keys, which Electrobun gives only the edit roles: ⌘Q quits, ⌘W closes, ⌘H hides (T970)", () => {
     const keys = appMenu("darwin")
       .flatMap((m) => ("submenu" in m ? m.submenu : []))

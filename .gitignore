@@ -11,7 +11,12 @@ __pycache__/
 .env
 .env.*
 *.sqlite
+*.sqlite-wal
+*.sqlite-shm
 !.env.example
+
+# Claude Code's per-session worktrees: whole checkouts of this repo
+.claude/worktrees/
 
 # iPhone app (ios/): Xcode's per-user state and the dev channel's throwaway folder
 ios/**/xcuserdata/

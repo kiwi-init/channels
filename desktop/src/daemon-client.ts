@@ -2,7 +2,8 @@
 // the contract; this follows it, so the CLI and the app reach the same daemon the same way):
 //   path: $KIWI_HOME/daemon.sock (a named pipe on Windows: \\.\pipe\kiwi-daemon-<home's tag>)
 //   framing: newline-delimited JSON, one request per line, one response per line
-//   request:  { "id": number, "verb": string, ...params }        (params flat on the request)
+//   request:  { "id": number, "verb": string, "token": string, ...params }   (params flat on the request;
+//              the token is $KIWI_HOME/daemon.token, which the daemon writes mode 0600 beside its socket)
 //   response: { "id": number, "ok": true, ...fields } | { "id": number, "ok": false, "error": string }
 //   verbs this shell needs:
 //     hello -> { version, machine: pk | null, mxpk, label, person: { pk, name, … } | null, certified }
@@ -18,6 +19,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { readHarnessRow, type HarnessRow } from "@kiwi/core/harnesses.ts";
+import type { DeviceLink } from "@kiwi/core/devices.ts";
 import type { MachineCert } from "@kiwi/core/person.ts";
 import type { LaunchedView } from "@kiwi/core/terminals.ts";
 
@@ -31,10 +33,7 @@ export interface HelloResult {
   paired: { person: string; name: string; label: string } | null;
 }
 
-export interface AdoptParams {
-  cert: MachineCert;
-  person: { pk: string; xpk: string; name: string };
-}
+export type AdoptParams = ({ cert: MachineCert } | { links: DeviceLink[] }) & { person: { pk: string; xpk: string; name: string } };
 
 export function kiwiHome(): string {
   return process.env["KIWI_HOME"] ?? path.join(os.homedir(), ".kiwi");
@@ -54,9 +53,24 @@ export function daemonSocketPath(home: string = kiwiHome()): string {
 
 type Reply = { id: number; ok: boolean; error?: string } & Record<string, unknown>;
 
-function call(sock: string, verb: string, params: object = {}, timeoutMs = 5_000): Promise<Reply> {
+function daemonTokenFile(home: string): string {
+  return path.join(home, "daemon.token");
+}
+
+export function daemonToken(home: string): string | null {
+  try {
+    const read = fs.readFileSync(daemonTokenFile(home), "utf8").trim();
+    return read || null;
+  } catch {
+    // A daemon from before the token answers without one, and this frame still carries ours.
+    return null;
+  }
+}
+
+function call(home: string, verb: string, params: object = {}, timeoutMs = 5_000): Promise<Reply> {
+  const token = daemonToken(home);
   return new Promise((resolve, reject) => {
-    const conn = net.createConnection(sock);
+    const conn = net.createConnection(daemonSocketPath(home));
     let settled = false;
     const settle = (finish: () => void): void => {
       if (settled) return;
@@ -67,7 +81,7 @@ function call(sock: string, verb: string, params: object = {}, timeoutMs = 5_000
     };
     const timer = setTimeout(() => settle(() => reject(new Error("the daemon didn't answer"))), timeoutMs);
     let buf = "";
-    conn.on("connect", () => conn.write(`${JSON.stringify({ ...params, id: 1, verb })}\n`));
+    conn.on("connect", () => conn.write(`${JSON.stringify({ ...params, id: 1, verb, ...(token ? { token } : {}) })}\n`));
     conn.on("data", (chunk) => {
       buf += chunk.toString("utf8");
       const nl = buf.indexOf("\n");
@@ -90,7 +104,7 @@ function call(sock: string, verb: string, params: object = {}, timeoutMs = 5_000
 /** The daemon's hello, or null when none is listening (stale socket included) or it has no key yet. */
 export async function daemonHello(home: string = kiwiHome(), timeoutMs = 5_000): Promise<HelloResult | null> {
   try {
-    const r = await call(daemonSocketPath(home), "hello", {}, timeoutMs);
+    const r = await call(home, "hello", {}, timeoutMs);
     if (typeof r["version"] !== "string" || typeof r["machine"] !== "string" || typeof r["mxpk"] !== "string") return null;
     const person = r["person"] as { pk?: unknown; name?: unknown } | null;
     const label = typeof r["label"] === "string" ? r["label"] : "";
@@ -107,31 +121,35 @@ export async function daemonHello(home: string = kiwiHome(), timeoutMs = 5_000):
 /** Ask the daemon to stop (an older one, before a newer starts). True once it said it would. */
 export async function daemonStop(home: string = kiwiHome(), timeoutMs = 5_000): Promise<boolean> {
   try {
-    await call(daemonSocketPath(home), "stop", {}, timeoutMs);
+    await call(home, "stop", {}, timeoutMs);
     return true;
   } catch {
     return false;
   }
 }
 
+export async function daemonUnpair(home: string = kiwiHome(), timeoutMs = 10_000): Promise<void> {
+  await call(home, "unpair", {}, timeoutMs);
+}
+
 /** Hand the daemon its cert from the person. Throws when it refuses. */
 export async function daemonAdopt(home: string, params: AdoptParams, timeoutMs = 10_000): Promise<void> {
-  await call(daemonSocketPath(home), "adopt", params, timeoutMs);
+  await call(home, "adopt", params, timeoutMs);
 }
 
 export async function daemonHarnesses(home: string = kiwiHome()): Promise<HarnessRow[]> {
-  const r = await call(daemonSocketPath(home), "harnesses", {}, 30_000);
+  const r = await call(home, "harnesses", {}, 30_000);
   const rows = Array.isArray(r["harnesses"]) ? r["harnesses"] : [];
   return rows.map(readHarnessRow).filter((row): row is HarnessRow => row !== null);
 }
 
 export async function daemonLaunch(req: LaunchAgentRequest, home: string = kiwiHome()): Promise<LaunchedView> {
-  const r = await call(daemonSocketPath(home), "launch", { ...req }, 150_000);
+  const r = await call(home, "launch", { ...req }, 150_000);
   return launchedView(r["launched"]);
 }
 
 export async function daemonMine(room: string, want: string | null, home: string = kiwiHome()): Promise<string> {
-  const r = await call(daemonSocketPath(home), "mine", { room, want }, 15_000);
+  const r = await call(home, "mine", { room, want }, 15_000);
   if (typeof r["pane"] !== "string") throw new Error("the daemon didn't say which terminal is yours");
   return r["pane"];
 }
@@ -143,11 +161,11 @@ const tabsOf = (r: Reply): TermTabView[] =>
   });
 
 export async function daemonMineTabs(home: string = kiwiHome()): Promise<TermTabView[]> {
-  return tabsOf(await call(daemonSocketPath(home), "mine-tabs", {}, 5_000));
+  return tabsOf(await call(home, "mine-tabs", {}, 5_000));
 }
 
 export async function daemonMineClose(pane: string, home: string = kiwiHome()): Promise<TermTabView[]> {
-  return tabsOf(await call(daemonSocketPath(home), "mine-close", { pane }, 5_000));
+  return tabsOf(await call(home, "mine-close", { pane }, 5_000));
 }
 
 /**
@@ -186,7 +204,7 @@ export function daemonEnv(from: NodeJS.ProcessEnv, home: string, relay: string):
 
 export function spawnDaemon(bin: string, home: string, relay: string): void {
   const log = openDaemonLog(home);
-  const child = spawn(bin, ["daemon"], { env: daemonEnv(process.env, home, relay), detached: true, stdio: ["ignore", log, log], windowsHide: true });
+  const child = spawn(bin, ["daemon"], { cwd: os.homedir(), env: daemonEnv(process.env, home, relay), detached: true, stdio: ["ignore", log, log], windowsHide: true });
   if (typeof log === "number") fs.closeSync(log);
   // A binary that won't start shows as no hello (the caller waits for one), not an uncaught error.
   child.on("error", () => {});

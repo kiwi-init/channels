@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { signRequest } from "@kiwi/core/auth.ts";
+import { readDeviceList, type DeviceList } from "@kiwi/core/devices.ts";
 import type { Identity } from "@kiwi/core/identity.ts";
 import { CHOICE_KEYS } from "@kiwi/core/launch-options.ts";
 import { readAsk, readMachineArgs, signAnswer, type MachineArgs } from "@kiwi/core/machine-ask.ts";
@@ -20,6 +21,7 @@ export interface InboxDeps {
   machine: () => PairedMachine | null;
   run: (args: MachineArgs, id: string) => Promise<unknown>;
   unpaired: () => Promise<void>;
+  settled?: () => Promise<unknown> | null;
   now?: () => number;
   checkMs?: number;
 }
@@ -69,6 +71,28 @@ export function deliveredFrom(frame: string): Delivered | null {
   }
 }
 
+type Paired = PairedMachine & { owner: string };
+
+function pairedOf(m: PairedMachine): Paired | null {
+  if (!m.relay) return null;
+  if (m.device?.links.length) return { ...m, owner: m.device.person.pk };
+  return m.cert && m.person ? { ...m, owner: m.person.pk } : null;
+}
+
+const pairedKey = (m: Paired): string => `${m.identity.pk}\u0000${m.relay}\u0000${m.owner}\u0000${m.device?.links.length ?? 0}\u0000${m.cert?.at ?? 0}`;
+
+async function listOf(m: Paired): Promise<DeviceList | null> {
+  if (!m.device?.links.length) return null;
+  const read = await readDeviceList(m.device.links);
+  return read.ok ? read.list : null;
+}
+
+async function register(m: Paired): Promise<Response | null> {
+  const listed = m.device?.links.length ? await machineFetch(m, "PUT", "", { links: m.device.links }).catch(() => null) : null;
+  if (listed?.ok || !m.cert || m.cert.pk !== m.owner) return listed;
+  return machineFetch(m, "PUT", "", { cert: m.cert }).catch(() => null);
+}
+
 export async function forgetAtRelay(m: PairedMachine): Promise<void> {
   await machineFetch(m, "DELETE").catch(() => null);
 }
@@ -101,8 +125,8 @@ export function startMachineInbox(deps: InboxDeps): { stop(): void; close(): voi
     }
   };
 
-  const handle = async (m: PairedMachine & { cert: NonNullable<PairedMachine["cert"]>; person: NonNullable<PairedMachine["person"]> }, d: Delivered): Promise<void> => {
-    const read = await readAsk(m.identity as Identity, d.box, { person: m.person.pk, now: now(), claim }).catch(() => ({ ok: false as const, why: "malformed" as const }));
+  const handle = async (m: Paired, d: Delivered): Promise<void> => {
+    const read = await readAsk(m.identity as Identity, d.box, { person: m.owner, list: await listOf(m), now: now(), claim }).catch(() => ({ ok: false as const, why: "malformed" as const }));
     if (!read.ok) {
       log(["refused", read.why, "", "", d.id]);
       await machineFetch(m, "DELETE", `/inbox/${d.id}`).catch(() => null);
@@ -126,10 +150,11 @@ export function startMachineInbox(deps: InboxDeps): { stop(): void; close(): voi
     if (args?.verb === "unpair") await deps.unpaired();
   };
 
-  const connect = async (m: PairedMachine & { cert: NonNullable<PairedMachine["cert"]>; person: NonNullable<PairedMachine["person"]> }): Promise<void> => {
-    const key = `${m.identity.pk}\u0000${m.relay}\u0000${m.cert.at}`;
+  const connect = async (m: Paired): Promise<void> => {
+    const key = pairedKey(m);
     held = key;
-    const registered = await machineFetch(m, "PUT", "", { cert: m.cert }).catch(() => null);
+    await deps.settled?.();
+    const registered = await register(m);
     if (!registered?.ok || stopped || held !== key) {
       held = null;
       retryAt = now() + wait;
@@ -159,8 +184,8 @@ export function startMachineInbox(deps: InboxDeps): { stop(): void; close(): voi
   const check = (): void => {
     if (stopped) return;
     const m = deps.machine();
-    const paired = m?.cert && m.person && m.relay ? (m as PairedMachine & { cert: NonNullable<PairedMachine["cert"]>; person: NonNullable<PairedMachine["person"]> }) : null;
-    const key = paired ? `${paired.identity.pk}\u0000${paired.relay}\u0000${paired.cert.at}` : null;
+    const paired = m ? pairedOf(m) : null;
+    const key = paired ? pairedKey(paired) : null;
     if (held && held !== key) close();
     if (!paired || held || now() < retryAt) return;
     void connect(paired);

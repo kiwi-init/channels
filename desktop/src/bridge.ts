@@ -88,6 +88,8 @@ export const CHANNEL_CALLS = [
   "deny",
   "remove",
   "cutDevices",
+  "tendDelegations",
+  "dropDelegates",
   "updateScopes",
   "updatePersona",
   "updateNickname",
@@ -115,6 +117,10 @@ export const CHANNEL_CALLS = [
   "setHold",
   "setRooms",
   "setRepos",
+  "makeRoom",
+  "makeDm",
+  "changeRoom",
+  "pruneRooms",
   "icon",
   "setIcon",
   "close",
@@ -240,6 +246,7 @@ export interface EnrollAskView {
   as: "desktop" | "phone" | "computer";
   at: number;
   stage: "new" | "waiting" | "digits" | "elsewhere";
+  fingerprint: string | null;
 }
 
 export interface DeviceView {
@@ -286,7 +293,14 @@ export interface RecoverDoneView {
 
 export type EnrollConfirmView = { ok: true; label: string } | { ok: false; left: number };
 
-export type EnrollStatusView = { stage: "asking" } | { stage: "digits"; digits: string } | { stage: "done"; person: PublicPerson; channels: { label: string; code: string }[] } | { stage: "gone" };
+export interface EnrollPersonView {
+  name: string;
+  fingerprint: string;
+}
+
+export type EnrollKeptView = { stage: "done"; person: PublicPerson; channels: { label: string; code: string }[] };
+
+export type EnrollStatusView = { stage: "asking" } | { stage: "digits"; digits: string } | { stage: "check"; person: EnrollPersonView } | EnrollKeptView | { stage: "gone" };
 
 /** "kiwi daemon" as the app sees it. */
 export interface DaemonStatus {
@@ -306,7 +320,10 @@ export interface GithubRepoView {
 
 export interface GithubStatus {
   available: boolean;
+  /** The relay takes GitHub sign-in, so this link is how the person signs in. */
+  signIn?: boolean;
   account: { login: string; id: number; at: number } | null;
+  moveRefused?: string;
 }
 
 export interface MachineView {
@@ -383,6 +400,7 @@ export interface KiwiBridge {
   enrollDeny(id: string): Promise<void>;
   enrollBegin(): Promise<void>;
   enrollStatus(): Promise<EnrollStatusView | null>;
+  enrollKeep(): Promise<EnrollKeptView>;
   enrollCancel(): Promise<void>;
   devices(): Promise<DeviceView[] | null>;
   forgetDevice(id: string): Promise<void>;
@@ -435,6 +453,8 @@ export interface KiwiBridge {
   onTextStep(cb: (step: TextStep) => void): () => void;
   onFrost(cb: (on: boolean) => void): () => void;
   getAccentColor(): Promise<string | null>;
+  /** What this app can run: its UI contract version and the channel calls it serves, so a newer UI hides what it can't do. */
+  capabilities(): Promise<{ contract: string; channelCalls: string[] }>;
   onAccent(cb: (color: string | null) => void): () => void;
   setPersonalities(list: Personality[]): Promise<void>;
   seatPlaces(): Promise<PlacedSeat[]>;

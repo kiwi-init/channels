@@ -6,8 +6,10 @@ from Needs you follows. What changed while building is under "As built". The aud
 `main` at `00217d35` (kiwi 0.23.1), before the code moved.
 
 Since T374 (2026-10-29, the owner's #355: plug and play), new agents always open in Channels' own
-tmux (T360), so the terminal app plugin, Prefer and the tmux helpers are gone, and no plugin opens
-windows. Rex is the one plugin left. The rest of this page is history.
+tmux (T360), so the terminal app plugin and Prefer are gone, and no plugin opens windows. The tmux
+helpers went with them and came back on 2026-10-30 (T14, the owner's #5): Rex and tmux mark and
+show the seats people run in them, and the daemon no longer takes the tmux helpers back. The rest of
+this page is history.
 
 ## The ask
 

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 import { MB, mb, only, payloadOf, shippedApp, sizeOf } from "./eb-app.ts";
+import { makeDmg } from "./eb-dmg.ts";
 
 const LIMITS = { app: 120 * MB, packed: 60 * MB };
 
@@ -34,7 +35,7 @@ try {
   const zip = join(tmp, "Channels.zip");
   execFileSync("ditto", ["-c", "-k", "--sequesterRsrc", "--keepParent", app, zip]);
   const dmg = join(tmp, "Channels.dmg");
-  execFileSync("hdiutil", ["create", "-quiet", "-volname", "Channels", "-srcfolder", app, "-format", "ULMO", "-o", dmg]);
+  makeDmg(app, dmg);
 
   const gated = [
     { what: "the app (.app on disk)", bytes: sizeOf(app), limit: LIMITS.app },

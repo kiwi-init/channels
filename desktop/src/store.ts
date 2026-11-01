@@ -16,7 +16,7 @@ export interface StoreFile {
   phones?: PhoneView[];
   pending: PendingItem[];
   signin?: { access: string; refresh: string; exp: number };
-  github?: { login: string; id: number; token: string; at: number; relay?: string; clientId?: string };
+  github?: { login: string; id: number; token: string; at: number; relay?: string; clientId?: string; first?: boolean; moved?: boolean };
   migrated?: boolean;
   personalities?: Personality[];
   device?: Identity;
@@ -99,6 +99,12 @@ export function requirePerson(): Identity {
   if (!p && store.enrolled) throw new Error("this app signed in as one of your devices: do this from the app that made your person key");
   if (!p || !p.xsk) throw new Error("make your person key first");
   return { name: p.name, pk: p.pk, sk: p.sk, xpk: p.xpk, xsk: p.xsk };
+}
+
+export function personSigner(): { signer: Identity; person: string } {
+  if (store.person?.xsk) return { signer: requirePerson(), person: store.person.pk };
+  if (store.enrolled && store.device && store.deviceLinks?.length) return { signer: store.device, person: store.enrolled.pk };
+  throw new Error("make your person key first");
 }
 
 export function upsertComputer(c: ComputerView): void {

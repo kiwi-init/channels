@@ -81,7 +81,7 @@ struct Conversation: View {
         ScrollView {
             LazyVStack(spacing: 0) {
                 if !room.whole && !room.messages.isEmpty {
-                    Text("Earlier messages are on your Mac")
+                    Text("Earlier messages aren't on this phone")
                         .type(.meta)
                         .foregroundStyle(Tone.ink3)
                         .padding(.vertical, 14)
@@ -196,7 +196,7 @@ struct Intro: View {
         }
         let member = room.member(lead)
         let now: String? = member?.working == true ? (member?.doing.first.map { "Working on \(taskLabel($0))" } ?? "Working") : nil
-        return ["Lead of \(room.title)", now ?? (room.messages.isEmpty ? "Only you and \(room.display(lead)) here" : nil)].compactMap { $0 }
+        return ["Lead of \(room.title)", now ?? (room.messages.isEmpty ? "Everyone in the channel can read this" : nil)].compactMap { $0 }
     }
 }
 
@@ -423,7 +423,7 @@ struct Bubble: View {
                 Picture(code: room.code, seq: message.seq, index: i)
             }
             if !onlyPictures {
-                Markdown(text: message.body, ink: ink, link: link, code: wash, underline: message.mine, selectable: false)
+                Markdown(text: message.shown, ink: ink, link: link, code: wash, underline: message.mine, selectable: false)
                     .padding(.horizontal, 13)
                     .padding(.vertical, 8)
                     .background {
@@ -558,7 +558,7 @@ struct Poll {
 
     init(_ message: MessageView) {
         seq = message.seq
-        body = message.body
+        body = message.shown
         choices = message.choices
         chosen = message.chosen
         waiting = message.waiting
@@ -566,7 +566,7 @@ struct Poll {
 
     init(_ ask: AskView) {
         seq = ask.seq
-        body = ask.body
+        body = ask.shown
         choices = ask.choices
         chosen = nil
         waiting = true

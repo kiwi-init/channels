@@ -1,12 +1,12 @@
-import { Suspense, useId, useState } from "react"
+import { lazy, Suspense, useId, useState } from "react"
 
 import "~/styles/start.css"
 import { cx } from "~/kit/bits"
-import { later } from "~/kit/later"
-import type { Enrolling } from "~/model"
 import { useApp } from "~/nav"
 
-const Recover = later(() => import("~/start/recover").then((m) => m.Recover))
+const Enroll = lazy(() => import("~/start/enroll"))
+const Recover = lazy(() => import("~/start/recover").then((m) => ({ default: m.Recover })))
+const GithubSignIn = lazy(() => import("~/start/github-sign-in"))
 
 const ALLOWED = /^[A-Za-z0-9._-]+$/
 
@@ -18,59 +18,23 @@ function problemWith(name: string): string | null {
   return null
 }
 
-function Enroll({ enrolling }: { enrolling: Extract<Enrolling, { stage: "asking" | "digits" }> }) {
-  const { app } = useApp()
-  return (
-    <div className="start-first-box">
-      <span className="start-mark">
-        <img src="/icon.svg" width={40} height={40} alt="" />
-      </span>
-      <h1 className="start-word">channels</h1>
-      {enrolling.stage === "asking" ? (
-        <>
-          <p className="start-ask">Open Channels on your other computer</p>
-          <p className="start-asking" aria-live="polite">
-            <span className="start-pip" aria-hidden="true" />
-            It shows this computer asking to join as you. Approve it there.
-          </p>
-        </>
-      ) : (
-        <>
-          <p className="start-ask">Type these on your other computer</p>
-          <p className="start-digits" aria-live="polite" aria-label={enrolling.digits.split("").join(" ")}>
-            {enrolling.digits.slice(0, 3)}
-            <span aria-hidden="true"> </span>
-            {enrolling.digits.slice(3)}
-          </p>
-          <p className="start-hint">Then this computer joins your channels as you.</p>
-        </>
-      )}
-      <div className="start-others">
-        <button type="button" className="btn is-quiet" onClick={() => app.actions.recoverBegin()}>
-          Lost your other devices? Use your recovery key
-        </button>
-        <button type="button" className="btn is-quiet" onClick={() => app.actions.enrollCancel()}>
-          Cancel
-        </button>
-      </div>
-    </div>
-  )
-}
-
 export function FirstRun() {
   const { app } = useApp()
-  const e = app.enrolling
-  if (e)
+  const signIn = app.signIn
+  if (signIn && (signIn.stage === "sign-in" || signIn.stage === "checking" || (signIn.stage === "signed-in" && !app.enrolling)))
     return (
       <main className="start-first">
         <div className="start-drag" />
-        {e.stage === "recover" || e.stage === "welcome" ? (
-          <Suspense fallback={null}>
-            <Recover enrolling={e} />
-          </Suspense>
-        ) : (
-          <Enroll enrolling={e} />
-        )}
+        <Suspense fallback={null}>
+          <GithubSignIn signIn={signIn} />
+        </Suspense>
+      </main>
+    )
+  if (app.enrolling)
+    return (
+      <main className="start-first">
+        <div className="start-drag" />
+        <Suspense fallback={null}>{app.enrolling.stage === "recover" || app.enrolling.stage === "welcome" ? <Recover enrolling={app.enrolling} /> : <Enroll enrolling={app.enrolling} />}</Suspense>
       </main>
     )
   return <NameForm />
@@ -106,7 +70,7 @@ function NameForm() {
           <input
             id={inputId}
             aria-label="Your name"
-            className="input is-mono"
+            className="input"
             autoFocus
             autoComplete="nickname"
             autoCapitalize="off"

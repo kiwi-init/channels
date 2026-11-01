@@ -73,9 +73,12 @@ export function gitRepos(home: string, depth = REPO_DEPTH): string[] {
     .map((r) => r.dir);
 }
 
+export function remoteFolders(cfg: Config, room?: string): string[] {
+  return [...new Set([...seatFolders(cfg, room), ...(cfg.launchRoots ?? []).filter(isFolder)])];
+}
+
 export function launchFolders(cfg: Config, room?: string, home = homedir()): string[] {
-  const chosen = (cfg.launchRoots ?? []).filter(isFolder);
-  return [...new Set([...seatFolders(cfg, room), ...chosen, ...gitRepos(home)])];
+  return [...new Set([...remoteFolders(cfg, room), ...gitRepos(home)])];
 }
 
 export function withLaunchRoot(cfg: Config, dir: string): Config | string {

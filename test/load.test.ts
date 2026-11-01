@@ -15,6 +15,7 @@ const task = (id: number, owner: string | undefined, state: Task["state"], title
 });
 const board = (tasks: Task[]): ChannelState =>
   ({
+    secret: new Map(),
     members: new Map(),
     tasks: new Map(tasks.map((t) => [t.id, t])),
     facts: new Map(),
@@ -22,6 +23,7 @@ const board = (tasks: Task[]): ChannelState =>
     trust: new Map(),
     scopeSets: new Map(),
     roleSets: new Map(),
+    gone: new Map(),
     rejected: new Map(),
     openAsks: [],
     askHeads: new Map(),
@@ -41,6 +43,8 @@ const board = (tasks: Task[]): ChannelState =>
     githubWrite: null,
     branchPrefix: null,
     reactions: new Map(),
+    edits: new Map(),
+    deleted: new Map(),
     head: 0,
   }) as ChannelState;
 

@@ -1,6 +1,6 @@
 import { AUTH_SKEW_MS, verifyRequest } from "@kiwi/core/auth.ts";
 import { b64url } from "@kiwi/core/crypto.ts";
-import { currentDevice, readDeviceList, type Device, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
+import { approvingDevice, readDeviceList, type Device, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
 import { accountScope, ENROLL_TTL_MS, readEnrollAnswer, readEnrollAsk, revealMatches, type Enrollment } from "@kiwi/core/enroll.ts";
 import { canonical } from "@kiwi/core/identity.ts";
 import { checkVault, readRecovery, type Recovery, type RecoveryLink, type Vault } from "@kiwi/core/recovery.ts";
@@ -22,6 +22,7 @@ export interface AccountStore {
   enrollment(user: string): Promise<Enrollment | null>;
   setEnrollment(user: string, next: Enrollment | null, prev: Enrollment | null): Promise<boolean>;
   revoke(keys: string[]): Promise<void>;
+  tellComputers(keys: string[], links: unknown[]): Promise<void>;
   recovery(user: string): Promise<unknown[]>;
   extendRecovery(user: string, from: number, links: RecoveryLink[]): Promise<boolean>;
   vault(user: string): Promise<Vault | null>;
@@ -32,6 +33,9 @@ const PATH = /^\/v1\/account(?:\/vault|\/ask(?:\/([A-Za-z0-9_-]{22})(?:\/(answer
 const VAULT_PATH = "/v1/account/vault";
 
 export const isAccountPath = (pathname: string): boolean => PATH.test(pathname);
+
+const NO_APPROVER = "no app of this account can approve a device yet: sign in on your first app";
+const NO_GITHUB_APPROVER = "nothing on this GitHub sign-in can approve a device yet: open Channels on your computer once to move your devices to your GitHub sign-in, then try again";
 
 const enrollmentLive = (e: Enrollment | null, now: number): Enrollment | null => (e && e.at + ENROLL_TTL_MS > now ? e : null);
 
@@ -57,10 +61,7 @@ export async function accountUser(req: Request, human: HumanAuth | null): Promis
   return user ?? refuse(new SignInRequired({ message: "sign in to reach your account" }));
 }
 
-function approver(list: DeviceList | null, pk: string, now: number): Device | null {
-  const d = list ? currentDevice(list, pk, now) : null;
-  return d && d.approve && d.as !== "computer" ? d : null;
-}
+const approver = (list: DeviceList | null, pk: string, now: number): Device | null => (list ? approvingDevice(list, pk, now) : null);
 
 async function kept(store: AccountStore, user: string): Promise<{ links: unknown[]; list: DeviceList | null }> {
   const links = await store.links(user);
@@ -118,7 +119,7 @@ export async function onAccountHttp(
   req: Request,
   store: AccountStore,
   user: string,
-  opts: { now?: () => number; perAccount?: (key: string) => boolean | Promise<boolean>; perAddress?: () => boolean | Promise<boolean> } = {},
+  opts: { now?: () => number; perAccount?: (key: string) => boolean | Promise<boolean>; perAddress?: () => boolean | Promise<boolean>; formerly?: string } = {},
 ): Promise<Response | null> {
   const url = new URL(req.url);
   const m = PATH.exec(url.pathname);
@@ -140,7 +141,8 @@ export async function onAccountHttp(
   if (!onAsk && req.method === "GET") return answer({ user, links });
 
   const token = requestToken(req);
-  const signer = token ? await verifyRequest(token, accountScope(user), req.method, url.pathname, body, now) : null;
+  const signedFor = (scope: string) => verifyRequest(token, accountScope(scope), req.method, url.pathname, body, now);
+  const signer = token ? ((await signedFor(user)) ?? (opts.formerly ? await signedFor(opts.formerly) : null)) : null;
   if (!signer) return refuse(new Unauthorized({ message: "sign this request for this account and path" }));
   if (list?.revoked.includes(signer)) return refuse(new Forbidden({ message: "this device was removed from this person's devices" }));
 
@@ -160,6 +162,8 @@ export async function onAccountHttp(
     if (!(await store.extend(user, links.length, raw.slice(links.length) as DeviceLink[]))) return refuse(new Conflict({ message: "the device list changed meanwhile; read it and try again" }));
     const cut = next.revoked.filter((k) => !list?.revoked.includes(k));
     if (cut.length) await store.revoke(cut);
+    const computers = next.devices.filter((d) => d.as === "computer").map((d) => d.device);
+    if (computers.length) await store.tellComputers(computers, raw);
     return done();
   }
 
@@ -170,7 +174,7 @@ export async function onAccountHttp(
     const ask = readEnrollAsk(parse(body)?.ask);
     if (!ask) return refuse(new BadRequest({ message: "an ask takes {ask}: device, dxpk, label, os, as, at and commit" }));
     if (signer !== ask.device) return refuse(new Forbidden({ message: "a device asks to join for itself" }));
-    if (!list) return refuse(new NotFound({ message: "no app of this account can approve a device yet: sign in on your first app" }));
+    if (!list) return refuse(user.startsWith("github_") ? new NotFound({ message: NO_GITHUB_APPROVER }) : new NotFound({ message: NO_APPROVER }));
     if (list.revoked.includes(ask.device)) return refuse(new Forbidden({ message: "this device was removed from this person's devices" }));
     if (list.devices.some((d) => d.device === ask.device)) return refuse(new Conflict({ message: "this device is already one of this person's" }));
     if (opts.perAccount && !(await opts.perAccount(`account:${user}`))) return refuse(new TooMany({ message: "too many asks for this account; try again in a minute" }));
