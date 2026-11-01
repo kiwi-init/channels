@@ -510,7 +510,8 @@ function folding(
       }
       if (ev.op === "msg.edit" || ev.op === "msg.delete") {
         const author = ev.seq < m.seq ? chatBy.get(ev.seq) : undefined;
-        if (author === undefined) reject(`no message #${ev.seq} that can be edited or deleted`);
+        if (ev.seq < m.seq && ev.seq <= m.seq - KEEP_SEQS) reject(`#${ev.seq} is too far back to edit or delete`);
+        else if (author === undefined) reject(`no message #${ev.seq} that can be edited or deleted`);
         else if (!sameAuthor(members.get(author), member)) reject(`only who wrote #${ev.seq} edits or deletes it`);
         else if (deleted.has(ev.seq)) reject(`#${ev.seq} is already deleted`);
         else if (ev.op === "msg.edit") edits.set(ev.seq, { body: ev.body, at, seq: m.seq });

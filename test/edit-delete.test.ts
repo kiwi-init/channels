@@ -144,3 +144,40 @@ describe("a removed key can't change messages any more, and its earlier edits st
     expect(state.edits.get(said)?.body).toBe("meeting at 4");
   });
 });
+
+describe("an edit or delete is judged the same however the fold started (T1784)", () => {
+  const KEEP = 5_000;
+  const wire = (seq: number, from: string, over: Partial<Message> = {}): Message =>
+    ({ v: 1, id: `age-${seq}`, seq, from, pk: ids[from]!.pk, sigOk: true, kind: "msg", body: `line ${seq}`, ts: seq, rts: seq, ...over }) as Message;
+  const overlay = (seq: number, from: string, ev: Event): Message => wire(seq, from, { kind: "event", body: "", ev });
+
+  function log(gap: number): Message[] {
+    const out = [wire(1, "mac"), wire(2, "mac")];
+    for (let s = 3; s <= gap; s++) out.push(wire(s, "jow"));
+    out.push(overlay(gap + 1, "mac", { op: "msg.edit", seq: 1, body: "edited much later" }));
+    out.push(overlay(gap + 2, "mac", { op: "msg.delete", seq: 2 }));
+    return out;
+  }
+
+  function both(all: Message[], cutAt: number) {
+    const whole = fold(all, roster, 0);
+    let base: FoldBase | null = null;
+    fold(all.slice(0, cutAt), roster, 0, null, null, null, (b) => (base = b));
+    const later = fold(all.slice(cutAt), roster, 0, null, null, base);
+    return [whole, later].map((s) => ({ edited: s.edits.get(1)?.body ?? null, deleted: s.deleted.has(2) }));
+  }
+
+  test("a target further back than the fold keeps is refused from seq 1 too, as it is from a base", () => {
+    const all = log(KEEP + 100);
+    const [whole, later] = both(all, all.length - 2);
+    expect(whole).toEqual(later);
+    expect(whole).toEqual({ edited: null, deleted: false });
+  });
+
+  test("a recent target is accepted both ways", () => {
+    const all = log(KEEP - 100);
+    const [whole, later] = both(all, all.length - 2);
+    expect(whole).toEqual(later);
+    expect(whole).toEqual({ edited: "edited much later", deleted: true });
+  });
+});
