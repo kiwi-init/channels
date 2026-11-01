@@ -9,7 +9,7 @@ import type { Roster } from "@kiwi/core/state.ts";
 import { SearchCore } from "../desktop/src/search-core.ts";
 import type { FoldInputs, SearchAsk, SearchReply } from "../desktop/src/search-types.ts";
 import { SearchHost, type SearchWorker } from "../desktop/src/search-host.ts";
-import { SearchIndex } from "../desktop/src/search-index.ts";
+import { SearchIndex, type IndexStamp } from "../desktop/src/search-index.ts";
 import { openIndex, sealIndex } from "../desktop/src/search-store.ts";
 
 const dir = mkdtempSync(join(tmpdir(), "kiwi-search-"));
@@ -29,9 +29,9 @@ describe("the index (T977)", () => {
   test("finds words by prefix and without accents, only in the rooms asked for", () => {
     const index = SearchIndex.empty();
     index.put([
-      { seq: 1, room: "general", from: "jow", text: "A relay ficou lento ontem" },
-      { seq: 2, room: "r-ops", from: "win", text: "relay restarted, latência normal" },
-      { seq: 3, room: "general", from: "win", text: "unrelated" },
+      { seq: 1, room: "general", from: "jow", text: "A relay ficou lento ontem", at: 0 },
+      { seq: 2, room: "r-ops", from: "win", text: "relay restarted, latência normal", at: 0 },
+      { seq: 3, room: "general", from: "win", text: "unrelated", at: 0 },
     ]);
     expect(index.search("relay", ["general"], 10).map((h) => h.seq)).toEqual([1]);
     expect(
@@ -46,18 +46,28 @@ describe("the index (T977)", () => {
 
   test("a query is words, never FTS syntax, whatever it holds", () => {
     const index = SearchIndex.empty();
-    index.put([{ seq: 1, room: "general", from: "jow", text: "near or not" }]);
+    index.put([{ seq: 1, room: "general", from: "jow", text: "near or not", at: 0 }]);
     for (const q of ['"', "NEAR(a b)", "near OR", "-not", "*", "room:general", "a AND (b", "'; DROP TABLE hits; --", "^near", ""]) {
       expect(() => index.search(q, ["general"], 10)).not.toThrow();
     }
     expect(index.search("NEAR(", ["general"], 10).map((h) => h.seq)).toEqual([1]);
   });
 
+  test("the stretch around a message comes back in order, only from rooms asked for and without what was dropped", () => {
+    const index = SearchIndex.empty();
+    index.put(Array.from({ length: 30 }, (_, i) => ({ seq: i + 1, room: i % 5 === 0 ? "r-private" : "general", from: "jow", text: `line ${i + 1}`, at: i })));
+    index.drop([12]);
+    const near = index.around(10, ["general"], 3);
+    expect(near.map((h) => h.seq)).toEqual([7, 8, 9, 10, 13]);
+    expect(near[0]).toMatchObject({ room: "general", from: "jow", text: "line 7", at: 6 });
+    expect(index.around(10, [], 3)).toEqual([]);
+  });
+
   test("an edit replaces the text, a delete and a room's removal drop it", () => {
     const index = SearchIndex.empty();
     index.put([
-      { seq: 1, room: "general", from: "jow", text: "first draft" },
-      { seq: 2, room: "r-x", from: "jow", text: "secret plan" },
+      { seq: 1, room: "general", from: "jow", text: "first draft", at: 0 },
+      { seq: 2, room: "r-x", from: "jow", text: "secret plan", at: 0 },
     ]);
     index.retext(1, "final wording");
     expect(index.search("draft", ["general"], 10)).toEqual([]);
@@ -73,23 +83,25 @@ describe("the sealed index file (T977)", () => {
   test("rests as ciphertext, opens only with its key and its room, and keeps the fold base", async () => {
     const k = key();
     const index = SearchIndex.empty();
-    index.put([{ seq: 7, room: "general", from: "jow", text: "PLAINTEXT-SENTINEL words" }]);
+    index.put([{ seq: 7, room: "general", from: "jow", text: "PLAINTEXT-SENTINEL words", at: 70 }]);
     const sealed = await sealIndex(index, { base: null, through: 7 }, k, ROOM);
     expect(Buffer.from(sealed).includes(Buffer.from("PLAINTEXT-SENTINEL"))).toBe(false);
     expect(await openIndex(sealed, key(), ROOM)).toBeNull();
     expect(await openIndex(sealed, k, "e".repeat(32))).toBeNull();
     const back = await openIndex(sealed, k, ROOM);
     expect(back?.fed.through).toBe(7);
-    expect(back?.index.search("sentinel", ["general"], 5).map((h) => h.seq)).toEqual([7]);
+    expect(back?.index.search("sentinel", ["general"], 5)).toEqual([{ seq: 7, rank: expect.any(Number), room: "general", from: "jow", text: "PLAINTEXT-SENTINEL words", at: 70 }]);
   });
 
-  test("an index from other fold rules is thrown away, never mixed", async () => {
-    const k = key();
-    const index = SearchIndex.empty();
-    const stamp = index.setStamp.bind(index);
-    index.setStamp = (s) => stamp({ ...s, rules: s.rules - 1 });
-    const sealed = await sealIndex(index, { base: null, through: 3 }, k, ROOM);
-    expect(await openIndex(sealed, k, ROOM)).toBeNull();
+  test("an index from other fold rules or another file layout is thrown away, never mixed", async () => {
+    for (const change of [(s: IndexStamp) => ({ ...s, rules: s.rules - 1 }), (s: IndexStamp) => ({ ...s, schema: s.schema - 1 })]) {
+      const k = key();
+      const index = SearchIndex.empty();
+      const stamp = index.setStamp.bind(index);
+      index.setStamp = (s) => stamp(change(s));
+      const sealed = await sealIndex(index, { base: null, through: 3 }, k, ROOM);
+      expect(await openIndex(sealed, k, ROOM)).toBeNull();
+    }
   });
 });
 

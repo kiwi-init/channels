@@ -28,6 +28,10 @@ export class SearchCore {
         const o = this.need(ask.code);
         return { hits: o.index.search(ask.query, ask.rooms, ask.limit), through: o.fed.through };
       }
+      case "around": {
+        const o = this.need(ask.code);
+        return { hits: o.index.around(ask.seq, ask.rooms, ask.span), through: o.fed.through };
+      }
       case "dropRoom": {
         const o = this.need(ask.code);
         o.index.dropRoom(ask.room);

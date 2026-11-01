@@ -7,16 +7,20 @@ export interface IndexedRow {
   room: string;
   from: string;
   text: string;
+  at: number;
 }
 
 export interface IndexStamp {
   rules: number;
   ops: number;
   through: number;
+  schema: number;
 }
 
+export const INDEX_SCHEMA = 2;
+
 const SCHEMA = [
-  "CREATE VIRTUAL TABLE IF NOT EXISTS hits USING fts5(body, who, room UNINDEXED, tokenize = 'unicode61 remove_diacritics 2')",
+  "CREATE VIRTUAL TABLE IF NOT EXISTS hits USING fts5(body, who, room UNINDEXED, at UNINDEXED, tokenize = 'unicode61 remove_diacritics 2')",
   "CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT NOT NULL)",
 ];
 
@@ -54,7 +58,9 @@ export class SearchIndex {
     const raw = this.get("stamp");
     if (!raw) return null;
     const s = JSON.parse(raw) as Partial<IndexStamp>;
-    return Number.isSafeInteger(s.rules) && Number.isSafeInteger(s.ops) && Number.isSafeInteger(s.through) ? { rules: s.rules!, ops: s.ops!, through: s.through! } : null;
+    return Number.isSafeInteger(s.rules) && Number.isSafeInteger(s.ops) && Number.isSafeInteger(s.through) && Number.isSafeInteger(s.schema)
+      ? { rules: s.rules!, ops: s.ops!, through: s.through!, schema: s.schema! }
+      : null;
   }
 
   setStamp(stamp: IndexStamp): void {
@@ -71,11 +77,11 @@ export class SearchIndex {
 
   put(rows: readonly IndexedRow[]): void {
     const drop = this.db.prepare("DELETE FROM hits WHERE rowid = ?");
-    const add = this.db.prepare("INSERT INTO hits (rowid, body, who, room) VALUES (?, ?, ?, ?)");
+    const add = this.db.prepare("INSERT INTO hits (rowid, body, who, room, at) VALUES (?, ?, ?, ?, ?)");
     this.db.transaction(() => {
       for (const r of rows) {
         drop.run(r.seq);
-        if (r.text.trim()) add.run(r.seq, r.text, r.from, r.room);
+        if (r.text.trim()) add.run(r.seq, r.text, r.from, r.room, r.at);
       }
     })();
   }
@@ -101,8 +107,17 @@ export class SearchIndex {
     if (!match || !rooms.length) return [];
     const marks = rooms.map(() => "?").join(", ");
     return this.db
-      .query<{ seq: number; rank: number }, (string | number)[]>(`SELECT rowid AS seq, rank FROM hits WHERE hits MATCH ? AND room IN (${marks}) ORDER BY rank, rowid DESC LIMIT ?`)
+      .query<IndexHit, (string | number)[]>(`SELECT rowid AS seq, rank, room, who AS "from", body AS text, at FROM hits WHERE hits MATCH ? AND room IN (${marks}) ORDER BY rank, rowid DESC LIMIT ?`)
       .all(match, ...rooms, Math.max(1, Math.min(limit, 500)));
+  }
+
+  around(seq: number, rooms: readonly string[], span: number): IndexHit[] {
+    if (!rooms.length) return [];
+    const marks = rooms.map(() => "?").join(", ");
+    const wide = Math.max(1, Math.min(span, 500));
+    return this.db
+      .query<IndexHit, (string | number)[]>(`SELECT rowid AS seq, 0 AS rank, room, who AS "from", body AS text, at FROM hits WHERE rowid BETWEEN ? AND ? AND room IN (${marks}) ORDER BY rowid`)
+      .all(seq - wide, seq + wide, ...rooms);
   }
 
   rows(): { seq: number; room: string; text: string }[] {

@@ -173,3 +173,26 @@
     width: min(200px, 40vw);
   }
 }
+
+.search-note {
+  padding: 8px 10px 10px;
+  color: var(--ink-3);
+  font: 400 var(--t-meta) var(--ui);
+}
+
+.older-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink-2);
+  font: 400 var(--t-ui) var(--ui);
+}
+
+.older-where {
+  padding: 12px 16px 2px;
+  color: var(--ink-3);
+  font: 400 var(--t-stamp) var(--mono);
+}

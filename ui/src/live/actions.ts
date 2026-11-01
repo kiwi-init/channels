@@ -312,6 +312,8 @@ export function makeActions(): Actions {
       }),
     setPrefs,
     setMute: (code, room, on) => void rare().then((r) => r.setMute(code, room, on)),
+    searchOlder: (code, query, before) => import("~/live/older").then((o) => o.searchOlder(code, query, before)),
+    olderAround: (code, seq) => import("~/live/older").then((o) => o.olderAround(code, seq)),
     snooze: (until) => void rare().then((r) => r.snooze(until)),
     forgetComputer: (id) => void manage().then((m) => m.forgetComputer(id)),
     linkGithub: () => attempt("GitHub not linked", linkGithub),

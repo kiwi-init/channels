@@ -16,7 +16,7 @@ import type {
   OlderRows,
   WireError,
 } from "../../../desktop/src/bridge.ts";
-import type { Searched } from "../../../desktop/src/search-types.ts";
+import type { IndexHit, Searched } from "../../../desktop/src/search-types.ts";
 import { fromWire, toWire } from "../../../desktop/src/wire.ts";
 
 export function errorOf(w: WireError): Error {
@@ -94,6 +94,7 @@ export function remoteOps(port: KeysPort): ChannelOps {
     olderRows: (code, before, limit) => ask({ op: "olderRows", code, before, limit }) as Promise<OlderRows>,
     indexRows: (code, rows, inputs) => ask({ op: "indexRows", code, rows: toWire(rows), inputs: toWire(inputs) }) as Promise<number | null>,
     searchHistory: (code, search) => ask({ op: "searchHistory", code, ask: toWire(search) }) as Promise<Searched | null>,
+    historyAround: (code, around) => ask({ op: "historyAround", code, ask: toWire(around) }) as Promise<IndexHit[] | null>,
     keep: (code, state) => ask({ op: "keep", code, state: toWire(state) }) as Promise<CachedKept | null>,
     openKept: (code, sealed) => ask({ op: "openKept", code, sealed: toWire(sealed) }),
     nudge: () => void port.request({ op: "nudge" }),

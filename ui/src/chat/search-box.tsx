@@ -6,14 +6,20 @@ import { hitKey, hitText, messageIndex, searchHits, whereLabel, type Hit } from 
 import { cx, Dot } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
-import type { Channel, Message } from "~/model"
+import type { Channel, Message, OlderSearch } from "~/model"
 import { useApp } from "~/nav"
 import { nickname } from "~/names"
 
 const SETTLE_MS = 150
+const OLDER_SHOWN = 30
 
 export interface Jump {
   m: Message
+  terms: string[]
+}
+
+export interface Older {
+  seq: number
   terms: string[]
 }
 
@@ -41,8 +47,21 @@ function Marked({ text, wanted }: { text: string; wanted: string[] }) {
   )
 }
 
-export function SearchBox({ channel, focusAsk, onJump, onClose }: { channel: Channel; focusAsk: number; onJump: (jump: Jump | null) => void; onClose: () => void }) {
-  const { go } = useApp()
+export function SearchBox({
+  channel,
+  focusAsk,
+  onJump,
+  onOlder,
+  onClose,
+}: {
+  channel: Channel
+  focusAsk: number
+  onJump: (jump: Jump | null) => void
+  onOlder: (older: Older) => void
+  onClose: () => void
+}) {
+  const { go, app } = useApp()
+  const actions = app.actions
   const [query, setQuery] = useState("")
   const [focused, setFocused] = useState(true)
   const [active, setActive] = useState(0)
@@ -51,7 +70,23 @@ export function SearchBox({ channel, focusAsk, onJump, onClose }: { channel: Cha
   const listId = useId()
   const settled = useSettled(query)
   const index = useMemo(() => messageIndex(channel), [channel])
-  const hits = useMemo(() => searchHits(channel.tasks, index, settled), [channel.tasks, index, settled])
+  const recent = useMemo(() => searchHits(channel.tasks, index, settled), [channel.tasks, index, settled])
+  const before = useMemo(() => channel.messages.reduce((low, m) => (m.seq > 0 && m.seq < low ? m.seq : low), Number.MAX_SAFE_INTEGER), [channel.messages])
+  const [older, setOlder] = useState<{ query: string; found: OlderSearch } | null>(null)
+  useEffect(() => {
+    const q = settled.trim()
+    if (!q) return
+    let gone = false
+    void actions.searchOlder(channel.code, q, before).then(
+      (found: OlderSearch) => !gone && setOlder({ query: q, found }),
+      () => !gone && setOlder({ query: q, found: { state: "none", hits: [] } })
+    )
+    return () => {
+      gone = true
+    }
+  }, [actions, channel.code, settled, before])
+  const olderNow = older?.query === settled.trim() ? older.found : null
+  const hits = useMemo((): Hit[] => [...recent, ...(olderNow?.hits ?? []).slice(0, OLDER_SHOWN).map((o): Hit => ({ kind: "older", o }))], [recent, olderNow])
   const wanted = useMemo(() => terms(settled), [settled])
   const [hitsWere, setHitsWere] = useState(hits)
   if (hitsWere !== hits) {
@@ -78,6 +113,11 @@ export function SearchBox({ channel, focusAsk, onJump, onClose }: { channel: Cha
       go({ to: "panel", panel: { kind: "task", task: hit.task.id } })
       return
     }
+    if (hit.kind === "older") {
+      onJump(null)
+      onOlder({ seq: hit.o.seq, terms: wanted })
+      return
+    }
     go({ to: "where", where: hit.m.where })
     onJump({ m: hit.m, terms: wanted })
   }
@@ -99,6 +139,8 @@ export function SearchBox({ channel, focusAsk, onJump, onClose }: { channel: Cha
   }
 
   const firstMessage = hits.findIndex((h) => h.kind === "message")
+  const firstOlder = hits.findIndex((h) => h.kind === "older")
+  const olderMore = olderNow ? olderNow.hits.length - OLDER_SHOWN : 0
   return (
     <div className="search">
       <div className="search-field" role="search">
@@ -148,7 +190,7 @@ export function SearchBox({ channel, focusAsk, onJump, onClose }: { channel: Cha
       </div>
       {open && (
         <div ref={listRef} id={listId} className="search-pop" role="listbox" aria-label="Search results">
-          {hits.length === 0 && <p className="search-none">Nothing matches “{settled.trim()}”.</p>}
+          {hits.length === 0 && olderNow?.state !== "indexing" && <p className="search-none">Nothing matches “{settled.trim()}”.</p>}
           {hits.map((hit, i) => (
             <div key={hitKey(hit)}>
               {i === 0 && hit.kind === "task" && (
@@ -161,6 +203,11 @@ export function SearchBox({ channel, focusAsk, onJump, onClose }: { channel: Cha
                   Messages
                 </div>
               )}
+              {i === firstOlder && (
+                <div className="search-heading" aria-hidden="true">
+                  Older messages · {olderNow?.hits.length}
+                </div>
+              )}
               <div
                 id={optionId(i)}
                 className={cx("search-item", i === current && "is-on")}
@@ -170,7 +217,20 @@ export function SearchBox({ channel, focusAsk, onJump, onClose }: { channel: Cha
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => pick(hit)}
               >
-                {hit.kind === "task" ? (
+                {hit.kind === "older" ? (
+                  <span className="search-msg">
+                    <span className="search-line">
+                      <span className="search-who">
+                        <Marked text={nickname(channel, hit.o.from)} wanted={wanted} />
+                      </span>
+                      <span className="search-where">{whereLabel(channel, hit.o.where)}</span>
+                      <span className="search-when">{ago(hit.o.at)}</span>
+                    </span>
+                    <span className="search-text">
+                      <Marked text={hitText(hit.o.text, wanted)} wanted={wanted} />
+                    </span>
+                  </span>
+                ) : hit.kind === "task" ? (
                   <>
                     <span className="search-id">T{hit.task.id}</span>
                     <span className="search-title">
@@ -195,6 +255,8 @@ export function SearchBox({ channel, focusAsk, onJump, onClose }: { channel: Cha
               </div>
             </div>
           ))}
+          {olderMore > 0 && <p className="search-note">{olderMore} more older matches; add a word to narrow them.</p>}
+          {olderNow?.state === "indexing" && <p className="search-note">Still indexing older history, so more may turn up.</p>}
         </div>
       )}
     </div>

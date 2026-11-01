@@ -26,12 +26,13 @@ import {
   type FollowEvent,
   type FollowOptions,
   type JoinCheck,
+  type HistoryAround,
   type HistorySearch,
   type OlderRows,
   type WireError,
 } from "./bridge.ts";
 import { indexKey, SearchHost, type SearchPlace } from "./search-host.ts";
-import type { FoldInputs, Searched } from "./search-types.ts";
+import type { FoldInputs, IndexHit, Searched } from "./search-types.ts";
 
 const OLDER_PAGE = 500;
 import { channelAccess, publicChannel } from "./seats.ts";
@@ -300,6 +301,11 @@ export class Keyring implements ChannelOps {
   async searchHistory(code: string, ask: HistorySearch): Promise<Searched | null> {
     const at = await this.searchAt(code);
     return at ? at.host.search(code, ask.query, ask.rooms, ask.limit, ask.head) : null;
+  }
+
+  async historyAround(code: string, ask: HistoryAround): Promise<IndexHit[] | null> {
+    const at = await this.searchAt(code);
+    return at ? at.host.around(code, ask.seq, ask.rooms, ask.span) : null;
   }
 
   async olderRows(code: string, before: number, limit: number): Promise<OlderRows> {

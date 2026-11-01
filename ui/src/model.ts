@@ -180,6 +180,19 @@ export interface Room {
   muted?: true
 }
 
+export interface OlderHit {
+  seq: number
+  from: string
+  text: string
+  at: number
+  where: Where
+}
+
+export interface OlderSearch {
+  state: "ready" | "indexing" | "none"
+  hits: OlderHit[]
+}
+
 export interface Direct {
   with: string
   unread: number
@@ -646,6 +659,8 @@ export interface Actions {
   setName(name: string): void
   setPrefs(prefs: Partial<Prefs>): void
   setMute(code: string, room: string | null, on: boolean): void
+  searchOlder(code: string, query: string, before: number): Promise<OlderSearch>
+  olderAround(code: string, seq: number): Promise<OlderHit[] | null>
   snooze(until: "1h" | "8h" | "tomorrow" | null): void
   forgetComputer(id: string): void
   linkGithub(): void

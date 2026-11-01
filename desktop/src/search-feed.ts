@@ -3,7 +3,7 @@ import { fold, type FoldBase } from "@kiwi/core/state.ts";
 import { roomOfMessage } from "@kiwi/core/state/rooms.ts";
 import type { ChannelState } from "@kiwi/core/state/types.ts";
 
-import type { IndexedRow, IndexStamp, SearchIndex } from "./search-index.ts";
+import { INDEX_SCHEMA, type IndexedRow, type IndexStamp, type SearchIndex } from "./search-index.ts";
 import type { FoldInputs } from "./search-types.ts";
 
 export interface Fed {
@@ -11,13 +11,13 @@ export interface Fed {
   through: number;
 }
 
-export const stampFor = (through: number): IndexStamp => ({ rules: FOLD_RULES, ops: EVENT_OPS_VERSION, through });
+export const stampFor = (through: number): IndexStamp => ({ rules: FOLD_RULES, ops: EVENT_OPS_VERSION, through, schema: INDEX_SCHEMA });
 
-export const sameRules = (stamp: IndexStamp | null): boolean => stamp !== null && stamp.rules === FOLD_RULES && stamp.ops === EVENT_OPS_VERSION;
+export const sameRules = (stamp: IndexStamp | null): boolean => stamp !== null && stamp.rules === FOLD_RULES && stamp.ops === EVENT_OPS_VERSION && stamp.schema === INDEX_SCHEMA;
 
 function searchable(state: Pick<ChannelState, "trust" | "deleted" | "edits" | "roomOf">, m: Message): IndexedRow | null {
   if (m.kind === "event" || isOverlay(m) || ignored(state.trust.get(m.seq)) || state.deleted.has(m.seq)) return null;
-  return { seq: m.seq, room: roomOfMessage(state, m), from: m.from, text: state.edits.get(m.seq)?.body ?? m.body };
+  return { seq: m.seq, room: roomOfMessage(state, m), from: m.from, text: state.edits.get(m.seq)?.body ?? m.body, at: m.ts };
 }
 
 export function feed(index: SearchIndex, fed: Fed, messages: readonly Message[], inputs: FoldInputs): Fed {

@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState, type CSSProperties } from "react"
 
 import { Conversation } from "~/chat/conversation"
-import type { Jump } from "~/chat/search-box"
+import type { Jump, Older } from "~/chat/search-box"
 import { cx, Count, IconButton, useLate } from "~/kit/bits"
 import { useGlide } from "~/kit/glide"
 import { Boundary } from "~/kit/boundary"
@@ -11,7 +11,7 @@ import type { Channel } from "~/model"
 import { drawerNews } from "~/live/notify"
 import { dropMessage, findWanted, useWantedMessage } from "~/live/open-message"
 import { openAsks } from "~/needs/open"
-import { sameWhere, useApp } from "~/nav"
+import { sameWhere, useApp, whereKey } from "~/nav"
 import { ThreadPanel } from "~/panels/thread"
 import { SIDEBAR_KEYS, useSidebarHidden } from "@kiwi/app/sidebar-hidden.ts"
 import { usePanelWidth } from "~/shell/panel-width"
@@ -26,6 +26,7 @@ const TermDrawer = lazy(() => import("~/term/drawer"))
 const TallPage = lazy(() => import("~/shell/tall"))
 const Waiting = later(() => import("~/start/waiting").then((m) => m.Waiting))
 const SearchBox = later(() => import("~/chat/search-box").then((m) => m.SearchBox))
+const OlderView = later(() => import("~/chat/older-view").then((m) => m.OlderView))
 const Board = later(() => import("~/tasks/board").then((m) => m.Board))
 const Lanes = later(() => import("~/tasks/lanes").then((m) => m.Lanes))
 const NeedsYou = later(() => import("~/needs/needs").then((m) => m.NeedsYou))
@@ -40,6 +41,11 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   const hidden = useSidebarHidden()
   const panel = usePanelWidth(hidden)
   const [jump, setJump] = useState<Jump | null>(null)
+  const place = `${channel.code}\n${nav.tab}\n${whereKey(nav.where)}`
+  const [olderAt, setOlderAt] = useState<{ older: Older; place: string } | null>(null)
+  if (olderAt && olderAt.place !== place) setOlderAt(null)
+  const older = olderAt?.older ?? null
+  const setOlder = (o: Older | null) => setOlderAt(o ? { older: o, place } : null)
   const [focusAsk, setFocusAsk] = useState(0)
   if (jump && (nav.tab !== "chat" || !sameWhere(jump.m.where, nav.where))) setJump(null)
   const wanted = useWantedMessage()
@@ -170,7 +176,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
           {searching && (
             <div className="top-find">
               <Suspense fallback={null}>
-                <SearchBox channel={channel} focusAsk={focusAsk} onJump={setJump} onClose={() => setSearching(false)} />
+                <SearchBox channel={channel} focusAsk={focusAsk} onJump={(j) => (j && setOlder(null), setJump(j))} onOlder={setOlder} onClose={() => setSearching(false)} />
               </Suspense>
             </div>
           )}
@@ -184,7 +190,9 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
       <main className={cx("main", tall && nav.tab !== "needs" && "is-tall")}>
         <Boundary resetKey={nav.tab}>
           <Suspense fallback={null}>
-            {tall && nav.tab !== "needs" ? (
+            {older ? (
+              <OlderView channel={channel} older={older} onBack={() => setOlder(null)} />
+            ) : tall && nav.tab !== "needs" ? (
               <TallPage
                 channel={channel}
                 jump={jump}

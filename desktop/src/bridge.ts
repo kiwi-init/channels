@@ -2,7 +2,7 @@
 // main-eb.ts and preload-eb.ts; renderer-neutral on purpose (no node imports),
 // so ui/ can type against it without touching this process.
 
-import type { FoldInputs, Searched } from "./search-types.ts";
+import type { FoldInputs, IndexHit, Searched } from "./search-types.ts";
 import type { ComputerSettings } from "@kiwi/core/computer-settings.ts";
 import type { DeviceLink } from "@kiwi/core/devices.ts";
 import type { HarnessRow, HookHarness, HookRow, KnownHarness } from "@kiwi/core/harnesses.ts";
@@ -163,10 +163,17 @@ export interface ChannelOps {
   olderRows(code: string, before: number, limit: number): Promise<OlderRows>;
   indexRows(code: string, rows: CachedRow[], inputs: FoldInputs): Promise<number | null>;
   searchHistory(code: string, ask: HistorySearch): Promise<Searched | null>;
+  historyAround(code: string, ask: HistoryAround): Promise<IndexHit[] | null>;
   keep(code: string, state: object): Promise<CachedKept | null>;
   openKept(code: string, sealed: CachedKept): Promise<unknown>;
   follow(code: string, since: number, on: (e: FollowEvent) => void, opts?: FollowOptions): () => void;
   nudge(): void;
+}
+
+export interface HistoryAround {
+  seq: number;
+  rooms: string[];
+  span: number;
 }
 
 export interface HistorySearch {
@@ -202,6 +209,7 @@ export type KeysAsk =
   | { op: "olderRows"; code: string; before: number; limit: number }
   | { op: "indexRows"; code: string; rows: Wire; inputs: Wire }
   | { op: "searchHistory"; code: string; ask: Wire }
+  | { op: "historyAround"; code: string; ask: Wire }
   | { op: "keep"; code: string; state: Wire }
   | { op: "openKept"; code: string; sealed: Wire }
   | { op: "follow"; code: string; since: number; watch?: boolean }
