@@ -63,7 +63,10 @@ const lastSetUp = (chain: readonly unknown[]): RecoveryLink | null => [...(chain
 
 export const setUpAt = (chain: readonly unknown[]): number | null => lastSetUp(chain)?.at ?? null;
 
-const typedHere = (chain: readonly unknown[], recovery: Recovery): boolean => lastSetUp(chain)?.rpk === recovery.rpk;
+const typedHere = (chain: readonly unknown[], recovery: Recovery): boolean => {
+  const made = [...(chain as RecoveryLink[])].reverse().find((l) => l.rpk === recovery.rpk);
+  return !!made && (made.after === null || made.pk === made.person);
+};
 
 export function createRecoveryHost(deps: RecoveryHostDeps): RecoveryHost {
   const now = deps.now ?? Date.now;
@@ -170,6 +173,12 @@ export function createRecoveryHost(deps: RecoveryHostDeps): RecoveryHost {
       const chain = [...(before.chain as RecoveryLink[]), link];
       const read = await readRecovery(chain, devices, now());
       if (!read.ok) throw new Error(`the new recovery key doesn't hold up: ${read.why}`);
+      const waits = read.recovery.pending?.rpk === key.pk ? read.recovery.pending : null;
+      if (waits) {
+        await session.client.keepVault({ recovery: chain });
+        held = null;
+        return { ok: true, at: link.at, from: waits.after };
+      }
       const done = await seal(session, read.recovery, chain, before.version, link.at, chain);
       held = null;
       await proveBack(session.client, devices, done.version, key, person);
@@ -195,7 +204,10 @@ export function createRecoveryHost(deps: RecoveryHostDeps): RecoveryHost {
       const before = await kept(s.client, await list());
       looked = true;
       if (!before.recovery) return;
-      const version = !current || !was?.person || was.version !== before.version ? (await seal(s, before.recovery, before.chain, before.version, before.at ?? now())).version : before.version;
+      const version =
+        !current || !was?.person || was.version !== before.version || was.person.rxpk !== before.recovery.rxpk
+          ? (await seal(s, before.recovery, before.chain, before.version, before.at ?? now())).version
+          : before.version;
       await letGo(before.chain, before.recovery, version);
     },
   };

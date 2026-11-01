@@ -279,7 +279,8 @@ export const recoveryWords = (): Promise<string[]> => recovering().recoveryWords
 export async function recoverySave(typed: { at: number; word: string }[]): Promise<RecoverySaved> {
   const r = await recovering().recoverySave(typed)
   if (!r.ok) return r
-  announce("Recovery key set up")
+  const from = "from" in r && r.from ? new Date(r.from).toLocaleDateString(undefined, { day: "numeric", month: "short" }) : null
+  announce(from ? `Your new words take over on ${from}. Until then, the words you had still work, and they can cancel this change.` : "Recovery key set up")
   await recovery.load()
   return { ok: true }
 }
