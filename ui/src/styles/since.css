@@ -1,60 +1,18 @@
-.since {
-  width: min(var(--col), calc(100% - 48px));
-  margin: 12px auto 0;
-  padding: 12px 12px 10px 16px;
-  border: 1px solid var(--line-2);
-  border-radius: var(--r-card);
-  background: var(--bg-2);
-  color: var(--ink);
-  font: var(--t-ui) var(--ui);
-  animation: rise var(--slow) var(--ease);
-}
-
-.since-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.since-title {
-  margin: 0;
-  font: inherit;
-  font-weight: 600;
-}
-
-.since-ago {
-  color: var(--ink-3);
-  font-weight: 400;
-}
-
-.since-close {
-  inline-size: 24px;
-  block-size: 24px;
-  border: 0;
-  border-radius: var(--r-ctl);
-  background: none;
-  color: var(--ink-3);
-  font: inherit;
-  cursor: pointer;
-}
-
-.since-close:hover {
-  background: var(--bg-3);
-  color: var(--ink);
-}
-
 .since-rows {
   display: grid;
-  margin: 8px 0 0;
+  margin: 0;
 }
 
 .since-row {
   display: grid;
   grid-template-columns: 112px minmax(0, 1fr);
   gap: 12px;
-  padding: 8px 0;
+  padding: 10px 0;
   border-top: 1px solid var(--line);
+}
+
+.since-row:first-child {
+  border-top: 0;
 }
 
 .since-label {
@@ -164,12 +122,6 @@
 .since-dm-n {
   color: var(--ink-3);
   font-variant-numeric: tabular-nums;
-}
-
-.since-foot {
-  display: flex;
-  padding-top: 8px;
-  border-top: 1px solid var(--line);
 }
 
 @media (max-width: 560px) {

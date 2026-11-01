@@ -2,6 +2,8 @@ import "~/styles/since.css"
 
 import { useState } from "react"
 
+import { Dialog, DialogHead } from "~/kit/bits"
+
 import { sinceYouLeft, type SincePlace } from "~/chat/since"
 import { ago } from "~/kit/time"
 import type { Channel, Task } from "~/model"
@@ -36,12 +38,48 @@ function placeName(channel: Channel, p: SincePlace): string {
   return `T${w.task}`
 }
 
-export default function SinceStrip({ channel }: { channel: Channel }) {
+const AWAY_MS = 30 * 60_000
+
+const away = (at: number): string => {
+  const a = ago(at)
+  return /^\d/.test(a) ? `from ${a} ago` : `since ${a}`
+}
+const SHOWN_KEY = (code: string) => `kiwi.since.${code}`
+
+function shownBefore(code: string, seq: number): boolean {
+  try {
+    return localStorage.getItem(SHOWN_KEY(code)) === String(seq)
+  } catch {
+    // Storage that can't be read shows it this once, as if it were new.
+    return false
+  }
+}
+
+function markShown(code: string, seq: number): void {
+  try {
+    localStorage.setItem(SHOWN_KEY(code), String(seq))
+  } catch {
+    // Storage that can't be written only means it may show again next launch.
+  }
+}
+
+export default function SinceModal({ channel }: { channel: Channel }) {
   const { app, go } = useApp()
-  const [since] = useState(() => sinceYouLeft(channel))
-  const [closed, setClosed] = useState<string | null>(null)
-  const [open, setOpen] = useState(false)
-  if (!since || closed === `${channel.code}:${since.seq}`) return null
+  const [since] = useState(() => {
+    const s = sinceYouLeft(channel)
+    return s && Date.now() - s.at >= AWAY_MS && !shownBefore(channel.code, s.seq) ? s : null
+  })
+  const [open, setOpen] = useState(!!since)
+  const [dms, setDms] = useState(false)
+  if (!since) return null
+  const close = () => {
+    markShown(channel.code, since.seq)
+    setOpen(false)
+  }
+  const goTo = (to: Parameters<typeof go>[0]) => {
+    close()
+    go(to)
+  }
   const dmCount = since.dms.reduce((n, p) => n + p.count, 0)
   const dmWho = [...new Set(since.dms.flatMap((p) => p.who))]
   const { done, doing, waiting } = since.tasks
@@ -49,24 +87,17 @@ export default function SinceStrip({ channel }: { channel: Channel }) {
   const seeAll = () => {
     for (const p of since.rooms) app.actions.markRead(channel.code, p.where)
     for (const p of since.dms) if (p.where.kind === "dm") app.actions.markRead(channel.code, p.where)
-    setClosed(`${channel.code}:${since.seq}`)
+    close()
   }
   return (
-    <section className="since" aria-label="Since you left">
-      <header className="since-head">
-        <h2 className="since-title">
-          Since you left <span className="since-ago">· {ago(since.at)}</span>
-        </h2>
-        <button type="button" className="since-close" aria-label="Close" onClick={() => setClosed(`${channel.code}:${since.seq}`)}>
-          ×
-        </button>
-      </header>
+    <Dialog open={open} onClose={close} label="Since you left" wide>
+      <DialogHead title="Since you left" sub={`${channel.title} · ${away(since.at)}`} onClose={close} />
       <dl className="since-rows">
         {since.rooms.map((p) => (
           <div key={placeName(channel, p)} className="since-row">
             <dt className="since-label">{placeName(channel, p)}</dt>
             <dd className="since-what">
-              <button type="button" className="since-link" onClick={() => go({ to: "where", where: p.where })}>
+              <button type="button" className="since-link" onClick={() => goTo({ to: "where", where: p.where })}>
                 <b>{plural(p.count, "message")}</b> · {names(channel, p.who)}
               </button>
               <span className="since-last">{snippet(channel, p)}</span>
@@ -77,15 +108,15 @@ export default function SinceStrip({ channel }: { channel: Channel }) {
           <div className="since-row">
             <dt className="since-label">Direct</dt>
             <dd className="since-what">
-              <button type="button" className="since-link" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
-                <b>{plural(dmCount, "message")}</b> in {plural(since.dms.length, "DM")} <span className="since-caret">{open ? "▴" : "▾"}</span>
+              <button type="button" className="since-link" aria-expanded={dms} onClick={() => setDms((o) => !o)}>
+                <b>{plural(dmCount, "message")}</b> in {plural(since.dms.length, "DM")} <span className="since-caret">{dms ? "▴" : "▾"}</span>
               </button>
               <span className="since-last">{names(channel, dmWho)}</span>
-              {open && (
+              {dms && (
                 <ul className="since-dms">
                   {since.dms.map((p) => (
                     <li key={placeName(channel, p)}>
-                      <button type="button" className="since-dm" onClick={() => go({ to: "where", where: p.where })}>
+                      <button type="button" className="since-dm" onClick={() => goTo({ to: "where", where: p.where })}>
                         <span className="since-dm-who">{placeName(channel, p)}</span>
                         <span className="since-dm-text">{snippet(channel, p)}</span>
                         <span className="since-dm-n">{p.count}</span>
@@ -101,13 +132,13 @@ export default function SinceStrip({ channel }: { channel: Channel }) {
           <div className="since-row">
             <dt className="since-label">Tasks</dt>
             <dd className="since-what">
-              <button type="button" className="since-link" onClick={() => go({ to: "tab", tab: "tasks" })}>
+              <button type="button" className="since-link" onClick={() => goTo({ to: "tab", tab: "tasks" })}>
                 <b>{done.length}</b> done · <b>{doing.length}</b> in progress
                 {waiting.length > 0 && <span className="since-waiting"> · {waiting.length} waiting on someone</span>}
               </button>
               <span className="since-tasks">
                 {ids.map((t) => (
-                  <button key={t.id} type="button" className="since-task" title={t.title} onClick={() => go({ to: "panel", panel: { kind: "task", task: t.id } })}>
+                  <button key={t.id} type="button" className="since-task" title={t.title} onClick={() => goTo({ to: "panel", panel: { kind: "task", task: t.id } })}>
                     T{t.id}
                   </button>
                 ))}
@@ -116,11 +147,14 @@ export default function SinceStrip({ channel }: { channel: Channel }) {
           </div>
         )}
       </dl>
-      <footer className="since-foot">
-        <button type="button" className="btn is-small" onClick={seeAll}>
+      <div className="dialog-foot">
+        <button type="button" className="btn" onClick={close}>
+          Close
+        </button>
+        <button type="button" className="btn is-primary" onClick={seeAll}>
           Mark all seen
         </button>
-      </footer>
-    </section>
+      </div>
+    </Dialog>
   )
 }

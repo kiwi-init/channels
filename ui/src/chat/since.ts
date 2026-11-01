@@ -14,7 +14,7 @@ export interface Since {
 const said = (m: Message): boolean => !m.system && !m.deleted && !m.pending && !m.failed
 
 function place(messages: readonly Message[], where: Where, after: number, count?: number): SincePlace | null {
-  const fresh = messages.filter((m) => m.seq > after && said(m) && sameWhere(m.where, where))
+  const fresh = messages.filter((m) => m.seq > after && said(m) && sameWhere(m.where, where)).sort((a, b) => a.seq - b.seq)
   const last = fresh.at(-1)
   if (!last) return null
   const who = [...new Set([...fresh].reverse().map((m) => m.from))]
@@ -25,7 +25,7 @@ export function sinceYouLeft(channel: Pick<Channel, "rooms" | "directs" | "their
   const marks = [...channel.rooms.filter((r) => r.unread > 0 && !r.muted).map((r) => r.seen ?? 0), ...channel.directs.filter((d) => d.unread > 0).map((d) => d.seen ?? 0)]
   if (!marks.length) return null
   const seq = Math.min(...marks)
-  const first = channel.messages.find((m) => m.seq > seq && said(m))
+  const first = channel.messages.reduce<Message | undefined>((a, m) => (m.seq > seq && said(m) && (!a || m.seq < a.seq) ? m : a), undefined)
   if (!first) return null
   const rooms = channel.rooms.flatMap((r) => (r.unread > 0 && !r.muted ? (place(channel.messages, { kind: "room", room: r.id }, r.seen ?? 0, r.unread) ?? []) : []))
   const mine = channel.directs.flatMap((d) => (d.unread > 0 ? (place(channel.messages, { kind: "dm", with: d.with }, d.seen ?? 0, d.unread) ?? []) : []))

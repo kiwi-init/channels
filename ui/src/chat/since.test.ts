@@ -70,6 +70,13 @@ describe("Since you left (T1605)", () => {
     expect(sinceYouLeft(channel({ rooms: [{ id: "design", name: "design", unread: 1, mentions: 0, seen: 4, muted: true }], directs: [] }))).toBeNull()
   })
 
+  test("messages out of order still start at the oldest unseen one", () => {
+    const c = channel()
+    const s = sinceYouLeft({ ...c, messages: [...c.messages].reverse() })!
+    expect(s.at).toBe(2 * 60_000)
+    expect(s.rooms[0]!.last.text).toBe("shots for T1304")
+  })
+
   test("pending, failed, deleted and system lines don't count", () => {
     const quiet = channel({
       rooms: [{ id: "general", name: "general", unread: 1, mentions: 0, seen: 9 }],
