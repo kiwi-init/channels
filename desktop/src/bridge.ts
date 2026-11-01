@@ -434,7 +434,7 @@ export interface KiwiBridge {
   getUpdate(): Promise<UpdateView | null>;
   onUpdate(cb: (u: UpdateView) => void): () => void;
   /** Restart into the downloaded update. */
-  installUpdate(): Promise<void>;
+  installUpdate(): Promise<boolean>;
   checkUpdate(): Promise<UpdateCheckView>;
   notify(title: string, body: string, link?: string): Promise<void>;
   openExternal(url: string): Promise<void>;
@@ -513,6 +513,7 @@ export interface UpdateView {
   /** The release's page. */
   url: string;
   blocked?: true;
+  progress?: number;
 }
 
 export type UpdateCheckView = UpdateView | { state: "current"; version: string } | { state: "failed" };

@@ -9,6 +9,7 @@ import { formatMessage } from "@kiwi/core/format.ts";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 import { wellFormedEvent, type Event, type Kind, type Message } from "@kiwi/core/protocol.ts";
 import { fold, rosterOf, type FoldBase, type Roster } from "@kiwi/core/state.ts";
+import { packAuthors, unpackAuthors } from "@kiwi/core/state/authors.ts";
 import { joinPerson, setupChannel, type OwnerSetup } from "./owner.ts";
 
 setDefaultTimeout(60_000);
@@ -142,5 +143,74 @@ describe("a removed key can't change messages any more, and its earlier edits st
     const state = fold(messages, rosterOf(await s.ownerCh.members()));
     expect(state.rejected.has(edited)).toBe(false);
     expect(state.edits.get(said)?.body).toBe("meeting at 4");
+  });
+});
+
+describe("an edit or delete is judged the same however the fold started (T1784)", () => {
+  const KEEP = 5_000;
+  const wire = (seq: number, from: string, over: Partial<Message> = {}): Message =>
+    ({ v: 1, id: `age-${seq}`, seq, from, pk: ids[from]!.pk, sigOk: true, kind: "msg", body: `line ${seq}`, ts: seq, rts: seq, ...over }) as Message;
+  const overlay = (seq: number, from: string, ev: Event): Message => wire(seq, from, { kind: "event", body: "", ev });
+
+  function log(gap: number): Message[] {
+    const out = [wire(1, "mac"), wire(2, "mac")];
+    for (let s = 3; s <= gap; s++) out.push(wire(s, "jow"));
+    out.push(overlay(gap + 1, "mac", { op: "msg.edit", seq: 1, body: "edited much later" }));
+    out.push(overlay(gap + 2, "mac", { op: "msg.delete", seq: 2 }));
+    return out;
+  }
+
+  function both(all: Message[], cutAt: number) {
+    const whole = fold(all, roster, 0);
+    let base: FoldBase | null = null;
+    fold(all.slice(0, cutAt), roster, 0, null, null, null, (b) => (base = b));
+    const later = fold(all.slice(cutAt), roster, 0, null, null, base);
+    return [whole, later].map((s) => ({ edited: s.edits.get(1)?.body ?? null, deleted: s.deleted.has(2) }));
+  }
+
+  test("a target further back than the fold keeps is accepted from a base too, as it is from seq 1", () => {
+    const all = log(KEEP + 100);
+    for (const cut of [all.length - 2, 3, KEEP + 50]) {
+      const [whole, later] = both(all, cut);
+      expect(later).toEqual(whole);
+      expect(whole).toEqual({ edited: "edited much later", deleted: true });
+    }
+  });
+
+  test("an old message deleted before the base can't be edited or deleted again after it", () => {
+    const all = log(KEEP + 100);
+    const last = all.length + 1;
+    all.push(overlay(last, "mac", { op: "msg.edit", seq: 2, body: "back from the dead" }), overlay(last + 1, "mac", { op: "msg.delete", seq: 2 }));
+    const whole = fold(all, roster, 0);
+    let base: FoldBase | null = null;
+    fold(all.slice(0, last - 1), roster, 0, null, null, null, (b) => (base = b));
+    const later = fold(all.slice(last - 1), roster, 0, null, null, base);
+    for (const s of [whole, later]) {
+      expect(s.rejected.get(last)).toBe("#2 is already deleted");
+      expect(s.rejected.get(last + 1)).toBe("#2 is already deleted");
+      expect(s.deleted.has(2)).toBe(true);
+      expect(s.edits.has(2)).toBe(false);
+    }
+  });
+
+  test("who wrote what packs into runs and back, and a malformed list is ignored", () => {
+    const by = new Map<number, string>([
+      [1, "mac"],
+      [2, "mac"],
+      [3, "jow"],
+      [7, "mac"],
+      [8, "mac"],
+    ]);
+    const packed = packAuthors(by);
+    expect(packed).toEqual({ names: ["mac", "jow"], runs: [1, 2, 0, 1, 1, 1, 4, 2, 0] });
+    expect(unpackAuthors(packed)).toEqual([...by]);
+    for (const bad of [null, { names: ["a"], runs: [1, 1] }, { names: ["a"], runs: [0, 1, 0] }, { names: ["a"], runs: [1, 1, 3] }, { names: [1], runs: [] }]) expect(unpackAuthors(bad)).toBeNull();
+  });
+
+  test("a recent target is accepted both ways", () => {
+    const all = log(KEEP - 100);
+    const [whole, later] = both(all, all.length - 2);
+    expect(whole).toEqual(later);
+    expect(whole).toEqual({ edited: "edited much later", deleted: true });
   });
 });
