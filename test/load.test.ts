@@ -23,6 +23,7 @@ const board = (tasks: Task[]): ChannelState =>
     trust: new Map(),
     scopeSets: new Map(),
     roleSets: new Map(),
+    gone: new Map(),
     rejected: new Map(),
     openAsks: [],
     askHeads: new Map(),

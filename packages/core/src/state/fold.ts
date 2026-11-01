@@ -221,6 +221,7 @@ function folding(
   };
   const scopeSets = new Map<string, { seq: number; scopes: Scope[] }>(from?.scopeSets);
   const roleSets = new Map<string, { seq: number; role: string | null; about?: string | null }>(from?.roleSets);
+  const gone = new Map<string, number>(from?.gone);
   const setRole = (target: FoldMember, role: string | null, about: string | null | undefined) => {
     const leads = isLeadRole(role ?? undefined);
     if (leads) {
@@ -306,6 +307,7 @@ function folding(
     scopesByKey,
     scopeSets,
     roleSets,
+    gone,
     setRole,
     tasks,
     facts,
@@ -353,6 +355,12 @@ function folding(
       trust.set(m.seq, t);
       if (t === "forged" || !member) {
         rejected.set(m.seq, member ? `not signed by ${m.from}'s key` : `${m.from} isn't a member`);
+        continue;
+      }
+      const goneAt = gone.get(m.pk!);
+      if (goneAt !== undefined && m.seq > goneAt) {
+        trust.set(m.seq, "refused");
+        rejected.set(m.seq, "sent after its key was removed");
         continue;
       }
       (member.ops ??= {})[m.pk!] = m.ops ?? 0;
@@ -604,6 +612,7 @@ function folding(
       scopesByKey: [...scopesByKey],
       scopeSets: [...scopeSets],
       roleSets: [...roleSets],
+      gone: [...gone],
       tasks: [...tasks.values()].map((t) => (carded(t) ? card(t) : t)),
       facts: [...facts.values()],
       leases: [...leases.values()],
@@ -675,6 +684,7 @@ function folding(
     trust,
     scopeSets,
     roleSets,
+    gone,
     rejected,
     openAsks,
     askHeads,

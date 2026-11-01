@@ -21,6 +21,8 @@ import { iconFromFile } from "~/live/icon-file"
 import { seatOf } from "~/live/seats"
 import { checkComputer, computerSettings, setContextLine, setHooks } from "~/live/computer"
 import { addStartFolder, allowNewAgents, allowRemoteBypass, removeStartFolder, setTerminalHelpers } from "~/live/starts"
+import { markSeenIn } from "@kiwi/app/threads.ts"
+import { lastIn, seenKeyOf } from "~/live/seen-place"
 import { closeOpened, leavingOnPurpose, openedRun, type Run } from "~/live/store"
 import { attempt, event, memberOf, need, owner, say } from "~/live/run"
 
@@ -137,6 +139,11 @@ export function makeActions(): Actions {
       }),
     loadImage: (code, spot) => loadPicture(code, spot),
     discard: (code, seq) => attempt("Couldn't remove it", async () => need(code).discard(-seq)),
+    markRead: (code, where) => {
+      const run = need(code)
+      const last = lastIn(run.messages, run.state, run.me, where)
+      if (last) markSeenIn(run.roomId, { [seenKeyOf(where, run.me)]: last })
+    },
     react: (code, seq, emoji) =>
       attempt("Couldn't react", async () => {
         const run = need(code)

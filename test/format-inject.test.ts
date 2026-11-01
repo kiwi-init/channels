@@ -40,6 +40,7 @@ function blank(): ChannelState {
     edits: new Map(),
     deleted: new Map(),
     roleSets: new Map(),
+    gone: new Map(),
     head: 1,
   };
 }
