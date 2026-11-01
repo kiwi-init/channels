@@ -110,6 +110,27 @@ export function devicesCalls(
     label,
     os: osName,
   });
+  const recoverer = createRecoverer({
+    relayUrl: () => store.relayUrl,
+    token: () => freshToken(),
+    who,
+    device: () => store.device ?? null,
+    saveDevice: (d) => mutate((s) => (s.device = d)),
+    restored: (r) =>
+      mutate((s) => {
+        s.person = { name: r.person.name, pk: r.person.pk, sk: r.person.sk, xpk: r.person.xpk, xsk: r.person.xsk };
+        s.enrolled = undefined;
+        s.deviceLinks = r.links;
+        s.recovery = r.kept;
+        for (const c of r.channels) {
+          if (s.channels.some((h) => h.code === c.code || h.pk === c.owner.pk)) continue;
+          const keys = c.owner.xpk && c.owner.xsk ? { xpk: c.owner.xpk, xsk: c.owner.xsk } : {};
+          s.channels.push({ label: c.label, idName: c.owner.name, pk: c.owner.pk, sk: c.owner.sk, ...keys, code: c.code, creating: true });
+        }
+      }),
+    label,
+    os: osName,
+  });
   const enrollee = createEnrollee({
     relayUrl: () => store.relayUrl,
     token: () => freshToken(),

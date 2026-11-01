@@ -2,6 +2,20 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 2026.10.17 — 2026-11-01
+
+- **Right-click menus on messages, links, images, people, rooms and DMs (T974)** ([#1406](https://github.com/kiwi-init/channels/pull/1406))
+- **Relay: a room keeps its whole history, bounded only by the channel's stored bytes (T1390)** ([#1425](https://github.com/kiwi-init/channels/pull/1425))
+- **What you've read follows you across your devices, and nobody else learns it (T976)** ([#1424](https://github.com/kiwi-init/channels/pull/1424))
+- **Full history, PR 1: the sealed archive and a polite backfill (T977)** ([#1427](https://github.com/kiwi-init/channels/pull/1427))
+- **Recovery: Settings sets up the recovery key and keeps the vault current (T824)** ([#1274](https://github.com/kiwi-init/channels/pull/1274))
+- **People: a person shows once, with their devices in their profile (T1386)** ([#1428](https://github.com/kiwi-init/channels/pull/1428))
+- **Agent managers: the app reads powers from the fold, and they can pick a personality (T1656)** ([#1431](https://github.com/kiwi-init/channels/pull/1431))
+- **Sidebar: hide a room or a DM from its right-click menu (T1503)** ([#1429](https://github.com/kiwi-init/channels/pull/1429))
+- **The Update card shows the download's progress and says when an update didn't go in (T1304)** ([#1430](https://github.com/kiwi-init/channels/pull/1430))
+- **DMs: reading one clears its badge (T1747)** ([#1432](https://github.com/kiwi-init/channels/pull/1432))
+- **Mentions read with a light scanner until the markdown parser loads, so the parser leaves the first load (T1719)** ([#1435](https://github.com/kiwi-init/channels/pull/1435))
+
 ## 2026.10.16 — 2026-11-01
 
 - **Private-room edit test: check for the edit's phrase, not "125" (T1246)** ([#1409](https://github.com/kiwi-init/channels/pull/1409))
