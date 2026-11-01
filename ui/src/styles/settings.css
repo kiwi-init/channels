@@ -365,7 +365,7 @@
 
 .set-recovery-nudge .set-row {
   padding: 12px;
-  border-radius: 10px;
+  border-radius: var(--r-ctl);
   background: color-mix(in srgb, var(--alert) 12%, transparent);
 }
 
