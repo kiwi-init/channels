@@ -2,10 +2,12 @@ import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { accountClient } from "@kiwi/core/account.ts";
 import { signRequest } from "@kiwi/core/auth.ts";
 import { readDeviceList, rootLink, type DeviceLink } from "@kiwi/core/devices.ts";
 import { accountScope, askToEnroll, enrollDigits, enrollMailbox, readEnrollGrant, type Enrollment } from "@kiwi/core/enroll.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
+import { personFingerprint } from "@kiwi/core/fingerprint.ts";
 import type { ComputerView, PublicPerson } from "../desktop/src/bridge.ts";
 import { createDeviceHost, createEnrollee, type DeviceHost } from "../desktop/src/devices.ts";
 import { startRelay } from "../src/relay/bun.ts";
@@ -266,14 +268,16 @@ describe("Settings → Devices: the signed list, forget and renew (T836)", () =>
 });
 
 function newDesktop(a: App) {
-  const held: { device: Identity | null; enrolled: Enrolled | null } = { device: null, enrolled: null };
+  const held: { device: Identity | null; enrolled: Enrolled | null; writes: number } = { device: null, enrolled: null, writes: 0 };
   const enrollee = createEnrollee({
     relayUrl: () => relay,
     token: async () => a.token,
     who: () => held.enrolled?.who ?? null,
-    device: () => held.device,
-    saveDevice: (d) => void (held.device = d),
-    enrolled: (grant) => void (held.enrolled = { who: grant.person, device: held.device!, links: grant.links }),
+    enrolled: (grant, device) => {
+      held.writes++;
+      held.device = device;
+      held.enrolled = { who: grant.person, device, links: grant.links };
+    },
     label: () => "studio",
     os: () => "Linux",
   });
@@ -296,7 +300,8 @@ describe("a new desktop enrolls with no person key (T837)", () => {
     expect((await a.host.poll())?.stage).toBe("digits");
     expect(await a.host.confirm(asking!.id, shown!.stage === "digits" ? shown!.digits : "")).toEqual({ ok: true, label: "studio" });
 
-    const done = await b.enrollee.status();
+    expect(await b.enrollee.status()).toEqual({ stage: "check", person: { name: "Jow", fingerprint: await personFingerprint(a.who.pk) } });
+    const done = await b.enrollee.keep();
     const person = (await readDeviceList(a.held.links)).ok ? a.held.links[0]!.person : "";
     expect(done).toEqual({ stage: "done", person: { name: "Jow", pk: person, xpk: expect.any(String) }, channels: [{ label: "general", code: "mc2-code" }] });
     const read = await readDeviceList(b.held.enrolled!.links);
@@ -316,6 +321,7 @@ describe("a new desktop enrolls with no person key (T837)", () => {
     const shown = await b.enrollee.status();
     await a.host.confirm(id, shown?.stage === "digits" ? shown.digits : "");
     await b.enrollee.status();
+    await b.enrollee.keep();
 
     const c = await app({ token: a.token, enrolled: b.held.enrolled! });
     const laptop = await enrolled(c, "phone");
@@ -348,8 +354,111 @@ describe("a new desktop enrolls with no person key (T837)", () => {
   });
 
   test("a new desktop that isn't signed in can't ask", async () => {
-    const e = createEnrollee({ relayUrl: () => relay, token: async () => null, who: () => null, device: () => null, saveDevice: () => {}, enrolled: () => {}, label: () => "x", os: () => "y" });
+    const e = createEnrollee({ relayUrl: () => relay, token: async () => null, who: () => null, enrolled: () => {}, label: () => "x", os: () => "y" });
     await expect(e.begin()).rejects.toThrow("sign in first");
+  });
+});
+
+async function toCheck(a: App, b: ReturnType<typeof newDesktop>): Promise<string> {
+  await a.host.poll();
+  await b.enrollee.begin();
+  await b.enrollee.status();
+  const { id } = (await a.host.poll())!;
+  await a.host.answer(id);
+  const shown = await b.enrollee.status();
+  const approving = await a.host.poll();
+  await a.host.confirm(id, shown?.stage === "digits" ? shown.digits : "");
+  return approving?.fingerprint ?? "";
+}
+
+describe("a new device keeps nothing until its person confirms the key (#1323)", () => {
+  const own = mkdtempSync(join(tmpdir(), "kiwi-desktop-keycheck-"));
+  let mine: ReturnType<typeof startRelay>;
+  let shared = "";
+  beforeAll(() => {
+    mine = startRelay({ port: 0, hostname: "127.0.0.1", dataDir: own, human: devHumanAuth() });
+    shared = relay;
+    relay = mine.url.origin;
+  });
+  afterAll(() => {
+    relay = shared;
+    mine.stop(true);
+    rmSync(own, { recursive: true, force: true });
+  });
+
+  test("the new desktop shows the key the approving app showed, and writes nothing before keep", async () => {
+    const a = await app();
+    const b = newDesktop(a);
+    const approving = await toCheck(a, b);
+    expect(approving).toBe(await personFingerprint(a.who.pk));
+    const check = await b.enrollee.status();
+    expect(check).toEqual({ stage: "check", person: { name: "Jow", fingerprint: approving } });
+    expect(await b.enrollee.status()).toEqual(check!);
+    expect(b.held).toEqual({ device: null, enrolled: null, writes: 0 });
+
+    await b.enrollee.keep();
+    expect(b.held.writes).toBe(1);
+    expect(b.held.enrolled?.who.pk).toBe(a.who.pk);
+  });
+
+  test("the approving app shows the key for desktops and phones, not only computers", async () => {
+    const a = await app();
+    await a.host.poll();
+    const b = newDesktop(a);
+    await b.enrollee.begin();
+    expect((await a.host.poll())?.fingerprint).toBe(await personFingerprint(a.who.pk));
+  });
+
+  test("a grant from someone else's person shows their key, and turning it down keeps nothing and drops the grant", async () => {
+    const mine = await app();
+    const theirs = await app();
+    const b = newDesktop(theirs);
+    await toCheck(theirs, b);
+    const check = await b.enrollee.status();
+    const shown = check?.stage === "check" ? check.person.fingerprint : "";
+    expect(shown).toBe(await personFingerprint(theirs.who.pk));
+    expect(shown).not.toBe(await personFingerprint(mine.who.pk));
+
+    await b.enrollee.cancel();
+    expect(b.held).toEqual({ device: null, enrolled: null, writes: 0 });
+    expect(await b.enrollee.status()).toBeNull();
+    await expect(b.enrollee.keep()).rejects.toThrow("check your person's key");
+  });
+
+  test("keep before the key check refuses, and writes nothing", async () => {
+    const a = await app();
+    const b = newDesktop(a);
+    await a.host.poll();
+    await b.enrollee.begin();
+    await expect(b.enrollee.keep()).rejects.toThrow("check your person's key");
+    expect(b.held.writes).toBe(0);
+  });
+
+  test("a device that took a person while it waited refuses another, naming the one it holds", async () => {
+    const a = await app();
+    const other = await app();
+    const b = newDesktop(a);
+    await toCheck(a, b);
+    await b.enrollee.status();
+    b.held.enrolled = { who: other.who, device: await device("held"), links: [] };
+    await expect(b.enrollee.keep()).rejects.toThrow(`kept nothing: while this waited, this app became one of Jow's devices (key ${await personFingerprint(other.who.pk)})`);
+    expect(b.held.writes).toBe(0);
+    expect(b.held.enrolled.who.pk).toBe(other.who.pk);
+    await expect(b.enrollee.begin()).rejects.toThrow("already holds your person");
+  });
+
+  test("every ask uses a new device key, so a turned-down grant's key is never reused", async () => {
+    const a = await app();
+    const b = newDesktop(a);
+    await toCheck(a, b);
+    const look = accountClient(relay, async () => a.token, a.held.device!);
+    await b.enrollee.cancel();
+    await b.enrollee.begin();
+    const first = (await look.enrollment())!.ask.device;
+    await b.enrollee.cancel();
+    await b.enrollee.begin();
+    expect((await look.enrollment())!.ask.device).not.toBe(first);
+    await b.enrollee.cancel();
   });
 });
 
@@ -363,6 +472,7 @@ async function secondDesktop(a: App): Promise<App> {
   const shown = await b.enrollee.status();
   await a.host.confirm(id, shown?.stage === "digits" ? shown.digits : "");
   await b.enrollee.status();
+  await b.enrollee.keep();
   return app({ token: a.token, enrolled: b.held.enrolled! });
 }
 

@@ -13,6 +13,7 @@ import { omit } from "@kiwi/core/omit.ts";
 import { cleanPersonalities } from "@kiwi/core/personalities.ts";
 import { PRESETS } from "@kiwi/core/presets.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
+import type { FoldBase } from "@kiwi/core/state.ts";
 import type { SigningBudget } from "@kiwi/core/sas.ts";
 import {
   CHANNEL_CALLS,
@@ -252,7 +253,11 @@ export class Keyring implements ChannelOps {
   async openRows(code: string, rows: readonly unknown[]): Promise<(Message | Unread | null)[]> {
     const access = channelAccess(this.seat(code, true));
     if (!access) return rows.map(() => null);
-    return openSealedRows(rows, access.roomId, access.keys);
+    const opened = await openSealedRows(rows, access.roomId, access.keys);
+    await this.channel(code)
+      .learnRooms(opened.filter((m): m is Message => !!m && "ev" in m))
+      .catch(() => {});
+    return opened;
   }
 
   async keep(code: string, state: object): Promise<CachedKept | null> {
@@ -263,7 +268,15 @@ export class Keyring implements ChannelOps {
 
   async openKept(code: string, sealed: unknown): Promise<unknown> {
     const access = channelAccess(this.seat(code, true));
-    return access ? openSealedKept(sealed, access.roomId, access.keys) : null;
+    const kept = access ? await openSealedKept(sealed, access.roomId, access.keys) : null;
+    const base = kept && typeof kept === "object" ? (kept as { base?: FoldBase | null }).base : null;
+    if (!base) return kept;
+    return {
+      ...(kept as object),
+      base: await this.channel(code)
+        .openRooms(base)
+        .catch(() => base),
+    };
   }
 
   follow(code: string, since: number, on: (e: FollowEvent) => void, opts: FollowOptions = {}): () => void {

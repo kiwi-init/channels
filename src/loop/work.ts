@@ -10,33 +10,37 @@ const openTasks = (state: ChannelState) => [...state.tasks.values()].filter(live
 
 const awaitingVerdict = (t: Task) => !!openRound(t);
 
-function owedReview(state: ChannelState, me: string): Work | null {
+const owesReview = (t: Task, me: string) => t.owner !== me && (t.review === me || (t.review === "*" && !t.workedBy.includes(me)));
+
+function owedReview(state: ChannelState, me: string, setAside: ReadonlySet<string> = new Set()): Work | null {
   for (const t of openTasks(state)) {
     const round = openRound(t);
-    if (round && t.review === me && t.owner !== me) return { kind: "reviewing", task: t.id, round: round.n };
+    const work: Work | null = round ? { kind: "reviewing", task: t.id, round: round.n } : null;
+    if (work && owesReview(t, me) && !(t.review === "*" && setAside.has(workName(work)))) return work;
   }
   return null;
 }
 
-export function nextWork(state: ChannelState, me: string, unreadForMe: number): Work | null {
+export function nextWork(state: ChannelState, me: string, unreadForMe: number, setAside: ReadonlySet<string> = new Set()): Work | null {
   const mine = openTasks(state).filter((t) => t.owner === me);
   const first = mine.filter((t) => t.first !== undefined && !awaitingVerdict(t)).sort((a, b) => (b.first ?? 0) - (a.first ?? 0))[0];
   if (first) return { kind: "coding", task: first.id };
   const doing = mine.find((t) => t.state === "doing" && !awaitingVerdict(t));
   if (doing) return { kind: "coding", task: doing.id };
-  const review = owedReview(state, me);
+  const review = owedReview(state, me, setAside);
   if (review) return review;
   const coding = mine.find((t) => !awaitingVerdict(t)) ?? mine[0];
   if (coding) return { kind: "coding", task: coding.id };
   return unreadForMe > 0 ? { kind: "answering" } : null;
 }
 
-export function waitingBehind(work: Work, state: ChannelState, me: string): Work[] {
+export function waitingBehind(work: Work, state: ChannelState, me: string, setAside: ReadonlySet<string> = new Set()): Work[] {
   const held = work.kind === "answering" ? null : work.task;
   const open = openTasks(state).filter((t) => t.id !== held);
   const reviews = open.flatMap((t): Work[] => {
     const round = openRound(t);
-    return round && t.review === me && t.owner !== me ? [{ kind: "reviewing", task: t.id, round: round.n }] : [];
+    const review: Work | null = round ? { kind: "reviewing", task: t.id, round: round.n } : null;
+    return review && owesReview(t, me) && !(t.review === "*" && setAside.has(workName(review))) ? [review] : [];
   });
   if (work.kind === "answering") return reviews;
   const coding = open.filter((t) => t.owner === me && !awaitingVerdict(t)).map((t): Work => ({ kind: "coding", task: t.id }));
@@ -76,11 +80,11 @@ export function waitingText(waiting: Work, session: Work, minutes: number, mc = 
   return `${workName(waiting)} has waited ${minutes} minutes behind my ${workName(session)} session, which is still running: my loop starts it only when that work is over. To start ${workName(waiting)} now, ${free}.`;
 }
 
-export function workOver(work: Work, state: ChannelState, me: string): boolean {
+export function workOver(work: Work, state: ChannelState, me: string, setAside: ReadonlySet<string> = new Set()): boolean {
   switch (work.kind) {
     case "coding": {
       const t = state.tasks.get(work.task);
-      return !live(t) || t.owner !== me || (awaitingVerdict(t) && owedReview(state, me) !== null);
+      return !live(t) || t.owner !== me || (awaitingVerdict(t) && owedReview(state, me, setAside) !== null);
     }
     case "reviewing": {
       const t = state.tasks.get(work.task);
@@ -97,12 +101,12 @@ export function workOver(work: Work, state: ChannelState, me: string): boolean {
 
 export type Step = { kind: "keep"; work: Work } | { kind: "over" } | { kind: "fresh"; work: Work; why: "took" | "checkpoint" };
 
-export function step(work: Work, state: ChannelState, me: string, freshFor: number | null): Step {
+export function step(work: Work, state: ChannelState, me: string, freshFor: number | null, setAside: ReadonlySet<string> = new Set()): Step {
   if (work.kind === "answering") {
-    const taken = nextWork(state, me, 0);
+    const taken = nextWork(state, me, 0, setAside);
     return taken?.kind === "coding" ? { kind: "fresh", work: taken, why: "took" } : { kind: "keep", work };
   }
-  if (workOver(work, state, me)) return { kind: "over" };
+  if (workOver(work, state, me, setAside)) return { kind: "over" };
   if (work.kind === "coding" && freshFor === work.task) return { kind: "fresh", work, why: "checkpoint" };
   return { kind: "keep", work };
 }

@@ -5,8 +5,17 @@
 // coordination events, signatures) lives inside the encrypted payload.
 
 import { DEVICE_LIST_MAX, type DeviceLink } from "./devices.ts";
+import { cleanPersona, type Persona } from "./personality.ts";
 import { permissionChoices, wellFormedPermission, wellFormedPermReply, wellFormedSettled, type PermissionReply, type PermissionSettled, type PermissionShown } from "./permission.ts";
 
+import { MAX_ROOM_MEMBERS, type RoomMeta } from "./room-rules.ts";
+
+const sealedBox = (x: unknown): boolean =>
+  !!x && typeof x === "object" && typeof (x as { iv?: unknown }).iv === "string" && typeof (x as { ct?: unknown }).ct === "string" && (x as { ct: string }).ct.length <= 64_000;
+export const POWERS = ["addsAgents", "answersDecisions", "managesAgents"] as const;
+export type Power = (typeof POWERS)[number];
+
+export const powerChange = (ev: { power?: Power; on?: boolean; managesAgents?: boolean }): { power: Power; on: boolean } => ({ power: ev.power ?? "managesAgents", on: ev.on ?? !!ev.managesAgents });
 export const PROTOCOL_VERSION = 1;
 
 /** Largest ciphertext (base64) the relay accepts for a single message. */
@@ -229,6 +238,7 @@ export type Event =
       title?: string;
       note?: string;
       review?: string | null;
+      claim?: true;
       verdict?: Verdict;
       round?: number;
       at?: string;
@@ -248,10 +258,11 @@ export type Event =
   | { op: "fact.del"; key: string }
   | { op: "lease.take"; name: string; ttl: number; note?: string }
   | { op: "lease.free"; name: string }
-  /** Owner only: set a member's role (and rules), or allow the one they asked for. */
+  /** The owner, or a person who manages agents (on an agent): set a member's role (and rules), or allow the one they asked for. */
   | { op: "role.set"; member: string; role: string | null; about?: string | null }
-  /** Owner only: turn down the role a member asked for. */
+  /** The owner, or a person who manages agents (on an agent): turn down the role a member asked for. */
   | { op: "role.refuse"; member: string }
+  | { op: "power.set"; member: string; pk: string; power?: Power; on?: boolean; managesAgents?: boolean; was: boolean }
   /** Owner only: a member's seat moved to a new key (fingerprints, for the record). */
   | { op: "seat.reclaim"; member: string; from: string; to: string }
   /** A person's colour (null clears it): set by that person, or by the owner for anyone. */
@@ -262,11 +273,13 @@ export type Event =
    * Owner only: what a member may do besides read (null: everything). Names the member's key
    * too, so it never carries over to someone admitted under the same name later.
    */
-  | { op: "scope.set"; member: string; pk: string; scopes: string[] | null; lead?: boolean; wasLead?: boolean; keepLead?: true }
+  | { op: "scope.set"; member: string; pk: string; scopes: string[] | null; lead?: boolean; wasLead?: boolean; keepLead?: true; persona?: Persona | null }
   /** Coordinator-only mode is gone. Older logs still carry these; they fold to nothing. */
   | { op: "mode.set"; coordinatorOnly: boolean; strict: boolean }
   /** Owner only: a room in this channel. Its id never changes; the name is a label (room.rename). */
   | { op: "room.create"; id: string; name: string }
+  | { op: "room.seal"; id: string; n: number; keys: string[]; meta: { iv: string; ct: string }; proof?: string }
+  | { op: "room.msg"; room: string; n: number; iv: string; ct: string }
   /** Owner only: a room's new name ("general" included; its id stays). */
   | { op: "room.rename"; id: string; name: string }
   /**
@@ -299,26 +312,35 @@ export type Event =
    * takes it back. Not news: it's no unread, no notification, no line in a feed. Its body is throwaway
    * (an older client drops the whole message, body and all, as malformed).
    */
-  | { op: "react"; seq: number; emoji: string | null };
+  | { op: "react"; seq: number; emoji: string | null }
+  | { op: "msg.edit"; seq: number; body: string }
+  | { op: "msg.delete"; seq: number }
+  | { op: "member.gone"; member: string; pk: string }
+  | { op: "member.back"; member: string; pk: string };
 
 /** The longest reaction, in UTF-16 units: one emoji, family sequences and flags included. */
 const MAX_REACTION = 16;
-const OLD_GIF_KEY = /^[a-z0-9][a-z0-9-]{0,23}\/[a-z0-9][a-z0-9-]{0,47}$/;
+const GIF_REACTION_RE = /^[a-z0-9][a-z0-9-]{0,23}\/[a-z0-9][a-z0-9-]{0,47}$/;
 
 /** Whether `x` can be a reaction: a short single line with something to see (no letters spelling words, no markup). */
 export function wellFormedReaction(x: unknown): x is string {
   if (typeof x !== "string") return false;
-  if (OLD_GIF_KEY.test(x)) return true;
+  if (GIF_REACTION_RE.test(x)) return true;
   return x.length > 0 && x.length <= MAX_REACTION && x.trim() === x && !/[\u0000-\u001f\u007f<>&"'`\\]/.test(x) && !/[\p{L}\p{N}]/u.test(x);
 }
 
-export function isOldGifKey(x: string): boolean {
-  return OLD_GIF_KEY.test(x);
+export function isGifReaction(x: string): boolean {
+  return GIF_REACTION_RE.test(x);
 }
 
-/** A reaction event, which feeds, unread counts and notifications leave out. */
-export function isReaction(m: Pick<Message, "kind" | "ev">): boolean {
-  return m.kind === "event" && m.ev?.op === "react";
+export const OVERLAY_OPS: ReadonlySet<string> = new Set(["react", "msg.edit", "msg.delete"]);
+
+export function isOverlay(m: Pick<Message, "kind" | "ev">): boolean {
+  return m.kind === "event" && !!m.ev && OVERLAY_OPS.has(m.ev.op);
+}
+
+export function editable(m: Pick<Message, "kind" | "esc" | "choices" | "step" | "stepReply" | "permission" | "perm" | "settled" | "handoff" | "ev">): boolean {
+  return (m.kind === "msg" || m.kind === "done") && !m.ev && !m.esc && !m.choices && !m.step && !m.stepReply && !m.permission && !m.perm && !m.settled && !m.handoff;
 }
 
 const QUIET_OPS: ReadonlySet<string> = new Set([
@@ -326,6 +348,10 @@ const QUIET_OPS: ReadonlySet<string> = new Set([
   "card",
   "picture.set",
   "react",
+  "msg.edit",
+  "msg.delete",
+  "member.gone",
+  "member.back",
   "fact.set",
   "fact.del",
   "lease.take",
@@ -471,6 +497,7 @@ export function cleanGithubNote(x: unknown): GithubNote | null {
     if (typeof v !== "string" || v.length > max || /[\u0000-\u001f\u007f]/.test(v)) return null;
     out[k] = v;
   }
+  if (out.url !== undefined && !handoffUrl(out.url)) return null;
   if (r.number !== undefined) {
     if (typeof r.number !== "number" || !Number.isSafeInteger(r.number) || r.number <= 0) return null;
     out.number = r.number;
@@ -675,6 +702,7 @@ export interface Payload {
   v: typeof PROTOCOL_VERSION;
   id: string;
   from: string;
+  ops?: number;
   /** Recipients by agent name; omitted means everyone. */
   to?: string[];
   kind: Kind;
@@ -735,7 +763,13 @@ export interface NewerEvent {
 
 export type WirePayload = Omit<Payload, "ev"> & { ev?: Event | NewerEvent };
 
-export const EVENT_OPS_VERSION = 7;
+export const EVENT_OPS_VERSION = 12;
+
+export const PRIVATE_ROOM_OPS = 9;
+
+export const PRIVATE_DM_OPS = 11;
+
+export const opsVersion = (x: unknown): x is number => Number.isSafeInteger(x) && (x as number) >= 1 && (x as number) <= 10_000;
 const NEWER_OP_RE = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/;
 
 export const knownOp = (op: string): boolean => eventCheck({ op }) !== null;
@@ -755,7 +789,7 @@ export function asSent(m: Message): Omit<Message, "newer" | "ev"> & { ev?: Event
 
 export const outgrown = (base: { folded?: number; skipped?: true }): boolean => base.skipped === true && (base.folded ?? 0) < EVENT_OPS_VERSION;
 
-export const FOLD_RULES = 2;
+export const FOLD_RULES = 12;
 
 export const olderRules = (base: { rules?: number }): boolean => (base.rules ?? 0) < FOLD_RULES;
 
@@ -764,6 +798,9 @@ export const decodedWhole = (page: { head: number; messages: readonly { seq: num
 
 export interface Message extends Payload {
   newer?: NewerEvent;
+  opened?: RoomMeta;
+  proven?: boolean;
+  sealed?: { room: string; n: number };
   seq: number;
   /** When the relay stored it (one clock for everyone, unlike `ts`). */
   rts?: number;
@@ -840,6 +877,7 @@ export interface Presence {
   reach?: Reach;
   readAt?: number;
   wake?: string;
+  ops?: number;
   ts: number;
   pk?: string;
   sig?: string;
@@ -887,6 +925,7 @@ function eventCheck(ev: unknown): boolean | null {
         opt(e.title, (x): x is string => str(x, 500)) &&
         opt(e.note, (x): x is string => str(x)) &&
         (e.review === undefined || e.review === null || str(e.review, 64)) &&
+        (e.claim === undefined || (e.claim === true && typeof e.review === "string")) &&
         (e.verdict === undefined || e.verdict === "approved" || e.verdict === "rejected") &&
         (e.round === undefined || (Number.isSafeInteger(e.round) && (e.round as number) > 0)) &&
         opt(e.at, (x): x is string => str(x, 200) && x.trim().length > 0 && !/[\r\n]/.test(x)) &&
@@ -936,6 +975,13 @@ function eventCheck(ev: unknown): boolean | null {
       return str(e.member, 64) && (e.role === null || str(e.role, 200)) && (e.about === undefined || e.about === null || str(e.about, 2000));
     case "role.refuse":
       return str(e.member, 64);
+    case "power.set":
+      return (
+        str(e.member, 64) &&
+        str(e.pk, 64) &&
+        typeof e.was === "boolean" &&
+        (e.power === undefined ? typeof e.managesAgents === "boolean" : (POWERS as readonly unknown[]).includes(e.power) && typeof e.on === "boolean")
+      );
     case "seat.reclaim":
       return str(e.member, 64) && str(e.from, 64) && str(e.to, 64);
     case "color.set":
@@ -948,10 +994,25 @@ function eventCheck(ev: unknown): boolean | null {
         str(e.pk, 64) &&
         (e.scopes === null || strs(e.scopes, 32)) &&
         (e.keepLead === undefined || (e.keepLead === true && e.lead === undefined)) &&
-        (e.lead === undefined ? e.wasLead === undefined : typeof e.lead === "boolean" && typeof e.wasLead === "boolean")
+        (e.lead === undefined ? e.wasLead === undefined : typeof e.lead === "boolean" && typeof e.wasLead === "boolean") &&
+        (e.persona === undefined || e.persona === null || cleanPersona(e.persona) !== null)
       );
     case "mode.set":
       return typeof e.coordinatorOnly === "boolean" && typeof e.strict === "boolean";
+    case "room.seal":
+      return (
+        roomId(e.id) &&
+        Number.isSafeInteger(e.n) &&
+        (e.n as number) >= 1 &&
+        Array.isArray(e.keys) &&
+        e.keys.length >= 1 &&
+        e.keys.length <= MAX_ROOM_MEMBERS &&
+        e.keys.every((k) => str(k, 400)) &&
+        sealedBox(e.meta) &&
+        opt(e.proof, (x): x is string => str(x, 100))
+      );
+    case "room.msg":
+      return roomId(e.room) && Number.isSafeInteger(e.n) && (e.n as number) >= 1 && str(e.iv, 32) && str(e.ct, MAX_BODY_LENGTH * 2);
     case "room.create":
     case "room.rename":
       return roomId(e.id) && str(e.name, MAX_ROOM_NAME * 4);
@@ -1001,6 +1062,13 @@ function eventCheck(ev: unknown): boolean | null {
       return e.prefix === null || (typeof e.prefix === "string" && BRANCH_PREFIX_RE.test(e.prefix));
     case "react":
       return n(e.seq) && (e.seq as number) > 0 && (e.emoji === null || wellFormedReaction(e.emoji));
+    case "msg.edit":
+      return n(e.seq) && (e.seq as number) > 0 && str(e.body, MAX_BODY_LENGTH) && (e.body as string).trim().length > 0;
+    case "msg.delete":
+      return n(e.seq) && (e.seq as number) > 0;
+    case "member.gone":
+    case "member.back":
+      return str(e.member, 64) && str(e.pk, 64);
     case "ask.name":
       return n(e.ask) && (e.ask as number) > 0 && (e.name === null || str(e.name, MAX_GOAL_NAME * 4));
     case "ask.close":
@@ -1024,6 +1092,7 @@ export function wellFormed(p: unknown): p is WirePayload {
     typeof m.kind === "string" &&
     (KINDS as readonly string[]).includes(m.kind) &&
     time(m.ts) &&
+    opt(m.ops, opsVersion) &&
     opt(m.to, (x): x is string[] => strs(x, 50)) &&
     opt(m.re, (x): x is number[] => nums(x, 20)) &&
     opt(m.room, roomId) &&

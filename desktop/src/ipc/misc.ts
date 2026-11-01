@@ -9,7 +9,9 @@ import type { Host } from "../host.ts";
 import { logMainError } from "../main-log.ts";
 import { openInBrowser } from "../open.ts";
 import { MAX_SAVE_BYTES, savedName } from "../save-file.ts";
+import { CHANNEL_CALLS } from "../bridge.ts";
 import { keysAtRest } from "../store.ts";
+import { UI_CONTRACT } from "../ui-contract.ts";
 import { checkForUpdate, updateState } from "../updater.ts";
 import { tintsOf } from "../wallpaper-tints.ts";
 import { BACKDROP_HEIGHT, BACKDROP_WIDTH, backdropOf } from "../wallpaper-backdrop.ts";
@@ -34,6 +36,7 @@ export function miscCalls(
   | "windowControl"
   | "saveFile"
   | "getAccentColor"
+  | "capabilities"
 > {
   return {
     keysAtRest: () => keysAtRest(),
@@ -88,5 +91,6 @@ export function miscCalls(
       return pixels ? backdropOf(pixels, BACKDROP_WIDTH, BACKDROP_HEIGHT) : null;
     },
     getAccentColor: () => host.accentColor(),
+    capabilities: () => ({ contract: UI_CONTRACT, channelCalls: [...CHANNEL_CALLS] }),
   };
 }

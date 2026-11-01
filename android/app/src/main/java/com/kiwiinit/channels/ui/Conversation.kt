@@ -293,7 +293,7 @@ fun Conversation(
                 if (room.whole || (room.messages.isEmpty() && room.connection == Connection.Live)) Intro(room)
                 if (!room.whole && room.messages.isNotEmpty()) {
                     Text(
-                        "Earlier messages are on your Mac",
+                        "Earlier messages aren't on this phone",
                         style = MaterialTheme.typography.labelMedium,
                         color = Tone.current.ink3,
                         modifier = Modifier.padding(vertical = 14.dp),
@@ -340,7 +340,7 @@ fun Intro(room: RoomView) {
     } else {
         val member = room.member(lead)
         val now = if (member?.working == true) member.doing.firstOrNull()?.let { "Working on ${taskLabel(it)}" } ?: "Working" else null
-        listOfNotNull("Lead of ${room.title}", now ?: if (room.messages.isEmpty()) "Only you and ${room.display(lead)} here" else null)
+        listOfNotNull("Lead of ${room.title}", now ?: if (room.messages.isEmpty()) "Everyone in the channel can read this" else null)
     }
     Column(
         Modifier.fillMaxWidth().padding(start = 32.dp, end = 32.dp, top = if (room.messages.isEmpty()) 72.dp else 28.dp, bottom = 20.dp),
@@ -523,7 +523,7 @@ private fun BubbleBody(model: AppModel, room: RoomView, message: MessageView, fi
                         }
                         .padding(horizontal = 14.dp, vertical = 9.dp),
                 ) {
-                    Markdown(message.body, Inks(ink, if (message.mine) ink else MaterialTheme.colorScheme.primary, ink.copy(alpha = 0.12f), message.mine), selectable = false)
+                    Markdown(message.shown, Inks(ink, if (message.mine) ink else MaterialTheme.colorScheme.primary, ink.copy(alpha = 0.12f), message.mine), selectable = false)
                 }
             }
         }
@@ -610,9 +610,9 @@ private fun QuoteBubble(quote: QuoteView, room: RoomView, tap: () -> Unit) {
 
 data class Poll(val seq: Int, val body: String, val choices: List<String>, val chosen: Chosen?, val waiting: Boolean) {
     companion object {
-        fun of(message: MessageView): Poll = Poll(message.seq, message.body, message.choices, message.chosen, message.waiting)
+        fun of(message: MessageView): Poll = Poll(message.seq, message.shown, message.choices, message.chosen, message.waiting)
 
-        fun of(ask: AskView): Poll = Poll(ask.seq, ask.body, ask.choices, null, true)
+        fun of(ask: AskView): Poll = Poll(ask.seq, ask.shown, ask.choices, null, true)
     }
 }
 

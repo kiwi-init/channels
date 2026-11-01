@@ -7,10 +7,10 @@
 
 .needs-list {
   display: grid;
-  gap: 14px;
-  max-width: calc(var(--col) + 56px);
+  gap: 12px;
+  max-width: calc(var(--col) + 2 * var(--gutter));
   margin-inline: auto;
-  padding: 20px 28px 40px;
+  padding: 24px var(--gutter) 48px;
 }
 
 .needs-sum {
@@ -28,7 +28,7 @@
   display: grid;
   gap: 12px;
   margin-top: 8px;
-  padding-top: 18px;
+  padding-top: 16px;
   border-top: 1px solid var(--line);
 }
 
@@ -44,12 +44,12 @@
 .needs-card {
   position: relative;
   display: grid;
-  gap: 14px;
-  padding: 16px 18px;
-  border: 0;
+  gap: 12px;
+  padding: var(--card-pad);
+  border: 1px solid var(--line-2);
   border-radius: var(--r-card);
-  background: var(--bg-2);
-  animation: rise var(--slow) var(--ease);
+  background: none;
+  animation: rise var(--glide) backwards;
 }
 
 .needs-card.is-open::before {
@@ -65,7 +65,6 @@
 }
 
 .needs-head .av {
-  margin-right: 2px;
 }
 
 .needs-name {
@@ -93,7 +92,7 @@ button.needs-name:hover {
 .needs-meta {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   margin-left: auto;
   padding-left: 12px;
 }
@@ -106,9 +105,9 @@ button.needs-name:hover {
 
 .needs-body {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
-  padding-left: 34px;
+  padding-left: 32px;
 }
 
 .needs-foot {
@@ -116,7 +115,7 @@ button.needs-name:hover {
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  padding-left: 34px;
+  padding-left: 32px;
 }
 
 .needs-link {
@@ -160,14 +159,13 @@ button.needs-name:hover {
 }
 
 .needs-code {
-  max-width: 640px;
-  padding: 9px 12px;
+  padding: 8px 12px;
   border: 1px solid var(--line-2);
   border-radius: var(--r-row);
-  font-size: calc(12.5px * var(--text-scale, 1));
+  font-size: var(--t-meta);
   line-height: 1.5;
   white-space: pre-wrap;
-  word-break: break-all;
+  overflow-wrap: anywhere;
 }
 
 .needs-holds {
@@ -191,11 +189,10 @@ button.needs-name:hover {
 
 .needs-note {
   margin: 0;
-  max-width: 640px;
   padding-left: 12px;
   border-left: 2px solid var(--line-3);
   color: var(--ink-2);
-  font: calc(14px * var(--text-scale, 1)) / 1.5 var(--sans);
+  font: var(--t-ui) / 1.5 var(--sans);
 }
 
 .needs-note-by {
@@ -210,7 +207,7 @@ button.needs-name:hover {
   gap: 10px;
   width: fit-content;
   max-width: 100%;
-  padding: 14px 16px;
+  padding: 16px 16px;
   border: 1px dashed var(--line-3);
   border-radius: var(--r-ctl);
 }
@@ -253,6 +250,7 @@ button.needs-name:hover {
 
 .needs-warn {
   color: var(--decide);
+  font: var(--t-ui) / 1.5 var(--ui);
 }
 
 .needs-strong {
@@ -262,7 +260,6 @@ button.needs-name:hover {
 
 .needs-opts {
   display: grid;
-  max-width: 520px;
 }
 
 .needs-opt {
@@ -279,7 +276,7 @@ button.needs-name:hover {
 
 .needs-opt-text {
   display: grid;
-  gap: 3px;
+  gap: 4px;
   min-width: 0;
 }
 
@@ -300,7 +297,7 @@ button.needs-name:hover {
 .needs-select select {
   appearance: none;
   min-width: 168px;
-  padding-right: 34px;
+  padding-right: 32px;
   cursor: pointer;
 }
 
@@ -325,8 +322,6 @@ button.needs-name:hover {
   padding: 4px 0;
   color: var(--ink-3);
   font: var(--t-stamp) var(--ui);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
   list-style: none;
   cursor: pointer;
 }
@@ -355,7 +350,7 @@ button.needs-name:hover {
 
 .needs-done li {
   overflow: hidden;
-  padding: 5px 0 5px 20px;
+  padding: 6px 0 6px 20px;
   color: var(--ink-3);
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -385,8 +380,8 @@ button.needs-name:hover {
 
 .needs-tag {
   flex: none;
-  padding: 1px 7px;
-  border-radius: 999px;
+  padding: 2px 6px;
+  border-radius: var(--r-tag);
   font: 600 var(--t-meta) var(--ui);
   white-space: nowrap;
 }
@@ -423,4 +418,67 @@ button.needs-name:hover {
 
 .needs-code.is-gone {
   color: var(--alert);
+}
+
+.needs-body > .dim {
+  font: var(--t-ui) / 1.5 var(--ui);
+}
+
+.needs-cards > li:nth-child(2) .needs-card {
+  animation-delay: 30ms;
+}
+
+.needs-cards > li:nth-child(3) .needs-card {
+  animation-delay: 60ms;
+}
+
+.needs-cards > li:nth-child(n + 4) .needs-card {
+  animation-delay: 90ms;
+}
+
+.needs-clear {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 16px;
+  min-height: 50vh;
+}
+
+.needs-list > .needs-clear .empty {
+  place-items: center;
+  min-height: 0;
+  padding: 0;
+  text-align: center;
+}
+
+.needs-tick {
+  width: 40px;
+  height: 40px;
+  fill: none;
+  stroke: var(--live);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.needs-tick circle,
+.needs-tick path {
+  stroke-dasharray: 1;
+  animation: tick-draw 0.5s var(--ease) backwards;
+}
+
+.needs-tick circle {
+  stroke: var(--line-3);
+  transform: rotate(-90deg);
+  transform-origin: center;
+}
+
+.needs-tick path {
+  animation-delay: 0.22s;
+}
+
+@keyframes tick-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
 }

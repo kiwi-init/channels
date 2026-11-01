@@ -53,7 +53,12 @@ agent                          relay                         owner's app
   owner's own signed statement, so a relay can't hand a member a key of its
   own making, or strip the promise. A member never replaces a key it already
   holds for an epoch. The relay stores the wrapped keys; only that member can
-  open them.
+  open them. A channel made before the statement carried that promise upgrades
+  itself the first time its owner's app opens: the owner re-signs the
+  statement and rotates the channel key, wrapped only in signed boxes. Until
+  then a new device can't join that channel — every client now refuses a
+  wrapped key without the owner's signature, whatever the channel's age, so
+  the refusal is what a relay's own key meets.
 - **Your own computers' agents skip the code.** A computer joins your devices
   (`kiwi login`, then the 6 digits typed into your app), and the app holding your
   person key writes it a **MachineCert** — "computer key M
@@ -461,6 +466,19 @@ wait returned. Marks aren't signed: the relay can show "Read" for a message
 nobody read, or hold a real mark back (a member can only move its own). A
 receipt says what the relay reported, and isn't proof.
 
+**The owner's GitHub link token.** When a channel's owner changes the
+channel's repo list, the owner's app sends the relay the token of their linked
+GitHub account in that one request (`PUT /github/repos`). It goes only to the
+relay the account was linked through, and only while that relay's
+`/v1/config` names the same GitHub App client id. The relay uses it to ask GitHub whether
+that account can push to each repo, and Kiwi's relay code keeps nothing of it.
+But the relay sees the token in the clear, and a relay operator who records
+request bodies could keep it and act as that person on GitHub, within what
+the GitHub App may do, until the token is revoked. The token does not expire
+on its own (see [docs/github-app.md](docs/github-app.md)). Connect repos only
+through a relay you trust with that, and revoke the App's authorization under
+GitHub → Settings → Applications if you stop trusting it.
+
 ## Local state
 
 `~/.kiwi` (override with `KIWI_HOME`) is mode 0700. Identities (signing and
@@ -647,7 +665,14 @@ device makes before it sees the app's nonce, so a relay that swaps keys can't gr
 (`packages/core/src/enroll.ts`; the design is [docs/linked-devices.md](docs/linked-devices.md)).
 The grant goes through the one-time mailbox, sealed to the two devices' keys, and holds the
 device list, the person's public key and name, and the channel codes it may join, never a
-secret key. A computer approved by the app holding your person key also gets its MachineCert
+secret key. Only the approving app checks the digits, so the new device can't tell by itself
+that your app answered, and not a relay that answered as someone else. Before it keeps anything,
+the new device shows the person's key (`packages/core/src/fingerprint.ts`) and asks you to check
+it against the key your app shows next to the digits and in Settings as "Your key for new
+devices". Until you confirm, it writes nothing: no device key, no device list, no person.
+Turning it down drops the grant, and the next ask uses a new device key. A device that already
+holds a person refuses another until it is unpaired or unlinked, and checks again right before
+it saves. A computer approved by the app holding your person key also gets its MachineCert
 there, so the app can start agents on it. A computer in your device list can instead register with
 the list, and then takes asks from your person key or any current approving desktop in it, never a
 phone or another computer.

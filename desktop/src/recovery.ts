@@ -53,13 +53,13 @@ const matches = (word: string, typed: string): boolean => {
   return t === word || (t.length >= 4 && word.startsWith(t));
 };
 
-const ownersOf = (channels: VaultContents["channels"]): string[] => channels.map((c) => c.owner.pk).sort();
+export const ownersOf = (channels: VaultContents["channels"]): string[] => channels.map((c) => c.owner.pk).sort();
 
 const sameOwners = (a: readonly string[], b: readonly string[]): boolean => a.length === b.length && a.every((pk, i) => pk === b[i]);
 
 const lastSetUp = (chain: readonly unknown[]): RecoveryLink | null => [...(chain as RecoveryLink[])].reverse().find((l) => l.after === null) ?? null;
 
-const setUpAt = (chain: readonly unknown[]): number | null => lastSetUp(chain)?.at ?? null;
+export const setUpAt = (chain: readonly unknown[]): number | null => lastSetUp(chain)?.at ?? null;
 
 const typedHere = (chain: readonly unknown[], recovery: Recovery): boolean => lastSetUp(chain)?.rpk === recovery.rpk;
 

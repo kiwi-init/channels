@@ -1,17 +1,22 @@
 import "~/styles/channel-panel.css"
+import "~/styles/new-room.css"
 
 import { useEffect, useId, useRef, useState, type ReactNode } from "react"
+import { RoomReadyNotes } from "~/shell/room-ready"
 
-import { Field, Heading, IconButton } from "~/kit/bits"
-import { Icon } from "~/kit/icons"
+import { Avatar, cx, Field, Heading, IconButton } from "~/kit/bits"
+import { NotificationOff01Icon } from "@hugeicons/core-free-icons"
+import { GlyphIcon, Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
 import type { Channel } from "~/model"
-import { nickname, shown } from "~/names"
+import { nickname, roomPeople, seatRoot, shown } from "~/names"
 import { useApp } from "~/nav"
 import { PanelHead } from "~/panels/frame"
 import { repoOffers } from "~/panels/repo-offers"
 import { Toggle } from "~/kit/bits"
 import { Confirm, InlineEdit } from "~/settings/controls"
+import { useAppCan } from "~/live/app-can"
+import { isMuted } from "~/live/quiet"
 
 const REPO = /^[\w.-]+\/[\w.-]+$/
 
@@ -19,6 +24,7 @@ export function ChannelPanel({ channel }: { channel: Channel }) {
   const { app, go, toast } = useApp()
   const { actions } = app
   const own = channel.youOwn
+  const sets = own || !!channel.youTrusted
   const owner = channel.people.find((p) => p.owner && !p.you)
   const [ending, setEnding] = useState(false)
 
@@ -45,19 +51,23 @@ export function ChannelPanel({ channel }: { channel: Channel }) {
           <ChannelIcon channel={channel} own={own} />
         </Part>
 
-        <Part title="Rooms">
-          <Rooms channel={channel} own={own} />
+        <Part title="Notifications">
+          <MuteChannel channel={channel} />
         </Part>
 
-        <Part title="Goal">{own ? <GoalEditor channel={channel} /> : channel.goal ? <p className="cpanel-goal">{channel.goal}</p> : <p className="cpanel-none">No goal yet.</p>}</Part>
+        <Part title="Rooms">
+          <Rooms channel={channel} own={sets} />
+        </Part>
+
+        <Part title="Goal">{sets ? <GoalEditor channel={channel} /> : channel.goal ? <p className="cpanel-goal">{channel.goal}</p> : <p className="cpanel-none">No goal yet.</p>}</Part>
 
         <Part title="Repos">
           <Repos channel={channel} />
         </Part>
 
-        {(own ? channel.repos.length > 0 : channel.githubWrite || channel.branchPrefix) && (
+        {(sets ? channel.repos.length > 0 : channel.githubWrite || channel.branchPrefix) && (
           <Part title="GitHub">
-            <GitHub channel={channel} own={own} />
+            <GitHub channel={channel} own={own} sets={sets} />
           </Part>
         )}
 
@@ -154,7 +164,7 @@ function GoalEditor({ channel }: { channel: Channel }) {
 
 function Repos({ channel }: { channel: Channel }) {
   const { app } = useApp()
-  const own = channel.youOwn
+  const own = channel.youOwn || !!channel.youTrusted
   const [draft, setDraft] = useState("")
   const [mine, setMine] = useState<string[]>([])
   const valid = REPO.test(draft.trim())
@@ -292,7 +302,7 @@ function End({ channel, open, onClose, onDone }: { channel: Channel; open: boole
   )
 }
 
-function GitHub({ channel, own }: { channel: Channel; own: boolean }) {
+function GitHub({ channel, own, sets }: { channel: Channel; own: boolean; sets: boolean }) {
   const { app } = useApp()
   const write = !!channel.githubWrite
   const prefix = channel.branchPrefix
@@ -305,7 +315,7 @@ function GitHub({ channel, own }: { channel: Channel; own: boolean }) {
       <p className="cpanel-hint">{write ? "Kiwi links new PRs and issues to their tasks, and a task closing closes its issue." : "Kiwi doesn't comment on or close anything in your repos."}</p>
       <div className="cpanel-row">
         <span className="cpanel-value">Branch prefix</span>
-        {own ? (
+        {sets ? (
           <span className="cpanel-prefix">
             <InlineEdit value={prefix ?? ""} label="Branch prefix" verb={prefix ? "Change" : "Set"} onSave={(v) => app.actions.setBranchPrefix(channel.code, v)} />
             {prefix && (
@@ -363,20 +373,106 @@ function ChannelIcon({ channel, own }: { channel: Channel; own: boolean }) {
   )
 }
 
+function MuteChannel({ channel }: { channel: Channel }) {
+  const { app } = useApp()
+  const muted = isMuted(app.prefs.muted, channel.code)
+  return (
+    <div className="cpanel-mute">
+      <span className="cpanel-hint">
+        {muted
+          ? "Muted on this computer: only mentions, direct messages and decisions for you notify or count."
+          : "Mute it on this computer: only mentions, direct messages and decisions for you will notify or count."}
+      </span>
+      <Toggle label="Mute this channel" on={muted} onChange={(on) => app.actions.setMute(channel.code, null, on)} />
+    </div>
+  )
+}
+
 function Rooms({ channel, own }: { channel: Channel; own: boolean }) {
   const { app } = useApp()
   return (
     <ul className="cpanel-rooms">
       {channel.rooms.map((r) => (
         <li key={r.id}>
-          {own ? (
-            <InlineEdit value={r.name} label={`Name of #${r.name}`} verb="Rename" onSave={(name) => app.actions.renameRoom(channel.code, r.id, name)} />
-          ) : (
-            <span className="cpanel-value">#{r.name}</span>
-          )}
+          <span className="cpanel-room-line">
+            {own ? (
+              <InlineEdit value={r.name} label={`Name of #${r.name}`} verb="Rename" onSave={(name) => app.actions.renameRoom(channel.code, r.id, name)} />
+            ) : (
+              <span className="cpanel-value">#{r.name}</span>
+            )}
+            <button
+              type="button"
+              className="icon-btn"
+              aria-label={r.muted ? `Unmute #${r.name}` : `Mute #${r.name}`}
+              title={r.muted ? `Unmute #${r.name}` : `Mute #${r.name}`}
+              aria-pressed={!!r.muted}
+              onClick={() => app.actions.setMute(channel.code, r.id, !r.muted)}
+            >
+              {r.muted ? <GlyphIcon glyph={NotificationOff01Icon} /> : <Icon name="bell" />}
+            </button>
+          </span>
+          {r.members && <RoomPeople channel={channel} id={r.id} members={r.members} own={own} />}
         </li>
       ))}
     </ul>
+  )
+}
+
+function RoomPeople({ channel, id, members, own }: { channel: Channel; id: string; members: string[]; own: boolean }) {
+  const { app } = useApp()
+  const [editing, setEditing] = useState<ReadonlySet<string> | null>(null)
+  const canChange = useAppCan("changeRoom")
+  const others = roomPeople(channel)
+  const mine = seatRoot(channel, channel.you)
+  const roots = [...new Set(members.map((m) => seatRoot(channel, m)))].filter((m) => m !== mine)
+  const names = roots.map((m) => nickname(channel, m))
+  if (!editing)
+    return (
+      <p className="cpanel-hint room-in">
+        <Icon name="lock" size={12} />
+        <span>Private: you{names.length ? `, ${names.join(", ")}` : ""}</span>
+        {own && canChange && (
+          <button type="button" className="btn is-quiet is-small" onClick={() => setEditing(new Set(roots))}>
+            Change who's in
+          </button>
+        )}
+      </p>
+    )
+  const flip = (name: string, on: boolean) =>
+    setEditing((was) => {
+      const next = new Set(was)
+      if (on) next.add(name)
+      else next.delete(name)
+      return next
+    })
+  const out = roots.some((m) => !editing.has(m))
+  return (
+    <div className="room-pick">
+      {others.map((p) => (
+        <label key={p.name} className={cx("room-member", editing.has(p.name) && "is-on")}>
+          <input type="checkbox" checked={editing.has(p.name)} onChange={(e) => flip(p.name, e.target.checked)} />
+          <Avatar person={p} size="sm" />
+          <span className="room-member-name">{shown(p)}</span>
+        </label>
+      ))}
+      <RoomReadyNotes people={others.filter((p) => editing.has(p.name))} />
+      <p className="cpanel-hint">{out ? "Whoever you take out keeps what they could read, and nothing after: the room moves to a new key." : "Whoever you add reads the room's history."}</p>
+      <div className="room-edit-foot">
+        <button type="button" className="btn is-quiet is-small" onClick={() => setEditing(null)}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          className="btn is-primary is-small"
+          onClick={() => {
+            app.actions.setRoomMembers(channel.code, id, [...editing])
+            setEditing(null)
+          }}
+        >
+          Save
+        </button>
+      </div>
+    </div>
   )
 }
 

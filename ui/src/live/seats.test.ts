@@ -16,4 +16,12 @@ describe("an agent running in a window here can be shown (T429)", () => {
     const out = seated([person("bot", "agent"), person("ana", "human")], [hosted("bot", "room-b"), hosted("ana", "room-a")], "room-a")
     expect(out.map((p) => p.seat)).toEqual([undefined, undefined])
   })
+
+  test("an agent in Channels' own tmux carries the command that attaches to it, for its Copy button (T428)", () => {
+    const attach = "tmux -S /tmp/kiwi attach -t %1 \\; set -w window-size latest"
+    const [bot] = seated([person("bot", "agent")], [{ ...hosted("bot", "room-a"), attach }], "room-a")
+    expect(bot?.attach).toBe(attach)
+    const [plain] = seated([person("bot", "agent")], [hosted("bot", "room-a")], "room-a")
+    expect(plain && "attach" in plain).toBe(false)
+  })
 })

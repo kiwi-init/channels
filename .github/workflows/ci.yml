@@ -145,6 +145,9 @@ jobs:
         run: bun run ui:build
       - name: ui bundle budget
         run: bun scripts/ui-bundle.ts
+      - name: ui harness build, with the plain-browser key store
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-harness.ts
       - name: app smoke
         if: ${{ !cancelled() }}
         run: bun scripts/smoke-app.ts
@@ -214,6 +217,30 @@ jobs:
       - name: ui stash clicks in WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-stash-click.ts --dist ui/dist
+      - name: ui Esc in search keeps the panel, and Settings doesn't offer a name change, in WebKit
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-esc-and-name.ts --dist ui/dist
+      - name: ui the composer keeps each room's draft and images to itself, and an image sends without a file name as text, in WebKit
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-composer-rooms.ts --dist ui/dist
+      - name: ui pause, quiet hours and muting a room, in WebKit
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-notification-controls.ts --dist ui/dist
+      - name: ui edit and delete your own message (toolbar, Enter, ↑, Esc, the delete confirm), in WebKit
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-edit-delete.ts --dist ui/dist
+      - name: ui top bar in Chromium moves the window only from its background
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-drag-regions.ts --dist ui/dist
+      - name: ui terminal in WebKit draws no browser caret down its left edge
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-term-caret.ts --dist ui/dist
+      - name: ui thread in Chromium opens on the reply it was asked for, not its bottom
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-thread-focus.ts --dist ui/dist
+      - name: ui portrait window in WebKit is one tall page, agents, tasks and chat in view, and landscape is unchanged
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-tall-page.ts --dist ui/dist
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -386,6 +413,11 @@ jobs:
       - name: the tmux the app bundles, linked only to glibc
         if: steps.tmux.outputs.cache-hit != 'true'
         run: bash scripts/build-tmux.sh dist/tmux
+      - name: hosted agents and your terminal open in their folder on the bundled tmux, even once its server's folder is deleted
+        run: KIWI_TMUX="$PWD/dist/tmux" bun test test/hosted-tmux.test.ts
+      - name: Add agent, end to end, 30 times on the bundled tmux from a daemon whose folder was deleted, every start counted
+        timeout-minutes: 15
+        run: KIWI_TMUX="$PWD/dist/tmux" KIWI_STARTS=30 bun test test/start-harness.test.ts
       - working-directory: desktop
         env:
           DASH_RELEASE_OFFLINE: "1"
@@ -685,8 +717,10 @@ jobs:
         if: ${{ !cancelled() }}
         run: xcodebuild -project ios/Channels.xcodeproj -scheme Channels -configuration Release -destination 'generic/platform=iOS' -derivedDataPath "$RUNNER_TEMP/ios" CODE_SIGNING_ALLOWED=NO build
 
-  # The Android app: Gradle bundles the engine, builds a release APK (R8, signed with the debug key in android/app/debug.p12
-  # so every build installs over the last one) and runs Android lint on it. The APK is kept as an artifact to install on a phone.
+  # The Android app: Gradle bundles the engine, builds a release APK (R8) and runs Android lint on it.
+  # The APK is signed with the repo's release keystore (KIWI_ANDROID_KEYSTORE_BASE64 with its password secrets,
+  # the macOS certificate's pattern) on runs that can read the secrets; anywhere else it comes out unsigned,
+  # never signed with the debug key. The APK is kept as an artifact to install on a phone.
   # Every screen is drawn on the JVM (Robolectric and Roborazzi), light and dark, and kept as the android-screens artifact.
   # Then the engine runs in Chromium the way Engine.kt hosts it, linked to a dev channel, through the kiwiAndroid bridge.
   android:
@@ -708,7 +742,21 @@ jobs:
           restore-keys: gradle-${{ runner.os }}-
       - name: app build, lint and screens
         working-directory: android
-        run: JAVA_HOME="$JAVA_HOME_17_X64" ./gradlew --no-daemon --stacktrace assembleRelease lintRelease recordRoborazziRelease
+        shell: bash
+        env:
+          KIWI_ANDROID_KEYSTORE_BASE64: ${{ secrets.KIWI_ANDROID_KEYSTORE_BASE64 }}
+          KIWI_ANDROID_STORE_PASSWORD: ${{ secrets.KIWI_ANDROID_STORE_PASSWORD }}
+          KIWI_ANDROID_KEY_ALIAS: ${{ secrets.KIWI_ANDROID_KEY_ALIAS }}
+          KIWI_ANDROID_KEY_PASSWORD: ${{ secrets.KIWI_ANDROID_KEY_PASSWORD }}
+        run: |
+          keystore="$RUNNER_TEMP/kiwi-release.p12"
+          if [ -n "$KIWI_ANDROID_KEYSTORE_BASE64" ] && [ -n "$KIWI_ANDROID_STORE_PASSWORD" ] && [ -n "$KIWI_ANDROID_KEY_ALIAS" ]; then
+            printf '%s' "$KIWI_ANDROID_KEYSTORE_BASE64" | base64 --decode > "$keystore"
+            export KIWI_ANDROID_KEYSTORE="$keystore"
+          else
+            echo "no release keystore secrets here: the APK will be unsigned"
+          fi
+          JAVA_HOME="$JAVA_HOME_17_X64" ./gradlew --no-daemon --stacktrace assembleRelease lintRelease recordRoborazziRelease
       - uses: ./.github/actions/browser
         if: ${{ !cancelled() }}
       - name: engine bridge
@@ -720,6 +768,7 @@ jobs:
           name: channels-android
           path: |
             android/app/build/outputs/apk/release/app-release.apk
+            android/app/build/outputs/apk/release/app-release-unsigned.apk
             android/app/build/reports/lint-results-release.html
           if-no-files-found: ignore
           overwrite: true

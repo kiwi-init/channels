@@ -3,6 +3,7 @@ import type { Serves } from "../calls.ts";
 import { publicPerson } from "../guard.ts";
 import { publicAccess } from "../public-channel.ts";
 import { createDeviceHost, createEnrollee, type DeviceHost } from "../devices.ts";
+import { createRecoverer } from "../recover.ts";
 import { createRecoveryHost } from "../recovery.ts";
 import { freshToken } from "../signin.ts";
 import { mutate, store, upsertComputer } from "../store.ts";
@@ -48,6 +49,7 @@ export function devicesCalls(
   | "enrollDeny"
   | "enrollBegin"
   | "enrollStatus"
+  | "enrollKeep"
   | "enrollCancel"
   | "devices"
   | "forgetDevice"
@@ -57,6 +59,9 @@ export function devicesCalls(
   | "recoveryWords"
   | "recoverySave"
   | "recoveryDrop"
+  | "recover"
+  | "recoverFinish"
+  | "recoverCancel"
 > {
   const recovery = createRecoveryHost({
     session: () => host.session(),
@@ -84,14 +89,34 @@ export function devicesCalls(
       });
     },
   });
-  const enrollee = createEnrollee({
+  const recoverer = createRecoverer({
     relayUrl: () => store.relayUrl,
     token: () => freshToken(),
     who,
     device: () => store.device ?? null,
     saveDevice: (d) => mutate((s) => (s.device = d)),
-    enrolled: (grant) =>
+    restored: (r) =>
       mutate((s) => {
+        s.person = { name: r.person.name, pk: r.person.pk, sk: r.person.sk, xpk: r.person.xpk, xsk: r.person.xsk };
+        s.enrolled = undefined;
+        s.deviceLinks = r.links;
+        s.recovery = r.kept;
+        for (const c of r.channels) {
+          if (s.channels.some((h) => h.code === c.code || h.pk === c.owner.pk)) continue;
+          const keys = c.owner.xpk && c.owner.xsk ? { xpk: c.owner.xpk, xsk: c.owner.xsk } : {};
+          s.channels.push({ label: c.label, idName: c.owner.name, pk: c.owner.pk, sk: c.owner.sk, ...keys, code: c.code, creating: true });
+        }
+      }),
+    label,
+    os: osName,
+  });
+  const enrollee = createEnrollee({
+    relayUrl: () => store.relayUrl,
+    token: () => freshToken(),
+    who,
+    enrolled: (grant, device) =>
+      mutate((s) => {
+        s.device = device;
         s.enrolled = grant.person;
         s.deviceLinks = grant.links;
       }),
@@ -111,6 +136,7 @@ export function devicesCalls(
     enrollDeny: (id: string) => host.deny(id),
     enrollBegin: () => enrollee.begin(),
     enrollStatus: () => enrollee.status(),
+    enrollKeep: () => enrollee.keep(),
     enrollCancel: () => enrollee.cancel(),
     devices: () => host.list(),
     forgetDevice: (id: string) => host.forget(id),
@@ -120,5 +146,8 @@ export function devicesCalls(
     recoveryWords: () => recovery.words(),
     recoverySave: (typed: { at: number; word: string }[]) => recovery.save(typed),
     recoveryDrop: () => recovery.drop(),
+    recover: (words: string) => recoverer.open(words),
+    recoverFinish: (lost: string[]) => recoverer.finish(lost),
+    recoverCancel: async () => recoverer.cancel(),
   };
 }
