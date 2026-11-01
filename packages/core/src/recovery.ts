@@ -1,7 +1,7 @@
 import { b64url, openFrom, sealTo } from "./crypto.ts";
 import { canonical, sign, verify, type Identity } from "./identity.ts";
 import type { DeviceList } from "./devices.ts";
-import { RECOVERY_WORDS } from "./recovery-words.ts";
+import { recoveryWords } from "./recovery-words.ts";
 
 const KEY_RE = /^[A-Za-z0-9_-]{43}$/;
 const DAY_MS = 86_400_000;
@@ -20,13 +20,13 @@ let byPrefix: Map<string, number> | null = null;
 
 function wordIndex(word: string): number | undefined {
   if (!index || !byPrefix) {
-    index = new Map(RECOVERY_WORDS.map((w, i) => [w, i]));
-    byPrefix = new Map(RECOVERY_WORDS.map((w, i) => [w.slice(0, 4), i]));
+    index = new Map(recoveryWords().map((w, i) => [w, i]));
+    byPrefix = new Map(recoveryWords().map((w, i) => [w.slice(0, 4), i]));
   }
   const exact = index.get(word);
   if (exact !== undefined || word.length < 4) return exact;
   const i = byPrefix.get(word.slice(0, 4));
-  return i !== undefined && RECOVERY_WORDS[i]!.startsWith(word) ? i : undefined;
+  return i !== undefined && recoveryWords()[i]!.startsWith(word) ? i : undefined;
 }
 
 async function checksum(entropy: Uint8Array<ArrayBuffer>): Promise<number> {
@@ -40,7 +40,7 @@ export async function phraseOf(entropy: Uint8Array<ArrayBuffer>): Promise<string
   for (let w = 0; w < PHRASE_WORDS; w++) {
     let n = 0;
     for (let b = w * 11; b < w * 11 + 11; b++) n = (n << 1) | ((bytes[b >> 3]! >> (7 - (b & 7))) & 1);
-    words.push(RECOVERY_WORDS[n]!);
+    words.push(recoveryWords()[n]!);
   }
   return words;
 }

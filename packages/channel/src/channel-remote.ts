@@ -2,7 +2,21 @@ import { ChannelGone, RelayError } from "@kiwi/core/client/relay-errors.ts";
 import type { CachedKept, Unread } from "@kiwi/core/cache-row.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
 
-import type { CallResult, ChannelCallName, ChannelCalls, ChannelOps, ChannelView, FollowEvent, FollowOptions, JoinCheck, KeysAsk, KeysPort, WireError } from "../../../desktop/src/bridge.ts";
+import type {
+  CallResult,
+  ChannelCallName,
+  ChannelCalls,
+  ChannelOps,
+  ChannelView,
+  FollowEvent,
+  FollowOptions,
+  JoinCheck,
+  KeysAsk,
+  KeysPort,
+  OlderRows,
+  WireError,
+} from "../../../desktop/src/bridge.ts";
+import type { Searched } from "../../../desktop/src/search-types.ts";
 import { fromWire, toWire } from "../../../desktop/src/wire.ts";
 
 export function errorOf(w: WireError): Error {
@@ -77,6 +91,9 @@ export function remoteOps(port: KeysPort): ChannelOps {
     forget: async (code) => void (await ask({ op: "forget", code })),
     presence: async (code, p) => void (await ask({ op: "presence", code, p: toWire(p) })),
     openRows: (code, rows) => ask({ op: "openRows", code, rows: toWire(rows) }) as Promise<(Message | Unread | null)[]>,
+    olderRows: (code, before, limit) => ask({ op: "olderRows", code, before, limit }) as Promise<OlderRows>,
+    indexRows: (code, rows, inputs) => ask({ op: "indexRows", code, rows: toWire(rows), inputs: toWire(inputs) }) as Promise<number | null>,
+    searchHistory: (code, search) => ask({ op: "searchHistory", code, ask: toWire(search) }) as Promise<Searched | null>,
     keep: (code, state) => ask({ op: "keep", code, state: toWire(state) }) as Promise<CachedKept | null>,
     openKept: (code, sealed) => ask({ op: "openKept", code, sealed: toWire(sealed) }),
     nudge: () => void port.request({ op: "nudge" }),

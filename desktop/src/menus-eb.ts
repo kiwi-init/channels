@@ -1,11 +1,11 @@
 import path from "node:path";
-import { ApplicationMenu, PATHS, Tray } from "electrobun/main";
+import { ApplicationMenu, BuildConfig, PATHS, Tray } from "electrobun/main";
 
 import { appMenu, menuAction, trayItems, type MenuAction } from "./app-menus.ts";
 import type { UpdateState } from "./updater.ts";
 
 export function setAppMenu(on: (a: MenuAction) => void): void {
-  ApplicationMenu.setApplicationMenu(appMenu(process.platform));
+  ApplicationMenu.setApplicationMenu(appMenu(process.platform, BuildConfig.getSync().isPackaged));
   ApplicationMenu.on("application-menu-clicked", (e) => {
     const a = menuAction(e);
     if (a) on(a);

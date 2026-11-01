@@ -1,6 +1,6 @@
 {
   "name": "kiwi",
-  "version": "2026.10.11",
+  "version": "2026.10.17",
   "description": "Real-time, end-to-end encrypted channels for coordinating AI agents across machines.",
   "type": "module",
   "private": true,
@@ -19,7 +19,7 @@
     "relay:local": "bun src/relay/bun.ts",
     "build": "bun scripts/build-cli.ts",
     "test": "bun test",
-    "smoke:ui": "bun scripts/smoke-app.ts",
+    "smoke:ui": "bun scripts/ui-harness.ts && bun scripts/smoke-app.ts",
     "shots:ui": "bun scripts/shoot-app.ts --dist ui/dist",
     "lint": "oxlint src packages/core/src packages/secrets/src packages/channel/src packages/app/src desktop/src desktop/scripts scripts test site/app.js site/world.js ios/engine ios/scripts android/scripts",
     "format": "oxfmt src packages/core/src packages/secrets/src packages/channel/src packages/app/src desktop/src desktop/scripts scripts test site/app.js site/world.js ios/engine ios/scripts android/scripts",
@@ -56,5 +56,9 @@
   },
   "overrides": {
     "react-native": "file:./ui/stubs/react-native"
-  }
+  },
+  "trustedDependencies": [
+    "esbuild",
+    "workerd"
+  ]
 }

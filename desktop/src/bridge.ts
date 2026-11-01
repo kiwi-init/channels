@@ -2,6 +2,7 @@
 // main-eb.ts and preload-eb.ts; renderer-neutral on purpose (no node imports),
 // so ui/ can type against it without touching this process.
 
+import type { FoldInputs, Searched } from "./search-types.ts";
 import type { ComputerSettings } from "@kiwi/core/computer-settings.ts";
 import type { DeviceLink } from "@kiwi/core/devices.ts";
 import type { HarnessRow, HookHarness, HookRow, KnownHarness } from "@kiwi/core/harnesses.ts";
@@ -117,6 +118,11 @@ export const CHANNEL_CALLS = [
   "setHold",
   "setRooms",
   "setRepos",
+  "makeRoom",
+  "makeDm",
+  "syncMarks",
+  "changeRoom",
+  "pruneRooms",
   "icon",
   "setIcon",
   "close",
@@ -154,10 +160,25 @@ export interface ChannelOps {
   forget(code: string): Promise<void>;
   presence(code: string, p: PresenceFields): Promise<void>;
   openRows(code: string, rows: CachedRow[]): Promise<(Message | Unread | null)[]>;
+  olderRows(code: string, before: number, limit: number): Promise<OlderRows>;
+  indexRows(code: string, rows: CachedRow[], inputs: FoldInputs): Promise<number | null>;
+  searchHistory(code: string, ask: HistorySearch): Promise<Searched | null>;
   keep(code: string, state: object): Promise<CachedKept | null>;
   openKept(code: string, sealed: CachedKept): Promise<unknown>;
   follow(code: string, since: number, on: (e: FollowEvent) => void, opts?: FollowOptions): () => void;
   nudge(): void;
+}
+
+export interface HistorySearch {
+  query: string;
+  rooms: string[];
+  limit: number;
+  head: number;
+}
+
+export interface OlderRows {
+  rows: CachedRow[];
+  done: boolean;
 }
 
 export interface FollowOptions {
@@ -178,6 +199,9 @@ export type KeysAsk =
   | { op: "forget"; code: string }
   | { op: "presence"; code: string; p: Wire }
   | { op: "openRows"; code: string; rows: Wire }
+  | { op: "olderRows"; code: string; before: number; limit: number }
+  | { op: "indexRows"; code: string; rows: Wire; inputs: Wire }
+  | { op: "searchHistory"; code: string; ask: Wire }
   | { op: "keep"; code: string; state: Wire }
   | { op: "openKept"; code: string; sealed: Wire }
   | { op: "follow"; code: string; since: number; watch?: boolean }
@@ -242,6 +266,7 @@ export interface EnrollAskView {
   as: "desktop" | "phone" | "computer";
   at: number;
   stage: "new" | "waiting" | "digits" | "elsewhere";
+  fingerprint: string | null;
 }
 
 export interface DeviceView {
@@ -276,9 +301,26 @@ export interface RecoveryView {
 
 export type RecoverySaveView = { ok: true; at: number } | { ok: false; wrong: number[] };
 
+export type RecoverOpenView =
+  | { ok: true; name: string; devices: (Pick<DeviceView, "id" | "label" | "os" | "as"> & { lost: boolean })[]; channels: string[] }
+  | { ok: false; why: string; word?: number };
+
+export interface RecoverDoneView {
+  name: string;
+  channels: number;
+  forgot: number;
+}
+
 export type EnrollConfirmView = { ok: true; label: string } | { ok: false; left: number };
 
-export type EnrollStatusView = { stage: "asking" } | { stage: "digits"; digits: string } | { stage: "done"; person: PublicPerson; channels: { label: string; code: string }[] } | { stage: "gone" };
+export interface EnrollPersonView {
+  name: string;
+  fingerprint: string;
+}
+
+export type EnrollKeptView = { stage: "done"; person: PublicPerson; channels: { label: string; code: string }[] };
+
+export type EnrollStatusView = { stage: "asking" } | { stage: "digits"; digits: string } | { stage: "check"; person: EnrollPersonView } | EnrollKeptView | { stage: "gone" };
 
 /** "kiwi daemon" as the app sees it. */
 export interface DaemonStatus {
@@ -298,7 +340,10 @@ export interface GithubRepoView {
 
 export interface GithubStatus {
   available: boolean;
+  /** The relay takes GitHub sign-in, so this link is how the person signs in. */
+  signIn?: boolean;
   account: { login: string; id: number; at: number } | null;
+  moveRefused?: string;
 }
 
 export interface MachineView {
@@ -375,6 +420,7 @@ export interface KiwiBridge {
   enrollDeny(id: string): Promise<void>;
   enrollBegin(): Promise<void>;
   enrollStatus(): Promise<EnrollStatusView | null>;
+  enrollKeep(): Promise<EnrollKeptView>;
   enrollCancel(): Promise<void>;
   devices(): Promise<DeviceView[] | null>;
   forgetDevice(id: string): Promise<void>;
@@ -384,6 +430,9 @@ export interface KiwiBridge {
   recoveryWords(): Promise<string[]>;
   recoverySave(typed: { at: number; word: string }[]): Promise<RecoverySaveView>;
   recoveryDrop(): Promise<void>;
+  recover(words: string): Promise<RecoverOpenView>;
+  recoverFinish(lost: string[]): Promise<RecoverDoneView>;
+  recoverCancel(): Promise<void>;
   daemonStatus(): Promise<DaemonStatus>;
   doctor(): Promise<DoctorFinding[] | null>;
   /** Certify this machine's daemon key with the person key and hand the cert back. */
@@ -398,7 +447,7 @@ export interface KiwiBridge {
   getUpdate(): Promise<UpdateView | null>;
   onUpdate(cb: (u: UpdateView) => void): () => void;
   /** Restart into the downloaded update. */
-  installUpdate(): Promise<void>;
+  installUpdate(): Promise<boolean>;
   checkUpdate(): Promise<UpdateCheckView>;
   notify(title: string, body: string, link?: string): Promise<void>;
   openExternal(url: string): Promise<void>;
@@ -424,6 +473,8 @@ export interface KiwiBridge {
   onTextStep(cb: (step: TextStep) => void): () => void;
   onFrost(cb: (on: boolean) => void): () => void;
   getAccentColor(): Promise<string | null>;
+  /** What this app can run: its UI contract version and the channel calls it serves, so a newer UI hides what it can't do. */
+  capabilities(): Promise<{ contract: string; channelCalls: string[] }>;
   onAccent(cb: (color: string | null) => void): () => void;
   setPersonalities(list: Personality[]): Promise<void>;
   seatPlaces(): Promise<PlacedSeat[]>;
@@ -475,6 +526,7 @@ export interface UpdateView {
   /** The release's page. */
   url: string;
   blocked?: true;
+  progress?: number;
 }
 
 export type UpdateCheckView = UpdateView | { state: "current"; version: string } | { state: "failed" };

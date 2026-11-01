@@ -42,8 +42,12 @@ import {
   putDelegation,
   errorResponse,
   frame,
+  gone,
   keysFor,
   markRead,
+  getNote,
+  putNote,
+  NOTES_PER_MINUTE,
   MESSAGES_PER_MINUTE,
   missingFingerprint,
   msgFrame,
@@ -149,10 +153,13 @@ const owner = Effect.gen(function* () {
 
 /** The owner, or a key the owner delegated admitting its own agents to. */
 const admitter = Effect.gen(function* () {
+  const db = yield* RoomStore;
   const pk = yield* requester;
-  if (pk === (yield* readMeta).ownerPk) return yield* owner;
-  if (!(yield* liveDelegation(pk))) return yield* new NotOwner({ message: "only the channel owner can do that" });
-  return pk;
+  const meta = yield* readMeta;
+  if (pk === meta.ownerPk) return yield* owner;
+  if (yield* liveDelegation(pk)) return pk;
+  if (!db.isMember(pk)) return yield* gone();
+  return yield* new NotOwner({ message: "only the channel owner can do that" });
 });
 
 /** A member, or a delegate, which holds the channel's keys too. */
@@ -199,6 +206,7 @@ type RoomRoute = Route<Guard, Who, Effects, Services>;
 const ID = "([0-9a-f-]{36})";
 
 const BLOB = /^\/blobs\/([0-9a-f]{64})$/;
+const NOTE = /^\/note\/([A-Za-z0-9_-]{43})$/;
 
 /** A handler that only reads the room. */
 const withRoom = <A>(f: (db: RoomDb) => A) => Effect.map(RoomStore, f);
@@ -372,6 +380,29 @@ const routes: RoomRoute[] = [
         const b = yield* json<{ seq?: unknown }>();
         const mark = yield* markRead(me, b.seq);
         return { data: { seq: mark?.seq ?? null }, fx: mark ? { readers: [frame({ t: "read", ...mark })] } : undefined };
+      }),
+  },
+  {
+    method: "GET",
+    path: NOTE,
+    guard: "member",
+    run: (_, m) =>
+      Effect.gen(function* () {
+        const note = yield* getNote(m[1]!);
+        if (!note) return yield* new NotFound({ message: "no note yet" });
+        return { data: note };
+      }),
+  },
+  {
+    method: "PUT",
+    path: NOTE,
+    guard: "member",
+    run: ({ me }, m) =>
+      Effect.gen(function* () {
+        const db = yield* RoomStore;
+        if (!allow(`note:${db.roomId}:${me}`, NOTES_PER_MINUTE)) return yield* new TooMany({ message: "too many note writes; one every few seconds is plenty" });
+        const b = yield* json<{ box?: unknown; prev?: unknown }>();
+        return { data: yield* putNote(m[1]!, me, b) };
       }),
   },
   {
@@ -747,8 +778,9 @@ const routes: RoomRoute[] = [
     guard: "owner",
     run: () =>
       Effect.gen(function* () {
-        const b = yield* json<{ epoch: number; keys: Record<string, string> }>();
-        yield* rotate(b.epoch, b.keys);
+        const b = yield* json<{ epoch: number; keys: Record<string, string>; owner?: { pk: string; xpk: string; sig: string }; older?: Record<string, Record<string, string>> }>();
+        if (!b || !Number.isSafeInteger(b.epoch) || b.epoch < 0 || typeof b.keys !== "object" || b.keys === null) return yield* new BadRequest({ message: "bad epoch" });
+        yield* rotate(b.epoch, b.keys, b.owner, b.older);
         return { data: { epoch: b.epoch }, fx: { broadcast: [frame({ t: "epoch", epoch: b.epoch })] } };
       }),
   },

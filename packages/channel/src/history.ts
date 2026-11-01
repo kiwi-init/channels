@@ -22,10 +22,13 @@ export type OpenRows = (rows: CachedRow[]) => Promise<(Message | Unread | null)[
 
 export interface HistoryDb {
   put(roomId: string, memberPk: string, row: CachedRow): Promise<void>;
-  putRows(roomId: string, memberPk: string, rows: CachedRow[], oldestKept: number): Promise<void>;
-  rows(roomId: string, memberPk: string): Promise<CachedRow[]>;
+  putRows(roomId: string, memberPk: string, rows: CachedRow[]): Promise<void>;
+  newest(roomId: string, memberPk: string, count: number): Promise<CachedRow[]>;
+  after(roomId: string, memberPk: string, seq: number, count: number): Promise<CachedRow[]>;
+  oldest(roomId: string, memberPk: string): Promise<number | null>;
+  floor(roomId: string, memberPk: string): Promise<boolean>;
+  putFloor(roomId: string, memberPk: string): Promise<void>;
   /** Delete seqs below `oldestKept` for this room and member. */
-  trimBelow(roomId: string, memberPk: string, oldestKept: number): Promise<void>;
   /** Delete seqs above `newestKept` for this room and member. */
   trimAbove(roomId: string, memberPk: string, newestKept: number): Promise<void>;
   drop(roomId: string, memberPk: string): Promise<void>;
@@ -37,6 +40,7 @@ export interface HistoryDb {
 const DB = "mc.history";
 const STORE = "rows";
 const KEPT = "kept";
+const FLOOR = "floor";
 
 function range(roomId: string, memberPk: string, hi: number, hiOpen: boolean): IDBKeyRange {
   return IDBKeyRange.bound([roomId, memberPk, 0], [roomId, memberPk, hi], false, hiOpen);
@@ -97,17 +101,40 @@ function idb(): HistoryDb {
 
   return {
     put: (roomId, memberPk, row) => run<void>("readwrite", (s) => void s.put(row, [roomId, memberPk, row.seq])),
-    putRows: (roomId, memberPk, rows, oldestKept) =>
+    putRows: (roomId, memberPk, rows) =>
       run<void>("readwrite", (s) => {
         for (const row of rows) s.put(row, [roomId, memberPk, row.seq]);
-        s.delete(range(roomId, memberPk, oldestKept, true));
       }),
-    rows: (roomId, memberPk) => run<CachedRow[]>("readonly", (s) => s.getAll(range(roomId, memberPk, Number.MAX_SAFE_INTEGER, false))),
-    trimBelow: (roomId, memberPk, oldestKept) => run<void>("readwrite", (s) => void s.delete(range(roomId, memberPk, oldestKept, true))),
+    newest: async (roomId, memberPk, count) => {
+      const db = await openDb();
+      return new Promise<CachedRow[]>((resolve, reject) => {
+        const out: CachedRow[] = [];
+        const req = db
+          .transaction(STORE, "readonly")
+          .objectStore(STORE)
+          .openCursor(range(roomId, memberPk, Number.MAX_SAFE_INTEGER, false), "prev");
+        req.onsuccess = () => {
+          const cursor = req.result;
+          if (!cursor || out.length >= count) return resolve(out.reverse());
+          out.push(cursor.value as CachedRow);
+          cursor.continue();
+        };
+        req.onerror = () => reject(req.error);
+      });
+    },
+    after: (roomId, memberPk, seq, count) => run<CachedRow[]>("readonly", (s) => s.getAll(rangeAbove(roomId, memberPk, seq), count)),
+    oldest: async (roomId, memberPk) => {
+      const key = await run<IDBValidKey | undefined>("readonly", (s) => s.getKey(range(roomId, memberPk, Number.MAX_SAFE_INTEGER, false)));
+      const seq = Array.isArray(key) ? key[2] : undefined;
+      return typeof seq === "number" ? seq : null;
+    },
+    floor: async (roomId, memberPk) => (await run<unknown>("readonly", (s) => s.get([roomId, memberPk, FLOOR]), KEPT)) === true,
+    putFloor: (roomId, memberPk) => run<void>("readwrite", (s) => void s.put(true, [roomId, memberPk, FLOOR]), KEPT),
     trimAbove: (roomId, memberPk, newestKept) => run<void>("readwrite", (s) => void s.delete(rangeAbove(roomId, memberPk, newestKept))),
     drop: async (roomId, memberPk) => {
       await run<void>("readwrite", (s) => void s.delete(range(roomId, memberPk, Number.MAX_SAFE_INTEGER, false)));
       await run<void>("readwrite", (s) => void s.delete([roomId, memberPk]), KEPT);
+      await run<void>("readwrite", (s) => void s.delete([roomId, memberPk, FLOOR]), KEPT);
     },
     dropAll: async () => {
       await run<void>("readwrite", (s) => void s.clear());
@@ -119,6 +146,10 @@ function idb(): HistoryDb {
 }
 
 let backing: HistoryDb | null = null;
+
+export function historyDb(): HistoryDb {
+  return db();
+}
 
 function db(): HistoryDb {
   if (!backing) {
@@ -133,13 +164,13 @@ export function useHistoryDb(next: HistoryDb | null): void {
   backing = next;
 }
 
-export async function rememberRows(roomId: string, memberPk: string, rows: CachedRow[], limit: number): Promise<void> {
+export async function rememberRows(roomId: string, memberPk: string, rows: CachedRow[]): Promise<void> {
   const kept = rows.filter((row) => Number.isSafeInteger(row.seq) && row.seq > 0);
   if (!kept.length) return;
-  await db().putRows(roomId, memberPk, kept, Math.max(...kept.map((row) => row.seq)) - limit + 1);
+  await db().putRows(roomId, memberPk, kept);
 }
 
-export const rememberRow = (roomId: string, memberPk: string, row: CachedRow, limit: number): Promise<void> => rememberRows(roomId, memberPk, [row], limit);
+export const rememberRow = (roomId: string, memberPk: string, row: CachedRow): Promise<void> => rememberRows(roomId, memberPk, [row]);
 
 /**
  * Messages to paint, and the exclusive seq to stream from. An unusable cache
@@ -150,8 +181,8 @@ export interface OpenedCache {
   opened: (Message | Unread)[];
 }
 
-export async function openCached(roomId: string, memberPk: string, openRows: OpenRows): Promise<OpenedCache> {
-  const stored = await db().rows(roomId, memberPk);
+export async function openCached(roomId: string, memberPk: string, openRows: OpenRows, limit: number): Promise<OpenedCache> {
+  const stored = await db().newest(roomId, memberPk, limit);
   markOnce("kiwi:cache-read");
   return { stored: stored.length, opened: (await openRows(stored)).filter((m): m is Message | Unread => m !== null) };
 }
@@ -163,7 +194,7 @@ export async function readCached(
   head: number,
   limit: number,
 ): Promise<{ messages: Message[]; unread: number[]; firstSeq: number | undefined; since: number }> {
-  return planCached(roomId, memberPk, await openCached(roomId, memberPk, openRows), head, limit);
+  return planCached(roomId, memberPk, await openCached(roomId, memberPk, openRows, limit), head, limit);
 }
 
 export async function planCached(
@@ -181,9 +212,8 @@ export async function planCached(
   if (!plan.keep.length) {
     if (stored) await db().drop(roomId, memberPk);
   } else {
-    // Drop a prefix the window no longer wants, and any seq past the relay head
+    // Keep everything older as the archive. Drop any seq past the relay head,
     // so a later head cannot revive it ahead of the relay.
-    await db().trimBelow(roomId, memberPk, plan.keep[0]!);
     await db().trimAbove(roomId, memberPk, plan.keep[plan.keep.length - 1]!);
   }
   const keep = new Set(plan.keep);

@@ -26,15 +26,16 @@
 
 export { forgetRoom, RoomDb, RoomStore, type RoomServices, type Sql, type SqlParam } from "./room/db.ts";
 export { Directory, HOLD_MS, holdEntry, releasable, reserveSlot, type DirectoryEntry, type DirectoryUpdate, type Effects } from "./room/directory.ts";
-export { allow, take, ASKS_PER_MINUTE, BLOBS_PER_MINUTE, GITHUB_READS_PER_MINUTE, MESSAGES_PER_MINUTE, MORE_PER_MINUTE, PAGES_PER_MINUTE, READS_PER_MINUTE } from "./room/limits.ts";
-export { authenticate, authenticateSocket, missingFingerprint, readMeta, requestToken, UPDATE_KIWI, wsHeaders } from "./room/auth.ts";
+export { allow, take, ASKS_PER_MINUTE, BLOBS_PER_MINUTE, GITHUB_READS_PER_MINUTE, MESSAGES_PER_MINUTE, MORE_PER_MINUTE, NOTES_PER_MINUTE, PAGES_PER_MINUTE, READS_PER_MINUTE } from "./room/limits.ts";
+export { getNote, putNote } from "./room/notes.ts";
+export { authenticate, authenticateSocket, gone, missingFingerprint, readMeta, requestToken, UPDATE_KIWI, wsHeaders } from "./room/auth.ts";
 export { append, expire, idleExpired, markRead, storeBlob, touch } from "./room/messages.ts";
-export { create, directory, setIcon, setSettings, setSnapshot, setTitle, type CreateBody } from "./room/lifecycle.ts";
+export { create, directory, reown, setIcon, setSettings, setSnapshot, setTitle, type CreateBody } from "./room/lifecycle.ts";
 export { approve, keysFor, remove, rotate, setCanPost, setRecord, type MemberBody } from "./room/members.ts";
 export { dropDelegation, listDelegations, liveDelegation, putDelegation } from "./room/delegations.ts";
 export { request, requestStatus, requireChecked, reveal, setOwnerNonce, type RequestBody } from "./room/requests.ts";
 export { frame, msgFrame, onClientFrame, socketError, takesPresence, wantsEcho, wantsReads, wantsWatch, watchFrame, welcomeFrames } from "./room/sockets.ts";
-export { errorResponse, parseRoomPath, relayConfig } from "./room/http.ts";
+export { errorResponse, gateRoom, parseRoomPath, relayConfig } from "./room/http.ts";
 
 /**
  * The HTTP API (all under /v1/rooms/<room>):

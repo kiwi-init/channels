@@ -4,12 +4,13 @@ import { useEffect, useId, useState, type ReactNode } from "react"
 
 import { TOO_MANY_REQUESTS } from "@kiwi/core/sas.ts"
 
-import { PrChip, QuestionCard, TaskChip } from "~/chat/cards"
+import { PrChip, TaskChip } from "~/chat/cards"
+import QuestionCard from "~/chat/question-card"
 import type { Jump } from "~/chat/search-box"
 import { Avatar, Empty, Loading, Toggle } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { ago, clock } from "~/kit/time"
-import type { Ask, Channel, JoinAsk, Message, PermissionAsk, Person, Powers, QuestionAsk, ReviewAsk } from "~/model"
+import { ALL_POWERS, NO_POWERS, trusted, type Ask, type Channel, type JoinAsk, type Message, type PermissionAsk, type Person, type Powers, type QuestionAsk, type ReviewAsk } from "~/model"
 import { useApp } from "~/nav"
 import { nickname } from "~/names"
 import { ShowAgent } from "~/kit/show-agent"
@@ -41,9 +42,13 @@ export function NeedsYou({ channel, onJump }: { channel: Channel; onJump: (jump:
         ) : channel.loading ? (
           <Loading />
         ) : (
-          <Empty title="Nothing needs you." icon="clear">
-            Asks from agents and people who want in show up here.
-          </Empty>
+          <div className="needs-clear">
+            <svg className="needs-tick" viewBox="0 0 40 40" aria-hidden="true">
+              <circle cx="20" cy="20" r="18" pathLength="1" />
+              <path d="M12.5 20.5l5.5 5.5 10-11" pathLength="1" />
+            </svg>
+            <Empty title="Nothing needs you.">Asks from agents and people who want in show up here.</Empty>
+          </div>
         )}
         {idle.length > 0 && (
           <section className="needs-idle" aria-label="Asked, holding nothing up">
@@ -267,21 +272,23 @@ function Written({ label, text, gone }: { label: string; text: string; gone?: bo
 function QuestionAskCard({ channel, ask, link }: { channel: Channel; ask: QuestionAsk; link: ReactNode }) {
   const who = member(channel, ask.from)
   const holds = [...new Set([...(ask.task !== undefined ? [ask.task] : []), ...ask.holds])]
+  const askedOf = ask.askedOf?.map((n) => nickname(channel, n)).join(" and ")
   return (
     <Shell
       face={who}
       name={nickname(channel, ask.from)}
       member={!!who}
       tag={{ text: ask.label, tone: ask.irreversible ? "alert" : ask.label.startsWith("Question") ? "quiet" : "decide" }}
-      verb={ask.step ? "has a step for you" : ask.handoff ? "needs you in a browser" : "asks you"}
+      verb={ask.step ? "has a step for you" : ask.handoff ? "needs you in a browser" : askedOf ? `asks ${askedOf}` : "asks you"}
       at={ask.at}
       link={link}
     >
       <p className="needs-text">{ask.text}</p>
+      {askedOf && <p className="needs-line">Put to {askedOf}. You can answer too, and the first answer counts.</p>}
       <QuestionCard channel={channel} ask={ask} />
       {holds.length > 0 && (
         <>
-          <p className="needs-label">{holds.length === 1 ? "This task waits on your answer" : "These tasks wait on your answer"}</p>
+          <p className="needs-label">{holds.length === 1 ? `This task waits on ${askedOf ? "an" : "your"} answer` : `These tasks wait on ${askedOf ? "an" : "your"} answer`}</p>
           <Holds channel={channel} ids={holds} />
         </>
       )}
@@ -299,6 +306,11 @@ const POWER_WORDS: Record<keyof Powers, { label: string; on: string; off: string
     label: "Can answer decisions",
     on: "They answer agents' decisions in Needs you, as you do.",
     off: "Agents' decisions go to you and each agent's own person.",
+  },
+  managesAgents: {
+    label: "Can manage agents",
+    on: "They pick agents' personalities and roles, the lead included. Never people's, and never their own.",
+    off: "Only you change agents' personalities and roles.",
   },
 }
 
@@ -352,7 +364,7 @@ function JoinAskCard({ channel, ask, link }: { channel: Channel; ask: JoinAsk; l
   const pinGone = agent && persona === undefined && !!ask.pin && ask.pin.persona === null
   const label = app.personas.find((p) => p.id === chosen)?.label
   const only = readOnly ?? channel.newMembers === "read"
-  const can = powers ?? channel.newPowers ?? { addsAgents: false, answersDecisions: false }
+  const can = powers ?? channel.newPowers ?? NO_POWERS
   const blocked = pinWaits || pinGone
   const letIn = () =>
     app.actions.answerJoin(channel.code, ask.id, true, {
@@ -451,6 +463,27 @@ function JoinAskCard({ channel, ask, link }: { channel: Channel; ask: JoinAsk; l
               )}
             </Opt>
           )}
+          {!agent && (
+            <Opt
+              label="Full trust"
+              hint={
+                !only && trusted(can)
+                  ? "They write and work, add agents, answer decisions and manage agents. The channel stays yours."
+                  : "Every power at once, for someone you'd trust with your life. The channel stays yours."
+              }
+            >
+              {(id) => (
+                <Toggle
+                  id={id}
+                  on={!only && trusted(can)}
+                  onChange={(on) => {
+                    if (on) setReadOnly(false)
+                    setPowers(on ? ALL_POWERS : NO_POWERS)
+                  }}
+                />
+              )}
+            </Opt>
+          )}
           {!chosen && (
             <Opt
               label="Can only read"
@@ -462,7 +495,7 @@ function JoinAskCard({ channel, ask, link }: { channel: Channel; ask: JoinAsk; l
             </Opt>
           )}
           {!agent &&
-            (["addsAgents", "answersDecisions"] as const).map((power) => (
+            (["addsAgents", "answersDecisions", "managesAgents"] as const).map((power) => (
               <Opt key={power} label={POWER_WORDS[power].label} hint={can[power] ? POWER_WORDS[power].on : POWER_WORDS[power].off}>
                 {(id) => <Toggle id={id} on={can[power]} onChange={(on) => setPowers({ ...can, [power]: on })} />}
               </Opt>

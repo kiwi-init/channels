@@ -1,5 +1,6 @@
 import { ignored, isQuiet, ROBOT_FACES, type ChannelIcon, type Message } from "@kiwi/core/protocol.ts";
 import { answersDecisions, decidersOf, MAIN, openRound, placeFromKey, placeKey, taskId, type ChannelState } from "@kiwi/core/state.ts";
+import { inGeneral } from "@kiwi/core/state/places.ts";
 import type { FoldMember } from "@kiwi/core/state/types.ts";
 
 import { askLabel, asksFor, chosenOf, heldAsks } from "@kiwi/app/asks.ts";
@@ -7,6 +8,7 @@ import { avatarIndex } from "@kiwi/app/avatar-pick.ts";
 import { chipsFor } from "@kiwi/app/reactions.ts";
 import type { Online } from "@kiwi/channel/online.ts";
 import { knownHarness, monoHarness } from "@kiwi/app/harness.ts";
+import { named, namedMarkdown } from "@kiwi/app/mentions.ts";
 import { lastPreview } from "@kiwi/app/preview.ts";
 import { reviewsFor } from "@kiwi/channel/task-actions.ts";
 import type { AskView, Connection, IconView, MemberView, MessageView, PlaceView, ReviewView, RoomView, TaskView } from "./wire.ts";
@@ -61,7 +63,8 @@ function memberView(m: FoldMember, state: ChannelState, online: ReadonlyMap<stri
 }
 
 function shownIn(m: Message, state: ChannelState, key: string): boolean {
-  if (placeKey(state.placeOf.get(m.seq) ?? MAIN) !== key) return false;
+  const here = key === placeKey(MAIN) ? inGeneral(state, m.seq) : placeKey(state.placeOf.get(m.seq) ?? MAIN) === key;
+  if (!here) return false;
   return !isQuiet(m) && !ignored(state.trust.get(m.seq));
 }
 
@@ -76,6 +79,9 @@ export function roomView(r: RoomInput): RoomView {
   const visible = r.messages.filter((m) => shownIn(m, state, here));
   const general = here === "main" ? visible : r.messages.filter((m) => shownIn(m, state, "main"));
   const shown = visible.slice(-SHOWN);
+  const nicknames = new Map([...state.members.values()].map((m) => [m.name, m.display || m.name]));
+  const said = (text: string) => namedMarkdown(text, nicknames);
+  const plain = (text: string) => named(text, nicknames);
 
   const messageView = (m: Message, prev: Message | undefined): MessageView => {
     const re = m.re?.length === 1 ? m.re[0]! : null;
@@ -88,9 +94,11 @@ export function roomView(r: RoomInput): RoomView {
       at: m.rts ?? m.ts,
       kind: m.kind,
       body: m.body,
+      shown: said(m.body),
+      plain: plain(m.body),
       event: m.kind === "event",
       mine: m.from === me,
-      quote: quoted && quoted.kind !== "event" ? { seq: quoted.seq, from: quoted.from, words: oneLine(quoted.body, QUOTE_CHARS) } : null,
+      quote: quoted && quoted.kind !== "event" ? { seq: quoted.seq, from: quoted.from, words: oneLine(plain(quoted.body), QUOTE_CHARS) } : null,
       choices: m.choices ?? [],
       chosen: chosen ? { choice: chosen.choice, by: chosen.by } : null,
       waiting: waiting.has(m.seq),
@@ -168,6 +176,8 @@ export function roomView(r: RoomInput): RoomView {
       seq: m.seq,
       from: m.from,
       body: m.body,
+      shown: said(m.body),
+      plain: plain(m.body),
       at: m.rts ?? m.ts,
       label: askLabel(m, me),
       choices: m.choices ?? [],

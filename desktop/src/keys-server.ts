@@ -1,7 +1,8 @@
 import type { PresenceFields } from "@kiwi/core/client.ts";
 import type { ChannelAccess } from "@kiwi/core/crypto.ts";
 import type { JoinClaims } from "@kiwi/core/membership.ts";
-import type { ChannelIdentityView, KeysPush, KeysReply } from "./bridge.ts";
+import type { ChannelIdentityView, HistorySearch, KeysPush, KeysReply } from "./bridge.ts";
+import type { FoldInputs } from "./search-types.ts";
 import { isCall, wireError, type Keyring } from "./keyring.ts";
 import { fromWire, toWire } from "./wire.ts";
 
@@ -52,6 +53,19 @@ export function serveKeys(k: Keyring, push: (p: KeysPush) => void): KeysSession 
         const rows = fromWire(r.rows);
         return k.openRows(text(r.code), Array.isArray(rows) ? rows : []);
       }
+      case "indexRows": {
+        const rows = fromWire(r.rows);
+        const inputs = fromWire(r.inputs);
+        if (!inputs || typeof inputs !== "object" || Array.isArray(inputs)) throw new Error("bad request");
+        return k.indexRows(text(r.code), Array.isArray(rows) ? rows : [], inputs as FoldInputs);
+      }
+      case "searchHistory": {
+        const ask = fromWire(r.ask) as Partial<HistorySearch> | null;
+        if (!ask || typeof ask.query !== "string" || !Array.isArray(ask.rooms) || !ask.rooms.every((x) => typeof x === "string")) throw new Error("bad request");
+        return k.searchHistory(text(r.code), { query: ask.query, rooms: ask.rooms, limit: Number(ask.limit) || 50, head: Number(ask.head) || 0 });
+      }
+      case "olderRows":
+        return k.olderRows(text(r.code), Number(r.before), Number(r.limit));
       case "keep": {
         const state = fromWire(r.state);
         if (!state || typeof state !== "object" || Array.isArray(state)) throw new Error("bad request");

@@ -39,7 +39,7 @@ interface App {
   token: string;
   owned: VaultContents["channels"];
   kept: { value: RecoveryKept | null };
-  swap: { vault: string | null };
+  swap: { vault: string | null; skip: number };
   holds: { value: boolean };
   listing: { fails: boolean };
   clock: { ahead: number };
@@ -53,10 +53,13 @@ async function app(opts: { person?: boolean; of?: { app: App; device: Identity; 
   const clock: App["clock"] = { ahead: 0 };
   let device: Identity | null = opts.of?.device ?? null;
   let links: DeviceLink[] = opts.of?.links ?? [];
-  const swap: App["swap"] = { vault: null };
+  const swap: App["swap"] = { vault: null, skip: 0 };
   const fetchImpl = (async (input: string | URL | Request, init?: RequestInit) => {
     const url = new URL(input instanceof Request ? input.url : input);
-    if (swap.vault && url.pathname === "/v1/account/vault" && (init?.method ?? "GET") === "GET") return new Response(swap.vault, { headers: { "content-type": "application/json" } });
+    if (swap.vault && url.pathname === "/v1/account/vault" && (init?.method ?? "GET") === "GET") {
+      if (swap.skip > 0) swap.skip--;
+      else return new Response(swap.vault, { headers: { "content-type": "application/json" } });
+    }
     return fetch(input, init);
   }) as typeof fetch;
   const host = createDeviceHost({
@@ -198,7 +201,7 @@ describe("setting up the recovery key on the desktop", () => {
     expect(inside?.person.sk).toBe(a.person.sk);
   });
 
-  test("an app that lost its local note reseals once from what the relay keeps", async () => {
+  test("an app that lost its local note reseals once from what the relay keeps, and keeps the person key it can't prove", async () => {
     const a = await app();
     a.listing.fails = true;
     const words = await a.recovery.words();
@@ -208,7 +211,7 @@ describe("setting up the recovery key on the desktop", () => {
     await a.recovery.keepCurrent();
     expect((await relayVault(a)).vault?.version).toBe(2);
     expect(a.kept.value).toMatchObject({ version: 2 });
-    expect(a.holds.value).toBe(false);
+    expect(a.holds.value).toBe(true);
   });
 
   test("a relay handing back an older vault is refused, and nothing is sealed over it", async () => {
@@ -302,7 +305,32 @@ describe("letting go of the person key once the words are checked (T899)", () =>
     expect((await relayVault(a)).vault?.version).toBe(1);
   });
 
-  test("words set up before this update: the next poll reseals with the person key boxed, then lets it go", async () => {
+  test("a vault that doesn't come back as sealed keeps the person key here", async () => {
+    const gone = await app();
+    gone.swap.vault = JSON.stringify({ recovery: [], vault: null });
+    gone.swap.skip = 1;
+    const once = await gone.recovery.words();
+    await expect(gone.recovery.save(typed(once, [0, 1, 2]))).rejects.toThrow("keeps your person key");
+    expect(gone.holds.value).toBe(true);
+    gone.swap.vault = null;
+    await gone.recovery.keepCurrent();
+    expect(gone.holds.value).toBe(true);
+
+    const old = await app();
+    old.listing.fails = true;
+    await old.recovery.save(typed(await old.recovery.words(), [3, 4, 5]));
+    const first = (await relayVault(old)).text;
+    old.listing.fails = false;
+    old.swap.vault = first;
+    old.swap.skip = 1;
+    const again = await old.recovery.words();
+    await expect(old.recovery.save(typed(again, [6, 7, 8]))).rejects.toThrow("keeps your person key");
+    old.swap.vault = null;
+    await old.recovery.keepCurrent();
+    expect(old.holds.value).toBe(true);
+  });
+
+  test("words set up before this update: the next poll reseals with the person key boxed, and keeps it, since no words were checked against the relay", async () => {
     const a = await app();
     a.listing.fails = true;
     const words = await a.recovery.words();
@@ -311,7 +339,7 @@ describe("letting go of the person key once the words are checked (T899)", () =>
     a.kept.value = { at: was.at, version: was.version, owners: was.owners };
     a.listing.fails = false;
     await a.recovery.keepCurrent();
-    expect(a.holds.value).toBe(false);
+    expect(a.holds.value).toBe(true);
     const got = await relayVault(a);
     expect(got.vault?.version).toBe(2);
     expect((await opened(words, got.vault!))?.person.sk).toBe(a.person.sk);

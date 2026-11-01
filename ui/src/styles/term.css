@@ -37,7 +37,7 @@
   align-items: center;
   gap: 8px;
   min-height: 40px;
-  padding: 6px 8px 6px 14px;
+  padding: 6px 8px 6px 16px;
   font: var(--t-ui) var(--ui);
 }
 
@@ -51,6 +51,10 @@
   align-items: center;
   gap: 2px;
   min-width: 0;
+  padding: 2px;
+  border-radius: var(--r-ctl);
+  background: var(--float);
+  box-shadow: var(--shadow-float);
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -59,9 +63,20 @@
   display: inline-flex;
   flex: none;
   align-items: center;
-  height: 26px;
-  border-radius: var(--r-ctl);
+  height: calc(var(--ctl) - 4px);
+  border-radius: var(--r-row);
   color: var(--ink-3);
+}
+
+.term-head > .icon-btn {
+  width: var(--ctl);
+  height: var(--ctl);
+  background: var(--float);
+  box-shadow: var(--shadow-float);
+}
+
+.term-head > .icon-btn:hover {
+  background: var(--float-2);
 }
 
 .term-tab button {
@@ -125,8 +140,9 @@
 .term-screen {
   flex: 1;
   min-height: 0;
-  margin: 0 6px 6px 14px;
+  margin: 0 6px 6px 16px;
   overflow: hidden;
+  caret-color: transparent;
 }
 
 .term-screen canvas {

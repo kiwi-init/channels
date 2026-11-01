@@ -1,6 +1,6 @@
 {
   "name": "kiwi-desktop",
-  "version": "2026.10.11",
+  "version": "2026.10.17",
   "private": true,
   "description": "Channels desktop app: an Electrobun shell hosting ui/ for people (auto-approval, pairing, admin).",
   "homepage": "https://github.com/kiwi-init/channels",

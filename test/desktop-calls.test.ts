@@ -110,7 +110,7 @@ describe("main's handlers reach the shell only through the host", () => {
   test("the folder picker, notifications and the update restart are the host's", async () => {
     expect(await bridge.chooseFolder()).toBe("/Users/someone/app");
     await bridge.notify("T484", "done");
-    await bridge.installUpdate();
+    expect(await bridge.installUpdate()).toBe(false);
     expect(did).toEqual(["notify T484: done", "restart"]);
   });
 
@@ -167,7 +167,7 @@ describe("main's handlers reach the shell only through the host", () => {
   });
 
   test("a bad argument is refused under the call's name before anything runs", async () => {
-    await expect(bridge.terminalHelpers("vim" as "rex", "on")).rejects.toThrow("terminalHelpers takes rex, and on or off");
+    await expect(bridge.terminalHelpers("vim" as "rex", "on")).rejects.toThrow("terminalHelpers takes rex or tmux, and on or off");
     await expect(bridge.terminalPrefer("rex")).rejects.toThrow("new agents always open in Channels' own tmux");
     await expect(bridge.setLaunches("maybe" as "on")).rejects.toThrow("setLaunches takes on or off");
   });

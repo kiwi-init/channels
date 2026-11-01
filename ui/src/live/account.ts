@@ -8,11 +8,26 @@ import { useUpdate } from "@kiwi/app/update.ts"
 import { announce } from "~/kit/toasts"
 import { deviceNews, postDevicesNow } from "~/live/devices"
 import { store, type Listener } from "~/live/value"
-import type { Account, Computer, Device, EnrollAsk, Enrolling, RecoverySaved, RecoveryState } from "~/model"
+import type { Account, Computer, Device, EnrollAsk, Enrolling, GithubSignIn, RecoverTrouble, RecoverySaved, RecoveryState } from "~/model"
 import { version } from "../../../package.json"
 
 const github = store<{ login: string } | null>(null)
 const githubCode = store<{ code: string; url: string } | null>(null)
+const githubGate = store<"unknown" | "needed" | "signed-in" | "off">("unknown")
+const githubBusy = store<string | null>(null)
+const githubMove = store<string | null>(null)
+let codeListener: (() => void) | null = null
+
+function listenForCodes(): void {
+  const b = bridge()
+  if (!b || codeListener) return
+  codeListener = b.onGithubCode((c) => {
+    githubCode.set(c)
+    void navigator.clipboard?.writeText(c.code).catch(() => {})
+    announce(`Type ${c.code} on GitHub (copied)`)
+    void b.openExternal(c.url).catch(() => {})
+  })
+}
 
 const ENROLL_POLL_MS = 20_000
 const ENROLL_WAIT_MS = 2_000
@@ -20,6 +35,7 @@ const ENROLLING_MS = 2_000
 
 const selfEnroll = store<Enrolling | null>(null)
 let enrollTimer: ReturnType<typeof setTimeout> | null = null
+let enrollRun: { done: (d: EnrollDone) => void } | null = null
 
 export type EnrollDone = { person: { name: string }; channels: { label: string; code: string }[] }
 
@@ -33,6 +49,9 @@ export async function enrollBegin(signIn: () => Promise<unknown>, done: (d: Enro
   const b = enrollBridge()
   await signIn()
   await b.enrollBegin()
+  if (enrollTimer) clearTimeout(enrollTimer)
+  const mine = { done }
+  enrollRun = mine
   selfEnroll.set({ stage: "asking" })
   const tick = async () => {
     enrollTimer = null
@@ -40,34 +59,86 @@ export async function enrollBegin(signIn: () => Promise<unknown>, done: (d: Enro
     try {
       next = await b.enrollStatus()
     } catch (err) {
+      if (enrollRun !== mine) return
+      enrollRun = null
       selfEnroll.set(null)
       announce(`Couldn't sign in as one of your devices: ${err instanceof Error ? err.message : String(err)}`)
       return
     }
-    if (!next) return selfEnroll.set(null)
-    if (next.stage === "gone") {
+    if (enrollRun !== mine) return
+    if (!next || next.stage === "gone" || next.stage === "done") {
+      enrollRun = null
       selfEnroll.set(null)
-      return announce("Your other computer turned this one away, or the ask ran out")
+      if (next?.stage === "gone") announce("Your other computer turned this one away, or the ask ran out")
+      if (next?.stage === "done") done(next)
+      return
     }
-    if (next.stage === "done") {
-      selfEnroll.set(null)
-      return done(next)
-    }
-    const shown = selfEnroll.get()
-    if (JSON.stringify(shown) !== JSON.stringify(next)) selfEnroll.set(next)
+    if (JSON.stringify(selfEnroll.get()) !== JSON.stringify(next)) selfEnroll.set(next)
+    if (next.stage === "check") return
     enrollTimer = setTimeout(() => void tick(), ENROLLING_MS)
   }
   enrollTimer = setTimeout(() => void tick(), ENROLLING_MS)
 }
 
+export async function enrollKeep(): Promise<void> {
+  const mine = enrollRun
+  if (selfEnroll.get()?.stage !== "check" || !mine) return
+  enrollRun = null
+  selfEnroll.set(null)
+  mine.done(await enrollBridge().enrollKeep())
+}
+
 export async function enrollCancel(): Promise<void> {
   if (enrollTimer) clearTimeout(enrollTimer)
   enrollTimer = null
+  const was = recoveringNow()
+  enrollRun = null
+  const shown = selfEnroll.get()
   selfEnroll.set(null)
+  if (was) return void (await recoverBridge().recoverCancel())
   await enrollBridge().enrollCancel()
+  if (shown?.stage === "check")
+    announce(`Kept nothing. If your other computer never showed ${shown.person.fingerprint}, someone else answered this computer. It may still list this computer under Devices: remove it there.`)
 }
 
-export const useEnrolling = (): Enrolling | null => useSyncExternalStore(selfEnroll.subscribe, selfEnroll.get)
+const recoveringNow = (): boolean => {
+  const stage = selfEnroll.get()?.stage
+  return stage === "recover" || stage === "welcome"
+}
+
+const recoverBridge = () => {
+  const b = bridge()
+  if (!b?.recover) throw new Error("recovering with your recovery key needs the next Channels update")
+  return b
+}
+
+export async function recoverBegin(): Promise<void> {
+  const b = recoverBridge()
+  if (enrollTimer) clearTimeout(enrollTimer)
+  enrollTimer = null
+  enrollRun = null
+  selfEnroll.set({ stage: "recover" })
+  await b.enrollCancel()
+}
+
+export async function recoverOpen(words: string): Promise<RecoverTrouble | null> {
+  const r = await recoverBridge().recover(words)
+  if (!r.ok) return { why: r.why, ...(r.word !== undefined ? { word: r.word } : {}) }
+  if (recoveringNow()) selfEnroll.set({ stage: "welcome", name: r.name, devices: r.devices, channels: r.channels })
+  return null
+}
+
+export async function recoverFinish(lost: string[]): Promise<void> {
+  const r = await recoverBridge().recoverFinish(lost)
+  selfEnroll.set(null)
+  const back = r.channels ? ` ${r.channels === 1 ? "1 channel is" : `${r.channels} channels are`} coming back.` : ""
+  const forgot = r.forgot ? ` Forgot ${r.forgot === 1 ? "1 device" : `${r.forgot} devices`}.` : ""
+  announce(`Welcome back, ${r.name}.${back}${forgot}`)
+}
+
+export const enrollingNow = (): Enrolling | null => selfEnroll.get()
+
+export const useEnrolling = (): Enrolling | null => useSyncExternalStore(selfEnroll.subscribe, enrollingNow)
 
 const enrollTrouble = store<string | null>(null)
 
@@ -243,29 +314,57 @@ export async function enrollDeny(id: string): Promise<void> {
 
 async function refreshGithub(): Promise<void> {
   const b = bridge()
-  if (!b) return github.set(null)
+  if (!b) {
+    github.set(null)
+    return githubGate.set("off")
+  }
+  listenForCodes()
   const s = await b.githubStatus()
   github.set(s.account ? { login: s.account.login } : null)
+  githubGate.set(!s.signIn ? "off" : s.account ? "signed-in" : "needed")
+  githubMove.set(s.moveRefused ?? null)
 }
 
 export async function linkGithub(): Promise<void> {
   const b = bridge()
   if (!b) throw new Error("Linking GitHub needs the Channels desktop app")
-  const stop = b.onGithubCode((c) => {
-    githubCode.set(c)
-    void navigator.clipboard?.writeText(c.code).catch(() => {})
-    announce(`Type ${c.code} on GitHub (copied)`)
-    void b.openExternal(c.url).catch(() => {})
-  })
+  listenForCodes()
+  githubBusy.set(null)
   try {
     const s = await b.githubLink()
     github.set(s.account ? { login: s.account.login } : null)
-    if (s.account) announce(`Linked GitHub as ${s.account.login}`)
+    if (s.signIn) githubGate.set(s.account ? "signed-in" : "needed")
+    githubMove.set(s.moveRefused ?? null)
+    if (s.account) announce(`Signed in with GitHub as ${s.account.login}`)
+  } catch (err) {
+    githubBusy.set(err instanceof Error ? err.message : String(err))
+    throw err
   } finally {
-    stop()
     githubCode.set(null)
   }
 }
+
+/** Where signing in with GitHub stands, on a relay that takes it; null on one that doesn't. */
+export function useGithubSignIn(): GithubSignIn | null {
+  const gate = useSyncExternalStore(githubGate.subscribe, githubGate.get)
+  const linked = useSyncExternalStore(github.subscribe, github.get)
+  const code = useSyncExternalStore(githubCode.subscribe, githubCode.get)
+  const problem = useSyncExternalStore(githubBusy.subscribe, githubBusy.get)
+  useEffect(() => {
+    void refreshGithub().catch(() => githubGate.set("off"))
+  }, [])
+  return useMemo((): GithubSignIn | null => {
+    if (gate === "unknown") return { stage: "checking" }
+    if (gate === "needed") return { stage: "sign-in", code, problem }
+    if (gate === "signed-in" && linked) return { stage: "signed-in", login: linked.login }
+    return null
+  }, [gate, linked, code, problem])
+}
+
+/** Whether the app waits on GitHub sign-in (or doesn't know yet whether it does). */
+export const useGithubGate = (): "unknown" | "needed" | "signed-in" | "off" => useSyncExternalStore(githubGate.subscribe, githubGate.get)
+
+export const useGithubLogin = (): string | null => useSyncExternalStore(github.subscribe, () => github.get()?.login ?? null)
 
 export async function unlinkGithub(): Promise<void> {
   const b = bridge()
@@ -377,6 +476,8 @@ export function useAccount(): Account | null {
   const agents = useOwnAgents()
   const linked = useSyncExternalStore(github.subscribe, github.get)
   const code = useSyncExternalStore(githubCode.subscribe, githubCode.get)
+  const gate = useSyncExternalStore(githubGate.subscribe, githubGate.get)
+  const moveRefused = useSyncExternalStore(githubMove.subscribe, githubMove.get)
   const look = useSyncExternalStore(uiUpdate.subscribe, uiUpdate.get)
   const enroll = useSyncExternalStore(enrollAsk.subscribe, enrollAsk.get)
   const trouble = useSyncExternalStore(enrollTrouble.subscribe, enrollTrouble.get)
@@ -393,11 +494,24 @@ export function useAccount(): Account | null {
       name: person.name,
       handle: handleFor(person.name),
       ...(linked ? { github: linked } : {}),
+      ...(gate === "signed-in" ? { githubSignIn: true } : {}),
+      ...(moveRefused ? { githubMove: moveRefused } : {}),
       computers: [...computers.map((c) => computerOf(c, online, agents)), ...phones.map(phoneOf)],
       version,
-      ...(update && !update.blocked ? { update: { version: update.version, ready: update.state === "ready", state: update.state } } : {}),
+      ...(update
+        ? {
+            update: {
+              version: update.version,
+              ready: update.state === "ready",
+              state: update.state,
+              ...(update.state === "downloading" && update.progress !== undefined ? { progress: update.progress } : {}),
+              ...(update.blocked ? { blocked: true as const } : {}),
+            },
+          }
+        : {}),
       ...(look ? { uiUpdate: look } : {}),
       key: person.pk.slice(0, 8),
+      personPk: person.pk,
       relay: relayUrl(),
       ...(unsealed ? { keysUnsealed: true } : {}),
       ...(bridge() ? { desktop: true } : {}),
@@ -408,5 +522,5 @@ export function useAccount(): Account | null {
       ...deviceNotices(news),
       ...(code ? { githubCode: code } : {}),
     }
-  }, [person, linked, computers, phones, online, agents, update, code, look, unsealed, enroll, trouble, signed, kept, news])
+  }, [person, linked, gate, moveRefused, computers, phones, online, agents, update, code, look, unsealed, enroll, trouble, signed, kept, news])
 }

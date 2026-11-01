@@ -1,8 +1,10 @@
 import { createHash } from "node:crypto";
-import { chmodSync, lstatSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { loginPath, loginShell } from "../launch/shell.ts";
 import { OWN_TMUX_DIR } from "@kiwi/core/terminals.ts";
+import type { Ended } from "../launch/place.ts";
 import type { Pane, PlaceRequest, Placed } from "../terminals/plugin.ts";
 import { loginArgv, SESSION_MARKERS } from "../terminals/shared/launch.ts";
 import { run, said, type Ran } from "../terminals/shared/run.ts";
@@ -24,6 +26,10 @@ const PAUSED = /^%pause (%\d+)$/;
 const GONE = /^%(?:window-close|unlinked-window-close) (@\d+)$/;
 const MINE = "@kiwi-mine";
 const MINE_FORMAT = `#{${MINE}}\t#{window_id}\t#{pane_id}\t#{pane_dead}\t#{pane_current_command}`;
+const DEAD_LINE = /^Pane is dead\b/;
+const TAIL_LINES = 6;
+const DEAD_NO_STATUS_MS = 1_500;
+const TAIL_WIDTH = 200;
 
 export const HOSTED_CONF = [
   "set -s exit-empty off",
@@ -97,6 +103,21 @@ export function ownTmux(home: string): string[] {
     .map((name) => join(home, OWN_TMUX_DIR, name));
 }
 
+function lastLines(screen: string, most = TAIL_LINES): string[] {
+  return screen
+    .split("\n")
+    .map((l) => l.trimEnd())
+    .filter((l) => l && !DEAD_LINE.test(l))
+    .slice(-most)
+    .map((l) => (l.length > TAIL_WIDTH ? `${l.slice(0, TAIL_WIDTH - 1)}…` : l));
+}
+
+const CD_SHELL = existsSync("/bin/zsh") ? ["/bin/zsh", "-f"] : ["/bin/sh"];
+
+export function inFolder(folder: string, argv: readonly string[], sh: readonly string[] = CD_SHELL): string[] {
+  return [...sh, "-c", 'cd -- "$1" 2>/dev/null || cd; shift; exec "$@"', "kiwi-cd", folder, ...argv];
+}
+
 export async function findTmux(home: string, env: Record<string, string | undefined> = process.env): Promise<HostedTmuxBin | null> {
   const bins = [env.KIWI_TMUX, ...ownTmux(home), Bun.which("tmux", { PATH: await loginPath() })].filter((b): b is string => !!b);
   for (const bin of bins) {
@@ -111,7 +132,10 @@ export class HostedTmux {
   private readonly lines = new Set<HostedLine>();
   private readonly outputs = new Map<string, Set<HostedOutput>>();
   private readonly typed = new Map<string, number>();
+  private readonly deadSeen = new Map<string, number>();
   private closing = false;
+  private ensuring: Promise<HostedState> | null = null;
+  private attaching: Promise<void> | null = null;
 
   constructor(
     readonly home: string,
@@ -129,7 +153,7 @@ export class HostedTmux {
   }
 
   tmux(st: HostedState, args: readonly string[]): Promise<Ran> {
-    return run([st.bin, "-u", "-S", st.socket, ...args], 5_000);
+    return run([st.bin, "-u", "-S", st.socket, ...args], 5_000, homedir());
   }
 
   async alive(st: HostedState): Promise<boolean> {
@@ -148,7 +172,12 @@ export class HostedTmux {
     return st;
   }
 
-  async ensure(): Promise<HostedState> {
+  ensure(): Promise<HostedState> {
+    this.ensuring ??= this.ensureOnce().finally(() => (this.ensuring = null));
+    return this.ensuring;
+  }
+
+  private async ensureOnce(): Promise<HostedState> {
     if (process.platform === "win32") throw new Error("hosted agents need tmux, which Windows doesn't have");
     this.closing = false;
     const known = this.state();
@@ -162,7 +191,7 @@ export class HostedTmux {
     privateDir(dirname(st.socket));
     const conf = join(this.home, CONF_FILE);
     writeFileSync(conf, HOSTED_CONF, { mode: 0o600 });
-    const started = await run([st.bin, "-u", "-S", st.socket, "-f", conf, "start-server"], 5_000);
+    const started = await run([st.bin, "-u", "-S", st.socket, "-f", conf, "start-server"], 5_000, homedir());
     if (started.status !== 0 || !(await this.alive(st))) throw new Error(`tmux didn't start on ${st.socket}: ${started.stderr.trim() || `exit ${started.status}`}`);
     this.save(st);
     await this.attach(st);
@@ -182,7 +211,7 @@ export class HostedTmux {
     const why = await this.ready();
     const st = this.state();
     if (why || !st) return { ok: false, why: "no-place", detail: why ?? "the hosted tmux server didn't start" };
-    const argv = loginArgv(loginShell(), req.argv, { ...req.env, KIWI_TMUX: st.bin });
+    const argv = inFolder(req.folder, loginArgv(loginShell(), req.argv, { ...req.env, KIWI_TMUX: st.bin }));
     const r = await this.tmux(st, ["new-window", "-d", "-t", `=${HOSTED_SESSION}:`, "-c", req.folder, "-n", req.name, "-P", "-F", WINDOW_FORMAT, "--", ...argv]);
     if (r.status !== 0) return { ok: false, why: "failed", detail: `tmux: ${said(r)}` };
     const [window, pane, pid] = r.stdout.trim().split("\t");
@@ -211,7 +240,7 @@ export class HostedTmux {
     const tabs = await this.mineTabs();
     const found = want === "new" ? undefined : (tabs.find((t) => t.pane === want) ?? tabs[0]);
     if (found) return { ok: true, pane: found.pane };
-    const argv = ["/usr/bin/env", ...SESSION_MARKERS.flatMap((key) => ["-u", key]), shell, "-l"];
+    const argv = inFolder(folder, ["/usr/bin/env", ...SESSION_MARKERS.flatMap((key) => ["-u", key]), shell, "-l"]);
     const r = await this.tmux(st, ["new-window", "-d", "-t", `=${HOSTED_SESSION}:`, "-c", folder, "-n", "you", "-P", "-F", WINDOW_FORMAT, "--", ...argv]);
     const [window, pane] = r.stdout.trim().split("\t");
     if (r.status !== 0 || !window || !pane) return { ok: false, detail: `tmux: ${said(r)}` };
@@ -236,6 +265,23 @@ export class HostedTmux {
       enter: () => free() && inner.enter(),
       erase: (count) => free() && inner.erase(count),
     };
+  }
+
+  async ended(pane: string): Promise<Ended | null> {
+    const st = this.state();
+    if (!st) return null;
+    const r = await this.tmux(st, ["display-message", "-p", "-t", pane, "#{pane_dead}\t#{pane_dead_status}\t#{pane_dead_signal}"]);
+    const [dead, status, signal] = r.stdout.replace(/\n$/, "").split("\t");
+    const code = /^\d+$/.test(status ?? "") ? Number(status) : /^\d+$/.test(signal ?? "") ? 128 + Number(signal) : null;
+    if (r.status !== 0 || dead !== "1") return null;
+    if (code === null) {
+      const first = this.deadSeen.get(pane) ?? Date.now();
+      this.deadSeen.set(pane, first);
+      if (Date.now() - first < DEAD_NO_STATUS_MS) return null;
+    }
+    this.deadSeen.delete(pane);
+    const shown = await this.tmux(st, ["capture-pane", "-p", "-J", "-S", "-", "-t", pane]);
+    return { code, tail: lastLines(shown.status === 0 ? shown.stdout : "") };
   }
 
   typing(pane: string): boolean {
@@ -314,13 +360,19 @@ export class HostedTmux {
     renameSync(tmp, path);
   }
 
-  private async attach(st: HostedState): Promise<void> {
-    if (this.attached()) return;
-    if ((await this.tmux(st, ["has-session", "-t", `=${HOSTED_SESSION}`])).status !== 0) {
+  private attach(st: HostedState): Promise<void> {
+    if (this.attached()) return Promise.resolve();
+    this.attaching ??= this.attachOnce(st).finally(() => (this.attaching = null));
+    return this.attaching;
+  }
+
+  private async attachOnce(st: HostedState): Promise<void> {
+    const has = async () => (await this.tmux(st, ["has-session", "-t", `=${HOSTED_SESSION}`])).status === 0;
+    if (!(await has())) {
       const made = await this.tmux(st, ["new-session", "-d", "-s", HOSTED_SESSION, "-n", "hold", "true"]);
-      if (made.status !== 0) throw new Error(`tmux on ${st.socket} wouldn't make its ${HOSTED_SESSION} session: ${made.stderr.trim()}`);
+      if (made.status !== 0 && !(await has())) throw new Error(`tmux on ${st.socket} wouldn't make its ${HOSTED_SESSION} session: ${made.stderr.trim()}`);
     }
-    const client: Client = Bun.spawn([st.bin, "-u", "-S", st.socket, "-C", "attach-session", "-t", `=${HOSTED_SESSION}`], { stdin: "pipe", stdout: "pipe", stderr: "ignore" });
+    const client: Client = Bun.spawn([st.bin, "-u", "-S", st.socket, "-C", "attach-session", "-t", `=${HOSTED_SESSION}`], { cwd: homedir(), stdin: "pipe", stdout: "pipe", stderr: "ignore" });
     this.client = client;
     this.closing = false;
     client.stdin.write(`refresh-client -f pause-after=${PAUSE_AFTER_S}\n`);

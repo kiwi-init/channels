@@ -8,6 +8,7 @@ import { launchAgent } from "../src/launch/launch.ts";
 import type { Hosted } from "../src/launch/place.ts";
 import type { Pane, PlaceRequest } from "../src/terminals/plugin.ts";
 import { tmuxPane } from "../src/terminals/tmux/type.ts";
+import { HostedTmux } from "../src/daemon/hosted-tmux.ts";
 import { typeWhenReady, type Typed } from "../src/launch/typed.ts";
 import { kimiScreen } from "../src/loop/kimi.ts";
 import { joinLineRefusal } from "@kiwi/core/join-line.ts";
@@ -43,12 +44,14 @@ function script(dir: string, name: string, body: string): string {
 }
 
 describe("the line an agent is started with", () => {
-  test("takes only a join code, an http(s) relay, a plain nickname and an invite's token", () => {
+  test("takes only a join code, an https relay (http only on this computer), a plain nickname and an invite's token", () => {
     expect(joinLineRefusal({ code })).toBeNull();
     expect(joinLineRefusal({ code, relay: "https://relay.example", nick: "Ada Bot", persona: "eyJhIjoxfQ" })).toBeNull();
+    for (const relay of ["http://127.0.0.1:8787", "http://localhost:8787/", "https://relay.example:8443"]) expect(joinLineRefusal({ code, relay })).toBeNull();
     expect(joinLineRefusal({ code: "mc2-nope" })).toContain("join code");
     expect(joinLineRefusal({ code: `${code}; rm -rf ~` })).toContain("join code");
-    for (const relay of ["ftp://relay.example", "https://relay.example/x", "https://relay.example'; curl x"]) expect(joinLineRefusal({ code, relay })).toContain("relay");
+    for (const relay of ["ftp://relay.example", "https://relay.example/x", "https://relay.example'; curl x", "http://relay.example", "http://192.168.1.5:8787", "http://localhost.evil.example"])
+      expect(joinLineRefusal({ code, relay })).toContain("relay");
     for (const nick of ["it's", "a;b", " lead", "x".repeat(41), "$(id)", "a\nb"]) expect(joinLineRefusal({ code, nick })).toContain("nickname");
     expect(joinLineRefusal({ code, persona: "not a token" })).toContain("personality");
     expect(joinLineRefusal({ code, persona: "a".repeat(801) })).toContain("personality");
@@ -448,6 +451,83 @@ esac`,
     expect(set.at(-1)).toContain(`kiwi join ${code} --nick 'Kim'`);
     expect(runs.find((c) => c.includes("paste-buffer"))).toEqual(expect.arrayContaining(["-p", "-t", "%3"]));
     expect(runs.find((c) => c.includes("send-keys"))).toEqual(["-u", "-S", "/tmp/kiwi-1/abc", "send-keys", "-t", "%3", "Enter"]);
+  });
+});
+
+describe("an agent that stops as it starts", () => {
+  const dir = join(root, "dies");
+  const bins = join(dir, "bins");
+  const folder = join(dir, "project");
+  const log = (): string[] =>
+    existsSync(join(root, "home", "launch.log"))
+      ? readFileSync(join(root, "home", "launch.log"), "utf8")
+          .trim()
+          .split("\n")
+      : [];
+  const said = "The current directory no longer exists (it was deleted or moved). Start Claude Code from an existing directory.";
+
+  beforeAll(() => {
+    mkdirSync(folder, { recursive: true });
+    mkdirSync(join(root, "home"), { recursive: true });
+    script(bins, "claude", `if [ "$1" = "--version" ]; then echo '2.1.304 (Claude Code)'; exit 0; fi\necho '${said}'\nexit 1`);
+    process.env.KIWI_NO_HOOKS = "1";
+  });
+
+  test("isn't reported started: the launch fails with its exit and last lines, and says so in launch.log", async () => {
+    let checks = 0;
+    const hosted: Hosted = {
+      ready: async () => null,
+      open: async () => ({ ok: true, place: "hosted", socket: "/tmp/kiwi-1/abc", window: "@4", pane: "%4" }),
+      pane: () => null,
+      ended: async () => (++checks < 3 ? null : { code: 1, tail: ["shell-init: error retrieving current directory", said] }),
+    };
+    const r = await launchAgent({ harness: "claude", folder, code, nick: "lead", launch: "diesAtStart_0123456789" }, { PATH: `${bins}:/usr/bin:/bin`, hosted, watch: { everyMs: 5 } });
+    expect(r).toEqual({ ok: false, why: "failed", detail: `Claude Code stopped as it started (exit 1):\nshell-init: error retrieving current directory\n${said}` });
+    expect(log().at(-1)).toMatch(
+      new RegExp(`\\tdiesAtStart_0123456789\\tclaude\\tnot started: Claude Code stopped as it started \\(exit 1\\): shell-init: .* Start Claude Code from an existing directory\\.$`),
+    );
+  });
+
+  test("one that keeps running is started once its start window passes, and a stop after that still lands in launch.log", async () => {
+    let up = true;
+    const hosted: Hosted = {
+      ready: async () => null,
+      open: async () => ({ ok: true, place: "hosted", socket: "/tmp/kiwi-1/abc", window: "@5", pane: "%5" }),
+      pane: () => null,
+      ended: async () => (up ? null : { code: 2, tail: ["Not logged in"] }),
+    };
+    const r = await launchAgent({ harness: "claude", folder, code, launch: "staysUp_0123456789ab" }, { PATH: `${bins}:/usr/bin:/bin`, hosted, watch: { startMs: 30, everyMs: 5, watchMs: 5_000 } });
+    expect(r).toMatchObject({ ok: true, launch: "staysUp_0123456789ab" });
+    expect(log().at(-1)).toEndWith(`\tstaysUp_0123456789ab\tclaude\tstarted in ${folder}, window @5`);
+    up = false;
+    for (let i = 0; i < 50 && !log().at(-1)?.includes("stopped"); i++) await Bun.sleep(50);
+    expect(log().at(-1)).toMatch(/\tstaysUp_0123456789ab\tclaude\tstopped \d+s after it started, exit 2: Not logged in$/);
+  });
+
+  test("a pane that died with no exit status still fails the launch, without inventing one (T1874)", async () => {
+    const hosted: Hosted = {
+      ready: async () => null,
+      open: async () => ({ ok: true, place: "hosted", socket: "/tmp/kiwi-1/abc", window: "@5", pane: "%5" }),
+      pane: () => null,
+      ended: async () => ({ code: null, tail: [said] }),
+    };
+    const r = await launchAgent({ harness: "claude", folder, code }, { PATH: `${bins}:/usr/bin:/bin`, hosted, config: {} });
+    expect(r).toMatchObject({ ok: false, why: "failed", detail: `Claude Code stopped as it started:\n${said}` });
+  });
+
+  test.if(process.platform !== "win32" && !!Bun.which("tmux"))("in Channels' own tmux, the dead pane's exit and words come back", async () => {
+    mkdirSync(join(dir, "tmux-home"), { recursive: true });
+    const hosted = new HostedTmux(join(dir, "tmux-home"));
+    try {
+      const r = await launchAgent({ harness: "claude", folder, code, nick: "lead" }, { PATH: `${bins}:/usr/bin:/bin`, hosted, config: {}, watch: { startMs: 30_000 } });
+      expect(r).toMatchObject({ ok: false, why: "failed" });
+      if (r.ok) return;
+      const [first, ...rest] = r.detail.split("\n");
+      expect(first).toMatch(/^Claude Code stopped as it started( \(exit 1\))?:$/);
+      expect(rest).toEqual([said]);
+    } finally {
+      await hosted.kill();
+    }
   });
 });
 

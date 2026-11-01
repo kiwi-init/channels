@@ -2,35 +2,35 @@ import { useEffect, useId, useRef, useState, type ReactNode } from "react"
 
 import { HARNESS_INSTALL, isKnownHarness } from "@kiwi/core/harnesses.ts"
 
+import { wantPersona } from "~/live/persona-later"
 import { Avatar, cx } from "~/kit/bits"
+import { Track } from "~/kit/glide"
 import { Icon } from "~/kit/icons"
-import { ago } from "~/kit/time"
-import type { App, Channel, Computer, ComputerChoices, Harness, NewAgent } from "~/model"
+import { ago, useNow } from "~/kit/time"
+import type { App, Channel, Computer, ComputerChoices, Harness, NewAgent, Person } from "~/model"
 import { useApp } from "~/nav"
 import { shown } from "~/names"
 import { PanelHead } from "~/panels/frame"
 import { CopyBox } from "~/panels/invite"
+import { joinedAs, seen, stallOf, starting, stepOf, type Launch, type Stall } from "~/panels/launch-progress"
 
 type Way = "here" | "command"
 type Mode = NonNullable<NewAgent["mode"]>
-type Step = 0 | 1 | 2
 type Taken = Map<string, "in" | "asking">
 
 interface Run {
   agent: NewAgent
   on: string
   runs: string
-  step: Step
+  launch: Launch
 }
 
 const NAMES = ["nova", "ember", "quill", "otto", "juno"]
 
 const PRESET = new URLSearchParams(location.search).get("shot")
 
-const DEMO_STEPS = new Map<Step, number>([
-  [1, 800],
-  [2, 1600],
-])
+const SHOT_FAILED =
+  "Claude Code stopped as it started (exit 1):\nshell-init: error retrieving current directory: getcwd: cannot access parent directories: No such file or directory\nThe current directory no longer exists (it was deleted or moved). Start Claude Code from an existing directory."
 
 const MODES: { id: Mode; label: string }[] = [
   { id: "ask-first", label: "Ask first" },
@@ -75,30 +75,30 @@ function firstChoices(app: App) {
   return { computer, harness }
 }
 
-function presetRun(app: App, name: string): Run | null {
-  if (PRESET !== "add-agent-starting") return null
+function presetRun(app: App, name: string, people: Person[]): Run | null {
+  if (PRESET !== "add-agent-starting" && PRESET !== "add-agent-failed") return null
   const { computer, harness } = firstChoices(app)
   if (!computer || !harness) return null
-  return { agent: { harness: harness.id, computer: computer.id, folder: "~/www/channels", name, mode: "ask-first" }, on: computer.label, runs: harness.label, step: 2 }
+  const now = Date.now()
+  const begun = starting(name, people, now)
+  const launch = PRESET === "add-agent-failed" ? seen(begun, { stage: "failed", why: SHOT_FAILED }, now) : seen(seen(begun, { stage: "started" }, now), { stage: "asked", name }, now)
+  return { agent: { harness: harness.id, computer: computer.id, folder: "~/www/channels", name, mode: "ask-first" }, on: computer.label, runs: harness.label, launch }
 }
 
 export function AddAgentPanel({ channel }: { channel: Channel }) {
   const { app, go } = useApp()
   const taken = takenNames(channel)
   const [name, setName] = useState(() => freeName(taken))
-  const [way, setWay] = useState<Way>(PRESET === "add-agent-command" ? "command" : "here")
-  const [run, setRun] = useState<Run | null>(() => presetRun(app, name))
-  const timers = useRef<number[]>([])
+  const [way, setWay] = useState<Way>(PRESET === "add-agent" ? "here" : "command")
+  const [run, setRun] = useState<Run | null>(() => presetRun(app, name, channel.people))
+  const following = useRef<(() => void) | null>(null)
 
-  useEffect(() => {
-    const list = timers.current
-    return () => list.forEach((t) => window.clearTimeout(t))
-  }, [])
+  useEffect(() => () => following.current?.(), [])
 
   const start = (agent: NewAgent, on: string, runs: string) => {
-    app.actions.addAgent(channel.code, agent)
-    setRun({ agent, on, runs, step: 0 })
-    for (const [step, ms] of DEMO_STEPS) timers.current.push(window.setTimeout(() => setRun((r) => r && { ...r, step }), ms))
+    following.current?.()
+    setRun({ agent, on, runs, launch: starting(agent.name, channel.people, Date.now()) })
+    following.current = app.actions.addAgent(channel.code, agent, (s) => setRun((r) => r && { ...r, launch: seen(r.launch, s, Date.now()) }))
   }
 
   if (run)
@@ -109,9 +109,15 @@ export function AddAgentPanel({ channel }: { channel: Channel }) {
           channel={channel}
           run={run}
           onDone={() => go({ to: "panel", panel: null })}
-          onMessage={() => {
-            go({ to: "where", where: { kind: "dm", with: run.agent.name } })
+          onMessage={(handle) => {
+            go({ to: "where", where: { kind: "dm", with: handle } })
             go({ to: "panel", panel: null })
+          }}
+          onRetry={() => start(run.agent, run.on, run.runs)}
+          onBack={() => {
+            following.current?.()
+            following.current = null
+            setRun(null)
           }}
         />
       </>
@@ -120,15 +126,16 @@ export function AddAgentPanel({ channel }: { channel: Channel }) {
   return (
     <>
       <PanelHead title="Add agent" />
+      <p className="add-lede">Agents join a channel the way people join a chat. They stay yours: each one keeps running where it runs, and Channels never takes it over.</p>
       <div className="add-way">
-        <div className="seg" role="group" aria-label="How to add it">
+        <Track className="seg" role="group" aria-label="How to add it">
+          <button type="button" aria-pressed={way === "command"} onClick={() => setWay("command")}>
+            Invite one you run
+          </button>
           <button type="button" aria-pressed={way === "here"} onClick={() => setWay("here")}>
             Start one here
           </button>
-          <button type="button" aria-pressed={way === "command"} onClick={() => setWay("command")}>
-            Run the command
-          </button>
-        </div>
+        </Track>
       </div>
       {way === "here" ? <StartHere channel={channel} name={name} setName={setName} taken={taken} onStart={start} /> : <RunCommand channel={channel} name={name} setName={setName} taken={taken} />}
     </>
@@ -244,8 +251,9 @@ function StartHere({ channel, name, setName, taken, onStart }: NameProps & { onS
       }}
     >
       <div className="panel-body add-body">
+        <p className="add-how">Channels opens a new agent on one of your computers, in a terminal you can open from here. Once it's in, it's an agent like any other.</p>
         <Group label="Computer">
-          {computers.length === 0 && <p className="add-none">No computer of yours is linked. Use Run the command instead.</p>}
+          {computers.length === 0 && <p className="add-none">No computer of yours is linked. Invite one you run instead.</p>}
           {computers.map((c) => (
             <Choice
               key={c.id}
@@ -363,7 +371,7 @@ function StartHere({ channel, name, setName, taken, onStart }: NameProps & { onS
           <span className="field-label" id={`${id}-mode`}>
             Permission mode
           </span>
-          <div className="seg add-seg" role="group" aria-labelledby={`${id}-mode`}>
+          <Track className="seg add-seg" role="group" aria-labelledby={`${id}-mode`}>
             {MODES.map((m) => (
               <button
                 key={m.id}
@@ -377,7 +385,7 @@ function StartHere({ channel, name, setName, taken, onStart }: NameProps & { onS
                 {m.label}
               </button>
             ))}
-          </div>
+          </Track>
           {mode === "dont-ask" ? (
             <div className="add-warn">
               <p>
@@ -448,15 +456,21 @@ function RunCommand({ channel, name, setName, taken }: NameProps) {
   const [persona, setPersona] = useState("")
   const problem = nameProblem(name, taken)
   const { line, failed, retry } = useJoinCommand(channel.code, name, channel.youOwn ? persona : "")
+  useEffect(() => {
+    if (!channel.youOwn) wantPersona(channel.code, name, persona)
+  }, [channel.code, channel.youOwn, name, persona])
   return (
     <div className="panel-body add-body">
+      <p className="add-how">Already running Claude Code, Codex or another agent? Give it this line. It asks to join, and it keeps working where it is.</p>
       <NameField name={name} setName={setName} problem={problem} />
-      {channel.youOwn ? (
+      {channel.youOwn || channel.youManageAgents ? (
         <Group label="Personality">
           <Choice group={`${id}-persona`} on={persona === ""} pick={() => setPersona("")}>
             <span className="add-choice-text">
               <span className="add-choice-label">None</span>
-              <span className="add-choice-about">The harness as it comes. You can still pick one when you let it in.</span>
+              <span className="add-choice-about">
+                {channel.youOwn ? "The harness as it comes. You can still pick one when you let it in." : "The harness as it comes. You can still pick one from its profile."}
+              </span>
             </span>
           </Choice>
           {app.personas.map((p) => (
@@ -485,8 +499,8 @@ function RunCommand({ channel, name, setName, taken }: NameProps) {
         )}
       </div>
       <p className="add-note">
-        Run it in the folder the agent should work in. It asks to join{persona && channel.youOwn ? ` as ${app.personas.find((p) => p.id === persona)?.label ?? "that personality"}` : ""}; you'll check
-        its code in Needs you.
+        Run it in the folder the agent should work in. If kiwi isn't on that computer yet, the line installs it first, from the same site, as a signed release. It asks to join
+        {persona && channel.youOwn ? ` as ${app.personas.find((p) => p.id === persona)?.label ?? "that personality"}` : ""}; you'll check its code in Needs you.
       </p>
     </div>
   )
@@ -499,7 +513,10 @@ export function AddAgentCard({ channel }: { channel: Channel }) {
   return (
     <section className="add-card" aria-label="Add an agent">
       <p className="add-card-title">Add an agent</p>
-      <p className="dim">Start one on a computer of yours, or paste this into the terminal your agent works in. It asks to join, and you check its code in Needs you.</p>
+      <p className="dim">
+        Invite an agent you already run: give it this line, and it asks to join, installing kiwi there first if it's missing. You check its code in Needs you. Or have Channels start one on a computer
+        of yours.
+      </p>
       {failed ? (
         <div className="invite-failed">
           <span>Couldn't make the command.</span>
@@ -519,19 +536,42 @@ export function AddAgentCard({ channel }: { channel: Channel }) {
   )
 }
 
-function Progress({ channel, run, onDone, onMessage }: { channel: Channel; run: Run; onDone: () => void; onMessage: () => void }) {
-  const { app } = useApp()
-  const { agent, on, runs } = run
+interface ProgressProps {
+  channel: Channel
+  run: Run
+  onDone: () => void
+  onMessage: (handle: string) => void
+  onRetry: () => void
+  onBack: () => void
+}
+
+function stallText(stall: Stall, n: string, on: string, owner: string): string {
+  if (stall === "slow-start") return `${on} hasn't said whether ${n} started. It may be asleep or offline.`
+  if (stall === "not-asking") return `${n} is running on ${on} but hasn't asked to join. Its window may be waiting on a question: a sign-in, a folder to trust or a permission.`
+  if (stall === "not-let-in") return `${n} asked to join, but Kiwi didn't let it in on its own. Let it in from Needs you.`
+  return `${owner} hasn't let ${n} in yet. If they don't see it in their Needs you, ${n} may be waiting on a question in its window on ${on}.`
+}
+
+function Progress({ channel, run, onDone, onMessage, onRetry, onBack }: ProgressProps) {
+  const { app, go } = useApp()
+  const { agent, on, runs, launch } = run
   const n = agent.name
-  const done = channel.people.some((p) => p.name === n)
-  const step = done ? 3 : run.step
+  const handle = joinedAs(launch, channel.people)
+  const member = handle ? channel.people.find((p) => p.name === handle) : undefined
+  const done = !!handle
+  const failed = launch.stage === "failed"
+  const now = useNow(done || failed ? null : 1_000)
+  const step = stepOf(launch, channel.youOwn, done)
+  const stall = stallOf(launch, channel.youOwn, done, now)
   const found = channel.people.find((p) => p.owner && !p.you)
   const owner = found ? shown(found) : "the owner"
+  const name = member ? shown(member) : n
   const rows = [
-    { now: `Starting ${n} on ${on}`, done: `Started ${n} on ${on}` },
-    { now: `${n} is asking to join`, done: `${n} asked to join` },
-    { now: channel.youOwn ? `Letting ${n} in` : `Waiting for ${owner} to let ${n} in`, done: `${n} is in` },
+    { now: `Starting ${n} on ${on}`, done: `Started ${n} on ${on}`, failed: `Couldn't start ${n} on ${on}` },
+    ...(channel.youOwn ? [{ now: `${n} is asking to join`, done: `${n} asked to join`, failed: "" }] : []),
+    { now: channel.youOwn ? `Letting ${n} in` : `Waiting for ${owner} to let ${n} in`, done: `${name} is in`, failed: "" },
   ]
+  const [why = "", ...said] = (launch.why ?? "").split("\n")
   const persona = app.personas.find((p) => p.id === agent.persona)?.label
   return (
     <>
@@ -539,32 +579,59 @@ function Progress({ channel, run, onDone, onMessage }: { channel: Channel; run: 
         <div className="add-who">
           <Avatar person={{ name: n, kind: "agent", harness: agent.harness, presence: done ? "online" : "offline" }} size="lg" pip />
           <div className="add-who-text">
-            <p className="add-who-name">{n}</p>
+            <p className="add-who-name">{name}</p>
             <p className="add-who-meta">{[runs, persona, agent.folder].filter(Boolean).join(" · ")}</p>
           </div>
         </div>
         <ol className="add-steps" aria-live="polite">
           {rows.map((row, i) => {
-            const state = i < step ? "is-done" : i === step ? "is-now" : "is-next"
+            const state = failed && i === step ? "is-failed" : i < step ? "is-done" : i === step ? "is-now" : "is-next"
             return (
-              <li key={row.done} className={cx("add-step", state)}>
+              <li key={row.now} className={cx("add-step", state)}>
                 <span className="add-step-mark" aria-hidden="true">
                   {state === "is-done" && <Icon name="check" size={12} />}
+                  {state === "is-failed" && <Icon name="close" size={12} />}
                 </span>
-                <span>{state === "is-now" ? `${row.now}…` : row.done}</span>
+                <span>{state === "is-failed" ? row.failed : state === "is-now" ? `${row.now}…` : row.done}</span>
               </li>
             )
           })}
         </ol>
-        {!done && <p className="add-note">You can close this. {n} shows up under Agents once it's in.</p>}
+        {failed ? (
+          <div className="add-failed" role="alert">
+            <p>{why}</p>
+            {said.length > 0 && <pre className="add-said">{said.join("\n")}</pre>}
+          </div>
+        ) : stall ? (
+          <div className="add-stall" role="status">
+            <p>{stallText(stall, n, on, owner)}</p>
+            {stall === "not-let-in" && (
+              <button type="button" className="btn is-small" onClick={() => go({ to: "tab", tab: "needs" })}>
+                Open Needs you
+              </button>
+            )}
+          </div>
+        ) : (
+          !done && <p className="add-note">You can close this. {n} shows up under Agents once it's in.</p>
+        )}
       </div>
-      {done && (
+      {failed && (
+        <footer className="add-foot">
+          <button type="button" className="btn" onClick={onBack}>
+            Back
+          </button>
+          <button type="button" className="btn is-primary" onClick={onRetry}>
+            Try again
+          </button>
+        </footer>
+      )}
+      {handle && (
         <footer className="add-foot">
           <button type="button" className="btn" onClick={onDone}>
             Done
           </button>
-          <button type="button" className="btn is-primary" onClick={onMessage}>
-            Message {n}
+          <button type="button" className="btn is-primary" onClick={() => onMessage(handle)}>
+            Message {name}
           </button>
         </footer>
       )}

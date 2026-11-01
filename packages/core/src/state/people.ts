@@ -1,7 +1,14 @@
 import type { Color, Message } from "../protocol.ts";
+import { canPost } from "../scopes.ts";
 import type { ChannelState, Member } from "./types.ts";
 
 export const isPerson = (m: { kind?: string; owner?: boolean }) => m.kind === "human" || !!m.owner;
+
+type Seat = Pick<Member, "name" | "kind" | "owner" | "sponsor">;
+
+const authorRoot = (m: Seat): string => (isPerson(m) ? `person:${m.sponsor?.user ?? m.name}` : `seat:${m.name}`);
+
+export const sameAuthor = (author: Seat | undefined, editor: Seat | undefined): boolean => !!author && !!editor && authorRoot(author) === authorRoot(editor);
 
 export function humanOf(state: Pick<ChannelState, "members">, name: string): string | null {
   const m = state.members.get(name);
@@ -14,12 +21,20 @@ export function answersDecisions(members: ReadonlyMap<string, Pick<Member, "acti
   return !!m?.active && !!m.answersDecisions;
 }
 
-export function answersAsk(members: ReadonlyMap<string, Pick<Member, "active" | "answersDecisions">>, m: Pick<Message, "from" | "esc" | "to" | "handoff">, name: string): boolean {
-  return m.esc ? !!m.to?.includes(name) || (!m.handoff && answersDecisions(members, name)) : name !== m.from;
+export function fullyTrusted(m: Pick<Member, "kind" | "owner" | "active" | "scopes" | "addsAgents" | "answersDecisions" | "managesAgents"> | undefined): boolean {
+  return !!m && m.kind === "human" && !m.owner && m.active && canPost(m.scopes) && !!m.addsAgents && !!m.answersDecisions && !!m.managesAgents;
 }
 
-export function decidersOf(state: Pick<ChannelState, "members">, m: Pick<Message, "esc" | "to" | "handoff" | "permission">): string[] {
-  if (!m.esc || m.handoff || m.permission) return [];
+export function trustedOf(state: Pick<ChannelState, "members">): string[] {
+  return [...state.members.values()].filter(fullyTrusted).map((x) => x.name);
+}
+
+export function answersAsk(members: ReadonlyMap<string, Pick<Member, "active" | "answersDecisions">>, m: Pick<Message, "from" | "esc" | "to" | "handoff" | "step">, name: string): boolean {
+  return m.esc ? !!m.to?.includes(name) || (!m.handoff && !m.step && answersDecisions(members, name)) : name !== m.from;
+}
+
+export function decidersOf(state: Pick<ChannelState, "members">, m: Pick<Message, "esc" | "to" | "handoff" | "permission" | "step">): string[] {
+  if (!m.esc || m.handoff || m.permission || m.step) return [];
   return [...state.members.values()].filter((x) => answersDecisions(state.members, x.name) && !m.to?.includes(x.name)).map((x) => x.name);
 }
 

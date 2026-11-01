@@ -73,6 +73,7 @@ const parsed = parseArgs({
     ttl: { type: "string" },
     label: { type: "string" },
     user: { type: "string" },
+    fingerprint: { type: "string" },
     note: { type: "string" },
     file: { type: "string" },
     at: { type: "string" },

@@ -16,7 +16,7 @@ export interface StoreFile {
   phones?: PhoneView[];
   pending: PendingItem[];
   signin?: { access: string; refresh: string; exp: number };
-  github?: { login: string; id: number; token: string; at: number; relay?: string; clientId?: string };
+  github?: { login: string; id: number; token: string; at: number; relay?: string; clientId?: string; first?: boolean; moved?: boolean };
   migrated?: boolean;
   personalities?: Personality[];
   device?: Identity;

@@ -10,13 +10,14 @@ import type { ServerWebSocket } from "bun";
 import * as Context from "effect/Context";
 import * as Layer from "effect/Layer";
 import { CLOSE_CLOSED, CLOSE_REMOVED, GONE_WORDS, MAX_BLOB_BYTES, PING, PONG } from "@kiwi/core/protocol.ts";
-import { ChannelGone, NotFound, UpdateRequired } from "./failures.ts";
+import { ChannelGone, NotFound, TooMany, UpdateRequired } from "./failures.ts";
 import { clockLayer, MAX_REQUEST_BYTES } from "./http.ts";
-import { authkitDomains, devHostOk, devHumanAuth, devRequestOk, Human, HUMAN_HEADER, workosFromSettings, type HumanAuth } from "./human.ts";
+import { authkitDomains, devHostOk, devHumanAuth, devRequestOk, Human, HUMAN_HEADER, withGithub, workosFromSettings, type HumanAuth } from "./human.ts";
 import { MAILBOX_TTL_MS } from "@kiwi/core/mailbox.ts";
 import { corsPreflight, onMailboxHttp, withCors, type MailboxStore } from "./mailbox.ts";
 import { ACCOUNT_ASKS_PER_MINUTE, accountUser, isAccountPath, onAccountHttp, sameEnrollment, type AccountStore } from "./account.ts";
 import { ENROLL_TTL_MS, type Enrollment } from "@kiwi/core/enroll.ts";
+import { accountHome, frozenWrite, MOVE_PATH, movedHuman, moveUsers, onMoveHttp, type MoveStore, type Row, type Rows } from "./move.ts";
 import type { Vault } from "@kiwi/core/recovery.ts";
 import {
   MACHINE_ASKS_PER_MINUTE,
@@ -46,9 +47,11 @@ import {
   authenticateSocket,
   errorResponse,
   expire,
+  gateRoom,
   idleExpired,
   missingFingerprint,
   onClientFrame,
+  reown as reownRoom,
   wantsEcho,
   parseRoomPath,
   takesPresence,
@@ -144,6 +147,8 @@ export function startRelay(
   people.run("CREATE TABLE IF NOT EXISTS account_recovery (user TEXT NOT NULL, n INTEGER NOT NULL, link TEXT NOT NULL, PRIMARY KEY (user, n))");
   people.run("CREATE TABLE IF NOT EXISTS account_vaults (user TEXT PRIMARY KEY, version INTEGER NOT NULL, rec TEXT NOT NULL)");
   people.run("CREATE TABLE IF NOT EXISTS account_asks (user TEXT PRIMARY KEY, rec TEXT NOT NULL, at INTEGER NOT NULL)");
+  people.run("CREATE TABLE IF NOT EXISTS account_moves (user TEXT PRIMARY KEY, to_user TEXT NOT NULL, id TEXT NOT NULL, at INTEGER NOT NULL, done INTEGER NOT NULL)");
+  people.run("CREATE TABLE IF NOT EXISTS account_adoptions (user TEXT NOT NULL, from_user TEXT NOT NULL, id TEXT NOT NULL, state TEXT NOT NULL, PRIMARY KEY (user, from_user))");
   const machineSockets = new Map<string, { ws: ServerWebSocket<SocketData>; since: number }>();
   const instance = crypto.randomUUID();
   const machines: MachineStore = {
@@ -321,7 +326,13 @@ export function startRelay(
 
   // What every room runs with. `now` (tests) is the clock the room reads.
   const services = Layer.mergeAll(
-    Layer.succeed(Human, human),
+    Layer.succeed(
+      Human,
+      movedHuman(human, async (user) => {
+        const state = await moves.state(user);
+        return state && "moved" in state ? state.moved : null;
+      }),
+    ),
     Layer.succeed(Policy, policy),
     Layer.succeed(GithubApp, opts.githubApp === undefined ? githubAppFrom({ appId: process.env.GITHUB_APP_ID, privateKey: process.env.GITHUB_APP_PRIVATE_KEY }) : opts.githubApp),
     Layer.succeed(GithubPush, opts.githubPush === undefined ? (githubSecret ? githubPushFrom() : null) : opts.githubPush),
@@ -414,6 +425,68 @@ export function startRelay(
   const sweeper = policy.expireAfterDays ? setInterval(sweep, 3_600_000) : undefined;
   sweeper?.unref?.();
 
+  const accountTables = () =>
+    (people.query("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'account\\_%' ESCAPE '\\'").all() as { name: string }[])
+      .map((r) => r.name)
+      .filter((n) => !["account_asks", "account_moves", "account_adoptions"].includes(n));
+  const rowsOf = (user: string): Rows =>
+    Object.fromEntries(
+      accountTables().map((t) => [t, (people.query(`SELECT * FROM ${t} WHERE user = ?`).all(user) as Row[]).map((r) => Object.fromEntries(Object.entries(r).filter(([k]) => k !== "user")))]),
+    );
+  const holds = (user: string) =>
+    people.query("SELECT 1 FROM account_adoptions WHERE user = ? AND state = 'adopted'").get(user) !== null ||
+    accountTables().some((t) => people.query(`SELECT 1 FROM ${t} WHERE user = ? LIMIT 1`).get(user) !== null);
+  const adoption = (to: string, from: string) => people.query("SELECT id, state FROM account_adoptions WHERE user = ? AND from_user = ?").get(to, from) as { id: string; state: string } | null;
+  const moves: MoveStore = {
+    state: async (from) => {
+      const row = people.query("SELECT to_user, id, at, done FROM account_moves WHERE user = ?").get(from) as { to_user: string; id: string; at: number; done: number } | null;
+      if (!row) return null;
+      return row.done ? { moved: row.to_user } : { frozen: { to: row.to_user, id: row.id, at: row.at } };
+    },
+    freeze: async (from, f) => people.query("INSERT OR IGNORE INTO account_moves (user, to_user, id, at, done) VALUES (?, ?, ?, ?, 0)").run(from, f.to, f.id, f.at).changes === 1,
+    thaw: async (from, id) => void people.query("DELETE FROM account_moves WHERE user = ? AND id = ? AND done = 0").run(from, id),
+    settle: async (from, to, id) => void people.query("UPDATE account_moves SET done = 1 WHERE user = ? AND to_user = ? AND id = ?").run(from, to, id),
+    rows: async (from) => rowsOf(from),
+    busy: async (from, now) => {
+      const ask = people.query("SELECT at FROM account_asks WHERE user = ?").get(from) as { at: number } | null;
+      return ask && ask.at + ENROLL_TTL_MS > now ? "asking" : null;
+    },
+    holds: async (to) => holds(to),
+    adopt: async (to, from, id, rows) =>
+      people.transaction(() => {
+        const had = adoption(to, from);
+        if (had?.state === "adopted") return "adopted" as const;
+        if (had?.id === id) return "abandoned" as const;
+        if (holds(to)) return "taken" as const;
+        for (const [t, list] of Object.entries(rows)) {
+          for (const row of list) {
+            const cols = ["user", ...Object.keys(row)];
+            people.query(`INSERT INTO ${t} (${cols.join(", ")}) VALUES (${cols.map(() => "?").join(", ")})`).run(to, ...Object.values(row));
+          }
+        }
+        people.query("INSERT OR REPLACE INTO account_adoptions (user, from_user, id, state) VALUES (?, ?, ?, 'adopted')").run(to, from, id);
+        return "adopted" as const;
+      })(),
+    abandon: async (to, from, id) =>
+      people.transaction(() => {
+        if (adoption(to, from)?.state === "adopted") return "adopted" as const;
+        people.query("INSERT OR REPLACE INTO account_adoptions (user, from_user, id, state) VALUES (?, ?, ?, 'abandoned')").run(to, from, id);
+        return "abandoned" as const;
+      })(),
+    rooms: async (from) =>
+      listOf(from)
+        .filter((e) => e.owner && e.code !== "")
+        .map((e) => e.room),
+    reown: async (room, from, to) => {
+      const db = storeFor(room, false);
+      try {
+        apply(room, { directory: await runRoom(relay, db, reownRoom(from, to)) });
+      } finally {
+        doneWith(db);
+      }
+    },
+  };
+
   let proxyHinted = false;
   const server = Bun.serve<SocketData>({
     port: opts.port ?? 8787,
@@ -450,11 +523,24 @@ export function startRelay(
         if (machine instanceof Response) return machine;
         const person = await onPersonHttp(req, personMachines, { now: clock });
         if (person) return person;
+        if (url.pathname === MOVE_PATH) {
+          const from = await accountUser(req, human);
+          if (from instanceof Response) return from;
+          const to = await moveUsers(req, human, from);
+          if (to instanceof Response) return to;
+          if (ip && !allowPerMinute(`account-ip:${instance}:${ip}`, MACHINE_WRITES_PER_ADDRESS, clock()))
+            return withCors(errorResponse(new TooMany({ message: "too many account requests from this address; try again in a few minutes" })));
+          return await onMoveHttp(req, moves, accounts, from, to, clock());
+        }
         if (isAccountPath(url.pathname)) {
           if (req.method === "OPTIONS") return corsPreflight();
           const user = await accountUser(req, human);
           if (user instanceof Response) return user;
-          const account = await onAccountHttp(req, accounts, user, {
+          const home = await accountHome(moves, user, clock());
+          const frozen = home.frozen ? frozenWrite(req) : null;
+          if (frozen) return frozen;
+          const account = await onAccountHttp(req, accounts, home.user, {
+            ...(home.user !== user ? { formerly: user } : {}),
             now: clock,
             perAccount: (key) => allowPerMinute(key, ACCOUNT_ASKS_PER_MINUTE, clock()),
             ...(ip ? { perAddress: () => allowPerMinute(`account-ip:${instance}:${ip}`, MACHINE_WRITES_PER_ADDRESS, clock()) } : {}),
@@ -473,6 +559,8 @@ export function startRelay(
         // No fingerprint: 426 before the room file is opened.
         const early = missingFingerprint(req.method, route.rest, url);
         if (early) return withCors(errorResponse(early));
+        const gate = await gateRoom(req, route.roomId, route.rest);
+        if (gate instanceof Response) return withCors(gate);
         if (pageCache && PAGE_PATH.test(route.rest))
           return withCors(await edgePage(req, route.roomId, route.rest, policy.pageKey, pageCache, () => pageFromRoom(req, route.roomId, route.rest), clock()));
         const isCreate = route.rest === "/create";
@@ -655,7 +743,8 @@ function webApp(app: WebApp): (pathname: string) => Response {
     if (inside && isFile(path)) {
       const headers: Record<string, string> = { ...security };
       // Vite fingerprints everything under /assets; the rest must be rechecked each time.
-      headers["cache-control"] = rel.startsWith("/assets/") ? "public, max-age=31536000, immutable" : "no-cache";
+      headers["cache-control"] = rel.startsWith("/assets/") ? "public, max-age=31536000, immutable" : rel.startsWith("/reactions/") ? "public, max-age=86400" : "no-cache";
+      if (rel.startsWith("/reactions/")) headers["access-control-allow-origin"] = "*";
       // The installers are fetched with curl | sh and must read as text.
       if (/^\/install(\.sh|\.ps1)?$/.test(rel)) headers["content-type"] = "text/plain; charset=utf-8";
       return new Response(Bun.file(path), { headers });
@@ -736,7 +825,12 @@ export function runRelay(argv: string[], cmd = "bun src/relay/bun.ts"): void {
     process.stderr.write(`${devFlag} is for requests made on this machine: it can't go with --trust-proxy (or KIWI_TRUST_PROXY), since a proxy in front passes other people's requests on.\n`);
     process.exit(2);
   }
-  const human = dev ? devHumanAuth() : workosFromSettings({ clientId: arg("--workos-client-id", "WORKOS_CLIENT_ID"), authkitDomain, apiKey: process.env.WORKOS_API_KEY || undefined });
+  const human = dev
+    ? devHumanAuth()
+    : withGithub(workosFromSettings({ clientId: arg("--workos-client-id", "WORKOS_CLIENT_ID"), authkitDomain, apiKey: process.env.WORKOS_API_KEY || undefined }), {
+        clientId: process.env.GITHUB_APP_CLIENT_ID || undefined,
+        clientSecret: process.env.GITHUB_APP_CLIENT_SECRET || undefined,
+      });
   const siteDir = resolve(import.meta.dir, "../../site");
   const builtUi = resolve(import.meta.dir, "../../ui/dist");
   const defaultSite = existsSync(join(siteDir, "index.html")) ? siteDir : existsSync(join(builtUi, "index.html")) ? builtUi : undefined;

@@ -124,7 +124,7 @@ fun ConversationList(model: AppModel, open: (Spot) -> Unit, settings: () -> Unit
         emptyList()
     } else {
         model.rows(Filter.All).flatMap { row ->
-            (model.shown(row.spot)?.messages ?: emptyList()).filter { !it.event && it.body.lowercase().contains(query) }.takeLast(3).map { row to it }
+            (model.shown(row.spot)?.messages ?: emptyList()).filter { !it.event && (it.plain.lowercase().contains(query) || it.body.lowercase().contains(query)) }.takeLast(3).map { row to it }
         }.sortedByDescending { it.second.at }.take(20)
     }
 
@@ -528,7 +528,7 @@ private fun androidx.compose.ui.text.AnnotatedString.Builder.words(row: Conversa
 @Composable
 private fun Hit(row: ConversationRow, message: MessageView, query: String, open: () -> Unit) {
     val tone = Tone.current
-    val words = (if (message.mine) "You: " else "${row.room.display(message.from)}: ") + message.body.oneLine()
+    val words = (if (message.mine) "You: " else "${row.room.display(message.from)}: ") + message.plain.oneLine()
     val at = words.lowercase().indexOf(query)
     val strong = MaterialTheme.colorScheme.onSurface
     Row(

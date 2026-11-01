@@ -3,6 +3,7 @@ import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathS
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
+import { personFingerprint } from "@kiwi/core/fingerprint.ts";
 import type { DeviceLink } from "@kiwi/core/devices.ts";
 import { createDeviceHost } from "../desktop/src/devices.ts";
 import { foldersOn, harnessesOn, launchOn, machineOnline } from "../desktop/src/remote.ts";
@@ -21,6 +22,7 @@ const kiwiHome = join(root, "kiwi");
 const bins = join(root, "bins");
 const calls = join(root, "tmux-calls");
 const repo = join(home, "code", "payments");
+const forgotten = join(home, "code", "dotfiles");
 const code = "mc2-AAAAAAAAAAAAAAAAAAAAAA-BBBBBBBBBBBBBBBB";
 const TMUX = Bun.which("tmux");
 
@@ -70,11 +72,11 @@ async function digitsFrom(out: ReadableStream<Uint8Array>): Promise<string> {
 }
 
 beforeAll(async () => {
-  for (const d of [home, kiwiHome, bins, calls, join(repo, ".git")]) mkdirSync(d, { recursive: true });
-  script(join(bins, "claude"), "echo '2.1.304 (Claude Code)'");
+  for (const d of [home, kiwiHome, bins, calls, join(repo, ".git"), join(forgotten, ".git")]) mkdirSync(d, { recursive: true });
+  script(join(bins, "claude"), `if [ "$1" = "--version" ]; then echo '2.1.304 (Claude Code)'; exit 0; fi\nexec sleep 600`);
   script(join(bins, "tmux"), `t=$(mktemp '${root}/call.XXXXXX')\nprintf '%s\\n' "$@" > "$t"\nmv "$t" '${calls}/'\nexec '${TMUX ?? "false"}' "$@"`);
   script(join(root, "login-shell"), `echo __kiwi_login_path__\necho '${bins}:/usr/bin:/bin'`);
-  writeFileSync(join(kiwiHome, "config.json"), JSON.stringify({ channels: {} }));
+  writeFileSync(join(kiwiHome, "config.json"), JSON.stringify({ channels: {}, launchRoots: [repo] }));
   server = startRelay({ port: 0, hostname: "127.0.0.1", dataDir: join(root, "relay"), human: devHumanAuth() });
   relay = server.url.origin;
   person = await withExchangeKey(await generateIdentity("Ada Lovelace"));
@@ -96,7 +98,12 @@ beforeAll(async () => {
     wipe: () => {},
   });
   await app.poll();
-  const login = Bun.spawn([process.execPath, MAIN_TS, "login", "--user", "ada"], { cwd: root, env: { ...env(), KIWI_RELAY: relay }, stdout: "pipe", stderr: "pipe" });
+  const login = Bun.spawn([process.execPath, MAIN_TS, "login", "--user", "ada", "--fingerprint", await personFingerprint(person.pk)], {
+    cwd: root,
+    env: { ...env(), KIWI_RELAY: relay },
+    stdout: "pipe",
+    stderr: "pipe",
+  });
   let ask = await app.poll();
   for (const until = Date.now() + 20_000; !ask && Date.now() < until; ask = await app.poll()) await Bun.sleep(100);
   if (!ask) throw new Error("the computer never asked to be added");
@@ -122,7 +129,7 @@ describe.skipIf(!TMUX)("starting an agent on one of your computers from another 
     expect(await machineOnline({ signer: person, person: person.pk, relay }, machine.pk)).toBe(true);
   });
 
-  test("it lists the harnesses it can start, without bypass while its switch is off, and offers its home folder's git repos", async () => {
+  test("it lists the harnesses it can start, without bypass while its switch is off, and offers the folders added for it, not every git repo at home (#1303)", async () => {
     const harnesses = await harnessesOn({ signer: person, person: person.pk, relay }, machine);
     if (!harnesses.ok) throw new Error(harnesses.detail);
     const claude = harnesses.value.find((r) => r.harness === "claude");
@@ -132,6 +139,7 @@ describe.skipIf(!TMUX)("starting an agent on one of your computers from another 
     const folders = await foldersOn({ signer: person, person: person.pk, relay }, machine, "a".repeat(32));
     if (!folders.ok) throw new Error(folders.detail);
     expect(folders.value).toContain(repo);
+    expect(folders.value).not.toContain(forgotten);
   });
 
   test("it starts Claude Code in that repo with the model, effort and permission mode asked for, in Channels' own tmux", async () => {
@@ -168,7 +176,7 @@ describe.skipIf(!TMUX)("starting an agent on one of your computers from another 
   test("a folder it doesn't start agents in is refused, however it's spelled", async () => {
     const outside = join(root, "elsewhere");
     mkdirSync(outside, { recursive: true });
-    for (const [n, folder] of [outside, join(repo, "..", "..", "..", "elsewhere")].entries()) {
+    for (const [n, folder] of [outside, join(repo, "..", "..", "..", "elsewhere"), forgotten].entries()) {
       const r = await launchOn({ signer: person, person: person.pk, relay }, machine, { launch: `outsideFromPhone_000${n}`, harness: "claude", folder, code, relay });
       expect(r).toEqual({ ok: false, why: "bad-request", detail: "that folder isn't one this computer starts agents in" });
     }

@@ -4,15 +4,17 @@ import { useId, useState, type ReactNode } from "react"
 
 import { TaskChip } from "~/chat/cards"
 import { Avatar, cx, Dialog, DialogHead, Empty, Heading, Toggle } from "~/kit/bits"
+import { Track } from "~/kit/glide"
 import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
-import { memberOf, type App, type Channel, type Person } from "~/model"
+import { ALL_POWERS, memberOf, NO_POWERS, trusted, type App, type Channel, type Person } from "~/model"
 import { useApp } from "~/nav"
-import { nickname, shown } from "~/names"
+import { devicesOf, nickname, seatRoot, shown } from "~/names"
 import { ShowAgent } from "~/kit/show-agent"
 import { contextOf, liveOf, restOf } from "~/doing"
 import { PanelHead } from "~/panels/frame"
 import { InlineEdit } from "~/settings/controls"
+import { CopyBox } from "~/panels/invite"
 
 const since = (at: number, on = "on "): string => {
   const a = ago(at)
@@ -38,8 +40,9 @@ export function PersonPanel({ channel, name }: { channel: Channel; name: string 
         <Hero person={person} />
         <Now channel={channel} person={person} />
         {!person.left && <Doors channel={channel} person={person} />}
+        {!person.left && person.seat === "hosted" && <Terminal channel={channel} person={person} />}
         <Facts channel={channel} person={person} />
-        {channel.youOwn && !person.you && !person.owner && !person.left && <Manage channel={channel} person={person} />}
+        {(channel.youOwn || (channel.youManageAgents && person.kind === "agent")) && !person.you && !person.owner && !person.left && <Manage channel={channel} person={person} />}
       </div>
     </>
   )
@@ -134,22 +137,59 @@ function Doors({ channel, person }: { channel: Channel; person: Person }) {
         type="button"
         className="btn is-primary"
         onClick={() => {
-          go({ to: "where", where: { kind: "dm", with: person.name } })
+          go({ to: "where", where: { kind: "dm", with: seatRoot(channel, person.name) } })
           go({ to: "panel", panel: null })
         }}
       >
-        Message privately
+        Message
       </button>
-      <ShowAgent channel={channel} person={person} />
+      {person.seat !== "hosted" && <ShowAgent channel={channel} person={person} />}
     </div>
+  )
+}
+
+function Terminal({ channel, person }: { channel: Channel; person: Person }) {
+  const { app, nav, go, toast } = useApp()
+  const [busy, setBusy] = useState(false)
+  const here = nav.term?.kind === "agent" && nav.term.name === person.name
+  return (
+    <section className="person-term" aria-label="Terminal">
+      <Heading>Terminal</Heading>
+      <p className="person-term-note">It runs in Channels' own tmux on this computer.</p>
+      <div className="actions">
+        <button type="button" className="btn" aria-pressed={here} onClick={() => go({ to: "term", term: here ? null : { kind: "agent", name: person.name } })}>
+          Open here
+        </button>
+        <button
+          type="button"
+          className="btn"
+          disabled={busy}
+          onClick={() => {
+            setBusy(true)
+            void app.actions
+              .showAgent(channel.code, person.name)
+              .then((note) => note && toast(note))
+              .finally(() => setBusy(false))
+          }}
+        >
+          <Icon name="external" size={14} />
+          Open in your terminal
+        </button>
+      </div>
+      {person.attach && <CopyBox text={person.attach} label="Copy the command" wrap />}
+      <p className="person-term-note">
+        To leave it running, press <kbd>Ctrl-b</kbd> then <kbd>d</kbd>.
+      </p>
+    </section>
   )
 }
 
 function Facts({ channel, person }: { channel: Channel; person: Person }) {
   const { app, go } = useApp()
   const persona = personaOf(app.personas, person.persona)
-  const editable = channel.youOwn && !person.you && !person.owner
+  const editable = (channel.youOwn || (!!channel.youManageAgents && person.kind === "agent")) && !person.you && !person.owner
   const sponsor = person.sponsor ? memberOf(channel, person.sponsor) : undefined
+  const devices = devicesOf(channel.people, { name: seatRoot(channel, person.name) })
   const rows: [string, ReactNode][] =
     person.kind === "agent"
       ? [
@@ -187,6 +227,7 @@ function Facts({ channel, person }: { channel: Channel; person: Person }) {
           ["Messages", person.messages.toLocaleString()],
         ]
       : [
+          ...(devices.length ? [["Devices", devices.map((d) => `${d.name} · ${d.presence}`).join(", ")] satisfies [string, ReactNode]] : []),
           ["Joined", since(person.joined, "")],
           ["Messages", person.messages.toLocaleString()],
         ]
@@ -211,6 +252,8 @@ function Manage({ channel, person }: { channel: Channel; person: Person }) {
   const roles = [...new Set(["lead", ...(person.role ? [person.role] : [])])]
   const persona = personaOf(app.personas, person.persona)
   const it = agent ? "It" : "They"
+  const owns = channel.youOwn
+  const trust = !person.readOnly && trusted({ addsAgents: !!person.addsAgents, answersDecisions: !!person.answersDecisions, managesAgents: !!person.managesAgents })
   const remove = () => {
     app.actions.removeMember(channel.code, person.name)
     setConfirm(false)
@@ -222,7 +265,7 @@ function Manage({ channel, person }: { channel: Channel; person: Person }) {
       <Heading>Manage</Heading>
       <Row label="Role">
         {(id) => (
-          <div id={id} className="seg" role="group" aria-labelledby={`${id}-label`}>
+          <Track id={id} className="seg" role="group" aria-labelledby={`${id}-label`}>
             <button type="button" aria-pressed={!person.role} onClick={() => app.actions.setRole(channel.code, person.name, null)}>
               None
             </button>
@@ -231,7 +274,7 @@ function Manage({ channel, person }: { channel: Channel; person: Person }) {
                 {r.slice(0, 1).toUpperCase() + r.slice(1)}
               </button>
             ))}
-          </div>
+          </Track>
         )}
       </Row>
       {agent && (
@@ -251,46 +294,76 @@ function Manage({ channel, person }: { channel: Channel; person: Person }) {
           )}
         </Row>
       )}
-      {agent && (
+      {owns && agent && (
         <Row label="Nickname" hint="The name people see. Its handle stays the same." stack>
           {() => <InlineEdit value={person.display ?? ""} label="Nickname" verb="Change" onSave={(v) => app.actions.setNickname(channel.code, person.name, v || null)} />}
         </Row>
       )}
-      <Row label="Can only read" hint={`${agent ? "It reads" : "They read"} messages but can't post or take tasks.`}>
-        {(id) => <Toggle id={id} on={!!person.readOnly} onChange={(on) => app.actions.setReadOnly(channel.code, person.name, on)} />}
-      </Row>
-      {agent && person.wakes !== undefined && (
-        <Row label="Wake it on new messages" hint={person.wakes ? "It starts working when someone writes." : "Off: it reads them on its next run."}>
-          {(id) => <Toggle id={id} on={person.wakes === true} onChange={(on) => app.actions.setWake(channel.code, person.name, on)} />}
-        </Row>
-      )}
-      {!agent && (
+      {owns && (
         <>
-          <Row label="Can add agents" hint={person.addsAgents ? "Their agents come in without waiting for you." : "Their agents wait for you to let them in."}>
-            {(id) => <Toggle id={id} on={!!person.addsAgents} onChange={(on) => app.actions.setPowers(channel.code, person.name, { addsAgents: on })} />}
+          {!agent && (
+            <div className="person-trust">
+              <Row
+                label="Full trust"
+                hint={
+                  trust
+                    ? "They write and work, add agents, answer decisions and manage agents. The channel stays yours."
+                    : "Every power at once, for someone you'd trust with your life. The channel stays yours."
+                }
+              >
+                {(id) => (
+                  <Toggle
+                    id={id}
+                    on={trust}
+                    onChange={(on) => {
+                      if (on && person.readOnly) app.actions.setReadOnly(channel.code, person.name, false)
+                      app.actions.setPowers(channel.code, person.name, on ? ALL_POWERS : NO_POWERS)
+                    }}
+                  />
+                )}
+              </Row>
+            </div>
+          )}
+          <Row label="Can only read" hint={`${agent ? "It reads" : "They read"} messages but can't post or take tasks.`}>
+            {(id) => <Toggle id={id} on={!!person.readOnly} onChange={(on) => app.actions.setReadOnly(channel.code, person.name, on)} />}
           </Row>
-          <Row label="Can answer decisions" hint="Agents' questions and approvals can go to them as well as you.">
-            {(id) => <Toggle id={id} on={!!person.answersDecisions} onChange={(on) => app.actions.setPowers(channel.code, person.name, { answersDecisions: on })} />}
-          </Row>
+          {agent && person.wakes !== undefined && (
+            <Row label="Wake it on new messages" hint={person.wakes ? "It starts working when someone writes." : "Off: it reads them on its next run."}>
+              {(id) => <Toggle id={id} on={person.wakes === true} onChange={(on) => app.actions.setWake(channel.code, person.name, on)} />}
+            </Row>
+          )}
+          {!agent && (
+            <>
+              <Row label="Can add agents" hint={person.addsAgents ? "Their agents come in without waiting for you." : "Their agents wait for you to let them in."}>
+                {(id) => <Toggle id={id} on={!!person.addsAgents} onChange={(on) => app.actions.setPowers(channel.code, person.name, { addsAgents: on })} />}
+              </Row>
+              <Row label="Can answer decisions" hint="Agents' questions and approvals can go to them as well as you.">
+                {(id) => <Toggle id={id} on={!!person.answersDecisions} onChange={(on) => app.actions.setPowers(channel.code, person.name, { answersDecisions: on })} />}
+              </Row>
+              <Row label="Can manage agents" hint="They pick agents' personalities and roles, the lead included. Never people's, and never their own.">
+                {(id) => <Toggle id={id} on={!!person.managesAgents} onChange={(on) => app.actions.setPowers(channel.code, person.name, { managesAgents: on })} />}
+              </Row>
+            </>
+          )}
+          <div className="person-remove">
+            <button type="button" className="btn is-danger" onClick={() => setConfirm(true)}>
+              Remove from channel
+            </button>
+          </div>
+          <Dialog open={confirm} onClose={() => setConfirm(false)} label={`Remove ${shown(person)}`}>
+            <DialogHead title={`Remove ${shown(person)}?`} onClose={() => setConfirm(false)} />
+            <p className="person-confirm">{it} loses access to this channel's messages from now on.</p>
+            <div className="dialog-foot">
+              <button type="button" className="btn" onClick={() => setConfirm(false)}>
+                Cancel
+              </button>
+              <button type="button" className="btn is-danger" onClick={remove}>
+                Remove
+              </button>
+            </div>
+          </Dialog>
         </>
       )}
-      <div className="person-remove">
-        <button type="button" className="btn is-danger" onClick={() => setConfirm(true)}>
-          Remove from channel
-        </button>
-      </div>
-      <Dialog open={confirm} onClose={() => setConfirm(false)} label={`Remove ${shown(person)}`}>
-        <DialogHead title={`Remove ${shown(person)}?`} onClose={() => setConfirm(false)} />
-        <p className="person-confirm">{it} loses access to this channel's messages from now on.</p>
-        <div className="dialog-foot">
-          <button type="button" className="btn" onClick={() => setConfirm(false)}>
-            Cancel
-          </button>
-          <button type="button" className="btn is-danger" onClick={remove}>
-            Remove
-          </button>
-        </div>
-      </Dialog>
     </section>
   )
 }

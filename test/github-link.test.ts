@@ -139,13 +139,21 @@ describe("the linked account's picture", () => {
     expect(Buffer.from(p!.data, "base64").length).toBe(3000);
   });
 
-  test("too big at 96px, it tries 64px; still too big, or not an image, or not there, it's null", async () => {
+  test("too big at 96px, it tries 64px, then 48px and 32px; still too big, or not an image, or not there, it's null", async () => {
     const urls: string[] = [];
     expect((await avatar(42, fetchOf([image(40_000), image(5000)], urls)))?.mime).toBe("image/jpeg");
     expect(urls.map((u) => new URL(u).searchParams.get("s"))).toEqual(["96", "64"]);
-    expect(await avatar(42, fetchOf([image(40_000), image(40_000)], []))).toBeNull();
+    expect(await avatar(42, fetchOf([image(40_000), image(40_000), image(40_000), image(40_000)], []))).toBeNull();
     expect(await avatar(42, fetchOf([image(3000, "image/svg+xml")], []))).toBeNull();
     expect(await avatar(42, fetchOf([new Response(null, { status: 404 })], []))).toBeNull();
+  });
+
+  test("a photo GitHub serves as PNG, a little over the limit at 64px, goes out at 48px", async () => {
+    const urls: string[] = [];
+    const p = await avatar(42, fetchOf([image(55_474, "image/png"), image(24_710, "image/png"), image(13_942, "image/png")], urls));
+    expect(urls.map((u) => new URL(u).searchParams.get("s"))).toEqual(["96", "64", "48"]);
+    expect(p?.mime).toBe("image/png");
+    expect(Buffer.from(p!.data, "base64").length).toBe(13_942);
   });
 });
 

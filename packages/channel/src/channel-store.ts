@@ -31,6 +31,8 @@ const CLOCK_MS = 15_000;
 
 type Connection = "connecting" | "live" | "reconnecting";
 
+export const APP_BEACON_MS = 60_000;
+const ANSWER_GAP_MS = 500;
 export interface ChannelHandle {
   ch: ChannelLink;
   connection: Connection;
@@ -100,6 +102,9 @@ export class ChannelStore {
   private readonly head: ReadonlySignal<number>;
   private readonly count: ReadonlySignal<number>;
   private readonly reconcileDue: ReadonlySignal<string>;
+  private readonly pruneDue: ReadonlySignal<string>;
+
+  private syncing = false;
   private readonly checksDue: ReadonlySignal<string>;
   private readonly rulesDue: ReadonlySignal<string>;
 
@@ -142,6 +147,7 @@ export class ChannelStore {
     const bitsKey = computed(() => this.roster.value.map((m) => `${m.pk}:${m.readOnly ? 0 : 1}`).join("|"));
     const repoList = computed(() => this.state.value.repos.join(","));
     this.reconcileDue = computed(() => `${scopesKey.value}\n${bitsKey.value}\n${this.caughtUp.value}`);
+    this.pruneDue = computed(() => `${[...this.keyOf.value.values()].sort().join(",")}\n${this.caughtUp.value}`);
     this.checksDue = computed(() => `${this.head.value}\n${this.caughtUp.value}`);
     this.rulesDue = computed(() => `${this.caughtUp.value}\n${repoList.value}`);
     const pkOf = computed(() => {
@@ -220,6 +226,9 @@ export class ChannelStore {
       this.follow(),
       on(this.count, () => this.trimSoon()),
       on(this.reconcileDue, () => this.reconcile()),
+      on(this.pruneDue, () => this.pruneRooms()),
+      () => void import("./prune-plan.ts").then((m) => m.stopPruning(this.ch)),
+      on(this.checksDue, () => this.syncSettings()),
       on(this.head, (head) => this.snapshotIfDue(head)),
       on(this.checksDue, () => this.postReviewChecks()),
       this.every(60_000, () => this.drainGithub()),
@@ -308,6 +317,57 @@ export class ChannelStore {
     let flush: ReturnType<typeof setTimeout> | undefined;
     let stopLive: (() => void) | null = null;
     let closed = false;
+    let beat: ReturnType<typeof setInterval> | undefined;
+    let answeredAt = 0;
+    let filling: "idle" | "running" | "over" = "idle";
+    const fill = () => {
+      if (filling !== "idle" || closed) return;
+      filling = "running";
+      void import("./history-fill.ts")
+        .then(({ backfill }) =>
+          backfill(ch.roomId, ch.pk, {
+            older: (before, limit) => ch.olderRows(before, limit),
+            hidden: () => typeof document !== "undefined" && document.hidden,
+            wait: (ms) => new Promise((done) => setTimeout(done, ms)),
+            stopped: () => closed,
+          }),
+        )
+        .then(
+          (out) => {
+            filling = out === "stopped" && !closed ? "idle" : "over";
+            if (out === "done") index();
+          },
+          () => void (filling = "over"),
+        );
+    };
+    let indexing: "idle" | "running" | "again" | "off" = "idle";
+    const index = () => {
+      if (closed || indexing === "off") return;
+      if (indexing !== "idle") return void (indexing = "again");
+      indexing = "running";
+      void import("./history-fill.ts")
+        .then(({ indexArchive }) =>
+          indexArchive(ch.roomId, ch.pk, {
+            index: (rows) => ch.indexRows(rows, { roster: this.rosterForFold.peek(), roomsFloor: this.roomsFloor.peek(), guardFloor: this.guardFloor.peek(), now: Date.now() }),
+            hidden: () => typeof document !== "undefined" && document.hidden,
+            wait: (ms) => new Promise((done) => setTimeout(done, ms)),
+            stopped: () => closed,
+          }),
+        )
+        .then(
+          (out) => {
+            const again = indexing === "again";
+            indexing = out === "unsupported" ? "off" : "idle";
+            if (again && out === "done") index();
+          },
+          () => void (indexing = "off"),
+        );
+    };
+    const here = () => {
+      if (closed) return;
+      answeredAt = Date.now();
+      void ch.presence({ client: "app" }).catch(() => {});
+    };
     const enqueue = (message: Message, row: CachedRow | null) => {
       pending.push({ message, row });
       flush ??= setTimeout(() => {
@@ -324,8 +384,10 @@ export class ChannelStore {
           ch.roomId,
           ch.pk,
           batched.flatMap((b) => (b.row ? [b.row] : [])),
-          HISTORY,
-        ).catch(() => {});
+        ).then(
+          () => (fill(), index()),
+          () => {},
+        );
       }, 30);
     };
     const onEvent = (ev: FollowEvent) => {
@@ -339,15 +401,18 @@ export class ChannelStore {
             void this.refreshRoster();
           }
           void ch.presence({ client: "probe", query: true }).catch(() => {});
+          here();
+          beat ??= setInterval(here, APP_BEACON_MS);
           return;
         case "Message":
           return enqueue(ev.message, ev.row);
         case "Unread":
           this.unread.value = [...this.unread.peek(), ev.seq].slice(-HISTORY);
-          if (ev.row) void rememberRow(ch.roomId, ch.pk, ev.row, HISTORY).catch(() => {});
+          if (ev.row) void rememberRow(ch.roomId, ch.pk, ev.row).then(fill, () => {});
           return;
         case "Presence":
           this.online.value = hear(this.online.peek(), ev.presence, Date.now());
+          if (ev.presence.query && ev.presence.pk !== ch.pk && Date.now() - answeredAt >= ANSWER_GAP_MS) here();
           return;
         case "Roster":
           void this.refreshRequests();
@@ -383,7 +448,7 @@ export class ChannelStore {
       requests: this.refreshRequests,
       rotate: () => (ch.isOwner ? ch.rotateIfDue().catch((err: unknown) => (this.onGone(err), false)) : Promise.resolve(false)),
       cache: () =>
-        openCached(ch.roomId, ch.pk, ch.openRows)
+        openCached(ch.roomId, ch.pk, ch.openRows, HISTORY)
           .then((opened) => (markOnce("kiwi:cache-open"), opened))
           .catch(() => null),
       plan: (opened, head) => planCached(ch.roomId, ch.pk, opened, head, HISTORY).catch(() => null),
@@ -440,6 +505,7 @@ export class ChannelStore {
           if (base || earlyBase) this.base.value = base;
           this.ready.value = true;
         });
+        fill();
       },
     });
     warmUp(steps, was, HISTORY);
@@ -462,6 +528,7 @@ export class ChannelStore {
       closed = true;
       stopLive?.();
       clearTimeout(flush);
+      clearInterval(beat);
       lent.release();
     };
   }
@@ -479,6 +546,27 @@ export class ChannelStore {
       this.messages.value = this.messages.peek().filter((m) => m.seq > next.n);
       this.unread.value = this.unread.peek().filter((seq) => seq > next.n);
     });
+  }
+
+  private syncSettings(): void {
+    if (!this.ch.isOwner || !this.caughtUp.peek() || !this.guardIn || !this.roomsIn || this.syncing) return;
+    this.syncing = true;
+    void import("./settings-sync.ts")
+      .then((m) => m.syncSettings(this.ch, this.state.peek(), this.guardFloor.peek(), this.roomsFloor.peek()))
+      .then(
+        (got) =>
+          got &&
+          batch(() => {
+            this.guardFloor.value = got.guard;
+            this.roomsFloor.value = got.rooms;
+          }),
+        () => {},
+      )
+      .finally(() => (this.syncing = false));
+  }
+
+  private pruneRooms(): void {
+    if (this.caughtUp.peek() && [...this.state.peek().rooms.values()].some((r) => r.members)) void import("./prune-plan.ts").then((m) => m.prune(this.ch, () => this.state.peek()));
   }
 
   private reconcile(): void {

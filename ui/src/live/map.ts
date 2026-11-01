@@ -7,7 +7,9 @@ import { describeEvent, proofLabel } from "@kiwi/core/format.ts"
 import { memberLoad, showsLoad } from "@kiwi/core/load.ts"
 import { checksOf, FAILED, prLinks, taskPr } from "@kiwi/core/prs.ts"
 import { stageOf } from "@kiwi/core/stage.ts"
-import { GENERAL_ROOM, ignored, isQuiet, isRasterMime, isReaction, type Message as Wire } from "@kiwi/core/protocol.ts"
+import { editable, GENERAL_ROOM, ignored, isQuiet, isRasterMime, isOverlay, type Message as Wire } from "@kiwi/core/protocol.ts"
+import { rootOf } from "@kiwi/core/room-rules.ts"
+import { dmOther } from "~/live/dm"
 import { pickFor, taskCandidates } from "@kiwi/core/routing.ts"
 import { canPost } from "@kiwi/core/scopes.ts"
 import { versionName } from "@kiwi/core/status.ts"
@@ -16,6 +18,7 @@ import {
   answersDecisions,
   colorOf,
   heldBy,
+  dmPlace,
   holdsWork,
   humanOf,
   isPerson,
@@ -26,6 +29,7 @@ import {
   prChecks,
   prKey,
   releaseOf,
+  sameAuthor,
   tasksAwaitingPeople,
   type ChannelState,
   type Task as CoreTask,
@@ -64,6 +68,7 @@ import type {
   Upload,
   Where,
 } from "~/model"
+import { mentions } from "~/live/mention"
 import { phraseOf } from "~/live/said"
 
 type Seen = Readonly<Record<string, number>>
@@ -110,6 +115,18 @@ function loadOf(state: ChannelState, m: StateMember): Load | undefined {
   return { level: l.level, doing: l.current.map((t) => t.id), queued: l.queued.map((t) => t.id), waiting: l.waiting.map((t) => t.id) }
 }
 
+function displayOf(state: ChannelState, m: StateMember): { display?: string } {
+  if (m.display) return { display: m.display }
+  const root = rootOf(m.name, state.members)
+  const was = root === m.name ? undefined : state.members.get(root)
+  return was ? { display: was.display || was.name } : {}
+}
+
+function seatOfIn(state: ChannelState, m: StateMember): { seatOf?: string } {
+  const root = rootOf(m.name, state.members)
+  return root !== m.name && state.members.get(root)?.active ? { seatOf: root } : {}
+}
+
 function personOf(state: ChannelState, m: StateMember, record: RosterMember | undefined, here: Online | undefined, me: string, wakes: ReadonlyMap<string, boolean>): Person {
   const human = isPerson(m)
   const raw = m.runs?.harness ?? m.card?.harness
@@ -123,12 +140,14 @@ function personOf(state: ChannelState, m: StateMember, record: RosterMember | un
   return {
     name: m.name,
     kind: human ? "human" : "agent",
-    ...(m.display ? { display: m.display } : {}),
+    ...displayOf(state, m),
     ...(m.name === state.lead ? { role: "lead" } : m.owner ? { role: "owner" } : m.persona ? { role: m.persona.name } : {}),
     ...(color ? { color } : {}),
     ...(human && m.picture ? { picture: `data:${m.picture.mime};base64,${m.picture.data}` } : {}),
     owner: m.owner,
     you: m.name === me,
+    ...seatOfIn(state, m),
+    ...(human ? {} : { face: m.name === state.lead ? "lead" : m.persona?.role }),
     presence: m.name === me || here ? (human && here?.activity?.state === "idle" ? "away" : "online") : "offline",
     ...(activity ? { activity } : {}),
     ...(reach && reach !== "unknown" ? { reach } : {}),
@@ -146,8 +165,11 @@ function personOf(state: ChannelState, m: StateMember, record: RosterMember | un
     ...(load ? { load } : {}),
     ...(!m.owner && !canPost(m.scopes) ? { readOnly: true } : {}),
     ...(!human && wakes.has(m.name) ? { wakes: wakes.get(m.name) === true } : {}),
-    ...(human && record?.addsAgents ? { addsAgents: true } : {}),
-    ...(human && record?.answersDecisions ? { answersDecisions: true } : {}),
+    ...(human && m.addsAgents ? { addsAgents: true } : {}),
+    ...(human && m.answersDecisions ? { answersDecisions: true } : {}),
+    ...(human && m.managesAgents ? { managesAgents: true } : {}),
+    ...(m.ops ? { ops: m.ops } : {}),
+    ...(here?.ops ? { opsLive: here.ops } : {}),
     lastSeen: here?.at ?? m.lastSeen,
     joined: m.joined,
     messages: m.messages,
@@ -177,17 +199,27 @@ export function roomsOf(state: ChannelState, messages: readonly Wire[], me: stri
     if (m.kind === "event" || m.from === me || ignored(state.trust.get(m.seq))) continue
     if ((state.placeOf.get(m.seq) ?? MAIN).kind !== "main") continue
     const id = roomOfMessage(state, m)
+    if (state.rooms.get(id)?.dm) continue
     if (m.seq <= (seen[roomSeenKey(id)] ?? (id === GENERAL_ROOM ? 0 : from))) continue
     unread.set(id, (unread.get(id) ?? 0) + 1)
     if (mentionsYou(m, me)) mentions.set(id, (mentions.get(id) ?? 0) + 1)
   }
-  const rooms = [...state.rooms.values()]
+  const rooms = [...state.rooms.values()].filter((r) => !r.dm)
   const list = rooms.some((r) => r.id === GENERAL_ROOM) ? rooms : [{ id: GENERAL_ROOM, name: GENERAL_ROOM }, ...rooms]
-  return list.map((r) => ({ id: r.id, name: r.name, unread: unread.get(r.id) ?? 0, mentions: mentions.get(r.id) ?? 0, seen: seen[roomSeenKey(r.id)] ?? (r.id === GENERAL_ROOM ? 0 : from) }))
+  return list.map((r) => ({
+    id: r.id,
+    name: r.name,
+    unread: unread.get(r.id) ?? 0,
+    mentions: mentions.get(r.id) ?? 0,
+    seen: seen[roomSeenKey(r.id)] ?? (r.id === GENERAL_ROOM ? 0 : from),
+    ...("members" in r && r.members ? { members: r.members.map((m) => m.name) } : {}),
+  }))
 }
 
-export function directsOf(state: ChannelState, messages: readonly Wire[], me: string, seen: Seen): Direct[] {
+export function directsOf(state: ChannelState, messages: readonly Wire[], seat: string, seen: Seen): Direct[] {
+  const me = rootOf(seat, state.members)
   const at = new Map<string, number>()
+  const locked = new Set<string>()
   const unread = new Map<string, number>()
   const marks = new Map<string, number>()
   for (const m of messages) {
@@ -196,17 +228,30 @@ export function directsOf(state: ChannelState, messages: readonly Wire[], me: st
     const other = place.with[0] === me ? place.with[1] : place.with[0]
     at.set(other, m.ts)
     marks.set(other, seen[placeKey(place)] ?? 0)
-    if (m.from !== me && m.kind !== "event" && m.seq > (seen[placeKey(place)] ?? 0)) unread.set(other, (unread.get(other) ?? 0) + 1)
+    if (rootOf(m.from, state.members) !== me && m.kind !== "event" && m.seq > (seen[placeKey(place)] ?? 0)) unread.set(other, (unread.get(other) ?? 0) + 1)
+  }
+  for (const m of messages) {
+    const room = (state.placeOf.get(m.seq) ?? MAIN).kind === "main" ? state.rooms.get(roomOfMessage(state, m)) : undefined
+    const other = room?.dm && room.members ? dmOther(state, seat, room.members) : undefined
+    if (!other || ignored(state.trust.get(m.seq))) continue
+    const key = placeKey(dmPlace(me, other))
+    at.set(other, Math.max(at.get(other) ?? 0, m.ts))
+    marks.set(other, seen[key] ?? 0)
+    locked.add(other)
+    if (rootOf(m.from, state.members) !== me && m.kind !== "event" && m.seq > (seen[key] ?? 0)) unread.set(other, (unread.get(other) ?? 0) + 1)
   }
   for (const s of state.places.values()) {
     if (s.place.kind !== "dm" || !s.place.with.includes(me)) continue
     const other = s.place.with[0] === me ? s.place.with[1] : s.place.with[0]
     if (!at.has(other)) at.set(other, 0)
   }
-  return [...at].map(([name, last]) => ({ with: name, unread: unread.get(name) ?? 0, last, seen: marks.get(name) ?? 0 })).sort((a, b) => b.last - a.last)
+  return [...at]
+    .map(([name, last]) => ({ with: name, unread: unread.get(name) ?? 0, last, seen: marks.get(name) ?? 0, ...(locked.has(name) ? { locked: true as const } : {}) }))
+    .sort((a, b) => b.last - a.last)
 }
 
-export function theirsOf(state: ChannelState, messages: readonly Wire[], me: string): TheirDirect[] {
+export function theirsOf(state: ChannelState, messages: readonly Wire[], seat: string): TheirDirect[] {
+  const me = rootOf(seat, state.members)
   const at = new Map<string, { between: readonly [string, string]; last: number }>()
   for (const m of messages) {
     const place = state.placeOf.get(m.seq)
@@ -216,10 +261,8 @@ export function theirsOf(state: ChannelState, messages: readonly Wire[], me: str
   return [...at.values()].sort((a, b) => b.last - a.last)
 }
 
-const LEADING_MENTION = (me: string) => new RegExp(`(^|[^\\p{L}\\p{N}_.-])@${me.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\p{L}\\p{N}_-])`, "u")
-
 function mentionsYou(m: Wire, me: string): boolean {
-  return m.from !== me && (!!m.to?.includes(me) || LEADING_MENTION(me).test(m.body))
+  return m.from !== me && (!!m.to?.includes(me) || mentions(m.body, me))
 }
 
 const SUMMARISED = (m: Wire): boolean => m.ev?.op === "task.add" || (m.ev?.op === "task.update" && !!m.ev.state)
@@ -298,11 +341,14 @@ export interface Pictures {
   get(seq: number, i: number, alt: string): Image | ImageSpot
 }
 
-function whereOf(state: ChannelState, m: Wire, me: string): Where {
+function whereOf(state: ChannelState, m: Wire, seat: string): Where {
+  const me = rootOf(seat, state.members)
   const place = state.placeOf.get(m.seq) ?? MAIN
   if (place.kind === "task") return { kind: "task", task: place.task }
   if (place.kind === "dm") return place.with.includes(me) ? { kind: "dm", with: place.with[0] === me ? place.with[1] : place.with[0] } : { kind: "theirs", between: place.with }
-  return { kind: "room", room: roomOfMessage(state, m) }
+  const room = state.rooms.get(roomOfMessage(state, m))
+  const other = room?.dm && room.members ? dmOther(state, seat, room.members) : undefined
+  return other ? { kind: "dm", with: other } : { kind: "room", room: roomOfMessage(state, m) }
 }
 
 export function messagesOf(state: ChannelState, messages: readonly Wire[], me: string, askOf: ReadonlyMap<number, string>, pictures: Pictures, pending: readonly Pending[]): Message[] {
@@ -326,7 +372,7 @@ export function messagesOf(state: ChannelState, messages: readonly Wire[], me: s
   }
   const out: Message[] = []
   for (const m of messages) {
-    if (ignored(state.trust.get(m.seq)) || isReaction(m)) continue
+    if (ignored(state.trust.get(m.seq)) || isOverlay(m)) continue
     if (m.kind === "event") {
       if (isQuiet(m)) continue
       const place = state.placeOf.get(m.seq) ?? MAIN
@@ -351,16 +397,22 @@ export function messagesOf(state: ChannelState, messages: readonly Wire[], me: s
     const quoted = m.re?.[0]
     const target = quoted === undefined ? undefined : bySeq.get(quoted)
     const reactions = reactionsOf(state, m.seq)
-    const prs = prLinks(m.body).map((link) => prOf(state, link))
+    const gone = state.deleted.has(m.seq)
+    const changed = state.edits.get(m.seq)
+    const text = gone ? "" : (changed?.body ?? m.body)
+    const prs = prLinks(text).map((link) => prOf(state, link))
     const said = phraseOf(m, me, (name) => (name === me ? "you" : nameIn(state, name)), new Set((m.re ?? []).flatMap((seq) => bySeq.get(seq)?.from ?? [])))
-    const images = (m.imgs ?? []).flatMap((img, i) => (isRasterMime(img.mime) ? [pictures.get(m.seq, i, img.name)] : []))
+    const images = gone ? [] : (m.imgs ?? []).flatMap((img, i) => (isRasterMime(img.mime) ? [pictures.get(m.seq, i, img.name)] : []))
     const ask = askOf.get(m.seq)
     out.push({
       seq: m.seq,
       from: m.from,
       at: m.ts,
-      text: m.body,
+      text,
       where,
+      ...(state.rooms.get(roomOfMessage(state, m))?.dm ? { locked: true as const } : {}),
+      ...(gone ? { deleted: true as const } : changed ? { edited: changed.at } : {}),
+      ...(!gone && editable(m) && sameAuthor(state.members.get(m.from), state.members.get(me)) ? { canChange: true as const } : {}),
       ...(said ? { said } : {}),
       ...(root !== undefined ? { inThread: root } : {}),
       ...(quoted !== undefined && quoted !== root && target?.kind !== "event" ? { replyTo: quoted } : {}),
@@ -394,9 +446,9 @@ export function leftOutOf(state: ChannelState, messages: readonly Wire[], me: st
   const out: Message[] = []
   for (const m of messages) {
     const trust = state.trust.get(m.seq)
-    if (!ignored(trust) || isReaction(m)) continue
+    if (!ignored(trust) || isOverlay(m)) continue
     const why = state.rejected.get(m.seq) ?? (trust === "forged" ? `not signed by ${m.from}'s key` : "not allowed here")
-    const leftOut = `${trust === "forged" ? "Forged" : "Refused"}: ${why}`
+    const leftOut = `${trust === "forged" ? "Bad signature" : "Refused"}: ${why}`
     if (m.kind === "event")
       out.push({
         seq: m.seq,
@@ -466,7 +518,7 @@ function historyOf(state: ChannelState, messages: readonly Wire[], me: string): 
     else out.set(id, [e])
   }
   for (const m of messages) {
-    if (ignored(state.trust.get(m.seq)) || isReaction(m) || state.rejected.has(m.seq)) continue
+    if (ignored(state.trust.get(m.seq)) || isOverlay(m) || state.rejected.has(m.seq)) continue
     const base = { seq: m.seq, by: m.from, at: m.ts }
     const ev = m.ev
     if (m.kind === "event") {
@@ -647,6 +699,7 @@ export function asksOf(
     const idle = !isOpen && !answer && pending.has(m.seq)
     if (!isOpen && !answer && !idle) continue
     const holds = heldBy(state, m)
+    const askedOf = m.esc && !m.handoff && m.to?.length && !m.to.includes(me) && !m.to.includes("*") ? [...m.to] : undefined
     if (isOpen) for (const t of holds) held.add(t)
     asks.push({
       kind: "question",
@@ -654,7 +707,7 @@ export function asksOf(
       from: m.from,
       at: m.ts,
       text: m.body,
-      label: m.handoff ? "Browser for you" : m.esc ? decisionLabel(m) : m.to?.includes(me) ? "Question for you" : "Question for everyone",
+      label: m.handoff ? "Browser for you" : m.esc ? (askedOf ? decisionLabel(m).replace(/ for you$/, "") : decisionLabel(m)) : m.to?.includes(me) ? "Question for you" : "Question for everyone",
       ...(m.decision === "irreversible" ? { irreversible: true as const } : {}),
       options: m.choices ?? [],
       holds,
@@ -662,6 +715,7 @@ export function asksOf(
       ...(m.handoff ? { handoff: { url: m.handoff.url, label: handoffLabel(m.handoff), expiresAt: m.handoff.expiresAt } } : {}),
       ...(task !== undefined ? { task } : {}),
       ...(idle ? { idle: true as const } : {}),
+      ...(askedOf ? { askedOf } : {}),
       ...(!isOpen && answer ? { answer: { text: answer.body, by: answer.from, at: answer.ts } } : {}),
     })
     askOf.set(m.seq, id)

@@ -1,19 +1,8 @@
-import { useEffect, useState } from "react"
-
 import "~/styles/start.css"
 import { Dot } from "~/kit/bits"
-import { ago } from "~/kit/time"
+import { ago, useNow } from "~/kit/time"
 import type { Channel } from "~/model"
 import { useApp } from "~/nav"
-
-function useNow(every: number): number {
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), every)
-    return () => clearInterval(timer)
-  }, [every])
-  return now
-}
 
 export function Waiting({ channel }: { channel: Channel }) {
   const { app, go } = useApp()

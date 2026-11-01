@@ -3,15 +3,21 @@ import { useEffect, useRef } from "react"
 import type { SendOptions } from "@kiwi/core/client.ts"
 import { isPerson, type ChannelState } from "@kiwi/core/state.ts"
 import { bridge } from "@kiwi/secrets/secrets.ts"
+import { useGithubLogin } from "~/live/account"
+
+export function faceDue(tried: string | null | undefined, login: string | null): boolean {
+  return tried !== login
+}
 
 export function usePublishFace(state: ChannelState, me: string, ready: boolean, send: (body: string, opts: SendOptions) => Promise<number>): void {
-  const done = useRef(false)
+  const tried = useRef<string | null | undefined>(undefined)
+  const login = useGithubLogin()
   const mine = state.members.get(me)
   const current = mine?.active && isPerson(mine) ? (mine.picture?.data ?? "") : null
   useEffect(() => {
     const b = bridge()
-    if (!ready || done.current || current === null || !b) return
-    done.current = true
+    if (!ready || current === null || !b || !faceDue(tried.current, login)) return
+    tried.current = login
     void b
       .githubPicture()
       .then((picture) => {
@@ -20,5 +26,5 @@ export function usePublishFace(state: ChannelState, me: string, ready: boolean, 
       .catch(() => {
         // A picture that can't be fetched or sent leaves the face as it is: the initial still says who this is.
       })
-  }, [ready, current, me, send])
+  }, [ready, current, me, send, login])
 }

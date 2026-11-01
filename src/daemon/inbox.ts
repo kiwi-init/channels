@@ -22,6 +22,7 @@ export interface InboxDeps {
   run: (args: MachineArgs, id: string) => Promise<unknown>;
   unpaired: () => Promise<void>;
   listed: (links: unknown) => Promise<boolean>;
+  settled?: () => Promise<unknown> | null;
   now?: () => number;
   checkMs?: number;
 }
@@ -156,6 +157,7 @@ export function startMachineInbox(deps: InboxDeps): { stop(): void; close(): voi
   const connect = async (m: Paired): Promise<void> => {
     const key = pairedKey(m);
     held = key;
+    await deps.settled?.();
     const registered = await register(m, deps.listed);
     if (!registered?.ok || stopped || held !== key) {
       held = null;

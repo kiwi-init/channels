@@ -15,7 +15,7 @@ import {
 } from "@kiwi/core/protocol.ts";
 import { omit } from "@kiwi/core/omit.ts";
 import { Rejected } from "@kiwi/core/refusals.ts";
-import { isPerson, openRound, reviewMoveRefusal, revisedOut, taskId, type ChannelState, type ReviewRound, type Task } from "@kiwi/core/state.ts";
+import { isPerson, openRound, reviewClaimRefusal, reviewMoveRefusal, revisedOut, taskId, type ChannelState, type ReviewRound, type Task } from "@kiwi/core/state.ts";
 import { inlineText } from "@kiwi/core/membership.ts";
 import { parseIssueRef, taskDigest, taskOfIssue } from "@kiwi/core/work.ts";
 import { handBackText, heldBy, reviewedBy } from "@kiwi/core/handback.ts";
@@ -155,6 +155,7 @@ export class SessionTasks extends SessionMessaging {
         title?: string;
         note?: string;
         review?: string | null;
+        claim?: true;
         verdict?: Verdict;
         at?: string;
         summary?: string;
@@ -191,7 +192,7 @@ export class SessionTasks extends SessionMessaging {
       const me = state.members.get(this.me);
       if (me) {
         const lead = !!me.owner || me.persona?.role === "lead" || state.lead === this.me;
-        const refused = reviewMoveRefusal(t, { name: this.me, person: isPerson(me), lead }, review);
+        const refused = change.claim ? reviewClaimRefusal(t, this.me, review) : reviewMoveRefusal(t, { name: this.me, person: isPerson(me), lead }, review);
         if (refused) return yield* new Rejected(refused);
       }
       const gate = review === undefined ? t.review : review || undefined;

@@ -41,6 +41,14 @@ export function reviewMoveRefusal(task: Task, from: { name: string; person: bool
   return `only a person, the lead or ${task.review === "*" ? "a reviewer" : task.review} changes who reviews ${taskId(task.id)}`;
 }
 
+export function reviewClaimRefusal(task: Task, from: string, review: string | null | undefined): string | null {
+  const id = taskId(task.id);
+  if (review !== from) return `a claim takes ${id}'s review for the one claiming it`;
+  if (task.review !== "*") return task.review ? `${id}'s review isn't open to anyone: ${task.review} reviews it` : `${id} has no review to take`;
+  if (from === task.owner || task.workedBy.includes(from)) return `${from} has worked on ${id}, so someone else reviews it`;
+  return null;
+}
+
 export function revisedOut(task: Task, from: string, open: ReviewRound | undefined): number | null {
   const last = task.rounds.at(-1);
   return !open && last?.result.kind === "rejected" && (from === task.owner || from === task.createdBy) ? last.n : null;

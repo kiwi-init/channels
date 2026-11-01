@@ -1,9 +1,10 @@
 // The relay URL, in one place. In the desktop app it is the shell's bridge
 // (window.kiwi.relayUrl), and only that: the page's own URL is never trusted
 // there, since the sign-in token goes wherever the relay is. In a browser it
-// is a `?relay=` param, else location.origin (development, where the dev
-// server proxies /v1 to the relay). Nothing else in the renderer may use
-// location.origin for relay traffic: call relayUrl() here instead.
+// is a `?relay=` param, but only in a development build (where the dev server
+// proxies /v1 to the relay); a production page never lets its URL steer the
+// relay. Nothing else in the renderer may use location.origin for relay
+// traffic: call relayUrl() here instead.
 
 import { DEFAULT_RELAY } from "@kiwi/core/relay-url.ts";
 
@@ -34,10 +35,20 @@ function fromEntry(): string | null {
   }
 }
 
+/** Whether this renderer is a development build (Vite's import.meta.env.DEV; false outside a bundler). */
+export function devBuild(): boolean {
+  try {
+    const dev = (import.meta.env as { DEV?: unknown } | undefined)?.DEV;
+    return dev === true || dev === "true";
+  } catch {
+    return false;
+  }
+}
+
 /** The relay this renderer talks to. */
 export function relayUrl(): string {
   if (hasBridge()) return fromBridge() ?? DEFAULT_RELAY;
-  return fromEntry() ?? window.location.origin;
+  return (devBuild() ? fromEntry() : null) ?? window.location.origin;
 }
 
 /** Whether the renderer runs inside the desktop shell (a bridge is present). */

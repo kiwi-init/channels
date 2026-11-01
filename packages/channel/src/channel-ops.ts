@@ -1,7 +1,8 @@
 import type { CachedKept, CachedRow } from "@kiwi/core/cache-row.ts";
 import type { PresenceFields } from "@kiwi/core/client.ts";
 
-import type { CallResult, ChannelCallName, ChannelCalls, ChannelOps, FollowEvent } from "../../../desktop/src/bridge.ts";
+import type { CallResult, ChannelCallName, ChannelCalls, ChannelOps, FollowEvent, HistorySearch } from "../../../desktop/src/bridge.ts";
+import type { FoldInputs } from "../../../desktop/src/search-types.ts";
 import { errorOf, remoteOps } from "./channel-remote.ts";
 import { bridge } from "@kiwi/secrets/secrets.ts";
 import { makeWatches, type Watches } from "./watch.ts";
@@ -28,6 +29,9 @@ function lazyLocalOps(): ChannelOps {
     forget: (code) => local().then((o) => o.forget(code)),
     presence: (code, p) => local().then((o) => o.presence(code, p)),
     openRows: (code, rows) => local().then((o) => o.openRows(code, rows)),
+    olderRows: (code, before, limit) => local().then((o) => o.olderRows(code, before, limit)),
+    indexRows: (code, rows, inputs) => local().then((o) => o.indexRows(code, rows, inputs)),
+    searchHistory: (code, search) => local().then((o) => o.searchHistory(code, search)),
     keep: (code, state) => local().then((o) => o.keep(code, state)),
     openKept: (code, sealed) => local().then((o) => o.openKept(code, sealed)),
     nudge: () => {
@@ -112,6 +116,11 @@ export class ChannelLink {
   setCharter = (...a: Args<"setCharter">) => this.c("setCharter", ...a);
   setHold = (...a: Args<"setHold">) => this.c("setHold", ...a);
   setRooms = (...a: Args<"setRooms">) => this.c("setRooms", ...a);
+  makeRoom = (...a: Args<"makeRoom">) => this.c("makeRoom", ...a);
+  makeDm = (...a: Args<"makeDm">) => this.c("makeDm", ...a);
+  syncMarks = (...a: Args<"syncMarks">) => this.c("syncMarks", ...a);
+  changeRoom = (...a: Args<"changeRoom">) => this.c("changeRoom", ...a);
+  pruneRooms = (...a: Args<"pruneRooms">) => this.c("pruneRooms", ...a);
   setRepos = (...a: Args<"setRepos">) => this.c("setRepos", ...a);
   icon = () => this.c("icon");
   setIcon = (...a: Args<"setIcon">) => this.c("setIcon", ...a);
@@ -122,6 +131,9 @@ export class ChannelLink {
   history = (...a: Args<"history">) => this.c("history", ...a);
   presence = (p: PresenceFields) => this.via.presence(this.code, p);
   openRows = (rows: CachedRow[]) => this.via.openRows(this.code, rows);
+  olderRows = (before: number, limit: number) => this.via.olderRows(this.code, before, limit);
+  indexRows = (rows: CachedRow[], inputs: FoldInputs) => this.via.indexRows(this.code, rows, inputs);
+  searchHistory = (search: HistorySearch) => this.via.searchHistory(this.code, search);
   keep = (state: object) => this.via.keep(this.code, state);
   openKept = (sealed: CachedKept) => this.via.openKept(this.code, sealed);
   follow = (since: number, on: (e: FollowEvent) => void) => this.via.follow(this.code, since, on);

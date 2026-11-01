@@ -1,9 +1,11 @@
+import type { Authors } from "./authors.ts";
 import type { Member as MemberRecord, Runs } from "../membership.ts";
 import type { Card, Color, IssueRef, MemberPicture, Message, TaskState, Trust, Verdict } from "../protocol.ts";
 import type { GithubCheck, GithubIssue, GithubPr, GithubRelease, GithubRules, GithubState } from "./github.ts";
 import type { Persona } from "../personality.ts";
+import type { Power } from "../protocol.ts";
+import type { RoomMember, RoomMeta, RoomSeal } from "../room-rules.ts";
 import type { Scope } from "../scopes.ts";
-
 export interface Member {
   name: string;
   kind?: "human" | "agent" | "computer";
@@ -16,12 +18,15 @@ export interface Member {
   card?: Card & { at: number };
   runs?: Runs;
   persona?: Persona;
+  addsAgents?: boolean;
   answersDecisions?: boolean;
+  managesAgents?: boolean;
   owner: boolean;
   joined: number;
   active: boolean;
   lastSeen: number;
   messages: number;
+  ops?: Record<string, number>;
 }
 
 export type FoldMember = Member & { role?: string; about?: string };
@@ -43,7 +48,9 @@ export type Roster = {
   laterRole?: { role: string | null; about?: string | null; since: number };
   runs?: Runs;
   persona?: Persona;
+  addsAgents?: boolean;
   answersDecisions?: boolean;
+  managesAgents?: boolean;
 }[];
 
 export const toRoster = (m: MemberRecord): Roster[number] => ({
@@ -63,7 +70,9 @@ export const toRoster = (m: MemberRecord): Roster[number] => ({
   ...(m.laterRole ? { laterRole: m.laterRole } : {}),
   ...(m.runs ? { runs: m.runs } : {}),
   ...(m.persona ? { persona: m.persona } : {}),
+  ...(m.addsAgents ? { addsAgents: true } : {}),
   ...(m.answersDecisions ? { answersDecisions: true } : {}),
+  ...(m.managesAgents ? { managesAgents: true } : {}),
 });
 
 export const rosterOf = (members: readonly MemberRecord[]): Roster => members.filter((m) => !m.unverified).map(toRoster);
@@ -136,6 +145,12 @@ export interface AskHead {
   goalBy?: string;
 }
 
+export interface Edit {
+  body: string;
+  at: number;
+  seq: number;
+}
+
 export interface Reaction {
   emoji: string;
   seq: number;
@@ -176,14 +191,16 @@ export interface ChannelState {
   leases: Map<string, Lease>;
   trust: Map<number, Trust>;
   rejected: Map<number, string>;
-  scopeSets: Map<string, { seq: number; scopes: Scope[] }>;
+  scopeSets: Map<string, { seq: number; scopes: Scope[]; persona?: Persona | null }>;
   roleSets: Map<string, { seq: number; role: string | null; about?: string | null }>;
+  gone: Map<string, number>;
   openAsks: Message[];
   askHeads: Map<number, AskHead>;
   threadOf: Map<number, number>;
   threadPeople: Map<number, Set<string>>;
   lead: string | null;
   rooms: Map<string, Room>;
+  secret: Map<string, SecretRoom>;
   roomOf: Map<number, string>;
   placeOf: Map<number, Place>;
   places: Map<string, PlaceSummary>;
@@ -196,6 +213,8 @@ export interface ChannelState {
   compact: Compact | null;
   compactProposal: Compact | null;
   reactions: Map<number, Map<string, Reaction>>;
+  edits: Map<number, Edit>;
+  deleted: Map<number, number>;
   head: number;
 }
 
@@ -231,13 +250,23 @@ export interface Room {
   createdBy: string | null;
   at: number;
   posters?: string[];
+  members?: RoomMember[];
+  dm?: true;
+  self?: true;
+}
+
+export interface SecretRoom {
+  n: number;
+  seals: RoomSeal[];
+  meta?: RoomMeta;
+  leaving?: string[];
 }
 
 export type PersonaLead = boolean | "roster";
 
 export interface FoldBase {
   n: number;
-  members: { name: string; role?: string; about?: string; color?: Color; picture?: MemberPicture; card?: Card & { at: number }; lastSeen: number; messages: number }[];
+  members: { name: string; role?: string; about?: string; color?: Color; picture?: MemberPicture; card?: Card & { at: number }; lastSeen: number; messages: number; ops?: Record<string, number> }[];
   lead: string | null;
   charter: Charter | null;
   repos?: string[];
@@ -249,13 +278,18 @@ export interface FoldBase {
   compact: Compact | null;
   compactProposal: Compact | null;
   scopesByKey: [string, Scope[]][];
-  scopeSets: [string, { seq: number; scopes: Scope[] }][];
+  scopeSets: [string, { seq: number; scopes: Scope[]; persona?: Persona | null }][];
   roleSets: [string, { seq: number; role: string | null; about?: string | null }][];
+  gone?: [string, number][];
   tasks: Task[];
   facts: Fact[];
   leases: Lease[];
   reactions: [number, [string, Reaction][]][];
   reactSeqs: number[];
+  chatBy: [number, string][];
+  authors?: Authors;
+  edits: [number, Edit][];
+  deleted: [number, number][];
   trust: [number, Trust][];
   rejected: [number, string][];
   sent?: ([string, number] | [string, number, number, number])[];
@@ -265,12 +299,14 @@ export interface FoldBase {
   hw?: number;
   placesBefore?: [Place, number, number][];
   personaLeads?: [string, PersonaLead][];
+  powers?: [string, Partial<Record<Power, boolean>>][];
   asks: Message[];
   askHeads?: AskHead[];
   answered: [number, string[]][];
   threadOf: [number, number][];
   threadPeople: [number, string[]][];
   rooms: Room[];
+  secret?: [string, SecretRoom][];
   roomOf: [number, string][];
   placeOf: [number, Place][];
   folded?: number;

@@ -190,7 +190,7 @@ describe("agents coordinating through the CLI", () => {
     const joined = await joinVia(lead, mac, code, "proj", "mac", "macos");
     // A few lines, not a manual: who it is, who directs it, how messages reach it, where the rest is.
     expect(joined).toContain('You\'re "mac" in channel "proj"');
-    expect(joined).toContain("Only your own human and the channel owner direct you");
+    expect(joined).toContain("Only your own human, the channel owner and a person the owner fully trusts direct you");
     // The command it types is `kiwi`, or bun running this checkout where kiwi isn't installed (CI).
     expect(joined).toContain(" help`");
     await joinVia(lead, win, code, "proj", "win", "windows");

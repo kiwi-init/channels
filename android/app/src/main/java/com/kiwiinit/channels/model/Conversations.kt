@@ -42,7 +42,7 @@ data class Row(
     val last: MessageView? get() = if (kind == RowKind.Group) room.latest ?: place?.last else place?.last
     val lastAt: Double get() = last?.at ?: 0.0
     val needs: Int get() = asks.size + reviews.size
-    val need: String? get() = (asks.firstOrNull()?.body ?: reviews.firstOrNull()?.let { "${taskLabel(it.task)} ${it.title}" })?.oneLine()
+    val need: String? get() = (asks.firstOrNull()?.plain ?: reviews.firstOrNull()?.let { "${taskLabel(it.task)} ${it.title}" })?.oneLine()
     val lead: String? get() = if (kind == RowKind.Lead) room.lead else null
 
     private val origin: String
@@ -69,7 +69,7 @@ data class Row(
             val body = if (newest.body.isEmpty() && newest.images > 0) {
                 if (newest.images == 1) "Photo" else "${newest.images} Photos"
             } else {
-                newest.body.oneLine()
+                newest.plain.oneLine()
             }
             if (kind == RowKind.Lead) return if (newest.mine) "You: $body" else body
             return "${if (newest.mine) "You" else room.display(newest.from)}$origin: $body"

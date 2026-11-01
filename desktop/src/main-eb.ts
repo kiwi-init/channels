@@ -12,12 +12,14 @@ import { keepDaemonAlive, watchPage } from "./keep-alive-eb.ts";
 import { KEYRING_GRACE_MS, openedWithin } from "./keyring-wait.ts";
 import { startKeys } from "./keys-start-eb.ts";
 import { startLife } from "./life-updates-eb.ts";
+import { keepLinuxEntry } from "./linux-entry.ts";
 import { catchMainErrors, logMainError, windowFailure } from "./main-log.ts";
 import { followColorScheme, missingGuard, sandboxOff, watchDrops, watchPaste } from "./native-eb.ts";
 import { watchCancels } from "./secret-service.ts";
 import { claimInstance, handoffFor, type Instance } from "./single-instance.ts";
 import { keyringLocked, openStoreForThisBuild, warnIfStoreBroken } from "./store-open-eb.ts";
 import { driveForTests, wrongTestHome } from "./test-build-eb.ts";
+import { runningAppImage } from "./updater.ts";
 import { createWindow, fail, showKeyringNote } from "./window-eb.ts";
 
 declare const KIWI_EB_TEST: boolean;
@@ -101,6 +103,17 @@ else if (instance.kind === "second") {
   Utils.quit(0);
 } else if (missing) refuse(instance, missing);
 else {
+  const appImage = process.platform === "linux" && ebHost.app.packaged() ? runningAppImage() : undefined;
+  if (appImage) {
+    try {
+      const entry = keepLinuxEntry(appImage);
+      if (entry.kind === "skipped") console.error(`Channels: no desktop entry written: ${entry.why}`);
+      else if (entry.wrote.length) console.error(`Channels: the desktop entry now starts ${appImage}: wrote ${entry.wrote.join(", ")}`);
+    } catch (e) {
+      // A home that can't take the entry still runs the app; main.log keeps why.
+      logMainError(e);
+    }
+  }
   const off = sandboxOff();
   if (off !== null) {
     const why = `WebKitGTK's sandbox is off: ${off}, so the page runs without it`;
