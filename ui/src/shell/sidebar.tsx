@@ -3,6 +3,7 @@ import { liveOf, restOf } from "~/doing"
 
 import { Avatar, Count, cx, Heading, IconButton, STATUS_WORDS } from "~/kit/bits"
 import { showMenu } from "~/kit/menu-open"
+import { useAppCan } from "~/live/app-can"
 import { useGlide } from "~/kit/glide"
 import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
@@ -24,6 +25,7 @@ export function Sidebar({ channel }: { channel: Channel }) {
   const sideRef = useGlide<HTMLDivElement>(".side-row.is-on")
   const hidden = useSyncExternalStore(hiddenPlaces.subscribe, hiddenPlaces.get)
   const kept = useSyncExternalStore(keptHidden.subscribe, keptHidden.get)
+  const canLeave = useAppCan("leaveRoom")
   const [showHidden, setShowHidden] = useState(false)
   const roomKey = (room: string) => hiddenKey(channel.code, { kind: "room", room })
   const dmKey = (who: string) => hiddenKey(channel.code, { kind: "dm", with: who })
@@ -57,7 +59,7 @@ export function Sidebar({ channel }: { channel: Channel }) {
                   aria-current={on ? "page" : undefined}
                   title={r.muted ? `#${r.name} is muted` : undefined}
                   onClick={() => go({ to: "where", where })}
-                  onContextMenu={(e) => showMenu(e, `#${r.name}`, (x) => x.roomGroups({ channel, go, toast }, actions, on, r))}
+                  onContextMenu={(e) => showMenu(e, `#${r.name}`, (x) => x.roomGroups({ channel, go, toast }, actions, on, canLeave, r))}
                 >
                   <span className="side-hash">{r.members ? <Icon name="lock" size={12} /> : "#"}</span>
                   <span className="side-label">{r.name}</span>
