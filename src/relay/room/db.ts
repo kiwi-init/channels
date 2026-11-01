@@ -288,13 +288,6 @@ export class RoomDb {
     return this.sql.all<{ n: number }>(`SELECT COALESCE(SUM(${CT_CHARS}), 0) AS n FROM msgs WHERE seq <= ?`, seq)[0]?.n ?? 0;
   }
 
-  dropThrough(seq: number): number {
-    if (seq <= 0) return 0;
-    const freed = this.bytesThrough(seq);
-    if (freed) this.sql.run("DELETE FROM msgs WHERE seq <= ?", seq);
-    return freed;
-  }
-
   dropOldest(need: number, upTo = Number.MAX_SAFE_INTEGER): number {
     let freed = 0;
     let through = 0;

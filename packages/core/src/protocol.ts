@@ -82,9 +82,6 @@ export const MAX_IMAGES = 8;
 /** Largest ephemeral (unstored) frame. */
 export const MAX_EPH_LENGTH = 4 * 1024;
 
-/** How many messages a room keeps before pruning the oldest. */
-export const ROOM_RETENTION = 10_000;
-
 /** Most messages returned by one history read or replayed on connect. */
 export const PAGE_LIMIT = 1_000;
 
