@@ -64,7 +64,7 @@ export function OlderView({ channel, older, onBack }: { channel: Channel; older:
                   </p>
                 )}
                 {(i === 0 || whereLabel(channel, rows[i - 1]!.where) !== whereLabel(channel, o.where)) && <p className="older-where">{whereLabel(channel, o.where)}</p>}
-                <MessageRow channel={channel} m={asMessage(o)} compact={i > 0 && rows[i - 1]?.from === o.from && sameDay(rows[i - 1]!.at, o.at)} names={names} tasks={tasks} />
+                <MessageRow channel={channel} m={asMessage(o)} compact={i > 0 && rows[i - 1]?.from === o.from && sameDay(rows[i - 1]!.at, o.at)} names={names} tasks={tasks} older />
               </Fragment>
             ))
           )}

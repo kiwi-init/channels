@@ -148,6 +148,7 @@ interface RowProps {
   inThread?: boolean
   quote?: Message | number
   onQuote?: (seq: number) => void
+  older?: boolean
 }
 
 const face = (p: Person | undefined): string => (p ? [p.kind, p.harness, p.presence, p.color, p.role, p.runs].join("\n") : "")
@@ -172,7 +173,7 @@ function sameRow(a: RowProps, b: RowProps): boolean {
   )
 }
 
-export const MessageRow = memo(function MessageRow({ channel, m, compact, names, tasks, inThread, quote, onQuote }: RowProps) {
+export const MessageRow = memo(function MessageRow({ channel, m, compact, names, tasks, inThread, quote, onQuote, older }: RowProps) {
   const { actions, go, toast } = useAct()
   const replying = useReplying()
   const [image, setImage] = useState<{ url: string; alt: string } | null>(null)
@@ -202,7 +203,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
     if (m.pending || m.failed !== undefined || m.leftOut || m.deleted || editing) return
     const target = e.target
     const reply = replying && m.where.kind !== "theirs" ? () => replying.set(m) : null
-    showMenu(e, "Message", (x) => x.messageGroups({ channel, go, toast }, m, target, { openImage, reply, inThread: !!inThread }))
+    showMenu(e, "Message", (x) => x.messageGroups({ channel, go, toast }, m, target, { openImage, reply, inThread: !!inThread || !!older }))
   }
 
   return (
@@ -346,7 +347,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
                 {e}
               </button>
             ))}
-          {m.where.kind !== "theirs" && (
+          {m.where.kind !== "theirs" && !older && (
             <Suspense fallback={null}>
               <Gifs channel={channel} m={m} />
             </Suspense>
@@ -361,7 +362,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
               <Icon name="reply" size={14} />
             </button>
           )}
-          {!inThread && (
+          {!inThread && !older && (
             <button type="button" className="msg-tool" aria-label="Open thread" title="Open thread" onClick={() => go({ to: "panel", panel: { kind: "thread", seq: m.inThread ?? m.seq } })}>
               <Icon name="thread" size={14} />
             </button>

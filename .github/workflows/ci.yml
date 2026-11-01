@@ -229,6 +229,9 @@ jobs:
       - name: ui edit and delete your own message (toolbar, Enter, ↑, Esc, the delete confirm), in WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-edit-delete.ts --dist ui/dist
+      - name: ui search reaches older history, and an older hit opens its stretch (Back to latest, react and copy only), in WebKit
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-older-search.ts --dist ui/dist
       - name: ui history archive (newest window on reload, rows kept below it, backfill, leave), on WebKit's IndexedDB
         if: ${{ !cancelled() }}
         run: bun scripts/ui-history-archive.ts
