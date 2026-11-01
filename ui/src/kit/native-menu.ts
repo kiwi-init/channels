@@ -9,8 +9,22 @@ export function nativeMenuAllowed(target: unknown, selected: string): boolean {
   return hasClosest(target) && !!target.closest(EDITABLE)
 }
 
+let pressed: string | null = null
+
+if (typeof document !== "undefined")
+  document.addEventListener(
+    "mousedown",
+    (e) => {
+      if (e.button === 2) pressed = document.getSelection()?.toString() ?? ""
+    },
+    true
+  )
+
+export const selectedBeforePress = (doc: Document = document): string => pressed ?? doc.getSelection()?.toString() ?? ""
+
 export function quietNativeMenu(doc: Document = document): void {
   doc.addEventListener("contextmenu", (e) => {
-    if (!e.defaultPrevented && !nativeMenuAllowed(e.target, doc.getSelection()?.toString() ?? "")) e.preventDefault()
+    if (!e.defaultPrevented && !nativeMenuAllowed(e.target, selectedBeforePress(doc))) e.preventDefault()
+    pressed = null
   })
 }
