@@ -26,9 +26,9 @@ const TermDrawer = lazy(() => import("~/term/drawer"))
 const TallPage = lazy(() => import("~/shell/tall"))
 const Waiting = later(() => import("~/start/waiting").then((m) => m.Waiting))
 const SearchBox = later(() => import("~/chat/search-box").then((m) => m.SearchBox))
-const Board = later(() => import("~/tasks/board").then((m) => m.Board))
 const Lanes = later(() => import("~/tasks/lanes").then((m) => m.Lanes))
 const GithubView = later(() => import("~/github/view").then((m) => m.GithubView))
+const SpecsView = later(() => import("~/specs/view").then((m) => m.SpecsView))
 const PrPanel = later(() => import("~/github/panel").then((m) => m.PrPanel))
 const IssuePanel = later(() => import("~/github/panel").then((m) => m.IssuePanel))
 const NeedsYou = later(() => import("~/needs/needs").then((m) => m.NeedsYou))
@@ -105,6 +105,8 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   const openPrs = channel.prs?.filter((p) => p.state === "open" || p.state === "draft") ?? []
   const red = openPrs.some((p) => p.checks === "fail" || !!p.ticks?.failed.length)
   const openIssues = channel.issues?.filter((i) => i.state === "open").length ?? 0
+  const specs = channel.specs?.filter((s) => !s.result) ?? []
+  const specsNeed = specs.filter((s) => s.canJudge && (s.stage === "draft" || s.stage === "delivered" || s.changed)).length
   const line = channel.loading ? [] : headerLine(channel, 0)
   const here =
     nav.where.kind === "room"
@@ -150,9 +152,15 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
             {here}
           </button>
           {!tall && (
-            <button type="button" aria-pressed={nav.tab === "tasks"} onClick={() => go({ to: "tab", tab: "tasks" })}>
-              <Icon name="tasks" size={14} />
-              Tasks <Count n={tasks} />
+            <button
+              type="button"
+              aria-pressed={nav.tab === "specs" || nav.tab === "tasks"}
+              onClick={() => go({ to: "spec", ask: null })}
+              title={specsNeed ? `${specsNeed} waiting on you` : `${specs.length} open specs, ${tasks} open tasks`}
+            >
+              <Icon name="spec" size={14} />
+              Specs <Count n={specs.length} />
+              {specsNeed > 0 && <span className="tab-red is-decide" role="img" aria-label="waiting on you" />}
             </button>
           )}
           {!tall && (agents || nav.tab === "agents") && (
@@ -208,7 +216,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
               <TallPage
                 channel={channel}
                 jump={jump}
-                work={<Board channel={channel} needs={needs} tall />}
+                work={<SpecsView channel={channel} tall />}
                 open={
                   nav.panel ? (
                     <div className="panel">
@@ -217,12 +225,12 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
                   ) : null
                 }
               />
-            ) : nav.tab === "tasks" ? (
-              <Board channel={channel} needs={needs} />
             ) : nav.tab === "agents" ? (
               <Lanes channel={channel} />
             ) : nav.tab === "github" ? (
               <GithubView channel={channel} />
+            ) : nav.tab === "specs" || nav.tab === "tasks" ? (
+              <SpecsView channel={channel} />
             ) : nav.tab === "needs" ? (
               <NeedsYou channel={channel} onJump={setJump} />
             ) : (

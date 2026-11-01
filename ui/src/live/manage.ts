@@ -152,6 +152,20 @@ async function setRepos(run: Run, repos: string[]): Promise<void> {
   if (run.isOwner) await run.ch.setRepos({ list: repos, since })
 }
 
+export async function setSpecsOnly(code: string, on: boolean): Promise<void> {
+  await event(owner(code), on ? "turned on Tasks only from approved specs" : "turned off Tasks only from approved specs", { op: "specs.only.set", on })
+}
+
+export function freshChannel(code: string): void {
+  fresh.add(code)
+}
+
+export function takeFresh(code: string): boolean {
+  return fresh.delete(code)
+}
+
+const fresh = new Set<string>()
+
 export async function setGithubWrite(code: string, on: boolean): Promise<void> {
   await event(owner(code), on ? "turned on Write to GitHub" : "turned off Write to GitHub", { op: "github.write.set", on })
 }

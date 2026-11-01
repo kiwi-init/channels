@@ -728,6 +728,7 @@ describe("MCP server", () => {
         "rooms",
         "save",
         "send",
+        "spec",
         "status",
         "task_add",
         "task_update",

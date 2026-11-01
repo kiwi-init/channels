@@ -7,7 +7,7 @@ import { chromium, type CDPSession, type Page, type Request, type WebSocket as P
 import { daemonSock } from "../src/daemon/protocol.ts";
 import { stopDaemon } from "../src/daemon/rpc.ts";
 import { startLocalRelay } from "./local-relay.ts";
-import { firstRun, letIn, newChannel, panel, ROWS, view } from "./perf-ui.ts";
+import { approveSpec, firstRun, letIn, newChannel, panel, ROWS, view } from "./perf-ui.ts";
 import { harnessDist } from "./ui-harness.ts";
 
 if (process.argv.includes("--help")) {
@@ -408,6 +408,8 @@ try {
     ask = String(said.find((m) => m.body === "Make it feel fast")?.seq ?? "");
     if (!ask) await later(300);
   }
+  await atlas(["spec", "write", ask, "# Make it feel fast\n\n## Done when\n- [ ] the app feels fast"]);
+  await approveSpec(page);
   const seedAt = Date.now();
   const tasks: number[] = [];
   for (let i = 0; i < TASKS; i++) {
@@ -504,7 +506,7 @@ try {
 
   const views: Record<string, number[]> = { Tasks: [], "# general": [] };
   for (let i = 0; i < REPS; i++) {
-    views.Tasks!.push(await view(page, "Tasks", `Task ${TASKS - 1}:`));
+    views.Tasks!.push(await view(page, "Specs", `Task ${TASKS - 1}:`));
     await later(500);
     let back = 0;
     if (i === 0) await filmstrip(cdp, "view-general", async () => (back = await view(page, "# general", `M${MESSAGES - 1}: `)));
@@ -523,7 +525,7 @@ try {
   };
   log("views", JSON.stringify(report.views));
 
-  await view(page, "Tasks", `Task ${TASKS - 1}:`);
+  await view(page, "Specs", `Task ${TASKS - 1}:`);
   await later(500);
   const opens: number[] = [];
   for (let i = 0; i < REPS; i++) {

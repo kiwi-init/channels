@@ -21,7 +21,8 @@ import { allowedOnHold, answersAsk, isLeadRole, isPerson, LEAD, ON_HOLD, sameAut
 import { omit } from "../omit.ts";
 import { dmPlace, MAIN, summarize } from "./places.ts";
 import { rootOf } from "../room-rules.ts";
-import { askHeadOf, fileTask } from "./asks.ts";
+import { askHeadOf, askOfMessage, fileTask } from "./asks.ts";
+import { foldSpec, specGate } from "./specs.ts";
 import { taskId } from "./tasks.ts";
 import { linkSafe, prKey, releasesFrom, repoKey } from "./github.ts";
 import { reposOf } from "./repos.ts";
@@ -29,7 +30,7 @@ import { roomName } from "./rooms.ts";
 import { settle } from "./leases.ts";
 import { carriedPersona } from "../personality.ts";
 import { permissionAnswer } from "../permission.ts";
-import type { AskHead, ChannelState, Edit, Fact, FoldBase, FoldMember, GuardFloor, Lease, Member, PersonaLead, Place, Reaction, Room, RoomsFloor, Roster, SecretRoom, Task } from "./types.ts";
+import type { AskHead, ChannelState, Edit, Fact, FoldBase, FoldMember, GuardFloor, Lease, Member, PersonaLead, Place, Reaction, Room, RoomsFloor, Roster, SecretRoom, Spec, Task } from "./types.ts";
 import { inRoom } from "../room-rules.ts";
 import { packAuthors, unpackAuthors } from "./authors.ts";
 
@@ -287,6 +288,8 @@ function folding(
   const threadOf = new Map<number, number>(from?.threadOf);
   const threadPeople = new Map<number, Set<string>>(from?.threadPeople.map(([seq, people]) => [seq, new Set(people)]));
   const askHeads = new Map<number, AskHead>(from?.askHeads?.map((h) => [h.id, h]));
+  const specs = new Map<number, Spec>(from?.specs?.map((sp) => [sp.ask, sp]));
+  let specsOnly = from?.specsOnly ?? null;
   let head = from?.n ?? 0;
 
   const known = new Map<string, Room>(from?.rooms.map((r) => [r.id, r]));
@@ -546,6 +549,28 @@ function folding(
         else askHeads.set(head.id, { ...head, goal, goalBy: m.from });
         continue;
       }
+      if (ev.op === "specs.only.set") {
+        placeOf.set(m.seq, MAIN);
+        if (!member.owner) reject("only the owner says whether tasks come only from approved specs");
+        else specsOnly = ev.on ? (specsOnly ?? m.seq) : null;
+        continue;
+      }
+      if (ev.op === "task.add" && specsOnly !== null) {
+        const re = earlierParent(m);
+        const ask = re !== undefined ? askOfMessage({ askHeads, threadOf, placeOf, tasks }, re) : ev.from !== undefined ? tasks.get(ev.from)?.ask : undefined;
+        const why = specGate(specs, ask);
+        if (why) {
+          placeOf.set(m.seq, MAIN);
+          reject(why);
+          continue;
+        }
+      }
+      if (ev.op === "spec.set" || ev.op === "spec.approve" || ev.op === "spec.result") {
+        placeOf.set(m.seq, MAIN);
+        const why = foldSpec(specs, askHeads, members, m, ev, at);
+        if (why) reject(why);
+        continue;
+      }
       placeOf.set(
         m.seq,
         ev.op === "task.add"
@@ -588,7 +613,8 @@ function folding(
   const recent = <T>(pairs: Iterable<[number, T]>) => [...pairs].filter(([seq]) => seq > cut);
   const keptThreads = recent(threadOf);
   const keptRoots = new Set(keptThreads.map(([, root]) => root));
-  const filedUnder = new Set([...tasks.values()].flatMap((t) => (t.ask !== undefined ? [t.ask] : [])));
+  const keptSpecs = [...specs.values()].filter((sp) => !sp.result || !closedLongAgo(sp.result.at, hw));
+  const filedUnder = new Set([...tasks.values()].flatMap((t) => (t.ask !== undefined ? [t.ask] : [])).concat(keptSpecs.map((sp) => sp.ask)));
   keep?.(
     structuredClone({
       n: head,
@@ -641,6 +667,8 @@ function folding(
       placesBefore: [...summarize(new Map([...placeOf].filter(([seq]) => seq <= cut)), tasks, trust, placesBefore).values()].map((p): [Place, number, number] => [p.place, p.count, p.last]),
       asks: openAsks.map((m) => (m.imgs?.length ? { ...m, imgs: m.imgs.map((i) => omit(i, "data")) } : m)),
       askHeads: [...askHeads.values()].filter((h) => h.id > cut || filedUnder.has(h.id)),
+      specs: keptSpecs,
+      specsOnly,
       answered: openAsks.flatMap((m): [number, string[]][] => [[m.seq, [...(answered.get(m.seq) ?? [])]]]),
       threadOf: keptThreads,
       threadPeople: [...threadPeople].filter(([root]) => root > cut || keptRoots.has(root)).map(([seq, people]): [number, string[]] => [seq, [...people]]),
@@ -698,6 +726,8 @@ function folding(
     rejected,
     openAsks,
     askHeads,
+    specs,
+    specsOnly,
     threadOf,
     threadPeople,
     lead: theLead ?? null,

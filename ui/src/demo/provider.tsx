@@ -7,11 +7,14 @@ import { HANDOFF_DONE } from "@kiwi/core/protocol.ts"
 import { stepReplyText } from "~/chat/step"
 import { DEMO_ACCOUNT, DEMO_CHANNEL, DEMO_DEVICES, DEMO_EMPTY, DEMO_GUEST, DEMO_PREFS, DEMO_TILES, DEMO_WAITING, DEMO_WELCOME, DEMO_WORDS } from "~/demo/data"
 import { longFeed } from "~/demo/long"
+import { withSpecs } from "~/demo/specs"
 import { demoShell, demoShells, demoTerm } from "~/demo/term"
-import type { Account, Actions, AgentStarts, App, Enrolling, Finding, GithubSignIn, Launching, ThisComputer, Channel, ChannelTile, GoneChannel, Message, Prefs, Task } from "~/model"
+import type { Account, Actions, AgentStarts, App, Enrolling, Finding, GithubSignIn, Launching, ThisComputer, Channel, ChannelTile, GoneChannel, Message, Prefs, Spec, Task } from "~/model"
 import { deletedTheme, savedTheme } from "~/theme/themes"
 import { announce } from "~/kit/toasts"
 import { muteKey, snoozeEnd } from "~/live/snooze"
+
+const unticked = (text: string): string => text.replace(/^(\s*[-*+]\s+)\[[xX]\]/gm, "$1[ ]").trim()
 
 interface State {
   account: Account | null
@@ -254,6 +257,8 @@ export type Scenario =
   | "github-code"
   | "github-signed-in"
   | "github-gate"
+  | "specs"
+  | "spec-changed"
 
 function initial(scenario: Scenario, look: Partial<Prefs>): State {
   const prefs = { ...DEMO_PREFS, ...look }
@@ -283,7 +288,9 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
                         ? { ...DEMO_CHANNEL, hold: { note: "Waiting on the release key.", by: "jow", at: Date.now() - 40 * 60_000 } }
                         : scenario === "compact" || scenario === "compacted"
                           ? withCompact(DEMO_CHANNEL, scenario === "compacted")
-                          : DEMO_CHANNEL,
+                          : scenario === "specs" || scenario === "spec-changed"
+                            ? withSpecs(DEMO_CHANNEL, scenario === "spec-changed")
+                            : DEMO_CHANNEL,
       DEMO_EMPTY,
       DEMO_WAITING,
       { ...DEMO_EMPTY, code: "interlinked", title: "interlinked" },
@@ -470,18 +477,30 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
               : t
           ),
         })),
-      addTask: (code, title, owner) =>
+      addTask: (code, ask, title) =>
         edit(code, (c) => {
           const id = Math.max(0, ...c.tasks.map((t) => t.id)) + 1
-          const unfiled = c.taskGroups.some((g) => g.head.kind === "unfiled")
           return {
             ...c,
-            taskGroups: unfiled
-              ? c.taskGroups.map((g) => (g.head.kind === "unfiled" ? { ...g, tasks: [id, ...g.tasks] } : g))
-              : [...c.taskGroups, { key: "unfiled", head: { kind: "unfiled" }, tasks: [id] }],
-            tasks: [...c.tasks, { id, title, owner, status: "todo", createdBy: c.you, createdAt: Date.now(), updatedAt: Date.now(), notes: [], rounds: [], history: [], archived: false }],
+            specs: c.specs?.map((sp) => (sp.ask === ask ? { ...sp, tasks: [...sp.tasks, id], stage: sp.stage === "queued" ? ("working" as const) : sp.stage, queue: undefined } : sp)),
+            tasks: [
+              ...c.tasks,
+              {
+                id,
+                title,
+                status: "todo",
+                createdBy: c.you,
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                notes: [],
+                rounds: [],
+                history: [{ seq: id, by: c.you, at: Date.now(), what: "created" }],
+                archived: false,
+              },
+            ],
           }
         }),
+      setSpecsOnly: (code, on) => edit(code, (c) => ({ ...c, specsOnly: on ? (true as const) : undefined })),
       setTaskStatus: (code, id, status) => editTask(code, id, (t) => ({ ...t, status, updatedAt: Date.now() })),
       cancelTask: (code, id, why) =>
         edit(code, (c, seq) => ({
@@ -507,6 +526,87 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
             t.id === id
               ? { ...t, owner: to, suggested: undefined, updatedAt: Date.now(), history: [...t.history, { seq, by: c.you, at: Date.now(), what: "assigned", to, ...(why ? { note: why } : {}) }] }
               : t
+          ),
+        })),
+      newSpec: (code, words, text) => {
+        let made = 0
+        edit(code, (c, seq) => {
+          made = seq
+          const at = Date.now()
+          const title =
+            text
+              .split("\n")
+              .find((l) => l.startsWith("# "))
+              ?.slice(2) ?? words.slice(0, 80)
+          const spec: Spec = {
+            ask: seq,
+            title,
+            words: words.trim(),
+            by: c.you,
+            at,
+            text,
+            v: seq,
+            edited: { by: c.you, at },
+            edits: 1,
+            editors: [c.you],
+            stage: "draft",
+            backs: [],
+            tasks: [],
+            canJudge: true,
+          }
+          return { ...post(c, seq, { from: c.you, text: words.trim(), where: { kind: "room", room: "general" } }), specs: [...(c.specs ?? []), spec] }
+        })
+        return Promise.resolve(made || null)
+      },
+      writeSpec: (code, ask, text) =>
+        edit(code, (c, seq) => ({
+          ...c,
+          specs: c.specs?.map((sp) => {
+            if (sp.ask !== ask) return sp
+            const changed = !!sp.approved && unticked(sp.approved.text) !== unticked(text)
+            const title =
+              text
+                .split("\n")
+                .find((l) => l.startsWith("# "))
+                ?.slice(2) ?? sp.title
+            return {
+              ...sp,
+              text,
+              title,
+              v: seq,
+              edits: sp.edits + 1,
+              edited: { by: c.you, at: Date.now() },
+              editors: sp.editors.includes(c.you) ? sp.editors : [...sp.editors, c.you],
+              ...(changed ? { changed: true as const } : { changed: undefined }),
+            }
+          }),
+        })),
+      approveSpec: (code, ask, v) =>
+        edit(code, (c) => ({
+          ...c,
+          asks: c.asks.filter((a) => !(a.kind === "spec" && a.ask === ask && a.why !== "result")),
+          specs: c.specs?.map((sp) =>
+            sp.ask === ask && sp.v === v
+              ? {
+                  ...sp,
+                  approved: { by: c.you, at: Date.now(), v, text: sp.text },
+                  changed: undefined,
+                  stage: sp.stage === "draft" ? ("queued" as const) : sp.stage,
+                  queue: sp.tasks.length ? undefined : 1 + (c.specs ?? []).filter((x) => x.stage === "queued").length,
+                }
+              : sp
+          ),
+        })),
+      judgeSpec: (code, ask, verdict, note) =>
+        edit(code, (c) => ({
+          ...c,
+          asks: c.asks.filter((a) => !(a.kind === "spec" && a.ask === ask)),
+          specs: c.specs?.map((sp) =>
+            sp.ask !== ask
+              ? sp
+              : verdict === "back"
+                ? { ...sp, stage: "queued" as const, queue: 1, backs: [...sp.backs, { by: c.you, at: Date.now(), note: note ?? "" }] }
+                : { ...sp, stage: verdict, result: { verdict, by: c.you, at: Date.now(), ...(note ? { note } : {}) } }
           ),
         })),
       nameGoal: (code, ask, name) =>

@@ -2,7 +2,9 @@ import { createContext, useContext } from "react"
 
 import type { Actions, App, Where } from "~/model"
 
-type Tab = "chat" | "tasks" | "agents" | "needs" | "github"
+type Tab = "chat" | "specs" | "tasks" | "agents" | "needs" | "github"
+
+export type SpecPart = "spec" | "inside" | "result"
 
 export type GithubView = "prs" | "issues"
 
@@ -33,6 +35,8 @@ export interface Nav {
   invite?: string
   term?: TermOf
   github?: GithubView
+  spec?: number
+  part?: SpecPart
 }
 
 export type Go =
@@ -40,6 +44,7 @@ export type Go =
   | { to: "where"; where: Where }
   | { to: "tab"; tab: Tab }
   | { to: "github"; view: GithubView }
+  | { to: "spec"; ask: number | null; part?: SpecPart }
   | { to: "panel"; panel: Panel | null }
   | { to: "dialog"; dialog: Dialog }
   | { to: "settings"; section?: Section }
@@ -66,6 +71,10 @@ export function navigate(nav: Nav, go: Go): Nav {
       return { ...nav, page: "channel", tab: go.tab }
     case "github":
       return { ...nav, page: "channel", tab: "github", github: go.view }
+    case "spec":
+      return go.ask === null
+        ? { ...nav, page: "channel", tab: "specs", spec: undefined, part: undefined }
+        : { ...nav, page: "channel", tab: "specs", spec: go.ask, part: go.part ?? "spec", panel: null }
     case "panel":
       return { ...nav, panel: go.panel }
     case "dialog":

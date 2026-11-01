@@ -247,7 +247,7 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   The top bar spans the sidebar and the main area (`--top-h`): the sidebar
   toggle first at the left edge, then the channel switcher, both in the same
   place whether the sidebar is open or collapsed; the views in the middle
-  (`# room`, Tasks with its count, Agents, GitHub with its open pull
+  (`# room`, Specs with its count, Agents, GitHub with its open pull
   requests once a repo is linked and a dot in `alert` while an open one's
   checks failed, Needs you in `decide` with its count), the open one on
   `wash-2`; on the right a mono summary
@@ -273,11 +273,13 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   message, "N replies" with who and when opens the thread. A pending message
   is at 55%; a failed one gets an `alert-wash` band. Working agents show as
   a mono line of dots under the last message.
-- **Tasks.** The Now card on top (what's working, what needs you, done
-  today), the add field, then a card per person's ask: their words in quotes
-  as the heading, who and `from #N` under it, then a two-line row per task
-  (its `Dot`, the title in `t-body`, a mono line of id, owner, state and
-  age), with its PR number, diff bar, additions and checks on the right.
+- **Tasks** live inside specs: the Specs view carries the Now card on top
+  (what's working, what needs you, done today), and under each spec row its
+  open tasks as two-line rows (its `Dot`, the title in `t-body`, a mono line
+  of id, owner, state and age, with its PR number, diff bar, additions and
+  checks on the right) and a mono count of the done ones. Tasks filed before
+  specs sit in a "Not in a spec" card. A person adds a task on an approved
+  spec's Inside.
 - **GitHub.** Pull requests and Issues as one segment control with their
   open counts, a filter field beside it (title, number, author, branch), then
   Open and Closed and, with several repos, the repos as segments. Items sit in
@@ -293,6 +295,26 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   author, size, when), every check with its link (failing on `alert-wash`
   first), the task, and Open on GitHub as the one primary button. A task's
   panel shows a compact PR card with passing checks folded, and its issue.
+- **Specs.** The work view, one tab in the top bar. A segment for Open and
+  Done, a quiet line and New spec as the view's one primary button, then
+  cards like GitHub's by what each spec needs
+  (Needs you in `decide`, Working in `doing`, Waiting for an agent with how
+  many are free, Drafts). A row: the spec's mark (a dashed ring for a draft,
+  a ring once approved, an open `doing` ring while working, `decide` filled
+  with a halo when delivered, `live` when accepted), the title, a mono line
+  of ask, who asked, age, boxes done and where it stands, and the faces of
+  the agents on it. A spec opens in the main area: back to Specs, the title
+  at `t-display` with a mono stage chip, a mono sub line, the person's words
+  quoted as written, then the gate card (`decide-wash` while it waits on a
+  person, with Approve as the primary button) and a segment for Spec, Inside
+  and Result. Spec is the markdown in a card with comments in a margin rail,
+  each beside the line it quotes; selecting words offers Comment. A change
+  after approval shows as a line diff (`live` added, `alert` removed). Inside
+  is one mono glance line, the alarms (`alert-wash` or `decide-wash`), the
+  work as task rows with their PR chips, the story with mono times, and every
+  message behind one quiet line. Under the person's message in #general a
+  spec card on `bg-2` follows the stage, and a run of messages between agents
+  folds into one mono line with their faces and Show.
 - **Needs you.** A mono count line, then one card per thing waiting (the same
   card as Tasks), oldest first: who and what (a `decide` chip for a permission), the detail (a
   command or a diff in mono boxes), and the answers as buttons, the main one

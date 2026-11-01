@@ -1,6 +1,6 @@
 import type { Authors } from "./authors.ts";
 import type { Member as MemberRecord, Runs } from "../membership.ts";
-import type { Card, Color, IssueRef, MemberPicture, Message, TaskState, Trust, Verdict } from "../protocol.ts";
+import type { Card, Color, IssueRef, MemberPicture, Message, SpecVerdict, TaskState, Trust, Verdict } from "../protocol.ts";
 import type { GithubCheck, GithubIssue, GithubPr, GithubRelease, GithubRules, GithubState } from "./github.ts";
 import type { Persona } from "../personality.ts";
 import type { Power } from "../protocol.ts";
@@ -145,6 +145,26 @@ export interface AskHead {
   goalBy?: string;
 }
 
+interface SpecMark {
+  seq: number;
+  by: string;
+  at: number;
+}
+
+export interface Spec {
+  ask: number;
+  text: string;
+  v: number;
+  by: string;
+  at: number;
+  started: SpecMark;
+  edits: number;
+  editors: string[];
+  approved?: SpecMark & { v: number; text: string };
+  result?: SpecMark & { verdict: SpecVerdict; note?: string };
+  backs: (SpecMark & { note: string })[];
+}
+
 export interface Edit {
   body: string;
   at: number;
@@ -196,6 +216,8 @@ export interface ChannelState {
   gone: Map<string, number>;
   openAsks: Message[];
   askHeads: Map<number, AskHead>;
+  specs: Map<number, Spec>;
+  specsOnly: number | null;
   threadOf: Map<number, number>;
   threadPeople: Map<number, Set<string>>;
   lead: string | null;
@@ -302,6 +324,8 @@ export interface FoldBase {
   powers?: [string, Partial<Record<Power, boolean>>][];
   asks: Message[];
   askHeads?: AskHead[];
+  specs?: Spec[];
+  specsOnly?: number | null;
   answered: [number, string[]][];
   threadOf: [number, number][];
   threadPeople: [number, string[]][];

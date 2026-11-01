@@ -5,7 +5,7 @@ import { inlineText } from "@kiwi/core/membership.ts";
 import { formatTask, formatTasks, issueLinkText, looksLikeLine, taskStateWord } from "@kiwi/core/format.ts";
 import type { TaskState } from "@kiwi/core/protocol.ts";
 import { leadCheckpointRefusal } from "@kiwi/core/reentry.ts";
-import { askRefusal, isPerson, leadCheckpointKey, mayNameGoal, openRound, parseTaskId, similarOpenTasks, taskId, type ChannelState } from "@kiwi/core/state.ts";
+import { askRefusal, isPerson, taskSpecRefusal, leadCheckpointKey, mayNameGoal, openRound, parseTaskId, similarOpenTasks, taskId, type ChannelState } from "@kiwi/core/state.ts";
 import { formatCandidates, pickFor, taskCandidates } from "@kiwi/core/routing.ts";
 import { bindingFor } from "../../hooks.ts";
 import { args, opt } from "../args.ts";
@@ -28,8 +28,11 @@ export const taskCommands: Record<string, Command> = {
         if (sub === "add") {
           const re = opt.re === undefined ? undefined : Number(opt.re.replace(/^#/, "")) || (yield* die("--ask takes a message number: --ask 18"));
           const from = opt.from === undefined ? undefined : (parseTaskId(opt.from) ?? (yield* die("--from takes a task: --from T72")));
-          const unfiled = askRefusal((yield* s.state()).state, s.me, { re, from, issue: opt.issue !== undefined }, ANCHORS);
+          const now = (yield* s.state()).state;
+          const unfiled = askRefusal(now, s.me, { re, from, issue: opt.issue !== undefined }, ANCHORS);
           if (unfiled) return yield* die(unfiled);
+          const unspecced = taskSpecRefusal(now, { re, from });
+          if (unspecced) return yield* die(unspecced);
           const given = [opt.body !== undefined, opt.file !== undefined, opt.detail !== undefined].filter(Boolean).length;
           if (given > 1) return yield* die('give the task\'s body once: --body "…", --file spec.md or --detail "…"');
           const body = opt.file !== undefined ? (yield* readText(opt.file)).trim() || (yield* die(`${opt.file} is empty`)) : (opt.body ?? opt.detail);

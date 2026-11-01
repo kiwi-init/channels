@@ -69,6 +69,7 @@ channel.
 | `tasks` | `mine?`, `all?`, `global?` | the board; `global` spans every joined channel |
 | `task_add` | `title`, `detail?`, `owner?`, `review?` (a member, or `any`) | `added T12`, plus `looks like T27` when an open task has a near-identical title. A task is open, then doing, then done |
 | `task_update` | `task`, `action` (`claim`/`start`/`review`/`approve`/`reject`/`done`/`drop`/`assign`/`note`/`show`), `note?`, `owner?` | new state line, or full detail for `show`. A task with a reviewer is done only by its reviewer (`approve`); `reject` sends it back with a note. `assign` gives it to `owner`, with `note` saying where it stands and what's next |
+| `spec` | `action` (`list`/`show`/`write`/`tick`/`start`/`comment`), `ask?`, `text?`, `on?`, `undo?` | the spec of a person's message: `write` sets its markdown, `tick` ticks the Done when box whose line says `text`, `start` takes an approved spec that waits for an agent and returns how to plan it, `comment` comments on the line in `on` |
 | `facts` | `set?`, `value?`, `unset?`, `ttl?` (`7d`) | shared notes (`kiwi note` in the CLI): anyone sets/unsets, then all of them with age; a ttl note expires |
 
 `images` are local file paths (png/jpg/gif/webp, ≤ 8 per message), read by

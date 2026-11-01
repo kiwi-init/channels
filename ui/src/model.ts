@@ -182,7 +182,44 @@ export interface Task {
   leftBy?: string
 }
 
-export type TaskGroupHead =
+type SpecStage = "draft" | "queued" | "working" | "delivered" | "accepted" | "dropped"
+
+interface SpecMark {
+  by: string
+  at: number
+}
+
+export interface Spec {
+  ask: number
+  title: string
+  words: string
+  by: string
+  at: number
+  text: string
+  v: number
+  edited: SpecMark
+  edits: number
+  editors: string[]
+  stage: SpecStage
+  approved?: SpecMark & { v: number; text: string }
+  changed?: true
+  result?: SpecMark & { verdict: "accepted" | "dropped"; note?: string }
+  backs: (SpecMark & { note: string })[]
+  tasks: number[]
+  planner?: string
+  queue?: number
+  canJudge?: true
+}
+
+export interface SpecAsk {
+  kind: "spec"
+  id: string
+  at: number
+  ask: number
+  why: "approve" | "changed" | "result"
+}
+
+type TaskGroupHead =
   | { kind: "ask"; id: number; by: string; words: string; goal?: string; mayName: boolean }
   | { kind: "unfiled" }
   | { kind: "next"; name?: string }
@@ -256,6 +293,7 @@ export interface Message {
   text: string
   locked?: true
   where: Where
+  to?: readonly string[]
   said?: Said
   replyTo?: number
   inThread?: number
@@ -363,7 +401,7 @@ export interface ReviewAsk {
   task: number
 }
 
-export type Ask = PermissionAsk | QuestionAsk | JoinAsk | ReviewAsk
+export type Ask = PermissionAsk | QuestionAsk | JoinAsk | ReviewAsk | SpecAsk
 
 export interface ChannelTile {
   code: string
@@ -460,6 +498,9 @@ export interface Channel {
   leftOut?: Message[]
   tasks: Task[]
   taskGroups: TaskGroup[]
+  specs?: Spec[]
+  specsOnly?: true
+  free?: string[]
   asks: Ask[]
   connection: "connecting" | "live" | "reconnecting"
   loading?: boolean
@@ -632,12 +673,17 @@ export interface Actions {
   answerStep(code: string, id: string, reply: StepReply): void
   answerJoin(code: string, id: string, letIn: boolean, choice?: JoinChoice): void
   approveTask(code: string, task: number, approve: boolean, why?: string): void
-  addTask(code: string, title: string, owner?: string): void
+  addTask(code: string, ask: number, title: string): void
   setTaskStatus(code: string, task: number, status: TaskStatus): void
   cancelTask(code: string, task: number, why: string): void
   assignTask(code: string, task: number, to: string, why: string): void
   setReviewer(code: string, task: number, reviewer: string): void
   nameGoal(code: string, ask: number, name: string | null): void
+  newSpec(code: string, words: string, text: string): Promise<number | null>
+  writeSpec(code: string, ask: number, text: string): void
+  approveSpec(code: string, ask: number, v: number): void
+  judgeSpec(code: string, ask: number, verdict: "accepted" | "back" | "dropped", note?: string): void
+  setSpecsOnly(code: string, on: boolean): void
   setRole(code: string, name: string, role: string | null): void
   removeMember(code: string, name: string): void
   setPersona(code: string, name: string, persona: string | null): void

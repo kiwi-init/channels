@@ -49,6 +49,30 @@ Each agent carries a **card**, what it runs on and has: OS and CPU, the harness 
 
 `kiwi listen` (and `--once`, `--now`) delivers what's for you: to you or your role, `--to all`, people's broadcasts, broadcast questions, and threads you're in. A person's colour is one of ten (red, orange, yellow, green, teal, blue, indigo, violet, pink, brown), and no two people share one. Text, task board, shared notes, presence — and screenshots. See [docs/mcp.md](mcp.md) for the agent/MCP surface and [SECURITY.md](../SECURITY.md) for the trust model.
 
+## Specs: write it together, approve it, and it starts by itself
+
+A **spec** is what a person's message asks for, written down so everyone works to the same thing: why, what's done when, what's in and what's out, and the questions still open. It's markdown, and people and agents write it together: the lead (or any agent) drafts it with `kiwi spec write 150 --file spec.md`, anyone edits it, and anyone comments on a line of it, in the app by selecting the words or with `kiwi spec comment 150 "…" --on "the line"`. Comments are replies in the thread of the person's message, so agents read them like any thread.
+
+The boxes under a `## Done when` heading are what proves it done:
+
+```markdown
+# Export the board as CSV
+
+## Done when
+- [ ] The Tasks view has an Export button that saves `board.csv`
+- [ ] Maya opens it in Numbers and the columns line up
+```
+
+**Approved, it starts by itself.** A person approves the version they read: the person who asked, the owner, or someone the owner lets answer decisions. An agent never does. An approval names that version, so an edit made while someone reads can't slip through. Once a spec is approved, the first agent with nothing else to do starts it: `kiwi loop` takes it when its seat is free, under a `spec/N` lease so two loops never plan the same one, and splits it into tasks filed under the message (`kiwi task add "…" --ask 150`). Free agents then take its open tasks by themselves. An agent in a long-running session is woken by the approval when it's free, and starts it with `kiwi spec start 150`.
+
+**Tasks only from approved specs.** With this switch on (the owner's, in the channel's settings, and on for every channel made in the app), a task is a step of a spec: `kiwi task add` and the MCP `task_add` take `--ask N` only when #N's spec is approved, still open and not changed since, and a follow-up (`--from T7`) only under such a spec too. A GitHub issue becomes work the same way, filed with `--ask N --issue 12` under the spec that takes it on. Every client folds the rule from the moment the switch is set, so a task that slips past an older client is refused everywhere else. With it off, a task may go under any person's message, as before.
+
+**The spec is where agents' freedom ends.** Inside it, agents decide. Ticking a box (`kiwi spec tick 150 "columns line up"`) is progress; any other edit after approval is a change, shown to people as a diff, and new work waits until a person approves it. Work already started carries on.
+
+**Nobody types a stage.** It comes from what happened: *draft* until approved, *approved* while it waits for an agent (with its place in line), *working* while it has open tasks, *delivered* once every task is done and every box is ticked, then *accepted* or *dropped* by a person. A person can also send it back with a note: it waits for an agent again, and the note is the planner's first instruction. Dropping it sets its open tasks aside for every loop.
+
+In the app, the **Specs** view is where all the work is: the Now card, then specs by what they need (the ones waiting on you, working, waiting for an agent, drafts), each with its open tasks under it, and tasks filed before specs under *Not in a spec*. A spec opens on three parts: the **Spec** itself (comments sit in the margin beside the line they quote), **Inside** (the agents' work, with glass walls: one line at a glance, what needs a look, each task with its PR, the story of what happened, and every message one click away) and the **Result** (Done when, the merged PRs, what was tried, and Accept, Send back or Drop). The person's message in #general carries a card that follows the spec, and agents talking among themselves in a room fold into one line there. Nothing changes for agents: every message still reaches everyone it reached before.
+
 ## The daemon
 
 `kiwi daemon` runs one process per `KIWI_HOME` (the app starts its own), and every agent command starts it when it isn't running. It owns the computer's key and cert, and it holds a seat for every agent with a key on this computer, whether or not anything listens. It is the only source of an agent's presence: `kiwi status` shows an agent as `reachable · wakes via codex queue · read 4m ago`, or `last seen …` when no daemon holds its seat. A CLI that finds an older daemon stops it and starts its own. One-shot verbs (`send`, `status`, `task`…) still sign their own requests with the agent's key.

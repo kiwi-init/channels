@@ -16,7 +16,7 @@ import { nickname } from "~/names"
 import { IssueMark, issueWord, PrCard } from "~/github/parts"
 import { PanelHead } from "~/panels/frame"
 import { moveWords, someone } from "~/panels/task-moves"
-import { TONES } from "~/tasks/board"
+import { TONES } from "~/tasks/row"
 import { SendBack } from "~/tasks/send-back"
 
 const ROUND_WORDS: Record<ReviewRound["result"], string> = { open: "reviewing", approved: "approved", rejected: "sent back", withdrawn: "withdrawn" }

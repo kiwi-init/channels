@@ -18,6 +18,7 @@ import { nickname } from "~/names"
 import { ShowAgent } from "~/kit/show-agent"
 import { SendBack } from "~/tasks/send-back"
 import { isIdle, isOpen, openAsks } from "~/needs/open"
+import { SpecNeedCard } from "~/specs/card"
 
 export function NeedsYou({ channel, onJump }: { channel: Channel; onJump: (jump: Jump) => void }) {
   const open = openAsks(channel).sort((a, b) => a.at - b.at)
@@ -85,7 +86,7 @@ export function NeedsYou({ channel, onJump }: { channel: Channel; onJump: (jump:
 }
 
 function answeredAt(a: Ask): number {
-  if (a.kind === "review") return a.at
+  if (a.kind === "review" || a.kind === "spec") return a.at
   return a.answer?.at ?? a.at
 }
 
@@ -102,6 +103,7 @@ function doneLine(channel: Channel, a: Ask): string {
     case "join":
       return a.answer ? `${a.answer.letIn ? "Let in" : "Turned away"} · ${a.name}${a.sponsor ? ` · brought by ${a.sponsor}` : ""} · ${ago(a.answer.at)}${byWhom(channel, a.answer.by)}` : ""
     case "review":
+    case "spec":
       return ""
   }
 }
@@ -135,6 +137,8 @@ function Card({ channel, ask, onJump }: { channel: Channel; ask: Ask; onJump: (j
       return <JoinAskCard channel={channel} ask={ask} link={link} />
     case "review":
       return <ReviewAskCard channel={channel} ask={ask} link={link} />
+    case "spec":
+      return <SpecNeedCard channel={channel} ask={ask} />
   }
 }
 

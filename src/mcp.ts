@@ -12,6 +12,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import * as Cause from "effect/Cause";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import { formatSpec, formatSpecs, planningText, specLine } from "@kiwi/core/spec-lines.ts";
 import * as Exit from "effect/Exit";
 import { join } from "node:path";
 import { z } from "zod";
@@ -61,7 +62,7 @@ import {
   type Message,
 } from "@kiwi/core/protocol.ts";
 import { inlineText } from "@kiwi/core/membership.ts";
-import { askRefusal, chooseThread, parseTaskId, similarOpenTasks, taskId, wentTo } from "@kiwi/core/state.ts";
+import { askRefusal, chooseThread, parseTaskId, similarOpenTasks, taskId, taskSpecRefusal, wentTo } from "@kiwi/core/state.ts";
 import { detectCard } from "./card.ts";
 import { VERSION } from "./version.ts";
 
@@ -684,6 +685,8 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
     tool(({ title, detail, owner, review, issue, from, ask, goal }) =>
       Effect.gen(function* () {
         const anchors = { ...(from !== undefined ? { from } : {}), ...(ask !== undefined ? { re: ask } : {}) };
+        const unspecced = taskSpecRefusal((yield* s.state()).state, anchors);
+        if (unspecced) return yield* new Rejected(unspecced);
         if (issue !== undefined) {
           const made = yield* s.taskFromIssue(issue, { title, detail, owner, review, ...anchors });
           const { state: after } = yield* s.state();
@@ -782,6 +785,42 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
                       : yield* s.taskUpdate(id, { state: states[action], note, ...(action === "review" && at?.trim() ? { at: at.trim() } : {}) });
         const t = state.tasks.get(id)!;
         return `${taskId(id)} ${taskStateWord(t)}${t.owner ? ` @${t.owner}` : ""}: ${inlineText(t.title, 200)}`;
+      }),
+    ),
+  );
+
+  server.registerTool(
+    "spec",
+    {
+      description:
+        "The spec of a person's message: what it's for, Done when, In, Out, as markdown that people and agents write together. A person approves it, and the first free agent starts it. " +
+        'list: the open specs. show: one in full. write: write or rewrite it (markdown in text). tick: tick the box under Done when whose line says text (untick with undo). start: take an approved spec that waits for an agent, and plan it. comment: comment on it, on the line in on. Example: spec {"action":"tick","ask":150,"text":"columns line up"}.',
+      inputSchema: {
+        action: z.enum(["list", "show", "write", "tick", "start", "comment"]),
+        ask: z.number().int().optional().describe("the person's message #N the spec is for"),
+        text: z.string().optional(),
+        on: z.string().optional().describe("comment: the words of the spec the comment is about"),
+        undo: z.boolean().optional(),
+      },
+    },
+    tool(({ action, ask, text, on, undo }) =>
+      Effect.gen(function* () {
+        if (action === "list") return formatSpecs((yield* s.state()).state);
+        if (ask === undefined) return yield* new Rejected(`${action} needs ask: the person's message #N the spec is for`);
+        if (action === "show") {
+          const { state } = yield* s.state();
+          const spec = state.specs.get(ask);
+          return spec ? formatSpec(state, spec) : yield* new Rejected(`#${ask} has no spec: spec {"action":"write","ask":${ask},"text":"# …"} writes one`);
+        }
+        if (action === "start") {
+          const { spec, lease } = yield* s.startSpec(ask, 30 * 60);
+          if (lease.holder !== s.me) return `${lease.holder} is already planning #${ask}: take one of its tasks once they're up`;
+          return planningText((yield* s.state()).state, spec);
+        }
+        if (!text?.trim()) return yield* new Rejected(`${action} needs text`);
+        if (action === "write") return `wrote ${specLine((yield* s.state()).state, yield* s.writeSpec(ask, text))}`;
+        if (action === "tick") return `${undo ? "unticked" : "ticked"}: ${specLine((yield* s.state()).state, yield* s.tickSpec(ask, text, !undo))}`;
+        return `commented on #${ask}'s spec: #${yield* s.commentSpec(ask, text, on)}`;
       }),
     ),
   );
