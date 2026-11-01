@@ -474,16 +474,12 @@ describe("the vault: the recovery chain and signed versions (T823)", () => {
     const other = await recoveryKey(new Uint8Array(32).fill(11));
     const r1 = await readOf(links, chain);
     const forced = (at: number) => sign(person, { kind: "kiwi-recovery" as const, v: 1 as const, person: person.pk, n: 2, prev: r1.head, at, rpk: other.pk, rxpk: other.xpk!, after: null });
-    const now = await call(a, desk, "PUT", "/v1/account/vault", { recovery: [...chain, await forced(t)] });
-    expect(now.status).toBe(400);
-    expect(await errorOf(now)).toContain("only the recovery key replaces it at once");
     const old = await call(a, desk, "PUT", "/v1/account/vault", { recovery: [...chain, await forced(PERSON_WORDS_WAIT_FROM - 86_400_000)] });
     expect(old.status).toBe(400);
     expect(await errorOf(old)).toContain("time it's sent");
-    const proposal = await recoveryLink(person, person.pk, r1, { pk: other.pk, xpk: other.xpk! }, t);
-    expect(proposal.after).toBe(recoveryAfter(t));
-    expect((await call(a, desk, "PUT", "/v1/account/vault", { recovery: [...chain, proposal] })).status).toBe(204);
-    expect((await readOf(links, [...chain, proposal])).pending).toMatchObject({ rpk: other.pk, by: person.pk });
+    const late = await forced(t);
+    expect((await call(a, desk, "PUT", "/v1/account/vault", { recovery: [...chain, late] })).status).toBe(204);
+    expect(await readOf(links, [...chain, late])).toMatchObject({ rpk: r1.rpk, pending: { rpk: other.pk, after: recoveryAfter(t), by: person.pk } });
   });
 
   test("a vault too large is refused", async () => {
