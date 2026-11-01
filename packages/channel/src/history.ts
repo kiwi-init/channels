@@ -14,7 +14,6 @@
 
 import type { CachedKept, CachedRow, Unread } from "@kiwi/core/cache-row.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
-import type { OlderRows } from "../../../desktop/src/bridge.ts";
 import { planReload } from "./history-plan.ts";
 import { markOnce } from "./marks.ts";
 
@@ -25,6 +24,7 @@ export interface HistoryDb {
   put(roomId: string, memberPk: string, row: CachedRow): Promise<void>;
   putRows(roomId: string, memberPk: string, rows: CachedRow[]): Promise<void>;
   newest(roomId: string, memberPk: string, count: number): Promise<CachedRow[]>;
+  after(roomId: string, memberPk: string, seq: number, count: number): Promise<CachedRow[]>;
   oldest(roomId: string, memberPk: string): Promise<number | null>;
   floor(roomId: string, memberPk: string): Promise<boolean>;
   putFloor(roomId: string, memberPk: string): Promise<void>;
@@ -122,6 +122,7 @@ function idb(): HistoryDb {
         req.onerror = () => reject(req.error);
       });
     },
+    after: (roomId, memberPk, seq, count) => run<CachedRow[]>("readonly", (s) => s.getAll(rangeAbove(roomId, memberPk, seq), count)),
     oldest: async (roomId, memberPk) => {
       const key = await run<IDBValidKey | undefined>("readonly", (s) => s.getKey(range(roomId, memberPk, Number.MAX_SAFE_INTEGER, false)));
       const seq = Array.isArray(key) ? key[2] : undefined;
@@ -145,6 +146,10 @@ function idb(): HistoryDb {
 }
 
 let backing: HistoryDb | null = null;
+
+export function historyDb(): HistoryDb {
+  return db();
+}
 
 function db(): HistoryDb {
   if (!backing) {
@@ -230,54 +235,4 @@ export async function forgetHistory(roomId: string, memberPk: string): Promise<v
 
 export async function forgetAllHistory(): Promise<void> {
   await db().dropAll();
-}
-
-interface Backfill {
-  older(before: number, limit: number): Promise<OlderRows>;
-  hidden(): boolean;
-  wait(ms: number): Promise<void>;
-  stopped(): boolean;
-}
-
-const BACKFILL_PAGE = 500;
-const BACKFILL_GAP_MS = 2_000;
-const BACKFILL_MAX_WAIT_MS = 5 * 60_000;
-const BACKFILL_TRIES = 6;
-
-export async function backfill(roomId: string, memberPk: string, b: Backfill): Promise<"done" | "stopped" | "failed"> {
-  let pause = BACKFILL_GAP_MS;
-  let failures = 0;
-  for (;;) {
-    if (b.stopped()) return "stopped";
-    if (b.hidden()) {
-      await b.wait(BACKFILL_GAP_MS);
-      continue;
-    }
-    if (await db().floor(roomId, memberPk)) return "done";
-    const oldest = await db().oldest(roomId, memberPk);
-    if (oldest === null) return "stopped";
-    if (oldest <= 1) {
-      await db().putFloor(roomId, memberPk);
-      return "done";
-    }
-    const page = await b.older(oldest, BACKFILL_PAGE).then(
-      (p) => p,
-      () => null,
-    );
-    if (!page) {
-      if (++failures >= BACKFILL_TRIES) return "failed";
-      pause = Math.min(pause * 2, BACKFILL_MAX_WAIT_MS);
-      await b.wait(pause);
-      continue;
-    }
-    failures = 0;
-    pause = BACKFILL_GAP_MS;
-    if (b.stopped()) return "stopped";
-    if (page.rows.length) await db().putRows(roomId, memberPk, page.rows);
-    if (page.done) {
-      await db().putFloor(roomId, memberPk);
-      return "done";
-    }
-    await b.wait(pause);
-  }
 }

@@ -6,7 +6,8 @@ import { b64url, seal } from "@kiwi/core/crypto.ts";
 import { generateIdentity, sign } from "@kiwi/core/identity.ts";
 import { PROTOCOL_VERSION, type Message } from "@kiwi/core/protocol.ts";
 import { openKept, openRow, openRows, packKept, packRow, packEnvelope } from "@kiwi/core/cache-row.ts";
-import { backfill, forgetAllHistory, forgetHistory, readCached, readKept, rememberKept, rememberRow, rememberRows, useHistoryDb, type CachedKept, type CachedRow, type HistoryDb } from "./history.ts";
+import { backfill, indexArchive } from "./history-fill.ts";
+import { forgetAllHistory, forgetHistory, readCached, readKept, rememberKept, rememberRow, rememberRows, useHistoryDb, type CachedKept, type CachedRow, type HistoryDb } from "./history.ts";
 
 const SENTINEL = "SENTINEL-plain-text-should-not-rest";
 const ROOM = "a".repeat(32);
@@ -35,6 +36,10 @@ function memoryDb(): HistoryDb {
       for (const row of batch) rows.set(id(room, pk, row.seq), row);
     },
     newest: async (room, pk, count) => list(room, pk).slice(-count),
+    after: async (room, pk, seq, count) =>
+      list(room, pk)
+        .filter((r) => r.seq > seq)
+        .slice(0, count),
     oldest: async (room, pk) => list(room, pk)[0]?.seq ?? null,
     floor: async (room, pk) => floors.has(`${room}\0${pk}`),
     putFloor: async (room, pk) => void floors.add(`${room}\0${pk}`),
@@ -312,5 +317,33 @@ describe("the archive fills in from the relay, a page at a time (T977)", () => {
     await rememberRows(ROOM, PK_A, await relay(9, 9));
     expect(await backfill(ROOM, PK_A, { ...quick, older: older(1) })).toBe("done");
     expect((await store.newest(ROOM, PK_A, Infinity)).length).toBe(9);
+  });
+});
+
+describe("the archive feeds the search index in order (T977)", () => {
+  const relay = (from: number, to: number) => Promise.all(Array.from({ length: to - from + 1 }, (_, i) => packRow(key, ROOM, 1, msg(from + i, `line ${from + i}`))));
+  const quick = { hidden: () => false, wait: async () => {}, stopped: () => false };
+
+  test("it waits until the archive reaches seq 1, then sends rows after what's indexed, 2,000 at a time", async () => {
+    await rememberRows(ROOM, PK_A, await relay(3, 4_500));
+    const pages: number[][] = [];
+    const index = async (rows: CachedRow[]) => (rows.length && pages.push([rows[0]!.seq, rows.at(-1)!.seq]), rows.at(-1)?.seq ?? 0);
+    expect(await indexArchive(ROOM, PK_A, { ...quick, index })).toBe("waiting");
+    await rememberRows(ROOM, PK_A, await relay(1, 2));
+    let through = 1_000;
+    const resumed = async (rows: CachedRow[]) => (rows.length && pages.push([rows[0]!.seq, rows.at(-1)!.seq]), (through = rows.at(-1)?.seq ?? through));
+    expect(await indexArchive(ROOM, PK_A, { ...quick, index: resumed })).toBe("done");
+    expect(pages).toEqual([
+      [1_001, 3_000],
+      [3_001, 4_500],
+    ]);
+  });
+
+  test("an app without search stops it, and rows it can't index end it instead of looping", async () => {
+    await rememberRows(ROOM, PK_A, await relay(1, 10));
+    expect(await indexArchive(ROOM, PK_A, { ...quick, index: async () => null })).toBe("unsupported");
+    let asks = 0;
+    expect(await indexArchive(ROOM, PK_A, { ...quick, index: async () => (asks++, 4) })).toBe("done");
+    expect(asks).toBe(2);
   });
 });

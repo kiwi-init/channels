@@ -294,6 +294,9 @@ jobs:
       - working-directory: desktop
         if: ${{ !cancelled() }}
         run: bun test --tsconfig-override tsconfig.eb.json ./eb-tests
+      - name: history search on macOS's own SQLite (FTS5, the sealed index, the worker)
+        if: ${{ !cancelled() }}
+        run: bun test test/search-index.test.ts test/history-search.test.ts
       - working-directory: desktop
         if: ${{ !cancelled() }}
         env:
