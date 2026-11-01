@@ -412,7 +412,17 @@ export function useAccount(): Account | null {
       ...(moveRefused ? { githubMove: moveRefused } : {}),
       computers: [...computers.map((c) => computerOf(c, online, agents)), ...phones.map(phoneOf)],
       version,
-      ...(update && !update.blocked ? { update: { version: update.version, ready: update.state === "ready", state: update.state } } : {}),
+      ...(update
+        ? {
+            update: {
+              version: update.version,
+              ready: update.state === "ready",
+              state: update.state,
+              ...(update.state === "downloading" && update.progress !== undefined ? { progress: update.progress } : {}),
+              ...(update.blocked ? { blocked: true as const } : {}),
+            },
+          }
+        : {}),
       ...(look ? { uiUpdate: look } : {}),
       key: person.pk.slice(0, 8),
       personPk: person.pk,

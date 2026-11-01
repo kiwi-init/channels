@@ -120,7 +120,9 @@ export const ebHost: Host = {
     return path.basename(file);
   },
   restartToUpdate: () => {
-    if (applyUpdate(true)) Utils.quit();
+    const applied = applyUpdate(true);
+    if (applied) Utils.quit();
+    return applied;
   },
   tellKeys: (m) => keysTell(m),
 };
