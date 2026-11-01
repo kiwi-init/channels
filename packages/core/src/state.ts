@@ -21,16 +21,13 @@ export {
   judgesSpec,
   setAsideBySpec,
   specLease,
-  specOfTask,
   specPlanner,
   specQueue,
   specStage,
   specTasks,
   specTitle,
-  specTitleOf,
   tickDoneWhen,
   type DoneWhen,
-  type SpecStage,
 } from "./state/specs.ts";
 export { findRoom, newRoomId } from "./state/rooms.ts";
 export { bareAt, memberNamed, readsAsHandle } from "./state/mentions.ts";
@@ -51,6 +48,5 @@ export {
   type RoomsFloor,
   type Roster,
   type Spec,
-  type SpecMark,
   type Task,
 } from "./state/types.ts";

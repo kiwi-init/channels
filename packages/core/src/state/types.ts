@@ -145,7 +145,7 @@ export interface AskHead {
   goalBy?: string;
 }
 
-export interface SpecMark {
+interface SpecMark {
   seq: number;
   by: string;
   at: number;

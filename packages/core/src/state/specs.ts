@@ -122,7 +122,7 @@ export function specQueue(state: Pick<ChannelState, "specs" | "tasks">): Spec[] 
   return [...state.specs.values()].filter((s) => specStage(state, s) === "queued" && !changedSinceApproval(s)).sort((a, b) => queuedSince(a) - queuedSince(b));
 }
 
-export function specOfTask(state: Pick<ChannelState, "specs" | "tasks">, task: number): Spec | undefined {
+function specOfTask(state: Pick<ChannelState, "specs" | "tasks">, task: number): Spec | undefined {
   const ask = state.tasks.get(task)?.ask;
   return ask === undefined ? undefined : state.specs.get(ask);
 }

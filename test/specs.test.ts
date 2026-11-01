@@ -32,6 +32,12 @@ const claim = (from: string, task: number) => ev(from, { op: "task.claim", task 
 const done = (from: string, task: number) => ev(from, { op: "task.update", task, state: "done" });
 const lease = (from: string, name: string) => ev(from, { op: "lease.take", name, ttl: 1800 });
 
+const tickBox = (text: string, words: string): string => {
+  const r = tickDoneWhen(text, words);
+  if ("why" in r) throw new Error(r.why);
+  return r.text;
+};
+
 const SPEC = ["# Export annotations as CSV", "", "## Done when", "- [ ] PR merged with ci-ok", "- [ ] Ana OKs a sample file", "", "## Out", "- batch export"].join("\n");
 
 beforeAll(async () => {
@@ -100,7 +106,7 @@ describe("a spec: humans and agents write it, a person approves it", () => {
 
 describe("approved, it starts by itself when an agent is free, and comes back as a result", () => {
   test("draft, queued, working, delivered, accepted: each from what happened, never typed", async () => {
-    const ticked = tickDoneWhen(tickDoneWhen(SPEC, "merged").text as string, "sample").text as string;
+    const ticked = tickBox(tickBox(SPEC, "merged"), "sample");
     const log = await signedLog([
       say("ana", "export please"),
       write("lead", 1, SPEC),
@@ -127,7 +133,7 @@ describe("approved, it starts by itself when an agent is free, and comes back as
       say("ana", "export please"),
       write("lead", 1, SPEC),
       approve("ana", 1, 2),
-      write("dev", 1, tickDoneWhen(SPEC, "merged").text as string),
+      write("dev", 1, tickBox(SPEC, "merged")),
       write("dev", 1, `${SPEC}\n- batch export after all`),
     ]);
     const ticked = fold(log.slice(0, 4), roster, T0);

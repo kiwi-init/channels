@@ -5,7 +5,7 @@ import type { ChannelState, Spec } from "./state/types.ts";
 
 const ordinal = (n: number): string => (n === 1 ? "next" : `${n}${n % 10 === 2 && n % 100 !== 12 ? "nd" : n % 10 === 3 && n % 100 !== 13 ? "rd" : "th"} in line`);
 
-export function specStageText(state: ChannelState, spec: Spec): string {
+function specStageText(state: ChannelState, spec: Spec): string {
   const stage: SpecStage = specStage(state, spec);
   const asker = state.askHeads.get(spec.ask)?.by;
   switch (stage) {
