@@ -12,7 +12,7 @@ import { handleFor, type JoinClaims, type Member, type MemberInfo } from "@kiwi/
 import { omit } from "@kiwi/core/omit.ts";
 import { cleanPersonalities } from "@kiwi/core/personalities.ts";
 import { PRESETS } from "@kiwi/core/presets.ts";
-import type { Message } from "@kiwi/core/protocol.ts";
+import { PAGE_LIMIT, type Message } from "@kiwi/core/protocol.ts";
 import type { FoldBase } from "@kiwi/core/state.ts";
 import type { SigningBudget } from "@kiwi/core/sas.ts";
 import {
@@ -26,8 +26,11 @@ import {
   type FollowEvent,
   type FollowOptions,
   type JoinCheck,
+  type OlderRows,
   type WireError,
 } from "./bridge.ts";
+
+const OLDER_PAGE = 500;
 import { channelAccess, publicChannel } from "./seats.ts";
 
 export interface KeyHost {
@@ -258,6 +261,19 @@ export class Keyring implements ChannelOps {
       .learnRooms(opened.filter((m): m is Message => !!m && "ev" in m))
       .catch(() => {});
     return opened;
+  }
+
+  async olderRows(code: string, before: number, limit: number): Promise<OlderRows> {
+    if (!Number.isSafeInteger(before) || before <= 1) return { rows: [], done: true };
+    const ch = this.channel(code);
+    const since = Math.max(0, before - 1 - Math.max(1, Math.min(Number.isSafeInteger(limit) ? limit : OLDER_PAGE, PAGE_LIMIT)));
+    const page = await ch.envelopes(since, before - 1 - since);
+    const key = ch.access.keys[String(ch.access.epoch)];
+    if (!key) return { rows: [], done: false };
+    const envelopes = page.messages.filter((e) => Number.isSafeInteger(e.seq) && e.seq > since && e.seq < before).sort((a, b) => a.seq - b.seq);
+    const packed = await Promise.all(envelopes.map((e) => packEnvelope(key, ch.roomId, ch.access.epoch, e).catch(() => null)));
+    const lowest = envelopes[0]?.seq;
+    return { rows: packed.filter((r): r is CachedRow => r !== null), done: since === 0 || lowest === undefined || lowest > since + 1 };
   }
 
   async keep(code: string, state: object): Promise<CachedKept | null> {

@@ -600,6 +600,10 @@ export class Channel {
     return run(this.fx.page(since, limit));
   }
 
+  envelopes(since: number, limit: number): Promise<{ head: number; messages: Envelope[] }> {
+    return run(this.fx.envelopes(since, limit));
+  }
+
   snapshotAt(): Promise<number | null> {
     return run(this.fx.snapshotAt());
   }

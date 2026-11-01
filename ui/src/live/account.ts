@@ -8,7 +8,7 @@ import { useUpdate } from "@kiwi/app/update.ts"
 import { announce } from "~/kit/toasts"
 import { deviceNews, postDevicesNow } from "~/live/devices"
 import { store, type Listener } from "~/live/value"
-import type { Account, Computer, Device, EnrollAsk, Enrolling, GithubSignIn } from "~/model"
+import type { Account, Computer, Device, EnrollAsk, Enrolling, GithubSignIn, RecoverySaved, RecoveryState } from "~/model"
 import { version } from "../../../package.json"
 
 const github = store<{ login: string } | null>(null)
@@ -200,6 +200,54 @@ export async function renewDevice(id: string): Promise<void> {
   await devices.load()
   postDevicesNow()
 }
+
+const recovery = (() => {
+  let value: RecoveryState | null = null
+  const listeners = new Set<Listener>()
+  let started = false
+  const load = async () => {
+    const b = bridge()
+    if (!b?.recovery) return
+    try {
+      value = await b.recovery()
+    } catch {
+      // Not signed in, or the relay is unreachable: the page shows what it last showed, and focus loads it again.
+      return
+    }
+    for (const l of listeners) l()
+  }
+  return {
+    get: () => value,
+    load,
+    subscribe: (l: Listener) => {
+      listeners.add(l)
+      if (!started) {
+        started = true
+        window.addEventListener("focus", () => void load())
+        void load()
+      }
+      return () => void listeners.delete(l)
+    },
+  }
+})()
+
+const recovering = () => {
+  const b = bridge()
+  if (!b?.recoveryWords) throw new Error("a recovery key needs the next Channels update")
+  return b
+}
+
+export const recoveryWords = (): Promise<string[]> => recovering().recoveryWords()
+
+export async function recoverySave(typed: { at: number; word: string }[]): Promise<RecoverySaved> {
+  const r = await recovering().recoverySave(typed)
+  if (!r.ok) return r
+  announce("Recovery key set up")
+  await recovery.load()
+  return { ok: true }
+}
+
+export const recoveryDrop = (): Promise<void> => recovering().recoveryDrop()
 
 const enrolling = () => {
   const b = bridge()
@@ -397,6 +445,7 @@ export function useAccount(): Account | null {
   const enroll = useSyncExternalStore(enrollAsk.subscribe, enrollAsk.get)
   const trouble = useSyncExternalStore(enrollTrouble.subscribe, enrollTrouble.get)
   const signed = useSyncExternalStore(devices.subscribe, devices.get)
+  const kept = useSyncExternalStore(recovery.subscribe, recovery.get)
   const news = useSyncExternalStore(deviceNews.subscribe, deviceNews.get)
   const unsealed = useUnsealedKeys()
   useEffect(() => {
@@ -432,8 +481,9 @@ export function useAccount(): Account | null {
       ...(enroll ? { enrollAsk: enroll } : {}),
       ...(trouble ? { enrollError: trouble } : {}),
       ...(signed ? { devices: signed } : {}),
+      ...(kept ? { recovery: kept } : {}),
       ...deviceNotices(news),
       ...(code ? { githubCode: code } : {}),
     }
-  }, [person, linked, gate, moveRefused, computers, phones, online, agents, update, code, look, unsealed, enroll, trouble, signed, news])
+  }, [person, linked, gate, moveRefused, computers, phones, online, agents, update, code, look, unsealed, enroll, trouble, signed, kept, news])
 }

@@ -115,6 +115,13 @@ function loadOf(state: ChannelState, m: StateMember): Load | undefined {
   return { level: l.level, doing: l.current.map((t) => t.id), queued: l.queued.map((t) => t.id), waiting: l.waiting.map((t) => t.id) }
 }
 
+function displayOf(state: ChannelState, m: StateMember): { display?: string } {
+  if (m.display) return { display: m.display }
+  const root = rootOf(m.name, state.members)
+  const was = root === m.name ? undefined : state.members.get(root)
+  return was ? { display: was.display || was.name } : {}
+}
+
 function seatOfIn(state: ChannelState, m: StateMember): { seatOf?: string } {
   const root = rootOf(m.name, state.members)
   return root !== m.name && state.members.get(root)?.active ? { seatOf: root } : {}
@@ -133,7 +140,7 @@ function personOf(state: ChannelState, m: StateMember, record: RosterMember | un
   return {
     name: m.name,
     kind: human ? "human" : "agent",
-    ...(m.display ? { display: m.display } : {}),
+    ...displayOf(state, m),
     ...(m.name === state.lead ? { role: "lead" } : m.owner ? { role: "owner" } : m.persona ? { role: m.persona.name } : {}),
     ...(color ? { color } : {}),
     ...(human && m.picture ? { picture: `data:${m.picture.mime};base64,${m.picture.data}` } : {}),
@@ -158,9 +165,9 @@ function personOf(state: ChannelState, m: StateMember, record: RosterMember | un
     ...(load ? { load } : {}),
     ...(!m.owner && !canPost(m.scopes) ? { readOnly: true } : {}),
     ...(!human && wakes.has(m.name) ? { wakes: wakes.get(m.name) === true } : {}),
-    ...(human && record?.addsAgents ? { addsAgents: true } : {}),
-    ...(human && record?.answersDecisions ? { answersDecisions: true } : {}),
-    ...(human && record?.managesAgents ? { managesAgents: true } : {}),
+    ...(human && m.addsAgents ? { addsAgents: true } : {}),
+    ...(human && m.answersDecisions ? { answersDecisions: true } : {}),
+    ...(human && m.managesAgents ? { managesAgents: true } : {}),
     ...(m.ops ? { ops: m.ops } : {}),
     ...(here?.ops ? { opsLive: here.ops } : {}),
     lastSeen: here?.at ?? m.lastSeen,

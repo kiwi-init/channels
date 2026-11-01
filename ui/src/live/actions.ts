@@ -13,7 +13,22 @@ import { savePersonalities } from "@kiwi/app/personalities.ts"
 import { createPerson, bridge, secrets } from "@kiwi/secrets/secrets.ts"
 import { isSignInGone } from "@kiwi/channel/session.ts"
 import { announce } from "~/kit/toasts"
-import { enrollAnswer, enrollBegin, enrollCancel, enrollConfirm, enrollDeny, enrollKeep, forgetDevice, linkGithub, renewDevice, unlinkGithub, type EnrollDone } from "~/live/account"
+import {
+  enrollAnswer,
+  enrollBegin,
+  enrollCancel,
+  enrollConfirm,
+  enrollDeny,
+  enrollKeep,
+  forgetDevice,
+  linkGithub,
+  recoveryDrop,
+  recoverySave,
+  recoveryWords,
+  renewDevice,
+  unlinkGithub,
+  type EnrollDone,
+} from "~/live/account"
 import { loadPicture } from "~/live/pictures"
 import { setNewMemberPowers, setNewMemberScopes } from "~/live/defaults"
 import { deleteTheme, saveTheme, setPrefs } from "~/live/prefs"
@@ -350,6 +365,9 @@ export function makeActions(): Actions {
     enrollDeny: (id) => attempt("Couldn't turn the device away", () => enrollDeny(id)),
     forgetDevice: (id) => attempt("Couldn't forget the device", () => forgetDevice(id)),
     renewDevice: (id) => attempt("Couldn't renew the device", () => renewDevice(id)),
+    recoveryWords: () => tried("Couldn't make the recovery words", recoveryWords),
+    recoverySave: (typed) => tried("Couldn't set up the recovery key", () => recoverySave(typed)),
+    recoveryDrop: () => attempt("Couldn't put the words away", recoveryDrop),
     enrollBegin: () =>
       attempt("Couldn't sign in as one of your devices", () =>
         enrollBegin(

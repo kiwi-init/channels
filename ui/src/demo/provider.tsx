@@ -5,7 +5,7 @@ import type { Personality } from "@kiwi/core/personality.ts"
 import { HANDOFF_DONE } from "@kiwi/core/protocol.ts"
 
 import { stepReplyText } from "~/chat/step"
-import { DEMO_ACCOUNT, DEMO_CHANNEL, DEMO_DEVICES, DEMO_EMPTY, DEMO_GUEST, DEMO_PREFS, DEMO_TILES, DEMO_WAITING } from "~/demo/data"
+import { DEMO_ACCOUNT, DEMO_CHANNEL, DEMO_DEVICES, DEMO_EMPTY, DEMO_GUEST, DEMO_PREFS, DEMO_TILES, DEMO_WAITING, DEMO_WORDS } from "~/demo/data"
 import { longFeed } from "~/demo/long"
 import { demoShell, demoShells, demoTerm } from "~/demo/term"
 import type { Account, Actions, AgentStarts, App, Enrolling, Finding, GithubSignIn, Launching, ThisComputer, Channel, ChannelTile, GoneChannel, Message, Prefs, Task } from "~/model"
@@ -245,6 +245,7 @@ export type Scenario =
   | "devices-forgotten"
   | "forgot-here"
   | "link-stuck"
+  | "recovery-set"
   | "github-sign-in"
   | "github-code"
   | "github-signed-in"
@@ -296,7 +297,9 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
       prefs,
       seq: 1000,
     }
-  if (scenario === "devices") return { account: { ...DEMO_ACCOUNT, devices: DEMO_DEVICES }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
+  if (scenario === "devices") return { account: { ...DEMO_ACCOUNT, devices: DEMO_DEVICES, recovery: { at: null, here: true } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
+  if (scenario === "recovery-set")
+    return { account: { ...DEMO_ACCOUNT, devices: DEMO_DEVICES, recovery: { at: Date.now() - 3 * 86_400_000, here: true } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
   if (scenario === "devices-forgotten")
     return {
       account: { ...DEMO_ACCOUNT, devices: DEMO_DEVICES.filter((d) => d.id !== "dev-air"), forgotten: [{ label: "Jow's MacBook Air", by: "iPhone", at: Date.now() - 2 * 3_600_000 }] },
@@ -649,6 +652,14 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       forgetDevice: (id) => setState((s) => (s.account ? { ...s, account: { ...s.account, devices: s.account.devices?.filter((d) => d.id !== id) } } : s)),
       renewDevice: (id) =>
         setState((s) => (s.account ? { ...s, account: { ...s.account, devices: s.account.devices?.map((d) => (d.id === id ? { ...d, until: Date.now() + 90 * 86_400_000 } : d)) } } : s)),
+      recoveryWords: async () => DEMO_WORDS,
+      recoverySave: async (typed) => {
+        const wrong = typed.filter((t) => t.word.trim().toLowerCase() !== DEMO_WORDS[t.at]).map((t) => t.at)
+        if (wrong.length) return { ok: false, wrong }
+        setState((s) => (s.account ? { ...s, account: { ...s.account, recovery: { at: Date.now(), here: true } } } : s))
+        return { ok: true }
+      },
+      recoveryDrop: () => {},
       signInWithGithub: () => {
         setState((s) => ({ ...s, signIn: { stage: "sign-in", code: { code: "8F3A-29KD", url: "https://github.com/login/device" }, problem: null } }))
         setTimeout(() => setState((s) => (s.signIn ? { ...s, signIn: s.account ? null : { stage: "signed-in", login: "ojowwalker77" } } : s)), 1500)
