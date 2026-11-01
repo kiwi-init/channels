@@ -41,7 +41,10 @@ export function fakeHost(app: FakeApp = {}): FakeHost {
     accentColor: () => null,
     showWindow: () => void did.push("show"),
     reload: () => void did.push("reload"),
-    restartToUpdate: () => void did.push("restart"),
+    restartToUpdate: () => {
+      did.push("restart");
+      return false;
+    },
     saveDownload: async (name) => (did.push(`save ${name}`), name),
     tellKeys: (m) => void told.push(m),
   };

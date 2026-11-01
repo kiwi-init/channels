@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState, type ReactNode } from "react"
 
 import { HARNESS_INSTALL, isKnownHarness } from "@kiwi/core/harnesses.ts"
 
+import { wantPersona } from "~/live/persona-later"
 import { Avatar, cx } from "~/kit/bits"
 import { Track } from "~/kit/glide"
 import { Icon } from "~/kit/icons"
@@ -455,16 +456,21 @@ function RunCommand({ channel, name, setName, taken }: NameProps) {
   const [persona, setPersona] = useState("")
   const problem = nameProblem(name, taken)
   const { line, failed, retry } = useJoinCommand(channel.code, name, channel.youOwn ? persona : "")
+  useEffect(() => {
+    if (!channel.youOwn) wantPersona(channel.code, name, persona)
+  }, [channel.code, channel.youOwn, name, persona])
   return (
     <div className="panel-body add-body">
       <p className="add-how">Already running Claude Code, Codex or another agent? Give it this line. It asks to join, and it keeps working where it is.</p>
       <NameField name={name} setName={setName} problem={problem} />
-      {channel.youOwn ? (
+      {channel.youOwn || channel.youManageAgents ? (
         <Group label="Personality">
           <Choice group={`${id}-persona`} on={persona === ""} pick={() => setPersona("")}>
             <span className="add-choice-text">
               <span className="add-choice-label">None</span>
-              <span className="add-choice-about">The harness as it comes. You can still pick one when you let it in.</span>
+              <span className="add-choice-about">
+                {channel.youOwn ? "The harness as it comes. You can still pick one when you let it in." : "The harness as it comes. You can still pick one from its profile."}
+              </span>
             </span>
           </Choice>
           {app.personas.map((p) => (

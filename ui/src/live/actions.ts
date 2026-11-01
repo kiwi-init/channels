@@ -160,7 +160,7 @@ export function makeActions(): Actions {
     markRead: (code, where) => {
       const run = need(code)
       const last = lastIn(run.messages, run.state, run.me, where)
-      if (last) markSeenIn(run.roomId, { [seenKeyOf(where, run.me)]: last })
+      if (last) markSeenIn(run.roomId, { [seenKeyOf(run.state, where, run.me)]: last })
     },
     react: (code, seq, emoji) =>
       attempt("Couldn't react", async () => {

@@ -1,9 +1,11 @@
 import { bridge } from "@kiwi/secrets/secrets.ts"
 import { askDelete, startEditing } from "~/chat/editing"
+import { GENERAL_ROOM } from "@kiwi/core/protocol.ts"
 import type { MenuGroups, MenuItem } from "~/kit/menu-open"
-import type { Actions, Channel, Message, Person } from "~/model"
+import type { Actions, Channel, Message, Person, Where } from "~/model"
 import type { Go } from "~/nav"
 import { seatRoot } from "~/names"
+import { hiddenKey, hiddenPlaces, setHidden } from "~/shell/hidden-places"
 
 const WEB_LINK = /^(https?:\/\/|mailto:)/i
 
@@ -79,18 +81,38 @@ export function messageGroups(ctx: MenuContext, m: Message, target: EventTarget,
   ]
 }
 
-export function roomGroups(ctx: MenuContext, actions: Actions, room: { id: string; name: string; unread: number; muted?: boolean | undefined }): MenuGroups {
+function hideItem(ctx: MenuContext, actions: Actions, where: Extract<Where, { kind: "room" | "dm" }>, name: string, open: boolean): MenuItem {
+  const key = hiddenKey(ctx.channel.code, where)
+  const hidden = hiddenPlaces.get().includes(key)
+  return {
+    label: `${hidden ? "Show" : "Hide"} ${name}`,
+    run: () => {
+      if (!hidden) actions.markRead(ctx.channel.code, where)
+      setHidden(key, !hidden)
+      if (!hidden && open) ctx.go({ to: "where", where: { kind: "room", room: GENERAL_ROOM } })
+    },
+  }
+}
+
+export function roomGroups(ctx: MenuContext, actions: Actions, open: boolean, room: { id: string; name: string; unread: number; muted?: boolean | undefined }): MenuGroups {
   const { channel, go, toast } = ctx
   return [
     [
       ...(room.unread > 0 ? [{ label: "Mark as read", run: () => actions.markRead(channel.code, { kind: "room", room: room.id }) }] : []),
       { label: `${room.muted ? "Unmute" : "Mute"} #${room.name}`, run: () => actions.setMute(channel.code, room.id, !room.muted) },
+      ...(room.id === GENERAL_ROOM ? [] : [hideItem(ctx, actions, { kind: "room", room: room.id }, `#${room.name}`, open)]),
     ],
     channel.youOwn || channel.youTrusted ? [{ label: "Room settings", run: () => go({ to: "panel", panel: { kind: "channel" } }) }] : [],
     [{ label: "Copy name", run: copier(toast, `#${room.name}`) }],
   ]
 }
 
-export function directGroups(ctx: MenuContext, actions: Actions, direct: { with: string; unread: number }, who: Person | undefined): MenuGroups {
-  return [direct.unread > 0 ? [{ label: "Mark as read", run: () => actions.markRead(ctx.channel.code, { kind: "dm", with: direct.with }) }] : [], who ? personItems(ctx, who).slice(0, 1) : []]
+export function directGroups(ctx: MenuContext, actions: Actions, open: boolean, direct: { with: string; unread: number }, who: Person | undefined): MenuGroups {
+  return [
+    [
+      ...(direct.unread > 0 ? [{ label: "Mark as read", run: () => actions.markRead(ctx.channel.code, { kind: "dm", with: direct.with }) }] : []),
+      hideItem(ctx, actions, { kind: "dm", with: direct.with }, "conversation", open),
+    ],
+    who ? personItems(ctx, who).slice(0, 1) : [],
+  ]
 }

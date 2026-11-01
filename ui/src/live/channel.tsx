@@ -28,6 +28,8 @@ import { isMuted, tells } from "~/live/quiet"
 import { tellMessage } from "~/live/notes"
 import { ownPrefs, usePrefs } from "~/live/prefs"
 import { receiptsOf, withReceipts } from "~/live/receipts"
+import { announce } from "~/kit/toasts"
+import { arrivals } from "~/live/persona-later"
 import { lastIn, seenKeyOf } from "~/live/seen-place"
 import { closeOpened, markGone, publish, type Run } from "~/live/store"
 import { useWakes } from "~/live/wakes"
@@ -279,12 +281,17 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
     })
   }, [firstVisit, messages, state, roomId])
 
+  useEffect(() => {
+    for (const { name, persona } of arrivals(code, people))
+      void import("~/live/manage").then((m) => m.setPersona(code, name, persona)).catch((e: unknown) => announce(`Personality not set on ${name}: ${e instanceof Error ? e.message : String(e)}`))
+  }, [code, people])
+
   const where = view.where
   const lastHere = useMemo(() => (where ? lastIn(messages, state, me, where) : 0), [messages, state, me, where])
   useEffect(() => {
     if (!where || !lastHere || !shown) return
-    markSeenIn(roomId, { [seenKeyOf(where, me)]: lastHere })
-  }, [where, lastHere, roomId, me, shown])
+    markSeenIn(roomId, { [seenKeyOf(state, where, me)]: lastHere })
+  }, [where, lastHere, roomId, me, shown, state])
   const task = view.task
   const lastInTask = useMemo(() => (task === null ? 0 : (state.places.get(placeKey({ kind: "task", task }))?.last ?? 0)), [task, state.places])
   useEffect(() => {

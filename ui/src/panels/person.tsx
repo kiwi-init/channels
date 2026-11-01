@@ -9,7 +9,7 @@ import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
 import { ALL_POWERS, memberOf, NO_POWERS, trusted, type App, type Channel, type Person } from "~/model"
 import { useApp } from "~/nav"
-import { nickname, seatRoot, shown } from "~/names"
+import { devicesOf, nickname, seatRoot, shown } from "~/names"
 import { ShowAgent } from "~/kit/show-agent"
 import { contextOf, liveOf, restOf } from "~/doing"
 import { PanelHead } from "~/panels/frame"
@@ -189,6 +189,7 @@ function Facts({ channel, person }: { channel: Channel; person: Person }) {
   const persona = personaOf(app.personas, person.persona)
   const editable = (channel.youOwn || (!!channel.youManageAgents && person.kind === "agent")) && !person.you && !person.owner
   const sponsor = person.sponsor ? memberOf(channel, person.sponsor) : undefined
+  const devices = devicesOf(channel.people, { name: seatRoot(channel, person.name) })
   const rows: [string, ReactNode][] =
     person.kind === "agent"
       ? [
@@ -226,6 +227,7 @@ function Facts({ channel, person }: { channel: Channel; person: Person }) {
           ["Messages", person.messages.toLocaleString()],
         ]
       : [
+          ...(devices.length ? [["Devices", devices.map((d) => `${d.name} · ${d.presence}`).join(", ")] satisfies [string, ReactNode]] : []),
           ["Joined", since(person.joined, "")],
           ["Messages", person.messages.toLocaleString()],
         ]

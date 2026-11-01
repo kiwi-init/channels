@@ -173,6 +173,7 @@ const people: Person[] = [
     joined: m(60 * 24 * 8),
     messages: 61,
   },
+  { name: "maya-2", kind: "human", seatOf: "maya", owner: false, you: false, presence: "online", lastSeen: m(1), joined: m(60 * 24), messages: 9 },
 ]
 
 const pr43 = {

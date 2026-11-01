@@ -456,7 +456,7 @@ export interface Account {
   githubMove?: string
   computers: Computer[]
   version: string
-  update?: { version: string; ready: boolean; state?: "downloading" | "ready" | "available" }
+  update?: { version: string; ready: boolean; state?: "downloading" | "ready" | "available"; progress?: number; blocked?: true }
   uiUpdate?: { version: string }
   key?: string
   personPk?: string

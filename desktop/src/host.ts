@@ -30,7 +30,7 @@ export interface Host {
   accentColor(): string | null;
   showWindow(): void;
   reload(): void;
-  restartToUpdate(): void;
+  restartToUpdate(): boolean;
   saveDownload(name: string, text: string): Promise<string>;
   tellKeys(m: HostToKeys): void;
 }
