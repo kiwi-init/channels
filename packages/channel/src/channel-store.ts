@@ -7,7 +7,7 @@ import type { JoinRequest, Member } from "@kiwi/core/membership.ts";
 import { SNAPSHOT_TOO_LARGE, type Message } from "@kiwi/core/protocol.ts";
 import { fold, type ChannelState, type FoldBase, type GuardFloor, type Roster } from "@kiwi/core/state.ts";
 import { errorOf, linkOf, watches, type ChannelLink, type FollowEvent } from "./channel-ops.ts";
-import { backfill, openCached, planCached, readKept, rememberKept, rememberRow, rememberRows } from "./history.ts";
+import { openCached, planCached, readKept, rememberKept, rememberRow, rememberRows } from "./history.ts";
 import { markOnce } from "./marks.ts";
 import { ICON_LIVE } from "./icon-event.ts";
 import { addMarks, type Marks } from "./receipts.ts";
@@ -323,15 +323,45 @@ export class ChannelStore {
     const fill = () => {
       if (filling !== "idle" || closed) return;
       filling = "running";
-      void backfill(ch.roomId, ch.pk, {
-        older: (before, limit) => ch.olderRows(before, limit),
-        hidden: () => typeof document !== "undefined" && document.hidden,
-        wait: (ms) => new Promise((done) => setTimeout(done, ms)),
-        stopped: () => closed,
-      }).then(
-        (out) => void (filling = out === "stopped" && !closed ? "idle" : "over"),
-        () => void (filling = "over"),
-      );
+      void import("./history-fill.ts")
+        .then(({ backfill }) =>
+          backfill(ch.roomId, ch.pk, {
+            older: (before, limit) => ch.olderRows(before, limit),
+            hidden: () => typeof document !== "undefined" && document.hidden,
+            wait: (ms) => new Promise((done) => setTimeout(done, ms)),
+            stopped: () => closed,
+          }),
+        )
+        .then(
+          (out) => {
+            filling = out === "stopped" && !closed ? "idle" : "over";
+            if (out === "done") index();
+          },
+          () => void (filling = "over"),
+        );
+    };
+    let indexing: "idle" | "running" | "again" | "off" = "idle";
+    const index = () => {
+      if (closed || indexing === "off") return;
+      if (indexing !== "idle") return void (indexing = "again");
+      indexing = "running";
+      void import("./history-fill.ts")
+        .then(({ indexArchive }) =>
+          indexArchive(ch.roomId, ch.pk, {
+            index: (rows) => ch.indexRows(rows, { roster: this.rosterForFold.peek(), roomsFloor: this.roomsFloor.peek(), guardFloor: this.guardFloor.peek(), now: Date.now() }),
+            hidden: () => typeof document !== "undefined" && document.hidden,
+            wait: (ms) => new Promise((done) => setTimeout(done, ms)),
+            stopped: () => closed,
+          }),
+        )
+        .then(
+          (out) => {
+            const again = indexing === "again";
+            indexing = out === "unsupported" ? "off" : "idle";
+            if (again && out === "done") index();
+          },
+          () => void (indexing = "off"),
+        );
     };
     const here = () => {
       if (closed) return;
@@ -354,7 +384,10 @@ export class ChannelStore {
           ch.roomId,
           ch.pk,
           batched.flatMap((b) => (b.row ? [b.row] : [])),
-        ).then(fill, () => {});
+        ).then(
+          () => (fill(), index()),
+          () => {},
+        );
       }, 30);
     };
     const onEvent = (ev: FollowEvent) => {

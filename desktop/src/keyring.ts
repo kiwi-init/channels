@@ -26,9 +26,12 @@ import {
   type FollowEvent,
   type FollowOptions,
   type JoinCheck,
+  type HistorySearch,
   type OlderRows,
   type WireError,
 } from "./bridge.ts";
+import { indexKey, SearchHost, type SearchPlace } from "./search-host.ts";
+import type { FoldInputs, Searched } from "./search-types.ts";
 
 const OLDER_PAGE = 500;
 import { channelAccess, publicChannel } from "./seats.ts";
@@ -44,6 +47,7 @@ export interface KeyHost {
   person(): string | null;
   mine(): readonly string[] | null;
   budget: SigningBudget;
+  search?: () => SearchPlace | null;
 }
 
 const runtime = ManagedRuntime.make(Layer.succeed(Relay, fetchRelay));
@@ -105,6 +109,7 @@ export class Keyring implements ChannelOps {
   private readonly open = new Map<string, Channel>();
   private readonly follows = new Map<number, Follow>();
   private nextSub = 1;
+  private searching: { host: SearchHost; place: SearchPlace } | null | undefined;
 
   constructor(private readonly host: KeyHost) {}
 
@@ -239,6 +244,7 @@ export class Keyring implements ChannelOps {
   }
 
   async forget(code: string): Promise<void> {
+    await this.searcher()?.host.forget(code);
     for (const [sub, f] of this.follows) {
       if (f.code !== code) continue;
       f.stop();
@@ -261,6 +267,39 @@ export class Keyring implements ChannelOps {
       .learnRooms(opened.filter((m): m is Message => !!m && "ev" in m))
       .catch(() => {});
     return opened;
+  }
+
+  private searcher(): { host: SearchHost; place: SearchPlace } | null {
+    if (this.searching === undefined) {
+      const place = this.host.search?.() ?? null;
+      this.searching = place ? { host: new SearchHost(() => place.spawn()), place } : null;
+    }
+    return this.searching;
+  }
+
+  private async searchAt(code: string): Promise<{ host: SearchHost; access: ChannelAccess } | null> {
+    const s = this.searcher();
+    const seat = this.seat(code, true);
+    const access = channelAccess(seat);
+    if (!s || !access) return null;
+    await s.host.open(code, { file: s.place.file(`${access.roomId}-${seat.pk.replace(/[^A-Za-z0-9_-]/g, "")}.idx`), key: await indexKey(seat.sk, access.roomId), roomId: access.roomId });
+    return { host: s.host, access };
+  }
+
+  async indexRows(code: string, rows: readonly unknown[], inputs: FoldInputs): Promise<number | null> {
+    const at = await this.searchAt(code);
+    if (!at) return null;
+    const opened = await openSealedRows(rows, at.access.roomId, at.access.keys);
+    return at.host.feed(
+      code,
+      opened.filter((m): m is Message => !!m && !("unread" in m)),
+      inputs,
+    );
+  }
+
+  async searchHistory(code: string, ask: HistorySearch): Promise<Searched | null> {
+    const at = await this.searchAt(code);
+    return at ? at.host.search(code, ask.query, ask.rooms, ask.limit, ask.head) : null;
   }
 
   async olderRows(code: string, before: number, limit: number): Promise<OlderRows> {
