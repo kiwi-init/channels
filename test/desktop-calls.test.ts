@@ -110,7 +110,7 @@ describe("main's handlers reach the shell only through the host", () => {
   test("the folder picker, notifications and the update restart are the host's", async () => {
     expect(await bridge.chooseFolder()).toBe("/Users/someone/app");
     await bridge.notify("T484", "done");
-    await bridge.installUpdate();
+    expect(await bridge.installUpdate()).toBe(false);
     expect(did).toEqual(["notify T484: done", "restart"]);
   });
 

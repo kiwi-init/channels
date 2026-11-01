@@ -697,6 +697,29 @@
   line-height: 1.35;
 }
 
+.side-card-pct {
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.side-card-bar {
+  grid-column: 1 / -1;
+  display: block;
+  block-size: 3px;
+  margin-inline-end: 4px;
+  border-radius: 999px;
+  background: var(--line-2);
+  overflow: hidden;
+}
+
+.side-card-fill {
+  display: block;
+  block-size: 100%;
+  border-radius: inherit;
+  background: var(--doing);
+  transition: inline-size var(--slow) var(--ease);
+}
+
 .side-row,
 .side-new {
   display: flex;

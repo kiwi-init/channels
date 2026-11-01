@@ -1,9 +1,5 @@
 import { bareAt, memberNamed, readsAsHandle } from "@kiwi/core/state.ts";
-import { fromMarkdown } from "mdast-util-from-markdown";
-import { gfmFromMarkdown } from "mdast-util-gfm";
-import { gfm } from "micromark-extension-gfm";
-
-type MdNode = { type: string; value?: string; url?: string; alt?: string | null; children?: MdNode[]; position?: { start: { offset?: number }; end: { offset?: number } } };
+import { scanTree, type Span, type Tree } from "./mention-scan.ts";
 
 export type Found = { start: number; end: number } & (
   | { kind: "mention" | "bare"; name: string; label: string }
@@ -12,43 +8,35 @@ export type Found = { start: number; end: number } & (
   | { kind: "image"; url: string; alt: string }
 );
 
-const NOT_PROSE = new Set(["link", "linkReference", "definition", "image", "imageReference", "code", "inlineCode", "html"]);
 const MENTION = /(?<![\p{L}\p{N}_.@-])@([\p{L}\p{N}_.-]+)/gu;
 const TASK = /\bT(\d+)\b/g;
 const REF = /(?<![\p{L}\p{N}\p{M}_/#&.-])#([1-9]\d{0,8})(?![\p{L}\p{N}\p{M}_])/gu;
 const NOT_A_MESSAGE = /\b(?:PR|pr|pull|issue|Issue|issues|Issues)\s*$/;
 const WORD = /(?<![\p{L}\p{N}\p{M}_/.@-])[\p{L}\p{N}_.-]+/gu;
 
-type Span = { start: number; end: number };
+const parsed = new Map<string, Tree>();
+let parse: ((text: string) => Tree) | null = null;
+let version = 0;
+const waiting = new Set<() => void>();
 
-type Image = Span & { url: string; alt: string };
-
-function images(node: MdNode): Image[] {
-  if (node.type === "image") {
-    const start = node.position?.start.offset;
-    const end = node.position?.end.offset;
-    return start !== undefined && end !== undefined && node.url !== undefined ? [{ start, end, url: node.url, alt: node.alt ?? "" }] : [];
-  }
-  return (node.children ?? []).flatMap(images);
+export function takeParser(next: (text: string) => Tree): void {
+  parse = next;
+  parsed.clear();
+  version++;
+  for (const w of waiting) w();
 }
 
-function prose(node: MdNode): Span[] {
-  if (NOT_PROSE.has(node.type)) return [];
-  if (node.type === "text") {
-    const start = node.position?.start.offset;
-    const end = node.position?.end.offset;
-    return start !== undefined && end !== undefined ? [{ start, end }] : [];
-  }
-  return (node.children ?? []).flatMap(prose);
+export const parserVersion = (): number => version;
+
+export function onParser(listener: () => void): () => void {
+  waiting.add(listener);
+  return () => void waiting.delete(listener);
 }
 
-const parsed = new Map<string, { spans: Span[]; images: Image[] }>();
-
-function treeOf(text: string): { spans: Span[]; images: Image[] } {
+function treeOf(text: string): Tree {
   const known = parsed.get(text);
   if (known) return known;
-  const tree = fromMarkdown(text, { extensions: [gfm()], mdastExtensions: [gfmFromMarkdown()] });
-  const next = { spans: prose(tree), images: images(tree) };
+  const next = parse ? parse(text) : scanTree(text);
   if (parsed.size >= 500) parsed.delete(parsed.keys().next().value ?? "");
   parsed.set(text, next);
   return next;

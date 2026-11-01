@@ -1,5 +1,10 @@
+import { useSyncExternalStore } from "react"
 import { sanitizeMarkdownUrl } from "@kiwi/app/markdown.ts"
-import { literal, spansOf, swap } from "@kiwi/app/mentions.ts"
+import { literal, onParser, parserVersion, spansOf, swap, takeParser } from "@kiwi/app/mentions.ts"
+
+void import("@kiwi/app/mention-tree.ts").then((m) => takeParser(m.markdownTree))
+
+export const useMentionParser = (): number => useSyncExternalStore(onParser, parserVersion)
 
 export { named } from "@kiwi/app/mentions.ts"
 

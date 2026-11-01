@@ -236,6 +236,7 @@ export function directsOf(state: ChannelState, messages: readonly Wire[], seat: 
     if (!other || ignored(state.trust.get(m.seq))) continue
     const key = placeKey(dmPlace(me, other))
     at.set(other, Math.max(at.get(other) ?? 0, m.ts))
+    marks.set(other, seen[key] ?? 0)
     locked.add(other)
     if (rootOf(m.from, state.members) !== me && m.kind !== "event" && m.seq > (seen[key] ?? 0)) unread.set(other, (unread.get(other) ?? 0) + 1)
   }

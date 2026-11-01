@@ -234,6 +234,8 @@ export type Scenario =
   | "updates"
   | "update-ready"
   | "update-available"
+  | "update-downloading"
+  | "update-blocked"
   | "enroll"
   | "enroll-digits"
   | "devices"
@@ -282,6 +284,10 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
     return { account: { ...DEMO_ACCOUNT, uiUpdate: { version: "dev-1542" }, update: { version: "2026.10.7", ready: true, state: "ready" } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
   if (scenario === "update-ready") return { account: { ...DEMO_ACCOUNT, update: { version: "2026.10.7", ready: true } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
   if (scenario === "link-stuck") return { account: { ...DEMO_ACCOUNT, enrollError: "this app isn't in your device list any more" }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
+  if (scenario === "update-downloading")
+    return { account: { ...DEMO_ACCOUNT, update: { version: "2026.10.8", ready: false, state: "downloading", progress: 0.42 } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
+  if (scenario === "update-blocked")
+    return { account: { ...DEMO_ACCOUNT, update: { version: "2026.10.8", ready: false, state: "available", blocked: true } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
   if (scenario === "update-available") return { account: { ...DEMO_ACCOUNT, update: { version: "2026.10.8", ready: false, state: "available" } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
   if (scenario === "enroll" || scenario === "enroll-digits")
     return {
