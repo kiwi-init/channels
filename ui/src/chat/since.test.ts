@@ -77,6 +77,10 @@ describe("Since you left (T1605)", () => {
     expect(s.rooms[0]!.last.text).toBe("shots for T1304")
   })
 
+  test("places you've never read don't count: no mark, no summary", () => {
+    expect(sinceYouLeft(channel({ rooms: [{ id: "general", name: "general", unread: 3, mentions: 0 }], directs: [{ with: "harry", unread: 1, last: 9 }] }))).toBeNull()
+  })
+
   test("pending, failed, deleted and system lines don't count", () => {
     const quiet = channel({
       rooms: [{ id: "general", name: "general", unread: 1, mentions: 0, seen: 9 }],

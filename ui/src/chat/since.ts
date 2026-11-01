@@ -22,7 +22,7 @@ function place(messages: readonly Message[], where: Where, after: number, count?
 }
 
 export function sinceYouLeft(channel: Pick<Channel, "rooms" | "directs" | "theirs" | "messages" | "tasks">): Since | null {
-  const marks = [...channel.rooms.filter((r) => r.unread > 0 && !r.muted).map((r) => r.seen ?? 0), ...channel.directs.filter((d) => d.unread > 0).map((d) => d.seen ?? 0)]
+  const marks = [...channel.rooms.filter((r) => r.unread > 0 && !r.muted).map((r) => r.seen), ...channel.directs.filter((d) => d.unread > 0).map((d) => d.seen)].filter((s) => s !== undefined)
   if (!marks.length) return null
   const seq = Math.min(...marks)
   const first = channel.messages.reduce<Message | undefined>((a, m) => (m.seq > seq && said(m) && (!a || m.seq < a.seq) ? m : a), undefined)
