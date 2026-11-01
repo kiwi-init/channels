@@ -390,6 +390,10 @@ export class Channel {
     return run(this.fx.cutDevices(list));
   }
 
+  goneDevices(list: DeviceList): Promise<Member[]> {
+    return run(this.fx.goneDevices(list));
+  }
+
   /** New channel key, wrapped to every remaining member. */
   rotate(): Promise<number> {
     return run(this.fx.rotate());

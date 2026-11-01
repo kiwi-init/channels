@@ -11,7 +11,7 @@ import { isPerson } from "./people.ts";
 import { roomName } from "./rooms.ts";
 import { currentState, openRound, reviewClaimRefusal, reviewMoveRefusal, revisedOut, taskId, verdictRefusal, worked } from "./tasks.ts";
 import type { Charter, Compact, Fact, FoldMember, Hold, Lease, PersonaLead, Room, SecretRoom, Task } from "./types.ts";
-import { dmPair, inRoom } from "../room-rules.ts";
+import { dmPair, inRoom, personOf } from "../room-rules.ts";
 
 const trustOnly = (what: string): string => `only the owner, or a person they fully trust, ${what}`;
 
@@ -80,7 +80,11 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
     }
 
     case "member.gone": {
-      if (!member.owner && m.pk !== ev.pk) reject("only the owner, or the key itself, says a key is gone");
+      const target = c.members.get(ev.member);
+      const seats = [...c.members.values()];
+      const mine = personOf(member, seats);
+      const ownDevice = !!target && member.active && target.kind === "human" && (member.kind === "human" || member.owner) && mine.startsWith("person:") && personOf(target, seats) === mine;
+      if (!member.owner && m.pk !== ev.pk && !ownDevice) reject("only the owner, the key itself, or another device of the same person says a key is gone");
       else if (!c.keysByName.get(ev.member)?.has(ev.pk)) reject(`that key isn't one of ${ev.member}'s`);
       else if (!c.gone.has(ev.pk)) c.gone.set(ev.pk, m.seq);
       break;

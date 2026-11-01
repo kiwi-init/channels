@@ -29,6 +29,7 @@ export interface MembersFx {
   reconcilePosting(state: Pick<ChannelState, "members" | "scopeSets" | "roleSets">, members?: Member[]): Effect.Effect<string[], Refused, Relay>;
   remove(pk: string): Effect.Effect<void, Refused, Relay>;
   cutDevices(list: DeviceList): Effect.Effect<Member[], Refused, Relay>;
+  goneDevices(list: DeviceList): Effect.Effect<Member[], Refused, Relay>;
   dropDelegates(pks: readonly string[]): Effect.Effect<string[], Refused, Relay>;
   rotate(): Effect.Effect<number, Refused, Relay>;
   rotateIfDue(): Effect.Effect<boolean, Refused, Relay>;
@@ -164,6 +165,16 @@ export class ChannelMembers {
       yield* this.ch.request(`/members/${pk}`, { method: "DELETE" });
       yield* Effect.ignore(Effect.try({ try: () => this.info.markGone(pk), catch: (err) => err }));
       yield* this.rotation(pk);
+    }),
+
+    goneDevices: Effect.fn("Channel.goneDevices")({ self: this }, function* (this: ChannelMembers, list: DeviceList) {
+      const all = yield* this.ch.fx.members();
+      const me = all.find((m) => m.pk === this.ch.identity.pk);
+      if (!me || me.person !== list.person) return [];
+      const revoked = new Set(list.revoked);
+      const gone = all.filter((m) => m.active && !m.owner && !m.unverified && m.pk !== me.pk && m.kind === "human" && m.person === list.person && !!m.device?.pk && revoked.has(m.device.pk));
+      for (const m of gone) yield* this.ch.fx.send(`removed ${m.name}`, { kind: "event", ev: { op: "member.gone", member: m.name, pk: m.pk } });
+      return gone;
     }),
 
     cutDevices: Effect.fn("Channel.cutDevices")({ self: this }, function* (this: ChannelMembers, list: DeviceList) {
