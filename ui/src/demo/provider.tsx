@@ -248,6 +248,7 @@ export type Scenario =
   | "forgot-here"
   | "link-stuck"
   | "recovery-set"
+  | "recovery-pending"
   | "github-sign-in"
   | "github-code"
   | "github-signed-in"
@@ -300,6 +301,14 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
       seq: 1000,
     }
   if (scenario === "devices") return { account: { ...DEMO_ACCOUNT, devices: DEMO_DEVICES, recovery: { at: null, here: true } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
+  if (scenario === "recovery-pending")
+    return {
+      account: { ...DEMO_ACCOUNT, devices: DEMO_DEVICES, recovery: { at: Date.now() - 30 * 86_400_000, here: true, pending: { from: Date.now() + 5 * 86_400_000, by: "studio" } } },
+      tiles: DEMO_TILES,
+      channels,
+      prefs,
+      seq: 1000,
+    }
   if (scenario === "recovery-set")
     return { account: { ...DEMO_ACCOUNT, devices: DEMO_DEVICES, recovery: { at: Date.now() - 3 * 86_400_000, here: true } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
   if (scenario === "devices-forgotten")

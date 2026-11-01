@@ -35,7 +35,7 @@ export function RecoveryKey({ recovery }: { recovery: RecoveryState }) {
   const { app } = useApp()
   const [step, setStep] = useState<Step | null>(null)
   const [renew, setRenew] = useState(false)
-  const [cancelling, setCancelling] = useState(false)
+  const [cancelling, setCancelling] = useState(SHOT === "settings-recovery-cancel")
   const { recoveryWords } = app.actions
 
   useEffect(() => {
