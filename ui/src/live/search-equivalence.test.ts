@@ -72,7 +72,11 @@ describe("main's search index accepts exactly what the app shows (T977)", () => 
     for (const batch of [250, 1_000]) expect(indexed(mainIndex(short, batch))).toEqual(shown(short, fold(short, roster, 0)))
   })
 
-  test("refused, forged, deleted and someone else's edit never become searchable; an edit of a line older than the fold keeps is refused, as the app refuses it", () => {
+  test("over the whole log, the same as one fold of everything, old edits and deletes included", () => {
+    expect(indexed(mainIndex(log, 2_000))).toEqual(shown(log, fold(log, roster, 0)))
+  })
+
+  test("refused, forged, deleted and someone else's edit never become searchable; an old line's late edit and delete still apply", () => {
     const rows = new Map(
       mainIndex(log, 2_000)
         .rows()
@@ -81,8 +85,8 @@ describe("main's search index accepts exactly what the app shows (T977)", () => 
     expect(rows.has(50)).toBe(false)
     expect(rows.has(71)).toBe(false)
     expect(rows.has(26)).toBe(false)
-    expect(rows.has(8)).toBe(true)
-    expect(rows.get(4)).toBe("line 4 about relays and search")
+    expect(rows.has(8)).toBe(false)
+    expect(rows.get(4)).toBe("an old line edited late")
     expect([...rows.values()].some((t) => t.startsWith("hijacked"))).toBe(false)
   })
 })
