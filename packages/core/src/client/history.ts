@@ -8,7 +8,7 @@ import { verify } from "../identity.ts";
 import { isEvent, PAGE_LIMIT, rasterAttachment, wellFormed, type Envelope, type Message, type WirePayload } from "../protocol.ts";
 import type { FoldBase } from "../state.ts";
 import type { ChannelCore } from "./core.ts";
-import type { MemberRefusal } from "./errors.ts";
+import { RelayError, type MemberRefusal } from "./errors.ts";
 import type { Relay } from "./relay.ts";
 
 interface PageOffer {
@@ -25,6 +25,8 @@ export function received(p: WirePayload, seq: number, rts: number | undefined, s
 export interface HistoryFx {
   head(): Effect.Effect<number, MemberRefusal, Relay>;
   markRead(seq: number): Effect.Effect<void, never, Relay>;
+  getNote(id: string): Effect.Effect<{ box: string; version: number } | null, MemberRefusal, Relay>;
+  putNote(id: string, box: string, prev: number | null): Effect.Effect<{ conflict: false; version: number } | { conflict: true; box: string | null; version: number | null }, MemberRefusal, Relay>;
   decrypt(env: Envelope): Effect.Effect<Message | null, never, Relay>;
   unseal(m: Message): Effect.Effect<Message | null>;
   settle(m: Message): Effect.Effect<Message>;
@@ -49,6 +51,22 @@ export class ChannelHistory {
       const exit = yield* Effect.exit(this.ch.request("/read", { method: "POST", body: JSON.stringify({ seq }) }));
       if (Exit.isSuccess(exit)) this.markedTo = seq;
       else if (/not found/i.test(String((Cause.squash(exit.cause) as Error)?.message ?? ""))) this.marksUnknown = true;
+    }),
+
+    getNote: Effect.fn("Channel.getNote")({ self: this }, function* (this: ChannelHistory, id: string) {
+      return yield* this.ch.request<{ box: string; version: number }>(`/note/${id}`).pipe(
+        Effect.catchIf(
+          (err) => err instanceof RelayError && err.status === 404,
+          () => Effect.succeed(null),
+        ),
+      );
+    }),
+
+    putNote: Effect.fn("Channel.putNote")({ self: this }, function* (this: ChannelHistory, id: string, box: string, prev: number | null) {
+      return yield* this.ch.request<{ conflict: false; version: number } | { conflict: true; box: string | null; version: number | null }>(`/note/${id}`, {
+        method: "PUT",
+        body: JSON.stringify({ box, prev }),
+      });
     }),
 
     decrypt: Effect.fn("Channel.decrypt")({ self: this }, function* (this: ChannelHistory, env: Envelope) {
