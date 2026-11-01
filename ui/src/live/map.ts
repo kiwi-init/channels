@@ -10,6 +10,7 @@ import { stageOf } from "@kiwi/core/stage.ts"
 import { editable, GENERAL_ROOM, ignored, isQuiet, isRasterMime, isOverlay, type Message as Wire } from "@kiwi/core/protocol.ts"
 import { rootOf } from "@kiwi/core/room-rules.ts"
 import { dmOther } from "~/live/dm"
+import { leftRoom } from "~/live/leaving"
 import { pickFor, taskCandidates } from "@kiwi/core/routing.ts"
 import { canPost } from "@kiwi/core/scopes.ts"
 import { versionName } from "@kiwi/core/status.ts"
@@ -204,7 +205,7 @@ export function roomsOf(state: ChannelState, messages: readonly Wire[], me: stri
     unread.set(id, (unread.get(id) ?? 0) + 1)
     if (mentionsYou(m, me)) mentions.set(id, (mentions.get(id) ?? 0) + 1)
   }
-  const rooms = [...state.rooms.values()].filter((r) => !r.dm)
+  const rooms = [...state.rooms.values()].filter((r) => !r.dm && !leftRoom(state, r.id, me))
   const list = rooms.some((r) => r.id === GENERAL_ROOM) ? rooms : [{ id: GENERAL_ROOM, name: GENERAL_ROOM }, ...rooms]
   return list.map((r) => ({
     id: r.id,
