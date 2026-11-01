@@ -211,6 +211,7 @@ export function makeActions(): Actions {
     setPersona: (code, name, id) => attempt("Personality not changed", async () => (await manage()).setPersona(code, name, id)),
     setReadOnly: (code, name, on) => attempt("Not changed", async () => (await manage()).setReadOnly(code, name, on)),
     setWake: (code, name, on) => attempt("Not changed", () => setWake(need(code).roomId, name, on)),
+    setAgentColor: (code, name, color) => attempt("Colour not changed", async () => (await manage()).setAgentColor(code, name, color)),
     setNickname: (code, name, nickname) => attempt("Nickname not changed", async () => (await manage()).setNickname(code, name, nickname)),
     setPowers: (code, name, powers) => attempt("Not changed", async () => (await manage()).setPowers(code, name, powers)),
     showAgent: async (code, name) => {

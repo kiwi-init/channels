@@ -384,6 +384,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       },
       retry: (code, seq) => edit(code, (c) => ({ ...c, messages: c.messages.map((m) => (m.seq === seq ? { ...m, failed: undefined } : m)) })),
       loadImage: () => {},
+      setAgentColor: (code, name, color) => edit(code, (c) => ({ ...c, people: c.people.map((p) => (p.name === name ? { ...p, color: color ?? undefined } : p)) })),
       leaveRoom: (code, room) => edit(code, (c) => ({ ...c, rooms: c.rooms.filter((r) => r.id !== room) })),
       markRead: (code, where) =>
         edit(code, (c) => ({

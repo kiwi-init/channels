@@ -322,6 +322,7 @@ export const trusted = (p: Powers): boolean => p.addsAgents && p.answersDecision
 
 export interface JoinChoice {
   as?: string
+  color?: Color | null
   persona?: string | null
   readOnly?: boolean
   powers?: Powers
@@ -614,6 +615,7 @@ export interface Actions {
   setReadOnly(code: string, name: string, on: boolean): void
   setWake(code: string, name: string, on: boolean): void
   setNickname(code: string, name: string, nickname: string | null): void
+  setAgentColor(code: string, name: string, color: Color | null): void
   setPowers(code: string, name: string, powers: Partial<Powers>): void
   addAgent(code: string, agent: NewAgent, seen: (s: Launching) => void): () => void
   showAgent(code: string, name: string): Promise<string | null>

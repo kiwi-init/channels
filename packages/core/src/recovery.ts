@@ -178,9 +178,12 @@ export async function readRecovery(links: readonly unknown[], list: DeviceList, 
     }
     if (r.pending && link.at >= r.pending.after) r = { ...r, rpk: r.pending.rpk, rxpk: r.pending.rxpk, pending: null };
     if (link.after === null) {
-      const before = link.pk === link.person && link.at < PERSON_WORDS_WAIT_FROM;
-      if (link.pk !== r.rpk && !before) return { ok: false, why: `recovery link ${link.n}: only the recovery key replaces it at once; new words from the person key wait ${RECOVERY_DELAY_DAYS} days` };
-      r = { ...r, n: link.n, head, rpk: link.rpk, rxpk: link.rxpk, pending: null };
+      if (link.pk === r.rpk || (link.pk === link.person && link.at < PERSON_WORDS_WAIT_FROM)) {
+        r = { ...r, n: link.n, head, rpk: link.rpk, rxpk: link.rxpk, pending: null };
+        continue;
+      }
+      if (link.pk !== link.person) return { ok: false, why: `recovery link ${link.n}: only the person key or the recovery key replaces it at once` };
+      r = { ...r, n: link.n, head, pending: { rpk: link.rpk, rxpk: link.rxpk, after: recoveryAfter(link.at), by: link.pk } };
       continue;
     }
     if (link.after !== recoveryAfter(link.at)) return { ok: false, why: `recovery link ${link.n}: a new recovery key waits ${RECOVERY_DELAY_DAYS} days` };

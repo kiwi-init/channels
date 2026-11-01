@@ -16,6 +16,7 @@ import { removeComputer } from "@kiwi/app/computers.ts"
 import { loadMember } from "@kiwi/channel/store.ts"
 import { inviteLine } from "@kiwi/app/join-line.ts"
 import type { Permission } from "@kiwi/core/launch-options.ts"
+import type { Color } from "@kiwi/core/protocol.ts"
 import { wantPersona } from "~/live/persona-later"
 import { openedChannel, openedRun, type Run } from "~/live/store"
 import type { Actions, JoinChoice, NewAgent, Powers } from "~/model"
@@ -94,6 +95,11 @@ export async function removeMember(code: string, name: string): Promise<void> {
   await run.ch.remove(m.pk)
   await run.refreshRoster()
   announce(`Removed ${m.display || name}`)
+}
+
+export async function setAgentColor(code: string, name: string, color: Color | null): Promise<void> {
+  const { run } = agentManager(code, name)
+  await event(run, color ? `made ${name} ${color}` : `cleared ${name}'s colour`, { op: "color.set", member: name, color })
 }
 
 export async function setPersona(code: string, name: string, id: string | null): Promise<void> {
@@ -258,6 +264,7 @@ export async function answerJoin(code: string, id: string, yes: boolean, choice?
   }
   if (r.check !== "ready" || !r.code) return announce(`Waiting for ${r.display || r.name}'s code`)
   announce(await letIn(run, r, choice ?? {}))
+  if (choice?.color) await event(run, `made ${choice.as?.trim() || r.name} ${choice.color}`, { op: "color.set", member: choice.as?.trim() || r.name, color: choice.color })
 }
 
 export const addAgent: Actions["addAgent"] = (code, agent, seen) => {
