@@ -21,6 +21,7 @@ Needs Playwright's Chromium: bunx playwright-core install --only-shell chromium 
   process.exit(0);
 }
 
+const frame = (m: string | Buffer): string | Uint8Array<ArrayBuffer> => (typeof m === "string" ? m : new Uint8Array(m));
 const ROOT = resolve(import.meta.dir, "..");
 const MESSAGES = Number(process.env.PERF_MESSAGES ?? 400);
 const TASKS = Number(process.env.PERF_TASKS ?? 12);
@@ -119,7 +120,7 @@ const proxy = Bun.serve<Pipe>({
       up.binaryType = "arraybuffer";
       ws.data.upstream = up;
       up.onopen = () => {
-        for (const m of ws.data.queue.splice(0)) up.send(m);
+        for (const m of ws.data.queue.splice(0)) up.send(frame(m));
       };
       up.onmessage = (e) => setTimeout(() => ws.readyState === 1 && ws.send(typeof e.data === "string" ? e.data : Buffer.from(e.data as ArrayBuffer)), half);
       up.onclose = (e) => setTimeout(() => ws.readyState === 1 && ws.close(e.code === 1005 ? 1000 : e.code, e.reason), half);
@@ -127,7 +128,7 @@ const proxy = Bun.serve<Pipe>({
     message(ws: ServerWebSocket<Pipe>, m: string | Buffer) {
       setTimeout(() => {
         const up = ws.data.upstream;
-        if (up?.readyState === WebSocket.OPEN) up.send(m);
+        if (up?.readyState === WebSocket.OPEN) up.send(frame(m));
         else ws.data.queue.push(m);
       }, half);
     },

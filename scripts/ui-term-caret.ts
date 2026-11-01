@@ -62,7 +62,10 @@ try {
         .map((a) => a.finished),
     );
   });
-  expect(await screen.evaluate((el) => el.isContentEditable && el.querySelector(":scope > canvas") !== null), "ghostty-web makes the terminal an editable element around its canvas");
+  expect(
+    await screen.evaluate((el) => el instanceof HTMLElement && el.isContentEditable && el.querySelector(":scope > canvas") !== null),
+    "ghostty-web makes the terminal an editable element around its canvas",
+  );
   await screen.evaluate((el) => {
     const bare = el.cloneNode(true);
     el.replaceWith(bare);

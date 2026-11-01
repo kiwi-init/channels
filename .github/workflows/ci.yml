@@ -78,6 +78,9 @@ jobs:
       - name: app types
         if: ${{ !cancelled() }}
         run: bunx tsrs --noEmit -p packages/app/tsconfig.json
+      - name: scripts types (the CI checks, perf and demo scripts; ui-dev-channel needs the local devkit)
+        if: ${{ !cancelled() }}
+        run: bunx tsrs --noEmit -p tsconfig.scripts.json
       - name: desktop types
         if: ${{ !cancelled() }}
         run: cd desktop && bunx tsrs --noEmit
