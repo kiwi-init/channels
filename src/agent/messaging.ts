@@ -283,7 +283,11 @@ export class SessionMessaging extends SessionListen {
         ...(ask.permission ? { permission: ask.permission } : {}),
         ...(re !== undefined ? { re: [re] } : {}),
       });
-      return { seq, to, also: decidersOf(state, { esc: true, to, ...(handoff ? { handoff } : {}), ...(ask.permission ? { permission: ask.permission } : {}) }) };
+      return {
+        seq,
+        to,
+        also: decidersOf(state, { esc: true, to, ...(handoff ? { handoff } : {}), ...(ask.permission ? { permission: ask.permission } : {}), ...(ask.step ? { step: ask.step } : {}) }),
+      };
     },
     oneLook,
   );

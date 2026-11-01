@@ -29,12 +29,12 @@ export function trustedOf(state: Pick<ChannelState, "members">): string[] {
   return [...state.members.values()].filter(fullyTrusted).map((x) => x.name);
 }
 
-export function answersAsk(members: ReadonlyMap<string, Pick<Member, "active" | "answersDecisions">>, m: Pick<Message, "from" | "esc" | "to" | "handoff">, name: string): boolean {
-  return m.esc ? !!m.to?.includes(name) || (!m.handoff && answersDecisions(members, name)) : name !== m.from;
+export function answersAsk(members: ReadonlyMap<string, Pick<Member, "active" | "answersDecisions">>, m: Pick<Message, "from" | "esc" | "to" | "handoff" | "step">, name: string): boolean {
+  return m.esc ? !!m.to?.includes(name) || (!m.handoff && !m.step && answersDecisions(members, name)) : name !== m.from;
 }
 
-export function decidersOf(state: Pick<ChannelState, "members">, m: Pick<Message, "esc" | "to" | "handoff" | "permission">): string[] {
-  if (!m.esc || m.handoff || m.permission) return [];
+export function decidersOf(state: Pick<ChannelState, "members">, m: Pick<Message, "esc" | "to" | "handoff" | "permission" | "step">): string[] {
+  if (!m.esc || m.handoff || m.permission || m.step) return [];
   return [...state.members.values()].filter((x) => answersDecisions(state.members, x.name) && !m.to?.includes(x.name)).map((x) => x.name);
 }
 

@@ -14,7 +14,7 @@ const isEscalationTo = (m: Message, me: string) => !!m.esc && !!m.to?.includes(m
 export const heldAsks = (state: Pick<ChannelState, "openAsks" | "tasks" | "askHeads" | "members">): Message[] => state.openAsks.filter((m) => holdsWork(state, m));
 
 export function asksFor(openAsks: Message[], me: string, decides = false): AsksForMe {
-  const deciding = (m: Message) => decides && !!m.esc && !m.permission && !m.handoff;
+  const deciding = (m: Message) => decides && !!m.esc && !m.permission && !m.handoff && !m.step;
   const mine = openAsks.filter((m) => m.from !== me && (m.to?.includes(me) || m.to?.includes("*") || deciding(m)));
   const decisions = mine.filter((m) => (!!m.to?.includes(me) || deciding(m)) && !handoffOf(m));
   const rest = mine.filter((m) => !decisions.includes(m));
