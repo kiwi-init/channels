@@ -145,7 +145,7 @@
   grid-template-columns: 16px minmax(0, 1fr) auto;
   grid-template-rows: auto auto;
   column-gap: 12px;
-  row-gap: 3px;
+  row-gap: 4px;
   align-items: center;
   min-width: 0;
   padding: 8px 0 8px 8px;
@@ -358,7 +358,7 @@
 .gh-branch {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   min-width: 0;
   max-width: 100%;
   font-family: var(--mono);
@@ -378,7 +378,7 @@
 .gh-copy {
   display: inline-flex;
   flex: none;
-  padding: 3px;
+  padding: 4px;
   border: 0;
   border-radius: var(--r-tag);
   background: none;
@@ -475,26 +475,6 @@
   flex: none;
 }
 
-.gh-check.is-running .gh-check-mark .icon {
-  animation: gh-spin 1.2s linear infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .gh-check.is-running .gh-check-mark .icon {
-    animation: none;
-  }
-}
-
-:root[data-motion="reduced"] .gh-check.is-running .gh-check-mark .icon {
-  animation: none;
-}
-
-@keyframes gh-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 .gh-check-name {
   flex: 1;
   min-width: 0;
@@ -569,7 +549,7 @@ button.gh-check:hover .gh-check-word {
 .gh-card-links {
   display: inline-flex;
   flex: none;
-  gap: 14px;
+  gap: 16px;
 }
 
 .gh-card-links > a {

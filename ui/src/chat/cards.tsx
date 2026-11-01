@@ -22,7 +22,7 @@ export function TaskChip({ channel, id }: { channel: Channel; id: number }) {
   )
 }
 
-export const CHECKS: Record<PullRequest["checks"], string> = { pass: "checks passed", fail: "checks failed", running: "checks running", none: "no checks" }
+const CHECKS: Record<PullRequest["checks"], string> = { pass: "checks passed", fail: "checks failed", running: "checks running", none: "no checks" }
 
 export function PrChip({ pr }: { pr: PullRequest }) {
   return (

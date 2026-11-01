@@ -2,7 +2,7 @@ import { createContext, useContext } from "react"
 
 import type { Actions, App, Where } from "~/model"
 
-export type Tab = "chat" | "tasks" | "agents" | "needs" | "github"
+type Tab = "chat" | "tasks" | "agents" | "needs" | "github"
 
 export type GithubView = "prs" | "issues"
 
