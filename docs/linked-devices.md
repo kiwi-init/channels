@@ -361,7 +361,11 @@ For when every app is gone, or a thief revoked your other devices first. The rec
   - Seats the person joined with only a person claim from the old key re-prove (T967). Each app
     posts its list with its device's vouch for its own seat (the same statement as a device claim);
     the owner's app re-signs the seat with that device when it is still listed. Seats with no such
-    proof are cut once the re-root is 7 days old.
+    proof are cut once the re-root is 7 days old, and the channel says why.
+  - An agent that joined with no person (its computer's app had no person key, #1519) gets one back:
+    its computer, once it holds a re-rooted list that keeps it, posts its vouch for each agent seat
+    it runs, and the owner's app re-signs that agent as the person's, from that computer. Only a
+    listed computer's vouch counts. Agents are never cut for lacking one.
   - A list with more re-roots beats a longer one with fewer, so a fork the old key grows can't win.
   - The relay takes a re-root only with its own time and the exact recovery chain it keeps, so words
     replaced since can't re-root. A later re-root must carry a chain that extends the one before.

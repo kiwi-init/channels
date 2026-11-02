@@ -43,10 +43,20 @@ const deviceName = (members: readonly Pick<Member, "name">[], base: string): str
 const sameHuman = (members: readonly Member[], person: string, ownerPerson?: string) =>
   members.find((m) => (m.kind === "human" || m.owner) && m.person === person && (!m.device || m.sponsor?.handle === m.name)) ?? (person === ownerPerson ? members.find((m) => m.owner) : undefined);
 
-const personNameOf = (members: readonly Member[], person: string): string => {
+export const personNameOf = (members: readonly Member[], person: string): string => {
   const m = sameHuman(members, person);
   return m?.display ?? m?.name ?? "someone";
 };
+
+export function computerSponsor(members: readonly Member[], person: string, personName: string, ownerPerson: string | undefined): NonNullable<MemberInfo["sponsor"]> {
+  if (ownerPerson && person === ownerPerson) {
+    const owner = members.find((m) => m.owner);
+    const ownerName = members.find((m) => m.owner && m.active)?.name;
+    return { user: person, name: owner?.display ?? owner?.name ?? personName, ...(ownerName ? { handle: ownerName } : {}) };
+  }
+  const human = members.find((m) => m.active && m.kind === "human" && m.person === person);
+  return human ? { user: person, name: human.display ?? personName, handle: human.name } : { user: person, name: personName };
+}
 
 const addsAgents = (m: Member) => m.kind === "human" && !m.owner && !!m.addsAgents && !!m.person && canPost(m.later?.scopes ?? scopesOf(m));
 
@@ -171,9 +181,7 @@ export class ChannelRequests {
       if (req.computer?.revoked) return yield* new Rejected(forgottenComputer(req.name, req.computer));
       const kind = req.kind ?? "agent";
       const members = yield* this.ch.fx.members();
-      const ownerName = members.find((m) => m.owner && m.active)?.name;
       const ownerPerson = opts.person ?? members.find((m) => m.owner)?.person;
-      const own = !!req.computer && !!ownerPerson && req.computer.person === ownerPerson;
       const device = kind === "human" && !req.person ? req.device : undefined;
       const same = device
         ? sameHuman(
@@ -191,14 +199,7 @@ export class ChannelRequests {
         const name = as?.name ?? req.name;
         sponsor = { user: req.person, name, handle: name };
       } else if (req.computer) {
-        const c = req.computer;
-        if (own) {
-          const owner = members.find((m) => m.owner);
-          sponsor = { user: c.person, name: owner?.display ?? owner?.name ?? c.personName, ...(ownerName ? { handle: ownerName } : {}) };
-        } else {
-          const human = members.find((m) => m.active && m.kind === "human" && m.person === c.person);
-          sponsor = human ? { user: c.person, name: human.display ?? c.personName, handle: human.name } : { user: c.person, name: c.personName };
-        }
+        sponsor = computerSponsor(members, req.computer.person, req.computer.personName, ownerPerson);
       }
       if (kind === "agent" && req.askedAs && !as?.name) {
         as = { ...as, name: members.some((m) => nameKey(m.name) === nameKey(req.name)) ? freeHandle(members, seededPick(req.pk)) : req.name };

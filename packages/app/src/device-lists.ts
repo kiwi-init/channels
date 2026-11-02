@@ -59,8 +59,8 @@ export function postedLists(messages: readonly Message[], into: Record<string, D
 export function postedProofs(messages: readonly Message[], into: Record<string, DeviceClaim> = {}): Record<string, DeviceClaim> {
   const out = { ...into };
   for (const m of messages) {
-    if (m.kind !== "event" || m.ev?.op !== "devices" || !m.ev.device || !m.ev.vouch) continue;
-    out[m.from] = { links: m.ev.links, device: m.ev.device, vouch: m.ev.vouch };
+    if (!m.sigOk || !m.pk || m.kind !== "event" || m.ev?.op !== "devices" || !m.ev.device || !m.ev.vouch) continue;
+    out[m.pk] = { links: m.ev.links, device: m.ev.device, vouch: m.ev.vouch };
   }
   return out;
 }
@@ -75,7 +75,7 @@ async function scan(code: string, api: Pick<ListsApi, "history">): Promise<void>
 }
 
 const cutFor = new Map<string, Map<string, number>>();
-const settledFor = new Map<string, Map<string, number>>();
+const settledFor = new Map<string, Map<string, string>>();
 
 export async function tendLists(code: string, own: readonly DeviceLink[], api: ListsApi): Promise<{ lists: Map<string, DeviceList>; cut: Cut[] }> {
   await scan(code, api);
@@ -95,14 +95,20 @@ export async function tendLists(code: string, own: readonly DeviceLink[], api: L
       // The relay or an older app refused: the lists still decide this pass's joins, and the next pass cuts again.
     }
   }
-  const settled = settledFor.get(code) ?? new Map<string, number>();
+  const settled = settledFor.get(code) ?? new Map<string, string>();
   settledFor.set(code, settled);
+  const proofs = seen[code]?.proofs ?? {};
+  const shown = Object.values(proofs)
+    .map((p) => p.vouch)
+    .sort()
+    .join(" ");
   for (const list of lists.values()) {
-    if (!list.reroots.length || settled.get(list.person) === list.version) continue;
+    const mark = `${list.version} ${shown}`;
+    if (!list.reroots.length || settled.get(list.person) === mark) continue;
     try {
-      const got = await api.reprove(list, seen[code]?.proofs ?? {});
+      const got = await api.reprove(list, proofs);
       cut.push(...got.cut);
-      if (!got.waiting.length) settled.set(list.person, list.version);
+      if (!got.waiting.length) settled.set(list.person, mark);
     } catch {
       // The relay or an older app refused: the seats wait, and the next pass proves them again.
     }

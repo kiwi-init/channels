@@ -38,8 +38,8 @@ async function lists() {
   return { person, phone, added, revoked };
 }
 
-const event = (seq: number, from: string, links: DeviceLink[], proof: { device: string; vouch: string } | object = {}): Message =>
-  ({ seq, from, kind: "event", body: "", ts: seq, ev: { op: "devices", links, ...proof } }) as unknown as Message;
+const event = (seq: number, from: string, links: DeviceLink[], proof: { device: string; vouch: string } | object = {}, sigOk = true): Message =>
+  ({ seq, from, pk: `pk-${from}`, sigOk, kind: "event", body: "", ts: seq, ev: { op: "devices", links, ...proof } }) as unknown as Message;
 
 function channel(messages: Message[], waiting: Member[] = []) {
   const asked: number[] = [];
@@ -117,7 +117,7 @@ test("a re-root that keeps every device still gets a cut pass, for the computers
   expect(ch.cuts.map((l) => l.reroots.length)).toEqual([1]);
 });
 
-test("a member's posted proof is kept per channel, and the owner re-proves a re-rooted person's seats until none wait", async () => {
+test("a member's signed proof is kept per channel under its key, and the owner re-proves a re-rooted person's seats until none wait and again when a new proof comes", async () => {
   const person = await generateIdentity("jow");
   const desk = await device("desk");
   const root = [await rootLink(person, { pk: desk.pk, xpk: desk.xpk!, label: "desk", os: "macOS", as: "desktop" })];
@@ -127,14 +127,21 @@ test("a member's posted proof is kept per channel, and the owner re-proves a re-
   if (!read.ok) throw new Error(read.why);
   const rerooted = [...root, await rerootLink(read.list, paper, chain, await device("next"), [desk.pk])];
   const proof = { device: desk.pk, vouch: "sig" };
-  expect(postedProofs([event(1, "seat", root), event(2, "seat", rerooted, proof), event(3, "other", root)])).toEqual({ seat: { links: rerooted, ...proof } });
+  const posted = [event(1, "seat", root), event(2, "seat", rerooted, proof), event(3, "other", root), event(4, "forger", rerooted, { device: desk.pk, vouch: "forged" }, false)];
+  expect(postedProofs(posted)).toEqual({ "pk-seat": { links: rerooted, ...proof } });
 
-  const ch = channel([event(2, "seat", rerooted, proof)], [{ name: "old-desk" } as Member]);
+  const messages = [event(2, "seat", rerooted, proof)];
+  const ch = channel(messages, [{ name: "old-desk" } as Member]);
   await tendLists("mc2-p", [], ch.api);
-  expect(ch.reproves.map((r) => r.proofs)).toEqual([{ seat: { links: rerooted, ...proof } }]);
+  expect(ch.reproves.map((r) => r.proofs)).toEqual([{ "pk-seat": { links: rerooted, ...proof } }]);
   await tendLists("mc2-p", [], ch.api);
   await tendLists("mc2-p", [], ch.api);
   expect(ch.reproves).toHaveLength(2);
+  messages.push(event(3, "agent", rerooted, { device: desk.pk, vouch: "agent-sig" }));
+  await tendLists("mc2-p", [], ch.api);
+  await tendLists("mc2-p", [], ch.api);
+  expect(ch.reproves).toHaveLength(3);
+  expect(Object.keys(ch.reproves[2]!.proofs).sort()).toEqual(["pk-agent", "pk-seat"]);
   const elsewhere = channel([]);
   await tendLists("mc2-q", [], elsewhere.api);
   expect(elsewhere.reproves.map((r) => r.proofs)).toEqual([{}]);

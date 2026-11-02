@@ -3,14 +3,14 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Channel } from "@kiwi/core/client.ts";
-import { cutReason, REPROVE_MS } from "@kiwi/core/client/members.ts";
+import { cutReason, REPROVE_MS, REPROVE_WHY } from "@kiwi/core/client/members.ts";
 import { describeEvent } from "@kiwi/core/format.ts";
 import { certUntil, claimDevice, newestLists, nextLink, readDeviceList, rerootLink, rootLink, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
 import { claimComputer, provePerson } from "@kiwi/core/person.ts";
 import { recoveryKey, recoveryLink } from "@kiwi/core/recovery.ts";
 import { startRelay } from "../src/relay/bun.ts";
-import { joinAgent, joinPerson, pairComputer, setupChannel, type OwnerSetup } from "./owner.ts";
+import { handshake, joinAgent, joinPerson, pairComputer, setupChannel, type OwnerSetup } from "./owner.ts";
 
 setDefaultTimeout(30_000);
 
@@ -314,6 +314,66 @@ describe("after a re-root, seats joined with an old person claim re-prove (T967)
     const joiner = await ask(s, tab, grown, "alice");
     const req = (await s.ownerCh.requests({ person: s.person.pk, lists: new Map([[alice.pk, await listOf(grown)]]) })).find((r) => r.id === joiner.requestId);
     expect(req?.device).toMatchObject({ person: alice.pk, joinsOnItsOwn: true, handle: "alice" });
+    await s.ownerCh.close();
+  });
+
+  test("an agent that joined with no person gets its person back from its computer's vouch, and nothing else links it (#1519)", async () => {
+    const s = await setupChannel(relay);
+    const alice = await generateIdentity("alice");
+    const { links, desk } = await listWithPhone(alice);
+    const mac = await device("mac");
+    const old = await device("old");
+    const add = (d: Identity, label: string) => ({ op: "add" as const, device: d.pk, dxpk: d.xpk!, label, os: "macOS", as: "computer" as const, approve: false, until: certUntil(Date.now()) });
+    const grown = await grow(await grow(links, desk, add(mac, "mac")), desk, add(old, "old"));
+    await joinPerson(s, "alice", alice);
+    const bare = async (name: string) => {
+      const id = await generateIdentity(name);
+      const { requestId } = await Channel.requestJoin(relay, s.code, id, { name });
+      const req = (await handshake(s, [{ id, requestId }])).find((r) => r.id === requestId)!;
+      await s.ownerCh.approve(req, undefined, { person: s.person.pk });
+      return id;
+    };
+    const mole = await bare("mole");
+    const viaDesk = await bare("via-desk");
+    const viaOld = await bare("via-old");
+    const stranger = await bare("stranger");
+    expect((await s.ownerCh.members()).find((m) => m.pk === mole.pk)?.sponsor).toBeUndefined();
+
+    const paper = await recoveryKey(new Uint8Array(32).fill(29));
+    const chain = [await recoveryLink(alice, alice.pk, null, { pk: paper.pk, xpk: paper.xpk! })];
+    const all = [...grown, await rerootLink(await listOf(grown), paper, chain, await device("next"), [desk.pk, mac.pk])];
+    const rerooted = await listOf(all);
+    const bob = await listWithPhone(await generateIdentity("bob"));
+    const bobMac = await device("bob-mac");
+    const bobs = await grow(bob.links, bob.desk, add(bobMac, "bob-mac"));
+    const proofs = {
+      [mole.pk]: await claimDevice(mac, all, s.roomId, mole.pk),
+      [viaDesk.pk]: await claimDevice(desk, all, s.roomId, viaDesk.pk),
+      [viaOld.pk]: await claimDevice(old, grown, s.roomId, viaOld.pk),
+      [stranger.pk]: await claimDevice(bobMac, bobs, s.roomId, stranger.pk),
+    };
+    const at = rerooted.reroots[0]!.at;
+
+    const got = await s.ownerCh.reprove(rerooted, proofs, at + 1000);
+    expect(got.proved.map((m) => m.name)).toEqual(["mole"]);
+    expect(got.waiting.map((m) => m.name)).toEqual(["alice"]);
+    const members = await s.ownerCh.members();
+    expect(members.find((m) => m.pk === mole.pk)).toMatchObject({ active: true, kind: "agent", sponsor: { user: alice.pk, name: "alice", handle: "alice" }, from: { pk: mac.pk, label: "mac" } });
+    for (const id of [viaDesk, viaOld, stranger]) expect(members.find((m) => m.pk === id.pk)?.sponsor).toBeUndefined();
+    expect(
+      cutReason(
+        members.find((m) => m.pk === mole.pk)!,
+        rerooted,
+      ),
+    ).toBeNull();
+
+    const later = await s.ownerCh.reprove(rerooted, proofs, at + REPROVE_MS);
+    expect(later.proved).toEqual([]);
+    expect(later.cut.map((m) => [m.name, m.why])).toEqual([["alice", REPROVE_WHY]]);
+    const active = (await s.ownerCh.members()).filter((m) => m.active).map((m) => m.name);
+    for (const name of ["mole", "via-desk", "via-old", "stranger"]) expect(active).toContain(name);
+    const said = (await s.ownerCh.history(0)).messages.filter((m) => m.ev?.op === "member.gone").map((m) => m.body);
+    expect(said).toEqual([`removed alice: ${REPROVE_WHY}`]);
     await s.ownerCh.close();
   });
 

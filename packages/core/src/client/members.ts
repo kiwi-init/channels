@@ -12,6 +12,7 @@ import { canPost, SCOPES, scopesOf, type Scope } from "../scopes.ts";
 import type { ChannelState } from "../state.ts";
 import type { ChannelCore } from "./core.ts";
 import { RelayError, type MemberRefusal, type Refused } from "./errors.ts";
+import { computerSponsor, personNameOf } from "./requests.ts";
 import type { ChannelInfo, MemberRow } from "./info.ts";
 import { ownerStatement, wrapFor } from "./keys.ts";
 import type { Relay } from "./relay.ts";
@@ -23,9 +24,11 @@ export type Reconciled = Pick<ChannelState, "members" | "scopeSets" | "roleSets"
 
 export const REPROVE_MS = 7 * 24 * 60 * 60 * 1000;
 
+export const REPROVE_WHY = "their app didn't prove this seat in the 7 days after they replaced their person key";
+
 export interface Reproved {
   proved: Member[];
-  cut: Member[];
+  cut: (Member & { why: string })[];
   waiting: Member[];
 }
 
@@ -230,21 +233,38 @@ export class ChannelMembers {
       const since = list.reroots.at(-1)?.at;
       const out: Reproved = { proved: [], cut: [], waiting: [] };
       if (since === undefined) return out;
-      const seats = (yield* this.ch.fx.members()).filter((m) => m.active && !m.owner && !m.unverified && m.kind === "human" && m.person === list.person && !m.device);
+      const all = yield* this.ch.fx.members();
+      const live = all.filter((m) => m.active && !m.owner && !m.unverified);
       const e = this.ch.access.epoch;
       const key = this.ch.access.keys[String(e)]!;
-      for (const m of seats) {
-        const got = yield* Effect.promise(() => checkDevice(proofs[m.pk], this.ch.roomId, m.pk, (p) => (p === list.person ? list : undefined), now));
+      const proven = (m: Member) => Effect.promise(() => checkDevice(proofs[m.pk], this.ch.roomId, m.pk, (p) => (p === list.person ? list : undefined), now));
+      const ch = this.ch;
+      const reseal = (m: Member, info: MemberInfo & Pick<Member, "pk" | "xpk" | "owner">) =>
+        Effect.gen(function* () {
+          const rec = yield* Effect.promise(async () => sealRecord(key, await makeRecord(ch.identity, ch.roomId, info)));
+          yield* ch.request(`/members/${m.pk}/record`, { method: "PUT", body: JSON.stringify({ rec, e, post: canPost(m.later?.scopes ?? scopesOf(m)) }) });
+        });
+      for (const m of live.filter((m) => m.kind === "human" && m.person === list.person && !m.device)) {
+        const got = yield* proven(m);
         if (got && got.person === list.person && got.device.as !== "computer") {
           const device = { pk: got.device.device, label: got.device.label, as: got.device.as };
-          const info = omit(m, "active", "readOnly", "unverified", "at");
-          const rec = yield* Effect.promise(async () => sealRecord(key, await makeRecord(this.ch.identity, this.ch.roomId, { ...info, device })));
-          yield* this.ch.request(`/members/${m.pk}/record`, { method: "PUT", body: JSON.stringify({ rec, e, post: canPost(m.later?.scopes ?? scopesOf(m)) }) });
+          yield* reseal(m, { ...omit(m, "active", "readOnly", "unverified", "at"), device });
           out.proved.push({ ...m, device });
-        } else (now - since >= REPROVE_MS ? out.cut : out.waiting).push(m);
+        } else if (now - since >= REPROVE_MS) out.cut.push({ ...m, why: REPROVE_WHY });
+        else out.waiting.push(m);
+      }
+      const ownerPerson = all.find((m) => m.owner)?.person;
+      for (const m of live.filter((m) => m.kind !== "human" && !m.sponsor)) {
+        const got = yield* proven(m);
+        if (!got || got.person !== list.person || got.device.as !== "computer") continue;
+        const sponsor = computerSponsor(all, list.person, personNameOf(live, list.person), ownerPerson);
+        const from = { pk: got.device.device, label: got.device.label };
+        yield* reseal(m, { ...omit(m, "active", "readOnly", "unverified", "at"), sponsor, from });
+        out.proved.push({ ...m, sponsor, from });
       }
       if (!out.cut.length) return out;
       for (const m of out.cut) {
+        yield* this.ch.fx.send(`removed ${m.name}: ${m.why}`, { kind: "event", ev: { op: "member.gone", member: m.name, pk: m.pk, why: m.why } });
         yield* this.ch.request(`/members/${m.pk}`, { method: "DELETE" });
         yield* Effect.ignore(Effect.try({ try: () => this.info.markGone(m.pk), catch: (err) => err }));
       }
