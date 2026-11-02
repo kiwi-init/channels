@@ -71,6 +71,7 @@ export const loopCommands: Record<string, Command> = {
       const stop = { asked: false, busy: false };
       const asked = () => void (stop.asked = true);
       process.on("SIGINT", () => {
+        process.stderr.write(`kiwi loop: probe: SIGINT, busy ${stop.busy}\n`);
         if (!stop.busy) asked();
       });
       process.on("SIGTERM", asked);

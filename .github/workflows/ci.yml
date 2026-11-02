@@ -689,12 +689,16 @@ jobs:
     needs: plan
     if: fromJSON(needs.plan.outputs.run)['cli-macos']
     runs-on: macos-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup
       - run: brew install tmux
-      - run: bun scripts/ci-tests.ts all
+      - run: |
+          for i in 1 2 3; do bun scripts/ci-tests.ts all > "$RUNNER_TEMP/all-$i.log" 2>&1 && echo "ALL RUN $i passed" || echo "ALL RUN $i FAILED"; grep -E '^\(fail\)' "$RUNNER_TEMP/all-$i.log" | sort -u; done
+          for i in $(seq 1 8); do bun test test/loop-flows.test.ts > "$RUNNER_TEMP/loop-$i.log" 2>&1 && echo "LOOP RUN $i passed" || echo "LOOP RUN $i FAILED"; done
+          for f in "$RUNNER_TEMP"/all-*.log "$RUNNER_TEMP"/loop-*.log; do echo "=== $f"; sed -n '/timed out waiting for the seat released/,/^ *at fail/p;/PROBE PRESSES/,/^$/p' "$f" | head -150; done
+          echo "=== one passing kimi run"; grep -h -A40 'PROBE PASS' "$RUNNER_TEMP"/loop-1.log | head -60
       - run: |
           mkdir -p dist
           for t in darwin-arm64 darwin-x64 linux-x64 linux-arm64; do

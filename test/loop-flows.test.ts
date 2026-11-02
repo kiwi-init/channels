@@ -700,10 +700,26 @@ test.skipIf(!tmuxPastes)("with --harness kimi in tmux 3.7 or newer, the loop typ
 
     await until(() => log().includes(`${id} is over; its session ended`), "the loop back to waiting").catch(fail);
     let pressed = 0;
+    const paneTty = new TextDecoder().decode(tmux("display", "-p", "-t", "loop", "#{pane_tty}").stdout).trim();
+    const presses: string[] = [];
+    const probe = () => {
+      const flags = new TextDecoder()
+        .decode(Bun.spawnSync(["stty", "-f", paneTty, "-a"], { stdout: "pipe", stderr: "pipe" }).stdout)
+        .match(/-?(isig|icanon)\b/g)
+        ?.join(" ");
+      const ps = new TextDecoder()
+        .decode(Bun.spawnSync(["ps", "-o", "pid=,pgid=,tpgid=,stat=,comm=", "-t", paneTty.replace("/dev/", "")], { stdout: "pipe" }).stdout)
+        .trim()
+        .split("\n")
+        .join(" | ");
+      presses.push(`${new Date().toISOString()} ${flags} :: ${ps}`);
+    };
+    const failPress = (e: unknown) => fail(`${String(e)}\nPROBE PRESSES\n${presses.join("\n")}`);
     await until(
       () => {
         if (log().includes(`released ${me} in`)) return true;
         if (Date.now() - pressed > 1_000) {
+          probe();
           tmux("send-keys", "-t", "loop", "C-c");
           pressed = Date.now();
         }
@@ -711,7 +727,8 @@ test.skipIf(!tmuxPastes)("with --harness kimi in tmux 3.7 or newer, the loop typ
       },
       "the seat released by Ctrl-C",
       60_000,
-    ).catch(fail);
+    ).catch(failPress);
+    console.error(`PROBE PASS\n${log()}\nPROBE PRESSES\n${presses.join("\n")}`);
     expect(log()).toContain("stopped 1 kiwi listener the session left running");
     expect(log()).toContain(`${id} is over; its session ended`);
   } finally {

@@ -187,6 +187,7 @@ function runSession(seat: LoopSeat, s: AgentSession, first: Work, prompt: string
       if (!spawned) return;
       yield* spawned.left;
       restoreTerminal(spawned.mode);
+      yield* say(`probe: session left, restored ${spawned.mode ? "a saved mode" : "nothing"}, ${probeTty()}`);
       stop.busy = false;
     });
     return session(seat, s, first, prompt, stop, claims, (left, mode) => void (spawned = { left, mode })).pipe(Effect.ensuring(leave));
@@ -215,6 +216,7 @@ function session(
     yield* hooksFirst(recipe);
     if (recipe.screen) clearTypedPane();
     const mode = terminalMode();
+    yield* say(`probe: session start, mode ${mode ? "saved" : "not saved"}, ${probeTty()}`);
     const started = Date.now();
     const child = Bun.spawn(argv, { cwd: process.cwd(), env: childEnv(), stdin: "inherit", stdout: "inherit", stderr: "inherit" });
     stop.busy = true;
@@ -312,6 +314,17 @@ function ownsTerminal(): boolean {
   const ps = Bun.spawnSync(["ps", "-o", "pgid=,tpgid=", "-p", String(process.pid)], { stdout: "pipe", stderr: "ignore" });
   const [group, foreground] = ps.stdout.toString().trim().split(/\s+/).map(Number);
   return ps.exitCode === 0 && group !== undefined && group > 0 && group === foreground;
+}
+
+function probeTty(): string {
+  const ps = Bun.spawnSync(["ps", "-o", "pgid=,tpgid=", "-p", String(process.pid)], { stdout: "pipe", stderr: "pipe" });
+  const tty = Bun.spawnSync(["stty", "-a"], { stdin: "inherit", stdout: "pipe", stderr: "pipe" });
+  const flags =
+    tty.stdout
+      .toString()
+      .match(/-?(isig|icanon)\b/g)
+      ?.join(" ") ?? `stty failed: ${tty.stderr.toString().trim()}`;
+  return `pgid/tpgid ${ps.stdout.toString().trim()} (ps exit ${ps.exitCode}), ${flags}, owns ${ownsTerminal()}`;
 }
 
 function terminalMode(): string | null {
