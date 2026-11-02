@@ -89,11 +89,11 @@ describe("a removed key can't speak after its removal, whatever the relay serves
     expect(state.rejected.get(before)).toBeUndefined();
   });
 
-  test("only the owner, or the key itself, can say a key is gone, and only a key of the member it names", async () => {
+  test("an agent can't say another key is gone, and the owner names only a key of the member it names", async () => {
     const forged = await bo.ch.send("cy is gone", { kind: "event", ev: { op: "member.gone", member: "cy", pk: cy.id.pk } });
     const mismatched = await s.ownerCh.send("removed bo", { kind: "event", ev: { op: "member.gone", member: "bo", pk: cy.id.pk } });
     const state = await judged([]);
-    expect(state.rejected.get(forged)).toBe("only the owner, or the key itself, says a key is gone");
+    expect(state.rejected.get(forged)).toBe("only the owner, the key itself, or the person an agent works for says a key is gone");
     expect(state.rejected.get(mismatched)).toBe("that key isn't one of bo's");
     expect(state.gone.has(cy.id.pk)).toBe(false);
     const fine = await cy.ch.send("still here");

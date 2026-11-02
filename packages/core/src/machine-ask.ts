@@ -88,7 +88,7 @@ export async function readAsk(
   if (!(await verify(signed))) return { ok: false, why: "unsigned" };
   const now = expect.now ?? Date.now();
   const list = expect.list?.person === expect.person ? expect.list : null;
-  const yours = signed.pk === expect.person || (!!list && speaksForPerson(list, signed.pk, now));
+  const yours = list ? speaksForPerson(list, signed.pk, now) : signed.pk === expect.person;
   if (!yours || signed.machine !== machine.pk) return { ok: false, why: "not-yours" };
   if (Math.abs(now - signed.at) > ASK_FRESH_MS) return { ok: false, why: "stale" };
   if (!expect.claim(signed.id)) return { ok: false, why: "replayed" };

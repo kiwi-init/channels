@@ -43,7 +43,7 @@ export function PersonPanel({ channel, name }: { channel: Channel; name: string 
         {!person.left && <Doors channel={channel} person={person} />}
         {!person.left && person.seat === "hosted" && <Terminal channel={channel} person={person} />}
         <Facts channel={channel} person={person} />
-        {(channel.youOwn || (channel.youManageAgents && person.kind === "agent")) && !person.you && !person.owner && !person.left && <Manage channel={channel} person={person} />}
+        {(channel.youOwn || (channel.youManageAgents && person.kind === "agent") || person.yours) && !person.you && !person.owner && !person.left && <Manage channel={channel} person={person} />}
       </div>
     </>
   )
@@ -254,6 +254,7 @@ function Manage({ channel, person }: { channel: Channel; person: Person }) {
   const persona = personaOf(app.personas, person.persona)
   const it = agent ? "It" : "They"
   const owns = channel.youOwn
+  const edits = owns || (!!channel.youManageAgents && agent)
   const trust = !person.readOnly && trusted({ addsAgents: !!person.addsAgents, answersDecisions: !!person.answersDecisions, managesAgents: !!person.managesAgents })
   const remove = () => {
     app.actions.removeMember(channel.code, person.name)
@@ -264,26 +265,28 @@ function Manage({ channel, person }: { channel: Channel; person: Person }) {
   return (
     <section className="person-manage" aria-label="Manage">
       <Heading>Manage</Heading>
-      <Row label="Role">
-        {(id) => (
-          <Track id={id} className="seg" role="group" aria-labelledby={`${id}-label`}>
-            <button type="button" aria-pressed={!person.role} onClick={() => app.actions.setRole(channel.code, person.name, null)}>
-              None
-            </button>
-            {roles.map((r) => (
-              <button key={r} type="button" aria-pressed={person.role === r} onClick={() => app.actions.setRole(channel.code, person.name, r)}>
-                {r.slice(0, 1).toUpperCase() + r.slice(1)}
+      {edits && (
+        <Row label="Role">
+          {(id) => (
+            <Track id={id} className="seg" role="group" aria-labelledby={`${id}-label`}>
+              <button type="button" aria-pressed={!person.role} onClick={() => app.actions.setRole(channel.code, person.name, null)}>
+                None
               </button>
-            ))}
-          </Track>
-        )}
-      </Row>
-      {agent && (
+              {roles.map((r) => (
+                <button key={r} type="button" aria-pressed={person.role === r} onClick={() => app.actions.setRole(channel.code, person.name, r)}>
+                  {r.slice(0, 1).toUpperCase() + r.slice(1)}
+                </button>
+              ))}
+            </Track>
+          )}
+        </Row>
+      )}
+      {edits && agent && (
         <Row label="Colour" hint="Its face takes this colour, for everyone here." stack>
           {(id) => <Swatches id={id} color={person.color} onPick={(c) => app.actions.setAgentColor(channel.code, person.name, c)} />}
         </Row>
       )}
-      {agent && (
+      {edits && agent && (
         <Row label="Personality" hint={persona?.about ?? "Works the way its harness does by default."} stack>
           {(id) => (
             <span className="person-select">
@@ -300,7 +303,7 @@ function Manage({ channel, person }: { channel: Channel; person: Person }) {
           )}
         </Row>
       )}
-      {owns && agent && (
+      {edits && agent && (
         <Row label="Nickname" hint="The name people see. Its handle stays the same." stack>
           {() => <InlineEdit value={person.display ?? ""} label="Nickname" verb="Change" onSave={(v) => app.actions.setNickname(channel.code, person.name, v || null)} />}
         </Row>
@@ -346,11 +349,15 @@ function Manage({ channel, person }: { channel: Channel; person: Person }) {
               <Row label="Can answer decisions" hint="Agents' questions and approvals can go to them as well as you.">
                 {(id) => <Toggle id={id} on={!!person.answersDecisions} onChange={(on) => app.actions.setPowers(channel.code, person.name, { answersDecisions: on })} />}
               </Row>
-              <Row label="Can manage agents" hint="They pick agents' personalities and roles, the lead included. Never people's, and never their own.">
+              <Row label="Can manage agents" hint="They name agents and pick their personalities and roles, the lead included. Never people's, and never their own.">
                 {(id) => <Toggle id={id} on={!!person.managesAgents} onChange={(on) => app.actions.setPowers(channel.code, person.name, { managesAgents: on })} />}
               </Row>
             </>
           )}
+        </>
+      )}
+      {(owns || person.yours) && (
+        <>
           <div className="person-remove">
             <button type="button" className="btn is-danger" onClick={() => setConfirm(true)}>
               Remove from channel

@@ -56,6 +56,7 @@ export interface Person {
   outside?: boolean
   persona?: string
   sponsor?: string
+  yours?: boolean
   about?: string
   load?: Load
   readOnly?: boolean

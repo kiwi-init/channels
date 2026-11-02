@@ -18,7 +18,7 @@ import type { Marks } from "./note.ts";
 import type { ChannelIcon, Envelope, ImageAttachment, Message } from "./protocol.ts";
 import type { Scope } from "./scopes.ts";
 import type { GithubStatus } from "./github-health.ts";
-import type { ChannelState, FoldBase, GithubRelease, GithubRules, GithubState, GuardFloor } from "./state.ts";
+import type { FoldBase, GithubRelease, GithubRules, GithubState, GuardFloor } from "./state.ts";
 import { ChannelCore, type ChannelFx } from "./client/core.ts";
 import { ChannelDelegations, type Computer, type Tended } from "./client/delegations.ts";
 import { ChannelGithub, type GithubDiff, type GithubIssueInfo, type ReviewCheck } from "./client/github.ts";
@@ -28,7 +28,7 @@ import { ChannelInfo, type Info, type MemberRow } from "./client/info.ts";
 import { joinFx, type JoinStatus } from "./client/join.ts";
 import { ChannelKeys } from "./client/keys.ts";
 import { ChannelLive, type StreamOptions } from "./client/live.ts";
-import { ChannelMembers } from "./client/members.ts";
+import { ChannelMembers, type Reconciled } from "./client/members.ts";
 import { run, runUntil } from "./client/relay.ts";
 import { ChannelRequests, type RequestsOptions } from "./client/requests.ts";
 import type { Delegation } from "./delegation.ts";
@@ -379,7 +379,7 @@ export class Channel {
    * first and the record (with the bit) follows in a second call; if that one failed, or the bit was
    * changed some other way, this puts it right. Returns the keys it changed.
    */
-  reconcilePosting(state: Pick<ChannelState, "members" | "scopeSets" | "roleSets">, members?: Member[]): Promise<string[]> {
+  reconcilePosting(state: Reconciled, members?: Member[]): Promise<string[]> {
     return run(this.fx.reconcilePosting(state, members));
   }
 

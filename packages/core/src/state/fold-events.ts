@@ -1,16 +1,17 @@
-import { GENERAL_ROOM, MAX_CHARTER, MAX_ROOMS, MAX_TAGS, PROOF_MAX, TASK_TITLE_MAX_LENGTH, type Event, type Message, type Power, powerChange } from "../protocol.ts";
+import { GENERAL_ROOM, MAX_CHARTER, MAX_NICKNAME, MAX_ROOMS, MAX_TAGS, PROOF_MAX, TASK_TITLE_MAX_LENGTH, type Event, type Message, type Power, powerChange } from "../protocol.ts";
 import { free, take } from "./leases.ts";
 import { unnamedTasks } from "./compact.ts";
 import { leadCheckpointKeyRefusal } from "./lead.ts";
 import { addRelease, applyGithub, repoKey, type GithubState } from "./github.ts";
 import { reposOf } from "./repos.ts";
 import { omit } from "../omit.ts";
+import { inlineText } from "../membership.ts";
 import { readScopes, SCOPES, type Scope } from "../scopes.ts";
 import { cleanPersona } from "../personality.ts";
-import { isPerson } from "./people.ts";
+import { isPerson, sponsorsAgent } from "./people.ts";
 import { roomName } from "./rooms.ts";
 import { currentState, openRound, reviewClaimRefusal, reviewMoveRefusal, revisedOut, taskId, verdictRefusal, worked } from "./tasks.ts";
-import type { Charter, Compact, Fact, FoldMember, Hold, Lease, PersonaLead, Room, SecretRoom, Task } from "./types.ts";
+import type { Charter, Compact, Fact, FoldMember, Hold, Lease, Nickname, PersonaLead, Room, SecretRoom, Task } from "./types.ts";
 import { dmPair, inRoom, leaveSeal, rootOf, selfOnly } from "../room-rules.ts";
 
 const trustOnly = (what: string): string => `only the owner, or a person they fully trust, ${what}`;
@@ -31,6 +32,7 @@ export interface FoldCtx {
   scopeSets: Map<string, { seq: number; scopes: Scope[] }>;
   roleSets: Map<string, { seq: number; role: string | null; about?: string | null }>;
   gone: Map<string, number>;
+  nicknames: Map<string, Nickname>;
   setRole: (target: FoldMember, role: string | null, about: string | null | undefined) => void;
   tasks: Map<number, Task>;
   facts: Map<string, Fact>;
@@ -80,7 +82,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
     }
 
     case "member.gone": {
-      if (!member.owner && m.pk !== ev.pk) reject("only the owner, or the key itself, says a key is gone");
+      if (!member.owner && m.pk !== ev.pk && !sponsorsAgent(members, m.from, ev.member)) reject("only the owner, the key itself, or the person an agent works for says a key is gone");
       else if (!c.keysByName.get(ev.member)?.has(ev.pk)) reject(`that key isn't one of ${ev.member}'s`);
       else if (!c.gone.has(ev.pk)) c.gone.set(ev.pk, m.seq);
       break;
@@ -330,6 +332,19 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
         const holder = ev.color && [...members.values()].find((x) => x.active && x.name !== target.name && isPerson(x) && x.color === ev.color);
         if (holder) reject(`${ev.color} is ${holder.name}'s colour`);
         else target.color = ev.color ?? undefined;
+      }
+      break;
+    }
+
+    case "nickname.set": {
+      const target = members.get(ev.member);
+      if (!member.owner && !managesAgent(c.held(m.pk ?? "", "managesAgents"), member, target)) reject("only the owner, or a person who manages agents, names an agent");
+      else if (!target || !keysByName.get(ev.member)?.has(ev.pk)) reject(target ? `that key isn't ${ev.member}'s` : `no member named ${ev.member}`);
+      else if (isPerson(target)) reject("only an agent's nickname is changed this way");
+      else {
+        const nickname = inlineText(ev.nickname ?? "", MAX_NICKNAME) || null;
+        c.nicknames.set(ev.pk, { seq: m.seq, nickname });
+        if (target.pk === ev.pk) target.display = nickname ?? undefined;
       }
       break;
     }

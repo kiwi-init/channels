@@ -1,6 +1,6 @@
 import { AUTH_SKEW_MS, verifyRequest } from "@kiwi/core/auth.ts";
 import { b64url } from "@kiwi/core/crypto.ts";
-import { approvingDevice, readDeviceList, type Device, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
+import { approvingDevice, readDeviceList, speaksForPerson, type Device, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
 import { accountScope, ENROLL_TTL_MS, readEnrollAnswer, readEnrollAsk, revealMatches, type Enrollment } from "@kiwi/core/enroll.ts";
 import { canonical } from "@kiwi/core/identity.ts";
 import { checkVault, readRecovery, type Recovery, type RecoveryLink, type Vault } from "@kiwi/core/recovery.ts";
@@ -87,7 +87,7 @@ async function keepVault(store: AccountStore, user: string, list: DeviceList | n
   if (!list) return refuse(new NotFound({ message: "publish the device list before a recovery key" }));
   const { chain, recovery: kept } = await keptRecovery(store, user, list, now);
   let recovery = kept;
-  if (signer !== list.person && !approver(list, signer, now) && signer !== recovery?.rpk)
+  if (!speaksForPerson(list, signer, now) && signer !== recovery?.rpk)
     return refuse(new Forbidden({ message: "only the person key, the recovery key or an app that approves devices keeps the vault" }));
   if (Array.isArray(raw)) {
     if (raw.length < chain.length) return refuse(new Conflict({ message: "a newer recovery chain is already kept" }));
@@ -105,7 +105,7 @@ async function keepVault(store: AccountStore, user: string, list: DeviceList | n
   const bad = await checkVault(vault, list);
   if (bad) return refuse(new BadRequest({ message: `that vault doesn't hold up: ${bad}` }));
   const next = vault as Vault;
-  if (next.pk !== list.person && !approver(list, next.pk, now)) return refuse(new Forbidden({ message: "the vault is signed by a key that isn't one of this person's current approving devices" }));
+  if (!speaksForPerson(list, next.pk, now)) return refuse(new Forbidden({ message: "the vault is signed by a key that isn't one of this person's current approving devices" }));
   const prev = await store.vault(user);
   const known = prev?.version ?? 0;
   if (prev && canonical(prev) === canonical(next)) return done();
@@ -154,11 +154,18 @@ export async function onAccountHttp(
     const read = await readDeviceList(raw);
     if (!read.ok) return refuse(new BadRequest({ message: `that device list doesn't hold up: ${read.why}` }));
     const next = read.list;
-    if (signer !== next.person && !approver(next, signer, now)) return refuse(new Forbidden({ message: "only the person key or an app that approves devices publishes their list" }));
+    if (!speaksForPerson(next, signer, now)) return refuse(new Forbidden({ message: "only the person key or an app that approves devices publishes their list" }));
     if (list && next.person !== list.person) return refuse(new Conflict({ message: "this account belongs to another person key" }));
     if (raw.length < links.length) return refuse(new Conflict({ message: "a newer device list is already kept" }));
     if (links.some((l, i) => canonical(l) !== canonical(raw[i]))) return refuse(new Conflict({ message: "that list doesn't extend the one kept" }));
     if (raw.length === links.length) return done();
+    const reroots = (raw.slice(links.length) as DeviceLink[]).flatMap((l) => (l.op === "reroot" ? [l] : []));
+    if (reroots.length) {
+      const chain = await store.recovery(user);
+      if (reroots.some((l) => Math.abs(l.at - now) > AUTH_SKEW_MS)) return refuse(new BadRequest({ message: "a re-root carries the time it's sent, and this one doesn't" }));
+      if (reroots.some((l) => canonical(l.recovery) !== canonical(chain)))
+        return refuse(new Conflict({ message: "a re-root is signed against the recovery chain this account keeps, and this one isn't" }));
+    }
     if (!(await store.extend(user, links.length, raw.slice(links.length) as DeviceLink[]))) return refuse(new Conflict({ message: "the device list changed meanwhile; read it and try again" }));
     const cut = next.revoked.filter((k) => !list?.revoked.includes(k));
     if (cut.length) await store.revoke(cut);

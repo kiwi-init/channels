@@ -1,6 +1,7 @@
 import type { Color, Message } from "../protocol.ts";
 import { canPost } from "../scopes.ts";
 import type { ChannelState, Member } from "./types.ts";
+import { personOf } from "../room-rules.ts";
 
 export const isPerson = (m: { kind?: string; owner?: boolean }) => m.kind === "human" || !!m.owner;
 
@@ -14,6 +15,13 @@ export function humanOf(state: Pick<ChannelState, "members">, name: string): str
   const m = state.members.get(name);
   if (!m || isPerson(m) || !m.sponsor) return null;
   return [...state.members.values()].find((x) => x.active && isPerson(x) && x.sponsor?.user === m.sponsor!.user)?.name ?? null;
+}
+
+export function sponsorsAgent(members: ReadonlyMap<string, Pick<Member, "name" | "pk" | "kind" | "owner" | "active" | "sponsor">>, by: string, agent: string): boolean {
+  const seat = members.get(by);
+  const target = members.get(agent);
+  if (!seat || !target || !isPerson(seat) || isPerson(target) || !target.sponsor?.user) return false;
+  return personOf(seat, [...members.values()]) === `person:${target.sponsor.user}`;
 }
 
 export function answersDecisions(members: ReadonlyMap<string, Pick<Member, "active" | "answersDecisions">>, name: string): boolean {
