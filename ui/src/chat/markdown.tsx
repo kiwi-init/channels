@@ -8,6 +8,7 @@ import { buildStyles, tableBodyRowStyle, zeroTrailingMargins } from "react-nativ
 import { indexTaskItems, markInlineImages } from "react-native-enriched-markdown/lib/module/web/utils.js"
 import type { ASTNode, RendererCallbacks } from "react-native-enriched-markdown/lib/typescript/src/web/types"
 import { compareCells, nextSort, sanitizeMarkdownUrl, type SortDir } from "@kiwi/app/markdown.ts"
+import { messageAt, messageHash } from "@kiwi/core/message-link.ts"
 import { bridge } from "@kiwi/secrets/secrets.ts"
 
 import { MermaidBlock } from "~/chat/mermaid"
@@ -139,7 +140,7 @@ const OWN_LINK = /^kiwi-(?:mention|task|msg):/
 const OPENED = /^(?:https?:\/\/|mailto:)/i
 const LOCAL_PICTURE = /^(?:data|blob):/i
 
-const opened = (url: string): boolean => OWN_LINK.test(url) || (OPENED.test(url.trim()) && !!sanitizeMarkdownUrl(url))
+const opened = (url: string): boolean => OWN_LINK.test(url) || !!messageAt(url) || (OPENED.test(url.trim()) && !!sanitizeMarkdownUrl(url))
 
 function pictureLink(node: ASTNode, inLink: boolean): void {
   const url = node.attributes?.url ?? ""
@@ -371,6 +372,11 @@ export default function Markdown({ markdown, onMention, onTask, onMessage, onIma
       if (url.startsWith("kiwi-mention:")) return onMention(decodeURIComponent(url.slice("kiwi-mention:".length)))
       if (url.startsWith("kiwi-task:")) return onTask(Number(url.slice("kiwi-task:".length)))
       if (url.startsWith("kiwi-msg:")) return onMessage(Number(url.slice("kiwi-msg:".length)))
+      const at = messageAt(url)
+      if (at) {
+        location.hash = messageHash(at.code, at.seq)
+        return
+      }
       if (!sanitizeMarkdownUrl(url) || (!/^https?:\/\//i.test(url) && !url.startsWith("mailto:"))) return
       const b = bridge()
       if (b) void b.openExternal(url).catch(() => {})

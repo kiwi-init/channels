@@ -238,6 +238,9 @@ jobs:
       - name: ui a reload keeps the room, tab and scroll, and ⌘[ / ⌘] step back and forward after search jumps, in WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-restore-place.ts --dist ui/dist
+      - name: ui Copy link to message copies only the message's address, and a pasted or opened link jumps to it with ⌘[ back, in WebKit
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-message-link.ts --dist ui/dist
       - name: ui history archive (newest window on reload, rows kept below it, backfill, leave), on WebKit's IndexedDB
         if: ${{ !cancelled() }}
         run: bun scripts/ui-history-archive.ts

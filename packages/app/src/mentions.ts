@@ -1,3 +1,4 @@
+import { MESSAGE_LINKS } from "@kiwi/core/message-link.ts";
 import { bareAt, memberNamed, readsAsHandle } from "@kiwi/core/state.ts";
 import { scanTree, type Span, type Tree } from "./mention-scan.ts";
 
@@ -5,6 +6,7 @@ export type Found = { start: number; end: number } & (
   | { kind: "mention" | "bare"; name: string; label: string }
   | { kind: "task"; id: number }
   | { kind: "ref"; seq: number }
+  | { kind: "link"; code: string; seq: number }
   | { kind: "image"; url: string; alt: string }
 );
 
@@ -50,6 +52,7 @@ function found(text: string, nicknames: ReadonlyMap<string, string>, before?: nu
   const hits: Found[] = pictures.map((p) => ({ kind: "image", ...p }));
   for (const span of spans) {
     const part = text.slice(span.start, span.end);
+    for (const m of part.matchAll(MESSAGE_LINKS)) hits.push({ kind: "link", code: m[1] ?? "", seq: Number(m[2]), start: span.start + m.index, end: span.start + m.index + m[0].length });
     for (const m of part.matchAll(MENTION)) {
       const who = memberNamed(m[1] ?? "", labelOf);
       if (who) hits.push({ kind: "mention", ...who, start: span.start + m.index, end: span.start + m.index + 1 + who.name.length });

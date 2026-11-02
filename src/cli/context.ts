@@ -46,10 +46,14 @@ function answered(): { alias: string; as: string } | undefined {
   return from.length === 1 ? from[0] : undefined;
 }
 
-export const channelAlias = Effect.fn("kiwi.channelAlias")(function* () {
+export const channelAlias = Effect.fn("kiwi.channelAlias")(function* (code?: string) {
   const cfg = yield* config;
   const all = Object.keys(cfg.channels);
-  const explicit = opt.channel ?? process.env.KIWI_CHANNEL;
+  const linked = code === undefined ? null : all.filter((a) => cfg.channels[a]?.code === code);
+  if (linked && !linked.length) return yield* die("that link is to a channel this machine hasn't joined");
+  const explicit = opt.channel ?? process.env.KIWI_CHANNEL ?? (linked?.length === 1 ? linked[0] : undefined);
+  const elsewhere = (alias: string) => !!linked && !linked.includes(alias);
+  const away = (alias: string) => die(`that link is to a message in ${linked?.join(" or ")}, not in ${alias}: pass -c ${linked?.[0]}`);
   const ours = explicit ? [] : seatsFor(process.cwd());
   const named = opt.as ?? process.env.KIWI_AS;
   const fits = ours.length > 1 && named ? ours.filter((b) => b.as === named) : ours;
@@ -60,7 +64,7 @@ export const channelAlias = Effect.fn("kiwi.channelAlias")(function* () {
   const heardIn = seq === undefined ? [] : [...new Set(heardFrom(here().session, seq).map((h) => h.alias))];
   if (heardIn.length > 1) return yield* die(`this session saw #${seq} in more than one channel (${heardIn.join(", ")}): pass -c ALIAS to say which`);
   if (others.length || (ours.length > 1 && !seat)) {
-    if (told) return (acting.alias = told);
+    if (told) return elsewhere(told) ? yield* away(told) : (acting.alias = told);
     return yield* die(`this session is several agents here (${ours.map((b) => `${b.as} in ${b.alias}`).join(", ")}); pass -c ALIAS --as NAME to say which`);
   }
   const alias = explicit ?? (told && told !== seat?.alias ? told : seat?.alias) ?? (all.length === 1 ? all[0] : undefined) ?? told;
@@ -75,6 +79,7 @@ export const channelAlias = Effect.fn("kiwi.channelAlias")(function* () {
     return yield* die(`this directory isn't bound to a channel, and this machine is in several (${all.join(", ")}); pass -c ALIAS --as NAME, or run kiwi from the directory you joined in`);
   }
   if (!cfg.channels[alias]) return yield* die(`unknown channel "${alias}" (see: kiwi channels)`);
+  if (elsewhere(alias)) return yield* away(alias);
   acting.alias = alias;
   return alias;
 });
@@ -111,8 +116,8 @@ export const agentName = Effect.fn("kiwi.agentName")(function* (ch?: ChannelConf
   return name;
 });
 
-export const session = Effect.fn("kiwi.session")(function* () {
-  const alias = yield* channelAlias();
+export const session = Effect.fn("kiwi.session")(function* (code?: string) {
+  const alias = yield* channelAlias(code);
   const all = yield* config;
   const cfg = all.channels[alias]!;
   acting.name = yield* agentName(cfg);

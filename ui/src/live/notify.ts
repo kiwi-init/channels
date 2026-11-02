@@ -20,17 +20,11 @@ export function drawerNews(channel: Pick<Channel, "rooms" | "directs">): "loud" 
   return channel.rooms.some((r) => r.unread > 0) ? "quiet" : null
 }
 
-export const channelLink = (code: string): string => `kiwi://join/${encodeURIComponent(code)}`
-
-export const messageLink = (code: string, seq: number): string => `${channelLink(code)}?m=${seq}`
-
 export function messageOfLink(url: string): number | null {
   const found = /[?&]m=(\d{1,15})(?:[&#]|$)/.exec(url)
   const seq = found ? Number(found[1]) : Number.NaN
   return Number.isSafeInteger(seq) && seq > 0 ? seq : null
 }
-
-export const messageHash = (code: string, seq: number): string => `#${encodeURIComponent(code)}?m=${seq}`
 
 export function hashTarget(hash: string): { hash: string; seq: number | null } {
   const at = hash.indexOf("?")
