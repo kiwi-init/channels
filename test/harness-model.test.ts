@@ -82,6 +82,16 @@ describe("harnessModel", () => {
     expect(await harnessModel(env, { tree: { from: 9, lookup: () => ({ ppid: 1, name: "zsh" }) } })).toBeUndefined();
   });
 
+  test("Antigravity CLI: the model its settings name, as the id its hooks report, read only under an agy process", async () => {
+    const data = dir();
+    writeFileSync(join(data, "settings.json"), JSON.stringify({ model: "Gemini 3.8 Flash (High)", agentMode: "auto" }));
+    const env = { ANTIGRAVITY_AGENT: "1", ANTIGRAVITY_CONVERSATION_ID: "c-1", ANTIGRAVITY_APP_DATA_DIR: data, CLAUDECODE: "1", CLAUDE_CONFIG_DIR: dir() };
+    expect(await harnessModel(env, { tree: { from: 9, lookup: () => ({ ppid: 1, name: "agy" }) } })).toBe("gemini-3.8-flash-high");
+    expect(await harnessModel(env, { tree: { from: 9, lookup: () => ({ ppid: 1, name: "claude" }) } })).toBeUndefined();
+    writeFileSync(join(data, "settings.json"), JSON.stringify({ agentMode: "auto" }));
+    expect(await harnessModel(env, { tree: { from: 9, lookup: () => ({ ppid: 1, name: "agy" }) } })).toBeUndefined();
+  });
+
   test("Kimi Code: a bare or single-quoted table key resolves; an alias with no table is no model at all", async () => {
     const tree = { from: 9, lookup: () => ({ ppid: 1, name: "kimi-code" }) };
     const at = (toml: string) => {

@@ -24,7 +24,7 @@ interface SeatHold {
 export interface SeatRecord {
   alias: string;
   as: string;
-  harness?: "claude" | "codex" | "gemini" | "cursor" | "grok" | "opencode" | "kimi" | "mimo" | "grok-bot" | "pi" | "zcode";
+  harness?: "claude" | "codex" | "gemini" | "cursor" | "grok" | "opencode" | "kimi" | "mimo" | "grok-bot" | "pi" | "zcode" | "agy";
   session?: string;
   harnessSession?: string;
   pid?: number;

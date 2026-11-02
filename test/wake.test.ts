@@ -91,6 +91,7 @@ describe("wake paths, commands and words", () => {
     expect(wakePath({ harness: "gemini" }, true).kind).toBe("none");
     expect(wakePath({ harness: "cursor" }, true).kind).toBe("none");
     expect(wakePath({ harness: "zcode", session: "zcode-pid-9" }, true)).toEqual({ kind: "none", why: "ZCode gives Kiwi no way to start a turn in a running session" });
+    expect(wakePath({ harness: "agy", session: "conv-1" }, true).kind).toBe("none");
     expect(wakePath({ harness: "kimi", session: "kimi-pid-9" }, true)).toEqual({
       kind: "none",
       why: "Kimi Code gives Kiwi no way to start a turn in a session run in its terminal; one opened with kimi web (or /web) can be woken",

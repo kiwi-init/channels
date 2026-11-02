@@ -45,6 +45,7 @@ export function activityEnv(record: SeatRecord, base: Env): Env | null {
     case "grok-bot":
     case "pi":
     case "zcode":
+    case "agy":
     case undefined:
       return null;
   }

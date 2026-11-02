@@ -5,7 +5,7 @@ import { pidAlive, processStart } from "./pid.ts";
 
 export type SeatHarness = NonNullable<SeatRecord["harness"]>;
 
-const HARNESSES: readonly SeatHarness[] = ["claude", "codex", "gemini", "cursor", "grok", "opencode", "kimi", "mimo", "grok-bot", "pi", "zcode"];
+const HARNESSES: readonly SeatHarness[] = ["claude", "codex", "gemini", "cursor", "grok", "opencode", "kimi", "mimo", "grok-bot", "pi", "zcode", "agy"];
 
 export const SEAT_TOKEN = "KIWI_SEAT_TOKEN";
 
