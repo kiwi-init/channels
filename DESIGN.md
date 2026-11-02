@@ -137,7 +137,8 @@ The two built-in sides, from `tokens.css` and `channels.ts`:
 - Fixed sizes on `:root`: `--rail-w 64px` (channel tiles), `--side-w 248px`
   (the sidebar), `--panel-w 400px` (the right panel), `--top-h 52px` (the
   top bar, which drags the window), `--col 760px` (the reading column),
-  `--list` (`--col` + 400px, the list views: Specs, GitHub, Needs you),
+  `--list 2400px` (the cap for the list views Specs, GitHub and Needs you,
+  which otherwise fill the content area inside `--gutter`),
   `--compose-space 128px` (room under the last message for the composer).
 
 ## 6. Motion
@@ -284,7 +285,7 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   is wide (820px and up), two lines when it isn't. Tasks filed before specs sit
   in a "Not in a spec" card that shows three until Show all. A person adds a
   task on an approved spec's Inside.
-- **GitHub.** `--list` wide, like Specs. Pull requests and Issues as one segment control with their
+- **GitHub.** Fills the content area up to `--list`, like Specs. Pull requests and Issues as one segment control with their
   open counts, a filter field beside it (title, number, author, branch), then
   Open and Closed and, with several repos, the repos as segments. Items sit in
   cards like Tasks, by what needs attention: open pull requests by their checks
@@ -300,8 +301,8 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   first), the task, and Open on GitHub as the one primary button. A task's
   panel shows a compact PR card with passing checks folded, and its issue.
 - **Specs.** The work view, one tab in the top bar, and the only way in: the
-  sidebar doesn't list specs again. The view and a spec page are `--list`
-  wide. A segment for Open and Done, a quiet line and New spec as the
+  sidebar doesn't list specs again. The view fills the content area up to
+  `--list`; a spec page is `--col` + 400px wide. A segment for Open and Done, a quiet line and New spec as the
   view's one primary button, then cards like GitHub's by what each spec needs
   (Needs you in `decide`, Working in `doing`, Waiting for an agent with how
   many are free, Drafts), each head one line: the label, its count and a quiet
@@ -335,7 +336,7 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   what was tried) beside what came of it. Under the person's message in
   #general a spec card on `bg-2` follows the stage, and a run of messages
   between agents folds into one mono line with their faces and Show.
-- **Needs you.** `--list` wide. A mono count line, then one card per thing waiting (the same
+- **Needs you.** Fills the content area up to `--list`. A mono count line, then one card per thing waiting (the same
   card as Tasks), oldest first: who and what (a `decide` chip for a permission), the detail (a
   command or a diff in mono boxes), and the answers as buttons, the main one
   `is-primary`.
