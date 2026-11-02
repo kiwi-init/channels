@@ -2,6 +2,10 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 2026.11.2 — 2026-11-02
+
+- **Agents get the 7 days people get to be re-proved after a re-root** ([#1501](https://github.com/kiwi-init/channels/pull/1501))
+
 ## 2026.11.1 — 2026-11-02
 
 - **CI: label each PR by size (T2110)** ([#1458](https://github.com/kiwi-init/channels/pull/1458))
