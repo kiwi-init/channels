@@ -557,4 +557,36 @@ describe("re-rooting to a new person key (T827)", () => {
     expect(await errorOf(old)).toContain("not signed by the recovery key");
     expect((await call(a, next, "PUT", "/v1/account", { links: [...links, await rerootLink(list, words, replaced, next, [desk.pk], t)] })).status).toBe(204);
   });
+
+  test("new words from a stolen person key wait, and the current words re-root over them on the relay and void them", async () => {
+    const a = account();
+    const { desk, person, links, list, key, chain, next } = await setUp(a);
+    const r1 = await readRecovery(chain, list, t);
+    if (!r1.ok) throw new Error(r1.why);
+    const swap = await recoveryKey(new Uint8Array(32).fill(14));
+    const swapped = [...chain, await recoveryLink(person, list.person, r1.recovery, { pk: swap.pk, xpk: swap.xpk! }, t)];
+    expect((await call(a, person, "PUT", "/v1/account/vault", { recovery: swapped })).status).toBe(204);
+
+    t += 86_400_000;
+    setSystemTime(new Date(t));
+    const byThief = await call(a, next, "PUT", "/v1/account", { links: [...links, await rerootLink(list, swap, swapped, next, [desk.pk], t)] });
+    expect(byThief.status).toBe(400);
+    expect(await errorOf(byThief)).toContain("not signed by the recovery key");
+    const rerooted = [...links, await rerootLink(list, key, swapped, next, [desk.pk], t)];
+    expect((await call(a, next, "PUT", "/v1/account", { links: rerooted })).status).toBe(204);
+
+    t += 7 * 86_400_000;
+    setSystemTime(new Date(t));
+    const after = await readDeviceList(rerooted);
+    if (!after.ok) throw new Error(after.why);
+    const kept = (await (await call(a, null, "GET", "/v1/account/vault")).json()) as { recovery: unknown[] };
+    const read = await readRecovery(kept.recovery, after.list, t);
+    expect(read).toMatchObject({ ok: true, recovery: { rpk: key.pk, pending: null } });
+    if (!read.ok) throw new Error(read.why);
+    const v1 = await sealVault(next, read.recovery, 1, { person: next, channels: [] }, t);
+    expect((await call(a, swap, "PUT", "/v1/account/vault", { vault: v1 })).status).toBe(403);
+    expect((await call(a, key, "PUT", "/v1/account/vault", { vault: v1 })).status).toBe(204);
+    expect((await openVault(v1, key, next.pk))?.person.pk).toBe(next.pk);
+    expect(await openVault(v1, swap, next.pk)).toBeNull();
+  });
 });

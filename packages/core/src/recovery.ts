@@ -156,6 +156,8 @@ function approver(list: DeviceList, pk: string): boolean {
   return list.devices.some((d) => d.device === pk && d.approve && d.as !== "computer");
 }
 
+const rerootedBefore = (list: DeviceList, pk: string, due: number): boolean => list.reroots.some((x) => x.from === pk && x.at < due);
+
 export async function readRecovery(links: readonly unknown[], list: DeviceList, now = Date.now()): Promise<ReadRecovery> {
   if (!links.length) return { ok: false, why: "no recovery key set up" };
   if (links.length > RECOVERY_MAX) return { ok: false, why: "a recovery chain longer than any person needs" };
@@ -189,14 +191,15 @@ export async function readRecovery(links: readonly unknown[], list: DeviceList, 
         continue;
       }
       if (link.pk !== root) return { ok: false, why: `recovery link ${link.n}: only the person key or the recovery key replaces it at once` };
-      r = { ...r, n: link.n, head, pending: { rpk: link.rpk, rxpk: link.rxpk, after: recoveryAfter(link.at), by: link.pk } };
+      const due = recoveryAfter(link.at);
+      r = { ...r, n: link.n, head, pending: rerootedBefore(list, link.pk, due) ? r.pending : { rpk: link.rpk, rxpk: link.rxpk, after: due, by: link.pk } };
       continue;
     }
     if (link.after !== recoveryAfter(link.at)) return { ok: false, why: `recovery link ${link.n}: a new recovery key waits ${RECOVERY_DELAY_DAYS} days` };
     const cut = list.revokes.find((x) => x.device === link.pk);
     if (link.pk !== root && (cut ? !cut.approve || cut.as === "computer" : !approver(list, link.pk)))
       return { ok: false, why: `recovery link ${link.n}: signed by a key that may not propose a recovery key` };
-    const voided = !!cut && cut.at < link.after;
+    const voided = (!!cut && cut.at < link.after) || rerootedBefore(list, link.pk, link.after);
     r = { ...r, n: link.n, head, pending: voided ? r.pending : { rpk: link.rpk, rxpk: link.rxpk, after: link.after, by: link.pk } };
   }
   if (r!.pending && now >= r!.pending.after) r = { ...r!, rpk: r!.pending.rpk, rxpk: r!.pending.rxpk, pending: null };

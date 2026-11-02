@@ -2,9 +2,11 @@ import { beforeAll, describe, expect, test } from "bun:test";
 import { certUntil, checkDevice, claimDevice, newestLists, nextLink, readDeviceList, rerootLink, rootLink, speaksForPerson, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
 import { generateIdentity, sign, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
 import { makeAsk, readAsk } from "@kiwi/core/machine-ask.ts";
-import { checkVault, openVault, readRecovery, recoveryAfter, recoveryKey, recoveryLink, sealPerson, sealVault, type Recovery, type RecoveryLink } from "@kiwi/core/recovery.ts";
+import { PERSON_WORDS_WAIT_FROM, checkVault, openVault, readRecovery, recoveryAfter, recoveryKey, recoveryLink, sealPerson, sealVault, type Recovery, type RecoveryLink } from "@kiwi/core/recovery.ts";
 
 const T0 = Date.UTC(2026, 9, 29);
+const DAY = 86_400_000;
+const T1 = PERSON_WORDS_WAIT_FROM + DAY;
 const ids: Record<string, Identity> = {};
 let links: DeviceLink[] = [];
 let list: DeviceList;
@@ -165,6 +167,76 @@ describe("a re-root to a new person key (T827)", () => {
     expect(await checkVault(await sealVault(ids.next!, before, 2, { person: ids.next!, channels: [] }, T0 + 2000), after)).toBeNull();
     const oldSigned = await sign(ids.person!, { ...vault, pk: undefined, sig: undefined });
     expect(await checkVault(oldSigned, after)).toContain("isn't one of this person's approving devices");
+  });
+
+  test("new words from a stolen person key wait 7 days, and the current words re-root over them and void them", async () => {
+    const thiefWords = await recoveryKey(new Uint8Array(32).fill(7));
+    const swapped = [...chain, await recoveryLink(ids.person!, ids.person!.pk, await recoveryOf(chain, list, T1), { pk: thiefWords.pk, xpk: thiefWords.xpk! }, T1)];
+    expect(await recoveryOf(swapped, list, T1 + DAY)).toMatchObject({ rpk: paper.pk, pending: { rpk: thiefWords.pk, by: ids.person!.pk, after: recoveryAfter(T1) } });
+
+    expect(await why(await rerooted([ids.desk!.pk], { by: thiefWords, on: swapped, at: T1 + DAY }))).toContain("not signed by the recovery key");
+    const r = await rerooted([ids.desk!.pk], { on: swapped, at: T1 + DAY });
+    const after = await listOf(r);
+    expect(after.root).toBe(ids.next!.pk);
+    for (const at of [T1 + 2 * DAY, recoveryAfter(T1), recoveryAfter(T1) + 30 * DAY]) expect(await recoveryOf(swapped, after, at)).toMatchObject({ rpk: paper.pk, pending: null, root: ids.next!.pk });
+    const paper2 = await recoveryKey(new Uint8Array(32).fill(8));
+    const next2 = await withExchangeKey(await generateIdentity("next2"));
+    const later = recoveryAfter(T1) + DAY;
+    expect(await why([...r, await rerootLink(after, thiefWords, swapped, next2, [ids.desk!.pk], later)])).toContain("not signed by the recovery key");
+    expect((await listOf([...r, await rerootLink(after, paper, swapped, next2, [ids.desk!.pk], later)])).root).toBe(next2.pk);
+    const bySelf = [...swapped, await recoveryLink(paper, ids.person!.pk, await recoveryOf(swapped, after, later), { pk: paper2.pk, xpk: paper2.xpk! }, later)];
+    expect(await recoveryOf(bySelf, after, later)).toMatchObject({ rpk: paper2.pk, pending: null });
+  });
+
+  test("a stolen person key's words signed to take over at once still wait, and a re-root voids them too", async () => {
+    const thiefWords = await recoveryKey(new Uint8Array(32).fill(7));
+    const before = await recoveryOf(chain, list, T1);
+    const forced = await sign(ids.person!, {
+      kind: "kiwi-recovery" as const,
+      v: 1 as const,
+      person: ids.person!.pk,
+      n: 2,
+      prev: before.head,
+      at: T1,
+      rpk: thiefWords.pk,
+      rxpk: thiefWords.xpk!,
+      after: null,
+    });
+    const swapped = [...chain, forced];
+    expect(await recoveryOf(swapped, list, T1 + DAY)).toMatchObject({ rpk: paper.pk, pending: { rpk: thiefWords.pk, by: ids.person!.pk, after: recoveryAfter(T1) } });
+    const after = await listOf(await rerooted([ids.desk!.pk], { on: swapped, at: T1 + DAY }));
+    expect(await recoveryOf(swapped, after, recoveryAfter(T1) + DAY)).toMatchObject({ rpk: paper.pk, pending: null });
+  });
+
+  test("with no re-root in the 7 days, the stolen key's words take over, and only they re-root after that", async () => {
+    const thiefWords = await recoveryKey(new Uint8Array(32).fill(7));
+    const swapped = [...chain, await recoveryLink(ids.person!, ids.person!.pk, await recoveryOf(chain, list, T1), { pk: thiefWords.pk, xpk: thiefWords.xpk! }, T1)];
+    const due = recoveryAfter(T1);
+    expect(await why(await rerooted([ids.desk!.pk], { on: swapped, at: due }))).toContain("not signed by the recovery key");
+    expect((await listOf(await rerooted([ids.desk!.pk], { by: thiefWords, on: swapped, at: due }))).root).toBe(ids.next!.pk);
+    expect((await listOf(await rerooted([ids.desk!.pk], { on: swapped, at: due - 1 }))).root).toBe(ids.next!.pk);
+  });
+
+  test("a re-root that drops the device whose proposal waits voids it; one that keeps the device leaves it waiting", async () => {
+    const proposed = await recoveryKey(new Uint8Array(32).fill(9));
+    const byThief = [...chain, await recoveryLink(ids.thief!, ids.person!.pk, await recoveryOf(chain, list, T1), { pk: proposed.pk, xpk: proposed.xpk! }, T1)];
+    expect((await recoveryOf(byThief, list, T1)).pending?.by).toBe(ids.thief!.pk);
+    const dropped = await listOf(await rerooted([ids.desk!.pk], { on: byThief, at: T1 + DAY }));
+    expect(await recoveryOf(byThief, dropped, recoveryAfter(T1) + DAY)).toMatchObject({ rpk: paper.pk, pending: null });
+    const kept = await listOf(await rerooted([ids.desk!.pk, ids.thief!.pk], { on: byThief, at: T1 + DAY }));
+    expect((await recoveryOf(byThief, kept, T1 + 2 * DAY)).pending?.by).toBe(ids.thief!.pk);
+    expect((await recoveryOf(byThief, kept, recoveryAfter(T1))).rpk).toBe(proposed.pk);
+  });
+
+  test("the old person key can't propose new words once the list is re-rooted, even dated before the re-root", async () => {
+    const r = await rerooted([ids.desk!.pk], { at: T1 });
+    const after = await listOf(r);
+    const swap = await recoveryKey(new Uint8Array(32).fill(10));
+    const before = await recoveryOf(chain, after, T1 + DAY);
+    for (const at of [T1 + DAY, T1 - DAY]) {
+      const late = [...chain, await recoveryLink(ids.person!, ids.person!.pk, before, { pk: swap.pk, xpk: swap.xpk! }, at)];
+      expect((await readRecovery(late, after, T1 + 2 * DAY)).ok).toBe(false);
+    }
   });
 
   test("a computer takes asks from the new person key, and no longer from the old one", async () => {
