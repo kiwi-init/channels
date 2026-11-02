@@ -19,10 +19,10 @@ export function runNow(argv: readonly string[], timeoutMs = 5_000): Ran {
   };
 }
 
-export function run(argv: readonly string[], timeoutMs = 10_000): Promise<Ran> {
+export function run(argv: readonly string[], timeoutMs = 10_000, cwd?: string): Promise<Ran> {
   let child: Bun.Subprocess<"ignore", "pipe", "pipe">;
   try {
-    child = Bun.spawn([...argv], { stdin: "ignore", stdout: "pipe", stderr: "pipe" });
+    child = Bun.spawn([...argv], { cwd, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
   } catch (err) {
     return Promise.resolve(failed(err));
   }

@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Channel, type PresenceFields } from "@kiwi/core/client.ts";
-import type { ChannelAccess } from "@kiwi/core/crypto.ts";
+import { newChannelKey, type ChannelAccess } from "@kiwi/core/crypto.ts";
 import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
 import type { Presence } from "@kiwi/core/protocol.ts";
 import { startRelay } from "../src/relay/bun.ts";
@@ -101,6 +101,21 @@ test("a forged beacon carrying win's key, its time far ahead, never holds back w
   base = Date.now();
   const frames = await Promise.all([beaconFrame(access, rogue, { from: "win", client: "forged", ts: base + 4 * MIN }, { pk: win.pk }), beaconFrame(access, win, { client: "forged", ts: base })]);
   expect(said(await deliver(frames))).toEqual([`forged@${4 * MIN} unsigned`, "forged@0"]);
+});
+
+test("a beacon sealed under an older epoch's key is dropped, though the listener still holds that key for history", async () => {
+  const next: ChannelAccess = { ...access, epoch: access.epoch + 1, keys: { ...access.keys, [String(access.epoch + 1)]: newChannelKey() } };
+  const got: (Presence & { sigOk: boolean })[] = [];
+  const listening = new AbortController();
+  let ready = false;
+  const ch = new Channel(next, relay, win);
+  void ch.stream(await ch.head(), () => {}, { signal: listening.signal, onReady: () => (ready = true), onPresence: (p) => void got.push(p) }).catch(() => {});
+  await until(() => ready, "the next epoch's listener to open");
+  socket!.send(await beaconFrame(access, rogue, { client: "departed" }));
+  socket!.send(await beaconFrame(next, win, { client: "current" }));
+  await until(() => got.some((p) => p.client === "current"), "the current epoch's beacon");
+  listening.abort();
+  expect(got.map((p) => p.client)).toEqual(["current"]);
 });
 
 test("beacons a live sender sends back to back are each heard", async () => {

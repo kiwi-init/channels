@@ -23,9 +23,14 @@ const HELPERS: Record<TerminalId, { download: string; on: string; off: string }>
     on: "Downloaded. A seat that needs you marks its Rex tab, and Needs you opens it.",
     off: "Marks a seat that needs you in its Rex tab, and opens it from Needs you.",
   },
+  tmux: {
+    download: "Download Tmux Helpers",
+    on: "Downloaded. A seat that needs you marks its window in tmux, and prefix K jumps to it.",
+    off: "Marks a seat that needs you in tmux's window list, and jumps to it with prefix K.",
+  },
 }
 
-const ORDER: TerminalId[] = ["rex"]
+const ORDER: TerminalId[] = ["rex", "tmux"]
 
 function Helpers({ starts }: { starts: AgentStarts }) {
   const { app } = useApp()
@@ -193,7 +198,7 @@ export function AgentsSection() {
           </Group>
           <Group
             title="Folders agents can start in"
-            hint="New agent, here or from your phone, can start one in these folders and the folders inside them, as well as where agents on this computer already work and your home folder's git repos."
+            hint="New agent, here or from your phone, can start one in these folders and the folders inside them, and where agents on this computer already work. Here, it can also start one in your home folder's git repos."
           >
             {starts.folders.map((f) => (
               <div key={f} className="set-row set-folder">

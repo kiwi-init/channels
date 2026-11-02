@@ -164,7 +164,7 @@ struct NeedsYouRow: View {
                 Spacer(minLength: 0)
                 Text(ask.label).type(.meta, .semibold).foregroundStyle(Tone.decide)
             }
-            Markdown(text: ask.body)
+            Markdown(text: ask.shown)
             VStack(alignment: .leading, spacing: 6) {
                 ForEach(ask.choices, id: \.self) { choice in
                     answer(choice)

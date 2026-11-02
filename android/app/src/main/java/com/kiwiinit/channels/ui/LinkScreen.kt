@@ -18,11 +18,16 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -116,6 +121,27 @@ fun LinkScreen(model: AppModel, modifier: Modifier = Modifier, linking: Linking 
                 )
                 Waiting("Waiting for your computer")
                 QuietButton("Cancel", Modifier.padding(top = 24.dp)) { model.cancelLink() }
+            }
+            is Linking.Check -> {
+                var keeping by remember(linking) { mutableStateOf(false) }
+                Text("Is this your key, ${linking.name}?", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                Text(
+                    linking.fingerprint,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    fontFamily = FontFamily.Monospace,
+                    modifier = Modifier.padding(vertical = 20.dp),
+                )
+                Text(
+                    "Your computer shows it in its approval and in Settings, under Your key for new devices. Join only if they match: a different key means someone else answered this phone.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = tone.ink2,
+                )
+                PrimaryButton("It matches, join", busy = keeping, modifier = Modifier.padding(top = 24.dp)) {
+                    keeping = true
+                    model.keepLink()
+                }
+                QuietButton("It doesn't match", Modifier.padding(top = 10.dp)) { if (!keeping) model.refuseLink(linking.fingerprint) }
             }
         }
         Spacer(Modifier.size(24.dp))

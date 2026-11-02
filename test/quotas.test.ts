@@ -55,6 +55,12 @@ describe("settings", () => {
       membersPerChannel: 8,
     });
   });
+
+  test("the hosted relay sets no limit: no cap on channels, members or messages, no expiry, and the 1 GB safety floor for bytes (T604)", async () => {
+    const config = Bun.JSONC.parse(await Bun.file(join(import.meta.dir, "../wrangler.jsonc")).text()) as { vars: Record<string, string> };
+    expect(Object.keys(config.vars).filter((k) => k.startsWith("KIWI_QUOTA_"))).toEqual([]);
+    expect(policyFrom(config.vars)).toEqual(OPEN_POLICY);
+  });
 });
 
 describe("members per channel", () => {

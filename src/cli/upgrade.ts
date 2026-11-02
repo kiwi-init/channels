@@ -4,6 +4,8 @@ import { chmod, mkdtemp, realpath, rename, rm, stat, writeFile } from "node:fs/p
 import { dirname, join } from "node:path";
 import { gunzipSync } from "node:zlib";
 import { compareVersions } from "@kiwi/core/versions.ts";
+import { minisignVerifies } from "./minisign.ts";
+import { RELEASE_KEY } from "./release-key.ts";
 
 const RELEASES = "https://github.com/kiwi-init/channels/releases";
 
@@ -13,6 +15,7 @@ type UpgradeOptions = {
   version: string;
   platform: string;
   arch: string;
+  releaseKey?: string;
   request?: (url: string, init: RequestInit) => Promise<Response>;
   report?: (message: string) => void;
 };
@@ -52,7 +55,16 @@ export async function upgrade(options: UpgradeOptions): Promise<void> {
     const name = `kiwi-${options.platform}-${options.arch}.gz`;
     const sums = await get(`${base}/SHA256SUMS`);
     if (!sums.ok) throw new Error(`could not download SHA256SUMS (HTTP ${sums.status})`);
-    const entries = (await sums.text()).split("\n").map((line) => line.trim().split(/\s+/));
+    const sumsBody = Buffer.from(await sums.arrayBuffer());
+    const sig = await get(`${base}/SHA256SUMS.minisig`);
+    if (!sig.ok) throw new Error(`the release carries no SHA256SUMS.minisig (HTTP ${sig.status}); your installed Kiwi was kept`);
+    if (!minisignVerifies(sumsBody, await sig.text(), options.releaseKey ?? RELEASE_KEY)) {
+      throw new Error("the release's signature doesn't match the key this Kiwi pins; your installed Kiwi was kept");
+    }
+    const entries = sumsBody
+      .toString("utf8")
+      .split("\n")
+      .map((line) => line.trim().split(/\s+/));
     const matches = entries.filter((entry) => entry[1] === name);
     const expected = matches.length === 1 ? matches[0]?.[0] : undefined;
     if (!expected || !/^[a-f0-9]{64}$/i.test(expected)) throw new Error(`SHA256SUMS does not contain one valid checksum for ${name}`);

@@ -6,16 +6,14 @@ test("Settings reads kiwi terminal status --json, keeps only terminals it knows,
   const known: TerminalsStatus = {
     launch: "on",
     bypass: "on",
-    terminals: [{ id: "rex", name: "Rex", found: true, running: true, helpers: "on" }],
+    terminals: [
+      { id: "rex", name: "Rex", found: true, running: true, helpers: "on" },
+      { id: "tmux", name: "tmux", found: true, running: true, helpers: "off" },
+    ],
   };
   const raw = {
     ...known,
-    terminals: [
-      ...known.terminals,
-      { id: "tmux", name: "tmux", found: true, running: true, helpers: "off" },
-      { id: "app", name: "Terminal", found: true, running: true, helpers: null },
-      { id: "moon", name: "Moon", found: true, running: true, helpers: "on" },
-    ],
+    terminals: [...known.terminals, { id: "app", name: "Terminal", found: true, running: true, helpers: null }, { id: "moon", name: "Moon", found: true, running: true, helpers: "on" }],
   };
   expect(terminalsOf(JSON.stringify(raw))).toEqual(known);
   expect(terminalsOf(JSON.stringify({ ...known, launch: "maybe" }))).toBeNull();

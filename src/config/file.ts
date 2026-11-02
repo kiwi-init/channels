@@ -80,7 +80,7 @@ export interface Config {
 }
 
 interface Terminals {
-  helpers?: Partial<Record<TerminalId | "tmux", "on" | "off">>;
+  helpers?: Partial<Record<TerminalId, "on" | "off">>;
 }
 
 function migrated(cfg: Config): Config {

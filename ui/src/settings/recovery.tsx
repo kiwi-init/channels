@@ -4,6 +4,7 @@ import { Dialog, DialogHead, Field } from "~/kit/bits"
 import type { RecoveryState } from "~/model"
 import { useApp } from "~/nav"
 import { Confirm, Row } from "~/settings/controls"
+import { WordsForm } from "~/start/recover"
 
 const SHOT = new URLSearchParams(location.search).get("shot")
 
@@ -34,6 +35,7 @@ export function RecoveryKey({ recovery }: { recovery: RecoveryState }) {
   const { app } = useApp()
   const [step, setStep] = useState<Step | null>(null)
   const [renew, setRenew] = useState(false)
+  const [cancelling, setCancelling] = useState(SHOT === "settings-recovery-cancel")
   const { recoveryWords } = app.actions
 
   useEffect(() => {
@@ -65,7 +67,7 @@ export function RecoveryKey({ recovery }: { recovery: RecoveryState }) {
       <div className="heading">
         <h3>Recovery key</h3>
       </div>
-      <p className="set-group-hint">24 words on paper that bring back your account if you lose every computer.</p>
+      <p className="set-group-hint">24 words on paper, and the only way back to your account if you lose every computer. Keep them safe and offline.</p>
       <div className={recovery.at ? "set-rows" : "set-rows set-recovery-nudge"}>
         <Row label={recovery.at ? `Set up ${day(recovery.at)}` : "Not set up yet"} hint={hintFor(recovery)}>
           {recovery.here &&
@@ -79,6 +81,13 @@ export function RecoveryKey({ recovery }: { recovery: RecoveryState }) {
               </button>
             ))}
         </Row>
+        {recovery.pending && (
+          <Row label={`New words take over ${day(recovery.pending.from)}`} hint={`Made by ${recovery.pending.by}. Until then your current words still work.`}>
+            <button type="button" className="btn is-danger is-small" onClick={() => setCancelling(true)}>
+              Not you? Cancel
+            </button>
+          </Row>
+        )}
       </div>
 
       <Confirm
@@ -98,7 +107,7 @@ export function RecoveryKey({ recovery }: { recovery: RecoveryState }) {
           <>
             <DialogHead
               title="Write down these 24 words"
-              sub="On paper, in order. Anyone with them can take over your account: keep them somewhere safe and never type them into a website."
+              sub="These words are the only way back to your account: once you've checked them, this computer lets go of your person key. Write them on paper, in order, and keep them safe and offline. Anyone with them can take over your account, so never type them into a website."
               onClose={close}
             />
             <div className="set-confirm">
@@ -158,6 +167,23 @@ export function RecoveryKey({ recovery }: { recovery: RecoveryState }) {
             </form>
           </>
         )}
+      </Dialog>
+
+      <Dialog open={cancelling} onClose={() => setCancelling(false)} label="Cancel the new words" wide>
+        <WordsForm
+          className="set-recover-cancel"
+          title="Cancel with your current words"
+          lede="Type the 24 words you have now, in order, or paste them all into the first box. The new words are dropped, and yours stay."
+          action="Cancel the new words"
+          busyLabel="Cancelling…"
+          onSubmit={async (words) => {
+            const trouble = await app.actions.recoveryCancel(words)
+            if (!trouble) setCancelling(false)
+            return trouble
+          }}
+          onCancel={() => setCancelling(false)}
+          back="Not now"
+        />
       </Dialog>
     </section>
   )

@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react"
+
 const MIN = 60_000
 const HOUR = 60 * MIN
 const DAY = 24 * HOUR
@@ -22,3 +24,13 @@ export function day(at: number, now = Date.now()): string {
 }
 
 export const sameDay = (a: number, b: number): boolean => new Date(a).toDateString() === new Date(b).toDateString()
+
+export function useNow(every: number | null): number {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (every === null) return
+    const timer = setInterval(() => setNow(Date.now()), every)
+    return () => clearInterval(timer)
+  }, [every])
+  return now
+}

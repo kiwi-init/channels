@@ -2,6 +2,7 @@ import { useEffect, useSyncExternalStore } from "react"
 
 import type { PlacedSeat } from "@kiwi/core/terminals.ts"
 import { bridge } from "@kiwi/secrets/secrets.ts"
+import { whileShown } from "~/live/shown"
 import { store } from "~/live/value"
 import type { Person } from "~/model"
 
@@ -10,7 +11,7 @@ const seats = store<readonly PlacedSeat[]>([])
 export function seated(people: Person[], placed: readonly PlacedSeat[], room: string): Person[] {
   return people.map((p) => {
     const seat = p.kind === "agent" ? placed.find((s) => s.room === room && s.agent === p.name) : undefined
-    return seat ? { ...p, seat: seat.place } : p
+    return seat ? { ...p, seat: seat.place, ...(seat.place !== "rex" && seat.attach ? { attach: seat.attach } : {}) } : p
   })
 }
 
@@ -27,11 +28,11 @@ export function useSeats(): readonly PlacedSeat[] {
         () => {}
       )
     load()
-    const every = window.setInterval(load, 15_000)
+    const stop = whileShown(load, 15_000)
     window.addEventListener("focus", load)
     return () => {
       live = false
-      window.clearInterval(every)
+      stop()
       window.removeEventListener("focus", load)
     }
   }, [])

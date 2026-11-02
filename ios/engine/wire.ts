@@ -26,6 +26,7 @@ export type Ask =
   | { op: "enrollBegin"; relay: string; label: string; os: string; user?: string; waitMs?: number }
   | { op: "enrollAsk" }
   | { op: "enrollWait" }
+  | { op: "enrollCheck" }
   | { op: "enrollFinish" }
   | { op: "enrollCancel" }
   | { op: "send"; code: string; body: string; re: number | null; imgs: Picture[]; place?: string }
@@ -95,6 +96,8 @@ export interface MessageView {
   at: number;
   kind: string;
   body: string;
+  shown: string;
+  plain: string;
   event: boolean;
   mine: boolean;
   quote: QuoteView | null;
@@ -128,6 +131,8 @@ export interface AskView {
   seq: number;
   from: string;
   body: string;
+  shown: string;
+  plain: string;
   at: number;
   label: string;
   choices: string[];

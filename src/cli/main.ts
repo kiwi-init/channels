@@ -15,26 +15,8 @@ import { refreshListeners } from "../hooks.ts";
 import { forgetSecretCopies } from "../config/wipe.ts";
 import { HELP } from "./help.ts";
 import { args, ignoredOptions, opt, unexpectedOptions } from "./args.ts";
-import { type Command, die, out } from "./context.ts";
-import { joinCommands } from "./commands/join.ts";
-import { adminCommands } from "./commands/admin.ts";
-import { hookCommands } from "./commands/hooks.ts";
-import { setupCommands } from "./commands/setup.ts";
-import { channelCommands } from "./commands/channel.ts";
-import { messageCommands } from "./commands/messages.ts";
-import { profileCommands } from "./commands/profile.ts";
-import { listenCommands } from "./commands/listen.ts";
-import { compactCommands } from "./commands/compact.ts";
-import { factCommands } from "./commands/facts.ts";
-import { leaseCommands } from "./commands/leases.ts";
-import { taskCommands } from "./commands/tasks.ts";
-import { toolCommands } from "./commands/tools.ts";
-import { contextLineCommands } from "./commands/context-line.ts";
-import { seatCommands } from "./commands/seat.ts";
-import { rexCommands } from "./commands/rex.ts";
-import { terminalCommands } from "./commands/terminal.ts";
-import { launchCommands } from "./commands/launch.ts";
-import { loopCommands } from "./commands/loop.ts";
+import { die, out } from "./context.ts";
+import { commandFor } from "./commands.ts";
 import { fail } from "./fail.ts";
 
 // Early signals for `kiwi daemon` only (the first positional, same as the CLI). Bun plus the
@@ -57,28 +39,6 @@ if (args[0] === "daemon") {
     process.removeListener("SIGINT", earlySig);
   };
 }
-
-const commands: Record<string, Command> = {
-  ...adminCommands,
-  ...joinCommands,
-  ...hookCommands,
-  ...setupCommands,
-  ...channelCommands,
-  ...messageCommands,
-  ...profileCommands,
-  ...listenCommands,
-  ...compactCommands,
-  ...factCommands,
-  ...leaseCommands,
-  ...taskCommands,
-  ...toolCommands,
-  ...contextLineCommands,
-  ...seatCommands,
-  ...rexCommands,
-  ...terminalCommands,
-  ...launchCommands,
-  ...loopCommands,
-};
 
 if (import.meta.main) {
   const cmd = opt.version ? "version" : args[0];
@@ -104,7 +64,7 @@ if (import.meta.main) {
     }
   }
   const shortcuts: Record<string, string> = { s: "status", t: "tasks" };
-  const command = commands[shortcuts[cmd] ?? cmd];
+  const command = await commandFor(shortcuts[cmd] ?? cmd);
   if (command && cmd !== "relay") forgetSecretCopies();
   if (command && cmd !== "daemon" && cmd !== "relay" && cmd !== "hook") await refreshListeners();
   // One runtime for the whole command: the relay over HTTP, and this computer's files.

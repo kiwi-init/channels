@@ -263,9 +263,9 @@ describe("revoking and expiry stop a delegate at once", () => {
     expect(await s.ownerCh.delegations()).toEqual([]);
     expect(await admitOwn(relay, s.roomId, s.owner.pk, pc.machine)).toEqual({ admitted: [], waiting: 0 });
     expect((await call(s, pc.machine, "GET", "/delegation")).status).toBe(404);
-    expect((await call(s, pc.machine, "GET", "/requests")).status).toBe(403);
-    expect((await call(s, pc.machine, "POST", `/requests/${requestId}/nonce`, { nonce: "x" })).status).toBe(403);
-    expect((await call(s, pc.machine, "GET", "/members")).status).toBe(403);
+    expect((await call(s, pc.machine, "GET", "/requests")).status).toBe(404);
+    expect((await call(s, pc.machine, "POST", `/requests/${requestId}/nonce`, { nonce: "x" })).status).toBe(404);
+    expect((await call(s, pc.machine, "GET", "/members")).status).toBe(404);
     expect(await Channel.joinStatus(relay, s.code, id, requestId)).toEqual({ status: "pending", code: null });
     await s.ownerCh.close();
   });
@@ -277,7 +277,7 @@ describe("revoking and expiry stop a delegate at once", () => {
     skew = (DELEGATION_DAYS + 1) * DAY_MS;
     try {
       expect(await admitOwn(relay, s.roomId, s.owner.pk, pc.machine)).toEqual({ admitted: [], waiting: 0 });
-      expect((await call(s, pc.machine, "POST", `/requests/${requestId}/nonce`, { nonce: "x" })).status).toBe(403);
+      expect((await call(s, pc.machine, "POST", `/requests/${requestId}/nonce`, { nonce: "x" })).status).toBe(404);
       expect((await call(s, pc.machine, "GET", "/delegation")).status).toBe(404);
     } finally {
       skew = 0;
@@ -299,11 +299,11 @@ describe("revoking and expiry stop a delegate at once", () => {
     expect((await call(s, s.owner, "PUT", "/delegations", { d: { ...forged, pk: s.owner.pk }, keys })).status).toBe(400);
     expect((await call(s, s.owner, "PUT", "/delegations", { d: forged, keys })).status).toBe(400);
     const good = await makeDelegation(s.owner, s.roomId, device, s.person.pk);
-    expect((await call(s, stranger, "PUT", "/delegations", { d: good, keys })).status).toBe(403);
+    expect((await call(s, stranger, "PUT", "/delegations", { d: good, keys })).status).toBe(404);
     expect((await call(s, s.owner, "PUT", "/delegations", { d: good, keys: {} })).status).toBe(400);
-    expect((await call(s, stranger, "GET", "/requests")).status).toBe(403);
-    expect((await call(s, stranger, "POST", "/members", {})).status).toBe(403);
-    expect((await call(s, stranger, "DELETE", `/delegations/${pc.machine.pk}`)).status).toBe(403);
+    expect((await call(s, stranger, "GET", "/requests")).status).toBe(404);
+    expect((await call(s, stranger, "POST", "/members", {})).status).toBe(404);
+    expect((await call(s, stranger, "DELETE", `/delegations/${pc.machine.pk}`)).status).toBe(404);
     await s.ownerCh.close();
   });
 

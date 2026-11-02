@@ -1,3 +1,4 @@
+import type { TextFont } from "@kiwi/app/theme.ts"
 import type { HookHarness, HookState } from "@kiwi/core/harnesses.ts"
 import type { Personality } from "@kiwi/core/personality.ts"
 import type { GithubNote, Step, StepReply } from "@kiwi/core/protocol.ts"
@@ -38,6 +39,8 @@ export interface Person {
   picture?: string
   owner: boolean
   you: boolean
+  seatOf?: string
+  face?: string
   presence: Presence
   activity?: Activity
   reach?: "listening" | "running" | "wakes"
@@ -52,17 +55,30 @@ export interface Person {
   outside?: boolean
   persona?: string
   sponsor?: string
+  yours?: boolean
   about?: string
   load?: Load
   readOnly?: boolean
   wakes?: boolean
   seat?: PlacedSeat["place"]
+  attach?: string
   addsAgents?: boolean
   answersDecisions?: boolean
+  managesAgents?: boolean
+  ops?: Readonly<Record<string, number>>
+  opsLive?: number
   lastSeen: number
   joined: number
   messages: number
   left?: boolean
+}
+
+export interface Check {
+  name: string
+  state: "pass" | "fail" | "running" | "waiting" | "skipped"
+  word: string
+  required?: boolean
+  url?: string
 }
 
 export interface PullRequest {
@@ -73,9 +89,28 @@ export interface PullRequest {
   state: "open" | "draft" | "merged" | "closed"
   checks: "pass" | "fail" | "running" | "none"
   ticks?: { passed: number; running: number; failed: readonly string[] }
+  list?: readonly Check[]
   mergedAt?: number
   additions?: number
   deletions?: number
+  files?: number
+  branch?: string
+  by?: string
+  at?: number
+  task?: number
+  release?: string
+}
+
+export interface Issue {
+  repo: string
+  number: number
+  title: string
+  url: string
+  state: "open" | "closed"
+  reason?: string
+  by?: string
+  at: number
+  task?: number
 }
 
 interface TaskNote {
@@ -148,7 +183,44 @@ export interface Task {
   leftBy?: string
 }
 
-export type TaskGroupHead =
+type SpecStage = "draft" | "queued" | "working" | "delivered" | "accepted" | "dropped"
+
+interface SpecMark {
+  by: string
+  at: number
+}
+
+export interface Spec {
+  ask: number
+  title: string
+  words: string
+  by: string
+  at: number
+  text: string
+  v: number
+  edited: SpecMark
+  edits: number
+  editors: string[]
+  stage: SpecStage
+  approved?: SpecMark & { v: number; text: string }
+  changed?: true
+  result?: SpecMark & { verdict: "accepted" | "dropped"; note?: string }
+  backs: (SpecMark & { note: string })[]
+  tasks: number[]
+  planner?: string
+  queue?: number
+  canJudge?: true
+}
+
+export interface SpecAsk {
+  kind: "spec"
+  id: string
+  at: number
+  ask: number
+  why: "approve" | "changed" | "result"
+}
+
+type TaskGroupHead =
   | { kind: "ask"; id: number; by: string; words: string; goal?: string; mayName: boolean }
   | { kind: "unfiled" }
   | { kind: "next"; name?: string }
@@ -169,6 +241,8 @@ export interface Room {
   unread: number
   mentions: number
   seen?: number
+  members?: string[]
+  muted?: true
 }
 
 export interface Direct {
@@ -176,6 +250,7 @@ export interface Direct {
   unread: number
   last: number
   seen?: number
+  locked?: true
 }
 
 export interface TheirDirect {
@@ -217,7 +292,9 @@ export interface Message {
   from: string
   at: number
   text: string
+  locked?: true
   where: Where
+  to?: readonly string[]
   said?: Said
   replyTo?: number
   inThread?: number
@@ -235,6 +312,9 @@ export interface Message {
   mentionsYou?: boolean
   leftOut?: string
   receipt?: string
+  edited?: number
+  deleted?: true
+  canChange?: true
 }
 
 export interface PermissionAsk {
@@ -273,6 +353,7 @@ export interface QuestionAsk {
   step?: Step
   handoff?: { url: string; label: string; expiresAt: number }
   answer?: { text: string; by: string; at: number }
+  askedOf?: string[]
 }
 
 export interface JoinAsk {
@@ -298,10 +379,16 @@ export interface JoinAsk {
 export interface Powers {
   addsAgents: boolean
   answersDecisions: boolean
+  managesAgents: boolean
 }
+
+export const NO_POWERS: Powers = { addsAgents: false, answersDecisions: false, managesAgents: false }
+export const ALL_POWERS: Powers = { addsAgents: true, answersDecisions: true, managesAgents: true }
+export const trusted = (p: Powers): boolean => p.addsAgents && p.answersDecisions && p.managesAgents
 
 export interface JoinChoice {
   as?: string
+  color?: Color | null
   persona?: string | null
   readOnly?: boolean
   powers?: Powers
@@ -315,7 +402,7 @@ export interface ReviewAsk {
   task: number
 }
 
-export type Ask = PermissionAsk | QuestionAsk | JoinAsk | ReviewAsk
+export type Ask = PermissionAsk | QuestionAsk | JoinAsk | ReviewAsk | SpecAsk
 
 export interface ChannelTile {
   code: string
@@ -325,6 +412,7 @@ export interface ChannelTile {
   unread: number
   needsYou: number
   last: number
+  muted?: true
 }
 
 export interface InviteInfo {
@@ -383,6 +471,8 @@ export interface Channel {
   title: string
   icon?: string
   youOwn: boolean
+  youManageAgents?: boolean
+  youTrusted?: boolean
   you: string
   lead?: string
   goal?: string
@@ -395,6 +485,8 @@ export interface Channel {
   newMembers?: "read" | "write"
   newPowers?: Powers
   repos: string[]
+  prs?: PullRequest[]
+  issues?: Issue[]
   githubWrite?: boolean
   branchPrefix?: string
   rooms: Room[]
@@ -407,6 +499,9 @@ export interface Channel {
   leftOut?: Message[]
   tasks: Task[]
   taskGroups: TaskGroup[]
+  specs?: Spec[]
+  specsOnly?: true
+  free?: string[]
   asks: Ask[]
   connection: "connecting" | "live" | "reconnecting"
   loading?: boolean
@@ -429,11 +524,14 @@ export interface Account {
   handle?: string
   email?: string
   github?: { login: string }
+  githubSignIn?: boolean
+  githubMove?: string
   computers: Computer[]
   version: string
-  update?: { version: string; ready: boolean; state?: "downloading" | "ready" | "available" }
+  update?: { version: string; ready: boolean; state?: "downloading" | "ready" | "available"; progress?: number; blocked?: true }
   uiUpdate?: { version: string }
   key?: string
+  personPk?: string
   relay?: string
   keysUnsealed?: boolean
   desktop?: boolean
@@ -452,9 +550,28 @@ export interface EnrollAsk {
   os: string
   as: "desktop" | "phone" | "computer"
   stage: "new" | "waiting" | "digits" | "elsewhere"
+  fingerprint?: string | null
 }
 
-export type Enrolling = { stage: "asking" } | { stage: "digits"; digits: string }
+export type Enrolling =
+  | { stage: "asking" }
+  | { stage: "digits"; digits: string }
+  | { stage: "check"; person: { name: string; fingerprint: string } }
+  | { stage: "recover" }
+  | { stage: "welcome"; name: string; devices: RecoverDevice[]; channels: string[] }
+
+export interface RecoverDevice {
+  id: string
+  label: string
+  os: string
+  as: "desktop" | "phone" | "computer"
+  lost: boolean
+}
+
+export interface RecoverTrouble {
+  why: string
+  word?: number
+}
 
 export interface Device {
   id: string
@@ -468,6 +585,7 @@ export interface Device {
 export interface RecoveryState {
   at: number | null
   here: boolean
+  pending?: { from: number; by: string }
 }
 
 export type RecoverySaved = { ok: true } | { ok: false; wrong: number[] }
@@ -502,12 +620,31 @@ export interface CustomTheme {
 export interface Prefs {
   theme: Theme
   textSize: number
+  font: TextFont
   reduceMotion: boolean
   notify: "all" | "mentions" | "none"
+  muted: string[]
+  snoozeUntil: number | null
+  quiet: Quiet
+  mentionSound: boolean
   enterSends: boolean
   darkTheme: string
   lightTheme: string
   customThemes: CustomTheme[]
+  folders: Folder[]
+}
+
+export interface Quiet {
+  on: boolean
+  from: number
+  to: number
+}
+
+export interface Folder {
+  id: string
+  name: string
+  codes: string[]
+  open: boolean
 }
 
 export interface NewAgent {
@@ -520,31 +657,43 @@ export interface NewAgent {
   mode?: "ask-first" | "accept-edits" | "dont-ask"
 }
 
+export type Launching = { stage: "started" } | { stage: "asked"; name: string } | { stage: "joined"; name: string } | { stage: "failed"; why: string }
+
 export interface Actions {
   send(code: string, where: Where, text: string, opts?: { replyTo?: number; inThread?: number; images?: Upload[] }): void
   retry(code: string, seq: number): void
   loadImage(code: string, spot: string): void
   discard(code: string, seq: number): void
+  markRead(code: string, where: Where): void
+  leaveRoom(code: string, room: string): void
   react(code: string, seq: number, emoji: string): void
+  editMessage(code: string, seq: number, text: string): void
+  deleteMessage(code: string, seq: number): void
   answerPermission(code: string, id: string, allow: boolean): void
   answerQuestion(code: string, id: string, text: string): void
   answerStep(code: string, id: string, reply: StepReply): void
   answerJoin(code: string, id: string, letIn: boolean, choice?: JoinChoice): void
   approveTask(code: string, task: number, approve: boolean, why?: string): void
-  addTask(code: string, title: string, owner?: string): void
+  addTask(code: string, ask: number, title: string): void
   setTaskStatus(code: string, task: number, status: TaskStatus): void
   cancelTask(code: string, task: number, why: string): void
   assignTask(code: string, task: number, to: string, why: string): void
   setReviewer(code: string, task: number, reviewer: string): void
   nameGoal(code: string, ask: number, name: string | null): void
+  newSpec(code: string, words: string, text: string): Promise<number | null>
+  writeSpec(code: string, ask: number, text: string): void
+  approveSpec(code: string, ask: number, v: number): void
+  judgeSpec(code: string, ask: number, verdict: "accepted" | "back" | "dropped", note?: string): void
+  setSpecsOnly(code: string, on: boolean): void
   setRole(code: string, name: string, role: string | null): void
   removeMember(code: string, name: string): void
   setPersona(code: string, name: string, persona: string | null): void
   setReadOnly(code: string, name: string, on: boolean): void
   setWake(code: string, name: string, on: boolean): void
   setNickname(code: string, name: string, nickname: string | null): void
+  setAgentColor(code: string, name: string, color: Color | null): void
   setPowers(code: string, name: string, powers: Partial<Powers>): void
-  addAgent(code: string, agent: NewAgent): void
+  addAgent(code: string, agent: NewAgent, seen: (s: Launching) => void): () => void
   showAgent(code: string, name: string): Promise<string | null>
   openTerm(code: string, name: string, cols: number, rows: number, watch: TermWatch): Promise<TermOpened>
   openMyTerm(code: string, want: string | null, cols: number, rows: number, watch: TermWatch): Promise<TermOpened>
@@ -552,8 +701,9 @@ export interface Actions {
   closeMyTerm(pane: string): Promise<TermTab[]>
   choicesOn(code: string, computer: string): Promise<ComputerChoices>
   chooseFolder(): Promise<string | null>
-  addRoom(code: string, name: string): Promise<string | null>
+  addRoom(code: string, name: string, members?: string[]): Promise<string | null>
   renameRoom(code: string, id: string, name: string): void
+  setRoomMembers(code: string, id: string, members: string[]): void
   setIcon(code: string, file: File | null): void
   renameChannel(code: string, title: string): void
   clearFact(code: string, key: string): void
@@ -562,6 +712,7 @@ export interface Actions {
   exportHistory(code: string, kind: "transcript" | "log"): Promise<void>
   setGoal(code: string, goal: string): void
   setHold(code: string, on: boolean, note?: string): void
+  askCompact(code: string): void
   approveCompact(code: string, proposal: number): void
   addRepo(code: string, repo: string): void
   myRepos(): Promise<string[]>
@@ -574,8 +725,11 @@ export interface Actions {
   joinChannel(code: string, name?: string): Promise<string>
   setName(name: string): void
   setPrefs(prefs: Partial<Prefs>): void
+  setMute(code: string, room: string | null, on: boolean): void
+  snooze(until: "1h" | "8h" | "tomorrow" | null): void
   forgetComputer(id: string): void
   linkGithub(): void
+  signInWithGithub(): void
   unlinkGithub(): void
   installUpdate(): void
   checkUpdate(): Promise<UpdateCheck | null>
@@ -593,8 +747,13 @@ export interface Actions {
   recoveryWords(): Promise<string[] | null>
   recoverySave(typed: { at: number; word: string }[]): Promise<RecoverySaved | null>
   recoveryDrop(): void
+  recoveryCancel(words: string): Promise<RecoverTrouble | null>
   enrollBegin(): void
+  enrollKeep(): void
   enrollCancel(): void
+  recoverBegin(): void
+  recoverOpen(words: string): Promise<RecoverTrouble | null>
+  recoverFinish(lost: string[]): Promise<void>
   closeChannel(code: string): void
   saveTheme(theme: CustomTheme): void
   deleteTheme(id: string): void
@@ -643,8 +802,12 @@ export interface App {
   ownPersonalities: Personality[]
   computer: ThisComputer | null
   enrolling?: Enrolling | null
+  signIn?: GithubSignIn | null
   actions: Actions
 }
+
+/** Signing in with GitHub, the first thing on a relay that takes it: where it stands. */
+export type GithubSignIn = { stage: "checking" } | { stage: "sign-in"; code: { code: string; url: string } | null; problem: string | null } | { stage: "signed-in"; login: string }
 
 export function memberOf(channel: Pick<Channel, "people" | "former">, name: string): Person | undefined {
   return channel.people.find((p) => p.name === name) ?? channel.former?.find((p) => p.name === name)

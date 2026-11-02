@@ -114,7 +114,8 @@ export class SessionState {
       } else {
         this.saved = Math.max(this.saved, lastSeq(cached));
         this.log ??= cached;
-        this.base ??= base;
+        this.base ??= base && (yield* this.ch.fx.openRooms(base));
+        for (const m of cached) if (m.ev?.op === "room.seal") yield* this.ch.fx.settle(m);
       }
     }
     const replaced = this.base && olderRules(this.base) ? yield* this.wholeLog() : null;

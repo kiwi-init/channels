@@ -6,10 +6,16 @@ import type { Pane, PlaceRequest, Placed } from "../terminals/plugin.ts";
 const CONTROL = /[\x00-\x1f\x7f]/;
 const ENV_KEY = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
+export interface Ended {
+  code: number | null;
+  tail: string[];
+}
+
 export interface Hosted {
   ready(): Promise<string | null>;
   open(req: PlaceRequest): Promise<Placed>;
   pane(pane: string): Pane | null;
+  ended?(pane: string): Promise<Ended | null>;
 }
 
 function isDir(path: string): boolean {

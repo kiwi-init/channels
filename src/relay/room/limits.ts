@@ -43,6 +43,7 @@ export function take(key: string, limit: number, now = Date.now()): { refund: ()
 export const MAX_PENDING = 20;
 
 export const READS_PER_MINUTE = 60;
+export const NOTES_PER_MINUTE = 10;
 export const ASKS_PER_MINUTE = 30;
 export const PAGES_PER_MINUTE = 120;
 export const GITHUB_READS_PER_MINUTE = 30;

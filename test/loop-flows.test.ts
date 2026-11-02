@@ -108,6 +108,13 @@ if (task && !(argv.at(-1) ?? "").includes("“loop hold”")) {
   await p.exited;
   say({ kind: "done", pid: process.pid, out });
 }
+const judged = /This session is for reviewing round (\\d+) of (T\\d+)/.exec(argv.at(-1) ?? "");
+if (judged) {
+  const p = Bun.spawn(${JSON.stringify(kiwiCmd([]))}.concat(["task", "approve", judged[2], "--round", judged[1], "looks right"]), { env: { ...process.env, CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: sessionId, CLAUDE_PID: String(process.pid) }, stdout: "pipe", stderr: "pipe" });
+  const out = (await new Response(p.stdout).text()) + (await new Response(p.stderr).text());
+  await p.exited;
+  say({ kind: "done", pid: process.pid, out });
+}
 reg("idle");
 setInterval(() => {}, 1_000);
 `;
@@ -441,6 +448,42 @@ test("a task assigned behind a session whose work never ends is named on stderr,
   await reading;
   await until(() => !seatOf(agent)?.hold, "the seat released");
   expect(log.split(`${next} is waiting`).length).toBe(2);
+});
+
+test("a round open to anyone who hasn't worked on the task is taken by a reviewer's loop, which names itself first and then reviews it (#1244)", async () => {
+  const before = seen().length;
+  const id = added(await ok(owner, ["--as", "human", "task", "add", "loop review", "--owner", "boss", "--review", "any", "--ask", want], { CLAUDECODE: "" }));
+  await ok(owner, ["--as", "boss", "task", "review", id, "--at", "abc1234"], { CLAUDECODE: "" });
+  const loopEnv: Env = { PATH: `${bin}:${process.env.PATH}`, SHELL: "/bin/sh", CLAUDECODE: "", CLAUDE_CODE_SESSION_ID: "outer", CLAUDE_PID: "" };
+  const loop = spawn(agent, ["loop", "--model", "test-model"], loopEnv);
+  let log = "";
+  const decoder = new TextDecoder();
+  const reading = (async () => {
+    for await (const chunk of loop.stderr) log += decoder.decode(chunk);
+  })();
+  const fail = async (e: unknown) => {
+    loop.kill();
+    await loop.exited;
+    await reading;
+    throw new Error(`${String(e)}\n${JSON.stringify(seen().slice(before))}\n${log}`);
+  };
+  const startOf = () =>
+    seen()
+      .slice(before)
+      .find((s) => s.kind === "start" && (s.argv.at(-1) ?? "").includes(`reviewing round 1 of ${id}`));
+  await until(() => !!startOf(), "the review session").catch(fail);
+  const started = startOf();
+  await until(() => seen().some((s) => s.kind === "term" && started?.kind === "start" && s.pid === started.pid), "the review session's end").catch(fail);
+  const shown = await ok(owner, ["--as", "human", "task", "show", id], { CLAUDECODE: "" });
+  expect(shown).toContain("status: done");
+  expect(shown).toContain(`approved by ${me}`);
+
+  loop.kill("SIGTERM");
+  await loop.exited;
+  await reading;
+  await until(() => !seatOf(agent)?.hold, "the seat released");
+  expect(log).toContain(`took ${id} round 1's review`);
+  expect(log).toContain(`${id} round 1 is over; its session ended`);
 });
 
 test("with --harness codex, the loop finds the new thread by the nonce in its first prompt, binds the seat to it, and ends it once the task is done", async () => {

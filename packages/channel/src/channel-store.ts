@@ -28,9 +28,12 @@ import { dropWarm, keepWarm, warmOf, type Warm } from "./warm.ts";
 const HISTORY = 2_000;
 const KEEP_DELAY_MS = 3_000;
 const CLOCK_MS = 15_000;
+const GITHUB_SYNC_MS = 6 * 3_600_000;
 
 type Connection = "connecting" | "live" | "reconnecting";
 
+export const APP_BEACON_MS = 60_000;
+const ANSWER_GAP_MS = 500;
 export interface ChannelHandle {
   ch: ChannelLink;
   connection: Connection;
@@ -100,6 +103,9 @@ export class ChannelStore {
   private readonly head: ReadonlySignal<number>;
   private readonly count: ReadonlySignal<number>;
   private readonly reconcileDue: ReadonlySignal<string>;
+  private readonly pruneDue: ReadonlySignal<string>;
+
+  private syncing = false;
   private readonly checksDue: ReadonlySignal<string>;
   private readonly rulesDue: ReadonlySignal<string>;
 
@@ -109,7 +115,10 @@ export class ChannelStore {
   private snapshotNext = nextSnapshotTry(0, 0);
   private snapshotBusy = false;
   private checksBusy = false;
+  private reconciling = false;
+  private reconcileAgain = false;
   private rulesBusy = false;
+  private readonly githubSynced = new Map<string, number>();
 
   constructor(member: StoredMember, human?: HumanSession | null, deps?: ChannelStoreDeps) {
     this.ch = deps?.link ?? linkOf(member);
@@ -141,7 +150,10 @@ export class ChannelStore {
     const scopesKey = computed(() => [...this.state.value.members.values()].map((m) => `${m.pk}:${m.scopes.join(",")}`).join("|"));
     const bitsKey = computed(() => this.roster.value.map((m) => `${m.pk}:${m.readOnly ? 0 : 1}`).join("|"));
     const repoList = computed(() => this.state.value.repos.join(","));
-    this.reconcileDue = computed(() => `${scopesKey.value}\n${bitsKey.value}\n${this.caughtUp.value}`);
+    const goneKey = computed(() => [...this.state.value.gone.keys()].sort().join(","));
+    const nickKey = computed(() => [...this.state.value.nicknames].map(([pk, n]) => `${pk}:${n.seq}`).join(","));
+    this.reconcileDue = computed(() => `${scopesKey.value}\n${bitsKey.value}\n${goneKey.value}\n${nickKey.value}\n${this.caughtUp.value}`);
+    this.pruneDue = computed(() => `${[...this.keyOf.value.values()].sort().join(",")}\n${this.caughtUp.value}`);
     this.checksDue = computed(() => `${this.head.value}\n${this.caughtUp.value}`);
     this.rulesDue = computed(() => `${this.caughtUp.value}\n${repoList.value}`);
     const pkOf = computed(() => {
@@ -220,6 +232,9 @@ export class ChannelStore {
       this.follow(),
       on(this.count, () => this.trimSoon()),
       on(this.reconcileDue, () => this.reconcile()),
+      on(this.pruneDue, () => this.pruneRooms()),
+      () => void import("./prune-plan.ts").then((m) => m.stopPruning(this.ch)),
+      on(this.checksDue, () => this.syncSettings()),
       on(this.head, (head) => this.snapshotIfDue(head)),
       on(this.checksDue, () => this.postReviewChecks()),
       this.every(60_000, () => this.drainGithub()),
@@ -308,6 +323,36 @@ export class ChannelStore {
     let flush: ReturnType<typeof setTimeout> | undefined;
     let stopLive: (() => void) | null = null;
     let closed = false;
+    let beat: ReturnType<typeof setInterval> | undefined;
+    let answeredAt = 0;
+    let indexing: "idle" | "running" | "again" | "off" = "idle";
+    const index = () => {
+      if (closed || indexing === "off") return;
+      if (indexing !== "idle") return void (indexing = "again");
+      indexing = "running";
+      void import("./history-fill.ts")
+        .then(({ indexArchive }) =>
+          indexArchive(ch.roomId, ch.pk, {
+            index: (rows) => ch.indexRows(rows, { roster: this.rosterForFold.peek(), roomsFloor: this.roomsFloor.peek(), guardFloor: this.guardFloor.peek(), now: Date.now() }),
+            hidden: () => typeof document !== "undefined" && document.hidden,
+            wait: (ms) => new Promise((done) => setTimeout(done, ms)),
+            stopped: () => closed,
+          }),
+        )
+        .then(
+          (out) => {
+            const again = indexing === "again";
+            indexing = out === "unsupported" ? "off" : "idle";
+            if (again && out === "done") index();
+          },
+          () => void (indexing = "off"),
+        );
+    };
+    const here = () => {
+      if (closed) return;
+      answeredAt = Date.now();
+      void ch.presence({ client: "app" }).catch(() => {});
+    };
     const enqueue = (message: Message, row: CachedRow | null) => {
       pending.push({ message, row });
       flush ??= setTimeout(() => {
@@ -324,8 +369,10 @@ export class ChannelStore {
           ch.roomId,
           ch.pk,
           batched.flatMap((b) => (b.row ? [b.row] : [])),
-          HISTORY,
-        ).catch(() => {});
+        ).then(
+          () => index(),
+          () => {},
+        );
       }, 30);
     };
     const onEvent = (ev: FollowEvent) => {
@@ -339,15 +386,22 @@ export class ChannelStore {
             void this.refreshRoster();
           }
           void ch.presence({ client: "probe", query: true }).catch(() => {});
+          here();
+          beat ??= setInterval(here, APP_BEACON_MS);
           return;
         case "Message":
           return enqueue(ev.message, ev.row);
         case "Unread":
           this.unread.value = [...this.unread.peek(), ev.seq].slice(-HISTORY);
-          if (ev.row) void rememberRow(ch.roomId, ch.pk, ev.row, HISTORY).catch(() => {});
+          if (ev.row)
+            void rememberRow(ch.roomId, ch.pk, ev.row).then(
+              () => index(),
+              () => {},
+            );
           return;
         case "Presence":
           this.online.value = hear(this.online.peek(), ev.presence, Date.now());
+          if (ev.presence.query && ev.presence.pk !== ch.pk && Date.now() - answeredAt >= ANSWER_GAP_MS) here();
           return;
         case "Roster":
           void this.refreshRequests();
@@ -383,7 +437,7 @@ export class ChannelStore {
       requests: this.refreshRequests,
       rotate: () => (ch.isOwner ? ch.rotateIfDue().catch((err: unknown) => (this.onGone(err), false)) : Promise.resolve(false)),
       cache: () =>
-        openCached(ch.roomId, ch.pk, ch.openRows)
+        openCached(ch.roomId, ch.pk, ch.openRows, HISTORY)
           .then((opened) => (markOnce("kiwi:cache-open"), opened))
           .catch(() => null),
       plan: (opened, head) => planCached(ch.roomId, ch.pk, opened, head, HISTORY).catch(() => null),
@@ -440,6 +494,7 @@ export class ChannelStore {
           if (base || earlyBase) this.base.value = base;
           this.ready.value = true;
         });
+        index();
       },
     });
     warmUp(steps, was, HISTORY);
@@ -462,6 +517,7 @@ export class ChannelStore {
       closed = true;
       stopLive?.();
       clearTimeout(flush);
+      clearInterval(beat);
       lent.release();
     };
   }
@@ -481,14 +537,48 @@ export class ChannelStore {
     });
   }
 
+  private syncSettings(): void {
+    if (!this.ch.isOwner || !this.caughtUp.peek() || !this.guardIn || !this.roomsIn || this.syncing) return;
+    this.syncing = true;
+    void import("./settings-sync.ts")
+      .then((m) => m.syncSettings(this.ch, this.state.peek(), this.guardFloor.peek(), this.roomsFloor.peek()))
+      .then(
+        (got) =>
+          got &&
+          batch(() => {
+            this.guardFloor.value = got.guard;
+            this.roomsFloor.value = got.rooms;
+          }),
+        () => {},
+      )
+      .finally(() => (this.syncing = false));
+  }
+
+  private pruneRooms(): void {
+    if (this.caughtUp.peek() && [...this.state.peek().rooms.values()].some((r) => r.members)) void import("./prune-plan.ts").then((m) => m.prune(this.ch, () => this.state.peek()));
+  }
+
   private reconcile(): void {
-    if (!this.ch.isOwner || !this.caughtUp.value || this.roster.value.length === 0) return;
-    this.ch.reconcilePosting(this.state.value, this.roster.value).then(
-      (changed) => {
-        if (changed.length) void this.refreshRoster();
-      },
-      () => {},
-    );
+    if (!this.ch.isOwner || !this.caughtUp.peek() || this.roster.peek().length === 0) return;
+    if (this.reconciling) {
+      this.reconcileAgain = true;
+      return;
+    }
+    this.reconciling = true;
+    this.ch
+      .reconcilePosting(this.state.peek(), this.roster.peek())
+      .then(
+        async (changed) => {
+          if (changed.length) await this.refreshRoster();
+        },
+        () => {},
+      )
+      .finally(() => {
+        this.reconciling = false;
+        if (!this.reconcileAgain) return;
+        this.reconcileAgain = false;
+        this.reconcile();
+      });
   }
 
   private snapshotIfDue(head: number): void {
@@ -541,9 +631,20 @@ export class ChannelStore {
       .catch(() => {})
       .then(() => this.ch.syncGithubReleases(state.repos, [...state.github.releases.values()].flat()))
       .catch(() => {})
+      .then(() => this.syncGithub(state.repos))
+      .catch(() => {})
       .finally(() => {
         this.rulesBusy = false;
       });
+  }
+
+  private async syncGithub(repos: readonly string[]): Promise<void> {
+    for (const repo of repos) {
+      const key = repo.toLowerCase();
+      if (Date.now() - (this.githubSynced.get(key) ?? -Infinity) < GITHUB_SYNC_MS) continue;
+      await this.ch.syncGithub(repo, this.state.peek().github);
+      this.githubSynced.set(key, Date.now());
+    }
   }
 
   private every(ms: number, run: () => void): () => void {

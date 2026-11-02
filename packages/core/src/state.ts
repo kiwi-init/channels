@@ -7,16 +7,47 @@
 
 export { fold } from "./state/fold.ts";
 export { askGroups, askRefusal, heldBy, holdsWork, mayNameGoal, type AskGroup } from "./state/asks.ts";
-export { allowedOnHold, answersAsk, answersDecisions, colorOf, decidersOf, humanOf, isLeadRole, isPerson, ON_HOLD, ownerOf } from "./state/people.ts";
+export {
+  allowedOnHold,
+  answersAsk,
+  answersDecisions,
+  colorOf,
+  decidersOf,
+  fullyTrusted,
+  humanOf,
+  isLeadRole,
+  isPerson,
+  ON_HOLD,
+  ownerOf,
+  sameAuthor,
+  sponsorsAgent,
+  trustedOf,
+} from "./state/people.ts";
 export { chooseThread, dmPlace, inGeneral, longForGeneral, MAIN, placeFromKey, placeKey, tasksAwaitingPeople, threadMembers, wentTo } from "./state/places.ts";
-export { issueOf, prChecks, prKey, releaseOf, rulesOf, type GithubPr, type GithubRelease, type GithubRules } from "./state/github.ts";
+export { githubNews, issueOf, prChecks, prKey, releaseOf, rulesOf, type GithubPr, type GithubRelease, type GithubRules, type GithubState } from "./state/github.ts";
 export { outsideRepos, reposOf } from "./state/repos.ts";
 export { LEASE_WAIT_MS, nextIn, placeIn } from "./state/leases.ts";
 export { unnamedAsks, unnamedTasks } from "./state/compact.ts";
 export { leadCheckpointKey } from "./state/lead.ts";
+export {
+  changedSinceApproval,
+  doneWhen,
+  freeAgents,
+  judgesSpec,
+  setAsideBySpec,
+  taskSpecRefusal,
+  specLease,
+  specPlanner,
+  specQueue,
+  specStage,
+  specTasks,
+  specTitle,
+  tickDoneWhen,
+  type DoneWhen,
+} from "./state/specs.ts";
 export { findRoom, newRoomId } from "./state/rooms.ts";
 export { bareAt, memberNamed, readsAsHandle } from "./state/mentions.ts";
-export { currentState, openRound, parseTaskId, reviewMoveRefusal, revisedOut, similarOpenTasks, taskId, titlesLookAlike } from "./state/tasks.ts";
+export { currentState, openRound, parseTaskId, reviewClaimRefusal, reviewMoveRefusal, revisedOut, similarOpenTasks, taskId, titlesLookAlike } from "./state/tasks.ts";
 export {
   rosterOf,
   toRoster,
@@ -32,5 +63,6 @@ export {
   type ReviewRound,
   type RoomsFloor,
   type Roster,
+  type Spec,
   type Task,
 } from "./state/types.ts";

@@ -6,7 +6,7 @@ import { downloadAndRestart, type Updater } from "~/live/update"
 const URL = "https://github.com/kiwi-init/channels/releases/tag/v2026.10.8"
 const at = (state: UpdateView["state"], extra: Partial<UpdateView> = {}): UpdateView => ({ version: "2026.10.8", state, url: URL, ...extra })
 
-function fake(now: UpdateView | null, checked: UpdateCheckView) {
+function fake(now: UpdateView | null, checked: UpdateCheckView, installs = true) {
   const calls: string[] = []
   const said: string[] = []
   const listeners = new Set<(u: UpdateView) => void>()
@@ -18,7 +18,10 @@ function fake(now: UpdateView | null, checked: UpdateCheckView) {
       if (checked.state !== "current" && checked.state !== "failed") state = checked
       return checked
     },
-    installUpdate: async () => void calls.push("install"),
+    installUpdate: async () => {
+      calls.push("install")
+      return installs
+    },
     openExternal: async (url: string) => void calls.push(`open ${url}`),
     onUpdate: (cb) => {
       listeners.add(cb)
@@ -79,6 +82,24 @@ describe("Download and restart", () => {
     const noFile = fake(at("available"), at("available"))
     await downloadAndRestart(noFile.b, noFile.say)
     expect(noFile.calls).toEqual(["check", `open ${URL}`])
+  })
+
+  test("an install that didn't go in place says so, instead of nothing happening", async () => {
+    const f = fake(at("ready"), at("ready"), false)
+    await expect(downloadAndRestart(f.b, f.say)).rejects.toThrow("Channels 2026.10.8 didn't go in place. Try again, or get it from the release page")
+    const later = fake(at("available"), at("downloading"), false)
+    await downloadAndRestart(later.b, later.say)
+    later.emit(at("ready"))
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(later.said.at(-1)).toBe("Channels 2026.10.8 didn't go in place. Try again, or get it from the release page")
+  })
+
+  test("with no update known yet, it asks GitHub instead of saying it's up to date", async () => {
+    const f = fake(null, { state: "current", version: "2026.10.8" })
+    await downloadAndRestart(f.b, f.say)
+    expect(f.calls).toEqual(["check"])
+    expect(f.said).toEqual(["Channels is up to date"])
   })
 
   test("GitHub not answering is an error the toast shows", async () => {

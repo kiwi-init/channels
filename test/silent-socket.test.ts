@@ -2,6 +2,7 @@ import { afterAll, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { signRequest, verifyRequest } from "@kiwi/core/auth.ts";
 import { Channel } from "@kiwi/core/client.ts";
 import { generateIdentity } from "@kiwi/core/identity.ts";
 import { WS_PROTOCOL } from "@kiwi/core/protocol.ts";
@@ -148,4 +149,68 @@ test("a nudge cuts a long reconnect wait short", async () => {
     server.stop(true);
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("the socket's signature covers its query, and the form from before still opens", async () => {
+  const { access, owner } = await seat();
+  const opens = (roomId: string, token: string) =>
+    new Promise<boolean>((resolve) => {
+      let settled = false;
+      const ws = new WebSocket(`${relay.url.origin.replace(/^http/, "ws")}/v1/rooms/${roomId}/ws?since=0&watch=1`, [WS_PROTOCOL, token]);
+      const done = (ok: boolean) => {
+        if (settled) return;
+        settled = true;
+        try {
+          ws.close(1000);
+        } catch {
+          // The socket never opened: nothing to close.
+        }
+        resolve(ok);
+      };
+      ws.onopen = () => done(true);
+      ws.onerror = () => done(false);
+      ws.onclose = () => done(false);
+    });
+  expect(await opens(access.roomId, await signRequest(owner, access.roomId, "GET", "/ws?since=0&watch=1"))).toBe(true);
+  expect(await opens(access.roomId, await signRequest(owner, access.roomId, "GET", "/ws"))).toBe(true);
+  const stranger = await generateIdentity("stranger");
+  expect(await opens(access.roomId, await signRequest(stranger, access.roomId, "GET", "/ws?since=0"))).toBe(false);
+  expect(await opens("f".repeat(32), await signRequest(stranger, "f".repeat(32), "GET", "/ws?since=0"))).toBe(false);
+  expect(await opens(access.roomId, "s1.broken.1.no")).toBe(false);
+});
+
+test("against a relay from before the query was signed, the client signs the old way on its next try", async () => {
+  const { access, owner } = await seat();
+  let refused = 0;
+  let opened = 0;
+  const old = Bun.serve({
+    port: 0,
+    hostname: "127.0.0.1",
+    async fetch(req, srv) {
+      const url = new URL(req.url);
+      if (req.headers.get("upgrade") !== "websocket") return new Response("not this relay's business", { status: 501 });
+      const room = /^\/v1\/rooms\/([0-9a-f]{32})\/ws$/.exec(url.pathname)?.[1] ?? "";
+      const token = (req.headers.get("sec-websocket-protocol") ?? "").split(",").map((p) => p.trim())[1] ?? "";
+      if (room && (await verifyRequest(token, room, "GET", "/ws" + url.search))) {
+        refused++;
+        return new Response("this relay predates the query being signed", { status: 401 });
+      }
+      if (!(room && (await verifyRequest(token, room, "GET", "/ws")))) return new Response("bad or expired signature", { status: 401 });
+      opened++;
+      return srv.upgrade(req, { headers: { "sec-websocket-protocol": WS_PROTOCOL } }) ? undefined : new Response("no", { status: 400 });
+    },
+    websocket: { message() {}, sendPings: false },
+  });
+  const ac = new AbortController();
+  const ch = new Channel(access, old.url.origin, owner);
+  const listening = ch.stream(0, () => {}, { signal: ac.signal }).catch(() => {});
+  try {
+    await until(() => refused >= 1 && opened >= 1, "the old signature after one refusal", 10_000);
+  } finally {
+    ac.abort();
+    await listening;
+    old.stop(true);
+  }
+  expect(refused).toBeGreaterThanOrEqual(1);
+  expect(opened).toBeGreaterThanOrEqual(1);
 });

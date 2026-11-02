@@ -7,19 +7,21 @@ import { chromium, type CDPSession, type Page, type Request, type WebSocket as P
 import { daemonSock } from "../src/daemon/protocol.ts";
 import { stopDaemon } from "../src/daemon/rpc.ts";
 import { startLocalRelay } from "./local-relay.ts";
-import { firstRun, letIn, newChannel, panel, ROWS, view } from "./perf-ui.ts";
+import { approveSpec, firstRun, letIn, newChannel, panel, ROWS, view } from "./perf-ui.ts";
+import { harnessDist } from "./ui-harness.ts";
 
 if (process.argv.includes("--help")) {
   console.log(`What a person feels, measured: one channel with PERF_MESSAGES messages (400) and PERF_TASKS tasks (12), behind a relay PERF_RTT_MS away (0).
 Times sending (Enter to the composer emptied, and to the bubble on screen), opening a task, switching views, scrolling the whole channel (frames over 33 ms, blank frames),
 typing, and a reload to the first screen and to a live composer, each PERF_REPS times (5), plus every layout shift. --shots DIR saves a filmstrip of the reload and the send.
 
-  bun run ui:build && bun scripts/perf-feel.ts [--json out.json] [--shots DIR]
+  bun scripts/ui-harness.ts && bun scripts/perf-feel.ts [--json out.json] [--shots DIR]
 
 Needs Playwright's Chromium: bunx playwright-core install --only-shell chromium (or SMOKE_CHROMIUM=<Chrome binary>).`);
   process.exit(0);
 }
 
+const frame = (m: string | Buffer): string | Uint8Array<ArrayBuffer> => (typeof m === "string" ? m : new Uint8Array(m));
 const ROOT = resolve(import.meta.dir, "..");
 const MESSAGES = Number(process.env.PERF_MESSAGES ?? 400);
 const TASKS = Number(process.env.PERF_TASKS ?? 12);
@@ -74,7 +76,7 @@ const median = (xs: number[]) => {
 const later = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 const log = (...xs: unknown[]) => console.log(`[${new Date().toISOString().slice(11, 19)}]`, ...xs);
 
-const { relay, port: relayPort } = await startLocalRelay(join(data, "relay"), join(ROOT, "ui/dist"), { rateLimits: false });
+const { relay, port: relayPort } = await startLocalRelay(join(data, "relay"), harnessDist(), { rateLimits: false });
 const UPSTREAM = `http://127.0.0.1:${relayPort}`;
 const half = RTT / 2;
 interface Pipe {
@@ -118,7 +120,7 @@ const proxy = Bun.serve<Pipe>({
       up.binaryType = "arraybuffer";
       ws.data.upstream = up;
       up.onopen = () => {
-        for (const m of ws.data.queue.splice(0)) up.send(m);
+        for (const m of ws.data.queue.splice(0)) up.send(frame(m));
       };
       up.onmessage = (e) => setTimeout(() => ws.readyState === 1 && ws.send(typeof e.data === "string" ? e.data : Buffer.from(e.data as ArrayBuffer)), half);
       up.onclose = (e) => setTimeout(() => ws.readyState === 1 && ws.close(e.code === 1005 ? 1000 : e.code, e.reason), half);
@@ -126,7 +128,7 @@ const proxy = Bun.serve<Pipe>({
     message(ws: ServerWebSocket<Pipe>, m: string | Buffer) {
       setTimeout(() => {
         const up = ws.data.upstream;
-        if (up?.readyState === WebSocket.OPEN) up.send(m);
+        if (up?.readyState === WebSocket.OPEN) up.send(frame(m));
         else ws.data.queue.push(m);
       }, half);
     },
@@ -406,6 +408,8 @@ try {
     ask = String(said.find((m) => m.body === "Make it feel fast")?.seq ?? "");
     if (!ask) await later(300);
   }
+  await atlas(["spec", "write", ask, "# Make it feel fast\n\n## Done when\n- [ ] the app feels fast"]);
+  await approveSpec(page);
   const seedAt = Date.now();
   const tasks: number[] = [];
   for (let i = 0; i < TASKS; i++) {
@@ -502,7 +506,7 @@ try {
 
   const views: Record<string, number[]> = { Tasks: [], "# general": [] };
   for (let i = 0; i < REPS; i++) {
-    views.Tasks!.push(await view(page, "Tasks", `Task ${TASKS - 1}:`));
+    views.Tasks!.push(await view(page, "Specs", `Task ${TASKS - 1}:`));
     await later(500);
     let back = 0;
     if (i === 0) await filmstrip(cdp, "view-general", async () => (back = await view(page, "# general", `M${MESSAGES - 1}: `)));
@@ -521,7 +525,7 @@ try {
   };
   log("views", JSON.stringify(report.views));
 
-  await view(page, "Tasks", `Task ${TASKS - 1}:`);
+  await view(page, "Specs", `Task ${TASKS - 1}:`);
   await later(500);
   const opens: number[] = [];
   for (let i = 0; i < REPS; i++) {

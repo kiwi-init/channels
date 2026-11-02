@@ -4,7 +4,7 @@ import { Avatar, cx, Dot, STATUS_WORDS } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import type { App, Task, TaskStatus, Theme } from "~/model"
 import { useApp, type Go, type Nav, type Panel } from "~/nav"
-import { nickname, shown } from "~/names"
+import { nickname, onePerPerson, shown } from "~/names"
 import { SIDEBAR_KEYS } from "@kiwi/app/sidebar-hidden.ts"
 import { toggleSide } from "~/shell/side"
 import { statusOf } from "~/shell/sidebar"
@@ -255,7 +255,7 @@ function collect(app: App, nav: Nav, go: (go: Go) => void): Item[] {
       })
     }
 
-    for (const person of channel.people) {
+    for (const person of onePerPerson(channel.people)) {
       const status = statusOf(person, channel)
       items.push({
         id: `person:${person.name}`,

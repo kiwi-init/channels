@@ -1,13 +1,11 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react"
 
-import { CHECKS } from "~/chat/cards"
 import { Composer } from "~/chat/composer"
 import { compactAt, quoteOf, useNames, useTaskIds } from "~/chat/conversation"
 import { named } from "~/chat/linked"
 import { MessageRow } from "~/chat/message"
 import { preview } from "~/chat/preview"
 import { jumpTo } from "~/chat/reply"
-import { whereLabel } from "~/chat/search-hits"
 import { ANYONE } from "@kiwi/channel/task-actions.ts"
 import { Avatar, cx, Dialog, DialogHead, Dot, Empty, Heading, statusWord } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
@@ -15,14 +13,14 @@ import { ago } from "~/kit/time"
 import { memberOf, type Ask, type Channel, type PermissionAsk, type Person, type PullRequest, type QuestionAsk, type ReviewRound, type Task, type TaskEvent } from "~/model"
 import { useApp } from "~/nav"
 import { nickname } from "~/names"
+import { IssueMark, issueWord, PrCard } from "~/github/parts"
 import { PanelHead } from "~/panels/frame"
-import { TONES } from "~/tasks/board"
+import { moveWords, someone } from "~/panels/task-moves"
+import { TONES } from "~/tasks/row"
 import { SendBack } from "~/tasks/send-back"
 
 const ROUND_WORDS: Record<ReviewRound["result"], string> = { open: "reviewing", approved: "approved", rejected: "sent back", withdrawn: "withdrawn" }
 const ROUND_TONES: Record<ReviewRound["result"], string> = { open: "tone-review", approved: "tone-live", rejected: "", withdrawn: "" }
-const CHECK_TONES: Record<PullRequest["checks"], string> = { pass: "tone-live", fail: "tone-alert", running: "tone-decide", none: "" }
-const STATE_TONES: Record<PullRequest["state"], string> = { open: "", draft: "dim", merged: "tone-review", closed: "tone-alert" }
 
 function since(at: number): string {
   const a = ago(at)
@@ -77,6 +75,7 @@ export function TaskPanel({ channel, id }: { channel: Channel; id: number }) {
         </section>
         {waits.length > 0 && <Waits channel={channel} waits={waits} />}
         {task.pr && <Pr pr={task.pr} />}
+        <LinkedIssue channel={channel} id={task.id} />
         <Review key={`review-${task.id}`} channel={channel} task={task} />
         {task.history.length > 0 && <Activity key={`activity-${task.id}`} channel={channel} history={task.history} />}
         {may && <Footer key={`foot-${task.id}`} channel={channel} task={task} />}
@@ -105,8 +104,6 @@ function Who({ channel, name }: { channel: Channel; name: string }) {
     </button>
   )
 }
-
-const someone = (channel: Channel, name: string): string => (name === channel.you ? "you" : nickname(channel, name))
 
 function Props({ channel, task, may }: { channel: Channel; task: Task; may: boolean }) {
   const [picking, setPicking] = useState<"owner" | "reviewer" | null>(null)
@@ -304,32 +301,24 @@ function Pr({ pr }: { pr: PullRequest }) {
   return (
     <section className="panel-section">
       <Heading>Pull request</Heading>
-      <div className="task-box task-pr">
-        <p className="task-pr-title">
-          <Icon name="pr" size={14} />
-          <span>
-            <span className="dim">#{pr.number}</span> {pr.title}
-          </span>
-        </p>
-        <p className="task-pr-meta">
-          {pr.additions !== undefined && (
-            <>
-              <span className="tone-live num">+{pr.additions}</span> <span className="tone-alert num">−{pr.deletions ?? 0}</span>
-              {" · "}
-            </>
-          )}
-          <span className={CHECK_TONES[pr.checks]}>{CHECKS[pr.checks]}</span>
-          {" · "}
-          <span className={STATE_TONES[pr.state]}>{pr.state}</span>
-        </p>
-        <p className="task-pr-foot">
-          <span className="dimmer">{pr.repo}</span>
-          <a href={pr.url} target="_blank" rel="noreferrer noopener" className="task-pr-link">
-            Open on GitHub
-            <Icon name="external" size={12} />
-          </a>
-        </p>
-      </div>
+      <PrCard pr={pr} />
+    </section>
+  )
+}
+
+function LinkedIssue({ channel, id }: { channel: Channel; id: number }) {
+  const { go } = useApp()
+  const issue = channel.issues?.find((i) => i.task === id)
+  if (!issue) return null
+  return (
+    <section className="panel-section">
+      <Heading>Issue</Heading>
+      <button type="button" className="gh-task" onClick={() => go({ to: "panel", panel: { kind: "issue", repo: issue.repo, number: issue.number } })}>
+        <IssueMark issue={issue} size={14} />
+        <span className="gh-task-id num">#{issue.number}</span>
+        <span className="gh-task-title">{issue.title}</span>
+        <span className="gh-task-who">{issueWord(issue)}</span>
+      </button>
     </section>
   )
 }
@@ -479,48 +468,6 @@ function Cancel({ channel, task, open, onClose }: { channel: Channel; task: Task
 const SHOWN = 6
 
 const LONG = 280
-
-function moveWords(channel: Channel, e: TaskEvent): string {
-  const to = e.to ? (e.to === ANYONE ? "anyone" : someone(channel, e.to)) : ""
-  switch (e.what) {
-    case "created":
-      return e.to ? `created it for ${to}` : "created it"
-    case "took":
-      return "took it"
-    case "assigned":
-      return `gave it to ${to}`
-    case "unassigned":
-      return "unassigned it"
-    case "started":
-      return "started it"
-    case "blocked":
-      return "marked it blocked"
-    case "reopened":
-      return "reopened it"
-    case "review":
-      return e.round ? `sent it for review · round ${e.round}` : "sent it for review"
-    case "approved":
-      return e.round ? `approved round ${e.round}` : "approved it"
-    case "rejected":
-      return e.round ? `sent round ${e.round} back` : "sent it back"
-    case "done":
-      return "marked it done"
-    case "cancelled":
-      return "cancelled it"
-    case "reviewer":
-      return e.to === ANYONE ? "opened its review to anyone who hasn't worked on it" : e.to ? `asked ${to} to review it` : "cleared its reviewer"
-    case "renamed":
-      return "renamed it"
-    case "proof":
-      return "added proof"
-    case "checkpoint":
-      return "saved a checkpoint"
-    case "note":
-      return "added a note"
-    case "mention":
-      return `mentioned it in ${e.where ? whereLabel(channel, e.where).replace(/^# /, "#").replace(/^@ /, "a message to ") : "a message"}`
-  }
-}
 
 function Activity({ channel, history }: { channel: Channel; history: TaskEvent[] }) {
   const [all, setAll] = useState(false)

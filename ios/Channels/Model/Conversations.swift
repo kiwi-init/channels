@@ -65,7 +65,7 @@ struct Row: Identifiable {
     var needs: Int { asks.count + reviews.count }
 
     var need: String? {
-        let words = asks.first?.body ?? reviews.first.map { "\(taskLabel($0.task)) \($0.title)" }
+        let words = asks.first?.plain ?? reviews.first.map { "\(taskLabel($0.task)) \($0.title)" }
         return words?.replacingOccurrences(of: "\n", with: " ")
     }
 
@@ -92,7 +92,7 @@ struct Row: Identifiable {
         if let need { return "Needs you: \(need)" }
         if let draft { return "Draft: \(draft.text.isEmpty ? "Photo" : draft.text.replacingOccurrences(of: "\n", with: " "))" }
         guard let last else { return kind == .lead ? "Message \(title) directly" : "No messages yet" }
-        let body = last.body.isEmpty && last.images > 0 ? (last.images == 1 ? "Photo" : "\(last.images) Photos") : last.body.replacingOccurrences(of: "\n", with: " ")
+        let body = last.body.isEmpty && last.images > 0 ? (last.images == 1 ? "Photo" : "\(last.images) Photos") : last.plain.replacingOccurrences(of: "\n", with: " ")
         if kind == .lead { return last.mine ? "You: \(body)" : body }
         return "\(last.mine ? "You" : room.display(last.from))\(origin): \(body)"
     }

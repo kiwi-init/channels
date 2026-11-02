@@ -17,6 +17,7 @@ import {
   goneHow,
   isReach,
   MORE_REFUSED,
+  EVENT_OPS_VERSION,
   PROTOCOL_VERSION,
   WS_PROTOCOL,
   wellFormedRead,
@@ -186,6 +187,7 @@ export interface LiveFx {
 export class ChannelLive {
   readonly wires = new Set<Wire>();
   private moreUnknown = false;
+  private olderWsSign = false;
   private readonly waits = new Set<() => void>();
   private readonly checks = new Set<() => void>();
   private kicked = false;
@@ -288,7 +290,6 @@ export class ChannelLive {
 
   private socket(at: Resume, presence: boolean, reads: boolean, q: Inbox, send: boolean, watch: boolean) {
     return Effect.gen({ self: this }, function* () {
-      const auth = yield* Effect.promise(() => signRequest(this.ch.identity, this.ch.roomId, "GET", "/ws"));
       const u = new URL(`/v1/rooms/${this.ch.roomId}/ws`, this.ch.relay);
       u.searchParams.set("since", String(at.seq));
       if (watch) u.searchParams.set("watch", "1");
@@ -296,6 +297,7 @@ export class ChannelLive {
       if (!reads) u.searchParams.set("reads", "0");
       if (send) u.searchParams.set("echo", "0");
       u.protocol = u.protocol === "https:" ? "wss:" : "ws:";
+      const auth = yield* Effect.promise(() => signRequest(this.ch.identity, this.ch.roomId, "GET", this.olderWsSign ? "/ws" : `/ws${u.search}`));
       const { ws, closed, ping, heard, silent } = yield* Effect.acquireRelease(
         Effect.sync(() => this.connect(u, auth, q, at, send)),
         ({ ws }) => Effect.sync(() => ws.close(1000, "aborted")),
@@ -318,7 +320,8 @@ export class ChannelLive {
             clearTimeout(checking);
           }),
       );
-      const { code, reason } = yield* Effect.promise(() => closed);
+      const { code, reason, opened } = yield* Effect.promise(() => closed);
+      this.olderWsSign = !opened;
       if (code === 4000) {
         at.next = "page";
         return yield* Queue.end(q);
@@ -335,8 +338,9 @@ export class ChannelLive {
     const sock = wireOf(ws, at.seq);
     const wire = send ? wireOn(ws, q) : null;
     let ended = false;
+    let everOpened = false;
     let end!: (c: { code: number; reason: string }) => void;
-    const closed = new Promise<{ code: number; reason: string }>((resolve) => {
+    const closed = new Promise<{ code: number; reason: string; opened: boolean }>((resolve) => {
       end = (c) => {
         if (ended) return;
         ended = true;
@@ -345,7 +349,7 @@ export class ChannelLive {
           this.wires.delete(wire);
           wire.drop();
         }
-        resolve(c);
+        resolve({ ...c, opened: everOpened });
       };
       ws.onclose = (ev) => end({ code: ev.code, reason: ev.reason });
     });
@@ -362,6 +366,7 @@ export class ChannelLive {
     ws.onerror = () => {};
     let openedAs: OpenKind = at.next;
     ws.onopen = () => {
+      everOpened = true;
       openedAs = at.next;
       at.next = "reconnect";
       Queue.offerUnsafe(q, { t: "open", presence: this.presenceOn(ws), mark: markOn(ws), probe: sock.probe, kind: openedAs });
@@ -413,7 +418,7 @@ export class ChannelLive {
         if (ws.readyState !== WebSocket.OPEN) return;
         const ts = Math.max(Date.now(), this.lastBeacon + 1);
         this.lastBeacon = ts;
-        const full = yield* Effect.promise(() => sign(this.ch.identity, { v: PROTOCOL_VERSION, type: "presence", from: this.ch.name, ts, ...p } as Presence));
+        const full = yield* Effect.promise(() => sign(this.ch.identity, { v: PROTOCOL_VERSION, type: "presence", from: this.ch.name, ops: EVENT_OPS_VERSION, ts, ...p } as Presence));
         const e = this.ch.access.epoch;
         const sealed = yield* Effect.promise(() => seal(this.ch.access.keys[String(e)]!, this.ch.roomId, { ...full, e }));
         ws.send(JSON.stringify({ t: "eph", ...sealed }));
@@ -434,14 +439,21 @@ export class ChannelLive {
           return null;
         case "msg": {
           if (f.seq <= at.seq) return null;
-          const m = yield* this.ch.fx.decrypt(f);
+          const got = yield* this.ch.fx.decrypt(f);
+          const m = got && (yield* this.ch.fx.settle(got));
           at.seq = f.seq;
-          return m ? ({ _tag: "Message", message: m, envelope: f } satisfies Live) : Number.isSafeInteger(f.seq) && f.seq > 0 ? ({ _tag: "Unread", envelope: f } satisfies Live) : null;
+          return m
+            ? ({ _tag: "Message", message: m, envelope: f } satisfies Live)
+            : Number.isSafeInteger(f.seq) && f.seq > 0 && !this.ch.hidden.has(f.seq)
+              ? ({ _tag: "Unread", envelope: f } satisfies Live)
+              : null;
         }
         case "own": {
           if (f.seq <= at.seq) return null;
           at.seq = f.seq;
-          const m = ownMessage(f.payload, f.seq, f.ts);
+          const own = ownMessage(f.payload, f.seq, f.ts);
+          const open = own && (yield* this.ch.fx.unseal(own));
+          const m = open && (yield* this.ch.fx.settle(open));
           return m && ({ _tag: "Message", message: m } satisfies Live);
         }
         case "eph":
@@ -498,21 +510,19 @@ export class ChannelLive {
 
   private presenceIn(f: { iv: string; ct: string }, beacons: Map<string, number>): Effect.Effect<Live | null> {
     return Effect.gen({ self: this }, function* () {
-      for (const k of Object.values(this.ch.access.keys).reverse()) {
-        const p = (yield* Effect.promise(() => open(k, this.ch.roomId, f.iv, f.ct))) as (Presence & { e?: number }) | null;
-        if (p?.type === "presence" && typeof p.from === "string") {
-          const rest = omit(p, "e");
-          const sigOk = yield* Effect.promise(() => verify(rest));
-          if (!fresh(beacons, rest, sigOk, yield* Clock.currentTimeMillis)) return null;
-          const { activity: said, reach, ...fields } = omit(rest as Presence & { role?: unknown }, "role");
-          const activity = cleanActivity(said);
-          return {
-            _tag: "Presence",
-            presence: { ...fields, ...(activity ? { activity } : {}), ...(isReach(reach) ? { reach } : {}), sigOk },
-          } satisfies Live;
-        }
-      }
-      return null;
+      const k = this.ch.access.keys[String(this.ch.access.epoch)];
+      if (!k) return null;
+      const p = (yield* Effect.promise(() => open(k, this.ch.roomId, f.iv, f.ct))) as (Presence & { e?: number }) | null;
+      if (p?.type !== "presence" || typeof p.from !== "string") return null;
+      const rest = omit(p, "e");
+      const sigOk = yield* Effect.promise(() => verify(rest));
+      if (!fresh(beacons, rest, sigOk, yield* Clock.currentTimeMillis)) return null;
+      const { activity: said, reach, ...fields } = omit(rest as Presence & { role?: unknown }, "role");
+      const activity = cleanActivity(said);
+      return {
+        _tag: "Presence",
+        presence: { ...fields, ...(activity ? { activity } : {}), ...(isReach(reach) ? { reach } : {}), sigOk },
+      } satisfies Live;
     });
   }
 }

@@ -12,7 +12,8 @@ import { daemonSock } from "../src/daemon/protocol.ts";
 import { stopDaemon } from "../src/daemon/rpc.ts";
 import { startLocalRelay } from "./local-relay.ts";
 import { calibrate } from "./perf-calibrate.ts";
-import { firstRun, letIn, newChannel, panel, ROWS, view } from "./perf-ui.ts";
+import { approveSpec, firstRun, letIn, newChannel, panel, ROWS, view } from "./perf-ui.ts";
+import { harnessDist } from "./ui-harness.ts";
 
 if (process.argv.includes("--help")) {
   console.log(`A busy channel, measured: PERF_AGENTS agents (10), PERF_TASKS tasks (100), PERF_MESSAGES messages (2000), then PERF_SOAK_MIN minutes (20) of agents posting.
@@ -21,7 +22,7 @@ PERF_TASKS_FIRST=1 makes the tasks before the messages, so a reload has to keep 
 PERF_GL=swiftshader draws with the CPU, as CI's runners do: on a Mac that's how to see what CI sees.
 --gated measures only what scripts/perf-check.ts gates: the reload at 1x, the views at 4x and typing, without the 1x views, details toggles, profiles or second reload.
 
-  bun run ui:build && bun scripts/perf-scale.ts [--gated] [--json out.json]
+  bun scripts/ui-harness.ts && bun scripts/perf-scale.ts [--gated] [--json out.json]
 
 Needs Playwright's Chromium: bunx playwright-core install --only-shell chromium (or SMOKE_CHROMIUM=<Chrome binary>).`);
   process.exit(0);
@@ -101,7 +102,7 @@ const median = (xs: number[]) => {
 const mb = (b: number) => Math.round((b / 1048576) * 10) / 10;
 const log = (...xs: unknown[]) => console.log(`[${new Date().toISOString().slice(11, 19)}]`, ...xs);
 
-const { relay, port } = await startLocalRelay(join(data, "relay"), join(ROOT, "ui/dist"), { rateLimits: false });
+const { relay, port } = await startLocalRelay(join(data, "relay"), harnessDist(), { rateLimits: false });
 const BASE = `http://localhost:${port}/`;
 
 const browser = await chromium.launch({
@@ -148,7 +149,7 @@ async function drain(page: Page): Promise<{ longTasks: number; longMs: number; w
   });
 }
 
-const VIEWS: Record<string, string> = { Agents: "Agents", Conversation: "# general", Tasks: "Tasks" };
+const VIEWS: Record<string, string> = { Agents: "Agents", Conversation: "# general", Tasks: "Specs" };
 const tab = (page: Page, label: string, marker: string): Promise<number> => view(page, VIEWS[label] ?? label, marker);
 
 async function work(cdp: CDPSession): Promise<Record<string, number>> {
@@ -196,6 +197,7 @@ const TEXTS = [
 ];
 
 const SEEDED = "Seeded: a reload opens the channel here";
+const SPEC = "# Ship it at scale\n\n## Done when\n- [ ] the board holds every task";
 const report: Record<string, unknown> = { agents: AGENTS, tasks: TASKS, messages: MESSAGES, soakMinutes: SOAK_MIN };
 const agents = Array.from({ length: AGENTS }, (_, i) => `agent${i}`);
 try {
@@ -275,6 +277,8 @@ try {
     ask = messages.find((m) => m.body === asked)?.seq ?? 0;
     if (!ask) await page.waitForTimeout(300);
   }
+  await patiently(() => runAgent(seats[0]!.writeSpec(ask, SPEC)));
+  await approveSpec(page);
   const perAgent = Math.ceil(TASKS / AGENTS);
   await Promise.all(
     seats.map(async (s, a) => {
@@ -292,7 +296,18 @@ try {
   await mark("tasks added");
 
   await post(early, perSender);
-  await patiently(() => runAgent(oneLook(seats[0]!.send(SEEDED, { kind: "msg" }))));
+  const seeder = seats[0]!;
+  await patiently(() =>
+    runAgent(
+      oneLook(
+        Effect.gen(function* () {
+          const { state } = yield* seeder.state();
+          const owner = [...state.members.values()].find((m) => m.owner)?.name;
+          return yield* seeder.send(SEEDED, { kind: "msg", ...(owner ? { to: [owner] } : {}) });
+        }),
+      ),
+    ),
+  );
   report.seedSeconds = Math.round((Date.now() - seedStart) / 1000);
   const live = await drain(page);
   report["while seeding (page open on the channel)"] = { longTasks: live.longTasks, longMs: live.longMs, worstMs: live.worstMs, perMessageMs: Math.round((live.longMs / MESSAGES) * 10) / 10 };

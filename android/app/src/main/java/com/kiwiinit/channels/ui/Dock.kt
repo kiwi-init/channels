@@ -247,9 +247,9 @@ fun Dock(
         if (sendingBack != null) {
             Bar(Icons.AutoMirrored.Filled.Reply, tone.decide, "Send back ${taskLabel(sendingBack.task)}", sendingBack.title, clearSendBack)
         } else if (answering != null) {
-            Bar(Icons.Filled.PanTool, tone.decide, room.display(answering.from), answering.body, clearAnswer)
+            Bar(Icons.Filled.PanTool, tone.decide, room.display(answering.from), answering.plain, clearAnswer)
         } else if (replyTo != null) {
-            Bar(Icons.AutoMirrored.Filled.Reply, MaterialTheme.colorScheme.primary, room.display(replyTo.from), replyTo.body, clearReply)
+            Bar(Icons.AutoMirrored.Filled.Reply, MaterialTheme.colorScheme.primary, room.display(replyTo.from), replyTo.plain, clearReply)
         }
         Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilledTonalIconButton(

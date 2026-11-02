@@ -29,7 +29,7 @@ describe("the channel's repos", () => {
     const forged = await ev("win", { op: "repos.set", repos: ["evil/fork"] });
     const set = await ev("jon", { op: "repos.set", repos: ["ojow/channels", "ojow/site", "OJOW/channels"] });
     let s = fold([forged, set], roster);
-    expect(s.rejected.get(forged.seq)).toBe("only the owner sets the channel's repos");
+    expect(s.rejected.get(forged.seq)).toBe("only the owner, or a person they fully trust, sets the channel's repos");
     expect(s.repos).toEqual(["ojow/channels", "ojow/site"]);
     expect(describeEvent(set)).toBe("set the channel's repos: ojow/channels, ojow/site, OJOW/channels");
     expect(wants("mac", set, s)).toBe(true);

@@ -94,3 +94,74 @@ describe("the phone's room view", () => {
     expect(room.latestIn).toBe("main");
   });
 });
+
+describe("names in the phone's room view (#1251)", () => {
+  const named = (log: Message[], nick = "Earnest Heron"): RoomView => {
+    const people: Roster = roster.map((r) => (r.name === "dev" ? { ...r, display: nick } : r));
+    return roomView({
+      code: "code",
+      title: "channels-dev",
+      icon: null,
+      me: "jow",
+      isOwner: true,
+      connection: "live",
+      gone: null,
+      error: null,
+      head: log.length,
+      whole: true,
+      messages: log,
+      state: fold(log, people, T0 + log.length * 60_000),
+      online: new Map(),
+      place: "main",
+    });
+  };
+
+  test("a message shows an @handle as the nickname and keeps its text as sent; code keeps the handle", async () => {
+    const room = named(await signedLog([say("lead", "In review with @dev, see `@dev` and\n\n```\n@dev\n```"), say("dev", "on it"), say("jow", "ok", { re: [1] }), say("jow", "@dev thanks")]));
+    expect(room.messages[0]).toMatchObject({ body: "In review with @dev, see `@dev` and\n\n```\n@dev\n```", shown: "In review with @Earnest Heron, see `@dev` and\n\n```\n@dev\n```" });
+    expect(room.messages[2]?.quote?.words).toBe("In review with @Earnest Heron, see `@dev` and ``` @dev ```");
+    expect(room.latest).toMatchObject({ body: "@dev thanks", shown: "@Earnest Heron thanks", plain: "@Earnest Heron thanks" });
+  });
+
+  test("a nickname is shown as text, never as Markdown", async () => {
+    const room = named(await signedLog([say("lead", "Ping @dev")]), "Earnest _Heron_ *1*");
+    expect(room.messages[0]).toMatchObject({ body: "Ping @dev", shown: "Ping @Earnest \\_Heron\\_ \\*1\\*", plain: "Ping @Earnest _Heron_ *1*" });
+  });
+
+  test("a nickname a bare handle turns into can't start a Markdown block", async () => {
+    const people: Roster = roster.map((r) => (r.name === "dev" ? { ...r, name: "dev.bot", display: "# Heron" } : r));
+    const log = await signedLog([say("lead", "dev.bot says hello\n\n@dev.bot then")]);
+    const room = roomView({
+      code: "code",
+      title: "c",
+      icon: null,
+      me: "jow",
+      isOwner: true,
+      connection: "live",
+      gone: null,
+      error: null,
+      head: 1,
+      whole: true,
+      messages: log,
+      state: fold(log, people, T0 + 60_000),
+      online: new Map(),
+      place: "main",
+    });
+    expect(room.messages[0]).toMatchObject({ shown: "\\# Heron says hello\n\n@\\# Heron then", plain: "# Heron says hello\n\n@# Heron then" });
+  });
+
+  test("an ask shows the nickname, while its choices and the answer that picks one keep their text, which the phone sends back and matches", async () => {
+    const room = named(await signedLog([say("lead", "Who takes it, @dev?", { kind: "ask", to: ["jow"], choices: ["@dev", "nobody"] }), say("jow", "@dev", { re: [1] })]));
+    expect(room.messages[0]).toMatchObject({ shown: "Who takes it, @Earnest Heron?", choices: ["@dev", "nobody"], chosen: { choice: "@dev", by: "jow" } });
+    expect(room.messages[1]?.body).toBe("@dev");
+    const open = named(await signedLog([ev("jow", { op: "task.add", title: "ship it", owner: "lead" }), say("lead", "Ping @dev?", { kind: "ask", to: ["jow"], choices: ["yes"], holds: [1] })]));
+    expect(open.asks[0]).toMatchObject({ body: "Ping @dev?", shown: "Ping @Earnest Heron?", plain: "Ping @Earnest Heron?", choices: ["yes"] });
+  });
+
+  test("a named room's messages stay out of #general (T948)", async () => {
+    const log = await signedLog([ev("jow", { op: "room.create", id: "ops", name: "ops" }), say("jow", "for everyone"), say("jow", "only for ops", { room: "ops" })]);
+    const bodies = view(log, "jow").messages.map((m) => m.body);
+    expect(bodies).toContain("for everyone");
+    expect(bodies).not.toContain("only for ops");
+  });
+});

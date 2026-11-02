@@ -1,0 +1,152 @@
+[
+  {
+    "reaction": "ok",
+    "name": "trailer",
+    "feeling": "confident ok: I got this"
+  },
+  {
+    "reaction": "ok",
+    "name": "nanalan-playful",
+    "feeling": "nice ok, playful"
+  },
+  {
+    "reaction": "ok",
+    "name": "nanalan-breeze",
+    "feeling": "nice ok, like a breeze"
+  },
+  {
+    "reaction": "ok",
+    "name": "shaun-the-sheep",
+    "feeling": "energetic ok"
+  },
+  {
+    "reaction": "thinking",
+    "name": "sesame-street",
+    "feeling": "contemplating ideas, looking at the sky"
+  },
+  {
+    "reaction": "thinking",
+    "name": "logic-problem",
+    "feeling": "thinking deep on a logical problem"
+  },
+  {
+    "reaction": "thinking",
+    "name": "reading",
+    "feeling": "reading a long message from a human, or doing research"
+  },
+  {
+    "reaction": "thinking",
+    "name": "confused",
+    "feeling": "thinking on something complex, might need human clarification"
+  },
+  {
+    "reaction": "blocked",
+    "name": "the-bear-help",
+    "feeling": "hard blocked"
+  },
+  {
+    "reaction": "blocked",
+    "name": "pratt-help",
+    "feeling": "soft blocked"
+  },
+  {
+    "reaction": "blocked",
+    "name": "scared",
+    "feeling": "not so soft blocked"
+  },
+  {
+    "reaction": "nope",
+    "name": "casual-no-way",
+    "feeling": "smug no, casual"
+  },
+  {
+    "reaction": "nope",
+    "name": "soft-no",
+    "feeling": "soft no"
+  },
+  {
+    "reaction": "nope",
+    "name": "schitts-creek",
+    "feeling": "soft no, do not want"
+  },
+  {
+    "reaction": "working",
+    "name": "cat-typing",
+    "feeling": "really working, 200 wpm"
+  },
+  {
+    "reaction": "breaking-news",
+    "name": "classic",
+    "feeling": "breaking news, the classic"
+  },
+  {
+    "reaction": "breaking-news",
+    "name": "south-park",
+    "feeling": "breaking news, real urgent, needs a fix asap, hard"
+  },
+  {
+    "reaction": "celebrate",
+    "name": "hard-work",
+    "feeling": "celebrate after really hard work"
+  },
+  {
+    "reaction": "working",
+    "name": "hotfix-fire",
+    "feeling": "working on something risky, playing with fire, a hotfix"
+  },
+  {
+    "reaction": "error",
+    "name": "stand-by",
+    "feeling": "please stand by, we are experiencing technical difficulties, github is down"
+  },
+  {
+    "reaction": "sorry",
+    "name": "oops",
+    "feeling": "oops"
+  },
+  {
+    "reaction": "facepalm",
+    "name": "simon-cowell",
+    "feeling": "oh my god"
+  },
+  {
+    "reaction": "thanks",
+    "name": "obama",
+    "feeling": "I simply want to say thank you"
+  },
+  {
+    "reaction": "thanks",
+    "name": "happy-dog",
+    "feeling": "soft thanks, cute"
+  },
+  {
+    "reaction": "working",
+    "name": "preparing-to-ship",
+    "feeling": "preparing to ship"
+  },
+  {
+    "reaction": "shipping",
+    "name": "take-off",
+    "feeling": "shipping, shipped"
+  },
+  {
+    "reaction": "waiting",
+    "name": "five-hours-later",
+    "feeling": "5 hours later, taking too long, we are waiting"
+  },
+  {
+    "reaction": "celebrate",
+    "name": "classy-smug",
+    "feeling": "classy smug, hell yeah"
+  },
+  {
+    "reaction": "hello",
+    "name": "simpsons",
+    "feeling": "hello"
+  },
+  {
+    "reaction": "facepalm",
+    "name": "lilo-stitch-nooo",
+    "feeling": "nooooooo"
+  }
+]

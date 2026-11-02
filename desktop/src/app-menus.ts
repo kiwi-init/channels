@@ -24,7 +24,7 @@ export function trayItems(update: UpdateState | null): TrayItem[] {
   ];
 }
 
-export function appMenu(platform: NodeJS.Platform): AppMenuItem[] {
+export function appMenu(platform: NodeJS.Platform, packaged = false): AppMenuItem[] {
   const roles = (...names: (string | null)[]): AppMenuItem[] => names.map((role) => (role ? { role } : SEPARATOR));
   return [
     ...(platform === "darwin"
@@ -49,7 +49,7 @@ export function appMenu(platform: NodeJS.Platform): AppMenuItem[] {
       label: "View",
       submenu: [
         { label: "Reload", action: "reload", accelerator: "r" },
-        { label: "Toggle Developer Tools", action: "devtools" },
+        ...(packaged ? [] : [{ label: "Toggle Developer Tools", action: "devtools" as const }]),
         SEPARATOR,
         { label: "Make Text Normal Size", action: "text-reset", accelerator: "0" },
         { label: "Make Text Bigger", action: "text-bigger", accelerator: "=" },

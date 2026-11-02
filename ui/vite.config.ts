@@ -2,9 +2,9 @@ import { resolve } from "node:path"
 import react from "@vitejs/plugin-react"
 import { defineConfig } from "vite"
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [react()],
-  define: { __DEV__: "false" },
+  define: { __DEV__: "false", ...(mode === "harness" ? { "import.meta.env.DEV": "true" } : {}) },
   resolve: {
     alias: {
       "react-native": resolve(import.meta.dirname, "./src/chat/react-native.ts"),
@@ -16,6 +16,6 @@ export default defineConfig({
   },
   server: {
     port: 5175,
-    proxy: { "/v1": { target: "http://localhost:8787", ws: true } },
+    proxy: { "/v1": { target: "http://localhost:8787", ws: true }, "/reactions": { target: "http://localhost:8787" } },
   },
-})
+}))

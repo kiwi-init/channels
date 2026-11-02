@@ -1,4 +1,4 @@
-// One colour per person, unique in the channel; agents wear their person's.
+// One colour per person, unique in the channel; an agent wears its person's unless it's given its own.
 
 import { beforeAll, describe, expect, test } from "bun:test";
 import { describeEvent } from "@kiwi/core/format.ts";
@@ -39,18 +39,33 @@ describe("colours", () => {
     expect(s.rejected.get(2)).toBe("teal is ana's colour");
   });
 
-  test("only that person or the owner sets it, and agents have none of their own", async () => {
-    const ms = [
-      await ev("bob", { op: "color.set", member: "ana", color: "red" }),
-      await ev("jonatas", { op: "color.set", member: "ana", color: "blue" }),
-      await ev("claude", { op: "color.set", member: "claude", color: "pink" }),
-      await ev("jonatas", { op: "color.set", member: "claude", color: "pink" }),
-    ];
+  test("only that person or the owner sets a person's colour", async () => {
+    const ms = [await ev("bob", { op: "color.set", member: "ana", color: "red" }), await ev("jonatas", { op: "color.set", member: "ana", color: "blue" })];
     const s = fold(ms, roster);
     expect(colorOf(s, "ana")).toBe("blue");
     expect(s.rejected.get(ms[0]!.seq)).toContain("only that person or the owner");
-    expect(s.rejected.get(ms[2]!.seq)).toContain("agents wear their person's colour");
-    expect(s.rejected.get(ms[3]!.seq)).toContain("agents wear their person's colour");
+  });
+
+  test("the owner picks an agent's colour, the agent can't, and it can match someone else's (T1528)", async () => {
+    const ms = [
+      await ev("claude", { op: "color.set", member: "claude", color: "pink" }),
+      await ev("bob", { op: "color.set", member: "claude", color: "green" }),
+      await ev("jonatas", { op: "color.set", member: "ana", color: "pink" }),
+      await ev("jonatas", { op: "color.set", member: "claude", color: "pink" }),
+    ];
+    const s = fold(ms, roster);
+    expect(s.rejected.get(ms[0]!.seq)).toContain("sets an agent's colour");
+    expect(s.rejected.get(ms[1]!.seq)).toContain("sets an agent's colour");
+    expect(s.rejected.has(ms[3]!.seq)).toBe(false);
+    expect(colorOf(s, "claude")).toBe("pink");
+  });
+
+  test("an agent's own colour wins over its person's, and clearing it goes back (T1528)", async () => {
+    const set = await ev("jonatas", { op: "color.set", member: "jonatas", color: "violet" });
+    const own = await ev("jonatas", { op: "color.set", member: "claude", color: "teal" });
+    expect(colorOf(fold([set, own], roster), "claude")).toBe("teal");
+    const clear = await ev("jonatas", { op: "color.set", member: "claude", color: null });
+    expect(colorOf(fold([set, own, clear], roster), "claude")).toBe("violet");
   });
 
   test("agents wear their person's colour, when that person is in the channel", async () => {
