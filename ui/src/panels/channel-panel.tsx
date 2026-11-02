@@ -19,6 +19,7 @@ import { Toggle } from "~/kit/bits"
 import { Confirm, InlineEdit } from "~/settings/controls"
 import { useAppCan } from "~/live/app-can"
 import { isMuted } from "~/live/quiet"
+import { copyText } from "~/kit/toasts"
 
 const REPO = /^[\w.-]+\/[\w.-]+$/
 
@@ -516,7 +517,7 @@ function RoomPeople({ channel, id, members, own }: { channel: Channel; id: strin
           type="button"
           className="btn is-primary is-small"
           onClick={() => {
-            app.actions.setRoomMembers(channel.code, id, [...editing])
+            void app.actions.setRoomMembers(channel.code, id, [...editing])
             setEditing(null)
           }}
         >
@@ -528,7 +529,7 @@ function RoomPeople({ channel, id, members, own }: { channel: Channel; id: strin
 }
 
 function Facts({ channel }: { channel: Channel }) {
-  const { app, toast } = useApp()
+  const { app } = useApp()
   const [clearing, setClearing] = useState<string | null>(null)
   const facts = channel.facts ?? []
   if (!facts.length) return <p className="cpanel-none">What agents note for everyone shows here. None yet.</p>
@@ -536,17 +537,7 @@ function Facts({ channel }: { channel: Channel }) {
     <ul className="cpanel-facts">
       {facts.map((f) => (
         <li key={f.key} className="cpanel-fact">
-          <button
-            type="button"
-            className="cpanel-fact-body"
-            title="Copy the value"
-            onClick={() =>
-              void navigator.clipboard.writeText(f.value).then(
-                () => toast(`Copied ${f.key}`),
-                () => toast(`Couldn't copy ${f.key}`)
-              )
-            }
-          >
+          <button type="button" className="cpanel-fact-body" title="Copy the value" onClick={() => copyText(f.value, `Copied ${f.key}`)}>
             <span className="cpanel-fact-line">
               <span className="cpanel-fact-key">{f.key}</span>
               <span className="cpanel-fact-value">{f.value}</span>

@@ -1,7 +1,7 @@
 import { accountClient, type AccountClient } from "@kiwi/core/account.ts";
 import { certUntil, nextLink, readDeviceList, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
 import type { Identity } from "@kiwi/core/identity.ts";
-import { checkVault, openVault, readRecovery, readRecoveryPhrase, recoveryKey, sealVault, type Vault, type VaultContents } from "@kiwi/core/recovery.ts";
+import { checkVault, openVault, readRecovery, readRecoveryPhrase, recoveryKey, sealVault, type OldVault, type Vault, type VaultContents } from "@kiwi/core/recovery.ts";
 import type { PublicPerson, RecoverDoneView, RecoverOpenView } from "./bridge.ts";
 import { myDevice } from "./devices.ts";
 import { ownersOf, setUpAt, type RecoveryKept } from "./recovery.ts";
@@ -78,7 +78,7 @@ export function createRecoverer(deps: RecovererDeps): Recoverer {
       if (got.vault === null) return { ok: false, why: "your recovery key holds no vault yet, so your person key isn't in it: approve this computer from one of your other devices" };
       const bad = await checkVault(got.vault, list);
       if (bad) throw new Error(`the relay's recovery vault doesn't hold up: ${bad}`);
-      const contents = await openVault(got.vault as Vault, key);
+      const contents = await openVault(got.vault as Vault | OldVault, key);
       if (!contents) throw new Error("your recovery vault didn't open with those words");
       const { person } = contents;
       if (!person.xpk || !person.xsk) throw new Error("the person key in your vault has no exchange half");
@@ -114,11 +114,11 @@ export function createRecoverer(deps: RecovererDeps): Recoverer {
       if (got.vault !== null) {
         const bad = await checkVault(got.vault, list);
         if (bad) throw new Error(`the relay's recovery vault doesn't hold up: ${bad}`);
-        const fresh = await openVault(got.vault as Vault, key);
+        const fresh = await openVault(got.vault as Vault | OldVault, key);
         if (!fresh || fresh.person.pk !== person.pk) throw new Error("your recovery vault changed and no longer opens with those words: type them again");
         contents = fresh;
       }
-      const version = got.vault === null ? 1 : (got.vault as Vault).version + 1;
+      const version = got.vault === null ? 1 : (got.vault as Vault | OldVault).version + 1;
       await client.keepVault({ vault: await sealVault(person, read.recovery, version, contents, now()) });
       opened = null;
       deps.restored({ person, links, channels: contents.channels, kept: { at: setUpAt(got.recovery) ?? now(), version, owners: ownersOf(contents.channels) } });

@@ -58,7 +58,7 @@ async function tried<T>(what: string, run: () => Promise<T>): Promise<T | null> 
     return await run()
   } catch (err) {
     // The person sees why in the announcement; the caller gets null and stays where it was.
-    announce(`${what}: ${say(err)}`)
+    announce(`${what}: ${say(err)}`, "error")
     return null
   }
 }
@@ -264,7 +264,11 @@ export function makeActions(): Actions {
       }
     },
     addRoom: (code, typed, members) => tried("Room not made", async () => (await manage()).addRoom(code, typed, members)),
-    setRoomMembers: (code, id, members) => attempt("Who's in didn't change", async () => (await manage()).setRoomMembers(code, id, members)),
+    setRoomMembers: async (code, id, members) =>
+      (await tried("Who's in didn't change", async () => {
+        await (await manage()).setRoomMembers(code, id, members)
+        return true
+      })) ?? false,
     setGithubWrite: (code, on) => attempt("Not changed", async () => (await manage()).setGithubWrite(code, on)),
     setBranchPrefix: (code, typed) => attempt("Branch prefix not changed", async () => (await manage()).setBranchPrefix(code, typed)),
     renameRoom: (code, id, typed) => attempt("Room not renamed", async () => (await manage()).renameRoom(code, id, typed)),
@@ -394,8 +398,8 @@ export function makeActions(): Actions {
     enrollAnswer: (id) => attempt("Couldn't answer the device", () => enrollAnswer(id)),
     enrollConfirm,
     enrollDeny: (id) => attempt("Couldn't turn the device away", () => enrollDeny(id)),
-    forgetDevice: (id) => attempt("Couldn't forget the device", () => forgetDevice(id)),
-    renewDevice: (id) => attempt("Couldn't renew the device", () => renewDevice(id)),
+    forgetDevice: (...ids) => attempt("Couldn't forget the device", () => forgetDevice(...ids)),
+    renewDevice: (...ids) => attempt("Couldn't renew the device", () => renewDevice(...ids)),
     recoveryWords: () => tried("Couldn't make the recovery words", recoveryWords),
     recoverySave: (typed) => tried("Couldn't set up the recovery key", () => recoverySave(typed)),
     recoveryDrop: () => attempt("Couldn't put the words away", recoveryDrop),

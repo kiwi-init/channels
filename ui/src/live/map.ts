@@ -39,6 +39,7 @@ import {
 } from "@kiwi/core/state.ts"
 import type { GithubCheck, GithubIssue, GithubPr } from "@kiwi/core/state/github.ts"
 import { decisionLabel } from "@kiwi/app/asks.ts"
+import { revokedComputer } from "@kiwi/app/forgotten-computers.ts"
 import { handoffLabel } from "@kiwi/app/handoff.ts"
 import { permissionCode, permissionNotes, permissionTitle, visibleText } from "@kiwi/app/permission-view.ts"
 import { reviewsFor, taskActions } from "@kiwi/channel/task-actions.ts"
@@ -817,6 +818,7 @@ export function asksOf(
             : {}),
         ...(r.computer ? { machine: r.computer.label, sponsor: r.computer.personName } : r.card?.os ? { machine: r.card.os } : {}),
         ...(r.computer?.forgotten ? { forgotten: true as const } : {}),
+        ...(r.computer && (r.computer.revoked || revokedComputer(r.computer.person, r.computer.pk)) ? { revoked: true as const } : {}),
         code: r.check === "ready" && r.code ? r.code : "",
         check: r.check,
       })

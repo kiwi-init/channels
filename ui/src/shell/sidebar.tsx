@@ -15,7 +15,7 @@ import { SideFoot } from "~/shell/updates"
 
 export function Sidebar({ channel }: { channel: Channel }) {
   const { nav, go } = useApp()
-  const { actions, toast } = useAct()
+  const { actions } = useAct()
   const humans = onePerPerson(channel.people.filter((p) => p.kind === "human"))
   const agents = channel.people.filter((p) => p.kind === "agent").sort((a, b) => rank(a) - rank(b))
   const onChat = nav.tab === "chat"
@@ -59,7 +59,7 @@ export function Sidebar({ channel }: { channel: Channel }) {
                   aria-current={on ? "page" : undefined}
                   title={r.muted ? `#${r.name} is muted` : undefined}
                   onClick={() => go({ to: "where", where })}
-                  onContextMenu={(e) => showMenu(e, `#${r.name}`, (x) => x.roomGroups({ channel, go, toast }, actions, on, canLeave, r))}
+                  onContextMenu={(e) => showMenu(e, `#${r.name}`, (x) => x.roomGroups({ channel, go }, actions, on, canLeave, r))}
                 >
                   <span className="side-hash">{r.members ? <Icon name="lock" size={12} /> : "#"}</span>
                   <span className="side-label">{r.name}</span>
@@ -95,7 +95,7 @@ export function Sidebar({ channel }: { channel: Channel }) {
                     className={cx("side-row", on && "is-on", d.unread > 0 && "is-news")}
                     aria-current={on ? "page" : undefined}
                     onClick={() => go({ to: "where", where })}
-                    onContextMenu={(e) => showMenu(e, nickname(channel, d.with), (x) => x.directGroups({ channel, go, toast }, actions, on, d, who))}
+                    onContextMenu={(e) => showMenu(e, nickname(channel, d.with), (x) => x.directGroups({ channel, go }, actions, on, d, who))}
                   >
                     <Avatar person={who} size="sm" />
                     <span className="side-label">{nickname(channel, d.with)}</span>
@@ -193,7 +193,6 @@ export function toneOf(p: Person, channel: Channel): string | false {
 
 function Member({ person, channel }: { person: Person; channel: Channel }) {
   const { nav, go } = useApp()
-  const { toast } = useAct()
   const on = nav.panel?.kind === "person" && nav.panel.name === person.name
   const tone = toneOf(person, channel)
   const quiet = !tone && person.presence === "online"
@@ -203,7 +202,7 @@ function Member({ person, channel }: { person: Person; channel: Channel }) {
         type="button"
         className={cx("side-member", quiet && "is-quiet", on && "is-on", person.presence === "offline" && "is-off")}
         onClick={() => go({ to: "panel", panel: on ? null : { kind: "person", name: person.name } })}
-        onContextMenu={(e) => showMenu(e, shown(person), (x) => [x.personItems({ channel, go, toast }, person)])}
+        onContextMenu={(e) => showMenu(e, shown(person), (x) => [x.personItems({ channel, go }, person)])}
       >
         <Avatar person={person} size="sm" pip />
         <span className="side-name">

@@ -389,13 +389,25 @@ function JoinAskCard({ channel, ask, link }: { channel: Channel; ask: JoinAsk; l
       link={link}
       actions={
         <>
-          {unchecked ? (
+          {ask.revoked ? (
+            <button type="button" className="btn is-primary" disabled>
+              Can't join from that computer
+            </button>
+          ) : unchecked ? (
             <button type="button" className="btn is-primary" onClick={() => app.actions.answerJoin(channel.code, ask.id, true)}>
               Show {agent ? "its" : "their"} code
             </button>
           ) : (
             <button type="button" className="btn is-primary" disabled={!ready || blocked} onClick={letIn}>
-              {!ready ? `Waiting for ${ask.name}'s code…` : pinGone ? "Pick a personality first" : label ? `It matches: let in as ${label}` : `It matches: let ${ask.freeName ?? ask.name} in`}
+              {ask.revoked
+                ? "Can't join from that computer"
+                : !ready
+                  ? `Waiting for ${ask.name}'s code…`
+                  : pinGone
+                    ? "Pick a personality first"
+                    : label
+                      ? `It matches: let in as ${label}`
+                      : `It matches: let ${ask.freeName ?? ask.name} in`}
             </button>
           )}
           <button type="button" className="btn is-danger" onClick={() => app.actions.answerJoin(channel.code, ask.id, false)}>
@@ -410,7 +422,14 @@ function JoinAskCard({ channel, ask, link }: { channel: Channel; ask: JoinAsk; l
           Someone here is already called {ask.name}, so {agent ? "it" : "they"} join{agent ? "s" : ""} as <span className="needs-strong">{ask.freeName}</span>.
         </p>
       )}
-      {ask.forgotten && <p className="needs-warn">It runs on {ask.machine}, a computer you forgot, so it didn't join on its own. Let it in only if you meant to bring that computer back.</p>}
+      {ask.revoked && (
+        <p className="needs-warn">
+          It runs on {ask.machine}, a computer {ask.sponsor ?? "its person"} forgot from their devices, so it can't join. It can once that computer gets a new key: <code>kiwi login</code> on it.
+        </p>
+      )}
+      {ask.forgotten && !ask.revoked && (
+        <p className="needs-warn">It runs on {ask.machine}, a computer you forgot, so it didn't join on its own. Let it in only if you meant to bring that computer back.</p>
+      )}
       {ask.said && <Said said={ask.said} />}
       {ask.pin && (
         <p className="needs-line">
@@ -418,35 +437,37 @@ function JoinAskCard({ channel, ask, link }: { channel: Channel; ask: JoinAsk; l
           {ask.pin.persona === null && <span className="needs-warn">, which isn't on this computer anymore</span>}
         </p>
       )}
-      <div className="needs-check">
-        {ready ? (
-          <>
-            <p className="needs-check-q">Does {agent ? "its terminal" : "their screen"} show this code?</p>
-            <p className="needs-pin">
-              <span className="sr">{ask.code}</span>
-              {ask.code.split("").map((d, i) =>
-                d === "-" ? (
-                  <span key={i} className="needs-dash" aria-hidden="true">
-                    –
-                  </span>
-                ) : (
-                  <span key={i} className="needs-digit" aria-hidden="true">
-                    {d}
-                  </span>
-                )
-              )}
+      {!ask.revoked && (
+        <div className="needs-check">
+          {ready ? (
+            <>
+              <p className="needs-check-q">Does {agent ? "its terminal" : "their screen"} show this code?</p>
+              <p className="needs-pin">
+                <span className="sr">{ask.code}</span>
+                {ask.code.split("").map((d, i) =>
+                  d === "-" ? (
+                    <span key={i} className="needs-dash" aria-hidden="true">
+                      –
+                    </span>
+                  ) : (
+                    <span key={i} className="needs-digit" aria-hidden="true">
+                      {d}
+                    </span>
+                  )
+                )}
+              </p>
+              <p className="needs-check-hint">If it doesn't match, someone else has the link. Turn them away.</p>
+            </>
+          ) : unchecked ? (
+            <p className="needs-check-q">
+              Show {agent ? "its" : "their"} code to start the check. It appears here and on {agent ? "its terminal" : "their screen"}, then you compare.
             </p>
-            <p className="needs-check-hint">If it doesn't match, someone else has the link. Turn them away.</p>
-          </>
-        ) : unchecked ? (
-          <p className="needs-check-q">
-            Show {agent ? "its" : "their"} code to start the check. It appears here and on {agent ? "its terminal" : "their screen"}, then you compare.
-          </p>
-        ) : (
-          <p className="needs-check-q">Their code shows up here as soon as {ask.name} has it on screen. Then you compare.</p>
-        )}
-      </div>
-      {ready && (
+          ) : (
+            <p className="needs-check-q">Their code shows up here as soon as {ask.name} has it on screen. Then you compare.</p>
+          )}
+        </div>
+      )}
+      {ready && !ask.revoked && (
         <div className="needs-opts">
           {agent && (
             <Opt label="Colour" hint="Its face takes this colour.">

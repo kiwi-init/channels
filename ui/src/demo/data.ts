@@ -9,7 +9,9 @@ const DEMO_DAY = 86_400_000
 
 export const DEMO_DEVICES: Device[] = [
   { id: "dev-desk", label: "studio", os: "macOS", as: "desktop", until: Date.now() + 81 * DEMO_DAY, thisOne: true },
+  { id: "dev-desk-agents", label: "studio", os: "darwin", as: "computer", until: Date.now() + 85 * DEMO_DAY, thisOne: false, app: "dev-desk" },
   { id: "dev-air", label: "Jow's MacBook Air", os: "macOS", as: "desktop", until: Date.now() + 63 * DEMO_DAY, thisOne: false },
+  { id: "dev-air-agents", label: "Jow's MacBook Air", os: "darwin", as: "computer", until: Date.now() + 11 * DEMO_DAY, thisOne: false, app: "dev-air" },
   { id: "dev-phone", label: "iPhone", os: "iOS", as: "phone", until: Date.now() + 9 * DEMO_DAY, thisOne: false },
   { id: "dev-box", label: "build-box", os: "Linux", as: "computer", until: Date.now() - 2 * DEMO_DAY, thisOne: false },
 ]
@@ -17,7 +19,7 @@ export const DEMO_DEVICES: Device[] = [
 export const DEMO_WELCOME: Enrolling = {
   stage: "welcome",
   name: "jow",
-  devices: DEMO_DEVICES.filter((d) => !d.thisOne).map((d) => ({ id: d.id, label: d.label, os: d.os, as: d.as, lost: d.as !== "computer" })),
+  devices: DEMO_DEVICES.filter((d) => !d.thisOne && !d.app).map((d) => ({ id: d.id, label: d.label, os: d.os, as: d.as, lost: d.as !== "computer" })),
   channels: ["studio", "kiwi", "landing"],
 }
 export const DEMO_WORDS = "orbit velvet canyon mango ladder silent harvest pilot frozen museum tribe anchor gravity olive wagon pepper rocket glimpse marble tunnel coyote bamboo dinner shield".split(

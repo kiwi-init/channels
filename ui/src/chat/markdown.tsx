@@ -12,6 +12,7 @@ import { bridge } from "@kiwi/secrets/secrets.ts"
 
 import { MermaidBlock } from "~/chat/mermaid"
 import { keepParsed, parsedFor } from "~/chat/parsed"
+import { copyText } from "~/kit/toasts"
 
 const TEXT = { fontSize: 15, fontFamily: "var(--sans)", color: "var(--ink)", lineHeight: 22, marginTop: 0, marginBottom: 8 }
 const HEAD = { fontFamily: "var(--sans)", fontWeight: "600", color: "var(--ink)", marginTop: 6, marginBottom: 4 }
@@ -279,10 +280,9 @@ export interface MarkdownProps {
   onMessage: (seq: number) => void
   onImage: (url: string, alt: string) => void
   onShown: () => void
-  copied: () => void
 }
 
-export default function Markdown({ markdown, onMention, onTask, onMessage, onImage, onShown, copied }: MarkdownProps) {
+export default function Markdown({ markdown, onMention, onTask, onMessage, onImage, onShown }: MarkdownProps) {
   const box = useRef<HTMLDivElement>(null)
   const [got, setGot] = useState<{ markdown: string; ast: ASTNode } | null>(() => {
     const cached = parsedFor(markdown)
@@ -344,15 +344,12 @@ export default function Markdown({ markdown, onMention, onTask, onMessage, onIma
     if (e.target instanceof HTMLPreElement) scrollsOn(e.target)
   }, [])
 
-  const copyCode = useCallback(
-    (target: EventTarget) => {
-      const code = target instanceof Element ? target.closest<HTMLElement>("code[data-copy]") : null
-      if (!code || !box.current?.contains(code)) return false
-      void navigator.clipboard?.writeText(code.textContent ?? "").then(copied, () => {})
-      return true
-    },
-    [copied]
-  )
+  const copyCode = useCallback((target: EventTarget) => {
+    const code = target instanceof Element ? target.closest<HTMLElement>("code[data-copy]") : null
+    if (!code || !box.current?.contains(code)) return false
+    copyText(code.textContent ?? "")
+    return true
+  }, [])
   const clicked = useCallback(
     (e: MouseEvent<HTMLDivElement>) => {
       const selection = window.getSelection()
@@ -386,10 +383,10 @@ export default function Markdown({ markdown, onMention, onTask, onMessage, onIma
       onLinkPress: press,
       onImagePress: ({ url, altText }: { url: string; altText: string }) => onImage(url, altText),
       onCodeBlockPress: ({ code }: { code: string }) => {
-        void navigator.clipboard?.writeText(code).then(copied, () => {})
+        copyText(code)
       },
     }),
-    [press, onImage, copied]
+    [press, onImage]
   )
   const children = ast?.children ?? []
 
@@ -406,7 +403,6 @@ export default function Markdown({ markdown, onMention, onTask, onMessage, onIma
                   key={`${child.type}-${i}`}
                   source={source}
                   onLink={(url) => press({ url })}
-                  copied={copied}
                   code={<RenderNode node={child} style={last ? LAST : NORMAL} styles={last ? LAST_STYLES : STYLES} callbacks={callbacks} capabilities={CAPABILITIES} />}
                 />
               )

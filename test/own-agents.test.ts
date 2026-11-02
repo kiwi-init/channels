@@ -13,7 +13,7 @@ import { joinAgent, joinPerson, pairComputer, setupChannel, type OwnerSetup } fr
 
 setDefaultTimeout(120_000);
 
-const NOT_YOURS = "only the owner, the key itself, or the person an agent works for says a key is gone";
+const NOT_YOURS = "only the owner, the key itself, or the person it belongs to says a key is gone";
 const NOT_A_MANAGER = "only the owner, or a person who manages agents, names an agent";
 const TRUSTED = { addsAgents: true, answersDecisions: true, managesAgents: true };
 

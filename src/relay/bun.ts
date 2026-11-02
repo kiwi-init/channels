@@ -18,7 +18,7 @@ import { corsPreflight, onMailboxHttp, withCors, type MailboxStore } from "./mai
 import { ACCOUNT_ASKS_PER_MINUTE, accountUser, isAccountPath, onAccountHttp, sameEnrollment, type AccountStore } from "./account.ts";
 import { ENROLL_TTL_MS, type Enrollment } from "@kiwi/core/enroll.ts";
 import { accountHome, frozenWrite, MOVE_PATH, movedHuman, moveUsers, onMoveHttp, type MoveStore, type Row, type Rows } from "./move.ts";
-import type { Vault } from "@kiwi/core/recovery.ts";
+import type { OldVault, Vault } from "@kiwi/core/recovery.ts";
 import {
   MACHINE_ASKS_PER_MINUTE,
   MACHINE_BOX_TTL_MS,
@@ -233,7 +233,7 @@ export function startRelay(
       })(),
     vault: async (user) => {
       const row = people.query("SELECT rec FROM account_vaults WHERE user = ?").get(user) as { rec: string } | null;
-      return row ? (JSON.parse(row.rec) as Vault) : null;
+      return row ? (JSON.parse(row.rec) as Vault | OldVault) : null;
     },
     setVault: async (user, next, prev) =>
       people.transaction(() => {

@@ -18,7 +18,7 @@ import { useState } from "react"
 
 import { Avatar, cx, Dot } from "~/kit/bits"
 import { GlyphIcon, Icon, ISSUE, type Glyph } from "~/kit/icons"
-import { announce } from "~/kit/toasts"
+import { copyText } from "~/kit/toasts"
 import { ago } from "~/kit/time"
 import { memberOf, type Channel, type Check, type Issue, type PullRequest } from "~/model"
 import { useApp } from "~/nav"
@@ -161,18 +161,7 @@ export function Branch({ name, copy }: { name: string; copy?: boolean }) {
       <GlyphIcon glyph={GitBranchIcon} size={13} />
       <span className="gh-branch-name">{name}</span>
       {copy && (
-        <button
-          type="button"
-          className="gh-copy"
-          aria-label={`Copy ${name}`}
-          title="Copy the branch name"
-          onClick={() =>
-            void navigator.clipboard?.writeText(name).then(
-              () => announce("Branch name copied"),
-              () => announce("Couldn't copy. Select it and copy by hand.")
-            )
-          }
-        >
+        <button type="button" className="gh-copy" aria-label={`Copy ${name}`} title="Copy the branch name" onClick={() => copyText(name, "Branch name copied")}>
           <Icon name="copy" size={13} />
         </button>
       )}

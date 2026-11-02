@@ -381,6 +381,7 @@ export interface JoinAsk {
   runs?: string
   machine?: string
   forgotten?: true
+  revoked?: true
   sponsor?: string
   key?: string
   said?: { machine?: string; tools?: string[]; repo?: string; outside: boolean } | "nothing"
@@ -597,6 +598,7 @@ export interface Device {
   as: "desktop" | "phone" | "computer"
   until: number
   thisOne: boolean
+  app?: string
 }
 
 export interface RecoveryState {
@@ -720,7 +722,7 @@ export interface Actions {
   chooseFolder(): Promise<string | null>
   addRoom(code: string, name: string, members?: string[]): Promise<string | null>
   renameRoom(code: string, id: string, name: string): void
-  setRoomMembers(code: string, id: string, members: string[]): void
+  setRoomMembers(code: string, id: string, members: string[]): Promise<boolean>
   setIcon(code: string, file: File | null): void
   renameChannel(code: string, title: string): void
   clearFact(code: string, key: string): void
@@ -763,8 +765,8 @@ export interface Actions {
   enrollAnswer(id: string): void
   enrollConfirm(id: string, digits: string): Promise<{ ok: true } | { ok: false; left: number }>
   enrollDeny(id: string): void
-  forgetDevice(id: string): void
-  renewDevice(id: string): void
+  forgetDevice(...ids: string[]): void
+  renewDevice(...ids: string[]): void
   recoveryWords(): Promise<string[] | null>
   recoverySave(typed: { at: number; word: string }[]): Promise<RecoverySaved | null>
   recoveryDrop(): void

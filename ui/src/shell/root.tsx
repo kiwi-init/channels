@@ -23,7 +23,7 @@ const NewRoomDialog = later(() => import("~/shell/new-room").then((m) => m.NewRo
 const Welcome = later(() => import("~/start/welcome").then((m) => m.Welcome))
 
 export function Root({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => void }) {
-  const [toasts, toast] = useToasts()
+  const [toasts, toast, dismissToast] = useToasts()
   const ctx = useMemo(() => ({ app, nav, go, toast }), [app, nav, go, toast])
   const act = useMemo(() => ({ actions: app.actions, go, toast }), [app.actions, go, toast])
   usePaletteKey(useCallback(() => go({ to: "dialog", dialog: nav.dialog === "palette" ? null : "palette" }), [go, nav.dialog]))
@@ -38,7 +38,7 @@ export function Root({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => voi
               <FirstRun />
             </Suspense>
           </Boundary>
-          <Toasts toasts={toasts} />
+          <Toasts toasts={toasts} onDismiss={dismissToast} />
         </ActContext>
       </AppContext>
     )
@@ -82,7 +82,7 @@ export function Root({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => voi
         )}
         <Palette />
         <ContextMenus />
-        <Toasts toasts={toasts} />
+        <Toasts toasts={toasts} onDismiss={dismissToast} />
       </ActContext>
     </AppContext>
   )

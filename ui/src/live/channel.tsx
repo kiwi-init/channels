@@ -311,7 +311,9 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
 
   useEffect(() => {
     for (const { name, persona } of arrivals(code, people))
-      void import("~/live/manage").then((m) => m.setPersona(code, name, persona)).catch((e: unknown) => announce(`Personality not set on ${name}: ${e instanceof Error ? e.message : String(e)}`))
+      void import("~/live/manage")
+        .then((m) => m.setPersona(code, name, persona))
+        .catch((e: unknown) => announce(`Personality not set on ${name}: ${e instanceof Error ? e.message : String(e)}`, "error"))
   }, [code, people])
 
   const toSeal = leaversToSeal(state, me)

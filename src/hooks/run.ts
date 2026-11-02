@@ -26,6 +26,7 @@ function heldOrNamed(who: Here, session: string | undefined, model: string | und
 }
 
 export const runHook = Effect.fn("Hooks.run")(function* (event: string, harness?: string) {
+  if (harness === "agy") return 0;
   const raw = yield* Effect.promise(() => new Response(Bun.stdin.stream()).text().catch(() => ""));
   let input: HookInput = {};
   try {

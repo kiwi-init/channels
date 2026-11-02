@@ -319,6 +319,19 @@ export function listedComputer(list: DeviceList, pk: string, now = Date.now()): 
   return d && d.as === "computer" ? d : null;
 }
 
+export function runnerHosts(list: DeviceList, links: readonly DeviceLink[]): Map<string, string> {
+  const addedBy = new Map<string, string>();
+  for (const l of links) if (l.op === "add") addedBy.set(l.device, l.pk);
+  const byId = new Map(list.devices.map((d) => [d.device, d]));
+  const hosts = new Map<string, string>();
+  for (const d of list.devices) {
+    if (d.as !== "computer") continue;
+    const host = byId.get(addedBy.get(d.device) ?? "");
+    if (host && host.as === "desktop" && host.label === d.label) hosts.set(d.device, host.device);
+  }
+  return hosts;
+}
+
 export const dueForRenewal = (list: DeviceList, now = Date.now()): Device[] => list.devices.filter((d) => d.until > now && d.until - now <= RENEW_WITHIN_DAYS * DAY_MS);
 
 function newestList(a: DeviceList | undefined, b: DeviceList | undefined): DeviceList | undefined {

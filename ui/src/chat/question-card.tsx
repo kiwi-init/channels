@@ -23,9 +23,9 @@ function useNow(until: number | undefined): number {
 }
 
 function openBrowser(handoff: Handoff): void {
-  if (handoff.expiresAt <= Date.now()) return announce("The link has expired")
+  if (handoff.expiresAt <= Date.now()) return announce("The link has expired", "error")
   const b = bridge()
-  if (b) void b.openExternal(handoff.url).catch(() => announce("Couldn't open the browser"))
+  if (b) void b.openExternal(handoff.url).catch(() => announce("Couldn't open the browser", "error"))
   else window.open(handoff.url, "_blank", "noopener,noreferrer")
 }
 

@@ -89,6 +89,7 @@ export const CHANNEL_CALLS = [
   "deny",
   "remove",
   "cutDevices",
+  "goneDevices",
   "tendDelegations",
   "dropDelegates",
   "updateScopes",
@@ -289,6 +290,7 @@ export interface DeviceView {
   approve: boolean;
   until: number;
   thisOne: boolean;
+  app?: string;
 }
 
 interface DeviceRevokeView {

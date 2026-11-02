@@ -227,7 +227,7 @@ export function describeEvent(m: Message, state?: ChannelState, nameOf: (handle:
     case "msg.delete":
       return `deleted #${ev.seq}`;
     case "member.gone":
-      return `removed ${ev.member}'s key ${ev.pk.slice(0, 8)}`;
+      return `removed ${ev.member}'s key ${ev.pk.slice(0, 8)}${ev.why ? `: ${inlineText(ev.why, 200)}` : ""}`;
     case "member.back":
       return `let ${ev.member}'s key ${ev.pk.slice(0, 8)} back in`;
     case "nickname.set":
