@@ -3,10 +3,12 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Channel } from "@kiwi/core/client.ts";
-import { certUntil, claimDevice, newestLists, nextLink, readDeviceList, rootLink, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
+import { certUntil, claimDevice, newestLists, nextLink, readDeviceList, rerootLink, rootLink, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
+import { claimComputer, provePerson } from "@kiwi/core/person.ts";
+import { recoveryKey, recoveryLink } from "@kiwi/core/recovery.ts";
 import { startRelay } from "../src/relay/bun.ts";
-import { joinPerson, setupChannel, type OwnerSetup } from "./owner.ts";
+import { joinAgent, joinPerson, pairComputer, setupChannel, type OwnerSetup } from "./owner.ts";
 
 setDefaultTimeout(30_000);
 
@@ -213,6 +215,44 @@ describe("a member's list posted into the channel cuts their forgotten phone (T1
     expect(lists.get(bobsPerson.pk)?.revoked).toEqual([phone.pk]);
     expect((await s.ownerCh.cutDevices(lists.get(bobsPerson.pk)!)).map((m) => m.name)).toEqual(["bob-2"]);
     expect((await s.ownerCh.members()).find((m) => m.pk === joiner.id.pk)?.active).toBe(false);
+    await s.ownerCh.close();
+  });
+});
+
+describe("a re-root cuts what the old person key vouched for (T827)", () => {
+  test("the owner cuts the devices left out and the computers only an old cert vouched for, and old-key claims stop counting", async () => {
+    const s = await setupChannel(relay);
+    const { links, desk, phone } = await listWithPhone(s.person);
+    const box = await device("box");
+    const all = await grow(links, desk, { op: "add", device: box.pk, dxpk: box.xpk!, label: "box", os: "Linux", as: "computer", approve: false, until: certUntil(Date.now()) });
+    const onPhone = await ask(s, phone, all, "owner");
+    expect(await letThrough(s, onPhone)).toHaveLength(1);
+    const listed = await ask(s, box, all, "listed");
+    expect(await letThrough(s, listed)).toHaveLength(1);
+    const certified = await joinAgent(s, "certified", await pairComputer(s.person));
+    expect(certified.member.sponsor?.user).toBe(s.person.pk);
+
+    const paper = await recoveryKey(new Uint8Array(32).fill(21));
+    const chain = [await recoveryLink(s.person, s.person.pk, null, { pk: paper.pk, xpk: paper.xpk! })];
+    const next = await device("next");
+    const rerooted = await listOf([...all, await rerootLink(await listOf(all), paper, chain, next, [desk.pk, box.pk])]);
+    expect(rerooted.revoked).toEqual([phone.pk]);
+    expect((await s.ownerCh.cutDevices(rerooted)).map((m) => m.name).sort()).toEqual(["certified", "owner-2"]);
+    const active = (await s.ownerCh.members()).filter((m) => m.active).map((m) => m.name);
+    expect(active).toContain("listed");
+    expect(active).not.toContain("certified");
+
+    const lists = new Map([[s.person.pk, rerooted]]);
+    const again = await generateIdentity("again");
+    const stolen = await pairComputer(s.person);
+    const byCert = await Channel.requestJoin(relay, s.code, again, { name: "again" }, { computer: await claimComputer(stolen.machine, stolen.cert, s.roomId, again.pk) });
+    const me = await generateIdentity("me");
+    const byPerson = await Channel.requestJoin(relay, s.code, me, { name: "me" }, { person: await provePerson(s.person, s.roomId, me.pk) });
+    const reqs = await s.ownerCh.requests({ person: s.person.pk, lists });
+    expect(reqs.find((r) => r.id === byPerson.requestId)?.person).toBeUndefined();
+    expect(reqs.find((r) => r.id === byCert.requestId)?.computer).toBeUndefined();
+    const before = await s.ownerCh.requests({ person: s.person.pk });
+    expect(before.find((r) => r.id === byPerson.requestId)?.person).toBe(s.person.pk);
     await s.ownerCh.close();
   });
 });

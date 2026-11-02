@@ -5,7 +5,7 @@ import type { Personality } from "@kiwi/core/personality.ts"
 import { HANDOFF_DONE } from "@kiwi/core/protocol.ts"
 
 import { stepReplyText } from "~/chat/step"
-import { DEMO_ACCOUNT, DEMO_CHANNEL, DEMO_DEVICES, DEMO_EMPTY, DEMO_GUEST, DEMO_PREFS, DEMO_TILES, DEMO_WAITING, DEMO_WELCOME, DEMO_WORDS } from "~/demo/data"
+import { DEMO_ACCOUNT, DEMO_CHANNEL, DEMO_DEVICES, DEMO_EMPTY, DEMO_GUEST, DEMO_GUEST_MEMBER, DEMO_PREFS, DEMO_TILES, DEMO_WAITING, DEMO_WELCOME, DEMO_WORDS } from "~/demo/data"
 import { longFeed } from "~/demo/long"
 import { demoAround, demoFetchOlder, demoOlder } from "~/demo/older"
 import { withSpecs } from "~/demo/specs"
@@ -260,6 +260,7 @@ export type Scenario =
   | "github-gate"
   | "specs"
   | "spec-changed"
+  | "member"
 
 function initial(scenario: Scenario, look: Partial<Prefs>): State {
   const prefs = { ...DEMO_PREFS, ...look }
@@ -295,7 +296,7 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
       DEMO_EMPTY,
       DEMO_WAITING,
       { ...DEMO_EMPTY, code: "interlinked", title: "interlinked" },
-      DEMO_GUEST,
+      scenario === "member" ? DEMO_GUEST_MEMBER : DEMO_GUEST,
     ].map((c) => [c.code, c])
   )
   if (scenario === "updates")

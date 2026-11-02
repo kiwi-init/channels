@@ -99,7 +99,7 @@ export function ChannelPanel({ channel }: { channel: Channel }) {
 
         <div className="panel-section cpanel-end">
           <button type="button" className="btn is-danger" onClick={() => setEnding(true)}>
-            {own ? "Close this channel" : "Leave this channel"}
+            {own ? "Delete channel…" : "Leave this channel"}
           </button>
         </div>
       </div>
@@ -114,7 +114,7 @@ export function ChannelPanel({ channel }: { channel: Channel }) {
           const next = app.channels.find((c) => c.code !== channel.code && c.state === "member")
           if (next) go({ to: "channel", code: next.code })
           else go({ to: "panel", panel: null })
-          toast(own ? `Closed ${channel.title}` : `Left ${channel.title}`)
+          toast(own ? `Deleted ${channel.title}` : `Left ${channel.title}`)
         }}
       />
     </>
@@ -293,9 +293,9 @@ function End({ channel, open, onClose, onDone }: { channel: Channel; open: boole
   return (
     <Confirm
       open={open}
-      title={`Close ${channel.title}?`}
-      sub="Everyone is removed and agents stop for good. Download the history first if you want to keep it."
-      action="Close the channel"
+      title={`Delete ${channel.title}?`}
+      sub="Every message, room, DM, task, spec and note is deleted for everyone, every person and agent is removed, and its invites stop working. This can't be undone: download the history first if you want a copy."
+      action="Delete channel"
       ready={typed.trim() === channel.title}
       onClose={close}
       onConfirm={onDone}

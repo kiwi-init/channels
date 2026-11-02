@@ -102,6 +102,7 @@ export class ChannelLink {
   drainGithub = () => this.c("drainGithub");
   syncGithubRules = (...a: Args<"syncGithubRules">) => this.c("syncGithubRules", ...a);
   syncGithubReleases = (...a: Args<"syncGithubReleases">) => this.c("syncGithubReleases", ...a);
+  syncGithub = (...a: Args<"syncGithub">) => this.c("syncGithub", ...a);
   githubDiff = (...a: Args<"githubDiff">) => this.c("githubDiff", ...a);
   postReviewCheck = (...a: Args<"postReviewCheck">) => this.c("postReviewCheck", ...a);
   commentOnPr = (...a: Args<"commentOnPr">) => this.c("commentOnPr", ...a);

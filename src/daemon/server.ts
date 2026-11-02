@@ -8,7 +8,7 @@ import type { Message } from "@kiwi/core/protocol.ts";
 import { DEFAULT_RELAY, hasKiwiState, home, identitiesIn, loadConfig, loadIdentity, saveAccess, writePrivate, type Config } from "../config.ts";
 import { readCursor } from "../config/cursors.ts";
 import { saveMachine, takeDeviceList } from "../machine.ts";
-import { listedComputer, readDeviceList, type DeviceLink } from "@kiwi/core/devices.ts";
+import { isNewerList, listedComputer, readDeviceList, type DeviceLink } from "@kiwi/core/devices.ts";
 import { readMachineCert } from "@kiwi/core/person.ts";
 import { VERSION } from "../version.ts";
 import { compareVersions } from "@kiwi/core/versions.ts";
@@ -640,7 +640,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
       if (read.list.person !== named.pk) throw new Error("that device list is another person's than the one named");
       if (!listedComputer(read.list, m.identity.pk)) throw new Error("that device list doesn't list this computer");
       const kept = m.device?.person.pk === named.pk ? await readDeviceList(m.device.links) : null;
-      if (kept?.ok && kept.list.version > read.list.version) throw new Error("this computer already holds a newer device list");
+      if (kept?.ok && isNewerList(kept.list, read.list)) throw new Error("this computer already holds a newer device list");
       const device = { person: named, links: params.links as DeviceLink[] };
       paired = m.cert?.pk === named.pk ? { ...m, device } : { identity: m.identity, label: m.label, relay: m.relay, device };
     } else {

@@ -15,7 +15,7 @@ import * as Effect from "effect/Effect";
 import type * as Layer from "effect/Layer";
 import { verifyRequest } from "@kiwi/core/auth.ts";
 import { ownerFingerprint } from "@kiwi/core/crypto.ts";
-import { MAX_BLOB_BYTES, PAGE_LIMIT, wellFormedFreed, wellFormedSendId, wellFormedSlot } from "@kiwi/core/protocol.ts";
+import { GITHUB_SYNC_LISTS, MAX_BLOB_BYTES, PAGE_LIMIT, wellFormedFreed, wellFormedSendId, wellFormedSlot } from "@kiwi/core/protocol.ts";
 import { ChannelGone, BadRequest, Forbidden, NotFound, NotOwner, Refused, SignInRequired, TooLarge, TooMany, Unauthorized, UpdateRequired, type Refusal } from "./failures.ts";
 import { answer, buildContext, describeRoutes, dispatch, incoming, json, readCapped, Request_, type Route } from "./http.ts";
 import { githubLinks, githubRepos, type GithubItem } from "./github.ts";
@@ -602,6 +602,25 @@ const routes: RoomRoute[] = [
         const known = (searchParams.get("known") ?? "").split("\n").filter(Boolean).slice(0, 50);
         const app = yield* githubApp;
         return { data: { releases: yield* replied(yield* Effect.promise(() => app.releases(repo, known))) } };
+      }),
+  },
+  {
+    method: "GET",
+    path: "/github/sync",
+    guard: "owner",
+    run: ({ me }) =>
+      Effect.gen(function* () {
+        const db = yield* RoomStore;
+        if (!allow(`gh:${db.roomId}:${me}`, GITHUB_READS_PER_MINUTE)) return yield* new TooMany({ message: "too many GitHub lookups; wait a minute" });
+        const { searchParams } = (yield* Request_).url;
+        const repo = searchParams.get("repo")?.toLowerCase();
+        if (!repo || !db.githubRepos().includes(repo)) return yield* new BadRequest({ message: "repo: one of the channel's connected repos" });
+        const list = GITHUB_SYNC_LISTS.find((l) => l === searchParams.get("list"));
+        if (!list) return yield* new BadRequest({ message: `list: one of ${GITHUB_SYNC_LISTS.join(", ")}` });
+        const after = searchParams.get("after");
+        if (after !== null && !/^[\w+/=-]{1,200}$/.test(after)) return yield* new BadRequest({ message: "after: the cursor the last page gave" });
+        const app = yield* githubApp;
+        return { data: yield* replied(yield* Effect.promise(() => app.sync(repo, list, after))) };
       }),
   },
   {
