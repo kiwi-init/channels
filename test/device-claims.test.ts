@@ -3,6 +3,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Channel } from "@kiwi/core/client.ts";
+import { cutReason } from "@kiwi/core/client/members.ts";
+import { describeEvent } from "@kiwi/core/format.ts";
 import { certUntil, claimDevice, newestLists, nextLink, readDeviceList, rerootLink, rootLink, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
 import { claimComputer, provePerson } from "@kiwi/core/person.ts";
@@ -145,6 +147,11 @@ describe("a person's other devices join as them (T634)", () => {
   });
 });
 
+async function gone(s: OwnerSetup): Promise<Map<string, string | undefined>> {
+  const events = (await s.ownerCh.history(0)).messages.flatMap((m) => (m.kind === "event" && m.ev?.op === "member.gone" ? [m.ev] : []));
+  return new Map(events.map((e) => [e.member, e.why]));
+}
+
 describe("a revoked device is cut out, and the newest list decides (T641)", () => {
   test("the owner removes a revoked phone and a revoked computer's agents, in one rotation", async () => {
     const s = await setupChannel(relay);
@@ -170,6 +177,12 @@ describe("a revoked device is cut out, and the newest list decides (T641)", () =
     const revoked = await grow(await grow(all, desk, { op: "revoke", device: phone.pk }), desk, { op: "revoke", device: box.pk });
     expect((await s.ownerCh.cutDevices(await listOf(revoked))).map((m) => m.name).sort()).toEqual(["builder", "owner-2"]);
     expect(s.ownerCh.access.epoch).toBe(epoch + 1);
+    const why = await gone(s);
+    expect(why.get("owner-2")).toBe('their phone "phone" was forgotten from their devices');
+    expect(why.get("builder")).toMatch(/^builder's computer "box" was forgotten from .+'s devices$/);
+    const line = (await s.ownerCh.history(0)).messages.find((m) => m.ev?.op === "member.gone" && m.ev.member === "builder");
+    expect(line && describeEvent(line)).toMatch(/^removed builder's key \S{8}: builder's computer "box" was forgotten from .+'s devices$/);
+    expect(line && describeEvent({ ...line, ev: { op: "member.gone", member: "builder", pk: agent.id.pk } })).toBe(`removed builder's key ${agent.id.pk.slice(0, 8)}`);
     const active = (await s.ownerCh.members()).filter((m) => m.active).map((m) => m.pk);
     expect(active).not.toContain(onPhone.id.pk);
     expect(active).not.toContain(agent.id.pk);
@@ -238,6 +251,7 @@ describe("a re-root cuts what the old person key vouched for (T827)", () => {
     const rerooted = await listOf([...all, await rerootLink(await listOf(all), paper, chain, next, [desk.pk, box.pk])]);
     expect(rerooted.revoked).toEqual([phone.pk]);
     expect((await s.ownerCh.cutDevices(rerooted)).map((m) => m.name).sort()).toEqual(["certified", "owner-2"]);
+    expect((await gone(s)).get("certified")).toMatch(/^certified's computer( ".+")? isn't on .+'s devices since they replaced their person key$/);
     const active = (await s.ownerCh.members()).filter((m) => m.active).map((m) => m.name);
     expect(active).toContain("listed");
     expect(active).not.toContain("certified");
@@ -254,5 +268,23 @@ describe("a re-root cuts what the old person key vouched for (T827)", () => {
     const before = await s.ownerCh.requests({ person: s.person.pk });
     expect(before.find((r) => r.id === byPerson.requestId)?.person).toBe(s.person.pk);
     await s.ownerCh.close();
+  });
+});
+
+describe("an automatic cut says why (T2623, #2540)", () => {
+  const list = (over: Partial<DeviceList> = {}): DeviceList => ({ root: "root", person: "harry", version: 3, head: "head", devices: [], revoked: ["mac"], revokes: [], reroots: [], ...over });
+  const dudu = { name: "dudu", from: { pk: "mac", label: "MacBook-Pro-de-Davi" }, sponsor: { user: "harry", name: "Harry", handle: "harry" } };
+
+  test("an agent from a forgotten computer, and a forgotten phone, each get a reason", () => {
+    expect(cutReason(dudu, list())).toBe(`dudu's computer "MacBook-Pro-de-Davi" was forgotten from @harry's devices`);
+    expect(cutReason({ name: "harry-2", person: "harry", device: { pk: "mac", label: "iPhone", as: "phone" } }, list())).toBe(`their phone "iPhone" was forgotten from their devices`);
+    expect(cutReason({ ...dudu, sponsor: { user: "harry", name: "Harry" } }, list())).toBe(`dudu's computer "MacBook-Pro-de-Davi" was forgotten from Harry's devices`);
+  });
+
+  test("nobody is cut without a reason: another person's agent, a computer not revoked, a phone of someone else", () => {
+    expect(cutReason({ ...dudu, sponsor: { user: "maya", name: "Maya" } }, list())).toBeNull();
+    expect(cutReason(dudu, list({ revoked: [] }))).toBeNull();
+    expect(cutReason({ name: "maya-2", person: "maya", device: { pk: "mac", label: "iPhone", as: "phone" } }, list())).toBeNull();
+    expect(cutReason({ name: "plain" }, list())).toBeNull();
   });
 });

@@ -16,7 +16,7 @@
 import { readFileSync, realpathSync, statSync } from "node:fs";
 import { homedir, hostname } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
-import { geminiAncestor, kimiAncestor, kimiCodePid, mimoHere, piHere, zcodePid, type ProcessTree } from "./ancestry.ts";
+import { agyHere, geminiAncestor, kimiAncestor, kimiCodePid, mimoHere, piHere, zcodePid, type ProcessTree } from "./ancestry.ts";
 import { loadConfig, updateConfig, type Config, type SeatRecord } from "./config.ts";
 import { holdsSeat, isSeatHarness, seatHeldAway, seatHolds, seatRefusal } from "./hold.ts";
 import { pidAlive } from "./pid.ts";
@@ -78,6 +78,8 @@ function harnessHere(env: Record<string, string | undefined>, tree: ProcessTree,
   if (kimi) return heldByProcess("kimi", kimi);
   const zcode = zcodePid(env, tree);
   if (zcode) return heldByProcess("zcode", zcode);
+  const agy = agyHere(env, tree);
+  if (agy) return { harness: "agy", session: agy.session, ...(agy.pid ? { pid: agy.pid } : {}) };
   // Grok Build can inherit CLAUDECODE from a Claude-compat session. GROK_SESSION_ID wins.
   if (env.GROK_SESSION_ID) return { harness: "grok", session: env.GROK_SESSION_ID };
   if (env.CLAUDECODE) return { harness: "claude", ...(env.CLAUDE_CODE_SESSION_ID ? { session: env.CLAUDE_CODE_SESSION_ID } : {}), ...(Number.isInteger(pid) && pid > 0 ? { pid } : {}) };
@@ -89,7 +91,7 @@ function harnessHere(env: Record<string, string | undefined>, tree: ProcessTree,
   return {};
 }
 
-export type NamedHookHarness = "codex" | "gemini" | "grok";
+export type NamedHookHarness = "codex" | "gemini" | "grok" | "agy";
 
 export function hereAs(harness: string | undefined, env: Record<string, string | undefined> = process.env, tree: ProcessTree = {}, host: string = hostname()): Here {
   if (harness === "codex") return { harness: "codex", ...(env.CODEX_THREAD_ID ? { session: env.CODEX_THREAD_ID } : {}) };

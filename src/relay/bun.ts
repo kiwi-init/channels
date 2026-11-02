@@ -382,7 +382,7 @@ export function startRelay(
       if (!existsSync(file(room))) return false;
       const db = storeFor(room, false);
       if (!db.exists() || db.isLegacy()) return false;
-      db.enqueueGithub(JSON.stringify(item), clock(), GITHUB_QUEUE_TTL_MS, GITHUB_QUEUE_MAX);
+      db.enqueueGithub(item.repo, JSON.stringify(item), clock(), GITHUB_QUEUE_TTL_MS, GITHUB_QUEUE_MAX);
       return true;
     },
     drop: async (repo, room) => void people.query("DELETE FROM github_routes WHERE repo = ? AND room = ?").run(repo, room),

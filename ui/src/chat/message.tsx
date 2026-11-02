@@ -15,6 +15,7 @@ import { nickname } from "~/names"
 import { linked, named, useMentionParser, withNames } from "~/chat/linked"
 import { showMenu } from "~/kit/menu-open"
 import { later } from "~/kit/later"
+import { copyText } from "~/kit/toasts"
 
 const Markdown = lazy(() => import("~/chat/markdown"))
 const Annotator = lazy(() => import("~/chat/annotator"))
@@ -42,19 +43,18 @@ export function Body({
   onImage: (url: string, alt: string) => void
   onMessage: (seq: number) => void
 }) {
-  const { go, toast } = useAct()
+  const { go } = useAct()
   const parser = useMentionParser()
   const { markdown } = useMemo(() => ({ parser, markdown: linked(text, names, tasks, seq) }), [parser, text, names, tasks, seq])
   const [shown, setShown] = useState(false)
   const onShown = useCallback(() => setShown(true), [])
   const onMention = useCallback((name: string) => go({ to: "panel", panel: { kind: "person", name } }), [go])
   const onTask = useCallback((task: number) => go({ to: "panel", panel: { kind: "task", task } }), [go])
-  const copied = useCallback(() => toast("Copied"), [toast])
   return (
     <div className="msg-text">
       {!shown && !parsedFor(markdown) && <p className="md-plain">{named(text, names)}</p>}
       <Suspense fallback={null}>
-        <Markdown markdown={markdown} onMention={onMention} onTask={onTask} onMessage={onMessage} onImage={onImage} onShown={onShown} copied={copied} />
+        <Markdown markdown={markdown} onMention={onMention} onTask={onTask} onMessage={onMessage} onImage={onImage} onShown={onShown} />
       </Suspense>
     </div>
   )
@@ -150,6 +150,7 @@ interface RowProps {
   inThread?: boolean
   quote?: Message | number
   onQuote?: (seq: number) => void
+  older?: boolean
 }
 
 const face = (p: Person | undefined): string => (p ? [p.kind, p.harness, p.presence, p.color, p.role, p.runs].join("\n") : "")
@@ -174,8 +175,8 @@ function sameRow(a: RowProps, b: RowProps): boolean {
   )
 }
 
-export const MessageRow = memo(function MessageRow({ channel, m, compact, names, tasks, inThread, quote, onQuote }: RowProps) {
-  const { actions, go, toast } = useAct()
+export const MessageRow = memo(function MessageRow({ channel, m, compact, names, tasks, inThread, quote, onQuote, older }: RowProps) {
+  const { actions, go } = useAct()
   const replying = useReplying()
   const [image, setImage] = useState<{ url: string; alt: string } | null>(null)
   const openImage = useCallback((url: string, alt: string) => setImage({ url, alt }), [])
@@ -205,7 +206,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
     if (m.pending || m.failed !== undefined || m.leftOut || m.deleted || editing) return
     const target = e.target
     const reply = replying && m.where.kind !== "theirs" ? () => replying.set(m) : null
-    showMenu(e, "Message", (x) => x.messageGroups({ channel, go, toast }, m, target, { openImage, reply, inThread: !!inThread }))
+    showMenu(e, "Message", (x) => x.messageGroups({ channel, go }, m, target, { openImage, reply, inThread: !!inThread || !!older }))
   }
 
   return (
@@ -231,7 +232,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
               type="button"
               className="msg-name"
               onClick={() => go({ to: "panel", panel: { kind: "person", name: m.from } })}
-              onContextMenu={(e) => who && showMenu(e, nickname(channel, m.from), (x) => [x.personItems({ channel, go, toast }, who)])}
+              onContextMenu={(e) => who && showMenu(e, nickname(channel, m.from), (x) => [x.personItems({ channel, go }, who)])}
             >
               {nickname(channel, m.from)}
             </button>
@@ -354,7 +355,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
                 {e}
               </button>
             ))}
-          {m.where.kind !== "theirs" && (
+          {m.where.kind !== "theirs" && !older && (
             <Suspense fallback={null}>
               <Gifs channel={channel} m={m} />
             </Suspense>
@@ -369,23 +370,12 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
               <Icon name="reply" size={14} />
             </button>
           )}
-          {!inThread && (
+          {!inThread && !older && (
             <button type="button" className="msg-tool" aria-label="Open thread" title="Open thread" onClick={() => go({ to: "panel", panel: { kind: "thread", seq: m.inThread ?? m.seq } })}>
               <Icon name="thread" size={14} />
             </button>
           )}
-          <button
-            type="button"
-            className="msg-tool"
-            aria-label="Copy text"
-            title="Copy text"
-            onClick={() =>
-              void navigator.clipboard?.writeText(m.text).then(
-                () => toast("Copied"),
-                () => {}
-              )
-            }
-          >
+          <button type="button" className="msg-tool" aria-label="Copy text" title="Copy text" onClick={() => copyText(m.text)}>
             <Icon name="copy" size={14} />
           </button>
         </div>

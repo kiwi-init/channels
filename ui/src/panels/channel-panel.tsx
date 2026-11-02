@@ -8,6 +8,7 @@ import { RoomReadyNotes } from "~/shell/room-ready"
 import { Avatar, cx, Field, Heading, IconButton } from "~/kit/bits"
 import { NotificationOff01Icon } from "@hugeicons/core-free-icons"
 import { GlyphIcon, Icon } from "~/kit/icons"
+import { choreLine } from "~/github/health"
 import { ago } from "~/kit/time"
 import type { Channel } from "~/model"
 import { nickname, roomPeople, seatRoot, shown } from "~/names"
@@ -18,6 +19,7 @@ import { Toggle } from "~/kit/bits"
 import { Confirm, InlineEdit } from "~/settings/controls"
 import { useAppCan } from "~/live/app-can"
 import { isMuted } from "~/live/quiet"
+import { copyText } from "~/kit/toasts"
 
 const REPO = /^[\w.-]+\/[\w.-]+$/
 
@@ -199,6 +201,7 @@ function Repos({ channel }: { channel: Channel }) {
       ) : (
         <p className="cpanel-none">{own ? "No repos yet. Agents work in the repos you add here." : "No repos yet."}</p>
       )}
+      {channel.github && <GithubTrouble channel={channel} />}
       {own && (
         <form
           className="cpanel-add"
@@ -221,6 +224,32 @@ function Repos({ channel }: { channel: Channel }) {
         </form>
       )}
     </>
+  )
+}
+
+function GithubTrouble({ channel }: { channel: Channel }) {
+  const health = channel.github
+  if (!health) return null
+  const missing = (health.status?.repos ?? []).filter((r) => r.installed === false)
+  if (!missing.length && !health.errors.length) return null
+  return (
+    <ul className="cpanel-list cpanel-gh-trouble">
+      {missing.map((r) => (
+        <li key={`install:${r.repo}`} className="cpanel-note">
+          Kiwi Channels isn't installed on {r.repo.split("/")[0]}, so GitHub sends {r.repo} nothing.{" "}
+          {r.install && (
+            <a href={r.install} target="_blank" rel="noreferrer">
+              Install it
+            </a>
+          )}
+        </li>
+      ))}
+      {health.errors.map((e) => (
+        <li key={`${e.what}:${e.repo ?? ""}`} className="cpanel-note">
+          {choreLine(e)}
+        </li>
+      ))}
+    </ul>
   )
 }
 
@@ -488,7 +517,7 @@ function RoomPeople({ channel, id, members, own }: { channel: Channel; id: strin
           type="button"
           className="btn is-primary is-small"
           onClick={() => {
-            app.actions.setRoomMembers(channel.code, id, [...editing])
+            void app.actions.setRoomMembers(channel.code, id, [...editing])
             setEditing(null)
           }}
         >
@@ -500,7 +529,7 @@ function RoomPeople({ channel, id, members, own }: { channel: Channel; id: strin
 }
 
 function Facts({ channel }: { channel: Channel }) {
-  const { app, toast } = useApp()
+  const { app } = useApp()
   const [clearing, setClearing] = useState<string | null>(null)
   const facts = channel.facts ?? []
   if (!facts.length) return <p className="cpanel-none">What agents note for everyone shows here. None yet.</p>
@@ -508,17 +537,7 @@ function Facts({ channel }: { channel: Channel }) {
     <ul className="cpanel-facts">
       {facts.map((f) => (
         <li key={f.key} className="cpanel-fact">
-          <button
-            type="button"
-            className="cpanel-fact-body"
-            title="Copy the value"
-            onClick={() =>
-              void navigator.clipboard.writeText(f.value).then(
-                () => toast(`Copied ${f.key}`),
-                () => toast(`Couldn't copy ${f.key}`)
-              )
-            }
-          >
+          <button type="button" className="cpanel-fact-body" title="Copy the value" onClick={() => copyText(f.value, `Copied ${f.key}`)}>
             <span className="cpanel-fact-line">
               <span className="cpanel-fact-key">{f.key}</span>
               <span className="cpanel-fact-value">{f.value}</span>

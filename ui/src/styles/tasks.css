@@ -6,7 +6,7 @@
 }
 
 .board-list {
-  max-width: calc(var(--col) + 2 * var(--gutter));
+  max-width: calc(var(--list) + 2 * var(--gutter));
   margin: 0 auto;
   padding: 24px var(--gutter) 48px;
   container-type: inline-size;

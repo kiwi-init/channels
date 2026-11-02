@@ -5,7 +5,7 @@ import { join, resolve } from "node:path";
 import { chromium } from "playwright-core";
 import { startLocalRelay } from "./local-relay.ts";
 import { harnessDist } from "./ui-harness.ts";
-import { approveSpec } from "./perf-ui.ts";
+import { approveSpec, unfold } from "./perf-ui.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
 const DIST = harnessDist(process.argv[2]);
@@ -149,6 +149,7 @@ try {
   await page.getByText("Smoke task").first().waitFor({ timeout: 30000 });
   await shot("general");
   await views.getByRole("button", { name: /^Specs/ }).click();
+  await unfold(page, "Smoke");
   await page.getByRole("main").getByText("Smoke task").first().waitFor({ timeout: 15000 });
   await shot("tasks");
   await views.getByRole("button", { name: /general/ }).click();

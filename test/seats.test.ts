@@ -166,6 +166,20 @@ test("ZCode: its own process holds the seat, over the Claude markers it passes t
   expect(baseName(here(zcode, chain("zsh", "zcode-cli")))).toBe("zcode");
 });
 
+test("Antigravity CLI: its conversation holds the seat, over the Claude markers it passes through, unless a harness runs nearer", () => {
+  const chain = (...names: string[]) => {
+    const procs = new Map(names.map((name, i) => [100 - i, { ppid: i === names.length - 1 ? 1 : 99 - i, name }]));
+    return { from: 100, lookup: (pid: number) => procs.get(pid) ?? null };
+  };
+  const agy = { ANTIGRAVITY_AGENT: "1", ANTIGRAVITY_CONVERSATION_ID: "conv-1" };
+  expect(here(agy, chain("sh", "agy", "zsh"))).toEqual({ harness: "agy", session: "conv-1", pid: 99 });
+  expect(here({ ...agy, CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "c1" }, chain("sh", "agy", "claude"))).toEqual({ harness: "agy", session: "conv-1", pid: 99 });
+  expect(here({ ...agy, CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "c1" }, chain("sh", "claude", "agy"))).toEqual({ harness: "claude", session: "c1" });
+  expect(here(agy, { from: 100, lookup: () => null })).toEqual({ harness: "agy", session: "conv-1" });
+  expect(here({ ANTIGRAVITY_AGENT: "1" }, chain("sh", "agy"))).toEqual({});
+  expect(baseName(here(agy, chain("sh", "agy")))).toBe("agy");
+});
+
 test("Pi: its marker names the harness; its extension's process and session hold the seat, unless a harness runs nearer", () => {
   const chain = (...names: string[]) => {
     const procs = new Map(names.map((name, i) => [100 - i, { ppid: i === names.length - 1 ? 1 : 99 - i, name }]));

@@ -4,9 +4,11 @@ import type { CachedRow } from "@kiwi/core/cache-row.ts";
 import { ChannelGone } from "@kiwi/core/client/relay-errors.ts";
 import type { HumanSession, RoomsSetting, SendOptions } from "@kiwi/core/client.ts";
 import type { JoinRequest, Member } from "@kiwi/core/membership.ts";
+import type { GithubChore, GithubHealth } from "@kiwi/core/github-health.ts";
 import { SNAPSHOT_TOO_LARGE, type Message } from "@kiwi/core/protocol.ts";
 import { fold, type ChannelState, type FoldBase, type GuardFloor, type Roster } from "@kiwi/core/state.ts";
 import { errorOf, linkOf, watches, type ChannelLink, type FollowEvent } from "./channel-ops.ts";
+import type { Reach } from "./history-fill.ts";
 import { openCached, planCached, readKept, rememberKept, rememberRow, rememberRows } from "./history.ts";
 import { markOnce } from "./marks.ts";
 import { ICON_LIVE } from "./icon-event.ts";
@@ -26,11 +28,19 @@ import { handOver, onceEach, openChannel, warmUp } from "./open.ts";
 import { dropWarm, keepWarm, warmOf, type Warm } from "./warm.ts";
 
 const HISTORY = 2_000;
+export const OLDER_PER_CLICK = 5_000;
+const OLDER_GAP_MS = 250;
 const KEEP_DELAY_MS = 3_000;
 const CLOCK_MS = 15_000;
 const GITHUB_SYNC_MS = 6 * 3_600_000;
+const OLDER_APP = /no such call/;
 
 type Connection = "connecting" | "live" | "reconnecting";
+
+export interface OlderHistory {
+  reach(): Promise<Reach>;
+  fetch(got?: (asked: number) => void): Promise<Reach>;
+}
 
 export const APP_BEACON_MS = 60_000;
 const ANSWER_GAP_MS = 500;
@@ -52,7 +62,9 @@ export interface ChannelHandle {
   pkOf: (name: string) => string | undefined;
   foldFrom: (messages: Message[], base: FoldBase | null) => ChannelState;
   snapshotTooBig: boolean;
+  github: GithubHealth | null;
   ready: boolean;
+  older: OlderHistory;
 }
 
 export interface ChannelStoreDeps {
@@ -118,7 +130,9 @@ export class ChannelStore {
   private reconciling = false;
   private reconcileAgain = false;
   private rulesBusy = false;
+  private fetchOlder: OlderHistory["fetch"] | null = null;
   private readonly githubSynced = new Map<string, number>();
+  private readonly githubHealth = signal<GithubHealth>({ status: null, errors: [], syncing: null });
 
   constructor(member: StoredMember, human?: HumanSession | null, deps?: ChannelStoreDeps) {
     this.ch = deps?.link ?? linkOf(member);
@@ -185,7 +199,9 @@ export class ChannelStore {
       pkOf: pkOf.value,
       foldFrom: foldFrom.value,
       snapshotTooBig: this.snapshotTooBig.value,
+      github: this.ch.isOwner ? this.githubHealth.value : null,
       ready: this.ready.value,
+      older: this.older,
     }));
   }
 
@@ -198,6 +214,11 @@ export class ChannelStore {
   };
 
   snapshot = (): ChannelHandle => this.handle.value;
+
+  readonly older: OlderHistory = {
+    reach: () => import("./history-fill.ts").then((f) => f.reach(this.ch.roomId, this.ch.pk)),
+    fetch: (got) => (this.fetchOlder ? this.fetchOlder(got) : Promise.reject(new Error("open the channel first"))),
+  };
 
   send = (body: string, opts: SendOptions): Promise<number> =>
     this.ch.send(body, opts).catch((err: unknown) => {
@@ -326,14 +347,18 @@ export class ChannelStore {
     let beat: ReturnType<typeof setInterval> | undefined;
     let answeredAt = 0;
     let indexing: "idle" | "running" | "again" | "off" = "idle";
-    const index = () => {
-      if (closed || indexing === "off") return;
-      if (indexing !== "idle") return void (indexing = "again");
+    let indexed: (() => void)[] = [];
+    const settle = () => {
+      const waiting = indexed;
+      indexed = [];
+      for (const done of waiting) done();
+    };
+    const pass = () => {
       indexing = "running";
       void import("./history-fill.ts")
         .then(({ indexArchive }) =>
           indexArchive(ch.roomId, ch.pk, {
-            index: (rows) => ch.indexRows(rows, { roster: this.rosterForFold.peek(), roomsFloor: this.roomsFloor.peek(), guardFloor: this.guardFloor.peek(), now: Date.now() }),
+            index: (rows, from) => ch.indexRows(rows, { roster: this.rosterForFold.peek(), roomsFloor: this.roomsFloor.peek(), guardFloor: this.guardFloor.peek(), now: Date.now() }, from),
             hidden: () => typeof document !== "undefined" && document.hidden,
             wait: (ms) => new Promise((done) => setTimeout(done, ms)),
             stopped: () => closed,
@@ -343,11 +368,51 @@ export class ChannelStore {
           (out) => {
             const again = indexing === "again";
             indexing = out === "unsupported" ? "off" : "idle";
-            if (again && out === "done") index();
+            if (again && out === "done") pass();
+            else settle();
           },
-          () => void (indexing = "off"),
+          () => {
+            indexing = "off";
+            settle();
+          },
         );
     };
+    const index = (): Promise<void> => {
+      if (closed || indexing === "off") return Promise.resolve();
+      const done = new Promise<void>((ok) => indexed.push(ok));
+      if (indexing === "idle") pass();
+      else indexing = "again";
+      return done;
+    };
+    let fetching: { done: Promise<Reach>; got: Set<(asked: number) => void> } | null = null;
+    const fetchOlder: OlderHistory["fetch"] = (got) => {
+      if (fetching) {
+        if (got) fetching.got.add(got);
+        return fetching.done;
+      }
+      const listeners = new Set(got ? [got] : []);
+      const done = import("./history-fill.ts")
+        .then(async ({ backfill, reach }) => {
+          const out = await backfill(ch.roomId, ch.pk, {
+            older: (before, limit) => ch.olderRows(before, limit),
+            hidden: () => false,
+            wait: (ms) => new Promise((ok) => setTimeout(ok, ms)),
+            stopped: () => closed,
+            cap: OLDER_PER_CLICK,
+            gap: OLDER_GAP_MS,
+            got: (asked) => {
+              for (const l of listeners) l(asked);
+            },
+          });
+          if (out === "failed") throw new Error("the relay didn't send older messages; try again in a minute");
+          await index();
+          return reach(ch.roomId, ch.pk);
+        })
+        .finally(() => (fetching = null));
+      fetching = { done, got: listeners };
+      return done;
+    };
+    this.fetchOlder = fetchOlder;
     const here = () => {
       if (closed) return;
       answeredAt = Date.now();
@@ -370,7 +435,7 @@ export class ChannelStore {
           ch.pk,
           batched.flatMap((b) => (b.row ? [b.row] : [])),
         ).then(
-          () => index(),
+          () => void index(),
           () => {},
         );
       }, 30);
@@ -395,7 +460,7 @@ export class ChannelStore {
           this.unread.value = [...this.unread.peek(), ev.seq].slice(-HISTORY);
           if (ev.row)
             void rememberRow(ch.roomId, ch.pk, ev.row).then(
-              () => index(),
+              () => void index(),
               () => {},
             );
           return;
@@ -494,7 +559,7 @@ export class ChannelStore {
           if (base || earlyBase) this.base.value = base;
           this.ready.value = true;
         });
-        index();
+        void index();
       },
     });
     warmUp(steps, was, HISTORY);
@@ -515,6 +580,8 @@ export class ChannelStore {
       });
     return () => {
       closed = true;
+      if (this.fetchOlder === fetchOlder) this.fetchOlder = null;
+      settle();
       stopLive?.();
       clearTimeout(flush);
       clearInterval(beat);
@@ -613,7 +680,7 @@ export class ChannelStore {
   }
 
   private drainGithub(): void {
-    if (this.ch.isOwner && this.state.peek().repos.length) this.ch.drainGithub().catch(() => {});
+    if (this.ch.isOwner && this.state.peek().repos.length) void this.chore("drain", () => this.ch.drainGithub());
   }
 
   private githubRules(): () => void {
@@ -626,25 +693,43 @@ export class ChannelStore {
     const state = this.state.peek();
     if (!this.ch.isOwner || !this.caughtUp.peek() || !state.repos.length || this.rulesBusy) return;
     this.rulesBusy = true;
-    this.ch
-      .syncGithubRules(state.repos, [...state.github.rules.values()])
-      .catch(() => {})
-      .then(() => this.ch.syncGithubReleases(state.repos, [...state.github.releases.values()].flat()))
-      .catch(() => {})
-      .then(() => this.syncGithub(state.repos))
-      .catch(() => {})
-      .finally(() => {
-        this.rulesBusy = false;
-      });
+    void this.githubChores(state).finally(() => {
+      this.rulesBusy = false;
+    });
   }
 
-  private async syncGithub(repos: readonly string[]): Promise<void> {
-    for (const repo of repos) {
+  private async githubChores(state: ChannelState): Promise<void> {
+    const status = await this.chore("status", () => this.ch.githubStatus());
+    if (status) this.health({ status });
+    await this.chore("rules", () => this.ch.syncGithubRules(state.repos, [...state.github.rules.values()]));
+    await this.chore("releases", () => this.ch.syncGithubReleases(state.repos, [...state.github.releases.values()].flat()));
+    for (const repo of state.repos) {
       const key = repo.toLowerCase();
       if (Date.now() - (this.githubSynced.get(key) ?? -Infinity) < GITHUB_SYNC_MS) continue;
-      await this.ch.syncGithub(repo, this.state.peek().github);
-      this.githubSynced.set(key, Date.now());
+      this.health({ syncing: repo });
+      const sent = await this.chore("sync", () => this.ch.syncGithub(repo, this.state.peek().github), repo);
+      this.health({ syncing: null });
+      if (sent !== null) this.githubSynced.set(key, Date.now());
     }
+  }
+
+  private health(change: Partial<GithubHealth>): void {
+    this.githubHealth.value = { ...this.githubHealth.peek(), ...change };
+  }
+
+  private chore<T>(what: GithubChore, run: () => Promise<T>, repo?: string): Promise<T | null> {
+    const others = () => this.githubHealth.peek().errors.filter((e) => e.what !== what || e.repo !== repo);
+    return run().then(
+      (value) => {
+        if (this.githubHealth.peek().errors.length) this.health({ errors: others() });
+        return value;
+      },
+      (err: unknown) => {
+        const message = err instanceof Error ? err.message : String(err);
+        if (!OLDER_APP.test(message)) this.health({ errors: [...others(), { what, ...(repo ? { repo } : {}), message, at: Date.now() }] });
+        return null;
+      },
+    );
   }
 
   private every(ms: number, run: () => void): () => void {

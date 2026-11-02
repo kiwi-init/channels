@@ -1,5 +1,6 @@
 import * as Effect from "effect/Effect";
 import { cleanGithubNote, GITHUB_SYNC_LISTS, MAX_GITHUB_ITEMS, wellFormedEvent, type GithubNote, type MergeMethod } from "../protocol.ts";
+import type { GithubStatus } from "../github-health.ts";
 import { githubNews, type GithubRelease, type GithubRules, type GithubState } from "../state.ts";
 import type { ChannelCore } from "./core.ts";
 import type { Refused } from "./errors.ts";
@@ -43,6 +44,7 @@ export interface GithubFx {
   syncGithubRules(repos: readonly string[], known: readonly GithubRules[]): Effect.Effect<number, Refused, Relay>;
   syncGithubReleases(repos: readonly string[], known: readonly GithubRelease[]): Effect.Effect<number, Refused, Relay>;
   syncGithub(repo: string, known: GithubState): Effect.Effect<number, Refused, Relay>;
+  githubStatus(): Effect.Effect<GithubStatus, Refused, Relay>;
   githubDiff(repo: string, sha: string): Effect.Effect<GithubDiff, Refused, Relay>;
   postReviewCheck(c: ReviewCheck): Effect.Effect<{ url: string | null }, Refused, Relay>;
   commentOnPr(repo: string, number: number, body: string): Effect.Effect<{ url: string | null }, Refused, Relay>;
@@ -127,6 +129,11 @@ export class ChannelGithub {
         }
       }
       return sent;
+    }),
+
+    githubStatus: Effect.fn("Channel.githubStatus")({ self: this }, function* (this: ChannelGithub) {
+      yield* this.ch.ownerOnly();
+      return yield* this.ch.request<GithubStatus>("/github/status");
     }),
 
     syncGithub: Effect.fn("Channel.syncGithub")({ self: this }, function* (this: ChannelGithub, repo: string, known: GithubState) {

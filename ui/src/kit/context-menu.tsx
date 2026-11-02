@@ -12,6 +12,9 @@ export function fitted(x: number, y: number, width: number, height: number, room
   }
 }
 
+export const placed = (menu: Pick<OpenMenu, "x" | "y" | "above">, width: number, height: number, roomX: number, roomY: number): { left: number; top: number } =>
+  fitted(menu.x, menu.above ? menu.y - height - 6 : menu.y, width, height, roomX, roomY)
+
 export function stepped(key: string, at: number, count: number): number | null {
   if (key === "ArrowDown") return at < 0 || at === count - 1 ? 0 : at + 1
   if (key === "ArrowUp") return at <= 0 ? count - 1 : at - 1
@@ -26,7 +29,7 @@ export default function Menu({ menu }: { menu: OpenMenu }) {
   const [asking, setAsking] = useState<MenuItem | null>(null)
   useLayoutEffect(() => {
     const rect = box.current?.getBoundingClientRect()
-    if (rect) setPlace(fitted(menu.x, menu.y, rect.width, rect.height, window.innerWidth, window.innerHeight))
+    if (rect) setPlace(placed(menu, rect.width, rect.height, window.innerWidth, window.innerHeight))
     box.current?.focus()
   }, [menu])
   useEffect(() => {

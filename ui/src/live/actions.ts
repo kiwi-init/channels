@@ -14,6 +14,7 @@ import { createPerson, bridge, secrets } from "@kiwi/secrets/secrets.ts"
 import { isSignInGone } from "@kiwi/channel/session.ts"
 import { announce } from "~/kit/toasts"
 import {
+  dismissMoved,
   enrollAnswer,
   enrollBegin,
   enrollCancel,
@@ -57,7 +58,7 @@ async function tried<T>(what: string, run: () => Promise<T>): Promise<T | null> 
     return await run()
   } catch (err) {
     // The person sees why in the announcement; the caller gets null and stays where it was.
-    announce(`${what}: ${say(err)}`)
+    announce(`${what}: ${say(err)}`, "error")
     return null
   }
 }
@@ -263,7 +264,11 @@ export function makeActions(): Actions {
       }
     },
     addRoom: (code, typed, members) => tried("Room not made", async () => (await manage()).addRoom(code, typed, members)),
-    setRoomMembers: (code, id, members) => attempt("Who's in didn't change", async () => (await manage()).setRoomMembers(code, id, members)),
+    setRoomMembers: async (code, id, members) =>
+      (await tried("Who's in didn't change", async () => {
+        await (await manage()).setRoomMembers(code, id, members)
+        return true
+      })) ?? false,
     setGithubWrite: (code, on) => attempt("Not changed", async () => (await manage()).setGithubWrite(code, on)),
     setBranchPrefix: (code, typed) => attempt("Branch prefix not changed", async () => (await manage()).setBranchPrefix(code, typed)),
     renameRoom: (code, id, typed) => attempt("Room not renamed", async () => (await manage()).renameRoom(code, id, typed)),
@@ -335,6 +340,9 @@ export function makeActions(): Actions {
       }),
     setPrefs,
     setMute: (code, room, on) => void rare().then((r) => r.setMute(code, room, on)),
+    searchOlder: (code, query, before) => import("~/live/older").then((o) => o.searchOlder(code, query, before)),
+    olderAround: (code, seq) => import("~/live/older").then((o) => o.olderAround(code, seq)),
+    fetchOlder: (code, got) => import("~/live/older").then((o) => o.fetchOlder(code, got)),
     snooze: (until) => void rare().then((r) => r.snooze(until)),
     forgetComputer: (id) => void manage().then((m) => m.forgetComputer(id)),
     linkGithub: () => attempt("GitHub not linked", linkGithub),
@@ -367,6 +375,7 @@ export function makeActions(): Actions {
         if (!b) throw new Error("the new look comes with the Channels desktop app")
         await b.applyUi()
       }),
+    dismissMoved: () => attempt("Couldn't put the note away", dismissMoved),
     signOut: () =>
       attempt("Couldn't sign out", async () => {
         const b = bridge()
@@ -389,8 +398,8 @@ export function makeActions(): Actions {
     enrollAnswer: (id) => attempt("Couldn't answer the device", () => enrollAnswer(id)),
     enrollConfirm,
     enrollDeny: (id) => attempt("Couldn't turn the device away", () => enrollDeny(id)),
-    forgetDevice: (id) => attempt("Couldn't forget the device", () => forgetDevice(id)),
-    renewDevice: (id) => attempt("Couldn't renew the device", () => renewDevice(id)),
+    forgetDevice: (...ids) => attempt("Couldn't forget the device", () => forgetDevice(...ids)),
+    renewDevice: (...ids) => attempt("Couldn't renew the device", () => renewDevice(...ids)),
     recoveryWords: () => tried("Couldn't make the recovery words", recoveryWords),
     recoverySave: (typed) => tried("Couldn't set up the recovery key", () => recoverySave(typed)),
     recoveryDrop: () => attempt("Couldn't put the words away", recoveryDrop),

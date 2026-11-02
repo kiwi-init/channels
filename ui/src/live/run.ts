@@ -41,5 +41,5 @@ export function setup(code: string): Run {
 export const say = (err: unknown): string => (err instanceof Error ? err.message : String(err))
 
 export function attempt(what: string, run: () => Promise<unknown>): void {
-  void (async () => run())().catch((err: unknown) => announce(`${what}: ${say(err)}`))
+  void (async () => run())().catch((err: unknown) => announce(`${what}: ${say(err)}`, "error"))
 }

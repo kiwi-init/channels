@@ -1,4 +1,5 @@
 import type { TextFont } from "@kiwi/app/theme.ts"
+import type { GithubHealth } from "@kiwi/core/github-health.ts"
 import type { HookHarness, HookState } from "@kiwi/core/harnesses.ts"
 import type { Personality } from "@kiwi/core/personality.ts"
 import type { GithubNote, Step, StepReply } from "@kiwi/core/protocol.ts"
@@ -245,6 +246,20 @@ export interface Room {
   muted?: true
 }
 
+export interface OlderHit {
+  seq: number
+  from: string
+  text: string
+  at: number
+  where: Where
+}
+
+export interface OlderSearch {
+  state: "ready" | "indexing" | "none"
+  hits: OlderHit[]
+  more: { since: number | null; upTo: number } | null
+}
+
 export interface Direct {
   with: string
   unread: number
@@ -366,6 +381,7 @@ export interface JoinAsk {
   runs?: string
   machine?: string
   forgotten?: true
+  revoked?: true
   sponsor?: string
   key?: string
   said?: { machine?: string; tools?: string[]; repo?: string; outside: boolean } | "nothing"
@@ -487,6 +503,7 @@ export interface Channel {
   repos: string[]
   prs?: PullRequest[]
   issues?: Issue[]
+  github?: GithubHealth
   githubWrite?: boolean
   branchPrefix?: string
   rooms: Room[]
@@ -530,6 +547,7 @@ export interface Account {
   version: string
   update?: { version: string; ready: boolean; state?: "downloading" | "ready" | "available"; progress?: number; blocked?: true }
   uiUpdate?: { version: string }
+  moved?: { from?: string; to: string }
   key?: string
   personPk?: string
   relay?: string
@@ -580,6 +598,7 @@ export interface Device {
   as: "desktop" | "phone" | "computer"
   until: number
   thisOne: boolean
+  app?: string
 }
 
 export interface RecoveryState {
@@ -703,7 +722,7 @@ export interface Actions {
   chooseFolder(): Promise<string | null>
   addRoom(code: string, name: string, members?: string[]): Promise<string | null>
   renameRoom(code: string, id: string, name: string): void
-  setRoomMembers(code: string, id: string, members: string[]): void
+  setRoomMembers(code: string, id: string, members: string[]): Promise<boolean>
   setIcon(code: string, file: File | null): void
   renameChannel(code: string, title: string): void
   clearFact(code: string, key: string): void
@@ -726,6 +745,9 @@ export interface Actions {
   setName(name: string): void
   setPrefs(prefs: Partial<Prefs>): void
   setMute(code: string, room: string | null, on: boolean): void
+  searchOlder(code: string, query: string, before: number): Promise<OlderSearch>
+  olderAround(code: string, seq: number): Promise<OlderHit[] | null>
+  fetchOlder(code: string, got: (asked: number) => void): Promise<void>
   snooze(until: "1h" | "8h" | "tomorrow" | null): void
   forgetComputer(id: string): void
   linkGithub(): void
@@ -736,14 +758,15 @@ export interface Actions {
   setRelay(url: string): Promise<string | null>
   windowControl(action: "minimize" | "maximize" | "close"): void
   applyUi(): void
+  dismissMoved(): void
   signOut(): void
   setNewMembers(code: string, can: "read" | "write"): void
   setNewPowers(code: string, powers: Powers): void
   enrollAnswer(id: string): void
   enrollConfirm(id: string, digits: string): Promise<{ ok: true } | { ok: false; left: number }>
   enrollDeny(id: string): void
-  forgetDevice(id: string): void
-  renewDevice(id: string): void
+  forgetDevice(...ids: string[]): void
+  renewDevice(...ids: string[]): void
   recoveryWords(): Promise<string[] | null>
   recoverySave(typed: { at: number; word: string }[]): Promise<RecoverySaved | null>
   recoveryDrop(): void

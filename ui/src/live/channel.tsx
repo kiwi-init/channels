@@ -80,7 +80,7 @@ function useShown(): boolean {
 
 export const OpenMember = memo(function OpenMember({ member, view }: { member: StoredMember; view: View }) {
   const live = useChannel(member)
-  const { ch, state, messages, roster, online, requests, isOwner, connection, gone, ready, send, refreshRequests, refreshRoster, foldFrom, marks, pkOf } = live
+  const { ch, state, messages, roster, online, requests, isOwner, connection, gone, ready, send, refreshRequests, refreshRoster, foldFrom, marks, pkOf, github, older } = live
   const me = member.identity.name
   const roomId = member.access.roomId
   const code = member.code
@@ -155,6 +155,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       repos: state.repos,
       prs,
       issues,
+      ...(github ? { github } : {}),
       ...(state.githubWrite !== null ? { githubWrite: true } : {}),
       ...(state.branchPrefix ? { branchPrefix: state.branchPrefix } : {}),
       rooms,
@@ -193,6 +194,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       state.repos,
       prs,
       issues,
+      github,
       state.githubWrite,
       state.branchPrefix,
       rooms,
@@ -277,8 +279,8 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   )
 
   const run = useMemo(
-    (): Run => ({ code, roomId, me, isOwner, ch, state, messages, roster, requests, send, post, retry, discard, refreshRequests, refreshRoster, foldFrom }),
-    [code, roomId, me, isOwner, ch, state, messages, roster, requests, send, post, retry, discard, refreshRequests, refreshRoster, foldFrom]
+    (): Run => ({ code, roomId, me, isOwner, ch, state, messages, roster, requests, send, post, retry, discard, refreshRequests, refreshRoster, foldFrom, older }),
+    [code, roomId, me, isOwner, ch, state, messages, roster, requests, send, post, retry, discard, refreshRequests, refreshRoster, foldFrom, older]
   )
 
   useLayoutEffect(() => {
@@ -309,7 +311,9 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
 
   useEffect(() => {
     for (const { name, persona } of arrivals(code, people))
-      void import("~/live/manage").then((m) => m.setPersona(code, name, persona)).catch((e: unknown) => announce(`Personality not set on ${name}: ${e instanceof Error ? e.message : String(e)}`))
+      void import("~/live/manage")
+        .then((m) => m.setPersona(code, name, persona))
+        .catch((e: unknown) => announce(`Personality not set on ${name}: ${e instanceof Error ? e.message : String(e)}`, "error"))
   }, [code, people])
 
   const toSeal = leaversToSeal(state, me)

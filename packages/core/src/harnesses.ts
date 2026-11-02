@@ -1,7 +1,7 @@
 import { readHarnessOptions, type HarnessOptions } from "./launch-options.ts";
 import { isWakeVia, type WakeHarness, type WakeVia } from "./wake.ts";
 
-export const KNOWN_HARNESSES = ["claude", "codex", "gemini", "cursor", "grok", "opencode", "kimi", "mimo", "pi"] as const satisfies readonly WakeHarness[];
+export const KNOWN_HARNESSES = ["claude", "codex", "gemini", "cursor", "grok", "opencode", "kimi", "mimo", "pi", "agy"] as const satisfies readonly WakeHarness[];
 
 export type KnownHarness = (typeof KNOWN_HARNESSES)[number];
 

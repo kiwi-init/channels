@@ -1,5 +1,17 @@
 import { accountClient, type AccountClient } from "@kiwi/core/account.ts";
-import { approvingDevice, certUntil, dueForRenewal, listedComputer, nextLink, readDeviceList, rootLink, type DeviceLink, type DeviceLinkBody, type DeviceList } from "@kiwi/core/devices.ts";
+import {
+  approvingDevice,
+  certUntil,
+  dueForRenewal,
+  listedComputer,
+  nextLink,
+  readDeviceList,
+  rootLink,
+  runnerHosts,
+  type DeviceLink,
+  type DeviceLinkBody,
+  type DeviceList,
+} from "@kiwi/core/devices.ts";
 import { askToEnroll, enrollDigits, enrollMailbox, enrollNonce, readEnrollGrant, revealMatches, type EnrollGrant, type Enrollment } from "@kiwi/core/enroll.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
 import { personFingerprint } from "@kiwi/core/fingerprint.ts";
@@ -247,8 +259,13 @@ export function createDeviceHost(deps: DeviceHostDeps): DeviceHost {
     async list() {
       const s = await sync();
       if (!s || !(await refresh(s))) return null;
-      const list = await readList(deps.links());
-      return list.devices.map((d) => ({ id: d.device, label: d.label, os: d.os, as: d.as, approve: d.approve, until: d.until, thisOne: d.device === s.device.pk }));
+      const links = deps.links();
+      const list = await readList(links);
+      const hosts = runnerHosts(list, links);
+      return list.devices.map((d) => {
+        const app = hosts.get(d.device);
+        return { id: d.device, label: d.label, os: d.os, as: d.as, approve: d.approve, until: d.until, thisOne: d.device === s.device.pk, ...(app ? { app } : {}) };
+      });
     },
 
     async forget(target) {

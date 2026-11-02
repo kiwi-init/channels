@@ -26,7 +26,7 @@ import {
   type Step,
 } from "@kiwi/core/protocol.ts";
 import { chooseThread, inGeneral, longForGeneral, parseTaskId, wentTo } from "@kiwi/core/state.ts";
-import { bareHandleNote } from "../handles.ts";
+import { bareHandleNote, outsideRoomNote } from "../handles.ts";
 import { args, opt, unexpectedOptions } from "../args.ts";
 import { parseWhere } from "../where.ts";
 import { type Command, die, noteRead, offlineOk, out, type Quit, session } from "../context.ts";
@@ -82,7 +82,7 @@ export const messageCommands: Record<string, Command> = {
         });
         const room = opt.room ?? where.room;
         const general = chosen.task === undefined && !chosen.dm && (!room || room.toLowerCase() === "general") && (re.length === 0 || inGeneral(state, re[0]!));
-        const notes = [general ? longForGeneral(state, s.me, body) : null, bareHandleNote(state, body)].filter((n) => n !== null);
+        const notes = [general ? longForGeneral(state, s.me, body) : null, bareHandleNote(state, body), outsideRoomNote(state, room, body)].filter((n) => n !== null);
         if (!asking || !opt.wait) {
           out(`${asking ? "asked" : "sent"} #${seq}${wentTo(chosen)}`);
           for (const n of notes) out(n);

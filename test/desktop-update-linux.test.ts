@@ -6,6 +6,7 @@ import { join } from "node:path";
 
 import { appImageName, type LinuxArch } from "../desktop/scripts/linux-files.ts";
 import { useHost } from "../desktop/src/host.ts";
+import { ENTRY_FILE } from "../desktop/src/linux-entry.ts";
 import { fakeHost, type FakeHost } from "./fake-host.ts";
 import { throwawayKey } from "./minisign-sign.ts";
 
@@ -18,16 +19,35 @@ interface Updater {
   checkForUpdate(): Promise<Checked>;
   updateState(): Checked | null;
   applyUpdate(relaunch: boolean): boolean;
+  movedApp(): { from: string; to: string } | null;
+  dismissMovedApp(): void;
 }
 
 const platformWas = process.platform;
-const envWas = { TMPDIR: process.env["TMPDIR"], APPIMAGE: process.env["APPIMAGE"], APPDIR: process.env["APPDIR"] };
+const envWas = {
+  TMPDIR: process.env["TMPDIR"],
+  APPIMAGE: process.env["APPIMAGE"],
+  APPDIR: process.env["APPDIR"],
+  HOME: process.env["HOME"],
+  XDG_DATA_HOME: process.env["XDG_DATA_HOME"],
+  XDG_CONFIG_HOME: process.env["XDG_CONFIG_HOME"],
+};
 const realFetch = globalThis.fetch;
 const root = mkdtempSync(join(tmpdir(), "kiwi-uplinux-"));
 const tmp = join(root, "tmp");
 mkdirSync(tmp);
 Object.defineProperty(process, "platform", { value: "linux", configurable: true });
 process.env["TMPDIR"] = tmp;
+
+function homeAt(name: string): string {
+  const home = join(root, name);
+  mkdirSync(home);
+  process.env["HOME"] = home;
+  process.env["XDG_DATA_HOME"] = join(home, ".local", "share");
+  process.env["XDG_CONFIG_HOME"] = join(home, ".config");
+  return home;
+}
+homeAt("home");
 
 const restore = (name: keyof typeof envWas): void => {
   const was = envWas[name];
@@ -39,6 +59,9 @@ afterAll(() => {
   restore("TMPDIR");
   restore("APPIMAGE");
   restore("APPDIR");
+  restore("HOME");
+  restore("XDG_DATA_HOME");
+  restore("XDG_CONFIG_HOME");
   globalThis.fetch = realFetch;
   for (const dir of readdirSync(root)) chmodSync(join(root, dir), 0o755);
   rmSync(root, { recursive: true, force: true });
@@ -209,13 +232,100 @@ test("an AppImage whose release has no SHA256SUMS.minisig is never staged: it fe
   expect(downloads()).toEqual([]);
 });
 
-test("an AppImage in a folder it can't write says it can't update itself and downloads nothing", async () => {
+test("an AppImage in a folder it can't write updates into ~/Applications, relaunches from there, leaves the old file, and the new one says so until dismissed (T1304)", async () => {
   const appImage = installed("ReadOnly");
   chmodSync(join(root, "ReadOnly"), 0o555);
+  const home = homeAt("home-readonly");
+  const data = join(root, "data-readonly");
+  release();
+  const first = await launch(appImage, data);
+  expect((await first.u.checkForUpdate()).state).toBe("downloading");
+  expect(await settled(first.u)).toEqual({ version: "0.27.0", state: "ready", url: PAGE });
+  expect(first.u.applyUpdate(true)).toBe(true);
+  const moved = join(home, "Applications", "Channels.AppImage");
+  expect(readFileSync(moved, "utf8")).toBe(NEW);
+  expect(statSync(moved).mode & 0o777).toBe(0o755);
+  expect(readFileSync(appImage, "utf8")).toBe(OLD);
+  expect(first.fake.did).toContain(`relaunch ${moved}`);
+  expect(readFileSync(join(home, ".local", "share", "applications", ENTRY_FILE), "utf8")).toContain(`"${moved}"`);
+  expect(downloads()).toEqual([]);
+  expect(first.u.movedApp()).toBeNull();
+  const next = await launch(moved, data);
+  expect(next.u.movedApp()).toEqual({ from: appImage, to: "~/Applications/Channels.AppImage" });
+  expect(next.u.movedApp()).toEqual({ from: appImage, to: "~/Applications/Channels.AppImage" });
+  next.u.dismissMovedApp();
+  expect(next.u.movedApp()).toBeNull();
+  const old = await launch(appImage, data);
+  expect(old.u.movedApp()).toBeNull();
+});
+
+test("an AppImage in a folder it can't write that quits with the update ready moves it home and points its menu entry there (T1304)", async () => {
+  const appImage = installed("ReadOnlyQuit");
+  chmodSync(join(root, "ReadOnlyQuit"), 0o555);
+  const home = homeAt("home-quit");
+  release();
+  const { fake, u } = await launch(appImage, join(root, "data-quit"));
+  await u.checkForUpdate();
+  expect((await settled(u))?.state).toBe("ready");
+  expect(u.applyUpdate(false)).toBe(true);
+  const moved = join(home, "Applications", "Channels.AppImage");
+  expect(readFileSync(moved, "utf8")).toBe(NEW);
+  expect(fake.did.filter((d) => d.startsWith("relaunch"))).toEqual([]);
+  expect(readFileSync(join(home, ".local", "share", "applications", ENTRY_FILE), "utf8")).toContain(`"${moved}"`);
+});
+
+test("an AppImage that can't write its folder or ~/Applications updates into $XDG_DATA_HOME/Channels (T1304)", async () => {
+  const appImage = installed("ReadOnlyNoApps");
+  chmodSync(join(root, "ReadOnlyNoApps"), 0o555);
+  const home = homeAt("home-no-apps");
+  chmodSync(home, 0o555);
+  process.env["XDG_DATA_HOME"] = join(root, "xdg-data");
+  process.env["XDG_CONFIG_HOME"] = join(root, "xdg-config");
+  release();
+  const data = join(root, "data-no-apps");
+  const { fake, u } = await launch(appImage, data);
+  await u.checkForUpdate();
+  expect((await settled(u))?.state).toBe("ready");
+  expect(u.applyUpdate(true)).toBe(true);
+  const moved = join(root, "xdg-data", "Channels", "Channels.AppImage");
+  expect(readFileSync(moved, "utf8")).toBe(NEW);
+  expect(existsSync(join(home, "Applications"))).toBe(false);
+  expect(fake.did).toContain(`relaunch ${moved}`);
+  const next = await launch(moved, data);
+  expect(next.u.movedApp()).toEqual({ from: appImage, to: moved });
+});
+
+test("an AppImage that can't write its folder nor anywhere in its home says it can't update itself and downloads nothing", async () => {
+  const appImage = installed("ReadOnlyNowhere");
+  chmodSync(join(root, "ReadOnlyNowhere"), 0o555);
+  chmodSync(homeAt("home-nowhere"), 0o555);
   const seen = release();
-  const { u } = await launch(appImage, join(root, "data-readonly"));
+  const { u } = await launch(appImage, join(root, "data-nowhere"));
   expect(await u.checkForUpdate()).toEqual({ version: "0.27.0", state: "available", url: PAGE, blocked: true });
   expect(seen).toEqual([LATEST]);
+});
+
+test("a move into ~/Applications that fails leaves the AppImage, says it can't update itself, and the next launch doesn't download that version again (T1304)", async () => {
+  const appImage = installed("ReadOnlyFails");
+  chmodSync(join(root, "ReadOnlyFails"), 0o555);
+  const home = homeAt("home-fails");
+  const data = join(root, "data-fails");
+  release();
+  const first = await launch(appImage, data);
+  await first.u.checkForUpdate();
+  expect((await settled(first.u))?.state).toBe("ready");
+  chmodSync(home, 0o555);
+  expect(first.u.applyUpdate(true)).toBe(false);
+  expect(readFileSync(appImage, "utf8")).toBe(OLD);
+  expect(first.u.updateState()).toEqual({ version: "0.27.0", state: "available", url: PAGE, blocked: true });
+  expect(first.fake.did.filter((d) => d.startsWith("relaunch"))).toEqual([]);
+  expect(downloads()).toEqual([]);
+  chmodSync(home, 0o755);
+  const seen = release();
+  const next = await launch(appImage, data);
+  expect(await next.u.checkForUpdate()).toEqual({ version: "0.27.0", state: "available", url: PAGE, blocked: true });
+  expect(seen).toEqual([LATEST]);
+  expect(next.u.movedApp()).toBeNull();
 });
 
 test("a Linux app that isn't an AppImage never swaps itself: it's offered the release page and downloads nothing", async () => {

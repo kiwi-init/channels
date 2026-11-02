@@ -10,6 +10,7 @@ import { newRoomKey, openRoomKey, openRoomMeta, sealRoom, type RoomMeta } from "
 import { fold, rosterOf } from "@kiwi/core/state.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { briefText } from "../src/brief.ts";
+import { outsideRoomNote } from "../src/cli/handles.ts";
 import { formatRooms } from "@kiwi/core/format.ts";
 import { runAgent } from "../src/agent.ts";
 import { joinAgent, joinPerson, pairComputer, setupChannel, type OwnerSetup } from "./owner.ts";
@@ -219,6 +220,18 @@ describe("a private room's key and what it hides (T681)", () => {
     const said = await ana.ch.send("bo is gone", { room: id });
     expect((await state(ana.ch)).rejected.get(said)).toBeUndefined();
     expect(await s.ownerCh.pruneRooms()).toEqual([]);
+  });
+
+  test("kiwi send notes a mention of someone outside the private room, who can't read it (T2627)", async () => {
+    const id = await s.ownerCh.makeRoom("quiet-corner", [{ name: "ana", pk: ana.id.pk, xpk: ana.id.xpk! }]);
+    const seen = await state(s.ownerCh);
+    expect(outsideRoomNote(seen, id, "@ana and @tia, have a look")).toBe(
+      "@tia isn't in #quiet-corner, so they don't see this message: someone in the room adds them from the app, or say it where they can read it.",
+    );
+    expect(outsideRoomNote(seen, "#quiet-corner", "@tia @tib")).toStartWith("@tia, @tib aren't in #quiet-corner, so they don't see this message");
+    expect(outsideRoomNote(seen, id, `@ana and @${s.owner.name}, have a look`)).toBeNull();
+    expect(outsideRoomNote(seen, "general", "@tia")).toBeNull();
+    expect(outsideRoomNote(seen, undefined, "@tia")).toBeNull();
   });
 
   test("an agent in a private room is told so in its brief, and kiwi rooms says who's in it (T681)", async () => {
