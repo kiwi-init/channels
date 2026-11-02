@@ -14,6 +14,7 @@ import { createPerson, bridge, secrets } from "@kiwi/secrets/secrets.ts"
 import { isSignInGone } from "@kiwi/channel/session.ts"
 import { announce } from "~/kit/toasts"
 import {
+  dismissMoved,
   enrollAnswer,
   enrollBegin,
   enrollCancel,
@@ -370,6 +371,7 @@ export function makeActions(): Actions {
         if (!b) throw new Error("the new look comes with the Channels desktop app")
         await b.applyUi()
       }),
+    dismissMoved: () => attempt("Couldn't put the note away", dismissMoved),
     signOut: () =>
       attempt("Couldn't sign out", async () => {
         const b = bridge()

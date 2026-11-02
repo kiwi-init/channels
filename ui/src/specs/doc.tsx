@@ -10,6 +10,8 @@ import { nickname } from "~/names"
 import { commentsOf, faceOf, lineDiff, quoteIn, type Comment } from "~/specs/read"
 
 const WIDE_PX = 940
+const TALK_SHOWN = 3
+const DIFF_CONTEXT = 1
 const RAIL_GAP = 8
 const BLOCKS = "p, li, h1, h2, h3, h4, h5, h6, td, th, pre"
 
@@ -46,6 +48,26 @@ function anchorOf(blocks: HTMLElement[], quote: string): HTMLElement | undefined
   return undefined
 }
 
+function placeRail(el: HTMLElement): void {
+  const talk = el.querySelector<HTMLElement>(".spec-rail-talk")
+  const items = [...el.querySelectorAll<HTMLElement>("[data-at]")].sort((a, b) => Number(a.dataset.at) - Number(b.dataset.at))
+  const room = talk ? talk.offsetHeight + RAIL_GAP : 0
+  const first = items.length ? Number(items[0]!.dataset.at) : Infinity
+  const above = !!talk && room <= first
+  if (talk && above) talk.style.top = "0px"
+  let floor = above ? room : 0
+  for (const item of items) {
+    const top = Math.max(Number(item.dataset.at), floor)
+    item.style.top = `${top}px`
+    floor = top + item.offsetHeight + RAIL_GAP
+  }
+  if (talk && !above) {
+    talk.style.top = `${floor}px`
+    floor += room
+  }
+  el.style.minHeight = `${floor}px`
+}
+
 export function SpecDoc({ channel, spec, editing, onEditing }: { channel: Channel; spec: Spec; editing: boolean; onEditing: (on: boolean) => void }) {
   const names = useNames(channel)
   const tasks = useTaskIds(channel)
@@ -59,6 +81,7 @@ export function SpecDoc({ channel, spec, editing, onEditing }: { channel: Channe
   const [pop, setPop] = useState<{ text: string; top: number; at: number } | null>(null)
   const [draft, setDraft] = useState<{ quote: string; top: number } | null>(null)
   const [diff, setDiff] = useState(!!spec.changed)
+  const [allTalk, setAllTalk] = useState(false)
   const anchored = comments.filter((c) => c.quote && tops.has(c.m.seq))
   const loose = comments.filter((c) => !c.quote || !tops.has(c.m.seq) || !wide)
   const key = `${spec.text}\n${comments.map((c) => `${c.m.seq}:${c.quote ?? ""}`).join("\n")}`
@@ -95,17 +118,17 @@ export function SpecDoc({ channel, spec, editing, onEditing }: { channel: Channe
   }, [key, editing, channel, spec.ask, wide, diff])
 
   useLayoutEffect(() => {
-    const el = rail.current
-    if (!el) return
-    let floor = 0
-    const items = [...el.querySelectorAll<HTMLElement>("[data-at]")].sort((a, b) => Number(a.dataset.at) - Number(b.dataset.at))
-    for (const item of items) {
-      const top = Math.max(Number(item.dataset.at), floor)
-      item.style.top = `${top}px`
-      floor = top + item.offsetHeight + RAIL_GAP
-    }
-    el.style.minHeight = `${floor}px`
+    if (rail.current) placeRail(rail.current)
   })
+
+  useLayoutEffect(() => {
+    const el = rail.current
+    const talk = el?.querySelector<HTMLElement>(".spec-rail-talk")
+    if (!el || !talk) return
+    const watch = new ResizeObserver(() => placeRail(el))
+    watch.observe(talk)
+    return () => watch.disconnect()
+  }, [wide])
 
   useEffect(() => {
     const el = doc.current
@@ -123,6 +146,29 @@ export function SpecDoc({ channel, spec, editing, onEditing }: { channel: Channe
   }, [])
 
   if (editing) return <Editor channel={channel} spec={spec} onDone={() => onEditing(false)} />
+
+  const talk = (
+    <section className="spec-talk" aria-label="Comments on the whole spec">
+      <h2 className="spec-talk-h">
+        {loose.length ? `${loose.length} ${loose.length === 1 ? "comment" : "comments"}` : "Comments"}
+        <span className="dimmer">select any words in the spec to comment on them</span>
+        {loose.length > TALK_SHOWN && (
+          <button type="button" className="btn is-quiet is-small" aria-expanded={allTalk} onClick={() => setAllTalk(!allTalk)}>
+            {allTalk ? "Latest only" : `All ${loose.length}`}
+          </button>
+        )}
+      </h2>
+      {loose.length > 0 && (
+        <ul className="spec-comments">
+          {(allTalk ? loose : loose.slice(-TALK_SHOWN)).map((c) => (
+            <CommentItem key={c.m.seq} channel={channel} c={c} names={names} tasks={tasks} showQuote />
+          ))}
+        </ul>
+      )}
+      {draft && !wide && <CommentBox channel={channel} spec={spec} quote={draft.quote} onDone={() => setDraft(null)} />}
+      <CommentBox channel={channel} spec={spec} />
+    </section>
+  )
 
   return (
     <div ref={wrap} className={cx("spec-doc-wrap", wide && "is-wide")}>
@@ -154,19 +200,7 @@ export function SpecDoc({ channel, spec, editing, onEditing }: { channel: Channe
             </button>
           )}
         </div>
-        <section className="spec-talk" aria-label="Comments on the whole spec">
-          <h2 className="spec-talk-h">
-            {loose.length ? `${loose.length} ${loose.length === 1 ? "comment" : "comments"}` : "Comments"}
-            <span className="dimmer"> · select any words in the spec to comment on them</span>
-          </h2>
-          <ul className="spec-comments">
-            {loose.map((c) => (
-              <CommentItem key={c.m.seq} channel={channel} c={c} names={names} tasks={tasks} showQuote />
-            ))}
-          </ul>
-          {draft && !wide && <CommentBox channel={channel} spec={spec} quote={draft.quote} onDone={() => setDraft(null)} />}
-          <CommentBox channel={channel} spec={spec} />
-        </section>
+        {!wide && talk}
       </div>
       {wide && (
         <aside ref={rail} className="spec-rail" aria-label="Comments on lines of the spec">
@@ -180,6 +214,7 @@ export function SpecDoc({ channel, spec, editing, onEditing }: { channel: Channe
               <CommentBox channel={channel} spec={spec} quote={draft.quote} onDone={() => setDraft(null)} />
             </div>
           )}
+          <div className="spec-rail-talk">{talk}</div>
         </aside>
       )}
     </div>
@@ -223,16 +258,34 @@ function CommentBox({ channel, spec, quote, onDone }: { channel: Channel; spec: 
       onDone()
     }
   }
+  if (!quote)
+    return (
+      <div className="spec-box-new is-line">
+        <textarea
+          ref={box}
+          className="textarea spec-box-text"
+          rows={Math.min(6, text.split("\n").length)}
+          value={text}
+          placeholder="Comment on the spec. Agents read it too. ⌘↩ sends"
+          aria-label="Comment on the spec"
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={keys}
+        />
+        <button type="button" className="btn" disabled={!text.trim()} onClick={send}>
+          Comment
+        </button>
+      </div>
+    )
   return (
-    <div className={cx("spec-box-new", quote && "is-anchored")}>
-      {quote && <p className="spec-comment-quote">{quote}</p>}
+    <div className="spec-box-new is-anchored">
+      <p className="spec-comment-quote">{quote}</p>
       <textarea
         ref={box}
         className="textarea spec-box-text"
-        rows={quote ? 3 : 2}
+        rows={3}
         value={text}
-        placeholder={quote ? "Say what's off, or ask about it" : "Comment on the spec. Agents read it too."}
-        aria-label={quote ? "Comment on the selected words" : "Comment on the spec"}
+        placeholder="Say what's off, or ask about it"
+        aria-label="Comment on the selected words"
         onChange={(e) => setText(e.target.value)}
         onKeyDown={keys}
       />
@@ -252,17 +305,37 @@ function CommentBox({ channel, spec, quote, onDone }: { channel: Channel; spec: 
 }
 
 function Diff({ before, after }: { before: string; after: string }) {
+  const [whole, setWhole] = useState(false)
   const lines = lineDiff(before, after)
+  const near = lines.map((_, i) => lines.slice(Math.max(0, i - DIFF_CONTEXT), i + DIFF_CONTEXT + 1).some((l) => l.kind !== "same"))
+  const rows: ({ kind: "line"; i: number } | { kind: "gap"; from: number; n: number })[] = []
+  lines.forEach((_, i) => {
+    if (whole || near[i]) return void rows.push({ kind: "line", i })
+    const last = rows.at(-1)
+    if (last?.kind === "gap") last.n += 1
+    else rows.push({ kind: "gap", from: i, n: 1 })
+  })
   return (
     <ol className="spec-diff" aria-label="What changed since it was approved">
-      {lines.map((l, i) => (
-        <li key={i} className={cx("spec-diff-line", `is-${l.kind}`)}>
-          <span className="spec-diff-sign" aria-hidden="true">
-            {l.kind === "add" ? "+" : l.kind === "del" ? "−" : " "}
-          </span>
-          <span className="spec-diff-text">{l.text || " "}</span>
-        </li>
-      ))}
+      {rows.map((r) => {
+        if (r.kind === "gap")
+          return (
+            <li key={`gap-${r.from}`} className="spec-diff-line is-gap">
+              <button type="button" className="spec-diff-gap" onClick={() => setWhole(true)}>
+                ⋯ {r.n} unchanged {r.n === 1 ? "line" : "lines"}
+              </button>
+            </li>
+          )
+        const l = lines[r.i]!
+        return (
+          <li key={r.i} className={cx("spec-diff-line", `is-${l.kind}`)}>
+            <span className="spec-diff-sign" aria-hidden="true">
+              {l.kind === "add" ? "+" : l.kind === "del" ? "−" : " "}
+            </span>
+            <span className="spec-diff-text">{l.text || " "}</span>
+          </li>
+        )
+      })}
     </ol>
   )
 }
