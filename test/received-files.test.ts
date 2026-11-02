@@ -9,6 +9,7 @@ import { formatShown } from "@kiwi/core/format.ts";
 import { generateIdentity } from "@kiwi/core/identity.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
 import { fold } from "@kiwi/core/state.ts";
+import { stagedAnydoc } from "../scripts/assets-stage.ts";
 import { anydocWasmPath, documentFormat, keepFiles } from "../src/received-files.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { checked } from "./check.ts";
@@ -22,11 +23,13 @@ process.env.KIWI_HOME = kiwiHome;
 const wasm = new Uint8Array(readFileSync(join(import.meta.dir, "../node_modules/@firecrawl/anydoc-wasm/anydoc_wasm_bg.wasm")));
 const fixture = (name: string): Uint8Array<ArrayBuffer> => new Uint8Array(readFileSync(join(import.meta.dir, "fixtures/files", name)));
 const realFetch = globalThis.fetch;
+const OURS = "https://github.com/kiwi-init/channels/releases/download/kiwi-assets/anydoc-0.2.4.wasm";
+const SOURCES = [OURS, "https://cdn.jsdelivr.net/npm/@firecrawl/anydoc-wasm@0.2.4/anydoc_wasm_bg.wasm", "https://unpkg.com/@firecrawl/anydoc-wasm@0.2.4/anydoc_wasm_bg.wasm"];
 const asked: string[] = [];
 let mirror: (url: string) => Response = () => Response.error();
 const stub = (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
   const url = input instanceof Request ? input.url : String(input);
-  if (!url.startsWith("https://cdn.jsdelivr.net/") && !url.startsWith("https://unpkg.com/")) return realFetch(input, init);
+  if (!SOURCES.some((s) => url === s)) return realFetch(input, init);
   asked.push(url);
   return Promise.resolve(mirror(url));
 };
@@ -74,23 +77,23 @@ test("documents are known by their extension, and other files are not", () => {
   expect(documentFormat("notes")).toBeNull();
 });
 
-test("without a converter that matches its pinned hash, the file is saved and keeps no Markdown copy", async () => {
+test("each source is tried in turn, our release first; without a converter that matches its pinned hash, the file is saved and keeps no Markdown copy", async () => {
   const tampered = wasm.slice();
   tampered[tampered.length - 1] = tampered.at(-1)! ^ 1;
   mkdirSync(join(kiwiHome, "cache"), { recursive: true });
   writeFileSync(anydocWasmPath(), tampered);
-  mirror = (url) => (url.startsWith("https://cdn.jsdelivr.net/") ? new Response(tampered) : new Response("down", { status: 503 }));
+  mirror = (url) => (url.startsWith("https://unpkg.com/") ? new Response("down", { status: 503 }) : new Response(tampered));
   const m = await received("plan.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", fixture("plan.docx"));
   const dir = join(kiwiHome, "first");
   const kept = await keep(m, dir);
   expect(kept.saved).toEqual([join(dir, `#${m.seq}-plan.docx`)]);
   expect(kept.markdown).toEqual([]);
-  expect(asked).toHaveLength(2);
+  expect(asked).toEqual(SOURCES);
   expect(Buffer.from(readFileSync(anydocWasmPath())).equals(Buffer.from(tampered))).toBe(true);
 });
 
-test("the converter comes from the next mirror once, is checked and cached, and a document gets a Markdown copy beside it", async () => {
-  mirror = (url) => (url.startsWith("https://unpkg.com/") ? new Response(wasm) : new Response("down", { status: 503 }));
+test("the converter comes from our own release first, once, is checked and cached, and a document gets a Markdown copy beside it", async () => {
+  mirror = (url) => (url === OURS ? new Response(wasm) : new Response("never asked", { status: 500 }));
   asked.length = 0;
   const m = await received("plan.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", fixture("plan.docx"));
   const dir = join(kiwiHome, "second");
@@ -99,7 +102,7 @@ test("the converter comes from the next mirror once, is checked and cached, and 
   expect(kept).toEqual({ saved: [join(dir, `#${m.seq}-plan.docx`)], markdown: [md] });
   expect(readFileSync(md, "utf8")).toContain("Ship files to every channel.");
   expect(statSync(md).mode & 0o777).toBe(0o600);
-  expect(asked).toEqual(["https://cdn.jsdelivr.net/npm/@firecrawl/anydoc-wasm@0.2.4/anydoc_wasm_bg.wasm", "https://unpkg.com/@firecrawl/anydoc-wasm@0.2.4/anydoc_wasm_bg.wasm"]);
+  expect(asked).toEqual([OURS]);
   expect(Buffer.from(readFileSync(anydocWasmPath())).equals(Buffer.from(wasm))).toBe(true);
   const shown = formatShown(m, [m], fold([m], []), [], undefined, false, kept);
   expect(shown).toContain(`  as Markdown: ${md}`);
@@ -116,4 +119,10 @@ test("a pdf and a csv read as Markdown; an image and a damaged pdf are saved wit
   const broken = await keep(await received("broken.pdf", "application/pdf", new TextEncoder().encode("not a pdf at all")), dir);
   expect([broken.saved.length, broken.markdown.length]).toEqual([1, 0]);
   expect(existsSync(`${broken.saved[0]}.md`)).toBe(false);
+});
+
+test("the installed anydoc package is the version and wasm the source pins, so the release asset and every mirror match", () => {
+  const staged = stagedAnydoc();
+  expect(staged.name).toBe("anydoc-0.2.4.wasm");
+  expect(Buffer.from(staged.bytes).equals(Buffer.from(wasm))).toBe(true);
 });

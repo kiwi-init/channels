@@ -8,9 +8,15 @@ import type { Message } from "@kiwi/core/protocol.ts";
 import { saveFiles } from "./attach.ts";
 import { home } from "./config.ts";
 
-const ANYDOC_VERSION = "0.2.4";
-const ANYDOC_WASM_SHA256 = "9f37cd53b17bf4028ac5ae6a2ac4cf625e9c53be511797168780bab495de1a9e";
-const SOURCES = [`https://cdn.jsdelivr.net/npm/@firecrawl/anydoc-wasm@${ANYDOC_VERSION}/anydoc_wasm_bg.wasm`, `https://unpkg.com/@firecrawl/anydoc-wasm@${ANYDOC_VERSION}/anydoc_wasm_bg.wasm`];
+export const ANYDOC_VERSION = "0.2.4";
+export const ANYDOC_WASM_SHA256 = "9f37cd53b17bf4028ac5ae6a2ac4cf625e9c53be511797168780bab495de1a9e";
+export const ANYDOC_ASSET = `anydoc-${ANYDOC_VERSION}.wasm`;
+const ASSETS_RELEASE = "kiwi-assets";
+const SOURCES = [
+  `https://github.com/kiwi-init/channels/releases/download/${ASSETS_RELEASE}/${ANYDOC_ASSET}`,
+  `https://cdn.jsdelivr.net/npm/@firecrawl/anydoc-wasm@${ANYDOC_VERSION}/anydoc_wasm_bg.wasm`,
+  `https://unpkg.com/@firecrawl/anydoc-wasm@${ANYDOC_VERSION}/anydoc_wasm_bg.wasm`,
+];
 const FETCH_MS = 60_000;
 
 const FORMATS: Readonly<Record<string, Format>> = {
@@ -35,7 +41,7 @@ export function documentFormat(name: string): Format | null {
 const sha256 = (bytes: Uint8Array): string => createHash("sha256").update(bytes).digest("hex");
 
 export function anydocWasmPath(): string {
-  return join(home(), "cache", `anydoc-${ANYDOC_VERSION}.wasm`);
+  return join(home(), "cache", ANYDOC_ASSET);
 }
 
 function cached(): Uint8Array | null {
