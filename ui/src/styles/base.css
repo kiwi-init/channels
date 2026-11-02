@@ -675,7 +675,6 @@ kbd {
   align-items: center;
   gap: 10px;
   padding-right: 6px;
-  pointer-events: auto;
 }
 
 .toast-close {
@@ -688,6 +687,7 @@ kbd {
   background: none;
   color: inherit;
   cursor: pointer;
+  pointer-events: auto;
 }
 
 .toast-close:hover {
