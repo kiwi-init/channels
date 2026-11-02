@@ -7,7 +7,7 @@ import { certUntil, nextLink, readDeviceList, rootLink, type DeviceLink, type De
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
 import { claimComputer } from "@kiwi/core/person.ts";
 import { startRelay } from "../src/relay/bun.ts";
-import { joinPerson, pairComputer, setupChannel, type OwnerSetup, type PairedComputer } from "./owner.ts";
+import { handshake, joinPerson, pairComputer, setupChannel, type OwnerSetup, type PairedComputer } from "./owner.ts";
 
 setDefaultTimeout(120_000);
 
@@ -17,6 +17,7 @@ let s: OwnerSetup;
 let harry: Identity;
 let mac: PairedComputer;
 let list: DeviceList;
+let dudu: { id: Identity; requestId: string };
 
 async function grow(from: DeviceLink[], signer: Identity, body: DeviceLinkBody): Promise<DeviceLink[]> {
   const read = await readDeviceList(from);
@@ -74,10 +75,34 @@ describe("an agent from a computer its person forgot (#2540, dudu)", () => {
 
   test("the owner's app doesn't let it in, so it never has to cut it a moment later", async () => {
     const lists = new Map([[harry.pk, list]]);
-    const asked = await agentAsks("dudu");
+    const asked = (dudu = await agentAsks("dudu"));
     expect(await ownerPass(lists, asked)).toEqual([]);
     expect((await s.ownerCh.members()).some((m) => m.active && m.pk === asked.id.pk)).toBe(false);
     const req = (await s.ownerCh.requests({ person: s.person.pk, lists })).find((r) => r.id === asked.requestId);
     expect(req?.computer?.joinsOnItsOwn).toBe(false);
+    expect(req?.computer?.revoked).toBe(true);
+  });
+
+  test("letting it in by hand is refused too, and says why", async () => {
+    const lists = new Map([[harry.pk, list]]);
+    await handshake(s, [dudu]);
+    const req = (await s.ownerCh.requests({ person: s.person.pk, lists })).find((r) => r.id === dudu.requestId);
+    expect(req?.check).toBe("ready");
+    expect(req).toBeDefined();
+    await expect(s.ownerCh.approve(req!, undefined, { person: s.person.pk })).rejects.toThrow(
+      "dudu runs on MacBook-Pro-de-Davi, a computer harry-person forgot from their devices: it can join again once that computer gets a new key (kiwi login on it)",
+    );
+  });
+
+  test("after kiwi login gives that Mac a new key, the agent comes in on its own and stays", async () => {
+    mac = await pairComputer(harry, "MacBook-Pro-de-Davi");
+    const desk = list.devices[0]!;
+    const deskKey = await withExchangeKey(await generateIdentity("desk-again"));
+    expect(desk.device).not.toBe(deskKey.pk);
+    const lists = new Map([[harry.pk, list]]);
+    const asked = await agentAsks("dudu-2");
+    expect(await ownerPass(lists, asked)).toEqual(["dudu-2"]);
+    expect(await s.ownerCh.cutDevices(list)).toEqual([]);
+    expect((await s.ownerCh.members()).some((m) => m.active && m.pk === asked.id.pk)).toBe(true);
   });
 });

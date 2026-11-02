@@ -260,6 +260,7 @@ export type Scenario =
   | "github-gate"
   | "specs"
   | "spec-changed"
+  | "forgotten-computer"
   | "member"
 
 function initial(scenario: Scenario, look: Partial<Prefs>): State {
@@ -292,7 +293,28 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
                           ? withCompact(DEMO_CHANNEL, scenario === "compacted")
                           : scenario === "specs" || scenario === "spec-changed"
                             ? withSpecs(DEMO_CHANNEL, scenario === "spec-changed")
-                            : DEMO_CHANNEL,
+                            : scenario === "forgotten-computer"
+                              ? {
+                                  ...DEMO_CHANNEL,
+                                  asks: [
+                                    {
+                                      kind: "join" as const,
+                                      id: "join-dudu",
+                                      at: Date.now() - 60_000,
+                                      name: "dudu",
+                                      who: "agent" as const,
+                                      harness: "claude" as const,
+                                      runs: "Claude Code · claude-opus-5-5",
+                                      machine: "MacBook-Pro-de-Davi",
+                                      sponsor: "harry",
+                                      revoked: true as const,
+                                      said: { machine: "macOS arm64 · 10 cores · 16 GB", repo: "Davi-Vicente/D2N@main", outside: true },
+                                      code: "604-218",
+                                    },
+                                    ...DEMO_CHANNEL.asks,
+                                  ],
+                                }
+                              : DEMO_CHANNEL,
       DEMO_EMPTY,
       DEMO_WAITING,
       { ...DEMO_EMPTY, code: "interlinked", title: "interlinked" },

@@ -48,6 +48,7 @@ export const SHOTS: Record<string, Shot> = {
   "task-done": kiwi({ tab: "tasks", panel: { kind: "task", task: 9 } }),
   "tasks-empty": { scenario: "full", channel: "landing", nav: { tab: "tasks" } },
   needs: kiwi({ tab: "needs" }),
+  "needs-forgotten-computer": { scenario: "forgotten-computer", channel: "kiwi", nav: { tab: "needs" } },
   "needs-asked-of": { scenario: "asked-of", channel: "kiwi", nav: { tab: "needs" } },
   "since-you-left": { scenario: "since", channel: "kiwi", nav: {} },
   "step-card": { scenario: "step", channel: "kiwi" },
