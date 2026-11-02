@@ -167,7 +167,7 @@ export interface GithubAppApi {
   issue(repo: string, number: number): Promise<GithubReply<GithubIssueInfo>>;
   closeIssue(repo: string, number: number, reason: "completed" | "not_planned", body: string): Promise<GithubReply<{ url: string | null }>>;
   rules(repo: string): Promise<GithubReply<GithubRulesInfo>>;
-  releases(repo: string, known: readonly string[]): Promise<GithubReply<GithubReleaseInfo[]>>;
+  releases(repo: string, known: readonly string[]): Promise<GithubReply<{ releases: GithubReleaseInfo[]; gone: string[] }>>;
   sync(repo: string, list: GithubSyncList, after: string | null): Promise<GithubReply<GithubSyncPage>>;
   status(repo: string): Promise<GithubReply<GithubInstall>>;
   canPush: PushCheck;
@@ -367,12 +367,16 @@ export function githubAppFrom(opts: { appId?: string | null; privateKey?: string
       if (!t.ok) return t;
       const res = await get(`${api}/repos/${repo}/releases?per_page=${RELEASES_READ + 1}`, { headers: headers(t.value) });
       if (!res.ok) return fail(res, "releases");
-      const list = ((await res.json()) as { tag_name?: string; draft?: boolean; prerelease?: boolean; published_at?: string | null }[]).flatMap((r) =>
+      const raw = (await res.json()) as { tag_name?: string; draft?: boolean; prerelease?: boolean; published_at?: string | null }[];
+      const list = raw.flatMap((r) =>
         !r.draft && !r.prerelease && typeof r.tag_name === "string" && r.tag_name.trim() && r.published_at ? [{ tag: r.tag_name, at: Date.parse(r.published_at) || 0 }] : [],
       );
+      const gone = known.filter((tag) => raw.some((r) => r.tag_name === tag && (r.draft || r.prerelease)));
+      const oldestGone = Math.max(-1, ...gone.map((tag) => raw.findIndex((r) => r.tag_name === tag)));
+      const stale = new Set(raw.slice(0, Math.max(0, oldestGone)).flatMap((r) => (typeof r.tag_name === "string" ? [r.tag_name] : [])));
       const out: GithubReleaseInfo[] = [];
       for (const [i, { tag, at }] of list.slice(0, RELEASES_READ).entries()) {
-        if (known.includes(tag)) continue;
+        if (known.includes(tag) && !stale.has(tag)) continue;
         const prev = list[i + 1]?.tag;
         const url = prev
           ? `${api}/repos/${repo}/compare/${encodeURIComponent(prev)}...${encodeURIComponent(tag)}?per_page=${MAX_RELEASE_COMMITS}`
@@ -382,7 +386,7 @@ export function githubAppFrom(opts: { appId?: string | null; privateKey?: string
         const body = (await commits.json()) as { commits?: Commit[] } | Commit[];
         out.push(releaseFrom(tag, at, Array.isArray(body) ? body : (body.commits ?? [])));
       }
-      return { ok: true, value: out.reverse() };
+      return { ok: true, value: { releases: out.reverse(), gone } };
     },
     closeIssue: async (repo, number, reason, body) => {
       const t = await token(repo);

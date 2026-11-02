@@ -293,7 +293,7 @@ export type Event =
   /** Owner only: what a connected repo asks before a pull request merges into its default branch, read from GitHub by the owner's app. */
   | { op: "github.rules"; repo: string; branch: string; required: string[]; merge: MergeMethod[] }
   /** Owner only: a published GitHub release of a connected repo, with the commits it added (shas, and the PR numbers their messages name), read by the owner's app. */
-  | { op: "github.release"; repo: string; tag: string; at: number; shas: string[]; prs: number[] }
+  | { op: "github.release"; repo: string; tag: string; at: number; shas: string[]; prs: number[]; gone?: true }
   /**
    * Owner only: stop every agent (on) or let them carry on (off). While on hold, every client refuses
    * an agent's work (tasks, facts, messages to other agents); agents may still answer people.
@@ -858,7 +858,7 @@ export function asSent(m: Message): Omit<Message, "newer" | "ev"> & { ev?: Event
 
 export const outgrown = (base: { folded?: number; skipped?: true }): boolean => base.skipped === true && (base.folded ?? 0) < EVENT_OPS_VERSION;
 
-export const FOLD_RULES = 21;
+export const FOLD_RULES = 22;
 
 export const olderRules = (base: { rules?: number }): boolean => (base.rules ?? 0) < FOLD_RULES;
 
@@ -1118,7 +1118,8 @@ function eventCheck(ev: unknown): boolean | null {
         e.shas.every((s) => typeof s === "string" && SHA_RE.test(s)) &&
         Array.isArray(e.prs) &&
         e.prs.length <= MAX_RELEASE_COMMITS &&
-        e.prs.every((p) => n(p) && (p as number) > 0)
+        e.prs.every((p) => n(p) && (p as number) > 0) &&
+        (e.gone === undefined || (e.gone === true && e.shas.length === 0 && e.prs.length === 0))
       );
     case "repos.set":
       return Array.isArray(e.repos) && e.repos.length <= MAX_REPOS && e.repos.every((r) => typeof r === "string" && REPO_RE.test(r));
