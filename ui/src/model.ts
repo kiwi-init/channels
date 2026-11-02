@@ -706,7 +706,7 @@ export interface Actions {
   chooseFolder(): Promise<string | null>
   addRoom(code: string, name: string, members?: string[]): Promise<string | null>
   renameRoom(code: string, id: string, name: string): void
-  setRoomMembers(code: string, id: string, members: string[]): void
+  setRoomMembers(code: string, id: string, members: string[]): Promise<boolean>
   setIcon(code: string, file: File | null): void
   renameChannel(code: string, title: string): void
   clearFact(code: string, key: string): void

@@ -109,6 +109,13 @@ export function withSeats<P extends { name: string; pk: string }, S extends Seat
   return [...out.values()];
 }
 
+export function unseenBy(inside: readonly string[], mentioned: Iterable<string>, root: (name: string) => string): string[] {
+  const people = new Set(inside.map(root));
+  const out = new Map<string, string>();
+  for (const name of mentioned) if (!people.has(root(name)) && !out.has(root(name))) out.set(root(name), name);
+  return [...out.values()];
+}
+
 export const inRoom = (meta: Pick<RoomMeta, "members">, name: string, pk: string | undefined): boolean => !!pk && meta.members.some((m) => m.name === name && m.pk === pk);
 
 export const publicView = <M extends { sealed?: unknown; opened?: unknown; proven?: unknown }>(messages: readonly M[]): M[] =>

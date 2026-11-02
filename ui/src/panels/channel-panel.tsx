@@ -516,7 +516,7 @@ function RoomPeople({ channel, id, members, own }: { channel: Channel; id: strin
           type="button"
           className="btn is-primary is-small"
           onClick={() => {
-            app.actions.setRoomMembers(channel.code, id, [...editing])
+            void app.actions.setRoomMembers(channel.code, id, [...editing])
             setEditing(null)
           }}
         >
