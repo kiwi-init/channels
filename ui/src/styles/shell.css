@@ -712,6 +712,28 @@
   font: var(--t-meta) var(--ui);
 }
 
+.side-card-path {
+  display: block;
+  margin-block-start: 2px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-2);
+  font: var(--t-meta) var(--mono);
+  text-align: start;
+  cursor: copy;
+}
+
+.side-card-path:hover {
+  color: var(--ink);
+}
+
+.side-card-path .icon {
+  display: inline-block;
+  margin-inline-end: 4px;
+  vertical-align: -1px;
+}
+
 .side-card-pct {
   color: var(--ink-3);
   font-variant-numeric: tabular-nums;
