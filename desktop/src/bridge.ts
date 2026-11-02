@@ -455,6 +455,8 @@ export interface KiwiBridge {
   /** Restart into the downloaded update. */
   installUpdate(): Promise<boolean>;
   checkUpdate(): Promise<UpdateCheckView>;
+  movedApp(): Promise<MovedView | null>;
+  dismissMovedApp(): Promise<void>;
   notify(title: string, body: string, link?: string): Promise<void>;
   openExternal(url: string): Promise<void>;
   saveFile(name: string, text: string): Promise<string>;
@@ -536,6 +538,11 @@ export interface UpdateView {
 }
 
 export type UpdateCheckView = UpdateView | { state: "current"; version: string } | { state: "failed" };
+
+export interface MovedView {
+  from: string;
+  to: string;
+}
 
 declare global {
   interface Window {
