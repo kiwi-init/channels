@@ -24,6 +24,15 @@ export function sponsorsAgent(members: ReadonlyMap<string, Pick<Member, "name" |
   return personOf(seat, [...members.values()]) === `person:${target.sponsor.user}`;
 }
 
+export function ownSeat(members: ReadonlyMap<string, Pick<Member, "name" | "pk" | "kind" | "owner" | "active" | "sponsor">>, by: string, seat: string): boolean {
+  const signer = members.get(by);
+  const target = members.get(seat);
+  if (!signer || !target || signer === target || !isPerson(signer) || !isPerson(target) || target.owner) return false;
+  const seats = [...members.values()];
+  const mine = personOf(signer, seats);
+  return mine.startsWith("person:") && personOf(target, seats) === mine;
+}
+
 export function answersDecisions(members: ReadonlyMap<string, Pick<Member, "active" | "answersDecisions">>, name: string): boolean {
   const m = members.get(name);
   return !!m?.active && !!m.answersDecisions;

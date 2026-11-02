@@ -5,7 +5,7 @@ import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/ide
 import type { Member } from "@kiwi/core/membership.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
 import { recoveryKey, recoveryLink } from "@kiwi/core/recovery.ts";
-import { postedLists, postList, tendLists, type ListsApi } from "./device-lists";
+import { goneOwn, postedLists, postList, tendLists, type ListsApi } from "./device-lists";
 import { revokedComputer } from "./forgotten-computers";
 
 const store = new Map<string, string>();
@@ -109,6 +109,23 @@ test("a re-root that keeps every device still gets a cut pass, for the computers
   const got = await tendLists("mc2-r", [], ch.api);
   expect(got.lists.get(person.pk)?.revoked).toEqual([]);
   expect(ch.cuts.map((l) => l.reroots.length)).toEqual([1]);
+});
+
+test("a person's own app logs the cut of its revoked devices once per channel and list version, and never for a list that revokes nothing (T1408)", async () => {
+  const { phone, added, revoked } = await lists();
+  const asked: DeviceList[] = [];
+  const api = {
+    goneDevices: async (list: DeviceList) => {
+      asked.push(list);
+      return [{ name: "jow-2" } as Member];
+    },
+  };
+  expect(await goneOwn("mc2-a", added, api)).toEqual([]);
+  expect(await goneOwn("mc2-a", [], api)).toEqual([]);
+  expect((await goneOwn("mc2-a", revoked, api)).map((m) => m.name)).toEqual(["jow-2"]);
+  expect(await goneOwn("mc2-a", revoked, api)).toEqual([]);
+  expect((await goneOwn("mc2-b", revoked, api)).map((m) => m.name)).toEqual(["jow-2"]);
+  expect(asked.map((l) => l.revoked)).toEqual([[phone.pk], [phone.pk]]);
 });
 
 test("a pass keeps the lists it read, so the app can tell a request from a forgotten computer (T2622)", async () => {

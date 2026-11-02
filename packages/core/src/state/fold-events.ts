@@ -8,7 +8,7 @@ import { omit } from "../omit.ts";
 import { inlineText } from "../membership.ts";
 import { readScopes, SCOPES, type Scope } from "../scopes.ts";
 import { cleanPersona } from "../personality.ts";
-import { isPerson, sponsorsAgent } from "./people.ts";
+import { isPerson, ownSeat, sponsorsAgent } from "./people.ts";
 import { roomName } from "./rooms.ts";
 import { currentState, openRound, reviewClaimRefusal, reviewMoveRefusal, revisedOut, taskId, verdictRefusal, worked } from "./tasks.ts";
 import type { Charter, Compact, Fact, FoldMember, Hold, Lease, Nickname, PersonaLead, Room, SecretRoom, Task } from "./types.ts";
@@ -82,7 +82,8 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
     }
 
     case "member.gone": {
-      if (!member.owner && m.pk !== ev.pk && !sponsorsAgent(members, m.from, ev.member)) reject("only the owner, the key itself, or the person an agent works for says a key is gone");
+      if (!member.owner && m.pk !== ev.pk && !sponsorsAgent(members, m.from, ev.member) && !ownSeat(members, m.from, ev.member))
+        reject("only the owner, the key itself, or the person it belongs to says a key is gone");
       else if (!c.keysByName.get(ev.member)?.has(ev.pk)) reject(`that key isn't one of ${ev.member}'s`);
       else if (!c.gone.has(ev.pk)) c.gone.set(ev.pk, m.seq);
       break;

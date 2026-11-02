@@ -1,4 +1,4 @@
-import { newestLists, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
+import { newestLists, readDeviceList, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
 import type { Member } from "@kiwi/core/membership.ts";
 import { keepLists } from "./forgotten-computers";
 import type { Message } from "@kiwi/core/protocol.ts";
@@ -7,12 +7,17 @@ type Cut = Member & { why?: string };
 
 const SEEN_KEY = "mc.devices.seen";
 const POSTED_KEY = "mc.devices.posted";
+const GONE_KEY = "mc.devices.gone";
 
 type Seen = Record<string, { through: number; links: Record<string, DeviceLink[]> }>;
 
 export interface ListsApi {
   history: (since: number) => Promise<{ messages: Message[] }>;
   cutDevices: (list: DeviceList) => Promise<Cut[]>;
+}
+
+export interface GoneApi {
+  goneDevices: (list: DeviceList) => Promise<Member[]>;
 }
 
 export interface PostApi {
@@ -84,4 +89,13 @@ export async function postList(code: string, links: readonly DeviceLink[], api: 
   await api.send("updated their list of devices", { kind: "event", ev: { op: "devices", links: [...links] } });
   write(POSTED_KEY, { ...read<Record<string, number>>(POSTED_KEY), [code]: links.length });
   return true;
+}
+
+export async function goneOwn(code: string, links: readonly DeviceLink[], api: GoneApi): Promise<Member[]> {
+  if (!links.length) return [];
+  const got = await readDeviceList(links);
+  if (!got.ok || !got.list.revoked.length || (read<Record<string, number>>(GONE_KEY)[code] ?? -1) >= got.list.version) return [];
+  const gone = await api.goneDevices(got.list);
+  write(GONE_KEY, { ...read<Record<string, number>>(GONE_KEY), [code]: got.list.version });
+  return gone;
 }
