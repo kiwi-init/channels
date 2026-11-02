@@ -1,5 +1,6 @@
 import { newestLists, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
 import type { Member } from "@kiwi/core/membership.ts";
+import { keepLists } from "./forgotten-computers";
 import type { Message } from "@kiwi/core/protocol.ts";
 
 type Cut = Member & { why?: string };
@@ -61,6 +62,7 @@ export async function tendLists(code: string, own: readonly DeviceLink[], api: L
   await scan(code, api);
   const posted = Object.values(read<Seen>(SEEN_KEY)).flatMap((c) => (c ? Object.values(c.links) : []));
   const lists = await newestLists(own.length ? [own, ...posted] : posted);
+  keepLists(lists);
   const done = cutFor.get(code) ?? new Map<string, number>();
   cutFor.set(code, done);
   const cut: Cut[] = [];

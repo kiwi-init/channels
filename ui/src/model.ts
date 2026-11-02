@@ -367,6 +367,7 @@ export interface JoinAsk {
   runs?: string
   machine?: string
   forgotten?: true
+  revoked?: true
   sponsor?: string
   key?: string
   said?: { machine?: string; tools?: string[]; repo?: string; outside: boolean } | "nothing"
