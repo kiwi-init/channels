@@ -382,6 +382,13 @@ For when every app is gone, or a thief revoked your other devices first. The rec
     re-roots: the current words still sign the re-root during the wait.
   - An app still holding the old key lets it go, and a sealed person box from before the re-root is
     never sealed into a new vault version.
+  - On the desktop (T2415): Settings → Computers and phones → Recovery key → Replace, on a computer
+    that approves devices. The person types the 24 words, unticks the devices to sign out (this
+    computer always stays), and the app makes the new person key, posts the re-root, and reseals the
+    vault with the new key, keeping every other computer's channel box. The app keeps no copy of the
+    new key: it goes on signing with its device key, and the vault holds the new key for the words.
+  - Recovering with the words on a new computer after a re-root opens the vault at `list.root`; the
+    app joins as one of the person's devices, keyed by `list.person`, and keeps no person key either.
 - **Start fresh** (T1010), for someone with no device left and no words, set up or forgotten. Nothing
   can vouch for them but the sign-in, and whoever takes over the sign-in has that too, so it waits:
   - A new desktop signed in to the account posts a `rootLink`: a new person key adding that desktop. The

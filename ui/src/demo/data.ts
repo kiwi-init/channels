@@ -1,4 +1,4 @@
-import type { Account, Ask, Channel, ChannelTile, Device, Enrolling, Issue, Message, Person, Prefs, PullRequest, Task, TaskGroup } from "~/model"
+import type { Account, Ask, Channel, ChannelTile, Device, Enrolling, Issue, Message, Person, Prefs, PullRequest, RerootOpened, Task, TaskGroup } from "~/model"
 import { nicknamesOf } from "~/names"
 import { omit } from "@kiwi/core/omit.ts"
 
@@ -20,6 +20,11 @@ export const DEMO_WELCOME: Enrolling = {
   stage: "welcome",
   name: "jow",
   devices: DEMO_DEVICES.filter((d) => !d.thisOne && !d.app).map((d) => ({ id: d.id, label: d.label, os: d.os, as: d.as, lost: d.as !== "computer" })),
+  channels: ["studio", "kiwi", "landing"],
+}
+export const DEMO_REROOT: RerootOpened = {
+  ok: true,
+  devices: DEMO_DEVICES.filter((d) => !d.app).map((d) => ({ id: d.id, label: d.label, os: d.os, as: d.as, here: d.thisOne })),
   channels: ["studio", "kiwi", "landing"],
 }
 export const DEMO_WORDS = "orbit velvet canyon mango ladder silent harvest pilot frozen museum tribe anchor gravity olive wagon pepper rocket glimpse marble tunnel coyote bamboo dinner shield".split(
