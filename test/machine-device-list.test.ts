@@ -2,9 +2,11 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { certUntil, nextLink, readDeviceList, rootLink, type DeviceLink, type DeviceLinkBody } from "@kiwi/core/devices.ts";
+import { newRoomId } from "@kiwi/core/crypto.ts";
+import { certUntil, checkDevice, nextLink, readDeviceList, rerootLink, rootLink, type DeviceLink, type DeviceLinkBody } from "@kiwi/core/devices.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
-import { loadMachine, newMachine, saveMachine, takeDeviceList, type MachineFile } from "../src/machine.ts";
+import { recoveryKey, recoveryLink } from "@kiwi/core/recovery.ts";
+import { loadMachine, newMachine, saveMachine, seatProof, takeDeviceList, type MachineFile } from "../src/machine.ts";
 
 let home = "";
 const prevHome = process.env.KIWI_HOME;
@@ -73,4 +75,29 @@ test("a computer that never logged in ignores lists", async () => {
   const person = await key("person");
   const desk = await key("desk");
   expect(await takeDeviceList([await rootLink(person, { pk: desk.pk, xpk: desk.xpk!, label: "desk", os: "macOS", as: "desktop" })])).toBeNull();
+});
+
+async function rerooted(person: Identity, links: DeviceLink[], keep: string[]): Promise<DeviceLink[]> {
+  const paper = await recoveryKey(new Uint8Array(32).fill(31));
+  const chain = [await recoveryLink(person, person.pk, null, { pk: paper.pk, xpk: paper.xpk! })];
+  const read = await readDeviceList(links);
+  if (!read.ok) throw new Error(read.why);
+  return [...links, await rerootLink(read.list, paper, chain, await key("next"), keep)];
+}
+
+test("once its person re-roots and keeps it, this computer vouches for its agents' seats; before that, or once dropped, it doesn't (#1519)", async () => {
+  const roomId = newRoomId();
+  const agent = await key("agent");
+  const { person, desk, m, links } = await enrolled();
+  expect(await seatProof(roomId, agent.pk)).toBeNull();
+  const kept = await rerooted(person, links, [desk.pk, m.identity.pk]);
+  expect(await takeDeviceList(kept)).toBe("longer");
+  const proof = await seatProof(roomId, agent.pk);
+  expect(proof).toMatchObject({ links: kept, device: m.identity.pk, version: kept.length });
+  expect(await checkDevice(proof, roomId, agent.pk)).toMatchObject({ person: person.pk, device: { device: m.identity.pk, as: "computer" } });
+  expect(await checkDevice(proof, roomId, (await key("other")).pk)).toBeNull();
+
+  const again = await enrolled();
+  expect(await takeDeviceList(await rerooted(again.person, again.links, [again.desk.pk]))).toBe("revoked");
+  expect(await seatProof(roomId, agent.pk)).toBeNull();
 });
