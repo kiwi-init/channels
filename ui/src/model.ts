@@ -521,6 +521,7 @@ export interface Channel {
   rooms: Room[]
   directs: Direct[]
   threads?: ThreadItem[]
+  follows?: Readonly<Record<number, boolean>>
   theirs: TheirDirect[]
   people: Person[]
   former?: Person[]

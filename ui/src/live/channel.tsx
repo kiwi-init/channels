@@ -32,7 +32,7 @@ import { announce } from "~/kit/toasts"
 import { arrivals } from "~/live/persona-later"
 import { leaversToSeal } from "~/live/leaving"
 import { lastIn, seenKeyOf } from "~/live/seen-place"
-import { threadSeenKey, threadsOf } from "~/live/threads"
+import { followsIn, threadSeenKey, threadsOf } from "~/live/threads"
 import { closeOpened, markGone, publish, type Run } from "~/live/store"
 import { useWakes } from "~/live/wakes"
 import { appCan } from "~/live/app-can"
@@ -129,6 +129,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const rooms = useMemo(() => roomsOf(state, messages, me, seen, from).map((r) => (isMuted(muted, code, r.id) ? { ...r, muted: true as const } : r)), [state, messages, me, seen, from, muted, code])
   const directs = useMemo(() => directsOf(state, messages, me, seen), [state, messages, me, seen])
   const threads = useMemo(() => threadsOf(state, messages, me, seen, from), [state, messages, me, seen, from])
+  const follows = useMemo(() => followsIn(seen), [seen])
   const theirs = useMemo(() => theirsOf(state, messages, me), [state, messages, me])
   const others = useMemo(() => people.filter((p) => !p.you), [people])
   const title = channelTitle(
@@ -171,6 +172,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       rooms,
       directs,
       threads,
+      follows,
       theirs,
       people,
       former,
@@ -211,6 +213,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       rooms,
       directs,
       threads,
+      follows,
       theirs,
       people,
       former,

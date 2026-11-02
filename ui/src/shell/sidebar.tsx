@@ -42,8 +42,32 @@ export function Sidebar({ channel }: { channel: Channel }) {
   }, [back])
   const shownRow = (key: string, on: boolean) => showHidden || on || !hidden.includes(key)
   const hiddenCount = channel.rooms.filter((r) => hidden.includes(roomKey(r.id))).length + channel.directs.filter((d) => hidden.includes(dmKey(d.with))).length
+  const followed = (channel.threads ?? []).filter((t) => t.following)
+  const onThreads = nav.tab === "threads"
+  const threadNews = followed.filter((t) => t.unread > 0).length
+  const threadMentions = followed.reduce((n, t) => n + t.mentions, 0)
   return (
     <div ref={sideRef} className="side">
+      {(followed.length > 0 || onThreads) && (
+        <section aria-label="Threads">
+          <ul>
+            <li>
+              <button
+                type="button"
+                className={cx("side-row", onThreads && "is-on", threadNews > 0 && "is-news")}
+                aria-current={onThreads ? "page" : undefined}
+                onClick={() => go({ to: "tab", tab: "threads" })}
+              >
+                <span className="side-hash">
+                  <Icon name="thread" size={12} />
+                </span>
+                <span className="side-label">Threads</span>
+                <Count n={threadMentions || threadNews} loud={threadMentions > 0} />
+              </button>
+            </li>
+          </ul>
+        </section>
+      )}
       <section aria-label="Rooms">
         <Heading action={channel.youOwn || channel.youTrusted ? <IconButton icon="plus" label="New room" onClick={() => go({ to: "dialog", dialog: "new-room" })} /> : undefined}>Rooms</Heading>
         <ul>

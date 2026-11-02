@@ -20,6 +20,15 @@ export function followsOf(seen: Seen, root: number): boolean | null {
   return mark === undefined ? null : mark % 2 === 1
 }
 
+export function followsIn(seen: Seen): Record<number, boolean> {
+  const out: Record<number, boolean> = {}
+  for (const [key, mark] of Object.entries(seen)) {
+    const root = key.startsWith("follow:") ? Number(key.slice(7)) : Number.NaN
+    if (Number.isSafeInteger(root)) out[root] = mark % 2 === 1
+  }
+  return out
+}
+
 export function threadsOf(state: Pick<ChannelState, "threadOf" | "trust" | "members" | "deleted" | "specs">, messages: readonly Wire[], me: string, seen: Seen, from: number): ThreadItem[] {
   const person = rootOf(me, state.members)
   const mine = (m: Wire) => rootOf(m.from, state.members) === person

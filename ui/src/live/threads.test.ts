@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 
 import type { Message as Wire } from "@kiwi/core/protocol.ts"
 import { fold, type Roster } from "@kiwi/core/state.ts"
-import { followKey, followMark, followsOf, threadSeenKey, threadsOf } from "~/live/threads"
+import { followKey, followMark, followsIn, followsOf, threadSeenKey, threadsOf } from "~/live/threads"
 
 const roster: Roster = [
   { name: "jow", pk: "pk-jow", owner: true, at: 0, active: true, kind: "human", display: "Jow" },
@@ -46,6 +46,7 @@ describe("following a thread (T2924)", () => {
     expect([followsOf({ [followKey(1)]: again }, 1), again > off]).toEqual([true, true])
     expect(followsOf({ [followKey(1)]: followMark(again, 40, false) }, 1)).toBe(false)
     expect(followsOf({}, 1)).toBeNull()
+    expect(followsIn({ [followKey(3)]: followMark(undefined, 1, true), [followKey(4)]: followMark(undefined, 1, false), [threadSeenKey(3)]: 9, "room:x": 5 })).toEqual({ 3: true, 4: false })
   })
 
   test("a later Follow on another device outranks an earlier Unfollow when the marks merge by max", () => {

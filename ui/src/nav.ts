@@ -3,7 +3,7 @@ import { createContext, useContext } from "react"
 
 import type { Actions, App, Where } from "~/model"
 
-type Tab = "chat" | "specs" | "tasks" | "agents" | "needs" | "github"
+type Tab = "chat" | "specs" | "tasks" | "agents" | "needs" | "github" | "threads"
 
 export type SpecPart = "spec" | "inside" | "result"
 
