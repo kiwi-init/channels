@@ -3,6 +3,7 @@ import {
   EVENT_OPS_VERSION,
   FOLD_RULES,
   GENERAL_ROOM,
+  GITHUB_CLOSED_KEEP_MS,
   ignored,
   isOverlay,
   MAX_GOAL_NAME,
@@ -58,9 +59,7 @@ const STALE_MS = 24 * 3_600_000;
 const SENT_WINDOW_MS = 2 * STALE_MS;
 const KEEP_SEQS = 5_000;
 const SENT_CAP = 3_000;
-const CLOSED_KEEP_MS = 30 * STALE_MS;
-
-const closedLongAgo = (at: number, hw: number) => hw - at > CLOSED_KEEP_MS;
+const closedLongAgo = (at: number, hw: number) => hw - at > GITHUB_CLOSED_KEEP_MS;
 
 function idHash(id: string): number {
   let a = 0xdeadbeef;

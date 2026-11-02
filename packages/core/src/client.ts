@@ -17,7 +17,7 @@ import { withSeats } from "./room-rules.ts";
 import type { Marks } from "./note.ts";
 import type { ChannelIcon, Envelope, ImageAttachment, Message } from "./protocol.ts";
 import type { Scope } from "./scopes.ts";
-import type { FoldBase, GithubRelease, GithubRules, GuardFloor } from "./state.ts";
+import type { ChannelState, FoldBase, GithubRelease, GithubRules, GithubState, GuardFloor } from "./state.ts";
 import { ChannelCore, type ChannelFx } from "./client/core.ts";
 import { ChannelDelegations, type Computer, type Tended } from "./client/delegations.ts";
 import { ChannelGithub, type GithubDiff, type GithubIssueInfo, type ReviewCheck } from "./client/github.ts";
@@ -419,6 +419,10 @@ export class Channel {
 
   syncGithubReleases(repos: readonly string[], known: readonly GithubRelease[]): Promise<number> {
     return run(this.fx.syncGithubReleases(repos, known));
+  }
+
+  syncGithub(repo: string, known: GithubState): Promise<number> {
+    return run(this.fx.syncGithub(repo, known));
   }
 
   githubDiff(repo: string, sha: string): Promise<GithubDiff> {
