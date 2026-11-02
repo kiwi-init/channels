@@ -277,7 +277,7 @@ describe("a member's list posted into the channel cuts their forgotten phone (T1
 });
 
 describe("a re-root cuts what the old person key vouched for (T827)", () => {
-  test("the owner cuts the devices left out and the computers only an old cert vouched for, and old-key claims stop counting", async () => {
+  test("the owner cuts the devices left out at once and the computers only an old cert vouched for after the window, and old-key claims stop counting", async () => {
     const s = await setupChannel(relay);
     const { links, desk, phone } = await listWithPhone(s.person);
     const box = await device("box");
@@ -294,8 +294,12 @@ describe("a re-root cuts what the old person key vouched for (T827)", () => {
     const next = await device("next");
     const rerooted = await listOf([...all, await rerootLink(await listOf(all), paper, chain, next, [desk.pk, box.pk])]);
     expect(rerooted.revoked).toEqual([phone.pk]);
-    expect((await s.ownerCh.cutDevices(rerooted)).map((m) => m.name).sort()).toEqual(["certified", "owner-2"]);
-    expect((await gone(s)).get("certified")).toMatch(/^certified's computer( ".+")? isn't on .+'s devices since they replaced their person key$/);
+    expect((await s.ownerCh.cutDevices(rerooted)).map((m) => m.name)).toEqual(["owner-2"]);
+    const at = rerooted.reroots[0]!.at;
+    expect((await s.ownerCh.reprove(rerooted, {}, at + 1000)).waiting.map((m) => m.name)).toEqual(["certified"]);
+    expect((await s.ownerCh.members()).find((m) => m.name === "certified")?.active).toBe(true);
+    expect((await s.ownerCh.reprove(rerooted, {}, at + REPROVE_MS)).cut.map((m) => m.name)).toEqual(["certified"]);
+    expect((await gone(s)).get("certified")).toMatch(/^certified's computer( ".+")? wasn't put back on .+'s devices in the 7 days after they replaced their person key$/);
     const active = (await s.ownerCh.members()).filter((m) => m.active).map((m) => m.name);
     expect(active).toContain("listed");
     expect(active).not.toContain("certified");
@@ -311,6 +315,33 @@ describe("a re-root cuts what the old person key vouched for (T827)", () => {
     expect(reqs.find((r) => r.id === byCert.requestId)?.computer).toBeUndefined();
     const before = await s.ownerCh.requests({ person: s.person.pk });
     expect(before.find((r) => r.id === byPerson.requestId)?.person).toBe(s.person.pk);
+    await s.ownerCh.close();
+  });
+});
+
+describe("an agent on a computer the person puts back on their list after a re-root keeps its seat", () => {
+  test("the app posts the re-rooted list before it lists its computer again, and the agents wait for it instead of being cut", async () => {
+    const s = await setupChannel(relay);
+    const { links, desk } = await listWithPhone(s.person);
+    const paired = await pairComputer(s.person);
+    const agent = await joinAgent(s, "nova", paired);
+    expect(agent.member.from?.pk).toBe(paired.machine.pk);
+
+    const paper = await recoveryKey(new Uint8Array(32).fill(25));
+    const chain = [await recoveryLink(s.person, s.person.pk, null, { pk: paper.pk, xpk: paper.xpk! })];
+    const next = await device("next");
+    const all = [...links, await rerootLink(await listOf(links), paper, chain, next, [desk.pk])];
+    const rerooted = await listOf(all);
+    const at = rerooted.reroots[0]!.at;
+    expect(await s.ownerCh.cutDevices(rerooted)).toEqual([]);
+    expect((await s.ownerCh.reprove(rerooted, {}, at + 1000)).waiting.map((m) => m.name)).toEqual(["nova"]);
+
+    const relisted = await listOf(
+      await grow(all, next, { op: "add", device: paired.machine.pk, dxpk: paired.machine.xpk!, label: "box", os: "darwin", as: "computer", approve: false, until: certUntil(Date.now()) }),
+    );
+    expect(await s.ownerCh.cutDevices(relisted)).toEqual([]);
+    expect(await s.ownerCh.reprove(relisted, {}, at + REPROVE_MS)).toEqual({ proved: [], cut: [], waiting: [] });
+    expect((await s.ownerCh.members()).find((m) => m.pk === agent.id.pk)?.active).toBe(true);
     await s.ownerCh.close();
   });
 });
