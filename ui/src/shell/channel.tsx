@@ -27,8 +27,11 @@ const TallPage = lazy(() => import("~/shell/tall"))
 const Waiting = later(() => import("~/start/waiting").then((m) => m.Waiting))
 const SearchBox = later(() => import("~/chat/search-box").then((m) => m.SearchBox))
 const OlderView = later(() => import("~/chat/older-view").then((m) => m.OlderView))
-const Board = later(() => import("~/tasks/board").then((m) => m.Board))
 const Lanes = later(() => import("~/tasks/lanes").then((m) => m.Lanes))
+const GithubView = later(() => import("~/github/view").then((m) => m.GithubView))
+const SpecsView = later(() => import("~/specs/view").then((m) => m.SpecsView))
+const PrPanel = later(() => import("~/github/panel").then((m) => m.PrPanel))
+const IssuePanel = later(() => import("~/github/panel").then((m) => m.IssuePanel))
 const NeedsYou = later(() => import("~/needs/needs").then((m) => m.NeedsYou))
 const TaskPanel = later(() => import("~/panels/task").then((m) => m.TaskPanel))
 const PersonPanel = later(() => import("~/panels/person").then((m) => m.PersonPanel))
@@ -104,6 +107,12 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   const needs = openAsks(channel).length
   const tasks = openTasks(channel).length
   const agents = channel.people.some((p) => p.kind === "agent" && !p.left)
+  const github = channel.repos.length > 0 || !!channel.prs?.length || !!channel.issues?.length
+  const openPrs = channel.prs?.filter((p) => p.state === "open" || p.state === "draft") ?? []
+  const red = openPrs.some((p) => p.checks === "fail" || !!p.ticks?.failed.length)
+  const openIssues = channel.issues?.filter((i) => i.state === "open").length ?? 0
+  const specs = channel.specs?.filter((s) => !s.result) ?? []
+  const specsNeed = specs.filter((s) => s.canJudge && (s.stage === "draft" || s.stage === "delivered" || s.changed)).length
   const line = channel.loading ? [] : headerLine(channel, 0)
   const here =
     nav.where.kind === "room"
@@ -115,9 +124,10 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
           : `T${nav.where.task}`
 
   const news = drawerNews(channel)
+  const paged = tall && nav.tab !== "needs" && nav.tab !== "github"
 
   return (
-    <div className={cx("chan", nav.panel && !(tall && nav.tab !== "needs") && "has-panel", drawer && "is-drawer", hidden && "is-bare")} style={{ "--panel-w": `${panel.width}px` } as CSSProperties}>
+    <div className={cx("chan", nav.panel && !paged && "has-panel", drawer && "is-drawer", hidden && "is-bare")} style={{ "--panel-w": `${panel.width}px` } as CSSProperties}>
       <header className="top">
         <button
           type="button"
@@ -144,19 +154,37 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
           </button>
         </div>
         <nav ref={tabsRef} className="tabs" aria-label="Views">
-          <button type="button" aria-pressed={nav.tab === "chat" || (tall && nav.tab !== "needs")} onClick={() => go({ to: "tab", tab: "chat" })}>
+          <button type="button" aria-pressed={nav.tab === "chat" || paged} onClick={() => go({ to: "tab", tab: "chat" })}>
             {here}
           </button>
           {!tall && (
-            <button type="button" aria-pressed={nav.tab === "tasks"} onClick={() => go({ to: "tab", tab: "tasks" })}>
-              <Icon name="tasks" size={14} />
-              Tasks <Count n={tasks} />
+            <button
+              type="button"
+              aria-pressed={nav.tab === "specs" || nav.tab === "tasks"}
+              onClick={() => go({ to: "spec", ask: null })}
+              title={specsNeed ? `${specsNeed} waiting on you` : `${specs.length} open specs, ${tasks} open tasks`}
+            >
+              <Icon name="spec" size={14} />
+              Specs <Count n={specs.length} />
+              {specsNeed > 0 && <span className="tab-red is-decide" role="img" aria-label="waiting on you" />}
             </button>
           )}
           {!tall && (agents || nav.tab === "agents") && (
             <button type="button" className="is-agents" aria-pressed={nav.tab === "agents"} onClick={() => go({ to: "tab", tab: "agents" })}>
               <Icon name="agent" size={14} />
               Agents
+            </button>
+          )}
+          {(github || nav.tab === "github") && (
+            <button
+              type="button"
+              aria-pressed={nav.tab === "github"}
+              onClick={() => go({ to: "tab", tab: "github" })}
+              title={red ? "An open pull request's checks failed" : `${openPrs.length} open pull requests, ${openIssues} open issues`}
+            >
+              <Icon name="github" size={14} />
+              GitHub <Count n={openPrs.length} />
+              {red && <span className="tab-red" role="img" aria-label="checks failed" />}
             </button>
           )}
           {(needs > 0 || nav.tab === "needs") && (
@@ -187,16 +215,16 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
         </div>
       </header>
       <Sidebar channel={channel} />
-      <main className={cx("main", tall && nav.tab !== "needs" && "is-tall")}>
+      <main className={cx("main", paged && "is-tall")}>
         <Boundary resetKey={nav.tab}>
           <Suspense fallback={null}>
             {older ? (
               <OlderView channel={channel} older={older} onBack={() => setOlder(null)} />
-            ) : tall && nav.tab !== "needs" ? (
+            ) : paged ? (
               <TallPage
                 channel={channel}
                 jump={jump}
-                work={<Board channel={channel} needs={needs} tall />}
+                work={<SpecsView channel={channel} tall />}
                 open={
                   nav.panel ? (
                     <div className="panel">
@@ -205,10 +233,12 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
                   ) : null
                 }
               />
-            ) : nav.tab === "tasks" ? (
-              <Board channel={channel} needs={needs} />
             ) : nav.tab === "agents" ? (
               <Lanes channel={channel} />
+            ) : nav.tab === "github" ? (
+              <GithubView channel={channel} />
+            ) : nav.tab === "specs" || nav.tab === "tasks" ? (
+              <SpecsView channel={channel} />
             ) : nav.tab === "needs" ? (
               <NeedsYou channel={channel} onJump={setJump} />
             ) : (
@@ -228,7 +258,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
           {channel.connection === "connecting" ? "Connecting…" : "Reconnecting…"}
         </p>
       )}
-      {nav.panel && !(tall && nav.tab !== "needs") && (
+      {nav.panel && !paged && (
         <aside className="panel" aria-label="Details">
           <div
             className="panel-grip"
@@ -259,6 +289,10 @@ function PanelView({ channel }: { channel: Channel }) {
           <ThreadPanel channel={channel} seq={nav.panel.seq} focus={nav.panel.focus} />
         ) : nav.panel.kind === "task" ? (
           <TaskPanel channel={channel} id={nav.panel.task} />
+        ) : nav.panel.kind === "pr" ? (
+          <PrPanel channel={channel} repo={nav.panel.repo} number={nav.panel.number} />
+        ) : nav.panel.kind === "issue" ? (
+          <IssuePanel channel={channel} repo={nav.panel.repo} number={nav.panel.number} />
         ) : nav.panel.kind === "person" ? (
           <PersonPanel channel={channel} name={nav.panel.name} />
         ) : nav.panel.kind === "channel" ? (

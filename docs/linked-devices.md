@@ -176,7 +176,13 @@ any current approving device in that list, then counts as its person: asks, unpa
 check and `/v1/person/<pk>/machines`. The relay never rolls the kept list back. Each list the account
 accepts reaches its computers, so a revoked or expired desktop stops counting at once. The daemon
 checks asks the same way (`readAsk` with the list). Under decision A, this is what lets a desktop
-without the person key start agents. The digits come from
+without the person key start agents.
+
+A computer paired by an older `MachineCert` alone keeps working once the person key is offline (T899).
+Before the first desktop lets go of the person key, it lists every computer it knows in the device
+list. The relay then keeps that list for a cert-registered computer it names, with the same person,
+and hands it back when the computer registers its cert again. The daemon takes it only when the list
+is its cert's person's and names it as a current computer, and from then on registers with the list. The digits come from
 `enrollDigits` in `packages/core/src/enroll.ts`.
 
 ## 3. Admitting agents without an app open (delegation)
@@ -321,7 +327,9 @@ For when every app is gone, or a thief revoked your other devices first. The rec
   once; an approving device may propose a new one, which takes over only after 7 days. Your devices show
   the proposal meanwhile, and the old words, or revoking the device that proposed it, cancel it.
 - **Format:** `{person, version, at, box}`. The box is sealed to the recovery X25519 key, with person,
-  version and time bound into the key derivation, and the vault is signed by the person key or any of
+  version and time bound into the key derivation. Inside, the person key is a box of its own, sealed to
+  the same recovery key with person and recovery key bound in (`sealPerson`, T899), so a device that
+  no longer holds the person key carries it into each new version unread, and the vault is signed by the person key or any of
   its current approving devices (decision A keeps the person key offline, so a device must be able to
   add a new channel's owner key). Stored at `/v1/account/vault`. Clients remember the highest version
   and refuse a lower one.
@@ -342,6 +350,14 @@ For when every app is gone, or a thief revoked your other devices first. The rec
 
 - Once the first app has signed the device list's root, the person key stays only in the recovery
   vault (paper-key style), and the first desktop becomes a device like the rest.
+- In the code (T899, `desktop/src/recovery.ts`): once the 24 words are checked and the vault is kept,
+  the first desktop lists its computers and drops the person secret from its store. It keeps only the
+  sealed person box, to reseal the vault when a channel it owns appears. It doesn't let go while a
+  device's proposed recovery key is waiting, and never seals the person key to a key a device proposed.
+  An app that set up its words before T899 does the same on its next poll. Joins are proven with the
+  device claim alone.
+- After that, new words need the old ones (or a re-root, T827): no app holds the person key to seal
+  to a new recovery key.
 - Whoever holds the person key can re-root the list. Keeping it offline means a stolen desktop can't
   beat the vault.
 - Re-rooting, and the `kl1` migration, then need the recovery key in hand.

@@ -71,6 +71,18 @@ Agents
                                                  board's header for its tasks, the person's message shown under it
   kiwi goal N "the goal" · goal N --clear        name (or rename) the goal of the person's message #N: the lead, the
                                                  owner or the person who asked
+  kiwi specs [--all]                             the open specs: what each person's ask is for, when it's done, and
+                                                 where it stands (draft, approved and waiting for an agent, working,
+                                                 delivered)
+     spec show N · spec write N --file spec.md   read or write the spec of the person's message #N, in markdown, with
+                                                 a "## Done when" list of boxes; people and agents edit it together
+     spec tick N "words" [--undo]                tick the box under Done when whose line says those words, once proven
+     spec start N                                take an approved spec that waits for an agent and plan it into tasks
+                                                 (kiwi loop does this by itself when its seat is free)
+     spec comment N "…" [--on "the line"]        comment on the spec, on one line of it; changing what it asks is an
+                                                 edit a person approves again
+                                                 With Tasks only from approved specs on (the owner's switch), every task
+                                                 is a step of one: task add --ask N only once #N's spec is approved
      task add … --from T72                       where it comes from (a follow-up, a part, a fix): it goes to whoever has
                                                  that context
      task add --issue 12|owner/repo#12 ["title"]  a task from a GitHub issue of the channel's repo, titled after

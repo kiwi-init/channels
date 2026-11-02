@@ -2,9 +2,9 @@ import { claimDevice } from "@kiwi/core/devices.ts";
 import { decodeJoinCode } from "@kiwi/core/crypto.ts";
 import type { JoinClaims } from "@kiwi/core/membership.ts";
 import { tokenForRelay } from "./github-flow.ts";
-import { acceptSeat, claimFor, withAccess } from "./guard.ts";
+import { acceptSeat, withAccess } from "./guard.ts";
 import type { KeysToHost } from "./keys-server.ts";
-import { mutate, requirePerson, store } from "./store.ts";
+import { mutate, store } from "./store.ts";
 
 export type KeysAsk = Exclude<KeysToHost, { type: "flushed" }>;
 
@@ -30,7 +30,6 @@ export function answerKeys(m: KeysAsk, done: (extra?: KeysAnswer) => void): void
       case "githubToken":
         return void tokenForRelay(store.relayUrl, store.github).then((token) => done({ token }), fail);
       case "prove":
-        if (store.person) return void claimFor(requirePerson(), m.code, m.memberPk).then((person) => done({ claim: { person } }), fail);
         if (store.device && store.deviceLinks?.length)
           return void claimDevice(store.device, store.deviceLinks, decodeJoinCode(m.code).roomId, m.memberPk).then((device) => done({ claim: { device } }), fail);
         return done({ claim: null });

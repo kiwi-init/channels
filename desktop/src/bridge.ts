@@ -121,6 +121,8 @@ export const CHANNEL_CALLS = [
   "makeRoom",
   "makeDm",
   "syncMarks",
+  "leaveRoom",
+  "sealOutLeavers",
   "changeRoom",
   "pruneRooms",
   "icon",
@@ -305,9 +307,12 @@ export interface DeviceNewsView {
 export interface RecoveryView {
   at: number | null;
   here: boolean;
+  pending?: { from: number; by: string };
 }
 
-export type RecoverySaveView = { ok: true; at: number } | { ok: false; wrong: number[] };
+export type RecoveryCancelView = { ok: true } | { ok: false; why: string; word?: number };
+
+export type RecoverySaveView = { ok: true; at: number; from?: number } | { ok: false; wrong: number[] };
 
 export type RecoverOpenView =
   | { ok: true; name: string; devices: (Pick<DeviceView, "id" | "label" | "os" | "as"> & { lost: boolean })[]; channels: string[] }
@@ -438,6 +443,7 @@ export interface KiwiBridge {
   recoveryWords(): Promise<string[]>;
   recoverySave(typed: { at: number; word: string }[]): Promise<RecoverySaveView>;
   recoveryDrop(): Promise<void>;
+  recoveryCancel(words: string): Promise<RecoveryCancelView>;
   recover(words: string): Promise<RecoverOpenView>;
   recoverFinish(lost: string[]): Promise<RecoverDoneView>;
   recoverCancel(): Promise<void>;

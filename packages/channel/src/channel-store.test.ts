@@ -8,6 +8,7 @@ import { APP_BEACON_MS, ChannelStore } from "./channel-store.ts";
 import { PRESENCE_TTL } from "./online.ts";
 import type { StoredMember } from "./store.ts";
 import { dropWarm } from "./warm.ts";
+import { useHistoryDb, type CachedRow, type HistoryDb } from "./history.ts";
 
 const CODE = "mc2-store-test";
 const ME = "pk-me";
@@ -58,6 +59,11 @@ function relay(head = 0, opts: { owner?: boolean; answers?: Record<string, Answe
       return Promise.resolve();
     },
     openRows: () => Promise.resolve([]),
+    olderRows: (_code: string, before: number, limit: number) => {
+      calls.push({ op: "olderRows", args: [before, limit] });
+      return Promise.resolve({ rows: [], done: true });
+    },
+    indexRows: () => Promise.resolve(null),
     keep: (_code: string, state: object) => {
       kept.push({ at: Date.now(), state });
       return Promise.resolve(null);
@@ -350,5 +356,45 @@ describe("a person's own presence (T560)", () => {
 
   test("it says so again well before others forget it", () => {
     expect(APP_BEACON_MS * 2).toBeLessThan(PRESENCE_TTL);
+  });
+});
+
+describe("history from the relay is fetched only when asked (T977, #1944)", () => {
+  function archive(from: number, to: number): HistoryDb {
+    const rows = Array.from({ length: to - from + 1 }, (_, i): CachedRow => ({ seq: from + i, e: 1, iv: "iv", ct: "ct" }));
+    return {
+      put: async () => {},
+      putRows: async () => {},
+      newest: async (_room, _pk, count) => rows.slice(-count),
+      after: async (_room, _pk, seq, count) => rows.filter((r) => r.seq > seq).slice(0, count),
+      oldest: async () => rows[0]?.seq ?? null,
+      floor: async () => false,
+      putFloor: async () => {},
+      trimAbove: async () => {},
+      drop: async () => {},
+      dropAll: async () => {},
+      putKept: async () => {},
+      kept: async () => null,
+    };
+  }
+
+  test("opening a channel and receiving live messages never reads older history from the relay", async () => {
+    useHistoryDb(archive(50, 60));
+    try {
+      const r = relay(60);
+      const { close } = await opened(r);
+      r.say({ _tag: "Open" });
+      for (let seq = 61; seq <= 63; seq++)
+        r.say({
+          _tag: "Message",
+          message: { v: PROTOCOL_VERSION, id: `m${seq}`, from: "atlas", kind: "msg", body: "hi", ts: seq, seq, rts: seq, sigOk: true } as Message,
+          row: { seq, e: 1, iv: "iv", ct: "ct" },
+        });
+      await sleep(300);
+      expect(r.called("olderRows")).toEqual([]);
+      close();
+    } finally {
+      useHistoryDb(null);
+    }
   });
 });

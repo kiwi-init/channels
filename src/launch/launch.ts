@@ -57,11 +57,11 @@ async function endedWithin(hosted: Hosted, pane: string, ms: number, everyMs: nu
 
 function endedWords(ended: Ended): string {
   const last = ended.tail.at(-1);
-  return `exit ${ended.code}${last ? `: ${last}` : ""}`;
+  return `exit ${ended.code ?? "unknown"}${last ? `: ${last}` : ""}`;
 }
 
 function diedText(harness: KnownHarness, ended: Ended): string {
-  return `${harnessLabel(harness)} stopped as it started (exit ${ended.code})${ended.tail.length ? `:\n${ended.tail.join("\n")}` : ""}`;
+  return `${harnessLabel(harness)} stopped as it started${ended.code === null ? "" : ` (exit ${ended.code})`}${ended.tail.length ? `:\n${ended.tail.join("\n")}` : ""}`;
 }
 
 async function watchLater(harness: KnownHarness, launch: string, pane: string, hosted: Hosted, opts: WatchOptions): Promise<void> {

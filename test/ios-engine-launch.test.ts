@@ -80,6 +80,7 @@ beforeAll(async () => {
     dir: root,
     machine: () => paired,
     checkMs: 100,
+    listed: async () => false,
     unpaired: async () => {},
     run: remoteRunner({
       inventory: async () => [claude],

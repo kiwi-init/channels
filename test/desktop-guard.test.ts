@@ -7,10 +7,7 @@ import { readFileSync } from "node:fs";
 import { chmodSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import type { ChannelIdentityView, ComputerView, PersonView } from "../desktop/src/bridge.ts";
-import { claimFor, csp, externalUrl, mergeChannels, normalizeRelay, publicComputer, snapshotOf, writePrivate } from "../desktop/src/guard.ts";
-import { encodeJoinCode, newRoomId } from "@kiwi/core/crypto.ts";
-import { generateIdentity } from "@kiwi/core/identity.ts";
-import { checkPerson } from "@kiwi/core/person.ts";
+import { csp, externalUrl, mergeChannels, normalizeRelay, publicComputer, snapshotOf, writePrivate } from "../desktop/src/guard.ts";
 
 describe("the window shows the app and nothing else (T183)", () => {
   test("only http(s) leaves for the system browser", () => {
@@ -61,15 +58,6 @@ describe("the person key stays in main (T203)", () => {
     const held = snapshotOf({ relayUrl: "https://r.example", person, channels: [], computers: [], phones: [{ label: "Ada's iPhone", at: 5, channels: ["kiwi", "landing"] }], pending: [] });
     expect(held.phones).toEqual([{ label: "Ada's iPhone", at: 5, channels: ["kiwi", "landing"] }]);
     expect(snapshotOf({ relayUrl: "https://r.example", person, channels: [], computers: [], pending: [] }).phones).toEqual([]);
-  });
-
-  test("main makes the person's claim for a join, and it checks out", async () => {
-    const me = await generateIdentity("jow");
-    const member = await generateIdentity("jow-agent");
-    const room = newRoomId();
-    const claim = await claimFor(me, encodeJoinCode({ roomId: room, ownerFp: "A".repeat(16) }), member.pk);
-    expect(await checkPerson(claim, room, member.pk)).toBe(me.pk);
-    expect(() => claimFor(me, 42, member.pk)).toThrow("bad person claim request");
   });
 });
 

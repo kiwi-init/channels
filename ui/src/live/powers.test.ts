@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts"
 import type { Event, Message } from "@kiwi/core/protocol.ts"
-import { fold, type Roster } from "@kiwi/core/state.ts"
+import { fold, type FoldBase, type Roster } from "@kiwi/core/state.ts"
 import { peopleOf } from "~/live/map"
 
 const roster: Roster = [
@@ -30,6 +30,22 @@ describe("a power given after someone joined shows, whatever the roster record s
     const p = await sign(who, { v: 1 as const, id: crypto.randomUUID(), ts: seq * 1000, from: name, kind: "event" as const, body: "", ev })
     return { ...p, seq, rts: seq * 1000, sigOk: await verify(p) } as Message
   }
+
+  test("a grant from before the channel's snapshot still counts, in a channel that already existed", async () => {
+    const owner = await generateIdentity("jow")
+    const maya = await generateIdentity("maya")
+    const list: Roster = [
+      { name: "jow", pk: owner.pk, owner: true, at: 0, active: true, kind: "human" },
+      { name: "maya", pk: maya.pk, owner: false, at: 0, active: true, kind: "human" },
+    ]
+    const give = await signedEvent(owner, "jow", 1, { op: "power.set", member: "maya", pk: maya.pk, power: "managesAgents", on: true, was: false } as Event)
+    let base: FoldBase | undefined
+    fold([give], list, 2000, undefined, undefined, undefined, (b) => void (base = b))
+    expect(base).toBeDefined()
+    const later = fold([], list, 3000, undefined, undefined, base)
+    expect(later.members.get("maya")?.managesAgents).toBe(true)
+    expect(peopleOf(later, list, new Map(), "maya", new Map()).find((p) => p.name === "maya")?.managesAgents).toBe(true)
+  })
 
   test("the owner's later grant counts, and so does taking it back", async () => {
     const owner = await generateIdentity("jow")

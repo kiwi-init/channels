@@ -7,7 +7,7 @@ import { hostname } from "node:os";
 import { join } from "node:path";
 import { home, writePrivate } from "./config.ts";
 import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
-import { claimDevice, readDeviceList, type DeviceClaim, type DeviceLink } from "@kiwi/core/devices.ts";
+import { claimDevice, listedComputer, readDeviceList, type DeviceClaim, type DeviceLink } from "@kiwi/core/devices.ts";
 import { claimComputer, type ComputerClaim, type MachineCert } from "@kiwi/core/person.ts";
 
 export interface EnrolledDevice {
@@ -82,10 +82,16 @@ export function takeDeviceList(links: unknown): Promise<"longer" | "revoked" | n
 
 async function takeNow(links: unknown): Promise<"longer" | "revoked" | null> {
   if (!Array.isArray(links)) return null;
-  const m = loadMachine();
-  if (!m?.device) return null;
+  const m = loadMachine() as (MachineFile & { cert?: MachineCert; person?: EnrolledDevice["person"] }) | null;
+  const certified = m?.cert && m.person?.pk === m.cert.pk && m.cert.machine === m.identity.pk ? m.person : null;
+  if (!m || (!m.device && !certified)) return null;
   const read = await readDeviceList(links);
-  if (!read.ok || read.list.person !== m.device.person.pk) return null;
+  if (!read.ok || read.list.person !== (m.device?.person ?? certified)?.pk) return null;
+  if (!m.device) {
+    if (!certified || !listedComputer(read.list, m.identity.pk)) return null;
+    saveMachine({ ...m, device: { person: certified, links: links as DeviceLink[] } });
+    return "longer";
+  }
   const kept = await readDeviceList(m.device.links);
   if (kept.ok && read.list.version <= kept.list.version) return null;
   if (read.list.revoked.includes(m.identity.pk)) {

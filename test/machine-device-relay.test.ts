@@ -167,13 +167,37 @@ describe("a computer registered with its person's device list", () => {
     expect((await ask(p.person, p.box)).status).toBe(202);
   });
 
-  test("a cert registered after it drops the list, so a desktop no longer speaks for it", async () => {
+  test("a cert registered after keeps the list while it lists the computer, and hands it back", async () => {
     const p = await people();
     expect((await call(p.box, p.box, "PUT", base(p.box), { links: p.links })).status).toBe(204);
     const cert = await certifyMachine(p.person, { pk: p.box.pk, xpk: p.box.xpk!, label: "studio" }, Date.now() + 1_000);
+    const res = await call(p.box, p.box, "PUT", base(p.box), { cert });
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { links: unknown[] }).links).toEqual(p.links);
+    expect((await ask(p.desk, p.box)).status).toBe(202);
+    expect((await ask(p.phone, p.box)).status).toBe(403);
+  });
+
+  test("a cert registered after a list that no longer lists the computer drops that list, so a desktop no longer speaks for it", async () => {
+    const p = await people();
+    expect((await call(p.box, p.box, "PUT", base(p.box), { links: p.links })).status).toBe(204);
+    const start = Date.now();
+    travel(start + 91 * DAY);
+    const cert = await certifyMachine(p.person, { pk: p.box.pk, xpk: p.box.xpk!, label: "studio" }, start + 91 * DAY);
     expect((await call(p.box, p.box, "PUT", base(p.box), { cert })).status).toBe(204);
+    travel(start);
     expect((await ask(p.desk, p.box)).status).toBe(403);
     expect((await ask(p.person, p.box)).status).toBe(202);
+  });
+
+  test("another person's cert never inherits the list", async () => {
+    const p = await people();
+    expect((await call(p.box, p.box, "PUT", base(p.box), { links: p.links })).status).toBe(204);
+    const theirs = await key("their person");
+    const cert = await certifyMachine(theirs, { pk: p.box.pk, xpk: p.box.xpk!, label: "studio" }, Date.now() + 1_000);
+    expect((await call(p.box, p.box, "PUT", base(p.box), { cert })).status).toBe(204);
+    expect((await ask(p.desk, p.box)).status).toBe(403);
+    expect((await ask(theirs, p.box)).status).toBe(202);
   });
 
   test("an approving desktop can unpair it, a phone can't", async () => {
@@ -206,6 +230,41 @@ describe("the account telling its computers", () => {
     expect((await publish(a, p.desk, await grow(p.links, p.desk, { op: "revoke", device: p.laptop.pk }))).status).toBe(204);
     expect((await ask(p.laptop, p.box)).status).toBe(403);
     expect((await ask(p.desk, p.box)).status).toBe(202);
+  });
+
+  test("a computer paired by an old person-signed cert (kp1) takes asks from approving desktops once the list names it", async () => {
+    const p = await people();
+    const a = account();
+    const old = await key("kp1 box");
+    const cert = await certifyMachine(p.person, { pk: old.pk, xpk: old.xpk!, label: "old box" });
+    expect((await call(old, old, "PUT", base(old), { cert })).status).toBe(204);
+    expect((await ask(p.desk, old)).status).toBe(403);
+    expect((await publish(a, p.desk, p.links)).status).toBe(204);
+    expect((await ask(p.desk, old)).status).toBe(403);
+    expect((await ask(p.person, old)).status).toBe(202);
+    const named = await grow(p.links, p.desk, adds(old, "computer"));
+    expect((await publish(a, p.desk, named)).status).toBe(204);
+    expect((await ask(p.desk, old)).status).toBe(202);
+    expect((await ask(p.laptop, old)).status).toBe(202);
+    expect((await ask(p.phone, old)).status).toBe(403);
+    expect((await ask(p.box, old)).status).toBe(403);
+    const again = await call(old, old, "PUT", base(old), { cert });
+    expect(again.status).toBe(200);
+    expect(((await again.json()) as { links: unknown[] }).links).toEqual(named);
+  });
+
+  test("another person's list naming a cert-paired computer gives their devices nothing", async () => {
+    const p = await people();
+    const theirs = await people();
+    const a = account();
+    const old = await key("kp1 box");
+    const cert = await certifyMachine(p.person, { pk: old.pk, xpk: old.xpk!, label: "old box" });
+    expect((await call(old, old, "PUT", base(old), { cert })).status).toBe(204);
+    expect((await publish(a, theirs.desk, await grow(theirs.links, theirs.desk, adds(old, "computer")))).status).toBe(204);
+    expect((await ask(theirs.desk, old)).status).toBe(403);
+    expect((await ask(theirs.person, old)).status).toBe(403);
+    expect((await ask(p.person, old)).status).toBe(202);
+    expect((await call(old, old, "PUT", base(old), { cert })).status).toBe(204);
   });
 
   test("a computer revoked in the account's list is unpaired and stays out", async () => {

@@ -1,16 +1,20 @@
-import { useEffect, useState, useSyncExternalStore } from "react"
+import { Suspense, useEffect, useState, useSyncExternalStore } from "react"
 import { liveOf, restOf } from "~/doing"
 
 import { Avatar, Count, cx, Heading, IconButton, STATUS_WORDS } from "~/kit/bits"
 import { showMenu } from "~/kit/menu-open"
+import { useAppCan } from "~/live/app-can"
 import { useGlide } from "~/kit/glide"
 import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
 import { memberOf, type Channel, type Person } from "~/model"
 import { sameWhere, useAct, useApp } from "~/nav"
 import { between, nickname, onePerPerson, shown } from "~/names"
-import { comingBack, hiddenKey, hiddenPlaces, setHidden } from "~/shell/hidden-places"
+import { comingBack, hiddenKey, hiddenPlaces, keptHidden, setHidden } from "~/shell/hidden-places"
 import { SideFoot } from "~/shell/updates"
+import { later } from "~/kit/later"
+
+const SpecSide = later(() => import("~/specs/view").then((m) => m.SpecSide))
 
 export function Sidebar({ channel }: { channel: Channel }) {
   const { nav, go } = useApp()
@@ -23,12 +27,18 @@ export function Sidebar({ channel }: { channel: Channel }) {
   const theirsShown = openTheirs || onTheirs
   const sideRef = useGlide<HTMLDivElement>(".side-row.is-on")
   const hidden = useSyncExternalStore(hiddenPlaces.subscribe, hiddenPlaces.get)
+  const kept = useSyncExternalStore(keptHidden.subscribe, keptHidden.get)
+  const canLeave = useAppCan("leaveRoom")
   const [showHidden, setShowHidden] = useState(false)
   const roomKey = (room: string) => hiddenKey(channel.code, { kind: "room", room })
   const dmKey = (who: string) => hiddenKey(channel.code, { kind: "dm", with: who })
   const back = comingBack(
-    [...channel.rooms.map((r) => ({ key: roomKey(r.id), news: (r.muted ? r.mentions : r.unread) > 0 })), ...channel.directs.map((d) => ({ key: dmKey(d.with), news: d.unread > 0 }))],
-    hidden
+    [
+      ...channel.rooms.map((r) => ({ key: roomKey(r.id), news: (r.muted ? r.mentions : r.unread) > 0, mention: r.mentions > 0 })),
+      ...channel.directs.map((d) => ({ key: dmKey(d.with), news: d.unread > 0 })),
+    ],
+    hidden,
+    kept
   ).join(" ")
   useEffect(() => {
     for (const key of back ? back.split(" ") : []) setHidden(key, false)
@@ -52,7 +62,7 @@ export function Sidebar({ channel }: { channel: Channel }) {
                   aria-current={on ? "page" : undefined}
                   title={r.muted ? `#${r.name} is muted` : undefined}
                   onClick={() => go({ to: "where", where })}
-                  onContextMenu={(e) => showMenu(e, `#${r.name}`, (x) => x.roomGroups({ channel, go, toast }, actions, on, r))}
+                  onContextMenu={(e) => showMenu(e, `#${r.name}`, (x) => x.roomGroups({ channel, go, toast }, actions, on, canLeave, r))}
                 >
                   <span className="side-hash">{r.members ? <Icon name="lock" size={12} /> : "#"}</span>
                   <span className="side-label">{r.name}</span>
@@ -126,6 +136,14 @@ export function Sidebar({ channel }: { channel: Channel }) {
         </section>
       )}
 
+      {(channel.specs ?? []).some((sp) => !sp.result) && (
+        <section aria-label="Specs">
+          <Heading action={<IconButton icon="chevron" label="All specs" onClick={() => go({ to: "spec", ask: null })} />}>Specs</Heading>
+          <Suspense fallback={null}>
+            <SpecSide channel={channel} />
+          </Suspense>
+        </section>
+      )}
       <section aria-label="People">
         <Heading>People</Heading>
         <ul>

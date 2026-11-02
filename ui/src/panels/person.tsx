@@ -5,6 +5,7 @@ import { useId, useState, type ReactNode } from "react"
 import { TaskChip } from "~/chat/cards"
 import { Avatar, cx, Dialog, DialogHead, Empty, Heading, Toggle } from "~/kit/bits"
 import { Track } from "~/kit/glide"
+import { Swatches } from "~/kit/swatches"
 import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
 import { ALL_POWERS, memberOf, NO_POWERS, trusted, type App, type Channel, type Person } from "~/model"
@@ -277,6 +278,11 @@ function Manage({ channel, person }: { channel: Channel; person: Person }) {
           </Track>
         )}
       </Row>
+      {agent && (
+        <Row label="Colour" hint="Its face takes this colour, for everyone here." stack>
+          {(id) => <Swatches id={id} color={person.color} onPick={(c) => app.actions.setAgentColor(channel.code, person.name, c)} />}
+        </Row>
+      )}
       {agent && (
         <Row label="Personality" hint={persona?.about ?? "Works the way its harness does by default."} stack>
           {(id) => (

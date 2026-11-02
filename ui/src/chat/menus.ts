@@ -81,28 +81,49 @@ export function messageGroups(ctx: MenuContext, m: Message, target: EventTarget,
   ]
 }
 
-function hideItem(ctx: MenuContext, actions: Actions, where: Extract<Where, { kind: "room" | "dm" }>, name: string, open: boolean): MenuItem {
+function hideItem(ctx: MenuContext, actions: Actions, where: Extract<Where, { kind: "room" | "dm" }>, name: string, open: boolean, keep = false): MenuItem {
   const key = hiddenKey(ctx.channel.code, where)
   const hidden = hiddenPlaces.get().includes(key)
   return {
-    label: `${hidden ? "Show" : "Hide"} ${name}`,
+    label: keep ? `Keep ${name} hidden` : `${hidden ? "Show" : "Hide"} ${name}`,
     run: () => {
       if (!hidden) actions.markRead(ctx.channel.code, where)
-      setHidden(key, !hidden)
+      setHidden(key, !hidden, keep)
       if (!hidden && open) ctx.go({ to: "where", where: { kind: "room", room: GENERAL_ROOM } })
     },
   }
 }
 
-export function roomGroups(ctx: MenuContext, actions: Actions, open: boolean, room: { id: string; name: string; unread: number; muted?: boolean | undefined }): MenuGroups {
+export function roomGroups(
+  ctx: MenuContext,
+  actions: Actions,
+  open: boolean,
+  canLeave: boolean,
+  room: { id: string; name: string; unread: number; muted?: boolean | undefined; members?: unknown }
+): MenuGroups {
   const { channel, go, toast } = ctx
   return [
     [
       ...(room.unread > 0 ? [{ label: "Mark as read", run: () => actions.markRead(channel.code, { kind: "room", room: room.id }) }] : []),
       { label: `${room.muted ? "Unmute" : "Mute"} #${room.name}`, run: () => actions.setMute(channel.code, room.id, !room.muted) },
       ...(room.id === GENERAL_ROOM ? [] : [hideItem(ctx, actions, { kind: "room", room: room.id }, `#${room.name}`, open)]),
+      ...(room.id === GENERAL_ROOM || hiddenPlaces.get().includes(hiddenKey(channel.code, { kind: "room", room: room.id }))
+        ? []
+        : [hideItem(ctx, actions, { kind: "room", room: room.id }, `#${room.name}`, open, true)]),
     ],
     channel.youOwn || channel.youTrusted ? [{ label: "Room settings", run: () => go({ to: "panel", panel: { kind: "channel" } }) }] : [],
+    room.members && canLeave
+      ? [
+          {
+            label: `Leave #${room.name}`,
+            confirm: { title: `Leave #${room.name}?`, sub: "It leaves your list now. It's fully closed once someone else in the room is online, and they can add you back.", yes: "Leave" },
+            run: () => {
+              actions.leaveRoom(channel.code, room.id)
+              if (open) go({ to: "where", where: { kind: "room", room: GENERAL_ROOM } })
+            },
+          },
+        ]
+      : [],
     [{ label: "Copy name", run: copier(toast, `#${room.name}`) }],
   ]
 }

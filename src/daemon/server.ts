@@ -922,6 +922,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     dir,
     machine: loadPairedMachine,
     unpaired: unpairHere,
+    listed: async (links) => (await takeDeviceList(links)) === "longer",
     settled: () => relayForget,
     run: remoteRunner({
       inventory: () => harnessInventory(),

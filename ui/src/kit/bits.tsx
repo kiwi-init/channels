@@ -22,9 +22,9 @@ export function Avatar({
   const face = (
     <span
       className={cx("av", `av-${size}`, person.kind === "agent" ? "av-face" : "av-human", person.presence === "offline" && "is-off")}
-      data-color={person.kind === "human" && person.color ? person.color : undefined}
+      data-color={person.color ?? undefined}
       data-harness={person.kind === "agent" ? person.harness : undefined}
-      style={person.kind === "human" && person.color ? ({ "--member": `var(--c-${person.color})` } as CSSProperties) : undefined}
+      style={person.color ? ({ "--member": `var(--c-${person.color})`, ...(person.kind === "agent" ? { color: `var(--c-${person.color})` } : {}) } as CSSProperties) : undefined}
       aria-hidden="true"
     >
       {person.kind === "agent" ? (

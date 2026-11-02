@@ -59,6 +59,7 @@ export function devicesCalls(
   | "recoveryWords"
   | "recoverySave"
   | "recoveryDrop"
+  | "recoveryCancel"
   | "recover"
   | "recoverFinish"
   | "recoverCancel"
@@ -75,6 +76,19 @@ export function devicesCalls(
       ),
     kept: () => store.recovery ?? null,
     keep: (k) => mutate((s) => (s.recovery = k)),
+    letGo: async () => {
+      const who = publicPerson(store.person);
+      if (!who) return;
+      const gone = new Set((await host.news())?.revokes.map((r) => r.device));
+      for (const c of store.computers) {
+        if (c.personPk !== who.pk || gone.has(c.machinePk)) continue;
+        if (!(await host.addComputer({ pk: c.machinePk, xpk: c.machineXpk, label: c.label, os: c.os }))) throw new Error("this app can't list your computers yet");
+      }
+      mutate((s) => {
+        s.enrolled = who;
+        s.person = null;
+      });
+    },
   });
   const recoverer = createRecoverer({
     relayUrl: () => store.relayUrl,
@@ -133,6 +147,7 @@ export function devicesCalls(
     recoveryWords: () => recovery.words(),
     recoverySave: (typed: { at: number; word: string }[]) => recovery.save(typed),
     recoveryDrop: () => recovery.drop(),
+    recoveryCancel: (words: string) => recovery.cancelPending(words),
     recover: (words: string) => recoverer.open(words),
     recoverFinish: (lost: string[]) => recoverer.finish(lost),
     recoverCancel: async () => recoverer.cancel(),

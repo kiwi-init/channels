@@ -6,7 +6,7 @@ import { chromium, type Page } from "playwright-core";
 import { daemonSock } from "../src/daemon/protocol.ts";
 import { stopDaemon } from "../src/daemon/rpc.ts";
 import { startLocalRelay } from "./local-relay.ts";
-import { firstRun, letIn, newChannel } from "./perf-ui.ts";
+import { approveSpec, firstRun, letIn, newChannel } from "./perf-ui.ts";
 import { harnessDist } from "./ui-harness.ts";
 
 if (process.argv.includes("--help")) {
@@ -125,7 +125,7 @@ try {
   const code = await newChannel(page, "motion");
   const views = page.getByRole("navigation", { name: "Views" });
   const toConversation = () => views.getByRole("button", { name: /general/ }).click();
-  const toTasks = () => views.getByRole("button", { name: /^Tasks/ }).click();
+  const toTasks = () => views.getByRole("button", { name: /^Specs/ }).click();
   let joined = false;
   const joining = kiwi(["join", code, "motion", "--as", "atlas", "--model", "claude-opus-5-5", "--relay", BASE]).then(() => void (joined = true));
   await letIn(page, () => !joined);
@@ -140,6 +140,8 @@ try {
   };
   const ask = await say("Morning. Can someone check the router numbers?");
   const titles = ["Write fewer rows per message", "Polish the conversation feed", "Cache sealed history in the browser", "Ship 0.8.12", "Trim the relay's cold start", "Move the docs to the site"];
+  await atlas("spec", "write", ask, "# Check the router numbers\n\n## Done when\n- [ ] the numbers are in");
+  await approveSpec(page);
   const ids: string[] = [];
   for (let i = 0; i < TASKS; i++) ids.push(/T(\d+)/.exec(await atlas("task", "add", `${titles[i % titles.length]} (${i + 1})`, "--owner", "atlas", "--ask", ask))![1]!);
 

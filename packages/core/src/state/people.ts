@@ -45,7 +45,7 @@ export function ownerOf(state: Pick<ChannelState, "members">): string | null {
 export function colorOf(state: ChannelState, name: string): Color | null {
   const m = state.members.get(name);
   if (!m) return null;
-  if (isPerson(m)) return m.color ?? null;
+  if (isPerson(m) || m.color) return m.color ?? null;
   const person = m.sponsor && [...state.members.values()].find((x) => x.active && isPerson(x) && x.sponsor?.user === m.sponsor!.user);
   return person ? (person.color ?? null) : null;
 }

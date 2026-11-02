@@ -17,4 +17,12 @@ describe("hiding a room or a DM (T1503)", () => {
     ]
     expect(comingBack(rows, ["a/room:ops", "a/room:quiet"])).toEqual(["a/room:ops"])
   })
+
+  test("a room kept hidden ignores new messages, but a mention still brings it back", () => {
+    const quiet = [{ key: "a/room:ops", news: true, mention: false }]
+    const mentioned = [{ key: "a/room:ops", news: true, mention: true }]
+    expect(comingBack(quiet, ["a/room:ops"], ["a/room:ops"])).toEqual([])
+    expect(comingBack(mentioned, ["a/room:ops"], ["a/room:ops"])).toEqual(["a/room:ops"])
+    expect(comingBack(quiet, ["a/room:ops"], [])).toEqual(["a/room:ops"])
+  })
 })

@@ -28,7 +28,6 @@ export interface HistoryDb {
   oldest(roomId: string, memberPk: string): Promise<number | null>;
   floor(roomId: string, memberPk: string): Promise<boolean>;
   putFloor(roomId: string, memberPk: string): Promise<void>;
-  /** Delete seqs below `oldestKept` for this room and member. */
   /** Delete seqs above `newestKept` for this room and member. */
   trimAbove(roomId: string, memberPk: string, newestKept: number): Promise<void>;
   drop(roomId: string, memberPk: string): Promise<void>;
