@@ -1,7 +1,9 @@
 import * as Context from "effect/Context";
 import { b64url, fromB64url } from "@kiwi/core/crypto.ts";
 import { PAGE_BYTES, PAGE_LIMIT, type Envelope, type ReadMark } from "@kiwi/core/protocol.ts";
+import type { PushRegistration } from "@kiwi/core/push.ts";
 import type { Policy } from "../policy.ts";
+import type { PushTarget } from "../push.ts";
 import type { DirectoryUpdate } from "./directory.ts";
 import { utcDay } from "./limits.ts";
 import type { RequestBody } from "./requests.ts";
@@ -82,13 +84,14 @@ interface Warm {
   reads: Map<string, number>;
   blobs: boolean | null;
   notes: boolean | null;
+  push: boolean | null;
 }
 
 const warmRooms = new WeakMap<Sql, Warm>();
 
 type Revised = "roster" | "info";
 
-const coldRoom = (): Warm => ({ exists: null, meta: new Map(), head: null, members: new Map(), reads: new Map(), blobs: null, notes: null });
+const coldRoom = (): Warm => ({ exists: null, meta: new Map(), head: null, members: new Map(), reads: new Map(), blobs: null, notes: null, push: null });
 
 export function forgetRoom(sql: Sql): void {
   warmRooms.delete(sql);
@@ -303,6 +306,40 @@ export class RoomDb {
     }
     if (through) this.sql.run("DELETE FROM msgs WHERE seq <= ?", through);
     return freed;
+  }
+
+  private hasPush(): boolean {
+    const w = this.warm;
+    w.push ??= this.sql.all("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'push'").length > 0;
+    return w.push;
+  }
+
+  setPush(pk: string, r: PushRegistration, at: number): void {
+    if (!this.hasPush()) {
+      this.sql.run("CREATE TABLE IF NOT EXISTS push (pk TEXT PRIMARY KEY, platform TEXT NOT NULL, token TEXT NOT NULL, tag TEXT NOT NULL, sandbox INTEGER NOT NULL, at INTEGER NOT NULL)");
+      this.warm.push = true;
+    }
+    this.sql.run("DELETE FROM push WHERE token = ? AND pk != ?", r.token, pk);
+    this.sql.run("INSERT OR REPLACE INTO push (pk, platform, token, tag, sandbox, at) VALUES (?, ?, ?, ?, ?, ?)", pk, r.platform, r.token, r.tag, r.sandbox ? 1 : 0, at);
+  }
+
+  dropPush(pk: string): void {
+    if (this.hasPush()) this.sql.run("DELETE FROM push WHERE pk = ?", pk);
+  }
+
+  dropPushTokens(tokens: readonly string[]): void {
+    if (!this.hasPush()) return;
+    for (const token of tokens) this.sql.run("DELETE FROM push WHERE token = ?", token);
+  }
+
+  pushFor(pks: readonly string[]): PushTarget[] {
+    if (!pks.length || !this.hasPush()) return [];
+    return this.sql
+      .all<Omit<PushTarget, "sandbox"> & { sandbox: number }>(
+        `SELECT p.pk, p.platform, p.token, p.tag, p.sandbox FROM push p JOIN members m ON m.pk = p.pk WHERE m.active = 1 AND p.pk IN (${pks.map(() => "?").join(", ")})`,
+        ...pks,
+      )
+      .map((r) => ({ ...r, sandbox: r.sandbox === 1 }));
   }
 
   private hasNotes(): boolean {

@@ -169,7 +169,7 @@ export function wellFormedRead(x: unknown): ReadMark | null {
  * sequence number; `eph` is relayed to the other sockets and never stored.
  */
 export type ClientFrame =
-  | { t: "send"; id: string; iv: string; ct: string; e?: number; cid?: string }
+  | { t: "send"; id: string; iv: string; ct: string; e?: number; cid?: string; wake?: string[] }
   | { t: "eph"; iv: string; ct: string }
   /** This member has read up to `seq` (a listener says it on the socket it already has: cheaper than a request). */
   | { t: "read"; seq: number }
