@@ -16,6 +16,7 @@ export interface LifeShell {
   showWindow(): void;
   reload(): void;
   textStep(step: TextStep): void;
+  showShortcuts(): void;
   restartToUpdate(): void;
   update(): UpdateState | null;
   nudgeKeys(): void;
@@ -37,6 +38,10 @@ export function startAppLife(shell: LifeShell): AppTray {
     else if (a === "devtools") shell.view.toggleDevTools();
     else if (a === "close") shell.win.requestClose();
     else if (a === "fullscreen") shell.win.setFullScreen(!shell.win.isFullScreen());
+    else if (a === "shortcuts") {
+      shell.showWindow();
+      shell.showShortcuts();
+    }
   };
   Electrobun.events.on("reopen", () => shell.showWindow());
   Electrobun.events.on(`will-close-${shell.win.id}`, (e: { response?: { allow: boolean } }) => {

@@ -205,8 +205,8 @@ describe("the tray and the app menu say what Electron's did (T438)", () => {
     return m && "submenu" in m ? m.submenu : [];
   };
 
-  test("the Mac gets the app menu; every platform gets File, Edit, View and Window", () => {
-    expect(labels(appMenu("darwin"))).toEqual(["Channels", "File", "Edit", "View", "Window"]);
+  test("the Mac gets the app and Help menus; every platform gets File, Edit, View and Window", () => {
+    expect(labels(appMenu("darwin"))).toEqual(["Channels", "File", "Edit", "View", "Window", "Help"]);
     expect(labels(appMenu("linux"))).toEqual(["File", "Edit", "View", "Window"]);
     expect(labels(sub(appMenu("darwin"), "Channels"))).toEqual(["About Channels", "-", "Hide Channels", "hideOthers", "showAll", "-", "Quit Channels"]);
     expect(labels(sub(appMenu("darwin"), "Edit"))).toEqual(["undo", "redo", "-", "cut", "copy", "paste", "pasteAndMatchStyle", "delete", "selectAll"]);
@@ -243,6 +243,11 @@ describe("the tray and the app menu say what Electron's did (T438)", () => {
       ["toggleFullScreen", "Ctrl+Cmd+f"],
       ["minimize", "m"],
     ]);
+  });
+
+  test("Help → Keyboard Shortcuts opens the shortcut sheet, and leaves ⌘/ to the page that handles it too (T994)", () => {
+    expect(sub(appMenu("darwin"), "Help")).toEqual([{ label: "Keyboard Shortcuts", action: "shortcuts" }]);
+    expect(menuAction({ data: { action: "shortcuts" } })).toBe("shortcuts");
   });
 
   test("a click is read back only as one of the app's own actions", () => {

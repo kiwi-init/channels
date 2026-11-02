@@ -1,0 +1,67 @@
+.keys-sheet {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px 32px;
+  padding: 4px 0 8px;
+}
+
+.keys-group h3 {
+  margin: 0 0 8px;
+  color: var(--ink-3);
+  font: var(--t-meta) var(--ui);
+}
+
+.keys-group dl {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+}
+
+.keys-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 30px;
+  border-bottom: 1px solid var(--line);
+}
+
+.keys-row:last-child {
+  border-bottom: 0;
+}
+
+.keys-row dt {
+  color: var(--ink-2);
+  font: var(--t-ui) var(--ui);
+}
+
+.keys-row dd {
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+  margin: 0;
+}
+
+.keys-combo {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.keys-or {
+  margin-right: 5px;
+  color: var(--ink-3);
+  font: var(--t-meta) var(--ui);
+}
+
+.keys-sheet kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-tag);
+  color: var(--ink);
+  font: var(--t-meta) var(--mono);
+}

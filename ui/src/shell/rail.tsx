@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useEffectEvent, useState, type CSSProperties, type DragEvent } from "react"
 
 import { nextWithNews } from "@kiwi/channel/news.ts"
+import { byDigit, railDigit } from "~/shell/shortcut-keys"
 import { cx } from "~/kit/bits"
 import { later } from "~/kit/later"
 import { Icon } from "~/kit/icons"
@@ -46,8 +47,18 @@ export function Rail() {
     const next = nextWithNews(ordered, news, from, dir)
     if (next) go({ to: "channel", code: next.code })
   })
+  const jump = useEffectEvent((n: number) => {
+    const to = byDigit(ordered, n)
+    if (to && to.code !== on) go({ to: "channel", code: to.code })
+  })
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      const n = railDigit(e)
+      if (n !== null && !document.querySelector("dialog[open]")) {
+        e.preventDefault()
+        jump(n)
+        return
+      }
       if (!e.altKey || e.metaKey || e.ctrlKey || e.shiftKey || (e.key !== "ArrowDown" && e.key !== "ArrowUp")) return
       e.preventDefault()
       e.stopPropagation()

@@ -511,6 +511,7 @@ export interface KiwiBridge {
   /** A link came in while the app runs (it waits for getDeepLink too, so it's opened once). */
   onDeepLink(cb: (url: string) => void): () => void;
   onTextStep(cb: (step: TextStep) => void): () => void;
+  onShortcuts(cb: () => void): () => void;
   onFrost(cb: (on: boolean) => void): () => void;
   getAccentColor(): Promise<string | null>;
   /** What this app can run: its UI contract version and the channel calls it serves, so a newer UI hides what it can't do. */

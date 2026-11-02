@@ -238,6 +238,9 @@ jobs:
       - name: ui a reload keeps the room, tab and scroll, and ⌘[ / ⌘] step back and forward after search jumps, in WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-restore-place.ts --dist ui/dist
+      - name: ui ⌘/ and ⌘K open the shortcut sheet, and ⌘1-9 pick a channel in the rail (9 the last), in WebKit
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-shortcuts.ts --dist ui/dist
       - name: ui history archive (newest window on reload, rows kept below it, backfill, leave), on WebKit's IndexedDB
         if: ${{ !cancelled() }}
         run: bun scripts/ui-history-archive.ts

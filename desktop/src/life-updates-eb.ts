@@ -14,6 +14,7 @@ export function startLife(win: BrowserWindow, release: () => void): void {
     showWindow: () => ebHost.showWindow(),
     reload: () => ebHost.reload(),
     textStep: (step) => ebHost.push("textStep", step),
+    showShortcuts: () => ebHost.push("shortcuts", null),
     restartToUpdate: () => ebHost.restartToUpdate(),
     update: updateState,
     nudgeKeys: () => ebHost.tellKeys({ type: "nudge" }),

@@ -7,6 +7,7 @@ import { useApp, type Go, type Nav, type Panel } from "~/nav"
 import { nickname, onePerPerson, shown } from "~/names"
 import { SIDEBAR_KEYS } from "@kiwi/app/sidebar-hidden.ts"
 import { toggleSide } from "~/shell/side"
+import { sheetKeys } from "~/shell/shortcut-keys"
 import { statusOf } from "~/shell/sidebar"
 
 type Group = "Channels" | "Rooms" | "People" | "Tasks" | "Actions"
@@ -311,6 +312,15 @@ function collect(app: App, nav: Nav, go: (go: Go) => void): Item[] {
       keys: ["phones", "devices", "machines"],
       lead: <Icon name="computer" size={14} />,
       run: () => go({ to: "settings", section: "computers" }),
+    },
+    {
+      id: "action:shortcuts",
+      group: "Actions",
+      label: "Keyboard shortcuts",
+      keys: ["keys", "help", "hotkeys", "cheat sheet"],
+      lead: <Icon name="info" size={14} />,
+      meta: <kbd className="palette-kbd">{sheetKeys()}</kbd>,
+      run: () => go({ to: "dialog", dialog: "shortcuts" }),
     },
     {
       id: "action:settings",

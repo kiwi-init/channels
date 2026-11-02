@@ -1,9 +1,9 @@
 import type { TextStep } from "./text-size.ts";
 import type { UpdateState } from "./updater.ts";
 
-export type MenuAction = "open" | "restart" | "quit" | "reload" | "devtools" | "close" | "fullscreen" | `text-${TextStep}`;
+export type MenuAction = "open" | "restart" | "quit" | "reload" | "devtools" | "close" | "fullscreen" | "shortcuts" | `text-${TextStep}`;
 
-const ACTIONS: readonly MenuAction[] = ["open", "restart", "quit", "reload", "devtools", "close", "fullscreen", "text-bigger", "text-smaller", "text-reset"];
+const ACTIONS: readonly MenuAction[] = ["open", "restart", "quit", "reload", "devtools", "close", "fullscreen", "shortcuts", "text-bigger", "text-smaller", "text-reset"];
 
 const LINUX_SHORTCUTS: readonly MenuAction[] = ["text-bigger", "text-smaller", "text-reset", "reload", "quit", "close", "fullscreen"];
 
@@ -59,6 +59,7 @@ export function appMenu(platform: NodeJS.Platform, packaged = false): AppMenuIte
       ],
     },
     { label: "Window", submenu: [{ role: "minimize", accelerator: "m" }, ...roles("zoom", null, "bringAllToFront")] },
+    ...(platform === "darwin" ? [{ label: "Help", submenu: [{ label: "Keyboard Shortcuts", action: "shortcuts" as const }] }] : []),
   ];
 }
 

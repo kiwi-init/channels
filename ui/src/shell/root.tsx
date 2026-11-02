@@ -5,6 +5,8 @@ import { later } from "~/kit/later"
 import { Toasts, useToasts } from "~/kit/toasts"
 import type { App } from "~/model"
 import { ActContext, AppContext, historyStep, type Go, type Nav } from "~/nav"
+import { bridge } from "@kiwi/secrets/secrets.ts"
+import { isSheetKey } from "~/shell/shortcut-keys"
 import { ContextMenus } from "~/kit/menu-open"
 import { Palette } from "~/palette/palette"
 import { ChannelScreen } from "~/shell/channel"
@@ -21,6 +23,7 @@ const EnrollDialog = later(() => import("~/settings/enroll").then((m) => m.Enrol
 const JoinDialog = later(() => import("~/start/join").then((m) => m.JoinDialog))
 const NewRoomDialog = later(() => import("~/shell/new-room").then((m) => m.NewRoomDialog))
 const Welcome = later(() => import("~/start/welcome").then((m) => m.Welcome))
+const ShortcutsDialog = later(() => import("~/shell/shortcuts").then((m) => m.ShortcutsDialog))
 
 export function Root({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => void }) {
   const [toasts, toast, dismissToast] = useToasts()
@@ -28,6 +31,7 @@ export function Root({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => voi
   const act = useMemo(() => ({ actions: app.actions, go, toast }), [app.actions, go, toast])
   usePaletteKey(useCallback(() => go({ to: "dialog", dialog: nav.dialog === "palette" ? null : "palette" }), [go, nav.dialog]))
   useHistoryKeys(go)
+  useSheetKeys(go, nav.dialog === "shortcuts")
   useTheme(app)
 
   if (!app.account || app.signIn?.stage === "sign-in")
@@ -76,6 +80,11 @@ export function Root({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => voi
             <JoinDialog />
           </Suspense>
         )}
+        {nav.dialog === "shortcuts" && (
+          <Suspense fallback={null}>
+            <ShortcutsDialog />
+          </Suspense>
+        )}
         {app.account?.enrollAsk && (
           <Suspense fallback={null}>
             <EnrollDialog />
@@ -100,6 +109,23 @@ function useHistoryKeys(go: (go: Go) => void) {
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
   }, [go])
+}
+
+function useSheetKeys(go: (go: Go) => void, open: boolean) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!isSheetKey(e) || e.defaultPrevented) return
+      e.preventDefault()
+      go({ to: "dialog", dialog: open ? null : "shortcuts" })
+    }
+    window.addEventListener("keydown", onKey)
+    const b = bridge()
+    const stop = b && typeof b.onShortcuts === "function" ? b.onShortcuts(() => go({ to: "dialog", dialog: "shortcuts" })) : null
+    return () => {
+      window.removeEventListener("keydown", onKey)
+      stop?.()
+    }
+  }, [go, open])
 }
 
 function usePaletteKey(toggle: () => void) {

@@ -14,6 +14,7 @@ export interface Pushes {
   githubCode: { code: string; url: string };
   deepLink: string;
   textStep: TextStep;
+  shortcuts: null;
   frost: boolean;
   accent: string | null;
   uiUpdate: UiUpdateView | null;
@@ -117,6 +118,7 @@ export function makeBridge(t: BridgeTransport): KiwiBridge {
     onDeepLink: (cb) => t.listen("deepLink", cb),
     onTextStep: (cb) => t.listen("textStep", cb),
     onFrost: (cb) => t.listen("frost", cb),
+    onShortcuts: (cb) => t.listen("shortcuts", () => cb()),
     getAccentColor: () => t.call("getAccentColor"),
     capabilities: () => t.call("capabilities"),
     onAccent: (cb) => t.listen("accent", cb),
