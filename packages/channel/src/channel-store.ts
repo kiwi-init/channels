@@ -28,6 +28,7 @@ import { dropWarm, keepWarm, warmOf, type Warm } from "./warm.ts";
 const HISTORY = 2_000;
 const KEEP_DELAY_MS = 3_000;
 const CLOCK_MS = 15_000;
+const GITHUB_SYNC_MS = 6 * 3_600_000;
 
 type Connection = "connecting" | "live" | "reconnecting";
 
@@ -114,7 +115,10 @@ export class ChannelStore {
   private snapshotNext = nextSnapshotTry(0, 0);
   private snapshotBusy = false;
   private checksBusy = false;
+  private reconciling = false;
+  private reconcileAgain = false;
   private rulesBusy = false;
+  private readonly githubSynced = new Map<string, number>();
 
   constructor(member: StoredMember, human?: HumanSession | null, deps?: ChannelStoreDeps) {
     this.ch = deps?.link ?? linkOf(member);
@@ -146,7 +150,9 @@ export class ChannelStore {
     const scopesKey = computed(() => [...this.state.value.members.values()].map((m) => `${m.pk}:${m.scopes.join(",")}`).join("|"));
     const bitsKey = computed(() => this.roster.value.map((m) => `${m.pk}:${m.readOnly ? 0 : 1}`).join("|"));
     const repoList = computed(() => this.state.value.repos.join(","));
-    this.reconcileDue = computed(() => `${scopesKey.value}\n${bitsKey.value}\n${this.caughtUp.value}`);
+    const goneKey = computed(() => [...this.state.value.gone.keys()].sort().join(","));
+    const nickKey = computed(() => [...this.state.value.nicknames].map(([pk, n]) => `${pk}:${n.seq}`).join(","));
+    this.reconcileDue = computed(() => `${scopesKey.value}\n${bitsKey.value}\n${goneKey.value}\n${nickKey.value}\n${this.caughtUp.value}`);
     this.pruneDue = computed(() => `${[...this.keyOf.value.values()].sort().join(",")}\n${this.caughtUp.value}`);
     this.checksDue = computed(() => `${this.head.value}\n${this.caughtUp.value}`);
     this.rulesDue = computed(() => `${this.caughtUp.value}\n${repoList.value}`);
@@ -553,13 +559,26 @@ export class ChannelStore {
   }
 
   private reconcile(): void {
-    if (!this.ch.isOwner || !this.caughtUp.value || this.roster.value.length === 0) return;
-    this.ch.reconcilePosting(this.state.value, this.roster.value).then(
-      (changed) => {
-        if (changed.length) void this.refreshRoster();
-      },
-      () => {},
-    );
+    if (!this.ch.isOwner || !this.caughtUp.peek() || this.roster.peek().length === 0) return;
+    if (this.reconciling) {
+      this.reconcileAgain = true;
+      return;
+    }
+    this.reconciling = true;
+    this.ch
+      .reconcilePosting(this.state.peek(), this.roster.peek())
+      .then(
+        async (changed) => {
+          if (changed.length) await this.refreshRoster();
+        },
+        () => {},
+      )
+      .finally(() => {
+        this.reconciling = false;
+        if (!this.reconcileAgain) return;
+        this.reconcileAgain = false;
+        this.reconcile();
+      });
   }
 
   private snapshotIfDue(head: number): void {
@@ -612,9 +631,20 @@ export class ChannelStore {
       .catch(() => {})
       .then(() => this.ch.syncGithubReleases(state.repos, [...state.github.releases.values()].flat()))
       .catch(() => {})
+      .then(() => this.syncGithub(state.repos))
+      .catch(() => {})
       .finally(() => {
         this.rulesBusy = false;
       });
+  }
+
+  private async syncGithub(repos: readonly string[]): Promise<void> {
+    for (const repo of repos) {
+      const key = repo.toLowerCase();
+      if (Date.now() - (this.githubSynced.get(key) ?? -Infinity) < GITHUB_SYNC_MS) continue;
+      await this.ch.syncGithub(repo, this.state.peek().github);
+      this.githubSynced.set(key, Date.now());
+    }
   }
 
   private every(ms: number, run: () => void): () => void {

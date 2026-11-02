@@ -1,5 +1,6 @@
 import * as Context from "effect/Context";
-import { MAX_RELEASE_COMMITS, MAX_REQUIRED_CHECKS, MERGE_METHODS, REPO_RE, type MergeMethod } from "@kiwi/core/protocol.ts";
+import { GITHUB_CLOSED_KEEP_MS, MAX_RELEASE_COMMITS, MAX_REQUIRED_CHECKS, MERGE_METHODS, REPO_RE, type GithubNote, type GithubSyncList, type MergeMethod } from "@kiwi/core/protocol.ts";
+import { syncNotes } from "./github.ts";
 
 export const REVIEW_CHECK = "kiwi/review";
 const MAX_DIFF = 2 << 20;
@@ -56,6 +57,13 @@ interface RepoMeta {
   allow_rebase_merge?: boolean | null;
 }
 
+const MERGE_SETTINGS = "query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { defaultBranchRef { name } mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed } }";
+
+type MergeSettings = {
+  data?: { repository?: { defaultBranchRef?: { name?: string } | null; mergeCommitAllowed?: boolean; squashMergeAllowed?: boolean; rebaseMergeAllowed?: boolean } | null };
+  errors?: { message?: string }[];
+};
+
 type BranchRule = { type?: string; parameters?: { required_status_checks?: { context?: string }[]; allowed_merge_methods?: string[] } };
 
 type BranchInfo = { protection?: { required_status_checks?: { contexts?: string[]; checks?: { context?: string }[] } } };
@@ -105,6 +113,43 @@ export function releaseFrom(tag: string, at: number, commits: readonly Commit[])
 
 const RELEASES_READ = 5;
 
+const PR_FIELDS = "number title url state mergeCommit { oid } headRefName headRefOid additions deletions changedFiles author { login } updatedAt closedAt";
+const CHECK_FIELDS = "commits(last: 1) { nodes { commit { checkSuites(first: 20) { nodes { checkRuns(first: 50) { nodes { databaseId name status conclusion url startedAt completedAt } } } } } } }";
+const ISSUE_FIELDS = "number title url state stateReason author { login } updatedAt closedAt";
+const NEWEST = "orderBy: { field: UPDATED_AT, direction: DESC }";
+
+interface SyncList {
+  connection: string;
+  fields: string;
+  prs: boolean;
+  closed: boolean;
+}
+
+const SYNC_LISTS: Record<GithubSyncList, SyncList> = {
+  "open-prs": { connection: `pullRequests(states: OPEN, first: 100, after: $after, ${NEWEST})`, fields: `${PR_FIELDS} ${CHECK_FIELDS}`, prs: true, closed: false },
+  "open-issues": { connection: `issues(states: OPEN, first: 100, after: $after, ${NEWEST})`, fields: ISSUE_FIELDS, prs: false, closed: false },
+  "closed-prs": { connection: `pullRequests(states: [CLOSED, MERGED], first: 100, after: $after, ${NEWEST})`, fields: PR_FIELDS, prs: true, closed: true },
+  "closed-issues": { connection: `issues(states: CLOSED, first: 100, after: $after, filterBy: { since: $since }, ${NEWEST})`, fields: ISSUE_FIELDS, prs: false, closed: true },
+};
+
+const syncQuery = (l: SyncList): string =>
+  `query($owner: String!, $name: String!, $after: String${l.connection.includes("$since") ? ", $since: DateTime" : ""}) { repository(owner: $owner, name: $name) { nameWithOwner list: ${l.connection} { nodes { ${l.fields} } pageInfo { hasNextPage endCursor } } } }`;
+
+type SyncPage = {
+  data?: { repository?: { nameWithOwner?: string; list?: { nodes?: unknown[]; pageInfo?: { hasNextPage?: boolean; endCursor?: string | null } } } | null };
+  errors?: { message?: string }[];
+};
+
+const updatedBefore = (node: unknown, since: number): boolean => {
+  const at = node && typeof node === "object" && "updatedAt" in node && typeof node.updatedAt === "string" ? Date.parse(node.updatedAt) : NaN;
+  return at < since;
+};
+
+interface GithubSyncPage {
+  items: GithubNote[];
+  next: string | null;
+}
+
 export type GithubReply<T> = { ok: true; value: T } | { ok: false; status: number; error: string };
 
 export interface GithubAppApi {
@@ -115,6 +160,7 @@ export interface GithubAppApi {
   closeIssue(repo: string, number: number, reason: "completed" | "not_planned", body: string): Promise<GithubReply<{ url: string | null }>>;
   rules(repo: string): Promise<GithubReply<GithubRulesInfo>>;
   releases(repo: string, known: readonly string[]): Promise<GithubReply<GithubReleaseInfo[]>>;
+  sync(repo: string, list: GithubSyncList, after: string | null): Promise<GithubReply<GithubSyncPage>>;
   canPush: PushCheck;
 }
 
@@ -202,6 +248,24 @@ export function githubAppFrom(opts: { appId?: string | null; privateKey?: string
 
   return {
     canPush: githubPushFrom({ api, fetch: get }),
+    sync: async (repo, list, after) => {
+      const t = await token(repo);
+      if (!t.ok) return t;
+      const l = SYNC_LISTS[list];
+      const since = now() - GITHUB_CLOSED_KEEP_MS;
+      const [owner, name] = repo.split("/");
+      const variables = { owner, name, after, ...(l.connection.includes("$since") ? { since: new Date(since).toISOString() } : {}) };
+      const res = await get(`${api}/graphql`, { method: "POST", headers: { ...headers(t.value), "content-type": "application/json" }, body: JSON.stringify({ query: syncQuery(l), variables }) });
+      if (!res.ok) return fail(res, "pull requests and issues for this repo");
+      const body = (await res.json()) as SyncPage;
+      const repository = body.data?.repository;
+      const got = repository?.list;
+      if (!got) return { ok: false, status: 502, error: `GitHub refused the pull requests and issues of ${repo}: ${body.errors?.[0]?.message ?? "no data"}` };
+      const full = repository.nameWithOwner && REPO_RE.test(repository.nameWithOwner) ? repository.nameWithOwner : repo;
+      const nodes = got.nodes ?? [];
+      const done = !got.pageInfo?.hasNextPage || !got.pageInfo.endCursor || (l.closed && updatedBefore(nodes.at(-1), since));
+      return { ok: true, value: { items: syncNotes(full, l.prs ? nodes : [], l.prs ? [] : nodes, since, now()), next: done ? null : (got.pageInfo?.endCursor ?? null) } };
+    },
     diff: async (repo, sha) => {
       const t = await token(repo);
       if (!t.ok) return t;
@@ -253,9 +317,17 @@ export function githubAppFrom(opts: { appId?: string | null; privateKey?: string
     rules: async (repo) => {
       const t = await token(repo);
       if (!t.ok) return t;
-      const meta = await get(`${api}/repos/${repo}`, { headers: headers(t.value) });
+      const [owner, name] = repo.split("/");
+      const meta = await get(`${api}/graphql`, {
+        method: "POST",
+        headers: { ...headers(t.value), "content-type": "application/json" },
+        body: JSON.stringify({ query: MERGE_SETTINGS, variables: { owner, name } }),
+      });
       if (!meta.ok) return fail(meta, "repo");
-      const m = (await meta.json()) as RepoMeta;
+      const body = (await meta.json()) as MergeSettings;
+      const r = body.data?.repository;
+      if (!r) return { ok: false, status: 502, error: `GitHub refused ${repo}'s merge settings: ${body.errors?.[0]?.message ?? "no data"}` };
+      const m: RepoMeta = { default_branch: r.defaultBranchRef?.name, allow_merge_commit: r.mergeCommitAllowed, allow_squash_merge: r.squashMergeAllowed, allow_rebase_merge: r.rebaseMergeAllowed };
       const branch = encodeURIComponent(m.default_branch ?? "main");
       const [rules, info] = await Promise.all([
         get(`${api}/repos/${repo}/rules/branches/${branch}`, { headers: headers(t.value) }),

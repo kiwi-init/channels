@@ -316,6 +316,8 @@ export type Event =
   | { op: "msg.delete"; seq: number }
   | { op: "member.gone"; member: string; pk: string }
   | { op: "member.back"; member: string; pk: string }
+  /** An agent's nickname (null: none), from the owner or a person who manages agents; the owner's app re-signs the agent's record with it. */
+  | { op: "nickname.set"; member: string; pk: string; nickname: string | null }
   | { op: "spec.set"; ask: number; text: string }
   | { op: "spec.approve"; ask: number; v: number }
   | { op: "spec.result"; ask: number; verdict: SpecVerdict; note?: string }
@@ -324,6 +326,8 @@ export type Event =
 export type SpecVerdict = "accepted" | "back" | "dropped";
 
 export const MAX_SPEC = 20_000;
+
+export const MAX_NICKNAME = 40;
 
 export const MAX_SPEC_NOTE = 2000;
 
@@ -376,10 +380,10 @@ const QUIET_OPS: ReadonlySet<string> = new Set([
 
 export const isRunning = (i: GithubNote): boolean => (i.event === "check_run" || i.event === "workflow_run") && i.conclusion === undefined;
 
-const onlyRunning = (items: readonly GithubNote[]): boolean => items.length > 0 && items.every(isRunning);
+const nothingNew = (items: readonly GithubNote[]): boolean => items.length > 0 && items.every((i) => isRunning(i) || i.action === GITHUB_SYNCED);
 
 export function isQuiet(m: Pick<Message, "kind" | "ev" | "newer">): boolean {
-  return m.kind === "event" && (m.newer !== undefined || (!!m.ev && (QUIET_OPS.has(m.ev.op) || (m.ev.op === "github" && onlyRunning(m.ev.items)))));
+  return m.kind === "event" && (m.newer !== undefined || (!!m.ev && (QUIET_OPS.has(m.ev.op) || (m.ev.op === "github" && nothingNew(m.ev.items)))));
 }
 
 /** What a member says about itself (see the card event). Every field is optional and short. */
@@ -446,6 +450,10 @@ export const MAX_SUMMARY = 8000;
 
 export const GITHUB_EVENTS = ["pull_request", "check_run", "push", "workflow_run", "issues"] as const;
 export const MAX_GITHUB_ITEMS = 50;
+export const GITHUB_SYNCED = "synced";
+export const GITHUB_SYNC_LISTS = ["open-prs", "open-issues", "closed-prs", "closed-issues"] as const;
+export type GithubSyncList = (typeof GITHUB_SYNC_LISTS)[number];
+export const GITHUB_CLOSED_KEEP_MS = 30 * 24 * 3_600_000;
 
 export interface GithubNote {
   event: (typeof GITHUB_EVENTS)[number];
@@ -773,7 +781,7 @@ export interface NewerEvent {
 
 export type WirePayload = Omit<Payload, "ev"> & { ev?: Event | NewerEvent };
 
-export const EVENT_OPS_VERSION = 14;
+export const EVENT_OPS_VERSION = 15;
 
 export const PRIVATE_ROOM_OPS = 9;
 
@@ -799,7 +807,7 @@ export function asSent(m: Message): Omit<Message, "newer" | "ev"> & { ev?: Event
 
 export const outgrown = (base: { folded?: number; skipped?: true }): boolean => base.skipped === true && (base.folded ?? 0) < EVENT_OPS_VERSION;
 
-export const FOLD_RULES = 19;
+export const FOLD_RULES = 20;
 
 export const olderRules = (base: { rules?: number }): boolean => (base.rules ?? 0) < FOLD_RULES;
 
@@ -1081,6 +1089,8 @@ function eventCheck(ev: unknown): boolean | null {
     case "member.gone":
     case "member.back":
       return str(e.member, 64) && str(e.pk, 64);
+    case "nickname.set":
+      return str(e.member, 64) && str(e.pk, 64) && (e.nickname === null || str(e.nickname, MAX_NICKNAME * 4));
     case "ask.name":
       return n(e.ask) && (e.ask as number) > 0 && (e.name === null || str(e.name, MAX_GOAL_NAME * 4));
     case "ask.close":

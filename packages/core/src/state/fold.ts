@@ -3,6 +3,7 @@ import {
   EVENT_OPS_VERSION,
   FOLD_RULES,
   GENERAL_ROOM,
+  GITHUB_CLOSED_KEEP_MS,
   ignored,
   isOverlay,
   MAX_GOAL_NAME,
@@ -30,7 +31,27 @@ import { roomName } from "./rooms.ts";
 import { settle } from "./leases.ts";
 import { carriedPersona } from "../personality.ts";
 import { permissionAnswer } from "../permission.ts";
-import type { AskHead, ChannelState, Edit, Fact, FoldBase, FoldMember, GuardFloor, Lease, Member, PersonaLead, Place, Reaction, Room, RoomsFloor, Roster, SecretRoom, Spec, Task } from "./types.ts";
+import type {
+  AskHead,
+  ChannelState,
+  Edit,
+  Fact,
+  FoldBase,
+  FoldMember,
+  GuardFloor,
+  Lease,
+  Member,
+  Nickname,
+  PersonaLead,
+  Place,
+  Reaction,
+  Room,
+  RoomsFloor,
+  Roster,
+  SecretRoom,
+  Spec,
+  Task,
+} from "./types.ts";
 import { inRoom } from "../room-rules.ts";
 import { packAuthors, unpackAuthors } from "./authors.ts";
 
@@ -38,9 +59,7 @@ const STALE_MS = 24 * 3_600_000;
 const SENT_WINDOW_MS = 2 * STALE_MS;
 const KEEP_SEQS = 5_000;
 const SENT_CAP = 3_000;
-const CLOSED_KEEP_MS = 30 * STALE_MS;
-
-const closedLongAgo = (at: number, hw: number) => hw - at > CLOSED_KEEP_MS;
+const closedLongAgo = (at: number, hw: number) => hw - at > GITHUB_CLOSED_KEEP_MS;
 
 function idHash(id: string): number {
   let a = 0xdeadbeef;
@@ -230,6 +249,11 @@ function folding(
   const scopeSets = new Map<string, { seq: number; scopes: Scope[] }>(from?.scopeSets);
   const roleSets = new Map<string, { seq: number; role: string | null; about?: string | null }>(from?.roleSets);
   const gone = new Map<string, number>(from?.gone);
+  const nicknames = new Map<string, Nickname>(from?.nicknames);
+  for (const m of members.values()) {
+    const nick = isPerson(m) ? undefined : nicknames.get(m.pk);
+    if (nick) m.display = nick.nickname ?? undefined;
+  }
   const setRole = (target: FoldMember, role: string | null, about: string | null | undefined) => {
     const leads = isLeadRole(role ?? undefined);
     if (leads) {
@@ -318,6 +342,7 @@ function folding(
     scopeSets,
     roleSets,
     gone,
+    nicknames,
     setRole,
     tasks,
     facts,
@@ -648,6 +673,7 @@ function folding(
       scopeSets: [...scopeSets],
       roleSets: [...roleSets],
       gone: [...gone],
+      nicknames: [...nicknames],
       tasks: [...tasks.values()].map((t) => (carded(t) ? card(t) : t)),
       facts: [...facts.values()],
       leases: [...leases.values()],
@@ -686,7 +712,10 @@ function folding(
 
   passFloors(Infinity);
   passRoleFloors(Infinity);
-  for (const member of members.values()) member.scopes = scopesByKey.get(member.pk) ?? [];
+  for (const member of members.values()) {
+    member.scopes = scopesByKey.get(member.pk) ?? [];
+    if (!member.owner && gone.has(member.pk)) member.active = false;
+  }
   const signedLead = [...members.values()].filter((m) => m.active && signed.has(m.name) && m.persona?.role === "lead").sort((a, b) => a.joined - b.joined)[0]?.name;
   const legacyLead = lead && members.get(lead)?.active && !signed.has(lead) ? lead : null;
   const theLead = signedLead ?? legacyLead;
@@ -723,6 +752,7 @@ function folding(
     scopeSets,
     roleSets,
     gone,
+    nicknames,
     rejected,
     openAsks,
     askHeads,

@@ -105,6 +105,7 @@ const OPS: Record<Event["op"], true> = {
   "room.leave": true,
   "member.gone": true,
   "member.back": true,
+  "nickname.set": true,
 };
 const V1 = [
   "hello",
@@ -205,6 +206,29 @@ const OPS_AT: Record<number, readonly string[]> = {
     "spec.approve",
     "spec.result",
     "specs.only.set",
+  ],
+  15: [
+    ...V1,
+    "branch.prefix.set",
+    "github.rules",
+    "github.release",
+    "ask.name",
+    "ask.close",
+    "devices",
+    "task.first",
+    "power.set",
+    "room.seal",
+    "room.msg",
+    "msg.edit",
+    "msg.delete",
+    "member.gone",
+    "member.back",
+    "room.leave",
+    "spec.set",
+    "spec.approve",
+    "spec.result",
+    "specs.only.set",
+    "nickname.set",
   ],
 };
 

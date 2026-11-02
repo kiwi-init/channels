@@ -1,6 +1,6 @@
 import * as Effect from "effect/Effect";
-import { cleanGithubNote, MAX_GITHUB_ITEMS, wellFormedEvent, type GithubNote, type MergeMethod } from "../protocol.ts";
-import type { GithubRelease, GithubRules } from "../state.ts";
+import { cleanGithubNote, GITHUB_SYNC_LISTS, MAX_GITHUB_ITEMS, wellFormedEvent, type GithubNote, type MergeMethod } from "../protocol.ts";
+import { githubNews, type GithubRelease, type GithubRules, type GithubState } from "../state.ts";
 import type { ChannelCore } from "./core.ts";
 import type { Refused } from "./errors.ts";
 import type { Relay } from "./relay.ts";
@@ -42,12 +42,15 @@ export interface GithubFx {
   drainGithub(): Effect.Effect<number, Refused, Relay>;
   syncGithubRules(repos: readonly string[], known: readonly GithubRules[]): Effect.Effect<number, Refused, Relay>;
   syncGithubReleases(repos: readonly string[], known: readonly GithubRelease[]): Effect.Effect<number, Refused, Relay>;
+  syncGithub(repo: string, known: GithubState): Effect.Effect<number, Refused, Relay>;
   githubDiff(repo: string, sha: string): Effect.Effect<GithubDiff, Refused, Relay>;
   postReviewCheck(c: ReviewCheck): Effect.Effect<{ url: string | null }, Refused, Relay>;
   commentOnPr(repo: string, number: number, body: string): Effect.Effect<{ url: string | null }, Refused, Relay>;
   githubIssue(repo: string, number: number): Effect.Effect<GithubIssueInfo, Refused, Relay>;
   closeIssue(c: { repo: string; number: number; reason: "completed" | "not_planned"; body: string }): Effect.Effect<{ url: string | null }, Refused, Relay>;
 }
+
+const SYNC_PAGES = 15;
 
 const PR_ACTIONS = new Set(["opened", "reopened", "closed", "ready_for_review", "synchronize", "edited", "converted_to_draft"]);
 const ISSUE_ACTIONS = new Set(["opened", "reopened", "closed", "edited"]);
@@ -121,6 +124,29 @@ export class ChannelGithub {
           if (tags.includes(r.tag) || !wellFormedEvent(ev)) continue;
           yield* this.ch.fx.send(`GitHub: ${repo} released ${r.tag}`, { kind: "event", ev });
           sent++;
+        }
+      }
+      return sent;
+    }),
+
+    syncGithub: Effect.fn("Channel.syncGithub")({ self: this }, function* (this: ChannelGithub, repo: string, known: GithubState) {
+      yield* this.ch.ownerOnly();
+      let sent = 0;
+      for (const list of GITHUB_SYNC_LISTS) {
+        let after: string | null = null;
+        for (let page = 0; page < SYNC_PAGES; page++) {
+          const got: { items: unknown[]; next: string | null } = yield* this.ch.request<{ items: unknown[]; next: string | null }>("/github/sync", {}, { repo, list, ...(after ? { after } : {}) });
+          const notes = githubNews(
+            known,
+            got.items.flatMap((i) => cleanGithubNote(i) ?? []),
+          );
+          for (let at = 0; at < notes.length; at += MAX_GITHUB_ITEMS) {
+            const batch = notes.slice(at, at + MAX_GITHUB_ITEMS);
+            yield* this.ch.fx.send(`GitHub: ${batch.length} from ${repo}`, { kind: "event", ev: { op: "github", items: batch } });
+          }
+          sent += notes.length;
+          after = got.next;
+          if (!after) break;
         }
       }
       return sent;

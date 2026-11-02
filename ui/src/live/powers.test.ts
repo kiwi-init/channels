@@ -63,3 +63,33 @@ describe("a power given after someone joined shows, whatever the roster record s
     expect(peopleOf(taken, list, new Map(), "maya", new Map()).find((p) => p.name === "maya")?.managesAgents).toBeUndefined()
   })
 })
+
+describe("an agent shows as yours on every seat of the person it works for (T1673)", () => {
+  const list: Roster = [
+    { name: "jow", pk: "pk-jow", owner: true, at: 0, active: true, kind: "human" },
+    { name: "maya", pk: "pk-maya", owner: false, at: 0, active: true, kind: "human", sponsor: { user: "person-maya", name: "Maya", handle: "maya" } },
+    { name: "maya-2", pk: "pk-maya-2", owner: false, at: 0, active: true, kind: "human", sponsor: { user: "person-maya", name: "Maya", handle: "maya" } },
+    {
+      name: "tia",
+      pk: "pk-tia",
+      owner: false,
+      at: 0,
+      active: true,
+      kind: "human",
+      sponsor: { user: "person-tia", name: "Tia", handle: "tia" },
+      addsAgents: true,
+      answersDecisions: true,
+      managesAgents: true,
+    },
+    { name: "mo", pk: "pk-mo", owner: false, at: 0, active: true, kind: "agent", sponsor: { user: "person-maya", name: "Maya", handle: "maya" } },
+  ]
+  const state = fold([], list, 0)
+  const mo = (me: string) => peopleOf(state, list, new Map(), me, new Map()).find((p) => p.name === "mo")
+
+  test("from either of maya's seats, and never for someone else, fully trusted or not", () => {
+    expect(mo("maya")?.yours).toBe(true)
+    expect(mo("maya-2")?.yours).toBe(true)
+    expect(mo("tia")?.yours).toBeUndefined()
+    expect(mo("jow")?.yours).toBeUndefined()
+  })
+})
