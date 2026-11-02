@@ -2,11 +2,15 @@ import { useCallback, useEffect, useRef, useState } from "react"
 
 import { gifFile, gifHost, useCatalog, useGifSrc, type Catalog, type Gif } from "~/chat/gifs"
 import { cx } from "~/kit/bits"
+import { Icon } from "~/kit/icons"
 import type { Channel, Message, Reaction } from "~/model"
 import { useAct, useApp } from "~/nav"
 import { nickname } from "~/names"
 
 interface ForCompose {
+  open: boolean
+  onReady: (ready: boolean) => void
+  onClose: () => void
   onFile: (file: File | null) => void
 }
 
@@ -19,22 +23,12 @@ interface ForMessage {
 export default function Gifs(props: ForCompose | ForMessage) {
   const host = gifHost(useApp().app.account?.relay)
   const catalog = useCatalog(host)
+  const ready = "m" in props ? undefined : props.onReady
+  useEffect(() => ready?.(!!catalog), [ready, catalog])
   if (!catalog) return null
-  if (!("m" in props)) return <GifButton host={host} catalog={catalog} onFile={props.onFile} />
+  if (!("m" in props))
+    return props.open ? <GifPicker catalog={catalog} className="gifs-on-compose" onClose={props.onClose} onPick={(g) => void gifFile(host, g).then(props.onFile, () => props.onFile(null))} /> : null
   return props.r ? <GifReaction channel={props.channel} m={props.m} r={props.r} catalog={catalog} /> : <GifTool channel={props.channel} m={props.m} catalog={catalog} />
-}
-
-function GifButton({ host, catalog, onFile }: { host: string; catalog: Catalog; onFile: (file: File | null) => void }) {
-  const [open, setOpen] = useState(false)
-  const close = useCallback(() => setOpen(false), [])
-  return (
-    <>
-      <button type="button" className="compose-attach" aria-label="GIFs" title="GIFs" aria-expanded={open} data-gif-toggle onClick={() => setOpen((v) => !v)}>
-        <span className="gif-mark">GIF</span>
-      </button>
-      {open && <GifPicker catalog={catalog} className="gifs-on-compose" onClose={close} onPick={(g) => void gifFile(host, g).then(onFile, () => onFile(null))} />}
-    </>
-  )
 }
 
 function GifTool({ channel, m, catalog }: { channel: Channel; m: Message; catalog: Catalog }) {
@@ -44,7 +38,7 @@ function GifTool({ channel, m, catalog }: { channel: Channel; m: Message; catalo
   return (
     <>
       <button type="button" className="msg-tool" aria-label="React with a GIF" title="React with a GIF" aria-expanded={open} data-gif-toggle onClick={() => setOpen((v) => !v)}>
-        <span className="gif-mark">GIF</span>
+        <Icon name="gif" size={15} />
       </button>
       {open && <GifPicker catalog={catalog} className="gifs-on-msg" onClose={close} onPick={(g) => actions.react(channel.code, m.seq, g.key)} />}
     </>

@@ -6,6 +6,15 @@ interface Backfill {
   hidden(): boolean;
   wait(ms: number): Promise<void>;
   stopped(): boolean;
+  cap?: number;
+  gap?: number;
+  got?(asked: number): void;
+}
+
+export interface Reach {
+  whole: boolean;
+  oldest: number | null;
+  at: number | null;
 }
 
 const BACKFILL_PAGE = 500;
@@ -13,9 +22,18 @@ const BACKFILL_GAP_MS = 2_000;
 const BACKFILL_MAX_WAIT_MS = 5 * 60_000;
 const BACKFILL_TRIES = 6;
 
-export async function backfill(roomId: string, memberPk: string, b: Backfill): Promise<"done" | "stopped" | "failed"> {
-  let pause = BACKFILL_GAP_MS;
+export async function reach(roomId: string, memberPk: string): Promise<Reach> {
+  const oldest = await db().oldest(roomId, memberPk);
+  const at = oldest === null ? null : ((await db().after(roomId, memberPk, oldest - 1, 1))[0]?.rts ?? null);
+  return { whole: oldest !== null && (oldest <= 1 || (await db().floor(roomId, memberPk))), oldest, at };
+}
+
+export async function backfill(roomId: string, memberPk: string, b: Backfill): Promise<"done" | "capped" | "stopped" | "failed"> {
+  const gap = b.gap ?? BACKFILL_GAP_MS;
+  let pause = gap;
   let failures = 0;
+  let asked = 0;
+  const cap = b.cap ?? Infinity;
   for (;;) {
     if (b.stopped()) return "stopped";
     if (b.hidden()) {
@@ -29,7 +47,9 @@ export async function backfill(roomId: string, memberPk: string, b: Backfill): P
       await db().putFloor(roomId, memberPk);
       return "done";
     }
-    const page = await b.older(oldest, BACKFILL_PAGE).then(
+    if (asked >= cap) return "capped";
+    const limit = Math.min(BACKFILL_PAGE, cap - asked);
+    const page = await b.older(oldest, limit).then(
       (p) => p,
       () => null,
     );
@@ -40,19 +60,22 @@ export async function backfill(roomId: string, memberPk: string, b: Backfill): P
       continue;
     }
     failures = 0;
-    pause = BACKFILL_GAP_MS;
+    pause = gap;
+    asked += limit;
     if (b.stopped()) return "stopped";
     if (page.rows.length) await db().putRows(roomId, memberPk, page.rows);
+    b.got?.(asked);
     if (page.done) {
       await db().putFloor(roomId, memberPk);
       return "done";
     }
+    if (asked >= cap) return "capped";
     await b.wait(pause);
   }
 }
 
 interface Indexer {
-  index(rows: CachedRow[]): Promise<number | null>;
+  index(rows: CachedRow[], from: number): Promise<number | null>;
   hidden(): boolean;
   wait(ms: number): Promise<void>;
   stopped(): boolean;
@@ -60,9 +83,10 @@ interface Indexer {
 
 const INDEX_PAGE = 2_000;
 
-export async function indexArchive(roomId: string, memberPk: string, x: Indexer): Promise<"done" | "stopped" | "waiting" | "unsupported"> {
-  if (!(await db().floor(roomId, memberPk)) && ((await db().oldest(roomId, memberPk)) ?? 2) > 1) return "waiting";
-  let through = await x.index([]);
+export async function indexArchive(roomId: string, memberPk: string, x: Indexer): Promise<"done" | "stopped" | "unsupported"> {
+  const oldest = await db().oldest(roomId, memberPk);
+  if (oldest === null) return "done";
+  let through = await x.index([], oldest);
   if (through === null) return "unsupported";
   for (;;) {
     if (x.stopped()) return "stopped";
@@ -72,7 +96,7 @@ export async function indexArchive(roomId: string, memberPk: string, x: Indexer)
     }
     const rows = await db().after(roomId, memberPk, through, INDEX_PAGE);
     if (!rows.length) return "done";
-    const next = await x.index(rows);
+    const next = await x.index(rows, rows[0]!.seq);
     if (next === null) return "unsupported";
     if (next <= through) return "done";
     through = next;

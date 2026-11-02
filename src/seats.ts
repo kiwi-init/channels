@@ -91,7 +91,7 @@ function harnessHere(env: Record<string, string | undefined>, tree: ProcessTree,
   return {};
 }
 
-export type NamedHookHarness = "codex" | "gemini" | "grok";
+export type NamedHookHarness = "codex" | "gemini" | "grok" | "agy";
 
 export function hereAs(harness: string | undefined, env: Record<string, string | undefined> = process.env, tree: ProcessTree = {}, host: string = hostname()): Here {
   if (harness === "codex") return { harness: "codex", ...(env.CODEX_THREAD_ID ? { session: env.CODEX_THREAD_ID } : {}) };

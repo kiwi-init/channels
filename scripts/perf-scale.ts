@@ -314,7 +314,6 @@ try {
   log("seeded", JSON.stringify(report["while seeding (page open on the channel)"]));
   await mark(`${MESSAGES} messages, live`);
 
-  const lastTask = `Task ${TASKS - 1}:`;
   let reloadMs = 0;
   for (const throttle of [1, 4]) {
     if (!GATED || throttle === 1) {
@@ -350,7 +349,7 @@ try {
     const switching = !GATED || throttle === 4;
     const views: Record<string, number[]> = { Agents: [], Conversation: [], Tasks: [] };
     const spent: Record<string, Record<string, number>[]> = { Agents: [], Conversation: [], Tasks: [] };
-    const markers: Record<string, string> = { Agents: agents.at(-1)!, Conversation: "M\\d+: ", Tasks: lastTask };
+    const markers: Record<string, string> = { Agents: agents.at(-1)!, Conversation: "M\\d+: ", Tasks: "Ship it at scale" };
     for (let i = 0; i < (switching ? 3 : 0); i++)
       for (const v of ["Agents", "Conversation", "Tasks"]) {
         const before = await work(cdp);

@@ -125,9 +125,16 @@ export function SpecDoc({ channel, spec, editing, onEditing }: { channel: Channe
     const el = rail.current
     const talk = el?.querySelector<HTMLElement>(".spec-rail-talk")
     if (!el || !talk) return
-    const watch = new ResizeObserver(() => placeRail(el))
+    let frame = 0
+    const watch = new ResizeObserver(() => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => placeRail(el))
+    })
     watch.observe(talk)
-    return () => watch.disconnect()
+    return () => {
+      watch.disconnect()
+      cancelAnimationFrame(frame)
+    }
   }, [wide])
 
   useEffect(() => {

@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, test } from "bun:test";
-import { certUntil, currentDevice, dueForRenewal, newestLists, nextLink, readDeviceList, rootLink, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
+import { certUntil, currentDevice, dueForRenewal, newestLists, nextLink, readDeviceList, rootLink, runnerHosts, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
 import { isQuiet, wellFormedEvent } from "@kiwi/core/protocol.ts";
 
@@ -37,6 +37,29 @@ const why = async (links: DeviceLink[]) => {
   const read = await readDeviceList(links);
   return read.ok ? null : read.why;
 };
+
+describe("a computer for agents and the app on the same machine (T2624)", () => {
+  test("an app's agent runner sits with the app that added it under the same name; one added elsewhere, or under another name, stands alone", async () => {
+    const runner = (who: string, label: string) => ({ ...add(who, "computer"), label });
+    let links = [await rootLink(ids.person!, { pk: ids.desk!.pk, xpk: ids.desk!.xpk!, label: "desk", os: "macOS", as: "desktop" }, T0)];
+    links = await grow(links, "desk", add("laptop", "desktop", true));
+    links = await grow(links, "desk", runner("box", "desk"));
+    links = await grow(links, "desk", runner("thief", "build-box"));
+    links = await grow(links, "laptop", runner("phone", "desk"));
+    const hosts = runnerHosts(await list(links), links);
+    expect([...hosts]).toEqual([[ids.box!.pk, ids.desk!.pk]]);
+  });
+
+  test("a runner keeps its app after either is renewed, and a forgotten app leaves its runner standing alone", async () => {
+    let links = [await rootLink(ids.person!, { pk: ids.desk!.pk, xpk: ids.desk!.xpk!, label: "desk", os: "macOS", as: "desktop" }, T0)];
+    links = await grow(links, "desk", add("laptop", "desktop", true));
+    links = await grow(links, "laptop", { ...add("box", "computer"), label: "laptop" });
+    links = await grow(links, "desk", { op: "renew", device: ids.box!.pk, until: certUntil(T0 + 1) });
+    expect([...runnerHosts(await list(links), links)]).toEqual([[ids.box!.pk, ids.laptop!.pk]]);
+    links = await grow(links, "desk", { op: "revoke", device: ids.laptop!.pk });
+    expect([...runnerHosts(await list(links), links)]).toEqual([]);
+  });
+});
 
 describe("a person's device list (T634)", () => {
   test("the person key adds the first device; a desktop adds the rest, and a phone approves only once a desktop lets it", async () => {
@@ -142,6 +165,9 @@ describe("revocation and expiry (T641)", () => {
     const links = [await root()];
     expect(wellFormedEvent({ op: "devices", links })).toBe(true);
     for (const bad of [[], ["link"], [[1]], undefined]) expect(wellFormedEvent({ op: "devices", links: bad })).toBe(false);
+    expect(wellFormedEvent({ op: "devices", links, device: "d".repeat(43), vouch: "v".repeat(86) })).toBe(true);
+    for (const bad of [{ device: "d".repeat(43) }, { vouch: "v" }, { device: 1, vouch: "v" }, { device: "d", vouch: "v".repeat(200) }])
+      expect(wellFormedEvent({ op: "devices", links, ...bad })).toBe(false);
     expect(isQuiet({ kind: "event", ev: { op: "devices", links } })).toBe(true);
   });
 });

@@ -100,9 +100,14 @@ function DeviceNotices({ account }: { account: Account }) {
   )
 }
 
+const FORGET_ONE = "It can't sign in as you again. Channels you own drop it now; other channels drop it when their owner's app is next open."
+const FORGET_AGENTS = "It can't sign in as you again, and its agents leave your channels too. Channels you own drop them now; other channels when their owner's app is next open."
+
 function SignedDevices({ devices }: { devices: Device[] }) {
   const { app } = useApp()
-  const [forget, setForget] = useState<Device | null>(null)
+  const [forget, setForget] = useState<{ row: Device; runner: Device | null } | null>(null)
+  const rows = devices.filter((d) => !(d.app && devices.some((x) => x.id === d.app)))
+  const runnerOf = (d: Device): Device | null => devices.find((x) => x.as === "computer" && x.app === d.id) ?? null
   return (
     <section className="set-group" aria-label="Signed in as you">
       <div className="heading">
@@ -111,46 +116,55 @@ function SignedDevices({ devices }: { devices: Device[] }) {
       <p className="set-group-hint">Each one has its own key. Forget one and it can't sign in as you again.</p>
       {app.account && <DeviceNotices account={app.account} />}
       <ul className="set-devices">
-        {devices.map((d) => (
-          <li key={d.id} className="set-device">
-            <span className="set-device-icon" aria-hidden="true">
-              <Icon name={d.as === "phone" ? "phone" : "computer"} />
-            </span>
-            <span className="set-device-text">
-              <span className="set-device-name">
-                {d.label}
-                {d.thisOne && <span className="set-tag">this app</span>}
+        {rows.map((d) => {
+          const runner = runnerOf(d)
+          const renew = [d, runner].flatMap((x) => (x && due(x.until) ? [x.id] : []))
+          return (
+            <li key={d.id} className="set-device">
+              <span className="set-device-icon" aria-hidden="true">
+                <Icon name={d.as === "phone" ? "phone" : "computer"} />
               </span>
-              <span className="set-device-meta">
-                <span className="set-device-status">
-                  {KIND[d.as]}
-                  {d.os ? ` · ${d.os}` : ""} · {expiry(d.until)}
+              <span className="set-device-text">
+                <span className="set-device-name">
+                  {d.label}
+                  {d.thisOne && <span className="set-tag">this app</span>}
                 </span>
+                <span className="set-device-meta">
+                  <span className="set-device-status">
+                    {KIND[d.as]}
+                    {d.os ? ` · ${d.os}` : ""} · {expiry(d.until)}
+                  </span>
+                </span>
+                {runner && (
+                  <span className="set-device-meta">
+                    <span className="set-device-status">runs your agents · {expiry(runner.until)}</span>
+                  </span>
+                )}
               </span>
-            </span>
-            <span className="set-device-actions-inline">
-              {due(d.until) && (
-                <button type="button" className="btn is-quiet is-small" onClick={() => app.actions.renewDevice(d.id)}>
-                  Renew
-                </button>
-              )}
-              {!d.thisOne && (
-                <button type="button" className="btn is-quiet is-small set-forget" onClick={() => setForget(d)}>
-                  Forget
-                </button>
-              )}
-            </span>
-          </li>
-        ))}
+              <span className="set-device-actions-inline">
+                {renew.length > 0 && (
+                  <button type="button" className="btn is-quiet is-small" onClick={() => app.actions.renewDevice(...renew)}>
+                    Renew
+                  </button>
+                )}
+                {!d.thisOne && (
+                  <button type="button" className="btn is-quiet is-small set-forget" onClick={() => setForget({ row: d, runner })}>
+                    Forget
+                  </button>
+                )}
+              </span>
+            </li>
+          )
+        })}
       </ul>
       <Confirm
         open={!!forget}
-        title={`Forget ${forget?.label ?? ""}?`}
-        sub="It can't sign in as you again. Channels you own drop it now; other channels drop it when their owner's app is next open."
+        title={`Forget ${forget?.row.label ?? ""}?`}
+        sub={forget && (forget.runner || forget.row.as === "computer") ? FORGET_AGENTS : FORGET_ONE}
         action="Forget"
         onClose={() => setForget(null)}
         onConfirm={() => {
-          if (forget) app.actions.forgetDevice(forget.id)
+          if (forget) app.actions.forgetDevice(...(forget.runner ? [forget.runner.id] : []), forget.row.id)
           setForget(null)
         }}
       />

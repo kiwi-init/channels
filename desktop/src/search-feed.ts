@@ -3,21 +3,26 @@ import { fold, type FoldBase } from "@kiwi/core/state.ts";
 import { roomOfMessage } from "@kiwi/core/state/rooms.ts";
 import type { ChannelState } from "@kiwi/core/state/types.ts";
 
-import type { IndexedRow, IndexStamp, SearchIndex } from "./search-index.ts";
+import { INDEX_SCHEMA, type IndexedRow, type IndexStamp, type SearchIndex } from "./search-index.ts";
 import type { FoldInputs } from "./search-types.ts";
 
 export interface Fed {
   base: FoldBase | null;
+  from: number;
   through: number;
 }
 
-export const stampFor = (through: number): IndexStamp => ({ rules: FOLD_RULES, ops: EVENT_OPS_VERSION, through });
+export const NOTHING_FED: Fed = { base: null, from: 0, through: 0 };
 
-export const sameRules = (stamp: IndexStamp | null): boolean => stamp !== null && stamp.rules === FOLD_RULES && stamp.ops === EVENT_OPS_VERSION;
+export const stampFor = (fed: Fed): IndexStamp => ({ rules: FOLD_RULES, ops: EVENT_OPS_VERSION, from: fed.from, through: fed.through, schema: INDEX_SCHEMA });
+
+export const covers = (fed: Fed, from: number): boolean => fed.from > 0 && fed.from <= from && from <= fed.through + 1;
+
+export const sameRules = (stamp: IndexStamp | null): boolean => stamp !== null && stamp.rules === FOLD_RULES && stamp.ops === EVENT_OPS_VERSION && stamp.schema === INDEX_SCHEMA;
 
 function searchable(state: Pick<ChannelState, "trust" | "deleted" | "edits" | "roomOf">, m: Message): IndexedRow | null {
   if (m.kind === "event" || isOverlay(m) || ignored(state.trust.get(m.seq)) || state.deleted.has(m.seq)) return null;
-  return { seq: m.seq, room: roomOfMessage(state, m), from: m.from, text: state.edits.get(m.seq)?.body ?? m.body };
+  return { seq: m.seq, room: roomOfMessage(state, m), from: m.from, text: state.edits.get(m.seq)?.body ?? m.body, at: m.ts };
 }
 
 export function feed(index: SearchIndex, fed: Fed, messages: readonly Message[], inputs: FoldInputs): Fed {
@@ -41,5 +46,5 @@ export function feed(index: SearchIndex, fed: Fed, messages: readonly Message[],
   index.put(put);
   index.drop(drop);
   for (const [target, text] of retext) if (!state.deleted.has(target)) index.retext(target, text);
-  return { base, through: batch[batch.length - 1]!.seq };
+  return { base, from: fed.from, through: batch[batch.length - 1]!.seq };
 }

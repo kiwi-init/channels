@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { lazy, Suspense, useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import { MAX_IMAGE_BYTES, RASTER_MIMES } from "@kiwi/core/protocol.ts"
 import { fileDrag, takeDropped } from "@kiwi/app/dropped.ts"
@@ -9,6 +9,7 @@ import { preview, useReplying } from "~/chat/reply"
 import { STASH_SHOT, useStash, type Stashed } from "~/chat/stash"
 import { Avatar, cx, Dot, STATUS_WORDS } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
+import { openMenu } from "~/kit/menu-open"
 import { ago } from "~/kit/time"
 import type { Channel, Person, Task, Upload, Where } from "~/model"
 import { sameWhere, useApp } from "~/nav"
@@ -162,6 +163,18 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
   const cue = cueOf?.key === key ? cueOf : null
   const [listOf, setListOf] = useState<string | null>(() => (STASH_SHOT === "stash-open" ? key : null))
   const listOpen = listOf === key && stash.list.length > 0
+  const plus = useRef<HTMLButtonElement>(null)
+  const [gifsOpen, setGifsOpen] = useState(false)
+  const [gifsReady, setGifsReady] = useState(false)
+  const closeGifs = useCallback(() => setGifsOpen(false), [])
+  const addMenu = () => {
+    if (gifsOpen) return setGifsOpen(false)
+    const at = plus.current?.getBoundingClientRect()
+    if (!at) return
+    const image = { label: "Image", run: () => picker.current?.click() }
+    const gif = { label: "GIF", run: () => setGifsOpen(true) }
+    openMenu.set({ x: at.left, y: at.top, label: "Add to the message", groups: [gifsReady ? [image, gif] : [image]], above: true })
+  }
   const sealed = useMemo(() => sealedOf(channel, where), [channel, where])
   const [warned, setWarned] = useState<{ text: string; people: Person[] } | null>(null)
 
@@ -474,11 +487,11 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
           </div>
         )}
         <div className="composer-row">
-          <button type="button" className="compose-attach" aria-label="Attach images" title="Attach images" onClick={() => picker.current?.click()}>
+          <button ref={plus} type="button" className="compose-attach" aria-label="Add an image or a GIF" title="Add an image or a GIF" aria-haspopup="menu" data-gif-toggle onClick={addMenu}>
             <Icon name="plus" />
           </button>
-          <Suspense fallback={<span className="compose-attach" />}>
-            <Gifs onFile={(file) => (file ? attach([file]) : toast("That GIF couldn't be loaded", "error"))} />
+          <Suspense fallback={null}>
+            <Gifs open={gifsOpen} onReady={setGifsReady} onClose={closeGifs} onFile={(file) => (file ? attach([file]) : toast("That GIF couldn't be loaded", "error"))} />
           </Suspense>
           <input
             ref={picker}

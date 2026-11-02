@@ -2,7 +2,7 @@
 // main-eb.ts and preload-eb.ts; renderer-neutral on purpose (no node imports),
 // so ui/ can type against it without touching this process.
 
-import type { FoldInputs, Searched } from "./search-types.ts";
+import type { FoldInputs, IndexHit, Searched } from "./search-types.ts";
 import type { ComputerSettings } from "@kiwi/core/computer-settings.ts";
 import type { DeviceLink } from "@kiwi/core/devices.ts";
 import type { HarnessRow, HookHarness, HookRow, KnownHarness } from "@kiwi/core/harnesses.ts";
@@ -89,6 +89,8 @@ export const CHANNEL_CALLS = [
   "deny",
   "remove",
   "cutDevices",
+  "reprove",
+  "goneDevices",
   "tendDelegations",
   "dropDelegates",
   "updateScopes",
@@ -165,12 +167,19 @@ export interface ChannelOps {
   presence(code: string, p: PresenceFields): Promise<void>;
   openRows(code: string, rows: CachedRow[]): Promise<(Message | Unread | null)[]>;
   olderRows(code: string, before: number, limit: number): Promise<OlderRows>;
-  indexRows(code: string, rows: CachedRow[], inputs: FoldInputs): Promise<number | null>;
+  indexRows(code: string, rows: CachedRow[], inputs: FoldInputs, from: number): Promise<number | null>;
   searchHistory(code: string, ask: HistorySearch): Promise<Searched | null>;
+  historyAround(code: string, ask: HistoryAround): Promise<IndexHit[] | null>;
   keep(code: string, state: object): Promise<CachedKept | null>;
   openKept(code: string, sealed: CachedKept): Promise<unknown>;
   follow(code: string, since: number, on: (e: FollowEvent) => void, opts?: FollowOptions): () => void;
   nudge(): void;
+}
+
+export interface HistoryAround {
+  seq: number;
+  rooms: string[];
+  span: number;
 }
 
 export interface HistorySearch {
@@ -204,8 +213,9 @@ export type KeysAsk =
   | { op: "presence"; code: string; p: Wire }
   | { op: "openRows"; code: string; rows: Wire }
   | { op: "olderRows"; code: string; before: number; limit: number }
-  | { op: "indexRows"; code: string; rows: Wire; inputs: Wire }
+  | { op: "indexRows"; code: string; rows: Wire; inputs: Wire; from: number }
   | { op: "searchHistory"; code: string; ask: Wire }
+  | { op: "historyAround"; code: string; ask: Wire }
   | { op: "keep"; code: string; state: Wire }
   | { op: "openKept"; code: string; sealed: Wire }
   | { op: "follow"; code: string; since: number; watch?: boolean }
@@ -281,6 +291,7 @@ export interface DeviceView {
   approve: boolean;
   until: number;
   thisOne: boolean;
+  app?: string;
 }
 
 interface DeviceRevokeView {
@@ -296,6 +307,11 @@ export interface DeviceNewsView {
   links: DeviceLink[];
   revokes: DeviceRevokeView[];
   removed: { wiped: boolean; by: string } | null;
+}
+
+interface SeatProofView {
+  device: string;
+  vouch: string;
 }
 
 export interface RecoveryView {
@@ -433,6 +449,7 @@ export interface KiwiBridge {
   forgetDevice(id: string): Promise<void>;
   renewDevice(id: string): Promise<void>;
   deviceNews(): Promise<DeviceNewsView | null>;
+  proveSeat(code: string): Promise<SeatProofView | null>;
   recovery(): Promise<RecoveryView | null>;
   recoveryWords(): Promise<string[]>;
   recoverySave(typed: { at: number; word: string }[]): Promise<RecoverySaveView>;

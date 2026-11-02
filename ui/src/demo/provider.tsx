@@ -7,6 +7,7 @@ import { HANDOFF_DONE } from "@kiwi/core/protocol.ts"
 import { stepReplyText } from "~/chat/step"
 import { DEMO_ACCOUNT, DEMO_CHANNEL, DEMO_DEVICES, DEMO_EMPTY, DEMO_GUEST, DEMO_GUEST_MEMBER, DEMO_PREFS, DEMO_TILES, DEMO_WAITING, DEMO_WELCOME, DEMO_WORDS } from "~/demo/data"
 import { longFeed } from "~/demo/long"
+import { demoAround, demoFetchOlder, demoOlder } from "~/demo/older"
 import { withSpecs } from "~/demo/specs"
 import { demoShell, demoShells, demoTerm } from "~/demo/term"
 import type { Account, Actions, AgentStarts, App, Enrolling, Finding, GithubSignIn, Launching, ThisComputer, Channel, ChannelTile, GoneChannel, Message, Prefs, Spec, Task } from "~/model"
@@ -261,6 +262,7 @@ export type Scenario =
   | "github-gate"
   | "specs"
   | "spec-changed"
+  | "forgotten-computer"
   | "member"
 
 function initial(scenario: Scenario, look: Partial<Prefs>): State {
@@ -293,7 +295,28 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
                           ? withCompact(DEMO_CHANNEL, scenario === "compacted")
                           : scenario === "specs" || scenario === "spec-changed"
                             ? withSpecs(DEMO_CHANNEL, scenario === "spec-changed")
-                            : DEMO_CHANNEL,
+                            : scenario === "forgotten-computer"
+                              ? {
+                                  ...DEMO_CHANNEL,
+                                  asks: [
+                                    {
+                                      kind: "join" as const,
+                                      id: "join-dudu",
+                                      at: Date.now() - 30 * 60_000,
+                                      name: "dudu",
+                                      who: "agent" as const,
+                                      harness: "claude" as const,
+                                      runs: "Claude Code · claude-opus-5-5",
+                                      machine: "MacBook-Pro-de-Davi",
+                                      sponsor: "harry",
+                                      revoked: true as const,
+                                      said: { machine: "macOS arm64 · 10 cores · 16 GB", repo: "Davi-Vicente/D2N@main", outside: true },
+                                      code: "604-218",
+                                    },
+                                    ...DEMO_CHANNEL.asks,
+                                  ],
+                                }
+                              : DEMO_CHANNEL,
       DEMO_EMPTY,
       DEMO_WAITING,
       { ...DEMO_EMPTY, code: "interlinked", title: "interlinked" },
@@ -753,6 +776,9 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       },
       setName: (name) => setState((s) => (s.account ? { ...s, account: { ...s.account, name } } : { ...s, account: { ...DEMO_ACCOUNT, name } })),
       setPrefs: (p) => setState((s) => ({ ...s, prefs: { ...s.prefs, ...p } })),
+      searchOlder: async (...[, query, before]: Parameters<Actions["searchOlder"]>) => demoOlder(query, before),
+      olderAround: async (...[, seq]: Parameters<Actions["olderAround"]>) => demoAround(seq),
+      fetchOlder: (...[, got]: Parameters<Actions["fetchOlder"]>) => demoFetchOlder(got),
       setMute: (code, room, on) => {
         setState((s) => {
           const key = muteKey(code, room)
@@ -787,9 +813,9 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
         setState((s) => (s.account ? { ...s, account: { ...s.account, enrollAsk: undefined } } : s))
         return { ok: true }
       },
-      forgetDevice: (id) => setState((s) => (s.account ? { ...s, account: { ...s.account, devices: s.account.devices?.filter((d) => d.id !== id) } } : s)),
-      renewDevice: (id) =>
-        setState((s) => (s.account ? { ...s, account: { ...s.account, devices: s.account.devices?.map((d) => (d.id === id ? { ...d, until: Date.now() + 90 * 86_400_000 } : d)) } } : s)),
+      forgetDevice: (...ids) => setState((s) => (s.account ? { ...s, account: { ...s.account, devices: s.account.devices?.filter((d) => !ids.includes(d.id)) } } : s)),
+      renewDevice: (...ids) =>
+        setState((s) => (s.account ? { ...s, account: { ...s.account, devices: s.account.devices?.map((d) => (ids.includes(d.id) ? { ...d, until: Date.now() + 90 * 86_400_000 } : d)) } } : s)),
       recoveryWords: async () => DEMO_WORDS,
       recoverySave: async (typed) => {
         const wrong = typed.filter((t) => t.word.trim().toLowerCase() !== DEMO_WORDS[t.at]).map((t) => t.at)

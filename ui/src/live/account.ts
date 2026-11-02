@@ -194,7 +194,7 @@ const devices = (() => {
     if (!b?.devices) return
     try {
       const got = await b.devices()
-      value = got ? got.map((d) => ({ id: d.id, label: d.label, os: d.os, as: d.as, until: d.until, thisOne: d.thisOne })) : null
+      value = got ? got.map((d) => ({ id: d.id, label: d.label, os: d.os, as: d.as, until: d.until, thisOne: d.thisOne, ...(d.app ? { app: d.app } : {}) })) : null
     } catch {
       // Not signed in, or the relay is unreachable: the list shows what it last showed, and focus loads it again.
       return
@@ -222,18 +222,18 @@ function deviceNotices(news: DeviceNewsView | null): Pick<Account, "forgotten" |
   return { ...(older.length ? { forgotten: older } : {}), ...(news.removed && !news.removed.wiped ? { forgotHere: { by: news.removed.by } } : {}) }
 }
 
-export async function forgetDevice(id: string): Promise<void> {
+export async function forgetDevice(...ids: string[]): Promise<void> {
   const b = bridge()
   if (!b?.forgetDevice) throw new Error("forgetting a device needs the next Channels update")
-  await b.forgetDevice(id)
+  for (const id of ids) await b.forgetDevice(id)
   await devices.load()
   postDevicesNow()
 }
 
-export async function renewDevice(id: string): Promise<void> {
+export async function renewDevice(...ids: string[]): Promise<void> {
   const b = bridge()
   if (!b?.renewDevice) throw new Error("renewing a device needs the next Channels update")
-  await b.renewDevice(id)
+  for (const id of ids) await b.renewDevice(id)
   await devices.load()
   postDevicesNow()
 }
