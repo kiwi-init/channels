@@ -2,7 +2,7 @@ import { useEffect, useState } from "react"
 
 import { useApp } from "~/nav"
 
-type Card = { key: string; text: string; act?: string; busy?: string; onAct?: () => void; progress?: number }
+type Card = { key: string; text: string; detail?: string; act?: string; busy?: string; onAct?: () => void; progress?: number }
 
 function useCards(): Card[] {
   const { app, go } = useApp()
@@ -15,6 +15,15 @@ function useCards(): Card[] {
     const day = new Date(words.from).toLocaleDateString(undefined, { day: "numeric", month: "short" })
     cards.push({ key: `words ${words.from}`, text: `New recovery words take over ${day}. Not you?`, act: "Review", onAct: () => go({ to: "settings", section: "computers" }) })
   }
+  const moved = account?.moved
+  if (moved)
+    cards.push({
+      key: `moved ${moved.to}`,
+      text: `Channels moved to ${moved.to.slice(0, moved.to.lastIndexOf("/")) || moved.to}`,
+      detail: `The old copy can be deleted: ${moved.from}`,
+      act: "OK",
+      onAct: () => app.actions.dismissMoved(),
+    })
   if (account?.uiUpdate) cards.push({ key: "look", text: "A new look is ready", act: "Switch", onAct: () => app.actions.applyUi() })
   const update = account?.update
   if (update) {
@@ -47,6 +56,7 @@ function SideCard({ card }: { card: Card }) {
       <span className="side-card-text">
         {card.text}
         {pct !== null && <span className="side-card-pct">{pct > 0 ? ` · ${pct}%` : "…"}</span>}
+        {card.detail && <span className="side-card-detail">{card.detail}</span>}
       </span>
       {card.act && (
         <button

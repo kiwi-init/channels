@@ -702,6 +702,14 @@
 
 .side-card-text {
   line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.side-card-detail {
+  display: block;
+  margin-block-start: 2px;
+  color: var(--ink-3);
+  font: var(--t-meta) var(--ui);
 }
 
 .side-card-pct {
