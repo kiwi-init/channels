@@ -168,6 +168,12 @@ describe("revocation and expiry (T641)", () => {
     expect(wellFormedEvent({ op: "devices", links, device: "d".repeat(43), vouch: "v".repeat(86) })).toBe(true);
     for (const bad of [{ device: "d".repeat(43) }, { vouch: "v" }, { device: 1, vouch: "v" }, { device: "d", vouch: "v".repeat(200) }])
       expect(wellFormedEvent({ op: "devices", links, ...bad })).toBe(false);
+    const keep = (agents: unknown, device: unknown = "k".repeat(43)) => wellFormedEvent({ op: "devices", links, keep: { device, agents } });
+    expect(keep([{ pk: "a".repeat(43), vouch: "v".repeat(86) }])).toBe(true);
+    expect(keep(Array.from({ length: 64 }, (_, i) => ({ pk: `${i}`.padEnd(43, "a"), vouch: "v".repeat(86) })))).toBe(true);
+    for (const bad of [[], Array.from({ length: 65 }, () => ({ pk: "a", vouch: "v" })), [{ pk: "a" }], [{ pk: 1, vouch: "v" }], [{ pk: "a", vouch: "v".repeat(200) }], "a"])
+      expect(keep(bad)).toBe(false);
+    expect(keep([{ pk: "a", vouch: "v" }], 7)).toBe(false);
     expect(isQuiet({ kind: "event", ev: { op: "devices", links } })).toBe(true);
   });
 });

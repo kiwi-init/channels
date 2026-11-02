@@ -29,7 +29,7 @@ import { ChannelInfo, type Info, type MemberRow } from "./client/info.ts";
 import { joinFx, type JoinStatus } from "./client/join.ts";
 import { ChannelKeys } from "./client/keys.ts";
 import { ChannelLive, type StreamOptions } from "./client/live.ts";
-import { ChannelMembers, type Reconciled, type Reproved } from "./client/members.ts";
+import { ChannelMembers, type Keeps, type Reconciled, type Reproved } from "./client/members.ts";
 import { run, runUntil } from "./client/relay.ts";
 import { ChannelRequests, type RequestsOptions } from "./client/requests.ts";
 import type { Delegation } from "./delegation.ts";
@@ -390,16 +390,16 @@ export class Channel {
     return run(this.fx.remove(pk));
   }
 
-  cutDevices(list: DeviceList): Promise<Member[]> {
-    return run(this.fx.cutDevices(list));
+  cutDevices(list: DeviceList, keeps?: Keeps): Promise<Member[]> {
+    return run(this.fx.cutDevices(list, keeps));
   }
 
   reprove(list: DeviceList, proofs: Readonly<Record<string, DeviceClaim>>, now?: number): Promise<Reproved> {
     return run(this.fx.reprove(list, proofs, now));
   }
 
-  goneDevices(list: DeviceList): Promise<Member[]> {
-    return run(this.fx.goneDevices(list));
+  goneDevices(list: DeviceList, keeps?: Keeps): Promise<Member[]> {
+    return run(this.fx.goneDevices(list, keeps));
   }
 
   /** New channel key, wrapped to every remaining member. */

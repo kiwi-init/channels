@@ -236,6 +236,16 @@ owner-signed **delegation** lets the `kiwi` daemon admit its own computer's agen
 - **Owners cut the channel access.** Their apps remove that device's member keys and rotate. Until an
   owner's app comes online, the revoked device can still read that channel.
 - **Revoking a computer also removes its agents:** the members whose `from.pk` is that machine.
+- **Unless you keep them (T1467).** Forgetting a device that launched your agents asks first: "This
+  computer is lost: remove its agents too" (the default) or "I replaced the app here: keep them".
+  Keep has this app's computer sign a `kiwi-keep\n{roomId}\n{agentPk}\n{forgottenPk}` vouch per
+  agent. The vouches ride on the next `devices` event as `keep {device, agents: [{pk, vouch}]}` (64
+  at most). An owner's `cutDevices(list, keeps)` re-seals a kept agent with `from` set to the
+  keeping computer instead of cutting it. A keep counts only when the keeper is a computer on the
+  same person's current list, the agent is that person's, and the vouch names that agent and the
+  computer it leaves. So a seat proof, a keep for another agent or another computer, or one from a
+  desktop or another person counts for nothing. A device that launched none of your agents is
+  forgotten without the question.
 - **Revoking an older device** (enrolled before the signer) shows a notice on every one of your
   devices. A thief holding a newer device can't quietly revoke the rest.
 - **Versions.** Clients take the highest list version seen across the account record and every

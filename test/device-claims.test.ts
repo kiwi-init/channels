@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { Channel } from "@kiwi/core/client.ts";
 import { cutReason, REPROVE_MS, REPROVE_WHY } from "@kiwi/core/client/members.ts";
 import { describeEvent } from "@kiwi/core/format.ts";
-import { certUntil, claimDevice, newestLists, nextLink, readDeviceList, rerootLink, rootLink, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
+import { certUntil, claimDevice, newestLists, nextLink, readDeviceList, rerootLink, rootLink, vouchKeep, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
 import { claimComputer, provePerson } from "@kiwi/core/person.ts";
 import { recoveryKey, recoveryLink } from "@kiwi/core/recovery.ts";
@@ -208,6 +208,50 @@ describe("a revoked device is cut out, and the newest list decides (T641)", () =
     await s.ownerCh.autoApprove(s.person.pk, [], null, lists);
     await Channel.joinStatus(relay, s.code, lapsed.id, lapsed.requestId);
     expect((await s.ownerCh.autoApprove(s.person.pk, [], null, lists)).map((m) => m.name)).toEqual(["owner-2"]);
+    await s.ownerCh.close();
+  });
+});
+
+describe("forgetting a computer keeps the agents the person's current computer vouches for (T1467)", () => {
+  test("a keep from a listed computer moves the agent to it; a keep from a desktop, another person or the forgotten computer, for another key or another computer, or a seat proof doesn't, and no keep cuts as before", async () => {
+    const s = await setupChannel(relay);
+    const { links, desk } = await listWithPhone(s.person);
+    const add = (d: Identity, label: string) => ({ op: "add" as const, device: d.pk, dxpk: d.xpk!, label, os: "macOS", as: "computer" as const, approve: false, until: certUntil(Date.now()) });
+    const old = await device("old-mac");
+    const mac = await device("mac");
+    const all = await grow(await grow(links, desk, add(old, "old-mac")), desk, add(mac, "mac"));
+    const joined: Record<string, Identity> = {};
+    for (const name of ["tortoise", "lost", "via-desk", "via-bob", "via-old", "swapped", "elsewhere", "seat-proof"]) {
+      const a = await ask(s, old, all, name);
+      expect(await letThrough(s, a)).toHaveLength(1);
+      joined[name] = a.id;
+    }
+    const bob = await listWithPhone(await generateIdentity("bob"));
+    const bobMac = await device("bob-mac");
+    const bobs = await grow(bob.links, bob.desk, add(bobMac, "bob-mac"));
+    const pk = (name: string) => joined[name]!.pk;
+    const keeps = {
+      [pk("tortoise")]: await vouchKeep(mac, all, s.roomId, pk("tortoise"), old.pk),
+      [pk("via-desk")]: await vouchKeep(desk, all, s.roomId, pk("via-desk"), old.pk),
+      [pk("via-bob")]: await vouchKeep(bobMac, bobs, s.roomId, pk("via-bob"), old.pk),
+      [pk("via-old")]: await vouchKeep(old, all, s.roomId, pk("via-old"), old.pk),
+      [pk("swapped")]: await vouchKeep(mac, all, s.roomId, pk("tortoise"), old.pk),
+      [pk("elsewhere")]: await vouchKeep(mac, all, s.roomId, pk("elsewhere"), mac.pk),
+      [pk("seat-proof")]: await claimDevice(mac, all, s.roomId, pk("seat-proof")),
+    };
+
+    const epoch = s.ownerCh.access.epoch;
+    const forgot = await listOf(await grow(all, desk, { op: "revoke", device: old.pk }));
+    expect((await s.ownerCh.cutDevices(forgot, keeps)).map((m) => m.name).sort()).toEqual(["elsewhere", "lost", "seat-proof", "swapped", "via-bob", "via-desk", "via-old"]);
+    expect(s.ownerCh.access.epoch).toBe(epoch + 1);
+    const tortoise = (await s.ownerCh.members()).find((m) => m.pk === pk("tortoise"))!;
+    expect(tortoise).toMatchObject({ active: true, kind: "agent", from: { pk: mac.pk, label: "mac" }, sponsor: { user: s.person.pk } });
+    expect(cutReason(tortoise, forgot)).toBeNull();
+    expect(await s.ownerCh.cutDevices(forgot, keeps)).toEqual([]);
+    expect((await s.ownerCh.history(0)).messages.some((m) => m.ev?.op === "member.gone" && m.ev.member === "tortoise")).toBe(false);
+
+    const both = await listOf(await grow(await grow(all, desk, { op: "revoke", device: old.pk }), desk, { op: "revoke", device: mac.pk }));
+    expect((await s.ownerCh.cutDevices(both, keeps)).map((m) => m.name)).toEqual(["tortoise"]);
     await s.ownerCh.close();
   });
 });

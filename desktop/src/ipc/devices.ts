@@ -1,6 +1,7 @@
 import os from "node:os";
 import { decodeJoinCode } from "@kiwi/core/crypto.ts";
 import { claimDevice } from "@kiwi/core/devices.ts";
+import { daemonKeep } from "../daemon-client.ts";
 import type { Serves } from "../calls.ts";
 import { publicPerson } from "../guard.ts";
 import { publicAccess } from "../public-channel.ts";
@@ -65,6 +66,7 @@ export function devicesCalls(
   | "renewDevice"
   | "deviceNews"
   | "proveSeat"
+  | "keepAgents"
   | "recovery"
   | "recoveryWords"
   | "recoverySave"
@@ -183,6 +185,7 @@ export function devicesCalls(
       const { device, vouch } = await claimDevice(store.device, [], decodeJoinCode(code).roomId, seat.pk);
       return { device, vouch };
     },
+    keepAgents: (code: string, agents: { pk: string; from: string }[]) => daemonKeep(decodeJoinCode(code).roomId, agents),
     recovery: () => recovery.status(),
     recoveryWords: () => recovery.words(),
     recoverySave: (typed: { at: number; word: string }[]) => recovery.save(typed),

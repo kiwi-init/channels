@@ -305,7 +305,7 @@ export type Event =
   /** The goal a person's message #ask stands for, in plain words, as its tasks' header (null: their own words again). The lead, the owner or who asked names it. */
   | { op: "ask.name"; ask: number; name: string | null }
   | { op: "ask.close"; ask: number; why?: string }
-  | { op: "devices"; links: DeviceLink[]; device?: string; vouch?: string }
+  | { op: "devices"; links: DeviceLink[]; device?: string; vouch?: string; keep?: DeviceKeep }
   /**
    * A member's reaction to message #seq: one short emoji per member per message, the latest wins, null
    * takes it back. Not news: it's no unread, no notification, no line in a feed. Its body is throwaway
@@ -956,6 +956,25 @@ const str = (x: unknown, max = 10_000): x is string => typeof x === "string" && 
 const strs = (x: unknown, n: number): x is string[] => Array.isArray(x) && x.length <= n && x.every((y) => str(y, 512));
 const nums = (x: unknown, n: number): x is number[] => Array.isArray(x) && x.length <= n && x.every((y) => Number.isSafeInteger(y) && y >= 0);
 const opt = <T>(x: unknown, ok: (v: unknown) => v is T): boolean => x === undefined || ok(x);
+
+export const KEEP_MAX = 64;
+
+export interface DeviceKeep {
+  device: string;
+  agents: { pk: string; vouch: string }[];
+}
+
+export function isDeviceKeep(x: unknown): x is DeviceKeep {
+  if (!x || typeof x !== "object" || Array.isArray(x)) return false;
+  const k = x as Record<string, unknown>;
+  return (
+    str(k.device, 64) &&
+    Array.isArray(k.agents) &&
+    k.agents.length > 0 &&
+    k.agents.length <= KEEP_MAX &&
+    k.agents.every((a: unknown) => !!a && typeof a === "object" && str((a as Record<string, unknown>).pk, 64) && str((a as Record<string, unknown>).vouch, 128))
+  );
+}
 const time = (x: unknown): x is number => typeof x === "number" && Number.isFinite(new Date(x).getTime());
 
 const roomId = (x: unknown): x is string => typeof x === "string" && ROOM_ID_RE.test(x);
@@ -1170,7 +1189,8 @@ function eventCheck(ev: unknown): boolean | null {
         e.links.every((l) => !!l && typeof l === "object" && !Array.isArray(l)) &&
         (e.device === undefined) === (e.vouch === undefined) &&
         opt(e.device, (x): x is string => str(x, 64)) &&
-        opt(e.vouch, (x): x is string => str(x, 128))
+        opt(e.vouch, (x): x is string => str(x, 128)) &&
+        opt(e.keep, isDeviceKeep)
       );
     default:
       return null;

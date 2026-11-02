@@ -103,6 +103,8 @@ export const SHOTS: Record<string, Shot> = {
   "side-recovery-pending": { scenario: "recovery-pending", channel: "kiwi" },
   "side-update-moved": { scenario: "update-moved", channel: "kiwi" },
   "side-update-moved-mac": { scenario: "update-moved-mac", channel: "kiwi" },
+  "settings-forget-agents": { scenario: "devices", channel: "kiwi", nav: { page: "settings", section: "computers" } },
+  "settings-forget-plain": { scenario: "devices", channel: "kiwi", nav: { page: "settings", section: "computers" } },
   "settings-devices-forgotten": { scenario: "devices-forgotten", channel: "kiwi", nav: { page: "settings", section: "computers" } },
   "settings-forgot-here": { scenario: "forgot-here", channel: "kiwi", nav: { page: "settings", section: "computers" } },
   empty: { scenario: "full", channel: "landing" },

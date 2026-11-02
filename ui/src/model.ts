@@ -31,6 +31,16 @@ export interface Load {
   waiting: number[]
 }
 
+export interface KeptAgent {
+  code: string
+  pk: string
+  from: string
+}
+
+export interface LaunchedAgent extends KeptAgent {
+  name: string
+}
+
 export interface Person {
   name: string
   kind: Kind
@@ -790,7 +800,7 @@ export interface Actions {
   enrollAnswer(id: string): void
   enrollConfirm(id: string, digits: string): Promise<{ ok: true } | { ok: false; left: number }>
   enrollDeny(id: string): void
-  forgetDevice(...ids: string[]): void
+  forgetDevice(ids: string[], keep?: KeptAgent[]): void
   renewDevice(...ids: string[]): void
   recoveryWords(): Promise<string[] | null>
   recoverySave(typed: { at: number; word: string }[]): Promise<RecoverySaved | null>
@@ -818,6 +828,7 @@ export interface Actions {
   setTerminalHelpers(id: TerminalId, on: boolean): void
   setContextLine(on: boolean): void
   computerSettings(id: string): Promise<[string, string[]][]>
+  launchedFrom(ids: string[]): Promise<LaunchedAgent[]>
 }
 
 export type Finding = { ok: true; what: string } | { ok: false; what: string; how: string }
