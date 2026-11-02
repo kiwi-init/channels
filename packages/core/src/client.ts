@@ -17,7 +17,7 @@ import { withSeats } from "./room-rules.ts";
 import type { Marks } from "./note.ts";
 import type { ChannelIcon, Envelope, ImageAttachment, Message } from "./protocol.ts";
 import type { Scope } from "./scopes.ts";
-import type { ChannelState, FoldBase, GithubRelease, GithubRules, GithubState, GuardFloor } from "./state.ts";
+import type { FoldBase, GithubRelease, GithubRules, GithubState, GuardFloor } from "./state.ts";
 import { ChannelCore, type ChannelFx } from "./client/core.ts";
 import { ChannelDelegations, type Computer, type Tended } from "./client/delegations.ts";
 import { ChannelGithub, type GithubDiff, type GithubIssueInfo, type ReviewCheck } from "./client/github.ts";
