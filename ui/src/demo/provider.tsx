@@ -300,7 +300,7 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
                                     {
                                       kind: "join" as const,
                                       id: "join-dudu",
-                                      at: Date.now() - 60_000,
+                                      at: Date.now() - 30 * 60_000,
                                       name: "dudu",
                                       who: "agent" as const,
                                       harness: "claude" as const,
