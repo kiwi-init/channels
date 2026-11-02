@@ -106,17 +106,17 @@ const FORGET_RAN = "It can't sign in as you again. It started these agents of yo
 function ForgetDevice({ forget, onClose }: { forget: { row: Device; runner: Device | null } | null; onClose: () => void }) {
   const { app } = useApp()
   const [keep, setKeep] = useState(false)
-  const [agents, setAgents] = useState<LaunchedAgent[] | null>(null)
+  const [got, setGot] = useState<{ key: string; agents: LaunchedAgent[] } | null>(null)
   const ids = forget ? [...(forget.runner ? [forget.runner.id] : []), forget.row.id] : []
   const key = ids.join(" ")
+  const agents = got?.key === key ? got.agents : null
   const { launchedFrom } = app.actions
   useEffect(() => {
     let live = true
-    setAgents(null)
     if (key)
       launchedFrom(key.split(" ")).then(
-        (got) => live && setAgents(got),
-        () => live && setAgents([])
+        (found) => live && setGot({ key, agents: found }),
+        () => live && setGot({ key, agents: [] })
       )
     return () => {
       live = false
