@@ -302,6 +302,17 @@ export interface Said {
   tone: "quiet" | "ask" | "alert" | "decide"
 }
 
+export interface ThreadItem {
+  root: number
+  following: boolean
+  replies: number
+  unread: number
+  mentions: number
+  last: number
+  lastSeq: number
+  people: string[]
+}
+
 export interface Message {
   seq: number
   from: string
@@ -509,6 +520,7 @@ export interface Channel {
   branchPrefix?: string
   rooms: Room[]
   directs: Direct[]
+  threads?: ThreadItem[]
   theirs: TheirDirect[]
   people: Person[]
   former?: Person[]
@@ -685,6 +697,7 @@ export interface Actions {
   loadImage(code: string, spot: string): void
   discard(code: string, seq: number): void
   markRead(code: string, where: Where): void
+  followThread(code: string, root: number, on: boolean): void
   leaveRoom(code: string, room: string): void
   react(code: string, seq: number, emoji: string): void
   editMessage(code: string, seq: number, text: string): void
