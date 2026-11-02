@@ -17,7 +17,7 @@ import { closeSync, existsSync, openSync, readFileSync, readSync, readdirSync, r
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join } from "node:path";
 
-import { kimiCodePid, mimoHere, piHere, type ProcessTree } from "./ancestry.ts";
+import { agyHere, kimiCodePid, mimoHere, piHere, type ProcessTree } from "./ancestry.ts";
 import type { Activity, ContextUse } from "@kiwi/core/protocol.ts";
 
 type Env = Record<string, string | undefined>;
@@ -160,6 +160,18 @@ function kimiModel(env: Env): string | undefined {
   return slug(tomlString(/^\s*model\s*=(.*)$/m.exec(section)?.[1]));
 }
 
+function agyModel(env: Env): string | undefined {
+  const dir = env.ANTIGRAVITY_APP_DATA_DIR || join(homedir(), ".gemini", "antigravity-cli");
+  const settings = JSON.parse(readFileSync(join(dir, "settings.json"), "utf8")) as { model?: unknown };
+  if (typeof settings.model !== "string") return undefined;
+  return slug(
+    settings.model
+      .toLowerCase()
+      .replace(/[^a-z0-9.]+/g, "-")
+      .replace(/^-+|-+$/g, ""),
+  );
+}
+
 function tomlString(v: string | undefined): string | undefined {
   const m = v === undefined ? null : /^\s*(?:"([^"\\]{1,120})"|'([^']{1,120})')\s*(?:#.*)?$/.exec(v);
   return m ? (m[1] ?? m[2]) : undefined;
@@ -258,6 +270,7 @@ export async function harnessModel(env: Env = process.env, where: HarnessWhere =
   if (piHere(env, where.tree)) tries.push(() => piModel(env, where.cwd ?? process.cwd()));
   else if (mimoHere(env, where.tree)) tries.push(() => mimoModel(env, where.cwd ?? process.cwd()));
   else if (kimiCodePid(env, where.tree)) tries.push(() => kimiModel(env));
+  else if (agyHere(env, where.tree)) tries.push(() => agyModel(env));
   else {
     if (env.GROK_SESSION_ID) tries.push(() => grokModel(env));
     if (env.CLAUDECODE) tries.push(() => claudeModel(env));
