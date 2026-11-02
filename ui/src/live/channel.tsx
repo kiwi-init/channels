@@ -56,13 +56,20 @@ function named(body: string, names: ReadonlySet<string>): string[] {
   return [...lead.matchAll(/@([\p{L}\p{N}_.-]+)/gu)].flatMap((m) => (m[1] && names.has(m[1]) ? [m[1]] : []))
 }
 
-function sendOptions(state: ChannelState, messages: readonly Wire[], me: string, where: Exclude<Where, { kind: "theirs" }>, body: string, opts: { replyTo?: number; inThread?: number }): SendOptions {
+function sendOptions(
+  state: ChannelState,
+  messages: readonly Wire[],
+  me: string,
+  where: Exclude<Where, { kind: "theirs" }>,
+  body: string,
+  opts: { replyTo?: number; inThread?: number; side?: true }
+): SendOptions {
   const names = new Set([...state.members.values()].filter((m) => m.active && m.name !== me).map((m) => m.name))
   const re = opts.replyTo ?? opts.inThread
   const target = opts.replyTo !== undefined ? messages.find((m) => m.seq === opts.replyTo) : undefined
   const mentioned = named(body, names)
   const to = mentioned.length ? mentioned : target && target.from !== me ? [target.from] : undefined
-  const base: SendOptions = { kind: "msg", ...(re !== undefined ? { re: [re] } : {}), ...(to ? { to } : {}) }
+  const base: SendOptions = { kind: "msg", ...(re !== undefined ? { re: [re] } : {}), ...(re !== undefined && opts.side ? { side: true } : {}), ...(to ? { to } : {}) }
   if (where.kind === "dm") return { ...base, ...sendFrom(state, dmPlace(me, where.with), me) }
   if (where.kind === "task") return { ...base, ...sendFrom(state, { kind: "task", task: where.task }, me) }
   return where.room === GENERAL_ROOM ? base : { ...base, room: where.room }
@@ -218,7 +225,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   )
 
   const post = useCallback(
-    async (where: Where, text: string, opts: { replyTo?: number; inThread?: number; images?: Upload[] }): Promise<number> => {
+    async (where: Where, text: string, opts: { replyTo?: number; inThread?: number; side?: true; images?: Upload[] }): Promise<number> => {
       if (where.kind === "theirs") throw new Error("Only the two of them write in their direct messages")
       const key = nextUnsentKey()
       const body = text.trim()
@@ -244,6 +251,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
         text: body,
         at: Date.now(),
         ...(opts.inThread !== undefined ? { inThread: opts.inThread } : {}),
+        ...(opts.side ? { side: true as const } : {}),
         ...(opts.replyTo !== undefined ? { replyTo: opts.replyTo } : {}),
         ...(opts.images?.length ? { images: opts.images } : {}),
       }
@@ -251,7 +259,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       try {
         const seq = await inTurn(async () => {
           const room = where.kind === "dm" ? await sealedIn(where.with) : undefined
-          return send(body, room ? { kind: "msg", room, ...(re !== undefined ? { re: [re] } : {}), ...imgs } : plain)
+          return send(body, room ? { kind: "msg", room, ...(re !== undefined ? { re: [re] } : {}), ...(re !== undefined && opts.side ? { side: true } : {}), ...imgs } : plain)
         })
         setPending((list) => list.map((p) => (p.key === key ? { ...p, seq } : p)))
         return seq
@@ -271,6 +279,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       discard(key)
       return post(p.where, p.text, {
         ...(p.inThread !== undefined ? { inThread: p.inThread } : {}),
+        ...(p.side ? { side: true as const } : {}),
         ...(p.replyTo !== undefined ? { replyTo: p.replyTo } : {}),
         ...(p.images?.length ? { images: p.images } : {}),
       })

@@ -740,6 +740,7 @@ export interface Payload {
   task?: number;
   /** A chat message to exactly one member, in the direct thread between the two. Older clients see a message to that member. */
   dm?: true;
+  side?: true;
   /**
    * An agent handing a decision or a step to people instead of acting (`kiwi escalate`): a blocking
    * question to its own human and the owner. Older clients see it as the blocking question it also is.
@@ -1135,6 +1136,7 @@ export function wellFormed(p: unknown): p is WirePayload {
     opt(m.room, roomId) &&
     (m.task === undefined || (Number.isSafeInteger(m.task) && (m.task as number) > 0)) &&
     (m.dm === undefined || m.dm === true) &&
+    (m.side === undefined || m.side === true) &&
     (m.esc === undefined || m.esc === true) &&
     (m.handoff === undefined || (m.esc === true && wellFormedHandoff(m.handoff))) &&
     (m.choices === undefined || (m.esc === true && m.handoff === undefined && wellFormedChoices(m.choices))) &&

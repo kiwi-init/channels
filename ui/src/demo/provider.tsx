@@ -413,7 +413,16 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
           const root = opts?.inThread ?? (target ? (target.inThread ?? target.seq) : undefined)
           const replyTo = opts?.replyTo !== undefined && opts.replyTo !== root ? opts.replyTo : undefined
           const images = opts?.images?.map((i) => ({ url: `data:${i.mime};base64,${i.data}`, width: 0, height: 0, alt: i.name }))
-          const next = post(c, seq, { from: c.you, text, where, replyTo, inThread: root, pending: true, ...(images?.length ? { images } : {}) })
+          const next = post(c, seq, {
+            from: c.you,
+            text,
+            where,
+            replyTo,
+            inThread: root,
+            pending: true,
+            ...(root !== undefined && opts?.side ? { side: true as const } : {}),
+            ...(images?.length ? { images } : {}),
+          })
           if (root === undefined) return next
           return {
             ...next,
