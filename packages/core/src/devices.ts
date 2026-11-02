@@ -368,7 +368,21 @@ interface CheckedDevice {
   device: Device;
 }
 
-export async function checkDevice(c: unknown, roomId: string, memberPk: string, newer?: (person: string) => DeviceList | undefined, now = Date.now()): Promise<CheckedDevice | null> {
+export function checkDevice(c: unknown, roomId: string, memberPk: string, newer?: (person: string) => DeviceList | undefined, now = Date.now()): Promise<CheckedDevice | null> {
+  return checkVouch(c, deviceVouch(roomId, memberPk), newer, now);
+}
+
+const keepVouch = (roomId: string, agentPk: string, fromPk: string) => `kiwi-keep\n${roomId}\n${agentPk}\n${fromPk}`;
+
+export async function vouchKeep(computer: Identity, links: DeviceLink[], roomId: string, agentPk: string, fromPk: string): Promise<DeviceClaim> {
+  return { links, device: computer.pk, vouch: await signText(computer, keepVouch(roomId, agentPk, fromPk)) };
+}
+
+export function checkKeep(c: unknown, roomId: string, agentPk: string, fromPk: string, newer?: (person: string) => DeviceList | undefined, now = Date.now()): Promise<CheckedDevice | null> {
+  return checkVouch(c, keepVouch(roomId, agentPk, fromPk), newer, now);
+}
+
+async function checkVouch(c: unknown, text: string, newer?: (person: string) => DeviceList | undefined, now = Date.now()): Promise<CheckedDevice | null> {
   if (!c || typeof c !== "object") return null;
   const claim = c as Partial<DeviceClaim>;
   if (!Array.isArray(claim.links) || typeof claim.device !== "string" || typeof claim.vouch !== "string") return null;
@@ -378,5 +392,5 @@ export async function checkDevice(c: unknown, roomId: string, memberPk: string, 
   const list = known && isNewerList(known, read.list) ? known : read.list;
   const d = currentDevice(list, claim.device, now);
   if (!d) return null;
-  return (await verifyText(d.device, claim.vouch, deviceVouch(roomId, memberPk))) ? { person: list.person, version: list.version, device: d } : null;
+  return (await verifyText(d.device, claim.vouch, text)) ? { person: list.person, version: list.version, device: d } : null;
 }

@@ -5,7 +5,7 @@ import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/ide
 import type { Member } from "@kiwi/core/membership.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
 import { recoveryKey, recoveryLink } from "@kiwi/core/recovery.ts";
-import { goneOwn, postedLists, postedProofs, postList, tendLists, type ListsApi } from "./device-lists";
+import { goneOwn, keepAgents, postedKeeps, postedLists, postedProofs, postList, tendLists, type ListsApi } from "./device-lists";
 import { revokedComputer } from "./forgotten-computers";
 
 const store = new Map<string, string>();
@@ -44,14 +44,16 @@ const event = (seq: number, from: string, links: DeviceLink[], proof: { device: 
 function channel(messages: Message[], waiting: Member[] = []) {
   const asked: number[] = [];
   const cuts: DeviceList[] = [];
+  const keeps: Record<string, DeviceClaim>[] = [];
   const reproves: { list: DeviceList; proofs: Record<string, DeviceClaim> }[] = [];
   const api: ListsApi = {
     history: async (since) => {
       asked.push(since);
       return { messages: messages.filter((m) => m.seq > since) };
     },
-    cutDevices: async (list) => {
+    cutDevices: async (list, kept) => {
       cuts.push(list);
+      keeps.push({ ...kept });
       return [{ name: "jow-2" } as Member];
     },
     reprove: async (list, proofs) => {
@@ -59,7 +61,7 @@ function channel(messages: Message[], waiting: Member[] = []) {
       return { proved: [], cut: [], waiting: reproves.length === 1 ? waiting : [] };
     },
   };
-  return { api, asked, cuts, reproves };
+  return { api, asked, cuts, keeps, reproves };
 }
 
 test("each member's longest posted list is the one kept", async () => {
@@ -187,4 +189,48 @@ test("a pass keeps the lists it read, so the app can tell a request from a forgo
   expect(revokedComputer(person.pk, phone.pk)).toBe(true);
   expect(revokedComputer(person.pk, "someone-else")).toBe(false);
   expect(revokedComputer("another-person", phone.pk)).toBe(false);
+});
+
+test("keeps for a forgotten computer's agents reach the cut: signed ones read from the log, and this app's own before it posts them (T1467)", async () => {
+  const { revoked } = await lists();
+  const keep = { device: "mac", agents: [{ pk: "pk-tortoise", vouch: "sig" }] };
+  const posted = [event(1, "jow", revoked, { keep }), event(2, "forger", revoked, { keep: { device: "evil", agents: [{ pk: "pk-other", vouch: "x" }] } }, false)];
+  expect(postedKeeps(posted)).toEqual({ "pk-tortoise": { links: revoked, device: "mac", vouch: "sig" } });
+
+  const read = channel(posted);
+  await tendLists("mc2-k", [], read.api);
+  expect(read.keeps).toEqual([{ "pk-tortoise": { links: revoked, device: "mac", vouch: "sig" } }]);
+
+  keepAgents("mc2-own", revoked, { device: "mac", agents: [{ pk: "pk-a", vouch: "a" }] });
+  keepAgents("mc2-own", revoked, {
+    device: "mac",
+    agents: [
+      { pk: "pk-b", vouch: "b" },
+      { pk: "pk-a", vouch: "a2" },
+    ],
+  });
+  const own = channel([]);
+  await tendLists("mc2-own", revoked, own.api);
+  expect(own.keeps).toEqual([{ "pk-a": { links: revoked, device: "mac", vouch: "a2" }, "pk-b": { links: revoked, device: "mac", vouch: "b" } }]);
+  const other = channel([]);
+  await tendLists("mc2-else", revoked, other.api);
+  expect(other.keeps).toEqual([{}]);
+});
+
+test("this app's keep rides on its next post into that channel only, and its own cut log honors it (T1467)", async () => {
+  const { added, revoked } = await lists();
+  keepAgents("mc2-a", revoked, { device: "mac", agents: [{ pk: "pk-a", vouch: "a" }] });
+  const sent: object[] = [];
+  const api = { send: async (_: string, o: { ev: object }) => sent.push(o.ev) };
+  await postList("mc2-a", revoked, api);
+  await postList("mc2-b", added, api);
+  expect(sent).toEqual([
+    { op: "devices", links: revoked, keep: { device: "mac", agents: [{ pk: "pk-a", vouch: "a" }] } },
+    { op: "devices", links: added },
+  ]);
+  const asked: Record<string, DeviceClaim>[] = [];
+  const gone = { goneDevices: async (_: DeviceList, keeps: Record<string, DeviceClaim>) => (asked.push({ ...keeps }), []) };
+  await goneOwn("mc2-a", revoked, gone);
+  await goneOwn("mc2-b", revoked, gone);
+  expect(asked).toEqual([{ "pk-a": { links: revoked, device: "mac", vouch: "a" } }, {}]);
 });
