@@ -215,11 +215,12 @@ export class ChannelMembers {
       const revoked = new Set(list.revoked);
       const cut: (Member & { why: string })[] = [];
       for (const m of yield* this.ch.fx.members()) {
-        const why = m.active && !m.owner && !m.unverified ? cutReason(m, list) : null;
-        if (!why) continue;
+        const live = m.active && !m.owner && !m.unverified;
+        const why = live ? cutReason(m, list) : null;
+        if (!why && !(live && unlistedReason(m, list))) continue;
         const to = yield* Effect.promise(() => keptOn(m, list, keeps, this.ch.roomId));
         if (to) yield* reseal(this.ch, m, { ...omit(m, "active", "readOnly", "unverified", "at"), from: to });
-        else cut.push({ ...m, why });
+        else if (why) cut.push({ ...m, why });
       }
       const dropped = (yield* this.ch.fx.delegations().pipe(Effect.catchCause(() => Effect.succeed([])))).filter((d) => d.person === list.person && revoked.has(d.delegate));
       if (!cut.length && !dropped.length) return cut;
@@ -258,6 +259,12 @@ export class ChannelMembers {
         const from = { pk: got.device.device, label: got.device.label };
         yield* reseal(this.ch, m, { ...omit(m, "active", "readOnly", "unverified", "at"), sponsor, from });
         out.proved.push({ ...m, sponsor, from });
+      }
+      for (const m of live) {
+        const why = unlistedReason(m, list);
+        if (!why) continue;
+        if (now - since >= REPROVE_MS) out.cut.push({ ...m, why: `${why} in the 7 days after they replaced their person key` });
+        else out.waiting.push(m);
       }
       if (!out.cut.length) return out;
       for (const m of out.cut) {
@@ -388,6 +395,11 @@ export function cutReason(m: Cuttable, list: DeviceList): string | null {
   if (!m.from || m.sponsor?.user !== list.person) return null;
   const whose = m.sponsor.handle ? `@${m.sponsor.handle}` : inlineText(m.sponsor.name, 60) || "their person";
   if (revoked.has(m.from.pk)) return `${m.name}'s computer${quoted(m.from.label)} was forgotten from ${whose}'s devices`;
-  if (list.reroots.length && !listedComputer(list, m.from.pk)) return `${m.name}'s computer${quoted(m.from.label)} isn't on ${whose}'s devices since they replaced their person key`;
   return null;
+}
+
+function unlistedReason(m: Cuttable, list: DeviceList): string | null {
+  if (!list.reroots.length || !m.from || m.sponsor?.user !== list.person || list.revoked.includes(m.from.pk) || listedComputer(list, m.from.pk)) return null;
+  const whose = m.sponsor.handle ? `@${m.sponsor.handle}` : inlineText(m.sponsor.name, 60) || "their person";
+  return `${m.name}'s computer${quoted(m.from.label)} wasn't put back on ${whose}'s devices`;
 }
