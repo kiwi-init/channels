@@ -1,5 +1,6 @@
 import { ignored, isQuiet, ROBOT_FACES, type ChannelIcon, type Message } from "@kiwi/core/protocol.ts";
-import { answersDecisions, decidersOf, MAIN, openRound, placeFromKey, placeKey, taskId, type ChannelState } from "@kiwi/core/state.ts";
+import { rootOf } from "@kiwi/core/room-rules.ts";
+import { answersDecisions, decidersOf, dmPlace, MAIN, openRound, placeFromKey, placeKey, taskId, type ChannelState } from "@kiwi/core/state.ts";
 import { inGeneral } from "@kiwi/core/state/places.ts";
 import type { FoldMember } from "@kiwi/core/state/types.ts";
 
@@ -68,6 +69,11 @@ function shownIn(m: Message, state: ChannelState, key: string): boolean {
   return !isQuiet(m) && !ignored(state.trust.get(m.seq));
 }
 
+export function leadChatKey(state: Pick<ChannelState, "lead" | "members">, me: string): string | null {
+  const root = rootOf(me, state.members);
+  return state.lead && state.lead !== me && state.lead !== root ? placeKey(dmPlace(root, state.lead)) : null;
+}
+
 export function roomView(r: RoomInput): RoomView {
   const { state, me } = r;
   const bySeq = new Map(r.messages.map((m) => [m.seq, m]));
@@ -109,7 +115,8 @@ export function roomView(r: RoomInput): RoomView {
   };
 
   const messages = shown.map((m, i) => messageView(m, i > 0 ? shown[i - 1] : visible[visible.length - shown.length - 1]));
-  const sideKey = state.lead && state.lead !== me ? `dm:${[me, state.lead].sort().join("~")}` : null;
+  const root = rootOf(me, state.members);
+  const sideKey = leadChatKey(state, me);
   const sideAll = sideKey ? r.messages.filter((m) => shownIn(m, state, sideKey)) : [];
   const sideShown = sideAll.slice(-SHOWN);
   const side = sideShown.map((m, i) => messageView(m, i > 0 ? sideShown[i - 1] : sideAll[sideAll.length - sideShown.length - 1]));
@@ -131,7 +138,7 @@ export function roomView(r: RoomInput): RoomView {
     if (!p) return null;
     const last = lastIn.get(key);
     const summary = state.places.get(key);
-    const withMe = p.kind !== "dm" || p.with.includes(me);
+    const withMe = p.kind !== "dm" || p.with.includes(root);
     const title =
       p.kind === "main"
         ? r.title
