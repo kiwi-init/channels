@@ -1,7 +1,7 @@
 import { b64url, openFrom, sealTo } from "./crypto.ts";
 import { canonical, sign, verify, type Identity } from "./identity.ts";
 import type { DeviceList } from "./devices.ts";
-import { RECOVERY_WORDS } from "./recovery-words.ts";
+import { recoveryWords } from "./recovery-words.ts";
 
 const KEY_RE = /^[A-Za-z0-9_-]{43}$/;
 const DAY_MS = 86_400_000;
@@ -20,13 +20,13 @@ let byPrefix: Map<string, number> | null = null;
 
 function wordIndex(word: string): number | undefined {
   if (!index || !byPrefix) {
-    index = new Map(RECOVERY_WORDS.map((w, i) => [w, i]));
-    byPrefix = new Map(RECOVERY_WORDS.map((w, i) => [w.slice(0, 4), i]));
+    index = new Map(recoveryWords().map((w, i) => [w, i]));
+    byPrefix = new Map(recoveryWords().map((w, i) => [w.slice(0, 4), i]));
   }
   const exact = index.get(word);
   if (exact !== undefined || word.length < 4) return exact;
   const i = byPrefix.get(word.slice(0, 4));
-  return i !== undefined && RECOVERY_WORDS[i]!.startsWith(word) ? i : undefined;
+  return i !== undefined && recoveryWords()[i]!.startsWith(word) ? i : undefined;
 }
 
 async function checksum(entropy: Uint8Array<ArrayBuffer>): Promise<number> {
@@ -40,7 +40,7 @@ export async function phraseOf(entropy: Uint8Array<ArrayBuffer>): Promise<string
   for (let w = 0; w < PHRASE_WORDS; w++) {
     let n = 0;
     for (let b = w * 11; b < w * 11 + 11; b++) n = (n << 1) | ((bytes[b >> 3]! >> (7 - (b & 7))) & 1);
-    words.push(RECOVERY_WORDS[n]!);
+    words.push(recoveryWords()[n]!);
   }
   return words;
 }
@@ -108,6 +108,7 @@ interface Pending {
 
 export interface Recovery {
   person: string;
+  root: string;
   n: number;
   head: string;
   rpk: string;
@@ -155,6 +156,8 @@ function approver(list: DeviceList, pk: string): boolean {
   return list.devices.some((d) => d.device === pk && d.approve && d.as !== "computer");
 }
 
+const rerootedBefore = (list: DeviceList, pk: string, due: number): boolean => list.reroots.some((x) => x.from === pk && x.at < due);
+
 export async function readRecovery(links: readonly unknown[], list: DeviceList, now = Date.now()): Promise<ReadRecovery> {
   if (!links.length) return { ok: false, why: "no recovery key set up" };
   if (links.length > RECOVERY_MAX) return { ok: false, why: "a recovery chain longer than any person needs" };
@@ -171,26 +174,32 @@ export async function readRecovery(links: readonly unknown[], list: DeviceList, 
     if (link.at < last) return { ok: false, why: `recovery link ${link.n} is dated before the one it follows` };
     last = link.at;
     const head = await digest(link);
+    const pinned = list.reroots.find((x) => x.n === link.n);
+    if (pinned && pinned.head !== head) return { ok: false, why: `recovery link ${link.n} isn't the one the re-root at link ${pinned.seq} was signed against` };
+    const after = list.reroots.findLast((x) => x.n < link.n);
+    if (after && link.at < after.at) return { ok: false, why: `recovery link ${link.n} is dated before the re-root it follows` };
+    const root = after?.root ?? list.person;
     if (!r) {
-      if (link.pk !== link.person || link.after !== null) return { ok: false, why: "the person key sets up the first recovery key" };
-      r = { person: link.person, n: 1, head, rpk: link.rpk, rxpk: link.rxpk, pending: null };
+      if (link.pk !== root || link.after !== null) return { ok: false, why: "the person key sets up the first recovery key" };
+      r = { person: link.person, root: list.root, n: 1, head, rpk: link.rpk, rxpk: link.rxpk, pending: null };
       continue;
     }
     if (r.pending && link.at >= r.pending.after) r = { ...r, rpk: r.pending.rpk, rxpk: r.pending.rxpk, pending: null };
     if (link.after === null) {
-      if (link.pk === r.rpk || (link.pk === link.person && link.at < PERSON_WORDS_WAIT_FROM)) {
+      if (link.pk === r.rpk || (!after && link.pk === root && link.at < PERSON_WORDS_WAIT_FROM)) {
         r = { ...r, n: link.n, head, rpk: link.rpk, rxpk: link.rxpk, pending: null };
         continue;
       }
-      if (link.pk !== link.person) return { ok: false, why: `recovery link ${link.n}: only the person key or the recovery key replaces it at once` };
-      r = { ...r, n: link.n, head, pending: { rpk: link.rpk, rxpk: link.rxpk, after: recoveryAfter(link.at), by: link.pk } };
+      if (link.pk !== root) return { ok: false, why: `recovery link ${link.n}: only the person key or the recovery key replaces it at once` };
+      const due = recoveryAfter(link.at);
+      r = { ...r, n: link.n, head, pending: rerootedBefore(list, link.pk, due) ? r.pending : { rpk: link.rpk, rxpk: link.rxpk, after: due, by: link.pk } };
       continue;
     }
     if (link.after !== recoveryAfter(link.at)) return { ok: false, why: `recovery link ${link.n}: a new recovery key waits ${RECOVERY_DELAY_DAYS} days` };
     const cut = list.revokes.find((x) => x.device === link.pk);
-    if (link.pk !== link.person && (cut ? !cut.approve || cut.as === "computer" : !approver(list, link.pk)))
+    if (link.pk !== root && (cut ? !cut.approve || cut.as === "computer" : !approver(list, link.pk)))
       return { ok: false, why: `recovery link ${link.n}: signed by a key that may not propose a recovery key` };
-    const voided = !!cut && cut.at < link.after;
+    const voided = (!!cut && cut.at < link.after) || rerootedBefore(list, link.pk, link.after);
     r = { ...r, n: link.n, head, pending: voided ? r.pending : { rpk: link.rpk, rxpk: link.rxpk, after: link.after, by: link.pk } };
   }
   if (r!.pending && now >= r!.pending.after) r = { ...r!, rpk: r!.pending.rpk, rxpk: r!.pending.rxpk, pending: null };
@@ -213,6 +222,7 @@ export interface VaultContents {
 export interface SealedPerson {
   rxpk: string;
   box: string;
+  pk?: string;
 }
 
 export interface Vault {
@@ -231,13 +241,14 @@ const vaultInfo = (v: { person: string; version: number; at: number }) => `kiwi-
 const personInfo = (person: string, rxpk: string) => `kiwi-vault-person\n${person}\n${rxpk}`;
 
 export async function sealPerson(recovery: Recovery, person: Identity): Promise<SealedPerson> {
-  if (person.pk !== recovery.person) throw new Error("that person key isn't the one this recovery key is for");
-  return { rxpk: recovery.rxpk, box: await sealTo(recovery.rxpk, JSON.stringify(person), personInfo(person.pk, recovery.rxpk)) };
+  if (person.pk !== recovery.root) throw new Error("that person key isn't the one this recovery key is for");
+  return { rxpk: recovery.rxpk, pk: person.pk, box: await sealTo(recovery.rxpk, JSON.stringify(person), personInfo(recovery.person, recovery.rxpk)) };
 }
 
 export async function sealVault(signer: Identity, recovery: Recovery, version: number, contents: { person: Identity | SealedPerson; channels: VaultChannel[] }, at = Date.now()): Promise<Vault> {
   const held = contents.person;
   if ("box" in held && held.rxpk !== recovery.rxpk) throw new Error("the person key is sealed to an earlier recovery key");
+  if (("box" in held ? (held.pk ?? recovery.person) : held.pk) !== recovery.root) throw new Error("that person key was replaced by a re-root");
   const head = { person: recovery.person, version, at };
   const inner = { person: "box" in held ? held.box : held, channels: contents.channels };
   return sign(signer, { kind: "kiwi-vault" as const, v: 1 as const, ...head, box: await sealTo(recovery.rxpk, JSON.stringify(inner), vaultInfo(head)) });
@@ -252,7 +263,7 @@ export async function checkVault(raw: unknown, list: DeviceList, known = 0): Pro
   if (typeof x["box"] !== "string" || x["box"].length > VAULT_BOX_MAX) return "a vault too large";
   if (!(await verify(x))) return "a vault that isn't signed by the key it names";
   if (x["person"] !== list.person) return "a vault for another person";
-  if (x["pk"] !== list.person && !approver(list, x["pk"])) return "a vault signed by a key that isn't one of this person's approving devices";
+  if (x["pk"] !== list.root && !approver(list, x["pk"])) return "a vault signed by a key that isn't one of this person's approving devices";
   if ((x["version"] as number) < known) return `vault version ${x["version"] as number} is older than version ${known}, already seen`;
   return null;
 }
@@ -282,11 +293,11 @@ async function opened(xsk: string, box: string, info: string): Promise<unknown> 
   }
 }
 
-export async function openVault(vault: Vault, key: Identity): Promise<VaultContents | null> {
+export async function openVault(vault: Vault, key: Identity, root = vault.person): Promise<VaultContents | null> {
   if (!key.xsk) return null;
   const inner = await opened(key.xsk, vault.box, vaultInfo(vault));
   if (!inner || typeof inner !== "object") return null;
   const held = (inner as { person?: unknown }).person;
   const person = typeof held === "string" ? await opened(key.xsk, held, personInfo(vault.person, key.xpk ?? "")) : held;
-  return contentsOf({ ...inner, person }, vault.person);
+  return contentsOf({ ...inner, person }, root);
 }

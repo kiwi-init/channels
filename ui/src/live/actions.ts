@@ -319,7 +319,7 @@ export function makeActions(): Actions {
         await forgetChannel(code)
       }),
     closeChannel: (code) =>
-      attempt("Couldn't close it", async () => {
+      attempt("Couldn't delete it", async () => {
         const run = owner(code)
         leavingOnPurpose(code)
         await run.ch.close()

@@ -47,6 +47,7 @@ function relay(head = 0, opts: { owner?: boolean; answers?: Record<string, Answe
     drainGithub: () => undefined,
     syncGithubRules: () => undefined,
     syncGithubReleases: () => undefined,
+    syncGithub: () => 0,
     ...opts.answers,
   };
   const ops = {
@@ -288,14 +289,16 @@ describe("snapshots", () => {
 describe("the GitHub chores", () => {
   const withRepo = { guard: () => ({ charter: null, hold: null, repos: { list: ["acme/app"], since: 0 } }) };
 
-  test("once caught up with a linked repo, the owner syncs its rules, then its releases", async () => {
+  test("once caught up with a linked repo, the owner syncs its rules, then its releases, then its pull requests and issues", async () => {
     const r = relay(0, { owner: true, answers: withRepo });
     const { store, close } = await opened(r);
     r.say({ _tag: "Message", message: msg(1), row: null });
     await until(() => store.handle.value.state.repos.length === 1);
-    await until(() => r.called("syncGithubReleases").length === 1);
+    await until(() => r.called("syncGithub").length === 1);
     expect(r.called("syncGithubRules")).toHaveLength(1);
+    expect(r.called("syncGithubReleases")).toHaveLength(1);
     expect(r.called("syncGithubRules")[0]!.args[0]).toEqual(["acme/app"]);
+    expect(r.called("syncGithub")[0]!.args[0]).toBe("acme/app");
     close();
   });
 
@@ -321,6 +324,7 @@ describe("the GitHub chores", () => {
     expect(r.called("drainGithub")).toHaveLength(0);
     expect(r.called("syncGithubRules")).toHaveLength(0);
     expect(r.called("syncGithubReleases")).toHaveLength(0);
+    expect(r.called("syncGithub")).toHaveLength(0);
     close();
   });
 });
