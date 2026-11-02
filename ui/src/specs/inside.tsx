@@ -9,9 +9,9 @@ import { ago, clock } from "~/kit/time"
 import type { Channel, Spec } from "~/model"
 import { useAct } from "~/nav"
 import { nickname } from "~/names"
-import { alarmsOf, boxesOf, faceOf, insideOf, lastMove, stageLine, storyOf, tasksOf, workersOf } from "~/specs/read"
+import { alarmsOf, boxesOf, faceOf, insideOf, lastMove, storyOf, tasksOf, workersOf } from "~/specs/read"
 
-const STORY_SHOWN = 12
+const STORY_SHOWN = 5
 
 export function Inside({ channel, spec }: { channel: Channel; spec: Spec }) {
   const { actions, go } = useAct()
@@ -19,7 +19,6 @@ export function Inside({ channel, spec }: { channel: Channel; spec: Spec }) {
   const taskIds = useTaskIds(channel)
   const [all, setAll] = useState(false)
   const [wire, setWire] = useState(false)
-  const line = stageLine(channel, spec)
   const tasks = tasksOf(channel, spec)
   const alarms = alarmsOf(channel, spec)
   const story = storyOf(channel, spec)
@@ -36,31 +35,6 @@ export function Inside({ channel, spec }: { channel: Channel; spec: Spec }) {
   }
   return (
     <div className="spec-inside">
-      <section className="inside-glance" aria-label="At a glance">
-        <span className={cx("inside-pulse", line.tone)} aria-hidden="true" />
-        <span className="inside-glance-line num">
-          <span className={line.tone}>{line.word}</span>
-          {who.length > 0 && <span>{who.length === 1 ? "1 agent" : `${who.length} agents`}</span>}
-          <span>
-            {done} of {counted.length} tasks done
-          </span>
-          {boxes.length > 0 && (
-            <span>
-              {boxes.filter((b) => b.done).length}/{boxes.length} done when
-            </span>
-          )}
-          <span>last move {ago(lastMove(channel, spec))}</span>
-        </span>
-        <span className="inside-faces" aria-hidden="true">
-          {who.map((n) => (
-            <Avatar key={n} person={faceOf(channel, n)} size="sm" pip />
-          ))}
-        </span>
-        <button type="button" className="btn is-quiet is-small" onClick={ask}>
-          Ask the lead where it stands
-        </button>
-      </section>
-
       {alarms.length > 0 && (
         <section className="inside-alarms" aria-label="Worth a look">
           {alarms.map((a) => (
@@ -77,54 +51,91 @@ export function Inside({ channel, spec }: { channel: Channel; spec: Spec }) {
         </section>
       )}
 
-      <section className="inside-lanes" aria-label="The work">
-        <h2 className="inside-h">The work</h2>
-        {tasks.length ? (
-          <ul className="inside-tasks">
-            {tasks.map((t) => (
-              <li key={t.id}>
-                <button type="button" className={cx("inside-task", t.cancelled && "is-cancelled")} onClick={() => go({ to: "panel", panel: { kind: "task", task: t.id } })}>
-                  <Dot status={t.cancelled ? "todo" : t.status} />
-                  <span className="inside-task-title">{t.title}</span>
-                  <span className="inside-task-meta num">
-                    <span>T{t.id}</span>
-                    {t.owner && <span>{nickname(channel, t.owner)}</span>}
-                    <span>{statusWord(t)}</span>
-                    <span>{ago(t.updatedAt)}</span>
-                  </span>
-                  {t.owner && <Avatar person={faceOf(channel, t.owner)} size="sm" />}
-                </button>
-                {t.pr && <PrChip pr={t.pr} />}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="inside-none">{spec.stage === "draft" ? "No work yet: tasks come once a person approves the spec." : "No tasks yet: the first free agent splits the spec into tasks."}</p>
-        )}
-        {spec.approved && !spec.result && !spec.changed && <AddStep channel={channel} spec={spec} />}
-      </section>
-
-      <section className="inside-story" aria-label="What happened">
-        <h2 className="inside-h">
-          What happened
-          {story.length > STORY_SHOWN && (
-            <button type="button" className="btn is-quiet is-small" onClick={() => setAll(!all)}>
-              {all ? "Latest only" : `All ${story.length}`}
-            </button>
-          )}
-        </h2>
-        <ol className="story">
-          {shown.map((s, i) => (
-            <li key={`${s.at}-${i}`} className="story-line">
-              <time className="story-time">{clock(s.at)}</time>
-              <Avatar person={faceOf(channel, s.who)} size="sm" />
-              <span className="story-text">
-                <span className="story-who">{nickname(channel, s.who)}</span> <span className={s.tone}>{s.text}</span>
+      <div className="inside-cols">
+        <section className="inside-lanes" aria-label="The work">
+          <h2 className="inside-h">
+            <span className="inside-h-line num">
+              <span className="inside-h-name">The work</span>
+              {spec.stage !== "working" && counted.length > 0 && (
+                <span>
+                  {done} of {counted.length} tasks done
+                </span>
+              )}
+              {boxes.length > 0 && (
+                <span>
+                  {boxes.filter((b) => b.done).length}/{boxes.length} done when
+                </span>
+              )}
+              <span>last move {ago(lastMove(channel, spec))}</span>
+            </span>
+            {who.length > 0 && (
+              <span className="inside-faces" aria-label={who.map((n) => nickname(channel, n)).join(", ")}>
+                {who.map((n) => (
+                  <Avatar key={n} person={faceOf(channel, n)} size="sm" pip />
+                ))}
               </span>
-            </li>
-          ))}
-        </ol>
-      </section>
+            )}
+            {!spec.result && (
+              <button type="button" className="btn is-quiet is-small" title="Ask the lead where it stands" onClick={ask}>
+                Ask where it stands
+              </button>
+            )}
+          </h2>
+          {tasks.length ? (
+            <ul className="inside-tasks">
+              {tasks.map((t) => (
+                <li key={t.id}>
+                  <button type="button" className={cx("inside-task", t.cancelled && "is-cancelled")} onClick={() => go({ to: "panel", panel: { kind: "task", task: t.id } })}>
+                    <Dot status={t.cancelled ? "todo" : t.status} />
+                    <span className="inside-task-title">{t.title}</span>
+                    <span className="inside-task-meta num">
+                      <span>T{t.id}</span>
+                      {t.owner && <span>{nickname(channel, t.owner)}</span>}
+                      <span>{statusWord(t)}</span>
+                      <span>{ago(t.updatedAt)}</span>
+                    </span>
+                  </button>
+                  {t.pr && <PrChip pr={t.pr} />}
+                  {t.owner && (
+                    <span className="inside-task-face" title={nickname(channel, t.owner)}>
+                      <Avatar person={faceOf(channel, t.owner)} size="sm" />
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="inside-none">{spec.stage === "draft" ? "No work yet: tasks come once a person approves the spec." : "No tasks yet: the first free agent splits the spec into tasks."}</p>
+          )}
+          {spec.approved && !spec.result && !spec.changed && <AddStep channel={channel} spec={spec} />}
+        </section>
+
+        <section className="inside-story" aria-label="What happened">
+          <h2 className="inside-h">
+            <span className="inside-h-name">What happened</span>
+            {story.length > STORY_SHOWN && (
+              <button type="button" className="btn is-quiet is-small" aria-expanded={all} onClick={() => setAll(!all)}>
+                {all ? "Latest only" : `All ${story.length}`}
+              </button>
+            )}
+          </h2>
+          {shown.length ? (
+            <ol className="story">
+              {shown.map((s, i) => (
+                <li key={`${s.at}-${i}`} className="story-line">
+                  <time className="story-time">{clock(s.at)}</time>
+                  <Avatar person={faceOf(channel, s.who)} size="sm" />
+                  <span className="story-text">
+                    <span className="story-who">{nickname(channel, s.who)}</span> <span className={s.tone}>{s.text}</span>
+                  </span>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p className="inside-none">Nothing yet.</p>
+          )}
+        </section>
+      </div>
 
       <section className="inside-wire" aria-label="Every message">
         <button type="button" className="inside-wire-toggle" aria-expanded={wire} onClick={() => setWire(!wire)}>
