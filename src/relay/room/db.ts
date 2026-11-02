@@ -473,11 +473,17 @@ export class RoomDb {
     this.set("github_repos", JSON.stringify(repos));
   }
 
-  enqueueGithub(item: string, now: number, ttlMs: number, most: number): void {
+  enqueueGithub(repo: string, item: string, now: number, ttlMs: number, most: number): void {
+    this.set(`github_seen:${repo.toLowerCase()}`, now);
     this.sql.run("CREATE TABLE IF NOT EXISTS github_queue (id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, item TEXT NOT NULL)");
     this.sql.run("DELETE FROM github_queue WHERE at < ?", now - ttlMs);
     this.sql.run("INSERT INTO github_queue (at, item) VALUES (?, ?)", now, item);
     this.sql.run("DELETE FROM github_queue WHERE id <= (SELECT id FROM github_queue ORDER BY id DESC LIMIT 1 OFFSET ?)", most);
+  }
+
+  githubSeen(repo: string): number | null {
+    const v = Number(this.get(`github_seen:${repo.toLowerCase()}`));
+    return Number.isSafeInteger(v) && v > 0 ? v : null;
   }
 
   githubQueue(limit: number): { id: number; item: string }[] {

@@ -3,6 +3,9 @@ import "~/styles/github.css"
 
 import { useState, type ReactNode } from "react"
 
+import { githubTrouble, type GithubTrouble } from "@kiwi/core/github-health.ts"
+
+import { choreTitle, since } from "~/github/health"
 import { ciOf, isOpen, issueGroups, matches, prGroups, type Group, type GroupKey, type Shown } from "~/github/groups"
 import { checksLine, DiffBar, IssueMark, issueWord, PrMark, Ticks } from "~/github/parts"
 import { Avatar, Count, cx, Dot, Empty } from "~/kit/bits"
@@ -41,6 +44,7 @@ export function GithubView({ channel }: { channel: Channel }) {
   const items: readonly { state: string }[] = kind === "prs" ? prs : issues
   const open = items.filter(isOpen).length
   const many = repos.length > 1
+  const trouble = channel.github ? githubTrouble(channel.github, repo ? [repo] : channel.repos, kind) : null
   return (
     <div className="board">
       <div className="board-list gh-list">
@@ -108,6 +112,7 @@ export function GithubView({ channel }: { channel: Channel }) {
                 what={shown === "open" ? "open pull requests" : "closed pull requests"}
                 hint={shown === "open" ? "A pull request opened in a linked repo shows up here with its checks." : "Merged and closed pull requests stay here for a while."}
                 icon="pr"
+                trouble={trouble}
               />
             }
             row={(pr: PullRequest) => <PrRow key={`${pr.repo}#${pr.number}`} channel={channel} pr={pr} repos={many ? repos : null} />}
@@ -122,6 +127,7 @@ export function GithubView({ channel }: { channel: Channel }) {
                 what={shown === "open" ? "open issues" : "closed issues"}
                 hint={shown === "open" ? "An issue opened in a linked repo shows up here, with the task it became." : "Closed issues stay here for a while."}
                 icon="issue"
+                trouble={trouble}
               />
             }
             row={(i: Issue) => <IssueRow key={`${i.repo}#${i.number}`} channel={channel} issue={i} repos={many ? repos : null} />}
@@ -168,7 +174,11 @@ function GroupCard<T>({ group, row }: { group: Group<T>; row: (x: T) => ReactNod
   )
 }
 
-function Nothing({ query, clear, what, hint, icon }: { query: string; clear: () => void; what: string; hint: string; icon: "pr" | "issue" }) {
+const EVENT_NAMES: Record<string, string> = { pull_request: "Pull request", check_run: "Check run", issues: "Issues" }
+
+const listed = (xs: readonly string[]): string => (xs.length < 2 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`)
+
+function Nothing({ query, clear, what, hint, icon, trouble }: { query: string; clear: () => void; what: string; hint: string; icon: "pr" | "issue"; trouble: GithubTrouble | null }) {
   if (query.trim())
     return (
       <Empty title={`No ${what} match “${query.trim()}”.`} icon="search">
@@ -177,9 +187,45 @@ function Nothing({ query, clear, what, hint, icon }: { query: string; clear: () 
         </button>
       </Empty>
     )
+  if (trouble?.kind === "no-app")
+    return (
+      <Empty title="GitHub can't reach this channel." icon="github">
+        <p>This relay has no GitHub App, so GitHub has nowhere to send a repo's pull requests and issues. Whoever runs the relay sets one up, as docs/github-app.md says.</p>
+      </Empty>
+    )
+  if (trouble?.kind === "not-installed")
+    return (
+      <Empty title={`Kiwi Channels isn't installed on ${trouble.owner}.`} icon="github">
+        <p>GitHub tells only the Apps installed on a repo about its pull requests, checks and issues.</p>
+        {trouble.install && (
+          <a className="btn is-small gh-empty-btn" href={trouble.install} target="_blank" rel="noreferrer">
+            Install Kiwi Channels on {trouble.owner}
+          </a>
+        )}
+      </Empty>
+    )
+  if (trouble?.kind === "events")
+    return (
+      <Empty title={`Kiwi Channels doesn't get ${listed(trouble.missing.map((e) => EVENT_NAMES[e] ?? e))} events.`} icon="github">
+        <p>Turn them on under Permissions & events in the App's settings, then accept the new permissions on {trouble.owner}.</p>
+      </Empty>
+    )
+  if (trouble?.kind === "syncing")
+    return (
+      <Empty title={`Fetching ${trouble.repo}'s ${icon === "pr" ? "pull requests" : "issues"}…`} icon={icon}>
+        <p>The open ones, and the ones closed in the last 30 days.</p>
+      </Empty>
+    )
+  if (trouble?.kind === "failed")
+    return (
+      <Empty title={`${choreTitle(trouble.what, trouble.repo)}.`} icon="github">
+        <p>{trouble.message}</p>
+      </Empty>
+    )
   return (
     <Empty title={`No ${what}.`} icon={icon}>
       {hint}
+      {trouble?.kind === "quiet" && <p>{trouble.last === null ? "GitHub hasn't sent this channel anything yet." : `GitHub's last news came ${since(trouble.last)}.`}</p>}
     </Empty>
   )
 }

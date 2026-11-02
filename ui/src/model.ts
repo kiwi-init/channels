@@ -1,4 +1,5 @@
 import type { TextFont } from "@kiwi/app/theme.ts"
+import type { GithubHealth } from "@kiwi/core/github-health.ts"
 import type { HookHarness, HookState } from "@kiwi/core/harnesses.ts"
 import type { Personality } from "@kiwi/core/personality.ts"
 import type { GithubNote, Step, StepReply } from "@kiwi/core/protocol.ts"
@@ -487,6 +488,7 @@ export interface Channel {
   repos: string[]
   prs?: PullRequest[]
   issues?: Issue[]
+  github?: GithubHealth
   githubWrite?: boolean
   branchPrefix?: string
   rooms: Room[]

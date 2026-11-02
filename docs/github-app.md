@@ -1,7 +1,8 @@
-# The Kiwi GitHub App
+# The Kiwi Channels GitHub App
 
-GitHub tells a channel about its pull requests, checks, pushes and workflow
-runs through a GitHub App whose webhooks point at the relay. The relay can't
+GitHub tells a channel about its pull requests, issues, checks, pushes and
+workflow runs through a GitHub App, **Kiwi Channels** on channels.kiwiinit.com,
+whose webhooks point at the relay. The relay can't
 read channels, so it doesn't post anything itself: it checks each webhook's
 signature, keeps a trimmed copy (repo, PR number and title, branch, commit,
 check name and result, who did it; never a body or a diff) in the queue of
@@ -29,14 +30,15 @@ there's nothing for it to route.
 
 1. GitHub → Settings → Developer settings → GitHub Apps → **New GitHub App**
    (under the organization, if the repos live in one).
-2. **Name**: `Kiwi` (or `Kiwi (your relay)`). **Homepage URL**: the relay's
+2. **Name**: `Kiwi Channels` (or `Kiwi Channels (your relay)`). **Homepage URL**: the relay's
    site, e.g. `https://kiwiinit.com`.
 3. **Webhook**: active. **Webhook URL**: `https://<relay>/v1/github/webhook`.
    **Webhook secret**: a long random string (`openssl rand -hex 32`); keep it
    for step 6.
-4. **Repository permissions**, all read-only: Pull requests, Checks, Contents,
-   Actions, Metadata. Nothing else.
-5. **Subscribe to events**: Pull request, Check run, Push, Workflow run.
+4. **Repository permissions**: Pull requests, Issues, Contents, Actions and
+   Metadata read-only; Checks **read and write** (the review check, below).
+   Nothing else.
+5. **Subscribe to events**: Pull request, Issues, Check run, Push, Workflow run.
    Where can it be installed: only on this account, unless others will use
    your relay.
 6. Give the relay the secret:
@@ -62,6 +64,22 @@ there's nothing for it to route.
    Set Checks and Pull requests to **Read and write** for the review check.
    Without them, `GET /github/diff` and `POST /github/check` answer 404.
 
+## What a channel already has, and why it's empty
+
+GitHub sends only what happens after a repo is linked. So the owner's app,
+on open, when a repo is linked and every 6 hours, asks the relay for the
+repo's open pull requests with the checks on their head commit, its open
+issues, and the pull requests and issues closed in the last 30 days
+(`GET /github/sync`, one GraphQL page per call, as the App). It posts only
+what the channel doesn't know yet, as quiet `github` events.
+
+When the GitHub tab is empty, the owner sees why: the relay answers
+`GET /github/status` with, per linked repo, whether the App is installed on it
+(and the install link when it isn't), the events the installation gets, and
+when its last webhook came. A repo that moved to an organization needs the
+App installed there too. The rules, releases, sync and queue chores show
+their last failure under **Repos** in the channel's settings.
+
 ## Diffs and the kiwi/review check
 
 With the key, the relay calls GitHub as the App, with a short-lived token for
@@ -83,7 +101,8 @@ only when the relay has a `GITHUB_APP_CLIENT_ID`.
 
 ## Connect a repo to a channel
 
-1. Install the App on the repos (the App's page → Install).
+1. Install the App on the repos (the App's page → Install), on every account
+   or organization that owns one.
 2. In the channel, the owner lists the repos under **Repos**. The app sends
    the same list to the relay (`PUT /github/repos`), which is what routes a
    repo's webhooks to this channel.

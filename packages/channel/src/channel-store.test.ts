@@ -48,6 +48,7 @@ function relay(head = 0, opts: { owner?: boolean; answers?: Record<string, Answe
     syncGithubRules: () => undefined,
     syncGithubReleases: () => undefined,
     syncGithub: () => 0,
+    githubStatus: () => ({ app: true, repos: [] }),
     ...opts.answers,
   };
   const ops = {
@@ -315,6 +316,23 @@ describe("the GitHub chores", () => {
     close();
   });
 
+  test("the owner's handle carries GitHub's status and each chore's failure; an older app's missing call isn't one", async () => {
+    const answers = {
+      ...withRepo,
+      githubStatus: () => ({ app: true, repos: [{ repo: "acme/app", last: null, installed: false, events: [], install: "https://github.com/apps/kiwi-channels/installations/new" }] }),
+      syncGithubRules: () => Promise.reject(new Error("GitHub refused the repo (502)")),
+      syncGithub: () => Promise.reject(new Error("no such call")),
+    };
+    const r = relay(0, { owner: true, answers });
+    const { store, close } = await opened(r);
+    r.say({ _tag: "Message", message: msg(1), row: null });
+    await until(() => r.called("syncGithub").length === 1);
+    await until(() => store.handle.value.github?.syncing === null);
+    expect(store.handle.value.github?.status?.repos[0]?.installed).toBe(false);
+    expect(store.handle.value.github?.errors).toEqual([{ what: "rules", message: "GitHub refused the repo (502)", at: expect.any(Number) }]);
+    close();
+  });
+
   test("a member who isn't the owner runs none of them", async () => {
     const r = relay(0, { answers: withRepo });
     const { store, close } = await opened(r);
@@ -325,6 +343,8 @@ describe("the GitHub chores", () => {
     expect(r.called("syncGithubRules")).toHaveLength(0);
     expect(r.called("syncGithubReleases")).toHaveLength(0);
     expect(r.called("syncGithub")).toHaveLength(0);
+    expect(r.called("githubStatus")).toHaveLength(0);
+    expect(store.handle.value.github).toBeNull();
     close();
   });
 });

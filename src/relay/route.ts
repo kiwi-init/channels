@@ -606,6 +606,29 @@ const routes: RoomRoute[] = [
   },
   {
     method: "GET",
+    path: "/github/status",
+    guard: "owner",
+    run: ({ me }) =>
+      Effect.gen(function* () {
+        const db = yield* RoomStore;
+        if (!allow(`gh:${db.roomId}:${me}`, GITHUB_READS_PER_MINUTE)) return yield* new TooMany({ message: "too many GitHub lookups; wait a minute" });
+        const app = yield* GithubApp;
+        const repos = yield* Effect.forEach(
+          db.githubRepos(),
+          (repo) =>
+            Effect.map(app ? Effect.promise(() => app.status(repo)) : Effect.succeed(null), (s) => ({
+              repo,
+              last: db.githubSeen(repo),
+              ...(s?.ok ? s.value : { installed: null, events: [], install: null }),
+              ...(s && !s.ok ? { error: s.error } : {}),
+            })),
+          { concurrency: "unbounded" },
+        );
+        return { data: { app: !!app, repos } };
+      }),
+  },
+  {
+    method: "GET",
     path: "/github/sync",
     guard: "owner",
     run: ({ me }) =>
