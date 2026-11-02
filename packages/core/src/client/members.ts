@@ -3,6 +3,7 @@ import { listedComputer, type DeviceList } from "../devices.ts";
 import { cleanPersona, personaScopes, type Persona } from "../personality.ts";
 import * as Effect from "effect/Effect";
 import { newChannelKey } from "../crypto.ts";
+import { MAX_NICKNAME } from "../protocol.ts";
 import { sign } from "../identity.ts";
 import { inlineText, makeRecord, sealRecord, type Member, type PersonPowers } from "../membership.ts";
 import { omit } from "../omit.ts";
@@ -18,6 +19,8 @@ import { newestEpoch, stale } from "./sealed.ts";
 
 const NO_RECORD = "that key has no record the owner signed: remove it instead";
 
+export type Reconciled = Pick<ChannelState, "members" | "scopeSets" | "roleSets" | "gone" | "nicknames">;
+
 export interface MembersFx {
   leave(): Effect.Effect<void, MemberRefusal, Relay>;
   setCanPost(pk: string, post: boolean): Effect.Effect<void, Refused, Relay>;
@@ -26,7 +29,7 @@ export interface MembersFx {
   updatePersona(m: Member, persona: Persona | null, since: number): Effect.Effect<void, Refused, Relay>;
   updateNickname(m: Member, nickname: string | null): Effect.Effect<void, Refused, Relay>;
   updatePowers(m: Member, powers: PersonPowers): Effect.Effect<void, Refused, Relay>;
-  reconcilePosting(state: Pick<ChannelState, "members" | "scopeSets" | "roleSets">, members?: Member[]): Effect.Effect<string[], Refused, Relay>;
+  reconcilePosting(state: Reconciled, members?: Member[]): Effect.Effect<string[], Refused, Relay>;
   remove(pk: string): Effect.Effect<void, Refused, Relay>;
   cutDevices(list: DeviceList): Effect.Effect<Member[], Refused, Relay>;
   dropDelegates(pks: readonly string[]): Effect.Effect<string[], Refused, Relay>;
@@ -98,7 +101,7 @@ export class ChannelMembers {
       const e = this.ch.access.epoch;
       const key = this.ch.access.keys[String(e)]!;
       const info = omit(m, "active", "readOnly", "unverified", "at", "display");
-      const display = inlineText(nickname ?? "", 40);
+      const display = inlineText(nickname ?? "", MAX_NICKNAME);
       const rec = yield* Effect.promise(async () => sealRecord(key, await makeRecord(this.ch.identity, this.ch.roomId, { ...info, ...(display ? { display } : {}) })));
       const scopes = m.later?.scopes ?? scopesOf(m);
       yield* this.ch.request(`/members/${m.pk}/record`, { method: "PUT", body: JSON.stringify({ rec, e, post: canPost(scopes) }) });
@@ -129,17 +132,31 @@ export class ChannelMembers {
       yield* this.ch.request(`/members/${m.pk}/record`, { method: "PUT", body: JSON.stringify({ rec, e, post: canPost(scopes) }) });
     }),
 
-    reconcilePosting: Effect.fn("Channel.reconcilePosting")({ self: this }, function* (this: ChannelMembers, state: Pick<ChannelState, "members" | "scopeSets" | "roleSets">, members?: Member[]) {
+    reconcilePosting: Effect.fn("Channel.reconcilePosting")({ self: this }, function* (this: ChannelMembers, state: Reconciled, members?: Member[]) {
       yield* this.ch.ownerOnly();
       const changed: string[] = [];
-      for (let m of members ?? (yield* this.ch.fx.members())) {
-        if (!m.active || m.owner || m.unverified) continue;
+      const all = members ?? (yield* this.ch.fx.members());
+      const cut = all.filter((m) => m.active && !m.owner && !m.unverified && state.gone.has(m.pk));
+      for (const m of cut) {
+        yield* this.ch.request(`/members/${m.pk}`, { method: "DELETE" });
+        yield* Effect.ignore(Effect.try({ try: () => this.info.markGone(m.pk), catch: (err) => err }));
+        changed.push(m.pk);
+      }
+      if (cut.length) yield* this.rotation();
+      for (let m of all) {
+        if (!m.active || m.owner || m.unverified || state.gone.has(m.pk)) continue;
         const folded = state.members.get(m.name);
         if (!folded || folded.pk !== m.pk) continue;
+        const nick = m.kind === "human" ? undefined : state.nicknames.get(m.pk);
+        if (nick && (m.display ?? null) !== nick.nickname) {
+          yield* this.ch.fx.updateNickname(m, nick.nickname);
+          changed.push(m.pk);
+          m = { ...omit(m, "display"), ...(nick.nickname ? { display: nick.nickname } : {}) };
+        }
         const roleSet = state.roleSets.get(m.name);
         if (roleSet && (m.laterRole?.since ?? -1) < roleSet.seq) {
           yield* this.ch.fx.updateRole(m, roleSet.role, roleSet.about, roleSet.seq);
-          changed.push(m.pk);
+          if (!changed.includes(m.pk)) changed.push(m.pk);
           m = { ...m, laterRole: { role: roleSet.role, ...(roleSet.about !== undefined ? { about: roleSet.about } : {}), since: roleSet.seq } };
         }
         const set = state.scopeSets.get(m.pk);
