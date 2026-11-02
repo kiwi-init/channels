@@ -372,7 +372,7 @@ function JoinAskCard({ channel, ask, link }: { channel: Channel; ask: JoinAsk; l
   const label = app.personas.find((p) => p.id === chosen)?.label
   const only = readOnly ?? channel.newMembers === "read"
   const can = powers ?? channel.newPowers ?? NO_POWERS
-  const blocked = pinWaits || pinGone || !!ask.revoked
+  const blocked = pinWaits || pinGone
   const letIn = () =>
     app.actions.answerJoin(channel.code, ask.id, true, {
       ...(ask.freeName ? { as: ask.freeName } : {}),
@@ -389,7 +389,11 @@ function JoinAskCard({ channel, ask, link }: { channel: Channel; ask: JoinAsk; l
       link={link}
       actions={
         <>
-          {unchecked ? (
+          {ask.revoked ? (
+            <button type="button" className="btn is-primary" disabled>
+              Can't join from that computer
+            </button>
+          ) : unchecked ? (
             <button type="button" className="btn is-primary" onClick={() => app.actions.answerJoin(channel.code, ask.id, true)}>
               Show {agent ? "its" : "their"} code
             </button>
@@ -433,35 +437,37 @@ function JoinAskCard({ channel, ask, link }: { channel: Channel; ask: JoinAsk; l
           {ask.pin.persona === null && <span className="needs-warn">, which isn't on this computer anymore</span>}
         </p>
       )}
-      <div className="needs-check">
-        {ready ? (
-          <>
-            <p className="needs-check-q">Does {agent ? "its terminal" : "their screen"} show this code?</p>
-            <p className="needs-pin">
-              <span className="sr">{ask.code}</span>
-              {ask.code.split("").map((d, i) =>
-                d === "-" ? (
-                  <span key={i} className="needs-dash" aria-hidden="true">
-                    –
-                  </span>
-                ) : (
-                  <span key={i} className="needs-digit" aria-hidden="true">
-                    {d}
-                  </span>
-                )
-              )}
+      {!ask.revoked && (
+        <div className="needs-check">
+          {ready ? (
+            <>
+              <p className="needs-check-q">Does {agent ? "its terminal" : "their screen"} show this code?</p>
+              <p className="needs-pin">
+                <span className="sr">{ask.code}</span>
+                {ask.code.split("").map((d, i) =>
+                  d === "-" ? (
+                    <span key={i} className="needs-dash" aria-hidden="true">
+                      –
+                    </span>
+                  ) : (
+                    <span key={i} className="needs-digit" aria-hidden="true">
+                      {d}
+                    </span>
+                  )
+                )}
+              </p>
+              <p className="needs-check-hint">If it doesn't match, someone else has the link. Turn them away.</p>
+            </>
+          ) : unchecked ? (
+            <p className="needs-check-q">
+              Show {agent ? "its" : "their"} code to start the check. It appears here and on {agent ? "its terminal" : "their screen"}, then you compare.
             </p>
-            <p className="needs-check-hint">If it doesn't match, someone else has the link. Turn them away.</p>
-          </>
-        ) : unchecked ? (
-          <p className="needs-check-q">
-            Show {agent ? "its" : "their"} code to start the check. It appears here and on {agent ? "its terminal" : "their screen"}, then you compare.
-          </p>
-        ) : (
-          <p className="needs-check-q">Their code shows up here as soon as {ask.name} has it on screen. Then you compare.</p>
-        )}
-      </div>
-      {ready && (
+          ) : (
+            <p className="needs-check-q">Their code shows up here as soon as {ask.name} has it on screen. Then you compare.</p>
+          )}
+        </div>
+      )}
+      {ready && !ask.revoked && (
         <div className="needs-opts">
           {agent && (
             <Opt label="Colour" hint="Its face takes this colour.">
