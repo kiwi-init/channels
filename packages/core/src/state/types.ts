@@ -31,6 +31,11 @@ export interface Member {
 
 export type FoldMember = Member & { role?: string; about?: string };
 
+export interface Nickname {
+  seq: number;
+  nickname: string | null;
+}
+
 export type Roster = {
   name: string;
   pk: string;
@@ -214,6 +219,7 @@ export interface ChannelState {
   scopeSets: Map<string, { seq: number; scopes: Scope[]; persona?: Persona | null }>;
   roleSets: Map<string, { seq: number; role: string | null; about?: string | null }>;
   gone: Map<string, number>;
+  nicknames: Map<string, Nickname>;
   openAsks: Message[];
   askHeads: Map<number, AskHead>;
   specs: Map<number, Spec>;
@@ -303,6 +309,7 @@ export interface FoldBase {
   scopeSets: [string, { seq: number; scopes: Scope[]; persona?: Persona | null }][];
   roleSets: [string, { seq: number; role: string | null; about?: string | null }][];
   gone?: [string, number][];
+  nicknames?: [string, Nickname][];
   tasks: Task[];
   facts: Fact[];
   leases: Lease[];
