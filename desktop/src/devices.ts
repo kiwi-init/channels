@@ -83,7 +83,7 @@ export function createDeviceHost(deps: DeviceHostDeps): DeviceHost {
   };
 
   const signerLabel = (list: DeviceList, pk: string): string =>
-    pk === list.person ? "your person key" : (list.devices.find((d) => d.device === pk)?.label ?? list.revokes.find((r) => r.device === pk)?.label ?? "a device");
+    pk === list.root || pk === list.person ? "your person key" : (list.devices.find((d) => d.device === pk)?.label ?? list.revokes.find((r) => r.device === pk)?.label ?? "a device");
 
   const revokedHere = async (links: unknown[], device: Identity): Promise<boolean> => {
     const read = await readDeviceList(links);

@@ -592,6 +592,16 @@ export interface RecoverTrouble {
   word?: number
 }
 
+export interface RerootDevice {
+  id: string
+  label: string
+  os: string
+  as: "desktop" | "phone" | "computer"
+  here: boolean
+}
+
+export type RerootOpened = { ok: true; devices: RerootDevice[]; channels: string[] } | { ok: false; trouble: RecoverTrouble }
+
 export interface Device {
   id: string
   label: string
@@ -772,6 +782,9 @@ export interface Actions {
   recoverySave(typed: { at: number; word: string }[]): Promise<RecoverySaved | null>
   recoveryDrop(): void
   recoveryCancel(words: string): Promise<RecoverTrouble | null>
+  rerootOpen(words: string): Promise<RerootOpened | null>
+  rerootFinish(keep: string[]): Promise<boolean>
+  rerootCancel(): void
   enrollBegin(): void
   enrollKeep(): void
   enrollCancel(): void

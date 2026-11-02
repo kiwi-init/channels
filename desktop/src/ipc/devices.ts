@@ -7,6 +7,7 @@ import { publicAccess } from "../public-channel.ts";
 import { createDeviceHost, createEnrollee, type DeviceHost } from "../devices.ts";
 import { createRecoverer } from "../recover.ts";
 import { createRecoveryHost } from "../recovery.ts";
+import { createRerooter } from "../reroot.ts";
 import { freshToken } from "../signin.ts";
 import { mutate, store, upsertComputer } from "../store.ts";
 
@@ -15,6 +16,12 @@ const OS_NAMES: Partial<Record<NodeJS.Platform, string>> = { darwin: "macOS", li
 const label = () => os.hostname().split(".")[0] || "this computer";
 export const osName = (): string => OS_NAMES[process.platform] ?? process.platform;
 const who = () => publicPerson(store.person) ?? store.enrolled ?? null;
+const owned = () =>
+  store.channels.flatMap((c) =>
+    c.code && publicAccess(c.access)?.ownerPk === c.pk
+      ? [{ label: c.label, code: c.code, owner: { name: c.idName ?? c.label, pk: c.pk, sk: c.sk, ...(c.xpk && c.xsk ? { xpk: c.xpk, xsk: c.xsk } : {}) } }]
+      : [],
+  );
 const person = () => (store.person ? { name: store.person.name, pk: store.person.pk, sk: store.person.sk, xpk: store.person.xpk, xsk: store.person.xsk } : null);
 
 export function storeDeviceHost(): DeviceHost {
@@ -66,17 +73,15 @@ export function devicesCalls(
   | "recover"
   | "recoverFinish"
   | "recoverCancel"
+  | "reroot"
+  | "rerootFinish"
+  | "rerootCancel"
 > {
   const recovery = createRecoveryHost({
     session: () => host.session(),
     person,
     links: () => store.deviceLinks ?? [],
-    owned: () =>
-      store.channels.flatMap((c) =>
-        c.code && publicAccess(c.access)?.ownerPk === c.pk
-          ? [{ label: c.label, code: c.code, owner: { name: c.idName ?? c.label, pk: c.pk, sk: c.sk, ...(c.xpk && c.xsk ? { xpk: c.xpk, xsk: c.xsk } : {}) } }]
-          : [],
-      ),
+    owned,
     kept: () => store.recovery ?? null,
     keep: (k) => mutate((s) => (s.recovery = k)),
     letGo: async () => {
@@ -110,8 +115,13 @@ export function devicesCalls(
     saveDevice: (d) => mutate((s) => (s.device = d)),
     restored: (r) =>
       mutate((s) => {
-        s.person = { name: r.person.name, pk: r.person.pk, sk: r.person.sk, xpk: r.person.xpk, xsk: r.person.xsk };
-        s.enrolled = undefined;
+        if (r.person.pk === r.who.pk) {
+          s.person = { name: r.person.name, pk: r.person.pk, sk: r.person.sk, xpk: r.person.xpk, xsk: r.person.xsk };
+          s.enrolled = undefined;
+        } else {
+          s.person = null;
+          s.enrolled = r.who;
+        }
         s.deviceLinks = r.links;
         s.recovery = r.kept;
         for (const c of r.channels) {
@@ -122,6 +132,18 @@ export function devicesCalls(
       }),
     label,
     os: osName,
+  });
+  const rerooter = createRerooter({
+    session: () => host.session(),
+    who,
+    owned,
+    rerooted: (r) =>
+      mutate((s) => {
+        s.person = null;
+        s.enrolled = r.who;
+        s.deviceLinks = r.links;
+        s.recovery = r.kept;
+      }),
   });
   const enrollee = createEnrollee({
     relayUrl: () => store.relayUrl,
@@ -169,5 +191,8 @@ export function devicesCalls(
     recover: (words: string) => recoverer.open(words),
     recoverFinish: (lost: string[]) => recoverer.finish(lost),
     recoverCancel: async () => recoverer.cancel(),
+    reroot: (words: string) => rerooter.open(words),
+    rerootFinish: (keep: string[]) => rerooter.finish(keep),
+    rerootCancel: async () => rerooter.cancel(),
   };
 }

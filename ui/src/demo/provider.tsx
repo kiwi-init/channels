@@ -5,7 +5,7 @@ import type { Personality } from "@kiwi/core/personality.ts"
 import { HANDOFF_DONE } from "@kiwi/core/protocol.ts"
 
 import { stepReplyText } from "~/chat/step"
-import { DEMO_ACCOUNT, DEMO_CHANNEL, DEMO_DEVICES, DEMO_EMPTY, DEMO_GUEST, DEMO_GUEST_MEMBER, DEMO_PREFS, DEMO_TILES, DEMO_WAITING, DEMO_WELCOME, DEMO_WORDS } from "~/demo/data"
+import { DEMO_ACCOUNT, DEMO_CHANNEL, DEMO_DEVICES, DEMO_EMPTY, DEMO_GUEST, DEMO_GUEST_MEMBER, DEMO_PREFS, DEMO_REROOT, DEMO_TILES, DEMO_WAITING, DEMO_WELCOME, DEMO_WORDS } from "~/demo/data"
 import { longFeed } from "~/demo/long"
 import { demoAround, demoFetchOlder, demoOlder } from "~/demo/older"
 import { withSpecs } from "~/demo/specs"
@@ -255,6 +255,7 @@ export type Scenario =
   | "forgot-here"
   | "link-stuck"
   | "recovery-set"
+  | "recovery-let-go"
   | "recovery-pending"
   | "github-sign-in"
   | "github-code"
@@ -358,6 +359,8 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
       prefs,
       seq: 1000,
     }
+  if (scenario === "recovery-let-go")
+    return { account: { ...DEMO_ACCOUNT, devices: DEMO_DEVICES, recovery: { at: Date.now() - 3 * 86_400_000, here: false } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
   if (scenario === "recovery-set")
     return { account: { ...DEMO_ACCOUNT, devices: DEMO_DEVICES, recovery: { at: Date.now() - 3 * 86_400_000, here: true } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
   if (scenario === "devices-forgotten")
@@ -847,6 +850,13 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       },
       enrollKeep: () => setState((s) => ({ ...s, enrolling: null })),
       enrollCancel: () => setState((s) => ({ ...s, enrolling: null })),
+      rerootOpen: async (words) => {
+        const n = words.split(/[^a-z]+/i).filter(Boolean).length
+        if (n !== 24) return { ok: false, trouble: { why: `a recovery key is 24 words, and that's ${n}` } }
+        return DEMO_REROOT
+      },
+      rerootFinish: async () => true,
+      rerootCancel: () => {},
       recoverBegin: () => setState((s) => ({ ...s, enrolling: { stage: "recover" } })),
       recoverOpen: async (words) => {
         const n = words.split(/[^a-z]+/i).filter(Boolean).length
