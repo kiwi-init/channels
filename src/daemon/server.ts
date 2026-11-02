@@ -4,17 +4,17 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { Socket } from "bun";
 import type { Channel, PresenceFields, Probe } from "@kiwi/core/client.ts";
-import type { Message } from "@kiwi/core/protocol.ts";
+import { KEEP_MAX, type Message } from "@kiwi/core/protocol.ts";
 import { DEFAULT_RELAY, hasKiwiState, home, identitiesIn, loadConfig, loadIdentity, saveAccess, writePrivate, type Config } from "../config.ts";
 import { readCursor } from "../config/cursors.ts";
-import { saveMachine, seatProof, takeDeviceList } from "../machine.ts";
+import { keepProof, saveMachine, seatProof, takeDeviceList } from "../machine.ts";
 import { isNewerList, listedComputer, readDeviceList, type DeviceLink } from "@kiwi/core/devices.ts";
 import { readMachineCert } from "@kiwi/core/person.ts";
 import { VERSION } from "../version.ts";
 import { compareVersions } from "@kiwi/core/versions.ts";
 import { listenedPath, pullsWake, viaOf } from "@kiwi/core/wake.ts";
 import { ensureMachine, loadPairedMachine, PairError, type PairedMachine, type PairedPerson } from "./pair.ts";
-import { DAEMON_PROTOCOL, daemonSock, daemonToken, readListener, type DaemonEvent, type DaemonRead, type DaemonSeat, type DaemonVerb } from "./protocol.ts";
+import { DAEMON_PROTOCOL, daemonSock, daemonToken, readKeepAsk, readListener, type DaemonEvent, type DaemonRead, type DaemonSeat, type DaemonVerb } from "./protocol.ts";
 import { activityEnv, reachOf, readsRex, seatRecordFor, wakeOn, type Attached } from "./reach.ts";
 import { readRexInto } from "./rex-reads.ts";
 import type { RexActivity, RexPlace, SeatPlace, TerminalPlugin } from "../terminals/plugin.ts";
@@ -794,6 +794,12 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
           await unpairHere();
           sendLine(conn, JSON.stringify({ id, ok: true }));
           break;
+        case "keep": {
+          const keep = readKeepAsk(params);
+          if (!keep) throw new Error(`keep needs {"room", "agents": [{"pk", "from"}], 1 to ${KEEP_MAX}}`);
+          sendLine(conn, JSON.stringify({ id, ok: true, kept: await keepProof(keep.room, keep.agents) }));
+          break;
+        }
         case "launch": {
           const launch = readLaunchRequest(params);
           if (!launch) throw new Error('launch needs {"harness", "folder", "code", "relay"?, "nick"?, "persona"?, "launch"?: an id of 8 to 64 of A-Z a-z 0-9 _ -}');

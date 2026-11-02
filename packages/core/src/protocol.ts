@@ -913,7 +913,7 @@ export interface DeviceKeep {
   agents: { pk: string; vouch: string }[];
 }
 
-function isDeviceKeep(x: unknown): x is DeviceKeep {
+export function isDeviceKeep(x: unknown): x is DeviceKeep {
   if (!x || typeof x !== "object" || Array.isArray(x)) return false;
   const k = x as Record<string, unknown>;
   return (

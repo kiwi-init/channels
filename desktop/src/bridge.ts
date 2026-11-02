@@ -11,7 +11,7 @@ import type { WakeSeat } from "@kiwi/core/wake.ts";
 import type { Personality } from "@kiwi/core/personality.ts";
 import type { CachedKept, CachedRow, Unread } from "@kiwi/core/cache-row.ts";
 import type { Channel, OpenKind, PresenceFields } from "@kiwi/core/client.ts";
-import type { MemberPicture, Message, Presence, ReadMark } from "@kiwi/core/protocol.ts";
+import type { DeviceKeep, MemberPicture, Message, Presence, ReadMark } from "@kiwi/core/protocol.ts";
 import type { LaunchedView, PlacedSeat, ShowResult, TerminalId, TerminalsStatus } from "@kiwi/core/terminals.ts";
 import type { TextStep } from "./text-size.ts";
 import type { Wire } from "./wire.ts";
@@ -314,6 +314,11 @@ interface SeatProofView {
   vouch: string;
 }
 
+export interface KeepView {
+  links: DeviceLink[];
+  keep: DeviceKeep;
+}
+
 export interface RecoveryView {
   at: number | null;
   here: boolean;
@@ -450,6 +455,7 @@ export interface KiwiBridge {
   renewDevice(id: string): Promise<void>;
   deviceNews(): Promise<DeviceNewsView | null>;
   proveSeat(code: string): Promise<SeatProofView | null>;
+  keepAgents(code: string, agents: { pk: string; from: string }[]): Promise<KeepView | null>;
   recovery(): Promise<RecoveryView | null>;
   recoveryWords(): Promise<string[]>;
   recoverySave(typed: { at: number; word: string }[]): Promise<RecoverySaveView>;

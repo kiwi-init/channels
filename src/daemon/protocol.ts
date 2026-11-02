@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import type { Info, MemberRow } from "@kiwi/core/client.ts";
 import { home } from "../config.ts";
-import type { Reach } from "@kiwi/core/protocol.ts";
+import { KEEP_MAX, type Reach } from "@kiwi/core/protocol.ts";
 import type { WakeCommand, WakePath } from "@kiwi/core/wake.ts";
 import type { PairedPerson } from "./pair.ts";
 
@@ -44,9 +44,23 @@ export type DaemonVerb =
   | "term-keys"
   | "term-size"
   | "unpair"
+  | "keep"
   | "stop";
 
 export const DAEMON_PROTOCOL = 9;
+
+const ROOM_RE = /^[0-9a-f]{32}$/;
+const KEY_RE = /^[A-Za-z0-9_-]{43}$/;
+
+export function readKeepAsk(params: Record<string, unknown>): { room: string; agents: { pk: string; from: string }[] } | null {
+  const { room, agents } = params;
+  if (typeof room !== "string" || !ROOM_RE.test(room) || !Array.isArray(agents) || !agents.length || agents.length > KEEP_MAX) return null;
+  const read = agents.map((a: unknown) => {
+    const { pk, from } = (a && typeof a === "object" ? a : {}) as Record<string, unknown>;
+    return typeof pk === "string" && KEY_RE.test(pk) && typeof from === "string" && KEY_RE.test(from) ? { pk, from } : null;
+  });
+  return read.every((a) => a !== null) ? { room, agents: read } : null;
+}
 
 export type DaemonEvent = "open" | "roster" | "info" | "request";
 
