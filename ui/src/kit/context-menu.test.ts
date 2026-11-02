@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
-import { fitted, stepped } from "~/kit/context-menu"
+import { fitted, placed, stepped } from "~/kit/context-menu"
 
 describe("right-click menus (T974)", () => {
   test("a menu opens at the pointer when it fits", () => {
@@ -10,6 +10,12 @@ describe("right-click menus (T974)", () => {
   test("near an edge it stays on screen", () => {
     expect(fitted(1190, 790, 180, 120, 1200, 800)).toEqual({ left: 1012, top: 672 })
     expect(fitted(0, 0, 180, 120, 150, 100)).toEqual({ left: 8, top: 8 })
+  })
+
+  test("a menu from a button at the bottom, like the composer's +, opens above it (T2697)", () => {
+    expect(placed({ x: 120, y: 760, above: true }, 180, 90, 1200, 800)).toEqual({ left: 120, top: 664 })
+    expect(placed({ x: 120, y: 60, above: true }, 180, 90, 1200, 800)).toEqual({ left: 120, top: 8 })
+    expect(placed({ x: 120, y: 200 }, 180, 90, 1200, 800)).toEqual({ left: 120, top: 200 })
   })
 
   test("the arrows wrap, and Home and End jump", () => {

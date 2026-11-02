@@ -16,6 +16,7 @@ export interface OpenMenu {
   y: number
   label: string
   groups: MenuGroups
+  above?: true
 }
 
 export const openMenu = store<OpenMenu | null>(null)

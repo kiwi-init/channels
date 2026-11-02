@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import { MAX_IMAGE_BYTES, RASTER_MIMES } from "@kiwi/core/protocol.ts"
 import { fileDrag, takeDropped } from "@kiwi/app/dropped.ts"
@@ -9,11 +9,13 @@ import { preview, useReplying } from "~/chat/reply"
 import { STASH_SHOT, useStash, type Stashed } from "~/chat/stash"
 import { Avatar, cx, Dot, STATUS_WORDS } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
+import { openMenu } from "~/kit/menu-open"
 import { ago } from "~/kit/time"
-import type { Channel, Task, Upload, Where } from "~/model"
+import type { Channel, Person, Task, Upload, Where } from "~/model"
 import { sameWhere, useApp } from "~/nav"
 import { nickname, onePerPerson, shown } from "~/names"
 import { mentionNames, withNames, type Picks } from "~/chat/linked"
+import { outside, outsiders, sealedOf, warning } from "~/chat/reach"
 
 const Gifs = lazy(() => import("~/chat/gif-picker"))
 
@@ -160,6 +162,20 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
   const cue = cueOf?.key === key ? cueOf : null
   const [listOf, setListOf] = useState<string | null>(() => (STASH_SHOT === "stash-open" ? key : null))
   const listOpen = listOf === key && stash.list.length > 0
+  const plus = useRef<HTMLButtonElement>(null)
+  const [gifsOpen, setGifsOpen] = useState(false)
+  const [gifsReady, setGifsReady] = useState(false)
+  const closeGifs = useCallback(() => setGifsOpen(false), [])
+  const addMenu = () => {
+    if (gifsOpen) return setGifsOpen(false)
+    const at = plus.current?.getBoundingClientRect()
+    if (!at) return
+    const image = { label: "Image", run: () => picker.current?.click() }
+    const gif = { label: "GIF", run: () => setGifsOpen(true) }
+    openMenu.set({ x: at.left, y: at.top, label: "Add to the message", groups: [gifsReady ? [image, gif] : [image]], above: true })
+  }
+  const sealed = useMemo(() => sealedOf(channel, where), [channel, where])
+  const [warned, setWarned] = useState<{ text: string; people: Person[] } | null>(null)
 
   useEffect(() => {
     const block = (e: DragEvent) => {
@@ -180,18 +196,18 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
     for (const f of list.slice(0, Math.max(0, room))) {
       const name = imageName(f)
       if (!IMAGE_TYPES.has(f.type)) {
-        toast(`${name} isn't a PNG, JPEG, GIF or WebP`)
+        toast(`${name} isn't a PNG, JPEG, GIF or WebP`, "error")
         continue
       }
       if (f.size > MAX_IMAGE_BYTES) {
         void import("@kiwi/app/compress-image.ts").then(({ compressImage, renamed }) =>
-          compressImage(f, MAX_IMAGE_BYTES).then((done) => (done ? add({ ...done, name: renamed(name, done.mime) }) : toast(`${name} couldn't be read`)))
+          compressImage(f, MAX_IMAGE_BYTES).then((done) => (done ? add({ ...done, name: renamed(name, done.mime) }) : toast(`${name} couldn't be read`, "error")))
         )
         continue
       }
       void readBase64(f).then(
         (data) => add({ name, mime: f.type, data }),
-        () => toast(`${name} couldn't be read`)
+        () => toast(`${name} couldn't be read`, "error")
       )
     }
   }
@@ -252,6 +268,7 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
 
   const update = (value: string, at = value.length) => {
     setText(value)
+    setWarned(null)
     setCaret(at)
     setPick(0)
     setClosed(false)
@@ -266,8 +283,14 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
     }
     const body = value.trim()
     if (!body && !files.length) return
+    const sent = mentions.sent(body, picksFor(key))
+    const away = outsiders(channel, sealed, sent)
+    if (away.length && warned?.text !== value) {
+      setWarned({ text: value, people: away })
+      return
+    }
     const opts = { ...(inThread !== undefined ? { inThread } : {}), ...(replyTo ? { replyTo: replyTo.seq } : {}), ...(files.length ? { images: files } : {}) }
-    app.actions.send(channel.code, where, mentions.sent(body, picksFor(key)), Object.keys(opts).length ? opts : undefined)
+    app.actions.send(channel.code, where, sent, Object.keys(opts).length ? opts : undefined)
     picked.delete(key)
     replying?.set(null)
     setFiles([])
@@ -275,6 +298,11 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
     update("")
   }
   const ready = !!text.trim() || files.length > 0
+  const addAndSend = async (room: string, people: readonly Person[]) => {
+    const value = text
+    const members = [...(sealed?.inside ?? []), ...people.map((p) => p.name)]
+    if (await app.actions.setRoomMembers(channel.code, room, members)) send(value)
+  }
   const complete = (name: string) => insert(text.slice(0, caret).replace(MENTION, (_all, pre: string) => `${pre}@${mentions.typed(name, picksFor(key))} `))
   const completeTask = (id: number) => insert(text.slice(0, caret).replace(TASK_REF, (_all, pre: string) => `${pre}T${id} `))
   const insert = (before: string) => {
@@ -346,7 +374,9 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
               <button type="button" tabIndex={-1} className={cx("mention-row", i === pick && "is-on")} onMouseDown={(e) => e.preventDefault()} onClick={() => complete(p.name)}>
                 <Avatar person={p} size="sm" pip />
                 <span className="mention-name">{shown(p)}</span>
-                <span className="dim">{p.role ?? p.runs ?? (p.kind === "human" ? "person" : "agent")}</span>
+                <span className="dim">
+                  {outside(channel, sealed, p) ? (sealed?.kind === "dm" ? "can't see this DM" : "not in this room") : (p.role ?? p.runs ?? (p.kind === "human" ? "person" : "agent"))}
+                </span>
               </button>
             </li>
           ))}
@@ -373,7 +403,7 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
           setDropping(false)
           if (e.dataTransfer.files.length) return attach([...e.dataTransfer.files])
           void takeDropped(e.dataTransfer).then(({ files: dropped, refused }) => {
-            for (const why of refused) toast(why)
+            for (const why of refused) toast(why, "error")
             attach(dropped)
           })
         }}
@@ -442,11 +472,11 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
           </div>
         )}
         <div className="composer-row">
-          <button type="button" className="compose-attach" aria-label="Attach images" title="Attach images" onClick={() => picker.current?.click()}>
+          <button ref={plus} type="button" className="compose-attach" aria-label="Add an image or a GIF" title="Add an image or a GIF" aria-haspopup="menu" data-gif-toggle onClick={addMenu}>
             <Icon name="plus" />
           </button>
-          <Suspense fallback={<span className="compose-attach" />}>
-            <Gifs onFile={(file) => (file ? attach([file]) : toast("That GIF couldn't be loaded"))} />
+          <Suspense fallback={null}>
+            <Gifs open={gifsOpen} onReady={setGifsReady} onClose={closeGifs} onFile={(file) => (file ? attach([file]) : toast("That GIF couldn't be loaded", "error"))} />
           </Suspense>
           <input
             ref={picker}
@@ -542,6 +572,19 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
           </button>
         </div>
       </form>
+      {warned && sealed && (
+        <div className="compose-warn" role="alert">
+          <p>{warning(sealed, warned.people)}</p>
+          {sealed.kind === "room" && (
+            <button type="button" className="btn is-small" onClick={() => void addAndSend(sealed.room, warned.people)}>
+              Add {warned.people.map(shown).join(", ")}
+            </button>
+          )}
+          <button type="button" className="btn is-small is-quiet" onClick={() => send(warned.text)}>
+            Send anyway
+          </button>
+        </div>
+      )}
       {running && !cue && (
         <p className="compose-hint" role="status">
           <b>/{running.command.name}</b> <span>·</span> {running.command.summary} <span>·</span> <kbd>{enterSends ? "↩" : "⌘↩"}</kbd> runs it

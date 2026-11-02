@@ -17,6 +17,7 @@ import { withSeats } from "./room-rules.ts";
 import type { Marks } from "./note.ts";
 import type { ChannelIcon, Envelope, ImageAttachment, Message } from "./protocol.ts";
 import type { Scope } from "./scopes.ts";
+import type { GithubStatus } from "./github-health.ts";
 import type { FoldBase, GithubRelease, GithubRules, GithubState, GuardFloor } from "./state.ts";
 import { ChannelCore, type ChannelFx } from "./client/core.ts";
 import { ChannelDelegations, type Computer, type Tended } from "./client/delegations.ts";
@@ -395,6 +396,10 @@ export class Channel {
     return run(this.fx.reprove(list, proofs, now));
   }
 
+  goneDevices(list: DeviceList): Promise<Member[]> {
+    return run(this.fx.goneDevices(list));
+  }
+
   /** New channel key, wrapped to every remaining member. */
   rotate(): Promise<number> {
     return run(this.fx.rotate());
@@ -427,6 +432,10 @@ export class Channel {
 
   syncGithub(repo: string, known: GithubState): Promise<number> {
     return run(this.fx.syncGithub(repo, known));
+  }
+
+  githubStatus(): Promise<GithubStatus> {
+    return run(this.fx.githubStatus());
   }
 
   githubDiff(repo: string, sha: string): Promise<GithubDiff> {

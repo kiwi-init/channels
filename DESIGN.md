@@ -215,7 +215,8 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
 - `Heading`: a section head in mono `t-stamp` `ink-3`, its action shown on
   hover. Section heads are never uppercase.
 - `Empty`, `Loading`, `Toasts` (`ink` pill with `on-ink` text, bottom
-  centre), `.codebox` (a `bg-3` box of mono text with Copy), `Boundary`
+  centre; one goes after 2.6 s, an error stays with a Dismiss button until
+  dismissed; copying goes through `copyText`, which says Copied or why not), `.codebox` (a `bg-3` box of mono text with Copy), `Boundary`
   (every channel view renders inside one).
 - Icons: `Icon` in `ui/src/kit/icons.tsx`, 16px line icons drawn in
   `currentColor` at a 1.4 stroke on a 16 grid, plus Hugeicons (24 grid, 1.5
@@ -273,13 +274,15 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   message, "N replies" with who and when opens the thread. A pending message
   is at 55%; a failed one gets an `alert-wash` band. Working agents show as
   a mono line of dots under the last message.
-- **Tasks** live inside specs: the Specs view carries the Now card on top
-  (what's working, what needs you, done today), and under each spec row its
-  open tasks as two-line rows (its `Dot`, the title in `t-body`, a mono line
-  of id, owner, state and age, with its PR number, diff bar, additions and
-  checks on the right) and a mono count of the done ones. Tasks filed before
-  specs sit in a "Not in a spec" card. A person adds a task on an approved
-  spec's Inside.
+- **Tasks** live inside specs: the Specs view carries the Now card on top,
+  folded to its one line (next step, in progress, needs you, done today) until
+  someone opens it. Each spec row ends in a mono `done/all tasks` toggle; its
+  open tasks stay folded under it unless one waits on you or is open in the
+  panel. A task row is its `Dot`, the title in `t-body`, and a mono line of id,
+  owner, state and age: on one line, the mono part on the right, when the view
+  is wide (820px and up), two lines when it isn't. Tasks filed before specs sit
+  in a "Not in a spec" card that shows three until Show all. A person adds a
+  task on an approved spec's Inside.
 - **GitHub.** Pull requests and Issues as one segment control with their
   open counts, a filter field beside it (title, number, author, branch), then
   Open and Closed and, with several repos, the repos as segments. Items sit in
@@ -295,26 +298,42 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   author, size, when), every check with its link (failing on `alert-wash`
   first), the task, and Open on GitHub as the one primary button. A task's
   panel shows a compact PR card with passing checks folded, and its issue.
-- **Specs.** The work view, one tab in the top bar. A segment for Open and
-  Done, a quiet line and New spec as the view's one primary button, then
-  cards like GitHub's by what each spec needs
+- **Specs.** The work view, one tab in the top bar, and the only way in: the
+  sidebar doesn't list specs again. The view and a spec page are `--col` +
+  400px wide. A segment for Open and Done, a quiet line and New spec as the
+  view's one primary button, then cards like GitHub's by what each spec needs
   (Needs you in `decide`, Working in `doing`, Waiting for an agent with how
-  many are free, Drafts). A row: the spec's mark (a dashed ring for a draft,
-  a ring once approved, an open `doing` ring while working, `decide` filled
-  with a halo when delivered, `live` when accepted), the title, a mono line
-  of ask, who asked, age, boxes done and where it stands, and the faces of
-  the agents on it. A spec opens in the main area: back to Specs, the title
-  at `t-display` with a mono stage chip, a mono sub line, the person's words
-  quoted as written, then the gate card (`decide-wash` while it waits on a
-  person, with Approve as the primary button) and a segment for Spec, Inside
-  and Result. Spec is the markdown in a card with comments in a margin rail,
-  each beside the line it quotes; selecting words offers Comment. A change
-  after approval shows as a line diff (`live` added, `alert` removed). Inside
-  is one mono glance line, the alarms (`alert-wash` or `decide-wash`), the
-  work as task rows with their PR chips, the story with mono times, and every
-  message behind one quiet line. Under the person's message in #general a
-  spec card on `bg-2` follows the stage, and a run of messages between agents
-  folds into one mono line with their faces and Show.
+  many are free, Drafts), each head one line: the label, its count and a quiet
+  sentence. A row: the spec's mark (a dashed ring for a draft, a ring once
+  approved, an open `doing` ring while working, `decide` filled with a halo
+  when delivered, `live` when accepted), the title, a mono line of ask, who
+  asked, age, boxes done and where it stands (on the title's line, to the
+  right, when wide), the faces of the agents on it, the stage word and the
+  tasks toggle. A spec opens in the main area. Its head is one row: a back
+  icon, the title at `t-display` with a mono stage chip, and on the right the
+  segment for Spec, Inside and Result and Edit. Under it a mono sub line (who
+  asked and approved, where it stands, versions, writers) and the person's
+  words quoted as written. The gate card (`decide-wash`, with the one primary
+  button) shows only while the spec waits on a person: a draft to approve, a
+  change to approve, a delivery to judge. Spec is the markdown in a card with
+  a margin rail beside it: comments on a line sit beside the line they quote,
+  and comments on the whole spec sit in the rail too, above the first line
+  comment when they fit and under the last one when they don't (under the
+  card on a narrow window). They show the latest three behind All N, as
+  compact rows with hairlines between them, and the comment field is one line.
+  Selecting words offers Comment. A change after approval shows as a line
+  diff (`live` added, `alert` removed) with one line of context around each
+  change; the unchanged runs fold into a "⋯ N unchanged lines" row that opens
+  the whole diff. Inside is the alarms (`alert-wash` or `decide-wash`), then
+  two columns once the page is 960px wide: the work (a mono head line with
+  boxes done and last move, the agents' faces and Ask where it stands, then
+  the task rows with their PR chip, number, size and checks, on the row's
+  right) and what happened (the latest five moves with mono times, All N for
+  the rest), and every message behind one quiet line. Result is the verdict
+  card with Drop it, Send back and Accept on its right, then Done when (with
+  what was tried) beside what came of it. Under the person's message in
+  #general a spec card on `bg-2` follows the stage, and a run of messages
+  between agents folds into one mono line with their faces and Show.
 - **Needs you.** A mono count line, then one card per thing waiting (the same
   card as Tasks), oldest first: who and what (a `decide` chip for a permission), the detail (a
   command or a diff in mono boxes), and the answers as buttons, the main one

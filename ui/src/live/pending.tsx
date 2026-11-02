@@ -43,7 +43,7 @@ export const OpenPending = memo(function OpenPending({ pending }: { pending: Pen
       } catch (err) {
         if (stop) return
         if (isJoinBlip(err)) setState("unreachable")
-        else announce(`Couldn't check the request: ${err instanceof Error ? err.message : String(err)}`)
+        else announce(`Couldn't check the request: ${err instanceof Error ? err.message : String(err)}`, "error")
       }
       timer = setTimeout(() => void tick(), POLL_MS)
     }

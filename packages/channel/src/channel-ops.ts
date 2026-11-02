@@ -88,6 +88,7 @@ export class ChannelLink {
   remove = (...a: Args<"remove">) => this.c("remove", ...a);
   cutDevices = (...a: Args<"cutDevices">) => this.c("cutDevices", ...a);
   reprove = (...a: Args<"reprove">) => this.c("reprove", ...a);
+  goneDevices = (...a: Args<"goneDevices">) => this.c("goneDevices", ...a);
   tendDelegations = (...a: Args<"tendDelegations">) => this.c("tendDelegations", ...a);
   dropDelegates = (...a: Args<"dropDelegates">) => this.c("dropDelegates", ...a);
   updateScopes = (...a: Args<"updateScopes">) => this.c("updateScopes", ...a);
@@ -103,6 +104,7 @@ export class ChannelLink {
   syncGithubRules = (...a: Args<"syncGithubRules">) => this.c("syncGithubRules", ...a);
   syncGithubReleases = (...a: Args<"syncGithubReleases">) => this.c("syncGithubReleases", ...a);
   syncGithub = (...a: Args<"syncGithub">) => this.c("syncGithub", ...a);
+  githubStatus = () => this.c("githubStatus");
   githubDiff = (...a: Args<"githubDiff">) => this.c("githubDiff", ...a);
   postReviewCheck = (...a: Args<"postReviewCheck">) => this.c("postReviewCheck", ...a);
   commentOnPr = (...a: Args<"commentOnPr">) => this.c("commentOnPr", ...a);

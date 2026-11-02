@@ -8,14 +8,20 @@ import { fakeHost } from "./fake-host.ts";
 const root = mkdtempSync(join(tmpdir(), "kiwi-blocked-"));
 const parent = join(root, "Applications");
 const userData = join(root, "userData");
+const home = join(root, "home");
+const homeWas = process.env["HOME"];
 mkdirSync(join(parent, "Channels.app", "Contents", "MacOS"), { recursive: true });
 mkdirSync(userData, { recursive: true });
+mkdirSync(home, { mode: 0o555 });
+process.env["HOME"] = home;
 afterAll(() => {
+  process.env["HOME"] = homeWas;
   chmodSync(parent, 0o755);
+  chmodSync(home, 0o755);
   rmSync(root, { recursive: true, force: true });
 });
 
-useHost(fakeHost({ packaged: true, version: "0.19.0", paths: { exe: join(parent, "Channels.app", "Contents", "MacOS", "Channels"), data: userData, logs: userData } }).host);
+useHost(fakeHost({ packaged: true, version: "0.19.0", paths: { exe: join(parent, "Channels.app", "Contents", "MacOS", "Channels"), data: userData, logs: userData, applications: parent } }).host);
 
 type Checked = { state: string; version?: string; url?: string; blocked?: true };
 const updater = "../desktop/src/updater.ts?blocked";
@@ -35,7 +41,7 @@ globalThis.fetch = Object.assign(
   { preconnect: realFetch.preconnect },
 );
 
-test.skipIf(process.platform !== "darwin")("a Mac app in a folder it can't write offers the release, says it can't update itself, and downloads nothing", async () => {
+test.skipIf(process.platform !== "darwin")("a Mac app in a folder it can't write, with no Applications folder it can write either, offers the release and downloads nothing", async () => {
   chmodSync(parent, 0o555);
   const r = await checkForUpdate();
   expect(r).toEqual({ version: "0.20.0", state: "available", url: "https://github.com/kiwi-init/channels/releases/tag/v0.20.0", blocked: true });

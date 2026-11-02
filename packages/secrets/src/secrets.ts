@@ -13,6 +13,7 @@ import type {
   GithubRepoView,
   KeysAtRest,
   KiwiBridge,
+  MovedView,
   PhoneView,
   PublicPerson,
   StoreSnapshot,
@@ -26,7 +27,22 @@ import { onLocalChange, readLocal, sweepBrowserKeys, writeLocal, type Local } fr
 import { persistQueue } from "./persist-queue.ts";
 import { devBuild } from "./relay.ts";
 
-export type { ChannelView, ComputerView, DeviceNewsView, GithubRepoView, KeysAtRest, KiwiBridge, PhoneView, PublicPerson, StoreSnapshot, TermEvent, TermOpenView, UpdateCheckView, UpdateView };
+export type {
+  ChannelView,
+  ComputerView,
+  DeviceNewsView,
+  GithubRepoView,
+  KeysAtRest,
+  KiwiBridge,
+  MovedView,
+  PhoneView,
+  PublicPerson,
+  StoreSnapshot,
+  TermEvent,
+  TermOpenView,
+  UpdateCheckView,
+  UpdateView,
+};
 
 /** The desktop bridge, or null in a plain browser. */
 export function bridge(): KiwiBridge | null {

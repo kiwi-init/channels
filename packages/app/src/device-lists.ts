@@ -1,10 +1,14 @@
 import type { Reproved } from "@kiwi/core/client/members.ts";
-import { newestLists, type DeviceClaim, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
+import { newestLists, readDeviceList, type DeviceClaim, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
 import type { Member } from "@kiwi/core/membership.ts";
+import { keepLists } from "./forgotten-computers";
 import type { Message } from "@kiwi/core/protocol.ts";
+
+type Cut = Member & { why?: string };
 
 const SEEN_KEY = "mc.devices.seen";
 const POSTED_KEY = "mc.devices.posted";
+const GONE_KEY = "mc.devices.gone";
 
 type Seen = Record<string, { through: number; links: Record<string, DeviceLink[]>; proofs?: Record<string, DeviceClaim> }>;
 
@@ -12,8 +16,12 @@ export type SeatProof = Pick<DeviceClaim, "device" | "vouch">;
 
 export interface ListsApi {
   history: (since: number) => Promise<{ messages: Message[] }>;
-  cutDevices: (list: DeviceList) => Promise<Member[]>;
+  cutDevices: (list: DeviceList) => Promise<Cut[]>;
   reprove: (list: DeviceList, proofs: Record<string, DeviceClaim>) => Promise<Reproved>;
+}
+
+export interface GoneApi {
+  goneDevices: (list: DeviceList) => Promise<Member[]>;
 }
 
 export interface PostApi {
@@ -69,14 +77,15 @@ async function scan(code: string, api: Pick<ListsApi, "history">): Promise<void>
 const cutFor = new Map<string, Map<string, number>>();
 const settledFor = new Map<string, Map<string, number>>();
 
-export async function tendLists(code: string, own: readonly DeviceLink[], api: ListsApi): Promise<{ lists: Map<string, DeviceList>; cut: Member[] }> {
+export async function tendLists(code: string, own: readonly DeviceLink[], api: ListsApi): Promise<{ lists: Map<string, DeviceList>; cut: Cut[] }> {
   await scan(code, api);
   const seen = read<Seen>(SEEN_KEY);
   const posted = Object.values(seen).flatMap((c) => (c ? Object.values(c.links) : []));
   const lists = await newestLists(own.length ? [own, ...posted] : posted);
+  keepLists(lists);
   const done = cutFor.get(code) ?? new Map<string, number>();
   cutFor.set(code, done);
-  const cut: Member[] = [];
+  const cut: Cut[] = [];
   for (const list of lists.values()) {
     if ((!list.revoked.length && !list.reroots.length) || done.get(list.person) === list.version) continue;
     try {
@@ -108,4 +117,13 @@ export async function postList(code: string, links: readonly DeviceLink[], api: 
   await api.send("updated their list of devices", { kind: "event", ev: { op: "devices", links: [...links], ...(proof ? { device: proof.device, vouch: proof.vouch } : {}) } });
   write(POSTED_KEY, { ...read<Record<string, number>>(POSTED_KEY), [code]: links.length });
   return true;
+}
+
+export async function goneOwn(code: string, links: readonly DeviceLink[], api: GoneApi): Promise<Member[]> {
+  if (!links.length) return [];
+  const got = await readDeviceList(links);
+  if (!got.ok || !got.list.revoked.length || (read<Record<string, number>>(GONE_KEY)[code] ?? -1) >= got.list.version) return [];
+  const gone = await api.goneDevices(got.list);
+  write(GONE_KEY, { ...read<Record<string, number>>(GONE_KEY), [code]: got.list.version });
+  return gone;
 }

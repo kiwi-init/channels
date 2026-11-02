@@ -50,6 +50,9 @@ const personNameOf = (members: readonly Member[], person: string): string => {
 
 const addsAgents = (m: Member) => m.kind === "human" && !m.owner && !!m.addsAgents && !!m.person && canPost(m.later?.scopes ?? scopesOf(m));
 
+export const forgottenComputer = (name: string, computer: { label: string; personName: string }): string =>
+  `${name} runs on ${computer.label}, a computer ${computer.personName} forgot from their devices: it can join again once that computer gets a new key (kiwi login on it)`;
+
 export interface RequestsOptions {
   budget?: SigningBudget;
   person?: string;
@@ -121,9 +124,10 @@ export class ChannelRequests {
         const nick = kind === "human" ? "" : inlineText(info.display, 40) || (auto && !free && allowed && !personName ? asked.replace(/-\d+$/, "") || asked : "");
         if (auto) offered.push({ name: (info.name = free ? asked : freeHandle(offered, seededPick(r.pk))) });
         const forgotten = !enrolled && !!computer && !!opts.person && computer.person === opts.person && !!opts.mine && !opts.mine.includes(computer.pk);
-        const own = !!computer && !!opts.person && computer.person === opts.person && !forgotten;
+        const revoked = !!computer && !!opts.lists?.get(computer.person)?.revoked.includes(computer.pk);
+        const own = !!computer && !!opts.person && computer.person === opts.person && !forgotten && !revoked;
         const same = app ? sameHuman(seats, app.person, opts.person) : undefined;
-        const joinsOnItsOwn = own || (kind === "agent" && !!computer && !!opts.person && agentsOf.has(computer.person)) || !!same;
+        const joinsOnItsOwn = (!revoked && (own || (kind === "agent" && !!computer && !!opts.person && agentsOf.has(computer.person)))) || !!same;
         const spend = joinsOnItsOwn ? undefined : opts.person && !r.reveal ? undefined : opts.budget;
         const check = yield* this.codeCheck(r, spend, joinsOnItsOwn).pipe(Effect.catchCause(() => Effect.succeed(null)));
         if (!check) continue;
@@ -139,7 +143,7 @@ export class ChannelRequests {
           ...check,
           sponsoredBy: null,
           ...(auto ? { askedAs: auto } : {}),
-          ...(computer ? { computer: { ...computer, own, joinsOnItsOwn, ...(forgotten ? { forgotten: true } : {}) } } : {}),
+          ...(computer ? { computer: { ...computer, own, joinsOnItsOwn, ...(forgotten ? { forgotten: true } : {}), ...(revoked ? { revoked: true } : {}) } } : {}),
           ...(person ? { person } : {}),
           ...(app ? { device: { ...app, own: !!opts.person && app.person === opts.person, joinsOnItsOwn: !!same, ...(same ? { handle: same.name } : {}) } } : {}),
           ...(cleanCard(info.card) ? { card: cleanCard(info.card)! } : {}),
@@ -164,6 +168,7 @@ export class ChannelRequests {
     approve: Effect.fn("Channel.approve")({ self: this }, function* (this: ChannelRequests, req: JoinRequest, as?: Partial<MemberInfo>, opts: { person?: string } = {}) {
       yield* this.ch.ownerOnly();
       if (req.check !== "ready" || !req.code) return yield* new Rejected(`${req.name} hasn't shown its code yet: approve once you've both seen the same 6 digits`);
+      if (req.computer?.revoked) return yield* new Rejected(forgottenComputer(req.name, req.computer));
       const kind = req.kind ?? "agent";
       const members = yield* this.ch.fx.members();
       const ownerName = members.find((m) => m.owner && m.active)?.name;

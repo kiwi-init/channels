@@ -1,3 +1,4 @@
+import type { Tone } from "~/kit/toasts"
 import { createContext, useContext } from "react"
 
 import type { Actions, App, Where } from "~/model"
@@ -100,7 +101,7 @@ export interface Ctx {
   app: App
   nav: Nav
   go: (go: Go) => void
-  toast: (text: string) => void
+  toast: (text: string, tone?: Tone) => void
 }
 
 export const AppContext = createContext<Ctx | null>(null)
@@ -114,7 +115,7 @@ export function useApp(): Ctx {
 export interface Act {
   actions: Actions
   go: (go: Go) => void
-  toast: (text: string) => void
+  toast: (text: string, tone?: Tone) => void
 }
 
 export const ActContext = createContext<Act | null>(null)

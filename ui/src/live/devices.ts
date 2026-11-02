@@ -69,11 +69,14 @@ export function useDeviceLists(codes: readonly string[]): void {
       tell(news)
       const codes = key ? key.split(" ") : []
       if (!codes.length) return
-      const { postList } = await import("@kiwi/app/device-lists.ts")
+      const { goneOwn, postList } = await import("@kiwi/app/device-lists.ts")
       for (const code of codes) {
         const m = loadMember(code)
+        if (!m || !live) continue
+        const link = linkOf(m)
         const prove = b.proveSeat ? () => b.proveSeat(code) : undefined
-        if (m && live) await postList(code, news.links, linkOf(m), prove).catch(() => false)
+        await postList(code, news.links, link, prove).catch(() => false)
+        await goneOwn(code, news.links, link).catch(() => [])
       }
     }
     kick = () => void pass()

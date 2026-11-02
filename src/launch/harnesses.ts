@@ -26,6 +26,7 @@ const BINARIES: Record<KnownHarness, readonly Binary[]> = {
   kimi: [{ bin: "kimi", vouch: /kimi-code/, home: kimiHome }, { bin: "kimi-code" }],
   mimo: [{ bin: "mimo" }],
   pi: [{ bin: "pi", vouch: /pi-coding-agent/ }],
+  agy: [{ bin: "agy" }],
 };
 
 const VERSION_MS = 5_000;

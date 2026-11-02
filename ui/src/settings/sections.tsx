@@ -12,6 +12,7 @@ import { useApp } from "~/nav"
 import { Toggle } from "~/kit/bits"
 import { Confirm, Group, InlineEdit, Row, Seg } from "~/settings/controls"
 import { Themes } from "~/settings/themes"
+import { copyText } from "~/kit/toasts"
 
 export function Page({ title, lede, children }: { title: string; lede?: ReactNode; children: ReactNode }) {
   return (
@@ -26,7 +27,7 @@ export function Page({ title, lede, children }: { title: string; lede?: ReactNod
 }
 
 export function AccountSection() {
-  const { app, toast } = useApp()
+  const { app } = useApp()
   const [leaving, setLeaving] = useState(false)
   const account = app.account
   if (!account) return null
@@ -74,10 +75,7 @@ export function AccountSection() {
               icon="copy"
               label="Copy the GitHub code"
               onClick={() => {
-                void navigator.clipboard.writeText(account.githubCode?.code ?? "").then(
-                  () => toast("Code copied"),
-                  () => toast("Could not copy")
-                )
+                copyText(account.githubCode?.code ?? "", "Code copied")
               }}
             />
             <a className="btn is-quiet is-small" href={account.githubCode.url} target="_blank" rel="noreferrer noopener">
@@ -92,10 +90,7 @@ export function AccountSection() {
               icon="copy"
               label="Copy your key"
               onClick={() => {
-                void navigator.clipboard.writeText(account.key ?? "").then(
-                  () => toast("Key copied"),
-                  () => toast("Could not copy")
-                )
+                copyText(account.key ?? "", "Key copied")
               }}
             />
           </Row>
