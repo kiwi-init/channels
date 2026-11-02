@@ -26,6 +26,7 @@ export interface Info {
   iconAt?: number | null;
   settings?: SealedBlob | null;
   blobs?: boolean;
+  files?: boolean;
   sealedEpoch?: boolean;
 }
 

@@ -67,7 +67,7 @@ export interface Config {
   asking?: Record<string, { as: string; at: number }>;
   bindings?: Record<string, SeatRecord | SeatRecord[]>;
   claudeHooks?: "on" | "off";
-  harnessHooks?: Partial<Record<"codex" | "gemini" | "cursor" | "grok" | "kimi" | "pi" | "mimo" | "zcode", "on" | "off">>;
+  harnessHooks?: Partial<Record<"codex" | "gemini" | "cursor" | "grok" | "kimi" | "pi" | "mimo" | "zcode" | "agy", "on" | "off">>;
   zcodeHooksTurnedOn?: string[];
   wakeOff?: string[];
   wakeHooks?: Record<string, WakeHook>;

@@ -36,6 +36,13 @@ export async function approveSpec(page: Page, timeoutMs = 60000): Promise<void> 
   await views.getByRole("button", { name: /general/ }).click();
 }
 
+export async function unfold(page: Page, spec: string): Promise<void> {
+  const main = page.getByRole("main");
+  const fold = main.getByRole("button", { name: new RegExp(`^(Show|Hide) the \\d+ open tasks? of ${spec}$`) });
+  if ((await fold.getAttribute("aria-expanded", { timeout: 15000 })) === "false") await fold.click();
+  await main.getByRole("button", { name: new RegExp(`^Hide the \\d+ open tasks? of ${spec}$`), expanded: true }).waitFor({ timeout: 15000 });
+}
+
 export async function letIn(page: Page, waiting: () => boolean, timeoutMs = 120000): Promise<void> {
   const views = page.getByRole("navigation", { name: "Views" });
   const needs = views.getByRole("button", { name: /^Needs you/ });

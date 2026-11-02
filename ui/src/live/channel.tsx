@@ -80,7 +80,7 @@ function useShown(): boolean {
 
 export const OpenMember = memo(function OpenMember({ member, view }: { member: StoredMember; view: View }) {
   const live = useChannel(member)
-  const { ch, state, messages, roster, online, requests, isOwner, connection, gone, ready, send, refreshRequests, refreshRoster, foldFrom, marks, pkOf, github } = live
+  const { ch, state, messages, roster, online, requests, isOwner, connection, gone, ready, send, refreshRequests, refreshRoster, foldFrom, marks, pkOf, github, older } = live
   const me = member.identity.name
   const roomId = member.access.roomId
   const code = member.code
@@ -279,8 +279,8 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   )
 
   const run = useMemo(
-    (): Run => ({ code, roomId, me, isOwner, ch, state, messages, roster, requests, send, post, retry, discard, refreshRequests, refreshRoster, foldFrom }),
-    [code, roomId, me, isOwner, ch, state, messages, roster, requests, send, post, retry, discard, refreshRequests, refreshRoster, foldFrom]
+    (): Run => ({ code, roomId, me, isOwner, ch, state, messages, roster, requests, send, post, retry, discard, refreshRequests, refreshRoster, foldFrom, older }),
+    [code, roomId, me, isOwner, ch, state, messages, roster, requests, send, post, retry, discard, refreshRequests, refreshRoster, foldFrom, older]
   )
 
   useLayoutEffect(() => {

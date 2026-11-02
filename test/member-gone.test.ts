@@ -93,7 +93,7 @@ describe("a removed key can't speak after its removal, whatever the relay serves
     const forged = await bo.ch.send("cy is gone", { kind: "event", ev: { op: "member.gone", member: "cy", pk: cy.id.pk } });
     const mismatched = await s.ownerCh.send("removed bo", { kind: "event", ev: { op: "member.gone", member: "bo", pk: cy.id.pk } });
     const state = await judged([]);
-    expect(state.rejected.get(forged)).toBe("only the owner, the key itself, or the person an agent works for says a key is gone");
+    expect(state.rejected.get(forged)).toBe("only the owner, the key itself, or the person it belongs to says a key is gone");
     expect(state.rejected.get(mismatched)).toBe("that key isn't one of bo's");
     expect(state.gone.has(cy.id.pk)).toBe(false);
     const fine = await cy.ch.send("still here");

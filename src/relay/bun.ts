@@ -15,10 +15,10 @@ import { clockLayer, MAX_REQUEST_BYTES } from "./http.ts";
 import { authkitDomains, devHostOk, devHumanAuth, devRequestOk, Human, HUMAN_HEADER, withGithub, workosFromSettings, type HumanAuth } from "./human.ts";
 import { MAILBOX_TTL_MS } from "@kiwi/core/mailbox.ts";
 import { corsPreflight, onMailboxHttp, withCors, type MailboxStore } from "./mailbox.ts";
-import { ACCOUNT_ASKS_PER_MINUTE, accountUser, isAccountPath, onAccountHttp, sameEnrollment, type AccountStore } from "./account.ts";
+import { ACCOUNT_ASKS_PER_MINUTE, accountUser, isAccountPath, onAccountHttp, sameEnrollment, sameFresh, type AccountStore, type FreshRecord } from "./account.ts";
 import { ENROLL_TTL_MS, type Enrollment } from "@kiwi/core/enroll.ts";
 import { accountHome, frozenWrite, MOVE_PATH, movedHuman, moveUsers, onMoveHttp, type MoveStore, type Row, type Rows } from "./move.ts";
-import type { Vault } from "@kiwi/core/recovery.ts";
+import type { OldVault, Vault } from "@kiwi/core/recovery.ts";
 import {
   MACHINE_ASKS_PER_MINUTE,
   MACHINE_BOX_TTL_MS,
@@ -147,6 +147,7 @@ export function startRelay(
   people.run("CREATE TABLE IF NOT EXISTS account_recovery (user TEXT NOT NULL, n INTEGER NOT NULL, link TEXT NOT NULL, PRIMARY KEY (user, n))");
   people.run("CREATE TABLE IF NOT EXISTS account_vaults (user TEXT PRIMARY KEY, version INTEGER NOT NULL, rec TEXT NOT NULL)");
   people.run("CREATE TABLE IF NOT EXISTS account_asks (user TEXT PRIMARY KEY, rec TEXT NOT NULL, at INTEGER NOT NULL)");
+  people.run("CREATE TABLE IF NOT EXISTS account_fresh (user TEXT PRIMARY KEY, rec TEXT NOT NULL)");
   people.run("CREATE TABLE IF NOT EXISTS account_moves (user TEXT PRIMARY KEY, to_user TEXT NOT NULL, id TEXT NOT NULL, at INTEGER NOT NULL, done INTEGER NOT NULL)");
   people.run("CREATE TABLE IF NOT EXISTS account_adoptions (user TEXT NOT NULL, from_user TEXT NOT NULL, id TEXT NOT NULL, state TEXT NOT NULL, PRIMARY KEY (user, from_user))");
   const machineSockets = new Map<string, { ws: ServerWebSocket<SocketData>; since: number }>();
@@ -199,6 +200,10 @@ export function startRelay(
     const row = people.query("SELECT rec FROM account_asks WHERE user = ?").get(user) as { rec: string } | null;
     return row ? (JSON.parse(row.rec) as Enrollment) : null;
   };
+  const freshOf = (user: string): FreshRecord | null => {
+    const row = people.query("SELECT rec FROM account_fresh WHERE user = ?").get(user) as { rec: string } | null;
+    return row ? (JSON.parse(row.rec) as FreshRecord) : null;
+  };
   const accounts: AccountStore = {
     links: async (user) => (people.query("SELECT link FROM account_links WHERE user = ? ORDER BY seq").all(user) as { link: string }[]).map((r) => JSON.parse(r.link) as unknown),
     extend: async (user, from, links) =>
@@ -233,13 +238,28 @@ export function startRelay(
       })(),
     vault: async (user) => {
       const row = people.query("SELECT rec FROM account_vaults WHERE user = ?").get(user) as { rec: string } | null;
-      return row ? (JSON.parse(row.rec) as Vault) : null;
+      return row ? (JSON.parse(row.rec) as Vault | OldVault) : null;
     },
     setVault: async (user, next, prev) =>
       people.transaction(() => {
         const row = people.query("SELECT version FROM account_vaults WHERE user = ?").get(user) as { version: number } | null;
         if ((row?.version ?? 0) !== prev) return false;
         people.query("INSERT OR REPLACE INTO account_vaults (user, version, rec) VALUES (?, ?, ?)").run(user, next.version, JSON.stringify(next));
+        return true;
+      })(),
+    fresh: async (user) => freshOf(user),
+    setFresh: async (user, next, prev) => {
+      if (!sameFresh(freshOf(user), prev)) return false;
+      people.query("INSERT OR REPLACE INTO account_fresh (user, rec) VALUES (?, ?)").run(user, JSON.stringify(next));
+      return true;
+    },
+    startOver: async (user, start) =>
+      people.transaction(() => {
+        const rec = freshOf(user);
+        if (rec?.pending?.id !== start.id) return false;
+        for (const table of ["account_links", "account_recovery", "account_vaults", "account_asks"]) people.query(`DELETE FROM ${table} WHERE user = ?`).run(user);
+        start.links.forEach((l, i) => people.query("INSERT INTO account_links (user, seq, link) VALUES (?, ?, ?)").run(user, i + 1, JSON.stringify(l)));
+        people.query("INSERT OR REPLACE INTO account_fresh (user, rec) VALUES (?, ?)").run(user, JSON.stringify({ pending: null, lastAt: rec.lastAt }));
         return true;
       })(),
   };
@@ -449,7 +469,8 @@ export function startRelay(
     rows: async (from) => rowsOf(from),
     busy: async (from, now) => {
       const ask = people.query("SELECT at FROM account_asks WHERE user = ?").get(from) as { at: number } | null;
-      return ask && ask.at + ENROLL_TTL_MS > now ? "asking" : null;
+      if (ask && ask.at + ENROLL_TTL_MS > now) return "asking";
+      return freshOf(from)?.pending ? "starting over" : null;
     },
     holds: async (to) => holds(to),
     adopt: async (to, from, id, rows) =>

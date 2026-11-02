@@ -74,6 +74,8 @@ const SESSION_ENVS = [
   "MIMOCODE",
   "MIMOCODE_PID",
   "MIMOCODE_SESSION_ID",
+  "ANTIGRAVITY_AGENT",
+  "ANTIGRAVITY_CONVERSATION_ID",
 ];
 
 afterEach(() => {
@@ -136,6 +138,8 @@ function realHomeStamp(): string {
     join(root, ".config", "mimocode", "plugin", "kiwi.ts"),
     join(root, ".zcode", "cli"),
     join(root, ".zcode", "cli", "config.json"),
+    join(root, ".gemini", "config"),
+    join(root, ".gemini", "config", "hooks.json"),
     join(root, ".claude"),
     join(root, ".claude", "settings.json"),
   ];
@@ -154,7 +158,7 @@ function realHomeStamp(): string {
 
 test("a harness session during tests does not touch the real home", () => {
   const root = homedir();
-  for (const key of ["KIWI_CODEX_DIR", "KIWI_GEMINI_DIR", "KIWI_CURSOR_DIR", "KIWI_GROK_DIR", "KIWI_KIMI_DIR", "KIWI_PI_DIR", "KIWI_MIMO_DIR", "KIWI_ZCODE_DIR", "CLAUDE_CONFIG_DIR"]) {
+  for (const key of ["KIWI_CODEX_DIR", "KIWI_GEMINI_DIR", "KIWI_CURSOR_DIR", "KIWI_GROK_DIR", "KIWI_KIMI_DIR", "KIWI_PI_DIR", "KIWI_MIMO_DIR", "KIWI_ZCODE_DIR", "KIWI_AGY_DIR", "CLAUDE_CONFIG_DIR"]) {
     const dir = process.env[key];
     expect(dir, key).toBeTruthy();
     expect(dir!.startsWith(`${root}/`), key).toBe(false);
@@ -184,7 +188,9 @@ test("a harness session during tests does not touch the real home", () => {
   expect(existsSync(join(process.env.KIWI_PI_DIR!, "extensions", "kiwi.ts"))).toBe(true);
   expect(existsSync(join(process.env.KIWI_MIMO_DIR!, "plugin", "kiwi.ts"))).toBe(true);
   expect(existsSync(join(process.env.KIWI_ZCODE_DIR!, "config.json"))).toBe(true);
+  expect(existsSync(join(process.env.KIWI_AGY_DIR!, "hooks.json"))).toBe(true);
   uninstallDetected();
+  expect(existsSync(join(process.env.KIWI_AGY_DIR!, "hooks.json"))).toBe(false);
   expect(realHomeStamp()).toBe(before);
 });
 
@@ -335,6 +341,7 @@ test("a harness opted out stays out of install, and a named install turns it bac
     KIWI_PI_DIR: absent,
     KIWI_MIMO_DIR: absent,
     KIWI_ZCODE_DIR: absent,
+    KIWI_AGY_DIR: absent,
   });
   updateConfig((c) => {
     c.harnessHooks = { codex: "off" };
@@ -634,13 +641,14 @@ test("kiwi hooks status --json gives the app each harness's state, and install c
     KIWI_PI_DIR: none,
     KIWI_MIMO_DIR: none,
     KIWI_ZCODE_DIR: none,
+    KIWI_AGY_DIR: none,
     KIWI_NO_HOOKS: "",
     CLAUDECODE: "",
     AI_AGENT: "",
     CLAUDE_CODE_EXECPATH: "",
   };
   const states = () => Object.fromEntries((JSON.parse(kiwiCli(["hooks", "status", "--json"], env).out) as { hooks: { harness: string; state: string }[] }).hooks.map((r) => [r.harness, r.state]));
-  expect(states()).toEqual({ claude: "missing", codex: "missing", gemini: "absent", cursor: "absent", grok: "absent", kimi: "absent", pi: "absent", mimo: "absent", zcode: "absent" });
+  expect(states()).toEqual({ claude: "missing", codex: "missing", gemini: "absent", cursor: "absent", grok: "absent", kimi: "absent", pi: "absent", mimo: "absent", zcode: "absent", agy: "absent" });
 
   expect(kiwiCli(["hooks", "install", "claude"], env).code).toBe(0);
   expect(states().claude).toBe("partial");

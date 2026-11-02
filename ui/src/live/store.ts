@@ -5,6 +5,7 @@ import type { JoinRequest, Member as RosterMember } from "@kiwi/core/membership.
 import type { Message as Wire } from "@kiwi/core/protocol.ts"
 import type { ChannelState, FoldBase } from "@kiwi/core/state.ts"
 import type { ChannelLink } from "@kiwi/channel/channel-ops.ts"
+import type { OlderHistory } from "@kiwi/channel/channel-store.ts"
 import type { Channel, GoneChannel, Upload, Where } from "~/model"
 
 export interface Run {
@@ -24,6 +25,7 @@ export interface Run {
   refreshRequests: () => Promise<void>
   refreshRoster: () => Promise<void>
   foldFrom: (messages: Wire[], base: FoldBase | null) => ChannelState
+  older: OlderHistory
 }
 
 interface Opened {

@@ -11,6 +11,7 @@ const RECOVERY_DELAY_DAYS = 7;
 export const PERSON_WORDS_WAIT_FROM = Date.UTC(2026, 10, 1, 2, 30);
 const RECOVERY_MAX = 256;
 const VAULT_BOX_MAX = 512 * 1024;
+const VAULT_SECTIONS_MAX = 64;
 const enc = new TextEncoder();
 
 const PKCS8_PREFIX = { Ed25519: "302e020100300506032b657004220420", X25519: "302e020100300506032b656e04220420" } as const;
@@ -156,6 +157,8 @@ function approver(list: DeviceList, pk: string): boolean {
   return list.devices.some((d) => d.device === pk && d.approve && d.as !== "computer");
 }
 
+const approvedWhen = (list: DeviceList, pk: string, at: number): boolean => approver(list, pk) || list.revokes.some((r) => r.device === pk && r.approve && r.as !== "computer" && at < r.at);
+
 const rerootedBefore = (list: DeviceList, pk: string, due: number): boolean => list.reroots.some((x) => x.from === pk && x.at < due);
 
 export async function readRecovery(links: readonly unknown[], list: DeviceList, now = Date.now()): Promise<ReadRecovery> {
@@ -221,11 +224,29 @@ export interface VaultContents {
 
 export interface SealedPerson {
   rxpk: string;
+  pk: string;
   box: string;
-  pk?: string;
+}
+
+export interface VaultSection {
+  device: string;
+  rxpk: string;
+  box: string;
 }
 
 export interface Vault {
+  kind: "kiwi-vault";
+  v: 1;
+  person: string;
+  version: number;
+  at: number;
+  held: SealedPerson;
+  boxes: VaultSection[];
+  pk: string;
+  sig: string;
+}
+
+export interface OldVault {
   kind: "kiwi-vault";
   v: 1;
   person: string;
@@ -236,34 +257,80 @@ export interface Vault {
   sig: string;
 }
 
-const VAULT_FIELDS = "at,box,kind,person,pk,sig,v,version";
-const vaultInfo = (v: { person: string; version: number; at: number }) => `kiwi-vault\n${v.person}\n${v.version}\n${v.at}`;
-const personInfo = (person: string, rxpk: string) => `kiwi-vault-person\n${person}\n${rxpk}`;
+export const isOldVault = (v: Vault | OldVault): v is OldVault => "box" in v;
+
+export const heldIn = (v: Vault | OldVault | null): SealedPerson | undefined => (v && !isOldVault(v) ? v.held : undefined);
+
+export const boxesIn = (v: Vault | OldVault | null): VaultSection[] => (v && !isOldVault(v) ? v.boxes : []);
+
+const VAULT_FIELDS = "at,boxes,held,kind,person,pk,sig,v,version";
+const OLD_VAULT_FIELDS = "at,box,kind,person,pk,sig,v,version";
+const HELD_FIELDS = "box,pk,rxpk";
+const SECTION_FIELDS = "box,device,rxpk";
+const personInfo = (person: string, pk: string, rxpk: string) => `kiwi-vault-person\n${person}\n${pk}\n${rxpk}`;
+const sectionInfo = (person: string, device: string, rxpk: string) => `kiwi-vault-channels\n${person}\n${device}\n${rxpk}`;
+const oldVaultInfo = (v: { person: string; version: number; at: number }) => `kiwi-vault\n${v.person}\n${v.version}\n${v.at}`;
+const oldPersonInfo = (person: string, rxpk: string) => `kiwi-vault-person\n${person}\n${rxpk}`;
+
+const boxSize = (v: { held: SealedPerson; boxes: readonly VaultSection[] }): number => v.boxes.reduce((n, s) => n + s.box.length, v.held.box.length);
 
 export async function sealPerson(recovery: Recovery, person: Identity): Promise<SealedPerson> {
   if (person.pk !== recovery.root) throw new Error("that person key isn't the one this recovery key is for");
-  return { rxpk: recovery.rxpk, pk: person.pk, box: await sealTo(recovery.rxpk, JSON.stringify(person), personInfo(recovery.person, recovery.rxpk)) };
+  return { rxpk: recovery.rxpk, pk: person.pk, box: await sealTo(recovery.rxpk, JSON.stringify(person), personInfo(recovery.person, person.pk, recovery.rxpk)) };
 }
 
-export async function sealVault(signer: Identity, recovery: Recovery, version: number, contents: { person: Identity | SealedPerson; channels: VaultChannel[] }, at = Date.now()): Promise<Vault> {
-  const held = contents.person;
-  if ("box" in held && held.rxpk !== recovery.rxpk) throw new Error("the person key is sealed to an earlier recovery key");
-  if (("box" in held ? (held.pk ?? recovery.person) : held.pk) !== recovery.root) throw new Error("that person key was replaced by a re-root");
-  const head = { person: recovery.person, version, at };
-  const inner = { person: "box" in held ? held.box : held, channels: contents.channels };
-  return sign(signer, { kind: "kiwi-vault" as const, v: 1 as const, ...head, box: await sealTo(recovery.rxpk, JSON.stringify(inner), vaultInfo(head)) });
+export async function sealVault(
+  signer: Identity,
+  recovery: Recovery,
+  version: number,
+  contents: { person: Identity | SealedPerson; channels: VaultChannel[]; device?: string; others?: readonly VaultSection[] },
+  at = Date.now(),
+): Promise<Vault> {
+  const given = contents.person;
+  if ("box" in given && given.rxpk !== recovery.rxpk) throw new Error("the person key is sealed to an earlier recovery key");
+  if (given.pk !== recovery.root) throw new Error("that person key was replaced by a re-root");
+  const held = "box" in given ? given : await sealPerson(recovery, given);
+  const device = contents.device ?? signer.pk;
+  const own = { device, rxpk: recovery.rxpk, box: await sealTo(recovery.rxpk, JSON.stringify(contents.channels), sectionInfo(recovery.person, device, recovery.rxpk)) };
+  const boxes = [...(contents.others ?? []).filter((s) => s.device !== device && s.rxpk === recovery.rxpk), own];
+  if (boxes.length > VAULT_SECTIONS_MAX || boxSize({ held, boxes }) > VAULT_BOX_MAX) throw new Error("the vault would grow past what the relay keeps");
+  return sign(signer, { kind: "kiwi-vault" as const, v: 1 as const, person: recovery.person, version, at, held, boxes });
+}
+
+const fieldsOf = (x: unknown, fields: string): Record<string, unknown> | null =>
+  !!x && typeof x === "object" && !Array.isArray(x) && Object.keys(x).sort().join(",") === fields ? (x as Record<string, unknown>) : null;
+
+const keyed = (x: Record<string, unknown>, ...keys: string[]): boolean => keys.every((k) => typeof x[k] === "string" && KEY_RE.test(x[k]));
+
+function boxesOk(x: Record<string, unknown>): string | null {
+  const held = fieldsOf(x["held"], HELD_FIELDS);
+  if (!held || !keyed(held, "pk", "rxpk") || typeof held["box"] !== "string") return "a vault with a bad person box";
+  const boxes = x["boxes"];
+  if (!Array.isArray(boxes) || boxes.length > VAULT_SECTIONS_MAX) return "a vault with bad channel boxes";
+  const devices = new Set<string>();
+  let size = held["box"].length;
+  for (const b of boxes as unknown[]) {
+    const s = fieldsOf(b, SECTION_FIELDS);
+    if (!s || !keyed(s, "device", "rxpk") || typeof s["box"] !== "string" || devices.has(s["device"] as string)) return "a vault with bad channel boxes";
+    devices.add(s["device"] as string);
+    size += s["box"].length;
+  }
+  return size > VAULT_BOX_MAX ? "a vault too large" : null;
 }
 
 export async function checkVault(raw: unknown, list: DeviceList, known = 0): Promise<string | null> {
   if (!raw || typeof raw !== "object") return "not a vault";
   const x = raw as Record<string, unknown>;
-  if (x["kind"] !== "kiwi-vault" || x["v"] !== 1 || Object.keys(x).sort().join(",") !== VAULT_FIELDS) return "not a vault";
+  const fields = Object.keys(x).sort().join(",");
+  const old = fields === OLD_VAULT_FIELDS;
+  if (x["kind"] !== "kiwi-vault" || x["v"] !== 1 || (!old && fields !== VAULT_FIELDS)) return "not a vault";
   if (typeof x["person"] !== "string" || typeof x["pk"] !== "string" || !KEY_RE.test(x["pk"])) return "a vault with a bad key";
   if (!Number.isSafeInteger(x["version"]) || (x["version"] as number) < 1 || !Number.isSafeInteger(x["at"])) return "a vault with a bad version";
-  if (typeof x["box"] !== "string" || x["box"].length > VAULT_BOX_MAX) return "a vault too large";
+  const bad = old ? (typeof x["box"] !== "string" || x["box"].length > VAULT_BOX_MAX ? "a vault too large" : null) : boxesOk(x);
+  if (bad) return bad;
   if (!(await verify(x))) return "a vault that isn't signed by the key it names";
   if (x["person"] !== list.person) return "a vault for another person";
-  if (x["pk"] !== list.root && !approver(list, x["pk"])) return "a vault signed by a key that isn't one of this person's approving devices";
+  if (x["pk"] !== list.root && !approvedWhen(list, x["pk"], x["at"] as number)) return "a vault signed by a key that isn't one of this person's approving devices";
   if ((x["version"] as number) < known) return `vault version ${x["version"] as number} is older than version ${known}, already seen`;
   return null;
 }
@@ -271,16 +338,10 @@ export async function checkVault(raw: unknown, list: DeviceList, known = 0): Pro
 const isKey = (k: unknown): k is Identity =>
   !!k && typeof k === "object" && typeof (k as Identity).pk === "string" && typeof (k as Identity).sk === "string" && typeof (k as Identity).name === "string";
 
-function contentsOf(x: unknown, person: string): VaultContents | null {
-  if (!x || typeof x !== "object") return null;
-  const c = x as Partial<VaultContents>;
-  if (!isKey(c.person) || c.person.pk !== person || !Array.isArray(c.channels)) return null;
-  for (const ch of c.channels as unknown[]) {
-    const v = ch as Partial<VaultChannel> | null;
-    if (!v || typeof v.label !== "string" || typeof v.code !== "string" || !isKey(v.owner)) return null;
-  }
-  return c as VaultContents;
-}
+const channelOf = (ch: unknown): ch is VaultChannel => {
+  const v = ch as Partial<VaultChannel> | null;
+  return !!v && typeof v === "object" && typeof v.label === "string" && typeof v.code === "string" && isKey(v.owner);
+};
 
 async function opened(xsk: string, box: string, info: string): Promise<unknown> {
   const text = await openFrom(xsk, box, info);
@@ -293,11 +354,32 @@ async function opened(xsk: string, box: string, info: string): Promise<unknown> 
   }
 }
 
-export async function openVault(vault: Vault, key: Identity, root = vault.person): Promise<VaultContents | null> {
-  if (!key.xsk) return null;
-  const inner = await opened(key.xsk, vault.box, vaultInfo(vault));
+async function openOld(vault: OldVault, xsk: string, xpk: string, root: string): Promise<VaultContents | null> {
+  const inner = await opened(xsk, vault.box, oldVaultInfo(vault));
   if (!inner || typeof inner !== "object") return null;
-  const held = (inner as { person?: unknown }).person;
-  const person = typeof held === "string" ? await opened(key.xsk, held, personInfo(vault.person, key.xpk ?? "")) : held;
-  return contentsOf({ ...inner, person }, root);
+  const { person: held, channels } = inner as { person?: unknown; channels?: unknown };
+  const person = typeof held === "string" ? await opened(xsk, held, oldPersonInfo(vault.person, xpk)) : held;
+  if (!isKey(person) || person.pk !== root || !Array.isArray(channels) || !channels.every(channelOf)) return null;
+  return { person, channels };
+}
+
+async function openPerson(vault: Vault, xsk: string, xpk: string, root: string): Promise<unknown> {
+  const person = await opened(xsk, vault.held.box, personInfo(vault.person, root, xpk));
+  return person === null && root === vault.person ? opened(xsk, vault.held.box, oldPersonInfo(vault.person, xpk)) : person;
+}
+
+export async function openVault(vault: Vault | OldVault, key: Identity, root = vault.person): Promise<VaultContents | null> {
+  if (!key.xsk || !key.xpk) return null;
+  if (isOldVault(vault)) return openOld(vault, key.xsk, key.xpk, root);
+  if (vault.held.pk !== root || vault.held.rxpk !== key.xpk) return null;
+  const person = await openPerson(vault, key.xsk, key.xpk, root);
+  if (!isKey(person) || person.pk !== root) return null;
+  const owners = new Map<string, VaultChannel>();
+  for (const s of vault.boxes) {
+    if (s.rxpk !== key.xpk) continue;
+    const channels = await opened(key.xsk, s.box, sectionInfo(vault.person, s.device, key.xpk));
+    if (!Array.isArray(channels) || !channels.every(channelOf)) continue;
+    for (const c of channels) owners.set(c.owner.pk, c);
+  }
+  return { person, channels: [...owners.values()] };
 }

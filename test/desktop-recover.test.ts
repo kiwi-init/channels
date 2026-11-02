@@ -5,11 +5,12 @@ import { join } from "node:path";
 import { accountClient } from "@kiwi/core/account.ts";
 import { certUntil, nextLink, readDeviceList, type DeviceLink } from "@kiwi/core/devices.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
-import { newRecoveryPhrase, openVault, readRecoveryPhrase, recoveryKey, type Vault, type VaultContents } from "@kiwi/core/recovery.ts";
+import { newRecoveryPhrase, openVault, readRecovery, readRecoveryPhrase, recoveryKey, recoveryLink, type Vault, type VaultContents } from "@kiwi/core/recovery.ts";
 import { createDeviceHost, type DeviceHost } from "../desktop/src/devices.ts";
 import { createRecoverer, type Recoverer, type Restored } from "../desktop/src/recover.ts";
-import { createRecoveryHost, type RecoveryHost } from "../desktop/src/recovery.ts";
+import { createRecoveryHost, type RecoveryHost, type RecoveryKept } from "../desktop/src/recovery.ts";
 import { startRelay } from "../src/relay/bun.ts";
+import { oldPersonBox, oldVault } from "./old-vault.ts";
 import { devHumanAuth } from "../src/relay/human.ts";
 
 setDefaultTimeout(30_000);
@@ -169,6 +170,34 @@ describe("recovering on a new desktop", () => {
     expect((await old.desk.host.news())?.removed).toEqual({ wiped: false, by: "your person key" });
   });
 
+  test("a vault sealed before T969 opens with the words, and finish reseals it with a box per desktop", async () => {
+    const token = `dev:lost${++users}`;
+    const person = await key("Jow");
+    const d = desk(token, () => person, "studio");
+    await d.host.poll();
+    const s = (await d.host.session())!;
+    const owned: VaultContents["channels"] = [{ label: "general", code: "mc2-general", owner: await key("general") }];
+    const words = await newRecoveryPhrase();
+    const phrase = await readRecoveryPhrase(words.join(" "));
+    if (!phrase.ok) throw new Error(phrase.why);
+    const paper = await recoveryKey(phrase.entropy);
+    const list = await readDeviceList(d.links());
+    if (!list.ok) throw new Error(list.why);
+    const chain = [await recoveryLink(person, person.pk, null, { pk: paper.pk, xpk: paper.xpk! })];
+    const r = await readRecovery(chain, list.list);
+    if (!r.ok) throw new Error(r.why);
+    await s.client.keepVault({ recovery: chain, vault: await oldVault(s.device, r.recovery, 1, { person: await oldPersonBox(r.recovery, person), channels: owned }) });
+
+    const fresh = newDesktop(token);
+    expect(await fresh.recoverer.open(words.join(" "))).toMatchObject({ ok: true, name: "Jow", channels: ["general"] });
+    expect(await fresh.recoverer.finish([])).toMatchObject({ name: "Jow", channels: 1 });
+    expect(fresh.restored.value?.person.sk).toBe(person.sk);
+    const got = (await accountClient(relay, async () => token, fresh.device()!).vault()).vault as Vault;
+    expect(got.version).toBe(2);
+    expect(got.held.pk).toBe(person.pk);
+    expect((await openVault(got, paper))?.channels.map((c) => c.label)).toEqual(["general"]);
+  });
+
   test("a channel sealed in by another desktop between open and finish stays in the vault", async () => {
     const old = await lostAccount();
     const fresh = newDesktop(old.token);
@@ -232,5 +261,150 @@ describe("recovering on a new desktop", () => {
     expect((await fresh.recoverer.open(old.words.join(" "))).ok).toBe(true);
     await fresh.recoverer.finish([]);
     await expect(fresh.recoverer.open(old.words.join(" "))).rejects.toThrow("already holds your person");
+  });
+});
+
+describe("losing the only desktop that held the person key locks nobody out (T1423)", () => {
+  interface Desktop {
+    host: DeviceHost;
+    recovery: RecoveryHost;
+    owned: VaultContents["channels"];
+    kept: { value: RecoveryKept | null };
+    holds: { value: boolean };
+    device: () => Identity | null;
+  }
+
+  function desktop(token: string, person: Identity, label: string, start: DeviceLink[] = [], held: Identity | null = null): Desktop {
+    let device = held;
+    let links = start;
+    const holds = { value: !held };
+    const host = createDeviceHost({
+      relayUrl: () => relay,
+      token: async () => token,
+      person: () => (holds.value ? person : null),
+      who: () => ({ name: person.name, pk: person.pk, xpk: person.xpk! }),
+      device: () => device,
+      saveDevice: (d) => void (device = d),
+      links: () => links,
+      saveLinks: (l) => void (links = l),
+      channels: () => [],
+      label: () => label,
+      os: () => "macOS",
+      wipe: () => {},
+    });
+    const owned: VaultContents["channels"] = [];
+    const kept: Desktop["kept"] = { value: null };
+    const recovery = createRecoveryHost({
+      session: () => host.session(),
+      person: () => (holds.value ? person : null),
+      links: () => links,
+      owned: () => owned,
+      kept: () => kept.value,
+      keep: (k) => void (kept.value = k),
+      letGo: async () => void (holds.value = false),
+      forget: () => {
+        holds.value = false;
+        kept.value = null;
+      },
+    });
+    return { host, recovery, owned, kept, holds, device: () => device };
+  }
+
+  async function grow(d: Desktop, body: Parameters<typeof nextLink>[2]): Promise<DeviceLink[]> {
+    const s = (await d.host.session())!;
+    const links = (await s.client.links()) as DeviceLink[];
+    const read = await readDeviceList(links);
+    if (!read.ok) throw new Error(read.why);
+    const next = [...links, await nextLink(read.list, s.device, body)];
+    await s.client.publish(next);
+    await d.host.poll();
+    return next;
+  }
+
+  const labels = (c: VaultContents | null) => c?.channels.map((x) => x.label).sort();
+
+  test("from setup to recovery: the words go in, a second desktop takes its box, the first is lost, the second keeps sealing, and the words still bring everything back", async () => {
+    const token = `dev:lost${++users}`;
+    const person = await key("Jow");
+    const phrase = async (words: string[]) => {
+      const read = await readRecoveryPhrase(words.join(" "));
+      if (!read.ok) throw new Error(read.why);
+      return recoveryKey(read.entropy);
+    };
+
+    const studio = desktop(token, person, "studio");
+    studio.owned.push({ label: "first", code: "mc2-first", owner: await key("first") });
+    await studio.host.poll();
+    const words = await studio.recovery.words();
+    expect((await studio.recovery.save([0, 7, 23].map((at) => ({ at, word: words[at]! })))).ok).toBe(true);
+    expect(studio.holds.value).toBe(false);
+
+    const laptopKey = await key("laptop");
+    const withLaptop = await grow(studio, { op: "add", device: laptopKey.pk, dxpk: laptopKey.xpk!, label: "laptop", os: "macOS", as: "desktop", approve: true, until: certUntil(Date.now()) });
+    const laptop = desktop(token, person, "laptop", withLaptop, laptopKey);
+    laptop.owned.push({ label: "second", code: "mc2-second", owner: await key("second") });
+    await laptop.recovery.keepCurrent();
+    expect(laptop.kept.value?.person).toEqual(studio.kept.value?.person);
+
+    const studioPk = studio.device()!.pk;
+    await grow(laptop, { op: "revoke", device: studioPk });
+    expect(await studio.host.poll()).toBeNull();
+    expect((await studio.host.news())?.removed).toMatchObject({ by: "laptop" });
+
+    laptop.owned.push({ label: "later", code: "mc2-later", owner: await key("later") });
+    await laptop.recovery.keepCurrent();
+    const client = accountClient(relay, async () => token, laptopKey);
+    const sealed = (await client.vault()).vault as Vault;
+    const inside = await openVault(sealed, await phrase(words));
+    expect(inside?.person.sk).toBe(person.sk);
+    expect(labels(inside)).toEqual(["first", "later", "second"]);
+
+    const fresh = newDesktop(token);
+    const open = await fresh.recoverer.open(words.join(" "));
+    if (!open.ok) throw new Error(open.why);
+    expect(open.channels.sort()).toEqual(["first", "later", "second"]);
+    expect(open.devices.map((d) => [d.label, d.lost])).toEqual([["laptop", true]]);
+    const done = await fresh.recoverer.finish([laptopKey.pk]);
+    expect(done).toEqual({ name: "Jow", channels: 3, forgot: 1 });
+    const r = fresh.restored.value!;
+    expect(r.person.sk).toBe(person.sk);
+    expect(r.channels.map((c) => c.label).sort()).toEqual(["first", "later", "second"]);
+    const after = await readDeviceList(r.links);
+    if (!after.ok) throw new Error(after.why);
+    expect(after.list.devices.map((d) => [d.label, d.approve])).toEqual([["new-mac", true]]);
+  });
+
+  test("when the lost desktop sealed the vault last, the words still open it and the desktop left keeps sealing", async () => {
+    const token = `dev:lost${++users}`;
+    const person = await key("Jow");
+    const studio = desktop(token, person, "studio");
+    await studio.host.poll();
+    const words = await studio.recovery.words();
+    expect((await studio.recovery.save([1, 2, 3].map((at) => ({ at, word: words[at]! })))).ok).toBe(true);
+    const laptopKey = await key("laptop");
+    const withLaptop = await grow(studio, { op: "add", device: laptopKey.pk, dxpk: laptopKey.xpk!, label: "laptop", os: "macOS", as: "desktop", approve: true, until: certUntil(Date.now()) });
+    const laptop = desktop(token, person, "laptop", withLaptop, laptopKey);
+    await laptop.recovery.keepCurrent();
+    studio.owned.push({ label: "studio-late", code: "mc2-studio-late", owner: await key("studio-late") });
+    await studio.recovery.keepCurrent();
+    const client = accountClient(relay, async () => token, laptopKey);
+    expect(((await client.vault()).vault as Vault).pk).toBe(studio.device()!.pk);
+
+    await grow(laptop, { op: "revoke", device: studio.device()!.pk });
+    const early = newDesktop(token);
+    const look = await early.recoverer.open(words.join(" "));
+    if (!look.ok) throw new Error(look.why);
+    expect(look.channels).toEqual(["studio-late"]);
+    early.recoverer.cancel();
+
+    laptop.owned.push({ label: "after", code: "mc2-after", owner: await key("after") });
+    await laptop.recovery.keepCurrent();
+    expect(((await client.vault()).vault as Vault).pk).toBe(laptopKey.pk);
+    const fresh = newDesktop(token);
+    const open = await fresh.recoverer.open(words.join(" "));
+    if (!open.ok) throw new Error(open.why);
+    expect(open.channels.sort()).toEqual(["after", "studio-late"]);
+    expect(await fresh.recoverer.finish([laptopKey.pk])).toEqual({ name: "Jow", channels: 2, forgot: 1 });
+    expect(fresh.restored.value?.person.sk).toBe(person.sk);
   });
 });
