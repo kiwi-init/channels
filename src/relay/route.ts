@@ -261,6 +261,7 @@ const routes: RoomRoute[] = [
           settings: db.settings(),
           iconAt: db.iconAt(),
           blobs: true,
+          files: true,
           sealedEpoch: true,
         }));
       }),

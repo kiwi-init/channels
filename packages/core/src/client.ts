@@ -15,7 +15,7 @@ import type { Identity } from "./identity.ts";
 import type { JoinClaims, JoinRequest, Member, MemberInfo, PersonPowers } from "./membership.ts";
 import { withSeats } from "./room-rules.ts";
 import type { Marks } from "./note.ts";
-import type { ChannelIcon, Envelope, ImageAttachment, Message } from "./protocol.ts";
+import type { ChannelIcon, Envelope, FileAttachment, ImageAttachment, Message } from "./protocol.ts";
 import type { Scope } from "./scopes.ts";
 import type { GithubStatus } from "./github-health.ts";
 import type { FoldBase, GithubRelease, GithubRules, GithubState, GuardFloor } from "./state.ts";
@@ -23,6 +23,7 @@ import { ChannelCore, type ChannelFx } from "./client/core.ts";
 import { ChannelDelegations, type Computer, type Tended } from "./client/delegations.ts";
 import { ChannelGithub, type GithubDiff, type GithubIssueInfo, type ReviewCheck } from "./client/github.ts";
 import { ChannelHistory } from "./client/history.ts";
+import { ChannelFiles } from "./client/files.ts";
 import { ChannelImages } from "./client/images.ts";
 import { ChannelInfo, type Info, type MemberRow } from "./client/info.ts";
 import { joinFx, type JoinStatus } from "./client/join.ts";
@@ -92,6 +93,7 @@ export class Channel {
       ...new ChannelSnapshots(this.core, history).fx,
       ...this.sending.fx,
       ...images.fx,
+      ...new ChannelFiles(this.core).fx,
       ...live.fx,
       ...new ChannelGithub(this.core).fx,
     };
@@ -666,6 +668,14 @@ export class Channel {
 
   image(img: ImageAttachment): Promise<string | null> {
     return run(this.fx.image(img));
+  }
+
+  putFile(name: string, mime: string, bytes: Uint8Array<ArrayBuffer>): Promise<FileAttachment> {
+    return run(this.fx.putFile(name, mime, bytes));
+  }
+
+  file(f: FileAttachment): Promise<Uint8Array<ArrayBuffer> | null> {
+    return run(this.fx.file(f));
   }
 
   decrypt(env: Envelope): Promise<Message | null> {
