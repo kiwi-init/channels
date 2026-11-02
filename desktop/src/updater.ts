@@ -11,14 +11,16 @@ import os from "node:os";
 import path from "node:path";
 
 import { compareVersions } from "@kiwi/core/versions.ts";
+import type { MovedView } from "./bridge.ts";
 import { childEnv } from "./child-env.ts";
 import { host } from "./host.ts";
+import { keepLinuxEntry } from "./linux-entry.ts";
 import { moveOver } from "./move.ts";
 import { logMainError } from "./main-log.ts";
 import { minisignVerifies } from "./minisign.ts";
 import { RELEASE_KEY } from "./release-key.ts";
 import { signedLikeThisApp } from "./signer.ts";
-import { cantSwap, githubHop, latestTag, ownAppImage, releaseDownload, swapAsset, swapScript } from "./update-asset.ts";
+import { appImageHome, cantSwap, githubHop, latestTag, ownAppImage, releaseDownload, swapAsset, swapScript } from "./update-asset.ts";
 
 const REPO = "kiwi-init/channels";
 const EVERY_MS = 6 * 3_600_000;
@@ -39,7 +41,14 @@ export interface UpdateState {
 
 export type UpdateCheck = UpdateState | { state: "current"; version: string } | { state: "failed" };
 
-let staged: { version: string; path: string; url: string } | null = null;
+interface Staged {
+  version: string;
+  path: string;
+  url: string;
+  into: string;
+}
+
+let staged: Staged | null = null;
 let retry: ReturnType<typeof setTimeout> | null = null;
 let fetching: Promise<void> | null = null;
 
@@ -85,6 +94,7 @@ async function githubFetch(url: string, signal: AbortSignal): Promise<Response> 
 }
 
 const failedMarker = () => path.join(host().app.path("data"), "update-failed");
+const movedMarker = () => path.join(host().app.path("data"), "update-moved");
 
 const writableDir = (dir: string): boolean => {
   try {
@@ -94,6 +104,24 @@ const writableDir = (dir: string): boolean => {
     return false;
   }
 };
+
+const canMakeIn = (dir: string): boolean => {
+  for (let at = dir; ; at = path.dirname(at)) {
+    try {
+      return fs.statSync(at).isDirectory() && writableDir(at);
+    } catch {
+      // Not there yet: it would be made inside the nearest folder that is.
+      if (path.dirname(at) === at) return false;
+    }
+  }
+};
+
+const homeDir = (): string => {
+  const home = process.env["HOME"];
+  return home && path.isAbsolute(home) ? home : os.homedir();
+};
+
+const swapTarget = (appImage: string): string => (writableDir(path.dirname(appImage)) ? appImage : (appImageHome(homeDir(), process.env["XDG_DATA_HOME"], canMakeIn) ?? appImage));
 
 const failedBefore = (version: string): boolean => {
   try {
@@ -132,15 +160,15 @@ async function check(): Promise<UpdateCheck> {
   const asset = fileOf(name);
   const sums = fileOf("SHA256SUMS");
   const signature = process.platform === "darwin" ? null : fileOf("SHA256SUMS.minisig");
-  const target = process.platform === "darwin" ? macBundle() : appImage;
-  if (name && target && cantSwap(target, writableDir, failedBefore(version))) return set({ version, state: "available", url, blocked: true });
-  if (!asset || !sums || (process.platform !== "darwin" && !signature)) return set({ version, state: "available", url });
+  const target = process.platform === "darwin" ? macBundle() : appImage ? swapTarget(appImage) : undefined;
+  if (name && target && cantSwap(target, canMakeIn, failedBefore(version))) return set({ version, state: "available", url, blocked: true });
+  if (!asset || !sums || !target || (process.platform !== "darwin" && !signature)) return set({ version, state: "available", url });
   const shown = set({ version, state: "downloading", url });
-  fetching = fetchUpdate(version, url, asset, sums, signature, name!).finally(() => (fetching = null));
+  fetching = fetchUpdate(version, url, target, asset, sums, signature, name!).finally(() => (fetching = null));
   return shown;
 }
 
-async function fetchUpdate(version: string, url: string, assetUrl: string, sumsUrl: string, signatureUrl: string | null, name: string): Promise<void> {
+async function fetchUpdate(version: string, url: string, into: string, assetUrl: string, sumsUrl: string, signatureUrl: string | null, name: string): Promise<void> {
   let dir: string | null = null;
   try {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), "kiwi-update-"));
@@ -151,7 +179,7 @@ async function fetchUpdate(version: string, url: string, assetUrl: string, sumsU
       shown = progress;
       set({ version, state: "downloading", url, progress: progress / 100 });
     };
-    staged = { version, path: await download(assetUrl, sumsUrl, signatureUrl, name, dir, onBytes), url };
+    staged = { version, path: await download(assetUrl, sumsUrl, signatureUrl, name, dir, onBytes), url, into };
   } catch (e) {
     retrySoon(`couldn't put Channels ${version} in place: ${e instanceof Error ? e.message : String(e)}`);
   } finally {
@@ -258,7 +286,7 @@ export function applyUpdate(relaunch: boolean): boolean {
   }
 }
 
-function swapIn(next: { version: string; path: string; url: string }, relaunch: boolean): boolean {
+function swapIn(next: Staged, relaunch: boolean): boolean {
   const dir = path.dirname(next.path);
   if (process.platform === "darwin") {
     const target = macBundle();
@@ -267,10 +295,12 @@ function swapIn(next: { version: string; path: string; url: string }, relaunch: 
     fs.writeFileSync(script, swapScript({ pid: process.pid, target, next: next.path, dir, marker: failedMarker(), version: next.version, relaunch }));
     spawn("/bin/sh", [script], { detached: true, stdio: "ignore", env: childEnv() }).unref();
   } else {
-    const target = runningAppImage();
-    if (!target) return false;
+    const running = runningAppImage();
+    if (!running) return false;
+    const target = next.into;
     // The download sits in the temp dir, often on another filesystem than the AppImage (moveOver).
     try {
+      fs.mkdirSync(path.dirname(target), { recursive: true });
       moveOver(next.path, target);
     } catch (e) {
       // The AppImage stays as it was; the marker keeps the next launch from downloading this version again.
@@ -283,11 +313,49 @@ function swapIn(next: { version: string; path: string; url: string }, relaunch: 
     }
     fs.rmSync(failedMarker(), { force: true });
     fs.rmSync(dir, { recursive: true, force: true });
+    if (realOr(target) !== realOr(running)) movedFrom(running, target);
     if (relaunch) host().app.relaunch(target);
   }
   staged = null;
   return true;
 }
+
+function movedFrom(from: string, to: string): void {
+  try {
+    fs.writeFileSync(movedMarker(), JSON.stringify({ from, to }));
+    const entry = keepLinuxEntry(to, process.env, homeDir());
+    if (entry.kind === "skipped") console.error(`Channels: no desktop entry written: ${entry.why}`);
+  } catch (e) {
+    // The update is in place either way; only the notice or the menu entry is lost, and main.log says which.
+    logMainError(e);
+  }
+}
+
+const tilde = (p: string): string => {
+  const home = homeDir();
+  return p.startsWith(`${home}/`) ? `~${p.slice(home.length)}` : p;
+};
+
+const isMoved = (v: unknown): v is { from: string; to: string } => {
+  if (typeof v !== "object" || v === null) return false;
+  const o = v as Record<string, unknown>;
+  return typeof o["from"] === "string" && typeof o["to"] === "string";
+};
+
+export function movedApp(): MovedView | null {
+  let saved: unknown;
+  try {
+    saved = JSON.parse(fs.readFileSync(movedMarker(), "utf8"));
+  } catch {
+    // No marker (nothing moved), or one that isn't JSON: there's nothing to tell.
+    return null;
+  }
+  const running = runningAppImage();
+  if (!isMoved(saved) || !running || realOr(saved.to) !== realOr(running)) return null;
+  return { from: tilde(saved.from), to: tilde(saved.to) };
+}
+
+export const dismissMovedApp = (): void => fs.rmSync(movedMarker(), { force: true });
 
 /** Start checking (packaged apps only): `onChange` hears each step, for the window and the tray. */
 export function startUpdates(onChange: (s: UpdateState) => void): void {

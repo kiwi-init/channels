@@ -44,6 +44,14 @@ export function swapAsset(version: string, platform: NodeJS.Platform, arch: stri
   return null;
 }
 
+const HOME_APPIMAGE = "Channels.AppImage";
+
+export function appImageHome(home: string, dataHome: string | undefined, canMakeIn: (dir: string) => boolean): string | null {
+  const data = dataHome && path.isAbsolute(dataHome) ? dataHome : path.join(home, ".local", "share");
+  const dir = [path.join(home, "Applications"), path.join(data, "Channels")].find(canMakeIn);
+  return dir ? path.join(dir, HOME_APPIMAGE) : null;
+}
+
 export function cantSwap(bundle: string, writable: (dir: string) => boolean, failedBefore: boolean): boolean {
   return bundle.includes("/AppTranslocation/") || bundle.startsWith("/Volumes/") || !writable(path.dirname(bundle)) || failedBefore;
 }

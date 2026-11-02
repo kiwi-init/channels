@@ -1,8 +1,10 @@
-import { useEffect, useState } from "react"
+import { Fragment, useEffect, useState } from "react"
 
+import { Icon } from "~/kit/icons"
+import { announce } from "~/kit/toasts"
 import { useApp } from "~/nav"
 
-type Card = { key: string; text: string; act?: string; busy?: string; onAct?: () => void; progress?: number }
+type Card = { key: string; text: string; detail?: string; path?: string; act?: string; busy?: string; onAct?: () => void; progress?: number }
 
 function useCards(): Card[] {
   const { app, go } = useApp()
@@ -15,6 +17,16 @@ function useCards(): Card[] {
     const day = new Date(words.from).toLocaleDateString(undefined, { day: "numeric", month: "short" })
     cards.push({ key: `words ${words.from}`, text: `New recovery words take over ${day}. Not you?`, act: "Review", onAct: () => go({ to: "settings", section: "computers" }) })
   }
+  const moved = account?.moved
+  if (moved)
+    cards.push({
+      key: `moved ${moved.to}`,
+      text: `Channels moved to ${moved.to.slice(0, moved.to.lastIndexOf("/")) || moved.to}`,
+      detail: "The old copy can be deleted:",
+      path: moved.from,
+      act: "OK",
+      onAct: () => app.actions.dismissMoved(),
+    })
   if (account?.uiUpdate) cards.push({ key: "look", text: "A new look is ready", act: "Switch", onAct: () => app.actions.applyUi() })
   const update = account?.update
   if (update) {
@@ -34,6 +46,35 @@ function useCards(): Card[] {
   return cards
 }
 
+function CopyPath({ path }: { path: string }) {
+  const parts = path.split("/")
+  return (
+    <button
+      type="button"
+      className="side-card-path"
+      title="Copy the path"
+      onClick={() =>
+        void navigator.clipboard?.writeText(path).then(
+          () => announce("Path copied"),
+          () => announce("Could not copy")
+        )
+      }
+    >
+      <Icon name="copy" size={12} />
+      {parts.map((part, i) => (
+        <Fragment key={i}>
+          {i > 0 && (
+            <>
+              /<wbr />
+            </>
+          )}
+          {part}
+        </Fragment>
+      ))}
+    </button>
+  )
+}
+
 function SideCard({ card }: { card: Card }) {
   const [busy, setBusy] = useState(false)
   useEffect(() => {
@@ -47,6 +88,8 @@ function SideCard({ card }: { card: Card }) {
       <span className="side-card-text">
         {card.text}
         {pct !== null && <span className="side-card-pct">{pct > 0 ? ` · ${pct}%` : "…"}</span>}
+        {card.detail && <span className="side-card-detail">{card.detail}</span>}
+        {card.path && <CopyPath path={card.path} />}
       </span>
       {card.act && (
         <button

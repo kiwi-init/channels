@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from "react"
 import { handleFor } from "@kiwi/core/membership.ts"
 import { useUnsealedKeys } from "@kiwi/secrets/keys-at-rest.ts"
 import { relayUrl } from "@kiwi/secrets/relay.ts"
-import { bridge, useSecrets, type ComputerView, type DeviceNewsView, type PhoneView } from "@kiwi/secrets/secrets.ts"
+import { bridge, useSecrets, type ComputerView, type DeviceNewsView, type MovedView, type PhoneView } from "@kiwi/secrets/secrets.ts"
 import { useUpdate } from "@kiwi/app/update.ts"
 import { announce } from "~/kit/toasts"
 import { deviceNews, postDevicesNow } from "~/live/devices"
@@ -491,6 +491,33 @@ const uiUpdate = (() => {
   }
 })()
 
+const moved = (() => {
+  const value = store<MovedView | null>(null)
+  let started = false
+  return {
+    get: value.get,
+    set: value.set,
+    subscribe: (l: Listener) => {
+      if (!started) {
+        started = true
+        const b = bridge()
+        if (b && typeof b.movedApp === "function")
+          void b
+            .movedApp()
+            .then(value.set)
+            .catch(() => {})
+      }
+      return value.subscribe(l)
+    },
+  }
+})()
+
+export async function dismissMoved(): Promise<void> {
+  moved.set(null)
+  const b = bridge()
+  if (b && typeof b.dismissMovedApp === "function") await b.dismissMovedApp()
+}
+
 export function useAccount(): Account | null {
   const { person, computers, phones } = useSecrets()
   const update = useUpdate()
@@ -501,6 +528,7 @@ export function useAccount(): Account | null {
   const gate = useSyncExternalStore(githubGate.subscribe, githubGate.get)
   const moveRefused = useSyncExternalStore(githubMove.subscribe, githubMove.get)
   const look = useSyncExternalStore(uiUpdate.subscribe, uiUpdate.get)
+  const home = useSyncExternalStore(moved.subscribe, moved.get)
   const enroll = useSyncExternalStore(enrollAsk.subscribe, enrollAsk.get)
   const trouble = useSyncExternalStore(enrollTrouble.subscribe, enrollTrouble.get)
   const signed = useSyncExternalStore(devices.subscribe, devices.get)
@@ -532,6 +560,7 @@ export function useAccount(): Account | null {
           }
         : {}),
       ...(look ? { uiUpdate: look } : {}),
+      ...(home ? { moved: home } : {}),
       key: person.pk.slice(0, 8),
       personPk: person.pk,
       relay: relayUrl(),
@@ -544,5 +573,5 @@ export function useAccount(): Account | null {
       ...deviceNotices(news),
       ...(code ? { githubCode: code } : {}),
     }
-  }, [person, linked, gate, moveRefused, computers, phones, online, agents, update, code, look, unsealed, enroll, trouble, signed, kept, news])
+  }, [person, linked, gate, moveRefused, computers, phones, online, agents, update, code, look, home, unsealed, enroll, trouble, signed, kept, news])
 }

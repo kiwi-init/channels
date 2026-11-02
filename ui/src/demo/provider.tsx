@@ -240,6 +240,7 @@ export type Scenario =
   | "update-available"
   | "update-downloading"
   | "update-blocked"
+  | "update-moved"
   | "enroll"
   | "enroll-digits"
   | "devices"
@@ -306,6 +307,14 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
     return { account: { ...DEMO_ACCOUNT, update: { version: "2026.10.8", ready: false, state: "downloading", progress: 0.42 } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
   if (scenario === "update-blocked")
     return { account: { ...DEMO_ACCOUNT, update: { version: "2026.10.8", ready: false, state: "available", blocked: true } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
+  if (scenario === "update-moved")
+    return {
+      account: { ...DEMO_ACCOUNT, moved: { from: "/opt/channels/Channels-2026.10.15-x86_64.AppImage", to: "~/Applications/Channels.AppImage" } },
+      tiles: DEMO_TILES,
+      channels,
+      prefs,
+      seq: 1000,
+    }
   if (scenario === "update-available") return { account: { ...DEMO_ACCOUNT, update: { version: "2026.10.8", ready: false, state: "available" } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
   if (scenario === "enroll" || scenario === "enroll-digits")
     return {
@@ -758,6 +767,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       linkGithub: () => setState((s) => (s.account ? { ...s, account: { ...s.account, github: { login: "ojowwalker77" } } } : s)),
       unlinkGithub: () => setState((s) => (s.account ? { ...s, account: { ...s.account, github: undefined } } : s)),
       applyUi: () => setState((s) => (s.account ? { ...s, account: { ...s.account, uiUpdate: undefined } } : s)),
+      dismissMoved: () => setState((s) => (s.account ? { ...s, account: { ...s.account, moved: undefined } } : s)),
       windowControl: () => {},
       checkUpdate: async () => ({ state: "current", version: "2026.10.8" }),
       setRelay: async (url) => (/^https?:\/\//.test(url.trim()) ? null : "a relay is an http(s) address"),

@@ -530,6 +530,7 @@ export interface Account {
   version: string
   update?: { version: string; ready: boolean; state?: "downloading" | "ready" | "available"; progress?: number; blocked?: true }
   uiUpdate?: { version: string }
+  moved?: { from: string; to: string }
   key?: string
   personPk?: string
   relay?: string
@@ -736,6 +737,7 @@ export interface Actions {
   setRelay(url: string): Promise<string | null>
   windowControl(action: "minimize" | "maximize" | "close"): void
   applyUi(): void
+  dismissMoved(): void
   signOut(): void
   setNewMembers(code: string, can: "read" | "write"): void
   setNewPowers(code: string, powers: Powers): void

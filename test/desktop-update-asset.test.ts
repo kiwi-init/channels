@@ -3,7 +3,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSyn
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { cantSwap, githubHop, latestTag, ownAppImage, relaunchAfter, releaseDownload, swapAsset, swapScript } from "../desktop/src/update-asset.ts";
+import { appImageHome, cantSwap, githubHop, latestTag, ownAppImage, relaunchAfter, releaseDownload, swapAsset, swapScript } from "../desktop/src/update-asset.ts";
 
 test("a Mac swaps itself for the zip for its CPU", () => {
   expect(swapAsset("0.14.0", "darwin", "arm64")).toBe("Channels-0.14.0-mac-arm64.zip");
@@ -90,6 +90,13 @@ test("a relaunch waits for this process to end, then starts the app without the 
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("an AppImage that can't write its own folder goes to ~/Applications, else $XDG_DATA_HOME/Channels, else nowhere (T1304)", () => {
+  expect(appImageHome("/home/a", undefined, () => true)).toBe("/home/a/Applications/Channels.AppImage");
+  expect(appImageHome("/home/a", "/data/a", (dir) => dir !== "/home/a/Applications")).toBe("/data/a/Channels/Channels.AppImage");
+  expect(appImageHome("/home/a", "relative/data", (dir) => dir !== "/home/a/Applications")).toBe("/home/a/.local/share/Channels/Channels.AppImage");
+  expect(appImageHome("/home/a", "/data/a", () => false)).toBeNull();
 });
 
 test("a Mac that's translocated, on its disk image, in a folder it can't write, or whose last swap of this version failed can't swap itself", () => {
