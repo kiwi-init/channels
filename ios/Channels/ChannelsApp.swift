@@ -16,13 +16,21 @@ struct ChannelsApp: App {
                     }
                 }
                 .task { await model.boot() }
+                .task {
+                    while !Task.isCancelled {
+                        try? await Task.sleep(for: .seconds(45))
+                        await model.marksTick()
+                    }
+                }
                 .onChange(of: scene) { _, now in
                     switch now {
                     case .active:
                         Task { await model.awake() }
                         Task { await lock.back() }
+                        model.cameToFront()
                     case .background:
                         lock.left()
+                        model.wentToBack()
                     default:
                         break
                     }

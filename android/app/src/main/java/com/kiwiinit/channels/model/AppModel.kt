@@ -34,6 +34,7 @@ import com.kiwiinit.channels.engine.wire
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -127,6 +128,9 @@ class AppModel(private val app: Application) {
     var unsaved by mutableStateOf<String?>(null)
         private set
     private var keeping: ByteArray? = null
+    private val wroteMarks = mutableMapOf<String, Map<String, Int>>()
+    private val pulledMarks = mutableSetOf<String>()
+    private var front = true
 
     val rooms = mutableStateMapOf<String, RoomView>()
     val seen = mutableStateMapOf<String, Int>().apply { putAll(counts("seen")) }
@@ -152,6 +156,12 @@ class AppModel(private val app: Application) {
             if (!startEngine()) return@launch
             val saved = vault.load()
             if (saved == null) phase = Phase.Unlinked else begin(saved)
+        }
+        scope.launch {
+            while (true) {
+                delay(MARKS_EVERY_MS)
+                if (front) syncMarks(write = true)
+            }
         }
     }
 
@@ -231,6 +241,7 @@ class AppModel(private val app: Application) {
                 feeds["${room.code}|${room.place}"] = Feed(room.messages, room.whole)
                 rooms[room.code] = room
                 settle(room.code)
+                if (room.connection == Connection.Live) pullOnce(room.code)
             }
             is Push.Gone -> rooms.remove(push.code)
             is Push.Log, is Push.Fetch -> Unit
@@ -508,6 +519,58 @@ class AppModel(private val app: Application) {
             keeping = data
             unsaved = "This phone couldn't save your sign-in: ${e.message}. You stay signed in until Channels closes, and it tries again each time you open it."
         }
+    }
+
+    fun cameToFront() {
+        front = true
+        pulledMarks.clear()
+        for ((code, room) in rooms) if (room.connection == Connection.Live) pullOnce(code)
+    }
+
+    fun wentToBack() {
+        front = false
+        scope.launch { syncMarks(write = true) }
+    }
+
+    private fun pullOnce(code: String) {
+        if (!front || !pulledMarks.add(code)) return
+        scope.launch { syncMarks(code, write = false) }
+    }
+
+    private suspend fun syncMarks(write: Boolean) {
+        for (code in rooms.keys.sorted()) syncMarks(code, write)
+    }
+
+    private suspend fun syncMarks(code: String, write: Boolean) {
+        val room = rooms[code] ?: return
+        if (room.gone != null) return
+        val keys = listOf("main") + listOfNotNull(room.sideKey)
+        val local = marksOf(code, keys, seen, placeSeen)
+        if (write && (local.isEmpty() || wroteMarks[code] == local)) return
+        val merged = try {
+            ask(
+                buildJsonObject {
+                    put("op", "marks")
+                    put("code", code)
+                    put("write", write)
+                    put("marks", buildJsonObject { for ((key, mark) in local) put(key, mark) })
+                },
+            )
+        } catch (e: EngineException) {
+            // Read marks are a nicety: a sync that fails keeps this phone's own and tries again at the next tick.
+            return
+        }
+        val got = (merged as? JsonObject)?.mapNotNull { (key, mark) -> (mark as? JsonPrimitive)?.intOrNull?.let { key to it } }?.toMap() ?: return
+        val raised = raisedMarks(code, keys, got, seen, placeSeen)
+        if (raised.seen.isNotEmpty()) {
+            seen.putAll(raised.seen)
+            saveCounts("seen", seen)
+        }
+        if (raised.placeSeen.isNotEmpty()) {
+            placeSeen.putAll(raised.placeSeen)
+            saveCounts("placeSeen", placeSeen)
+        }
+        if (write) wroteMarks[code] = marksOf(code, keys, seen, placeSeen)
     }
 
     fun nudge() {

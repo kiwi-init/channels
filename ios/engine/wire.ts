@@ -36,6 +36,7 @@ export type Ask =
   | { op: "approve"; code: string; task: number }
   | { op: "sendBack"; code: string; task: number; why: string }
   | { op: "open"; code: string; place: string }
+  | { op: "marks"; code: string; marks: Record<string, number>; write: boolean }
   | { op: "nudge" }
   | { op: "computers" }
   | { op: "harnessesOn"; computer: string }
