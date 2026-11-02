@@ -611,7 +611,8 @@ export class Account extends DurableObject<Env> {
       rows: () => this.rows(),
       busy: async (_from, now) => {
         const ask = this.enrollment();
-        return ask && ask.at + ENROLL_TTL_MS > now ? "asking" : null;
+        if (ask && ask.at + ENROLL_TTL_MS > now) return "asking";
+        return this.freshRecord()?.pending ? "starting over" : null;
       },
       holds: (to) => at(to).taken(),
       adopt: (to, from, id, rows) => at(to).adopt(from, id, rows),

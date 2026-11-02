@@ -206,6 +206,26 @@ describe("moving an account from a WorkOS id to a GitHub id (T261)", () => {
     expect((await view(p.old)).user).toBe(p.user);
   });
 
+  test("a start-over waiting on the account holds the move until it's cancelled (T1010)", async () => {
+    const p = person();
+    const { desk, links } = await firstApp(p.old, p.user);
+    const fresh = await device("fresh");
+    const link = await rootLink(await device("fresh-person"), { pk: fresh.pk, xpk: fresh.xpk!, label: "fresh", os: "Linux", as: "desktop" }, t);
+    const started = await call(p.old, p.user, fresh, "POST", "/v1/account/fresh", { links: [link] });
+    expect(started.status).toBe(202);
+    const { id } = (await started.json()) as { id: string };
+
+    const held = await move(p, desk);
+    expect(held.status).toBe(409);
+    expect(await errorOf(held)).toContain("waiting to start over");
+    expect(await view(p.old)).toEqual({ user: p.user, links });
+
+    expect((await call(p.old, p.user, desk, "DELETE", `/v1/account/fresh/${id}`)).status).toBe(204);
+    const res = await move(p, desk);
+    expect(res.status).toBe(200);
+    expect(await view(p.gh)).toEqual({ user: p.github, links });
+  });
+
   test("an empty WorkOS account moves too, so a second one can't later move onto the same GitHub account", async () => {
     const p = person();
     const signer = await device("any");

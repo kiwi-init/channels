@@ -469,7 +469,8 @@ export function startRelay(
     rows: async (from) => rowsOf(from),
     busy: async (from, now) => {
       const ask = people.query("SELECT at FROM account_asks WHERE user = ?").get(from) as { at: number } | null;
-      return ask && ask.at + ENROLL_TTL_MS > now ? "asking" : null;
+      if (ask && ask.at + ENROLL_TTL_MS > now) return "asking";
+      return freshOf(from)?.pending ? "starting over" : null;
     },
     holds: async (to) => holds(to),
     adopt: async (to, from, id, rows) =>

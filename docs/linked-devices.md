@@ -168,7 +168,8 @@ channels they create count against the GitHub account. Every step can run again:
 nothing, and a freeze nobody finishes ends after 10 minutes, as moved if the copy went through and
 untouched if it didn't. Nothing under the WorkOS id is deleted. A GitHub account that already holds
 devices, a device waiting to join, or a signer the list doesn't approve is refused, and the WorkOS
-account stays as it was.
+account stays as it was. So is an account waiting to start over (section 6): it moves once the start
+is cancelled or done, so a move never carries a list the start is about to replace.
 
 A key revoked in a published list is refused on every account route, can't ask again, and loses its
 computer inbox at once (`/v1/machine/<key>` answers 403 and its socket closes).
