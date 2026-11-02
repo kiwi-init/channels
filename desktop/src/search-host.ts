@@ -1,7 +1,7 @@
 import { b64url } from "@kiwi/core/crypto.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
 
-import type { FoldInputs, SearchAsk, SearchCalls, Searched, SearchOp, SearchReply } from "./search-types.ts";
+import type { FoldInputs, IndexHit, SearchAsk, SearchCalls, Searched, SearchOp, SearchReply } from "./search-types.ts";
 
 export interface SearchWorker {
   postMessage(ask: SearchAsk): void;
@@ -67,8 +67,8 @@ export class SearchHost {
     return this.ready(code);
   }
 
-  async feed(code: string, messages: Message[], inputs: FoldInputs): Promise<number> {
-    return (await this.call(code, "feed", { messages, inputs })).through;
+  async feed(code: string, messages: Message[], inputs: FoldInputs, from: number): Promise<number> {
+    return (await this.call(code, "feed", { messages, inputs, from })).through;
   }
 
   async search(code: string, query: string, rooms: string[], limit: number, head: number): Promise<Searched> {
@@ -78,6 +78,14 @@ export class SearchHost {
     });
     if (!out) return { state: "indexing", hits: [], through: 0 };
     return { state: out.through >= head ? "ready" : "indexing", hits: out.hits, through: out.through };
+  }
+
+  async around(code: string, seq: number, rooms: string[], span: number): Promise<IndexHit[] | null> {
+    const out = await this.call(code, "around", { seq, rooms, span }).catch((e: unknown) => {
+      if (e instanceof WorkerGone) return null;
+      throw e;
+    });
+    return out ? out.hits : null;
   }
 
   async dropRoom(code: string, room: string): Promise<void> {

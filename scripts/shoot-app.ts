@@ -37,9 +37,11 @@ const browser = engine === "webkit" ? await webkit.launch() : await chromium.lau
 try {
   const page = await browser.newPage({ viewport: { width: size[0] ?? 1440, height: size[1] ?? 900 }, deviceScaleFactor: 2 });
   const errors: string[] = [];
-  page.on("pageerror", (e) => errors.push(e.message));
+  let at = "";
+  page.on("pageerror", (e) => errors.push(`${at}: ${e.message}`));
   for (const theme of themes) {
     for (const name of names) {
+      at = `${name}-${theme}`;
       await page.goto(`${base}?shot=${name}&theme=${theme}`);
       await page.waitForLoadState("networkidle");
       await page.evaluate(() => document.fonts.ready);

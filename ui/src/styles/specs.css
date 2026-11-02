@@ -122,10 +122,6 @@
   color: var(--ink-3);
 }
 
-.board-list.specs-list {
-  max-width: calc(var(--col) + 400px + 2 * var(--gutter));
-}
-
 .specs-list .gh-item {
   grid-template-columns: minmax(0, 1fr) minmax(96px, max-content);
 }
@@ -151,6 +147,11 @@
   grid-template-rows: auto;
   width: 100%;
   padding-right: 8px;
+}
+
+.spec-row > .gh-title {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .spec-row > .spec-mark {
