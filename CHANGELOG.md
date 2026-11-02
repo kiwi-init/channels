@@ -2,6 +2,18 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 2026.11.0 — 2026-11-02
+
+- **Private rooms: Leave from the room's right-click menu (T1768)** ([#1443](https://github.com/kiwi-init/channels/pull/1443))
+- **Since you left opens only for places you've read before, so it never pops up on a fresh look (T1605)** ([#1450](https://github.com/kiwi-init/channels/pull/1450))
+- **New words from the person key wait 7 days, so a stolen person key can't swap them (T1967)** ([#1446](https://github.com/kiwi-init/channels/pull/1446))
+- **Agents: pick a colour when letting one in, and change it later (T1528)** ([#1451](https://github.com/kiwi-init/channels/pull/1451))
+- **CI: typecheck scripts/, and fix what it finds; the demo runs again (T1962)** ([#1448](https://github.com/kiwi-init/channels/pull/1448))
+- **An immediate person-key words change after the cutoff reads as pending, not refused (T2024)** ([#1452](https://github.com/kiwi-init/channels/pull/1452))
+- **Every desktop shows pending new words, and the current words cancel them (T1975)** ([#1449](https://github.com/kiwi-init/channels/pull/1449))
+- **GitHub view: pull requests and issues with their checks; the task's PR card shows every check again (#1453)** ([#1454](https://github.com/kiwi-init/channels/pull/1454))
+- **Specs: people and agents write it together, a person approves it, a free agent starts it, and no task exists outside one (#1455)** ([#1456](https://github.com/kiwi-init/channels/pull/1456))
+
 ## 2026.10.18 — 2026-11-01
 
 - **Old edits and deletes are accepted however the fold started (T1784)** ([#1436](https://github.com/kiwi-init/channels/pull/1436))
