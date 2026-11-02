@@ -52,18 +52,42 @@ export function appImageHome(home: string, dataHome: string | undefined, canMake
   return dir ? path.join(dir, HOME_APPIMAGE) : null;
 }
 
-export function cantSwap(bundle: string, writable: (dir: string) => boolean, failedBefore: boolean): boolean {
-  return bundle.includes("/AppTranslocation/") || bundle.startsWith("/Volumes/") || !writable(path.dirname(bundle)) || failedBefore;
+export const translocated = (bundle: string): boolean => bundle.includes("/AppTranslocation/");
+
+export const displaced = (bundle: string): boolean => translocated(bundle) || bundle.startsWith("/Volumes/");
+
+export function macAppHome(applications: string, home: string, canMakeIn: (dir: string) => boolean): string | null {
+  const dir = [applications, path.join(home, "Applications")].find(canMakeIn);
+  return dir ? path.join(dir, "Channels.app") : null;
 }
 
-export function swapScript(o: { pid: number; target: string; next: string; dir: string; marker: string; version: string; relaunch: boolean }): string {
+export function cantSwap(bundle: string, writable: (dir: string) => boolean, failedBefore: boolean): boolean {
+  return displaced(bundle) || !writable(path.dirname(bundle)) || failedBefore;
+}
+
+export interface SwapPlan {
+  pid: number;
+  target: string;
+  next: string;
+  dir: string;
+  marker: string;
+  version: string;
+  relaunch: boolean;
+  from?: string;
+  moved?: { marker: string; text: string };
+}
+
+export function swapScript(o: SwapPlan): string {
   const q = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
   const old = `${o.target}.old-${o.pid}`;
+  const from = o.from ?? o.target;
   return [
     "#!/bin/sh",
     `while kill -0 ${o.pid} 2>/dev/null; do sleep 0.2; done`,
-    `if mv ${q(o.target)} ${q(old)} && mv ${q(o.next)} ${q(o.target)}; then rm -rf ${q(old)}; rm -f ${q(o.marker)}; else [ -e ${q(o.target)} ] || mv ${q(old)} ${q(o.target)}; printf '%s' ${q(o.version)} > ${q(o.marker)}; fi`,
-    o.relaunch ? `open ${q(o.target)}` : "",
+    `mkdir -p ${q(path.dirname(o.target))} 2>/dev/null`,
+    `if [ -e ${q(o.target)} ]; then if mv ${q(o.target)} ${q(old)} && mv ${q(o.next)} ${q(o.target)}; then rm -rf ${q(old)}; ok=1; else [ -e ${q(o.target)} ] || mv ${q(old)} ${q(o.target)}; ok=0; fi; elif mv ${q(o.next)} ${q(o.target)}; then ok=1; else ok=0; fi`,
+    `if [ "$ok" = 1 ]; then rm -f ${q(o.marker)};${o.moved ? ` printf '%s' ${q(o.moved.text)} > ${q(o.moved.marker)};` : ""} else printf '%s' ${q(o.version)} > ${q(o.marker)}; fi`,
+    o.relaunch ? `if [ "$ok" = 1 ]; then open ${q(o.target)}; else open ${q(from)}; fi` : "",
     `rm -rf ${q(o.dir)}`,
   ].join("\n");
 }
@@ -72,7 +96,7 @@ const LEFT_BEHIND = ["APPDIR", "APPIMAGE", "ARGV0", "OWD", "LD_LIBRARY_PATH", "L
 
 export function relaunchAfter(pid: number, exe: string, env: NodeJS.ProcessEnv): { args: string[]; env: NodeJS.ProcessEnv } {
   return {
-    args: ["-c", `while kill -0 ${pid} 2>/dev/null; do sleep 0.2; done; exec "$0"`, exe],
+    args: ["-c", `while kill -0 ${pid} 2>/dev/null; do sleep 0.2; done; ${exe.endsWith(".app") ? "exec open" : "exec"} "$0"`, exe],
     env: Object.fromEntries(Object.entries(env).filter(([k]) => !LEFT_BEHIND.includes(k))),
   };
 }

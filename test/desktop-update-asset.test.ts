@@ -3,7 +3,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSyn
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { appImageHome, cantSwap, githubHop, latestTag, ownAppImage, relaunchAfter, releaseDownload, swapAsset, swapScript } from "../desktop/src/update-asset.ts";
+import { appImageHome, cantSwap, macAppHome, githubHop, latestTag, ownAppImage, relaunchAfter, releaseDownload, swapAsset, swapScript } from "../desktop/src/update-asset.ts";
 
 test("a Mac swaps itself for the zip for its CPU", () => {
   expect(swapAsset("0.14.0", "darwin", "arm64")).toBe("Channels-0.14.0-mac-arm64.zip");
@@ -99,6 +99,17 @@ test("an AppImage that can't write its own folder goes to ~/Applications, else $
   expect(appImageHome("/home/a", "/data/a", () => false)).toBeNull();
 });
 
+test("a Mac app that can't swap where it is goes to /Applications, else ~/Applications, else nowhere (T2366)", () => {
+  expect(macAppHome("/Applications", "/Users/a", () => true)).toBe("/Applications/Channels.app");
+  expect(macAppHome("/Applications", "/Users/a", (dir) => dir !== "/Applications")).toBe("/Users/a/Applications/Channels.app");
+  expect(macAppHome("/Applications", "/Users/a", () => false)).toBeNull();
+});
+
+test("a relaunch into a Mac app opens the bundle instead of running it (T2366)", () => {
+  expect(relaunchAfter(42, "/Applications/Channels.app", {}).args).toEqual(["-c", 'while kill -0 42 2>/dev/null; do sleep 0.2; done; exec open "$0"', "/Applications/Channels.app"]);
+  expect(relaunchAfter(42, "/home/a/Channels.AppImage", {}).args[1]).toEndWith('exec "$0"');
+});
+
 test("a Mac that's translocated, on its disk image, in a folder it can't write, or whose last swap of this version failed can't swap itself", () => {
   const ok = () => true;
   expect(cantSwap("/private/var/folders/x/AppTranslocation/ABC/d/Channels.app", ok, false)).toBe(true);
@@ -147,6 +158,42 @@ test("a swap that goes in replaces the app, clears an old marker and leaves no c
     expect(existsSync(f.marker)).toBe(false);
     expect(readdirSync(f.parent)).toEqual(["Channels.app"]);
   } finally {
+    rmSync(f.root, { recursive: true, force: true });
+  }
+});
+
+test("a swap into a new home makes its folder, moves the app in, leaves the old one, and says where it went (T2366)", () => {
+  const f = swapFixture();
+  try {
+    const home = join(f.root, "home", "Applications", "Channels.app");
+    const moved = join(f.root, "update-moved");
+    const text = JSON.stringify({ from: f.target, to: home });
+    const script = swapScript({ ...f, target: home, from: f.target, version: "0.20.0", relaunch: false, moved: { marker: moved, text } });
+    expect(Bun.spawnSync(["/bin/sh", "-c", script]).exitCode).toBe(0);
+    expect(readFileSync(join(home, "v"), "utf8")).toBe("new");
+    expect(readFileSync(join(f.target, "v"), "utf8")).toBe("old");
+    expect(readFileSync(moved, "utf8")).toBe(text);
+    expect(existsSync(f.marker)).toBe(false);
+    expect(existsSync(f.dir)).toBe(false);
+  } finally {
+    rmSync(f.root, { recursive: true, force: true });
+  }
+});
+
+test("a swap into a new home that can't be made leaves the old app, marks the version, and says nothing moved (T2366)", () => {
+  const f = swapFixture();
+  const locked = join(f.root, "locked");
+  mkdirSync(locked);
+  try {
+    chmodSync(locked, 0o555);
+    const moved = join(f.root, "update-moved");
+    const script = swapScript({ ...f, target: join(locked, "Applications", "Channels.app"), from: f.target, version: "0.20.0", relaunch: false, moved: { marker: moved, text: "{}" } });
+    expect(Bun.spawnSync(["/bin/sh", "-c", script]).exitCode).toBe(0);
+    expect(readFileSync(join(f.target, "v"), "utf8")).toBe("old");
+    expect(readFileSync(f.marker, "utf8")).toBe("0.20.0");
+    expect(existsSync(moved)).toBe(false);
+  } finally {
+    chmodSync(locked, 0o755);
     rmSync(f.root, { recursive: true, force: true });
   }
 });

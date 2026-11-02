@@ -542,7 +542,7 @@ export interface UpdateView {
 export type UpdateCheckView = UpdateView | { state: "current"; version: string } | { state: "failed" };
 
 export interface MovedView {
-  from: string;
+  from?: string;
   to: string;
 }
 

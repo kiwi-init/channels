@@ -241,6 +241,7 @@ export type Scenario =
   | "update-downloading"
   | "update-blocked"
   | "update-moved"
+  | "update-moved-mac"
   | "enroll"
   | "enroll-digits"
   | "devices"
@@ -315,6 +316,7 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
       prefs,
       seq: 1000,
     }
+  if (scenario === "update-moved-mac") return { account: { ...DEMO_ACCOUNT, moved: { to: "/Applications/Channels.app" } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
   if (scenario === "update-available") return { account: { ...DEMO_ACCOUNT, update: { version: "2026.10.8", ready: false, state: "available" } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
   if (scenario === "enroll" || scenario === "enroll-digits")
     return {

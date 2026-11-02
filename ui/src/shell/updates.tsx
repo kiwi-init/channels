@@ -22,8 +22,7 @@ function useCards(): Card[] {
     cards.push({
       key: `moved ${moved.to}`,
       text: `Channels moved to ${moved.to.slice(0, moved.to.lastIndexOf("/")) || moved.to}`,
-      detail: "The old copy can be deleted:",
-      path: moved.from,
+      ...(moved.from ? { detail: "The old copy can be deleted:", path: moved.from } : { detail: "You can delete the copy you downloaded." }),
       act: "OK",
       onAct: () => app.actions.dismissMoved(),
     })
