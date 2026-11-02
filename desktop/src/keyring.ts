@@ -12,7 +12,8 @@ import { handleFor, type JoinClaims, type Member, type MemberInfo } from "@kiwi/
 import { omit } from "@kiwi/core/omit.ts";
 import { cleanPersonalities } from "@kiwi/core/personalities.ts";
 import { PRESETS } from "@kiwi/core/presets.ts";
-import type { Message } from "@kiwi/core/protocol.ts";
+import { PAGE_LIMIT, type Message } from "@kiwi/core/protocol.ts";
+import type { FoldBase } from "@kiwi/core/state.ts";
 import type { SigningBudget } from "@kiwi/core/sas.ts";
 import {
   CHANNEL_CALLS,
@@ -25,8 +26,14 @@ import {
   type FollowEvent,
   type FollowOptions,
   type JoinCheck,
+  type HistorySearch,
+  type OlderRows,
   type WireError,
 } from "./bridge.ts";
+import { indexKey, SearchHost, type SearchPlace } from "./search-host.ts";
+import type { FoldInputs, Searched } from "./search-types.ts";
+
+const OLDER_PAGE = 500;
 import { channelAccess, publicChannel } from "./seats.ts";
 
 export interface KeyHost {
@@ -40,6 +47,7 @@ export interface KeyHost {
   person(): string | null;
   mine(): readonly string[] | null;
   budget: SigningBudget;
+  search?: () => SearchPlace | null;
 }
 
 const runtime = ManagedRuntime.make(Layer.succeed(Relay, fetchRelay));
@@ -101,6 +109,7 @@ export class Keyring implements ChannelOps {
   private readonly open = new Map<string, Channel>();
   private readonly follows = new Map<number, Follow>();
   private nextSub = 1;
+  private searching: { host: SearchHost; place: SearchPlace } | null | undefined;
 
   constructor(private readonly host: KeyHost) {}
 
@@ -235,6 +244,7 @@ export class Keyring implements ChannelOps {
   }
 
   async forget(code: string): Promise<void> {
+    await this.searcher()?.host.forget(code);
     for (const [sub, f] of this.follows) {
       if (f.code !== code) continue;
       f.stop();
@@ -252,7 +262,57 @@ export class Keyring implements ChannelOps {
   async openRows(code: string, rows: readonly unknown[]): Promise<(Message | Unread | null)[]> {
     const access = channelAccess(this.seat(code, true));
     if (!access) return rows.map(() => null);
-    return openSealedRows(rows, access.roomId, access.keys);
+    const opened = await openSealedRows(rows, access.roomId, access.keys);
+    await this.channel(code)
+      .learnRooms(opened.filter((m): m is Message => !!m && "ev" in m))
+      .catch(() => {});
+    return opened;
+  }
+
+  private searcher(): { host: SearchHost; place: SearchPlace } | null {
+    if (this.searching === undefined) {
+      const place = this.host.search?.() ?? null;
+      this.searching = place ? { host: new SearchHost(() => place.spawn()), place } : null;
+    }
+    return this.searching;
+  }
+
+  private async searchAt(code: string): Promise<{ host: SearchHost; access: ChannelAccess } | null> {
+    const s = this.searcher();
+    const seat = this.seat(code, true);
+    const access = channelAccess(seat);
+    if (!s || !access) return null;
+    await s.host.open(code, { file: s.place.file(`${access.roomId}-${seat.pk.replace(/[^A-Za-z0-9_-]/g, "")}.idx`), key: await indexKey(seat.sk, access.roomId), roomId: access.roomId });
+    return { host: s.host, access };
+  }
+
+  async indexRows(code: string, rows: readonly unknown[], inputs: FoldInputs): Promise<number | null> {
+    const at = await this.searchAt(code);
+    if (!at) return null;
+    const opened = await openSealedRows(rows, at.access.roomId, at.access.keys);
+    return at.host.feed(
+      code,
+      opened.filter((m): m is Message => !!m && !("unread" in m)),
+      inputs,
+    );
+  }
+
+  async searchHistory(code: string, ask: HistorySearch): Promise<Searched | null> {
+    const at = await this.searchAt(code);
+    return at ? at.host.search(code, ask.query, ask.rooms, ask.limit, ask.head) : null;
+  }
+
+  async olderRows(code: string, before: number, limit: number): Promise<OlderRows> {
+    if (!Number.isSafeInteger(before) || before <= 1) return { rows: [], done: true };
+    const ch = this.channel(code);
+    const since = Math.max(0, before - 1 - Math.max(1, Math.min(Number.isSafeInteger(limit) ? limit : OLDER_PAGE, PAGE_LIMIT)));
+    const page = await ch.envelopes(since, before - 1 - since);
+    const key = ch.access.keys[String(ch.access.epoch)];
+    if (!key) return { rows: [], done: false };
+    const envelopes = page.messages.filter((e) => Number.isSafeInteger(e.seq) && e.seq > since && e.seq < before).sort((a, b) => a.seq - b.seq);
+    const packed = await Promise.all(envelopes.map((e) => packEnvelope(key, ch.roomId, ch.access.epoch, e).catch(() => null)));
+    const lowest = envelopes[0]?.seq;
+    return { rows: packed.filter((r): r is CachedRow => r !== null), done: since === 0 || lowest === undefined || lowest > since + 1 };
   }
 
   async keep(code: string, state: object): Promise<CachedKept | null> {
@@ -263,7 +323,15 @@ export class Keyring implements ChannelOps {
 
   async openKept(code: string, sealed: unknown): Promise<unknown> {
     const access = channelAccess(this.seat(code, true));
-    return access ? openSealedKept(sealed, access.roomId, access.keys) : null;
+    const kept = access ? await openSealedKept(sealed, access.roomId, access.keys) : null;
+    const base = kept && typeof kept === "object" ? (kept as { base?: FoldBase | null }).base : null;
+    if (!base) return kept;
+    return {
+      ...(kept as object),
+      base: await this.channel(code)
+        .openRooms(base)
+        .catch(() => base),
+    };
   }
 
   follow(code: string, since: number, on: (e: FollowEvent) => void, opts: FollowOptions = {}): () => void {

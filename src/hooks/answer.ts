@@ -408,6 +408,7 @@ export const answer = Effect.fn("Hooks.answer")(function* (event: string, input:
       listen,
       human: humanOf(state, b.as),
       hold: holdLine(state),
+      privateRooms: [...state.rooms.values()].flatMap((r) => (r.members ? [r.name] : [])),
       charter: charterLines(state),
       lead: leadLine(state, b.as),
       scopes: seat?.scopes,

@@ -1,5 +1,6 @@
-import type { Account, Ask, Channel, ChannelTile, Device, Message, Person, Prefs, Task, TaskGroup } from "~/model"
+import type { Account, Ask, Channel, ChannelTile, Device, Enrolling, Issue, Message, Person, Prefs, PullRequest, Task, TaskGroup } from "~/model"
 import { nicknamesOf } from "~/names"
+import { omit } from "@kiwi/core/omit.ts"
 
 const now = Date.now()
 const m = (min: number): number => now - min * 60_000
@@ -13,6 +14,12 @@ export const DEMO_DEVICES: Device[] = [
   { id: "dev-box", label: "build-box", os: "Linux", as: "computer", until: Date.now() - 2 * DEMO_DAY, thisOne: false },
 ]
 
+export const DEMO_WELCOME: Enrolling = {
+  stage: "welcome",
+  name: "jow",
+  devices: DEMO_DEVICES.filter((d) => !d.thisOne).map((d) => ({ id: d.id, label: d.label, os: d.os, as: d.as, lost: d.as !== "computer" })),
+  channels: ["studio", "kiwi", "landing"],
+}
 export const DEMO_WORDS = "orbit velvet canyon mango ladder silent harvest pilot frozen museum tribe anchor gravity olive wagon pepper rocket glimpse marble tunnel coyote bamboo dinner shield".split(
   " "
 )
@@ -35,25 +42,32 @@ export const DEMO_ACCOUNT: Account = {
 export const DEMO_PREFS: Prefs = {
   theme: "system",
   textSize: 0,
+  font: "system",
   reduceMotion: false,
   notify: "mentions",
+  muted: ["interlinked", "kiwi/releases"],
+  snoozeUntil: null,
+  quiet: { on: false, from: 22 * 60, to: 8 * 60 },
+  mentionSound: true,
   enterSends: true,
   darkTheme: "channels-oled",
   lightTheme: "channels-light",
   customThemes: [],
+  folders: [],
 }
 
 export const DEMO_TILES: ChannelTile[] = [
   { code: "kiwi", title: "kiwi", state: "member", unread: 0, needsYou: 3, last: m(1) },
-  { code: "interlinked", title: "interlinked", state: "member", unread: 4, needsYou: 0, last: m(9) },
+  { code: "interlinked", title: "interlinked", state: "member", unread: 0, needsYou: 0, last: m(9), muted: true },
   { code: "landing", title: "landing", state: "member", unread: 0, needsYou: 0, last: m(300) },
   { code: "ops", title: "ops", state: "waiting", unread: 0, needsYou: 0, last: m(20) },
 ]
 
 const people: Person[] = [
-  { name: "jow", kind: "human", color: "teal", owner: true, you: true, role: "owner", presence: "online", lastSeen: now, joined: m(60 * 24 * 30), messages: 812 },
+  { name: "jow", kind: "human", color: "teal", owner: true, you: true, role: "owner", presence: "online", opsLive: 11, lastSeen: now, joined: m(60 * 24 * 30), messages: 812 },
   {
     name: "maya",
+    opsLive: 11,
     kind: "human",
     color: "pink",
     picture:
@@ -68,6 +82,8 @@ const people: Person[] = [
   },
   {
     name: "atlas",
+    face: "lead",
+    ops: { atlasKey: 9 },
     kind: "agent",
     owner: false,
     you: false,
@@ -76,6 +92,7 @@ const people: Person[] = [
     activity: { state: "idle" },
     reach: "listening",
     seat: "hosted",
+    attach: "/Users/jow/.kiwi/tmux/tmux-3.8 -S /tmp/kiwi-501/c67909c5955f attach -t %12 \\; set -w window-size latest",
     harness: "claude",
     runs: "Claude Code",
     model: "claude-opus-5-5",
@@ -94,6 +111,8 @@ const people: Person[] = [
   },
   {
     name: "win",
+    face: "builder",
+    ops: { winMac: 9 },
     kind: "agent",
     owner: false,
     you: false,
@@ -116,6 +135,8 @@ const people: Person[] = [
   },
   {
     name: "pixel",
+    face: "reviewer",
+    ops: { pixelKey: 8 },
     kind: "agent",
     owner: false,
     you: false,
@@ -138,6 +159,7 @@ const people: Person[] = [
   },
   {
     name: "ridge",
+    face: "bug-hunter",
     kind: "agent",
     owner: false,
     you: false,
@@ -152,6 +174,7 @@ const people: Person[] = [
     joined: m(60 * 24 * 8),
     messages: 61,
   },
+  { name: "maya-2", kind: "human", seatOf: "maya", owner: false, you: false, presence: "online", lastSeen: m(1), joined: m(60 * 24), messages: 9 },
 ]
 
 const pr43 = {
@@ -162,8 +185,21 @@ const pr43 = {
   state: "open",
   checks: "pass",
   ticks: { passed: 6, running: 0, failed: [] },
+  list: [
+    { name: "android / build", state: "pass", word: "passed" },
+    { name: "build / bundles", state: "pass", word: "passed" },
+    { name: "ci-ok", state: "pass", word: "passed", required: true, url: "https://github.com/kiwi-init/channels/actions/runs/1" },
+    { name: "desktop / linux", state: "pass", word: "passed" },
+    { name: "repo / static", state: "pass", word: "passed" },
+    { name: "test / unit", state: "pass", word: "passed" },
+  ],
   additions: 182,
   deletions: 40,
+  files: 7,
+  branch: "T12-dark-mode",
+  by: "atlas-bot",
+  at: m(40),
+  task: 12,
 } as const
 const pr44 = {
   repo: "kiwi-init/channels",
@@ -173,8 +209,20 @@ const pr44 = {
   state: "open",
   checks: "running",
   ticks: { passed: 3, running: 2, failed: [] },
+  list: [
+    { name: "build / shots", state: "running", word: "running", url: "https://github.com/kiwi-init/channels/actions/runs/2" },
+    { name: "ci-ok", state: "waiting", word: "queued", required: true },
+    { name: "build / bundles", state: "pass", word: "passed" },
+    { name: "repo / static", state: "pass", word: "passed" },
+    { name: "test / unit", state: "pass", word: "passed" },
+  ],
   additions: 96,
   deletions: 71,
+  files: 12,
+  branch: "T14-channel-icons",
+  by: "pixel-bot",
+  at: m(12),
+  task: 14,
 } as const
 const pr45 = {
   repo: "kiwi-init/channels",
@@ -184,8 +232,21 @@ const pr45 = {
   state: "open",
   checks: "fail",
   ticks: { passed: 5, running: 0, failed: ["desktop / linux"] },
+  list: [
+    { name: "desktop / linux", state: "fail", word: "failed", url: "https://github.com/kiwi-init/channels/actions/runs/3" },
+    { name: "build / bundles", state: "pass", word: "passed" },
+    { name: "ci-ok", state: "pass", word: "passed", required: true },
+    { name: "repo / static", state: "pass", word: "passed" },
+    { name: "test / unit", state: "pass", word: "passed" },
+    { name: "perf / scale", state: "skipped", word: "skipped" },
+  ],
   additions: 64,
   deletions: 210,
+  files: 9,
+  branch: "T11-first-load",
+  by: "win-bot",
+  at: m(25),
+  task: 11,
 } as const
 
 const general = { kind: "room", room: "general" } as const
@@ -405,7 +466,8 @@ const messages: Message[] = [
   { seq: 101, from: "maya", at: m(60 * 20), text: "morning! anything blocking the release?", where: general },
   { seq: 102, from: "atlas", at: m(60 * 20 - 1), text: "Nothing blocking. T9 is merged, the rest is polish.", where: general, task: 9 },
   { seq: 103, from: "scout", at: m(60 * 19), text: "Signing off: the docs pass is merged, so I'm leaving the channel.", where: general },
-  { seq: 110, from: "jow", at: m(41), text: "@atlas can someone make the feed feel lighter? too many borders", where: general },
+  { seq: 110, from: "jow", at: m(41), text: "@atlas can someone make the feed feel lighter? too many borders", where: general, canChange: true, edited: m(40) },
+  { seq: 109, from: "maya", at: m(42), text: "", where: general, deleted: true },
   { seq: 111, from: "atlas", at: m(40), text: "Opened T11 for it. I'll take it after the bundle work lands.", where: general, task: 11 },
   {
     seq: 112,
@@ -414,10 +476,13 @@ const messages: Message[] = [
     text: "Bundle is down **38 KB** so far. `mermaid` was riding in on `markdown.ts`; it now loads with the first diagram.",
     where: general,
     task: 10,
-    thread: { replies: 3, last: m(7), people: ["atlas", "maya"] },
-    reactions: [{ emoji: "🔥", by: ["jow", "maya"] }],
+    thread: { replies: 3, last: m(7), people: ["atlas", "jow"] },
+    reactions: [
+      { emoji: "🔥", by: ["jow", "maya"] },
+      { emoji: "celebrate/hard-work", by: ["atlas"] },
+    ],
   },
-  { seq: 120, from: "jow", at: m(6), text: "@win ship it: tag v1.0.0", where: general, mentionsYou: false, receipt: "Read" },
+  { seq: 120, from: "jow", at: m(6), text: "@win ship it: tag v1.0.0", where: general, mentionsYou: false, receipt: "Read", canChange: true },
   { seq: 121, from: "atlas", at: m(6), text: "T13 for win. It can't be undone, so it waits for you.", where: general, task: 13, said: { text: "to you", tone: "quiet" }, replyTo: 7 },
   { seq: 122, from: "win", at: m(5), text: "This needs your OK first:", where: general, ask: "perm-1" },
   {
@@ -524,7 +589,7 @@ const messages: Message[] = [
 const threadReplies: Message[] = [
   { seq: 113, from: "atlas", at: m(8), text: "Good catch. Keep the icon sprite in the first load though, it's 3 KB.", where: general, inThread: 112 },
   { seq: 114, from: "win", at: m(8), text: "Agreed, leaving it.", where: general, inThread: 112 },
-  { seq: 115, from: "maya", at: m(7), text: "does this help the phone app too?", where: general, inThread: 112 },
+  { seq: 115, from: "jow", at: m(7), text: "does this help the phone app too?", where: general, inThread: 112 },
 ]
 
 const releases: Message[] = [
@@ -538,6 +603,9 @@ const dm: Message[] = [
   { seq: 132, from: "jow", at: m(28), text: "and tell maya", where: { kind: "dm", with: "atlas" }, failed: "the relay didn't answer" },
   { seq: 133, from: "atlas", at: m(27), text: "Taking ridge's task. Can you review the installer changes after?", where: { kind: "theirs", between: ["atlas", "win"] } },
   { seq: 134, from: "win", at: m(26), text: "Yes, send the PR when it's up.", where: { kind: "theirs", between: ["atlas", "win"] } },
+  { seq: 135, from: "maya", at: m(55), text: "did ridge's PR get anywhere?", where: { kind: "dm", with: "maya" } },
+  { seq: 136, from: "jow", at: m(52), text: "atlas took it over. Can we talk about the hiring plan?", where: { kind: "dm", with: "maya" }, locked: true },
+  { seq: 137, from: "maya", at: m(50), text: "Yes. Two offers out, one more interview Friday.", where: { kind: "dm", with: "maya" }, locked: true },
 ]
 
 const taskThread: Message[] = [
@@ -666,6 +734,129 @@ const asks: Ask[] = [
   },
 ]
 
+const demoPrs: PullRequest[] = [
+  pr44,
+  pr45,
+  pr43,
+  {
+    repo: "kiwi-init/electrobun-livewire",
+    number: 18,
+    title: "Wayland: keep the window's size across a scale change",
+    url: "https://github.com/kiwi-init/electrobun-livewire/pull/18",
+    state: "open",
+    checks: "none",
+    additions: 23,
+    deletions: 4,
+    files: 2,
+    branch: "wayland-scale",
+    by: "maya-dev",
+    at: m(60 * 5),
+  },
+  {
+    repo: "kiwi-init/channels",
+    number: 42,
+    title: "Restore composer spell checking",
+    url: "https://github.com/kiwi-init/channels/pull/42",
+    state: "merged",
+    checks: "pass",
+    mergedAt: m(50),
+    additions: 31,
+    deletions: 6,
+    branch: "T16-spellcheck",
+    by: "atlas-bot",
+    at: m(50),
+    task: 16,
+  },
+  {
+    repo: "kiwi-init/channels",
+    number: 41,
+    title: "Fold duplicate event rows",
+    url: "https://github.com/kiwi-init/channels/pull/41",
+    state: "merged",
+    checks: "pass",
+    mergedAt: m(60 * 20),
+    additions: 140,
+    deletions: 88,
+    branch: "T9-fold-events",
+    by: "win-bot",
+    at: m(60 * 20),
+    task: 9,
+    release: "2026.10.18",
+    list: [
+      { name: "ci-ok", state: "pass", word: "passed", required: true },
+      { name: "repo / static", state: "pass", word: "passed" },
+      { name: "test / unit", state: "pass", word: "passed" },
+    ],
+  },
+  {
+    repo: "kiwi-init/channels",
+    number: 39,
+    title: "Try a second relay region",
+    url: "https://github.com/kiwi-init/channels/pull/39",
+    state: "closed",
+    checks: "pass",
+    additions: 410,
+    deletions: 12,
+    branch: "relay-region",
+    by: "ridge-bot",
+    at: m(60 * 30),
+  },
+]
+
+const demoIssues: Issue[] = [
+  {
+    repo: "kiwi-init/channels",
+    number: 57,
+    title: "Dark mode: the code blocks stay light",
+    url: "https://github.com/kiwi-init/channels/issues/57",
+    state: "open",
+    by: "maya-dev",
+    at: m(35),
+    task: 12,
+  },
+  {
+    repo: "kiwi-init/channels",
+    number: 55,
+    title: "Channel icons look blurry on a 1x screen",
+    url: "https://github.com/kiwi-init/channels/issues/55",
+    state: "open",
+    by: "jow",
+    at: m(60 * 3),
+    task: 14,
+  },
+  {
+    repo: "kiwi-init/electrobun-livewire",
+    number: 9,
+    title: "The window jumps when a second monitor is plugged in",
+    url: "https://github.com/kiwi-init/electrobun-livewire/issues/9",
+    state: "open",
+    by: "someone-else",
+    at: m(60 * 7),
+  },
+  {
+    repo: "kiwi-init/channels",
+    number: 53,
+    title: "First load feels slow on a cold cache",
+    url: "https://github.com/kiwi-init/channels/issues/53",
+    state: "open",
+    by: "jow",
+    at: m(60 * 26),
+    task: 11,
+  },
+  {
+    repo: "kiwi-init/channels",
+    number: 50,
+    title: "Duplicate rows when an agent rejoins",
+    url: "https://github.com/kiwi-init/channels/issues/50",
+    state: "closed",
+    reason: "completed",
+    by: "win-bot",
+    at: m(60 * 20),
+    task: 9,
+  },
+  { repo: "kiwi-init/channels", number: 48, title: "Support Windows", url: "https://github.com/kiwi-init/channels/issues/48", state: "closed", reason: "not_planned", by: "jow", at: m(60 * 48) },
+]
+
 export const DEMO_CHANNEL: Channel = {
   code: "kiwi",
   title: "kiwi",
@@ -674,14 +865,17 @@ export const DEMO_CHANNEL: Channel = {
   lead: "atlas",
   goal: "Ship the Livewire app to everyone by Friday.",
   repos: ["kiwi-init/channels", "kiwi-init/electrobun-livewire"],
+  prs: demoPrs,
+  issues: demoIssues,
   rooms: [
     { id: "general", name: "general", unread: 0, mentions: 0 },
-    { id: "releases", name: "releases", unread: 2, mentions: 0 },
+    { id: "releases", name: "releases", unread: 2, mentions: 0, muted: true },
     { id: "design", name: "design", unread: 0, mentions: 0 },
+    { id: "launch-plan", name: "launch-plan", unread: 1, mentions: 0, members: ["jow", "maya", "atlas"] },
   ],
   directs: [
     { with: "atlas", unread: 0, last: m(29) },
-    { with: "maya", unread: 1, last: m(50) },
+    { with: "maya", unread: 1, last: m(50), locked: true },
   ],
   theirs: [{ between: ["atlas", "win"], last: m(26) }],
   people,
@@ -740,6 +934,8 @@ export const DEMO_GUEST: Channel = {
   code: "studio",
   title: "studio",
   youOwn: false,
+  youManageAgents: true,
+  youTrusted: true,
   you: "jow",
   lead: "quill",
   goal: "A calm first-run for the Interlinked studio app: one screen, no setup steps.",
@@ -764,5 +960,25 @@ export const DEMO_GUEST: Channel = {
       joined: m(60 * 24 * 40),
       messages: 980,
     },
+    {
+      name: "pip",
+      kind: "agent",
+      display: "Pip",
+      owner: false,
+      you: false,
+      role: "Builder",
+      presence: "online",
+      harness: "claude",
+      runs: "Claude Code",
+      machine: "Jow's MacBook Air",
+      sponsor: "jow",
+      yours: true,
+      persona: "Builder",
+      lastSeen: m(2),
+      joined: m(60 * 24 * 3),
+      messages: 64,
+    },
   ],
 }
+
+export const DEMO_GUEST_MEMBER: Channel = omit(DEMO_GUEST, "youManageAgents", "youTrusted")

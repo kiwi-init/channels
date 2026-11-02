@@ -34,6 +34,7 @@ export interface UpdateState {
   state: "downloading" | "ready" | "available";
   url: string;
   blocked?: true;
+  progress?: number;
 }
 
 export type UpdateCheck = UpdateState | { state: "current"; version: string } | { state: "failed" };
@@ -66,7 +67,7 @@ const realOr = (p: string): string => {
   }
 };
 
-const runningAppImage = (): string | undefined => {
+export const runningAppImage = (): string | undefined => {
   const dir = process.env["APPDIR"];
   return ownAppImage(process.env["APPIMAGE"], dir ? realOr(dir) : undefined, realOr(host().app.path("exe")));
 };
@@ -143,7 +144,14 @@ async function fetchUpdate(version: string, url: string, assetUrl: string, sumsU
   let dir: string | null = null;
   try {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), "kiwi-update-"));
-    staged = { version, path: await download(assetUrl, sumsUrl, signatureUrl, name, dir), url };
+    let shown = 0;
+    const onBytes = (got: number, total: number) => {
+      const progress = Math.min(99, Math.floor((got / total) * 100));
+      if (progress <= shown) return;
+      shown = progress;
+      set({ version, state: "downloading", url, progress: progress / 100 });
+    };
+    staged = { version, path: await download(assetUrl, sumsUrl, signatureUrl, name, dir, onBytes), url };
   } catch (e) {
     retrySoon(`couldn't put Channels ${version} in place: ${e instanceof Error ? e.message : String(e)}`);
   } finally {
@@ -152,7 +160,7 @@ async function fetchUpdate(version: string, url: string, assetUrl: string, sumsU
   }
 }
 
-async function save(url: string, file: string, name: string): Promise<string> {
+async function save(url: string, file: string, name: string, onBytes: (got: number, total: number) => void): Promise<string> {
   const ac = new AbortController();
   const quiet = () => ac.abort(new Error(`${name} sent nothing for ${IDLE_MS / 1000}s`));
   let idle = setTimeout(quiet, IDLE_MS);
@@ -160,6 +168,7 @@ async function save(url: string, file: string, name: string): Promise<string> {
   try {
     const res = await githubFetch(url, ac.signal);
     if (!res.ok || !res.body) throw new Error(`${name} answered ${res.status}`);
+    const total = Number(res.headers.get("content-length")) || 0;
     const hash = createHash("sha256");
     const reader = res.body.getReader();
     let size = 0;
@@ -172,6 +181,7 @@ async function save(url: string, file: string, name: string): Promise<string> {
       if (size > MAX_BYTES) throw new Error(`${name} is over ${MAX_BYTES} bytes`);
       hash.update(value);
       fs.writeSync(fd, value);
+      if (total > 0) onBytes(size, total);
     }
     return hash.digest("hex");
   } finally {
@@ -187,7 +197,7 @@ async function signedSums(sums: Uint8Array, signatureUrl: string): Promise<void>
 }
 
 /** The release's file for this install, checked against its SHA256SUMS (signed, when a signature is asked for) and unpacked in `dir`: what goes in place, or null. */
-async function download(assetUrl: string, sumsUrl: string, signatureUrl: string | null, name: string, dir: string): Promise<string> {
+async function download(assetUrl: string, sumsUrl: string, signatureUrl: string | null, name: string, dir: string, onBytes: (got: number, total: number) => void): Promise<string> {
   const sums = await githubFetch(sumsUrl, AbortSignal.timeout(ASK_WAIT_MS));
   if (!sums.ok) throw new Error(`SHA256SUMS answered ${sums.status}`);
   const listed = new Uint8Array(await sums.arrayBuffer());
@@ -199,7 +209,7 @@ async function download(assetUrl: string, sumsUrl: string, signatureUrl: string 
     .find(([, f]) => f === name)?.[0];
   if (!want) throw new Error(`SHA256SUMS doesn't list ${name}`);
   const file = path.join(dir, name);
-  if ((await save(assetUrl, file, name)) !== want) throw new Error(`${name} doesn't match its SHA256SUMS line`);
+  if ((await save(assetUrl, file, name, onBytes)) !== want) throw new Error(`${name} doesn't match its SHA256SUMS line`);
   if (process.platform === "darwin") {
     // ditto keeps the bundle's symlinks and modes (the frameworks need both).
     await run("/usr/bin/ditto", ["-x", "-k", file, dir]);

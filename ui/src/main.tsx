@@ -47,6 +47,8 @@ function LiveApp() {
   )
 }
 
+if (hasBridge()) void import("~/kit/native-menu").then((m) => m.quietNativeMenu())
+
 if (!demo) {
   applyStoredAppearance()
   bridge()?.onTextStep(stepTextSize)

@@ -16,7 +16,7 @@ const server = dist
       hostname: "127.0.0.1",
       async fetch(req) {
         const path = decodeURIComponent(new URL(req.url).pathname);
-        const file = Bun.file(join(dist, path === "/" || !path.includes(".") ? "index.html" : path));
+        const file = Bun.file(path.startsWith("/reactions/") ? resolve(import.meta.dir, "../site", "." + path) : join(dist, path === "/" || !path.includes(".") ? "index.html" : path));
         return (await file.exists()) ? new Response(file) : new Response("not found", { status: 404 });
       },
     })

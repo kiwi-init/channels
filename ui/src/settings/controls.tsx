@@ -3,16 +3,17 @@ import "~/styles/settings.css"
 import { useState, type ReactNode } from "react"
 
 import { cx, Dialog, DialogHead } from "~/kit/bits"
+import { Track } from "~/kit/glide"
 
 export function Seg<T extends string | number>({ label, value, options, onChange }: { label: string; value: T; options: readonly (readonly [T, string])[]; onChange: (value: T) => void }) {
   return (
-    <div className="seg" role="group" aria-label={label}>
+    <Track className="seg" role="group" aria-label={label}>
       {options.map(([v, text]) => (
         <button key={String(v)} type="button" aria-pressed={v === value} onClick={() => onChange(v)}>
           {text}
         </button>
       ))}
-    </div>
+    </Track>
   )
 }
 

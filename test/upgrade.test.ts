@@ -5,13 +5,14 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { gzipSync } from "node:zlib";
 import { upgrade } from "../src/cli/upgrade.ts";
+import { throwawayKey } from "./minisign-sign.ts";
 
 const dirs: string[] = [];
 afterEach(() => {
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
-function fixture(settings: { version?: string; checksum?: string; body?: string; status?: number; location?: string; cleanupFails?: boolean } = {}) {
+function fixture(settings: { version?: string; checksum?: string; body?: string; status?: number; location?: string; cleanupFails?: boolean; tamper?: boolean; noSig?: boolean } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "kiwi-upgrade-test-"));
   dirs.push(dir);
   const executable = join(dir, "kiwi");
@@ -20,6 +21,9 @@ function fixture(settings: { version?: string; checksum?: string; body?: string;
   const body = settings.body ?? `#!/bin/sh\ncase "$1" in\n--version) echo 2026.10.4 ;;\ncleanup) ${settings.cleanupFails ? "exit 1" : `printf cleaned > '${join(dir, "cleaned")}'`} ;;\nesac\n`;
   const packed = gzipSync(body);
   const sum = settings.checksum ?? createHash("sha256").update(packed).digest("hex");
+  const key = throwawayKey();
+  const sumsText = `${sum}  kiwi-linux-x64.gz\n`;
+  const sigText = key.sign(settings.tamper ? "different checksums entirely" : sumsText, "kiwi v2026.10.4 SHA256SUMS");
   const urls: string[] = [];
   const messages: string[] = [];
   const request = async (url: string, init: RequestInit): Promise<Response> => {
@@ -29,7 +33,11 @@ function fixture(settings: { version?: string; checksum?: string; body?: string;
       return new Response(null, { status: 302, headers: { location: settings.location ?? "https://github.com/kiwi-init/channels/releases/tag/v2026.10.4" } });
     }
     expect(url).toContain("/download/v2026.10.4/");
-    if (url.endsWith("SHA256SUMS")) return new Response(`${sum}  kiwi-linux-x64.gz\n`);
+    if (url.endsWith("SHA256SUMS.minisig")) {
+      if (settings.noSig) return new Response("not found", { status: 404 });
+      return new Response(sigText);
+    }
+    if (url.endsWith("SHA256SUMS")) return new Response(sumsText);
     return new Response(packed, { status: settings.status ?? 200 });
   };
   const options = {
@@ -38,6 +46,7 @@ function fixture(settings: { version?: string; checksum?: string; body?: string;
     version: settings.version ?? "2026.10.1",
     platform: "linux",
     arch: "x64",
+    releaseKey: key.publicKey,
     request,
     report: (message: string): void => {
       messages.push(message);
@@ -86,6 +95,16 @@ test("reports cleanup failure without reporting the installed upgrade as failed"
   await upgrade(f.options);
   expect(readFileSync(f.executable, "utf8")).toBe(f.body);
   expect(f.messages.join("\n")).toContain("run kiwi cleanup");
+});
+
+test.each([
+  { noSig: true, why: /no SHA256SUMS\.minisig/ },
+  { tamper: true, why: /signature doesn't match the key this Kiwi pins/ },
+])("keeps the old binary when the release's signature can't be trusted: %j", async (settings) => {
+  const f = fixture(settings);
+  await expect(upgrade(f.options)).rejects.toThrow(settings.why);
+  expect(readFileSync(f.executable, "utf8")).toBe(f.old);
+  expect(f.urls.filter((u) => u.endsWith(".gz"))).toHaveLength(0);
 });
 
 test("follows a custom install symlink without replacing the link", async () => {

@@ -86,7 +86,7 @@ describe("old pages", () => {
   test("never to someone who isn't a member, nor without the signature, nor with another key's capability", async () => {
     const { cap } = await offer(room.owner);
     const stranger = await generateIdentity("eve");
-    expect((await get(relay, room.roomId, "/messages?since=0&pages=1", stranger)).status).toBe(403);
+    expect((await get(relay, room.roomId, "/messages?since=0&pages=1", stranger)).status).toBe(404);
     for (const k of [0, 2]) {
       expect((await page(k, cap)).status).toBe(401);
       expect((await page(k, cap, stranger)).status).toBe(403);

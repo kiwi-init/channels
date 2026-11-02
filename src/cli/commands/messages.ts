@@ -4,6 +4,7 @@ import { oneLook } from "../../agent.ts";
 import { saveImages } from "../../attach.ts";
 import { home } from "../../config.ts";
 import { alsoAnswers, formatShown, missingImages, parseDuration } from "@kiwi/core/format.ts";
+import reactionPack from "../../../site/reactions/index.json";
 import {
   CHAT_KINDS,
   CHOICE_MAX_LENGTH,
@@ -16,6 +17,7 @@ import {
   handoffUrl,
   ignored,
   isDecisionKind,
+  isGifReaction,
   wellFormedChoices,
   isQuiet,
   type InlineImage,
@@ -130,12 +132,40 @@ export const messageCommands: Record<string, Command> = {
   react: () =>
     oneLook(
       Effect.gen(function* () {
+        if (args[1] === "--list" || opt.list) {
+          for (const g of reactionPack) out(`${g.reaction}/${g.name}  ${g.feeling}`);
+          return;
+        }
         const s = yield* session();
-        const usage = "usage: kiwi react N 👍 (one emoji); --clear takes it back";
+        const usage = "usage: kiwi react N ok/trailer (kiwi react --list shows the GIFs), or an emoji; --clear takes it back";
         const seq = Number((args[1] ?? "").replace(/^#/, "")) || (yield* die(usage));
         const emoji = opt.clear ? null : args[2]?.trim() || (yield* die(usage));
+        if (emoji && isGifReaction(emoji) && !reactionPack.some((g) => `${g.reaction}/${g.name}` === emoji)) return yield* die(`no GIF ${emoji}: kiwi react --list shows them`);
         yield* s.react(seq, emoji);
         out(emoji ? `reacted ${emoji} to #${seq}` : `took back your reaction on #${seq}`);
+      }),
+    ),
+
+  edit: () =>
+    oneLook(
+      Effect.gen(function* () {
+        const s = yield* session();
+        const usage = 'usage: kiwi edit N "the new text" (or --file PATH): your own message #N';
+        const seq = Number((args[1] ?? "").replace(/^#/, "")) || (yield* die(usage));
+        const body = yield* text(2);
+        if (!body.trim()) return yield* die(usage);
+        yield* s.change(seq, body);
+        out(`edited #${seq}`);
+      }),
+    ),
+
+  delete: () =>
+    oneLook(
+      Effect.gen(function* () {
+        const s = yield* session();
+        const seq = Number((args[1] ?? "").replace(/^#/, "")) || (yield* die("usage: kiwi delete N: your own message #N"));
+        yield* s.change(seq, null);
+        out(`deleted #${seq}: it reads as deleted for everyone, but anyone who already read it may keep a copy`);
       }),
     ),
 

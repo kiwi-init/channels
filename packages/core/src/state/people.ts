@@ -1,7 +1,15 @@
 import type { Color, Message } from "../protocol.ts";
+import { canPost } from "../scopes.ts";
 import type { ChannelState, Member } from "./types.ts";
+import { personOf } from "../room-rules.ts";
 
 export const isPerson = (m: { kind?: string; owner?: boolean }) => m.kind === "human" || !!m.owner;
+
+type Seat = Pick<Member, "name" | "kind" | "owner" | "sponsor">;
+
+const authorRoot = (m: Seat): string => (isPerson(m) ? `person:${m.sponsor?.user ?? m.name}` : `seat:${m.name}`);
+
+export const sameAuthor = (author: Seat | undefined, editor: Seat | undefined): boolean => !!author && !!editor && authorRoot(author) === authorRoot(editor);
 
 export function humanOf(state: Pick<ChannelState, "members">, name: string): string | null {
   const m = state.members.get(name);
@@ -9,17 +17,32 @@ export function humanOf(state: Pick<ChannelState, "members">, name: string): str
   return [...state.members.values()].find((x) => x.active && isPerson(x) && x.sponsor?.user === m.sponsor!.user)?.name ?? null;
 }
 
+export function sponsorsAgent(members: ReadonlyMap<string, Pick<Member, "name" | "pk" | "kind" | "owner" | "active" | "sponsor">>, by: string, agent: string): boolean {
+  const seat = members.get(by);
+  const target = members.get(agent);
+  if (!seat || !target || !isPerson(seat) || isPerson(target) || !target.sponsor?.user) return false;
+  return personOf(seat, [...members.values()]) === `person:${target.sponsor.user}`;
+}
+
 export function answersDecisions(members: ReadonlyMap<string, Pick<Member, "active" | "answersDecisions">>, name: string): boolean {
   const m = members.get(name);
   return !!m?.active && !!m.answersDecisions;
 }
 
-export function answersAsk(members: ReadonlyMap<string, Pick<Member, "active" | "answersDecisions">>, m: Pick<Message, "from" | "esc" | "to" | "handoff">, name: string): boolean {
-  return m.esc ? !!m.to?.includes(name) || (!m.handoff && answersDecisions(members, name)) : name !== m.from;
+export function fullyTrusted(m: Pick<Member, "kind" | "owner" | "active" | "scopes" | "addsAgents" | "answersDecisions" | "managesAgents"> | undefined): boolean {
+  return !!m && m.kind === "human" && !m.owner && m.active && canPost(m.scopes) && !!m.addsAgents && !!m.answersDecisions && !!m.managesAgents;
 }
 
-export function decidersOf(state: Pick<ChannelState, "members">, m: Pick<Message, "esc" | "to" | "handoff" | "permission">): string[] {
-  if (!m.esc || m.handoff || m.permission) return [];
+export function trustedOf(state: Pick<ChannelState, "members">): string[] {
+  return [...state.members.values()].filter(fullyTrusted).map((x) => x.name);
+}
+
+export function answersAsk(members: ReadonlyMap<string, Pick<Member, "active" | "answersDecisions">>, m: Pick<Message, "from" | "esc" | "to" | "handoff" | "step">, name: string): boolean {
+  return m.esc ? !!m.to?.includes(name) || (!m.handoff && !m.step && answersDecisions(members, name)) : name !== m.from;
+}
+
+export function decidersOf(state: Pick<ChannelState, "members">, m: Pick<Message, "esc" | "to" | "handoff" | "permission" | "step">): string[] {
+  if (!m.esc || m.handoff || m.permission || m.step) return [];
   return [...state.members.values()].filter((x) => answersDecisions(state.members, x.name) && !m.to?.includes(x.name)).map((x) => x.name);
 }
 
@@ -30,7 +53,7 @@ export function ownerOf(state: Pick<ChannelState, "members">): string | null {
 export function colorOf(state: ChannelState, name: string): Color | null {
   const m = state.members.get(name);
   if (!m) return null;
-  if (isPerson(m)) return m.color ?? null;
+  if (isPerson(m) || m.color) return m.color ?? null;
   const person = m.sponsor && [...state.members.values()].find((x) => x.active && isPerson(x) && x.sponsor?.user === m.sponsor!.user);
   return person ? (person.color ?? null) : null;
 }

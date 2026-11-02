@@ -225,6 +225,10 @@ let recordMemory: RecordMemory = {
 export function keepRecordsIn(memory: RecordMemory): void {
   recordMemory = memory;
 }
+export function wasRemoved(room: string, pk: string): boolean {
+  return isGone(room, pk);
+}
+
 function isGone(room: string, pk: string): boolean {
   return recordMemory.get(room, pk)?.active === false;
 }

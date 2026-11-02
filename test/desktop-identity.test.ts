@@ -10,6 +10,7 @@ const desktop = path.join(import.meta.dirname, "..", "desktop");
 interface Config {
   app: { name: string; identifier: string; urlSchemes?: string[] };
   build: { bun: { define: Record<string, string> } };
+  runtime: { inspector: boolean };
 }
 
 function configWith(env: Record<string, string>): Config {
@@ -26,6 +27,13 @@ test("a release build is Channels, com.kiwiinit.channels, with the kiwi:// handl
   const release = configWith({ CHANNELS_EB_RELEASE: "1" });
   expect(release.app).toMatchObject({ name: "Channels", identifier: "com.kiwiinit.channels", urlSchemes: ["kiwi"] });
   expect(release.build.bun.define).toMatchObject({ KIWI_EB_TEST: "false", KIWI_EB_OFFICIAL_UI: "true", KIWI_EB_DEV: "false" });
+});
+
+test("only dev builds keep the web inspector, so a shipped app has no Inspect Element (T1009)", () => {
+  expect(configWith({ CHANNELS_EB_RELEASE: "1" }).runtime.inspector).toBe(false);
+  expect(configWith({ CHANNELS_EB_TEST: "1" }).runtime.inspector).toBe(false);
+  expect(configWith({}).runtime.inspector).toBe(true);
+  expect(configWith({ CHANNELS_EB_RELEASE: "1", CHANNELS_EB_LOCAL_UI: "1" }).runtime.inspector).toBe(true);
 });
 
 test("dev and test builds keep their own ids and never take kiwi:// links; dev builds may boot a local UI channel", () => {

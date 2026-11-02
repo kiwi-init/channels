@@ -150,6 +150,7 @@ export interface RelayConfig {
   workosClientId: string | null;
   dev?: boolean;
   githubClientId?: string;
+  githubSignIn?: boolean;
 }
 
 export const fx = {

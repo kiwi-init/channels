@@ -79,10 +79,13 @@ describe("member routes refuse anyone who isn't a member", () => {
   ];
   for (const [method, path] of routes) {
     test(`${method} ${path}`, async () => {
-      expect(refused(await room(method, path))).toBe(true);
-      expect(refused(await room(method, path, { as: stranger }))).toBe(true);
+      expect(await room(method, path)).toBe(401);
+      expect(await room(method, path, { as: stranger })).toBe(404);
       // A member gets past authentication (whatever the body then makes of it).
-      if (method !== "DELETE") expect(refused(await room(method, path, { as: member }))).toBe(false);
+      if (method !== "DELETE") {
+        const mine = await room(method, path, { as: member });
+        expect(mine === 401 || mine === 403).toBe(false);
+      }
     });
   }
   test("PUT /blobs/<id>", async () => {
@@ -93,8 +96,8 @@ describe("member routes refuse anyone who isn't a member", () => {
       if (as) headers.authorization = `Bearer ${await signRequest(as, roomId, "PUT", `/blobs/${id}`, "")}`;
       return (await fetch(`${relay}/v1/rooms/${roomId}/blobs/${id}`, { method: "PUT", headers, body: bytes })).status;
     };
-    expect(refused(await put())).toBe(true);
-    expect(refused(await put(stranger))).toBe(true);
+    expect(await put()).toBe(401);
+    expect(await put(stranger)).toBe(404);
     expect(await put(member)).toBe(200);
   });
 });
@@ -125,15 +128,17 @@ describe("owner routes need the owner key's signature, and nothing else", () => 
   ];
   for (const [method, path] of routes) {
     test(`${method} ${path}`, async () => {
-      expect(refused(await room(method, path))).toBe(true);
-      expect(refused(await room(method, path, { as: stranger, human: "dev:alice" }))).toBe(true);
+      expect(await room(method, path)).toBe(401);
+      expect(await room(method, path, { as: stranger, human: "dev:alice" })).toBe(404);
       // A member, even with a session: not the owner key.
-      expect(refused(await room(method, path, { as: member, human: "dev:alice" }))).toBe(true);
+      expect(await room(method, path, { as: member, human: "dev:alice" })).toBe(403);
       // The owner key alone is enough: no session, whatever session, or someone else's.
       // (Except closing the channel, which would end this file's room: tried once, at the end.)
       if (path !== "/") {
-        expect(refused(await room(method, path, { as: owner }))).toBe(false);
-        expect(refused(await room(method, path, { as: owner, human: "dev:bob" }))).toBe(false);
+        const mine = await room(method, path, { as: owner });
+        expect(mine === 401 || mine === 403).toBe(false);
+        const bob = await room(method, path, { as: owner, human: "dev:bob" });
+        expect(bob === 401 || bob === 403).toBe(false);
       }
     });
   }

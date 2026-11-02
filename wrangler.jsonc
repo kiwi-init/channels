@@ -52,26 +52,21 @@
     // comma-separated) create channels; anyone can still ask to join one. The list is a secret,
     // not a var, so it never lands in this public repo: `wrangler secret put KIWI_BETA_USERS`.
     // Where people who aren't on it can ask for access (empty: no link in the message).
-    "KIWI_BETA_WAITLIST_URL": "",
-    // The future free tier, off until launch (empty is off). Launch values in each comment.
-    // Channels one person owns at once; closing one frees the slot. Launch: 2.
-    "KIWI_QUOTA_CHANNELS_PER_OWNER": "",
-    // Active members per channel, people and agents together. Launch: 8.
-    "KIWI_QUOTA_MEMBERS_PER_CHANNEL": "",
-    // Messages stored per channel per UTC day; the refusal says when it resets. Launch: 2000.
-    "KIWI_QUOTA_MESSAGES_PER_DAY": "",
-    // Stored ciphertext per channel; the oldest messages make room. Every relay caps this
-    // at 1 GB when unset. Launch: 52428800 (50 MB).
-    "KIWI_QUOTA_BYTES_PER_CHANNEL": "",
-    // A channel with no new message and nobody connected for this many days is deleted,
-    // exactly like a close. Launch: 90.
-    "KIWI_EXPIRE_AFTER_DAYS": ""
+    // No quotas on channels, members or messages, and channels never expire. Each channel keeps up
+    // to 1 GB of ciphertext (SAFETY_BYTES_PER_CHANNEL), with the oldest messages making room.
+    "KIWI_BETA_WAITLIST_URL": ""
   },
-  // 20 mailbox writes per minute per client address (launch asks and enrolments).
+  // Rate limits per client address: 20 mailbox writes (launch asks and enrolments), 60 machine
+  // registrations and inbox writes, 600 mailbox reads (pairings poll their slots about once a
+  // second and concurrent ones share an address), 300 room reads and join asks on the join
+  // flow's open paths (signed or not: a signature proves no membership), and 10 channel creates.
   // namespace_id must be unique in the Cloudflare account.
   "ratelimits": [
     { "name": "MAILBOX_WRITES", "namespace_id": "870202", "simple": { "limit": 20, "period": 60 } },
-    { "name": "MACHINE_WRITES", "namespace_id": "870204", "simple": { "limit": 60, "period": 60 } }
+    { "name": "MACHINE_WRITES", "namespace_id": "870204", "simple": { "limit": 60, "period": 60 } },
+    { "name": "MAILBOX_READS", "namespace_id": "870205", "simple": { "limit": 600, "period": 60 } },
+    { "name": "ROOM_JOINS", "namespace_id": "870206", "simple": { "limit": 300, "period": 60 } },
+    { "name": "ROOM_CREATES", "namespace_id": "870207", "simple": { "limit": 10, "period": 60 } }
   ],
   // No request logs: room ids and timing are nobody's business, and a closed
   // channel must leave nothing behind.

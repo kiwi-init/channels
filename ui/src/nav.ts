@@ -2,11 +2,23 @@ import { createContext, useContext } from "react"
 
 import type { Actions, App, Where } from "~/model"
 
-type Tab = "chat" | "tasks" | "agents" | "needs"
+type Tab = "chat" | "specs" | "tasks" | "agents" | "needs" | "github"
 
-export type Panel = { kind: "person"; name: string } | { kind: "task"; task: number } | { kind: "thread"; seq: number } | { kind: "channel" } | { kind: "invite" } | { kind: "add-agent" }
+export type SpecPart = "spec" | "inside" | "result"
 
-export type Dialog = "new-channel" | "join" | "palette" | null
+export type GithubView = "prs" | "issues"
+
+export type Panel =
+  | { kind: "person"; name: string }
+  | { kind: "task"; task: number }
+  | { kind: "pr"; repo: string; number: number }
+  | { kind: "issue"; repo: string; number: number }
+  | { kind: "thread"; seq: number; focus?: number }
+  | { kind: "channel" }
+  | { kind: "invite" }
+  | { kind: "add-agent" }
+
+export type Dialog = "new-channel" | "new-room" | "join" | "palette" | null
 
 export type TermOf = { kind: "agent"; name: string } | { kind: "you" }
 
@@ -22,12 +34,17 @@ export interface Nav {
   section: Section
   invite?: string
   term?: TermOf
+  github?: GithubView
+  spec?: number
+  part?: SpecPart
 }
 
 export type Go =
   | { to: "channel"; code: string }
   | { to: "where"; where: Where }
   | { to: "tab"; tab: Tab }
+  | { to: "github"; view: GithubView }
+  | { to: "spec"; ask: number | null; part?: SpecPart }
   | { to: "panel"; panel: Panel | null }
   | { to: "dialog"; dialog: Dialog }
   | { to: "settings"; section?: Section }
@@ -52,6 +69,12 @@ export function navigate(nav: Nav, go: Go): Nav {
       return { ...nav, page: "channel", where: go.where, tab: "chat", panel: nav.panel?.kind === "thread" ? null : nav.panel }
     case "tab":
       return { ...nav, page: "channel", tab: go.tab }
+    case "github":
+      return { ...nav, page: "channel", tab: "github", github: go.view }
+    case "spec":
+      return go.ask === null
+        ? { ...nav, page: "channel", tab: "specs", spec: undefined, part: undefined }
+        : { ...nav, page: "channel", tab: "specs", spec: go.ask, part: go.part ?? "spec", panel: null }
     case "panel":
       return { ...nav, panel: go.panel }
     case "dialog":

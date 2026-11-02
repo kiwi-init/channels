@@ -126,7 +126,16 @@ reveal.
      reveal; there is no code to carry it.
    - The answer holds `{cert, relay, the person's public key and name, the channels it may join
      (codes, not keys)}`, never a secret key.
-7. **Join.**
+7. **Check the person's key.**
+   - Only the approving app checks the digits, so a relay that answers the ask itself, with a
+     device and person it controls, would otherwise get the new device to join that person.
+   - The new device shows the person's name and key (`personFingerprint`), the same key the
+     approving app shows next to the digits and in Settings. It writes nothing (its device key, the
+     list, the person) until you confirm they match. Turning it down drops the grant, and the next
+     ask uses a new device key.
+   - A device that already holds a person refuses another, and checks again right before it saves.
+     `kiwi login` follows the same rules.
+8. **Join.**
    - The device asks to join each channel with its `DeviceClaim`.
    - Owners' clients admit it on their own; channels you own admit it immediately.
 
@@ -145,6 +154,18 @@ gets one pending ask at most. Approving it needs your app in your hand and the d
 | `PUT /v1/account/ask/<id>/answer` `{device, dxpk, nonce}` | an app that approves | once, with the app's own listed keys |
 | `PUT /v1/account/ask/<id>/reveal` `{nonce}` | the asking device | once, after the answer; checked against the commitment |
 | `DELETE /v1/account/ask/<id>` | the asking device, an app that approves | turns the ask away |
+| `POST /v1/account/move` `{to}` | the person key or an app that approves, with a GitHub sign-in in `x-human-token-to` | moves a WorkOS account to `github_<id>` once (`src/relay/move.ts`) |
+
+**Moving to GitHub sign-in** (T261). A WorkOS account moves to the `github_<id>` account of the
+GitHub sign-in sent with it: the device list, the recovery chain, the vault and the owned channels
+the quota counts. The move freezes the WorkOS account (reads still answer, writes wait), copies it
+into the GitHub account in one step, and only if that account holds nothing, then marks it moved.
+From then on the WorkOS account's routes answer from the GitHub one, so older apps keep working, and
+channels they create count against the GitHub account. Every step can run again: a repeat changes
+nothing, and a freeze nobody finishes ends after 10 minutes, as moved if the copy went through and
+untouched if it didn't. Nothing under the WorkOS id is deleted. A GitHub account that already holds
+devices, a device waiting to join, or a signer the list doesn't approve is refused, and the WorkOS
+account stays as it was.
 
 A key revoked in a published list is refused on every account route, can't ask again, and loses its
 computer inbox at once (`/v1/machine/<key>` answers 403 and its socket closes).
@@ -304,19 +325,29 @@ For when every app is gone, or a thief revoked your other devices first. The rec
   clients still read the list. The person key signs the first link. The recovery key replaces itself at
   once; an approving device may propose a new one, which takes over only after 7 days. Your devices show
   the proposal meanwhile, and the old words, or revoking the device that proposed it, cancel it.
-- **Format:** `{person, version, at, box}`. The box is sealed to the recovery X25519 key, with person,
-  version and time bound into the key derivation. Inside, the person key is a box of its own, sealed to
-  the same recovery key with person and recovery key bound in (`sealPerson`, T899), so a device that
-  no longer holds the person key carries it into each new version unread, and the vault is signed by the person key or any of
-  its current approving devices (decision A keeps the person key offline, so a device must be able to
-  add a new channel's owner key). Stored at `/v1/account/vault`. Clients remember the highest version
-  and refuse a lower one.
+- **Format:** `{person, version, at, held, boxes}`, signed by the person key or any of its current
+  approving devices (decision A keeps the person key offline, so a device must be able to add a new
+  channel's owner key). Stored at `/v1/account/vault`. Clients remember the highest version and refuse
+  a lower one.
+  - `held` is the person key, sealed to the recovery X25519 key with person, person key and recovery
+    key bound in (`sealPerson`, T899). It sits in the signed record, so every approving desktop reads
+    it and carries it into each new version unread (T969).
+  - `boxes` holds one box per desktop: the owner keys of the channels that desktop owns, sealed to the
+    recovery key with person, desktop and recovery key bound in. A desktop reseals only its own box and
+    carries the others unread, so two desktops never drop each other's channels. Boxes sealed to
+    earlier words are dropped; their desktops seal them again on their next look, within 10 minutes.
+  - The words open `held` and every box that opens; a box that doesn't is skipped.
+  - At most 64 boxes and 512 KB in all.
+  - A vault from before T969 has one `box` that holds the person key and every channel. Apps still read
+    it, and the first desktop moves it to `held` and `boxes` on its next look, carrying the person box
+    it kept unread. That box's older label opens only for the original person key. The relay keeps a
+    one-box vault from an app not yet updated, but never over a vault with boxes, nor after a re-root.
 - **The relay** keeps the chain and the newest vault at `/v1/account/vault`. `GET` needs only the sign-in,
   so a new desktop with nothing but the 24 words can read them. `PUT` takes `{recovery, vault}`, signed by
   the person key, the recovery key or a current approving device. The chain must extend the one kept,
   and each new link must carry the relay's time, so a proposal can't be backdated past its 7 days. A
-  vault must be version kept + 1, signed by the person key or a current approving device, and at most
-  512 KB. Links and vaults from revoked devices are refused.
+  vault must be version kept + 1, signed by the person key or a current approving device, with `held`
+  sealed for the current person key and recovery key. Links and vaults from revoked devices are refused.
 - In the code (T693, T823): `packages/core/src/recovery.ts`, `src/relay/account.ts`.
 - **Re-root** (T827), when the person key itself may be stolen: a `reroot {root, keep[]}` link in the
   device list, signed by the new person key, with the recovery key's signature over it (`rsig`) and
@@ -334,6 +365,9 @@ For when every app is gone, or a thief revoked your other devices first. The rec
   - A list with more re-roots beats a longer one with fewer, so a fork the old key grows can't win.
   - The relay takes a re-root only with its own time and the exact recovery chain it keeps, so words
     replaced since can't re-root. A later re-root must carry a chain that extends the one before.
+  - New words the old key proposed, still in their 7 days, are void once the re-root lands, as are
+    those of a device it drops. A thief with the person key can't swap the words before the owner
+    re-roots: the current words still sign the re-root during the wait.
   - An app still holding the old key lets it go, and a sealed person box from before the re-root is
     never sealed into a new vault version.
 - **Passkeys later:** per-passkey wrapping where native passkey PRF exists (macOS 15 and iOS 18 through
@@ -348,7 +382,8 @@ For when every app is gone, or a thief revoked your other devices first. The rec
   vault (paper-key style), and the first desktop becomes a device like the rest.
 - In the code (T899, `desktop/src/recovery.ts`): once the 24 words are checked and the vault is kept,
   the first desktop lists its computers and drops the person secret from its store. It keeps only the
-  sealed person box, to reseal the vault when a channel it owns appears. It doesn't let go while a
+  sealed person box, to reseal the vault when a channel it owns appears. Other approving desktops take
+  that box from the vault (T969), and after a re-root they take the new person key's box from it. It doesn't let go while a
   device's proposed recovery key is waiting, and never seals the person key to a key a device proposed.
   An app that set up its words before T899 does the same on its next poll. Joins are proven with the
   device claim alone.

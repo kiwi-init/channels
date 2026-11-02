@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { ProcessTree } from "../src/ancestry.ts";
 import { loadConfig, updateConfig, wipeChannel } from "../src/config.ts";
 import { freeAgentName } from "@kiwi/core/membership.ts";
 import { baseName, bindDirectory, bindingFor, canonicalHarness, here, hereAs, sameHarness, seatsAt, seatsFor, seatsHeldAnywhere } from "../src/seats.ts";
@@ -33,13 +34,14 @@ afterEach(() => {
 
 /** A pid that isn't running: a session that's gone. */
 const DEAD = 2 ** 22 + 12345;
+const NO_TREE: ProcessTree = { lookup: () => null };
 
 test("what each harness says about itself", () => {
   expect(here({ CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "s1", CLAUDE_PID: "42" })).toEqual({ harness: "claude", session: "s1", pid: 42 });
   expect(here({ CODEX_THREAD_ID: "t1" })).toEqual({ harness: "codex", session: "t1" });
   expect(here({ GROK_SESSION_ID: "g1" })).toEqual({ harness: "grok", session: "g1" });
   expect(here({ CLAUDECODE: "1", GROK_SESSION_ID: "g1" })).toEqual({ harness: "grok", session: "g1" });
-  expect(here({ GEMINI_CLI: "1" })).toEqual({ harness: "gemini" });
+  expect(here({ GEMINI_CLI: "1" }, NO_TREE)).toEqual({ harness: "gemini" });
   expect(here({ CURSOR_AGENT: "1" })).toEqual({ harness: "cursor" });
   expect(here({ CURSOR_AGENT: "1", CURSOR_CONVERSATION_ID: "chat-1" })).toEqual({ harness: "cursor", session: "chat-1" });
   expect(here({}, {}, "grok-bot-vm-53703001")).toEqual({ harness: "grok-bot" });
@@ -68,7 +70,7 @@ test("a hook that names its harness is that harness's, whatever the session that
   const nested = { CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "s1", CLAUDE_PID: String(process.pid), CODEX_THREAD_ID: "t1", GROK_SESSION_ID: "g1" };
   expect(hereAs("codex", nested)).toEqual({ harness: "codex", session: "t1" });
   expect(hereAs("grok", nested)).toEqual({ harness: "grok", session: "g1" });
-  expect(hereAs("gemini", nested)).toEqual({ harness: "gemini" });
+  expect(hereAs("gemini", nested, NO_TREE)).toEqual({ harness: "gemini" });
   expect(hereAs(undefined, nested)).toEqual(here(nested));
   bindDirectory(dir, { alias: "ch", as: "claude-seat", harness: "claude", session: "s1", pid: process.pid });
   expect(seatsFor(dir, { who: hereAs("codex", nested) })).toEqual([]);
@@ -82,7 +84,7 @@ test("a named harness with no session never takes a folder's only seat from anot
   expect(hereAs("codex", parent)).toEqual({ harness: "codex" });
   expect(seatsFor(dir, { who: hereAs("codex", parent), claim: false })).toEqual([]);
   expect(seatsFor(dir, { who: hereAs("grok", parent), claim: false })).toEqual([]);
-  expect(seatsFor(dir, { who: hereAs("gemini", parent), claim: false })).toEqual([]);
+  expect(seatsFor(dir, { who: hereAs("gemini", parent, NO_TREE), claim: false })).toEqual([]);
   expect(seatsFor(dir, { who: {}, claim: false }).map((b) => b.as)).toEqual(["parent-seat"]);
 
   const other = join(home, "other");
@@ -93,7 +95,47 @@ test("a named harness with no session never takes a folder's only seat from anot
   const gem = join(home, "gem");
   mkdirSync(gem);
   bindDirectory(gem, { alias: "ch", as: "gemini", harness: "gemini" });
-  expect(seatsFor(gem, { who: hereAs("gemini", parent), claim: false }).map((b) => b.as)).toEqual(["gemini"]);
+  expect(seatsFor(gem, { who: hereAs("gemini", parent, NO_TREE), claim: false }).map((b) => b.as)).toEqual(["gemini"]);
+});
+
+test("Gemini: its own process holds the seat, so a second live Gemini in the checkout is someone else and a restarted one takes its seat back", () => {
+  const tree = (...names: string[]): ProcessTree => ({
+    from: 50,
+    lookup: (pid) => {
+      const name = names[50 - pid];
+      return name ? { ppid: pid - 1, name } : null;
+    },
+  });
+  const first = here({ GEMINI_CLI: "1" }, tree("bash", "node", "node", "zsh"));
+  expect(first).toEqual({ harness: "gemini", session: "gemini-pid-49", pid: 49 });
+  expect(hereAs("gemini", {}, tree("sh", "gemini"))).toEqual({ harness: "gemini", session: "gemini-pid-49", pid: 49 });
+  expect(here({ GEMINI_CLI: "1" }, tree("bash", "claude", "node"))).toEqual({ harness: "gemini" });
+
+  const live = { harness: "gemini" as const, session: `gemini-pid-${process.pid}`, pid: process.pid };
+  bindDirectory(dir, { alias: "ch", as: "gem-one", ...live });
+  const second = { harness: "gemini" as const, session: "gemini-pid-777", pid: 777 };
+  expect(seatsFor(dir, { who: second, claim: false })).toEqual([]);
+  expect(bindingFor(dir, { who: live })?.as).toBe("gem-one");
+
+  bindDirectory(dir, { alias: "ch", as: "gem-gone", harness: "gemini", session: `gemini-pid-${DEAD}`, pid: DEAD });
+  expect(seatsFor(dir, { who: second }).map((b) => b.as)).toEqual(["gem-gone"]);
+  expect(seatsAt(loadConfig(), dir).find((b) => b.as === "gem-gone")).toMatchObject({ session: "gemini-pid-777", pid: 777 });
+});
+
+test("an agent Channels started, in a harness kiwi can't recognise, is told apart by its launch: it never takes the folder's seat, and finds its own", () => {
+  const launched = { KIWI_LAUNCH: "fromTheApp_0123456789", KIWI_HARNESS: "kimi" };
+  expect(here(launched, NO_TREE)).toEqual({ harness: "kimi", session: "launch-fromTheApp_0123456789" });
+  expect(here({ KIWI_LAUNCH: "fromTheApp_0123456789", KIWI_HARNESS: "vim" }, NO_TREE)).toEqual({ session: "launch-fromTheApp_0123456789" });
+  expect(here({ ...launched, CODEX_THREAD_ID: "t1" }, NO_TREE)).toEqual({ harness: "codex", session: "t1" });
+  expect(here({ KIWI_LAUNCH: "no good; id" }, NO_TREE)).toEqual({});
+
+  bindDirectory(dir, { alias: "ch", as: "first", harness: "claude", session: "s1" });
+  const who = here(launched, NO_TREE);
+  expect(seatsFor(dir, { who, claim: false })).toEqual([]);
+  expect(seatsFor(dir, { who: {}, claim: false }).map((b) => b.as)).toEqual(["first"]);
+  bindDirectory(dir, { alias: "ch", as: "second", ...who });
+  expect(bindingFor(dir, { who })?.as).toBe("second");
+  expect(bindingFor(dir, { who: { harness: "claude", session: "s1" } })?.as).toBe("first");
 });
 
 test("MiMoCode and Kimi Code: the harness's own process holds the seat, over the CLAUDECODE they pass through", () => {

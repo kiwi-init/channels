@@ -18,6 +18,8 @@ import type { Connection, Picture, RoomView } from "./wire.ts";
 const WINDOW = 400;
 const KEEP = 1_500;
 const EMIT_MS = 60;
+const RETRY_FIRST_MS = 500;
+const RETRY_MOST_MS = 30_000;
 
 const merged = (prev: readonly Message[], more: readonly Message[]): Message[] => {
   const seen = new Set(prev.map((p) => p.seq));
@@ -52,6 +54,8 @@ export class Room {
   private stopLive: (() => void) | null = null;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private clock: ReturnType<typeof setInterval> | null = null;
+  private retry: ReturnType<typeof setTimeout> | null = null;
+  private retryMs = RETRY_FIRST_MS;
   private closed = false;
   private state: ChannelState | null = null;
   private place = "main";
@@ -88,6 +92,18 @@ export class Room {
       this.schedule();
       if (Date.now() - this.tendedAt >= TEND_SAFETY_MS) this.kick();
     }, 30_000);
+    await this.connect();
+  }
+
+  nudge(): void {
+    if (!this.retry) return;
+    clearTimeout(this.retry);
+    this.retry = null;
+    this.retryMs = RETRY_FIRST_MS;
+    void this.connect();
+  }
+
+  private async connect(): Promise<void> {
     try {
       await this.refreshRoster();
       const head = await this.keyring.call(this.code, "head");
@@ -97,10 +113,22 @@ export class Room {
       void this.refreshInfo();
       if (this.closed) return;
       this.stopLive = this.keyring.follow(this.code, this.since, (ev) => this.on(ev));
+      this.error = null;
+      this.schedule();
     } catch (e) {
+      this.schedule();
+      if (e instanceof ChannelGone) {
+        this.gone = e.why;
+        return;
+      }
       this.error = e instanceof Error ? e.message : String(e);
       this.connection = "reconnecting";
-      this.schedule();
+      if (this.closed) return;
+      this.retry = setTimeout(() => {
+        this.retry = null;
+        void this.connect();
+      }, this.retryMs);
+      this.retryMs = Math.min(this.retryMs * 2, RETRY_MOST_MS);
     }
   }
 
@@ -129,6 +157,7 @@ export class Room {
     this.stopLive?.();
     if (this.timer) clearTimeout(this.timer);
     if (this.clock) clearInterval(this.clock);
+    if (this.retry) clearTimeout(this.retry);
   }
 
   open(place: string): void {
@@ -338,7 +367,7 @@ export class Room {
         gone: this.gone,
         error: this.error,
         head: this.head,
-        whole: this.since === 0 || this.base !== null,
+        whole: this.since === 0,
         messages: this.messages,
         state: this.state,
         online: onlineByName(this.heard, keyOf, now),

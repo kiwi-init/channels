@@ -4,9 +4,11 @@ import type { Member } from "@kiwi/core/membership.ts";
 import { PROTOCOL_VERSION, SNAPSHOT_EVERY, SNAPSHOT_TOO_LARGE, type Message } from "@kiwi/core/protocol.ts";
 import type { ChannelOps, FollowEvent } from "../../../desktop/src/bridge.ts";
 import { ChannelLink } from "./channel-ops.ts";
-import { ChannelStore } from "./channel-store.ts";
+import { APP_BEACON_MS, ChannelStore } from "./channel-store.ts";
+import { PRESENCE_TTL } from "./online.ts";
 import type { StoredMember } from "./store.ts";
 import { dropWarm } from "./warm.ts";
+import { useHistoryDb, type CachedRow, type HistoryDb } from "./history.ts";
 
 const CODE = "mc2-store-test";
 const ME = "pk-me";
@@ -28,6 +30,7 @@ function relay(head = 0, opts: { owner?: boolean; answers?: Record<string, Answe
   const lent = { emitted: [] as string[], released: 0 };
   const calls: { op: string; args: unknown[] }[] = [];
   const kept: { at: number; state: object }[] = [];
+  const beacons: { client: string; query?: boolean }[] = [];
   const answers: Record<string, Answer> = {
     head: () => head,
     members: () => roster,
@@ -44,6 +47,7 @@ function relay(head = 0, opts: { owner?: boolean; answers?: Record<string, Answe
     drainGithub: () => undefined,
     syncGithubRules: () => undefined,
     syncGithubReleases: () => undefined,
+    syncGithub: () => 0,
     ...opts.answers,
   };
   const ops = {
@@ -51,8 +55,16 @@ function relay(head = 0, opts: { owner?: boolean; answers?: Record<string, Answe
       calls.push({ op, args });
       return (await answers[op]?.(...args)) ?? null;
     },
-    presence: () => Promise.resolve(),
+    presence: (_code: string, p: { client: string; query?: boolean }) => {
+      beacons.push(p);
+      return Promise.resolve();
+    },
     openRows: () => Promise.resolve([]),
+    olderRows: (_code: string, before: number, limit: number) => {
+      calls.push({ op: "olderRows", args: [before, limit] });
+      return Promise.resolve({ rows: [], done: true });
+    },
+    indexRows: () => Promise.resolve(null),
     keep: (_code: string, state: object) => {
       kept.push({ at: Date.now(), state });
       return Promise.resolve(null);
@@ -78,7 +90,7 @@ function relay(head = 0, opts: { owner?: boolean; answers?: Record<string, Answe
   };
   const changedAt = () => rosterAt;
   const called = (op: string) => calls.filter((c) => c.op === op);
-  return { link, lend, follows, lent, live, say, setRoster, changedAt, called, kept };
+  return { link, lend, follows, lent, live, say, setRoster, changedAt, called, kept, beacons };
 }
 
 const opened = async (r: ReturnType<typeof relay>, human?: null) => {
@@ -277,14 +289,16 @@ describe("snapshots", () => {
 describe("the GitHub chores", () => {
   const withRepo = { guard: () => ({ charter: null, hold: null, repos: { list: ["acme/app"], since: 0 } }) };
 
-  test("once caught up with a linked repo, the owner syncs its rules, then its releases", async () => {
+  test("once caught up with a linked repo, the owner syncs its rules, then its releases, then its pull requests and issues", async () => {
     const r = relay(0, { owner: true, answers: withRepo });
     const { store, close } = await opened(r);
     r.say({ _tag: "Message", message: msg(1), row: null });
     await until(() => store.handle.value.state.repos.length === 1);
-    await until(() => r.called("syncGithubReleases").length === 1);
+    await until(() => r.called("syncGithub").length === 1);
     expect(r.called("syncGithubRules")).toHaveLength(1);
+    expect(r.called("syncGithubReleases")).toHaveLength(1);
     expect(r.called("syncGithubRules")[0]!.args[0]).toEqual(["acme/app"]);
+    expect(r.called("syncGithub")[0]!.args[0]).toBe("acme/app");
     close();
   });
 
@@ -310,6 +324,81 @@ describe("the GitHub chores", () => {
     expect(r.called("drainGithub")).toHaveLength(0);
     expect(r.called("syncGithubRules")).toHaveLength(0);
     expect(r.called("syncGithubReleases")).toHaveLength(0);
+    expect(r.called("syncGithub")).toHaveLength(0);
     close();
+  });
+});
+
+describe("a person's own presence (T560)", () => {
+  const probe = (from: string): FollowEvent => ({
+    _tag: "Presence",
+    presence: { v: PROTOCOL_VERSION, type: "presence", from, client: "probe", query: true, ts: Date.now(), pk: `pk-${from}`, sigOk: true },
+  });
+
+  test("going live, the app asks who's here and says it's here itself, so other people see it online", async () => {
+    const r = relay(0);
+    const { close } = await opened(r);
+    r.say({ _tag: "Open" });
+    expect(r.beacons).toEqual([{ client: "probe", query: true }, { client: "app" }]);
+    close();
+  });
+
+  test("someone else asking who's here gets an answer, once for a burst of asks, and never from a closed store", async () => {
+    const r = relay(0);
+    const { close } = await opened(r);
+    r.say({ _tag: "Open" });
+    r.beacons.length = 0;
+    await sleep(600);
+    r.say(probe("ana"));
+    r.say(probe("bo"));
+    expect(r.beacons).toEqual([{ client: "app" }]);
+    close();
+    await sleep(600);
+    r.say(probe("ana"));
+    expect(r.beacons).toEqual([{ client: "app" }]);
+  });
+
+  test("it says so again well before others forget it", () => {
+    expect(APP_BEACON_MS * 2).toBeLessThan(PRESENCE_TTL);
+  });
+});
+
+describe("history from the relay is fetched only when asked (T977, #1944)", () => {
+  function archive(from: number, to: number): HistoryDb {
+    const rows = Array.from({ length: to - from + 1 }, (_, i): CachedRow => ({ seq: from + i, e: 1, iv: "iv", ct: "ct" }));
+    return {
+      put: async () => {},
+      putRows: async () => {},
+      newest: async (_room, _pk, count) => rows.slice(-count),
+      after: async (_room, _pk, seq, count) => rows.filter((r) => r.seq > seq).slice(0, count),
+      oldest: async () => rows[0]?.seq ?? null,
+      floor: async () => false,
+      putFloor: async () => {},
+      trimAbove: async () => {},
+      drop: async () => {},
+      dropAll: async () => {},
+      putKept: async () => {},
+      kept: async () => null,
+    };
+  }
+
+  test("opening a channel and receiving live messages never reads older history from the relay", async () => {
+    useHistoryDb(archive(50, 60));
+    try {
+      const r = relay(60);
+      const { close } = await opened(r);
+      r.say({ _tag: "Open" });
+      for (let seq = 61; seq <= 63; seq++)
+        r.say({
+          _tag: "Message",
+          message: { v: PROTOCOL_VERSION, id: `m${seq}`, from: "atlas", kind: "msg", body: "hi", ts: seq, seq, rts: seq, sigOk: true } as Message,
+          row: { seq, e: 1, iv: "iv", ct: "ct" },
+        });
+      await sleep(300);
+      expect(r.called("olderRows")).toEqual([]);
+      close();
+    } finally {
+      useHistoryDb(null);
+    }
   });
 });

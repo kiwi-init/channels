@@ -17,12 +17,20 @@ import type { SendFx } from "./send.ts";
 import type { SettingsFx } from "./settings.ts";
 import type { SnapshotsFx } from "./snapshots.ts";
 
+import type { RoomMeta, RoomNow, RoomSeal } from "../room-rules.ts";
 export interface ChannelFx extends KeysFx, InfoFx, SettingsFx, RequestsFx, MembersFx, DelegationsFx, HistoryFx, SnapshotsFx, SendFx, ImagesFx, LiveFx, GithubFx {}
 
 export class ChannelCore {
   readonly name: string;
   fx!: ChannelFx;
   rotating = false;
+  readonly roomKeys = new Map<string, string>();
+  readonly hidden = new Set<number>();
+  readonly publicRooms = new Set<string>();
+  readonly roomNow = new Map<string, RoomNow>();
+  readonly roomSeals = new Map<string, { seq: number; seal: RoomSeal }[]>();
+  readonly sealSteps = new Map<number, { proven?: boolean; opened?: RoomMeta }>();
+  opensRooms = true;
 
   constructor(
     public access: ChannelAccess,

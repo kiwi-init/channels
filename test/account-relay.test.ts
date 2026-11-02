@@ -1,12 +1,25 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, setDefaultTimeout, setSystemTime, test } from "bun:test";
+import { oldPersonBox, oldVault } from "./old-vault.ts";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { signRequest } from "@kiwi/core/auth.ts";
 import { certUntil, nextLink, readDeviceList, rerootLink, rootLink, type DeviceLink, type DeviceLinkBody } from "@kiwi/core/devices.ts";
 import { accountScope, askToEnroll, ENROLL_TTL_MS, enrollDigits, enrollNonce, type EnrollAnswer, type EnrollAsk, type Enrollment } from "@kiwi/core/enroll.ts";
-import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
-import { openVault, readRecovery, recoveryAfter, recoveryKey, recoveryLink, sealVault, type Recovery, type RecoveryLink, type Vault } from "@kiwi/core/recovery.ts";
+import { generateIdentity, sign, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
+import {
+  PERSON_WORDS_WAIT_FROM,
+  openVault,
+  readRecovery,
+  recoveryAfter,
+  recoveryKey,
+  recoveryLink,
+  sealVault,
+  type Recovery,
+  type OldVault,
+  type RecoveryLink,
+  type Vault,
+} from "@kiwi/core/recovery.ts";
 import { certifyMachine } from "@kiwi/core/person.ts";
 import { WS_PROTOCOL } from "@kiwi/core/protocol.ts";
 import { startRelay } from "../src/relay/bun.ts";
@@ -341,7 +354,7 @@ describe("the vault: the recovery chain and signed versions (T823)", () => {
     return { ...first, key, chain, seal };
   }
 
-  const kept = async (a: Account) => (await (await call(a, null, "GET", "/v1/account/vault")).json()) as { recovery: unknown[]; vault: Vault | null };
+  const kept = async (a: Account) => (await (await call(a, null, "GET", "/v1/account/vault")).json()) as { recovery: unknown[]; vault: Vault | OldVault | null };
 
   test("a new account keeps no vault, and a vault waits for the device list and a recovery key", async () => {
     const a = account();
@@ -464,13 +477,49 @@ describe("the vault: the recovery chain and signed versions (T823)", () => {
     expect((await call(a, await device("stranger"), "PUT", "/v1/account/vault", { recovery: [...longer, cancel] })).status).toBe(403);
   });
 
+  test("new words from the person key wait 7 days, and no new link can claim a date before that rule (T1967)", async () => {
+    t = PERSON_WORDS_WAIT_FROM - 3 * 86_400_000;
+    setSystemTime(new Date(t));
+    const a = account();
+    const { desk, person, links, chain } = await setUp(a);
+    t = PERSON_WORDS_WAIT_FROM + 2 * 86_400_000;
+    setSystemTime(new Date(t));
+    const other = await recoveryKey(new Uint8Array(32).fill(11));
+    const r1 = await readOf(links, chain);
+    const forced = (at: number) => sign(person, { kind: "kiwi-recovery" as const, v: 1 as const, person: person.pk, n: 2, prev: r1.head, at, rpk: other.pk, rxpk: other.xpk!, after: null });
+    const old = await call(a, desk, "PUT", "/v1/account/vault", { recovery: [...chain, await forced(PERSON_WORDS_WAIT_FROM - 86_400_000)] });
+    expect(old.status).toBe(400);
+    expect(await errorOf(old)).toContain("time it's sent");
+    const late = await forced(t);
+    expect((await call(a, desk, "PUT", "/v1/account/vault", { recovery: [...chain, late] })).status).toBe(204);
+    expect(await readOf(links, [...chain, late])).toMatchObject({ rpk: r1.rpk, pending: { rpk: other.pk, after: recoveryAfter(t), by: person.pk } });
+  });
+
+  test("an app from before T969 still keeps its one-box vault, until a vault with a box per desktop is kept (T969)", async () => {
+    const a = account();
+    const { desk, person, links, chain, key, seal } = await setUp(a);
+    const r = await readOf(links, chain);
+    const v1 = await oldVault(desk, r, 1, { person: await oldPersonBox(r, person), channels: [] }, t);
+    expect((await call(a, desk, "PUT", "/v1/account/vault", { vault: v1 })).status).toBe(204);
+    const back = (await kept(a)).vault;
+    expect(back).toEqual(v1);
+    expect((await openVault(back!, key))?.person.sk).toBe(person.sk);
+    const v2 = await oldVault(person, r, 2, { person, channels: [] }, t);
+    expect((await call(a, desk, "PUT", "/v1/account/vault", { vault: v2 })).status).toBe(204);
+    expect((await call(a, desk, "PUT", "/v1/account/vault", { vault: await seal(desk, 3) })).status).toBe(204);
+    const after = await call(a, desk, "PUT", "/v1/account/vault", { vault: await oldVault(desk, r, 4, { person, channels: [] }, t) });
+    expect(after.status).toBe(409);
+    expect(await errorOf(after)).toContain("update the app");
+    expect((await kept(a)).vault?.version).toBe(3);
+  });
+
   test("a vault too large is refused", async () => {
     const a = account();
     const { desk, seal } = await setUp(a);
     const v1 = await seal(desk, 1);
     const huge = await call(a, desk, "PUT", "/v1/account/vault", { vault: { ...v1, box: "x".repeat(1024 * 1024) } });
     expect(huge.status).toBe(413);
-    const big = await call(a, desk, "PUT", "/v1/account/vault", { vault: { ...v1, box: "x".repeat(600 * 1024) } });
+    const big = await call(a, desk, "PUT", "/v1/account/vault", { vault: { ...v1, boxes: [{ ...v1.boxes[0]!, box: "x".repeat(600 * 1024) }] } });
     expect(big.status).toBe(400);
     expect(await errorOf(big)).toContain("too large");
   });
@@ -512,11 +561,27 @@ describe("re-rooting to a new person key (T827)", () => {
     expect((await call(a, person, "PUT", "/v1/account/vault", { vault: v1 })).status).toBe(403);
     const oldSigned = await sealVault(person, { ...recovery.recovery, root: person.pk }, 1, { person, channels: [] }, t);
     expect((await call(a, desk, "PUT", "/v1/account/vault", { vault: oldSigned })).status).toBe(400);
+    for (const held of [oldSigned.held, { ...v1.held, rxpk: (await recoveryKey(new Uint8Array(32).fill(13))).xpk! }]) {
+      const carried = await call(a, desk, "PUT", "/v1/account/vault", { vault: await sign(desk, { ...v1, held, pk: undefined, sig: undefined }) });
+      expect(carried.status).toBe(400);
+      expect(await errorOf(carried)).toContain("isn't sealed for the current person key and recovery key");
+    }
     expect((await call(a, next, "PUT", "/v1/account/vault", { vault: v1 })).status).toBe(204);
     expect((await openVault(v1, key, next.pk))?.person.pk).toBe(next.pk);
     const swap = await recoveryKey(new Uint8Array(32).fill(12));
     const byOldKey = [...chain, await recoveryLink(person, person.pk, recovery.recovery, { pk: swap.pk, xpk: swap.xpk! }, t)];
     expect((await call(a, person, "PUT", "/v1/account/vault", { recovery: byOldKey })).status).toBe(403);
+  });
+
+  test("after a re-root, an app from before T969 can't keep a one-box vault, which can't name the new person key", async () => {
+    const a = account();
+    const { desk, links, list, key, chain, next } = await setUp(a);
+    expect((await call(a, next, "PUT", "/v1/account", { links: [...links, await rerootLink(list, key, chain, next, [desk.pk], t)] })).status).toBe(204);
+    const r = await readRecovery(chain, list, t);
+    if (!r.ok) throw new Error(r.why);
+    const old = await call(a, desk, "PUT", "/v1/account/vault", { vault: await oldVault(desk, r.recovery, 1, { person: next, channels: [] }, t) });
+    expect(old.status).toBe(409);
+    expect(await errorOf(old)).toContain("update the app");
   });
 
   test("a re-root carries the relay's time and the recovery chain it keeps, so replaced words can't re-root", async () => {
@@ -538,5 +603,37 @@ describe("re-rooting to a new person key (T827)", () => {
     expect(old.status).toBe(400);
     expect(await errorOf(old)).toContain("not signed by the recovery key");
     expect((await call(a, next, "PUT", "/v1/account", { links: [...links, await rerootLink(list, words, replaced, next, [desk.pk], t)] })).status).toBe(204);
+  });
+
+  test("new words from a stolen person key wait, and the current words re-root over them on the relay and void them", async () => {
+    const a = account();
+    const { desk, person, links, list, key, chain, next } = await setUp(a);
+    const r1 = await readRecovery(chain, list, t);
+    if (!r1.ok) throw new Error(r1.why);
+    const swap = await recoveryKey(new Uint8Array(32).fill(14));
+    const swapped = [...chain, await recoveryLink(person, list.person, r1.recovery, { pk: swap.pk, xpk: swap.xpk! }, t)];
+    expect((await call(a, person, "PUT", "/v1/account/vault", { recovery: swapped })).status).toBe(204);
+
+    t += 86_400_000;
+    setSystemTime(new Date(t));
+    const byThief = await call(a, next, "PUT", "/v1/account", { links: [...links, await rerootLink(list, swap, swapped, next, [desk.pk], t)] });
+    expect(byThief.status).toBe(400);
+    expect(await errorOf(byThief)).toContain("not signed by the recovery key");
+    const rerooted = [...links, await rerootLink(list, key, swapped, next, [desk.pk], t)];
+    expect((await call(a, next, "PUT", "/v1/account", { links: rerooted })).status).toBe(204);
+
+    t += 7 * 86_400_000;
+    setSystemTime(new Date(t));
+    const after = await readDeviceList(rerooted);
+    if (!after.ok) throw new Error(after.why);
+    const kept = (await (await call(a, null, "GET", "/v1/account/vault")).json()) as { recovery: unknown[] };
+    const read = await readRecovery(kept.recovery, after.list, t);
+    expect(read).toMatchObject({ ok: true, recovery: { rpk: key.pk, pending: null } });
+    if (!read.ok) throw new Error(read.why);
+    const v1 = await sealVault(next, read.recovery, 1, { person: next, channels: [] }, t);
+    expect((await call(a, swap, "PUT", "/v1/account/vault", { vault: v1 })).status).toBe(403);
+    expect((await call(a, key, "PUT", "/v1/account/vault", { vault: v1 })).status).toBe(204);
+    expect((await openVault(v1, key, next.pk))?.person.pk).toBe(next.pk);
+    expect(await openVault(v1, swap, next.pk)).toBeNull();
   });
 });

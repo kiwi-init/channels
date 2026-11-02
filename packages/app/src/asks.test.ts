@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 import { PERMISSION_CHOICES, type PermissionShown } from "@kiwi/core/permission.ts";
 import { PROTOCOL_VERSION, type Message } from "@kiwi/core/protocol.ts";
-import { fold, type ChannelState, type Roster, type Task } from "@kiwi/core/state.ts";
+import { answersAsk, decidersOf, fold, type ChannelState, type Roster, type Task } from "@kiwi/core/state.ts";
 
 import { askLabel, asksFor, choiceIn, chosenOf, heldAsks, permissionAsks } from "./asks";
 
@@ -17,6 +17,30 @@ const ask = (seq: number, from: string, extra: Partial<Message> = {}): Message =
   seq,
   sigOk: true,
   ...extra,
+});
+
+describe("a step stays with the person it's asked of (T1480)", () => {
+  const step = { why: "only the owner can", needsPerson: "approving members is owner-only", do: ["approve it"] };
+
+  test("someone who answers decisions gets a decision, but not a step", () => {
+    const decision = ask(1, "bot", { to: ["jow"], esc: true });
+    const owed = ask(2, "bot", { to: ["jow"], esc: true, step });
+    expect(asksFor([decision, owed], "ana", true).decisions.map((m) => m.seq)).toEqual([1]);
+    expect(asksFor([decision, owed], "jow", false).decisions.map((m) => m.seq)).toEqual([1, 2]);
+  });
+
+  test("their Done doesn't close it, and only the person asked is named", () => {
+    const members = new Map([
+      ["jow", { name: "jow", active: true }],
+      ["ana", { name: "ana", active: true, answersDecisions: true }],
+    ]);
+    const owed = { from: "bot", esc: true as const, to: ["jow"], step };
+    expect(answersAsk(members, owed, "ana")).toBe(false);
+    expect(answersAsk(members, owed, "jow")).toBe(true);
+    expect(answersAsk(members, { from: "bot", esc: true as const, to: ["jow"] }, "ana")).toBe(true);
+    expect(decidersOf({ members } as unknown as Pick<ChannelState, "members">, owed)).toEqual([]);
+    expect(decidersOf({ members } as unknown as Pick<ChannelState, "members">, { esc: true, to: ["jow"] })).toEqual(["ana"]);
+  });
 });
 
 describe("asksFor", () => {

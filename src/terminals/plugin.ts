@@ -75,6 +75,7 @@ export interface PlaceTools {
   platform: NodeJS.Platform;
   shell: string;
   rex: string | null;
+  tmux?: string | null;
 }
 
 export interface TerminalPlugin {

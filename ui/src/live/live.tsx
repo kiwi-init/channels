@@ -11,15 +11,18 @@ import { joinCodeFromLink } from "@kiwi/app/deep-link.ts"
 import { adoptThisComputer } from "@kiwi/app/computers.ts"
 import { useIcons, useMemberIcons } from "@kiwi/app/icons.ts"
 import { lastChannel, rememberChannel, reopenable } from "@kiwi/app/last-channel.ts"
-import { newsTotal, rowNews, startMarks, useMarks, useOpenNews, useTabNews } from "@kiwi/channel/news.ts"
+import { isMuted } from "~/live/quiet"
+import { badgeTotal, newsTotal, rowNews, startMarks, useMarks, useOpenNews, useTabNews } from "@kiwi/channel/news.ts"
 import { useOwnPersonalities } from "@kiwi/app/personalities.ts"
 import { bridge, useSecrets } from "@kiwi/secrets/secrets.ts"
-import { useAccount, useEnrolling } from "~/live/account"
+import { useAccount, useEnrolling, useGithubGate, useGithubSignIn } from "~/live/account"
 import { makeActions } from "~/live/actions"
 import { chime } from "~/live/alerts"
 import { OpenMember, type View } from "~/live/channel"
 import { iconUrl } from "~/live/icon"
 import { useNotesElsewhere } from "~/live/notes"
+import { hashTarget, messageOfLink } from "~/live/notify"
+import { openFromNote } from "~/live/open-message"
 import { harnessChoices } from "~/live/harness-rows"
 import { OpenPending, pendingTitle } from "~/live/pending"
 import { ownPrefs, usePrefs } from "~/live/prefs"
@@ -32,13 +35,20 @@ import type { Go } from "~/nav"
 
 const STATE: Record<ChannelRow["state"], ChannelTile["state"]> = { member: "member", pending: "waiting", agents: "gone", elsewhere: "gone" }
 
-function useTiles(rows: ChannelRow[]): ChannelTile[] {
+function useTiles(rows: ChannelRow[], notify: "all" | "mentions" | "none", muted: readonly string[]): ChannelTile[] {
   const marks = useMarks()
   const openNews = useOpenNews()
   const icons = useIcons()
-  const news = useMemo(() => rows.map((r) => rowNews(r, marks, openNews)), [rows, marks, openNews])
+  const news = useMemo(
+    () =>
+      rows.map((r) => {
+        const n = rowNews(r, marks, openNews)
+        return isMuted(muted, r.code) ? { ...n, fresh: false, count: n.mentions, muted: true } : n
+      }),
+    [rows, marks, openNews, muted]
+  )
   useEffect(() => startMarks(rows), [rows])
-  useTabNews(newsTotal(news))
+  useTabNews(newsTotal(news), badgeTotal(news, notify))
   return useMemo(
     () =>
       rows.map((r, i): ChannelTile => {
@@ -52,6 +62,7 @@ function useTiles(rows: ChannelRow[]): ChannelTile[] {
           unread: n ? (n.open ? n.count : n.fresh ? 1 : 0) : 0,
           needsYou: n?.needs ?? 0,
           last: r.ts,
+          ...(n && "muted" in n ? { muted: true as const } : {}),
         }
       }),
     [rows, news, icons]
@@ -99,23 +110,24 @@ function useDuties(rows: ChannelRow[], person: string | undefined, open: string 
 export function useLive(open: string | null): App {
   const account = useAccount()
   const rows = useChannelList()
-  const channels = useTiles(rows)
+  const prefs = usePrefs()
+  const channels = useTiles(rows, prefs.notify, prefs.muted)
   useDuties(rows, useSecrets().person?.pk, open)
   const opened = useOpened()
-  const prefs = usePrefs()
   const harnesses = useHarnesses()
   const ownPersonalities = useOwnPersonalities()
   const personas = usePersonas(ownPersonalities)
   const starts = useStarts()
   const computer = useComputer()
   const enrolling = useEnrolling()
+  const signIn = useGithubSignIn()
   const actions = useMemo(() => makeActions(), [])
   const channel = opened && opened.code === open ? opened.channel : null
   const lost = useGone()
   const gone = !channel && lost && lost.code === open ? lost : null
   return useMemo(
-    () => ({ account, channels, channel, ...(gone ? { gone } : {}), prefs, harnesses, personas, starts, ownPersonalities, computer, enrolling, actions }),
-    [account, channels, channel, gone, prefs, harnesses, personas, starts, ownPersonalities, computer, enrolling, actions]
+    () => ({ account, channels, channel, ...(gone ? { gone } : {}), prefs, harnesses, personas, starts, ownPersonalities, computer, enrolling, signIn, actions }),
+    [account, channels, channel, gone, prefs, harnesses, personas, starts, ownPersonalities, computer, enrolling, signIn, actions]
   )
 }
 
@@ -130,10 +142,12 @@ function useOpenLinks(go: (g: Go) => void, ready: boolean) {
   useEffect(() => {
     if (!ready) return
     const fromHash = () => {
-      const { code } = parseHash(location.hash)
+      const { hash, seq } = hashTarget(location.hash)
+      const { code } = parseHash(hash)
       if (!code) return
       history.replaceState(null, "", `${location.pathname}${location.search}`)
-      take.current(code)
+      if (seq) openFromNote(code, seq, take.current)
+      else take.current(code)
     }
     fromHash()
     window.addEventListener("hashchange", fromHash)
@@ -147,7 +161,10 @@ function useOpenLinks(go: (g: Go) => void, ready: boolean) {
         .getDeepLink()
         .then((url) => {
           const code = url ? joinCodeFromLink(url) : null
-          if (code) take.current(code)
+          if (!url || !code) return
+          const seq = messageOfLink(url)
+          if (seq) openFromNote(code, seq, take.current)
+          else take.current(code)
         })
         .catch(() => {})
     pick()
@@ -157,7 +174,8 @@ function useOpenLinks(go: (g: Go) => void, ready: boolean) {
 
 export function LiveDuties({ open, view, go }: { open: string | null; view: View; go: (g: Go) => void }) {
   const { person, channels } = useSecrets()
-  useOpenLinks(go, !!person)
+  const gate = useGithubGate()
+  useOpenLinks(go, !!person && gate !== "needed" && gate !== "unknown")
   const restored = useRef(false)
   useEffect(() => {
     if (restored.current || !person || !channels.length) return

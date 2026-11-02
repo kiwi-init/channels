@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import net from "node:net";
 
 import type { TermEvent, TermOpenView, TermTabView } from "./bridge.ts";
-import { daemonMine, daemonMineClose, daemonMineTabs, daemonSocketPath, kiwiHome } from "./daemon-client.ts";
+import { daemonMine, daemonMineClose, daemonMineTabs, daemonSocketPath, daemonToken, kiwiHome } from "./daemon-client.ts";
 
 const FLUSH_MS = 8;
 const OPEN_MS = 10_000;
@@ -13,6 +13,7 @@ interface Open {
   conn: net.Socket;
   pane: string;
   next: number;
+  token: string | null;
 }
 
 const open = new Map<string, Open>();
@@ -22,6 +23,7 @@ const size = (n: unknown): number => (typeof n === "number" && Number.isInteger(
 export function termOpen(pane: unknown, cols: unknown, rows: unknown, emit: (e: TermEvent) => void, home: string = kiwiHome()): Promise<TermOpenView> {
   if (typeof pane !== "string" || !PANE.test(pane) || !size(cols) || !size(rows)) return Promise.resolve({ ok: false, detail: "termOpen takes a pane like %3, and a size" });
   const term = randomUUID();
+  const token = daemonToken(home);
   const conn = net.createConnection(daemonSocketPath(home));
   return new Promise((resolve) => {
     let answered = false;
@@ -37,7 +39,7 @@ export function termOpen(pane: unknown, cols: unknown, rows: unknown, emit: (e: 
       if (answered) return;
       answered = true;
       clearTimeout(late);
-      if (view.ok) open.set(term, { conn, pane, next: 2 });
+      if (view.ok) open.set(term, { conn, pane, next: 2, token });
       else conn.destroy();
       resolve(view);
     };
@@ -68,7 +70,7 @@ export function termOpen(pane: unknown, cols: unknown, rows: unknown, emit: (e: 
       }
     };
     conn.setEncoding("utf8");
-    conn.on("connect", () => conn.write(`${JSON.stringify({ id: 1, verb: "term", pane, cols, rows })}\n`));
+    conn.on("connect", () => conn.write(`${JSON.stringify({ id: 1, verb: "term", pane, cols, rows, ...(token ? { token } : {}) })}\n`));
     conn.on("data", (chunk: string) => {
       buf += chunk;
       for (let nl = buf.indexOf("\n"); nl >= 0; nl = buf.indexOf("\n")) {
@@ -103,7 +105,7 @@ export function termTabClose(pane: unknown, home: string = kiwiHome()): Promise<
 function send(term: unknown, verb: string, params: object): void {
   const t = typeof term === "string" ? open.get(term) : undefined;
   if (!t || t.conn.destroyed) return;
-  t.conn.write(`${JSON.stringify({ ...params, id: t.next++, verb, pane: t.pane })}\n`);
+  t.conn.write(`${JSON.stringify({ ...params, id: t.next++, verb, pane: t.pane, ...(t.token ? { token: t.token } : {}) })}\n`);
 }
 
 export function termKeys(term: unknown, keys: unknown): void {

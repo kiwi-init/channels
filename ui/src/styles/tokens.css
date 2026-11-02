@@ -5,6 +5,70 @@
   font-display: swap;
 }
 
+@font-face {
+  font-family: "Inter";
+  src: url("/fonts/Inter.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inter";
+  src: url("/fonts/Inter-Italic.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Lato";
+  src: url("/fonts/Lato-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Lato";
+  src: url("/fonts/Lato-Italic.woff2") format("woff2");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Lato";
+  src: url("/fonts/Lato-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Lato";
+  src: url("/fonts/Lato-BoldItalic.woff2") format("woff2");
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Atkinson Hyperlegible Next";
+  src: url("/fonts/Atkinson.woff2") format("woff2");
+  font-weight: 200 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Atkinson Hyperlegible Next";
+  src: url("/fonts/Atkinson-Italic.woff2") format("woff2");
+  font-weight: 200 800;
+  font-style: italic;
+  font-display: swap;
+}
+
 :root {
   color-scheme: dark;
   --bg: #000000;
@@ -48,10 +112,16 @@
 
   --white: #fff;
   --shadow-pop: 0 0 0 1px var(--line-2), 0 16px 48px rgb(0 0 0 / 0.32);
+  --float: var(--bg-3);
+  --float-2: color-mix(in srgb, var(--float) 90%, var(--ink));
+  --float-3: color-mix(in srgb, var(--float) 80%, var(--ink));
+  --shadow-float: 0 0 0 1px var(--line-2), inset 0 1px 0 var(--line), 0 1px 2px rgb(0 0 0 / 0.5), 0 4px 12px rgb(0 0 0 / 0.3);
 
   --mono: "Paper Mono", ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
   --ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, Ubuntu, Cantarell, sans-serif;
   --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, Ubuntu, Cantarell, sans-serif;
+
+  --text-scale: 1.1;
 
   --t-stamp: calc(11px * var(--text-scale, 1));
   --t-meta: calc(12px * var(--text-scale, 1));
@@ -60,10 +130,17 @@
   --t-title: calc(17px * var(--text-scale, 1));
   --t-display: calc(24px * var(--text-scale, 1));
 
+  --r-tick: 2px;
+  --r-tag: 6px;
   --r-row: 8px;
   --r-ctl: 10px;
   --r-card: 14px;
   --r-win: 18px;
+
+  --ctl: 32px;
+  --ctl-sm: 24px;
+  --gutter: 24px;
+  --card-pad: 16px;
 
   --rail-w: 64px;
   --side-w: 248px;
@@ -75,6 +152,23 @@
   --ease: cubic-bezier(0.32, 0.72, 0, 1);
   --fast: 0.16s;
   --slow: 0.28s;
+  --glide: 0.48s linear(0, 0.07, 0.223, 0.399, 0.565, 0.705, 0.813, 0.893, 0.947, 0.981, 1.001, 1.011, 1.015, 1.015, 1.013, 1.01, 1.008, 1.005, 1.004, 1.002, 1.001, 1.001, 1);
+  --pop: 0.35s linear(0, 0.073, 0.239, 0.436, 0.626, 0.786, 0.907, 0.99, 1.039, 1.063, 1.068, 1.062, 1.05, 1.037, 1.024, 1.013, 1.005, 1, 0.997, 0.996, 0.995, 0.996, 0.997, 0.998, 1);
+}
+
+:root[data-font="inter"] {
+  --ui: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, Ubuntu, Cantarell, sans-serif;
+  --sans: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, Ubuntu, Cantarell, sans-serif;
+}
+
+:root[data-font="lato"] {
+  --ui: "Lato", -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, Ubuntu, Cantarell, sans-serif;
+  --sans: "Lato", -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, Ubuntu, Cantarell, sans-serif;
+}
+
+:root[data-font="atkinson"] {
+  --ui: "Atkinson Hyperlegible Next", -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, Ubuntu, Cantarell, sans-serif;
+  --sans: "Atkinson Hyperlegible Next", -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, Ubuntu, Cantarell, sans-serif;
 }
 
 :root[data-theme="light"] {
@@ -116,6 +210,8 @@
   --h-codex: #111;
   --h-gemini: #2f6fe4;
   --h-opencode: #444;
+  --float: var(--bg);
+  --shadow-float: 0 0 0 1px var(--line-2), 0 1px 2px rgb(0 0 0 / 0.08), 0 4px 12px rgb(0 0 0 / 0.06);
 }
 
 @media (prefers-color-scheme: light) {
@@ -158,5 +254,7 @@
     --h-codex: #111;
     --h-gemini: #2f6fe4;
     --h-opencode: #444;
+    --float: var(--bg);
+    --shadow-float: 0 0 0 1px var(--line-2), 0 1px 2px rgb(0 0 0 / 0.08), 0 4px 12px rgb(0 0 0 / 0.06);
   }
 }

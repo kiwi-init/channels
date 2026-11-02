@@ -45,6 +45,7 @@ export interface MemberInfo {
   person?: string;
   addsAgents?: boolean;
   answersDecisions?: boolean;
+  managesAgents?: boolean;
   /**
    * On an agent let in with a computer claim: the computer it runs on, so the app can list and
    * remove a computer's agents.
@@ -83,7 +84,7 @@ export interface MemberInfo {
   persona?: Persona;
 }
 
-export type PersonPowers = Pick<MemberInfo, "addsAgents" | "answersDecisions">;
+export type PersonPowers = Pick<MemberInfo, "addsAgents" | "answersDecisions" | "managesAgents">;
 
 /** What runs an agent: its harness (claude-code, codex, opencode…) and the model id it answers with. */
 export interface Runs {
@@ -195,6 +196,7 @@ export async function makeRecord(owner: Identity, room: string, m: MemberInfo & 
     ...(!m.owner && m.kind === "human" && m.device ? { device: { ...(m.device.pk ? { pk: m.device.pk } : {}), label: m.device.label, as: m.device.as } } : {}),
     ...(!m.owner && m.kind === "human" && m.addsAgents ? { addsAgents: true } : {}),
     ...(!m.owner && m.kind === "human" && m.answersDecisions ? { answersDecisions: true } : {}),
+    ...(!m.owner && m.kind === "human" && m.managesAgents ? { managesAgents: true } : {}),
     ...(m.from ? { from: { pk: m.from.pk, label: m.from.label } } : {}),
     ...(m.color && (m.kind === "human" || m.owner) ? { color: m.color } : {}),
     ...(!m.owner && wireScopes(m.scopes) ? { scopes: wireScopes(m.scopes)! } : {}),
@@ -237,6 +239,7 @@ export async function readRecord(key: string, sealed: string, room: string, pk: 
     const person = typeof rec.person === "string" && rec.person.length <= 64 ? rec.person : undefined;
     const addsAgents = !owner && kind === "human" && rec.pk === ownerPk && (rec as { addsAgents?: unknown }).addsAgents === true;
     const answersDecisions = !owner && kind === "human" && rec.pk === ownerPk && (rec as { answersDecisions?: unknown }).answersDecisions === true;
+    const managesAgents = !owner && kind === "human" && rec.pk === ownerPk && (rec as { managesAgents?: unknown }).managesAgents === true;
     const from = readFrom((rec as { from?: unknown }).from);
     const device = !owner && kind === "human" && rec.pk === ownerPk ? readDeviceMark((rec as { device?: unknown }).device) : undefined;
     return {
@@ -254,6 +257,7 @@ export async function readRecord(key: string, sealed: string, room: string, pk: 
         person,
         ...(addsAgents ? { addsAgents } : {}),
         ...(answersDecisions ? { answersDecisions } : {}),
+        ...(managesAgents ? { managesAgents } : {}),
         ...(from ? { from } : {}),
         ...(device ? { device } : {}),
         ...(isColor(rec.color) ? { color: rec.color } : {}),

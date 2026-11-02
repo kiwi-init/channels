@@ -37,7 +37,7 @@ describe("message text follows Settings > Appearance > Text size", () => {
     )
     expect(html).toMatch(/<div class="enrm-admonition"[^>]*><div style="[^"]*font-size:15px[^"]*"><svg[\s\S]*?<\/svg><span>Warning<\/span><\/div>/)
     const css = readFileSync(join(import.meta.dir, "../styles/chat.css"), "utf8")
-    expect(css).toContain(".md .enrm-admonition > div:first-child > span {\n  font-size: calc(15px * var(--text-scale, 1));\n}")
+    expect(css).toContain(".md .enrm-admonition > div:first-child > span {\n  font-size: var(--t-body);\n}")
   })
 })
 
@@ -112,6 +112,44 @@ describe("a link that hides a user name or password stays text (T216)", () => {
 
   test("javascript: links stay text", async () => {
     expect(await rendered("[x](javascript:alert(1))")).not.toContain("href=")
+  })
+})
+
+describe("the renderer only links what a click opens, and never loads a remote picture (#1308)", () => {
+  test("a link keeps its href only for http(s), mailto and Kiwi's own links", async () => {
+    const html = await rendered("[call](tel:123) <tel:456> [mail](mailto:a@b.example) [site](https://ok.example) [file](file:///etc/passwd) [@ana](kiwi-mention:ana)")
+    expect(html).not.toContain('href="tel:')
+    expect(html).not.toContain('href="file:')
+    expect(html).toContain('href="mailto:a@b.example"')
+    expect(html).toContain('href="https://ok.example"')
+    expect(html).toContain('href="kiwi-mention:ana"')
+    expect(html).toContain("call")
+  })
+
+  test("a remote picture, inline, by reference or in a table, is a link that says where it opens", async () => {
+    const html = await rendered("![a *b*](https://evil.example/a.png)\n\n![r][ref]\n\n| x |\n| - |\n| ![t](https://evil.example/t.png) |\n\n[ref]: https://evil.example/ref.png")
+    expect(html).not.toContain("<img")
+    expect(html).not.toContain('rel="preload"')
+    expect(html).toContain('href="https://evil.example/a.png"')
+    expect(html).toContain(">a b (opens evil.example)</a>")
+    expect(html).toContain(">r (opens evil.example)</a>")
+    expect(html).toContain(">t (opens evil.example)</a>")
+  })
+
+  test("a picture at an address a click wouldn't open is its alt text; one inside the message stays a picture", async () => {
+    const html = await rendered("![x](javascript:alert(1)) ![y](file:///tmp/y.png)\n\n![d](data:image/png;base64,AAAA)")
+    expect(html).not.toContain("javascript:")
+    expect(html).not.toContain("file:")
+    expect(html).toContain('<img src="data:image/png;base64,AAAA"')
+  })
+
+  test("a remote picture inside a link is its alt text, so the link around it stays the only one", async () => {
+    const html = await rendered("[![thumb *x*][pic]](https://destination.example) [![p](https://images.example/b.png)](https://two.example)\n\n[pic]: https://images.example/a.png")
+    expect(html).not.toContain("<img")
+    expect(html).not.toContain("images.example")
+    expect(html).not.toMatch(/<a[^>]*>(?:(?!<\/a>).)*<a/)
+    expect(html).toMatch(/<a href="https:\/\/destination.example"[^>]*>thumb x<\/a>/)
+    expect(html).toMatch(/<a href="https:\/\/two.example"[^>]*>p<\/a>/)
   })
 })
 

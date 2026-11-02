@@ -5,7 +5,7 @@ import type { Capability, PlaceTools, SeatPlace, TerminalId, TerminalManifest, T
 import { MANIFESTS, seatPlaces, showSeat, terminalPlugins } from "../src/terminals/registry.ts";
 import { rexManifest } from "../src/terminals/rex/manifest.ts";
 
-const tools = (over: Partial<PlaceTools> = {}): PlaceTools => ({ platform: "darwin", shell: "/bin/zsh", rex: null, ...over });
+const tools = (over: Partial<PlaceTools> = {}): PlaceTools => ({ platform: "darwin", shell: "/bin/zsh", rex: null, tmux: null, ...over });
 
 describe("the terminal plugins", () => {
   test("each has its own id, a name, the platforms it runs on, and only the capabilities it implements", async () => {
@@ -31,8 +31,9 @@ describe("the terminal plugins", () => {
     }
   });
 
-  test("Rex is the only terminal, and it doesn't open a new agent's window: Channels' own tmux does", async () => {
-    expect(MANIFESTS.map((m) => m.id)).toEqual(["rex"]);
+  test("Rex and tmux are the terminals, and neither opens a new agent's window: Channels' own tmux does", async () => {
+    expect(MANIFESTS.map((m) => m.id)).toEqual(["rex", "tmux"]);
+    expect((await terminalPlugins(tools())).map((p) => p.manifest.id)).toEqual(["rex", "tmux"]);
     expect((await terminalPlugins(tools({ platform: "win32" }))).map((p) => p.manifest.id)).toEqual(["rex"]);
     for (const plugin of await terminalPlugins(tools())) expect(Object.keys(plugin)).not.toContain("open");
   });

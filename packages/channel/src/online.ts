@@ -1,4 +1,4 @@
-import type { Activity, Presence, Reach } from "@kiwi/core/protocol.ts";
+import { opsVersion, type Activity, type Presence, type Reach } from "@kiwi/core/protocol.ts";
 import { isWakeVia, wakesInSession } from "@kiwi/core/wake.ts";
 import { howHere } from "./presence.ts";
 
@@ -11,6 +11,7 @@ export interface Online {
   pk: string;
   activity?: Activity;
   reach?: Reach;
+  ops?: number;
   wakes: boolean;
 }
 
@@ -24,6 +25,7 @@ export function hear(heard: ReadonlyMap<string, Online>, p: Presence & { sigOk: 
     pk: p.pk,
     ...(p.activity ? { activity: p.activity } : {}),
     ...(p.reach ? { reach: p.reach } : {}),
+    ...(opsVersion(p.ops) ? { ops: p.ops } : {}),
     wakes: isWakeVia(p.wake) && !wakesInSession(p.wake),
   });
 }

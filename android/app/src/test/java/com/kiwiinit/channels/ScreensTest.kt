@@ -53,6 +53,9 @@ class ScreensTest {
     fun approve() = shoot("approve") { LinkScreen(it, linking = Linking.Approve("482913")) }
 
     @Test
+    fun check() = shoot("check") { LinkScreen(it, linking = Linking.Check("Jow", "3f9a 0c41 77e2 b8d5 1a06")) }
+
+    @Test
     fun list() = shoot("list") { ConversationList(it, open = {}, settings = {}) }
 
     @Test

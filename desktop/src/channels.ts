@@ -8,6 +8,7 @@ import type { Signed, SigningBudget } from "@kiwi/core/sas.ts";
 import type { ChannelIdentityView } from "./bridge.ts";
 import { writePrivate } from "./guard.ts";
 import { Keyring } from "./keyring.ts";
+import { bunSearchWorker } from "./search-host.ts";
 import { serveKeys, type HostToKeys, type KeysToHost } from "./keys-server.ts";
 import { keysParent, type PagePort } from "./keys-shim.ts";
 
@@ -100,6 +101,10 @@ const keyring = new Keyring({
   person: () => person,
   mine: () => mine,
   budget,
+  search: () => {
+    const worker = ["search.js", "search-worker.ts"].map((f) => path.join(import.meta.dir, f)).find((f) => fs.existsSync(f));
+    return dir && worker ? { file: (name) => path.join(dir, "search", name), spawn: () => bunSearchWorker(worker) } : null;
+  },
 });
 
 function attach(port: PagePort): void {
@@ -129,6 +134,7 @@ parent.on("message", (e) => {
       seats = m.seats;
       person = m.person;
       mine = m.mine;
+      if (seats.some((c) => c.creating && !c.access)) void keyring.finishCreating().catch(() => {});
       return;
     case "flush":
       writeMemory();

@@ -145,7 +145,7 @@ describe("a repo's own merge rules decide a task's checks", () => {
   });
 });
 
-describe("the owner's app reads a connected repo's rules through the relay's GitHub App", () => {
+describe("the owner's app reads a connected repo's rules through the relay's GitHub App, whose token GitHub hides the REST merge settings from", () => {
   const dataDir = mkdtempSync(join(tmpdir(), "kiwi-github-rules-"));
   let github: ReturnType<typeof Bun.serve>;
   let server: ReturnType<typeof startRelay>;
@@ -167,14 +167,9 @@ describe("the owner's app reads a connected repo's rules through the relay's Git
         const path = new URL(req.url).pathname;
         if (path === "/repos/ojow/channels/installation") return Response.json({ id: 42 });
         if (path === "/app/installations/42/access_tokens") return Response.json({ token: "ghs_test", expires_at: new Date(Date.now() + 3_600_000).toISOString() });
-        if (path === "/repos/ojow/channels")
-          return Response.json({
-            default_branch: "main",
-            allow_merge_commit: false,
-            allow_squash_merge: true,
-            allow_rebase_merge: false,
-            ...(req.headers.get("authorization") === "Bearer ghu_owner" ? { permissions: { push: true } } : {}),
-          });
+        if (path === "/repos/ojow/channels") return Response.json({ default_branch: "main", ...(req.headers.get("authorization") === "Bearer ghu_owner" ? { permissions: { push: true } } : {}) });
+        if (path === "/graphql" && req.headers.get("authorization") === "Bearer ghs_test")
+          return Response.json({ data: { repository: { defaultBranchRef: { name: "main" }, mergeCommitAllowed: false, squashMergeAllowed: true, rebaseMergeAllowed: false } } });
         if (path === "/repos/ojow/channels/rules/branches/main")
           return Response.json([{ type: "required_status_checks", parameters: { required_status_checks: required.map((context) => ({ context })) } }]);
         if (path === "/repos/ojow/channels/branches/main") return new Response("forbidden", { status: 403 });

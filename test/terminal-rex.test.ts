@@ -426,7 +426,7 @@ esac
         "/other": { alias: "ch", as: "ana", rex: place },
       },
     } as never;
-    const rex = await terminalPlugin("rex", { platform: "darwin", shell: "/bin/zsh", rex: null });
+    const rex = await terminalPlugin("rex", { platform: "darwin", shell: "/bin/zsh", rex: null, tmux: null });
     expect(rex.seats?.(cfg)).toEqual(localRexSeats(cfg).map((seat) => ({ place: "rex", ...seat })));
     expect(rex.seats?.(cfg)).toEqual([{ place: "rex", alias: "ch", agent: "ana", room: "room-1", ...place }]);
   });
@@ -489,7 +489,7 @@ describe("Rex as a terminal plugin", () => {
     const log = join(dir, "calls");
     writeFileSync(bin, `#!/bin/sh\nprintf '%s\\n' "$*" >> '${log}'\ncase "$*" in\n  *terminal.format*) echo '{"content":"the screen"}' ;;\nesac\n`);
     chmodSync(bin, 0o755);
-    const rex = await terminalPlugin("rex", { platform: "darwin", shell: "/bin/zsh", rex: bin });
+    const rex = await terminalPlugin("rex", { platform: "darwin", shell: "/bin/zsh", rex: bin, tmux: null });
     const pane = rex.type?.({ rex: place });
     expect(pane?.type("/clear")).toBe(true);
     expect(pane?.enter()).toBe(true);
@@ -505,7 +505,7 @@ describe("Rex as a terminal plugin", () => {
   });
 
   test("a seat outside Rex gets no pane, no activity, and nothing to show", async () => {
-    const rex = await terminalPlugin("rex", { platform: "darwin", shell: "/bin/zsh", rex: "/nonexistent/rex" });
+    const rex = await terminalPlugin("rex", { platform: "darwin", shell: "/bin/zsh", rex: "/nonexistent/rex", tmux: null });
     expect(rex.type?.({ term: { program: "ghostty" } })).toBeNull();
     expect(await rex.activity?.({})).toBeNull();
     expect(await rex.show?.({})).toEqual({ ok: false, why: "failed" });

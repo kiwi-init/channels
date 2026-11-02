@@ -7,7 +7,7 @@ import { parseJson } from "../../terminals/shared/json.ts";
 import { args, opt } from "../args.ts";
 import { type Command, die, out } from "../context.ts";
 
-const USAGE = "usage: kiwi terminal [status] [--json] | kiwi terminal download|remove rex | kiwi terminal seats [--json] | kiwi terminal show --needs-you | kiwi terminal show --seat SEAT";
+const USAGE = "usage: kiwi terminal [status] [--json] | kiwi terminal download|remove rex|tmux | kiwi terminal seats [--json] | kiwi terminal show --needs-you | kiwi terminal show --seat SEAT";
 const LAUNCHES_USAGE = "usage: kiwi launches on|off|status [--json] | kiwi launches bypass on|off|status [--json]";
 
 async function terminalsStatus(): Promise<TerminalsStatus> {
@@ -65,7 +65,7 @@ const SHOW_WHY: Record<ShowWhy, string> = {
 
 function needsYouText(got: Extract<NeedsYou, { shown: null }>): string {
   if (got.failed) return `Couldn't show ${got.failed.waiting.agent} in ${got.failed.waiting.alias}: ${SHOW_WHY[got.failed.why]}`;
-  return got.seats ? "Nothing needs you right now" : "No seat here runs where Kiwi can show it (Rex, with its helpers on)";
+  return got.seats ? "Nothing needs you right now" : "No seat here runs where Kiwi can show it (Rex or tmux, with its helpers on)";
 }
 
 export const terminalCommands: Record<string, Command> = {
@@ -96,7 +96,7 @@ export const terminalCommands: Record<string, Command> = {
       }
       if (sub === "seats") {
         const seats = yield* Effect.promise(() => seatPlaces());
-        return out(opt.json ? JSON.stringify(seats) : seats.map((s) => `${s.alias} ${s.agent} ${PLACE_NAMES[s.place]}`).join("\n"));
+        return out(opt.json ? JSON.stringify(seats) : seats.map((s) => `${s.alias} ${s.agent} ${PLACE_NAMES[s.place]}${s.place !== "rex" && s.attach ? `: ${s.attach}` : ""}`).join("\n"));
       }
       return yield* die(USAGE);
     }),

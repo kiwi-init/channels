@@ -107,11 +107,18 @@ export async function readCapped(req: Request, max: number): Promise<Uint8Array<
   }
 }
 
-/** The request body as JSON, or the 400 every route has always sent. */
-export const json = <T>() =>
+/** The request body as a JSON object, or the 400 every route has always sent. */
+export const json = <T>(): Effect.Effect<T, BadRequest, Request_> =>
   Effect.gen(function* () {
     const { body } = yield* Request_;
-    return yield* Effect.try({ try: () => JSON.parse(body) as T, catch: () => new BadRequest({ message: "bad json" }) });
+    return yield* Effect.try({
+      try: () => {
+        const parsed: unknown = JSON.parse(body);
+        if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("bad json");
+        return parsed as T;
+      },
+      catch: () => new BadRequest({ message: "bad json" }),
+    });
   });
 
 /** What a handler answers: data to send as JSON (with effects for the adapter), or a whole response. */

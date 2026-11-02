@@ -6,12 +6,14 @@ import { mergeCard, movedCard, sameCard, type Where } from "../card.ts";
 import { eachLive, RelayError, type Live, type SendOptions } from "@kiwi/core/client.ts";
 import { Cursor } from "../config.ts";
 import { cardLine } from "@kiwi/core/format.ts";
+import { changeTo } from "@kiwi/core/changes.ts";
 import {
+  editable,
+  GENERAL_ROOM,
   HANDOFF_DONE,
   HANDOFF_FAILED,
   HANDOFF_MAX_SECONDS,
   ignored,
-  isOldGifKey,
   LEASE_NAME_RE,
   MAX_LEASE_SECONDS,
   MAX_SUMMARY,
@@ -200,10 +202,35 @@ export class SessionMessaging extends SessionListen {
       );
   }
 
+  readonly change = Effect.fn("AgentSession.change")(
+    { self: this },
+    function* (this: SessionMessaging, seq: number, body: string | null) {
+      if (body !== null && !body.trim()) return yield* new Rejected("an edit needs the new text; to remove a message, delete it");
+      const { messages, state } = yield* this.state();
+      const original = messages.find((m) => m.seq === seq);
+      if (!original || ignored(state.trust.get(seq))) return yield* new Rejected(`no message #${seq} here`);
+      if (original.from !== this.me) return yield* new Rejected(`#${seq} isn't yours: only who wrote a message edits or deletes it`);
+      if (!editable(original)) return yield* new Rejected(`#${seq} carries a question, a step or a decision others act on, so it can't be edited or deleted`);
+      if (state.deleted.has(seq)) return yield* new Rejected(`#${seq} is already deleted`);
+      const ev: Event = body === null ? { op: "msg.delete", seq } : { op: "msg.edit", seq, body };
+      yield* this.mayI({ kind: "event", ev });
+      const to = changeTo(original);
+      const room = state.roomOf.get(seq);
+      const sent = yield* this.ch.fx.send(body === null ? `deleted #${seq}` : `edited #${seq}`, {
+        kind: "event",
+        ev,
+        ...(to.length ? { to } : {}),
+        ...(room && room !== GENERAL_ROOM ? { room } : {}),
+      });
+      return yield* this.confirm(sent);
+    },
+    oneLook,
+  );
+
   readonly react = Effect.fn("AgentSession.react")(
     { self: this },
     function* (this: SessionMessaging, seq: number, emoji: string | null) {
-      if (emoji !== null && (!wellFormedReaction(emoji) || isOldGifKey(emoji))) return yield* new Rejected("a reaction is one emoji, like 👍");
+      if (emoji !== null && !wellFormedReaction(emoji)) return yield* new Rejected("a reaction is one emoji, or a GIF key like ok/trailer (kiwi react --list)");
       const { state } = yield* this.state();
       if (!state.placeOf.has(seq) || ignored(state.trust.get(seq))) return yield* new Rejected(`no message #${seq} to react to`);
       return yield* this.confirm(yield* this.event({ op: "react", seq, emoji }, "reaction"));
@@ -256,7 +283,11 @@ export class SessionMessaging extends SessionListen {
         ...(ask.permission ? { permission: ask.permission } : {}),
         ...(re !== undefined ? { re: [re] } : {}),
       });
-      return { seq, to, also: decidersOf(state, { esc: true, to, ...(handoff ? { handoff } : {}), ...(ask.permission ? { permission: ask.permission } : {}) }) };
+      return {
+        seq,
+        to,
+        also: decidersOf(state, { esc: true, to, ...(handoff ? { handoff } : {}), ...(ask.permission ? { permission: ask.permission } : {}), ...(ask.step ? { step: ask.step } : {}) }),
+      };
     },
     oneLook,
   );
