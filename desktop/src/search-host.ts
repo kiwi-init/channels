@@ -67,8 +67,8 @@ export class SearchHost {
     return this.ready(code);
   }
 
-  async feed(code: string, messages: Message[], inputs: FoldInputs): Promise<number> {
-    return (await this.call(code, "feed", { messages, inputs })).through;
+  async feed(code: string, messages: Message[], inputs: FoldInputs, from: number): Promise<number> {
+    return (await this.call(code, "feed", { messages, inputs, from })).through;
   }
 
   async search(code: string, query: string, rooms: string[], limit: number, head: number): Promise<Searched> {

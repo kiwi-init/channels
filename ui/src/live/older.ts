@@ -1,3 +1,4 @@
+import { OLDER_PER_CLICK } from "@kiwi/channel/channel-store.ts"
 import { GENERAL_ROOM } from "@kiwi/core/protocol.ts"
 import type { ChannelState } from "@kiwi/core/state.ts"
 import type { IndexHit } from "../../../desktop/src/search-types.ts"
@@ -23,9 +24,17 @@ const asOlder = (state: Pick<ChannelState, "rooms">, me: string, h: IndexHit): O
 export async function searchOlder(code: string, query: string, before: number): Promise<OlderSearch> {
   const run = need(code)
   const head = run.messages.at(-1)?.seq ?? 0
-  const found = await run.ch.searchHistory({ query, rooms: openRooms(run.state, run.me), limit: LIMIT, head }).catch(() => null)
-  if (!found) return { state: "none", hits: [] }
-  return { state: found.state, hits: found.hits.filter((h) => h.seq < before).map((h) => asOlder(run.state, run.me, h)) }
+  const [found, reach] = await Promise.all([run.ch.searchHistory({ query, rooms: openRooms(run.state, run.me), limit: LIMIT, head }).catch(() => null), run.older.reach().catch(() => null)])
+  if (!found) return { state: "none", hits: [], more: null }
+  return {
+    state: found.state,
+    hits: found.hits.filter((h) => h.seq < before).map((h) => asOlder(run.state, run.me, h)),
+    more: reach && !reach.whole && reach.oldest !== null ? { since: reach.at, upTo: OLDER_PER_CLICK } : null,
+  }
+}
+
+export async function fetchOlder(code: string, got: (asked: number) => void): Promise<void> {
+  await need(code).older.fetch(got)
 }
 
 export async function olderAround(code: string, seq: number): Promise<OlderHit[] | null> {

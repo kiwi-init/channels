@@ -163,7 +163,7 @@ export interface ChannelOps {
   presence(code: string, p: PresenceFields): Promise<void>;
   openRows(code: string, rows: CachedRow[]): Promise<(Message | Unread | null)[]>;
   olderRows(code: string, before: number, limit: number): Promise<OlderRows>;
-  indexRows(code: string, rows: CachedRow[], inputs: FoldInputs): Promise<number | null>;
+  indexRows(code: string, rows: CachedRow[], inputs: FoldInputs, from: number): Promise<number | null>;
   searchHistory(code: string, ask: HistorySearch): Promise<Searched | null>;
   historyAround(code: string, ask: HistoryAround): Promise<IndexHit[] | null>;
   keep(code: string, state: object): Promise<CachedKept | null>;
@@ -209,7 +209,7 @@ export type KeysAsk =
   | { op: "presence"; code: string; p: Wire }
   | { op: "openRows"; code: string; rows: Wire }
   | { op: "olderRows"; code: string; before: number; limit: number }
-  | { op: "indexRows"; code: string; rows: Wire; inputs: Wire }
+  | { op: "indexRows"; code: string; rows: Wire; inputs: Wire; from: number }
   | { op: "searchHistory"; code: string; ask: Wire }
   | { op: "historyAround"; code: string; ask: Wire }
   | { op: "keep"; code: string; state: Wire }

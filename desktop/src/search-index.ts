@@ -13,6 +13,7 @@ export interface IndexedRow {
 export interface IndexStamp {
   rules: number;
   ops: number;
+  from: number;
   through: number;
   schema: number;
 }
@@ -58,8 +59,8 @@ export class SearchIndex {
     const raw = this.get("stamp");
     if (!raw) return null;
     const s = JSON.parse(raw) as Partial<IndexStamp>;
-    return Number.isSafeInteger(s.rules) && Number.isSafeInteger(s.ops) && Number.isSafeInteger(s.through) && Number.isSafeInteger(s.schema)
-      ? { rules: s.rules!, ops: s.ops!, through: s.through!, schema: s.schema! }
+    return Number.isSafeInteger(s.rules) && Number.isSafeInteger(s.ops) && Number.isSafeInteger(s.from) && Number.isSafeInteger(s.through) && Number.isSafeInteger(s.schema)
+      ? { rules: s.rules!, ops: s.ops!, from: s.from!, through: s.through!, schema: s.schema! }
       : null;
   }
 

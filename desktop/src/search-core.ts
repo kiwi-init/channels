@@ -1,4 +1,4 @@
-import { feed, type Fed } from "./search-feed.ts";
+import { covers, feed, NOTHING_FED, type Fed } from "./search-feed.ts";
 import { SearchIndex } from "./search-index.ts";
 import { readIndexFile, removeIndexFile, writeIndexFile } from "./search-store.ts";
 import type { SearchAsk, SearchCalls, SearchOp } from "./search-types.ts";
@@ -20,6 +20,11 @@ export class SearchCore {
         return this.load(ask.code, ask.file, ask.key, ask.roomId);
       case "feed": {
         const o = this.need(ask.code);
+        if (!covers(o.fed, ask.from)) {
+          o.index.close();
+          o.index = SearchIndex.empty();
+          o.fed = { base: null, from: ask.from, through: ask.from - 1 };
+        }
         o.fed = feed(o.index, o.fed, ask.messages, ask.inputs);
         await writeIndexFile(o.file, o.index, o.fed, o.key, o.roomId);
         return { through: o.fed.through };
@@ -55,7 +60,7 @@ export class SearchCore {
     if (had && had.file === file && had.key === key && had.roomId === roomId) return { through: had.fed.through };
     this.close(code);
     const loaded = await readIndexFile(file, key, roomId);
-    const o: Open = loaded ? { ...loaded, file, key, roomId } : { index: SearchIndex.empty(), fed: { base: null, through: 0 }, file, key, roomId };
+    const o: Open = loaded ? { ...loaded, file, key, roomId } : { index: SearchIndex.empty(), fed: NOTHING_FED, file, key, roomId };
     this.open.set(code, o);
     return { through: o.fed.through };
   }

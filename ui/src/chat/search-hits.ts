@@ -4,7 +4,7 @@ import { preview } from "~/chat/preview"
 import type { Channel, Message, OlderHit, Task, Where } from "~/model"
 import { between, nickname } from "~/names"
 
-export type Hit = { kind: "task"; task: Task } | { kind: "message"; m: Message } | { kind: "older"; o: OlderHit }
+export type Hit = { kind: "task"; task: Task } | { kind: "message"; m: Message } | { kind: "older"; o: OlderHit } | { kind: "fetch" }
 
 const TASKS = 8
 const MESSAGES = 50
@@ -49,7 +49,12 @@ export function searchHits(tasks: Task[], messages: Index<Message>, query: strin
   ]
 }
 
-export const hitKey = (hit: Hit): string => (hit.kind === "task" ? `task-${hit.task.id}` : hit.kind === "older" ? `older-${hit.o.seq}` : `message-${hit.m.seq}`)
+export function hitKey(hit: Hit): string {
+  if (hit.kind === "task") return `task-${hit.task.id}`
+  if (hit.kind === "older") return `older-${hit.o.seq}`
+  if (hit.kind === "fetch") return "fetch"
+  return `message-${hit.m.seq}`
+}
 
 export function whereLabel(channel: Pick<Channel, "rooms" | "nicknames">, where: Where): string {
   if (where.kind === "room") return `# ${channel.rooms.find((r) => r.id === where.room)?.name ?? where.room}`

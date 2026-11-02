@@ -287,7 +287,7 @@ export class Keyring implements ChannelOps {
     return { host: s.host, access };
   }
 
-  async indexRows(code: string, rows: readonly unknown[], inputs: FoldInputs): Promise<number | null> {
+  async indexRows(code: string, rows: readonly unknown[], inputs: FoldInputs, from: number): Promise<number | null> {
     const at = await this.searchAt(code);
     if (!at) return null;
     const opened = await openSealedRows(rows, at.access.roomId, at.access.keys);
@@ -295,6 +295,7 @@ export class Keyring implements ChannelOps {
       code,
       opened.filter((m): m is Message => !!m && !("unread" in m)),
       inputs,
+      from,
     );
   }
 

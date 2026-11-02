@@ -53,10 +53,10 @@ test("main indexes sealed archive rows in a worker, searches them by room, and l
   const roster = foldRoster(await k.call(code, "members"));
   const inputs = { roster, roomsFloor: null, guardFloor: null, now: Date.now() };
 
-  expect(await k.indexRows(code, [], inputs)).toBe(0);
+  expect(await k.indexRows(code, [], inputs, 1)).toBe(0);
   const before = await k.searchHistory(code, { query: "report", rooms: ["general"], limit: 50, head });
   expect(before?.state).toBe("indexing");
-  expect(await k.indexRows(code, rows, inputs)).toBe(head);
+  expect(await k.indexRows(code, rows, inputs, 1)).toBe(head);
 
   const found = await k.searchHistory(code, { query: "report", rooms: ["general"], limit: 50, head });
   expect(found?.state).toBe("ready");

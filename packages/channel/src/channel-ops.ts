@@ -30,7 +30,7 @@ function lazyLocalOps(): ChannelOps {
     presence: (code, p) => local().then((o) => o.presence(code, p)),
     openRows: (code, rows) => local().then((o) => o.openRows(code, rows)),
     olderRows: (code, before, limit) => local().then((o) => o.olderRows(code, before, limit)),
-    indexRows: (code, rows, inputs) => local().then((o) => o.indexRows(code, rows, inputs)),
+    indexRows: (code, rows, inputs, from) => local().then((o) => o.indexRows(code, rows, inputs, from)),
     searchHistory: (code, search) => local().then((o) => o.searchHistory(code, search)),
     historyAround: (code, around) => local().then((o) => o.historyAround(code, around)),
     keep: (code, state) => local().then((o) => o.keep(code, state)),
@@ -135,7 +135,7 @@ export class ChannelLink {
   presence = (p: PresenceFields) => this.via.presence(this.code, p);
   openRows = (rows: CachedRow[]) => this.via.openRows(this.code, rows);
   olderRows = (before: number, limit: number) => this.via.olderRows(this.code, before, limit);
-  indexRows = (rows: CachedRow[], inputs: FoldInputs) => this.via.indexRows(this.code, rows, inputs);
+  indexRows = (rows: CachedRow[], inputs: FoldInputs, from: number) => this.via.indexRows(this.code, rows, inputs, from);
   searchHistory = (search: HistorySearch) => this.via.searchHistory(this.code, search);
   historyAround = (around: HistoryAround) => this.via.historyAround(this.code, around);
   keep = (state: object) => this.via.keep(this.code, state);

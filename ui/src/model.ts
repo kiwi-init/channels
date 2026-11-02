@@ -255,6 +255,7 @@ export interface OlderHit {
 export interface OlderSearch {
   state: "ready" | "indexing" | "none"
   hits: OlderHit[]
+  more: { since: number | null; upTo: number } | null
 }
 
 export interface Direct {
@@ -740,6 +741,7 @@ export interface Actions {
   setMute(code: string, room: string | null, on: boolean): void
   searchOlder(code: string, query: string, before: number): Promise<OlderSearch>
   olderAround(code: string, seq: number): Promise<OlderHit[] | null>
+  fetchOlder(code: string, got: (asked: number) => void): Promise<void>
   snooze(until: "1h" | "8h" | "tomorrow" | null): void
   forgetComputer(id: string): void
   linkGithub(): void

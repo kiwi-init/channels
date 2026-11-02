@@ -25,7 +25,7 @@ export interface Searched {
 
 export interface SearchCalls {
   open: { args: { file: string; key: string; roomId: string }; value: { through: number } };
-  feed: { args: { messages: Message[]; inputs: FoldInputs }; value: { through: number } };
+  feed: { args: { messages: Message[]; inputs: FoldInputs; from: number }; value: { through: number } };
   search: { args: { query: string; rooms: string[]; limit: number }; value: { hits: IndexHit[]; through: number } };
   around: { args: { seq: number; rooms: string[]; span: number }; value: { hits: IndexHit[]; through: number } };
   dropRoom: { args: { room: string }; value: { through: number } };

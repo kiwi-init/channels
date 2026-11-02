@@ -25,10 +25,23 @@ const ARCHIVE: OlderHit[] = Array.from({ length: 80 }, (_, i) => {
   return { seq: i + 1, from, text, at: Date.now() - (120 - i) * DAY, where: { kind: "room", room: "general" } }
 })
 
+const PER_CLICK = 5_000
+const FETCHED_AT_START = 48
+let fetched = FETCHED_AT_START
+
 export function demoOlder(query: string, before: number): OlderSearch {
   const terms = query.toLowerCase().split(/\s+/).filter(Boolean)
-  const hits = terms.length ? ARCHIVE.filter((h) => h.seq < before && terms.every((t) => h.text.toLowerCase().includes(t) || h.from.includes(t))) : []
-  return { state: "ready", hits: hits.reverse() }
+  const here = ARCHIVE.slice(ARCHIVE.length - fetched)
+  const hits = terms.length ? here.filter((h) => h.seq < before && terms.every((t) => h.text.toLowerCase().includes(t) || h.from.includes(t))) : []
+  return { state: "ready", hits: hits.reverse(), more: fetched < ARCHIVE.length ? { since: here[0]?.at ?? null, upTo: PER_CLICK } : null }
 }
 
-export const demoAround = (seq: number): OlderHit[] => ARCHIVE.filter((h) => Math.abs(h.seq - seq) <= 40)
+export async function demoFetchOlder(got: (asked: number) => void): Promise<void> {
+  for (const asked of [500, 1_000, 1_500, 2_000]) {
+    await new Promise((ok) => setTimeout(ok, 350))
+    got(asked)
+  }
+  fetched = ARCHIVE.length
+}
+
+export const demoAround = (seq: number): OlderHit[] => ARCHIVE.slice(ARCHIVE.length - fetched).filter((h) => Math.abs(h.seq - seq) <= 40)

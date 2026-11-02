@@ -7,7 +7,7 @@ import { HANDOFF_DONE } from "@kiwi/core/protocol.ts"
 import { stepReplyText } from "~/chat/step"
 import { DEMO_ACCOUNT, DEMO_CHANNEL, DEMO_DEVICES, DEMO_EMPTY, DEMO_GUEST, DEMO_PREFS, DEMO_TILES, DEMO_WAITING, DEMO_WELCOME, DEMO_WORDS } from "~/demo/data"
 import { longFeed } from "~/demo/long"
-import { demoAround, demoOlder } from "~/demo/older"
+import { demoAround, demoFetchOlder, demoOlder } from "~/demo/older"
 import { withSpecs } from "~/demo/specs"
 import { demoShell, demoShells, demoTerm } from "~/demo/term"
 import type { Account, Actions, AgentStarts, App, Enrolling, Finding, GithubSignIn, Launching, ThisComputer, Channel, ChannelTile, GoneChannel, Message, Prefs, Spec, Task } from "~/model"
@@ -741,6 +741,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       setPrefs: (p) => setState((s) => ({ ...s, prefs: { ...s.prefs, ...p } })),
       searchOlder: async (...[, query, before]: Parameters<Actions["searchOlder"]>) => demoOlder(query, before),
       olderAround: async (...[, seq]: Parameters<Actions["olderAround"]>) => demoAround(seq),
+      fetchOlder: (...[, got]: Parameters<Actions["fetchOlder"]>) => demoFetchOlder(got),
       setMute: (code, room, on) => {
         setState((s) => {
           const key = muteKey(code, room)

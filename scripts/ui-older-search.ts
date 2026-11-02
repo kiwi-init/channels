@@ -40,6 +40,20 @@ try {
   expect(windowHits > 1, "the window's hits and the older ones show in one list");
   expect(/· (\d+)/.exec(await heading.innerText())?.[1] !== "0", "the older section says how many matched");
 
+  const olderCount = async () => Number(/· (\d+)/.exec(await heading.innerText())?.[1] ?? 0);
+  const offer = page.getByRole("option", { name: /Search older history/ });
+  expect((await offer.count()) === 1, "a channel with more history on the relay offers to search older history");
+  expect((await offer.innerText()).includes("Fetches up to 5,000 older messages from the relay."), "the offer says how much one click fetches");
+  const fewer = await olderCount();
+  await offer.click();
+  const fetching = page.getByText("Fetching older messages…");
+  await fetching.waitFor();
+  expect(await box.evaluate((el) => el === document.activeElement), "the search stays open and focused while it fetches");
+  await fetching.waitFor({ state: "detached" });
+  await offer.waitFor({ state: "detached" });
+  expect((await olderCount()) > fewer, "matches from the fetched history show up in the same list");
+  expect((await offer.count()) === 0, "once the channel's first message is here, the offer goes away");
+
   await box.fill("relay dumb");
   await heading.waitFor();
   const older = page.locator(".search-item").filter({ hasText: "Keep the relay dumb" }).first();

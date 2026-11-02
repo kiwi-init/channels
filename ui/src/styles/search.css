@@ -180,6 +180,19 @@
   font: 400 var(--t-meta) var(--ui);
 }
 
+.search-item.is-fetch {
+  margin-top: 6px;
+}
+
+.search-fetch .search-line {
+  align-items: center;
+  color: var(--ink-3);
+}
+
+.search-fetch[aria-busy="true"] .search-text {
+  font-variant-numeric: tabular-nums;
+}
+
 .older-bar {
   display: flex;
   align-items: center;

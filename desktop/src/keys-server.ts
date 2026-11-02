@@ -56,8 +56,9 @@ export function serveKeys(k: Keyring, push: (p: KeysPush) => void): KeysSession 
       case "indexRows": {
         const rows = fromWire(r.rows);
         const inputs = fromWire(r.inputs);
-        if (!inputs || typeof inputs !== "object" || Array.isArray(inputs)) throw new Error("bad request");
-        return k.indexRows(text(r.code), Array.isArray(rows) ? rows : [], inputs as FoldInputs);
+        const from = Number(r.from);
+        if (!inputs || typeof inputs !== "object" || Array.isArray(inputs) || !Number.isSafeInteger(from) || from < 1) throw new Error("bad request");
+        return k.indexRows(text(r.code), Array.isArray(rows) ? rows : [], inputs as FoldInputs, from);
       }
       case "searchHistory": {
         const ask = fromWire(r.ask) as Partial<HistorySearch> | null;

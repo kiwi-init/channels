@@ -8,10 +8,15 @@ import type { FoldInputs } from "./search-types.ts";
 
 export interface Fed {
   base: FoldBase | null;
+  from: number;
   through: number;
 }
 
-export const stampFor = (through: number): IndexStamp => ({ rules: FOLD_RULES, ops: EVENT_OPS_VERSION, through, schema: INDEX_SCHEMA });
+export const NOTHING_FED: Fed = { base: null, from: 0, through: 0 };
+
+export const stampFor = (fed: Fed): IndexStamp => ({ rules: FOLD_RULES, ops: EVENT_OPS_VERSION, from: fed.from, through: fed.through, schema: INDEX_SCHEMA });
+
+export const covers = (fed: Fed, from: number): boolean => fed.from > 0 && fed.from <= from && from <= fed.through + 1;
 
 export const sameRules = (stamp: IndexStamp | null): boolean => stamp !== null && stamp.rules === FOLD_RULES && stamp.ops === EVENT_OPS_VERSION && stamp.schema === INDEX_SCHEMA;
 
@@ -41,5 +46,5 @@ export function feed(index: SearchIndex, fed: Fed, messages: readonly Message[],
   index.put(put);
   index.drop(drop);
   for (const [target, text] of retext) if (!state.deleted.has(target)) index.retext(target, text);
-  return { base, through: batch[batch.length - 1]!.seq };
+  return { base, from: fed.from, through: batch[batch.length - 1]!.seq };
 }
