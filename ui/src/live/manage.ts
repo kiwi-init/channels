@@ -21,7 +21,7 @@ import { wantPersona } from "~/live/persona-later"
 import { openedChannel, openedRun, type Run } from "~/live/store"
 import type { Actions, JoinChoice, NewAgent, Powers } from "~/model"
 import { BRANCH_PREFIX_RE, POWERS, ROOM_ID_RE, type Power } from "@kiwi/core/protocol.ts"
-import { newRoomId } from "@kiwi/core/state.ts"
+import { newRoomId, sponsorsAgent } from "@kiwi/core/state.ts"
 import { cleanRoomName, roomProblem, roomsAfter } from "@kiwi/app/rooms.ts"
 
 const POWER_WORDS: Record<Power, string> = { addsAgents: "add agents", answersDecisions: "answer decisions", managesAgents: "manage agents" }
@@ -31,7 +31,8 @@ function agentManager(code: string, name: string): { run: Run; m: RosterMember }
   const m = memberOf(run, name)
   if (run.isOwner) return { run, m }
   const me = run.state.members.get(run.me)
-  if (!me?.active || !me.managesAgents || m.kind !== "agent" || m.owner || m.name === run.me) throw new Error("only the owner, or a person who manages agents, changes an agent's role or personality")
+  if (!me?.active || !me.managesAgents || m.kind !== "agent" || m.owner || m.name === run.me)
+    throw new Error("only the owner, or a person who manages agents, changes an agent's role, personality or nickname")
   return { run, m }
 }
 
@@ -87,12 +88,14 @@ export async function setRole(code: string, name: string, role: string | null): 
 }
 
 export async function removeMember(code: string, name: string): Promise<void> {
-  const run = owner(code)
+  const run = need(code)
+  if (!run.isOwner && !sponsorsAgent(run.state.members, run.me, name)) throw new Error("only the owner removes people, and other people's agents")
   const m = memberOf(run, name)
   const held = heldBy(run.state, name)
   const lead = run.state.lead && run.state.lead !== name ? [run.state.lead] : undefined
   if (held.length) await run.send(handBackText(run.state, name, "removed", held), lead ? { to: lead } : {})
-  await run.ch.remove(m.pk)
+  if (run.isOwner) await run.ch.remove(m.pk)
+  else await event(run, `removed ${name}`, { op: "member.gone", member: m.name, pk: m.pk })
   await run.refreshRoster()
   announce(`Removed ${m.display || name}`)
 }
@@ -125,8 +128,11 @@ export async function setPersona(code: string, name: string, id: string | null):
 export const setReadOnly = (code: string, name: string, on: boolean): Promise<void> => scopesFor(owner(code), name, on ? [] : [...SCOPES])
 
 export async function setNickname(code: string, name: string, nickname: string | null): Promise<void> {
-  const run = owner(code)
-  await run.ch.updateNickname(memberOf(run, name), nickname?.trim() || null)
+  const { run, m } = agentManager(code, name)
+  const clean = nickname?.trim() || null
+  await event(run, clean ? `called ${name} ${clean}` : `took ${name}'s nickname away`, { op: "nickname.set", member: m.name, pk: m.pk, nickname: clean })
+  if (!run.isOwner) return
+  await run.ch.updateNickname(m, clean)
   await run.refreshRoster()
 }
 

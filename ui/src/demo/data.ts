@@ -1,5 +1,6 @@
 import type { Account, Ask, Channel, ChannelTile, Device, Enrolling, Issue, Message, Person, Prefs, PullRequest, Task, TaskGroup } from "~/model"
 import { nicknamesOf } from "~/names"
+import { omit } from "@kiwi/core/omit.ts"
 
 const now = Date.now()
 const m = (min: number): number => now - min * 60_000
@@ -959,5 +960,25 @@ export const DEMO_GUEST: Channel = {
       joined: m(60 * 24 * 40),
       messages: 980,
     },
+    {
+      name: "pip",
+      kind: "agent",
+      display: "Pip",
+      owner: false,
+      you: false,
+      role: "Builder",
+      presence: "online",
+      harness: "claude",
+      runs: "Claude Code",
+      machine: "Jow's MacBook Air",
+      sponsor: "jow",
+      yours: true,
+      persona: "Builder",
+      lastSeen: m(2),
+      joined: m(60 * 24 * 3),
+      messages: 64,
+    },
   ],
 }
+
+export const DEMO_GUEST_MEMBER: Channel = omit(DEMO_GUEST, "youManageAgents", "youTrusted")
