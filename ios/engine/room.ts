@@ -1,6 +1,7 @@
-import { ChannelGone, type RoomsSetting } from "@kiwi/core/client.ts";
+import { ChannelGone, type RoomsSetting, type SendOptions } from "@kiwi/core/client.ts";
 import type { Member } from "@kiwi/core/membership.ts";
 import type { ChannelIcon, Message } from "@kiwi/core/protocol.ts";
+import { wakeList } from "@kiwi/core/phone-wake.ts";
 import { fold, MAIN, placeFromKey, taskId, type ChannelState, type FoldBase, type GuardFloor, type Task } from "@kiwi/core/state.ts";
 
 import type { ChannelIdentityView, FollowEvent, WireError } from "../../desktop/src/bridge.ts";
@@ -175,10 +176,10 @@ export class Room {
     if (where.kind === "dm") {
       if (!where.with.includes(this.me)) throw new Error("this conversation is between two others: you can read along");
       const other = where.with[0] === this.me ? where.with[1] : where.with[0];
-      return this.keyring.call(this.code, "send", body, { kind: "msg", to: [other], dm: true, ...(re !== null ? { re: [re] } : {}), ...(imgs.length ? { imgs: [...imgs] } : {}) });
+      return this.sendWoken(body, { kind: "msg", to: [other], dm: true, ...(re !== null ? { re: [re] } : {}), ...(imgs.length ? { imgs: [...imgs] } : {}) });
     }
     const to = named.length ? named : replyTo && replyTo.from !== this.me ? [replyTo.from] : undefined;
-    return this.keyring.call(this.code, "send", body, {
+    return this.sendWoken(body, {
       kind: "msg",
       ...(to ? { to } : {}),
       ...(where.kind === "task" ? { task: where.task } : {}),
@@ -200,7 +201,12 @@ export class Room {
   async answer(seq: number, text: string): Promise<number> {
     const ask = this.messages.find((m) => m.seq === seq);
     if (!ask) throw new Error("that question isn't here any more");
-    return this.keyring.call(this.code, "send", text, { to: [ask.from], re: [ask.seq], kind: "msg" });
+    return this.sendWoken(text, { to: [ask.from], re: [ask.seq], kind: "msg" });
+  }
+
+  private sendWoken(body: string, opts: SendOptions): Promise<number> {
+    const state = this.state;
+    return this.keyring.call(this.code, "send", body, state ? { ...opts, wake: wakeList(state, this.me, body, opts) } : opts);
   }
 
   async approve(id: number): Promise<number> {

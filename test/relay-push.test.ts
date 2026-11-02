@@ -268,6 +268,13 @@ describe("the relay wakes only the registered phones a message names", () => {
     expect(woken).toEqual([[{ pk: phone.pk, platform: "apns", token: registration.token, tag: "phone-tag-1", sandbox: true, seq }]]);
   });
 
+  test("the client puts its wake list on the send", async () => {
+    woken.length = 0;
+    const seq = await ownerCh.send("for your phone", { wake: [phone.pk] });
+    await Bun.sleep(30);
+    expect(woken).toEqual([[{ pk: phone.pk, platform: "apns", token: registration.token, tag: "phone-tag-1", sandbox: true, seq }]]);
+  });
+
   test("a token APNs calls dead is forgotten", async () => {
     dead = [registration.token];
     await post(owner, [phone.pk]);
