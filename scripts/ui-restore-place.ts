@@ -63,21 +63,26 @@ async function search(page: Page, words: string, hit: string) {
   await option.click();
 }
 
-try {
+async function fresh(shot: string): Promise<Page> {
   const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
   const page = await context.newPage();
   page.on("pageerror", (e) => fails.push(`page threw: ${e.message}`));
+  await page.goto(`http://127.0.0.1:${server.port}/?shot=${shot}`);
+  return page;
+}
 
-  await page.goto(`http://127.0.0.1:${server.port}/?shot=channel`);
+async function roomsAndTabs() {
+  const page = await fresh("channel");
   await page.locator("article.msg").first().waitFor();
   expect((await room(page)) === "general", "a channel with nothing remembered opens #general");
   await page.locator('section[aria-label="Rooms"] button').filter({ hasText: "design" }).click();
-  await page.getByRole("button", { name: "Specs" }).click();
+  await page.getByRole("navigation", { name: "Views" }).getByRole("button", { name: /Specs/ }).click();
   await settle(page, 700);
   await page.reload();
-  await page.getByRole("button", { name: "Specs" }).waitFor();
-  expect((await page.getByRole("button", { name: "Specs" }).getAttribute("aria-pressed")) === "true", "a restart reopens the tab you were on");
-  await page.getByRole("button", { name: "# design" }).click();
+  const specs = page.getByRole("navigation", { name: "Views" }).getByRole("button", { name: /Specs/ });
+  await specs.waitFor();
+  expect((await specs.getAttribute("aria-pressed")) === "true", "a restart reopens the tab you were on");
+  await page.getByRole("navigation", { name: "Views" }).getByRole("button", { name: "# design" }).click();
   expect((await room(page)) === "design", "and the room you were in");
 
   await search(page, "Wayland fixes", "2026.10.6 is out");
@@ -89,16 +94,23 @@ try {
   await page.keyboard.press("ControlOrMeta+BracketRight");
   await settle(page);
   expect((await room(page)) === "releases", "⌘] goes forward to the hit's room again");
+  await page.context().close();
+}
 
-  await page.goto(`http://127.0.0.1:${server.port}/?shot=long-feed`);
+async function scroll() {
+  const page = await fresh("long-feed");
   await page.locator("article.msg").first().waitFor();
   await settle(page);
-  await page.locator(".feed").evaluate((el) => {
-    el.scrollTop = Math.max(0, el.scrollTop - 2600);
-  });
+  const opened = await topRow(page);
+  for (let i = 0; i < 4; i++) {
+    await page.locator(".feed").evaluate((el) => {
+      el.scrollTop = Math.max(0, el.scrollTop - 1500);
+    });
+    await settle(page, 300);
+  }
   await settle(page, 700);
   const spot = await topRow(page);
-  expect(!!spot, "the long feed has a top row to measure");
+  expect(!!spot && !near(spot, opened), `the long feed scrolls up to a spot of its own (${JSON.stringify(opened)} → ${JSON.stringify(spot)})`);
   await page.reload();
   await page.locator("article.msg").first().waitFor();
   await settle(page);
@@ -124,7 +136,12 @@ try {
   await page.keyboard.press("ControlOrMeta+BracketRight");
   await settle(page);
   expect(await visible(page, hit), "⌘] works from inside a text box too");
-  await context.close();
+  await page.context().close();
+}
+
+try {
+  await roomsAndTabs();
+  await scroll();
 } finally {
   await browser.close();
   void server.stop(true);

@@ -104,13 +104,12 @@ function spotIn(box: HTMLElement, list: HTMLElement): Spot | null {
   return row && Number.isSafeInteger(seq) ? { seq, offset: Math.round(row.getBoundingClientRect().top - top) } : null
 }
 
-function rowAt(list: HTMLElement, seq: number): HTMLElement | null {
-  let best: HTMLElement | null = null
-  for (const row of list.querySelectorAll<HTMLElement>(":scope > [data-seq]")) {
-    if (Number(row.dataset.seq) > seq) break
-    best = row
+function rowAt(box: HTMLElement, list: readonly Message[], at: number): HTMLElement | null {
+  for (let i = at; i >= Math.max(0, at - MORE); i--) {
+    const row = box.querySelector<HTMLElement>(`:scope > [data-seq="${list[i]?.seq}"]`)
+    if (row) return row
   }
-  return best
+  return null
 }
 
 export function useStick(following = true) {
@@ -273,13 +272,13 @@ function Feed({ channel, where, spot, jump }: { channel: Channel; where: Where; 
   const afterProposal = proposalAt === undefined ? undefined : list[list.findIndex((m) => m.seq === proposalAt) + 1]?.seq
   const breaks = new Set([mark, foldAt, proposalAt, afterProposal].filter((seq): seq is number => seq !== null && seq !== undefined))
 
-  const [back] = useState(() => (spot && !jump && list.some((m) => m.seq <= spot.seq) ? spot : null))
+  const [back] = useState(() => {
+    const at = spot && !jump ? list.findIndex((m) => m.seq === spot.seq) : -1
+    return spot && at >= 0 ? { offset: spot.offset, at } : null
+  })
   const [span, setSpan] = useState<Span>(() =>
     back
-      ? around(
-          list,
-          list.findLastIndex((m) => m.seq <= back.seq)
-        )
+      ? around(list, back.at)
       : mark === null
         ? { top: null, bottom: null }
         : around(
@@ -313,13 +312,14 @@ function Feed({ channel, where, spot, jump }: { channel: Channel; where: Where; 
   }, [list, start, end, names, tasks])
 
   const opened = useRef(false)
+  const pinned = useRef<Spot | null>(back && spot)
   useLayoutEffect(() => {
     if (opened.current) return
     opened.current = true
     const box = scroller.current
-    const row = back && content.current ? rowAt(content.current, back.seq) : null
+    const row = back && content.current ? rowAt(content.current, list, back.at) : null
     if (back && box && row) {
-      toOffset(box.scrollTop + row.getBoundingClientRect().top - box.getBoundingClientRect().top - back.offset)
+      toOffset(Math.round(box.scrollTop + row.getBoundingClientRect().top - box.getBoundingClientRect().top - back.offset))
       remember()
       if (!stuck.current && unread) queueMicrotask(() => setFresh(unread.count))
       return
@@ -329,7 +329,7 @@ function Feed({ channel, where, spot, jump }: { channel: Channel; where: Where; 
     toOffset(line.offsetTop - 12)
     remember()
     if (!stuck.current) queueMicrotask(() => setFresh(unread.count))
-  }, [back, unread, remember, toBottom, toOffset, stuck, content, scroller])
+  }, [back, list, unread, remember, toBottom, toOffset, stuck, content, scroller])
 
   const last = list.at(-1)
   const lastSeq = useRef(last?.seq ?? 0)
@@ -359,7 +359,14 @@ function Feed({ channel, where, spot, jump }: { channel: Channel; where: Where; 
     remember()
     const box = scroller.current
     if (!box) return
-    if (list.length && content.current) keepSpot(here, stuck.current ? null : spotIn(box, content.current))
+    if (list.length && content.current) {
+      const now = stuck.current ? null : spotIn(box, content.current)
+      const pin = pinned.current
+      if (!pin || !now || now.seq !== pin.seq || Math.abs(now.offset - pin.offset) > 2) {
+        pinned.current = null
+        keepSpot(here, now)
+      }
+    }
     if (stuck.current) setFresh(0)
     const below = box.scrollHeight - box.scrollTop - box.clientHeight
     setFar(!following || below > box.clientHeight * 1.5)
