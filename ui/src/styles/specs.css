@@ -122,10 +122,6 @@
   color: var(--ink-3);
 }
 
-.board-list.specs-list {
-  max-width: calc(var(--col) + 400px + 2 * var(--gutter));
-}
-
 .specs-list .gh-item {
   grid-template-columns: minmax(0, 1fr) 96px;
 }
@@ -169,6 +165,11 @@
   grid-template-columns: 16px minmax(0, 1fr) auto;
   width: 100%;
   padding-right: 8px;
+}
+
+.spec-row > .gh-title {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .spec-row > .spec-mark {
@@ -287,7 +288,7 @@
 }
 
 .spec-top {
-  max-width: calc(var(--col) + 400px);
+  max-width: var(--list);
   margin: 0 auto;
 }
 
@@ -402,7 +403,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 24px;
-  max-width: calc(var(--col) + 400px);
+  max-width: var(--list);
   margin: 20px auto 0;
 }
 
@@ -721,7 +722,7 @@
 }
 
 .spec-editor {
-  max-width: calc(var(--col) + 400px);
+  max-width: var(--list);
   margin: 20px auto 0;
 }
 
@@ -779,7 +780,7 @@
 .spec-result {
   display: grid;
   gap: 20px;
-  max-width: calc(var(--col) + 400px);
+  max-width: var(--list);
   margin: 20px auto 0;
 }
 

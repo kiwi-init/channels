@@ -166,8 +166,10 @@
 .gh-title {
   grid-column: 2;
   min-width: 0;
+  overflow: hidden;
   font: var(--t-body) / 1.35 var(--sans);
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .gh-group.is-merged .gh-title,
