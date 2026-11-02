@@ -135,6 +135,13 @@ describe("a person cuts their own old devices from a channel without waiting for
     }
     expect(state.members.get("tia")?.active).toBe(true);
     expect([...state.rejected.values()].filter((why) => why === REFUSED)).toHaveLength(4);
+    const said = (await log()).flatMap((m) => (m.ev?.op === "member.gone" && m.from === "tia" && m.ev.why ? [[m.ev.member, m.ev.why]] : []));
+    expect(said).toEqual(
+      expect.arrayContaining([
+        [tablet.id.name, 'their phone "tablet" was forgotten from their devices'],
+        ["tia-bot", `tia-bot's computer "test-computer" was forgotten from @tia's devices`],
+      ]),
+    );
     await s.ownerCh.reconcilePosting(state, await s.ownerCh.members());
     for (const who of [tablet, bot]) expect(await relayHas(who)).toBe(false);
   });

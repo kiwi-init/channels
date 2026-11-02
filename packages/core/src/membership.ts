@@ -398,7 +398,7 @@ export interface JoinRequest extends MemberInfo {
    * (which the owner's client passes in, since only the app holds it), and `joinsOnItsOwn` whether
    * it's let in without a tap: the owner's own, or a person's whose record says they add agents.
    */
-  computer?: { pk: string; label: string; person: string; personName: string; own: boolean; joinsOnItsOwn: boolean; forgotten?: true };
+  computer?: { pk: string; label: string; person: string; personName: string; own: boolean; joinsOnItsOwn: boolean; forgotten?: true; revoked?: true };
   device?: { pk: string; person: string; label: string; as: "desktop" | "phone" | "computer"; own: boolean; joinsOnItsOwn: boolean; handle?: string };
   /**
    * A person asking to join themself: their verified person key (from a valid PersonClaim over this

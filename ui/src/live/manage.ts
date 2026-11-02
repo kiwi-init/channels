@@ -23,6 +23,8 @@ import type { Actions, JoinChoice, NewAgent, Powers } from "~/model"
 import { BRANCH_PREFIX_RE, POWERS, ROOM_ID_RE, type Power } from "@kiwi/core/protocol.ts"
 import { newRoomId, sponsorsAgent } from "@kiwi/core/state.ts"
 import { cleanRoomName, roomProblem, roomsAfter } from "@kiwi/app/rooms.ts"
+import { revokedComputer } from "@kiwi/app/forgotten-computers.ts"
+import { forgottenComputer } from "@kiwi/core/client/requests.ts"
 
 const POWER_WORDS: Record<Power, string> = { addsAgents: "add agents", answersDecisions: "answer decisions", managesAgents: "manage agents" }
 
@@ -56,6 +58,7 @@ export async function letIn(run: Run, r: JoinRequest, choice: JoinChoice): Promi
     if (!NAME_RE.test(name)) throw new Error(`${name} can't be a name: letters, digits, . _ - only`)
     if (run.roster.some((m) => m.active && m.pk !== r.pk && nameKey(m.name) === nameKey(name))) throw new Error(`${name} is taken here too`)
   }
+  if (r.computer && (r.computer.revoked || revokedComputer(r.computer.person, r.computer.pk))) throw new Error(forgottenComputer(r.display || r.name, r.computer))
   const persona = await personaFor(r, choice)
   const scopes = choice.readOnly === undefined ? newMemberScopes(run.roomId) : choice.readOnly ? [] : [...SCOPES]
   const powers = r.kind === "human" ? (choice.powers ?? newMemberPowers(run.roomId)) : null
@@ -348,7 +351,7 @@ export const exportHistory: Actions["exportHistory"] = async (code, kind) => {
     const note = exportNote(log)
     if (!note.complete) announce(note.text)
   } catch (err) {
-    announce(`Not saved: ${err instanceof Error ? err.message : String(err)}`)
+    announce(`Not saved: ${err instanceof Error ? err.message : String(err)}`, "error")
   }
 }
 

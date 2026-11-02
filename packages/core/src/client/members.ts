@@ -5,7 +5,7 @@ import * as Effect from "effect/Effect";
 import { newChannelKey } from "../crypto.ts";
 import { MAX_NICKNAME } from "../protocol.ts";
 import { sign } from "../identity.ts";
-import { inlineText, makeRecord, sealRecord, type Member, type PersonPowers } from "../membership.ts";
+import { inlineText, makeRecord, sealRecord, type Member, type MemberInfo, type PersonPowers } from "../membership.ts";
 import { omit } from "../omit.ts";
 import { Rejected } from "../refusals.ts";
 import { canPost, SCOPES, scopesOf, type Scope } from "../scopes.ts";
@@ -189,35 +189,26 @@ export class ChannelMembers {
       const all = yield* this.ch.fx.members();
       const me = all.find((m) => m.active && !m.unverified && m.pk === this.ch.identity.pk);
       if (me?.kind !== "human" || (me.person ?? me.sponsor?.user) !== list.person) return [];
-      const revoked = new Set(list.revoked);
-      const gone = all.filter(
-        (m) =>
-          m.active &&
-          !m.owner &&
-          !m.unverified &&
-          m.pk !== me.pk &&
-          (m.kind === "human" ? m.person === list.person && !!m.device?.pk && revoked.has(m.device.pk) : m.sponsor?.user === list.person && !!m.from?.pk && revoked.has(m.from.pk)),
-      );
-      for (const m of gone) yield* this.ch.fx.send(`removed ${m.name}`, { kind: "event", ev: { op: "member.gone", member: m.name, pk: m.pk } });
+      const gone = all.flatMap((m) => {
+        const why = m.active && !m.owner && !m.unverified && m.pk !== me.pk ? cutReason(m, list) : null;
+        return why ? [{ ...m, why }] : [];
+      });
+      for (const m of gone) yield* this.ch.fx.send(`removed ${m.name}: ${m.why}`, { kind: "event", ev: { op: "member.gone", member: m.name, pk: m.pk, why: m.why } });
       return gone;
     }),
 
     cutDevices: Effect.fn("Channel.cutDevices")({ self: this }, function* (this: ChannelMembers, list: DeviceList) {
       yield* this.ch.ownerOnly();
       const revoked = new Set(list.revoked);
-      const certOnly = (pk: string): boolean => !!list.reroots.length && !listedComputer(list, pk);
-      const cut = (yield* this.ch.fx.members()).filter(
-        (m) =>
-          m.active &&
-          !m.owner &&
-          !m.unverified &&
-          ((!!m.device?.pk && revoked.has(m.device.pk) && m.person === list.person) || (!!m.from && (revoked.has(m.from.pk) || certOnly(m.from.pk)) && m.sponsor?.user === list.person)),
-      );
+      const cut = (yield* this.ch.fx.members()).flatMap((m) => {
+        const why = m.active && !m.owner && !m.unverified ? cutReason(m, list) : null;
+        return why ? [{ ...m, why }] : [];
+      });
       const dropped = (yield* this.ch.fx.delegations().pipe(Effect.catchCause(() => Effect.succeed([])))).filter((d) => d.person === list.person && revoked.has(d.delegate));
       if (!cut.length && !dropped.length) return cut;
       for (const d of dropped) yield* this.ch.fx.undelegate(d.delegate);
       for (const m of cut) {
-        yield* this.ch.fx.send(`removed ${m.name}`, { kind: "event", ev: { op: "member.gone", member: m.name, pk: m.pk } });
+        yield* this.ch.fx.send(`removed ${m.name}: ${m.why}`, { kind: "event", ev: { op: "member.gone", member: m.name, pk: m.pk, why: m.why } });
         yield* this.ch.request(`/members/${m.pk}`, { method: "DELETE" });
         yield* Effect.ignore(Effect.try({ try: () => this.info.markGone(m.pk), catch: (err) => err }));
       }
@@ -315,4 +306,18 @@ export class ChannelMembers {
     if (!pk8 || !rows.some((r) => r.pk.startsWith(pk8) && (r.pk === without || this.info.removed(r.pk)))) return err;
     return new Rejected(`the relay still lists a key this channel removed (${pk8}…), so it won't take the new key: that's the relay's doing; ask whoever runs it (${said})`);
   }
+}
+
+type Cuttable = Pick<MemberInfo, "name" | "person" | "device" | "from" | "sponsor">;
+
+const quoted = (label: string): string => (label ? ` "${inlineText(label, 60)}"` : "");
+
+export function cutReason(m: Cuttable, list: DeviceList): string | null {
+  const revoked = new Set(list.revoked);
+  if (m.device?.pk && revoked.has(m.device.pk) && m.person === list.person) return `their ${m.device.as}${quoted(m.device.label)} was forgotten from their devices`;
+  if (!m.from || m.sponsor?.user !== list.person) return null;
+  const whose = m.sponsor.handle ? `@${m.sponsor.handle}` : inlineText(m.sponsor.name, 60) || "their person";
+  if (revoked.has(m.from.pk)) return `${m.name}'s computer${quoted(m.from.label)} was forgotten from ${whose}'s devices`;
+  if (list.reroots.length && !listedComputer(list, m.from.pk)) return `${m.name}'s computer${quoted(m.from.label)} isn't on ${whose}'s devices since they replaced their person key`;
+  return null;
 }

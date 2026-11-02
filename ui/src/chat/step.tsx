@@ -2,18 +2,14 @@ import { useState } from "react"
 
 import type { Step, StepReply } from "@kiwi/core/protocol.ts"
 import { Icon } from "~/kit/icons"
-import { announce } from "~/kit/toasts"
+import { copyText } from "~/kit/toasts"
 
 export function stepReplyText(reply: StepReply): string {
   if (reply.outcome === "done") return reply.output ? `Done\n\n${reply.output}` : "Done"
   return `${reply.outcome === "cant" ? "Can't do it" : "Not needed"}: ${reply.reason}`
 }
 
-const copy = (command: string) =>
-  navigator.clipboard.writeText(command).then(
-    () => announce("Command copied"),
-    () => announce("Couldn't copy. Select it and copy by hand.")
-  )
+const copy = (command: string) => copyText(command, "Command copied")
 
 export function StepHow({ step }: { step: Step }) {
   return (

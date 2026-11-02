@@ -6,6 +6,7 @@ import type { Member } from "@kiwi/core/membership.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
 import { recoveryKey, recoveryLink } from "@kiwi/core/recovery.ts";
 import { goneOwn, postedLists, postList, tendLists, type ListsApi } from "./device-lists";
+import { revokedComputer } from "./forgotten-computers";
 
 const store = new Map<string, string>();
 globalThis.localStorage = {
@@ -125,4 +126,13 @@ test("a person's own app logs the cut of its revoked devices once per channel an
   expect(await goneOwn("mc2-a", revoked, api)).toEqual([]);
   expect((await goneOwn("mc2-b", revoked, api)).map((m) => m.name)).toEqual(["jow-2"]);
   expect(asked.map((l) => l.revoked)).toEqual([[phone.pk], [phone.pk]]);
+});
+
+test("a pass keeps the lists it read, so the app can tell a request from a forgotten computer (T2622)", async () => {
+  const { person, phone, revoked } = await lists();
+  const { api } = channel([event(1, "jow", revoked)]);
+  await tendLists("mc2-forgot", [], api);
+  expect(revokedComputer(person.pk, phone.pk)).toBe(true);
+  expect(revokedComputer(person.pk, "someone-else")).toBe(false);
+  expect(revokedComputer("another-person", phone.pk)).toBe(false);
 });

@@ -12,7 +12,7 @@ import { MAX_SAVE_BYTES, savedName } from "../save-file.ts";
 import { CHANNEL_CALLS } from "../bridge.ts";
 import { keysAtRest } from "../store.ts";
 import { UI_CONTRACT } from "../ui-contract.ts";
-import { checkForUpdate, updateState } from "../updater.ts";
+import { checkForUpdate, dismissMovedApp, movedApp, updateState } from "../updater.ts";
 import { tintsOf } from "../wallpaper-tints.ts";
 import { BACKDROP_HEIGHT, BACKDROP_WIDTH, backdropOf } from "../wallpaper-backdrop.ts";
 
@@ -23,6 +23,8 @@ export function miscCalls(
   | "getUpdate"
   | "installUpdate"
   | "checkUpdate"
+  | "movedApp"
+  | "dismissMovedApp"
   | "notify"
   | "openExternal"
   | "getDeepLink"
@@ -43,6 +45,8 @@ export function miscCalls(
     getUpdate: () => updateState(),
     installUpdate: () => host.restartToUpdate(),
     checkUpdate: () => checkForUpdate(),
+    movedApp: () => movedApp(),
+    dismissMovedApp: () => dismissMovedApp(),
     notify: (title: string, body: string, link?: string) => host.notify(title, body, opensChannel(link)),
     openExternal: async (url: string) => {
       const ext = externalUrl(url);

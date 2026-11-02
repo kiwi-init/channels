@@ -67,7 +67,7 @@ export const ebHost: Host = {
   app: {
     packaged: () => BuildConfig.getSync().isPackaged,
     version: () => bundle.version,
-    path: (name) => (name === "data" ? dataDir : name === "logs" ? Utils.paths.userLogs : name === "exe" ? process.execPath : PATHS.RESOURCES_FOLDER),
+    path: (name) => (name === "applications" ? "/Applications" : name === "data" ? dataDir : name === "logs" ? Utils.paths.userLogs : name === "exe" ? process.execPath : PATHS.RESOURCES_FOLDER),
     ready: () => true,
     relaunch: (execPath) => {
       const after = relaunchAfter(process.pid, execPath, process.env);

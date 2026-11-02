@@ -8,6 +8,7 @@ import { useApp } from "~/nav"
 import { Confirm } from "~/settings/controls"
 import { RecoveryKey } from "~/settings/recovery"
 import { Page } from "~/settings/sections"
+import { copyText } from "~/kit/toasts"
 
 type Kind = "computer" | "phone"
 
@@ -163,7 +164,6 @@ function phoneWarning(phone: Computer): string {
 }
 
 function PairLine({ text, label }: { text: string; label: string }) {
-  const { toast } = useApp()
   return (
     <div className="set-pair-line">
       <code>{text}</code>
@@ -171,10 +171,7 @@ function PairLine({ text, label }: { text: string; label: string }) {
         icon="copy"
         label={label}
         onClick={() => {
-          void navigator.clipboard.writeText(text).then(
-            () => toast("Copied"),
-            () => toast("Could not copy")
-          )
+          copyText(text)
         }}
       />
     </div>

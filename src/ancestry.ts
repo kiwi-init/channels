@@ -32,7 +32,7 @@ function procInfo(pid: number): ProcInfo | null {
   return process.platform === "linux" ? fromProc(pid) : fromPs(pid);
 }
 
-const HARNESS_PROCESSES: readonly string[] = ["claude", "codex", "opencode", "grok", "gemini", "cursor-agent", "mimo", "kimi-code", "kimi", "zcode-cli"];
+const HARNESS_PROCESSES: readonly string[] = ["claude", "codex", "opencode", "grok", "gemini", "cursor-agent", "mimo", "kimi-code", "kimi", "zcode-cli", "agy"];
 
 const KIMI_PROCESSES: readonly string[] = ["kimi-code", "kimi"];
 
@@ -79,6 +79,14 @@ export function zcodePid(env: Record<string, string | undefined>, tree: ProcessT
   return near.kind === "harness" && near.name === "zcode-cli" ? near.pid : null;
 }
 
+export function agyHere(env: Record<string, string | undefined>, tree: ProcessTree = {}): { session: string; pid: number | null } | null {
+  const session = env.ANTIGRAVITY_CONVERSATION_ID;
+  if (env.ANTIGRAVITY_AGENT !== "1" || !session) return null;
+  const near = nearestHarness(tree, null);
+  if (near.kind !== "harness") return { session, pid: null };
+  return near.name === "agy" ? { session, pid: near.pid } : null;
+}
+
 export function mimoHere(env: Record<string, string | undefined>, tree: ProcessTree = {}): { pid: number | null } | null {
   if (!env.MIMOCODE) return null;
   const pid = Number(env.MIMOCODE_PID);
@@ -93,7 +101,7 @@ export function mimoHere(env: Record<string, string | undefined>, tree: ProcessT
   }
 }
 
-const OTHER_HARNESS_ENV: readonly string[] = ["CLAUDECODE", "CODEX_THREAD_ID", "GROK_SESSION_ID", "OPENCODE_SESSION_ID", "GEMINI_CLI", "CURSOR_AGENT", "MIMOCODE"];
+const OTHER_HARNESS_ENV: readonly string[] = ["CLAUDECODE", "CODEX_THREAD_ID", "GROK_SESSION_ID", "OPENCODE_SESSION_ID", "GEMINI_CLI", "CURSOR_AGENT", "MIMOCODE", "ANTIGRAVITY_AGENT"];
 
 export function piHere(env: Record<string, string | undefined>, tree: ProcessTree = {}): { pid: number | null } | null {
   if (env.PI_CODING_AGENT !== "true") return null;

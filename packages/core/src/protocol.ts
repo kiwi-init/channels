@@ -314,7 +314,7 @@ export type Event =
   | { op: "react"; seq: number; emoji: string | null }
   | { op: "msg.edit"; seq: number; body: string }
   | { op: "msg.delete"; seq: number }
-  | { op: "member.gone"; member: string; pk: string }
+  | { op: "member.gone"; member: string; pk: string; why?: string }
   | { op: "member.back"; member: string; pk: string }
   /** An agent's nickname (null: none), from the owner or a person who manages agents; the owner's app re-signs the agent's record with it. */
   | { op: "nickname.set"; member: string; pk: string; nickname: string | null }
@@ -1087,6 +1087,7 @@ function eventCheck(ev: unknown): boolean | null {
     case "room.leave":
       return str(e.id, 64);
     case "member.gone":
+      return str(e.member, 64) && str(e.pk, 64) && (e.why === undefined || str(e.why, 500));
     case "member.back":
       return str(e.member, 64) && str(e.pk, 64);
     case "nickname.set":

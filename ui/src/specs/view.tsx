@@ -2,7 +2,7 @@ import "~/styles/tasks.css"
 import "~/styles/github.css"
 import "~/styles/specs.css"
 
-import { useState, type ReactNode } from "react"
+import { useState } from "react"
 
 import { Avatar, cx, Empty, Loading } from "~/kit/bits"
 import { Track } from "~/kit/glide"
@@ -18,7 +18,7 @@ import { boxesOf, faceOf, freeCount, lastMove, needsYou, stageLine, tasksOf, wor
 import { NowCard } from "~/tasks/now"
 import { TaskRow } from "~/tasks/row"
 
-const LOOSE_SHOWN = 5
+const LOOSE_SHOWN = 3
 
 const SpecPage = later(() => import("~/specs/page").then((m) => m.SpecPage))
 const NewSpec = later(() => import("~/specs/new").then((m) => m.NewSpec))
@@ -126,10 +126,8 @@ function GroupCard({ channel, group }: { channel: Channel; group: Group }) {
           {group.tone && <span className={cx("specs-group-dot", group.tone)} aria-hidden="true" />}
           <span className={cx("board-label", group.tone)}>{group.label}</span>
           <span className="board-n num">{group.rows.length}</span>
+          <span className="specs-group-sub">{group.sub}</span>
         </h2>
-        <p className="board-sub">
-          <span>{group.sub}</span>
-        </p>
       </div>
       <ul className="gh-rows">
         {group.rows.map((s) => (
@@ -151,14 +149,12 @@ function Loose({ channel, tasks, specsOnly }: { channel: Channel; tasks: Task[];
         <h2 className="board-h">
           <span className="board-label">Not in a spec</span>
           <span className="board-n num">{tasks.length}</span>
-        </h2>
-        <p className="board-sub">
-          <span>
+          <span className="specs-group-sub">
             {specsOnly
               ? "From before specs. Every new task is a step of an approved spec."
               : "Tasks filed before this channel worked from specs. Turn on Tasks only from approved specs in the channel's settings."}
           </span>
-        </p>
+        </h2>
       </div>
       <ul className="board-rows">
         {rows.map((t) => (
@@ -176,42 +172,20 @@ function Loose({ channel, tasks, specsOnly }: { channel: Channel; tasks: Task[];
   )
 }
 
-function SpecTasks({ channel, spec }: { channel: Channel; spec: Spec }) {
-  const { nav } = useApp()
-  const on = nav.panel?.kind === "task" ? nav.panel.task : null
-  const tasks = tasksOf(channel, spec).filter((t) => !t.archived && !t.cancelled)
-  const open = tasks.filter((t) => t.status !== "done")
-  const done = tasks.length - open.length
-  if (!tasks.length || spec.result) return null
-  return (
-    <div className="spec-steps">
-      {open.length > 0 && (
-        <ul className="board-rows">
-          {open.map((t) => (
-            <li key={t.id}>
-              <TaskRow channel={channel} t={t} on={t.id === on} />
-            </li>
-          ))}
-        </ul>
-      )}
-      {done > 0 && (
-        <p className="spec-steps-done num">
-          {done} of {tasks.length} {tasks.length === 1 ? "task" : "tasks"} done
-        </p>
-      )}
-    </div>
-  )
-}
-
 function SpecRow({ channel, spec }: { channel: Channel; spec: Spec }) {
-  const { go } = useApp()
+  const { go, nav } = useApp()
   const line = stageLine(channel, spec)
   const boxes = boxesOf(spec)
   const done = boxes.filter((b) => b.done).length
   const who = workersOf(channel, spec)
   const part = spec.stage === "delivered" ? "result" : spec.stage === "working" ? "inside" : "spec"
+  const on = nav.panel?.kind === "task" ? nav.panel.task : null
+  const tasks = spec.result ? [] : tasksOf(channel, spec).filter((t) => !t.archived && !t.cancelled)
+  const open = tasks.filter((t) => t.status !== "done")
+  const [unfolded, setUnfolded] = useState(() => open.some((t) => t.status === "waiting" || t.id === on))
+  const shown = unfolded && open.length > 0
   return (
-    <li className="gh-item">
+    <li className={cx("gh-item", shown && "is-unfolded")}>
       <button type="button" className="gh-row spec-row" onClick={() => go({ to: "spec", ask: spec.ask, part })}>
         <SpecMark spec={spec} />
         <span className="gh-title">{spec.title}</span>
@@ -224,7 +198,7 @@ function SpecRow({ channel, spec }: { channel: Channel; spec: Spec }) {
               {done}/{boxes.length} done when
             </span>
           )}
-          <span>{line.line}</span>
+          <span>{spec.stage === "working" ? who.map((n) => nickname(channel, n)).join(", ") || line.line : line.line}</span>
         </span>
         <span className="spec-row-end">
           {who.length > 0 && (
@@ -237,32 +211,35 @@ function SpecRow({ channel, spec }: { channel: Channel; spec: Spec }) {
           <span className={cx("spec-word", line.tone)}>{line.word}</span>
         </span>
       </button>
-      <SpecTasks channel={channel} spec={spec} />
+      {open.length > 0 ? (
+        <button
+          type="button"
+          className="spec-fold num"
+          aria-expanded={shown}
+          aria-label={`${shown ? "Hide" : "Show"} the ${open.length} open ${open.length === 1 ? "task" : "tasks"} of ${spec.title}`}
+          onClick={() => setUnfolded(!unfolded)}
+        >
+          {tasks.length - open.length}/{tasks.length}
+          <span>{tasks.length === 1 ? "task" : "tasks"}</span>
+          <Icon name="down" size={12} />
+        </button>
+      ) : tasks.length > 0 ? (
+        <span className="spec-fold is-done num">
+          {tasks.length}/{tasks.length}
+          <span>{tasks.length === 1 ? "task" : "tasks"}</span>
+        </span>
+      ) : (
+        <span className="spec-fold is-empty" aria-hidden="true" />
+      )}
+      {shown && (
+        <ul className="board-rows spec-steps">
+          {open.map((t) => (
+            <li key={t.id}>
+              <TaskRow channel={channel} t={t} on={t.id === on} />
+            </li>
+          ))}
+        </ul>
+      )}
     </li>
-  )
-}
-
-export function SpecSide({ channel }: { channel: Channel }): ReactNode {
-  const { nav, go } = useApp()
-  const open = (channel.specs ?? []).filter((s) => !s.result)
-  if (!open.length) return null
-  return (
-    <ul>
-      {open.map((s) => {
-        const on = nav.tab === "specs" && nav.spec === s.ask
-        const line = stageLine(channel, s)
-        return (
-          <li key={s.ask}>
-            <button type="button" className={cx("side-row spec-side", on && "is-on", needsYou(s) && "is-news")} aria-current={on ? "page" : undefined} onClick={() => go({ to: "spec", ask: s.ask })}>
-              <span className="side-hash">
-                <SpecMark spec={s} />
-              </span>
-              <span className="side-label">{s.title}</span>
-              <span className={cx("spec-side-word", line.tone)}>{line.word}</span>
-            </button>
-          </li>
-        )
-      })}
-    </ul>
   )
 }

@@ -14,6 +14,7 @@ import { createPerson, bridge, secrets } from "@kiwi/secrets/secrets.ts"
 import { isSignInGone } from "@kiwi/channel/session.ts"
 import { announce } from "~/kit/toasts"
 import {
+  dismissMoved,
   enrollAnswer,
   enrollBegin,
   enrollCancel,
@@ -57,7 +58,7 @@ async function tried<T>(what: string, run: () => Promise<T>): Promise<T | null> 
     return await run()
   } catch (err) {
     // The person sees why in the announcement; the caller gets null and stays where it was.
-    announce(`${what}: ${say(err)}`)
+    announce(`${what}: ${say(err)}`, "error")
     return null
   }
 }
@@ -263,7 +264,11 @@ export function makeActions(): Actions {
       }
     },
     addRoom: (code, typed, members) => tried("Room not made", async () => (await manage()).addRoom(code, typed, members)),
-    setRoomMembers: (code, id, members) => attempt("Who's in didn't change", async () => (await manage()).setRoomMembers(code, id, members)),
+    setRoomMembers: async (code, id, members) =>
+      (await tried("Who's in didn't change", async () => {
+        await (await manage()).setRoomMembers(code, id, members)
+        return true
+      })) ?? false,
     setGithubWrite: (code, on) => attempt("Not changed", async () => (await manage()).setGithubWrite(code, on)),
     setBranchPrefix: (code, typed) => attempt("Branch prefix not changed", async () => (await manage()).setBranchPrefix(code, typed)),
     renameRoom: (code, id, typed) => attempt("Room not renamed", async () => (await manage()).renameRoom(code, id, typed)),
@@ -367,6 +372,7 @@ export function makeActions(): Actions {
         if (!b) throw new Error("the new look comes with the Channels desktop app")
         await b.applyUi()
       }),
+    dismissMoved: () => attempt("Couldn't put the note away", dismissMoved),
     signOut: () =>
       attempt("Couldn't sign out", async () => {
         const b = bridge()
