@@ -25,6 +25,7 @@ import com.kiwiinit.channels.ui.OptionsForm
 import com.kiwiinit.channels.ui.SettingsScreen
 import com.kiwiinit.channels.ui.StartedList
 import com.kiwiinit.channels.ui.Starting
+import com.kiwiinit.channels.ui.ThreadPane
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -63,6 +64,9 @@ class ScreensTest {
 
     @Test
     fun leadChat() = shoot("lead-chat") { ConversationScreen(it, Spot(DEV, LEAD_CHAT), chosen = null, consumeChosen = {}, back = {}, details = {}) }
+
+    @Test
+    fun thread() = shoot("thread") { ThreadPane(it, Spot(DEV), it.rooms.getValue(DEV).messages.first { m -> m.seq == 3 }) }
 
     @Test
     fun details() = shoot("details") { DetailsScreen(it, DEV, "main", back = {}, choose = {}, newAgent = {}) }

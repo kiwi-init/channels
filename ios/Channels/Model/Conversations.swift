@@ -117,7 +117,7 @@ extension RoomView {
         RoomView(
             code: code, title: title, icon: icon, me: me, isOwner: isOwner, connection: connection, gone: gone, error: error, head: head,
             whole: feed?.whole ?? false, hold: hold, charter: charter, lead: lead, members: members, messages: feed?.messages ?? [], side: side,
-            sideKey: sideKey, tasks: tasks, asks: asks, reviews: reviews, last: last, latest: latest, latestIn: latestIn, place: key, places: places)
+            sideKey: sideKey, tasks: tasks, asks: asks, reviews: reviews, last: last, latest: latest, latestIn: latestIn, place: key, places: places, thread: thread)
     }
 
     func spotTitle(_ key: String) -> String {

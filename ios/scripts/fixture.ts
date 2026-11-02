@@ -23,15 +23,16 @@ const long = (n: number) =>
     "- CI now fails if any of that slides back",
   ].join("\n");
 
-const said: [string, string][] = [];
+const said: [string, string, { re?: number[]; side?: true }?][] = [];
 for (let n = 1; n <= 6; n++) said.push(["jow", `progress update ${n}?`], [n % 2 ? "lead" : "dev", long(n)]);
 said.push(["lead", "Notes in https://example.com/release"]);
+said.push(["jow", "Does the release include the phone fixes?", { re: [13], side: true }], ["lead", "Yes, both.", { re: [14], side: true }]);
 
 const start = Date.now() - said.length * 60_000;
 const log: Message[] = [];
-for (const [i, [from, body]] of said.entries()) {
+for (const [i, [from, body, more]] of said.entries()) {
   const ts = start + i * 60_000;
-  const signed = await sign(ids[from]!, { v: 1 as const, id: crypto.randomUUID(), from, kind: "msg" as const, body, ts });
+  const signed = await sign(ids[from]!, { v: 1 as const, id: crypto.randomUUID(), from, kind: "msg" as const, body, ts, ...more });
   log.push({ ...signed, seq: i + 1, rts: ts, sigOk: await verify(signed) });
 }
 
@@ -50,5 +51,6 @@ const room = roomView({
   state: fold(log, roster, Date.now()),
   online: new Map(),
   place: "main",
+  thread: null,
 });
 writeFileSync(out, JSON.stringify(room));

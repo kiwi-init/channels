@@ -29,7 +29,8 @@ export type Ask =
   | { op: "enrollCheck" }
   | { op: "enrollFinish" }
   | { op: "enrollCancel" }
-  | { op: "send"; code: string; body: string; re: number | null; imgs: Picture[]; place?: string }
+  | { op: "send"; code: string; body: string; re: number | null; imgs: Picture[]; place?: string; side?: boolean }
+  | { op: "thread"; code: string; seq: number | null }
   | { op: "image"; code: string; seq: number; index: number }
   | { op: "answer"; code: string; seq: number; text: string }
   | { op: "react"; code: string; seq: number; emoji: string | null }
@@ -108,6 +109,12 @@ export interface MessageView {
   images: number;
   task: number | null;
   reactions: ReactionView[];
+  replies: number;
+}
+
+export interface ThreadView {
+  root: MessageView;
+  replies: MessageView[];
 }
 
 interface ReactionView {
@@ -187,4 +194,5 @@ export interface RoomView {
   latestIn: string;
   place: string;
   places: PlaceView[];
+  thread: ThreadView | null;
 }

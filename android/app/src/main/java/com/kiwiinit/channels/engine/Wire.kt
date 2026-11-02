@@ -52,6 +52,9 @@ data class Chosen(val choice: String, val by: String)
 data class ReactionView(val emoji: String, val who: List<String> = emptyList(), val mine: Boolean = false)
 
 @Serializable
+data class ThreadView(val root: MessageView, val replies: List<MessageView> = emptyList())
+
+@Serializable
 data class MessageView(
     val seq: Int,
     val from: String,
@@ -69,6 +72,7 @@ data class MessageView(
     val reactions: List<ReactionView> = emptyList(),
     val shown: String = body,
     val plain: String = body,
+    val replies: Int = 0,
 ) {
     val myReaction: String? get() = reactions.firstOrNull { it.mine }?.emoji
     val millis: Long get() = at.toLong()
@@ -161,6 +165,7 @@ data class RoomView(
     val latestIn: String = "main",
     val place: String = "main",
     val places: List<PlaceView> = emptyList(),
+    val thread: ThreadView? = null,
 ) {
     fun placeView(key: String): PlaceView? = places.firstOrNull { it.key == key }
 

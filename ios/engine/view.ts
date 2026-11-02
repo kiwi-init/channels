@@ -1,4 +1,5 @@
 import { ignored, isQuiet, ROBOT_FACES, type ChannelIcon, type Message } from "@kiwi/core/protocol.ts";
+import { mentionsOf } from "@kiwi/core/changes.ts";
 import { rootOf } from "@kiwi/core/room-rules.ts";
 import { answersDecisions, decidersOf, dmPlace, MAIN, openRound, placeFromKey, placeKey, taskId, type ChannelState } from "@kiwi/core/state.ts";
 import { inGeneral } from "@kiwi/core/state/places.ts";
@@ -12,7 +13,7 @@ import { knownHarness, monoHarness } from "@kiwi/app/harness.ts";
 import { named, namedMarkdown } from "@kiwi/app/mentions.ts";
 import { lastPreview } from "@kiwi/app/preview.ts";
 import { reviewsFor } from "@kiwi/channel/task-actions.ts";
-import type { AskView, Connection, IconView, MemberView, MessageView, PlaceView, ReviewView, RoomView, TaskView } from "./wire.ts";
+import type { AskView, Connection, IconView, MemberView, MessageView, PlaceView, ReviewView, RoomView, TaskView, ThreadView } from "./wire.ts";
 
 const SHOWN = 300;
 const QUOTE_CHARS = 140;
@@ -32,6 +33,7 @@ export interface RoomInput {
   state: ChannelState;
   online: ReadonlyMap<string, Online>;
   place: string;
+  thread: number | null;
 }
 
 const iconView = (icon: ChannelIcon | null, title: string): IconView => icon ?? { kind: "robot", robot: ROBOT_FACES[avatarIndex(title.trim().toLowerCase(), ROBOT_FACES.length)]! };
@@ -63,9 +65,12 @@ function memberView(m: FoldMember, state: ChannelState, online: ReadonlyMap<stri
   };
 }
 
+const offTheRoom = (state: Pick<ChannelState, "threadOf">, m: Pick<Message, "seq" | "side">): boolean => m.side === true && (state.threadOf.get(m.seq) ?? m.seq) !== m.seq;
+
 function shownIn(m: Message, state: ChannelState, key: string): boolean {
   const here = key === placeKey(MAIN) ? inGeneral(state, m.seq) : placeKey(state.placeOf.get(m.seq) ?? MAIN) === key;
   if (!here) return false;
+  if (!key.startsWith("task:") && offTheRoom(state, m)) return false;
   return !isQuiet(m) && !ignored(state.trust.get(m.seq));
 }
 
@@ -85,6 +90,15 @@ export function roomView(r: RoomInput): RoomView {
   const visible = r.messages.filter((m) => shownIn(m, state, here));
   const general = here === "main" ? visible : r.messages.filter((m) => shownIn(m, state, "main"));
   const shown = visible.slice(-SHOWN);
+  const root = rootOf(me, state.members);
+  const replies = new Map<number, number>();
+  for (const m of r.messages) {
+    if (m.kind === "event" || ignored(state.trust.get(m.seq))) continue;
+    const top = state.threadOf.get(m.seq);
+    if (top !== undefined && top !== m.seq) replies.set(top, (replies.get(top) ?? 0) + 1);
+  }
+  const forMe = (m: Message): boolean => m.from !== me && [me, root].some((n) => !!m.to?.includes(n) || mentionsOf(m.body).has(n));
+  const quietHere = (m: Message): boolean => (state.placeOf.get(m.seq) ?? MAIN).kind !== "task" && offTheRoom(state, m) && !forMe(m);
   const nicknames = new Map([...state.members.values()].map((m) => [m.name, m.display || m.name]));
   const said = (text: string) => namedMarkdown(text, nicknames);
   const plain = (text: string) => named(text, nicknames);
@@ -111,11 +125,11 @@ export function roomView(r: RoomInput): RoomView {
       images: m.imgs?.length ?? 0,
       task: place?.kind === "task" ? place.task : (m.task ?? null),
       reactions: chipsFor(state, m.seq, me, (name) => state.members.get(name)?.display ?? name),
+      replies: replies.get(m.seq) ?? 0,
     };
   };
 
   const messages = shown.map((m, i) => messageView(m, i > 0 ? shown[i - 1] : visible[visible.length - shown.length - 1]));
-  const root = rootOf(me, state.members);
   const sideKey = leadChatKey(state, me);
   const sideAll = sideKey ? r.messages.filter((m) => shownIn(m, state, sideKey)) : [];
   const sideShown = sideAll.slice(-SHOWN);
@@ -123,13 +137,13 @@ export function roomView(r: RoomInput): RoomView {
   const lastChat = general.findLast((m) => m.kind !== "event");
   const lastIn = new Map<string, Message>();
   for (const m of r.messages) {
-    if (m.kind === "event" || isQuiet(m) || ignored(state.trust.get(m.seq))) continue;
+    if (m.kind === "event" || isQuiet(m) || ignored(state.trust.get(m.seq)) || quietHere(m)) continue;
     lastIn.set(placeKey(state.placeOf.get(m.seq) ?? MAIN), m);
   }
   const nameOf = (name: string) => state.members.get(name)?.display ?? name;
   const keyOf = (m: Message) => placeKey(state.placeOf.get(m.seq) ?? MAIN);
   const latest = lastPreview(
-    r.messages.filter((m) => keyOf(m) !== sideKey),
+    r.messages.filter((m) => keyOf(m) !== sideKey && !quietHere(m)),
     (seq) => state.trust.get(seq),
   );
   const latestIn = latest ? keyOf(latest) : "main";
@@ -154,7 +168,7 @@ export function roomView(r: RoomInput): RoomView {
       with: p.kind === "dm" ? [...p.with] : [],
       withMe,
       task: p.kind === "task" ? p.task : null,
-      lastSeq: summary?.last ?? last?.seq ?? 0,
+      lastSeq: (p.kind === "task" ? (summary?.last ?? last?.seq) : (last?.seq ?? summary?.last)) ?? 0,
       last: last ? messageView(last, undefined) : null,
     };
   };
@@ -202,6 +216,17 @@ export function roomView(r: RoomInput): RoomView {
     at: openRound(t)?.ts ?? t.updatedAt,
   }));
 
+  const opened = r.thread !== null ? bySeq.get(r.thread) : undefined;
+  const threadAll =
+    opened && opened.kind !== "event"
+      ? r.messages.filter((m) => m.seq !== opened.seq && m.kind !== "event" && !isQuiet(m) && !ignored(state.trust.get(m.seq)) && state.threadOf.get(m.seq) === opened.seq)
+      : [];
+  const threadShown = threadAll.slice(-SHOWN);
+  const thread: ThreadView | null =
+    opened && opened.kind !== "event"
+      ? { root: messageView(opened, undefined), replies: threadShown.map((m, i) => messageView(m, i > 0 ? threadShown[i - 1] : (threadAll[threadAll.length - threadShown.length - 1] ?? opened))) }
+      : null;
+
   return {
     code: r.code,
     title: r.title,
@@ -228,5 +253,6 @@ export function roomView(r: RoomInput): RoomView {
     latestIn,
     place: here,
     places,
+    thread,
   };
 }

@@ -68,6 +68,7 @@ struct Conversation: View {
     var reviews: [ReviewView] = []
     var answer: (AskView) -> Void = { _ in }
     var sendBack: (ReviewView) -> Void = { _ in }
+    var openThread: (MessageView) -> Void = { _ in }
     @Environment(AppModel.self) private var model
     @State private var reveal: CGFloat = 0
 
@@ -93,14 +94,20 @@ struct Conversation: View {
                     Line.build(room.messages, asks: elsewhere, reviews: reviews, pending: model.pending["\(room.code)|\(room.place)"] ?? [], sentAs: model.sentAs)
                 ) { line in
                     LineView(line: line, room: room, reveal: reveal, solo: solo) { m in
-                        replyTo = m
-                        typing.wrappedValue = true
+                        if room.place.hasPrefix("task:") {
+                            replyTo = m
+                            typing.wrappedValue = true
+                        } else {
+                            openThread(m)
+                        }
                     } jump: { seq in
                         withAnimation(Motion.ease) { position.scrollTo(id: "b\(seq)", anchor: .center) }
                     } answer: { seq in
                         if let ask = room.asks.first(where: { $0.seq == seq }) { answer(ask) }
                     } sendBack: { review in
                         sendBack(review)
+                    } thread: { m in
+                        openThread(m)
                     }
                     .id(line.id)
                     .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity), removal: .opacity))
@@ -209,6 +216,7 @@ struct LineView: View {
     let jump: (Int) -> Void
     let answer: (Int) -> Void
     let sendBack: (ReviewView) -> Void
+    var thread: ((MessageView) -> Void)?
 
     var body: some View {
         switch line.kind {
@@ -235,7 +243,7 @@ struct LineView: View {
                 .padding(.horizontal, 32)
                 .padding(.vertical, 4)
         case .bubble(let m, let first, let last):
-            BubbleRow(message: m, first: first, last: last, room: room, reveal: reveal, solo: solo, reply: reply, jump: jump, answer: answer)
+            BubbleRow(message: m, first: first, last: last, room: room, reveal: reveal, solo: solo, reply: reply, jump: jump, answer: answer, thread: thread)
         }
     }
 }
@@ -294,6 +302,7 @@ struct BubbleRow: View {
     let reply: (MessageView) -> Void
     let jump: (Int) -> Void
     let answer: (Int) -> Void
+    var thread: ((MessageView) -> Void)?
     @State private var pull: CGFloat = 0
     @State private var armed = false
 
@@ -331,6 +340,19 @@ struct BubbleRow: View {
                     PollCard(poll: Poll(message), room: room, tail: last) {
                         if message.waiting { answer(message.seq) } else { reply(message) }
                     }
+                }
+                if let thread, message.threads > 0 {
+                    Button {
+                        thread(message)
+                    } label: {
+                        Text(message.threads == 1 ? "1 Reply" : "\(message.threads) Replies")
+                            .type(.meta, .semibold)
+                            .foregroundStyle(Tone.accent)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 2)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Opens the thread")
                 }
             }
             if !message.mine { Spacer(minLength: 40) }

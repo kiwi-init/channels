@@ -94,6 +94,10 @@ final class AppModel {
         try? await engine.ask(["op": "open", "code": code, "place": place])
     }
 
+    func openThread(_ code: String, seq: Int?) async {
+        try? await engine.ask(["op": "thread", "code": code, "seq": seq ?? NSNull()])
+    }
+
     func boot() async {
         guard !booted else { return }
         booted = true
@@ -266,11 +270,12 @@ final class AppModel {
     }
 
     @discardableResult
-    func send(_ spot: Spot, _ body: String, re: Int?, pictures: [Outgoing] = []) async throws -> Int {
+    func send(_ spot: Spot, _ body: String, re: Int?, pictures: [Outgoing] = [], side: Bool = false) async throws -> Int {
         var ask: [String: Any] = [
             "op": "send", "code": spot.code, "place": spot.place, "body": body, "imgs": pictures.map { ["name": $0.name, "mime": $0.mime, "data": $0.data] },
         ]
         ask["re"] = re ?? NSNull()
+        if side { ask["side"] = true }
         let data = try await engine.ask(ask)
         return (try? JSONDecoder().decode(Int.self, from: data)) ?? 0
     }

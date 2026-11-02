@@ -8,6 +8,7 @@ struct ConversationScreen: View {
     @State private var previous: Spot?
     @State private var details = ConversationScreen.opensDetails
     @State private var replyTo: MessageView?
+    @State private var thread: MessageView?
     @State private var answering: AskView?
     @State private var sendingBack: ReviewView?
     @State private var position = ScrollPosition(edge: .bottom)
@@ -43,6 +44,9 @@ struct ConversationScreen: View {
                     answering = nil
                     sendingBack = review
                     typing = true
+                } openThread: { m in
+                    typing = false
+                    thread = m
                 }
                 .id(spot.id)
                 .transition(
@@ -67,6 +71,10 @@ struct ConversationScreen: View {
                         details = false
                         switchTo(Spot(code: room.code, place: key))
                     }
+                }
+                .sheet(item: $thread) { m in
+                    ThreadSheet(code: room.code, place: spot.place, root: m)
+                        .environment(model)
                 }
                 .onAppear(perform: seen)
                 .onChange(of: room.placeView(spot.place)?.lastSeq) { _, _ in seen() }

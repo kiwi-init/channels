@@ -59,8 +59,10 @@ struct MessageView: Codable, Sendable, Hashable, Identifiable {
     let reactions: [ReactionView]
     let shown: String
     let plain: String
+    let replies: Int?
 
     var id: Int { seq }
+    var threads: Int { replies ?? 0 }
     var myReaction: String? { reactions.first { $0.mine }?.emoji }
     var date: Date { Date(timeIntervalSince1970: at / 1000) }
 }
@@ -132,6 +134,11 @@ struct IconView: Codable, Sendable, Hashable {
     let data: String?
 }
 
+struct ThreadView: Codable, Sendable, Hashable {
+    let root: MessageView
+    let replies: [MessageView]
+}
+
 struct RoomView: Codable, Sendable, Hashable, Identifiable {
     let code: String
     let title: String
@@ -158,6 +165,7 @@ struct RoomView: Codable, Sendable, Hashable, Identifiable {
     let latestIn: String
     let place: String
     let places: [PlaceView]
+    let thread: ThreadView?
 
     var id: String { code }
 

@@ -487,7 +487,7 @@ async function handle(ask: Ask): Promise<unknown> {
       await enrollCancel();
       return null;
     case "send":
-      return room(ask.code).send(ask.body, ask.re, ask.imgs ?? [], ask.place ?? null);
+      return room(ask.code).send(ask.body, ask.re, ask.imgs ?? [], ask.place ?? null, ask.side === true);
     case "image":
       return room(ask.code).image(ask.seq, ask.index);
     case "answer":
@@ -500,6 +500,9 @@ async function handle(ask: Ask): Promise<unknown> {
       return room(ask.code).sendBack(ask.task, ask.why);
     case "open":
       room(ask.code).open(ask.place);
+      return null;
+    case "thread":
+      room(ask.code).openThread(ask.seq);
       return null;
     case "marks":
       return room(ask.code).marks(ask.marks, ask.write);

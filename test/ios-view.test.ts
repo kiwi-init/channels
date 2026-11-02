@@ -26,7 +26,7 @@ async function signedLog(drafts: Draft[]): Promise<Message[]> {
 const say = (from: string, body: string, more: Partial<Draft> = {}): Draft => ({ from, kind: "msg", body, ...more });
 const ev = (from: string, e: Event): Draft => ({ from, kind: "event", body: "", ev: e });
 
-function view(log: Message[], me: string): RoomView {
+function view(log: Message[], me: string, thread: number | null = null, place = "main"): RoomView {
   return roomView({
     code: "code",
     title: "channels-dev",
@@ -41,7 +41,8 @@ function view(log: Message[], me: string): RoomView {
     messages: log,
     state: fold(log, roster, T0 + log.length * 60_000),
     online: new Map(),
-    place: "main",
+    place,
+    thread,
   });
 }
 
@@ -113,6 +114,7 @@ describe("names in the phone's room view (#1251)", () => {
       state: fold(log, people, T0 + log.length * 60_000),
       online: new Map(),
       place: "main",
+      thread: null,
     });
   };
 
@@ -146,6 +148,7 @@ describe("names in the phone's room view (#1251)", () => {
       state: fold(log, people, T0 + 60_000),
       online: new Map(),
       place: "main",
+      thread: null,
     });
     expect(room.messages[0]).toMatchObject({ shown: "\\# Heron says hello\n\n@\\# Heron then", plain: "# Heron says hello\n\n@# Heron then" });
   });
@@ -177,5 +180,51 @@ describe("a phone on a second seat of its person (T1372)", () => {
     roster = was;
     expect(side?.key).toBe("dm:jow~lead");
     expect(side?.lastSeq).toBe(2);
+  });
+});
+
+describe("replies stay in their thread on the phone (T3118)", () => {
+  let log: Message[];
+
+  beforeAll(async () => {
+    log = await signedLog([
+      say("lead", "Shipping the board today."),
+      say("dev", "Which build?", { re: [1], side: true }),
+      say("lead", "The green one.", { re: [2], side: true }),
+      say("dev", "Posted in the room too.", { re: [1] }),
+      say("dev", "@jow can you check?", { re: [1], side: true }),
+      say("lead", "A word.", { to: ["jow"], dm: true }),
+      say("jow", "Thanks.", { to: ["lead"], dm: true, re: [6], side: true }),
+      ev("lead", { op: "task.add", title: "Board", owner: "dev" }),
+      say("dev", "Started.", { task: 8 }),
+      say("lead", "Good.", { re: [9], side: true }),
+    ]);
+  });
+
+  test("#general leaves side replies out, and the message they answer carries the thread's count", () => {
+    const room = view(log, "jow");
+    expect(room.messages.filter((m) => !m.event).map((m) => m.body)).toEqual(["Shipping the board today.", "Posted in the room too."]);
+    expect(room.messages.find((m) => m.seq === 1)?.replies).toBe(4);
+  });
+
+  test("the lead chat leaves them out too, and a task's thread keeps them flat", () => {
+    const room = view(log, "jow", null, "task:8");
+    expect(room.side.map((m) => m.body)).toEqual(["A word."]);
+    expect(room.side[0]?.replies).toBe(1);
+    expect(room.messages.filter((m) => !m.event).map((m) => m.body)).toEqual(["Started.", "Good."]);
+  });
+
+  test("an open thread shows the message and every reply under it, in order", () => {
+    const thread = view(log, "jow", 1).thread;
+    expect(thread?.root.body).toBe("Shipping the board today.");
+    expect(thread?.replies.map((m) => m.body)).toEqual(["Which build?", "The green one.", "Posted in the room too.", "@jow can you check?"]);
+    expect(thread?.replies[1]?.quote).toBeNull();
+    expect(view(log, "jow").thread).toBeNull();
+  });
+
+  test("a side reply moves #general's unread mark only when it's for you", () => {
+    const general = (room: RoomView) => room.places.find((p) => p.key === "main");
+    expect(general(view(log, "jow"))?.lastSeq).toBe(5);
+    expect(general(view(log.slice(0, 3), "jow"))?.lastSeq).toBe(1);
   });
 });

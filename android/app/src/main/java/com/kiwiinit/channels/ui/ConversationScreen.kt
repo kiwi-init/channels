@@ -102,6 +102,7 @@ fun ConversationScreen(
     var previous by remember { mutableStateOf<Spot?>(null) }
     var toLead by remember { mutableStateOf(true) }
     var replyTo by remember { mutableStateOf<MessageView?>(null) }
+    var thread by remember { mutableStateOf<MessageView?>(null) }
     var answering by remember { mutableStateOf<AskView?>(null) }
     var sendingBack by remember { mutableStateOf<ReviewView?>(null) }
     val focus = remember { FocusRequester() }
@@ -180,10 +181,15 @@ fun ConversationScreen(
                             elsewhere = if (at.general) shown.elsewhere() else emptyList(),
                             reviews = if (at.general) shown.reviews else emptyList(),
                             reply = { m ->
-                                answering = null
-                                sendingBack = null
-                                replyTo = m
-                                type()
+                                if (at.place.startsWith("task:")) {
+                                    answering = null
+                                    sendingBack = null
+                                    replyTo = m
+                                    type()
+                                } else {
+                                    keyboard?.hide()
+                                    thread = m
+                                }
                             },
                             answer = { ask ->
                                 replyTo = null
@@ -196,6 +202,10 @@ fun ConversationScreen(
                                 answering = null
                                 sendingBack = review
                                 type()
+                            },
+                            thread = { m ->
+                                keyboard?.hide()
+                                thread = m
                             },
                         )
                         Jump(!follow.atBottom, follow.unseen, Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = 8.dp)) {
@@ -218,6 +228,7 @@ fun ConversationScreen(
             clearSendBack = { sendingBack = null },
         )
     }
+    thread?.let { root -> ThreadSheet(model, spot, root) { thread = null } }
 }
 
 @Composable

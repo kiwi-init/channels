@@ -17,6 +17,7 @@ import com.kiwiinit.channels.engine.ReactionView
 import com.kiwiinit.channels.engine.ReviewView
 import com.kiwiinit.channels.engine.RoomView
 import com.kiwiinit.channels.engine.TaskView
+import com.kiwiinit.channels.engine.ThreadView
 import com.kiwiinit.channels.model.AppModel
 
 const val DEV = "dev"
@@ -67,6 +68,7 @@ private fun dev(): RoomView {
             "msg",
             "The app is on your moto g75 (Android 16) and opens on **Link this phone**, with no crash. See https://github.com/kiwi-init/channels/pull/755 or www.example.com",
             reactions = listOf(ReactionView("👍", listOf("jow"), mine = true), ReactionView("🎉", listOf("lively-swan"))),
+            replies = 2,
         ),
         MessageView(4, "gentle-jaguar", at(3), "event", "gentle-jaguar joined", event = true),
         MessageView(5, "jow", at(4), "msg", "Fonts on dark mode are broken in the entire app", mine = true, quote = QuoteView(3, "hearty-badger", "The app is on your moto g75 (Android 16)…")),
@@ -85,6 +87,13 @@ private fun dev(): RoomView {
             "## Today's plan\n1. Native markdown in messages\n2. Release APK, arm64 only\n- [x] Spike\n- [ ] Ship\n\n> Keep Prose for previews and quotes.",
         ),
         MessageView(23, "lively-swan", at(11), "msg", "| Job | State |\n| --- | --- |\n| android / build | green |\n| ci-ok | *waiting* |"),
+    )
+    val thread = ThreadView(
+        messages[2],
+        listOf(
+            MessageView(9, "jow", at(2) + MINUTE, "msg", "Does Link this phone open the sign-in page?", mine = true),
+            MessageView(10, "hearty-badger", at(2) + 2 * MINUTE, "msg", "Yes: it opens WorkOS in the browser, then asks for the six digits."),
+        ),
     )
     val asks = listOf(
         AskView(7, "lively-swan", "Remove the emulator job, or fix it?", at(6), "Decision for you", listOf("Remove it", "Fix it"), task = 535, place = "main"),
@@ -119,6 +128,7 @@ private fun dev(): RoomView {
         last = messages.last(),
         latest = messages.last(),
         place = "main",
+        thread = thread,
         places = listOf(
             PlaceView("main", "main", "channels-dev", lastSeq = 8, last = messages.last()),
             PlaceView(LEAD_CHAT, "dm", "lively-swan", with = listOf("jow", "lively-swan"), lastSeq = 23, last = side.last()),

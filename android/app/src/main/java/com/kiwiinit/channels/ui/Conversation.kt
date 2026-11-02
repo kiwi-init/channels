@@ -207,6 +207,8 @@ fun Conversation(
     answer: (AskView) -> Unit,
     sendBack: (ReviewView) -> Unit,
     modifier: Modifier = Modifier,
+    thread: ((MessageView) -> Unit)? = null,
+    intro: Boolean = true,
 ) {
     val scope = rememberCoroutineScope()
     val pending = model.pending[spot.id] ?: emptyList()
@@ -284,11 +286,12 @@ fun Conversation(
                         reply = reply,
                         jump = jump,
                         answer = { seq -> room.asks.firstOrNull { it.seq == seq }?.let(answer) },
+                        thread = thread,
                     )
                 }
             }
         }
-        item(key = "intro", contentType = "intro") {
+        if (intro) item(key = "intro", contentType = "intro") {
             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                 if (room.whole || (room.messages.isEmpty() && room.connection == Connection.Live)) Intro(room)
                 if (!room.whole && room.messages.isNotEmpty()) {
@@ -382,6 +385,7 @@ private fun BubbleRow(
     reply: (MessageView) -> Unit,
     jump: (Int) -> Unit,
     answer: (Int) -> Unit,
+    thread: ((MessageView) -> Unit)?,
 ) {
     val tone = Tone.current
     val view = LocalView.current
@@ -469,6 +473,17 @@ private fun BubbleRow(
                     PollCard(model, room, Poll.of(message)) {
                         if (message.waiting) answer(message.seq) else reply(message)
                     }
+                }
+                if (thread != null && message.replies > 0) {
+                    Text(
+                        if (message.replies == 1) "1 reply" else "${message.replies} replies",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.clip(RoundedCornerShape(8.dp))
+                            .clickable(onClickLabel = "Open the thread") { thread(message) }
+                            .padding(horizontal = 12.dp, vertical = 4.dp),
+                    )
                 }
             }
         }

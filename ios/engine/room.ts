@@ -61,6 +61,7 @@ export class Room {
   private closed = false;
   private state: ChannelState | null = null;
   private place = "main";
+  private thread: number | null = null;
   private tending: Promise<void> | null = null;
   private tendAgain = false;
   private tendedAt = 0;
@@ -169,7 +170,15 @@ export class Room {
     this.flush();
   }
 
-  async send(body: string, re: number | null, imgs: readonly Picture[], at: string | null): Promise<number> {
+  openThread(seq: number | null): void {
+    this.thread = seq !== null && Number.isSafeInteger(seq) && seq > 0 ? seq : null;
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = null;
+    this.flush();
+  }
+
+  async send(body: string, re: number | null, imgs: readonly Picture[], at: string | null, side = false): Promise<number> {
+    const aside = re !== null && side ? { side: true } : {};
     const names = this.roster.filter((m) => m.active && !m.unverified).map((m) => m.name);
     const named = [...body.matchAll(/(^|\s)@([A-Za-z0-9_.-]+)/g)].map((x) => x[2]!).filter((n) => names.includes(n) && n !== this.me);
     const replyTo = re === null ? undefined : this.messages.find((m) => m.seq === re);
@@ -178,7 +187,7 @@ export class Room {
       const root = this.state ? rootOf(this.me, this.state.members) : this.me;
       if (!where.with.includes(root)) throw new Error("this conversation is between two others: you can read along");
       const other = where.with[0] === root ? where.with[1] : where.with[0];
-      return this.sendWoken(body, { kind: "msg", to: [other], dm: true, ...(re !== null ? { re: [re] } : {}), ...(imgs.length ? { imgs: [...imgs] } : {}) });
+      return this.sendWoken(body, { kind: "msg", to: [other], dm: true, ...(re !== null ? { re: [re] } : {}), ...aside, ...(imgs.length ? { imgs: [...imgs] } : {}) });
     }
     const to = named.length ? named : replyTo && replyTo.from !== this.me ? [replyTo.from] : undefined;
     return this.sendWoken(body, {
@@ -186,6 +195,7 @@ export class Room {
       ...(to ? { to } : {}),
       ...(where.kind === "task" ? { task: where.task } : {}),
       ...(re !== null ? { re: [re] } : {}),
+      ...aside,
       ...(imgs.length ? { imgs: [...imgs] } : {}),
     });
   }
@@ -219,7 +229,7 @@ export class Room {
   async answer(seq: number, text: string): Promise<number> {
     const ask = this.messages.find((m) => m.seq === seq);
     if (!ask) throw new Error("that question isn't here any more");
-    return this.sendWoken(text, { to: [ask.from], re: [ask.seq], kind: "msg" });
+    return this.sendWoken(text, { to: [ask.from], re: [ask.seq], kind: "msg", side: true });
   }
 
   private sendWoken(body: string, opts: SendOptions): Promise<number> {
@@ -396,6 +406,7 @@ export class Room {
         state: this.state,
         online: onlineByName(this.heard, keyOf, now),
         place: this.place,
+        thread: this.thread,
       }),
     );
   }

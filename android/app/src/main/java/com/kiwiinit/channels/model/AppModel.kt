@@ -359,7 +359,23 @@ class AppModel(private val app: Application) {
         }
     }
 
-    suspend fun send(spot: Spot, body: String, re: Int?, pictures: List<Outgoing> = emptyList()): Int {
+    fun openThread(code: String, seq: Int?) {
+        scope.launch {
+            try {
+                ask(
+                    buildJsonObject {
+                        put("op", "thread")
+                        put("code", code)
+                        put("seq", seq?.let { JsonPrimitive(it) } ?: JsonNull)
+                    },
+                )
+            } catch (e: EngineException) {
+                // A channel that left this phone has no thread to open; the sheet shows the message alone.
+            }
+        }
+    }
+
+    suspend fun send(spot: Spot, body: String, re: Int?, pictures: List<Outgoing> = emptyList(), side: Boolean = false): Int {
         val value = ask(
             buildJsonObject {
                 put("op", "send")
@@ -367,6 +383,7 @@ class AppModel(private val app: Application) {
                 put("place", spot.place)
                 put("body", body)
                 put("re", re?.let { JsonPrimitive(it) } ?: JsonNull)
+                if (side) put("side", true)
                 putJsonArray("imgs") {
                     for (p in pictures) {
                         addJsonObject {
