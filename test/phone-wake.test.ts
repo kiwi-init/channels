@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test";
+import type { SendOptions } from "@kiwi/core/client.ts";
+import type { Member as Joined } from "@kiwi/core/membership.ts";
 import { wakeList } from "@kiwi/core/phone-wake.ts";
 import { MAX_WAKE } from "@kiwi/core/push.ts";
 import { dmPlace, MAIN, type ChannelState, type Member } from "@kiwi/core/state.ts";
+import type { ChannelIdentityView } from "../desktop/src/bridge.ts";
+import type { Keyring } from "../desktop/src/keyring.ts";
+import { Room } from "../ios/engine/room.ts";
 
 const seat = (name: string, over: Partial<Member> = {}): Member => ({
   name,
@@ -91,5 +96,32 @@ describe("whose phones a message wakes", () => {
     expect(wakeList(channel([seat("gone", { active: false })]), "atlas", "@gone", {})).toEqual([]);
     const crowd = Array.from({ length: MAX_WAKE + 5 }, (_, i) => seat(`p${i}`));
     expect(wakeList(channel(crowd), "atlas", crowd.map((m) => `@${m.name}`).join(" "), {})).toHaveLength(MAX_WAKE);
+  });
+});
+
+describe("a phone's own sends name whose phones to wake", () => {
+  test("a message from the phone in #general wakes the person it mentions, not the phone's own person", async () => {
+    const joined = (name: string, over: Partial<Joined> = {}): Joined => ({ name, pk: pks(name)[0]!, xpk: "x", owner: false, at: 0, active: true, kind: "human", ...over });
+    const roster = [joined("jow", { owner: true, sponsor: jowUser }), joined("jow-phone", { sponsor: jowUser }), joined("maya", { sponsor: mayaUser }), joined("maya-phone", { sponsor: mayaUser })];
+    const sent: SendOptions[] = [];
+    const keyring = {
+      call: async (_code: string, op: string, _body?: string, opts?: SendOptions): Promise<unknown> => {
+        if (op === "head") return 0;
+        if (op === "members") return roster;
+        if (op === "send" && opts) {
+          sent.push(opts);
+          return 1;
+        }
+        return null;
+      },
+      follow: (): (() => void) => () => {},
+    } as unknown as Keyring;
+    const seat = { code: "code", label: "jow-phone", idName: "jow-phone", name: "general", pk: pks("jow-phone")[0], access: {} } as unknown as ChannelIdentityView;
+    const room = new Room(keyring, seat, { emit: () => {}, lost: () => {}, launch: () => {}, person: () => null, log: () => {}, devices: () => {} });
+    await room.start();
+    await new Promise((done) => setTimeout(done, 200));
+    await room.send("@maya can you look?", null, [], null);
+    room.stop();
+    expect(sorted(sent[0]?.wake ? [...sent[0].wake] : [])).toEqual(sorted(pks("maya", "maya-phone")));
   });
 });
