@@ -114,7 +114,7 @@ function Card({ channel, ask, onJump }: { channel: Channel; ask: Ask; onJump: (j
   const { go } = useApp()
   const source = channel.messages.find((m) => m.ask === ask.id)
   const show = (m: Message) => {
-    go({ to: "where", where: m.where })
+    go({ to: "where", where: m.where, jump: true })
     if (m.inThread !== undefined) go({ to: "panel", panel: { kind: "thread", seq: m.inThread } })
     else onJump({ m, terms: [] })
   }

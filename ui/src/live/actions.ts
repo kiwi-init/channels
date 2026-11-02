@@ -30,6 +30,9 @@ import {
   recoveryDrop,
   recoverySave,
   recoveryWords,
+  rerootCancel,
+  rerootFinish,
+  rerootOpen,
   renewDevice,
   unlinkGithub,
   type EnrollDone,
@@ -410,6 +413,9 @@ export function makeActions(): Actions {
     recoverySave: (typed) => tried("Couldn't set up the recovery key", () => recoverySave(typed)),
     recoveryDrop: () => attempt("Couldn't put the words away", recoveryDrop),
     recoveryCancel: (words) => tried("Couldn't cancel the new words", () => recoveryCancel(words)),
+    rerootOpen: (words) => tried("Couldn't open your recovery key", () => rerootOpen(words)),
+    rerootFinish: async (keep) => !!(await tried("Couldn't replace your person key", () => rerootFinish(keep))),
+    rerootCancel: () => attempt("Couldn't put the words away", rerootCancel),
     enrollBegin: () =>
       attempt("Couldn't sign in as one of your devices", () =>
         enrollBegin(

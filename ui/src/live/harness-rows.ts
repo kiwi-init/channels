@@ -3,7 +3,7 @@ import { harnessName } from "@kiwi/app/harness.ts"
 import { harnessOf } from "~/live/map"
 import type { App, Harness } from "~/model"
 
-export const STARTS: Partial<Record<Harness, KnownHarness>> = { claude: "claude", codex: "codex", opencode: "opencode", gemini: "gemini", cursor: "cursor", grok: "grok" }
+export const STARTS: Partial<Record<Harness, KnownHarness>> = { claude: "claude", codex: "codex", opencode: "opencode", gemini: "gemini", cursor: "cursor", grok: "grok", agy: "agy" }
 
 export function harnessChoices(rows: readonly HarnessRow[]): App["harnesses"] {
   const out = new Map<string, App["harnesses"][number]>()

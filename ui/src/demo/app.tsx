@@ -4,7 +4,7 @@ import { DEMO_PREFS } from "~/demo/data"
 import { useDemo } from "~/demo/provider"
 import { SHOTS } from "~/demo/shots"
 import type { Prefs } from "~/model"
-import { navigate, startNav, type Go, type Nav } from "~/nav"
+import { navigate, startNav, useKeepPlace, type Go, type Nav } from "~/nav"
 import { Root } from "~/shell/root"
 import { uiBooted } from "@kiwi/app/ui-boot.ts"
 
@@ -25,10 +25,11 @@ function threadAt(param: string | null): { seq: number; focus: number } | null {
 const switchTo = threadAt(params.get("switch"))
 
 export function DemoApp() {
-  const [nav, setNav] = useState<Nav>(() => ({ ...startNav(shot?.channel ?? null), ...shot?.nav }))
+  const [nav, setNav] = useState<Nav>(() => ({ ...(shot?.channel ? navigate(startNav(null), { to: "channel", code: shot.channel }) : startNav(null)), ...shot?.nav }))
   const app = useDemo(shot?.scenario ?? "full", nav.channel, look)
   const go = useCallback((g: Go) => setNav((n) => navigate(n, g)), [])
   useEffect(uiBooted, [])
+  useKeepPlace(nav)
   useEffect(() => {
     if (!switchTo) return
     const timer = setTimeout(() => go({ to: "panel", panel: { kind: "thread", ...switchTo } }), SWITCH_AFTER_MS)

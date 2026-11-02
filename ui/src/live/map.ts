@@ -91,6 +91,7 @@ const HARNESS_OF: Record<string, Harness> = {
   pi: "pi",
   "grok-bot": "grok-bot",
   zcode: "zcode",
+  antigravity: "agy",
 }
 
 export function harnessOf(raw: string | undefined): Harness | undefined {

@@ -5,7 +5,7 @@ import type { Personality } from "@kiwi/core/personality.ts"
 import type { GithubNote, Step, StepReply } from "@kiwi/core/protocol.ts"
 import type { PlacedSeat, TerminalId, TerminalRow } from "@kiwi/core/terminals.ts"
 
-export type Harness = "claude" | "codex" | "opencode" | "gemini" | "cursor" | "grok" | "kimi" | "mimo" | "pi" | "grok-bot" | "zcode" | "other"
+export type Harness = "claude" | "codex" | "opencode" | "gemini" | "cursor" | "grok" | "kimi" | "mimo" | "pi" | "grok-bot" | "zcode" | "agy" | "other"
 
 type Presence = "online" | "away" | "offline"
 
@@ -605,6 +605,16 @@ export interface RecoverTrouble {
   word?: number
 }
 
+export interface RerootDevice {
+  id: string
+  label: string
+  os: string
+  as: "desktop" | "phone" | "computer"
+  here: boolean
+}
+
+export type RerootOpened = { ok: true; devices: RerootDevice[]; channels: string[] } | { ok: false; trouble: RecoverTrouble }
+
 export interface Device {
   id: string
   label: string
@@ -786,6 +796,9 @@ export interface Actions {
   recoverySave(typed: { at: number; word: string }[]): Promise<RecoverySaved | null>
   recoveryDrop(): void
   recoveryCancel(words: string): Promise<RecoverTrouble | null>
+  rerootOpen(words: string): Promise<RerootOpened | null>
+  rerootFinish(keep: string[]): Promise<boolean>
+  rerootCancel(): void
   enrollBegin(): void
   enrollKeep(): void
   enrollCancel(): void

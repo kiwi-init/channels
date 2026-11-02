@@ -165,3 +165,17 @@ describe("names in the phone's room view (#1251)", () => {
     expect(bodies).not.toContain("only for ops");
   });
 });
+
+describe("a phone on a second seat of its person (T1372)", () => {
+  test("its lead chat is the person's DM with the lead, keyed as the desktop keys it", async () => {
+    ids["jow-2"] = await generateIdentity("jow-2");
+    const sponsor = { user: "p-jow", name: "Jow", handle: "jow" };
+    const was = roster;
+    roster = [{ ...was[0]!, sponsor }, { name: "jow-2", pk: ids["jow-2"]!.pk, owner: false, at: 0, active: true, kind: "human", sponsor }, ...was.slice(1)];
+    const log = await signedLog([say("lead", "Only for you.", { to: ["jow"], dm: true }), say("jow-2", "From the phone.", { to: ["lead"], dm: true })]);
+    const side = view(log, "jow-2").places.find((p) => p.kind === "dm");
+    roster = was;
+    expect(side?.key).toBe("dm:jow~lead");
+    expect(side?.lastSeq).toBe(2);
+  });
+});

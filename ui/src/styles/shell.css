@@ -391,6 +391,7 @@
 }
 
 .top {
+  container: top / inline-size;
   grid-column: 1 / -1;
   display: grid;
   grid-template-columns: var(--side-w) minmax(0, 1fr) auto;
@@ -501,6 +502,7 @@
 
 .tabs button {
   display: inline-flex;
+  flex: none;
   align-items: center;
   gap: 6px;
   max-width: 240px;
@@ -587,6 +589,26 @@
 @media (min-width: 761px) {
   .top-tools {
     min-width: calc(260px + var(--ctl) + 8px + 24px);
+  }
+}
+
+@container top (max-width: 1120px) {
+  .top-meta {
+    display: none;
+  }
+
+  .top-tools {
+    min-width: 0;
+  }
+
+  .top:has(.top-tools.is-searching) .tabs {
+    visibility: hidden;
+  }
+}
+
+@container top (max-width: 900px) {
+  .tabs button > .icon {
+    display: none;
   }
 }
 
