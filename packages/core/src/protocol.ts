@@ -376,10 +376,10 @@ const QUIET_OPS: ReadonlySet<string> = new Set([
 
 export const isRunning = (i: GithubNote): boolean => (i.event === "check_run" || i.event === "workflow_run") && i.conclusion === undefined;
 
-const onlyRunning = (items: readonly GithubNote[]): boolean => items.length > 0 && items.every(isRunning);
+const nothingNew = (items: readonly GithubNote[]): boolean => items.length > 0 && items.every((i) => isRunning(i) || i.action === GITHUB_SYNCED);
 
 export function isQuiet(m: Pick<Message, "kind" | "ev" | "newer">): boolean {
-  return m.kind === "event" && (m.newer !== undefined || (!!m.ev && (QUIET_OPS.has(m.ev.op) || (m.ev.op === "github" && onlyRunning(m.ev.items)))));
+  return m.kind === "event" && (m.newer !== undefined || (!!m.ev && (QUIET_OPS.has(m.ev.op) || (m.ev.op === "github" && nothingNew(m.ev.items)))));
 }
 
 /** What a member says about itself (see the card event). Every field is optional and short. */
@@ -446,6 +446,10 @@ export const MAX_SUMMARY = 8000;
 
 export const GITHUB_EVENTS = ["pull_request", "check_run", "push", "workflow_run", "issues"] as const;
 export const MAX_GITHUB_ITEMS = 50;
+export const GITHUB_SYNCED = "synced";
+export const GITHUB_SYNC_LISTS = ["open-prs", "open-issues", "closed-prs", "closed-issues"] as const;
+export type GithubSyncList = (typeof GITHUB_SYNC_LISTS)[number];
+export const GITHUB_CLOSED_KEEP_MS = 30 * 24 * 3_600_000;
 
 export interface GithubNote {
   event: (typeof GITHUB_EVENTS)[number];
