@@ -1,6 +1,7 @@
 import * as Effect from "effect/Effect";
 import { delegateStatement } from "@kiwi/core/delegation.ts";
 import { verify, verifyText } from "@kiwi/core/identity.ts";
+import { JOIN_BOX_MAX } from "@kiwi/core/membership.ts";
 import { commitTo, NONCE_RE, ownerNonceStatement } from "@kiwi/core/sas.ts";
 import { BadRequest, Conflict, Denied, NotFound, Removed, TooLarge, TooMany, UpdateRequired } from "../failures.ts";
 import { fits, JoinRequest } from "../schema.ts";
@@ -17,7 +18,7 @@ export const request = Effect.fn("Room.request")(function* (body: RequestBody) {
   const { pk, xpk, box, ts, sig, commit } = body ?? ({} as RequestBody);
   if (typeof commit !== "string") return yield* new UpdateRequired({ message: UPDATE_KIWI });
   if (!fits(JoinRequest, body)) return yield* new BadRequest({ message: "bad request" });
-  if (box.length > 4096) return yield* new TooLarge({ message: "request too large" });
+  if (box.length > JOIN_BOX_MAX) return yield* new TooLarge({ message: "request too large" });
   if (!(yield* Effect.promise(() => verify({ room: db.roomId, pk, xpk, box, ts, commit, sig })))) return yield* new BadRequest({ message: "bad request signature" });
   if (Math.abs(Date.now() - ts) > REQUEST_TTL_MS) return yield* new BadRequest({ message: "request timestamp out of range" });
   const toDelegate = yield* delegateBox(db.roomId, body);
@@ -68,7 +69,7 @@ const delegateBox = Effect.fn("Room.delegateBox")(function* (room: string, body:
   const { pk, dpk, dbox, dsig } = body;
   if (dpk === undefined && dbox === undefined && dsig === undefined) return null;
   if (typeof dpk !== "string" || !KEY_RE.test(dpk) || typeof dbox !== "string" || typeof dsig !== "string" || !SIG_RE.test(dsig)) return yield* new BadRequest({ message: "bad request" });
-  if (dbox.length > 4096) return yield* new TooLarge({ message: "request too large" });
+  if (dbox.length > JOIN_BOX_MAX) return yield* new TooLarge({ message: "request too large" });
   if (!(yield* Effect.promise(() => verifyText(pk, dsig, delegateStatement(room, pk, dpk, dbox))))) return yield* new BadRequest({ message: "bad request signature" });
   return { dpk, dbox, dsig };
 });
