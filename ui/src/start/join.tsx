@@ -62,7 +62,7 @@ function JoinForm({ onClose }: { onClose: () => void }) {
     try {
       const info = await app.actions.inviteInfo(c)
       if (info.state === "member") return go({ to: "channel", code: info.code })
-      if (info.state === "gone") setError("This invite no longer works: the channel was closed, or the code is wrong. Ask whoever sent it for a new one.")
+      if (info.state === "gone") setError("This invite no longer works: the channel was deleted, or the code is wrong. Ask whoever sent it for a new one.")
       else setInvite(info)
     } catch (err) {
       setError(`Couldn't check the invite: ${err instanceof Error ? err.message : String(err)}`)
