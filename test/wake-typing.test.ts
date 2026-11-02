@@ -33,8 +33,8 @@ describe("whether a hosted agent is at its input prompt", () => {
 });
 
 describe("the wake route for a hosted seat", () => {
-  test("Gemini, Cursor, Grok and Kimi in its terminal are woken by typing into their hosted window", () => {
-    for (const harness of ["gemini", "cursor", "grok", "kimi"] as const) expect(wakePath({ harness, hosted: "%4" }, false)).toEqual({ kind: "command", via: "hosted-typing", session: "%4" });
+  test("Gemini, Cursor, Grok, Kimi in its terminal and Antigravity CLI are woken by typing into their hosted window", () => {
+    for (const harness of ["gemini", "cursor", "grok", "kimi", "agy"] as const) expect(wakePath({ harness, hosted: "%4" }, false)).toEqual({ kind: "command", via: "hosted-typing", session: "%4" });
   });
 
   test("a harness with a wake route keeps it, a held seat still wakes nothing, and a seat outside Channels' tmux has no typing", () => {
@@ -43,6 +43,7 @@ describe("the wake route for a hosted seat", () => {
     expect(wakePath({ harness: "gemini", hosted: "%4", held: true }, false).kind).toBe("none");
     expect(wakePath({ harness: "gemini" }, false).kind).toBe("none");
     expect(wakePath({ harness: "zcode", hosted: "%4" }, false).kind).toBe("none");
+    expect(wakePath({ harness: "agy" }, false).kind).toBe("none");
   });
 
   test("it has a name people read, and the agent is told not to run listen", () => {
