@@ -149,7 +149,7 @@ export function SearchBox({
       onOlder({ seq: hit.o.seq, terms: wanted })
       return
     }
-    go({ to: "where", where: hit.m.where })
+    go({ to: "where", where: hit.m.where, jump: true })
     onJump({ m: hit.m, terms: wanted })
   }
 
