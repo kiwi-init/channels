@@ -11,10 +11,10 @@ const FOLDED = "kiwi:now:folded"
 
 function readFolded(): boolean {
   try {
-    return localStorage.getItem(FOLDED) === "1"
+    return localStorage.getItem(FOLDED) !== "0"
   } catch {
-    // Storage can be off (private windows, blocked site data): the card opens unfolded.
-    return false
+    // Storage can be off (private windows, blocked site data): the card opens folded, its one line says enough.
+    return true
   }
 }
 
