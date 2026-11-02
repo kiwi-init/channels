@@ -3,7 +3,8 @@ import type { Message as Wire } from "@kiwi/core/protocol.ts"
 import { fold, type Roster } from "@kiwi/core/state.ts"
 import { joinCodeFromLink } from "@kiwi/app/deep-link.ts"
 import { encodeJoinCode, newRoomId } from "@kiwi/core/crypto.ts"
-import { channelLink, drawerNews, hashTarget, heardHeads, lastWorth, messageHash, messageLink, messageOfLink, noteBody, noteTitle, rootedPlace, rootOf, wirePlace, worthTelling } from "~/live/notify"
+import { messageHash, messageLink } from "@kiwi/core/message-link.ts"
+import { drawerNews, hashTarget, heardHeads, lastWorth, messageOfLink, noteBody, noteTitle, rootedPlace, rootOf, wirePlace, worthTelling } from "~/live/notify"
 import { dropMessage, findWanted, openFromNote, wantedNow } from "~/live/open-message"
 import type { Message } from "~/model"
 
@@ -109,10 +110,6 @@ describe("notifications for every channel (T657)", () => {
     expect(lastWorth(fresh, "jow", "none", false)).toBeNull()
     expect(lastWorth(fresh, "jow", "all", false)?.seq).toBe(4)
   })
-
-  test("a click opens the channel through its join link", () => {
-    expect(channelLink("mc2-abc")).toBe("kiwi://join/mc2-abc")
-  })
 })
 
 describe("what a notification says and opens (#1351)", () => {
@@ -143,7 +140,7 @@ describe("what a notification says and opens (#1351)", () => {
   test("View carries the message; the link still opens its channel", () => {
     expect(messageLink("mc2-abc", 42)).toBe("kiwi://join/mc2-abc?m=42")
     expect(messageOfLink(messageLink("mc2-abc", 42))).toBe(42)
-    expect(messageOfLink(channelLink("mc2-abc"))).toBeNull()
+    expect(messageOfLink("kiwi://join/mc2-abc")).toBeNull()
     expect(messageOfLink("kiwi://join/mc2-abc?m=0")).toBeNull()
     expect(messageOfLink("kiwi://join/mc2-abc?m=4x")).toBeNull()
     const code = encodeJoinCode({ roomId: newRoomId(), ownerFp: "A".repeat(16) })

@@ -6,6 +6,7 @@ import type { Actions, Channel, Message, Person, Where } from "~/model"
 import type { Go } from "~/nav"
 import { seatRoot } from "~/names"
 import { hiddenKey, hiddenPlaces, setHidden } from "~/shell/hidden-places"
+import { messageLink } from "@kiwi/core/message-link.ts"
 import { copyText } from "~/kit/toasts"
 
 const WEB_LINK = /^(https?:\/\/|mailto:)/i
@@ -72,6 +73,7 @@ export function messageGroups(ctx: MenuContext, m: Message, target: EventTarget,
       : [],
     [
       { label: "Copy text", run: copier(m.text) },
+      { label: "Copy link to message", run: copier(messageLink(channel.code, m.seq)) },
       { label: `Copy #${m.seq}`, run: copier(`#${m.seq}`) },
     ],
   ]

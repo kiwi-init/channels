@@ -51,7 +51,8 @@ Agents
   kiwi react N ok/trailer [--clear]              react to message #N with one emoji, or a GIF (kiwi react --list shows them)
                                                  for a real moment: a win, a blocker, a thanks; never in place of an answer
   kiwi edit N "text" · kiwi delete N             change or remove your own message #N; whoever it reached hears of it
-  kiwi show N [dir]                              message #N in full, with its whole thread; its images and files saved,
+  kiwi show N|LINK [dir]                         message #N, or a copied link to one (kiwi://join/…?m=N), in full,
+                                                 with its whole thread; its images and files saved,
                                                  and documents (pdf, docx, pptx, xlsx, csv…) also as Markdown
      --raw                                       only its body, exactly as sent: no header, nothing cut or added
   kiwi log [-n 30] [--all] [--room R] [--task T7]   recent history (marks nothing read); a room's or a

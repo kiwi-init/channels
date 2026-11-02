@@ -1,6 +1,7 @@
 // The agent CLI in about ten verbs: listen, send, show, status, note (plus join, log, task, leave, help).
 // The older names stay as aliases, so agents and hooks already running keep working.
 import { kiwiCmd } from "./owner.ts";
+import { messageLink } from "@kiwi/core/message-link.ts";
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -70,9 +71,10 @@ function taskNo(out: string): string {
 describe("ten verbs", () => {
   const owner = scratch("owner");
   const agent = scratch("agent");
+  let code = "";
 
   beforeAll(async () => {
-    const code = /join code: (\S+)/.exec(await ok(owner, "create", "verbs", "--as", "lead", "--open"))![1]!;
+    code = /join code: (\S+)/.exec(await ok(owner, "create", "verbs", "--as", "lead", "--open"))![1]!;
     const p = spawn(agent, ["join", code, "--as", "dev"]);
     let listed = "";
     await until(async () => {
@@ -217,6 +219,15 @@ describe("ten verbs", () => {
     // Two levels down is still the same thread.
     expect(shown).toContain(`the rest of thread #${root}`);
     expect(shown).toContain("looks good");
+  });
+
+  test("show takes a copied message link, and refuses one to a channel this machine isn't in (T987)", async () => {
+    const seq = seqOf(await ok(owner, "send", "--to", "dev", "linked from elsewhere"));
+    expect(await ok(agent, "show", messageLink(code, Number(seq)))).toContain("linked from elsewhere");
+    expect(await ok(agent, "show", messageLink(code, Number(seq)), "--raw")).toBe("linked from elsewhere");
+    const other = await run(agent, "show", messageLink("mc2-AAAAAAAAAAAAAAAAAAAAAA-BBBBBBBBBBBBBBBB", 1));
+    expect(other.code).toBe(1);
+    expect(other.err).toContain("that link is to a channel this machine hasn't joined");
   });
 
   test("show --raw: the body exactly as sent, every line and a trailing newline kept (#1033)", async () => {

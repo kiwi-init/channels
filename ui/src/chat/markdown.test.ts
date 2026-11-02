@@ -185,3 +185,13 @@ describe("long inline code copies and wide code fades (T216)", () => {
     expect(css).toContain(".md code[data-copy] {\n  cursor: copy;\n}")
   })
 })
+
+describe("a link to a message keeps its href; other kiwi:// links don't (T987)", () => {
+  test("only the message form survives", async () => {
+    const code = "mc2-4u2dwIeijB9T9jh4JERA4Q-62qozsSxRQzg3q6a"
+    const html = await rendered(`[message #12](<kiwi://join/${code}?m=12>) and [join](<kiwi://join/${code}>) and [odd](<kiwi://other/x?m=1>)`)
+    expect(html).toContain(`href="kiwi://join/${code}?m=12"`)
+    expect(html).not.toContain(`href="kiwi://join/${code}"`)
+    expect(html).not.toContain('href="kiwi://other')
+  })
+})

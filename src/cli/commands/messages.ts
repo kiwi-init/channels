@@ -5,6 +5,7 @@ import { saveImages } from "../../attach.ts";
 import { keepFiles } from "../../received-files.ts";
 import { home } from "../../config.ts";
 import { alsoAnswers, formatShown, missingImages, parseDuration } from "@kiwi/core/format.ts";
+import { messageAt } from "@kiwi/core/message-link.ts";
 import reactionPack from "../../../site/reactions/index.json";
 import {
   CHAT_KINDS,
@@ -193,8 +194,9 @@ export const messageCommands: Record<string, Command> = {
 
   show: () =>
     Effect.gen(function* () {
-      const s = yield* session();
-      const seq = Number((args[1] ?? "").replace(/^#/, "")) || (yield* die("usage: kiwi show N [dir] | kiwi show N --raw"));
+      const link = messageAt(args[1] ?? "");
+      const s = yield* session(link?.code);
+      const seq = link?.seq ?? (Number((args[1] ?? "").replace(/^#/, "")) || (yield* die("usage: kiwi show N|LINK [dir] | kiwi show N|LINK --raw")));
       const { messages, state } = yield* s.state();
       const found = yield* s.message(seq, messages);
       const m = found && !ignored(state.trust.get(seq)) ? found : yield* die(`no message #${seq}`);

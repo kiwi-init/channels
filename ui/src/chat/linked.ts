@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react"
 import { sanitizeMarkdownUrl } from "@kiwi/app/markdown.ts"
+import { messageLink } from "@kiwi/core/message-link.ts"
 import { literal, onParser, parserVersion, spansOf, swap, takeParser } from "@kiwi/app/mentions.ts"
 
 void import("@kiwi/app/mention-tree.ts").then((m) => takeParser(m.markdownTree))
@@ -27,9 +28,11 @@ export function linked(text: string, nicknames: ReadonlyMap<string, string>, tas
           : null
         : hit.kind === "ref"
           ? `[#${hit.seq}](kiwi-msg:${hit.seq})`
-          : hit.kind === "image"
-            ? remote(hit.url, hit.alt)
-            : `[${hit.kind === "mention" ? "@" : ""}${literal(hit.label)}](kiwi-mention:${hit.name})`,
+          : hit.kind === "link"
+            ? `[message #${hit.seq}](<${messageLink(hit.code, hit.seq)}>)`
+            : hit.kind === "image"
+              ? remote(hit.url, hit.alt)
+              : `[${hit.kind === "mention" ? "@" : ""}${literal(hit.label)}](kiwi-mention:${hit.name})`,
     before
   )
 }

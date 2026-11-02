@@ -38,3 +38,14 @@ describe("images from other hosts open as links, as they did before (T616)", () 
     expect(named("see #12 ![g](https://x.test/g.png)", nobody)).toBe("see #12 ![g](https://x.test/g.png)")
   })
 })
+
+describe("a pasted link to a message reads as one (T987)", () => {
+  const code = "mc2-4u2dwIeijB9T9jh4JERA4Q-62qozsSxRQzg3q6a"
+  test("it shows as the message's number and keeps the link", () => {
+    expect(linked(`look at kiwi://join/${code}?m=3218.`, nobody, new Set([3218]), 50)).toBe(`look at [message #3218](<kiwi://join/${code}?m=3218>).`)
+  })
+
+  test("in code it stays text", () => {
+    expect(linked(`\`kiwi://join/${code}?m=12\``, nobody, none, 50)).toBe(`\`kiwi://join/${code}?m=12\``)
+  })
+})
