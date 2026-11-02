@@ -19,6 +19,7 @@ import { z } from "zod";
 import { holding, openSession, Rejected, type Agent, type AgentSession } from "./agent.ts";
 import { mcpBrief } from "./brief.ts";
 import { loadImages, saveImages } from "./attach.ts";
+import { keepFiles } from "./received-files.ts";
 import { loadSummary, memberLoad, showsLoad } from "@kiwi/core/load.ts";
 import { Cursor, home, Keystore } from "./config.ts";
 import { holdSession } from "./hooks/listeners.ts";
@@ -609,7 +610,8 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
   server.registerTool(
     "message",
     {
-      description: 'One message in full, never cut short: its text, the message it answers, its replies, and its images (as image blocks, also saved to disk). Example: message {"seq":42}.',
+      description:
+        'One message in full, never cut short: its text, the message it answers, its replies, its images (as image blocks, also saved to disk), and its files saved to disk, with a Markdown copy of each document (pdf, docx, pptx, xlsx, odt, rtf, epub, csv…). Example: message {"seq":42}.',
       inputSchema: { seq: z.number().int() },
     },
     shaped(({ seq }) =>
@@ -618,8 +620,10 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
         const m = yield* s.message(seq, messages);
         if (!m || ignored(state.trust.get(seq))) return fail(`no message #${seq}`);
         const images = m.imgs?.length ? yield* s.ch.fx.images(m.imgs).pipe(Effect.orElseSucceed((): InlineImage[] => [])) : [];
-        const saved = images.length ? saveImages(seq, images, join(home(), "downloads", s.ch.roomId)) : [];
-        return yield* withImages(s.ch, formatShown(m, messages, state, saved, s.me), [m], false);
+        const dir = join(home(), "downloads", s.ch.roomId);
+        const saved = images.length ? saveImages(seq, images, dir) : [];
+        const kept = yield* keepFiles(s.ch, m, dir);
+        return yield* withImages(s.ch, formatShown(m, messages, state, saved, s.me, false, kept), [m], false);
       }),
     ),
   );
