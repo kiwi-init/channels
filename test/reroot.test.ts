@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, test } from "bun:test";
 import { certUntil, checkDevice, claimDevice, newestLists, nextLink, readDeviceList, rerootLink, rootLink, speaksForPerson, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
 import { generateIdentity, sign, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
 import { makeAsk, readAsk } from "@kiwi/core/machine-ask.ts";
-import { checkVault, openVault, readRecovery, recoveryKey, recoveryLink, sealPerson, sealVault, type Recovery, type RecoveryLink } from "@kiwi/core/recovery.ts";
+import { checkVault, openVault, readRecovery, recoveryAfter, recoveryKey, recoveryLink, sealPerson, sealVault, type Recovery, type RecoveryLink } from "@kiwi/core/recovery.ts";
 
 const T0 = Date.UTC(2026, 9, 29);
 const ids: Record<string, Identity> = {};
@@ -146,7 +146,10 @@ describe("a re-root to a new person key (T827)", () => {
     expect(byOld[1]!.after).not.toBeNull();
     expect((await readRecovery(byOld, after, T0 + 3000)).ok).toBe(false);
     const byNew = [...chain, await recoveryLink(ids.next!, ids.person!.pk, before, { pk: paper2.pk, xpk: paper2.xpk! }, T0 + 2000)];
-    expect((await recoveryOf(byNew, after, T0 + 3000)).rpk).toBe(paper2.pk);
+    expect(await recoveryOf(byNew, after, T0 + 3000)).toMatchObject({ rpk: paper.pk, pending: { rpk: paper2.pk, by: ids.next!.pk } });
+    expect((await recoveryOf(byNew, after, recoveryAfter(T0 + 2000))).rpk).toBe(paper2.pk);
+    const bySelf = [...chain, await recoveryLink(paper, ids.person!.pk, before, { pk: paper2.pk, xpk: paper2.xpk! }, T0 + 2000)];
+    expect(await recoveryOf(bySelf, after, T0 + 3000)).toMatchObject({ rpk: paper2.pk, pending: null });
     const backdated = [...chain, await sign(ids.next!, { ...byNew[1]!, at: T0 + 500, pk: undefined, sig: undefined })];
     expect((await readRecovery(backdated, after, T0 + 3000)) as { why?: string }).toMatchObject({ why: expect.stringContaining("before the re-root") });
 

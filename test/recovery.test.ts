@@ -6,6 +6,7 @@ import {
   newRecoveryPhrase,
   newerRecovery,
   openVault,
+  PERSON_WORDS_WAIT_FROM,
   phraseOf,
   readRecovery,
   readRecoveryPhrase,
@@ -256,5 +257,40 @@ describe("the person key sealed on its own (T899)", () => {
     expect(await openVault(await sealVault(ids.desk!, theirs, 1, { person: held, channels }, T0), paper)).toBeNull();
     const forgedInner = await sealVault(ids.desk!, r, 1, { person: { rxpk: r.rxpk, box: "not.a.box" }, channels }, T0);
     expect(await openVault(forgedInner, paper)).toBeNull();
+  });
+});
+
+describe("new words from the person key wait 7 days (T1967)", () => {
+  const T1 = PERSON_WORDS_WAIT_FROM + DAY;
+
+  test("after the first, the person key's new words are a proposal that takes over after 7 days", async () => {
+    const l = await chain([ids.person!, paper, T1], [ids.person!, other, T1 + DAY]);
+    expect(l[1]!.after).toBe(recoveryAfter(T1 + DAY));
+    expect(await recovery(l, T1 + 2 * DAY)).toMatchObject({ rpk: paper.pk, pending: { rpk: other.pk, by: ids.person!.pk } });
+    expect(await recovery(l, recoveryAfter(T1 + DAY))).toMatchObject({ rpk: other.pk, pending: null });
+  });
+
+  test("a stolen person key can't swap the words at once: an immediate link reads as pending, and the current words void it (T2024)", async () => {
+    const first = await chain([ids.person!, paper, T1]);
+    const r = (await recovery(first, T1)) as Recovery;
+    const forced = await sign(ids.person!, { kind: "kiwi-recovery" as const, v: 1 as const, person: list.person, n: 2, prev: r.head, at: T1 + DAY, rpk: other.pk, rxpk: other.xpk!, after: null });
+    expect(await recovery([...first, forced], T1 + DAY)).toMatchObject({ rpk: paper.pk, pending: { rpk: other.pk, after: recoveryAfter(T1 + DAY), by: ids.person!.pk } });
+    expect(await recovery([...first, forced], recoveryAfter(T1 + DAY))).toMatchObject({ rpk: other.pk, pending: null });
+    const late = (await recovery([...first, forced], T1 + DAY)) as Recovery;
+    const cancel = await recoveryLink(paper, list.person, late, { pk: paper.pk, xpk: paper.xpk! }, T1 + 2 * DAY);
+    expect(cancel.after).toBeNull();
+    expect(await recovery([...first, forced, cancel], T1 + 30 * DAY)).toMatchObject({ n: 3, rpk: paper.pk, pending: null });
+    const stranger = await sign(ids.stranger!, { kind: "kiwi-recovery" as const, v: 1 as const, person: list.person, n: 2, prev: r.head, at: T1 + DAY, rpk: other.pk, rxpk: other.xpk!, after: null });
+    expect(await recovery([...first, stranger], T1 + DAY)).toMatch(/only the person key or the recovery key/);
+    const voided = await chain([ids.person!, paper, T1], [ids.person!, other, T1 + DAY], [paper, paper, T1 + 2 * DAY]);
+    expect(await recovery(voided, T1 + 30 * DAY)).toMatchObject({ n: 3, rpk: paper.pk, pending: null });
+  });
+
+  test("words the person key replaced at once before this rule still hold up", async () => {
+    const at = PERSON_WORDS_WAIT_FROM - DAY;
+    const first = await chain([ids.person!, paper, at - DAY]);
+    const r = (await recovery(first, at)) as Recovery;
+    const old = await sign(ids.person!, { kind: "kiwi-recovery" as const, v: 1 as const, person: list.person, n: 2, prev: r.head, at, rpk: other.pk, rxpk: other.xpk!, after: null });
+    expect(await recovery([...first, old], T1)).toMatchObject({ n: 2, rpk: other.pk, pending: null });
   });
 });

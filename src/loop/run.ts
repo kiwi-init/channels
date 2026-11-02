@@ -1,6 +1,6 @@
 import * as Effect from "effect/Effect";
 import * as Cause from "effect/Cause";
-import type { ChannelState } from "@kiwi/core/state.ts";
+import { specPlanner, type ChannelState } from "@kiwi/core/state.ts";
 import { openSession, type Agent } from "../agent.ts";
 import type { AgentSession } from "../agent.ts";
 import { randomBytes } from "node:crypto";
@@ -94,6 +94,7 @@ const release = (seat: LoopSeat) =>
   });
 
 const CLAIM_RETRY_MS = 10 * 60_000;
+const PLAN_TTL_S = 30 * 60;
 
 const setAside = (claims: Map<string, number>): Set<string> => {
   const now = Date.now();
@@ -116,6 +117,16 @@ const cycles = (seat: LoopSeat, stop: { asked: boolean; busy: boolean }): Effect
       if (!work || stop.asked) break;
       if (work.kind === "reviewing" && seen.state.tasks.get(work.task)?.review === "*") {
         const taken = yield* claimReview(s, seat.me, work);
+        if (!taken) claims.set(workName(work), Date.now() + CLAIM_RETRY_MS);
+        continue;
+      }
+      if (work.kind === "coding" && !seen.state.tasks.get(work.task)?.owner) {
+        const taken = yield* claimSpecTask(s, work);
+        if (!taken) claims.set(workName(work), Date.now() + CLAIM_RETRY_MS);
+        continue;
+      }
+      if (work.kind === "planning" && specPlanner(seen.state, work.ask) !== seat.me) {
+        const taken = yield* takePlanning(s, seat.me, work);
         if (!taken) claims.set(workName(work), Date.now() + CLAIM_RETRY_MS);
         continue;
       }
@@ -149,6 +160,23 @@ function claimReview(s: AgentSession, me: string, work: Extract<Work, { kind: "r
         Effect.as(false),
       ),
     ),
+  );
+}
+
+function claimSpecTask(s: AgentSession, work: Extract<Work, { kind: "coding" }>): Effect.Effect<boolean, never, Agent> {
+  return s.taskClaim(work.task).pipe(
+    Effect.flatMap(() => say(`took ${workName(work)}, open under an approved spec`)),
+    Effect.as(true),
+    Effect.catchCause((cause) => say(`couldn't take ${workName(work)} (${Cause.pretty(cause).split("\n")[0]}); the loop tries again in ${CLAIM_RETRY_MS / 60_000} minutes`).pipe(Effect.as(false))),
+  );
+}
+
+function takePlanning(s: AgentSession, me: string, work: Extract<Work, { kind: "planning" }>): Effect.Effect<boolean, never, Agent> {
+  return s.startSpec(work.ask, PLAN_TTL_S).pipe(
+    Effect.flatMap(({ lease }) =>
+      lease.holder === me ? say(`took ${workName(work)}: approved, and this seat is free`).pipe(Effect.as(true)) : say(`${lease.holder} is planning ${workName(work)}`).pipe(Effect.as(false)),
+    ),
+    Effect.catchCause((cause) => say(`couldn't take ${workName(work)} (${Cause.pretty(cause).split("\n")[0]}); the loop tries again in ${CLAIM_RETRY_MS / 60_000} minutes`).pipe(Effect.as(false))),
   );
 }
 

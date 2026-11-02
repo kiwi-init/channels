@@ -14,6 +14,7 @@ import { useAct } from "~/nav"
 import { nickname } from "~/names"
 import { linked, named, useMentionParser, withNames } from "~/chat/linked"
 import { showMenu } from "~/kit/menu-open"
+import { later } from "~/kit/later"
 
 const Markdown = lazy(() => import("~/chat/markdown"))
 const Annotator = lazy(() => import("~/chat/annotator"))
@@ -21,6 +22,7 @@ const Gifs = lazy(() => import("~/chat/gif-picker"))
 const Changes = lazy(() => import("~/chat/changes"))
 const PermissionCard = lazy(() => import("~/chat/permission-card"))
 const QuestionCard = lazy(() => import("~/chat/question-card"))
+const SpecCard = later(() => import("~/specs/card").then((m) => m.SpecCard))
 
 const QUICK = ["👍", "🔥", "👀", "✅"]
 const CLAMP_PX = 12 * 22
@@ -187,6 +189,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
   const who = memberOf(channel, m.from)
   const editing = useEditing(channel.code, m.seq)
   const ask = m.ask ? channel.asks.find((a) => a.id === m.ask) : undefined
+  const spec = channel.specs?.find((s) => s.ask === m.seq)
 
   if (m.system)
     return (
@@ -286,6 +289,11 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
           </p>
         )}
         {m.task !== undefined && <TaskChip channel={channel} id={m.task} />}
+        {spec && !inThread && (
+          <Suspense fallback={null}>
+            <SpecCard channel={channel} spec={spec} />
+          </Suspense>
+        )}
         {m.prs?.map((pr) => (
           <PrChip key={pr.url} pr={pr} />
         ))}

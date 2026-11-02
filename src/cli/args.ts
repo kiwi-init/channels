@@ -75,6 +75,8 @@ const parsed = parseArgs({
     user: { type: "string" },
     fingerprint: { type: "string" },
     note: { type: "string" },
+    on: { type: "string" },
+    undo: { type: "boolean" },
     file: { type: "string" },
     at: { type: "string" },
     round: { type: "string" },

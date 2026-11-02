@@ -28,6 +28,7 @@ import { compactCommands } from "./commands/compact.ts";
 import { factCommands } from "./commands/facts.ts";
 import { leaseCommands } from "./commands/leases.ts";
 import { taskCommands } from "./commands/tasks.ts";
+import { specCommands } from "./commands/specs.ts";
 import { toolCommands } from "./commands/tools.ts";
 import { contextLineCommands } from "./commands/context-line.ts";
 import { seatCommands } from "./commands/seat.ts";
@@ -71,6 +72,7 @@ const commands: Record<string, Command> = {
   ...factCommands,
   ...leaseCommands,
   ...taskCommands,
+  ...specCommands,
   ...toolCommands,
   ...contextLineCommands,
   ...seatCommands,

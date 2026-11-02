@@ -239,6 +239,8 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
     return [
       { name: "compact", summary: "Ask the lead for a summary to fold the history behind", run: () => app.actions.askCompact(code) },
       { name: "tasks", summary: "Open the tasks", run: () => go({ to: "tab", tab: "tasks" }) },
+      { name: "prs", summary: "Open the pull requests", run: () => go({ to: "github", view: "prs" }) },
+      { name: "issues", summary: "Open the issues", run: () => go({ to: "github", view: "issues" }) },
       ...(owner && !channel.hold ? [{ name: "pause", summary: "Pause the agents", args: "note", run: (note: string) => app.actions.setHold(code, true, note || undefined) }] : []),
       ...(owner && channel.hold ? [{ name: "resume", summary: "Let the agents work again", run: () => app.actions.setHold(code, false) }] : []),
     ]

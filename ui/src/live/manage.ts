@@ -16,6 +16,7 @@ import { removeComputer } from "@kiwi/app/computers.ts"
 import { loadMember } from "@kiwi/channel/store.ts"
 import { inviteLine } from "@kiwi/app/join-line.ts"
 import type { Permission } from "@kiwi/core/launch-options.ts"
+import type { Color } from "@kiwi/core/protocol.ts"
 import { wantPersona } from "~/live/persona-later"
 import { openedChannel, openedRun, type Run } from "~/live/store"
 import type { Actions, JoinChoice, NewAgent, Powers } from "~/model"
@@ -96,6 +97,11 @@ export async function removeMember(code: string, name: string): Promise<void> {
   announce(`Removed ${m.display || name}`)
 }
 
+export async function setAgentColor(code: string, name: string, color: Color | null): Promise<void> {
+  const { run } = agentManager(code, name)
+  await event(run, color ? `made ${name} ${color}` : `cleared ${name}'s colour`, { op: "color.set", member: name, color })
+}
+
 export async function setPersona(code: string, name: string, id: string | null): Promise<void> {
   const { run, m } = agentManager(code, name)
   const p = id === null ? null : personalities().find((x) => x.id === id)
@@ -146,6 +152,20 @@ async function setRepos(run: Run, repos: string[]): Promise<void> {
   if (run.isOwner) await run.ch.setRepos({ list: repos, since })
 }
 
+export async function setSpecsOnly(code: string, on: boolean): Promise<void> {
+  await event(owner(code), on ? "turned on Tasks only from approved specs" : "turned off Tasks only from approved specs", { op: "specs.only.set", on })
+}
+
+export function freshChannel(code: string): void {
+  fresh.add(code)
+}
+
+export function takeFresh(code: string): boolean {
+  return fresh.delete(code)
+}
+
+const fresh = new Set<string>()
+
 export async function setGithubWrite(code: string, on: boolean): Promise<void> {
   await event(owner(code), on ? "turned on Write to GitHub" : "turned off Write to GitHub", { op: "github.write.set", on })
 }
@@ -192,7 +212,15 @@ const picks = (run: Run, names: readonly string[]) =>
 const open = (rooms: Iterable<{ id: string; name: string; members?: unknown }>) => [...rooms].filter((r) => !r.members)
 
 const updateFirst = (err: unknown): never => {
-  throw new Error(/no such call|not a call|unknown call|makeRoom|changeRoom/i.test(say(err)) ? "update Channels to make private rooms" : say(err))
+  throw new Error(/no such call|not a call|unknown call|makeRoom|changeRoom|leaveRoom/i.test(say(err)) ? "update Channels to make private rooms" : say(err))
+}
+
+export async function leaveRoom(code: string, id: string): Promise<void> {
+  await need(code).ch.leaveRoom(id).catch(updateFirst)
+}
+
+export async function sealOutLeavers(code: string, id: string, names: readonly string[]): Promise<void> {
+  await need(code).ch.sealOutLeavers(id, names)
 }
 
 export async function addRoom(code: string, typed: string, members?: string[]): Promise<string> {
@@ -250,6 +278,7 @@ export async function answerJoin(code: string, id: string, yes: boolean, choice?
   }
   if (r.check !== "ready" || !r.code) return announce(`Waiting for ${r.display || r.name}'s code`)
   announce(await letIn(run, r, choice ?? {}))
+  if (choice?.color) await event(run, `made ${choice.as?.trim() || r.name} ${choice.color}`, { op: "color.set", member: choice.as?.trim() || r.name, color: choice.color })
 }
 
 export const addAgent: Actions["addAgent"] = (code, agent, seen) => {

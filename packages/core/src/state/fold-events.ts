@@ -322,8 +322,10 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
     case "color.set": {
       const target = members.get(ev.member);
       if (!target?.active) reject(`no member named ${ev.member}`);
-      else if (ev.member !== m.from && !member.owner) reject("only that person or the owner sets a colour");
-      else if (!isPerson(target)) reject("agents wear their person's colour; they don't have their own");
+      else if (!isPerson(target)) {
+        if (!member.owner && !managesAgent(c.held(m.pk ?? "", "managesAgents"), member, target)) reject("only the owner, or a person who manages agents, sets an agent's colour");
+        else target.color = ev.color ?? undefined;
+      } else if (ev.member !== m.from && !member.owner) reject("only that person or the owner sets a colour");
       else {
         const holder = ev.color && [...members.values()].find((x) => x.active && x.name !== target.name && isPerson(x) && x.color === ev.color);
         if (holder) reject(`${ev.color} is ${holder.name}'s colour`);

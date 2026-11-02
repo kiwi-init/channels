@@ -17,7 +17,7 @@ import { useAskChime } from "~/live/alerts"
 import { useNewMembers, useNewPowers } from "~/live/defaults"
 import { kept } from "~/live/keep"
 import { changeUnsent, nextUnsentKey, unsentIn } from "~/live/unsent"
-import { asksOf, directsOf, groupsOf, leftOutOf, messagesOf, formerOf, nextOf, peopleOf, roomsOf, tasksOf, theirsOf, type Pending } from "~/live/map"
+import { asksOf, directsOf, groupsOf, issuesOf, leftOutOf, messagesOf, formerOf, nextOf, peopleOf, prsOf, roomsOf, tasksOf, theirsOf, type Pending } from "~/live/map"
 import { iconUrl } from "~/live/icon"
 import { usePinsHere } from "~/live/pins"
 import { usePublishFace } from "~/live/face"
@@ -30,12 +30,14 @@ import { ownPrefs, usePrefs } from "~/live/prefs"
 import { receiptsOf, withReceipts } from "~/live/receipts"
 import { announce } from "~/kit/toasts"
 import { arrivals } from "~/live/persona-later"
+import { leaversToSeal } from "~/live/leaving"
 import { lastIn, seenKeyOf } from "~/live/seen-place"
 import { closeOpened, markGone, publish, type Run } from "~/live/store"
 import { useWakes } from "~/live/wakes"
 import { appCan } from "~/live/app-can"
 import { useMarksSync } from "~/live/read-sync"
 import { dmRoomOf, sealable } from "~/live/dm"
+import { freeOf, specAsksOf, specsOf } from "~/live/specs"
 import { clock } from "~/kit/time"
 import type { Channel, Upload, Where } from "~/model"
 import { nicknamesOf } from "~/names"
@@ -110,6 +112,9 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const leftOut = useMemo(() => (isOwner ? leftOutOf(state, messages, me) : []), [isOwner, state, messages, me])
   const tasks = useMemo(() => tasksOf(state, asks.held, me, messages), [state, asks.held, me, messages])
   const taskGroups = useMemo(() => groupsOf(state, me), [state, me])
+  const specs = useMemo(() => specsOf(state, me), [state, me])
+  const free = useMemo(() => freeOf(state), [state])
+  const everyAsk = useMemo(() => [...asks.asks, ...specAsksOf(specs)], [asks.asks, specs])
   const from = roomsFrom(roomId)
   const { muted } = usePrefs()
   const rooms = useMemo(() => roomsOf(state, messages, me, seen, from).map((r) => (isMuted(muted, code, r.id) ? { ...r, muted: true as const } : r)), [state, messages, me, seen, from, muted, code])
@@ -123,6 +128,8 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
 
   const facts = useMemo(() => [...state.facts.values()].sort((a, b) => a.key.localeCompare(b.key)).map((f) => ({ key: f.key, value: f.value, by: f.by, at: f.ts })), [state.facts])
   const next = nextOf(state)
+  const prs = useMemo(() => prsOf(state), [state])
+  const issues = useMemo(() => issuesOf(state), [state])
   const mergedAt = useMemo(() => [...state.github.prs.values()].flatMap((p) => (p.state === "merged" ? [p.at] : [])), [state.github.prs])
 
   const trusted = !isOwner && fullyTrusted(state.members.get(me))
@@ -146,6 +153,8 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       newMembers,
       newPowers,
       repos: state.repos,
+      prs,
+      issues,
       ...(state.githubWrite !== null ? { githubWrite: true } : {}),
       ...(state.branchPrefix ? { branchPrefix: state.branchPrefix } : {}),
       rooms,
@@ -158,7 +167,10 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       ...(leftOut.length ? { leftOut } : {}),
       tasks,
       taskGroups,
-      asks: asks.asks,
+      ...(specs.length ? { specs } : {}),
+      ...(state.specsOnly !== null ? { specsOnly: true as const } : {}),
+      free,
+      asks: everyAsk,
       connection,
       ...(ready ? {} : { loading: true }),
     }),
@@ -179,6 +191,8 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       newMembers,
       newPowers,
       state.repos,
+      prs,
+      issues,
       state.githubWrite,
       state.branchPrefix,
       rooms,
@@ -191,7 +205,10 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       leftOut,
       tasks,
       taskGroups,
-      asks.asks,
+      specs,
+      state.specsOnly,
+      free,
+      everyAsk,
       connection,
       ready,
       trusted,
@@ -271,6 +288,15 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   }, [code, channel, run, gone, title])
   useLayoutEffect(() => () => closeOpened(code), [code])
 
+  useEffect(() => {
+    if (!isOwner || !ready || connection !== "live" || state.specsOnly !== null) return
+    void import("~/live/manage")
+      .then((m) => (m.takeFresh(code) ? m.setSpecsOnly(code, true) : undefined))
+      .catch(() => {
+        // The switch stays off; the owner turns it on in the channel's settings.
+      })
+  }, [isOwner, ready, connection, state.specsOnly, code])
+
   const firstVisit = useRef(Object.keys(seenIn(roomId)).length === 0)
   useEffect(() => {
     if (!firstVisit.current || !messages.length) return
@@ -285,6 +311,24 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
     for (const { name, persona } of arrivals(code, people))
       void import("~/live/manage").then((m) => m.setPersona(code, name, persona)).catch((e: unknown) => announce(`Personality not set on ${name}: ${e instanceof Error ? e.message : String(e)}`))
   }, [code, people])
+
+  const toSeal = leaversToSeal(state, me)
+    .map((r) => `${r.id}\0${r.names.join(",")}`)
+    .join("\n")
+  useEffect(() => {
+    if (!toSeal) return
+    const timer = setTimeout(() => {
+      for (const line of toSeal.split("\n")) {
+        const [id = "", names = ""] = line.split("\0")
+        void import("~/live/manage")
+          .then((m) => m.sealOutLeavers(code, id, names.split(",")))
+          .catch(() => {
+            // Another member may have sealed first, or this app is older: whoever is in the room next tries again.
+          })
+      }
+    }, Math.random() * 5_000)
+    return () => clearTimeout(timer)
+  }, [code, toSeal])
 
   const where = view.where
   const lastHere = useMemo(() => (where ? lastIn(messages, state, me, where) : 0), [messages, state, me, where])

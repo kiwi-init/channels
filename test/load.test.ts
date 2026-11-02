@@ -27,6 +27,8 @@ const board = (tasks: Task[]): ChannelState =>
     rejected: new Map(),
     openAsks: [],
     askHeads: new Map(),
+    specs: new Map(),
+    specsOnly: null,
     threadOf: new Map(),
     threadPeople: new Map(),
     lead: null,

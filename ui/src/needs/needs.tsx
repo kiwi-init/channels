@@ -1,6 +1,8 @@
 import "~/styles/needs.css"
 
 import { useEffect, useId, useState, type ReactNode } from "react"
+import type { Color } from "@kiwi/core/protocol.ts"
+import { Swatches } from "~/kit/swatches"
 
 import { TOO_MANY_REQUESTS } from "@kiwi/core/sas.ts"
 
@@ -16,6 +18,7 @@ import { nickname } from "~/names"
 import { ShowAgent } from "~/kit/show-agent"
 import { SendBack } from "~/tasks/send-back"
 import { isIdle, isOpen, openAsks } from "~/needs/open"
+import { SpecNeedCard } from "~/specs/card"
 
 export function NeedsYou({ channel, onJump }: { channel: Channel; onJump: (jump: Jump) => void }) {
   const open = openAsks(channel).sort((a, b) => a.at - b.at)
@@ -83,7 +86,7 @@ export function NeedsYou({ channel, onJump }: { channel: Channel; onJump: (jump:
 }
 
 function answeredAt(a: Ask): number {
-  if (a.kind === "review") return a.at
+  if (a.kind === "review" || a.kind === "spec") return a.at
   return a.answer?.at ?? a.at
 }
 
@@ -100,6 +103,7 @@ function doneLine(channel: Channel, a: Ask): string {
     case "join":
       return a.answer ? `${a.answer.letIn ? "Let in" : "Turned away"} · ${a.name}${a.sponsor ? ` · brought by ${a.sponsor}` : ""} · ${ago(a.answer.at)}${byWhom(channel, a.answer.by)}` : ""
     case "review":
+    case "spec":
       return ""
   }
 }
@@ -133,6 +137,8 @@ function Card({ channel, ask, onJump }: { channel: Channel; ask: Ask; onJump: (j
       return <JoinAskCard channel={channel} ask={ask} link={link} />
     case "review":
       return <ReviewAskCard channel={channel} ask={ask} link={link} />
+    case "spec":
+      return <SpecNeedCard channel={channel} ask={ask} />
   }
 }
 
@@ -355,6 +361,7 @@ function JoinAskCard({ channel, ask, link }: { channel: Channel; ask: JoinAsk; l
   const [persona, setPersona] = useState<string | null | undefined>(undefined)
   const [readOnly, setReadOnly] = useState<boolean | undefined>(undefined)
   const [powers, setPowers] = useState<Powers | undefined>(undefined)
+  const [color, setColor] = useState<Color | null>(null)
   const face: Face = { name: ask.name, kind: ask.who, harness: ask.harness, presence: "online" }
   const ready = (ask.check ?? "ready") === "ready" && ask.code !== ""
   const unchecked = ask.check === "unchecked"
@@ -369,7 +376,7 @@ function JoinAskCard({ channel, ask, link }: { channel: Channel; ask: JoinAsk; l
   const letIn = () =>
     app.actions.answerJoin(channel.code, ask.id, true, {
       ...(ask.freeName ? { as: ask.freeName } : {}),
-      ...(agent ? { persona: chosen } : { powers: can }),
+      ...(agent ? { persona: chosen, ...(color ? { color } : {}) } : { powers: can }),
       ...(chosen ? {} : { readOnly: only }),
     })
   return (
@@ -441,6 +448,11 @@ function JoinAskCard({ channel, ask, link }: { channel: Channel; ask: JoinAsk; l
       </div>
       {ready && (
         <div className="needs-opts">
+          {agent && (
+            <Opt label="Colour" hint="Its face takes this colour.">
+              {() => <Swatches color={color ?? undefined} onPick={setColor} />}
+            </Opt>
+          )}
           {agent && (
             <Opt label="Personality" hint={app.personas.find((p) => p.id === chosen)?.about ?? "Works the way its harness does by default."}>
               {(id) => (
