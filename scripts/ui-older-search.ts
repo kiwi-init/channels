@@ -45,6 +45,15 @@ try {
   expect((await offer.count()) === 1, "a channel with more history on the relay offers to search older history");
   expect((await offer.innerText()).includes("Fetches up to 5,000 older messages from the relay."), "the offer says how much one click fetches");
   const fewer = await olderCount();
+  await page.evaluate(() => {
+    const seen: string[] = [];
+    (window as unknown as { offerSeen: string[] }).offerSeen = seen;
+    const note = () => {
+      const text = document.querySelector(".search-item.is-fetch")?.textContent ?? "gone";
+      if (seen.at(-1) !== text) seen.push(text);
+    };
+    new MutationObserver(note).observe(document.body, { subtree: true, childList: true, characterData: true });
+  });
   await offer.click();
   const fetching = page.getByText("Fetching older messages…");
   await fetching.waitFor();
@@ -53,6 +62,9 @@ try {
   await offer.waitFor({ state: "detached" });
   expect((await olderCount()) > fewer, "matches from the fetched history show up in the same list");
   expect((await offer.count()) === 0, "once the channel's first message is here, the offer goes away");
+  const seen = await page.evaluate(() => (window as unknown as { offerSeen: string[] }).offerSeen);
+  const fetchedAt = seen.findIndex((t) => t.startsWith("Fetching"));
+  expect(fetchedAt >= 0 && !seen.slice(fetchedAt).some((t) => t.startsWith("Search older history")), "the offer doesn't flash back between the fetch and the new results");
 
   await box.fill("relay dumb");
   await heading.waitFor();

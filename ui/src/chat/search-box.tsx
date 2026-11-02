@@ -14,7 +14,7 @@ const SETTLE_MS = 150
 const OLDER_SHOWN = 30
 const FETCH_HIT: Hit = { kind: "fetch" }
 
-type Pull = { asked: number } | { failed: string }
+type Pull = { asked: number; until?: number } | { failed: string }
 
 const count = (n: number) => n.toLocaleString("en-US")
 
@@ -86,9 +86,13 @@ export function SearchBox({
     const q = settled.trim()
     if (!q) return
     let gone = false
+    const settle = (found: OlderSearch) => {
+      setOlder({ query: q, found })
+      setPull((p) => (p && "until" in p && p.until !== undefined && p.until <= round ? null : p))
+    }
     void actions.searchOlder(channel.code, q, before).then(
-      (found: OlderSearch) => !gone && setOlder({ query: q, found }),
-      () => !gone && setOlder({ query: q, found: { state: "none", hits: [], more: null } })
+      (found: OlderSearch) => !gone && settle(found),
+      () => !gone && settle({ state: "none", hits: [], more: null })
     )
     return () => {
       gone = true
@@ -118,13 +122,14 @@ export function SearchBox({
 
   const fetchOlder = () => {
     if (pull && "asked" in pull) return
+    const next = round + 1
     setPull({ asked: 0 })
     void actions
       .fetchOlder(channel.code, (asked) => setPull({ asked }))
       .then(
         () => {
-          setPull(null)
-          setRound((r) => r + 1)
+          setPull((p) => (p && "asked" in p ? { ...p, until: next } : p))
+          setRound(next)
         },
         (err: unknown) => setPull({ failed: err instanceof Error ? err.message : String(err) })
       )
