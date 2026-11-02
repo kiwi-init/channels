@@ -66,6 +66,7 @@ import type { OldVault, Vault } from "@kiwi/core/recovery.ts";
 import { allow as allowPerMinute } from "./room/limits.ts";
 import { makeRelay, onHttp, runRoom, runRoomSync, type Relay } from "./route.ts";
 import { GithubApp, githubAppFrom, GithubPush, githubPushFrom } from "./github-app.ts";
+import { pusherFrom, type Pusher } from "./push.ts";
 import { GITHUB_QUEUE_MAX, GITHUB_QUEUE_TTL_MS, onGithubHttp, type GithubItem, type GithubLink, type GithubRoutes } from "./github.ts";
 
 interface Env {
@@ -101,6 +102,11 @@ interface Env {
   GITHUB_APP_CLIENT_SECRET?: string;
   GITHUB_APP_ID?: string;
   GITHUB_APP_PRIVATE_KEY?: string;
+  APNS_KEY?: string;
+  APNS_KEY_ID?: string;
+  APNS_TEAM_ID?: string;
+  APNS_TOPIC?: string;
+  FCM_SERVICE_ACCOUNT?: string;
 }
 
 const edgeCache: PageCache = {
@@ -147,6 +153,7 @@ export class Channel extends DurableObject<Env> {
   private readonly policy: RelayPolicy;
   /** What this channel's room runs with: sign-in, policy and the owner's owned-channel count. */
   private readonly relay: Relay;
+  private readonly pusher: Pusher | null;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -167,6 +174,7 @@ export class Channel extends DurableObject<Env> {
         Layer.succeed(GithubPush, env.GITHUB_WEBHOOK_SECRET ? githubPushFrom() : null),
       ),
     );
+    this.pusher = pusherFrom({ apnsKey: env.APNS_KEY, apnsKeyId: env.APNS_KEY_ID, apnsTeamId: env.APNS_TEAM_ID, apnsTopic: env.APNS_TOPIC, fcmServiceAccount: env.FCM_SERVICE_ACCOUNT });
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(PING, PONG));
   }
 
@@ -249,6 +257,7 @@ export class Channel extends DurableObject<Env> {
         if ((ws.deserializeAttachment() as { pk?: string } | null)?.pk === fx.disconnect.pk) close(ws, CLOSE_REMOVED, GONE_WORDS[fx.disconnect.how]);
       }
     }
+    if (fx.push && this.pusher) this.ctx.waitUntil(this.wake(this.pusher, fx.push).catch((e: unknown) => console.error(`wake: ${e instanceof Error ? e.message : "error"}`)));
     if (fx.github?.length) {
       await Promise.allSettled(fx.github.map((l) => this.env.REPOS.get(this.env.REPOS.idFromName(l.repo)).fetch("https://repos/apply", { method: "POST", body: JSON.stringify(l) })));
     }
@@ -265,6 +274,11 @@ export class Channel extends DurableObject<Env> {
     } else if (fx.expireAt) {
       await this.ctx.storage.setAlarm(fx.expireAt);
     }
+  }
+
+  private async wake(pusher: Pusher, { room, wakes }: NonNullable<Effects["push"]>): Promise<void> {
+    const dead = await pusher.send(wakes);
+    if (dead.length) this.store(room).dropPushTokens(dead);
   }
 
   async reown(roomId: string, from: string, to: string): Promise<void> {

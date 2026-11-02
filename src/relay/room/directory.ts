@@ -1,6 +1,7 @@
 import * as Context from "effect/Context";
 import type { GoneHow } from "@kiwi/core/protocol.ts";
 import type { GithubLink } from "../github.ts";
+import type { Wake } from "../push.ts";
 
 export interface Effects {
   broadcast?: string[];
@@ -13,6 +14,7 @@ export interface Effects {
   wipe?: boolean;
   directory?: DirectoryUpdate[];
   github?: GithubLink[];
+  push?: { room: string; wakes: Wake[] };
   expireAt?: number;
 }
 

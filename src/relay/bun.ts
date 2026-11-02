@@ -68,6 +68,7 @@ import {
 import { makeRelay, onHttp, runRoom, runRoomSync } from "./route.ts";
 import { GITHUB_QUEUE_MAX, GITHUB_QUEUE_TTL_MS, onGithubHttp, type GithubRoutes } from "./github.ts";
 import { GithubApp, githubAppFrom, GithubPush, githubPushFrom, type GithubAppApi, type PushCheck } from "./github-app.ts";
+import { pushConfigFrom, pusherFrom, type Pusher } from "./push.ts";
 import { edgePage, PAGE_CACHE_SECONDS, PAGE_PATH, type PageCache } from "./pages.ts";
 
 interface SocketData {
@@ -111,6 +112,7 @@ export function startRelay(
     githubSecret?: string | null;
     githubApp?: GithubAppApi | null;
     githubPush?: PushCheck | null;
+    pusher?: Pusher | null;
     devNoRateLimits?: boolean;
   } = {},
 ) {
@@ -397,8 +399,20 @@ export function startRelay(
     }
   };
 
+  const pusher = opts.pusher === undefined ? pusherFrom(pushConfigFrom(process.env)) : opts.pusher;
+  const wake = async (p: Pusher, { room, wakes }: NonNullable<Effects["push"]>) => {
+    const dead = await p.send(wakes);
+    if (!dead.length || !existsSync(file(room))) return;
+    const db = storeFor(room, false);
+    try {
+      db.dropPushTokens(dead);
+    } finally {
+      doneWith(db);
+    }
+  };
   const apply = (roomId: string, fx: Effects, sender?: ServerWebSocket<SocketData>) => {
     const room = sockets.get(roomId) ?? new Set();
+    if (fx.push && pusher) void wake(pusher, fx.push).catch((e: unknown) => console.error(`wake: ${e instanceof Error ? e.message : "error"}`));
     for (const ws of room) for (const f of (ws.data.watch ? fx.watch : undefined) ?? fx.broadcast ?? []) ws.send(f);
     if (fx.others) for (const ws of room) if (ws !== sender && !ws.data.watch) ws.send(fx.others);
     if (fx.ephemeral) for (const ws of room) if (ws !== sender && ws.data.presence) ws.send(fx.ephemeral);
