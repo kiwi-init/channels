@@ -113,7 +113,8 @@ export function transcript({ title, log, state, nameOf, at }: { title: string | 
     const kind = m.kind && m.kind !== "msg" ? ` (${plain(m.kind, 20)})` : "";
     const said = m.kind === "event" ? describeEvent(m, state) : (m.body ?? "");
     const images = (m.imgs ?? []).map((i) => `> [image: ${plain(i.name, 80)}]`);
-    const text = [said ? quoted(said) : "", ...images].filter(Boolean).join("\n>\n");
+    const files = (m.files ?? []).map((f) => `> [file: ${plain(f.name, 80)}]`);
+    const text = [said ? quoted(said) : "", ...images, ...files].filter(Boolean).join("\n>\n");
     return `**#${m.seq} · ${localStamp(new Date(m.ts))} · ${plain(nameOf(m.from), 60)}**${kind}\n\n${text || "_(no text)_"}`;
   });
   return `${[...head, ...entries].join("\n\n")}\n`;

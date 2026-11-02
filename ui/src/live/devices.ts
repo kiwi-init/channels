@@ -74,7 +74,8 @@ export function useDeviceLists(codes: readonly string[]): void {
         const m = loadMember(code)
         if (!m || !live) continue
         const link = linkOf(m)
-        await postList(code, news.links, link).catch(() => false)
+        const prove = b.proveSeat ? () => b.proveSeat(code) : undefined
+        await postList(code, news.links, link, prove).catch(() => false)
         await goneOwn(code, news.links, link).catch(() => [])
       }
     }

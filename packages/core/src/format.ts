@@ -3,7 +3,7 @@
 import { ROLE_LABEL } from "./personality.ts";
 import { loadJson, loadSummary, memberLoad, showsLoad } from "./load.ts";
 import { inlineText, runsLine, type Runs } from "./membership.ts";
-import { GENERAL_ROOM, ignored, imageMarker, isRunning, powerChange } from "./protocol.ts";
+import { fileMarker, GENERAL_ROOM, ignored, imageMarker, isRunning, powerChange } from "./protocol.ts";
 import type { Card, GithubNote, Message, OldTaskState, Reach, TaskState, Trust } from "./protocol.ts";
 import { describeScopes, presetOf, readScopes, SCOPE_LABELS, type Scope } from "./scopes.ts";
 import {
@@ -367,9 +367,10 @@ export function formatMessage(m: Message, trust?: Trust, state?: ChannelState, m
             : String(m.body ?? "");
   const body = cleanBody(said).replace(/\n/g, "\n  │ ");
   const imgs = !gone && m.imgs?.length ? ` ${m.imgs.map((i) => imageMarker({ name: inlineText(i.name, 80), data: i.data, ref: i.ref })).join(" ")}` : "";
+  const files = !gone && m.files?.length ? ` ${m.files.map((f) => fileMarker({ name: inlineText(f.name, 80), size: f.size })).join(" ")}` : "";
   const link = m.handoff ? " [browser link]" : "";
   const options = m.choices?.length ? ` [options: ${m.choices.map((c) => inlineText(c, 200)).join(" | ")}]` : "";
-  return `${messageHead(m, trust, state, me)}: ${body}${imgs}${link}${options}`;
+  return `${messageHead(m, trust, state, me)}: ${body}${imgs}${files}${link}${options}`;
 }
 
 function taskLine(state: ChannelState, t: Task): string {
@@ -698,7 +699,11 @@ export function missingImages(seq: number, want: number, got: number): string | 
   return got < want ? `${want - got} of the ${want} images in #${seq} did not load; the relay may no longer have them` : null;
 }
 
-export function formatShown(m: Message, messages: Message[], state: ChannelState, savedImages: string[] = [], me?: string, reveal = false): string {
+function missingFiles(seq: number, want: number, got: number): string | null {
+  return got < want ? `${want - got} of the ${want} files in #${seq} did not load; the relay may no longer have them` : null;
+}
+
+export function formatShown(m: Message, messages: Message[], state: ChannelState, savedImages: string[] = [], me?: string, reveal = false, savedFiles: string[] = []): string {
   const out = [formatMessage(m, state.trust.get(m.seq), state, me)];
   if (m.step) {
     out.push(`  why: ${cleanBody(m.step.why).replace(/\n/g, "\n    ")}`);
@@ -712,6 +717,9 @@ export function formatShown(m: Message, messages: Message[], state: ChannelState
   if (savedImages.length) out.push(`  images saved: ${savedImages.join(", ")}`);
   const missing = m.imgs?.length ? missingImages(m.seq, m.imgs.length, savedImages.length) : null;
   if (missing) out.push(`  ${missing}`);
+  if (savedFiles.length) out.push(`  files saved: ${savedFiles.join(", ")}`);
+  const lost = m.files?.length ? missingFiles(m.seq, m.files.length, savedFiles.length) : null;
+  if (lost) out.push(`  ${lost}`);
   for (const r of m.re ?? []) {
     const parent = messages.find((x) => x.seq === r);
     if (parent && !ignored(state.trust.get(parent.seq)))

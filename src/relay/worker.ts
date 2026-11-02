@@ -58,7 +58,7 @@ import {
   type MachineStore,
   type PersonMachine,
 } from "./machine.ts";
-import { ACCOUNT_ASKS_PER_MINUTE, accountUser, isAccountPath, onAccountHttp, sameEnrollment, type AccountStore } from "./account.ts";
+import { ACCOUNT_ASKS_PER_MINUTE, accountUser, isAccountPath, onAccountHttp, sameEnrollment, sameFresh, type AccountStore, type FreshRecord } from "./account.ts";
 import { ENROLL_TTL_MS, type Enrollment } from "@kiwi/core/enroll.ts";
 import { accountHome, frozenWrite, MOVE_PATH, movedHuman, moveUsers, onMoveHttp, type Adoption, type MoveStore, type Row, type Rows } from "./move.ts";
 import type { DeviceLink } from "@kiwi/core/devices.ts";
@@ -66,6 +66,7 @@ import type { OldVault, Vault } from "@kiwi/core/recovery.ts";
 import { allow as allowPerMinute } from "./room/limits.ts";
 import { makeRelay, onHttp, runRoom, runRoomSync, type Relay } from "./route.ts";
 import { GithubApp, githubAppFrom, GithubPush, githubPushFrom } from "./github-app.ts";
+import { pusherFrom, type Pusher } from "./push.ts";
 import { GITHUB_QUEUE_MAX, GITHUB_QUEUE_TTL_MS, onGithubHttp, type GithubItem, type GithubLink, type GithubRoutes } from "./github.ts";
 
 interface Env {
@@ -101,6 +102,11 @@ interface Env {
   GITHUB_APP_CLIENT_SECRET?: string;
   GITHUB_APP_ID?: string;
   GITHUB_APP_PRIVATE_KEY?: string;
+  APNS_KEY?: string;
+  APNS_KEY_ID?: string;
+  APNS_TEAM_ID?: string;
+  APNS_TOPIC?: string;
+  FCM_SERVICE_ACCOUNT?: string;
 }
 
 const edgeCache: PageCache = {
@@ -147,6 +153,7 @@ export class Channel extends DurableObject<Env> {
   private readonly policy: RelayPolicy;
   /** What this channel's room runs with: sign-in, policy and the owner's owned-channel count. */
   private readonly relay: Relay;
+  private readonly pusher: Pusher | null;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -167,6 +174,7 @@ export class Channel extends DurableObject<Env> {
         Layer.succeed(GithubPush, env.GITHUB_WEBHOOK_SECRET ? githubPushFrom() : null),
       ),
     );
+    this.pusher = pusherFrom({ apnsKey: env.APNS_KEY, apnsKeyId: env.APNS_KEY_ID, apnsTeamId: env.APNS_TEAM_ID, apnsTopic: env.APNS_TOPIC, fcmServiceAccount: env.FCM_SERVICE_ACCOUNT });
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(PING, PONG));
   }
 
@@ -249,6 +257,7 @@ export class Channel extends DurableObject<Env> {
         if ((ws.deserializeAttachment() as { pk?: string } | null)?.pk === fx.disconnect.pk) close(ws, CLOSE_REMOVED, GONE_WORDS[fx.disconnect.how]);
       }
     }
+    if (fx.push && this.pusher) this.ctx.waitUntil(this.wake(this.pusher, fx.push).catch((e: unknown) => console.error(`wake: ${e instanceof Error ? e.message : "error"}`)));
     if (fx.github?.length) {
       await Promise.allSettled(fx.github.map((l) => this.env.REPOS.get(this.env.REPOS.idFromName(l.repo)).fetch("https://repos/apply", { method: "POST", body: JSON.stringify(l) })));
     }
@@ -265,6 +274,11 @@ export class Channel extends DurableObject<Env> {
     } else if (fx.expireAt) {
       await this.ctx.storage.setAlarm(fx.expireAt);
     }
+  }
+
+  private async wake(pusher: Pusher, { room, wakes }: NonNullable<Effects["push"]>): Promise<void> {
+    const dead = await pusher.send(wakes);
+    if (dead.length) this.store(room).dropPushTokens(dead);
   }
 
   async reown(roomId: string, from: string, to: string): Promise<void> {
@@ -529,8 +543,14 @@ export class Account extends DurableObject<Env> {
     ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS ask (k INTEGER PRIMARY KEY CHECK (k = 1), rec TEXT NOT NULL)");
     ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS recovery (n INTEGER PRIMARY KEY, link TEXT NOT NULL)");
     ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS vault (k INTEGER PRIMARY KEY CHECK (k = 1), version INTEGER NOT NULL, rec TEXT NOT NULL)");
+    ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS fresh (k INTEGER PRIMARY KEY CHECK (k = 1), rec TEXT NOT NULL)");
     ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS move (k INTEGER PRIMARY KEY CHECK (k = 1), to_user TEXT NOT NULL, id TEXT NOT NULL, at INTEGER NOT NULL, done INTEGER NOT NULL)");
     ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS adoptions (from_user TEXT PRIMARY KEY, id TEXT NOT NULL, state TEXT NOT NULL)");
+  }
+
+  private freshRecord(): FreshRecord | null {
+    const row = this.ctx.storage.sql.exec("SELECT rec FROM fresh").toArray()[0] as { rec: string } | undefined;
+    return row ? (JSON.parse(row.rec) as FreshRecord) : null;
   }
 
   private tables(): string[] {
@@ -605,7 +625,8 @@ export class Account extends DurableObject<Env> {
       rows: () => this.rows(),
       busy: async (_from, now) => {
         const ask = this.enrollment();
-        return ask && ask.at + ENROLL_TTL_MS > now ? "asking" : null;
+        if (ask && ask.at + ENROLL_TTL_MS > now) return "asking";
+        return this.freshRecord()?.pending ? "starting over" : null;
       },
       holds: (to) => at(to).taken(),
       adopt: (to, from, id, rows) => at(to).adopt(from, id, rows),
@@ -670,6 +691,22 @@ export class Account extends DurableObject<Env> {
         const row = sql.exec("SELECT version FROM vault").toArray()[0] as { version: number } | undefined;
         if ((row?.version ?? 0) !== prev) return false;
         sql.exec("INSERT OR REPLACE INTO vault (k, version, rec) VALUES (1, ?, ?)", next.version, JSON.stringify(next));
+        return true;
+      },
+      fresh: async () => this.freshRecord(),
+      setFresh: async (_user, next, prev) => {
+        if (!sameFresh(this.freshRecord(), prev)) return false;
+        sql.exec("INSERT OR REPLACE INTO fresh (k, rec) VALUES (1, ?)", JSON.stringify(next));
+        return true;
+      },
+      startOver: async (_user, start) => {
+        const rec = this.freshRecord();
+        if (rec?.pending?.id !== start.id) return false;
+        this.ctx.storage.transactionSync(() => {
+          for (const table of ["links", "recovery", "vault", "ask"]) sql.exec(`DELETE FROM ${table}`);
+          start.links.forEach((l, i) => sql.exec("INSERT INTO links (seq, link) VALUES (?, ?)", i + 1, JSON.stringify(l)));
+          sql.exec("INSERT OR REPLACE INTO fresh (k, rec) VALUES (1, ?)", JSON.stringify({ pending: null, lastAt: rec.lastAt }));
+        });
         return true;
       },
     };

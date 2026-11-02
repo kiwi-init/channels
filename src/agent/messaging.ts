@@ -144,14 +144,14 @@ export class SessionMessaging extends SessionListen {
 
   readonly reply = Effect.fn("AgentSession.reply")(
     { self: this },
-    function* (this: SessionMessaging, seq: number, body: string, kind: Kind = "msg", imgs?: ImageAttachment[], extra: Pick<SendOptions, "settled"> = {}) {
+    function* (this: SessionMessaging, seq: number, body: string, kind: Kind = "msg", imgs?: ImageAttachment[], extra: Pick<SendOptions, "settled" | "files"> = {}) {
       const { messages, state } = yield* this.state();
       const orig = yield* this.message(seq, messages);
       if (!orig) return yield* new Rejected(`no message #${seq}`);
       yield* this.notAnsweredByOthers(state, seq, body);
       const to = orig.from === this.me ? orig.to : [orig.from];
       yield* this.mayI({ kind, to });
-      const sent = yield* this.ch.fx.send(body, { to, kind, re: [seq], imgs, room: state.roomOf.get(seq) ?? orig.room, ...extra });
+      const sent = yield* this.ch.fx.send(body, { to, kind, re: [seq], side: true, imgs, room: state.roomOf.get(seq) ?? orig.room, ...extra });
       return sent;
     },
     oneLook,

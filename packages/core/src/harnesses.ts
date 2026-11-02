@@ -12,6 +12,7 @@ export const HARNESS_INSTALL: Partial<Record<KnownHarness, string>> = {
   gemini: "npm install -g @google/gemini-cli",
   cursor: "curl https://cursor.com/install -fsS | bash",
   grok: "curl -fsSL https://x.ai/cli/install.sh | bash",
+  agy: "curl -fsSL https://antigravity.google/cli/install.sh | bash",
 };
 
 export interface HarnessRow {

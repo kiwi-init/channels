@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { HARNESS_INSTALL, type HarnessRow } from "@kiwi/core/harnesses.ts"
 import { harnessChoices, STARTS } from "~/live/harness-rows"
+import { harnessOf } from "~/live/map"
 
 const row = (harness: HarnessRow["harness"], over: Partial<HarnessRow> = {}): HarnessRow => ({
   harness,
@@ -27,6 +28,12 @@ describe("the harnesses a computer can start (T429)", () => {
   test("each harness shows once", () => {
     expect(harnessChoices([row("codex"), row("codex", { path: "/other/codex" })]).map((h) => h.path)).toEqual(["/bin/codex"])
   })
+})
+
+test("Antigravity CLI is offered by its own name, and its seats show as agy (T2464)", () => {
+  expect(harnessChoices([row("agy", { version: "1.4.12" })])).toEqual([{ id: "agy", label: "Antigravity CLI", installed: true, version: "1.4.12", path: "/bin/agy" }])
+  expect(harnessOf("antigravity")).toBe("agy")
+  expect(STARTS.agy).toBe("agy")
 })
 
 test("a harness the app can show but not start yet isn't offered", () => {

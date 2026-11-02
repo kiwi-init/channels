@@ -154,6 +154,9 @@ gets one pending ask at most. Approving it needs your app in your hand and the d
 | `PUT /v1/account/ask/<id>/answer` `{device, dxpk, nonce}` | an app that approves | once, with the app's own listed keys |
 | `PUT /v1/account/ask/<id>/reveal` `{nonce}` | the asking device | once, after the answer; checked against the commitment |
 | `DELETE /v1/account/ask/<id>` | the asking device, an app that approves | turns the ask away |
+| `GET /v1/account/fresh` | the session | `{fresh}`: the waiting start-over, with its end time, or null (section 6) |
+| `POST /v1/account/fresh` `{links}` | the new desktop | starts over: one link, a new person key adding this desktop |
+| `DELETE /v1/account/fresh/<id>` | a current device, the person key, the desktop that started it | cancels the start-over |
 | `POST /v1/account/move` `{to}` | the person key or an app that approves, with a GitHub sign-in in `x-human-token-to` | moves a WorkOS account to `github_<id>` once (`src/relay/move.ts`) |
 
 **Moving to GitHub sign-in** (T261). A WorkOS account moves to the `github_<id>` account of the
@@ -165,7 +168,8 @@ channels they create count against the GitHub account. Every step can run again:
 nothing, and a freeze nobody finishes ends after 10 minutes, as moved if the copy went through and
 untouched if it didn't. Nothing under the WorkOS id is deleted. A GitHub account that already holds
 devices, a device waiting to join, or a signer the list doesn't approve is refused, and the WorkOS
-account stays as it was.
+account stays as it was. So is an account waiting to start over (section 6): it moves once the start
+is cancelled or done, so a move never carries a list the start is about to replace.
 
 A key revoked in a published list is refused on every account route, can't ask again, and loses its
 computer inbox at once (`/v1/machine/<key>` answers 403 and its socket closes).
@@ -348,6 +352,10 @@ For when every app is gone, or a thief revoked your other devices first. The rec
   and each new link must carry the relay's time, so a proposal can't be backdated past its 7 days. A
   vault must be version kept + 1, signed by the person key or a current approving device, with `held`
   sealed for the current person key and recovery key. Links and vaults from revoked devices are refused.
+- **Apps reading the vault** take one sealed by an approving desktop before that desktop was revoked
+  (its `at` is before the revoke). Since the first desktop lets go of the person key, vaults are signed by
+  desktops, so revoking the lost one that sealed last would otherwise leave the words and every other
+  desktop unable to read the vault (T1423). Writes still need a current approving device.
 - In the code (T693, T823): `packages/core/src/recovery.ts`, `src/relay/account.ts`.
 - **Re-root** (T827), when the person key itself may be stolen: a `reroot {root, keep[]}` link in the
   device list, signed by the new person key, with the recovery key's signature over it (`rsig`) and
@@ -358,6 +366,14 @@ For when every app is gone, or a thief revoked your other devices first. The rec
   - Every device not in `keep` is revoked. The owner's app cuts those devices, and the agents of
     computers only an old `kp1` cert vouched for; join claims by the old key or its certs stop
     counting.
+  - Seats the person joined with only a person claim from the old key re-prove (T967). Each app
+    posts its list with its device's vouch for its own seat (the same statement as a device claim);
+    the owner's app re-signs the seat with that device when it is still listed. Seats with no such
+    proof are cut once the re-root is 7 days old, and the channel says why.
+  - An agent that joined with no person (its computer's app had no person key, #1519) gets one back:
+    its computer, once it holds a re-rooted list that keeps it, posts its vouch for each agent seat
+    it runs, and the owner's app re-signs that agent as the person's, from that computer. Only a
+    listed computer's vouch counts. Agents are never cut for lacking one.
   - A list with more re-roots beats a longer one with fewer, so a fork the old key grows can't win.
   - The relay takes a re-root only with its own time and the exact recovery chain it keeps, so words
     replaced since can't re-root. A later re-root must carry a chain that extends the one before.
@@ -366,6 +382,29 @@ For when every app is gone, or a thief revoked your other devices first. The rec
     re-roots: the current words still sign the re-root during the wait.
   - An app still holding the old key lets it go, and a sealed person box from before the re-root is
     never sealed into a new vault version.
+  - On the desktop (T2415): Settings → Computers and phones → Recovery key → Replace, on a computer
+    that approves devices. The person types the 24 words, unticks the devices to sign out (this
+    computer always stays), and the app makes the new person key, posts the re-root, and reseals the
+    vault with the new key, keeping every other computer's channel box. The app keeps no copy of the
+    new key: it goes on signing with its device key, and the vault holds the new key for the words.
+  - Recovering with the words on a new computer after a re-root opens the vault at `list.root`; the
+    app joins as one of the person's devices, keyed by `list.person`, and keeps no person key either.
+- **Start fresh** (T1010), for someone with no device left and no words, set up or forgotten. Nothing
+  can vouch for them but the sign-in, and whoever takes over the sign-in has that too, so it waits:
+  - A new desktop signed in to the account posts a `rootLink`: a new person key adding that desktop. The
+    relay keeps it for 7 days, and the account works as it did meanwhile.
+  - Every signed-in read of `GET /v1/account/fresh` shows it, so a device hears at its next poll, and one
+    that was offline when it comes back. Computers hold no sign-in: they aren't told and can't cancel.
+  - A current device, the person key or the starting desktop cancels it, by id. A sign-in alone can
+    neither cancel nor shorten the wait. A re-root, or a list link signed by the person key (what recovering
+    with the words publishes), cancels it too; a device's routine renewal doesn't.
+  - One at a time: a second start with other keys is refused and the first keeps its end time. A repeat
+    of the same link answers with the one waiting. One start a day per account, cancelled or not, so
+    nobody can spam old devices with notices.
+  - On the first account request after day 7 the relay cuts every old device and replaces the list, recovery
+    chain and vault with the new one-link list. It isn't a re-root: `list.person` is the new key, so nothing
+    chains to the old person. Old channels stay unreadable, since nothing is re-sealed. Old devices keep
+    what they already hold, and their seats in those channels stay until an owner removes them.
 - **Passkeys later:** per-passkey wrapping where native passkey PRF exists (macOS 15 and iOS 18 through
   AuthenticationServices; Android Credential Manager). Never in a page the relay serves, which would
   see the unlock key.

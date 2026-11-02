@@ -15,7 +15,7 @@ import type { Identity } from "./identity.ts";
 import type { JoinClaims, JoinRequest, Member, MemberInfo, PersonPowers } from "./membership.ts";
 import { withSeats } from "./room-rules.ts";
 import type { Marks } from "./note.ts";
-import type { ChannelIcon, Envelope, ImageAttachment, Message } from "./protocol.ts";
+import type { ChannelIcon, Envelope, FileAttachment, ImageAttachment, Message } from "./protocol.ts";
 import type { Scope } from "./scopes.ts";
 import type { GithubStatus } from "./github-health.ts";
 import type { FoldBase, GithubRelease, GithubRules, GithubState, GuardFloor } from "./state.ts";
@@ -23,16 +23,17 @@ import { ChannelCore, type ChannelFx } from "./client/core.ts";
 import { ChannelDelegations, type Computer, type Tended } from "./client/delegations.ts";
 import { ChannelGithub, type GithubDiff, type GithubIssueInfo, type ReviewCheck } from "./client/github.ts";
 import { ChannelHistory } from "./client/history.ts";
+import { ChannelFiles } from "./client/files.ts";
 import { ChannelImages } from "./client/images.ts";
 import { ChannelInfo, type Info, type MemberRow } from "./client/info.ts";
 import { joinFx, type JoinStatus } from "./client/join.ts";
 import { ChannelKeys } from "./client/keys.ts";
 import { ChannelLive, type StreamOptions } from "./client/live.ts";
-import { ChannelMembers, type Reconciled } from "./client/members.ts";
+import { ChannelMembers, type Reconciled, type Reproved } from "./client/members.ts";
 import { run, runUntil } from "./client/relay.ts";
 import { ChannelRequests, type RequestsOptions } from "./client/requests.ts";
 import type { Delegation } from "./delegation.ts";
-import type { DeviceList } from "./devices.ts";
+import type { DeviceClaim, DeviceList } from "./devices.ts";
 import { ChannelSending, type SendOptions } from "./client/send.ts";
 import { ChannelSettings, type RoomsSetting } from "./client/settings.ts";
 import { ChannelSnapshots } from "./client/snapshots.ts";
@@ -92,6 +93,7 @@ export class Channel {
       ...new ChannelSnapshots(this.core, history).fx,
       ...this.sending.fx,
       ...images.fx,
+      ...new ChannelFiles(this.core).fx,
       ...live.fx,
       ...new ChannelGithub(this.core).fx,
     };
@@ -392,6 +394,10 @@ export class Channel {
     return run(this.fx.cutDevices(list));
   }
 
+  reprove(list: DeviceList, proofs: Readonly<Record<string, DeviceClaim>>, now?: number): Promise<Reproved> {
+    return run(this.fx.reprove(list, proofs, now));
+  }
+
   goneDevices(list: DeviceList): Promise<Member[]> {
     return run(this.fx.goneDevices(list));
   }
@@ -666,6 +672,14 @@ export class Channel {
 
   image(img: ImageAttachment): Promise<string | null> {
     return run(this.fx.image(img));
+  }
+
+  putFile(name: string, mime: string, bytes: Uint8Array<ArrayBuffer>): Promise<FileAttachment> {
+    return run(this.fx.putFile(name, mime, bytes));
+  }
+
+  file(f: FileAttachment): Promise<Uint8Array<ArrayBuffer> | null> {
+    return run(this.fx.file(f));
   }
 
   decrypt(env: Envelope): Promise<Message | null> {

@@ -22,6 +22,7 @@ import type { ComputerView, DeviceNewsView, DeviceView, EnrollAskView, EnrollCon
 
 const TRIES = 3;
 const RENEW_EVERY_MS = 6 * 3_600_000;
+const ANOTHER_PERSON = "this sign-in already belongs to another Channels person key";
 
 export interface DeviceHostDeps {
   relayUrl: () => string;
@@ -82,7 +83,7 @@ export function createDeviceHost(deps: DeviceHostDeps): DeviceHost {
   };
 
   const signerLabel = (list: DeviceList, pk: string): string =>
-    pk === list.person ? "your person key" : (list.devices.find((d) => d.device === pk)?.label ?? list.revokes.find((r) => r.device === pk)?.label ?? "a device");
+    pk === list.root || pk === list.person ? "your person key" : (list.devices.find((d) => d.device === pk)?.label ?? list.revokes.find((r) => r.device === pk)?.label ?? "a device");
 
   const revokedHere = async (links: unknown[], device: Identity): Promise<boolean> => {
     const read = await readDeviceList(links);
@@ -114,7 +115,7 @@ export function createDeviceHost(deps: DeviceHostDeps): DeviceHost {
       await client.publish(ours);
     } else {
       const theirs = await readList(kept);
-      if (theirs.person !== who.pk) throw new Error("this sign-in already belongs to another Channels person key");
+      if (theirs.person !== who.pk) throw new Error(ANOTHER_PERSON);
       if (kept.length >= ours.length) ours = kept as DeviceLink[];
       else await client.publish(ours);
     }
@@ -127,6 +128,7 @@ export function createDeviceHost(deps: DeviceHostDeps): DeviceHost {
   const refresh = async (s: { client: AccountClient; device: Identity }): Promise<boolean> => {
     const kept = (await s.client.links()) as DeviceLink[];
     if (await revokedHere(kept, s.device)) return false;
+    if (kept.length && (await readList(kept)).person !== deps.who()?.pk) throw new Error(ANOTHER_PERSON);
     if (kept.length > deps.links().length) deps.saveLinks(kept);
     return true;
   };

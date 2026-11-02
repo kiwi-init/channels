@@ -62,7 +62,7 @@ export function messageGroups(ctx: MenuContext, m: Message, target: EventTarget,
       : [],
     [
       ...(more.reply ? [{ label: "Reply", run: more.reply }] : []),
-      ...(more.inThread ? [] : [{ label: "Open thread", run: () => go({ to: "panel", panel: { kind: "thread", seq: m.inThread ?? m.seq } }) }]),
+      ...(more.inThread ? [] : [{ label: m.where.kind === "task" ? "Open thread" : "Reply in thread", run: () => go({ to: "panel", panel: { kind: "thread", seq: m.inThread ?? m.seq } }) }]),
     ],
     m.canChange
       ? [

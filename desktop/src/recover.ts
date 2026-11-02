@@ -8,6 +8,7 @@ import { ownersOf, setUpAt, type RecoveryKept } from "./recovery.ts";
 
 export interface Restored {
   person: Identity & { xpk: string; xsk: string };
+  who: PublicPerson;
   links: DeviceLink[];
   channels: VaultContents["channels"];
   kept: RecoveryKept;
@@ -36,6 +37,7 @@ interface Opened {
   client: AccountClient;
   device: Identity;
   person: Restored["person"];
+  id: string;
   contents: VaultContents;
   key: Awaited<ReturnType<typeof recoveryKey>>;
 }
@@ -78,11 +80,11 @@ export function createRecoverer(deps: RecovererDeps): Recoverer {
       if (got.vault === null) return { ok: false, why: "your recovery key holds no vault yet, so your person key isn't in it: approve this computer from one of your other devices" };
       const bad = await checkVault(got.vault, list);
       if (bad) throw new Error(`the relay's recovery vault doesn't hold up: ${bad}`);
-      const contents = await openVault(got.vault as Vault | OldVault, key);
+      const contents = await openVault(got.vault as Vault | OldVault, key, list.root);
       if (!contents) throw new Error("your recovery vault didn't open with those words");
       const { person } = contents;
       if (!person.xpk || !person.xsk) throw new Error("the person key in your vault has no exchange half");
-      opened = { client, device, person: { ...person, xpk: person.xpk, xsk: person.xsk }, contents, key };
+      opened = { client, device, person: { ...person, xpk: person.xpk, xsk: person.xsk }, id: list.person, contents, key };
       const devices = list.devices.filter((d) => d.device !== device.pk).map((d) => ({ id: d.device, label: d.label, os: d.os, as: d.as, lost: d.as !== "computer" }));
       return { ok: true, name: person.name, devices, channels: contents.channels.map((c) => c.label) };
     },
@@ -93,7 +95,7 @@ export function createRecoverer(deps: RecovererDeps): Recoverer {
       const { client, device, person, key } = o;
       let links = (await client.links()) as DeviceLink[];
       let list = await listOf(links);
-      if (list.person !== person.pk) throw new Error("this account's device list belongs to another person key");
+      if (list.person !== o.id || list.root !== person.pk) throw new Error("this account's person key changed meanwhile: type your words again");
       const append = async (body: Parameters<typeof nextLink>[2]) => {
         links = [...links, await nextLink(list, person, body, now())];
         list = await listOf(links);
@@ -114,14 +116,20 @@ export function createRecoverer(deps: RecovererDeps): Recoverer {
       if (got.vault !== null) {
         const bad = await checkVault(got.vault, list);
         if (bad) throw new Error(`the relay's recovery vault doesn't hold up: ${bad}`);
-        const fresh = await openVault(got.vault as Vault | OldVault, key);
+        const fresh = await openVault(got.vault as Vault | OldVault, key, list.root);
         if (!fresh || fresh.person.pk !== person.pk) throw new Error("your recovery vault changed and no longer opens with those words: type them again");
         contents = fresh;
       }
       const version = got.vault === null ? 1 : (got.vault as Vault | OldVault).version + 1;
       await client.keepVault({ vault: await sealVault(person, read.recovery, version, contents, now()) });
       opened = null;
-      deps.restored({ person, links, channels: contents.channels, kept: { at: setUpAt(got.recovery) ?? now(), version, owners: ownersOf(contents.channels) } });
+      deps.restored({
+        person,
+        who: { pk: o.id, name: person.name, xpk: person.xpk },
+        links,
+        channels: contents.channels,
+        kept: { at: setUpAt(got.recovery) ?? now(), version, owners: ownersOf(contents.channels) },
+      });
       return { name: person.name, channels: contents.channels.length, forgot };
     },
 

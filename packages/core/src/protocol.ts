@@ -169,7 +169,7 @@ export function wellFormedRead(x: unknown): ReadMark | null {
  * sequence number; `eph` is relayed to the other sockets and never stored.
  */
 export type ClientFrame =
-  | { t: "send"; id: string; iv: string; ct: string; e?: number; cid?: string }
+  | { t: "send"; id: string; iv: string; ct: string; e?: number; cid?: string; wake?: string[] }
   | { t: "eph"; iv: string; ct: string }
   /** This member has read up to `seq` (a listener says it on the socket it already has: cheaper than a request). */
   | { t: "read"; seq: number }
@@ -305,7 +305,7 @@ export type Event =
   /** The goal a person's message #ask stands for, in plain words, as its tasks' header (null: their own words again). The lead, the owner or who asked names it. */
   | { op: "ask.name"; ask: number; name: string | null }
   | { op: "ask.close"; ask: number; why?: string }
-  | { op: "devices"; links: DeviceLink[] }
+  | { op: "devices"; links: DeviceLink[]; device?: string; vouch?: string }
   /**
    * A member's reaction to message #seq: one short emoji per member per message, the latest wins, null
    * takes it back. Not news: it's no unread, no notification, no line in a feed. Its body is throwaway
@@ -569,7 +569,17 @@ interface ImageRef {
 
 export type InlineImage = ImageAttachment & { data: string };
 
-export const MAX_BLOB_BYTES = MAX_IMAGE_BYTES + 28;
+export const MAX_FILE_BYTES = 25 * 1024 * 1024;
+
+export const FILE_PIECE_BYTES = 1024 * 1024;
+
+export const MAX_FILES = 8;
+
+const MAX_FILE_NAME = 255;
+
+const MAX_FILE_MIME = 127;
+
+export const MAX_BLOB_BYTES = FILE_PIECE_BYTES + 28;
 
 export const BLOB_ID_RE = /^[0-9a-f]{64}$/;
 
@@ -601,6 +611,45 @@ function kb(n: number): string {
 /** One-line marker for an image, e.g. `[image: shot.png (84KB)]`. */
 export function imageMarker(img: Pick<ImageAttachment, "name" | "data" | "ref">): string {
   return `[image: ${img.name} (${kb(img.data !== undefined ? Math.ceil((img.data.length * 3) / 4) : (img.ref?.size ?? 0))})]`;
+}
+
+export interface FilePiece {
+  id: string;
+  key: string;
+  size: number;
+}
+
+export interface FileAttachment {
+  name: string;
+  mime: string;
+  size: number;
+  pieces: FilePiece[];
+}
+
+function wellFormedPiece(x: unknown, size: number): x is FilePiece {
+  if (!x || typeof x !== "object") return false;
+  const p = x as Record<string, unknown>;
+  return typeof p.id === "string" && BLOB_ID_RE.test(p.id) && typeof p.key === "string" && /^[A-Za-z0-9_-]{43}$/.test(p.key) && p.size === size;
+}
+
+export function filePieceSizes(size: number): number[] {
+  const n = Math.ceil(size / FILE_PIECE_BYTES);
+  return Array.from({ length: n }, (_, i) => (i < n - 1 ? FILE_PIECE_BYTES : size - FILE_PIECE_BYTES * (n - 1)));
+}
+
+export function fileAttachment(x: unknown): x is FileAttachment {
+  if (!x || typeof x !== "object") return false;
+  const f = x as Record<string, unknown>;
+  if (typeof f.name !== "string" || !f.name.trim() || f.name.length > MAX_FILE_NAME) return false;
+  if (typeof f.mime !== "string" || !f.mime || f.mime.length > MAX_FILE_MIME) return false;
+  if (!Number.isSafeInteger(f.size) || (f.size as number) < 1 || (f.size as number) > MAX_FILE_BYTES || !Array.isArray(f.pieces)) return false;
+  const sizes = filePieceSizes(f.size as number);
+  const pieces: unknown[] = f.pieces;
+  return pieces.length === sizes.length && pieces.every((p, i) => wellFormedPiece(p, sizes[i]!));
+}
+
+export function fileMarker(f: Pick<FileAttachment, "name" | "size">): string {
+  return `[file: ${f.name} (${kb(f.size)})]`;
 }
 
 const HANDOFF_MAX_URL = 2048;
@@ -731,6 +780,7 @@ export interface Payload {
   ev?: Event;
   /** Attached images, in order. Never present on events. */
   imgs?: ImageAttachment[];
+  files?: FileAttachment[];
   /** The room a chat message is in (a room id); absent is general. Events are channel-wide. */
   room?: string;
   /**
@@ -740,6 +790,7 @@ export interface Payload {
   task?: number;
   /** A chat message to exactly one member, in the direct thread between the two. Older clients see a message to that member. */
   dm?: true;
+  side?: true;
   /**
    * An agent handing a decision or a step to people instead of acting (`kiwi escalate`): a blocking
    * question to its own human and the owner. Older clients see it as the blocking question it also is.
@@ -1111,7 +1162,15 @@ function eventCheck(ev: unknown): boolean | null {
         (e.verdict !== "back" || (typeof e.note === "string" && e.note.trim().length > 0))
       );
     case "devices":
-      return Array.isArray(e.links) && e.links.length > 0 && e.links.length <= DEVICE_LIST_MAX && e.links.every((l) => !!l && typeof l === "object" && !Array.isArray(l));
+      return (
+        Array.isArray(e.links) &&
+        e.links.length > 0 &&
+        e.links.length <= DEVICE_LIST_MAX &&
+        e.links.every((l) => !!l && typeof l === "object" && !Array.isArray(l)) &&
+        (e.device === undefined) === (e.vouch === undefined) &&
+        opt(e.device, (x): x is string => str(x, 64)) &&
+        opt(e.vouch, (x): x is string => str(x, 128))
+      );
     default:
       return null;
   }
@@ -1135,6 +1194,7 @@ export function wellFormed(p: unknown): p is WirePayload {
     opt(m.room, roomId) &&
     (m.task === undefined || (Number.isSafeInteger(m.task) && (m.task as number) > 0)) &&
     (m.dm === undefined || m.dm === true) &&
+    (m.side === undefined || m.side === true) &&
     (m.esc === undefined || m.esc === true) &&
     (m.handoff === undefined || (m.esc === true && wellFormedHandoff(m.handoff))) &&
     (m.choices === undefined || (m.esc === true && m.handoff === undefined && wellFormedChoices(m.choices))) &&

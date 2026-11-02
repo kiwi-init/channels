@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { lazy, Suspense, useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import { MAX_IMAGE_BYTES, RASTER_MIMES } from "@kiwi/core/protocol.ts"
 import { fileDrag, takeDropped } from "@kiwi/app/dropped.ts"
@@ -146,6 +146,7 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
   const [closed, setClosed] = useState(false)
   const area = useRef<HTMLTextAreaElement>(null)
   const box = useRef<HTMLDivElement>(null)
+  const form = useRef<HTMLFormElement>(null)
   const picker = useRef<HTMLInputElement>(null)
   const [files, setFilesNow] = useState<Upload[]>(() => attached.get(key) ?? [])
   const setFiles = (next: Upload[] | ((now: Upload[]) => Upload[])) =>
@@ -156,6 +157,7 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
       return list
     })
   const [dropping, setDropping] = useState(false)
+  const [alsoRoom, setAlsoRoom] = useState(false)
   const enterSends = app.prefs.enterSends
   const stash = useStash(key)
   const [cueOf, setCue] = useState<Cue | null>(() => (STASH_SHOT === "stash" ? { key, back: false, left: stash.list.length } : null))
@@ -176,18 +178,6 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
   }
   const sealed = useMemo(() => sealedOf(channel, where), [channel, where])
   const [warned, setWarned] = useState<{ text: string; people: Person[] } | null>(null)
-
-  useEffect(() => {
-    const block = (e: DragEvent) => {
-      if (e.dataTransfer && fileDrag(e.dataTransfer)) e.preventDefault()
-    }
-    window.addEventListener("dragover", block)
-    window.addEventListener("drop", block)
-    return () => {
-      window.removeEventListener("dragover", block)
-      window.removeEventListener("drop", block)
-    }
-  }, [])
 
   const add = (upload: Upload) => setFiles((now) => (now.length < MAX_FILES ? [...now, upload] : now))
   const attach = (list: readonly File[]) => {
@@ -212,6 +202,36 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
     }
   }
 
+  const takeIn = (dt: DataTransfer) => {
+    setDropping(false)
+    if (dt.files.length) return attach([...dt.files])
+    void takeDropped(dt).then(({ files: dropped, refused }) => {
+      for (const why of refused) toast(why, "error")
+      attach(dropped)
+    })
+  }
+
+  const droppedOver = useEffectEvent((e: DragEvent, dt: DataTransfer) => {
+    const el = form.current
+    if (!el || (e.target instanceof Node && el.contains(e.target))) return
+    const r = el.getBoundingClientRect()
+    if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) takeIn(dt)
+  })
+
+  useEffect(() => {
+    const block = (e: DragEvent) => {
+      if (!e.dataTransfer || !fileDrag(e.dataTransfer)) return
+      e.preventDefault()
+      if (e.type === "drop") droppedOver(e, e.dataTransfer)
+    }
+    window.addEventListener("dragover", block)
+    window.addEventListener("drop", block)
+    return () => {
+      window.removeEventListener("dragover", block)
+      window.removeEventListener("drop", block)
+    }
+  }, [])
+
   useLayoutEffect(() => {
     const el = area.current
     if (!el) return
@@ -220,8 +240,8 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
   }, [text])
 
   useEffect(() => {
-    if (replyTo) area.current?.focus()
-  }, [replyTo])
+    if (replyTo || inThread !== undefined) area.current?.focus()
+  }, [replyTo, inThread])
 
   useLayoutEffect(() => {
     const el = box.current
@@ -289,10 +309,15 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
       setWarned({ text: value, people: away })
       return
     }
-    const opts = { ...(inThread !== undefined ? { inThread } : {}), ...(replyTo ? { replyTo: replyTo.seq } : {}), ...(files.length ? { images: files } : {}) }
+    const opts = {
+      ...(inThread !== undefined ? { inThread, ...(alsoRoom ? {} : { side: true as const }) } : {}),
+      ...(replyTo ? { replyTo: replyTo.seq } : {}),
+      ...(files.length ? { images: files } : {}),
+    }
     app.actions.send(channel.code, where, sent, Object.keys(opts).length ? opts : undefined)
     picked.delete(key)
     replying?.set(null)
+    setAlsoRoom(false)
     setFiles([])
     setCue(null)
     update("")
@@ -383,6 +408,7 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
         </ul>
       )}
       <form
+        ref={form}
         className={cx("composer", replyTo && "is-replying", dropping && "is-dropping")}
         onSubmit={(e) => {
           e.preventDefault()
@@ -400,12 +426,7 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
         onDrop={(e) => {
           if (!fileDrag(e.dataTransfer)) return
           e.preventDefault()
-          setDropping(false)
-          if (e.dataTransfer.files.length) return attach([...e.dataTransfer.files])
-          void takeDropped(e.dataTransfer).then(({ files: dropped, refused }) => {
-            for (const why of refused) toast(why, "error")
-            attach(dropped)
-          })
+          takeIn(e.dataTransfer)
         }}
       >
         {stash.list.length > 0 && (
@@ -571,6 +592,12 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
             <Icon name="send" />
           </button>
         </div>
+        {inThread !== undefined && (
+          <label className="compose-also">
+            <input type="checkbox" checked={alsoRoom} onChange={(e) => setAlsoRoom(e.target.checked)} />
+            Also send to {placeOf(channel, where)}
+          </label>
+        )}
       </form>
       {warned && sealed && (
         <div className="compose-warn" role="alert">

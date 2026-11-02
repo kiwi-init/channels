@@ -76,6 +76,8 @@ describe("member routes refuse anyone who isn't a member", () => {
     ["GET", "/github/issue"],
     ["DELETE", "/members/me"],
     ["GET", `/blobs/${"0".repeat(64)}`],
+    ["PUT", "/push"],
+    ["DELETE", "/push"],
   ];
   for (const [method, path] of routes) {
     test(`${method} ${path}`, async () => {
