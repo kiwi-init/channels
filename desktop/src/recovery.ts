@@ -17,7 +17,10 @@ import {
   type Vault,
   type VaultContents,
 } from "@kiwi/core/recovery.ts";
-import type { RecoverySaveView, RecoveryView } from "./bridge.ts";
+import type { RecoveryCancelView, RecoverySaveView, RecoveryView } from "./bridge.ts";
+
+const byLabel = (list: DeviceList, pk: string): string =>
+  pk === list.person ? "your person key" : (list.devices.find((d) => d.device === pk)?.label ?? list.revokes.find((r) => r.device === pk)?.label ?? "a device");
 
 const CHECKS = 3;
 const LOOK_MS = 10 * 60_000;
@@ -47,6 +50,7 @@ export interface RecoveryHost {
   words(): Promise<string[]>;
   save(typed: { at: number; word: string }[]): Promise<RecoverySaveView>;
   drop(): void;
+  cancelPending(words: string): Promise<RecoveryCancelView>;
   keepCurrent(): Promise<void>;
 }
 
@@ -66,7 +70,10 @@ const lastSetUp = (chain: readonly unknown[]): RecoveryLink | null => [...(chain
 
 export const setUpAt = (chain: readonly unknown[]): number | null => lastSetUp(chain)?.at ?? null;
 
-const typedHere = (chain: readonly unknown[], recovery: Recovery): boolean => lastSetUp(chain)?.rpk === recovery.rpk;
+const typedHere = (chain: readonly unknown[], recovery: Recovery): boolean => {
+  const made = [...(chain as RecoveryLink[])].reverse().find((l) => l.rpk === recovery.rpk);
+  return !!made && (made.after === null || made.pk === made.person);
+};
 
 const sealedFor = (box: SealedPerson | undefined, recovery: Recovery): box is SealedPerson => !!box && box.rxpk === recovery.rxpk && box.pk === recovery.root;
 
@@ -164,7 +171,30 @@ export function createRecoveryHost(deps: RecoveryHostDeps): RecoveryHost {
       const s = await deps.session();
       if (!s) return null;
       const got = await s.client.vault();
-      return { at: got.recovery.length ? setUpAt(got.recovery) : null, here: !!deps.person() };
+      const at = got.recovery.length ? setUpAt(got.recovery) : null;
+      const devices = got.recovery.length && deps.links().length ? await list().catch(() => null) : null;
+      const read = devices ? await readRecovery(got.recovery, devices, now()) : null;
+      const pending = read?.ok ? read.recovery.pending : null;
+      return { at, here: !!deps.person(), ...(pending && devices ? { pending: { from: pending.after, by: byLabel(devices, pending.by) } } : {}) };
+    },
+
+    async cancelPending(words) {
+      const phrase = await readRecoveryPhrase(words);
+      if (!phrase.ok) return { ok: false, why: phrase.why, ...(phrase.word !== undefined ? { word: phrase.word } : {}) };
+      const key = await recoveryKey(phrase.entropy);
+      const session = await signedIn();
+      const devices = await list();
+      const before = await kept(session.client, devices);
+      if (!before.recovery) return { ok: false, why: "this account has no recovery key" };
+      if (!before.recovery.pending) return { ok: true };
+      if (key.pk !== before.recovery.rpk)
+        return { ok: false, why: before.recovery.pending.rpk === key.pk ? "those are the new words: type the ones you had before" : "those aren't your current words" };
+      const link = await recoveryLink(key, devices.person, before.recovery, { pk: key.pk, xpk: key.xpk! }, now());
+      const chain = [...(before.chain as RecoveryLink[]), link];
+      const read = await readRecovery(chain, devices, now());
+      if (!read.ok || read.recovery.pending) throw new Error(`cancelling the new words didn't hold up${read.ok ? "" : `: ${read.why}`}`);
+      await session.client.keepVault({ recovery: chain });
+      return { ok: true };
     },
 
     async words() {
@@ -192,6 +222,12 @@ export function createRecoveryHost(deps: RecoveryHostDeps): RecoveryHost {
       const chain = [...(before.chain as RecoveryLink[]), link];
       const read = await readRecovery(chain, devices, now());
       if (!read.ok) throw new Error(`the new recovery key doesn't hold up: ${read.why}`);
+      const waits = read.recovery.pending?.rpk === key.pk ? read.recovery.pending : null;
+      if (waits) {
+        await session.client.keepVault({ recovery: chain });
+        held = null;
+        return { ok: true, at: link.at, from: waits.after };
+      }
       const done = await seal(session, read.recovery, chain, before, link.at, chain);
       held = null;
       const onRelay = await proveBack(session.client, devices, done.version, key, person);

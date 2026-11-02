@@ -78,6 +78,7 @@ export function makeBridge(t: BridgeTransport): KiwiBridge {
     recoveryWords: () => t.call("recoveryWords"),
     recoverySave: (typed) => t.call("recoverySave", typed),
     recoveryDrop: () => t.call("recoveryDrop"),
+    recoveryCancel: (words) => t.call("recoveryCancel", words),
     recover: (words) => t.call("recover", words),
     recoverFinish: (lost) => t.call("recoverFinish", lost),
     recoverCancel: () => t.call("recoverCancel"),

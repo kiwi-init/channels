@@ -1,6 +1,6 @@
 import { handleFor } from "@kiwi/core/membership.ts"
 import { ROBOT_FACES, TASK_TITLE_MAX_LENGTH } from "@kiwi/core/protocol.ts"
-import { taskId } from "@kiwi/core/state.ts"
+import { taskId, taskSpecRefusal } from "@kiwi/core/state.ts"
 import { assignTask, type TaskSend } from "@kiwi/channel/task-actions.ts"
 import { tokenForCreate } from "@kiwi/app/auth.ts"
 import { askToJoin, createChannel, inviteInfo } from "@kiwi/channel/join.ts"
@@ -25,6 +25,7 @@ import {
   recoverBegin,
   recoverFinish,
   recoverOpen,
+  recoveryCancel,
   recoveryDrop,
   recoverySave,
   recoveryWords,
@@ -96,6 +97,7 @@ async function newChannel(title: string): Promise<string> {
     if (isSignInGone(err) && bridge()) return make(true)
     throw err
   })
+  void manage().then((x) => x.freshChannel(m.code))
   await linkOf(m)
     .setIcon({ kind: "robot", robot: ROBOT_FACES[Math.floor(Math.random() * ROBOT_FACES.length)] ?? "blue" })
     .catch(() => {
@@ -157,6 +159,11 @@ export function makeActions(): Actions {
       }),
     loadImage: (code, spot) => loadPicture(code, spot),
     discard: (code, seq) => attempt("Couldn't remove it", async () => need(code).discard(-seq)),
+    leaveRoom: (code, room) =>
+      attempt("Couldn't leave the room", async () => {
+        await (await manage()).leaveRoom(code, room)
+        announce("You've left. It's fully closed once someone else in the room is online.")
+      }),
     markRead: (code, where) => {
       const run = need(code)
       const last = lastIn(run.messages, run.state, run.me, where)
@@ -181,13 +188,16 @@ export function makeActions(): Actions {
     answerStep: (code, id, reply) => attempt("Not answered", async () => (await rare()).answerStep(code, id, reply)),
     answerJoin: (code, id, yes, choice) => attempt(yes ? "Couldn't let them in" : "Couldn't turn them away", async () => (await manage()).answerJoin(code, id, yes, choice)),
     approveTask: (code, id, approve, why) => attempt(approve ? "Not approved" : "Not sent back", async () => (await rare()).approveTask(code, id, approve, why)),
-    addTask: (code, title, taskOwner) =>
+    addTask: (code, ask, title) =>
       attempt("Task not added", async () => {
         const run = need(code)
         const clean = title.trim().slice(0, TASK_TITLE_MAX_LENGTH)
         if (!clean) throw new Error("a task needs a title")
-        await event(run, `task: ${clean}`, { op: "task.add", title: clean, ...(taskOwner ? { owner: taskOwner } : {}) }, taskOwner ? [taskOwner] : undefined)
+        const why = taskSpecRefusal(run.state, { re: ask })
+        if (why) throw new Error(why)
+        await run.send(`task: ${clean}`, { kind: "event", ev: { op: "task.add", title: clean }, re: [ask] })
       }),
+    setSpecsOnly: (code, on) => attempt("Not changed", async () => (await manage()).setSpecsOnly(code, on)),
     setTaskStatus: (code, id, status) => attempt("Status not changed", async () => (await rare()).setTaskStatus(code, id, status)),
     cancelTask: (code, id, why) => attempt("Not cancelled", async () => (await rare()).cancelTask(code, id, why)),
     assignTask: (code, id, to, why) =>
@@ -200,11 +210,24 @@ export function makeActions(): Actions {
       }),
     setReviewer: (code, id, reviewer) => attempt("Reviewer not changed", async () => (await rare()).setReviewer(code, id, reviewer)),
     nameGoal: (code, ask, name) => attempt("Goal not named", async () => (await rare()).nameGoal(code, ask, name)),
+    newSpec: async (code, words, text) => {
+      try {
+        return await (await rare()).newSpec(code, words, text)
+      } catch (err) {
+        announce(`Spec not started: ${say(err)}`)
+        return null
+      }
+    },
+    writeSpec: (code, ask, text) => attempt("Spec not saved", async () => (await rare()).writeSpec(code, ask, text)),
+    approveSpec: (code, ask, v) => attempt("Not approved", async () => (await rare()).approveSpec(code, ask, v)),
+    judgeSpec: (code, ask, verdict, note) =>
+      attempt(verdict === "accepted" ? "Not accepted" : verdict === "back" ? "Not sent back" : "Not dropped", async () => (await rare()).judgeSpec(code, ask, verdict, note)),
     setRole: (code, name, role) => attempt("Role not changed", async () => (await manage()).setRole(code, name, role)),
     removeMember: (code, name) => attempt(`Couldn't remove ${name}`, async () => (await manage()).removeMember(code, name)),
     setPersona: (code, name, id) => attempt("Personality not changed", async () => (await manage()).setPersona(code, name, id)),
     setReadOnly: (code, name, on) => attempt("Not changed", async () => (await manage()).setReadOnly(code, name, on)),
     setWake: (code, name, on) => attempt("Not changed", () => setWake(need(code).roomId, name, on)),
+    setAgentColor: (code, name, color) => attempt("Colour not changed", async () => (await manage()).setAgentColor(code, name, color)),
     setNickname: (code, name, nickname) => attempt("Nickname not changed", async () => (await manage()).setNickname(code, name, nickname)),
     setPowers: (code, name, powers) => attempt("Not changed", async () => (await manage()).setPowers(code, name, powers)),
     showAgent: async (code, name) => {
@@ -371,6 +394,7 @@ export function makeActions(): Actions {
     recoveryWords: () => tried("Couldn't make the recovery words", recoveryWords),
     recoverySave: (typed) => tried("Couldn't set up the recovery key", () => recoverySave(typed)),
     recoveryDrop: () => attempt("Couldn't put the words away", recoveryDrop),
+    recoveryCancel: (words) => tried("Couldn't cancel the new words", () => recoveryCancel(words)),
     enrollBegin: () =>
       attempt("Couldn't sign in as one of your devices", () =>
         enrollBegin(

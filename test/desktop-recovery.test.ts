@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, describe, expect, setDefaultTimeout, setSystemTime, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -27,6 +27,14 @@ function ownRelay(): void {
 }
 
 afterAll(() => rmSync(dataDir, { recursive: true, force: true }));
+
+afterEach(() => {
+  setSystemTime();
+});
+
+const later = (ms: number): void => {
+  setSystemTime(new Date(Date.now() + ms));
+};
 
 const key = async (name: string) => withExchangeKey(await generateIdentity(name));
 
@@ -237,7 +245,30 @@ describe("setting up the recovery key on the desktop", () => {
     await expect(a.recovery.keepCurrent()).rejects.toThrow("lost your recovery vault");
   });
 
-  test("new words replace the old at once: the next vault opens only with them", async () => {
+  test("every desktop sees pending new words, and the current words cancel them (T1975)", async () => {
+    const a = await app();
+    a.listing.fails = true;
+    const old = await a.recovery.words();
+    await a.recovery.save(typed(old, [0, 1, 2]));
+    a.recovery.drop();
+    const fresh = await a.recovery.words();
+    const saved = await a.recovery.save(typed(fresh, [3, 4, 5]));
+    const from = saved.ok ? saved.from : undefined;
+    expect(await a.recovery.status()).toMatchObject({ pending: { from, by: "your person key" } });
+    expect(await a.recovery.cancelPending(fresh.join(" "))).toMatchObject({ ok: false, why: expect.stringContaining("new words") });
+    const wrong = [...old.slice(0, 23), old[0] === "abandon" ? "ability" : "abandon"].join(" ");
+    expect((await a.recovery.cancelPending(wrong)).ok).toBe(false);
+    expect(await a.recovery.cancelPending(old.join(" "))).toEqual({ ok: true });
+    expect((await a.recovery.status())?.pending).toBeUndefined();
+    a.listing.fails = false;
+    a.clock.ahead = 7 * DAY + 60_000;
+    await a.recovery.keepCurrent();
+    const got = await relayVault(a);
+    expect((await opened(old, got.vault!))?.person.sk).toBe(a.person.sk);
+    expect(await opened(fresh, got.vault!)).toBeNull();
+  });
+
+  test("new words from the person key take over after 7 days: the old ones open the vault until then, then it's resealed to the new ones", async () => {
     const a = await app();
     a.listing.fails = true;
     const old = await a.recovery.words();
@@ -245,12 +276,20 @@ describe("setting up the recovery key on the desktop", () => {
     a.recovery.drop();
     const fresh = await a.recovery.words();
     expect(fresh).not.toEqual(old);
-    await a.recovery.save(typed(fresh, [3, 4, 5]));
-    const got = await relayVault(a);
+    const saved = await a.recovery.save(typed(fresh, [3, 4, 5]));
+    expect(saved).toMatchObject({ ok: true, from: expect.any(Number) });
+    let got = await relayVault(a);
     expect(got.recovery).toHaveLength(2);
+    expect(got.vault?.version).toBe(1);
+    expect((await opened(old, got.vault!))?.person.sk).toBe(a.person.sk);
+    expect(await opened(fresh, got.vault!)).toBeNull();
+    later(7 * DAY + 60_000);
+    await a.recovery.keepCurrent();
+    got = await relayVault(a);
     expect(got.vault?.version).toBe(2);
     expect(await opened(old, got.vault!)).toBeNull();
     expect((await opened(fresh, got.vault!))?.person.sk).toBe(a.person.sk);
+    expect(a.holds.value).toBe(true);
   });
 
   test("another person's app can't read this account's recovery state", async () => {
@@ -316,18 +355,15 @@ describe("letting go of the person key once the words are checked (T899)", () =>
     await gone.recovery.keepCurrent();
     expect(gone.holds.value).toBe(true);
 
-    const old = await app();
-    old.listing.fails = true;
-    await old.recovery.save(typed(await old.recovery.words(), [3, 4, 5]));
-    const first = (await relayVault(old)).text;
-    old.listing.fails = false;
-    old.swap.vault = first;
-    old.swap.skip = 1;
-    const again = await old.recovery.words();
-    await expect(old.recovery.save(typed(again, [6, 7, 8]))).rejects.toThrow("keeps your person key");
-    old.swap.vault = null;
-    await old.recovery.keepCurrent();
-    expect(old.holds.value).toBe(true);
+    const theirs = await app();
+    await theirs.recovery.save(typed(await theirs.recovery.words(), [3, 4, 5]));
+    const other = await app();
+    other.swap.vault = (await relayVault(theirs)).text;
+    other.swap.skip = 1;
+    await expect(other.recovery.save(typed(await other.recovery.words(), [6, 7, 8]))).rejects.toThrow("keeps your person key");
+    other.swap.vault = null;
+    await other.recovery.keepCurrent();
+    expect(other.holds.value).toBe(true);
   });
 
   test("words set up before this update: the next poll reseals with the person key boxed, and keeps it, since no words were checked against the relay", async () => {
@@ -514,6 +550,10 @@ describe("every approving desktop seals its own channels (T969)", () => {
     await b.recovery.keepCurrent();
     const fresh = await a.recovery.words();
     await a.recovery.save(typed(fresh, [4, 5, 6]));
+    expect((await relayVault(a)).vault?.boxes).toHaveLength(2);
+    later(7 * DAY + 60_000);
+    await expect(b.recovery.keepCurrent()).rejects.toThrow("recovery key changed");
+    await a.recovery.keepCurrent();
     const after = await relayVault(a);
     expect(after.vault?.boxes).toHaveLength(1);
     expect(labels(await opened(fresh, after.vault!))).toEqual([]);

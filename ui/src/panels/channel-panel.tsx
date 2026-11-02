@@ -62,6 +62,10 @@ export function ChannelPanel({ channel }: { channel: Channel }) {
 
         <Part title="Goal">{sets ? <GoalEditor channel={channel} /> : channel.goal ? <p className="cpanel-goal">{channel.goal}</p> : <p className="cpanel-none">No goal yet.</p>}</Part>
 
+        <Part title="Specs">
+          <SpecsOnly channel={channel} own={own} />
+        </Part>
+
         <Part title="Repos">
           <Repos channel={channel} />
         </Part>
@@ -300,6 +304,24 @@ function End({ channel, open, onClose, onDone }: { channel: Channel; open: boole
         <input autoFocus className="input is-mono" value={typed} onChange={(e) => setTyped(e.target.value)} />
       </Field>
     </Confirm>
+  )
+}
+
+function SpecsOnly({ channel, own }: { channel: Channel; own: boolean }) {
+  const { app } = useApp()
+  const on = !!channel.specsOnly
+  return (
+    <div className="cpanel-github">
+      <div className="cpanel-row">
+        <span className="cpanel-value">Tasks only from approved specs</span>
+        {own ? <Toggle on={on} label="Tasks only from approved specs" onChange={(next) => app.actions.setSpecsOnly(channel.code, next)} /> : <span className="cpanel-value">{on ? "On" : "Off"}</span>}
+      </div>
+      <p className="cpanel-hint">
+        {on
+          ? "Every task is a step of a spec a person approved. Agents write the spec with you; once it's approved, the first free agent starts it."
+          : "Agents may file tasks under any person's message. Turn it on, and work starts only from a spec a person approved."}
+      </p>
+    </div>
   )
 }
 

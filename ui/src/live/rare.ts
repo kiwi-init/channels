@@ -3,7 +3,7 @@ import { ANYONE, approveTask as approving, cancelTask as cancelling, changeRevie
 import { ALLOW_ONCE, DENY } from "@kiwi/app/permission-settled.ts"
 import { changeTo } from "@kiwi/core/changes.ts"
 import { permissionReply } from "@kiwi/core/permission.ts"
-import { GENERAL_ROOM, MAX_GOAL_NAME, type Event, type StepReply } from "@kiwi/core/protocol.ts"
+import { GENERAL_ROOM, MAX_GOAL_NAME, MAX_SPEC, MAX_SPEC_NOTE, type Event, type StepReply } from "@kiwi/core/protocol.ts"
 import { taskId } from "@kiwi/core/state.ts"
 import { bridge, type KiwiBridge, type TermEvent, type TermOpenView } from "@kiwi/secrets/secrets.ts"
 import { stepReplyText } from "~/chat/step"
@@ -58,6 +58,41 @@ export async function nameGoal(code: string, ask: number, name: string | null): 
   const run = need(code)
   const clean = name?.trim().slice(0, MAX_GOAL_NAME) || null
   await event(run, clean ? `named the goal of #${ask}: ${clean}` : `#${ask}'s goal unnamed`, { op: "ask.name", ask, name: clean })
+}
+
+export async function newSpec(code: string, words: string, text: string): Promise<number> {
+  const run = need(code)
+  const said = words.trim()
+  if (!said) throw new Error("say what you want, in your own words")
+  const ask = await run.post({ kind: "room", room: GENERAL_ROOM }, said, {})
+  await writeSpec(code, ask, text.trim() || `# ${said.split("\n")[0]!.slice(0, 120)}`)
+  return ask
+}
+
+export async function writeSpec(code: string, ask: number, text: string): Promise<void> {
+  const run = need(code)
+  const clean = text.trim()
+  if (!clean) throw new Error("a spec needs words")
+  if (clean.length > MAX_SPEC) throw new Error(`a spec is at most ${MAX_SPEC} characters`)
+  if (run.state.specs.get(ask)?.text.trim() === clean) return
+  await event(run, `spec of #${ask}`, { op: "spec.set", ask, text: clean })
+}
+
+export async function approveSpec(code: string, ask: number, v: number): Promise<void> {
+  const run = need(code)
+  const spec = run.state.specs.get(ask)
+  if (!spec) throw new Error(`#${ask} has no spec`)
+  if (spec.v !== v) throw new Error("the spec changed while you read it: read it again, then approve")
+  await event(run, `approved the spec of #${ask}`, { op: "spec.approve", ask, v })
+  announce("Approved: it starts when an agent is free")
+}
+
+export async function judgeSpec(code: string, ask: number, verdict: "accepted" | "back" | "dropped", note?: string): Promise<void> {
+  const run = need(code)
+  const clean = note?.trim().slice(0, MAX_SPEC_NOTE)
+  if (verdict === "back" && !clean) throw new Error("say what's missing, so the agents know what to fix")
+  await event(run, verdict === "accepted" ? `accepted #${ask}` : verdict === "back" ? `sent #${ask} back` : `dropped #${ask}`, { op: "spec.result", ask, verdict, ...(clean ? { note: clean } : {}) })
+  announce(verdict === "accepted" ? "Accepted" : verdict === "back" ? "Sent back: it starts again when an agent is free" : "Dropped")
 }
 
 export async function change(code: string, seq: number, text: string | null): Promise<void> {

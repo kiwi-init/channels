@@ -357,6 +357,9 @@ For when every app is gone, or a thief revoked your other devices first. The rec
   - A list with more re-roots beats a longer one with fewer, so a fork the old key grows can't win.
   - The relay takes a re-root only with its own time and the exact recovery chain it keeps, so words
     replaced since can't re-root. A later re-root must carry a chain that extends the one before.
+  - New words the old key proposed, still in their 7 days, are void once the re-root lands, as are
+    those of a device it drops. A thief with the person key can't swap the words before the owner
+    re-roots: the current words still sign the re-root during the wait.
   - An app still holding the old key lets it go, and a sealed person box from before the re-root is
     never sealed into a new vault version.
 - **Passkeys later:** per-passkey wrapping where native passkey PRF exists (macOS 15 and iOS 18 through

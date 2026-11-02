@@ -5,6 +5,7 @@ import { join, resolve } from "node:path";
 import { chromium } from "playwright-core";
 import { startLocalRelay } from "./local-relay.ts";
 import { harnessDist } from "./ui-harness.ts";
+import { approveSpec } from "./perf-ui.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
 const DIST = harnessDist(process.argv[2]);
@@ -129,18 +130,25 @@ try {
   await page.keyboard.press("Escape");
   step(at);
 
-  at = "the agent posts a message and a task";
+  at = "the agent writes a spec, no task goes in before the person approves it, then the agent posts a message and a task";
   await views.getByRole("button", { name: /general/ }).click();
   await kiwi(["-c", "smoke", "--as", "bot", "send", "hello from bot"]);
   const ask = (await said("bot")).find((m) => m.body === "smoke test")?.seq;
   if (ask === undefined) throw new Error("the person's message isn't in the agent's log");
+  await kiwi(["-c", "smoke", "--as", "bot", "spec", "write", String(ask), "# Smoke\n\n## Done when\n- [ ] the smoke passes"]);
+  const early = await kiwi(["-c", "smoke", "--as", "bot", "task", "add", "Too early", "--ask", String(ask)]).then(
+    () => "",
+    (e: unknown) => String(e),
+  );
+  if (!early.includes("isn't approved yet")) throw new Error(`a task went in before its spec was approved: ${early || "no refusal"}`);
+  await approveSpec(page);
   const added = await kiwi(["-c", "smoke", "--as", "bot", "task", "add", "Smoke task", "--owner", "bot", "--ask", String(ask)]);
   const task = /\bT(\d+)\b/.exec(added)?.[1];
   if (task === undefined) throw new Error(`kiwi task add printed no task id: ${added.trim()}`);
   await page.locator("article").filter({ hasText: "hello from bot" }).first().waitFor({ timeout: 30000 });
   await page.getByText("Smoke task").first().waitFor({ timeout: 30000 });
   await shot("general");
-  await views.getByRole("button", { name: /^Tasks/ }).click();
+  await views.getByRole("button", { name: /^Specs/ }).click();
   await page.getByRole("main").getByText("Smoke task").first().waitFor({ timeout: 15000 });
   await shot("tasks");
   await views.getByRole("button", { name: /general/ }).click();
@@ -189,7 +197,7 @@ try {
   await shot("search-jump");
   await page.keyboard.press("ControlOrMeta+f");
   if (!(await search.evaluate((el) => el === document.activeElement))) throw new Error("the search shortcut did not focus the open search field");
-  await views.getByRole("button", { name: /^Tasks/ }).click();
+  await views.getByRole("button", { name: /^Specs/ }).click();
   await views.getByRole("button", { name: /general/ }).click();
   await page.locator("article").filter({ hasText: "hello from bot" }).first().waitFor({ timeout: 15000 });
   await page.waitForTimeout(300);

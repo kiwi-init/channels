@@ -94,7 +94,13 @@ function hideItem(ctx: MenuContext, actions: Actions, where: Extract<Where, { ki
   }
 }
 
-export function roomGroups(ctx: MenuContext, actions: Actions, open: boolean, room: { id: string; name: string; unread: number; muted?: boolean | undefined }): MenuGroups {
+export function roomGroups(
+  ctx: MenuContext,
+  actions: Actions,
+  open: boolean,
+  canLeave: boolean,
+  room: { id: string; name: string; unread: number; muted?: boolean | undefined; members?: unknown }
+): MenuGroups {
   const { channel, go, toast } = ctx
   return [
     [
@@ -106,6 +112,18 @@ export function roomGroups(ctx: MenuContext, actions: Actions, open: boolean, ro
         : [hideItem(ctx, actions, { kind: "room", room: room.id }, `#${room.name}`, open, true)]),
     ],
     channel.youOwn || channel.youTrusted ? [{ label: "Room settings", run: () => go({ to: "panel", panel: { kind: "channel" } }) }] : [],
+    room.members && canLeave
+      ? [
+          {
+            label: `Leave #${room.name}`,
+            confirm: { title: `Leave #${room.name}?`, sub: "It leaves your list now. It's fully closed once someone else in the room is online, and they can add you back.", yes: "Leave" },
+            run: () => {
+              actions.leaveRoom(channel.code, room.id)
+              if (open) go({ to: "where", where: { kind: "room", room: GENERAL_ROOM } })
+            },
+          },
+        ]
+      : [],
     [{ label: "Copy name", run: copier(toast, `#${room.name}`) }],
   ]
 }

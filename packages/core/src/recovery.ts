@@ -8,6 +8,7 @@ const DAY_MS = 86_400_000;
 const PHRASE_WORDS = 24;
 const ENTROPY_BYTES = 32;
 const RECOVERY_DELAY_DAYS = 7;
+export const PERSON_WORDS_WAIT_FROM = Date.UTC(2026, 10, 1, 2, 30);
 const RECOVERY_MAX = 256;
 const VAULT_BOX_MAX = 512 * 1024;
 const VAULT_SECTIONS_MAX = 64;
@@ -128,7 +129,7 @@ export const recoveryAfter = (at: number): number => at + RECOVERY_DELAY_DAYS * 
 
 export function recoveryLink(signer: Identity, person: string, prior: Recovery | null, key: { pk: string; xpk: string }, at = Date.now()): Promise<RecoveryLink> {
   if (!key.xpk) throw new Error("a recovery key needs its exchange half");
-  const now = signer.pk === (prior?.root ?? person) || (!!prior && prior.rpk === signer.pk);
+  const now = prior ? prior.rpk === signer.pk : signer.pk === person;
   return sign(signer, {
     kind: "kiwi-recovery" as const,
     v: 1 as const,
@@ -155,6 +156,8 @@ function shapeOf(x: Record<string, unknown>): string | null {
 function approver(list: DeviceList, pk: string): boolean {
   return list.devices.some((d) => d.device === pk && d.approve && d.as !== "computer");
 }
+
+const rerootedBefore = (list: DeviceList, pk: string, due: number): boolean => list.reroots.some((x) => x.from === pk && x.at < due);
 
 export async function readRecovery(links: readonly unknown[], list: DeviceList, now = Date.now()): Promise<ReadRecovery> {
   if (!links.length) return { ok: false, why: "no recovery key set up" };
@@ -184,14 +187,20 @@ export async function readRecovery(links: readonly unknown[], list: DeviceList, 
     }
     if (r.pending && link.at >= r.pending.after) r = { ...r, rpk: r.pending.rpk, rxpk: r.pending.rxpk, pending: null };
     if (link.after === null) {
-      if (link.pk !== root && link.pk !== r.rpk) return { ok: false, why: `recovery link ${link.n}: only the person key or the recovery key replaces it at once` };
-      r = { ...r, n: link.n, head, rpk: link.rpk, rxpk: link.rxpk, pending: null };
+      if (link.pk === r.rpk || (!after && link.pk === root && link.at < PERSON_WORDS_WAIT_FROM)) {
+        r = { ...r, n: link.n, head, rpk: link.rpk, rxpk: link.rxpk, pending: null };
+        continue;
+      }
+      if (link.pk !== root) return { ok: false, why: `recovery link ${link.n}: only the person key or the recovery key replaces it at once` };
+      const due = recoveryAfter(link.at);
+      r = { ...r, n: link.n, head, pending: rerootedBefore(list, link.pk, due) ? r.pending : { rpk: link.rpk, rxpk: link.rxpk, after: due, by: link.pk } };
       continue;
     }
     if (link.after !== recoveryAfter(link.at)) return { ok: false, why: `recovery link ${link.n}: a new recovery key waits ${RECOVERY_DELAY_DAYS} days` };
     const cut = list.revokes.find((x) => x.device === link.pk);
-    if (cut ? !cut.approve || cut.as === "computer" : !approver(list, link.pk)) return { ok: false, why: `recovery link ${link.n}: signed by a key that may not propose a recovery key` };
-    const voided = !!cut && cut.at < link.after;
+    if (link.pk !== root && (cut ? !cut.approve || cut.as === "computer" : !approver(list, link.pk)))
+      return { ok: false, why: `recovery link ${link.n}: signed by a key that may not propose a recovery key` };
+    const voided = (!!cut && cut.at < link.after) || rerootedBefore(list, link.pk, link.after);
     r = { ...r, n: link.n, head, pending: voided ? r.pending : { rpk: link.rpk, rxpk: link.rxpk, after: link.after, by: link.pk } };
   }
   if (r!.pending && now >= r!.pending.after) r = { ...r!, rpk: r!.pending.rpk, rxpk: r!.pending.rxpk, pending: null };

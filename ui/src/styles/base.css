@@ -804,7 +804,6 @@ html .compose-hint,
 html .stash-age,
 html .board-n,
 html .board-meta,
-html .task-pr-meta,
 html .task-wait-meta,
 html .needs-sum,
 html .needs-meta,
@@ -841,7 +840,6 @@ html .chip-id,
 html .chip-meta,
 html .compose-hint,
 html .board-meta,
-html .task-pr-meta,
 html .task-wait-meta,
 html .needs-meta,
 html .needs-time,
@@ -1161,4 +1159,33 @@ html .person-kind {
 .add-who-name,
 .feed-start-title {
   letter-spacing: -0.01em;
+}
+
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.swatch {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--member);
+  transition: transform var(--fast);
+}
+
+.swatch:hover {
+  transform: scale(1.12);
+}
+
+.swatch[aria-pressed="true"] {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.av-face[data-color] {
+  background: none;
 }

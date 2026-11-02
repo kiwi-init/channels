@@ -72,6 +72,14 @@ export interface Person {
   left?: boolean
 }
 
+export interface Check {
+  name: string
+  state: "pass" | "fail" | "running" | "waiting" | "skipped"
+  word: string
+  required?: boolean
+  url?: string
+}
+
 export interface PullRequest {
   repo: string
   number: number
@@ -80,9 +88,28 @@ export interface PullRequest {
   state: "open" | "draft" | "merged" | "closed"
   checks: "pass" | "fail" | "running" | "none"
   ticks?: { passed: number; running: number; failed: readonly string[] }
+  list?: readonly Check[]
   mergedAt?: number
   additions?: number
   deletions?: number
+  files?: number
+  branch?: string
+  by?: string
+  at?: number
+  task?: number
+  release?: string
+}
+
+export interface Issue {
+  repo: string
+  number: number
+  title: string
+  url: string
+  state: "open" | "closed"
+  reason?: string
+  by?: string
+  at: number
+  task?: number
 }
 
 interface TaskNote {
@@ -155,7 +182,44 @@ export interface Task {
   leftBy?: string
 }
 
-export type TaskGroupHead =
+type SpecStage = "draft" | "queued" | "working" | "delivered" | "accepted" | "dropped"
+
+interface SpecMark {
+  by: string
+  at: number
+}
+
+export interface Spec {
+  ask: number
+  title: string
+  words: string
+  by: string
+  at: number
+  text: string
+  v: number
+  edited: SpecMark
+  edits: number
+  editors: string[]
+  stage: SpecStage
+  approved?: SpecMark & { v: number; text: string }
+  changed?: true
+  result?: SpecMark & { verdict: "accepted" | "dropped"; note?: string }
+  backs: (SpecMark & { note: string })[]
+  tasks: number[]
+  planner?: string
+  queue?: number
+  canJudge?: true
+}
+
+export interface SpecAsk {
+  kind: "spec"
+  id: string
+  at: number
+  ask: number
+  why: "approve" | "changed" | "result"
+}
+
+type TaskGroupHead =
   | { kind: "ask"; id: number; by: string; words: string; goal?: string; mayName: boolean }
   | { kind: "unfiled" }
   | { kind: "next"; name?: string }
@@ -229,6 +293,7 @@ export interface Message {
   text: string
   locked?: true
   where: Where
+  to?: readonly string[]
   said?: Said
   replyTo?: number
   inThread?: number
@@ -322,6 +387,7 @@ export const trusted = (p: Powers): boolean => p.addsAgents && p.answersDecision
 
 export interface JoinChoice {
   as?: string
+  color?: Color | null
   persona?: string | null
   readOnly?: boolean
   powers?: Powers
@@ -335,7 +401,7 @@ export interface ReviewAsk {
   task: number
 }
 
-export type Ask = PermissionAsk | QuestionAsk | JoinAsk | ReviewAsk
+export type Ask = PermissionAsk | QuestionAsk | JoinAsk | ReviewAsk | SpecAsk
 
 export interface ChannelTile {
   code: string
@@ -418,6 +484,8 @@ export interface Channel {
   newMembers?: "read" | "write"
   newPowers?: Powers
   repos: string[]
+  prs?: PullRequest[]
+  issues?: Issue[]
   githubWrite?: boolean
   branchPrefix?: string
   rooms: Room[]
@@ -430,6 +498,9 @@ export interface Channel {
   leftOut?: Message[]
   tasks: Task[]
   taskGroups: TaskGroup[]
+  specs?: Spec[]
+  specsOnly?: true
+  free?: string[]
   asks: Ask[]
   connection: "connecting" | "live" | "reconnecting"
   loading?: boolean
@@ -513,6 +584,7 @@ export interface Device {
 export interface RecoveryState {
   at: number | null
   here: boolean
+  pending?: { from: number; by: string }
 }
 
 export type RecoverySaved = { ok: true } | { ok: false; wrong: number[] }
@@ -592,6 +664,7 @@ export interface Actions {
   loadImage(code: string, spot: string): void
   discard(code: string, seq: number): void
   markRead(code: string, where: Where): void
+  leaveRoom(code: string, room: string): void
   react(code: string, seq: number, emoji: string): void
   editMessage(code: string, seq: number, text: string): void
   deleteMessage(code: string, seq: number): void
@@ -600,18 +673,24 @@ export interface Actions {
   answerStep(code: string, id: string, reply: StepReply): void
   answerJoin(code: string, id: string, letIn: boolean, choice?: JoinChoice): void
   approveTask(code: string, task: number, approve: boolean, why?: string): void
-  addTask(code: string, title: string, owner?: string): void
+  addTask(code: string, ask: number, title: string): void
   setTaskStatus(code: string, task: number, status: TaskStatus): void
   cancelTask(code: string, task: number, why: string): void
   assignTask(code: string, task: number, to: string, why: string): void
   setReviewer(code: string, task: number, reviewer: string): void
   nameGoal(code: string, ask: number, name: string | null): void
+  newSpec(code: string, words: string, text: string): Promise<number | null>
+  writeSpec(code: string, ask: number, text: string): void
+  approveSpec(code: string, ask: number, v: number): void
+  judgeSpec(code: string, ask: number, verdict: "accepted" | "back" | "dropped", note?: string): void
+  setSpecsOnly(code: string, on: boolean): void
   setRole(code: string, name: string, role: string | null): void
   removeMember(code: string, name: string): void
   setPersona(code: string, name: string, persona: string | null): void
   setReadOnly(code: string, name: string, on: boolean): void
   setWake(code: string, name: string, on: boolean): void
   setNickname(code: string, name: string, nickname: string | null): void
+  setAgentColor(code: string, name: string, color: Color | null): void
   setPowers(code: string, name: string, powers: Partial<Powers>): void
   addAgent(code: string, agent: NewAgent, seen: (s: Launching) => void): () => void
   showAgent(code: string, name: string): Promise<string | null>
@@ -667,6 +746,7 @@ export interface Actions {
   recoveryWords(): Promise<string[] | null>
   recoverySave(typed: { at: number; word: string }[]): Promise<RecoverySaved | null>
   recoveryDrop(): void
+  recoveryCancel(words: string): Promise<RecoverTrouble | null>
   enrollBegin(): void
   enrollKeep(): void
   enrollCancel(): void

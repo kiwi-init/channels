@@ -1,8 +1,9 @@
-import { useEffect, useState, useSyncExternalStore } from "react"
+import { Suspense, useEffect, useState, useSyncExternalStore } from "react"
 import { liveOf, restOf } from "~/doing"
 
 import { Avatar, Count, cx, Heading, IconButton, STATUS_WORDS } from "~/kit/bits"
 import { showMenu } from "~/kit/menu-open"
+import { useAppCan } from "~/live/app-can"
 import { useGlide } from "~/kit/glide"
 import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
@@ -11,6 +12,9 @@ import { sameWhere, useAct, useApp } from "~/nav"
 import { between, nickname, onePerPerson, shown } from "~/names"
 import { comingBack, hiddenKey, hiddenPlaces, keptHidden, setHidden } from "~/shell/hidden-places"
 import { SideFoot } from "~/shell/updates"
+import { later } from "~/kit/later"
+
+const SpecSide = later(() => import("~/specs/view").then((m) => m.SpecSide))
 
 export function Sidebar({ channel }: { channel: Channel }) {
   const { nav, go } = useApp()
@@ -24,6 +28,7 @@ export function Sidebar({ channel }: { channel: Channel }) {
   const sideRef = useGlide<HTMLDivElement>(".side-row.is-on")
   const hidden = useSyncExternalStore(hiddenPlaces.subscribe, hiddenPlaces.get)
   const kept = useSyncExternalStore(keptHidden.subscribe, keptHidden.get)
+  const canLeave = useAppCan("leaveRoom")
   const [showHidden, setShowHidden] = useState(false)
   const roomKey = (room: string) => hiddenKey(channel.code, { kind: "room", room })
   const dmKey = (who: string) => hiddenKey(channel.code, { kind: "dm", with: who })
@@ -57,7 +62,7 @@ export function Sidebar({ channel }: { channel: Channel }) {
                   aria-current={on ? "page" : undefined}
                   title={r.muted ? `#${r.name} is muted` : undefined}
                   onClick={() => go({ to: "where", where })}
-                  onContextMenu={(e) => showMenu(e, `#${r.name}`, (x) => x.roomGroups({ channel, go, toast }, actions, on, r))}
+                  onContextMenu={(e) => showMenu(e, `#${r.name}`, (x) => x.roomGroups({ channel, go, toast }, actions, on, canLeave, r))}
                 >
                   <span className="side-hash">{r.members ? <Icon name="lock" size={12} /> : "#"}</span>
                   <span className="side-label">{r.name}</span>
@@ -131,6 +136,14 @@ export function Sidebar({ channel }: { channel: Channel }) {
         </section>
       )}
 
+      {(channel.specs ?? []).some((sp) => !sp.result) && (
+        <section aria-label="Specs">
+          <Heading action={<IconButton icon="chevron" label="All specs" onClick={() => go({ to: "spec", ask: null })} />}>Specs</Heading>
+          <Suspense fallback={null}>
+            <SpecSide channel={channel} />
+          </Suspense>
+        </section>
+      )}
       <section aria-label="People">
         <Heading>People</Heading>
         <ul>

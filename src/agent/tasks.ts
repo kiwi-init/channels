@@ -2,6 +2,7 @@ import * as Effect from "effect/Effect";
 import {
   CHECKPOINT_MAX_LENGTH,
   MAX_GOAL_NAME,
+  MAX_SPEC,
   PROOF_LABEL_MAX_LENGTH,
   PROOF_URL_MAX_LENGTH,
   REVIEW_SUMMARY_MAX_LENGTH,
@@ -15,7 +16,22 @@ import {
 } from "@kiwi/core/protocol.ts";
 import { omit } from "@kiwi/core/omit.ts";
 import { Rejected } from "@kiwi/core/refusals.ts";
-import { isPerson, openRound, reviewClaimRefusal, reviewMoveRefusal, revisedOut, taskId, type ChannelState, type ReviewRound, type Task } from "@kiwi/core/state.ts";
+import {
+  isPerson,
+  openRound,
+  reviewClaimRefusal,
+  reviewMoveRefusal,
+  revisedOut,
+  specLease,
+  specStage,
+  taskId,
+  tickDoneWhen,
+  type ChannelState,
+  type Lease,
+  type ReviewRound,
+  type Spec,
+  type Task,
+} from "@kiwi/core/state.ts";
 import { inlineText } from "@kiwi/core/membership.ts";
 import { parseIssueRef, taskDigest, taskOfIssue } from "@kiwi/core/work.ts";
 import { handBackText, heldBy, reviewedBy } from "@kiwi/core/handback.ts";
@@ -283,6 +299,69 @@ export class SessionTasks extends SessionMessaging {
       if (!t.owner) return yield* new Rejected(`${taskId(id)} has no owner to go first for: assign it first`);
       const seq = yield* this.event({ op: "task.first", task: id }, `${taskId(id)} first`, t.owner !== this.me ? [t.owner] : undefined);
       return yield* this.confirm(seq);
+    },
+    oneLook,
+  );
+
+  readonly writeSpec = Effect.fn("AgentSession.writeSpec")(
+    { self: this },
+    function* (this: SessionTasks, ask: number, text: string) {
+      const body = text.trim();
+      if (!body) return yield* new Rejected("a spec needs words: what it's for, when it's done, what's in and out");
+      if (body.length > MAX_SPEC) return yield* new Rejected(`the spec is ${body.length} characters, the most a spec takes is ${MAX_SPEC}: link the rest`);
+      const { state } = yield* this.state();
+      if (!state.askHeads.has(ask)) return yield* new Rejected(`#${ask} isn't a person's message, so no spec is written for it`);
+      const was = state.specs.get(ask);
+      if (was?.result) return yield* new Rejected(`#${ask}'s spec is ${was.result.verdict}, so it no longer changes`);
+      if (was && was.text.trim() === body) return was;
+      const seq = yield* this.event({ op: "spec.set", ask, text: body }, `spec of #${ask}`);
+      const after = yield* this.confirm(seq);
+      return after.specs.get(ask)!;
+    },
+    oneLook,
+  );
+
+  readonly tickSpec = Effect.fn("AgentSession.tickSpec")(
+    { self: this },
+    function* (this: SessionTasks, ask: number, words: string, done: boolean) {
+      const { state } = yield* this.state();
+      const spec = state.specs.get(ask);
+      if (!spec) return yield* new Rejected(`#${ask} has no spec`);
+      const ticked = tickDoneWhen(spec.text, words, done);
+      if ("why" in ticked) return yield* new Rejected(ticked.why);
+      return yield* this.writeSpec(ask, ticked.text);
+    },
+    oneLook,
+  );
+
+  readonly startSpec = Effect.fn("AgentSession.startSpec")(
+    { self: this },
+    function* (this: SessionTasks, ask: number, ttlSec: number) {
+      const { state } = yield* this.state();
+      const spec: Spec | undefined = state.specs.get(ask);
+      if (!spec) return yield* new Rejected(`#${ask} has no spec`);
+      const stage = specStage(state, spec);
+      if (stage === "draft") return yield* new Rejected(`#${ask}'s spec isn't approved yet: comment on it, or wait for a person to approve it`);
+      if (stage !== "queued") return yield* new Rejected(`#${ask}'s spec is ${stage}, so there's nothing to start: kiwi spec show ${ask}`);
+      const lease: Lease = yield* this.lease(specLease(ask), ttlSec, `planning #${ask}`);
+      return { spec, lease };
+    },
+    oneLook,
+  );
+
+  readonly commentSpec = Effect.fn("AgentSession.commentSpec")(
+    { self: this },
+    function* (this: SessionTasks, ask: number, text: string, on?: string) {
+      const { state } = yield* this.state();
+      if (!state.specs.has(ask)) return yield* new Rejected(`#${ask} has no spec to comment on`);
+      const quote = on?.trim();
+      const body = quote
+        ? `${quote
+            .split("\n")
+            .map((l) => `> ${l}`)
+            .join("\n")}\n\n${text.trim()}`
+        : text.trim();
+      return yield* this.reply(ask, body);
     },
     oneLook,
   );
