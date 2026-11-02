@@ -339,6 +339,16 @@ export interface RecoverDoneView {
   forgot: number;
 }
 
+export type RerootOpenView =
+  | { ok: true; name: string; devices: (Pick<DeviceView, "id" | "label" | "os" | "as"> & { here: boolean })[]; channels: string[] }
+  | { ok: false; why: string; word?: number };
+
+export interface RerootDoneView {
+  kept: number;
+  dropped: number;
+  channels: number;
+}
+
 export type EnrollConfirmView = { ok: true; label: string } | { ok: false; left: number };
 
 export interface EnrollPersonView {
@@ -464,6 +474,9 @@ export interface KiwiBridge {
   recover(words: string): Promise<RecoverOpenView>;
   recoverFinish(lost: string[]): Promise<RecoverDoneView>;
   recoverCancel(): Promise<void>;
+  reroot(words: string): Promise<RerootOpenView>;
+  rerootFinish(keep: string[]): Promise<RerootDoneView>;
+  rerootCancel(): Promise<void>;
   daemonStatus(): Promise<DaemonStatus>;
   doctor(): Promise<DoctorFinding[] | null>;
   /** Certify this machine's daemon key with the person key and hand the cert back. */

@@ -205,6 +205,7 @@ export function describeEvent(m: Message, state?: ChannelState, nameOf: (handle:
     case "github":
       return githubLine(ev.items);
     case "github.release":
+      if (ev.gone) return `${ev.repo} withdrew ${inlineText(ev.tag, 60)}: GitHub lists it as a prerelease or a draft now, not a release`;
       return `${ev.repo} released ${inlineText(ev.tag, 60)}: ${ev.prs.length ? `${ev.prs.length} PR${ev.prs.length === 1 ? "" : "s"}, ` : ""}${ev.shas.length} commit${ev.shas.length === 1 ? "" : "s"}`;
     case "github.rules":
       return `read ${ev.repo}'s rules for ${inlineText(ev.branch, 60)}: ${rulesText(ev)}`;
@@ -703,7 +704,15 @@ function missingFiles(seq: number, want: number, got: number): string | null {
   return got < want ? `${want - got} of the ${want} files in #${seq} did not load; the relay may no longer have them` : null;
 }
 
-export function formatShown(m: Message, messages: Message[], state: ChannelState, savedImages: string[] = [], me?: string, reveal = false, savedFiles: string[] = []): string {
+export function formatShown(
+  m: Message,
+  messages: Message[],
+  state: ChannelState,
+  savedImages: string[] = [],
+  me?: string,
+  reveal = false,
+  files: { saved: string[]; markdown: string[] } = { saved: [], markdown: [] },
+): string {
   const out = [formatMessage(m, state.trust.get(m.seq), state, me)];
   if (m.step) {
     out.push(`  why: ${cleanBody(m.step.why).replace(/\n/g, "\n    ")}`);
@@ -717,8 +726,9 @@ export function formatShown(m: Message, messages: Message[], state: ChannelState
   if (savedImages.length) out.push(`  images saved: ${savedImages.join(", ")}`);
   const missing = m.imgs?.length ? missingImages(m.seq, m.imgs.length, savedImages.length) : null;
   if (missing) out.push(`  ${missing}`);
-  if (savedFiles.length) out.push(`  files saved: ${savedFiles.join(", ")}`);
-  const lost = m.files?.length ? missingFiles(m.seq, m.files.length, savedFiles.length) : null;
+  if (files.saved.length) out.push(`  files saved: ${files.saved.join(", ")}`);
+  if (files.markdown.length) out.push(`  as Markdown: ${files.markdown.join(", ")}`);
+  const lost = m.files?.length ? missingFiles(m.seq, m.files.length, files.saved.length) : null;
   if (lost) out.push(`  ${lost}`);
   for (const r of m.re ?? []) {
     const parent = messages.find((x) => x.seq === r);

@@ -109,7 +109,7 @@ export async function answerStep(code: string, id: string, reply: StepReply): Pr
   const run = need(code)
   const m = run.messages.find((x) => x.seq === Number(id))
   if (!m) throw new Error("that step is gone")
-  await run.send(stepReplyText(reply), { to: [m.from], re: [m.seq], kind: "msg", stepReply: reply })
+  await run.send(stepReplyText(reply), { to: [m.from], re: [m.seq], kind: "msg", side: true, stepReply: reply })
 }
 
 async function streamTerm(b: KiwiBridge, open: () => Promise<TermOpenView>, watch: TermWatch): Promise<TermOpened> {
@@ -182,7 +182,7 @@ export async function answerPermission(code: string, id: string, allow: boolean)
   if (!m) throw new Error("that request is gone")
   const perm = permissionReply(m, allow, run.state)
   if (!perm) throw new Error("this one can only be answered in the terminal")
-  await run.send(allow ? ALLOW_ONCE : DENY, { to: [m.from], re: [m.seq], kind: "msg", perm })
+  await run.send(allow ? ALLOW_ONCE : DENY, { to: [m.from], re: [m.seq], kind: "msg", side: true, perm })
 }
 
 const STATES: Partial<Record<TaskStatus, "todo" | "doing" | "review" | "done">> = { todo: "todo", doing: "doing", review: "review", done: "done" }

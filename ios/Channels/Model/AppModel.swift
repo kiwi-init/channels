@@ -67,6 +67,10 @@ final class AppModel {
     @ObservationIgnored private var shut = false
     @ObservationIgnored private var keeping: Data?
     @ObservationIgnored private let pictures = NSCache<NSString, UIImage>()
+    @ObservationIgnored private var wroteMarks: [String: [String: Int]] = [:]
+    @ObservationIgnored private var pulledMarks: Set<String> = []
+    @ObservationIgnored private var front = true
+    @ObservationIgnored private var leaving: UIBackgroundTaskIdentifier = .invalid
 
     var channels: [RoomView] {
         rooms.values.filter { $0.gone == nil }.sorted { (($0.latest ?? $0.last)?.at ?? 0) > (($1.latest ?? $1.last)?.at ?? 0) }
@@ -202,6 +206,7 @@ final class AppModel {
             } else {
                 rooms[room.code] = room
             }
+            if room.connection == .live { pullOnce(room.code) }
         case .gone(let code):
             rooms[code] = nil
         case .log:
@@ -317,6 +322,77 @@ final class AppModel {
 
     func nudge() {
         Task { try? await engine.ask(["op": "nudge"]) }
+    }
+
+    func cameToFront() {
+        front = true
+        pulledMarks = []
+        for (code, room) in rooms where room.connection == .live { pullOnce(code) }
+    }
+
+    func wentToBack() {
+        front = false
+        endLeaving()
+        leaving = UIApplication.shared.beginBackgroundTask(withName: "read marks") { [weak self] in
+            MainActor.assumeIsolated { self?.endLeaving() }
+        }
+        Task {
+            await syncMarks(write: true)
+            endLeaving()
+        }
+    }
+
+    func marksTick() async {
+        guard front else { return }
+        await syncMarks(write: true)
+    }
+
+    private func endLeaving() {
+        guard leaving != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(leaving)
+        leaving = .invalid
+    }
+
+    private func pullOnce(_ code: String) {
+        guard front, !pulledMarks.contains(code) else { return }
+        pulledMarks.insert(code)
+        Task { await syncMarks(code, write: false) }
+    }
+
+    private func syncMarks(write: Bool) async {
+        for code in rooms.keys.sorted() { await syncMarks(code, write: write) }
+    }
+
+    private func syncMarks(_ code: String, write: Bool) async {
+        guard let room = rooms[code], room.gone == nil else { return }
+        let keys = ["main"] + (room.sideKey.map { [$0] } ?? [])
+        let local = marks(code, keys)
+        if write && (local.isEmpty || wroteMarks[code] == local) { return }
+        guard let merged = try? await engine.ask(["op": "marks", "code": code, "marks": local, "write": write], as: [String: Int].self) else { return }
+        var main = false
+        var side = false
+        for (key, mark) in merged where keys.contains(key) {
+            if key == "main" {
+                if mark > (seen[code] ?? 0) {
+                    seen[code] = mark
+                    main = true
+                }
+            } else if mark > (placeSeen["\(code)|\(key)"] ?? 0) {
+                placeSeen["\(code)|\(key)"] = mark
+                side = true
+            }
+        }
+        if main { UserDefaults.standard.set(seen, forKey: "seen") }
+        if side { UserDefaults.standard.set(placeSeen, forKey: "placeSeen") }
+        if write { wroteMarks[code] = marks(code, keys) }
+    }
+
+    private func marks(_ code: String, _ keys: [String]) -> [String: Int] {
+        var out: [String: Int] = [:]
+        for key in keys {
+            if let mark = key == "main" ? seen[code] : placeSeen["\(code)|\(key)"] { out[key] = mark }
+        }
+        return out
     }
 
     func unlink() {

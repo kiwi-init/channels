@@ -29,6 +29,14 @@ function piArgv(bin: string, prompt: string, { model, effort }: LaunchChoices): 
   return [bin, ...(model ? ["--model", model] : []), ...(effort ? ["--thinking", effort] : []), prompt];
 }
 
+const AGY_EFFORTS = ["low", "medium", "high"];
+
+const AGY_MODES: Record<Permission, string[]> = { default: [], "accept-edits": ["--mode", "accept-edits"], plan: ["--mode", "plan"], bypass: ["--dangerously-skip-permissions"] };
+
+function agyArgv(bin: string, prompt: string, { model, effort, permission }: LaunchChoices): string[] {
+  return [bin, ...(model ? ["--model", model] : []), ...(effort ? ["--effort", effort] : []), ...(permission ? AGY_MODES[permission] : []), "-i", prompt];
+}
+
 const OPENCODE_PERMISSIONS: Permission[] = ["default", "plan", "bypass"];
 
 function opencodeArgv(bin: string, prompt: string, { model, permission }: LaunchChoices): string[] {
@@ -77,6 +85,11 @@ const RECIPES: Partial<Record<KnownHarness, LaunchRecipe>> = {
       choices.model && choices.permission === "bypass"
         ? "OpenCode skips its permission prompts (--auto) only in its full interface, which can't pick a model: leave the model empty to start it with Bypass"
         : null,
+  },
+  agy: {
+    label: "Antigravity CLI",
+    options: { model: true, effort: AGY_EFFORTS, permission: [...PERMISSIONS], context: [] },
+    argv: agyArgv,
   },
   mimo: {
     label: "MiMoCode",

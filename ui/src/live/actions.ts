@@ -31,6 +31,9 @@ import {
   recoveryDrop,
   recoverySave,
   recoveryWords,
+  rerootCancel,
+  rerootFinish,
+  rerootOpen,
   renewDevice,
   unlinkGithub,
   type EnrollDone,
@@ -42,7 +45,8 @@ import { iconFromFile } from "~/live/icon-file"
 import { seatOf } from "~/live/seats"
 import { checkComputer, computerSettings, setContextLine, setHooks } from "~/live/computer"
 import { addStartFolder, allowNewAgents, allowRemoteBypass, removeStartFolder, setTerminalHelpers } from "~/live/starts"
-import { markSeenIn } from "@kiwi/app/threads.ts"
+import { markSeenIn, seenIn } from "@kiwi/app/threads.ts"
+import { followKey, followMark } from "~/live/threads"
 import { lastIn, seenKeyOf } from "~/live/seen-place"
 import { closeOpened, leavingOnPurpose, openedRun, type Run } from "~/live/store"
 import { attempt, event, memberOf, need, owner, say } from "~/live/run"
@@ -171,6 +175,11 @@ export function makeActions(): Actions {
       const last = lastIn(run.messages, run.state, run.me, where)
       if (last) markSeenIn(run.roomId, { [seenKeyOf(run.state, where, run.me)]: last })
     },
+    followThread: (code, root, on) => {
+      const run = need(code)
+      markSeenIn(run.roomId, { [followKey(root)]: followMark(seenIn(run.roomId)[followKey(root)], run.messages.at(-1)?.seq ?? 0, on) })
+      announce(on ? "Following this thread" : "Not following this thread")
+    },
     react: (code, seq, emoji) =>
       attempt("Couldn't react", async () => {
         const run = need(code)
@@ -185,7 +194,7 @@ export function makeActions(): Actions {
         const run = need(code)
         const m = run.messages.find((x) => x.seq === Number(id))
         if (!m) throw new Error("that question is gone")
-        await run.send(text, { to: [m.from], re: [m.seq], kind: "msg" })
+        await run.send(text, { to: [m.from], re: [m.seq], kind: "msg", side: true })
       }),
     answerStep: (code, id, reply) => attempt("Not answered", async () => (await rare()).answerStep(code, id, reply)),
     answerJoin: (code, id, yes, choice) => attempt(yes ? "Couldn't let them in" : "Couldn't turn them away", async () => (await manage()).answerJoin(code, id, yes, choice)),
@@ -405,6 +414,9 @@ export function makeActions(): Actions {
     recoverySave: (typed) => tried("Couldn't set up the recovery key", () => recoverySave(typed)),
     recoveryDrop: () => attempt("Couldn't put the words away", recoveryDrop),
     recoveryCancel: (words) => tried("Couldn't cancel the new words", () => recoveryCancel(words)),
+    rerootOpen: (words) => tried("Couldn't open your recovery key", () => rerootOpen(words)),
+    rerootFinish: async (keep) => !!(await tried("Couldn't replace your person key", () => rerootFinish(keep))),
+    rerootCancel: () => attempt("Couldn't put the words away", rerootCancel),
     enrollBegin: () =>
       attempt("Couldn't sign in as one of your devices", () =>
         enrollBegin(

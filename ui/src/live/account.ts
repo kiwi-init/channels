@@ -9,7 +9,7 @@ import { launchedBy } from "@kiwi/app/forgotten-computers.ts"
 import { announce } from "~/kit/toasts"
 import { deviceNews, postDevicesNow } from "~/live/devices"
 import { store, type Listener } from "~/live/value"
-import type { Account, Computer, Device, EnrollAsk, Enrolling, GithubSignIn, KeptAgent, LaunchedAgent, RecoverTrouble, RecoverySaved, RecoveryState } from "~/model"
+import type { Account, Computer, Device, EnrollAsk, Enrolling, GithubSignIn, KeptAgent, LaunchedAgent, RecoverTrouble, RecoverySaved, RecoveryState, RerootOpened } from "~/model"
 import { version } from "../../../package.json"
 
 const github = store<{ login: string } | null>(null)
@@ -335,6 +335,28 @@ export async function recoveryCancel(words: string): Promise<RecoverTrouble | nu
   await recovery.load()
   return null
 }
+
+const rerooting = () => {
+  const b = bridge()
+  if (!b?.reroot) throw new Error("replacing your person key needs the next Channels update")
+  return b
+}
+
+export async function rerootOpen(words: string): Promise<RerootOpened> {
+  const r = await rerooting().reroot(words)
+  if (!r.ok) return { ok: false, trouble: { why: r.why, ...(r.word !== undefined ? { word: r.word } : {}) } }
+  return { ok: true, devices: r.devices, channels: r.channels }
+}
+
+export async function rerootFinish(keep: string[]): Promise<boolean> {
+  const r = await rerooting().rerootFinish(keep)
+  const out = r.dropped ? ` Signed out ${r.dropped === 1 ? "1 device" : `${r.dropped} devices`}.` : ""
+  announce(`Your person key is replaced.${out} Your channels move to the new key as their owners' apps catch up.`)
+  await recovery.load()
+  return true
+}
+
+export const rerootCancel = (): Promise<void> => rerooting().rerootCancel()
 
 const enrolling = () => {
   const b = bridge()

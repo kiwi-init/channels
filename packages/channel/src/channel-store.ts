@@ -1,5 +1,6 @@
 import { batch, computed, effect, signal, untracked, type ReadonlySignal, type Signal } from "@preact/signals-core";
 
+import { wakeList } from "@kiwi/core/phone-wake.ts";
 import type { CachedRow } from "@kiwi/core/cache-row.ts";
 import { ChannelGone } from "@kiwi/core/client/relay-errors.ts";
 import type { HumanSession, RoomsSetting, SendOptions } from "@kiwi/core/client.ts";
@@ -220,8 +221,14 @@ export class ChannelStore {
     fetch: (got) => (this.fetchOlder ? this.fetchOlder(got) : Promise.reject(new Error("open the channel first"))),
   };
 
+  private wakeFor(body: string, opts: SendOptions): string[] {
+    const state = this.state.value;
+    const me = [...state.members.values()].find((m) => m.pk === this.ch.pk)?.name;
+    return me ? wakeList(state, me, body, opts) : [];
+  }
+
   send = (body: string, opts: SendOptions): Promise<number> =>
-    this.ch.send(body, opts).catch((err: unknown) => {
+    this.ch.send(body, { ...opts, wake: opts.wake ?? this.wakeFor(body, opts) }).catch((err: unknown) => {
       if (this.onGone(err)) throw new Error("you no longer have access to this channel", { cause: err });
       throw err;
     });

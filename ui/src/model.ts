@@ -5,7 +5,7 @@ import type { Personality } from "@kiwi/core/personality.ts"
 import type { GithubNote, Step, StepReply } from "@kiwi/core/protocol.ts"
 import type { PlacedSeat, TerminalId, TerminalRow } from "@kiwi/core/terminals.ts"
 
-export type Harness = "claude" | "codex" | "opencode" | "gemini" | "cursor" | "grok" | "kimi" | "mimo" | "pi" | "grok-bot" | "zcode" | "other"
+export type Harness = "claude" | "codex" | "opencode" | "gemini" | "cursor" | "grok" | "kimi" | "mimo" | "pi" | "grok-bot" | "zcode" | "agy" | "other"
 
 type Presence = "online" | "away" | "offline"
 
@@ -312,6 +312,17 @@ export interface Said {
   tone: "quiet" | "ask" | "alert" | "decide"
 }
 
+export interface ThreadItem {
+  root: number
+  following: boolean
+  replies: number
+  unread: number
+  mentions: number
+  last: number
+  lastSeq: number
+  people: string[]
+}
+
 export interface Message {
   seq: number
   from: string
@@ -323,6 +334,7 @@ export interface Message {
   said?: Said
   replyTo?: number
   inThread?: number
+  side?: true
   thread?: { replies: number; last: number; people: string[] }
   task?: number
   prs?: PullRequest[]
@@ -518,6 +530,8 @@ export interface Channel {
   branchPrefix?: string
   rooms: Room[]
   directs: Direct[]
+  threads?: ThreadItem[]
+  follows?: Readonly<Record<number, boolean>>
   theirs: TheirDirect[]
   people: Person[]
   former?: Person[]
@@ -600,6 +614,16 @@ export interface RecoverTrouble {
   why: string
   word?: number
 }
+
+export interface RerootDevice {
+  id: string
+  label: string
+  os: string
+  as: "desktop" | "phone" | "computer"
+  here: boolean
+}
+
+export type RerootOpened = { ok: true; devices: RerootDevice[]; channels: string[] } | { ok: false; trouble: RecoverTrouble }
 
 export interface Device {
   id: string
@@ -689,11 +713,12 @@ export interface NewAgent {
 export type Launching = { stage: "started" } | { stage: "asked"; name: string } | { stage: "joined"; name: string } | { stage: "failed"; why: string }
 
 export interface Actions {
-  send(code: string, where: Where, text: string, opts?: { replyTo?: number; inThread?: number; images?: Upload[] }): void
+  send(code: string, where: Where, text: string, opts?: { replyTo?: number; inThread?: number; side?: true; images?: Upload[] }): void
   retry(code: string, seq: number): void
   loadImage(code: string, spot: string): void
   discard(code: string, seq: number): void
   markRead(code: string, where: Where): void
+  followThread(code: string, root: number, on: boolean): void
   leaveRoom(code: string, room: string): void
   react(code: string, seq: number, emoji: string): void
   editMessage(code: string, seq: number, text: string): void
@@ -781,6 +806,9 @@ export interface Actions {
   recoverySave(typed: { at: number; word: string }[]): Promise<RecoverySaved | null>
   recoveryDrop(): void
   recoveryCancel(words: string): Promise<RecoverTrouble | null>
+  rerootOpen(words: string): Promise<RerootOpened | null>
+  rerootFinish(keep: string[]): Promise<boolean>
+  rerootCancel(): void
   enrollBegin(): void
   enrollKeep(): void
   enrollCancel(): void

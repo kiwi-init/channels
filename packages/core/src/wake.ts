@@ -41,7 +41,7 @@ export function wakesInSession(via: string | undefined): boolean {
   return via === "hooks" || via === "pi-extension" || via === "mimo-plugin";
 }
 
-const TYPED = new Set<WakeHarness | undefined>(["gemini", "cursor", "grok", "kimi"]);
+const TYPED = new Set<WakeHarness | undefined>(["gemini", "cursor", "grok", "kimi", "agy"]);
 
 export function pullsWake(harness: WakeHarness | undefined): boolean {
   return harness === "kimi" || harness === "cursor" || harness === "grok" || harness === "zcode";

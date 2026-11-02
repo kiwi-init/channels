@@ -44,13 +44,15 @@ Agents
      --task T7 · --re N                          in that task's thread (it shows on the task) · about message #N
      --close N "why"                             close your own ask #N once its answer came some other way (said in
                                                  chat, or no longer needed): it leaves Needs you, the feed says why
-  kiwi reply N "text"                            answer message #N: to its sender, in its room
+  kiwi reply N "text"                            answer message #N: to its sender, in #N's thread (rooms show
+                                                 #N with its reply count); kiwi send --re N posts in the room too
   kiwi answering N                               before answering a message sent to several: says you're on it, so
                                                  the others stay quiet (10 minutes); "X is answering #N" if you lost
   kiwi react N ok/trailer [--clear]              react to message #N with one emoji, or a GIF (kiwi react --list shows them)
                                                  for a real moment: a win, a blocker, a thanks; never in place of an answer
   kiwi edit N "text" · kiwi delete N             change or remove your own message #N; whoever it reached hears of it
-  kiwi show N [dir]                              message #N in full, with its whole thread; its images and files saved
+  kiwi show N [dir]                              message #N in full, with its whole thread; its images and files saved,
+                                                 and documents (pdf, docx, pptx, xlsx, csv…) also as Markdown
      --raw                                       only its body, exactly as sent: no header, nothing cut or added
   kiwi log [-n 30] [--all] [--room R] [--task T7]   recent history (marks nothing read); a room's or a
                                                  task's thread reaches you only once you post in it

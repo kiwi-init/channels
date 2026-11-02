@@ -132,10 +132,10 @@ export function useLive(open: string | null): App {
 }
 
 function useOpenLinks(go: (g: Go) => void, ready: boolean) {
-  const take = useRef<(code: string) => void>(() => {})
+  const take = useRef<(code: string, jump?: true) => void>(() => {})
   useEffect(() => {
-    take.current = (code: string) => {
-      if (loadMember(code) || loadPending(code)) return go({ to: "channel", code })
+    take.current = (code: string, jump?: true) => {
+      if (loadMember(code) || loadPending(code)) return go({ to: "channel", code, ...(jump ? { jump } : {}) })
       go({ to: "invite", code })
     }
   }, [go])
@@ -146,7 +146,7 @@ function useOpenLinks(go: (g: Go) => void, ready: boolean) {
       const { code } = parseHash(hash)
       if (!code) return
       history.replaceState(null, "", `${location.pathname}${location.search}`)
-      if (seq) openFromNote(code, seq, take.current)
+      if (seq) openFromNote(code, seq, (c) => take.current(c, true))
       else take.current(code)
     }
     fromHash()
@@ -163,7 +163,7 @@ function useOpenLinks(go: (g: Go) => void, ready: boolean) {
           const code = url ? joinCodeFromLink(url) : null
           if (!url || !code) return
           const seq = messageOfLink(url)
-          if (seq) openFromNote(code, seq, take.current)
+          if (seq) openFromNote(code, seq, (c) => take.current(c, true))
           else take.current(code)
         })
         .catch(() => {})

@@ -501,6 +501,8 @@ async function handle(ask: Ask): Promise<unknown> {
     case "open":
       room(ask.code).open(ask.place);
       return null;
+    case "marks":
+      return room(ask.code).marks(ask.marks, ask.write);
     case "nudge":
       keyring?.nudge();
       for (const r of rooms.values()) r.nudge();

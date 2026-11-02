@@ -25,9 +25,13 @@ class MainActivity : FragmentActivity() {
                 when (event) {
                     Lifecycle.Event.ON_START -> {
                         model.nudge()
+                        model.cameToFront()
                         model.lock.back(prompt)
                     }
-                    Lifecycle.Event.ON_STOP -> model.lock.left()
+                    Lifecycle.Event.ON_STOP -> {
+                        model.lock.left()
+                        model.wentToBack()
+                    }
                     else -> Unit
                 }
             },

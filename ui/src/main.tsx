@@ -9,7 +9,7 @@ import { Boundary } from "~/kit/boundary"
 import { warmLater } from "~/kit/later"
 import { LiveDuties, useLive } from "~/live/live"
 import { storedThemePrefs } from "~/live/prefs"
-import { navigate, startNav, type Go, type Nav } from "~/nav"
+import { navigate, startNav, useKeepPlace, type Go, type Nav } from "~/nav"
 import { Root } from "~/shell/root"
 import { bootTheme } from "~/theme/apply"
 import { loadRex } from "~/theme/rex"
@@ -37,8 +37,10 @@ function LiveApp() {
   const go = useCallback((g: Go) => setNav((n) => navigate(n, g)), [])
   const where = nav.page === "channel" && nav.tab === "chat" ? nav.where : null
   const task = nav.panel?.kind === "task" ? nav.panel.task : null
-  const view = useMemo(() => ({ where, task }), [where, task])
+  const thread = nav.panel?.kind === "thread" ? nav.panel.seq : null
+  const view = useMemo(() => ({ where, task, thread }), [where, task, thread])
   useEffect(uiBooted, [])
+  useKeepPlace(nav)
   return (
     <>
       <LiveDuties open={nav.channel} view={view} go={go} />

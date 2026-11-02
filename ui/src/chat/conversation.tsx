@@ -16,7 +16,8 @@ import { later } from "~/kit/later"
 import { day, sameDay } from "~/kit/time"
 import { memberOf, type Channel, type Message, type Person, type Where } from "~/model"
 import { liveOf, workingIn } from "~/doing"
-import { sameWhere, useApp, whereKey } from "~/nav"
+import { sameWhere, useApp } from "~/nav"
+import { keepSpot, spotAt, spotKey, type Spot } from "~/places"
 import { between, nickname, shown } from "~/names"
 import { dmBlocker, sealable } from "~/live/dm"
 
@@ -86,6 +87,29 @@ function anchorIn(box: HTMLElement, list: HTMLElement): Anchor | null {
   }
   const el = rows[lo]
   return el ? { el, top: el.getBoundingClientRect().top - top, at: box.scrollTop } : null
+}
+
+function spotIn(box: HTMLElement, list: HTMLElement): Spot | null {
+  const rows = list.querySelectorAll<HTMLElement>(":scope > [data-seq]")
+  const top = box.getBoundingClientRect().top
+  let lo = 0
+  let hi = rows.length - 1
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1
+    if ((rows[mid]?.getBoundingClientRect().bottom ?? 0) > top) hi = mid
+    else lo = mid + 1
+  }
+  const row = rows[lo]
+  const seq = Number(row?.dataset.seq)
+  return row && Number.isSafeInteger(seq) ? { seq, offset: Math.round(row.getBoundingClientRect().top - top) } : null
+}
+
+function rowAt(box: HTMLElement, list: readonly Message[], at: number): HTMLElement | null {
+  for (let i = at; i >= Math.max(0, at - MORE); i--) {
+    const row = box.querySelector<HTMLElement>(`:scope > [data-seq="${list[i]?.seq}"]`)
+    if (row) return row
+  }
+  return null
 }
 
 export function useStick(following = true) {
@@ -174,7 +198,7 @@ function Since({ channel }: { channel: Channel }) {
 export function Conversation({ channel, jump }: { channel: Channel; jump: Jump | null }) {
   const { nav } = useApp()
   const where: Where = nav.where
-  const key = `${channel.code}:${whereKey(where)}`
+  const key = spotKey(channel.code, where)
   const [reply, setReply] = useState<{ key: string; to: Message } | null>(null)
   const replying = useMemo((): Replying => ({ to: reply?.key === key ? reply.to : null, set: (to) => setReply(to ? { key, to } : null) }), [reply, key])
   const placeName =
@@ -190,20 +214,26 @@ export function Conversation({ channel, jump }: { channel: Channel; jump: Jump |
     <ReplyContext.Provider value={replying}>
       {channel.hold && <HoldBanner channel={channel} hold={channel.hold} />}
       <Since key={channel.code} channel={channel} />
-      <Feed key={key} channel={channel} where={where} jump={jump && sameWhere(jump.m.where, where) ? jump : null} />
+      <Feed
+        key={`${key}\n${nav.visit}\n${channel.loading ? "loading" : "ready"}`}
+        channel={channel}
+        where={where}
+        spot={nav.restore !== undefined ? nav.restore : spotAt(key)}
+        jump={jump && sameWhere(jump.m.where, where) ? jump : null}
+      />
       {where.kind === "dm" && <DmNote channel={channel} other={where.with} />}
       {where.kind === "theirs" ? <ReadOnly channel={channel} between={where.between} /> : <Composer channel={channel} where={where} placeholder={`Message ${placeName}`} />}
     </ReplyContext.Provider>
   )
 }
 
-function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: Jump | null }) {
+function Feed({ channel, where, spot, jump }: { channel: Channel; where: Where; spot: Spot | null; jump: Jump | null }) {
   const { go } = useApp()
   const specAsks = useMemo(() => new Set((channel.specs ?? []).map((s) => s.ask)), [channel.specs])
   const all = useMemo(
     () =>
       withLeftOut(
-        channel.messages.filter((m) => sameWhere(m.where, where) && (where.kind !== "room" || m.inThread === undefined || !specAsks.has(m.inThread))),
+        channel.messages.filter((m) => sameWhere(m.where, where) && (!m.side || where.kind === "task") && (where.kind !== "room" || m.inThread === undefined || !specAsks.has(m.inThread))),
         (channel.leftOut ?? []).filter((m) => sameWhere(m.where, where))
       ),
     [channel.messages, channel.leftOut, where, specAsks]
@@ -242,13 +272,19 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
   const afterProposal = proposalAt === undefined ? undefined : list[list.findIndex((m) => m.seq === proposalAt) + 1]?.seq
   const breaks = new Set([mark, foldAt, proposalAt, afterProposal].filter((seq): seq is number => seq !== null && seq !== undefined))
 
+  const [back] = useState(() => {
+    const at = spot && !jump ? list.findIndex((m) => m.seq === spot.seq) : -1
+    return spot && at >= 0 ? { offset: spot.offset, at } : null
+  })
   const [span, setSpan] = useState<Span>(() =>
-    mark === null
-      ? { top: null, bottom: null }
-      : around(
-          list,
-          list.findIndex((m) => m.seq === mark)
-        )
+    back
+      ? around(list, back.at)
+      : mark === null
+        ? { top: null, bottom: null }
+        : around(
+            list,
+            list.findIndex((m) => m.seq === mark)
+          )
   )
   const lastAt = span.bottom === null ? -1 : list.findIndex((m) => m.seq === span.bottom)
   const end = lastAt >= 0 ? lastAt + 1 : list.length
@@ -276,15 +312,24 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
   }, [list, start, end, names, tasks])
 
   const opened = useRef(false)
+  const pinned = useRef<Spot | null>(back && spot)
   useLayoutEffect(() => {
     if (opened.current) return
     opened.current = true
+    const box = scroller.current
+    const row = back && content.current ? rowAt(content.current, list, back.at) : null
+    if (back && box && row) {
+      toOffset(Math.round(box.scrollTop + row.getBoundingClientRect().top - box.getBoundingClientRect().top - back.offset))
+      remember()
+      if (!stuck.current && unread) queueMicrotask(() => setFresh(unread.count))
+      return
+    }
     const line = content.current?.querySelector<HTMLElement>(".feed-new")
     if (!line || !unread) return toBottom(false)
     toOffset(line.offsetTop - 12)
     remember()
     if (!stuck.current) queueMicrotask(() => setFresh(unread.count))
-  }, [unread, remember, toBottom, toOffset, stuck, content])
+  }, [back, list, unread, remember, toBottom, toOffset, stuck, content, scroller])
 
   const last = list.at(-1)
   const lastSeq = useRef(last?.seq ?? 0)
@@ -309,10 +354,19 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
     settle()
   }, [last, list, channel.you, toBottom, settle, stuck, live, content])
 
+  const here = spotKey(channel.code, where)
   const onScroll = () => {
     remember()
     const box = scroller.current
     if (!box) return
+    if (list.length && content.current) {
+      const now = stuck.current ? null : spotIn(box, content.current)
+      const pin = pinned.current
+      if (!pin || !now || now.seq !== pin.seq || Math.abs(now.offset - pin.offset) > 2) {
+        pinned.current = null
+        keepSpot(here, now)
+      }
+    }
     if (stuck.current) setFresh(0)
     const below = box.scrollHeight - box.scrollTop - box.clientHeight
     setFar(!following || below > box.clientHeight * 1.5)

@@ -93,7 +93,7 @@ On **Start**, that computer's daemon does what `kiwi launch` does:
 3. It opens a window in Channels' own tmux, the copy the app ships, so there is nothing to install or download. The app shows the agent there. If that tmux can't start, the launch is refused and says why.
 4. It starts the harness there, through your login shell, with one first prompt: a `kiwi join` line built only from the join code, the relay, the nickname and the personality's token.
 
-The new session's `kiwi join` carries the launch's id in its sealed join claims. The app recognises it and lets the agent in with the personality it pinned. Claude Code, Codex, Gemini CLI, Grok, MiMoCode, Kimi Code, Pi and OpenCode can be started so far.
+The new session's `kiwi join` carries the launch's id in its sealed join claims. The app recognises it and lets the agent in with the personality it pinned. Claude Code, Codex, Gemini CLI, Antigravity CLI, Grok, MiMoCode, Kimi Code, Pi and OpenCode can be started so far.
 
 Kimi Code takes no prompt on its command line, so Kiwi types it into its window. The daemon waits for Kimi's ready screen, types the `kiwi join` line and presses Enter. While Kimi asks "Trust this folder?", it waits for you to answer, for up to 30 minutes; it never answers dialogs. Each outcome is a line in `~/.kiwi/launch.log`.
 
@@ -104,6 +104,7 @@ A launch can also pick the model, effort, permissions and context, where that ha
 | Claude Code | `--model` | `--effort` low … max | `--permission-mode acceptEdits` / `plan` / `bypassPermissions` | 1M, as the model's `[1m]` |
 | Codex | `-m` | `model_reasoning_effort` minimal … xhigh | `--sandbox workspace-write` / `--sandbox read-only`, both `--ask-for-approval on-request` / `--dangerously-bypass-approvals-and-sandbox` | `model_context_window` 128k, 272k, 400k, 1m |
 | Gemini CLI | `-m` | none | `--approval-mode auto_edit` / `plan` / `yolo` | none |
+| Antigravity CLI | `--model` | `--effort` low … high | `--mode accept-edits` / `--mode plan` / `--dangerously-skip-permissions` | none |
 | Pi | `--model` | `--thinking` off … xhigh | none: Pi never asks before it uses its tools | none |
 | Grok | `-m` | `--reasoning-effort` none … max | `--permission-mode acceptEdits` / `plan` / `bypassPermissions` | none |
 | MiMoCode | `-m provider/model` | none | none / `--agent plan` / `--dangerously-skip-permissions` | none |

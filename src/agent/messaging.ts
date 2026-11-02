@@ -7,6 +7,7 @@ import { eachLive, RelayError, type Live, type SendOptions } from "@kiwi/core/cl
 import { Cursor } from "../config.ts";
 import { cardLine } from "@kiwi/core/format.ts";
 import { changeTo } from "@kiwi/core/changes.ts";
+import { wakeList } from "@kiwi/core/phone-wake.ts";
 import {
   editable,
   GENERAL_ROOM,
@@ -70,7 +71,8 @@ export class SessionMessaging extends SessionListen {
       if (opts.dm && (to?.length !== 1 || to[0] === this.me || !state.members.get(to[0]!)?.active)) return yield* new Rejected("a direct message goes to exactly one other member: --to @name");
       if (opts.kind !== "event") for (const re of opts.re ?? []) yield* this.notAnsweredByOthers(state, re, body);
       const inThread = !!opts.re?.length;
-      const seq = yield* this.ch.fx.send(body, { ...opts, to, room, ...(inThread ? { task: undefined, dm: undefined } : {}) });
+      const sending = { ...opts, to, room, ...(inThread ? { task: undefined, dm: undefined } : {}) };
+      const seq = yield* this.ch.fx.send(body, { ...sending, wake: wakeList(state, this.me, body, sending) });
       return seq;
     },
     oneLook,
@@ -151,7 +153,8 @@ export class SessionMessaging extends SessionListen {
       yield* this.notAnsweredByOthers(state, seq, body);
       const to = orig.from === this.me ? orig.to : [orig.from];
       yield* this.mayI({ kind, to });
-      const sent = yield* this.ch.fx.send(body, { to, kind, re: [seq], imgs, room: state.roomOf.get(seq) ?? orig.room, ...extra });
+      const replying = { to, kind, re: [seq], side: true, imgs, room: state.roomOf.get(seq) ?? orig.room, ...extra };
+      const sent = yield* this.ch.fx.send(body, { ...replying, wake: wakeList(state, this.me, body, replying) });
       return sent;
     },
     oneLook,

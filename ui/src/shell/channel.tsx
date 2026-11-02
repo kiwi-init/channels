@@ -11,7 +11,8 @@ import type { Channel } from "~/model"
 import { drawerNews } from "~/live/notify"
 import { dropMessage, findWanted, useWantedMessage } from "~/live/open-message"
 import { openAsks } from "~/needs/open"
-import { sameWhere, useApp, whereKey } from "~/nav"
+import { sameWhere, useApp } from "~/nav"
+import { whereKey } from "~/places"
 import { ThreadPanel } from "~/panels/thread"
 import { SIDEBAR_KEYS, useSidebarHidden } from "@kiwi/app/sidebar-hidden.ts"
 import { usePanelWidth } from "~/shell/panel-width"
@@ -33,6 +34,7 @@ const SpecsView = later(() => import("~/specs/view").then((m) => m.SpecsView))
 const PrPanel = later(() => import("~/github/panel").then((m) => m.PrPanel))
 const IssuePanel = later(() => import("~/github/panel").then((m) => m.IssuePanel))
 const NeedsYou = later(() => import("~/needs/needs").then((m) => m.NeedsYou))
+const ThreadsView = later(() => import("~/chat/threads-view").then((m) => m.ThreadsView))
 const TaskPanel = later(() => import("~/panels/task").then((m) => m.TaskPanel))
 const PersonPanel = later(() => import("~/panels/person").then((m) => m.PersonPanel))
 const ChannelPanel = later(() => import("~/panels/channel-panel").then((m) => m.ChannelPanel))
@@ -43,7 +45,9 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   const { nav, go } = useApp()
   const hidden = useSidebarHidden()
   const panel = usePanelWidth(hidden)
-  const [jump, setJump] = useState<Jump | null>(null)
+  const [jumpAt, setJumpAt] = useState<{ jump: Jump; visit: number } | null>(null)
+  const jump = jumpAt?.visit === nav.visit ? jumpAt.jump : null
+  const setJump = (j: Jump | null) => setJumpAt(j ? { jump: j, visit: nav.visit } : null)
   const place = `${channel.code}\n${nav.tab}\n${whereKey(nav.where)}`
   const [olderAt, setOlderAt] = useState<{ older: Older; place: string } | null>(null)
   if (olderAt && olderAt.place !== place) setOlderAt(null)
@@ -62,11 +66,16 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
     if (!wanted) return
     if (found.kind === "missing") return dropMessage(wanted)
     if (!anchor) return
-    if (!atAnchor) return go({ to: "where", where: anchor.where })
+    if (!atAnchor) return go({ to: "where", where: anchor.where, replace: true })
     if (jump?.m.seq !== anchor.seq) return
     if (root !== undefined) go({ to: "panel", panel: { kind: "thread", seq: root, focus: wanted.seq } })
     dropMessage(wanted)
   }, [wanted, found.kind, anchor, root, atAnchor, jump, go])
+  const room = nav.where.kind === "room" ? nav.where.room : null
+  const gone = room !== null && !channel.loading && channel.connection === "live" && nav.tab === "chat" && !channel.rooms.some((r) => r.id === room)
+  useEffect(() => {
+    if (gone) go({ to: "where", where: { kind: "room", room: "general" }, replace: true })
+  }, [gone, go])
   const [searching, setSearching] = useState(false)
   const drawer = useDrawer()
   const tall = useTall()
@@ -241,6 +250,8 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
               <SpecsView channel={channel} />
             ) : nav.tab === "needs" ? (
               <NeedsYou channel={channel} onJump={setJump} />
+            ) : nav.tab === "threads" ? (
+              <ThreadsView channel={channel} />
             ) : (
               <Conversation channel={channel} jump={jump} />
             )}

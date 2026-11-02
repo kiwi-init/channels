@@ -5,7 +5,21 @@ import type { Personality } from "@kiwi/core/personality.ts"
 import { HANDOFF_DONE } from "@kiwi/core/protocol.ts"
 
 import { stepReplyText } from "~/chat/step"
-import { DEMO_ACCOUNT, DEMO_CHANNEL, DEMO_DEVICES, DEMO_EMPTY, DEMO_GUEST, DEMO_GUEST_MEMBER, DEMO_LAUNCHED, DEMO_PREFS, DEMO_TILES, DEMO_WAITING, DEMO_WELCOME, DEMO_WORDS } from "~/demo/data"
+import {
+  DEMO_ACCOUNT,
+  DEMO_CHANNEL,
+  DEMO_DEVICES,
+  DEMO_EMPTY,
+  DEMO_GUEST,
+  DEMO_GUEST_MEMBER,
+  DEMO_LAUNCHED,
+  DEMO_PREFS,
+  DEMO_REROOT,
+  DEMO_TILES,
+  DEMO_WAITING,
+  DEMO_WELCOME,
+  DEMO_WORDS,
+} from "~/demo/data"
 import { longFeed } from "~/demo/long"
 import { demoAround, demoFetchOlder, demoOlder } from "~/demo/older"
 import { withSpecs } from "~/demo/specs"
@@ -255,6 +269,7 @@ export type Scenario =
   | "forgot-here"
   | "link-stuck"
   | "recovery-set"
+  | "recovery-let-go"
   | "recovery-pending"
   | "github-sign-in"
   | "github-code"
@@ -358,6 +373,8 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
       prefs,
       seq: 1000,
     }
+  if (scenario === "recovery-let-go")
+    return { account: { ...DEMO_ACCOUNT, devices: DEMO_DEVICES, recovery: { at: Date.now() - 3 * 86_400_000, here: false } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
   if (scenario === "recovery-set")
     return { account: { ...DEMO_ACCOUNT, devices: DEMO_DEVICES, recovery: { at: Date.now() - 3 * 86_400_000, here: true } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
   if (scenario === "devices-forgotten")
@@ -413,7 +430,16 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
           const root = opts?.inThread ?? (target ? (target.inThread ?? target.seq) : undefined)
           const replyTo = opts?.replyTo !== undefined && opts.replyTo !== root ? opts.replyTo : undefined
           const images = opts?.images?.map((i) => ({ url: `data:${i.mime};base64,${i.data}`, width: 0, height: 0, alt: i.name }))
-          const next = post(c, seq, { from: c.you, text, where, replyTo, inThread: root, pending: true, ...(images?.length ? { images } : {}) })
+          const next = post(c, seq, {
+            from: c.you,
+            text,
+            where,
+            replyTo,
+            inThread: root,
+            pending: true,
+            ...(root !== undefined && opts?.side ? { side: true as const } : {}),
+            ...(images?.length ? { images } : {}),
+          })
           if (root === undefined) return next
           return {
             ...next,
@@ -434,6 +460,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
           rooms: where.kind === "room" ? c.rooms.map((r) => (r.id === where.room ? { ...r, unread: 0, mentions: 0 } : r)) : c.rooms,
           directs: where.kind === "dm" ? c.directs.map((d) => (d.with === where.with ? { ...d, unread: 0 } : d)) : c.directs,
         })),
+      followThread: (code, root, on) => edit(code, (c) => ({ ...c, follows: { ...c.follows, [root]: on }, threads: (c.threads ?? []).map((t) => (t.root === root ? { ...t, following: on } : t)) })),
       discard: (code, seq) => edit(code, (c) => ({ ...c, messages: c.messages.filter((m) => m.seq !== seq) })),
       react: (code, seq, emoji) =>
         edit(code, (c) => ({
@@ -838,6 +865,13 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       },
       enrollKeep: () => setState((s) => ({ ...s, enrolling: null })),
       enrollCancel: () => setState((s) => ({ ...s, enrolling: null })),
+      rerootOpen: async (words) => {
+        const n = words.split(/[^a-z]+/i).filter(Boolean).length
+        if (n !== 24) return { ok: false, trouble: { why: `a recovery key is 24 words, and that's ${n}` } }
+        return DEMO_REROOT
+      },
+      rerootFinish: async () => true,
+      rerootCancel: () => {},
       recoverBegin: () => setState((s) => ({ ...s, enrolling: { stage: "recover" } })),
       recoverOpen: async (words) => {
         const n = words.split(/[^a-z]+/i).filter(Boolean).length

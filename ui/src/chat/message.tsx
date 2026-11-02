@@ -187,6 +187,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
     },
     [onQuote, go, channel.messages]
   )
+  const quoting = !!replying && m.where.kind !== "theirs" && (!!inThread || m.where.kind === "task")
   const who = memberOf(channel, m.from)
   const editing = useEditing(channel.code, m.seq)
   const ask = m.ask ? channel.asks.find((a) => a.id === m.ask) : undefined
@@ -205,7 +206,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
   const onMenu = (e: MouseEvent<HTMLElement>) => {
     if (m.pending || m.failed !== undefined || m.leftOut || m.deleted || editing) return
     const target = e.target
-    const reply = replying && m.where.kind !== "theirs" ? () => replying.set(m) : null
+    const reply = replying && quoting ? () => replying.set(m) : null
     showMenu(e, "Message", (x) => x.messageGroups({ channel, go }, m, target, { openImage, reply, inThread: !!inThread || !!older }))
   }
 
@@ -365,13 +366,19 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
               <Changes kind="tools" channel={channel} m={m} />
             </Suspense>
           )}
-          {replying && m.where.kind !== "theirs" && (
+          {replying && quoting && (
             <button type="button" className="msg-tool" aria-label="Reply" title="Reply" onClick={() => replying.set(m)}>
               <Icon name="reply" size={14} />
             </button>
           )}
           {!inThread && !older && (
-            <button type="button" className="msg-tool" aria-label="Open thread" title="Open thread" onClick={() => go({ to: "panel", panel: { kind: "thread", seq: m.inThread ?? m.seq } })}>
+            <button
+              type="button"
+              className="msg-tool"
+              aria-label={m.where.kind === "task" ? "Open thread" : "Reply in thread"}
+              title={m.where.kind === "task" ? "Open thread" : "Reply in thread"}
+              onClick={() => go({ to: "panel", panel: { kind: "thread", seq: m.inThread ?? m.seq } })}
+            >
               <Icon name="thread" size={14} />
             </button>
           )}

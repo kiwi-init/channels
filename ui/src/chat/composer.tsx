@@ -157,6 +157,7 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
       return list
     })
   const [dropping, setDropping] = useState(false)
+  const [alsoRoom, setAlsoRoom] = useState(false)
   const enterSends = app.prefs.enterSends
   const stash = useStash(key)
   const [cueOf, setCue] = useState<Cue | null>(() => (STASH_SHOT === "stash" ? { key, back: false, left: stash.list.length } : null))
@@ -239,8 +240,8 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
   }, [text])
 
   useEffect(() => {
-    if (replyTo) area.current?.focus()
-  }, [replyTo])
+    if (replyTo || inThread !== undefined) area.current?.focus()
+  }, [replyTo, inThread])
 
   useLayoutEffect(() => {
     const el = box.current
@@ -308,10 +309,15 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
       setWarned({ text: value, people: away })
       return
     }
-    const opts = { ...(inThread !== undefined ? { inThread } : {}), ...(replyTo ? { replyTo: replyTo.seq } : {}), ...(files.length ? { images: files } : {}) }
+    const opts = {
+      ...(inThread !== undefined ? { inThread, ...(alsoRoom ? {} : { side: true as const }) } : {}),
+      ...(replyTo ? { replyTo: replyTo.seq } : {}),
+      ...(files.length ? { images: files } : {}),
+    }
     app.actions.send(channel.code, where, sent, Object.keys(opts).length ? opts : undefined)
     picked.delete(key)
     replying?.set(null)
+    setAlsoRoom(false)
     setFiles([])
     setCue(null)
     update("")
@@ -586,6 +592,12 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
             <Icon name="send" />
           </button>
         </div>
+        {inThread !== undefined && (
+          <label className="compose-also">
+            <input type="checkbox" checked={alsoRoom} onChange={(e) => setAlsoRoom(e.target.checked)} />
+            Also send to {placeOf(channel, where)}
+          </label>
+        )}
       </form>
       {warned && sealed && (
         <div className="compose-warn" role="alert">

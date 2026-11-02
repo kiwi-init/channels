@@ -169,7 +169,7 @@ export function wellFormedRead(x: unknown): ReadMark | null {
  * sequence number; `eph` is relayed to the other sockets and never stored.
  */
 export type ClientFrame =
-  | { t: "send"; id: string; iv: string; ct: string; e?: number; cid?: string }
+  | { t: "send"; id: string; iv: string; ct: string; e?: number; cid?: string; wake?: string[] }
   | { t: "eph"; iv: string; ct: string }
   /** This member has read up to `seq` (a listener says it on the socket it already has: cheaper than a request). */
   | { t: "read"; seq: number }
@@ -293,7 +293,7 @@ export type Event =
   /** Owner only: what a connected repo asks before a pull request merges into its default branch, read from GitHub by the owner's app. */
   | { op: "github.rules"; repo: string; branch: string; required: string[]; merge: MergeMethod[] }
   /** Owner only: a published GitHub release of a connected repo, with the commits it added (shas, and the PR numbers their messages name), read by the owner's app. */
-  | { op: "github.release"; repo: string; tag: string; at: number; shas: string[]; prs: number[] }
+  | { op: "github.release"; repo: string; tag: string; at: number; shas: string[]; prs: number[]; gone?: true }
   /**
    * Owner only: stop every agent (on) or let them carry on (off). While on hold, every client refuses
    * an agent's work (tasks, facts, messages to other agents); agents may still answer people.
@@ -790,6 +790,7 @@ export interface Payload {
   task?: number;
   /** A chat message to exactly one member, in the direct thread between the two. Older clients see a message to that member. */
   dm?: true;
+  side?: true;
   /**
    * An agent handing a decision or a step to people instead of acting (`kiwi escalate`): a blocking
    * question to its own human and the owner. Older clients see it as the blocking question it also is.
@@ -857,7 +858,7 @@ export function asSent(m: Message): Omit<Message, "newer" | "ev"> & { ev?: Event
 
 export const outgrown = (base: { folded?: number; skipped?: true }): boolean => base.skipped === true && (base.folded ?? 0) < EVENT_OPS_VERSION;
 
-export const FOLD_RULES = 21;
+export const FOLD_RULES = 22;
 
 export const olderRules = (base: { rules?: number }): boolean => (base.rules ?? 0) < FOLD_RULES;
 
@@ -1136,7 +1137,8 @@ function eventCheck(ev: unknown): boolean | null {
         e.shas.every((s) => typeof s === "string" && SHA_RE.test(s)) &&
         Array.isArray(e.prs) &&
         e.prs.length <= MAX_RELEASE_COMMITS &&
-        e.prs.every((p) => n(p) && (p as number) > 0)
+        e.prs.every((p) => n(p) && (p as number) > 0) &&
+        (e.gone === undefined || (e.gone === true && e.shas.length === 0 && e.prs.length === 0))
       );
     case "repos.set":
       return Array.isArray(e.repos) && e.repos.length <= MAX_REPOS && e.repos.every((r) => typeof r === "string" && REPO_RE.test(r));
@@ -1213,6 +1215,7 @@ export function wellFormed(p: unknown): p is WirePayload {
     opt(m.room, roomId) &&
     (m.task === undefined || (Number.isSafeInteger(m.task) && (m.task as number) > 0)) &&
     (m.dm === undefined || m.dm === true) &&
+    (m.side === undefined || m.side === true) &&
     (m.esc === undefined || m.esc === true) &&
     (m.handoff === undefined || (m.esc === true && wellFormedHandoff(m.handoff))) &&
     (m.choices === undefined || (m.esc === true && m.handoff === undefined && wellFormedChoices(m.choices))) &&

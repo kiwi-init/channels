@@ -1,6 +1,8 @@
-import { ChannelGone, type RoomsSetting } from "@kiwi/core/client.ts";
+import { ChannelGone, type RoomsSetting, type SendOptions } from "@kiwi/core/client.ts";
 import type { Member } from "@kiwi/core/membership.ts";
 import type { ChannelIcon, Message } from "@kiwi/core/protocol.ts";
+import { wakeList } from "@kiwi/core/phone-wake.ts";
+import { rootOf } from "@kiwi/core/room-rules.ts";
 import { fold, MAIN, placeFromKey, taskId, type ChannelState, type FoldBase, type GuardFloor, type Task } from "@kiwi/core/state.ts";
 
 import type { ChannelIdentityView, FollowEvent, WireError } from "../../desktop/src/bridge.ts";
@@ -12,7 +14,7 @@ import { trimmed } from "@kiwi/channel/trim.ts";
 import { approveTask, closedDigest, sendBackTask, type TaskSend } from "@kiwi/channel/task-actions.ts";
 import { TEND_SAFETY_MS, tendOwned } from "@kiwi/app/approval-tend.ts";
 import { followedLaunches, followLaunch, sawMembers, sawRequests, type LaunchSeen } from "@kiwi/app/launch-follow.ts";
-import { roomView } from "./view.ts";
+import { leadChatKey, roomView } from "./view.ts";
 import type { Connection, Picture, RoomView } from "./wire.ts";
 
 const WINDOW = 400;
@@ -173,18 +175,35 @@ export class Room {
     const replyTo = re === null ? undefined : this.messages.find((m) => m.seq === re);
     const where = placeFromKey(at ?? this.place) ?? MAIN;
     if (where.kind === "dm") {
-      if (!where.with.includes(this.me)) throw new Error("this conversation is between two others: you can read along");
-      const other = where.with[0] === this.me ? where.with[1] : where.with[0];
-      return this.keyring.call(this.code, "send", body, { kind: "msg", to: [other], dm: true, ...(re !== null ? { re: [re] } : {}), ...(imgs.length ? { imgs: [...imgs] } : {}) });
+      const root = this.state ? rootOf(this.me, this.state.members) : this.me;
+      if (!where.with.includes(root)) throw new Error("this conversation is between two others: you can read along");
+      const other = where.with[0] === root ? where.with[1] : where.with[0];
+      return this.sendWoken(body, { kind: "msg", to: [other], dm: true, ...(re !== null ? { re: [re] } : {}), ...(imgs.length ? { imgs: [...imgs] } : {}) });
     }
     const to = named.length ? named : replyTo && replyTo.from !== this.me ? [replyTo.from] : undefined;
-    return this.keyring.call(this.code, "send", body, {
+    return this.sendWoken(body, {
       kind: "msg",
       ...(to ? { to } : {}),
       ...(where.kind === "task" ? { task: where.task } : {}),
       ...(re !== null ? { re: [re] } : {}),
       ...(imgs.length ? { imgs: [...imgs] } : {}),
     });
+  }
+
+  async marks(local: Readonly<Record<string, number>>, write: boolean): Promise<Record<string, number>> {
+    const state = this.state;
+    if (!state) return {};
+    const side = leadChatKey(state, this.me);
+    const keys = side ? ["main", side] : ["main"];
+    const mine = Object.fromEntries(
+      keys.flatMap((k) => {
+        const v = local[k];
+        return v !== undefined && Number.isSafeInteger(v) && v > 0 ? [[k, v]] : [];
+      }),
+    );
+    if (write && !Object.keys(mine).length) return {};
+    const merged = await this.keyring.call(this.code, "syncMarks", mine, { write });
+    return merged ? Object.fromEntries(keys.flatMap((k) => (merged[k] !== undefined ? [[k, merged[k]]] : []))) : {};
   }
 
   async react(seq: number, emoji: string | null): Promise<number> {
@@ -200,7 +219,12 @@ export class Room {
   async answer(seq: number, text: string): Promise<number> {
     const ask = this.messages.find((m) => m.seq === seq);
     if (!ask) throw new Error("that question isn't here any more");
-    return this.keyring.call(this.code, "send", text, { to: [ask.from], re: [ask.seq], kind: "msg" });
+    return this.sendWoken(text, { to: [ask.from], re: [ask.seq], kind: "msg" });
+  }
+
+  private sendWoken(body: string, opts: SendOptions): Promise<number> {
+    const state = this.state;
+    return this.keyring.call(this.code, "send", body, state ? { ...opts, wake: wakeList(state, this.me, body, opts) } : opts);
   }
 
   async approve(id: number): Promise<number> {
