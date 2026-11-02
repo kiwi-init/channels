@@ -352,6 +352,10 @@ For when every app is gone, or a thief revoked your other devices first. The rec
   and each new link must carry the relay's time, so a proposal can't be backdated past its 7 days. A
   vault must be version kept + 1, signed by the person key or a current approving device, with `held`
   sealed for the current person key and recovery key. Links and vaults from revoked devices are refused.
+- **Apps reading the vault** take one sealed by an approving desktop before that desktop was revoked
+  (its `at` is before the revoke). Since the first desktop lets go of the person key, vaults are signed by
+  desktops, so revoking the lost one that sealed last would otherwise leave the words and every other
+  desktop unable to read the vault (T1423). Writes still need a current approving device.
 - In the code (T693, T823): `packages/core/src/recovery.ts`, `src/relay/account.ts`.
 - **Re-root** (T827), when the person key itself may be stolen: a `reroot {root, keep[]}` link in the
   device list, signed by the new person key, with the recovery key's signature over it (`rsig`) and
