@@ -1,6 +1,6 @@
 import * as Effect from "effect/Effect";
 import type { AgentSession, Delivery } from "../agent.ts";
-import { loadImages } from "../attach.ts";
+import { loadFiles, loadImages } from "../attach.ts";
 import { formatMessage } from "@kiwi/core/format.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
 import { parseTaskId, type ChannelState } from "@kiwi/core/state.ts";
@@ -38,6 +38,16 @@ export const images = Effect.suspend(() => {
   if (!paths.length) return Effect.succeed(undefined);
   return Effect.tryPromise({ try: () => loadImages(paths), catch: (err) => new Quit({ message: err instanceof Error ? err.message : String(err), code: 1 }) });
 });
+
+export const attachments = (s: AgentSession) =>
+  Effect.suspend(() => {
+    const v = opt.attach as string | string[] | undefined;
+    const paths = Array.isArray(v) ? v : v ? [v] : [];
+    if (!paths.length) return Effect.succeed(undefined);
+    return Effect.try({ try: () => loadFiles(paths), catch: (err) => new Quit({ message: err instanceof Error ? err.message : String(err), code: 1 }) }).pipe(
+      Effect.flatMap((files) => Effect.forEach(files, (f) => s.ch.fx.putFile(f.name, f.mime, f.bytes))),
+    );
+  });
 
 export const taskArg = Effect.fn("kiwi.taskArg")(function* (i = 2) {
   const raw = args[i] ?? (yield* die(`usage: kiwi task ${args[1]} T<id>`));
