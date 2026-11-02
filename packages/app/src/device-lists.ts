@@ -2,6 +2,8 @@ import { newestLists, type DeviceLink, type DeviceList } from "@kiwi/core/device
 import type { Member } from "@kiwi/core/membership.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
 
+type Cut = Member & { why?: string };
+
 const SEEN_KEY = "mc.devices.seen";
 const POSTED_KEY = "mc.devices.posted";
 
@@ -9,7 +11,7 @@ type Seen = Record<string, { through: number; links: Record<string, DeviceLink[]
 
 export interface ListsApi {
   history: (since: number) => Promise<{ messages: Message[] }>;
-  cutDevices: (list: DeviceList) => Promise<Member[]>;
+  cutDevices: (list: DeviceList) => Promise<Cut[]>;
 }
 
 export interface PostApi {
@@ -55,13 +57,13 @@ async function scan(code: string, api: Pick<ListsApi, "history">): Promise<void>
 
 const cutFor = new Map<string, Map<string, number>>();
 
-export async function tendLists(code: string, own: readonly DeviceLink[], api: ListsApi): Promise<{ lists: Map<string, DeviceList>; cut: Member[] }> {
+export async function tendLists(code: string, own: readonly DeviceLink[], api: ListsApi): Promise<{ lists: Map<string, DeviceList>; cut: Cut[] }> {
   await scan(code, api);
   const posted = Object.values(read<Seen>(SEEN_KEY)).flatMap((c) => (c ? Object.values(c.links) : []));
   const lists = await newestLists(own.length ? [own, ...posted] : posted);
   const done = cutFor.get(code) ?? new Map<string, number>();
   cutFor.set(code, done);
-  const cut: Member[] = [];
+  const cut: Cut[] = [];
   for (const list of lists.values()) {
     if ((!list.revoked.length && !list.reroots.length) || done.get(list.person) === list.version) continue;
     try {
