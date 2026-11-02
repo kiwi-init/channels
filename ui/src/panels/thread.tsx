@@ -7,6 +7,7 @@ import { jumpTo, ReplyContext, type Replying } from "~/chat/reply"
 import { Empty } from "~/kit/bits"
 import type { Channel, Message } from "~/model"
 import { nickname } from "~/names"
+import { useAct } from "~/nav"
 import { PanelHead } from "~/panels/frame"
 
 export function ThreadPanel({ channel, seq, focus }: { channel: Channel; seq: number; focus?: number | undefined }) {
@@ -34,6 +35,8 @@ export function ThreadPanel({ channel, seq, focus }: { channel: Channel; seq: nu
     if (last !== undefined && replies.at(-1)?.from === channel.you) toBottom(false)
   }, [seq, last, replies, channel.you, toBottom])
   const onQuote = useCallback((target: number) => void jumpTo(content.current, target), [content])
+  const { actions } = useAct()
+  const following = channel.threads?.find((t) => t.root === seq)?.following ?? channel.follows?.[seq] ?? (root?.from === channel.you || !!root?.mentionsYou)
 
   if (!root)
     return (
@@ -44,7 +47,11 @@ export function ThreadPanel({ channel, seq, focus }: { channel: Channel; seq: nu
     )
   return (
     <ReplyContext.Provider value={replying}>
-      <PanelHead title="Thread" sub={`· ${nickname(channel, root.from)}`} />
+      <PanelHead title="Thread" sub={`· ${nickname(channel, root.from)}`}>
+        <button type="button" className="btn is-small is-quiet" aria-pressed={following} onClick={() => actions.followThread(channel.code, seq, !following)}>
+          {following ? "Following" : "Follow"}
+        </button>
+      </PanelHead>
       <div className="feed" ref={scroller} onScroll={remember}>
         <div className="feed-list" ref={content}>
           <div className="thread-root">

@@ -37,7 +37,8 @@ function LiveApp() {
   const go = useCallback((g: Go) => setNav((n) => navigate(n, g)), [])
   const where = nav.page === "channel" && nav.tab === "chat" ? nav.where : null
   const task = nav.panel?.kind === "task" ? nav.panel.task : null
-  const view = useMemo(() => ({ where, task }), [where, task])
+  const thread = nav.panel?.kind === "thread" ? nav.panel.seq : null
+  const view = useMemo(() => ({ where, task, thread }), [where, task, thread])
   useEffect(uiBooted, [])
   useKeepPlace(nav)
   return (

@@ -44,7 +44,8 @@ import { iconFromFile } from "~/live/icon-file"
 import { seatOf } from "~/live/seats"
 import { checkComputer, computerSettings, setContextLine, setHooks } from "~/live/computer"
 import { addStartFolder, allowNewAgents, allowRemoteBypass, removeStartFolder, setTerminalHelpers } from "~/live/starts"
-import { markSeenIn } from "@kiwi/app/threads.ts"
+import { markSeenIn, seenIn } from "@kiwi/app/threads.ts"
+import { followKey, followMark } from "~/live/threads"
 import { lastIn, seenKeyOf } from "~/live/seen-place"
 import { closeOpened, leavingOnPurpose, openedRun, type Run } from "~/live/store"
 import { attempt, event, memberOf, need, owner, say } from "~/live/run"
@@ -172,6 +173,11 @@ export function makeActions(): Actions {
       const run = need(code)
       const last = lastIn(run.messages, run.state, run.me, where)
       if (last) markSeenIn(run.roomId, { [seenKeyOf(run.state, where, run.me)]: last })
+    },
+    followThread: (code, root, on) => {
+      const run = need(code)
+      markSeenIn(run.roomId, { [followKey(root)]: followMark(seenIn(run.roomId)[followKey(root)], run.messages.at(-1)?.seq ?? 0, on) })
+      announce(on ? "Following this thread" : "Not following this thread")
     },
     react: (code, seq, emoji) =>
       attempt("Couldn't react", async () => {

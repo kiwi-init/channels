@@ -32,6 +32,7 @@ import { announce } from "~/kit/toasts"
 import { arrivals } from "~/live/persona-later"
 import { leaversToSeal } from "~/live/leaving"
 import { lastIn, seenKeyOf } from "~/live/seen-place"
+import { followsIn, threadSeenKey, threadsOf } from "~/live/threads"
 import { closeOpened, markGone, publish, type Run } from "~/live/store"
 import { useWakes } from "~/live/wakes"
 import { appCan } from "~/live/app-can"
@@ -45,6 +46,7 @@ import { nicknamesOf } from "~/names"
 export interface View {
   where: Where | null
   task: number | null
+  thread: number | null
 }
 
 const PENDING_MAX = 50
@@ -126,6 +128,8 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const { muted } = usePrefs()
   const rooms = useMemo(() => roomsOf(state, messages, me, seen, from).map((r) => (isMuted(muted, code, r.id) ? { ...r, muted: true as const } : r)), [state, messages, me, seen, from, muted, code])
   const directs = useMemo(() => directsOf(state, messages, me, seen), [state, messages, me, seen])
+  const threads = useMemo(() => threadsOf(state, messages, me, seen, from), [state, messages, me, seen, from])
+  const follows = useMemo(() => followsIn(seen), [seen])
   const theirs = useMemo(() => theirsOf(state, messages, me), [state, messages, me])
   const others = useMemo(() => people.filter((p) => !p.you), [people])
   const title = channelTitle(
@@ -167,6 +171,8 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       ...(state.branchPrefix ? { branchPrefix: state.branchPrefix } : {}),
       rooms,
       directs,
+      threads,
+      follows,
       theirs,
       people,
       former,
@@ -206,6 +212,8 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       state.branchPrefix,
       rooms,
       directs,
+      threads,
+      follows,
       theirs,
       people,
       former,
@@ -349,6 +357,11 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
     if (!where || !lastHere || !shown) return
     markSeenIn(roomId, { [seenKeyOf(state, where, me)]: lastHere })
   }, [where, lastHere, roomId, me, shown, state])
+  const openThread = view.thread
+  const lastInThread = useMemo(() => (openThread === null ? 0 : (threads.find((t) => t.root === openThread)?.lastSeq ?? 0)), [openThread, threads])
+  useEffect(() => {
+    if (openThread !== null && lastInThread && shown) markSeenIn(roomId, { [threadSeenKey(openThread)]: lastInThread })
+  }, [openThread, lastInThread, roomId, shown])
   const task = view.task
   const lastInTask = useMemo(() => (task === null ? 0 : (state.places.get(placeKey({ kind: "task", task }))?.last ?? 0)), [task, state.places])
   useEffect(() => {

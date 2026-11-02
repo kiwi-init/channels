@@ -21,6 +21,8 @@ export const SHOTS: Record<string, Shot> = {
   thread: kiwi({ panel: { kind: "thread", seq: 112 } }),
   "thread-focus": kiwi({ panel: { kind: "thread", seq: 112, focus: 113 } }),
   "thread-other": kiwi({ panel: { kind: "thread", seq: 127 } }),
+  threads: kiwi({ tab: "threads" }),
+  "threads-open": kiwi({ tab: "threads", panel: { kind: "thread", seq: 127 } }),
   dm: kiwi({ where: { kind: "dm", with: "atlas" } }),
   "dm-private": kiwi({ where: { kind: "dm", with: "maya" } }),
   theirs: kiwi({ where: { kind: "theirs", between: ["atlas", "win"] } }),

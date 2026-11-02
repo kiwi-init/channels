@@ -884,6 +884,10 @@ export const DEMO_CHANNEL: Channel = {
     { with: "atlas", unread: 0, last: m(29) },
     { with: "maya", unread: 1, last: m(50), locked: true },
   ],
+  threads: [
+    { root: 127, following: true, replies: 3, unread: 2, mentions: 0, last: m(0.3), lastSeq: 130, people: ["jow", "atlas", "win"] },
+    { root: 112, following: true, replies: 3, unread: 0, mentions: 0, last: m(7), lastSeq: 115, people: ["atlas", "win", "jow"] },
+  ],
   theirs: [{ between: ["atlas", "win"], last: m(26) }],
   people,
   next: "Tag v1.0.0 once T12 and T14 land",

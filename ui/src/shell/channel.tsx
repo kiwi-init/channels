@@ -34,6 +34,7 @@ const SpecsView = later(() => import("~/specs/view").then((m) => m.SpecsView))
 const PrPanel = later(() => import("~/github/panel").then((m) => m.PrPanel))
 const IssuePanel = later(() => import("~/github/panel").then((m) => m.IssuePanel))
 const NeedsYou = later(() => import("~/needs/needs").then((m) => m.NeedsYou))
+const ThreadsView = later(() => import("~/chat/threads-view").then((m) => m.ThreadsView))
 const TaskPanel = later(() => import("~/panels/task").then((m) => m.TaskPanel))
 const PersonPanel = later(() => import("~/panels/person").then((m) => m.PersonPanel))
 const ChannelPanel = later(() => import("~/panels/channel-panel").then((m) => m.ChannelPanel))
@@ -249,6 +250,8 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
               <SpecsView channel={channel} />
             ) : nav.tab === "needs" ? (
               <NeedsYou channel={channel} onJump={setJump} />
+            ) : nav.tab === "threads" ? (
+              <ThreadsView channel={channel} />
             ) : (
               <Conversation channel={channel} jump={jump} />
             )}
