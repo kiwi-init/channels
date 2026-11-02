@@ -56,6 +56,13 @@ interface RepoMeta {
   allow_rebase_merge?: boolean | null;
 }
 
+const MERGE_SETTINGS = "query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { defaultBranchRef { name } mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed } }";
+
+type MergeSettings = {
+  data?: { repository?: { defaultBranchRef?: { name?: string } | null; mergeCommitAllowed?: boolean; squashMergeAllowed?: boolean; rebaseMergeAllowed?: boolean } | null };
+  errors?: { message?: string }[];
+};
+
 type BranchRule = { type?: string; parameters?: { required_status_checks?: { context?: string }[]; allowed_merge_methods?: string[] } };
 
 type BranchInfo = { protection?: { required_status_checks?: { contexts?: string[]; checks?: { context?: string }[] } } };
@@ -253,9 +260,17 @@ export function githubAppFrom(opts: { appId?: string | null; privateKey?: string
     rules: async (repo) => {
       const t = await token(repo);
       if (!t.ok) return t;
-      const meta = await get(`${api}/repos/${repo}`, { headers: headers(t.value) });
+      const [owner, name] = repo.split("/");
+      const meta = await get(`${api}/graphql`, {
+        method: "POST",
+        headers: { ...headers(t.value), "content-type": "application/json" },
+        body: JSON.stringify({ query: MERGE_SETTINGS, variables: { owner, name } }),
+      });
       if (!meta.ok) return fail(meta, "repo");
-      const m = (await meta.json()) as RepoMeta;
+      const body = (await meta.json()) as MergeSettings;
+      const r = body.data?.repository;
+      if (!r) return { ok: false, status: 502, error: `GitHub refused ${repo}'s merge settings: ${body.errors?.[0]?.message ?? "no data"}` };
+      const m: RepoMeta = { default_branch: r.defaultBranchRef?.name, allow_merge_commit: r.mergeCommitAllowed, allow_squash_merge: r.squashMergeAllowed, allow_rebase_merge: r.rebaseMergeAllowed };
       const branch = encodeURIComponent(m.default_branch ?? "main");
       const [rules, info] = await Promise.all([
         get(`${api}/repos/${repo}/rules/branches/${branch}`, { headers: headers(t.value) }),
