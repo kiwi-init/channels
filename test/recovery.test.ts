@@ -211,6 +211,14 @@ describe("the vault (T693)", () => {
     expect(await checkVault(await sealVault(ids.thief!, r, 2, contents, T0 + 2), cut)).toMatch(/approving devices/);
   });
 
+  test("a vault an approving desktop sealed before it was revoked still holds up, so losing that desktop doesn't lose the vault (T1423)", async () => {
+    const cut = await listOf([...links, await nextLink(list, ids.desk!, { op: "revoke", device: ids.thief!.pk }, T0 + 10)]);
+    expect(await checkVault(await sealVault(ids.thief!, r, 2, contents, T0 + 9), cut)).toBeNull();
+    expect(await checkVault(await sealVault(ids.thief!, r, 2, contents, T0 + 10), cut)).toMatch(/approving devices/);
+    const phoneCut = await listOf([...links, await nextLink(list, ids.desk!, { op: "revoke", device: ids.phone!.pk }, T0 + 10)]);
+    expect(await checkVault(await sealVault(ids.phone!, r, 2, contents, T0 + 9), phoneCut)).toMatch(/approving devices/);
+  });
+
   test("a channel box moved to another desktop's name, or into another person's vault, doesn't open", async () => {
     const v1 = await sealVault(ids.desk!, r, 1, contents, T0);
     const moved: Vault = { ...v1, boxes: [{ ...v1.boxes[0]!, device: ids.thief!.pk }] };

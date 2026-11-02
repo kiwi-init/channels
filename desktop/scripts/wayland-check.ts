@@ -260,6 +260,31 @@ try {
     return { ok: s.files.includes("Remove kiwi-drop.png") && s.files.length === before + 1, detail: { before, s, page } };
   });
 
+  await step("a PNG dropped on something floating over the composer, like a toast, is attached too (T1000)", async () => {
+    const before = (await state()).files.length;
+    const cover = await driver.evaluate(() => {
+      const t = document.querySelector('textarea[aria-label="Message"]')?.getBoundingClientRect();
+      if (!t) return null;
+      const c = document.createElement("div");
+      c.id = "kiwi-check-cover";
+      Object.assign(c.style, { position: "fixed", left: `${t.x + t.width / 2 - 40}px`, top: `${t.y + t.height / 2 - 16}px`, width: "80px", height: "32px", zIndex: "99999" });
+      document.body.append(c);
+      const w = window as unknown as { kiwiCheckDropOn?: string[] };
+      w.kiwiCheckDropOn = [];
+      window.addEventListener("drop", (e) => w.kiwiCheckDropOn?.push(e.target instanceof Element ? e.target.id || e.target.tagName : String(e.target)), { capture: true, once: true });
+      return [c.style.left, c.style.top];
+    }, null);
+    if (!cover) return { ok: false, detail: "no composer to cover" };
+    await ask({ op: "drag", from: onHelper("drag"), to: composer });
+    await later(1500);
+    const on = await driver.evaluate(() => {
+      document.getElementById("kiwi-check-cover")?.remove();
+      return (window as unknown as { kiwiCheckDropOn?: string[] }).kiwiCheckDropOn ?? null;
+    }, null);
+    const s = await state();
+    return { ok: on?.[0] === "kiwi-check-cover" && s.files.length === before + 1 && s.files.at(-1) === "Remove kiwi-drop.png", detail: { before, cover, on, s } };
+  });
+
   await step("a file dropped elsewhere in the window leaves the page where it was", async () => {
     await ask({ op: "drag", from: onHelper("drag"), to: onPage([page.w / 2 - 100, page.h / 3 - 50, 200, 100]) });
     await later(2000);

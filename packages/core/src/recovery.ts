@@ -157,6 +157,8 @@ function approver(list: DeviceList, pk: string): boolean {
   return list.devices.some((d) => d.device === pk && d.approve && d.as !== "computer");
 }
 
+const approvedWhen = (list: DeviceList, pk: string, at: number): boolean => approver(list, pk) || list.revokes.some((r) => r.device === pk && r.approve && r.as !== "computer" && at < r.at);
+
 const rerootedBefore = (list: DeviceList, pk: string, due: number): boolean => list.reroots.some((x) => x.from === pk && x.at < due);
 
 export async function readRecovery(links: readonly unknown[], list: DeviceList, now = Date.now()): Promise<ReadRecovery> {
@@ -328,7 +330,7 @@ export async function checkVault(raw: unknown, list: DeviceList, known = 0): Pro
   if (bad) return bad;
   if (!(await verify(x))) return "a vault that isn't signed by the key it names";
   if (x["person"] !== list.person) return "a vault for another person";
-  if (x["pk"] !== list.root && !approver(list, x["pk"])) return "a vault signed by a key that isn't one of this person's approving devices";
+  if (x["pk"] !== list.root && !approvedWhen(list, x["pk"], x["at"] as number)) return "a vault signed by a key that isn't one of this person's approving devices";
   if ((x["version"] as number) < known) return `vault version ${x["version"] as number} is older than version ${known}, already seen`;
   return null;
 }

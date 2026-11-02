@@ -5,7 +5,7 @@ import { open } from "../crypto.ts";
 
 const rooms = () => import("../private-room.ts");
 import { verify } from "../identity.ts";
-import { isEvent, PAGE_LIMIT, rasterAttachment, wellFormed, type Envelope, type Message, type WirePayload } from "../protocol.ts";
+import { fileAttachment, isEvent, PAGE_LIMIT, rasterAttachment, wellFormed, type Envelope, type Message, type WirePayload } from "../protocol.ts";
 import type { FoldBase } from "../state.ts";
 import type { ChannelCore } from "./core.ts";
 import { RelayError, type MemberRefusal } from "./errors.ts";
@@ -19,7 +19,16 @@ interface PageOffer {
 export function received(p: WirePayload, seq: number, rts: number | undefined, sigOk: boolean): Message {
   const { ev, ...rest } = p;
   const imgs = Array.isArray(p.imgs) ? p.imgs.filter(rasterAttachment) : undefined;
-  return { ...rest, ...(ev === undefined ? {} : isEvent(ev) ? { ev } : { newer: ev }), ...(imgs?.length ? { imgs } : { imgs: undefined }), seq, ...(rts !== undefined ? { rts } : {}), sigOk };
+  const files = Array.isArray(p.files) ? p.files.filter(fileAttachment) : undefined;
+  return {
+    ...rest,
+    ...(ev === undefined ? {} : isEvent(ev) ? { ev } : { newer: ev }),
+    ...(imgs?.length ? { imgs } : { imgs: undefined }),
+    ...(files?.length ? { files } : { files: undefined }),
+    seq,
+    ...(rts !== undefined ? { rts } : {}),
+    sigOk,
+  };
 }
 
 export interface HistoryFx {
