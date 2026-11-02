@@ -5,7 +5,8 @@ import { join } from "node:path";
 import type { Channel } from "@kiwi/core/client.ts";
 import { received } from "@kiwi/core/client/history.ts";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
-import { PROTOCOL_VERSION, type Event, type Message, type Payload } from "@kiwi/core/protocol.ts";
+import { FOLD_RULES, olderRules, PROTOCOL_VERSION, type Event, type Message, type Payload } from "@kiwi/core/protocol.ts";
+import { omit } from "@kiwi/core/omit.ts";
 import { fold, rosterOf, type ChannelState, type FoldBase } from "@kiwi/core/state.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { joinAgent, joinPerson, pairComputer, setupChannel, type OwnerSetup } from "./owner.ts";
@@ -159,5 +160,40 @@ describe("people remove their own agents, the owner removes anyone, and people w
     expect(after.members.get("mi")?.display).toBeUndefined();
     await s.ownerCh.reconcilePosting(after, await s.ownerCh.members());
     expect((await s.ownerCh.members()).find((m) => m.pk === mi.id.pk)?.display).toBeUndefined();
+  });
+
+  test("a channel opened from a snapshot taken before these rules folds to the same state as its whole log", async () => {
+    const messages = await log();
+    const roster = rosterOf(await s.ownerCh.members());
+    const cut = messages.find((m) => m.ev?.op === "member.gone" && m.from === "maya" && m.ev.member === "mo")!.seq - 1;
+    let base: FoldBase | null = null;
+    fold(
+      messages.filter((m) => m.seq <= cut),
+      roster,
+      Date.now(),
+      null,
+      null,
+      null,
+      (b) => (base = b),
+    );
+    const older: FoldBase = { ...omit(base!, "nicknames"), rules: FOLD_RULES - 1 };
+    expect(olderRules(older)).toBe(true);
+    const whole = fold(messages, roster, Date.now());
+    const resumed = fold(
+      messages.filter((m) => m.seq > cut),
+      roster,
+      Date.now(),
+      null,
+      null,
+      older,
+    );
+    const view = (st: ChannelState) => ({
+      gone: [...st.gone].sort(),
+      nicknames: [...st.nicknames].sort(),
+      members: [...st.members.values()].map((m) => [m.name, m.active, m.display ?? null]).sort(),
+      rejected: [...st.rejected].filter(([seq]) => seq > cut).sort(),
+    });
+    expect(view(resumed)).toEqual(view(whole));
+    expect(resumed.members.get("mo")?.active).toBe(false);
   });
 });
