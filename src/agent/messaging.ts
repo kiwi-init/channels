@@ -153,7 +153,7 @@ export class SessionMessaging extends SessionListen {
       yield* this.notAnsweredByOthers(state, seq, body);
       const to = orig.from === this.me ? orig.to : [orig.from];
       yield* this.mayI({ kind, to });
-      const replying = { to, kind, re: [seq], imgs, room: state.roomOf.get(seq) ?? orig.room, ...extra };
+      const replying = { to, kind, re: [seq], side: true, imgs, room: state.roomOf.get(seq) ?? orig.room, ...extra };
       const sent = yield* this.ch.fx.send(body, { ...replying, wake: wakeList(state, this.me, body, replying) });
       return sent;
     },

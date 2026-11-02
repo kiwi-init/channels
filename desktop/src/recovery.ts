@@ -23,7 +23,7 @@ import {
 import type { RecoveryCancelView, RecoverySaveView, RecoveryView } from "./bridge.ts";
 
 const byLabel = (list: DeviceList, pk: string): string =>
-  pk === list.person ? "your person key" : (list.devices.find((d) => d.device === pk)?.label ?? list.revokes.find((r) => r.device === pk)?.label ?? "a device");
+  pk === list.root || pk === list.person ? "your person key" : (list.devices.find((d) => d.device === pk)?.label ?? list.revokes.find((r) => r.device === pk)?.label ?? "a device");
 
 const CHECKS = 3;
 const LOOK_MS = 10 * 60_000;
@@ -229,7 +229,7 @@ export function createRecoveryHost(deps: RecoveryHostDeps): RecoveryHost {
       const session = await signedIn();
       const devices = await list();
       const before = await kept(session.client, devices);
-      const link = await recoveryLink(person, person.pk, before.recovery, { pk: key.pk, xpk: key.xpk! }, now());
+      const link = await recoveryLink(person, devices.person, before.recovery, { pk: key.pk, xpk: key.xpk! }, now());
       const chain = [...(before.chain as RecoveryLink[]), link];
       const read = await readRecovery(chain, devices, now());
       if (!read.ok) throw new Error(`the new recovery key doesn't hold up: ${read.why}`);

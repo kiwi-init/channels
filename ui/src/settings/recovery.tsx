@@ -4,6 +4,7 @@ import { Dialog, DialogHead, Field } from "~/kit/bits"
 import type { RecoveryState } from "~/model"
 import { useApp } from "~/nav"
 import { Confirm, Row } from "~/settings/controls"
+import { Reroot } from "~/settings/reroot"
 import { WordsForm } from "~/start/recover"
 
 const SHOT = new URLSearchParams(location.search).get("shot")
@@ -36,6 +37,7 @@ export function RecoveryKey({ recovery }: { recovery: RecoveryState }) {
   const [step, setStep] = useState<Step | null>(null)
   const [renew, setRenew] = useState(false)
   const [cancelling, setCancelling] = useState(SHOT === "settings-recovery-cancel")
+  const [rerooting, setRerooting] = useState(SHOT === "settings-reroot-words" || SHOT === "settings-reroot-keep")
   const { recoveryWords } = app.actions
 
   useEffect(() => {
@@ -81,6 +83,13 @@ export function RecoveryKey({ recovery }: { recovery: RecoveryState }) {
               </button>
             ))}
         </Row>
+        {recovery.at && !recovery.here && (
+          <Row label="Someone else has your person key?" hint="Replace it with your words. Devices you don't keep are signed out.">
+            <button type="button" className="btn is-quiet is-small" onClick={() => setRerooting(true)}>
+              Replace
+            </button>
+          </Row>
+        )}
         {recovery.pending && (
           <Row label={`New words take over ${day(recovery.pending.from)}`} hint={`Made by ${recovery.pending.by}. Until then your current words still work.`}>
             <button type="button" className="btn is-danger is-small" onClick={() => setCancelling(true)}>
@@ -168,6 +177,8 @@ export function RecoveryKey({ recovery }: { recovery: RecoveryState }) {
           </>
         )}
       </Dialog>
+
+      {rerooting && <Reroot onClose={() => setRerooting(false)} />}
 
       <Dialog open={cancelling} onClose={() => setCancelling(false)} label="Cancel the new words" wide>
         <WordsForm

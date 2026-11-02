@@ -168,3 +168,7 @@
 .set-recover-cancel .start-hint.is-error {
   color: var(--alert);
 }
+
+.set-reroot-devices {
+  margin-top: 16px;
+}

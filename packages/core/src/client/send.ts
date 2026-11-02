@@ -67,6 +67,7 @@ export interface SendOptions {
   settled?: PermissionSettled;
   task?: number;
   dm?: boolean;
+  side?: boolean;
   slot?: { name: string; ttl: number };
   wake?: readonly string[];
   free?: string[];
@@ -163,6 +164,7 @@ export class ChannelSending {
         ...(opts.settled && opts.re?.length && !opts.ev ? { settled: opts.settled } : {}),
         ...(opts.task && !opts.ev ? { task: opts.task } : {}),
         ...(opts.dm && !opts.ev && opts.to?.length === 1 ? { dm: true as const } : {}),
+        ...(opts.side && opts.re?.length && !opts.ev ? { side: true as const } : {}),
         ts: Date.now(),
       };
       if (payload.step && !wellFormed(payload))

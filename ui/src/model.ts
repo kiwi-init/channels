@@ -313,6 +313,7 @@ export interface Message {
   said?: Said
   replyTo?: number
   inThread?: number
+  side?: true
   thread?: { replies: number; last: number; people: string[] }
   task?: number
   prs?: PullRequest[]
@@ -591,6 +592,16 @@ export interface RecoverTrouble {
   word?: number
 }
 
+export interface RerootDevice {
+  id: string
+  label: string
+  os: string
+  as: "desktop" | "phone" | "computer"
+  here: boolean
+}
+
+export type RerootOpened = { ok: true; devices: RerootDevice[]; channels: string[] } | { ok: false; trouble: RecoverTrouble }
+
 export interface Device {
   id: string
   label: string
@@ -679,7 +690,7 @@ export interface NewAgent {
 export type Launching = { stage: "started" } | { stage: "asked"; name: string } | { stage: "joined"; name: string } | { stage: "failed"; why: string }
 
 export interface Actions {
-  send(code: string, where: Where, text: string, opts?: { replyTo?: number; inThread?: number; images?: Upload[] }): void
+  send(code: string, where: Where, text: string, opts?: { replyTo?: number; inThread?: number; side?: true; images?: Upload[] }): void
   retry(code: string, seq: number): void
   loadImage(code: string, spot: string): void
   discard(code: string, seq: number): void
@@ -771,6 +782,9 @@ export interface Actions {
   recoverySave(typed: { at: number; word: string }[]): Promise<RecoverySaved | null>
   recoveryDrop(): void
   recoveryCancel(words: string): Promise<RecoverTrouble | null>
+  rerootOpen(words: string): Promise<RerootOpened | null>
+  rerootFinish(keep: string[]): Promise<boolean>
+  rerootCancel(): void
   enrollBegin(): void
   enrollKeep(): void
   enrollCancel(): void

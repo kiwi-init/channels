@@ -1463,6 +1463,25 @@ button.msg-image-spot:hover {
   pointer-events: none;
 }
 
+.compose-also {
+  display: flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 6px;
+  margin: 6px 0 0 calc(var(--ctl) + 8px);
+  color: var(--ink-2);
+  font: var(--t-stamp) var(--ui);
+  cursor: pointer;
+}
+
+.compose-also input {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  margin: 0;
+  accent-color: var(--ink);
+}
+
 .compose-hint b {
   color: var(--ink);
   font-weight: 600;

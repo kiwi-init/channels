@@ -19,7 +19,7 @@ export interface Run {
   roster: readonly RosterMember[]
   requests: readonly JoinRequest[]
   send: (body: string, opts: SendOptions) => Promise<number>
-  post: (where: Where, text: string, opts: { replyTo?: number; inThread?: number; images?: Upload[] }) => Promise<number>
+  post: (where: Where, text: string, opts: { replyTo?: number; inThread?: number; side?: true; images?: Upload[] }) => Promise<number>
   retry: (key: number) => Promise<number>
   discard: (key: number) => void
   refreshRequests: () => Promise<void>

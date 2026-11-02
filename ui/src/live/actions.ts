@@ -30,6 +30,9 @@ import {
   recoveryDrop,
   recoverySave,
   recoveryWords,
+  rerootCancel,
+  rerootFinish,
+  rerootOpen,
   renewDevice,
   unlinkGithub,
   type EnrollDone,
@@ -184,7 +187,7 @@ export function makeActions(): Actions {
         const run = need(code)
         const m = run.messages.find((x) => x.seq === Number(id))
         if (!m) throw new Error("that question is gone")
-        await run.send(text, { to: [m.from], re: [m.seq], kind: "msg" })
+        await run.send(text, { to: [m.from], re: [m.seq], kind: "msg", side: true })
       }),
     answerStep: (code, id, reply) => attempt("Not answered", async () => (await rare()).answerStep(code, id, reply)),
     answerJoin: (code, id, yes, choice) => attempt(yes ? "Couldn't let them in" : "Couldn't turn them away", async () => (await manage()).answerJoin(code, id, yes, choice)),
@@ -404,6 +407,9 @@ export function makeActions(): Actions {
     recoverySave: (typed) => tried("Couldn't set up the recovery key", () => recoverySave(typed)),
     recoveryDrop: () => attempt("Couldn't put the words away", recoveryDrop),
     recoveryCancel: (words) => tried("Couldn't cancel the new words", () => recoveryCancel(words)),
+    rerootOpen: (words) => tried("Couldn't open your recovery key", () => rerootOpen(words)),
+    rerootFinish: async (keep) => !!(await tried("Couldn't replace your person key", () => rerootFinish(keep))),
+    rerootCancel: () => attempt("Couldn't put the words away", rerootCancel),
     enrollBegin: () =>
       attempt("Couldn't sign in as one of your devices", () =>
         enrollBegin(
