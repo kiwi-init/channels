@@ -367,8 +367,8 @@ export function githubAppFrom(opts: { appId?: string | null; privateKey?: string
       if (!t.ok) return t;
       const res = await get(`${api}/repos/${repo}/releases?per_page=${RELEASES_READ + 1}`, { headers: headers(t.value) });
       if (!res.ok) return fail(res, "releases");
-      const list = ((await res.json()) as { tag_name?: string; draft?: boolean; published_at?: string | null }[]).flatMap((r) =>
-        !r.draft && typeof r.tag_name === "string" && r.tag_name.trim() && r.published_at ? [{ tag: r.tag_name, at: Date.parse(r.published_at) || 0 }] : [],
+      const list = ((await res.json()) as { tag_name?: string; draft?: boolean; prerelease?: boolean; published_at?: string | null }[]).flatMap((r) =>
+        !r.draft && !r.prerelease && typeof r.tag_name === "string" && r.tag_name.trim() && r.published_at ? [{ tag: r.tag_name, at: Date.parse(r.published_at) || 0 }] : [],
       );
       const out: GithubReleaseInfo[] = [];
       for (const [i, { tag, at }] of list.slice(0, RELEASES_READ).entries()) {

@@ -1,0 +1,57 @@
+name: assets-publish
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - src/received-files.ts
+      - scripts/assets-stage.ts
+      - .github/workflows/assets-publish.yml
+      - package.json
+      - bun.lock
+
+permissions:
+  contents: read
+
+concurrency:
+  group: assets-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.2
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Stage the pinned assets
+        run: bun scripts/assets-stage.ts "$RUNNER_TEMP/assets"
+
+      - name: Publish what the release doesn't hold yet
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view kiwi-assets --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1 || gh release create kiwi-assets \
+            --repo "$GITHUB_REPOSITORY" --target main --prerelease --latest=false \
+            --title "Kiwi assets" \
+            --notes "Files the kiwi CLI fetches on first need instead of from outside CDNs, each checked against the sha256 pinned in the source (anydoc-<version>.wasm: src/received-files.ts). Published by assets-publish.yml. Not an app release: nothing here updates the app."
+          held=$(gh release view kiwi-assets --repo "$GITHUB_REPOSITORY" --json assets -q '.assets[].name')
+          for file in "$RUNNER_TEMP"/assets/*; do
+            name=$(basename "$file")
+            if grep -qxF "$name" <<< "$held"; then echo "$name is already published"; continue; fi
+            gh release upload kiwi-assets "$file" --repo "$GITHUB_REPOSITORY"
+            echo "published $name"
+          done

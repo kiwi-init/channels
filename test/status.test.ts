@@ -133,6 +133,7 @@ describe("the owner's app posts a connected repo's new releases", () => {
   const releases = [
     { tag_name: "v0.2.0", published_at: "2026-10-02T00:00:00Z", draft: false },
     { tag_name: "v0.3.0-draft", published_at: null, draft: true },
+    { tag_name: "kiwi-assets", published_at: "2026-10-01T12:00:00Z", draft: false, prerelease: true },
     { tag_name: "v0.1.0", published_at: "2026-10-01T00:00:00Z", draft: false },
   ];
 
@@ -177,7 +178,7 @@ describe("the owner's app posts a connected repo's new releases", () => {
 
   const folded = async () => fold((await ownerCh.history(0)).messages, (await ownerCh.members()).map(toRoster));
 
-  test("posts each published release oldest first, skips drafts and the ones it has, and refuses a member", async () => {
+  test("posts each published release oldest first, compared with the one before, skips drafts, prereleases (an asset host like kiwi-assets) and the ones it has, and refuses a member", async () => {
     expect(await ownerCh.syncGithubReleases(["ojow/channels"], [])).toBe(2);
     const s = await folded();
     expect(s.github.releases.get("ojow/channels")?.map((r) => [r.tag, r.prs, r.shas])).toEqual([
