@@ -3,7 +3,7 @@ import type { Push, Pushes } from "./calls.ts";
 import type { ExternalUrl } from "./guard.ts";
 import type { HostToKeys } from "./keys-server.ts";
 
-export type AppPath = "data" | "exe" | "logs" | "resources";
+export type AppPath = "applications" | "data" | "exe" | "logs" | "resources";
 
 interface AppFacts {
   packaged(): boolean;
