@@ -62,7 +62,7 @@ import { ACCOUNT_ASKS_PER_MINUTE, accountUser, isAccountPath, onAccountHttp, sam
 import { ENROLL_TTL_MS, type Enrollment } from "@kiwi/core/enroll.ts";
 import { accountHome, frozenWrite, MOVE_PATH, movedHuman, moveUsers, onMoveHttp, type Adoption, type MoveStore, type Row, type Rows } from "./move.ts";
 import type { DeviceLink } from "@kiwi/core/devices.ts";
-import type { Vault } from "@kiwi/core/recovery.ts";
+import type { OldVault, Vault } from "@kiwi/core/recovery.ts";
 import { allow as allowPerMinute } from "./room/limits.ts";
 import { makeRelay, onHttp, runRoom, runRoomSync, type Relay } from "./route.ts";
 import { GithubApp, githubAppFrom, GithubPush, githubPushFrom } from "./github-app.ts";
@@ -664,7 +664,7 @@ export class Account extends DurableObject<Env> {
       },
       vault: async () => {
         const row = sql.exec("SELECT rec FROM vault").toArray()[0] as { rec: string } | undefined;
-        return row ? (JSON.parse(row.rec) as Vault) : null;
+        return row ? (JSON.parse(row.rec) as Vault | OldVault) : null;
       },
       setVault: async (_user, next, prev) => {
         const row = sql.exec("SELECT version FROM vault").toArray()[0] as { version: number } | undefined;

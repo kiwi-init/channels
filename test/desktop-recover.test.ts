@@ -5,11 +5,12 @@ import { join } from "node:path";
 import { accountClient } from "@kiwi/core/account.ts";
 import { certUntil, nextLink, readDeviceList, type DeviceLink } from "@kiwi/core/devices.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
-import { newRecoveryPhrase, openVault, readRecoveryPhrase, recoveryKey, type Vault, type VaultContents } from "@kiwi/core/recovery.ts";
+import { newRecoveryPhrase, openVault, readRecovery, readRecoveryPhrase, recoveryKey, recoveryLink, type Vault, type VaultContents } from "@kiwi/core/recovery.ts";
 import { createDeviceHost, type DeviceHost } from "../desktop/src/devices.ts";
 import { createRecoverer, type Recoverer, type Restored } from "../desktop/src/recover.ts";
 import { createRecoveryHost, type RecoveryHost } from "../desktop/src/recovery.ts";
 import { startRelay } from "../src/relay/bun.ts";
+import { oldPersonBox, oldVault } from "./old-vault.ts";
 import { devHumanAuth } from "../src/relay/human.ts";
 
 setDefaultTimeout(30_000);
@@ -167,6 +168,34 @@ describe("recovering on a new desktop", () => {
     expect((await back.host.list())?.find((d) => d.thisOne)?.label).toBe("new-mac");
     expect(await old.desk.host.poll()).toBeNull();
     expect((await old.desk.host.news())?.removed).toEqual({ wiped: false, by: "your person key" });
+  });
+
+  test("a vault sealed before T969 opens with the words, and finish reseals it with a box per desktop", async () => {
+    const token = `dev:lost${++users}`;
+    const person = await key("Jow");
+    const d = desk(token, () => person, "studio");
+    await d.host.poll();
+    const s = (await d.host.session())!;
+    const owned: VaultContents["channels"] = [{ label: "general", code: "mc2-general", owner: await key("general") }];
+    const words = await newRecoveryPhrase();
+    const phrase = await readRecoveryPhrase(words.join(" "));
+    if (!phrase.ok) throw new Error(phrase.why);
+    const paper = await recoveryKey(phrase.entropy);
+    const list = await readDeviceList(d.links());
+    if (!list.ok) throw new Error(list.why);
+    const chain = [await recoveryLink(person, person.pk, null, { pk: paper.pk, xpk: paper.xpk! })];
+    const r = await readRecovery(chain, list.list);
+    if (!r.ok) throw new Error(r.why);
+    await s.client.keepVault({ recovery: chain, vault: await oldVault(s.device, r.recovery, 1, { person: await oldPersonBox(r.recovery, person), channels: owned }) });
+
+    const fresh = newDesktop(token);
+    expect(await fresh.recoverer.open(words.join(" "))).toMatchObject({ ok: true, name: "Jow", channels: ["general"] });
+    expect(await fresh.recoverer.finish([])).toMatchObject({ name: "Jow", channels: 1 });
+    expect(fresh.restored.value?.person.sk).toBe(person.sk);
+    const got = (await accountClient(relay, async () => token, fresh.device()!).vault()).vault as Vault;
+    expect(got.version).toBe(2);
+    expect(got.held.pk).toBe(person.pk);
+    expect((await openVault(got, paper))?.channels.map((c) => c.label)).toEqual(["general"]);
   });
 
   test("a channel sealed in by another desktop between open and finish stays in the vault", async () => {

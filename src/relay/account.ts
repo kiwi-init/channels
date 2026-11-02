@@ -3,7 +3,7 @@ import { b64url } from "@kiwi/core/crypto.ts";
 import { approvingDevice, readDeviceList, speaksForPerson, type Device, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
 import { accountScope, ENROLL_TTL_MS, readEnrollAnswer, readEnrollAsk, revealMatches, type Enrollment } from "@kiwi/core/enroll.ts";
 import { canonical } from "@kiwi/core/identity.ts";
-import { checkVault, readRecovery, type Recovery, type RecoveryLink, type Vault } from "@kiwi/core/recovery.ts";
+import { checkVault, isOldVault, readRecovery, type OldVault, type Recovery, type RecoveryLink, type Vault } from "@kiwi/core/recovery.ts";
 import { BadRequest, Conflict, Forbidden, NotFound, SignInRequired, TooLarge, TooMany, Unauthorized } from "./failures.ts";
 import { readCapped } from "./http.ts";
 import { HUMAN_HEADER, type HumanAuth } from "./human.ts";
@@ -25,8 +25,8 @@ export interface AccountStore {
   tellComputers(keys: string[], links: unknown[]): Promise<void>;
   recovery(user: string): Promise<unknown[]>;
   extendRecovery(user: string, from: number, links: RecoveryLink[]): Promise<boolean>;
-  vault(user: string): Promise<Vault | null>;
-  setVault(user: string, next: Vault, prev: number): Promise<boolean>;
+  vault(user: string): Promise<Vault | OldVault | null>;
+  setVault(user: string, next: Vault | OldVault, prev: number): Promise<boolean>;
 }
 
 const PATH = /^\/v1\/account(?:\/vault|\/ask(?:\/([A-Za-z0-9_-]{22})(?:\/(answer|reveal))?)?)?$/;
@@ -104,9 +104,14 @@ async function keepVault(store: AccountStore, user: string, list: DeviceList | n
   if (!recovery) return refuse(new Conflict({ message: "set up a recovery key before its vault" }));
   const bad = await checkVault(vault, list);
   if (bad) return refuse(new BadRequest({ message: `that vault doesn't hold up: ${bad}` }));
-  const next = vault as Vault;
+  const next = vault as Vault | OldVault;
   if (!speaksForPerson(list, next.pk, now)) return refuse(new Forbidden({ message: "the vault is signed by a key that isn't one of this person's current approving devices" }));
   const prev = await store.vault(user);
+  if (isOldVault(next)) {
+    if (list.reroots.length || (prev && !isOldVault(prev)))
+      return refuse(new Conflict({ message: "this vault is kept with a box per desktop now, so an app from before that can't write it: update the app" }));
+  } else if (next.held.pk !== list.root || next.held.rxpk !== recovery.rxpk)
+    return refuse(new BadRequest({ message: "that vault's person key isn't sealed for the current person key and recovery key" }));
   const known = prev?.version ?? 0;
   if (prev && canonical(prev) === canonical(next)) return done();
   if (next.version <= known) return refuse(new Conflict({ message: `vault version ${known} is already kept, so version ${next.version} is too old` }));
