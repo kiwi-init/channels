@@ -8,7 +8,7 @@
 .needs-list {
   display: grid;
   gap: 12px;
-  max-width: calc(var(--col) + 2 * var(--gutter));
+  max-width: calc(var(--list) + 2 * var(--gutter));
   margin-inline: auto;
   padding: 24px var(--gutter) 48px;
 }

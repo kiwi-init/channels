@@ -147,6 +147,7 @@
   --panel-w: 400px;
   --top-h: 52px;
   --col: 760px;
+  --list: 2400px;
   --compose-space: 128px;
 
   --ease: cubic-bezier(0.32, 0.72, 0, 1);
