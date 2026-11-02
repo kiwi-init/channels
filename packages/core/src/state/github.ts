@@ -143,6 +143,25 @@ export function applyGithub(g: GithubState, items: readonly GithubNote[], seq: n
   }
 }
 
+export function githubNews(g: GithubState, notes: readonly GithubNote[]): GithubNote[] {
+  return notes.filter((i) => {
+    if (i.event === "pull_request" && i.number) {
+      const was = g.prs.get(prKey(i.repo, i.number));
+      const state = i.merged ? "merged" : i.state === "closed" ? "closed" : "open";
+      return !was || was.state !== state || (!!i.title && was.title !== i.title) || (state === "open" && !!i.sha && was.sha !== i.sha);
+    }
+    if (i.event === "issues" && i.number) {
+      const was = g.issues.get(prKey(i.repo, i.number));
+      return !was || was.state !== (i.state === "closed" ? "closed" : "open") || (!!i.title && was.title !== i.title);
+    }
+    if ((i.event === "check_run" || i.event === "workflow_run") && i.sha && i.name) {
+      const was = g.checks.get(shaKey(i.repo, i.sha))?.get(i.name);
+      return !was || (!behind(i, was) && (was.status !== i.status || was.conclusion !== i.conclusion));
+    }
+    return false;
+  });
+}
+
 export const repoKey = (repo: string): string => repo.toLowerCase();
 
 export function rulesOf(g: GithubState, repo: string): GithubRules | undefined {

@@ -1,4 +1,4 @@
-import { GITHUB_EVENTS, REPO_RE, type GithubNote } from "@kiwi/core/protocol.ts";
+import { GITHUB_EVENTS, GITHUB_SYNCED, REPO_RE, type GithubNote } from "@kiwi/core/protocol.ts";
 import { readText } from "./http.ts";
 import { withCors } from "./mailbox.ts";
 
@@ -131,6 +131,93 @@ export function githubItem(event: string, payload: unknown, now: number): Github
   }
   const ref = str(p.ref);
   return defined({ ...base, event: "push", branch: ref?.startsWith("refs/heads/") ? ref.slice(11) : ref, sha: str(p.after, 40), url: str(p.compare, 300) });
+}
+
+const lower = (x: unknown, max = 20): string | undefined => str(x, max)?.toLowerCase();
+const when = (x: unknown): number | undefined => (typeof x === "string" ? Date.parse(x) || undefined : undefined);
+const login = (x: unknown): string | undefined => str(obj(x).login, 100);
+
+const list = (x: unknown): Json[] => (Array.isArray(x) ? x.map(obj) : []);
+
+function runsOf(pr: Json): Json[] {
+  const commit = obj(list(obj(pr.commits).nodes)[0]?.commit);
+  const latest = new Map<string, Json>();
+  for (const run of list(obj(commit.checkSuites).nodes).flatMap((suite) => list(obj(suite.checkRuns).nodes))) {
+    const name = str(run.name);
+    const was = name ? latest.get(name) : undefined;
+    if (name && (!was || (int(run.databaseId) ?? 0) > (int(was.databaseId) ?? 0))) latest.set(name, run);
+  }
+  return [...latest.values()];
+}
+
+export function syncNotes(repo: string, prs: readonly unknown[], issues: readonly unknown[], since: number, now: number): GithubItem[] {
+  const out: GithubItem[] = [];
+  const recent = (state: string | undefined, closedAt: unknown) => state === "OPEN" || (when(closedAt) ?? 0) >= since;
+  for (const x of prs) {
+    const pr = obj(x);
+    const state = str(pr.state, 20);
+    if (!int(pr.number) || !recent(state, pr.closedAt)) continue;
+    const merged = state === "MERGED";
+    const sha = str(pr.headRefOid, 40);
+    const branch = str(pr.headRefName);
+    out.push(
+      defined({
+        event: "pull_request",
+        action: GITHUB_SYNCED,
+        repo,
+        at: Math.min(now, (state === "OPEN" ? when(pr.updatedAt) : when(pr.closedAt)) ?? now),
+        number: int(pr.number),
+        title: str(pr.title),
+        url: str(pr.url, 300),
+        state: state === "OPEN" ? "open" : "closed",
+        merged,
+        additions: count(pr.additions),
+        deletions: count(pr.deletions),
+        files: count(pr.changedFiles),
+        branch,
+        sha,
+        merge: merged ? str(obj(pr.mergeCommit).oid, 40) : undefined,
+        by: login(pr.author),
+      }),
+    );
+    if (state !== "OPEN" || !sha) continue;
+    for (const run of runsOf(pr))
+      out.push(
+        defined({
+          event: "check_run",
+          action: GITHUB_SYNCED,
+          repo,
+          at: Math.min(now, when(run.completedAt) ?? when(run.startedAt) ?? now),
+          run: int(run.databaseId),
+          name: str(run.name),
+          url: str(run.url, 300),
+          status: lower(run.status),
+          conclusion: lower(run.conclusion),
+          sha,
+          branch,
+        }),
+      );
+  }
+  for (const x of issues) {
+    const issue = obj(x);
+    const state = str(issue.state, 20);
+    if (!int(issue.number) || !recent(state, issue.closedAt)) continue;
+    out.push(
+      defined({
+        event: "issues",
+        action: GITHUB_SYNCED,
+        repo,
+        at: Math.min(now, (state === "OPEN" ? when(issue.updatedAt) : when(issue.closedAt)) ?? now),
+        number: int(issue.number),
+        title: str(issue.title),
+        url: str(issue.url, 300),
+        state: state === "OPEN" ? "open" : "closed",
+        reason: state === "OPEN" ? undefined : lower(issue.stateReason),
+        by: login(issue.author),
+      }),
+    );
+  }
+  return out;
 }
 
 const reply = (status: number, data: object) => withCors(Response.json(data, { status }));
