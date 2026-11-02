@@ -1,4 +1,4 @@
-const ALIASES: Record<string, string> = { claude: "claude-code", kimi: "kimi-code", mimo: "mimocode", grokbot: "grok-bot" };
+const ALIASES: Record<string, string> = { claude: "claude-code", kimi: "kimi-code", mimo: "mimocode", grokbot: "grok-bot", agy: "antigravity" };
 
 const NAMES: Record<string, string> = {
   "claude-code": "Claude Code",
@@ -12,6 +12,7 @@ const NAMES: Record<string, string> = {
   "grok-bot": "Grok Bot",
   pi: "Pi",
   zcode: "ZCode",
+  antigravity: "Antigravity CLI",
 };
 
 const MONO = new Set(["opencode", "grok", "cursor", "mimocode", "grok-bot", "pi", "zcode"]);
