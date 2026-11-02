@@ -584,6 +584,7 @@ export interface Device {
   as: "desktop" | "phone" | "computer"
   until: number
   thisOne: boolean
+  app?: string
 }
 
 export interface RecoveryState {
@@ -747,8 +748,8 @@ export interface Actions {
   enrollAnswer(id: string): void
   enrollConfirm(id: string, digits: string): Promise<{ ok: true } | { ok: false; left: number }>
   enrollDeny(id: string): void
-  forgetDevice(id: string): void
-  renewDevice(id: string): void
+  forgetDevice(...ids: string[]): void
+  renewDevice(...ids: string[]): void
   recoveryWords(): Promise<string[] | null>
   recoverySave(typed: { at: number; word: string }[]): Promise<RecoverySaved | null>
   recoveryDrop(): void

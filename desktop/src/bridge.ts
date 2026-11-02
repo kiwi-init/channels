@@ -281,6 +281,7 @@ export interface DeviceView {
   approve: boolean;
   until: number;
   thisOne: boolean;
+  app?: string;
 }
 
 interface DeviceRevokeView {

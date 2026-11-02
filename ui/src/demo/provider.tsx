@@ -809,9 +809,9 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
         setState((s) => (s.account ? { ...s, account: { ...s.account, enrollAsk: undefined } } : s))
         return { ok: true }
       },
-      forgetDevice: (id) => setState((s) => (s.account ? { ...s, account: { ...s.account, devices: s.account.devices?.filter((d) => d.id !== id) } } : s)),
-      renewDevice: (id) =>
-        setState((s) => (s.account ? { ...s, account: { ...s.account, devices: s.account.devices?.map((d) => (d.id === id ? { ...d, until: Date.now() + 90 * 86_400_000 } : d)) } } : s)),
+      forgetDevice: (...ids) => setState((s) => (s.account ? { ...s, account: { ...s.account, devices: s.account.devices?.filter((d) => !ids.includes(d.id)) } } : s)),
+      renewDevice: (...ids) =>
+        setState((s) => (s.account ? { ...s, account: { ...s.account, devices: s.account.devices?.map((d) => (ids.includes(d.id) ? { ...d, until: Date.now() + 90 * 86_400_000 } : d)) } } : s)),
       recoveryWords: async () => DEMO_WORDS,
       recoverySave: async (typed) => {
         const wrong = typed.filter((t) => t.word.trim().toLowerCase() !== DEMO_WORDS[t.at]).map((t) => t.at)
