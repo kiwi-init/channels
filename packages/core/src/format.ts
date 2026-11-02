@@ -205,6 +205,7 @@ export function describeEvent(m: Message, state?: ChannelState, nameOf: (handle:
     case "github":
       return githubLine(ev.items);
     case "github.release":
+      if (ev.gone) return `${ev.repo} withdrew ${inlineText(ev.tag, 60)}: GitHub lists it as a prerelease or a draft now, not a release`;
       return `${ev.repo} released ${inlineText(ev.tag, 60)}: ${ev.prs.length ? `${ev.prs.length} PR${ev.prs.length === 1 ? "" : "s"}, ` : ""}${ev.shas.length} commit${ev.shas.length === 1 ? "" : "s"}`;
     case "github.rules":
       return `read ${ev.repo}'s rules for ${inlineText(ev.branch, 60)}: ${rulesText(ev)}`;

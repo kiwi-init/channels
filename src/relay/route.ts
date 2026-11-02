@@ -622,7 +622,8 @@ const routes: RoomRoute[] = [
         if (!repo || !db.githubRepos().includes(repo)) return yield* new BadRequest({ message: "repo: one of the channel's connected repos" });
         const known = (searchParams.get("known") ?? "").split("\n").filter(Boolean).slice(0, 50);
         const app = yield* githubApp;
-        return { data: { releases: yield* replied(yield* Effect.promise(() => app.releases(repo, known))) } };
+        const got = yield* replied(yield* Effect.promise(() => app.releases(repo, known)));
+        return { data: { releases: got.releases, gone: got.gone } };
       }),
   },
   {

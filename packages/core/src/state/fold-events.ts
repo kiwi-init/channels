@@ -2,7 +2,7 @@ import { GENERAL_ROOM, MAX_CHARTER, MAX_NICKNAME, MAX_ROOMS, MAX_TAGS, PROOF_MAX
 import { free, take } from "./leases.ts";
 import { unnamedTasks } from "./compact.ts";
 import { leadCheckpointKeyRefusal } from "./lead.ts";
-import { addRelease, applyGithub, repoKey, type GithubState } from "./github.ts";
+import { addRelease, applyGithub, dropRelease, repoKey, type GithubState } from "./github.ts";
 import { reposOf } from "./repos.ts";
 import { omit } from "../omit.ts";
 import { inlineText } from "../membership.ts";
@@ -221,7 +221,8 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
         reject("only the owner's app posts a repo's releases");
         break;
       }
-      addRelease(c.github, { repo: ev.repo, tag: ev.tag, at: ev.at, shas: ev.shas, prs: ev.prs, seq: m.seq });
+      if (ev.gone) dropRelease(c.github, ev.repo, ev.tag);
+      else addRelease(c.github, { repo: ev.repo, tag: ev.tag, at: ev.at, shas: ev.shas, prs: ev.prs, seq: m.seq });
       break;
     }
 
