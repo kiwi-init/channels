@@ -39,6 +39,7 @@ import { MissingKey, Rejected } from "../refusals.ts";
 import type { ChannelCore } from "./core.ts";
 import { RelayError, Unreachable, type Refused } from "./errors.ts";
 import { received } from "./history.ts";
+import { MAX_WAKE } from "../push.ts";
 import type { ChannelImages } from "./images.ts";
 import type { ChannelLive } from "./live.ts";
 import type { Relay } from "./relay.ts";
@@ -67,6 +68,7 @@ export interface SendOptions {
   task?: number;
   dm?: boolean;
   slot?: { name: string; ttl: number };
+  wake?: readonly string[];
   free?: string[];
 }
 
@@ -199,6 +201,7 @@ export class ChannelSending {
             )
           : inner;
       const cid = b64url(crypto.getRandomValues(new Uint8Array(16)));
+      const wake = opts.ev || roomKey ? [] : (opts.wake ?? []).slice(0, MAX_WAKE);
       const sealNow = Effect.gen({ self: this }, function* () {
         if (!this.ch.access.keys[String(this.ch.access.epoch)]) yield* this.ch.fx.refreshKeys();
         const e = this.ch.access.epoch;
@@ -214,7 +217,7 @@ export class ChannelSending {
         const roomId = this.ch.roomId;
         const slot = take ? { slot: { id: yield* Effect.promise(() => slotId(key, roomId, take.name)), ttl: take.ttl } } : {};
         const free = freeing.length ? { free: yield* Effect.promise(() => Promise.all(freeing.map((n) => slotId(key, roomId, n)))) } : {};
-        return yield* this.ch.request<{ seq: number; ts?: number }>("/messages", { method: "POST", body: JSON.stringify({ ...sealed, e, ...slot, ...free, cid }) });
+        return yield* this.ch.request<{ seq: number; ts?: number }>("/messages", { method: "POST", body: JSON.stringify({ ...sealed, e, ...slot, ...free, cid, ...(wake.length ? { wake } : {}) }) });
       });
       const posted = Effect.gen({ self: this }, function* () {
         const stored = yield* again(post, UNSURE_RETRIES).pipe(
@@ -236,7 +239,7 @@ export class ChannelSending {
         const wire = slotted ? undefined : [...this.live.wires].at(-1);
         if (!wire) return yield* posted;
         const { e, sealed } = yield* sealNow;
-        const acked = yield* wire.send(sealed, e, signed, cid).pipe(
+        const acked = yield* wire.send(sealed, e, signed, cid, wake).pipe(
           Effect.catchIf(
             (err) => err instanceof Unreachable,
             () => Effect.succeed(null),
