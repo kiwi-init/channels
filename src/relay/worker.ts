@@ -275,7 +275,7 @@ export class Channel extends DurableObject<Env> {
   async enqueueGithub(roomId: string, item: GithubItem): Promise<boolean> {
     const db = this.store(roomId);
     if (!db.exists() || db.isLegacy()) return false;
-    db.enqueueGithub(JSON.stringify(item), Date.now(), GITHUB_QUEUE_TTL_MS, GITHUB_QUEUE_MAX);
+    db.enqueueGithub(item.repo, JSON.stringify(item), Date.now(), GITHUB_QUEUE_TTL_MS, GITHUB_QUEUE_MAX);
     return true;
   }
 

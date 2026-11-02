@@ -138,6 +138,14 @@ const updatedBefore = (node: unknown, since: number): boolean => {
   return at < since;
 };
 
+interface GithubInstall {
+  installed: boolean;
+  events: string[];
+  install: string | null;
+}
+
+const strings = (x: unknown): string[] => (Array.isArray(x) ? x.filter((e): e is string => typeof e === "string" && e.length <= 60).slice(0, 100) : []);
+
 interface GithubSyncPage {
   items: GithubNote[];
   next: string | null;
@@ -154,6 +162,7 @@ export interface GithubAppApi {
   rules(repo: string): Promise<GithubReply<GithubRulesInfo>>;
   releases(repo: string, known: readonly string[]): Promise<GithubReply<GithubReleaseInfo[]>>;
   sync(repo: string, list: GithubSyncList, after: string | null): Promise<GithubReply<GithubSyncPage>>;
+  status(repo: string): Promise<GithubReply<GithubInstall>>;
   canPush: PushCheck;
 }
 
@@ -239,8 +248,25 @@ export function githubAppFrom(opts: { appId?: string | null; privateKey?: string
     return { ok: true, value: t.token };
   };
 
+  let slug: string | null = null;
+  const installUrl = async (jwt: string): Promise<string | null> => {
+    if (!slug) {
+      const res = await get(`${api}/app`, { headers: headers(jwt) });
+      const s = res.ok ? ((await res.json()) as { slug?: unknown }).slug : null;
+      if (typeof s === "string" && /^[\w-]{1,100}$/.test(s)) slug = s;
+    }
+    return slug ? `https://github.com/apps/${slug}/installations/new` : null;
+  };
+
   return {
     canPush: githubPushFrom({ api, fetch: get }),
+    status: async (repo) => {
+      const jwt = await appJwt(appId.trim(), privateKey, now());
+      const inst = await get(`${api}/repos/${repo}/installation`, { headers: headers(jwt) });
+      if (inst.status === 404) return { ok: true, value: { installed: false, events: [], install: await installUrl(jwt) } };
+      if (!inst.ok) return fail(inst, "installation for this repo");
+      return { ok: true, value: { installed: true, events: strings(((await inst.json()) as { events?: unknown }).events), install: await installUrl(jwt) } };
+    },
     sync: async (repo, list, after) => {
       const t = await token(repo);
       if (!t.ok) return t;

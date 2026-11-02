@@ -103,6 +103,7 @@ export const CHANNEL_CALLS = [
   "syncGithubRules",
   "syncGithubReleases",
   "syncGithub",
+  "githubStatus",
   "githubDiff",
   "postReviewCheck",
   "commentOnPr",

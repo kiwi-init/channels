@@ -107,6 +107,23 @@
   font: var(--t-body) / 1.45 var(--sans);
 }
 
+.cpanel-gh-trouble {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0;
+}
+
+.cpanel-gh-trouble .cpanel-note {
+  border-left-color: var(--alert);
+  color: var(--alert);
+}
+
+.cpanel-gh-trouble a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .cpanel-downloads {
   display: grid;
   justify-items: start;

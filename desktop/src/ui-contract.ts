@@ -14,10 +14,10 @@ export const CHANNEL_CALLS_SINCE: Readonly<Record<string, readonly string[]>> = 
   "1.12.0": ["makeDm"],
   "1.13.0": ["syncMarks"],
   "1.14.0": ["leaveRoom", "sealOutLeavers"],
-  "1.15.0": ["syncGithub"],
+  "1.15.0": ["syncGithub", "githubStatus"],
 };
 
-export const CHANNEL_CALLS_BACKGROUND: readonly string[] = ["pruneRooms", "syncMarks", "sealOutLeavers", "syncGithub"];
+export const CHANNEL_CALLS_BACKGROUND: readonly string[] = ["pruneRooms", "syncMarks", "sealOutLeavers", "syncGithub", "githubStatus"];
 
 export const UI_SURFACES: Readonly<Record<string, readonly string[]>> = {
   "1.0.0": [
