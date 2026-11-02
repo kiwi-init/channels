@@ -1,7 +1,7 @@
 import type { PresenceFields } from "@kiwi/core/client.ts";
 import type { ChannelAccess } from "@kiwi/core/crypto.ts";
 import type { JoinClaims } from "@kiwi/core/membership.ts";
-import type { ChannelIdentityView, HistorySearch, KeysPush, KeysReply } from "./bridge.ts";
+import type { ChannelIdentityView, HistoryAround, HistorySearch, KeysPush, KeysReply } from "./bridge.ts";
 import type { FoldInputs } from "./search-types.ts";
 import { isCall, wireError, type Keyring } from "./keyring.ts";
 import { fromWire, toWire } from "./wire.ts";
@@ -56,13 +56,19 @@ export function serveKeys(k: Keyring, push: (p: KeysPush) => void): KeysSession 
       case "indexRows": {
         const rows = fromWire(r.rows);
         const inputs = fromWire(r.inputs);
-        if (!inputs || typeof inputs !== "object" || Array.isArray(inputs)) throw new Error("bad request");
-        return k.indexRows(text(r.code), Array.isArray(rows) ? rows : [], inputs as FoldInputs);
+        const from = Number(r.from);
+        if (!inputs || typeof inputs !== "object" || Array.isArray(inputs) || !Number.isSafeInteger(from) || from < 1) throw new Error("bad request");
+        return k.indexRows(text(r.code), Array.isArray(rows) ? rows : [], inputs as FoldInputs, from);
       }
       case "searchHistory": {
         const ask = fromWire(r.ask) as Partial<HistorySearch> | null;
         if (!ask || typeof ask.query !== "string" || !Array.isArray(ask.rooms) || !ask.rooms.every((x) => typeof x === "string")) throw new Error("bad request");
         return k.searchHistory(text(r.code), { query: ask.query, rooms: ask.rooms, limit: Number(ask.limit) || 50, head: Number(ask.head) || 0 });
+      }
+      case "historyAround": {
+        const ask = fromWire(r.ask) as Partial<HistoryAround> | null;
+        if (!ask || !Number.isSafeInteger(ask.seq) || !Array.isArray(ask.rooms) || !ask.rooms.every((x) => typeof x === "string")) throw new Error("bad request");
+        return k.historyAround(text(r.code), { seq: ask.seq!, rooms: ask.rooms, span: Number(ask.span) || 40 });
       }
       case "olderRows":
         return k.olderRows(text(r.code), Number(r.before), Number(r.limit));

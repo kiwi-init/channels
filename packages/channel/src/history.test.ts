@@ -6,7 +6,7 @@ import { b64url, seal } from "@kiwi/core/crypto.ts";
 import { generateIdentity, sign } from "@kiwi/core/identity.ts";
 import { PROTOCOL_VERSION, type Message } from "@kiwi/core/protocol.ts";
 import { openKept, openRow, openRows, packKept, packRow, packEnvelope } from "@kiwi/core/cache-row.ts";
-import { backfill, indexArchive } from "./history-fill.ts";
+import { backfill, indexArchive, reach } from "./history-fill.ts";
 import { forgetAllHistory, forgetHistory, readCached, readKept, rememberKept, rememberRow, rememberRows, useHistoryDb, type CachedKept, type CachedRow, type HistoryDb } from "./history.ts";
 
 const SENTINEL = "SENTINEL-plain-text-should-not-rest";
@@ -307,6 +307,35 @@ describe("the archive fills in from the relay, a page at a time (T977)", () => {
     expect((await store.newest(ROOM, PK_A, Infinity)).map((r) => r.seq)).toEqual([50, 51]);
   });
 
+  test("a click asks for at most its cap, and the next click carries on below it without asking again for what's here", async () => {
+    await rememberRows(ROOM, PK_A, await relay(1_500, 1_501));
+    expect(await reach(ROOM, PK_A)).toEqual({ whole: false, oldest: 1_500, at: 1_800_000_001_500 });
+    const asked: [number, number][] = [];
+    const got: number[] = [];
+    const ask = older(1);
+    const click = { ...quick, cap: 1_200, got: (n: number) => got.push(n), older: (b: number, l: number) => (asked.push([b, l]), ask(b, l)) };
+    expect(await backfill(ROOM, PK_A, click)).toBe("capped");
+    expect(asked).toEqual([
+      [1_500, 500],
+      [1_000, 500],
+      [500, 200],
+    ]);
+    expect(got).toEqual([500, 1_000, 1_200]);
+    expect(await reach(ROOM, PK_A)).toEqual({ whole: false, oldest: 300, at: 1_800_000_000_300 });
+    expect(await backfill(ROOM, PK_A, click)).toBe("done");
+    expect(asked.slice(3)).toEqual([[300, 500]]);
+    expect(await reach(ROOM, PK_A)).toEqual({ whole: true, oldest: 1, at: 1_800_000_000_001 });
+    expect(await backfill(ROOM, PK_A, click)).toBe("done");
+    expect(asked.length).toBe(4);
+  });
+
+  test("an empty archive has nothing to search back from, and a channel the relay forgot the start of is whole at its floor", async () => {
+    expect(await reach(ROOM, PK_A)).toEqual({ whole: false, oldest: null, at: null });
+    await rememberRows(ROOM, PK_A, await relay(1_100, 1_100));
+    expect(await backfill(ROOM, PK_A, { ...quick, cap: 5_000, older: older(1_001) })).toBe("done");
+    expect(await reach(ROOM, PK_A)).toMatchObject({ whole: true, oldest: 1_001 });
+  });
+
   test("it waits while the app is hidden, and a dropped cache forgets that it had everything", async () => {
     await rememberRows(ROOM, PK_A, await relay(3, 4));
     let hidden = 2;
@@ -324,19 +353,50 @@ describe("the archive feeds the search index in order (T977)", () => {
   const relay = (from: number, to: number) => Promise.all(Array.from({ length: to - from + 1 }, (_, i) => packRow(key, ROOM, 1, msg(from + i, `line ${from + i}`))));
   const quick = { hidden: () => false, wait: async () => {}, stopped: () => false };
 
-  test("it waits until the archive reaches seq 1, then sends rows after what's indexed, 2,000 at a time", async () => {
+  const fakeIndex = () => {
+    const fed = { from: 0, through: 0 };
+    const log: string[] = [];
+    const index = async (rows: CachedRow[], from: number) => {
+      if (!(fed.from > 0 && fed.from <= from && from <= fed.through + 1)) {
+        Object.assign(fed, { from, through: from - 1 });
+        log.push(`start at ${from}`);
+      }
+      if (rows.length) {
+        log.push(`${rows[0]!.seq}-${rows.at(-1)!.seq}`);
+        fed.through = Math.max(fed.through, rows.at(-1)!.seq);
+      }
+      return fed.through;
+    };
+    return { index, log };
+  };
+
+  test("it starts at the archive's oldest row and sends what comes after the index, 2,000 at a time", async () => {
     await rememberRows(ROOM, PK_A, await relay(3, 4_500));
-    const pages: number[][] = [];
-    const index = async (rows: CachedRow[]) => (rows.length && pages.push([rows[0]!.seq, rows.at(-1)!.seq]), rows.at(-1)?.seq ?? 0);
-    expect(await indexArchive(ROOM, PK_A, { ...quick, index })).toBe("waiting");
-    await rememberRows(ROOM, PK_A, await relay(1, 2));
-    let through = 1_000;
-    const resumed = async (rows: CachedRow[]) => (rows.length && pages.push([rows[0]!.seq, rows.at(-1)!.seq]), (through = rows.at(-1)?.seq ?? through));
-    expect(await indexArchive(ROOM, PK_A, { ...quick, index: resumed })).toBe("done");
-    expect(pages).toEqual([
-      [1_001, 3_000],
-      [3_001, 4_500],
-    ]);
+    const { index, log } = fakeIndex();
+    expect(await indexArchive(ROOM, PK_A, { ...quick, index })).toBe("done");
+    expect(log).toEqual(["start at 3", "3-2002", "2003-4002", "4003-4500"]);
+    await rememberRows(ROOM, PK_A, await relay(4_501, 4_501));
+    expect(await indexArchive(ROOM, PK_A, { ...quick, index })).toBe("done");
+    expect(log.slice(4)).toEqual(["4501-4501"]);
+  });
+
+  test("older rows below the index fold it again from the new oldest, so later edits and deletes still apply to them", async () => {
+    await rememberRows(ROOM, PK_A, await relay(2_001, 2_500));
+    const { index, log } = fakeIndex();
+    expect(await indexArchive(ROOM, PK_A, { ...quick, index })).toBe("done");
+    await rememberRows(ROOM, PK_A, await relay(1_501, 2_000));
+    expect(await indexArchive(ROOM, PK_A, { ...quick, index })).toBe("done");
+    expect(log).toEqual(["start at 2001", "2001-2500", "start at 1501", "1501-2500"]);
+  });
+
+  test("an archive dropped past what's indexed starts the index over instead of leaving a gap", async () => {
+    await rememberRows(ROOM, PK_A, await relay(1, 100));
+    const { index, log } = fakeIndex();
+    expect(await indexArchive(ROOM, PK_A, { ...quick, index })).toBe("done");
+    await forgetHistory(ROOM, PK_A);
+    await rememberRows(ROOM, PK_A, await relay(500, 600));
+    expect(await indexArchive(ROOM, PK_A, { ...quick, index })).toBe("done");
+    expect(log).toEqual(["start at 1", "1-100", "start at 500", "500-600"]);
   });
 
   test("an app without search stops it, and rows it can't index end it instead of looping", async () => {

@@ -6,14 +6,27 @@ import { hitKey, hitText, messageIndex, searchHits, whereLabel, type Hit } from 
 import { cx, Dot } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
-import type { Channel, Message } from "~/model"
+import type { Channel, Message, OlderSearch } from "~/model"
 import { useApp } from "~/nav"
 import { nickname } from "~/names"
 
 const SETTLE_MS = 150
+const OLDER_SHOWN = 30
+const FETCH_HIT: Hit = { kind: "fetch" }
+
+type Pull = { asked: number; until?: number } | { failed: string }
+
+const count = (n: number) => n.toLocaleString("en-US")
+
+const date = (at: number) => new Date(at).toLocaleDateString([], { month: "short", day: "numeric", ...(new Date(at).getFullYear() === new Date().getFullYear() ? {} : { year: "numeric" }) })
 
 export interface Jump {
   m: Message
+  terms: string[]
+}
+
+export interface Older {
+  seq: number
   terms: string[]
 }
 
@@ -41,8 +54,21 @@ function Marked({ text, wanted }: { text: string; wanted: string[] }) {
   )
 }
 
-export function SearchBox({ channel, focusAsk, onJump, onClose }: { channel: Channel; focusAsk: number; onJump: (jump: Jump | null) => void; onClose: () => void }) {
-  const { go } = useApp()
+export function SearchBox({
+  channel,
+  focusAsk,
+  onJump,
+  onOlder,
+  onClose,
+}: {
+  channel: Channel
+  focusAsk: number
+  onJump: (jump: Jump | null) => void
+  onOlder: (older: Older) => void
+  onClose: () => void
+}) {
+  const { go, app } = useApp()
+  const actions = app.actions
   const [query, setQuery] = useState("")
   const [focused, setFocused] = useState(true)
   const [active, setActive] = useState(0)
@@ -51,7 +77,31 @@ export function SearchBox({ channel, focusAsk, onJump, onClose }: { channel: Cha
   const listId = useId()
   const settled = useSettled(query)
   const index = useMemo(() => messageIndex(channel), [channel])
-  const hits = useMemo(() => searchHits(channel.tasks, index, settled), [channel.tasks, index, settled])
+  const recent = useMemo(() => searchHits(channel.tasks, index, settled), [channel.tasks, index, settled])
+  const before = useMemo(() => channel.messages.reduce((low, m) => (m.seq > 0 && m.seq < low ? m.seq : low), Number.MAX_SAFE_INTEGER), [channel.messages])
+  const [older, setOlder] = useState<{ query: string; found: OlderSearch } | null>(null)
+  const [pull, setPull] = useState<Pull | null>(null)
+  const [round, setRound] = useState(0)
+  useEffect(() => {
+    const q = settled.trim()
+    if (!q) return
+    let gone = false
+    const settle = (found: OlderSearch) => {
+      setOlder({ query: q, found })
+      setPull((p) => (p && "until" in p && p.until !== undefined && p.until <= round ? null : p))
+    }
+    void actions.searchOlder(channel.code, q, before).then(
+      (found: OlderSearch) => !gone && settle(found),
+      () => !gone && settle({ state: "none", hits: [], more: null })
+    )
+    return () => {
+      gone = true
+    }
+  }, [actions, channel.code, settled, before, round])
+  const olderNow = older?.query === settled.trim() ? older.found : null
+  const more = olderNow?.state !== "none" ? (olderNow?.more ?? null) : null
+  const hits = useMemo((): Hit[] => [...recent, ...(olderNow?.hits ?? []).slice(0, OLDER_SHOWN).map((o): Hit => ({ kind: "older", o })), ...(more ? [FETCH_HIT] : [])], [recent, olderNow, more])
+  const found = hits.filter((h) => h.kind !== "fetch").length
   const wanted = useMemo(() => terms(settled), [settled])
   const [hitsWere, setHitsWere] = useState(hits)
   if (hitsWere !== hits) {
@@ -70,12 +120,33 @@ export function SearchBox({ channel, focusAsk, onJump, onClose }: { channel: Cha
     if (focusAsk) input.current?.focus()
   }, [focusAsk])
 
+  const fetchOlder = () => {
+    if (pull && "asked" in pull) return
+    const next = round + 1
+    setPull({ asked: 0 })
+    void actions
+      .fetchOlder(channel.code, (asked) => setPull({ asked }))
+      .then(
+        () => {
+          setPull((p) => (p && "asked" in p ? { ...p, until: next } : p))
+          setRound(next)
+        },
+        (err: unknown) => setPull({ failed: err instanceof Error ? err.message : String(err) })
+      )
+  }
+
   const pick = (hit: Hit) => {
+    if (hit.kind === "fetch") return fetchOlder()
     setFocused(false)
     input.current?.blur()
     if (hit.kind === "task") {
       onJump(null)
       go({ to: "panel", panel: { kind: "task", task: hit.task.id } })
+      return
+    }
+    if (hit.kind === "older") {
+      onJump(null)
+      onOlder({ seq: hit.o.seq, terms: wanted })
       return
     }
     go({ to: "where", where: hit.m.where })
@@ -99,6 +170,14 @@ export function SearchBox({ channel, focusAsk, onJump, onClose }: { channel: Cha
   }
 
   const firstMessage = hits.findIndex((h) => h.kind === "message")
+  const firstOlder = hits.findIndex((h) => h.kind === "older")
+  const olderMore = olderNow ? olderNow.hits.length - OLDER_SHOWN : 0
+  const notes = (
+    <>
+      {olderMore > 0 && <p className="search-note">{olderMore} more older matches; add a word to narrow them.</p>}
+      {olderNow?.state === "indexing" && <p className="search-note">Still indexing older history, so more may turn up.</p>}
+    </>
+  )
   return (
     <div className="search">
       <div className="search-field" role="search">
@@ -148,7 +227,7 @@ export function SearchBox({ channel, focusAsk, onJump, onClose }: { channel: Cha
       </div>
       {open && (
         <div ref={listRef} id={listId} className="search-pop" role="listbox" aria-label="Search results">
-          {hits.length === 0 && <p className="search-none">Nothing matches “{settled.trim()}”.</p>}
+          {found === 0 && olderNow?.state !== "indexing" && <p className="search-none">Nothing matches “{settled.trim()}”.</p>}
           {hits.map((hit, i) => (
             <div key={hitKey(hit)}>
               {i === 0 && hit.kind === "task" && (
@@ -161,16 +240,37 @@ export function SearchBox({ channel, focusAsk, onJump, onClose }: { channel: Cha
                   Messages
                 </div>
               )}
+              {hit.kind === "fetch" && notes}
+              {i === firstOlder && (
+                <div className="search-heading" aria-hidden="true">
+                  Older messages · {olderNow?.hits.length}
+                </div>
+              )}
               <div
                 id={optionId(i)}
-                className={cx("search-item", i === current && "is-on")}
+                className={cx("search-item", hit.kind === "fetch" && "is-fetch", i === current && "is-on")}
                 role="option"
                 aria-selected={i === current}
                 onMouseMove={() => i !== current && setActive(i)}
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => pick(hit)}
               >
-                {hit.kind === "task" ? (
+                {hit.kind === "fetch" ? (
+                  <FetchRow pull={pull} since={more?.since ?? null} upTo={more?.upTo ?? 0} />
+                ) : hit.kind === "older" ? (
+                  <span className="search-msg">
+                    <span className="search-line">
+                      <span className="search-who">
+                        <Marked text={nickname(channel, hit.o.from)} wanted={wanted} />
+                      </span>
+                      <span className="search-where">{whereLabel(channel, hit.o.where)}</span>
+                      <span className="search-when">{ago(hit.o.at)}</span>
+                    </span>
+                    <span className="search-text">
+                      <Marked text={hitText(hit.o.text, wanted)} wanted={wanted} />
+                    </span>
+                  </span>
+                ) : hit.kind === "task" ? (
                   <>
                     <span className="search-id">T{hit.task.id}</span>
                     <span className="search-title">
@@ -195,8 +295,28 @@ export function SearchBox({ channel, focusAsk, onJump, onClose }: { channel: Cha
               </div>
             </div>
           ))}
+          {!more && notes}
         </div>
       )}
     </div>
+  )
+}
+
+function FetchRow({ pull, since, upTo }: { pull: Pull | null; since: number | null; upTo: number }) {
+  const asked = pull && "asked" in pull ? pull.asked : null
+  return (
+    <span className="search-msg search-fetch" aria-busy={asked !== null}>
+      <span className="search-line">
+        <Icon name="download" size={14} />
+        <span className="search-who">{asked === null ? "Search older history" : "Fetching older messages…"}</span>
+      </span>
+      <span className="search-text">
+        {asked !== null
+          ? `${count(asked)} of up to ${count(upTo)}`
+          : pull && "failed" in pull
+            ? `Couldn't fetch them: ${pull.failed}.`
+            : `${since ? `Searched back to ${date(since)}. ` : ""}Fetches up to ${count(upTo)} older messages from the relay.`}
+      </span>
+    </span>
   )
 }
