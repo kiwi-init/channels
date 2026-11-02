@@ -1,4 +1,4 @@
-import type { Account, Ask, Channel, ChannelTile, Device, Enrolling, Issue, Message, Person, Prefs, PullRequest, Task, TaskGroup } from "~/model"
+import type { Account, Ask, Channel, ChannelTile, Device, Enrolling, Issue, LaunchedAgent, Message, Person, Prefs, PullRequest, Task, TaskGroup } from "~/model"
 import { nicknamesOf } from "~/names"
 import { omit } from "@kiwi/core/omit.ts"
 
@@ -14,6 +14,12 @@ export const DEMO_DEVICES: Device[] = [
   { id: "dev-air-agents", label: "Jow's MacBook Air", os: "darwin", as: "computer", until: Date.now() + 11 * DEMO_DAY, thisOne: false, app: "dev-air" },
   { id: "dev-phone", label: "iPhone", os: "iOS", as: "phone", until: Date.now() + 9 * DEMO_DAY, thisOne: false },
   { id: "dev-box", label: "build-box", os: "Linux", as: "computer", until: Date.now() - 2 * DEMO_DAY, thisOne: false },
+]
+
+export const DEMO_LAUNCHED: LaunchedAgent[] = [
+  { code: "kiwi", pk: "pk-atlas", from: "dev-air-agents", name: "atlas" },
+  { code: "kiwi", pk: "pk-pixel", from: "dev-air-agents", name: "pixel" },
+  { code: "landing", pk: "pk-scout", from: "dev-air-agents", name: "scout" },
 ]
 
 export const DEMO_WELCOME: Enrolling = {

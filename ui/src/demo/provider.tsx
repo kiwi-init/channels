@@ -5,7 +5,7 @@ import type { Personality } from "@kiwi/core/personality.ts"
 import { HANDOFF_DONE } from "@kiwi/core/protocol.ts"
 
 import { stepReplyText } from "~/chat/step"
-import { DEMO_ACCOUNT, DEMO_CHANNEL, DEMO_DEVICES, DEMO_EMPTY, DEMO_GUEST, DEMO_GUEST_MEMBER, DEMO_PREFS, DEMO_TILES, DEMO_WAITING, DEMO_WELCOME, DEMO_WORDS } from "~/demo/data"
+import { DEMO_ACCOUNT, DEMO_CHANNEL, DEMO_DEVICES, DEMO_EMPTY, DEMO_GUEST, DEMO_GUEST_MEMBER, DEMO_LAUNCHED, DEMO_PREFS, DEMO_TILES, DEMO_WAITING, DEMO_WELCOME, DEMO_WORDS } from "~/demo/data"
 import { longFeed } from "~/demo/long"
 import { demoAround, demoFetchOlder, demoOlder } from "~/demo/older"
 import { withSpecs } from "~/demo/specs"
@@ -813,7 +813,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
         setState((s) => (s.account ? { ...s, account: { ...s.account, enrollAsk: undefined } } : s))
         return { ok: true }
       },
-      forgetDevice: (...ids) => setState((s) => (s.account ? { ...s, account: { ...s.account, devices: s.account.devices?.filter((d) => !ids.includes(d.id)) } } : s)),
+      forgetDevice: (ids) => setState((s) => (s.account ? { ...s, account: { ...s.account, devices: s.account.devices?.filter((d) => !ids.includes(d.id)) } } : s)),
       renewDevice: (...ids) =>
         setState((s) => (s.account ? { ...s, account: { ...s.account, devices: s.account.devices?.map((d) => (ids.includes(d.id) ? { ...d, until: Date.now() + 90 * 86_400_000 } : d)) } } : s)),
       recoveryWords: async () => DEMO_WORDS,
@@ -857,6 +857,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       setHooks: (harness, on) => setComputer((c) => ({ ...c, hooks: c.hooks.map((h) => (h.harness === harness ? { ...h, state: on ? "installed" : "off" } : h)) })),
       setTerminalHelpers: (id, on) => setStarts((s) => ({ ...s, terminals: s.terminals.map((t) => (t.id === id ? { ...t, helpers: on ? "on" : "off" } : t)) })),
       setContextLine: (on) => setComputer((c) => ({ ...c, contextLine: on })),
+      launchedFrom: async (ids) => DEMO_LAUNCHED.filter((a) => ids.includes(a.from)),
       computerSettings: () =>
         new Promise((done) =>
           setTimeout(

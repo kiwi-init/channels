@@ -164,6 +164,81 @@
   gap: 20px;
 }
 
+.set-forget-agents {
+  display: grid;
+  gap: 4px;
+  margin: -8px 0 0;
+  padding: 0;
+  list-style: none;
+  font: var(--t-ui) / 1.45 var(--ui);
+}
+
+.set-forget-names {
+  color: var(--ink);
+}
+
+.set-forget-in {
+  color: var(--ink-3);
+}
+
+.set-forget-choices {
+  display: grid;
+  gap: 4px;
+}
+
+.set-forget-choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--r-row);
+  color: var(--ink-2);
+  cursor: pointer;
+  transition:
+    background var(--fast),
+    border-color var(--fast),
+    color var(--fast);
+}
+
+.set-forget-choice:hover {
+  background: var(--wash);
+  color: var(--ink);
+}
+
+.set-forget-choice.is-on {
+  border-color: var(--line-3);
+  background: none;
+  color: var(--ink);
+}
+
+.set-forget-choice:has(input:focus-visible) {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.set-forget-text {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+
+.set-forget-label {
+  font: var(--t-ui) var(--ui);
+}
+
+.set-forget-about {
+  color: var(--ink-3);
+  font: var(--t-meta) / 1.45 var(--ui);
+}
+
+.set-forget-tick {
+  display: inline-flex;
+  width: 14px;
+  color: var(--ink);
+}
+
 .set-state {
   display: inline-flex;
   align-items: center;
