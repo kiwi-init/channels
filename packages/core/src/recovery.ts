@@ -244,11 +244,31 @@ export interface Vault {
   sig: string;
 }
 
+export interface OldVault {
+  kind: "kiwi-vault";
+  v: 1;
+  person: string;
+  version: number;
+  at: number;
+  box: string;
+  pk: string;
+  sig: string;
+}
+
+export const isOldVault = (v: Vault | OldVault): v is OldVault => "box" in v;
+
+export const heldIn = (v: Vault | OldVault | null): SealedPerson | undefined => (v && !isOldVault(v) ? v.held : undefined);
+
+export const boxesIn = (v: Vault | OldVault | null): VaultSection[] => (v && !isOldVault(v) ? v.boxes : []);
+
 const VAULT_FIELDS = "at,boxes,held,kind,person,pk,sig,v,version";
+const OLD_VAULT_FIELDS = "at,box,kind,person,pk,sig,v,version";
 const HELD_FIELDS = "box,pk,rxpk";
 const SECTION_FIELDS = "box,device,rxpk";
 const personInfo = (person: string, pk: string, rxpk: string) => `kiwi-vault-person\n${person}\n${pk}\n${rxpk}`;
 const sectionInfo = (person: string, device: string, rxpk: string) => `kiwi-vault-channels\n${person}\n${device}\n${rxpk}`;
+const oldVaultInfo = (v: { person: string; version: number; at: number }) => `kiwi-vault\n${v.person}\n${v.version}\n${v.at}`;
+const oldPersonInfo = (person: string, rxpk: string) => `kiwi-vault-person\n${person}\n${rxpk}`;
 
 const boxSize = (v: { held: SealedPerson; boxes: readonly VaultSection[] }): number => v.boxes.reduce((n, s) => n + s.box.length, v.held.box.length);
 
@@ -299,10 +319,12 @@ function boxesOk(x: Record<string, unknown>): string | null {
 export async function checkVault(raw: unknown, list: DeviceList, known = 0): Promise<string | null> {
   if (!raw || typeof raw !== "object") return "not a vault";
   const x = raw as Record<string, unknown>;
-  if (x["kind"] !== "kiwi-vault" || x["v"] !== 1 || Object.keys(x).sort().join(",") !== VAULT_FIELDS) return "not a vault";
+  const fields = Object.keys(x).sort().join(",");
+  const old = fields === OLD_VAULT_FIELDS;
+  if (x["kind"] !== "kiwi-vault" || x["v"] !== 1 || (!old && fields !== VAULT_FIELDS)) return "not a vault";
   if (typeof x["person"] !== "string" || typeof x["pk"] !== "string" || !KEY_RE.test(x["pk"])) return "a vault with a bad key";
   if (!Number.isSafeInteger(x["version"]) || (x["version"] as number) < 1 || !Number.isSafeInteger(x["at"])) return "a vault with a bad version";
-  const bad = boxesOk(x);
+  const bad = old ? (typeof x["box"] !== "string" || x["box"].length > VAULT_BOX_MAX ? "a vault too large" : null) : boxesOk(x);
   if (bad) return bad;
   if (!(await verify(x))) return "a vault that isn't signed by the key it names";
   if (x["person"] !== list.person) return "a vault for another person";
@@ -330,9 +352,25 @@ async function opened(xsk: string, box: string, info: string): Promise<unknown> 
   }
 }
 
-export async function openVault(vault: Vault, key: Identity, root = vault.person): Promise<VaultContents | null> {
-  if (!key.xsk || !key.xpk || vault.held.pk !== root || vault.held.rxpk !== key.xpk) return null;
-  const person = await opened(key.xsk, vault.held.box, personInfo(vault.person, root, key.xpk));
+async function openOld(vault: OldVault, xsk: string, xpk: string, root: string): Promise<VaultContents | null> {
+  const inner = await opened(xsk, vault.box, oldVaultInfo(vault));
+  if (!inner || typeof inner !== "object") return null;
+  const { person: held, channels } = inner as { person?: unknown; channels?: unknown };
+  const person = typeof held === "string" ? await opened(xsk, held, oldPersonInfo(vault.person, xpk)) : held;
+  if (!isKey(person) || person.pk !== root || !Array.isArray(channels) || !channels.every(channelOf)) return null;
+  return { person, channels };
+}
+
+async function openPerson(vault: Vault, xsk: string, xpk: string, root: string): Promise<unknown> {
+  const person = await opened(xsk, vault.held.box, personInfo(vault.person, root, xpk));
+  return person === null && root === vault.person ? opened(xsk, vault.held.box, oldPersonInfo(vault.person, xpk)) : person;
+}
+
+export async function openVault(vault: Vault | OldVault, key: Identity, root = vault.person): Promise<VaultContents | null> {
+  if (!key.xsk || !key.xpk) return null;
+  if (isOldVault(vault)) return openOld(vault, key.xsk, key.xpk, root);
+  if (vault.held.pk !== root || vault.held.rxpk !== key.xpk) return null;
+  const person = await openPerson(vault, key.xsk, key.xpk, root);
   if (!isKey(person) || person.pk !== root) return null;
   const owners = new Map<string, VaultChannel>();
   for (const s of vault.boxes) {

@@ -338,6 +338,10 @@ For when every app is gone, or a thief revoked your other devices first. The rec
     earlier words are dropped; their desktops seal them again on their next look, within 10 minutes.
   - The words open `held` and every box that opens; a box that doesn't is skipped.
   - At most 64 boxes and 512 KB in all.
+  - A vault from before T969 has one `box` that holds the person key and every channel. Apps still read
+    it, and the first desktop moves it to `held` and `boxes` on its next look, carrying the person box
+    it kept unread. That box's older label opens only for the original person key. The relay keeps a
+    one-box vault from an app not yet updated, but never over a vault with boxes, nor after a re-root.
 - **The relay** keeps the chain and the newest vault at `/v1/account/vault`. `GET` needs only the sign-in,
   so a new desktop with nothing but the 24 words can read them. `PUT` takes `{recovery, vault}`, signed by
   the person key, the recovery key or a current approving device. The chain must extend the one kept,

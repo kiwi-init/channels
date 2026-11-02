@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, test } from "bun:test";
+import { oldPersonBox, oldVault } from "./old-vault.ts";
 import { certUntil, nextLink, readDeviceList, rootLink, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
 import { generateIdentity, sign, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
 import {
@@ -333,6 +334,48 @@ describe("each approving desktop seals its own channels (T969)", () => {
   test("a vault that would grow past the relay's limit isn't sealed", async () => {
     const big = Array.from({ length: 64 }, (_, i) => ({ device: (i.toString(36) + "B".repeat(43)).slice(0, 43), rxpk: r.rxpk, box: "x" }));
     await expect(sealVault(ids.desk!, r, 1, { person: ids.person!, channels: [], others: big }, T0)).rejects.toThrow("past what the relay keeps");
+  });
+});
+
+describe("a vault sealed before T969 still opens, and moves to a box per desktop (T969)", () => {
+  let r: Recovery;
+  const ch = (label: string) => ({ label, code: `kiwi://join/${label}`, owner: ids[label]! });
+
+  beforeAll(async () => {
+    r = (await recovery(await chain([ids.person!, paper, T0]))) as Recovery;
+    for (const name of ["work", "home"]) ids[name] ??= await withExchangeKey(await generateIdentity(name));
+  });
+
+  test("one with the person key inside, or the box the first desktop kept, holds up and opens to the words", async () => {
+    const plain = await oldVault(ids.person!, r, 1, { person: ids.person!, channels: [ch("work")] }, T0);
+    expect(await checkVault(plain, list)).toBeNull();
+    expect(await openVault(plain, paper)).toEqual({ person: ids.person!, channels: [ch("work")] });
+    const boxed = await oldVault(ids.desk!, r, 2, { person: await oldPersonBox(r, ids.person!), channels: [ch("home")] }, T0 + 1);
+    expect(await checkVault(boxed, list, 1)).toBeNull();
+    expect(await openVault(boxed, paper)).toEqual({ person: ids.person!, channels: [ch("home")] });
+    expect(await openVault(boxed, other)).toBeNull();
+    expect(await openVault(boxed, paper, ids.thief!.pk)).toBeNull();
+  });
+
+  test("an old one too large, with a field it shouldn't have, or re-signed by a stranger is refused", async () => {
+    const v1 = await oldVault(ids.desk!, r, 1, { person: ids.person!, channels: [] }, T0);
+    expect(await checkVault(await sign(ids.desk!, { ...v1, box: "x".repeat(600 * 1024), pk: undefined, sig: undefined }), list)).toMatch(/too large/);
+    expect(await checkVault(await sign(ids.desk!, { ...v1, held: v1.box, pk: undefined, sig: undefined }), list)).toBe("not a vault");
+    expect(await checkVault(await sign(ids.stranger!, { ...v1, pk: undefined, sig: undefined }), list)).toMatch(/isn't one of this person's approving devices/);
+  });
+
+  test("the box a desktop kept before T969 carries into the new vault, and the words still open it", async () => {
+    const kept = await oldPersonBox(r, ids.person!);
+    const v2 = await sealVault(ids.desk!, r, 2, { person: { ...kept, pk: ids.person!.pk }, channels: [ch("work")] }, T0 + 1);
+    expect(v2.held.box).toBe(kept.box);
+    expect(await checkVault(v2, list, 1)).toBeNull();
+    expect(await openVault(v2, paper)).toEqual({ person: ids.person!, channels: [ch("work")] });
+  });
+
+  test("the old label opens a person box only for the person key itself, never for a key a re-root named", async () => {
+    const kept = await oldPersonBox(r, ids.thief!);
+    const v2 = await sealVault(ids.desk!, r, 2, { person: ids.person!, channels: [] }, T0 + 1);
+    expect(await openVault({ ...v2, held: { rxpk: r.rxpk, pk: ids.thief!.pk, box: kept.box } }, paper, ids.thief!.pk)).toBeNull();
   });
 });
 

@@ -2,7 +2,9 @@ import type { AccountClient } from "@kiwi/core/account.ts";
 import { readDeviceList, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
 import type { Identity } from "@kiwi/core/identity.ts";
 import {
+  boxesIn,
   checkVault,
+  heldIn,
   openVault,
   newRecoveryPhrase,
   readRecovery,
@@ -13,6 +15,7 @@ import {
   sealVault,
   type Recovery,
   type RecoveryLink,
+  type OldVault,
   type SealedPerson,
   type Vault,
   type VaultContents,
@@ -25,12 +28,17 @@ const byLabel = (list: DeviceList, pk: string): string =>
 const CHECKS = 3;
 const LOOK_MS = 10 * 60_000;
 
+interface BoxBeforeT969 {
+  rxpk: string;
+  box: string;
+}
+
 export interface RecoveryKept {
   at: number;
   version: number;
   owners: string[];
-  person?: SealedPerson;
-  proven?: string;
+  person?: SealedPerson | BoxBeforeT969;
+  proven?: string | number;
 }
 
 export interface RecoveryHostDeps {
@@ -77,14 +85,16 @@ const typedHere = (chain: readonly unknown[], recovery: Recovery): boolean => {
 
 const sealedFor = (box: SealedPerson | undefined, recovery: Recovery): box is SealedPerson => !!box && box.rxpk === recovery.rxpk && box.pk === recovery.root;
 
-const holdsMine = (vault: Vault | null, device: string, recovery: Recovery): boolean =>
-  !!vault && sealedFor(vault.held, recovery) && vault.boxes.some((b) => b.device === device && b.rxpk === recovery.rxpk);
+const holdsMine = (vault: Vault | OldVault | null, device: string, recovery: Recovery): boolean =>
+  sealedFor(heldIn(vault), recovery) && boxesIn(vault).some((b) => b.device === device && b.rxpk === recovery.rxpk);
+
+const keptBox = (k: SealedPerson | BoxBeforeT969 | undefined, recovery: Recovery): SealedPerson | undefined => k && ("pk" in k ? k : { ...k, pk: recovery.person });
 
 interface Kept {
   chain: unknown[];
   recovery: Recovery | null;
   version: number;
-  vault: Vault | null;
+  vault: Vault | OldVault | null;
   at: number | null;
 }
 
@@ -114,19 +124,19 @@ export function createRecoveryHost(deps: RecoveryHostDeps): RecoveryHost {
     }
     const bad = await checkVault(got.vault, devices, known);
     if (bad) throw new Error(`the relay's recovery vault doesn't hold up: ${bad}`);
-    const vault = got.vault as Vault;
+    const vault = got.vault as Vault | OldVault;
     return { chain: got.recovery, recovery, version: vault.version, vault, at: setUpAt(got.recovery) };
   };
 
-  const boxed = async (chain: readonly unknown[], recovery: Recovery, vault: Vault | null): Promise<SealedPerson> => {
+  const boxed = async (chain: readonly unknown[], recovery: Recovery, vault: Vault | OldVault | null): Promise<SealedPerson> => {
     const person = deps.person();
     if (person) {
       if (!typedHere(chain, recovery)) throw new Error("your recovery key was replaced by a device's proposal, so this app won't seal your person key to it");
       const mine = deps.kept()?.person;
-      return mine && sealedFor(mine, recovery) ? mine : sealPerson(recovery, person);
+      return mine && "pk" in mine && sealedFor(mine, recovery) ? mine : sealPerson(recovery, person);
     }
-    const kept = deps.kept()?.person;
-    const box = [kept, vault?.held].find((b) => sealedFor(b, recovery));
+    const kept = keptBox(deps.kept()?.person, recovery);
+    const box = [kept, heldIn(vault)].find((b) => sealedFor(b, recovery));
     if (box) return box;
     if (kept && kept.rxpk !== recovery.rxpk) throw new Error("your recovery key changed after this app let go of your person key: type the old words to carry it over");
     throw new Error(NO_BOX);
@@ -135,7 +145,7 @@ export function createRecoveryHost(deps: RecoveryHostDeps): RecoveryHost {
   const seal = async (s: { client: AccountClient; device: Identity }, recovery: Recovery, chain: readonly unknown[], before: Kept, at: number, extend?: RecoveryLink[]): Promise<RecoveryKept> => {
     const channels = deps.owned();
     const person = await boxed(chain, recovery, before.vault);
-    const others = before.vault?.boxes ?? [];
+    const others = boxesIn(before.vault);
     const vault = await sealVault(deps.person() ?? s.device, recovery, before.version + 1, { person, channels, device: s.device.pk, others }, now());
     await s.client.keepVault({ ...(extend ? { recovery: extend } : {}), vault });
     const proven = deps.kept()?.proven;
@@ -144,7 +154,7 @@ export function createRecoveryHost(deps: RecoveryHostDeps): RecoveryHost {
     return next;
   };
 
-  const letGo = async (chain: readonly unknown[], recovery: Recovery, onRelay: SealedPerson | undefined): Promise<void> => {
+  const letGo = async (chain: readonly unknown[], recovery: Recovery, onRelay: { box: string } | undefined): Promise<void> => {
     const k = deps.kept();
     if (deps.person() && !recovery.pending && typedHere(chain, recovery) && k?.person?.rxpk === recovery.rxpk && !!k.proven && k.proven === onRelay?.box) await deps.letGo();
   };
@@ -153,11 +163,12 @@ export function createRecoveryHost(deps: RecoveryHostDeps): RecoveryHost {
     const got = await client.vault();
     const bad = got.vault === null ? "the relay kept none" : await checkVault(got.vault, devices, version);
     if (bad) throw new Error(`your recovery vault didn't come back as sealed (${bad}), so this app keeps your person key`);
-    const back = got.vault as Vault;
+    const back = got.vault as Vault | OldVault;
     const inside = back.version === version ? await openVault(back, key) : null;
-    if (!inside || inside.person.pk !== person.pk || inside.person.sk !== person.sk)
+    const held = heldIn(back);
+    if (!inside || !held || inside.person.pk !== person.pk || inside.person.sk !== person.sk)
       throw new Error("the vault on the relay doesn't open to your person key with these words, so this app keeps it: make new words");
-    return back.held;
+    return held;
   };
 
   const signedIn = async () => {
@@ -258,7 +269,7 @@ export function createRecoveryHost(deps: RecoveryHostDeps): RecoveryHost {
       if (!before.recovery) return;
       const resealed = !current || !holdsMine(before.vault, s.device.pk, before.recovery) ? await seal(s, before.recovery, before.chain, before, before.at ?? now()) : null;
       if (!resealed && was && was.version !== before.version) deps.keep({ ...was, version: before.version });
-      await letGo(before.chain, before.recovery, resealed ? resealed.person : before.vault?.held);
+      await letGo(before.chain, before.recovery, resealed ? resealed.person : heldIn(before.vault));
     },
   };
 }

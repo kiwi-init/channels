@@ -9,6 +9,7 @@ import { openVault, readRecovery, readRecoveryPhrase, recoveryKey, recoveryLink,
 import { createDeviceHost, type DeviceHost } from "../desktop/src/devices.ts";
 import { createRecoveryHost, type RecoveryHost, type RecoveryKept } from "../desktop/src/recovery.ts";
 import { startRelay } from "../src/relay/bun.ts";
+import { oldPersonBox, oldVault } from "./old-vault.ts";
 import { devHumanAuth } from "../src/relay/human.ts";
 
 setDefaultTimeout(30_000);
@@ -304,6 +305,43 @@ describe("setting up the recovery key on the desktop", () => {
 describe("letting go of the person key once the words are checked (T899)", () => {
   ownRelay();
 
+  test("a desktop that let go before T969 moves its one-box vault to a box per desktop, and the words still open it", async () => {
+    const a = await app();
+    await a.host.poll();
+    const s = (await a.host.session())!;
+    const words = await a.recovery.words();
+    a.recovery.drop();
+    const phrase = await readRecoveryPhrase(words.join(" "));
+    if (!phrase.ok) throw new Error(phrase.why);
+    const paper = await recoveryKey(phrase.entropy);
+    const list = await readDeviceList((await s.client.links()) as DeviceLink[]);
+    if (!list.ok) throw new Error(list.why);
+    const chain = [await recoveryLink(a.person, a.person.pk, null, { pk: paper.pk, xpk: paper.xpk! })];
+    const r = await readRecovery(chain, list.list);
+    if (!r.ok) throw new Error(r.why);
+    const box = await oldPersonBox(r.recovery, a.person);
+    const work = await channel("work");
+    await s.client.keepVault({ recovery: chain, vault: await oldVault(s.device, r.recovery, 1, { person: box, channels: [work] }) });
+    a.kept.value = { at: chain[0]!.at, version: 1, owners: [work.owner.pk], person: box, proven: 1 };
+    a.holds.value = false;
+    a.owned.push(work);
+
+    await a.recovery.keepCurrent();
+    const got = await relayVault(a);
+    expect(got.vault?.version).toBe(2);
+    expect(got.vault?.held).toEqual({ ...box, pk: a.person.pk });
+    expect(got.text).not.toContain(a.person.sk);
+    const inside = await opened(words, got.vault!);
+    expect(inside?.person.sk).toBe(a.person.sk);
+    expect(inside?.channels.map((c) => c.label)).toEqual(["work"]);
+    expect(a.kept.value?.person).toEqual({ ...box, pk: a.person.pk });
+
+    const b = await laptop(a);
+    b.owned.push(await channel("second"));
+    await b.recovery.keepCurrent();
+    expect((await opened(words, (await relayVault(b)).vault!))?.channels.map((c) => c.label).sort()).toEqual(["second", "work"]);
+  });
+
   test("saving the words drops the person key here; the vault still opens to all of it, and this app can't make new words", async () => {
     const a = await app();
     const words = await a.recovery.words();
@@ -462,7 +500,7 @@ describe("after a re-root elsewhere (T827)", () => {
     a.owned.push(await channel("later"));
     await a.recovery.keepCurrent();
     expect(a.holds.value).toBe(false);
-    expect(a.kept.value?.person?.pk).toBe(next.pk);
+    expect(a.kept.value?.person).toMatchObject({ pk: next.pk });
     const got = await relayVault(a);
     expect(got.vault?.version).toBe(3);
     expect(got.text).not.toContain(a.person.sk);

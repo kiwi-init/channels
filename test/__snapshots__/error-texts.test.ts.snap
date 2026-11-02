@@ -162,6 +162,7 @@ exports[`the relay's error texts are exactly these 1`] = `
   "409 this device is already one of this person's",
   "409 this request already has the owner's nonce",
   "409 this request hasn't finished its code check yet",
+  "409 this vault is kept with a box per desktop now, so an app from before that can't write it: update the app",
   "409 vault version \${known} is already kept, so version \${next.version} is too old",
   "409 wait for the owner's half of the check",
   "413 a note is at most \${formatBytes(NOTE_MAX_BYTES)}",
