@@ -62,7 +62,7 @@ export async function enrollBegin(signIn: () => Promise<unknown>, done: (d: Enro
       if (enrollRun !== mine) return
       enrollRun = null
       selfEnroll.set(null)
-      announce(`Couldn't sign in as one of your devices: ${err instanceof Error ? err.message : String(err)}`)
+      announce(`Couldn't sign in as one of your devices: ${err instanceof Error ? err.message : String(err)}`, "error")
       return
     }
     if (enrollRun !== mine) return
@@ -324,7 +324,7 @@ export async function enrollConfirm(id: string, digits: string): Promise<{ ok: t
   if (r.ok) {
     announce(`${r.label} is one of your devices now`)
     await devices.load()
-  } else if (r.left === 0) announce("Turned it away: the digits didn't match")
+  } else if (r.left === 0) announce("Turned it away: the digits didn't match", "error")
   await enrollAsk.check()
   return r.ok ? { ok: true } : { ok: false, left: r.left }
 }

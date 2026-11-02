@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState } from "react"
 
 import { Icon } from "~/kit/icons"
-import { announce } from "~/kit/toasts"
+import { copyText } from "~/kit/toasts"
 import { useApp } from "~/nav"
 
 type Card = { key: string; text: string; detail?: string; path?: string; act?: string; busy?: string; onAct?: () => void; progress?: number }
@@ -49,17 +49,7 @@ function useCards(): Card[] {
 function CopyPath({ path }: { path: string }) {
   const parts = path.split("/")
   return (
-    <button
-      type="button"
-      className="side-card-path"
-      title="Copy the path"
-      onClick={() =>
-        void navigator.clipboard?.writeText(path).then(
-          () => announce("Path copied"),
-          () => announce("Could not copy")
-        )
-      }
-    >
+    <button type="button" className="side-card-path" title="Copy the path" onClick={() => copyText(path, "Path copied")}>
       <Icon name="copy" size={12} />
       {parts.map((part, i) => (
         <Fragment key={i}>

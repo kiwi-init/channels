@@ -366,11 +366,11 @@ export default function Annotator({ image, sender, face, at, onSend, onClose }: 
       a.download = out.name
       a.click()
     } catch (err) {
-      toast(`Not saved: ${say(err)}`)
+      toast(`Not saved: ${say(err)}`, "error")
     }
   }
   const copy = () => {
-    if (!navigator.clipboard) return toast("Not copied: this window has no clipboard")
+    if (!navigator.clipboard) return toast("Not copied: this window has no clipboard", "error")
     const png = current().then((out) => {
       const blob = base64Blob(out.data, out.mime)
       return out.mime === "image/png" ? blob : toPng(blob)
@@ -380,7 +380,7 @@ export default function Annotator({ image, sender, face, at, onSend, onClose }: 
         setCopied(true)
         window.setTimeout(() => setCopied(false), 1500)
       },
-      (err: unknown) => toast(`Not copied: ${say(err)}`)
+      (err: unknown) => toast(`Not copied: ${say(err)}`, "error")
     )
   }
   const send = async () => {
@@ -390,7 +390,7 @@ export default function Annotator({ image, sender, face, at, onSend, onClose }: 
       toast(`Sent to ${sender}`)
       onClose()
     } catch (err) {
-      toast(`Not sent: ${say(err)}`)
+      toast(`Not sent: ${say(err)}`, "error")
     }
   }
 

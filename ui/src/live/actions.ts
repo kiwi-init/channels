@@ -58,7 +58,7 @@ async function tried<T>(what: string, run: () => Promise<T>): Promise<T | null> 
     return await run()
   } catch (err) {
     // The person sees why in the announcement; the caller gets null and stays where it was.
-    announce(`${what}: ${say(err)}`)
+    announce(`${what}: ${say(err)}`, "error")
     return null
   }
 }

@@ -180,18 +180,18 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
     for (const f of list.slice(0, Math.max(0, room))) {
       const name = imageName(f)
       if (!IMAGE_TYPES.has(f.type)) {
-        toast(`${name} isn't a PNG, JPEG, GIF or WebP`)
+        toast(`${name} isn't a PNG, JPEG, GIF or WebP`, "error")
         continue
       }
       if (f.size > MAX_IMAGE_BYTES) {
         void import("@kiwi/app/compress-image.ts").then(({ compressImage, renamed }) =>
-          compressImage(f, MAX_IMAGE_BYTES).then((done) => (done ? add({ ...done, name: renamed(name, done.mime) }) : toast(`${name} couldn't be read`)))
+          compressImage(f, MAX_IMAGE_BYTES).then((done) => (done ? add({ ...done, name: renamed(name, done.mime) }) : toast(`${name} couldn't be read`, "error")))
         )
         continue
       }
       void readBase64(f).then(
         (data) => add({ name, mime: f.type, data }),
-        () => toast(`${name} couldn't be read`)
+        () => toast(`${name} couldn't be read`, "error")
       )
     }
   }
@@ -373,7 +373,7 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
           setDropping(false)
           if (e.dataTransfer.files.length) return attach([...e.dataTransfer.files])
           void takeDropped(e.dataTransfer).then(({ files: dropped, refused }) => {
-            for (const why of refused) toast(why)
+            for (const why of refused) toast(why, "error")
             attach(dropped)
           })
         }}
@@ -446,7 +446,7 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
             <Icon name="plus" />
           </button>
           <Suspense fallback={<span className="compose-attach" />}>
-            <Gifs onFile={(file) => (file ? attach([file]) : toast("That GIF couldn't be loaded"))} />
+            <Gifs onFile={(file) => (file ? attach([file]) : toast("That GIF couldn't be loaded", "error"))} />
           </Suspense>
           <input
             ref={picker}
