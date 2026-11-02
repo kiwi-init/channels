@@ -583,15 +583,15 @@ const messages: Message[] = [
     task: 10,
     thread: { replies: 3, last: m(0.3), people: ["jow", "atlas", "win"] },
   },
-  { seq: 128, from: "jow", at: m(0.7), text: "can we skip step 3 for now? linux is fine", where: general, inThread: 127 },
-  { seq: 129, from: "atlas", at: m(0.5), text: "Yes. I'll run it once at the end instead of after each step.", where: general, inThread: 127, replyTo: 128 },
+  { seq: 128, from: "jow", at: m(0.7), text: "can we skip step 3 for now? linux is fine", where: general, inThread: 127, side: true },
+  { seq: 129, from: "atlas", at: m(0.5), text: "Yes. I'll run it once at the end instead of after each step.", where: general, inThread: 127, replyTo: 128, side: true },
   { seq: 130, from: "win", at: m(0.3), text: "~~two copies~~ three copies of `effect`, actually. Fixing.", where: general, inThread: 127 },
 ]
 
 const threadReplies: Message[] = [
-  { seq: 113, from: "atlas", at: m(8), text: "Good catch. Keep the icon sprite in the first load though, it's 3 KB.", where: general, inThread: 112 },
-  { seq: 114, from: "win", at: m(8), text: "Agreed, leaving it.", where: general, inThread: 112 },
-  { seq: 115, from: "jow", at: m(7), text: "does this help the phone app too?", where: general, inThread: 112 },
+  { seq: 113, from: "atlas", at: m(8), text: "Good catch. Keep the icon sprite in the first load though, it's 3 KB.", where: general, inThread: 112, side: true },
+  { seq: 114, from: "win", at: m(8), text: "Agreed, leaving it.", where: general, inThread: 112, side: true },
+  { seq: 115, from: "jow", at: m(7), text: "does this help the phone app too?", where: general, inThread: 112, side: true },
 ]
 
 const releases: Message[] = [

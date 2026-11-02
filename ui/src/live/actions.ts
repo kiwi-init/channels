@@ -184,7 +184,7 @@ export function makeActions(): Actions {
         const run = need(code)
         const m = run.messages.find((x) => x.seq === Number(id))
         if (!m) throw new Error("that question is gone")
-        await run.send(text, { to: [m.from], re: [m.seq], kind: "msg" })
+        await run.send(text, { to: [m.from], re: [m.seq], kind: "msg", side: true })
       }),
     answerStep: (code, id, reply) => attempt("Not answered", async () => (await rare()).answerStep(code, id, reply)),
     answerJoin: (code, id, yes, choice) => attempt(yes ? "Couldn't let them in" : "Couldn't turn them away", async () => (await manage()).answerJoin(code, id, yes, choice)),
