@@ -9,7 +9,7 @@ export { fold } from "./state/fold.ts";
 export { askGroups, askRefusal, heldBy, holdsWork, mayNameGoal, type AskGroup } from "./state/asks.ts";
 export { allowedOnHold, answersAsk, answersDecisions, colorOf, decidersOf, fullyTrusted, humanOf, isLeadRole, isPerson, ON_HOLD, ownerOf, sameAuthor, trustedOf } from "./state/people.ts";
 export { chooseThread, dmPlace, inGeneral, longForGeneral, MAIN, placeFromKey, placeKey, tasksAwaitingPeople, threadMembers, wentTo } from "./state/places.ts";
-export { issueOf, prChecks, prKey, releaseOf, rulesOf, type GithubPr, type GithubRelease, type GithubRules } from "./state/github.ts";
+export { githubNews, issueOf, prChecks, prKey, releaseOf, rulesOf, type GithubPr, type GithubRelease, type GithubRules, type GithubState } from "./state/github.ts";
 export { outsideRepos, reposOf } from "./state/repos.ts";
 export { LEASE_WAIT_MS, nextIn, placeIn } from "./state/leases.ts";
 export { unnamedAsks, unnamedTasks } from "./state/compact.ts";

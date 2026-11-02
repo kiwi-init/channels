@@ -28,6 +28,7 @@ import { dropWarm, keepWarm, warmOf, type Warm } from "./warm.ts";
 const HISTORY = 2_000;
 const KEEP_DELAY_MS = 3_000;
 const CLOCK_MS = 15_000;
+const GITHUB_SYNC_MS = 6 * 3_600_000;
 
 type Connection = "connecting" | "live" | "reconnecting";
 
@@ -115,6 +116,7 @@ export class ChannelStore {
   private snapshotBusy = false;
   private checksBusy = false;
   private rulesBusy = false;
+  private readonly githubSynced = new Map<string, number>();
 
   constructor(member: StoredMember, human?: HumanSession | null, deps?: ChannelStoreDeps) {
     this.ch = deps?.link ?? linkOf(member);
@@ -612,9 +614,20 @@ export class ChannelStore {
       .catch(() => {})
       .then(() => this.ch.syncGithubReleases(state.repos, [...state.github.releases.values()].flat()))
       .catch(() => {})
+      .then(() => this.syncGithub(state.repos))
+      .catch(() => {})
       .finally(() => {
         this.rulesBusy = false;
       });
+  }
+
+  private async syncGithub(repos: readonly string[]): Promise<void> {
+    for (const repo of repos) {
+      const key = repo.toLowerCase();
+      if (Date.now() - (this.githubSynced.get(key) ?? -Infinity) < GITHUB_SYNC_MS) continue;
+      await this.ch.syncGithub(repo, this.state.peek().github);
+      this.githubSynced.set(key, Date.now());
+    }
   }
 
   private every(ms: number, run: () => void): () => void {
