@@ -6,6 +6,7 @@ import type { Actions, Channel, Message, Person, Where } from "~/model"
 import type { Go } from "~/nav"
 import { seatRoot } from "~/names"
 import { hiddenKey, hiddenPlaces, setHidden } from "~/shell/hidden-places"
+import { copyText } from "~/kit/toasts"
 
 const WEB_LINK = /^(https?:\/\/|mailto:)/i
 
@@ -31,14 +32,9 @@ function saveImage(url: string, name: string): void {
 export interface MenuContext {
   channel: Channel
   go: (to: Go) => void
-  toast: (text: string) => void
 }
 
-const copier = (toast: (text: string) => void, text: string) => () =>
-  void navigator.clipboard?.writeText(text).then(
-    () => toast("Copied"),
-    () => {}
-  )
+const copier = (text: string) => () => copyText(text)
 
 export function personItems({ channel, go }: MenuContext, person: Person): MenuItem[] {
   return [
@@ -48,14 +44,14 @@ export function personItems({ channel, go }: MenuContext, person: Person): MenuI
 }
 
 export function messageGroups(ctx: MenuContext, m: Message, target: EventTarget, more: { openImage: (url: string, alt: string) => void; reply: (() => void) | null; inThread: boolean }): MenuGroups {
-  const { channel, go, toast } = ctx
+  const { channel, go } = ctx
   const link = webLinkAt(target)
   const picture = (target as Partial<Element>).closest?.<HTMLImageElement>(".msg-image img, .msg-text img") ?? null
   return [
     link
       ? [
           { label: "Open link", run: () => openWebLink(link) },
-          { label: "Copy link", run: copier(toast, link) },
+          { label: "Copy link", run: copier(link) },
         ]
       : [],
     picture
@@ -75,8 +71,8 @@ export function messageGroups(ctx: MenuContext, m: Message, target: EventTarget,
         ]
       : [],
     [
-      { label: "Copy text", run: copier(toast, m.text) },
-      { label: `Copy #${m.seq}`, run: copier(toast, `#${m.seq}`) },
+      { label: "Copy text", run: copier(m.text) },
+      { label: `Copy #${m.seq}`, run: copier(`#${m.seq}`) },
     ],
   ]
 }
@@ -101,7 +97,7 @@ export function roomGroups(
   canLeave: boolean,
   room: { id: string; name: string; unread: number; muted?: boolean | undefined; members?: unknown }
 ): MenuGroups {
-  const { channel, go, toast } = ctx
+  const { channel, go } = ctx
   return [
     [
       ...(room.unread > 0 ? [{ label: "Mark as read", run: () => actions.markRead(channel.code, { kind: "room", room: room.id }) }] : []),
@@ -124,7 +120,7 @@ export function roomGroups(
           },
         ]
       : [],
-    [{ label: "Copy name", run: copier(toast, `#${room.name}`) }],
+    [{ label: "Copy name", run: copier(`#${room.name}`) }],
   ]
 }
 

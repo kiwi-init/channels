@@ -348,7 +348,7 @@ export const exportHistory: Actions["exportHistory"] = async (code, kind) => {
     const note = exportNote(log)
     if (!note.complete) announce(note.text)
   } catch (err) {
-    announce(`Not saved: ${err instanceof Error ? err.message : String(err)}`)
+    announce(`Not saved: ${err instanceof Error ? err.message : String(err)}`, "error")
   }
 }
 

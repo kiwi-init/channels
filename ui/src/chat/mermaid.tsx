@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent, type ReactNode } from "react"
 import { sanitizeMarkdownUrl } from "@kiwi/app/markdown.ts"
+import { copyText } from "~/kit/toasts"
 
 type Mermaid = (typeof import("mermaid"))["default"]
 export type Drawn = { kind: "svg"; svg: string } | { kind: "error"; message: string } | null
@@ -211,7 +212,7 @@ function useScheme(): string {
 
 const linkOf = (a: Element): string | null => a.getAttribute("href") ?? a.getAttribute("xlink:href")
 
-export function MermaidBlock({ source, code, onLink, copied }: { source: string; code: ReactNode; onLink: (url: string) => void; copied: () => void }) {
+export function MermaidBlock({ source, code, onLink }: { source: string; code: ReactNode; onLink: (url: string) => void }) {
   const scheme = useScheme()
   const [drawn, setDrawn] = useState<Drawn>(null)
   const [showCode, setShowCode] = useState(false)
@@ -302,7 +303,7 @@ export function MermaidBlock({ source, code, onLink, copied }: { source: string;
         <button type="button" onClick={() => setShowCode(true)}>
           Code
         </button>
-        <button type="button" aria-label="Copy Mermaid source" onClick={() => void navigator.clipboard?.writeText(source).then(copied, () => {})}>
+        <button type="button" aria-label="Copy Mermaid source" onClick={() => copyText(source)}>
           Copy
         </button>
       </div>

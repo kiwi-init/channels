@@ -7,6 +7,7 @@ import { Icon } from "~/kit/icons"
 import { ALL_POWERS, NO_POWERS, trusted, type Channel } from "~/model"
 import { useApp } from "~/nav"
 import { PanelHead } from "~/panels/frame"
+import { copyText } from "~/kit/toasts"
 
 type Link = { code: string; link: string } | { code: string; failed: true }
 
@@ -36,7 +37,6 @@ function useInviteLink(code: string): { link: string | null; failed: boolean; re
 }
 
 export function CopyBox({ text, label, disabled, wrap }: { text: string | null; label: string; disabled?: boolean; wrap?: boolean }) {
-  const { toast } = useApp()
   return (
     <div className={cx("codebox invite-box", disabled && "is-off", wrap && "is-wrap")}>
       <code>
@@ -59,10 +59,7 @@ export function CopyBox({ text, label, disabled, wrap }: { text: string | null; 
         disabled={!text || disabled}
         onClick={() => {
           if (!text) return
-          navigator.clipboard.writeText(text).then(
-            () => toast("Copied"),
-            () => toast("Couldn't copy. Select it and copy by hand.")
-          )
+          copyText(text)
         }}
       >
         <Icon name="copy" />
