@@ -1,4 +1,4 @@
-import type { LaunchRefusal, Opened, PlacedSeat, RexPlace, ShowResult, TerminalId } from "@kiwi/core/terminals.ts";
+import type { PlacedSeat, RexPlace, ShowResult, TerminalId } from "@kiwi/core/terminals.ts";
 import type { Config, SeatRecord } from "../config.ts";
 
 export interface TerminalPlace {
@@ -61,15 +61,6 @@ interface Helpers {
   download(): Promise<void>;
   remove(): Promise<void>;
 }
-
-export interface PlaceRequest {
-  argv: string[];
-  folder: string;
-  name: string;
-  env?: Record<string, string>;
-}
-
-export type Placed = Opened | { ok: false; why: Exclude<LaunchRefusal, "not-installed" | "no-recipe">; detail: string };
 
 export interface PlaceTools {
   platform: NodeJS.Platform;

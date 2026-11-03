@@ -248,7 +248,7 @@ describe("a re-root to a new person key (T827)", () => {
       [ids.next!, true],
       [ids.desk!, true],
     ] as const) {
-      const { box } = await makeAsk(signer, { pk: ids.box!.pk, xpk: ids.box!.xpk! }, { verb: "harnesses", args: {}, reply: "r".repeat(43) });
+      const { box } = await makeAsk(signer, { pk: ids.box!.pk, xpk: ids.box!.xpk! }, { verb: "settings", args: {}, reply: "r".repeat(43) });
       const read = await readAsk(ids.box!, box, { person: ids.person!.pk, list: after, now: Date.now(), claim });
       expect(read.ok).toBe(ok);
     }

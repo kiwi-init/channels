@@ -487,8 +487,6 @@ interface Fact {
   at: number
 }
 
-export type ComputerChoices = { harnesses?: App["harnesses"]; folders: string[] } | { error: string }
-
 export interface Compacted {
   summary: string
   through: number
@@ -683,18 +681,6 @@ export interface Folder {
   open: boolean
 }
 
-export interface NewAgent {
-  harness: Harness
-  computer: string
-  folder: string
-  name: string
-  persona?: string
-  role?: string
-  mode?: "ask-first" | "accept-edits" | "dont-ask"
-}
-
-export type Launching = { stage: "started" } | { stage: "asked"; name: string } | { stage: "joined"; name: string } | { stage: "failed"; why: string }
-
 export interface Actions {
   send(code: string, where: Where, text: string, opts?: { replyTo?: number; inThread?: number; side?: true; images?: Upload[] }): void
   retry(code: string, seq: number): void
@@ -730,10 +716,7 @@ export interface Actions {
   setNickname(code: string, name: string, nickname: string | null): void
   setAgentColor(code: string, name: string, color: Color | null): void
   setPowers(code: string, name: string, powers: Partial<Powers>): void
-  addAgent(code: string, agent: NewAgent, seen: (s: Launching) => void): () => void
   showAgent(code: string, name: string): Promise<string | null>
-  choicesOn(code: string, computer: string): Promise<ComputerChoices>
-  chooseFolder(): Promise<string | null>
   addRoom(code: string, name: string, members?: string[]): Promise<string | null>
   renameRoom(code: string, id: string, name: string): void
   setRoomMembers(code: string, id: string, members: string[]): Promise<boolean>
@@ -796,10 +779,6 @@ export interface Actions {
   closeChannel(code: string): void
   saveTheme(theme: CustomTheme): void
   deleteTheme(id: string): void
-  addStartFolder(): void
-  removeStartFolder(dir: string): void
-  allowNewAgents(on: boolean): void
-  allowRemoteBypass(on: boolean): void
   savePersonalities(list: Personality[]): void
   setHooks(harness: HookHarness, on: boolean): void
   checkComputer(): Promise<Finding[] | null>
@@ -818,9 +797,6 @@ export interface ThisComputer {
 }
 
 export interface AgentStarts {
-  folders: string[]
-  launch: boolean
-  bypass: boolean
   terminals: TerminalRow[]
 }
 
@@ -837,7 +813,7 @@ export interface App {
   channel: Channel | null
   gone?: GoneChannel
   prefs: Prefs
-  harnesses: { id: Harness; label: string; installed: boolean; version?: string; path?: string; why?: string }[]
+  harnesses: { id: Harness; label: string; installed: boolean; version?: string; path?: string }[]
   personas: { id: string; label: string; about: string }[]
   starts: AgentStarts | null
   ownPersonalities: Personality[]

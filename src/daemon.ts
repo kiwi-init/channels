@@ -33,8 +33,6 @@ export {
   adoptDaemon,
   daemonAdmit,
   daemonHarnesses,
-  daemonLaunch,
-  daemonLoop,
   daemonUnpair,
   daemonHello,
   daemonListeners,

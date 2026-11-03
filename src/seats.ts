@@ -18,9 +18,8 @@ import { homedir, hostname } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { agyHere, geminiAncestor, kimiAncestor, kimiCodePid, mimoHere, piHere, zcodePid, type ProcessTree } from "./ancestry.ts";
 import { loadConfig, updateConfig, type Config, type SeatRecord } from "./config.ts";
-import { holdsSeat, isSeatHarness, seatHeldAway, seatHolds, seatRefusal } from "./hold.ts";
+import { holdsSeat, seatHeldAway, seatHolds, seatRefusal } from "./hold.ts";
 import { pidAlive } from "./pid.ts";
-import { readLaunch } from "@kiwi/core/membership.ts";
 import { omit } from "@kiwi/core/omit.ts";
 import type { SeatPlace } from "./terminals/plugin.ts";
 import { locate } from "./terminals/registry.ts";
@@ -59,12 +58,7 @@ export function onGrokBot(env: Record<string, string | undefined> = process.env,
 }
 
 export function here(env: Record<string, string | undefined> = process.env, tree: ProcessTree = {}, host: string = hostname()): Here {
-  const found = harnessHere(env, tree, host);
-  const launch = found.session ? null : readLaunch(env.KIWI_LAUNCH);
-  if (!launch) return found;
-  const named = env.KIWI_HARNESS?.trim().toLowerCase();
-  const harness = found.harness ?? (isSeatHarness(named) ? named : undefined);
-  return { ...found, ...(harness ? { harness } : {}), session: `launch-${launch}` };
+  return harnessHere(env, tree, host);
 }
 
 function harnessHere(env: Record<string, string | undefined>, tree: ProcessTree, host: string): Here {

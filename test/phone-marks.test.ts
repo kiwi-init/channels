@@ -28,7 +28,7 @@ async function phone(note: Record<string, number> | null) {
     follow: (): (() => void) => () => {},
   } as unknown as Keyring;
   const seat = { code: "code", label: "jow-2", idName: "jow-2", name: "general", pk: "jow-2-pk", access: {} } as unknown as ChannelIdentityView;
-  const room = new Room(keyring, seat, { emit: () => {}, lost: () => {}, launch: () => {}, person: () => null, log: () => {}, devices: () => {} });
+  const room = new Room(keyring, seat, { emit: () => {}, lost: () => {}, person: () => null, log: () => {}, devices: () => {} });
   await room.start();
   await new Promise((done) => setTimeout(done, 200));
   return { room, synced };

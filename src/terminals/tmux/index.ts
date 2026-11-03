@@ -3,7 +3,6 @@ import { selfCommand } from "../../hooks/self.ts";
 import { loginPath } from "../../launch/shell.ts";
 import type { PlaceTools, TerminalPlugin } from "../plugin.ts";
 import { helpersOn } from "../registry.ts";
-import { onHostedSocket } from "../shared/tmux.ts";
 import { downloadTmuxHelpers, liveSockets, removeTmuxHelpers } from "./helpers.ts";
 import { tmuxPlaceFrom } from "./locate.ts";
 import { tmuxManifest } from "./manifest.ts";
@@ -13,7 +12,7 @@ import { showPane } from "./show.ts";
 import { tmuxPane } from "./type.ts";
 
 function sockets(): string[] {
-  return liveSockets(allSeats(loadConfig()).flatMap((r) => (r.tmux && !onHostedSocket(r.tmux.socket) ? [r.tmux.socket] : [])));
+  return liveSockets(allSeats(loadConfig()).flatMap((r) => (r.tmux ? [r.tmux.socket] : [])));
 }
 
 export function tmuxTerminal(t: PlaceTools): TerminalPlugin {

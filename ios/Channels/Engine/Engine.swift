@@ -22,7 +22,6 @@ enum Push {
     case room(RoomView)
     case gone(String)
     case log(String)
-    case launch(String, LaunchSeen)
     case removed(String)
 }
 
@@ -150,10 +149,6 @@ final class Engine: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
             }
         case "removed":
             onPush(.removed(object["by"] as? String ?? "another device"))
-        case "launch":
-            if let launch = object["launch"] as? String, let stage = object["stage"] as? String, let name = object["name"] as? String {
-                onPush(.launch(launch, LaunchSeen(stage: stage, name: name)))
-            }
         default:
             return
         }

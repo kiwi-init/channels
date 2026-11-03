@@ -90,7 +90,7 @@ beforeAll(async () => {
     checkMs: 100,
     unpaired: async () => {},
     listed: async (l) => (await takeDeviceList(l)) === "longer",
-    run: remoteRunner({ inventory: async () => [], folders: () => ["/work"], launch: async () => ({ ok: false, why: "failed", detail: "unused" }) }),
+    run: remoteRunner({ settings: async () => ({ hooks: [], seats: [] }) }),
   });
   await until("the cert-paired inbox online", online);
 });
@@ -110,7 +110,7 @@ describe("a computer paired by an old person-signed cert (kp1), once the person 
     expect(await takeDeviceList(theirs)).toBeNull();
     expect(await takeDeviceList(links)).toBeNull();
     expect(loadPairedMachine()?.device).toBeUndefined();
-    const { box } = await makeAsk(desk, { pk: machine.pk, xpk: machine.xpk! }, { verb: "folders", args: {}, reply: newSecret() });
+    const { box } = await makeAsk(desk, { pk: machine.pk, xpk: machine.xpk! }, { verb: "settings", args: {}, reply: newSecret() });
     expect(await post(desk, box)).toBe(403);
   });
 
@@ -121,11 +121,11 @@ describe("a computer paired by an old person-signed cert (kp1), once the person 
     expect(loadPairedMachine()?.cert?.pk).toBe(person.pk);
     await until("the inbox back online", online);
     const reply = newSecret();
-    const { box, id } = await makeAsk(desk, { pk: machine.pk, xpk: machine.xpk! }, { verb: "folders", args: {}, reply });
+    const { box, id } = await makeAsk(desk, { pk: machine.pk, xpk: machine.xpk! }, { verb: "settings", args: {}, reply });
     expect(await post(desk, box)).toBe(202);
     const got = await (await openMailbox(relay, reply)).wait("b", { timeoutMs: 6_000, everyMs: 100 });
-    expect((await readAnswer(got, { machine: machine.pk, id }))?.result).toEqual({ ok: true, folders: ["/work"] });
-    const fromPhone = await makeAsk(phone, { pk: machine.pk, xpk: machine.xpk! }, { verb: "folders", args: {}, reply: newSecret() });
+    expect((await readAnswer(got, { machine: machine.pk, id }))?.result).toEqual({ ok: true, settings: { hooks: [], seats: [] } });
+    const fromPhone = await makeAsk(phone, { pk: machine.pk, xpk: machine.xpk! }, { verb: "settings", args: {}, reply: newSecret() });
     expect(await post(phone, fromPhone.box)).toBe(403);
   });
 });

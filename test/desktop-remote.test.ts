@@ -61,20 +61,16 @@ function fakeRelay(opts: { inbox?: number; answer?: Answering; online?: boolean 
 const to = () => ({ pk: machine.pk, xpk: machine.xpk! });
 
 describe("asking another computer through the relay", () => {
-  test("its signed answer comes back, and a launch's id is the one the app chose", async () => {
-    const relay = fakeRelay({
-      answer: ({ verb }) => ({ by: machine, result: verb === "harnesses" ? { ok: true, harnesses: [] } : { ok: true, launch: "launch-app-chose", placed: { ok: true, place: "terminal" } } }),
-    });
+  test("its signed answer comes back, under the id the app chose", async () => {
+    const relay = fakeRelay({ answer: () => ({ by: machine, result: { ok: true } }) });
     const asker = { signer: person, person: person.pk, relay: RELAY, fetch: relay.relayFetch };
-    expect(await askMachine(asker, to(), "harnesses", {}, { timeoutMs: 2_000 })).toEqual({ ok: true, result: { ok: true, harnesses: [] } });
-    const launched = await askMachine(asker, to(), "launch", { harness: "claude", folder: "/srv/app", code: "mc2-x" }, { timeoutMs: 2_000, id: "launch-app-chose" });
-    expect(launched.ok).toBe(true);
-    expect(relay.asked.at(-1)).toEqual({ verb: "launch", id: "launch-app-chose" });
+    expect(await askMachine(asker, to(), "unpair", {}, { timeoutMs: 2_000, id: "unpair-app-chose" })).toEqual({ ok: true, result: { ok: true } });
+    expect(relay.asked.at(-1)).toEqual({ verb: "unpair", id: "unpair-app-chose" });
   });
 
   test("an answer signed by anyone but that computer is refused", async () => {
-    const relay = fakeRelay({ answer: () => ({ by: stranger, result: { ok: true, harnesses: [] } }) });
-    expect(await askMachine({ signer: person, person: person.pk, relay: RELAY, fetch: relay.relayFetch }, to(), "harnesses", {}, { timeoutMs: 2_000 })).toEqual({
+    const relay = fakeRelay({ answer: () => ({ by: stranger, result: { ok: true } }) });
+    expect(await askMachine({ signer: person, person: person.pk, relay: RELAY, fetch: relay.relayFetch }, to(), "settings", {}, { timeoutMs: 2_000 })).toEqual({
       ok: false,
       why: "failed",
       detail: "the answer wasn't signed by that computer",
@@ -83,16 +79,16 @@ describe("asking another computer through the relay", () => {
 
   test("no answer in time says why it might be, and the relay's refusals say what they mean", async () => {
     const silent = fakeRelay({ answer: () => null });
-    expect(await askMachine({ signer: person, person: person.pk, relay: RELAY, fetch: silent.relayFetch }, to(), "folders", {}, { timeoutMs: 50 })).toEqual({
+    expect(await askMachine({ signer: person, person: person.pk, relay: RELAY, fetch: silent.relayFetch }, to(), "settings", {}, { timeoutMs: 50 })).toEqual({
       ok: false,
       why: "no-answer",
       detail: NO_ANSWER,
     });
-    expect(await askMachine({ signer: person, person: person.pk, relay: RELAY, fetch: fakeRelay({ inbox: 403 }).relayFetch }, to(), "harnesses", {}, { timeoutMs: 50 })).toMatchObject({
+    expect(await askMachine({ signer: person, person: person.pk, relay: RELAY, fetch: fakeRelay({ inbox: 403 }).relayFetch }, to(), "settings", {}, { timeoutMs: 50 })).toMatchObject({
       ok: false,
       why: "not-registered",
     });
-    expect(await askMachine({ signer: person, person: person.pk, relay: RELAY, fetch: fakeRelay({ inbox: 429 }).relayFetch }, to(), "harnesses", {}, { timeoutMs: 50 })).toMatchObject({
+    expect(await askMachine({ signer: person, person: person.pk, relay: RELAY, fetch: fakeRelay({ inbox: 429 }).relayFetch }, to(), "settings", {}, { timeoutMs: 50 })).toMatchObject({
       ok: false,
       why: "busy",
     });
@@ -146,8 +142,6 @@ describe("listing a person's paired computers through the relay", () => {
 describe("reading another computer's settings", () => {
   test("is a settings ask with nothing in it, and only an answer in the settings' own shape reads back", async () => {
     const settings: ComputerSettings = {
-      launch: "on",
-      bypass: "off",
       hooks: [{ harness: "claude", state: "installed", text: "installed" }],
       seats: [{ channel: "dev", agent: "otter", wake: "on" }],
     };

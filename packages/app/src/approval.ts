@@ -8,7 +8,6 @@ import { loadMember } from "@kiwi/channel/store.ts";
 import { linkOf, watches } from "@kiwi/channel/channel-ops.ts";
 import { ownComputers, tendDelegates } from "./delegations";
 import { tendLists } from "./device-lists";
-import { followedLaunches, sawMembers, sawRequests } from "./launch-follow";
 import { bridge, secrets } from "@kiwi/secrets/secrets.ts";
 
 async function ownLinks() {
@@ -27,13 +26,8 @@ async function tend(code: string, person: string | undefined): Promise<void> {
   if (lists) await tendDelegates(code, person, ownComputers(person, secrets().computers, lists.get(person)), ch).catch(() => null);
   const [{ PRESETS }, { cleanPersonalities }] = await Promise.all([import("@kiwi/core/presets.ts"), import("@kiwi/core/personalities.ts")]);
   const personalities = [...PRESETS, ...cleanPersonalities(secrets().personalities)];
-  if (followedLaunches(code).length) sawRequests(code, await ch.requests({ person, ...(lists ? { lists } : {}) }).catch(() => []));
   const api = {
-    autoApprove: async (p: string) => {
-      const members = await ch.autoApprove(p, personalities, null, lists);
-      sawMembers(code, members);
-      return members;
-    },
+    autoApprove: (p: string) => ch.autoApprove(p, personalities, null, lists),
     requests: (o: { person: string }) => ch.requests({ ...o, ...(lists ? { lists } : {}) }),
   };
   await tendOwned(person, api);

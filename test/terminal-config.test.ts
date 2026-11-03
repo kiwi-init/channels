@@ -2,8 +2,7 @@ import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { launchAgent } from "../src/launch/launch.ts";
-import { helpersOn, launchesOn, switchHelpers } from "../src/terminals/registry.ts";
+import { helpersOn, switchHelpers } from "../src/terminals/registry.ts";
 
 setDefaultTimeout(30_000);
 
@@ -42,7 +41,7 @@ function script(file: string, body: string): string {
 
 const saved = (dir: string): Record<string, unknown> => JSON.parse(readFileSync(join(dir, "kiwi", "config.json"), "utf8")) as Record<string, unknown>;
 
-describe("terminal helpers, and whether new agents may start", () => {
+describe("terminal helpers", () => {
   test("a terminal's helpers are on only when its switch says so", () => {
     expect(helpersOn("rex", { terminals: { helpers: { rex: "on" } } })).toBe(true);
     expect(helpersOn("rex", { terminals: { helpers: { rex: "off" } } })).toBe(false);
@@ -54,27 +53,17 @@ describe("terminal helpers, and whether new agents may start", () => {
     expect(switchHelpers({}, "rex", true)).toEqual({ helpers: { rex: "on" } });
     expect(switchHelpers({ helpers: { rex: "on" } }, "tmux", true)).toEqual({ helpers: { rex: "on", tmux: "on" } });
   });
-
-  test("creating new agents is on unless it was turned off, and off refuses every launch before anything runs", async () => {
-    expect(launchesOn({})).toBe(true);
-    expect(launchesOn({ launch: "off" })).toBe(false);
-    const refused = await launchAgent(
-      { harness: "claude", folder: "relative", code: "nope" },
-      { config: { launch: "off" }, hosted: { ready: async () => null, open: async () => ({ ok: false, why: "failed", detail: "" }), pane: () => null } },
-    );
-    expect(refused).toEqual({ ok: false, why: "not-allowed", detail: "Creating new agents is off on this computer (kiwi launches on turns it back on)" });
-  });
 });
 
-describe("kiwi terminal and kiwi launches", () => {
-  test("a fresh computer has creating new agents on, says they open in Channels' own tmux, and has no terminal to prefer", () => {
+describe("kiwi terminal", () => {
+  test("a fresh computer lists its terminals, with no switch for new agents and no terminal to prefer", () => {
     const dir = kiwiHome();
     const got = kiwi(dir, "terminal", "status", "--json");
     expect(got.code).toBe(0);
-    expect(JSON.parse(got.stdout)).toMatchObject({ launch: "on" });
-    expect(JSON.parse(got.stdout)).not.toHaveProperty("prefer");
-    expect(kiwi(dir, "terminal", "status").stdout).toContain("New agents open in Channels' own tmux");
+    expect(Object.keys(JSON.parse(got.stdout))).toEqual(["terminals"]);
+    expect(kiwi(dir, "terminal", "status").stdout).not.toContain("New agents");
     expect(kiwi(dir, "terminal", "prefer", "rex").code).toBe(1);
+    expect(kiwi(dir, "launches", "off").code).toBe(1);
   });
 
   test("kiwi terminal download tmux writes its helpers and turns its switch on, and remove takes both back", () => {
@@ -117,15 +106,6 @@ describe("kiwi terminal and kiwi launches", () => {
     expect(kiwi(dir, "terminal", "show").code).toBe(1);
   });
 
-  test("kiwi launches turns creating new agents off and on, and says which", () => {
-    const dir = kiwiHome();
-    expect(kiwi(dir, "launches", "off").code).toBe(0);
-    expect(saved(dir)).toMatchObject({ launch: "off" });
-    expect(JSON.parse(kiwi(dir, "launches", "status", "--json").stdout)).toEqual({ launch: "off" });
-    expect(kiwi(dir, "launches", "on").stdout).toStartWith("Creating new agents is on for this computer");
-    expect(kiwi(dir, "launches", "maybe").code).toBe(1);
-  });
-
   test("kiwi context-line is off on a fresh computer, and on and off write the one setting Settings reads, as JSON with --json", () => {
     const dir = kiwiHome();
     expect(JSON.parse(kiwi(dir, "context-line", "status", "--json").stdout)).toEqual({ contextLine: "off" });
@@ -141,9 +121,9 @@ describe("kiwi terminal and kiwi launches", () => {
   test("an old rex: on becomes the Rex helpers on, written in the new shape on the next save", () => {
     const dir = kiwiHome({ channels: {}, rex: "on" });
     expect(JSON.parse(kiwi(dir, "terminal", "status", "--json").stdout)).toMatchObject({ terminals: [{ id: "rex", helpers: "on" }, { id: "tmux" }] });
-    expect(kiwi(dir, "launches", "on").code).toBe(0);
+    expect(kiwi(dir, "terminal", "download", "tmux").code).toBe(0);
     const cfg = saved(dir);
-    expect(cfg).toMatchObject({ terminals: { helpers: { rex: "on" } }, launch: "on" });
+    expect(cfg).toMatchObject({ terminals: { helpers: { rex: "on", tmux: "on" } } });
     expect(cfg).not.toHaveProperty("rex");
     const off = kiwiHome({ channels: {}, rex: "off" });
     expect(JSON.parse(kiwi(off, "terminal", "status", "--json").stdout)).toMatchObject({ terminals: [{ id: "rex", helpers: "off" }, { id: "tmux" }] });

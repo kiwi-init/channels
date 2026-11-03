@@ -13,7 +13,6 @@ import { hear, onlineByName, type Online } from "@kiwi/channel/online.ts";
 import { trimmed } from "@kiwi/channel/trim.ts";
 import { approveTask, closedDigest, sendBackTask, type TaskSend } from "@kiwi/channel/task-actions.ts";
 import { TEND_SAFETY_MS, tendOwned } from "@kiwi/app/approval-tend.ts";
-import { followedLaunches, followLaunch, sawMembers, sawRequests, type LaunchSeen } from "@kiwi/app/launch-follow.ts";
 import { leadChatKey, roomView } from "./view.ts";
 import type { Connection, Picture, RoomView } from "./wire.ts";
 
@@ -33,7 +32,6 @@ const errorText = (e: WireError): string => (e.kind === "gone" ? `the channel wa
 interface RoomHooks {
   emit: (room: RoomView) => void;
   lost: (code: string) => void;
-  launch: (launch: string, seen: LaunchSeen) => void;
   person: () => string | null;
   log: (line: string) => void;
   devices: (links: unknown) => void;
@@ -65,7 +63,6 @@ export class Room {
   private tendAgain = false;
   private tendedAt = 0;
   private readonly told = new Set<string>();
-  private readonly following = new Map<string, () => void>();
 
   constructor(
     private readonly keyring: Keyring,
@@ -134,27 +131,7 @@ export class Room {
     }
   }
 
-  follow(launch: string): void {
-    this.following.get(launch)?.();
-    let last: LaunchSeen["stage"] | null = null;
-    const stop = followLaunch(this.code, launch, (seen) => {
-      if (seen.stage === last) return;
-      last = seen.stage;
-      this.hooks.launch(launch, seen);
-      if (seen.stage === "joined") this.unfollow(launch);
-    });
-    this.following.set(launch, stop);
-    this.kick();
-  }
-
-  unfollow(launch: string): void {
-    this.following.get(launch)?.();
-    this.following.delete(launch);
-  }
-
   stop(): void {
-    for (const stop of this.following.values()) stop();
-    this.following.clear();
     this.closed = true;
     this.stopLive?.();
     if (this.timer) clearTimeout(this.timer);
@@ -293,13 +270,8 @@ export class Room {
   private async tend(): Promise<void> {
     const person = this.hooks.person();
     if (!person) return;
-    if (followedLaunches(this.code).length) sawRequests(this.code, await this.keyring.call(this.code, "requests", { person }).catch(() => []));
     const api = {
-      autoApprove: async (p: string) => {
-        const members = await this.keyring.call(this.code, "autoApprove", p, []);
-        sawMembers(this.code, members);
-        return members;
-      },
+      autoApprove: (p: string) => this.keyring.call(this.code, "autoApprove", p, []),
       requests: (o: { person: string }) => this.keyring.call(this.code, "requests", o),
     };
     await tendOwned(person, api, { title: this.title, ping: (title, body) => this.hooks.log(`${title}: ${body}`), told: this.told });

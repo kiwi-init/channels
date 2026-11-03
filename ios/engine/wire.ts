@@ -1,5 +1,3 @@
-import type { HarnessRow } from "@kiwi/core/harnesses.ts";
-import type { LaunchChoices } from "@kiwi/core/launch-options.ts";
 import type { DeviceLink } from "@kiwi/core/devices.ts";
 import type { ChannelIdentityView, PersonView, PublicPerson } from "../../desktop/src/bridge.ts";
 
@@ -37,15 +35,7 @@ export type Ask =
   | { op: "sendBack"; code: string; task: number; why: string }
   | { op: "open"; code: string; place: string }
   | { op: "marks"; code: string; marks: Record<string, number>; write: boolean }
-  | { op: "nudge" }
-  | { op: "computers" }
-  | { op: "harnessesOn"; computer: string }
-  | { op: "foldersOn"; computer: string; code: string }
-  | LaunchAsk;
-
-export type HarnessChoice = HarnessRow & { name: string; face: string; mono: boolean };
-
-export type LaunchAsk = { op: "launch"; code: string; computer: string; harness: string; folder: string; nick?: string } & LaunchChoices;
+  | { op: "nudge" };
 
 export interface Picture {
   name: string;
@@ -63,8 +53,7 @@ export type Push =
   | { type: "gone"; code: string }
   | { type: "log"; line: string }
   | { type: "removed"; by: string }
-  | { type: "fetch"; id: number; url: string; body: string }
-  | { type: "launch"; code: string; launch: string; stage: "asked" | "joined"; name: string };
+  | { type: "fetch"; id: number; url: string; body: string };
 
 export type Connection = "connecting" | "live" | "reconnecting";
 

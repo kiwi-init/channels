@@ -44,7 +44,7 @@ import { deleteTheme, saveTheme, setPrefs } from "~/live/prefs"
 import { iconFromFile } from "~/live/icon-file"
 import { seatOf } from "~/live/seats"
 import { checkComputer, computerSettings, setContextLine, setHooks } from "~/live/computer"
-import { addStartFolder, allowNewAgents, allowRemoteBypass, removeStartFolder, setTerminalHelpers } from "~/live/starts"
+import { setTerminalHelpers } from "~/live/starts"
 import { markSeenIn, seenIn } from "@kiwi/app/threads.ts"
 import { followKey, followMark } from "~/live/threads"
 import { lastIn, seenKeyOf } from "~/live/seen-place"
@@ -247,22 +247,6 @@ export function makeActions(): Actions {
       const r = await showSeat(seat).catch((): ShowResult => ({ ok: false, why: "failed" }))
       return noteFor(seat.place, r)
     },
-    choicesOn: async (code, computer) => (await manage()).choicesOn(code, computer),
-    chooseFolder: async () => {
-      const b = bridge()
-      return b ? b.chooseFolder() : null
-    },
-    addAgent: (code, agent, seen) => {
-      let stop = () => {}
-      let stopped = false
-      void manage().then((m) => {
-        if (!stopped) stop = m.addAgent(code, agent, seen)
-      })
-      return () => {
-        stopped = true
-        stop()
-      }
-    },
     addRoom: (code, typed, members) => tried("Room not made", async () => (await manage()).addRoom(code, typed, members)),
     setRoomMembers: async (code, id, members) =>
       (await tried("Who's in didn't change", async () => {
@@ -420,10 +404,6 @@ export function makeActions(): Actions {
     recoverFinish: async (lost) => void (await tried("Couldn't finish the recovery", () => recoverFinish(lost))),
     saveTheme,
     deleteTheme,
-    addStartFolder: () => attempt("Couldn't add the folder", addStartFolder),
-    removeStartFolder: (dir) => attempt("Couldn't remove the folder", () => removeStartFolder(dir)),
-    allowNewAgents: (on) => attempt("Couldn't change new agents", () => allowNewAgents(on)),
-    allowRemoteBypass: (on) => attempt("Couldn't change bypass", () => allowRemoteBypass(on)),
     savePersonalities: (list) => attempt("Not saved", () => savePersonalities(list)),
     setHooks: (harness, on) => attempt("Couldn't change the hooks", () => setHooks(harness, on)),
     checkComputer,

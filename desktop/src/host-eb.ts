@@ -70,10 +70,6 @@ export const ebHost: Host = {
   openExternal: async (url) => {
     if (!Utils.openExternal(url)) throw new Error("the system browser didn't open the link");
   },
-  pickFolder: async () => {
-    const picked = await Utils.openFileDialog({ canChooseFiles: false, canChooseDirectory: true, allowsMultipleSelection: false });
-    return picked.find((p) => p.length > 0) ?? null;
-  },
   droppedFiles: () => readDropped(droppedPaths()),
   pastedImage: async () => {
     const png = pastedPng(MAX_PASTED_BYTES);

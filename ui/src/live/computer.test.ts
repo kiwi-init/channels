@@ -26,8 +26,6 @@ const fake = {
       ? {
           ok: true as const,
           value: {
-            launch: "on" as const,
-            bypass: "off" as const,
             hooks: [{ harness: "claude" as const, state: "outdated" as const, text: "" }],
             seats: [{ channel: "kiwi", agent: "builder", wake: "on" as const }],
           },
@@ -70,8 +68,6 @@ describe("Settings > Agents shows this computer", () => {
 
   test("a paired computer's settings read as lines, or say why it didn't answer", async () => {
     expect(await computerSettings("studio")).toEqual([
-      ["New agents", ["Allowed"]],
-      ["Bypass from your other devices", ["Off"]],
       ["Hooks", ["Claude Code out of date"]],
       ["Agents", ["builder in kiwi, wakes on a message"]],
     ])
