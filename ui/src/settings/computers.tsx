@@ -6,7 +6,6 @@ import { ago, useNow } from "~/kit/time"
 import type { Account, Computer, Device, LaunchedAgent } from "~/model"
 import { useApp } from "~/nav"
 import { Confirm } from "~/settings/controls"
-import { RecoveryKey } from "~/settings/recovery"
 import { Page } from "~/settings/sections"
 import { copyText } from "~/kit/toasts"
 
@@ -288,7 +287,6 @@ export function ComputersSection() {
       {account.devices && account.devices.length > 0 && (
         <>
           <SignedDevices devices={account.devices} />
-          {account.recovery && <RecoveryKey recovery={account.recovery} />}
           <section className="set-group" aria-label="Paired with a code">
             <div className="heading">
               <h3>Paired with a code</h3>

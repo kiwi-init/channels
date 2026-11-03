@@ -17,7 +17,6 @@ const ERROR_TAGS = [
   "NotFound",
   "MethodNotAllowed",
   "Conflict",
-  "VaultConflict",
   "Taken",
   "TooLarge",
   "UpdateRequired",

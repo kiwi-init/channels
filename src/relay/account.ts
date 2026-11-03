@@ -4,7 +4,6 @@ import type { FreshNotice } from "@kiwi/core/account.ts";
 import { approvingDevice, currentDevice, readDeviceList, speaksForPerson, type Device, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
 import { accountScope, ENROLL_TTL_MS, readEnrollAnswer, readEnrollAsk, revealMatches, type Enrollment } from "@kiwi/core/enroll.ts";
 import { canonical } from "@kiwi/core/identity.ts";
-import { checkVault, isOldVault, readRecovery, type OldVault, type Recovery, type RecoveryLink, type Vault } from "@kiwi/core/recovery.ts";
 import { BadRequest, Conflict, Forbidden, NotFound, SignInRequired, TooLarge, TooMany, Unauthorized } from "./failures.ts";
 import { readCapped } from "./http.ts";
 import { HUMAN_HEADER, type HumanAuth } from "./human.ts";
@@ -15,7 +14,6 @@ import { requestToken } from "./room/auth.ts";
 export const ACCOUNT_ASKS_PER_MINUTE = 5;
 const LIST_MAX_BYTES = 768 * 1024;
 const ASK_MAX_BYTES = 4096;
-const VAULT_MAX_BYTES = 1024 * 1024;
 export const FRESH_WAIT_MS = 7 * 24 * 3_600_000;
 export const FRESH_EVERY_MS = 24 * 3_600_000;
 
@@ -36,17 +34,12 @@ export interface AccountStore {
   setEnrollment(user: string, next: Enrollment | null, prev: Enrollment | null): Promise<boolean>;
   revoke(keys: string[]): Promise<void>;
   tellComputers(keys: string[], links: unknown[]): Promise<void>;
-  recovery(user: string): Promise<unknown[]>;
-  extendRecovery(user: string, from: number, links: RecoveryLink[]): Promise<boolean>;
-  vault(user: string): Promise<Vault | OldVault | null>;
-  setVault(user: string, next: Vault | OldVault, prev: number): Promise<boolean>;
   fresh(user: string): Promise<FreshRecord | null>;
   setFresh(user: string, next: FreshRecord, prev: FreshRecord | null): Promise<boolean>;
   startOver(user: string, start: FreshStart): Promise<boolean>;
 }
 
-const PATH = /^\/v1\/account(?:\/vault|\/fresh(?:\/([A-Za-z0-9_-]{22}))?|\/ask(?:\/([A-Za-z0-9_-]{22})(?:\/(answer|reveal))?)?)?$/;
-const VAULT_PATH = "/v1/account/vault";
+const PATH = /^\/v1\/account(?:\/fresh(?:\/([A-Za-z0-9_-]{22}))?|\/ask(?:\/([A-Za-z0-9_-]{22})(?:\/(answer|reveal))?)?)?$/;
 const FRESH_PATH = "/v1/account/fresh";
 
 export const isAccountPath = (pathname: string): boolean => PATH.test(pathname);
@@ -92,55 +85,6 @@ async function kept(store: AccountStore, user: string): Promise<{ links: unknown
   return { links, list: read.list };
 }
 
-async function keptRecovery(store: AccountStore, user: string, list: DeviceList | null, now: number): Promise<{ chain: unknown[]; recovery: Recovery | null }> {
-  const chain = await store.recovery(user);
-  if (!chain.length || !list) return { chain, recovery: null };
-  const read = await readRecovery(chain, list, now);
-  if (!read.ok) throw new Error(`a kept recovery chain doesn't hold up: ${read.why}`);
-  return { chain, recovery: read.recovery };
-}
-
-async function keepVault(store: AccountStore, user: string, list: DeviceList | null, signer: string, body: Record<string, unknown> | null, now: number): Promise<Response> {
-  const raw = body?.["recovery"];
-  const vault = body?.["vault"];
-  if (!body || (raw !== undefined && !Array.isArray(raw)) || (raw === undefined && vault === undefined))
-    return refuse(new BadRequest({ message: "a vault update takes {recovery, vault}: the recovery chain, the sealed vault, or both" }));
-  if (!list) return refuse(new NotFound({ message: "publish the device list before a recovery key" }));
-  const { chain, recovery: kept } = await keptRecovery(store, user, list, now);
-  let recovery = kept;
-  if (!speaksForPerson(list, signer, now) && signer !== recovery?.rpk)
-    return refuse(new Forbidden({ message: "only the person key, the recovery key or an app that approves devices keeps the vault" }));
-  if (Array.isArray(raw)) {
-    if (raw.length < chain.length) return refuse(new Conflict({ message: "a newer recovery chain is already kept" }));
-    if (chain.some((l, i) => canonical(l) !== canonical(raw[i]))) return refuse(new Conflict({ message: "that recovery chain doesn't extend the one kept" }));
-    const read = await readRecovery(raw, list, now);
-    if (!read.ok) return refuse(new BadRequest({ message: `that recovery chain doesn't hold up: ${read.why}` }));
-    const fresh = raw.slice(chain.length) as RecoveryLink[];
-    if (fresh.some((l) => list.revoked.includes(l.pk))) return refuse(new Forbidden({ message: "a removed device can't change the recovery key" }));
-    if (fresh.some((l) => Math.abs(l.at - now) > AUTH_SKEW_MS)) return refuse(new BadRequest({ message: "a new recovery link carries the time it's sent, and this one doesn't" }));
-    if (fresh.length && !(await store.extendRecovery(user, chain.length, fresh))) return refuse(new Conflict({ message: "the recovery chain changed meanwhile; read it and try again" }));
-    recovery = read.recovery;
-  }
-  if (vault === undefined) return done();
-  if (!recovery) return refuse(new Conflict({ message: "set up a recovery key before its vault" }));
-  const bad = await checkVault(vault, list);
-  if (bad) return refuse(new BadRequest({ message: `that vault doesn't hold up: ${bad}` }));
-  const next = vault as Vault | OldVault;
-  if (!speaksForPerson(list, next.pk, now)) return refuse(new Forbidden({ message: "the vault is signed by a key that isn't one of this person's current approving devices" }));
-  const prev = await store.vault(user);
-  if (isOldVault(next)) {
-    if (list.reroots.length || (prev && !isOldVault(prev)))
-      return refuse(new Conflict({ message: "this vault is kept with a box per desktop now, so an app from before that can't write it: update the app" }));
-  } else if (next.held.pk !== list.root || next.held.rxpk !== recovery.rxpk)
-    return refuse(new BadRequest({ message: "that vault's person key isn't sealed for the current person key and recovery key" }));
-  const known = prev?.version ?? 0;
-  if (prev && canonical(prev) === canonical(next)) return done();
-  if (next.version <= known) return refuse(new Conflict({ message: `vault version ${known} is already kept, so version ${next.version} is too old` }));
-  if (next.version !== known + 1) return refuse(new BadRequest({ message: `vault version ${next.version} doesn't follow version ${known}` }));
-  if (!(await store.setVault(user, next, known))) return refuse(new Conflict({ message: "the vault changed meanwhile; read it and try again" }));
-  return done();
-}
-
 async function settleFresh(store: AccountStore, user: string, now: number): Promise<void> {
   const start = (await store.fresh(user))?.pending;
   if (!start || start.ends > now) return;
@@ -169,7 +113,7 @@ async function startFresh(store: AccountStore, user: string, list: DeviceList | 
     return refuse(new Conflict({ message: "a start-over is already waiting: it keeps its end time, and a device of this account can cancel it" }));
   }
   if (Math.abs((raw[0] as DeviceLink).at - now) > AUTH_SKEW_MS) return refuse(new BadRequest({ message: "a start-over carries the time it's sent, and this one doesn't" }));
-  const used = [list.person, ...list.reroots.map((r) => r.root), ...list.devices.map((d) => d.device), ...list.revoked];
+  const used = [list.person, ...list.devices.map((d) => d.device), ...list.revoked];
   if (used.includes(read.list.person) || used.includes(desk.device)) return refuse(new Conflict({ message: "a start-over needs a new person key and a new device key" }));
   if (rec && now - rec.lastAt < FRESH_EVERY_MS) return refuse(new TooMany({ message: "this account started over less than a day ago; try again tomorrow" }));
   const start: FreshStart = {
@@ -189,7 +133,7 @@ async function cancelFresh(store: AccountStore, user: string, list: DeviceList |
   const rec = await store.fresh(user);
   const start = rec?.pending;
   if (!rec || !start || start.id !== id) return refuse(new NotFound({ message: "that start-over is gone" }));
-  const listed = !!list && (signer === list.root || !!currentDevice(list, signer, now));
+  const listed = !!list && (signer === list.person || !!currentDevice(list, signer, now));
   if (!listed && signer !== start.device) return refuse(new Forbidden({ message: "only a device of this account cancels a start-over" }));
   if (!(await store.setFresh(user, { pending: null, lastAt: rec.lastAt }, rec))) return refuse(new Conflict({ message: "the start-over changed meanwhile; read it and try again" }));
   return done();
@@ -206,13 +150,12 @@ export async function onAccountHttp(
   if (!m) return null;
   if (req.method === "OPTIONS") return corsPreflight();
   const now = (opts.now ?? Date.now)();
-  const onVault = url.pathname === VAULT_PATH;
   const onFresh = url.pathname.startsWith(FRESH_PATH);
-  const onAsk = url.pathname !== "/v1/account" && !onVault && !onFresh;
+  const onAsk = url.pathname !== "/v1/account" && !onFresh;
   const id = m[2];
   const step = m[3];
   const writes = req.method === "PUT" || req.method === "POST";
-  const bytes = writes ? await readCapped(req, onAsk || onFresh ? ASK_MAX_BYTES : onVault ? VAULT_MAX_BYTES : LIST_MAX_BYTES) : new Uint8Array(0);
+  const bytes = writes ? await readCapped(req, onAsk || onFresh ? ASK_MAX_BYTES : LIST_MAX_BYTES) : new Uint8Array(0);
   if (bytes === null) return refuse(new TooLarge({ message: "that request is too large for an account route" }));
   if (writes && opts.perAddress && !(await opts.perAddress())) return refuse(new TooMany({ message: "too many account requests from this address; try again in a few minutes" }));
   const body = new TextDecoder().decode(bytes);
@@ -223,7 +166,6 @@ export async function onAccountHttp(
     const pending = (await store.fresh(user))?.pending;
     return answer({ fresh: pending ? noticeOf(pending) : null });
   }
-  if (onVault && req.method === "GET") return answer({ recovery: await store.recovery(user), vault: await store.vault(user) });
   if (!onAsk && req.method === "GET") return answer({ user, links });
 
   const token = requestToken(req);
@@ -238,8 +180,6 @@ export async function onAccountHttp(
     return refuse(new NotFound({ message: "not found" }));
   }
 
-  if (onVault) return req.method === "PUT" ? keepVault(store, user, list, signer, parse(body), now) : refuse(new NotFound({ message: "not found" }));
-
   if (!onAsk && req.method === "PUT") {
     const raw = parse(body)?.links;
     if (!Array.isArray(raw)) return refuse(new BadRequest({ message: "an account takes {links}, the person's device list" }));
@@ -251,15 +191,8 @@ export async function onAccountHttp(
     if (raw.length < links.length) return refuse(new Conflict({ message: "a newer device list is already kept" }));
     if (links.some((l, i) => canonical(l) !== canonical(raw[i]))) return refuse(new Conflict({ message: "that list doesn't extend the one kept" }));
     if (raw.length === links.length) return done();
-    const reroots = (raw.slice(links.length) as DeviceLink[]).flatMap((l) => (l.op === "reroot" ? [l] : []));
-    if (reroots.length) {
-      const chain = await store.recovery(user);
-      if (reroots.some((l) => Math.abs(l.at - now) > AUTH_SKEW_MS)) return refuse(new BadRequest({ message: "a re-root carries the time it's sent, and this one doesn't" }));
-      if (reroots.some((l) => canonical(l.recovery) !== canonical(chain)))
-        return refuse(new Conflict({ message: "a re-root is signed against the recovery chain this account keeps, and this one isn't" }));
-    }
     if (!(await store.extend(user, links.length, raw.slice(links.length) as DeviceLink[]))) return refuse(new Conflict({ message: "the device list changed meanwhile; read it and try again" }));
-    if ((raw.slice(links.length) as DeviceLink[]).some((l) => l.op === "reroot" || l.pk === list?.root)) await dropFresh(store, user);
+    if ((raw.slice(links.length) as DeviceLink[]).some((l) => l.pk === list?.person)) await dropFresh(store, user);
     const cut = next.revoked.filter((k) => !list?.revoked.includes(k));
     if (cut.length) await store.revoke(cut);
     const computers = next.devices.filter((d) => d.as === "computer").map((d) => d.device);

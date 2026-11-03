@@ -5,21 +5,7 @@ import type { Personality } from "@kiwi/core/personality.ts"
 import { HANDOFF_DONE } from "@kiwi/core/protocol.ts"
 
 import { stepReplyText } from "~/chat/step"
-import {
-  DEMO_ACCOUNT,
-  DEMO_CHANNEL,
-  DEMO_DEVICES,
-  DEMO_EMPTY,
-  DEMO_GUEST,
-  DEMO_GUEST_MEMBER,
-  DEMO_LAUNCHED,
-  DEMO_PREFS,
-  DEMO_REROOT,
-  DEMO_TILES,
-  DEMO_WAITING,
-  DEMO_WELCOME,
-  DEMO_WORDS,
-} from "~/demo/data"
+import { DEMO_ACCOUNT, DEMO_CHANNEL, DEMO_DEVICES, DEMO_EMPTY, DEMO_GUEST, DEMO_GUEST_MEMBER, DEMO_LAUNCHED, DEMO_PREFS, DEMO_TILES, DEMO_WAITING } from "~/demo/data"
 import { longFeed } from "~/demo/long"
 import { demoAround, demoFetchOlder, demoOlder } from "~/demo/older"
 import { withSpecs } from "~/demo/specs"
@@ -259,15 +245,10 @@ export type Scenario =
   | "devices"
   | "enroll-desktop"
   | "enroll-desktop-digits"
-  | "recover-desktop"
-  | "recover-desktop-welcome"
   | "enroll-desktop-check"
   | "devices-forgotten"
   | "forgot-here"
   | "link-stuck"
-  | "recovery-set"
-  | "recovery-let-go"
-  | "recovery-pending"
   | "github-sign-in"
   | "github-code"
   | "github-signed-in"
@@ -361,19 +342,7 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
       prefs,
       seq: 1000,
     }
-  if (scenario === "devices") return { account: { ...DEMO_ACCOUNT, devices: DEMO_DEVICES, recovery: { at: null, here: true } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
-  if (scenario === "recovery-pending")
-    return {
-      account: { ...DEMO_ACCOUNT, devices: DEMO_DEVICES, recovery: { at: Date.now() - 30 * 86_400_000, here: true, pending: { from: Date.now() + 5 * 86_400_000, by: "studio" } } },
-      tiles: DEMO_TILES,
-      channels,
-      prefs,
-      seq: 1000,
-    }
-  if (scenario === "recovery-let-go")
-    return { account: { ...DEMO_ACCOUNT, devices: DEMO_DEVICES, recovery: { at: Date.now() - 3 * 86_400_000, here: false } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
-  if (scenario === "recovery-set")
-    return { account: { ...DEMO_ACCOUNT, devices: DEMO_DEVICES, recovery: { at: Date.now() - 3 * 86_400_000, here: true } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
+  if (scenario === "devices") return { account: { ...DEMO_ACCOUNT, devices: DEMO_DEVICES }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
   if (scenario === "devices-forgotten")
     return {
       account: { ...DEMO_ACCOUNT, devices: DEMO_DEVICES.filter((d) => d.id !== "dev-air"), forgotten: [{ label: "Jow's MacBook Air", by: "iPhone", at: Date.now() - 2 * 3_600_000 }] },
@@ -385,8 +354,6 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
   if (scenario === "forgot-here") return { account: { ...DEMO_ACCOUNT, forgotHere: { by: "Jow's MacBook Air" } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
   if (scenario === "enroll-desktop") return { account: null, tiles: [], channels: new Map(), prefs, seq: 1000, enrolling: { stage: "asking" } }
   if (scenario === "enroll-desktop-digits") return { account: null, tiles: [], channels: new Map(), prefs, seq: 1000, enrolling: { stage: "digits", digits: "482915" } }
-  if (scenario === "recover-desktop") return { account: null, tiles: [], channels: new Map(), prefs, seq: 1000, enrolling: { stage: "recover" } }
-  if (scenario === "recover-desktop-welcome") return { account: null, tiles: [], channels: new Map(), prefs, seq: 1000, enrolling: DEMO_WELCOME }
   if (scenario === "enroll-desktop-check")
     return { account: null, tiles: [], channels: new Map(), prefs, seq: 1000, enrolling: { stage: "check", person: { name: "Jow", fingerprint: "3f9a 0c41 77e2 b8d5 1a06" } } }
   if (scenario === "signed-out") return { account: null, tiles: [], channels: new Map(), prefs, seq: 1000 }
@@ -791,18 +758,6 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       forgetDevice: (ids) => setState((s) => (s.account ? { ...s, account: { ...s.account, devices: s.account.devices?.filter((d) => !ids.includes(d.id)) } } : s)),
       renewDevice: (...ids) =>
         setState((s) => (s.account ? { ...s, account: { ...s.account, devices: s.account.devices?.map((d) => (ids.includes(d.id) ? { ...d, until: Date.now() + 90 * 86_400_000 } : d)) } } : s)),
-      recoveryWords: async () => DEMO_WORDS,
-      recoverySave: async (typed) => {
-        const wrong = typed.filter((t) => t.word.trim().toLowerCase() !== DEMO_WORDS[t.at]).map((t) => t.at)
-        if (wrong.length) return { ok: false, wrong }
-        setState((s) => (s.account ? { ...s, account: { ...s.account, recovery: { at: Date.now(), here: true } } } : s))
-        return { ok: true }
-      },
-      recoveryDrop: () => {},
-      recoveryCancel: async () => {
-        setState((s) => (s.account?.recovery ? { ...s, account: { ...s.account, recovery: { at: s.account.recovery.at, here: s.account.recovery.here } } } : s))
-        return null
-      },
       signInWithGithub: () => {
         setState((s) => ({ ...s, signIn: { stage: "sign-in", code: { code: "8F3A-29KD", url: "https://github.com/login/device" }, problem: null } }))
         setTimeout(() => setState((s) => (s.signIn ? { ...s, signIn: s.account ? null : { stage: "signed-in", login: "ojowwalker77" } } : s)), 1500)
@@ -813,21 +768,6 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       },
       enrollKeep: () => setState((s) => ({ ...s, enrolling: null })),
       enrollCancel: () => setState((s) => ({ ...s, enrolling: null })),
-      rerootOpen: async (words) => {
-        const n = words.split(/[^a-z]+/i).filter(Boolean).length
-        if (n !== 24) return { ok: false, trouble: { why: `a recovery key is 24 words, and that's ${n}` } }
-        return DEMO_REROOT
-      },
-      rerootFinish: async () => true,
-      rerootCancel: () => {},
-      recoverBegin: () => setState((s) => ({ ...s, enrolling: { stage: "recover" } })),
-      recoverOpen: async (words) => {
-        const n = words.split(/[^a-z]+/i).filter(Boolean).length
-        if (n !== 24) return { why: `a recovery key is 24 words, and that's ${n}` }
-        setState((s) => ({ ...s, enrolling: DEMO_WELCOME }))
-        return null
-      },
-      recoverFinish: async () => setState((s) => ({ ...s, enrolling: null })),
       enrollDeny: () => setState((s) => (s.account ? { ...s, account: { ...s.account, enrollAsk: undefined } } : s)),
       saveTheme: (theme) => setState((s) => ({ ...s, prefs: { ...s.prefs, ...savedTheme(s.prefs, theme) } })),
       deleteTheme: (id) => setState((s) => ({ ...s, prefs: { ...s.prefs, ...deletedTheme(s.prefs, id) } })),

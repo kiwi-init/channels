@@ -110,7 +110,7 @@ test("sign-in says so, and only create asks for it", async () => {
 
 test("an older relay that sends no tag still gets one, from the status", () => {
   expect(new RelayError(403, "only the channel owner can do that").tag).toBe("Forbidden");
-  expect(new RelayError(409, "x", "VaultConflict").tag).toBe("VaultConflict");
+  expect(new RelayError(409, "x", "Removed").tag).toBe("Removed");
   expect(new RelayError(409, "x", "MadeUp").tag).toBe("Conflict");
   expect(tagForStatus(418)).toBe("Internal");
 });

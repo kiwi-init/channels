@@ -12,11 +12,6 @@ function useCards(): Card[] {
   const cards: Card[] = []
   const ask = account?.enrollAsk
   if (ask && ask.stage !== "elsewhere") cards.push({ key: "ask", text: `${ask.label} wants to sign in as you`, act: "Review", onAct: () => go({ to: "settings", section: "computers" }) })
-  const words = account?.recovery?.pending
-  if (words) {
-    const day = new Date(words.from).toLocaleDateString(undefined, { day: "numeric", month: "short" })
-    cards.push({ key: `words ${words.from}`, text: `New recovery words take over ${day}. Not you?`, act: "Review", onAct: () => go({ to: "settings", section: "computers" }) })
-  }
   const moved = account?.moved
   if (moved)
     cards.push({

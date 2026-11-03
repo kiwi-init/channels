@@ -1,4 +1,4 @@
-import type { Keeps, Reproved } from "@kiwi/core/client/members.ts";
+import type { Keeps } from "@kiwi/core/client/members.ts";
 import { newestLists, readDeviceList, type DeviceClaim, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
 import type { Member } from "@kiwi/core/membership.ts";
 import { keepLists } from "./forgotten-computers";
@@ -11,16 +11,13 @@ const POSTED_KEY = "mc.devices.posted";
 const GONE_KEY = "mc.devices.gone";
 const KEEP_KEY = "mc.devices.keep";
 
-type Seen = Record<string, { through: number; links: Record<string, DeviceLink[]>; proofs?: Record<string, DeviceClaim>; keeps?: Record<string, DeviceClaim> }>;
+type Seen = Record<string, { through: number; links: Record<string, DeviceLink[]>; keeps?: Record<string, DeviceClaim> }>;
 
 type Kept = Record<string, { links: DeviceLink[]; keep: DeviceKeep }>;
-
-export type SeatProof = Pick<DeviceClaim, "device" | "vouch">;
 
 export interface ListsApi {
   history: (since: number) => Promise<{ messages: Message[] }>;
   cutDevices: (list: DeviceList, keeps: Keeps) => Promise<Cut[]>;
-  reprove: (list: DeviceList, proofs: Record<string, DeviceClaim>) => Promise<Reproved>;
 }
 
 export interface GoneApi {
@@ -28,7 +25,7 @@ export interface GoneApi {
 }
 
 export interface PostApi {
-  send: (body: string, opts: { kind: "event"; ev: { op: "devices"; links: DeviceLink[]; device?: string; vouch?: string; keep?: DeviceKeep } }) => Promise<number>;
+  send: (body: string, opts: { kind: "event"; ev: { op: "devices"; links: DeviceLink[]; keep?: DeviceKeep } }) => Promise<number>;
 }
 
 function read<T>(key: string): Partial<T> {
@@ -55,15 +52,6 @@ export function postedLists(messages: readonly Message[], into: Record<string, D
     if (m.kind !== "event" || m.ev?.op !== "devices") continue;
     const was = out[m.from];
     if (!was || m.ev.links.length >= was.length) out[m.from] = m.ev.links;
-  }
-  return out;
-}
-
-export function postedProofs(messages: readonly Message[], into: Record<string, DeviceClaim> = {}): Record<string, DeviceClaim> {
-  const out = { ...into };
-  for (const m of messages) {
-    if (!m.sigOk || !m.pk || m.kind !== "event" || m.ev?.op !== "devices" || !m.ev.device || !m.ev.vouch) continue;
-    out[m.pk] = { links: m.ev.links, device: m.ev.device, vouch: m.ev.vouch };
   }
   return out;
 }
@@ -96,11 +84,10 @@ async function scan(code: string, api: Pick<ListsApi, "history">): Promise<void>
   const { messages } = await api.history(was.through);
   const through = messages.reduce((n, m) => Math.max(n, m.seq), was.through);
   if (through === was.through) return;
-  write(SEEN_KEY, { ...read<Seen>(SEEN_KEY), [code]: { through, links: postedLists(messages, was.links), proofs: postedProofs(messages, was.proofs), keeps: postedKeeps(messages, was.keeps) } });
+  write(SEEN_KEY, { ...read<Seen>(SEEN_KEY), [code]: { through, links: postedLists(messages, was.links), keeps: postedKeeps(messages, was.keeps) } });
 }
 
 const cutFor = new Map<string, Map<string, number>>();
-const settledFor = new Map<string, Map<string, string>>();
 
 export async function tendLists(code: string, own: readonly DeviceLink[], api: ListsApi): Promise<{ lists: Map<string, DeviceList>; cut: Cut[] }> {
   await scan(code, api);
@@ -113,7 +100,7 @@ export async function tendLists(code: string, own: readonly DeviceLink[], api: L
   const cut: Cut[] = [];
   const keeps = { ...seen[code]?.keeps, ...keptHere(code) };
   for (const list of lists.values()) {
-    if ((!list.revoked.length && !list.reroots.length) || done.get(list.person) === list.version) continue;
+    if (!list.revoked.length || done.get(list.person) === list.version) continue;
     try {
       cut.push(...(await api.cutDevices(list, keeps)));
       done.set(list.person, list.version);
@@ -121,35 +108,16 @@ export async function tendLists(code: string, own: readonly DeviceLink[], api: L
       // The relay or an older app refused: the lists still decide this pass's joins, and the next pass cuts again.
     }
   }
-  const settled = settledFor.get(code) ?? new Map<string, string>();
-  settledFor.set(code, settled);
-  const proofs = seen[code]?.proofs ?? {};
-  const shown = Object.values(proofs)
-    .map((p) => p.vouch)
-    .sort()
-    .join(" ");
-  for (const list of lists.values()) {
-    const mark = `${list.version} ${shown}`;
-    if (!list.reroots.length || settled.get(list.person) === mark) continue;
-    try {
-      const got = await api.reprove(list, proofs);
-      cut.push(...got.cut);
-      if (!got.waiting.length) settled.set(list.person, mark);
-    } catch {
-      // The relay or an older app refused: the seats wait, and the next pass proves them again.
-    }
-  }
   return { lists, cut };
 }
 
-export async function postList(code: string, links: readonly DeviceLink[], api: PostApi, prove?: () => Promise<SeatProof | null>): Promise<boolean> {
+export async function postList(code: string, links: readonly DeviceLink[], api: PostApi): Promise<boolean> {
   const posted = read<Record<string, number>>(POSTED_KEY);
   if (!links.length || (posted[code] ?? 0) >= links.length) return false;
-  const proof = await prove?.().catch(() => null);
   const kept = read<Kept>(KEEP_KEY)[code];
   await api.send("updated their list of devices", {
     kind: "event",
-    ev: { op: "devices", links: [...links], ...(proof ? { device: proof.device, vouch: proof.vouch } : {}), ...(kept ? { keep: kept.keep } : {}) },
+    ev: { op: "devices", links: [...links], ...(kept ? { keep: kept.keep } : {}) },
   });
   write(POSTED_KEY, { ...read<Record<string, number>>(POSTED_KEY), [code]: links.length });
   return true;
