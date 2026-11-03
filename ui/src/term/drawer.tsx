@@ -14,6 +14,7 @@ import { activeTheme } from "~/theme/themes"
 
 const SCROLLBACK = 3_000
 const RESIZE_MS = 120
+const BROKE_AGAIN_MS = 10_000
 const HEIGHT_KEY = "kiwi.term.height"
 const MIN_HEIGHT = 180
 const CELL = 8
@@ -107,6 +108,7 @@ export default function TermDrawer({ channel, of }: { channel: Channel; of: Term
   const looks = `${theme.id}:${JSON.stringify(colorsOf(theme))}`
   const ended = useRef<() => void>(() => {})
   const last = useRef<{ n: number; pane: string | null }>({ n: 0, pane: null })
+  const brokeAt = useRef(0)
 
   const pick = (pane: string | null) => setWant((w) => ({ pane, n: w.n + 1 }))
   const settle = (left: TermTab[], gone: string | null) => {
@@ -154,8 +156,32 @@ export default function TermDrawer({ channel, of }: { channel: Channel; of: Term
         const fit = new FitAddon()
         t.loadAddon(fit)
         t.open(el)
+        const broke = () => {
+          if (gone) return
+          gone = true
+          window.clearTimeout(timer)
+          observer?.disconnect()
+          link?.close()
+          link = null
+          term = null
+          t.dispose()
+          el.replaceChildren()
+          const now = Date.now()
+          const again = now - brokeAt.current < BROKE_AGAIN_MS
+          brokeAt.current = now
+          if (again) setPhase({ kind: "error", why: "The terminal stopped drawing. Close it and open it again." })
+          else pick(last.current.pane)
+        }
+        const safely = (draw: () => void) => {
+          try {
+            draw()
+          } catch {
+            // The terminal engine broke mid-draw; drawing on would freeze the page, so it opens afresh.
+            broke()
+          }
+        }
         const watch: TermWatch = {
-          out: (text) => t.write(text),
+          out: (text) => safely(() => t.write(text)),
           ended: () => {
             setPhase((p) => (p.kind === "live" ? { ...p, kind: "ended" } : p))
             ended.current()
@@ -177,8 +203,11 @@ export default function TermDrawer({ channel, of }: { channel: Channel; of: Term
         last.current = { n: want.n, pane: opened.screen.pane ?? null }
         setCurrent(opened.screen.pane ?? null)
         if (name === null) void app.actions.myTerms().then((t) => !gone && setTabs(t))
-        t.resize(opened.screen.cols, opened.screen.rows)
-        t.write(opened.screen.seed)
+        safely(() => {
+          t.resize(opened.screen.cols, opened.screen.rows)
+          t.write(opened.screen.seed)
+        })
+        if (gone) return
         setPhase({ kind: opened.screen.dead ? "ended" : "live", cols: opened.screen.cols, rows: opened.screen.rows })
         t.onData((data) => l.keys(data))
         t.focus()
@@ -186,8 +215,9 @@ export default function TermDrawer({ channel, of }: { channel: Channel; of: Term
           window.clearTimeout(timer)
           timer = window.setTimeout(() => {
             const next = fit.proposeDimensions()
-            if (!next || (next.cols === t.cols && next.rows === t.rows)) return
-            t.resize(next.cols, next.rows)
+            if (gone || !next || (next.cols === t.cols && next.rows === t.rows)) return
+            safely(() => t.resize(next.cols, next.rows))
+            if (gone) return
             l.size(next.cols, next.rows)
             setPhase((p) => (p.kind === "live" || p.kind === "ended" ? { ...p, cols: next.cols, rows: next.rows } : p))
           }, RESIZE_MS)
