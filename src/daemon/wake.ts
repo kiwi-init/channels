@@ -11,6 +11,8 @@ import { kimiServer, promptKimi } from "../kimi-server.ts";
 import { wakeArgv, wakeKey, wakePath, wakePrompt, type WakePath, type WakeVia } from "@kiwi/core/wake.ts";
 import { withDeadline, type DaemonWake } from "./protocol.ts";
 import { seatRecordFor, wakeOn } from "./reach.ts";
+import { tmuxPane } from "../tmux-pane.ts";
+import { typeWake } from "./wake-pane.ts";
 import type { Seat } from "./seat.ts";
 
 const WAKE_LOG_KEEP_BYTES = 1_000_000;
@@ -71,6 +73,7 @@ function oneLine(text: string): string {
   return text.replace(/\s+/g, " ").trim().slice(0, 200);
 }
 const UNREAD_CHECK_MS = 30_000;
+const TYPE_RETRY_MS = 10_000;
 
 export const pathOf = async (cfg: Config, alias: string, agent: string): Promise<WakePath> => {
   const record = seatRecordFor(cfg, alias, agent);
@@ -168,6 +171,13 @@ export function seatWakes({ dir, wakeDelayMs, wakeGapMs, wakeOutstandingMs, stop
     return path.kind === "command" ? path : null;
   };
 
+  const typeInto = async (seat: Seat, pane: string, prompt: string): Promise<{ why: string | null; retry: boolean }> => {
+    const record = seatRecordFor(loadConfig(), seat.alias, seat.agent);
+    const place = record?.tmux?.pane === pane ? record.tmux : null;
+    const typed = await typeWake(place ? tmuxPane(place, process.env.KIWI_TMUX || "tmux") : null, prompt, record?.harness);
+    return typed.ok ? { why: null, retry: false } : { why: typed.why, retry: typed.retry };
+  };
+
   const fireWake = async (seat: Seat): Promise<void> => {
     if (!current(seat)) return;
     if (seat.waking) {
@@ -201,6 +211,7 @@ export function seatWakes({ dir, wakeDelayMs, wakeGapMs, wakeOutstandingMs, stop
       }
       seat.outstanding = null;
       const prompt = wakePrompt(seat.alias, seat.agent);
+      let retry = false;
       const why =
         path.via === "webhook"
           ? hook
@@ -208,8 +219,14 @@ export function seatWakes({ dir, wakeDelayMs, wakeGapMs, wakeOutstandingMs, stop
             : "no webhook set"
           : path.via === "kimi-server"
             ? await wakeKimi(seat, path.session, prompt)
-            : await runWake(seat, wakeArgv(path.via, path.session, prompt));
+            : path.via === "tmux-typing"
+              ? await typeInto(seat, path.session, prompt).then((t) => ((retry = t.retry), t.why))
+              : await runWake(seat, wakeArgv(path.via, path.session, prompt));
       if (!current(seat)) return;
+      if (retry) {
+        seat.wakeAgain = false;
+        return scheduleWake(seat, Math.min(wakeGapMs, TYPE_RETRY_MS));
+      }
       seat.lastWake = { at: Date.now(), via: path.via, unread, ok: why === null };
       if (why === null) seat.outstanding = { seqs, to, at: seat.lastWake.at };
       logWake(seat, seat.lastWake, why, cursor);

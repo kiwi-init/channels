@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { keepHeld } from "@kiwi/core/client.ts";
 import { keepSeen, type ChannelAccess } from "@kiwi/core/crypto.ts";
 import { home, writePrivate } from "./paths.ts";
+import type { TmuxPlace } from "../tmux-pane.ts";
 
 export interface ChannelConfig extends ChannelAccess {
   relay: string;
@@ -31,6 +32,7 @@ export interface SeatRecord {
   seen?: number;
   plain?: true;
   model?: string;
+  tmux?: TmuxPlace;
   hold?: SeatHold;
   holds?: number;
   loop?: true;
