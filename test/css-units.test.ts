@@ -30,6 +30,14 @@ describe("sizes that must follow Settings > Appearance > Text size", () => {
     expect(lines("@container top (max-width: 70rem) {\n  .a {\n    display: none;\n  }\n}")).toEqual([]);
   });
 
+  test("the root font size follows the chosen text size, and every type step is in rem", async () => {
+    const tokens = await Bun.file("ui/src/styles/tokens.css").text();
+    expect(tokens).toMatch(/:root \{\n  font-size: calc\(var\(--text-scale, 1\) \* 100%\);/);
+    const steps = [...tokens.matchAll(/^\s*(--t-[a-z]+):\s*([^;]+);/gm)];
+    expect(steps.length).toBe(6);
+    for (const [, name, value] of steps) expect(`${name}: ${value}`).toMatch(/: \d*\.?\d+rem$/);
+  });
+
   test("the app's stylesheets pass", async () => {
     expect(await check(".")).toEqual([]);
   });
