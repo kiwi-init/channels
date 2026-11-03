@@ -494,7 +494,8 @@ export class Channel {
     if (!key || !members) return null;
     const { mergeMarks, noteId, openNote, sealNote } = await import("./note.ts");
     const mine = new Set(members.map((m) => m.pk));
-    const id = await noteId(this.roomId, key);
+    const scope = plain ? `${this.roomId}/${plain[0]}` : this.roomId;
+    const id = await noteId(scope, key);
     const prevKey = room ? (room.meta?.prev ?? this.core.roomKeys.get(`${roomId}/${room.n - 1}`)) : this.core.access.keys[String(epoch - 1)];
     for (let tries = 0; tries < 5; tries++) {
       const had = await run(this.fx.getNote(id));
@@ -504,7 +505,7 @@ export class Channel {
         if (opened && mine.has(opened.pk)) theirs = opened.marks;
       } else if (prevKey) {
         const prev = prevKey;
-        const oldId = await noteId(this.roomId, prev);
+        const oldId = await noteId(scope, prev);
         const old = await run(this.fx.getNote(oldId));
         const opened = old ? await openNote(prev, this.roomId, oldId, old.box) : null;
         if (opened) theirs = opened.marks;
@@ -519,10 +520,12 @@ export class Channel {
   }
 
   async changeRoom(id: string, change: { name?: string; members?: readonly RoomPick[] }): Promise<boolean> {
-    const now = this.core.memberRooms.get(id) ?? (() => {
-      const sealed = this.core.roomNow.get(id)?.meta;
-      return sealed ? { members: sealed.members, ...(sealed.dm ? { dm: true as const } : {}), ...(sealed.self ? { self: true as const } : {}) } : undefined;
-    })();
+    const now =
+      this.core.memberRooms.get(id) ??
+      (() => {
+        const sealed = this.core.roomNow.get(id)?.meta;
+        return sealed ? { members: sealed.members, ...(sealed.dm ? { dm: true as const } : {}), ...(sealed.self ? { self: true as const } : {}) } : undefined;
+      })();
     if (!now) throw new Error("you're not in that members-only room");
     let changed = false;
     if (change.name) {

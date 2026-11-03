@@ -346,7 +346,7 @@ export function isGifReaction(x: string): boolean {
   return GIF_REACTION_RE.test(x);
 }
 
-export const OVERLAY_OPS: ReadonlySet<string> = new Set(["react", "msg.edit", "msg.delete"]);
+const OVERLAY_OPS: ReadonlySet<string> = new Set(["react", "msg.edit", "msg.delete"]);
 
 export function isOverlay(m: Pick<Message, "kind" | "ev">): boolean {
   return m.kind === "event" && !!m.ev && OVERLAY_OPS.has(m.ev.op);
@@ -854,7 +854,7 @@ export function asSent(m: Message): Omit<Message, "newer" | "ev"> & { ev?: Event
 
 export const outgrown = (base: { folded?: number; skipped?: true }): boolean => base.skipped === true && (base.folded ?? 0) < EVENT_OPS_VERSION;
 
-export const FOLD_RULES = 22;
+export const FOLD_RULES = 23;
 
 export const olderRules = (base: { rules?: number }): boolean => (base.rules ?? 0) < FOLD_RULES;
 

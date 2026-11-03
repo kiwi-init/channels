@@ -45,5 +45,5 @@ export function outsideRoomNote(state: ChannelState, room: string | undefined, b
   );
   if (!away.length) return null;
   const one = away.length === 1;
-  return `${away.map((n) => `@${n}`).join(", ")} ${one ? "isn't" : "aren't"} in #${r.name}, so they don't see this message: someone in the room adds them from the app, or say it where they can read it.`;
+  return `${away.map((n) => `@${n}`).join(", ")} ${one ? "isn't" : "aren't"} in #${r.name}, so they aren't sent this message: someone in the room adds them from the app, or say it where they are.`;
 }

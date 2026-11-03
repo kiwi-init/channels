@@ -506,7 +506,7 @@ function Feed({ channel, where, spot, jump }: { channel: Channel; where: Where; 
                   )}
                   {m.membersOnly && !list[i - 1]?.membersOnly && where.kind === "dm" && (
                     <p className="day is-members" role="separator">
-                      <span>From here on, only you and {nickname(channel, where.with)} are sent new messages</span>
+                      <span>From here on, new messages are sent to you and {nickname(channel, where.with)} alone</span>
                     </p>
                   )}
                   {m.seq === mark && (
@@ -636,7 +636,7 @@ function Start({ channel, where }: { channel: Channel; where: Where }) {
           ? `This is the start of #${channel.rooms.find((r) => r.id === where.room)?.name ?? where.room}.`
           : where.kind === "dm"
             ? dmInRoom(channel, where.with)
-              ? `Only you and ${nickname(channel, where.with)} are sent these. Anyone in the channel can still open them.`
+              ? `These are sent to you and ${nickname(channel, where.with)} alone. Anyone in the channel can still open them.`
               : `Everyone in the channel can read your messages with ${nickname(channel, where.with)}.`
             : where.kind === "theirs"
               ? `This is the start of ${between(channel, where.between)}.`

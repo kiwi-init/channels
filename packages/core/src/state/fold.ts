@@ -430,11 +430,11 @@ function folding(
         const room = secret.get(m.sealed.room);
         const why =
           !room?.meta || room.n !== m.sealed.n || !inRoom(room.meta, m.from, m.pk)
-            ? `${m.from} wasn't in that private room, or wrote with a key it no longer uses`
+            ? `${m.from} wasn't in that members-only room, or wrote with a key it no longer uses`
             : room.meta.self
               ? "a person's own room carries no messages"
               : m.kind === "event" && !isOverlay(m)
-                ? "a private room keeps to messages, reactions, edits and deletes: tasks, notes and other channel events would be seen by everyone"
+                ? "a sealed room kept to messages, reactions, edits and deletes"
                 : null;
         if (why) {
           trust.set(m.seq, "refused");
@@ -479,6 +479,11 @@ function folding(
         if (!sentTo(rooms.get(room), m.from, members) && room !== GENERAL_ROOM) {
           trust.set(m.seq, "refused");
           rejected.set(m.seq, "only its members post in a members-only room");
+          continue;
+        }
+        if (rooms.get(room)?.self) {
+          trust.set(m.seq, "refused");
+          rejected.set(m.seq, "a person's own room carries no messages");
           continue;
         }
         roomOf.set(m.seq, room);

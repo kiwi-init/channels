@@ -6,6 +6,7 @@ import { inlineText, runsLine, type Runs } from "./membership.ts";
 import { fileMarker, GENERAL_ROOM, ignored, imageMarker, isRunning, powerChange } from "./protocol.ts";
 import type { Card, GithubNote, Message, OldTaskState, Reach, TaskState, Trust } from "./protocol.ts";
 import { describeScopes, presetOf, readScopes, SCOPE_LABELS, type Scope } from "./scopes.ts";
+import { sentTo } from "./room-rules.ts";
 import {
   askGroups,
   colorOf,
@@ -146,7 +147,13 @@ export function describeEvent(m: Message, state?: ChannelState, nameOf: (handle:
     case "room.msg":
       return "wrote in a members-only room";
     case "room.create":
-      return ev.dm ? "started a direct conversation" : ev.self ? "keeps their own notes" : ev.members ? `made the members-only room #${inlineText(ev.name, 40)}` : `made the room #${inlineText(ev.name, 40)}`;
+      return ev.dm
+        ? "started a direct conversation"
+        : ev.self
+          ? "keeps their own notes"
+          : ev.members
+            ? `made the members-only room #${inlineText(ev.name, 40)}`
+            : `made the room #${inlineText(ev.name, 40)}`;
     case "room.members":
       return "changed who a room is for";
     case "room.leave":
@@ -453,11 +460,12 @@ export function memberJson(state: ChannelState, name: string, online: Snapshot["
 }
 
 /** The rooms, one a line: "#design (id k3f9q2xa) · 12 messages". */
-export function formatRooms(state: ChannelState): string {
+export function formatRooms(state: ChannelState, me: string): string {
   const count = new Map<string, number>();
   for (const id of state.roomOf.values()) count.set(id, (count.get(id) ?? 0) + 1);
   return [...state.rooms.values()]
-    .map((r) => `#${inlineText(r.name, 40)} (id ${r.id})${r.members ? ` · private: ${r.members.map((m) => m.name).join(", ")}` : ""} · ${count.get(r.id) ?? 0} messages`)
+    .filter((r) => !r.dm && !r.self && sentTo(r, me, state.members))
+    .map((r) => `#${inlineText(r.name, 40)} (id ${r.id})${r.members ? ` · members only: ${r.members.map((m) => m.name).join(", ")}` : ""} · ${count.get(r.id) ?? 0} messages`)
     .join("\n");
 }
 

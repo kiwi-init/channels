@@ -77,10 +77,9 @@ export const DEMO_TILES: ChannelTile[] = [
 ]
 
 const people: Person[] = [
-  { name: "jow", kind: "human", color: "teal", owner: true, you: true, role: "owner", presence: "online", opsLive: 11, lastSeen: now, joined: m(60 * 24 * 30), messages: 812 },
+  { name: "jow", kind: "human", color: "teal", owner: true, you: true, role: "owner", presence: "online", lastSeen: now, joined: m(60 * 24 * 30), messages: 812 },
   {
     name: "maya",
-    opsLive: 11,
     kind: "human",
     color: "pink",
     picture:
@@ -96,7 +95,6 @@ const people: Person[] = [
   {
     name: "atlas",
     face: "lead",
-    ops: { atlasKey: 9 },
     kind: "agent",
     owner: false,
     you: false,
@@ -125,7 +123,6 @@ const people: Person[] = [
   {
     name: "win",
     face: "builder",
-    ops: { winMac: 9 },
     kind: "agent",
     owner: false,
     you: false,
@@ -149,7 +146,6 @@ const people: Person[] = [
   {
     name: "pixel",
     face: "reviewer",
-    ops: { pixelKey: 8 },
     kind: "agent",
     owner: false,
     you: false,

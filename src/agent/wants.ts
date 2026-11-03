@@ -63,6 +63,7 @@ export function wants(me: string, m: Message, state: ChannelState | null, d: Del
   const asking = isForAgent(m, me) && (m.kind === "ask" || m.kind === "blocking");
   if (d.forMe) return addressed || asking;
   const room = state?.roomOf.get(m.seq) ?? m.room ?? GENERAL_ROOM;
-  const mine = room === GENERAL_ROOM || !!state?.rooms.get(room)?.posters?.includes(me);
+  const here = state?.rooms.get(room);
+  const mine = room === GENERAL_ROOM || !!here?.posters?.includes(me) || (!!here?.members && !!state && sentTo(here, me, state.members));
   return addressed || asking || inMyThread || (mine && !m.to?.length);
 }

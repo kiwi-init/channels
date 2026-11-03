@@ -78,8 +78,6 @@ export interface Person {
   addsAgents?: boolean
   answersDecisions?: boolean
   managesAgents?: boolean
-  ops?: Readonly<Record<string, number>>
-  opsLive?: number
   lastSeen: number
   joined: number
   messages: number

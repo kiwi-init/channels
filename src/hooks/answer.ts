@@ -14,6 +14,7 @@ import { kimiServer } from "../kimi-server.ts";
 import { here, type Binding, type Here } from "../seats.ts";
 import { REENTRY_MAX, reentryText } from "@kiwi/core/reentry.ts";
 import { humanOf } from "@kiwi/core/state.ts";
+import { sentTo } from "@kiwi/core/room-rules.ts";
 import { asOption, channelOption } from "@kiwi/core/wake.ts";
 import { crossing, noteOverLine, nudgeShort, nudgeText, openTasksOf, overLine } from "./context-line.ts";
 import { commitDelivered, noteHeard } from "./delivered.ts";
@@ -408,7 +409,7 @@ export const answer = Effect.fn("Hooks.answer")(function* (event: string, input:
       listen,
       human: humanOf(state, b.as),
       hold: holdLine(state),
-      privateRooms: [...state.rooms.values()].flatMap((r) => (r.members ? [r.name] : [])),
+      memberRooms: [...state.rooms.values()].flatMap((r) => (r.members && !r.dm && !r.self && sentTo(r, b.as, state.members) ? [r.name] : [])),
       charter: charterLines(state),
       lead: leadLine(state, b.as),
       scopes: seat?.scopes,

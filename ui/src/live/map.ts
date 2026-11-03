@@ -187,8 +187,6 @@ function personOf(state: ChannelState, m: StateMember, record: RosterMember | un
     ...(human && m.addsAgents ? { addsAgents: true } : {}),
     ...(human && m.answersDecisions ? { answersDecisions: true } : {}),
     ...(human && m.managesAgents ? { managesAgents: true } : {}),
-    ...(m.ops ? { ops: m.ops } : {}),
-    ...(here?.ops ? { opsLive: here.ops } : {}),
     lastSeen: here?.at ?? m.lastSeen,
     joined: m.joined,
     messages: m.messages,
