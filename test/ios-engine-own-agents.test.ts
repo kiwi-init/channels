@@ -6,6 +6,7 @@ import { Channel } from "@kiwi/core/client.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
 import { certifyMachine, claimComputer, type MachineCert } from "@kiwi/core/person.ts";
 import type { ChannelIdentityView } from "../desktop/src/bridge.ts";
+import { personMachines } from "../desktop/src/remote.ts";
 import { startMachineInbox } from "../src/daemon/inbox.ts";
 import type { PairedMachine } from "../src/daemon/pair.ts";
 import { remoteRunner } from "../src/daemon/remote.ts";
@@ -75,6 +76,10 @@ beforeAll(async () => {
     listed: async () => false,
     unpaired: async () => {},
     run: remoteRunner({}),
+  });
+  await until("the computer listed online", async () => {
+    const got = await personMachines({ signer: person, person: person.pk, relay });
+    return got.ok && got.value.some((c) => c.key === machine.pk && c.online);
   });
   await import("../ios/engine/main.ts");
   kiwi().listen((p) => pushes.push(p));
