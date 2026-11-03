@@ -271,7 +271,8 @@ function CommentBox({ channel, spec, quote, onDone }: { channel: Channel; spec: 
           className="textarea spec-box-text"
           rows={Math.min(6, text.split("\n").length)}
           value={text}
-          placeholder="Comment, or select words in the spec"
+          placeholder="Comment"
+          title="Or select words in the spec to comment on them"
           aria-label="Comment on the spec"
           onChange={(e) => setText(e.target.value)}
           onKeyDown={keys}

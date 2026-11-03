@@ -98,7 +98,7 @@ function SpecList({ channel, tall }: { channel: Channel; tall: boolean }) {
         ) : channel.loading ? (
           <Loading />
         ) : (
-          <Empty title={shown === "open" ? "No open specs." : "Nothing finished yet."} icon="spec" />
+          <Empty title={!specs.length ? "No specs yet." : shown === "open" ? "No open specs." : "Nothing finished yet."} icon="spec" />
         )}
       </div>
       {making && <NewSpec channel={channel} onClose={() => setMaking(false)} />}

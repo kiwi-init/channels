@@ -404,9 +404,8 @@
   position: absolute;
   right: 0;
   left: 0;
-  padding: 10px 12px;
-  border: 1px solid var(--line-2);
-  border-radius: var(--r-ctl);
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
   background: var(--bg);
   transition:
     top var(--slow) var(--ease),
@@ -414,11 +413,13 @@
 }
 
 .spec-rail-item.is-hot {
-  border-color: var(--line-3);
+  border-color: var(--ink-3);
 }
 
 .spec-rail-item.is-draft {
-  border-color: var(--line-3);
+  padding: 10px 12px;
+  border: 1px solid var(--line-3);
+  border-radius: var(--r-ctl);
   background: var(--bg-2);
 }
 
@@ -440,7 +441,7 @@
 }
 
 .spec-comment .msg-text {
-  margin-top: 6px;
+  margin: 2px 0 0 calc(1.5rem + 8px);
   font-size: var(--t-ui);
 }
 
@@ -475,31 +476,6 @@
   margin: 0;
 }
 
-.spec-rail-talk .spec-talk-h {
-  flex-wrap: wrap;
-  row-gap: 0;
-}
-
-.spec-rail-talk .spec-talk-h .dimmer {
-  flex-basis: 100%;
-  order: 1;
-  color: var(--ink-3);
-  font: var(--t-meta) var(--ui);
-}
-
-.spec-rail-talk .spec-box-new.is-line {
-  flex-direction: column;
-  align-items: stretch;
-}
-
-.spec-rail-talk .spec-box-new.is-line .btn {
-  align-self: flex-end;
-}
-
-.spec-rail-talk .spec-box-new.is-line .spec-box-text {
-  min-height: 3.25rem;
-}
-
 .spec-talk-h {
   display: flex;
   align-items: center;
@@ -510,18 +486,6 @@
 
 .spec-talk-h .btn {
   margin-left: auto;
-}
-
-.spec-talk-h .dimmer::before {
-  content: "· ";
-}
-
-.spec-rail-talk .spec-talk-h .dimmer::before {
-  content: none;
-}
-
-.spec-talk-h .dimmer {
-  font-weight: 400;
 }
 
 .spec-comments {
@@ -537,10 +501,6 @@
 
 .spec-comments .spec-comment + .spec-comment {
   border-top: 1px solid var(--line);
-}
-
-.spec-comments .spec-comment .msg-text {
-  margin: 2px 0 0 calc(1.5rem + 8px);
 }
 
 .spec-comments .spec-comment-quote {
