@@ -264,10 +264,9 @@ export class Keyring implements ChannelOps {
     const access = channelAccess(this.seat(code, true));
     if (!access) return rows.map(() => null);
     const opened = await openSealedRows(rows, access.roomId, access.keys);
-    await this.channel(code)
-      .learnRooms(opened.filter((m): m is Message => !!m && "ev" in m))
-      .catch(() => {});
-    return opened;
+    return this.channel(code)
+      .learnRooms(opened)
+      .catch(() => opened);
   }
 
   private searcher(): { host: SearchHost; place: SearchPlace } | null {
