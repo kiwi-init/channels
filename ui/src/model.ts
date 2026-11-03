@@ -442,6 +442,25 @@ export interface ReviewAsk {
 
 export type Ask = PermissionAsk | QuestionAsk | JoinAsk | ReviewAsk | SpecAsk
 
+export type HomeAct = { kind: "options"; options: string[] } | { kind: "allow" } | { kind: "approve-spec"; ask: number; v: number } | { kind: "approve-task"; task: number } | { kind: "open" }
+
+export interface HomeAsk {
+  id: string
+  at: number
+  text: string
+  act: HomeAct
+}
+
+export interface HomeChannel {
+  code: string
+  title: string
+  lead: string | null
+  leadName: string | null
+  working: number
+  asks: HomeAsk[]
+  loading?: true
+}
+
 export interface ChannelTile {
   code: string
   title: string
@@ -479,11 +498,13 @@ interface TermScreen {
 export interface TermTab {
   pane: string
   label: string
+  machine?: string
 }
 
 export interface TermWatch {
   out(text: string): void
   ended(): void
+  lost?(): void
 }
 
 export interface TermLink {
@@ -750,9 +771,11 @@ export interface Actions {
   addAgent(code: string, agent: NewAgent, seen: (s: Launching) => void): () => void
   showAgent(code: string, name: string): Promise<string | null>
   openTerm(code: string, name: string, cols: number, rows: number, watch: TermWatch): Promise<TermOpened>
-  openMyTerm(code: string, want: string | null, cols: number, rows: number, watch: TermWatch): Promise<TermOpened>
+  openMyTerm(code: string, want: string | null, cols: number, rows: number, watch: TermWatch, machine?: string): Promise<TermOpened>
   myTerms(): Promise<TermTab[]>
   closeMyTerm(pane: string): Promise<TermTab[]>
+  remoteTerms(machine: string): Promise<TermTab[]>
+  closeRemoteTerm(machine: string, pane: string): Promise<TermTab[]>
   choicesOn(code: string, computer: string): Promise<ComputerChoices>
   chooseFolder(): Promise<string | null>
   addRoom(code: string, name: string, members?: string[]): Promise<string | null>
@@ -855,6 +878,7 @@ export interface GoneChannel {
 export interface App {
   account: Account | null
   channels: ChannelTile[]
+  home: HomeChannel[]
   channel: Channel | null
   gone?: GoneChannel
   prefs: Prefs

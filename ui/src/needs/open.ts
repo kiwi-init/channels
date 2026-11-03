@@ -4,4 +4,4 @@ export const isOpen = (a: Ask): boolean => a.kind === "review" || a.kind === "sp
 
 export const isIdle = (a: Ask): boolean => a.kind === "question" && !!a.idle && !a.answer
 
-export const openAsks = (channel: Channel): Ask[] => channel.asks.filter((a) => isOpen(a) && !isIdle(a))
+export const openAsks = (channel: Pick<Channel, "asks">): Ask[] => channel.asks.filter((a) => isOpen(a) && !isIdle(a))
