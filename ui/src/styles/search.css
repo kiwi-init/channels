@@ -7,7 +7,7 @@
   align-items: center;
   gap: 8px;
   width: 260px;
-  height: 30px;
+  height: 1.875rem;
   padding: 0 6px 0 10px;
   border-radius: var(--r-ctl);
   background: var(--bg-3);
@@ -82,7 +82,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  min-height: 38px;
+  min-height: 2.375rem;
   padding: 6px 10px;
   border: 1px solid transparent;
   border-radius: var(--r-ctl);

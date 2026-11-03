@@ -26,6 +26,7 @@ const themes = (flag("--theme") ?? "dark").split(",");
 const engine = flag("--browser") ?? "chromium";
 const size = (flag("--size") ?? "1440x900").split("x").map(Number);
 const only = flag("--only")?.split(",").filter(Boolean);
+const textScale = flag("--text-scale");
 const out = resolve(args[0] ?? "shots");
 mkdirSync(out, { recursive: true });
 
@@ -44,6 +45,7 @@ try {
       at = `${name}-${theme}`;
       await page.goto(`${base}?shot=${name}&theme=${theme}`);
       await page.waitForLoadState("networkidle");
+      if (textScale) await page.evaluate((scale) => document.documentElement.style.setProperty("--text-scale", scale), textScale);
       await page.evaluate(() => document.fonts.ready);
       await page.waitForTimeout(350);
       const file = join(out, `${name}-${theme}.png`);

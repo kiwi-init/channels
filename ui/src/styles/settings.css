@@ -76,7 +76,7 @@
   justify-content: space-between;
   gap: 8px 24px;
   width: 100%;
-  min-height: 56px;
+  min-height: 3.5rem;
   padding: 12px 0;
   border: 0;
   background: none;
@@ -273,18 +273,18 @@
 
 .set-device {
   display: grid;
-  grid-template-columns: 32px minmax(0, 1fr) auto;
+  grid-template-columns: 2rem minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
-  min-height: 64px;
+  min-height: 4rem;
   padding: 12px 0;
 }
 
 .set-device-icon {
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  width: 2rem;
+  height: 2rem;
   border: 1px solid var(--line-3);
   border-radius: var(--r-ctl);
   color: var(--ink-2);
@@ -365,7 +365,7 @@
 
 @media (max-width: 760px) {
   .set-device {
-    grid-template-columns: 32px minmax(0, 1fr);
+    grid-template-columns: 2rem minmax(0, 1fr);
   }
 
   .set-device-actions-inline {
@@ -613,7 +613,7 @@
 }
 
 .set-folder {
-  min-height: 32px;
+  min-height: 2rem;
   padding: 8px 0;
 }
 
@@ -627,7 +627,7 @@
 .set-add {
   justify-content: flex-start;
   gap: 10px;
-  min-height: 32px;
+  min-height: 2rem;
   color: var(--ink-3);
   font: var(--t-ui) var(--ui);
 }
@@ -739,7 +739,7 @@
 }
 
 .set-back .icon {
-  width: 24px;
+  width: calc(1rem + 8px);
   padding: 0 4px;
   color: var(--ink-2);
   transition: transform var(--pop);

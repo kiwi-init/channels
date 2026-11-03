@@ -77,8 +77,8 @@
   position: relative;
   display: grid;
   place-items: center;
-  width: 38px;
-  height: 38px;
+  width: 2.375rem;
+  height: 2.375rem;
   padding: 0;
   border: 0;
   border-radius: var(--r-ctl);
@@ -153,8 +153,8 @@
   right: -4px;
   display: grid;
   place-items: center;
-  min-width: 16px;
-  height: 16px;
+  min-width: 1rem;
+  height: 1rem;
   padding: 0 4px;
   border-radius: 999px;
   background: var(--decide);
@@ -232,8 +232,8 @@
 
 .folder-grid {
   display: grid;
-  grid-template-columns: repeat(2, 15px);
-  grid-auto-rows: 15px;
+  grid-template-columns: repeat(2, 0.9375rem);
+  grid-auto-rows: 0.9375rem;
   gap: 2px;
 }
 
@@ -592,7 +592,7 @@
   }
 }
 
-@container top (max-width: 1120px) {
+@container top (max-width: 70rem) {
   .top-meta {
     display: none;
   }
@@ -606,7 +606,7 @@
   }
 }
 
-@container top (max-width: 900px) {
+@container top (max-width: 56.25rem) {
   .tabs button > .icon {
     display: none;
   }
@@ -826,7 +826,7 @@
 }
 
 .side-row.is-add .icon {
-  width: 24px;
+  width: calc(1rem + 8px);
   padding: 0 4px;
 }
 
@@ -856,14 +856,14 @@
   display: flex;
   flex: none;
   align-items: center;
-  width: 28px;
-  height: 24px;
+  width: 1.75rem;
+  height: 1.5rem;
   margin-right: -4px;
 }
 
 .side-pair .av {
-  width: 16px;
-  height: 16px;
+  width: 1rem;
+  height: 1rem;
   border-radius: var(--r-tag);
   font-size: 0.6em;
 }
@@ -897,7 +897,7 @@
 
 .side-member {
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr);
+  grid-template-columns: 1.5rem minmax(0, 1fr);
   grid-template-rows: auto auto;
   column-gap: 8px;
   align-items: center;
@@ -1282,7 +1282,7 @@
 }
 
 .side-foot > .side-row > .icon {
-  width: 24px;
+  width: calc(1rem + 8px);
   padding: 0 4px;
 }
 
@@ -1336,8 +1336,8 @@
 
 :root[data-shell="mac"],
 :root[data-wm="floating"] {
-  --top-h: 46px;
-  --rail-w: 80px;
+  --top-h: 2.875rem;
+  --rail-w: 5rem;
 }
 
 :root[data-shell="mac"] .rail,
@@ -1346,11 +1346,11 @@
 }
 
 html .tile.is-on::before {
-  left: calc((var(--rail-w) - 38px) / -2);
+  left: calc((var(--rail-w) - 2.375rem) / -2);
 }
 
 html .tile-dot {
-  left: calc((var(--rail-w) - 38px) / -2);
+  left: calc((var(--rail-w) - 2.375rem) / -2);
 }
 
 html .rail-list {
@@ -1363,8 +1363,8 @@ html .tile.is-on:not(.is-waiting) {
 }
 
 html .rail-gear {
-  width: 38px;
-  height: 38px;
+  width: 2.375rem;
+  height: 2.375rem;
   border-radius: var(--r-ctl);
   color: var(--ink-3);
 }
@@ -1463,7 +1463,7 @@ html .rail-gear.is-on {
 
 .crew-agent {
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) auto;
+  grid-template-columns: 1.5rem minmax(0, 1fr) auto;
   grid-template-rows: auto auto;
   column-gap: 8px;
   row-gap: 2px;

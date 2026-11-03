@@ -143,7 +143,7 @@
 }
 
 .gh-row.spec-row {
-  grid-template-columns: 16px minmax(0, 1fr) auto;
+  grid-template-columns: 1rem minmax(0, 1fr) auto;
   grid-template-rows: auto;
   width: 100%;
   padding-right: 8px;
@@ -204,7 +204,7 @@
   padding: 0 8px 6px 24px;
 }
 
-@container (min-width: 820px) {
+@container (min-width: 51.25rem) {
   .spec-row > .spec-mark {
     align-self: center;
     margin-top: 0;
@@ -504,7 +504,7 @@
 }
 
 .spec-rail-talk .spec-box-new.is-line .spec-box-text {
-  min-height: 52px;
+  min-height: 3.25rem;
 }
 
 .spec-talk-h {
@@ -547,11 +547,11 @@
 }
 
 .spec-comments .spec-comment .msg-text {
-  margin: 2px 0 0 32px;
+  margin: 2px 0 0 calc(1.5rem + 8px);
 }
 
 .spec-comments .spec-comment-quote {
-  margin-left: 32px;
+  margin-left: calc(1.5rem + 8px);
 }
 
 .spec-box-new.is-line {
@@ -622,7 +622,7 @@
 
 .spec-diff-line {
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr);
+  grid-template-columns: 1.5rem minmax(0, 1fr);
   padding-right: 12px;
   white-space: pre-wrap;
 }
@@ -716,7 +716,7 @@
 }
 
 .spec-source {
-  min-height: 520px;
+  min-height: 32.5rem;
   padding: 16px;
   resize: vertical;
   font: var(--t-meta) / 1.6 var(--mono);
@@ -919,7 +919,7 @@
   color: var(--ink-3);
 }
 
-@container spec-col (min-width: 480px) {
+@container spec-col (min-width: 30rem) {
   .inside-tasks > li {
     grid-template-columns: minmax(0, 1fr) auto auto;
   }
@@ -935,7 +935,7 @@
   }
 }
 
-@container spec-page (min-width: 960px) {
+@container spec-page (min-width: 60rem) {
   .inside-cols {
     grid-template-columns: minmax(0, 3fr) minmax(300px, 2fr);
     column-gap: 40px;
@@ -964,7 +964,7 @@
 .story-line {
   position: relative;
   display: grid;
-  grid-template-columns: 64px 24px minmax(0, 1fr);
+  grid-template-columns: 4rem 1.5rem minmax(0, 1fr);
   gap: 10px;
   align-items: center;
   padding: 4px 0;
@@ -974,7 +974,7 @@
   content: "";
   position: absolute;
   top: -4px;
-  left: 85px;
+  left: calc(4.75rem + 9px);
   width: 1px;
   height: 8px;
   background: var(--line-2);
@@ -1220,7 +1220,7 @@
   background: var(--decide);
 }
 
-@container (max-width: 720px) {
+@container (max-width: 45rem) {
   .spec-editor-panes {
     grid-template-columns: minmax(0, 1fr);
   }

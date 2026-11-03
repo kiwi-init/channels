@@ -89,12 +89,20 @@ The two built-in sides, from `tokens.css` and `channels.ts`:
   paths. The list is the `html .msg-time, html .count, …` rule and the
   `code, pre, kbd, .mono, .codebox, …` rule in `base.css`; a new
   machine-word class joins it there, with `letter-spacing: -0.01em`.
-- Six steps and no sizes between them, all scaled by `--text-scale`
-  (Default 1.1; Small 1, Large 1.25, Larger 1.4, Largest 1.6): `--t-stamp 11px` (times, counts),
-  `--t-meta 12px` (meta lines, section heads), `--t-ui 13px` (rows, names,
-  buttons, menus), `--t-body 15px` (messages, task titles; message text at
-  22px line height), `--t-title 17px` (panel and dialog titles),
-  `--t-display 24px` (empty states, page headings).
+- Six steps and no sizes between them, in `rem`: `--t-stamp` 11px (times,
+  counts), `--t-meta` 12px (meta lines, section heads), `--t-ui` 13px (rows,
+  names, buttons, menus), `--t-body` 15px (messages, task titles; message
+  text at 22px line height), `--t-title` 17px (panel and dialog titles),
+  `--t-display` 24px (empty states, page headings). Sizes here are at Small,
+  where 1rem is 16px.
+- Text size scales the root: `:root` has `font-size: calc(var(--text-scale) *
+  100%)` (Default 1.1; Small 1, Large 1.25, Larger 1.4, Largest 1.6), so
+  everything in `rem` grows with it. Type, every box that holds text
+  (controls, rows, chips, avatars with initials, the rail's tiles), the
+  columns sized for text (`--side-w`, `--col`), icons and container-query
+  breakpoints are in `rem`. Hairlines, radii, spacing, shadows and dots stay
+  in px. `scripts/css-units.ts` (`repo / static`) refuses px type, a px
+  height on a rule that sets a font size, and a px container breakpoint.
 - Weights: 400 for text, 500 for buttons and tabs, 600 for names, titles and
   what's chosen. Hierarchy comes from weight, ink level and size, not from
   new faces.
@@ -111,8 +119,8 @@ The two built-in sides, from `tokens.css` and `channels.ts`:
   A card is `bg` with a 1px `line-2` border, `--r-card` and text inset
   `--card-pad` (16px). A list of cards has 12px between them; sections of a
   page or panel have 24px or 32px between them. A panel's text is inset 16px.
-- Control heights: `--ctl` (32px: buttons, fields, tabs, tracks, the channel
-  switcher, sidebar rows, send, attach) and `--ctl-sm` (24px: small buttons).
+- Control heights: `--ctl` (2rem: buttons, fields, tabs, tracks, the channel
+  switcher, sidebar rows, send, attach) and `--ctl-sm` (1.5rem: small buttons).
   A quiet button or icon button at the end of a row is pulled out by its own
   padding so its text or glyph lines up with the row's right edge.
 - Radii, only from tokens: `--r-tick 2px` (bars, ticks), `--r-tag 6px` (tags,
@@ -134,12 +142,13 @@ The two built-in sides, from `tokens.css` and `channels.ts`:
 - No glass, no `backdrop-filter`, no blur anywhere. The fade over the bottom
   of the conversation (`.main::after`, 96px, transparent to `bg`) is a plain
   gradient: text under it fades but stays sharp.
-- Fixed sizes on `:root`: `--rail-w 64px` (channel tiles), `--side-w 248px`
-  (the sidebar), `--panel-w 400px` (the right panel), `--top-h 52px` (the
-  top bar, which drags the window), `--col 760px` (the reading column),
-  `--list 2400px` (the cap for the list views Specs, GitHub and Needs you,
-  which otherwise fill the content area inside `--gutter`),
-  `--compose-space 128px` (room under the last message for the composer).
+- Sizes on `:root`: `--rail-w 4rem` (channel tiles), `--side-w 15.5rem`
+  (the sidebar), `--panel-w 400px` (the right panel, which people resize),
+  `--top-h 3.25rem` (the top bar, which drags the window), `--col 47.5rem`
+  (the reading column), `--list 2400px` (the cap for the list views Specs,
+  GitHub and Needs you, which otherwise fill the content area inside
+  `--gutter`), `--compose-space 8rem` (room under the last message for the
+  composer).
 
 ## 6. Motion
 
@@ -378,7 +387,8 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
 - Selection: `--selection` (ink at 28%). Scrollbars: thin, `line-3` thumb on
   transparent.
 - Text size (Settings: Small, Default, Large, Larger, Largest) sets `--text-scale`,
-  which every type step multiplies; layout sizes don't scale.
+  which scales the root font size. Type, text boxes, icons and the columns
+  sized for text grow with it because they are in `rem` (sections 4 and 5).
 - Reduced motion: the OS setting and Settings' own toggle both cut motion
   (section 6).
 - `ink-3` is the lowest ink for text. Placeholders and empty states use it,
