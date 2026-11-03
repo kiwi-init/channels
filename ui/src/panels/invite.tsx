@@ -93,9 +93,8 @@ export function InvitePanel({ channel }: { channel: Channel }) {
   return (
     <>
       <PanelHead title="Invite people" />
-      <div className="panel-body">
-        <section className="panel-section" aria-label="Invite link">
-          <Heading>Invite link</Heading>
+      <div className="panel-body invite">
+        <section className="invite-link" aria-label="Invite link">
           {failed ? (
             <div className="invite-failed">
               <span>Couldn't get a link.</span>
@@ -106,44 +105,37 @@ export function InvitePanel({ channel }: { channel: Channel }) {
           ) : (
             <CopyBox text={link} label="Copy link" />
           )}
-          <p className="invite-note">Anyone with this link can ask to join. You let them in after checking their code.</p>
+          <p className="invite-note">Anyone with it can ask to join. You let them in after checking their code.</p>
         </section>
         {channel.youOwn && (
-          <section className="panel-section" aria-label="New people can">
+          <section className="invite-can" aria-label="New people can">
             <Heading>New people can</Heading>
-            <div className="invite-power invite-trust">
-              <div className="invite-power-text">
-                <span className="invite-power-label">Full trust</span>
-                <p className="invite-note">
-                  {trust ? "They write and work, add agents, answer decisions and manage agents. The channel stays yours." : "Every power below at once. The channel stays yours."}
-                </p>
-              </div>
-              <Toggle
-                label="Full trust"
-                on={trust}
-                onChange={(on) => {
-                  if (on) app.actions.setNewMembers(channel.code, "write")
-                  app.actions.setNewPowers(channel.code, on ? ALL_POWERS : NO_POWERS)
-                }}
-              />
-            </div>
             <Track className="seg invite-seg" role="group" aria-label="New people can">
               {CAN.map((c) => (
-                <button key={c.id} type="button" aria-pressed={can === c.id} onClick={() => app.actions.setNewMembers(channel.code, c.id)}>
+                <button key={c.id} type="button" title={c.says} aria-pressed={can === c.id} onClick={() => app.actions.setNewMembers(channel.code, c.id)}>
                   {c.label}
                 </button>
               ))}
             </Track>
-            <p className="invite-note">{CAN.find((c) => c.id === can)?.says}</p>
-            {POWERS.map((power) => (
-              <div key={power.id} className="invite-power">
-                <div className="invite-power-text">
-                  <span className="invite-power-label">{power.label}</span>
-                  <p className="invite-note">{powers[power.id] ? power.on : power.off}</p>
-                </div>
-                <Toggle label={power.label} on={powers[power.id]} onChange={(on) => app.actions.setNewPowers(channel.code, { ...powers, [power.id]: on })} />
+            <div className="invite-powers">
+              <div className="invite-power" title="Every power below at once. The channel stays yours.">
+                <span className="invite-power-label">Full trust</span>
+                <Toggle
+                  label="Full trust"
+                  on={trust}
+                  onChange={(on) => {
+                    if (on) app.actions.setNewMembers(channel.code, "write")
+                    app.actions.setNewPowers(channel.code, on ? ALL_POWERS : NO_POWERS)
+                  }}
+                />
               </div>
-            ))}
+              {POWERS.map((power) => (
+                <div key={power.id} className="invite-power" title={powers[power.id] ? power.on : power.off}>
+                  <span className="invite-power-label">{power.label}</span>
+                  <Toggle label={power.label} on={powers[power.id]} onChange={(on) => app.actions.setNewPowers(channel.code, { ...powers, [power.id]: on })} />
+                </div>
+              ))}
+            </div>
             <p className="invite-note">You can change it for each person when you let them in.</p>
           </section>
         )}

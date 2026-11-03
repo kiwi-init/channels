@@ -184,9 +184,9 @@ function Group({ label, children }: { label: string; children: ReactNode }) {
   )
 }
 
-function Choice({ group, on, off, pick, children, side }: { group: string; on: boolean; off?: boolean; pick: () => void; children: ReactNode; side?: ReactNode }) {
+function Choice({ group, on, off, pick, children, side, title }: { group: string; on: boolean; off?: boolean; pick: () => void; children: ReactNode; side?: ReactNode; title?: string }) {
   return (
-    <label className={cx("add-choice", on && "is-on", off && "is-off")}>
+    <label className={cx("add-choice", on && "is-on", off && "is-off")} title={title}>
       <input type="radio" className="sr" name={group} checked={on} disabled={off} onChange={pick} />
       {children}
       {side && <span className="add-choice-side">{side}</span>}
@@ -250,7 +250,6 @@ function StartHere({ channel, name, setName, taken, onStart }: NameProps & { onS
       }}
     >
       <div className="panel-body add-body">
-        <p className="add-how">It runs in a terminal you can open from here.</p>
         <Group label="Computer">
           {computers.length === 0 && <p className="add-none">No computer of yours is linked. Invite one you run instead.</p>}
           {computers.map((c) => (
@@ -264,12 +263,7 @@ function StartHere({ channel, name, setName, taken, onStart }: NameProps & { onS
                 setComputerId(c.id)
                 setTyped(false)
               }}
-              side={
-                <>
-                  <span className={cx("add-pip", c.online && "is-online")} />
-                  {c.online ? "online" : `offline · ${ago(c.lastSeen)}`}
-                </>
-              }
+              side={c.online ? undefined : `offline · ${ago(c.lastSeen)}`}
             >
               <Icon name="computer" />
               <span className="add-choice-label">
@@ -280,26 +274,16 @@ function StartHere({ channel, name, setName, taken, onStart }: NameProps & { onS
           ))}
         </Group>
 
-        <Group label={`Agents found on ${where}`}>
-          {found.length === 0 && <p className="add-none">No agent found on {where} yet. Install one below, then come back here.</p>}
+        <Group label="Agent">
+          {found.length === 0 && <p className="add-none">No agent found on {where} yet. Install one, then come back here.</p>}
           {found.map((h) => (
-            <Choice key={h.id} group={`${id}-harness`} on={h.id === harnessId} pick={() => setHarnessId(h.id)} side={h.version}>
+            <Choice key={h.id} group={`${id}-harness`} on={h.id === harnessId} pick={() => setHarnessId(h.id)} title={h.version}>
               <Avatar person={{ name: h.label, kind: "agent", harness: h.id, presence: "online" }} size="sm" />
               <span className="add-choice-label">{h.label}</span>
             </Choice>
           ))}
+          {missing.length > 0 && <Others where={where} missing={missing} open={found.length === 0} />}
         </Group>
-
-        {missing.length > 0 && (
-          <div className="add-group">
-            <span className="field-label">To get the others, run on {where}</span>
-            <ul className="add-gets">
-              {missing.map((h) => (
-                <Missing key={h.id} harness={h} />
-              ))}
-            </ul>
-          </div>
-        )}
 
         <div className="field">
           <label className="field-label" htmlFor={`${id}-folder`}>
@@ -349,22 +333,7 @@ function StartHere({ channel, name, setName, taken, onStart }: NameProps & { onS
 
         <NameField name={name} setName={setName} problem={problem} />
 
-        <Group label="Personality">
-          <Choice group={`${id}-persona`} on={persona === ""} pick={() => setPersona("")}>
-            <span className="add-choice-text">
-              <span className="add-choice-label">None</span>
-              <span className="add-choice-about">The harness as it comes, with no extra instructions.</span>
-            </span>
-          </Choice>
-          {app.personas.map((p) => (
-            <Choice key={p.id} group={`${id}-persona`} on={persona === p.id} pick={() => setPersona(p.id)}>
-              <span className="add-choice-text">
-                <span className="add-choice-label">{p.label}</span>
-                <span className="add-choice-about">{p.about}</span>
-              </span>
-            </Choice>
-          ))}
-        </Group>
+        <PersonaPick value={persona} onPick={setPersona} />
 
         <div className="field">
           <span className="field-label" id={`${id}-mode`}>
@@ -405,6 +374,52 @@ function StartHere({ channel, name, setName, taken, onStart }: NameProps & { onS
         </button>
       </footer>
     </form>
+  )
+}
+
+function Others({ where, missing, open }: { where: string; missing: App["harnesses"]; open: boolean }) {
+  const [shown, setShown] = useState(open)
+  if (!shown)
+    return (
+      <button type="button" className="btn is-quiet is-small add-others" onClick={() => setShown(true)}>
+        <Icon name="plus" size={14} />
+        Install another agent
+      </button>
+    )
+  return (
+    <div className="add-others-list">
+      <span className="add-others-head">Run one of these on {where}, then come back here</span>
+      <ul className="add-gets">
+        {missing.map((h) => (
+          <Missing key={h.id} harness={h} />
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+function PersonaPick({ value, onPick, none }: { value: string; onPick: (id: string) => void; none?: string }) {
+  const { app } = useApp()
+  const id = useId()
+  const about = app.personas.find((p) => p.id === value)?.about ?? none
+  return (
+    <div className="field">
+      <label className="field-label" htmlFor={id}>
+        Personality
+      </label>
+      <span className="add-select">
+        <select id={id} className="input" value={value} onChange={(e) => onPick(e.target.value)}>
+          <option value="">None</option>
+          {app.personas.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.label}
+            </option>
+          ))}
+        </select>
+        <Icon name="down" size={14} />
+      </span>
+      {about && <span className="field-hint">{about}</span>}
+    </div>
   )
 }
 
@@ -450,8 +465,6 @@ function useJoinCommand(code: string, nick: string, persona: string): { line: st
 }
 
 function RunCommand({ channel, name, setName, taken }: NameProps) {
-  const { app } = useApp()
-  const id = useId()
   const [persona, setPersona] = useState("")
   const problem = nameProblem(name, taken)
   const { line, failed, retry } = useJoinCommand(channel.code, name, channel.youOwn ? persona : "")
@@ -460,27 +473,9 @@ function RunCommand({ channel, name, setName, taken }: NameProps) {
   }, [channel.code, channel.youOwn, name, persona])
   return (
     <div className="panel-body add-body">
-      <p className="add-how">Already running Claude Code, Codex or another agent? Give it this line. It asks to join, and it keeps working where it is.</p>
       <NameField name={name} setName={setName} problem={problem} />
       {channel.youOwn || channel.youManageAgents ? (
-        <Group label="Personality">
-          <Choice group={`${id}-persona`} on={persona === ""} pick={() => setPersona("")}>
-            <span className="add-choice-text">
-              <span className="add-choice-label">None</span>
-              <span className="add-choice-about">
-                {channel.youOwn ? "The harness as it comes. You can still pick one when you let it in." : "The harness as it comes. You can still pick one from its profile."}
-              </span>
-            </span>
-          </Choice>
-          {app.personas.map((p) => (
-            <Choice key={p.id} group={`${id}-persona`} on={persona === p.id} pick={() => setPersona(p.id)}>
-              <span className="add-choice-text">
-                <span className="add-choice-label">{p.label}</span>
-                <span className="add-choice-about">{p.about}</span>
-              </span>
-            </Choice>
-          ))}
-        </Group>
+        <PersonaPick value={persona} onPick={setPersona} none={channel.youOwn ? "You can still pick one when you let it in." : "You can still pick one from its profile."} />
       ) : (
         <p className="add-note">The owner picks its personality when they let it in.</p>
       )}
@@ -497,10 +492,7 @@ function RunCommand({ channel, name, setName, taken }: NameProps) {
           <CopyBox text={line} label="Copy command" disabled={!!problem} wrap />
         )}
       </div>
-      <p className="add-note">
-        Run it in the folder the agent should work in. If kiwi isn't on that computer yet, the line installs it first, from the same site, as a signed release. It asks to join
-        {persona && channel.youOwn ? ` as ${app.personas.find((p) => p.id === persona)?.label ?? "that personality"}` : ""}; you'll check its code in Needs you.
-      </p>
+      <p className="add-note">Run it in the folder it should work in. It installs kiwi first if that computer has none, then asks to join; you check its code in Needs you.</p>
     </div>
   )
 }
@@ -608,7 +600,7 @@ function Progress({ channel, run, onDone, onMessage, onRetry, onBack }: Progress
             )}
           </div>
         ) : (
-          !done && <p className="add-note">You can close this. {n} shows up under Agents once it's in.</p>
+          !done && <p className="add-note">You can close this.</p>
         )}
       </div>
       {failed && (
