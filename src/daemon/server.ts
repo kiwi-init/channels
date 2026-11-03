@@ -18,7 +18,7 @@ import { DAEMON_PROTOCOL, daemonSock, daemonToken, readKeepAsk, readListener, ty
 import { activityEnv, reachOf, readsRex, seatRecordFor, wakeOn, type Attached } from "./reach.ts";
 import { readRexInto } from "./rex-reads.ts";
 import type { RexActivity, RexPlace, SeatPlace, TerminalPlugin } from "../terminals/plugin.ts";
-import { helpersOn, marking, remoteBypassOn, terminalPlugin } from "../terminals/registry.ts";
+import { helpersOn, marking, remoteBypassOn, shellsOn, terminalPlugin } from "../terminals/registry.ts";
 import { pruneHookFiles } from "../hooks/delivered.ts";
 import { launchFolders, remoteFolders, seatFolders } from "../launch/folders.ts";
 import { hooksRows } from "../hooks/install/extra.ts";
@@ -26,8 +26,9 @@ import { computerSettings } from "./settings.ts";
 import { harnessInventory } from "../launch/harnesses.ts";
 import { HostedTmux } from "./hosted-tmux.ts";
 import { clampSize, isPane, openTerm, TERM_COLS, TERM_ROWS } from "./hosted-term.ts";
-import { forgetAtRelay, startMachineInbox } from "./inbox.ts";
+import { forgetAtRelay, speaksHere, startMachineInbox } from "./inbox.ts";
 import { remoteRunner } from "./remote.ts";
+import { remoteShells } from "./shells.ts";
 import { launchAgent } from "../launch/launch.ts";
 import { readLoopStart, startLoop } from "../loop/start.ts";
 import { readLaunchRequest } from "../launch/wire.ts";
@@ -36,7 +37,7 @@ import { stopDaemon, tryHello } from "./rpc.ts";
 import { readKey, type ConnState, type Seat, type Sub, type Waiting } from "./seat.ts";
 import { throttled } from "./throttle.ts";
 import { readAdmitRoom, startAdmitter } from "./admit.ts";
-import { pathOf, seatWakes } from "./wake.ts";
+import { appendRotated, pathOf, seatWakes } from "./wake.ts";
 
 export const ACTIVITY_EVERY_MS = 3_000;
 const PROBE_ANSWER_GAP_MS = 500;
@@ -112,6 +113,27 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
   }
 
   const hosted = new HostedTmux(dir);
+  const shells = remoteShells({
+    machine: () => {
+      const m = loadPairedMachine();
+      return m?.relay ? { identity: m.identity, relay: m.relay } : null;
+    },
+    on: () => shellsOn(loadConfig()),
+    mine: (want) => hosted.mine(seatFolders(loadConfig())[0] ?? homedir(), want),
+    term: (pane, cols, rows, send) => openTerm(hosted, pane, cols, rows, send),
+    keys: (pane, text) => hosted.keys(pane, text),
+    resize: (pane, cols, rows) => hosted.resize(pane, cols, rows),
+    tabs: () => hosted.mineTabs(),
+    closeTab: (pane) => hosted.closeMine(pane),
+    yours: (by) => speaksHere(loadPairedMachine(), by),
+    log: (row) => {
+      try {
+        appendRotated(join(dir, "remote.log"), `${new Date().toISOString()}\t${row.join("\t")}\n`);
+      } catch {
+        // The log only records what happened; failing to write it changes nothing.
+      }
+    },
+  });
   void hosted.resume().catch(() => {});
   const seats = new Map<string, Seat>();
   const admitter = startAdmitter(() => {
@@ -541,6 +563,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
   const heardList = (m: Message, seat: Seat): void => {
     if (!m.sigOk || m.kind !== "event" || m.ev?.op !== "devices") return;
     void takeDeviceList(m.ev.links)
+      .then(() => shells.recheck())
       .then(() => proveSeat(seat))
       .catch(() => {
         // A list this computer can't take, or a send the relay refused: the next list or the next start tries again.
@@ -946,7 +969,11 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     dir,
     machine: loadPairedMachine,
     unpaired: unpairHere,
-    listed: async (links) => (await takeDeviceList(links)) === "longer",
+    listed: async (links) => {
+      const longer = (await takeDeviceList(links)) === "longer";
+      await shells.recheck();
+      return longer;
+    },
     settled: () => relayForget,
     run: remoteRunner({
       inventory: () => harnessInventory(),
@@ -955,6 +982,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
       bypass: () => remoteBypassOn(loadConfig()),
       settings: async () => computerSettings(loadConfig(), hooksRows()),
       starts: join(dir, "remote-launches.json"),
+      shells,
     }),
   });
   let rexWatch: { stop(): void } | null = null;
@@ -1038,6 +1066,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     statusWatch?.stop();
     statusWatch = null;
     inbox.stop();
+    shells.stop();
     rexWatch?.stop();
     rexWatch = null;
     await hosted.detach();

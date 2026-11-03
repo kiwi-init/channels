@@ -30,6 +30,7 @@ describe("an ask to a paired computer", () => {
     expect(await readAsk(machine, box, { person: person.pk, now: 1_000_000 + ASK_FRESH_MS, claim: fresh() })).toEqual({
       ok: true,
       ask: { kind: "kiwi-machine-ask", v: 1, machine: machine.pk, verb: "launch", args: { harness: "claude", folder: "/work" }, id: "launch_0123456789", at: 1_000_000, reply },
+      by: person.pk,
     });
   });
 
