@@ -1,0 +1,40 @@
+     ▀▀▀▀▀▀
+    ▀▀▀▀▀▀▀▀
+   ▄▀▀    ▀▀▄
+  ▄▀▀      ▀▀▄
+
+  Antigravity CLI 1.4.12
+  person@example.com (Google AI Pro)
+  Gemini 3.8 Flash (Low)
+  /work/app
+
+────────────────────────────────────────────────────────────
+> Run the shell command: sleep 20 && echo done
+
+● Bash(sleep 20 && echo done) (ctrl+o to expand)
+
+  The command sleep 20 && echo done has been started in the background (Task ID: 88793544-b881-4f48-bf8d-
+  4dff124d6bc8/task-2). I will wait for it to complete.
+
+  The command has finished successfully:
+
+    done
+
+────────────────────────────────────────────────────────────
+> Run exactly this shell command: rm -rf ./x.txt
+
+● Bash(rm -rf ./x.txt) (ctrl+o to expand)
+
+  The command rm -rf ./x.txt has executed successfully (exit code 0).
+
+────────────────────────────────────────────────────────────
+> Run exactly this shell command: rm -rf ./y.txt
+
+● Bash(rm -rf ./y.txt) (ctrl+o to expand)
+
+  The command rm -rf ./y.txt has executed successfully (exit code 0).
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+> half typed by a person
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+                                                                                   accept-edits · Gemini 3.8 Flash · low
