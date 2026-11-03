@@ -254,7 +254,7 @@ intents:
   - id: sign-in
     name: Sign In
     status: active
-    sentence: A person signs in with WorkOS so the relay knows who they are.
+    sentence: A person signs in with GitHub so the relay knows who they are.
     actor: user
     triggers:
       - Sign In button in the app
@@ -262,11 +262,9 @@ intents:
     code:
       - desktop/src/ipc/signin.ts
       - desktop/src/signin.ts
-      - packages/core/src/workos.ts
       - src/login.ts
       - src/relay/human.ts
     confidence: high
-    wants: I believe we already switched to just github no ???
     reviewed:
       by: ojowwalker77
       at: 2026-11-03T19:25:07.587Z
@@ -573,7 +571,7 @@ intents:
     sentence: An operator limits who can create channels and how many each owns.
     actor: operator
     triggers:
-      - WORKOS and KIWI settings at deploy
+      - KIWI settings at deploy
       - Create channel refused with beta message
     code:
       - src/relay/account.ts
@@ -980,35 +978,17 @@ intents:
   - id: sign-in-with-github
     name: Sign In With GitHub
     status: active
-    sentence: A person signs in with their GitHub account instead of WorkOS.
+    sentence: A person signs in with their GitHub account, the only sign-in.
     actor: user
     triggers:
       - Sign-in screen, Continue with GitHub
     code:
       - desktop/src/github-flow.ts
       - ui/src/start/github-sign-in.tsx
-    confidence: medium
-    doubt: Does GitHub sign-in replace WorkOS, or sit beside it?
+    confidence: high
     reviewed:
       by: ojowwalker77
       at: 2026-11-03T19:56:42.640Z
-  - id: move-account-to-github
-    name: Move Account To GitHub
-    status: active
-    sentence: A person moves their account from WorkOS sign-in to GitHub sign-in.
-    actor: user
-    triggers:
-      - Settings, Account, Move to GitHub
-    code:
-      - desktop/src/signin.ts
-      - packages/core/src/account.ts
-      - src/relay/move.ts
-    confidence: medium
-    doubt: Is moving accounts still open to people after the beta?
-    wants: we don't have users, new users shall only log in with github, remove workos bs
-    reviewed:
-      by: ojowwalker77
-      at: 2026-11-03T19:57:23.118Z
   - id: get-phone-alerts
     name: Get Phone Alerts
     status: active
