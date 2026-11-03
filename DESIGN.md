@@ -100,8 +100,10 @@ The two built-in sides, from `tokens.css` and `channels.ts`:
   everything in `rem` grows with it. Type, every box that holds text
   (controls, rows, chips, avatars with initials, the rail's tiles), the
   columns sized for text (`--side-w`, `--col`), icons and container-query
-  breakpoints are in `rem`. Hairlines, radii, spacing, shadows and dots stay
-  in px. `scripts/css-units.ts` (`repo / static`) refuses px type, a px
+  breakpoints are in `rem`. A breakpoint is its width at Default divided by
+  17.6 (1rem at Default), so it fires where it always did there and moves
+  with the text at other sizes. Hairlines, radii, spacing, shadows and dots
+  stay in px. `scripts/css-units.ts` (`repo / static`) refuses px type, a px
   height on a rule that sets a font size, and a px container breakpoint.
 - Weights: 400 for text, 500 for buttons and tabs, 600 for names, titles and
   what's chosen. Hierarchy comes from weight, ink level and size, not from

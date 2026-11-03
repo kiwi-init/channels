@@ -266,7 +266,7 @@
   }
 }
 
-@container (min-width: 37.5rem) {
+@container (min-width: 34.09rem) {
   .gh-row {
     grid-template-columns: 1rem minmax(0, 1fr) 10rem 4rem;
   }
@@ -289,7 +289,7 @@
   }
 }
 
-@container (min-width: 46.25rem) {
+@container (min-width: 42.05rem) {
   .gh-row {
     grid-template-columns: 1rem minmax(0, 1fr) 10rem 8.25rem 4rem;
   }
