@@ -1121,38 +1121,6 @@
   font: var(--t-meta) / 1.5 var(--ui);
 }
 
-.chatter {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: 4px 0;
-  padding: 6px 0 6px 8px;
-  color: var(--ink-2);
-  font: var(--t-meta) var(--mono);
-  letter-spacing: -0.01em;
-}
-
-.chatter-faces {
-  display: inline-flex;
-  flex: none;
-  width: 32px;
-}
-
-.chatter-faces > * + * {
-  margin-left: -12px;
-}
-
-.chatter-text {
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.chatter.is-open {
-  border-bottom: 1px dashed var(--line-2);
-}
-
 .tab-red.is-decide {
   background: var(--decide);
 }
