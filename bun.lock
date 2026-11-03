@@ -30,7 +30,7 @@
     },
     "desktop": {
       "name": "kiwi-desktop",
-      "version": "2026.11.0",
+      "version": "2026.11.2",
       "dependencies": {
         "@kiwi/core": "workspace:*",
       },
@@ -91,7 +91,7 @@
         "@kiwi/channel": "workspace:*",
         "@kiwi/core": "workspace:*",
         "@kiwi/secrets": "workspace:*",
-        "ghostty-web": "0.4.0",
+        "ghostty-web": "0.4.0-next.21.g640db46",
         "mermaid": "^12.2.0",
         "react": "^19.3.1",
         "react-dom": "^19.3.1",
@@ -788,7 +788,7 @@
 
     "get-tsconfig": ["get-tsconfig@4.14.3", "", { "dependencies": { "resolve-pkg-maps": "^1.0.0" } }, "sha512-++QEw4DIY7WGoukz+/+A/8dGYPT9l9yIadnmSgZ8Rjr3YVSVDipQSO9CdnJo9ePqFqUUqh+wk9uIaoiAwsiPkA=="],
 
-    "ghostty-web": ["ghostty-web@0.4.0", "", {}, "sha512-0puDBik2qapbD/QQBW9o5ZHfXnZBqZWx/ctBiVtKZ6ZLds4NYb+wZuw1cRLXZk9zYovIQ908z3rvFhexAvc5Hg=="],
+    "ghostty-web": ["ghostty-web@0.4.0-next.21.g640db46", "", {}, "sha512-YxJYIo+Frc+HsJOeyyZVBMSke3TsiQ9yyl+Cu8sI7oEBINYUxP6Z9AxBehst20AZOP255z6S7rpORu0JJzHtEw=="],
 
     "gopd": ["gopd@1.2.0", "", {}, "sha512-ZUKRh6/kUFoAiTAtTYPZJ3hw9wNxx+BIBOijnlG9PnrJsCcSjs1wyyD6vJpaYtgnzDrKYRSqf3OO6Rfa93xsRg=="],
 
