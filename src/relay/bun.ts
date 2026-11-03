@@ -37,6 +37,7 @@ import { Policy, policyFrom, type RelayPolicy, type RoomPolicy } from "./policy.
 import {
   Directory,
   forgetRoom,
+  requestsGone,
   holdEntry,
   releasable,
   reserveSlot,
@@ -400,6 +401,8 @@ export function startRelay(
     }
     if (fx.wipe) {
       pageCache?.forget(roomId);
+      const sql = sqls.get(roomId);
+      if (sql) requestsGone(sql);
       closeDb(roomId);
       for (const suffix of ["", "-wal", "-shm"]) rmSync(file(roomId) + suffix, { force: true });
       for (const ws of room) ws.close(CLOSE_CLOSED, "channel closed");

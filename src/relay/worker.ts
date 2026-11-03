@@ -23,6 +23,7 @@ import {
   errorResponse,
   expire,
   forgetRoom,
+  requestsGone,
   gateRoom,
   idleExpired,
   missingFingerprint,
@@ -251,6 +252,7 @@ export class Channel extends DurableObject<Env> {
       await Promise.allSettled(fx.directory.map((u) => this.env.OWNERS.get(this.env.OWNERS.idFromName(u.user)).fetch("https://owners/apply", { method: "POST", body: JSON.stringify(u) })));
     }
     if (fx.wipe) {
+      requestsGone(this.sql);
       // Closing leaves no breadcrumbs: every row and table goes, alarms included.
       await this.ctx.storage.deleteAlarm();
       await this.ctx.storage.deleteAll();

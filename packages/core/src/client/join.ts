@@ -10,7 +10,7 @@ import { canPost, scopesOf } from "../scopes.ts";
 import type { Refusal } from "./errors.ts";
 import type { Info } from "./info.ts";
 import { ownerStatement, requestInfo, unwrapKeys, wrapFor } from "./keys.ts";
-import { callRelay, type Relay } from "./relay.ts";
+import { callRelay, Relay } from "./relay.ts";
 import { keepHeld } from "./sealed.ts";
 
 const pinnedInfo = Effect.fn("Channel.pinnedInfo")(function* (relay: string, code: string) {
@@ -37,6 +37,34 @@ async function delegateNonce(roomId: string, ownerPk: string, delegation: unknow
 }
 
 export type JoinStatus = { status: "pending"; code: string | null } | { status: "denied" } | { status: "approved"; access: ChannelAccess };
+
+export type JoinWatch = { tag: string | null; status: JoinStatus | null };
+
+type StatusReply = { status: string; ownerNonce?: string | null; revealed?: boolean; epoch?: number; keys?: Record<string, string>; delegation?: string };
+
+const statusOf = Effect.fn("Channel.statusOf")(function* (
+  relay: string,
+  pinned: { roomId: string; info: Info; signedKeys: boolean },
+  id: Identity,
+  requestId: string,
+  r: StatusReply,
+): Effect.fn.Return<JoinStatus, Refusal, Relay> {
+  const { roomId, info, signedKeys } = pinned;
+  if (r.status === "denied") return { status: "denied" };
+  if (r.status !== "approved") {
+    const ownerNonce = r.ownerNonce;
+    if (!ownerNonce) return { status: "pending", code: null };
+    const nonce = yield* Effect.promise(() => joinNonce(id, roomId));
+    const statement = yield* Effect.promise(async () => ownerNonceStatement(roomId, id.pk, await commitTo(roomId, id.pk, nonce)));
+    if (!(yield* Effect.promise(async () => (await verifyText(info.ownerPk, ownerNonce, statement)) || (await delegateNonce(roomId, info.ownerPk, r.delegation, ownerNonce, statement))))) {
+      throw new Error("the relay passed on an owner signature that doesn't check out: don't let the owner approve this request, and tell them");
+    }
+    if (!r.revealed) yield* callRelay(relay, roomId, `/requests/${requestId}/reveal`, { method: "POST", identity: id, body: JSON.stringify({ nonce }) });
+    return { status: "pending", code: yield* Effect.promise(() => joinCheckCode(roomId, id.pk, ownerNonce, nonce)) };
+  }
+  const keys = yield* Effect.promise(() => unwrapKeys(id, roomId, r.keys ?? {}, info.ownerPk, r.delegation));
+  return { status: "approved", access: { roomId, ownerPk: info.ownerPk, ownerXpk: info.ownerXpk, ...keepHeld({ epoch: 0, keys: {} }, { epoch: r.epoch ?? 0, keys }), signedKeys } };
+});
 
 export const joinFx = {
   create: Effect.fn("Channel.create")(function* (
@@ -92,27 +120,23 @@ export const joinFx = {
   }),
 
   joinStatus: Effect.fn("Channel.joinStatus")(function* (relay: string, code: string, id: Identity, requestId: string): Effect.fn.Return<JoinStatus, Refusal, Relay> {
-    const { roomId, info, signedKeys } = yield* pinnedInfo(relay, code);
-    const r = yield* callRelay<{ status: string; ownerNonce?: string | null; revealed?: boolean; epoch?: number; keys?: Record<string, string>; delegation?: string }>(
-      relay,
-      roomId,
-      `/requests/${requestId}`,
-      { identity: id },
-    );
-    if (r.status === "denied") return { status: "denied" };
-    if (r.status !== "approved") {
-      const ownerNonce = r.ownerNonce;
-      if (!ownerNonce) return { status: "pending", code: null };
-      const nonce = yield* Effect.promise(() => joinNonce(id, roomId));
-      const statement = yield* Effect.promise(async () => ownerNonceStatement(roomId, id.pk, await commitTo(roomId, id.pk, nonce)));
-      if (!(yield* Effect.promise(async () => (await verifyText(info.ownerPk, ownerNonce, statement)) || (await delegateNonce(roomId, info.ownerPk, r.delegation, ownerNonce, statement))))) {
-        throw new Error("the relay passed on an owner signature that doesn't check out: don't let the owner approve this request, and tell them");
-      }
-      if (!r.revealed) yield* callRelay(relay, roomId, `/requests/${requestId}/reveal`, { method: "POST", identity: id, body: JSON.stringify({ nonce }) });
-      return { status: "pending", code: yield* Effect.promise(() => joinCheckCode(roomId, id.pk, ownerNonce, nonce)) };
-    }
-    const keys = yield* Effect.promise(() => unwrapKeys(id, roomId, r.keys ?? {}, info.ownerPk, r.delegation));
-    return { status: "approved", access: { roomId, ownerPk: info.ownerPk, ownerXpk: info.ownerXpk, ...keepHeld({ epoch: 0, keys: {} }, { epoch: r.epoch ?? 0, keys }), signedKeys } };
+    const pinned = yield* pinnedInfo(relay, code);
+    const r = yield* callRelay<StatusReply>(relay, pinned.roomId, `/requests/${requestId}`, { identity: id });
+    return yield* statusOf(relay, pinned, id, requestId, r);
+  }),
+
+  watchJoin: Effect.fn("Channel.watchJoin")(function* (
+    relay: string,
+    code: string,
+    id: Identity,
+    requestId: string,
+    seen: string | null,
+    waitSeconds: number,
+  ): Effect.fn.Return<JoinWatch, Refusal, Relay> {
+    const pinned = yield* pinnedInfo(relay, code);
+    const got = yield* (yield* Relay).conditional<StatusReply>(relay, pinned.roomId, `/requests/${requestId}`, seen, { identity: id }, seen && waitSeconds > 0 ? { wait: waitSeconds } : {});
+    if (!got.fresh) return { tag: seen, status: null };
+    return { tag: got.etag, status: yield* statusOf(relay, pinned, id, requestId, got.data) };
   }),
 
   resume: Effect.fn("Channel.resume")(function* (relay: string, code: string, id: Identity) {
