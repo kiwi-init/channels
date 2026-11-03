@@ -24,7 +24,7 @@ import { longFeed } from "~/demo/long"
 import { demoAround, demoFetchOlder, demoOlder } from "~/demo/older"
 import { withSpecs } from "~/demo/specs"
 import { homeOf } from "~/home"
-import type { Account, Actions, AgentStarts, App, Enrolling, Finding, GithubSignIn, Launching, ThisComputer, Channel, ChannelTile, GoneChannel, Message, Prefs, Spec, Task } from "~/model"
+import type { Account, Actions, AgentStarts, App, Enrolling, Finding, GithubSignIn, ThisComputer, Channel, ChannelTile, GoneChannel, Message, Prefs, Spec, Task } from "~/model"
 import { deletedTheme, savedTheme } from "~/theme/themes"
 import { announce } from "~/kit/toasts"
 import { muteKey, snoozeEnd } from "~/live/snooze"
@@ -72,9 +72,6 @@ const FINDINGS: Finding[] = [
 ]
 
 const STARTS: AgentStarts = {
-  folders: ["~/www/channels", "~/www/landing"],
-  launch: true,
-  bypass: false,
   terminals: [
     { id: "rex", name: "Rex", found: true, running: true, helpers: "on" },
     { id: "tmux", name: "tmux", found: true, running: false, helpers: "off" },
@@ -689,51 +686,6 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       setNickname: (code, name, nickname) => edit(code, (c) => ({ ...c, people: c.people.map((p) => (p.name === name ? { ...p, display: nickname?.trim() || undefined } : p)) })),
       setPowers: (code, name, powers) => edit(code, (c) => ({ ...c, people: c.people.map((p) => (p.name === name ? { ...p, ...powers } : p)) })),
       showAgent: async () => null,
-      choicesOn: async (_code, computer) =>
-        computer === "mbp"
-          ? { folders: ["~/www/channels", "~/www/landing"] }
-          : {
-              harnesses: [
-                { id: "codex", label: "Codex", installed: true },
-                { id: "claude", label: "Claude Code", installed: false, why: "not installed" },
-              ],
-              folders: ["~/src/channels"],
-            },
-      chooseFolder: async () => "~/www/picked",
-      addAgent: (code, a, seen) => {
-        let following = true
-        const tell = (s: Launching) => following && seen(s)
-        window.setTimeout(() => tell({ stage: "started" }), 800)
-        window.setTimeout(() => tell({ stage: "asked", name: a.name }), 1600)
-        window.setTimeout(() => {
-          tell({ stage: "joined", name: a.name })
-          edit(code, (c) => ({
-            ...c,
-            people: [
-              ...c.people,
-              {
-                name: a.name,
-                kind: "agent",
-                owner: false,
-                you: false,
-                presence: "online",
-                harness: a.harness,
-                runs: HARNESSES.find((h) => h.id === a.harness)?.label,
-                machine: DEMO_ACCOUNT.computers.find((m) => m.id === a.computer)?.label ?? a.computer,
-                persona: PERSONAS.find((p) => p.id === a.persona)?.label ?? a.persona,
-                role: a.role,
-                sponsor: c.you,
-                lastSeen: Date.now(),
-                joined: Date.now(),
-                messages: 0,
-              },
-            ],
-          }))
-        }, 2400)
-        return () => {
-          following = false
-        }
-      },
       addRoom: (code, name, members) => {
         edit(code, (c) => ({ ...c, rooms: [...c.rooms, { id: name, name, unread: 0, mentions: 0, ...(members?.length ? { members: ["jow", ...members] } : {}) }] }))
         return Promise.resolve(name)
@@ -879,10 +831,6 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       enrollDeny: () => setState((s) => (s.account ? { ...s, account: { ...s.account, enrollAsk: undefined } } : s)),
       saveTheme: (theme) => setState((s) => ({ ...s, prefs: { ...s.prefs, ...savedTheme(s.prefs, theme) } })),
       deleteTheme: (id) => setState((s) => ({ ...s, prefs: { ...s.prefs, ...deletedTheme(s.prefs, id) } })),
-      addStartFolder: () => setStarts((s) => (s.folders.includes("~/code/kiwi") ? s : { ...s, folders: [...s.folders, "~/code/kiwi"] })),
-      removeStartFolder: (dir) => setStarts((s) => ({ ...s, folders: s.folders.filter((f) => f !== dir) })),
-      allowNewAgents: (on) => setStarts((s) => ({ ...s, launch: on })),
-      allowRemoteBypass: (on) => setStarts((s) => ({ ...s, bypass: on })),
       savePersonalities: setOwnPersonalities,
       setHooks: (harness, on) => setComputer((c) => ({ ...c, hooks: c.hooks.map((h) => (h.harness === harness ? { ...h, state: on ? "installed" : "off" } : h)) })),
       setTerminalHelpers: (id, on) => setStarts((s) => ({ ...s, terminals: s.terminals.map((t) => (t.id === id ? { ...t, helpers: on ? "on" : "off" } : t)) })),

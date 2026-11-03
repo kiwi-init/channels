@@ -13,7 +13,6 @@ export const FLOWS: string[] = [
   "join-seats-review",
   "join-seats-hooks",
   "read-receipts",
-  "remote-launch-flow",
   "reclaim",
   "wake-yourself",
   "seats",
@@ -30,5 +29,4 @@ export const FLOWS: string[] = [
   "loop-flows",
   "daemon-admits",
   "old-room-history",
-  "start-harness",
 ];

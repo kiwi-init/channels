@@ -22,11 +22,9 @@ import { readHarnessRow, type HarnessRow } from "@kiwi/core/harnesses.ts";
 import type { DeviceLink } from "@kiwi/core/devices.ts";
 import { isDeviceKeep } from "@kiwi/core/protocol.ts";
 import type { MachineCert } from "@kiwi/core/person.ts";
-import type { LaunchedView } from "@kiwi/core/terminals.ts";
 
-import type { KeepView, LaunchAgentRequest } from "./bridge.ts";
+import type { KeepView } from "./bridge.ts";
 import { childEnv } from "./child-env.ts";
-import { launchedView } from "./launch-view.ts";
 
 export interface HelloResult {
   version: string;
@@ -149,11 +147,6 @@ export async function daemonKeep(room: string, agents: readonly { pk: string; fr
   if (!kept || typeof kept !== "object") return null;
   const { links, keep } = kept as Record<string, unknown>;
   return Array.isArray(links) && isDeviceKeep(keep) ? { links: links as DeviceLink[], keep } : null;
-}
-
-export async function daemonLaunch(req: LaunchAgentRequest, home: string = kiwiHome()): Promise<LaunchedView> {
-  const r = await call(home, "launch", { ...req }, 150_000);
-  return launchedView(r["launched"]);
 }
 
 /**

@@ -55,7 +55,7 @@ class AnswerTest {
         val model = sample(RuntimeEnvironment.getApplication())
         compose.setContent {
             ChannelsTheme {
-                Surface(Modifier.fillMaxSize()) { DetailsScreen(model, DEV, "main", back = {}, choose = {}, newAgent = {}) }
+                Surface(Modifier.fillMaxSize()) { DetailsScreen(model, DEV, "main", back = {}, choose = {}) }
             }
         }
         compose.waitForIdle()

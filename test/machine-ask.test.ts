@@ -24,18 +24,18 @@ beforeAll(async () => {
 describe("an ask to a paired computer", () => {
   test("is read back by that computer, from that person, while fresh and new", async () => {
     const reply = newSecret();
-    const { box, id } = await makeAsk(person, to(machine), { verb: "launch", args: { harness: "claude", folder: "/work" }, reply, id: "launch_0123456789" }, 1_000_000);
-    expect(id).toBe("launch_0123456789");
+    const { box, id } = await makeAsk(person, to(machine), { verb: "settings", args: {}, reply, id: "settings_0123456789" }, 1_000_000);
+    expect(id).toBe("settings_0123456789");
     expect(box.length).toBeLessThanOrEqual(ASK_MAX_BYTES);
     expect(await readAsk(machine, box, { person: person.pk, now: 1_000_000 + ASK_FRESH_MS, claim: fresh() })).toEqual({
       ok: true,
-      ask: { kind: "kiwi-machine-ask", v: 1, machine: machine.pk, verb: "launch", args: { harness: "claude", folder: "/work" }, id: "launch_0123456789", at: 1_000_000, reply },
+      ask: { kind: "kiwi-machine-ask", v: 1, machine: machine.pk, verb: "settings", args: {}, id: "settings_0123456789", at: 1_000_000, reply },
     });
   });
 
   test("is refused when it's for another computer, from someone else, old, from the future, or seen before", async () => {
     const reply = newSecret();
-    const { box, id } = await makeAsk(person, to(machine), { verb: "harnesses", args: {}, reply }, 1_000_000);
+    const { box, id } = await makeAsk(person, to(machine), { verb: "settings", args: {}, reply }, 1_000_000);
     expect(id).toMatch(/^[A-Za-z0-9_-]{22}$/);
     expect(await readAsk(other, box, { person: person.pk, now: 1_000_000, claim: fresh() })).toEqual({ ok: false, why: "unsealed" });
     expect(await readAsk(machine, box, { person: stranger.pk, now: 1_000_000, claim: fresh() })).toEqual({ ok: false, why: "not-yours" });
@@ -46,7 +46,7 @@ describe("an ask to a paired computer", () => {
 
   test("sealed to this computer but meant for another one is refused, so a box can't be re-aimed", async () => {
     const reply = newSecret();
-    const signed = await sign(person, { kind: "kiwi-machine-ask", v: 1, machine: other.pk, verb: "launch", args: {}, id: "aimedElsewhere1", at: 5, reply });
+    const signed = await sign(person, { kind: "kiwi-machine-ask", v: 1, machine: other.pk, verb: "settings", args: {}, id: "aimedElsewhere1", at: 5, reply });
     const box = await sealTo(machine.xpk!, JSON.stringify(signed), "kiwi-machine-ask");
     expect(await readAsk(machine, box, { person: person.pk, now: 5, claim: fresh() })).toEqual({ ok: false, why: "not-yours" });
   });
@@ -54,10 +54,11 @@ describe("an ask to a paired computer", () => {
   test("anything changed inside, an unknown verb, an extra field, or a forged signature is refused", async () => {
     const reply = newSecret();
     const reseal = (x: object) => sealTo(machine.xpk!, JSON.stringify(x), "kiwi-machine-ask");
-    const good = await sign(person, { kind: "kiwi-machine-ask", v: 1, machine: machine.pk, verb: "folders", args: {}, id: "foldersAsk_01", at: 5, reply });
+    const good = await sign(person, { kind: "kiwi-machine-ask", v: 1, machine: machine.pk, verb: "settings", args: {}, id: "settingsAsk_01", at: 5, reply });
     expect((await readAsk(machine, await reseal(good), { person: person.pk, now: 5, claim: fresh() })).ok).toBe(true);
-    expect(await readAsk(machine, await reseal({ ...good, verb: "launch" }), { person: person.pk, now: 5, claim: fresh() })).toEqual({ ok: false, why: "unsigned" });
-    expect(await readAsk(machine, await reseal({ ...good, verb: "rm" }), { person: person.pk, now: 5, claim: fresh() })).toEqual({ ok: false, why: "malformed" });
+    expect(await readAsk(machine, await reseal({ ...good, verb: "unpair" }), { person: person.pk, now: 5, claim: fresh() })).toEqual({ ok: false, why: "unsigned" });
+    for (const verb of ["rm", "launch", "harnesses", "folders"])
+      expect(await readAsk(machine, await reseal({ ...good, verb }), { person: person.pk, now: 5, claim: fresh() })).toEqual({ ok: false, why: "malformed" });
     expect(await readAsk(machine, await reseal({ ...good, argv: ["sh"] }), { person: person.pk, now: 5, claim: fresh() })).toEqual({ ok: false, why: "malformed" });
     expect(await readAsk(machine, await reseal({ ...good, sig: good.sig.replace(/^./, (c) => (c === "A" ? "B" : "A")) }), { person: person.pk, now: 5, claim: fresh() })).toEqual({
       ok: false,
@@ -68,9 +69,9 @@ describe("an ask to a paired computer", () => {
   });
 
   test("a bad id or reply, or one too big once sealed, isn't made at all", async () => {
-    await expect(makeAsk(person, to(machine), { verb: "harnesses", args: {}, reply: "short" })).rejects.toThrow("mailbox secret");
-    await expect(makeAsk(person, to(machine), { verb: "harnesses", args: {}, reply: newSecret(), id: "no spaces" })).rejects.toThrow("id");
-    await expect(makeAsk(person, to(machine), { verb: "launch", args: { blob: "x".repeat(ASK_MAX_BYTES) }, reply: newSecret() })).rejects.toThrow("at most");
+    await expect(makeAsk(person, to(machine), { verb: "settings", args: {}, reply: "short" })).rejects.toThrow("mailbox secret");
+    await expect(makeAsk(person, to(machine), { verb: "settings", args: {}, reply: newSecret(), id: "no spaces" })).rejects.toThrow("id");
+    await expect(makeAsk(person, to(machine), { verb: "settings", args: { blob: "x".repeat(ASK_MAX_BYTES) }, reply: newSecret() })).rejects.toThrow("at most");
   });
 
   test("an ask can be opened only with this computer's own key, and the relay only sees the box", async () => {
@@ -84,7 +85,7 @@ describe("an ask to a paired computer", () => {
 describe("claiming an ask", () => {
   test("two copies of one box run once, and a box refused for another reason doesn't use up its id", async () => {
     const claim = fresh();
-    const { box, id } = await makeAsk(person, to(machine), { verb: "harnesses", args: {}, reply: newSecret() }, 1_000_000);
+    const { box, id } = await makeAsk(person, to(machine), { verb: "settings", args: {}, reply: newSecret() }, 1_000_000);
     expect(await readAsk(machine, box, { person: person.pk, now: 1_000_000 + 10 * ASK_FRESH_MS, claim })).toEqual({ ok: false, why: "stale" });
     expect((await readAsk(machine, box, { person: person.pk, now: 1_000_000, claim })).ok).toBe(true);
     expect(await readAsk(machine, box, { person: person.pk, now: 1_000_000, claim })).toEqual({ ok: false, why: "replayed" });
@@ -93,58 +94,10 @@ describe("claiming an ask", () => {
 });
 
 describe("an ask's arguments, per verb", () => {
-  const code = "mc2-AAAAAAAAAAAAAAAAAAAAAA-BBBBBBBBBBBBBBBB";
-  test("harnesses and unpair take nothing, folders an optional room", () => {
-    expect(readMachineArgs({ verb: "harnesses", args: {} })).toEqual({ verb: "harnesses" });
-    expect(readMachineArgs({ verb: "harnesses", args: { all: true } })).toBeNull();
+  test("settings and unpair take nothing, and an extra field is refused", () => {
+    expect(readMachineArgs({ verb: "settings", args: {} })).toEqual({ verb: "settings" });
     expect(readMachineArgs({ verb: "unpair", args: {} })).toEqual({ verb: "unpair" });
-    expect(readMachineArgs({ verb: "folders", args: {} })).toEqual({ verb: "folders" });
-    expect(readMachineArgs({ verb: "folders", args: { room: "0123456789abcdef0123456789abcdef" } })).toEqual({ verb: "folders", room: "0123456789abcdef0123456789abcdef" });
-    expect(readMachineArgs({ verb: "folders", args: { room: "../.." } })).toBeNull();
-  });
-
-  test("launch takes a known harness, a full folder path and a clean join line, and nothing else", () => {
-    const good = { harness: "claude" as const, folder: "/Users/jow/www/channels", code, relay: "https://relay.example", nick: "Ada Bot", persona: "eyJhIjoxfQ" };
-    expect(readMachineArgs({ verb: "launch", args: good })).toEqual({ verb: "launch", launch: good });
-    expect(readMachineArgs({ verb: "launch", args: { harness: "claude", folder: "/w", code } })).toEqual({ verb: "launch", launch: { harness: "claude" as const, folder: "/w", code } });
-    for (const bad of [
-      { ...good, harness: "bash" },
-      { ...good, folder: "relative/path" },
-      { ...good, folder: "/w\nrm -rf ~" },
-      { ...good, code: `${code}; curl x` },
-      { ...good, nick: "a'b" },
-      { ...good, relay: "https://relay.example/path" },
-      { ...good, persona: "not a token" },
-      { ...good, argv: ["sh", "-c", "id"] },
-      { ...good, folder: 3 },
-    ]) {
-      expect(readMachineArgs({ verb: "launch", args: bad })).toBeNull();
-    }
-  });
-
-  test("launch carries a model, effort, permission and context, each checked", () => {
-    const chosen = { harness: "codex" as const, folder: "/w", code, model: "gpt-5.3-codex", effort: "high", permission: "plan" as const, context: 400_000 };
-    expect(readMachineArgs({ verb: "launch", args: chosen })).toEqual({ verb: "launch", launch: chosen });
-    for (const bad of [{ model: "-c x=1" }, { effort: "high\n" }, { permission: "bypassPermissions" }, { context: "400k" }]) {
-      expect(readMachineArgs({ verb: "launch", args: { ...chosen, ...bad } })).toBeNull();
-    }
-  });
-
-  test("a launch with every choice and a long persona still fits in one sealed ask", async () => {
-    const args = {
-      harness: "claude",
-      folder: `/${"f".repeat(400)}`,
-      code,
-      relay: "https://relay.example",
-      nick: "n".repeat(40),
-      persona: "p".repeat(800),
-      model: "m".repeat(100),
-      effort: "xhigh",
-      permission: "accept-edits",
-      context: 1_000_000,
-    };
-    const { box } = await makeAsk(person, to(machine), { verb: "launch", args, reply: newSecret() });
-    expect(box.length).toBeLessThanOrEqual(ASK_MAX_BYTES);
+    expect(readMachineArgs({ verb: "settings", args: { all: true } })).toBeNull();
   });
 });
 

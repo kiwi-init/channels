@@ -4,9 +4,6 @@ import { dirname, join, resolve } from "node:path";
 import type { Socket } from "bun";
 import type { Info, MemberRow } from "@kiwi/core/client.ts";
 import { readHarnessRow, type HarnessRow } from "@kiwi/core/harnesses.ts";
-import { readLaunched, readOpened, type Launched, type Opened } from "@kiwi/core/terminals.ts";
-import type { LaunchRequest } from "../launch/wire.ts";
-import type { LoopStart } from "../loop/start.ts";
 import { home } from "../config.ts";
 import type { DeviceLink } from "@kiwi/core/devices.ts";
 import type { MachineCert } from "@kiwi/core/person.ts";
@@ -290,30 +287,6 @@ export async function daemonHarnesses(sock = daemonSock()): Promise<HarnessRow[]
   try {
     const r = await c.call("harnesses");
     return (Array.isArray(r.harnesses) ? r.harnesses : []).map(readHarnessRow).filter((h): h is HarnessRow => !!h);
-  } finally {
-    c.close();
-  }
-}
-
-export async function daemonLaunch(req: LaunchRequest, sock = daemonSock()): Promise<Launched> {
-  const c = await openConn(sock, 150_000);
-  try {
-    const r = await c.call("launch", { ...req });
-    const launched = readLaunched(r.launched);
-    if (!launched) throw new Error("the daemon answered a launch in a shape this kiwi doesn't know");
-    return launched;
-  } finally {
-    c.close();
-  }
-}
-
-export async function daemonLoop(start: LoopStart, sock = daemonSock()): Promise<Opened> {
-  const c = await openConn(sock, 30_000);
-  try {
-    const r = await c.call("loop", { ...start });
-    const opened = readOpened(r.opened);
-    if (!opened) throw new Error("the daemon answered a loop start in a shape this kiwi doesn't know");
-    return opened;
   } finally {
     c.close();
   }

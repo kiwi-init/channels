@@ -1,44 +1,15 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from "react"
-
-import { HARNESS_INSTALL, isKnownHarness } from "@kiwi/core/harnesses.ts"
+import { useEffect, useId, useState } from "react"
 
 import { wantPersona } from "~/live/persona-later"
-import { Avatar, cx } from "~/kit/bits"
-import { Track } from "~/kit/glide"
 import { Icon } from "~/kit/icons"
-import { ago, useNow } from "~/kit/time"
-import type { App, Channel, Computer, ComputerChoices, Harness, NewAgent, Person } from "~/model"
+import type { Channel } from "~/model"
 import { useApp } from "~/nav"
-import { shown } from "~/names"
 import { PanelHead } from "~/panels/frame"
 import { CopyBox } from "~/panels/invite"
-import { joinedAs, seen, stallOf, starting, stepOf, type Launch, type Stall } from "~/panels/launch-progress"
 
-type Way = "here" | "command"
-type Mode = NonNullable<NewAgent["mode"]>
 type Taken = Map<string, "in" | "asking">
 
-interface Run {
-  agent: NewAgent
-  on: string
-  runs: string
-  launch: Launch
-}
-
 const NAMES = ["nova", "ember", "quill", "otto", "juno"]
-
-const PRESET = new URLSearchParams(location.search).get("shot")
-
-const SHOT_FAILED =
-  "Claude Code stopped as it started (exit 1):\nshell-init: error retrieving current directory: getcwd: cannot access parent directories: No such file or directory\nThe current directory no longer exists (it was deleted or moved). Start Claude Code from an existing directory."
-
-const MODES: { id: Mode; label: string }[] = [
-  { id: "ask-first", label: "Ask first" },
-  { id: "accept-edits", label: "Accept edits" },
-  { id: "dont-ask", label: "Don't ask" },
-]
-
-const isPhone = (c: Computer): boolean => c.os === "iphone" || c.os === "android"
 
 function takenNames(channel: Channel): Taken {
   const taken: Taken = new Map()
@@ -65,78 +36,13 @@ function nameProblem(name: string, taken: Taken): string | null {
   return null
 }
 
-function computersOf(app: App): Computer[] {
-  return (app.account?.computers ?? []).filter((c) => !isPhone(c))
-}
-
-function firstChoices(app: App) {
-  const computer = computersOf(app).find((c) => c.thisOne && c.online) ?? computersOf(app).find((c) => c.online)
-  const harness = app.harnesses.find((h) => h.installed)
-  return { computer, harness }
-}
-
-function presetRun(app: App, name: string, people: Person[]): Run | null {
-  if (PRESET !== "add-agent-starting" && PRESET !== "add-agent-failed") return null
-  const { computer, harness } = firstChoices(app)
-  if (!computer || !harness) return null
-  const now = Date.now()
-  const begun = starting(name, people, now)
-  const launch = PRESET === "add-agent-failed" ? seen(begun, { stage: "failed", why: SHOT_FAILED }, now) : seen(seen(begun, { stage: "started" }, now), { stage: "asked", name }, now)
-  return { agent: { harness: harness.id, computer: computer.id, folder: "~/www/channels", name, mode: "ask-first" }, on: computer.label, runs: harness.label, launch }
-}
-
 export function AddAgentPanel({ channel }: { channel: Channel }) {
-  const { app, go } = useApp()
   const taken = takenNames(channel)
   const [name, setName] = useState(() => freeName(taken))
-  const [way, setWay] = useState<Way>(PRESET === "add-agent" ? "here" : "command")
-  const [run, setRun] = useState<Run | null>(() => presetRun(app, name, channel.people))
-  const following = useRef<(() => void) | null>(null)
-
-  useEffect(() => () => following.current?.(), [])
-
-  const start = (agent: NewAgent, on: string, runs: string) => {
-    following.current?.()
-    setRun({ agent, on, runs, launch: starting(agent.name, channel.people, Date.now()) })
-    following.current = app.actions.addAgent(channel.code, agent, (s) => setRun((r) => r && { ...r, launch: seen(r.launch, s, Date.now()) }))
-  }
-
-  if (run)
-    return (
-      <>
-        <PanelHead title="Add agent" />
-        <Progress
-          channel={channel}
-          run={run}
-          onDone={() => go({ to: "panel", panel: null })}
-          onMessage={(handle) => {
-            go({ to: "where", where: { kind: "dm", with: handle } })
-            go({ to: "panel", panel: null })
-          }}
-          onRetry={() => start(run.agent, run.on, run.runs)}
-          onBack={() => {
-            following.current?.()
-            following.current = null
-            setRun(null)
-          }}
-        />
-      </>
-    )
-
   return (
     <>
       <PanelHead title="Add agent" />
-      <div className="add-way">
-        <Track className="seg" role="group" aria-label="How to add it">
-          <button type="button" aria-pressed={way === "command"} onClick={() => setWay("command")}>
-            Invite one you run
-          </button>
-          <button type="button" aria-pressed={way === "here"} onClick={() => setWay("here")}>
-            Start one here
-          </button>
-        </Track>
-      </div>
-      {way === "here" ? <StartHere channel={channel} name={name} setName={setName} taken={taken} onStart={start} /> : <RunCommand channel={channel} name={name} setName={setName} taken={taken} />}
+      <RunCommand channel={channel} name={name} setName={setName} taken={taken} />
     </>
   )
 }
@@ -175,229 +81,6 @@ function NameField({ name, setName, problem }: { name: string; setName: (name: s
   )
 }
 
-function Group({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <fieldset className="add-group">
-      <legend className="field-label">{label}</legend>
-      <div className="add-choices">{children}</div>
-    </fieldset>
-  )
-}
-
-function Choice({ group, on, off, pick, children, side, title }: { group: string; on: boolean; off?: boolean; pick: () => void; children: ReactNode; side?: ReactNode; title?: string }) {
-  return (
-    <label className={cx("add-choice", on && "is-on", off && "is-off")} title={title}>
-      <input type="radio" className="sr" name={group} checked={on} disabled={off} onChange={pick} />
-      {children}
-      {side && <span className="add-choice-side">{side}</span>}
-      <span className="add-choice-tick">{on && <Icon name="check" size={14} />}</span>
-    </label>
-  )
-}
-
-function StartHere({ channel, name, setName, taken, onStart }: NameProps & { onStart: (agent: NewAgent, on: string, runs: string) => void }) {
-  const { app } = useApp()
-  const id = useId()
-  const computers = computersOf(app)
-  const [first] = useState(() => firstChoices(app))
-  const [computerId, setComputerId] = useState(first.computer?.id ?? "")
-  const [harnessId, setHarnessId] = useState<Harness | "">(first.harness?.id ?? "")
-  const [folder, setFolder] = useState("")
-  const [typed, setTyped] = useState(false)
-  const [loaded, setLoaded] = useState<{ for: string; choices: ComputerChoices } | null>(null)
-  useEffect(() => {
-    if (!computerId) return
-    let live = true
-    const load = () =>
-      void app.actions.choicesOn(channel.code, computerId).then((c) => {
-        if (!live) return
-        setLoaded({ for: computerId, choices: c })
-        if (!typed && "folders" in c) setFolder(c.folders[0] ?? "")
-        const there = "harnesses" in c ? c.harnesses : undefined
-        if (there) setHarnessId((now) => (there.some((h) => h.id === now && h.installed) ? now : (there.find((h) => h.installed)?.id ?? "")))
-      })
-    load()
-    window.addEventListener("focus", load)
-    return () => {
-      live = false
-      window.removeEventListener("focus", load)
-    }
-  }, [app.actions, channel.code, computerId, typed])
-  const choices = loaded?.for === computerId ? loaded.choices : null
-  const harnesses = choices && "harnesses" in choices && choices.harnesses ? choices.harnesses : app.harnesses
-  const found = harnesses.filter((h) => h.installed)
-  const missing = harnesses.filter((h) => !h.installed)
-  const folders = choices && "folders" in choices ? choices.folders : []
-  const unreachable = choices && "error" in choices ? choices.error : null
-  const [persona, setPersona] = useState("")
-  const [mode, setMode] = useState<Mode>("ask-first")
-  const [understood, setUnderstood] = useState(false)
-
-  const computer = computers.find((c) => c.id === computerId && c.online)
-  const harness = harnesses.find((h) => h.id === harnessId && h.installed)
-  const problem = nameProblem(name, taken)
-  const who = problem ? "It" : name
-  const ready = !!computer && !!harness && !!folder.trim() && !problem && (mode !== "dont-ask" || understood)
-  const where = computer ? (computer.thisOne ? "this computer" : computer.label) : "this computer"
-
-  return (
-    <form
-      className="add-form"
-      onSubmit={(e) => {
-        e.preventDefault()
-        if (!ready || !computer || !harness) return
-        onStart({ harness: harness.id, computer: computer.id, folder: folder.trim(), name, persona: persona || undefined, mode }, computer.label, harness.label)
-      }}
-    >
-      <div className="panel-body add-body">
-        <Group label="Computer">
-          {computers.length === 0 && <p className="add-none">No computer of yours is linked. Invite one you run instead.</p>}
-          {computers.map((c) => (
-            <Choice
-              key={c.id}
-              group={`${id}-computer`}
-              on={c.id === computerId}
-              off={!c.online}
-              pick={() => {
-                if (c.id === computerId) return
-                setComputerId(c.id)
-                setTyped(false)
-              }}
-              side={c.online ? undefined : `offline · ${ago(c.lastSeen)}`}
-            >
-              <Icon name="computer" />
-              <span className="add-choice-label">
-                {c.label}
-                {c.thisOne && <span className="add-choice-tag"> this computer</span>}
-              </span>
-            </Choice>
-          ))}
-        </Group>
-
-        <Group label="Agent">
-          {found.length === 0 && <p className="add-none">No agent found on {where} yet. Install one, then come back here.</p>}
-          {found.map((h) => (
-            <Choice key={h.id} group={`${id}-harness`} on={h.id === harnessId} pick={() => setHarnessId(h.id)} title={h.version}>
-              <Avatar person={{ name: h.label, kind: "agent", harness: h.id, presence: "online" }} size="sm" />
-              <span className="add-choice-label">{h.label}</span>
-            </Choice>
-          ))}
-          {missing.length > 0 && <Others where={where} missing={missing} open={found.length === 0} />}
-        </Group>
-
-        <div className="field">
-          <label className="field-label" htmlFor={`${id}-folder`}>
-            Folder
-          </label>
-          <div className="add-folder">
-            <input
-              id={`${id}-folder`}
-              className="input is-mono"
-              value={folder}
-              list={`${id}-folders`}
-              placeholder={computer?.thisOne ? "Choose a folder" : "A folder on that computer"}
-              spellCheck={false}
-              autoComplete="off"
-              onChange={(e) => {
-                setTyped(true)
-                setFolder(e.target.value)
-              }}
-            />
-            <datalist id={`${id}-folders`}>
-              {folders.map((f) => (
-                <option key={f} value={f} />
-              ))}
-            </datalist>
-            {computer?.thisOne && (
-              <button
-                type="button"
-                className="btn is-quiet"
-                onClick={() =>
-                  void app.actions.chooseFolder().then((f) => {
-                    if (!f) return
-                    setTyped(true)
-                    setFolder(f)
-                  })
-                }
-              >
-                Choose…
-              </button>
-            )}
-          </div>
-          {unreachable && computer && (
-            <p className="add-none">
-              Couldn't ask {computer.label} for its harnesses and folders: {unreachable}
-            </p>
-          )}
-        </div>
-
-        <NameField name={name} setName={setName} problem={problem} />
-
-        <PersonaPick value={persona} onPick={setPersona} />
-
-        <div className="field">
-          <span className="field-label" id={`${id}-mode`}>
-            Permission mode
-          </span>
-          <Track className="seg add-seg" role="group" aria-labelledby={`${id}-mode`}>
-            {MODES.map((m) => (
-              <button
-                key={m.id}
-                type="button"
-                aria-pressed={mode === m.id}
-                onClick={() => {
-                  setMode(m.id)
-                  setUnderstood(false)
-                }}
-              >
-                {m.label}
-              </button>
-            ))}
-          </Track>
-          {mode === "dont-ask" ? (
-            <div className="add-warn">
-              <p>
-                {who} runs any command on {where} without asking you first.
-              </p>
-              <label className="add-check">
-                <input type="checkbox" checked={understood} onChange={(e) => setUnderstood(e.target.checked)} />I understand it runs commands without asking
-              </label>
-            </div>
-          ) : (
-            <span className="field-hint">{mode === "ask-first" ? `${who} asks you before it edits files or runs commands.` : `${who} edits files on its own and asks before it runs commands.`}</span>
-          )}
-        </div>
-      </div>
-      <footer className="add-foot">
-        <button type="submit" className="btn is-primary" disabled={!ready}>
-          Start {problem ? "agent" : name}
-        </button>
-      </footer>
-    </form>
-  )
-}
-
-function Others({ where, missing, open }: { where: string; missing: App["harnesses"]; open: boolean }) {
-  const [shown, setShown] = useState(open)
-  if (!shown)
-    return (
-      <button type="button" className="btn is-quiet is-small add-others" onClick={() => setShown(true)}>
-        <Icon name="plus" size={14} />
-        Install another agent
-      </button>
-    )
-  return (
-    <div className="add-others-list">
-      <span className="add-others-head">Run one of these on {where}, then come back here</span>
-      <ul className="add-gets">
-        {missing.map((h) => (
-          <Missing key={h.id} harness={h} />
-        ))}
-      </ul>
-    </div>
-  )
-}
-
 function PersonaPick({ value, onPick, none }: { value: string; onPick: (id: string) => void; none?: string }) {
   const { app } = useApp()
   const id = useId()
@@ -420,20 +103,6 @@ function PersonaPick({ value, onPick, none }: { value: string; onPick: (id: stri
       </span>
       {about && <span className="field-hint">{about}</span>}
     </div>
-  )
-}
-
-function Missing({ harness: h }: { harness: App["harnesses"][number] }) {
-  const line = isKnownHarness(h.id) ? HARNESS_INSTALL[h.id] : undefined
-  return (
-    <li className="add-get">
-      <span className="add-get-who">
-        <Avatar person={{ name: h.label, kind: "agent", harness: h.id, presence: "offline" }} size="sm" />
-        <span className="add-choice-label">{h.label}</span>
-        {h.path && <span className="add-choice-side">{h.why ?? "can't start yet"}</span>}
-      </span>
-      {!h.path && line && <CopyBox text={line} label={`Copy the ${h.label} install command`} />}
-    </li>
   )
 }
 
@@ -498,13 +167,12 @@ function RunCommand({ channel, name, setName, taken }: NameProps) {
 }
 
 export function AddAgentCard({ channel }: { channel: Channel }) {
-  const { go } = useApp()
   const [name] = useState(() => freeName(takenNames(channel)))
   const { line, failed, retry } = useJoinCommand(channel.code, name, "")
   return (
     <section className="add-card" aria-label="Add an agent">
       <p className="add-card-title">Add an agent</p>
-      <p className="dim">Give this line to an agent you already run, or start one here.</p>
+      <p className="dim">Give this line to an agent you already run.</p>
       {failed ? (
         <div className="invite-failed">
           <span>Couldn't make the command.</span>
@@ -515,114 +183,6 @@ export function AddAgentCard({ channel }: { channel: Channel }) {
       ) : (
         <CopyBox text={line} label="Copy command" wrap />
       )}
-      <div className="add-card-foot">
-        <button type="button" className="btn is-primary" onClick={() => go({ to: "panel", panel: { kind: "add-agent" } })}>
-          Start one here
-        </button>
-      </div>
     </section>
-  )
-}
-
-interface ProgressProps {
-  channel: Channel
-  run: Run
-  onDone: () => void
-  onMessage: (handle: string) => void
-  onRetry: () => void
-  onBack: () => void
-}
-
-function stallText(stall: Stall, n: string, on: string, owner: string): string {
-  if (stall === "slow-start") return `${on} hasn't said whether ${n} started. It may be asleep or offline.`
-  if (stall === "not-asking") return `${n} is running on ${on} but hasn't asked to join. Its window may be waiting on a question: a sign-in, a folder to trust or a permission.`
-  if (stall === "not-let-in") return `${n} asked to join, but Kiwi didn't let it in on its own. Let it in from Needs you.`
-  return `${owner} hasn't let ${n} in yet. If they don't see it in their Needs you, ${n} may be waiting on a question in its window on ${on}.`
-}
-
-function Progress({ channel, run, onDone, onMessage, onRetry, onBack }: ProgressProps) {
-  const { app, go } = useApp()
-  const { agent, on, runs, launch } = run
-  const n = agent.name
-  const handle = joinedAs(launch, channel.people)
-  const member = handle ? channel.people.find((p) => p.name === handle) : undefined
-  const done = !!handle
-  const failed = launch.stage === "failed"
-  const now = useNow(done || failed ? null : 1_000)
-  const step = stepOf(launch, channel.youOwn, done)
-  const stall = stallOf(launch, channel.youOwn, done, now)
-  const found = channel.people.find((p) => p.owner && !p.you)
-  const owner = found ? shown(found) : "the owner"
-  const name = member ? shown(member) : n
-  const rows = [
-    { now: `Starting ${n} on ${on}`, done: `Started ${n} on ${on}`, failed: `Couldn't start ${n} on ${on}` },
-    ...(channel.youOwn ? [{ now: `${n} is asking to join`, done: `${n} asked to join`, failed: "" }] : []),
-    { now: channel.youOwn ? `Letting ${n} in` : `Waiting for ${owner} to let ${n} in`, done: `${name} is in`, failed: "" },
-  ]
-  const [why = "", ...said] = (launch.why ?? "").split("\n")
-  const persona = app.personas.find((p) => p.id === agent.persona)?.label
-  return (
-    <>
-      <div className="panel-body add-body">
-        <div className="add-who">
-          <Avatar person={{ name: n, kind: "agent", harness: agent.harness, presence: done ? "online" : "offline" }} size="lg" pip />
-          <div className="add-who-text">
-            <p className="add-who-name">{name}</p>
-            <p className="add-who-meta">{[runs, persona, agent.folder].filter(Boolean).join(" · ")}</p>
-          </div>
-        </div>
-        <ol className="add-steps" aria-live="polite">
-          {rows.map((row, i) => {
-            const state = failed && i === step ? "is-failed" : i < step ? "is-done" : i === step ? "is-now" : "is-next"
-            return (
-              <li key={row.now} className={cx("add-step", state)}>
-                <span className="add-step-mark" aria-hidden="true">
-                  {state === "is-done" && <Icon name="check" size={12} />}
-                  {state === "is-failed" && <Icon name="close" size={12} />}
-                </span>
-                <span>{state === "is-failed" ? row.failed : state === "is-now" ? `${row.now}…` : row.done}</span>
-              </li>
-            )
-          })}
-        </ol>
-        {failed ? (
-          <div className="add-failed" role="alert">
-            <p>{why}</p>
-            {said.length > 0 && <pre className="add-said">{said.join("\n")}</pre>}
-          </div>
-        ) : stall ? (
-          <div className="add-stall" role="status">
-            <p>{stallText(stall, n, on, owner)}</p>
-            {stall === "not-let-in" && (
-              <button type="button" className="btn is-small" onClick={() => go({ to: "tab", tab: "needs" })}>
-                Open Needs you
-              </button>
-            )}
-          </div>
-        ) : (
-          !done && <p className="add-note">You can close this.</p>
-        )}
-      </div>
-      {failed && (
-        <footer className="add-foot">
-          <button type="button" className="btn" onClick={onBack}>
-            Back
-          </button>
-          <button type="button" className="btn is-primary" onClick={onRetry}>
-            Try again
-          </button>
-        </footer>
-      )}
-      {handle && (
-        <footer className="add-foot">
-          <button type="button" className="btn" onClick={onDone}>
-            Done
-          </button>
-          <button type="button" className="btn is-primary" onClick={() => onMessage(handle)}>
-            Message {name}
-          </button>
-        </footer>
-      )}
-    </>
   )
 }

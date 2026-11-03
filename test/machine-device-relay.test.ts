@@ -314,7 +314,7 @@ describe("an ask signed by a device", () => {
     const list = read.list;
     const claimed = new Set<string>();
     const claim = (id: string) => !claimed.has(id) && !!claimed.add(id);
-    const from = async (signer: Identity) => (await makeAsk(signer, { pk: p.box.pk, xpk: p.box.xpk! }, { verb: "harnesses", args: {}, reply: newSecret() }, 1_000)).box;
+    const from = async (signer: Identity) => (await makeAsk(signer, { pk: p.box.pk, xpk: p.box.xpk! }, { verb: "settings", args: {}, reply: newSecret() }, 1_000)).box;
     expect((await readAsk(p.box, await from(p.laptop), { person: p.person.pk, list, now: 1_000, claim })).ok).toBe(true);
     expect((await readAsk(p.box, await from(p.person), { person: p.person.pk, list, now: 1_000, claim })).ok).toBe(true);
     expect(await readAsk(p.box, await from(p.laptop), { person: p.person.pk, now: 1_000, claim })).toEqual({ ok: false, why: "not-yours" });
@@ -325,7 +325,7 @@ describe("an ask signed by a device", () => {
     if (!later.ok) throw new Error(later.why);
     expect(await readAsk(p.box, await from(p.laptop), { person: p.person.pk, list: later.list, now: 1_000, claim })).toEqual({ ok: false, why: "not-yours" });
     const expired = certUntil(Date.now()) + 1;
-    const old = (await makeAsk(p.laptop, { pk: p.box.pk, xpk: p.box.xpk! }, { verb: "harnesses", args: {}, reply: newSecret() }, expired)).box;
+    const old = (await makeAsk(p.laptop, { pk: p.box.pk, xpk: p.box.xpk! }, { verb: "settings", args: {}, reply: newSecret() }, expired)).box;
     expect(await readAsk(p.box, old, { person: p.person.pk, list, now: expired + ASK_FRESH_MS - 1, claim })).toEqual({ ok: false, why: "not-yours" });
   });
 });

@@ -64,7 +64,7 @@ describe("a join request carries its computer's whole device list", () => {
 
   test("a request sealed past the cap is still refused", async () => {
     const agent = await generateIdentity("huge");
-    const asked = Channel.requestJoin(s.relay, s.code, agent, { name: "huge" }, { launch: "x".repeat(JOIN_BOX_MAX) });
+    const asked = Channel.requestJoin(s.relay, s.code, agent, { name: "huge" }, { pin: "x".repeat(JOIN_BOX_MAX) });
     expect(asked).rejects.toThrow("request too large");
   });
 });

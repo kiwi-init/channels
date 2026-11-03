@@ -58,8 +58,6 @@ const WAKE: Record<SeatWake, string> = { on: "wakes on a message", off: "doesn't
 function settingsLines(s: ComputerSettings): [string, string[]][] {
   const hooks = s.hooks.flatMap((h) => (h.state === "absent" ? [] : [`${harnessName(h.harness)} ${HOOK[h.state]}`]))
   return [
-    ["New agents", [s.launch === "on" ? "Allowed" : "Off"]],
-    ["Bypass from your other devices", [s.bypass === "on" ? "Allowed" : "Off"]],
     ["Hooks", hooks.length ? hooks : ["None"]],
     ["Agents", s.seats.length ? s.seats.map((seat) => `${seat.agent} in ${seat.channel}, ${WAKE[seat.wake]}`) : ["None yet"]],
   ]
