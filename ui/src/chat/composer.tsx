@@ -6,6 +6,7 @@ import { takePasted } from "@kiwi/app/pasted.ts"
 import { matchCommands, parseCommand, type Command } from "~/chat/commands"
 import { startEditing } from "~/chat/editing"
 import { preview, useReplying } from "~/chat/reply"
+import { attached, composerKey, drafts, tooLong, useGivenBack } from "~/chat/drafts"
 import { STASH_SHOT, useStash, type Stashed } from "~/chat/stash"
 import { Avatar, cx, Dot, STATUS_WORDS } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
@@ -42,8 +43,6 @@ function taskMatches(tasks: readonly Task[], query: string): Task[] {
     .map((x) => x.t)
 }
 
-const drafts = new Map<string, string>()
-const attached = new Map<string, Upload[]>()
 const picked = new Map<string, Picks>()
 function picksFor(key: string): Picks {
   const have = picked.get(key)
@@ -128,14 +127,14 @@ const readBase64 = (file: File): Promise<string> =>
 type ComposerProps = { channel: Channel; where: Where; placeholder: string; inThread?: number }
 
 export function Composer(props: ComposerProps) {
-  return <ComposerIn key={`${props.channel.code}:${JSON.stringify(props.where)}:${props.inThread ?? ""}`} {...props} />
+  return <ComposerIn key={composerKey(props.channel.code, props.where, props.inThread)} {...props} />
 }
 
 function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
   const { app, go, toast } = useApp()
   const replying = useReplying()
   const replyTo = replying?.to ?? null
-  const key = `${channel.code}:${JSON.stringify(where)}:${inThread ?? ""}`
+  const key = composerKey(channel.code, where, inThread)
   const [text, setText] = useState(() => drafts.get(key) ?? "")
   const [caret, setCaret] = useState(text.length)
   const [pick, setPick] = useState(0)
@@ -152,6 +151,17 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
       else attached.delete(key)
       return list
     })
+  const back = useGivenBack(key)
+  const seenBack = useRef(back)
+  useEffect(() => {
+    if (back === seenBack.current) return
+    seenBack.current = back
+    const got = drafts.get(key) ?? ""
+    setText(got)
+    setCaret(got.length)
+    setFilesNow(attached.get(key) ?? [])
+    area.current?.focus()
+  }, [back, key])
   const [dropping, setDropping] = useState(false)
   const [alsoRoom, setAlsoRoom] = useState(false)
   const enterSends = app.prefs.enterSends
@@ -300,6 +310,11 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
     const body = value.trim()
     if (!body && !files.length) return
     const sent = mentions.sent(body, picksFor(key))
+    const long = tooLong(sent)
+    if (long) {
+      toast(long, "error")
+      return
+    }
     const away = outsiders(channel, sealed, sent)
     if (away.length && warned?.text !== value) {
       setWarned({ text: value, people: away })
