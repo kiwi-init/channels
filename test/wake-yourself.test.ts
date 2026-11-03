@@ -359,9 +359,6 @@ describe("Grok keeps its own monitor running", () => {
     await until(async () => (await listenersOf(h, me)).some((l) => l.session === "g1"), "join streaming for this Grok session");
     await ok(owner, ["send", "--to", me, "streamed by join"]);
     await until(() => joined().includes("streamed by join"), "join printing the message");
-    joining.kill();
-    await joining.exited;
-    await until(async () => (await listenersOf(h, me)).length === 0, "join gone");
     const file = JSON.parse(readFileSync(join(grokDir, "hooks", "kiwi.json"), "utf8")) as { hooks: Record<string, { hooks: { command: string }[] }[]> };
     expect(Object.keys(file.hooks)).toEqual(["Stop"]);
 
@@ -376,6 +373,25 @@ describe("Grok keeps its own monitor running", () => {
       expect(r.code).toBe(0);
       return r.out ? (JSON.parse(r.out) as { decision: string; reason: string }) : null;
     };
+    const original = (command: string) => stop({ backgroundTasks: [{ id: "j1", type: "monitor", status: "running", command }] });
+    expect(await original(`kiwi join ${code} --timeout 40s`)).toBeNull();
+    expect(await original(`[monitor] /home/u/.kiwi/bin/kiwi join "${code}" --as="${me}"`)).toBeNull();
+    expect(await original(`sh -c 'k=$(command -v kiwi || echo "$HOME/.kiwi/bin/kiwi"); exec "$k" "$@"' kiwi join ${code}`)).toBeNull();
+    expect((await original("tail -f build.log"))?.decision).toBe("block");
+    expect((await stop({ backgroundTasks: [{ id: "s1", type: "shell", status: "running", command: `kiwi join ${code}` }] }))?.decision).toBe("block");
+
+    joining.kill();
+    await joining.exited;
+    await until(async () => (await listenersOf(h, me)).length === 0, "join gone");
+    expect((await original(`kiwi join ${code}`))?.decision).toBe("block");
+    expect((await original(`echo kiwi join ${code}; sleep 3600`))?.decision).toBe("block");
+    const otherSession = spawn(h, ["-c", "grok-wake", "--as", me, "listen"], { CLAUDECODE: "", KIWI_GROK_DIR: grokDir });
+    shells.push(otherSession);
+    await until(async () => (await listenersOf(h, me)).length === 1, "a listener for this seat outside this Grok session");
+    expect((await original(`kiwi join ${code}`))?.decision).toBe("block");
+    otherSession.kill();
+    await otherSession.exited;
+    await until(async () => (await listenersOf(h, me)).length === 0, "that listener gone");
 
     await ok(owner, ["send", "--to", me, "kept for the stop hook"]);
     expect((await run(h, ["hook", "session-start"], G, h, JSON.stringify({ hook_event_name: "SessionStart", session_id: "g1", cwd: h }))).out).toBe("");
@@ -433,16 +449,6 @@ describe("Grok keeps its own monitor running", () => {
     await monitor.exited;
     await until(async () => (await listenersOf(h, me)).length === 0, "the monitor's join gone");
     expect(await stop({ backgroundTasks: [{ id: "m8", type: "monitor", status: "running", description: listen.replace(/ join$/, " listen") }] })).toBeNull();
-
-    const original = (command: string) => stop({ backgroundTasks: [{ id: "j1", type: "monitor", status: "running", command }] });
-    expect(await original(`kiwi join ${code} --timeout 40s`)).toBeNull();
-    expect(await original(`[monitor] /home/u/.kiwi/bin/kiwi join ${code} --as ${me}`)).toBeNull();
-    expect(await original(`sh -c 'k=$(command -v kiwi || echo "$HOME/.kiwi/bin/kiwi"); exec "$k" "$@"' kiwi join ${code}`)).toBeNull();
-    const otherCode = created(await ok(owner, ["create", "grok-other", "--as", "boss"]));
-    expect((await original(`kiwi join ${otherCode}`))?.decision).toBe("block");
-    expect((await original(`kiwi join ${code} --as someone-else`))?.decision).toBe("block");
-    expect((await original(`kiwi join ${code} -c elsewhere`))?.decision).toBe("block");
-    expect((await original(`kiwi join not-a-code`))?.decision).toBe("block");
   });
 });
 

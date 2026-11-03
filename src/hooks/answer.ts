@@ -9,7 +9,6 @@ import { detectWhere } from "../card.ts";
 import { home, loadConfig, type ChannelConfig } from "../config.ts";
 import { wakeHooked, wakeOn } from "../daemon/reach.ts";
 import { appendRotated } from "../daemon/wake.ts";
-import { decodeJoinCode } from "@kiwi/core/crypto.ts";
 import { charterLines, formatMessage, holdLine, leadLine, messageHead } from "@kiwi/core/format.ts";
 import { kimiServer } from "../kimi-server.ts";
 import { here, type Binding, type Here } from "../seats.ts";
@@ -102,45 +101,17 @@ export function grokMonitorListens(tasks: readonly BackgroundTask[], commands: r
   return tasks.some((t) => t.type === "monitor" && t.text.split("\n").some((line) => commands.includes(line.trim().replace(TAGGED, ""))));
 }
 
-export interface SeatRoom {
-  alias: string;
-  as: string;
-  roomId: string;
-}
+const runsKiwiJoin = (line: string): boolean => {
+  const words = line
+    .replace(TAGGED, "")
+    .split(/[\s'"=;&|()]+/)
+    .filter(Boolean);
+  const at = words.findIndex((w) => w === "kiwi" || w.endsWith("/kiwi"));
+  return at >= 0 && words.slice(at + 1).includes("join");
+};
 
-const JOIN_VALUE_FLAGS = new Set(["-c", "--channel", "--as", "--relay", "--timeout", "--model", "--harness", "--nick", "--persona", "--about"]);
-
-const unquoted = (w: string) => w.replace(/^'(.*)'$/, "$1");
-
-function joinsWithCode(words: readonly string[], seat: SeatRoom): boolean {
-  const positional: string[] = [];
-  const given = new Map<string, string>();
-  for (let i = 0; i < words.length; i++) {
-    const w = unquoted(words[i]!);
-    const inline = /^(--[a-z-]+)=(.*)$/.exec(w);
-    if (inline) given.set(inline[1]!, unquoted(inline[2]!));
-    else if (JOIN_VALUE_FLAGS.has(w)) given.set(w, unquoted(words[++i] ?? ""));
-    else if (!w.startsWith("-")) positional.push(w);
-  }
-  const channel = given.get("-c") ?? given.get("--channel");
-  const as = given.get("--as");
-  if (positional[0] !== "join" || positional[1] === undefined) return false;
-  if ((channel !== undefined && channel !== seat.alias) || (as !== undefined && as !== seat.as)) return false;
-  try {
-    return decodeJoinCode(positional[1]).roomId === seat.roomId;
-  } catch {
-    // Not a join code, so not a join for this seat's channel.
-    return false;
-  }
-}
-
-export function joinsSeat(line: string, seat: SeatRoom): boolean {
-  const words = line.trim().replace(TAGGED, "").split(/\s+/).filter(Boolean);
-  return words.some((w, at) => (unquoted(w) === "kiwi" || unquoted(w).endsWith("/kiwi")) && joinsWithCode(words.slice(at + 1), seat));
-}
-
-export function grokMonitorJoins(tasks: readonly BackgroundTask[], seat: SeatRoom): boolean {
-  return tasks.some((t) => t.type === "monitor" && t.text.split("\n").some((line) => joinsSeat(line, seat)));
+export function grokMonitorJoins(tasks: readonly BackgroundTask[]): boolean {
+  return tasks.some((t) => t.type === "monitor" && t.text.split("\n").some(runsKiwiJoin));
 }
 
 const LOGGED_CHARS = 300;
@@ -184,9 +155,9 @@ function listenCheck(input: HookInput, b: Binding, who: Here, mc: string): Liste
   }
   const full = `${mcBin()} ${channelOption(b.alias)} ${asOption(b.as)}`;
   const commands = [COMMANDS.join(mc), COMMANDS.join(full), `${mc} listen`, `${full} listen`];
-  const roomId = loadConfig().channels[b.alias]?.roomId;
+  const seatListensHere = () => !!who.session && liveListeners().some((l) => l.alias === b.alias && l.as === b.as && l.session === who.session);
   const listens = () => {
-    const heard = grokMonitorListens(tasks, commands) || (roomId !== undefined && grokMonitorJoins(tasks, { alias: b.alias, as: b.as, roomId }));
+    const heard = grokMonitorListens(tasks, commands) || (grokMonitorJoins(tasks) && seatListensHere());
     if (!heard) noteUnheard(b, tasks, commands);
     return heard;
   };
