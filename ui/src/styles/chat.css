@@ -375,6 +375,21 @@ html .day.is-sealed {
 .md th,
 .md td {
   border: 0 !important;
+  border-bottom: 1px solid var(--line) !important;
+}
+
+.md tr:last-child > td {
+  border-bottom: 0 !important;
+}
+
+.md th:first-child,
+.md td:first-child {
+  padding-left: 0 !important;
+}
+
+.md th:last-child,
+.md td:last-child {
+  padding-right: 0 !important;
 }
 
 .md-sort {
