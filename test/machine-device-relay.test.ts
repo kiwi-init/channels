@@ -9,6 +9,7 @@ import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/ide
 import { ASK_FRESH_MS, makeAsk, readAsk } from "@kiwi/core/machine-ask.ts";
 import { newSecret } from "@kiwi/core/mailbox.ts";
 import { certifyMachine } from "@kiwi/core/person.ts";
+import { WS_PROTOCOL } from "@kiwi/core/protocol.ts";
 import { recoveryKey, recoveryLink } from "@kiwi/core/recovery.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { devHumanAuth } from "../src/relay/human.ts";
@@ -105,6 +106,17 @@ async function listMachines(id: Identity, person: string): Promise<Response> {
 }
 
 const ask = (from: Identity, m: Identity) => call(from, m, "POST", `${base(m)}/inbox`, { box: "sealed" });
+
+async function pipe(as: Identity, m: Identity, id: string): Promise<(WebSocket & { closed: Promise<number> }) | null> {
+  const path = `${base(m)}/pipe/${id}`;
+  const ws = new WebSocket(relay.replace(/^http/, "ws") + path, [WS_PROTOCOL, await signRequest(as, machineScope(m.pk), "GET", path, "")]);
+  const closed = new Promise<number>((resolve) => ws.addEventListener("close", (e) => resolve(e.code)));
+  const opened = await new Promise<boolean>((resolve) => {
+    ws.onopen = () => resolve(true);
+    ws.onerror = () => resolve(false);
+  });
+  return opened ? Object.assign(ws, { closed }) : null;
+}
 
 const errorOf = async (res: Response) => ((await res.json()) as { error: string }).error;
 
@@ -231,6 +243,25 @@ describe("the account telling its computers", () => {
     expect((await publish(a, p.desk, await grow(p.links, p.desk, { op: "revoke", device: p.laptop.pk }))).status).toBe(204);
     expect((await ask(p.laptop, p.box)).status).toBe(403);
     expect((await ask(p.desk, p.box)).status).toBe(202);
+  });
+
+  test("a desktop revoked in the account's list loses the shells it opened, and only those", async () => {
+    const p = await people();
+    const a = account();
+    expect((await publish(a, p.desk, p.links)).status).toBe(204);
+    expect((await call(p.box, p.box, "PUT", base(p.box), { links: p.links })).status).toBe(204);
+    expect(await pipe(p.phone, p.box, "phonePipe_0123456789ab")).toBeNull();
+    const laptopApp = (await pipe(p.laptop, p.box, "laptopPipe_0123456789a"))!;
+    const laptopBox = (await pipe(p.box, p.box, "laptopPipe_0123456789a"))!;
+    const deskApp = (await pipe(p.desk, p.box, "deskPipe_0123456789abc"))!;
+    const deskBox = (await pipe(p.box, p.box, "deskPipe_0123456789abc"))!;
+    expect((await publish(a, p.desk, await grow(p.links, p.desk, { op: "revoke", device: p.laptop.pk }))).status).toBe(204);
+    expect(await laptopApp.closed).toBe(4003);
+    expect(await laptopBox.closed).toBe(1000);
+    expect(await pipe(p.laptop, p.box, "laptopAgain_0123456789")).toBeNull();
+    expect(deskApp.readyState).toBe(WebSocket.OPEN);
+    expect(deskBox.readyState).toBe(WebSocket.OPEN);
+    deskApp.close();
   });
 
   test("a computer paired by an old person-signed cert (kp1) takes asks from approving desktops once the list names it", async () => {
