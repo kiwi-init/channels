@@ -1,24 +1,57 @@
 import { COMMANDS } from "../brief.ts";
 import { kimiServer } from "../kimi-server.ts";
 import { here, type Here } from "../seats.ts";
-import { wakePath, wakeWords } from "@kiwi/core/wake.ts";
+import { viaOf, wakePath, wakeWords, type WakePath } from "@kiwi/core/wake.ts";
 import { hooksListen } from "./install/claude.ts";
 import { extraInstalled } from "./install/extra.ts";
 import { mimoInstalled } from "./install/mimo.ts";
 import { piInstalled } from "./install/pi.ts";
 
 function checkEachTurn(mc: string): string {
-  return `Run \`${COMMANDS.unread(mc)}\` at the start of every turn and again before you end one. It prints the messages waiting for you, or says there are none.`;
+  return `Run \`${COMMANDS.join(mc)}\` at the start of every turn and again before you end one. It prints the messages waiting for you, or says there are none.`;
 }
 
 const KEEP_A_LISTENER = "Kiwi can't wake you in this session from outside, so keep a listener of your own running. It is what wakes you.";
 
+export type ListenMode = "read" | "once" | "stream";
+
+const kimiServed = (who: Here) => who.harness === "kimi" && kimiServer(who.pid) && extraInstalled("kimi");
+
+function pathHere(who: Here, webhook: boolean): WakePath {
+  return wakePath(who.harness ? { harness: who.harness, ...(who.session ? { session: who.session } : {}) } : null, hooksListen(), webhook, {
+    pi: piInstalled(),
+    mimo: mimoInstalled(),
+  });
+}
+
+export function wokenBy(waking: boolean, who: Here = here(), webhook = false): string | null {
+  if (!waking) return null;
+  if (kimiServed(who)) return wakeWords("kimi-server");
+  const via = viaOf(pathHere(who, webhook));
+  return via ? wakeWords(via) : null;
+}
+
+export function listenMode(waking: boolean, who: Here = here(), webhook = false): ListenMode {
+  if (!waking || wokenBy(waking, who, webhook)) return "read";
+  if (who.harness === "grok") return "stream";
+  return who.harness === "kimi" || who.harness === "cursor" || who.harness === "zcode" ? "once" : "read";
+}
+
 export function startListener(mc: string, harness: Here["harness"]): string | null {
+  const join = COMMANDS.join(mc);
   if (harness === "kimi")
-    return `Now, from your main session (not a subagent), and again every time it wakes you: call the Bash tool with command \`${COMMANDS.listenOnce(mc)}\`, run_in_background: true, disable_timeout: true, description "kiwi messages".`;
-  if (harness === "grok") return `Now, once for this session: start the monitor tool with command \`${COMMANDS.listen(mc)}\`, description "${COMMANDS.listen(mc)}", persistent: true.`;
-  if (harness === "zcode") return `Now, and again every time it wakes you: call the Bash tool with command \`${COMMANDS.listenOnce(mc)}\`, run_in_background: true, and no timeout.`;
-  if (harness === "cursor") return `Now, and again every time it wakes you: run \`${COMMANDS.listenOnce(mc)}\` with the Shell tool as a background command (is_background: true).`;
+    return `Now, from your main session (not a subagent), and again every time it wakes you: call the Bash tool with command \`${join}\`, run_in_background: true, disable_timeout: true, description "kiwi messages".`;
+  if (harness === "grok") return `Now, once for this session: start the monitor tool with command \`${join}\`, description "${join}", persistent: true.`;
+  if (harness === "zcode") return `Now, and again every time it wakes you: call the Bash tool with command \`${join}\`, run_in_background: true, and no timeout.`;
+  if (harness === "cursor") return `Now, and again every time it wakes you: run \`${join}\` with the Shell tool as a background command (is_background: true).`;
+  return null;
+}
+
+export function runInBackground(harness: Here["harness"]): string | null {
+  if (harness === "kimi") return "with the Bash tool as a background task (run_in_background: true, disable_timeout: true)";
+  if (harness === "grok") return "with the monitor tool (persistent: true)";
+  if (harness === "zcode") return "with the Bash tool as a background task (run_in_background: true, no timeout)";
+  if (harness === "cursor") return "with the Shell tool as a background command (is_background: true)";
   return null;
 }
 
@@ -70,18 +103,15 @@ export function wakeYourself(mc: string, harness: Here["harness"]): string | nul
 
 export function howMessagesReachYou(mc: string, waking: boolean, who: Here = here(), webhook = false): string {
   if (!waking) return `Kiwi won't wake you: waking is off for you here (\`kiwi wake on\` turns it back on). ${checkEachTurn(mc)}`;
-  if (who.harness === "kimi" && kimiServer(who.pid) && extraInstalled("kimi")) return `Kiwi wakes you in this session when a message for you arrives (${wakeWords("kimi-server")}). Don't run listen.`;
-  const path = wakePath(who.harness ? { harness: who.harness, ...(who.session ? { session: who.session } : {}) } : null, hooksListen(), webhook, {
-    pi: piInstalled(),
-    mimo: mimoInstalled(),
-  });
+  if (kimiServed(who)) return `Kiwi wakes you in this session when a message for you arrives (${wakeWords("kimi-server")}). Don't keep a listener running.`;
+  const path = pathHere(who, webhook);
   switch (path.kind) {
     case "hooks":
-      return "Messages for you arrive on their own: Kiwi's hooks wake you when one comes. Don't run listen.";
+      return "Messages for you arrive on their own: Kiwi's hooks wake you when one comes. Don't keep a listener running.";
     case "extension":
-      return `Messages for you arrive on their own: ${wakeWords(path.via)} wakes you when one comes. Don't run listen.`;
+      return `Messages for you arrive on their own: ${wakeWords(path.via)} wakes you when one comes. Don't keep a listener running.`;
     case "command":
-      return `Kiwi wakes you in this session when a message for you arrives (${wakeWords(path.via)}). Don't run listen.`;
+      return `Kiwi wakes you in this session when a message for you arrives (${wakeWords(path.via)}). Don't keep a listener running.`;
     case "none":
       return wakeYourself(mc, who.harness) ?? `Kiwi can't wake you in this session: ${path.why}. ${checkEachTurn(mc)}`;
   }

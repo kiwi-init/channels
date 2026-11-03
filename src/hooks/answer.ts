@@ -101,6 +101,19 @@ export function grokMonitorListens(tasks: readonly BackgroundTask[], commands: r
   return tasks.some((t) => t.type === "monitor" && t.text.split("\n").some((line) => commands.includes(line.trim().replace(TAGGED, ""))));
 }
 
+const runsKiwiJoin = (line: string): boolean => {
+  const words = line
+    .replace(TAGGED, "")
+    .split(/[\s'"=;&|()]+/)
+    .filter(Boolean);
+  const at = words.findIndex((w) => w === "kiwi" || w.endsWith("/kiwi"));
+  return at >= 0 && words.slice(at + 1).includes("join");
+};
+
+function grokMonitorJoins(tasks: readonly BackgroundTask[]): boolean {
+  return tasks.some((t) => t.type === "monitor" && t.text.split("\n").some(runsKiwiJoin));
+}
+
 const LOGGED_CHARS = 300;
 
 function noteGrok(b: Binding, text: string): void {
@@ -140,9 +153,11 @@ function listenCheck(input: HookInput, b: Binding, who: Here, mc: string): Liste
     };
     return { kind: "check", listens, settles: false };
   }
-  const commands = [COMMANDS.listen(mc), COMMANDS.listen(`${mcBin()} ${channelOption(b.alias)} ${asOption(b.as)}`)];
+  const full = `${mcBin()} ${channelOption(b.alias)} ${asOption(b.as)}`;
+  const commands = [COMMANDS.join(mc), COMMANDS.join(full), `${mc} listen`, `${full} listen`];
+  const seatListensHere = () => !!who.session && liveListeners().some((l) => l.alias === b.alias && l.as === b.as && l.session === who.session);
   const listens = () => {
-    const heard = grokMonitorListens(tasks, commands);
+    const heard = grokMonitorListens(tasks, commands) || (grokMonitorJoins(tasks) && seatListensHere());
     if (!heard) noteUnheard(b, tasks, commands);
     return heard;
   };
