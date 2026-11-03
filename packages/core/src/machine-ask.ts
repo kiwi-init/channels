@@ -5,7 +5,7 @@ import { sign, verify, type Identity } from "./identity.ts";
 import { joinLineRefusal } from "./join-line.ts";
 import { CHOICE_KEYS, readLaunchChoices, type LaunchChoices } from "./launch-options.ts";
 
-const MACHINE_VERBS = ["harnesses", "folders", "launch", "unpair", "settings"] as const;
+const MACHINE_VERBS = ["harnesses", "folders", "launch", "unpair", "settings", "shell", "shell-tabs", "shell-close"] as const;
 export type MachineVerb = (typeof MACHINE_VERBS)[number];
 
 export const ASK_MAX_BYTES = 4_096;
@@ -110,9 +110,65 @@ export type MachineArgs =
   | { verb: "unpair" }
   | { verb: "settings" }
   | { verb: "folders"; room?: string }
-  | { verb: "launch"; launch: { harness: KnownHarness; folder: string; code: string; relay?: string; nick?: string; persona?: string } & LaunchChoices };
+  | { verb: "launch"; launch: { harness: KnownHarness; folder: string; code: string; relay?: string; nick?: string; persona?: string } & LaunchChoices }
+  | { verb: "shell"; shell: ShellAsk }
+  | { verb: "shell-tabs" }
+  | { verb: "shell-close"; pane: string };
+
+interface ShellAsk {
+  want: string;
+  cols: number;
+  rows: number;
+  pipe: string;
+  epk: string;
+}
+
+export interface ShellOpened {
+  epk: string;
+  pane: string;
+  window: string;
+  cols: number;
+  rows: number;
+}
+
+export interface ShellTab {
+  pane: string;
+  label: string;
+}
 
 const ROOM_RE = /^[0-9a-f]{32}$/;
+const PANE_RE = /^%\d{1,10}$/;
+const PIPE_RE = /^[A-Za-z0-9_-]{22}$/;
+const EPK_RE = /^[A-Za-z0-9_-]{43}$/;
+const SHELL_KEYS = ["want", "cols", "rows", "pipe", "epk"];
+const LABEL_MAX = 200;
+const TABS_MAX = 64;
+
+const isPane = (v: unknown): v is string => typeof v === "string" && PANE_RE.test(v);
+
+const shellSize = (n: unknown): n is number => typeof n === "number" && Number.isInteger(n) && n > 0 && n <= 1_000;
+
+function readShellAsk(args: Record<string, unknown>): ShellAsk | null {
+  const keys = Object.keys(args);
+  if (keys.length !== SHELL_KEYS.length || keys.some((k) => !SHELL_KEYS.includes(k))) return null;
+  const { want, cols, rows, pipe, epk } = args;
+  if (want !== "new" && !isPane(want)) return null;
+  if (!shellSize(cols) || !shellSize(rows) || typeof pipe !== "string" || !PIPE_RE.test(pipe) || typeof epk !== "string" || !EPK_RE.test(epk)) return null;
+  return { want, cols, rows, pipe, epk };
+}
+
+export function readShellOpened(result: unknown): ShellOpened | null {
+  if (!isRecord(result) || result.ok !== true) return null;
+  const { epk, pane, window, cols, rows } = result;
+  if (typeof epk !== "string" || !EPK_RE.test(epk) || !isPane(pane) || typeof window !== "string" || window.length > LABEL_MAX || !shellSize(cols) || !shellSize(rows)) return null;
+  return { epk, pane, window, cols, rows };
+}
+
+export function readShellTabs(result: unknown): ShellTab[] | null {
+  if (!isRecord(result) || result.ok !== true || !Array.isArray(result.tabs) || result.tabs.length > TABS_MAX) return null;
+  const tabs = result.tabs.flatMap((t: unknown) => (isRecord(t) && isPane(t.pane) && typeof t.label === "string" && t.label.length <= LABEL_MAX ? [{ pane: t.pane, label: t.label }] : []));
+  return tabs.length === result.tabs.length ? tabs : null;
+}
 const LAUNCH_KEYS = new Set<string>(["harness", "folder", "code", "relay", "nick", "persona", ...CHOICE_KEYS]);
 const FOLDER_RE = /^\/[^\u0000-\u001f\u007f]{0,1023}$/;
 
@@ -121,7 +177,12 @@ const optionalText = (v: unknown): v is string | undefined => v === undefined ||
 export function readMachineArgs(ask: Pick<MachineAsk, "verb" | "args">): MachineArgs | null {
   const { verb, args } = ask;
   const keys = Object.keys(args);
-  if (verb === "harnesses" || verb === "unpair" || verb === "settings") return keys.length ? null : { verb };
+  if (verb === "harnesses" || verb === "unpair" || verb === "settings" || verb === "shell-tabs") return keys.length ? null : { verb };
+  if (verb === "shell") {
+    const shell = readShellAsk(args);
+    return shell ? { verb, shell } : null;
+  }
+  if (verb === "shell-close") return keys.length === 1 && isPane(args.pane) ? { verb, pane: args.pane } : null;
   if (verb === "folders") {
     if (keys.some((k) => k !== "room")) return null;
     if (args.room === undefined) return { verb };
