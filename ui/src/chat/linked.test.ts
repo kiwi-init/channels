@@ -23,9 +23,9 @@ describe("#123 points at an earlier message (T616)", () => {
 })
 
 describe("images from other hosts open as links, as they did before (T616)", () => {
-  test("a remote image becomes 'alt (opens host)', which the app may load", () => {
-    expect(linked("look: ![the graph](https://img.example.com/g.png)", nobody, none)).toBe("look: [the graph (opens img.example.com)](<https://img.example.com/g.png>)")
-    expect(linked("![](http://x.test/p.png)", nobody, none)).toBe("[image (opens x.test)](<http://x.test/p.png>)")
+  test("a remote image becomes a link named by its alt, which the app never loads", () => {
+    expect(linked("look: ![the graph](https://img.example.com/g.png)", nobody, none)).toBe("look: [the graph](<https://img.example.com/g.png>)")
+    expect(linked("![](http://x.test/p.png)", nobody, none)).toBe("[image](<http://x.test/p.png>)")
   })
 
   test("an image the app can show stays; one with nowhere safe to go keeps only its words", () => {

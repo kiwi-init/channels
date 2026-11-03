@@ -11,11 +11,12 @@ export function stepReplyText(reply: StepReply): string {
 
 const copy = (command: string) => copyText(command, "Command copied")
 
-export function StepHow({ step }: { step: Step }) {
+export function StepHow({ step, you = [] }: { step: Step; you?: readonly string[] }) {
+  const mine = you.some((n) => n.toLowerCase() === step.needsPerson.trim().toLowerCase())
   return (
     <section className="ask-step" aria-label="Step instructions">
       <p className="ask-why">{step.why}</p>
-      <p className="ask-who">Needs a person: {step.needsPerson}</p>
+      {!mine && <p className="ask-who">Needs a person: {step.needsPerson}</p>}
       {step.do?.length ? (
         <ol className="ask-do">
           {step.do.map((item, i) => (
@@ -35,7 +36,7 @@ export function StepHow({ step }: { step: Step }) {
       ))}
       {step.expect && (
         <p className="ask-why">
-          <span className="ask-label">Expected:</span> {step.expect}
+          <span className="ask-label">Expected</span> {step.expect}
         </p>
       )}
       {step.links?.length ? (
@@ -59,7 +60,7 @@ export function StepAnswer({ onAnswer, onElse }: { onAnswer: (reply: StepReply) 
   const [reason, setReason] = useState("")
   return (
     <div className="ask-step-answer">
-      <textarea className="textarea" rows={2} aria-label="Step output" placeholder="Output to send back with Done (optional)" value={output} onChange={(e) => setOutput(e.target.value)} />
+      <textarea className="textarea" rows={1} aria-label="Step output" title="Sent back with Done" placeholder="Output (optional)" value={output} onChange={(e) => setOutput(e.target.value)} />
       <div className="actions">
         <button type="button" className="btn is-primary is-small" onClick={() => onAnswer({ outcome: "done", ...(output.trim() ? { output } : {}) })}>
           Done

@@ -42,7 +42,7 @@ const AWAY_MS = 30 * 60_000
 
 const away = (at: number): string => {
   const a = ago(at)
-  return /^\d/.test(a) ? `from ${a} ago` : `since ${a}`
+  return /^\d/.test(a) ? `${a} ago` : `since ${a}`
 }
 const SHOWN_KEY = (code: string) => `kiwi.since.${code}`
 
@@ -91,7 +91,7 @@ export default function SinceModal({ channel }: { channel: Channel }) {
   }
   return (
     <Dialog open={open} onClose={close} label="Since you left" wide>
-      <DialogHead title="Since you left" sub={`${channel.title} · ${away(since.at)}`} onClose={close} />
+      <DialogHead title="Since you left" sub={away(since.at)} onClose={close} />
       <dl className="since-rows">
         {since.rooms.map((p) => (
           <div key={placeName(channel, p)} className="since-row">
@@ -133,8 +133,25 @@ export default function SinceModal({ channel }: { channel: Channel }) {
             <dt className="since-label">Tasks</dt>
             <dd className="since-what">
               <button type="button" className="since-link" onClick={() => goTo({ to: "tab", tab: "tasks" })}>
-                <b>{done.length}</b> done · <b>{doing.length}</b> in progress
-                {waiting.length > 0 && <span className="since-waiting"> · {waiting.length} waiting on someone</span>}
+                {[
+                  done.length > 0 && (
+                    <span key="done">
+                      <b>{done.length}</b> done
+                    </span>
+                  ),
+                  doing.length > 0 && (
+                    <span key="doing">
+                      <b>{doing.length}</b> in progress
+                    </span>
+                  ),
+                  waiting.length > 0 && (
+                    <span key="waiting" className="since-waiting">
+                      {waiting.length} waiting on someone
+                    </span>
+                  ),
+                ]
+                  .filter(Boolean)
+                  .flatMap((part, i) => (i === 0 ? [part] : [" · ", part]))}
               </button>
               <span className="since-tasks">
                 {ids.map((t) => (
@@ -148,9 +165,6 @@ export default function SinceModal({ channel }: { channel: Channel }) {
         )}
       </dl>
       <div className="dialog-foot">
-        <button type="button" className="btn" onClick={close}>
-          Close
-        </button>
         <button type="button" className="btn is-primary" onClick={seeAll}>
           Mark all seen
         </button>
