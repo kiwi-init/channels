@@ -1888,14 +1888,6 @@ button.msg-image-spot:hover {
   row-gap: 2px;
 }
 
-.panel .chip-meta {
-  flex-basis: 100%;
-}
-
-.panel .chip-title + .chip-meta::before {
-  content: none;
-}
-
 .msg-edited {
   color: var(--ink-3);
   font: var(--t-stamp) var(--ui);
