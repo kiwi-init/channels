@@ -180,7 +180,7 @@ any current approving device in that list, then counts as its person: asks, unpa
 check and `/v1/person/<pk>/machines`. The relay never rolls the kept list back. Each list the account
 accepts reaches its computers, so a revoked or expired desktop stops counting at once. The daemon
 checks asks the same way (`readAsk` with the list). Under decision A, this is what lets a desktop
-without the person key start agents.
+without the person key let a computer's agents in and unpair it.
 
 A computer paired by an older `MachineCert` alone keeps working once the person key is offline (T899).
 Before the first desktop lets go of the person key, it lists every computer it knows in the device

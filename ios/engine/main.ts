@@ -203,7 +203,7 @@ function room(code: string): Room {
 
 function asker(): Asker {
   const person = saved?.person;
-  if (saved?.device && !person) throw new Error("this phone signed in without your person key: start agents from Channels on your computer");
+  if (saved?.device && !person) throw new Error("this phone signed in without your person key: manage your computers from Channels on your computer");
   if (!saved || !person) throw new Error("sign in on this phone first");
   return { signer: person, person: person.pk, relay: saved.relay };
 }
