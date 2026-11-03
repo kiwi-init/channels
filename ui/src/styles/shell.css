@@ -900,7 +900,7 @@
 .side-tiles {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
+  gap: 2px;
   margin-bottom: 4px;
 }
 
@@ -909,26 +909,24 @@
   display: grid;
   place-content: center;
   justify-items: center;
-  gap: 6px;
+  gap: 4px;
   width: 100%;
-  aspect-ratio: 1;
-  padding: 8px;
+  padding: 8px 4px 6px;
   border: 0;
   border-radius: var(--r-ctl);
-  background: var(--bg-2);
+  background: none;
   color: var(--ink-2);
   font: var(--t-meta) var(--ui);
   transition: background var(--fast);
 }
 
 .side-tile:hover {
-  background: var(--bg-3);
+  background: var(--wash);
   color: var(--ink);
 }
 
 .side-tile.is-on {
-  background: var(--bg-3);
-  box-shadow: inset 0 0 0 1px var(--line-2);
+  background: var(--wash-2);
   color: var(--ink);
   font-weight: 500;
 }
@@ -943,8 +941,8 @@
 }
 
 .side-tile > .av {
-  width: 4rem;
-  height: 4rem;
+  width: 2.5rem;
+  height: 2.5rem;
 }
 
 .side-tile > .side-label {
@@ -954,14 +952,14 @@
 
 .side-tile > .count {
   position: absolute;
-  top: 6px;
-  right: 6px;
+  top: 4px;
+  right: 4px;
 }
 
 .side-tile > .icon {
   position: absolute;
-  top: 8px;
-  left: 8px;
+  top: 6px;
+  left: 6px;
   color: var(--ink-3);
 }
 

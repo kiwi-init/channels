@@ -291,9 +291,9 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   member is listed once, and the row is your conversation with them: a click
   opens the DM, its unread count sits on the row, and the profile is in the
   row's menu (and in the Agents view). You aren't listed. A person's pip
-  carries their presence. Agents are square tiles, two across on `bg-2`
-  (`bg-3` on hover, plus a `line-2` ring when open): a 64px face with the
-  name under it, and the unread count in the top-right corner. The eyes carry
+  carries their presence. Agents are tiles, two across with no fill (`wash`
+  on hover, `wash-2` when open): a 40px face with the name under it, and
+  the unread count in the top-right corner. The eyes carry
   the state, with no status word, and the words (`running Bash`,
   `thinking`, offline since) wait in the tile's `title`. A DM
   with someone no longer listed follows the people; conversations between
