@@ -66,14 +66,37 @@ let shells: TermTab[] = [
   { pane: "%2", label: "node" },
 ]
 
+let remote: TermTab[] = [{ pane: "%4", label: "zsh", machine: "arch" }]
+
 export function demoShells(close?: string): TermTab[] {
   if (close) shells = shells.filter((t) => t.pane !== close)
   return shells
 }
 
-export async function demoShell(want: string | null, cols: number, rows: number, watch: TermWatch): Promise<TermOpened> {
+export function demoRemoteShells(machine: string, close?: string): TermTab[] {
+  if (close) remote = remote.filter((t) => t.machine !== machine || t.pane !== close)
+  return remote.filter((t) => t.machine === machine)
+}
+
+const ARCH = `${GREEN}jow@arch-box${OFF} ${BOLD}~${OFF} $`
+
+function archShell(rows: number): string {
+  const lines = [`${ARCH} uptime`, ` 12:41:07 up 9 days,  3:12,  1 user,  load average: 0.31, 0.27, 0.22`, `${ARCH} kiwi status --short`, `  2 agents · 1 task open`, `${ARCH} `]
+  return lines.slice(-rows).join("\r\n")
+}
+
+export async function demoShell(want: string | null, cols: number, rows: number, watch: TermWatch, machine?: string): Promise<TermOpened> {
   const c = Math.max(40, cols)
   const r = Math.max(12, rows)
+  if (machine) {
+    const made = want === "new" ? { pane: `%${remote.length + 20}`, label: "zsh", machine } : null
+    if (made) remote = [...remote, made]
+    const there = made ?? remote.find((t) => t.machine === machine && t.pane === want) ?? remote.find((t) => t.machine === machine)
+    return {
+      screen: { cols: c, rows: r, seed: `\x1b[H\x1b[2J${made ? `${ARCH} ` : archShell(r)}`, dead: false, ...(there ? { pane: there.pane } : {}) },
+      link: { keys: (text) => watch.out(text.replace(/\r/g, "\r\n")), size: () => {}, close: () => {} },
+    }
+  }
   const fresh = want === "new" ? { pane: `%${shells.length + 10}`, label: "zsh" } : null
   if (fresh) shells = [...shells, fresh]
   const tab = fresh ?? shells.find((t) => t.pane === want) ?? shells[0]

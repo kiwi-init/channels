@@ -6,7 +6,8 @@ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } f
 
 import { Avatar, cx, IconButton } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
-import { memberOf, type Channel, type TermLink, type TermTab, type TermWatch } from "~/model"
+import { openMenu } from "~/kit/menu-open"
+import { memberOf, type Channel, type Computer, type TermLink, type TermTab, type TermWatch } from "~/model"
 import { shown } from "~/names"
 import { useApp, type TermOf } from "~/nav"
 import { colorsOf, useSystemDark } from "~/theme/apply"
@@ -19,8 +20,21 @@ const MIN_HEIGHT = 180
 const CELL = 8
 const FONT = '"SF Mono", SFMono-Regular, Menlo, "DejaVu Sans Mono", ui-monospace, monospace'
 const TABS_MS = 2_000
+const REMOTE_TABS_MS = 30_000
+const RETRY_FIRST_MS = 1_000
+const RETRY_FOR_MS = 120_000
 
-type Phase = { kind: "opening" } | { kind: "live"; cols: number; rows: number } | { kind: "ended"; cols: number; rows: number } | { kind: "error"; why: string }
+type Phase = { kind: "opening" } | { kind: "live"; cols: number; rows: number } | { kind: "ended"; cols: number; rows: number } | { kind: "reconnecting" } | { kind: "error"; why: string }
+
+interface Want {
+  pane: string | null
+  machine: string | null
+  n: number
+}
+
+const isPhone = (c: Computer): boolean => c.os === "iphone" || c.os === "android"
+
+const tabKey = (t: { pane: string | null; machine?: string | null }): string => `${t.machine ?? ""}:${t.pane ?? ""}`
 
 let ghostty: Promise<Ghostty> | null = null
 
@@ -99,28 +113,63 @@ export default function TermDrawer({ channel, of }: { channel: Channel; of: Term
   const host = useRef<HTMLDivElement>(null)
   const [phase, setPhase] = useState<Phase>({ kind: "opening" })
   const [height, setHeight] = useState<number | null>(storedHeight)
-  const [want, setWant] = useState<{ pane: string | null; n: number }>({ pane: null, n: 0 })
-  const [current, setCurrent] = useState<string | null>(null)
+  const [want, setWant] = useState<Want>({ pane: null, machine: null, n: 0 })
+  const [current, setCurrent] = useState<{ pane: string; machine: string | null } | null>(null)
   const [tabs, setTabs] = useState<TermTab[]>([])
+  const [away, setAway] = useState<ReadonlyMap<string, TermTab[]>>(new Map())
+  const others = (app.account?.computers ?? []).filter((c) => !c.thisOne && !isPhone(c))
+  const labelOf = (machine: string | null | undefined): string => (machine ? (others.find((c) => c.id === machine)?.label ?? "another computer") : "This computer")
+  const retry = useRef<{ since: number; wait: number; timer: number } | null>(null)
+  const plusAt = useRef<HTMLSpanElement>(null)
   const systemDark = useSystemDark()
   const theme = activeTheme(app.prefs, systemDark)
   const looks = `${theme.id}:${JSON.stringify(colorsOf(theme))}`
   const ended = useRef<() => void>(() => {})
-  const last = useRef<{ n: number; pane: string | null }>({ n: 0, pane: null })
+  const lost = useRef<() => void>(() => {})
+  const seen = useRef<(machine: string) => void>(() => {})
+  const last = useRef<{ n: number; pane: string | null; machine: string | null }>({ n: 0, pane: null, machine: null })
 
-  const pick = (pane: string | null) => setWant((w) => ({ pane, n: w.n + 1 }))
-  const settle = (left: TermTab[], gone: string | null) => {
-    setTabs(left)
-    if (gone !== current) return
-    const next = left[0]
-    if (next) pick(next.pane)
+  const pick = (pane: string | null, machine: string | null = null) => setWant((w) => ({ pane, machine, n: w.n + 1 }))
+  const everyTab = (here: TermTab[], there: ReadonlyMap<string, TermTab[]>): TermTab[] => [...here, ...[...there.values()].flat()]
+  const settle = (here: TermTab[], there: ReadonlyMap<string, TermTab[]>, gone: { pane: string; machine: string | null } | null) => {
+    setTabs(here)
+    setAway(there)
+    if (!gone || !current || tabKey(gone) !== tabKey(current)) return
+    const next = everyTab(here, there)[0]
+    if (next) pick(next.pane, next.machine ?? null)
     else go({ to: "term", term: null })
   }
+  const lookAway = async (machine: string): Promise<ReadonlyMap<string, TermTab[]>> => {
+    const next: ReadonlyMap<string, TermTab[]> = new Map([...away, [machine, await app.actions.remoteTerms(machine)]])
+    setAway(next)
+    return next
+  }
   useEffect(() => {
+    seen.current = (machine) => void lookAway(machine)
     ended.current = () => {
-      if (name === null) void app.actions.myTerms().then((left) => settle(left, current))
+      if (name !== null) return
+      const machine = current?.machine ?? null
+      if (machine) void lookAway(machine).then((there) => settle(tabs, there, current))
+      else void app.actions.myTerms().then((left) => settle(left, away, current))
+    }
+    lost.current = () => {
+      const at = current
+      if (!at?.machine) return ended.current()
+      const now = Date.now()
+      const r = retry.current ?? { since: now, wait: RETRY_FIRST_MS, timer: 0 }
+      if (now - r.since > RETRY_FOR_MS) {
+        retry.current = null
+        setPhase({ kind: "error", why: `${labelOf(at.machine)} is offline. Your shell keeps running there.` })
+        return
+      }
+      setPhase({ kind: "reconnecting" })
+      window.clearTimeout(r.timer)
+      r.timer = window.setTimeout(() => pick(at.pane, at.machine), r.wait)
+      r.wait = Math.min(r.wait * 2, 15_000)
+      retry.current = r
     }
   })
+  useEffect(() => () => window.clearTimeout(retry.current?.timer), [])
 
   useEffect(() => {
     if (name !== null) return
@@ -133,6 +182,24 @@ export default function TermDrawer({ channel, of }: { channel: Channel; of: Term
       window.clearInterval(every)
     }
   }, [app.actions, name])
+
+  const reachable = others
+    .filter((c) => c.online)
+    .map((c) => c.id)
+    .join(",")
+  useEffect(() => {
+    if (name !== null || !reachable) return
+    let live = true
+    const look = () => {
+      for (const machine of reachable.split(",")) void app.actions.remoteTerms(machine).then((t) => live && setAway((m) => new Map([...m, [machine, t]])))
+    }
+    look()
+    const every = window.setInterval(look, REMOTE_TABS_MS)
+    return () => {
+      live = false
+      window.clearInterval(every)
+    }
+  }, [app.actions, name, reachable])
 
   useEffect(() => {
     const el = host.current
@@ -160,23 +227,38 @@ export default function TermDrawer({ channel, of }: { channel: Channel; of: Term
             setPhase((p) => (p.kind === "live" ? { ...p, kind: "ended" } : p))
             ended.current()
           },
+          lost: () => {
+            if (!gone) lost.current()
+          },
         }
         const size = fit.proposeDimensions() ?? { cols: 100, rows: 30 }
-        const target = last.current.n === want.n ? last.current.pane : want.pane
-        const opened = name === null ? await app.actions.openMyTerm(channel.code, target, size.cols, size.rows, watch) : await app.actions.openTerm(channel.code, name, size.cols, size.rows, watch)
+        const again = last.current.n === want.n
+        const target = again ? last.current.pane : want.pane
+        const machine = again ? last.current.machine : want.machine
+        const opened =
+          name === null
+            ? await app.actions.openMyTerm(channel.code, target, size.cols, size.rows, watch, machine ?? undefined)
+            : await app.actions.openTerm(channel.code, name, size.cols, size.rows, watch)
         if (gone) {
           if ("link" in opened) opened.link.close()
           return
         }
         if ("error" in opened) {
+          if (retry.current && machine) {
+            last.current = { n: want.n, pane: target, machine }
+            lost.current()
+            return
+          }
           setPhase({ kind: "error", why: opened.error })
           return
         }
+        retry.current = null
         const l = opened.link
         link = l
-        last.current = { n: want.n, pane: opened.screen.pane ?? null }
-        setCurrent(opened.screen.pane ?? null)
-        if (name === null) void app.actions.myTerms().then((t) => !gone && setTabs(t))
+        last.current = { n: want.n, pane: opened.screen.pane ?? null, machine }
+        setCurrent(opened.screen.pane ? { pane: opened.screen.pane, machine } : null)
+        if (machine) seen.current(machine)
+        if (name === null && !machine) void app.actions.myTerms().then((t) => !gone && setTabs(t))
         t.resize(opened.screen.cols, opened.screen.rows)
         t.write(opened.screen.seed)
         setPhase({ kind: opened.screen.dead ? "ended" : "live", cols: opened.screen.cols, rows: opened.screen.rows })
@@ -230,37 +312,59 @@ export default function TermDrawer({ channel, of }: { channel: Channel; of: Term
   }
 
   const size = phase.kind === "live" || phase.kind === "ended" ? `${phase.cols}×${phase.rows}` : null
+  const all = everyTab(tabs, away)
+  const tabName = (t: TermTab): string => (t.machine ? `${labelOf(t.machine)} · ${t.label}` : t.label)
+  const closeTab = (t: TermTab) => {
+    const at = { pane: t.pane, machine: t.machine ?? null }
+    if (t.machine) void app.actions.closeRemoteTerm(t.machine, t.pane).then((left) => settle(tabs, new Map([...away, [t.machine!, left]]), at))
+    else void app.actions.closeMyTerm(t.pane).then((left) => settle(left, away, at))
+  }
+  const plus = () => {
+    const r = plusAt.current?.getBoundingClientRect()
+    if (!others.length || !r) return pick("new")
+    openMenu.set({
+      x: r.left,
+      y: r.bottom + 4,
+      label: "New terminal on",
+      groups: [
+        [
+          { label: "This computer", run: () => pick("new") },
+          ...others.map((c) => ({ label: c.online ? c.label : `${c.label} · offline`, run: () => pick("new", c.id), ...(c.online ? {} : { disabled: true as const }) })),
+        ],
+      ],
+    })
+  }
   return (
     <section className="term" aria-label={name === null ? title : `${title}'s terminal`} style={height ? { height } : undefined} onKeyDown={(e) => e.stopPropagation()}>
       <div className="term-grip" role="separator" aria-orientation="horizontal" aria-label="Resize the terminal" onPointerDown={grip} onDoubleClick={() => setHeight(null)} />
-      <header className="term-head" title={[name === null ? "This computer" : "Channels' tmux", size].filter(Boolean).join(" · ")}>
+      <header className="term-head" title={[name === null ? labelOf(current?.machine) : "Channels' tmux", size].filter(Boolean).join(" · ")}>
         {name !== null ? (
           <Avatar person={person} size="sm" />
         ) : (
-          tabs.length === 0 && (
+          all.length === 0 && (
             <span className="term-mine" aria-hidden="true">
               <Icon name="terminal" size={14} />
             </span>
           )
         )}
-        {name === null && tabs.length > 0 ? (
+        {name === null && all.length > 0 ? (
           <div className="term-tabs" role="tablist" aria-label="Your terminals">
-            {tabs.map((t) => (
-              <span key={t.pane} className={cx("term-tab", t.pane === current && "is-on")}>
-                <button type="button" role="tab" aria-selected={t.pane === current} onClick={() => pick(t.pane)}>
-                  {t.label}
-                </button>
-                <button
-                  type="button"
-                  className="term-tab-x"
-                  aria-label={`Close ${t.label} (ends that shell)`}
-                  onClick={() => void app.actions.closeMyTerm(t.pane).then((left) => settle(left, t.pane))}
-                >
-                  <Icon name="close" size={10} />
-                </button>
-              </span>
-            ))}
-            <IconButton icon="plus" label="New terminal" onClick={() => pick("new")} />
+            {all.map((t) => {
+              const on = !!current && tabKey(current) === tabKey(t)
+              return (
+                <span key={tabKey(t)} className={cx("term-tab", on && "is-on")}>
+                  <button type="button" role="tab" aria-selected={on} onClick={() => pick(t.pane, t.machine ?? null)}>
+                    {tabName(t)}
+                  </button>
+                  <button type="button" className="term-tab-x" aria-label={`Close ${tabName(t)} (ends that shell)`} onClick={() => closeTab(t)}>
+                    <Icon name="close" size={10} />
+                  </button>
+                </span>
+              )
+            })}
+            <span ref={plusAt} className="term-plus">
+              <IconButton icon="plus" label={others.length ? "New terminal on…" : "New terminal"} onClick={plus} />
+            </span>
           </div>
         ) : (
           <span className="term-name">{title}</span>
@@ -275,6 +379,7 @@ export default function TermDrawer({ channel, of }: { channel: Channel; of: Term
       </header>
       <div className="term-screen" ref={host} />
       {phase.kind === "opening" && <p className="term-note">Opening…</p>}
+      {phase.kind === "reconnecting" && <p className="term-note">Reconnecting…</p>}
       {phase.kind === "error" && (
         <p className="term-note is-error" role="alert">
           {phase.why}
