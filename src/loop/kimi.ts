@@ -3,8 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Permission } from "@kiwi/core/launch-options.ts";
 import { kimiHome } from "../kimi-server.ts";
-import { runNow } from "../terminals/shared/run.ts";
-import { tmuxNow } from "../terminals/shared/tmux.ts";
+import { runNow, tmuxNow } from "./tmux.ts";
 
 type Env = Record<string, string | undefined>;
 

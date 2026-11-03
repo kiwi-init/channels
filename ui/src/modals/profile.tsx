@@ -10,7 +10,6 @@ import { ago } from "~/kit/time"
 import { ALL_POWERS, memberOf, NO_POWERS, trusted, type App, type Channel, type Person, type Task } from "~/model"
 import { useApp } from "~/nav"
 import { devicesOf, nickname, seatRoot, shown } from "~/names"
-import { ShowAgent } from "~/kit/show-agent"
 import { contextOf, liveOf, restOf } from "~/doing"
 import { Group, InlineEdit, Row } from "~/settings/controls"
 
@@ -131,7 +130,6 @@ function Doors({ channel, person }: { channel: Channel; person: Person }) {
       <button type="button" className="btn is-primary" onClick={() => go({ to: "where", where: { kind: "dm", with: seatRoot(channel, person.name) } })}>
         Message
       </button>
-      <ShowAgent channel={channel} person={person} />
     </div>
   )
 }

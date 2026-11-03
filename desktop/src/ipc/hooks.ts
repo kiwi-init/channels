@@ -1,17 +1,10 @@
 import { isHookHarness, readHookRow, type HookHarness, type HookRow } from "@kiwi/core/harnesses.ts";
 import { readWakeSeat, type WakeSeat } from "@kiwi/core/wake.ts";
-import { isTerminalId, readPlacedSeat, readShowResult, type PlacedSeat, type ShowResult, type TerminalsStatus } from "@kiwi/core/terminals.ts";
 import type { Serves } from "../calls.ts";
 import { daemonHarnesses } from "../daemon-client.ts";
-import { terminalsOf } from "../terminals-status.ts";
 import { runKiwi } from "./kiwi.ts";
 
 const isSwitch = (v: unknown): v is "on" | "off" => v === "on" || v === "off";
-
-async function terminals(): Promise<TerminalsStatus | null> {
-  const got = await runKiwi(["terminal", "status", "--json"]);
-  return got.code === 0 ? terminalsOf(got.stdout) : null;
-}
 
 async function must(args: string[]): Promise<string> {
   const done = await runKiwi(args);
@@ -24,11 +17,6 @@ async function must(args: string[]): Promise<string> {
         ?.replace(/^kiwi: /, "") || `kiwi ${args.join(" ")} didn't finish`,
     );
   return done.stdout;
-}
-
-async function change(args: string[]): Promise<TerminalsStatus | null> {
-  await must(args);
-  return terminals();
 }
 
 const isHooked = (v: unknown): v is HookHarness => isHookHarness(v) && v !== "opencode";
@@ -82,18 +70,8 @@ async function contextLine(args: string[]): Promise<"on" | "off" | null> {
   return isSwitch(on) ? on : null;
 }
 
-function seats(stdout: string): PlacedSeat[] {
-  const parsed = answer(stdout);
-  return Array.isArray(parsed) ? parsed.map(readPlacedSeat).filter((s): s is PlacedSeat => s !== null) : [];
-}
-
-export function terminalsCalls(): Serves<"terminals" | "terminalHelpers" | "contextLine" | "setContextLine" | "hooks" | "setHooks" | "wakeSeats" | "setWake" | "seatPlaces" | "showSeat"> {
+export function hooksCalls(): Serves<"contextLine" | "setContextLine" | "hooks" | "setHooks" | "wakeSeats" | "setWake"> {
   return {
-    terminals: () => terminals(),
-    terminalHelpers: (id: unknown, to: unknown) => {
-      if (!isTerminalId(id) || !isSwitch(to)) throw new Error("terminalHelpers takes rex or tmux, and on or off");
-      return change(["terminal", to === "on" ? "download" : "remove", id]);
-    },
     contextLine: () => contextLine(["context-line", "status", "--json"]),
     setContextLine: (to: unknown) => {
       if (!isSwitch(to)) throw new Error("setContextLine takes on or off");
@@ -110,16 +88,6 @@ export function terminalsCalls(): Serves<"terminals" | "terminalHelpers" | "cont
       const listen = harness === "claude" && to === "on" && (await claudeHere()) === "wakes";
       await must(["hooks", to === "on" ? "install" : "uninstall", harness, ...(listen ? ["--listen"] : [])]);
       return hooks();
-    },
-    seatPlaces: async (): Promise<PlacedSeat[]> => {
-      const listed = await runKiwi(["terminal", "seats", "--json"]);
-      return listed.code === 0 ? seats(listed.stdout) : [];
-    },
-    showSeat: async (value: unknown): Promise<ShowResult> => {
-      const seat = readPlacedSeat(value);
-      if (!seat) return { ok: false, why: "failed" };
-      const done = await runKiwi(["terminal", "show", "--seat", JSON.stringify(seat)]);
-      return done.code === 0 ? readShowResult(answer(done.stdout)) : { ok: false, why: "failed" };
     },
   };
 }

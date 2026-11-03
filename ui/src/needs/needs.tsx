@@ -13,7 +13,6 @@ import { ago, clock } from "~/kit/time"
 import { ALL_POWERS, NO_POWERS, trusted, type Ask, type Channel, type JoinAsk, type Message, type PermissionAsk, type Person, type Powers, type QuestionAsk, type ReviewAsk } from "~/model"
 import { useApp } from "~/nav"
 import { nickname } from "~/names"
-import { ShowAgent } from "~/kit/show-agent"
 import { SendBack } from "~/tasks/send-back"
 import { isIdle, isOpen, openAsks } from "~/needs/open"
 import { SpecNeedCard } from "~/specs/card"
@@ -120,7 +119,6 @@ function Card({ channel, ask, onJump }: { channel: Channel; ask: Ask; onJump: (j
           Show in the conversation
         </button>
       )}
-      <ShowAgent channel={channel} person={"from" in ask ? member(channel, ask.from) : undefined} className="needs-link" />
     </>
   )
   switch (ask.kind) {

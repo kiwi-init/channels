@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { HookRow } from "@kiwi/core/harnesses.ts";
-import { withClaude } from "../desktop/src/ipc/terminals.ts";
+import { withClaude } from "../desktop/src/ipc/hooks.ts";
 
 const claude = (state: HookRow["state"]): HookRow => ({ harness: "claude", state, text: state });
 

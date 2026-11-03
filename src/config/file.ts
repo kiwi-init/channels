@@ -3,8 +3,8 @@ import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } 
 import { join } from "node:path";
 import { keepHeld } from "@kiwi/core/client.ts";
 import { keepSeen, type ChannelAccess } from "@kiwi/core/crypto.ts";
-import type { RexPlace, TerminalId, TerminalPlace, TmuxPlace } from "../terminals/plugin.ts";
 import { home, writePrivate } from "./paths.ts";
+import type { TmuxPlace } from "../tmux-pane.ts";
 
 export interface ChannelConfig extends ChannelAccess {
   relay: string;
@@ -32,8 +32,6 @@ export interface SeatRecord {
   seen?: number;
   plain?: true;
   model?: string;
-  term?: TerminalPlace;
-  rex?: RexPlace;
   tmux?: TmuxPlace;
   hold?: SeatHold;
   holds?: number;
@@ -72,22 +70,9 @@ export interface Config {
   wakeOff?: string[];
   wakeHooks?: Record<string, WakeHook>;
   contextLine?: "on" | "off";
-  rex?: "on" | "off";
-  terminals?: Terminals;
-}
-
-interface Terminals {
-  helpers?: Partial<Record<TerminalId, "on" | "off">>;
 }
 
 export const contextLineOn = (cfg: Pick<Config, "contextLine">): boolean => cfg.contextLine !== "off";
-
-function migrated(cfg: Config): Config {
-  if (cfg.rex === undefined) return cfg;
-  const { rex, ...rest } = cfg;
-  const terminals = rest.terminals ?? {};
-  return { ...rest, terminals: { ...terminals, helpers: { rex, ...terminals.helpers } } };
-}
 
 export interface WakeHook {
   url: string;
@@ -99,7 +84,7 @@ export function loadConfig(): Config {
   if (!existsSync(path)) return { channels: {} };
   const text = readFileSync(path, "utf8");
   try {
-    return migrated(JSON.parse(text) as Config);
+    return JSON.parse(text) as Config;
   } catch (err) {
     // A bare parse error names no file; say which one and what to do with it.
     throw new Error(`${path} isn't valid JSON (${err instanceof Error ? err.message : String(err)}): fix it, or move it aside and join your channels again`, { cause: err });

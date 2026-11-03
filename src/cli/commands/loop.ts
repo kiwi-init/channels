@@ -1,11 +1,11 @@
 import * as Effect from "effect/Effect";
 import { newSeatToken, SEAT_TOKEN } from "../../hold.ts";
-import { loginPath } from "../../launch/shell.ts";
-import { SESSION_MARKERS } from "../../terminals/shared/launch.ts";
+import { loginPath } from "../../login-shell.ts";
+import { SESSION_MARKERS } from "../../loop/login-argv.ts";
 import { isLoopHarness, LOOP_HARNESSES, recipeFor } from "../../loop/recipes.ts";
 import { runLoop } from "../../loop/run.ts";
 import { paneIsOurs, tmuxPastesFlag, tmuxVersion } from "../../loop/kimi.ts";
-import { tmuxSocket } from "../../terminals/shared/tmux.ts";
+import { tmuxSocket } from "../../loop/tmux.ts";
 import { args, opt } from "../args.ts";
 import { type Command, config, die, keepDaemon } from "../context.ts";
 import { seatNamed } from "./seat.ts";

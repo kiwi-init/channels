@@ -11,7 +11,6 @@ import type { Personality } from "@kiwi/core/personality.ts";
 import type { CachedKept, CachedRow, Unread } from "@kiwi/core/cache-row.ts";
 import type { Channel, OpenKind, PresenceFields } from "@kiwi/core/client.ts";
 import type { DeviceKeep, MemberPicture, Message, Presence, ReadMark } from "@kiwi/core/protocol.ts";
-import type { PlacedSeat, ShowResult, TerminalId, TerminalsStatus } from "@kiwi/core/terminals.ts";
 import type { TextStep } from "./text-size.ts";
 import type { Wire } from "./wire.ts";
 
@@ -451,10 +450,6 @@ export interface KiwiBridge {
   capabilities(): Promise<{ contract: string; channelCalls: string[] }>;
   onAccent(cb: (color: string | null) => void): () => void;
   setPersonalities(list: Personality[]): Promise<void>;
-  seatPlaces(): Promise<PlacedSeat[]>;
-  showSeat(seat: PlacedSeat): Promise<ShowResult>;
-  terminals(): Promise<TerminalsStatus | null>;
-  terminalHelpers(id: TerminalId, to: "on" | "off"): Promise<TerminalsStatus | null>;
   contextLine(): Promise<"on" | "off" | null>;
   setContextLine(to: "on" | "off"): Promise<"on" | "off" | null>;
   hooks(): Promise<HookRow[]>;

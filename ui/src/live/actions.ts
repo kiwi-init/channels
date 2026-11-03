@@ -8,7 +8,6 @@ import { forgetChannel, forgetPending, isJoinCode, loadMember, loadPending, rena
 import { linkOf, type ChannelLink } from "@kiwi/channel/channel-ops.ts"
 import { joinCodeFromLink } from "@kiwi/app/deep-link.ts"
 import { relayUrl } from "@kiwi/secrets/relay.ts"
-import { noteFor, showSeat, type ShowResult } from "@kiwi/app/show-seat.ts"
 import { savePersonalities } from "@kiwi/app/personalities.ts"
 import { createPerson, bridge, secrets } from "@kiwi/secrets/secrets.ts"
 import { isSignInGone } from "@kiwi/channel/session.ts"
@@ -32,9 +31,7 @@ import { loadPicture } from "~/live/pictures"
 import { setNewMemberPowers, setNewMemberScopes } from "~/live/defaults"
 import { deleteTheme, saveTheme, setPrefs } from "~/live/prefs"
 import { iconFromFile } from "~/live/icon-file"
-import { seatOf } from "~/live/seats"
 import { checkComputer, computerSettings, setContextLine, setHooks } from "~/live/computer"
-import { setTerminalHelpers } from "~/live/starts"
 import { markSeenIn, seenIn } from "@kiwi/app/threads.ts"
 import { followKey, followMark } from "~/live/threads"
 import { lastIn, seenKeyOf } from "~/live/seen-place"
@@ -234,12 +231,6 @@ export function makeActions(): Actions {
     setAgentColor: (code, name, color) => attempt("Colour not changed", async () => (await manage()).setAgentColor(code, name, color)),
     setNickname: (code, name, nickname) => attempt("Nickname not changed", async () => (await manage()).setNickname(code, name, nickname)),
     setPowers: (code, name, powers) => attempt("Not changed", async () => (await manage()).setPowers(code, name, powers)),
-    showAgent: async (code, name) => {
-      const seat = seatOf(need(code).roomId, name)
-      if (!seat) return "It isn't running in a window on this computer."
-      const r = await showSeat(seat).catch((): ShowResult => ({ ok: false, why: "failed" }))
-      return noteFor(seat.place, r)
-    },
     addRoom: (code, typed, members) => tried("Room not made", async () => (await manage()).addRoom(code, typed, members)),
     setRoomMembers: async (code, id, members) =>
       (await tried("Who's in didn't change", async () => {
@@ -392,7 +383,6 @@ export function makeActions(): Actions {
     checkComputer,
     computerSettings,
     launchedFrom,
-    setTerminalHelpers: (id, on) => attempt(on ? "Couldn't download the helpers" : "Couldn't remove the helpers", () => setTerminalHelpers(id, on)),
     setContextLine: (on) => attempt("Couldn't change it", () => setContextLine(on)),
   }
 }

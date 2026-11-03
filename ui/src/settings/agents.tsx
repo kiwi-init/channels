@@ -1,11 +1,10 @@
 import { useState } from "react"
 
-import type { TerminalId, TerminalRow } from "@kiwi/core/terminals.ts"
 import { cx, Toggle } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { LOGOS } from "~/kit/logos"
 import { RoleFace } from "~/kit/role-face"
-import type { AgentStarts, Finding, Harness, ThisComputer } from "~/model"
+import type { Finding, Harness, ThisComputer } from "~/model"
 import { useApp } from "~/nav"
 import { Group, Row } from "~/settings/controls"
 import { Personalities } from "~/settings/personalities"
@@ -91,53 +90,6 @@ function KiwiState({ computer }: { computer: ThisComputer | null }) {
   return <span className="set-kiwi">{computer.kiwi.version ? `kiwi ${computer.kiwi.version} · running` : "kiwi · running"}</span>
 }
 
-const HELPERS: Record<TerminalId, { download: string; on: string; off: string }> = {
-  rex: {
-    download: "Download Rex Helpers",
-    on: "A seat that needs you marks its Rex tab; Needs you opens it.",
-    off: "Mark a seat that needs you in its Rex tab, and open it from Needs you.",
-  },
-  tmux: {
-    download: "Download Tmux Helpers",
-    on: "A seat that needs you marks its tmux window; prefix K jumps to it.",
-    off: "Mark a seat that needs you in tmux's window list, and jump to it with prefix K.",
-  },
-}
-
-const ORDER: TerminalId[] = ["rex", "tmux"]
-
-const helpersOf = (starts: AgentStarts | null): (TerminalRow & { helpers: "on" | "off" })[] =>
-  starts ? ORDER.flatMap((id) => starts.terminals.filter((t) => t.id === id)).filter((t): t is TerminalRow & { helpers: "on" | "off" } => t.helpers !== null && (t.found || t.helpers === "on")) : []
-
-function Helpers({ helpers }: { helpers: (TerminalRow & { helpers: "on" | "off" })[] }) {
-  const { app } = useApp()
-  return (
-    <>
-      {helpers.map((t) => {
-        const on = t.helpers === "on"
-        const note =
-          on && !t.found ? `${t.name} isn't on this computer anymore. Remove takes back what Kiwi wrote.` : on && !t.running ? `${t.name} isn't running. Kiwi picks it up once it starts.` : null
-        return (
-          <Row
-            key={t.id}
-            label={t.name}
-            hint={
-              <>
-                {on ? HELPERS[t.id].on : HELPERS[t.id].off}
-                {note && <span className="set-row-note">{note}</span>}
-              </>
-            }
-          >
-            <button type="button" className="btn is-quiet is-small" onClick={() => app.actions.setTerminalHelpers(t.id, !on)}>
-              {on ? "Remove" : HELPERS[t.id].download}
-            </button>
-          </Row>
-        )
-      })}
-    </>
-  )
-}
-
 function CheckComputer() {
   const { app } = useApp()
   const [state, setState] = useState<"idle" | "running" | "failed" | Finding[]>("idle")
@@ -195,12 +147,11 @@ function FindingRow({ f }: { f: Finding }) {
 
 export function AgentsSection() {
   const { app } = useApp()
-  const { starts, computer, actions } = app
+  const { computer, actions } = app
   const hooks = computer?.hooks ?? []
   const loose = hooks.filter((k) => !app.harnesses.some((h) => h.id === k.harness))
   const here = app.harnesses.filter((h) => h.installed || hooks.some((k) => k.harness === h.id))
   const away = app.harnesses.filter((h) => !here.includes(h))
-  const helpers = helpersOf(starts)
   return (
     <Page title="Agents">
       <Personalities />
@@ -215,15 +166,14 @@ export function AgentsSection() {
         {away.length > 0 && <p className="set-harness-away">Not installed: {away.map((h) => h.label).join(", ")}</p>}
       </Group>
 
-      {(computer || helpers.length > 0) && (
+      {computer && (
         <Group title="This computer">
-          {computer && <CheckComputer />}
-          {computer && computer.contextLine !== null && (
+          <CheckComputer />
+          {computer.contextLine !== null && (
             <Row label="Ask agents for a checkpoint past 250k context" hint="An agent here past 250k tokens is asked to write where its work stands before it ends its turn.">
               <Toggle label="Ask agents for a checkpoint past 250k context" on={computer.contextLine} onChange={actions.setContextLine} />
             </Row>
           )}
-          <Helpers helpers={helpers} />
         </Group>
       )}
     </Page>

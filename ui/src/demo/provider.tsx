@@ -10,7 +10,7 @@ import { longFeed } from "~/demo/long"
 import { demoAround, demoFetchOlder, demoOlder } from "~/demo/older"
 import { withSpecs } from "~/demo/specs"
 import { homeOf } from "~/home"
-import type { Account, Actions, AgentStarts, App, Enrolling, Finding, GithubSignIn, ThisComputer, Channel, ChannelTile, GoneChannel, Message, Prefs, Spec, Task } from "~/model"
+import type { Account, Actions, App, Enrolling, Finding, GithubSignIn, ThisComputer, Channel, ChannelTile, GoneChannel, Message, Prefs, Spec, Task } from "~/model"
 import { deletedTheme, savedTheme } from "~/theme/themes"
 import { announce } from "~/kit/toasts"
 import { muteKey } from "~/live/mute"
@@ -56,13 +56,6 @@ const FINDINGS: Finding[] = [
   { ok: true, what: "relay    wss://relay.kiwi.sh answers" },
   { ok: false, what: "Codex's hooks are from an older kiwi", how: "Update them in Settings > Agents > Harnesses." },
 ]
-
-const STARTS: AgentStarts = {
-  terminals: [
-    { id: "rex", name: "Rex", found: true, running: true, helpers: "on" },
-    { id: "tmux", name: "tmux", found: true, running: false, helpers: "off" },
-  ],
-}
 
 function withLeftOut(c: Channel): Channel {
   const at = Date.now() - 20_000
@@ -223,7 +216,6 @@ export type Scenario =
   | "long"
   | "step"
   | "asked-of"
-  | "since"
   | "left-out"
   | "events"
   | "handoff"
@@ -266,50 +258,44 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
         ? longFeed(DEMO_CHANNEL)
         : scenario === "step"
           ? withStep(DEMO_CHANNEL)
-          : scenario === "since"
-            ? {
-                ...DEMO_CHANNEL,
-                rooms: DEMO_CHANNEL.rooms.map((r) => (r.id === "general" ? { ...r, unread: 9, seen: 109 } : r.id === "launch-plan" ? { ...r, seen: 109 } : r)),
-                directs: DEMO_CHANNEL.directs.map((d) => (d.unread ? { ...d, seen: 109 } : d)),
-              }
-            : scenario === "asked-of"
-              ? { ...DEMO_CHANNEL, asks: DEMO_CHANNEL.asks.map((a) => (a.kind === "question" ? { ...a, label: a.label.replace(/ for you$/, ""), askedOf: ["maya"] } : a)) }
-              : scenario === "left-out"
-                ? withLeftOut(DEMO_CHANNEL)
-                : scenario === "events"
-                  ? withEvents(DEMO_CHANNEL)
-                  : scenario === "handoff"
-                    ? withHandoff(DEMO_CHANNEL)
-                    : scenario === "opening"
-                      ? { ...DEMO_CHANNEL, messages: [], tasks: [], asks: [], connection: "connecting" as const, loading: true }
-                      : scenario === "held"
-                        ? { ...DEMO_CHANNEL, hold: { note: "Waiting on the release key.", by: "jow", at: Date.now() - 40 * 60_000 } }
-                        : scenario === "compact" || scenario === "compacted"
-                          ? withCompact(DEMO_CHANNEL, scenario === "compacted")
-                          : scenario === "specs" || scenario === "spec-changed"
-                            ? withSpecs(DEMO_CHANNEL, scenario === "spec-changed")
-                            : scenario === "forgotten-computer"
-                              ? {
-                                  ...DEMO_CHANNEL,
-                                  asks: [
-                                    {
-                                      kind: "join" as const,
-                                      id: "join-dudu",
-                                      at: Date.now() - 30 * 60_000,
-                                      name: "dudu",
-                                      who: "agent" as const,
-                                      harness: "claude" as const,
-                                      runs: "Claude Code · claude-opus-5-5",
-                                      machine: "MacBook-Pro-de-Davi",
-                                      sponsor: "harry",
-                                      revoked: true as const,
-                                      said: { machine: "macOS arm64 · 10 cores · 16 GB", repo: "Davi-Vicente/D2N@main", outside: true },
-                                      code: "604-218",
-                                    },
-                                    ...DEMO_CHANNEL.asks,
-                                  ],
-                                }
-                              : DEMO_CHANNEL,
+          : scenario === "asked-of"
+            ? { ...DEMO_CHANNEL, asks: DEMO_CHANNEL.asks.map((a) => (a.kind === "question" ? { ...a, label: a.label.replace(/ for you$/, ""), askedOf: ["maya"] } : a)) }
+            : scenario === "left-out"
+              ? withLeftOut(DEMO_CHANNEL)
+              : scenario === "events"
+                ? withEvents(DEMO_CHANNEL)
+                : scenario === "handoff"
+                  ? withHandoff(DEMO_CHANNEL)
+                  : scenario === "opening"
+                    ? { ...DEMO_CHANNEL, messages: [], tasks: [], asks: [], connection: "connecting" as const, loading: true }
+                    : scenario === "held"
+                      ? { ...DEMO_CHANNEL, hold: { note: "Waiting on the release key.", by: "jow", at: Date.now() - 40 * 60_000 } }
+                      : scenario === "compact" || scenario === "compacted"
+                        ? withCompact(DEMO_CHANNEL, scenario === "compacted")
+                        : scenario === "specs" || scenario === "spec-changed"
+                          ? withSpecs(DEMO_CHANNEL, scenario === "spec-changed")
+                          : scenario === "forgotten-computer"
+                            ? {
+                                ...DEMO_CHANNEL,
+                                asks: [
+                                  {
+                                    kind: "join" as const,
+                                    id: "join-dudu",
+                                    at: Date.now() - 30 * 60_000,
+                                    name: "dudu",
+                                    who: "agent" as const,
+                                    harness: "claude" as const,
+                                    runs: "Claude Code · claude-opus-5-5",
+                                    machine: "MacBook-Pro-de-Davi",
+                                    sponsor: "harry",
+                                    revoked: true as const,
+                                    said: { machine: "macOS arm64 · 10 cores · 16 GB", repo: "Davi-Vicente/D2N@main", outside: true },
+                                    code: "604-218",
+                                  },
+                                  ...DEMO_CHANNEL.asks,
+                                ],
+                              }
+                            : DEMO_CHANNEL,
       DEMO_EMPTY,
       DEMO_WAITING,
       { ...DEMO_EMPTY, code: "interlinked", title: "interlinked" },
@@ -370,7 +356,6 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
 
 export function useDemo(scenario: Scenario, open: string | null, look: Partial<Prefs> = {}): App {
   const [state, setState] = useState(() => initial(scenario, look))
-  const [starts, setStarts] = useState(STARTS)
   const [ownPersonalities, setOwnPersonalities] = useState<Personality[]>([])
   const [computer, setComputer] = useState(COMPUTER)
 
@@ -671,7 +656,6 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       setWake: (code, name, on) => edit(code, (c) => ({ ...c, people: c.people.map((p) => (p.name === name ? { ...p, wakes: on } : p)) })),
       setNickname: (code, name, nickname) => edit(code, (c) => ({ ...c, people: c.people.map((p) => (p.name === name ? { ...p, display: nickname?.trim() || undefined } : p)) })),
       setPowers: (code, name, powers) => edit(code, (c) => ({ ...c, people: c.people.map((p) => (p.name === name ? { ...p, ...powers } : p)) })),
-      showAgent: async () => null,
       addRoom: (code, name, members) => {
         edit(code, (c) => ({ ...c, rooms: [...c.rooms, { id: name, name, unread: 0, mentions: 0, ...(members?.length ? { members: ["jow", ...members] } : {}) }] }))
         return Promise.resolve(name)
@@ -791,7 +775,6 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       deleteTheme: (id) => setState((s) => ({ ...s, prefs: { ...s.prefs, ...deletedTheme(s.prefs, id) } })),
       savePersonalities: setOwnPersonalities,
       setHooks: (harness, on) => setComputer((c) => ({ ...c, hooks: c.hooks.map((h) => (h.harness === harness ? { ...h, state: on ? "installed" : "off" } : h)) })),
-      setTerminalHelpers: (id, on) => setStarts((s) => ({ ...s, terminals: s.terminals.map((t) => (t.id === id ? { ...t, helpers: on ? "on" : "off" } : t)) })),
       setContextLine: (on) => setComputer((c) => ({ ...c, contextLine: on })),
       launchedFrom: async (ids) => DEMO_LAUNCHED.filter((a) => ids.includes(a.from)),
       computerSettings: () =>
@@ -822,7 +805,6 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
     prefs: state.prefs,
     harnesses: HARNESSES,
     personas: PERSONAS,
-    starts,
     ownPersonalities,
     computer,
     enrolling: state.enrolling ?? null,

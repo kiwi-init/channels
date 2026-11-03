@@ -1,29 +1,8 @@
-import { useState, type FormEvent, type KeyboardEvent } from "react"
-
 import "~/styles/start.css"
 import { cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import type { ChannelTile, HomeAsk, HomeChannel } from "~/model"
 import { useApp } from "~/nav"
-
-const PICKED = "kiwi:home-to"
-
-function remembered(): string | null {
-  try {
-    return localStorage.getItem(PICKED)
-  } catch {
-    // No storage here (a private window, a preview): Home picks the first channel.
-    return null
-  }
-}
-
-function remember(code: string): void {
-  try {
-    localStorage.setItem(PICKED, code)
-  } catch {
-    // Without storage the pick lasts until Home closes, which is fine.
-  }
-}
 
 export function Welcome() {
   const { app } = useApp()
@@ -78,7 +57,6 @@ function Hud({ tiles, home }: { tiles: readonly ChannelTile[]; home: readonly Ho
             ))}
           </ol>
         )}
-        {members.length > 0 && <Bar members={members} byCode={byCode} />}
         <ul className="home-chips" aria-label="Your channels">
           {tiles.map((t) => (
             <li key={t.code}>
@@ -145,66 +123,6 @@ function AskRow({ tile, ask }: { tile: ChannelTile; ask: HomeAsk }) {
         )}
       </span>
     </li>
-  )
-}
-
-function Bar({ members, byCode }: { members: readonly ChannelTile[]; byCode: ReadonlyMap<string, HomeChannel> }) {
-  const { app, toast } = useApp()
-  const [picked, setPicked] = useState(() => {
-    const kept = remembered()
-    return members.some((t) => t.code === kept) ? kept! : members[0]!.code
-  })
-  const [text, setText] = useState("")
-  const code = members.some((t) => t.code === picked) ? picked : members[0]!.code
-  const tile = members.find((t) => t.code === code)!
-  const summary = byCode.get(code)
-  const to = summary?.leadName ?? null
-  const ready = !!summary && !summary.loading
-  const pick = (next: string) => {
-    setPicked(next)
-    remember(next)
-  }
-  const sendNow = () => {
-    const body = text.trim()
-    if (!body || !summary || !ready) return
-    app.actions.send(code, summary.lead ? { kind: "dm", with: summary.lead } : { kind: "room", room: "general" }, body)
-    setText("")
-    toast(summary.lead ? `Sent to ${to} in ${tile.title}` : `Sent to #general in ${tile.title}`)
-  }
-  const submit = (e: FormEvent) => {
-    e.preventDefault()
-    sendNow()
-  }
-  const keys = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.nativeEvent.isComposing || e.key !== "Enter" || e.shiftKey) return
-    e.preventDefault()
-    sendNow()
-  }
-  return (
-    <form className="home-bar" onSubmit={submit}>
-      <label className="home-pick">
-        <span className="home-pick-name">{tile.title}</span>
-        <Icon name="chevron" size={10} />
-        <select aria-label="Channel" value={code} onChange={(e) => pick(e.target.value)}>
-          {members.map((t) => (
-            <option key={t.code} value={t.code}>
-              {t.title}
-            </option>
-          ))}
-        </select>
-      </label>
-      <textarea
-        rows={1}
-        value={text}
-        aria-label={to ? `Tell ${to}` : "Write to #general"}
-        placeholder={!ready ? "Connecting…" : to ? `Tell ${to}…` : "Write to #general…"}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={keys}
-      />
-      <button type="submit" className={cx("home-send", text.trim() && ready && "is-ready")} aria-label="Send" title="Send (Enter)" disabled={!text.trim() || !ready}>
-        <Icon name="send" />
-      </button>
-    </form>
   )
 }
 

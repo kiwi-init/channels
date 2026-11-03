@@ -26,7 +26,6 @@ import { OpenPending, pendingTitle } from "~/live/pending"
 import { usePrefs } from "~/live/prefs"
 import { useComputer } from "~/live/computer"
 import { useDeviceLists } from "~/live/devices"
-import { useStarts } from "~/live/starts"
 import { useGone, useHome, useOpened } from "~/live/store"
 import { HomeMembers } from "~/live/home"
 import type { App, ChannelTile } from "~/model"
@@ -113,7 +112,6 @@ export function useLive(open: string | null): App {
   const harnesses = useHarnesses()
   const ownPersonalities = useOwnPersonalities()
   const personas = usePersonas(ownPersonalities)
-  const starts = useStarts()
   const computer = useComputer()
   const enrolling = useEnrolling()
   const signIn = useGithubSignIn()
@@ -123,8 +121,8 @@ export function useLive(open: string | null): App {
   const lost = useGone()
   const gone = !channel && lost && lost.code === open ? lost : null
   return useMemo(
-    () => ({ account, channels, home, channel, ...(gone ? { gone } : {}), prefs, harnesses, personas, starts, ownPersonalities, computer, enrolling, signIn, actions }),
-    [account, channels, home, channel, gone, prefs, harnesses, personas, starts, ownPersonalities, computer, enrolling, signIn, actions]
+    () => ({ account, channels, home, channel, ...(gone ? { gone } : {}), prefs, harnesses, personas, ownPersonalities, computer, enrolling, signIn, actions }),
+    [account, channels, home, channel, gone, prefs, harnesses, personas, ownPersonalities, computer, enrolling, signIn, actions]
   )
 }
 

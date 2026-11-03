@@ -61,7 +61,7 @@ describe("window.kiwi over Electrobun's RPC, both ends as the app wires them", (
   test("calls reach main's handlers with their arguments, and answers and errors come back", async () => {
     expect(await kiwi.installUpdate()).toBe(false);
     expect(await kiwi.saveFile("notes.md", "hi")).toBe("notes.md");
-    await expect(kiwi.terminalHelpers("vim" as "rex", "on")).rejects.toThrow("terminalHelpers takes rex or tmux, and on or off");
+    await expect(kiwi.setContextLine("maybe" as "on")).rejects.toThrow("setContextLine takes on or off");
     await expect(kiwi.openExternal("file:///etc/passwd")).rejects.toThrow("only http(s) links open outside");
     expect(shell.did).toEqual(["restart", "save notes.md"]);
   });

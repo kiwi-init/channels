@@ -114,12 +114,6 @@ html .set-body {
   font: var(--t-meta) / 1.45 var(--ui);
 }
 
-.set-row-note {
-  display: block;
-  margin-top: 2px;
-  color: var(--ink-2);
-}
-
 .set-none {
   padding: 8px 0;
   color: var(--ink-3);

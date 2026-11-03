@@ -3,9 +3,9 @@ import { delimiter } from "node:path";
 import { KNOWN_HARNESSES, type HarnessRow, type KnownHarness } from "@kiwi/core/harnesses.ts";
 import { compareVersions } from "@kiwi/core/versions.ts";
 import { viaOf, wakePath, wakeWords } from "@kiwi/core/wake.ts";
-import { REWAKE_SINCE } from "../hooks/install/claude.ts";
-import { kimiHome } from "../kimi-server.ts";
-import { loginPath } from "./shell.ts";
+import { REWAKE_SINCE } from "./hooks/install/claude.ts";
+import { kimiHome } from "./kimi-server.ts";
+import { loginPath } from "./login-shell.ts";
 
 interface Binary {
   bin: string;

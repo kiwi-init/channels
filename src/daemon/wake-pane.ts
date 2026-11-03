@@ -1,5 +1,5 @@
 import type { WakeHarness } from "@kiwi/core/wake.ts";
-import type { Pane } from "../terminals/plugin.ts";
+import type { Pane } from "../tmux-pane.ts";
 
 const STILL_MS = 700;
 const BUSY = /esc to (?:cancel|interrupt|stop)|ctrl\+c to (?:stop|cancel|interrupt)|press esc to|\bworking\.\.\.|\bthinking\.\.\./i;

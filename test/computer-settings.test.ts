@@ -26,7 +26,6 @@ describe("a computer's settings, as another of the person's devices reads them",
         "/c": { alias: "gone", as: "ghost" },
         "/d": { alias: "dev", as: "heron" },
       },
-      terminals: { helpers: { tmux: "on" } },
       wakeOff: [wakeKey("ops", "orca")],
       wakeHooks: { [wakeKey("dev", "heron")]: { url: "https://hook.example/secret", authorization: "Bearer s3cret" } },
     };

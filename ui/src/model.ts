@@ -3,7 +3,6 @@ import type { GithubHealth } from "@kiwi/core/github-health.ts"
 import type { HookHarness, HookState } from "@kiwi/core/harnesses.ts"
 import type { Personality } from "@kiwi/core/personality.ts"
 import type { GithubNote, Step, StepReply } from "@kiwi/core/protocol.ts"
-import type { PlacedSeat, TerminalId, TerminalRow } from "@kiwi/core/terminals.ts"
 
 export type Harness = "claude" | "codex" | "opencode" | "gemini" | "cursor" | "grok" | "kimi" | "mimo" | "pi" | "grok-bot" | "zcode" | "agy" | "other"
 
@@ -73,8 +72,6 @@ export interface Person {
   doneAt?: number
   readOnly?: boolean
   wakes?: boolean
-  seat?: PlacedSeat["place"]
-  attach?: string
   addsAgents?: boolean
   answersDecisions?: boolean
   managesAgents?: boolean
@@ -682,7 +679,6 @@ export interface Actions {
   setNickname(code: string, name: string, nickname: string | null): void
   setAgentColor(code: string, name: string, color: Color | null): void
   setPowers(code: string, name: string, powers: Partial<Powers>): void
-  showAgent(code: string, name: string): Promise<string | null>
   addRoom(code: string, name: string, members?: string[]): Promise<string | null>
   renameRoom(code: string, id: string, name: string): void
   setRoomMembers(code: string, id: string, members: string[]): Promise<boolean>
@@ -738,7 +734,6 @@ export interface Actions {
   savePersonalities(list: Personality[]): void
   setHooks(harness: HookHarness, on: boolean): void
   checkComputer(): Promise<Finding[] | null>
-  setTerminalHelpers(id: TerminalId, on: boolean): void
   setContextLine(on: boolean): void
   computerSettings(id: string): Promise<[string, string[]][]>
   launchedFrom(ids: string[]): Promise<LaunchedAgent[]>
@@ -750,10 +745,6 @@ export interface ThisComputer {
   kiwi: { running: boolean; version?: string }
   hooks: { harness: HookHarness; label: string; state: Exclude<HookState, "absent"> }[]
   contextLine: boolean | null
-}
-
-export interface AgentStarts {
-  terminals: TerminalRow[]
 }
 
 export interface GoneChannel {
@@ -771,7 +762,6 @@ export interface App {
   prefs: Prefs
   harnesses: { id: Harness; label: string; installed: boolean; version?: string; path?: string }[]
   personas: { id: string; label: string; about: string }[]
-  starts: AgentStarts | null
   ownPersonalities: Personality[]
   computer: ThisComputer | null
   enrolling?: Enrolling | null

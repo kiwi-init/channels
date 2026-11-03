@@ -11,7 +11,7 @@ import { kimiServer, promptKimi } from "../kimi-server.ts";
 import { wakeArgv, wakeKey, wakePath, wakePrompt, type WakePath, type WakeVia } from "@kiwi/core/wake.ts";
 import { withDeadline, type DaemonWake } from "./protocol.ts";
 import { seatRecordFor, wakeOn } from "./reach.ts";
-import { tmuxPane } from "../terminals/tmux/type.ts";
+import { tmuxPane } from "../tmux-pane.ts";
 import { typeWake } from "./wake-pane.ts";
 import type { Seat } from "./seat.ts";
 

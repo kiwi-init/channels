@@ -6,7 +6,7 @@ import { hooksListen } from "./install/claude.ts";
 import { extraInstalled } from "./install/extra.ts";
 import { mimoInstalled } from "./install/mimo.ts";
 import { piInstalled } from "./install/pi.ts";
-import { tmuxPlaceFrom } from "../terminals/tmux/locate.ts";
+import { tmuxPlaceFrom } from "../tmux-pane.ts";
 
 function checkEachTurn(mc: string): string {
   return `Run \`${COMMANDS.join(mc)}\` at the start of every turn and again before you end one. It prints the messages waiting for you, or says there are none.`;

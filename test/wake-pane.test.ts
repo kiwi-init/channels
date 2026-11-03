@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { isWakeVia, wakePath, wakeWords } from "@kiwi/core/wake.ts";
 import { promptState, typeWake } from "../src/daemon/wake-pane.ts";
 import { howMessagesReachYou } from "../src/hooks/reach.ts";
-import type { Pane } from "../src/terminals/plugin.ts";
+import type { Pane } from "../src/tmux-pane.ts";
 
 const screen = (name: string): string => readFileSync(join(import.meta.dir, "fixtures", "agy-screens", `${name}.txt`), "utf8");
 
