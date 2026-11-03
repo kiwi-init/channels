@@ -14,7 +14,7 @@ import { Keyring, type KeyHost } from "../desktop/src/keyring.ts";
 import { acceptSeat, channelAccess, withAccess } from "../desktop/src/seats.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { memoryBudget } from "./check.ts";
-import { joinPerson, setupChannel } from "./owner.ts";
+import { joinDevice, joinPerson, setupChannel } from "./owner.ts";
 
 setDefaultTimeout(60_000);
 
@@ -122,5 +122,28 @@ test("a room that took in a member later comes back for its maker and for that m
       ).toEqual([s.owner.pk, tia.id.pk].sort());
       expect(opened.find((m) => m.seq === said)?.body).toBe("tia is in");
     }
+  }
+});
+
+test("a room its maker made on one device comes back on that person's other device after its restart (T551)", async () => {
+  const s = await setupChannel(relay);
+  const phone = await joinDevice(s, s.person, s.owner.name);
+  const room = await s.ownerCh.makeRoom("explorations", []);
+  const said = await s.ownerCh.send("from my desk", { room });
+  const fromPhone = await phone.ch.send("from my phone", { room });
+
+  const before = [...fold((await phone.ch.history(0)).messages, rosterOf(await s.ownerCh.members())).rejected];
+  for (const rows of await rowsOf(phone.ch, phone.ch.access)) {
+    const opened = await restart(phone.ch.access, phone.id, rows);
+    const state = fold(opened, rosterOf(await s.ownerCh.members()));
+    expect([...state.rejected]).toEqual(before);
+    expect(
+      state.rooms
+        .get(room)
+        ?.members?.map((m) => m.pk)
+        .sort(),
+    ).toEqual([s.owner.pk, phone.id.pk].sort());
+    expect(opened.find((m) => m.seq === said)?.body).toBe("from my desk");
+    expect(opened.find((m) => m.seq === fromPhone)?.body).toBe("from my phone");
   }
 });
