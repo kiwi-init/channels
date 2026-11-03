@@ -870,6 +870,7 @@ html .add-who-meta,
 html .theme-when,
 html .now-counts,
 html .lane-sub,
+html .home-chip-needs,
 html .needs-until {
   font-family: var(--mono);
   letter-spacing: -0.01em;
