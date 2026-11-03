@@ -499,11 +499,7 @@ function JoinAskCard({ channel, ask, link }: { channel: Channel; ask: JoinAsk; l
           {!agent && (
             <Opt
               label="Full trust"
-              hint={
-                !only && trusted(can)
-                  ? "They write and work, add agents, answer decisions and manage agents. The channel stays yours."
-                  : "Every power at once, for someone you'd trust with your life. The channel stays yours."
-              }
+              hint={!only && trusted(can) ? "They write and work, add agents, answer decisions and manage agents. The channel stays yours." : "Every power below at once. The channel stays yours."}
             >
               {(id) => (
                 <Toggle

@@ -238,7 +238,6 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
               {nickname(channel, m.from)}
             </button>
             {who?.role && who.role.toLowerCase() !== nickname(channel, m.from).toLowerCase() && <span className="msg-role">{who.role}</span>}
-            {who?.runs && <span className="msg-runs">{who.runs}</span>}
             {m.said && <span className={cx("msg-said", `is-${m.said.tone}`)}>{m.said.text}</span>}
             <time className="msg-time" dateTime={new Date(m.at).toISOString()}>
               {clock(m.at)}

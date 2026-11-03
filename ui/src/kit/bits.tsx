@@ -178,9 +178,6 @@ export function Loading() {
 export function Toggle({ on, onChange, label, id }: { on: boolean; onChange: (on: boolean) => void; label?: string; id?: string }) {
   return (
     <button id={id} type="button" role="switch" aria-checked={on} aria-label={label} className={cx("toggle", on && "is-on")} onClick={() => onChange(!on)}>
-      <span className="toggle-word" aria-hidden="true">
-        {on ? "On" : "Off"}
-      </span>
       <span className="toggle-track" aria-hidden="true">
         <span className="toggle-knob" />
       </span>

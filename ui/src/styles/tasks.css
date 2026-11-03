@@ -647,12 +647,6 @@
   margin-bottom: 0;
 }
 
-.task-quiet {
-  margin-top: 6px;
-  color: var(--ink-3);
-  font: var(--t-ui) var(--ui);
-}
-
 .now {
   margin-bottom: 12px;
   padding: 8px var(--card-pad);
@@ -1030,12 +1024,6 @@ button.lane-row:hover {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-}
-
-.lane-empty {
-  padding: 0 8px;
-  color: var(--ink-3);
-  font: var(--t-ui) var(--ui);
 }
 
 .lane-recent {

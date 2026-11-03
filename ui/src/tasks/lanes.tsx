@@ -57,7 +57,6 @@ function LaneCard({ channel, lane }: { channel: Channel; lane: Lane }) {
   const context = app.computer?.contextLine ? contextOf(p) : null
   const line = live?.text ?? (p.presence === "online" ? restOf(p) : "offline")
   const sub = [p.sponsor ? `for ${nickname(channel, p.sponsor)}` : null, p.model].filter(Boolean).join(" · ")
-  const empty = !lane.current.length && !lane.next.length && !lane.watching.length
   return (
     <section className="lane" aria-label={shown(p)}>
       <button type="button" className="lane-head" onClick={() => go({ to: "panel", panel: { kind: "person", name: p.name } })}>
@@ -114,7 +113,6 @@ function LaneCard({ channel, lane }: { channel: Channel; lane: Lane }) {
           </ul>
         </div>
       )}
-      {empty && <p className="lane-empty">Nothing on its plate.</p>}
       {lane.recent.length > 0 && (
         <ul className="lane-recent" aria-label="Recent">
           {lane.recent.map((e) => (

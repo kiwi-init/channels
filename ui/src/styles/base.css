@@ -40,6 +40,36 @@ ol {
   list-style: none;
 }
 
+h1,
+h2,
+h3,
+h4 {
+  text-wrap-style: balance;
+}
+
+p,
+li,
+dd,
+figcaption,
+blockquote {
+  text-wrap-style: pretty;
+}
+
+.av img,
+.tile img,
+.folder-mini img,
+.palette-tile img,
+.cpanel-icon-tile img,
+.msg-images img,
+.md img[role="button"],
+.react-gif img,
+.gifs-item img,
+.compose-file img,
+.annot-thumb img {
+  outline: 1px solid var(--img-edge);
+  outline-offset: -1px;
+}
+
 button,
 input,
 textarea,
@@ -729,11 +759,6 @@ kbd {
   color: var(--ink);
 }
 
-.toggle-word {
-  min-width: 22px;
-  text-align: right;
-}
-
 .toggle-track {
   position: relative;
   display: block;
@@ -817,7 +842,6 @@ html .panel-sub,
 html .msg-time,
 html .msg-time-hover,
 html .msg-role,
-html .msg-runs,
 html .msg-thread-n,
 html .thread-count,
 html .working,
@@ -856,7 +880,6 @@ html .side-status,
 html .msg-time,
 html .msg-time-hover,
 html .msg-role,
-html .msg-runs,
 html .thread-count,
 html .working,
 html .sys time,
@@ -884,7 +907,6 @@ html .side-role,
 html .msg-time,
 html .msg-time-hover,
 html .msg-role,
-html .msg-runs,
 html .thread-count,
 html .chip-id,
 html .chip-meta,
@@ -1106,7 +1128,7 @@ html .feed-jump:active {
 .task-pick-row,
 .stash-row,
 .mention-row {
-  transition: background var(--slow) var(--ease);
+  transition: background var(--fast) var(--ease);
 }
 
 .side-row:hover,
@@ -1163,7 +1185,6 @@ html .feed-jump:active {
 html .top-meta,
 html .board-meta,
 html .msg-role,
-html .msg-runs,
 html .msg-time,
 html .chip-meta,
 html .needs-meta,
@@ -1198,11 +1219,12 @@ html .person-kind {
   border: 0;
   border-radius: 50%;
   background: var(--member);
-  transition: transform var(--fast);
+  transition: outline-color var(--fast);
 }
 
 .swatch:hover {
-  transform: scale(1.12);
+  outline: 2px solid var(--line-3);
+  outline-offset: 2px;
 }
 
 .swatch[aria-pressed="true"] {

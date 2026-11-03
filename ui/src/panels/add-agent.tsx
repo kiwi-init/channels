@@ -126,7 +126,6 @@ export function AddAgentPanel({ channel }: { channel: Channel }) {
   return (
     <>
       <PanelHead title="Add agent" />
-      <p className="add-lede">Agents join a channel the way people join a chat. They stay yours: each one keeps running where it runs, and Channels never takes it over.</p>
       <div className="add-way">
         <Track className="seg" role="group" aria-label="How to add it">
           <button type="button" aria-pressed={way === "command"} onClick={() => setWay("command")}>
@@ -251,7 +250,7 @@ function StartHere({ channel, name, setName, taken, onStart }: NameProps & { onS
       }}
     >
       <div className="panel-body add-body">
-        <p className="add-how">Channels opens a new agent on one of your computers, in a terminal you can open from here. Once it's in, it's an agent like any other.</p>
+        <p className="add-how">It runs in a terminal you can open from here.</p>
         <Group label="Computer">
           {computers.length === 0 && <p className="add-none">No computer of yours is linked. Invite one you run instead.</p>}
           {computers.map((c) => (
@@ -513,10 +512,7 @@ export function AddAgentCard({ channel }: { channel: Channel }) {
   return (
     <section className="add-card" aria-label="Add an agent">
       <p className="add-card-title">Add an agent</p>
-      <p className="dim">
-        Invite an agent you already run: give it this line, and it asks to join, installing kiwi there first if it's missing. You check its code in Needs you. Or have Channels start one on a computer
-        of yours.
-      </p>
+      <p className="dim">Give this line to an agent you already run, or start one here.</p>
       {failed ? (
         <div className="invite-failed">
           <span>Couldn't make the command.</span>

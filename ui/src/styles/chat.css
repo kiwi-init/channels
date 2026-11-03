@@ -98,7 +98,7 @@
   width: min(var(--col), calc(100% - 48px));
   margin: 12px auto 0;
   padding: 8px 8px 8px 16px;
-  border-radius: var(--r-ctl);
+  border-radius: var(--r-card);
   background: var(--decide-wash);
   color: var(--ink);
   font: var(--t-ui) var(--ui);
@@ -269,10 +269,6 @@
 }
 
 .msg-role,
-.msg-runs {
-  color: var(--ink-2);
-}
-
 .msg-time {
   color: var(--ink-3);
   font-variant-numeric: tabular-nums;
@@ -775,7 +771,7 @@ button.msg-image-spot:hover {
   width: 100%;
   padding: 8px 12px;
   border: 0;
-  border-radius: var(--r-ctl);
+  border-radius: var(--r-card);
   background: var(--wash-2);
   font: var(--t-ui) var(--sans);
   text-align: left;
@@ -1878,7 +1874,7 @@ button.msg-image-spot:hover {
   display: none;
 }
 
-.msg-head > :is(.msg-role, .msg-runs, .msg-said) ~ :is(.msg-runs, .msg-time)::before {
+.msg-head > :is(.msg-role, .msg-said) ~ .msg-time::before {
   content: "·";
   margin-right: 8px;
 }

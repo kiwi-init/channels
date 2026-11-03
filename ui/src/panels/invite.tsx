@@ -115,9 +115,7 @@ export function InvitePanel({ channel }: { channel: Channel }) {
               <div className="invite-power-text">
                 <span className="invite-power-label">Full trust</span>
                 <p className="invite-note">
-                  {trust
-                    ? "They write and work, add agents, answer decisions and manage agents. The channel stays yours."
-                    : "Every power at once, for someone you'd trust with your life. The channel stays yours."}
+                  {trust ? "They write and work, add agents, answer decisions and manage agents. The channel stays yours." : "Every power below at once. The channel stays yours."}
                 </p>
               </div>
               <Toggle

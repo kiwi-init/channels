@@ -63,7 +63,7 @@ export function TaskPanel({ channel, id }: { channel: Channel; id: number }) {
   const may = !memberOf(channel, channel.you)?.readOnly
   return (
     <>
-      <PanelHead title={`T${task.id}`} sub={`· ${task.archived ? "archived" : statusWord(task)}`} />
+      <PanelHead title={`T${task.id}`} />
       <div key={task.id} ref={body} className="panel-body task-body">
         <section className="panel-section">
           <h3 className="task-title">{task.title}</h3>
@@ -79,14 +79,14 @@ export function TaskPanel({ channel, id }: { channel: Channel; id: number }) {
         <Review key={`review-${task.id}`} channel={channel} task={task} />
         {task.history.length > 0 && <Activity key={`activity-${task.id}`} channel={channel} history={task.history} />}
         {may && <Footer key={`foot-${task.id}`} channel={channel} task={task} />}
-        <section className="panel-section task-talk">
-          <Heading>Conversation</Heading>
-          {talk.length === 0 ? (
-            <p className="task-quiet">No messages about this task yet.</p>
-          ) : (
-            talk.map((m, i) => <MessageRow key={m.seq} channel={channel} m={m} compact={compactAt(talk, i)} names={names} tasks={tasks} inThread quote={quoteOf(talk, i, bySeq)} onQuote={onQuote} />)
-          )}
-        </section>
+        {talk.length > 0 && (
+          <section className="panel-section task-talk">
+            <Heading>Conversation</Heading>
+            {talk.map((m, i) => (
+              <MessageRow key={m.seq} channel={channel} m={m} compact={compactAt(talk, i)} names={names} tasks={tasks} inThread quote={quoteOf(talk, i, bySeq)} onQuote={onQuote} />
+            ))}
+          </section>
+        )}
       </div>
       <Composer key={`compose-${task.id}`} channel={channel} where={{ kind: "task", task: task.id }} placeholder={`Message in T${task.id}`} />
     </>

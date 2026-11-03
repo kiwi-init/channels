@@ -67,6 +67,9 @@ The two built-in sides, from `tokens.css` and `channels.ts`:
 
 - `selection` is ink at 28%. `white` is for a knob or a glyph on a coloured
   fill.
+- `img-edge` rings every picture (faces, channel icons, message images,
+  GIFs, attachments) with a 1px outline set 1px in: pure black at 10% in
+  light, pure white at 10% in dark, never a tinted grey.
 - `c-red … c-brown` are the member colours: a person's initials and the
   tint behind them (`.av[data-color]`, 18%). They never colour chrome.
 - `h-claude, h-codex, h-gemini, h-opencode` colour the harness badge on an agent's face.
@@ -111,6 +114,8 @@ The two built-in sides, from `tokens.css` and `channels.ts`:
 - Numbers that line up (counts, times, sizes, diff stats) use
   `font-variant-numeric: tabular-nums` (`.num`).
 - Body text is antialiased with `optimizeLegibility`.
+- Headings balance their lines (`text-wrap-style: balance`); paragraphs, list
+  items and `dd` wrap `pretty`, so no word sits alone on the last line.
 
 ## 5. Radius, shadow, layout
 
@@ -131,6 +136,8 @@ The two built-in sides, from `tokens.css` and `channels.ts`:
   hover), `--r-card 14px` (cards), `--r-win 18px` (the composer, dialogs).
   `999px` is for counts and the toggle track only. Avatars of people are round;
   agents and channel tiles are rounded squares.
+- Nested corners are concentric: the outer radius is the inner radius plus
+  the padding between them (an `r-tag` letter 8px inside an `r-card` option).
 - Two shadows. `--shadow-pop` (`0 0 0 1px line-2`, then a soft black drop)
   for what floats over the page: dialogs, menus, the palette, the stash
   list, Jump to latest. `--shadow-float` for the chrome's controls and the
@@ -168,7 +175,8 @@ The two built-in sides, from `tokens.css` and `channels.ts`:
   (`useGlide` and `Track` in `ui/src/kit/glide.tsx`) instead of each option
   lighting up on its own.
 - Pressing a control dips it to 0.96 and it springs back on `--pop`. This is the
-  only scale on a resting control. Rows take hover at once and let it go slowly.
+  only scale on a resting control. Rows take hover at once and let it go on
+  `--fast`; nothing grows on hover.
 - A change is marked once: a `Dot` pops when its status moves and rings when it
   turns done (`done-ring`), a `Count` rolls to its new number (`count-roll`),
   both through `useMoved`, so opening a view animates nothing that didn't change.
@@ -212,7 +220,8 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   `--ctl` high, `t-ui`; `.input.is-mono` for codes and paths.
 - `Seg` (`.seg`): a `bg-3` track, the chosen segment on `wash-2` in `ink`
   and 600.
-- `Toggle`: a 36×22 track, `live` when on with a white knob.
+- `Toggle`: a 36×22 track, `live` when on with a white knob. No On/Off word
+  beside it: the track already says it.
 - `Dialog` / `DialogHead`: `bg-2`, `r-win`, `shadow-pop`, 480px (720px
   wide), rises in. A dialog is for one decision or a short form; Settings
   and the panels open in place.
@@ -421,6 +430,14 @@ surfaces.
 Don't: hard-code hex, add a font outside the Font setting, add glass, blur or decorative gradients,
 fill a button with the accent, add coloured shadows, or animate anything
 that isn't answering an action.
+
+Words: show the least that says what someone needs. A line the layout
+already says goes (a page subtitle that repeats its title, a status in a
+header and again in the rows below, the harness name on every message when
+the face carries its badge, an empty state under a composer that invites
+the same thing). Explain only what someone can't see: a consequence, a
+limit, a scope. More specific detail waits for a more specific intent (the
+profile, the task panel), not every row.
 
 Names: people read nicknames, and only nicknames. A handle (`cheery-fox`)
 is for agents and commands; a person never has to read one. Wherever the

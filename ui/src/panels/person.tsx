@@ -51,7 +51,7 @@ export function PersonPanel({ channel, name }: { channel: Channel; name: string 
 
 function Hero({ person }: { person: Person }) {
   const tags = [...new Set([person.you && "you", person.owner && "owner", person.role, person.readOnly && "reads only"].filter((t): t is string => !!t))]
-  const kind = person.kind === "agent" ? ["Agent", person.runs, person.model].filter(Boolean).join(" · ") : "Person"
+  const kind = person.kind === "agent" ? [person.runs, person.model].filter(Boolean).join(" · ") : ""
   return (
     <header className="person-hero">
       <Avatar person={person} size="lg" pip />
@@ -64,7 +64,7 @@ function Hero({ person }: { person: Person }) {
             </span>
           ))}
         </h3>
-        <p className="person-kind">{kind}</p>
+        {kind && <p className="person-kind">{kind}</p>}
       </div>
     </header>
   )
@@ -314,11 +314,7 @@ function Manage({ channel, person }: { channel: Channel; person: Person }) {
             <div className="person-trust">
               <Row
                 label="Full trust"
-                hint={
-                  trust
-                    ? "They write and work, add agents, answer decisions and manage agents. The channel stays yours."
-                    : "Every power at once, for someone you'd trust with your life. The channel stays yours."
-                }
+                hint={trust ? "They write and work, add agents, answer decisions and manage agents. The channel stays yours." : "Every power below at once. The channel stays yours."}
               >
                 {(id) => (
                   <Toggle

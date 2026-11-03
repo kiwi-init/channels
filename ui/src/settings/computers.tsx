@@ -282,7 +282,7 @@ export function ComputersSection() {
   const computers = [...account.computers].sort((a, b) => Number(b.thisOne) - Number(a.thisOne) || Number(b.online) - Number(a.online))
 
   return (
-    <Page title="Computers and phones" lede="Everywhere you are signed in. Agents run on computers; phones read and answer.">
+    <Page title="Computers and phones" lede="Agents run on computers; phones read and answer.">
       {!account.devices?.length && account.forgotHere && <DeviceNotices account={account} />}
       {account.devices && account.devices.length > 0 && (
         <>

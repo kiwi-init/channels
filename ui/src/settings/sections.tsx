@@ -33,7 +33,7 @@ export function AccountSection() {
   if (!account) return null
   const { actions } = app
   return (
-    <Page title="Account" lede="Who you are in every channel.">
+    <Page title="Account">
       <Group>
         <Row label="Name" hint="Shown next to everything you send. It's part of your key, so it stays the one you started with.">
           <span className="set-value">{account.name}</span>
@@ -155,7 +155,7 @@ export function AppearanceSection() {
   const { prefs, actions } = app
   const set = (p: Partial<Prefs>) => actions.setPrefs(p)
   return (
-    <Page title="Appearance" lede="Changes apply right away, on this computer only.">
+    <Page title="Appearance" lede="On this computer only.">
       <Group>
         <Row label="Mode" hint="System follows your computer's light or dark setting.">
           <Seg label="Mode" value={prefs.theme} options={THEMES} onChange={(theme) => set({ theme })} />
@@ -288,7 +288,7 @@ export function UpdatesSection() {
   if (!account) return null
   const update = account.update
   return (
-    <Page title="Updates" lede="Channels checks for a new version on its own.">
+    <Page title="Updates">
       <Group>
         <Row label="This version">
           <span className="set-value">{account.version}</span>
