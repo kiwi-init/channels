@@ -57,6 +57,8 @@ export type RemoteResult = { ok: true; harnesses: HarnessRow[]; bypass: boolean 
 export const NO_REMOTE_BYPASS =
   "this computer doesn't take bypass permissions from another device: turn on Allow bypass from your other devices in its Settings → New agents, or run kiwi launches bypass on there";
 
+const NO_SHELLS_YET = "this computer's kiwi doesn't open shells for your other devices yet: update kiwi there";
+
 const withoutBypass = (row: HarnessRow): HarnessRow => (row.options ? { ...row, options: { ...row.options, permission: row.options.permission.filter((p) => p !== "bypass") } } : row);
 
 export function remoteRunner(deps: RemoteDeps): (args: MachineArgs, id: string) => Promise<RemoteResult> {
@@ -88,6 +90,10 @@ export function remoteRunner(deps: RemoteDeps): (args: MachineArgs, id: string) 
         if (deps.starts) writePrivate(deps.starts, JSON.stringify(started));
         return deps.launch({ ...args.launch, folder, launch: id });
       }
+      case "shell":
+      case "shell-tabs":
+      case "shell-close":
+        return { ok: false, why: "failed", detail: NO_SHELLS_YET };
     }
   };
 }
