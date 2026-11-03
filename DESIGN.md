@@ -298,14 +298,16 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   on hover, `wash-2` when open): a 40px face with the name under it, and
   the unread count in the top-right corner. An idle agent's eyes carry its
   state, and the words (offline since, idle) wait in the tile's `title`.
-  An agent at work takes the whole row and speaks: a `bg-2` bubble with a
-  `line-2` edge and a tail pointing at its face. In it, a mono `ink-3` head
-  (`T<N>` on the left, how long on the right), the task's title (two lines
-  at most) and a mono `ink-3` line of what it runs now (`running Bash`,
-  `thinking`, two lines at most). An agent waiting on a person says "needs
-  a person" in `decide`, on a `decide` edge. Working agents come first, the
-  lead first among them. The bubble pops in on `--pop` when work starts,
-  and each new step rises in on `--fast`. A DM with someone no longer listed follows the people; conversations between
+  An agent at work takes the whole row and speaks: a 32px face with its
+  name under it, and beside it a `bg-2` bubble with a `line-2` edge and a
+  tail at the face. Two lines, each cut with an ellipsis: mono `T<N>` and
+  the task's title, then a mono `ink-3` line of what it runs now (`running
+  Bash`, `thinking`) with how long on the right; the full title waits in
+  `title`. An agent waiting on a person says "needs a person" in
+  `decide`, on a `decide` edge. Working agents come first, the lead first
+  among them. The bubble pops in on `--pop` when work starts, and each new
+  step rises in on `--fast`. A DM with someone no longer listed follows
+  the people; conversations between
   others fold under the agents ("1 between others"). A section's + (New
   room, Invite people, Add an agent) shows when the pointer is over the
   section; it becomes a row only while the section is empty. The open row is

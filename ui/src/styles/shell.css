@@ -941,56 +941,55 @@
 }
 
 .side-tile.is-live {
-  grid-template-columns: 4.5rem minmax(0, 1fr);
+  grid-template-columns: 3.5rem minmax(0, 1fr);
   place-content: stretch;
-  align-items: center;
+  align-items: start;
   justify-items: stretch;
-  gap: 6px;
-  padding: 8px 8px 6px 0;
+  gap: 4px;
+  padding: 6px 6px 4px 0;
 }
 
 .side-who {
   display: grid;
   justify-items: center;
-  gap: 4px;
+  gap: 2px;
   min-width: 0;
 }
 
 .side-who > .av {
-  width: 2.5rem;
-  height: 2.5rem;
+  width: 2rem;
+  height: 2rem;
 }
 
 .side-who > .side-label {
   max-width: 100%;
+  font: var(--t-stamp) var(--ui);
   text-align: center;
 }
 
 .side-says {
   position: relative;
   display: grid;
-  gap: 2px;
-  align-self: start;
+  gap: 1px;
   min-width: 0;
-  margin-top: 4px;
-  padding: 6px 10px 6px;
+  padding: 4px 8px;
   border: 1px solid var(--line-2);
   border-radius: var(--r-ctl);
   background: var(--bg-2);
   color: var(--ink);
   font-weight: 400;
   text-align: left;
-  transform-origin: 0 24px;
+  transform-origin: 0 16px;
   animation: says-in var(--pop) both;
 }
 
 .side-says::before {
   content: "";
   position: absolute;
-  top: 16px;
-  left: -5px;
-  width: 8px;
-  height: 8px;
+  top: 12px;
+  left: -4px;
+  width: 6px;
+  height: 6px;
   border-bottom: 1px solid var(--line-2);
   border-left: 1px solid var(--line-2);
   border-radius: 0 0 0 var(--r-tick);
@@ -999,30 +998,31 @@
 }
 
 .side-task {
-  display: -webkit-box;
   overflow: hidden;
-  font: var(--t-meta) / 1.35 var(--ui);
-  text-wrap: pretty;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  font: var(--t-meta) / 1.4 var(--ui);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.side-head,
+.side-id {
+  margin-right: 4px;
+  color: var(--ink-3);
+  font: var(--t-stamp) var(--mono);
+}
+
 .side-now {
   display: flex;
   gap: 6px;
   align-items: baseline;
   min-width: 0;
   color: var(--ink-3);
-  font: var(--t-stamp) var(--mono);
+  font: var(--t-stamp) / 1.4 var(--mono);
 }
 
 .side-what {
-  display: -webkit-box;
   overflow: hidden;
-  overflow-wrap: anywhere;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   animation: rise var(--fast) var(--ease);
 }
 
@@ -1043,7 +1043,7 @@
 @keyframes says-in {
   from {
     opacity: 0;
-    transform: scale(0.85);
+    transform: scale(0.9);
   }
 }
 

@@ -226,6 +226,7 @@ function Member({ person, channel, direct, tile }: { person: Person; channel: Ch
   const on = nav.tab === "chat" && sameWhere(nav.where, where)
   const unread = direct?.unread ?? 0
   const live = tile ? liveOf(person) : null
+  const task = live ? taskOf(person, channel) : undefined
   return (
     <li className={cx(live && "is-live")}>
       <button
@@ -239,7 +240,7 @@ function Member({ person, channel, direct, tile }: { person: Person; channel: Ch
           person.presence === "offline" && "is-off"
         )}
         aria-current={on ? "page" : undefined}
-        title={statusOf(person, channel)}
+        title={task ? `T${task.id} ${task.title} · ${statusOf(person, channel)}` : statusOf(person, channel)}
         onClick={() => go({ to: "where", where })}
         onContextMenu={(e) =>
           showMenu(e, shown(person), (x) => [unread > 0 ? [{ label: "Mark as read", run: () => actions.markRead(channel.code, where) }] : [], x.personItems({ channel, go }, person)])
@@ -256,7 +257,7 @@ function Member({ person, channel, direct, tile }: { person: Person; channel: Ch
             <span className="side-label">{shown(person)}</span>
           </>
         )}
-        {live && <Says text={live.busy ? live.text : "needs a person"} since={live.since} task={taskOf(person, channel)} />}
+        {live && <Says text={live.busy ? live.text : "needs a person"} since={live.since} task={task} />}
         <Count n={unread} loud />
       </button>
     </li>
@@ -268,29 +269,20 @@ const MIN = 60_000
 function Says({ text, since, task }: { text: string; since: number | undefined; task: Task | undefined }) {
   const now = useNow(since === undefined ? null : 15_000)
   const long = since !== undefined && now - since >= MIN ? ago(since, now) : null
-  const what = (
-    <span key={text} className="side-what">
-      {text}
-    </span>
-  )
-  const time = long && <span className="side-for">{long}</span>
   return (
     <span className="side-says">
-      {task ? (
-        <>
-          <span className="side-head">
-            <span>T{task.id}</span>
-            {time}
-          </span>
-          <span className="side-task">{task.title}</span>
-          <span className="side-now">{what}</span>
-        </>
-      ) : (
-        <span className="side-now">
-          {what}
-          {time}
+      {task && (
+        <span className="side-task">
+          <span className="side-id">T{task.id}</span>
+          {task.title}
         </span>
       )}
+      <span className="side-now">
+        <span key={text} className="side-what">
+          {text}
+        </span>
+        {long && <span className="side-for">{long}</span>}
+      </span>
     </span>
   )
 }
