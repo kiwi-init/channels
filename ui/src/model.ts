@@ -69,6 +69,8 @@ export interface Person {
   yours?: boolean
   about?: string
   load?: Load
+  red?: true
+  doneAt?: number
   readOnly?: boolean
   wakes?: boolean
   seat?: PlacedSeat["place"]

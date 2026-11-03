@@ -905,27 +905,6 @@
   color: var(--ink-3);
 }
 
-.side-status {
-  flex: 0 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  color: var(--ink-3);
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.side-member.is-doing .pip {
-  background: var(--doing);
-}
-
-.side-member.is-waiting .pip {
-  background: var(--decide);
-}
-
-.side-member.is-waiting .side-status {
-  color: var(--decide);
-}
-
 .side section:hover .heading .icon-btn {
   opacity: 1;
 }
@@ -1449,25 +1428,6 @@ html .rail-gear.is-on {
 
 .crew-agent.is-off .crew-name {
   color: var(--ink-2);
-}
-
-.crew-status {
-  color: var(--ink-3);
-  font: var(--t-stamp) var(--mono);
-  letter-spacing: -0.01em;
-  white-space: nowrap;
-}
-
-.crew-status.is-doing {
-  color: var(--doing);
-}
-
-.crew-status.is-review {
-  color: var(--review);
-}
-
-.crew-status.is-waiting {
-  color: var(--decide);
 }
 
 .crew-task {

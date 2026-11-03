@@ -3,6 +3,7 @@ import { Suspense, useEffect, useRef, useState, type CSSProperties, type ReactNo
 import { useMoved } from "~/kit/glide"
 import { Icon, type IconName } from "~/kit/icons"
 import { later } from "~/kit/later"
+import { useMood, type MoodOf } from "~/kit/mood"
 import type { Person, TaskStatus } from "~/model"
 
 export const cx = (...parts: (string | false | null | undefined)[]): string => parts.filter(Boolean).join(" ")
@@ -14,10 +15,11 @@ export function Avatar({
   size = "md",
   pip,
 }: {
-  person: Pick<Person, "name" | "kind" | "harness" | "presence" | "color" | "picture" | "face"> | undefined
+  person: (Pick<Person, "name" | "kind" | "harness" | "presence" | "color" | "picture" | "face"> & MoodOf) | undefined
   size?: "sm" | "md" | "lg"
   pip?: boolean
 }) {
+  const mood = useMood(person?.kind === "agent" ? person : undefined)
   if (!person) return <span className={cx("av", `av-${size}`, "av-gone")} aria-hidden="true" />
   const face = (
     <span
@@ -29,7 +31,7 @@ export function Avatar({
     >
       {person.kind === "agent" ? (
         <Suspense fallback={null}>
-          <RoleFace role={person.face} harness={person.harness} />
+          <RoleFace role={person.face} harness={person.harness} mood={mood} />
         </Suspense>
       ) : person.picture ? (
         <img src={person.picture} alt="" />
@@ -38,7 +40,7 @@ export function Avatar({
       )}
     </span>
   )
-  if (!pip) return face
+  if (!pip || person.kind === "agent") return face
   return (
     <span className="av-wrap" aria-hidden="true">
       {face}
