@@ -7,7 +7,7 @@ import { GlyphIcon, Icon, type Glyph, type IconName } from "~/kit/icons"
 import { useApp, type Section } from "~/nav"
 import { AgentsSection } from "~/settings/agents"
 import { ComputersSection } from "~/settings/computers"
-import { AboutSection, AccountSection, AppearanceSection, UpdatesSection } from "~/settings/sections"
+import { AboutSection, AccountSection, AppearanceSection } from "~/settings/sections"
 import { useSideways } from "~/kit/sideways"
 import { SideCards } from "~/shell/updates"
 
@@ -16,7 +16,6 @@ const SECTIONS: readonly (readonly [Section, string, IconName | Glyph])[] = [
   ["appearance", "Appearance", PaintBoardIcon],
   ["computers", "Computers and phones", "devices"],
   ["agents", "Agents", "agent"],
-  ["updates", "Updates", "download"],
   ["about", "About", "info"],
 ]
 
@@ -78,8 +77,6 @@ function Current({ section }: { section: Section }) {
       return <ComputersSection />
     case "agents":
       return <AgentsSection />
-    case "updates":
-      return <UpdatesSection />
     case "about":
       return <AboutSection />
   }

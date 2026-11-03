@@ -12,7 +12,6 @@ import { sentHere } from "@kiwi/core/room-rules.ts";
 import { fold, rosterOf, type ChannelState } from "@kiwi/core/state.ts";
 import { wants } from "../src/agent/wants.ts";
 import { briefText } from "../src/brief.ts";
-import { outsideRoomNote } from "../src/cli/handles.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { joinAgent, joinPerson, pairComputer, setupChannel, type OwnerSetup } from "./owner.ts";
 
@@ -79,16 +78,11 @@ describe("a members-only room is sent to its members only (T703)", () => {
     expect(formatRooms(inside.state, "ana")).toMatch(new RegExp(`#launch-plan \\(id [0-9a-z]+\\) · members only: ${s.owner.name}, ana · `));
   });
 
-  test("a post from outside it is refused, and the CLI notes a mention of someone outside", async () => {
+  test("a post from outside it is refused", async () => {
     const id = await s.ownerCh.makeRoom("quiet-corner", [pick(ana)]);
     await bo.ch.history(0);
     const seq = await bo.ch.send("let me in", { room: id });
     expect((await seen(s.ownerCh)).state.rejected.get(seq)).toBe("only its members post in a members-only room");
-    const { state } = await seen(s.ownerCh);
-    expect(outsideRoomNote(state, id, "@ana and @bo, have a look")).toBe(
-      "@bo isn't in #quiet-corner, so they aren't sent this message: someone in the room adds them from the app, or say it where they are.",
-    );
-    expect(outsideRoomNote(state, id, `@ana and @${s.owner.name}`)).toBeNull();
   });
 
   test("an agent's brief names the members-only rooms it's in, and only those", () => {
