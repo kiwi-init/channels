@@ -936,6 +936,117 @@
   color: var(--ink-3);
 }
 
+.side-tiles > .is-live {
+  grid-column: 1 / -1;
+}
+
+.side-tile.is-live {
+  grid-template-columns: 4.5rem minmax(0, 1fr);
+  place-content: stretch;
+  align-items: center;
+  justify-items: stretch;
+  gap: 6px;
+  padding: 8px 8px 6px 0;
+}
+
+.side-who {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.side-who > .av {
+  width: 2.5rem;
+  height: 2.5rem;
+}
+
+.side-who > .side-label {
+  max-width: 100%;
+  text-align: center;
+}
+
+.side-says {
+  position: relative;
+  display: grid;
+  gap: 2px;
+  align-self: start;
+  min-width: 0;
+  margin-top: 4px;
+  padding: 6px 10px 6px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-ctl);
+  background: var(--bg-2);
+  color: var(--ink);
+  font-weight: 400;
+  text-align: left;
+  transform-origin: 0 24px;
+  animation: says-in var(--pop) both;
+}
+
+.side-says::before {
+  content: "";
+  position: absolute;
+  top: 16px;
+  left: -5px;
+  width: 8px;
+  height: 8px;
+  border-bottom: 1px solid var(--line-2);
+  border-left: 1px solid var(--line-2);
+  border-radius: 0 0 0 var(--r-tick);
+  background: var(--bg-2);
+  transform: rotate(45deg);
+}
+
+.side-task {
+  display: -webkit-box;
+  overflow: hidden;
+  font: var(--t-meta) / 1.35 var(--ui);
+  text-wrap: pretty;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.side-head,
+.side-now {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  min-width: 0;
+  color: var(--ink-3);
+  font: var(--t-stamp) var(--mono);
+}
+
+.side-what {
+  display: -webkit-box;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  animation: rise var(--fast) var(--ease);
+}
+
+.side-for {
+  flex: none;
+  margin-left: auto;
+}
+
+.side-tile.is-waiting .side-says,
+.side-tile.is-waiting .side-says::before {
+  border-color: var(--decide);
+}
+
+.side-tile.is-waiting .side-what {
+  color: var(--decide);
+}
+
+@keyframes says-in {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+}
+
 .side-member > .av-wrap {
   flex: none;
 }

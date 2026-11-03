@@ -296,10 +296,16 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   row's menu (and in the Agents view). You aren't listed. A person's pip
   carries their presence. Agents are tiles, two across with no fill (`wash`
   on hover, `wash-2` when open): a 40px face with the name under it, and
-  the unread count in the top-right corner. The eyes carry
-  the state, with no status word, and the words (`running Bash`,
-  `thinking`, offline since) wait in the tile's `title`. A DM
-  with someone no longer listed follows the people; conversations between
+  the unread count in the top-right corner. An idle agent's eyes carry its
+  state, and the words (offline since, idle) wait in the tile's `title`.
+  An agent at work takes the whole row and speaks: a `bg-2` bubble with a
+  `line-2` edge and a tail pointing at its face. In it, a mono `ink-3` head
+  (`T<N>` on the left, how long on the right), the task's title (two lines
+  at most) and a mono `ink-3` line of what it runs now (`running Bash`,
+  `thinking`, two lines at most). An agent waiting on a person says "needs
+  a person" in `decide`, on a `decide` edge. Working agents come first, the
+  lead first among them. The bubble pops in on `--pop` when work starts,
+  and each new step rises in on `--fast`. A DM with someone no longer listed follows the people; conversations between
   others fold under the agents ("1 between others"). A section's + (New
   room, Invite people, Add an agent) shows when the pointer is over the
   section; it becomes a row only while the section is empty. The open row is
