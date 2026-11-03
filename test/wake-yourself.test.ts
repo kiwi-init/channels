@@ -11,6 +11,7 @@ setDefaultTimeout(90_000);
 
 const INSTALLED = join(homedir(), ".kiwi", "bin", "kiwi");
 const KIWI = Bun.which("kiwi") ? "kiwi" : existsSync(INSTALLED) ? INSTALLED : [process.execPath, join(import.meta.dir, "..", "src", "cli", "main.ts")].map((s) => `'${s}'`).join(" ");
+const seatJoins = (alias: string, me: string) => [`${KIWI} join`, `${KIWI} -c ${alias} --as ${me} join`];
 
 const dataDir = mkdtempSync(join(tmpdir(), "kiwi-wy-relay-"));
 const claudeDir = mkdtempSync(join(tmpdir(), "kiwi-wy-claude-"));
@@ -179,7 +180,11 @@ describe("Kimi Code keeps its own listener running", () => {
     expect(deaf.code).toBe(2);
     expect(deaf.out).toBe("");
     expect(deaf.err).toContain("no Kiwi listener of yours is running for kimi-wake");
-    expect(deaf.err).toContain(`call the Bash tool with command \`${KIWI} join\`, run_in_background: true, disable_timeout: true`);
+    expect(
+      seatJoins("kimi-wake", me)
+        .map((c) => `call the Bash tool with command \`${c}\`, run_in_background: true, disable_timeout: true`)
+        .some((line) => deaf.err.includes(line)),
+    ).toBe(true);
     expect(deaf.err).not.toMatch(/ listen\b/);
     expect(deaf.err).toContain("If you are a subagent, ignore this and end your turn.");
 
@@ -408,7 +413,7 @@ describe("Grok keeps its own monitor running", () => {
     expect(deaf?.decision).toBe("block");
     expect(deaf?.reason).toContain("no Kiwi listener of yours is running for grok-wake");
     const listen = /start the monitor tool with command `([^`]+)`/.exec(deaf!.reason)![1]!;
-    expect(listen).toBe(`${KIWI} join`);
+    expect(seatJoins("grok-wake", me)).toContain(listen);
     expect(await stop({ stop_hook_active: true, backgroundTasks: [] })).toBeNull();
     const activeLogged = readFileSync(join(h, "stop.log"), "utf8").trim().split("\n").at(-1)!;
     expect(activeLogged).toContain("grok-wake");
