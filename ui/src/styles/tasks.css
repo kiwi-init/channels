@@ -257,9 +257,6 @@
   gap: 8px;
 }
 
-
-
-
 .task-change {
   flex: none;
   padding: 0;
@@ -373,10 +370,6 @@
   display: grid;
   gap: 4px;
 }
-
-
-
-
 
 .task-earlier {
   margin-bottom: 10px;

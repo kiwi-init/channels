@@ -1332,7 +1332,6 @@ html .rail-gear.is-on {
   display: none;
 }
 
-
 @media (max-width: 760px) {
   :root[data-shell="mac"],
   :root[data-wm="floating"] {
@@ -1607,7 +1606,6 @@ html .rail-gear.is-on {
   padding: 6px 8px;
 }
 
-
 .tall-work .board-list .board-row > .dot {
   grid-row: 1;
 }
@@ -1626,8 +1624,6 @@ html .rail-gear.is-on {
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-
-
 
 .tall-work .board-list .board-owner {
   grid-row: 1;
