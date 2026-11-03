@@ -56,6 +56,17 @@ describe("kiwi doctor", () => {
     expect(found.some(mentionsLink)).toBe(false);
   });
 
+  test("an older relay with only WorkOS sign-in is named as one to update", async () => {
+    const old = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: () => Response.json({ workosClientId: "client_old" }) });
+    try {
+      const found = await checks({ KIWI_RELAY: old.url.origin });
+      const f = found.find((f) => !f.ok && f.what.includes("older Kiwi relay"));
+      expect(f && "how" in f ? f.how : "").toContain("GitHub App");
+    } finally {
+      old.stop(true);
+    }
+  });
+
   test("an unreachable relay is reported as down, not as a missing link", async () => {
     const found = await checks({ KIWI_RELAY: "http://127.0.0.1:1" });
     const down = found.find((f) => !f.ok && f.what.includes("http://127.0.0.1:1"));

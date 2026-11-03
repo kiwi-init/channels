@@ -9,7 +9,7 @@ import { DurableObject } from "cloudflare:workers";
 import * as Layer from "effect/Layer";
 import { CLOSE_CLOSED, CLOSE_REMOVED, GONE_WORDS, PING, PONG } from "@kiwi/core/protocol.ts";
 import { ChannelGone, NotFound, Refused, TooMany, UpdateRequired } from "./failures.ts";
-import { githubHumanAuth, Human, type HumanAuth } from "./human.ts";
+import { githubHumanAuth, Human, NO_ONE, type HumanAuth } from "./human.ts";
 import { pageSecret, Policy, policyFrom, type RelayPolicy } from "./policy.ts";
 import { edgePage, PAGE_PATH, type PageCache } from "./pages.ts";
 import {
@@ -109,7 +109,8 @@ const edgeCache: PageCache = {
 let humanAuth: HumanAuth | null | undefined;
 /** One verifier (and its cache of checked tokens) per isolate. */
 function human(env: Env): HumanAuth | null {
-  if (humanAuth === undefined) humanAuth = githubHumanAuth({ clientId: env.GITHUB_APP_CLIENT_ID, clientSecret: env.GITHUB_APP_CLIENT_SECRET });
+  // The hosted relay always has sign-in: missing GitHub App settings refuse everyone, never open it up.
+  if (humanAuth === undefined) humanAuth = githubHumanAuth({ clientId: env.GITHUB_APP_CLIENT_ID, clientSecret: env.GITHUB_APP_CLIENT_SECRET }) ?? NO_ONE;
   return humanAuth;
 }
 

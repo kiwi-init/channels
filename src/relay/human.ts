@@ -22,6 +22,12 @@ export interface HumanAuth {
   dev?: boolean;
 }
 
+/**
+ * Sign-in that takes nobody: for a relay that must have sign-in but is missing its settings, so
+ * creating channels and account routes refuse everyone instead of opening to anyone.
+ */
+export const NO_ONE: HumanAuth = { verify: async () => null };
+
 /** Sign-in as this relay runs it: GitHub, dev sign-in, or null for none. */
 export class Human extends Context.Service<Human, HumanAuth | null>()("kiwi/relay/HumanAuth") {}
 

@@ -150,7 +150,13 @@ const checkRelay = Effect.fn("Doctor.relay")(function* (relay: string) {
         signIn: false,
       } satisfies Check;
     }
-    const body = (yield* Effect.tryPromise({ try: () => res.json(), catch: (err) => err })) as { githubSignIn?: unknown; dev?: unknown };
+    const body = (yield* Effect.tryPromise({ try: () => res.json(), catch: (err) => err })) as { githubSignIn?: unknown; dev?: unknown; workosClientId?: unknown };
+    if (body && typeof body === "object" && typeof body.githubSignIn !== "boolean" && typeof body.workosClientId === "string") {
+      return {
+        finding: { ok: false, what: `${relay} is an older Kiwi relay without GitHub sign-in.`, how: "Update the relay and give it your GitHub App's client id and secret." },
+        signIn: false,
+      } satisfies Check;
+    }
     if (!body || typeof body !== "object" || typeof body.githubSignIn !== "boolean") {
       return { finding: { ok: false, what: `${relay}/v1/config answered, but not as a Kiwi relay.`, how: "Point KIWI_RELAY at your Kiwi relay." }, signIn: false } satisfies Check;
     }

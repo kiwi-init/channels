@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { Channel, relayConfig } from "@kiwi/core/client.ts";
 import { generateIdentity } from "@kiwi/core/identity.ts";
 import { startRelay } from "../src/relay/bun.ts";
-import { githubHumanAuth } from "../src/relay/human.ts";
+import { githubHumanAuth, NO_ONE } from "../src/relay/human.ts";
 import { HOLD_MS, holdEntry, reserveSlot } from "../src/relay/room.ts";
 import { signRequest } from "@kiwi/core/auth.ts";
 import { WS_PROTOCOL } from "@kiwi/core/protocol.ts";
@@ -350,4 +350,10 @@ describe("expiry", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+});
+
+test("a relay missing its GitHub App settings signs nobody in, rather than opening up", async () => {
+  expect(githubHumanAuth({ clientId: undefined, clientSecret: undefined })).toBeNull();
+  expect(await NO_ONE.verify("ghu_" + "a".repeat(36))).toBeNull();
+  expect(await NO_ONE.verify("dev:alice")).toBeNull();
 });
