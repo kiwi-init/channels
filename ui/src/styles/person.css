@@ -104,10 +104,6 @@
   align-items: center;
 }
 
-.person-icon:disabled {
-  opacity: 0.5;
-}
-
 .person-prop {
   display: contents;
 }
