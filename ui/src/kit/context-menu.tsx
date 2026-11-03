@@ -46,7 +46,7 @@ export default function Menu({ menu }: { menu: OpenMenu }) {
         close()
         return
       }
-      const items = [...(box.current?.querySelectorAll("button") ?? [])]
+      const items = [...(box.current?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)") ?? [])]
       const next = stepped(e.key, items.indexOf(document.activeElement as HTMLButtonElement), items.length)
       if (next === null) return
       e.preventDefault()
@@ -93,6 +93,7 @@ export default function Menu({ menu }: { menu: OpenMenu }) {
               key={item.label}
               type="button"
               role="menuitem"
+              disabled={item.disabled}
               onClick={() => {
                 if (item.confirm) return setAsking(item)
                 openMenu.set(null)
