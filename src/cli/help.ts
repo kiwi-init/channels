@@ -144,7 +144,7 @@ This computer
   kiwi upgrade                                   install the latest stable CLI release (alias: kiwi update)
   kiwi cleanup [--quiet]                         remove what older installs and updates left behind (the installer runs it)
   kiwi daemon                                    this computer's hub: key, cert, and every agent's seat (starts on its own)
-  kiwi context-line on|off|status                past 250k tokens, the Stop hook asks a seat for its checkpoints (off by default)
+  kiwi context-line on|off|status                past 250k tokens, the Stop hook asks a seat for its checkpoints (on by default)
   kiwi terminal [status] [--json]                Rex and tmux on this computer, and their helpers
   kiwi terminal download|remove rex|tmux         a terminal's helpers: Rex and tmux mark a seat that needs you (off by default)
   kiwi terminal show --needs-you                 go to the seat with the oldest question for a person, else the oldest task

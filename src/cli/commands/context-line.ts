@@ -1,7 +1,7 @@
 import * as Effect from "effect/Effect";
 import { CONTEXT_LINE } from "@kiwi/core/protocol.ts";
 import { tokensWord } from "@kiwi/core/format.ts";
-import { Keystore, loadConfig } from "../../config.ts";
+import { contextLineOn, Keystore, loadConfig } from "../../config.ts";
 import { args, opt } from "../args.ts";
 import { type Command, die, out } from "../context.ts";
 
@@ -16,7 +16,7 @@ export const contextLineCommands: Record<string, Command> = {
     Effect.gen(function* () {
       const sub = args[1] ?? "status";
       const said = (on: boolean) => out(opt.json ? JSON.stringify({ contextLine: on ? "on" : "off" }) : statusText(on));
-      if (sub === "status") return said(loadConfig().contextLine === "on");
+      if (sub === "status") return said(contextLineOn(loadConfig()));
       if (sub !== "on" && sub !== "off") return yield* die("usage: kiwi context-line on|off|status [--json]");
       const keys = yield* Keystore;
       yield* keys.update((c) => {
