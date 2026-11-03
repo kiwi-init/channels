@@ -94,7 +94,7 @@ export function Dialog({ open, onClose, label, children, wide }: { open: boolean
     if (!el) return
     if (open && !el.open) {
       el.showModal()
-      el.querySelector<HTMLElement>("input:not([type=hidden]), textarea, select")?.focus()
+      ;(el.querySelector<HTMLElement>("[autofocus], input:not([type=hidden]), textarea, select") ?? el).focus()
     }
     if (!open && el.open) el.close()
   }, [open])
@@ -103,6 +103,7 @@ export function Dialog({ open, onClose, label, children, wide }: { open: boolean
       ref={ref}
       role="dialog"
       aria-modal="true"
+      tabIndex={-1}
       className={cx("dialog", wide && "is-wide")}
       aria-label={label}
       onClose={() => {

@@ -378,14 +378,16 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   command or a diff in mono boxes), and the answers as buttons, the main one
   `is-primary`.
 - **Agents.** One card per agent, in a grid that wraps (nothing scrolls
-  sideways): face, name, `for person ·
-  model`, a status line with a coloured dot, its tasks with PR and check
-  ticks, Up next, Watching, and its last moves with mono times.
+  sideways): face, name, and one status line under it (what it's doing,
+  "for X" only when it's someone else's; model and sponsor on hover), then
+  its tasks with PR and check ticks, Up next, Watching, and its last moves
+  with mono times.
 - **Settings.** The sidebar trades the channels for Settings' sections (the
   open one on `wash-2`) under a `‹ Settings` back button. The page sits beside
-  them, up to 720px: a `t-display` title, a quiet line, then groups of rows, each
-  group a card (hairlines between rows; a title, a quiet line and the control on
-  the right).
+  them, up to 720px: a `t-display` title (a quiet line under it only when it
+  says a scope or a limit), then groups of rows on the page under mono group
+  heads, hairlines between rows: a title, a quiet line only when it says what
+  the title can't, and the control on the right. No cards around groups.
 - **Palette** (⌘K), **Search**, the **terminal drawer** and the **annotator**
   (a picture opened full window, marked up and sent back) float with
   `shadow-pop` and their own enter animation. The palette is `bg-2` at

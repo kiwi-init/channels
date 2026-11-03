@@ -541,6 +541,10 @@ kbd {
   box-shadow: var(--shadow-pop);
 }
 
+.dialog:focus {
+  outline: none;
+}
+
 .dialog.is-wide {
   width: min(720px, calc(100vw - 32px));
 }
