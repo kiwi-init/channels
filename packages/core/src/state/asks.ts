@@ -1,10 +1,11 @@
 import type { Message } from "../protocol.ts";
 import { isPerson } from "./people.ts";
+import { commentedSpec } from "./specs.ts";
 import type { AskHead, ChannelState, Task } from "./types.ts";
 
 const ASK_WORDS_MAX = 200;
 
-type Lookup = Pick<ChannelState, "askHeads" | "threadOf" | "placeOf" | "tasks">;
+type Lookup = Pick<ChannelState, "askHeads" | "threadOf" | "placeOf" | "tasks" | "specs">;
 
 export function askHeadOf(m: Pick<Message, "seq" | "from" | "body">, at: number): AskHead {
   return {
@@ -18,6 +19,8 @@ export function askHeadOf(m: Pick<Message, "seq" | "from" | "body">, at: number)
 }
 
 export function askOfMessage(look: Lookup, seq: number): number | undefined {
+  const spec = commentedSpec(look.specs, seq);
+  if (spec !== undefined) return spec;
   const root = look.threadOf.get(seq) ?? seq;
   for (const said of root === seq ? [seq] : [seq, root]) {
     const place = look.placeOf.get(said);
@@ -39,7 +42,7 @@ export function fileTask(look: Lookup, task: Task, re: number | undefined, byPer
 }
 
 export function askRefusal(
-  state: Pick<ChannelState, "members" | "askHeads" | "threadOf" | "placeOf" | "tasks">,
+  state: Pick<ChannelState, "members" | "askHeads" | "threadOf" | "placeOf" | "tasks" | "specs">,
   me: string,
   anchors: { re?: number; from?: number; issue?: boolean },
   fix: string,

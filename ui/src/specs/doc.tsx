@@ -71,7 +71,7 @@ function placeRail(el: HTMLElement): void {
 export function SpecDoc({ channel, spec, editing, onEditing }: { channel: Channel; spec: Spec; editing: boolean; onEditing: (on: boolean) => void }) {
   const names = useNames(channel)
   const tasks = useTaskIds(channel)
-  const comments = commentsOf(channel, spec.ask)
+  const comments = commentsOf(channel, spec)
   const wrap = useRef<HTMLDivElement>(null)
   const doc = useRef<HTMLDivElement>(null)
   const rail = useRef<HTMLDivElement>(null)
@@ -102,7 +102,7 @@ export function SpecDoc({ channel, spec, editing, onEditing }: { channel: Channe
       for (const b of blocks) delete b.dataset.anchor
       const base = (rail.current ?? el).getBoundingClientRect().top
       const next = new Map<number, number>()
-      for (const c of commentsOf(channel, spec.ask)) {
+      for (const c of commentsOf(channel, spec)) {
         if (!c.quote) continue
         const hit = anchorOf(blocks, c.quote)
         if (!hit) continue
@@ -115,7 +115,7 @@ export function SpecDoc({ channel, spec, editing, onEditing }: { channel: Channe
     const watch = new ResizeObserver(measure)
     watch.observe(el)
     return () => watch.disconnect()
-  }, [key, editing, channel, spec.ask, wide, diff])
+  }, [key, editing, channel, spec, wide, diff])
 
   useLayoutEffect(() => {
     if (rail.current) placeRail(rail.current)

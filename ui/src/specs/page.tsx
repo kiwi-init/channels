@@ -20,7 +20,7 @@ export function SpecPage({ channel, spec }: { channel: Channel; spec: Spec }) {
   const part: SpecPart = nav.part ?? "spec"
   const [editing, setEditing] = useState(false)
   const line = stageLine(channel, spec)
-  const comments = commentsOf(channel, spec.ask)
+  const comments = commentsOf(channel, spec)
   const inside = insideOf(channel, spec).length
   const alarms = alarmsOf(channel, spec)
   const boxes = boxesOf(spec)
