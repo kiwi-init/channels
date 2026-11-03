@@ -3,6 +3,7 @@ import {
   CHECKPOINT_MAX_LENGTH,
   MAX_GOAL_NAME,
   MAX_SPEC,
+  MAX_SPEC_NOTE,
   PROOF_LABEL_MAX_LENGTH,
   PROOF_URL_MAX_LENGTH,
   REVIEW_SUMMARY_MAX_LENGTH,
@@ -24,6 +25,7 @@ import {
   revisedOut,
   specLease,
   specStage,
+  specTasks,
   taskId,
   tickDoneWhen,
   type ChannelState,
@@ -169,6 +171,7 @@ export class SessionTasks extends SessionMessaging {
         state?: TaskState | "cancelled";
         owner?: string | null;
         title?: string;
+        detail?: string;
         note?: string;
         review?: string | null;
         claim?: true;
@@ -186,6 +189,8 @@ export class SessionTasks extends SessionMessaging {
       if (!t) return yield* new Rejected(`no task ${taskId(id)}`);
       const long = change.title === undefined ? null : titleRefusal(change.title);
       if (long) return yield* new Rejected(long);
+      if (change.detail !== undefined && change.detail.length > TASK_BODY_MAX_LENGTH)
+        return yield* new Rejected(`the body is ${change.detail.length} characters, the most a task's body takes is ${TASK_BODY_MAX_LENGTH}: link the rest`);
       if (change.summary !== undefined && (change.state !== "review" || !change.summary.trim())) return yield* new Rejected("a review summary needs text and a new review round");
       if (change.summary && change.summary.length > REVIEW_SUMMARY_MAX_LENGTH)
         return yield* new Rejected(`the review summary is ${change.summary.length} characters, the most it takes is ${REVIEW_SUMMARY_MAX_LENGTH}: keep what changed and how it was proven`);
@@ -206,8 +211,9 @@ export class SessionTasks extends SessionMessaging {
       const opensReview = finishing && change.review === undefined && reviewerLeft && state.lead === this.me;
       const review = change.review ? yield* this.reviewer(state, change.review) : opensReview ? "*" : change.review;
       const me = state.members.get(this.me);
+      const lead = !!me && (!!me.owner || me.persona?.role === "lead" || state.lead === this.me);
+      if (change.detail !== undefined && me && !isPerson(me) && !lead) return yield* new Rejected(`only a person or the lead rewrites ${taskId(id)}'s body`);
       if (me) {
-        const lead = !!me.owner || me.persona?.role === "lead" || state.lead === this.me;
         const refused = change.claim ? reviewClaimRefusal(t, this.me, review) : reviewMoveRefusal(t, { name: this.me, person: isPerson(me), lead }, review);
         if (refused) return yield* new Rejected(refused);
       }
@@ -215,7 +221,7 @@ export class SessionTasks extends SessionMessaging {
       const notReviewer = !!gate && !!me && !isPerson(me) && (gate === "*" ? (owner ?? t.owner) === this.me || t.workedBy.includes(this.me) : gate !== this.me);
       const open = openRound(t);
       const revised = change.state === "cancelled" ? revisedOut(t, this.me, open) : null;
-      if (finishing && t.state !== "done" && notReviewer && revised === null) {
+      if (finishing && t.state !== "done" && notReviewer && revised === null && !(lead && change.state === "cancelled")) {
         const what = change.state === "cancelled" ? "cancelled" : "done";
         if (gate === t.review && reviewerLeft)
           return yield* new Rejected(`${taskId(id)}'s reviewer ${gate} left the channel: the lead or a person opens its review (kiwi task review ${taskId(id)} --review any), then it can be ${what}`);
@@ -298,6 +304,45 @@ export class SessionTasks extends SessionMessaging {
       if (t.state === "done") return yield* new Rejected(`${taskId(id)} is already done`);
       if (!t.owner) return yield* new Rejected(`${taskId(id)} has no owner to go first for: assign it first`);
       const seq = yield* this.event({ op: "task.first", task: id }, `${taskId(id)} first`, t.owner !== this.me ? [t.owner] : undefined);
+      return yield* this.confirm(seq);
+    },
+    oneLook,
+  );
+
+  readonly taskDelete = Effect.fn("AgentSession.taskDelete")(
+    { self: this },
+    function* (this: SessionTasks, id: number, why: string | undefined) {
+      const { state } = yield* this.state();
+      const t = state.tasks.get(id);
+      if (!t) return yield* new Rejected(`no task ${taskId(id)}`);
+      const me = state.members.get(this.me);
+      if (me && !isPerson(me) && state.lead !== this.me && me.persona?.role !== "lead") return yield* new Rejected(`only a person or the lead deletes ${taskId(id)}`);
+      const notify = [...new Set([t.owner, t.createdBy].filter((n): n is string => !!n && n !== this.me))];
+      const reason = why?.trim().slice(0, 500);
+      const seq = yield* this.event({ op: "task.delete", task: id, ...(reason ? { why: reason } : {}) }, `deleted ${taskId(id)}`, notify.length ? notify : undefined);
+      return yield* this.confirm(seq);
+    },
+    oneLook,
+  );
+
+  readonly endSpec = Effect.fn("AgentSession.endSpec")(
+    { self: this },
+    function* (this: SessionTasks, ask: number, how: "cancel" | "close" | "delete", why: string | undefined) {
+      const { state } = yield* this.state();
+      const spec = state.specs.get(ask);
+      if (!spec) return yield* new Rejected(`#${ask} has no spec`);
+      if (how !== "delete" && spec.result) return yield* new Rejected(`#${ask}'s spec is already ${spec.result.verdict}`);
+      const note = why?.trim().slice(0, MAX_SPEC_NOTE);
+      const owners = specTasks(state, ask)
+        .filter((t) => t.state !== "done" && !t.archived)
+        .flatMap((t) => (t.owner && t.owner !== this.me ? [t.owner] : []));
+      const notify = how === "close" ? undefined : [...new Set(owners)];
+      const ev =
+        how === "delete"
+          ? ({ op: "spec.delete", ask, ...(note ? { why: note } : {}) } as const)
+          : ({ op: "spec.result", ask, verdict: how === "close" ? "accepted" : "dropped", ...(note ? { note } : {}) } as const);
+      const said = how === "delete" ? `deleted #${ask}'s spec` : how === "close" ? `closed #${ask}'s spec` : `cancelled #${ask}'s spec`;
+      const seq = yield* this.event(ev, said, notify?.length ? notify : undefined);
       return yield* this.confirm(seq);
     },
     oneLook,

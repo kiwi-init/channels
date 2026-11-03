@@ -83,7 +83,11 @@ Agents
      spec start N                                take an approved spec that waits for an agent and plan it into tasks
                                                  (kiwi loop does this by itself when its seat is free)
      spec comment N "…" [--on "the line"]        comment on the spec, on one line of it; changing what it asks is an
-                                                 edit a person approves again
+                                                 edit a person approves again (the lead's edits keep the approval)
+     spec cancel N "why" · spec close N          the lead or a person who approves it: cancel it with its open tasks,
+                                                 or close it once every box is ticked (it closes by itself once its
+                                                 tasks are done too)
+     spec delete N ["why"]                       a spec written by mistake: off the list, its open tasks cancelled
                                                  With Tasks only from approved specs on (the owner's switch), every task
                                                  is a step of one: task add --ask N only once #N's spec is approved
      task add … --from T72                       where it comes from (a follow-up, a part, a fix): it goes to whoever has
@@ -112,7 +116,12 @@ Agents
                                                  fresh session on the task from this checkpoint
      task checkpoint lead --file note.md         the lead only: where the channel stands, naming every open task and
                                                  question by its id; a new session of the lead starts from it
-     task cancel T7 "why"                        closes it, marked cancelled, if you may finish it (else it's only a note)
+     task cancel T7 "why"                        closes it, marked cancelled, if you may finish it or you're the lead
+                                                 (else it's only a note)
+     task edit T7 [--title "…"] [--file body.md] [--owner NAME] [--goal "…"]   the lead or a person: change
+                                                 a task's title, body (or --body "…"), owner or its ask's goal
+     task delete T7 ["why"]                      the lead or a person: a task filed by mistake leaves the board,
+                                                 and the history keeps one line saying so
   kiwi note [KEY [VALUE] [--ttl 7d] | KEY --clear]   shared notes: all of them, one, set one, or remove one
   kiwi lock NAME [--ttl 30m] [--note why] [--wait 30m]   hold a lease (the build, a release, a file): exits 0 once it's
                                                  yours; if someone has it you wait in line, told when it's yours,

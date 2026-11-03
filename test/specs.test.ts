@@ -121,7 +121,7 @@ describe("a spec: humans and agents write it, a person approves it", () => {
 });
 
 describe("approved, it starts by itself when an agent is free, and comes back as a result", () => {
-  test("draft, queued, working, delivered, accepted: each from what happened, never typed", async () => {
+  test("draft, queued, working, accepted: each from what happened, never typed; ticked and done, it closes by itself", async () => {
     const ticked = tickBox(tickBox(SPEC, "merged"), "sample");
     const log = await signedLog([
       say("ana", "export please"),
@@ -138,8 +138,10 @@ describe("approved, it starts by itself when an agent is free, and comes back as
       const s = fold(log.slice(0, n), roster, T0);
       return specStage(s, s.specs.get(1)!);
     };
-    expect([2, 3, 4, 5, 6, 7, 8].map(stage)).toEqual(["draft", "queued", "working", "working", "queued", "delivered", "accepted"]);
+    expect([2, 3, 4, 5, 6, 7, 8].map(stage)).toEqual(["draft", "queued", "working", "working", "queued", "accepted", "accepted"]);
     const s = fold(log, roster, T0);
+    expect(at(s, 1).result).toMatchObject({ verdict: "accepted", auto: true, seq: 7 });
+    expect(s.rejected.get(8)).toContain("accepted, so it no longer changes");
     expect(s.rejected.get(9)).toContain("accepted, so it no longer changes");
     expect(changedSinceApproval(at(s, 1))).toBe(false);
   });
@@ -164,7 +166,7 @@ describe("approved, it starts by itself when an agent is free, and comes back as
   test("sent back with a note, it waits for an agent again, and is delivered only once new work closes", async () => {
     const log = await signedLog([
       say("ana", "export please"),
-      write("lead", 1, "# CSV\n- [x] works"),
+      write("lead", 1, "# CSV"),
       approve("ana", 1, 2),
       add("dev", "writer", 1),
       claim("dev", 4),
