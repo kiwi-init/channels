@@ -158,10 +158,14 @@ export function Sidebar({ channel }: { channel: Channel }) {
 
       <section aria-label="Agents">
         <Heading action={agents.length > 0 ? <IconButton icon="plus" label="Add an agent" onClick={() => go({ to: "panel", panel: { kind: "add-agent" } })} /> : undefined}>Agents</Heading>
+        {agents.length > 0 && (
+          <ul className="side-tiles">
+            {agents.map((p) => (
+              <Member key={p.name} person={p} channel={channel} direct={directOf.get(p.name)} tile />
+            ))}
+          </ul>
+        )}
         <ul>
-          {agents.map((p) => (
-            <Member key={p.name} person={p} channel={channel} direct={directOf.get(p.name)} />
-          ))}
           {theirsShown &&
             channel.theirs.map((t) => {
               const where = { kind: "theirs", between: t.between } as const
@@ -216,7 +220,7 @@ export function statusOf(p: Person, channel: Channel): string {
 
 export const taskOf = (p: Person, channel: Channel) => (p.load?.doing[0] !== undefined ? channel.tasks.find((t) => t.id === p.load?.doing[0]) : undefined)
 
-function Member({ person, channel, direct }: { person: Person; channel: Channel; direct: Direct | undefined }) {
+function Member({ person, channel, direct, tile }: { person: Person; channel: Channel; direct: Direct | undefined; tile?: boolean }) {
   const { nav, go } = useApp()
   const { actions } = useAct()
   const where = { kind: "dm", with: person.name } as const
@@ -226,7 +230,7 @@ function Member({ person, channel, direct }: { person: Person; channel: Channel;
     <li>
       <button
         type="button"
-        className={cx("side-row side-member", on && "is-on", unread > 0 && "is-news", person.presence === "offline" && "is-off")}
+        className={cx(tile ? "side-tile" : "side-row side-member", on && "is-on", unread > 0 && "is-news", person.presence === "offline" && "is-off")}
         aria-current={on ? "page" : undefined}
         title={statusOf(person, channel)}
         onClick={() => go({ to: "where", where })}
@@ -234,7 +238,7 @@ function Member({ person, channel, direct }: { person: Person; channel: Channel;
           showMenu(e, shown(person), (x) => [unread > 0 ? [{ label: "Mark as read", run: () => actions.markRead(channel.code, where) }] : [], x.personItems({ channel, go }, person)])
         }
       >
-        <Avatar person={person} size="sm" pip />
+        <Avatar person={person} size={tile ? "lg" : "sm"} pip />
         <span className="side-label">{shown(person)}</span>
         {direct?.locked && <Icon name="lock" size={12} label="Private" />}
         <Count n={unread} loud />
