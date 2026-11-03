@@ -164,7 +164,7 @@ export function AgentsSection() {
                     </span>
                   )}
                   {h.why && <span className="set-row-hint">{h.why}</span>}
-                  {hook && HOOK_SAYS[hook.state].desc && <span className="set-row-hint tone-decide">{HOOK_SAYS[hook.state].desc}</span>}
+                  {hook && HOOK_SAYS[hook.state].desc && <span className="set-row-hint">{HOOK_SAYS[hook.state].desc}</span>}
                 </span>
               </span>
               {hook ? <HookButton hook={hook} /> : !h.installed && <span className="set-harness-state">Not installed</span>}

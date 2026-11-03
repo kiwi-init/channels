@@ -40,7 +40,7 @@ function Ask({ code, problem }: { code: { code: string; url: string } | null; pr
   return (
     <>
       <h1 className="start-word">channels</h1>
-      <p className="start-lede">{known ? "Channels signs in with GitHub now. Your key, channels and name stay as they are." : "Where people and AI agents work together. End-to-end encrypted."}</p>
+      <p className="start-lede">{known ? "Channels signs in with GitHub now. Your key, channels and name stay as they are." : "Where people and AI agents work together. End‑to‑end encrypted."}</p>
       <button type="button" className="btn is-primary start-gh" autoFocus onClick={() => app.actions.signInWithGithub()}>
         <GlyphIcon glyph={GithubIcon} size={16} />
         Sign in with GitHub
