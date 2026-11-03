@@ -17,7 +17,7 @@ import { repoOffers } from "~/panels/repo-offers"
 import { Toggle } from "~/kit/bits"
 import { Confirm, InlineEdit } from "~/settings/controls"
 import { useAppCan } from "~/live/app-can"
-import { isMuted } from "~/live/quiet"
+import { isMuted } from "~/live/mute"
 import { copyText } from "~/kit/toasts"
 
 const REPO = /^[\w.-]+\/[\w.-]+$/
@@ -423,12 +423,12 @@ function MuteChannel({ channel }: { channel: Channel }) {
   const { app } = useApp()
   const muted = isMuted(app.prefs.muted, channel.code)
   return (
-    <section className="cpanel-mute" aria-label="Notifications">
+    <section className="cpanel-mute" aria-label="Mute">
       <div className="cpanel-row">
         <span className="cpanel-value">Mute on this computer</span>
         <Toggle label="Mute this channel" on={muted} onChange={(on) => app.actions.setMute(channel.code, null, on)} />
       </div>
-      {muted && <p className="cpanel-hint">Mentions, direct messages and decisions for you still notify.</p>}
+      {muted && <p className="cpanel-hint">Its unread count shows only mentions of you.</p>}
     </section>
   )
 }

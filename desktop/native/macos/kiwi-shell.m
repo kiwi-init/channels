@@ -1,6 +1,5 @@
 #import <AppKit/AppKit.h>
 #import <ImageIO/ImageIO.h>
-#import <UserNotifications/UserNotifications.h>
 #import <WebKit/WebKit.h>
 #import <objc/runtime.h>
 #import <os/lock.h>
@@ -268,58 +267,6 @@ void kiwi_window_appearance(void *ptr, int32_t appearance) {
     window.appearance = appearanceFor(appearance);
     noteLook(window);
   });
-}
-
-static void (*noteClicked)(uint32_t) = NULL;
-
-@interface KiwiNotes : NSObject <UNUserNotificationCenterDelegate>
-@end
-
-@implementation KiwiNotes
-- (void)userNotificationCenter:(UNUserNotificationCenter *)center
-       willPresentNotification:(UNNotification *)notification
-         withCompletionHandler:(void (^)(UNNotificationPresentationOptions))completionHandler {
-  completionHandler(UNNotificationPresentationOptionBanner | UNNotificationPresentationOptionList | UNNotificationPresentationOptionSound);
-}
-
-- (void)userNotificationCenter:(UNUserNotificationCenter *)center
-    didReceiveNotificationResponse:(UNNotificationResponse *)response
-             withCompletionHandler:(void (^)(void))completionHandler {
-  if (noteClicked && ![response.actionIdentifier isEqualToString:UNNotificationDismissActionIdentifier]) {
-    id tag = response.notification.request.content.userInfo[@"tag"];
-    noteClicked([tag isKindOfClass:NSNumber.class] ? [tag unsignedIntValue] : 0);
-  }
-  completionHandler();
-}
-@end
-
-static KiwiNotes *notes = nil;
-
-bool kiwi_notify(const char *title, const char *body, uint32_t tag) {
-  NSString *heading = title ? [NSString stringWithUTF8String:title] : nil;
-  if (!heading) return false;
-  UNMutableNotificationContent *content = [UNMutableNotificationContent new];
-  content.title = heading;
-  content.body = (body ? [NSString stringWithUTF8String:body] : nil) ?: @"";
-  content.userInfo = @{@"tag" : @(tag)};
-  UNNotificationRequest *request = [UNNotificationRequest requestWithIdentifier:NSUUID.UUID.UUIDString content:content trigger:nil];
-  UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
-  [center requestAuthorizationWithOptions:UNAuthorizationOptionAlert | UNAuthorizationOptionSound
-                        completionHandler:^(BOOL granted, NSError *error) {
-                          (void)error;
-                          if (granted) [center addNotificationRequest:request withCompletionHandler:nil];
-                        }];
-  return true;
-}
-
-bool kiwi_notify_clicks(void *window, void (*clicked)(uint32_t)) {
-  if (!clicked) return false;
-  noteClicked = clicked;
-  dispatch_async(dispatch_get_main_queue(), ^{
-    if (!notes) notes = [KiwiNotes new];
-    [UNUserNotificationCenter currentNotificationCenter].delegate = notes;
-  });
-  return true;
 }
 
 void kiwi_badge(int32_t count) {

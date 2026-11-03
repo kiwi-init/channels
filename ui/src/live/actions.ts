@@ -343,7 +343,6 @@ export function makeActions(): Actions {
     searchOlder: (code, query, before) => import("~/live/older").then((o) => o.searchOlder(code, query, before)),
     olderAround: (code, seq) => import("~/live/older").then((o) => o.olderAround(code, seq)),
     fetchOlder: (code, got) => import("~/live/older").then((o) => o.fetchOlder(code, got)),
-    snooze: (until) => void rare().then((r) => r.snooze(until)),
     forgetComputer: (id) => void manage().then((m) => m.forgetComputer(id)),
     linkGithub: () => attempt("GitHub not linked", linkGithub),
     signInWithGithub: () => attempt("Not signed in with GitHub", linkGithub),

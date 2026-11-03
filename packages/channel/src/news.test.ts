@@ -50,10 +50,8 @@ test("withHeads stashes polled seqs so a closed row can be fresh", () => {
   expect(rowNews(withHeads(listed, { a: 5 })[0]!, marks, null).fresh).toBe(false);
 });
 
-test("the dock badge follows the notification setting: everything, only mentions and questions, or nothing (T947)", () => {
+test("the dock badge counts mentions and questions, not every unread message (T947)", () => {
   const open = { room: "a", unread: 3, needs: 1, mentions: 2 };
   const news = [rowNews({ room: "a", head: 9 }, marks, open), rowNews({ room: "b", head: 12 }, marks, open), rowNews({ room: "c", head: 4 }, marks, open)];
-  expect(badgeTotal(news, "all")).toBe(newsTotal(news));
-  expect(badgeTotal(news, "mentions")).toBe(2 + 1 + 1);
-  expect(badgeTotal(news, "none")).toBe(0);
+  expect(badgeTotal(news)).toBe(2 + 1 + 1);
 });

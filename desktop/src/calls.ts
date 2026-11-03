@@ -100,7 +100,6 @@ export function makeBridge(t: BridgeTransport): KiwiBridge {
     checkUpdate: () => t.call("checkUpdate"),
     movedApp: () => t.call("movedApp"),
     dismissMovedApp: () => t.call("dismissMovedApp"),
-    notify: (title, body, link) => t.call("notify", title, body, link),
     openExternal: (url) => t.call("openExternal", url),
     saveFile: (name, text) => t.call("saveFile", name, text),
     getDeepLink: () => t.call("getDeepLink"),

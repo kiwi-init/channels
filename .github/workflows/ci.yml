@@ -229,9 +229,9 @@ jobs:
       - name: ui the composer keeps each room's draft and images to itself, and an image sends without a file name as text, in WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-composer-rooms.ts --dist ui/dist
-      - name: ui pause, quiet hours and muting a room, in WebKit
+      - name: ui muting a room dims it in the sidebar, in WebKit
         if: ${{ !cancelled() }}
-        run: bun scripts/ui-notification-controls.ts --dist ui/dist
+        run: bun scripts/ui-mute-room.ts --dist ui/dist
       - name: ui edit and delete your own message (toolbar, Enter, ↑, Esc, the delete confirm), in WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-edit-delete.ts --dist ui/dist
@@ -342,15 +342,6 @@ jobs:
       - name: no test driver in the release build
         if: ${{ !cancelled() }}
         run: bun desktop/scripts/eb-driver-check.ts desktop/release-eb
-      - name: notifications show while the app is in front, and a click on one shows the window
-        if: ${{ !cancelled() }}
-        run: |
-          t="$RUNNER_TEMP/KiwiNotesTest.app/Contents"
-          mkdir -p "$t/MacOS"
-          printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>CFBundleIdentifier</key><string>com.kiwiinit.channels.notes-test</string><key>CFBundleExecutable</key><string>kiwi-notes-test</string><key>CFBundlePackageType</key><string>APPL</string></dict></plist>\n' > "$t/Info.plist"
-          clang -fobjc-arc -O2 -Wall -Wextra -Werror -arch arm64 -mmacosx-version-min=12.0 -framework AppKit -framework UserNotifications -o "$t/MacOS/kiwi-notes-test" desktop/native/macos/kiwi-notes-test.m
-          codesign --force --sign - "$RUNNER_TEMP/KiwiNotesTest.app"
-          "$t/MacOS/kiwi-notes-test" "$(ls -d desktop/release-eb/build/dev-macos-*/*.app)/Contents/MacOS/libkiwi-shell.dylib"
       - name: smoke
         if: ${{ !cancelled() }}
         run: bun desktop/scripts/smoke-eb.ts desktop/release-eb/build/dev-macos-*/*.app
@@ -505,11 +496,6 @@ jobs:
         run: |
           cc -O2 -Wall -Wextra -Werror -o "$RUNNER_TEMP/kiwi-look-test" desktop/native/linux/kiwi-look-test.c $(pkg-config --cflags --libs gtk+-3.0) -ldl
           xvfb-run -a -s "-screen 0 1280x720x24" "$RUNNER_TEMP/kiwi-look-test" "$APP/bin/libkiwi-shell.so"
-      - name: notifications come from Channels over D-Bus, and a click opens the window
-        if: ${{ !cancelled() }}
-        run: |
-          cc -O2 -Wall -Wextra -Werror -o "$RUNNER_TEMP/kiwi-notify-test" desktop/native/linux/kiwi-notify-test.c $(pkg-config --cflags --libs gtk+-3.0) -ldl
-          dbus-run-session -- xvfb-run -a "$RUNNER_TEMP/kiwi-notify-test" "$APP/bin/libkiwi-shell.so"
       - name: an image pasted from another app is served to the page only right after a real Ctrl+V or Shift+Insert
         if: ${{ !cancelled() }}
         run: |

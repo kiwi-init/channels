@@ -117,8 +117,6 @@ execFileSync(
     "-framework",
     "WebKit",
     "-framework",
-    "UserNotifications",
-    "-framework",
     "ImageIO",
     "-o",
     path.join(contents, "MacOS", "libkiwi-shell.dylib"),

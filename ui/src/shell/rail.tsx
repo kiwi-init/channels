@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useEffectEvent, useState, type CSSProperties, type DragEvent } from "react"
+import { Suspense, useEffect, useEffectEvent, useState, type CSSProperties, type DragEvent } from "react"
 
 import { nextWithNews } from "@kiwi/channel/news.ts"
 import { cx } from "~/kit/bits"
@@ -6,12 +6,8 @@ import { later } from "~/kit/later"
 import { Icon } from "~/kit/icons"
 import type { ChannelTile } from "~/model"
 import { useApp } from "~/nav"
-import { useNow } from "~/kit/time"
 import type { Menu } from "~/shell/rail-menu"
 import { railItems, type DropTarget } from "~/shell/rail-items"
-
-const Paused = lazy(() => import("~/shell/paused"))
-import { silentNow } from "~/live/quiet"
 
 const RailMenu = later(() => import("~/shell/rail-menu").then((m) => m.default))
 const FolderTile = later(() => import("~/shell/rail-folder").then((m) => m.default))
@@ -28,7 +24,6 @@ const keyOf = (t: DropTarget): string => (t.kind === "channel" ? `c:${t.code}` :
 
 export function Rail() {
   const { app, nav, go } = useApp()
-  const now = useNow(60_000)
   const onChannel = nav.page === "channel"
   const home = onChannel && nav.channel === null
   const on = onChannel ? nav.channel : null
@@ -147,11 +142,6 @@ export function Rail() {
         </li>
       </ul>
       <div className="rail-foot">
-        {silentNow(app.prefs, now) && (
-          <Suspense fallback={null}>
-            <Paused />
-          </Suspense>
-        )}
         <button
           type="button"
           className={cx("rail-gear", nav.page === "settings" && "is-on")}
