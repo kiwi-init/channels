@@ -302,6 +302,29 @@ html .day.is-members {
   text-overflow: ellipsis;
 }
 
+.msg-quote.is-excerpt {
+  display: grid;
+  gap: 2px;
+  align-items: start;
+  margin: 2px 0 6px;
+  padding: 2px 0 2px 12px;
+  border-left: 2px solid var(--line-3);
+  border-radius: 0;
+}
+
+.msg-quote.is-excerpt:hover {
+  border-left-color: var(--ink-3);
+  background: none;
+}
+
+.msg-quote.is-excerpt .msg-quote-text {
+  display: -webkit-box;
+  overflow: hidden;
+  white-space: pre-line;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+}
+
 .msg-receipt {
   margin-top: 2px;
   color: var(--ink-3);
@@ -1447,6 +1470,10 @@ button.msg-image-spot:hover {
   font-weight: 600;
 }
 
+.compose-reply-excerpt {
+  color: var(--ink);
+}
+
 .compose-reply-x {
   display: grid;
   flex: none;
@@ -1991,4 +2018,35 @@ button.msg-image-spot:hover {
   flex-wrap: wrap;
   align-items: center;
   gap: 8px 12px;
+}
+
+.quote-pick {
+  position: fixed;
+  z-index: 40;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--ctl);
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--r-ctl);
+  background: var(--float);
+  color: var(--ink);
+  font: 500 var(--t-ui) var(--ui);
+  box-shadow: var(--shadow-pop);
+  transform: translate(-50%, calc(-100% - 8px));
+  animation: fade var(--fast) var(--ease);
+}
+
+.quote-pick.is-below {
+  transform: translate(-50%, 8px);
+}
+
+.quote-pick .icon {
+  color: var(--ink-2);
+  transform: scaleY(-1);
+}
+
+.quote-pick:hover {
+  background: var(--raise-2);
 }

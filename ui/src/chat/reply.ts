@@ -4,7 +4,8 @@ import type { Message } from "~/model"
 
 export interface Replying {
   to: Message | null
-  set: (m: Message | null) => void
+  excerpt: string | null
+  set: (m: Message | null, excerpt?: string) => void
 }
 
 export const ReplyContext = createContext<Replying | null>(null)

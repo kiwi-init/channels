@@ -1,11 +1,13 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useLayoutEffect, useMemo, useRef, useSyncExternalStore } from "react"
 
 import { Composer } from "~/chat/composer"
 import { compactAt, quoteOf, ReadOnly, useNames, useStick, useTaskIds } from "~/chat/conversation"
 import { MessageRow } from "~/chat/message"
+import { threadReply } from "~/chat/quote"
+import { QuotePick } from "~/chat/quote-pick"
 import { jumpTo, ReplyContext, type Replying } from "~/chat/reply"
 import { Empty } from "~/kit/bits"
-import type { Channel, Message } from "~/model"
+import type { Channel } from "~/model"
 import { nickname } from "~/names"
 import { useAct } from "~/nav"
 import { PanelHead } from "~/panels/frame"
@@ -16,8 +18,15 @@ export function ThreadPanel({ channel, seq, focus }: { channel: Channel; seq: nu
   const bySeq = useMemo(() => new Map(channel.messages.map((m) => [m.seq, m])), [channel.messages])
   const names = useNames(channel)
   const tasks = useTaskIds(channel)
-  const [reply, setReply] = useState<{ seq: number; to: Message } | null>(null)
-  const replying = useMemo((): Replying => ({ to: reply?.seq === seq ? reply.to : null, set: (to) => setReply(to ? { seq, to } : null) }), [reply, seq])
+  const reply = useSyncExternalStore(threadReply.subscribe, threadReply.get)
+  const replying = useMemo((): Replying => {
+    const here = reply?.code === channel.code && reply.root === seq ? reply : null
+    return {
+      to: (here && bySeq.get(here.to)) ?? null,
+      excerpt: here?.excerpt ?? null,
+      set: (to, excerpt) => threadReply.set(to ? { code: channel.code, root: seq, to: to.seq, excerpt: excerpt ?? null } : null),
+    }
+  }, [reply, channel.code, seq, bySeq])
   const { scroller, content, remember, toBottom, unstick } = useStick()
   const last = replies.at(-1)?.seq
   const shown = useRef({ seq, last })
@@ -35,6 +44,7 @@ export function ThreadPanel({ channel, seq, focus }: { channel: Channel; seq: nu
     if (last !== undefined && replies.at(-1)?.from === channel.you) toBottom(false)
   }, [seq, last, replies, channel.you, toBottom])
   const onQuote = useCallback((target: number) => void jumpTo(content.current, target), [content])
+  const quote = useCallback((at: number, excerpt: string) => threadReply.set({ code: channel.code, root: seq, to: at, excerpt }), [channel.code, seq])
   const { actions } = useAct()
   const following = channel.threads?.find((t) => t.root === seq)?.following ?? channel.follows?.[seq] ?? (root?.from === channel.you || !!root?.mentionsYou)
 
@@ -52,6 +62,7 @@ export function ThreadPanel({ channel, seq, focus }: { channel: Channel; seq: nu
           {following ? "Following" : "Follow"}
         </button>
       </PanelHead>
+      {root.where.kind !== "theirs" && <QuotePick root={content} onQuote={quote} />}
       <div className="feed" ref={scroller} onScroll={remember}>
         <div className="feed-list" ref={content}>
           <div className="thread-root">
