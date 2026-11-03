@@ -37,7 +37,7 @@ export function stageWords(t: Task): { text: string; red: boolean } {
       if (t.release) return { text: at(`shipped in ${t.release}`), red: false }
       return { text: pr && t.pr?.state === "merged" ? `${pr} merged` : "done", red: false }
     default:
-      return { text: pr ?? "no PR yet", red: false }
+      return { text: pr ?? "", red: false }
   }
 }
 

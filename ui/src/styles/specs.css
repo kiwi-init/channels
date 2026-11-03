@@ -130,14 +130,6 @@
   background: var(--wash);
 }
 
-.specs-group-dot {
-  align-self: center;
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  background: currentColor;
-}
-
 .specs-list .board-head {
   padding: 4px 8px;
 }
@@ -157,6 +149,7 @@
 .spec-row > .spec-mark {
   grid-row: 1;
   grid-column: 1;
+  justify-self: center;
   align-self: start;
   margin-top: 4px;
 }
@@ -211,7 +204,7 @@
   }
 
   .specs-list .board-row {
-    grid-template-columns: 8px auto minmax(120px, 1fr) auto;
+    grid-template-columns: 1rem auto minmax(120px, 1fr) auto;
     grid-template-rows: auto;
     column-gap: 16px;
     padding-block: 6px;
@@ -379,7 +372,7 @@
 
 .spec-doc [data-anchor] {
   border-radius: var(--r-tick);
-  box-shadow: -10px 0 0 -8px var(--line-3);
+  background: var(--wash);
   transition: background var(--fast);
 }
 
@@ -411,9 +404,8 @@
   position: absolute;
   right: 0;
   left: 0;
-  padding: 10px 12px;
-  border: 1px solid var(--line-2);
-  border-radius: var(--r-ctl);
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
   background: var(--bg);
   transition:
     top var(--slow) var(--ease),
@@ -421,11 +413,13 @@
 }
 
 .spec-rail-item.is-hot {
-  border-color: var(--line-3);
+  border-color: var(--ink-3);
 }
 
 .spec-rail-item.is-draft {
-  border-color: var(--line-3);
+  padding: 10px 12px;
+  border: 1px solid var(--line-3);
+  border-radius: var(--r-ctl);
   background: var(--bg-2);
 }
 
@@ -447,7 +441,7 @@
 }
 
 .spec-comment .msg-text {
-  margin-top: 6px;
+  margin: 2px 0 0 calc(1.5rem + 8px);
   font-size: var(--t-ui);
 }
 
@@ -482,31 +476,6 @@
   margin: 0;
 }
 
-.spec-rail-talk .spec-talk-h {
-  flex-wrap: wrap;
-  row-gap: 0;
-}
-
-.spec-rail-talk .spec-talk-h .dimmer {
-  flex-basis: 100%;
-  order: 1;
-  color: var(--ink-3);
-  font: var(--t-meta) var(--ui);
-}
-
-.spec-rail-talk .spec-box-new.is-line {
-  flex-direction: column;
-  align-items: stretch;
-}
-
-.spec-rail-talk .spec-box-new.is-line .btn {
-  align-self: flex-end;
-}
-
-.spec-rail-talk .spec-box-new.is-line .spec-box-text {
-  min-height: 3.25rem;
-}
-
 .spec-talk-h {
   display: flex;
   align-items: center;
@@ -517,18 +486,6 @@
 
 .spec-talk-h .btn {
   margin-left: auto;
-}
-
-.spec-talk-h .dimmer::before {
-  content: "· ";
-}
-
-.spec-rail-talk .spec-talk-h .dimmer::before {
-  content: none;
-}
-
-.spec-talk-h .dimmer {
-  font-weight: 400;
 }
 
 .spec-comments {
@@ -544,10 +501,6 @@
 
 .spec-comments .spec-comment + .spec-comment {
   border-top: 1px solid var(--line);
-}
-
-.spec-comments .spec-comment .msg-text {
-  margin: 2px 0 0 calc(1.5rem + 8px);
 }
 
 .spec-comments .spec-comment-quote {
@@ -591,13 +544,6 @@
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-}
-
-.spec-box-hint {
-  margin-right: auto;
-  color: var(--ink-3);
-  font: var(--t-stamp) var(--mono);
-  letter-spacing: -0.01em;
 }
 
 .spec-diff-bar {
@@ -686,15 +632,6 @@
   align-items: center;
   gap: 8px 12px;
   margin-bottom: 12px;
-}
-
-.spec-editor-kind {
-  padding: 2px 8px;
-  border-radius: var(--r-tag);
-  background: var(--bg-3);
-  color: var(--ink-2);
-  font: var(--t-stamp) var(--mono);
-  letter-spacing: -0.01em;
 }
 
 .spec-editor-hint {

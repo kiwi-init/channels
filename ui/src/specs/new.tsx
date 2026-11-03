@@ -24,9 +24,9 @@ export function NewSpec({ channel, onClose }: { channel: Channel; onClose: () =>
   }
   return (
     <Dialog open onClose={onClose} label="New spec">
-      <DialogHead title="New spec" sub="Say what you want. Agents and people shape it into a spec together." onClose={onClose} />
+      <DialogHead title="New spec" onClose={onClose} />
       <div className="dialog-body spec-new">
-        <Field label="What do you want?" hint="Your own words, as you'd say them in #general. They stay on the spec as written.">
+        <Field label="What do you want?" hint="Your words stay on the spec as written.">
           <textarea
             className="textarea"
             rows={4}
@@ -36,13 +36,10 @@ export function NewSpec({ channel, onClose }: { channel: Channel; onClose: () =>
             placeholder="The labels as a spreadsheet for Friday's review: one row per box, with who drew it."
           />
         </Field>
-        <Field label="A short name" hint="Optional. The spec's heading; the lead can change it.">
+        <Field label="A short name" hint="Optional.">
           <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Export annotations as CSV" />
         </Field>
-        <p className="spec-new-how">
-          It posts in #general and starts a draft with Why, Done when, In, Out and Open questions. {lead ? `${lead} fills it in` : "The agents fill it in"}, anyone comments on any line, and once you
-          approve it the first free agent starts.
-        </p>
+        <p className="spec-new-how">It posts in #general, and {lead ?? "the lead"} drafts the spec for you to approve.</p>
       </div>
       <footer className="dialog-foot">
         <button type="button" className="btn is-quiet" onClick={onClose}>

@@ -7,21 +7,20 @@ export type GroupKey = "fail" | "running" | "ready" | "none" | "merged" | "close
 export interface Group<T> {
   key: GroupKey
   label: string
-  sub: string
   rows: T[]
 }
 
-const HEADS: Record<GroupKey, { label: string; sub: string }> = {
-  fail: { label: "Checks failed", sub: "These can't merge until CI is green" },
-  running: { label: "Checks running", sub: "Waiting on CI" },
-  ready: { label: "Ready", sub: "Every check passed" },
-  none: { label: "No checks yet", sub: "GitHub hasn't reported a check on these" },
-  merged: { label: "Merged", sub: "Newest first" },
-  closed: { label: "Closed without merging", sub: "Newest first" },
-  free: { label: "Not picked up", sub: "No task holds these yet" },
-  held: { label: "Being worked on", sub: "A task holds these" },
-  done: { label: "Done", sub: "Closed as completed" },
-  dropped: { label: "Not planned", sub: "Closed without doing them" },
+const HEADS: Record<GroupKey, string> = {
+  fail: "Checks failed",
+  running: "Checks running",
+  ready: "Ready",
+  none: "No checks yet",
+  merged: "Merged",
+  closed: "Closed without merging",
+  free: "Not picked up",
+  held: "Being worked on",
+  done: "Done",
+  dropped: "Not planned",
 }
 
 export const isOpen = (x: { state: string }): boolean => x.state === "open" || x.state === "draft"
@@ -39,7 +38,7 @@ function grouped<T>(rows: readonly T[], order: readonly GroupKey[], keyOf: (row:
   for (const r of rows) out.get(keyOf(r))?.push(r)
   return order.flatMap((key) => {
     const list = out.get(key) ?? []
-    return list.length ? [{ key, ...HEADS[key], rows: list }] : []
+    return list.length ? [{ key, label: HEADS[key], rows: list }] : []
   })
 }
 

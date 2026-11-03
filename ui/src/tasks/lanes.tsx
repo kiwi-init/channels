@@ -5,6 +5,7 @@ import { ago, clock } from "~/kit/time"
 import { contextOf, liveOf, restOf } from "~/doing"
 import type { Channel, PullRequest, Task } from "~/model"
 import { useApp } from "~/nav"
+import { TONES } from "~/tasks/row"
 import { nickname, shown } from "~/names"
 import { lanesOf, type Lane } from "~/now"
 
@@ -42,7 +43,8 @@ function Current({ t }: { t: Task }) {
       <button type="button" onClick={() => go({ to: "panel", panel: { kind: "task", task: t.id } })}>
         <span className="lane-title">{t.title}</span>
         <span className="lane-meta">
-          <span className="num">T{t.id}</span> · {statusWord(t)} · {ago(t.updatedAt)}
+          <span className="num">T{t.id}</span>
+          {t.status !== "doing" && <span className={TONES[t.status]}> · {statusWord(t)}</span>} · {ago(t.updatedAt)}
         </span>
       </button>
       {t.pr && <PrLine pr={t.pr} />}
@@ -56,25 +58,25 @@ function LaneCard({ channel, lane }: { channel: Channel; lane: Lane }) {
   const live = liveOf(p)
   const context = app.computer?.contextLine ? contextOf(p) : null
   const line = live?.text ?? (p.presence === "online" ? restOf(p) : "offline")
-  const sub = [p.sponsor ? `for ${nickname(channel, p.sponsor)}` : null, p.model].filter(Boolean).join(" · ")
+  const sponsor = p.sponsor && p.sponsor !== channel.you ? `for ${nickname(channel, p.sponsor)}` : null
+  const about = [p.sponsor ? `for ${nickname(channel, p.sponsor)}` : null, p.model].filter(Boolean).join(" · ")
   return (
     <section className="lane" aria-label={shown(p)}>
-      <button type="button" className="lane-head" onClick={() => go({ to: "panel", panel: { kind: "person", name: p.name } })}>
+      <button type="button" className="lane-head" title={about || undefined} onClick={() => go({ to: "panel", panel: { kind: "person", name: p.name } })}>
         <Avatar person={p} pip />
         <span className="lane-who">
           <span className="lane-name">
             {nickname(channel, p.name)}
             {p.name === channel.lead && <span className="dim"> lead</span>}
           </span>
-          {sub && <span className="lane-sub">{sub}</span>}
+          <span className="lane-sub">
+            <span className={cx(live?.busy && "tone-doing")}>{line}</span>
+            {p.load?.level === "overloaded" && <span className="tone-alert"> · overloaded</span>}
+            {sponsor && <span> · {sponsor}</span>}
+          </span>
         </span>
-      </button>
-      <p className="lane-now">
-        <span className={cx("lane-dot", live?.busy ? "is-busy" : p.presence === "online" ? "is-online" : "is-off")} aria-hidden="true" />
-        <span className={cx("lane-doing", !live?.busy && "dim")}>{line}</span>
-        {p.load?.level === "overloaded" && <span className="tone-alert">overloaded</span>}
         {context && <span className={cx("lane-context num", context.over ? "tone-alert" : "dim")}>{context.text}</span>}
-      </p>
+      </button>
       {lane.current.length > 0 && (
         <ul className="lane-list">
           {lane.current.map((t) => (
@@ -132,7 +134,7 @@ export function Lanes({ channel }: { channel: Channel }) {
   if (!lanes.length)
     return (
       <Empty title="No agents yet." icon="agent">
-        Add one from the sidebar to see what it works on here.
+        Add one from the sidebar.
       </Empty>
     )
   return (

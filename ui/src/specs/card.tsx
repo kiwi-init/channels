@@ -20,8 +20,6 @@ export function SpecMark({ spec }: { spec: Spec }) {
 export function SpecCard({ channel, spec }: { channel: Channel; spec: Spec }) {
   const { go } = useAct()
   const line = stageLine(channel, spec)
-  const boxes = boxesOf(spec)
-  const done = boxes.filter((b) => b.done).length
   const who = workersOf(channel, spec)
   const said = commentsOf(channel, spec.ask).length
   const open = (part: "spec" | "inside" | "result") => go({ to: "spec", ask: spec.ask, part })
@@ -40,11 +38,6 @@ export function SpecCard({ channel, spec }: { channel: Channel; spec: Spec }) {
         <span className="spec-card-meta">
           <span className={line.tone}>{line.word}</span>
           <span>{line.line}</span>
-          {boxes.length > 0 && (
-            <span className="num">
-              {done}/{boxes.length} done when
-            </span>
-          )}
           {said > 0 && <span className="num">{said === 1 ? "1 comment" : `${said} comments`}</span>}
         </span>
       </button>
@@ -71,7 +64,6 @@ export function SpecNeedCard({ channel, ask }: { channel: Channel; ask: SpecAsk 
         <button type="button" className="needs-name" onClick={() => go({ to: "panel", panel: { kind: "person", name: by } })}>
           {nickname(channel, by)}
         </button>
-        <span className="needs-tag is-decide">{ask.why === "result" ? "result" : ask.why === "changed" ? "changed" : "spec"}</span>
         <span className="needs-verb">{NEED_VERB[ask.why]}</span>
         <span className="needs-meta">
           <time className="needs-time" dateTime={new Date(ask.at).toISOString()}>
@@ -106,7 +98,7 @@ export function SpecNeedCard({ channel, ask }: { channel: Channel; ask: SpecAsk 
             <button type="button" className="btn" onClick={() => go({ to: "spec", ask: spec.ask, part: "spec" })}>
               Read and comment
             </button>
-            <span className="spec-need-hint">Approved, it starts by itself when an agent is free.</span>
+            <span className="spec-need-hint">It starts when an agent is free.</span>
           </>
         ) : ask.why === "changed" ? (
           <>
