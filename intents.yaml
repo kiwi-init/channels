@@ -110,7 +110,7 @@ intents:
       at: 2026-11-03T18:57:25.317Z
   - id: keep-keys-safe
     name: Keep Keys Safe
-    status: retired
+    status: active
     sentence: The app seals the person's keys with the OS keychain, never in plain files.
     actor: system
     triggers:
@@ -1165,9 +1165,10 @@ intents:
     actor: developer
     triggers:
       - Actions, rehearsal, Run workflow
-    code: []
-    confidence: low
-    doubt: No code found. Does this still exist?
+    code:
+      - .github/workflows/rehearsal.yml
+      - .github/workflows/release-build.yml
+    confidence: high
     reviewed:
       by: ojowwalker77
       at: 2026-11-03T19:58:22.243Z
@@ -1192,9 +1193,10 @@ intents:
     triggers:
       - Run the refresh-dependencies skill
       - Livewire release dispatch
-    code: []
-    confidence: low
-    doubt: No code found. Does this still exist?
+    code:
+      - .claude/skills/refresh-dependencies/
+      - .github/workflows/livewire-bump.yml
+    confidence: high
     reviewed:
       by: ojowwalker77
       at: 2026-11-03T19:58:40.875Z
