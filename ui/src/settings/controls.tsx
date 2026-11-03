@@ -17,9 +17,11 @@ export function Seg<T extends string | number>({ label, value, options, onChange
   )
 }
 
-export function Row({ label, hint, children, wide }: { label: ReactNode; hint?: ReactNode; children?: ReactNode; wide?: boolean }) {
+export const autofocus = (el: HTMLElement | null) => el?.setAttribute("autofocus", "")
+
+export function Row({ label, hint, children, wide, tip }: { label: ReactNode; hint?: ReactNode; children?: ReactNode; wide?: boolean; tip?: string }) {
   return (
-    <div className={cx("set-row", wide && "is-wide")}>
+    <div className={cx("set-row", wide && "is-wide")} title={tip}>
       <div className="set-row-text">
         <span className="set-row-label">{label}</span>
         {hint && <span className="set-row-hint">{hint}</span>}
@@ -106,6 +108,7 @@ export function Confirm({
   onClose: () => void
   children?: ReactNode
 }) {
+  const safe = children !== undefined || !ready
   return (
     <Dialog open={open} onClose={onClose} label={title}>
       <DialogHead title={title} sub={sub} onClose={onClose} />
@@ -118,10 +121,10 @@ export function Confirm({
       >
         {children}
         <div className="dialog-foot">
-          <button type="button" className="btn is-quiet" onClick={onClose}>
+          <button type="button" className="btn is-quiet" onClick={onClose} ref={safe ? autofocus : undefined}>
             Cancel
           </button>
-          <button type="submit" className="btn is-danger" disabled={!ready} autoFocus={!children}>
+          <button type="submit" className="btn is-danger" disabled={!ready} ref={safe ? undefined : autofocus}>
             {action}
           </button>
         </div>

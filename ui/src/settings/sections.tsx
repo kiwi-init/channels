@@ -35,19 +35,10 @@ export function AccountSection() {
   return (
     <Page title="Account">
       <Group>
-        <Row label="Name" hint="Shown next to everything you send. It's part of your key, so it stays the one you started with.">
+        <Row label="Name" tip="Part of your key, so it can't change.">
           <span className="set-value">{account.name}</span>
         </Row>
-        <Row
-          label="GitHub"
-          hint={
-            account.githubSignIn
-              ? "You sign in with it. Your pull requests and their checks show up in tasks, and your GitHub picture is your face in channels."
-              : account.github
-                ? "Your pull requests and their checks show up in tasks, and your GitHub picture is your face in channels."
-                : "Link it to see pull requests and their checks in tasks, and to wear your GitHub picture in channels."
-          }
-        >
+        <Row label="GitHub" hint={account.githubSignIn ? "You sign in with it." : account.github ? undefined : "Pull requests in tasks, and your picture in channels."}>
           {account.githubSignIn && account.github ? (
             <span className="set-value">@{account.github.login}</span>
           ) : account.github ? (
@@ -63,13 +54,9 @@ export function AccountSection() {
             </button>
           )}
         </Row>
-        {account.githubMove && (
-          <Row label="Your devices" hint={`They stay under your earlier sign-in: ${account.githubMove}.`}>
-            <span className="set-value">Not moved to GitHub</span>
-          </Row>
-        )}
+        {account.githubMove && <Row label="Devices not moved to GitHub" hint={`Still under ${account.githubMove}.`} />}
         {account.githubCode && !account.github && (
-          <Row label="GitHub code" hint="Type it on the GitHub page that opened, then come back.">
+          <Row label="GitHub code" hint="Type it on the GitHub page that opened.">
             <code className="set-value set-key">{account.githubCode.code}</code>
             <IconButton
               icon="copy"
@@ -84,7 +71,7 @@ export function AccountSection() {
           </Row>
         )}
         {account.key && (
-          <Row label="Your key" hint="Signs everything you send. Others can check it against this.">
+          <Row label="Your key" hint="Others check what you send against it.">
             <code className="set-value set-key">{account.key}</code>
             <IconButton
               icon="copy"
@@ -102,17 +89,15 @@ export function AccountSection() {
           {KEYS_UNSEALED}
         </p>
       )}
-      <Group>
-        <Row label="Sign out" hint="Signs this computer out of the relay. Your keys and channels stay here.">
-          <button type="button" className="btn is-danger is-small" onClick={() => setLeaving(true)}>
-            Sign out
-          </button>
-        </Row>
-      </Group>
+      <div className="set-end">
+        <button type="button" className="btn is-small set-forget" onClick={() => setLeaving(true)}>
+          Sign out
+        </button>
+      </div>
       <Confirm
         open={leaving}
-        title="Sign out?"
-        sub="Your keys, channels and their history stay on this computer. Sign in again to pick up where you left off."
+        title="Sign out of the relay?"
+        sub="Your keys, channels and their history stay on this computer."
         action="Sign out"
         onClose={() => setLeaving(false)}
         onConfirm={() => {
@@ -157,16 +142,16 @@ export function AppearanceSection() {
   return (
     <Page title="Appearance" lede="On this computer only.">
       <Group>
-        <Row label="Mode" hint="System follows your computer's light or dark setting.">
+        <Row label="Mode">
           <Seg label="Mode" value={prefs.theme} options={THEMES} onChange={(theme) => set({ theme })} />
         </Row>
         <Row label="Text size">
           <Seg<number> label="Text size" value={prefs.textSize} options={SIZES} onChange={(textSize) => set({ textSize })} />
         </Row>
-        <Row label="Font" hint="For messages and the app's words. Times, ids and code keep Paper Mono.">
+        <Row label="Font">
           <Seg label="Font" value={prefs.font} options={FONTS} onChange={(font) => set({ font })} />
         </Row>
-        <Row label="Motion" hint="Reduced keeps panels and dialogs still.">
+        <Row label="Motion">
           <Seg label="Motion" value={prefs.reduceMotion ? "reduced" : "full"} options={MOTION} onChange={(m) => set({ reduceMotion: m === "reduced" })} />
         </Row>
       </Group>
@@ -190,15 +175,13 @@ export function NotificationsSection() {
   return (
     <Page title="Notifications" lede="For every channel on this computer.">
       <Group>
-        <Row label="Notify me" hint="Asks are things that wait on you: a permission, a question, someone at the door." wide>
+        <Row label="Notify me" hint="Asks: a permission, a question, someone at the door.">
           <Seg label="Notify me" value={prefs.notify} options={NOTIFY} onChange={(notify) => actions.setPrefs({ notify })} />
         </Row>
-        <Row label="Sound for mentions and direct messages" hint="A short chime when someone mentions you or writes to you directly, while Channels isn't in front.">
+        <Row label="Sound for mentions and direct messages" tip="A short chime while Channels is in the background.">
           <Toggle label="Sound for mentions and direct messages" on={prefs.mentionSound} onChange={(mentionSound) => actions.setPrefs({ mentionSound })} />
         </Row>
-      </Group>
-      <Group title="Pause" hint="While paused, nothing notifies or makes a sound. Counts still add up, so you see what you missed.">
-        <Row label={paused ? `Paused until ${clockAt(prefs.snoozeUntil!)}` : "Pause notifications"}>
+        <Row label={paused ? `Paused until ${clockAt(prefs.snoozeUntil!)}` : "Pause"}>
           {paused ? (
             <button type="button" className="btn is-small" onClick={() => actions.snooze(null)}>
               Resume
@@ -213,11 +196,8 @@ export function NotificationsSection() {
             </span>
           )}
         </Row>
-        <Row label="Quiet hours" hint={quiet.on ? `Every day from ${hhmm(quiet.from)} to ${hhmm(quiet.to)}.` : "Pause every day at the same times."}>
-          <Toggle label="Quiet hours" on={quiet.on} onChange={(on) => actions.setPrefs({ quiet: { ...quiet, on } })} />
-        </Row>
-        {quiet.on && (
-          <Row label="From and to">
+        <Row label="Quiet hours">
+          {quiet.on && (
             <span className="set-buttons">
               <input
                 className="input is-small"
@@ -226,6 +206,9 @@ export function NotificationsSection() {
                 value={hhmm(quiet.from)}
                 onChange={(e) => actions.setPrefs({ quiet: { ...quiet, from: minutesOf(e.target.value, quiet.from) } })}
               />
+              <span className="set-to" aria-hidden="true">
+                to
+              </span>
               <input
                 className="input is-small"
                 type="time"
@@ -234,10 +217,11 @@ export function NotificationsSection() {
                 onChange={(e) => actions.setPrefs({ quiet: { ...quiet, to: minutesOf(e.target.value, quiet.to) } })}
               />
             </span>
-          </Row>
-        )}
+          )}
+          <Toggle label="Quiet hours" on={quiet.on} onChange={(on) => actions.setPrefs({ quiet: { ...quiet, on } })} />
+        </Row>
       </Group>
-      <Group title="Muted" hint="A muted channel or room stays quiet: no notifications, no sound and no count, except when someone mentions you, writes to you directly or a decision is put to you.">
+      <Group title="Muted" hint={prefs.muted.length ? "They still notify for mentions, direct messages and decisions." : undefined}>
         {prefs.muted.length ? (
           prefs.muted.map((key) => (
             <Row key={key} label={mutedName(app.channels, app.channel, key)}>
@@ -247,11 +231,11 @@ export function NotificationsSection() {
             </Row>
           ))
         ) : (
-          <Row label="Nothing muted" hint="Mute a channel from its settings, or a room from the channel's room list." />
+          <p className="set-none">Nothing. Mute a channel in its settings, a room in the room list.</p>
         )}
       </Group>
       <Group>
-        <Row label="Enter sends" hint={prefs.enterSends ? "Shift Enter starts a new line." : "Enter starts a new line. ⌘ Enter sends."}>
+        <Row label="Enter sends" hint={prefs.enterSends ? "Shift Enter starts a new line." : "⌘ Enter sends."}>
           <Toggle label="Enter sends" on={prefs.enterSends} onChange={(enterSends) => actions.setPrefs({ enterSends })} />
         </Row>
       </Group>
@@ -287,36 +271,18 @@ export function UpdatesSection() {
   const account = app.account
   if (!account) return null
   const update = account.update
+  const on = <span className="set-mono">{account.version}</span>
   return (
     <Page title="Updates">
       <Group>
-        <Row label="This version">
-          <span className="set-value">{account.version}</span>
-        </Row>
         {update?.ready ? (
-          <Row
-            label={
-              <span className="set-state">
-                <span className="set-state-dot is-new" aria-hidden="true" />
-                {update.version} is ready
-              </span>
-            }
-            hint="Channels closes and opens again on the new version."
-          >
+          <Row label={<New>{update.version} is ready</New>} hint={<>You're on {on}. Channels restarts on the new one.</>}>
             <button type="button" className="btn is-primary is-small" onClick={app.actions.installUpdate}>
               Restart to update
             </button>
           </Row>
         ) : update?.state === "available" ? (
-          <Row
-            label={
-              <span className="set-state">
-                <span className="set-state-dot is-new" aria-hidden="true" />
-                {update.version} is out
-              </span>
-            }
-            hint={update.blocked ? "This copy can't replace itself where it is, so the release page has the new one." : "Channels downloads it, then closes and opens again on the new version."}
-          >
+          <Row label={<New>{update.version} is out</New>} hint={update.blocked ? "This copy can't replace itself where it is." : <>You're on {on}.</>}>
             <button type="button" className="btn is-primary is-small" onClick={app.actions.installUpdate}>
               {update.blocked ? "Get it" : "Download and restart"}
             </button>
@@ -327,26 +293,38 @@ export function UpdatesSection() {
               <span className="set-state tone-doing">
                 <span className="set-state-dot is-doing" aria-hidden="true" />
                 Downloading {update.version}
-                {update.progress ? ` · ${Math.round(update.progress * 100)}%` : "…"}
+                <span className="set-mono">{update.progress ? ` · ${Math.round(update.progress * 100)}%` : "…"}</span>
               </span>
             }
             hint="You can keep working. We ask before restarting."
           />
+        ) : account.desktop ? (
+          <CheckUpdates version={account.version} />
         ) : (
-          <Row
-            label={
-              <span className="set-state">
-                <span className="tone-live">
-                  <Icon name="check" size={14} />
-                </span>
-                Up to date
-              </span>
-            }
-          />
+          <Row label={<UpToDate />} hint={on} />
         )}
-        {account.desktop && <CheckUpdates />}
       </Group>
     </Page>
+  )
+}
+
+function New({ children }: { children: ReactNode }) {
+  return (
+    <span className="set-state">
+      <span className="set-state-dot is-new" aria-hidden="true" />
+      {children}
+    </span>
+  )
+}
+
+function UpToDate() {
+  return (
+    <span className="set-state">
+      <span className="tone-live">
+        <Icon name="check" size={14} />
+      </span>
+      Up to date
+    </span>
   )
 }
 
@@ -363,17 +341,17 @@ export function AboutSection() {
         {account.desktop ? (
           <RelayRow relay={account.relay ?? ""} />
         ) : (
-          <Row label="Relay" hint="Where your channels meet.">
-            <span className="set-value">{account.relay ?? "Not connected"}</span>
+          <Row label="Relay">
+            <span className="set-value set-mono">{account.relay ?? "Not connected"}</span>
           </Row>
         )}
       </Group>
-      <p className="set-fine">Channels is built on open source software. Each project's license ships inside the app.</p>
+      <p className="set-fine">Built on open source software. Each project's license ships inside the app.</p>
     </Page>
   )
 }
 
-function CheckUpdates() {
+function CheckUpdates({ version }: { version: string }) {
   const { app } = useApp()
   const [result, setResult] = useState<UpdateCheck | null>(null)
   const [busy, setBusy] = useState(false)
@@ -385,8 +363,8 @@ function CheckUpdates() {
       .finally(() => setBusy(false))
   }
   return (
-    <Row label="Check for updates" hint={<span role="status">{busy ? "Checking…" : updateFound(result)}</span>}>
-      <button type="button" className="btn is-small" disabled={busy} onClick={check}>
+    <Row label={<UpToDate />} hint={<span role="status">{busy ? "Checking…" : result ? updateFound(result) : <span className="set-mono">{version}</span>}</span>}>
+      <button type="button" className="btn is-quiet is-small" disabled={busy} onClick={check}>
         Check now
       </button>
     </Row>
@@ -405,10 +383,9 @@ function RelayRow({ relay }: { relay: string }) {
             {error.slice(0, 1).toUpperCase() + error.slice(1)}
           </span>
         ) : (
-          "Where your channels meet. Changing it reloads the app."
+          "Changing it reloads the app."
         )
       }
-      wide
     >
       <InlineEdit
         value={relay}
@@ -434,10 +411,7 @@ function LoginKey({ pk }: { pk: string }) {
   }, [pk])
   if (shown?.pk !== pk) return null
   return (
-    <Row
-      label="Your key for new devices"
-      hint="A new computer or phone you sign in, or a computer you add with kiwi login, shows this before it takes you as its person. Anything else means it isn't you."
-    >
+    <Row label="Your key for new devices" hint="A device you add must show this. Anything else isn't you.">
       <code className="set-value set-key">{shown.key}</code>
     </Row>
   )
