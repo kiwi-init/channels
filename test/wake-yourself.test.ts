@@ -433,6 +433,16 @@ describe("Grok keeps its own monitor running", () => {
     await monitor.exited;
     await until(async () => (await listenersOf(h, me)).length === 0, "the monitor's join gone");
     expect(await stop({ backgroundTasks: [{ id: "m8", type: "monitor", status: "running", description: listen.replace(/ join$/, " listen") }] })).toBeNull();
+
+    const original = (command: string) => stop({ backgroundTasks: [{ id: "j1", type: "monitor", status: "running", command }] });
+    expect(await original(`kiwi join ${code} --timeout 40s`)).toBeNull();
+    expect(await original(`[monitor] /home/u/.kiwi/bin/kiwi join ${code} --as ${me}`)).toBeNull();
+    expect(await original(`sh -c 'k=$(command -v kiwi || echo "$HOME/.kiwi/bin/kiwi"); exec "$k" "$@"' kiwi join ${code}`)).toBeNull();
+    const otherCode = created(await ok(owner, ["create", "grok-other", "--as", "boss"]));
+    expect((await original(`kiwi join ${otherCode}`))?.decision).toBe("block");
+    expect((await original(`kiwi join ${code} --as someone-else`))?.decision).toBe("block");
+    expect((await original(`kiwi join ${code} -c elsewhere`))?.decision).toBe("block");
+    expect((await original(`kiwi join not-a-code`))?.decision).toBe("block");
   });
 });
 
@@ -490,6 +500,14 @@ describe("Cursor keeps its own listener running", () => {
     const unread = await stop();
     expect(unread).toContain("Unread Kiwi messages (cursor-wake).");
     expect(unread).toContain("no Kiwi listener of yours is running");
+
+    const resuming = spawn(h, ["join", code], C);
+    shells.push(resuming);
+    const resumed = printed(resuming);
+    expect(await resuming.exited).toBe(0);
+    await until(() => resumed().includes("unread at stop"), "the resumed join handing over what was unread");
+    expect(resumed()).toContain("this key is already a member: resumed, nothing new was granted.");
+    expect(resumed()).toContain("Listening now: this command ends when a message for you arrives.");
   });
 });
 
