@@ -1,0 +1,22 @@
+
+      ▄▀▀▄
+     ▀▀▀▀▀▀
+    ▀▀▀▀▀▀▀▀
+   ▄▀▀    ▀▀▄
+  ▄▀▀      ▀▀▄
+
+  Antigravity CLI 1.4.12
+  person@example.com (Google AI Pro)
+  Gemini 3.8 Flash (Low)
+  /work/app
+
+────────────────────────────────────────────────────────────
+> Run the shell command: sleep 20 && echo done
+
+○ Bash(sleep 20 && echo done) (ctrl+o to expand)
+⡿  Running command...
+└ Tip: Press ctrl+r to review pending artifacts.
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+>
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+esc to cancel                                                                              auto · Gemini 3.8 Flash · low

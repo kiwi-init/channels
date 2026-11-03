@@ -6,6 +6,7 @@ import { hooksListen } from "./install/claude.ts";
 import { extraInstalled } from "./install/extra.ts";
 import { mimoInstalled } from "./install/mimo.ts";
 import { piInstalled } from "./install/pi.ts";
+import { tmuxPlaceFrom } from "../terminals/tmux/locate.ts";
 
 function checkEachTurn(mc: string): string {
   return `Run \`${COMMANDS.join(mc)}\` at the start of every turn and again before you end one. It prints the messages waiting for you, or says there are none.`;
@@ -17,8 +18,8 @@ export type ListenMode = "read" | "once" | "stream";
 
 const kimiServed = (who: Here) => who.harness === "kimi" && kimiServer(who.pid) && extraInstalled("kimi");
 
-function pathHere(who: Here, webhook: boolean): WakePath {
-  return wakePath(who.harness ? { harness: who.harness, ...(who.session ? { session: who.session } : {}) } : null, hooksListen(), webhook, {
+function pathHere(who: Here, webhook: boolean, pane: string | undefined = tmuxPlaceFrom(process.env).tmux?.pane): WakePath {
+  return wakePath(who.harness ? { harness: who.harness, ...(who.session ? { session: who.session } : {}), ...(pane ? { tmux: { pane } } : {}) } : null, hooksListen(), webhook, {
     pi: piInstalled(),
     mimo: mimoInstalled(),
   });
@@ -101,10 +102,10 @@ export function wakeYourself(mc: string, harness: Here["harness"]): string | nul
   return null;
 }
 
-export function howMessagesReachYou(mc: string, waking: boolean, who: Here = here(), webhook = false): string {
+export function howMessagesReachYou(mc: string, waking: boolean, who: Here = here(), webhook = false, pane: string | undefined = tmuxPlaceFrom(process.env).tmux?.pane): string {
   if (!waking) return `Kiwi won't wake you: waking is off for you here (\`kiwi wake on\` turns it back on). ${checkEachTurn(mc)}`;
   if (kimiServed(who)) return `Kiwi wakes you in this session when a message for you arrives (${wakeWords("kimi-server")}). Don't keep a listener running.`;
-  const path = pathHere(who, webhook);
+  const path = pathHere(who, webhook, pane);
   switch (path.kind) {
     case "hooks":
       return "Messages for you arrive on their own: Kiwi's hooks wake you when one comes. Don't keep a listener running.";
