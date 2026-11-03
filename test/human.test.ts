@@ -1,16 +1,15 @@
-// Sign-in at the relay: verifying WorkOS tokens, and the one gate they guard (creating
+// Sign-in at the relay: GitHub sign-in, and the one gate it guards (creating
 // channels). Everything after creation takes member keys alone: owners approve by their owner
 // key's signature, agents join with computer claims and people with person claims.
 
-import { afterAll, beforeAll, describe, expect, setDefaultTimeout, setSystemTime, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Channel, relayConfig } from "@kiwi/core/client.ts";
-import { b64url } from "@kiwi/core/crypto.ts";
 import { generateIdentity } from "@kiwi/core/identity.ts";
 import { startRelay } from "../src/relay/bun.ts";
-import { authkitDomains, workosHumanAuth } from "../src/relay/human.ts";
+import { githubHumanAuth, NO_ONE } from "../src/relay/human.ts";
 import { HOLD_MS, holdEntry, reserveSlot } from "../src/relay/room.ts";
 import { signRequest } from "@kiwi/core/auth.ts";
 import { WS_PROTOCOL } from "@kiwi/core/protocol.ts";
@@ -20,26 +19,28 @@ import { joinAgent, joinPerson, pairComputer, setupChannel } from "./owner.ts";
 
 setDefaultTimeout(30_000);
 
-// A stand-in for WorkOS: an RSA key, its JWKS endpoint, and tokens signed like AuthKit's.
-const rsa = (await crypto.subtle.generateKey({ name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" }, true, [
-  "sign",
-  "verify",
-])) as CryptoKeyPair;
-const jwk = (await crypto.subtle.exportKey("jwk", rsa.publicKey)) as { n: string; e: string };
-const jwks = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: () => Response.json({ keys: [{ kty: "RSA", kid: "k1", alg: "RS256", use: "sig", n: jwk.n, e: jwk.e }] }) });
+// A stand-in for GitHub's check-token API: token(login) is a GitHub user token for that login,
+// which the relay's GitHub App issued. Alice and Carol have names and emails; the rest have neither.
+const CLIENT = "Iv23liHumanTest";
+const SECRET = "test-secret";
+const PEOPLE: Record<string, { id: number; name: string | null; email: string | null }> = {
+  alice: { id: 1, name: "Alice Owner", email: "alice@example.com" },
+  bob: { id: 2, name: null, email: null },
+  carol: { id: 3, name: "Carol Coder", email: "carol@example.com" },
+  dana: { id: 4, name: null, email: null },
+  erin: { id: 5, name: null, email: null },
+};
+const github = (async (_input: string | URL | Request, init?: RequestInit) => {
+  const login = /^ghu_([a-z]+)_0+$/.exec((JSON.parse(String(init?.body ?? "{}")) as { access_token?: string }).access_token ?? "")?.[1];
+  const p = login ? PEOPLE[login] : undefined;
+  return p ? Response.json({ app: { client_id: CLIENT }, user: { id: p.id, login, name: p.name, email: p.email } }) : new Response("not found", { status: 404 });
+}) as typeof fetch;
 
-async function token(sub: string, opts: { exp?: number; key?: CryptoKey; kid?: string; iss?: string } = {}): Promise<string> {
-  const enc = (o: object) => b64url(new TextEncoder().encode(JSON.stringify(o)));
-  const head = enc({ alg: "RS256", kid: opts.kid ?? "k1", typ: "JWT" });
-  const body = enc({ sub, iss: opts.iss ?? "https://api.workos.com/user_management/client_test", exp: opts.exp ?? Math.floor(Date.now() / 1000) + 300 });
-  const sig = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", opts.key ?? rsa.privateKey, new TextEncoder().encode(`${head}.${body}`));
-  return `${head}.${body}.${b64url(new Uint8Array(sig))}`;
+async function token(login: string): Promise<string> {
+  return `ghu_${login}_${"0".repeat(24)}`;
 }
 
-const human = {
-  ...workosHumanAuth("client_test", `${jwks.url.origin}/jwks`),
-  profile: async (u: string) => (u === "user_alice" ? { name: "Alice Owner", email: "alice@example.com" } : u === "user_carol" ? { name: "Carol Coder", email: "carol@example.com" } : null),
-};
+const human = githubHumanAuth({ clientId: CLIENT, clientSecret: SECRET }, github)!;
 const dataDir = mkdtempSync(join(tmpdir(), "mc-relay-"));
 let server: ReturnType<typeof startRelay>;
 let relay: string;
@@ -50,96 +51,12 @@ beforeAll(() => {
 });
 afterAll(() => {
   server.stop(true);
-  jwks.stop(true);
   rmSync(dataDir, { recursive: true, force: true });
 });
 
-describe("WorkOS token verification", () => {
-  test("accepts a valid token, rejects expired, forged and tampered ones", async () => {
-    expect(await human.verify(await token("user_a"))).toBe("user_a");
-    expect(await human.verify(await token("user_a", { exp: Math.floor(Date.now() / 1000) - 120 }))).toBeNull();
-    const other = (await crypto.subtle.generateKey({ name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" }, true, [
-      "sign",
-      "verify",
-    ])) as CryptoKeyPair;
-    expect(await human.verify(await token("user_a", { key: other.privateKey }))).toBeNull();
-    const [h, , s] = (await token("user_a")).split(".");
-    const forgedBody = b64url(new TextEncoder().encode(JSON.stringify({ sub: "admin", exp: 9999999999 })));
-    expect(await human.verify(`${h}.${forgedBody}.${s}`)).toBeNull();
-    expect(await human.verify("not.a.jwt")).toBeNull();
-  });
-});
-
-describe("WorkOS keys that fail to load", () => {
-  test("a failed refetch for a new kid isn't kept: the next token loads the keys again", async () => {
-    const next = (await crypto.subtle.generateKey({ name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" }, true, [
-      "sign",
-      "verify",
-    ])) as CryptoKeyPair;
-    const nextJwk = (await crypto.subtle.exportKey("jwk", next.publicKey)) as { n: string; e: string };
-    let mode: "one" | "broken" | "both" = "one";
-    const keys = Bun.serve({
-      port: 0,
-      hostname: "127.0.0.1",
-      fetch: () => {
-        if (mode === "broken") return new Response("{ not json", { headers: { "content-type": "application/json" } });
-        const listed = [{ kty: "RSA", kid: "k1", n: jwk.n, e: jwk.e }, ...(mode === "both" ? [{ kty: "RSA", kid: "k2", n: nextJwk.n, e: nextJwk.e }] : [])];
-        return Response.json({ keys: listed });
-      },
-    });
-    const auth = workosHumanAuth("client_test", `${keys.url.origin}/jwks`);
-    const start = Date.now();
-    try {
-      expect(await auth.verify(await token("user_a"))).toBe("user_a");
-      mode = "broken";
-      setSystemTime(new Date(start + 31_000));
-      expect(await auth.verify(await token("user_b", { key: next.privateKey, kid: "k2" }))).toBeNull();
-      mode = "both";
-      setSystemTime(new Date(start + 32_000));
-      expect(await auth.verify(await token("user_a"))).toBe("user_a");
-      expect(await auth.verify(await token("user_b", { key: next.privateKey, kid: "k2" }))).toBe("user_b");
-    } finally {
-      setSystemTime();
-      keys.stop(true);
-    }
-  });
-});
-
-// Moving to a custom AuthKit domain (auth.example.com in place of ….authkit.app): for a while the relay
-// names both, and takes tokens from either, issued bare or with WorkOS's /user_management/<client> path.
-describe("AuthKit domains", () => {
-  test("a setting names one or several, comma-separated, without trailing slashes", () => {
-    expect(authkitDomains(undefined)).toEqual([]);
-    expect(authkitDomains("https://x.authkit.app/")).toEqual(["https://x.authkit.app"]);
-    expect(authkitDomains(" https://auth.example.com , https://x.authkit.app/,")).toEqual(["https://auth.example.com", "https://x.authkit.app"]);
-  });
-
-  test("while moving domains, tokens from either are taken, and only for this client", async () => {
-    const custom = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: () => Response.json({ keys: [] }) });
-    try {
-      const old = jwks.url.origin;
-      const now = custom.url.origin;
-      // What workosFromSettings builds for `${now},${old}`, minus api.workos.com's JWKS (no network in tests).
-      const auth = workosHumanAuth(
-        "client_test",
-        authkitDomains(`${now},${old}/`).map((d) => `${d}/oauth2/jwks`),
-      );
-      expect(await auth.verify(await token("user_a", { iss: old }))).toBe("user_a");
-      expect(await auth.verify(await token("user_a", { iss: `${now}/` }))).toBe("user_a");
-      expect(await auth.verify(await token("user_a", { iss: `${now}/user_management/client_test` }))).toBe("user_a");
-      expect(await auth.verify(await token("user_a"))).toBe("user_a");
-      expect(await auth.verify(await token("user_a", { iss: `${now}/user_management/client_other` }))).toBeNull();
-      expect(await auth.verify(await token("user_a", { iss: "https://evil.example" }))).toBeNull();
-      expect(await auth.verify(await token("user_a", { iss: "https://api.workos.com/user_management/client_other" }))).toBeNull();
-    } finally {
-      custom.stop(true);
-    }
-  });
-});
-
 describe("a relay that requires sign-in", () => {
-  test("advertises its WorkOS client", async () => {
-    expect(await relayConfig(relay)).toEqual({ workosClientId: "client_test" });
+  test("advertises GitHub sign-in", async () => {
+    expect(await relayConfig(relay)).toEqual({ githubSignIn: true });
   });
 
   test("only a signed-in human can create a channel; anyone with the code can ask to join", async () => {
@@ -147,7 +64,7 @@ describe("a relay that requires sign-in", () => {
     // No session: refused.
     await expect(Channel.create(relay, owner, { name: "human" })).rejects.toMatchObject({ status: 401 });
 
-    const alice = await token("user_alice");
+    const alice = await token("alice");
     const { code, access } = await Channel.create(relay, owner, { name: "human" }, [], undefined, alice);
     // No session, no vouch: asking is open.
     const req = await Channel.requestJoin(relay, code, agent, { name: "mac" });
@@ -173,7 +90,7 @@ describe("a relay that requires sign-in", () => {
 
 describe("agents join with computer claims, people with person claims", () => {
   test("the owner's client verifies both; forgeries read as unclaimed", async () => {
-    const s = await setupChannel(relay, { human: await token("user_alice") });
+    const s = await setupChannel(relay, { human: await token("alice") });
     const computer = await pairComputer(s.person, "mac-mini");
 
     // An agent from the owner's own computer: the owner is its sponsor, and it carries `from`.
@@ -202,7 +119,7 @@ describe("agents join with computer claims, people with person claims", () => {
   });
 
   test("another person's computer: sponsored by them, with no handle here", async () => {
-    const s = await setupChannel(relay, { human: await token("user_alice") });
+    const s = await setupChannel(relay, { human: await token("alice") });
     const bobsPerson = await generateIdentity("bobs-person");
     const bobsComputer = await pairComputer(bobsPerson, "bob-box");
     const agent = await joinAgent(s, "scout", bobsComputer);
@@ -219,7 +136,7 @@ describe("names", () => {
     expect(handleFor("Jonatas Walker")).toBe("jonatas-walker");
     expect(handleFor("  José  da Silva ")).toBe("jose-da-silva");
 
-    const s = await setupChannel(relay, { human: await token("user_alice") });
+    const s = await setupChannel(relay, { human: await token("alice") });
     // A person who types someone else's name gets exactly what they typed (there's no account
     // handle anymore); a second requester under a taken name is refused at approval.
     const bob1 = await generateIdentity("b1");
@@ -256,15 +173,15 @@ describe("private beta", () => {
       hostname: "127.0.0.1",
       dataDir: betaDir,
       human,
-      policy: { ...OPEN_POLICY, betaUsers: ["user_alice", "@example.com"], waitlistUrl: "https://kiwiinit.com/waitlist" },
+      policy: { ...OPEN_POLICY, betaUsers: ["github_1", "@example.com"], waitlistUrl: "https://kiwiinit.com/waitlist" },
     });
     const at = beta.url.origin;
     try {
       const [a, b, c, guest] = await Promise.all([generateIdentity("a"), generateIdentity("b"), generateIdentity("c"), generateIdentity("g")]);
       // Listed by id: yes. Listed by email domain: yes. Not listed: a clear 403 with the waitlist.
-      const { code } = await Channel.create(at, a, { name: "alice-owner", kind: "human" }, [], undefined, await token("user_alice"));
-      await Channel.create(at, c, { name: "carol", kind: "human" }, [], undefined, await token("user_carol"));
-      await expect(Channel.create(at, b, { name: "bob", kind: "human" }, [], undefined, await token("user_bob"))).rejects.toMatchObject({
+      const { code } = await Channel.create(at, a, { name: "alice-owner", kind: "human" }, [], undefined, await token("alice"));
+      await Channel.create(at, c, { name: "carol", kind: "human" }, [], undefined, await token("carol"));
+      await expect(Channel.create(at, b, { name: "bob", kind: "human" }, [], undefined, await token("bob"))).rejects.toMatchObject({
         status: 403,
         message: expect.stringContaining("https://kiwiinit.com/waitlist"),
       });
@@ -279,7 +196,7 @@ describe("private beta", () => {
   test("with no list configured, anyone signed in creates channels", async () => {
     // The shared relay in this file has no beta list: Bob could create above too.
     const owner = await generateIdentity("bob");
-    const { access } = await Channel.create(relay, owner, { name: "bob", kind: "human" }, [], undefined, await token("user_bob"));
+    const { access } = await Channel.create(relay, owner, { name: "bob", kind: "human" }, [], undefined, await token("bob"));
     await new Channel(access, relay, owner).close();
   });
 });
@@ -292,14 +209,14 @@ describe("channels per person", () => {
     const at = r.url.origin;
     try {
       const [first, second] = await Promise.all([generateIdentity("a"), generateIdentity("b")]);
-      const alice = () => token("user_alice");
+      const alice = () => token("alice");
       const { access } = await Channel.create(at, first, { name: "alice-owner", kind: "human" }, [], undefined, await alice());
       await expect(Channel.create(at, second, { name: "alice-owner", kind: "human" }, [], undefined, await alice())).rejects.toMatchObject({
         status: 429,
         message: expect.stringContaining("close one to create another"),
       });
       // Others aren't affected.
-      const bobs = await Channel.create(at, await generateIdentity("c"), { name: "bob", kind: "human" }, [], undefined, await token("user_bob"));
+      const bobs = await Channel.create(at, await generateIdentity("c"), { name: "bob", kind: "human" }, [], undefined, await token("bob"));
       expect(bobs.code).toBeTruthy();
       await new Channel(access, at, first).close();
       expect((await Channel.create(at, second, { name: "alice-owner", kind: "human" }, [], undefined, await alice())).code).toBeTruthy();
@@ -318,7 +235,7 @@ describe("channels per person, at once (T113)", () => {
     const at = r.url.origin;
     try {
       const ids = await Promise.all([1, 2, 3, 4, 5].map((i) => generateIdentity(`race-${i}`)));
-      const tokens = await Promise.all(ids.map(() => token("user_dana")));
+      const tokens = await Promise.all(ids.map(() => token("dana")));
       const tries = await Promise.allSettled(ids.map((id, i) => Channel.create(at, id, { name: "dana", kind: "human" }, [], undefined, tokens[i])));
       expect(tries.filter((t) => t.status === "fulfilled").length).toBe(1);
       expect(tries.filter((t) => t.status === "rejected").every((t) => (t as PromiseRejectedResult).reason.status === 429)).toBe(true);
@@ -327,9 +244,9 @@ describe("channels per person, at once (T113)", () => {
       const room = "ab".repeat(16);
       const body = JSON.stringify({ owner: { pk: erin.pk, xpk: erin.xpk, sig: "x" }, members: [] });
       const auth = await signRequest(erin, room, "POST", "/create", body);
-      const bad = await fetch(`${at}/v1/rooms/${room}/create`, { method: "POST", headers: { authorization: `Bearer ${auth}`, "x-human-token": await token("user_erin") }, body });
+      const bad = await fetch(`${at}/v1/rooms/${room}/create`, { method: "POST", headers: { authorization: `Bearer ${auth}`, "x-human-token": await token("erin") }, body });
       expect(bad.status).toBe(400);
-      expect((await Channel.create(at, erin, { name: "erin", kind: "human" }, [], undefined, await token("user_erin"))).code).toBeTruthy();
+      expect((await Channel.create(at, erin, { name: "erin", kind: "human" }, [], undefined, await token("erin"))).code).toBeTruthy();
     } finally {
       r.stop(true);
       rmSync(dir, { recursive: true, force: true });
@@ -391,7 +308,7 @@ describe("expiry", () => {
     const r = startRelay({ port: 0, hostname: "127.0.0.1", dataDir: dir, human, policy: { ...OPEN_POLICY, expireAfterDays: 90 }, now: () => clock.now });
     try {
       const owner = await generateIdentity("a");
-      const { access, code } = await Channel.create(r.url.origin, owner, { name: "alice-owner", kind: "human" }, [], undefined, await token("user_alice"));
+      const { access, code } = await Channel.create(r.url.origin, owner, { name: "alice-owner", kind: "human" }, [], undefined, await token("alice"));
       const ch = new Channel(access, r.url.origin, owner);
       const seq = await ch.send("one");
       expect(seq).toBe(1);
@@ -412,7 +329,7 @@ describe("expiry", () => {
     const r = startRelay({ port: 0, hostname: "127.0.0.1", dataDir: dir, human, policy: { ...OPEN_POLICY, expireAfterDays: 90 }, now: () => clock.now });
     try {
       const owner = await generateIdentity("stays");
-      const { access } = await Channel.create(r.url.origin, owner, { name: "stays", kind: "human" }, [], undefined, await token("user_alice"));
+      const { access } = await Channel.create(r.url.origin, owner, { name: "stays", kind: "human" }, [], undefined, await token("alice"));
       const u = new URL(`/v1/rooms/${access.roomId}/ws?since=0`, r.url.origin);
       u.protocol = "ws:";
       const ws = new WebSocket(u, [WS_PROTOCOL, await signRequest(owner, access.roomId, "GET", "/ws")]);
@@ -433,4 +350,10 @@ describe("expiry", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+});
+
+test("a relay missing its GitHub App settings signs nobody in, rather than opening up", async () => {
+  expect(githubHumanAuth({ clientId: undefined, clientSecret: undefined })).toBeNull();
+  expect(await NO_ONE.verify("ghu_" + "a".repeat(36))).toBeNull();
+  expect(await NO_ONE.verify("dev:alice")).toBeNull();
 });

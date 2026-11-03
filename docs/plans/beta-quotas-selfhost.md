@@ -13,23 +13,23 @@ quotas that become the future free tier, (3) first-class documentation for self-
 
 ## Hard constraints
 - Never weaken end-to-end encryption. Quotas may use only what the relay already sees: room ids,
-  member public keys, WorkOS user ids, counts, byte sizes, timestamps. No new plaintext fields.
+  member public keys, signed-in user ids, counts, byte sizes, timestamps. No new plaintext fields.
 - All logic in `src/relay/room.ts` or a shared module next to it; both relays behave identically
   and the same tests pass against both.
 - Configurable, off by default for self-hosters (no allowlist → anyone signed in can create; no
   quota → no limit, except the always-on safety caps). The public relay turns it all on via
-  `wrangler.jsonc`. Self-hosted relays without WorkOS keep working exactly as today.
+  `wrangler.jsonc`. Self-hosted relays without sign-in keep working exactly as today.
 - Keep the style: small functions, comments that explain why, no new dependencies.
 - Don't break the wire protocol. New errors: 403 not allowed, 429 over quota, 413 too large.
 
 ## Part 1: beta gate
-- `BETA_USERS`: comma-separated WorkOS user ids (optionally emails / email domains, via the
-  WorkOS profile lookup). When set, `POST /create` from a signed-in user not on the list → 403
+- `BETA_USERS`: comma-separated user ids (optionally emails / email domains, via the
+  sign-in's profile lookup). When set, `POST /create` from a signed-in user not on the list → 403
   with a clear message and a configurable waitlist URL.
 - Joining existing channels is not gated (beta users bring collaborators).
 - The dashboard shows the error nicely where "create channel" lives.
 - Bun relay accepts the same settings (flags/env) and its entry point exposes `--hostname` and
-  WorkOS settings.
+  sign-in settings.
 
 ## Part 2: per-person quotas [public-relay defaults]
 1. Channels owned per person [2], checked on create (Directory DO / people.sqlite); closing frees a slot.
@@ -56,7 +56,7 @@ When to self-host; Bun relay (flags, data layout, backups); putting it on the in
 Caddy, systemd, optional Docker); dashboard on a self-hosted relay (serve web/dist with an SPA
 fallback from bun.ts, preferred over documenting the gap); your own Cloudflare Worker (wrangler,
 migrations stay, Free vs Paid limits, billing alerts, rate limiting on /v1/*); optional sign-in
-with your own WorkOS app (redirect URI /auth/callback); a table of every beta/quota setting;
+with your own sign-in app; a table of every beta/quota setting;
 pointing clients at your relay (--relay / KIWI_RELAY, remembered per channel; installing the CLI,
 forks); security notes for operators (what they see, what the Bun relay logs, whoever serves the
 dashboard JS controls the code holding the owner key). Update SECURITY.md and README.md where
@@ -65,7 +65,7 @@ promises change (e.g. expiry deletes everything like close).
 ## Tests
 Every rule: allowlist on/off; each quota at the limit and one past; daily reset with an injected
 clock; byte counter correct after pruning; expiry wiping room and directory entries;
-/v1/me/usage; self-hosted defaults unchanged. Fake WorkOS verifier as in test/human.test.ts.
+/v1/me/usage; self-hosted defaults unchanged. Fake sign-in verifier as in test/human.test.ts.
 All on the Bun relay; also against `wrangler dev` if it runs, else say so.
 
 ## Done means

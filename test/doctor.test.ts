@@ -6,24 +6,10 @@ import * as Effect from "effect/Effect";
 import { checkShadowed, doctorChecks, type Finding } from "../src/cli/doctor.ts";
 import { newMachine, saveMachine, type MachineFile } from "../src/machine.ts";
 import { startRelay } from "../src/relay/bun.ts";
-import { workosHumanAuth } from "../src/relay/human.ts";
+import type { HumanAuth } from "../src/relay/human.ts";
 
-// A stand-in for WorkOS, same shape as test/human.test.ts: the relay can confirm and remove a computer.
-const rsa = (await crypto.subtle.generateKey({ name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" }, true, [
-  "sign",
-  "verify",
-])) as CryptoKeyPair;
-const jwk = (await crypto.subtle.exportKey("jwk", rsa.publicKey)) as { n: string; e: string };
-const jwks = Bun.serve({
-  port: 0,
-  hostname: "127.0.0.1",
-  fetch: () => Response.json({ keys: [{ kty: "RSA", kid: "k1", alg: "RS256", use: "sig", n: jwk.n, e: jwk.e }] }),
-});
-
-const human = {
-  ...workosHumanAuth("client_test", `${jwks.url.origin}/jwks`),
-  profile: async (u: string) => (u === "user_alice" ? { name: "Alice Owner", email: "alice@example.com" } : null),
-};
+// A relay that takes sign-in: a stand-in for its GitHub App's that signs nobody in.
+const human: HumanAuth = { verify: async () => null };
 
 const tmp = mkdtempSync(join(tmpdir(), "kiwi-doctor-"));
 let openRelay: ReturnType<typeof startRelay>;
@@ -36,7 +22,6 @@ beforeAll(() => {
 afterAll(() => {
   openRelay.stop(true);
   signedIn.stop(true);
-  jwks.stop(true);
   rmSync(tmp, { recursive: true, force: true });
 });
 
@@ -63,6 +48,23 @@ describe("kiwi doctor", () => {
     const found = await checks({ KIWI_RELAY: openRelay.url.origin });
     expect(found.some((f) => f.ok && f.what.includes("/v1/config answered"))).toBe(true);
     expect(found.some(mentionsLink)).toBe(false);
+  });
+
+  test("a relay with sign-in answers as a Kiwi relay", async () => {
+    const found = await checks({ KIWI_RELAY: signedIn.url.origin });
+    expect(found.some((f) => f.ok && f.what.includes("/v1/config answered"))).toBe(true);
+    expect(found.some(mentionsLink)).toBe(false);
+  });
+
+  test("an older relay with only WorkOS sign-in is named as one to update", async () => {
+    const old = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: () => Response.json({ workosClientId: "client_old" }) });
+    try {
+      const found = await checks({ KIWI_RELAY: old.url.origin });
+      const f = found.find((f) => !f.ok && f.what.includes("older Kiwi relay"));
+      expect(f && "how" in f ? f.how : "").toContain("GitHub App");
+    } finally {
+      old.stop(true);
+    }
   });
 
   test("an unreachable relay is reported as down, not as a missing link", async () => {

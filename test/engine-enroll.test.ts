@@ -241,33 +241,43 @@ describe("the phone engine's sign-in opens or says why (T13)", () => {
     }
   });
 
-  test("the app makes the WorkOS calls, and a blocked one says what failed", async () => {
-    const workos = configOnly(async () => Response.json({ workosClientId: "client_test" }));
+  const GITHUB_CONFIG = { githubSignIn: true, githubClientId: "Iv23phoneTest" };
+
+  test("a relay without sign-in says so", async () => {
+    const none = configOnly(async () => Response.json({ githubSignIn: false }));
+    try {
+      await expect(ask({ op: "enrollBegin", relay: none.url.origin, label: "iPhone", os: "iOS 27", waitMs: 5_000 })).rejects.toThrow("has no sign-in");
+    } finally {
+      none.stop(true);
+    }
+  });
+
+  test("the app makes GitHub's calls, and a blocked one says what failed", async () => {
+    const github = configOnly(async () => Response.json(GITHUB_CONFIG));
     asHost();
     try {
       const before = pushes.length;
-      const opening = ask({ op: "enrollBegin", relay: workos.url.origin, label: "iPhone", os: "iOS 27", waitMs: 5_000 });
+      const opening = ask({ op: "enrollBegin", relay: github.url.origin, label: "iPhone", os: "iOS 27", waitMs: 5_000 });
       const call = await asked(before);
-      expect(call.url).toBe("https://api.workos.com/user_management/authorize/device");
-      expect(JSON.parse(call.body)).toMatchObject({ client_id: "client_test" });
+      expect(call.url).toBe("https://github.com/login/device/code");
       engine.fetched(JSON.stringify({ id: call.id, error: "Load failed" }));
-      await expect(opening).rejects.toThrow("couldn't reach the sign-in service: Load failed");
+      await expect(opening).rejects.toThrow("couldn't reach GitHub's sign-in: Load failed");
 
       const again = pushes.length;
-      const started = ask<EnrollStart>({ op: "enrollBegin", relay: workos.url.origin, label: "iPhone", os: "iOS 27", waitMs: 5_000 });
-      const answer = { device_code: "dc", user_code: "ABCD-EFGH", verification_uri_complete: "https://auth.example/device?user_code=ABCD-EFGH", interval: 60 };
+      const started = ask<EnrollStart>({ op: "enrollBegin", relay: github.url.origin, label: "iPhone", os: "iOS 27", waitMs: 5_000 });
+      const answer = { device_code: "dc", user_code: "WDJB-MJHT", verification_uri: "https://github.com/login/device", interval: 60 };
       engine.fetched(JSON.stringify({ id: (await asked(again)).id, status: 200, body: JSON.stringify(answer) }));
-      expect(await started).toEqual({ url: "https://auth.example/device?user_code=ABCD-EFGH", code: "ABCD-EFGH" });
+      expect(await started).toEqual({ url: "https://github.com/login/device", code: "WDJB-MJHT" });
       expect(pushes.slice(again).some((p) => p.type === "log" && p.line === "sign-in: page ready")).toBe(true);
       await ask({ op: "enrollCancel" });
     } finally {
       noHost();
-      workos.stop(true);
+      github.stop(true);
     }
   });
 
   test("on a relay that takes GitHub sign-in, the app makes GitHub's calls, shows its code, and a check cut off in the browser is asked again (T254)", async () => {
-    const both = configOnly(async () => Response.json({ workosClientId: "client_test", githubSignIn: true, githubClientId: "Iv23phoneTest" }));
+    const both = configOnly(async () => Response.json(GITHUB_CONFIG));
     asHost();
     try {
       const before = pushes.length;
@@ -294,7 +304,7 @@ describe("the phone engine's sign-in opens or says why (T13)", () => {
       engine.fetched(JSON.stringify({ id: granted.id, status: 200, body: JSON.stringify({ access_token: `ghu_${"p".repeat(36)}`, token_type: "bearer" }) }));
       for (let i = 0; i < 200 && !pushes.slice(last).some((p) => p.type === "log" && p.line === "sign-in: signed in, asking your computer"); i++) await Bun.sleep(10);
       expect(pushes.slice(last).some((p) => p.type === "log" && p.line === "sign-in: signed in, asking your computer")).toBe(true);
-      expect(pushes.slice(before).some((p) => p.type === "fetch" && p.url.startsWith("https://api.workos.com"))).toBe(false);
+      expect(pushes.slice(before).every((p) => p.type !== "fetch" || p.url.startsWith("https://github.com/"))).toBe(true);
       await ask({ op: "enrollCancel" });
     } finally {
       noHost();
@@ -303,12 +313,12 @@ describe("the phone engine's sign-in opens or says why (T13)", () => {
   });
 
   test("a token check cut off while the phone is in Safari is asked again", async () => {
-    const workos = configOnly(async () => Response.json({ workosClientId: "client_test" }));
+    const github = configOnly(async () => Response.json(GITHUB_CONFIG));
     asHost();
     try {
       const before = pushes.length;
-      const started = ask<EnrollStart>({ op: "enrollBegin", relay: workos.url.origin, label: "iPhone", os: "iOS 27", waitMs: 5_000 });
-      const answer = { device_code: "dc", user_code: "ABCD-EFGH", verification_uri_complete: "https://auth.example/device?user_code=ABCD-EFGH", interval: 0.05 };
+      const started = ask<EnrollStart>({ op: "enrollBegin", relay: github.url.origin, label: "iPhone", os: "iOS 27", waitMs: 5_000 });
+      const answer = { device_code: "dc", user_code: "WDJB-MJHT", verification_uri: "https://github.com/login/device", expires_in: 900, interval: 0.05 };
       engine.fetched(JSON.stringify({ id: (await asked(before)).id, status: 200, body: JSON.stringify(answer) }));
       await started;
       let signedIn = false;
@@ -321,21 +331,21 @@ describe("the phone engine's sign-in opens or says why (T13)", () => {
 
       const cut = pushes.length;
       const first = await asked(cut);
-      expect(first.url).toBe("https://api.workos.com/user_management/authenticate");
+      expect(first.url).toBe("https://github.com/login/oauth/access_token");
       engine.fetched(JSON.stringify({ id: first.id, error: "The network connection was lost." }));
       expect(signedIn).toBe(false);
 
       const next = pushes.length;
       const second = await asked(next);
       expect(second.id).not.toBe(first.id);
-      engine.fetched(JSON.stringify({ id: second.id, status: 200, body: JSON.stringify({ access_token: "at", refresh_token: "rt" }) }));
+      engine.fetched(JSON.stringify({ id: second.id, status: 200, body: JSON.stringify({ access_token: `ghu_${"s".repeat(36)}`, token_type: "bearer" }) }));
       for (let i = 0; i < 200 && !pushes.slice(next).some((p) => p.type === "log" && p.line === "sign-in: signed in, asking your computer"); i++) await Bun.sleep(10);
       expect(pushes.slice(next).some((p) => p.type === "log" && p.line === "sign-in: signed in, asking your computer")).toBe(true);
       expect(pushes.slice(next).filter((p) => p.type === "log" && p.line === "sign-in: signed in, asking your computer")).toHaveLength(1);
       await ask({ op: "enrollCancel" });
     } finally {
       noHost();
-      workos.stop(true);
+      github.stop(true);
     }
   });
 });

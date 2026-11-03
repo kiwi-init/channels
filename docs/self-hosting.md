@@ -56,7 +56,7 @@ kiwi send --ask "hello from a self-hosted relay"
 
 A relay without sign-in doesn't gate who may create: the app makes a channel
 with your person key alone. With sign-in, `POST /create` takes a signed-in
-human and everyone else is refused ([below](#sign-in-with-your-own-workos-app)).
+human and everyone else is refused ([below](#sign-in-with-your-github-app)).
 
 With only the `kiwi` binary installed (no checkout), `kiwi relay` takes the same
 flags. It serves the static site only if it can find it: pass `--web` with a
@@ -73,9 +73,6 @@ built `site/`.
 | `--data <dir>`                  | `KIWI_DATA`             | `.relay-data`      | Where channels are stored                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `--web <dir>`                   | `KIWI_WEB`              | `site/` if present | Serve the static site from this folder                                                                                                                                                                                                                                                                                                                                                                                    |
 | `--no-web`                      |                         |                    | Don't serve the static site                                                                                                                                                                                                                                                                                                                                                                                               |
-| `--workos-client-id <id>`       | `WORKOS_CLIENT_ID`      |                    | Turn on sign-in, the create gate, with your WorkOS app ([below](#sign-in-with-your-own-workos-app))                                                                                                                                                                                                                                                                                                                       |
-| `--workos-authkit-domain <url>` | `WORKOS_AUTHKIT_DOMAIN` |                    | Your AuthKit domain. Comma-separate two while moving to your own ([below](#your-own-sign-in-domain))                                                                                                                                                                                                                                                                                                                      |
-|                                 | `WORKOS_API_KEY`        |                    | Secret, env only: lets the relay show the creator's real name                                                                                                                                                                                                                                                                                                                                                             |
 | `--dev-sign-in`                 |                         |                    | Testing only: the token `dev:<name>` signs in as `<name>`, no password. Refused unless `--hostname` is `127.0.0.1` or `localhost`, and refused with `--trust-proxy` ([below](#testing-a-relay))                                                                                                                                                                                                                           |
 | `--dev-no-rate-limits`          |                         |                    | Testing only: no per-minute cap on a member's messages or history reads (load tests such as `scripts/perf-scale.ts`), for requests made on this machine directly. Like dev sign-in, a request a proxy passed on keeps the caps. Refused unless `--hostname` is `127.0.0.1` or `localhost`, refused with `--trust-proxy`, and no environment setting turns it on                                                           |
 | `--trust-proxy [addr,cidr]`     | `KIWI_TRUST_PROXY`      | off                | Trust a reverse proxy. Bare or `1` trusts a loopback peer. An address or CIDR (comma-separated, or the flag repeated) also trusts that peer, for example `172.17.0.1` or `172.16.0.0/12`. A trusted peer's last `X-Forwarded-For` entry is the client. If that entry is not an address, the registration counts as the proxy; earlier entries are ignored. Any other peer ignores the header. A prefix of `/0` is refused |
@@ -122,7 +119,7 @@ rotated after that one too, the channel can still be read but takes no new
 messages, and its owner closes it and creates a new one.
 
 A backup holds everything the relay holds: ciphertext, member public keys, wrapped
-channel keys, join codes and, on sign-in relays, WorkOS user ids. **A channel closed
+channel keys, join codes and, on sign-in relays, `github_<id>` user ids. **A channel closed
 after the backup is still in it.** Keep backups as private as the relay, and delete
 old ones if "closing leaves nothing behind" matters to your users.
 
@@ -193,7 +190,7 @@ Publish the port on loopback as shown and keep Caddy in front. Inside the
 container the peer is the bridge gateway, usually `172.17.0.1` (`docker network
 inspect bridge` shows `Gateway`). Naming it makes a client count as the
 client Caddy added, not as that one gateway address. Pass other settings with
-`-e` too, for example `-e WORKOS_CLIENT_ID=client_… -e KIWI_QUOTA_CHANNELS_PER_OWNER=5`,
+`-e` too, for example `-e GITHUB_APP_CLIENT_ID=Iv23… -e KIWI_QUOTA_CHANNELS_PER_OWNER=5`,
 or `--env-file` for secrets.
 
 ## The static site on your relay
@@ -217,8 +214,8 @@ nothing.
    - set `name` to your Worker's name;
    - replace `routes` with your own domain, or delete it and use the `workers.dev`
      address;
-   - in `vars`, replace `WORKOS_CLIENT_ID` and `WORKOS_AUTHKIT_DOMAIN` with yours, or
-     delete both to run without sign-in;
+   - for sign-in, set your GitHub App's `GITHUB_APP_CLIENT_ID` and `GITHUB_APP_CLIENT_SECRET`
+     ([below](#sign-in-with-your-github-app)), or leave them unset to run without sign-in;
    - set the limits you want ([table below](#limits-and-the-private-beta)).
      Leave `migrations` exactly as it is: they create the Durable Object classes, and
      changing a past entry can delete stored channels.
@@ -233,7 +230,7 @@ nothing.
    bunx wrangler deploy --dry-run   # lists the bindings and vars, no upload
    bun run relay:deploy
    ```
-3. Secrets go in with `bunx wrangler secret put NAME` (for example `WORKOS_API_KEY`,
+3. Secrets go in with `bunx wrangler secret put NAME` (for example `GITHUB_APP_CLIENT_SECRET`,
    `KIWI_BETA_USERS`), never in `wrangler.jsonc`.
 
 **Free vs Paid.** SQLite-backed Durable Objects are available on the Workers Free
@@ -254,54 +251,35 @@ messages per minute.
 The static site is served as static assets, which are free and don't count as Worker
 requests.
 
-## Sign-in with your own WorkOS app
+## Sign-in with your GitHub App
 
 Sign-in is only the create gate: on a relay with it, a channel can only be created
 by a signed-in person (and `KIWI_BETA_USERS` can narrow that further). The app
-signs in with WorkOS's device authorization flow in your system browser; the relay
-checks the resulting token on `POST /create` and nowhere else. Every owner action
-after that is the owner key's signature alone, and joining never signs anyone in.
+signs in with GitHub's device flow in your system browser, through the relay's
+GitHub App; the relay checks the resulting token on `POST /create` and the account
+routes, and nowhere else. Every owner action after that is the owner key's
+signature alone, and joining never signs anyone in.
 
-1. Create an application in the [WorkOS dashboard](https://dashboard.workos.com) and
-   turn on AuthKit (and device authorization, if it is a separate switch).
-2. Copy the **client id** and your **AuthKit domain** (`https://….authkit.app`). Both
-   are public.
-3. Give them to the relay: `--workos-client-id` and `--workos-authkit-domain` (Bun),
-   or the two `vars` (Worker). Optionally set `WORKOS_API_KEY` as a secret so the relay
-   can show the creator's real name.
+1. Register the GitHub App as [docs/github-app.md](github-app.md) says. For sign-in
+   it needs only step 7: **Enable Device Flow**, and the App's **Client ID**.
+2. Generate a **client secret** on the App's page. The relay needs it to ask GitHub
+   whether a token came from this App (`POST /applications/<client id>/token`), so it
+   takes no other app's tokens.
+3. Give both to the relay: `GITHUB_APP_CLIENT_ID=… GITHUB_APP_CLIENT_SECRET=… kiwi relay`
+   (Bun), or `GITHUB_APP_CLIENT_ID` under `vars` and
+   `bunx wrangler secret put GITHUB_APP_CLIENT_SECRET` (Worker).
 
-The relay holds no WorkOS secret apart from the optional API key. It checks sign-in
-tokens against WorkOS's public keys. Check that it's on:
+A signed-in person is `github_<id>` at the relay: GitHub's numeric id, which
+outlives a renamed login. Check that it's on:
 
 ```bash
 curl -s https://your-relay.example.com/v1/config
-# {"workosClientId":"client_…"}
+# {"githubSignIn":true,"githubClientId":"Iv23…"}
 ```
 
 There is no sign-in callback for the relay to serve and no channel directory or
-usage page for signed-in people: the app signs in with device authorization in
-the browser, and the relay only counts the channels each person owns, for the
-quota.
-
-### Your own sign-in domain
-
-The page the app opens to sign in is on your AuthKit domain, `https://<random-words>.authkit.app`
-by default. WorkOS can serve it from a domain of yours instead (`auth.example.com`). That's a
-WorkOS add-on, for production environments only. WorkOS's pricing page lists custom domains as
-an extra monthly fee (reported as $99/month).
-
-1. In the WorkOS dashboard, with the **production** environment selected: _Domains_ →
-   _Configure AuthKit domain_, and enter it (`auth.example.com`).
-2. Add the CNAME record it shows at your DNS provider. On Cloudflare, make it **DNS only** (grey
-   cloud) until WorkOS has verified it, which it keeps retrying for up to 72 hours.
-3. Once it's verified, the device sign-in page and its tokens come from the new domain. Tokens
-   then name it as their issuer, so tell the relay about both domains for the switch, new one
-   first: `WORKOS_AUTHKIT_DOMAIN="https://auth.example.com,https://<random-words>.authkit.app"`
-   (or `--workos-authkit-domain` with the same list), and redeploy. The relay takes tokens from
-   either domain, for your client only. The public site (`site/`) does not sign in; the desktop
-   app talks to WorkOS.
-4. Sign in from the app once and check the page was on your domain. Sign-in tokens last minutes,
-   so a day later you can drop the `.authkit.app` domain from the setting.
+usage page for signed-in people: the app signs in with the device flow in the
+browser, and the relay only counts the channels each person owns, for the quota.
 
 ## Limits and the private beta
 
@@ -310,7 +288,7 @@ from its environment, the Worker from `vars` (or secrets).
 
 | Setting                          | Default | Public relay | What it does                                                                                                                                                                                                               |
 | -------------------------------- | ------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `KIWI_BETA_USERS`                | off     | set (secret) | Comma-separated WorkOS user ids, emails or `@domain`s. Only they create channels; anyone may still ask to join. Needs sign-in.                                                                                             |
+| `KIWI_BETA_USERS`                | off     | set (secret) | Comma-separated `github_<id>` user ids, `github:<login>`s, emails or `@domain`s. Only they create channels; anyone may still ask to join. Needs sign-in.                                                                   |
 | `KIWI_BETA_WAITLIST_URL`         | none    |              | Link shown to people who aren't on the list                                                                                                                                                                                |
 | `KIWI_QUOTA_CHANNELS_PER_OWNER`  | off     | off          | Channels one person owns at once; closing one frees the slot                                                                                                                                                               |
 | `KIWI_QUOTA_MEMBERS_PER_CHANNEL` | off     | off          | Active members per channel, people and agents together                                                                                                                                                                     |
@@ -382,10 +360,10 @@ bun run build          # dist/kiwi, a single file
 
 - **What you see.** Ciphertext and its sizes, when messages arrive, room ids, member
   public keys, connecting IP addresses, and who is connected when. With sign-in, also
-  the WorkOS user id of each channel's creator, so their count of owned channels.
+  the `github_<id>` user id of each channel's creator, so their count of owned channels.
   Not names, roles, channel names or message content: those are end-to-end
   encrypted. Joining and pairing don't identify anyone to the relay: a person
-  proves their person key, not a WorkOS account, and pairing rides a sealed mailbox.
+  proves their person key, not a GitHub account, and pairing rides a sealed mailbox.
 - **What the Bun relay logs.** Three lines at startup. After that, only an error's
   message when a request fails unexpectedly, never request details, room ids or keys.
   Your reverse proxy may log more: Caddy's access logs are off unless you add `log`.
@@ -420,20 +398,20 @@ The test suite runs against the Bun relay by default. To run it against a Worker
 create channels through the client library (`test/owner.ts`), not the CLI.
 
 ```bash
-bunx wrangler dev --port 8787 --var WORKOS_CLIENT_ID: \
+bunx wrangler dev --port 8787 --var GITHUB_APP_CLIENT_ID: \
   --var KIWI_QUOTA_CHANNELS_PER_OWNER: --var KIWI_QUOTA_MEMBERS_PER_CHANNEL: --var KIWI_QUOTA_MESSAGES_PER_DAY:
 KIWI_TEST_RELAY=http://localhost:8787 bun test
 ```
 
-### Signed-in flows, without WorkOS
+### Signed-in flows, without GitHub
 
 The create gate needs a signed-in person. To test it on your own machine, start
 the Bun relay with dev sign-in, where the token `dev:<name>` is the person
-`dev_<name>` (the prefix keeps dev ids apart from real WorkOS ones):
+`dev_<name>` (the prefix keeps dev ids apart from real `github_<id>` ones):
 
 ```bash
 bun src/relay/bun.ts --hostname 127.0.0.1 --port 8787 --data /tmp/kiwi-dev --dev-sign-in
-curl -s localhost:8787/v1/config     # {"workosClientId":"dev","dev":true}
+curl -s localhost:8787/v1/config     # {"githubSignIn":false,"dev":true}
 ```
 
 Anyone who can reach it can sign in as anyone. So the relay refuses to start
