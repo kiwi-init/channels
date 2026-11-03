@@ -334,24 +334,18 @@ const routes: RoomRoute[] = [
     run: ({ me: pk }, m) =>
       Effect.gen(function* () {
         const { req, url } = yield* Request_;
-        const roomId = (yield* RoomStore).roomId;
+        const watch = watchRequests((yield* RoomStore).sql);
         const until = Date.now() + requestWait(url);
-        return yield* Effect.acquireUseRelease(
-          Effect.sync(() => watchRequests(roomId)),
-          (watch) =>
-            Effect.gen(function* () {
-              for (;;) {
-                const seen = watch.rev();
-                const data = yield* requestStatus(m[1]!, pk);
-                const etag = requestTag(data);
-                const left = until - Date.now();
-                if (left <= 0 || !holds(req, etag)) return yield* tagged(etag, () => data);
-                yield* Effect.promise(() => watch.next(seen, left, req.signal));
-                if (req.signal.aborted) return yield* tagged(etag, () => data);
-              }
-            }),
-          (watch) => Effect.sync(watch.close),
-        );
+        for (;;) {
+          if (watch.gone()) return yield* gone();
+          const seen = watch.rev();
+          const data = yield* requestStatus(m[1]!, pk).pipe(Effect.catchCause((cause) => (watch.gone() ? Effect.fail(gone()) : Effect.failCause(cause))));
+          const etag = requestTag(data);
+          const left = until - Date.now();
+          if (left <= 0 || !holds(req, etag)) return yield* tagged(etag, () => data);
+          yield* Effect.promise(() => watch.next(seen, left, req.signal));
+          if (req.signal.aborted) return yield* tagged(etag, () => data);
+        }
       }),
   },
   { method: "GET", path: "/", guard: "member", run: () => withRoom((db) => ({ data: { head: db.head() } })) },
@@ -911,6 +905,6 @@ export async function onHttp(relay: Relay, db: RoomDb, req: Request, path: strin
   try {
     return await Effect.runPromiseWith(context)(program);
   } finally {
-    requestsChanged(db.roomId);
+    requestsChanged(db.sql);
   }
 }

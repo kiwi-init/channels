@@ -34,7 +34,7 @@ export { append, expire, idleExpired, markRead, storeBlob, touch } from "./room/
 export { create, directory, reown, setIcon, setSettings, setSnapshot, setTitle, type CreateBody } from "./room/lifecycle.ts";
 export { approve, keysFor, remove, rotate, setCanPost, setRecord, type MemberBody } from "./room/members.ts";
 export { dropDelegation, listDelegations, liveDelegation, putDelegation } from "./room/delegations.ts";
-export { request, requestsChanged, requestStatus, requestTag, requestWait, requireChecked, reveal, setOwnerNonce, watchRequests, type RequestBody } from "./room/requests.ts";
+export { request, requestsChanged, requestsGone, requestStatus, requestTag, requestWait, requireChecked, reveal, setOwnerNonce, watchRequests, type RequestBody } from "./room/requests.ts";
 export { frame, msgFrame, onClientFrame, socketError, takesPresence, wantsEcho, wantsReads, wantsWatch, watchFrame, welcomeFrames } from "./room/sockets.ts";
 export { errorResponse, gateRoom, parseRoomPath, relayConfig } from "./room/http.ts";
 

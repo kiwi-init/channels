@@ -7,6 +7,7 @@ import { Channel } from "@kiwi/core/client.ts";
 import { decodeJoinCode } from "@kiwi/core/crypto.ts";
 import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
 import { startRelay } from "../src/relay/bun.ts";
+import { OPEN_POLICY } from "../src/relay/policy.ts";
 import { memoryBudget } from "./check.ts";
 import { kiwiCmd } from "./owner.ts";
 import { trafficProxy } from "./traffic.ts";
@@ -136,6 +137,38 @@ describe("join waits on the relay instead of polling it", () => {
     expect(await Channel.joinStatus(relay, code, joiner, requestId)).toEqual({ status: "pending", code: null });
     await ownerCh.requests({ budget: memoryBudget() });
     expect(await Channel.joinStatus(relay, code, joiner, requestId)).toMatchObject({ status: "pending", code: expect.stringMatching(/^\d{3}-\d{3}$/) });
+  });
+
+  test("closing the channel ends the wait at once with channel gone", async () => {
+    const { code, ownerCh, joiner, requestId, first } = await asking();
+    const watching = timed(Channel.watchJoin(relay, code, joiner, requestId, first.tag, 20).catch((e: unknown) => e));
+    await Bun.sleep(300);
+    await ownerCh.close();
+    const { got, ms } = await watching;
+    expect(ms).toBeLessThan(5_000);
+    expect(got).toMatchObject({ status: 404, tag: "ChannelGone" });
+  });
+
+  test("an expiring channel ends the wait at once with channel gone", async () => {
+    const clock = { now: Date.now() };
+    const r = startRelay({ port: 0, hostname: "127.0.0.1", dataDir: scratch("expiry"), policy: { ...OPEN_POLICY, expireAfterDays: 90 }, now: () => clock.now });
+    try {
+      const at = r.url.origin;
+      const owner = await generateIdentity("boss");
+      const { code } = await Channel.create(at, owner, { name: "boss" });
+      const joiner = await generateIdentity("win");
+      const { requestId } = await Channel.requestJoin(at, code, joiner, { name: "win" });
+      const first = await Channel.watchJoin(at, code, joiner, requestId, null, 20);
+      const watching = timed(Channel.watchJoin(at, code, joiner, requestId, first.tag, 20).catch((e: unknown) => e));
+      await Bun.sleep(300);
+      clock.now += 91 * 86_400_000;
+      expect(r.sweep()).toBe(1);
+      const { got, ms } = await watching;
+      expect(ms).toBeLessThan(5_000);
+      expect(got).toMatchObject({ status: 404, tag: "ChannelGone" });
+    } finally {
+      r.stop(true);
+    }
   });
 
   test("a stranger's key can't wait on someone else's request", async () => {
