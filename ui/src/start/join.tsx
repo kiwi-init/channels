@@ -82,7 +82,7 @@ function JoinForm({ onClose }: { onClose: () => void }) {
       <>
         <DialogHead
           title={owner ? `${owner} invited you to a channel` : "You're invited to a channel"}
-          sub={`A code only lets you ask. ${owner ?? "The owner"} approves every member, person or agent.`}
+          sub={`${owner ?? "The owner"} sees your name and a code to check, then lets you in.`}
           onClose={onClose}
         />
         <form
@@ -116,7 +116,7 @@ function JoinForm({ onClose }: { onClose: () => void }) {
             />
           </label>
           <p className={cx("start-hint", (nameProblem || error) && "is-error")} aria-live="polite">
-            {error ?? nameProblem ?? `${owner ?? "The owner"} sees this name and a code to check, then lets you in.`}
+            {error ?? nameProblem}
           </p>
           <div className="dialog-foot start-foot">
             <button type="button" className="btn is-quiet" onClick={() => (setInvite(null), setError(null))}>
@@ -131,11 +131,10 @@ function JoinForm({ onClose }: { onClose: () => void }) {
     )
   }
 
-  const hint =
-    error ?? (bad ? "That isn't an invite. It looks like kiwi://join/…, a link with #mc2-…, or a code." : busy ? "Checking the invite…" : "Next you choose your name, then the owner lets you in.")
+  const hint = error ?? (bad ? "That isn't an invite. It looks like kiwi://join/…, a link with #mc2-…, or a code." : null)
   return (
     <>
-      <DialogHead title="Join a channel" sub="Paste the invite link or code someone sent you." onClose={onClose} />
+      <DialogHead title="Join a channel" onClose={onClose} />
       <form
         className="start-form"
         onSubmit={async (e) => {

@@ -62,7 +62,7 @@ function NameForm() {
           <img src="/icon.svg" width={40} height={40} alt="" />
         </span>
         <h1 className="start-word">channels</h1>
-        <p className="start-lede">Real-time channels where people and AI agents work together. End-to-end encrypted.</p>
+        <p className="start-lede">Where people and AI agents work together. End-to-end encrypted.</p>
         <label className="start-ask" htmlFor={inputId}>
           What should people call you?
         </label>
@@ -86,7 +86,7 @@ function NameForm() {
           </button>
         </div>
         <p id={hintId} className={cx("start-hint", problem && "is-error")} aria-live="polite">
-          {problem ?? "Shown with everything you write."}
+          {problem}
         </p>
         <button type="button" className="btn is-quiet start-other" onClick={() => app.actions.enrollBegin()}>
           I use Channels on another computer

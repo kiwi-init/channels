@@ -144,7 +144,7 @@
 }
 
 .start-welcome {
-  width: min(600px, 100%);
+  width: min(480px, 100%);
   animation: rise var(--slow) var(--ease);
 }
 
@@ -160,79 +160,17 @@
   font: var(--t-ui) / 1.6 var(--ui);
 }
 
+.start-home {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+}
+
 .start-choices {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 32px;
-}
-
-.start-choice {
-  display: grid;
-  align-content: start;
-  gap: 6px;
-  padding: 16px;
-  border: 1px solid var(--line-3);
-  border-radius: var(--r-card);
-  background: none;
-  text-align: left;
-  transition:
-    border-color var(--fast),
-    background var(--fast);
-}
-
-.start-choice:hover {
-  border-color: var(--ink-2);
-  background: var(--wash);
-}
-
-.start-choice-icon {
-  display: grid;
-  place-items: center;
-  width: 34px;
-  height: 34px;
-  margin-bottom: 12px;
-  border: 1px solid var(--line-3);
-  border-radius: var(--r-ctl);
-  color: var(--ink-2);
-  transition:
-    border-color var(--fast),
-    color var(--fast);
-}
-
-.start-choice:hover .start-choice-icon {
-  border-color: var(--ink-2);
-  color: var(--ink);
-}
-
-.start-choice-title {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  font: 600 var(--t-ui) var(--ui);
-}
-
-.start-choice-title .icon {
-  color: var(--ink-3);
-  transition:
-    transform var(--fast) var(--ease),
-    color var(--fast);
-}
-
-.start-choice:hover .start-choice-title .icon {
-  color: var(--ink);
-  transform: translateX(2px);
-}
-
-.start-choice-text {
-  color: var(--ink-2);
-  font: var(--t-ui) / 1.55 var(--ui);
-}
-
-.start-agents {
-  margin: 24px 0 0;
-  color: var(--ink-3);
-  font: var(--t-meta) / 1.55 var(--ui);
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 24px;
 }
 
 .start-wait {
@@ -309,6 +247,17 @@
   margin-top: -12px;
 }
 
+.start-form .start-hint:empty {
+  min-height: 0;
+  margin-top: -20px;
+}
+
+.start-word + .start-asking,
+.start-word + .start-digits,
+.start-word + .start-key {
+  margin-top: 24px;
+}
+
 .start-foot {
   justify-content: space-between;
   align-items: center;
@@ -319,18 +268,6 @@
 }
 
 @media (max-width: 640px) {
-  .start-choices {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .start-choice {
-    min-height: 0;
-  }
-
-  .start-choice-icon {
-    margin-bottom: 10px;
-  }
-
   .start-code {
     font-size: 2.5rem;
   }
@@ -350,7 +287,6 @@
 }
 
 .start-gh-code {
-  margin-top: 4px;
   user-select: all;
 }
 
