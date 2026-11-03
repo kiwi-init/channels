@@ -72,12 +72,6 @@
   padding: 24px var(--gutter) var(--compose-space);
 }
 
-.feed-empty {
-  padding: 40px 24px;
-  color: var(--ink-2);
-  font: var(--t-ui) var(--ui);
-}
-
 .feed-start {
   display: grid;
   align-content: end;
@@ -1674,29 +1668,6 @@ button.msg-image-spot:hover {
   box-shadow: var(--shadow-pop);
 }
 
-.compose-warn {
-  position: absolute;
-  bottom: calc(100% - 4px);
-  left: 28px;
-  z-index: 5;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  max-width: min(520px, calc(100% - 56px));
-  padding: 8px 8px 8px 12px;
-  border-radius: var(--r-ctl);
-  background: var(--bg-2);
-  box-shadow: var(--shadow-pop);
-}
-
-.compose-warn p {
-  flex: 1 1 200px;
-  margin: 0;
-  color: var(--ink);
-  font: var(--t-body) / 1.4 var(--ui);
-}
-
 .mention-row {
   display: flex;
   align-items: center;
@@ -1939,13 +1910,6 @@ button.msg-image-spot:hover {
 
 .msg-edit-foot .dim {
   margin-right: auto;
-}
-
-.dm-note {
-  margin: 0 0 8px;
-  color: var(--ink-2);
-  font: var(--t-stamp) var(--ui);
-  text-align: center;
 }
 
 .threads {
