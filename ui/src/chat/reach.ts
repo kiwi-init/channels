@@ -1,7 +1,7 @@
 import { mentionsOf } from "@kiwi/core/changes.ts"
 import { unseenBy } from "@kiwi/core/room-rules.ts"
 
-import { sealable } from "~/live/dm"
+import { dmInRoom } from "~/live/dm"
 import type { Channel, Person, Where } from "~/model"
 import { seatRoot, shown } from "~/names"
 
@@ -13,8 +13,8 @@ export function sealedOf(channel: Pick<Channel, "rooms" | "directs" | "people" |
     return members ? { kind: "room", room: where.room, inside: members } : null
   }
   if (where.kind === "dm") {
-    const locked = channel.directs.find((d) => d.with === where.with)?.locked
-    return locked || sealable(channel, where.with) ? { kind: "dm", inside: [channel.you, where.with] } : null
+    const membersOnly = channel.directs.find((d) => d.with === where.with)?.membersOnly
+    return membersOnly || dmInRoom(channel, where.with) ? { kind: "dm", inside: [channel.you, where.with] } : null
   }
   return null
 }

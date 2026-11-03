@@ -94,6 +94,7 @@ export class ChannelHistory {
     }),
 
     settle: Effect.fn("Channel.settle")({ self: this }, function* (this: ChannelHistory, m: Message) {
+      this.ch.learnRoom(m);
       if (m.ev?.op !== "room.seal" || !this.ch.opensRooms) return m;
       return yield* Effect.promise(async () => (await rooms()).settleSeal(this.ch, m));
     }),
@@ -123,8 +124,7 @@ export class ChannelHistory {
           const decrypted = yield* Effect.forEach(envelopes, (e) => this.ch.fx.decrypt(e), { concurrency: "unbounded" });
           for (let i = 0; i < decrypted.length; i++) {
             const m = decrypted[i];
-            if (m?.ev?.op === "room.seal") decrypted[i] = yield* this.ch.fx.settle(m);
-            if (m?.ev?.op === "room.create") this.ch.publicRooms.add(m.ev.id);
+            if (m?.ev?.op === "room.seal" || m?.ev?.op === "room.create" || m?.ev?.op === "room.members" || m?.ev?.op === "room.leave") decrypted[i] = yield* this.ch.fx.settle(m);
           }
           if (this.ch.roomKeys.size > known) for (let i = 0; i < envelopes.length; i++) if (!decrypted[i]) decrypted[i] = yield* this.ch.fx.decrypt(envelopes[i]!);
           for (let i = 0; i < envelopes.length; i++) {

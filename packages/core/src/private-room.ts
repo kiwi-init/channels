@@ -1,4 +1,4 @@
-import { b64url, fromB64url, newChannelKey, open, openFrom, seal, sealTo } from "./crypto.ts";
+import { fromB64url, open, openFrom } from "./crypto.ts";
 import { MAX_ROOM_MEMBERS, type RoomLetter, type RoomMember, type RoomMeta, type RoomNow, type RoomSeal } from "./room-rules.ts";
 import type { Message } from "./protocol.ts";
 import type { FoldBase, SecretRoom } from "./state/types.ts";
@@ -14,13 +14,11 @@ const enc = new TextEncoder();
 const boxInfo = (channel: string, id: string, n: number): string => `mc/room/${channel}/${id}/${n}`;
 const bound = (channel: string, id: string, n: number): string => `${channel}/room/${id}/${n}`;
 
-export const newRoomKey = (): string => newChannelKey();
-
 const digest = (channel: string, s: Omit<RoomSeal, "proof">): Uint8Array<ArrayBuffer> =>
   new Uint8Array(enc.encode(JSON.stringify(["kiwi-room-seal", channel, s.id, s.n, [...s.keys].sort(), s.meta.iv, s.meta.ct])));
 
 async function hmac(key: string): Promise<CryptoKey> {
-  return crypto.subtle.importKey("raw", fromB64url(key), { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"]);
+  return crypto.subtle.importKey("raw", fromB64url(key), { name: "HMAC", hash: "SHA-256" }, false, ["verify"]);
 }
 
 async function proven(channel: string, s: RoomSeal, key: string): Promise<boolean> {
@@ -31,20 +29,6 @@ async function proven(channel: string, s: RoomSeal, key: string): Promise<boolea
     // A proof that isn't base64url, or a key that isn't one, proves nothing.
     return false;
   }
-}
-
-export async function sealRoom(channel: string, id: string, n: number, key: string, meta: RoomMeta, xpks: readonly string[], replaces?: string): Promise<RoomSeal> {
-  const keys = (await Promise.all(xpks.map((xpk) => sealTo(xpk, key, boxInfo(channel, id, n))))).sort();
-  const sealed = { id, n, keys, meta: await seal(key, bound(channel, id, n), replaces && replaces !== key ? { ...meta, prev: replaces } : meta) };
-  if (!replaces) return sealed;
-  const proof = b64url(new Uint8Array(await crypto.subtle.sign("HMAC", await hmac(replaces), digest(channel, sealed))));
-  return { ...sealed, proof };
-}
-
-export async function renameRoom(channel: string, last: RoomSeal, key: string, meta: RoomMeta): Promise<RoomSeal> {
-  const sealed = { id: last.id, n: last.n, keys: last.keys, meta: await seal(key, bound(channel, last.id, last.n), meta) };
-  const proof = b64url(new Uint8Array(await crypto.subtle.sign("HMAC", await hmac(key), digest(channel, sealed))));
-  return { ...sealed, proof };
 }
 
 export async function openRoomKey(channel: string, s: Pick<RoomSeal, "id" | "n" | "keys">, xsk: string): Promise<string | null> {
@@ -100,10 +84,6 @@ export async function stepRoom(channel: string, now: RoomNow | undefined, seals:
   return { now: { n: s.n, key, meta }, proven: true };
 }
 
-export async function sealLetter(channel: string, room: string, n: number, key: string, inner: object): Promise<RoomLetter> {
-  return { room, n, ...(await seal(key, bound(channel, room, n), inner)) };
-}
-
 export async function openLetter(channel: string, letter: RoomLetter, key: string): Promise<unknown> {
   return open(key, bound(channel, letter.room, letter.n), letter.iv, letter.ct);
 }
@@ -135,6 +115,8 @@ export interface RoomCache {
   readonly roomNow: Map<string, RoomNow>;
   readonly roomSeals: Map<string, { seq: number; seal: RoomSeal }[]>;
   readonly sealSteps: Map<number, { proven?: boolean; opened?: RoomMeta }>;
+  readonly memberRooms?: Map<string, { members: RoomMember[]; dm?: true; self?: true }>;
+  readonly publicRooms?: Set<string>;
 }
 
 async function replay(c: RoomCache, id: string): Promise<RoomNow | undefined> {
@@ -174,6 +156,8 @@ export async function settleSeal(c: RoomCache, m: Message): Promise<Message> {
 export async function openBaseRooms(c: RoomCache, base: FoldBase): Promise<FoldBase> {
   const secret: [string, SecretRoom][] = [];
   const rooms = new Map(base.rooms.map((r) => [r.id, r]));
+  for (const r of base.rooms) if (!r.members) c.publicRooms?.add(r.id);
+  for (const r of base.rooms) if (r.members) c.memberRooms?.set(r.id, { members: r.members, ...(r.dm ? { dm: true as const } : {}), ...(r.self ? { self: true as const } : {}) });
   for (const [id, room] of base.secret ?? []) {
     const had = c.roomSeals.get(id) ?? [];
     c.roomSeals.set(id, [...room.seals.map((seal, i) => ({ seq: -(room.seals.length - i), seal })), ...had.filter((x) => x.seq > 0)]);
@@ -190,17 +174,6 @@ export async function openBaseRooms(c: RoomCache, base: FoldBase): Promise<FoldB
     else if (room.meta) rooms.delete(id);
   }
   return { ...base, secret, rooms: [...rooms.values()] };
-}
-
-export function ownSeal(c: Omit<RoomCache, "roomId" | "identity">, id: string, seq: number, seal: RoomSeal, now: Required<RoomNow>): void {
-  const list = [...(c.roomSeals.get(id) ?? []).filter((x) => x.seq !== seq), { seq, seal }].sort((a, b) => a.seq - b.seq);
-  c.roomSeals.set(
-    id,
-    keptSeals(list, (x) => x.seal.n),
-  );
-  c.roomKeys.set(`${id}/${now.n}`, now.key);
-  c.sealSteps.set(seq, { proven: true, opened: now.meta });
-  if (list.at(-1)?.seq === seq) c.roomNow.set(id, now);
 }
 
 export const SEALS_PER_KEY = 8;

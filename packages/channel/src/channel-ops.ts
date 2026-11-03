@@ -126,8 +126,7 @@ export class ChannelLink {
   syncMarks = (...a: Args<"syncMarks">) => this.c("syncMarks", ...a);
   changeRoom = (...a: Args<"changeRoom">) => this.c("changeRoom", ...a);
   leaveRoom = (...a: Args<"leaveRoom">) => this.c("leaveRoom", ...a);
-  sealOutLeavers = (...a: Args<"sealOutLeavers">) => this.c("sealOutLeavers", ...a);
-  pruneRooms = (...a: Args<"pruneRooms">) => this.c("pruneRooms", ...a);
+  sentRooms = (...a: Args<"sentRooms">) => this.c("sentRooms", ...a);
   setRepos = (...a: Args<"setRepos">) => this.c("setRepos", ...a);
   icon = () => this.c("icon");
   setIcon = (...a: Args<"setIcon">) => this.c("setIcon", ...a);

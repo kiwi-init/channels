@@ -78,8 +78,6 @@ export interface Person {
   addsAgents?: boolean
   answersDecisions?: boolean
   managesAgents?: boolean
-  ops?: Readonly<Record<string, number>>
-  opsLive?: number
   lastSeen: number
   joined: number
   messages: number
@@ -277,7 +275,7 @@ export interface Direct {
   unread: number
   last: number
   seen?: number
-  locked?: true
+  membersOnly?: true
 }
 
 export interface TheirDirect {
@@ -330,7 +328,7 @@ export interface Message {
   from: string
   at: number
   text: string
-  locked?: true
+  membersOnly?: true
   where: Where
   to?: readonly string[]
   said?: Said

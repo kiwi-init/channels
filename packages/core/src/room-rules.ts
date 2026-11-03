@@ -116,16 +116,13 @@ export function unseenBy(inside: readonly string[], mentioned: Iterable<string>,
   return [...out.values()];
 }
 
+export const sentTo = (room: { members?: readonly RoomMember[] } | undefined, name: string, members: ReadonlyMap<string, Seat>): boolean =>
+  !!room && (!room.members || room.members.some((m) => m.name === name || rootOf(m.name, members) === rootOf(name, members)));
+
+export const sentHere = (state: { rooms: ReadonlyMap<string, { members?: readonly RoomMember[] }>; members: ReadonlyMap<string, Seat> }, room: string, name: string): boolean =>
+  sentTo(state.rooms.get(room), name, state.members);
+
 export const inRoom = (meta: Pick<RoomMeta, "members">, name: string, pk: string | undefined): boolean => !!pk && meta.members.some((m) => m.name === name && m.pk === pk);
 
 export const publicView = <M extends { sealed?: unknown; opened?: unknown; proven?: unknown }>(messages: readonly M[]): M[] =>
   messages.flatMap((m) => (m.sealed ? [] : m.opened || m.proven !== undefined ? [Object.fromEntries(Object.entries(m).filter(([k]) => k !== "opened" && k !== "proven")) as M] : [m]));
-
-export type RoomReadiness = "ready" | "old" | "unseen";
-
-export function roomReadiness(signed: Readonly<Record<string, number>> | undefined, live: readonly number[], needs: number): RoomReadiness {
-  if (live.some((v) => v >= needs)) return "ready";
-  const known = Object.values(signed ?? {}).filter((v) => v > 0);
-  if (known.some((v) => v < needs)) return "old";
-  return known.length ? "ready" : "unseen";
-}

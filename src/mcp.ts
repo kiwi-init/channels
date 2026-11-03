@@ -391,7 +391,7 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
   server.registerTool(
     "rooms",
     { description: "The channel's rooms, with their ids. Messages say their room as [#name] once there's more than one. Example: call rooms." },
-    tool(() => Effect.map(s.state(), ({ state }) => formatRooms(state))),
+    tool(() => Effect.map(s.state(), ({ state }) => formatRooms(state, s.me))),
   );
 
   /** Where a send or ask goes (state.ts chooseThread): one of task, main or dm, else the task the agent is doing. */

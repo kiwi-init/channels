@@ -287,7 +287,7 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   banner already says it. No borders between the columns.
 - **Sidebar.** Every row is one `--ctl` line, its text on one edge after a
   24px icon column (the `#`, a face, an icon). Three sections with a mono
-  head: Rooms (`#` rows, a lock for a private room), People and Agents. Each
+  head: Rooms (`#` rows, the people icon for a members-only room), People and Agents. Each
   member is listed once, and the row is your conversation with them: a click
   opens the DM, its unread count sits on the row, and the profile is in the
   row's menu (and in the Agents view). You aren't listed. A person's pip
