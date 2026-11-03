@@ -8,7 +8,8 @@ import { join } from "node:path";
 import { Channel } from "@kiwi/core/client.ts";
 import type { JoinRequest } from "@kiwi/core/membership.ts";
 import type { ChannelAccess } from "@kiwi/core/crypto.ts";
-import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
+import { certUntil, claimDevice, nextLink, readDeviceList, rootLink, type DeviceLink } from "@kiwi/core/devices.ts";
+import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
 import type { Member, MemberInfo } from "@kiwi/core/membership.ts";
 import { certifyMachine, claimComputer, provePerson, type MachineCert } from "@kiwi/core/person.ts";
 import { checked, memoryBudget } from "./check.ts";
@@ -94,6 +95,27 @@ export async function joinPerson(s: OwnerSetup, name: string, person: Identity, 
   if (st.status !== "approved") throw new Error(`not approved: ${st.status}`);
   const member = (await s.ownerCh.members()).find((m) => m.pk === id.pk)!;
   return { id, ch: new Channel(st.access, s.relay, id), member };
+}
+
+export async function joinDevice(s: OwnerSetup, person: Identity, name: string): Promise<{ id: Identity; ch: Channel }> {
+  const desk = await withExchangeKey(await generateIdentity("desk"));
+  const phone = await withExchangeKey(await generateIdentity("phone"));
+  const root = await rootLink(person, { pk: desk.pk, xpk: desk.xpk!, label: "desk", os: "macOS", as: "desktop" });
+  const read = await readDeviceList([root]);
+  if (!read.ok) throw new Error(read.why);
+  const links: DeviceLink[] = [
+    root,
+    await nextLink(read.list, desk, { op: "add", device: phone.pk, dxpk: phone.xpk!, label: "phone", os: "iOS", as: "phone", approve: false, until: certUntil(Date.now()) }),
+  ];
+  const id = await generateIdentity(name);
+  const { requestId } = await Channel.requestJoin(s.relay, s.code, id, { name }, { device: await claimDevice(phone, links, s.roomId, id.pk) });
+  await s.ownerCh.autoApprove(s.person.pk);
+  await Channel.joinStatus(s.relay, s.code, id, requestId);
+  await s.ownerCh.autoApprove(s.person.pk);
+  const st = await Channel.joinStatus(s.relay, s.code, id, requestId);
+  if (st.status !== "approved") throw new Error(`not approved: ${st.status}`);
+  const seat = { ...id, name: (await s.ownerCh.members()).find((m) => m.pk === id.pk)!.name };
+  return { id: seat, ch: new Channel(st.access, s.relay, seat) };
 }
 
 const ADMIN = new Set(["create", "quick", "requests", "approve", "deny", "kick", "close", "role", "room", "images"]);
