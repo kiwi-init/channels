@@ -25,6 +25,13 @@ describe("sizes that must follow Settings > Appearance > Text size", () => {
     expect(lines('.a {\n  content: "font-size: 9px; {";\n  /* height: 9px; font: 9px x; */\n  font: var(--t-ui) var(--ui);\n}')).toEqual([]);
   });
 
+  test("unbalanced braces are read the way a browser recovers them, and escaped newlines keep line numbers", () => {
+    expect(lines(".a {\n  font-size: 13px;\n  height: 24px")).toEqual([2, 3]);
+    expect(lines(".a {\n  font-size: 13px;\n  & .b {\n    line-height: 20px;\n")).toEqual([2, 4]);
+    expect(lines("}\n.a {\n  font-size: 13px;\n}")).toEqual([3]);
+    expect(lines('.a {\n  content: "a\\\nb";\n  font-size: 13px;\n}')).toEqual([4]);
+  });
+
   test("container breakpoints in px are refused", () => {
     expect(lines("@container top (max-width: 1120px) {\n  .a {\n    display: none;\n  }\n}")).toEqual([1]);
     expect(lines("@container top (max-width: 70rem) {\n  .a {\n    display: none;\n  }\n}")).toEqual([]);
@@ -32,7 +39,7 @@ describe("sizes that must follow Settings > Appearance > Text size", () => {
 
   test("the root font size follows the chosen text size, and every type step is in rem", async () => {
     const tokens = await Bun.file("ui/src/styles/tokens.css").text();
-    expect(tokens).toMatch(/:root \{\n  font-size: calc\(var\(--text-scale, 1\) \* 100%\);/);
+    expect(tokens).toMatch(/:root \{\n {2}font-size: calc\(var\(--text-scale, 1\) \* 100%\);/);
     const steps = [...tokens.matchAll(/^\s*(--t-[a-z]+):\s*([^;]+);/gm)];
     expect(steps.length).toBe(6);
     for (const [, name, value] of steps) expect(`${name}: ${value}`).toMatch(/: \d*\.?\d+rem$/);

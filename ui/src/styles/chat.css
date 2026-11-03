@@ -1245,7 +1245,7 @@ button.msg-image-spot:hover {
 }
 
 .sys.is-task-row {
-  margin-left: 64px;
+  margin-left: calc(2rem + 32px);
 }
 
 .sys-task {

@@ -30,17 +30,21 @@ interface Block {
 
 function blocksOf(css: string): Block[] {
   const done: Block[] = [];
-  const stack: Block[] = [{ prelude: { text: "", line: 1 }, pieces: [] }];
+  const root: Block = { prelude: { text: "", line: 1 }, pieces: [] };
+  const stack: Block[] = [root];
   let piece: Piece = { text: "", line: 1 };
   let line = 1;
   let quote = "";
-  const top = () => stack[stack.length - 1] ?? { prelude: piece, pieces: [] };
+  const top = () => stack[stack.length - 1] ?? root;
   for (let i = 0; i < css.length; i++) {
     const ch = css[i] ?? "";
     if (quote) {
       piece.text += ch;
-      if (ch === "\\") piece.text += css[++i] ?? "";
-      else if (ch === quote) quote = "";
+      if (ch === "\\") {
+        const escaped = css[++i] ?? "";
+        piece.text += escaped;
+        if (escaped === "\n") line++;
+      } else if (ch === quote) quote = "";
     } else if (ch === "/" && css[i + 1] === "*") {
       const end = css.indexOf("*/", i + 2);
       const stop = end < 0 ? css.length : end + 2;
@@ -54,9 +58,11 @@ function blocksOf(css: string): Block[] {
       stack.push({ prelude: piece, pieces: [] });
       piece = { text: "", line };
     } else if (ch === "}") {
-      top().pieces.push(piece);
-      const closed = stack.pop();
-      if (closed) done.push(closed);
+      if (stack.length > 1) {
+        top().pieces.push(piece);
+        const closed = stack.pop();
+        if (closed) done.push(closed);
+      }
       piece = { text: "", line };
     } else if (ch === ";") {
       top().pieces.push(piece);
@@ -67,7 +73,8 @@ function blocksOf(css: string): Block[] {
     }
     if (ch === "\n") line++;
   }
-  return done;
+  top().pieces.push(piece);
+  return [...done, ...stack.slice(1).reverse()];
 }
 
 function declsOf(block: Block): Decl[] {

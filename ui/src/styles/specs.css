@@ -547,11 +547,11 @@
 }
 
 .spec-comments .spec-comment .msg-text {
-  margin: 2px 0 0 32px;
+  margin: 2px 0 0 calc(1.5rem + 8px);
 }
 
 .spec-comments .spec-comment-quote {
-  margin-left: 32px;
+  margin-left: calc(1.5rem + 8px);
 }
 
 .spec-box-new.is-line {
@@ -974,7 +974,7 @@
   content: "";
   position: absolute;
   top: -4px;
-  left: 85px;
+  left: calc(4.75rem + 9px);
   width: 1px;
   height: 8px;
   background: var(--line-2);
