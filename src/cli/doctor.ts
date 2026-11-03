@@ -128,7 +128,7 @@ const why = (err: unknown) => (err instanceof Error ? err.message : String(err))
 
 /**
  * Ask the relay who it is. Sign-in is on only when it says so: a relay
- * without WorkOS has no computer links, and `kiwi setup` cannot succeed there.
+ * without sign-in has no computer links, and `kiwi setup` cannot succeed there.
  * A relay that doesn't answer is reported here, before any link advice.
  */
 const checkRelay = Effect.fn("Doctor.relay")(function* (relay: string) {
@@ -150,11 +150,17 @@ const checkRelay = Effect.fn("Doctor.relay")(function* (relay: string) {
         signIn: false,
       } satisfies Check;
     }
-    const body = (yield* Effect.tryPromise({ try: () => res.json(), catch: (err) => err })) as { workosClientId?: unknown };
-    if (!body || typeof body !== "object" || !("workosClientId" in body)) {
+    const body = (yield* Effect.tryPromise({ try: () => res.json(), catch: (err) => err })) as { githubSignIn?: unknown; dev?: unknown; workosClientId?: unknown };
+    if (body && typeof body === "object" && typeof body.githubSignIn !== "boolean" && typeof body.workosClientId === "string") {
+      return {
+        finding: { ok: false, what: `${relay} is an older Kiwi relay without GitHub sign-in.`, how: "Update the relay and give it your GitHub App's client id and secret." },
+        signIn: false,
+      } satisfies Check;
+    }
+    if (!body || typeof body !== "object" || typeof body.githubSignIn !== "boolean") {
       return { finding: { ok: false, what: `${relay}/v1/config answered, but not as a Kiwi relay.`, how: "Point KIWI_RELAY at your Kiwi relay." }, signIn: false } satisfies Check;
     }
-    const signIn = typeof body.workosClientId === "string" && body.workosClientId.length > 0;
+    const signIn = body.githubSignIn || body.dev === true;
     return { finding: { ok: true, what: `relay    ${relay}  /v1/config answered` }, signIn } satisfies Check;
   });
   return yield* asked.pipe(

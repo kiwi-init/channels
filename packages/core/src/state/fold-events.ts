@@ -446,6 +446,14 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       break;
     }
 
+    case "task.delete": {
+      const task = tasks.get(ev.task);
+      if (!task) reject(`no task ${taskId(ev.task)}`);
+      else if (!isPerson(member) && !c.leads(member)) reject(`only a person or the lead deletes ${taskId(task.id)}`);
+      else tasks.delete(task.id);
+      break;
+    }
+
     case "task.first": {
       const task = tasks.get(ev.task);
       if (!task) reject(`no task ${taskId(ev.task)}`);
@@ -467,6 +475,10 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
         reject(reviewRefused);
         break;
       }
+      if (ev.detail !== undefined && !isPerson(member) && !lead) {
+        reject(`only a person or the lead rewrites ${taskId(task.id)}'s body`);
+        break;
+      }
       const review = ev.review === undefined ? task.review : ev.review?.trim() || undefined;
       const owner = ev.owner === undefined ? task.owner : ev.owner || undefined;
       const mayFinish = !review || isPerson(member) || (review === "*" ? m.from !== owner && !task.workedBy.includes(m.from) : m.from === review);
@@ -482,7 +494,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       }
       const cancel = ev.state === "cancelled" && task.state !== "done";
       const state =
-        ev.state === "cancelled" ? (cancel && (mayFinish || (ev.round !== undefined && revisedOut(task, m.from, open) === ev.round)) ? "done" : undefined) : ev.state && currentState(ev.state);
+        ev.state === "cancelled" ? (cancel && (mayFinish || lead || (ev.round !== undefined && revisedOut(task, m.from, open) === ev.round)) ? "done" : undefined) : ev.state && currentState(ev.state);
       if (open && state && state !== "review")
         open.result =
           ev.verdict && mayFinish
@@ -520,6 +532,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       if (state && state !== "done" && (m.from === task.owner || state === "review")) worked(task, m.from);
       if (state) task.state = state;
       if (ev.title) task.title = ev.title.slice(0, TASK_TITLE_MAX_LENGTH);
+      if (ev.detail !== undefined) task.detail = ev.detail.trim() || undefined;
       if (note)
         task.notes.push({
           seq: m.seq,

@@ -570,6 +570,9 @@ describe("the Kimi Code recipe", () => {
     expect(isListener("kiwi -c dev --as fond-owl listen --once")).toBe(true);
     expect(isListener("sh -c kiwi hook listen")).toBe(true);
     expect(isListener("kiwi --quiet listen")).toBe(true);
+    expect(isListener("/home/u/.kiwi/bin/kiwi join")).toBe(true);
+    expect(isListener("kiwi -c dev --as fond-owl join")).toBe(true);
+    expect(isListener("kiwi send join")).toBe(false);
     expect(isListener("kiwi send listen")).toBe(false);
     expect(isListener("bun test test/kiwi/listen.test.ts")).toBe(false);
     expect(isListener("rg listen /home/u/kiwi")).toBe(false);

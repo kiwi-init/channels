@@ -9,7 +9,7 @@ import { DurableObject } from "cloudflare:workers";
 import * as Layer from "effect/Layer";
 import { CLOSE_CLOSED, CLOSE_REMOVED, GONE_WORDS, PING, PONG } from "@kiwi/core/protocol.ts";
 import { ChannelGone, NotFound, Refused, TooMany, UpdateRequired } from "./failures.ts";
-import { Human, withGithub, workosFromSettings, type HumanAuth } from "./human.ts";
+import { githubHumanAuth, Human, NO_ONE, type HumanAuth } from "./human.ts";
 import { pageSecret, Policy, policyFrom, type RelayPolicy } from "./policy.ts";
 import { edgePage, PAGE_PATH, type PageCache } from "./pages.ts";
 import {
@@ -23,11 +23,11 @@ import {
   errorResponse,
   expire,
   forgetRoom,
+  requestsGone,
   gateRoom,
   idleExpired,
   missingFingerprint,
   onClientFrame,
-  reown as reownRoom,
   wantsEcho,
   parseRoomPath,
   takesPresence,
@@ -60,7 +60,6 @@ import {
 } from "./machine.ts";
 import { ACCOUNT_ASKS_PER_MINUTE, accountUser, isAccountPath, onAccountHttp, sameEnrollment, sameFresh, type AccountStore, type FreshRecord } from "./account.ts";
 import { ENROLL_TTL_MS, type Enrollment } from "@kiwi/core/enroll.ts";
-import { accountHome, frozenWrite, MOVE_PATH, movedHuman, moveUsers, onMoveHttp, type Adoption, type MoveStore, type Row, type Rows } from "./move.ts";
 import type { DeviceLink } from "@kiwi/core/devices.ts";
 import { allow as allowPerMinute } from "./room/limits.ts";
 import { makeRelay, onHttp, runRoom, runRoomSync, type Relay } from "./route.ts";
@@ -78,12 +77,6 @@ interface Env {
   MACHINES: DurableObjectNamespace<MachineInbox>;
   PERSON_MACHINES: DurableObjectNamespace<PersonMachines>;
   ACCOUNTS: DurableObjectNamespace<Account>;
-  /** When set, channels belong to humans signed in with this WorkOS AuthKit client. */
-  WORKOS_CLIENT_ID?: string;
-  /** The AuthKit domain (https://….authkit.app or a custom one), whose keys may also sign tokens. Comma-separated while moving domains. */
-  WORKOS_AUTHKIT_DOMAIN?: string;
-  /** Secret, optional: lets the beta list match people by email (the relay never names owners from it). */
-  WORKOS_API_KEY?: string;
   /** 20 mailbox writes per minute per client address (computer asks and enrolments). */
   MAILBOX_WRITES: RateLimit;
   /** 60 machine registrations and inbox writes per minute per client address. */
@@ -96,6 +89,7 @@ interface Env {
   KIWI_PAGE_KEY?: string;
   REPOS: DurableObjectNamespace<Repos>;
   GITHUB_WEBHOOK_SECRET?: string;
+  /** With its secret: channels belong to humans signed in through this GitHub App. */
   GITHUB_APP_CLIENT_ID?: string;
   /** Secret: lets the relay tell its GitHub App's sign-ins from any other app's. */
   GITHUB_APP_CLIENT_SECRET?: string;
@@ -114,14 +108,10 @@ const edgeCache: PageCache = {
 };
 
 let humanAuth: HumanAuth | null | undefined;
-/** One verifier (and JWKS cache) per isolate. */
+/** One verifier (and its cache of checked tokens) per isolate. */
 function human(env: Env): HumanAuth | null {
-  if (humanAuth === undefined) {
-    humanAuth = withGithub(workosFromSettings({ clientId: env.WORKOS_CLIENT_ID, authkitDomain: env.WORKOS_AUTHKIT_DOMAIN, apiKey: env.WORKOS_API_KEY }), {
-      clientId: env.GITHUB_APP_CLIENT_ID,
-      clientSecret: env.GITHUB_APP_CLIENT_SECRET,
-    });
-  }
+  // The hosted relay always has sign-in: missing GitHub App settings refuse everyone, never open it up.
+  if (humanAuth === undefined) humanAuth = githubHumanAuth({ clientId: env.GITHUB_APP_CLIENT_ID, clientSecret: env.GITHUB_APP_CLIENT_SECRET }) ?? NO_ONE;
   return humanAuth;
 }
 
@@ -163,10 +153,7 @@ export class Channel extends DurableObject<Env> {
     this.policy = policyFrom(env as unknown as Record<string, string | undefined>);
     this.relay = makeRelay(
       Layer.mergeAll(
-        Layer.succeed(
-          Human,
-          movedHuman(human(env), (user) => env.ACCOUNTS.get(env.ACCOUNTS.idFromName(user)).movedTo()),
-        ),
+        Layer.succeed(Human, human(env)),
         Layer.succeed(Policy, this.policy),
         Layer.succeed(ChannelLists, owned(env)),
         Layer.succeed(GithubApp, githubAppFrom({ appId: env.GITHUB_APP_ID, privateKey: env.GITHUB_APP_PRIVATE_KEY })),
@@ -265,6 +252,7 @@ export class Channel extends DurableObject<Env> {
       await Promise.allSettled(fx.directory.map((u) => this.env.OWNERS.get(this.env.OWNERS.idFromName(u.user)).fetch("https://owners/apply", { method: "POST", body: JSON.stringify(u) })));
     }
     if (fx.wipe) {
+      requestsGone(this.sql);
       // Closing leaves no breadcrumbs: every row and table goes, alarms included.
       await this.ctx.storage.deleteAlarm();
       await this.ctx.storage.deleteAll();
@@ -278,11 +266,6 @@ export class Channel extends DurableObject<Env> {
   private async wake(pusher: Pusher, { room, wakes }: NonNullable<Effects["push"]>): Promise<void> {
     const dead = await pusher.send(wakes);
     if (dead.length) this.store(room).dropPushTokens(dead);
-  }
-
-  async reown(roomId: string, from: string, to: string): Promise<void> {
-    const db = this.store(roomId);
-    await this.apply({ directory: await runRoom(this.relay, db, reownRoom(from, to)) });
   }
 
   async enqueueGithub(roomId: string, item: GithubItem): Promise<boolean> {
@@ -543,105 +526,13 @@ export class Account extends DurableObject<Env> {
     ctx.storage.sql.exec("DROP TABLE IF EXISTS recovery");
     ctx.storage.sql.exec("DROP TABLE IF EXISTS vault");
     ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS fresh (k INTEGER PRIMARY KEY CHECK (k = 1), rec TEXT NOT NULL)");
-    ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS move (k INTEGER PRIMARY KEY CHECK (k = 1), to_user TEXT NOT NULL, id TEXT NOT NULL, at INTEGER NOT NULL, done INTEGER NOT NULL)");
-    ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS adoptions (from_user TEXT PRIMARY KEY, id TEXT NOT NULL, state TEXT NOT NULL)");
+    ctx.storage.sql.exec("DROP TABLE IF EXISTS move");
+    ctx.storage.sql.exec("DROP TABLE IF EXISTS adoptions");
   }
 
   private freshRecord(): FreshRecord | null {
     const row = this.ctx.storage.sql.exec("SELECT rec FROM fresh").toArray()[0] as { rec: string } | undefined;
     return row ? (JSON.parse(row.rec) as FreshRecord) : null;
-  }
-
-  private tables(): string[] {
-    return (this.ctx.storage.sql.exec("SELECT name FROM sqlite_master WHERE type = 'table'").toArray() as { name: string }[])
-      .map((r) => r.name)
-      .filter((n) => !n.startsWith("_cf_") && !n.startsWith("sqlite_") && !["ask", "move", "adoptions"].includes(n));
-  }
-
-  private holds(): boolean {
-    const sql = this.ctx.storage.sql;
-    return sql.exec("SELECT 1 FROM adoptions WHERE state = 'adopted'").toArray().length > 0 || this.tables().some((t) => sql.exec(`SELECT 1 FROM ${t} LIMIT 1`).toArray().length > 0);
-  }
-
-  private adoption(from: string): { id: string; state: string } | undefined {
-    return this.ctx.storage.sql.exec("SELECT id, state FROM adoptions WHERE from_user = ?", from).toArray()[0] as { id: string; state: string } | undefined;
-  }
-
-  async rows(): Promise<Rows> {
-    return Object.fromEntries(this.tables().map((t) => [t, this.ctx.storage.sql.exec(`SELECT * FROM ${t}`).toArray() as Row[]]));
-  }
-
-  async movedTo(): Promise<string | null> {
-    return (this.ctx.storage.sql.exec("SELECT to_user FROM move WHERE done = 1").toArray()[0] as { to_user: string } | undefined)?.to_user ?? null;
-  }
-
-  async taken(): Promise<boolean> {
-    return this.holds();
-  }
-
-  async adopt(from: string, id: string, rows: Rows): Promise<Adoption> {
-    const sql = this.ctx.storage.sql;
-    return this.ctx.storage.transactionSync(() => {
-      const had = this.adoption(from);
-      if (had?.state === "adopted") return "adopted";
-      if (had?.id === id) return "abandoned";
-      if (this.holds()) return "taken";
-      for (const [t, list] of Object.entries(rows)) {
-        for (const row of list) {
-          const cols = Object.keys(row);
-          sql.exec(`INSERT INTO ${t} (${cols.join(", ")}) VALUES (${cols.map(() => "?").join(", ")})`, ...Object.values(row));
-        }
-      }
-      sql.exec("INSERT OR REPLACE INTO adoptions (from_user, id, state) VALUES (?, ?, 'adopted')", from, id);
-      return "adopted";
-    });
-  }
-
-  async abandon(from: string, id: string): Promise<Exclude<Adoption, "taken">> {
-    return this.ctx.storage.transactionSync(() => {
-      if (this.adoption(from)?.state === "adopted") return "adopted";
-      this.ctx.storage.sql.exec("INSERT OR REPLACE INTO adoptions (from_user, id, state) VALUES (?, ?, 'abandoned')", from, id);
-      return "abandoned";
-    });
-  }
-
-  private moves(): MoveStore {
-    const sql = this.ctx.storage.sql;
-    const at = (user: string) => this.env.ACCOUNTS.get(this.env.ACCOUNTS.idFromName(user));
-    return {
-      state: async () => {
-        const row = sql.exec("SELECT to_user, id, at, done FROM move").toArray()[0] as { to_user: string; id: string; at: number; done: number } | undefined;
-        if (!row) return null;
-        return row.done ? { moved: row.to_user } : { frozen: { to: row.to_user, id: row.id, at: row.at } };
-      },
-      freeze: async (_from, f) => {
-        if (sql.exec("SELECT 1 FROM move").toArray().length) return false;
-        sql.exec("INSERT INTO move (k, to_user, id, at, done) VALUES (1, ?, ?, ?, 0)", f.to, f.id, f.at);
-        return true;
-      },
-      thaw: async (_from, id) => void sql.exec("DELETE FROM move WHERE id = ? AND done = 0", id),
-      settle: async (_from, to, id) => void sql.exec("UPDATE move SET done = 1 WHERE to_user = ? AND id = ?", to, id),
-      rows: () => this.rows(),
-      busy: async (_from, now) => {
-        const ask = this.enrollment();
-        if (ask && ask.at + ENROLL_TTL_MS > now) return "asking";
-        return this.freshRecord()?.pending ? "starting over" : null;
-      },
-      holds: (to) => at(to).taken(),
-      adopt: (to, from, id, rows) => at(to).adopt(from, id, rows),
-      abandon: (to, from, id) => at(to).abandon(from, id),
-      rooms: async (from) =>
-        ((await (await this.env.OWNERS.get(this.env.OWNERS.idFromName(from)).fetch("https://owners/")).json()) as DirectoryEntry[]).filter((e) => e.owner && e.code !== "").map((e) => e.room),
-      reown: (room, from, to) => this.env.CHANNELS.get(this.env.CHANNELS.idFromName(room)).reown(room, from, to),
-    };
-  }
-
-  async move(from: string, to: string, req: Request): Promise<Response> {
-    try {
-      return await onMoveHttp(req, this.moves(), this.store(), from, to, Date.now());
-    } catch (err) {
-      return withCors(errorResponse(err));
-    }
   }
 
   private enrollment(): Enrollment | null {
@@ -695,15 +586,9 @@ export class Account extends DurableObject<Env> {
     };
   }
 
-  async serve(user: string, req: Request, formerly?: string): Promise<Response> {
+  async serve(user: string, req: Request): Promise<Response> {
     try {
-      if (!formerly) {
-        const home = await accountHome(this.moves(), user, Date.now());
-        if (home.user !== user) return await this.env.ACCOUNTS.get(this.env.ACCOUNTS.idFromName(home.user)).serve(home.user, req, user);
-        const frozen = home.frozen ? frozenWrite(req) : null;
-        if (frozen) return frozen;
-      }
-      const out = await onAccountHttp(req, this.store(), user, { perAccount: (key) => allowPerMinute(key, ACCOUNT_ASKS_PER_MINUTE), ...(formerly ? { formerly } : {}) });
+      const out = await onAccountHttp(req, this.store(), user, { perAccount: (key) => allowPerMinute(key, ACCOUNT_ASKS_PER_MINUTE) });
       return out ?? withCors(errorResponse(new NotFound({ message: "not found" })));
     } catch (err) {
       return withCors(errorResponse(err));
@@ -794,17 +679,6 @@ export default {
       if (!signed) return withCors(errorResponse(new NotFound({ message: "not found" })));
       if (signed instanceof Response) return signed;
       return env.MACHINES.get(env.MACHINES.idFromName(signed.mpk)).fetch(req);
-    }
-    if (url.pathname === MOVE_PATH) {
-      const ip = req.headers.get("cf-connecting-ip");
-      if (ip && !(await env.MACHINE_WRITES.limit({ key: `account:${ip}` })).success) {
-        return withCors(errorResponse(new TooMany({ message: "too many account requests from this address; try again in a few minutes" })));
-      }
-      const from = await accountUser(req, human(env));
-      if (from instanceof Response) return from;
-      const to = await moveUsers(req, human(env), from);
-      if (to instanceof Response) return to;
-      return env.ACCOUNTS.get(env.ACCOUNTS.idFromName(from)).move(from, to, req);
     }
     if (isAccountPath(url.pathname)) {
       const ip = req.headers.get("cf-connecting-ip");

@@ -16,7 +16,7 @@ export async function newChannel(page: Page, title: string): Promise<string> {
   await dialog.waitFor({ state: "detached", timeout: 30000 });
   await page.getByRole("textbox", { name: "Message" }).waitFor({ timeout: 30000 });
   await page.getByRole("button", { name: "Invite people", exact: true }).first().click();
-  const link = page.getByRole("complementary", { name: "Details" }).locator("code").filter({ hasText: "#mc2-" }).first();
+  const link = page.getByRole("dialog", { name: "Invite people" }).locator("code").filter({ hasText: "#mc2-" }).first();
   await link.waitFor({ timeout: 15000 });
   const code = (await link.innerText()).trim().replace(/^.*#/, "");
   await page.keyboard.press("Escape");
@@ -78,19 +78,20 @@ export async function view(page: Page, label: string, marker: string): Promise<n
   );
 }
 
-export async function panel(page: Page, opening: boolean): Promise<number> {
+export async function channelSettings(page: Page, opening: boolean): Promise<number> {
   return page.evaluate(async (open) => {
-    const close = () => [...document.querySelectorAll<HTMLElement>('aside[aria-label="Details"] button')].find((b) => (b.getAttribute("aria-label") ?? b.textContent?.trim()) === "Close");
+    const shown = () => document.querySelector('dialog.modal[open][aria-label="Channel settings"]');
+    const close = () => [...(shown()?.querySelectorAll<HTMLElement>("button") ?? [])].find((b) => b.getAttribute("aria-label") === "Close");
     const button = open ? [...document.querySelectorAll<HTMLElement>("button")].find((b) => (b.getAttribute("aria-label") ?? "").endsWith(": channel settings")) : close();
-    if (!button) throw new Error(open ? "no channel settings button" : "no Close in the panel");
+    if (!button) throw new Error(open ? "no channel settings button" : "no Close in channel settings");
     const t0 = performance.now();
     button.click();
     const deadline = t0 + 15000;
     while (performance.now() < deadline) {
       await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
-      if (!!document.querySelector('aside[aria-label="Details"]') === open) break;
+      if (!!shown() === open) break;
     }
-    if (performance.now() >= deadline) throw new Error(open ? "the panel never opened" : "the panel never closed");
+    if (performance.now() >= deadline) throw new Error(open ? "channel settings never opened" : "channel settings never closed");
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     return Math.round(performance.now() - t0);
   }, opening);

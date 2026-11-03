@@ -56,6 +56,7 @@ const claude = (session: string, pid: number): Env => ({ ...PLAIN, CLAUDECODE: "
 const OLD = claude("old-session", process.pid);
 const NEW = claude("new-session", stand.pid);
 const THIRD = claude("third-session", third.pid);
+const unhooked = (env: Env): Env => ({ ...env, AI_AGENT: "claude-code_2-1-200_agent" });
 
 function spawn(home: string, args: string[], env: Env = {}, stdin?: string) {
   return Bun.spawn(kiwiCmd(args), {
@@ -196,7 +197,7 @@ afterAll(async () => {
 test("while a loop holds the seat, no hook, kiwi command, MCP tool or running listener reads for it, and what arrives stays unread", async () => {
   await send("before the hold");
   expect(await prompt(OLD)).toContain("before the hold");
-  const listener = spawn(agent, ["listen"], OLD);
+  const listener = spawn(agent, ["listen"], unhooked(OLD));
   let heard = "";
   const hearing = (async () => {
     for await (const chunk of listener.stdout) heard += new TextDecoder().decode(chunk);
@@ -283,7 +284,7 @@ test("the loop hands the seat to the session it names, which gets what arrived d
 });
 
 test("a listener of the bound session that heard nothing during the next hold reads nothing after the seat goes to a third session", async () => {
-  const listener = spawn(agent, ["listen"], NEW);
+  const listener = spawn(agent, ["listen"], unhooked(NEW));
   let heard = "";
   const hearing = (async () => {
     for await (const chunk of listener.stdout) heard += new TextDecoder().decode(chunk);

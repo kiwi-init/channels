@@ -205,6 +205,7 @@ const spec = (s: Partial<Spec> & Pick<Spec, "ask" | "title" | "words" | "by" | "
   edits: 1,
   editors: ["atlas"],
   backs: [],
+  comments: [],
   tasks: [],
   ...s,
 })

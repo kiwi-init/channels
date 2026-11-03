@@ -34,7 +34,7 @@ describe("back and forward walk the places you were (T978)", () => {
   })
 
   test("opening the same room again without a jump adds nothing", () => {
-    const nav = run(startNav("a"), { to: "where", where: general }, { to: "panel", panel: { kind: "channel" } }, { to: "where", where: general })
+    const nav = run(startNav("a"), { to: "where", where: general }, { to: "modal", modal: { kind: "channel" } }, { to: "where", where: general })
     expect(nav.back).toEqual([])
   })
 
@@ -65,9 +65,28 @@ describe("back and forward walk the places you were (T978)", () => {
   })
 
   test("going back to another channel closes that channel's panel", () => {
-    const nav = run(startNav("a"), { to: "channel", code: "c" }, { to: "panel", panel: { kind: "channel" } }, { to: "history", step: "back" })
+    const nav = run(startNav("a"), { to: "channel", code: "c" }, { to: "panel", panel: { kind: "task", task: 7 } }, { to: "history", step: "back" })
     expect(nav.channel).toBe("a")
     expect(nav.panel).toBeNull()
+  })
+
+  test("back and forward close an open modal and stay where you are", () => {
+    const open = run(startNav("a"), { to: "where", where: room("design") }, { to: "modal", modal: { kind: "person", name: "maya" } })
+    for (const step of ["back", "forward"] as const) {
+      const closed = navigate(open, { to: "history", step })
+      expect(closed.modal).toBeNull()
+      expect(at(closed)).toEqual(at(open))
+      expect(closed.back).toEqual(open.back)
+    }
+  })
+
+  test("a modal closes when you go somewhere or open a work panel, and stays when the panel closes", () => {
+    const open = navigate(startNav("a"), { to: "modal", modal: { kind: "channel" } })
+    expect(navigate(open, { to: "panel", panel: { kind: "task", task: 7 } }).modal).toBeNull()
+    expect(navigate(open, { to: "panel", panel: null }).modal).toEqual({ kind: "channel" })
+    expect(navigate(open, { to: "where", where: room("design") }).modal).toBeNull()
+    expect(navigate(open, { to: "channel", code: "b" }).modal).toBeNull()
+    expect(navigate(open, { to: "settings" }).modal).toBeNull()
   })
 
   test("the history keeps the last 50 places", () => {

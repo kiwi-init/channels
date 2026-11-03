@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { relayConfig } from "../src/relay/room/http.ts";
+import { devHumanAuth } from "../src/relay/human.ts";
 import { avatar, finishDevice, linkedHere, listRepos, startDevice, tokenForRelay, type DeviceStart, type FlowDeps } from "../desktop/src/github-flow.ts";
 
 const json = (body: unknown, status = 200): Response => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -80,9 +81,14 @@ describe("finishing the device flow", () => {
 
 describe("the relay's config", () => {
   test("carries the GitHub App's public client id only when the relay has one", async () => {
-    expect(await relayConfig(null, "Iv23abc").json()).toEqual({ workosClientId: null, githubClientId: "Iv23abc" });
-    expect(await relayConfig(null).json()).toEqual({ workosClientId: null });
-    expect(await relayConfig(null, "").json()).toEqual({ workosClientId: null });
+    expect(await relayConfig(null, "Iv23abc").json()).toEqual({ githubSignIn: false, githubClientId: "Iv23abc" });
+    expect(await relayConfig(null).json()).toEqual({ githubSignIn: false });
+    expect(await relayConfig(null, "").json()).toEqual({ githubSignIn: false });
+  });
+
+  test("says whether the relay takes GitHub sign-in, or dev sign-in", async () => {
+    expect(await relayConfig({ verify: async () => null }, "Iv23abc").json()).toEqual({ githubSignIn: true, githubClientId: "Iv23abc" });
+    expect(await relayConfig(devHumanAuth()).json()).toEqual({ githubSignIn: false, dev: true });
   });
 });
 
@@ -164,7 +170,7 @@ test("the link token goes only to the relay it was made for, while that relay st
   const link = { token: "gho_x", relay: "https://relay.example", clientId: "Iv1.abc" };
   expect(await tokenForRelay("https://relay.example", link, relayWith({ githubClientId: "Iv1.abc" }))).toBe("gho_x");
   expect(await tokenForRelay("https://relay.example", link, relayWith({ githubClientId: "Iv1.other" }))).toBeNull();
-  expect(await tokenForRelay("https://relay.example", link, relayWith({ workosClientId: "w" }))).toBeNull();
+  expect(await tokenForRelay("https://relay.example", link, relayWith({ githubSignIn: false }))).toBeNull();
   expect(await tokenForRelay("https://relay.example", link, relayWith({}, false))).toBeNull();
   const down = (async () => {
     throw new Error("offline");

@@ -115,11 +115,11 @@ describe("the wake route for an agent in its own tmux pane", () => {
     for (const harness of ["cursor", "grok", "kimi", "zcode"] as const) expect(wakePath({ harness, tmux: { pane: "%4" } }, false).kind).toBe("none");
   });
 
-  test("it has a name people read, and an agy agent in tmux is told not to run listen", () => {
+  test("it has a name people read, and an agy agent in tmux is told not to keep a listener running", () => {
     expect(isWakeVia("tmux-typing")).toBe(true);
     expect(wakeWords("tmux-typing")).toBe("typing into its tmux pane");
     expect(howMessagesReachYou("kiwi", true, { harness: "agy", session: "c" }, false, "%7")).toBe(
-      "Kiwi wakes you in this session when a message for you arrives (typing into its tmux pane). Don't run listen.",
+      "Kiwi wakes you in this session when a message for you arrives (typing into its tmux pane). Don't keep a listener running.",
     );
     expect(howMessagesReachYou("kiwi", true, { harness: "agy", session: "c" }, false, undefined)).toContain("Kiwi wakes it only in tmux");
   });

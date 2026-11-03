@@ -8,15 +8,11 @@ export type SpecPart = "spec" | "inside" | "result"
 
 export type GithubView = "prs" | "issues"
 
-export type Panel =
-  | { kind: "person"; name: string }
-  | { kind: "task"; task: number }
-  | { kind: "pr"; repo: string; number: number }
-  | { kind: "issue"; repo: string; number: number }
-  | { kind: "thread"; seq: number; focus?: number }
-  | { kind: "channel" }
-  | { kind: "invite" }
-  | { kind: "add-agent" }
+export type Panel = { kind: "task"; task: number } | { kind: "pr"; repo: string; number: number } | { kind: "issue"; repo: string; number: number } | { kind: "thread"; seq: number; focus?: number }
+
+export type ChannelTab = "general" | "rooms" | "github" | "notes"
+
+type ModalView = { kind: "person"; name: string } | { kind: "channel"; tab?: ChannelTab } | { kind: "invite" } | { kind: "add-agent" }
 
 type Dialog = "new-channel" | "new-room" | "join" | "palette" | null
 
@@ -35,6 +31,7 @@ export interface Nav {
   where: Where
   tab: Tab
   panel: Panel | null
+  modal: ModalView | null
   dialog: Dialog
   section: Section
   invite?: string
@@ -54,6 +51,7 @@ export type Go =
   | { to: "github"; view: GithubView }
   | { to: "spec"; ask: number | null; part?: SpecPart }
   | { to: "panel"; panel: Panel | null }
+  | { to: "modal"; modal: ModalView | null }
   | { to: "dialog"; dialog: Dialog }
   | { to: "settings"; section?: Section }
   | { to: "back" }
@@ -65,7 +63,19 @@ const GENERAL: Where = { kind: "room", room: "general" }
 
 const HISTORY = 50
 
-export const startNav = (channel: string | null): Nav => ({ page: "channel", channel, where: GENERAL, tab: "chat", panel: null, dialog: null, section: "account", back: [], ahead: [], visit: 0 })
+export const startNav = (channel: string | null): Nav => ({
+  page: "channel",
+  channel,
+  where: GENERAL,
+  tab: "chat",
+  panel: null,
+  modal: null,
+  dialog: null,
+  section: "account",
+  back: [],
+  ahead: [],
+  visit: 0,
+})
 
 export const sameWhere = (a: Where, b: Where): boolean => whereKey(a) === whereKey(b)
 
@@ -77,7 +87,7 @@ function placeOf(nav: Nav): Place | null {
 const samePlace = (a: Place, b: Nav): boolean => b.page === "channel" && a.channel === b.channel && a.tab === b.tab && sameWhere(a.where, b.where)
 
 export function navigate(nav: Nav, go: Go): Nav {
-  if (go.to === "history") return travel(nav, go.step)
+  if (go.to === "history") return nav.modal ? { ...nav, modal: null } : travel(nav, go.step)
   const next = step(nav, go)
   const was = placeOf(nav)
   const restore = next.restore === undefined ? next : { ...next, restore: undefined }
@@ -107,6 +117,7 @@ function travel(nav: Nav, way: "back" | "forward"): Nav {
     where: to.where,
     tab: to.tab,
     panel: nav.channel !== to.channel || nav.panel?.kind === "thread" ? null : nav.panel,
+    modal: null,
     dialog: null,
     spec: undefined,
     part: undefined,
@@ -121,10 +132,10 @@ function step(nav: Nav, go: Exclude<Go, { to: "history" }>): Nav {
   switch (go.to) {
     case "channel": {
       const kept = go.code === nav.channel ? { where: nav.where, tab: "chat" as const } : keptPlace(go.code)
-      return { ...nav, page: "channel", channel: go.code, where: kept?.where ?? GENERAL, tab: kept?.tab ?? "chat", panel: null, dialog: null }
+      return { ...nav, page: "channel", channel: go.code, where: kept?.where ?? GENERAL, tab: kept?.tab ?? "chat", panel: null, modal: null, dialog: null }
     }
     case "where":
-      return { ...nav, page: "channel", where: go.where, tab: "chat", panel: nav.panel?.kind === "thread" ? null : nav.panel }
+      return { ...nav, page: "channel", where: go.where, tab: "chat", panel: nav.panel?.kind === "thread" ? null : nav.panel, modal: null }
     case "tab":
       return { ...nav, page: "channel", tab: go.tab }
     case "github":
@@ -132,19 +143,21 @@ function step(nav: Nav, go: Exclude<Go, { to: "history" }>): Nav {
     case "spec":
       return go.ask === null
         ? { ...nav, page: "channel", tab: "specs", spec: undefined, part: undefined }
-        : { ...nav, page: "channel", tab: "specs", spec: go.ask, part: go.part ?? "spec", panel: null }
+        : { ...nav, page: "channel", tab: "specs", spec: go.ask, part: go.part ?? "spec", panel: null, modal: null }
     case "panel":
-      return { ...nav, panel: go.panel }
+      return { ...nav, panel: go.panel, modal: go.panel ? null : nav.modal }
+    case "modal":
+      return { ...nav, modal: go.modal }
     case "dialog":
       return { ...nav, dialog: go.dialog, ...(go.dialog === "join" ? {} : { invite: undefined }) }
     case "invite":
       return { ...nav, dialog: "join", invite: go.code }
     case "settings":
-      return { ...nav, page: "settings", section: go.section ?? nav.section, dialog: null }
+      return { ...nav, page: "settings", section: go.section ?? nav.section, modal: null, dialog: null }
     case "back":
       return { ...nav, page: "channel" }
     case "home":
-      return { ...nav, page: "channel", channel: null, where: GENERAL, tab: "chat", panel: null, dialog: null }
+      return { ...nav, page: "channel", channel: null, where: GENERAL, tab: "chat", panel: null, modal: null, dialog: null }
   }
 }
 

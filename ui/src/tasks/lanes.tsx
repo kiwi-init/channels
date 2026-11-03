@@ -62,7 +62,7 @@ function LaneCard({ channel, lane }: { channel: Channel; lane: Lane }) {
   const about = [p.sponsor ? `for ${nickname(channel, p.sponsor)}` : null, p.model].filter(Boolean).join(" · ")
   return (
     <section className="lane" aria-label={shown(p)}>
-      <button type="button" className="lane-head" title={about || undefined} onClick={() => go({ to: "panel", panel: { kind: "person", name: p.name } })}>
+      <button type="button" className="lane-head" title={about || undefined} onClick={() => go({ to: "modal", modal: { kind: "person", name: p.name } })}>
         <Avatar person={p} pip />
         <span className="lane-who">
           <span className="lane-name">

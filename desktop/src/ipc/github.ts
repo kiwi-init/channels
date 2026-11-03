@@ -2,37 +2,22 @@ import type { GithubRepoView, GithubStatus } from "../bridge.ts";
 import type { MemberPicture } from "@kiwi/core/protocol.ts";
 import type { Pushes, Serves } from "../calls.ts";
 
-import { avatar, finishDevice, linkedHere, listRepos, startDevice, type GithubAccount } from "../github-flow.ts";
+import { avatar, finishDevice, linkedHere, listRepos, startDevice } from "../github-flow.ts";
 import { externalUrl } from "../guard.ts";
 import { held } from "../held.ts";
 import type { Host } from "../host.ts";
 import { openInBrowser } from "../open.ts";
-import { forgetMoveRefusal, githubSignsIn, moveToGithub, relayConfig } from "../signin.ts";
-import { mutate, store, type StoreFile } from "../store.ts";
+import { githubSignsIn, relayConfig } from "../signin.ts";
+import { mutate, store } from "../store.ts";
 
 async function status(): Promise<GithubStatus> {
   const link = linkedHere(store.github, store.relayUrl) ? store.github : undefined;
   const config = await relayConfig(store.relayUrl).catch(() => null);
-  const signIn = !!config && githubSignsIn(config);
-  const refused = signIn && link ? await moveToGithub() : null;
   return {
     available: !!config?.githubClientId,
-    ...(signIn ? { signIn: true } : {}),
+    ...(config && githubSignsIn(config) ? { signIn: true } : {}),
     account: link ? { login: link.login, id: link.id, at: link.at } : null,
-    ...(refused ? { moveRefused: refused } : {}),
   };
-}
-
-/**
- * A new link, remembering whether GitHub sign-in came before the person key on this computer
- * (first): only then is the relay account under github_<id> this person's own. A person who had a
- * key before keeps their account where it is until it moves, and a link made again for the same
- * GitHub account keeps what the first one knew.
- */
-export function linkRecord(s: Pick<StoreFile, "person" | "github">, found: GithubAccount, relay: string, clientId: string, at: number): NonNullable<StoreFile["github"]> {
-  const same = s.github?.id === found.id;
-  const first = same ? s.github?.first === true : !s.person;
-  return { ...found, at, relay, clientId, ...(first ? { first: true } : {}), ...(same && s.github?.moved ? { moved: true } : {}) };
 }
 
 let linking: Promise<GithubStatus> | null = null;
@@ -64,8 +49,7 @@ async function link(host: Host): Promise<GithubStatus> {
   host.push("githubCode", pending);
   await openInBrowser(page, (u) => host.openExternal(u));
   const found = await finishDevice(clientId, start, { fetch, sleep: (ms) => new Promise((r) => setTimeout(r, ms)), now: Date.now });
-  mutate((s) => (s.github = linkRecord(s, found, relay, clientId, Date.now())));
-  forgetMoveRefusal();
+  mutate((s) => (s.github = { ...found, at: Date.now(), relay, clientId }));
   return status();
 }
 

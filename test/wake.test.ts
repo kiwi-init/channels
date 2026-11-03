@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { type Config } from "../src/config.ts";
 import { seatRecordFor } from "../src/daemon.ts";
 import { howMessagesReachYou } from "../src/hooks.ts";
+import { listenMode, wokenBy } from "../src/hooks/reach.ts";
 import { listenedPath, pullsWake, wakeArgv, wakePath, wakePrompt } from "@kiwi/core/wake.ts";
 import { wakeHarness } from "./wake-harness.ts";
 
@@ -145,45 +146,45 @@ describe("wake paths, commands and words", () => {
   });
 
   test("the prompt holds whether a prompt hook already showed the messages or not", () => {
-    expect(wakePrompt("c", "w")).toBe('New Kiwi messages for you in "c". If they aren\'t shown here, read them with: kiwi -c c --as w listen --now, then act on them.');
+    expect(wakePrompt("c", "w")).toBe('New Kiwi messages for you in "c". If they aren\'t shown here, read them with: kiwi -c c --as w join, then act on them.');
   });
 
   test("the prompt's read command is quoted for a shell", () => {
-    expect(wakePrompt("release notes", "worker")).toContain("kiwi -c 'release notes' --as worker listen --now");
-    expect(wakePrompt("it's; rm -rf ~", "w")).toContain(`kiwi -c 'it'\\''s; rm -rf ~' --as w listen --now`);
+    expect(wakePrompt("release notes", "worker")).toContain("kiwi -c 'release notes' --as worker join");
+    expect(wakePrompt("it's; rm -rf ~", "w")).toContain(`kiwi -c 'it'\\''s; rm -rf ~' --as w join`);
   });
 
   test("an agent is told how messages reach it, without a Monitor", () => {
     expect(howMessagesReachYou("kiwi", true, { harness: "codex", session: "t" })).toContain("Kiwi wakes you in this session");
     const gemini = howMessagesReachYou("kiwi", true, { harness: "gemini" });
     expect(gemini).toContain("Kiwi can't wake you in this session: Gemini CLI gives Kiwi no way to start a turn in a running session outside tmux (in tmux, Kiwi types into its pane).");
-    expect(gemini).toContain("Run `kiwi listen --now` at the start of every turn and again before you end one.");
+    expect(gemini).toContain("Run `kiwi join` at the start of every turn and again before you end one.");
     expect(gemini).not.toContain("Monitor");
     const pi = howMessagesReachYou("kiwi", true, { harness: "pi" });
     expect(pi).toContain("Kiwi can't wake you in this session: Kiwi's Pi extension isn't installed (kiwi hooks install pi, then /reload in Pi).");
-    expect(pi).toContain("Run `kiwi listen --now` at the start of every turn");
+    expect(pi).toContain("Run `kiwi join` at the start of every turn");
     const cursor = howMessagesReachYou("kiwi", true, { harness: "cursor", session: "chat-1" });
-    expect(cursor).toContain("run `kiwi listen --once` with the Shell tool as a background command (is_background: true)");
+    expect(cursor).toContain("run `kiwi join` with the Shell tool as a background command (is_background: true)");
     expect(cursor).toContain("Cursor starts your next turn with its output");
-    expect(cursor).not.toContain("listen --now");
+    expect(cursor).not.toMatch(/ listen\b/);
     expect(pullsWake("cursor")).toBe(true);
     const zcode = howMessagesReachYou("kiwi -c ch --as glm", true, { harness: "zcode", session: "zcode-pid-7", pid: 7 });
-    expect(zcode).toContain("call the Bash tool with command `kiwi -c ch --as glm listen --once`, run_in_background: true, and no timeout");
+    expect(zcode).toContain("call the Bash tool with command `kiwi -c ch --as glm join`, run_in_background: true, and no timeout");
     expect(zcode).toContain("ZCode starts your next turn when it exits");
     expect(zcode).toContain("won't be shown again");
     expect(zcode).toContain("Before you end any turn, check it is still running; if not, start it.");
-    expect(zcode).not.toContain("listen --now");
+    expect(zcode).not.toMatch(/ listen\b/);
     expect(pullsWake("zcode")).toBe(true);
     expect(pullsWake("grok")).toBe(true);
     expect(pullsWake("gemini")).toBe(false);
     const off = howMessagesReachYou("kiwi", false, { harness: "codex", session: "t" });
     expect(off).toContain("Kiwi won't wake you");
-    expect(off).toContain("Run `kiwi listen --now` at the start of every turn");
+    expect(off).toContain("Run `kiwi join` at the start of every turn");
   });
 
   test("Kimi Code and Grok are told the exact tool call that keeps them wakeable", () => {
     const kimi = howMessagesReachYou("kiwi -c ch --as k3", true, { harness: "kimi", session: "kimi-pid-7", pid: 7 });
-    expect(kimi).toContain("call the Bash tool with command `kiwi -c ch --as k3 listen --once`, run_in_background: true, disable_timeout: true");
+    expect(kimi).toContain("call the Bash tool with command `kiwi -c ch --as k3 join`, run_in_background: true, disable_timeout: true");
     expect(kimi).toContain("from your main session (not a subagent)");
     expect(kimi).toContain("If the notice names an output file, read that whole file: it holds your messages.");
     expect(kimi).toContain(
@@ -194,19 +195,37 @@ describe("wake paths, commands and words", () => {
     expect(kimi).not.toContain("the notice shows the messages");
     expect(kimi).toContain("again every time it wakes you");
     expect(kimi).toContain("check TaskList shows it running");
-    expect(kimi).not.toContain("listen --now");
+    expect(kimi).not.toMatch(/ listen\b/);
     const grok = howMessagesReachYou("kiwi", true, { harness: "grok", session: "g" });
-    expect(grok).toContain('start the monitor tool with command `kiwi listen`, description "kiwi listen", persistent: true');
+    expect(grok).toContain('start the monitor tool with command `kiwi join`, description "kiwi join", persistent: true');
     expect(grok).toContain("start it again the same way");
-    expect(grok).not.toContain("listen --once");
+    expect(grok).not.toMatch(/ listen\b/);
     expect(grok).not.toContain("leader");
-    expect(howMessagesReachYou("kiwi", false, { harness: "grok", session: "g" })).toContain("Run `kiwi listen --now`");
+    expect(howMessagesReachYou("kiwi", false, { harness: "grok", session: "g" })).toContain("Run `kiwi join`");
+  });
+
+  test("join and listen pick how an agent listens: read where Kiwi wakes it, once for Kimi, Cursor and ZCode, a stream for Grok (#1539)", () => {
+    expect(listenMode(true, { harness: "codex", session: "t" })).toBe("read");
+    expect(listenMode(true, { harness: "kimi", session: "k", pid: 7 })).toBe("once");
+    expect(listenMode(true, { harness: "cursor", session: "c" })).toBe("once");
+    expect(listenMode(true, { harness: "zcode", session: "z", pid: 7 })).toBe("once");
+    expect(listenMode(true, { harness: "grok", session: "g" })).toBe("stream");
+    expect(listenMode(true, { harness: "gemini" })).toBe("read");
+    expect(listenMode(true, { harness: "grok-bot" }, true)).toBe("read");
+    expect(listenMode(false, { harness: "grok", session: "g" })).toBe("read");
+    expect(listenMode(true, {})).toBe("read");
+    expect(wokenBy(true, { harness: "codex", session: "t" })).toBe("codex queue");
+    expect(wokenBy(true, { harness: "grok-bot" }, true)).toBe("its routine's webhook");
+    expect(wokenBy(true, { harness: "grok", session: "g" })).toBeNull();
+    expect(wokenBy(false, { harness: "codex", session: "t" })).toBeNull();
   });
 
   test("a Grok Bot is told to set up its routine's webhook until it has one, then that Kiwi wakes it", () => {
     const before = howMessagesReachYou("kiwi", true, { harness: "grok-bot" });
     expect(before).toContain('printf %s "$AUTHORIZATION" | kiwi wake webhook <the routine\'s URL>');
-    expect(before).toContain("Run `kiwi listen --now` at the start of every turn");
-    expect(howMessagesReachYou("kiwi", true, { harness: "grok-bot" }, true)).toBe("Kiwi wakes you in this session when a message for you arrives (its routine's webhook). Don't run listen.");
+    expect(before).toContain("Run `kiwi join` at the start of every turn");
+    expect(howMessagesReachYou("kiwi", true, { harness: "grok-bot" }, true)).toBe(
+      "Kiwi wakes you in this session when a message for you arrives (its routine's webhook). Don't keep a listener running.",
+    );
   });
 });

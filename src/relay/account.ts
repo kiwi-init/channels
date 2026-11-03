@@ -45,7 +45,6 @@ const FRESH_PATH = "/v1/account/fresh";
 export const isAccountPath = (pathname: string): boolean => PATH.test(pathname);
 
 const NO_APPROVER = "no app of this account can approve a device yet: sign in on your first app";
-const NO_GITHUB_APPROVER = "nothing on this GitHub sign-in can approve a device yet: open Channels on your computer once to move your devices to your GitHub sign-in, then try again";
 
 const enrollmentLive = (e: Enrollment | null, now: number): Enrollment | null => (e && e.at + ENROLL_TTL_MS > now ? e : null);
 
@@ -143,7 +142,7 @@ export async function onAccountHttp(
   req: Request,
   store: AccountStore,
   user: string,
-  opts: { now?: () => number; perAccount?: (key: string) => boolean | Promise<boolean>; perAddress?: () => boolean | Promise<boolean>; formerly?: string } = {},
+  opts: { now?: () => number; perAccount?: (key: string) => boolean | Promise<boolean>; perAddress?: () => boolean | Promise<boolean> } = {},
 ): Promise<Response | null> {
   const url = new URL(req.url);
   const m = PATH.exec(url.pathname);
@@ -169,8 +168,7 @@ export async function onAccountHttp(
   if (!onAsk && req.method === "GET") return answer({ user, links });
 
   const token = requestToken(req);
-  const signedFor = (scope: string) => verifyRequest(token, accountScope(scope), req.method, url.pathname, body, now);
-  const signer = token ? ((await signedFor(user)) ?? (opts.formerly ? await signedFor(opts.formerly) : null)) : null;
+  const signer = token ? await verifyRequest(token, accountScope(user), req.method, url.pathname, body, now) : null;
   if (!signer) return refuse(new Unauthorized({ message: "sign this request for this account and path" }));
   if (list?.revoked.includes(signer)) return refuse(new Forbidden({ message: "this device was removed from this person's devices" }));
 
@@ -207,7 +205,7 @@ export async function onAccountHttp(
     const ask = readEnrollAsk(parse(body)?.ask);
     if (!ask) return refuse(new BadRequest({ message: "an ask takes {ask}: device, dxpk, label, os, as, at and commit" }));
     if (signer !== ask.device) return refuse(new Forbidden({ message: "a device asks to join for itself" }));
-    if (!list) return refuse(user.startsWith("github_") ? new NotFound({ message: NO_GITHUB_APPROVER }) : new NotFound({ message: NO_APPROVER }));
+    if (!list) return refuse(new NotFound({ message: NO_APPROVER }));
     if (list.revoked.includes(ask.device)) return refuse(new Forbidden({ message: "this device was removed from this person's devices" }));
     if (list.devices.some((d) => d.device === ask.device)) return refuse(new Conflict({ message: "this device is already one of this person's" }));
     if (opts.perAccount && !(await opts.perAccount(`account:${user}`))) return refuse(new TooMany({ message: "too many asks for this account; try again in a minute" }));

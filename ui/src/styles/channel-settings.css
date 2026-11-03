@@ -1,0 +1,278 @@
+.cset-tile {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--r-ctl);
+  background: var(--bg-3);
+  color: var(--ink);
+  font: 600 var(--t-title) var(--ui);
+}
+
+.cset-tile.is-button {
+  cursor: pointer;
+  transition: scale var(--pop);
+}
+
+.cset-tile.is-button:active {
+  scale: 0.96;
+}
+
+.cset-tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}
+
+.cset-goal {
+  padding: 12px 0;
+  color: var(--ink);
+  font: var(--t-body) / 1.5 var(--sans);
+}
+
+.cset-goal-form {
+  display: grid;
+  gap: 8px;
+  padding: 8px 0 12px;
+}
+
+.cset-save {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.cset-hold-note {
+  padding: 0 0 12px;
+}
+
+.cset-note {
+  margin: 0 0 12px;
+  padding-left: 10px;
+  border-left: 2px solid var(--line-3);
+  color: var(--ink-2);
+  font: var(--t-ui) / 1.45 var(--sans);
+}
+
+.cset-hint {
+  color: var(--ink-3);
+  font: var(--t-meta) / 1.45 var(--ui);
+}
+
+.cset-mono {
+  color: var(--ink-2);
+  font: var(--t-ui) var(--mono);
+  letter-spacing: -0.01em;
+}
+
+.cset-room-line {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 3.5rem;
+  padding: 8px 0;
+}
+
+.cset-room-mark {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--r-row);
+  background: var(--bg-3);
+  color: var(--ink-2);
+  font: var(--t-ui) var(--mono);
+}
+
+.cset-room-text {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+
+.cset-room-text .set-inline .btn {
+  opacity: 0;
+  transition: opacity var(--fast);
+}
+
+.cset-room-who {
+  overflow: hidden;
+  color: var(--ink-3);
+  font: var(--t-meta) var(--ui);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.cset-room.is-muted .set-inline-value {
+  color: var(--ink-2);
+}
+
+.cset-bell {
+  flex: none;
+  margin-right: -6px;
+}
+
+.cset-bell[aria-pressed="true"] {
+  background: none;
+}
+
+.cset-room:not(.is-muted) .cset-bell,
+.cset-on-hover {
+  opacity: 0;
+  transition: opacity var(--fast);
+}
+
+.cset-room:hover .cset-bell,
+.cset-room:focus-within .cset-bell,
+.cset-room:hover .cset-on-hover,
+.cset-room:focus-within .cset-on-hover,
+.cset-room:hover .set-inline .btn,
+.cset-room:focus-within .set-inline .btn,
+.cset-fact:hover .cset-on-hover,
+.cset-fact:focus-within .cset-on-hover {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .cset-room .cset-bell,
+  .cset-on-hover,
+  .cset-room-text .set-inline .btn {
+    opacity: 1;
+  }
+}
+
+.cset-pick {
+  margin: 0 0 12px 40px;
+}
+
+.cset-add-row {
+  display: flex;
+  padding: 8px 0;
+}
+
+.cset-add-row > .btn {
+  margin-left: -8px;
+  gap: 6px;
+}
+
+.cset-repo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 3.5rem;
+  padding: 8px 0;
+  color: var(--ink-2);
+}
+
+.cset-repo-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font: var(--t-ui) var(--mono);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.cset-repo-name:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.cset-repo > .icon-btn:last-child {
+  margin-right: -6px;
+}
+
+.cset-repo-add .input {
+  flex: 1;
+}
+
+.cset-trouble {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 12px 0;
+  list-style: none;
+  color: var(--alert);
+  font: var(--t-ui) / 1.45 var(--ui);
+}
+
+.cset-trouble a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.cset-prefix {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.cset-prefix .set-inline-value {
+  font-family: var(--mono);
+}
+
+.set-row-ctl > .cset-prefix > .set-inline:last-child > .btn.is-quiet:last-child {
+  margin-right: -8px;
+}
+
+.cset-fact {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 3.5rem;
+}
+
+.cset-fact-body {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+  margin: 0 -8px;
+  padding: 8px;
+  border: 0;
+  border-radius: var(--r-row);
+  background: none;
+  color: var(--ink);
+  font: var(--t-ui) var(--ui);
+  text-align: left;
+  transition: background-color var(--fast);
+}
+
+.cset-fact-body:hover {
+  background: var(--wash);
+  transition: none;
+}
+
+.cset-fact-key {
+  font-weight: 600;
+}
+
+.cset-fact-value {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-2);
+  font: var(--t-meta) var(--mono);
+  letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cset-fact-confirm {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.cset-fact .cset-on-hover {
+  margin-right: -6px;
+}

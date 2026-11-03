@@ -26,7 +26,7 @@ import { ChannelHistory } from "./client/history.ts";
 import { ChannelFiles } from "./client/files.ts";
 import { ChannelImages } from "./client/images.ts";
 import { ChannelInfo, type Info, type MemberRow } from "./client/info.ts";
-import { joinFx, type JoinStatus } from "./client/join.ts";
+import { joinFx, type JoinStatus, type JoinWatch } from "./client/join.ts";
 import { ChannelKeys } from "./client/keys.ts";
 import { ChannelLive, type StreamOptions } from "./client/live.ts";
 import { ChannelMembers, type Keeps, type Reconciled } from "./client/members.ts";
@@ -47,7 +47,7 @@ export { INFO_MAX_AGE_MS, keepRecordsIn, type Info, type MemberRow, type RecordM
 export { keepBlobsIn, type BlobMemory } from "./client/images.ts";
 export { keepHeld } from "./client/sealed.ts";
 export type { RoomsSetting } from "./client/settings.ts";
-export type { JoinStatus } from "./client/join.ts";
+export type { JoinStatus, JoinWatch } from "./client/join.ts";
 export type { SendOptions } from "./client/send.ts";
 export type { ChannelFx } from "./client/core.ts";
 export type { GithubDiff, GithubIssueInfo, ReviewCheck } from "./client/github.ts";
@@ -189,6 +189,10 @@ export class Channel {
   /** Check a join request. Once approved, returns this member's access. */
   static joinStatus(relay: string, code: string, id: Identity, requestId: string): Promise<JoinStatus> {
     return run(Channel.fx.joinStatus(relay, code, id, requestId));
+  }
+
+  static watchJoin(relay: string, code: string, id: Identity, requestId: string, seen: string | null, waitSeconds: number): Promise<JoinWatch> {
+    return run(Channel.fx.watchJoin(relay, code, id, requestId, seen, waitSeconds));
   }
 
   /**

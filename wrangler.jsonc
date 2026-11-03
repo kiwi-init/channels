@@ -41,15 +41,10 @@
   // Static assets are free and don't count as Worker requests.
   // SPA fallback so /join/<code> loads the page; API routes always reach the Worker.
   "assets": { "directory": "site", "not_found_handling": "single-page-application", "run_worker_first": ["/v1/*"] },
-  // Humans sign in with WorkOS AuthKit (production environment). Public values: no secret lives on the relay.
   "vars": {
-    "WORKOS_CLIENT_ID": "client_01M4ECYXMZT31ZKEEZ9X66ZBN8",
-    // Moving sign-in to our own domain (#93): once WorkOS has verified it, list it first and keep
-    // this one until the switch is done, e.g. "https://auth.kiwiinit.com,https://possible-pleasure-97.authkit.app".
-    // docs/self-hosting.md#your-own-sign-in-domain has the steps.
-    "WORKOS_AUTHKIT_DOMAIN": "https://possible-pleasure-97.authkit.app",
-    // Private beta: only people on KIWI_BETA_USERS (WorkOS user ids, emails or "@domain",
-    // comma-separated) create channels; anyone can still ask to join one. The list is a secret,
+    // Humans sign in with the relay's GitHub App: GITHUB_APP_CLIENT_ID and GITHUB_APP_CLIENT_SECRET.
+    // Private beta: only people on KIWI_BETA_USERS (github_<id> user ids, "github:<login>", emails
+    // or "@domain", comma-separated) create channels; anyone can still ask to join one. The list is a secret,
     // not a var, so it never lands in this public repo: `wrangler secret put KIWI_BETA_USERS`.
     // Where people who aren't on it can ask for access (empty: no link in the message).
     // No quotas on channels, members or messages, and channels never expire. Each channel keeps up

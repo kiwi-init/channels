@@ -2,7 +2,7 @@ import "~/styles/since.css"
 
 import { useState } from "react"
 
-import { Dialog, DialogHead } from "~/kit/bits"
+import { Modal } from "~/kit/bits"
 
 import { sinceYouLeft, type SincePlace } from "~/chat/since"
 import { ago } from "~/kit/time"
@@ -89,8 +89,21 @@ export default function SinceModal({ channel }: { channel: Channel }) {
     close()
   }
   return (
-    <Dialog open={open} onClose={close} label="Since you left" wide>
-      <DialogHead title="Since you left" sub={away(since.at)} onClose={close} />
+    <Modal
+      open={open}
+      onClose={close}
+      label="Since you left"
+      size="wide"
+      title="Since you left"
+      sub={away(since.at)}
+      foot={
+        <>
+          <button type="button" className="btn is-primary" onClick={seeAll}>
+            Mark all seen
+          </button>
+        </>
+      }
+    >
       <dl className="since-rows">
         {since.rooms.map((p) => (
           <div key={placeName(channel, p)} className="since-row">
@@ -163,11 +176,6 @@ export default function SinceModal({ channel }: { channel: Channel }) {
           </div>
         )}
       </dl>
-      <div className="dialog-foot">
-        <button type="button" className="btn is-primary" onClick={seeAll}>
-          Mark all seen
-        </button>
-      </div>
-    </Dialog>
+    </Modal>
   )
 }

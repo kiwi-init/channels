@@ -15,11 +15,11 @@ import { checkComputer, checkPerson, type ComputerClaim, type PersonClaim } from
 import { isColor, type Card, type Color } from "./protocol.ts";
 import { readScopes, SCOPES, wireScopes, type Scope } from "./scopes.ts";
 
-/** The signed-in person an agent acts for, as the relay verified them with WorkOS. */
+/** The signed-in person an agent acts for, as the relay verified their sign-in. */
 export interface Sponsor {
-  /** WorkOS user id. */
+  /** Their user id at the relay (github_<id>). */
   user: string;
-  /** Their name as WorkOS knows it ("Jonatas Walker"). */
+  /** Their name as their sign-in knows it ("Jonatas Walker"). */
   name: string;
   /** Their handle in this channel, when they're a member too ("jonatas"). */
   handle?: string;

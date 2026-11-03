@@ -21,7 +21,7 @@ export function SpecCard({ channel, spec }: { channel: Channel; spec: Spec }) {
   const { go } = useAct()
   const line = stageLine(channel, spec)
   const who = workersOf(channel, spec)
-  const said = commentsOf(channel, spec.ask).length
+  const said = commentsOf(channel, spec).length
   const open = (part: "spec" | "inside" | "result") => go({ to: "spec", ask: spec.ask, part })
   return (
     <div className={cx("spec-card", `is-${spec.stage}`, spec.changed && "is-changed")}>
@@ -61,7 +61,7 @@ export function SpecNeedCard({ channel, ask }: { channel: Channel; ask: SpecAsk 
     <article className="needs-card is-open spec-need" aria-label={`${nickname(channel, by)} ${NEED_VERB[ask.why]}`}>
       <header className="needs-head">
         <Avatar person={faceOf(channel, by)} size="sm" />
-        <button type="button" className="needs-name" onClick={() => go({ to: "panel", panel: { kind: "person", name: by } })}>
+        <button type="button" className="needs-name" onClick={() => go({ to: "modal", modal: { kind: "person", name: by } })}>
           {nickname(channel, by)}
         </button>
         <span className="needs-verb">{NEED_VERB[ask.why]}</span>

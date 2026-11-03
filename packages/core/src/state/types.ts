@@ -166,8 +166,10 @@ export interface Spec {
   edits: number;
   editors: string[];
   approved?: SpecMark & { v: number; text: string };
-  result?: SpecMark & { verdict: SpecVerdict; note?: string };
+  result?: SpecMark & { verdict: SpecVerdict; note?: string; auto?: true };
   backs: (SpecMark & { note: string })[];
+  comments?: { seq: number; by: string }[];
+  changes?: number[];
 }
 
 export interface Edit {

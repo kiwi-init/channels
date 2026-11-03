@@ -94,7 +94,21 @@ describe("comments sit on the line they quote", () => {
       { seq: 13, from: "atlas", at: NOW, text: "elsewhere", where: general, inThread: 99 },
       { seq: 14, from: "jow", at: NOW, text: "", where: general, inThread: 10, deleted: true },
     ]
-    expect(commentsOf({ messages }, 10).map((c) => [c.m.seq, c.quote ?? null, c.text])).toEqual([[12, "a button", "where?"]])
+    expect(commentsOf({ messages }, { ask: 10, comments: [] }).map((c) => [c.m.seq, c.quote ?? null, c.text])).toEqual([[12, "a button", "where?"]])
+  })
+
+  test("a spec on a reply keeps its comments, and its thread root's spec doesn't take them", () => {
+    const messages: Message[] = [
+      { seq: 10, from: "maya", at: NOW, text: "board please", where: general },
+      { seq: 11, from: "maya", at: NOW, text: "and fix the reply bug", where: general, inThread: 10 },
+      { seq: 12, from: "win", at: NOW, text: "on the board?", where: general, inThread: 10 },
+      { seq: 13, from: "atlas", at: NOW, text: "on the reply's spec", where: general, inThread: 10, replyTo: 11 },
+    ]
+    const root = { ask: 10, comments: [12] }
+    const reply = { ask: 11, comments: [13] }
+    const channel = { messages, specs: [root, reply] as Spec[] }
+    expect(commentsOf(channel, root).map((c) => c.m.seq)).toEqual([12])
+    expect(commentsOf(channel, reply).map((c) => c.m.seq)).toEqual([13])
   })
 
   test("a quote finds its line whatever the markdown around it", () => {

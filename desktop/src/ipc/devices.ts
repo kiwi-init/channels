@@ -5,7 +5,7 @@ import type { Serves } from "../calls.ts";
 import { publicPerson } from "../guard.ts";
 import { publicAccess } from "../public-channel.ts";
 import { createDeviceHost, createEnrollee, type DeviceHost } from "../devices.ts";
-import { freshToken } from "../signin.ts";
+import { signInToken } from "../signin.ts";
 import { mutate, store, upsertComputer } from "../store.ts";
 
 const OS_NAMES: Partial<Record<NodeJS.Platform, string>> = { darwin: "macOS", linux: "Linux", win32: "Windows" };
@@ -18,7 +18,7 @@ const person = () => (store.person ? { name: store.person.name, pk: store.person
 export function storeDeviceHost(): DeviceHost {
   return createDeviceHost({
     relayUrl: () => store.relayUrl,
-    token: () => freshToken(),
+    token: () => signInToken(),
     person,
     who,
     device: () => store.device ?? null,
@@ -59,7 +59,7 @@ export function devicesCalls(
 > {
   const enrollee = createEnrollee({
     relayUrl: () => store.relayUrl,
-    token: () => freshToken(),
+    token: () => signInToken(),
     who,
     enrolled: (grant, device) =>
       mutate((s) => {

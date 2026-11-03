@@ -84,8 +84,9 @@ afterAll(async () => {
   for (const d of made) rmSync(d, { recursive: true, force: true });
 });
 
-test("with kiwi context-line off, its default, the context line says nothing: no checkpoint line in the brief, a checkpoint is only saved, and the Stop hook past the line asks nothing", async () => {
-  expect(await ok(agent, ["context-line", "status"], S)).toContain("the context line is off");
+test("the context line is on by default; turned off, it says nothing: no checkpoint line in the brief, a checkpoint is only saved, and the Stop hook past the line asks nothing", async () => {
+  expect(await ok(agent, ["context-line", "status"], S)).toContain("the context line is on");
+  expect(await ok(agent, ["context-line", "off"], S)).toContain("the context line is off");
   const id = /added (T\d+)/.exec(await ok(agent, ["task", "add", "quiet by default", "--owner", me, "--ask", want], S))![1]!;
   const told = await context("startup");
   expect(told).not.toContain("Your session may be cleared");

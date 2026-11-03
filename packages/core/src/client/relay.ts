@@ -71,7 +71,7 @@ export const fetchRelay: RelayApi = {
     }),
   config: (relay) =>
     Effect.suspend(() => inTime(new URL(relay), reach(new URL("/v1/config", relay), {}))).pipe(
-      Effect.flatMap((res) => (res.ok ? Effect.promise(() => res.json() as Promise<RelayConfig>) : Effect.succeed({ workosClientId: null }))),
+      Effect.flatMap((res) => (res.ok ? Effect.promise(() => res.json() as Promise<RelayConfig>) : Effect.succeed({}))),
     ),
   blob: (relay, roomId, id, identity, put) =>
     Effect.suspend(() => {
@@ -147,10 +147,10 @@ export function keepAnswersIn(memory: AnswerMemory | null): void {
 }
 
 export interface RelayConfig {
-  workosClientId: string | null;
+  /** The relay takes GitHub sign-in through its GitHub App (githubClientId). */
+  githubSignIn?: boolean;
   dev?: boolean;
   githubClientId?: string;
-  githubSignIn?: boolean;
 }
 
 export const fx = {

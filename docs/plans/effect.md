@@ -49,7 +49,7 @@
   - `RoomStore` (SQL: the DO's `ctx.storage.sql` or `bun:sqlite`)
   - `Directory`, `DeviceStore`, `MachineStore`, `VaultStore` (already
     interfaces today; they become services)
-  - `HumanAuth` (WorkOS, dev sign-in, or none)
+  - `HumanAuth` (GitHub, dev sign-in, or none)
   - `Policy` (beta gate and quotas), `Clock` (Effect's own, so expiry and
     quota tests stop injecting `now` by hand)
   - Client side: `Relay` (the HTTP+signing `call`), `Keystore` (`~/.kiwi`
