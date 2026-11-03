@@ -77,10 +77,9 @@ export const DEMO_TILES: ChannelTile[] = [
 ]
 
 const people: Person[] = [
-  { name: "jow", kind: "human", color: "teal", owner: true, you: true, role: "owner", presence: "online", opsLive: 11, lastSeen: now, joined: m(60 * 24 * 30), messages: 812 },
+  { name: "jow", kind: "human", color: "teal", owner: true, you: true, role: "owner", presence: "online", lastSeen: now, joined: m(60 * 24 * 30), messages: 812 },
   {
     name: "maya",
-    opsLive: 11,
     kind: "human",
     color: "pink",
     picture:
@@ -96,7 +95,6 @@ const people: Person[] = [
   {
     name: "atlas",
     face: "lead",
-    ops: { atlasKey: 9 },
     kind: "agent",
     owner: false,
     you: false,
@@ -125,7 +123,6 @@ const people: Person[] = [
   {
     name: "win",
     face: "builder",
-    ops: { winMac: 9 },
     kind: "agent",
     owner: false,
     you: false,
@@ -149,7 +146,6 @@ const people: Person[] = [
   {
     name: "pixel",
     face: "reviewer",
-    ops: { pixelKey: 8 },
     kind: "agent",
     owner: false,
     you: false,
@@ -617,8 +613,8 @@ const dm: Message[] = [
   { seq: 133, from: "atlas", at: m(27), text: "Taking ridge's task. Can you review the installer changes after?", where: { kind: "theirs", between: ["atlas", "win"] } },
   { seq: 134, from: "win", at: m(26), text: "Yes, send the PR when it's up.", where: { kind: "theirs", between: ["atlas", "win"] } },
   { seq: 135, from: "maya", at: m(55), text: "did ridge's PR get anywhere?", where: { kind: "dm", with: "maya" } },
-  { seq: 136, from: "jow", at: m(52), text: "atlas took it over. Can we talk about the hiring plan?", where: { kind: "dm", with: "maya" }, locked: true },
-  { seq: 137, from: "maya", at: m(50), text: "Yes. Two offers out, one more interview Friday.", where: { kind: "dm", with: "maya" }, locked: true },
+  { seq: 136, from: "jow", at: m(52), text: "atlas took it over. Can we talk about the hiring plan?", where: { kind: "dm", with: "maya" }, membersOnly: true },
+  { seq: 137, from: "maya", at: m(50), text: "Yes. Two offers out, one more interview Friday.", where: { kind: "dm", with: "maya" }, membersOnly: true },
 ]
 
 const taskThread: Message[] = [
@@ -888,7 +884,7 @@ export const DEMO_CHANNEL: Channel = {
   ],
   directs: [
     { with: "atlas", unread: 0, last: m(29) },
-    { with: "maya", unread: 1, last: m(50), locked: true },
+    { with: "maya", unread: 1, last: m(50), membersOnly: true },
   ],
   threads: [
     { root: 127, following: true, replies: 3, unread: 2, mentions: 0, last: m(0.3), lastSeq: 130, people: ["jow", "atlas", "win"] },

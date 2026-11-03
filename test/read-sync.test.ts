@@ -6,7 +6,6 @@ import { Channel } from "@kiwi/core/client.ts";
 import { newRoomId } from "@kiwi/core/crypto.ts";
 import { certUntil, claimDevice, nextLink, readDeviceList, rootLink, type DeviceLink } from "@kiwi/core/devices.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
-import { newRoomKey, sealRoom } from "@kiwi/core/private-room.ts";
 import { fold, rosterOf } from "@kiwi/core/state.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { joinPerson, setupChannel, type OwnerSetup } from "./owner.ts";
@@ -56,7 +55,7 @@ afterAll(() => {
 const state = async (ch: Channel) => fold((await ch.history(0)).messages, rosterOf(await s.ownerCh.members()));
 const logSize = async () => (await s.ownerCh.history(0)).messages.length;
 
-describe("what you've read follows you across your devices, and nobody else learns it (T976)", () => {
+describe("what you've read follows you across your devices (T976)", () => {
   let self: string;
 
   test("reading on the desktop marks the phone read too, and marks never go backwards", async () => {
@@ -68,40 +67,31 @@ describe("what you've read follows you across your devices, and nobody else lear
     expect(await desk.ch.syncMarks({ main: 12 }, { write: false })).toEqual({ main: 12, "task:3": 4, "dm:bo~tia": 6 });
   });
 
-  test("the log only gains the room's seal: syncing many times adds nothing", async () => {
+  test("the log only gains the person's own room: syncing many times adds nothing", async () => {
     const before = await logSize();
     for (let i = 13; i < 20; i++) await desk.ch.syncMarks({ main: i });
     expect(await logSize()).toBe(before);
   });
 
-  test("everyone else sees no room and no marks, and the person's own room carries no messages", async () => {
+  test("someone else keeps marks of their own, and the person's own room carries no messages", async () => {
+    expect(await bo.ch.syncMarks({ main: 3 })).toEqual({ main: 3 });
+    expect(await desk.ch.syncMarks({}, { write: false })).toMatchObject({ main: 19 });
+    expect(await bo.ch.syncMarks({}, { write: false })).toEqual({ main: 3 });
     const outside = await state(bo.ch);
-    expect(outside.rooms.has(self)).toBe(false);
-    expect(outside.secret.get(self)?.seals.length).toBe(1);
+    expect(outside.rooms.get(self)?.members?.map((m) => m.name)).not.toContain("bo");
     const letter = await desk.ch.send("a message in my own room", { room: self });
     expect((await state(phone.ch)).rejected.get(letter)).toBe("a person's own room carries no messages");
   });
 
   test("a 'person's own room' that lists someone else is refused", async () => {
-    const id = newRoomId();
-    const who = [desk.id, bo.id];
-    const sealed = await sealRoom(
-      s.roomId,
-      id,
-      1,
-      newRoomKey(),
-      { name: "", members: who.map((w) => ({ name: w.name, pk: w.pk })), self: true },
-      who.map((w) => w.xpk!),
-    );
-    const seq = await desk.ch.send("keeps a private note", { kind: "event", ev: { op: "room.seal", ...sealed } });
+    const members = [desk.id, bo.id].map((w) => ({ name: w.name, pk: w.pk }));
+    const seq = await desk.ch.send("keeps their own notes", { kind: "event", ev: { op: "room.create", id: newRoomId(), name: "", members, self: true } });
     expect((await state(bo.ch)).rejected.get(seq)).toBe("a person's own room holds only that person's devices");
   });
 
-  test("removing the phone moves the note to a new key, and the marks come along", async () => {
+  test("removing the phone keeps the marks on the desktop", async () => {
     await s.ownerCh.remove(phone.id.pk);
     await desk.ch.history(0);
-    expect(await desk.ch.pruneRooms([self])).toEqual([self]);
-    expect((await state(desk.ch)).secret.get(self)?.n).toBe(2);
     expect(await desk.ch.syncMarks({}, { write: false })).toMatchObject({ main: 19, "task:3": 4, "dm:bo~tia": 6 });
   });
 });

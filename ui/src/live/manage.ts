@@ -221,15 +221,11 @@ const picks = (run: Run, names: readonly string[]) =>
 const open = (rooms: Iterable<{ id: string; name: string; members?: unknown }>) => [...rooms].filter((r) => !r.members)
 
 const updateFirst = (err: unknown): never => {
-  throw new Error(/no such call|not a call|unknown call|makeRoom|changeRoom|leaveRoom/i.test(say(err)) ? "update Channels to make private rooms" : say(err))
+  throw new Error(/no such call|not a call|unknown call|makeRoom|changeRoom|leaveRoom/i.test(say(err)) ? "update Channels to make members-only rooms" : say(err))
 }
 
 export async function leaveRoom(code: string, id: string): Promise<void> {
   await need(code).ch.leaveRoom(id).catch(updateFirst)
-}
-
-export async function sealOutLeavers(code: string, id: string, names: readonly string[]): Promise<void> {
-  await need(code).ch.sealOutLeavers(id, names)
 }
 
 export async function addRoom(code: string, typed: string, members?: string[]): Promise<string> {
@@ -267,7 +263,7 @@ export async function renameRoom(code: string, id: string, typed: string): Promi
 
 export async function setRoomMembers(code: string, id: string, members: string[]): Promise<void> {
   const run = setup(code)
-  if (!run.state.rooms.get(id)?.members) throw new Error("that isn't a private room you're in")
+  if (!run.state.rooms.get(id)?.members) throw new Error("that isn't a members-only room you're in")
   await run.ch.changeRoom(id, { members: picks(run, members) }).catch(updateFirst)
 }
 

@@ -61,7 +61,7 @@ async function restart(access: ChannelAccess, id: Identity, rows: CachedRow[]): 
   return (await fresh.learnRooms(await openRows(rows, access.roomId, access.keys))).filter(isMessage);
 }
 
-test("a private room its maker sealed comes back after the app restarts on its own cache (T157)", async () => {
+test("a members-only room its maker made comes back after the app restarts on its own cache (T157)", async () => {
   const store = { seats: [] as ChannelIdentityView[] };
   const made = await new Keyring(memHost(store)).create("plans", null, null);
   const seat = store.seats.find((s) => s.code === made.code)!;

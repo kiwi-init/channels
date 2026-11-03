@@ -5,6 +5,7 @@ import { freeAgents, openRound, threadMembers, type ChannelState, type Task } fr
 import type { Delivery } from "./shared.ts";
 
 import { mentionsOf } from "@kiwi/core/changes.ts";
+import { sentHere, sentTo } from "@kiwi/core/room-rules.ts";
 
 export function narrows(d: Delivery): boolean {
   return d.thread !== undefined || d.room !== undefined || !!d.forMe || !!d.loop;
@@ -33,6 +34,8 @@ export function wants(me: string, m: Message, state: ChannelState | null, d: Del
   if (m.from === me) return false;
   if (ignored(state?.trust.get(m.seq))) return false;
   if (m.kind === "event" && !d.all && state?.rejected.has(m.seq)) return false;
+  if (m.kind === "event" && (m.ev?.op === "room.create" || m.ev?.op === "room.members") && m.ev.members && state && !sentTo(m.ev, me, state.members)) return false;
+  if (m.kind !== "event" && state && !sentHere(state, state.roomOf.get(m.seq) ?? m.room ?? GENERAL_ROOM, me)) return false;
   if (d.room !== undefined && m.kind !== "event" && (state?.roomOf.get(m.seq) ?? m.room ?? GENERAL_ROOM) !== d.room) return false;
   if (d.all) return true;
   if (d.thread !== undefined) return m.kind !== "event" && (state?.threadOf.get(m.seq) ?? m.seq) === (state?.threadOf.get(d.thread) ?? d.thread);
@@ -60,6 +63,7 @@ export function wants(me: string, m: Message, state: ChannelState | null, d: Del
   const asking = isForAgent(m, me) && (m.kind === "ask" || m.kind === "blocking");
   if (d.forMe) return addressed || asking;
   const room = state?.roomOf.get(m.seq) ?? m.room ?? GENERAL_ROOM;
-  const mine = room === GENERAL_ROOM || !!state?.rooms.get(room)?.posters?.includes(me);
+  const here = state?.rooms.get(room);
+  const mine = room === GENERAL_ROOM || !!here?.posters?.includes(me) || (!!here?.members && !!state && sentTo(here, me, state.members));
   return addressed || asking || inMyThread || (mine && !m.to?.length);
 }

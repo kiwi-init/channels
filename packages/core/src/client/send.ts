@@ -15,7 +15,6 @@ import {
   MAX_FILES,
   MAX_IMAGES,
   EVENT_OPS_VERSION,
-  OVERLAY_OPS,
   PROTOCOL_VERSION,
   fileAttachment,
   rasterAttachment,
@@ -45,7 +44,6 @@ import type { ChannelLive } from "./live.ts";
 import type { Relay } from "./relay.ts";
 import type { ChannelSettings } from "./settings.ts";
 
-const PRIVATE_EVENTS = "a private room keeps to messages, reactions, edits and deletes: post tasks, notes and other channel events outside it, where everyone sees them";
 export interface SendOptions {
   to?: string[];
   kind?: Kind;
@@ -174,36 +172,17 @@ export class ChannelSending {
       if (payload.stepReply && !wellFormed(payload)) return yield* new Rejected("a step answer needs a reply target and either Done with optional output, or Can't do it or Not needed with a reason");
       if ((payload.permission || payload.perm || payload.settled) && !wellFormed(payload)) return yield* new Rejected("a permission prompt, its answer or its close is malformed");
       const named = opts.room && opts.room !== GENERAL_ROOM ? opts.room : undefined;
-      if (named && !this.ch.roomNow.get(named)?.key && !this.ch.publicRooms.has(named)) {
+      const known = (id: string) => this.ch.publicRooms.has(id) || this.ch.memberRooms.has(id) || !!this.ch.roomNow.get(id)?.meta;
+      if (named && !known(named)) {
         const listed = yield* this.settings.fx.rooms().pipe(Effect.catchCause(() => Effect.succeed(null)));
         for (const r of listed?.list ?? []) this.ch.publicRooms.add(r.id);
-        if (!this.ch.publicRooms.has(named)) yield* this.ch.fx.history(listed?.since ?? 0).pipe(Effect.catchCause(() => Effect.succeed(null)));
+        if (!known(named)) yield* this.ch.fx.history(listed?.since ?? 0).pipe(Effect.catchCause(() => Effect.succeed(null)));
       }
-      const now = opts.room ? this.ch.roomNow.get(opts.room) : undefined;
-      const n = now?.n;
-      const roomKey = now?.key;
-      if (now && !roomKey) return yield* new Rejected("you're not in that private room anymore");
-      if (named && !roomKey && this.ch.roomSeals.has(named)) return yield* new Rejected("you're not in that private room");
-      if (named && !roomKey && !this.ch.publicRooms.has(named)) return yield* new Rejected(`this app doesn't know a room ${named} yet, so it won't send there: fetch the channel and try again`);
-      if (roomKey && ((opts.ev && !OVERLAY_OPS.has(opts.ev.op)) || opts.task)) return yield* new Rejected(PRIVATE_EVENTS);
-      const inner = yield* Effect.promise(() => sign(this.ch.identity, payload));
-      const signed =
-        roomKey && opts.room && n
-          ? yield* Effect.promise(async () =>
-              sign(this.ch.identity, {
-                v: PROTOCOL_VERSION,
-                id: crypto.randomUUID(),
-                from: this.ch.name,
-                ops: EVENT_OPS_VERSION,
-                kind: "event",
-                body: "A message in a private room. Update Kiwi to read it.",
-                ev: { op: "room.msg", ...(await (await import("../private-room.ts")).sealLetter(this.ch.roomId, opts.room!, n, roomKey, inner)) },
-                ts: payload.ts,
-              }),
-            )
-          : inner;
+      if (named && !known(named)) return yield* new Rejected(`this app doesn't know a room ${named} yet, so it won't send there: fetch the channel and try again`);
+      const signed = yield* Effect.promise(() => sign(this.ch.identity, payload));
       const cid = b64url(crypto.getRandomValues(new Uint8Array(16)));
-      const wake = opts.ev || roomKey ? [] : (opts.wake ?? []).slice(0, MAX_WAKE);
+      const inside = named ? (this.ch.memberRooms.get(named)?.members ?? this.ch.roomNow.get(named)?.meta?.members) : undefined;
+      const wake = opts.ev ? [] : (opts.wake ?? []).filter((w) => !inside || inside.some((m) => m.name === w)).slice(0, MAX_WAKE);
       const sealNow = Effect.gen({ self: this }, function* () {
         if (!this.ch.access.keys[String(this.ch.access.epoch)]) yield* this.ch.fx.refreshKeys();
         const e = this.ch.access.epoch;

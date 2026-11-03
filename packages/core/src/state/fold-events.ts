@@ -12,7 +12,7 @@ import { isPerson, ownSeat, sponsorsAgent } from "./people.ts";
 import { roomName } from "./rooms.ts";
 import { currentState, openRound, reviewClaimRefusal, reviewMoveRefusal, revisedOut, taskId, verdictRefusal, worked } from "./tasks.ts";
 import type { Charter, Compact, Fact, FoldMember, Hold, Lease, Nickname, PersonaLead, Room, SecretRoom, Task } from "./types.ts";
-import { dmPair, inRoom, leaveSeal, rootOf, selfOnly } from "../room-rules.ts";
+import { dmPair, inRoom, leaveSeal, rootOf, selfOnly, type RoomMember } from "../room-rules.ts";
 
 const trustOnly = (what: string): string => `only the owner, or a person they fully trust, ${what}`;
 
@@ -51,6 +51,20 @@ export interface FoldCtx {
   compactProposal: Compact | null;
 }
 
+function membersOnly(c: FoldCtx, member: FoldMember, m: Message, ev: { members: RoomMember[]; dm?: true; self?: true }, known: Room | undefined): string | null {
+  const trusted = member.owner || c.trusted(m.pk ?? "", member);
+  if (ev.dm && !dmPair(ev, member.name, c.members)) return "a direct message's room is between exactly two people";
+  if (ev.self && !selfOnly(ev, member.name, c.members)) return "a person's own room holds only that person's devices";
+  if (!ev.dm && !ev.self && !trusted) return trustOnly("makes members-only rooms");
+  if (known?.dm && !ev.dm) return "a direct message's room stays one";
+  if (known?.self && !ev.self) return "a person's own room stays theirs";
+  if (known && !known.dm && ev.dm) return "a room can't become a direct message";
+  if (known && !known.self && ev.self) return "a room can't become a person's own";
+  if (known?.members && (known.dm || known.self) && !inRoom(known as { members: RoomMember[] }, member.name, m.pk)) return "only its members change a direct message or a person's own room";
+  if (!inRoom(ev, member.name, m.pk)) return "whoever changes a members-only room stays in it";
+  return null;
+}
+
 export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember, at: number, reject: (why: string) => void): void {
   const { members, keysByName, scopesByKey, scopeSets, roleSets, setRole, tasks, facts, rooms, roomsSince, nameTaken } = c;
   switch (ev.op) {
@@ -63,6 +77,22 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
     }
 
     case "room.create": {
+      if (ev.members) {
+        const kept = membersOnly(c, member, m, { members: ev.members, ...(ev.dm ? { dm: ev.dm } : {}), ...(ev.self ? { self: ev.self } : {}) }, undefined);
+        if (kept) reject(kept);
+        else if (ev.id === GENERAL_ROOM || rooms.has(ev.id) || c.secret.has(ev.id)) reject(`there's already a room ${ev.id}`);
+        else
+          rooms.set(ev.id, {
+            id: ev.id,
+            name: ev.dm || ev.self ? "" : (roomName(ev.name) ?? ""),
+            createdBy: m.from,
+            at,
+            members: ev.members,
+            ...(ev.dm ? { dm: true as const } : {}),
+            ...(ev.self ? { self: true as const } : {}),
+          });
+        break;
+      }
       if (!member.owner && !c.trusted(m.pk ?? "", member)) {
         reject(trustOnly("makes rooms"));
         break;
@@ -76,8 +106,26 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       if (ev.id === GENERAL_ROOM || known) reject(`there's already a room ${ev.id}`);
       else if (!name) reject("a room needs a name");
       else if (nameTaken(name)) reject(`a room is already called ${name}`);
-      else if (rooms.size >= MAX_ROOMS) reject(`a channel holds at most ${MAX_ROOMS} rooms`);
+      else if ([...rooms.values()].filter((r) => !r.members).length >= MAX_ROOMS) reject(`a channel holds at most ${MAX_ROOMS} rooms`);
       else rooms.set(ev.id, { id: ev.id, name, createdBy: m.from, at });
+      break;
+    }
+
+    case "room.members": {
+      const known = rooms.get(ev.id);
+      if (ev.id === GENERAL_ROOM || (known && !known.members)) {
+        reject("a room everyone is sent can't become members-only");
+        break;
+      }
+      const kept = membersOnly(c, member, m, ev, known);
+      if (kept) reject(kept);
+      else
+        rooms.set(ev.id, {
+          ...(known ?? { id: ev.id, name: ev.dm || ev.self ? "" : (roomName(ev.name) ?? ""), createdBy: m.from, at }),
+          members: ev.members,
+          ...(ev.dm ? { dm: true as const } : {}),
+          ...(ev.self ? { self: true as const } : {}),
+        });
       break;
     }
 
@@ -112,14 +160,14 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       if (isDm && opened && !dmPair(opened, member.name, c.members)) reject("a direct message's room is between exactly two people");
       else if (isSelf && opened && !selfOnly(opened, member.name, c.members)) reject("a person's own room holds only that person's devices");
       else if (!trusted && !isDm && !isSelf && !((wasDm || wasSelf) && !opened && m.proven) && !(opened && m.proven && leaveSeal(known, opened, ev.n, c.members)))
-        reject(trustOnly("makes private rooms"));
+        reject(trustOnly("makes members-only rooms"));
       else if (wasDm && opened && !isDm) reject("a direct message's room stays one");
       else if (wasSelf && opened && !isSelf) reject("a person's own room stays theirs");
       else if (isDm && known?.meta && !wasDm) reject("a room can't become a direct message");
       else if (isSelf && known?.meta && !wasSelf) reject("a room can't become a person's own");
-      else if (m.proven === false || (known?.meta && !m.proven)) reject("that change to a private room doesn't hold the room's key");
+      else if (m.proven === false || (known?.meta && !m.proven)) reject("that change to a members-only room doesn't hold the room's key");
       else if (!known && (ev.id === GENERAL_ROOM || rooms.has(ev.id))) reject(`there's already a room ${ev.id}`);
-      else if (opened && !inRoom(opened, member.name, m.pk)) reject("whoever changes a private room stays in it");
+      else if (opened && !inRoom(opened, member.name, m.pk)) reject("whoever changes a members-only room stays in it");
       else {
         const seals = [...(known?.seals ?? []), { id: ev.id, n: ev.n, keys: ev.keys, meta: ev.meta, ...(ev.proof ? { proof: ev.proof } : {}) }];
         const n = m.proven || !known ? ev.n : known.n;
@@ -140,17 +188,15 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
     }
 
     case "room.msg":
-      reject("a private room's message this app couldn't open");
+      reject("a members-only room's sealed message this app couldn't open");
       break;
 
     case "room.leave": {
-      const room = c.secret.get(ev.id);
-      if (m.sealed?.room !== ev.id || !room?.meta) reject("a person leaves a private room from inside it");
-      else if (room.meta.dm || room.meta.self) reject("a direct message or a person's own room has nobody to leave to");
-      else {
-        const who = rootOf(m.from, c.members);
-        if (!room.leaving?.includes(who)) c.secret.set(ev.id, { ...room, leaving: [...(room.leaving ?? []), who] });
-      }
+      const room = rooms.get(ev.id);
+      const who = rootOf(m.from, c.members);
+      if (!room?.members || !room.members.some((x) => rootOf(x.name, c.members) === who)) reject("a person leaves a members-only room they're in");
+      else if (room.dm || room.self) reject("a direct message or a person's own room has nobody to leave to");
+      else room.members = room.members.filter((x) => rootOf(x.name, c.members) !== who);
       break;
     }
 

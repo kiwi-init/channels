@@ -10,16 +10,17 @@ export const UI_DATA_SCHEMA = 1;
  * background where failing is harmless (listed in CHANNEL_CALLS_BACKGROUND).
  */
 export const CHANNEL_CALLS_SINCE: Readonly<Record<string, readonly string[]>> = {
-  "1.11.0": ["makeRoom", "changeRoom", "pruneRooms"],
+  "1.11.0": ["makeRoom", "changeRoom"],
   "1.12.0": ["makeDm"],
   "1.13.0": ["syncMarks"],
-  "1.14.0": ["leaveRoom", "sealOutLeavers"],
+  "1.14.0": ["leaveRoom"],
   "1.15.0": ["syncGithub", "githubStatus"],
   "1.17.0": ["goneDevices"],
   "1.18.0": ["reprove"],
+  "1.21.0": ["sentRooms"],
 };
 
-export const CHANNEL_CALLS_BACKGROUND: readonly string[] = ["pruneRooms", "syncMarks", "sealOutLeavers", "syncGithub", "githubStatus", "goneDevices", "reprove"];
+export const CHANNEL_CALLS_BACKGROUND: readonly string[] = ["syncMarks", "sentRooms", "syncGithub", "githubStatus", "goneDevices", "reprove"];
 
 export const UI_SURFACES: Readonly<Record<string, readonly string[]>> = {
   "1.0.0": [
