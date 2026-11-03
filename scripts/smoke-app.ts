@@ -84,7 +84,7 @@ try {
   step(at);
 
   at = "the invite carries the join code";
-  await page.getByRole("button", { name: "invite", exact: true }).click();
+  await page.getByRole("button", { name: "Invite people", exact: true }).first().click();
   const panel = page.getByRole("complementary", { name: "Details" });
   const link = panel.locator("code").filter({ hasText: "#mc2-" }).first();
   await link.waitFor({ timeout: 15000 });

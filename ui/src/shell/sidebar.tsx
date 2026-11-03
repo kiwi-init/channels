@@ -7,7 +7,7 @@ import { useAppCan } from "~/live/app-can"
 import { useGlide } from "~/kit/glide"
 import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
-import { memberOf, type Channel, type Person } from "~/model"
+import { memberOf, type Channel, type Direct, type Person } from "~/model"
 import { sameWhere, useAct, useApp } from "~/nav"
 import { between, nickname, onePerPerson, shown } from "~/names"
 import { comingBack, hiddenKey, hiddenPlaces, keptHidden, setHidden } from "~/shell/hidden-places"
@@ -16,8 +16,11 @@ import { SideFoot } from "~/shell/updates"
 export function Sidebar({ channel }: { channel: Channel }) {
   const { nav, go } = useApp()
   const { actions } = useAct()
-  const humans = onePerPerson(channel.people.filter((p) => p.kind === "human"))
-  const agents = channel.people.filter((p) => p.kind === "agent").sort((a, b) => rank(a) - rank(b))
+  const humans = onePerPerson(channel.people.filter((p) => p.kind === "human")).filter((p) => !p.you && !p.left)
+  const agents = channel.people.filter((p) => p.kind === "agent" && !p.left).sort((a, b) => rank(a) - rank(b))
+  const listed = new Set([...humans, ...agents].map((p) => p.name))
+  const directOf = new Map(channel.directs.map((d) => [d.with, d]))
+  const orphans = channel.directs.filter((d) => !listed.has(d.with))
   const onChat = nav.tab === "chat"
   const [openTheirs, setOpenTheirs] = useState(false)
   const onTheirs = onChat && nav.where.kind === "theirs"
@@ -41,7 +44,8 @@ export function Sidebar({ channel }: { channel: Channel }) {
     for (const key of back ? back.split(" ") : []) setHidden(key, false)
   }, [back])
   const shownRow = (key: string, on: boolean) => showHidden || on || !hidden.includes(key)
-  const hiddenCount = channel.rooms.filter((r) => hidden.includes(roomKey(r.id))).length + channel.directs.filter((d) => hidden.includes(dmKey(d.with))).length
+  const hiddenCount = channel.rooms.filter((r) => hidden.includes(roomKey(r.id))).length
+  const hiddenDirects = orphans.filter((d) => hidden.includes(dmKey(d.with))).length
   const followed = (channel.threads ?? []).filter((t) => t.following)
   const onThreads = nav.tab === "threads"
   const threadNews = followed.filter((t) => t.unread > 0).length
@@ -103,71 +107,47 @@ export function Sidebar({ channel }: { channel: Channel }) {
         </ul>
       </section>
 
-      {(channel.directs.length > 0 || channel.theirs.length > 0) && (
-        <section aria-label="Direct messages">
-          <Heading>Direct</Heading>
-          <ul>
-            {channel.directs.map((d) => {
-              const where = { kind: "dm", with: d.with } as const
-              const on = onChat && sameWhere(nav.where, where)
-              const who = memberOf(channel, d.with)
-              if (!shownRow(dmKey(d.with), on)) return null
-              return (
-                <li key={d.with}>
-                  <button
-                    type="button"
-                    className={cx("side-row", on && "is-on", d.unread > 0 && "is-news")}
-                    aria-current={on ? "page" : undefined}
-                    onClick={() => go({ to: "where", where })}
-                    onContextMenu={(e) => showMenu(e, nickname(channel, d.with), (x) => x.directGroups({ channel, go }, actions, on, d, who))}
-                  >
-                    <Avatar person={who} size="sm" />
-                    <span className="side-label">{nickname(channel, d.with)}</span>
-                    {d.locked && <Icon name="lock" size={12} label="Private" />}
-                    <Count n={d.unread} loud />
-                  </button>
-                </li>
-              )
-            })}
-            {theirsShown &&
-              channel.theirs.map((t) => {
-                const where = { kind: "theirs", between: t.between } as const
-                const on = onChat && sameWhere(nav.where, where)
-                return (
-                  <li key={t.between.join("&")}>
-                    <button type="button" className={cx("side-row", on && "is-on")} aria-current={on ? "page" : undefined} onClick={() => go({ to: "where", where })}>
-                      <span className="side-pair">
-                        <Avatar person={memberOf(channel, t.between[0])} size="sm" />
-                        <Avatar person={memberOf(channel, t.between[1])} size="sm" />
-                      </span>
-                      <span className="side-label">{between(channel, t.between)}</span>
-                    </button>
-                  </li>
-                )
-              })}
-            {channel.theirs.length > 0 && !onTheirs && (
-              <li>
-                <button type="button" className="side-row is-add" aria-expanded={openTheirs} onClick={() => setOpenTheirs(!openTheirs)}>
-                  <Icon name={openTheirs ? "down" : "chevron"} size={14} />
-                  <span className="side-label">{openTheirs ? "Show less" : `${channel.theirs.length} more`}</span>
-                </button>
-              </li>
-            )}
-          </ul>
-        </section>
-      )}
-
       <section aria-label="People">
-        <Heading>People</Heading>
+        <Heading action={channel.youOwn ? <IconButton icon="plus" label="Invite people" onClick={() => go({ to: "panel", panel: { kind: "invite" } })} /> : undefined}>People</Heading>
         <ul>
           {humans.map((p) => (
-            <Member key={p.name} person={p} channel={channel} />
+            <Member key={p.name} person={p} channel={channel} direct={directOf.get(p.name)} />
           ))}
-          {channel.youOwn && (
+          {orphans.map((d) => {
+            const where = { kind: "dm", with: d.with } as const
+            const on = onChat && sameWhere(nav.where, where)
+            const who = memberOf(channel, d.with)
+            if (!shownRow(dmKey(d.with), on)) return null
+            return (
+              <li key={d.with}>
+                <button
+                  type="button"
+                  className={cx("side-row", on && "is-on", d.unread > 0 && "is-news")}
+                  aria-current={on ? "page" : undefined}
+                  onClick={() => go({ to: "where", where })}
+                  onContextMenu={(e) => showMenu(e, nickname(channel, d.with), (x) => x.directGroups({ channel, go }, actions, on, d, who))}
+                >
+                  <Avatar person={who} size="sm" />
+                  <span className="side-label">{nickname(channel, d.with)}</span>
+                  {d.locked && <Icon name="lock" size={12} label="Private" />}
+                  <Count n={d.unread} loud />
+                </button>
+              </li>
+            )
+          })}
+          {hiddenDirects > 0 && (
+            <li>
+              <button type="button" className="side-row is-add" aria-expanded={showHidden} onClick={() => setShowHidden(!showHidden)}>
+                <Icon name={showHidden ? "down" : "chevron"} size={14} />
+                <span className="side-label">{showHidden ? "Show less" : `${hiddenDirects} hidden`}</span>
+              </button>
+            </li>
+          )}
+          {channel.youOwn && humans.length + orphans.length === 0 && (
             <li>
               <button type="button" className={cx("side-row is-add", nav.panel?.kind === "invite" && "is-on")} onClick={() => go({ to: "panel", panel: { kind: "invite" } })}>
                 <Icon name="plus" size={14} />
-                <span className="side-label">invite</span>
+                <span className="side-label">Invite people</span>
               </button>
             </li>
           )}
@@ -175,17 +155,43 @@ export function Sidebar({ channel }: { channel: Channel }) {
       </section>
 
       <section aria-label="Agents">
-        <Heading>Agents</Heading>
+        <Heading action={agents.length > 0 ? <IconButton icon="plus" label="Add an agent" onClick={() => go({ to: "panel", panel: { kind: "add-agent" } })} /> : undefined}>Agents</Heading>
         <ul>
           {agents.map((p) => (
-            <Member key={p.name} person={p} channel={channel} />
+            <Member key={p.name} person={p} channel={channel} direct={directOf.get(p.name)} />
           ))}
-          <li>
-            <button type="button" className={cx("side-row is-add", nav.panel?.kind === "add-agent" && "is-on")} onClick={() => go({ to: "panel", panel: { kind: "add-agent" } })}>
-              <Icon name="plus" size={14} />
-              <span className="side-label">add agent</span>
-            </button>
-          </li>
+          {theirsShown &&
+            channel.theirs.map((t) => {
+              const where = { kind: "theirs", between: t.between } as const
+              const on = onChat && sameWhere(nav.where, where)
+              return (
+                <li key={t.between.join("&")}>
+                  <button type="button" className={cx("side-row", on && "is-on")} aria-current={on ? "page" : undefined} onClick={() => go({ to: "where", where })}>
+                    <span className="side-pair">
+                      <Avatar person={memberOf(channel, t.between[0])} size="sm" />
+                      <Avatar person={memberOf(channel, t.between[1])} size="sm" />
+                    </span>
+                    <span className="side-label">{between(channel, t.between)}</span>
+                  </button>
+                </li>
+              )
+            })}
+          {channel.theirs.length > 0 && !onTheirs && (
+            <li>
+              <button type="button" className="side-row is-add" aria-expanded={openTheirs} onClick={() => setOpenTheirs(!openTheirs)}>
+                <Icon name={openTheirs ? "down" : "chevron"} size={14} />
+                <span className="side-label">{openTheirs ? "Show less" : `${channel.theirs.length} between others`}</span>
+              </button>
+            </li>
+          )}
+          {agents.length === 0 && (
+            <li>
+              <button type="button" className={cx("side-row is-add", nav.panel?.kind === "add-agent" && "is-on")} onClick={() => go({ to: "panel", panel: { kind: "add-agent" } })}>
+                <Icon name="plus" size={14} />
+                <span className="side-label">Add an agent</span>
+              </button>
+            </li>
+          )}
         </ul>
       </section>
 
@@ -215,26 +221,30 @@ export function toneOf(p: Person, channel: Channel): string | false {
   return !!t && `is-${t.status}`
 }
 
-function Member({ person, channel }: { person: Person; channel: Channel }) {
+function Member({ person, channel, direct }: { person: Person; channel: Channel; direct: Direct | undefined }) {
   const { nav, go } = useApp()
-  const on = nav.panel?.kind === "person" && nav.panel.name === person.name
-  const tone = toneOf(person, channel)
-  const quiet = !tone && person.presence === "online"
+  const { actions } = useAct()
+  const where = { kind: "dm", with: person.name } as const
+  const on = nav.tab === "chat" && sameWhere(nav.where, where)
+  const live = person.kind === "agent" ? liveOf(person) : null
+  const unread = direct?.unread ?? 0
   return (
     <li>
       <button
         type="button"
-        className={cx("side-member", quiet && "is-quiet", on && "is-on", person.presence === "offline" && "is-off")}
-        onClick={() => go({ to: "panel", panel: on ? null : { kind: "person", name: person.name } })}
-        onContextMenu={(e) => showMenu(e, shown(person), (x) => [x.personItems({ channel, go }, person)])}
+        className={cx("side-row side-member", on && "is-on", unread > 0 && "is-news", person.presence === "offline" && "is-off", live && (live.busy ? "is-doing" : "is-waiting"))}
+        aria-current={on ? "page" : undefined}
+        title={statusOf(person, channel)}
+        onClick={() => go({ to: "where", where })}
+        onContextMenu={(e) =>
+          showMenu(e, shown(person), (x) => [unread > 0 ? [{ label: "Mark as read", run: () => actions.markRead(channel.code, where) }] : [], x.personItems({ channel, go }, person)])
+        }
       >
         <Avatar person={person} size="sm" pip />
-        <span className="side-name">
-          {shown(person)}
-          {person.you && <span className="side-role"> you</span>}
-          {person.role && person.role.toLowerCase() !== shown(person).toLowerCase() && <span className="side-role"> {person.role}</span>}
-        </span>
-        {!quiet && <span className={cx("side-status", tone)}>{statusOf(person, channel)}</span>}
+        <span className="side-label">{shown(person)}</span>
+        {live && <span className="side-status">{live.text}</span>}
+        {direct?.locked && <Icon name="lock" size={12} label="Private" />}
+        <Count n={unread} loud />
       </button>
     </li>
   )

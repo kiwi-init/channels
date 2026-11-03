@@ -173,14 +173,12 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
               onClick={() => go({ to: "spec", ask: null })}
               title={specsNeed ? `${specsNeed} waiting on you` : `${specs.length} open specs, ${tasks} open tasks`}
             >
-              <Icon name="spec" size={14} />
-              Specs <Count n={specs.length} />
+              Specs
               {specsNeed > 0 && <span className="tab-red is-decide" role="img" aria-label="waiting on you" />}
             </button>
           )}
           {!tall && (agents || nav.tab === "agents") && (
-            <button type="button" className="is-agents" aria-pressed={nav.tab === "agents"} onClick={() => go({ to: "tab", tab: "agents" })}>
-              <Icon name="agent" size={14} />
+            <button type="button" className="is-agents" aria-pressed={nav.tab === "agents"} title={line.length ? line.join(" · ") : undefined} onClick={() => go({ to: "tab", tab: "agents" })}>
               Agents
             </button>
           )}
@@ -191,21 +189,18 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
               onClick={() => go({ to: "tab", tab: "github" })}
               title={red ? "An open pull request's checks failed" : `${openPrs.length} open pull requests, ${openIssues} open issues`}
             >
-              <Icon name="github" size={14} />
-              GitHub <Count n={openPrs.length} />
+              GitHub
               {red && <span className="tab-red" role="img" aria-label="checks failed" />}
             </button>
           )}
           {(needs > 0 || nav.tab === "needs") && (
             <button type="button" className="is-needs" aria-pressed={nav.tab === "needs"} onClick={() => go({ to: "tab", tab: "needs" })}>
-              <Icon name="needs" size={14} />
               Needs you <Count n={needs} loud />
             </button>
           )}
         </nav>
         <div className={cx("top-tools", searching && "is-searching")}>
-          {line.length > 0 && <span className="top-meta num">{line.join(" · ")}</span>}
-          {channel.hold && (
+          {channel.hold && nav.tab !== "chat" && (
             <span className="top-hold" title={channel.hold.note}>
               paused
             </span>
