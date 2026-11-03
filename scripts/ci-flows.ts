@@ -24,6 +24,7 @@ export const FLOWS: string[] = [
   "offline-read",
   "hooks-reentry",
   "hooks-persona",
+  "hooks-agy-answers",
   "mimo-wake-restart",
   "held-seat",
   "loop-flows",

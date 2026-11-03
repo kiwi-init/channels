@@ -97,6 +97,7 @@ export function hereAs(harness: string | undefined, env: Record<string, string |
   if (harness === "codex") return { harness: "codex", ...(env.CODEX_THREAD_ID ? { session: env.CODEX_THREAD_ID } : {}) };
   if (harness === "grok") return { harness: "grok", ...(env.GROK_SESSION_ID ? { session: env.GROK_SESSION_ID } : {}) };
   if (harness === "gemini") return geminiHere(tree);
+  if (harness === "agy") return { harness: "agy", ...(env.ANTIGRAVITY_CONVERSATION_ID ? { session: env.ANTIGRAVITY_CONVERSATION_ID } : {}) };
   return here(env, tree, host);
 }
 

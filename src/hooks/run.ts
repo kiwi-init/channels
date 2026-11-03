@@ -5,7 +5,7 @@ import { ChannelGone } from "@kiwi/core/client.ts";
 import { Keystore } from "../config.ts";
 import { hereAs, kimiHookHere, noteHarnessSession, notePlace, onGrokBot, sameSeat, seatsHeldAnywhere, type Here } from "../seats.ts";
 import { writeSync } from "node:fs";
-import { answer, hookOutput, kimiReason, printed, seatBudget, tellKimi, type Answer, type HookInput } from "./answer.ts";
+import { answer, fromAgy, hookOutput, kimiReason, printed, seatBudget, tellKimi, type Answer, type HookInput } from "./answer.ts";
 import { holdAnswering } from "./delivered.ts";
 import { migrateClaudeHooks } from "./install/claude.ts";
 import { migrateExtraHooks } from "./install/extra.ts";
@@ -26,7 +26,6 @@ function heldOrNamed(who: Here, session: string | undefined, model: string | und
 }
 
 export const runHook = Effect.fn("Hooks.run")(function* (event: string, harness?: string) {
-  if (harness === "agy") return 0;
   const raw = yield* Effect.promise(() => new Response(Bun.stdin.stream()).text().catch(() => ""));
   let input: HookInput = {};
   try {
@@ -34,6 +33,7 @@ export const runHook = Effect.fn("Hooks.run")(function* (event: string, harness?
   } catch {
     // Empty or not JSON on stdin: the hook goes by its environment alone.
   }
+  if (harness === "agy") input = fromAgy(input);
   if (event === PERMISSION) {
     const pid = Number(process.env.CLAUDE_PID);
     const decided = yield* runPermission(input as PermissionInput, Number.isInteger(pid) && pid > 0 ? pid : null).pipe(Effect.catchCause(() => Effect.succeed(null)));

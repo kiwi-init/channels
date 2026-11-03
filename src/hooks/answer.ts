@@ -62,6 +62,17 @@ export interface HookInput {
   transcript_path?: unknown;
   landed?: unknown;
   refused?: unknown;
+  conversationId?: unknown;
+  workspacePaths?: unknown;
+  modelName?: unknown;
+  terminationReason?: unknown;
+}
+
+export function fromAgy(input: HookInput): HookInput {
+  const session = typeof input.conversationId === "string" && input.conversationId ? input.conversationId : undefined;
+  const [cwd] = Array.isArray(input.workspacePaths) ? input.workspacePaths.filter((p): p is string => typeof p === "string" && p !== "") : [];
+  const model = typeof input.modelName === "string" && input.modelName.trim() && input.modelName.trim() !== "auto" ? input.modelName.trim() : undefined;
+  return { ...input, ...(session ? { session_id: session } : {}), ...(cwd ? { cwd } : {}), ...(model ? { model } : {}) };
 }
 
 export function freshAt(input: Pick<HookInput, "source">, now: number): number | null {
@@ -302,7 +313,7 @@ const unreadText = Effect.fn("Hooks.unreadText")(function* (s: AgentSession, mc:
   return { text: hand.text, shown };
 });
 
-type AnswerKind = "cursor-start" | "start" | "gemini-prompt" | "prompt" | "followup" | "block" | "deny";
+type AnswerKind = "cursor-start" | "start" | "gemini-prompt" | "agy-inject" | "prompt" | "followup" | "block" | "deny" | "agy-continue";
 
 export interface Answer {
   kind: AnswerKind;
@@ -318,6 +329,10 @@ function envelope(kind: AnswerKind, texts: readonly string[]): string {
       return JSON.stringify({ hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: texts.join("\n\n") } });
     case "gemini-prompt":
       return JSON.stringify({ hookSpecificOutput: { hookEventName: "BeforeAgent", additionalContext: texts.join("\n\n") } });
+    case "agy-inject":
+      return JSON.stringify({ injectSteps: [{ systemMessage: { systemMessage: texts.join("\n\n") } }] });
+    case "agy-continue":
+      return JSON.stringify({ decision: "continue", reason: texts.join("\n\n") });
     case "prompt":
       return texts.join("\n\n");
     case "followup":
@@ -427,6 +442,7 @@ export const answer = Effect.fn("Hooks.answer")(function* (event: string, input:
           unread.shown,
         )
       : unread.shown;
+    if (who.harness === "agy") return answered("agy-inject", additionalContext, shown);
     if (input.hook_event_name === "sessionStart" || input.composer_mode != null || typeof input.is_background_agent === "boolean") {
       return answered("cursor-start", additionalContext, shown);
     }
@@ -441,6 +457,7 @@ export const answer = Effect.fn("Hooks.answer")(function* (event: string, input:
     const text = [persona?.text ?? null, unread.text ? [head, unread.text].join("\n") : null].filter((t) => t !== null).join("\n\n");
     const shown = persona ? Effect.andThen(persona.shown, unread.shown) : unread.shown;
     if (input.hook_event_name === "BeforeAgent") return answered("gemini-prompt", text, shown);
+    if (who.harness === "agy") return answered("agy-inject", text, shown);
     return answered("prompt", text, shown);
   }
 
@@ -454,6 +471,7 @@ export const answer = Effect.fn("Hooks.answer")(function* (event: string, input:
       return follow ? answered("followup", follow) : null;
     }
     if (who.harness === "grok" && input.reason !== undefined && input.reason !== "end_turn") return null;
+    if (who.harness === "agy" && input.terminationReason !== undefined && input.terminationReason !== "NO_TOOL_CALL") return null;
     const stopHead = `Before stopping: unread Kiwi Channels messages for you (${b.alias}). Handle them (answer with \`${mc} reply N "…"\`):`;
     const nudge = yield* contextNudge(input, s, who, mc, budget);
     const persona = yield* personaNews(s, who, mc, budget - (nudge ? nudge.text.length + 2 : 0));
@@ -461,7 +479,7 @@ export const answer = Effect.fn("Hooks.answer")(function* (event: string, input:
     const reminder = [nudge?.text ?? null, rearm].filter((t) => t !== null).join("\n\n") || null;
     const unreadMax = stopUnreadMax(stopHead, [persona?.text ?? null, reminder].filter((t) => t !== null).join("\n\n") || null, budget);
     const unread = unreadMax > 0 ? yield* unreadText(s, mc, unreadMax, loopDelivery()) : { text: "", shown: Effect.void };
-    const decision = style === "gemini" ? "deny" : "block";
+    const decision = style === "gemini" ? "deny" : who.harness === "agy" ? "agy-continue" : "block";
     const reason = [persona?.text ?? null, stopReason(stopHead, unread.text, reminder) || null].filter((t) => t !== null).join("\n\n");
     const told = persona ? Effect.andThen(persona.shown, unread.shown) : unread.shown;
     const shown = nudge ? Effect.andThen(nudge.shown, told) : told;
