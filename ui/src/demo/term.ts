@@ -85,7 +85,11 @@ function archShell(rows: number): string {
   return lines.slice(-rows).join("\r\n")
 }
 
+type HarnessShell = { open(want: string | null, cols: number, rows: number, watch: TermWatch): Promise<TermOpened> }
+
 export async function demoShell(want: string | null, cols: number, rows: number, watch: TermWatch, machine?: string): Promise<TermOpened> {
+  const harness = (globalThis as { kiwiHarnessShell?: HarnessShell }).kiwiHarnessShell
+  if (machine && harness) return harness.open(want, cols, rows, watch)
   const c = Math.max(40, cols)
   const r = Math.max(12, rows)
   if (machine) {

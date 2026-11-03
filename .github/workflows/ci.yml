@@ -253,6 +253,11 @@ jobs:
       - name: ui terminal in WebKit draws no browser caret down its left edge
         if: ${{ !cancelled() }}
         run: bun scripts/ui-term-caret.ts --dist ui/dist
+      - name: ui terminal in Chromium stays responsive for 30 s of drags and resizes with a real remote shell (relay, a second daemon, tmux) redrawing after each one
+        if: ${{ !cancelled() }}
+        run: |
+          command -v tmux >/dev/null || { sudo apt-get update -q && sudo apt-get install -yq tmux; }
+          bun scripts/ui-resize-remote.ts --dist ui/dist
       - name: ui thread in Chromium opens on the reply it was asked for, not its bottom
         if: ${{ !cancelled() }}
         run: bun scripts/ui-thread-focus.ts --dist ui/dist

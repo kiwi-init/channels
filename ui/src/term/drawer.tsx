@@ -248,7 +248,9 @@ export default function TermDrawer({ channel, of }: { channel: Channel; of: Term
           }
         }
         const watch: TermWatch = {
-          out: (text) => safely(() => t.write(text)),
+          out: (text) => {
+            if (text) safely(() => t.write(text))
+          },
           ended: () => {
             setPhase((p) => (p.kind === "live" ? { ...p, kind: "ended" } : p))
             ended.current()
@@ -287,7 +289,7 @@ export default function TermDrawer({ channel, of }: { channel: Channel; of: Term
         if (name === null && !machine) void app.actions.myTerms().then((t) => !gone && setTabs(t))
         safely(() => {
           t.resize(opened.screen.cols, opened.screen.rows)
-          t.write(opened.screen.seed)
+          if (opened.screen.seed) t.write(opened.screen.seed)
         })
         if (gone) return
         setPhase({ kind: opened.screen.dead ? "ended" : "live", cols: opened.screen.cols, rows: opened.screen.rows })
