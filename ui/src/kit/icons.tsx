@@ -24,7 +24,6 @@ import {
   InboxIcon,
   InformationCircleIcon,
   Link01Icon,
-  LockIcon,
   LinkSquare02Icon,
   MinusSignIcon,
   Moon02Icon,
@@ -37,6 +36,7 @@ import {
   TaskDone01Icon,
   Tick02Icon,
   UserCircleIcon,
+  UserMultipleIcon,
   UserQuestion01Icon,
 } from "@hugeicons/core-free-icons"
 import { createElement } from "react"
@@ -72,7 +72,7 @@ const GLYPHS = {
   pr: GitPullRequestIcon,
   issue: ISSUE,
   github: GithubIcon,
-  lock: LockIcon,
+  people: UserMultipleIcon,
   home: Home01Icon,
   at: AtIcon,
   sidebar: SidebarLeftIcon,

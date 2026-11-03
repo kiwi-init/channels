@@ -19,7 +19,7 @@ import { liveOf, workingIn } from "~/doing"
 import { sameWhere, useApp } from "~/nav"
 import { keepSpot, spotAt, spotKey, type Spot } from "~/places"
 import { between, nickname, shown } from "~/names"
-import { dmBlocker, sealable } from "~/live/dm"
+import { dmInRoom } from "~/live/dm"
 
 const HistoryFold = later(() => import("~/chat/compact").then((m) => m.HistoryFold))
 const ProposalCard = later(() => import("~/chat/compact").then((m) => m.ProposalCard))
@@ -221,7 +221,6 @@ export function Conversation({ channel, jump }: { channel: Channel; jump: Jump |
         spot={nav.restore !== undefined ? nav.restore : spotAt(key)}
         jump={jump && sameWhere(jump.m.where, where) ? jump : null}
       />
-      {where.kind === "dm" && <DmNote channel={channel} other={where.with} />}
       {where.kind === "theirs" ? <ReadOnly channel={channel} between={where.between} /> : <Composer channel={channel} where={where} placeholder={`Message ${placeName}`} />}
     </ReplyContext.Provider>
   )
@@ -505,9 +504,9 @@ function Feed({ channel, where, spot, jump }: { channel: Channel; where: Where; 
                       <span>{day(m.at)}</span>
                     </p>
                   )}
-                  {m.locked && !list[i - 1]?.locked && where.kind === "dm" && (
-                    <p className="day is-sealed" role="separator">
-                      <span>From here on, just you and {nickname(channel, where.with)} can read new messages</span>
+                  {m.membersOnly && !list[i - 1]?.membersOnly && where.kind === "dm" && (
+                    <p className="day is-members" role="separator">
+                      <span>From here on, new messages are sent to you and {nickname(channel, where.with)} alone</span>
                     </p>
                   )}
                   {m.seq === mark && (
@@ -636,8 +635,8 @@ function Start({ channel, where }: { channel: Channel; where: Where }) {
         {where.kind === "room"
           ? `This is the start of #${channel.rooms.find((r) => r.id === where.room)?.name ?? where.room}.`
           : where.kind === "dm"
-            ? sealable(channel, where.with)
-              ? `Just you and ${nickname(channel, where.with)} can read these: not the channel, not the relay.`
+            ? dmInRoom(channel, where.with)
+              ? `These are sent to you and ${nickname(channel, where.with)} alone. Anyone in the channel can still open them.`
               : `Everyone in the channel can read your messages with ${nickname(channel, where.with)}.`
             : where.kind === "theirs"
               ? `This is the start of ${between(channel, where.between)}.`
@@ -645,12 +644,6 @@ function Start({ channel, where }: { channel: Channel; where: Where }) {
       </p>
     </div>
   )
-}
-
-function DmNote({ channel, other }: { channel: Channel; other: string }) {
-  const blocker = dmBlocker(channel, other)
-  if (!blocker || channel.directs.find((d) => d.with === other)?.locked) return null
-  return <p className="dm-note">{`${blocker.charAt(0).toUpperCase()}${blocker.slice(1)} can't open private messages yet, so everyone in the channel can read these.`}</p>
 }
 
 function Working({ people }: { people: Person[] }) {

@@ -1,8 +1,7 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 import { hear } from "@kiwi/channel/online.ts";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
-import { EVENT_OPS_VERSION, PRIVATE_ROOM_OPS, wellFormed, type Message } from "@kiwi/core/protocol.ts";
-import { roomReadiness } from "@kiwi/core/room-rules.ts";
+import { EVENT_OPS_VERSION, wellFormed, type Message } from "@kiwi/core/protocol.ts";
 import { fold, type FoldBase, type Roster } from "@kiwi/core/state.ts";
 
 const ids: Record<string, Identity> = {};
@@ -26,7 +25,7 @@ beforeAll(async () => {
   ];
 });
 
-describe("which members can read a private room (T869)", () => {
+describe("which event ops each member's app knows (T869)", () => {
   test("a message says which event ops its client knows, and an old validator's rules still take it", async () => {
     const m = await msg("ana", EVENT_OPS_VERSION);
     expect(wellFormed(m)).toBe(true);
@@ -51,18 +50,6 @@ describe("which members can read a private room (T869)", () => {
   test("a forged message says nothing about anyone's app", async () => {
     const forged = { ...(await msg("ana", EVENT_OPS_VERSION, "bo")) };
     expect(fold([forged], roster).members.get("ana")!.ops).toBeUndefined();
-  });
-
-  test("ready, old or not seen: no ops is not seen, a lower one is old, and live presence only ever helps", () => {
-    const need = PRIVATE_ROOM_OPS;
-    expect(roomReadiness(undefined, [], need)).toBe("unseen");
-    expect(roomReadiness({ a: 0 }, [], need)).toBe("unseen");
-    expect(roomReadiness({ a: need }, [], need)).toBe("ready");
-    expect(roomReadiness({ a: need, b: 0 }, [], need)).toBe("ready");
-    expect(roomReadiness({ a: need, b: need - 1 }, [], need)).toBe("old");
-    expect(roomReadiness({ a: need - 1 }, [need], need)).toBe("ready");
-    expect(roomReadiness(undefined, [need], need)).toBe("ready");
-    expect(roomReadiness({ a: need }, [need - 1], need)).toBe("ready");
   });
 
   test("a presence beacon's ops reaches the app's list of who's online, and a bad one doesn't", async () => {

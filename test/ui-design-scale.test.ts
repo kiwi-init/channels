@@ -57,7 +57,6 @@ describe("the top bar's controls float", () => {
   const shell = readFileSync(join(STYLES, "shell.css"), "utf8");
   const settings = readFileSync(join(STYLES, "settings.css"), "utf8");
   const chat = readFileSync(join(STYLES, "chat.css"), "utf8");
-  const term = readFileSync(join(STYLES, "term.css"), "utf8");
   const rule = (css: string, selector: string): string => {
     const at = css.indexOf(`\n${selector} {`);
     return at < 0 ? "" : css.slice(at, css.indexOf("}", at));
@@ -82,8 +81,6 @@ describe("the top bar's controls float", () => {
       [settings, ".set-back"],
       [shell, ".tile"],
       [chat, ".composer"],
-      [term, ".term-tabs"],
-      [term, ".term-head > .icon-btn"],
     ];
     for (const [css, selector] of controls) {
       const body = rule(css, selector);

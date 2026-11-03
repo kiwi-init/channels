@@ -24,11 +24,11 @@ export const FLOWS: string[] = [
   "offline-read",
   "hooks-reentry",
   "hooks-persona",
+  "hooks-agy-answers",
   "mimo-wake-restart",
   "held-seat",
   "loop-flows",
   "daemon-admits",
-  "private-room-history",
-  "private-dms",
+  "old-room-history",
   "start-harness",
 ];

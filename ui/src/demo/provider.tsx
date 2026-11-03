@@ -9,7 +9,6 @@ import { DEMO_ACCOUNT, DEMO_CHANNEL, DEMO_DEVICES, DEMO_EMPTY, DEMO_GUEST, DEMO_
 import { longFeed } from "~/demo/long"
 import { demoAround, demoFetchOlder, demoOlder } from "~/demo/older"
 import { withSpecs } from "~/demo/specs"
-import { demoRemoteShells, demoShell, demoShells, demoTerm } from "~/demo/term"
 import { homeOf } from "~/home"
 import type { Account, Actions, AgentStarts, App, Enrolling, Finding, GithubSignIn, Launching, ThisComputer, Channel, ChannelTile, GoneChannel, Message, Prefs, Spec, Task } from "~/model"
 import { deletedTheme, savedTheme } from "~/theme/themes"
@@ -657,12 +656,6 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       setNickname: (code, name, nickname) => edit(code, (c) => ({ ...c, people: c.people.map((p) => (p.name === name ? { ...p, display: nickname?.trim() || undefined } : p)) })),
       setPowers: (code, name, powers) => edit(code, (c) => ({ ...c, people: c.people.map((p) => (p.name === name ? { ...p, ...powers } : p)) })),
       showAgent: async () => null,
-      openTerm: (_code, _name, cols, rows, watch) => demoTerm(cols, rows, watch),
-      openMyTerm: (_code, want, cols, rows, watch, machine) => demoShell(want, cols, rows, watch, machine),
-      myTerms: async () => demoShells(),
-      closeMyTerm: async (pane) => demoShells(pane),
-      remoteTerms: async (machine) => demoRemoteShells(machine),
-      closeRemoteTerm: async (machine, pane) => demoRemoteShells(machine, pane),
       choicesOn: async (_code, computer) =>
         computer === "mbp"
           ? { folders: ["~/www/channels", "~/www/landing"] }

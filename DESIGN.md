@@ -185,7 +185,7 @@ The two built-in sides, from `tokens.css` and `channels.ts`:
   most). Clearing Needs you draws a tick (`tick-draw`).
 - Keyframes: `rise` (6px up and in), `fade`, `panel-in` (the right panel, 12px
   from the right), `dialog-in`, `toast-in`, `pop-in`, `palette-in` (6px down),
-  `term-in` (the terminal drawer, 16px up), `jump-in` (Jump to latest),
+  `jump-in` (Jump to latest),
   `tile-bar` (the rail's mark), `msg-flash` (a message you jumped to, 1.6s).
 - Scrolling content fades under the top bar (16px, `bg` to transparent).
 - Reduced motion: the OS setting or Settings' own (`data-motion="reduced"` on
@@ -287,7 +287,7 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   banner already says it. No borders between the columns.
 - **Sidebar.** Every row is one `--ctl` line, its text on one edge after a
   24px icon column (the `#`, a face, an icon). Three sections with a mono
-  head: Rooms (`#` rows, a lock for a private room), People and Agents. Each
+  head: Rooms (`#` rows, the people icon for a members-only room), People and Agents. Each
   member is listed once, and the row is your conversation with them: a click
   opens the DM, its unread count sits on the row, and the profile is in the
   row's menu (and in the Agents view). You aren't listed. A person's pip
@@ -394,7 +394,7 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   says a scope or a limit), then groups of rows on the page under mono group
   heads, hairlines between rows: a title, a quiet line only when it says what
   the title can't, and the control on the right. No cards around groups.
-- **Palette** (⌘K), **Search**, the **terminal drawer** and the **annotator**
+- **Palette** (⌘K), **Search** and the **annotator**
   (a picture opened full window, marked up and sent back) float with
   `shadow-pop` and their own enter animation. The palette is `bg-2` at
   `r-win`: the field ("Jump to…") over a hairline, then the groups, the

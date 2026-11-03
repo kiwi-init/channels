@@ -151,7 +151,7 @@ test("agy: joining from inside agy installs its hooks, and a person's off keeps 
   expect(existsSync(path)).toBe(false);
 });
 
-test("agy: kiwi hooks install, status and uninstall agy, and its hooks answer nothing until they speak agy", () => {
+test("agy: kiwi hooks install, status and uninstall agy, and its hooks answer nothing for a conversation with no seat", () => {
   const dir = scratch("hk-agy-cli-");
   const path = join(dir, "hooks.json");
   const env = { KIWI_HOME: scratch("hk-agy-cli-home-"), KIWI_AGY_DIR: dir, KIWI_NO_HOOKS: "" };

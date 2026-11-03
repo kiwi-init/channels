@@ -1,4 +1,4 @@
-import type { KeysPort, KiwiBridge, StoreSnapshot, TermEvent, UiUpdateView, UpdateView } from "./bridge.ts";
+import type { KeysPort, KiwiBridge, StoreSnapshot, UiUpdateView, UpdateView } from "./bridge.ts";
 import type { TextStep } from "./text-size.ts";
 
 export type Call = { [K in keyof KiwiBridge]: KiwiBridge[K] extends (...args: never[]) => Promise<unknown> ? K : never }[keyof KiwiBridge];
@@ -17,7 +17,6 @@ export interface Pushes {
   frost: boolean;
   accent: string | null;
   uiUpdate: UiUpdateView | null;
-  term: TermEvent;
 }
 
 export type Push = keyof Pushes;
@@ -112,17 +111,6 @@ export function makeBridge(t: BridgeTransport): KiwiBridge {
     setPersonalities: (list) => t.call("setPersonalities", list),
     seatPlaces: () => t.call("seatPlaces"),
     showSeat: (seat) => t.call("showSeat", seat),
-    termOpen: (pane, cols, rows) => t.call("termOpen", pane, cols, rows),
-    termMine: (roomId, want, cols, rows) => t.call("termMine", roomId, want, cols, rows),
-    termTabs: () => t.call("termTabs"),
-    termTabClose: (pane) => t.call("termTabClose", pane),
-    termRemote: (machinePk, want, cols, rows) => t.call("termRemote", machinePk, want, cols, rows),
-    termRemoteTabs: (machinePk) => t.call("termRemoteTabs", machinePk),
-    termRemoteClose: (machinePk, pane) => t.call("termRemoteClose", machinePk, pane),
-    termKeys: (term, keys) => t.call("termKeys", term, keys),
-    termSize: (term, cols, rows) => t.call("termSize", term, cols, rows),
-    termClose: (term) => t.call("termClose", term),
-    onTerm: (cb) => t.listen("term", cb),
     terminals: () => t.call("terminals"),
     terminalHelpers: (id, to) => t.call("terminalHelpers", id, to),
     terminalPrefer: (id) => t.call("terminalPrefer", id),

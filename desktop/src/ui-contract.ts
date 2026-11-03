@@ -10,15 +10,16 @@ export const UI_DATA_SCHEMA = 1;
  * background where failing is harmless (listed in CHANNEL_CALLS_BACKGROUND).
  */
 export const CHANNEL_CALLS_SINCE: Readonly<Record<string, readonly string[]>> = {
-  "1.11.0": ["makeRoom", "changeRoom", "pruneRooms"],
+  "1.11.0": ["makeRoom", "changeRoom"],
   "1.12.0": ["makeDm"],
   "1.13.0": ["syncMarks"],
-  "1.14.0": ["leaveRoom", "sealOutLeavers"],
+  "1.14.0": ["leaveRoom"],
   "1.15.0": ["syncGithub", "githubStatus"],
   "1.17.0": ["goneDevices"],
+  "1.21.0": ["sentRooms"],
 };
 
-export const CHANNEL_CALLS_BACKGROUND: readonly string[] = ["pruneRooms", "syncMarks", "sealOutLeavers", "syncGithub", "githubStatus", "goneDevices"];
+export const CHANNEL_CALLS_BACKGROUND: readonly string[] = ["syncMarks", "sentRooms", "syncGithub", "githubStatus", "goneDevices"];
 
 export const UI_SURFACES: Readonly<Record<string, readonly string[]>> = {
   "1.0.0": [
@@ -2588,7 +2589,6 @@ export const UI_SURFACES: Readonly<Record<string, readonly string[]>> = {
     "kiwi.onFrost",
     "kiwi.onGithubCode",
     "kiwi.onStore",
-    "kiwi.onTerm",
     "kiwi.onTextStep",
     "kiwi.onUiUpdate",
     "kiwi.onUpdate",
@@ -2621,16 +2621,6 @@ export const UI_SURFACES: Readonly<Record<string, readonly string[]>> = {
     "kiwi.signOut",
     "kiwi.takeDroppedFiles",
     "kiwi.takePastedImage",
-    "kiwi.termClose",
-    "kiwi.termKeys",
-    "kiwi.termMine",
-    "kiwi.termOpen",
-    "kiwi.termRemote",
-    "kiwi.termRemoteClose",
-    "kiwi.termRemoteTabs",
-    "kiwi.termSize",
-    "kiwi.termTabClose",
-    "kiwi.termTabs",
     "kiwi.terminalHelpers",
     "kiwi.terminalPrefer",
     "kiwi.terminals",
@@ -2645,7 +2635,6 @@ export const UI_SURFACES: Readonly<Record<string, readonly string[]>> = {
     "push:frost",
     "push:githubCode",
     "push:store",
-    "push:term",
     "push:textStep",
     "push:uiUpdate",
     "push:update",

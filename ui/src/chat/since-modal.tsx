@@ -19,7 +19,6 @@ function names(channel: Channel, who: readonly string[]): string {
 }
 
 function snippet(channel: Channel, p: SincePlace): string {
-  if (p.last.locked) return `${nickname(channel, p.last.from)}: sealed`
   const text = p.last.text
     .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
     .replace(/[`*_~#>]+/g, "")

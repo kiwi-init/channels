@@ -2,7 +2,7 @@ import "~/styles/person.css"
 
 import { Fragment, useId, useState, type ReactNode } from "react"
 
-import { Avatar, cx, Dialog, DialogHead, Dot, Empty, Heading, IconButton, statusWord, Toggle } from "~/kit/bits"
+import { Avatar, cx, Dialog, DialogHead, Dot, Empty, Heading, statusWord, Toggle } from "~/kit/bits"
 import { Track } from "~/kit/glide"
 import { Swatches } from "~/kit/swatches"
 import { Icon } from "~/kit/icons"
@@ -14,7 +14,6 @@ import { ShowAgent } from "~/kit/show-agent"
 import { contextOf, liveOf, restOf } from "~/doing"
 import { PanelHead } from "~/panels/frame"
 import { InlineEdit } from "~/settings/controls"
-import { copyText } from "~/kit/toasts"
 
 const since = (at: number, on = "on "): string => {
   const a = ago(at)
@@ -153,38 +152,8 @@ function Doors({ channel, person }: { channel: Channel; person: Person }) {
       >
         Message
       </button>
-      {person.seat === "hosted" ? <Terminal channel={channel} person={person} /> : <ShowAgent channel={channel} person={person} />}
+      <ShowAgent channel={channel} person={person} />
     </div>
-  )
-}
-
-function Terminal({ channel, person }: { channel: Channel; person: Person }) {
-  const { app, nav, go, toast } = useApp()
-  const [busy, setBusy] = useState(false)
-  const here = nav.term?.kind === "agent" && nav.term.name === person.name
-  return (
-    <>
-      <button type="button" className="btn" aria-pressed={here} onClick={() => go({ to: "term", term: here ? null : { kind: "agent", name: person.name } })}>
-        Open terminal
-      </button>
-      <button
-        type="button"
-        className="icon-btn person-icon"
-        aria-label="Open in your terminal"
-        title="Open in your terminal. To leave it running there, press Ctrl-b then d."
-        disabled={busy}
-        onClick={() => {
-          setBusy(true)
-          void app.actions
-            .showAgent(channel.code, person.name)
-            .then((note) => note && toast(note))
-            .finally(() => setBusy(false))
-        }}
-      >
-        <Icon name="external" />
-      </button>
-      {person.attach && <IconButton icon="copy" label="Copy the tmux command" onClick={() => person.attach && copyText(person.attach)} />}
-    </>
   )
 }
 

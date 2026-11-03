@@ -20,8 +20,6 @@ export type Panel =
 
 type Dialog = "new-channel" | "new-room" | "join" | "palette" | null
 
-export type TermOf = { kind: "agent"; name: string } | { kind: "you" }
-
 export type Section = "account" | "appearance" | "notifications" | "computers" | "agents" | "updates" | "about"
 
 interface Place {
@@ -40,7 +38,6 @@ export interface Nav {
   dialog: Dialog
   section: Section
   invite?: string
-  term?: TermOf
   github?: GithubView
   spec?: number
   part?: SpecPart
@@ -62,7 +59,6 @@ export type Go =
   | { to: "back" }
   | { to: "home" }
   | { to: "invite"; code: string }
-  | { to: "term"; term: TermOf | null }
   | { to: "history"; step: "back" | "forward" }
 
 const GENERAL: Where = { kind: "room", room: "general" }
@@ -114,7 +110,6 @@ function travel(nav: Nav, way: "back" | "forward"): Nav {
     dialog: null,
     spec: undefined,
     part: undefined,
-    ...(nav.channel !== to.channel ? { term: undefined } : {}),
     visit: nav.visit + 1,
     restore: to.spot,
   }
@@ -126,7 +121,7 @@ function step(nav: Nav, go: Exclude<Go, { to: "history" }>): Nav {
   switch (go.to) {
     case "channel": {
       const kept = go.code === nav.channel ? { where: nav.where, tab: "chat" as const } : keptPlace(go.code)
-      return { ...nav, page: "channel", channel: go.code, where: kept?.where ?? GENERAL, tab: kept?.tab ?? "chat", panel: null, dialog: null, term: undefined }
+      return { ...nav, page: "channel", channel: go.code, where: kept?.where ?? GENERAL, tab: kept?.tab ?? "chat", panel: null, dialog: null }
     }
     case "where":
       return { ...nav, page: "channel", where: go.where, tab: "chat", panel: nav.panel?.kind === "thread" ? null : nav.panel }
@@ -144,14 +139,12 @@ function step(nav: Nav, go: Exclude<Go, { to: "history" }>): Nav {
       return { ...nav, dialog: go.dialog, ...(go.dialog === "join" ? {} : { invite: undefined }) }
     case "invite":
       return { ...nav, dialog: "join", invite: go.code }
-    case "term":
-      return { ...nav, page: "channel", term: go.term ?? undefined }
     case "settings":
       return { ...nav, page: "settings", section: go.section ?? nav.section, dialog: null }
     case "back":
       return { ...nav, page: "channel" }
     case "home":
-      return { ...nav, page: "channel", channel: null, where: GENERAL, tab: "chat", panel: null, dialog: null, term: undefined }
+      return { ...nav, page: "channel", channel: null, where: GENERAL, tab: "chat", panel: null, dialog: null }
   }
 }
 
