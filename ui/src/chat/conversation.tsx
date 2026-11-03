@@ -10,11 +10,11 @@ import { linked } from "~/chat/linked"
 import { flash, jumpTo, ReplyContext, type Replying } from "~/chat/reply"
 import type { Jump } from "~/chat/search-box"
 import { paintHits } from "~/chat/search-paint"
-import { Avatar, cx, Loading } from "~/kit/bits"
+import { Loading } from "~/kit/bits"
 import { land } from "~/kit/glide"
 import { later } from "~/kit/later"
 import { day, sameDay } from "~/kit/time"
-import { memberOf, type Channel, type Message, type Person, type Where } from "~/model"
+import { type Channel, type Message, type Person, type Where } from "~/model"
 import { liveOf, workingIn } from "~/doing"
 import { sameWhere, useApp } from "~/nav"
 import { keepSpot, spotAt, spotKey, type Spot } from "~/places"
@@ -570,19 +570,14 @@ function Feed({ channel, where, spot, jump }: { channel: Channel; where: Where; 
 }
 
 function ChatterFold({ channel, run, open, onToggle }: { channel: Channel; run: readonly Message[]; open: boolean; onToggle: () => void }) {
-  const who = [...new Set(run.map((m) => m.from))]
   return (
-    <div className={cx("chatter", open && "is-open")} data-seq={run[0]?.seq}>
-      <span className="chatter-faces" aria-hidden="true">
-        {who.slice(0, 4).map((n) => (
-          <Avatar key={n} person={memberOf(channel, n)} size="sm" />
-        ))}
-      </span>
-      <span className="chatter-text">{chatterLine(run, (n) => nickname(channel, n))}</span>
+    <p className="sys" data-seq={run[0]?.seq}>
+      <span className="sys-line" />
+      <span className="sys-text">{chatterLine(run, (n) => nickname(channel, n))}</span>
       <button type="button" className="fold-act" aria-expanded={open} onClick={onToggle}>
-        {open ? "Fold" : "Show"}
+        {open ? "Hide" : "Show"}
       </button>
-    </div>
+    </p>
   )
 }
 
