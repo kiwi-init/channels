@@ -4,8 +4,6 @@ import { useEffect, useId, useState, type ReactNode } from "react"
 import type { Color } from "@kiwi/core/protocol.ts"
 import { Swatches } from "~/kit/swatches"
 
-import { TOO_MANY_REQUESTS } from "@kiwi/core/sas.ts"
-
 import { PrChip, TaskChip } from "~/chat/cards"
 import QuestionCard from "~/chat/question-card"
 import type { Jump } from "~/chat/search-box"
@@ -30,7 +28,7 @@ export function NeedsYou({ channel, onJump }: { channel: Channel; onJump: (jump:
       <div className="needs-list">
         {open.length > 0 ? (
           <>
-            {unchecked && <p className="needs-warn">{TOO_MANY_REQUESTS}</p>}
+            {unchecked && <p className="needs-warn">Unusually many join requests today: the relay may be misbehaving. Let in only codes you've compared.</p>}
             <ol className="needs-cards">
               {open.map((a) => (
                 <li key={a.id}>
