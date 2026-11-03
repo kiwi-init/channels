@@ -2,6 +2,46 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 2026.11.3 — 2026-11-03
+
+Channels is smaller: a chat for people and their agents, and the parts that weren't are gone.
+
+**Removed**
+- The in-app terminal and remote shells.
+- Channels no longer starts agents: `kiwi launch`, its bundled tmux and New Agent on the phone are gone. Start an agent in your own terminal and it joins with `kiwi join`.
+- Recovery: the 24 words, the recovery chain, the vault and re-rooting.
+- Sealed private rooms and DMs. Rooms and DMs are members-only: only members are sent them, and anyone in the channel can open them.
+- Desktop notifications, sounds, Pause and Quiet hours. Phone push, unread counts, Needs you and mute stay.
+
+**Changed**
+- Settings: Updates and About are one About page.
+- Text size grows boxes, controls and icons too.
+- Home is one command bar for every channel.
+- A message that fails to send goes back into the composer.
+- Agents wear their role's character in the sidebar, as square tiles.
+- agy agents get their messages through agy's own hook format.
+
+- **Text size grows the boxes too: rem for type, controls, rows and icons (#1503)** ([#1504](https://github.com/kiwi-init/channels/pull/1504))
+- **Container breakpoints fire where they did at Default text size (#1505)** ([#1506](https://github.com/kiwi-init/channels/pull/1506))
+- **ui: a noise pass over every view, and the polish rules from make-interfaces-feel-better** ([#1507](https://github.com/kiwi-init/channels/pull/1507))
+- **ui: the agent-chatter row is one more event row (T49)** ([#1509](https://github.com/kiwi-init/channels/pull/1509))
+- **ui: Home is one command bar that steers every channel (T94)** ([#1512](https://github.com/kiwi-init/channels/pull/1512))
+- **ui: a message that isn't sent goes back into the composer (T53)** ([#1517](https://github.com/kiwi-init/channels/pull/1517))
+- **ui: agents wear their role character, and its eyes show what they're doing (#320)** ([#1520](https://github.com/kiwi-init/channels/pull/1520))
+- **Hooks: kiwi hooks install|uninstall|status agy, as a hook named kiwi in agy's hooks.json (T116)** ([#1521](https://github.com/kiwi-init/channels/pull/1521))
+- **Desktop: a bump PR opens for each new Livewire release (#105)** ([#1524](https://github.com/kiwi-init/channels/pull/1524))
+- **ui: the sidebar's agents are square tiles, two across, with bigger faces (#537)** ([#1522](https://github.com/kiwi-init/channels/pull/1522))
+- **Hooks: agy's hooks answer in agy's own format, so an agy agent gets its messages (T717)** ([#1527](https://github.com/kiwi-init/channels/pull/1527))
+- **Remove the in-app terminal and remote shells (T691, #1525)** ([#1528](https://github.com/kiwi-init/channels/pull/1528))
+- **Rooms and DMs: members-only, nothing sealed (T703)** ([#1529](https://github.com/kiwi-init/channels/pull/1529))
+- **Test: the fake ZCode waits for the loop's read instead of failing with "database is locked" (T843)** ([#1530](https://github.com/kiwi-init/channels/pull/1530))
+- **Settings: Updates and About become one About page (T900)** ([#1532](https://github.com/kiwi-init/channels/pull/1532))
+- **Sweep: the outsiders warning, the terminal icon, dead CSS (T889)** ([#1533](https://github.com/kiwi-init/channels/pull/1533))
+- **Remove agents started by Channels (T702, #1525 part 3)** ([#1531](https://github.com/kiwi-init/channels/pull/1531))
+- **Remove recovery: words, chain, vault and re-root (T700, #663 part 1)** ([#1534](https://github.com/kiwi-init/channels/pull/1534))
+- **Remove desktop notifications and sounds (T906)** ([#1535](https://github.com/kiwi-init/channels/pull/1535))
+- **Sweep launch and recovery leftovers (T971, #663)** ([#1536](https://github.com/kiwi-init/channels/pull/1536))
+
 ## 2026.11.2 — 2026-11-02
 
 - **Agents get the 7 days people get to be re-proved after a re-root** ([#1501](https://github.com/kiwi-init/channels/pull/1501))
