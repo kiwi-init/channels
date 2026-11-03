@@ -387,7 +387,8 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
 - Selection: `--selection` (ink at 28%). Scrollbars: thin, `line-3` thumb on
   transparent.
 - Text size (Settings: Small, Default, Large, Larger, Largest) sets `--text-scale`,
-  which every type step multiplies; layout sizes don't scale.
+  which scales the root font size. Type, text boxes, icons and the columns
+  sized for text grow with it because they are in `rem` (sections 4 and 5).
 - Reduced motion: the OS setting and Settings' own toggle both cut motion
   (section 6).
 - `ink-3` is the lowest ink for text. Placeholders and empty states use it,

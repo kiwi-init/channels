@@ -19,6 +19,12 @@ describe("sizes that must follow Settings > Appearance > Text size", () => {
     expect(lines(".a {\n  height: 24px;\n  font: inherit;\n}")).toEqual([]);
   });
 
+  test("a rule's own declarations count around nested blocks, and strings and comments don't", () => {
+    expect(lines(".a {\n  font-size: 13px;\n  @media (width > 600px) {\n    color: red;\n  }\n  height: 24px;\n}")).toEqual([2, 6]);
+    expect(lines(".a {\n  & .b {\n    line-height: 20px;\n  }\n  font: var(--t-ui) var(--ui);\n  min-height: 30px;\n}")).toEqual([3, 6]);
+    expect(lines('.a {\n  content: "font-size: 9px; {";\n  /* height: 9px; font: 9px x; */\n  font: var(--t-ui) var(--ui);\n}')).toEqual([]);
+  });
+
   test("container breakpoints in px are refused", () => {
     expect(lines("@container top (max-width: 1120px) {\n  .a {\n    display: none;\n  }\n}")).toEqual([1]);
     expect(lines("@container top (max-width: 70rem) {\n  .a {\n    display: none;\n  }\n}")).toEqual([]);

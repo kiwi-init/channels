@@ -273,7 +273,7 @@
 
 .set-device {
   display: grid;
-  grid-template-columns: 32px minmax(0, 1fr) auto;
+  grid-template-columns: 2rem minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
   min-height: 4rem;
@@ -283,8 +283,8 @@
 .set-device-icon {
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  width: 2rem;
+  height: 2rem;
   border: 1px solid var(--line-3);
   border-radius: var(--r-ctl);
   color: var(--ink-2);
@@ -365,7 +365,7 @@
 
 @media (max-width: 760px) {
   .set-device {
-    grid-template-columns: 32px minmax(0, 1fr);
+    grid-template-columns: 2rem minmax(0, 1fr);
   }
 
   .set-device-actions-inline {

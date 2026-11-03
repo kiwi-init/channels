@@ -133,7 +133,7 @@
 
 .msg {
   display: grid;
-  grid-template-columns: 32px minmax(0, 1fr);
+  grid-template-columns: 2rem minmax(0, 1fr);
   column-gap: 16px;
   margin: 12px -12px 0;
   padding: 4px 12px;
@@ -1141,7 +1141,7 @@ button.msg-image-spot:hover {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin: 10px 0 0 48px;
+  margin: 10px 0 0 calc(2rem + 16px);
   color: var(--ink-2);
   font: var(--t-meta) var(--ui);
 }
@@ -1175,7 +1175,7 @@ button.msg-image-spot:hover {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin: 10px 0 0 48px;
+  margin: 10px 0 0 calc(2rem + 16px);
   color: var(--ink-3);
   font: var(--t-meta) var(--ui);
 }
@@ -1205,7 +1205,7 @@ button.msg-image-spot:hover {
 
 .compacted-summary {
   max-width: 560px;
-  margin-left: 48px;
+  margin-left: calc(2rem + 16px);
   padding-left: 12px;
   border-left: 2px solid var(--line);
 }
@@ -1215,7 +1215,7 @@ button.msg-image-spot:hover {
 }
 
 .compact-card {
-  margin: 10px 0 0 48px;
+  margin: 10px 0 0 calc(2rem + 16px);
 }
 
 .compact-card > .ask {
@@ -1301,7 +1301,7 @@ button.msg-image-spot:hover {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 12px 0 0 48px;
+  margin: 12px 0 0 calc(2rem + 16px);
   color: var(--ink-2);
   font: var(--t-meta) var(--ui);
 }
@@ -1716,15 +1716,15 @@ button.msg-image-spot:hover {
 }
 
 .panel .msg {
-  grid-template-columns: 24px minmax(0, 1fr);
+  grid-template-columns: 1.5rem minmax(0, 1fr);
   column-gap: 8px;
   margin: 8px -8px 0;
   padding: 4px 8px;
 }
 
 .panel .msg .av {
-  width: 24px;
-  height: 24px;
+  width: 1.5rem;
+  height: 1.5rem;
 }
 
 .panel .compose {

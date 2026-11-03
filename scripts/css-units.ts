@@ -18,23 +18,71 @@ interface Decl {
   line: number;
 }
 
-function lineAt(css: string, index: number): number {
-  return css.slice(0, index).split("\n").length;
+interface Piece {
+  text: string;
+  line: number;
+}
+
+interface Block {
+  prelude: Piece;
+  pieces: Piece[];
+}
+
+function blocksOf(css: string): Block[] {
+  const done: Block[] = [];
+  const stack: Block[] = [{ prelude: { text: "", line: 1 }, pieces: [] }];
+  let piece: Piece = { text: "", line: 1 };
+  let line = 1;
+  let quote = "";
+  const top = () => stack[stack.length - 1] ?? { prelude: piece, pieces: [] };
+  for (let i = 0; i < css.length; i++) {
+    const ch = css[i] ?? "";
+    if (quote) {
+      piece.text += ch;
+      if (ch === "\\") piece.text += css[++i] ?? "";
+      else if (ch === quote) quote = "";
+    } else if (ch === "/" && css[i + 1] === "*") {
+      const end = css.indexOf("*/", i + 2);
+      const stop = end < 0 ? css.length : end + 2;
+      line += css.slice(i, stop).split("\n").length - 1;
+      i = stop - 1;
+      continue;
+    } else if (ch === '"' || ch === "'") {
+      quote = ch;
+      piece.text += ch;
+    } else if (ch === "{") {
+      stack.push({ prelude: piece, pieces: [] });
+      piece = { text: "", line };
+    } else if (ch === "}") {
+      top().pieces.push(piece);
+      const closed = stack.pop();
+      if (closed) done.push(closed);
+      piece = { text: "", line };
+    } else if (ch === ";") {
+      top().pieces.push(piece);
+      piece = { text: "", line };
+    } else {
+      if (!piece.text.trim() && ch.trim()) piece.line = line;
+      piece.text += ch;
+    }
+    if (ch === "\n") line++;
+  }
+  return done;
+}
+
+function declsOf(block: Block): Decl[] {
+  return block.pieces.flatMap((p) => {
+    const m = /^\s*([\w-]+)\s*:\s*([\s\S]+?)\s*$/.exec(p.text);
+    return m ? [{ prop: (m[1] ?? "").toLowerCase(), value: m[2] ?? "", line: p.line }] : [];
+  });
 }
 
 export function breachesIn(css: string, file: string): Breach[] {
   const found: Breach[] = [];
-  const stripped = css.replace(/\/\*[\s\S]*?\*\//g, (c) => c.replace(/[^\n]/g, " "));
-  for (const m of stripped.matchAll(/@container\b([^{]*)\{/g)) {
-    if (PX.test(m[1] ?? "")) found.push({ file, line: lineAt(stripped, m.index), what: `@container${(m[1] ?? "").trimEnd()} measures in px: write rem so it follows the text size` });
-  }
-  for (const m of stripped.matchAll(/\{([^{}]*)\}/g)) {
-    const body = m[1] ?? "";
-    const start = m.index + 1;
-    const decls: Decl[] = [];
-    for (const d of body.matchAll(/([\w-]+)\s*:\s*([^;]+);?/g)) {
-      decls.push({ prop: (d[1] ?? "").toLowerCase(), value: (d[2] ?? "").trim(), line: lineAt(stripped, start + d.index) });
-    }
+  for (const block of blocksOf(css)) {
+    const head = block.prelude.text.trim();
+    if (head.startsWith("@container") && PX.test(head)) found.push({ file, line: block.prelude.line, what: `${head} measures in px: write rem so it follows the text size` });
+    const decls = declsOf(block);
     const sized = decls.some((d) => (d.prop === "font" || d.prop === "font-size") && d.value !== "inherit");
     for (const d of decls) {
       if (TYPE.has(d.prop) && PX.test(d.value)) found.push({ file, line: d.line, what: `${d.prop}: ${d.value} sets type in px: use a --t-* token or rem` });
@@ -42,7 +90,7 @@ export function breachesIn(css: string, file: string): Breach[] {
         found.push({ file, line: d.line, what: `${d.prop}: ${d.value} fixes a text box in px: use rem so it grows with the text` });
     }
   }
-  return found;
+  return found.sort((a, b) => a.line - b.line);
 }
 
 export function cssFiles(root: string): string[] {

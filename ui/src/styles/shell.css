@@ -897,7 +897,7 @@
 
 .side-member {
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr);
+  grid-template-columns: 1.5rem minmax(0, 1fr);
   grid-template-rows: auto auto;
   column-gap: 8px;
   align-items: center;
@@ -1346,11 +1346,11 @@
 }
 
 html .tile.is-on::before {
-  left: calc((var(--rail-w) - 38px) / -2);
+  left: calc((var(--rail-w) - 2.375rem) / -2);
 }
 
 html .tile-dot {
-  left: calc((var(--rail-w) - 38px) / -2);
+  left: calc((var(--rail-w) - 2.375rem) / -2);
 }
 
 html .rail-list {
@@ -1463,7 +1463,7 @@ html .rail-gear.is-on {
 
 .crew-agent {
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) auto;
+  grid-template-columns: 1.5rem minmax(0, 1fr) auto;
   grid-template-rows: auto auto;
   column-gap: 8px;
   row-gap: 2px;
