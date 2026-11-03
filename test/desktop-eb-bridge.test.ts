@@ -67,7 +67,7 @@ describe("the bridge answers only our page", () => {
 
   test("a bridge call runs its handler with its arguments, and a handler's throw comes back as a rejection", async () => {
     expect(await answer(table, "installUpdate", [])).toBe(false);
-    await expect(answer(table, "terminalHelpers", ["vim", "on"])).rejects.toThrow("terminalHelpers takes rex or tmux, and on or off");
+    await expect(answer(table, "setContextLine", ["maybe"])).rejects.toThrow("setContextLine takes on or off");
     expect(shell.did).toEqual(["restart"]);
   });
 });
