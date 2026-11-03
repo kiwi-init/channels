@@ -18,7 +18,8 @@ import type { SendFx } from "./send.ts";
 import type { SettingsFx } from "./settings.ts";
 import type { SnapshotsFx } from "./snapshots.ts";
 
-import type { RoomMeta, RoomNow, RoomSeal } from "../room-rules.ts";
+import type { RoomMember, RoomMeta, RoomNow, RoomSeal } from "../room-rules.ts";
+import type { Message } from "../protocol.ts";
 export interface ChannelFx extends KeysFx, InfoFx, SettingsFx, RequestsFx, MembersFx, DelegationsFx, HistoryFx, SnapshotsFx, SendFx, ImagesFx, FilesFx, LiveFx, GithubFx {}
 
 export class ChannelCore {
@@ -28,6 +29,7 @@ export class ChannelCore {
   readonly roomKeys = new Map<string, string>();
   readonly hidden = new Set<number>();
   readonly publicRooms = new Set<string>();
+  readonly memberRooms = new Map<string, { members: RoomMember[]; dm?: true; self?: true }>();
   readonly roomNow = new Map<string, RoomNow>();
   readonly roomSeals = new Map<string, { seq: number; seal: RoomSeal }[]>();
   readonly sealSteps = new Map<number, { proven?: boolean; opened?: RoomMeta }>();
@@ -40,6 +42,14 @@ export class ChannelCore {
     readonly onAccess?: (a: ChannelAccess) => void,
   ) {
     this.name = identity.name;
+  }
+
+  learnRoom(m: Message): void {
+    const ev = m.ev;
+    if (ev?.op === "room.create" && !ev.members) this.publicRooms.add(ev.id);
+    else if ((ev?.op === "room.create" || ev?.op === "room.members") && ev.members)
+      this.memberRooms.set(ev.id, { members: ev.members, ...(ev.dm ? { dm: true as const } : {}), ...(ev.self ? { self: true as const } : {}) });
+    else if (ev?.op === "room.leave" && m.from === this.name) this.memberRooms.delete(ev.id);
   }
 
   get roomId(): string {

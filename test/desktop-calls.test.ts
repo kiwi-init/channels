@@ -65,7 +65,7 @@ describe("window.kiwi on any transport", () => {
     }
     expect(seen.map((s) => s.name)).toEqual(called);
     for (const s of seen) for (const arg of s.args) expect(String(arg).startsWith(`${s.name} `)).toBe(true);
-    expect(seen.find((s) => s.name === "foldersOn")?.args).toEqual(["foldersOn 1", "foldersOn 2"]);
+    expect(seen.find((s) => s.name === "settingsOn")?.args).toEqual(["settingsOn 1"]);
     expect(seen.find((s) => s.name === "setWake")?.args).toEqual(["setWake 1", "setWake 2", "setWake 3"]);
     expect(Object.keys(handlers(shell.host)).sort()).toEqual([...called].sort());
   });
@@ -107,19 +107,9 @@ describe("main's handlers reach the shell only through the host", () => {
   const bus = pushes();
   const bridge = makeBridge({ snapshot, channels, listen: bus.listen, call: inProcess(handlers(host)) });
 
-  test("the folder picker, notifications and the update restart are the host's", async () => {
-    expect(await bridge.chooseFolder()).toBe("/Users/someone/app");
-    await bridge.notify("T484", "done");
+  test("the update restart is the host's", async () => {
     expect(await bridge.installUpdate()).toBe(false);
-    expect(did).toEqual(["notify T484: done", "restart"]);
-  });
-
-  test("a notification carries the channel link a click opens, and nothing else", async () => {
-    did.length = 0;
-    await bridge.notify("maya in kiwi-dev", "@you look", "kiwi://join/mc2-abc");
-    await bridge.notify("maya in kiwi-dev", "@you look", "https://evil.example");
-    await bridge.notify("maya in kiwi-dev", "@you look", `kiwi://join/${"a".repeat(3000)}`);
-    expect(did).toEqual(["notify maya in kiwi-dev: @you look → kiwi://join/mc2-abc", "notify maya in kiwi-dev: @you look", "notify maya in kiwi-dev: @you look"]);
+    expect(did).toEqual(["restart"]);
   });
 
   test("the page's news count goes to the app icon's badge; anything but a whole count of zero or more is refused", async () => {
@@ -168,7 +158,6 @@ describe("main's handlers reach the shell only through the host", () => {
 
   test("a bad argument is refused under the call's name before anything runs", async () => {
     await expect(bridge.terminalHelpers("vim" as "rex", "on")).rejects.toThrow("terminalHelpers takes rex or tmux, and on or off");
-    await expect(bridge.terminalPrefer("rex")).rejects.toThrow("new agents always open in Channels' own tmux");
-    await expect(bridge.setLaunches("maybe" as "on")).rejects.toThrow("setLaunches takes on or off");
+    await expect(bridge.setContextLine("maybe" as "on")).rejects.toThrow("setContextLine takes on or off");
   });
 });

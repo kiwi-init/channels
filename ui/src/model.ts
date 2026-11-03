@@ -78,8 +78,6 @@ export interface Person {
   addsAgents?: boolean
   answersDecisions?: boolean
   managesAgents?: boolean
-  ops?: Readonly<Record<string, number>>
-  opsLive?: number
   lastSeen: number
   joined: number
   messages: number
@@ -277,7 +275,7 @@ export interface Direct {
   unread: number
   last: number
   seen?: number
-  locked?: true
+  membersOnly?: true
 }
 
 export interface TheirDirect {
@@ -330,7 +328,7 @@ export interface Message {
   from: string
   at: number
   text: string
-  locked?: true
+  membersOnly?: true
   where: Where
   to?: readonly string[]
   said?: Said
@@ -489,36 +487,6 @@ interface Fact {
   at: number
 }
 
-interface TermScreen {
-  cols: number
-  rows: number
-  seed: string
-  dead: boolean
-  pane?: string
-}
-
-export interface TermTab {
-  pane: string
-  label: string
-  machine?: string
-}
-
-export interface TermWatch {
-  out(text: string): void
-  ended(): void
-  lost?(): void
-}
-
-export interface TermLink {
-  keys(text: string): void
-  size(cols: number, rows: number): void
-  close(): void
-}
-
-export type TermOpened = { screen: TermScreen; link: TermLink } | { error: string }
-
-export type ComputerChoices = { harnesses?: App["harnesses"]; folders: string[] } | { error: string }
-
 export interface Compacted {
   summary: string
   through: number
@@ -603,7 +571,6 @@ export interface Account {
   enrollAsk?: EnrollAsk
   enrollError?: string
   devices?: Device[]
-  recovery?: RecoveryState
   forgotten?: { label: string; by: string; at: number }[]
   forgotHere?: { by: string }
   githubCode?: { code: string; url: string }
@@ -618,35 +585,7 @@ export interface EnrollAsk {
   fingerprint?: string | null
 }
 
-export type Enrolling =
-  | { stage: "asking" }
-  | { stage: "digits"; digits: string }
-  | { stage: "check"; person: { name: string; fingerprint: string } }
-  | { stage: "recover" }
-  | { stage: "welcome"; name: string; devices: RecoverDevice[]; channels: string[] }
-
-export interface RecoverDevice {
-  id: string
-  label: string
-  os: string
-  as: "desktop" | "phone" | "computer"
-  lost: boolean
-}
-
-export interface RecoverTrouble {
-  why: string
-  word?: number
-}
-
-export interface RerootDevice {
-  id: string
-  label: string
-  os: string
-  as: "desktop" | "phone" | "computer"
-  here: boolean
-}
-
-export type RerootOpened = { ok: true; devices: RerootDevice[]; channels: string[] } | { ok: false; trouble: RecoverTrouble }
+export type Enrolling = { stage: "asking" } | { stage: "digits"; digits: string } | { stage: "check"; person: { name: string; fingerprint: string } }
 
 export interface Device {
   id: string
@@ -657,14 +596,6 @@ export interface Device {
   thisOne: boolean
   app?: string
 }
-
-export interface RecoveryState {
-  at: number | null
-  here: boolean
-  pending?: { from: number; by: string }
-}
-
-export type RecoverySaved = { ok: true } | { ok: false; wrong: number[] }
 
 export type Theme = "system" | "dark" | "light"
 
@@ -698,22 +629,12 @@ export interface Prefs {
   textSize: number
   font: TextFont
   reduceMotion: boolean
-  notify: "all" | "mentions" | "none"
   muted: string[]
-  snoozeUntil: number | null
-  quiet: Quiet
-  mentionSound: boolean
   enterSends: boolean
   darkTheme: string
   lightTheme: string
   customThemes: CustomTheme[]
   folders: Folder[]
-}
-
-export interface Quiet {
-  on: boolean
-  from: number
-  to: number
 }
 
 export interface Folder {
@@ -722,18 +643,6 @@ export interface Folder {
   codes: string[]
   open: boolean
 }
-
-export interface NewAgent {
-  harness: Harness
-  computer: string
-  folder: string
-  name: string
-  persona?: string
-  role?: string
-  mode?: "ask-first" | "accept-edits" | "dont-ask"
-}
-
-export type Launching = { stage: "started" } | { stage: "asked"; name: string } | { stage: "joined"; name: string } | { stage: "failed"; why: string }
 
 export interface Actions {
   send(code: string, where: Where, text: string, opts?: { replyTo?: number; inThread?: number; side?: true; images?: Upload[] }): void
@@ -770,16 +679,7 @@ export interface Actions {
   setNickname(code: string, name: string, nickname: string | null): void
   setAgentColor(code: string, name: string, color: Color | null): void
   setPowers(code: string, name: string, powers: Partial<Powers>): void
-  addAgent(code: string, agent: NewAgent, seen: (s: Launching) => void): () => void
   showAgent(code: string, name: string): Promise<string | null>
-  openTerm(code: string, name: string, cols: number, rows: number, watch: TermWatch): Promise<TermOpened>
-  openMyTerm(code: string, want: string | null, cols: number, rows: number, watch: TermWatch, machine?: string): Promise<TermOpened>
-  myTerms(): Promise<TermTab[]>
-  closeMyTerm(pane: string): Promise<TermTab[]>
-  remoteTerms(machine: string): Promise<TermTab[]>
-  closeRemoteTerm(machine: string, pane: string): Promise<TermTab[]>
-  choicesOn(code: string, computer: string): Promise<ComputerChoices>
-  chooseFolder(): Promise<string | null>
   addRoom(code: string, name: string, members?: string[]): Promise<string | null>
   renameRoom(code: string, id: string, name: string): void
   setRoomMembers(code: string, id: string, members: string[]): Promise<boolean>
@@ -808,7 +708,6 @@ export interface Actions {
   searchOlder(code: string, query: string, before: number): Promise<OlderSearch>
   olderAround(code: string, seq: number): Promise<OlderHit[] | null>
   fetchOlder(code: string, got: (asked: number) => void): Promise<void>
-  snooze(until: "1h" | "8h" | "tomorrow" | null): void
   forgetComputer(id: string): void
   linkGithub(): void
   signInWithGithub(): void
@@ -827,26 +726,12 @@ export interface Actions {
   enrollDeny(id: string): void
   forgetDevice(ids: string[], keep?: KeptAgent[]): void
   renewDevice(...ids: string[]): void
-  recoveryWords(): Promise<string[] | null>
-  recoverySave(typed: { at: number; word: string }[]): Promise<RecoverySaved | null>
-  recoveryDrop(): void
-  recoveryCancel(words: string): Promise<RecoverTrouble | null>
-  rerootOpen(words: string): Promise<RerootOpened | null>
-  rerootFinish(keep: string[]): Promise<boolean>
-  rerootCancel(): void
   enrollBegin(): void
   enrollKeep(): void
   enrollCancel(): void
-  recoverBegin(): void
-  recoverOpen(words: string): Promise<RecoverTrouble | null>
-  recoverFinish(lost: string[]): Promise<void>
   closeChannel(code: string): void
   saveTheme(theme: CustomTheme): void
   deleteTheme(id: string): void
-  addStartFolder(): void
-  removeStartFolder(dir: string): void
-  allowNewAgents(on: boolean): void
-  allowRemoteBypass(on: boolean): void
   savePersonalities(list: Personality[]): void
   setHooks(harness: HookHarness, on: boolean): void
   checkComputer(): Promise<Finding[] | null>
@@ -865,9 +750,6 @@ export interface ThisComputer {
 }
 
 export interface AgentStarts {
-  folders: string[]
-  launch: boolean
-  bypass: boolean
   terminals: TerminalRow[]
 }
 
@@ -884,7 +766,7 @@ export interface App {
   channel: Channel | null
   gone?: GoneChannel
   prefs: Prefs
-  harnesses: { id: Harness; label: string; installed: boolean; version?: string; path?: string; why?: string }[]
+  harnesses: { id: Harness; label: string; installed: boolean; version?: string; path?: string }[]
   personas: { id: string; label: string; about: string }[]
   starts: AgentStarts | null
   ownPersonalities: Personality[]

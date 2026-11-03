@@ -61,9 +61,6 @@ export default function Enroll({ enrolling }: { enrolling: Extract<Enrolling, { 
       {enrolling.stage === "check" && <Check person={enrolling.person} />}
       {enrolling.stage !== "check" && (
         <div className="start-others">
-          <button type="button" className="btn is-quiet" onClick={() => app.actions.recoverBegin()}>
-            Lost your other devices? Use your recovery key
-          </button>
           <button type="button" className="btn is-quiet" onClick={() => app.actions.enrollCancel()}>
             Cancel
           </button>

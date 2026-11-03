@@ -12,11 +12,10 @@ import { Avatar, cx, Dot, STATUS_WORDS } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { openMenu } from "~/kit/menu-open"
 import { ago } from "~/kit/time"
-import type { Channel, Person, Task, Upload, Where } from "~/model"
+import type { Channel, Task, Upload, Where } from "~/model"
 import { sameWhere, useApp } from "~/nav"
 import { nickname, onePerPerson, shown } from "~/names"
 import { mentionNames, withNames, type Picks } from "~/chat/linked"
-import { outside, outsiders, sealedOf, warning } from "~/chat/reach"
 
 const Gifs = lazy(() => import("~/chat/gif-picker"))
 
@@ -182,8 +181,6 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
     const gif = { label: "GIF", run: () => setGifsOpen(true) }
     openMenu.set({ x: at.left, y: at.top, label: "Add to the message", groups: [gifsReady ? [image, gif] : [image]], above: true })
   }
-  const sealed = useMemo(() => sealedOf(channel, where), [channel, where])
-  const [warned, setWarned] = useState<{ text: string; people: Person[] } | null>(null)
 
   const add = (upload: Upload) => setFiles((now) => (now.length < MAX_FILES ? [...now, upload] : now))
   const attach = (list: readonly File[]) => {
@@ -294,7 +291,6 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
 
   const update = (value: string, at = value.length) => {
     setText(value)
-    setWarned(null)
     setCaret(at)
     setPick(0)
     setClosed(false)
@@ -315,11 +311,6 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
       toast(long, "error")
       return
     }
-    const away = outsiders(channel, sealed, sent)
-    if (away.length && warned?.text !== value) {
-      setWarned({ text: value, people: away })
-      return
-    }
     const opts = {
       ...(inThread !== undefined ? { inThread, ...(alsoRoom ? {} : { side: true as const }) } : {}),
       ...(replyTo ? { replyTo: replyTo.seq } : {}),
@@ -334,11 +325,6 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
     update("")
   }
   const ready = !!text.trim() || files.length > 0
-  const addAndSend = async (room: string, people: readonly Person[]) => {
-    const value = text
-    const members = [...(sealed?.inside ?? []), ...people.map((p) => p.name)]
-    if (await app.actions.setRoomMembers(channel.code, room, members)) send(value)
-  }
   const complete = (name: string) => insert(text.slice(0, caret).replace(MENTION, (_all, pre: string) => `${pre}@${mentions.typed(name, picksFor(key))} `))
   const completeTask = (id: number) => insert(text.slice(0, caret).replace(TASK_REF, (_all, pre: string) => `${pre}T${id} `))
   const insert = (before: string) => {
@@ -410,9 +396,7 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
               <button type="button" tabIndex={-1} className={cx("mention-row", i === pick && "is-on")} onMouseDown={(e) => e.preventDefault()} onClick={() => complete(p.name)}>
                 <Avatar person={p} size="sm" pip />
                 <span className="mention-name">{shown(p)}</span>
-                <span className="dim">
-                  {outside(channel, sealed, p) ? (sealed?.kind === "dm" ? "can't see this DM" : "not in this room") : (p.role ?? p.runs ?? (p.kind === "human" ? "person" : "agent"))}
-                </span>
+                <span className="dim">{p.role ?? p.runs ?? (p.kind === "human" ? "person" : "agent")}</span>
               </button>
             </li>
           ))}
@@ -609,19 +593,6 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
           </label>
         )}
       </form>
-      {warned && sealed && (
-        <div className="compose-warn" role="alert">
-          <p>{warning(sealed, warned.people)}</p>
-          {sealed.kind === "room" && (
-            <button type="button" className="btn is-small" onClick={() => void addAndSend(sealed.room, warned.people)}>
-              Add {warned.people.map(shown).join(", ")}
-            </button>
-          )}
-          <button type="button" className="btn is-small is-quiet" onClick={() => send(warned.text)}>
-            Send anyway
-          </button>
-        </div>
-      )}
       {running && !cue && (
         <p className="compose-hint" role="status">
           <b>/{running.command.name}</b> <span>·</span> {running.command.summary} <span>·</span> <kbd>{enterSends ? "↩" : "⌘↩"}</kbd> runs it

@@ -176,7 +176,7 @@ function checkPaired(): Finding {
     return { ok: false, what: "This computer's key file can't be read.", how: err instanceof Error ? err.message : String(err) };
   }
   const name = m?.cert?.name ?? m?.device?.person.name;
-  if (m?.cert || m?.device) return { ok: true, what: `login    one of ${name ?? "your"}'s devices (${m.label}): your app can start agents here` };
+  if (m?.cert || m?.device) return { ok: true, what: `login    one of ${name ?? "your"}'s devices (${m.label}): its agents get in on their own` };
   return { ok: true, what: "login    no: agents here ask to join and wait for the owner (kiwi login adds this computer to your devices)" };
 }
 

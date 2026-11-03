@@ -7,7 +7,6 @@ export interface MenuItem {
   label: string
   run: () => void
   confirm?: { title: string; sub: string; yes: string }
-  disabled?: true
 }
 
 export type MenuGroups = readonly (readonly MenuItem[])[]

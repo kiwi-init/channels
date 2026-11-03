@@ -8,7 +8,7 @@ import { Boundary } from "~/kit/boundary"
 import { Icon } from "~/kit/icons"
 import { later } from "~/kit/later"
 import type { Channel } from "~/model"
-import { drawerNews } from "~/live/notify"
+import { drawerNews } from "~/live/links"
 import { dropMessage, findWanted, useWantedMessage } from "~/live/open-message"
 import { openAsks } from "~/needs/open"
 import { sameWhere, useApp } from "~/nav"
@@ -23,7 +23,6 @@ import { openTasks } from "~/tasks/open"
 import { headerLine } from "~/now"
 import { between, nickname } from "~/names"
 
-const TermDrawer = lazy(() => import("~/term/drawer"))
 const TallPage = lazy(() => import("~/shell/tall"))
 const Waiting = later(() => import("~/start/waiting").then((m) => m.Waiting))
 const SearchBox = later(() => import("~/chat/search-box").then((m) => m.SearchBox))
@@ -214,7 +213,6 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
           )}
           <div className="top-group">
             <IconButton icon="search" label="Search this channel (⌘F)" onClick={() => setSearching(true)} />
-            <IconButton icon="terminal" label="Your terminal" pressed={nav.term?.kind === "you"} onClick={() => go({ to: "term", term: nav.term?.kind === "you" ? null : { kind: "you" } })} />
           </div>
         </div>
       </header>
@@ -252,11 +250,6 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
             )}
           </Suspense>
         </Boundary>
-        {nav.term && (
-          <Suspense fallback={null}>
-            <TermDrawer key={nav.term.kind === "agent" ? `agent:${nav.term.name}` : "you"} channel={channel} of={nav.term} />
-          </Suspense>
-        )}
       </main>
       {offline && (
         <p className="conn" role="status">

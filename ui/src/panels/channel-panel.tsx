@@ -3,7 +3,6 @@ import "~/styles/channel-panel.css"
 import "~/styles/new-room.css"
 
 import { useEffect, useId, useRef, useState, type ReactNode } from "react"
-import { RoomReadyNotes } from "~/shell/room-ready"
 
 import { Avatar, cx, Field, Heading, IconButton } from "~/kit/bits"
 import { NotificationOff01Icon } from "@hugeicons/core-free-icons"
@@ -18,7 +17,7 @@ import { repoOffers } from "~/panels/repo-offers"
 import { Toggle } from "~/kit/bits"
 import { Confirm, InlineEdit } from "~/settings/controls"
 import { useAppCan } from "~/live/app-can"
-import { isMuted } from "~/live/quiet"
+import { isMuted } from "~/live/mute"
 import { copyText } from "~/kit/toasts"
 
 const REPO = /^[\w.-]+\/[\w.-]+$/
@@ -424,12 +423,12 @@ function MuteChannel({ channel }: { channel: Channel }) {
   const { app } = useApp()
   const muted = isMuted(app.prefs.muted, channel.code)
   return (
-    <section className="cpanel-mute" aria-label="Notifications">
+    <section className="cpanel-mute" aria-label="Mute">
       <div className="cpanel-row">
         <span className="cpanel-value">Mute on this computer</span>
         <Toggle label="Mute this channel" on={muted} onChange={(on) => app.actions.setMute(channel.code, null, on)} />
       </div>
-      {muted && <p className="cpanel-hint">Mentions, direct messages and decisions for you still notify.</p>}
+      {muted && <p className="cpanel-hint">Its unread count shows only mentions of you.</p>}
     </section>
   )
 }
@@ -442,7 +441,7 @@ function Rooms({ channel, own }: { channel: Channel; own: boolean }) {
         <li key={r.id} className={cx("cpanel-room", r.muted && "is-muted")}>
           <span className="cpanel-room-line">
             <span className="cpanel-room-hash" aria-hidden="true">
-              #
+              {r.members ? <Icon name="people" size={12} /> : "#"}
             </span>
             {own ? (
               <InlineEdit value={r.name} label={`Name of #${r.name}`} verb="Rename" onSave={(name) => app.actions.renameRoom(channel.code, r.id, name)} />
@@ -478,8 +477,8 @@ function RoomPeople({ channel, id, members, own }: { channel: Channel; id: strin
   if (!editing)
     return (
       <p className="cpanel-hint room-in cpanel-room-who">
-        <Icon name="lock" size={12} />
-        <span>Private: you{names.length ? `, ${names.join(", ")}` : ""}</span>
+        <Icon name="people" size={12} />
+        <span>Members only: you{names.length ? `, ${names.join(", ")}` : ""}</span>
         {own && canChange && (
           <button type="button" className="btn is-quiet is-small cpanel-reveal" onClick={() => setEditing(new Set(roots))}>
             Change who's in
@@ -504,7 +503,6 @@ function RoomPeople({ channel, id, members, own }: { channel: Channel; id: strin
           <span className="room-member-name">{shown(p)}</span>
         </label>
       ))}
-      <RoomReadyNotes people={others.filter((p) => editing.has(p.name))} />
       <p className="cpanel-hint">{out ? "Whoever you take out keeps what they could read, and nothing after: the room moves to a new key." : "Whoever you add reads the room's history."}</p>
       <div className="room-edit-foot">
         <button type="button" className="btn is-quiet is-small" onClick={() => setEditing(null)}>

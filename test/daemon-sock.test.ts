@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "
 import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { adoptDaemon, daemonHello, daemonLaunch, daemonListening, daemonSock, ensureDaemon, loadPairedMachine, startDaemon, stopDaemon, type Daemon } from "../src/daemon.ts";
+import { adoptDaemon, daemonHello, daemonListening, daemonSock, ensureDaemon, loadPairedMachine, startDaemon, stopDaemon, type Daemon } from "../src/daemon.ts";
 import { certUntil, nextLink, readDeviceList, rootLink } from "@kiwi/core/devices.ts";
 import { generateIdentity, withExchangeKey } from "@kiwi/core/identity.ts";
 import { saveMachine } from "../src/machine.ts";
@@ -159,12 +159,10 @@ describe("the daemon socket", () => {
     await expect(ask({ id: 1, verb: "listening" })).resolves.toEqual({ id: 1, ok: false, error: expect.stringMatching(/token/) });
     await expect(ask({ id: 1, verb: "listening", token: "not-the-one" })).resolves.toEqual({ id: 1, ok: false, error: expect.stringMatching(/token/) });
     await expect(ask({ id: 1, verb: "launch", token: "not-the-one" })).resolves.toEqual({ id: 1, ok: false, error: expect.stringMatching(/token/) });
-    await expect(ask({ id: 1, verb: "term", pane: "nope", cols: 80, rows: 24, token })).resolves.toEqual({ id: 1, ok: false, error: expect.stringMatching(/term needs/) });
+    await expect(ask({ id: 1, verb: "term", pane: "nope", cols: 80, rows: 24, token })).resolves.toEqual({ id: 1, ok: false, error: expect.stringMatching(/unknown verb "term"/) });
+    for (const verb of ["launch", "loop", "folders"])
+      await expect(ask({ id: 1, verb, token })).resolves.toEqual({ id: 1, ok: false, error: expect.stringMatching(new RegExp(`unknown verb "${verb}"`)) });
     await expect(ask({ id: 1, verb: "listening", token })).resolves.toMatchObject({ ok: true });
-  });
-
-  test("a launch asking for bypass is refused while kiwi launches bypass is off", async () => {
-    await expect(daemonLaunch({ harness: "codex", folder: "/tmp", code: "mc2-00000000-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", permission: "bypass" })).rejects.toThrow(/launches bypass/);
   });
 
   test("listening is empty, and stop quiets the socket", async () => {

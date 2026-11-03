@@ -20,15 +20,13 @@ describe("tendOwned", () => {
     const told = new Set<string>();
     await tendOwned(
       "pk",
-      "chan",
       api({
         autoApprove: async () => {
           throw new Error("relay blip");
         },
         requests: async () => [{ id: "1", name: "bot" }],
       }),
-      ping,
-      told,
+      { title: "chan", ping, told },
     );
     expect(pinged).toEqual(["bot asks to join"]);
     expect(told.has("1")).toBe(true);
@@ -36,7 +34,7 @@ describe("tendOwned", () => {
 
   test("autoApprove returning none still announces remaining own asks", async () => {
     pinged.length = 0;
-    await tendOwned("pk", "chan", api({ requests: async () => [{ id: "1", name: "bot" }] }), ping, new Set());
+    await tendOwned("pk", api({ requests: async () => [{ id: "1", name: "bot" }] }), { title: "chan", ping, told: new Set() });
     expect(pinged).toEqual(["bot asks to join"]);
   });
 
@@ -45,7 +43,6 @@ describe("tendOwned", () => {
     const told = new Set(["old"]);
     await tendOwned(
       "pk",
-      "chan",
       api({
         autoApprove: async () => [{ name: "bot" }, { name: "dev" }],
         requests: async () => [
@@ -53,28 +50,25 @@ describe("tendOwned", () => {
           { id: "new", name: "ada" },
         ],
       }),
-      ping,
-      told,
+      { title: "chan", ping, told },
     );
     expect(pinged).toEqual(["2 of your agents joined", "ada asks to join"]);
   });
 
   test("an agent from a member's computer is announced as theirs", async () => {
     pinged.length = 0;
-    await tendOwned("pk", "chan", api({ autoApprove: async () => [{ name: "scout", sponsor: { user: "bob-pk", name: "Bob" } }] }), ping, new Set());
+    await tendOwned("pk", api({ autoApprove: async () => [{ name: "scout", sponsor: { user: "bob-pk", name: "Bob" } }] }), { title: "chan", ping, told: new Set() });
     expect(pinged).toEqual(["scout joined from Bob’s computer"]);
     pinged.length = 0;
     await tendOwned(
       "pk",
-      "chan",
       api({
         autoApprove: async () => [
           { name: "scout", sponsor: { user: "bob-pk", name: "Bob" } },
           { name: "dev", sponsor: { user: "pk", name: "Me" } },
         ],
       }),
-      ping,
-      new Set(),
+      { title: "chan", ping, told: new Set() },
     );
     expect(pinged).toEqual(["2 agents joined"]);
   });
@@ -83,15 +77,13 @@ describe("tendOwned", () => {
     pinged.length = 0;
     await tendOwned(
       "pk",
-      "chan",
       api({
         autoApprove: async () => [{ name: "bot" }],
         requests: async () => {
           throw new Error("blip");
         },
       }),
-      ping,
-      new Set(),
+      { title: "chan", ping, told: new Set() },
     );
     expect(pinged).toEqual(["bot joined from your computer"]);
   });

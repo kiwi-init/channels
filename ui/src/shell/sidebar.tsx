@@ -89,7 +89,7 @@ export function Sidebar({ channel }: { channel: Channel }) {
                   onClick={() => go({ to: "where", where })}
                   onContextMenu={(e) => showMenu(e, `#${r.name}`, (x) => x.roomGroups({ channel, go }, actions, on, canLeave, r))}
                 >
-                  <span className="side-hash">{r.members ? <Icon name="lock" size={12} /> : "#"}</span>
+                  <span className="side-hash">{r.members ? <Icon name="people" size={12} label="Members only" /> : "#"}</span>
                   <span className="side-label">{r.name}</span>
                   <Count n={r.muted ? r.mentions : r.mentions || r.unread} loud={r.mentions > 0} />
                 </button>
@@ -130,7 +130,6 @@ export function Sidebar({ channel }: { channel: Channel }) {
                   >
                     <Avatar person={who} size="sm" />
                     <span className="side-label">{nickname(channel, d.with)}</span>
-                    {d.locked && <Icon name="lock" size={12} label="Private" />}
                     <Count n={d.unread} loud />
                   </button>
                 </li>
@@ -240,7 +239,6 @@ function Member({ person, channel, direct, tile }: { person: Person; channel: Ch
       >
         <Avatar person={person} size={tile ? "lg" : "sm"} pip />
         <span className="side-label">{shown(person)}</span>
-        {direct?.locked && <Icon name="lock" size={12} label="Private" />}
         <Count n={unread} loud />
       </button>
     </li>

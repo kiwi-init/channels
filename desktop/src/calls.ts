@@ -1,4 +1,4 @@
-import type { KeysPort, KiwiBridge, StoreSnapshot, TermEvent, UiUpdateView, UpdateView } from "./bridge.ts";
+import type { KeysPort, KiwiBridge, StoreSnapshot, UiUpdateView, UpdateView } from "./bridge.ts";
 import type { TextStep } from "./text-size.ts";
 
 export type Call = { [K in keyof KiwiBridge]: KiwiBridge[K] extends (...args: never[]) => Promise<unknown> ? K : never }[keyof KiwiBridge];
@@ -17,7 +17,6 @@ export interface Pushes {
   frost: boolean;
   accent: string | null;
   uiUpdate: UiUpdateView | null;
-  term: TermEvent;
 }
 
 export type Push = keyof Pushes;
@@ -74,19 +73,7 @@ export function makeBridge(t: BridgeTransport): KiwiBridge {
     forgetDevice: (id) => t.call("forgetDevice", id),
     renewDevice: (id) => t.call("renewDevice", id),
     deviceNews: () => t.call("deviceNews"),
-    proveSeat: (code) => t.call("proveSeat", code),
     keepAgents: (code, agents) => t.call("keepAgents", code, agents),
-    recovery: () => t.call("recovery"),
-    recoveryWords: () => t.call("recoveryWords"),
-    recoverySave: (typed) => t.call("recoverySave", typed),
-    recoveryDrop: () => t.call("recoveryDrop"),
-    recoveryCancel: (words) => t.call("recoveryCancel", words),
-    recover: (words) => t.call("recover", words),
-    recoverFinish: (lost) => t.call("recoverFinish", lost),
-    recoverCancel: () => t.call("recoverCancel"),
-    reroot: (words) => t.call("reroot", words),
-    rerootFinish: (keep) => t.call("rerootFinish", keep),
-    rerootCancel: () => t.call("rerootCancel"),
     daemonStatus: () => t.call("daemonStatus"),
     doctor: () => t.call("doctor"),
     daemonAdopt: () => t.call("daemonAdopt"),
@@ -101,7 +88,6 @@ export function makeBridge(t: BridgeTransport): KiwiBridge {
     checkUpdate: () => t.call("checkUpdate"),
     movedApp: () => t.call("movedApp"),
     dismissMovedApp: () => t.call("dismissMovedApp"),
-    notify: (title, body, link) => t.call("notify", title, body, link),
     openExternal: (url) => t.call("openExternal", url),
     saveFile: (name, text) => t.call("saveFile", name, text),
     getDeepLink: () => t.call("getDeepLink"),
@@ -124,22 +110,8 @@ export function makeBridge(t: BridgeTransport): KiwiBridge {
     setPersonalities: (list) => t.call("setPersonalities", list),
     seatPlaces: () => t.call("seatPlaces"),
     showSeat: (seat) => t.call("showSeat", seat),
-    termOpen: (pane, cols, rows) => t.call("termOpen", pane, cols, rows),
-    termMine: (roomId, want, cols, rows) => t.call("termMine", roomId, want, cols, rows),
-    termTabs: () => t.call("termTabs"),
-    termTabClose: (pane) => t.call("termTabClose", pane),
-    termRemote: (machinePk, want, cols, rows) => t.call("termRemote", machinePk, want, cols, rows),
-    termRemoteTabs: (machinePk) => t.call("termRemoteTabs", machinePk),
-    termRemoteClose: (machinePk, pane) => t.call("termRemoteClose", machinePk, pane),
-    termKeys: (term, keys) => t.call("termKeys", term, keys),
-    termSize: (term, cols, rows) => t.call("termSize", term, cols, rows),
-    termClose: (term) => t.call("termClose", term),
-    onTerm: (cb) => t.listen("term", cb),
     terminals: () => t.call("terminals"),
     terminalHelpers: (id, to) => t.call("terminalHelpers", id, to),
-    terminalPrefer: (id) => t.call("terminalPrefer", id),
-    setLaunches: (to) => t.call("setLaunches", to),
-    setRemoteBypass: (to) => t.call("setRemoteBypass", to),
     contextLine: () => t.call("contextLine"),
     setContextLine: (to) => t.call("setContextLine", to),
     hooks: () => t.call("hooks"),
@@ -147,14 +119,7 @@ export function makeBridge(t: BridgeTransport): KiwiBridge {
     wakeSeats: () => t.call("wakeSeats"),
     setWake: (room, agent, to) => t.call("setWake", room, agent, to),
     harnesses: () => t.call("harnesses"),
-    seatFolders: (roomId) => t.call("seatFolders", roomId),
-    chooseFolder: () => t.call("chooseFolder"),
-    launchAgent: (req) => t.call("launchAgent", req),
     machines: () => t.call("machines"),
-    harnessesOn: (machinePk) => t.call("harnessesOn", machinePk),
-    foldersOn: (machinePk, roomId) => t.call("foldersOn", machinePk, roomId),
     settingsOn: (machinePk) => t.call("settingsOn", machinePk),
-    launchRoots: () => t.call("launchRoots"),
-    setLaunchRoot: (dir, to) => t.call("setLaunchRoot", dir, to),
   };
 }

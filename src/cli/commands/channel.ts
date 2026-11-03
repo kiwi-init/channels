@@ -33,7 +33,7 @@ export const channelCommands: Record<string, Command> = {
   rooms: () =>
     Effect.gen(function* () {
       const s = yield* session();
-      out(formatRooms((yield* s.state()).state));
+      out(formatRooms((yield* s.state()).state, s.me));
     }),
 
   leave: () =>

@@ -53,7 +53,7 @@ export const setupCommands: Record<string, Command> = {
         else out(`PATH: ${file} already names ${binDir()}; open a new terminal to type plain kiwi (or: ${line}).\n`);
       }
       out("To let this computer's agents in on their own, run kiwi login here and type the digits it shows in your");
-      out("Channels app: this computer becomes one of your devices, and your app can start agents on it.");
+      out("Channels app: this computer becomes one of your devices, and its agents get in on their own.");
     }),
 
   login: () =>
@@ -77,7 +77,7 @@ export const setupCommands: Record<string, Command> = {
           () => false,
         ),
       );
-      out(running ? "its kiwi daemon is running, so your app can start agents here now." : "its kiwi daemon didn't start: run kiwi daemon here, or your app can't reach this computer.");
+      out(running ? "its kiwi daemon is running, so your app can reach this computer now." : "its kiwi daemon didn't start: run kiwi daemon here, or your app can't reach this computer.");
     }),
 
   unpair: () =>
@@ -85,7 +85,7 @@ export const setupCommands: Record<string, Command> = {
       const { daemonUnpair, ensureDaemon } = yield* Effect.promise(() => import("../../daemon.ts"));
       yield* Effect.promise(() => ensureDaemon());
       yield* Effect.promise(() => daemonUnpair());
-      out("your app can't start agents here any more: it takes no more asks from your app (kiwi login lets it again)");
+      out("your app can't reach this computer any more: it takes no more asks from your app (kiwi login lets it again)");
     }),
 
   cleanup: () =>

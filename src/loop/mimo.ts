@@ -14,8 +14,6 @@ export interface MimoStart {
   prompt: string;
 }
 
-export const MIMO_PERMISSIONS: Permission[] = ["default", "plan", "bypass"];
-
 const MIMO_FLAGS: Record<Permission, string[]> = { default: [], "accept-edits": [], plan: ["--agent", "plan"], bypass: ["--dangerously-skip-permissions"] };
 
 const CLOCK_MS = 2_000;

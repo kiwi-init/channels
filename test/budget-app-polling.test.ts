@@ -94,7 +94,8 @@ afterAll(() => {
 
 const pinged: string[] = [];
 const told = new Set<string>();
-const tend = (code: string) => tendOwned(ada.pk, code, { autoApprove: (p) => app.call(code, "autoApprove", p), requests: (o) => app.call(code, "requests", o) }, (_t, body) => pinged.push(body), told);
+const tend = (code: string) =>
+  tendOwned(ada.pk, { autoApprove: (p) => app.call(code, "autoApprove", p), requests: (o) => app.call(code, "requests", o) }, { title: code, ping: (_t, body) => pinged.push(body), told });
 const headTick = () => Promise.all([...owned, ...joined].map((code) => app.call(code, "head")));
 const tendPass = async () => {
   for (const code of owned) await tend(code);

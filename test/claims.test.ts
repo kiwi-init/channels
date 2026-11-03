@@ -276,31 +276,20 @@ describe("auto-approval", () => {
     await s.ownerCh.close();
   });
 
-  test("a launch id rides the sealed claims to the owner, and only a well-formed one", async () => {
-    const s = await setupChannel(relay);
-    const own = await pairComputer(s.person, "own-box");
-    const good = await askFromOwn(s, "launched", own, { launch: "L7xQ_2v-9aZk" });
-    const bad = await askFromOwn(s, "odd-launch", own, { launch: "has spaces in it" });
-    const reqs = await s.ownerCh.requests({ person: s.person.pk });
-    expect(reqs.find((r) => r.id === good)?.launch).toBe("L7xQ_2v-9aZk");
-    expect(reqs.find((r) => r.id === bad)?.launch).toBeUndefined();
-    await s.ownerCh.close();
-  });
-
-  test("a launched agent from an own computer is let in even when the day's signing budget is spent", async () => {
+  test("an agent from an own computer is let in even when the day's signing budget is spent", async () => {
     const s = await setupChannel(relay);
     const own = await pairComputer(s.person, "own-box");
     const budget = memoryBudget();
     const spent = Array.from({ length: AUTO_SIGN_PER_DAY }, (_, i) => ({ commit: `spent-${i}`, at: Date.now() }));
     budget.save(s.roomId, spent);
-    const id = await generateIdentity("launched");
+    const id = await generateIdentity("own-agent");
     const computer = await claimComputer(own.machine, own.cert, s.roomId, id.pk);
-    const { requestId } = await Channel.requestJoin(relay, s.code, id, { name: "launched" }, { computer, launch: "L7xQ_2v-9aZk", pin: await s.ownerCh.pinPersona(builder) });
+    const { requestId } = await Channel.requestJoin(relay, s.code, id, { name: "own-agent" }, { computer, pin: await s.ownerCh.pinPersona(builder) });
     await s.ownerCh.requests({ budget, person: s.person.pk });
     await Channel.joinStatus(relay, s.code, id, requestId);
-    expect((await s.ownerCh.requests({ budget, person: s.person.pk })).find((r) => r.id === requestId)).toMatchObject({ check: "ready", launch: "L7xQ_2v-9aZk" });
+    expect((await s.ownerCh.requests({ budget, person: s.person.pk })).find((r) => r.id === requestId)).toMatchObject({ check: "ready" });
     const approved = await s.ownerCh.autoApprove(s.person.pk, PRESETS);
-    expect(approved.map((m) => [m.name, m.persona?.name])).toEqual([["launched", "Builder"]]);
+    expect(approved.map((m) => [m.name, m.persona?.name])).toEqual([["own-agent", "Builder"]]);
     expect(budget.load(s.roomId)).toEqual(spent);
     await s.ownerCh.close();
   });

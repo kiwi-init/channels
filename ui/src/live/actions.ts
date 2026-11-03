@@ -24,16 +24,6 @@ import {
   forgetDevice,
   launchedFrom,
   linkGithub,
-  recoverBegin,
-  recoverFinish,
-  recoverOpen,
-  recoveryCancel,
-  recoveryDrop,
-  recoverySave,
-  recoveryWords,
-  rerootCancel,
-  rerootFinish,
-  rerootOpen,
   renewDevice,
   unlinkGithub,
   type EnrollDone,
@@ -44,7 +34,7 @@ import { deleteTheme, saveTheme, setPrefs } from "~/live/prefs"
 import { iconFromFile } from "~/live/icon-file"
 import { seatOf } from "~/live/seats"
 import { checkComputer, computerSettings, setContextLine, setHooks } from "~/live/computer"
-import { addStartFolder, allowNewAgents, allowRemoteBypass, removeStartFolder, setTerminalHelpers } from "~/live/starts"
+import { setTerminalHelpers } from "~/live/starts"
 import { markSeenIn, seenIn } from "@kiwi/app/threads.ts"
 import { followKey, followMark } from "~/live/threads"
 import { lastIn, seenKeyOf } from "~/live/seen-place"
@@ -247,42 +237,6 @@ export function makeActions(): Actions {
       const r = await showSeat(seat).catch((): ShowResult => ({ ok: false, why: "failed" }))
       return noteFor(seat.place, r)
     },
-    openTerm: async (code, name, cols, rows, watch) => (await rare()).openTerm(code, name, cols, rows, watch),
-    openMyTerm: async (code, want, cols, rows, watch, machine) => (await rare()).openMyTerm(code, want, cols, rows, watch, machine),
-    myTerms: async () => {
-      const b = bridge()
-      return b && typeof b.termTabs === "function" ? b.termTabs().catch(() => []) : []
-    },
-    closeMyTerm: async (pane) => {
-      const b = bridge()
-      return b && typeof b.termTabClose === "function" ? b.termTabClose(pane).catch(() => []) : []
-    },
-    remoteTerms: async (machine) => {
-      const b = bridge()
-      const tabs = b && typeof b.termRemoteTabs === "function" ? await b.termRemoteTabs(machine).catch(() => []) : []
-      return tabs.map((t) => ({ ...t, machine }))
-    },
-    closeRemoteTerm: async (machine, pane) => {
-      const b = bridge()
-      const tabs = b && typeof b.termRemoteClose === "function" ? await b.termRemoteClose(machine, pane).catch(() => []) : []
-      return tabs.map((t) => ({ ...t, machine }))
-    },
-    choicesOn: async (code, computer) => (await manage()).choicesOn(code, computer),
-    chooseFolder: async () => {
-      const b = bridge()
-      return b ? b.chooseFolder() : null
-    },
-    addAgent: (code, agent, seen) => {
-      let stop = () => {}
-      let stopped = false
-      void manage().then((m) => {
-        if (!stopped) stop = m.addAgent(code, agent, seen)
-      })
-      return () => {
-        stopped = true
-        stop()
-      }
-    },
     addRoom: (code, typed, members) => tried("Room not made", async () => (await manage()).addRoom(code, typed, members)),
     setRoomMembers: async (code, id, members) =>
       (await tried("Who's in didn't change", async () => {
@@ -363,7 +317,6 @@ export function makeActions(): Actions {
     searchOlder: (code, query, before) => import("~/live/older").then((o) => o.searchOlder(code, query, before)),
     olderAround: (code, seq) => import("~/live/older").then((o) => o.olderAround(code, seq)),
     fetchOlder: (code, got) => import("~/live/older").then((o) => o.fetchOlder(code, got)),
-    snooze: (until) => void rare().then((r) => r.snooze(until)),
     forgetComputer: (id) => void manage().then((m) => m.forgetComputer(id)),
     linkGithub: () => attempt("GitHub not linked", linkGithub),
     signInWithGithub: () => attempt("Not signed in with GitHub", linkGithub),
@@ -420,13 +373,6 @@ export function makeActions(): Actions {
     enrollDeny: (id) => attempt("Couldn't turn the device away", () => enrollDeny(id)),
     forgetDevice: (ids, keep) => attempt("Couldn't forget the device", () => forgetDevice(ids, keep)),
     renewDevice: (...ids) => attempt("Couldn't renew the device", () => renewDevice(...ids)),
-    recoveryWords: () => tried("Couldn't make the recovery words", recoveryWords),
-    recoverySave: (typed) => tried("Couldn't set up the recovery key", () => recoverySave(typed)),
-    recoveryDrop: () => attempt("Couldn't put the words away", recoveryDrop),
-    recoveryCancel: (words) => tried("Couldn't cancel the new words", () => recoveryCancel(words)),
-    rerootOpen: (words) => tried("Couldn't open your recovery key", () => rerootOpen(words)),
-    rerootFinish: async (keep) => !!(await tried("Couldn't replace your person key", () => rerootFinish(keep))),
-    rerootCancel: () => attempt("Couldn't put the words away", rerootCancel),
     enrollBegin: () =>
       attempt("Couldn't sign in as one of your devices", () =>
         enrollBegin(
@@ -436,15 +382,8 @@ export function makeActions(): Actions {
       ),
     enrollKeep: () => attempt("Couldn't join as one of your devices", enrollKeep),
     enrollCancel: () => attempt("Couldn't take the ask back", enrollCancel),
-    recoverBegin: () => attempt("Couldn't start the recovery", recoverBegin),
-    recoverOpen: (words) => tried("Couldn't open your recovery vault", () => recoverOpen(words)),
-    recoverFinish: async (lost) => void (await tried("Couldn't finish the recovery", () => recoverFinish(lost))),
     saveTheme,
     deleteTheme,
-    addStartFolder: () => attempt("Couldn't add the folder", addStartFolder),
-    removeStartFolder: (dir) => attempt("Couldn't remove the folder", () => removeStartFolder(dir)),
-    allowNewAgents: (on) => attempt("Couldn't change new agents", () => allowNewAgents(on)),
-    allowRemoteBypass: (on) => attempt("Couldn't change bypass", () => allowRemoteBypass(on)),
     savePersonalities: (list) => attempt("Not saved", () => savePersonalities(list)),
     setHooks: (harness, on) => attempt("Couldn't change the hooks", () => setHooks(harness, on)),
     checkComputer,

@@ -1,4 +1,4 @@
-import type { Account, Ask, Channel, ChannelTile, Device, Enrolling, Issue, LaunchedAgent, Message, Person, Prefs, PullRequest, RerootOpened, Task, TaskGroup } from "~/model"
+import type { Account, Ask, Channel, ChannelTile, Device, Issue, LaunchedAgent, Message, Person, Prefs, PullRequest, Task, TaskGroup } from "~/model"
 import { nicknamesOf } from "~/names"
 import { omit } from "@kiwi/core/omit.ts"
 
@@ -22,21 +22,6 @@ export const DEMO_LAUNCHED: LaunchedAgent[] = [
   { code: "landing", pk: "pk-scout", from: "dev-air-agents", name: "scout" },
 ]
 
-export const DEMO_WELCOME: Enrolling = {
-  stage: "welcome",
-  name: "jow",
-  devices: DEMO_DEVICES.filter((d) => !d.thisOne && !d.app).map((d) => ({ id: d.id, label: d.label, os: d.os, as: d.as, lost: d.as !== "computer" })),
-  channels: ["studio", "kiwi", "landing"],
-}
-export const DEMO_REROOT: RerootOpened = {
-  ok: true,
-  devices: DEMO_DEVICES.filter((d) => !d.app).map((d) => ({ id: d.id, label: d.label, os: d.os, as: d.as, here: d.thisOne })),
-  channels: ["studio", "kiwi", "landing"],
-}
-export const DEMO_WORDS = "orbit velvet canyon mango ladder silent harvest pilot frozen museum tribe anchor gravity olive wagon pepper rocket glimpse marble tunnel coyote bamboo dinner shield".split(
-  " "
-)
-
 export const DEMO_ACCOUNT: Account = {
   name: "jow",
   handle: "ojowwalker77",
@@ -57,11 +42,7 @@ export const DEMO_PREFS: Prefs = {
   textSize: 0,
   font: "system",
   reduceMotion: false,
-  notify: "mentions",
   muted: ["interlinked", "kiwi/releases"],
-  snoozeUntil: null,
-  quiet: { on: false, from: 22 * 60, to: 8 * 60 },
-  mentionSound: true,
   enterSends: true,
   darkTheme: "channels-oled",
   lightTheme: "channels-light",
@@ -77,10 +58,9 @@ export const DEMO_TILES: ChannelTile[] = [
 ]
 
 const people: Person[] = [
-  { name: "jow", kind: "human", color: "teal", owner: true, you: true, role: "owner", presence: "online", opsLive: 11, lastSeen: now, joined: m(60 * 24 * 30), messages: 812 },
+  { name: "jow", kind: "human", color: "teal", owner: true, you: true, role: "owner", presence: "online", lastSeen: now, joined: m(60 * 24 * 30), messages: 812 },
   {
     name: "maya",
-    opsLive: 11,
     kind: "human",
     color: "pink",
     picture:
@@ -96,7 +76,6 @@ const people: Person[] = [
   {
     name: "atlas",
     face: "lead",
-    ops: { atlasKey: 9 },
     kind: "agent",
     owner: false,
     you: false,
@@ -104,8 +83,8 @@ const people: Person[] = [
     presence: "online",
     activity: { state: "idle" },
     reach: "listening",
-    seat: "hosted",
-    attach: "/Users/jow/.kiwi/tmux/tmux-3.8 -S /tmp/kiwi-501/c67909c5955f attach -t %12 \\; set -w window-size latest",
+    seat: "tmux",
+    attach: "tmux -S /private/tmp/tmux-501/default attach -t %12",
     harness: "claude",
     runs: "Claude Code",
     model: "claude-opus-5-5",
@@ -125,7 +104,6 @@ const people: Person[] = [
   {
     name: "win",
     face: "builder",
-    ops: { winMac: 9 },
     kind: "agent",
     owner: false,
     you: false,
@@ -149,7 +127,6 @@ const people: Person[] = [
   {
     name: "pixel",
     face: "reviewer",
-    ops: { pixelKey: 8 },
     kind: "agent",
     owner: false,
     you: false,
@@ -617,8 +594,8 @@ const dm: Message[] = [
   { seq: 133, from: "atlas", at: m(27), text: "Taking ridge's task. Can you review the installer changes after?", where: { kind: "theirs", between: ["atlas", "win"] } },
   { seq: 134, from: "win", at: m(26), text: "Yes, send the PR when it's up.", where: { kind: "theirs", between: ["atlas", "win"] } },
   { seq: 135, from: "maya", at: m(55), text: "did ridge's PR get anywhere?", where: { kind: "dm", with: "maya" } },
-  { seq: 136, from: "jow", at: m(52), text: "atlas took it over. Can we talk about the hiring plan?", where: { kind: "dm", with: "maya" }, locked: true },
-  { seq: 137, from: "maya", at: m(50), text: "Yes. Two offers out, one more interview Friday.", where: { kind: "dm", with: "maya" }, locked: true },
+  { seq: 136, from: "jow", at: m(52), text: "atlas took it over. Can we talk about the hiring plan?", where: { kind: "dm", with: "maya" }, membersOnly: true },
+  { seq: 137, from: "maya", at: m(50), text: "Yes. Two offers out, one more interview Friday.", where: { kind: "dm", with: "maya" }, membersOnly: true },
 ]
 
 const taskThread: Message[] = [
@@ -888,7 +865,7 @@ export const DEMO_CHANNEL: Channel = {
   ],
   directs: [
     { with: "atlas", unread: 0, last: m(29) },
-    { with: "maya", unread: 1, last: m(50), locked: true },
+    { with: "maya", unread: 1, last: m(50), membersOnly: true },
   ],
   threads: [
     { root: 127, following: true, replies: 3, unread: 2, mentions: 0, last: m(0.3), lastSeq: 130, people: ["jow", "atlas", "win"] },

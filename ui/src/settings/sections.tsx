@@ -2,14 +2,12 @@ import { useEffect, useState, type ReactNode } from "react"
 
 import { IconButton } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
-import { useNow } from "~/kit/time"
 import type { TextFont } from "@kiwi/app/theme.ts"
 import { personFingerprint } from "@kiwi/core/fingerprint.ts"
 import { KEYS_UNSEALED } from "@kiwi/secrets/keys-at-rest.ts"
-import type { Channel, ChannelTile, Prefs, Theme, UpdateCheck } from "~/model"
+import type { Account, Prefs, Theme, UpdateCheck } from "~/model"
 import { updateFound } from "~/settings/update-check"
 import { useApp } from "~/nav"
-import { Toggle } from "~/kit/bits"
 import { Confirm, Group, InlineEdit, Row, Seg } from "~/settings/controls"
 import { Themes } from "~/settings/themes"
 import { copyText } from "~/kit/toasts"
@@ -160,151 +158,37 @@ export function AppearanceSection() {
   )
 }
 
-const NOTIFY = [
-  ["all", "Everything"],
-  ["mentions", "Mentions and asks"],
-  ["none", "Nothing"],
-] as const satisfies readonly (readonly [Prefs["notify"], string])[]
-
-export function NotificationsSection() {
+function VersionRow({ account }: { account: Account }) {
   const { app } = useApp()
-  const { prefs, actions } = app
-  const now = useNow(60_000)
-  const paused = prefs.snoozeUntil !== null && prefs.snoozeUntil > now
-  const quiet = prefs.quiet
-  return (
-    <Page title="Notifications" lede="For every channel on this computer.">
-      <Group>
-        <Row label="Notify me" hint="Asks: a permission, a question, someone at the door.">
-          <Seg label="Notify me" value={prefs.notify} options={NOTIFY} onChange={(notify) => actions.setPrefs({ notify })} />
-        </Row>
-        <Row label="Sound for mentions and direct messages" tip="A short chime while Channels is in the background.">
-          <Toggle label="Sound for mentions and direct messages" on={prefs.mentionSound} onChange={(mentionSound) => actions.setPrefs({ mentionSound })} />
-        </Row>
-        <Row label={paused ? `Paused until ${clockAt(prefs.snoozeUntil!)}` : "Pause"}>
-          {paused ? (
-            <button type="button" className="btn is-small" onClick={() => actions.snooze(null)}>
-              Resume
-            </button>
-          ) : (
-            <span className="set-buttons">
-              {SNOOZE.map(([until, label]) => (
-                <button key={until} type="button" className="btn is-small" onClick={() => actions.snooze(until)}>
-                  {label}
-                </button>
-              ))}
-            </span>
-          )}
-        </Row>
-        <Row label="Quiet hours">
-          {quiet.on && (
-            <span className="set-buttons">
-              <input
-                className="input is-small"
-                type="time"
-                aria-label="Quiet hours start"
-                value={hhmm(quiet.from)}
-                onChange={(e) => actions.setPrefs({ quiet: { ...quiet, from: minutesOf(e.target.value, quiet.from) } })}
-              />
-              <span className="set-to" aria-hidden="true">
-                to
-              </span>
-              <input
-                className="input is-small"
-                type="time"
-                aria-label="Quiet hours end"
-                value={hhmm(quiet.to)}
-                onChange={(e) => actions.setPrefs({ quiet: { ...quiet, to: minutesOf(e.target.value, quiet.to) } })}
-              />
-            </span>
-          )}
-          <Toggle label="Quiet hours" on={quiet.on} onChange={(on) => actions.setPrefs({ quiet: { ...quiet, on } })} />
-        </Row>
-      </Group>
-      <Group title="Muted" hint={prefs.muted.length ? "They still notify for mentions, direct messages and decisions." : undefined}>
-        {prefs.muted.length ? (
-          prefs.muted.map((key) => (
-            <Row key={key} label={mutedName(app.channels, app.channel, key)}>
-              <button type="button" className="btn is-quiet is-small" onClick={() => actions.setMute(key.split("/")[0]!, key.split("/")[1] ?? null, false)}>
-                Unmute
-              </button>
-            </Row>
-          ))
-        ) : (
-          <p className="set-none">Nothing. Mute a channel in its settings, a room in the room list.</p>
-        )}
-      </Group>
-      <Group>
-        <Row label="Enter sends" hint={prefs.enterSends ? "Shift Enter starts a new line." : "⌘ Enter sends."}>
-          <Toggle label="Enter sends" on={prefs.enterSends} onChange={(enterSends) => actions.setPrefs({ enterSends })} />
-        </Row>
-      </Group>
-    </Page>
-  )
-}
-
-const SNOOZE = [
-  ["1h", "1 hour"],
-  ["8h", "8 hours"],
-  ["tomorrow", "Until tomorrow"],
-] as const
-
-const hhmm = (minutes: number): string => `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`
-
-const minutesOf = (typed: string, fallback: number): number => {
-  const m = /^(\d{2}):(\d{2})$/.exec(typed)
-  return m ? Number(m[1]) * 60 + Number(m[2]) : fallback
-}
-
-const clockAt = (at: number): string => new Date(at).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" })
-
-function mutedName(tiles: readonly ChannelTile[], open: Channel | null, key: string): string {
-  const [code, room] = key.split("/")
-  const title = tiles.find((t) => t.code === code)?.title ?? "A channel"
-  if (!room) return title
-  const name = open?.code === code ? open.rooms.find((r) => r.id === room)?.name : undefined
-  return name ? `#${name} in ${title}` : `A room in ${title}`
-}
-
-export function UpdatesSection() {
-  const { app } = useApp()
-  const account = app.account
-  if (!account) return null
   const update = account.update
   const on = <span className="set-mono">{account.version}</span>
-  return (
-    <Page title="Updates">
-      <Group>
-        {update?.ready ? (
-          <Row label={<New>{update.version} is ready</New>} hint={<>You're on {on}. Channels restarts on the new one.</>}>
-            <button type="button" className="btn is-primary is-small" onClick={app.actions.installUpdate}>
-              Restart to update
-            </button>
-          </Row>
-        ) : update?.state === "available" ? (
-          <Row label={<New>{update.version} is out</New>} hint={update.blocked ? "This copy can't replace itself where it is." : <>You're on {on}.</>}>
-            <button type="button" className="btn is-primary is-small" onClick={app.actions.installUpdate}>
-              {update.blocked ? "Get it" : "Download and restart"}
-            </button>
-          </Row>
-        ) : update ? (
-          <Row
-            label={
-              <span className="set-state tone-doing">
-                <span className="set-state-dot is-doing" aria-hidden="true" />
-                Downloading {update.version}
-                <span className="set-mono">{update.progress ? ` · ${Math.round(update.progress * 100)}%` : "…"}</span>
-              </span>
-            }
-            hint="You can keep working. We ask before restarting."
-          />
-        ) : account.desktop ? (
-          <CheckUpdates version={account.version} />
-        ) : (
-          <Row label={<UpToDate />} hint={on} />
-        )}
-      </Group>
-    </Page>
+  return update?.ready ? (
+    <Row label={<New>{update.version} is ready</New>} hint={<>You're on {on}. Channels restarts on the new one.</>}>
+      <button type="button" className="btn is-primary is-small" onClick={app.actions.installUpdate}>
+        Restart to update
+      </button>
+    </Row>
+  ) : update?.state === "available" ? (
+    <Row label={<New>{update.version} is out</New>} hint={update.blocked ? "This copy can't replace itself where it is." : <>You're on {on}.</>}>
+      <button type="button" className="btn is-primary is-small" onClick={app.actions.installUpdate}>
+        {update.blocked ? "Get it" : "Download and restart"}
+      </button>
+    </Row>
+  ) : update ? (
+    <Row
+      label={
+        <span className="set-state tone-doing">
+          <span className="set-state-dot is-doing" aria-hidden="true" />
+          Downloading {update.version}
+          <span className="set-mono">{update.progress ? ` · ${Math.round(update.progress * 100)}%` : "…"}</span>
+        </span>
+      }
+      hint="You can keep working. We ask before restarting."
+    />
+  ) : account.desktop ? (
+    <CheckUpdates version={account.version} />
+  ) : (
+    <Row label={<UpToDate />} hint={on} />
   )
 }
 
@@ -335,9 +219,7 @@ export function AboutSection() {
   return (
     <Page title="About" lede="Channels by Kiwi Init.">
       <Group>
-        <Row label="Version">
-          <span className="set-value set-mono">{account.version}</span>
-        </Row>
+        <VersionRow account={account} />
         {account.desktop ? (
           <RelayRow relay={account.relay ?? ""} />
         ) : (

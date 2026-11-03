@@ -229,9 +229,9 @@ jobs:
       - name: ui the composer keeps each room's draft and images to itself, and an image sends without a file name as text, in WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-composer-rooms.ts --dist ui/dist
-      - name: ui pause, quiet hours and muting a room, in WebKit
+      - name: ui muting a room dims it in the sidebar, in WebKit
         if: ${{ !cancelled() }}
-        run: bun scripts/ui-notification-controls.ts --dist ui/dist
+        run: bun scripts/ui-mute-room.ts --dist ui/dist
       - name: ui edit and delete your own message (toolbar, Enter, ↑, Esc, the delete confirm), in WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-edit-delete.ts --dist ui/dist
@@ -250,9 +250,6 @@ jobs:
       - name: ui top bar in Chromium moves the window only from its background
         if: ${{ !cancelled() }}
         run: bun scripts/ui-drag-regions.ts --dist ui/dist
-      - name: ui terminal in WebKit draws no browser caret down its left edge
-        if: ${{ !cancelled() }}
-        run: bun scripts/ui-term-caret.ts --dist ui/dist
       - name: ui thread in Chromium opens on the reply it was asked for, not its bottom
         if: ${{ !cancelled() }}
         run: bun scripts/ui-thread-focus.ts --dist ui/dist
@@ -294,14 +291,6 @@ jobs:
         run: for i in 1 2 3; do bun run prepare:eb && exit 0; echo "electrobun prepare failed ($i of 3)"; [ "$i" -lt 3 ] && sleep 20; done; exit 1
       - name: the kiwi CLI the app bundles
         run: mkdir -p dist && bun scripts/build-cli.ts --js dist/kiwi.js
-      - id: tmux
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: dist/tmux
-          key: tmux-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/build-tmux.sh') }}
-      - name: the tmux the app bundles, linked only to the system's own libraries
-        if: steps.tmux.outputs.cache-hit != 'true'
-        run: bash scripts/build-tmux.sh dist/tmux
       - working-directory: desktop
         env:
           DASH_RELEASE_OFFLINE: "1"
@@ -319,14 +308,6 @@ jobs:
         run: bun run build:eb
       - if: ${{ !cancelled() }}
         run: bun desktop/scripts/eb-size.ts desktop/release-eb
-      - name: the app carries its own tmux, and it runs
-        if: ${{ !cancelled() }}
-        run: |
-          into=$(mktemp -d)
-          app=$(INTO="$into" bun -e 'import { payloadOf, shippedApp } from "./desktop/scripts/eb-app.ts"; console.log(shippedApp(payloadOf("desktop/release-eb/artifacts"), process.env.INTO ?? ""))')
-          [ -x "$app/Contents/Resources/tmux" ] || { echo "the shipped app has no Contents/Resources/tmux"; exit 1; }
-          "$app/Contents/Resources/tmux" -V
-          rm -rf "$into"
       - if: ${{ !cancelled() }}
         run: bun desktop/scripts/eb-seal-check.ts
       - name: the launcher keeps BUN_*, NODE_*, DYLD_* and JSC_* out of the app
@@ -345,15 +326,6 @@ jobs:
       - name: no test driver in the release build
         if: ${{ !cancelled() }}
         run: bun desktop/scripts/eb-driver-check.ts desktop/release-eb
-      - name: notifications show while the app is in front, and a click on one shows the window
-        if: ${{ !cancelled() }}
-        run: |
-          t="$RUNNER_TEMP/KiwiNotesTest.app/Contents"
-          mkdir -p "$t/MacOS"
-          printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>CFBundleIdentifier</key><string>com.kiwiinit.channels.notes-test</string><key>CFBundleExecutable</key><string>kiwi-notes-test</string><key>CFBundlePackageType</key><string>APPL</string></dict></plist>\n' > "$t/Info.plist"
-          clang -fobjc-arc -O2 -Wall -Wextra -Werror -arch arm64 -mmacosx-version-min=12.0 -framework AppKit -framework UserNotifications -o "$t/MacOS/kiwi-notes-test" desktop/native/macos/kiwi-notes-test.m
-          codesign --force --sign - "$RUNNER_TEMP/KiwiNotesTest.app"
-          "$t/MacOS/kiwi-notes-test" "$(ls -d desktop/release-eb/build/dev-macos-*/*.app)/Contents/MacOS/libkiwi-shell.dylib"
       - name: smoke
         if: ${{ !cancelled() }}
         run: bun desktop/scripts/smoke-eb.ts desktop/release-eb/build/dev-macos-*/*.app
@@ -426,19 +398,6 @@ jobs:
         run: for i in 1 2 3; do bun run prepare:eb && exit 0; echo "electrobun prepare failed ($i of 3)"; sleep 20; done; exit 1
       - name: the kiwi CLI the app bundles
         run: mkdir -p dist && bun scripts/build-cli.ts --js dist/kiwi.js
-      - id: tmux
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: dist/tmux
-          key: tmux-${{ runner.arch }}-${{ steps.image.outputs.key }}-${{ hashFiles('scripts/build-tmux.sh') }}
-      - name: the tmux the app bundles, linked only to glibc
-        if: steps.tmux.outputs.cache-hit != 'true'
-        run: bash scripts/build-tmux.sh dist/tmux
-      - name: hosted agents and your terminal open in their folder on the bundled tmux, even once its server's folder is deleted
-        run: KIWI_TMUX="$PWD/dist/tmux" bun test test/hosted-tmux.test.ts
-      - name: Add agent, end to end, 30 times on the bundled tmux from a daemon whose folder was deleted, every start counted
-        timeout-minutes: 15
-        run: KIWI_TMUX="$PWD/dist/tmux" KIWI_STARTS=30 bun test test/start-harness.test.ts
       - working-directory: desktop
         env:
           DASH_RELEASE_OFFLINE: "1"
@@ -508,11 +467,6 @@ jobs:
         run: |
           cc -O2 -Wall -Wextra -Werror -o "$RUNNER_TEMP/kiwi-look-test" desktop/native/linux/kiwi-look-test.c $(pkg-config --cflags --libs gtk+-3.0) -ldl
           xvfb-run -a -s "-screen 0 1280x720x24" "$RUNNER_TEMP/kiwi-look-test" "$APP/bin/libkiwi-shell.so"
-      - name: notifications come from Channels over D-Bus, and a click opens the window
-        if: ${{ !cancelled() }}
-        run: |
-          cc -O2 -Wall -Wextra -Werror -o "$RUNNER_TEMP/kiwi-notify-test" desktop/native/linux/kiwi-notify-test.c $(pkg-config --cflags --libs gtk+-3.0) -ldl
-          dbus-run-session -- xvfb-run -a "$RUNNER_TEMP/kiwi-notify-test" "$APP/bin/libkiwi-shell.so"
       - name: an image pasted from another app is served to the page only right after a real Ctrl+V or Shift+Insert
         if: ${{ !cancelled() }}
         run: |

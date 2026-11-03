@@ -3,14 +3,12 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { signRequest } from "@kiwi/core/auth.ts";
-import { certUntil, nextLink, readDeviceList, rerootLink, rootLink, type DeviceLink, type DeviceLinkBody } from "@kiwi/core/devices.ts";
+import { certUntil, nextLink, readDeviceList, rootLink, type DeviceLink, type DeviceLinkBody } from "@kiwi/core/devices.ts";
 import { accountScope } from "@kiwi/core/enroll.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
 import { ASK_FRESH_MS, makeAsk, readAsk } from "@kiwi/core/machine-ask.ts";
 import { newSecret } from "@kiwi/core/mailbox.ts";
 import { certifyMachine } from "@kiwi/core/person.ts";
-import { WS_PROTOCOL } from "@kiwi/core/protocol.ts";
-import { recoveryKey, recoveryLink } from "@kiwi/core/recovery.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { devHumanAuth } from "../src/relay/human.ts";
 import { machineScope, personScope } from "../src/relay/machine.ts";
@@ -106,17 +104,6 @@ async function listMachines(id: Identity, person: string): Promise<Response> {
 }
 
 const ask = (from: Identity, m: Identity) => call(from, m, "POST", `${base(m)}/inbox`, { box: "sealed" });
-
-async function pipe(as: Identity, m: Identity, id: string): Promise<(WebSocket & { closed: Promise<number> }) | null> {
-  const path = `${base(m)}/pipe/${id}`;
-  const ws = new WebSocket(relay.replace(/^http/, "ws") + path, [WS_PROTOCOL, await signRequest(as, machineScope(m.pk), "GET", path, "")]);
-  const closed = new Promise<number>((resolve) => ws.addEventListener("close", (e) => resolve(e.code)));
-  const opened = await new Promise<boolean>((resolve) => {
-    ws.onopen = () => resolve(true);
-    ws.onerror = () => resolve(false);
-  });
-  return opened ? Object.assign(ws, { closed }) : null;
-}
 
 const errorOf = async (res: Response) => ((await res.json()) as { error: string }).error;
 
@@ -245,25 +232,6 @@ describe("the account telling its computers", () => {
     expect((await ask(p.desk, p.box)).status).toBe(202);
   });
 
-  test("a desktop revoked in the account's list loses the shells it opened, and only those", async () => {
-    const p = await people();
-    const a = account();
-    expect((await publish(a, p.desk, p.links)).status).toBe(204);
-    expect((await call(p.box, p.box, "PUT", base(p.box), { links: p.links })).status).toBe(204);
-    expect(await pipe(p.phone, p.box, "phonePipe_0123456789ab")).toBeNull();
-    const laptopApp = (await pipe(p.laptop, p.box, "laptopPipe_0123456789a"))!;
-    const laptopBox = (await pipe(p.box, p.box, "laptopPipe_0123456789a"))!;
-    const deskApp = (await pipe(p.desk, p.box, "deskPipe_0123456789abc"))!;
-    const deskBox = (await pipe(p.box, p.box, "deskPipe_0123456789abc"))!;
-    expect((await publish(a, p.desk, await grow(p.links, p.desk, { op: "revoke", device: p.laptop.pk }))).status).toBe(204);
-    expect(await laptopApp.closed).toBe(4003);
-    expect(await laptopBox.closed).toBe(1000);
-    expect(await pipe(p.laptop, p.box, "laptopAgain_0123456789")).toBeNull();
-    expect(deskApp.readyState).toBe(WebSocket.OPEN);
-    expect(deskBox.readyState).toBe(WebSocket.OPEN);
-    deskApp.close();
-  });
-
   test("a computer paired by an old person-signed cert (kp1) takes asks from approving desktops once the list names it", async () => {
     const p = await people();
     const a = account();
@@ -283,33 +251,6 @@ describe("the account telling its computers", () => {
     const again = await call(old, old, "PUT", base(old), { cert });
     expect(again.status).toBe(200);
     expect(((await again.json()) as { links: unknown[] }).links).toEqual(named);
-  });
-
-  test("a re-root moves its computers to the new person key: the old one asks and lists nothing, and the cut desktop is out", async () => {
-    const p = await people();
-    const a = account();
-    expect((await publish(a, p.desk, p.links)).status).toBe(204);
-    expect((await call(p.box, p.box, "PUT", base(p.box), { links: p.links })).status).toBe(204);
-    expect((await call(p.other, p.other, "PUT", base(p.other), { links: p.links })).status).toBe(204);
-    const paper = await recoveryKey(new Uint8Array(32).fill(31));
-    const chain = [await recoveryLink(p.person, p.person.pk, null, { pk: paper.pk, xpk: paper.xpk! }, t)];
-    const text = JSON.stringify({ recovery: chain });
-    const auth = await signRequest(p.desk, accountScope(a.user), "PUT", "/v1/account/vault", text);
-    const kept = await fetch(`${relay}/v1/account/vault`, { method: "PUT", headers: { "x-human-token": a.token, authorization: `Bearer ${auth}`, "content-type": "application/json" }, body: text });
-    expect(kept.status).toBe(204);
-    const list = await readDeviceList(p.links);
-    if (!list.ok) throw new Error(list.why);
-    const next = await key("next");
-    expect((await publish(a, next, [...p.links, await rerootLink(list.list, paper, chain, next, [p.desk.pk, p.box.pk], t)])).status).toBe(204);
-
-    expect((await ask(p.person, p.box)).status).toBe(403);
-    expect((await ask(p.laptop, p.box)).status).toBe(403);
-    expect((await ask(next, p.box)).status).toBe(202);
-    expect((await ask(p.desk, p.box)).status).toBe(202);
-    expect((await listMachines(p.person, p.person.pk)).status).toBe(403);
-    const listed = await listMachines(next, p.person.pk);
-    expect(listed.status).toBe(200);
-    expect(((await listed.json()) as { machines: { key: string }[] }).machines.map((m) => m.key)).toEqual([p.box.pk]);
   });
 
   test("another person's list naming a cert-paired computer gives their devices nothing", async () => {
@@ -345,7 +286,7 @@ describe("an ask signed by a device", () => {
     const list = read.list;
     const claimed = new Set<string>();
     const claim = (id: string) => !claimed.has(id) && !!claimed.add(id);
-    const from = async (signer: Identity) => (await makeAsk(signer, { pk: p.box.pk, xpk: p.box.xpk! }, { verb: "harnesses", args: {}, reply: newSecret() }, 1_000)).box;
+    const from = async (signer: Identity) => (await makeAsk(signer, { pk: p.box.pk, xpk: p.box.xpk! }, { verb: "settings", args: {}, reply: newSecret() }, 1_000)).box;
     expect((await readAsk(p.box, await from(p.laptop), { person: p.person.pk, list, now: 1_000, claim })).ok).toBe(true);
     expect((await readAsk(p.box, await from(p.person), { person: p.person.pk, list, now: 1_000, claim })).ok).toBe(true);
     expect(await readAsk(p.box, await from(p.laptop), { person: p.person.pk, now: 1_000, claim })).toEqual({ ok: false, why: "not-yours" });
@@ -356,7 +297,7 @@ describe("an ask signed by a device", () => {
     if (!later.ok) throw new Error(later.why);
     expect(await readAsk(p.box, await from(p.laptop), { person: p.person.pk, list: later.list, now: 1_000, claim })).toEqual({ ok: false, why: "not-yours" });
     const expired = certUntil(Date.now()) + 1;
-    const old = (await makeAsk(p.laptop, { pk: p.box.pk, xpk: p.box.xpk! }, { verb: "harnesses", args: {}, reply: newSecret() }, expired)).box;
+    const old = (await makeAsk(p.laptop, { pk: p.box.pk, xpk: p.box.xpk! }, { verb: "settings", args: {}, reply: newSecret() }, expired)).box;
     expect(await readAsk(p.box, old, { person: p.person.pk, list, now: expired + ASK_FRESH_MS - 1, claim })).toEqual({ ok: false, why: "not-yours" });
   });
 });

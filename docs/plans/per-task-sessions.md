@@ -135,7 +135,7 @@ otherwise still clear a loop's session past the context line (`src/hooks/rotate.
 
 ## How this meets the other plans
 
-- **[new-agent.md](new-agent.md):** its principle and decision 1 say Kiwi "never starts one on its
+- **new-agent.md (removed with New agent, #1525):** its principle and decision 1 say Kiwi "never starts one on its
   own: not to wake, not to restart, not to rotate", and its Not doing list rules out "restarting or
   resuming an agent's session". A per-task loop in a window the owner made is the owner's launch, but
   it does start a process per task, so decision 1 here changes that rule. Its recipe table (item 3)

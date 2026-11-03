@@ -88,7 +88,6 @@ export class ChannelLink {
   deny = (...a: Args<"deny">) => this.c("deny", ...a);
   remove = (...a: Args<"remove">) => this.c("remove", ...a);
   cutDevices = (...a: Args<"cutDevices">) => this.c("cutDevices", ...a);
-  reprove = (...a: Args<"reprove">) => this.c("reprove", ...a);
   goneDevices = (...a: Args<"goneDevices">) => this.c("goneDevices", ...a);
   tendDelegations = (...a: Args<"tendDelegations">) => this.c("tendDelegations", ...a);
   dropDelegates = (...a: Args<"dropDelegates">) => this.c("dropDelegates", ...a);
@@ -126,8 +125,7 @@ export class ChannelLink {
   syncMarks = (...a: Args<"syncMarks">) => this.c("syncMarks", ...a);
   changeRoom = (...a: Args<"changeRoom">) => this.c("changeRoom", ...a);
   leaveRoom = (...a: Args<"leaveRoom">) => this.c("leaveRoom", ...a);
-  sealOutLeavers = (...a: Args<"sealOutLeavers">) => this.c("sealOutLeavers", ...a);
-  pruneRooms = (...a: Args<"pruneRooms">) => this.c("pruneRooms", ...a);
+  sentRooms = (...a: Args<"sentRooms">) => this.c("sentRooms", ...a);
   setRepos = (...a: Args<"setRepos">) => this.c("setRepos", ...a);
   icon = () => this.c("icon");
   setIcon = (...a: Args<"setIcon">) => this.c("setIcon", ...a);

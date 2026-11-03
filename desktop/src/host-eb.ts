@@ -10,9 +10,7 @@ import type { Host } from "./host.ts";
 import type { HostToKeys } from "./keys-server.ts";
 import { readDropped } from "./dropped.ts";
 import { followTheme } from "./frost-eb.ts";
-import { handleDeepLink } from "./deep-links.ts";
-import { droppedPaths, onNoteClick, pastedPng, showBadge, showNote, wallpaperImage, wallpaperPixels } from "./native-eb.ts";
-import { noteLinks } from "./note-links.ts";
+import { droppedPaths, pastedPng, showBadge, wallpaperImage, wallpaperPixels } from "./native-eb.ts";
 import { freePath } from "./save-file.ts";
 import { relaunchAfter } from "./update-asset.ts";
 import { applyUpdate } from "./updater.ts";
@@ -48,15 +46,8 @@ let shown: Shown | null = null;
 
 let keysTell: (m: HostToKeys) => void = () => {};
 
-const notes = noteLinks();
-
 export function attachWindow(next: Shown): void {
   shown = next;
-  onNoteClick(next.win.ptr, (tag) => {
-    ebHost.showWindow();
-    const link = notes.link(tag);
-    if (link) handleDeepLink(link);
-  });
 }
 
 export function attachKeys(tell: (m: HostToKeys) => void): void {
@@ -79,10 +70,6 @@ export const ebHost: Host = {
   openExternal: async (url) => {
     if (!Utils.openExternal(url)) throw new Error("the system browser didn't open the link");
   },
-  pickFolder: async () => {
-    const picked = await Utils.openFileDialog({ canChooseFiles: false, canChooseDirectory: true, allowsMultipleSelection: false });
-    return picked.find((p) => p.length > 0) ?? null;
-  },
   droppedFiles: () => readDropped(droppedPaths()),
   pastedImage: async () => {
     const png = pastedPng(MAX_PASTED_BYTES);
@@ -103,7 +90,6 @@ export const ebHost: Host = {
     else if (win.isMaximized()) win.unmaximize();
     else win.maximize();
   },
-  notify: (title, body, link) => void showNote(title, body, notes.tag(link)),
   showWindow: () => {
     if (!shown) return;
     if (shown.win.isMinimized()) shown.win.unminimize();

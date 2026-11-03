@@ -1,15 +1,12 @@
 import type { PlacedSeat, ShowResult } from "@kiwi/core/terminals.ts";
 import { loadConfig, type Config, type SeatRecord } from "../config.ts";
 import { loginShell } from "../launch/shell.ts";
-import { attachArgv, attachLine, hostedTmuxBin, showHosted, type TerminalOpener } from "./hosted.ts";
 import type { PlaceTools, SeatPlace, TerminalId, TerminalManifest, TerminalPlugin } from "./plugin.ts";
 import { placeFrom, rexBinary } from "./rex/locate.ts";
 import { rexManifest } from "./rex/manifest.ts";
 import { takesStatus } from "./shared/osc7501.ts";
-import { onHostedSocket } from "./shared/tmux.ts";
 import { tmuxPlaceFrom } from "./tmux/locate.ts";
 import { tmuxManifest } from "./tmux/manifest.ts";
-import { hostedSeats } from "./tmux/seats.ts";
 
 export const MANIFESTS: readonly TerminalManifest[] = [rexManifest, tmuxManifest];
 
@@ -42,18 +39,6 @@ export function switchHelpers(terminals: NonNullable<Config["terminals"]>, id: T
   return { ...terminals, helpers: { ...terminals.helpers, [id]: on ? "on" : "off" } };
 }
 
-export function launchesOn(cfg: Pick<Config, "launch">): boolean {
-  return cfg.launch !== "off";
-}
-
-export function remoteBypassOn(cfg: Pick<Config, "remoteBypass">): boolean {
-  return cfg.remoteBypass === "on";
-}
-
-export function shellsOn(cfg: Pick<Config, "shells">): boolean {
-  return cfg.shells !== "off";
-}
-
 interface Plugins {
   manifests: readonly TerminalManifest[];
   load(id: TerminalId): Promise<TerminalPlugin>;
@@ -72,24 +57,11 @@ function showing(from: Plugins, on: (id: TerminalId) => boolean): Promise<Termin
   return Promise.all(ids.map((id) => from.load(id)));
 }
 
-export async function seatPlaces(cfg: Config = loadConfig(), from: Plugins = BUILT_IN, tmux?: string): Promise<PlacedSeat[]> {
-  const listed = hostedSeats(cfg);
-  const bin = listed.length ? (tmux ?? (await hostedTmuxBin())) : "tmux";
-  const hosted = listed.map((seat): PlacedSeat => ({ place: "hosted", ...seat, attach: attachLine(attachArgv(bin, seat)) }));
-  return [...hosted, ...(await showing(from, (id) => helpersOn(id, cfg))).flatMap((plugin) => plugin.seats?.(cfg) ?? [])];
+export async function seatPlaces(cfg: Config = loadConfig(), from: Plugins = BUILT_IN): Promise<PlacedSeat[]> {
+  return (await showing(from, (id) => helpersOn(id, cfg))).flatMap((plugin) => plugin.seats?.(cfg) ?? []);
 }
 
-export interface HostedShow {
-  tmux: string;
-  opener: TerminalOpener;
-}
-
-export async function showSeat(seat: PlacedSeat, cfg: Config = loadConfig(), from: Plugins = BUILT_IN, hosted?: HostedShow): Promise<ShowResult> {
-  if (seat.place === "hosted") {
-    const mine = hostedSeats(cfg).find((s) => s.socket === seat.socket && s.pane === seat.pane);
-    if (!mine) return { ok: false, why: "failed" };
-    return showHosted(mine, hosted?.tmux ?? (await hostedTmuxBin()), hosted?.opener);
-  }
+export async function showSeat(seat: PlacedSeat, cfg: Config = loadConfig(), from: Plugins = BUILT_IN): Promise<ShowResult> {
   for (const plugin of await showing(from, () => true)) {
     const mine = plugin.seats?.(cfg).find((s) => samePlace(s, seat));
     if (mine && plugin.show) return plugin.show(placeOf(mine));
@@ -102,11 +74,11 @@ export function marking(cfg: Pick<Config, "terminals">): TerminalId[] {
 }
 
 export function markerOf(record: SeatRecord, on: readonly TerminalId[]): TerminalId | null {
-  if (record.tmux) return !onHostedSocket(record.tmux.socket) && on.includes("tmux") ? "tmux" : null;
+  if (record.tmux) return on.includes("tmux") ? "tmux" : null;
   return takesStatus(record.term) && on.includes("rex") ? "rex" : null;
 }
 
 export function showsIn(record: SeatPlace, cfg: Pick<Config, "terminals">): TerminalId | null {
-  if (record.tmux) return !onHostedSocket(record.tmux.socket) && helpersOn("tmux", cfg) ? "tmux" : null;
+  if (record.tmux) return helpersOn("tmux", cfg) ? "tmux" : null;
   return record.rex && helpersOn("rex", cfg) ? "rex" : null;
 }

@@ -8,9 +8,8 @@ import { memberLoad, showsLoad } from "@kiwi/core/load.ts"
 import { checksOf, FAILED, prLinks, taskOfBranch, taskPr } from "@kiwi/core/prs.ts"
 import { stageOf } from "@kiwi/core/stage.ts"
 import { editable, GENERAL_ROOM, ignored, isQuiet, isRasterMime, isOverlay, type Message as Wire } from "@kiwi/core/protocol.ts"
-import { rootOf } from "@kiwi/core/room-rules.ts"
+import { rootOf, sentTo } from "@kiwi/core/room-rules.ts"
 import { dmOther } from "~/live/dm"
-import { leftRoom } from "~/live/leaving"
 import { pickFor, taskCandidates } from "@kiwi/core/routing.ts"
 import { canPost } from "@kiwi/core/scopes.ts"
 import { versionName } from "@kiwi/core/status.ts"
@@ -188,8 +187,6 @@ function personOf(state: ChannelState, m: StateMember, record: RosterMember | un
     ...(human && m.addsAgents ? { addsAgents: true } : {}),
     ...(human && m.answersDecisions ? { answersDecisions: true } : {}),
     ...(human && m.managesAgents ? { managesAgents: true } : {}),
-    ...(m.ops ? { ops: m.ops } : {}),
-    ...(here?.ops ? { opsLive: here.ops } : {}),
     lastSeen: here?.at ?? m.lastSeen,
     joined: m.joined,
     messages: m.messages,
@@ -226,7 +223,7 @@ export function roomsOf(state: ChannelState, messages: readonly Wire[], me: stri
     unread.set(id, (unread.get(id) ?? 0) + 1)
     if (mentionsYou(m, me)) mentions.set(id, (mentions.get(id) ?? 0) + 1)
   }
-  const rooms = [...state.rooms.values()].filter((r) => !r.dm && !leftRoom(state, r.id, me))
+  const rooms = [...state.rooms.values()].filter((r) => !r.dm && sentTo(r, me, state.members))
   const list = rooms.some((r) => r.id === GENERAL_ROOM) ? rooms : [{ id: GENERAL_ROOM, name: GENERAL_ROOM }, ...rooms]
   return list.map((r) => ({
     id: r.id,
@@ -241,7 +238,7 @@ export function roomsOf(state: ChannelState, messages: readonly Wire[], me: stri
 export function directsOf(state: ChannelState, messages: readonly Wire[], seat: string, seen: Seen): Direct[] {
   const me = rootOf(seat, state.members)
   const at = new Map<string, number>()
-  const locked = new Set<string>()
+  const membersOnly = new Set<string>()
   const unread = new Map<string, number>()
   const marks = new Map<string, number>()
   for (const m of messages) {
@@ -259,7 +256,7 @@ export function directsOf(state: ChannelState, messages: readonly Wire[], seat: 
     const key = placeKey(dmPlace(me, other))
     at.set(other, Math.max(at.get(other) ?? 0, m.ts))
     marks.set(other, seen[key] ?? 0)
-    locked.add(other)
+    membersOnly.add(other)
     if (rootOf(m.from, state.members) !== me && m.kind !== "event" && m.seq > (seen[key] ?? 0)) unread.set(other, (unread.get(other) ?? 0) + 1)
   }
   for (const s of state.places.values()) {
@@ -268,7 +265,7 @@ export function directsOf(state: ChannelState, messages: readonly Wire[], seat: 
     if (!at.has(other)) at.set(other, 0)
   }
   return [...at]
-    .map(([name, last]) => ({ with: name, unread: unread.get(name) ?? 0, last, seen: marks.get(name) ?? 0, ...(locked.has(name) ? { locked: true as const } : {}) }))
+    .map(([name, last]) => ({ with: name, unread: unread.get(name) ?? 0, last, seen: marks.get(name) ?? 0, ...(membersOnly.has(name) ? { membersOnly: true as const } : {}) }))
     .sort((a, b) => b.last - a.last)
 }
 
@@ -496,7 +493,7 @@ export function messagesOf(state: ChannelState, messages: readonly Wire[], me: s
       text,
       where,
       ...(m.to?.length ? { to: m.to } : {}),
-      ...(state.rooms.get(roomOfMessage(state, m))?.dm ? { locked: true as const } : {}),
+      ...(state.rooms.get(roomOfMessage(state, m))?.dm ? { membersOnly: true as const } : {}),
       ...(gone ? { deleted: true as const } : changed ? { edited: changed.at } : {}),
       ...(!gone && editable(m) && sameAuthor(state.members.get(m.from), state.members.get(me)) ? { canChange: true as const } : {}),
       ...(said ? { said } : {}),

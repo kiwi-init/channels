@@ -245,7 +245,7 @@ describe("kiwi login enrolls a computer (T637)", () => {
     expect(run.lines.at(-1)).toContain("is one of Jow's devices now");
   });
 
-  test("the app holding the person key certifies it too, so the app can start agents there", async () => {
+  test("the app holding the person key certifies it too, so its agents get in on their own", async () => {
     freshMachine();
     const user = `cli${++users}`;
     const person = await withExchangeKey(await generateIdentity("Jow"));
@@ -259,7 +259,7 @@ describe("kiwi login enrolls a computer (T637)", () => {
     expect(m.cert).toMatchObject({ machine: m.identity.pk, pk: person.pk, label: m.label });
     expect(m.person?.pk).toBe(person.pk);
     expect(app.computers).toEqual([expect.objectContaining({ machinePk: m.identity.pk, personPk: person.pk, label: m.label })]);
-    expect(run.lines.at(-1)).toContain("your app can start agents here");
+    expect(run.lines.at(-1)).toContain("its agents join your channels on their own");
   });
 
   test("its agents join the person's channels on their own, from this computer", async () => {

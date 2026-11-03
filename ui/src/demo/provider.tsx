@@ -5,30 +5,15 @@ import type { Personality } from "@kiwi/core/personality.ts"
 import { HANDOFF_DONE } from "@kiwi/core/protocol.ts"
 
 import { stepReplyText } from "~/chat/step"
-import {
-  DEMO_ACCOUNT,
-  DEMO_CHANNEL,
-  DEMO_DEVICES,
-  DEMO_EMPTY,
-  DEMO_GUEST,
-  DEMO_GUEST_MEMBER,
-  DEMO_LAUNCHED,
-  DEMO_PREFS,
-  DEMO_REROOT,
-  DEMO_TILES,
-  DEMO_WAITING,
-  DEMO_WELCOME,
-  DEMO_WORDS,
-} from "~/demo/data"
+import { DEMO_ACCOUNT, DEMO_CHANNEL, DEMO_DEVICES, DEMO_EMPTY, DEMO_GUEST, DEMO_GUEST_MEMBER, DEMO_LAUNCHED, DEMO_PREFS, DEMO_TILES, DEMO_WAITING } from "~/demo/data"
 import { longFeed } from "~/demo/long"
 import { demoAround, demoFetchOlder, demoOlder } from "~/demo/older"
 import { withSpecs } from "~/demo/specs"
-import { demoRemoteShells, demoShell, demoShells, demoTerm } from "~/demo/term"
 import { homeOf } from "~/home"
-import type { Account, Actions, AgentStarts, App, Enrolling, Finding, GithubSignIn, Launching, ThisComputer, Channel, ChannelTile, GoneChannel, Message, Prefs, Spec, Task } from "~/model"
+import type { Account, Actions, AgentStarts, App, Enrolling, Finding, GithubSignIn, ThisComputer, Channel, ChannelTile, GoneChannel, Message, Prefs, Spec, Task } from "~/model"
 import { deletedTheme, savedTheme } from "~/theme/themes"
 import { announce } from "~/kit/toasts"
-import { muteKey, snoozeEnd } from "~/live/snooze"
+import { muteKey } from "~/live/mute"
 
 const unticked = (text: string): string => text.replace(/^(\s*[-*+]\s+)\[[xX]\]/gm, "$1[ ]").trim()
 
@@ -73,9 +58,6 @@ const FINDINGS: Finding[] = [
 ]
 
 const STARTS: AgentStarts = {
-  folders: ["~/www/channels", "~/www/landing"],
-  launch: true,
-  bypass: false,
   terminals: [
     { id: "rex", name: "Rex", found: true, running: true, helpers: "on" },
     { id: "tmux", name: "tmux", found: true, running: false, helpers: "off" },
@@ -263,15 +245,10 @@ export type Scenario =
   | "devices"
   | "enroll-desktop"
   | "enroll-desktop-digits"
-  | "recover-desktop"
-  | "recover-desktop-welcome"
   | "enroll-desktop-check"
   | "devices-forgotten"
   | "forgot-here"
   | "link-stuck"
-  | "recovery-set"
-  | "recovery-let-go"
-  | "recovery-pending"
   | "github-sign-in"
   | "github-code"
   | "github-signed-in"
@@ -365,19 +342,7 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
       prefs,
       seq: 1000,
     }
-  if (scenario === "devices") return { account: { ...DEMO_ACCOUNT, devices: DEMO_DEVICES, recovery: { at: null, here: true } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
-  if (scenario === "recovery-pending")
-    return {
-      account: { ...DEMO_ACCOUNT, devices: DEMO_DEVICES, recovery: { at: Date.now() - 30 * 86_400_000, here: true, pending: { from: Date.now() + 5 * 86_400_000, by: "studio" } } },
-      tiles: DEMO_TILES,
-      channels,
-      prefs,
-      seq: 1000,
-    }
-  if (scenario === "recovery-let-go")
-    return { account: { ...DEMO_ACCOUNT, devices: DEMO_DEVICES, recovery: { at: Date.now() - 3 * 86_400_000, here: false } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
-  if (scenario === "recovery-set")
-    return { account: { ...DEMO_ACCOUNT, devices: DEMO_DEVICES, recovery: { at: Date.now() - 3 * 86_400_000, here: true } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
+  if (scenario === "devices") return { account: { ...DEMO_ACCOUNT, devices: DEMO_DEVICES }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
   if (scenario === "devices-forgotten")
     return {
       account: { ...DEMO_ACCOUNT, devices: DEMO_DEVICES.filter((d) => d.id !== "dev-air"), forgotten: [{ label: "Jow's MacBook Air", by: "iPhone", at: Date.now() - 2 * 3_600_000 }] },
@@ -389,8 +354,6 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
   if (scenario === "forgot-here") return { account: { ...DEMO_ACCOUNT, forgotHere: { by: "Jow's MacBook Air" } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
   if (scenario === "enroll-desktop") return { account: null, tiles: [], channels: new Map(), prefs, seq: 1000, enrolling: { stage: "asking" } }
   if (scenario === "enroll-desktop-digits") return { account: null, tiles: [], channels: new Map(), prefs, seq: 1000, enrolling: { stage: "digits", digits: "482915" } }
-  if (scenario === "recover-desktop") return { account: null, tiles: [], channels: new Map(), prefs, seq: 1000, enrolling: { stage: "recover" } }
-  if (scenario === "recover-desktop-welcome") return { account: null, tiles: [], channels: new Map(), prefs, seq: 1000, enrolling: DEMO_WELCOME }
   if (scenario === "enroll-desktop-check")
     return { account: null, tiles: [], channels: new Map(), prefs, seq: 1000, enrolling: { stage: "check", person: { name: "Jow", fingerprint: "3f9a 0c41 77e2 b8d5 1a06" } } }
   if (scenario === "signed-out") return { account: null, tiles: [], channels: new Map(), prefs, seq: 1000 }
@@ -690,57 +653,6 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       setNickname: (code, name, nickname) => edit(code, (c) => ({ ...c, people: c.people.map((p) => (p.name === name ? { ...p, display: nickname?.trim() || undefined } : p)) })),
       setPowers: (code, name, powers) => edit(code, (c) => ({ ...c, people: c.people.map((p) => (p.name === name ? { ...p, ...powers } : p)) })),
       showAgent: async () => null,
-      openTerm: (_code, _name, cols, rows, watch) => demoTerm(cols, rows, watch),
-      openMyTerm: (_code, want, cols, rows, watch, machine) => demoShell(want, cols, rows, watch, machine),
-      myTerms: async () => demoShells(),
-      closeMyTerm: async (pane) => demoShells(pane),
-      remoteTerms: async (machine) => demoRemoteShells(machine),
-      closeRemoteTerm: async (machine, pane) => demoRemoteShells(machine, pane),
-      choicesOn: async (_code, computer) =>
-        computer === "mbp"
-          ? { folders: ["~/www/channels", "~/www/landing"] }
-          : {
-              harnesses: [
-                { id: "codex", label: "Codex", installed: true },
-                { id: "claude", label: "Claude Code", installed: false, why: "not installed" },
-              ],
-              folders: ["~/src/channels"],
-            },
-      chooseFolder: async () => "~/www/picked",
-      addAgent: (code, a, seen) => {
-        let following = true
-        const tell = (s: Launching) => following && seen(s)
-        window.setTimeout(() => tell({ stage: "started" }), 800)
-        window.setTimeout(() => tell({ stage: "asked", name: a.name }), 1600)
-        window.setTimeout(() => {
-          tell({ stage: "joined", name: a.name })
-          edit(code, (c) => ({
-            ...c,
-            people: [
-              ...c.people,
-              {
-                name: a.name,
-                kind: "agent",
-                owner: false,
-                you: false,
-                presence: "online",
-                harness: a.harness,
-                runs: HARNESSES.find((h) => h.id === a.harness)?.label,
-                machine: DEMO_ACCOUNT.computers.find((m) => m.id === a.computer)?.label ?? a.computer,
-                persona: PERSONAS.find((p) => p.id === a.persona)?.label ?? a.persona,
-                role: a.role,
-                sponsor: c.you,
-                lastSeen: Date.now(),
-                joined: Date.now(),
-                messages: 0,
-              },
-            ],
-          }))
-        }, 2400)
-        return () => {
-          following = false
-        }
-      },
       addRoom: (code, name, members) => {
         edit(code, (c) => ({ ...c, rooms: [...c.rooms, { id: name, name, unread: 0, mentions: 0, ...(members?.length ? { members: ["jow", ...members] } : {}) }] }))
         return Promise.resolve(name)
@@ -823,7 +735,6 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
             ),
           }))
       },
-      snooze: (until) => setState((s) => ({ ...s, prefs: { ...s.prefs, snoozeUntil: until ? snoozeEnd(until, Date.now()) : null } })),
       forgetComputer: (id) => setState((s) => (s.account ? { ...s, account: { ...s.account, computers: s.account.computers.filter((c) => c.id !== id) } } : s)),
       linkGithub: () => setState((s) => (s.account ? { ...s, account: { ...s.account, github: { login: "ojowwalker77" } } } : s)),
       unlinkGithub: () => setState((s) => (s.account ? { ...s, account: { ...s.account, github: undefined } } : s)),
@@ -846,18 +757,6 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       forgetDevice: (ids) => setState((s) => (s.account ? { ...s, account: { ...s.account, devices: s.account.devices?.filter((d) => !ids.includes(d.id)) } } : s)),
       renewDevice: (...ids) =>
         setState((s) => (s.account ? { ...s, account: { ...s.account, devices: s.account.devices?.map((d) => (ids.includes(d.id) ? { ...d, until: Date.now() + 90 * 86_400_000 } : d)) } } : s)),
-      recoveryWords: async () => DEMO_WORDS,
-      recoverySave: async (typed) => {
-        const wrong = typed.filter((t) => t.word.trim().toLowerCase() !== DEMO_WORDS[t.at]).map((t) => t.at)
-        if (wrong.length) return { ok: false, wrong }
-        setState((s) => (s.account ? { ...s, account: { ...s.account, recovery: { at: Date.now(), here: true } } } : s))
-        return { ok: true }
-      },
-      recoveryDrop: () => {},
-      recoveryCancel: async () => {
-        setState((s) => (s.account?.recovery ? { ...s, account: { ...s.account, recovery: { at: s.account.recovery.at, here: s.account.recovery.here } } } : s))
-        return null
-      },
       signInWithGithub: () => {
         setState((s) => ({ ...s, signIn: { stage: "sign-in", code: { code: "8F3A-29KD", url: "https://github.com/login/device" }, problem: null } }))
         setTimeout(() => setState((s) => (s.signIn ? { ...s, signIn: s.account ? null : { stage: "signed-in", login: "ojowwalker77" } } : s)), 1500)
@@ -868,28 +767,9 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       },
       enrollKeep: () => setState((s) => ({ ...s, enrolling: null })),
       enrollCancel: () => setState((s) => ({ ...s, enrolling: null })),
-      rerootOpen: async (words) => {
-        const n = words.split(/[^a-z]+/i).filter(Boolean).length
-        if (n !== 24) return { ok: false, trouble: { why: `a recovery key is 24 words, and that's ${n}` } }
-        return DEMO_REROOT
-      },
-      rerootFinish: async () => true,
-      rerootCancel: () => {},
-      recoverBegin: () => setState((s) => ({ ...s, enrolling: { stage: "recover" } })),
-      recoverOpen: async (words) => {
-        const n = words.split(/[^a-z]+/i).filter(Boolean).length
-        if (n !== 24) return { why: `a recovery key is 24 words, and that's ${n}` }
-        setState((s) => ({ ...s, enrolling: DEMO_WELCOME }))
-        return null
-      },
-      recoverFinish: async () => setState((s) => ({ ...s, enrolling: null })),
       enrollDeny: () => setState((s) => (s.account ? { ...s, account: { ...s.account, enrollAsk: undefined } } : s)),
       saveTheme: (theme) => setState((s) => ({ ...s, prefs: { ...s.prefs, ...savedTheme(s.prefs, theme) } })),
       deleteTheme: (id) => setState((s) => ({ ...s, prefs: { ...s.prefs, ...deletedTheme(s.prefs, id) } })),
-      addStartFolder: () => setStarts((s) => (s.folders.includes("~/code/kiwi") ? s : { ...s, folders: [...s.folders, "~/code/kiwi"] })),
-      removeStartFolder: (dir) => setStarts((s) => ({ ...s, folders: s.folders.filter((f) => f !== dir) })),
-      allowNewAgents: (on) => setStarts((s) => ({ ...s, launch: on })),
-      allowRemoteBypass: (on) => setStarts((s) => ({ ...s, bypass: on })),
       savePersonalities: setOwnPersonalities,
       setHooks: (harness, on) => setComputer((c) => ({ ...c, hooks: c.hooks.map((h) => (h.harness === harness ? { ...h, state: on ? "installed" : "off" } : h)) })),
       setTerminalHelpers: (id, on) => setStarts((s) => ({ ...s, terminals: s.terminals.map((t) => (t.id === id ? { ...t, helpers: on ? "on" : "off" } : t)) })),

@@ -73,10 +73,6 @@ export interface Config {
   wakeHooks?: Record<string, WakeHook>;
   contextLine?: "on" | "off";
   rex?: "on" | "off";
-  launch?: "on" | "off";
-  launchRoots?: string[];
-  remoteBypass?: "on" | "off";
-  shells?: "on" | "off";
   terminals?: Terminals;
 }
 

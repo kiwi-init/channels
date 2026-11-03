@@ -10,11 +10,10 @@ import { showNeedsYou } from "../src/status.ts";
 import type { ShowResult, StatusRecord, TerminalId } from "../src/terminals/plugin.ts";
 import { locate, markerOf, marking, showsIn, terminalPlugin } from "../src/terminals/registry.ts";
 import { daemonHello, daemonSock, stopDaemon } from "../src/daemon.ts";
-import { hostedSocket } from "../src/daemon/hosted-tmux.ts";
 import { downloadTmuxHelpers, kiwiConf, kiwiConfPath, MARK_FORMAT, removeTmuxHelpers, sourceLine, tmuxConfigPath, tmuxConfigs } from "../src/terminals/tmux/helpers.ts";
 import { tmuxPlaceFrom } from "../src/terminals/tmux/locate.ts";
 import { markText, tmuxMarker } from "../src/terminals/tmux/mark.ts";
-import { hostedSeats, tmuxSeats } from "../src/terminals/tmux/seats.ts";
+import { tmuxSeats } from "../src/terminals/tmux/seats.ts";
 import { showPane } from "../src/terminals/tmux/show.ts";
 
 setDefaultTimeout(20_000);
@@ -116,12 +115,6 @@ describe("the mark tmux shows", () => {
     expect(markerOf(inRex, ["rex", "tmux"])).toBe("rex");
     expect(markerOf(inRex, ["tmux"])).toBeNull();
     expect(markerOf(elsewhere, ["rex", "tmux"])).toBeNull();
-  });
-
-  test("Channels' own tmux is never marked or shown by the tmux helpers: its seats open in the app", () => {
-    const hosted: SeatRecord = { alias: "ch", as: "ana", tmux: { socket: hostedSocket(temp("kiwi-hosted-")), pane: "%1" } };
-    expect(markerOf(hosted, ["rex", "tmux"])).toBeNull();
-    expect(showsIn(hosted, { terminals: { helpers: { tmux: "on" } } })).toBeNull();
   });
 });
 
@@ -536,20 +529,4 @@ test("Show in tmux lists this computer's seats with a tmux pane, once each, matc
   } as never;
   expect(tmuxSeats(cfg)).toEqual([{ alias: "ch", agent: "ana", room: "room-1", ...pane }]);
   expect((await terminalPlugin("tmux")).seats?.(cfg)).toEqual([{ place: "tmux", alias: "ch", agent: "ana", room: "room-1", ...pane }]);
-});
-
-test("Channels lists the seats in its own tmux, once each, matched to their channel, and none from the person's tmux", () => {
-  const hostedPane = { socket: hostedSocket(temp("kiwi-hosted-")), pane: "%3" };
-  const cfg: Config = {
-    channels: { ch: { roomId: "room-1", ownerPk: "o", ownerXpk: "x", epoch: 0, keys: {}, relay: "r", code: "c" } },
-    bindings: {
-      "/work": [
-        { alias: "ch", as: "ana", tmux: hostedPane },
-        { alias: "ch", as: "bo", tmux: { socket: SOCKET, pane: "%4" } },
-      ],
-      "/other": [{ alias: "ch", as: "ana", tmux: hostedPane }],
-    },
-  };
-  expect(hostedSeats(cfg)).toEqual([{ alias: "ch", agent: "ana", room: "room-1", ...hostedPane }]);
-  expect(tmuxSeats(cfg)).toEqual([{ alias: "ch", agent: "bo", room: "room-1", socket: SOCKET, pane: "%4" }]);
 });

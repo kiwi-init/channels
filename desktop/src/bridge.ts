@@ -5,14 +5,13 @@
 import type { FoldInputs, IndexHit, Searched } from "./search-types.ts";
 import type { ComputerSettings } from "@kiwi/core/computer-settings.ts";
 import type { DeviceLink } from "@kiwi/core/devices.ts";
-import type { HarnessRow, HookHarness, HookRow, KnownHarness } from "@kiwi/core/harnesses.ts";
-import type { LaunchChoices } from "@kiwi/core/launch-options.ts";
+import type { HarnessRow, HookHarness, HookRow } from "@kiwi/core/harnesses.ts";
 import type { WakeSeat } from "@kiwi/core/wake.ts";
 import type { Personality } from "@kiwi/core/personality.ts";
 import type { CachedKept, CachedRow, Unread } from "@kiwi/core/cache-row.ts";
 import type { Channel, OpenKind, PresenceFields } from "@kiwi/core/client.ts";
 import type { DeviceKeep, MemberPicture, Message, Presence, ReadMark } from "@kiwi/core/protocol.ts";
-import type { LaunchedView, PlacedSeat, ShowResult, TerminalId, TerminalsStatus } from "@kiwi/core/terminals.ts";
+import type { PlacedSeat, ShowResult, TerminalId, TerminalsStatus } from "@kiwi/core/terminals.ts";
 import type { TextStep } from "./text-size.ts";
 import type { Wire } from "./wire.ts";
 
@@ -89,7 +88,6 @@ export const CHANNEL_CALLS = [
   "deny",
   "remove",
   "cutDevices",
-  "reprove",
   "goneDevices",
   "tendDelegations",
   "dropDelegates",
@@ -126,9 +124,8 @@ export const CHANNEL_CALLS = [
   "makeDm",
   "syncMarks",
   "leaveRoom",
-  "sealOutLeavers",
+  "sentRooms",
   "changeRoom",
-  "pruneRooms",
   "icon",
   "setIcon",
   "close",
@@ -309,44 +306,9 @@ export interface DeviceNewsView {
   removed: { wiped: boolean; by: string } | null;
 }
 
-interface SeatProofView {
-  device: string;
-  vouch: string;
-}
-
 export interface KeepView {
   links: DeviceLink[];
   keep: DeviceKeep;
-}
-
-export interface RecoveryView {
-  at: number | null;
-  here: boolean;
-  pending?: { from: number; by: string };
-}
-
-export type RecoveryCancelView = { ok: true } | { ok: false; why: string; word?: number };
-
-export type RecoverySaveView = { ok: true; at: number; from?: number } | { ok: false; wrong: number[] };
-
-export type RecoverOpenView =
-  | { ok: true; name: string; devices: (Pick<DeviceView, "id" | "label" | "os" | "as"> & { lost: boolean })[]; channels: string[] }
-  | { ok: false; why: string; word?: number };
-
-export interface RecoverDoneView {
-  name: string;
-  channels: number;
-  forgot: number;
-}
-
-export type RerootOpenView =
-  | { ok: true; name: string; devices: (Pick<DeviceView, "id" | "label" | "os" | "as"> & { here: boolean })[]; channels: string[] }
-  | { ok: false; why: string; word?: number };
-
-export interface RerootDoneView {
-  kept: number;
-  dropped: number;
-  channels: number;
 }
 
 export type EnrollConfirmView = { ok: true; label: string } | { ok: false; left: number };
@@ -392,27 +354,7 @@ export interface MachineView {
   online: boolean | null;
 }
 
-export type TermOpenView = { ok: true; term: string; pane: string; window: string; cols: number; rows: number; seed: string; dead: boolean } | { ok: false; detail: string };
-
-export interface TermTabView {
-  pane: string;
-  label: string;
-}
-
-export type TermEvent = { term: string; out: string } | { term: string; ended: true } | { term: string; lost: true };
-
 export type FromMachine<T> = { ok: true; value: T } | { ok: false; detail: string };
-
-export interface LaunchAgentRequest extends LaunchChoices {
-  machinePk?: string;
-  launch: string;
-  harness: KnownHarness;
-  folder: string;
-  code: string;
-  relay: string;
-  nick?: string;
-  persona?: string;
-}
 
 export interface KiwiBridge {
   /** The relay URL injected at load (query param, else the default). */
@@ -464,19 +406,7 @@ export interface KiwiBridge {
   forgetDevice(id: string): Promise<void>;
   renewDevice(id: string): Promise<void>;
   deviceNews(): Promise<DeviceNewsView | null>;
-  proveSeat(code: string): Promise<SeatProofView | null>;
   keepAgents(code: string, agents: { pk: string; from: string }[]): Promise<KeepView | null>;
-  recovery(): Promise<RecoveryView | null>;
-  recoveryWords(): Promise<string[]>;
-  recoverySave(typed: { at: number; word: string }[]): Promise<RecoverySaveView>;
-  recoveryDrop(): Promise<void>;
-  recoveryCancel(words: string): Promise<RecoveryCancelView>;
-  recover(words: string): Promise<RecoverOpenView>;
-  recoverFinish(lost: string[]): Promise<RecoverDoneView>;
-  recoverCancel(): Promise<void>;
-  reroot(words: string): Promise<RerootOpenView>;
-  rerootFinish(keep: string[]): Promise<RerootDoneView>;
-  rerootCancel(): Promise<void>;
   daemonStatus(): Promise<DaemonStatus>;
   doctor(): Promise<DoctorFinding[] | null>;
   /** Certify this machine's daemon key with the person key and hand the cert back. */
@@ -495,7 +425,6 @@ export interface KiwiBridge {
   checkUpdate(): Promise<UpdateCheckView>;
   movedApp(): Promise<MovedView | null>;
   dismissMovedApp(): Promise<void>;
-  notify(title: string, body: string, link?: string): Promise<void>;
   openExternal(url: string): Promise<void>;
   saveFile(name: string, text: string): Promise<string>;
   takeDroppedFiles(): Promise<DroppedFile[]>;
@@ -525,24 +454,8 @@ export interface KiwiBridge {
   setPersonalities(list: Personality[]): Promise<void>;
   seatPlaces(): Promise<PlacedSeat[]>;
   showSeat(seat: PlacedSeat): Promise<ShowResult>;
-  /** Watch and type in a hosted agent's tmux pane: the daemon sizes it, then sends the screen and what follows as onTerm events. */
-  termOpen(pane: string, cols: number, rows: number): Promise<TermOpenView>;
-  termMine(roomId: string, want: string | null, cols: number, rows: number): Promise<TermOpenView>;
-  termTabs(): Promise<TermTabView[]>;
-  termTabClose(pane: string): Promise<TermTabView[]>;
-  /** A shell on another of your computers, through the relay: its screen and output come as onTerm events, and lost when the pipe drops. */
-  termRemote(machinePk: string, want: string | null, cols: number, rows: number): Promise<TermOpenView>;
-  termRemoteTabs(machinePk: string): Promise<TermTabView[]>;
-  termRemoteClose(machinePk: string, pane: string): Promise<TermTabView[]>;
-  termKeys(term: string, keys: string): Promise<void>;
-  termSize(term: string, cols: number, rows: number): Promise<void>;
-  termClose(term: string): Promise<void>;
-  onTerm(cb: (e: TermEvent) => void): () => void;
   terminals(): Promise<TerminalsStatus | null>;
   terminalHelpers(id: TerminalId, to: "on" | "off"): Promise<TerminalsStatus | null>;
-  terminalPrefer(id: TerminalId): Promise<TerminalsStatus | null>;
-  setLaunches(to: "on" | "off"): Promise<TerminalsStatus | null>;
-  setRemoteBypass(to: "on" | "off"): Promise<TerminalsStatus | null>;
   contextLine(): Promise<"on" | "off" | null>;
   setContextLine(to: "on" | "off"): Promise<"on" | "off" | null>;
   hooks(): Promise<HookRow[]>;
@@ -550,15 +463,8 @@ export interface KiwiBridge {
   wakeSeats(): Promise<WakeSeat[]>;
   setWake(room: string, agent: string, to: "on" | "off"): Promise<WakeSeat[]>;
   harnesses(): Promise<HarnessRow[]>;
-  seatFolders(roomId: string): Promise<string[]>;
-  chooseFolder(): Promise<string | null>;
-  launchAgent(req: LaunchAgentRequest): Promise<LaunchedView>;
   machines(): Promise<MachineView[]>;
-  harnessesOn(machinePk: string): Promise<FromMachine<HarnessRow[]>>;
-  foldersOn(machinePk: string, roomId: string): Promise<FromMachine<string[]>>;
   settingsOn(machinePk: string): Promise<FromMachine<ComputerSettings>>;
-  launchRoots(): Promise<string[]>;
-  setLaunchRoot(dir: string, to: "add" | "remove"): Promise<string[]>;
 }
 
 export interface KeysAtRest {

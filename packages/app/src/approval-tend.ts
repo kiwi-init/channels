@@ -11,17 +11,25 @@ export interface TendApi {
   requests: (opts: { person: string }) => Promise<readonly { id: string; name: string }[]>;
 }
 
+export interface Tell {
+  title: string;
+  ping: (title: string, body: string) => void;
+  told: Set<string>;
+}
+
 /**
- * Approve own computers' agents, then announce whoever is still waiting — including
- * own-computer requests auto-approve did not let in (it threw, or returned none).
+ * Approve own computers' agents, then, given someone to tell, announce whoever is still waiting —
+ * including own-computer requests auto-approve did not let in (it threw, or returned none).
  */
-export async function tendOwned(person: string, title: string, api: TendApi, ping: (title: string, body: string) => void, told: Set<string>): Promise<void> {
+export async function tendOwned(person: string, api: TendApi, tell?: Tell): Promise<void> {
   let letIn: readonly LetIn[] = [];
   try {
     letIn = await api.autoApprove(person);
   } catch {
     // Still list remaining requests.
   }
+  if (!tell) return;
+  const { title, ping, told } = tell;
   const theirs = (m: LetIn) => (m.sponsor && m.sponsor.user !== person ? m.sponsor.name : null);
   const one = letIn[0];
   if (one) {

@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 
 import type { SendOptions } from "@kiwi/core/client.ts"
 import { GENERAL_ROOM, type Message as Wire } from "@kiwi/core/protocol.ts"
-import { answersDecisions, dmPlace, fullyTrusted, placeKey, type ChannelState } from "@kiwi/core/state.ts"
+import { dmPlace, fullyTrusted, placeKey, type ChannelState } from "@kiwi/core/state.ts"
 import { channelTitle, loadRecent, saveRecent } from "@kiwi/channel/recent.ts"
 import { useChannel } from "@kiwi/channel/use-channel.ts"
 import { useKnownChannels } from "@kiwi/channel/list.ts"
@@ -10,10 +10,9 @@ import { type StoredMember } from "@kiwi/channel/store.ts"
 import { useIcons, useLiveIcon } from "@kiwi/app/icons.ts"
 import { markSeen, setOpenNews } from "@kiwi/channel/news.ts"
 import { lastPreview } from "@kiwi/app/preview.ts"
-import { roomLast, roomOfMessage, roomSeenKey } from "@kiwi/app/rooms.ts"
+import { roomLast, roomSeenKey } from "@kiwi/app/rooms.ts"
 import { sendsInTurn } from "@kiwi/app/send-order.ts"
 import { markSeenIn, roomsFrom, seenIn, sendFrom, useSeen } from "@kiwi/app/threads.ts"
-import { useAskChime } from "~/live/alerts"
 import { useNewMembers, useNewPowers } from "~/live/defaults"
 import { kept } from "~/live/keep"
 import { changeUnsent, nextUnsentKey, unsentIn } from "~/live/unsent"
@@ -23,14 +22,11 @@ import { usePinsHere } from "~/live/pins"
 import { usePublishFace } from "~/live/face"
 import { usePictures } from "~/live/pictures"
 import { seated, useSeats } from "~/live/seats"
-import { elsewhere, type NotePlace } from "~/live/notify"
-import { isMuted, tells } from "~/live/quiet"
-import { tellMessage } from "~/live/notes"
-import { ownPrefs, usePrefs } from "~/live/prefs"
+import { isMuted } from "~/live/mute"
+import { usePrefs } from "~/live/prefs"
 import { receiptsOf, withReceipts } from "~/live/receipts"
 import { announce } from "~/kit/toasts"
 import { arrivals } from "~/live/persona-later"
-import { leaversToSeal } from "~/live/leaving"
 import { lastIn, seenKeyOf } from "~/live/seen-place"
 import { followsIn, threadSeenKey, threadsOf } from "~/live/threads"
 import { closeOpened, markGone, publish, type Run } from "~/live/store"
@@ -40,7 +36,7 @@ import { useMarksSync } from "~/live/read-sync"
 import { refusal } from "~/live/refused"
 import { backWords, composerKey, giveBack } from "~/chat/drafts"
 import { stashText } from "~/chat/stash"
-import { dmRoomOf, sealable } from "~/live/dm"
+import { dmInRoom, dmRoomOf } from "~/live/dm"
 import { freeOf, specAsksOf, specsOf } from "~/live/specs"
 import { clock } from "~/kit/time"
 import type { Channel, Upload, Where } from "~/model"
@@ -244,7 +240,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       const plain = { ...sendOptions(state, messages, me, where, body, opts), ...imgs }
       const sealedIn = async (other: string): Promise<string | undefined> => {
         const had = dmRoomOf(state, me, other)
-        if (had || !sealable(channel, other)) return had
+        if (had || !dmInRoom(channel, other)) return had
         const seat = roster.find((r) => r.active && r.name === other)
         if (!seat?.xpk || !(await appCan("makeDm"))) return undefined
         try {
@@ -343,24 +339,6 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
         .catch((e: unknown) => announce(`Personality not set on ${name}: ${e instanceof Error ? e.message : String(e)}`, "error"))
   }, [code, people])
 
-  const toSeal = leaversToSeal(state, me)
-    .map((r) => `${r.id}\0${r.names.join(",")}`)
-    .join("\n")
-  useEffect(() => {
-    if (!toSeal) return
-    const timer = setTimeout(() => {
-      for (const line of toSeal.split("\n")) {
-        const [id = "", names = ""] = line.split("\0")
-        void import("~/live/manage")
-          .then((m) => m.sealOutLeavers(code, id, names.split(",")))
-          .catch(() => {
-            // Another member may have sealed first, or this app is older: whoever is in the room next tries again.
-          })
-      }
-    }, Math.random() * 5_000)
-    return () => clearTimeout(timer)
-  }, [code, toSeal])
-
   const where = view.where
   const lastHere = useMemo(() => (where ? lastIn(messages, state, me, where) : 0), [messages, state, me, where])
   useEffect(() => {
@@ -380,7 +358,6 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
 
   const waiting = useMemo(() => asks.asks.filter((a) => !("answer" in a && a.answer) && !(a.kind === "question" && a.idle)), [asks.asks])
   const needs = waiting.length
-  useAskChime(waiting)
   const top = Math.max(live.head, messages.at(-1)?.seq ?? 0)
   const unreadHere = rooms.reduce((n, r) => n + (r.muted ? r.mentions : r.unread), 0) + directs.reduce((n, d) => n + d.unread, 0)
   useEffect(() => {
@@ -404,29 +381,5 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
     })
   }, [messages, others, state, code, me, member.at])
 
-  useNotify(messages, me, title, code, state)
-
   return null
 })
-
-function statePlace(state: Pick<ChannelState, "placeOf" | "roomOf" | "rooms">, m: Wire): NotePlace {
-  const place = state.placeOf.get(m.seq)
-  if (place?.kind === "task") return { kind: "task", task: place.task }
-  if (place?.kind === "dm") return { kind: "dm" }
-  const id = roomOfMessage(state, m)
-  return { kind: "room", name: state.rooms.get(id)?.name ?? id }
-}
-
-function useNotify(messages: readonly Wire[], me: string, title: string, code: string, state: ChannelState) {
-  const told = useRef(messages.at(-1)?.seq ?? 0)
-  useEffect(() => {
-    const fresh = messages.filter((m) => m.seq > told.current)
-    told.current = Math.max(told.current, messages.at(-1)?.seq ?? 0)
-    if (!fresh.length || !elsewhere()) return
-    const { members } = state
-    const prefs = ownPrefs()
-    const decides = answersDecisions(members, me)
-    const last = fresh.findLast((m) => m.sigOk && tells(m, me, prefs, code, decides, Date.now()))
-    if (last) tellMessage(last, { me, channel: title, code, place: statePlace(state, last), members: members.values(), display: members.get(last.from)?.display })
-  }, [messages, me, title, code, state])
-}

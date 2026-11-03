@@ -22,11 +22,9 @@ import { readHarnessRow, type HarnessRow } from "@kiwi/core/harnesses.ts";
 import type { DeviceLink } from "@kiwi/core/devices.ts";
 import { isDeviceKeep } from "@kiwi/core/protocol.ts";
 import type { MachineCert } from "@kiwi/core/person.ts";
-import type { LaunchedView } from "@kiwi/core/terminals.ts";
 
-import type { KeepView, LaunchAgentRequest, TermTabView } from "./bridge.ts";
+import type { KeepView } from "./bridge.ts";
 import { childEnv } from "./child-env.ts";
-import { launchedView } from "./launch-view.ts";
 
 export interface HelloResult {
   version: string;
@@ -58,7 +56,7 @@ function daemonTokenFile(home: string): string {
   return path.join(home, "daemon.token");
 }
 
-export function daemonToken(home: string): string | null {
+function daemonToken(home: string): string | null {
   try {
     const read = fs.readFileSync(daemonTokenFile(home), "utf8").trim();
     return read || null;
@@ -149,31 +147,6 @@ export async function daemonKeep(room: string, agents: readonly { pk: string; fr
   if (!kept || typeof kept !== "object") return null;
   const { links, keep } = kept as Record<string, unknown>;
   return Array.isArray(links) && isDeviceKeep(keep) ? { links: links as DeviceLink[], keep } : null;
-}
-
-export async function daemonLaunch(req: LaunchAgentRequest, home: string = kiwiHome()): Promise<LaunchedView> {
-  const r = await call(home, "launch", { ...req }, 150_000);
-  return launchedView(r["launched"]);
-}
-
-export async function daemonMine(room: string, want: string | null, home: string = kiwiHome()): Promise<string> {
-  const r = await call(home, "mine", { room, want }, 15_000);
-  if (typeof r["pane"] !== "string") throw new Error("the daemon didn't say which terminal is yours");
-  return r["pane"];
-}
-
-const tabsOf = (r: Reply): TermTabView[] =>
-  (Array.isArray(r["tabs"]) ? (r["tabs"] as unknown[]) : []).flatMap((t) => {
-    const { pane, label } = (t ?? {}) as { pane?: unknown; label?: unknown };
-    return typeof pane === "string" && typeof label === "string" ? [{ pane, label }] : [];
-  });
-
-export async function daemonMineTabs(home: string = kiwiHome()): Promise<TermTabView[]> {
-  return tabsOf(await call(home, "mine-tabs", {}, 5_000));
-}
-
-export async function daemonMineClose(pane: string, home: string = kiwiHome()): Promise<TermTabView[]> {
-  return tabsOf(await call(home, "mine-close", { pane }, 5_000));
 }
 
 /**

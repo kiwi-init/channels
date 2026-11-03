@@ -7,19 +7,15 @@ import { secrets } from "@kiwi/secrets/secrets.ts"
 import { announce } from "~/kit/toasts"
 import { newMemberPowers, newMemberScopes } from "~/live/defaults"
 import { attempt, event, memberOf, need, owner, personalities, say, setup } from "~/live/run"
-import { followLaunch } from "@kiwi/app/launch-follow.ts"
 import { relayUrl } from "@kiwi/secrets/relay.ts"
 import { bridge } from "@kiwi/secrets/secrets.ts"
-import { harnessChoices, STARTS } from "~/live/harness-rows"
 import { memberName } from "@kiwi/app/format.ts"
 import { removeComputer } from "@kiwi/app/computers.ts"
 import { loadMember } from "@kiwi/channel/store.ts"
 import { inviteLine } from "@kiwi/app/join-line.ts"
-import type { Permission } from "@kiwi/core/launch-options.ts"
 import type { Color } from "@kiwi/core/protocol.ts"
-import { wantPersona } from "~/live/persona-later"
 import { openedChannel, openedRun, type Run } from "~/live/store"
-import type { Actions, JoinChoice, NewAgent, Powers } from "~/model"
+import type { Actions, JoinChoice, Powers } from "~/model"
 import { BRANCH_PREFIX_RE, POWERS, ROOM_ID_RE, type Power } from "@kiwi/core/protocol.ts"
 import { newRoomId, sponsorsAgent } from "@kiwi/core/state.ts"
 import { cleanRoomName, roomProblem, roomsAfter } from "@kiwi/app/rooms.ts"
@@ -221,15 +217,11 @@ const picks = (run: Run, names: readonly string[]) =>
 const open = (rooms: Iterable<{ id: string; name: string; members?: unknown }>) => [...rooms].filter((r) => !r.members)
 
 const updateFirst = (err: unknown): never => {
-  throw new Error(/no such call|not a call|unknown call|makeRoom|changeRoom|leaveRoom/i.test(say(err)) ? "update Channels to make private rooms" : say(err))
+  throw new Error(/no such call|not a call|unknown call|makeRoom|changeRoom|leaveRoom/i.test(say(err)) ? "update Channels to make members-only rooms" : say(err))
 }
 
 export async function leaveRoom(code: string, id: string): Promise<void> {
   await need(code).ch.leaveRoom(id).catch(updateFirst)
-}
-
-export async function sealOutLeavers(code: string, id: string, names: readonly string[]): Promise<void> {
-  await need(code).ch.sealOutLeavers(id, names)
 }
 
 export async function addRoom(code: string, typed: string, members?: string[]): Promise<string> {
@@ -267,7 +259,7 @@ export async function renameRoom(code: string, id: string, typed: string): Promi
 
 export async function setRoomMembers(code: string, id: string, members: string[]): Promise<void> {
   const run = setup(code)
-  if (!run.state.rooms.get(id)?.members) throw new Error("that isn't a private room you're in")
+  if (!run.state.rooms.get(id)?.members) throw new Error("that isn't a members-only room you're in")
   await run.ch.changeRoom(id, { members: picks(run, members) }).catch(updateFirst)
 }
 
@@ -288,41 +280,6 @@ export async function answerJoin(code: string, id: string, yes: boolean, choice?
   if (r.check !== "ready" || !r.code) return announce(`Waiting for ${r.display || r.name}'s code`)
   announce(await letIn(run, r, choice ?? {}))
   if (choice?.color) await event(run, `made ${choice.as?.trim() || r.name} ${choice.color}`, { op: "color.set", member: choice.as?.trim() || r.name, color: choice.color })
-}
-
-export const addAgent: Actions["addAgent"] = (code, agent, seen) => {
-  const launch = launchId()
-  const stop = followLaunch(code, launch, (s) => seen({ stage: s.stage, name: s.name }))
-  void (async () => {
-    const b = bridge()
-    if (!b) throw new Error("starting agents needs the Channels desktop app")
-    const run = need(code)
-    const harness = STARTS[agent.harness]
-    if (!harness) throw new Error("pick a harness Channels knows how to start")
-    const p = agent.persona ? personalities().find((x) => x.id === agent.persona) : undefined
-    const pin = p && run.isOwner ? await run.ch.pinPersona(p) : undefined
-    if (p && !run.isOwner) wantPersona(code, agent.name, p.id)
-    const here = secrets().computers.find((c) => c.own)?.machinePk
-    const r = await b.launchAgent({
-      ...(agent.computer && agent.computer !== here && agent.computer !== "this" ? { machinePk: agent.computer } : {}),
-      launch,
-      harness,
-      folder: agent.folder,
-      code,
-      relay: relayUrl(),
-      ...(agent.name ? { nick: agent.name } : {}),
-      ...(pin ? { persona: pin } : {}),
-      ...(agent.mode && agent.mode !== "ask-first" ? { permission: PERMISSION[agent.mode] } : {}),
-    })
-    if (!r.ok) throw new Error(r.detail || "Kiwi couldn't start it")
-    seen({ stage: "started" })
-  })().catch((err: unknown) => {
-    stop()
-    const why = say(err)
-    announce(`${agent.name || "Agent"} not started: ${why.split("\n")[0]}`)
-    seen({ stage: "failed", why })
-  })
-  return stop
 }
 
 export const exportHistory: Actions["exportHistory"] = async (code, kind) => {
@@ -355,20 +312,6 @@ export const exportHistory: Actions["exportHistory"] = async (code, kind) => {
   }
 }
 
-export const choicesOn: Actions["choicesOn"] = async (code, computer) => {
-  const b = bridge()
-  if (!b) return { error: "agents start from the Channels desktop app" }
-  const here = secrets().computers.find((c) => c.own)?.machinePk
-  try {
-    if (computer === "this" || computer === here) return { folders: await b.launchRoots() }
-    const [h, f] = await Promise.all([b.harnessesOn(computer), b.foldersOn(computer, need(code).roomId)])
-    if (!h.ok) return { error: h.detail }
-    return { harnesses: harnessChoices(h.value), folders: f.ok ? f.value : [] }
-  } catch (err) {
-    return { error: err instanceof Error ? err.message : String(err) }
-  }
-}
-
 export const forgetComputer: Actions["forgetComputer"] = (id) =>
   attempt("Couldn't forget it", async () => {
     if (id.startsWith("phone:")) {
@@ -388,13 +331,3 @@ export const joinCommand: Actions["joinCommand"] = async (code, as) => {
   const pin = picked ? await owner(code).ch.pinPersona(picked) : null
   return inviteLine(relayUrl(), code, { ...(as.nick ? { nick: as.nick } : {}), persona: pin })
 }
-
-function launchId(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(16))
-  return btoa(String.fromCharCode(...bytes))
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "")
-}
-
-const PERMISSION: Record<NonNullable<NewAgent["mode"]>, Permission> = { "ask-first": "default", "accept-edits": "accept-edits", "dont-ask": "bypass" }

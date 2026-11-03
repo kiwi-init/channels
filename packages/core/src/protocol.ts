@@ -8,7 +8,7 @@ import { DEVICE_LIST_MAX, type DeviceLink } from "./devices.ts";
 import { cleanPersona, type Persona } from "./personality.ts";
 import { permissionChoices, wellFormedPermission, wellFormedPermReply, wellFormedSettled, type PermissionReply, type PermissionSettled, type PermissionShown } from "./permission.ts";
 
-import { MAX_ROOM_MEMBERS, type RoomMeta } from "./room-rules.ts";
+import { MAX_ROOM_MEMBERS, type RoomMember, type RoomMeta } from "./room-rules.ts";
 
 const sealedBox = (x: unknown): boolean =>
   !!x && typeof x === "object" && typeof (x as { iv?: unknown }).iv === "string" && typeof (x as { ct?: unknown }).ct === "string" && (x as { ct: string }).ct.length <= 64_000;
@@ -274,12 +274,12 @@ export type Event =
   /** Coordinator-only mode is gone. Older logs still carry these; they fold to nothing. */
   | { op: "mode.set"; coordinatorOnly: boolean; strict: boolean }
   /** Owner only: a room in this channel. Its id never changes; the name is a label (room.rename). */
-  | { op: "room.create"; id: string; name: string }
+  | { op: "room.create"; id: string; name: string; members?: RoomMember[]; dm?: true; self?: true }
+  | { op: "room.members"; id: string; name: string; members: RoomMember[]; dm?: true; self?: true }
   | { op: "room.seal"; id: string; n: number; keys: string[]; meta: { iv: string; ct: string }; proof?: string }
   | { op: "room.msg"; room: string; n: number; iv: string; ct: string }
   /** Owner only: a room's new name ("general" included; its id stays). */
   | { op: "room.rename"; id: string; name: string }
-  /** Sealed inside a private room: its sender is leaving, and any member still in it may seal them out. */
   | { op: "room.leave"; id: string }
   /**
    * Owner only: what this channel is for and where its limits are (null clears it). Every agent is
@@ -305,7 +305,7 @@ export type Event =
   /** The goal a person's message #ask stands for, in plain words, as its tasks' header (null: their own words again). The lead, the owner or who asked names it. */
   | { op: "ask.name"; ask: number; name: string | null }
   | { op: "ask.close"; ask: number; why?: string }
-  | { op: "devices"; links: DeviceLink[]; device?: string; vouch?: string; keep?: DeviceKeep }
+  | { op: "devices"; links: DeviceLink[]; keep?: DeviceKeep }
   /**
    * A member's reaction to message #seq: one short emoji per member per message, the latest wins, null
    * takes it back. Not news: it's no unread, no notification, no line in a feed. Its body is throwaway
@@ -346,7 +346,7 @@ export function isGifReaction(x: string): boolean {
   return GIF_REACTION_RE.test(x);
 }
 
-export const OVERLAY_OPS: ReadonlySet<string> = new Set(["react", "msg.edit", "msg.delete", "room.leave"]);
+const OVERLAY_OPS: ReadonlySet<string> = new Set(["react", "msg.edit", "msg.delete"]);
 
 export function isOverlay(m: Pick<Message, "kind" | "ev">): boolean {
   return m.kind === "event" && !!m.ev && OVERLAY_OPS.has(m.ev.op);
@@ -832,11 +832,7 @@ export interface NewerEvent {
 
 export type WirePayload = Omit<Payload, "ev"> & { ev?: Event | NewerEvent };
 
-export const EVENT_OPS_VERSION = 15;
-
-export const PRIVATE_ROOM_OPS = 9;
-
-export const PRIVATE_DM_OPS = 11;
+export const EVENT_OPS_VERSION = 16;
 
 export const opsVersion = (x: unknown): x is number => Number.isSafeInteger(x) && (x as number) >= 1 && (x as number) <= 10_000;
 const NEWER_OP_RE = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/;
@@ -858,7 +854,7 @@ export function asSent(m: Message): Omit<Message, "newer" | "ev"> & { ev?: Event
 
 export const outgrown = (base: { folded?: number; skipped?: true }): boolean => base.skipped === true && (base.folded ?? 0) < EVENT_OPS_VERSION;
 
-export const FOLD_RULES = 22;
+export const FOLD_RULES = 23;
 
 export const olderRules = (base: { rules?: number }): boolean => (base.rules ?? 0) < FOLD_RULES;
 
@@ -956,6 +952,14 @@ const str = (x: unknown, max = 10_000): x is string => typeof x === "string" && 
 const strs = (x: unknown, n: number): x is string[] => Array.isArray(x) && x.length <= n && x.every((y) => str(y, 512));
 const nums = (x: unknown, n: number): x is number[] => Array.isArray(x) && x.length <= n && x.every((y) => Number.isSafeInteger(y) && y >= 0);
 const opt = <T>(x: unknown, ok: (v: unknown) => v is T): boolean => x === undefined || ok(x);
+const roomMembers = (e: Record<string, unknown>): boolean =>
+  Array.isArray(e.members) &&
+  e.members.length >= 1 &&
+  e.members.length <= MAX_ROOM_MEMBERS &&
+  e.members.every((m: unknown) => !!m && typeof m === "object" && str((m as RoomMember).name, 64) && str((m as RoomMember).pk, 64) && Object.keys(m).length === 2) &&
+  opt(e.dm, (x): x is true => x === true) &&
+  opt(e.self, (x): x is true => x === true) &&
+  !(e.dm && e.self);
 
 export const KEEP_MAX = 64;
 
@@ -1102,6 +1106,9 @@ function eventCheck(ev: unknown): boolean | null {
     case "room.msg":
       return roomId(e.room) && Number.isSafeInteger(e.n) && (e.n as number) >= 1 && str(e.iv, 32) && str(e.ct, MAX_BODY_LENGTH * 2);
     case "room.create":
+      return roomId(e.id) && str(e.name, MAX_ROOM_NAME * 4) && (e.members === undefined ? e.dm === undefined && e.self === undefined : roomMembers(e));
+    case "room.members":
+      return roomId(e.id) && str(e.name, MAX_ROOM_NAME * 4) && roomMembers(e);
     case "room.rename":
       return roomId(e.id) && str(e.name, MAX_ROOM_NAME * 4);
     case "charter.set":
@@ -1182,16 +1189,7 @@ function eventCheck(ev: unknown): boolean | null {
         (e.verdict !== "back" || (typeof e.note === "string" && e.note.trim().length > 0))
       );
     case "devices":
-      return (
-        Array.isArray(e.links) &&
-        e.links.length > 0 &&
-        e.links.length <= DEVICE_LIST_MAX &&
-        e.links.every((l) => !!l && typeof l === "object" && !Array.isArray(l)) &&
-        (e.device === undefined) === (e.vouch === undefined) &&
-        opt(e.device, (x): x is string => str(x, 64)) &&
-        opt(e.vouch, (x): x is string => str(x, 128)) &&
-        opt(e.keep, isDeviceKeep)
-      );
+      return Array.isArray(e.links) && e.links.length > 0 && e.links.length <= DEVICE_LIST_MAX && e.links.every((l) => !!l && typeof l === "object" && !Array.isArray(l)) && opt(e.keep, isDeviceKeep);
     default:
       return null;
   }

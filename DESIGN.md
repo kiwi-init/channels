@@ -185,7 +185,7 @@ The two built-in sides, from `tokens.css` and `channels.ts`:
   most). Clearing Needs you draws a tick (`tick-draw`).
 - Keyframes: `rise` (6px up and in), `fade`, `panel-in` (the right panel, 12px
   from the right), `dialog-in`, `toast-in`, `pop-in`, `palette-in` (6px down),
-  `term-in` (the terminal drawer, 16px up), `jump-in` (Jump to latest),
+  `jump-in` (Jump to latest),
   `tile-bar` (the rail's mark), `msg-flash` (a message you jumped to, 1.6s).
 - Scrolling content fades under the top bar (16px, `bg` to transparent).
 - Reduced motion: the OS setting or Settings' own (`data-motion="reduced"` on
@@ -206,16 +206,15 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
 - The top bar floats its controls: the channel switcher and the sidebar
   button are each one `float` object (`r-ctl`, `shadow-float`); the view tabs
   are one `float` group with the chosen tab's pill gliding inside it, and
-  search and the terminal share a second group (`.top-group`, 2px inset,
-  28px buttons at `r-row`). The search field floats the same way when open,
+  search sits in a second group (`.top-group`, 2px inset, 28px buttons at
+  `r-row`). The search field floats the same way when open,
   and on a narrow window it takes the tabs' place. The other bars follow:
   Settings' back button floats too (a panel's close is a plain `IconButton`:
   the panel is already its own column), and so does
   the rail: home and every channel tile (a tile still waiting to be let in
   keeps its outline and no fill); + and the Settings gear stay quiet, a bare
   `ink-3` glyph with `wash` on hover, and the gear floats only while Settings
-  is open. In the terminal
-  drawer the tabs and + are one `float` group and close floats. Hover on a
+  is open. Hover on a
   floating control is `float-2` (the `float` fill, 10% toward `ink`); the
   chosen one is `float-3` (20%).
 - Fields (`.input`, `.textarea`, `Field` with label and hint): `bg-3` fill,
@@ -282,12 +281,12 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   Specs while one waits on you, an `alert` dot on GitHub while an open pull
   request's checks failed. Ambient numbers (open specs, open pull requests,
   who's working, merged today) live in the tab's `title`, not on the bar.
-  On the right, Search and the terminal; a `decide` "paused" chip joins them
+  On the right, Search; a `decide` "paused" chip joins it
   while the agents are paused, on every view but the conversation, whose
   banner already says it. No borders between the columns.
 - **Sidebar.** Every row is one `--ctl` line, its text on one edge after a
   24px icon column (the `#`, a face, an icon). Three sections with a mono
-  head: Rooms (`#` rows, a lock for a private room), People and Agents. Each
+  head: Rooms (`#` rows, the people icon for a members-only room), People and Agents. Each
   member is listed once, and the row is your conversation with them: a click
   opens the DM, its unread count sits on the row, and the profile is in the
   row's menu (and in the Agents view). You aren't listed. A person's pip
@@ -301,7 +300,7 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   room, Invite people, Add an agent) shows when the pointer is over the
   section; it becomes a row only while the section is empty. The open row is
   on `wash-2`; a row with news is 600 with a count. Cards for what waits on
-  you (an update, a device, new recovery words) sit at the foot under a
+  you (an update, a device) sit at the foot under a
   16px fade: the text, then the action on its line's end, or under it when
   the text needs the width.
 - **Right panel** (`--panel-w` to start, resizable by its grip): a thread,
@@ -394,7 +393,7 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   says a scope or a limit), then groups of rows on the page under mono group
   heads, hairlines between rows: a title, a quiet line only when it says what
   the title can't, and the control on the right. No cards around groups.
-- **Palette** (⌘K), **Search**, the **terminal drawer** and the **annotator**
+- **Palette** (⌘K), **Search** and the **annotator**
   (a picture opened full window, marked up and sent back) float with
   `shadow-pop` and their own enter animation. The palette is `bg-2` at
   `r-win`: the field ("Jump to…") over a hairline, then the groups, the
@@ -478,7 +477,7 @@ profile, the task panel), not every row.
 Names: people read nicknames, and only nicknames. A handle (`cheery-fox`)
 is for agents and commands; a person never has to read one. Wherever the
 UI shows a member (a message's author, the sidebar, a mention, a task's
-owner or reviewer, an event line, a toast, a notification) it shows their
+owner or reviewer, an event line, a toast) it shows their
 nickname, and a member without one shows their handle as the fallback.
 That includes members who have left. `@handle` and a bare handle in a
 message's prose read as the nickname too; code, links and paths keep the

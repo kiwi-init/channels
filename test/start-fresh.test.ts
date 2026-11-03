@@ -4,10 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { accountClient, type FreshNotice } from "@kiwi/core/account.ts";
 import { signRequest } from "@kiwi/core/auth.ts";
-import { certUntil, nextLink, readDeviceList, rerootLink, rootLink, type DeviceLink, type DeviceLinkBody } from "@kiwi/core/devices.ts";
+import { certUntil, nextLink, readDeviceList, rootLink, type DeviceLink, type DeviceLinkBody } from "@kiwi/core/devices.ts";
 import { accountScope } from "@kiwi/core/enroll.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
-import { recoveryKey, recoveryLink, type RecoveryLink } from "@kiwi/core/recovery.ts";
 import { createDeviceHost } from "../desktop/src/devices.ts";
 import { FRESH_EVERY_MS, FRESH_WAIT_MS } from "../src/relay/account.ts";
 import { startRelay } from "../src/relay/bun.ts";
@@ -117,12 +116,9 @@ async function start(a: Account, n: { desk: Identity; link: DeviceLink }): Promi
 }
 
 describe("starting fresh after a 7-day wait (T1010)", () => {
-  test("not before day 7: the account works as it did; after it, the new key is the root and the old list, vault and devices are gone", async () => {
+  test("not before day 7: the account works as it did; after it, the new key is the person and the old list and devices are gone", async () => {
     const a = account();
-    const { person, desk, phone, box, links } = await setUp(a);
-    const key = await recoveryKey(new Uint8Array(32).fill(21));
-    const chain = [await recoveryLink(person, person.pk, null, { pk: key.pk, xpk: key.xpk! }, t)];
-    expect((await call(a, desk, "PUT", "/v1/account/vault", { recovery: chain })).status).toBe(204);
+    const { desk, box, links } = await setUp(a);
     const machinePath = `/v1/machine/${box.pk}`;
     const register = JSON.stringify({ links });
     const registered = await fetch(relay + machinePath, {
@@ -141,19 +137,15 @@ describe("starting fresh after a 7-day wait (T1010)", () => {
     expect(await pendingOf(a)).toEqual(notice);
     expect(await linksOf(a)).toEqual(links);
     expect((await call(a, desk, "PUT", "/v1/account", { links: await grow(links, desk, adds(await device("tablet"), "phone")) })).status).toBe(204);
-    expect((await call(a, n.desk, "PUT", "/v1/account/vault", { recovery: chain })).status).toBe(403);
 
     advance(1000);
     expect(await pendingOf(a)).toBeNull();
     expect(await linksOf(a)).toEqual([n.link]);
     const read = await readDeviceList(await linksOf(a));
     if (!read.ok) throw new Error(read.why);
-    expect(read.list.root).toBe(n.person.pk);
+    expect(read.list.person).toBe(n.person.pk);
     expect(read.list.devices.map((d) => d.device)).toEqual([n.desk.pk]);
-    const vault = (await (await call(a, null, "GET", "/v1/account/vault")).json()) as { recovery: unknown[]; vault: unknown };
-    expect(vault).toEqual({ recovery: [], vault: null });
 
-    for (const old of [desk, phone]) expect((await call(a, old, "PUT", "/v1/account/vault", { recovery: chain })).status).toBe(403);
     expect((await call(a, desk, "PUT", "/v1/account", { links })).status).toBe(409);
     const inboxPath = `${machinePath}/inbox`;
     const inbox = await fetch(relay + inboxPath, { headers: { authorization: `Bearer ${await signRequest(box, machineScope(box.pk), "GET", inboxPath)}` } });
@@ -273,7 +265,7 @@ describe("starting fresh after a 7-day wait (T1010)", () => {
     expect(none.status).toBe(404);
   });
 
-  test("it applies with no recovery key set up, and a successful recovery or re-root during the wait cancels it", async () => {
+  test("it applies on its own, and a change the person key signs during the wait cancels it", async () => {
     const plain = account();
     await setUp(plain);
     const n1 = await newcomer("n1");
@@ -285,26 +277,12 @@ describe("starting fresh after a 7-day wait (T1010)", () => {
     const { person, links } = await setUp(a);
     const n2 = await newcomer("n2");
     await start(a, n2);
-    const lost = await device("recovered");
-    const recovered = await grow(links, person, adds(lost, "desktop", true));
-    expect((await call(a, lost, "PUT", "/v1/account", { links: recovered })).status).toBe(204);
+    const added = await device("added");
+    const signed = await grow(links, person, adds(added, "desktop", true));
+    expect((await call(a, added, "PUT", "/v1/account", { links: signed })).status).toBe(204);
     expect(await pendingOf(a)).toBeNull();
     advance(FRESH_WAIT_MS);
-    expect(await linksOf(a)).toEqual(recovered);
-
-    const b = account();
-    const set = await setUp(b);
-    const key = await recoveryKey(new Uint8Array(32).fill(22));
-    const chain: RecoveryLink[] = [await recoveryLink(set.person, set.person.pk, null, { pk: key.pk, xpk: key.xpk! }, t)];
-    expect((await call(b, set.desk, "PUT", "/v1/account/vault", { recovery: chain })).status).toBe(204);
-    const n3 = await newcomer("n3");
-    await start(b, n3);
-    const read = await readDeviceList(set.links);
-    if (!read.ok) throw new Error(read.why);
-    const next = await device("next");
-    const rerooted = [...set.links, await rerootLink(read.list, key, chain, next, [set.desk.pk], t)];
-    expect((await call(b, next, "PUT", "/v1/account", { links: rerooted })).status).toBe(204);
-    expect(await pendingOf(b)).toBeNull();
+    expect(await linksOf(a)).toEqual(signed);
   });
 
   test("a device's routine renewal doesn't cancel it", async () => {

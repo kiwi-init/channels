@@ -12,7 +12,7 @@ export function takeDeepLink(): string | null {
   return link;
 }
 
-export const opensChannel = (link: unknown): string | null => (typeof link === "string" && link.length <= MAX_LINK && link.startsWith(`${JOIN_SCHEME}://join/`) ? link : null);
+const opensChannel = (link: unknown): string | null => (typeof link === "string" && link.length <= MAX_LINK && link.startsWith(`${JOIN_SCHEME}://join/`) ? link : null);
 
 export function handleDeepLink(url: string): void {
   if (!opensChannel(url)) return;

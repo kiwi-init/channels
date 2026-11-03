@@ -4,6 +4,7 @@ import { join, relative, sep } from "node:path";
 
 import { startLocalRelay } from "../../scripts/local-relay.ts";
 import { buildUipack, generateSigningKey, signManifest, uipackFileName, type UiManifest } from "../.hutch/devkit/api/sdks/main/appengine/format.ts";
+import { UI_CONTRACT } from "../src/ui-contract.ts";
 import { appExecutable, appRoot, attach, launch, stop, testEnv, until, type Driver } from "./eb-drive.ts";
 
 if (!process.argv[2] || process.platform !== "darwin") {
@@ -64,7 +65,7 @@ function publish(mark: string, change: (files: Map<string, Uint8Array>) => void 
   const name = uipackFileName(uiVersion, sha256);
   bundles.set(name, bytes);
   manifest = signManifest(
-    { format: "livewire-manifest/1", keyId: key.keyId, seq: Date.now(), uiVersion, bundleUrl: name, sha256, requiresContract: "^1.0.0", dataSchema: 1, publishedAt: Date.now() },
+    { format: "livewire-manifest/1", keyId: key.keyId, seq: Date.now(), uiVersion, bundleUrl: name, sha256, requiresContract: `^${UI_CONTRACT}`, dataSchema: 1, publishedAt: Date.now() },
     key.privateKeyPem,
   );
   return manifest;
