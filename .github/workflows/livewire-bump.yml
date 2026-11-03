@@ -1,0 +1,136 @@
+name: livewire-bump
+
+on:
+  repository_dispatch:
+    types: [livewire-release]
+  schedule:
+    - cron: "23 7 * * *"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Bump to this Livewire version instead of the latest release"
+        default: ""
+      dry-run:
+        description: "Only print what the bump would change; open no pull request"
+        type: boolean
+        default: false
+
+concurrency:
+  group: livewire-bump
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  bump:
+    name: livewire / bump
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      BRANCH: livewire-bump
+      JOBS: build,desktop-mac,desktop-linux
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.2
+
+      - id: look
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WANTED: ${{ inputs.version || github.event.client_payload.version || '' }}
+        run: bun desktop/scripts/eb-bump.ts ${WANTED:+--version "$WANTED"}
+
+      - if: steps.look.outputs.changed == 'true'
+        run: git diff -- desktop/electrobun-pins.json
+
+      - id: app
+        if: steps.look.outputs.changed == 'true' && !inputs.dry-run
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.BUS_APP_CLIENT_ID }}
+          private-key: ${{ secrets.BUS_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-actions: write
+
+      - id: push
+        if: steps.look.outputs.changed == 'true' && !inputs.dry-run
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          APP: ${{ steps.app.outputs.app-slug }}
+          VERSION: ${{ steps.look.outputs.version }}
+          NOTES: ${{ steps.look.outputs.notes }}
+        run: |
+          id=$(gh api "users/$APP%5Bbot%5D" --jq .id)
+          who=$(gh api "users/$GITHUB_ACTOR" --jq '.name // .login')
+          echo "who=$who" >> "$GITHUB_OUTPUT"
+          git config user.name "$APP[bot]"
+          git config user.email "$id+$APP[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:$GH_TOKEN@github.com/$GITHUB_REPOSITORY.git"
+          git checkout -q -- desktop/electrobun-pins.json
+          if git fetch -q origin "$BRANCH"; then
+            git checkout -q -B "$BRANCH" FETCH_HEAD
+            git merge -q --no-edit -X theirs origin/main -m "Merge main into $BRANCH" -m "Agent: livewire-bump.yml on behalf of $who"
+          else
+            git checkout -q -b "$BRANCH"
+          fi
+          bun desktop/scripts/eb-bump.ts --version "$VERSION" > /dev/null
+          fresh=true
+          if git diff --quiet; then
+            echo "$BRANCH already builds on Livewire $VERSION"
+            fresh=false
+          else
+            git commit -q -a -m "Desktop: build on Livewire $VERSION" -m "$NOTES" -m "Opened by livewire-bump.yml from Livewire's release; desktop/scripts/eb-bump.ts regenerated the devkit and app pins from the release's core archives." -m "Agent: livewire-bump.yml on behalf of $who"
+          fi
+          git push -q origin "HEAD:$BRANCH"
+          body=$(printf '%s\n\n%s\n\n%s' "livewire-bump.yml on behalf of $who" "$NOTES" "This runs \`desktop / mac\`, \`desktop / linux\` and \`build\` on the branch and merges itself when they pass. A red run leaves it open.")
+          pr=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$pr" ]; then
+            gh pr edit "$pr" --title "Desktop: build on Livewire $VERSION" --body "$body"
+          else
+            gh pr create --base main --head "$BRANCH" --title "Desktop: build on Livewire $VERSION" --body "$body"
+            pr=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number')
+            fresh=true
+          fi
+          echo "pr=$pr" >> "$GITHUB_OUTPUT"
+          echo "fresh=$fresh" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - id: checks
+        if: steps.push.outputs.fresh == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          SHA: ${{ steps.push.outputs.sha }}
+        run: |
+          gh workflow run ci.yml --ref "$BRANCH" -f jobs="$JOBS"
+          run=""
+          for _ in $(seq 1 30); do
+            sleep 10
+            run=$(gh run list --workflow ci.yml --branch "$BRANCH" --event workflow_dispatch --commit "$SHA" --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+            [ -n "$run" ] && break
+          done
+          [ -n "$run" ] || { echo "the dispatched ci run never showed up"; exit 1; }
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          until [ "$(gh run view "$run" --json status --jq .status)" = completed ]; do sleep 60; done
+          echo "conclusion=$(gh run view "$run" --json conclusion --jq .conclusion)" >> "$GITHUB_OUTPUT"
+
+      - if: steps.checks.outputs.conclusion == 'success'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          PR: ${{ steps.push.outputs.pr }}
+          SHA: ${{ steps.push.outputs.sha }}
+        run: gh pr merge "$PR" --squash --auto --match-head-commit "$SHA"
+
+      - if: steps.push.outputs.fresh == 'true' && steps.checks.outputs.conclusion != 'success'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          PR: ${{ steps.push.outputs.pr }}
+          RUN: ${{ steps.checks.outputs.run }}
+          WHO: ${{ steps.push.outputs.who }}
+        run: |
+          gh pr comment "$PR" --body "$(printf '%s\n\n%s' "livewire-bump.yml on behalf of $WHO" "The desktop and build jobs on this bump didn't pass (https://github.com/$GITHUB_REPOSITORY/actions/runs/$RUN), so it stays open for a person or an agent to look at.")"
+          exit 1
