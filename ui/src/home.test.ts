@@ -174,6 +174,36 @@ describe("homeOf", () => {
     expect(h.moving[0]).toMatchObject({ who: "fern", state: "running send", busy: true })
   })
 
+  test("lists every agent, working first, with the task it has and what it's doing, and counts red checks", () => {
+    const doing = (id: number, more: Partial<Task> = {}): Task => ({ ...task(id, `task ${id}`), status: "doing", history: [], updatedAt: id, ...more })
+    const h = homeOf(
+      channel({
+        nicknames: new Map([["fern", "Fern"]]),
+        people: [
+          agent("moss"),
+          agent("zed", { presence: "offline", activity: { state: "working", tool: "Bash" } }),
+          agent("fern", { activity: { state: "working", tool: "Bash", since: 5 } }),
+          agent("ivy", { activity: { state: "waiting" } }),
+          agent("old", { left: true }),
+          { ...agent("me"), you: true },
+        ],
+        tasks: [
+          doing(1, { owner: "fern" }),
+          doing(2, { owner: "fern", updatedAt: 9, stage: "red", pr: { repo: "r", number: 8, title: "", url: "", state: "open", checks: "fail", ticks: { passed: 0, running: 0, failed: ["unit"] } } }),
+          doing(3, { owner: "moss", status: "done" }),
+        ],
+      })
+    )
+    expect(h.agents).toEqual([
+      { name: "fern", nick: "Fern", state: "working", doing: "running Bash", since: 5, task: { id: 2, title: "task 2" } },
+      { name: "ivy", nick: "ivy", state: "waiting", doing: "waiting for a person", task: null },
+      { name: "moss", nick: "moss", state: "idle", doing: "idle", task: null },
+      { name: "zed", nick: "zed", state: "away", doing: "offline", task: null },
+    ])
+    expect(h.working).toBe(1)
+    expect(h.red).toBe(1)
+  })
+
   test("the last word in #general reads as plain text from its author's nickname", () => {
     const said = saidIn([
       { seq: 1, from: "owl", at: 1, text: "## Plan\n- ship **it**", where: { kind: "room", room: "general" } },
