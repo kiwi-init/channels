@@ -299,7 +299,7 @@
   color: var(--doing);
 }
 
-@container (min-width: 38.75rem) {
+@container (min-width: 35.23rem) {
   .has-prs .board-row {
     grid-template-columns: 8px minmax(0, 1fr) 132px auto;
   }
@@ -313,7 +313,7 @@
   }
 }
 
-@container (min-width: 47.5rem) {
+@container (min-width: 43.18rem) {
   .has-prs .board-row {
     grid-template-columns: 8px minmax(0, 1fr) 132px 120px auto;
   }

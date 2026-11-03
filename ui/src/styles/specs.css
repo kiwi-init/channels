@@ -204,7 +204,7 @@
   padding: 0 8px 6px 24px;
 }
 
-@container (min-width: 51.25rem) {
+@container (min-width: 46.59rem) {
   .spec-row > .spec-mark {
     align-self: center;
     margin-top: 0;
@@ -919,7 +919,7 @@
   color: var(--ink-3);
 }
 
-@container spec-col (min-width: 30rem) {
+@container spec-col (min-width: 27.27rem) {
   .inside-tasks > li {
     grid-template-columns: minmax(0, 1fr) auto auto;
   }
@@ -935,7 +935,7 @@
   }
 }
 
-@container spec-page (min-width: 60rem) {
+@container spec-page (min-width: 54.55rem) {
   .inside-cols {
     grid-template-columns: minmax(0, 3fr) minmax(300px, 2fr);
     column-gap: 40px;
@@ -1220,7 +1220,7 @@
   background: var(--decide);
 }
 
-@container (max-width: 45rem) {
+@container (max-width: 40.91rem) {
   .spec-editor-panes {
     grid-template-columns: minmax(0, 1fr);
   }

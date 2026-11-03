@@ -592,7 +592,7 @@
   }
 }
 
-@container top (max-width: 70rem) {
+@container top (max-width: 63.64rem) {
   .top-meta {
     display: none;
   }
@@ -606,7 +606,7 @@
   }
 }
 
-@container top (max-width: 56.25rem) {
+@container top (max-width: 51.14rem) {
   .tabs button > .icon {
     display: none;
   }
