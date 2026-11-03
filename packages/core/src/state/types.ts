@@ -168,6 +168,8 @@ export interface Spec {
   approved?: SpecMark & { v: number; text: string };
   result?: SpecMark & { verdict: SpecVerdict; note?: string; auto?: true };
   backs: (SpecMark & { note: string })[];
+  comments?: { seq: number; by: string }[];
+  changes?: number[];
 }
 
 export interface Edit {
