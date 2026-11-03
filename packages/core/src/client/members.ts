@@ -1,5 +1,5 @@
 import { delegationLive } from "../delegation.ts";
-import { checkDevice, checkKeep, listedComputer, type DeviceClaim, type DeviceList } from "../devices.ts";
+import { checkKeep, type DeviceClaim, type DeviceList } from "../devices.ts";
 import { cleanPersona, personaScopes, type Persona } from "../personality.ts";
 import * as Effect from "effect/Effect";
 import { newChannelKey } from "../crypto.ts";
@@ -12,7 +12,6 @@ import { canPost, SCOPES, scopesOf, type Scope } from "../scopes.ts";
 import type { ChannelState } from "../state.ts";
 import type { ChannelCore } from "./core.ts";
 import { RelayError, type MemberRefusal, type Refused } from "./errors.ts";
-import { computerSponsor, personNameOf } from "./requests.ts";
 import type { ChannelInfo, MemberRow } from "./info.ts";
 import { ownerStatement, wrapFor } from "./keys.ts";
 import type { Relay } from "./relay.ts";
@@ -21,16 +20,6 @@ import { newestEpoch, stale } from "./sealed.ts";
 const NO_RECORD = "that key has no record the owner signed: remove it instead";
 
 export type Reconciled = Pick<ChannelState, "members" | "scopeSets" | "roleSets" | "gone" | "nicknames">;
-
-export const REPROVE_MS = 7 * 24 * 60 * 60 * 1000;
-
-export const REPROVE_WHY = "their app didn't prove this seat in the 7 days after they replaced their person key";
-
-export interface Reproved {
-  proved: Member[];
-  cut: (Member & { why: string })[];
-  waiting: Member[];
-}
 
 export interface MembersFx {
   leave(): Effect.Effect<void, MemberRefusal, Relay>;
@@ -43,7 +32,6 @@ export interface MembersFx {
   reconcilePosting(state: Reconciled, members?: Member[]): Effect.Effect<string[], Refused, Relay>;
   remove(pk: string): Effect.Effect<void, Refused, Relay>;
   cutDevices(list: DeviceList, keeps?: Keeps): Effect.Effect<Member[], Refused, Relay>;
-  reprove(list: DeviceList, proofs: Readonly<Record<string, DeviceClaim>>, now?: number): Effect.Effect<Reproved, Refused, Relay>;
   goneDevices(list: DeviceList, keeps?: Keeps): Effect.Effect<Member[], Refused, Relay>;
   dropDelegates(pks: readonly string[]): Effect.Effect<string[], Refused, Relay>;
   rotate(): Effect.Effect<number, Refused, Relay>;
@@ -217,10 +205,10 @@ export class ChannelMembers {
       for (const m of yield* this.ch.fx.members()) {
         const live = m.active && !m.owner && !m.unverified;
         const why = live ? cutReason(m, list) : null;
-        if (!why && !(live && unlistedReason(m, list))) continue;
+        if (!why) continue;
         const to = yield* Effect.promise(() => keptOn(m, list, keeps, this.ch.roomId));
         if (to) yield* reseal(this.ch, m, { ...omit(m, "active", "readOnly", "unverified", "at"), from: to });
-        else if (why) cut.push({ ...m, why });
+        else cut.push({ ...m, why });
       }
       const dropped = (yield* this.ch.fx.delegations().pipe(Effect.catchCause(() => Effect.succeed([])))).filter((d) => d.person === list.person && revoked.has(d.delegate));
       if (!cut.length && !dropped.length) return cut;
@@ -232,48 +220,6 @@ export class ChannelMembers {
       }
       yield* this.rotation();
       return cut;
-    }),
-
-    reprove: Effect.fn("Channel.reprove")({ self: this }, function* (this: ChannelMembers, list: DeviceList, proofs: Readonly<Record<string, DeviceClaim>>, now: number = Date.now()) {
-      yield* this.ch.ownerOnly();
-      const since = list.reroots.at(-1)?.at;
-      const out: Reproved = { proved: [], cut: [], waiting: [] };
-      if (since === undefined) return out;
-      const all = yield* this.ch.fx.members();
-      const live = all.filter((m) => m.active && !m.owner && !m.unverified);
-      const proven = (m: Member) => Effect.promise(() => checkDevice(proofs[m.pk], this.ch.roomId, m.pk, (p) => (p === list.person ? list : undefined), now));
-      for (const m of live.filter((m) => m.kind === "human" && m.person === list.person && !m.device)) {
-        const got = yield* proven(m);
-        if (got && got.person === list.person && got.device.as !== "computer") {
-          const device = { pk: got.device.device, label: got.device.label, as: got.device.as };
-          yield* reseal(this.ch, m, { ...omit(m, "active", "readOnly", "unverified", "at"), device });
-          out.proved.push({ ...m, device });
-        } else if (now - since >= REPROVE_MS) out.cut.push({ ...m, why: REPROVE_WHY });
-        else out.waiting.push(m);
-      }
-      const ownerPerson = all.find((m) => m.owner)?.person;
-      for (const m of live.filter((m) => m.kind !== "human" && !m.sponsor)) {
-        const got = yield* proven(m);
-        if (!got || got.person !== list.person || got.device.as !== "computer") continue;
-        const sponsor = computerSponsor(all, list.person, personNameOf(live, list.person), ownerPerson);
-        const from = { pk: got.device.device, label: got.device.label };
-        yield* reseal(this.ch, m, { ...omit(m, "active", "readOnly", "unverified", "at"), sponsor, from });
-        out.proved.push({ ...m, sponsor, from });
-      }
-      for (const m of live) {
-        const why = unlistedReason(m, list);
-        if (!why) continue;
-        if (now - since >= REPROVE_MS) out.cut.push({ ...m, why: `${why} in the 7 days after they replaced their person key` });
-        else out.waiting.push(m);
-      }
-      if (!out.cut.length) return out;
-      for (const m of out.cut) {
-        yield* this.ch.fx.send(`removed ${m.name}: ${m.why}`, { kind: "event", ev: { op: "member.gone", member: m.name, pk: m.pk, why: m.why } });
-        yield* this.ch.request(`/members/${m.pk}`, { method: "DELETE" });
-        yield* Effect.ignore(Effect.try({ try: () => this.info.markGone(m.pk), catch: (err) => err }));
-      }
-      yield* this.rotation();
-      return out;
     }),
 
     dropDelegates: Effect.fn("Channel.dropDelegates")({ self: this }, function* (this: ChannelMembers, pks: readonly string[]) {
@@ -396,10 +342,4 @@ export function cutReason(m: Cuttable, list: DeviceList): string | null {
   const whose = m.sponsor.handle ? `@${m.sponsor.handle}` : inlineText(m.sponsor.name, 60) || "their person";
   if (revoked.has(m.from.pk)) return `${m.name}'s computer${quoted(m.from.label)} was forgotten from ${whose}'s devices`;
   return null;
-}
-
-function unlistedReason(m: Cuttable, list: DeviceList): string | null {
-  if (!list.reroots.length || !m.from || m.sponsor?.user !== list.person || list.revoked.includes(m.from.pk) || listedComputer(list, m.from.pk)) return null;
-  const whose = m.sponsor.handle ? `@${m.sponsor.handle}` : inlineText(m.sponsor.name, 60) || "their person";
-  return `${m.name}'s computer${quoted(m.from.label)} wasn't put back on ${whose}'s devices`;
 }

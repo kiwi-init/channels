@@ -300,7 +300,7 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   room, Invite people, Add an agent) shows when the pointer is over the
   section; it becomes a row only while the section is empty. The open row is
   on `wash-2`; a row with news is 600 with a count. Cards for what waits on
-  you (an update, a device, new recovery words) sit at the foot under a
+  you (an update, a device) sit at the foot under a
   16px fade: the text, then the action on its line's end, or under it when
   the text needs the width.
 - **Right panel** (`--panel-w` to start, resizable by its grip): a thread,

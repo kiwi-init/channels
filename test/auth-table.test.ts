@@ -227,6 +227,8 @@ describe("removed person routes are gone", () => {
     ["GET", "/v1/me/vault"],
     ["PUT", "/v1/me/vault"],
     ["DELETE", "/v1/me/vault"],
+    ["GET", "/v1/account/vault"],
+    ["PUT", "/v1/account/vault"],
     ["GET", "/v1/me/channels"],
     ["GET", "/v1/me/usage"],
     ["POST", "/v1/me/devices/transfers"],

@@ -52,7 +52,6 @@ export interface DeviceHost {
   renew(device: string): Promise<void>;
   news(): Promise<DeviceNewsView | null>;
   addComputer(m: { pk: string; xpk: string; label: string; os: string }): Promise<DeviceLink[] | null>;
-  session(): Promise<{ client: AccountClient; device: Identity } | null>;
 }
 
 async function readList(links: unknown[]): Promise<DeviceList> {
@@ -61,7 +60,7 @@ async function readList(links: unknown[]): Promise<DeviceList> {
   return read.list;
 }
 
-export async function myDevice(deps: Pick<DeviceHostDeps, "device" | "saveDevice">, name: string): Promise<Identity> {
+async function myDevice(deps: Pick<DeviceHostDeps, "device" | "saveDevice">, name: string): Promise<Identity> {
   const held = deps.device();
   if (held?.xsk) return held;
   const made = await withExchangeKey(await generateIdentity(name));
@@ -83,7 +82,7 @@ export function createDeviceHost(deps: DeviceHostDeps): DeviceHost {
   };
 
   const signerLabel = (list: DeviceList, pk: string): string =>
-    pk === list.root || pk === list.person ? "your person key" : (list.devices.find((d) => d.device === pk)?.label ?? list.revokes.find((r) => r.device === pk)?.label ?? "a device");
+    pk === list.person ? "your person key" : (list.devices.find((d) => d.device === pk)?.label ?? list.revokes.find((r) => r.device === pk)?.label ?? "a device");
 
   const revokedHere = async (links: unknown[], device: Identity): Promise<boolean> => {
     const read = await readDeviceList(links);
@@ -304,8 +303,6 @@ export function createDeviceHost(deps: DeviceHostDeps): DeviceHost {
       const revokes = list.revokes.map((r) => ({ device: r.device, label: r.label, as: r.as, by: signerLabel(list, r.by), at: r.at, older: r.older }));
       return { links, revokes, removed: null };
     },
-
-    session: sync,
   };
 }
 

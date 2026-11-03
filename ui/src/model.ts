@@ -571,7 +571,6 @@ export interface Account {
   enrollAsk?: EnrollAsk
   enrollError?: string
   devices?: Device[]
-  recovery?: RecoveryState
   forgotten?: { label: string; by: string; at: number }[]
   forgotHere?: { by: string }
   githubCode?: { code: string; url: string }
@@ -586,35 +585,7 @@ export interface EnrollAsk {
   fingerprint?: string | null
 }
 
-export type Enrolling =
-  | { stage: "asking" }
-  | { stage: "digits"; digits: string }
-  | { stage: "check"; person: { name: string; fingerprint: string } }
-  | { stage: "recover" }
-  | { stage: "welcome"; name: string; devices: RecoverDevice[]; channels: string[] }
-
-export interface RecoverDevice {
-  id: string
-  label: string
-  os: string
-  as: "desktop" | "phone" | "computer"
-  lost: boolean
-}
-
-export interface RecoverTrouble {
-  why: string
-  word?: number
-}
-
-export interface RerootDevice {
-  id: string
-  label: string
-  os: string
-  as: "desktop" | "phone" | "computer"
-  here: boolean
-}
-
-export type RerootOpened = { ok: true; devices: RerootDevice[]; channels: string[] } | { ok: false; trouble: RecoverTrouble }
+export type Enrolling = { stage: "asking" } | { stage: "digits"; digits: string } | { stage: "check"; person: { name: string; fingerprint: string } }
 
 export interface Device {
   id: string
@@ -625,14 +596,6 @@ export interface Device {
   thisOne: boolean
   app?: string
 }
-
-export interface RecoveryState {
-  at: number | null
-  here: boolean
-  pending?: { from: number; by: string }
-}
-
-export type RecoverySaved = { ok: true } | { ok: false; wrong: number[] }
 
 export type Theme = "system" | "dark" | "light"
 
@@ -763,19 +726,9 @@ export interface Actions {
   enrollDeny(id: string): void
   forgetDevice(ids: string[], keep?: KeptAgent[]): void
   renewDevice(...ids: string[]): void
-  recoveryWords(): Promise<string[] | null>
-  recoverySave(typed: { at: number; word: string }[]): Promise<RecoverySaved | null>
-  recoveryDrop(): void
-  recoveryCancel(words: string): Promise<RecoverTrouble | null>
-  rerootOpen(words: string): Promise<RerootOpened | null>
-  rerootFinish(keep: string[]): Promise<boolean>
-  rerootCancel(): void
   enrollBegin(): void
   enrollKeep(): void
   enrollCancel(): void
-  recoverBegin(): void
-  recoverOpen(words: string): Promise<RecoverTrouble | null>
-  recoverFinish(lost: string[]): Promise<void>
   closeChannel(code: string): void
   saveTheme(theme: CustomTheme): void
   deleteTheme(id: string): void
