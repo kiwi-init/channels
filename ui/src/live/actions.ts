@@ -248,7 +248,7 @@ export function makeActions(): Actions {
       return noteFor(seat.place, r)
     },
     openTerm: async (code, name, cols, rows, watch) => (await rare()).openTerm(code, name, cols, rows, watch),
-    openMyTerm: async (code, want, cols, rows, watch) => (await rare()).openMyTerm(code, want, cols, rows, watch),
+    openMyTerm: async (code, want, cols, rows, watch, machine) => (await rare()).openMyTerm(code, want, cols, rows, watch, machine),
     myTerms: async () => {
       const b = bridge()
       return b && typeof b.termTabs === "function" ? b.termTabs().catch(() => []) : []
@@ -256,6 +256,16 @@ export function makeActions(): Actions {
     closeMyTerm: async (pane) => {
       const b = bridge()
       return b && typeof b.termTabClose === "function" ? b.termTabClose(pane).catch(() => []) : []
+    },
+    remoteTerms: async (machine) => {
+      const b = bridge()
+      const tabs = b && typeof b.termRemoteTabs === "function" ? await b.termRemoteTabs(machine).catch(() => []) : []
+      return tabs.map((t) => ({ ...t, machine }))
+    },
+    closeRemoteTerm: async (machine, pane) => {
+      const b = bridge()
+      const tabs = b && typeof b.termRemoteClose === "function" ? await b.termRemoteClose(machine, pane).catch(() => []) : []
+      return tabs.map((t) => ({ ...t, machine }))
     },
     choicesOn: async (code, computer) => (await manage()).choicesOn(code, computer),
     chooseFolder: async () => {
