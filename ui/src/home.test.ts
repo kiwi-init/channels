@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { homeOf } from "~/home"
+import { homeOf, saidIn, takeTurns } from "~/home"
 import type { Ask, Channel, Person, Spec, Task } from "~/model"
 
 const agent = (name: string, more: Partial<Person> = {}): Person => ({ name, kind: "agent", owner: false, you: false, presence: "online", lastSeen: 0, joined: 0, messages: 0, ...more })
@@ -102,7 +102,8 @@ describe("homeOf", () => {
         ],
       })
     )
-    expect(h.asks.map((a) => a.text)).toEqual(["Approve spec #55 “Home steers every channel”", "Review T94 Home: one command bar", "Spec #56 is done: check it"])
+    expect(h.asks.map((a) => a.what)).toEqual(["Approve spec #55", "Review T94", "Spec #56 is done: check it"])
+    expect(h.asks.map((a) => a.text)).toEqual(["Home steers every channel", "Home: one command bar", "Spec #56"])
     expect(h.asks.map((a) => a.act)).toEqual([{ kind: "approve-spec", ask: 55, v: 90 }, { kind: "approve-task", task: 94 }, { kind: "open" }])
   })
 
@@ -120,12 +121,75 @@ describe("homeOf", () => {
       notes: [],
     })
     const h = homeOf(channel({ asks: [perm("p1", true), perm("p2", false)] }))
-    expect(h.asks.map((a) => a.text)).toEqual(["win wants to run a command: bun test", "win wants to run a command: bun test"])
+    expect(h.asks.map((a) => [a.what, a.text])).toEqual([
+      ["win wants to run a command", "bun test"],
+      ["win wants to run a command", "bun test"],
+    ])
     expect(h.asks.map((a) => a.act.kind)).toEqual(["allow", "open"])
   })
 
   test("never lets someone in from Home", () => {
     const h = homeOf(channel({ asks: [{ kind: "join", id: "j1", at: 1, name: "pero", who: "agent", code: "123-456" }] }))
-    expect(h.asks[0]).toEqual({ id: "j1", at: 1, text: "pero wants to join", act: { kind: "open" } })
+    expect(h.asks[0]).toEqual({ id: "j1", at: 1, what: "Wants to join", text: "pero", act: { kind: "open" } })
+  })
+
+  test("a long ask reads in full up to its clip, not cut at a line's width", () => {
+    const long = "word ".repeat(50).trim()
+    const h = homeOf(channel({ asks: [question("1", 1, { text: long })] }))
+    expect(h.asks[0]?.text).toBe(long)
+  })
+
+  test("shows the tasks moving with who has them and where they stand, and counts the rest and today's done", () => {
+    const doing = (id: number, more: Partial<Task> = {}): Task => ({ ...task(id, `task ${id}`), status: "doing", history: [], updatedAt: id, ...more })
+    const h = homeOf(
+      channel({
+        nicknames: new Map([["fern", "Fern"]]),
+        people: [agent("fern", { activity: { state: "working", tool: "Bash" } }), agent("moss")],
+        tasks: [
+          doing(1, { owner: "fern" }),
+          doing(2, { owner: "moss", stage: "proving", pr: { repo: "r", number: 7, title: "", url: "", state: "open", checks: "running", ticks: { passed: 1, running: 2, failed: [] } } }),
+          doing(3, { stage: "red", pr: { repo: "r", number: 8, title: "", url: "", state: "open", checks: "fail", ticks: { passed: 1, running: 0, failed: ["unit"] } } }),
+          doing(4),
+          doing(5, { status: "done", updatedAt: Date.now() }),
+          doing(6, { archived: true }),
+        ],
+      })
+    )
+    expect(h.moving).toEqual([
+      { id: 4, title: "task 4", who: null, state: "", busy: false, red: false },
+      { id: 3, title: "task 3", who: null, state: "PR #8 · unit failed", busy: false, red: true },
+      { id: 2, title: "task 2", who: "moss", state: "PR #7 · checks running", busy: false, red: false },
+    ])
+    expect(h.more).toBe(1)
+    expect(h.doneToday).toBe(1)
+  })
+
+  test("names who is running what when a task has no PR yet", () => {
+    const h = homeOf(
+      channel({
+        people: [agent("fern", { activity: { state: "working", tool: "mcp__kiwi__send" } })],
+        tasks: [{ ...task(1, "sync"), status: "doing", owner: "fern", history: [] }],
+      })
+    )
+    expect(h.moving[0]).toMatchObject({ who: "fern", state: "running send", busy: true })
+  })
+
+  test("the last word in #general reads as plain text from its author's nickname", () => {
+    const said = saidIn([
+      { seq: 1, from: "owl", at: 1, text: "## Plan\n- ship **it**", where: { kind: "room", room: "general" } },
+      { seq: 2, from: "owl", at: 2, text: "in a thread", where: { kind: "room", room: "general" }, inThread: 1 },
+      { seq: 3, from: "owl", at: 3, text: "owl took T4", where: { kind: "room", room: "general" }, system: true },
+      { seq: 4, from: "owl", at: 4, text: "in a task", where: { kind: "task", task: 4 } },
+    ])
+    expect(said).toEqual({ from: "owl", at: 1, text: "## Plan\n- ship **it**" })
+    expect(homeOf(channel({ nicknames: new Map([["owl", "lead"]]) }), said).said).toEqual({ from: "lead", at: 1, text: "Plan ship it" })
+    expect(saidIn([])).toBeNull()
+  })
+})
+
+describe("takeTurns", () => {
+  test("takes one from each list in turn, so every channel's first ask shows", () => {
+    expect(takeTurns([["a1", "a2", "a3"], [], ["b1"], ["c1", "c2"]])).toEqual(["a1", "b1", "c1", "a2", "c2", "a3"])
+    expect(takeTurns([])).toEqual([])
   })
 })

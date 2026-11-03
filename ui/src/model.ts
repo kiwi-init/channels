@@ -445,8 +445,24 @@ export type HomeAct = { kind: "options"; options: string[] } | { kind: "allow" }
 export interface HomeAsk {
   id: string
   at: number
+  what: string
   text: string
   act: HomeAct
+}
+
+export interface HomeTask {
+  id: number
+  title: string
+  who: string | null
+  state: string
+  busy: boolean
+  red: boolean
+}
+
+export interface HomeLine {
+  from: string
+  at: number
+  text: string
 }
 
 export interface HomeChannel {
@@ -456,6 +472,10 @@ export interface HomeChannel {
   leadName: string | null
   working: number
   asks: HomeAsk[]
+  moving: HomeTask[]
+  more: number
+  doneToday: number
+  said: HomeLine | null
   loading?: true
 }
 
