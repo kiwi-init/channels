@@ -84,7 +84,7 @@ export async function incoming(req: Request, path: string): Promise<Incoming | n
   const method = req.method.toUpperCase();
   if (method === "PUT" && path.startsWith("/blobs/")) return { req, url: new URL(req.url), method, path, body: "" };
   if (method === "GET" || method === "HEAD") return { req, url: new URL(req.url), method, path, body: "" };
-  // Every client signs the exact body it sends (empty when there is none), so reading DELETE's too is safe; the vault needs it.
+  // Every client signs the exact body it sends (empty when there is none), so reading DELETE's too is safe.
   const body = await readText(req.body, MAX_REQUEST_BYTES, req.headers.get("content-length"));
   return body === null ? null : { req, url: new URL(req.url), method, path, body };
 }

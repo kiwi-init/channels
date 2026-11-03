@@ -3,10 +3,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Channel } from "@kiwi/core/client.ts";
-import { certUntil, nextLink, readDeviceList, rerootLink, rootLink, type DeviceClaim, type DeviceLink, type DeviceLinkBody } from "@kiwi/core/devices.ts";
+import { certUntil, nextLink, readDeviceList, rootLink, type DeviceLink, type DeviceLinkBody } from "@kiwi/core/devices.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
-import { recoveryKey, recoveryLink } from "@kiwi/core/recovery.ts";
-import { postedProofs } from "../packages/app/src/device-lists.ts";
 import { saveConfig, saveIdentity } from "../src/config.ts";
 import { listenDaemon, startDaemon, type Daemon } from "../src/daemon.ts";
 import { loadMachine, newMachine, saveMachine, type MachineFile } from "../src/machine.ts";
@@ -23,7 +21,6 @@ let server: ReturnType<typeof startRelay> | undefined;
 let ownerCh: Channel;
 let daemon: Daemon | undefined;
 let desk: Identity;
-let agentPk: string;
 let machine: MachineFile;
 let links: DeviceLink[];
 
@@ -52,7 +49,6 @@ beforeAll(async () => {
   saveConfig({ channels: { test: { ...(await Channel.resume(relay, made.code, agent)), relay, code: made.code, as: "claude" } } });
   saveIdentity(agent, made.access.roomId);
   const person = await withExchangeKey(await generateIdentity("person"));
-  agentPk = agent.pk;
   desk = await withExchangeKey(await generateIdentity("desk"));
   machine = await newMachine(relay);
   const root = [await rootLink(person, { pk: desk.pk, xpk: desk.xpk!, label: "desk", os: "macOS", as: "desktop" })];
@@ -79,46 +75,5 @@ test("a seat that reads a newer device list keeps it, and one that revokes this 
   await ownerCh.send("updated their list of devices", { kind: "event", ev: { op: "devices", links: revoked } });
   expect(await until(() => loadMachine()?.device === undefined)).toBe(true);
   expect(loadMachine()?.identity.pk).toBe(machine.identity.pk);
-  sub.close();
-});
-
-test("after a re-root that keeps this computer, its agent's seat posts the computer's vouch, and the owner links the agent to its person (#1519)", async () => {
-  const person = await withExchangeKey(await generateIdentity("person-2"));
-  const desk = await withExchangeKey(await generateIdentity("desk-2"));
-  const root = [await rootLink(person, { pk: desk.pk, xpk: desk.xpk!, label: "desk", os: "macOS", as: "desktop" })];
-  const links = await grow(root, desk, {
-    op: "add",
-    device: machine.identity.pk,
-    dxpk: machine.identity.xpk!,
-    label: "box",
-    os: "Linux",
-    as: "computer",
-    approve: false,
-    until: certUntil(Date.now()),
-  });
-  saveMachine({ ...machine, device: { person: { pk: person.pk, name: "human", xpk: person.xpk! }, links } });
-  const sub = await listenDaemon("test", "claude", 0, { noSpawn: true });
-  expect((await ownerCh.members()).find((m) => m.pk === agentPk)?.sponsor).toBeUndefined();
-  const paper = await recoveryKey(new Uint8Array(32).fill(37));
-  const chain = [await recoveryLink(person, person.pk, null, { pk: paper.pk, xpk: paper.xpk! })];
-  const read = await readDeviceList(links);
-  if (!read.ok) throw new Error(read.why);
-  const kept = [...links, await rerootLink(read.list, paper, chain, await withExchangeKey(await generateIdentity("next")), [desk.pk, machine.identity.pk])];
-  await ownerCh.send("updated their list of devices", { kind: "event", ev: { op: "devices", links: kept } });
-  const it = sub[Symbol.asyncIterator]();
-  const end = Date.now() + 15_000;
-  let vouched = false;
-  while (!vouched && Date.now() < end) {
-    const next = await Promise.race([it.next(), Bun.sleep(end - Date.now()).then(() => null)]);
-    if (!next || next.done) break;
-    vouched = next.value.from === "claude" && next.value.ev?.op === "devices" && !!next.value.ev.device;
-  }
-  expect(vouched).toBe(true);
-  const proofs: Record<string, DeviceClaim> = postedProofs((await ownerCh.history(0)).messages);
-  expect(proofs[agentPk]).toMatchObject({ links: kept, device: machine.identity.pk });
-  const list = await readDeviceList(kept);
-  if (!list.ok) throw new Error(list.why);
-  expect((await ownerCh.reprove(list.list, proofs)).proved.map((m) => m.name)).toEqual(["claude"]);
-  expect((await ownerCh.members()).find((m) => m.pk === agentPk)).toMatchObject({ sponsor: { user: person.pk }, from: { pk: machine.identity.pk, label: "box" } });
   sub.close();
 });

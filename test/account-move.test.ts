@@ -7,7 +7,6 @@ import { Channel } from "@kiwi/core/client.ts";
 import { certUntil, nextLink, readDeviceList, rootLink, type DeviceLink } from "@kiwi/core/devices.ts";
 import { accountScope, askToEnroll } from "@kiwi/core/enroll.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
-import { readRecovery, recoveryKey, recoveryLink, sealVault, type RecoveryLink } from "@kiwi/core/recovery.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { withGithub, type HumanAuth } from "../src/relay/human.ts";
 import { FREEZE_MS, MOVE_PATH, MOVE_TO_HEADER, onMoveHttp, TAKEN, type Adoption, type Freeze, type MoveState, type MoveStore, type Rows } from "../src/relay/move.ts";
@@ -105,33 +104,16 @@ async function grown(links: DeviceLink[], signer: Identity, d: Identity): Promis
   return [...links, await nextLink(read.list, signer, { op: "add", device: d.pk, dxpk: d.xpk!, label: "phone", os: "iOS", as: "phone", approve: false, until: certUntil(Date.now()) }, Date.now())];
 }
 
-async function withVault(p: Person): Promise<{ person: Identity; desk: Identity; links: DeviceLink[]; chain: RecoveryLink[] }> {
-  const first = await firstApp(p.old, p.user);
-  const key = await recoveryKey(new Uint8Array(32).fill(7));
-  const chain = [await recoveryLink(first.person, first.person.pk, null, { pk: key.pk, xpk: key.xpk! }, t)];
-  expect((await call(p.old, p.user, first.desk, "PUT", "/v1/account/vault", { recovery: chain })).status).toBe(204);
-  const list = await readDeviceList(first.links);
-  if (!list.ok) throw new Error(list.why);
-  const read = await readRecovery(chain, list.list, t);
-  if (!read.ok) throw new Error(read.why);
-  const vault = await sealVault(first.desk, read.recovery, 1, { person: first.person, channels: [{ label: "home", code: "c", owner: first.desk }] }, t);
-  expect((await call(p.old, p.user, first.desk, "PUT", "/v1/account/vault", { vault })).status).toBe(204);
-  return { ...first, chain };
-}
-
 describe("moving an account from a WorkOS id to a GitHub id (T261)", () => {
-  test("devices, the recovery chain and the vault move to github_<id>, and older apps keep seeing the same account", async () => {
+  test("devices move to github_<id>, and older apps keep seeing the same account", async () => {
     const p = person();
-    const { desk, links, chain } = await withVault(p);
-    const before = await (await call(p.old, "", null, "GET", "/v1/account/vault")).json();
+    const { desk, links } = await firstApp(p.old, p.user);
 
     const res = await move(p, desk);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ user: p.github, rooms: 0 });
 
     expect(await view(p.gh)).toEqual({ user: p.github, links });
-    expect(await (await call(p.gh, "", null, "GET", "/v1/account/vault")).json()).toEqual(before);
-    expect((before as { recovery: unknown[] }).recovery).toEqual(chain);
     expect(await view(p.old)).toEqual({ user: p.github, links });
 
     const longer = await grown(links, desk, await device("phone"));
@@ -351,7 +333,7 @@ describe("a move that fails partway (T261)", () => {
 
   const seeded = (): Accounts => {
     const a = new Accounts();
-    a.data.set(FROM, { links: [{ seq: 1, link: "one" }], vault: [{ k: 1, version: 1, rec: "v" }] });
+    a.data.set(FROM, { links: [{ seq: 1, link: "one" }], fresh: [{ pending: null, last_at: 1 }] });
     a.owned.set(FROM, ["room1", "room2"]);
     return a;
   };

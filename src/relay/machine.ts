@@ -302,6 +302,6 @@ export async function onPersonHttp(req: Request, store: PersonMachinesStore, opt
   const { pk, signer } = signed;
   const list = (await newestLists(await store.lists(pk))).get(pk);
   if (list ? !speaksForPerson(list, signer, now) : signer !== pk) return refuse(new Forbidden({ message: "only the person or one of their current approving devices lists their computers" }));
-  const machines = (await store.machines(pk)).filter((m) => !list?.reroots.length || listedComputer(list, m.key, now));
+  const machines = await store.machines(pk);
   return answer({ machines: machines.sort((a, b) => a.label.localeCompare(b.label) || a.key.localeCompare(b.key)) });
 }

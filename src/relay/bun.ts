@@ -18,7 +18,6 @@ import { corsPreflight, onMailboxHttp, withCors, type MailboxStore } from "./mai
 import { ACCOUNT_ASKS_PER_MINUTE, accountUser, isAccountPath, onAccountHttp, sameEnrollment, sameFresh, type AccountStore, type FreshRecord } from "./account.ts";
 import { ENROLL_TTL_MS, type Enrollment } from "@kiwi/core/enroll.ts";
 import { accountHome, frozenWrite, MOVE_PATH, movedHuman, moveUsers, onMoveHttp, type MoveStore, type Row, type Rows } from "./move.ts";
-import type { OldVault, Vault } from "@kiwi/core/recovery.ts";
 import {
   MACHINE_ASKS_PER_MINUTE,
   MACHINE_BOX_TTL_MS,
@@ -152,8 +151,8 @@ export function startRelay(
   people.run("CREATE TABLE IF NOT EXISTS revoked_keys (pk TEXT PRIMARY KEY)");
   people.run("CREATE TABLE IF NOT EXISTS machine_links (mpk TEXT PRIMARY KEY, links TEXT NOT NULL)");
   people.run("CREATE TABLE IF NOT EXISTS account_links (user TEXT NOT NULL, seq INTEGER NOT NULL, link TEXT NOT NULL, PRIMARY KEY (user, seq))");
-  people.run("CREATE TABLE IF NOT EXISTS account_recovery (user TEXT NOT NULL, n INTEGER NOT NULL, link TEXT NOT NULL, PRIMARY KEY (user, n))");
-  people.run("CREATE TABLE IF NOT EXISTS account_vaults (user TEXT PRIMARY KEY, version INTEGER NOT NULL, rec TEXT NOT NULL)");
+  people.run("DROP TABLE IF EXISTS account_recovery");
+  people.run("DROP TABLE IF EXISTS account_vaults");
   people.run("CREATE TABLE IF NOT EXISTS account_asks (user TEXT PRIMARY KEY, rec TEXT NOT NULL, at INTEGER NOT NULL)");
   people.run("CREATE TABLE IF NOT EXISTS account_fresh (user TEXT PRIMARY KEY, rec TEXT NOT NULL)");
   people.run("CREATE TABLE IF NOT EXISTS account_moves (user TEXT PRIMARY KEY, to_user TEXT NOT NULL, id TEXT NOT NULL, at INTEGER NOT NULL, done INTEGER NOT NULL)");
@@ -262,24 +261,6 @@ export function startRelay(
     tellComputers: async (keys, links) => {
       for (const pk of keys) await takeNewerList(machines, pk, links, Date.now());
     },
-    recovery: async (user) => (people.query("SELECT link FROM account_recovery WHERE user = ? ORDER BY n").all(user) as { link: string }[]).map((r) => JSON.parse(r.link) as unknown),
-    extendRecovery: async (user, from, links) =>
-      people.transaction(() => {
-        if ((people.query("SELECT COUNT(*) AS n FROM account_recovery WHERE user = ?").get(user) as { n: number }).n !== from) return false;
-        links.forEach((l, i) => people.query("INSERT INTO account_recovery (user, n, link) VALUES (?, ?, ?)").run(user, from + i + 1, JSON.stringify(l)));
-        return true;
-      })(),
-    vault: async (user) => {
-      const row = people.query("SELECT rec FROM account_vaults WHERE user = ?").get(user) as { rec: string } | null;
-      return row ? (JSON.parse(row.rec) as Vault | OldVault) : null;
-    },
-    setVault: async (user, next, prev) =>
-      people.transaction(() => {
-        const row = people.query("SELECT version FROM account_vaults WHERE user = ?").get(user) as { version: number } | null;
-        if ((row?.version ?? 0) !== prev) return false;
-        people.query("INSERT OR REPLACE INTO account_vaults (user, version, rec) VALUES (?, ?, ?)").run(user, next.version, JSON.stringify(next));
-        return true;
-      })(),
     fresh: async (user) => freshOf(user),
     setFresh: async (user, next, prev) => {
       if (!sameFresh(freshOf(user), prev)) return false;
@@ -290,7 +271,7 @@ export function startRelay(
       people.transaction(() => {
         const rec = freshOf(user);
         if (rec?.pending?.id !== start.id) return false;
-        for (const table of ["account_links", "account_recovery", "account_vaults", "account_asks"]) people.query(`DELETE FROM ${table} WHERE user = ?`).run(user);
+        for (const table of ["account_links", "account_asks"]) people.query(`DELETE FROM ${table} WHERE user = ?`).run(user);
         start.links.forEach((l, i) => people.query("INSERT INTO account_links (user, seq, link) VALUES (?, ?, ?)").run(user, i + 1, JSON.stringify(l)));
         people.query("INSERT OR REPLACE INTO account_fresh (user, rec) VALUES (?, ?)").run(user, JSON.stringify({ pending: null, lastAt: rec.lastAt }));
         return true;

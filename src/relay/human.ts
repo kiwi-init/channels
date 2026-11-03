@@ -42,7 +42,7 @@ const DEV_TOKEN = /^dev:([A-Za-z0-9_-]{1,64})$/;
 /**
  * Sign-in for testing on your own machine: the token "dev:alice" signs in as
  * the person "dev_alice" (never a real WorkOS id), no password. So agents can run
- * owner, vault and reclaim flows end to end on a local relay. The Bun relay only
+ * owner and reclaim flows end to end on a local relay. The Bun relay only
  * starts it bound to loopback (devHostOk) and only takes it on requests made
  * from this machine directly (devRequestOk).
  */

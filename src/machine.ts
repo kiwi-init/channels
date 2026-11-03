@@ -73,22 +73,6 @@ export async function computerClaimFor(roomId: string, agentPk: string): Promise
   return computer || device ? { ...(computer ? { computer } : {}), ...(device ? { device } : {}) } : undefined;
 }
 
-export interface SeatProof {
-  links: DeviceLink[];
-  version: number;
-  device: string;
-  vouch: string;
-}
-
-export async function seatProof(roomId: string, agentPk: string): Promise<SeatProof | null> {
-  const m = loadMachine();
-  if (!m?.device?.links.length) return null;
-  const read = await readDeviceList(m.device.links);
-  if (!read.ok || !read.list.reroots.length || !listedComputer(read.list, m.identity.pk)) return null;
-  const { device, vouch } = await claimDevice(m.identity, m.device.links, roomId, agentPk);
-  return { links: m.device.links, version: read.list.version, device, vouch };
-}
-
 export async function keepProof(roomId: string, agents: readonly { pk: string; from: string }[]): Promise<{ links: DeviceLink[]; keep: DeviceKeep } | null> {
   const m = loadMachine();
   const links = m?.device?.links;

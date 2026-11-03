@@ -5,7 +5,6 @@ import { cx } from "~/kit/bits"
 import { useApp } from "~/nav"
 
 const Enroll = lazy(() => import("~/start/enroll"))
-const Recover = lazy(() => import("~/start/recover").then((m) => ({ default: m.Recover })))
 const GithubSignIn = lazy(() => import("~/start/github-sign-in"))
 
 const ALLOWED = /^[A-Za-z0-9._-]+$/
@@ -34,7 +33,9 @@ export function FirstRun() {
     return (
       <main className="start-first">
         <div className="start-drag" />
-        <Suspense fallback={null}>{app.enrolling.stage === "recover" || app.enrolling.stage === "welcome" ? <Recover enrolling={app.enrolling} /> : <Enroll enrolling={app.enrolling} />}</Suspense>
+        <Suspense fallback={null}>
+          <Enroll enrolling={app.enrolling} />
+        </Suspense>
       </main>
     )
   return <NameForm />

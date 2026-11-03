@@ -32,7 +32,7 @@ export class ReadOnly extends Schema.TaggedError<ReadOnly>()("ReadOnly", text) {
 export class ChannelGone extends Schema.TaggedError<ChannelGone>()("ChannelGone", text) {}
 /** No such request, member or route. */
 export class NotFound extends Schema.TaggedError<NotFound>()("NotFound", text) {}
-/** The path is right, the method isn't (the vault takes GET, PUT and DELETE). */
+/** The path is right, the method isn't. */
 class MethodNotAllowed extends Schema.TaggedError<MethodNotAllowed>()("MethodNotAllowed", text) {}
 /** The room moved on (an epoch, a check, an existing member): read again and retry. */
 export class Conflict extends Schema.TaggedError<Conflict>()("Conflict", text) {}
