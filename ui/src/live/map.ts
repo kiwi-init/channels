@@ -116,6 +116,17 @@ function activityOf(here: Online | undefined): Activity | undefined {
   }
 }
 
+function workOf(state: ChannelState, m: StateMember): { red?: true; doneAt?: number } {
+  let doneAt: number | undefined
+  let red = false
+  for (const t of state.tasks.values()) {
+    if (t.owner !== m.name || t.cancelled) continue
+    if (t.state === "done") doneAt = Math.max(doneAt ?? 0, t.updatedAt)
+    else if (t.state === "doing" || t.state === "review") red ||= stageOf(state, t).stage === "red"
+  }
+  return { ...(red ? { red: true } : {}), ...(doneAt !== undefined ? { doneAt } : {}) }
+}
+
 function loadOf(state: ChannelState, m: StateMember): Load | undefined {
   const l = memberLoad(state, m.name)
   if (!showsLoad(m, l)) return undefined
@@ -171,6 +182,7 @@ function personOf(state: ChannelState, m: StateMember, record: RosterMember | un
     ...(!human && sponsorsAgent(state.members, me, m.name) ? { yours: true } : {}),
     ...(m.card?.note ? { about: m.card.note } : {}),
     ...(load ? { load } : {}),
+    ...(human ? {} : workOf(state, m)),
     ...(!m.owner && !canPost(m.scopes) ? { readOnly: true } : {}),
     ...(!human && wakes.has(m.name) ? { wakes: wakes.get(m.name) === true } : {}),
     ...(human && m.addsAgents ? { addsAgents: true } : {}),

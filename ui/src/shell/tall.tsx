@@ -7,7 +7,7 @@ import { Icon } from "~/kit/icons"
 import type { Channel } from "~/model"
 import { useApp } from "~/nav"
 import { shown } from "~/names"
-import { statusOf, taskOf, toneOf } from "~/shell/sidebar"
+import { statusOf, taskOf } from "~/shell/sidebar"
 
 const KEY = "channels.tall.work"
 const SHARE = 0.42
@@ -93,11 +93,11 @@ function Crew({ channel }: { channel: Channel }) {
             type="button"
             className={cx("crew-agent", on && "is-on", p.presence === "offline" && "is-off")}
             aria-pressed={on}
+            title={statusOf(p, channel)}
             onClick={() => go({ to: "panel", panel: on ? null : { kind: "person", name: p.name } })}
           >
             <Avatar person={p} size="sm" pip />
             <span className="crew-name">{shown(p)}</span>
-            <span className={cx("crew-status", toneOf(p, channel))}>{statusOf(p, channel)}</span>
             <span className="crew-task">
               {task ? (
                 <>

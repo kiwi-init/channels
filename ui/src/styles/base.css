@@ -392,6 +392,200 @@ kbd {
   fill: currentColor;
 }
 
+.face {
+  overflow: visible;
+}
+
+.face .eye {
+  opacity: 0;
+  transform: scale(0.2);
+  transition:
+    opacity var(--fast),
+    transform var(--pop);
+}
+
+.face .eye:not(.eye-line) {
+  fill: #000;
+}
+
+.face .eye-line {
+  fill: none;
+  stroke: #000;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.face :is(.face-rig, .face-look) {
+  transition: transform var(--glide);
+}
+
+.face :is(.face-cross, .face-ask, .face-spark) {
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  scale: 0.3;
+  transition:
+    opacity var(--fast),
+    scale var(--pop);
+}
+
+.face .face-cross {
+  fill: none;
+  stroke: var(--alert);
+  stroke-width: 3.2;
+  stroke-linecap: round;
+}
+
+.face .face-ask {
+  fill: var(--decide);
+}
+
+.face .face-spark {
+  fill: var(--live);
+}
+
+.face:is([data-mood="free"], [data-mood="thinking"]) .eye-dot,
+.face[data-mood="tool"] .eye-bar,
+.face[data-mood="overloaded"] .eye-chev,
+.face[data-mood="offline"] .eye-shut,
+.face[data-mood="done"] .eye-joy {
+  opacity: 1;
+  transform: none;
+}
+
+.face[data-mood="waiting"] .eye-dot {
+  opacity: 1;
+  transform: scale(1.28);
+}
+
+.face[data-mood="error"] .face-cross,
+.face[data-mood="waiting"] .face-ask,
+.face[data-mood="done"] .face-spark {
+  opacity: 1;
+  scale: 1;
+}
+
+.face[data-mood="thinking"] .face-look {
+  transform: translate(2.6px, -3.4px);
+  animation: face-ponder 5.2s ease-in-out 2;
+}
+
+.face[data-mood="tool"] .face-look {
+  transform: translate(0, 3px);
+  animation: face-scan 1.9s ease-in-out 4;
+}
+
+.face[data-mood="waiting"] .face-rig {
+  transform: translate(0, -2.5px);
+  animation: face-perk 0.5s var(--ease);
+}
+
+.face[data-mood="overloaded"] .face-rig {
+  transform: translate(50px, 92px) scale(1.06, 0.92) translate(-50px, -92px);
+  animation: face-shiver 0.5s linear;
+}
+
+.face[data-mood="offline"] .face-rig {
+  transform: translate(0, 2px);
+}
+
+.face[data-mood="done"] .face-rig {
+  animation: face-hop 0.62s cubic-bezier(0.3, 0.7, 0.4, 1);
+}
+
+.face[data-mood="error"] .face-rig {
+  animation: face-shake 0.42s ease-in-out;
+}
+
+.av.is-off .face-badge {
+  fill: var(--ink-3);
+}
+
+@keyframes face-ponder {
+  0%,
+  100% {
+    transform: translate(2.6px, -3.4px);
+  }
+  35% {
+    transform: translate(-2px, -4px);
+  }
+  70% {
+    transform: translate(0.8px, -2.6px);
+  }
+}
+
+@keyframes face-scan {
+  0%,
+  100% {
+    transform: translate(-2.4px, 3px);
+  }
+  50% {
+    transform: translate(2.4px, 3px);
+  }
+}
+
+@keyframes face-perk {
+  0% {
+    transform: none;
+  }
+  40% {
+    transform: translate(0, -6px);
+  }
+  100% {
+    transform: translate(0, -2.5px);
+  }
+}
+
+@keyframes face-hop {
+  0%,
+  62%,
+  100% {
+    transform: none;
+  }
+  30% {
+    transform: translate(0, -9px);
+  }
+  78% {
+    transform: translate(50px, 92px) scale(1.06, 0.93) translate(-50px, -92px);
+  }
+}
+
+@keyframes face-shake {
+  0%,
+  100% {
+    transform: none;
+  }
+  20% {
+    transform: translate(-3.5px, 0);
+  }
+  40% {
+    transform: translate(3.5px, 0);
+  }
+  60% {
+    transform: translate(-2.2px, 0);
+  }
+  80% {
+    transform: translate(1.4px, 0);
+  }
+}
+
+@keyframes face-shiver {
+  0%,
+  100% {
+    transform: translate(50px, 92px) scale(1.06, 0.92) translate(-50px, -92px);
+  }
+  25% {
+    transform: translate(48.8px, 92px) scale(1.08, 0.9) translate(-50px, -92px);
+  }
+  50% {
+    transform: translate(51.2px, 92px) scale(1.05, 0.93) translate(-50px, -92px);
+  }
+  75% {
+    transform: translate(49.4px, 92px) scale(1.07, 0.91) translate(-50px, -92px);
+  }
+}
+
 .av svg {
   width: 62%;
   height: 62%;
@@ -843,7 +1037,6 @@ html .day,
 html .num,
 html .count,
 html .tile-badge,
-html .side-status,
 html .panel-sub,
 html .msg-time,
 html .msg-time-hover,
@@ -883,7 +1076,6 @@ html .msg-thread-n {
 
 html .heading h3,
 html .day,
-html .side-status,
 html .msg-time,
 html .msg-time-hover,
 html .thread-count,
@@ -1186,7 +1378,6 @@ html .msg-time,
 html .chip-meta,
 html .needs-meta,
 html .set-device-meta,
-html .side-status,
 html .panel-sub,
 html .person-kind {
   word-spacing: -0.2em;

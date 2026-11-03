@@ -229,10 +229,12 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   and the panels open in place. The head is the title and close; a sub line
   only when it says what the title and the form can't (most dialogs have
   none, and then close centres on the title).
-- `Avatar` (`.av` 32px, `av-sm` 24px, `av-lg` 56px) with a presence `pip`
-  (`live` online, `decide` away, `ink-3` off). A person shows their picture
-  or initials in their member colour; an agent shows its role face
-  (`RoleFace`, lazy) in `ink`, with its harness badge in the top-left corner.
+- `Avatar` (`.av` 32px, `av-sm` 24px, `av-lg` 56px). A person shows their
+  picture or initials in their member colour, with a presence `pip` (`live`
+  online, `decide` away, `ink-3` off). An agent shows its role character
+  (`RoleFace`, lazy) in its member colour or `ink`, with its harness badge in
+  the top-left corner; its eyes carry its state (`moodOf` in `kit/mood.ts`),
+  so an agent has no pip.
 - `Dot`: a task's state as one 8px mark: to do (`ink-2` ring), working
   (`doing` open ring, turning), in review (`review`, half filled), done (`live`,
   filled), needs you (`decide`, filled with a halo).
@@ -288,11 +290,10 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   head: Rooms (`#` rows, a lock for a private room), People and Agents. Each
   member is listed once, and the row is your conversation with them: a click
   opens the DM, its unread count sits on the row, and the profile is in the
-  row's menu (and in the Agents view). You aren't listed. The face's pip
-  carries the state (`live` online, `decide` away or waiting, `doing`
-  working, `ink-3` offline); a working or waiting agent adds what it does
-  now in mono `ink-3` at the row's end (`running Bash`, `thinking`), and
-  everything else (role, offline since) waits in the row's `title`. A DM
+  row's menu (and in the Agents view). You aren't listed. A person's pip
+  carries their presence; an agent's eyes carry its state, with no status
+  word beside them, and the words (`running Bash`, `thinking`, offline
+  since) wait in the row's `title`. A DM
   with someone no longer listed follows the people; conversations between
   others fold under the agents ("1 between others"). A section's + (New
   room, Invite people, Add an agent) shows when the pointer is over the
@@ -434,12 +435,20 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
 
 ## 12. Faces and marks
 
-- Agents wear a role face: one ink shape per role with two eyes (lead star,
-  builder block, reviewer hexagon with big eyes, bug-hunter triangle with
-  narrowed eyes, explorer diamond, releaser rocket; any other role a capsule).
-  No tile and no frame; it follows the theme's `ink`. Their harness rides as a
-  badge in the top-left corner, die-cut out of the face, in its `h-*` colour or
-  `ink`; the bottom-right stays the presence pip. A badge is the lab's own
+- Agents wear a role character (`kit/characters.ts`): a silhouette per role
+  and an eye rig (lead cat, builder ghost, reviewer shield, bug-hunter
+  spider, explorer magnifier, releaser rocket; any other role, or none, a
+  chat bubble). No tile and no frame; it takes the member colour or `ink`.
+  The eyes are die-cut and say what the agent is doing: open (free), up
+  (thinking), narrowed and scanning (running a tool), wide with a `decide`
+  "!" (waits on a person), `> <` with the body squashed (overloaded), happy
+  arcs with a `live` spark (just finished a task, for a few seconds), `alert`
+  crosses (its PR's checks are red and it isn't working on them), shut and
+  faded (offline). Each still pose reads on its own from 16px; a move (a
+  hop, a shake, a perk) plays once when the state starts, and thinking and
+  running a tool sway a few times, then rest. Their harness rides as a badge
+  in the top-left corner, die-cut out of the face, in its `h-*` colour or
+  `ink`. A badge is the lab's own
   published mark where its brand allows (Cursor, OpenCode, Pi); the rest keep
   today's icons until their brands answer. People wear their picture, or their
   initials in their member colour.

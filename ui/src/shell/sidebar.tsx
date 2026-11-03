@@ -216,25 +216,17 @@ export function statusOf(p: Person, channel: Channel): string {
 
 export const taskOf = (p: Person, channel: Channel) => (p.load?.doing[0] !== undefined ? channel.tasks.find((t) => t.id === p.load?.doing[0]) : undefined)
 
-export function toneOf(p: Person, channel: Channel): string | false {
-  const live = liveOf(p)
-  if (live) return live.busy ? "is-doing" : "is-waiting"
-  const t = taskOf(p, channel)
-  return !!t && `is-${t.status}`
-}
-
 function Member({ person, channel, direct }: { person: Person; channel: Channel; direct: Direct | undefined }) {
   const { nav, go } = useApp()
   const { actions } = useAct()
   const where = { kind: "dm", with: person.name } as const
   const on = nav.tab === "chat" && sameWhere(nav.where, where)
-  const live = person.kind === "agent" ? liveOf(person) : null
   const unread = direct?.unread ?? 0
   return (
     <li>
       <button
         type="button"
-        className={cx("side-row side-member", on && "is-on", unread > 0 && "is-news", person.presence === "offline" && "is-off", live && (live.busy ? "is-doing" : "is-waiting"))}
+        className={cx("side-row side-member", on && "is-on", unread > 0 && "is-news", person.presence === "offline" && "is-off")}
         aria-current={on ? "page" : undefined}
         title={statusOf(person, channel)}
         onClick={() => go({ to: "where", where })}
@@ -244,7 +236,6 @@ function Member({ person, channel, direct }: { person: Person; channel: Channel;
       >
         <Avatar person={person} size="sm" pip />
         <span className="side-label">{shown(person)}</span>
-        {live && <span className="side-status">{live.text}</span>}
         {direct?.locked && <Icon name="lock" size={12} label="Private" />}
         <Count n={unread} loud />
       </button>
