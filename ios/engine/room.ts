@@ -274,7 +274,7 @@ export class Room {
       autoApprove: (p: string) => this.keyring.call(this.code, "autoApprove", p, []),
       requests: (o: { person: string }) => this.keyring.call(this.code, "requests", o),
     };
-    await tendOwned(person, this.title, api, (title, body) => this.hooks.log(`${title}: ${body}`), this.told);
+    await tendOwned(person, api, { title: this.title, ping: (title, body) => this.hooks.log(`${title}: ${body}`), told: this.told });
   }
 
   private fail(e: unknown): void {

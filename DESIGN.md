@@ -477,7 +477,7 @@ profile, the task panel), not every row.
 Names: people read nicknames, and only nicknames. A handle (`cheery-fox`)
 is for agents and commands; a person never has to read one. Wherever the
 UI shows a member (a message's author, the sidebar, a mention, a task's
-owner or reviewer, an event line, a toast, a notification) it shows their
+owner or reviewer, an event line, a toast) it shows their
 nickname, and a member without one shows their handle as the fallback.
 That includes members who have left. `@handle` and a bare handle in a
 message's prose read as the nickname too; code, links and paths keep the

@@ -8,10 +8,10 @@ const storeOf = (saved: Record<string, string>) => {
 }
 
 test("a saved Channels Dark moves to OLED Black once, and a later pick of it stays", () => {
-  const store = storeOf({ "ui.prefs": JSON.stringify({ notify: "all", darkTheme: "channels-dark", lightTheme: "channels-light" }) })
-  expect(readPrefs(store)).toMatchObject({ notify: "all", darkTheme: "channels-oled" })
-  expect(JSON.parse(store.m.get("ui.prefs") ?? "{}")).toMatchObject({ notify: "all", darkTheme: "channels-oled" })
-  store.setItem("ui.prefs", JSON.stringify({ notify: "all", darkTheme: "channels-dark", lightTheme: "channels-light" }))
+  const store = storeOf({ "ui.prefs": JSON.stringify({ enterSends: false, darkTheme: "channels-dark", lightTheme: "channels-light" }) })
+  expect(readPrefs(store)).toMatchObject({ enterSends: false, darkTheme: "channels-oled" })
+  expect(JSON.parse(store.m.get("ui.prefs") ?? "{}")).toMatchObject({ enterSends: false, darkTheme: "channels-oled" })
+  store.setItem("ui.prefs", JSON.stringify({ enterSends: false, darkTheme: "channels-dark", lightTheme: "channels-light" }))
   expect(readPrefs(store).darkTheme).toBe("channels-dark")
 })
 

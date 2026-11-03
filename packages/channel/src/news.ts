@@ -115,9 +115,7 @@ export function newsTotal(news: RowNews[]): number {
   return news.reduce((n, r) => n + (r.open ? r.count : r.fresh || r.needs ? 1 : 0), 0);
 }
 
-export function badgeTotal(news: RowNews[], notify: "all" | "mentions" | "none"): number {
-  if (notify === "none") return 0;
-  if (notify === "all") return newsTotal(news);
+export function badgeTotal(news: RowNews[]): number {
   return news.reduce((n, r) => n + (r.open ? r.mentions + r.needs : r.needs ? 1 : 0), 0);
 }
 

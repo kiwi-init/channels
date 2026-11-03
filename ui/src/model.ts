@@ -629,22 +629,12 @@ export interface Prefs {
   textSize: number
   font: TextFont
   reduceMotion: boolean
-  notify: "all" | "mentions" | "none"
   muted: string[]
-  snoozeUntil: number | null
-  quiet: Quiet
-  mentionSound: boolean
   enterSends: boolean
   darkTheme: string
   lightTheme: string
   customThemes: CustomTheme[]
   folders: Folder[]
-}
-
-export interface Quiet {
-  on: boolean
-  from: number
-  to: number
 }
 
 export interface Folder {
@@ -718,7 +708,6 @@ export interface Actions {
   searchOlder(code: string, query: string, before: number): Promise<OlderSearch>
   olderAround(code: string, seq: number): Promise<OlderHit[] | null>
   fetchOlder(code: string, got: (asked: number) => void): Promise<void>
-  snooze(until: "1h" | "8h" | "tomorrow" | null): void
   forgetComputer(id: string): void
   linkGithub(): void
   signInWithGithub(): void

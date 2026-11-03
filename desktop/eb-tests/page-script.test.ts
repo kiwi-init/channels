@@ -87,7 +87,7 @@ test("script in our page that hooks every builtin it can never sees the session 
     window.kiwi.onStore(() => window.stores++);
     window.answer = "pending";
     window.kiwi.getDeepLink().then((v) => (window.answer = v));
-    window.kiwi.notify("page", "script");
+    window.kiwi.installUpdate();
   `,
     realm,
   );
@@ -100,5 +100,5 @@ test("script in our page that hooks every builtin it can never sees the session 
   expect(seen.length).toBeGreaterThan(0);
   expect(seen.filter((s) => s.includes(session) || s.includes(doc))).toEqual([]);
   expect({ answer: sandbox["answer"], stores: sandbox["stores"], stolen: sandbox["stolen"] }).toEqual({ answer: null, stores: 1, stolen: [] });
-  expect(shell.did).toContain("notify page: script");
+  expect(shell.did).toContain("restart");
 });

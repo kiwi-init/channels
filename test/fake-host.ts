@@ -31,7 +31,6 @@ export function fakeHost(app: FakeApp = {}): FakeHost {
     openExternal: async (url) => void did.push(`open ${url}`),
     droppedFiles: async () => [],
     pastedImage: async () => null,
-    notify: (title, body, link) => void did.push(`notify ${title}: ${body}${link ? ` → ${link}` : ""}`),
     badge: (count) => void did.push(`badge ${count}`),
     appearance: (appearance) => void did.push(`appearance ${appearance}`),
     wallpaper: async () => null,

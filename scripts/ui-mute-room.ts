@@ -29,26 +29,6 @@ const expect = (ok: boolean, what: string) => {
 try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 860 } });
   page.on("pageerror", (e) => fails.push(`page threw: ${e.message}`));
-  await page.goto(`http://127.0.0.1:${server.port}/?shot=settings`);
-  await page.getByRole("button", { name: "Notifications" }).click();
-  await page.getByRole("button", { name: "1 hour" }).click();
-  const resume = page.getByRole("button", { name: "Resume" });
-  await resume.waitFor();
-  const moon = await page
-    .getByRole("button", { name: /Notifications paused until/ })
-    .waitFor({ timeout: 5_000 })
-    .then(
-      () => true,
-      () => false,
-    );
-  expect(moon, "pausing shows the moon in the rail, naming when it ends");
-  await resume.click();
-  await page.getByRole("button", { name: "1 hour" }).waitFor();
-  expect((await page.getByRole("button", { name: /Notifications paused/ }).count()) === 0, "Resume takes the pause and the moon away");
-
-  await page.getByRole("switch", { name: "Quiet hours" }).click();
-  expect((await page.getByLabel("Quiet hours start").inputValue()) === "22:00", "quiet hours offer 22:00 to 08:00 to start with");
-
   await page.goto(`http://127.0.0.1:${server.port}/?shot=channel-settings`);
   const design = page.locator(".side-row", { hasText: "design" }).first();
   await design.waitFor();

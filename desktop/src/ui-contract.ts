@@ -2578,7 +2578,6 @@ export const UI_SURFACES: Readonly<Record<string, readonly string[]>> = {
     "kiwi.machines",
     "kiwi.migrateChannels",
     "kiwi.movedApp",
-    "kiwi.notify",
     "kiwi.onAccent",
     "kiwi.onDeepLink",
     "kiwi.onFrost",

@@ -11,21 +11,19 @@ import { joinCodeFromLink } from "@kiwi/app/deep-link.ts"
 import { adoptThisComputer } from "@kiwi/app/computers.ts"
 import { useIcons, useMemberIcons } from "@kiwi/app/icons.ts"
 import { lastChannel, rememberChannel, reopenable } from "@kiwi/app/last-channel.ts"
-import { isMuted } from "~/live/quiet"
+import { isMuted } from "~/live/mute"
 import { badgeTotal, newsTotal, rowNews, startMarks, useMarks, useOpenNews, useTabNews } from "@kiwi/channel/news.ts"
 import { useOwnPersonalities } from "@kiwi/app/personalities.ts"
 import { bridge, useSecrets } from "@kiwi/secrets/secrets.ts"
 import { useAccount, useEnrolling, useGithubGate, useGithubSignIn } from "~/live/account"
 import { makeActions } from "~/live/actions"
-import { chime } from "~/live/alerts"
 import { OpenMember, type View } from "~/live/channel"
 import { iconUrl } from "~/live/icon"
-import { useNotesElsewhere } from "~/live/notes"
-import { hashTarget, messageOfLink } from "~/live/notify"
+import { hashTarget, messageOfLink } from "~/live/links"
 import { openFromNote } from "~/live/open-message"
 import { harnessChoices } from "~/live/harness-rows"
 import { OpenPending, pendingTitle } from "~/live/pending"
-import { ownPrefs, usePrefs } from "~/live/prefs"
+import { usePrefs } from "~/live/prefs"
 import { useComputer } from "~/live/computer"
 import { useDeviceLists } from "~/live/devices"
 import { useStarts } from "~/live/starts"
@@ -36,7 +34,7 @@ import type { Go } from "~/nav"
 
 const STATE: Record<ChannelRow["state"], ChannelTile["state"]> = { member: "member", pending: "waiting", agents: "gone", elsewhere: "gone" }
 
-function useTiles(rows: ChannelRow[], notify: "all" | "mentions" | "none", muted: readonly string[]): ChannelTile[] {
+function useTiles(rows: ChannelRow[], muted: readonly string[]): ChannelTile[] {
   const marks = useMarks()
   const openNews = useOpenNews()
   const icons = useIcons()
@@ -49,7 +47,7 @@ function useTiles(rows: ChannelRow[], notify: "all" | "mentions" | "none", muted
     [rows, marks, openNews, muted]
   )
   useEffect(() => startMarks(rows), [rows])
-  useTabNews(newsTotal(news), badgeTotal(news, notify))
+  useTabNews(newsTotal(news), badgeTotal(news))
   return useMemo(
     () =>
       rows.map((r, i): ChannelTile => {
@@ -95,11 +93,8 @@ function usePersonas(own: Personality[]): App["personas"] {
   return useMemo(() => [...PRESETS, ...own].map((p) => ({ id: p.id, label: p.name, about: p.instructions.split(/(?<=\.)\s/)[0] ?? capabilityLine(p) })), [own])
 }
 
-const joinsMuted = (): boolean => ownPrefs().notify === "none"
-
-function useDuties(rows: ChannelRow[], person: string | undefined, open: string | null) {
-  useAutoApproval(rows, joinsMuted, chime)
-  useNotesElsewhere(rows, open)
+function useDuties(rows: ChannelRow[], person: string | undefined) {
+  useAutoApproval(rows)
   const members = useMemo(() => rows.filter((r) => r.state === "member").map((r) => r.code), [rows])
   useMemberIcons(members)
   useDeviceLists(members)
@@ -112,8 +107,8 @@ export function useLive(open: string | null): App {
   const account = useAccount()
   const rows = useChannelList()
   const prefs = usePrefs()
-  const channels = useTiles(rows, prefs.notify, prefs.muted)
-  useDuties(rows, useSecrets().person?.pk, open)
+  const channels = useTiles(rows, prefs.muted)
+  useDuties(rows, useSecrets().person?.pk)
   const opened = useOpened()
   const harnesses = useHarnesses()
   const ownPersonalities = useOwnPersonalities()

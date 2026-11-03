@@ -59,11 +59,11 @@ const settled = (p: Promise<unknown>, ms = 100): Promise<string> =>
 
 describe("window.kiwi over Electrobun's RPC, both ends as the app wires them", () => {
   test("calls reach main's handlers with their arguments, and answers and errors come back", async () => {
-    await kiwi.notify("T436", "over RPC");
+    expect(await kiwi.installUpdate()).toBe(false);
     expect(await kiwi.saveFile("notes.md", "hi")).toBe("notes.md");
     await expect(kiwi.terminalHelpers("vim" as "rex", "on")).rejects.toThrow("terminalHelpers takes rex or tmux, and on or off");
     await expect(kiwi.openExternal("file:///etc/passwd")).rejects.toThrow("only http(s) links open outside");
-    expect(shell.did).toEqual(["notify T436: over RPC", "save notes.md"]);
+    expect(shell.did).toEqual(["restart", "save notes.md"]);
   });
 
   test("a store change reaches the page's onStore and getSnapshot, and other pushes their own listener", async () => {
@@ -84,7 +84,7 @@ describe("window.kiwi over Electrobun's RPC, both ends as the app wires them", (
     const heard: string[] = [];
     kiwi.onDeepLink((u) => heard.push(u));
     expect(await settled(kiwi.saveFile("off.md", "page"))).toBe("no answer");
-    expect(await settled(kiwi.notify("off", "page"))).toBe("no answer");
+    expect(await settled(kiwi.installUpdate())).toBe("no answer");
     main.push("deepLink", "kiwi://join/mc2-leak");
     await Bun.sleep(0);
     expect({ ran: shell.did.slice(before), heard }).toEqual({ ran: [], heard: [] });
@@ -127,7 +127,7 @@ describe("window.kiwi over Electrobun's RPC, both ends as the app wires them", (
     expect(await settled(deep)).toBe("answered null");
     expect(await settled(before)).toBe("no answer");
     const done = shell.did.length;
-    expect(await settled(first.call("notify", "late", "from the old page"))).toBe("no answer");
+    expect(await settled(first.call("installUpdate"))).toBe("no answer");
     expect(shell.did.slice(done)).toEqual([]);
     const heard: string[] = [];
     second.listen("deepLink", (u) => heard.push(u));
@@ -248,11 +248,12 @@ describe("sessions are main's (T1230)", () => {
   test("only a session main minted opens: a thousand hellos with ids of the page's own choosing open nothing, and the real page keeps its answers", async () => {
     const r = rig();
     const real = r.load();
+    const done = shell.did.length;
     for (let i = 0; i < 1000; i++) r.raw({ session: crypto.randomUUID(), doc: crypto.randomUUID() });
-    r.raw({ session: crypto.randomUUID(), doc: crypto.randomUUID(), packet: { type: "request", id: 1, method: "notify", params: ["forged", "session"] } });
+    r.raw({ session: crypto.randomUUID(), doc: crypto.randomUUID(), packet: { type: "request", id: 1, method: "installUpdate", params: [] } });
     expect(await settled(real.call("getDeepLink"))).toBe("answered null");
     expect(r.events).toEqual([`opened ${real.session}`]);
-    expect(shell.did).not.toContain("notify forged: session");
+    expect(shell.did.slice(done)).toEqual([]);
   });
 
   test("main mints a fresh id for the next load each time one opens, so every load has its own", () => {
@@ -326,9 +327,10 @@ describe("each document is its own session (T1741)", () => {
     const id = r.bridge.nextSession();
     r.load(id);
     const second = r.load(id);
-    for (let i = 0; i < 100; i++) r.raw({ session: id, doc: crypto.randomUUID(), packet: { type: "request", id: 1, method: "notify", params: ["forged", "nonce"] } });
+    const done = shell.did.length;
+    for (let i = 0; i < 100; i++) r.raw({ session: id, doc: crypto.randomUUID(), packet: { type: "request", id: 1, method: "installUpdate", params: [] } });
     expect(await settled(second.call("getDeepLink"))).toBe("answered null");
     expect(r.events).toEqual([`opened ${id}`, `opened ${id}`]);
-    expect(shell.did).not.toContain("notify forged: nonce");
+    expect(shell.did.slice(done)).toEqual([]);
   });
 });

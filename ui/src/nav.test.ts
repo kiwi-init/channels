@@ -38,14 +38,14 @@ describe("back and forward walk the places you were (T978)", () => {
     expect(nav.back).toEqual([])
   })
 
-  test("a notification in another channel is one step: ⌘[ goes straight back, not through that channel's last room", () => {
+  test("a message link into another channel is one step: ⌘[ goes straight back, not through that channel's last room", () => {
     keepPlace("b", { where: room("ops"), tab: "chat" })
     const nav = run(startNav("a"), { to: "channel", code: "b", jump: true }, { to: "where", where: room("alerts"), replace: true })
     expect(at(nav)).toEqual({ channel: "b", where: room("alerts"), tab: "chat" })
     expect(nav.back.map((p) => [p.channel, p.where])).toEqual([["a", general]])
   })
 
-  test("a notification in another room of the same channel is one step too", () => {
+  test("a message link into another room of the same channel is one step too", () => {
     const nav = run(startNav("a"), { to: "channel", code: "a", jump: true }, { to: "where", where: room("alerts"), replace: true })
     expect(nav.back.map((p) => [p.channel, p.where])).toEqual([["a", general]])
   })

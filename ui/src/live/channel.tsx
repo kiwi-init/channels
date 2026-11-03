@@ -2,8 +2,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 
 import type { SendOptions } from "@kiwi/core/client.ts"
 import { GENERAL_ROOM, type Message as Wire } from "@kiwi/core/protocol.ts"
-import { sentHere } from "@kiwi/core/room-rules.ts"
-import { answersDecisions, dmPlace, fullyTrusted, placeKey, type ChannelState } from "@kiwi/core/state.ts"
+import { dmPlace, fullyTrusted, placeKey, type ChannelState } from "@kiwi/core/state.ts"
 import { channelTitle, loadRecent, saveRecent } from "@kiwi/channel/recent.ts"
 import { useChannel } from "@kiwi/channel/use-channel.ts"
 import { useKnownChannels } from "@kiwi/channel/list.ts"
@@ -11,10 +10,9 @@ import { type StoredMember } from "@kiwi/channel/store.ts"
 import { useIcons, useLiveIcon } from "@kiwi/app/icons.ts"
 import { markSeen, setOpenNews } from "@kiwi/channel/news.ts"
 import { lastPreview } from "@kiwi/app/preview.ts"
-import { roomLast, roomOfMessage, roomSeenKey } from "@kiwi/app/rooms.ts"
+import { roomLast, roomSeenKey } from "@kiwi/app/rooms.ts"
 import { sendsInTurn } from "@kiwi/app/send-order.ts"
 import { markSeenIn, roomsFrom, seenIn, sendFrom, useSeen } from "@kiwi/app/threads.ts"
-import { useAskChime } from "~/live/alerts"
 import { useNewMembers, useNewPowers } from "~/live/defaults"
 import { kept } from "~/live/keep"
 import { changeUnsent, nextUnsentKey, unsentIn } from "~/live/unsent"
@@ -24,10 +22,8 @@ import { usePinsHere } from "~/live/pins"
 import { usePublishFace } from "~/live/face"
 import { usePictures } from "~/live/pictures"
 import { seated, useSeats } from "~/live/seats"
-import { elsewhere, type NotePlace } from "~/live/notify"
-import { isMuted, tells } from "~/live/quiet"
-import { tellMessage } from "~/live/notes"
-import { ownPrefs, usePrefs } from "~/live/prefs"
+import { isMuted } from "~/live/mute"
+import { usePrefs } from "~/live/prefs"
 import { receiptsOf, withReceipts } from "~/live/receipts"
 import { announce } from "~/kit/toasts"
 import { arrivals } from "~/live/persona-later"
@@ -362,7 +358,6 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
 
   const waiting = useMemo(() => asks.asks.filter((a) => !("answer" in a && a.answer) && !(a.kind === "question" && a.idle)), [asks.asks])
   const needs = waiting.length
-  useAskChime(waiting)
   const top = Math.max(live.head, messages.at(-1)?.seq ?? 0)
   const unreadHere = rooms.reduce((n, r) => n + (r.muted ? r.mentions : r.unread), 0) + directs.reduce((n, d) => n + d.unread, 0)
   useEffect(() => {
@@ -386,29 +381,5 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
     })
   }, [messages, others, state, code, me, member.at])
 
-  useNotify(messages, me, title, code, state)
-
   return null
 })
-
-function statePlace(state: Pick<ChannelState, "placeOf" | "roomOf" | "rooms">, m: Wire): NotePlace {
-  const place = state.placeOf.get(m.seq)
-  if (place?.kind === "task") return { kind: "task", task: place.task }
-  if (place?.kind === "dm") return { kind: "dm" }
-  const id = roomOfMessage(state, m)
-  return { kind: "room", name: state.rooms.get(id)?.name ?? id }
-}
-
-function useNotify(messages: readonly Wire[], me: string, title: string, code: string, state: ChannelState) {
-  const told = useRef(messages.at(-1)?.seq ?? 0)
-  useEffect(() => {
-    const fresh = messages.filter((m) => m.seq > told.current)
-    told.current = Math.max(told.current, messages.at(-1)?.seq ?? 0)
-    if (!fresh.length || !elsewhere()) return
-    const { members } = state
-    const prefs = ownPrefs()
-    const decides = answersDecisions(members, me)
-    const last = fresh.findLast((m) => m.sigOk && sentHere(state, state.roomOf.get(m.seq) ?? m.room ?? GENERAL_ROOM, me) && tells(m, me, prefs, code, decides, Date.now()))
-    if (last) tellMessage(last, { me, channel: title, code, place: statePlace(state, last), members: members.values(), display: members.get(last.from)?.display })
-  }, [messages, me, title, code, state])
-}

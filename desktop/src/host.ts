@@ -20,7 +20,6 @@ export interface Host {
   openExternal(url: ExternalUrl): Promise<void>;
   droppedFiles(): Promise<DroppedFile[]>;
   pastedImage(): Promise<PastedImage | null>;
-  notify(title: string, body: string, link: string | null): void;
   badge(count: number): void;
   appearance(appearance: "system" | "light" | "dark"): void;
   wallpaper(dark: boolean): Promise<Uint8Array | null>;

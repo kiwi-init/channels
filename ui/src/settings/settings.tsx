@@ -1,4 +1,4 @@
-import { Notification01Icon, PaintBoardIcon } from "@hugeicons/core-free-icons"
+import { PaintBoardIcon } from "@hugeicons/core-free-icons"
 import { useEffect } from "react"
 
 import { cx } from "~/kit/bits"
@@ -7,14 +7,13 @@ import { GlyphIcon, Icon, type Glyph, type IconName } from "~/kit/icons"
 import { useApp, type Section } from "~/nav"
 import { AgentsSection } from "~/settings/agents"
 import { ComputersSection } from "~/settings/computers"
-import { AboutSection, AccountSection, AppearanceSection, NotificationsSection } from "~/settings/sections"
+import { AboutSection, AccountSection, AppearanceSection } from "~/settings/sections"
 import { useSideways } from "~/kit/sideways"
 import { SideCards } from "~/shell/updates"
 
 const SECTIONS: readonly (readonly [Section, string, IconName | Glyph])[] = [
   ["account", "Account", "account"],
   ["appearance", "Appearance", PaintBoardIcon],
-  ["notifications", "Notifications", Notification01Icon],
   ["computers", "Computers and phones", "devices"],
   ["agents", "Agents", "agent"],
   ["about", "About", "info"],
@@ -74,8 +73,6 @@ function Current({ section }: { section: Section }) {
       return <AccountSection />
     case "appearance":
       return <AppearanceSection />
-    case "notifications":
-      return <NotificationsSection />
     case "computers":
       return <ComputersSection />
     case "agents":

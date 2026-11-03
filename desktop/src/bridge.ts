@@ -425,7 +425,6 @@ export interface KiwiBridge {
   checkUpdate(): Promise<UpdateCheckView>;
   movedApp(): Promise<MovedView | null>;
   dismissMovedApp(): Promise<void>;
-  notify(title: string, body: string, link?: string): Promise<void>;
   openExternal(url: string): Promise<void>;
   saveFile(name: string, text: string): Promise<string>;
   takeDroppedFiles(): Promise<DroppedFile[]>;

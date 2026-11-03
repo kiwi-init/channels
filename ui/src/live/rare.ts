@@ -9,7 +9,7 @@ import { bridge } from "@kiwi/secrets/secrets.ts"
 import { stepReplyText } from "~/chat/step"
 import { announce } from "~/kit/toasts"
 import { ownPrefs, setPrefs } from "~/live/prefs"
-import { muteKey, snoozeEnd, type SnoozeFor } from "~/live/snooze"
+import { muteKey } from "~/live/mute"
 import { event, memberOf, need, owner } from "~/live/run"
 import type { Run } from "~/live/store"
 import type { TaskStatus, UpdateCheck } from "~/model"
@@ -116,8 +116,6 @@ export function setMute(code: string, room: string | null, on: boolean): void {
   const rest = ownPrefs().muted.filter((k) => k !== key)
   setPrefs({ muted: on ? [...rest, key] : rest })
 }
-
-export const snooze = (until: SnoozeFor | null): void => setPrefs({ snoozeUntil: until ? snoozeEnd(until, Date.now()) : null })
 
 export async function checkUpdate(): Promise<UpdateCheck | null> {
   const b = bridge()

@@ -54,14 +54,14 @@ info "unprivileged user namespaces, as Arch allows them: $(unshare -U true 2>&1 
 
 tests=/usr/local/libexec/kiwi-tests
 mkdir -p "$tests"
-for t in tray:gio-2.0 scheme:webkit2gtk-4.1 notify:gtk+-3.0; do
+for t in tray:gio-2.0 scheme:webkit2gtk-4.1; do
   name=${t%%:*}
   cc -O2 -Wall -Wextra -Werror -o "$tests/kiwi-$name-test" "$repo/desktop/native/linux/kiwi-$name-test.c" $(pkg-config --cflags --libs "${t#*:}") -ldl > "$out/logs/cc-$name.log" 2>&1 || bad "kiwi-$name-test didn't build: $(tail -n 3 "$out/logs/cc-$name.log" | tr '\n' ' ')"
 done
 
 id tester > /dev/null 2>&1 || useradd -m tester
 cp "$extract/Channels.AppImage" /home/tester/Channels.AppImage
-cp "$here/session.sh" "$here/update.sh" "$here/watcher.py" "$here/kwallet-login.py" "$here/secrets-cancel.py" "$here/chime-check.py" "$repo/ui/public/sounds/needs-you.wav" /home/tester/
+cp "$here/session.sh" "$here/update.sh" "$here/watcher.py" "$here/kwallet-login.py" "$here/secrets-cancel.py" /home/tester/
 chmod +x /home/tester/Channels.AppImage
 chown -R tester: /home/tester
 
@@ -85,9 +85,6 @@ entry_check() {
   if [ "$icons" -gt 0 ]; then ok "and $icons hicolor icons for it"; else bad "no hicolor icons for the desktop entry"; fi
   handler=$(runuser -u tester -- env HOME="$home" gio mime x-scheme-handler/kiwi 2>&1 | head -n 1)
   case "$handler" in *channels-desktop.desktop*) ok "kiwi:// links open it: $handler" ;; *) bad "kiwi:// doesn't open channels-desktop.desktop: $handler" ;; esac
-}
-chime() {
-  as_tester xvfb-run -a python3 /home/tester/chime-check.py /home/tester/needs-you.wav "$1" 2> "$out/logs/chime-$1-$2.log" | tail -n 1
 }
 mounted() {
   if grep -q "$2" "$out/logs/$1-app.log"; then ok "$3"; else bad "$3 didn't happen: $(grep -m1 'Current directory' "$out/logs/$1-app.log")"; fi
@@ -119,20 +116,12 @@ session cancel-no-keyring cancel-no-keyring-first-run tray
 session cancel-holds-key cancel-sealed tray "$sealed_home"
 session cancel keyless-dialog tray "$sealed_home"
 lib_test kiwi-scheme-test xvfb-run -a "$tests/kiwi-scheme-test" "$lib"
-lib_test kiwi-notify-test xvfb-run -a "$tests/kiwi-notify-test" "$lib"
-if pacman -Q gst-plugins-good > /dev/null 2>&1; then bad "the test tools pulled in gst-plugins-good, so the chime without GStreamer's autoaudiosink can't be checked"; fi
-info "an <audio> element on stock Arch, which the app no longer makes on Linux: $(chime element no-sink)"
-heard=$(chime webaudio no-sink)
-case "$heard" in *"page said: silent:"*) ok "the Needs-you chime's WebAudio path stays silent without gst-plugins-good, and the web process lives: $heard" ;; *) bad "the Needs-you chime's WebAudio path without gst-plugins-good: $heard" ;; esac
 install fuse3 || exit 1
 fuse_home=$(runuser -u tester -- mktemp -d)
 session gnome-keyring fuse tray "$fuse_home"
 entry_check "$fuse_home" '"/home/tester/Channels.AppImage" %U'
 session gnome-keyring entry-fuse tray "$fuse_home" entry
 mounted entry-fuse /tmp/.mount_ "with fuse3, the entry's start mounts the AppImage"
-install gst-plugins-good || exit 1
-heard=$(chime webaudio sink)
-case "$heard" in *"page said: played, running"*) ok "with gst-plugins-good, the Needs-you chime plays through WebAudio: $heard" ;; *) bad "with gst-plugins-good, the Needs-you chime didn't play: $heard" ;; esac
 [ -z "$from" ] || as_tester bash /home/tester/update.sh "$from" "$results" "$out/logs"
 
 chmod -R a+rX "$out"
