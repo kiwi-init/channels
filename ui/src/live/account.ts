@@ -9,7 +9,7 @@ import { launchedBy } from "@kiwi/app/forgotten-computers.ts"
 import { announce } from "~/kit/toasts"
 import { deviceNews, postDevicesNow } from "~/live/devices"
 import { store, type Listener } from "~/live/value"
-import type { Account, Computer, Device, EnrollAsk, Enrolling, GithubSignIn, KeptAgent, LaunchedAgent, RecoverTrouble, RecoverySaved, RecoveryState, RerootOpened } from "~/model"
+import type { Account, Computer, Device, EnrollAsk, Enrolling, GithubSignIn, KeptAgent, LaunchedAgent } from "~/model"
 import { version } from "../../../package.json"
 
 const github = store<{ login: string } | null>(null)
@@ -92,49 +92,12 @@ export async function enrollKeep(): Promise<void> {
 export async function enrollCancel(): Promise<void> {
   if (enrollTimer) clearTimeout(enrollTimer)
   enrollTimer = null
-  const was = recoveringNow()
   enrollRun = null
   const shown = selfEnroll.get()
   selfEnroll.set(null)
-  if (was) return void (await recoverBridge().recoverCancel())
   await enrollBridge().enrollCancel()
   if (shown?.stage === "check")
     announce(`Kept nothing. If your other computer never showed ${shown.person.fingerprint}, someone else answered this computer. It may still list this computer under Devices: remove it there.`)
-}
-
-const recoveringNow = (): boolean => {
-  const stage = selfEnroll.get()?.stage
-  return stage === "recover" || stage === "welcome"
-}
-
-const recoverBridge = () => {
-  const b = bridge()
-  if (!b?.recover) throw new Error("recovering with your recovery key needs the next Channels update")
-  return b
-}
-
-export async function recoverBegin(): Promise<void> {
-  const b = recoverBridge()
-  if (enrollTimer) clearTimeout(enrollTimer)
-  enrollTimer = null
-  enrollRun = null
-  selfEnroll.set({ stage: "recover" })
-  await b.enrollCancel()
-}
-
-export async function recoverOpen(words: string): Promise<RecoverTrouble | null> {
-  const r = await recoverBridge().recover(words)
-  if (!r.ok) return { why: r.why, ...(r.word !== undefined ? { word: r.word } : {}) }
-  if (recoveringNow()) selfEnroll.set({ stage: "welcome", name: r.name, devices: r.devices, channels: r.channels })
-  return null
-}
-
-export async function recoverFinish(lost: string[]): Promise<void> {
-  const r = await recoverBridge().recoverFinish(lost)
-  selfEnroll.set(null)
-  const back = r.channels ? ` ${r.channels === 1 ? "1 channel is" : `${r.channels} channels are`} coming back.` : ""
-  const forgot = r.forgot ? ` Forgot ${r.forgot === 1 ? "1 device" : `${r.forgot} devices`}.` : ""
-  announce(`Welcome back, ${r.name}.${back}${forgot}`)
 }
 
 export const enrollingNow = (): Enrolling | null => selfEnroll.get()
@@ -265,98 +228,6 @@ export async function renewDevice(...ids: string[]): Promise<void> {
   await devices.load()
   postDevicesNow()
 }
-
-const warned = new Set<number>()
-
-function warnPending(state: RecoveryState | null): void {
-  const p = state?.pending
-  if (!p || warned.has(p.from)) return
-  warned.add(p.from)
-  const day = new Date(p.from).toLocaleDateString(undefined, { day: "numeric", month: "short" })
-  announce(`New recovery words, made by ${p.by}, take over on ${day}. Not you? Cancel them in Settings → Recovery key with your current words.`)
-}
-
-const recovery = (() => {
-  let value: RecoveryState | null = null
-  const listeners = new Set<Listener>()
-  let started = false
-  const load = async () => {
-    const b = bridge()
-    if (!b?.recovery) return
-    try {
-      value = await b.recovery()
-      warnPending(value)
-    } catch {
-      // Not signed in, or the relay is unreachable: the page shows what it last showed, and focus loads it again.
-      return
-    }
-    for (const l of listeners) l()
-  }
-  return {
-    get: () => value,
-    load,
-    subscribe: (l: Listener) => {
-      listeners.add(l)
-      if (!started) {
-        started = true
-        window.addEventListener("focus", () => void load())
-        void load()
-      }
-      return () => void listeners.delete(l)
-    },
-  }
-})()
-
-const recovering = () => {
-  const b = bridge()
-  if (!b?.recoveryWords) throw new Error("a recovery key needs the next Channels update")
-  return b
-}
-
-export const recoveryWords = (): Promise<string[]> => recovering().recoveryWords()
-
-export async function recoverySave(typed: { at: number; word: string }[]): Promise<RecoverySaved> {
-  const r = await recovering().recoverySave(typed)
-  if (!r.ok) return r
-  const from = "from" in r && r.from ? new Date(r.from).toLocaleDateString(undefined, { day: "numeric", month: "short" }) : null
-  announce(from ? `Your new words take over on ${from}. Until then, the words you had still work, and they can cancel this change.` : "Recovery key set up")
-  await recovery.load()
-  return { ok: true }
-}
-
-export const recoveryDrop = (): Promise<void> => recovering().recoveryDrop()
-
-export async function recoveryCancel(words: string): Promise<RecoverTrouble | null> {
-  const b = bridge()
-  if (!b?.recoveryCancel) throw new Error("cancelling new words needs the next Channels update")
-  const r = await b.recoveryCancel(words)
-  if (!r.ok) return { why: r.why, ...(r.word !== undefined ? { word: r.word } : {}) }
-  announce("Cancelled: your current words stay")
-  await recovery.load()
-  return null
-}
-
-const rerooting = () => {
-  const b = bridge()
-  if (!b?.reroot) throw new Error("replacing your person key needs the next Channels update")
-  return b
-}
-
-export async function rerootOpen(words: string): Promise<RerootOpened> {
-  const r = await rerooting().reroot(words)
-  if (!r.ok) return { ok: false, trouble: { why: r.why, ...(r.word !== undefined ? { word: r.word } : {}) } }
-  return { ok: true, devices: r.devices, channels: r.channels }
-}
-
-export async function rerootFinish(keep: string[]): Promise<boolean> {
-  const r = await rerooting().rerootFinish(keep)
-  const out = r.dropped ? ` Signed out ${r.dropped === 1 ? "1 device" : `${r.dropped} devices`}.` : ""
-  announce(`Your person key is replaced.${out} Your channels move to the new key as their owners' apps catch up.`)
-  await recovery.load()
-  return true
-}
-
-export const rerootCancel = (): Promise<void> => rerooting().rerootCancel()
 
 const enrolling = () => {
   const b = bridge()
@@ -582,7 +453,6 @@ export function useAccount(): Account | null {
   const enroll = useSyncExternalStore(enrollAsk.subscribe, enrollAsk.get)
   const trouble = useSyncExternalStore(enrollTrouble.subscribe, enrollTrouble.get)
   const signed = useSyncExternalStore(devices.subscribe, devices.get)
-  const kept = useSyncExternalStore(recovery.subscribe, recovery.get)
   const news = useSyncExternalStore(deviceNews.subscribe, deviceNews.get)
   const unsealed = useUnsealedKeys()
   useEffect(() => {
@@ -619,9 +489,8 @@ export function useAccount(): Account | null {
       ...(enroll ? { enrollAsk: enroll } : {}),
       ...(trouble ? { enrollError: trouble } : {}),
       ...(signed ? { devices: signed } : {}),
-      ...(kept ? { recovery: kept } : {}),
       ...deviceNotices(news),
       ...(code ? { githubCode: code } : {}),
     }
-  }, [person, linked, gate, moveRefused, computers, phones, online, agents, update, code, look, home, unsealed, enroll, trouble, signed, kept, news])
+  }, [person, linked, gate, moveRefused, computers, phones, online, agents, update, code, look, home, unsealed, enroll, trouble, signed, news])
 }

@@ -16,11 +16,10 @@ export const CHANNEL_CALLS_SINCE: Readonly<Record<string, readonly string[]>> = 
   "1.14.0": ["leaveRoom"],
   "1.15.0": ["syncGithub", "githubStatus"],
   "1.17.0": ["goneDevices"],
-  "1.18.0": ["reprove"],
   "1.21.0": ["sentRooms"],
 };
 
-export const CHANNEL_CALLS_BACKGROUND: readonly string[] = ["syncMarks", "sentRooms", "syncGithub", "githubStatus", "goneDevices", "reprove"];
+export const CHANNEL_CALLS_BACKGROUND: readonly string[] = ["syncMarks", "sentRooms", "syncGithub", "githubStatus", "goneDevices"];
 
 export const UI_SURFACES: Readonly<Record<string, readonly string[]>> = {
   "1.0.0": [
@@ -2593,20 +2592,8 @@ export const UI_SURFACES: Readonly<Record<string, readonly string[]>> = {
     "kiwi.pairBegin",
     "kiwi.pairCancel",
     "kiwi.pairPoll",
-    "kiwi.proveSeat",
-    "kiwi.recover",
-    "kiwi.recoverCancel",
-    "kiwi.recoverFinish",
-    "kiwi.recovery",
-    "kiwi.recoveryCancel",
-    "kiwi.recoveryDrop",
-    "kiwi.recoverySave",
-    "kiwi.recoveryWords",
     "kiwi.relayUrl",
     "kiwi.renewDevice",
-    "kiwi.reroot",
-    "kiwi.rerootCancel",
-    "kiwi.rerootFinish",
     "kiwi.saveChannels",
     "kiwi.saveComputers",
     "kiwi.saveFile",

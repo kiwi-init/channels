@@ -5,7 +5,7 @@ import type { Channel, PresenceFields, Probe } from "@kiwi/core/client.ts";
 import { KEEP_MAX, type Message } from "@kiwi/core/protocol.ts";
 import { DEFAULT_RELAY, hasKiwiState, home, identitiesIn, loadConfig, loadIdentity, saveAccess, writePrivate, type Config } from "../config.ts";
 import { readCursor } from "../config/cursors.ts";
-import { keepProof, saveMachine, seatProof, takeDeviceList } from "../machine.ts";
+import { keepProof, saveMachine, takeDeviceList } from "../machine.ts";
 import { isNewerList, listedComputer, readDeviceList, type DeviceLink } from "@kiwi/core/devices.ts";
 import { readMachineCert } from "@kiwi/core/person.ts";
 import { VERSION } from "../version.ts";
@@ -469,7 +469,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
         seat.head,
         (m) => {
           if (m.seq > seat.head) seat.head = m.seq;
-          heardList(m, seat);
+          heardList(m);
           if (m.from !== seat.agent) scheduleWake(seat);
           for (const sub of [...seat.subs]) {
             if (sub.held) sub.held.push(m);
@@ -497,9 +497,6 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
         () => seatEnded(seat, null),
         (err: unknown) => seatEnded(seat, seat.ctl.signal.aborted ? null : err),
       );
-      void proveSeat(seat).catch(() => {
-        // The relay refused the proof or the seat closed: the next list this seat hears proves it again.
-      });
       return seat;
     })();
     const entry = { promise: open, waiters, last: () => last };
@@ -511,23 +508,11 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     }
   };
 
-  const proved = new Map<string, number>();
-  const proveSeat = async (seat: Seat): Promise<void> => {
-    const proof = await seatProof(seat.ch.roomId, seat.ch.identity.pk);
-    if (!proof || proved.get(seat.key) === proof.version) return;
-    proved.set(seat.key, proof.version);
-    const self = (await seat.ch.members()).find((m) => m.pk === seat.ch.identity.pk);
-    if (!self || self.sponsor) return;
-    await seat.ch.send("updated their list of devices", { kind: "event", ev: { op: "devices", links: proof.links, device: proof.device, vouch: proof.vouch } });
-  };
-
-  const heardList = (m: Message, seat: Seat): void => {
+  const heardList = (m: Message): void => {
     if (!m.sigOk || m.kind !== "event" || m.ev?.op !== "devices") return;
-    void takeDeviceList(m.ev.links)
-      .then(() => proveSeat(seat))
-      .catch(() => {
-        // A list this computer can't take, or a send the relay refused: the next list or the next start tries again.
-      });
+    void takeDeviceList(m.ev.links).catch(() => {
+      // A list this computer can't take, or a send the relay refused: the next list or the next start tries again.
+    });
   };
 
   const onListen = async (conn: ConnState, id: number, params: Record<string, unknown>): Promise<void> => {
@@ -545,7 +530,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
       const { messages } = await seat.ch.history(cursor);
       const caught = [...messages, ...(sub.held ?? [])];
       sub.held = null;
-      for (const m of caught) heardList(m, seat);
+      for (const m of caught) heardList(m);
       for (const m of caught) {
         if (m.seq <= sub.cursor) continue;
         if (sendLine(conn, JSON.stringify({ id, message: m }))) sub.cursor = m.seq;
