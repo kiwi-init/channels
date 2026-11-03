@@ -85,8 +85,8 @@ try {
 
   at = "the invite carries the join code";
   await page.getByRole("button", { name: "Invite people", exact: true }).first().click();
-  const panel = page.getByRole("dialog", { name: "Invite people" });
-  const link = panel.locator("code").filter({ hasText: "#mc2-" }).first();
+  const invite = page.getByRole("dialog", { name: "Invite people" });
+  const link = invite.locator("code").filter({ hasText: "#mc2-" }).first();
   await link.waitFor({ timeout: 15000 });
   const code = (await link.innerText()).trim().replace(/^.*#/, "");
   if (!/^mc2-[A-Za-z0-9_-]+-[A-Za-z0-9_-]+$/.test(code)) throw new Error(`the invite link carries no join code: ${code}`);
@@ -185,7 +185,7 @@ try {
   await openSearch();
   await search.fill("smok tas");
   await results.getByRole("option", { name: /Smoke task/ }).click();
-  await panel.getByText("Smoke task").first().waitFor({ timeout: 15000 });
+  await page.getByRole("complementary", { name: "Details" }).getByText("Smoke task").first().waitFor({ timeout: 15000 });
   if (await results.count()) throw new Error("picking a task left the results open");
   await page.keyboard.press("Escape");
   await search.fill("hel bot");

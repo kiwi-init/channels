@@ -12,7 +12,7 @@ import { daemonSock } from "../src/daemon/protocol.ts";
 import { stopDaemon } from "../src/daemon/rpc.ts";
 import { startLocalRelay } from "./local-relay.ts";
 import { calibrate } from "./perf-calibrate.ts";
-import { approveSpec, firstRun, letIn, newChannel, panel, ROWS, view } from "./perf-ui.ts";
+import { approveSpec, firstRun, letIn, newChannel, channelSettings, ROWS, view } from "./perf-ui.ts";
 import { harnessDist } from "./ui-harness.ts";
 
 if (process.argv.includes("--help")) {
@@ -160,7 +160,7 @@ async function work(cdp: CDPSession): Promise<Record<string, number>> {
 
 async function detailsToggle(page: Page, cdp: CDPSession, open: boolean): Promise<{ ms: number; taskMs: number; scriptMs: number; styleMs: number; layoutMs: number }> {
   const before = await work(cdp);
-  const ms = await panel(page, open);
+  const ms = await channelSettings(page, open);
   await page.waitForTimeout(400);
   const after = await work(cdp);
   const d = (k: string) => Math.round(((after[k] ?? 0) - (before[k] ?? 0)) * 1000);
