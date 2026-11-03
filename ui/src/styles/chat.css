@@ -131,6 +131,11 @@
   font: var(--t-stamp) var(--ui);
 }
 
+html .day.is-sealed {
+  font-family: var(--sans);
+  letter-spacing: normal;
+}
+
 .day::before,
 .day::after {
   content: "";

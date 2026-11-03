@@ -234,12 +234,14 @@ export default function TermDrawer({ channel, of }: { channel: Channel; of: Term
     <section className="term" aria-label={name === null ? title : `${title}'s terminal`} style={height ? { height } : undefined} onKeyDown={(e) => e.stopPropagation()}>
       <div className="term-grip" role="separator" aria-orientation="horizontal" aria-label="Resize the terminal" onPointerDown={grip} onDoubleClick={() => setHeight(null)} />
       <header className="term-head" title={[name === null ? "This computer" : "Channels' tmux", size].filter(Boolean).join(" · ")}>
-        {name === null ? (
-          <span className="term-mine" aria-hidden="true">
-            <Icon name="terminal" size={14} />
-          </span>
-        ) : (
+        {name !== null ? (
           <Avatar person={person} size="sm" />
+        ) : (
+          tabs.length === 0 && (
+            <span className="term-mine" aria-hidden="true">
+              <Icon name="terminal" size={14} />
+            </span>
+          )
         )}
         {name === null && tabs.length > 0 ? (
           <div className="term-tabs" role="tablist" aria-label="Your terminals">

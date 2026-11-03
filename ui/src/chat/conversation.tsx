@@ -506,7 +506,7 @@ function Feed({ channel, where, spot, jump }: { channel: Channel; where: Where; 
                     </p>
                   )}
                   {m.locked && !list[i - 1]?.locked && where.kind === "dm" && (
-                    <p className="day" role="separator">
+                    <p className="day is-sealed" role="separator">
                       <span>From here on, just you and {nickname(channel, where.with)} can read new messages</span>
                     </p>
                   )}
