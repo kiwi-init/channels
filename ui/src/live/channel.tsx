@@ -37,6 +37,9 @@ import { closeOpened, markGone, publish, type Run } from "~/live/store"
 import { useWakes } from "~/live/wakes"
 import { appCan } from "~/live/app-can"
 import { useMarksSync } from "~/live/read-sync"
+import { refusal } from "~/live/refused"
+import { backWords, composerKey, giveBack } from "~/chat/drafts"
+import { stashText } from "~/chat/stash"
 import { dmRoomOf, sealable } from "~/live/dm"
 import { freeOf, specAsksOf, specsOf } from "~/live/specs"
 import { clock } from "~/kit/time"
@@ -272,11 +275,18 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
         setPending((list) => list.map((p) => (p.key === key ? { ...p, seq } : p)))
         return seq
       } catch (err) {
-        setPending((list) => list.map((p) => (p.key === key ? { ...p, failed: err instanceof Error ? err.message : String(err) } : p)))
+        const why = refusal(err)
+        if (why === null) {
+          setPending((list) => list.map((p) => (p.key === key ? { ...p, failed: err instanceof Error ? err.message : String(err) } : p)))
+          throw err
+        }
+        setPending((list) => list.filter((p) => p.key !== key))
+        const images = opts.images ?? []
+        announce(backWords(why, giveBack(composerKey(code, where, opts.inThread), body, images, stashText), images.length), "error")
         throw err
       }
     },
-    [state, messages, me, send, inTurn, setPending, channel, roster, ch]
+    [state, messages, me, send, inTurn, setPending, channel, roster, ch, code]
   )
 
   const discard = useCallback((key: number) => setPending((list) => list.filter((p) => p.key !== key)), [setPending])

@@ -13,6 +13,9 @@ import { usePinsHere } from "~/live/pins"
 import { specAsksOf, specsOf } from "~/live/specs"
 import { publishHome, type Run } from "~/live/store"
 import { changeUnsent, nextUnsentKey } from "~/live/unsent"
+import { refusal } from "~/live/refused"
+import { backWords, composerKey, giveBack } from "~/chat/drafts"
+import { stashText } from "~/chat/stash"
 import { useWakes } from "~/live/wakes"
 import type { Upload, Where } from "~/model"
 import { nicknamesOf } from "~/names"
@@ -62,13 +65,19 @@ const HomeMember = memo(function HomeMember({ member }: { member: StoredMember }
       try {
         return await send(body, room ? { kind: "msg", room } : sendOptions(state, messages, me, where, body, opts))
       } catch (err) {
+        const refused = refusal(err)
+        if (refused !== null) {
+          const images = opts.images ?? []
+          announce(`${title}: ${backWords(refused, giveBack(composerKey(code, where, opts.inThread), body, images, stashText), images.length)}`, "error")
+          throw err
+        }
         const why = err instanceof Error ? err.message : String(err)
         changeUnsent(roomId, (list) => [...list, { key: nextUnsentKey(), where, text: body, at: Date.now(), failed: why }])
         announce(`Not sent in ${title}: ${why}. It waits in the channel with Retry.`, "error")
         throw err
       }
     },
-    [state, messages, me, send, roomId, title]
+    [state, messages, me, send, roomId, title, code]
   )
   const retry = useCallback(async (): Promise<number> => {
     throw new Error("open the channel to retry")
