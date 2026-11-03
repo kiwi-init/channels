@@ -3,7 +3,7 @@ import { useEffect, useId, useRef, useState } from "react"
 import { handleFor, NAME_RE, RESERVED_NAMES } from "@kiwi/core/membership.ts"
 
 import "~/styles/start.css"
-import { cx, Modal } from "~/kit/bits"
+import { autofocus, cx, Modal } from "~/kit/bits"
 import type { InviteInfo } from "~/model"
 import { useApp } from "~/nav"
 
@@ -26,8 +26,6 @@ function inviteCode(text: string): string | null {
   const code = decode(raw ?? "").replace(/\/+$/, "")
   return CODE.test(code) ? code : null
 }
-
-const focusFirst = (el: HTMLInputElement | null) => el?.setAttribute("autofocus", "")
 
 export function JoinDialog() {
   const { go } = useApp()
@@ -99,7 +97,7 @@ function JoinForm({ onClose }: { onClose: () => void }) {
             <span className="field-label">Your name in this channel</span>
             <input
               id={nameId}
-              ref={focusFirst}
+              ref={autofocus}
               className="input is-mono"
               autoComplete="off"
               autoCapitalize="off"
@@ -142,7 +140,7 @@ function JoinForm({ onClose }: { onClose: () => void }) {
           <span className="field-label">Invite link or code</span>
           <input
             id={inputId}
-            ref={focusFirst}
+            ref={autofocus}
             className="input is-mono"
             autoComplete="off"
             autoCapitalize="off"

@@ -1,10 +1,8 @@
 import { useState } from "react"
 
 import "~/styles/start.css"
-import { cx, Modal, Field } from "~/kit/bits"
+import { autofocus, cx, Modal, Field } from "~/kit/bits"
 import { useApp } from "~/nav"
-
-const focusFirst = (el: HTMLInputElement | null) => el?.setAttribute("autofocus", "")
 
 export function NewChannelDialog() {
   const { go } = useApp()
@@ -41,7 +39,7 @@ function NewChannelForm({ onClose }: { onClose: () => void }) {
             <span className={cx("start-tile", !title && "is-blank")} aria-hidden="true">
               {title.slice(0, 1).toUpperCase()}
             </span>
-            <input ref={focusFirst} className="input" autoComplete="off" spellCheck={false} maxLength={40} placeholder="e.g. kiwi" value={name} onChange={(e) => setName(e.target.value)} />
+            <input ref={autofocus} className="input" autoComplete="off" spellCheck={false} maxLength={40} placeholder="e.g. kiwi" value={name} onChange={(e) => setName(e.target.value)} />
           </span>
         </Field>
         <p className={cx("start-hint", failed && "is-error")} aria-live="polite">

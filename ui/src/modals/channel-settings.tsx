@@ -4,7 +4,7 @@ import "~/styles/new-room.css"
 
 import { useEffect, useId, useRef, useState } from "react"
 
-import { Avatar, cx, Field, IconButton, Modal, Toggle } from "~/kit/bits"
+import { autofocus, Avatar, cx, Field, IconButton, Modal, Toggle } from "~/kit/bits"
 import { Track } from "~/kit/glide"
 import { GlyphIcon, Icon } from "~/kit/icons"
 import { choreLine } from "~/github/health"
@@ -561,7 +561,7 @@ function End({ channel, open, onClose, onDone }: { channel: Channel; open: boole
       onConfirm={onDone}
     >
       <Field label={`Type ${channel.title} to confirm`}>
-        <input autoFocus className="input is-mono" value={typed} onChange={(e) => setTyped(e.target.value)} />
+        <input ref={autofocus} className="input is-mono" value={typed} onChange={(e) => setTyped(e.target.value)} />
       </Field>
     </Confirm>
   )

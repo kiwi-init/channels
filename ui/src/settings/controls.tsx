@@ -2,7 +2,7 @@ import "~/styles/settings.css"
 
 import { useState, type ReactNode } from "react"
 
-import { cx, Modal } from "~/kit/bits"
+import { autofocus, cx, Modal } from "~/kit/bits"
 import { Track } from "~/kit/glide"
 
 export function Seg<T extends string | number>({ label, value, options, onChange }: { label: string; value: T; options: readonly (readonly [T, string])[]; onChange: (value: T) => void }) {
@@ -16,8 +16,6 @@ export function Seg<T extends string | number>({ label, value, options, onChange
     </Track>
   )
 }
-
-export const autofocus = (el: HTMLElement | null) => el?.setAttribute("autofocus", "")
 
 export function Row({ label, hint, children, wide, tip }: { label: ReactNode; hint?: ReactNode; children?: ReactNode; wide?: boolean; tip?: string }) {
   return (

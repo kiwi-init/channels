@@ -6,6 +6,8 @@ import { later } from "~/kit/later"
 import { useMood, type MoodOf } from "~/kit/mood"
 import type { Person, TaskStatus } from "~/model"
 
+export const autofocus = (el: HTMLElement | null) => el?.setAttribute("autofocus", "")
+
 export const cx = (...parts: (string | false | null | undefined)[]): string => parts.filter(Boolean).join(" ")
 
 const RoleFace = later(() => import("~/kit/role-face").then((m) => m.RoleFace))
@@ -123,9 +125,8 @@ export function Modal({
     const el = ref.current
     if (!el) return
     if (open && !el.open) {
-      const asked = document.activeElement instanceof HTMLElement && el.contains(document.activeElement) ? document.activeElement : null
       el.showModal()
-      ;(asked ?? el.querySelector<HTMLElement>("[autofocus]") ?? el).focus()
+      ;(el.querySelector<HTMLElement>("[autofocus]") ?? el).focus()
     }
     if (!open && el.open) el.close()
   }, [open])

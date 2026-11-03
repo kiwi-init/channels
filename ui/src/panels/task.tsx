@@ -9,7 +9,7 @@ import { MessageRow } from "~/chat/message"
 import { preview } from "~/chat/preview"
 import { jumpTo } from "~/chat/reply"
 import { ANYONE } from "@kiwi/channel/task-actions.ts"
-import { Avatar, cx, Modal, Dot, Empty, Heading, statusWord } from "~/kit/bits"
+import { autofocus, Avatar, cx, Modal, Dot, Empty, Heading, statusWord } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
 import { memberOf, type Ask, type Channel, type PermissionAsk, type Person, type QuestionAsk, type ReviewRound, type Task, type TaskEvent } from "~/model"
@@ -222,7 +222,7 @@ function Assign({ channel, task, open, onClose }: { channel: Channel; task: Task
       sub={task.owner ? `Now ${someone(channel, task.owner)}. The new owner gets a message with your note.` : "The new owner gets a message with your note."}
     >
       <div className="task-pick">
-        <input autoFocus className="input" value={why} aria-label="A note for them" placeholder="A note for them (optional)" maxLength={300} onChange={(e) => setWhy(e.target.value)} />
+        <input ref={autofocus} className="input" value={why} aria-label="A note for them" placeholder="A note for them (optional)" maxLength={300} onChange={(e) => setWhy(e.target.value)} />
         <div className="task-pick-list">
           {[...first, ...rest].map((p) => (
             <Choice
@@ -439,7 +439,7 @@ function Cancel({ channel, task, open, onClose }: { channel: Channel; task: Task
         }}
       >
         <input
-          autoFocus
+          ref={autofocus}
           className="input"
           value={why}
           aria-label="Why it's cancelled"

@@ -3,7 +3,7 @@ import "~/styles/new-room.css"
 import { useState } from "react"
 
 import { roomProblem } from "@kiwi/app/rooms.ts"
-import { Avatar, cx, Modal } from "~/kit/bits"
+import { autofocus, Avatar, cx, Modal } from "~/kit/bits"
 import { Track } from "~/kit/glide"
 import type { Channel } from "~/model"
 import { useApp } from "~/nav"
@@ -58,7 +58,7 @@ function NewRoomForm({ channel, onClose }: { channel: Channel; onClose: () => vo
           </span>
           <input
             className="input is-mono"
-            autoFocus
+            ref={autofocus}
             autoComplete="off"
             spellCheck={false}
             maxLength={40}

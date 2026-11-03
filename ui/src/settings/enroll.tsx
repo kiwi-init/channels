@@ -2,10 +2,9 @@ import "~/styles/settings.css"
 
 import { useState } from "react"
 
-import { Modal, Field } from "~/kit/bits"
+import { autofocus, Modal, Field } from "~/kit/bits"
 import type { EnrollAsk } from "~/model"
 import { useApp } from "~/nav"
-import { autofocus } from "~/settings/controls"
 
 const KIND: Record<EnrollAsk["as"], string> = { desktop: "computer", phone: "phone", computer: "computer for agents" }
 
@@ -60,7 +59,7 @@ export function EnrollDialog() {
             hint={mine.left !== null ? `Those don't match. ${mine.left} ${mine.left === 1 ? "try" : "tries"} left.` : ask.fingerprint ? `Then it shows your key: ${ask.fingerprint}` : undefined}
           >
             <input
-              autoFocus
+              ref={autofocus}
               className="input set-enroll-digits"
               inputMode="numeric"
               autoComplete="one-time-code"

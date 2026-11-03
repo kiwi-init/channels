@@ -1,6 +1,6 @@
 import { useState } from "react"
 
-import { Modal, Field } from "~/kit/bits"
+import { autofocus, Modal, Field } from "~/kit/bits"
 import type { Channel } from "~/model"
 import { useAct } from "~/nav"
 import { nickname } from "~/names"
@@ -44,7 +44,7 @@ export function NewSpec({ channel, onClose }: { channel: Channel; onClose: () =>
           <textarea
             className="textarea"
             rows={4}
-            autoFocus
+            ref={autofocus}
             value={words}
             onChange={(e) => setWords(e.target.value)}
             placeholder="The labels as a spreadsheet for Friday's review: one row per box, with who drew it."

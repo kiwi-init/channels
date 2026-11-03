@@ -67,6 +67,21 @@ try {
   expect(focused, "focus starts inside the modal");
   for (let i = 0; i < 12; i++) await page.keyboard.press("Tab");
   expect(await page.evaluate(() => !!document.activeElement?.closest("dialog.modal")), "and Tab keeps it there");
+
+  for (const [shot, name, field] of [
+    ["new-room", "New room", "Room name"],
+    ["new-channel", "New channel", "Name"],
+    ["join", "Join a channel", "Invite link or code"],
+  ] as const) {
+    await page.goto(`http://127.0.0.1:${server.port}/?shot=${shot}`);
+    await page.getByRole("dialog", { name }).waitFor();
+    await page.waitForTimeout(100);
+    const label = await page.evaluate(() => {
+      const el = document.activeElement;
+      return el instanceof HTMLInputElement ? (el.getAttribute("aria-label") ?? el.labels?.[0]?.textContent ?? "") : "";
+    });
+    expect(label.trim() === field, `${name} opens with its field focused`);
+  }
 } finally {
   await browser.close();
   await server.stop(true);
