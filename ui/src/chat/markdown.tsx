@@ -92,7 +92,7 @@ const FLAGS = { latexMath: false, underline: false, hardSoftBreaks: true }
 
 type Styles = ReturnType<typeof buildStyles>
 
-const scaled = (px: number) => `calc(${px}px * var(--text-scale, 1))`
+const scaled = (px: number) => `${px / 16}rem`
 
 function sized(s: CSSProperties): CSSProperties {
   const line = typeof s.lineHeight === "string" ? /^(\d+(?:\.\d+)?)px$/.exec(s.lineHeight)?.[1] : undefined

@@ -204,7 +204,7 @@
   padding: 0 8px 6px 24px;
 }
 
-@container (min-width: 820px) {
+@container (min-width: 51.25rem) {
   .spec-row > .spec-mark {
     align-self: center;
     margin-top: 0;
@@ -504,7 +504,7 @@
 }
 
 .spec-rail-talk .spec-box-new.is-line .spec-box-text {
-  min-height: 52px;
+  min-height: 3.25rem;
 }
 
 .spec-talk-h {
@@ -716,7 +716,7 @@
 }
 
 .spec-source {
-  min-height: 520px;
+  min-height: 32.5rem;
   padding: 16px;
   resize: vertical;
   font: var(--t-meta) / 1.6 var(--mono);
@@ -919,7 +919,7 @@
   color: var(--ink-3);
 }
 
-@container spec-col (min-width: 480px) {
+@container spec-col (min-width: 30rem) {
   .inside-tasks > li {
     grid-template-columns: minmax(0, 1fr) auto auto;
   }
@@ -935,7 +935,7 @@
   }
 }
 
-@container spec-page (min-width: 960px) {
+@container spec-page (min-width: 60rem) {
   .inside-cols {
     grid-template-columns: minmax(0, 3fr) minmax(300px, 2fr);
     column-gap: 40px;
@@ -1220,7 +1220,7 @@
   background: var(--decide);
 }
 
-@container (max-width: 720px) {
+@container (max-width: 45rem) {
   .spec-editor-panes {
     grid-template-columns: minmax(0, 1fr);
   }

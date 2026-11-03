@@ -22,11 +22,11 @@ const fixed = (name: string, s: CSSProperties): string[] => [
 ]
 
 describe("message text follows Settings > Appearance > Text size", () => {
-  test("every markdown style that sets a size scales with --text-scale", () => {
+  test("every markdown style that sets a size scales with the root font size", () => {
     const styles = withTextSize(buildStyles(normalizeMarkdownStyle({ paragraph: { fontSize: 15, lineHeight: 22 } })))
     const left = Object.entries(styles).flatMap(([name, s]) => ("left" in s ? Object.entries(s).flatMap(([align, cell]) => fixed(`${name}.${align}`, cell)) : fixed(name, s)))
     expect(left).toEqual([])
-    expect(styles.paragraph).toMatchObject({ fontSize: "calc(15px * var(--text-scale, 1))", lineHeight: "calc(22px * var(--text-scale, 1))" })
+    expect(styles.paragraph).toMatchObject({ fontSize: "0.9375rem", lineHeight: "1.375rem" })
   })
 
   test("a callout's title, which the renderer sizes inline, scales through chat.css", async () => {

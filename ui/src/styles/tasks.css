@@ -119,7 +119,7 @@
 .board-goal {
   flex: 1;
   min-width: 0;
-  height: 28px;
+  height: 1.75rem;
   font: 600 var(--t-ui) var(--ui);
 }
 
@@ -299,7 +299,7 @@
   color: var(--doing);
 }
 
-@container (min-width: 620px) {
+@container (min-width: 38.75rem) {
   .has-prs .board-row {
     grid-template-columns: 8px minmax(0, 1fr) 132px auto;
   }
@@ -313,7 +313,7 @@
   }
 }
 
-@container (min-width: 760px) {
+@container (min-width: 47.5rem) {
   .has-prs .board-row {
     grid-template-columns: 8px minmax(0, 1fr) 132px 120px auto;
   }
@@ -359,7 +359,7 @@
 .task-props dd {
   display: flex;
   align-items: center;
-  min-height: 24px;
+  min-height: 1.5rem;
 }
 
 .task-props dd {
@@ -494,7 +494,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  min-height: 40px;
+  min-height: 2.5rem;
   padding: 6px 10px;
   border: 1px solid transparent;
   border-radius: var(--r-ctl);

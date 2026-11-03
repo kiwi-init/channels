@@ -102,6 +102,9 @@ jobs:
       - name: ui format
         if: ${{ !cancelled() }}
         run: cd ui && bun oxfmt --check src
+      - name: ui css units
+        if: ${{ !cancelled() }}
+        run: bun scripts/css-units.ts
       - name: knip
         if: ${{ !cancelled() }}
         run: bun run knip
