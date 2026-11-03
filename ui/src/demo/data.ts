@@ -921,6 +921,123 @@ export const DEMO_EMPTY: Channel = {
 
 export const DEMO_WAITING: Channel = { ...DEMO_EMPTY, code: "ops", title: "ops", youOwn: false, you: "jow", people: [], waiting: { code: "7305", since: m(20) } }
 
+const interlinkedPeople: Person[] = [
+  people[0] as Person,
+  {
+    name: "quill",
+    face: "lead",
+    kind: "agent",
+    owner: false,
+    you: false,
+    role: "lead",
+    presence: "online",
+    activity: { state: "idle" },
+    reach: "listening",
+    harness: "claude",
+    lastSeen: m(2),
+    joined: m(60 * 24 * 9),
+    messages: 640,
+    load: { level: "free", doing: [], queued: [], waiting: [] },
+  },
+  {
+    name: "fern",
+    kind: "agent",
+    owner: false,
+    you: false,
+    presence: "online",
+    activity: { state: "working", tool: "Bash", since: m(3) },
+    harness: "codex",
+    lastSeen: now,
+    joined: m(60 * 24 * 6),
+    messages: 212,
+    load: { level: "busy", doing: [31], queued: [], waiting: [] },
+  },
+  {
+    name: "moss",
+    kind: "agent",
+    owner: false,
+    you: false,
+    presence: "online",
+    activity: { state: "working", since: m(1) },
+    harness: "claude",
+    lastSeen: now,
+    joined: m(60 * 24 * 4),
+    messages: 98,
+    load: { level: "busy", doing: [33], queued: [], waiting: [] },
+  },
+]
+
+const linked = (id: number, title: string, more: Partial<Task>): Task => ({
+  id,
+  title,
+  status: "doing",
+  createdBy: "quill",
+  createdAt: m(240),
+  updatedAt: m(5),
+  notes: [],
+  rounds: [],
+  history: [],
+  archived: false,
+  ...more,
+})
+
+export const DEMO_INTERLINKED: Channel = {
+  ...DEMO_EMPTY,
+  code: "interlinked",
+  title: "interlinked",
+  lead: "quill",
+  people: interlinkedPeople,
+  nicknames: nicknamesOf(interlinkedPeople),
+  tasks: [
+    linked(31, "Sync the studio library across devices without a server round trip", {
+      owner: "fern",
+      updatedAt: m(2),
+      stage: "proving",
+      pr: {
+        repo: "interlinked/studio",
+        number: 214,
+        title: "Library sync",
+        url: "https://github.com/interlinked/studio/pull/214",
+        state: "open",
+        checks: "running",
+        ticks: { passed: 9, running: 3, failed: [] },
+      },
+    }),
+    linked(33, "Empty states for the first run", { owner: "moss", updatedAt: m(4) }),
+    linked(30, "Export a board as PDF", { status: "done", owner: "fern", updatedAt: m(80), stage: "done" }),
+    linked(29, "Keyboard shortcuts sheet", { status: "done", owner: "moss", updatedAt: m(150), stage: "done" }),
+  ],
+  specs: [
+    {
+      ask: 607,
+      title: "ClickUp's admin-only pieces: automations, forms, dashboards and the time-tracking reports, behind one owner switch",
+      words: "",
+      by: "jow",
+      at: m(40),
+      text: "",
+      v: 3,
+      edited: { by: "quill", at: m(12) },
+      edits: 2,
+      editors: ["quill"],
+      comments: [],
+      stage: "draft",
+      backs: [],
+      tasks: [],
+    },
+  ],
+  asks: [{ kind: "spec", id: "spec:607:approve", at: m(12), ask: 607, why: "approve" }],
+  messages: [
+    { seq: 9001, from: "jow", at: m(30), text: "@quill can we get the ClickUp admin pieces scoped today?", where: { kind: "room", room: "general" } },
+    {
+      seq: 9002,
+      from: "quill",
+      at: m(12),
+      text: "Spec #607 is up for your OK: automations, forms, dashboards and reports behind one owner switch. fern keeps going on sync meanwhile.",
+      where: { kind: "room", room: "general" },
+    },
+  ],
+}
+
 export const DEMO_GUEST: Channel = {
   ...DEMO_EMPTY,
   code: "studio",
