@@ -1172,19 +1172,20 @@
   padding: 0;
   border: 0;
   border-radius: var(--r-row);
-  background: var(--float);
-  box-shadow: var(--shadow-float);
+  background: none;
+  box-shadow: none;
   color: var(--ink-2);
 }
 
 .rail-gear:hover {
   color: var(--ink);
-  background: var(--float-2);
+  background: var(--wash);
 }
 
 .rail-gear.is-on {
   color: var(--ink);
   background: var(--float-3);
+  box-shadow: var(--shadow-float);
 }
 
 .panel-grip {
@@ -1319,19 +1320,11 @@ html .rail-gear {
   width: 2.375rem;
   height: 2.375rem;
   border-radius: var(--r-ctl);
-  background: none;
-  box-shadow: none;
   color: var(--ink-3);
 }
 
-html .rail-gear:hover {
-  background: var(--wash);
-  color: var(--ink);
-}
-
+html .rail-gear:hover,
 html .rail-gear.is-on {
-  background: var(--float-3);
-  box-shadow: var(--shadow-float);
   color: var(--ink);
 }
 
