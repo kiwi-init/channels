@@ -625,8 +625,18 @@ export class Channel {
     return pruned;
   }
 
-  async learnRooms(messages: readonly Message[]): Promise<void> {
-    for (const m of [...messages].sort((a, b) => a.seq - b.seq)) if (m.ev?.op === "room.seal") await run(this.fx.settle(m));
+  async learnRooms<T extends { seq: number }>(rows: readonly (T | Message | null)[]): Promise<(T | Message | null)[]> {
+    const isMessage = (m: T | Message | null): m is Message => !!m && "ev" in m && !!(m as Message).ev;
+    const settled = new Map<number, Message>();
+    for (const m of rows.filter(isMessage).sort((a, b) => a.seq - b.seq)) if (m.ev?.op === "room.seal") settled.set(m.seq, await run(this.fx.settle(m)));
+    return Promise.all(
+      rows.map(async (m) => {
+        if (!isMessage(m)) return m;
+        if (m.ev?.op === "room.seal") return settled.get(m.seq) ?? m;
+        if (m.ev?.op === "room.msg") return (await run(this.fx.unseal(m))) ?? m;
+        return m;
+      }),
+    );
   }
 
   openRooms(base: FoldBase): Promise<FoldBase> {

@@ -58,7 +58,7 @@ function named(body: string, names: ReadonlySet<string>): string[] {
   return [...lead.matchAll(/@([\p{L}\p{N}_.-]+)/gu)].flatMap((m) => (m[1] && names.has(m[1]) ? [m[1]] : []))
 }
 
-function sendOptions(
+export function sendOptions(
   state: ChannelState,
   messages: readonly Wire[],
   me: string,
