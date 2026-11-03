@@ -377,25 +377,13 @@ function JoinAskCard({ channel, ask, link }: { channel: Channel; ask: JoinAsk; l
       link={link}
       actions={
         <>
-          {ask.revoked ? (
-            <button type="button" className="btn is-primary" disabled>
-              Can't join from that computer
-            </button>
-          ) : unchecked ? (
+          {ask.revoked ? null : unchecked ? (
             <button type="button" className="btn is-primary" onClick={() => app.actions.answerJoin(channel.code, ask.id, true)}>
               Show {agent ? "its" : "their"} code
             </button>
           ) : (
             <button type="button" className="btn is-primary" disabled={!ready || blocked} onClick={letIn}>
-              {ask.revoked
-                ? "Can't join from that computer"
-                : !ready
-                  ? `Waiting for ${ask.name}'s code…`
-                  : pinGone
-                    ? "Pick a personality first"
-                    : label
-                      ? `It matches: let in as ${label}`
-                      : `It matches: let ${ask.freeName ?? ask.name} in`}
+              {!ready ? `Waiting for ${ask.name}'s code…` : pinGone ? "Pick a personality first" : label ? `It matches: let in as ${label}` : `It matches: let ${ask.freeName ?? ask.name} in`}
             </button>
           )}
           <button type="button" className="btn is-danger" onClick={() => app.actions.answerJoin(channel.code, ask.id, false)}>
@@ -412,7 +400,7 @@ function JoinAskCard({ channel, ask, link }: { channel: Channel; ask: JoinAsk; l
       )}
       {ask.revoked && (
         <p className="needs-warn">
-          It runs on {ask.machine}, a computer {ask.sponsor ?? "its person"} forgot from their devices, so it can't join. It can once that computer gets a new key: <code>kiwi login</code> on it.
+          {ask.sponsor ?? "Its person"} forgot {ask.machine}, so it can't join until that computer runs <code>kiwi login</code>.
         </p>
       )}
       {ask.forgotten && !ask.revoked && (
