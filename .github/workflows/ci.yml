@@ -102,6 +102,9 @@ jobs:
       - name: ui format
         if: ${{ !cancelled() }}
         run: cd ui && bun oxfmt --check src
+      - name: ui css units
+        if: ${{ !cancelled() }}
+        run: bun scripts/css-units.ts
       - name: knip
         if: ${{ !cancelled() }}
         run: bun run knip
@@ -232,6 +235,15 @@ jobs:
       - name: ui edit and delete your own message (toolbar, Enter, ↑, Esc, the delete confirm), in WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-edit-delete.ts --dist ui/dist
+      - name: ui search reaches older history, Search older history fetches more only on a click, and an older hit opens its stretch (Back to latest, react and copy only), in WebKit
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-older-search.ts --dist ui/dist
+      - name: ui a reload keeps the room, tab and scroll, and ⌘[ / ⌘] step back and forward after search jumps, in WebKit
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-restore-place.ts --dist ui/dist
+      - name: ui Copy link to message copies only the message's address, and a pasted or opened link jumps to it with ⌘[ back, in WebKit
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-message-link.ts --dist ui/dist
       - name: ui history archive (newest window on reload, rows kept below it, backfill, leave), on WebKit's IndexedDB
         if: ${{ !cancelled() }}
         run: bun scripts/ui-history-archive.ts

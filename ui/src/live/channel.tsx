@@ -32,10 +32,14 @@ import { announce } from "~/kit/toasts"
 import { arrivals } from "~/live/persona-later"
 import { leaversToSeal } from "~/live/leaving"
 import { lastIn, seenKeyOf } from "~/live/seen-place"
+import { followsIn, threadSeenKey, threadsOf } from "~/live/threads"
 import { closeOpened, markGone, publish, type Run } from "~/live/store"
 import { useWakes } from "~/live/wakes"
 import { appCan } from "~/live/app-can"
 import { useMarksSync } from "~/live/read-sync"
+import { refusal } from "~/live/refused"
+import { backWords, composerKey, giveBack } from "~/chat/drafts"
+import { stashText } from "~/chat/stash"
 import { dmRoomOf, sealable } from "~/live/dm"
 import { freeOf, specAsksOf, specsOf } from "~/live/specs"
 import { clock } from "~/kit/time"
@@ -45,6 +49,7 @@ import { nicknamesOf } from "~/names"
 export interface View {
   where: Where | null
   task: number | null
+  thread: number | null
 }
 
 const PENDING_MAX = 50
@@ -56,13 +61,20 @@ function named(body: string, names: ReadonlySet<string>): string[] {
   return [...lead.matchAll(/@([\p{L}\p{N}_.-]+)/gu)].flatMap((m) => (m[1] && names.has(m[1]) ? [m[1]] : []))
 }
 
-function sendOptions(state: ChannelState, messages: readonly Wire[], me: string, where: Exclude<Where, { kind: "theirs" }>, body: string, opts: { replyTo?: number; inThread?: number }): SendOptions {
+export function sendOptions(
+  state: ChannelState,
+  messages: readonly Wire[],
+  me: string,
+  where: Exclude<Where, { kind: "theirs" }>,
+  body: string,
+  opts: { replyTo?: number; inThread?: number; side?: true }
+): SendOptions {
   const names = new Set([...state.members.values()].filter((m) => m.active && m.name !== me).map((m) => m.name))
   const re = opts.replyTo ?? opts.inThread
   const target = opts.replyTo !== undefined ? messages.find((m) => m.seq === opts.replyTo) : undefined
   const mentioned = named(body, names)
   const to = mentioned.length ? mentioned : target && target.from !== me ? [target.from] : undefined
-  const base: SendOptions = { kind: "msg", ...(re !== undefined ? { re: [re] } : {}), ...(to ? { to } : {}) }
+  const base: SendOptions = { kind: "msg", ...(re !== undefined ? { re: [re] } : {}), ...(re !== undefined && opts.side ? { side: true } : {}), ...(to ? { to } : {}) }
   if (where.kind === "dm") return { ...base, ...sendFrom(state, dmPlace(me, where.with), me) }
   if (where.kind === "task") return { ...base, ...sendFrom(state, { kind: "task", task: where.task }, me) }
   return where.room === GENERAL_ROOM ? base : { ...base, room: where.room }
@@ -80,7 +92,7 @@ function useShown(): boolean {
 
 export const OpenMember = memo(function OpenMember({ member, view }: { member: StoredMember; view: View }) {
   const live = useChannel(member)
-  const { ch, state, messages, roster, online, requests, isOwner, connection, gone, ready, send, refreshRequests, refreshRoster, foldFrom, marks, pkOf, github } = live
+  const { ch, state, messages, roster, online, requests, isOwner, connection, gone, ready, send, refreshRequests, refreshRoster, foldFrom, marks, pkOf, github, older } = live
   const me = member.identity.name
   const roomId = member.access.roomId
   const code = member.code
@@ -119,6 +131,8 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const { muted } = usePrefs()
   const rooms = useMemo(() => roomsOf(state, messages, me, seen, from).map((r) => (isMuted(muted, code, r.id) ? { ...r, muted: true as const } : r)), [state, messages, me, seen, from, muted, code])
   const directs = useMemo(() => directsOf(state, messages, me, seen), [state, messages, me, seen])
+  const threads = useMemo(() => threadsOf(state, messages, me, seen, from), [state, messages, me, seen, from])
+  const follows = useMemo(() => followsIn(seen), [seen])
   const theirs = useMemo(() => theirsOf(state, messages, me), [state, messages, me])
   const others = useMemo(() => people.filter((p) => !p.you), [people])
   const title = channelTitle(
@@ -160,6 +174,8 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       ...(state.branchPrefix ? { branchPrefix: state.branchPrefix } : {}),
       rooms,
       directs,
+      threads,
+      follows,
       theirs,
       people,
       former,
@@ -199,6 +215,8 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       state.branchPrefix,
       rooms,
       directs,
+      threads,
+      follows,
       theirs,
       people,
       former,
@@ -218,7 +236,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   )
 
   const post = useCallback(
-    async (where: Where, text: string, opts: { replyTo?: number; inThread?: number; images?: Upload[] }): Promise<number> => {
+    async (where: Where, text: string, opts: { replyTo?: number; inThread?: number; side?: true; images?: Upload[] }): Promise<number> => {
       if (where.kind === "theirs") throw new Error("Only the two of them write in their direct messages")
       const key = nextUnsentKey()
       const body = text.trim()
@@ -244,6 +262,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
         text: body,
         at: Date.now(),
         ...(opts.inThread !== undefined ? { inThread: opts.inThread } : {}),
+        ...(opts.side ? { side: true as const } : {}),
         ...(opts.replyTo !== undefined ? { replyTo: opts.replyTo } : {}),
         ...(opts.images?.length ? { images: opts.images } : {}),
       }
@@ -251,16 +270,23 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       try {
         const seq = await inTurn(async () => {
           const room = where.kind === "dm" ? await sealedIn(where.with) : undefined
-          return send(body, room ? { kind: "msg", room, ...(re !== undefined ? { re: [re] } : {}), ...imgs } : plain)
+          return send(body, room ? { kind: "msg", room, ...(re !== undefined ? { re: [re] } : {}), ...(re !== undefined && opts.side ? { side: true } : {}), ...imgs } : plain)
         })
         setPending((list) => list.map((p) => (p.key === key ? { ...p, seq } : p)))
         return seq
       } catch (err) {
-        setPending((list) => list.map((p) => (p.key === key ? { ...p, failed: err instanceof Error ? err.message : String(err) } : p)))
+        const why = refusal(err)
+        if (why === null) {
+          setPending((list) => list.map((p) => (p.key === key ? { ...p, failed: err instanceof Error ? err.message : String(err) } : p)))
+          throw err
+        }
+        setPending((list) => list.filter((p) => p.key !== key))
+        const images = opts.images ?? []
+        announce(backWords(why, giveBack(composerKey(code, where, opts.inThread), body, images, stashText), images.length), "error")
         throw err
       }
     },
-    [state, messages, me, send, inTurn, setPending, channel, roster, ch]
+    [state, messages, me, send, inTurn, setPending, channel, roster, ch, code]
   )
 
   const discard = useCallback((key: number) => setPending((list) => list.filter((p) => p.key !== key)), [setPending])
@@ -271,6 +297,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       discard(key)
       return post(p.where, p.text, {
         ...(p.inThread !== undefined ? { inThread: p.inThread } : {}),
+        ...(p.side ? { side: true as const } : {}),
         ...(p.replyTo !== undefined ? { replyTo: p.replyTo } : {}),
         ...(p.images?.length ? { images: p.images } : {}),
       })
@@ -279,8 +306,8 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   )
 
   const run = useMemo(
-    (): Run => ({ code, roomId, me, isOwner, ch, state, messages, roster, requests, send, post, retry, discard, refreshRequests, refreshRoster, foldFrom }),
-    [code, roomId, me, isOwner, ch, state, messages, roster, requests, send, post, retry, discard, refreshRequests, refreshRoster, foldFrom]
+    (): Run => ({ code, roomId, me, isOwner, ch, state, messages, roster, requests, send, post, retry, discard, refreshRequests, refreshRoster, foldFrom, older }),
+    [code, roomId, me, isOwner, ch, state, messages, roster, requests, send, post, retry, discard, refreshRequests, refreshRoster, foldFrom, older]
   )
 
   useLayoutEffect(() => {
@@ -340,6 +367,11 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
     if (!where || !lastHere || !shown) return
     markSeenIn(roomId, { [seenKeyOf(state, where, me)]: lastHere })
   }, [where, lastHere, roomId, me, shown, state])
+  const openThread = view.thread
+  const lastInThread = useMemo(() => (openThread === null ? 0 : (threads.find((t) => t.root === openThread)?.lastSeq ?? 0)), [openThread, threads])
+  useEffect(() => {
+    if (openThread !== null && lastInThread && shown) markSeenIn(roomId, { [threadSeenKey(openThread)]: lastInThread })
+  }, [openThread, lastInThread, roomId, shown])
   const task = view.task
   const lastInTask = useMemo(() => (task === null ? 0 : (state.places.get(placeKey({ kind: "task", task }))?.last ?? 0)), [task, state.places])
   useEffect(() => {

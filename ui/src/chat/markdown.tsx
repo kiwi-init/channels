@@ -8,6 +8,7 @@ import { buildStyles, tableBodyRowStyle, zeroTrailingMargins } from "react-nativ
 import { indexTaskItems, markInlineImages } from "react-native-enriched-markdown/lib/module/web/utils.js"
 import type { ASTNode, RendererCallbacks } from "react-native-enriched-markdown/lib/typescript/src/web/types"
 import { compareCells, nextSort, sanitizeMarkdownUrl, type SortDir } from "@kiwi/app/markdown.ts"
+import { messageAt, messageHash } from "@kiwi/core/message-link.ts"
 import { bridge } from "@kiwi/secrets/secrets.ts"
 
 import { MermaidBlock } from "~/chat/mermaid"
@@ -74,14 +75,14 @@ const STYLE: MarkdownStyle = {
     lineHeight: 20,
     marginTop: 2,
     marginBottom: 8,
-    headerBackgroundColor: "var(--raise)",
-    headerTextColor: "var(--ink)",
-    rowEvenBackgroundColor: "var(--wash)",
+    headerBackgroundColor: "transparent",
+    headerTextColor: "var(--ink-2)",
+    rowEvenBackgroundColor: "transparent",
     rowOddBackgroundColor: "transparent",
     borderColor: "transparent",
     borderWidth: 0,
     borderRadius: 10,
-    cellPaddingHorizontal: 10,
+    cellPaddingHorizontal: 12,
     cellPaddingVertical: 6,
   },
   taskList: { checkedColor: "var(--accent)", borderColor: "var(--line-3)", checkmarkColor: "var(--on-ink)", checkedTextColor: "var(--ink-2)" },
@@ -91,7 +92,7 @@ const FLAGS = { latexMath: false, underline: false, hardSoftBreaks: true }
 
 type Styles = ReturnType<typeof buildStyles>
 
-const scaled = (px: number) => `calc(${px}px * var(--text-scale, 1))`
+const scaled = (px: number) => `${px / 16}rem`
 
 function sized(s: CSSProperties): CSSProperties {
   const line = typeof s.lineHeight === "string" ? /^(\d+(?:\.\d+)?)px$/.exec(s.lineHeight)?.[1] : undefined
@@ -139,7 +140,7 @@ const OWN_LINK = /^kiwi-(?:mention|task|msg):/
 const OPENED = /^(?:https?:\/\/|mailto:)/i
 const LOCAL_PICTURE = /^(?:data|blob):/i
 
-const opened = (url: string): boolean => OWN_LINK.test(url) || (OPENED.test(url.trim()) && !!sanitizeMarkdownUrl(url))
+const opened = (url: string): boolean => OWN_LINK.test(url) || !!messageAt(url) || (OPENED.test(url.trim()) && !!sanitizeMarkdownUrl(url))
 
 function pictureLink(node: ASTNode, inLink: boolean): void {
   const url = node.attributes?.url ?? ""
@@ -147,7 +148,7 @@ function pictureLink(node: ASTNode, inLink: boolean): void {
   const alt = textOf(node) || "image"
   node.type = safe ? "Link" : "Text"
   node.attributes = safe ? { url: safe } : {}
-  if (safe) node.children = [{ type: "Text", content: `${alt} (opens ${new URL(safe).hostname})` }]
+  if (safe) node.children = [{ type: "Text", content: alt }]
   else {
     node.content = alt
     node.children = []
@@ -319,6 +320,10 @@ export default function Markdown({ markdown, onMention, onTask, onMessage, onIma
         // A mention link someone wrote by hand with a stray %: it keeps no hover text.
       }
     }
+    for (const a of box.current?.querySelectorAll<HTMLAnchorElement>('a[href^="http"], a[href^="mailto:"]') ?? []) {
+      const href = a.getAttribute("href") ?? ""
+      if (!a.title && a.textContent?.trim() !== href) a.title = href
+    }
     for (const code of box.current?.querySelectorAll<HTMLElement>("code") ?? []) {
       const text = code.textContent ?? ""
       if (code.closest("pre, a") || text.length < COPYABLE || text.includes("\n")) continue
@@ -371,6 +376,11 @@ export default function Markdown({ markdown, onMention, onTask, onMessage, onIma
       if (url.startsWith("kiwi-mention:")) return onMention(decodeURIComponent(url.slice("kiwi-mention:".length)))
       if (url.startsWith("kiwi-task:")) return onTask(Number(url.slice("kiwi-task:".length)))
       if (url.startsWith("kiwi-msg:")) return onMessage(Number(url.slice("kiwi-msg:".length)))
+      const at = messageAt(url)
+      if (at) {
+        location.hash = messageHash(at.code, at.seq)
+        return
+      }
       if (!sanitizeMarkdownUrl(url) || (!/^https?:\/\//i.test(url) && !url.startsWith("mailto:"))) return
       const b = bridge()
       if (b) void b.openExternal(url).catch(() => {})

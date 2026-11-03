@@ -70,6 +70,7 @@
 }
 
 :root {
+  font-size: calc(var(--text-scale, 1) * 100%);
   color-scheme: dark;
   --bg: #000000;
   --bg-2: #0c0c0d;
@@ -111,6 +112,7 @@
   --h-opencode: #c9c9c9;
 
   --white: #fff;
+  --img-edge: light-dark(oklch(0 0 0 / 0.1), oklch(1 0 0 / 0.1));
   --shadow-pop: 0 0 0 1px var(--line-2), 0 16px 48px rgb(0 0 0 / 0.32);
   --float: var(--bg-3);
   --float-2: color-mix(in srgb, var(--float) 90%, var(--ink));
@@ -123,12 +125,12 @@
 
   --text-scale: 1.1;
 
-  --t-stamp: calc(11px * var(--text-scale, 1));
-  --t-meta: calc(12px * var(--text-scale, 1));
-  --t-ui: calc(13px * var(--text-scale, 1));
-  --t-body: calc(15px * var(--text-scale, 1));
-  --t-title: calc(17px * var(--text-scale, 1));
-  --t-display: calc(24px * var(--text-scale, 1));
+  --t-stamp: 0.6875rem;
+  --t-meta: 0.75rem;
+  --t-ui: 0.8125rem;
+  --t-body: 0.9375rem;
+  --t-title: 1.0625rem;
+  --t-display: 1.5rem;
 
   --r-tick: 2px;
   --r-tag: 6px;
@@ -137,17 +139,18 @@
   --r-card: 14px;
   --r-win: 18px;
 
-  --ctl: 32px;
-  --ctl-sm: 24px;
+  --ctl: 2rem;
+  --ctl-sm: 1.5rem;
   --gutter: 24px;
   --card-pad: 16px;
 
-  --rail-w: 64px;
-  --side-w: 248px;
+  --rail-w: 4rem;
+  --side-w: 15.5rem;
   --panel-w: 400px;
-  --top-h: 52px;
-  --col: 760px;
-  --compose-space: 128px;
+  --top-h: 3.25rem;
+  --col: 47.5rem;
+  --list: 2400px;
+  --compose-space: 8rem;
 
   --ease: cubic-bezier(0.32, 0.72, 0, 1);
   --fast: 0.16s;

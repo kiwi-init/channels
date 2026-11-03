@@ -1,7 +1,7 @@
 import type { CachedKept, CachedRow } from "@kiwi/core/cache-row.ts";
 import type { PresenceFields } from "@kiwi/core/client.ts";
 
-import type { CallResult, ChannelCallName, ChannelCalls, ChannelOps, FollowEvent, HistorySearch } from "../../../desktop/src/bridge.ts";
+import type { CallResult, ChannelCallName, ChannelCalls, ChannelOps, FollowEvent, HistoryAround, HistorySearch } from "../../../desktop/src/bridge.ts";
 import type { FoldInputs } from "../../../desktop/src/search-types.ts";
 import { errorOf, remoteOps } from "./channel-remote.ts";
 import { bridge } from "@kiwi/secrets/secrets.ts";
@@ -30,8 +30,9 @@ function lazyLocalOps(): ChannelOps {
     presence: (code, p) => local().then((o) => o.presence(code, p)),
     openRows: (code, rows) => local().then((o) => o.openRows(code, rows)),
     olderRows: (code, before, limit) => local().then((o) => o.olderRows(code, before, limit)),
-    indexRows: (code, rows, inputs) => local().then((o) => o.indexRows(code, rows, inputs)),
+    indexRows: (code, rows, inputs, from) => local().then((o) => o.indexRows(code, rows, inputs, from)),
     searchHistory: (code, search) => local().then((o) => o.searchHistory(code, search)),
+    historyAround: (code, around) => local().then((o) => o.historyAround(code, around)),
     keep: (code, state) => local().then((o) => o.keep(code, state)),
     openKept: (code, sealed) => local().then((o) => o.openKept(code, sealed)),
     nudge: () => {
@@ -87,6 +88,8 @@ export class ChannelLink {
   deny = (...a: Args<"deny">) => this.c("deny", ...a);
   remove = (...a: Args<"remove">) => this.c("remove", ...a);
   cutDevices = (...a: Args<"cutDevices">) => this.c("cutDevices", ...a);
+  reprove = (...a: Args<"reprove">) => this.c("reprove", ...a);
+  goneDevices = (...a: Args<"goneDevices">) => this.c("goneDevices", ...a);
   tendDelegations = (...a: Args<"tendDelegations">) => this.c("tendDelegations", ...a);
   dropDelegates = (...a: Args<"dropDelegates">) => this.c("dropDelegates", ...a);
   updateScopes = (...a: Args<"updateScopes">) => this.c("updateScopes", ...a);
@@ -136,8 +139,9 @@ export class ChannelLink {
   presence = (p: PresenceFields) => this.via.presence(this.code, p);
   openRows = (rows: CachedRow[]) => this.via.openRows(this.code, rows);
   olderRows = (before: number, limit: number) => this.via.olderRows(this.code, before, limit);
-  indexRows = (rows: CachedRow[], inputs: FoldInputs) => this.via.indexRows(this.code, rows, inputs);
+  indexRows = (rows: CachedRow[], inputs: FoldInputs, from: number) => this.via.indexRows(this.code, rows, inputs, from);
   searchHistory = (search: HistorySearch) => this.via.searchHistory(this.code, search);
+  historyAround = (around: HistoryAround) => this.via.historyAround(this.code, around);
   keep = (state: object) => this.via.keep(this.code, state);
   openKept = (sealed: CachedKept) => this.via.openKept(this.code, sealed);
   follow = (since: number, on: (e: FollowEvent) => void) => this.via.follow(this.code, since, on);

@@ -15,16 +15,19 @@ import { clockLayer, MAX_REQUEST_BYTES } from "./http.ts";
 import { authkitDomains, devHostOk, devHumanAuth, devRequestOk, Human, HUMAN_HEADER, withGithub, workosFromSettings, type HumanAuth } from "./human.ts";
 import { MAILBOX_TTL_MS } from "@kiwi/core/mailbox.ts";
 import { corsPreflight, onMailboxHttp, withCors, type MailboxStore } from "./mailbox.ts";
-import { ACCOUNT_ASKS_PER_MINUTE, accountUser, isAccountPath, onAccountHttp, sameEnrollment, type AccountStore } from "./account.ts";
+import { ACCOUNT_ASKS_PER_MINUTE, accountUser, isAccountPath, onAccountHttp, sameEnrollment, sameFresh, type AccountStore, type FreshRecord } from "./account.ts";
 import { ENROLL_TTL_MS, type Enrollment } from "@kiwi/core/enroll.ts";
 import { accountHome, frozenWrite, MOVE_PATH, movedHuman, moveUsers, onMoveHttp, type MoveStore, type Row, type Rows } from "./move.ts";
-import type { Vault } from "@kiwi/core/recovery.ts";
+import type { OldVault, Vault } from "@kiwi/core/recovery.ts";
 import {
   MACHINE_ASKS_PER_MINUTE,
   MACHINE_BOX_TTL_MS,
   MACHINE_UNSEEN_MS,
   MACHINE_WRITES_PER_ADDRESS,
+  PIPE_JOIN_MS,
+  PIPE_PAIRED,
   onMachineHttp,
+  pipeFrame,
   onPersonHttp,
   personMachine,
   takeNewerList,
@@ -32,6 +35,7 @@ import {
   type MachineBox,
   type MachineStore,
   type PersonMachinesStore,
+  type PipeEnd,
 } from "./machine.ts";
 import { allow as allowPerMinute } from "./room/limits.ts";
 import { clientAddress, parseTrustProxy, trustProxyFromArgs, trustProxyHint, trustsAProxy, untrustedProxy, writeAllowed, type TrustProxy } from "./address.ts";
@@ -68,10 +72,12 @@ import {
 import { makeRelay, onHttp, runRoom, runRoomSync } from "./route.ts";
 import { GITHUB_QUEUE_MAX, GITHUB_QUEUE_TTL_MS, onGithubHttp, type GithubRoutes } from "./github.ts";
 import { GithubApp, githubAppFrom, GithubPush, githubPushFrom, type GithubAppApi, type PushCheck } from "./github-app.ts";
+import { pushConfigFrom, pusherFrom, type Pusher } from "./push.ts";
 import { edgePage, PAGE_CACHE_SECONDS, PAGE_PATH, type PageCache } from "./pages.ts";
 
 interface SocketData {
   machine?: string;
+  pipe?: PipeEnd & { mpk: string };
   roomId: string;
   pk: string;
   since: number;
@@ -111,7 +117,9 @@ export function startRelay(
     githubSecret?: string | null;
     githubApp?: GithubAppApi | null;
     githubPush?: PushCheck | null;
+    pusher?: Pusher | null;
     devNoRateLimits?: boolean;
+    pipeJoinMs?: number;
   } = {},
 ) {
   if (opts.devNoRateLimits && !devHostOk(opts.hostname)) throw new Error("devNoRateLimits needs hostname 127.0.0.1 (or localhost)");
@@ -147,9 +155,32 @@ export function startRelay(
   people.run("CREATE TABLE IF NOT EXISTS account_recovery (user TEXT NOT NULL, n INTEGER NOT NULL, link TEXT NOT NULL, PRIMARY KEY (user, n))");
   people.run("CREATE TABLE IF NOT EXISTS account_vaults (user TEXT PRIMARY KEY, version INTEGER NOT NULL, rec TEXT NOT NULL)");
   people.run("CREATE TABLE IF NOT EXISTS account_asks (user TEXT PRIMARY KEY, rec TEXT NOT NULL, at INTEGER NOT NULL)");
+  people.run("CREATE TABLE IF NOT EXISTS account_fresh (user TEXT PRIMARY KEY, rec TEXT NOT NULL)");
   people.run("CREATE TABLE IF NOT EXISTS account_moves (user TEXT PRIMARY KEY, to_user TEXT NOT NULL, id TEXT NOT NULL, at INTEGER NOT NULL, done INTEGER NOT NULL)");
   people.run("CREATE TABLE IF NOT EXISTS account_adoptions (user TEXT NOT NULL, from_user TEXT NOT NULL, id TEXT NOT NULL, state TEXT NOT NULL, PRIMARY KEY (user, from_user))");
   const machineSockets = new Map<string, { ws: ServerWebSocket<SocketData>; since: number }>();
+  const pipeSockets = new Map<string, Set<ServerWebSocket<SocketData>>>();
+  const pipeJoinMs = opts.pipeJoinMs ?? PIPE_JOIN_MS;
+  const pipesOf = (mpk: string): ServerWebSocket<SocketData>[] => [...(pipeSockets.get(mpk) ?? [])];
+  const partnerOf = (ws: ServerWebSocket<SocketData>): ServerWebSocket<SocketData> | undefined => {
+    const end = ws.data.pipe;
+    return end ? pipesOf(end.mpk).find((o) => o.data.pipe?.id === end.id && o.data.pipe.side !== end.side) : undefined;
+  };
+  const dropPipe = (ws: ServerWebSocket<SocketData>): void => {
+    const mpk = ws.data.pipe?.mpk;
+    if (!mpk) return;
+    pipeSockets.get(mpk)?.delete(ws);
+    if (!pipeSockets.get(mpk)?.size) pipeSockets.delete(mpk);
+  };
+  const endPipe = (ws: ServerWebSocket<SocketData>, code: number, reason: string): void => {
+    dropPipe(ws);
+    ws.close(code, reason);
+  };
+  const closePipes = (mpk: string, which: (end: PipeEnd) => boolean, code: number, reason: string): void => {
+    const ending = pipesOf(mpk).filter((ws) => ws.data.pipe && which(ws.data.pipe));
+    for (const ws of ending) dropPipe(ws);
+    for (const ws of ending) ws.close(code, reason);
+  };
   const instance = crypto.randomUUID();
   const machines: MachineStore = {
     binding: async (mpk) => {
@@ -185,7 +216,10 @@ export function startRelay(
     close: (mpk) => {
       machineSockets.get(mpk)?.ws.close(4000, "unpaired");
       machineSockets.delete(mpk);
+      closePipes(mpk, () => true, 4000, "unpaired");
     },
+    pipes: (mpk) => pipesOf(mpk).flatMap((ws) => (ws.data.pipe ? [ws.data.pipe] : [])),
+    closePipes,
   };
   const personMachines: PersonMachinesStore = {
     machines: async (person) =>
@@ -198,6 +232,10 @@ export function startRelay(
   const enrollmentOf = (user: string): Enrollment | null => {
     const row = people.query("SELECT rec FROM account_asks WHERE user = ?").get(user) as { rec: string } | null;
     return row ? (JSON.parse(row.rec) as Enrollment) : null;
+  };
+  const freshOf = (user: string): FreshRecord | null => {
+    const row = people.query("SELECT rec FROM account_fresh WHERE user = ?").get(user) as { rec: string } | null;
+    return row ? (JSON.parse(row.rec) as FreshRecord) : null;
   };
   const accounts: AccountStore = {
     links: async (user) => (people.query("SELECT link FROM account_links WHERE user = ? ORDER BY seq").all(user) as { link: string }[]).map((r) => JSON.parse(r.link) as unknown),
@@ -233,13 +271,28 @@ export function startRelay(
       })(),
     vault: async (user) => {
       const row = people.query("SELECT rec FROM account_vaults WHERE user = ?").get(user) as { rec: string } | null;
-      return row ? (JSON.parse(row.rec) as Vault) : null;
+      return row ? (JSON.parse(row.rec) as Vault | OldVault) : null;
     },
     setVault: async (user, next, prev) =>
       people.transaction(() => {
         const row = people.query("SELECT version FROM account_vaults WHERE user = ?").get(user) as { version: number } | null;
         if ((row?.version ?? 0) !== prev) return false;
         people.query("INSERT OR REPLACE INTO account_vaults (user, version, rec) VALUES (?, ?, ?)").run(user, next.version, JSON.stringify(next));
+        return true;
+      })(),
+    fresh: async (user) => freshOf(user),
+    setFresh: async (user, next, prev) => {
+      if (!sameFresh(freshOf(user), prev)) return false;
+      people.query("INSERT OR REPLACE INTO account_fresh (user, rec) VALUES (?, ?)").run(user, JSON.stringify(next));
+      return true;
+    },
+    startOver: async (user, start) =>
+      people.transaction(() => {
+        const rec = freshOf(user);
+        if (rec?.pending?.id !== start.id) return false;
+        for (const table of ["account_links", "account_recovery", "account_vaults", "account_asks"]) people.query(`DELETE FROM ${table} WHERE user = ?`).run(user);
+        start.links.forEach((l, i) => people.query("INSERT INTO account_links (user, seq, link) VALUES (?, ?, ?)").run(user, i + 1, JSON.stringify(l)));
+        people.query("INSERT OR REPLACE INTO account_fresh (user, rec) VALUES (?, ?)").run(user, JSON.stringify({ pending: null, lastAt: rec.lastAt }));
         return true;
       })(),
   };
@@ -377,8 +430,20 @@ export function startRelay(
     }
   };
 
+  const pusher = opts.pusher === undefined ? pusherFrom(pushConfigFrom(process.env)) : opts.pusher;
+  const wake = async (p: Pusher, { room, wakes }: NonNullable<Effects["push"]>) => {
+    const dead = await p.send(wakes);
+    if (!dead.length || !existsSync(file(room))) return;
+    const db = storeFor(room, false);
+    try {
+      db.dropPushTokens(dead);
+    } finally {
+      doneWith(db);
+    }
+  };
   const apply = (roomId: string, fx: Effects, sender?: ServerWebSocket<SocketData>) => {
     const room = sockets.get(roomId) ?? new Set();
+    if (fx.push && pusher) void wake(pusher, fx.push).catch((e: unknown) => console.error(`wake: ${e instanceof Error ? e.message : "error"}`));
     for (const ws of room) for (const f of (ws.data.watch ? fx.watch : undefined) ?? fx.broadcast ?? []) ws.send(f);
     if (fx.others) for (const ws of room) if (ws !== sender && !ws.data.watch) ws.send(fx.others);
     if (fx.ephemeral) for (const ws of room) if (ws !== sender && ws.data.presence) ws.send(fx.ephemeral);
@@ -449,7 +514,8 @@ export function startRelay(
     rows: async (from) => rowsOf(from),
     busy: async (from, now) => {
       const ask = people.query("SELECT at FROM account_asks WHERE user = ?").get(from) as { at: number } | null;
-      return ask && ask.at + ENROLL_TTL_MS > now ? "asking" : null;
+      if (ask && ask.at + ENROLL_TTL_MS > now) return "asking";
+      return freshOf(from)?.pending ? "starting over" : null;
     },
     holds: async (to) => holds(to),
     adopt: async (to, from, id, rows) =>
@@ -547,6 +613,11 @@ export function startRelay(
           });
           if (account) return account;
         }
+        if (machine && "pipe" in machine) {
+          const data: SocketData = { pipe: { ...machine.pipe, mpk: machine.mpk }, roomId: "", pk: machine.pipe.signer, since: 0, presence: false, reads: false, echo: false, watch: false };
+          if (server.upgrade(req, { data, headers: wsHeaders(req) })) return undefined;
+          return withCors(errorResponse(new UpdateRequired({ message: "expected websocket" })));
+        }
         if (machine) {
           const data: SocketData = { machine: machine.upgrade, roomId: "", pk: machine.upgrade, since: 0, presence: false, reads: false, echo: false, watch: false };
           if (server.upgrade(req, { data, headers: wsHeaders(req) })) return undefined;
@@ -624,6 +695,18 @@ export function startRelay(
     websocket: {
       idleTimeout: 120,
       open(ws) {
+        const end = ws.data.pipe;
+        if (end) {
+          let set = pipeSockets.get(end.mpk);
+          if (!set) pipeSockets.set(end.mpk, (set = new Set()));
+          set.add(ws);
+          const other = partnerOf(ws);
+          if (other) {
+            other.send(PIPE_PAIRED);
+            ws.send(PIPE_PAIRED);
+          } else setTimeout(() => !partnerOf(ws) && endPipe(ws, 4408, "the other side didn't join this pipe in time"), pipeJoinMs).unref();
+          return;
+        }
         const mpk = ws.data.machine;
         if (mpk) {
           machineSockets.get(mpk)?.ws.close(4001, "replaced by a newer connection");
@@ -646,6 +729,20 @@ export function startRelay(
         }
       },
       message(ws, data) {
+        if (ws.data.pipe) {
+          const frame = pipeFrame(data, PING);
+          const other = partnerOf(ws);
+          if (frame === "ping") return void ws.send(PONG);
+          if (frame === "refuse") {
+            if (other) dropPipe(other);
+            endPipe(ws, 1009, "a pipe carries binary frames of at most 64 KB");
+            other?.close(1011, "the other side sent a frame the relay doesn't carry");
+            return;
+          }
+          if (!other) return void endPipe(ws, 4409, "the other side hasn't joined this pipe yet");
+          other.send(data);
+          return;
+        }
         const raw = typeof data === "string" ? data : new TextDecoder().decode(data);
         if (raw === PING) return void ws.send(PONG);
         if (ws.data.machine) return;
@@ -660,6 +757,13 @@ export function startRelay(
         apply(ws.data.roomId, fx, ws);
       },
       close(ws) {
+        const end = ws.data.pipe;
+        if (end) {
+          const other = partnerOf(ws);
+          dropPipe(ws);
+          if (other) endPipe(other, 1000, "the other side left");
+          return;
+        }
         const mpk = ws.data.machine;
         if (mpk) {
           if (machineSockets.get(mpk)?.ws !== ws) return;

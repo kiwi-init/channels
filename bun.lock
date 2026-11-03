@@ -5,6 +5,7 @@
     "": {
       "name": "modelchannel",
       "dependencies": {
+        "@firecrawl/anydoc-wasm": "0.2.4",
         "@kiwi/app": "workspace:*",
         "@kiwi/channel": "workspace:*",
         "@kiwi/core": "workspace:*",
@@ -29,7 +30,7 @@
     },
     "desktop": {
       "name": "kiwi-desktop",
-      "version": "2026.10.12",
+      "version": "2026.11.2",
       "dependencies": {
         "@kiwi/core": "workspace:*",
       },
@@ -90,7 +91,7 @@
         "@kiwi/channel": "workspace:*",
         "@kiwi/core": "workspace:*",
         "@kiwi/secrets": "workspace:*",
-        "ghostty-web": "0.4.0",
+        "ghostty-web": "0.4.0-next.21.g640db46",
         "mermaid": "^12.2.0",
         "react": "^19.3.1",
         "react-dom": "^19.3.1",
@@ -206,6 +207,8 @@
     "@esbuild/win32-ia32": ["@esbuild/win32-ia32@0.28.2", "", { "os": "win32", "cpu": "ia32" }, "sha512-YmJbfTlvU7Sdn9BB+4PRES4oB6pxgS37MAONj+hBr/cpXS1aBPKXxNnDbu+QCWPj0o9dgyxeq79g6c5P8KeuYA=="],
 
     "@esbuild/win32-x64": ["@esbuild/win32-x64@0.28.2", "", { "os": "win32", "cpu": "x64" }, "sha512-5ebpxr3nWMzrL/rnUI755Jkuee0bHL/Gq0WTF9lvcpv73wAp5eu8MfBUgWK9bhWvZjj7yX8etf/8tI8Ney695g=="],
+
+    "@firecrawl/anydoc-wasm": ["@firecrawl/anydoc-wasm@0.2.4", "", {}, "sha512-ZqrTXBrwi1Ct4kB5R72KQC9fOxwq4W08bZh6T+o84Mork3xCKLpH8TRe+KM3vJ+XqRVlV1dxHvQp0cnkO2r5TQ=="],
 
     "@hono/node-server": ["@hono/node-server@2.1.5", "", { "peerDependencies": { "hono": "^4 || ^5.0.0-0" } }, "sha512-MgP/I06GdvsilDspMk/qmRzpk8LOUStP6jFAbSRi40W09DhoyUn+Mj7eyKICPqeYKybOjVFLVIAQzvu1bfIa7Q=="],
 
@@ -785,7 +788,7 @@
 
     "get-tsconfig": ["get-tsconfig@4.14.3", "", { "dependencies": { "resolve-pkg-maps": "^1.0.0" } }, "sha512-++QEw4DIY7WGoukz+/+A/8dGYPT9l9yIadnmSgZ8Rjr3YVSVDipQSO9CdnJo9ePqFqUUqh+wk9uIaoiAwsiPkA=="],
 
-    "ghostty-web": ["ghostty-web@0.4.0", "", {}, "sha512-0puDBik2qapbD/QQBW9o5ZHfXnZBqZWx/ctBiVtKZ6ZLds4NYb+wZuw1cRLXZk9zYovIQ908z3rvFhexAvc5Hg=="],
+    "ghostty-web": ["ghostty-web@0.4.0-next.21.g640db46", "", {}, "sha512-YxJYIo+Frc+HsJOeyyZVBMSke3TsiQ9yyl+Cu8sI7oEBINYUxP6Z9AxBehst20AZOP255z6S7rpORu0JJzHtEw=="],
 
     "gopd": ["gopd@1.2.0", "", {}, "sha512-ZUKRh6/kUFoAiTAtTYPZJ3hw9wNxx+BIBOijnlG9PnrJsCcSjs1wyyD6vJpaYtgnzDrKYRSqf3OO6Rfa93xsRg=="],
 

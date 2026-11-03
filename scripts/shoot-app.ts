@@ -26,6 +26,7 @@ const themes = (flag("--theme") ?? "dark").split(",");
 const engine = flag("--browser") ?? "chromium";
 const size = (flag("--size") ?? "1440x900").split("x").map(Number);
 const only = flag("--only")?.split(",").filter(Boolean);
+const textScale = flag("--text-scale");
 const out = resolve(args[0] ?? "shots");
 mkdirSync(out, { recursive: true });
 
@@ -37,11 +38,22 @@ const browser = engine === "webkit" ? await webkit.launch() : await chromium.lau
 try {
   const page = await browser.newPage({ viewport: { width: size[0] ?? 1440, height: size[1] ?? 900 }, deviceScaleFactor: 2 });
   const errors: string[] = [];
-  page.on("pageerror", (e) => errors.push(e.message));
+  let at = "";
+  page.on("pageerror", (e) => errors.push(`${at}: ${e.message}`));
   for (const theme of themes) {
     for (const name of names) {
+      at = `${name}-${theme}`;
+      await page.evaluate(() => {
+        try {
+          localStorage.clear();
+          sessionStorage.clear();
+        } catch {
+          // about:blank before the first shot has no storage to clear
+        }
+      });
       await page.goto(`${base}?shot=${name}&theme=${theme}`);
       await page.waitForLoadState("networkidle");
+      if (textScale) await page.evaluate((scale) => document.documentElement.style.setProperty("--text-scale", scale), textScale);
       await page.evaluate(() => document.fonts.ready);
       await page.waitForTimeout(350);
       const file = join(out, `${name}-${theme}.png`);

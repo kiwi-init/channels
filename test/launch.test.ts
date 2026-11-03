@@ -151,6 +151,27 @@ describe("the line an agent is started with", () => {
     expect(launchChoicesRefusal("gemini", { context: 1_000_000 })).toBe("Gemini CLI doesn't take a context size from Kiwi");
   });
 
+  test("Antigravity CLI gets the model, effort, its accept-edits and plan modes or the flag that skips its prompts, with the join line as its first interactive prompt", () => {
+    expect(recipeArgv("agy", "/bin/agy", "P")).toEqual(["/bin/agy", "-i", "P"]);
+    expect(recipeArgv("agy", "/bin/agy", "P", { model: "gemini-3.8-flash", effort: "high", permission: "accept-edits" })).toEqual([
+      "/bin/agy",
+      "--model",
+      "gemini-3.8-flash",
+      "--effort",
+      "high",
+      "--mode",
+      "accept-edits",
+      "-i",
+      "P",
+    ]);
+    expect(recipeArgv("agy", "/bin/agy", "P", { permission: "plan" })).toEqual(["/bin/agy", "--mode", "plan", "-i", "P"]);
+    expect(recipeArgv("agy", "/bin/agy", "P", { permission: "bypass" })).toEqual(["/bin/agy", "--dangerously-skip-permissions", "-i", "P"]);
+    expect(recipeArgv("agy", "/bin/agy", "P", { permission: "default" })).toEqual(["/bin/agy", "-i", "P"]);
+    expect(launchChoicesRefusal("agy", { model: "gemini-3.8-flash", effort: "low", permission: "bypass" })).toBeNull();
+    expect(launchChoicesRefusal("agy", { effort: "xhigh" })).toBe("Antigravity CLI takes effort low, medium, high, not xhigh");
+    expect(launchChoicesRefusal("agy", { context: 1_000_000 })).toBe("Antigravity CLI doesn't take a context size from Kiwi");
+  });
+
   test("Pi gets the model and its thinking level, with the join line as its first message, and no permission modes", () => {
     expect(recipeArgv("pi", "/bin/pi", "P", { model: "anthropic/claude-opus-5-5", effort: "xhigh" })).toEqual(["/bin/pi", "--model", "anthropic/claude-opus-5-5", "--thinking", "xhigh", "P"]);
     expect(recipeArgv("pi", "/bin/pi", "P", { effort: "off" })).toEqual(["/bin/pi", "--thinking", "off", "P"]);

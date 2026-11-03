@@ -7,6 +7,7 @@ import { writePrivate } from "../config.ts";
 import { isFolder } from "../launch/folders.ts";
 import type { Launched } from "@kiwi/core/terminals.ts";
 import type { LaunchRequest } from "../launch/wire.ts";
+import type { RemoteShells, ShellResult } from "./shells.ts";
 
 const REMOTE_LAUNCHES = 3;
 const REMOTE_WINDOW_MS = 10 * 60_000;
@@ -18,6 +19,7 @@ export interface RemoteDeps {
   bypass?: () => boolean;
   settings?: () => Promise<ComputerSettings>;
   starts?: string;
+  shells?: RemoteShells;
   now?: () => number;
 }
 
@@ -52,18 +54,20 @@ function loadStarts(file: string | undefined): number[] {
   }
 }
 
-export type RemoteResult = { ok: true; harnesses: HarnessRow[]; bypass: boolean } | { ok: true; folders: string[] } | { ok: true; settings: ComputerSettings } | { ok: true } | Launched;
+export type RemoteResult = { ok: true; harnesses: HarnessRow[]; bypass: boolean } | { ok: true; folders: string[] } | { ok: true; settings: ComputerSettings } | { ok: true } | Launched | ShellResult;
 
 export const NO_REMOTE_BYPASS =
   "this computer doesn't take bypass permissions from another device: turn on Allow bypass from your other devices in its Settings → New agents, or run kiwi launches bypass on there";
 
+const NO_SHELLS_YET = "this computer's kiwi doesn't open shells for your other devices yet: update kiwi there";
+
 const withoutBypass = (row: HarnessRow): HarnessRow => (row.options ? { ...row, options: { ...row.options, permission: row.options.permission.filter((p) => p !== "bypass") } } : row);
 
-export function remoteRunner(deps: RemoteDeps): (args: MachineArgs, id: string) => Promise<RemoteResult> {
+export function remoteRunner(deps: RemoteDeps): (args: MachineArgs, id: string, by?: string) => Promise<RemoteResult> {
   const now = deps.now ?? Date.now;
   const started = loadStarts(deps.starts);
   const bypass = deps.bypass ?? (() => false);
-  return async (args, id) => {
+  return async (args, id, by = "") => {
     switch (args.verb) {
       case "harnesses": {
         const allowed = bypass();
@@ -88,6 +92,12 @@ export function remoteRunner(deps: RemoteDeps): (args: MachineArgs, id: string) 
         if (deps.starts) writePrivate(deps.starts, JSON.stringify(started));
         return deps.launch({ ...args.launch, folder, launch: id });
       }
+      case "shell":
+        return deps.shells ? deps.shells.open(args.shell, id, by) : { ok: false, why: "failed", detail: NO_SHELLS_YET };
+      case "shell-tabs":
+        return deps.shells ? deps.shells.tabs() : { ok: false, why: "failed", detail: NO_SHELLS_YET };
+      case "shell-close":
+        return deps.shells ? deps.shells.close(args.pane) : { ok: false, why: "failed", detail: NO_SHELLS_YET };
     }
   };
 }

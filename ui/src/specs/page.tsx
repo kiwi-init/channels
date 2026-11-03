@@ -73,7 +73,7 @@ export function SpecPage({ channel, spec }: { channel: Channel; spec: Spec }) {
               approved by {nickname(channel, spec.approved.by)} {ago(spec.approved.at)}
             </span>
           )}
-          {!asks && !spec.result && <span>{line.line}</span>}
+          {(spec.stage === "queued" || spec.stage === "working") && !spec.changed && <span>{line.line}</span>}
           {spec.result && (
             <span className={line.tone}>
               {spec.result.verdict} by {nickname(channel, spec.result.by)} {ago(spec.result.at)}
@@ -81,14 +81,8 @@ export function SpecPage({ channel, spec }: { channel: Channel; spec: Spec }) {
             </span>
           )}
           {spec.backs.length > 0 && <span>sent back {spec.backs.length === 1 ? "once" : `${spec.backs.length} times`}</span>}
-          <span>
-            {spec.edits} {spec.edits === 1 ? "version" : "versions"} · last by {nickname(channel, spec.edited.by)} {ago(spec.edited.at)}
-          </span>
-          {spec.editors.length > 1 && <span>written by {spec.editors.map((n) => nickname(channel, n)).join(", ")}</span>}
         </p>
-        <blockquote className="spec-words">
-          “{spec.words}” <span className="dimmer">· {nickname(channel, spec.by)}</span>
-        </blockquote>
+        <blockquote className="spec-words">“{spec.words}”</blockquote>
         {asks && <Gate channel={channel} spec={spec} editing={editing} part={part} />}
       </div>
       {part === "spec" ? (
@@ -109,12 +103,12 @@ function Gate({ channel, spec, editing, part }: { channel: Channel; spec: Spec; 
     return (
       <div className="spec-gate is-draft">
         <div className="spec-gate-text">
-          <p className="spec-gate-head">{spec.canJudge ? "Read it, comment on any line, then approve it." : `Waiting for ${nickname(channel, spec.by)} to approve it.`}</p>
-          <p className="spec-gate-sub">Approved, it starts by itself as soon as an agent is free{free ? ` (${free} free now)` : ""}. Anything outside it comes back to you as a change.</p>
+          <p className="spec-gate-head">{spec.canJudge ? "Approve it and it starts when an agent is free." : `Waiting for ${nickname(channel, spec.by)} to approve it.`}</p>
+          {free > 0 && <p className="spec-gate-sub num">{free} free now</p>}
         </div>
         {spec.canJudge && !editing && (
           <button type="button" className="btn is-primary" onClick={() => actions.approveSpec(channel.code, spec.ask, spec.v)}>
-            Approve and auto-start
+            Approve
           </button>
         )}
       </div>
@@ -126,7 +120,7 @@ function Gate({ channel, spec, editing, part }: { channel: Channel; spec: Spec; 
           <p className="spec-gate-head tone-decide">
             {nickname(channel, spec.edited.by)} changed it after {nickname(channel, spec.approved?.by ?? spec.by)} approved it.
           </p>
-          <p className="spec-gate-sub">Work already started goes on. New work waits until a person approves the change; the lines that changed are marked below.</p>
+          <p className="spec-gate-sub">New work waits for this approval.</p>
         </div>
         {spec.canJudge && !editing && (
           <button type="button" className="btn is-primary" onClick={() => actions.approveSpec(channel.code, spec.ask, spec.v)}>
@@ -138,8 +132,8 @@ function Gate({ channel, spec, editing, part }: { channel: Channel; spec: Spec; 
   return (
     <div className="spec-gate is-delivered">
       <div className="spec-gate-text">
-        <p className="spec-gate-head tone-decide">Delivered: every task is done and every box under Done when is ticked.</p>
-        <p className="spec-gate-sub">{spec.canJudge ? "Look at the result, then accept it or send it back with a note." : `Waiting for ${nickname(channel, spec.by)}'s verdict.`}</p>
+        <p className="spec-gate-head tone-decide">Delivered: every task done, every box ticked.</p>
+        {!spec.canJudge && <p className="spec-gate-sub">Waiting for {nickname(channel, spec.by)}'s verdict.</p>}
       </div>
       {spec.canJudge && part !== "result" && (
         <button type="button" className="btn is-primary" onClick={() => go({ to: "spec", ask: spec.ask, part: "result" })}>

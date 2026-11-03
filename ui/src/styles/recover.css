@@ -20,7 +20,7 @@
   align-items: center;
   gap: 6px;
   min-width: 0;
-  height: 34px;
+  height: 2.125rem;
   padding: 0 8px;
   border: 1px solid var(--line-2);
   border-radius: var(--r-ctl);
@@ -102,7 +102,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  height: 36px;
+  height: 2.25rem;
   padding: 0 10px;
   border-radius: var(--r-row);
   cursor: pointer;
@@ -159,7 +159,7 @@
 }
 
 .set-recover-cancel .start-hint {
-  min-height: 18px;
+  min-height: 1.125rem;
   margin-top: 8px;
   color: var(--ink-3);
   font: var(--t-meta) / 1.5 var(--ui);
@@ -167,4 +167,8 @@
 
 .set-recover-cancel .start-hint.is-error {
   color: var(--alert);
+}
+
+.set-reroot-devices {
+  margin-top: 16px;
 }

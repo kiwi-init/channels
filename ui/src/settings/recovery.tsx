@@ -3,7 +3,8 @@ import { useEffect, useState } from "react"
 import { Dialog, DialogHead, Field } from "~/kit/bits"
 import type { RecoveryState } from "~/model"
 import { useApp } from "~/nav"
-import { Confirm, Row } from "~/settings/controls"
+import { autofocus, Confirm, Row } from "~/settings/controls"
+import { Reroot } from "~/settings/reroot"
 import { WordsForm } from "~/start/recover"
 
 const SHOT = new URLSearchParams(location.search).get("shot")
@@ -26,9 +27,9 @@ const listed = (ask: number[]): string => {
 }
 
 function hintFor(recovery: RecoveryState): string {
-  if (recovery.at) return "If you lose every computer, sign in on a new one and type them to get your account and channels back."
-  if (recovery.here) return "Without it, losing this computer means losing the channels you own."
-  return "Set it up on the computer you first signed in on: it holds your person key."
+  if (recovery.at) return `24 words, set up ${day(recovery.at)}. The way back if you lose every computer.`
+  if (recovery.here) return "Not set up. Without it, losing this computer loses the channels you own."
+  return "Not set up. Set it up on the computer you first signed in on."
 }
 
 export function RecoveryKey({ recovery }: { recovery: RecoveryState }) {
@@ -36,6 +37,7 @@ export function RecoveryKey({ recovery }: { recovery: RecoveryState }) {
   const [step, setStep] = useState<Step | null>(null)
   const [renew, setRenew] = useState(false)
   const [cancelling, setCancelling] = useState(SHOT === "settings-recovery-cancel")
+  const [rerooting, setRerooting] = useState(SHOT === "settings-reroot-words" || SHOT === "settings-reroot-keep")
   const { recoveryWords } = app.actions
 
   useEffect(() => {
@@ -64,12 +66,8 @@ export function RecoveryKey({ recovery }: { recovery: RecoveryState }) {
 
   return (
     <section className="set-group" aria-label="Recovery key">
-      <div className="heading">
-        <h3>Recovery key</h3>
-      </div>
-      <p className="set-group-hint">24 words on paper, and the only way back to your account if you lose every computer. Keep them safe and offline.</p>
-      <div className={recovery.at ? "set-rows" : "set-rows set-recovery-nudge"}>
-        <Row label={recovery.at ? `Set up ${day(recovery.at)}` : "Not set up yet"} hint={hintFor(recovery)}>
+      <div className="set-rows">
+        <Row label="Recovery key" hint={hintFor(recovery)}>
           {recovery.here &&
             (recovery.at ? (
               <button type="button" className="btn is-quiet is-small" onClick={() => setRenew(true)}>
@@ -81,10 +79,17 @@ export function RecoveryKey({ recovery }: { recovery: RecoveryState }) {
               </button>
             ))}
         </Row>
+        {recovery.at && !recovery.here && (
+          <Row label="Someone else has your person key?" hint="Replace it with your words.">
+            <button type="button" className="btn is-quiet is-small" onClick={() => setRerooting(true)}>
+              Replace
+            </button>
+          </Row>
+        )}
         {recovery.pending && (
-          <Row label={`New words take over ${day(recovery.pending.from)}`} hint={`Made by ${recovery.pending.by}. Until then your current words still work.`}>
+          <Row label={<span className="tone-decide">New words take over {day(recovery.pending.from)}</span>} hint={`Made on ${recovery.pending.by}. Your current words work until then.`}>
             <button type="button" className="btn is-danger is-small" onClick={() => setCancelling(true)}>
-              Not you? Cancel
+              Cancel them
             </button>
           </Row>
         )}
@@ -93,7 +98,7 @@ export function RecoveryKey({ recovery }: { recovery: RecoveryState }) {
       <Confirm
         open={renew}
         title="Make new words?"
-        sub="Your old words stop working as soon as you've checked the new ones. Do this if the paper is lost or someone else saw it."
+        sub="Your old words stop working once you've checked the new ones."
         action="Make new words"
         onClose={() => setRenew(false)}
         onConfirm={() => {
@@ -107,7 +112,7 @@ export function RecoveryKey({ recovery }: { recovery: RecoveryState }) {
           <>
             <DialogHead
               title="Write down these 24 words"
-              sub="These words are the only way back to your account: once you've checked them, this computer lets go of your person key. Write them on paper, in order, and keep them safe and offline. Anyone with them can take over your account, so never type them into a website."
+              sub="On paper, in order. After the check they're the only way back to your account, and anyone with them can take it over: never type them into a website."
               onClose={close}
             />
             <div className="set-confirm">
@@ -123,7 +128,7 @@ export function RecoveryKey({ recovery }: { recovery: RecoveryState }) {
                 <button type="button" className="btn is-quiet" onClick={close}>
                   Cancel
                 </button>
-                <button type="button" className="btn is-primary" autoFocus onClick={() => setStep(checking(step.words))}>
+                <button type="button" className="btn is-primary" ref={autofocus} onClick={() => setStep(checking(step.words))}>
                   I wrote them down
                 </button>
               </div>
@@ -132,7 +137,7 @@ export function RecoveryKey({ recovery }: { recovery: RecoveryState }) {
         )}
         {step?.at === "check" && (
           <>
-            <DialogHead title="Check three of them" sub={`Type words ${listed(step.ask)} from your paper.`} onClose={close} />
+            <DialogHead title={`Type words ${listed(step.ask)}`} onClose={close} />
             <form
               className="set-confirm"
               onSubmit={(e) => {
@@ -158,7 +163,7 @@ export function RecoveryKey({ recovery }: { recovery: RecoveryState }) {
               </div>
               <div className="dialog-foot">
                 <button type="button" className="btn is-quiet" onClick={() => setStep({ at: "words", words: step.words })}>
-                  Show the words again
+                  Show them again
                 </button>
                 <button type="submit" className="btn is-primary" disabled={step.busy || step.typed.some((t) => !t.trim())}>
                   Set up
@@ -169,11 +174,13 @@ export function RecoveryKey({ recovery }: { recovery: RecoveryState }) {
         )}
       </Dialog>
 
+      {rerooting && <Reroot onClose={() => setRerooting(false)} />}
+
       <Dialog open={cancelling} onClose={() => setCancelling(false)} label="Cancel the new words" wide>
         <WordsForm
           className="set-recover-cancel"
           title="Cancel with your current words"
-          lede="Type the 24 words you have now, in order, or paste them all into the first box. The new words are dropped, and yours stay."
+          lede="Type your current 24 words, or paste them all at once. The new words are dropped."
           action="Cancel the new words"
           busyLabel="Cancelling…"
           onSubmit={async (words) => {

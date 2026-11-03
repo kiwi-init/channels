@@ -8,13 +8,10 @@ import { Avatar, cx, Empty, Loading } from "~/kit/bits"
 import { Track } from "~/kit/glide"
 import { Icon } from "~/kit/icons"
 import { later } from "~/kit/later"
-import { ago } from "~/kit/time"
 import type { Channel, Spec, Task } from "~/model"
 import { useApp } from "~/nav"
-import { nickname } from "~/names"
 import { SpecMark } from "~/specs/card"
-import { openAsks } from "~/needs/open"
-import { boxesOf, faceOf, freeCount, lastMove, needsYou, stageLine, tasksOf, workersOf } from "~/specs/read"
+import { faceOf, needsYou, tasksOf, workersOf } from "~/specs/read"
 import { NowCard } from "~/tasks/now"
 import { TaskRow } from "~/tasks/row"
 
@@ -28,7 +25,6 @@ type Shown = "open" | "done"
 interface Group {
   key: string
   label: string
-  sub: string
   tone?: string
   rows: Spec[]
 }
@@ -37,30 +33,22 @@ function groupsOf(channel: Channel, shown: Shown): Group[] {
   const specs = channel.specs ?? []
   if (shown === "done")
     return [
-      { key: "accepted", label: "Accepted", sub: "What people said yes to.", rows: specs.filter((s) => s.stage === "accepted") },
-      { key: "dropped", label: "Dropped", sub: "Stopped on purpose, with what was tried.", rows: specs.filter((s) => s.stage === "dropped") },
+      { key: "accepted", label: "Accepted", rows: specs.filter((s) => s.stage === "accepted") },
+      { key: "dropped", label: "Dropped", rows: specs.filter((s) => s.stage === "dropped") },
     ].filter((g) => g.rows.length)
-  const free = freeCount(channel)
   const open = specs.filter((s) => !s.result)
   const yours = open.filter(needsYou)
   const rest = open.filter((s) => !needsYou(s))
   return [
-    { key: "yours", label: "Needs you", sub: "A spec to approve, a change to look at, or a result to judge.", tone: "tone-decide", rows: yours },
-    {
-      key: "working",
-      label: "Working",
-      sub: "Agents are on it. Open one to look inside.",
-      tone: "tone-doing",
-      rows: rest.filter((s) => s.stage === "working" || (s.stage === "queued" && !!s.planner)),
-    },
+    { key: "yours", label: "Needs you", tone: "tone-decide", rows: yours },
+    { key: "working", label: "Working", tone: "tone-doing", rows: rest.filter((s) => s.stage === "working" || (s.stage === "queued" && !!s.planner)) },
     {
       key: "queued",
       label: "Waiting for an agent",
-      sub: `Approved. Each starts by itself when an agent is free: ${free === 0 ? "none is right now" : free === 1 ? "1 is now" : `${free} are now`}.`,
       rows: rest.filter((s) => s.stage === "queued" && !s.planner).sort((a, b) => (a.queue ?? 99) - (b.queue ?? 99)),
     },
-    { key: "drafts", label: "Drafts", sub: "Still being written. Comment on any line.", rows: rest.filter((s) => s.stage === "draft") },
-    { key: "delivered", label: "Delivered", sub: "Waiting on who asked.", rows: rest.filter((s) => s.stage === "delivered") },
+    { key: "drafts", label: "Drafts", rows: rest.filter((s) => s.stage === "draft") },
+    { key: "delivered", label: "Delivered", rows: rest.filter((s) => s.stage === "delivered") },
   ].filter((g) => g.rows.length)
 }
 
@@ -83,34 +71,34 @@ function SpecList({ channel, tall }: { channel: Channel; tall: boolean }) {
   return (
     <div className="board">
       <div className="board-list gh-list specs-list">
-        {live && !tall && <NowCard channel={channel} needs={openAsks(channel).length} />}
+        {live && !tall && <NowCard channel={channel} />}
         <div className="gh-top">
-          <Track className="seg" role="group" aria-label="Open or done">
-            <button type="button" aria-pressed={shown === "open"} onClick={() => setShown("open")}>
-              Open <span className="gh-n num">{open}</span>
-            </button>
-            <button type="button" aria-pressed={shown === "done"} onClick={() => setShown("done")}>
-              Done <span className="gh-n num">{specs.length - open}</span>
-            </button>
-          </Track>
-          <p className="specs-how">Write it together, approve it, and agents start by themselves when one is free.</p>
+          {specs.length > 0 && (
+            <Track className="seg" role="group" aria-label="Open or done">
+              <button type="button" aria-pressed={shown === "open"} onClick={() => setShown("open")}>
+                Open <span className="gh-n num">{open}</span>
+              </button>
+              <button type="button" aria-pressed={shown === "done"} onClick={() => setShown("done")}>
+                Done <span className="gh-n num">{specs.length - open}</span>
+              </button>
+            </Track>
+          )}
           <button type="button" className="btn is-primary" onClick={() => setMaking(true)}>
             <Icon name="plus" size={14} />
             New spec
           </button>
         </div>
-        {groups.map((g) => (
-          <GroupCard key={g.key} channel={channel} group={g} />
-        ))}
-        {shown === "open" && loose.length > 0 && <Loose channel={channel} tasks={loose} specsOnly={!!channel.specsOnly} />}
-        {groups.length || (shown === "open" && loose.length) ? null : channel.loading ? (
+        {groups.length || (shown === "open" && loose.length) ? (
+          <div className="board-stack">
+            {groups.map((g) => (
+              <GroupCard key={g.key} channel={channel} group={g} />
+            ))}
+            {shown === "open" && loose.length > 0 && <Loose channel={channel} tasks={loose} label={specs.length ? "Not in a spec" : "Tasks"} />}
+          </div>
+        ) : channel.loading ? (
           <Loading />
         ) : (
-          <Empty title={shown === "open" ? "No open specs." : "Nothing finished yet."} icon="spec">
-            {shown === "open"
-              ? "Ask for something in your own words. The lead drafts a spec, you all comment on it, and once someone approves it agents take it from there."
-              : "Accepted and dropped specs stay here."}
-          </Empty>
+          <Empty title={!specs.length ? "No specs yet." : shown === "open" ? "No open specs." : "Nothing finished yet."} icon="spec" />
         )}
       </div>
       {making && <NewSpec channel={channel} onClose={() => setMaking(false)} />}
@@ -123,10 +111,8 @@ function GroupCard({ channel, group }: { channel: Channel; group: Group }) {
     <section className={cx("board-group gh-group", `is-${group.key}`)} aria-label={group.label}>
       <div className="board-head">
         <h2 className="board-h">
-          {group.tone && <span className={cx("specs-group-dot", group.tone)} aria-hidden="true" />}
           <span className={cx("board-label", group.tone)}>{group.label}</span>
           <span className="board-n num">{group.rows.length}</span>
-          <span className="specs-group-sub">{group.sub}</span>
         </h2>
       </div>
       <ul className="gh-rows">
@@ -138,22 +124,17 @@ function GroupCard({ channel, group }: { channel: Channel; group: Group }) {
   )
 }
 
-function Loose({ channel, tasks, specsOnly }: { channel: Channel; tasks: Task[]; specsOnly: boolean }) {
+function Loose({ channel, tasks, label }: { channel: Channel; tasks: Task[]; label: string }) {
   const { nav } = useApp()
   const [all, setAll] = useState(false)
   const on = nav.panel?.kind === "task" ? nav.panel.task : null
   const rows = all ? tasks : tasks.slice(0, LOOSE_SHOWN)
   return (
-    <section className="board-group gh-group is-loose" aria-label="Not in a spec">
+    <section className="board-group gh-group is-loose" aria-label={label}>
       <div className="board-head">
         <h2 className="board-h">
-          <span className="board-label">Not in a spec</span>
+          <span className="board-label">{label}</span>
           <span className="board-n num">{tasks.length}</span>
-          <span className="specs-group-sub">
-            {specsOnly
-              ? "From before specs. Every new task is a step of an approved spec."
-              : "Tasks filed before this channel worked from specs. Turn on Tasks only from approved specs in the channel's settings."}
-          </span>
         </h2>
       </div>
       <ul className="board-rows">
@@ -165,7 +146,7 @@ function Loose({ channel, tasks, specsOnly }: { channel: Channel; tasks: Task[];
       </ul>
       {tasks.length > LOOSE_SHOWN && (
         <button type="button" className="board-more" onClick={() => setAll(!all)}>
-          {all ? "Show fewer" : `Show all ${tasks.length}`}
+          {all ? "Show fewer" : `Show ${tasks.length - LOOSE_SHOWN} more`}
         </button>
       )}
     </section>
@@ -174,9 +155,6 @@ function Loose({ channel, tasks, specsOnly }: { channel: Channel; tasks: Task[];
 
 function SpecRow({ channel, spec }: { channel: Channel; spec: Spec }) {
   const { go, nav } = useApp()
-  const line = stageLine(channel, spec)
-  const boxes = boxesOf(spec)
-  const done = boxes.filter((b) => b.done).length
   const who = workersOf(channel, spec)
   const part = spec.stage === "delivered" ? "result" : spec.stage === "working" ? "inside" : "spec"
   const on = nav.panel?.kind === "task" ? nav.panel.task : null
@@ -189,27 +167,13 @@ function SpecRow({ channel, spec }: { channel: Channel; spec: Spec }) {
       <button type="button" className="gh-row spec-row" onClick={() => go({ to: "spec", ask: spec.ask, part })}>
         <SpecMark spec={spec} />
         <span className="gh-title">{spec.title}</span>
-        <span className="gh-meta">
-          <span className="num">#{spec.ask}</span>
-          <span>{nickname(channel, spec.by)}</span>
-          <span>{ago(lastMove(channel, spec))}</span>
-          {boxes.length > 0 && (
-            <span className="num">
-              {done}/{boxes.length} done when
-            </span>
-          )}
-          <span>{spec.stage === "working" ? who.map((n) => nickname(channel, n)).join(", ") || line.line : line.line}</span>
-        </span>
-        <span className="spec-row-end">
-          {who.length > 0 && (
-            <span className="spec-card-faces" aria-hidden="true">
-              {who.slice(0, 3).map((n) => (
-                <Avatar key={n} person={faceOf(channel, n)} size="sm" />
-              ))}
-            </span>
-          )}
-          <span className={cx("spec-word", line.tone)}>{line.word}</span>
-        </span>
+        {who.length > 0 && (
+          <span className="spec-card-faces spec-row-faces" aria-hidden="true">
+            {who.slice(0, 3).map((n) => (
+              <Avatar key={n} person={faceOf(channel, n)} size="sm" />
+            ))}
+          </span>
+        )}
       </button>
       {open.length > 0 ? (
         <button

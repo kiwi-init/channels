@@ -96,6 +96,7 @@ export const listenCommands: Record<string, Command> = {
             re: m.re ?? null,
             text: m.kind === "event" ? describeEvent(m, state) : m.body,
             images: m.imgs?.map((i) => i.name) ?? [],
+            files: m.files?.map((f) => f.name) ?? [],
             trust: state.trust.get(m.seq) ?? null,
             ts: m.ts,
           });

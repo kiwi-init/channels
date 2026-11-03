@@ -36,7 +36,7 @@
   flex: none;
   align-items: center;
   gap: 8px;
-  min-height: 40px;
+  min-height: 2.5rem;
   padding: 6px 8px 6px 16px;
   font: var(--t-ui) var(--ui);
 }
@@ -127,10 +127,6 @@
   color: var(--ink-3);
   white-space: nowrap;
   text-overflow: ellipsis;
-}
-
-.term-size {
-  font-variant-numeric: tabular-nums;
 }
 
 .term-ended {

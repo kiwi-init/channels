@@ -22,6 +22,7 @@ import {
   enrollDeny,
   enrollKeep,
   forgetDevice,
+  launchedFrom,
   linkGithub,
   recoverBegin,
   recoverFinish,
@@ -30,6 +31,9 @@ import {
   recoveryDrop,
   recoverySave,
   recoveryWords,
+  rerootCancel,
+  rerootFinish,
+  rerootOpen,
   renewDevice,
   unlinkGithub,
   type EnrollDone,
@@ -41,7 +45,8 @@ import { iconFromFile } from "~/live/icon-file"
 import { seatOf } from "~/live/seats"
 import { checkComputer, computerSettings, setContextLine, setHooks } from "~/live/computer"
 import { addStartFolder, allowNewAgents, allowRemoteBypass, removeStartFolder, setTerminalHelpers } from "~/live/starts"
-import { markSeenIn } from "@kiwi/app/threads.ts"
+import { markSeenIn, seenIn } from "@kiwi/app/threads.ts"
+import { followKey, followMark } from "~/live/threads"
 import { lastIn, seenKeyOf } from "~/live/seen-place"
 import { closeOpened, leavingOnPurpose, openedRun, type Run } from "~/live/store"
 import { attempt, event, memberOf, need, owner, say } from "~/live/run"
@@ -170,6 +175,11 @@ export function makeActions(): Actions {
       const last = lastIn(run.messages, run.state, run.me, where)
       if (last) markSeenIn(run.roomId, { [seenKeyOf(run.state, where, run.me)]: last })
     },
+    followThread: (code, root, on) => {
+      const run = need(code)
+      markSeenIn(run.roomId, { [followKey(root)]: followMark(seenIn(run.roomId)[followKey(root)], run.messages.at(-1)?.seq ?? 0, on) })
+      announce(on ? "Following this thread" : "Not following this thread")
+    },
     react: (code, seq, emoji) =>
       attempt("Couldn't react", async () => {
         const run = need(code)
@@ -184,7 +194,7 @@ export function makeActions(): Actions {
         const run = need(code)
         const m = run.messages.find((x) => x.seq === Number(id))
         if (!m) throw new Error("that question is gone")
-        await run.send(text, { to: [m.from], re: [m.seq], kind: "msg" })
+        await run.send(text, { to: [m.from], re: [m.seq], kind: "msg", side: true })
       }),
     answerStep: (code, id, reply) => attempt("Not answered", async () => (await rare()).answerStep(code, id, reply)),
     answerJoin: (code, id, yes, choice) => attempt(yes ? "Couldn't let them in" : "Couldn't turn them away", async () => (await manage()).answerJoin(code, id, yes, choice)),
@@ -238,7 +248,7 @@ export function makeActions(): Actions {
       return noteFor(seat.place, r)
     },
     openTerm: async (code, name, cols, rows, watch) => (await rare()).openTerm(code, name, cols, rows, watch),
-    openMyTerm: async (code, want, cols, rows, watch) => (await rare()).openMyTerm(code, want, cols, rows, watch),
+    openMyTerm: async (code, want, cols, rows, watch, machine) => (await rare()).openMyTerm(code, want, cols, rows, watch, machine),
     myTerms: async () => {
       const b = bridge()
       return b && typeof b.termTabs === "function" ? b.termTabs().catch(() => []) : []
@@ -246,6 +256,16 @@ export function makeActions(): Actions {
     closeMyTerm: async (pane) => {
       const b = bridge()
       return b && typeof b.termTabClose === "function" ? b.termTabClose(pane).catch(() => []) : []
+    },
+    remoteTerms: async (machine) => {
+      const b = bridge()
+      const tabs = b && typeof b.termRemoteTabs === "function" ? await b.termRemoteTabs(machine).catch(() => []) : []
+      return tabs.map((t) => ({ ...t, machine }))
+    },
+    closeRemoteTerm: async (machine, pane) => {
+      const b = bridge()
+      const tabs = b && typeof b.termRemoteClose === "function" ? await b.termRemoteClose(machine, pane).catch(() => []) : []
+      return tabs.map((t) => ({ ...t, machine }))
     },
     choicesOn: async (code, computer) => (await manage()).choicesOn(code, computer),
     chooseFolder: async () => {
@@ -340,6 +360,9 @@ export function makeActions(): Actions {
       }),
     setPrefs,
     setMute: (code, room, on) => void rare().then((r) => r.setMute(code, room, on)),
+    searchOlder: (code, query, before) => import("~/live/older").then((o) => o.searchOlder(code, query, before)),
+    olderAround: (code, seq) => import("~/live/older").then((o) => o.olderAround(code, seq)),
+    fetchOlder: (code, got) => import("~/live/older").then((o) => o.fetchOlder(code, got)),
     snooze: (until) => void rare().then((r) => r.snooze(until)),
     forgetComputer: (id) => void manage().then((m) => m.forgetComputer(id)),
     linkGithub: () => attempt("GitHub not linked", linkGithub),
@@ -395,12 +418,15 @@ export function makeActions(): Actions {
     enrollAnswer: (id) => attempt("Couldn't answer the device", () => enrollAnswer(id)),
     enrollConfirm,
     enrollDeny: (id) => attempt("Couldn't turn the device away", () => enrollDeny(id)),
-    forgetDevice: (id) => attempt("Couldn't forget the device", () => forgetDevice(id)),
-    renewDevice: (id) => attempt("Couldn't renew the device", () => renewDevice(id)),
+    forgetDevice: (ids, keep) => attempt("Couldn't forget the device", () => forgetDevice(ids, keep)),
+    renewDevice: (...ids) => attempt("Couldn't renew the device", () => renewDevice(...ids)),
     recoveryWords: () => tried("Couldn't make the recovery words", recoveryWords),
     recoverySave: (typed) => tried("Couldn't set up the recovery key", () => recoverySave(typed)),
     recoveryDrop: () => attempt("Couldn't put the words away", recoveryDrop),
     recoveryCancel: (words) => tried("Couldn't cancel the new words", () => recoveryCancel(words)),
+    rerootOpen: (words) => tried("Couldn't open your recovery key", () => rerootOpen(words)),
+    rerootFinish: async (keep) => !!(await tried("Couldn't replace your person key", () => rerootFinish(keep))),
+    rerootCancel: () => attempt("Couldn't put the words away", rerootCancel),
     enrollBegin: () =>
       attempt("Couldn't sign in as one of your devices", () =>
         enrollBegin(
@@ -423,6 +449,7 @@ export function makeActions(): Actions {
     setHooks: (harness, on) => attempt("Couldn't change the hooks", () => setHooks(harness, on)),
     checkComputer,
     computerSettings,
+    launchedFrom,
     setTerminalHelpers: (id, on) => attempt(on ? "Couldn't download the helpers" : "Couldn't remove the helpers", () => setTerminalHelpers(id, on)),
     setContextLine: (on) => attempt("Couldn't change it", () => setContextLine(on)),
   }

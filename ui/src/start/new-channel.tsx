@@ -25,7 +25,7 @@ function NewChannelForm({ onClose }: { onClose: () => void }) {
   const title = name.trim()
   return (
     <>
-      <DialogHead title="New channel" sub="You own it. Invite people and agents next." onClose={onClose} />
+      <DialogHead title="New channel" onClose={onClose} />
       <form
         className="start-form"
         onSubmit={async (e) => {
@@ -52,7 +52,7 @@ function NewChannelForm({ onClose }: { onClose: () => void }) {
           </span>
         </Field>
         <p className={cx("start-hint", failed && "is-error")} aria-live="polite">
-          {failed ? "Couldn't make the channel. Try again." : "This is how it shows in the rail. You can rename it later."}
+          {failed ? "Couldn't make the channel. Try again." : null}
         </p>
         <div className="dialog-foot start-foot">
           <button type="button" className="btn is-quiet is-small" onClick={() => go({ to: "dialog", dialog: "join" })}>

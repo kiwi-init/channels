@@ -10,13 +10,14 @@ import { linked } from "~/chat/linked"
 import { flash, jumpTo, ReplyContext, type Replying } from "~/chat/reply"
 import type { Jump } from "~/chat/search-box"
 import { paintHits } from "~/chat/search-paint"
-import { Avatar, cx, Loading } from "~/kit/bits"
+import { Loading } from "~/kit/bits"
 import { land } from "~/kit/glide"
 import { later } from "~/kit/later"
 import { day, sameDay } from "~/kit/time"
-import { memberOf, type Channel, type Message, type Person, type Where } from "~/model"
+import { type Channel, type Message, type Person, type Where } from "~/model"
 import { liveOf, workingIn } from "~/doing"
-import { sameWhere, useApp, whereKey } from "~/nav"
+import { sameWhere, useApp } from "~/nav"
+import { keepSpot, spotAt, spotKey, type Spot } from "~/places"
 import { between, nickname, shown } from "~/names"
 import { dmBlocker, sealable } from "~/live/dm"
 
@@ -86,6 +87,29 @@ function anchorIn(box: HTMLElement, list: HTMLElement): Anchor | null {
   }
   const el = rows[lo]
   return el ? { el, top: el.getBoundingClientRect().top - top, at: box.scrollTop } : null
+}
+
+function spotIn(box: HTMLElement, list: HTMLElement): Spot | null {
+  const rows = list.querySelectorAll<HTMLElement>(":scope > [data-seq]")
+  const top = box.getBoundingClientRect().top
+  let lo = 0
+  let hi = rows.length - 1
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1
+    if ((rows[mid]?.getBoundingClientRect().bottom ?? 0) > top) hi = mid
+    else lo = mid + 1
+  }
+  const row = rows[lo]
+  const seq = Number(row?.dataset.seq)
+  return row && Number.isSafeInteger(seq) ? { seq, offset: Math.round(row.getBoundingClientRect().top - top) } : null
+}
+
+function rowAt(box: HTMLElement, list: readonly Message[], at: number): HTMLElement | null {
+  for (let i = at; i >= Math.max(0, at - MORE); i--) {
+    const row = box.querySelector<HTMLElement>(`:scope > [data-seq="${list[i]?.seq}"]`)
+    if (row) return row
+  }
+  return null
 }
 
 export function useStick(following = true) {
@@ -174,7 +198,7 @@ function Since({ channel }: { channel: Channel }) {
 export function Conversation({ channel, jump }: { channel: Channel; jump: Jump | null }) {
   const { nav } = useApp()
   const where: Where = nav.where
-  const key = `${channel.code}:${whereKey(where)}`
+  const key = spotKey(channel.code, where)
   const [reply, setReply] = useState<{ key: string; to: Message } | null>(null)
   const replying = useMemo((): Replying => ({ to: reply?.key === key ? reply.to : null, set: (to) => setReply(to ? { key, to } : null) }), [reply, key])
   const placeName =
@@ -190,20 +214,26 @@ export function Conversation({ channel, jump }: { channel: Channel; jump: Jump |
     <ReplyContext.Provider value={replying}>
       {channel.hold && <HoldBanner channel={channel} hold={channel.hold} />}
       <Since key={channel.code} channel={channel} />
-      <Feed key={key} channel={channel} where={where} jump={jump && sameWhere(jump.m.where, where) ? jump : null} />
+      <Feed
+        key={`${key}\n${nav.visit}\n${channel.loading ? "loading" : "ready"}`}
+        channel={channel}
+        where={where}
+        spot={nav.restore !== undefined ? nav.restore : spotAt(key)}
+        jump={jump && sameWhere(jump.m.where, where) ? jump : null}
+      />
       {where.kind === "dm" && <DmNote channel={channel} other={where.with} />}
       {where.kind === "theirs" ? <ReadOnly channel={channel} between={where.between} /> : <Composer channel={channel} where={where} placeholder={`Message ${placeName}`} />}
     </ReplyContext.Provider>
   )
 }
 
-function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: Jump | null }) {
+function Feed({ channel, where, spot, jump }: { channel: Channel; where: Where; spot: Spot | null; jump: Jump | null }) {
   const { go } = useApp()
   const specAsks = useMemo(() => new Set((channel.specs ?? []).map((s) => s.ask)), [channel.specs])
   const all = useMemo(
     () =>
       withLeftOut(
-        channel.messages.filter((m) => sameWhere(m.where, where) && (where.kind !== "room" || m.inThread === undefined || !specAsks.has(m.inThread))),
+        channel.messages.filter((m) => sameWhere(m.where, where) && (!m.side || where.kind === "task") && (where.kind !== "room" || m.inThread === undefined || !specAsks.has(m.inThread))),
         (channel.leftOut ?? []).filter((m) => sameWhere(m.where, where))
       ),
     [channel.messages, channel.leftOut, where, specAsks]
@@ -242,13 +272,19 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
   const afterProposal = proposalAt === undefined ? undefined : list[list.findIndex((m) => m.seq === proposalAt) + 1]?.seq
   const breaks = new Set([mark, foldAt, proposalAt, afterProposal].filter((seq): seq is number => seq !== null && seq !== undefined))
 
+  const [back] = useState(() => {
+    const at = spot && !jump ? list.findIndex((m) => m.seq === spot.seq) : -1
+    return spot && at >= 0 ? { offset: spot.offset, at } : null
+  })
   const [span, setSpan] = useState<Span>(() =>
-    mark === null
-      ? { top: null, bottom: null }
-      : around(
-          list,
-          list.findIndex((m) => m.seq === mark)
-        )
+    back
+      ? around(list, back.at)
+      : mark === null
+        ? { top: null, bottom: null }
+        : around(
+            list,
+            list.findIndex((m) => m.seq === mark)
+          )
   )
   const lastAt = span.bottom === null ? -1 : list.findIndex((m) => m.seq === span.bottom)
   const end = lastAt >= 0 ? lastAt + 1 : list.length
@@ -276,15 +312,24 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
   }, [list, start, end, names, tasks])
 
   const opened = useRef(false)
+  const pinned = useRef<Spot | null>(back && spot)
   useLayoutEffect(() => {
     if (opened.current) return
     opened.current = true
+    const box = scroller.current
+    const row = back && content.current ? rowAt(content.current, list, back.at) : null
+    if (back && box && row) {
+      toOffset(Math.round(box.scrollTop + row.getBoundingClientRect().top - box.getBoundingClientRect().top - back.offset))
+      remember()
+      if (!stuck.current && unread) queueMicrotask(() => setFresh(unread.count))
+      return
+    }
     const line = content.current?.querySelector<HTMLElement>(".feed-new")
     if (!line || !unread) return toBottom(false)
     toOffset(line.offsetTop - 12)
     remember()
     if (!stuck.current) queueMicrotask(() => setFresh(unread.count))
-  }, [unread, remember, toBottom, toOffset, stuck, content])
+  }, [back, list, unread, remember, toBottom, toOffset, stuck, content, scroller])
 
   const last = list.at(-1)
   const lastSeq = useRef(last?.seq ?? 0)
@@ -309,10 +354,19 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
     settle()
   }, [last, list, channel.you, toBottom, settle, stuck, live, content])
 
+  const here = spotKey(channel.code, where)
   const onScroll = () => {
     remember()
     const box = scroller.current
     if (!box) return
+    if (list.length && content.current) {
+      const now = stuck.current ? null : spotIn(box, content.current)
+      const pin = pinned.current
+      if (!pin || !now || now.seq !== pin.seq || Math.abs(now.offset - pin.offset) > 2) {
+        pinned.current = null
+        keepSpot(here, now)
+      }
+    }
     if (stuck.current) setFresh(0)
     const below = box.scrollHeight - box.scrollTop - box.clientHeight
     setFar(!following || below > box.clientHeight * 1.5)
@@ -429,7 +483,7 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
         <div className="feed-list" ref={content}>
           {list.length === 0 && !compact ? (
             channel.loading ? (
-              <Loading />
+              channel.connection === "live" && <Loading />
             ) : (
               <Start channel={channel} where={where} />
             )
@@ -452,7 +506,7 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
                     </p>
                   )}
                   {m.locked && !list[i - 1]?.locked && where.kind === "dm" && (
-                    <p className="day" role="separator">
+                    <p className="day is-sealed" role="separator">
                       <span>From here on, just you and {nickname(channel, where.with)} can read new messages</span>
                     </p>
                   )}
@@ -502,7 +556,7 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
               <ProposalCard channel={channel} proposal={proposal} names={names} tasks={tasks} onQuote={onQuote} />
             </Suspense>
           )}
-          {working.length > 0 && <Working people={working} />}
+          {working.length > 0 && !channel.loading && <Working people={working} />}
         </div>
       </div>
       {(fresh > 0 || far) && (
@@ -516,19 +570,14 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
 }
 
 function ChatterFold({ channel, run, open, onToggle }: { channel: Channel; run: readonly Message[]; open: boolean; onToggle: () => void }) {
-  const who = [...new Set(run.map((m) => m.from))]
   return (
-    <div className={cx("chatter", open && "is-open")} data-seq={run[0]?.seq}>
-      <span className="chatter-faces" aria-hidden="true">
-        {who.slice(0, 4).map((n) => (
-          <Avatar key={n} person={memberOf(channel, n)} size="sm" />
-        ))}
-      </span>
-      <span className="chatter-text">{chatterLine(run, (n) => nickname(channel, n))}</span>
+    <p className="sys" data-seq={run[0]?.seq}>
+      <span className="sys-line" />
+      <span className="sys-text">{chatterLine(run, (n) => nickname(channel, n))}</span>
       <button type="button" className="fold-act" aria-expanded={open} onClick={onToggle}>
-        {open ? "Fold" : "Show"}
+        {open ? "Hide" : "Show"}
       </button>
-    </div>
+    </p>
   )
 }
 
@@ -547,7 +596,7 @@ function Fold({ run, open, onToggle }: { run: readonly Message[]; open: boolean;
 export function ReadOnly({ channel, between: names }: { channel: Channel; between: readonly [string, string] }) {
   return (
     <div className="compose">
-      <p className="compose-note">Only {between(channel, names)} write here. You read along.</p>
+      <p className="compose-note">Only {between(channel, names)} write here.</p>
     </div>
   )
 }
@@ -556,14 +605,16 @@ function HoldBanner({ channel, hold }: { channel: Channel; hold: NonNullable<Cha
   const { app } = useApp()
   const owner = channel.people.find((p) => p.owner && !p.you)
   const until = channel.youOwn ? "until you resume them" : `until ${owner ? shown(owner) : "the owner"} resumes them`
+  const note = hold.note?.replace(/[.\s]+$/, "")
   return (
-    <div className="banner" role="status">
+    <div className="banner" role="status" title={`They read but don't act ${until}.`}>
       <p className="banner-text">
-        Agents are paused{hold.note ? `: ${hold.note.replace(/[.\s]+$/, "")}` : ""}. <span className="dim">They read but don't act {until}.</span>
+        <b>{channel.youOwn || !owner ? "Agents paused" : `${shown(owner)} paused the agents`}</b>
+        {note && <span className="dim">{note}</span>}
       </p>
       {channel.youOwn && (
         <button type="button" className="btn is-small" onClick={() => app.actions.setHold(channel.code, false)}>
-          Resume agents
+          Resume
         </button>
       )}
     </div>
@@ -571,7 +622,14 @@ function HoldBanner({ channel, hold }: { channel: Channel; hold: NonNullable<Cha
 }
 
 function Start({ channel, where }: { channel: Channel; where: Where }) {
-  const agents = channel.people.filter((p) => p.kind === "agent").length
+  if (where.kind === "room" && !channel.people.some((p) => p.kind === "agent"))
+    return (
+      <div className="feed-start">
+        <Suspense fallback={null}>
+          <AddAgentCard channel={channel} />
+        </Suspense>
+      </div>
+    )
   return (
     <div className="feed-start">
       <p className="feed-start-title">
@@ -579,19 +637,12 @@ function Start({ channel, where }: { channel: Channel; where: Where }) {
           ? `This is the start of #${channel.rooms.find((r) => r.id === where.room)?.name ?? where.room}.`
           : where.kind === "dm"
             ? sealable(channel, where.with)
-              ? `This is the start of your messages with ${nickname(channel, where.with)}. Just you and ${nickname(channel, where.with)} can read them: not the channel, not the relay.`
-              : `This is the start of your messages with ${nickname(channel, where.with)}. Everyone in the channel can read them.`
+              ? `Just you and ${nickname(channel, where.with)} can read these: not the channel, not the relay.`
+              : `Everyone in the channel can read your messages with ${nickname(channel, where.with)}.`
             : where.kind === "theirs"
               ? `This is the start of ${between(channel, where.between)}.`
               : "Nothing here yet."}
       </p>
-      {agents === 0 ? (
-        <Suspense fallback={null}>
-          <AddAgentCard channel={channel} />
-        </Suspense>
-      ) : (
-        <p className="dim">Say what you want done. The lead turns it into tasks.</p>
-      )}
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import type { Account, Ask, Channel, ChannelTile, Device, Enrolling, Issue, Message, Person, Prefs, PullRequest, Task, TaskGroup } from "~/model"
+import type { Account, Ask, Channel, ChannelTile, Device, Enrolling, Issue, LaunchedAgent, Message, Person, Prefs, PullRequest, RerootOpened, Task, TaskGroup } from "~/model"
 import { nicknamesOf } from "~/names"
 import { omit } from "@kiwi/core/omit.ts"
 
@@ -9,15 +9,28 @@ const DEMO_DAY = 86_400_000
 
 export const DEMO_DEVICES: Device[] = [
   { id: "dev-desk", label: "studio", os: "macOS", as: "desktop", until: Date.now() + 81 * DEMO_DAY, thisOne: true },
+  { id: "dev-desk-agents", label: "studio", os: "darwin", as: "computer", until: Date.now() + 85 * DEMO_DAY, thisOne: false, app: "dev-desk" },
   { id: "dev-air", label: "Jow's MacBook Air", os: "macOS", as: "desktop", until: Date.now() + 63 * DEMO_DAY, thisOne: false },
+  { id: "dev-air-agents", label: "Jow's MacBook Air", os: "darwin", as: "computer", until: Date.now() + 11 * DEMO_DAY, thisOne: false, app: "dev-air" },
   { id: "dev-phone", label: "iPhone", os: "iOS", as: "phone", until: Date.now() + 9 * DEMO_DAY, thisOne: false },
   { id: "dev-box", label: "build-box", os: "Linux", as: "computer", until: Date.now() - 2 * DEMO_DAY, thisOne: false },
+]
+
+export const DEMO_LAUNCHED: LaunchedAgent[] = [
+  { code: "kiwi", pk: "pk-atlas", from: "dev-air-agents", name: "atlas" },
+  { code: "kiwi", pk: "pk-pixel", from: "dev-air-agents", name: "pixel" },
+  { code: "landing", pk: "pk-scout", from: "dev-air-agents", name: "scout" },
 ]
 
 export const DEMO_WELCOME: Enrolling = {
   stage: "welcome",
   name: "jow",
-  devices: DEMO_DEVICES.filter((d) => !d.thisOne).map((d) => ({ id: d.id, label: d.label, os: d.os, as: d.as, lost: d.as !== "computer" })),
+  devices: DEMO_DEVICES.filter((d) => !d.thisOne && !d.app).map((d) => ({ id: d.id, label: d.label, os: d.os, as: d.as, lost: d.as !== "computer" })),
+  channels: ["studio", "kiwi", "landing"],
+}
+export const DEMO_REROOT: RerootOpened = {
+  ok: true,
+  devices: DEMO_DEVICES.filter((d) => !d.app).map((d) => ({ id: d.id, label: d.label, os: d.os, as: d.as, here: d.thisOne })),
   channels: ["studio", "kiwi", "landing"],
 }
 export const DEMO_WORDS = "orbit velvet canyon mango ladder silent harvest pilot frozen museum tribe anchor gravity olive wagon pepper rocket glimpse marble tunnel coyote bamboo dinner shield".split(
@@ -581,15 +594,15 @@ const messages: Message[] = [
     task: 10,
     thread: { replies: 3, last: m(0.3), people: ["jow", "atlas", "win"] },
   },
-  { seq: 128, from: "jow", at: m(0.7), text: "can we skip step 3 for now? linux is fine", where: general, inThread: 127 },
-  { seq: 129, from: "atlas", at: m(0.5), text: "Yes. I'll run it once at the end instead of after each step.", where: general, inThread: 127, replyTo: 128 },
+  { seq: 128, from: "jow", at: m(0.7), text: "can we skip step 3 for now? linux is fine", where: general, inThread: 127, side: true },
+  { seq: 129, from: "atlas", at: m(0.5), text: "Yes. I'll run it once at the end instead of after each step.", where: general, inThread: 127, replyTo: 128, side: true },
   { seq: 130, from: "win", at: m(0.3), text: "~~two copies~~ three copies of `effect`, actually. Fixing.", where: general, inThread: 127 },
 ]
 
 const threadReplies: Message[] = [
-  { seq: 113, from: "atlas", at: m(8), text: "Good catch. Keep the icon sprite in the first load though, it's 3 KB.", where: general, inThread: 112 },
-  { seq: 114, from: "win", at: m(8), text: "Agreed, leaving it.", where: general, inThread: 112 },
-  { seq: 115, from: "jow", at: m(7), text: "does this help the phone app too?", where: general, inThread: 112 },
+  { seq: 113, from: "atlas", at: m(8), text: "Good catch. Keep the icon sprite in the first load though, it's 3 KB.", where: general, inThread: 112, side: true },
+  { seq: 114, from: "win", at: m(8), text: "Agreed, leaving it.", where: general, inThread: 112, side: true },
+  { seq: 115, from: "jow", at: m(7), text: "does this help the phone app too?", where: general, inThread: 112, side: true },
 ]
 
 const releases: Message[] = [
@@ -876,6 +889,10 @@ export const DEMO_CHANNEL: Channel = {
   directs: [
     { with: "atlas", unread: 0, last: m(29) },
     { with: "maya", unread: 1, last: m(50), locked: true },
+  ],
+  threads: [
+    { root: 127, following: true, replies: 3, unread: 2, mentions: 0, last: m(0.3), lastSeq: 130, people: ["jow", "atlas", "win"] },
+    { root: 112, following: true, replies: 3, unread: 0, mentions: 0, last: m(7), lastSeq: 115, people: ["atlas", "win", "jow"] },
   ],
   theirs: [{ between: ["atlas", "win"], last: m(26) }],
   people,

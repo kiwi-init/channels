@@ -4,8 +4,11 @@ import { DEMO_PREFS } from "~/demo/data"
 import { useDemo } from "~/demo/provider"
 import { SHOTS } from "~/demo/shots"
 import type { Prefs } from "~/model"
-import { navigate, startNav, type Go, type Nav } from "~/nav"
+import { navigate, startNav, useKeepPlace, type Go, type Nav } from "~/nav"
 import { Root } from "~/shell/root"
+import { hashTarget } from "~/live/notify"
+import { openFromNote } from "~/live/open-message"
+import { parseHash } from "@kiwi/channel/hash.ts"
 import { uiBooted } from "@kiwi/app/ui-boot.ts"
 
 const params = new URLSearchParams(location.search)
@@ -25,10 +28,22 @@ function threadAt(param: string | null): { seq: number; focus: number } | null {
 const switchTo = threadAt(params.get("switch"))
 
 export function DemoApp() {
-  const [nav, setNav] = useState<Nav>(() => ({ ...startNav(shot?.channel ?? null), ...shot?.nav }))
+  const [nav, setNav] = useState<Nav>(() => ({ ...(shot?.channel ? navigate(startNav(null), { to: "channel", code: shot.channel }) : startNav(null)), ...shot?.nav }))
   const app = useDemo(shot?.scenario ?? "full", nav.channel, look)
   const go = useCallback((g: Go) => setNav((n) => navigate(n, g)), [])
   useEffect(uiBooted, [])
+  useKeepPlace(nav)
+  useEffect(() => {
+    const fromHash = () => {
+      const { hash, seq } = hashTarget(location.hash)
+      const { code } = parseHash(hash)
+      if (!code || !seq) return
+      history.replaceState(null, "", `${location.pathname}${location.search}`)
+      openFromNote(code, seq, (c) => go({ to: "channel", code: c, jump: true }))
+    }
+    window.addEventListener("hashchange", fromHash)
+    return () => window.removeEventListener("hashchange", fromHash)
+  }, [go])
   useEffect(() => {
     if (!switchTo) return
     const timer = setTimeout(() => go({ to: "panel", panel: { kind: "thread", ...switchTo } }), SWITCH_AFTER_MS)

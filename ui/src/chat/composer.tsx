@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { lazy, Suspense, useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import { MAX_IMAGE_BYTES, RASTER_MIMES } from "@kiwi/core/protocol.ts"
 import { fileDrag, takeDropped } from "@kiwi/app/dropped.ts"
@@ -6,9 +6,11 @@ import { takePasted } from "@kiwi/app/pasted.ts"
 import { matchCommands, parseCommand, type Command } from "~/chat/commands"
 import { startEditing } from "~/chat/editing"
 import { preview, useReplying } from "~/chat/reply"
+import { attached, composerKey, drafts, tooLong, useGivenBack } from "~/chat/drafts"
 import { STASH_SHOT, useStash, type Stashed } from "~/chat/stash"
 import { Avatar, cx, Dot, STATUS_WORDS } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
+import { openMenu } from "~/kit/menu-open"
 import { ago } from "~/kit/time"
 import type { Channel, Person, Task, Upload, Where } from "~/model"
 import { sameWhere, useApp } from "~/nav"
@@ -41,8 +43,6 @@ function taskMatches(tasks: readonly Task[], query: string): Task[] {
     .map((x) => x.t)
 }
 
-const drafts = new Map<string, string>()
-const attached = new Map<string, Upload[]>()
 const picked = new Map<string, Picks>()
 function picksFor(key: string): Picks {
   const have = picked.get(key)
@@ -62,7 +62,7 @@ function placeOf(channel: Channel, where: Where, inThread?: number): string {
   return "here"
 }
 
-function StashList({ list, place, onTake, onDrop, onClose }: { list: readonly Stashed[]; place: string; onTake: (i: number) => void; onDrop: (i: number) => void; onClose: () => void }) {
+function StashList({ list, onTake, onDrop, onClose }: { list: readonly Stashed[]; onTake: (i: number) => void; onDrop: (i: number) => void; onClose: () => void }) {
   const [on, setOn] = useState(0)
   const rows = useRef<HTMLUListElement>(null)
   useEffect(() => {
@@ -87,10 +87,6 @@ function StashList({ list, place, onTake, onDrop, onClose }: { list: readonly St
         }
       }}
     >
-      <div className="stash-head">
-        <span>Stashed in {place}</span>
-        <span>{list.length}</span>
-      </div>
       <ul ref={rows} aria-label="Stashed drafts">
         {list.map((s, i) => (
           <li key={`${s.at}-${i}`}>
@@ -102,7 +98,7 @@ function StashList({ list, place, onTake, onDrop, onClose }: { list: readonly St
         ))}
       </ul>
       <p className="stash-foot">
-        Click to bring back · <kbd>⌫</kbd> drops one · <kbd>⇧⌘S</kbd> brings back the newest
+        <kbd>⌫</kbd> drops one
       </p>
     </div>
   )
@@ -131,20 +127,21 @@ const readBase64 = (file: File): Promise<string> =>
 type ComposerProps = { channel: Channel; where: Where; placeholder: string; inThread?: number }
 
 export function Composer(props: ComposerProps) {
-  return <ComposerIn key={`${props.channel.code}:${JSON.stringify(props.where)}:${props.inThread ?? ""}`} {...props} />
+  return <ComposerIn key={composerKey(props.channel.code, props.where, props.inThread)} {...props} />
 }
 
 function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
   const { app, go, toast } = useApp()
   const replying = useReplying()
   const replyTo = replying?.to ?? null
-  const key = `${channel.code}:${JSON.stringify(where)}:${inThread ?? ""}`
+  const key = composerKey(channel.code, where, inThread)
   const [text, setText] = useState(() => drafts.get(key) ?? "")
   const [caret, setCaret] = useState(text.length)
   const [pick, setPick] = useState(0)
   const [closed, setClosed] = useState(false)
   const area = useRef<HTMLTextAreaElement>(null)
   const box = useRef<HTMLDivElement>(null)
+  const form = useRef<HTMLFormElement>(null)
   const picker = useRef<HTMLInputElement>(null)
   const [files, setFilesNow] = useState<Upload[]>(() => attached.get(key) ?? [])
   const setFiles = (next: Upload[] | ((now: Upload[]) => Upload[])) =>
@@ -154,27 +151,39 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
       else attached.delete(key)
       return list
     })
+  const back = useGivenBack(key)
+  const seenBack = useRef(back)
+  useEffect(() => {
+    if (back === seenBack.current) return
+    seenBack.current = back
+    const got = drafts.get(key) ?? ""
+    setText(got)
+    setCaret(got.length)
+    setFilesNow(attached.get(key) ?? [])
+    area.current?.focus()
+  }, [back, key])
   const [dropping, setDropping] = useState(false)
+  const [alsoRoom, setAlsoRoom] = useState(false)
   const enterSends = app.prefs.enterSends
   const stash = useStash(key)
   const [cueOf, setCue] = useState<Cue | null>(() => (STASH_SHOT === "stash" ? { key, back: false, left: stash.list.length } : null))
   const cue = cueOf?.key === key ? cueOf : null
   const [listOf, setListOf] = useState<string | null>(() => (STASH_SHOT === "stash-open" ? key : null))
   const listOpen = listOf === key && stash.list.length > 0
+  const plus = useRef<HTMLButtonElement>(null)
+  const [gifsOpen, setGifsOpen] = useState(false)
+  const [gifsReady, setGifsReady] = useState(false)
+  const closeGifs = useCallback(() => setGifsOpen(false), [])
+  const addMenu = () => {
+    if (gifsOpen) return setGifsOpen(false)
+    const at = plus.current?.getBoundingClientRect()
+    if (!at) return
+    const image = { label: "Image", run: () => picker.current?.click() }
+    const gif = { label: "GIF", run: () => setGifsOpen(true) }
+    openMenu.set({ x: at.left, y: at.top, label: "Add to the message", groups: [gifsReady ? [image, gif] : [image]], above: true })
+  }
   const sealed = useMemo(() => sealedOf(channel, where), [channel, where])
   const [warned, setWarned] = useState<{ text: string; people: Person[] } | null>(null)
-
-  useEffect(() => {
-    const block = (e: DragEvent) => {
-      if (e.dataTransfer && fileDrag(e.dataTransfer)) e.preventDefault()
-    }
-    window.addEventListener("dragover", block)
-    window.addEventListener("drop", block)
-    return () => {
-      window.removeEventListener("dragover", block)
-      window.removeEventListener("drop", block)
-    }
-  }, [])
 
   const add = (upload: Upload) => setFiles((now) => (now.length < MAX_FILES ? [...now, upload] : now))
   const attach = (list: readonly File[]) => {
@@ -199,6 +208,36 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
     }
   }
 
+  const takeIn = (dt: DataTransfer) => {
+    setDropping(false)
+    if (dt.files.length) return attach([...dt.files])
+    void takeDropped(dt).then(({ files: dropped, refused }) => {
+      for (const why of refused) toast(why, "error")
+      attach(dropped)
+    })
+  }
+
+  const droppedOver = useEffectEvent((e: DragEvent, dt: DataTransfer) => {
+    const el = form.current
+    if (!el || (e.target instanceof Node && el.contains(e.target))) return
+    const r = el.getBoundingClientRect()
+    if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) takeIn(dt)
+  })
+
+  useEffect(() => {
+    const block = (e: DragEvent) => {
+      if (!e.dataTransfer || !fileDrag(e.dataTransfer)) return
+      e.preventDefault()
+      if (e.type === "drop") droppedOver(e, e.dataTransfer)
+    }
+    window.addEventListener("dragover", block)
+    window.addEventListener("drop", block)
+    return () => {
+      window.removeEventListener("dragover", block)
+      window.removeEventListener("drop", block)
+    }
+  }, [])
+
   useLayoutEffect(() => {
     const el = area.current
     if (!el) return
@@ -207,8 +246,8 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
   }, [text])
 
   useEffect(() => {
-    if (replyTo) area.current?.focus()
-  }, [replyTo])
+    if (replyTo || inThread !== undefined) area.current?.focus()
+  }, [replyTo, inThread])
 
   useLayoutEffect(() => {
     const el = box.current
@@ -271,15 +310,25 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
     const body = value.trim()
     if (!body && !files.length) return
     const sent = mentions.sent(body, picksFor(key))
+    const long = tooLong(sent)
+    if (long) {
+      toast(long, "error")
+      return
+    }
     const away = outsiders(channel, sealed, sent)
     if (away.length && warned?.text !== value) {
       setWarned({ text: value, people: away })
       return
     }
-    const opts = { ...(inThread !== undefined ? { inThread } : {}), ...(replyTo ? { replyTo: replyTo.seq } : {}), ...(files.length ? { images: files } : {}) }
+    const opts = {
+      ...(inThread !== undefined ? { inThread, ...(alsoRoom ? {} : { side: true as const }) } : {}),
+      ...(replyTo ? { replyTo: replyTo.seq } : {}),
+      ...(files.length ? { images: files } : {}),
+    }
     app.actions.send(channel.code, where, sent, Object.keys(opts).length ? opts : undefined)
     picked.delete(key)
     replying?.set(null)
+    setAlsoRoom(false)
     setFiles([])
     setCue(null)
     update("")
@@ -370,6 +419,7 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
         </ul>
       )}
       <form
+        ref={form}
         className={cx("composer", replyTo && "is-replying", dropping && "is-dropping")}
         onSubmit={(e) => {
           e.preventDefault()
@@ -387,12 +437,7 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
         onDrop={(e) => {
           if (!fileDrag(e.dataTransfer)) return
           e.preventDefault()
-          setDropping(false)
-          if (e.dataTransfer.files.length) return attach([...e.dataTransfer.files])
-          void takeDropped(e.dataTransfer).then(({ files: dropped, refused }) => {
-            for (const why of refused) toast(why, "error")
-            attach(dropped)
-          })
+          takeIn(e.dataTransfer)
         }}
       >
         {stash.list.length > 0 && (
@@ -406,7 +451,6 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
             {listOpen && (
               <StashList
                 list={stash.list}
-                place={placeOf(channel, where, inThread)}
                 onTake={bringBack}
                 onDrop={stash.drop}
                 onClose={() => {
@@ -459,11 +503,11 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
           </div>
         )}
         <div className="composer-row">
-          <button type="button" className="compose-attach" aria-label="Attach images" title="Attach images" onClick={() => picker.current?.click()}>
+          <button ref={plus} type="button" className="compose-attach" aria-label="Add an image or a GIF" title="Add an image or a GIF" aria-haspopup="menu" data-gif-toggle onClick={addMenu}>
             <Icon name="plus" />
           </button>
-          <Suspense fallback={<span className="compose-attach" />}>
-            <Gifs onFile={(file) => (file ? attach([file]) : toast("That GIF couldn't be loaded", "error"))} />
+          <Suspense fallback={null}>
+            <Gifs open={gifsOpen} onReady={setGifsReady} onClose={closeGifs} onFile={(file) => (file ? attach([file]) : toast("That GIF couldn't be loaded", "error"))} />
           </Suspense>
           <input
             ref={picker}
@@ -558,6 +602,12 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
             <Icon name="send" />
           </button>
         </div>
+        {inThread !== undefined && (
+          <label className="compose-also">
+            <input type="checkbox" checked={alsoRoom} onChange={(e) => setAlsoRoom(e.target.checked)} />
+            Also send to {placeOf(channel, where)}
+          </label>
+        )}
       </form>
       {warned && sealed && (
         <div className="compose-warn" role="alert">

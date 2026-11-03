@@ -90,8 +90,7 @@ export function Inside({ channel, spec }: { channel: Channel; spec: Spec }) {
                     <span className="inside-task-title">{t.title}</span>
                     <span className="inside-task-meta num">
                       <span>T{t.id}</span>
-                      {t.owner && <span>{nickname(channel, t.owner)}</span>}
-                      <span>{statusWord(t)}</span>
+                      {(t.cancelled || t.status === "waiting") && <span className={cx(t.status === "waiting" && !t.cancelled && "tone-decide")}>{statusWord(t)}</span>}
                       <span>{ago(t.updatedAt)}</span>
                     </span>
                   </button>
@@ -105,7 +104,7 @@ export function Inside({ channel, spec }: { channel: Channel; spec: Spec }) {
               ))}
             </ul>
           ) : (
-            <p className="inside-none">{spec.stage === "draft" ? "No work yet: tasks come once a person approves the spec." : "No tasks yet: the first free agent splits the spec into tasks."}</p>
+            <p className="inside-none">{spec.stage === "draft" ? "Tasks come once the spec is approved." : "The first free agent splits it into tasks."}</p>
           )}
           {spec.approved && !spec.result && !spec.changed && <AddStep channel={channel} spec={spec} />}
         </section>
@@ -140,7 +139,7 @@ export function Inside({ channel, spec }: { channel: Channel; spec: Spec }) {
       <section className="inside-wire" aria-label="Every message">
         <button type="button" className="inside-wire-toggle" aria-expanded={wire} onClick={() => setWire(!wire)}>
           <span className="sys-line" />
-          <span>{wire ? "Hide the messages" : `Every message inside: ${messages.length}, between ${new Set(messages.map((m) => m.from)).size} members`}</span>
+          <span>{wire ? "Hide the messages" : `${messages.length} ${messages.length === 1 ? "message" : "messages"} inside`}</span>
         </button>
         {wire &&
           (messages.length ? (

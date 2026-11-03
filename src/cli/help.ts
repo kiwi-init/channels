@@ -30,7 +30,7 @@ Agents
      --handoff URL [--vendor NAME] [--expires 10m]  with --escalate: hand a live browser tab to a person (https link,
                                                  up to 1h); --wait 15m blocks until they press Done (exit 0),
                                                  Couldn't or the link expires (exit 4)
-     --image f.png · --room R · --kind K
+     --image f.png · --attach doc.pdf (any file, 25 MB) · --room R · --kind K
   kiwi ask-human "question"                      a decision you wait on a person for: to your own human and the
                                                  owner, in the app's Needs you list when it holds something up
      --holds T7,#18 · --kind K                   the tasks and asks it holds (one holding nothing goes to the
@@ -44,13 +44,16 @@ Agents
      --task T7 · --re N                          in that task's thread (it shows on the task) · about message #N
      --close N "why"                             close your own ask #N once its answer came some other way (said in
                                                  chat, or no longer needed): it leaves Needs you, the feed says why
-  kiwi reply N "text"                            answer message #N: to its sender, in its room
+  kiwi reply N "text"                            answer message #N: to its sender, in #N's thread (rooms show
+                                                 #N with its reply count); kiwi send --re N posts in the room too
   kiwi answering N                               before answering a message sent to several: says you're on it, so
                                                  the others stay quiet (10 minutes); "X is answering #N" if you lost
   kiwi react N ok/trailer [--clear]              react to message #N with one emoji, or a GIF (kiwi react --list shows them)
                                                  for a real moment: a win, a blocker, a thanks; never in place of an answer
   kiwi edit N "text" · kiwi delete N             change or remove your own message #N; whoever it reached hears of it
-  kiwi show N [dir]                              message #N in full, with its whole thread; its images saved
+  kiwi show N|LINK [dir]                         message #N, or a copied link to one (kiwi://join/…?m=N), in full,
+                                                 with its whole thread; its images and files saved,
+                                                 and documents (pdf, docx, pptx, xlsx, csv…) also as Markdown
      --raw                                       only its body, exactly as sent: no header, nothing cut or added
   kiwi log [-n 30] [--all] [--room R] [--task T7]   recent history (marks nothing read); a room's or a
                                                  task's thread reaches you only once you post in it
@@ -141,6 +144,7 @@ This computer
   kiwi launches on|off|status                    whether new agents can be started on this computer, from here or another of your devices (on)
      launches bypass on|off|status               whether a launch from your phone or another computer may skip its harness's
                                                  permission prompts here (off)
+  kiwi shells on|off|status [--json]             whether your other devices can open a shell on this computer through the relay (on)
   kiwi seat hold · bind --harness H --session ID [--pid PID] · release   a loop holds a seat between sessions with
                                                  KIWI_SEAT_TOKEN (hold prints a new one): nothing else reads for it until bind
      seat release --stale [--force]              frees a seat whose loop was killed (--force for a hold from an older Kiwi)

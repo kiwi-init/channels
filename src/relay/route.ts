@@ -16,6 +16,7 @@ import type * as Layer from "effect/Layer";
 import { verifyRequest } from "@kiwi/core/auth.ts";
 import { ownerFingerprint } from "@kiwi/core/crypto.ts";
 import { GITHUB_SYNC_LISTS, MAX_BLOB_BYTES, PAGE_LIMIT, wellFormedFreed, wellFormedSendId, wellFormedSlot } from "@kiwi/core/protocol.ts";
+import { PUSH_PATH } from "@kiwi/core/push.ts";
 import { ChannelGone, BadRequest, Forbidden, NotFound, NotOwner, Refused, SignInRequired, TooLarge, TooMany, Unauthorized, UpdateRequired, type Refusal } from "./failures.ts";
 import { answer, buildContext, describeRoutes, dispatch, incoming, json, readCapped, Request_, type Route } from "./http.ts";
 import { githubLinks, githubRepos, type GithubItem } from "./github.ts";
@@ -47,6 +48,9 @@ import {
   markRead,
   getNote,
   putNote,
+  registerPush,
+  unregisterPush,
+  wakesFor,
   NOTES_PER_MINUTE,
   MESSAGES_PER_MINUTE,
   missingFingerprint,
@@ -261,6 +265,7 @@ const routes: RoomRoute[] = [
           settings: db.settings(),
           iconAt: db.iconAt(),
           blobs: true,
+          files: true,
           sealedEpoch: true,
         }));
       }),
@@ -354,7 +359,7 @@ const routes: RoomRoute[] = [
         const { noRateLimits } = yield* Policy;
         const counted = take(`${db.roomId}:${me}`, noRateLimits ? Infinity : MESSAGES_PER_MINUTE);
         if ("retryAfter" in counted) return yield* new TooMany({ message: "too many messages; wait a minute", retryAfter: counted.retryAfter });
-        const b = yield* json<{ iv?: string; ct?: string; e?: number; slot?: unknown; free?: unknown; cid?: unknown }>().pipe(Effect.tapError(() => Effect.sync(counted.refund)));
+        const b = yield* json<{ iv?: string; ct?: string; e?: number; slot?: unknown; free?: unknown; cid?: unknown; wake?: unknown }>().pipe(Effect.tapError(() => Effect.sync(counted.refund)));
         if (b.slot !== undefined && !wellFormedSlot(b.slot)) return yield* Effect.andThen(Effect.sync(counted.refund), new BadRequest({ message: "bad slot" }));
         if (b.free !== undefined && !wellFormedFreed(b.free)) return yield* Effect.andThen(Effect.sync(counted.refund), new BadRequest({ message: "bad slots to free" }));
         if (b.cid !== undefined && !wellFormedSendId(b.cid)) return yield* Effect.andThen(Effect.sync(counted.refund), new BadRequest({ message: "bad send id" }));
@@ -365,7 +370,7 @@ const routes: RoomRoute[] = [
           counted.refund();
           return { data: { seq: e.seq, ts: e.ts }, fx: {} };
         }
-        return { data: { seq: e.seq, ts: e.ts }, fx: { broadcast: [msgFrame(e)], ...watchFrame(e), expireAt: (yield* touch) ?? undefined } };
+        return { data: { seq: e.seq, ts: e.ts }, fx: { broadcast: [msgFrame(e)], ...watchFrame(e), ...wakesFor(db, b.wake, me, e.seq), expireAt: (yield* touch) ?? undefined } };
       }),
   },
   {
@@ -381,6 +386,22 @@ const routes: RoomRoute[] = [
         const mark = yield* markRead(me, b.seq);
         return { data: { seq: mark?.seq ?? null }, fx: mark ? { readers: [frame({ t: "read", ...mark })] } : undefined };
       }),
+  },
+  {
+    method: "PUT",
+    path: PUSH_PATH,
+    guard: "member",
+    run: ({ me }) =>
+      Effect.map(
+        Effect.flatMap(json<unknown>(), (b) => registerPush(me, b)),
+        (data) => ({ data }),
+      ),
+  },
+  {
+    method: "DELETE",
+    path: PUSH_PATH,
+    guard: "member",
+    run: ({ me }) => Effect.map(unregisterPush(me), (data) => ({ data })),
   },
   {
     method: "GET",
@@ -601,7 +622,8 @@ const routes: RoomRoute[] = [
         if (!repo || !db.githubRepos().includes(repo)) return yield* new BadRequest({ message: "repo: one of the channel's connected repos" });
         const known = (searchParams.get("known") ?? "").split("\n").filter(Boolean).slice(0, 50);
         const app = yield* githubApp;
-        return { data: { releases: yield* replied(yield* Effect.promise(() => app.releases(repo, known))) } };
+        const got = yield* replied(yield* Effect.promise(() => app.releases(repo, known)));
+        return { data: { releases: got.releases, gone: got.gone } };
       }),
   },
   {

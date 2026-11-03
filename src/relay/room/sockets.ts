@@ -7,6 +7,7 @@ import { RoomStore } from "./db.ts";
 import type { Effects } from "./directory.ts";
 import { allow, EPHEMERAL_PER_MINUTE, MESSAGES_PER_MINUTE, MORE_PER_MINUTE, READS_PER_MINUTE, take } from "./limits.ts";
 import { append, markRead, touch } from "./messages.ts";
+import { wakesFor } from "./push.ts";
 
 export const frame = (f: ServerFrame) => JSON.stringify(f);
 
@@ -89,7 +90,7 @@ export const onClientFrame = Effect.fn("Room.onClientFrame")(function* (raw: str
     ),
   );
   const reply = frame({ t: "ack", id: send.id, seq: e.seq, ts: e.ts });
-  const fx: Effects = { ...(echo ? { broadcast: [msgFrame(e)] } : { others: msgFrame(e) }), ...watchFrame(e), reply, expireAt: expireAt ?? undefined };
+  const fx: Effects = { ...(echo ? { broadcast: [msgFrame(e)] } : { others: msgFrame(e) }), ...watchFrame(e), ...wakesFor(db, send.wake, sender, e.seq), reply, expireAt: expireAt ?? undefined };
   return fx;
 });
 

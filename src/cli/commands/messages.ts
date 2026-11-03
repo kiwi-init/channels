@@ -2,8 +2,10 @@ import * as Effect from "effect/Effect";
 import { join as joinPath } from "node:path";
 import { oneLook } from "../../agent.ts";
 import { saveImages } from "../../attach.ts";
+import { keepFiles } from "../../received-files.ts";
 import { home } from "../../config.ts";
 import { alsoAnswers, formatShown, missingImages, parseDuration } from "@kiwi/core/format.ts";
+import { messageAt } from "@kiwi/core/message-link.ts";
 import reactionPack from "../../../site/reactions/index.json";
 import {
   CHAT_KINDS,
@@ -30,9 +32,9 @@ import { bareHandleNote, outsideRoomNote } from "../handles.ts";
 import { args, opt, unexpectedOptions } from "../args.ts";
 import { parseWhere } from "../where.ts";
 import { type Command, die, noteRead, offlineOk, out, type Quit, session } from "../context.ts";
-import { images, list, render, text } from "../input.ts";
+import { attachments, images, list, render, text } from "../input.ts";
 
-const PUBLISHING = ["channel", "as", "quiet", "json", "file", "image"] as const;
+const PUBLISHING = ["channel", "as", "quiet", "json", "file", "image", "attach"] as const;
 const SEND_OPTIONS = [...PUBLISHING, "to", "kind", "re", "room", "ask", "wait", "escalate", "handoff", "vendor", "expires", "option", "dm", "task", "main"];
 
 function refuseUnused(command: string, allowed: readonly string[]): Effect.Effect<void, Quit> {
@@ -69,6 +71,7 @@ export const messageCommands: Record<string, Command> = {
         if (!CHAT_KINDS.includes(kind)) return yield* die(`kind must be one of: ${CHAT_KINDS.join(", ")}`);
         const re = reArgs.map((x) => Number(x.replace(/^#/, ""))).filter((n) => n > 0);
         const imgs = yield* images;
+        const files = yield* attachments(s);
         const asking = opt.ask || !!opt.wait;
         const head = asking && opt.wait ? yield* s.ch.fx.head() : 0;
         const seq = yield* s.send(body, {
@@ -76,6 +79,7 @@ export const messageCommands: Record<string, Command> = {
           kind: asking && !opt.kind ? "ask" : kind,
           ...(re.length ? { re } : {}),
           imgs,
+          ...(files?.length ? { files } : {}),
           room: opt.room ?? where.room,
           ...(chosen.task !== undefined ? { task: chosen.task } : {}),
           ...(chosen.dm ? { dm: true } : {}),
@@ -112,8 +116,9 @@ export const messageCommands: Record<string, Command> = {
         const kind = (opt.kind ?? "msg") as Kind;
         if (!CHAT_KINDS.includes(kind)) return yield* die(`kind must be one of: ${CHAT_KINDS.join(", ")}`);
         const imgs = yield* images;
+        const files = yield* attachments(s);
         const { state } = yield* s.state();
-        out(`sent #${yield* s.reply(seq, body, kind, imgs)}`);
+        out(`sent #${yield* s.reply(seq, body, kind, imgs, files?.length ? { files } : {})}`);
         const notes = [inGeneral(state, seq) ? longForGeneral(state, s.me, body) : null, bareHandleNote(state, body)].filter((n) => n !== null);
         for (const n of notes) out(n);
       }),
@@ -176,18 +181,22 @@ export const messageCommands: Record<string, Command> = {
       const { messages, state } = yield* s.state();
       const found = yield* s.message(seq, messages);
       const m = found && !ignored(state.trust.get(seq)) ? found : yield* die(`no message #${seq}`);
-      if (!m.imgs?.length) return yield* die(`message #${seq} has no images`);
-      const imgs = yield* s.ch.fx.images(m.imgs);
-      if (!imgs.length) return yield* die(`message #${seq}'s images are no longer on the relay`);
-      for (const path of saveImages(seq, imgs, args[2] ?? ".")) out(path);
-      const missing = missingImages(seq, m.imgs.length, imgs.length);
+      if (!m.imgs?.length && !m.files?.length) return yield* die(`message #${seq} has no images or files`);
+      const imgs = m.imgs?.length ? yield* s.ch.fx.images(m.imgs) : [];
+      const kept = yield* keepFiles(s.ch, m, args[2] ?? ".");
+      if (!imgs.length && !kept.saved.length) return yield* die(`message #${seq}'s images and files are no longer on the relay`);
+      for (const path of [...saveImages(seq, imgs, args[2] ?? "."), ...kept.saved, ...kept.markdown]) out(path);
+      const missing = m.imgs?.length ? missingImages(seq, m.imgs.length, imgs.length) : null;
       if (missing) process.stderr.write(`kiwi: ${missing}\n`);
+      if (m.files && kept.saved.length < m.files.length)
+        process.stderr.write(`kiwi: ${m.files.length - kept.saved.length} of the ${m.files.length} files in #${seq} did not load; the relay may no longer have them\n`);
     }),
 
   show: () =>
     Effect.gen(function* () {
-      const s = yield* session();
-      const seq = Number((args[1] ?? "").replace(/^#/, "")) || (yield* die("usage: kiwi show N [dir] | kiwi show N --raw"));
+      const link = messageAt(args[1] ?? "");
+      const s = yield* session(link?.code);
+      const seq = link?.seq ?? (Number((args[1] ?? "").replace(/^#/, "")) || (yield* die("usage: kiwi show N|LINK [dir] | kiwi show N|LINK --raw")));
       const { messages, state } = yield* s.state();
       const found = yield* s.message(seq, messages);
       const m = found && !ignored(state.trust.get(seq)) ? found : yield* die(`no message #${seq}`);
@@ -202,8 +211,10 @@ export const messageCommands: Record<string, Command> = {
       const fetched = m.imgs?.length
         ? yield* Effect.forEach(m.imgs, (img) => s.ch.fx.images([img]).pipe(Effect.orElseSucceed((): InlineImage[] => [])), { concurrency: 4 }).pipe(Effect.map((lists) => lists.flat()))
         : [];
-      const saved = fetched.length ? saveImages(seq, fetched, args[2] ?? joinPath(home(), "downloads", s.ch.roomId)) : [];
-      out(formatShown(m, known, state, saved, s.me, !!opt.reveal && !!m.to?.includes(s.me)));
+      const dir = args[2] ?? joinPath(home(), "downloads", s.ch.roomId);
+      const saved = fetched.length ? saveImages(seq, fetched, dir) : [];
+      const kept = yield* keepFiles(s.ch, m, dir);
+      out(formatShown(m, known, state, saved, s.me, !!opt.reveal && !!m.to?.includes(s.me), kept));
       const near = new Set([seq, ...(m.re ?? []), ...known.filter((x) => x.re?.includes(seq)).map((x) => x.seq)]);
       const rest = thread.filter((x) => !near.has(x.seq) && !ignored(state.trust.get(x.seq)));
       if (rest.length) {

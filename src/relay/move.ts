@@ -34,7 +34,7 @@ export interface MoveStore {
   thaw(from: string, id: string): Promise<void>;
   settle(from: string, to: string, id: string): Promise<void>;
   rows(from: string): Promise<Rows>;
-  busy(from: string, now: number): Promise<"asking" | null>;
+  busy(from: string, now: number): Promise<"asking" | "starting over" | null>;
   holds(to: string): Promise<boolean>;
   adopt(to: string, from: string, id: string, rows: Rows): Promise<Adoption>;
   abandon(to: string, from: string, id: string): Promise<Exclude<Adoption, "taken">>;
@@ -115,7 +115,9 @@ export async function onMoveHttp(req: Request, store: MoveStore, accounts: Accou
     let freeze = state?.frozen ?? null;
     if (freeze && freeze.to !== to) return refuse(new Conflict({ message: "this account is moving to another GitHub account; try again in 10 minutes" }));
     if (!freeze) {
-      if ((await store.busy(from, now)) === "asking") return refuse(new Conflict({ message: "a device is asking to join this account: approve it or turn it away, then move" }));
+      const busy = await store.busy(from, now);
+      if (busy === "asking") return refuse(new Conflict({ message: "a device is asking to join this account: approve it or turn it away, then move" }));
+      if (busy === "starting over") return refuse(new Conflict({ message: "this account is waiting to start over: cancel that on one of its devices, or move once it's done" }));
       if (await store.holds(to)) return refuse(new Conflict({ message: TAKEN }));
       freeze = { to, id: b64url(crypto.getRandomValues(new Uint8Array(16))), at: now };
       if (!(await store.freeze(from, freeze))) return refuse(new Conflict({ message: "the account changed meanwhile; try again" }));

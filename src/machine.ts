@@ -7,7 +7,8 @@ import { hostname } from "node:os";
 import { join } from "node:path";
 import { home, writePrivate } from "./config.ts";
 import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
-import { claimDevice, isNewerList, listedComputer, readDeviceList, type DeviceClaim, type DeviceLink } from "@kiwi/core/devices.ts";
+import { claimDevice, isNewerList, listedComputer, readDeviceList, vouchKeep, type DeviceClaim, type DeviceLink } from "@kiwi/core/devices.ts";
+import type { DeviceKeep } from "@kiwi/core/protocol.ts";
 import { claimComputer, type ComputerClaim, type MachineCert } from "@kiwi/core/person.ts";
 
 export interface EnrolledDevice {
@@ -70,6 +71,32 @@ export async function computerClaimFor(roomId: string, agentPk: string): Promise
   const computer = m.cert && m.cert.machine === m.identity.pk ? await claimComputer(m.identity, m.cert, roomId, agentPk) : undefined;
   const device = m.device?.links.length ? await claimDevice(m.identity, m.device.links, roomId, agentPk) : undefined;
   return computer || device ? { ...(computer ? { computer } : {}), ...(device ? { device } : {}) } : undefined;
+}
+
+export interface SeatProof {
+  links: DeviceLink[];
+  version: number;
+  device: string;
+  vouch: string;
+}
+
+export async function seatProof(roomId: string, agentPk: string): Promise<SeatProof | null> {
+  const m = loadMachine();
+  if (!m?.device?.links.length) return null;
+  const read = await readDeviceList(m.device.links);
+  if (!read.ok || !read.list.reroots.length || !listedComputer(read.list, m.identity.pk)) return null;
+  const { device, vouch } = await claimDevice(m.identity, m.device.links, roomId, agentPk);
+  return { links: m.device.links, version: read.list.version, device, vouch };
+}
+
+export async function keepProof(roomId: string, agents: readonly { pk: string; from: string }[]): Promise<{ links: DeviceLink[]; keep: DeviceKeep } | null> {
+  const m = loadMachine();
+  const links = m?.device?.links;
+  if (!m || !links?.length || !agents.length) return null;
+  const read = await readDeviceList(links);
+  if (!read.ok || !listedComputer(read.list, m.identity.pk)) return null;
+  const vouched = await Promise.all(agents.map(async (a) => ({ pk: a.pk, vouch: (await vouchKeep(m.identity, links, roomId, a.pk, a.from)).vouch })));
+  return { links, keep: { device: m.identity.pk, agents: vouched } };
 }
 
 let taking: Promise<unknown> = Promise.resolve();

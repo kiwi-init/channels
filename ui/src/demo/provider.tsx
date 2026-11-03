@@ -5,10 +5,26 @@ import type { Personality } from "@kiwi/core/personality.ts"
 import { HANDOFF_DONE } from "@kiwi/core/protocol.ts"
 
 import { stepReplyText } from "~/chat/step"
-import { DEMO_ACCOUNT, DEMO_CHANNEL, DEMO_DEVICES, DEMO_EMPTY, DEMO_GUEST, DEMO_GUEST_MEMBER, DEMO_PREFS, DEMO_TILES, DEMO_WAITING, DEMO_WELCOME, DEMO_WORDS } from "~/demo/data"
+import {
+  DEMO_ACCOUNT,
+  DEMO_CHANNEL,
+  DEMO_DEVICES,
+  DEMO_EMPTY,
+  DEMO_GUEST,
+  DEMO_GUEST_MEMBER,
+  DEMO_LAUNCHED,
+  DEMO_PREFS,
+  DEMO_REROOT,
+  DEMO_TILES,
+  DEMO_WAITING,
+  DEMO_WELCOME,
+  DEMO_WORDS,
+} from "~/demo/data"
 import { longFeed } from "~/demo/long"
+import { demoAround, demoFetchOlder, demoOlder } from "~/demo/older"
 import { withSpecs } from "~/demo/specs"
-import { demoShell, demoShells, demoTerm } from "~/demo/term"
+import { demoRemoteShells, demoShell, demoShells, demoTerm } from "~/demo/term"
+import { homeOf } from "~/home"
 import type { Account, Actions, AgentStarts, App, Enrolling, Finding, GithubSignIn, Launching, ThisComputer, Channel, ChannelTile, GoneChannel, Message, Prefs, Spec, Task } from "~/model"
 import { deletedTheme, savedTheme } from "~/theme/themes"
 import { announce } from "~/kit/toasts"
@@ -254,6 +270,7 @@ export type Scenario =
   | "forgot-here"
   | "link-stuck"
   | "recovery-set"
+  | "recovery-let-go"
   | "recovery-pending"
   | "github-sign-in"
   | "github-code"
@@ -357,6 +374,8 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
       prefs,
       seq: 1000,
     }
+  if (scenario === "recovery-let-go")
+    return { account: { ...DEMO_ACCOUNT, devices: DEMO_DEVICES, recovery: { at: Date.now() - 3 * 86_400_000, here: false } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
   if (scenario === "recovery-set")
     return { account: { ...DEMO_ACCOUNT, devices: DEMO_DEVICES, recovery: { at: Date.now() - 3 * 86_400_000, here: true } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
   if (scenario === "devices-forgotten")
@@ -412,7 +431,16 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
           const root = opts?.inThread ?? (target ? (target.inThread ?? target.seq) : undefined)
           const replyTo = opts?.replyTo !== undefined && opts.replyTo !== root ? opts.replyTo : undefined
           const images = opts?.images?.map((i) => ({ url: `data:${i.mime};base64,${i.data}`, width: 0, height: 0, alt: i.name }))
-          const next = post(c, seq, { from: c.you, text, where, replyTo, inThread: root, pending: true, ...(images?.length ? { images } : {}) })
+          const next = post(c, seq, {
+            from: c.you,
+            text,
+            where,
+            replyTo,
+            inThread: root,
+            pending: true,
+            ...(root !== undefined && opts?.side ? { side: true as const } : {}),
+            ...(images?.length ? { images } : {}),
+          })
           if (root === undefined) return next
           return {
             ...next,
@@ -433,6 +461,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
           rooms: where.kind === "room" ? c.rooms.map((r) => (r.id === where.room ? { ...r, unread: 0, mentions: 0 } : r)) : c.rooms,
           directs: where.kind === "dm" ? c.directs.map((d) => (d.with === where.with ? { ...d, unread: 0 } : d)) : c.directs,
         })),
+      followThread: (code, root, on) => edit(code, (c) => ({ ...c, follows: { ...c.follows, [root]: on }, threads: (c.threads ?? []).map((t) => (t.root === root ? { ...t, following: on } : t)) })),
       discard: (code, seq) => edit(code, (c) => ({ ...c, messages: c.messages.filter((m) => m.seq !== seq) })),
       react: (code, seq, emoji) =>
         edit(code, (c) => ({
@@ -662,9 +691,11 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       setPowers: (code, name, powers) => edit(code, (c) => ({ ...c, people: c.people.map((p) => (p.name === name ? { ...p, ...powers } : p)) })),
       showAgent: async () => null,
       openTerm: (_code, _name, cols, rows, watch) => demoTerm(cols, rows, watch),
-      openMyTerm: (_code, want, cols, rows, watch) => demoShell(want, cols, rows, watch),
+      openMyTerm: (_code, want, cols, rows, watch, machine) => demoShell(want, cols, rows, watch, machine),
       myTerms: async () => demoShells(),
       closeMyTerm: async (pane) => demoShells(pane),
+      remoteTerms: async (machine) => demoRemoteShells(machine),
+      closeRemoteTerm: async (machine, pane) => demoRemoteShells(machine, pane),
       choicesOn: async (_code, computer) =>
         computer === "mbp"
           ? { folders: ["~/www/channels", "~/www/landing"] }
@@ -775,6 +806,9 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       },
       setName: (name) => setState((s) => (s.account ? { ...s, account: { ...s.account, name } } : { ...s, account: { ...DEMO_ACCOUNT, name } })),
       setPrefs: (p) => setState((s) => ({ ...s, prefs: { ...s.prefs, ...p } })),
+      searchOlder: async (...[, query, before]: Parameters<Actions["searchOlder"]>) => demoOlder(query, before),
+      olderAround: async (...[, seq]: Parameters<Actions["olderAround"]>) => demoAround(seq),
+      fetchOlder: (...[, got]: Parameters<Actions["fetchOlder"]>) => demoFetchOlder(got),
       setMute: (code, room, on) => {
         setState((s) => {
           const key = muteKey(code, room)
@@ -809,9 +843,9 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
         setState((s) => (s.account ? { ...s, account: { ...s.account, enrollAsk: undefined } } : s))
         return { ok: true }
       },
-      forgetDevice: (id) => setState((s) => (s.account ? { ...s, account: { ...s.account, devices: s.account.devices?.filter((d) => d.id !== id) } } : s)),
-      renewDevice: (id) =>
-        setState((s) => (s.account ? { ...s, account: { ...s.account, devices: s.account.devices?.map((d) => (d.id === id ? { ...d, until: Date.now() + 90 * 86_400_000 } : d)) } } : s)),
+      forgetDevice: (ids) => setState((s) => (s.account ? { ...s, account: { ...s.account, devices: s.account.devices?.filter((d) => !ids.includes(d.id)) } } : s)),
+      renewDevice: (...ids) =>
+        setState((s) => (s.account ? { ...s, account: { ...s.account, devices: s.account.devices?.map((d) => (ids.includes(d.id) ? { ...d, until: Date.now() + 90 * 86_400_000 } : d)) } } : s)),
       recoveryWords: async () => DEMO_WORDS,
       recoverySave: async (typed) => {
         const wrong = typed.filter((t) => t.word.trim().toLowerCase() !== DEMO_WORDS[t.at]).map((t) => t.at)
@@ -834,6 +868,13 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       },
       enrollKeep: () => setState((s) => ({ ...s, enrolling: null })),
       enrollCancel: () => setState((s) => ({ ...s, enrolling: null })),
+      rerootOpen: async (words) => {
+        const n = words.split(/[^a-z]+/i).filter(Boolean).length
+        if (n !== 24) return { ok: false, trouble: { why: `a recovery key is 24 words, and that's ${n}` } }
+        return DEMO_REROOT
+      },
+      rerootFinish: async () => true,
+      rerootCancel: () => {},
       recoverBegin: () => setState((s) => ({ ...s, enrolling: { stage: "recover" } })),
       recoverOpen: async (words) => {
         const n = words.split(/[^a-z]+/i).filter(Boolean).length
@@ -853,6 +894,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       setHooks: (harness, on) => setComputer((c) => ({ ...c, hooks: c.hooks.map((h) => (h.harness === harness ? { ...h, state: on ? "installed" : "off" } : h)) })),
       setTerminalHelpers: (id, on) => setStarts((s) => ({ ...s, terminals: s.terminals.map((t) => (t.id === id ? { ...t, helpers: on ? "on" : "off" } : t)) })),
       setContextLine: (on) => setComputer((c) => ({ ...c, contextLine: on })),
+      launchedFrom: async (ids) => DEMO_LAUNCHED.filter((a) => ids.includes(a.from)),
       computerSettings: () =>
         new Promise((done) =>
           setTimeout(
@@ -870,9 +912,12 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
     }
   }, [])
 
+  const home = useMemo(() => [...state.channels.values()].map(homeOf), [state.channels])
+
   return {
     account: state.account,
     channels: state.tiles,
+    home,
     channel: open && state.gone?.code !== open ? (state.channels.get(open) ?? null) : null,
     ...(state.gone && state.gone.code === open ? { gone: state.gone } : {}),
     prefs: state.prefs,

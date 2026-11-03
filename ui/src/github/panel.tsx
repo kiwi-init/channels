@@ -32,12 +32,12 @@ function Unknown({ title, what }: { title: string; what: string }) {
   return (
     <>
       <PanelHead title={title} />
-      <Empty title={`This ${what} isn't here any more.`}>It may have been closed long ago, or its repo unlinked.</Empty>
+      <Empty title={`This ${what} isn't here any more.`} />
     </>
   )
 }
 
-function TaskSection({ channel, id, what }: { channel: Channel; id: number | undefined; what: string }) {
+function TaskSection({ channel, id }: { channel: Channel; id: number | undefined }) {
   const { go } = useApp()
   return (
     <section className="panel-section">
@@ -46,11 +46,10 @@ function TaskSection({ channel, id, what }: { channel: Channel; id: number | und
         <TaskLink channel={channel} id={id} />
       ) : (
         <p className="gh-none">
-          No task holds this {what} yet. Say what you want done with it{" "}
+          None yet.{" "}
           <button type="button" className="gh-inline" onClick={() => go({ to: "tab", tab: "chat" })}>
-            in the conversation
+            Ask for one in the conversation
           </button>
-          , and the lead turns it into a task.
         </p>
       )}
     </section>
@@ -64,7 +63,7 @@ export function PrPanel({ channel, repo, number }: { channel: Channel; repo: str
   const closed = pr.state === "merged" || pr.state === "closed"
   return (
     <>
-      <PanelHead title={`PR #${pr.number}`} sub={`· ${PR_WORDS[pr.state].toLowerCase()}`} />
+      <PanelHead title={`PR #${pr.number}`} />
       <div className="panel-body">
         <section className="panel-section">
           <h3 className="task-title gh-panel-title">{pr.title}</h3>
@@ -113,10 +112,12 @@ export function PrPanel({ channel, repo, number }: { channel: Channel; repo: str
           <section className="panel-section">
             <Heading
               action={
-                <span className="gh-heading-side">
-                  <Ticks list={pr.list} />
-                  <span className="num">{checksSummary(pr.list)}</span>
-                </span>
+                pr.list.length > 8 ? (
+                  <span className="gh-heading-side">
+                    <Ticks list={pr.list} />
+                    <span className="num">{checksSummary(pr.list)}</span>
+                  </span>
+                ) : undefined
               }
             >
               Checks
@@ -124,7 +125,7 @@ export function PrPanel({ channel, repo, number }: { channel: Channel; repo: str
             <Checks list={pr.list} fold={pr.list.length > 8} />
           </section>
         )}
-        <TaskSection channel={channel} id={pr.task} what="pull request" />
+        <TaskSection channel={channel} id={pr.task} />
         <section className="panel-section gh-actions">
           <Out href={pr.url} primary>
             Open on GitHub
@@ -142,7 +143,7 @@ export function IssuePanel({ channel, repo, number }: { channel: Channel; repo: 
   if (!issue) return <Unknown title={`Issue #${number}`} what="issue" />
   return (
     <>
-      <PanelHead title={`Issue #${issue.number}`} sub={`· ${issueWord(issue)}`} />
+      <PanelHead title={`Issue #${issue.number}`} />
       <div className="panel-body">
         <section className="panel-section">
           <h3 className="task-title gh-panel-title">{issue.title}</h3>
@@ -165,7 +166,7 @@ export function IssuePanel({ channel, repo, number }: { channel: Channel; repo: 
             <dd>{since(issue.at)}</dd>
           </dl>
         </section>
-        <TaskSection channel={channel} id={issue.task} what="issue" />
+        <TaskSection channel={channel} id={issue.task} />
         <section className="panel-section gh-actions">
           <Out href={issue.url} primary>
             Open on GitHub

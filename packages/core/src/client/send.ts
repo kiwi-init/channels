@@ -12,10 +12,12 @@ import {
   isRasterMime,
   MAX_BODY_LENGTH,
   MAX_HOLDS,
+  MAX_FILES,
   MAX_IMAGES,
   EVENT_OPS_VERSION,
   OVERLAY_OPS,
   PROTOCOL_VERSION,
+  fileAttachment,
   rasterAttachment,
   wellFormed,
   wellFormedChoices,
@@ -24,6 +26,7 @@ import {
   type DecisionKind,
   type Event,
   type Handoff,
+  type FileAttachment,
   type ImageAttachment,
   type Kind,
   type Message,
@@ -36,6 +39,7 @@ import { MissingKey, Rejected } from "../refusals.ts";
 import type { ChannelCore } from "./core.ts";
 import { RelayError, Unreachable, type Refused } from "./errors.ts";
 import { received } from "./history.ts";
+import { MAX_WAKE } from "../push.ts";
 import type { ChannelImages } from "./images.ts";
 import type { ChannelLive } from "./live.ts";
 import type { Relay } from "./relay.ts";
@@ -48,6 +52,7 @@ export interface SendOptions {
   re?: number[];
   ev?: Event;
   imgs?: ImageAttachment[];
+  files?: FileAttachment[];
   room?: string;
   esc?: boolean;
   handoff?: Handoff;
@@ -62,7 +67,9 @@ export interface SendOptions {
   settled?: PermissionSettled;
   task?: number;
   dm?: boolean;
+  side?: boolean;
   slot?: { name: string; ttl: number };
+  wake?: readonly string[];
   free?: string[];
 }
 
@@ -115,6 +122,9 @@ export class ChannelSending {
       const imgs = opts.imgs?.slice(0, MAX_IMAGES);
       if (imgs?.some((i) => !isRasterMime(i.mime))) return yield* new Rejected("an image must be png, jpg, gif or webp");
       if (imgs?.some((i) => !rasterAttachment(i))) return yield* new Rejected("an image needs its bytes or a stored reference");
+      if (opts.files?.length && opts.ev) return yield* new Rejected("files go on a message, not an event");
+      if ((opts.files?.length ?? 0) > MAX_FILES) return yield* new Rejected(`at most ${MAX_FILES} files per message`);
+      if (opts.files?.some((f) => !fileAttachment(f))) return yield* new Rejected("a file needs its stored pieces: store it with putFile first");
       if (opts.handoff && (!opts.esc || !wellFormedHandoff(opts.handoff))) return yield* new Rejected("a browser handoff goes only on an escalation, with an https link, a vendor and an expiry");
       if (opts.choices && (!opts.esc || opts.handoff || !wellFormedChoices(opts.choices)))
         return yield* new Rejected(`options go only on an escalation without a browser link: ${CHOICES_MIN} to ${CHOICES_MAX} different ones, one line of up to ${CHOICE_MAX_LENGTH} characters each`);
@@ -140,6 +150,7 @@ export class ChannelSending {
         ...(opts.re?.length ? { re: opts.re } : {}),
         ...(opts.ev ? { ev: opts.ev } : {}),
         ...(attached?.length ? { imgs: attached } : {}),
+        ...(opts.files?.length ? { files: opts.files } : {}),
         ...(opts.room && opts.room !== GENERAL_ROOM && !opts.ev ? { room: opts.room } : {}),
         ...(opts.esc && !opts.ev ? { esc: true as const } : {}),
         ...(opts.esc && opts.handoff && !opts.ev ? { handoff: opts.handoff } : {}),
@@ -153,6 +164,7 @@ export class ChannelSending {
         ...(opts.settled && opts.re?.length && !opts.ev ? { settled: opts.settled } : {}),
         ...(opts.task && !opts.ev ? { task: opts.task } : {}),
         ...(opts.dm && !opts.ev && opts.to?.length === 1 ? { dm: true as const } : {}),
+        ...(opts.side && opts.re?.length && !opts.ev ? { side: true as const } : {}),
         ts: Date.now(),
       };
       if (payload.step && !wellFormed(payload))
@@ -191,6 +203,7 @@ export class ChannelSending {
             )
           : inner;
       const cid = b64url(crypto.getRandomValues(new Uint8Array(16)));
+      const wake = opts.ev || roomKey ? [] : (opts.wake ?? []).slice(0, MAX_WAKE);
       const sealNow = Effect.gen({ self: this }, function* () {
         if (!this.ch.access.keys[String(this.ch.access.epoch)]) yield* this.ch.fx.refreshKeys();
         const e = this.ch.access.epoch;
@@ -206,7 +219,7 @@ export class ChannelSending {
         const roomId = this.ch.roomId;
         const slot = take ? { slot: { id: yield* Effect.promise(() => slotId(key, roomId, take.name)), ttl: take.ttl } } : {};
         const free = freeing.length ? { free: yield* Effect.promise(() => Promise.all(freeing.map((n) => slotId(key, roomId, n)))) } : {};
-        return yield* this.ch.request<{ seq: number; ts?: number }>("/messages", { method: "POST", body: JSON.stringify({ ...sealed, e, ...slot, ...free, cid }) });
+        return yield* this.ch.request<{ seq: number; ts?: number }>("/messages", { method: "POST", body: JSON.stringify({ ...sealed, e, ...slot, ...free, cid, ...(wake.length ? { wake } : {}) }) });
       });
       const posted = Effect.gen({ self: this }, function* () {
         const stored = yield* again(post, UNSURE_RETRIES).pipe(
@@ -228,7 +241,7 @@ export class ChannelSending {
         const wire = slotted ? undefined : [...this.live.wires].at(-1);
         if (!wire) return yield* posted;
         const { e, sealed } = yield* sealNow;
-        const acked = yield* wire.send(sealed, e, signed, cid).pipe(
+        const acked = yield* wire.send(sealed, e, signed, cid, wake).pipe(
           Effect.catchIf(
             (err) => err instanceof Unreachable,
             () => Effect.succeed(null),

@@ -133,6 +133,7 @@ describe("the owner's app posts a connected repo's new releases", () => {
   const releases = [
     { tag_name: "v0.2.0", published_at: "2026-10-02T00:00:00Z", draft: false },
     { tag_name: "v0.3.0-draft", published_at: null, draft: true },
+    { tag_name: "kiwi-assets", published_at: "2026-10-01T12:00:00Z", draft: false, prerelease: true },
     { tag_name: "v0.1.0", published_at: "2026-10-01T00:00:00Z", draft: false },
   ];
 
@@ -177,7 +178,7 @@ describe("the owner's app posts a connected repo's new releases", () => {
 
   const folded = async () => fold((await ownerCh.history(0)).messages, (await ownerCh.members()).map(toRoster));
 
-  test("posts each published release oldest first, skips drafts and the ones it has, and refuses a member", async () => {
+  test("posts each published release oldest first, compared with the one before, skips drafts, prereleases (an asset host like kiwi-assets) and the ones it has, and refuses a member", async () => {
     expect(await ownerCh.syncGithubReleases(["ojow/channels"], [])).toBe(2);
     const s = await folded();
     expect(s.github.releases.get("ojow/channels")?.map((r) => [r.tag, r.prs, r.shas])).toEqual([
@@ -186,5 +187,37 @@ describe("the owner's app posts a connected repo's new releases", () => {
     ]);
     expect(await ownerCh.syncGithubReleases(["ojow/channels"], [...s.github.releases.values()].flat())).toBe(0);
     expect(await memberCh.syncGithubReleases(["ojow/channels"], []).catch((e: Error) => e.message)).toContain("owner");
+  });
+
+  test("a tag posted as a release before GitHub listed it as a prerelease is withdrawn by the next sync, and the release after it is read again and claims its PRs", async () => {
+    const pr = { repo: "ojow/channels", number: 2, state: "merged" as const, at: 0, seq: 0 };
+    const stuck = { op: "github.release" as const, repo: "ojow/channels", tag: "kiwi-assets", at: Date.parse("2026-10-01T12:00:00Z"), shas: ["2".repeat(12)], prs: [2] };
+    await ownerCh.send("GitHub: ojow/channels released kiwi-assets", { kind: "event", ev: stuck });
+    await ownerCh.send("GitHub: ojow/channels released v0.2.0", {
+      kind: "event",
+      ev: { op: "github.release", repo: "ojow/channels", tag: "v0.2.0", at: Date.parse("2026-10-02T00:00:00Z"), shas: [], prs: [] },
+    });
+    let s = await folded();
+    expect(releaseOf(s.github, pr)?.tag).toBe("kiwi-assets");
+    expect(await ownerCh.syncGithubReleases(["ojow/channels"], [...s.github.releases.values()].flat())).toBe(2);
+    s = await folded();
+    expect(s.github.releases.get("ojow/channels")?.map((r) => [r.tag, r.prs])).toEqual([
+      ["v0.1.0", [1]],
+      ["v0.2.0", [2]],
+    ]);
+    expect(releaseOf(s.github, pr)?.tag).toBe("v0.2.0");
+    const withdrawn = (await ownerCh.history(0)).messages.find((m) => m.ev?.op === "github.release" && m.ev.gone)!;
+    expect(withdrawn.ev).toEqual({ ...stuck, shas: [], prs: [], gone: true });
+    expect(describeEvent(withdrawn, s)).toContain("withdrew kiwi-assets");
+    expect(await ownerCh.syncGithubReleases(["ojow/channels"], [...s.github.releases.values()].flat())).toBe(0);
+  });
+
+  test("a withdrawal claims nothing: one that still names commits or PRs is refused", () => {
+    const base = { v: PROTOCOL_VERSION, id: "x", from: "alice", kind: "event", body: "", ts: 0 };
+    const ev = (extra: object) => ({ ...base, ev: { op: "github.release", repo: "ojow/channels", tag: "kiwi-assets", at: 1, shas: [], prs: [], gone: true, ...extra } });
+    expect(wellFormed(ev({}))).toBe(true);
+    expect(wellFormed(ev({ prs: [2] }))).toBe(false);
+    expect(wellFormed(ev({ shas: ["2".repeat(12)] }))).toBe(false);
+    expect(wellFormed(ev({ gone: false }))).toBe(false);
   });
 });

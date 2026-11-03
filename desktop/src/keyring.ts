@@ -26,12 +26,13 @@ import {
   type FollowEvent,
   type FollowOptions,
   type JoinCheck,
+  type HistoryAround,
   type HistorySearch,
   type OlderRows,
   type WireError,
 } from "./bridge.ts";
 import { indexKey, SearchHost, type SearchPlace } from "./search-host.ts";
-import type { FoldInputs, Searched } from "./search-types.ts";
+import type { FoldInputs, IndexHit, Searched } from "./search-types.ts";
 
 const OLDER_PAGE = 500;
 import { channelAccess, publicChannel } from "./seats.ts";
@@ -263,10 +264,9 @@ export class Keyring implements ChannelOps {
     const access = channelAccess(this.seat(code, true));
     if (!access) return rows.map(() => null);
     const opened = await openSealedRows(rows, access.roomId, access.keys);
-    await this.channel(code)
-      .learnRooms(opened.filter((m): m is Message => !!m && "ev" in m))
-      .catch(() => {});
-    return opened;
+    return this.channel(code)
+      .learnRooms(opened)
+      .catch(() => opened);
   }
 
   private searcher(): { host: SearchHost; place: SearchPlace } | null {
@@ -286,7 +286,7 @@ export class Keyring implements ChannelOps {
     return { host: s.host, access };
   }
 
-  async indexRows(code: string, rows: readonly unknown[], inputs: FoldInputs): Promise<number | null> {
+  async indexRows(code: string, rows: readonly unknown[], inputs: FoldInputs, from: number): Promise<number | null> {
     const at = await this.searchAt(code);
     if (!at) return null;
     const opened = await openSealedRows(rows, at.access.roomId, at.access.keys);
@@ -294,12 +294,18 @@ export class Keyring implements ChannelOps {
       code,
       opened.filter((m): m is Message => !!m && !("unread" in m)),
       inputs,
+      from,
     );
   }
 
   async searchHistory(code: string, ask: HistorySearch): Promise<Searched | null> {
     const at = await this.searchAt(code);
     return at ? at.host.search(code, ask.query, ask.rooms, ask.limit, ask.head) : null;
+  }
+
+  async historyAround(code: string, ask: HistoryAround): Promise<IndexHit[] | null> {
+    const at = await this.searchAt(code);
+    return at ? at.host.around(code, ask.seq, ask.rooms, ask.span) : null;
   }
 
   async olderRows(code: string, before: number, limit: number): Promise<OlderRows> {

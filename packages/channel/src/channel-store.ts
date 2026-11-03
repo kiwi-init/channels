@@ -1,5 +1,6 @@
 import { batch, computed, effect, signal, untracked, type ReadonlySignal, type Signal } from "@preact/signals-core";
 
+import { wakeList } from "@kiwi/core/phone-wake.ts";
 import type { CachedRow } from "@kiwi/core/cache-row.ts";
 import { ChannelGone } from "@kiwi/core/client/relay-errors.ts";
 import type { HumanSession, RoomsSetting, SendOptions } from "@kiwi/core/client.ts";
@@ -8,6 +9,7 @@ import type { GithubChore, GithubHealth } from "@kiwi/core/github-health.ts";
 import { SNAPSHOT_TOO_LARGE, type Message } from "@kiwi/core/protocol.ts";
 import { fold, type ChannelState, type FoldBase, type GuardFloor, type Roster } from "@kiwi/core/state.ts";
 import { errorOf, linkOf, watches, type ChannelLink, type FollowEvent } from "./channel-ops.ts";
+import type { Reach } from "./history-fill.ts";
 import { openCached, planCached, readKept, rememberKept, rememberRow, rememberRows } from "./history.ts";
 import { markOnce } from "./marks.ts";
 import { ICON_LIVE } from "./icon-event.ts";
@@ -27,12 +29,19 @@ import { handOver, onceEach, openChannel, warmUp } from "./open.ts";
 import { dropWarm, keepWarm, warmOf, type Warm } from "./warm.ts";
 
 const HISTORY = 2_000;
+export const OLDER_PER_CLICK = 5_000;
+const OLDER_GAP_MS = 250;
 const KEEP_DELAY_MS = 3_000;
 const CLOCK_MS = 15_000;
 const GITHUB_SYNC_MS = 6 * 3_600_000;
 const OLDER_APP = /no such call/;
 
 type Connection = "connecting" | "live" | "reconnecting";
+
+export interface OlderHistory {
+  reach(): Promise<Reach>;
+  fetch(got?: (asked: number) => void): Promise<Reach>;
+}
 
 export const APP_BEACON_MS = 60_000;
 const ANSWER_GAP_MS = 500;
@@ -56,6 +65,7 @@ export interface ChannelHandle {
   snapshotTooBig: boolean;
   github: GithubHealth | null;
   ready: boolean;
+  older: OlderHistory;
 }
 
 export interface ChannelStoreDeps {
@@ -121,6 +131,7 @@ export class ChannelStore {
   private reconciling = false;
   private reconcileAgain = false;
   private rulesBusy = false;
+  private fetchOlder: OlderHistory["fetch"] | null = null;
   private readonly githubSynced = new Map<string, number>();
   private readonly githubHealth = signal<GithubHealth>({ status: null, errors: [], syncing: null });
 
@@ -191,6 +202,7 @@ export class ChannelStore {
       snapshotTooBig: this.snapshotTooBig.value,
       github: this.ch.isOwner ? this.githubHealth.value : null,
       ready: this.ready.value,
+      older: this.older,
     }));
   }
 
@@ -204,8 +216,19 @@ export class ChannelStore {
 
   snapshot = (): ChannelHandle => this.handle.value;
 
+  readonly older: OlderHistory = {
+    reach: () => import("./history-fill.ts").then((f) => f.reach(this.ch.roomId, this.ch.pk)),
+    fetch: (got) => (this.fetchOlder ? this.fetchOlder(got) : Promise.reject(new Error("open the channel first"))),
+  };
+
+  private wakeFor(body: string, opts: SendOptions): string[] {
+    const state = this.state.value;
+    const me = [...state.members.values()].find((m) => m.pk === this.ch.pk)?.name;
+    return me ? wakeList(state, me, body, opts) : [];
+  }
+
   send = (body: string, opts: SendOptions): Promise<number> =>
-    this.ch.send(body, opts).catch((err: unknown) => {
+    this.ch.send(body, { ...opts, wake: opts.wake ?? this.wakeFor(body, opts) }).catch((err: unknown) => {
       if (this.onGone(err)) throw new Error("you no longer have access to this channel", { cause: err });
       throw err;
     });
@@ -331,14 +354,18 @@ export class ChannelStore {
     let beat: ReturnType<typeof setInterval> | undefined;
     let answeredAt = 0;
     let indexing: "idle" | "running" | "again" | "off" = "idle";
-    const index = () => {
-      if (closed || indexing === "off") return;
-      if (indexing !== "idle") return void (indexing = "again");
+    let indexed: (() => void)[] = [];
+    const settle = () => {
+      const waiting = indexed;
+      indexed = [];
+      for (const done of waiting) done();
+    };
+    const pass = () => {
       indexing = "running";
       void import("./history-fill.ts")
         .then(({ indexArchive }) =>
           indexArchive(ch.roomId, ch.pk, {
-            index: (rows) => ch.indexRows(rows, { roster: this.rosterForFold.peek(), roomsFloor: this.roomsFloor.peek(), guardFloor: this.guardFloor.peek(), now: Date.now() }),
+            index: (rows, from) => ch.indexRows(rows, { roster: this.rosterForFold.peek(), roomsFloor: this.roomsFloor.peek(), guardFloor: this.guardFloor.peek(), now: Date.now() }, from),
             hidden: () => typeof document !== "undefined" && document.hidden,
             wait: (ms) => new Promise((done) => setTimeout(done, ms)),
             stopped: () => closed,
@@ -348,11 +375,51 @@ export class ChannelStore {
           (out) => {
             const again = indexing === "again";
             indexing = out === "unsupported" ? "off" : "idle";
-            if (again && out === "done") index();
+            if (again && out === "done") pass();
+            else settle();
           },
-          () => void (indexing = "off"),
+          () => {
+            indexing = "off";
+            settle();
+          },
         );
     };
+    const index = (): Promise<void> => {
+      if (closed || indexing === "off") return Promise.resolve();
+      const done = new Promise<void>((ok) => indexed.push(ok));
+      if (indexing === "idle") pass();
+      else indexing = "again";
+      return done;
+    };
+    let fetching: { done: Promise<Reach>; got: Set<(asked: number) => void> } | null = null;
+    const fetchOlder: OlderHistory["fetch"] = (got) => {
+      if (fetching) {
+        if (got) fetching.got.add(got);
+        return fetching.done;
+      }
+      const listeners = new Set(got ? [got] : []);
+      const done = import("./history-fill.ts")
+        .then(async ({ backfill, reach }) => {
+          const out = await backfill(ch.roomId, ch.pk, {
+            older: (before, limit) => ch.olderRows(before, limit),
+            hidden: () => false,
+            wait: (ms) => new Promise((ok) => setTimeout(ok, ms)),
+            stopped: () => closed,
+            cap: OLDER_PER_CLICK,
+            gap: OLDER_GAP_MS,
+            got: (asked) => {
+              for (const l of listeners) l(asked);
+            },
+          });
+          if (out === "failed") throw new Error("the relay didn't send older messages; try again in a minute");
+          await index();
+          return reach(ch.roomId, ch.pk);
+        })
+        .finally(() => (fetching = null));
+      fetching = { done, got: listeners };
+      return done;
+    };
+    this.fetchOlder = fetchOlder;
     const here = () => {
       if (closed) return;
       answeredAt = Date.now();
@@ -375,7 +442,7 @@ export class ChannelStore {
           ch.pk,
           batched.flatMap((b) => (b.row ? [b.row] : [])),
         ).then(
-          () => index(),
+          () => void index(),
           () => {},
         );
       }, 30);
@@ -400,7 +467,7 @@ export class ChannelStore {
           this.unread.value = [...this.unread.peek(), ev.seq].slice(-HISTORY);
           if (ev.row)
             void rememberRow(ch.roomId, ch.pk, ev.row).then(
-              () => index(),
+              () => void index(),
               () => {},
             );
           return;
@@ -499,7 +566,7 @@ export class ChannelStore {
           if (base || earlyBase) this.base.value = base;
           this.ready.value = true;
         });
-        index();
+        void index();
       },
     });
     warmUp(steps, was, HISTORY);
@@ -520,6 +587,8 @@ export class ChannelStore {
       });
     return () => {
       closed = true;
+      if (this.fetchOlder === fetchOlder) this.fetchOlder = null;
+      settle();
       stopLive?.();
       clearTimeout(flush);
       clearInterval(beat);

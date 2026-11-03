@@ -47,6 +47,9 @@ import {
   MACHINE_ASKS_PER_MINUTE,
   MACHINE_BOX_TTL_MS,
   MACHINE_UNSEEN_MS,
+  PIPE_JOIN_MS,
+  PIPE_PAIRED,
+  lonelyPipes,
   machineAlarmAt,
   onMachineHttp,
   onPersonHttp,
@@ -57,15 +60,18 @@ import {
   type MachineBox,
   type MachineStore,
   type PersonMachine,
+  type PipeEnd,
+  pipeFrame,
 } from "./machine.ts";
-import { ACCOUNT_ASKS_PER_MINUTE, accountUser, isAccountPath, onAccountHttp, sameEnrollment, type AccountStore } from "./account.ts";
+import { ACCOUNT_ASKS_PER_MINUTE, accountUser, isAccountPath, onAccountHttp, sameEnrollment, sameFresh, type AccountStore, type FreshRecord } from "./account.ts";
 import { ENROLL_TTL_MS, type Enrollment } from "@kiwi/core/enroll.ts";
 import { accountHome, frozenWrite, MOVE_PATH, movedHuman, moveUsers, onMoveHttp, type Adoption, type MoveStore, type Row, type Rows } from "./move.ts";
 import type { DeviceLink } from "@kiwi/core/devices.ts";
-import type { Vault } from "@kiwi/core/recovery.ts";
+import type { OldVault, Vault } from "@kiwi/core/recovery.ts";
 import { allow as allowPerMinute } from "./room/limits.ts";
 import { makeRelay, onHttp, runRoom, runRoomSync, type Relay } from "./route.ts";
 import { GithubApp, githubAppFrom, GithubPush, githubPushFrom } from "./github-app.ts";
+import { pusherFrom, type Pusher } from "./push.ts";
 import { GITHUB_QUEUE_MAX, GITHUB_QUEUE_TTL_MS, onGithubHttp, type GithubItem, type GithubLink, type GithubRoutes } from "./github.ts";
 
 interface Env {
@@ -101,6 +107,11 @@ interface Env {
   GITHUB_APP_CLIENT_SECRET?: string;
   GITHUB_APP_ID?: string;
   GITHUB_APP_PRIVATE_KEY?: string;
+  APNS_KEY?: string;
+  APNS_KEY_ID?: string;
+  APNS_TEAM_ID?: string;
+  APNS_TOPIC?: string;
+  FCM_SERVICE_ACCOUNT?: string;
 }
 
 const edgeCache: PageCache = {
@@ -147,6 +158,7 @@ export class Channel extends DurableObject<Env> {
   private readonly policy: RelayPolicy;
   /** What this channel's room runs with: sign-in, policy and the owner's owned-channel count. */
   private readonly relay: Relay;
+  private readonly pusher: Pusher | null;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -167,6 +179,7 @@ export class Channel extends DurableObject<Env> {
         Layer.succeed(GithubPush, env.GITHUB_WEBHOOK_SECRET ? githubPushFrom() : null),
       ),
     );
+    this.pusher = pusherFrom({ apnsKey: env.APNS_KEY, apnsKeyId: env.APNS_KEY_ID, apnsTeamId: env.APNS_TEAM_ID, apnsTopic: env.APNS_TOPIC, fcmServiceAccount: env.FCM_SERVICE_ACCOUNT });
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(PING, PONG));
   }
 
@@ -249,6 +262,7 @@ export class Channel extends DurableObject<Env> {
         if ((ws.deserializeAttachment() as { pk?: string } | null)?.pk === fx.disconnect.pk) close(ws, CLOSE_REMOVED, GONE_WORDS[fx.disconnect.how]);
       }
     }
+    if (fx.push && this.pusher) this.ctx.waitUntil(this.wake(this.pusher, fx.push).catch((e: unknown) => console.error(`wake: ${e instanceof Error ? e.message : "error"}`)));
     if (fx.github?.length) {
       await Promise.allSettled(fx.github.map((l) => this.env.REPOS.get(this.env.REPOS.idFromName(l.repo)).fetch("https://repos/apply", { method: "POST", body: JSON.stringify(l) })));
     }
@@ -265,6 +279,11 @@ export class Channel extends DurableObject<Env> {
     } else if (fx.expireAt) {
       await this.ctx.storage.setAlarm(fx.expireAt);
     }
+  }
+
+  private async wake(pusher: Pusher, { room, wakes }: NonNullable<Effects["push"]>): Promise<void> {
+    const dead = await pusher.send(wakes);
+    if (dead.length) this.store(room).dropPushTokens(dead);
   }
 
   async reown(roomId: string, from: string, to: string): Promise<void> {
@@ -372,11 +391,27 @@ export class MachineInbox extends DurableObject<Env> {
     return this.ctx.getWebSockets("machine");
   }
 
+  private pipeSockets(): { ws: WebSocket; end: PipeEnd }[] {
+    return this.ctx.getWebSockets("pipe").flatMap((ws) => {
+      const end = (ws.deserializeAttachment() as { pipe?: PipeEnd } | null)?.pipe;
+      return end ? [{ ws, end }] : [];
+    });
+  }
+
+  private partner(end: PipeEnd): WebSocket | undefined {
+    return this.ctx.getWebSockets(`pipe:${end.id}:${end.side === "app" ? "computer" : "app"}`)[0];
+  }
+
+  private closePipes(which: (end: PipeEnd) => boolean, code: number, reason: string): void {
+    for (const { ws, end } of this.pipeSockets()) if (which(end)) close(ws, code, reason);
+  }
+
   private async schedule(): Promise<void> {
     const sql = this.ctx.storage.sql;
     const oldest = (sql.exec("SELECT MIN(at) AS at FROM boxes").toArray()[0] as { at: number | null } | undefined)?.at ?? null;
     const seen = (sql.exec("SELECT seen_at FROM binding").toArray()[0] as { seen_at: number } | undefined)?.seen_at ?? null;
-    const at = machineAlarmAt(oldest, seen);
+    const lonely = lonelyPipes(this.pipeSockets().map((p) => p.end));
+    const at = machineAlarmAt(oldest, seen, lonely.length ? Math.min(...lonely.map((e) => e.at)) : null);
     const set = await this.ctx.storage.getAlarm();
     if (at === null) await this.ctx.storage.deleteAlarm();
     else if (set === null || at < set) await this.ctx.storage.setAlarm(at);
@@ -431,7 +466,10 @@ export class MachineInbox extends DurableObject<Env> {
       },
       close: () => {
         for (const ws of this.live()) close(ws, 4000, "unpaired");
+        this.closePipes(() => true, 4000, "unpaired");
       },
+      pipes: () => this.pipeSockets().map((p) => p.end),
+      closePipes: (_mpk, which, code, reason) => this.closePipes(which, code, reason),
     };
   }
 
@@ -442,6 +480,7 @@ export class MachineInbox extends DurableObject<Env> {
     sql.exec("DELETE FROM boxes");
     sql.exec("DELETE FROM links");
     for (const ws of this.live()) close(ws, 4000, "unpaired");
+    this.closePipes(() => true, 4000, "unpaired");
     await this.schedule();
   }
 
@@ -461,6 +500,7 @@ export class MachineInbox extends DurableObject<Env> {
       const out = await onMachineHttp(req, store, { perMachine: (key) => allowPerMinute(key, MACHINE_ASKS_PER_MINUTE) });
       if (out instanceof Response) return out;
       if (!out) return withCors(errorResponse(new NotFound({ message: "not found" })));
+      if ("pipe" in out) return await this.openPipe(req, out.pipe);
       for (const old of this.live()) close(old, 4001, "replaced by a newer connection");
       const { 0: client, 1: server } = new WebSocketPair();
       this.ctx.acceptWebSocket(server, ["machine"]);
@@ -472,8 +512,41 @@ export class MachineInbox extends DurableObject<Env> {
     }
   }
 
+  private async openPipe(req: Request, end: PipeEnd): Promise<Response> {
+    const { 0: client, 1: server } = new WebSocketPair();
+    this.ctx.acceptWebSocket(server, ["pipe", `pipe:${end.id}`, `pipe:${end.id}:${end.side}`]);
+    server.serializeAttachment({ pipe: end });
+    const other = this.partner(end);
+    if (other) {
+      send(other, PIPE_PAIRED);
+      send(server, PIPE_PAIRED);
+    } else await this.schedule();
+    return new Response(null, { status: 101, webSocket: client, headers: wsHeaders(req) });
+  }
+
+  override async webSocketMessage(ws: WebSocket, data: string | ArrayBuffer): Promise<void> {
+    const end = (ws.deserializeAttachment() as { pipe?: PipeEnd } | null)?.pipe;
+    if (!end) return;
+    const other = this.partner(end);
+    const frame = pipeFrame(data, PING);
+    if (frame === "ping") return send(ws, PONG);
+    if (frame === "refuse" || typeof data === "string") {
+      close(ws, 1009, "a pipe carries binary frames of at most 64 KB");
+      if (other) close(other, 1011, "the other side sent a frame the relay doesn't carry");
+      return;
+    }
+    if (!other) return close(ws, 4409, "the other side hasn't joined this pipe yet");
+    send(other, data);
+  }
+
   override async webSocketClose(ws: WebSocket, code: number): Promise<void> {
     close(ws, code === 1005 ? 1000 : code, "");
+    const end = (ws.deserializeAttachment() as { pipe?: PipeEnd } | null)?.pipe;
+    if (end) {
+      const other = this.partner(end);
+      if (other && other !== ws) close(other, 1000, "the other side left");
+      return;
+    }
     if (this.live().some((x) => x !== ws)) return;
     this.ctx.storage.sql.exec("UPDATE binding SET seen_at = ?", Date.now());
     await this.schedule();
@@ -484,6 +557,8 @@ export class MachineInbox extends DurableObject<Env> {
     const now = Date.now();
     sql.exec("DELETE FROM boxes WHERE at < ?", now - MACHINE_BOX_TTL_MS);
     if (!this.live().length && sql.exec("DELETE FROM binding WHERE seen_at < ?", now - MACHINE_UNSEEN_MS).rowsWritten) sql.exec("DELETE FROM links");
+    const lonely = new Set(lonelyPipes(this.pipeSockets().map((p) => p.end)).filter((e) => e.at + PIPE_JOIN_MS <= now));
+    this.closePipes((end) => [...lonely].some((l) => l.id === end.id && l.side === end.side), 4408, "the other side didn't join this pipe in time");
     await this.schedule();
   }
 }
@@ -529,8 +604,14 @@ export class Account extends DurableObject<Env> {
     ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS ask (k INTEGER PRIMARY KEY CHECK (k = 1), rec TEXT NOT NULL)");
     ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS recovery (n INTEGER PRIMARY KEY, link TEXT NOT NULL)");
     ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS vault (k INTEGER PRIMARY KEY CHECK (k = 1), version INTEGER NOT NULL, rec TEXT NOT NULL)");
+    ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS fresh (k INTEGER PRIMARY KEY CHECK (k = 1), rec TEXT NOT NULL)");
     ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS move (k INTEGER PRIMARY KEY CHECK (k = 1), to_user TEXT NOT NULL, id TEXT NOT NULL, at INTEGER NOT NULL, done INTEGER NOT NULL)");
     ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS adoptions (from_user TEXT PRIMARY KEY, id TEXT NOT NULL, state TEXT NOT NULL)");
+  }
+
+  private freshRecord(): FreshRecord | null {
+    const row = this.ctx.storage.sql.exec("SELECT rec FROM fresh").toArray()[0] as { rec: string } | undefined;
+    return row ? (JSON.parse(row.rec) as FreshRecord) : null;
   }
 
   private tables(): string[] {
@@ -605,7 +686,8 @@ export class Account extends DurableObject<Env> {
       rows: () => this.rows(),
       busy: async (_from, now) => {
         const ask = this.enrollment();
-        return ask && ask.at + ENROLL_TTL_MS > now ? "asking" : null;
+        if (ask && ask.at + ENROLL_TTL_MS > now) return "asking";
+        return this.freshRecord()?.pending ? "starting over" : null;
       },
       holds: (to) => at(to).taken(),
       adopt: (to, from, id, rows) => at(to).adopt(from, id, rows),
@@ -664,12 +746,28 @@ export class Account extends DurableObject<Env> {
       },
       vault: async () => {
         const row = sql.exec("SELECT rec FROM vault").toArray()[0] as { rec: string } | undefined;
-        return row ? (JSON.parse(row.rec) as Vault) : null;
+        return row ? (JSON.parse(row.rec) as Vault | OldVault) : null;
       },
       setVault: async (_user, next, prev) => {
         const row = sql.exec("SELECT version FROM vault").toArray()[0] as { version: number } | undefined;
         if ((row?.version ?? 0) !== prev) return false;
         sql.exec("INSERT OR REPLACE INTO vault (k, version, rec) VALUES (1, ?, ?)", next.version, JSON.stringify(next));
+        return true;
+      },
+      fresh: async () => this.freshRecord(),
+      setFresh: async (_user, next, prev) => {
+        if (!sameFresh(this.freshRecord(), prev)) return false;
+        sql.exec("INSERT OR REPLACE INTO fresh (k, rec) VALUES (1, ?)", JSON.stringify(next));
+        return true;
+      },
+      startOver: async (_user, start) => {
+        const rec = this.freshRecord();
+        if (rec?.pending?.id !== start.id) return false;
+        this.ctx.storage.transactionSync(() => {
+          for (const table of ["links", "recovery", "vault", "ask"]) sql.exec(`DELETE FROM ${table}`);
+          start.links.forEach((l, i) => sql.exec("INSERT INTO links (seq, link) VALUES (?, ?)", i + 1, JSON.stringify(l)));
+          sql.exec("INSERT OR REPLACE INTO fresh (k, rec) VALUES (1, ?)", JSON.stringify({ pending: null, lastAt: rec.lastAt }));
+        });
         return true;
       },
     };
@@ -731,7 +829,7 @@ function isWatch(ws: WebSocket): boolean {
   return (ws.deserializeAttachment() as { watch?: boolean } | null)?.watch === true;
 }
 
-function send(ws: WebSocket, f: string): void {
+function send(ws: WebSocket, f: string | ArrayBuffer): void {
   try {
     ws.send(f);
   } catch {

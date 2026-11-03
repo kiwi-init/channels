@@ -3,12 +3,13 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from "react"
 import { handleFor } from "@kiwi/core/membership.ts"
 import { useUnsealedKeys } from "@kiwi/secrets/keys-at-rest.ts"
 import { relayUrl } from "@kiwi/secrets/relay.ts"
-import { bridge, useSecrets, type ComputerView, type DeviceNewsView, type MovedView, type PhoneView } from "@kiwi/secrets/secrets.ts"
+import { bridge, secrets, useSecrets, type ComputerView, type DeviceNewsView, type MovedView, type PhoneView } from "@kiwi/secrets/secrets.ts"
 import { useUpdate } from "@kiwi/app/update.ts"
+import { launchedBy } from "@kiwi/app/forgotten-computers.ts"
 import { announce } from "~/kit/toasts"
 import { deviceNews, postDevicesNow } from "~/live/devices"
 import { store, type Listener } from "~/live/value"
-import type { Account, Computer, Device, EnrollAsk, Enrolling, GithubSignIn, RecoverTrouble, RecoverySaved, RecoveryState } from "~/model"
+import type { Account, Computer, Device, EnrollAsk, Enrolling, GithubSignIn, KeptAgent, LaunchedAgent, RecoverTrouble, RecoverySaved, RecoveryState, RerootOpened } from "~/model"
 import { version } from "../../../package.json"
 
 const github = store<{ login: string } | null>(null)
@@ -194,7 +195,7 @@ const devices = (() => {
     if (!b?.devices) return
     try {
       const got = await b.devices()
-      value = got ? got.map((d) => ({ id: d.id, label: d.label, os: d.os, as: d.as, until: d.until, thisOne: d.thisOne })) : null
+      value = got ? got.map((d) => ({ id: d.id, label: d.label, os: d.os, as: d.as, until: d.until, thisOne: d.thisOne, ...(d.app ? { app: d.app } : {}) })) : null
     } catch {
       // Not signed in, or the relay is unreachable: the list shows what it last showed, and focus loads it again.
       return
@@ -222,18 +223,45 @@ function deviceNotices(news: DeviceNewsView | null): Pick<Account, "forgotten" |
   return { ...(older.length ? { forgotten: older } : {}), ...(news.removed && !news.removed.wiped ? { forgotHere: { by: news.removed.by } } : {}) }
 }
 
-export async function forgetDevice(id: string): Promise<void> {
+export async function launchedFrom(ids: readonly string[]): Promise<LaunchedAgent[]> {
+  const person = secrets().person?.pk
+  if (!person) return []
+  const [{ allMembers }, { linkOf }] = await Promise.all([import("@kiwi/channel/store.ts"), import("@kiwi/channel/channel-ops.ts")])
+  const rosters = await Promise.all(
+    allMembers().map(async (m) => {
+      const roster = await linkOf(m)
+        .members()
+        .catch(() => [])
+      return launchedBy(roster, ids, person).map((a) => ({ ...a, code: m.code }))
+    })
+  )
+  return rosters.flat()
+}
+
+export async function forgetDevice(ids: readonly string[], keep: readonly KeptAgent[] = []): Promise<void> {
   const b = bridge()
   if (!b?.forgetDevice) throw new Error("forgetting a device needs the next Channels update")
-  await b.forgetDevice(id)
+  if (keep.length) {
+    if (!b.keepAgents) throw new Error("keeping its agents needs the next Channels update")
+    const { keepAgents } = await import("@kiwi/app/device-lists.ts")
+    for (const code of new Set(keep.map((k) => k.code))) {
+      const got = await b.keepAgents(
+        code,
+        keep.filter((k) => k.code === code).map(({ pk, from }) => ({ pk, from }))
+      )
+      if (!got) throw new Error("this computer isn't on your list of devices, so it can't take the agents over")
+      keepAgents(code, got.links, got.keep)
+    }
+  }
+  for (const id of ids) await b.forgetDevice(id)
   await devices.load()
   postDevicesNow()
 }
 
-export async function renewDevice(id: string): Promise<void> {
+export async function renewDevice(...ids: string[]): Promise<void> {
   const b = bridge()
   if (!b?.renewDevice) throw new Error("renewing a device needs the next Channels update")
-  await b.renewDevice(id)
+  for (const id of ids) await b.renewDevice(id)
   await devices.load()
   postDevicesNow()
 }
@@ -307,6 +335,28 @@ export async function recoveryCancel(words: string): Promise<RecoverTrouble | nu
   await recovery.load()
   return null
 }
+
+const rerooting = () => {
+  const b = bridge()
+  if (!b?.reroot) throw new Error("replacing your person key needs the next Channels update")
+  return b
+}
+
+export async function rerootOpen(words: string): Promise<RerootOpened> {
+  const r = await rerooting().reroot(words)
+  if (!r.ok) return { ok: false, trouble: { why: r.why, ...(r.word !== undefined ? { word: r.word } : {}) } }
+  return { ok: true, devices: r.devices, channels: r.channels }
+}
+
+export async function rerootFinish(keep: string[]): Promise<boolean> {
+  const r = await rerooting().rerootFinish(keep)
+  const out = r.dropped ? ` Signed out ${r.dropped === 1 ? "1 device" : `${r.dropped} devices`}.` : ""
+  announce(`Your person key is replaced.${out} Your channels move to the new key as their owners' apps catch up.`)
+  await recovery.load()
+  return true
+}
+
+export const rerootCancel = (): Promise<void> => rerooting().rerootCancel()
 
 const enrolling = () => {
   const b = bridge()

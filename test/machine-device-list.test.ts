@@ -2,9 +2,12 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { certUntil, nextLink, readDeviceList, rootLink, type DeviceLink, type DeviceLinkBody } from "@kiwi/core/devices.ts";
+import { newRoomId } from "@kiwi/core/crypto.ts";
+import { certUntil, checkDevice, checkKeep, nextLink, readDeviceList, rerootLink, rootLink, type DeviceLink, type DeviceLinkBody } from "@kiwi/core/devices.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
-import { loadMachine, newMachine, saveMachine, takeDeviceList, type MachineFile } from "../src/machine.ts";
+import { recoveryKey, recoveryLink } from "@kiwi/core/recovery.ts";
+import { keepProof, loadMachine, newMachine, saveMachine, seatProof, takeDeviceList, type MachineFile } from "../src/machine.ts";
+import { readKeepAsk } from "../src/daemon/protocol.ts";
 
 let home = "";
 const prevHome = process.env.KIWI_HOME;
@@ -73,4 +76,68 @@ test("a computer that never logged in ignores lists", async () => {
   const person = await key("person");
   const desk = await key("desk");
   expect(await takeDeviceList([await rootLink(person, { pk: desk.pk, xpk: desk.xpk!, label: "desk", os: "macOS", as: "desktop" })])).toBeNull();
+});
+
+async function rerooted(person: Identity, links: DeviceLink[], keep: string[]): Promise<DeviceLink[]> {
+  const paper = await recoveryKey(new Uint8Array(32).fill(31));
+  const chain = [await recoveryLink(person, person.pk, null, { pk: paper.pk, xpk: paper.xpk! })];
+  const read = await readDeviceList(links);
+  if (!read.ok) throw new Error(read.why);
+  return [...links, await rerootLink(read.list, paper, chain, await key("next"), keep)];
+}
+
+test("once its person re-roots and keeps it, this computer vouches for its agents' seats; before that, or once dropped, it doesn't (#1519)", async () => {
+  const roomId = newRoomId();
+  const agent = await key("agent");
+  const { person, desk, m, links } = await enrolled();
+  expect(await seatProof(roomId, agent.pk)).toBeNull();
+  const kept = await rerooted(person, links, [desk.pk, m.identity.pk]);
+  expect(await takeDeviceList(kept)).toBe("longer");
+  const proof = await seatProof(roomId, agent.pk);
+  expect(proof).toMatchObject({ links: kept, device: m.identity.pk, version: kept.length });
+  expect(await checkDevice(proof, roomId, agent.pk)).toMatchObject({ person: person.pk, device: { device: m.identity.pk, as: "computer" } });
+  expect(await checkDevice(proof, roomId, (await key("other")).pk)).toBeNull();
+
+  const again = await enrolled();
+  expect(await takeDeviceList(await rerooted(again.person, again.links, [again.desk.pk]))).toBe("revoked");
+  expect(await seatProof(roomId, agent.pk)).toBeNull();
+});
+
+test("a listed computer takes over agents from a forgotten one with keep vouches; one that isn't listed, or never logged in, signs none (T1467)", async () => {
+  const roomId = newRoomId();
+  const [a, b, old] = await Promise.all([key("a"), key("b"), key("old")]);
+  expect(await keepProof(roomId, [{ pk: a.pk, from: old.pk }])).toBeNull();
+  const { person, m, links } = await enrolled();
+  expect(await keepProof(roomId, [])).toBeNull();
+  const got = await keepProof(roomId, [
+    { pk: a.pk, from: old.pk },
+    { pk: b.pk, from: old.pk },
+  ]);
+  expect(got?.links).toEqual(links);
+  expect(got?.keep.device).toBe(m.identity.pk);
+  expect(got?.keep.agents.map((x) => x.pk)).toEqual([a.pk, b.pk]);
+  const claim = { links, device: got!.keep.device, vouch: got!.keep.agents[0]!.vouch };
+  expect(await checkKeep(claim, roomId, a.pk, old.pk)).toMatchObject({ person: person.pk, device: { device: m.identity.pk, as: "computer" } });
+  expect(await checkKeep(claim, roomId, a.pk, m.identity.pk)).toBeNull();
+  expect(await checkKeep(claim, roomId, b.pk, old.pk)).toBeNull();
+  expect(await checkDevice(claim, roomId, a.pk)).toBeNull();
+
+  const again = await enrolled();
+  expect(await takeDeviceList(await grow(again.links, again.desk, { op: "revoke", device: again.m.identity.pk }))).toBe("revoked");
+  expect(await keepProof(roomId, [{ pk: a.pk, from: old.pk }])).toBeNull();
+});
+
+test("the daemon's keep ask takes a room and 1 to 64 agents, each a key and the computer it leaves", () => {
+  const k = "k".repeat(43);
+  const room = "0".repeat(32);
+  expect(readKeepAsk({ room, agents: [{ pk: k, from: k }] })).toEqual({ room, agents: [{ pk: k, from: k }] });
+  for (const bad of [
+    { room, agents: [] },
+    { room: "x", agents: [{ pk: k, from: k }] },
+    { room, agents: [{ pk: k }] },
+    { room, agents: [{ pk: "short", from: k }] },
+    { room, agents: Array.from({ length: 65 }, () => ({ pk: k, from: k })) },
+    { room },
+  ])
+    expect(readKeepAsk(bad)).toBeNull();
 });

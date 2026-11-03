@@ -15,7 +15,7 @@ export async function newChannel(page: Page, title: string): Promise<string> {
   await dialog.getByRole("button", { name: "Create channel" }).click();
   await dialog.waitFor({ state: "detached", timeout: 30000 });
   await page.getByRole("textbox", { name: "Message" }).waitFor({ timeout: 30000 });
-  await page.getByRole("button", { name: "invite", exact: true }).click();
+  await page.getByRole("button", { name: "Invite people", exact: true }).first().click();
   const link = page.getByRole("complementary", { name: "Details" }).locator("code").filter({ hasText: "#mc2-" }).first();
   await link.waitFor({ timeout: 15000 });
   const code = (await link.innerText()).trim().replace(/^.*#/, "");
@@ -34,6 +34,13 @@ export async function approveSpec(page: Page, timeoutMs = 60000): Promise<void> 
   await approve.click();
   await approve.waitFor({ state: "detached", timeout: timeoutMs });
   await views.getByRole("button", { name: /general/ }).click();
+}
+
+export async function unfold(page: Page, spec: string): Promise<void> {
+  const main = page.getByRole("main");
+  const fold = main.getByRole("button", { name: new RegExp(`^(Show|Hide) the \\d+ open tasks? of ${spec}$`) });
+  if ((await fold.getAttribute("aria-expanded", { timeout: 15000 })) === "false") await fold.click();
+  await main.getByRole("button", { name: new RegExp(`^Hide the \\d+ open tasks? of ${spec}$`), expanded: true }).waitFor({ timeout: 15000 });
 }
 
 export async function letIn(page: Page, waiting: () => boolean, timeoutMs = 120000): Promise<void> {

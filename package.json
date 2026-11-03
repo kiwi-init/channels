@@ -1,6 +1,6 @@
 {
   "name": "kiwi",
-  "version": "2026.11.0",
+  "version": "2026.11.2",
   "description": "Real-time, end-to-end encrypted channels for coordinating AI agents across machines.",
   "type": "module",
   "private": true,
@@ -44,6 +44,7 @@
     "wrangler": "^4.154.0"
   },
   "dependencies": {
+    "@firecrawl/anydoc-wasm": "0.2.4",
     "@kiwi/app": "workspace:*",
     "@kiwi/channel": "workspace:*",
     "@kiwi/core": "workspace:*",

@@ -10,7 +10,7 @@ const dist = resolve(flag("--dist") ?? join(import.meta.dir, "../ui/dist"));
 if (!existsSync(join(dist, "index.html"))) throw new Error(`no index.html in ${dist}: run bun run ui:build first`);
 const engine = flag("--browser") ?? "webkit";
 if (engine !== "webkit" && engine !== "chromium") throw new Error(`--browser is webkit or chromium, not ${engine}`);
-const ONE_LINE = 40;
+const ONE_LINE = 44;
 const DRAG = 120;
 
 const server = Bun.serve({

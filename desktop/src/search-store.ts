@@ -20,7 +20,7 @@ const ad = (roomId: string): Uint8Array<ArrayBuffer> => new TextEncoder().encode
 const aes = (key: string): Promise<CryptoKey> => crypto.subtle.importKey("raw", fromB64url(key), "AES-GCM", false, ["encrypt", "decrypt"]);
 
 export async function sealIndex(index: SearchIndex, fed: Fed, key: string, roomId: string): Promise<Uint8Array<ArrayBuffer>> {
-  index.setStamp(stampFor(fed.through));
+  index.setStamp(stampFor(fed));
   index.set("base", JSON.stringify(fed.base));
   const iv = crypto.getRandomValues(new Uint8Array(IV));
   const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: ad(roomId) }, await aes(key), index.bytes()));
@@ -41,12 +41,12 @@ export async function openIndex(sealed: Uint8Array, key: string, roomId: string)
   const index = plain ? SearchIndex.from(plain) : null;
   if (!index) return null;
   const stamp = index.stamp();
-  if (!sameRules(stamp)) {
+  if (!stamp || !sameRules(stamp)) {
     index.close();
     return null;
   }
   const base = JSON.parse(index.get("base") ?? "null") as FoldBase | null;
-  return { index, fed: { base, through: stamp?.through ?? 0 } };
+  return { index, fed: { base, from: stamp.from, through: stamp.through } };
 }
 
 export async function readIndexFile(file: string, key: string, roomId: string): Promise<Loaded | null> {

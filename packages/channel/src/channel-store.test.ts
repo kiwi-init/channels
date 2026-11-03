@@ -24,7 +24,15 @@ async function until(ok: () => boolean): Promise<void> {
 
 type Answer = (...args: unknown[]) => unknown;
 
-function relay(head = 0, opts: { owner?: boolean; answers?: Record<string, Answer> } = {}) {
+function relay(
+  head = 0,
+  opts: {
+    owner?: boolean;
+    answers?: Record<string, Answer>;
+    older?: (before: number, limit: number) => { rows: CachedRow[]; done: boolean };
+    index?: (rows: CachedRow[], from: number) => number | null;
+  } = {},
+) {
   let roster: Member[] = [person("atlas", "pk-atlas")];
   const follows: { since: number; on: (e: FollowEvent) => void; stopped: boolean }[] = [];
   const lent = { emitted: [] as string[], released: 0 };
@@ -63,9 +71,12 @@ function relay(head = 0, opts: { owner?: boolean; answers?: Record<string, Answe
     openRows: () => Promise.resolve([]),
     olderRows: (_code: string, before: number, limit: number) => {
       calls.push({ op: "olderRows", args: [before, limit] });
-      return Promise.resolve({ rows: [], done: true });
+      return Promise.resolve(opts.older?.(before, limit) ?? { rows: [], done: true });
     },
-    indexRows: () => Promise.resolve(null),
+    indexRows: (_code: string, rows: CachedRow[], _inputs: unknown, from: number) => {
+      calls.push({ op: "indexRows", args: [rows.length, from] });
+      return Promise.resolve(opts.index?.(rows, from) ?? null);
+    },
     keep: (_code: string, state: object) => {
       kept.push({ at: Date.now(), state });
       return Promise.resolve(null);
@@ -384,16 +395,22 @@ describe("a person's own presence (T560)", () => {
 });
 
 describe("history from the relay is fetched only when asked (T977, #1944)", () => {
+  const row = (seq: number): CachedRow => ({ seq, e: 1, iv: "iv", ct: "ct" });
   function archive(from: number, to: number): HistoryDb {
-    const rows = Array.from({ length: to - from + 1 }, (_, i): CachedRow => ({ seq: from + i, e: 1, iv: "iv", ct: "ct" }));
+    let rows = Array.from({ length: to - from + 1 }, (_, i): CachedRow => row(from + i));
+    let floor = false;
     return {
       put: async () => {},
-      putRows: async () => {},
+      putRows: async (_room, _pk, more) => {
+        rows = [...more, ...rows].sort((a, b) => a.seq - b.seq);
+      },
       newest: async (_room, _pk, count) => rows.slice(-count),
       after: async (_room, _pk, seq, count) => rows.filter((r) => r.seq > seq).slice(0, count),
       oldest: async () => rows[0]?.seq ?? null,
-      floor: async () => false,
-      putFloor: async () => {},
+      floor: async () => floor,
+      putFloor: async () => {
+        floor = true;
+      },
       trimAbove: async () => {},
       drop: async () => {},
       dropAll: async () => {},
@@ -417,6 +434,47 @@ describe("history from the relay is fetched only when asked (T977, #1944)", () =
       await sleep(300);
       expect(r.called("olderRows")).toEqual([]);
       close();
+    } finally {
+      useHistoryDb(null);
+    }
+  });
+
+  test("a click fetches older pages down from the archive, indexes from the new oldest, and a second click joins the first", async () => {
+    useHistoryDb(archive(1_801, 1_900));
+    try {
+      let through = 0;
+      const r = relay(1_900, {
+        older: (before, limit) => {
+          const since = Math.max(0, before - 1 - limit);
+          return { rows: Array.from({ length: before - 1 - since }, (_, i) => row(since + 1 + i)), done: since === 0 };
+        },
+        index: (rows, from) => {
+          if (rows.length === 0 && from < through) through = from - 1;
+          through = Math.max(through, rows.at(-1)?.seq ?? through);
+          return through;
+        },
+      });
+      const { store, close } = await opened(r);
+      await until(() => r.called("indexRows").length > 0);
+      expect(await store.older.reach()).toEqual({ whole: false, oldest: 1_801, at: null });
+      const got: number[] = [];
+      const one = store.older.fetch((n) => got.push(n));
+      const two = store.older.fetch();
+      expect(await one).toEqual({ whole: true, oldest: 1, at: null });
+      expect(await two).toEqual({ whole: true, oldest: 1, at: null });
+      expect(r.called("olderRows").map((c) => c.args)).toEqual([
+        [1_801, 500],
+        [1_301, 500],
+        [801, 500],
+        [301, 500],
+      ]);
+      expect(got).toEqual([500, 1_000, 1_500, 2_000]);
+      expect(r.called("indexRows").some((c) => c.args[0] === 0 && c.args[1] === 1)).toBe(true);
+      expect(through).toBe(1_900);
+      expect(await store.older.fetch()).toEqual({ whole: true, oldest: 1, at: null });
+      expect(r.called("olderRows").length).toBe(4);
+      close();
+      await expect(store.older.fetch()).rejects.toThrow("open the channel first");
     } finally {
       useHistoryDb(null);
     }

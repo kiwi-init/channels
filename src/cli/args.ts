@@ -46,6 +46,7 @@ const parsed = parseArgs({
     webhook: { type: "string" },
     secret: { type: "string" },
     image: { type: "string", multiple: true },
+    attach: { type: "string", multiple: true },
     option: { type: "string", multiple: true },
     holds: { type: "string" },
     close: { type: "string" },

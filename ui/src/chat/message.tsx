@@ -120,16 +120,6 @@ function Spot({ code, img }: { code: string; img: ImageSpot }) {
   )
 }
 
-function Earlier() {
-  return (
-    <p className="msg-quote is-earlier">
-      <Icon name="reply" size={12} />
-      <span className="msg-quote-who">Earlier message</span>
-      <span className="msg-quote-text">no longer kept here</span>
-    </p>
-  )
-}
-
 function Quote({ quoted, who, names, onClick }: { quoted: Message; who: string; names: ReadonlyMap<string, string>; onClick?: () => void }) {
   const line = useMemo(() => withNames(quoted.text, names, preview), [quoted.text, names])
   return (
@@ -150,6 +140,7 @@ interface RowProps {
   inThread?: boolean
   quote?: Message | number
   onQuote?: (seq: number) => void
+  older?: boolean
 }
 
 const face = (p: Person | undefined): string => (p ? [p.kind, p.harness, p.presence, p.color, p.role, p.runs].join("\n") : "")
@@ -174,7 +165,7 @@ function sameRow(a: RowProps, b: RowProps): boolean {
   )
 }
 
-export const MessageRow = memo(function MessageRow({ channel, m, compact, names, tasks, inThread, quote, onQuote }: RowProps) {
+export const MessageRow = memo(function MessageRow({ channel, m, compact, names, tasks, inThread, quote, onQuote, older }: RowProps) {
   const { actions, go } = useAct()
   const replying = useReplying()
   const [image, setImage] = useState<{ url: string; alt: string } | null>(null)
@@ -186,6 +177,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
     },
     [onQuote, go, channel.messages]
   )
+  const quoting = !!replying && m.where.kind !== "theirs" && (!!inThread || m.where.kind === "task")
   const who = memberOf(channel, m.from)
   const editing = useEditing(channel.code, m.seq)
   const ask = m.ask ? channel.asks.find((a) => a.id === m.ask) : undefined
@@ -204,8 +196,8 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
   const onMenu = (e: MouseEvent<HTMLElement>) => {
     if (m.pending || m.failed !== undefined || m.leftOut || m.deleted || editing) return
     const target = e.target
-    const reply = replying && m.where.kind !== "theirs" ? () => replying.set(m) : null
-    showMenu(e, "Message", (x) => x.messageGroups({ channel, go }, m, target, { openImage, reply, inThread: !!inThread }))
+    const reply = replying && quoting ? () => replying.set(m) : null
+    showMenu(e, "Message", (x) => x.messageGroups({ channel, go }, m, target, { openImage, reply, inThread: !!inThread || !!older }))
   }
 
   return (
@@ -230,13 +222,12 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
             <button
               type="button"
               className="msg-name"
+              title={who?.role && who.role.toLowerCase() !== nickname(channel, m.from).toLowerCase() ? who.role : undefined}
               onClick={() => go({ to: "panel", panel: { kind: "person", name: m.from } })}
               onContextMenu={(e) => who && showMenu(e, nickname(channel, m.from), (x) => [x.personItems({ channel, go }, who)])}
             >
               {nickname(channel, m.from)}
             </button>
-            {who?.role && who.role.toLowerCase() !== nickname(channel, m.from).toLowerCase() && <span className="msg-role">{who.role}</span>}
-            {who?.runs && <span className="msg-runs">{who.runs}</span>}
             {m.said && <span className={cx("msg-said", `is-${m.said.tone}`)}>{m.said.text}</span>}
             <time className="msg-time" dateTime={new Date(m.at).toISOString()}>
               {clock(m.at)}
@@ -248,7 +239,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
             )}
           </p>
         )}
-        {typeof quote === "number" ? <Earlier /> : quote && <Quote quoted={quote} who={nickname(channel, quote.from)} names={names} onClick={onQuote ? () => onQuote(quote.seq) : undefined} />}
+        {typeof quote === "object" && <Quote quoted={quote} who={nickname(channel, quote.from)} names={names} onClick={onQuote ? () => onQuote(quote.seq) : undefined} />}
         {m.deleted ? (
           <p className="msg-deleted">Message deleted</p>
         ) : editing ? (
@@ -354,7 +345,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
                 {e}
               </button>
             ))}
-          {m.where.kind !== "theirs" && (
+          {m.where.kind !== "theirs" && !older && (
             <Suspense fallback={null}>
               <Gifs channel={channel} m={m} />
             </Suspense>
@@ -364,13 +355,19 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
               <Changes kind="tools" channel={channel} m={m} />
             </Suspense>
           )}
-          {replying && m.where.kind !== "theirs" && (
+          {replying && quoting && (
             <button type="button" className="msg-tool" aria-label="Reply" title="Reply" onClick={() => replying.set(m)}>
               <Icon name="reply" size={14} />
             </button>
           )}
-          {!inThread && (
-            <button type="button" className="msg-tool" aria-label="Open thread" title="Open thread" onClick={() => go({ to: "panel", panel: { kind: "thread", seq: m.inThread ?? m.seq } })}>
+          {!inThread && !older && (
+            <button
+              type="button"
+              className="msg-tool"
+              aria-label={m.where.kind === "task" ? "Open thread" : "Reply in thread"}
+              title={m.where.kind === "task" ? "Open thread" : "Reply in thread"}
+              onClick={() => go({ to: "panel", panel: { kind: "thread", seq: m.inThread ?? m.seq } })}
+            >
               <Icon name="thread" size={14} />
             </button>
           )}

@@ -12,9 +12,9 @@ export interface CachedRow {
 }
 
 export async function packRow(key: string, roomId: string, epoch: number, message: Message): Promise<CachedRow> {
-  const { seq, rts, sigOk, ...payload } = asSent(message);
-  void sigOk;
-  const sealed = await seal(key, roomId, { seq, msg: payload });
+  const { seq, rts, sigOk, opened, proven, sealed: room, ...payload } = asSent(message);
+  void [sigOk, opened, proven];
+  const sealed = await seal(key, roomId, { seq, msg: payload, ...(room ? { sealed: room } : {}) });
   return { seq, ...(rts !== undefined ? { rts } : {}), e: epoch, iv: sealed.iv, ct: sealed.ct };
 }
 
@@ -40,16 +40,29 @@ async function reopen(seq: number, raw: { ts: number; e: number; iv: string; ct:
   return wellFormed(p) ? received(p, seq, raw.ts, await verify(p)) : { seq, unread: true };
 }
 
+function sealedIn(x: unknown): x is { room: string; n: number } {
+  if (!x || typeof x !== "object") return false;
+  const r = x as Record<string, unknown>;
+  return typeof r.room === "string" && r.room.length > 0 && r.room.length <= 100 && Number.isSafeInteger(r.n) && (r.n as number) > 0;
+}
+
 export async function openRow(row: CachedRow, roomId: string, keys: Record<string, string>): Promise<Message | Unread | null> {
   const epochs = [String(row.e), ...Object.keys(keys).filter((e) => e !== String(row.e))];
   for (const e of epochs) {
     const key = keys[e];
     if (!key) continue;
-    const opened = (await open(key, roomId, row.iv, row.ct)) as { seq?: unknown; msg?: unknown; raw?: unknown } | null;
+    const opened = (await open(key, roomId, row.iv, row.ct)) as { seq?: unknown; msg?: unknown; raw?: unknown; sealed?: unknown } | null;
     if (!opened || opened.seq !== row.seq) continue;
     if (wellFormedRaw(opened.raw)) return reopen(row.seq, opened.raw, roomId, keys);
-    if (!wellFormed(opened.msg)) continue;
-    return received(opened.msg, row.seq, row.rts, await verify(opened.msg));
+    if (!opened.msg || typeof opened.msg !== "object") continue;
+    const msg = { ...(opened.msg as Record<string, unknown>) };
+    const room = sealedIn(opened.sealed) ? opened.sealed : sealedIn(msg.sealed) ? msg.sealed : null;
+    delete msg.opened;
+    delete msg.proven;
+    delete msg.sealed;
+    if (!wellFormed(msg)) continue;
+    const m = received(msg, row.seq, row.rts, await verify(msg));
+    return room ? { ...m, room: room.room, sealed: room } : m;
   }
   return null;
 }

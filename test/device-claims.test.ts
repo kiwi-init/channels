@@ -3,14 +3,14 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Channel } from "@kiwi/core/client.ts";
-import { cutReason } from "@kiwi/core/client/members.ts";
+import { cutReason, REPROVE_MS, REPROVE_WHY } from "@kiwi/core/client/members.ts";
 import { describeEvent } from "@kiwi/core/format.ts";
-import { certUntil, claimDevice, newestLists, nextLink, readDeviceList, rerootLink, rootLink, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
+import { certUntil, claimDevice, newestLists, nextLink, readDeviceList, rerootLink, rootLink, vouchKeep, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
 import { claimComputer, provePerson } from "@kiwi/core/person.ts";
 import { recoveryKey, recoveryLink } from "@kiwi/core/recovery.ts";
 import { startRelay } from "../src/relay/bun.ts";
-import { joinAgent, joinPerson, pairComputer, setupChannel, type OwnerSetup } from "./owner.ts";
+import { handshake, joinAgent, joinPerson, pairComputer, setupChannel, type OwnerSetup } from "./owner.ts";
 
 setDefaultTimeout(30_000);
 
@@ -212,6 +212,50 @@ describe("a revoked device is cut out, and the newest list decides (T641)", () =
   });
 });
 
+describe("forgetting a computer keeps the agents the person's current computer vouches for (T1467)", () => {
+  test("a keep from a listed computer moves the agent to it; a keep from a desktop, another person or the forgotten computer, for another key or another computer, or a seat proof doesn't, and no keep cuts as before", async () => {
+    const s = await setupChannel(relay);
+    const { links, desk } = await listWithPhone(s.person);
+    const add = (d: Identity, label: string) => ({ op: "add" as const, device: d.pk, dxpk: d.xpk!, label, os: "macOS", as: "computer" as const, approve: false, until: certUntil(Date.now()) });
+    const old = await device("old-mac");
+    const mac = await device("mac");
+    const all = await grow(await grow(links, desk, add(old, "old-mac")), desk, add(mac, "mac"));
+    const joined: Record<string, Identity> = {};
+    for (const name of ["tortoise", "lost", "via-desk", "via-bob", "via-old", "swapped", "elsewhere", "seat-proof"]) {
+      const a = await ask(s, old, all, name);
+      expect(await letThrough(s, a)).toHaveLength(1);
+      joined[name] = a.id;
+    }
+    const bob = await listWithPhone(await generateIdentity("bob"));
+    const bobMac = await device("bob-mac");
+    const bobs = await grow(bob.links, bob.desk, add(bobMac, "bob-mac"));
+    const pk = (name: string) => joined[name]!.pk;
+    const keeps = {
+      [pk("tortoise")]: await vouchKeep(mac, all, s.roomId, pk("tortoise"), old.pk),
+      [pk("via-desk")]: await vouchKeep(desk, all, s.roomId, pk("via-desk"), old.pk),
+      [pk("via-bob")]: await vouchKeep(bobMac, bobs, s.roomId, pk("via-bob"), old.pk),
+      [pk("via-old")]: await vouchKeep(old, all, s.roomId, pk("via-old"), old.pk),
+      [pk("swapped")]: await vouchKeep(mac, all, s.roomId, pk("tortoise"), old.pk),
+      [pk("elsewhere")]: await vouchKeep(mac, all, s.roomId, pk("elsewhere"), mac.pk),
+      [pk("seat-proof")]: await claimDevice(mac, all, s.roomId, pk("seat-proof")),
+    };
+
+    const epoch = s.ownerCh.access.epoch;
+    const forgot = await listOf(await grow(all, desk, { op: "revoke", device: old.pk }));
+    expect((await s.ownerCh.cutDevices(forgot, keeps)).map((m) => m.name).sort()).toEqual(["elsewhere", "lost", "seat-proof", "swapped", "via-bob", "via-desk", "via-old"]);
+    expect(s.ownerCh.access.epoch).toBe(epoch + 1);
+    const tortoise = (await s.ownerCh.members()).find((m) => m.pk === pk("tortoise"))!;
+    expect(tortoise).toMatchObject({ active: true, kind: "agent", from: { pk: mac.pk, label: "mac" }, sponsor: { user: s.person.pk } });
+    expect(cutReason(tortoise, forgot)).toBeNull();
+    expect(await s.ownerCh.cutDevices(forgot, keeps)).toEqual([]);
+    expect((await s.ownerCh.history(0)).messages.some((m) => m.ev?.op === "member.gone" && m.ev.member === "tortoise")).toBe(false);
+
+    const both = await listOf(await grow(await grow(all, desk, { op: "revoke", device: old.pk }), desk, { op: "revoke", device: mac.pk }));
+    expect((await s.ownerCh.cutDevices(both, keeps)).map((m) => m.name)).toEqual(["tortoise"]);
+    await s.ownerCh.close();
+  });
+});
+
 describe("a member's list posted into the channel cuts their forgotten phone (T1006)", () => {
   test("bob's desktop posts the revoke, and the owner reads it from the log and cuts bob's phone", async () => {
     const s = await setupChannel(relay);
@@ -233,7 +277,7 @@ describe("a member's list posted into the channel cuts their forgotten phone (T1
 });
 
 describe("a re-root cuts what the old person key vouched for (T827)", () => {
-  test("the owner cuts the devices left out and the computers only an old cert vouched for, and old-key claims stop counting", async () => {
+  test("the owner cuts the devices left out at once and the computers only an old cert vouched for after the window, and old-key claims stop counting", async () => {
     const s = await setupChannel(relay);
     const { links, desk, phone } = await listWithPhone(s.person);
     const box = await device("box");
@@ -250,8 +294,12 @@ describe("a re-root cuts what the old person key vouched for (T827)", () => {
     const next = await device("next");
     const rerooted = await listOf([...all, await rerootLink(await listOf(all), paper, chain, next, [desk.pk, box.pk])]);
     expect(rerooted.revoked).toEqual([phone.pk]);
-    expect((await s.ownerCh.cutDevices(rerooted)).map((m) => m.name).sort()).toEqual(["certified", "owner-2"]);
-    expect((await gone(s)).get("certified")).toMatch(/^certified's computer( ".+")? isn't on .+'s devices since they replaced their person key$/);
+    expect((await s.ownerCh.cutDevices(rerooted)).map((m) => m.name)).toEqual(["owner-2"]);
+    const at = rerooted.reroots[0]!.at;
+    expect((await s.ownerCh.reprove(rerooted, {}, at + 1000)).waiting.map((m) => m.name)).toEqual(["certified"]);
+    expect((await s.ownerCh.members()).find((m) => m.name === "certified")?.active).toBe(true);
+    expect((await s.ownerCh.reprove(rerooted, {}, at + REPROVE_MS)).cut.map((m) => m.name)).toEqual(["certified"]);
+    expect((await gone(s)).get("certified")).toMatch(/^certified's computer( ".+")? wasn't put back on .+'s devices in the 7 days after they replaced their person key$/);
     const active = (await s.ownerCh.members()).filter((m) => m.active).map((m) => m.name);
     expect(active).toContain("listed");
     expect(active).not.toContain("certified");
@@ -267,6 +315,149 @@ describe("a re-root cuts what the old person key vouched for (T827)", () => {
     expect(reqs.find((r) => r.id === byCert.requestId)?.computer).toBeUndefined();
     const before = await s.ownerCh.requests({ person: s.person.pk });
     expect(before.find((r) => r.id === byPerson.requestId)?.person).toBe(s.person.pk);
+    await s.ownerCh.close();
+  });
+});
+
+describe("an agent on a computer the person puts back on their list after a re-root keeps its seat", () => {
+  test("the app posts the re-rooted list before it lists its computer again, and the agents wait for it instead of being cut", async () => {
+    const s = await setupChannel(relay);
+    const { links, desk } = await listWithPhone(s.person);
+    const paired = await pairComputer(s.person);
+    const agent = await joinAgent(s, "nova", paired);
+    expect(agent.member.from?.pk).toBe(paired.machine.pk);
+
+    const paper = await recoveryKey(new Uint8Array(32).fill(25));
+    const chain = [await recoveryLink(s.person, s.person.pk, null, { pk: paper.pk, xpk: paper.xpk! })];
+    const next = await device("next");
+    const all = [...links, await rerootLink(await listOf(links), paper, chain, next, [desk.pk])];
+    const rerooted = await listOf(all);
+    const at = rerooted.reroots[0]!.at;
+    expect(await s.ownerCh.cutDevices(rerooted)).toEqual([]);
+    expect((await s.ownerCh.reprove(rerooted, {}, at + 1000)).waiting.map((m) => m.name)).toEqual(["nova"]);
+
+    const relisted = await listOf(
+      await grow(all, next, { op: "add", device: paired.machine.pk, dxpk: paired.machine.xpk!, label: "box", os: "darwin", as: "computer", approve: false, until: certUntil(Date.now()) }),
+    );
+    expect(await s.ownerCh.cutDevices(relisted)).toEqual([]);
+    expect(await s.ownerCh.reprove(relisted, {}, at + REPROVE_MS)).toEqual({ proved: [], cut: [], waiting: [] });
+    expect((await s.ownerCh.members()).find((m) => m.pk === agent.id.pk)?.active).toBe(true);
+    await s.ownerCh.close();
+  });
+});
+
+describe("after a re-root, seats joined with an old person claim re-prove (T967)", () => {
+  test("a kept device's proof re-signs its seat, a forged or forgotten one's proof doesn't, and seats left unproven are cut after the window", async () => {
+    const s = await setupChannel(relay);
+    const alice = await generateIdentity("alice");
+    const { links, desk, phone: laptop } = await listWithPhone(alice);
+    const onDesk = await joinPerson(s, "alice", alice);
+    const onLaptop = await joinPerson(s, "alice-laptop", alice);
+    const thief = await joinPerson(s, "thief", alice);
+    expect(onDesk.member).toMatchObject({ kind: "human", person: alice.pk });
+    expect(onDesk.member.device).toBeUndefined();
+
+    const paper = await recoveryKey(new Uint8Array(32).fill(23));
+    const chain = [await recoveryLink(alice, alice.pk, null, { pk: paper.pk, xpk: paper.xpk! })];
+    const next = await device("next");
+    const all = [...links, await rerootLink(await listOf(links), paper, chain, next, [desk.pk])];
+    const rerooted = await listOf(all);
+    const proofs = {
+      [onDesk.id.pk]: await claimDevice(desk, all, s.roomId, onDesk.id.pk),
+      [onLaptop.id.pk]: await claimDevice(laptop, links, s.roomId, onLaptop.id.pk),
+      [thief.id.pk]: await claimDevice(desk, all, s.roomId, onDesk.id.pk),
+    };
+    const at = rerooted.reroots[0]!.at;
+
+    const first = await s.ownerCh.reprove(rerooted, proofs, at + 1000);
+    expect(first.proved.map((m) => m.name)).toEqual(["alice"]);
+    expect(first.waiting.map((m) => m.name).sort()).toEqual(["alice-laptop", "thief"]);
+    expect(first.cut).toEqual([]);
+    const proved = (await s.ownerCh.members()).find((m) => m.pk === onDesk.id.pk);
+    expect(proved).toMatchObject({ active: true, person: alice.pk, device: { pk: desk.pk, label: "desk", as: "desktop" } });
+
+    const later = await s.ownerCh.reprove(rerooted, proofs, at + REPROVE_MS);
+    expect(later.proved).toEqual([]);
+    expect(later.cut.map((m) => m.name).sort()).toEqual(["alice-laptop", "thief"]);
+    const active = (await s.ownerCh.members()).filter((m) => m.active).map((m) => m.name);
+    expect(active).toContain("alice");
+    expect(active).not.toContain("alice-laptop");
+    expect(active).not.toContain("thief");
+
+    const tab = await device("tab");
+    const grown = await grow(all, next, { op: "add", device: tab.pk, dxpk: tab.xpk!, label: "tab", os: "iPadOS", as: "phone", approve: false, until: certUntil(Date.now()) });
+    const joiner = await ask(s, tab, grown, "alice");
+    const req = (await s.ownerCh.requests({ person: s.person.pk, lists: new Map([[alice.pk, await listOf(grown)]]) })).find((r) => r.id === joiner.requestId);
+    expect(req?.device).toMatchObject({ person: alice.pk, joinsOnItsOwn: true, handle: "alice" });
+    await s.ownerCh.close();
+  });
+
+  test("an agent that joined with no person gets its person back from its computer's vouch, and nothing else links it (#1519)", async () => {
+    const s = await setupChannel(relay);
+    const alice = await generateIdentity("alice");
+    const { links, desk } = await listWithPhone(alice);
+    const mac = await device("mac");
+    const old = await device("old");
+    const add = (d: Identity, label: string) => ({ op: "add" as const, device: d.pk, dxpk: d.xpk!, label, os: "macOS", as: "computer" as const, approve: false, until: certUntil(Date.now()) });
+    const grown = await grow(await grow(links, desk, add(mac, "mac")), desk, add(old, "old"));
+    await joinPerson(s, "alice", alice);
+    const bare = async (name: string) => {
+      const id = await generateIdentity(name);
+      const { requestId } = await Channel.requestJoin(relay, s.code, id, { name });
+      const req = (await handshake(s, [{ id, requestId }])).find((r) => r.id === requestId)!;
+      await s.ownerCh.approve(req, undefined, { person: s.person.pk });
+      return id;
+    };
+    const mole = await bare("mole");
+    const viaDesk = await bare("via-desk");
+    const viaOld = await bare("via-old");
+    const stranger = await bare("stranger");
+    expect((await s.ownerCh.members()).find((m) => m.pk === mole.pk)?.sponsor).toBeUndefined();
+
+    const paper = await recoveryKey(new Uint8Array(32).fill(29));
+    const chain = [await recoveryLink(alice, alice.pk, null, { pk: paper.pk, xpk: paper.xpk! })];
+    const all = [...grown, await rerootLink(await listOf(grown), paper, chain, await device("next"), [desk.pk, mac.pk])];
+    const rerooted = await listOf(all);
+    const bob = await listWithPhone(await generateIdentity("bob"));
+    const bobMac = await device("bob-mac");
+    const bobs = await grow(bob.links, bob.desk, add(bobMac, "bob-mac"));
+    const proofs = {
+      [mole.pk]: await claimDevice(mac, all, s.roomId, mole.pk),
+      [viaDesk.pk]: await claimDevice(desk, all, s.roomId, viaDesk.pk),
+      [viaOld.pk]: await claimDevice(old, grown, s.roomId, viaOld.pk),
+      [stranger.pk]: await claimDevice(bobMac, bobs, s.roomId, stranger.pk),
+    };
+    const at = rerooted.reroots[0]!.at;
+
+    const got = await s.ownerCh.reprove(rerooted, proofs, at + 1000);
+    expect(got.proved.map((m) => m.name)).toEqual(["mole"]);
+    expect(got.waiting.map((m) => m.name)).toEqual(["alice"]);
+    const members = await s.ownerCh.members();
+    expect(members.find((m) => m.pk === mole.pk)).toMatchObject({ active: true, kind: "agent", sponsor: { user: alice.pk, name: "alice", handle: "alice" }, from: { pk: mac.pk, label: "mac" } });
+    for (const id of [viaDesk, viaOld, stranger]) expect(members.find((m) => m.pk === id.pk)?.sponsor).toBeUndefined();
+    expect(
+      cutReason(
+        members.find((m) => m.pk === mole.pk)!,
+        rerooted,
+      ),
+    ).toBeNull();
+
+    const later = await s.ownerCh.reprove(rerooted, proofs, at + REPROVE_MS);
+    expect(later.proved).toEqual([]);
+    expect(later.cut.map((m) => [m.name, m.why])).toEqual([["alice", REPROVE_WHY]]);
+    const active = (await s.ownerCh.members()).filter((m) => m.active).map((m) => m.name);
+    for (const name of ["mole", "via-desk", "via-old", "stranger"]) expect(active).toContain(name);
+    const said = (await s.ownerCh.history(0)).messages.filter((m) => m.ev?.op === "member.gone").map((m) => m.body);
+    expect(said).toEqual([`removed alice: ${REPROVE_WHY}`]);
+    await s.ownerCh.close();
+  });
+
+  test("a list without a re-root proves nothing and cuts nothing", async () => {
+    const s = await setupChannel(relay);
+    const alice = await generateIdentity("alice");
+    const { links } = await listWithPhone(alice);
+    await joinPerson(s, "alice", alice);
+    expect(await s.ownerCh.reprove(await listOf(links), {}, Date.now() + REPROVE_MS)).toEqual({ proved: [], cut: [], waiting: [] });
     await s.ownerCh.close();
   });
 });

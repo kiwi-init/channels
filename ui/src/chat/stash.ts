@@ -55,6 +55,10 @@ function put(key: string, list: readonly Stashed[]): void {
   keep(next)
 }
 
+export function stashText(key: string, text: string): void {
+  put(key, [{ text, at: Date.now() }, ...(stashes.get()[key] ?? [])])
+}
+
 export function useStash(key: string) {
   const all = useSyncExternalStore(stashes.subscribe, stashes.get)
   const list = all[key] ?? (STASH_SHOT && key.includes(`"general"`) ? DEMO : NONE)

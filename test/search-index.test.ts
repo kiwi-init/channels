@@ -9,7 +9,7 @@ import type { Roster } from "@kiwi/core/state.ts";
 import { SearchCore } from "../desktop/src/search-core.ts";
 import type { FoldInputs, SearchAsk, SearchReply } from "../desktop/src/search-types.ts";
 import { SearchHost, type SearchWorker } from "../desktop/src/search-host.ts";
-import { SearchIndex } from "../desktop/src/search-index.ts";
+import { SearchIndex, type IndexStamp } from "../desktop/src/search-index.ts";
 import { openIndex, sealIndex } from "../desktop/src/search-store.ts";
 
 const dir = mkdtempSync(join(tmpdir(), "kiwi-search-"));
@@ -29,9 +29,9 @@ describe("the index (T977)", () => {
   test("finds words by prefix and without accents, only in the rooms asked for", () => {
     const index = SearchIndex.empty();
     index.put([
-      { seq: 1, room: "general", from: "jow", text: "A relay ficou lento ontem" },
-      { seq: 2, room: "r-ops", from: "win", text: "relay restarted, latência normal" },
-      { seq: 3, room: "general", from: "win", text: "unrelated" },
+      { seq: 1, room: "general", from: "jow", text: "A relay ficou lento ontem", at: 0 },
+      { seq: 2, room: "r-ops", from: "win", text: "relay restarted, latência normal", at: 0 },
+      { seq: 3, room: "general", from: "win", text: "unrelated", at: 0 },
     ]);
     expect(index.search("relay", ["general"], 10).map((h) => h.seq)).toEqual([1]);
     expect(
@@ -46,18 +46,28 @@ describe("the index (T977)", () => {
 
   test("a query is words, never FTS syntax, whatever it holds", () => {
     const index = SearchIndex.empty();
-    index.put([{ seq: 1, room: "general", from: "jow", text: "near or not" }]);
+    index.put([{ seq: 1, room: "general", from: "jow", text: "near or not", at: 0 }]);
     for (const q of ['"', "NEAR(a b)", "near OR", "-not", "*", "room:general", "a AND (b", "'; DROP TABLE hits; --", "^near", ""]) {
       expect(() => index.search(q, ["general"], 10)).not.toThrow();
     }
     expect(index.search("NEAR(", ["general"], 10).map((h) => h.seq)).toEqual([1]);
   });
 
+  test("the stretch around a message comes back in order, only from rooms asked for and without what was dropped", () => {
+    const index = SearchIndex.empty();
+    index.put(Array.from({ length: 30 }, (_, i) => ({ seq: i + 1, room: i % 5 === 0 ? "r-private" : "general", from: "jow", text: `line ${i + 1}`, at: i })));
+    index.drop([12]);
+    const near = index.around(10, ["general"], 3);
+    expect(near.map((h) => h.seq)).toEqual([7, 8, 9, 10, 13]);
+    expect(near[0]).toMatchObject({ room: "general", from: "jow", text: "line 7", at: 6 });
+    expect(index.around(10, [], 3)).toEqual([]);
+  });
+
   test("an edit replaces the text, a delete and a room's removal drop it", () => {
     const index = SearchIndex.empty();
     index.put([
-      { seq: 1, room: "general", from: "jow", text: "first draft" },
-      { seq: 2, room: "r-x", from: "jow", text: "secret plan" },
+      { seq: 1, room: "general", from: "jow", text: "first draft", at: 0 },
+      { seq: 2, room: "r-x", from: "jow", text: "secret plan", at: 0 },
     ]);
     index.retext(1, "final wording");
     expect(index.search("draft", ["general"], 10)).toEqual([]);
@@ -73,23 +83,25 @@ describe("the sealed index file (T977)", () => {
   test("rests as ciphertext, opens only with its key and its room, and keeps the fold base", async () => {
     const k = key();
     const index = SearchIndex.empty();
-    index.put([{ seq: 7, room: "general", from: "jow", text: "PLAINTEXT-SENTINEL words" }]);
-    const sealed = await sealIndex(index, { base: null, through: 7 }, k, ROOM);
+    index.put([{ seq: 7, room: "general", from: "jow", text: "PLAINTEXT-SENTINEL words", at: 70 }]);
+    const sealed = await sealIndex(index, { base: null, from: 1, through: 7 }, k, ROOM);
     expect(Buffer.from(sealed).includes(Buffer.from("PLAINTEXT-SENTINEL"))).toBe(false);
     expect(await openIndex(sealed, key(), ROOM)).toBeNull();
     expect(await openIndex(sealed, k, "e".repeat(32))).toBeNull();
     const back = await openIndex(sealed, k, ROOM);
     expect(back?.fed.through).toBe(7);
-    expect(back?.index.search("sentinel", ["general"], 5).map((h) => h.seq)).toEqual([7]);
+    expect(back?.index.search("sentinel", ["general"], 5)).toEqual([{ seq: 7, rank: expect.any(Number), room: "general", from: "jow", text: "PLAINTEXT-SENTINEL words", at: 70 }]);
   });
 
-  test("an index from other fold rules is thrown away, never mixed", async () => {
-    const k = key();
-    const index = SearchIndex.empty();
-    const stamp = index.setStamp.bind(index);
-    index.setStamp = (s) => stamp({ ...s, rules: s.rules - 1 });
-    const sealed = await sealIndex(index, { base: null, through: 3 }, k, ROOM);
-    expect(await openIndex(sealed, k, ROOM)).toBeNull();
+  test("an index from other fold rules or another file layout is thrown away, never mixed", async () => {
+    for (const change of [(s: IndexStamp) => ({ ...s, rules: s.rules - 1 }), (s: IndexStamp) => ({ ...s, schema: s.schema - 1 })]) {
+      const k = key();
+      const index = SearchIndex.empty();
+      const stamp = index.setStamp.bind(index);
+      index.setStamp = (s) => stamp(change(s));
+      const sealed = await sealIndex(index, { base: null, from: 1, through: 3 }, k, ROOM);
+      expect(await openIndex(sealed, k, ROOM)).toBeNull();
+    }
   });
 });
 
@@ -99,15 +111,40 @@ describe("the worker's core (T977)", () => {
     const k = key();
     const a = new SearchCore();
     expect(await a.handle({ id: 1, op: "open", code: "c", file, key: k, roomId: ROOM })).toEqual({ through: 0 });
-    await a.handle({ id: 2, op: "feed", code: "c", messages: lines(1, 300), inputs });
+    await a.handle({ id: 2, op: "feed", code: "c", messages: lines(1, 300), inputs, from: 1 });
     expect(readFileSync(file).includes(Buffer.from("archive"))).toBe(false);
     const b = new SearchCore();
     expect(await b.handle({ id: 1, op: "open", code: "c", file, key: k, roomId: ROOM })).toEqual({ through: 300 });
-    expect(await b.handle({ id: 2, op: "feed", code: "c", messages: lines(250, 400), inputs })).toEqual({ through: 400 });
+    expect(await b.handle({ id: 2, op: "feed", code: "c", messages: lines(250, 400), inputs, from: 250 })).toEqual({ through: 400 });
     const found = await b.handle({ id: 3, op: "search", code: "c", query: "note", rooms: ["general"], limit: 500 });
     expect(found && "hits" in found ? found.hits.length : 0).toBe(400);
     await b.handle({ id: 4, op: "forget", code: "c" });
     expect(existsSync(file)).toBe(false);
+  });
+
+  test("rows from below the index fold it again from there, so a later delete hides the older message", async () => {
+    const core = new SearchCore();
+    await core.handle({ id: 1, op: "open", code: "c", file: join(dir, "lower.idx"), key: key(), roomId: ROOM });
+    const gone = { ...line(201, ""), kind: "event", ev: { op: "msg.delete", seq: 50 } } as Message;
+    const hits = async (query: string) => {
+      const found = await core.handle({ id: 9, op: "search", code: "c", query, rooms: ["general"], limit: 500 });
+      return found && "hits" in found ? found.hits.map((h) => h.seq) : [];
+    };
+    expect(await core.handle({ id: 2, op: "feed", code: "c", messages: [...lines(101, 200), gone], inputs, from: 101 })).toEqual({ through: 201 });
+    expect((await hits("note")).length).toBe(100);
+    expect(await core.handle({ id: 3, op: "feed", code: "c", messages: [...lines(1, 200), gone], inputs, from: 1 })).toEqual({ through: 201 });
+    expect((await hits("note")).length).toBe(199);
+    expect(await hits("50")).toEqual([]);
+    expect(await hits("49")).toEqual([49]);
+  });
+
+  test("a feed that skips past what's indexed starts over instead of leaving a gap", async () => {
+    const core = new SearchCore();
+    await core.handle({ id: 1, op: "open", code: "c", file: join(dir, "gap.idx"), key: key(), roomId: ROOM });
+    await core.handle({ id: 2, op: "feed", code: "c", messages: lines(1, 100), inputs, from: 1 });
+    expect(await core.handle({ id: 3, op: "feed", code: "c", messages: lines(500, 520), inputs, from: 500 })).toEqual({ through: 520 });
+    const found = await core.handle({ id: 4, op: "search", code: "c", query: "note", rooms: ["general"], limit: 500 });
+    expect(found && "hits" in found ? found.hits.map((h) => h.seq).sort((a, b) => a - b)[0] : 0).toBe(500);
   });
 });
 
@@ -142,9 +179,9 @@ describe("the search host (T977)", () => {
     const host = new SearchHost(w.spawn);
     const at = { file: join(dir, "crash.idx"), key: key(), roomId: ROOM };
     await host.open("c", at);
-    expect(await host.feed("c", lines(1, 200), inputs)).toBe(200);
+    expect(await host.feed("c", lines(1, 200), inputs, 1)).toBe(200);
     w.hold(true);
-    const lost = host.feed("c", lines(201, 400), inputs);
+    const lost = host.feed("c", lines(201, 400), inputs, 201);
     while (!w.asks.some((a) => a.op === "feed" && a.messages[0]?.seq === 201)) await Bun.sleep(1);
     w.kill();
     await expect(lost).rejects.toThrow("the search worker stopped");
@@ -153,7 +190,7 @@ describe("the search host (T977)", () => {
     expect(after.state).toBe("indexing");
     expect(after.through).toBe(200);
     expect(after.hits.length).toBe(200);
-    expect(await host.feed("c", lines(201, 400), inputs)).toBe(400);
+    expect(await host.feed("c", lines(201, 400), inputs, 201)).toBe(400);
     const done = await host.search("c", "note", ["general"], 500, 400);
     expect(done.state).toBe("ready");
     expect(done.hits.length).toBe(400);
@@ -164,7 +201,7 @@ describe("the search host (T977)", () => {
     const w = inProcess();
     const host = new SearchHost(w.spawn, 20);
     await host.open("c", { file: join(dir, "idle.idx"), key: key(), roomId: ROOM });
-    await host.feed("c", lines(1, 5), inputs);
+    await host.feed("c", lines(1, 5), inputs, 1);
     await Bun.sleep(60);
     expect(w.asks.some((a) => a.op === "unload")).toBe(true);
     expect((await host.search("c", "note", ["general"], 10, 5)).hits.length).toBe(5);
@@ -183,7 +220,7 @@ describe("the search host (T977)", () => {
       };
     });
     await host.open("c", { file: join(dir, "real.idx"), key: key(), roomId: ROOM });
-    await host.feed("c", lines(1, 50), inputs);
+    await host.feed("c", lines(1, 50), inputs, 1);
     expect((await host.search("c", "archive", ["general"], 100, 50)).hits.length).toBe(50);
     host.stop();
   });

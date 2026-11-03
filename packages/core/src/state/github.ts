@@ -186,6 +186,13 @@ export function addRelease(g: Pick<GithubState, "releases">, r: GithubRelease): 
   g.releases.set(key, kept.slice(-MAX_RELEASES));
 }
 
+export function dropRelease(g: Pick<GithubState, "releases">, repo: string, tag: string): void {
+  const key = repoKey(repo);
+  const kept = (g.releases.get(key) ?? []).filter((x) => x.tag !== tag);
+  if (kept.length) g.releases.set(key, kept);
+  else g.releases.delete(key);
+}
+
 const sameCommit = (a: string, b: string): boolean => a.length >= 7 && b.length >= 7 && (a.startsWith(b) || b.startsWith(a));
 
 export function releaseOf(g: GithubState, pr: GithubPr): GithubRelease | undefined {

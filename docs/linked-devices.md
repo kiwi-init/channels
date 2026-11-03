@@ -154,6 +154,9 @@ gets one pending ask at most. Approving it needs your app in your hand and the d
 | `PUT /v1/account/ask/<id>/answer` `{device, dxpk, nonce}` | an app that approves | once, with the app's own listed keys |
 | `PUT /v1/account/ask/<id>/reveal` `{nonce}` | the asking device | once, after the answer; checked against the commitment |
 | `DELETE /v1/account/ask/<id>` | the asking device, an app that approves | turns the ask away |
+| `GET /v1/account/fresh` | the session | `{fresh}`: the waiting start-over, with its end time, or null (section 6) |
+| `POST /v1/account/fresh` `{links}` | the new desktop | starts over: one link, a new person key adding this desktop |
+| `DELETE /v1/account/fresh/<id>` | a current device, the person key, the desktop that started it | cancels the start-over |
 | `POST /v1/account/move` `{to}` | the person key or an app that approves, with a GitHub sign-in in `x-human-token-to` | moves a WorkOS account to `github_<id>` once (`src/relay/move.ts`) |
 
 **Moving to GitHub sign-in** (T261). A WorkOS account moves to the `github_<id>` account of the
@@ -165,7 +168,8 @@ channels they create count against the GitHub account. Every step can run again:
 nothing, and a freeze nobody finishes ends after 10 minutes, as moved if the copy went through and
 untouched if it didn't. Nothing under the WorkOS id is deleted. A GitHub account that already holds
 devices, a device waiting to join, or a signer the list doesn't approve is refused, and the WorkOS
-account stays as it was.
+account stays as it was. So is an account waiting to start over (section 6): it moves once the start
+is cancelled or done, so a move never carries a list the start is about to replace.
 
 A key revoked in a published list is refused on every account route, can't ask again, and loses its
 computer inbox at once (`/v1/machine/<key>` answers 403 and its socket closes).
@@ -232,6 +236,16 @@ owner-signed **delegation** lets the `kiwi` daemon admit its own computer's agen
 - **Owners cut the channel access.** Their apps remove that device's member keys and rotate. Until an
   owner's app comes online, the revoked device can still read that channel.
 - **Revoking a computer also removes its agents:** the members whose `from.pk` is that machine.
+- **Unless you keep them (T1467).** Forgetting a device that launched your agents asks first: "This
+  computer is lost: remove its agents too" (the default) or "I replaced the app here: keep them".
+  Keep has this app's computer sign a `kiwi-keep\n{roomId}\n{agentPk}\n{forgottenPk}` vouch per
+  agent. The vouches ride on the next `devices` event as `keep {device, agents: [{pk, vouch}]}` (64
+  at most). An owner's `cutDevices(list, keeps)` re-seals a kept agent with `from` set to the
+  keeping computer instead of cutting it. A keep counts only when the keeper is a computer on the
+  same person's current list, the agent is that person's, and the vouch names that agent and the
+  computer it leaves. So a seat proof, a keep for another agent or another computer, or one from a
+  desktop or another person counts for nothing. A device that launched none of your agents is
+  forgotten without the question.
 - **Revoking an older device** (enrolled before the signer) shows a notice on every one of your
   devices. A thief holding a newer device can't quietly revoke the rest.
 - **Versions.** Clients take the highest list version seen across the account record and every
@@ -325,19 +339,33 @@ For when every app is gone, or a thief revoked your other devices first. The rec
   clients still read the list. The person key signs the first link. The recovery key replaces itself at
   once; an approving device may propose a new one, which takes over only after 7 days. Your devices show
   the proposal meanwhile, and the old words, or revoking the device that proposed it, cancel it.
-- **Format:** `{person, version, at, box}`. The box is sealed to the recovery X25519 key, with person,
-  version and time bound into the key derivation. Inside, the person key is a box of its own, sealed to
-  the same recovery key with person and recovery key bound in (`sealPerson`, T899), so a device that
-  no longer holds the person key carries it into each new version unread, and the vault is signed by the person key or any of
-  its current approving devices (decision A keeps the person key offline, so a device must be able to
-  add a new channel's owner key). Stored at `/v1/account/vault`. Clients remember the highest version
-  and refuse a lower one.
+- **Format:** `{person, version, at, held, boxes}`, signed by the person key or any of its current
+  approving devices (decision A keeps the person key offline, so a device must be able to add a new
+  channel's owner key). Stored at `/v1/account/vault`. Clients remember the highest version and refuse
+  a lower one.
+  - `held` is the person key, sealed to the recovery X25519 key with person, person key and recovery
+    key bound in (`sealPerson`, T899). It sits in the signed record, so every approving desktop reads
+    it and carries it into each new version unread (T969).
+  - `boxes` holds one box per desktop: the owner keys of the channels that desktop owns, sealed to the
+    recovery key with person, desktop and recovery key bound in. A desktop reseals only its own box and
+    carries the others unread, so two desktops never drop each other's channels. Boxes sealed to
+    earlier words are dropped; their desktops seal them again on their next look, within 10 minutes.
+  - The words open `held` and every box that opens; a box that doesn't is skipped.
+  - At most 64 boxes and 512 KB in all.
+  - A vault from before T969 has one `box` that holds the person key and every channel. Apps still read
+    it, and the first desktop moves it to `held` and `boxes` on its next look, carrying the person box
+    it kept unread. That box's older label opens only for the original person key. The relay keeps a
+    one-box vault from an app not yet updated, but never over a vault with boxes, nor after a re-root.
 - **The relay** keeps the chain and the newest vault at `/v1/account/vault`. `GET` needs only the sign-in,
   so a new desktop with nothing but the 24 words can read them. `PUT` takes `{recovery, vault}`, signed by
   the person key, the recovery key or a current approving device. The chain must extend the one kept,
   and each new link must carry the relay's time, so a proposal can't be backdated past its 7 days. A
-  vault must be version kept + 1, signed by the person key or a current approving device, and at most
-  512 KB. Links and vaults from revoked devices are refused.
+  vault must be version kept + 1, signed by the person key or a current approving device, with `held`
+  sealed for the current person key and recovery key. Links and vaults from revoked devices are refused.
+- **Apps reading the vault** take one sealed by an approving desktop before that desktop was revoked
+  (its `at` is before the revoke). Since the first desktop lets go of the person key, vaults are signed by
+  desktops, so revoking the lost one that sealed last would otherwise leave the words and every other
+  desktop unable to read the vault (T1423). Writes still need a current approving device.
 - In the code (T693, T823): `packages/core/src/recovery.ts`, `src/relay/account.ts`.
 - **Re-root** (T827), when the person key itself may be stolen: a `reroot {root, keep[]}` link in the
   device list, signed by the new person key, with the recovery key's signature over it (`rsig`) and
@@ -348,6 +376,14 @@ For when every app is gone, or a thief revoked your other devices first. The rec
   - Every device not in `keep` is revoked. The owner's app cuts those devices, and the agents of
     computers only an old `kp1` cert vouched for; join claims by the old key or its certs stop
     counting.
+  - Seats the person joined with only a person claim from the old key re-prove (T967). Each app
+    posts its list with its device's vouch for its own seat (the same statement as a device claim);
+    the owner's app re-signs the seat with that device when it is still listed. Seats with no such
+    proof are cut once the re-root is 7 days old, and the channel says why.
+  - An agent that joined with no person (its computer's app had no person key, #1519) gets one back:
+    its computer, once it holds a re-rooted list that keeps it, posts its vouch for each agent seat
+    it runs, and the owner's app re-signs that agent as the person's, from that computer. Only a
+    listed computer's vouch counts. Agents are never cut for lacking one.
   - A list with more re-roots beats a longer one with fewer, so a fork the old key grows can't win.
   - The relay takes a re-root only with its own time and the exact recovery chain it keeps, so words
     replaced since can't re-root. A later re-root must carry a chain that extends the one before.
@@ -356,6 +392,29 @@ For when every app is gone, or a thief revoked your other devices first. The rec
     re-roots: the current words still sign the re-root during the wait.
   - An app still holding the old key lets it go, and a sealed person box from before the re-root is
     never sealed into a new vault version.
+  - On the desktop (T2415): Settings → Computers and phones → Recovery key → Replace, on a computer
+    that approves devices. The person types the 24 words, unticks the devices to sign out (this
+    computer always stays), and the app makes the new person key, posts the re-root, and reseals the
+    vault with the new key, keeping every other computer's channel box. The app keeps no copy of the
+    new key: it goes on signing with its device key, and the vault holds the new key for the words.
+  - Recovering with the words on a new computer after a re-root opens the vault at `list.root`; the
+    app joins as one of the person's devices, keyed by `list.person`, and keeps no person key either.
+- **Start fresh** (T1010), for someone with no device left and no words, set up or forgotten. Nothing
+  can vouch for them but the sign-in, and whoever takes over the sign-in has that too, so it waits:
+  - A new desktop signed in to the account posts a `rootLink`: a new person key adding that desktop. The
+    relay keeps it for 7 days, and the account works as it did meanwhile.
+  - Every signed-in read of `GET /v1/account/fresh` shows it, so a device hears at its next poll, and one
+    that was offline when it comes back. Computers hold no sign-in: they aren't told and can't cancel.
+  - A current device, the person key or the starting desktop cancels it, by id. A sign-in alone can
+    neither cancel nor shorten the wait. A re-root, or a list link signed by the person key (what recovering
+    with the words publishes), cancels it too; a device's routine renewal doesn't.
+  - One at a time: a second start with other keys is refused and the first keeps its end time. A repeat
+    of the same link answers with the one waiting. One start a day per account, cancelled or not, so
+    nobody can spam old devices with notices.
+  - On the first account request after day 7 the relay cuts every old device and replaces the list, recovery
+    chain and vault with the new one-link list. It isn't a re-root: `list.person` is the new key, so nothing
+    chains to the old person. Old channels stay unreadable, since nothing is re-sealed. Old devices keep
+    what they already hold, and their seats in those channels stay until an owner removes them.
 - **Passkeys later:** per-passkey wrapping where native passkey PRF exists (macOS 15 and iOS 18 through
   AuthenticationServices; Android Credential Manager). Never in a page the relay serves, which would
   see the unlock key.
@@ -368,7 +427,8 @@ For when every app is gone, or a thief revoked your other devices first. The rec
   vault (paper-key style), and the first desktop becomes a device like the rest.
 - In the code (T899, `desktop/src/recovery.ts`): once the 24 words are checked and the vault is kept,
   the first desktop lists its computers and drops the person secret from its store. It keeps only the
-  sealed person box, to reseal the vault when a channel it owns appears. It doesn't let go while a
+  sealed person box, to reseal the vault when a channel it owns appears. Other approving desktops take
+  that box from the vault (T969), and after a re-root they take the new person key's box from it. It doesn't let go while a
   device's proposed recovery key is waiting, and never seals the person key to a key a device proposed.
   An app that set up its words before T899 does the same on its next poll. Joins are proven with the
   device claim alone.

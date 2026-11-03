@@ -109,13 +109,13 @@ export async function answerStep(code: string, id: string, reply: StepReply): Pr
   const run = need(code)
   const m = run.messages.find((x) => x.seq === Number(id))
   if (!m) throw new Error("that step is gone")
-  await run.send(stepReplyText(reply), { to: [m.from], re: [m.seq], kind: "msg", stepReply: reply })
+  await run.send(stepReplyText(reply), { to: [m.from], re: [m.seq], kind: "msg", side: true, stepReply: reply })
 }
 
 async function streamTerm(b: KiwiBridge, open: () => Promise<TermOpenView>, watch: TermWatch): Promise<TermOpened> {
   const early: TermEvent[] = []
   let mine: string | null = null
-  const deliver = (e: TermEvent) => ("out" in e ? watch.out(e.out) : watch.ended())
+  const deliver = (e: TermEvent) => ("out" in e ? watch.out(e.out) : "lost" in e && watch.lost ? watch.lost() : watch.ended())
   const off = b.onTerm((e) => (mine === null ? early.push(e) : e.term === mine && deliver(e)))
   const r = await open().catch((err: unknown): TermOpenView => ({ ok: false, detail: err instanceof Error ? err.message : String(err) }))
   if (!r.ok) {
@@ -147,9 +147,13 @@ export async function openTerm(code: string, name: string, cols: number, rows: n
   return streamTerm(b, () => b.termOpen(seat.pane, cols, rows), watch)
 }
 
-export async function openMyTerm(code: string, want: string | null, cols: number, rows: number, watch: TermWatch): Promise<TermOpened> {
+export async function openMyTerm(code: string, want: string | null, cols: number, rows: number, watch: TermWatch, machine?: string): Promise<TermOpened> {
   const b = bridge()
   if (!b) return { error: "Your terminal opens in the Channels desktop app." }
+  if (machine) {
+    if (typeof b.termRemote !== "function") return { error: "Update Channels to open a shell on your other computers." }
+    return streamTerm(b, () => b.termRemote(machine, want, cols, rows), watch)
+  }
   if (typeof b.termMine !== "function") return { error: "Update Channels to open your own terminal here." }
   const room = need(code).roomId
   return streamTerm(b, () => b.termMine(room, want, cols, rows), watch)
@@ -182,7 +186,7 @@ export async function answerPermission(code: string, id: string, allow: boolean)
   if (!m) throw new Error("that request is gone")
   const perm = permissionReply(m, allow, run.state)
   if (!perm) throw new Error("this one can only be answered in the terminal")
-  await run.send(allow ? ALLOW_ONCE : DENY, { to: [m.from], re: [m.seq], kind: "msg", perm })
+  await run.send(allow ? ALLOW_ONCE : DENY, { to: [m.from], re: [m.seq], kind: "msg", side: true, perm })
 }
 
 const STATES: Partial<Record<TaskStatus, "todo" | "doing" | "review" | "done">> = { todo: "todo", doing: "doing", review: "review", done: "done" }

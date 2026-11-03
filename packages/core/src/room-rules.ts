@@ -43,7 +43,7 @@ export interface Seat {
   sponsor?: { user?: string; handle?: string };
 }
 
-const isPerson = (s: Pick<Seat, "kind" | "owner">): boolean => s.owner === true || s.kind === "human";
+export const isPerson = (s: Pick<Seat, "kind" | "owner">): boolean => s.owner === true || s.kind === "human";
 
 export function personOf(s: Seat, seats: readonly Seat[]): string {
   if (!isPerson(s)) return `seat:${s.pk}`;

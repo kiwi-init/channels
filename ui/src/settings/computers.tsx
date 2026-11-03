@@ -2,8 +2,8 @@ import { useEffect, useState } from "react"
 
 import { cx, IconButton } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
-import { ago } from "~/kit/time"
-import type { Account, Computer, Device } from "~/model"
+import { ago, useNow } from "~/kit/time"
+import type { Account, Computer, Device, LaunchedAgent } from "~/model"
 import { useApp } from "~/nav"
 import { Confirm } from "~/settings/controls"
 import { RecoveryKey } from "~/settings/recovery"
@@ -71,8 +71,6 @@ function TheirSettings({ computer }: { computer: Computer }) {
 const DAY = 86_400_000
 const RENEW_WITHIN = 14 * DAY
 
-const KIND: Record<Device["as"], string> = { desktop: "computer", phone: "phone", computer: "computer for agents" }
-
 function expiry(until: number, now = Date.now()): string {
   if (until <= now) return "expired"
   const days = Math.ceil((until - now) / DAY)
@@ -81,6 +79,23 @@ function expiry(until: number, now = Date.now()): string {
 
 const due = (until: number, now = Date.now()): boolean => until - now < RENEW_WITHIN
 
+function DeviceMeta({ d, runner }: { d: Device; runner: Device | null }) {
+  const now = useNow(60_000)
+  const soonest = [d, runner].flatMap((x) => (x && due(x.until, now) ? [x.until] : [])).sort((a, b) => a - b)[0]
+  const about = [d.os, d.as === "computer" && "agents only", runner && "runs your agents"].filter(Boolean).join(" · ")
+  return (
+    <span className="set-device-status">
+      {about}
+      {soonest !== undefined && (
+        <>
+          {about && " · "}
+          <span className={soonest <= now ? "tone-alert" : "tone-decide"}>{expiry(soonest, now)}</span>
+        </>
+      )}
+    </span>
+  )
+}
+
 const day = (at: number): string => new Date(at).toLocaleDateString(undefined, { month: "short", day: "numeric" })
 
 function DeviceNotices({ account }: { account: Account }) {
@@ -88,7 +103,7 @@ function DeviceNotices({ account }: { account: Account }) {
     <>
       {account.forgotHere && (
         <p className="set-fine set-warning" role="note">
-          {account.forgotHere.by} forgot this app. It keeps your person key and its channels, but it can't approve or change your devices any more.
+          {account.forgotHere.by} forgot this app: it can't approve or change your devices any more.
         </p>
       )}
       {account.forgotten?.map((f) => (
@@ -100,67 +115,141 @@ function DeviceNotices({ account }: { account: Account }) {
   )
 }
 
+const FORGET_ONE = "It can't sign in as you again. Channels you don't own drop it later."
+const FORGET_RAN = "It can't sign in as you again. It started these agents of yours:"
+
+function ForgetDevice({ forget, onClose }: { forget: { row: Device; runner: Device | null } | null; onClose: () => void }) {
+  const { app } = useApp()
+  const [keep, setKeep] = useState(false)
+  const [got, setGot] = useState<{ key: string; agents: LaunchedAgent[] } | null>(null)
+  const ids = forget ? [...(forget.runner ? [forget.runner.id] : []), forget.row.id] : []
+  const key = ids.join(" ")
+  const agents = got?.key === key ? got.agents : null
+  const { launchedFrom } = app.actions
+  useEffect(() => {
+    let live = true
+    if (key)
+      launchedFrom(key.split(" ")).then(
+        (found) => live && setGot({ key, agents: found }),
+        () => live && setGot({ key, agents: [] })
+      )
+    return () => {
+      live = false
+    }
+  }, [key, launchedFrom])
+  const title = (code: string): string => app.channels.find((c) => c.code === code)?.title ?? code
+  const close = () => {
+    setKeep(false)
+    onClose()
+  }
+  return (
+    <Confirm
+      open={!!forget}
+      title={`Forget ${forget?.row.label ?? ""}?`}
+      sub={agents?.length ? FORGET_RAN : FORGET_ONE}
+      action="Forget"
+      ready={agents !== null}
+      onClose={close}
+      onConfirm={() => {
+        app.actions.forgetDevice(ids, keep && agents ? agents.map(({ code, pk, from }) => ({ code, pk, from })) : undefined)
+        close()
+      }}
+    >
+      {agents && agents.length > 0 && (
+        <>
+          <ul className="set-forget-agents">
+            {[...new Set(agents.map((a) => a.code))].map((code) => (
+              <li key={code}>
+                <span className="set-forget-names">
+                  {agents
+                    .filter((a) => a.code === code)
+                    .map((a) => a.name)
+                    .join(", ")}
+                </span>
+                <span className="set-forget-in"> in {title(code)}</span>
+              </li>
+            ))}
+          </ul>
+          <div className="set-forget-choices" role="radiogroup" aria-label="Its agents">
+            <ForgetChoice on={!keep} pick={() => setKeep(false)} label="This computer is lost: remove its agents too" about="They leave every channel." />
+            <ForgetChoice on={keep} pick={() => setKeep(true)} label="I replaced the app here: keep them" about="They stay, now tied to this computer." />
+          </div>
+        </>
+      )}
+    </Confirm>
+  )
+}
+
+function ForgetChoice({ on, pick, label, about }: { on: boolean; pick: () => void; label: string; about: string }) {
+  return (
+    <label className={cx("set-forget-choice", on && "is-on")}>
+      <input type="radio" className="sr" name="forget-agents" checked={on} onChange={pick} />
+      <span className="set-forget-text">
+        <span className="set-forget-label">{label}</span>
+        <span className="set-forget-about">{about}</span>
+      </span>
+      <span className="set-forget-tick">{on && <Icon name="check" size={14} />}</span>
+    </label>
+  )
+}
+
 function SignedDevices({ devices }: { devices: Device[] }) {
   const { app } = useApp()
-  const [forget, setForget] = useState<Device | null>(null)
+  const rows = devices.filter((d) => !(d.app && devices.some((x) => x.id === d.app)))
+  const runnerOf = (d: Device): Device | null => devices.find((x) => x.as === "computer" && x.app === d.id) ?? null
+  const [forget, setForget] = useState<{ row: Device; runner: Device | null } | null>(() => {
+    const row =
+      SHOT === "settings-forget-agents" ? devices.find((d) => d.as === "desktop" && !d.thisOne && runnerOf(d)) : SHOT === "settings-forget-plain" ? devices.find((d) => d.as === "phone") : undefined
+    return row ? { row, runner: runnerOf(row) } : null
+  })
   return (
     <section className="set-group" aria-label="Signed in as you">
       <div className="heading">
         <h3>Signed in as you</h3>
       </div>
-      <p className="set-group-hint">Each one has its own key. Forget one and it can't sign in as you again.</p>
       {app.account && <DeviceNotices account={app.account} />}
       <ul className="set-devices">
-        {devices.map((d) => (
-          <li key={d.id} className="set-device">
-            <span className="set-device-icon" aria-hidden="true">
-              <Icon name={d.as === "phone" ? "phone" : "computer"} />
-            </span>
-            <span className="set-device-text">
-              <span className="set-device-name">
-                {d.label}
-                {d.thisOne && <span className="set-tag">this app</span>}
+        {rows.map((d) => {
+          const runner = runnerOf(d)
+          const renew = [d, runner].flatMap((x) => (x && due(x.until) ? [x.id] : []))
+          return (
+            <li key={d.id} className="set-device">
+              <span className="set-device-icon" aria-hidden="true">
+                <Icon name={d.as === "phone" ? "phone" : "computer"} />
               </span>
-              <span className="set-device-meta">
-                <span className="set-device-status">
-                  {KIND[d.as]}
-                  {d.os ? ` · ${d.os}` : ""} · {expiry(d.until)}
+              <span className="set-device-text">
+                <span className="set-device-name">
+                  {d.label}
+                  {d.thisOne && <span className="set-tag">this app</span>}
+                </span>
+                <span className="set-device-meta">
+                  <DeviceMeta d={d} runner={runner} />
                 </span>
               </span>
-            </span>
-            <span className="set-device-actions-inline">
-              {due(d.until) && (
-                <button type="button" className="btn is-quiet is-small" onClick={() => app.actions.renewDevice(d.id)}>
-                  Renew
-                </button>
-              )}
-              {!d.thisOne && (
-                <button type="button" className="btn is-quiet is-small set-forget" onClick={() => setForget(d)}>
-                  Forget
-                </button>
-              )}
-            </span>
-          </li>
-        ))}
+              <span className="set-device-actions-inline">
+                {renew.length > 0 && (
+                  <button type="button" className="btn is-quiet is-small" onClick={() => app.actions.renewDevice(...renew)}>
+                    Renew
+                  </button>
+                )}
+                {!d.thisOne && (
+                  <button type="button" className="btn is-quiet is-small set-forget" onClick={() => setForget({ row: d, runner })}>
+                    Forget
+                  </button>
+                )}
+              </span>
+            </li>
+          )
+        })}
       </ul>
-      <Confirm
-        open={!!forget}
-        title={`Forget ${forget?.label ?? ""}?`}
-        sub="It can't sign in as you again. Channels you own drop it now; other channels drop it when their owner's app is next open."
-        action="Forget"
-        onClose={() => setForget(null)}
-        onConfirm={() => {
-          if (forget) app.actions.forgetDevice(forget.id)
-          setForget(null)
-        }}
-      />
+      <ForgetDevice forget={forget} onClose={() => setForget(null)} />
     </section>
   )
 }
 
 function phoneWarning(phone: Computer): string {
   const held = phone.holds?.length ? `your person key and the keys of ${phone.holds.join(", ")}` : "your person key and the keys of the channels you had when you linked it"
-  return `It holds ${held}, so it can act as you there. Forgetting it removes it from this list; to sign it out, unlink it on the phone. If it's lost or stolen, there's no way yet to cut it off from here.`
+  return `It holds ${held}. Forgetting only drops it from this list: unlink it on the phone to sign it out. A lost phone can't be cut off from here yet.`
 }
 
 function PairLine({ text, label }: { text: string; label: string }) {
@@ -194,7 +283,7 @@ export function ComputersSection() {
   const computers = [...account.computers].sort((a, b) => Number(b.thisOne) - Number(a.thisOne) || Number(b.online) - Number(a.online))
 
   return (
-    <Page title="Computers and phones" lede="Everywhere you are signed in. Agents run on computers; phones read and answer.">
+    <Page title="Computers and phones">
       {!account.devices?.length && account.forgotHere && <DeviceNotices account={account} />}
       {account.devices && account.devices.length > 0 && (
         <>
@@ -247,10 +336,10 @@ export function ComputersSection() {
         <div className="set-pair" role="region" aria-label={linking === "phone" ? "Link a phone" : "Add a computer"}>
           <p className="set-pair-what">{linking === "phone" ? "Link a phone" : "Add a computer"}</p>
           {linking === "phone" ? (
-            <p className="set-pair-how">On your phone, open Channels and tap Sign In. It shows 6 digits: type them here when this app asks.</p>
+            <p className="set-pair-how">Open Channels on the phone and tap Sign In. This app then asks for the 6 digits it shows.</p>
           ) : (
             <>
-              <p className="set-pair-how">On the other computer, run this in a terminal and sign in. It shows 6 digits: type them here when this app asks.</p>
+              <p className="set-pair-how">Run this on the other computer. This app then asks for the 6 digits it shows.</p>
               <PairLine text="kiwi login" label="Copy the command" />
             </>
           )}
@@ -286,7 +375,7 @@ export function ComputersSection() {
       <Confirm
         open={!!forget}
         title={`Forget ${forget?.label ?? ""}?`}
-        sub={forget && isPhone(forget) ? phoneWarning(forget) : "It is signed out and its agents stop. Pair it again to bring it back."}
+        sub={forget && isPhone(forget) ? phoneWarning(forget) : "It's signed out and its agents stop."}
         action="Forget"
         onClose={() => setForget(null)}
         onConfirm={() => {

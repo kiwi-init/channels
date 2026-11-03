@@ -39,24 +39,21 @@ export function ChannelPanel({ channel }: { channel: Channel }) {
 
   return (
     <>
-      <PanelHead title={channel.title} />
+      <PanelHead title={<span className="sr">Channel settings</span>} />
       <div className="panel-body cpanel">
-        <Part title="Name">
-          {own ? (
-            <InlineEdit value={channel.title} label="Channel name" verb="Rename" onSave={(title) => actions.renameChannel(channel.code, title)} />
-          ) : (
-            <p className="cpanel-value">{channel.title}</p>
-          )}
-          {!own && owner && <p className="cpanel-hint">{shown(owner)} owns this channel.</p>}
-        </Part>
-
-        <Part title="Icon">
+        <section className="cpanel-id" aria-label="Name and icon">
           <ChannelIcon channel={channel} own={own} />
-        </Part>
+          <div className="cpanel-id-text">
+            {own ? (
+              <InlineEdit value={channel.title} label="Channel name" verb="Rename" onSave={(title) => actions.renameChannel(channel.code, title)} />
+            ) : (
+              <p className="cpanel-name">{channel.title}</p>
+            )}
+            {!own && owner && <p className="cpanel-hint">{shown(owner)} owns it</p>}
+          </div>
+        </section>
 
-        <Part title="Notifications">
-          <MuteChannel channel={channel} />
-        </Part>
+        <MuteChannel channel={channel} />
 
         <Part title="Rooms">
           <Rooms channel={channel} own={sets} />
@@ -64,44 +61,38 @@ export function ChannelPanel({ channel }: { channel: Channel }) {
 
         <Part title="Goal">{sets ? <GoalEditor channel={channel} /> : channel.goal ? <p className="cpanel-goal">{channel.goal}</p> : <p className="cpanel-none">No goal yet.</p>}</Part>
 
-        <Part title="Specs">
+        <Part title="Agents">
+          <Hold channel={channel} />
           <SpecsOnly channel={channel} own={own} />
         </Part>
 
-        <Part title="Repos">
+        <Part title="GitHub">
           <Repos channel={channel} />
+          {(sets ? channel.repos.length > 0 : channel.githubWrite || channel.branchPrefix) && <GitHub channel={channel} own={own} sets={sets} />}
         </Part>
 
-        {(sets ? channel.repos.length > 0 : channel.githubWrite || channel.branchPrefix) && (
-          <Part title="GitHub">
-            <GitHub channel={channel} own={own} sets={sets} />
+        {(channel.facts?.length ?? 0) > 0 && (
+          <Part title="Notes">
+            <Facts channel={channel} />
           </Part>
         )}
 
-        <Part title="Notes">
-          <Facts channel={channel} />
-        </Part>
-
-        <Part title="Agents">
-          <Hold channel={channel} />
-        </Part>
-
         <Part title="History">
           <div className="cpanel-downloads">
-            <button type="button" className="btn is-quiet cpanel-download" disabled={saving !== null} onClick={() => save("transcript")}>
+            <button type="button" className="btn is-quiet is-small" title="Markdown, readable anywhere" disabled={saving !== null} onClick={() => save("transcript")}>
               <Icon name="download" size={14} />
-              {saving === "transcript" ? "Saving the transcript…" : "Download the transcript (.md)"}
+              {saving === "transcript" ? "Saving…" : "Transcript"}
             </button>
-            <button type="button" className="btn is-quiet cpanel-download" disabled={saving !== null} onClick={() => save("log")}>
+            <button type="button" className="btn is-quiet is-small" title="JSON lines, every message signed" disabled={saving !== null} onClick={() => save("log")}>
               <Icon name="download" size={14} />
-              {saving === "log" ? "Saving the signed log…" : "Download the signed log (.jsonl)"}
+              {saving === "log" ? "Saving…" : "Signed log"}
             </button>
           </div>
         </Part>
 
-        <div className="panel-section cpanel-end">
-          <button type="button" className="btn is-danger" onClick={() => setEnding(true)}>
-            {own ? "Delete channel…" : "Leave this channel"}
+        <div className="cpanel-end">
+          <button type="button" className="btn is-quiet is-small" onClick={() => setEnding(true)}>
+            {own ? "Delete channel…" : "Leave this channel…"}
           </button>
         </div>
       </div>
@@ -149,7 +140,7 @@ function GoalEditor({ channel }: { channel: Channel }) {
       <textarea
         className="textarea"
         aria-label="Goal"
-        placeholder="What this channel is for and what done looks like."
+        placeholder="What this channel is for and what done looks like. Every agent reads it first."
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={(e) => {
@@ -159,12 +150,16 @@ function GoalEditor({ channel }: { channel: Channel }) {
           }
         }}
       />
-      <div className="cpanel-row">
-        <p className="cpanel-hint">Every agent reads this first.</p>
-        <button type="submit" className="btn is-small" disabled={!changed}>
-          Save
-        </button>
-      </div>
+      {changed && (
+        <div className="cpanel-save">
+          <button type="button" className="btn is-quiet is-small" onClick={() => setDraft(channel.goal ?? "")}>
+            Cancel
+          </button>
+          <button type="submit" className="btn is-small">
+            Save
+          </button>
+        </div>
+      )}
     </form>
   )
 }
@@ -199,7 +194,7 @@ function Repos({ channel }: { channel: Channel }) {
           ))}
         </ul>
       ) : (
-        <p className="cpanel-none">{own ? "No repos yet. Agents work in the repos you add here." : "No repos yet."}</p>
+        !own && <p className="cpanel-none">No repos yet.</p>
       )}
       {channel.github && <GithubTrouble channel={channel} />}
       {own && (
@@ -268,13 +263,11 @@ function Hold({ channel }: { channel: Channel }) {
         </p>
         {hold.note && <p className="cpanel-note">{hold.note}</p>}
       </div>
-    ) : (
-      <p className="cpanel-value">Not paused</p>
-    )
+    ) : null
 
   return (
     <div className="cpanel-hold">
-      <div className="cpanel-row">
+      <div className="cpanel-row" title="Agents keep reading but don't act until you resume.">
         <span className="cpanel-value">Pause agents</span>
         <Toggle
           label="Pause agents"
@@ -285,25 +278,20 @@ function Hold({ channel }: { channel: Channel }) {
           }}
         />
       </div>
-      {hold ? (
-        <>
+      {hold && (
+        <form
+          className="cpanel-held"
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (note.trim() !== (hold.note ?? "")) app.actions.setHold(channel.code, true, note.trim() || undefined)
+            e.currentTarget.querySelector("input")?.blur()
+          }}
+        >
           <p className="cpanel-held-line">
             Paused by {by} · {ago(hold.at)}
           </p>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault()
-              if (note.trim() !== (hold.note ?? "")) app.actions.setHold(channel.code, true, note.trim() || undefined)
-              e.currentTarget.querySelector("input")?.blur()
-            }}
-          >
-            <Field label="Note for the agents" hint="Press Enter to save.">
-              <input className="input is-mono" placeholder="Why they should wait" value={note} onChange={(e) => setNote(e.target.value)} />
-            </Field>
-          </form>
-        </>
-      ) : (
-        <p className="cpanel-hint">Agents keep reading but don't act until you resume.</p>
+          <input className="input" aria-label="Note for the agents" placeholder="A note for the agents, Enter to save" value={note} onChange={(e) => setNote(e.target.value)} />
+        </form>
       )}
     </div>
   )
@@ -340,16 +328,16 @@ function SpecsOnly({ channel, own }: { channel: Channel; own: boolean }) {
   const { app } = useApp()
   const on = !!channel.specsOnly
   return (
-    <div className="cpanel-github">
-      <div className="cpanel-row">
-        <span className="cpanel-value">Tasks only from approved specs</span>
-        {own ? <Toggle on={on} label="Tasks only from approved specs" onChange={(next) => app.actions.setSpecsOnly(channel.code, next)} /> : <span className="cpanel-value">{on ? "On" : "Off"}</span>}
-      </div>
-      <p className="cpanel-hint">
-        {on
+    <div
+      className="cpanel-row"
+      title={
+        on
           ? "Every task is a step of a spec a person approved. Agents write the spec with you; once it's approved, the first free agent starts it."
-          : "Agents may file tasks under any person's message. Turn it on, and work starts only from a spec a person approved."}
-      </p>
+          : "Agents may file tasks under any person's message. Turn it on, and work starts only from a spec a person approved."
+      }
+    >
+      <span className="cpanel-value">Tasks only from approved specs</span>
+      {own ? <Toggle on={on} label="Tasks only from approved specs" onChange={(next) => app.actions.setSpecsOnly(channel.code, next)} /> : <span className="cpanel-state">{on ? "on" : "off"}</span>}
     </div>
   )
 }
@@ -360,12 +348,18 @@ function GitHub({ channel, own, sets }: { channel: Channel; own: boolean; sets: 
   const prefix = channel.branchPrefix
   return (
     <div className="cpanel-github">
-      <div className="cpanel-row">
+      <div className="cpanel-row" title={write ? "Kiwi links new PRs and issues to their tasks, and a task closing closes its issue." : "Kiwi doesn't comment on or close anything in your repos."}>
         <span className="cpanel-value">Write to GitHub</span>
-        {own ? <Toggle on={write} label="Write to GitHub" onChange={(on) => app.actions.setGithubWrite(channel.code, on)} /> : <span className="cpanel-value">{write ? "On" : "Off"}</span>}
+        {own ? <Toggle on={write} label="Write to GitHub" onChange={(on) => app.actions.setGithubWrite(channel.code, on)} /> : <span className="cpanel-state">{write ? "on" : "off"}</span>}
       </div>
-      <p className="cpanel-hint">{write ? "Kiwi links new PRs and issues to their tasks, and a task closing closes its issue." : "Kiwi doesn't comment on or close anything in your repos."}</p>
-      <div className="cpanel-row">
+      <div
+        className="cpanel-row"
+        title={
+          prefix
+            ? undefined
+            : "With a prefix, a pull request from a branch named with it and a task's number shows on that task. Without one, a pull request shows on a task only when someone posts its link."
+        }
+      >
         <span className="cpanel-value">Branch prefix</span>
         {sets ? (
           <span className="cpanel-prefix">
@@ -377,14 +371,10 @@ function GitHub({ channel, own, sets }: { channel: Channel; own: boolean; sets: 
             )}
           </span>
         ) : (
-          <span className="cpanel-value is-mono">{prefix ?? "None"}</span>
+          <span className="cpanel-state">{prefix ?? "none"}</span>
         )}
       </div>
-      <p className="cpanel-hint">
-        {prefix
-          ? `A pull request from a branch named ${prefix}7-… shows on T7.`
-          : "With a prefix, a pull request from a branch named with it and a task's number shows on that task. Without one, a pull request shows on a task only when someone posts its link."}
-      </p>
+      {prefix && <p className="cpanel-hint">A branch named {prefix}7-… shows its pull request on T7.</p>}
     </div>
   )
 }
@@ -392,35 +382,40 @@ function GitHub({ channel, own, sets }: { channel: Channel; own: boolean; sets: 
 function ChannelIcon({ channel, own }: { channel: Channel; own: boolean }) {
   const { app } = useApp()
   const input = useRef<HTMLInputElement>(null)
+  const tile = channel.icon ? <img src={channel.icon} alt="" /> : <span>{channel.title.slice(0, 1).toUpperCase()}</span>
+  if (!own)
+    return (
+      <span className="cpanel-icon-tile" aria-hidden="true">
+        {tile}
+      </span>
+    )
   return (
     <div className="cpanel-icon">
-      <span className="cpanel-icon-tile" aria-hidden="true">
-        {channel.icon ? <img src={channel.icon} alt="" /> : <span>{channel.title.slice(0, 1).toUpperCase()}</span>}
-      </span>
-      {own && (
-        <>
-          <button type="button" className="btn is-small" onClick={() => input.current?.click()}>
-            {channel.icon ? "Change image…" : "Choose an image…"}
-          </button>
-          {channel.icon && (
-            <button type="button" className="btn is-quiet is-small" onClick={() => app.actions.setIcon(channel.code, null)}>
-              Remove
-            </button>
-          )}
-          <input
-            ref={input}
-            type="file"
-            accept="image/png,image/jpeg,image/gif,image/webp"
-            hidden
-            onChange={(e) => {
-              const file = e.currentTarget.files?.[0]
-              e.currentTarget.value = ""
-              if (file) app.actions.setIcon(channel.code, file)
-            }}
-          />
-        </>
+      <button
+        type="button"
+        className="cpanel-icon-tile is-button"
+        aria-label={channel.icon ? "Change image…" : "Choose an image…"}
+        title={channel.icon ? "Change image…" : "Choose an image…"}
+        onClick={() => input.current?.click()}
+      >
+        {tile}
+      </button>
+      {channel.icon && (
+        <button type="button" className="cpanel-icon-drop" aria-label="Remove the image" title="Remove the image" onClick={() => app.actions.setIcon(channel.code, null)}>
+          <Icon name="close" size={12} />
+        </button>
       )}
-      {!own && !channel.icon && <p className="cpanel-none">No image: the channel shows its first letter.</p>}
+      <input
+        ref={input}
+        type="file"
+        accept="image/png,image/jpeg,image/gif,image/webp"
+        hidden
+        onChange={(e) => {
+          const file = e.currentTarget.files?.[0]
+          e.currentTarget.value = ""
+          if (file) app.actions.setIcon(channel.code, file)
+        }}
+      />
     </div>
   )
 }
@@ -429,14 +424,13 @@ function MuteChannel({ channel }: { channel: Channel }) {
   const { app } = useApp()
   const muted = isMuted(app.prefs.muted, channel.code)
   return (
-    <div className="cpanel-mute">
-      <span className="cpanel-hint">
-        {muted
-          ? "Muted on this computer: only mentions, direct messages and decisions for you notify or count."
-          : "Mute it on this computer: only mentions, direct messages and decisions for you will notify or count."}
-      </span>
-      <Toggle label="Mute this channel" on={muted} onChange={(on) => app.actions.setMute(channel.code, null, on)} />
-    </div>
+    <section className="cpanel-mute" aria-label="Notifications">
+      <div className="cpanel-row">
+        <span className="cpanel-value">Mute on this computer</span>
+        <Toggle label="Mute this channel" on={muted} onChange={(on) => app.actions.setMute(channel.code, null, on)} />
+      </div>
+      {muted && <p className="cpanel-hint">Mentions, direct messages and decisions for you still notify.</p>}
+    </section>
   )
 }
 
@@ -445,16 +439,19 @@ function Rooms({ channel, own }: { channel: Channel; own: boolean }) {
   return (
     <ul className="cpanel-rooms">
       {channel.rooms.map((r) => (
-        <li key={r.id}>
+        <li key={r.id} className={cx("cpanel-room", r.muted && "is-muted")}>
           <span className="cpanel-room-line">
+            <span className="cpanel-room-hash" aria-hidden="true">
+              #
+            </span>
             {own ? (
               <InlineEdit value={r.name} label={`Name of #${r.name}`} verb="Rename" onSave={(name) => app.actions.renameRoom(channel.code, r.id, name)} />
             ) : (
-              <span className="cpanel-value">#{r.name}</span>
+              <span className="cpanel-value">{r.name}</span>
             )}
             <button
               type="button"
-              className="icon-btn"
+              className="icon-btn cpanel-bell"
               aria-label={r.muted ? `Unmute #${r.name}` : `Mute #${r.name}`}
               title={r.muted ? `Unmute #${r.name}` : `Mute #${r.name}`}
               aria-pressed={!!r.muted}
@@ -480,11 +477,11 @@ function RoomPeople({ channel, id, members, own }: { channel: Channel; id: strin
   const names = roots.map((m) => nickname(channel, m))
   if (!editing)
     return (
-      <p className="cpanel-hint room-in">
+      <p className="cpanel-hint room-in cpanel-room-who">
         <Icon name="lock" size={12} />
         <span>Private: you{names.length ? `, ${names.join(", ")}` : ""}</span>
         {own && canChange && (
-          <button type="button" className="btn is-quiet is-small" onClick={() => setEditing(new Set(roots))}>
+          <button type="button" className="btn is-quiet is-small cpanel-reveal" onClick={() => setEditing(new Set(roots))}>
             Change who's in
           </button>
         )}
@@ -532,19 +529,18 @@ function Facts({ channel }: { channel: Channel }) {
   const { app } = useApp()
   const [clearing, setClearing] = useState<string | null>(null)
   const facts = channel.facts ?? []
-  if (!facts.length) return <p className="cpanel-none">What agents note for everyone shows here. None yet.</p>
   return (
     <ul className="cpanel-facts">
       {facts.map((f) => (
         <li key={f.key} className="cpanel-fact">
-          <button type="button" className="cpanel-fact-body" title="Copy the value" onClick={() => copyText(f.value, `Copied ${f.key}`)}>
-            <span className="cpanel-fact-line">
-              <span className="cpanel-fact-key">{f.key}</span>
-              <span className="cpanel-fact-value">{f.value}</span>
-            </span>
-            <span className="cpanel-hint">
-              {nickname(channel, f.by)} · {ago(f.at) === "now" ? "just now" : `${ago(f.at)} ago`}
-            </span>
+          <button
+            type="button"
+            className="cpanel-fact-body"
+            title={`Copy the value. Noted by ${nickname(channel, f.by)} ${ago(f.at) === "now" ? "just now" : `${ago(f.at)} ago`}.`}
+            onClick={() => copyText(f.value, `Copied ${f.key}`)}
+          >
+            <span className="cpanel-fact-key">{f.key}</span>
+            <span className="cpanel-fact-value">{f.value}</span>
           </button>
           {clearing === f.key ? (
             <span className="cpanel-fact-confirm">
@@ -556,7 +552,9 @@ function Facts({ channel }: { channel: Channel }) {
               </button>
             </span>
           ) : (
-            <IconButton icon="close" label={`Clear ${f.key}`} onClick={() => setClearing(f.key)} />
+            <span className="cpanel-reveal">
+              <IconButton icon="close" label={`Clear ${f.key}`} onClick={() => setClearing(f.key)} />
+            </span>
           )}
         </li>
       ))}

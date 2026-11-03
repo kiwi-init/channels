@@ -22,11 +22,11 @@ const fixed = (name: string, s: CSSProperties): string[] => [
 ]
 
 describe("message text follows Settings > Appearance > Text size", () => {
-  test("every markdown style that sets a size scales with --text-scale", () => {
+  test("every markdown style that sets a size scales with the root font size", () => {
     const styles = withTextSize(buildStyles(normalizeMarkdownStyle({ paragraph: { fontSize: 15, lineHeight: 22 } })))
     const left = Object.entries(styles).flatMap(([name, s]) => ("left" in s ? Object.entries(s).flatMap(([align, cell]) => fixed(`${name}.${align}`, cell)) : fixed(name, s)))
     expect(left).toEqual([])
-    expect(styles.paragraph).toMatchObject({ fontSize: "calc(15px * var(--text-scale, 1))", lineHeight: "calc(22px * var(--text-scale, 1))" })
+    expect(styles.paragraph).toMatchObject({ fontSize: "0.9375rem", lineHeight: "1.375rem" })
   })
 
   test("a callout's title, which the renderer sizes inline, scales through chat.css", async () => {
@@ -126,14 +126,14 @@ describe("the renderer only links what a click opens, and never loads a remote p
     expect(html).toContain("call")
   })
 
-  test("a remote picture, inline, by reference or in a table, is a link that says where it opens", async () => {
+  test("a remote picture, inline, by reference or in a table, is a link named by its alt", async () => {
     const html = await rendered("![a *b*](https://evil.example/a.png)\n\n![r][ref]\n\n| x |\n| - |\n| ![t](https://evil.example/t.png) |\n\n[ref]: https://evil.example/ref.png")
     expect(html).not.toContain("<img")
     expect(html).not.toContain('rel="preload"')
     expect(html).toContain('href="https://evil.example/a.png"')
-    expect(html).toContain(">a b (opens evil.example)</a>")
-    expect(html).toContain(">r (opens evil.example)</a>")
-    expect(html).toContain(">t (opens evil.example)</a>")
+    expect(html).toContain(">a b</a>")
+    expect(html).toContain(">r</a>")
+    expect(html).toContain(">t</a>")
   })
 
   test("a picture at an address a click wouldn't open is its alt text; one inside the message stays a picture", async () => {
@@ -183,5 +183,15 @@ describe("long inline code copies and wide code fades (T216)", () => {
     expect(css).toContain(".md pre.code-more {\n  mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);\n}")
     expect(css).toContain('.msg:hover .md pre.code-more[role="button"],\n.md pre.code-more[role="button"]:focus-visible {')
     expect(css).toContain(".md code[data-copy] {\n  cursor: copy;\n}")
+  })
+})
+
+describe("a link to a message keeps its href; other kiwi:// links don't (T987)", () => {
+  test("only the message form survives", async () => {
+    const code = "mc2-4u2dwIeijB9T9jh4JERA4Q-62qozsSxRQzg3q6a"
+    const html = await rendered(`[message #12](<kiwi://join/${code}?m=12>) and [join](<kiwi://join/${code}>) and [odd](<kiwi://other/x?m=1>)`)
+    expect(html).toContain(`href="kiwi://join/${code}?m=12"`)
+    expect(html).not.toContain(`href="kiwi://join/${code}"`)
+    expect(html).not.toContain('href="kiwi://other')
   })
 })

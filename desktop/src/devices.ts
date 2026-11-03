@@ -1,5 +1,17 @@
 import { accountClient, type AccountClient } from "@kiwi/core/account.ts";
-import { approvingDevice, certUntil, dueForRenewal, listedComputer, nextLink, readDeviceList, rootLink, type DeviceLink, type DeviceLinkBody, type DeviceList } from "@kiwi/core/devices.ts";
+import {
+  approvingDevice,
+  certUntil,
+  dueForRenewal,
+  listedComputer,
+  nextLink,
+  readDeviceList,
+  rootLink,
+  runnerHosts,
+  type DeviceLink,
+  type DeviceLinkBody,
+  type DeviceList,
+} from "@kiwi/core/devices.ts";
 import { askToEnroll, enrollDigits, enrollMailbox, enrollNonce, readEnrollGrant, revealMatches, type EnrollGrant, type Enrollment } from "@kiwi/core/enroll.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
 import { personFingerprint } from "@kiwi/core/fingerprint.ts";
@@ -10,6 +22,7 @@ import type { ComputerView, DeviceNewsView, DeviceView, EnrollAskView, EnrollCon
 
 const TRIES = 3;
 const RENEW_EVERY_MS = 6 * 3_600_000;
+const ANOTHER_PERSON = "this sign-in already belongs to another Channels person key";
 
 export interface DeviceHostDeps {
   relayUrl: () => string;
@@ -70,7 +83,7 @@ export function createDeviceHost(deps: DeviceHostDeps): DeviceHost {
   };
 
   const signerLabel = (list: DeviceList, pk: string): string =>
-    pk === list.person ? "your person key" : (list.devices.find((d) => d.device === pk)?.label ?? list.revokes.find((r) => r.device === pk)?.label ?? "a device");
+    pk === list.root || pk === list.person ? "your person key" : (list.devices.find((d) => d.device === pk)?.label ?? list.revokes.find((r) => r.device === pk)?.label ?? "a device");
 
   const revokedHere = async (links: unknown[], device: Identity): Promise<boolean> => {
     const read = await readDeviceList(links);
@@ -102,7 +115,7 @@ export function createDeviceHost(deps: DeviceHostDeps): DeviceHost {
       await client.publish(ours);
     } else {
       const theirs = await readList(kept);
-      if (theirs.person !== who.pk) throw new Error("this sign-in already belongs to another Channels person key");
+      if (theirs.person !== who.pk) throw new Error(ANOTHER_PERSON);
       if (kept.length >= ours.length) ours = kept as DeviceLink[];
       else await client.publish(ours);
     }
@@ -115,6 +128,7 @@ export function createDeviceHost(deps: DeviceHostDeps): DeviceHost {
   const refresh = async (s: { client: AccountClient; device: Identity }): Promise<boolean> => {
     const kept = (await s.client.links()) as DeviceLink[];
     if (await revokedHere(kept, s.device)) return false;
+    if (kept.length && (await readList(kept)).person !== deps.who()?.pk) throw new Error(ANOTHER_PERSON);
     if (kept.length > deps.links().length) deps.saveLinks(kept);
     return true;
   };
@@ -245,8 +259,13 @@ export function createDeviceHost(deps: DeviceHostDeps): DeviceHost {
     async list() {
       const s = await sync();
       if (!s || !(await refresh(s))) return null;
-      const list = await readList(deps.links());
-      return list.devices.map((d) => ({ id: d.device, label: d.label, os: d.os, as: d.as, approve: d.approve, until: d.until, thisOne: d.device === s.device.pk }));
+      const links = deps.links();
+      const list = await readList(links);
+      const hosts = runnerHosts(list, links);
+      return list.devices.map((d) => {
+        const app = hosts.get(d.device);
+        return { id: d.device, label: d.label, os: d.os, as: d.as, approve: d.approve, until: d.until, thisOne: d.device === s.device.pk, ...(app ? { app } : {}) };
+      });
     },
 
     async forget(target) {

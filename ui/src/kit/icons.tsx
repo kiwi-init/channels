@@ -16,9 +16,11 @@ import {
   DocumentValidationIcon,
   Download01Icon,
   Folder01Icon,
+  Gif01Icon,
   GithubIcon,
   GitPullRequestIcon,
   Home01Icon,
+  Image01Icon,
   InboxIcon,
   InformationCircleIcon,
   Link01Icon,
@@ -49,6 +51,8 @@ export const ISSUE: Glyph = [
 const GLYPHS = {
   send: ArrowUp02Icon,
   plus: Add01Icon,
+  gif: Gif01Icon,
+  image: Image01Icon,
   minus: MinusSignIcon,
   expand: SquareIcon,
   close: Cancel01Icon,
@@ -98,7 +102,16 @@ export function Icon({ name, size = 16, label }: { name: IconName; size?: number
 /** An icon from its glyph, for a screen that loads later and brings its own (the GitHub mark on sign-in). */
 export function GlyphIcon({ glyph, size = 16, label }: { glyph: Glyph; size?: number; label?: string | undefined }) {
   return (
-    <svg className="icon" width={size} height={size} viewBox="0 0 24 24" fill="none" role={label ? "img" : undefined} aria-label={label} aria-hidden={label ? undefined : true}>
+    <svg
+      className="icon"
+      width={`${size / 16}rem`}
+      height={`${size / 16}rem`}
+      viewBox="0 0 24 24"
+      fill="none"
+      role={label ? "img" : undefined}
+      aria-label={label}
+      aria-hidden={label ? undefined : true}
+    >
       {glyph.map(([tag, attrs], i) => createElement(tag, { ...attrs, ...("strokeWidth" in attrs ? { strokeWidth: STROKE } : {}), key: i }))}
     </svg>
   )

@@ -6,6 +6,8 @@ import type { ChannelCore } from "./core.ts";
 import type { Refused } from "./errors.ts";
 import type { Relay } from "./relay.ts";
 
+const sameList = <T>(a: readonly T[], b: readonly T[]): boolean => a.length === b.length && a.every((x, i) => x === b[i]);
+
 export interface GithubDiff {
   diff: string;
   base: string;
@@ -120,10 +122,22 @@ export class ChannelGithub {
       let sent = 0;
       for (const repo of repos) {
         const tags = known.filter((k) => k.repo.toLowerCase() === repo.toLowerCase()).map((k) => k.tag);
-        const { releases } = yield* this.ch.request<{ releases: { tag: string; at: number; shas: string[]; prs: number[] }[] }>("/github/releases", {}, { repo, known: tags.slice(-50).join("\n") });
+        const { releases, gone = [] } = yield* this.ch.request<{ releases: { tag: string; at: number; shas: string[]; prs: number[] }[]; gone?: string[] }>(
+          "/github/releases",
+          {},
+          { repo, known: tags.slice(-50).join("\n") },
+        );
+        for (const tag of gone) {
+          const was = known.find((k) => k.repo.toLowerCase() === repo.toLowerCase() && k.tag === tag);
+          const ev = { op: "github.release" as const, repo, tag, at: was?.at ?? 0, shas: [], prs: [], gone: true as const };
+          if (!was || !wellFormedEvent(ev)) continue;
+          yield* this.ch.fx.send(`GitHub: ${repo} withdrew ${tag}`, { kind: "event", ev });
+          sent++;
+        }
         for (const r of releases) {
           const ev = { op: "github.release" as const, repo, tag: r.tag, at: r.at, shas: r.shas, prs: r.prs };
-          if (tags.includes(r.tag) || !wellFormedEvent(ev)) continue;
+          const was = known.find((k) => k.repo.toLowerCase() === repo.toLowerCase() && k.tag === r.tag);
+          if ((was && sameList(was.shas, r.shas) && sameList(was.prs, r.prs)) || !wellFormedEvent(ev)) continue;
           yield* this.ch.fx.send(`GitHub: ${repo} released ${r.tag}`, { kind: "event", ev });
           sent++;
         }

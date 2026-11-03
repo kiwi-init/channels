@@ -1,11 +1,11 @@
 import { afterEach, expect, test } from "bun:test";
 
-import { certUntil, nextLink, readDeviceList, rerootLink, rootLink, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
+import { certUntil, nextLink, readDeviceList, rerootLink, rootLink, type DeviceClaim, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
 import type { Member } from "@kiwi/core/membership.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
 import { recoveryKey, recoveryLink } from "@kiwi/core/recovery.ts";
-import { postedLists, postList, tendLists, type ListsApi } from "./device-lists";
+import { goneOwn, keepAgents, postedKeeps, postedLists, postedProofs, postList, tendLists, type ListsApi } from "./device-lists";
 import { revokedComputer } from "./forgotten-computers";
 
 const store = new Map<string, string>();
@@ -38,22 +38,30 @@ async function lists() {
   return { person, phone, added, revoked };
 }
 
-const event = (seq: number, from: string, links: DeviceLink[]): Message => ({ seq, from, kind: "event", body: "", ts: seq, ev: { op: "devices", links } }) as unknown as Message;
+const event = (seq: number, from: string, links: DeviceLink[], proof: { device: string; vouch: string } | object = {}, sigOk = true): Message =>
+  ({ seq, from, pk: `pk-${from}`, sigOk, kind: "event", body: "", ts: seq, ev: { op: "devices", links, ...proof } }) as unknown as Message;
 
-function channel(messages: Message[]) {
+function channel(messages: Message[], waiting: Member[] = []) {
   const asked: number[] = [];
   const cuts: DeviceList[] = [];
+  const keeps: Record<string, DeviceClaim>[] = [];
+  const reproves: { list: DeviceList; proofs: Record<string, DeviceClaim> }[] = [];
   const api: ListsApi = {
     history: async (since) => {
       asked.push(since);
       return { messages: messages.filter((m) => m.seq > since) };
     },
-    cutDevices: async (list) => {
+    cutDevices: async (list, kept) => {
       cuts.push(list);
+      keeps.push({ ...kept });
       return [{ name: "jow-2" } as Member];
     },
+    reprove: async (list, proofs) => {
+      reproves.push({ list, proofs });
+      return { proved: [], cut: [], waiting: reproves.length === 1 ? waiting : [] };
+    },
   };
-  return { api, asked, cuts };
+  return { api, asked, cuts, keeps, reproves };
 }
 
 test("each member's longest posted list is the one kept", async () => {
@@ -111,6 +119,69 @@ test("a re-root that keeps every device still gets a cut pass, for the computers
   expect(ch.cuts.map((l) => l.reroots.length)).toEqual([1]);
 });
 
+test("a member's signed proof is kept per channel under its key, and the owner re-proves a re-rooted person's seats until none wait and again when a new proof comes", async () => {
+  const person = await generateIdentity("jow");
+  const desk = await device("desk");
+  const root = [await rootLink(person, { pk: desk.pk, xpk: desk.xpk!, label: "desk", os: "macOS", as: "desktop" })];
+  const paper = await recoveryKey(new Uint8Array(32).fill(9));
+  const chain = [await recoveryLink(person, person.pk, null, { pk: paper.pk, xpk: paper.xpk! })];
+  const read = await readDeviceList(root);
+  if (!read.ok) throw new Error(read.why);
+  const rerooted = [...root, await rerootLink(read.list, paper, chain, await device("next"), [desk.pk])];
+  const proof = { device: desk.pk, vouch: "sig" };
+  const posted = [event(1, "seat", root), event(2, "seat", rerooted, proof), event(3, "other", root), event(4, "forger", rerooted, { device: desk.pk, vouch: "forged" }, false)];
+  expect(postedProofs(posted)).toEqual({ "pk-seat": { links: rerooted, ...proof } });
+
+  const messages = [event(2, "seat", rerooted, proof)];
+  const ch = channel(messages, [{ name: "old-desk" } as Member]);
+  await tendLists("mc2-p", [], ch.api);
+  expect(ch.reproves.map((r) => r.proofs)).toEqual([{ "pk-seat": { links: rerooted, ...proof } }]);
+  await tendLists("mc2-p", [], ch.api);
+  await tendLists("mc2-p", [], ch.api);
+  expect(ch.reproves).toHaveLength(2);
+  messages.push(event(3, "agent", rerooted, { device: desk.pk, vouch: "agent-sig" }));
+  await tendLists("mc2-p", [], ch.api);
+  await tendLists("mc2-p", [], ch.api);
+  expect(ch.reproves).toHaveLength(3);
+  expect(Object.keys(ch.reproves[2]!.proofs).sort()).toEqual(["pk-agent", "pk-seat"]);
+  const elsewhere = channel([]);
+  await tendLists("mc2-q", [], elsewhere.api);
+  expect(elsewhere.reproves.map((r) => r.proofs)).toEqual([{}]);
+});
+
+test("a posted list carries this app's proof for its seat, when it has one", async () => {
+  const { added } = await lists();
+  const sent: object[] = [];
+  const api = { send: async (_: string, o: { ev: object }) => sent.push(o.ev) };
+  await postList("mc2-a", added, api, async () => ({ device: "dev", vouch: "sig" }));
+  await postList("mc2-b", added, api, async () => null);
+  await postList("mc2-c", added, api, async () => {
+    throw new Error("an older app");
+  });
+  expect(sent).toEqual([
+    { op: "devices", links: added, device: "dev", vouch: "sig" },
+    { op: "devices", links: added },
+    { op: "devices", links: added },
+  ]);
+});
+
+test("a person's own app logs the cut of its revoked devices once per channel and list version, and never for a list that revokes nothing (T1408)", async () => {
+  const { phone, added, revoked } = await lists();
+  const asked: DeviceList[] = [];
+  const api = {
+    goneDevices: async (list: DeviceList) => {
+      asked.push(list);
+      return [{ name: "jow-2" } as Member];
+    },
+  };
+  expect(await goneOwn("mc2-a", added, api)).toEqual([]);
+  expect(await goneOwn("mc2-a", [], api)).toEqual([]);
+  expect((await goneOwn("mc2-a", revoked, api)).map((m) => m.name)).toEqual(["jow-2"]);
+  expect(await goneOwn("mc2-a", revoked, api)).toEqual([]);
+  expect((await goneOwn("mc2-b", revoked, api)).map((m) => m.name)).toEqual(["jow-2"]);
+  expect(asked.map((l) => l.revoked)).toEqual([[phone.pk], [phone.pk]]);
+});
+
 test("a pass keeps the lists it read, so the app can tell a request from a forgotten computer (T2622)", async () => {
   const { person, phone, revoked } = await lists();
   const { api } = channel([event(1, "jow", revoked)]);
@@ -118,4 +189,48 @@ test("a pass keeps the lists it read, so the app can tell a request from a forgo
   expect(revokedComputer(person.pk, phone.pk)).toBe(true);
   expect(revokedComputer(person.pk, "someone-else")).toBe(false);
   expect(revokedComputer("another-person", phone.pk)).toBe(false);
+});
+
+test("keeps for a forgotten computer's agents reach the cut: signed ones read from the log, and this app's own before it posts them (T1467)", async () => {
+  const { revoked } = await lists();
+  const keep = { device: "mac", agents: [{ pk: "pk-tortoise", vouch: "sig" }] };
+  const posted = [event(1, "jow", revoked, { keep }), event(2, "forger", revoked, { keep: { device: "evil", agents: [{ pk: "pk-other", vouch: "x" }] } }, false)];
+  expect(postedKeeps(posted)).toEqual({ "pk-tortoise": { links: revoked, device: "mac", vouch: "sig" } });
+
+  const read = channel(posted);
+  await tendLists("mc2-k", [], read.api);
+  expect(read.keeps).toEqual([{ "pk-tortoise": { links: revoked, device: "mac", vouch: "sig" } }]);
+
+  keepAgents("mc2-own", revoked, { device: "mac", agents: [{ pk: "pk-a", vouch: "a" }] });
+  keepAgents("mc2-own", revoked, {
+    device: "mac",
+    agents: [
+      { pk: "pk-b", vouch: "b" },
+      { pk: "pk-a", vouch: "a2" },
+    ],
+  });
+  const own = channel([]);
+  await tendLists("mc2-own", revoked, own.api);
+  expect(own.keeps).toEqual([{ "pk-a": { links: revoked, device: "mac", vouch: "a2" }, "pk-b": { links: revoked, device: "mac", vouch: "b" } }]);
+  const other = channel([]);
+  await tendLists("mc2-else", revoked, other.api);
+  expect(other.keeps).toEqual([{}]);
+});
+
+test("this app's keep rides on its next post into that channel only, and its own cut log honors it (T1467)", async () => {
+  const { added, revoked } = await lists();
+  keepAgents("mc2-a", revoked, { device: "mac", agents: [{ pk: "pk-a", vouch: "a" }] });
+  const sent: object[] = [];
+  const api = { send: async (_: string, o: { ev: object }) => sent.push(o.ev) };
+  await postList("mc2-a", revoked, api);
+  await postList("mc2-b", added, api);
+  expect(sent).toEqual([
+    { op: "devices", links: revoked, keep: { device: "mac", agents: [{ pk: "pk-a", vouch: "a" }] } },
+    { op: "devices", links: added },
+  ]);
+  const asked: Record<string, DeviceClaim>[] = [];
+  const gone = { goneDevices: async (_: DeviceList, keeps: Record<string, DeviceClaim>) => (asked.push({ ...keeps }), []) };
+  await goneOwn("mc2-a", revoked, gone);
+  await goneOwn("mc2-b", revoked, gone);
+  expect(asked).toEqual([{ "pk-a": { links: revoked, device: "mac", vouch: "a" } }, {}]);
 });

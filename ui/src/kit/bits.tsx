@@ -3,6 +3,7 @@ import { Suspense, useEffect, useRef, useState, type CSSProperties, type ReactNo
 import { useMoved } from "~/kit/glide"
 import { Icon, type IconName } from "~/kit/icons"
 import { later } from "~/kit/later"
+import { useMood, type MoodOf } from "~/kit/mood"
 import type { Person, TaskStatus } from "~/model"
 
 export const cx = (...parts: (string | false | null | undefined)[]): string => parts.filter(Boolean).join(" ")
@@ -14,10 +15,11 @@ export function Avatar({
   size = "md",
   pip,
 }: {
-  person: Pick<Person, "name" | "kind" | "harness" | "presence" | "color" | "picture" | "face"> | undefined
+  person: (Pick<Person, "name" | "kind" | "harness" | "presence" | "color" | "picture" | "face"> & MoodOf) | undefined
   size?: "sm" | "md" | "lg"
   pip?: boolean
 }) {
+  const mood = useMood(person?.kind === "agent" ? person : undefined)
   if (!person) return <span className={cx("av", `av-${size}`, "av-gone")} aria-hidden="true" />
   const face = (
     <span
@@ -29,7 +31,7 @@ export function Avatar({
     >
       {person.kind === "agent" ? (
         <Suspense fallback={null}>
-          <RoleFace role={person.face} harness={person.harness} />
+          <RoleFace role={person.face} harness={person.harness} mood={mood} />
         </Suspense>
       ) : person.picture ? (
         <img src={person.picture} alt="" />
@@ -38,7 +40,7 @@ export function Avatar({
       )}
     </span>
   )
-  if (!pip) return face
+  if (!pip || person.kind === "agent") return face
   return (
     <span className="av-wrap" aria-hidden="true">
       {face}
@@ -94,7 +96,7 @@ export function Dialog({ open, onClose, label, children, wide }: { open: boolean
     if (!el) return
     if (open && !el.open) {
       el.showModal()
-      el.querySelector<HTMLElement>("input:not([type=hidden]), textarea, select")?.focus()
+      ;(el.querySelector<HTMLElement>("[autofocus], input:not([type=hidden]), textarea, select") ?? el).focus()
     }
     if (!open && el.open) el.close()
   }, [open])
@@ -103,6 +105,7 @@ export function Dialog({ open, onClose, label, children, wide }: { open: boolean
       ref={ref}
       role="dialog"
       aria-modal="true"
+      tabIndex={-1}
       className={cx("dialog", wide && "is-wide")}
       aria-label={label}
       onClose={() => {
@@ -178,9 +181,6 @@ export function Loading() {
 export function Toggle({ on, onChange, label, id }: { on: boolean; onChange: (on: boolean) => void; label?: string; id?: string }) {
   return (
     <button id={id} type="button" role="switch" aria-checked={on} aria-label={label} className={cx("toggle", on && "is-on")} onClick={() => onChange(!on)}>
-      <span className="toggle-word" aria-hidden="true">
-        {on ? "On" : "Off"}
-      </span>
       <span className="toggle-track" aria-hidden="true">
         <span className="toggle-knob" />
       </span>

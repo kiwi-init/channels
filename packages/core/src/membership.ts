@@ -282,6 +282,8 @@ export async function openRecord(key: string, sealed: string, room: string, owne
   return r && r.signer === ownerPk ? r.member : null;
 }
 
+export const JOIN_BOX_MAX = 256 * 1024;
+
 /**
  * The claims a join request's sealed info may carry: an agent's computer claim, a person's person
  * claim, or neither. Sealed to the owner with the requester's name and role, so the relay can't

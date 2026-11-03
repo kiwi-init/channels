@@ -40,6 +40,36 @@ ol {
   list-style: none;
 }
 
+h1,
+h2,
+h3,
+h4 {
+  text-wrap-style: balance;
+}
+
+p,
+li,
+dd,
+figcaption,
+blockquote {
+  text-wrap-style: pretty;
+}
+
+.av img,
+.tile img,
+.folder-mini img,
+.palette-tile img,
+.cpanel-icon-tile img,
+.msg-images img,
+.md img[role="button"],
+.react-gif img,
+.gifs-item img,
+.compose-file img,
+.annot-thumb img {
+  outline: 1px solid var(--img-edge);
+  outline-offset: -1px;
+}
+
 button,
 input,
 textarea,
@@ -192,8 +222,8 @@ kbd {
   display: grid;
   place-items: center;
   flex: none;
-  width: 28px;
-  height: 28px;
+  width: 1.75rem;
+  height: 1.75rem;
   padding: 0;
   border: 0;
   border-radius: var(--r-row);
@@ -267,7 +297,7 @@ kbd {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 24px;
+  min-height: 1.5rem;
   margin: 0 0 4px;
   padding: 0 8px;
 }
@@ -278,8 +308,8 @@ kbd {
 }
 
 .heading .icon-btn {
-  width: 22px;
-  height: 22px;
+  width: 1.375rem;
+  height: 1.375rem;
   opacity: 0;
 }
 
@@ -292,7 +322,7 @@ kbd {
   display: inline-grid;
   place-items: center;
   min-width: 18px;
-  height: 18px;
+  height: 1.125rem;
   padding: 0 4px;
   border-radius: 999px;
   color: var(--ink-2);
@@ -316,8 +346,8 @@ kbd {
   display: grid;
   place-items: center;
   flex: none;
-  width: 32px;
-  height: 32px;
+  width: 2rem;
+  height: 2rem;
   border: 0;
   color: var(--ink-2);
   font: 600 var(--t-ui) var(--ui);
@@ -332,14 +362,14 @@ kbd {
 }
 
 .av-sm {
-  width: 24px;
-  height: 24px;
+  width: 1.5rem;
+  height: 1.5rem;
   font-size: var(--t-stamp);
 }
 
 .av-lg {
-  width: 56px;
-  height: 56px;
+  width: 3.5rem;
+  height: 3.5rem;
   font-size: var(--t-title);
 }
 
@@ -360,6 +390,200 @@ kbd {
 .face-body,
 .face-badge {
   fill: currentColor;
+}
+
+.face {
+  overflow: visible;
+}
+
+.face .eye {
+  opacity: 0;
+  transform: scale(0.2);
+  transition:
+    opacity var(--fast),
+    transform var(--pop);
+}
+
+.face .eye:not(.eye-line) {
+  fill: #000;
+}
+
+.face .eye-line {
+  fill: none;
+  stroke: #000;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.face :is(.face-rig, .face-look) {
+  transition: transform var(--glide);
+}
+
+.face :is(.face-cross, .face-ask, .face-spark) {
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  scale: 0.3;
+  transition:
+    opacity var(--fast),
+    scale var(--pop);
+}
+
+.face .face-cross {
+  fill: none;
+  stroke: var(--alert);
+  stroke-width: 3.2;
+  stroke-linecap: round;
+}
+
+.face .face-ask {
+  fill: var(--decide);
+}
+
+.face .face-spark {
+  fill: var(--live);
+}
+
+.face:is([data-mood="free"], [data-mood="thinking"]) .eye-dot,
+.face[data-mood="tool"] .eye-bar,
+.face[data-mood="overloaded"] .eye-chev,
+.face[data-mood="offline"] .eye-shut,
+.face[data-mood="done"] .eye-joy {
+  opacity: 1;
+  transform: none;
+}
+
+.face[data-mood="waiting"] .eye-dot {
+  opacity: 1;
+  transform: scale(1.28);
+}
+
+.face[data-mood="error"] .face-cross,
+.face[data-mood="waiting"] .face-ask,
+.face[data-mood="done"] .face-spark {
+  opacity: 1;
+  scale: 1;
+}
+
+.face[data-mood="thinking"] .face-look {
+  transform: translate(2.6px, -3.4px);
+  animation: face-ponder 5.2s ease-in-out 2;
+}
+
+.face[data-mood="tool"] .face-look {
+  transform: translate(0, 3px);
+  animation: face-scan 1.9s ease-in-out 4;
+}
+
+.face[data-mood="waiting"] .face-rig {
+  transform: translate(0, -2.5px);
+  animation: face-perk 0.5s var(--ease);
+}
+
+.face[data-mood="overloaded"] .face-rig {
+  transform: translate(50px, 92px) scale(1.06, 0.92) translate(-50px, -92px);
+  animation: face-shiver 0.5s linear;
+}
+
+.face[data-mood="offline"] .face-rig {
+  transform: translate(0, 2px);
+}
+
+.face[data-mood="done"] .face-rig {
+  animation: face-hop 0.62s cubic-bezier(0.3, 0.7, 0.4, 1);
+}
+
+.face[data-mood="error"] .face-rig {
+  animation: face-shake 0.42s ease-in-out;
+}
+
+.av.is-off .face-badge {
+  fill: var(--ink-3);
+}
+
+@keyframes face-ponder {
+  0%,
+  100% {
+    transform: translate(2.6px, -3.4px);
+  }
+  35% {
+    transform: translate(-2px, -4px);
+  }
+  70% {
+    transform: translate(0.8px, -2.6px);
+  }
+}
+
+@keyframes face-scan {
+  0%,
+  100% {
+    transform: translate(-2.4px, 3px);
+  }
+  50% {
+    transform: translate(2.4px, 3px);
+  }
+}
+
+@keyframes face-perk {
+  0% {
+    transform: none;
+  }
+  40% {
+    transform: translate(0, -6px);
+  }
+  100% {
+    transform: translate(0, -2.5px);
+  }
+}
+
+@keyframes face-hop {
+  0%,
+  62%,
+  100% {
+    transform: none;
+  }
+  30% {
+    transform: translate(0, -9px);
+  }
+  78% {
+    transform: translate(50px, 92px) scale(1.06, 0.93) translate(-50px, -92px);
+  }
+}
+
+@keyframes face-shake {
+  0%,
+  100% {
+    transform: none;
+  }
+  20% {
+    transform: translate(-3.5px, 0);
+  }
+  40% {
+    transform: translate(3.5px, 0);
+  }
+  60% {
+    transform: translate(-2.2px, 0);
+  }
+  80% {
+    transform: translate(1.4px, 0);
+  }
+}
+
+@keyframes face-shiver {
+  0%,
+  100% {
+    transform: translate(50px, 92px) scale(1.06, 0.92) translate(-50px, -92px);
+  }
+  25% {
+    transform: translate(48.8px, 92px) scale(1.08, 0.9) translate(-50px, -92px);
+  }
+  50% {
+    transform: translate(51.2px, 92px) scale(1.05, 0.93) translate(-50px, -92px);
+  }
+  75% {
+    transform: translate(49.4px, 92px) scale(1.07, 0.91) translate(-50px, -92px);
+  }
 }
 
 .av svg {
@@ -511,6 +735,10 @@ kbd {
   box-shadow: var(--shadow-pop);
 }
 
+.dialog:focus {
+  outline: none;
+}
+
 .dialog.is-wide {
   width: min(720px, calc(100vw - 32px));
 }
@@ -535,6 +763,10 @@ kbd {
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+}
+
+.dialog-head:not(:has(p)) {
+  align-items: center;
 }
 
 .dialog-head h2 {
@@ -609,7 +841,7 @@ kbd {
 
 .seg button {
   flex: none;
-  height: 28px;
+  height: 1.75rem;
   padding: 0 10px;
   white-space: nowrap;
   border: 0;
@@ -675,7 +907,6 @@ kbd {
   align-items: center;
   gap: 10px;
   padding-right: 6px;
-  pointer-events: auto;
 }
 
 .toast-close {
@@ -688,6 +919,7 @@ kbd {
   background: none;
   color: inherit;
   cursor: pointer;
+  pointer-events: auto;
 }
 
 .toast-close:hover {
@@ -716,7 +948,7 @@ kbd {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  height: 28px;
+  height: 1.75rem;
   padding: 0;
   border: 0;
   border-radius: var(--r-row);
@@ -727,11 +959,6 @@ kbd {
 
 .toggle.is-on {
   color: var(--ink);
-}
-
-.toggle-word {
-  min-width: 22px;
-  text-align: right;
 }
 
 .toggle-track {
@@ -810,14 +1037,9 @@ html .day,
 html .num,
 html .count,
 html .tile-badge,
-html .top-meta,
-html .side-role,
-html .side-status,
 html .panel-sub,
 html .msg-time,
 html .msg-time-hover,
-html .msg-role,
-html .msg-runs,
 html .msg-thread-n,
 html .thread-count,
 html .working,
@@ -838,7 +1060,11 @@ html .person-kind,
 html .set-device-meta,
 html .palette-meta,
 html .add-who-meta,
-html .theme-when {
+html .theme-when,
+html .now-counts,
+html .lane-sub,
+html .home-chip-needs,
+html .needs-until {
   font-family: var(--mono);
   letter-spacing: -0.01em;
 }
@@ -850,13 +1076,8 @@ html .msg-thread-n {
 
 html .heading h3,
 html .day,
-html .top-meta,
-html .side-role,
-html .side-status,
 html .msg-time,
 html .msg-time-hover,
-html .msg-role,
-html .msg-runs,
 html .thread-count,
 html .working,
 html .sys time,
@@ -879,12 +1100,8 @@ html .theme-when {
 
 html .heading h3,
 html .day,
-html .top-meta,
-html .side-role,
 html .msg-time,
 html .msg-time-hover,
-html .msg-role,
-html .msg-runs,
 html .thread-count,
 html .chip-id,
 html .chip-meta,
@@ -902,8 +1119,7 @@ html .msg-name {
   font-weight: 600;
 }
 
-html .chip-title,
-html .side-name {
+html .chip-title {
   font-weight: 500;
 }
 
@@ -1047,7 +1263,6 @@ html .md {
 .seg[data-glide] button,
 .tabs[data-glide] button,
 .side[data-glide] .side-row,
-.side[data-glide] .side-member,
 .set-nav[data-glide] .side-row {
   position: relative;
 }
@@ -1097,7 +1312,6 @@ html .feed-jump:active {
 }
 
 .side-row,
-.side-member,
 .board-row,
 .lane-row,
 .lane-task,
@@ -1106,11 +1320,10 @@ html .feed-jump:active {
 .task-pick-row,
 .stash-row,
 .mention-row {
-  transition: background var(--slow) var(--ease);
+  transition: background var(--fast) var(--ease);
 }
 
 .side-row:hover,
-.side-member:hover,
 .board-row:hover,
 .lane-row:hover,
 .lane-task:hover,
@@ -1160,15 +1373,11 @@ html .feed-jump:active {
   height: 6px;
 }
 
-html .top-meta,
 html .board-meta,
-html .msg-role,
-html .msg-runs,
 html .msg-time,
 html .chip-meta,
 html .needs-meta,
 html .set-device-meta,
-html .side-status,
 html .panel-sub,
 html .person-kind {
   word-spacing: -0.2em;
@@ -1198,11 +1407,12 @@ html .person-kind {
   border: 0;
   border-radius: 50%;
   background: var(--member);
-  transition: transform var(--fast);
+  transition: outline-color var(--fast);
 }
 
 .swatch:hover {
-  transform: scale(1.12);
+  outline: 2px solid var(--line-3);
+  outline-offset: 2px;
 }
 
 .swatch[aria-pressed="true"] {

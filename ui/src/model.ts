@@ -5,7 +5,7 @@ import type { Personality } from "@kiwi/core/personality.ts"
 import type { GithubNote, Step, StepReply } from "@kiwi/core/protocol.ts"
 import type { PlacedSeat, TerminalId, TerminalRow } from "@kiwi/core/terminals.ts"
 
-export type Harness = "claude" | "codex" | "opencode" | "gemini" | "cursor" | "grok" | "kimi" | "mimo" | "pi" | "grok-bot" | "zcode" | "other"
+export type Harness = "claude" | "codex" | "opencode" | "gemini" | "cursor" | "grok" | "kimi" | "mimo" | "pi" | "grok-bot" | "zcode" | "agy" | "other"
 
 type Presence = "online" | "away" | "offline"
 
@@ -29,6 +29,16 @@ export interface Load {
   doing: number[]
   queued: number[]
   waiting: number[]
+}
+
+export interface KeptAgent {
+  code: string
+  pk: string
+  from: string
+}
+
+export interface LaunchedAgent extends KeptAgent {
+  name: string
 }
 
 export interface Person {
@@ -59,6 +69,8 @@ export interface Person {
   yours?: boolean
   about?: string
   load?: Load
+  red?: true
+  doneAt?: number
   readOnly?: boolean
   wakes?: boolean
   seat?: PlacedSeat["place"]
@@ -246,6 +258,20 @@ export interface Room {
   muted?: true
 }
 
+export interface OlderHit {
+  seq: number
+  from: string
+  text: string
+  at: number
+  where: Where
+}
+
+export interface OlderSearch {
+  state: "ready" | "indexing" | "none"
+  hits: OlderHit[]
+  more: { since: number | null; upTo: number } | null
+}
+
 export interface Direct {
   with: string
   unread: number
@@ -288,6 +314,17 @@ export interface Said {
   tone: "quiet" | "ask" | "alert" | "decide"
 }
 
+export interface ThreadItem {
+  root: number
+  following: boolean
+  replies: number
+  unread: number
+  mentions: number
+  last: number
+  lastSeq: number
+  people: string[]
+}
+
 export interface Message {
   seq: number
   from: string
@@ -299,6 +336,7 @@ export interface Message {
   said?: Said
   replyTo?: number
   inThread?: number
+  side?: true
   thread?: { replies: number; last: number; people: string[] }
   task?: number
   prs?: PullRequest[]
@@ -406,6 +444,25 @@ export interface ReviewAsk {
 
 export type Ask = PermissionAsk | QuestionAsk | JoinAsk | ReviewAsk | SpecAsk
 
+export type HomeAct = { kind: "options"; options: string[] } | { kind: "allow" } | { kind: "approve-spec"; ask: number; v: number } | { kind: "approve-task"; task: number } | { kind: "open" }
+
+export interface HomeAsk {
+  id: string
+  at: number
+  text: string
+  act: HomeAct
+}
+
+export interface HomeChannel {
+  code: string
+  title: string
+  lead: string | null
+  leadName: string | null
+  working: number
+  asks: HomeAsk[]
+  loading?: true
+}
+
 export interface ChannelTile {
   code: string
   title: string
@@ -443,11 +500,13 @@ interface TermScreen {
 export interface TermTab {
   pane: string
   label: string
+  machine?: string
 }
 
 export interface TermWatch {
   out(text: string): void
   ended(): void
+  lost?(): void
 }
 
 export interface TermLink {
@@ -494,6 +553,8 @@ export interface Channel {
   branchPrefix?: string
   rooms: Room[]
   directs: Direct[]
+  threads?: ThreadItem[]
+  follows?: Readonly<Record<number, boolean>>
   theirs: TheirDirect[]
   people: Person[]
   former?: Person[]
@@ -577,6 +638,16 @@ export interface RecoverTrouble {
   word?: number
 }
 
+export interface RerootDevice {
+  id: string
+  label: string
+  os: string
+  as: "desktop" | "phone" | "computer"
+  here: boolean
+}
+
+export type RerootOpened = { ok: true; devices: RerootDevice[]; channels: string[] } | { ok: false; trouble: RecoverTrouble }
+
 export interface Device {
   id: string
   label: string
@@ -584,6 +655,7 @@ export interface Device {
   as: "desktop" | "phone" | "computer"
   until: number
   thisOne: boolean
+  app?: string
 }
 
 export interface RecoveryState {
@@ -664,11 +736,12 @@ export interface NewAgent {
 export type Launching = { stage: "started" } | { stage: "asked"; name: string } | { stage: "joined"; name: string } | { stage: "failed"; why: string }
 
 export interface Actions {
-  send(code: string, where: Where, text: string, opts?: { replyTo?: number; inThread?: number; images?: Upload[] }): void
+  send(code: string, where: Where, text: string, opts?: { replyTo?: number; inThread?: number; side?: true; images?: Upload[] }): void
   retry(code: string, seq: number): void
   loadImage(code: string, spot: string): void
   discard(code: string, seq: number): void
   markRead(code: string, where: Where): void
+  followThread(code: string, root: number, on: boolean): void
   leaveRoom(code: string, room: string): void
   react(code: string, seq: number, emoji: string): void
   editMessage(code: string, seq: number, text: string): void
@@ -700,9 +773,11 @@ export interface Actions {
   addAgent(code: string, agent: NewAgent, seen: (s: Launching) => void): () => void
   showAgent(code: string, name: string): Promise<string | null>
   openTerm(code: string, name: string, cols: number, rows: number, watch: TermWatch): Promise<TermOpened>
-  openMyTerm(code: string, want: string | null, cols: number, rows: number, watch: TermWatch): Promise<TermOpened>
+  openMyTerm(code: string, want: string | null, cols: number, rows: number, watch: TermWatch, machine?: string): Promise<TermOpened>
   myTerms(): Promise<TermTab[]>
   closeMyTerm(pane: string): Promise<TermTab[]>
+  remoteTerms(machine: string): Promise<TermTab[]>
+  closeRemoteTerm(machine: string, pane: string): Promise<TermTab[]>
   choicesOn(code: string, computer: string): Promise<ComputerChoices>
   chooseFolder(): Promise<string | null>
   addRoom(code: string, name: string, members?: string[]): Promise<string | null>
@@ -730,6 +805,9 @@ export interface Actions {
   setName(name: string): void
   setPrefs(prefs: Partial<Prefs>): void
   setMute(code: string, room: string | null, on: boolean): void
+  searchOlder(code: string, query: string, before: number): Promise<OlderSearch>
+  olderAround(code: string, seq: number): Promise<OlderHit[] | null>
+  fetchOlder(code: string, got: (asked: number) => void): Promise<void>
   snooze(until: "1h" | "8h" | "tomorrow" | null): void
   forgetComputer(id: string): void
   linkGithub(): void
@@ -747,12 +825,15 @@ export interface Actions {
   enrollAnswer(id: string): void
   enrollConfirm(id: string, digits: string): Promise<{ ok: true } | { ok: false; left: number }>
   enrollDeny(id: string): void
-  forgetDevice(id: string): void
-  renewDevice(id: string): void
+  forgetDevice(ids: string[], keep?: KeptAgent[]): void
+  renewDevice(...ids: string[]): void
   recoveryWords(): Promise<string[] | null>
   recoverySave(typed: { at: number; word: string }[]): Promise<RecoverySaved | null>
   recoveryDrop(): void
   recoveryCancel(words: string): Promise<RecoverTrouble | null>
+  rerootOpen(words: string): Promise<RerootOpened | null>
+  rerootFinish(keep: string[]): Promise<boolean>
+  rerootCancel(): void
   enrollBegin(): void
   enrollKeep(): void
   enrollCancel(): void
@@ -772,6 +853,7 @@ export interface Actions {
   setTerminalHelpers(id: TerminalId, on: boolean): void
   setContextLine(on: boolean): void
   computerSettings(id: string): Promise<[string, string[]][]>
+  launchedFrom(ids: string[]): Promise<LaunchedAgent[]>
 }
 
 export type Finding = { ok: true; what: string } | { ok: false; what: string; how: string }
@@ -798,6 +880,7 @@ export interface GoneChannel {
 export interface App {
   account: Account | null
   channels: ChannelTile[]
+  home: HomeChannel[]
   channel: Channel | null
   gone?: GoneChannel
   prefs: Prefs

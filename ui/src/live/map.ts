@@ -91,6 +91,7 @@ const HARNESS_OF: Record<string, Harness> = {
   pi: "pi",
   "grok-bot": "grok-bot",
   zcode: "zcode",
+  antigravity: "agy",
 }
 
 export function harnessOf(raw: string | undefined): Harness | undefined {
@@ -113,6 +114,17 @@ function activityOf(here: Online | undefined): Activity | undefined {
     ...(a.since ? { since: a.since } : {}),
     ...(a.context ? { context: a.context.window ? { used: a.context.used, window: a.context.window } : { used: a.context.used } } : {}),
   }
+}
+
+function workOf(state: ChannelState, m: StateMember): { red?: true; doneAt?: number } {
+  let doneAt: number | undefined
+  let red = false
+  for (const t of state.tasks.values()) {
+    if (t.owner !== m.name || t.cancelled) continue
+    if (t.state === "done") doneAt = Math.max(doneAt ?? 0, t.updatedAt)
+    else if (t.state === "doing" || t.state === "review") red ||= stageOf(state, t).stage === "red"
+  }
+  return { ...(red ? { red: true } : {}), ...(doneAt !== undefined ? { doneAt } : {}) }
 }
 
 function loadOf(state: ChannelState, m: StateMember): Load | undefined {
@@ -170,6 +182,7 @@ function personOf(state: ChannelState, m: StateMember, record: RosterMember | un
     ...(!human && sponsorsAgent(state.members, me, m.name) ? { yours: true } : {}),
     ...(m.card?.note ? { about: m.card.note } : {}),
     ...(load ? { load } : {}),
+    ...(human ? {} : workOf(state, m)),
     ...(!m.owner && !canPost(m.scopes) ? { readOnly: true } : {}),
     ...(!human && wakes.has(m.name) ? { wakes: wakes.get(m.name) === true } : {}),
     ...(human && m.addsAgents ? { addsAgents: true } : {}),
@@ -199,11 +212,13 @@ export function formerOf(state: ChannelState, me: string): Person[] {
     .map((m) => ({ ...personOf(state, m, undefined, undefined, me, new Map()), presence: "offline" as const, left: true }))
 }
 
+const offTheRoom = (state: Pick<ChannelState, "threadOf">, m: Pick<Wire, "seq" | "side">): boolean => m.side === true && (state.threadOf.get(m.seq) ?? m.seq) !== m.seq
+
 export function roomsOf(state: ChannelState, messages: readonly Wire[], me: string, seen: Seen, from: number): Room[] {
   const unread = new Map<string, number>()
   const mentions = new Map<string, number>()
   for (const m of messages) {
-    if (m.kind === "event" || m.from === me || ignored(state.trust.get(m.seq))) continue
+    if (m.kind === "event" || m.from === me || ignored(state.trust.get(m.seq)) || (offTheRoom(state, m) && !mentionsYou(m, me))) continue
     if ((state.placeOf.get(m.seq) ?? MAIN).kind !== "main") continue
     const id = roomOfMessage(state, m)
     if (state.rooms.get(id)?.dm) continue
@@ -400,6 +415,7 @@ export interface Pending {
   text: string
   at: number
   inThread?: number
+  side?: true
   replyTo?: number
   seq?: number
   failed?: string
@@ -485,6 +501,7 @@ export function messagesOf(state: ChannelState, messages: readonly Wire[], me: s
       ...(!gone && editable(m) && sameAuthor(state.members.get(m.from), state.members.get(me)) ? { canChange: true as const } : {}),
       ...(said ? { said } : {}),
       ...(root !== undefined ? { inThread: root } : {}),
+      ...(root !== undefined && m.side ? { side: true as const } : {}),
       ...(quoted !== undefined && quoted !== root && target?.kind !== "event" ? { replyTo: quoted } : {}),
       ...(threads.has(m.seq) ? { thread: threads.get(m.seq) } : {}),
       ...(m.kind === "done" && m.task !== undefined && !state.rejected.has(m.seq) ? { task: m.task, done: true } : {}),
@@ -505,6 +522,7 @@ export function messagesOf(state: ChannelState, messages: readonly Wire[], me: s
       where: p.where,
       ...(p.failed !== undefined ? { failed: p.failed } : { pending: true }),
       ...(p.inThread !== undefined ? { inThread: p.inThread } : {}),
+      ...(p.inThread !== undefined && p.side ? { side: true as const } : {}),
       ...(p.replyTo !== undefined ? { replyTo: p.replyTo } : {}),
       ...(p.images?.length ? { images: p.images.map((i) => ({ url: `data:${i.mime};base64,${i.data}`, width: 0, height: 0, alt: i.name })) } : {}),
     })

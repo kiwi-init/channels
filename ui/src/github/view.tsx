@@ -59,28 +59,6 @@ export function GithubView({ channel }: { channel: Channel }) {
               Issues <Count n={issues.filter(isOpen).length} />
             </button>
           </Track>
-          <label className="gh-find">
-            <Icon name="search" size={14} />
-            <input
-              value={query}
-              aria-label={kind === "prs" ? "Filter pull requests" : "Filter issues"}
-              placeholder={kind === "prs" ? "Title, #number, author or branch" : "Title, #number or author"}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Escape" && query) {
-                  e.stopPropagation()
-                  setQuery("")
-                }
-              }}
-            />
-            {query && (
-              <button type="button" className="gh-find-clear" aria-label="Clear the filter" onClick={() => setQuery("")}>
-                <Icon name="close" size={12} />
-              </button>
-            )}
-          </label>
-        </div>
-        <div className="gh-bar">
           <Track className="seg" role="group" aria-label="Open or closed">
             <button type="button" aria-pressed={shown === "open"} onClick={() => setShown("open")}>
               Open <span className="gh-n num">{open}</span>
@@ -89,47 +67,52 @@ export function GithubView({ channel }: { channel: Channel }) {
               Closed <span className="gh-n num">{items.length - open}</span>
             </button>
           </Track>
-          {many && (
-            <Track className="seg gh-repos" role="group" aria-label="Repo">
-              <button type="button" aria-pressed={repo === null} onClick={() => setRepo(null)}>
-                All repos
-              </button>
-              {repos.map((r) => (
-                <button key={r} type="button" aria-pressed={repo?.toLowerCase() === r.toLowerCase()} title={r} onClick={() => setRepo(r)}>
-                  {shortRepo(r, repos)}
+          <div className="gh-end">
+            {many && (
+              <Track className="seg gh-repos" role="group" aria-label="Repo">
+                <button type="button" aria-pressed={repo === null} onClick={() => setRepo(null)}>
+                  All repos
                 </button>
-              ))}
-            </Track>
-          )}
+                {repos.map((r) => (
+                  <button key={r} type="button" aria-pressed={repo?.toLowerCase() === r.toLowerCase()} title={r} onClick={() => setRepo(r)}>
+                    {shortRepo(r, repos)}
+                  </button>
+                ))}
+              </Track>
+            )}
+            <label className="gh-find">
+              <Icon name="search" size={14} />
+              <input
+                value={query}
+                aria-label={kind === "prs" ? "Filter pull requests" : "Filter issues"}
+                placeholder="Filter"
+                title={kind === "prs" ? "Title, #number, author or branch" : "Title, #number or author"}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape" && query) {
+                    e.stopPropagation()
+                    setQuery("")
+                  }
+                }}
+              />
+              {query && (
+                <button type="button" className="gh-find-clear" aria-label="Clear the filter" onClick={() => setQuery("")}>
+                  <Icon name="close" size={12} />
+                </button>
+              )}
+            </label>
+          </div>
         </div>
         {kind === "prs" ? (
           <Groups
             groups={prGroups(prs, shown)}
-            empty={
-              <Nothing
-                query={query}
-                clear={() => setQuery("")}
-                what={shown === "open" ? "open pull requests" : "closed pull requests"}
-                hint={shown === "open" ? "A pull request opened in a linked repo shows up here with its checks." : "Merged and closed pull requests stay here for a while."}
-                icon="pr"
-                trouble={trouble}
-              />
-            }
+            empty={<Nothing query={query} clear={() => setQuery("")} what={shown === "open" ? "open pull requests" : "closed pull requests"} icon="pr" trouble={trouble} />}
             row={(pr: PullRequest) => <PrRow key={`${pr.repo}#${pr.number}`} channel={channel} pr={pr} repos={many ? repos : null} />}
           />
         ) : (
           <Groups
             groups={issueGroups(issues, shown)}
-            empty={
-              <Nothing
-                query={query}
-                clear={() => setQuery("")}
-                what={shown === "open" ? "open issues" : "closed issues"}
-                hint={shown === "open" ? "An issue opened in a linked repo shows up here, with the task it became." : "Closed issues stay here for a while."}
-                icon="issue"
-                trouble={trouble}
-              />
-            }
+            empty={<Nothing query={query} clear={() => setQuery("")} what={shown === "open" ? "open issues" : "closed issues"} icon="issue" trouble={trouble} />}
             row={(i: Issue) => <IssueRow key={`${i.repo}#${i.number}`} channel={channel} issue={i} repos={many ? repos : null} />}
           />
         )}
@@ -141,11 +124,11 @@ export function GithubView({ channel }: { channel: Channel }) {
 function Groups<T>({ groups, empty, row }: { groups: Group<T>[]; empty: ReactNode; row: (x: T) => ReactNode }) {
   if (!groups.length) return <>{empty}</>
   return (
-    <>
+    <div className="board-stack">
       {groups.map((g) => (
         <GroupCard key={g.key} group={g} row={row} />
       ))}
-    </>
+    </div>
   )
 }
 
@@ -156,18 +139,14 @@ function GroupCard<T>({ group, row }: { group: Group<T>; row: (x: T) => ReactNod
     <section className={cx("board-group gh-group", `is-${group.key}`)} aria-label={group.label}>
       <div className="board-head">
         <h2 className="board-h">
-          {LOUD[group.key] && <span className={cx("gh-group-dot", `is-${group.key}`)} aria-hidden="true" />}
           <span className={cx("board-label", LOUD[group.key])}>{group.label}</span>
           <span className="board-n num">{group.rows.length}</span>
         </h2>
-        <p className="board-sub">
-          <span>{group.sub}</span>
-        </p>
       </div>
       <ul className="gh-rows">{rows.map(row)}</ul>
       {group.rows.length > SHOWN && (
         <button type="button" className="board-more" onClick={() => setAll(!all)}>
-          {all ? "Show fewer" : `Show all ${group.rows.length}`}
+          {all ? "Show fewer" : `Show ${group.rows.length - SHOWN} more`}
         </button>
       )}
     </section>
@@ -178,7 +157,7 @@ const EVENT_NAMES: Record<string, string> = { pull_request: "Pull request", chec
 
 const listed = (xs: readonly string[]): string => (xs.length < 2 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`)
 
-function Nothing({ query, clear, what, hint, icon, trouble }: { query: string; clear: () => void; what: string; hint: string; icon: "pr" | "issue"; trouble: GithubTrouble | null }) {
+function Nothing({ query, clear, what, icon, trouble }: { query: string; clear: () => void; what: string; icon: "pr" | "issue"; trouble: GithubTrouble | null }) {
   if (query.trim())
     return (
       <Empty title={`No ${what} match “${query.trim()}”.`} icon="search">
@@ -224,8 +203,7 @@ function Nothing({ query, clear, what, hint, icon, trouble }: { query: string; c
     )
   return (
     <Empty title={`No ${what}.`} icon={icon}>
-      {hint}
-      {trouble?.kind === "quiet" && <p>{trouble.last === null ? "GitHub hasn't sent this channel anything yet." : `GitHub's last news came ${since(trouble.last)}.`}</p>}
+      {trouble?.kind === "quiet" && (trouble.last === null ? "GitHub hasn't sent this channel anything yet." : `GitHub's last news came ${since(trouble.last)}.`)}
     </Empty>
   )
 }
@@ -236,7 +214,6 @@ function NoRepo() {
     <div className="board">
       <div className="board-list gh-list">
         <Empty title="No GitHub repo linked yet." icon="github">
-          <p>Link a repo in the channel's settings. Its pull requests, their checks and its issues show up here as GitHub reports them, each beside the task it belongs to.</p>
           <button type="button" className="btn is-small gh-empty-btn" onClick={() => go({ to: "panel", panel: { kind: "channel" } })}>
             Open channel settings
           </button>
@@ -273,11 +250,9 @@ function Item({ on, url, label, open, issue, children }: { on: boolean; url: str
 function ciWord(pr: PullRequest): string {
   const t = pr.ticks
   const ci = ciOf(pr)
-  if (ci === "none") return "no checks yet"
   if (t && ci === "fail") return t.failed.length === 1 ? (t.failed[0] ?? "1 failed") : `${t.failed.length} failed`
   if (t && ci === "running") return `${t.passed} of ${t.passed + t.running + t.failed.length}`
-  if (t && ci === "ready") return `${t.passed} passed`
-  return ci === "fail" ? "failed" : ci === "running" ? "running" : "passed"
+  return ci === "fail" ? "failed" : "running"
 }
 
 function PrRow({ channel, pr, repos }: { channel: Channel; pr: PullRequest; repos: string[] | null }) {
@@ -296,12 +271,12 @@ function PrRow({ channel, pr, repos }: { channel: Channel; pr: PullRequest; repo
         {pr.by && <span>{pr.by}</span>}
         {closed ? <span>{`${pr.state} ${ago(pr.at ?? 0)}`}</span> : pr.at !== undefined && <span>{ago(pr.at)}</span>}
         {pr.release && <span>shipped in {pr.release}</span>}
-        {line && !closed && <span className={cx("gh-meta-ci", line.tone)}>{line.text}</span>}
+        {line && (ci === "fail" || ci === "running") && <span className={cx("gh-meta-ci", line.tone)}>{line.text}</span>}
       </span>
       <span className={cx("gh-col-ci", closed && "is-quiet")}>
         {!closed && pr.list?.length ? <Ticks list={pr.list} /> : null}
-        {!closed && (
-          <span className={cx("gh-ci-word", line?.tone, ci === "none" && "is-none")} title={pr.ticks?.failed.length ? `Failed: ${pr.ticks.failed.join(", ")}` : undefined}>
+        {!closed && (ci === "fail" || ci === "running") && (
+          <span className={cx("gh-ci-word", line?.tone)} title={pr.ticks?.failed.length ? `Failed: ${pr.ticks.failed.join(", ")}` : undefined}>
             {ciWord(pr)}
           </span>
         )}

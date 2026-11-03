@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState, type CSSProperties } from "react"
 
 import { Conversation } from "~/chat/conversation"
-import type { Jump } from "~/chat/search-box"
+import type { Jump, Older } from "~/chat/search-box"
 import { cx, Count, IconButton, useLate } from "~/kit/bits"
 import { useGlide } from "~/kit/glide"
 import { Boundary } from "~/kit/boundary"
@@ -12,6 +12,7 @@ import { drawerNews } from "~/live/notify"
 import { dropMessage, findWanted, useWantedMessage } from "~/live/open-message"
 import { openAsks } from "~/needs/open"
 import { sameWhere, useApp } from "~/nav"
+import { whereKey } from "~/places"
 import { ThreadPanel } from "~/panels/thread"
 import { SIDEBAR_KEYS, useSidebarHidden } from "@kiwi/app/sidebar-hidden.ts"
 import { usePanelWidth } from "~/shell/panel-width"
@@ -26,12 +27,14 @@ const TermDrawer = lazy(() => import("~/term/drawer"))
 const TallPage = lazy(() => import("~/shell/tall"))
 const Waiting = later(() => import("~/start/waiting").then((m) => m.Waiting))
 const SearchBox = later(() => import("~/chat/search-box").then((m) => m.SearchBox))
+const OlderView = later(() => import("~/chat/older-view").then((m) => m.OlderView))
 const Lanes = later(() => import("~/tasks/lanes").then((m) => m.Lanes))
 const GithubView = later(() => import("~/github/view").then((m) => m.GithubView))
 const SpecsView = later(() => import("~/specs/view").then((m) => m.SpecsView))
 const PrPanel = later(() => import("~/github/panel").then((m) => m.PrPanel))
 const IssuePanel = later(() => import("~/github/panel").then((m) => m.IssuePanel))
 const NeedsYou = later(() => import("~/needs/needs").then((m) => m.NeedsYou))
+const ThreadsView = later(() => import("~/chat/threads-view").then((m) => m.ThreadsView))
 const TaskPanel = later(() => import("~/panels/task").then((m) => m.TaskPanel))
 const PersonPanel = later(() => import("~/panels/person").then((m) => m.PersonPanel))
 const ChannelPanel = later(() => import("~/panels/channel-panel").then((m) => m.ChannelPanel))
@@ -42,7 +45,14 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   const { nav, go } = useApp()
   const hidden = useSidebarHidden()
   const panel = usePanelWidth(hidden)
-  const [jump, setJump] = useState<Jump | null>(null)
+  const [jumpAt, setJumpAt] = useState<{ jump: Jump; visit: number } | null>(null)
+  const jump = jumpAt?.visit === nav.visit ? jumpAt.jump : null
+  const setJump = (j: Jump | null) => setJumpAt(j ? { jump: j, visit: nav.visit } : null)
+  const place = `${channel.code}\n${nav.tab}\n${whereKey(nav.where)}`
+  const [olderAt, setOlderAt] = useState<{ older: Older; place: string } | null>(null)
+  if (olderAt && olderAt.place !== place) setOlderAt(null)
+  const older = olderAt?.older ?? null
+  const setOlder = (o: Older | null) => setOlderAt(o ? { older: o, place } : null)
   const [focusAsk, setFocusAsk] = useState(0)
   if (jump && (nav.tab !== "chat" || !sameWhere(jump.m.where, nav.where))) setJump(null)
   const wanted = useWantedMessage()
@@ -56,11 +66,16 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
     if (!wanted) return
     if (found.kind === "missing") return dropMessage(wanted)
     if (!anchor) return
-    if (!atAnchor) return go({ to: "where", where: anchor.where })
+    if (!atAnchor) return go({ to: "where", where: anchor.where, replace: true })
     if (jump?.m.seq !== anchor.seq) return
     if (root !== undefined) go({ to: "panel", panel: { kind: "thread", seq: root, focus: wanted.seq } })
     dropMessage(wanted)
   }, [wanted, found.kind, anchor, root, atAnchor, jump, go])
+  const room = nav.where.kind === "room" ? nav.where.room : null
+  const gone = room !== null && !channel.loading && channel.connection === "live" && nav.tab === "chat" && !channel.rooms.some((r) => r.id === room)
+  useEffect(() => {
+    if (gone) go({ to: "where", where: { kind: "room", room: "general" }, replace: true })
+  }, [gone, go])
   const [searching, setSearching] = useState(false)
   const drawer = useDrawer()
   const tall = useTall()
@@ -158,14 +173,12 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
               onClick={() => go({ to: "spec", ask: null })}
               title={specsNeed ? `${specsNeed} waiting on you` : `${specs.length} open specs, ${tasks} open tasks`}
             >
-              <Icon name="spec" size={14} />
-              Specs <Count n={specs.length} />
+              Specs
               {specsNeed > 0 && <span className="tab-red is-decide" role="img" aria-label="waiting on you" />}
             </button>
           )}
           {!tall && (agents || nav.tab === "agents") && (
-            <button type="button" className="is-agents" aria-pressed={nav.tab === "agents"} onClick={() => go({ to: "tab", tab: "agents" })}>
-              <Icon name="agent" size={14} />
+            <button type="button" className="is-agents" aria-pressed={nav.tab === "agents"} title={line.length ? line.join(" · ") : undefined} onClick={() => go({ to: "tab", tab: "agents" })}>
               Agents
             </button>
           )}
@@ -176,21 +189,18 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
               onClick={() => go({ to: "tab", tab: "github" })}
               title={red ? "An open pull request's checks failed" : `${openPrs.length} open pull requests, ${openIssues} open issues`}
             >
-              <Icon name="github" size={14} />
-              GitHub <Count n={openPrs.length} />
+              GitHub
               {red && <span className="tab-red" role="img" aria-label="checks failed" />}
             </button>
           )}
           {(needs > 0 || nav.tab === "needs") && (
             <button type="button" className="is-needs" aria-pressed={nav.tab === "needs"} onClick={() => go({ to: "tab", tab: "needs" })}>
-              <Icon name="needs" size={14} />
               Needs you <Count n={needs} loud />
             </button>
           )}
         </nav>
         <div className={cx("top-tools", searching && "is-searching")}>
-          {line.length > 0 && <span className="top-meta num">{line.join(" · ")}</span>}
-          {channel.hold && (
+          {channel.hold && nav.tab !== "chat" && (
             <span className="top-hold" title={channel.hold.note}>
               paused
             </span>
@@ -198,7 +208,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
           {searching && (
             <div className="top-find">
               <Suspense fallback={null}>
-                <SearchBox channel={channel} focusAsk={focusAsk} onJump={setJump} onClose={() => setSearching(false)} />
+                <SearchBox channel={channel} focusAsk={focusAsk} onJump={(j) => (j && setOlder(null), setJump(j))} onOlder={setOlder} onClose={() => setSearching(false)} />
               </Suspense>
             </div>
           )}
@@ -212,7 +222,9 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
       <main className={cx("main", paged && "is-tall")}>
         <Boundary resetKey={nav.tab}>
           <Suspense fallback={null}>
-            {paged ? (
+            {older ? (
+              <OlderView channel={channel} older={older} onBack={() => setOlder(null)} />
+            ) : paged ? (
               <TallPage
                 channel={channel}
                 jump={jump}
@@ -233,6 +245,8 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
               <SpecsView channel={channel} />
             ) : nav.tab === "needs" ? (
               <NeedsYou channel={channel} onJump={setJump} />
+            ) : nav.tab === "threads" ? (
+              <ThreadsView channel={channel} />
             ) : (
               <Conversation channel={channel} jump={jump} />
             )}

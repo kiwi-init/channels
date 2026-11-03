@@ -1,28 +1,61 @@
+.cpanel > * + * {
+  margin-top: 24px;
+}
+
 .cpanel .panel-section + .panel-section {
-  margin-top: 0;
+  margin-top: 24px;
 }
 
 .cpanel-part {
   display: grid;
   gap: 8px;
-  padding: 12px 0;
-}
-
-.cpanel-part:first-child {
-  padding-top: 0;
 }
 
 .cpanel-part > .heading {
   margin: 0;
 }
 
-.cpanel-part > .seg {
-  justify-self: start;
+.cpanel-id {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+
+.cpanel-id-text {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+
+.cpanel-name,
+.cpanel-id .set-inline-value {
+  overflow: hidden;
+  color: var(--ink);
+  font: 600 var(--t-title) var(--ui);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.cpanel-id .set-inline {
+  justify-content: space-between;
+}
+
+.cpanel-id .set-inline > .btn.is-quiet:last-child {
+  margin-right: -8px;
 }
 
 .cpanel-value {
+  min-width: 0;
   color: var(--ink);
   font: var(--t-ui) var(--ui);
+}
+
+.cpanel-state {
+  color: var(--ink-2);
+  font: var(--t-meta) var(--mono);
+  letter-spacing: -0.01em;
 }
 
 .cpanel-hint,
@@ -45,14 +78,18 @@
   gap: 8px;
 }
 
+.cpanel-save {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
 .cpanel-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-}
-
-.cpanel-list {
+  min-height: var(--ctl);
 }
 
 .cpanel-item {
@@ -73,6 +110,11 @@
   text-overflow: ellipsis;
 }
 
+.cpanel-repo:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .cpanel-add {
   display: flex;
   gap: 8px;
@@ -82,12 +124,9 @@
   flex: 1;
 }
 
-.cpanel-add .btn {
-}
-
 .cpanel-hold {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .cpanel-held {
@@ -125,48 +164,69 @@
 }
 
 .cpanel-downloads {
-  display: grid;
-  justify-items: start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
   margin: 0 -8px;
 }
 
-.cpanel-download {
-  gap: 10px;
-  padding: 0 8px;
+.cpanel-downloads .btn {
+  gap: 6px;
 }
 
 .cpanel-end {
-  padding: 24px 0 8px;
+  padding: 8px 0;
+}
+
+.cpanel-end > .btn {
+  margin-left: -8px;
+  color: var(--alert);
+}
+
+.cpanel-end > .btn:hover:not(:disabled) {
+  background: var(--alert-wash);
+  color: var(--alert);
 }
 
 .cpanel-github {
   display: grid;
-  gap: 6px;
-}
-
-.cpanel-github .cpanel-hint {
-  margin-bottom: 8px;
+  gap: 0;
 }
 
 .cpanel-prefix {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
+  min-width: 0;
+}
+
+.cpanel-prefix .set-inline-value {
+  font-family: var(--mono);
+}
+
+.cpanel-prefix > .btn:last-child,
+.cpanel-prefix > .set-inline:last-child > .btn.is-quiet:last-child {
+  margin-right: -8px;
+}
+
+.cpanel-item > .icon-btn:last-child {
+  margin-right: -6px;
 }
 
 .cpanel-icon {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
+  position: relative;
+  flex: none;
 }
 
 .cpanel-icon-tile {
   display: grid;
+  flex: none;
   place-items: center;
-  width: 48px;
-  height: 48px;
+  width: 3rem;
+  height: 3rem;
+  padding: 0;
   overflow: hidden;
+  border: 0;
   border-radius: var(--r-card);
   background: var(--bg-3);
   color: var(--ink);
@@ -174,56 +234,150 @@
   font-size: var(--t-title);
 }
 
+.cpanel-icon-tile.is-button {
+  cursor: pointer;
+  transition: scale var(--pop);
+}
+
+.cpanel-icon-tile.is-button:active {
+  scale: 0.96;
+}
+
 .cpanel-icon-tile img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  border-radius: inherit;
+}
+
+.cpanel-icon-drop {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--bg-3);
+  box-shadow: var(--shadow-pop);
+  color: var(--ink-2);
+  opacity: 0;
+  transition: opacity var(--fast);
+}
+
+.cpanel-icon:hover .cpanel-icon-drop,
+.cpanel-icon-drop:focus-visible {
+  opacity: 1;
+}
+
+.cpanel-icon-drop:hover {
+  color: var(--ink);
 }
 
 .cpanel-rooms {
   display: grid;
-  gap: 0;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.cpanel-facts {
+.cpanel-room-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--ctl);
+}
+
+.cpanel-room-hash {
+  flex: none;
+  width: 0.75rem;
+  color: var(--ink-3);
+  font: var(--t-ui) var(--mono);
+}
+
+.cpanel-room-line > .set-inline,
+.cpanel-room-line > .cpanel-value {
+  flex: 1;
+  min-width: 0;
+}
+
+.cpanel-room-line > .cpanel-bell {
+  margin-left: auto;
+  margin-right: -6px;
+}
+
+.cpanel-bell[aria-pressed="true"] {
+  background: none;
+}
+
+.cpanel-room-who {
+  padding-left: 20px;
+}
+
+.cpanel-room .set-inline > .btn.is-quiet,
+.cpanel-room:not(.is-muted) .cpanel-bell,
+.cpanel-reveal {
+  opacity: 0;
+  transition: opacity var(--fast);
+}
+
+.cpanel-room:hover .set-inline > .btn.is-quiet,
+.cpanel-room:focus-within .set-inline > .btn.is-quiet,
+.cpanel-room:hover .cpanel-bell,
+.cpanel-room:focus-within .cpanel-bell,
+.cpanel-room:hover .cpanel-reveal,
+.cpanel-room:focus-within .cpanel-reveal,
+.cpanel-fact:hover .cpanel-reveal,
+.cpanel-fact:focus-within .cpanel-reveal {
+  opacity: 1;
+}
+
+.cpanel-room.is-muted .cpanel-value,
+.cpanel-room.is-muted .set-inline-value {
+  color: var(--ink-2);
+}
+
+.cpanel-mute {
   display: grid;
   gap: 2px;
-  margin: 0;
+}
+
+.cpanel-facts {
+  display: grid;
+  margin: 0 -8px;
   padding: 0;
   list-style: none;
 }
 
 .cpanel-fact {
   display: flex;
-  align-items: flex-start;
-  gap: 6px;
+  align-items: center;
+  gap: 4px;
 }
 
 .cpanel-fact-body {
-  display: grid;
+  display: flex;
   flex: 1;
+  align-items: baseline;
+  gap: 8px;
   min-width: 0;
-  gap: 2px;
+  min-height: var(--ctl);
   padding: 6px 8px;
   border: 0;
   border-radius: var(--r-row);
   background: none;
-  color: inherit;
+  color: var(--ink);
+  font: var(--t-ui) var(--ui);
   text-align: left;
+  transition: background-color var(--fast);
 }
 
 .cpanel-fact-body:hover {
   background: var(--wash);
-}
-
-.cpanel-fact-line {
-  display: flex;
-  min-width: 0;
-  align-items: baseline;
-  gap: 8px;
+  transition: none;
 }
 
 .cpanel-fact-key {
@@ -232,9 +386,11 @@
 }
 
 .cpanel-fact-value {
+  min-width: 0;
   overflow: hidden;
-  font-family: var(--mono);
   color: var(--ink-2);
+  font: var(--t-meta) var(--mono);
+  letter-spacing: -0.01em;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -242,26 +398,9 @@
 .cpanel-fact-confirm {
   display: inline-flex;
   gap: 4px;
-  padding-top: 4px;
+  padding-right: 8px;
 }
 
-.cpanel .set-inline {
-  justify-content: space-between;
-  min-height: var(--ctl);
-}
-
-.cpanel .set-inline > .btn.is-quiet:last-child {
-  margin-right: -8px;
-}
-
-.cpanel-item > .icon-btn:last-child {
-  margin-right: -6px;
-}
-
-.cpanel-mute,
-.cpanel-room-line {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+.cpanel-fact .cpanel-reveal {
+  padding-right: 2px;
 }

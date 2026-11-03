@@ -8,8 +8,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 1.375rem;
+  height: 1.375rem;
   border-radius: var(--r-ctl);
   background: var(--bg-3);
   font: var(--t-meta) var(--ui);
@@ -21,18 +21,8 @@
   scroll-margin-top: 20px;
 }
 
-.persona-head {
-  display: grid;
-  gap: 4px;
-}
-
 .persona-title {
   font: 600 var(--t-ui) var(--ui);
-}
-
-.persona-hint {
-  color: var(--ink-3);
-  font: var(--t-meta) / 1.45 var(--ui);
 }
 
 .persona-form {
@@ -53,7 +43,7 @@
 }
 
 .persona-field .input {
-  height: 34px;
+  height: 2.125rem;
   padding: 6px 10px;
   font-size: var(--t-ui);
 }
@@ -73,7 +63,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 28px;
+  height: 1.75rem;
   padding: 0 10px;
   border-radius: var(--r-ctl);
   background: var(--bg-3);
@@ -88,7 +78,7 @@
 
 .persona-field .persona-area-add {
   width: 200px;
-  height: 28px;
+  height: 1.75rem;
   font: var(--t-meta) var(--mono);
 }
 

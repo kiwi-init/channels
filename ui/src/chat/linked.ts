@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react"
 import { sanitizeMarkdownUrl } from "@kiwi/app/markdown.ts"
+import { messageLink } from "@kiwi/core/message-link.ts"
 import { literal, onParser, parserVersion, spansOf, swap, takeParser } from "@kiwi/app/mentions.ts"
 
 void import("@kiwi/app/mention-tree.ts").then((m) => takeParser(m.markdownTree))
@@ -12,8 +13,7 @@ function remote(url: string, alt: string): string | null {
   if (/^(?:data|blob):/i.test(url.trim())) return null
   const safe = sanitizeMarkdownUrl(url)
   if (!safe || !/^https?:\/\//i.test(safe)) return literal(alt)
-  const at = new URL(safe)
-  return `[${literal(alt || "image")} (opens ${at.hostname})](<${at.href}>)`
+  return `[${literal(alt || "image")}](<${new URL(safe).href}>)`
 }
 
 export function linked(text: string, nicknames: ReadonlyMap<string, string>, tasks: ReadonlySet<number>, before?: number): string {
@@ -27,9 +27,11 @@ export function linked(text: string, nicknames: ReadonlyMap<string, string>, tas
           : null
         : hit.kind === "ref"
           ? `[#${hit.seq}](kiwi-msg:${hit.seq})`
-          : hit.kind === "image"
-            ? remote(hit.url, hit.alt)
-            : `[${hit.kind === "mention" ? "@" : ""}${literal(hit.label)}](kiwi-mention:${hit.name})`,
+          : hit.kind === "link"
+            ? `[message #${hit.seq}](<${messageLink(hit.code, hit.seq)}>)`
+            : hit.kind === "image"
+              ? remote(hit.url, hit.alt)
+              : `[${hit.kind === "mention" ? "@" : ""}${literal(hit.label)}](kiwi-mention:${hit.name})`,
     before
   )
 }

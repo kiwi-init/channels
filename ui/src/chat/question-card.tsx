@@ -3,6 +3,7 @@ import { useEffect, useState } from "react"
 import { HANDOFF_DONE, HANDOFF_FAILED } from "@kiwi/core/protocol.ts"
 import { bridge } from "@kiwi/secrets/secrets.ts"
 import { StepAnswer, StepHow } from "~/chat/step"
+import { cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { clock } from "~/kit/time"
 import { announce } from "~/kit/toasts"
@@ -53,33 +54,31 @@ export default function QuestionCard({ channel, ask }: { channel: Channel; ask: 
   const asker = nickname(channel, ask.from)
   if (ask.answer) {
     const who = ask.answer.by === channel.you ? "You" : nickname(channel, ask.answer.by)
+    const at = <time>{clock(ask.answer.at)}</time>
     if (ask.handoff && (ask.answer.text === HANDOFF_DONE || ask.answer.text === HANDOFF_FAILED))
       return (
-        <div className="ask">
-          <p className="ask-state">
-            {who} {ask.answer.text === HANDOFF_DONE ? "finished in the browser" : "couldn’t finish in the browser"} · {clock(ask.answer.at)}
-          </p>
-        </div>
+        <p className="ask-done">
+          {who} {ask.answer.text === HANDOFF_DONE ? "finished in the browser" : "couldn’t finish in the browser"} {at}
+        </p>
       )
     if (ask.options.includes(ask.answer.text))
       return (
-        <div className="ask">
-          <p className="ask-state">
-            {who} chose “{ask.answer.text}” · {clock(ask.answer.at)}
-          </p>
-        </div>
+        <p className="ask-done">
+          {who} chose <b>{ask.answer.text}</b> {at}
+        </p>
       )
     return (
-      <div className="ask">
-        <p className="ask-state">
-          {who} {ask.step ? "answered" : "replied"} · {clock(ask.answer.at)}
+      <div className="ask-done">
+        <p>
+          {who} {ask.step ? "answered" : "replied"} {at}
         </p>
         <p className="ask-reply">{ask.answer.text}</p>
       </div>
     )
   }
+  const choice = ask.options.length > 0 && !ask.step && !ask.handoff
   return (
-    <div className="ask is-open">
+    <div className={cx("ask", choice && "is-choice", free && "is-free")}>
       {ask.handoff && <HandoffLink handoff={ask.handoff} now={now} />}
       {ask.handoff && other === null && ask.handoff.expiresAt > now && (
         <div className="actions">
@@ -94,7 +93,7 @@ export default function QuestionCard({ channel, ask }: { channel: Channel; ask: 
           </button>
         </div>
       )}
-      {ask.step && <StepHow step={ask.step} />}
+      {ask.step && <StepHow step={ask.step} you={[channel.you, nickname(channel, channel.you)]} />}
       {ask.step && other === null && <StepAnswer onAnswer={(reply) => actions.answerStep(channel.code, ask.id, reply)} onElse={() => setOther("")} />}
       {ask.options.length > 0 && (
         <ol className="ask-options">
@@ -109,7 +108,7 @@ export default function QuestionCard({ channel, ask }: { channel: Channel; ask: 
         </ol>
       )}
       {(ask.step || (ask.handoff && ask.handoff.expiresAt > now)) && other === null ? null : other === null ? (
-        <button type="button" className="btn is-quiet is-small" onClick={() => setOther("")}>
+        <button type="button" className={choice ? "ask-option is-else" : "btn is-quiet is-small"} onClick={() => setOther("")}>
           Something else…
         </button>
       ) : (
@@ -120,16 +119,14 @@ export default function QuestionCard({ channel, ask }: { channel: Channel; ask: 
             if (other.trim()) actions.answerQuestion(channel.code, ask.id, other.trim())
           }}
         >
-          <label className="ask-reply-label" htmlFor={`reply-${ask.id}`}>
-            Reply to {asker}
-            <span className="ask-reply-hint"> · answers this card, in its thread</span>
-          </label>
           <div className="ask-other">
             <input
               id={`reply-${ask.id}`}
               autoFocus={!free}
               className="input"
               value={other}
+              aria-label={`Reply to ${asker}`}
+              title="Answers this card, in its thread"
               onChange={(e) => setOther(e.target.value)}
               placeholder={`Your reply to ${asker}`}
               onKeyDown={(e) => e.key === "Escape" && !free && setOther(null)}

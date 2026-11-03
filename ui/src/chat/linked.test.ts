@@ -23,9 +23,9 @@ describe("#123 points at an earlier message (T616)", () => {
 })
 
 describe("images from other hosts open as links, as they did before (T616)", () => {
-  test("a remote image becomes 'alt (opens host)', which the app may load", () => {
-    expect(linked("look: ![the graph](https://img.example.com/g.png)", nobody, none)).toBe("look: [the graph (opens img.example.com)](<https://img.example.com/g.png>)")
-    expect(linked("![](http://x.test/p.png)", nobody, none)).toBe("[image (opens x.test)](<http://x.test/p.png>)")
+  test("a remote image becomes a link named by its alt, which the app never loads", () => {
+    expect(linked("look: ![the graph](https://img.example.com/g.png)", nobody, none)).toBe("look: [the graph](<https://img.example.com/g.png>)")
+    expect(linked("![](http://x.test/p.png)", nobody, none)).toBe("[image](<http://x.test/p.png>)")
   })
 
   test("an image the app can show stays; one with nowhere safe to go keeps only its words", () => {
@@ -36,5 +36,16 @@ describe("images from other hosts open as links, as they did before (T616)", () 
 
   test("the plain text shown before the markdown is ready leaves both alone", () => {
     expect(named("see #12 ![g](https://x.test/g.png)", nobody)).toBe("see #12 ![g](https://x.test/g.png)")
+  })
+})
+
+describe("a pasted link to a message reads as one (T987)", () => {
+  const code = "mc2-4u2dwIeijB9T9jh4JERA4Q-62qozsSxRQzg3q6a"
+  test("it shows as the message's number and keeps the link", () => {
+    expect(linked(`look at kiwi://join/${code}?m=3218.`, nobody, new Set([3218]), 50)).toBe(`look at [message #3218](<kiwi://join/${code}?m=3218>).`)
+  })
+
+  test("in code it stays text", () => {
+    expect(linked(`\`kiwi://join/${code}?m=12\``, nobody, none, 50)).toBe(`\`kiwi://join/${code}?m=12\``)
   })
 })

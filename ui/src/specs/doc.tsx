@@ -125,9 +125,16 @@ export function SpecDoc({ channel, spec, editing, onEditing }: { channel: Channe
     const el = rail.current
     const talk = el?.querySelector<HTMLElement>(".spec-rail-talk")
     if (!el || !talk) return
-    const watch = new ResizeObserver(() => placeRail(el))
+    let frame = 0
+    const watch = new ResizeObserver(() => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => placeRail(el))
+    })
     watch.observe(talk)
-    return () => watch.disconnect()
+    return () => {
+      watch.disconnect()
+      cancelAnimationFrame(frame)
+    }
   }, [wide])
 
   useEffect(() => {
@@ -151,7 +158,6 @@ export function SpecDoc({ channel, spec, editing, onEditing }: { channel: Channe
     <section className="spec-talk" aria-label="Comments on the whole spec">
       <h2 className="spec-talk-h">
         {loose.length ? `${loose.length} ${loose.length === 1 ? "comment" : "comments"}` : "Comments"}
-        <span className="dimmer">select any words in the spec to comment on them</span>
         {loose.length > TALK_SHOWN && (
           <button type="button" className="btn is-quiet is-small" aria-expanded={allTalk} onClick={() => setAllTalk(!allTalk)}>
             {allTalk ? "Latest only" : `All ${loose.length}`}
@@ -175,7 +181,6 @@ export function SpecDoc({ channel, spec, editing, onEditing }: { channel: Channe
       <div className="spec-doc-col">
         {spec.changed && spec.approved && (
           <div className="spec-diff-bar">
-            <span className="tone-decide">Changed since it was approved</span>
             <button type="button" className="btn is-quiet is-small" aria-expanded={diff} onClick={() => setDiff(!diff)}>
               {diff ? "Hide the changes" : "Show the changes"}
             </button>
@@ -266,7 +271,8 @@ function CommentBox({ channel, spec, quote, onDone }: { channel: Channel; spec: 
           className="textarea spec-box-text"
           rows={Math.min(6, text.split("\n").length)}
           value={text}
-          placeholder="Comment on the spec. Agents read it too. ⌘↩ sends"
+          placeholder="Comment"
+          title="Or select words in the spec to comment on them"
           aria-label="Comment on the spec"
           onChange={(e) => setText(e.target.value)}
           onKeyDown={keys}
@@ -290,7 +296,6 @@ function CommentBox({ channel, spec, quote, onDone }: { channel: Channel; spec: 
         onKeyDown={keys}
       />
       <div className="spec-box-foot">
-        <span className="spec-box-hint">⌘↩ sends</span>
         {onDone && (
           <button type="button" className="btn is-quiet is-small" onClick={onDone}>
             Cancel
@@ -364,8 +369,7 @@ function Editor({ channel, spec, onDone }: { channel: Channel; spec: Spec; onDon
   return (
     <div className="spec-editor">
       <div className="spec-editor-bar">
-        <span className="spec-editor-kind">Markdown</span>
-        <span className="spec-editor-hint">⌘S saves · Esc cancels · boxes under “## Done when” are what a person checks</span>
+        <span className="spec-editor-hint">⌘S saves · Esc cancels</span>
         {moved && <span className="tone-decide spec-editor-moved">{nickname(channel, spec.edited.by)} saved a newer version while you edited: saving replaces it.</span>}
         <button type="button" className="btn is-quiet" onClick={onDone}>
           Cancel

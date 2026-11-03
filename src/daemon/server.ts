@@ -4,21 +4,21 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { Socket } from "bun";
 import type { Channel, PresenceFields, Probe } from "@kiwi/core/client.ts";
-import type { Message } from "@kiwi/core/protocol.ts";
+import { KEEP_MAX, type Message } from "@kiwi/core/protocol.ts";
 import { DEFAULT_RELAY, hasKiwiState, home, identitiesIn, loadConfig, loadIdentity, saveAccess, writePrivate, type Config } from "../config.ts";
 import { readCursor } from "../config/cursors.ts";
-import { saveMachine, takeDeviceList } from "../machine.ts";
+import { keepProof, saveMachine, seatProof, takeDeviceList } from "../machine.ts";
 import { isNewerList, listedComputer, readDeviceList, type DeviceLink } from "@kiwi/core/devices.ts";
 import { readMachineCert } from "@kiwi/core/person.ts";
 import { VERSION } from "../version.ts";
 import { compareVersions } from "@kiwi/core/versions.ts";
 import { listenedPath, pullsWake, viaOf } from "@kiwi/core/wake.ts";
 import { ensureMachine, loadPairedMachine, PairError, type PairedMachine, type PairedPerson } from "./pair.ts";
-import { DAEMON_PROTOCOL, daemonSock, daemonToken, readListener, type DaemonEvent, type DaemonRead, type DaemonSeat, type DaemonVerb } from "./protocol.ts";
+import { DAEMON_PROTOCOL, daemonSock, daemonToken, readKeepAsk, readListener, type DaemonEvent, type DaemonRead, type DaemonSeat, type DaemonVerb } from "./protocol.ts";
 import { activityEnv, reachOf, readsRex, seatRecordFor, wakeOn, type Attached } from "./reach.ts";
 import { readRexInto } from "./rex-reads.ts";
 import type { RexActivity, RexPlace, SeatPlace, TerminalPlugin } from "../terminals/plugin.ts";
-import { helpersOn, marking, remoteBypassOn, terminalPlugin } from "../terminals/registry.ts";
+import { helpersOn, marking, remoteBypassOn, shellsOn, terminalPlugin } from "../terminals/registry.ts";
 import { pruneHookFiles } from "../hooks/delivered.ts";
 import { launchFolders, remoteFolders, seatFolders } from "../launch/folders.ts";
 import { hooksRows } from "../hooks/install/extra.ts";
@@ -26,8 +26,9 @@ import { computerSettings } from "./settings.ts";
 import { harnessInventory } from "../launch/harnesses.ts";
 import { HostedTmux } from "./hosted-tmux.ts";
 import { clampSize, isPane, openTerm, TERM_COLS, TERM_ROWS } from "./hosted-term.ts";
-import { forgetAtRelay, startMachineInbox } from "./inbox.ts";
+import { forgetAtRelay, speaksHere, startMachineInbox } from "./inbox.ts";
 import { remoteRunner } from "./remote.ts";
+import { remoteShells } from "./shells.ts";
 import { launchAgent } from "../launch/launch.ts";
 import { readLoopStart, startLoop } from "../loop/start.ts";
 import { readLaunchRequest } from "../launch/wire.ts";
@@ -36,7 +37,7 @@ import { stopDaemon, tryHello } from "./rpc.ts";
 import { readKey, type ConnState, type Seat, type Sub, type Waiting } from "./seat.ts";
 import { throttled } from "./throttle.ts";
 import { readAdmitRoom, startAdmitter } from "./admit.ts";
-import { pathOf, seatWakes } from "./wake.ts";
+import { appendRotated, pathOf, seatWakes } from "./wake.ts";
 
 export const ACTIVITY_EVERY_MS = 3_000;
 const PROBE_ANSWER_GAP_MS = 500;
@@ -112,6 +113,27 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
   }
 
   const hosted = new HostedTmux(dir);
+  const shells = remoteShells({
+    machine: () => {
+      const m = loadPairedMachine();
+      return m?.relay ? { identity: m.identity, relay: m.relay } : null;
+    },
+    on: () => shellsOn(loadConfig()),
+    mine: (want) => hosted.mine(seatFolders(loadConfig())[0] ?? homedir(), want),
+    term: (pane, cols, rows, send) => openTerm(hosted, pane, cols, rows, send),
+    keys: (pane, text) => hosted.keys(pane, text),
+    resize: (pane, cols, rows) => hosted.resize(pane, cols, rows),
+    tabs: () => hosted.mineTabs(),
+    closeTab: (pane) => hosted.closeMine(pane),
+    yours: (by) => speaksHere(loadPairedMachine(), by),
+    log: (row) => {
+      try {
+        appendRotated(join(dir, "remote.log"), `${new Date().toISOString()}\t${row.join("\t")}\n`);
+      } catch {
+        // The log only records what happened; failing to write it changes nothing.
+      }
+    },
+  });
   void hosted.resume().catch(() => {});
   const seats = new Map<string, Seat>();
   const admitter = startAdmitter(() => {
@@ -486,7 +508,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
         seat.head,
         (m) => {
           if (m.seq > seat.head) seat.head = m.seq;
-          heardList(m);
+          heardList(m, seat);
           if (m.from !== seat.agent) scheduleWake(seat);
           for (const sub of [...seat.subs]) {
             if (sub.held) sub.held.push(m);
@@ -514,6 +536,9 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
         () => seatEnded(seat, null),
         (err: unknown) => seatEnded(seat, seat.ctl.signal.aborted ? null : err),
       );
+      void proveSeat(seat).catch(() => {
+        // The relay refused the proof or the seat closed: the next list this seat hears proves it again.
+      });
       return seat;
     })();
     const entry = { promise: open, waiters, last: () => last };
@@ -525,8 +550,24 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     }
   };
 
-  const heardList = (m: Message): void => {
-    if (m.sigOk && m.kind === "event" && m.ev?.op === "devices") void takeDeviceList(m.ev.links).catch(() => null);
+  const proved = new Map<string, number>();
+  const proveSeat = async (seat: Seat): Promise<void> => {
+    const proof = await seatProof(seat.ch.roomId, seat.ch.identity.pk);
+    if (!proof || proved.get(seat.key) === proof.version) return;
+    proved.set(seat.key, proof.version);
+    const self = (await seat.ch.members()).find((m) => m.pk === seat.ch.identity.pk);
+    if (!self || self.sponsor) return;
+    await seat.ch.send("updated their list of devices", { kind: "event", ev: { op: "devices", links: proof.links, device: proof.device, vouch: proof.vouch } });
+  };
+
+  const heardList = (m: Message, seat: Seat): void => {
+    if (!m.sigOk || m.kind !== "event" || m.ev?.op !== "devices") return;
+    void takeDeviceList(m.ev.links)
+      .then(() => shells.recheck())
+      .then(() => proveSeat(seat))
+      .catch(() => {
+        // A list this computer can't take, or a send the relay refused: the next list or the next start tries again.
+      });
   };
 
   const onListen = async (conn: ConnState, id: number, params: Record<string, unknown>): Promise<void> => {
@@ -544,7 +585,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
       const { messages } = await seat.ch.history(cursor);
       const caught = [...messages, ...(sub.held ?? [])];
       sub.held = null;
-      for (const m of caught) heardList(m);
+      for (const m of caught) heardList(m, seat);
       for (const m of caught) {
         if (m.seq <= sub.cursor) continue;
         if (sendLine(conn, JSON.stringify({ id, message: m }))) sub.cursor = m.seq;
@@ -776,6 +817,12 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
           await unpairHere();
           sendLine(conn, JSON.stringify({ id, ok: true }));
           break;
+        case "keep": {
+          const keep = readKeepAsk(params);
+          if (!keep) throw new Error(`keep needs {"room", "agents": [{"pk", "from"}], 1 to ${KEEP_MAX}}`);
+          sendLine(conn, JSON.stringify({ id, ok: true, kept: await keepProof(keep.room, keep.agents) }));
+          break;
+        }
         case "launch": {
           const launch = readLaunchRequest(params);
           if (!launch) throw new Error('launch needs {"harness", "folder", "code", "relay"?, "nick"?, "persona"?, "launch"?: an id of 8 to 64 of A-Z a-z 0-9 _ -}');
@@ -922,7 +969,11 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     dir,
     machine: loadPairedMachine,
     unpaired: unpairHere,
-    listed: async (links) => (await takeDeviceList(links)) === "longer",
+    listed: async (links) => {
+      const longer = (await takeDeviceList(links)) === "longer";
+      await shells.recheck();
+      return longer;
+    },
     settled: () => relayForget,
     run: remoteRunner({
       inventory: () => harnessInventory(),
@@ -931,6 +982,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
       bypass: () => remoteBypassOn(loadConfig()),
       settings: async () => computerSettings(loadConfig(), hooksRows()),
       starts: join(dir, "remote-launches.json"),
+      shells,
     }),
   });
   let rexWatch: { stop(): void } | null = null;
@@ -1014,6 +1066,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     statusWatch?.stop();
     statusWatch = null;
     inbox.stop();
+    shells.stop();
     rexWatch?.stop();
     rexWatch = null;
     await hosted.detach();

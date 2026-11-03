@@ -7,6 +7,7 @@ export interface MenuItem {
   label: string
   run: () => void
   confirm?: { title: string; sub: string; yes: string }
+  disabled?: true
 }
 
 export type MenuGroups = readonly (readonly MenuItem[])[]
@@ -16,6 +17,7 @@ export interface OpenMenu {
   y: number
   label: string
   groups: MenuGroups
+  above?: true
 }
 
 export const openMenu = store<OpenMenu | null>(null)

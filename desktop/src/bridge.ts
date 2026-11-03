@@ -2,7 +2,7 @@
 // main-eb.ts and preload-eb.ts; renderer-neutral on purpose (no node imports),
 // so ui/ can type against it without touching this process.
 
-import type { FoldInputs, Searched } from "./search-types.ts";
+import type { FoldInputs, IndexHit, Searched } from "./search-types.ts";
 import type { ComputerSettings } from "@kiwi/core/computer-settings.ts";
 import type { DeviceLink } from "@kiwi/core/devices.ts";
 import type { HarnessRow, HookHarness, HookRow, KnownHarness } from "@kiwi/core/harnesses.ts";
@@ -11,7 +11,7 @@ import type { WakeSeat } from "@kiwi/core/wake.ts";
 import type { Personality } from "@kiwi/core/personality.ts";
 import type { CachedKept, CachedRow, Unread } from "@kiwi/core/cache-row.ts";
 import type { Channel, OpenKind, PresenceFields } from "@kiwi/core/client.ts";
-import type { MemberPicture, Message, Presence, ReadMark } from "@kiwi/core/protocol.ts";
+import type { DeviceKeep, MemberPicture, Message, Presence, ReadMark } from "@kiwi/core/protocol.ts";
 import type { LaunchedView, PlacedSeat, ShowResult, TerminalId, TerminalsStatus } from "@kiwi/core/terminals.ts";
 import type { TextStep } from "./text-size.ts";
 import type { Wire } from "./wire.ts";
@@ -89,6 +89,8 @@ export const CHANNEL_CALLS = [
   "deny",
   "remove",
   "cutDevices",
+  "reprove",
+  "goneDevices",
   "tendDelegations",
   "dropDelegates",
   "updateScopes",
@@ -165,12 +167,19 @@ export interface ChannelOps {
   presence(code: string, p: PresenceFields): Promise<void>;
   openRows(code: string, rows: CachedRow[]): Promise<(Message | Unread | null)[]>;
   olderRows(code: string, before: number, limit: number): Promise<OlderRows>;
-  indexRows(code: string, rows: CachedRow[], inputs: FoldInputs): Promise<number | null>;
+  indexRows(code: string, rows: CachedRow[], inputs: FoldInputs, from: number): Promise<number | null>;
   searchHistory(code: string, ask: HistorySearch): Promise<Searched | null>;
+  historyAround(code: string, ask: HistoryAround): Promise<IndexHit[] | null>;
   keep(code: string, state: object): Promise<CachedKept | null>;
   openKept(code: string, sealed: CachedKept): Promise<unknown>;
   follow(code: string, since: number, on: (e: FollowEvent) => void, opts?: FollowOptions): () => void;
   nudge(): void;
+}
+
+export interface HistoryAround {
+  seq: number;
+  rooms: string[];
+  span: number;
 }
 
 export interface HistorySearch {
@@ -204,8 +213,9 @@ export type KeysAsk =
   | { op: "presence"; code: string; p: Wire }
   | { op: "openRows"; code: string; rows: Wire }
   | { op: "olderRows"; code: string; before: number; limit: number }
-  | { op: "indexRows"; code: string; rows: Wire; inputs: Wire }
+  | { op: "indexRows"; code: string; rows: Wire; inputs: Wire; from: number }
   | { op: "searchHistory"; code: string; ask: Wire }
+  | { op: "historyAround"; code: string; ask: Wire }
   | { op: "keep"; code: string; state: Wire }
   | { op: "openKept"; code: string; sealed: Wire }
   | { op: "follow"; code: string; since: number; watch?: boolean }
@@ -281,6 +291,7 @@ export interface DeviceView {
   approve: boolean;
   until: number;
   thisOne: boolean;
+  app?: string;
 }
 
 interface DeviceRevokeView {
@@ -296,6 +307,16 @@ export interface DeviceNewsView {
   links: DeviceLink[];
   revokes: DeviceRevokeView[];
   removed: { wiped: boolean; by: string } | null;
+}
+
+interface SeatProofView {
+  device: string;
+  vouch: string;
+}
+
+export interface KeepView {
+  links: DeviceLink[];
+  keep: DeviceKeep;
 }
 
 export interface RecoveryView {
@@ -316,6 +337,16 @@ export interface RecoverDoneView {
   name: string;
   channels: number;
   forgot: number;
+}
+
+export type RerootOpenView =
+  | { ok: true; name: string; devices: (Pick<DeviceView, "id" | "label" | "os" | "as"> & { here: boolean })[]; channels: string[] }
+  | { ok: false; why: string; word?: number };
+
+export interface RerootDoneView {
+  kept: number;
+  dropped: number;
+  channels: number;
 }
 
 export type EnrollConfirmView = { ok: true; label: string } | { ok: false; left: number };
@@ -368,7 +399,7 @@ export interface TermTabView {
   label: string;
 }
 
-export type TermEvent = { term: string; out: string } | { term: string; ended: true };
+export type TermEvent = { term: string; out: string } | { term: string; ended: true } | { term: string; lost: true };
 
 export type FromMachine<T> = { ok: true; value: T } | { ok: false; detail: string };
 
@@ -433,6 +464,8 @@ export interface KiwiBridge {
   forgetDevice(id: string): Promise<void>;
   renewDevice(id: string): Promise<void>;
   deviceNews(): Promise<DeviceNewsView | null>;
+  proveSeat(code: string): Promise<SeatProofView | null>;
+  keepAgents(code: string, agents: { pk: string; from: string }[]): Promise<KeepView | null>;
   recovery(): Promise<RecoveryView | null>;
   recoveryWords(): Promise<string[]>;
   recoverySave(typed: { at: number; word: string }[]): Promise<RecoverySaveView>;
@@ -441,6 +474,9 @@ export interface KiwiBridge {
   recover(words: string): Promise<RecoverOpenView>;
   recoverFinish(lost: string[]): Promise<RecoverDoneView>;
   recoverCancel(): Promise<void>;
+  reroot(words: string): Promise<RerootOpenView>;
+  rerootFinish(keep: string[]): Promise<RerootDoneView>;
+  rerootCancel(): Promise<void>;
   daemonStatus(): Promise<DaemonStatus>;
   doctor(): Promise<DoctorFinding[] | null>;
   /** Certify this machine's daemon key with the person key and hand the cert back. */
@@ -494,6 +530,10 @@ export interface KiwiBridge {
   termMine(roomId: string, want: string | null, cols: number, rows: number): Promise<TermOpenView>;
   termTabs(): Promise<TermTabView[]>;
   termTabClose(pane: string): Promise<TermTabView[]>;
+  /** A shell on another of your computers, through the relay: its screen and output come as onTerm events, and lost when the pipe drops. */
+  termRemote(machinePk: string, want: string | null, cols: number, rows: number): Promise<TermOpenView>;
+  termRemoteTabs(machinePk: string): Promise<TermTabView[]>;
+  termRemoteClose(machinePk: string, pane: string): Promise<TermTabView[]>;
   termKeys(term: string, keys: string): Promise<void>;
   termSize(term: string, cols: number, rows: number): Promise<void>;
   termClose(term: string): Promise<void>;

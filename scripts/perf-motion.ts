@@ -6,7 +6,7 @@ import { chromium, type Page } from "playwright-core";
 import { daemonSock } from "../src/daemon/protocol.ts";
 import { stopDaemon } from "../src/daemon/rpc.ts";
 import { startLocalRelay } from "./local-relay.ts";
-import { approveSpec, firstRun, letIn, newChannel } from "./perf-ui.ts";
+import { approveSpec, firstRun, letIn, newChannel, unfold } from "./perf-ui.ts";
 import { harnessDist } from "./ui-harness.ts";
 
 if (process.argv.includes("--help")) {
@@ -186,7 +186,8 @@ try {
   );
 
   await toTasks();
-  const row = page.getByRole("main").getByRole("button", { name: new RegExp(`^.+ T${ids[1]} · `) });
+  await unfold(page, "Check the router numbers");
+  const row = page.getByRole("main").getByRole("button", { name: new RegExp(`^.+ T${ids[1]}\\b`) });
   const closeTasks = closeThread;
   await row.waitFor();
   await measure(
