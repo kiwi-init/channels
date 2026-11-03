@@ -257,19 +257,8 @@
   gap: 8px;
 }
 
-.task-sendback .input {
-}
 
-.task-rounds {
-  display: grid;
-  gap: 4px;
-  color: var(--ink-2);
-  font: var(--t-meta) var(--ui);
-}
 
-.task-review + .task-rounds {
-  margin-top: 12px;
-}
 
 .task-change {
   flex: none;
@@ -385,28 +374,9 @@
   gap: 4px;
 }
 
-.task-cancel .input {
-}
 
-.task-brief {
-  display: grid;
-  gap: 4px;
-  margin-bottom: 12px;
-  padding: 12px;
-  border: 1px solid var(--line-2);
-  border-radius: var(--r-ctl);
-}
 
-.task-brief-head {
-  color: var(--ink-3);
-  font: var(--t-meta) var(--ui);
-}
 
-.task-brief-text {
-  font: var(--t-body) / 1.5 var(--sans);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
 
 .task-earlier {
   margin-bottom: 10px;
