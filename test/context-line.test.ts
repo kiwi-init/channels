@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { tokensWord } from "@kiwi/core/format.ts";
 import { CONTEXT_LINE, cleanActivity } from "@kiwi/core/protocol.ts";
 import { fold, type Roster } from "@kiwi/core/state.ts";
+import { contextLineOn } from "../src/config.ts";
 import { crossing, nudgeShort, nudgeText, openTasksOf } from "../src/hooks/context-line.ts";
 
 describe("context in tokens, in words", () => {
@@ -12,6 +13,14 @@ describe("context in tokens, in words", () => {
     expect(tokensWord(999_600)).toBe("1M");
     expect(tokensWord(1_000_000)).toBe("1M");
     expect(tokensWord(1_250_000)).toBe("1.3M");
+  });
+});
+
+describe("the context line's default", () => {
+  test("on unless the computer turned it off", () => {
+    expect(contextLineOn({})).toBe(true);
+    expect(contextLineOn({ contextLine: "on" })).toBe(true);
+    expect(contextLineOn({ contextLine: "off" })).toBe(false);
   });
 });
 

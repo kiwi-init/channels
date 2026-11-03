@@ -219,14 +219,14 @@ export class ChannelStore {
     fetch: (got) => (this.fetchOlder ? this.fetchOlder(got) : Promise.reject(new Error("open the channel first"))),
   };
 
-  private wakeFor(body: string, opts: SendOptions): string[] {
+  private wakeFor(opts: SendOptions): string[] {
     const state = this.state.value;
     const me = [...state.members.values()].find((m) => m.pk === this.ch.pk)?.name;
-    return me ? wakeList(state, me, body, opts) : [];
+    return me ? wakeList(state, me, opts) : [];
   }
 
   send = (body: string, opts: SendOptions): Promise<number> =>
-    this.ch.send(body, { ...opts, wake: opts.wake ?? this.wakeFor(body, opts) }).catch((err: unknown) => {
+    this.ch.send(body, { ...opts, wake: opts.wake ?? this.wakeFor(opts) }).catch((err: unknown) => {
       if (this.onGone(err)) throw new Error("you no longer have access to this channel", { cause: err });
       throw err;
     });

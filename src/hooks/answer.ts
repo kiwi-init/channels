@@ -6,7 +6,7 @@ import { openSession, type AgentSession } from "../agent.ts";
 import type { Delivery } from "../agent/shared.ts";
 import { briefText, COMMANDS } from "../brief.ts";
 import { detectWhere } from "../card.ts";
-import { home, loadConfig, type ChannelConfig } from "../config.ts";
+import { contextLineOn, home, loadConfig, type ChannelConfig } from "../config.ts";
 import { wakeHooked, wakeOn } from "../daemon/reach.ts";
 import { appendRotated } from "../daemon/wake.ts";
 import { charterLines, formatMessage, holdLine, leadLine, messageHead } from "@kiwi/core/format.ts";
@@ -191,7 +191,7 @@ export function cursorFollow(alias: string, mc: string, unread: boolean, reminde
 }
 
 const contextNudge = Effect.fn("Hooks.contextNudge")(function* (input: HookInput, s: AgentSession, who: Here, mc: string, budget: number) {
-  if (loadConfig().contextLine !== "on") return null;
+  if (!contextLineOn(loadConfig())) return null;
   const session = who.session;
   const file = input.transcript_path;
   if ((who.harness !== "claude" && who.harness !== "codex") || !session || typeof file !== "string" || !file) return null;
@@ -429,7 +429,7 @@ export const answer = Effect.fn("Hooks.answer")(function* (event: string, input:
       lead: leadLine(state, b.as),
       scopes: seat?.scopes,
       ...(seat?.persona ? { persona: seat.persona } : {}),
-      contextLine: local.contextLine === "on",
+      contextLine: contextLineOn(local),
     });
     const budgets = startBudgets(b.alias, budget, brief.length);
     const reentry = fresh === null || budgets.reentry === 0 ? null : reentryText(state, b.as, Date.now(), budgets.reentry, mc);
