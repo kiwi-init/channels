@@ -218,8 +218,6 @@ class Engine(private val app: Context, private val onPush: (Push) -> Unit, priva
 
     private companion object {
         val SIGN_IN = setOf(
-            "https://api.workos.com/user_management/authorize/device",
-            "https://api.workos.com/user_management/authenticate",
             "https://github.com/login/device/code",
             "https://github.com/login/oauth/access_token",
         )

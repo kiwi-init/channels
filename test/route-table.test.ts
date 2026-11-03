@@ -64,13 +64,13 @@ test("the only public room route is the one meant to be", () => {
   expect(routeTable.filter((r) => r.guard === "public").map((r) => `${r.method} ${r.path}`)).toEqual(["GET /info"]);
 });
 
-test("0.11: the signed-in person routes, machine links, pairing, seats and usage are gone", async () => {
+test("0.11: the signed-in person routes, machine links, pairing, seats and usage are gone, and so is the account move (T216)", async () => {
   const { startRelay } = await import("../src/relay/bun.ts");
   const { mkdtempSync, rmSync } = await import("node:fs");
   const { tmpdir } = await import("node:os");
   const { join } = await import("node:path");
   const dir = mkdtempSync(join(tmpdir(), "kiwi-gone-"));
-  const r = startRelay({ port: 0, hostname: "127.0.0.1", dataDir: dir, human: { clientId: "c", verify: async (t: string) => (t ? t : null) } });
+  const r = startRelay({ port: 0, hostname: "127.0.0.1", dataDir: dir, human: { verify: async (t: string) => (t ? t : null) } });
   try {
     for (const [method, path] of [
       ["GET", "/v1/me/channels"],
@@ -80,6 +80,7 @@ test("0.11: the signed-in person routes, machine links, pairing, seats and usage
       ["GET", "/v1/me/machines"],
       ["POST", "/v1/machines"],
       ["GET", `/v1/machines/${"a".repeat(43)}`],
+      ["POST", "/v1/account/move"],
     ]) {
       const res = await fetch(`${r.url.origin}${path}`, { method, headers: { "x-human-token": "user_a" }, body: method === "GET" ? undefined : "{}" });
       expect(`${method} ${path} ${res.status}`).toBe(`${method} ${path} 404`);

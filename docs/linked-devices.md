@@ -25,7 +25,7 @@ decisions at the end (#602, #615). Reviewed by sunny-tortoise (#559, #570).
 - Auto-approval runs wherever the channel owner key is: the desktop app, and the iOS app while open
   (`packages/core/src/client/requests.ts:181`). The `kiwi` daemon admits only its own computer's
   agents, and only with a delegation (section 3).
-- WorkOS sign-in (`desktop/src/signin.ts:22`) only gates creating channels (`creator` guard,
+- GitHub sign-in (`desktop/src/signin.ts`) only gates creating channels (`creator` guard,
   `src/relay/route.ts:147`).
 - The relay keeps each computer's binding to its person (`src/relay/machine.ts`).
 - Removing a member rotates the channel's content key: `rotation(without)` wraps the next epoch for
@@ -100,14 +100,14 @@ relay. The digits must therefore be committed before they can be ground: Matrix'
 reveal.
 
 1. **Sign in.**
-   - The new device runs the WorkOS device flow (the one `desktop/src/signin.ts` already has;
+   - The new device runs GitHub's device flow (the one `desktop/src/ipc/github.ts` already has;
      `kiwi login` for the CLI).
-   - The relay maps the WorkOS user to the person. The first app publishes that mapping, signed by
-     its list.
+   - The relay maps the GitHub user (`github_<id>`) to the person. The first app publishes that
+     mapping, signed by its list.
 2. **Ask, with a commitment.**
    - The new device makes its keys and a random `nonce_d`.
    - It posts an `EnrollAsk` `{device, dxpk, label, os, at, commit: H(nonce_d ‖ device ‖ dxpk)}`.
-   - One pending ask per account, WorkOS-authenticated, rate-limited, gone after 10 minutes.
+   - One pending ask per account, signed in with GitHub, rate-limited, gone after 10 minutes.
 3. **Answer.** An app of the person's answers with its own keys and a random `nonce_a`.
 4. **Reveal.**
    - The new device reveals `nonce_d`, and the app checks it against the commitment.
@@ -115,8 +115,8 @@ reveal.
    - A relay that swaps keys must commit before it sees `nonce_a`, so it can't search for a match.
 5. **Confirm, without fatigue.**
    - The approving app asks you to **type the digits shown on the new device** (or pick them out of
-     three). A tap alone isn't enough, so a stream of asks from a WorkOS takeover can't be waved
-     through.
+     three). A tap alone isn't enough, so a stream of asks from a GitHub account takeover can't be
+     waved through.
    - The screen says plainly what the device will get (your channels, as you), and its label and OS.
      That is Signal's 2025 phishing lesson.
 6. **Hand over.**
@@ -139,10 +139,10 @@ reveal.
    - The device asks to join each channel with its `DeviceClaim`.
    - Owners' clients admit it on their own; channels you own admit it immediately.
 
-What the relay sees: public keys, the WorkOS user, commitments and sealed blobs. A WorkOS takeover
-gets one pending ask at most. Approving it needs your app in your hand and the digits typed in.
+What the relay sees: public keys, the GitHub user, commitments and sealed blobs. A GitHub account
+takeover gets one pending ask at most. Approving it needs your app in your hand and the digits typed in.
 
-**At the relay** (step 2, `src/relay/account.ts`). Every route takes the WorkOS session
+**At the relay** (step 2, `src/relay/account.ts`). Every route takes the GitHub sign-in
 (`x-human-token`); all but the first are also signed by a device key for `account:<user>`.
 
 | Route | Who | What |
@@ -157,19 +157,6 @@ gets one pending ask at most. Approving it needs your app in your hand and the d
 | `GET /v1/account/fresh` | the session | `{fresh}`: the waiting start-over, with its end time, or null (section 6) |
 | `POST /v1/account/fresh` `{links}` | the new desktop | starts over: one link, a new person key adding this desktop |
 | `DELETE /v1/account/fresh/<id>` | a current device, the person key, the desktop that started it | cancels the start-over |
-| `POST /v1/account/move` `{to}` | the person key or an app that approves, with a GitHub sign-in in `x-human-token-to` | moves a WorkOS account to `github_<id>` once (`src/relay/move.ts`) |
-
-**Moving to GitHub sign-in** (T261). A WorkOS account moves to the `github_<id>` account of the
-GitHub sign-in sent with it: the device list and the owned channels
-the quota counts. The move freezes the WorkOS account (reads still answer, writes wait), copies it
-into the GitHub account in one step, and only if that account holds nothing, then marks it moved.
-From then on the WorkOS account's routes answer from the GitHub one, so older apps keep working, and
-channels they create count against the GitHub account. Every step can run again: a repeat changes
-nothing, and a freeze nobody finishes ends after 10 minutes, as moved if the copy went through and
-untouched if it didn't. Nothing under the WorkOS id is deleted. A GitHub account that already holds
-devices, a device waiting to join, or a signer the list doesn't approve is refused, and the WorkOS
-account stays as it was. So is an account waiting to start over (section 6): it moves once the start
-is cancelled or done, so a move never carries a list the start is about to replace.
 
 A key revoked in a published list is refused on every account route, can't ask again, and loses its
 computer inbox at once (`/v1/machine/<key>` answers 403 and its socket closes).
@@ -267,7 +254,7 @@ owner-signed **delegation** lets the `kiwi` daemon admit its own computer's agen
 - In the `kiwi` daemon (T1007): when its seats read a `devices` event of this computer's person, a
   longer list replaces the one in `machine.json`. If the list revokes this computer, it drops
   `machine.device`, so its agents stop carrying a device claim. It keeps its seat keys: owners cut
-  those. The daemon keeps no WorkOS session after `kiwi login`, so channel logs are its only source.
+  those. The daemon keeps no GitHub sign-in after `kiwi login`, so channel logs are its only source.
 - On phones (T1007, `ios/engine`, shared by iOS and Android): the same, from the channels the phone
   reads. A list that revokes the phone stops the engine, and the app wipes its vault (the device key,
   the links, the person and the channels it joined) and says on the sign-in screen which device
@@ -290,7 +277,7 @@ owner-signed **delegation** lets the `kiwi` daemon admit its own computer's agen
 
 1. **Core:** the device list (links, verification from the root), `DeviceCert` v2, `DeviceClaim`, and
    auto-admit of a person's devices.
-2. **Relay:** the account record (WorkOS user → person, device list), the enrollment inbox with
+2. **Relay:** the account record (GitHub user → person, device list), the enrollment inbox with
    commit-reveal, and refusing revoked keys.
 3. **Desktop:** the approve screen (typing the digits), Settings → Devices (rename, forget, renew), and
    enrolling as a new desktop.

@@ -31,7 +31,7 @@ export { getNote, putNote } from "./room/notes.ts";
 export { registerPush, unregisterPush, wakesFor } from "./room/push.ts";
 export { authenticate, authenticateSocket, gone, missingFingerprint, readMeta, requestToken, UPDATE_KIWI, wsHeaders } from "./room/auth.ts";
 export { append, expire, idleExpired, markRead, storeBlob, touch } from "./room/messages.ts";
-export { create, directory, reown, setIcon, setSettings, setSnapshot, setTitle, type CreateBody } from "./room/lifecycle.ts";
+export { create, directory, setIcon, setSettings, setSnapshot, setTitle, type CreateBody } from "./room/lifecycle.ts";
 export { approve, keysFor, remove, rotate, setCanPost, setRecord, type MemberBody } from "./room/members.ts";
 export { dropDelegation, listDelegations, liveDelegation, putDelegation } from "./room/delegations.ts";
 export { request, requestStatus, requireChecked, reveal, setOwnerNonce, type RequestBody } from "./room/requests.ts";

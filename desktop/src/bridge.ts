@@ -343,7 +343,6 @@ export interface GithubStatus {
   /** The relay takes GitHub sign-in, so this link is how the person signs in. */
   signIn?: boolean;
   account: { login: string; id: number; at: number } | null;
-  moveRefused?: string;
 }
 
 export interface MachineView {
@@ -369,9 +368,9 @@ export interface KiwiBridge {
   readonly channels: KeysPort;
   saveComputers(computers: ComputerView[]): Promise<void>;
   setPending(pending: PendingItem[]): Promise<void>;
-  /** WorkOS device authorization (system browser, polled in main), or { dev } for a dev relay. */
+  /** GitHub sign-in (the device flow, in the system browser, polled in main), or { dev } for a dev relay. */
   signIn(): Promise<SignInResult>;
-  /** A dev relay's sign-in: whoever they say (never a real WorkOS id). */
+  /** A dev relay's sign-in: whoever they say (never a real github_<id>). */
   devSignIn(name: string): Promise<{ token: string }>;
   getToken(): Promise<string | null>;
   signOut(): Promise<void>;

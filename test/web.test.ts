@@ -3,7 +3,6 @@ import { mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { startRelay } from "../src/relay/bun.ts";
-import { workosFromSettings } from "../src/relay/human.ts";
 
 // A stand-in for a built app: the app, a fingerprinted asset, an installer, and Cloudflare's config file.
 const tmp = mkdtempSync(join(tmpdir(), "kiwi-web-"));
@@ -20,7 +19,7 @@ let bare: ReturnType<typeof startRelay>;
 let relay: string;
 
 beforeAll(() => {
-  server = startRelay({ port: 0, hostname: "127.0.0.1", dataDir: join(tmp, "data"), web: { dir: dist, connect: ["https://api.workos.com", "https://x.authkit.app"] } });
+  server = startRelay({ port: 0, hostname: "127.0.0.1", dataDir: join(tmp, "data"), web: { dir: dist } });
   bare = startRelay({ port: 0, hostname: "127.0.0.1", dataDir: join(tmp, "data2") });
   relay = server.url.origin;
 });
@@ -32,12 +31,12 @@ afterAll(() => {
 
 describe("dashboard on the Bun relay", () => {
   test("pages get the app, with the dashboard's security headers", async () => {
-    for (const path of ["/", "/auth/callback", "/some/page"]) {
+    for (const path of ["/", "/join/some-code", "/some/page"]) {
       const res = await fetch(relay + path);
       expect(res.status).toBe(200);
       expect(await res.text()).toContain("<title>app</title>");
       expect(res.headers.get("cache-control")).toBe("no-cache");
-      expect(res.headers.get("content-security-policy")).toContain("connect-src 'self' https://api.workos.com https://x.authkit.app;");
+      expect(res.headers.get("content-security-policy")).toContain("connect-src 'self';");
       expect(res.headers.get("x-content-type-options")).toBe("nosniff");
       expect(res.headers.get("referrer-policy")).toBe("no-referrer");
     }
@@ -66,13 +65,13 @@ describe("dashboard on the Bun relay", () => {
 
   test("the API still answers under /v1", async () => {
     const res = await fetch(`${relay}/v1/config`);
-    expect(await res.json()).toEqual({ workosClientId: null });
+    expect(await res.json()).toEqual({ githubSignIn: false });
     expect((await fetch(`${relay}/v1/nope`)).status).toBe(404);
   });
 
   test("without a dashboard, the relay answers as before", async () => {
     expect(await (await fetch(`${bare.url.origin}/`)).text()).toBe("Kiwi Channels relay (bun)\n");
-    expect((await fetch(`${bare.url.origin}/auth/callback`)).status).toBe(404);
+    expect((await fetch(`${bare.url.origin}/join/some-code`)).status).toBe(404);
   });
 
   test("a dashboard folder that was never built is refused at startup", () => {
@@ -83,18 +82,5 @@ describe("dashboard on the Bun relay", () => {
 describe("the data folder", () => {
   test("is created readable only by the relay's user", () => {
     expect(statSync(join(tmp, "data")).mode & 0o777).toBe(0o700);
-  });
-});
-
-describe("WorkOS settings", () => {
-  test("no client id: no sign-in", () => {
-    expect(workosFromSettings({})).toBeNull();
-    expect(workosFromSettings({ authkitDomain: "https://x.authkit.app", apiKey: "sk" })).toBeNull();
-  });
-
-  test("a client id turns it on; the API key adds names", () => {
-    expect(workosFromSettings({ clientId: "client_x" })?.clientId).toBe("client_x");
-    expect(workosFromSettings({ clientId: "client_x" })?.profile).toBeUndefined();
-    expect(workosFromSettings({ clientId: "client_x", apiKey: "sk" })?.profile).toBeFunction();
   });
 });
