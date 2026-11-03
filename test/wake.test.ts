@@ -156,7 +156,7 @@ describe("wake paths, commands and words", () => {
   test("an agent is told how messages reach it, without a Monitor", () => {
     expect(howMessagesReachYou("kiwi", true, { harness: "codex", session: "t" })).toContain("Kiwi wakes you in this session");
     const gemini = howMessagesReachYou("kiwi", true, { harness: "gemini" });
-    expect(gemini).toContain("Kiwi can't wake you in this session: Gemini CLI gives Kiwi no way to start a turn in a running session.");
+    expect(gemini).toContain("Kiwi can't wake you in this session: Gemini CLI gives Kiwi no way to start a turn in a running session outside tmux (in tmux, Kiwi types into its pane).");
     expect(gemini).toContain("Run `kiwi listen --now` at the start of every turn and again before you end one.");
     expect(gemini).not.toContain("Monitor");
     const pi = howMessagesReachYou("kiwi", true, { harness: "pi" });
