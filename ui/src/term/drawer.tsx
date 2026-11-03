@@ -401,11 +401,7 @@ export default function TermDrawer({ channel, of }: { channel: Channel; of: Term
         )}
         <span className="term-where">{phase.kind === "ended" && <span className="term-ended">exited</span>}</span>
         {name !== null && <IconButton icon="external" label="Open in your terminal" onClick={() => void app.actions.showAgent(channel.code, name).then((note) => note && toast(note))} />}
-        <IconButton
-          icon="close"
-          label={name === null ? "Close the terminal (your shell keeps running)" : "Close the terminal (the agent keeps running)"}
-          onClick={() => go({ to: "term", term: null })}
-        />
+        <IconButton icon="down" label={name === null ? "Hide the terminal · your shells keep running" : "Hide the terminal · the agent keeps running"} onClick={() => go({ to: "term", term: null })} />
       </header>
       <div className="term-screen" ref={host} />
       {phase.kind === "opening" && <p className="term-note">Opening…</p>}
