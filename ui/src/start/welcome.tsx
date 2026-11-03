@@ -196,7 +196,7 @@ function Bar({ members, byCode }: { members: readonly ChannelTile[]; byCode: Rea
       <textarea
         rows={1}
         value={text}
-        aria-label={to ? `Message ${to}` : "Message #general"}
+        aria-label={to ? `Tell ${to}` : "Write to #general"}
         placeholder={!ready ? "Connecting…" : to ? `Tell ${to}…` : "Write to #general…"}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={keys}
