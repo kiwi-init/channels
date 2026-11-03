@@ -107,52 +107,54 @@ export function Sidebar({ channel }: { channel: Channel }) {
         </ul>
       </section>
 
-      <section aria-label="People">
-        <Heading action={channel.youOwn ? <IconButton icon="plus" label="Invite people" onClick={() => go({ to: "panel", panel: { kind: "invite" } })} /> : undefined}>People</Heading>
-        <ul>
-          {humans.map((p) => (
-            <Member key={p.name} person={p} channel={channel} direct={directOf.get(p.name)} />
-          ))}
-          {orphans.map((d) => {
-            const where = { kind: "dm", with: d.with } as const
-            const on = onChat && sameWhere(nav.where, where)
-            const who = memberOf(channel, d.with)
-            if (!shownRow(dmKey(d.with), on)) return null
-            return (
-              <li key={d.with}>
-                <button
-                  type="button"
-                  className={cx("side-row", on && "is-on", d.unread > 0 && "is-news")}
-                  aria-current={on ? "page" : undefined}
-                  onClick={() => go({ to: "where", where })}
-                  onContextMenu={(e) => showMenu(e, nickname(channel, d.with), (x) => x.directGroups({ channel, go }, actions, on, d, who))}
-                >
-                  <Avatar person={who} size="sm" />
-                  <span className="side-label">{nickname(channel, d.with)}</span>
-                  {d.locked && <Icon name="lock" size={12} label="Private" />}
-                  <Count n={d.unread} loud />
+      {(humans.length > 0 || orphans.length > 0 || channel.youOwn) && (
+        <section aria-label="People">
+          <Heading action={channel.youOwn ? <IconButton icon="plus" label="Invite people" onClick={() => go({ to: "panel", panel: { kind: "invite" } })} /> : undefined}>People</Heading>
+          <ul>
+            {humans.map((p) => (
+              <Member key={p.name} person={p} channel={channel} direct={directOf.get(p.name)} />
+            ))}
+            {orphans.map((d) => {
+              const where = { kind: "dm", with: d.with } as const
+              const on = onChat && sameWhere(nav.where, where)
+              const who = memberOf(channel, d.with)
+              if (!shownRow(dmKey(d.with), on)) return null
+              return (
+                <li key={d.with}>
+                  <button
+                    type="button"
+                    className={cx("side-row", on && "is-on", d.unread > 0 && "is-news")}
+                    aria-current={on ? "page" : undefined}
+                    onClick={() => go({ to: "where", where })}
+                    onContextMenu={(e) => showMenu(e, nickname(channel, d.with), (x) => x.directGroups({ channel, go }, actions, on, d, who))}
+                  >
+                    <Avatar person={who} size="sm" />
+                    <span className="side-label">{nickname(channel, d.with)}</span>
+                    {d.locked && <Icon name="lock" size={12} label="Private" />}
+                    <Count n={d.unread} loud />
+                  </button>
+                </li>
+              )
+            })}
+            {hiddenDirects > 0 && (
+              <li>
+                <button type="button" className="side-row is-add" aria-expanded={showHidden} onClick={() => setShowHidden(!showHidden)}>
+                  <Icon name={showHidden ? "down" : "chevron"} size={14} />
+                  <span className="side-label">{showHidden ? "Show less" : `${hiddenDirects} hidden`}</span>
                 </button>
               </li>
-            )
-          })}
-          {hiddenDirects > 0 && (
-            <li>
-              <button type="button" className="side-row is-add" aria-expanded={showHidden} onClick={() => setShowHidden(!showHidden)}>
-                <Icon name={showHidden ? "down" : "chevron"} size={14} />
-                <span className="side-label">{showHidden ? "Show less" : `${hiddenDirects} hidden`}</span>
-              </button>
-            </li>
-          )}
-          {channel.youOwn && humans.length + orphans.length === 0 && (
-            <li>
-              <button type="button" className={cx("side-row is-add", nav.panel?.kind === "invite" && "is-on")} onClick={() => go({ to: "panel", panel: { kind: "invite" } })}>
-                <Icon name="plus" size={14} />
-                <span className="side-label">Invite people</span>
-              </button>
-            </li>
-          )}
-        </ul>
-      </section>
+            )}
+            {channel.youOwn && humans.length + orphans.length === 0 && (
+              <li>
+                <button type="button" className={cx("side-row is-add", nav.panel?.kind === "invite" && "is-on")} onClick={() => go({ to: "panel", panel: { kind: "invite" } })}>
+                  <Icon name="plus" size={14} />
+                  <span className="side-label">Invite people</span>
+                </button>
+              </li>
+            )}
+          </ul>
+        </section>
+      )}
 
       <section aria-label="Agents">
         <Heading action={agents.length > 0 ? <IconButton icon="plus" label="Add an agent" onClick={() => go({ to: "panel", panel: { kind: "add-agent" } })} /> : undefined}>Agents</Heading>
