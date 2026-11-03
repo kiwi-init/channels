@@ -416,8 +416,13 @@ function EditTask({ channel, task, open, onClose }: { channel: Channel; task: Ta
     onClose()
   }
   return (
-    <Dialog open={open} onClose={close} label={`Edit T${task.id}`}>
-      <DialogHead title={`Edit T${task.id}`} sub={task.owner ? `${someone(channel, task.owner)} sees the change in the task's history.` : "The change shows in the task's history."} onClose={close} />
+    <Modal
+      open={open}
+      onClose={close}
+      label={`Edit T${task.id}`}
+      title={`Edit T${task.id}`}
+      sub={task.owner ? `${someone(channel, task.owner)} sees the change in the task's history.` : "The change shows in the task's history."}
+    >
       <form
         className="task-cancel task-edit"
         onSubmit={(e) => {
@@ -427,9 +432,9 @@ function EditTask({ channel, task, open, onClose }: { channel: Channel; task: Ta
           onClose()
         }}
       >
-        <input className="input" value={title} aria-label="Title" placeholder="Title" maxLength={200} onChange={(e) => setTitle(e.target.value)} />
+        <input ref={autofocus} className="input" value={title} aria-label="Title" placeholder="Title" maxLength={200} onChange={(e) => setTitle(e.target.value)} />
         <textarea className="textarea" rows={8} value={detail} aria-label="Body" placeholder="What to do, where the code is and why" onChange={(e) => setDetail(e.target.value)} />
-        <div className="dialog-foot">
+        <div className="modal-foot">
           <button type="button" className="btn is-quiet" onClick={close}>
             Cancel
           </button>
@@ -438,7 +443,7 @@ function EditTask({ channel, task, open, onClose }: { channel: Channel; task: Ta
           </button>
         </div>
       </form>
-    </Dialog>
+    </Modal>
   )
 }
 
