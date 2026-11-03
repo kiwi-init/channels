@@ -7,7 +7,7 @@ import { BadRequest, Conflict, Denied, NotFound, Removed, TooLarge, TooMany, Upd
 import { fits, JoinRequest } from "../schema.ts";
 import { readMeta, UPDATE_KIWI } from "./auth.ts";
 import { RoomStore } from "./db.ts";
-import { MAX_PENDING, REQUEST_TTL_MS } from "./limits.ts";
+import { MAX_PENDING, REQUEST_TTL_MS, REQUEST_WAIT_MAX_S } from "./limits.ts";
 import { liveDelegation } from "./delegations.ts";
 import { keysFor } from "./members.ts";
 
@@ -92,6 +92,55 @@ export const requestStatus = Effect.fn("Room.requestStatus")(function* (id: stri
 });
 
 type RequestStatus = { status: string; ownerNonce?: string | null; revealed?: boolean; epoch?: number; keys?: Record<string, string>; delegation?: string };
+
+export const requestTag = (status: RequestStatus): string => {
+  let h = 0x811c9dc5;
+  for (const c of JSON.stringify(status)) h = Math.imul(h ^ c.charCodeAt(0), 0x01000193);
+  return `"request-${(h >>> 0).toString(36)}"`;
+};
+
+export const requestWait = (url: URL): number => {
+  const wait = Number(url.searchParams.get("wait") ?? 0);
+  return Number.isFinite(wait) && wait > 0 ? Math.min(wait, REQUEST_WAIT_MAX_S) * 1000 : 0;
+};
+
+type Watch = { rev: number; wakes: Set<() => void>; held: number };
+
+const watches = new Map<string, Watch>();
+
+export const requestsChanged = (roomId: string): void => {
+  const w = watches.get(roomId);
+  if (!w) return;
+  w.rev++;
+  const wakes = [...w.wakes];
+  w.wakes.clear();
+  for (const wake of wakes) wake();
+};
+
+export const watchRequests = (roomId: string) => {
+  const w = watches.get(roomId) ?? { rev: 0, wakes: new Set<() => void>(), held: 0 };
+  watches.set(roomId, w);
+  w.held++;
+  return {
+    rev: () => w.rev,
+    next: (seen: number, ms: number, signal: AbortSignal) =>
+      new Promise<void>((resolve) => {
+        if (seen !== w.rev || signal.aborted) return resolve();
+        const done = () => {
+          clearTimeout(timer);
+          signal.removeEventListener("abort", done);
+          w.wakes.delete(done);
+          resolve();
+        };
+        const timer = setTimeout(done, ms);
+        signal.addEventListener("abort", done);
+        w.wakes.add(done);
+      }),
+    close: () => {
+      if (--w.held === 0 && watches.get(roomId) === w) watches.delete(roomId);
+    },
+  };
+};
 
 const pendingCheck = Effect.fn("Room.pendingCheck")(function* (id: string) {
   const db = yield* RoomStore;

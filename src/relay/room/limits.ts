@@ -50,3 +50,4 @@ export const PAGES_PER_MINUTE = 120;
 export const GITHUB_READS_PER_MINUTE = 30;
 export const BLOBS_PER_MINUTE = 120;
 export const REQUEST_TTL_MS = 60 * 60_000;
+export const REQUEST_WAIT_MAX_S = 25;

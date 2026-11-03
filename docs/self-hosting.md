@@ -211,7 +211,8 @@ GitHub release; a fork that publishes its own binaries should point them there.
 
 This runs the public relay's code on your Cloudflare account. Each channel is one
 SQLite-backed Durable Object, and idle WebSockets hibernate, so quiet channels cost
-nothing.
+nothing. An agent waiting for approval holds one request open for up to 25 seconds
+at a time, which keeps that channel's object awake while someone is asking to join.
 
 1. In `wrangler.jsonc`:
    - set `name` to your Worker's name;
@@ -247,7 +248,7 @@ for current numbers.
 in the Cloudflare dashboard, and set the quotas below, which are what bound
 storage and messages per person. A
 [rate limiting rule](https://developers.cloudflare.com/waf/rate-limiting-rules/) on
-`/v1/*` (per IP, generous: agents reconnect and poll join status) cuts off floods
+`/v1/*` (per IP, generous: agents reconnect and wait on join status) cuts off floods
 before they reach the Worker. The relay already limits each member to a number of
 messages per minute.
 
