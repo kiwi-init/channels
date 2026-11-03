@@ -1,7 +1,5 @@
 import { chmodSync, existsSync, mkdirSync, renameSync, rmSync, statSync } from "node:fs";
 import { getRandomValues, timingSafeEqual } from "node:crypto";
-
-import { join } from "node:path";
 import type { Socket } from "bun";
 import type { Channel, PresenceFields, Probe } from "@kiwi/core/client.ts";
 import { KEEP_MAX, type Message } from "@kiwi/core/protocol.ts";
@@ -18,18 +16,13 @@ import { DAEMON_PROTOCOL, daemonSock, daemonToken, readKeepAsk, readListener, ty
 import { activityEnv, reachOf, readsRex, seatRecordFor, wakeOn, type Attached } from "./reach.ts";
 import { readRexInto } from "./rex-reads.ts";
 import type { RexActivity, RexPlace, SeatPlace, TerminalPlugin } from "../terminals/plugin.ts";
-import { helpersOn, marking, remoteBypassOn, terminalPlugin } from "../terminals/registry.ts";
+import { helpersOn, marking, terminalPlugin } from "../terminals/registry.ts";
 import { pruneHookFiles } from "../hooks/delivered.ts";
-import { launchFolders, remoteFolders } from "../launch/folders.ts";
 import { hooksRows } from "../hooks/install/extra.ts";
 import { computerSettings } from "./settings.ts";
 import { harnessInventory } from "../launch/harnesses.ts";
-import { HostedTmux } from "./hosted-tmux.ts";
 import { forgetAtRelay, startMachineInbox } from "./inbox.ts";
 import { remoteRunner } from "./remote.ts";
-import { launchAgent } from "../launch/launch.ts";
-import { readLoopStart, startLoop } from "../loop/start.ts";
-import { readLaunchRequest } from "../launch/wire.ts";
 import { beatLock, dropLock, lockPath, ownsLock, takeLock } from "./lock.ts";
 import { stopDaemon, tryHello } from "./rpc.ts";
 import { readKey, type ConnState, type Seat, type Sub, type Waiting } from "./seat.ts";
@@ -52,13 +45,10 @@ const SYNC_ON_REQUEST_MS = 2_000;
 
 class NotAgentSeat extends Error {}
 
-const NO_SOCKET_BYPASS = "a bypass agent needs kiwi launches bypass on here first (the app's Allow bypass from your other devices setting)";
-
 export interface Daemon {
   readonly sock: string;
   stop(): Promise<void>;
   readonly stopped: Promise<void>;
-  readonly hosted: HostedTmux;
   beacons(): number;
   admitting(): number;
 }
@@ -110,8 +100,6 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     }
   }
 
-  const hosted = new HostedTmux(dir);
-  void hosted.resume().catch(() => {});
   const seats = new Map<string, Seat>();
   const admitter = startAdmitter(() => {
     const m = loadPairedMachine();
@@ -215,7 +203,6 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     wakeOutstandingMs: opts.wakeOutstandingMs ?? WAKE_OUTSTANDING_MS,
     stopped: () => stopped,
     current,
-    hosted,
   });
 
   const seatInfo = async (s: Seat): Promise<DaemonSeat> => {
@@ -759,11 +746,6 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
         case "harnesses":
           sendLine(conn, JSON.stringify({ id, ok: true, harnesses: await harnessInventory() }));
           break;
-        case "folders": {
-          const room = typeof params.room === "string" && /^[0-9a-f]{32}$/.test(params.room) ? params.room : undefined;
-          sendLine(conn, JSON.stringify({ id, ok: true, folders: launchFolders(loadConfig(), room) }));
-          break;
-        }
         case "admit": {
           const room = readAdmitRoom(params);
           if (!room) throw new Error('admit needs {"relay", "room", "owner"}');
@@ -781,27 +763,12 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
           sendLine(conn, JSON.stringify({ id, ok: true, kept: await keepProof(keep.room, keep.agents) }));
           break;
         }
-        case "launch": {
-          const launch = readLaunchRequest(params);
-          if (!launch) throw new Error('launch needs {"harness", "folder", "code", "relay"?, "nick"?, "persona"?, "launch"?: an id of 8 to 64 of A-Z a-z 0-9 _ -}');
-          if (launch.permission === "bypass" && !remoteBypassOn(loadConfig())) throw new Error(NO_SOCKET_BYPASS);
-          sendLine(conn, JSON.stringify({ id, ok: true, launched: await launchAgent(launch, { hosted }) }));
-          break;
-        }
-        case "loop": {
-          const start = readLoopStart(params);
-          if (!start) throw new Error('loop needs {"channel", "as", "folder", "harness"?, "model"?, "effort"?}');
-          const opened = await startLoop(start, hosted);
-          if (!opened.ok) throw new Error(opened.detail);
-          sendLine(conn, JSON.stringify({ id, ok: true, opened }));
-          break;
-        }
         case "stop":
           sendLine(conn, JSON.stringify({ id, ok: true }));
           setTimeout(() => void stop(), 50);
           break;
         default:
-          throw new Error(`unknown verb "${verb}" (hello, adopt, admit, listen, listening, hold, listeners, read, mark, peek, presence, harnesses, folders, launch, loop, unpair, stop)`);
+          throw new Error(`unknown verb "${verb}" (hello, adopt, admit, listen, listening, hold, listeners, read, mark, peek, presence, harnesses, unpair, stop)`);
       }
     } catch (err) {
       sendLine(conn, JSON.stringify({ id, ok: false, error: err instanceof Error ? err.message : String(err) }));
@@ -885,12 +852,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     },
     settled: () => relayForget,
     run: remoteRunner({
-      inventory: () => harnessInventory(),
-      folders: (room) => remoteFolders(loadConfig(), room),
-      launch: (req) => launchAgent(req, { hosted }),
-      bypass: () => remoteBypassOn(loadConfig()),
       settings: async () => computerSettings(loadConfig(), hooksRows()),
-      starts: join(dir, "remote-launches.json"),
     }),
   });
   let rexWatch: { stop(): void } | null = null;
@@ -976,7 +938,6 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     inbox.stop();
     rexWatch?.stop();
     rexWatch = null;
-    await hosted.detach();
     resolveStopped();
     for (const conn of [...conns]) {
       try {
@@ -1013,7 +974,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
   } catch {
     // An unreadable config names no channels to look at: pokes and request frames still admit.
   }
-  return { sock, stop, stopped: stoppedP, hosted, beacons: () => beacons, admitting: () => admitter.watching() };
+  return { sock, stop, stopped: stoppedP, beacons: () => beacons, admitting: () => admitter.watching() };
 }
 
 function onLoopback(relay: string): boolean {

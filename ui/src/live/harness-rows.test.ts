@@ -1,28 +1,24 @@
 import { describe, expect, test } from "bun:test"
 import { HARNESS_INSTALL, type HarnessRow } from "@kiwi/core/harnesses.ts"
-import { harnessChoices, STARTS } from "~/live/harness-rows"
+import { harnessChoices, LISTED } from "~/live/harness-rows"
 import { harnessOf } from "~/live/map"
 
 const row = (harness: HarnessRow["harness"], over: Partial<HarnessRow> = {}): HarnessRow => ({
   harness,
   path: `/bin/${harness}`,
   version: "1.0.0",
-  start: true,
   wake: null,
   why: null,
-  options: null,
   ...over,
 })
 
-describe("the harnesses a computer can start (T429)", () => {
-  test("a harness that's there and can start is offered as installed, with its version and path", () => {
+describe("the harnesses Settings lists for this computer", () => {
+  test("a harness that's there is listed as installed, with its version and path", () => {
     expect(harnessChoices([row("codex")])).toEqual([{ id: "codex", label: "Codex", installed: true, version: "1.0.0", path: "/bin/codex" }])
   })
 
-  test("one that's missing or can't start is listed as not installed, saying why", () => {
-    const [missing, refused] = harnessChoices([row("codex", { path: null, version: null }), row("claude-code", { start: false, why: "needs a newer version" })])
-    expect(missing).toMatchObject({ id: "codex", installed: false })
-    expect(refused).toMatchObject({ installed: false, why: "needs a newer version" })
+  test("one that's missing is listed as not installed", () => {
+    expect(harnessChoices([row("codex", { path: null, version: null })])).toEqual([{ id: "codex", label: "Codex", installed: false }])
   })
 
   test("each harness shows once", () => {
@@ -30,16 +26,12 @@ describe("the harnesses a computer can start (T429)", () => {
   })
 })
 
-test("Antigravity CLI is offered by its own name, and its seats show as agy (T2464)", () => {
+test("Antigravity CLI is listed by its own name, and its seats show as agy (T2464)", () => {
   expect(harnessChoices([row("agy", { version: "1.4.12" })])).toEqual([{ id: "agy", label: "Antigravity CLI", installed: true, version: "1.4.12", path: "/bin/agy" }])
   expect(harnessOf("antigravity")).toBe("agy")
-  expect(STARTS.agy).toBe("agy")
+  expect(LISTED.agy).toBe("agy")
 })
 
-test("a harness the app can show but not start yet isn't offered", () => {
-  expect(harnessChoices([row("kimi"), row("mimo"), row("pi"), row("codex")]).map((h) => h.id)).toEqual(["codex"])
-})
-
-test("every harness the app can start has a line that installs it (T375)", () => {
-  expect(Object.values(STARTS).filter((h) => !HARNESS_INSTALL[h])).toEqual([])
+test("every listed harness has a line that installs it (T375)", () => {
+  expect(Object.values(LISTED).filter((h) => !HARNESS_INSTALL[h])).toEqual([])
 })

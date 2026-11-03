@@ -583,18 +583,6 @@ html .set-body {
   color: var(--live);
 }
 
-.set-folder {
-  min-height: 2rem;
-  padding: 8px 0;
-}
-
-.set-folder-path {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: var(--ink-3);
-}
-
 .set-add {
   justify-content: flex-start;
   gap: 10px;

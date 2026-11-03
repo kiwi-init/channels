@@ -2,15 +2,15 @@ import * as Effect from "effect/Effect";
 import { newSeatToken, SEAT_TOKEN } from "../../hold.ts";
 import { loginPath } from "../../launch/shell.ts";
 import { SESSION_MARKERS } from "../../terminals/shared/launch.ts";
-import { isLoopHarness, LOOP_HARNESSES, recipeFor, type LoopHarness } from "../../loop/recipes.ts";
+import { isLoopHarness, LOOP_HARNESSES, recipeFor } from "../../loop/recipes.ts";
 import { runLoop } from "../../loop/run.ts";
 import { paneIsOurs, tmuxPastesFlag, tmuxVersion } from "../../loop/kimi.ts";
 import { tmuxSocket } from "../../terminals/shared/tmux.ts";
 import { args, opt } from "../args.ts";
-import { type Command, config, die, keepDaemon, out } from "../context.ts";
+import { type Command, config, die, keepDaemon } from "../context.ts";
 import { seatNamed } from "./seat.ts";
 
-const USAGE = `usage: kiwi loop [start] [--harness ${LOOP_HARNESSES.join("|")}] [--model ID] [--effort LEVEL] (from the seat's folder: start runs it in Channels' own tmux, without start it runs here)`;
+const USAGE = `usage: kiwi loop [--harness ${LOOP_HARNESSES.join("|")}] [--model ID] [--effort LEVEL] (from the seat's folder)`;
 
 function typedPaneOk(): boolean {
   const socket = tmuxSocket(process.env);
@@ -23,19 +23,6 @@ function typedTmuxOld(): string | null {
   const version = socket ? tmuxVersion(socket) : "";
   return tmuxPastesFlag(version) ? null : version || "unknown";
 }
-
-const startHosted = (harness: LoopHarness) =>
-  Effect.gen(function* () {
-    const { program } = recipeFor(harness);
-    if (!Bun.which(program, { PATH: yield* Effect.promise(() => loginPath()) })) return yield* die(`${program} isn't on your login shell's PATH`);
-    const { alias, name } = yield* seatNamed;
-    const { daemonLoop, ensureDaemon } = yield* Effect.promise(() => import("../../daemon.ts"));
-    const { hostedWhere } = yield* Effect.promise(() => import("../../launch/wire.ts"));
-    yield* Effect.promise(() => ensureDaemon());
-    const start = { channel: alias, as: name, folder: process.cwd(), harness, ...(opt.model ? { model: opt.model } : {}), ...(opt.effort ? { effort: opt.effort } : {}) };
-    const opened = yield* Effect.tryPromise(() => daemonLoop(start)).pipe(Effect.catch((e) => die(`kiwi loop start: ${e.cause instanceof Error ? e.cause.message : String(e.cause)}`)));
-    out(`kiwi loop for ${name} in ${alias} runs in ${hostedWhere(opened)}`);
-  });
 
 export const loopCommands: Record<string, Command> = {
   loop: () =>
@@ -50,11 +37,6 @@ export const loopCommands: Record<string, Command> = {
           : opt.model && !recipe.takesModel
             ? `${recipe.label} takes its model from its own settings (/model in a session): drop --model`
             : null;
-      if (args[1] === "start") {
-        const refused = unsupported();
-        if (refused) return yield* die(refused);
-        return yield* startHosted(harness);
-      }
       if (args[1] !== undefined) return yield* die(USAGE);
       if (recipe.screen && !typedPaneOk())
         return yield* die(`${recipe.label} takes its first prompt typed into its window, so kiwi loop --harness ${harness} runs only inside tmux, in the pane it was started from`);

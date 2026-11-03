@@ -27,7 +27,7 @@ export function stableBin(exe: string): string {
   return exe;
 }
 
-export function selfArgv(): string[] {
+function selfArgv(): string[] {
   const compiled = !/\.(ts|js)$/.test(Bun.main);
   return compiled ? [stableBin(process.execPath)] : [Bun.which("bun") ?? process.execPath, Bun.main];
 }

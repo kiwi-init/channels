@@ -29,7 +29,6 @@ export function fakeHost(app: FakeApp = {}): FakeHost {
     },
     push: (name) => void did.push(`push ${name}`),
     openExternal: async (url) => void did.push(`open ${url}`),
-    pickFolder: async () => "/Users/someone/app",
     droppedFiles: async () => [],
     pastedImage: async () => null,
     notify: (title, body, link) => void did.push(`notify ${title}: ${body}${link ? ` → ${link}` : ""}`),

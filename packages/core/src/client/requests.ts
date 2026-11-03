@@ -10,7 +10,6 @@ import {
   makeRecord,
   NAME_RE,
   nameKey,
-  readLaunch,
   readRuns,
   RESERVED_NAMES,
   sealRecord,
@@ -121,7 +120,6 @@ export class ChannelRequests {
         const computer = enrolled ?? paired;
         const pin = person || app ? null : yield* Effect.promise(() => readPin(info.pin, this.ch.roomId, this.ch.identity.pk));
         const kind = person || app ? "human" : "agent";
-        const launch = kind === "agent" ? readLaunch(info.launch) : undefined;
         const asked = inlineText(info.name, 40);
         const allowed = NAME_RE.test(asked) && !RESERVED_NAMES.has(nameKey(asked));
         const holder = allowed ? seats.find((m) => nameKey(m.name) === nameKey(asked)) : undefined;
@@ -156,7 +154,6 @@ export class ChannelRequests {
           ...(cleanCard(info.card) ? { card: cleanCard(info.card)! } : {}),
           ...(kind !== "human" && readRuns(info.runs) ? { runs: readRuns(info.runs)! } : {}),
           ...(pin ? { pin } : {}),
-          ...(launch ? { launch } : {}),
         });
       }
       return out;

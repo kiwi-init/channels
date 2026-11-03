@@ -18,7 +18,6 @@ export interface Host {
   readonly app: AppFacts;
   push<P extends Push>(name: P, value: Pushes[P]): void;
   openExternal(url: ExternalUrl): Promise<void>;
-  pickFolder(): Promise<string | null>;
   droppedFiles(): Promise<DroppedFile[]>;
   pastedImage(): Promise<PastedImage | null>;
   notify(title: string, body: string, link: string | null): void;

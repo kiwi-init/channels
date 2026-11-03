@@ -1,5 +1,5 @@
 // A one-time mailbox at the relay, where two of one person's programs meet: the desktop app and a
-// computer it asks to launch an agent, or a device enrolling with the app. Whoever starts makes a
+// computer it asks for its settings, or a device enrolling with the app. Whoever starts makes a
 // random secret; the relay only ever sees a mailbox id hashed from it, and boxes sealed under keys
 // derived from it, so it can't read, forge or swap either side's message. Each slot is written once;
 // the mailbox lives ten minutes.

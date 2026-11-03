@@ -206,16 +206,15 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
 - The top bar floats its controls: the channel switcher and the sidebar
   button are each one `float` object (`r-ctl`, `shadow-float`); the view tabs
   are one `float` group with the chosen tab's pill gliding inside it, and
-  search and the terminal share a second group (`.top-group`, 2px inset,
-  28px buttons at `r-row`). The search field floats the same way when open,
+  search sits in a second group (`.top-group`, 2px inset, 28px buttons at
+  `r-row`). The search field floats the same way when open,
   and on a narrow window it takes the tabs' place. The other bars follow:
   Settings' back button floats too (a panel's close is a plain `IconButton`:
   the panel is already its own column), and so does
   the rail: home and every channel tile (a tile still waiting to be let in
   keeps its outline and no fill); + and the Settings gear stay quiet, a bare
   `ink-3` glyph with `wash` on hover, and the gear floats only while Settings
-  is open. In the terminal
-  drawer the tabs and + are one `float` group and close floats. Hover on a
+  is open. Hover on a
   floating control is `float-2` (the `float` fill, 10% toward `ink`); the
   chosen one is `float-3` (20%).
 - Fields (`.input`, `.textarea`, `Field` with label and hint): `bg-3` fill,
@@ -282,7 +281,7 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   Specs while one waits on you, an `alert` dot on GitHub while an open pull
   request's checks failed. Ambient numbers (open specs, open pull requests,
   who's working, merged today) live in the tab's `title`, not on the bar.
-  On the right, Search and the terminal; a `decide` "paused" chip joins them
+  On the right, Search; a `decide` "paused" chip joins it
   while the agents are paused, on every view but the conversation, whose
   banner already says it. No borders between the columns.
 - **Sidebar.** Every row is one `--ctl` line, its text on one edge after a

@@ -32,7 +32,6 @@ function roomOn(head: number, offlineTries: number) {
   const room = new Room(keyring, seat, {
     emit: (view) => void seen.views.push(view),
     lost: () => {},
-    launch: () => {},
     person: () => null,
     log: () => {},
     devices: () => {},

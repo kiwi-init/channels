@@ -60,10 +60,10 @@ const settled = (p: Promise<unknown>, ms = 100): Promise<string> =>
 describe("window.kiwi over Electrobun's RPC, both ends as the app wires them", () => {
   test("calls reach main's handlers with their arguments, and answers and errors come back", async () => {
     await kiwi.notify("T436", "over RPC");
-    expect(await kiwi.chooseFolder()).toBe("/Users/someone/app");
+    expect(await kiwi.saveFile("notes.md", "hi")).toBe("notes.md");
     await expect(kiwi.terminalHelpers("vim" as "rex", "on")).rejects.toThrow("terminalHelpers takes rex or tmux, and on or off");
     await expect(kiwi.openExternal("file:///etc/passwd")).rejects.toThrow("only http(s) links open outside");
-    expect(shell.did).toEqual(["notify T436: over RPC"]);
+    expect(shell.did).toEqual(["notify T436: over RPC", "save notes.md"]);
   });
 
   test("a store change reaches the page's onStore and getSnapshot, and other pushes their own listener", async () => {
@@ -83,24 +83,24 @@ describe("window.kiwi over Electrobun's RPC, both ends as the app wires them", (
     const before = shell.did.length;
     const heard: string[] = [];
     kiwi.onDeepLink((u) => heard.push(u));
-    expect(await settled(kiwi.chooseFolder())).toBe("no answer");
+    expect(await settled(kiwi.saveFile("off.md", "page"))).toBe("no answer");
     expect(await settled(kiwi.notify("off", "page"))).toBe("no answer");
     main.push("deepLink", "kiwi://join/mc2-leak");
     await Bun.sleep(0);
     expect({ ran: shell.did.slice(before), heard }).toEqual({ ran: [], heard: [] });
     at = `${PAGE_URL}#mc2-abc`;
-    expect(await settled(kiwi.chooseFolder())).toBe('answered "/Users/someone/app"');
+    expect(await settled(kiwi.saveFile("notes.md", "hi"))).toBe('answered "notes.md"');
   });
 
   test("a call that isn't the bridge's is refused before any handler", async () => {
     at = PAGE_URL;
-    expect(await settled(page.call("constructor" as "chooseFolder"))).toBe("refused the app has no such call");
+    expect(await settled(page.call("constructor" as "saveFile", "notes.md", "hi"))).toBe("refused the app has no such call");
   });
 
   test("a reloaded page never gets the previous load's replies, and the old page's late messages get nothing", async () => {
     let release: (folder: string) => void = () => {};
     const slow = new Promise<string>((r) => (release = r));
-    const table: Handlers = { ...handlers(shell.host), chooseFolder: () => slow };
+    const table: Handlers = { ...handlers(shell.host), saveFile: () => slow };
     let fromAnyPage: (frame: unknown) => void = () => {};
     let toLoaded: (frame: unknown) => void = () => {};
     const opened: string[] = [];
@@ -116,7 +116,7 @@ describe("window.kiwi over Electrobun's RPC, both ends as the app wires them", (
       (receive) => (toLoaded = receive),
       reloading.nextSession(),
     );
-    const before = first.call("chooseFolder");
+    const before = first.call("saveFile", "notes.md", "hi");
     const second = pageBridge(
       (json) => fromAnyPage(JSON.parse(json)),
       (receive) => (toLoaded = receive),
@@ -269,9 +269,9 @@ describe("sessions are main's (T1230)", () => {
   test("a retired session's late reply never leaves main, so nothing from an old load is evaluated in the new one", async () => {
     let release: (folder: string) => void = () => {};
     const slow = new Promise<string>((done) => (release = done));
-    const r = rig({ ...handlers(shell.host), chooseFolder: () => slow });
+    const r = rig({ ...handlers(shell.host), saveFile: () => slow });
     const first = r.load();
-    void first.call("chooseFolder");
+    void first.call("saveFile", "notes.md", "hi");
     const second = r.load();
     expect(await settled(second.call("getDeepLink"))).toBe("answered null");
     release("/picked/by/the/old/load");
@@ -291,12 +291,12 @@ describe("sessions are main's (T1230)", () => {
 describe("each document is its own session (T1741)", () => {
   test("two documents that boot from one preload's id get their own sessions, so neither takes the other's reply", async () => {
     const picks: ((folder: string) => void)[] = [];
-    const r = rig({ ...handlers(shell.host), chooseFolder: () => new Promise<string>((done) => picks.push(done)) });
+    const r = rig({ ...handlers(shell.host), saveFile: () => new Promise<string>((done) => picks.push(done)) });
     const id = r.bridge.nextSession();
     const first = r.load(id);
-    const askedFirst = first.call("chooseFolder");
+    const askedFirst = first.call("saveFile", "notes.md", "hi");
     const second = r.load(id);
-    const askedSecond = second.call("chooseFolder");
+    const askedSecond = second.call("saveFile", "notes.md", "hi");
     await Bun.sleep(0);
     picks[0]?.("/the/first/document's/dialog");
     picks[1]?.("/the/second/document's/dialog");
@@ -307,9 +307,9 @@ describe("each document is its own session (T1741)", () => {
 
   test("load() retires the session at once: nothing for the old load leaves main before the new page says hello", async () => {
     const picks: ((folder: string) => void)[] = [];
-    const r = rig({ ...handlers(shell.host), chooseFolder: () => new Promise<string>((done) => picks.push(done)) });
+    const r = rig({ ...handlers(shell.host), saveFile: () => new Promise<string>((done) => picks.push(done)) });
     const first = r.load();
-    void first.call("chooseFolder");
+    void first.call("saveFile", "notes.md", "hi");
     await Bun.sleep(0);
     r.bridge.retire();
     const before = r.sent.length;

@@ -6,7 +6,7 @@ import { useNow } from "~/kit/time"
 import type { TextFont } from "@kiwi/app/theme.ts"
 import { personFingerprint } from "@kiwi/core/fingerprint.ts"
 import { KEYS_UNSEALED } from "@kiwi/secrets/keys-at-rest.ts"
-import type { Channel, ChannelTile, Prefs, Theme, UpdateCheck } from "~/model"
+import type { Account, Channel, ChannelTile, Prefs, Theme, UpdateCheck } from "~/model"
 import { updateFound } from "~/settings/update-check"
 import { useApp } from "~/nav"
 import { Toggle } from "~/kit/bits"
@@ -266,45 +266,37 @@ function mutedName(tiles: readonly ChannelTile[], open: Channel | null, key: str
   return name ? `#${name} in ${title}` : `A room in ${title}`
 }
 
-export function UpdatesSection() {
+function VersionRow({ account }: { account: Account }) {
   const { app } = useApp()
-  const account = app.account
-  if (!account) return null
   const update = account.update
   const on = <span className="set-mono">{account.version}</span>
-  return (
-    <Page title="Updates">
-      <Group>
-        {update?.ready ? (
-          <Row label={<New>{update.version} is ready</New>} hint={<>You're on {on}. Channels restarts on the new one.</>}>
-            <button type="button" className="btn is-primary is-small" onClick={app.actions.installUpdate}>
-              Restart to update
-            </button>
-          </Row>
-        ) : update?.state === "available" ? (
-          <Row label={<New>{update.version} is out</New>} hint={update.blocked ? "This copy can't replace itself where it is." : <>You're on {on}.</>}>
-            <button type="button" className="btn is-primary is-small" onClick={app.actions.installUpdate}>
-              {update.blocked ? "Get it" : "Download and restart"}
-            </button>
-          </Row>
-        ) : update ? (
-          <Row
-            label={
-              <span className="set-state tone-doing">
-                <span className="set-state-dot is-doing" aria-hidden="true" />
-                Downloading {update.version}
-                <span className="set-mono">{update.progress ? ` · ${Math.round(update.progress * 100)}%` : "…"}</span>
-              </span>
-            }
-            hint="You can keep working. We ask before restarting."
-          />
-        ) : account.desktop ? (
-          <CheckUpdates version={account.version} />
-        ) : (
-          <Row label={<UpToDate />} hint={on} />
-        )}
-      </Group>
-    </Page>
+  return update?.ready ? (
+    <Row label={<New>{update.version} is ready</New>} hint={<>You're on {on}. Channels restarts on the new one.</>}>
+      <button type="button" className="btn is-primary is-small" onClick={app.actions.installUpdate}>
+        Restart to update
+      </button>
+    </Row>
+  ) : update?.state === "available" ? (
+    <Row label={<New>{update.version} is out</New>} hint={update.blocked ? "This copy can't replace itself where it is." : <>You're on {on}.</>}>
+      <button type="button" className="btn is-primary is-small" onClick={app.actions.installUpdate}>
+        {update.blocked ? "Get it" : "Download and restart"}
+      </button>
+    </Row>
+  ) : update ? (
+    <Row
+      label={
+        <span className="set-state tone-doing">
+          <span className="set-state-dot is-doing" aria-hidden="true" />
+          Downloading {update.version}
+          <span className="set-mono">{update.progress ? ` · ${Math.round(update.progress * 100)}%` : "…"}</span>
+        </span>
+      }
+      hint="You can keep working. We ask before restarting."
+    />
+  ) : account.desktop ? (
+    <CheckUpdates version={account.version} />
+  ) : (
+    <Row label={<UpToDate />} hint={on} />
   )
 }
 
@@ -335,9 +327,7 @@ export function AboutSection() {
   return (
     <Page title="About" lede="Channels by Kiwi Init.">
       <Group>
-        <Row label="Version">
-          <span className="set-value set-mono">{account.version}</span>
-        </Row>
+        <VersionRow account={account} />
         {account.desktop ? (
           <RelayRow relay={account.relay ?? ""} />
         ) : (
