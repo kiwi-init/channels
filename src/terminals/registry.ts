@@ -50,6 +50,10 @@ export function remoteBypassOn(cfg: Pick<Config, "remoteBypass">): boolean {
   return cfg.remoteBypass === "on";
 }
 
+export function shellsOn(cfg: Pick<Config, "shells">): boolean {
+  return cfg.shells !== "off";
+}
+
 interface Plugins {
   manifests: readonly TerminalManifest[];
   load(id: TerminalId): Promise<TerminalPlugin>;

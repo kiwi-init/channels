@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { signRequest } from "@kiwi/core/auth.ts";
-import { readDeviceList, type DeviceList } from "@kiwi/core/devices.ts";
+import { readDeviceList, speaksForPerson, type DeviceList } from "@kiwi/core/devices.ts";
 import type { Identity } from "@kiwi/core/identity.ts";
 import { CHOICE_KEYS } from "@kiwi/core/launch-options.ts";
 import { readAsk, readMachineArgs, signAnswer, type MachineArgs } from "@kiwi/core/machine-ask.ts";
@@ -19,7 +19,7 @@ const CHECK_MS = 2_000;
 export interface InboxDeps {
   dir: string;
   machine: () => PairedMachine | null;
-  run: (args: MachineArgs, id: string) => Promise<unknown>;
+  run: (args: MachineArgs, id: string, by: string) => Promise<unknown>;
   unpaired: () => Promise<void>;
   listed: (links: unknown) => Promise<boolean>;
   settled?: () => Promise<unknown> | null;
@@ -88,6 +88,13 @@ async function listOf(m: Paired): Promise<DeviceList | null> {
   return read.ok ? read.list : null;
 }
 
+export async function speaksHere(m: PairedMachine | null, by: string, now = Date.now()): Promise<boolean> {
+  const paired = m ? pairedOf(m) : null;
+  if (!paired) return false;
+  const list = await listOf(paired);
+  return list?.person === paired.owner ? speaksForPerson(list, by, now) : by === paired.owner;
+}
+
 async function register(m: Paired, listed: InboxDeps["listed"]): Promise<Response | null> {
   const byList = m.device?.links.length ? await machineFetch(m, "PUT", "", { links: m.device.links }).catch(() => null) : null;
   if (byList?.ok || !m.cert || m.cert.pk !== m.owner) return byList;
@@ -140,7 +147,7 @@ export function startMachineInbox(deps: InboxDeps): { stop(): void; close(): voi
     const where = args?.verb === "launch" ? [args.launch.harness, args.launch.folder] : ["", ""];
     const options = args?.verb === "launch" ? CHOICE_KEYS.flatMap((k) => (args.launch[k] === undefined ? [] : [`${k}=${args.launch[k]}`])).join(" ") : "";
     const result = args
-      ? await deps.run(args, read.ask.id).catch((err: unknown) => ({ ok: false, why: "failed", detail: err instanceof Error ? err.message : String(err) }))
+      ? await deps.run(args, read.ask.id, read.by).catch((err: unknown) => ({ ok: false, why: "failed", detail: err instanceof Error ? err.message : String(err) }))
       : { ok: false, why: "bad-args" };
     const ok = !!result && typeof result === "object" && (result as { ok?: unknown }).ok !== false;
     log([read.ask.verb, ok ? "done" : "refused", ...where, read.ask.id, ...(options ? [options] : [])]);
