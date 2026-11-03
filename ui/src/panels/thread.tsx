@@ -22,11 +22,11 @@ export function ThreadPanel({ channel, seq, focus }: { channel: Channel; seq: nu
   const replying = useMemo((): Replying => {
     const here = reply?.code === channel.code && reply.root === seq ? reply : null
     return {
-      to: (here && bySeq.get(here.to)) ?? null,
+      to: (here && (here.to === seq ? root : replies.find((m) => m.seq === here.to))) ?? null,
       excerpt: here?.excerpt ?? null,
       set: (to, excerpt) => threadReply.set(to ? { code: channel.code, root: seq, to: to.seq, excerpt: excerpt ?? null } : null),
     }
-  }, [reply, channel.code, seq, bySeq])
+  }, [reply, channel.code, seq, root, replies])
   const { scroller, content, remember, toBottom, unstick } = useStick()
   const last = replies.at(-1)?.seq
   const shown = useRef({ seq, last })

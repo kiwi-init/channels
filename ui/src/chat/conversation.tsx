@@ -285,14 +285,14 @@ function Feed({ channel, where, spot, jump }: { channel: Channel; where: Where; 
   const replying = useReplying()
   const quote = useCallback(
     (seq: number, excerpt: string) => {
-      const m = bySeq.get(seq)
+      const m = list.find((x) => x.seq === seq)
       if (!m) return
       if (where.kind === "task" && replying) return replying.set(m, excerpt)
       const root = m.inThread ?? m.seq
       threadReply.set({ code: channel.code, root, to: m.seq, excerpt })
       go({ to: "panel", panel: { kind: "thread", seq: root } })
     },
-    [bySeq, where.kind, replying, channel.code, go]
+    [list, where.kind, replying, channel.code, go]
   )
 
   useEffect(() => {
