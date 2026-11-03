@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { isWakeVia, wakePath, wakeWords } from "@kiwi/core/wake.ts";
 import { promptState, typeWake } from "../src/daemon/wake-pane.ts";
+import { howMessagesReachYou } from "../src/hooks/reach.ts";
 import type { Pane } from "../src/terminals/plugin.ts";
 
 const screen = (name: string): string => readFileSync(join(import.meta.dir, "fixtures", "agy-screens", `${name}.txt`), "utf8");
@@ -96,5 +98,29 @@ describe("typing a wake into a pane", () => {
     const moving = fakePane([screen("busy"), screen("idle")]);
     expect(await typeWake(moving, "wake", "agy", 0)).toEqual({ ok: false, why: "its screen is still changing", retry: true });
     expect(await typeWake(null, "wake", "agy", 0)).toEqual({ ok: false, why: "its tmux pane is gone", retry: false });
+  });
+});
+
+describe("the wake route for an agent in its own tmux pane", () => {
+  test("Antigravity CLI and Gemini CLI in tmux are woken by typing into their pane", () => {
+    for (const harness of ["agy", "gemini"] as const) expect(wakePath({ harness, tmux: { pane: "%4" } }, false)).toEqual({ kind: "command", via: "tmux-typing", session: "%4" });
+  });
+
+  test("outside tmux they still can't be woken, a held seat wakes nothing, and harnesses with a wake of their own keep it", () => {
+    expect(wakePath({ harness: "agy" }, false).kind).toBe("none");
+    expect(wakePath({ harness: "gemini" }, false).kind).toBe("none");
+    expect(wakePath({ harness: "agy", tmux: { pane: "%4" }, held: true }, false).kind).toBe("none");
+    expect(wakePath({ harness: "claude", tmux: { pane: "%4" } }, true)).toEqual({ kind: "hooks" });
+    expect(wakePath({ harness: "codex", session: "t", tmux: { pane: "%4" } }, false)).toEqual({ kind: "command", via: "codex-queue", session: "t" });
+    for (const harness of ["cursor", "grok", "kimi", "zcode"] as const) expect(wakePath({ harness, tmux: { pane: "%4" } }, false).kind).toBe("none");
+  });
+
+  test("it has a name people read, and an agy agent in tmux is told not to run listen", () => {
+    expect(isWakeVia("tmux-typing")).toBe(true);
+    expect(wakeWords("tmux-typing")).toBe("typing into its tmux pane");
+    expect(howMessagesReachYou("kiwi", true, { harness: "agy", session: "c" }, false, "%7")).toBe(
+      "Kiwi wakes you in this session when a message for you arrives (typing into its tmux pane). Don't run listen.",
+    );
+    expect(howMessagesReachYou("kiwi", true, { harness: "agy", session: "c" }, false, undefined)).toContain("Kiwi wakes it only in tmux");
   });
 });

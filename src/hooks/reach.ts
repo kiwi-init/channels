@@ -6,6 +6,7 @@ import { hooksListen } from "./install/claude.ts";
 import { extraInstalled } from "./install/extra.ts";
 import { mimoInstalled } from "./install/mimo.ts";
 import { piInstalled } from "./install/pi.ts";
+import { tmuxPlaceFrom } from "../terminals/tmux/locate.ts";
 
 function checkEachTurn(mc: string): string {
   return `Run \`${COMMANDS.unread(mc)}\` at the start of every turn and again before you end one. It prints the messages waiting for you, or says there are none.`;
@@ -68,10 +69,10 @@ export function wakeYourself(mc: string, harness: Here["harness"]): string | nul
   return null;
 }
 
-export function howMessagesReachYou(mc: string, waking: boolean, who: Here = here(), webhook = false): string {
+export function howMessagesReachYou(mc: string, waking: boolean, who: Here = here(), webhook = false, pane: string | undefined = tmuxPlaceFrom(process.env).tmux?.pane): string {
   if (!waking) return `Kiwi won't wake you: waking is off for you here (\`kiwi wake on\` turns it back on). ${checkEachTurn(mc)}`;
   if (who.harness === "kimi" && kimiServer(who.pid) && extraInstalled("kimi")) return `Kiwi wakes you in this session when a message for you arrives (${wakeWords("kimi-server")}). Don't run listen.`;
-  const path = wakePath(who.harness ? { harness: who.harness, ...(who.session ? { session: who.session } : {}) } : null, hooksListen(), webhook, {
+  const path = wakePath(who.harness ? { harness: who.harness, ...(who.session ? { session: who.session } : {}), ...(pane ? { tmux: { pane } } : {}) } : null, hooksListen(), webhook, {
     pi: piInstalled(),
     mimo: mimoInstalled(),
   });

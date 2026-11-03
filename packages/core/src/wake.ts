@@ -1,6 +1,6 @@
 export type WakeHarness = "claude" | "codex" | "gemini" | "cursor" | "grok" | "opencode" | "kimi" | "mimo" | "grok-bot" | "pi" | "zcode" | "agy";
 
-export type WakeCommand = "codex-queue" | "opencode-api" | "webhook" | "kimi-server";
+export type WakeCommand = "codex-queue" | "opencode-api" | "webhook" | "kimi-server" | "tmux-typing";
 
 export type WakePath = { kind: "hooks" } | { kind: "extension"; via: WakeExtension } | { kind: "command"; via: WakeCommand; session: string } | { kind: "none"; why: string };
 
@@ -8,7 +8,7 @@ type WakeExtension = "pi-extension" | "mimo-plugin";
 
 export type WakeVia = "hooks" | WakeExtension | "listener" | WakeCommand;
 
-const WAKE_VIA: readonly WakeVia[] = ["hooks", "pi-extension", "mimo-plugin", "listener", "codex-queue", "opencode-api", "webhook", "kimi-server"];
+const WAKE_VIA: readonly WakeVia[] = ["hooks", "pi-extension", "mimo-plugin", "listener", "codex-queue", "opencode-api", "webhook", "kimi-server", "tmux-typing"];
 
 export function isWakeVia(v: unknown): v is WakeVia {
   return typeof v === "string" && (WAKE_VIA as readonly string[]).includes(v);
@@ -32,12 +32,16 @@ export function wakeWords(via: WakeVia): string {
       return "its routine's webhook";
     case "kimi-server":
       return "Kimi's server";
+    case "tmux-typing":
+      return "typing into its tmux pane";
   }
 }
 
 export function wakesInSession(via: string | undefined): boolean {
   return via === "hooks" || via === "pi-extension" || via === "mimo-plugin";
 }
+
+const TYPED_IN_TMUX = new Set<WakeHarness | undefined>(["agy", "gemini"]);
 
 export function pullsWake(harness: WakeHarness | undefined): boolean {
   return harness === "kimi" || harness === "cursor" || harness === "grok" || harness === "zcode";
@@ -64,13 +68,14 @@ export function viaOf(path: WakePath): WakeVia | null {
 }
 
 export function wakePath(
-  record: { harness?: WakeHarness; session?: string; harnessSession?: string; served?: boolean; held?: boolean } | null,
+  record: { harness?: WakeHarness; session?: string; harnessSession?: string; served?: boolean; held?: boolean; tmux?: { pane: string } } | null,
   claudeHooks: boolean,
   webhook = false,
   extensions: { pi?: boolean; mimo?: boolean } = {},
 ): WakePath {
   if (!record) return { kind: "none", why: "no session of a harness Kiwi knows has used this seat yet" };
   if (record.held) return { kind: "none", why: "its loop holds it between sessions, and wakes nothing until it hands the seat to a new session" };
+  if (record.tmux && TYPED_IN_TMUX.has(record.harness)) return { kind: "command", via: "tmux-typing", session: record.tmux.pane };
   switch (record.harness) {
     case "claude":
       return claudeHooks ? { kind: "hooks" } : { kind: "none", why: "Claude Code's listening hooks aren't installed, or this Claude Code is older than 2.1.296 (kiwi hooks install)" };
@@ -81,13 +86,13 @@ export function wakePath(
     case "grok":
       return { kind: "none", why: "Kiwi can't tell whether a Grok session is live in its leader, and waking one that isn't would start a second copy" };
     case "gemini":
-      return { kind: "none", why: "Gemini CLI gives Kiwi no way to start a turn in a running session" };
+      return { kind: "none", why: "Gemini CLI gives Kiwi no way to start a turn in a running session outside tmux (in tmux, Kiwi types into its pane)" };
     case "cursor":
       return { kind: "none", why: "Cursor gives Kiwi no way to start a turn in a running session" };
     case "zcode":
       return { kind: "none", why: "ZCode gives Kiwi no way to start a turn in a running session" };
     case "agy":
-      return { kind: "none", why: "Antigravity CLI's hooks run inside its turn, so Kiwi has no way yet to start one in a running session" };
+      return { kind: "none", why: "Antigravity CLI takes no turn from outside a running session, so Kiwi wakes it only in tmux, by typing into its pane" };
     case "kimi":
       if (!record.served) return { kind: "none", why: "Kimi Code gives Kiwi no way to start a turn in a session run in its terminal; one opened with kimi web (or /web) can be woken" };
       return record.harnessSession ? { kind: "command", via: "kimi-server", session: record.harnessSession } : { kind: "none", why: "Kiwi learns which Kimi Code session this is when its turn ends" };
@@ -122,7 +127,7 @@ export function wakePrompt(alias: string, agent: string): string {
   return `New Kiwi messages for you in ${JSON.stringify(alias)}. If they aren't shown here, read them with: kiwi ${channelOption(alias)} ${asOption(agent)} listen --now, then act on them.`;
 }
 
-export function wakeArgv(via: Exclude<WakeCommand, "webhook" | "kimi-server">, session: string, prompt: string): string[] {
+export function wakeArgv(via: Exclude<WakeCommand, "webhook" | "kimi-server" | "tmux-typing">, session: string, prompt: string): string[] {
   switch (via) {
     case "codex-queue":
       return ["codex", "queue", "--thread", session, "--message", prompt];
