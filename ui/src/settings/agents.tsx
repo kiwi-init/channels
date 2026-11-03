@@ -1,9 +1,11 @@
 import { useState } from "react"
 
 import type { TerminalId, TerminalRow } from "@kiwi/core/terminals.ts"
-import { Avatar, Toggle } from "~/kit/bits"
+import { cx, Toggle } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
-import type { AgentStarts, Finding, ThisComputer } from "~/model"
+import { LOGOS } from "~/kit/logos"
+import { RoleFace } from "~/kit/role-face"
+import type { AgentStarts, Finding, Harness, ThisComputer } from "~/model"
 import { useApp } from "~/nav"
 import { Group, Row } from "~/settings/controls"
 import { Personalities } from "~/settings/personalities"
@@ -11,29 +13,82 @@ import { Page } from "~/settings/sections"
 
 type Hook = ThisComputer["hooks"][number]
 
-const HOOK_SAYS: Record<Hook["state"], { desc: string; action: string }> = {
-  installed: { desc: "", action: "Remove hooks" },
-  partial: { desc: "Its hooks can't wake Claude Code when a message comes", action: "Update hooks" },
-  outdated: { desc: "Its hooks are from an older kiwi", action: "Update hooks" },
-  missing: { desc: "No hooks yet", action: "Install hooks" },
-  off: { desc: "Hooks removed. Kiwi won't add them back until you install them", action: "Install hooks" },
+const HOOK_SAYS: Record<Hook["state"], { state: string; action: string; tone?: string; why?: string }> = {
+  installed: { state: "Hooks on", action: "Remove" },
+  partial: { state: "Hooks out of date", action: "Update", tone: "tone-decide", why: "Its hooks can't wake the agent when a message comes." },
+  outdated: { state: "Hooks out of date", action: "Update", tone: "tone-decide", why: "Its hooks are from an older kiwi." },
+  missing: { state: "No hooks", action: "Add" },
+  off: { state: "No hooks", action: "Add", why: "You removed them. Kiwi won't add them back until you add them." },
 }
 
 const HOOKS_DO = "Hooks bring new messages to agents here, and their permission prompts to Needs you."
 
-function HookButton({ hook }: { hook: Hook }) {
+function HookState({ hook }: { hook: Hook }) {
   const { app } = useApp()
+  const says = HOOK_SAYS[hook.state]
   return (
-    <button
-      type="button"
-      className="btn is-quiet is-small"
-      title={HOOKS_DO}
-      aria-label={`${HOOK_SAYS[hook.state].action} for ${hook.label}`}
-      onClick={() => app.actions.setHooks(hook.harness, hook.state !== "installed")}
-    >
-      {HOOK_SAYS[hook.state].action}
-    </button>
+    <>
+      <span className={cx("set-harness-state", says.tone)} title={says.why}>
+        {says.state}
+      </span>
+      <button
+        type="button"
+        className="btn is-quiet is-small"
+        title={HOOKS_DO}
+        aria-label={`${says.action} hooks for ${hook.label}`}
+        onClick={() => app.actions.setHooks(hook.harness, hook.state !== "installed")}
+      >
+        {says.action}
+      </button>
+    </>
   )
+}
+
+function HarnessMark({ harness }: { harness: Harness }) {
+  const logo = LOGOS[harness]
+  if (!logo)
+    return (
+      <span className="set-harness-mark is-face" aria-hidden="true">
+        <RoleFace harness={undefined} />
+      </span>
+    )
+  return (
+    <svg className="set-harness-mark" viewBox="0 0 24 24" data-harness={harness} aria-hidden="true">
+      {logo.map((p, i) => (
+        <path key={i} d={p.d} transform={p.transform} fillRule={p.rule} opacity={p.opacity} />
+      ))}
+    </svg>
+  )
+}
+
+function HarnessRow({ harness, label, version, path, hook }: { harness: Harness; label: string; version?: string | undefined; path?: string | undefined; hook: Hook | undefined }) {
+  return (
+    <div className="set-row set-harness">
+      <HarnessMark harness={harness} />
+      <span className="set-row-text">
+        <span className="set-row-label">
+          {label}
+          {version && <span className="set-harness-version">{version}</span>}
+        </span>
+        {path && (
+          <span className="set-row-hint set-harness-path" title={path}>
+            {path}
+          </span>
+        )}
+      </span>
+      {hook && (
+        <span className="set-row-ctl">
+          <HookState hook={hook} />
+        </span>
+      )}
+    </div>
+  )
+}
+
+function KiwiState({ computer }: { computer: ThisComputer | null }) {
+  if (!computer) return null
+  if (!computer.kiwi.running) return <span className="set-kiwi tone-decide">kiwi isn't running</span>
+  return <span className="set-kiwi">{computer.kiwi.version ? `kiwi ${computer.kiwi.version} · running` : "kiwi · running"}</span>
 }
 
 const HELPERS: Record<TerminalId, { download: string; on: string; off: string }> = {
@@ -51,13 +106,13 @@ const HELPERS: Record<TerminalId, { download: string; on: string; off: string }>
 
 const ORDER: TerminalId[] = ["rex", "tmux"]
 
-function Helpers({ starts }: { starts: AgentStarts }) {
+const helpersOf = (starts: AgentStarts | null): (TerminalRow & { helpers: "on" | "off" })[] =>
+  starts ? ORDER.flatMap((id) => starts.terminals.filter((t) => t.id === id)).filter((t): t is TerminalRow & { helpers: "on" | "off" } => t.helpers !== null && (t.found || t.helpers === "on")) : []
+
+function Helpers({ helpers }: { helpers: (TerminalRow & { helpers: "on" | "off" })[] }) {
   const { app } = useApp()
-  const rows = ORDER.flatMap((id) => starts.terminals.filter((t) => t.id === id))
-  const helpers = rows.filter((t): t is TerminalRow & { helpers: "on" | "off" } => t.helpers !== null && (t.found || t.helpers === "on"))
-  if (!helpers.length) return null
   return (
-    <Group title="Terminals">
+    <>
       {helpers.map((t) => {
         const on = t.helpers === "on"
         const note =
@@ -79,7 +134,7 @@ function Helpers({ starts }: { starts: AgentStarts }) {
           </Row>
         )
       })}
-    </Group>
+    </>
   )
 }
 
@@ -143,52 +198,34 @@ export function AgentsSection() {
   const { starts, computer, actions } = app
   const hooks = computer?.hooks ?? []
   const loose = hooks.filter((k) => !app.harnesses.some((h) => h.id === k.harness))
+  const here = app.harnesses.filter((h) => h.installed || hooks.some((k) => k.harness === h.id))
+  const away = app.harnesses.filter((h) => !here.includes(h))
+  const helpers = helpersOf(starts)
   return (
     <Page title="Agents">
       <Personalities />
 
-      <Group title="Harnesses" hint={computer ? (computer.kiwi.running && computer.kiwi.version ? `kiwi ${computer.kiwi.version} running` : "kiwi isn't running") : undefined}>
-        {app.harnesses.map((h) => {
-          const hook = hooks.find((k) => k.harness === h.id)
-          return (
-            <div key={h.id} className="set-row">
-              <span className="set-row-text set-harness">
-                <Avatar person={{ name: h.label, kind: "agent", harness: h.id, presence: h.installed ? "online" : "offline" }} size="sm" />
-                <span className="set-harness-text">
-                  <span className="set-row-label">
-                    {h.label}
-                    {h.version && <span className="set-harness-version"> {h.version}</span>}
-                  </span>
-                  {h.path && (
-                    <span className="set-row-hint set-harness-path" title={h.path}>
-                      {h.path}
-                    </span>
-                  )}
-                  {hook && HOOK_SAYS[hook.state].desc && <span className="set-row-hint">{HOOK_SAYS[hook.state].desc}</span>}
-                </span>
-              </span>
-              {hook ? <HookButton hook={hook} /> : !h.installed && <span className="set-harness-state">Not installed</span>}
-            </div>
-          )
-        })}
-        {loose.map((k) => (
-          <Row key={k.harness} label={`${k.label} hooks`} hint={HOOK_SAYS[k.state].desc || undefined}>
-            <HookButton hook={k} />
-          </Row>
+      <Group title="Harnesses" aside={<KiwiState computer={computer} />}>
+        {here.map((h) => (
+          <HarnessRow key={h.id} harness={h.id} label={h.label} version={h.version} path={h.path} hook={hooks.find((k) => k.harness === h.id)} />
         ))}
+        {loose.map((k) => (
+          <HarnessRow key={k.harness} harness={k.harness} label={k.label} hook={k} />
+        ))}
+        {away.length > 0 && <p className="set-harness-away">Not installed: {away.map((h) => h.label).join(", ")}</p>}
       </Group>
 
-      {computer && (
-        <Group>
-          {computer.contextLine !== null && (
+      {(computer || helpers.length > 0) && (
+        <Group title="This computer">
+          {computer && <CheckComputer />}
+          {computer && computer.contextLine !== null && (
             <Row label="Ask agents for a checkpoint past 250k context" hint="An agent here past 250k tokens is asked to write where its work stands before it ends its turn.">
               <Toggle label="Ask agents for a checkpoint past 250k context" on={computer.contextLine} onChange={actions.setContextLine} />
             </Row>
           )}
-          <CheckComputer />
+          <Helpers helpers={helpers} />
         </Group>
       )}
-      {starts && <Helpers starts={starts} />}
     </Page>
   )
 }

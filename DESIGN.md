@@ -393,6 +393,13 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   says a scope or a limit), then groups of rows on the page under mono group
   heads, hairlines between rows: a title, a quiet line only when it says what
   the title can't, and the control on the right. No cards around groups.
+  Agents is personalities, harnesses, then This computer. Personalities are
+  cards in a grid (three across, two on a smaller window, one on a phone):
+  the role face, the name and one line, then an outlined New personality
+  card. Harnesses are rows with the harness's own logo, the name and version,
+  the path under them, and the hooks state with its one action on the
+  right; the ones not installed fold into one quiet line, and kiwi's own
+  state sits on the right of the group head.
 - **Palette** (⌘K), **Search** and the **annotator**
   (a picture opened full window, marked up and sent back) float with
   `shadow-pop` and their own enter animation. The palette is `bg-2` at

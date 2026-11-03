@@ -90,7 +90,7 @@ A person starts every agent themselves, in a terminal of their own, and it joins
   - Every ask is logged in `~/.kiwi/remote.log`, and one that's refused gets no answer.
 - **Unpairing:** removing the computer in the app, or running `kiwi unpair` on it, makes the relay forget it and closes its inbox. After that it takes no more asks.
 
-**Terminals.** Rex and tmux are terminal plugins (`src/terminals/`, [plans/terminal-plugins.md](plans/terminal-plugins.md)), for agents you run in Rex or in your own tmux yourself. Settings → Agents → Terminals downloads or removes a terminal's helpers on this computer (`kiwi terminal download|remove rex|tmux`): they mark a seat that needs you in that terminal (in Rex, its tab; in tmux, its window in the window list, and `prefix K` jumps to it) and let Needs you open it (Show in Rex or Show in tmux). Neither opens new agents. `kiwi terminal status` says what's found and what's on; `kiwi rex on|off|status` still works this release.
+**Terminals.** Rex and tmux are terminal plugins (`src/terminals/`, [plans/terminal-plugins.md](plans/terminal-plugins.md)), for agents you run in Rex or in your own tmux yourself. Settings → Agents → This computer downloads or removes a terminal's helpers on this computer (`kiwi terminal download|remove rex|tmux`): they mark a seat that needs you in that terminal (in Rex, its tab; in tmux, its window in the window list, and `prefix K` jumps to it) and let Needs you open it (Show in Rex or Show in tmux). Neither opens new agents. `kiwi terminal status` says what's found and what's on; `kiwi rex on|off|status` still works this release.
 
 ## One session per task: `kiwi loop`
 
