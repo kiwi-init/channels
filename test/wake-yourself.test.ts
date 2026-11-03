@@ -155,7 +155,7 @@ describe("Kimi Code keeps its own listener running", () => {
     await approve(owner);
     await until(() => joined.out().includes("You're \""), "the brief");
     const me = youAre(joined.out());
-    expect(joined.out()).toContain("`kiwi join`, run_in_background: true, disable_timeout: true");
+    expect(joined.out()).toContain(" join`, run_in_background: true, disable_timeout: true");
     await until(() => joined.out().includes("Listening now: this command ends when a message for you arrives. While it runs in the background, don't start another"), "join listening");
     expect(joined.err()).toContain(`installed Kimi Code hooks (${join(kimiDir, "config.toml")})`);
     const config = readFileSync(join(kimiDir, "config.toml"), "utf8");
@@ -176,7 +176,7 @@ describe("Kimi Code keeps its own listener running", () => {
     expect(deaf.code).toBe(2);
     expect(deaf.out).toBe("");
     expect(deaf.err).toContain("no Kiwi listener of yours is running for kimi-wake");
-    expect(deaf.err).toContain("`kiwi join`, run_in_background: true, disable_timeout: true");
+    expect(deaf.err).toContain(" join`, run_in_background: true, disable_timeout: true");
     expect(deaf.err).not.toMatch(/ listen\b/);
     expect(deaf.err).toContain("If you are a subagent, ignore this and end your turn.");
 
@@ -226,7 +226,7 @@ describe("ZCode keeps its own listener running", () => {
     await approve(owner);
     await until(() => joined.out().includes("You're \""), "the brief");
     const me = youAre(joined.out());
-    expect(joined.out()).toContain("`kiwi join`, run_in_background: true, and no timeout");
+    expect(joined.out()).toContain(" join`, run_in_background: true, and no timeout");
     await until(() => joined.err().includes(`installed ZCode hooks (${join(zcodeDir, "config.json")})`), "the hooks installed");
     const config = JSON.parse(readFileSync(join(zcodeDir, "config.json"), "utf8")) as { model: string; hooks: { enabled: boolean; events: { Stop: { hooks: { command: string }[] }[] } } };
     expect(config.model).toBe("glm-5");
@@ -263,7 +263,7 @@ describe("ZCode keeps its own listener running", () => {
     expect(rearm.code).toBe(0);
     expect(decision(rearm).decision).toBe("block");
     expect(decision(rearm).reason).toContain("no Kiwi listener of yours is running for zcode-wake");
-    expect(decision(rearm).reason).toContain("`kiwi -c zcode-wake --as");
+    expect(decision(rearm).reason).toMatch(/-c zcode-wake --as \S+ join`/);
     expect(decision(rearm).reason).toContain(" join`, run_in_background: true, and no timeout");
     expect(decision(rearm).reason).not.toContain("running for zcode-other");
 
@@ -464,7 +464,7 @@ describe("Cursor keeps its own listener running", () => {
     await approve(owner);
     await until(() => joined().includes("You're \""), "the brief");
     const me = youAre(joined());
-    expect(joined()).toContain("`kiwi join` with the Shell tool as a background command (is_background: true)");
+    expect(joined()).toContain(" join` with the Shell tool as a background command (is_background: true)");
     await until(async () => (await listenersOf(h, me)).some((l) => l.session === "chat-1" && l.harness === "cursor"), "join listening for this Cursor chat");
     await ok(owner, ["send", "--to", me, "handed over by join"]);
     expect(await joining.exited).toBe(0);
