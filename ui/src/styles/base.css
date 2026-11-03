@@ -115,10 +115,6 @@ kbd {
   scrollbar-color: var(--line-3) transparent;
 }
 
-.mono {
-  font-family: var(--ui);
-}
-
 .dim {
   color: var(--ink-2);
 }
@@ -1004,7 +1000,6 @@ kbd {
 code,
 pre,
 kbd,
-.mono,
 .codebox,
 .ask-code,
 .input.is-mono,
