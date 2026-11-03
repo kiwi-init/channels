@@ -68,6 +68,7 @@ const parsed = parseArgs({
     after: { type: "string" },
     detail: { type: "string" },
     body: { type: "string" },
+    title: { type: "string" },
     goal: { type: "string" },
     issue: { type: "string" },
     from: { type: "string" },

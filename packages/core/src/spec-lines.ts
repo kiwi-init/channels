@@ -26,7 +26,7 @@ function specStageText(state: ChannelState, spec: Spec): string {
     case "delivered":
       return `delivered: waiting on ${asker ?? "a person"}'s verdict`;
     case "accepted":
-      return `accepted by ${spec.result?.by ?? "a person"}`;
+      return spec.result?.auto ? "closed by itself: every box ticked and its tasks done" : `accepted by ${spec.result?.by ?? "a person"}`;
     case "dropped":
       return `dropped by ${spec.result?.by ?? "a person"}${spec.result?.note ? `: ${inlineText(spec.result.note, 120)}` : ""}`;
   }

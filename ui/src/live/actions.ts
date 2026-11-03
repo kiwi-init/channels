@@ -201,6 +201,8 @@ export function makeActions(): Actions {
     setSpecsOnly: (code, on) => attempt("Not changed", async () => (await manage()).setSpecsOnly(code, on)),
     setTaskStatus: (code, id, status) => attempt("Status not changed", async () => (await rare()).setTaskStatus(code, id, status)),
     cancelTask: (code, id, why) => attempt("Not cancelled", async () => (await rare()).cancelTask(code, id, why)),
+    editTask: (code, id, change) => attempt("Not saved", async () => (await rare()).editTask(code, id, change)),
+    deleteTask: (code, id) => attempt("Not deleted", async () => (await rare()).deleteTask(code, id)),
     assignTask: (code, id, to, why) =>
       attempt("Not assigned", async () => {
         const run = need(code)
@@ -223,6 +225,7 @@ export function makeActions(): Actions {
     approveSpec: (code, ask, v) => attempt("Not approved", async () => (await rare()).approveSpec(code, ask, v)),
     judgeSpec: (code, ask, verdict, note) =>
       attempt(verdict === "accepted" ? "Not accepted" : verdict === "back" ? "Not sent back" : "Not dropped", async () => (await rare()).judgeSpec(code, ask, verdict, note)),
+    deleteSpec: (code, ask) => attempt("Not deleted", async () => (await rare()).deleteSpec(code, ask)),
     setRole: (code, name, role) => attempt("Role not changed", async () => (await manage()).setRole(code, name, role)),
     removeMember: (code, name) => attempt(`Couldn't remove ${name}`, async () => (await manage()).removeMember(code, name)),
     setPersona: (code, name, id) => attempt("Personality not changed", async () => (await manage()).setPersona(code, name, id)),

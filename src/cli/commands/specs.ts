@@ -1,6 +1,7 @@
 import * as Effect from "effect/Effect";
 import { formatSpec, formatSpecs, planningText, specLine } from "@kiwi/core/spec-lines.ts";
 import { parseDuration } from "@kiwi/core/format.ts";
+import { specTasks, taskId } from "@kiwi/core/state.ts";
 import { oneLook } from "../../agent.ts";
 import { args, opt } from "../args.ts";
 import { type Command, die, out, session } from "../context.ts";
@@ -14,6 +15,9 @@ const USAGE = [
   '       kiwi spec tick N "words" [--undo]      tick the box under Done when whose line says those words',
   "       kiwi spec start N                      take an approved spec that waits for an agent, and plan it",
   '       kiwi spec comment N "…" [--on "line"]  comment on #N\'s spec, on one line of it',
+  '       kiwi spec cancel N "why"               cancel #N\'s spec and its open tasks (the lead or a person who approves it)',
+  "       kiwi spec close N                      close #N's spec once every Done when box is ticked",
+  '       kiwi spec delete N ["why"]             take a spec written by mistake off the list, and cancel its open tasks',
 ].join("\n");
 
 const askArg = (i: number) =>
@@ -71,6 +75,18 @@ export const specCommands: Record<string, Command> = {
           const said = args.slice(3).join(" ").trim() || (yield* die('say the comment: kiwi spec comment N "…" --on "the line it\'s about"'));
           const seq = yield* s.commentSpec(ask, said, opt.on);
           return out(`commented on #${ask}'s spec: #${seq}`);
+        }
+        if (sub === "cancel" || sub === "close" || sub === "delete") {
+          const ask = yield* askArg(2);
+          const why = args.slice(3).join(" ").trim() || opt.note?.trim() || undefined;
+          if (sub === "cancel" && !why) return yield* die(`say why, so its agents know: kiwi spec cancel ${ask} "why"`);
+          const { state: before } = yield* s.state();
+          const open = specTasks(before, ask).filter((t) => t.state !== "done" && !t.archived);
+          const state = yield* s.endSpec(ask, sub, why);
+          const spec = state.specs.get(ask);
+          const tasks = sub === "close" || !open.length ? "" : `; cancelled ${open.map((t) => taskId(t.id)).join(", ")}`;
+          if (sub === "delete") return out(`deleted #${ask}'s spec: it's off the specs list, and the history keeps one line saying so${tasks}`);
+          return out(`${sub === "close" ? "closed" : "cancelled"}: ${spec ? specLine(state, spec) : `#${ask}`}${tasks}`);
         }
         return yield* die(USAGE);
       }),

@@ -9,7 +9,10 @@ export function specsOf(state: ChannelState, me: string): Spec[] {
       const head = state.askHeads.get(s.ask)
       const place = queue.indexOf(s.ask) + 1
       const planner = specPlanner(state, s.ask)
-      const result = s.result && s.result.verdict !== "back" ? { verdict: s.result.verdict, by: s.result.by, at: s.result.at, ...(s.result.note ? { note: s.result.note } : {}) } : undefined
+      const result =
+        s.result && s.result.verdict !== "back"
+          ? { verdict: s.result.verdict, by: s.result.by, at: s.result.at, ...(s.result.note ? { note: s.result.note } : {}), ...(s.result.auto ? { auto: true as const } : {}) }
+          : undefined
       return {
         ask: s.ask,
         title: specTitle(s, head),

@@ -3,7 +3,7 @@ import { ANYONE, approveTask as approving, cancelTask as cancelling, changeRevie
 import { ALLOW_ONCE, DENY } from "@kiwi/app/permission-settled.ts"
 import { changeTo } from "@kiwi/core/changes.ts"
 import { permissionReply } from "@kiwi/core/permission.ts"
-import { GENERAL_ROOM, MAX_GOAL_NAME, MAX_SPEC, MAX_SPEC_NOTE, type Event, type StepReply } from "@kiwi/core/protocol.ts"
+import { GENERAL_ROOM, MAX_GOAL_NAME, MAX_SPEC, MAX_SPEC_NOTE, TASK_BODY_MAX_LENGTH, TASK_TITLE_MAX_LENGTH, type Event, type StepReply } from "@kiwi/core/protocol.ts"
 import { taskId } from "@kiwi/core/state.ts"
 import { bridge } from "@kiwi/secrets/secrets.ts"
 import { stepReplyText } from "~/chat/step"
@@ -43,6 +43,37 @@ export async function cancelTask(code: string, id: number, why: string): Promise
   const note = why.trim()
   if (!note) throw new Error("say why it's cancelled")
   await sends(run, cancelling(t, note, run.me), closedDigest(run.state, [...run.messages], t, { by: run.me, cancelled: note }))
+}
+
+export async function editTask(code: string, id: number, change: { title?: string; detail?: string }): Promise<void> {
+  const run = need(code)
+  const t = run.state.tasks.get(id)
+  if (!t) throw new Error(`no task ${taskId(id)}`)
+  const title = change.title?.trim().slice(0, TASK_TITLE_MAX_LENGTH)
+  if (change.title !== undefined && !title) throw new Error("a task needs a title")
+  const detail = change.detail?.trim()
+  if (detail && detail.length > TASK_BODY_MAX_LENGTH) throw new Error(`a task's body is at most ${TASK_BODY_MAX_LENGTH} characters`)
+  const renamed = title && title !== t.title ? { title } : {}
+  const rewritten = detail !== undefined && detail !== (t.detail ?? "") ? { detail } : {}
+  if (!("title" in renamed) && !("detail" in rewritten)) return
+  await event(run, `edited ${taskId(id)}`, { op: "task.update", task: id, ...renamed, ...rewritten }, t.owner && t.owner !== run.me ? [t.owner] : undefined)
+  announce(`Saved ${taskId(id)}`)
+}
+
+export async function deleteTask(code: string, id: number): Promise<void> {
+  const run = need(code)
+  const t = run.state.tasks.get(id)
+  if (!t) throw new Error(`no task ${taskId(id)}`)
+  const to = [...new Set([t.owner, t.createdBy].filter((n): n is string => !!n && n !== run.me))]
+  await event(run, `deleted ${taskId(id)}`, { op: "task.delete", task: id }, to)
+  announce(`Deleted ${taskId(id)}`)
+}
+
+export async function deleteSpec(code: string, ask: number): Promise<void> {
+  const run = need(code)
+  if (!run.state.specs.has(ask)) throw new Error(`#${ask} has no spec`)
+  await event(run, `deleted #${ask}'s spec`, { op: "spec.delete", ask })
+  announce(`Deleted #${ask}'s spec`)
 }
 
 export async function setReviewer(code: string, id: number, reviewer: string): Promise<void> {

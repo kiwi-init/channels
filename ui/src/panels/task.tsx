@@ -11,6 +11,7 @@ import { jumpTo } from "~/chat/reply"
 import { ANYONE } from "@kiwi/channel/task-actions.ts"
 import { autofocus, Avatar, cx, Modal, Dot, Empty, Heading, statusWord } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
+import { MoreButton } from "~/kit/menu-open"
 import { ago } from "~/kit/time"
 import { memberOf, type Ask, type Channel, type PermissionAsk, type Person, type QuestionAsk, type ReviewRound, type Task, type TaskEvent } from "~/model"
 import { useApp } from "~/nav"
@@ -62,7 +63,7 @@ export function TaskPanel({ channel, id }: { channel: Channel; id: number }) {
   const may = !memberOf(channel, channel.you)?.readOnly
   return (
     <>
-      <PanelHead title={`T${task.id}`} />
+      <PanelHead title={`T${task.id}`}>{may && <TaskMenu key={`menu-${task.id}`} channel={channel} task={task} />}</PanelHead>
       <div key={task.id} ref={body} className="panel-body task-body tp">
         <section className="panel-section tp-top">
           <h3 className="task-title">{task.title}</h3>
@@ -379,9 +380,70 @@ function Review({ channel, task }: { channel: Channel; task: Task }) {
   )
 }
 
+function TaskMenu({ channel, task }: { channel: Channel; task: Task }) {
+  const { app } = useApp()
+  const [editing, setEditing] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
+  const label = `T${task.id}`
+  return (
+    <>
+      <MoreButton
+        label={label}
+        groups={() => [
+          [{ label: "Edit…", run: () => setEditing(true) }, ...(task.status === "done" ? [] : [{ label: "Cancel…", run: () => setCancelling(true) }])],
+          [
+            {
+              label: "Delete…",
+              run: () => app.actions.deleteTask(channel.code, task.id),
+              confirm: { title: `Delete ${label}?`, sub: "It leaves the board and the counts. The history keeps one line saying you deleted it.", yes: "Delete task" },
+            },
+          ],
+        ]}
+      />
+      <EditTask channel={channel} task={task} open={editing} onClose={() => setEditing(false)} />
+      <Cancel channel={channel} task={task} open={cancelling} onClose={() => setCancelling(false)} />
+    </>
+  )
+}
+
+function EditTask({ channel, task, open, onClose }: { channel: Channel; task: Task; open: boolean; onClose: () => void }) {
+  const { app } = useApp()
+  const [title, setTitle] = useState(task.title)
+  const [detail, setDetail] = useState(task.detail ?? "")
+  const close = () => {
+    setTitle(task.title)
+    setDetail(task.detail ?? "")
+    onClose()
+  }
+  return (
+    <Dialog open={open} onClose={close} label={`Edit T${task.id}`}>
+      <DialogHead title={`Edit T${task.id}`} sub={task.owner ? `${someone(channel, task.owner)} sees the change in the task's history.` : "The change shows in the task's history."} onClose={close} />
+      <form
+        className="task-cancel task-edit"
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (!title.trim()) return
+          app.actions.editTask(channel.code, task.id, { title, detail })
+          onClose()
+        }}
+      >
+        <input className="input" value={title} aria-label="Title" placeholder="Title" maxLength={200} onChange={(e) => setTitle(e.target.value)} />
+        <textarea className="textarea" rows={8} value={detail} aria-label="Body" placeholder="What to do, where the code is and why" onChange={(e) => setDetail(e.target.value)} />
+        <div className="dialog-foot">
+          <button type="button" className="btn is-quiet" onClick={close}>
+            Cancel
+          </button>
+          <button type="submit" className="btn is-primary" disabled={!title.trim()}>
+            Save
+          </button>
+        </div>
+      </form>
+    </Dialog>
+  )
+}
+
 function State({ channel, task, may }: { channel: Channel; task: Task; may: boolean }) {
   const { app } = useApp()
-  const [cancelling, setCancelling] = useState(false)
   return (
     <div className="tp-state">
       <p className="tp-status" title={`Created ${since(task.createdAt)}`}>
@@ -397,18 +459,12 @@ function State({ channel, task, may }: { channel: Channel; task: Task; may: bool
               Reopen
             </button>
           ) : (
-            <>
-              <button type="button" className="btn is-quiet is-small" onClick={() => app.actions.setTaskStatus(channel.code, task.id, "done")}>
-                Mark done
-              </button>
-              <button type="button" className="btn is-quiet is-small" onClick={() => setCancelling(true)}>
-                Cancel…
-              </button>
-            </>
+            <button type="button" className="btn is-quiet is-small" onClick={() => app.actions.setTaskStatus(channel.code, task.id, "done")}>
+              Mark done
+            </button>
           )}
         </span>
       )}
-      <Cancel channel={channel} task={task} open={cancelling} onClose={() => setCancelling(false)} />
     </div>
   )
 }

@@ -174,6 +174,8 @@ export function describeEvent(m: Message, state?: ChannelState, nameOf: (handle:
       return `claimed ${task(ev.task)}`;
     case "task.first":
       return `put ${task(ev.task)} before its owner's other tasks`;
+    case "task.delete":
+      return `deleted ${taskId(ev.task)}${note(ev.why)}`;
     case "task.update": {
       if (ev.verdict === "approved" && ev.state === "done") return `approved ${task(ev.task)}${round}${note(ev.note)}`;
       if (ev.verdict === "rejected" && ev.state === "doing") return `rejected ${task(ev.task)}${round}${note(ev.note)}`;
@@ -187,7 +189,9 @@ export function describeEvent(m: Message, state?: ChannelState, nameOf: (handle:
       if (ev.state) return `${STATE_VERB[ev.state]} ${task(ev.task)}${note(ev.note)}`;
       if (ev.owner) return `assigned ${task(ev.task)} to ${nameOf(ev.owner)}${note(ev.note)}`;
       if (ev.owner === null) return `unassigned ${task(ev.task)}${note(ev.note)}`;
+      if (ev.title && ev.detail !== undefined) return `renamed ${taskId(ev.task)} to “${ev.title}” and rewrote its body`;
       if (ev.title) return `renamed ${taskId(ev.task)} to “${ev.title}”`;
+      if (ev.detail !== undefined) return `rewrote ${task(ev.task)}'s body`;
       if (ev.proof) return `added proof to ${task(ev.task)}: ${proofLabel(ev.proof)} ${ev.proof.url}${note(ev.note)}`;
       return `noted on ${task(ev.task)}${note(ev.note)}`;
     }
@@ -260,6 +264,8 @@ export function describeEvent(m: Message, state?: ChannelState, nameOf: (handle:
         : ev.verdict === "back"
           ? `sent #${ev.ask}'s spec back${note(ev.note)}`
           : `dropped #${ev.ask}'s spec${note(ev.note)}`;
+    case "spec.delete":
+      return `deleted #${ev.ask}'s spec${note(ev.why)}`;
   }
 }
 

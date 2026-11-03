@@ -87,6 +87,31 @@ export const taskCommands: Record<string, Command> = {
           const shown = state.tasks.get(id) ?? (yield* die(`no task ${taskId(id)}`));
           return out(opt.json ? JSON.stringify(shown) : formatTask(state, shown, Date.now(), messages));
         }
+        if (sub === "edit") {
+          const { state: now } = yield* s.state();
+          const t = now.tasks.get(id) ?? (yield* die(`no task ${taskId(id)}`));
+          if (opt.body !== undefined && opt.file !== undefined) return yield* die('give the new body once: --body "…" or --file spec.md');
+          const detail = opt.file !== undefined ? (yield* readText(opt.file)).trim() || (yield* die(`${opt.file} is empty`)) : opt.body?.trim();
+          const title = opt.title?.trim();
+          const change = { ...(title ? { title } : {}), ...(detail !== undefined ? { detail } : {}), ...(opt.owner !== undefined ? { owner: opt.owner.trim() || null } : {}) };
+          if (!Object.keys(change).length && opt.goal === undefined) return yield* die('usage: kiwi task edit T7 [--title "…"] [--body "…" | --file spec.md] [--owner NAME] [--goal "…"]');
+          const lines: string[] = [];
+          if (Object.keys(change).length) {
+            const after = (yield* s.taskUpdate(id, change)).tasks.get(id)!;
+            const what = [title ? "title" : null, detail !== undefined ? "body" : null, opt.owner !== undefined ? `owner (${after.owner ?? "nobody"})` : null].filter(Boolean).join(", ");
+            lines.push(`edited ${taskId(id)}'s ${what}: ${inlineText(after.title, 200)}`);
+          }
+          if (opt.goal !== undefined) {
+            if (t.ask === undefined) return yield* die(`${taskId(id)} isn't filed under a person's message, so it has no goal to name`);
+            lines.push(`goal of #${t.ask}: ${(yield* s.nameGoal(t.ask, opt.goal)).goal}`);
+          }
+          return out(lines.join("\n"));
+        }
+        if (sub === "delete") {
+          const why = args.slice(3).join(" ") || opt.note || undefined;
+          yield* s.taskDelete(id, why);
+          return out(`deleted ${taskId(id)}: it's off the board, and the history keeps one line saying so`);
+        }
         if (sub === "match" || sub === "after") return yield* die(`kiwi task ${sub} is gone: tasks don't wait on or match anything now. Pick what you can do from the board (kiwi task)`);
         if (sub === "who") {
           const { state } = yield* s.state();
