@@ -31,12 +31,13 @@ export function Row({ label, hint, children, wide, tip }: { label: ReactNode; hi
   )
 }
 
-export function Group({ title, hint, children }: { title?: string; hint?: string; children: ReactNode }) {
+export function Group({ title, hint, aside, children }: { title?: string; hint?: string; aside?: ReactNode; children: ReactNode }) {
   return (
     <section className="set-group" aria-label={title}>
       {title && (
         <div className="heading">
           <h3>{title}</h3>
+          {aside}
         </div>
       )}
       {hint && <p className="set-group-hint">{hint}</p>}

@@ -662,19 +662,19 @@ kbd {
   color: var(--member);
 }
 
-.face-badge[data-harness="claude"] {
+:is(.face-badge, .set-harness-mark)[data-harness="claude"] {
   color: var(--h-claude);
 }
 
-.face-badge[data-harness="codex"] {
+:is(.face-badge, .set-harness-mark)[data-harness="codex"] {
   color: var(--h-codex);
 }
 
-.face-badge[data-harness="gemini"] {
+:is(.face-badge, .set-harness-mark)[data-harness="gemini"] {
   color: var(--h-gemini);
 }
 
-.face-badge[data-harness="opencode"] {
+:is(.face-badge, .set-harness-mark)[data-harness="opencode"] {
   color: var(--h-opencode);
 }
 

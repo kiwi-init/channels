@@ -54,7 +54,7 @@ const COMPUTER: ThisComputer = {
 const FINDINGS: Finding[] = [
   { ok: true, what: "kiwi     2026.10.8 at ~/.local/bin/kiwi" },
   { ok: true, what: "relay    wss://relay.kiwi.sh answers" },
-  { ok: false, what: "Codex's hooks are from an older kiwi", how: "Update them in Settings > Agents > Hooks." },
+  { ok: false, what: "Codex's hooks are from an older kiwi", how: "Update them in Settings > Agents > Harnesses." },
 ]
 
 const STARTS: AgentStarts = {
