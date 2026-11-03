@@ -110,7 +110,7 @@ const runsKiwiJoin = (line: string): boolean => {
   return at >= 0 && words.slice(at + 1).includes("join");
 };
 
-export function grokMonitorJoins(tasks: readonly BackgroundTask[]): boolean {
+function grokMonitorJoins(tasks: readonly BackgroundTask[]): boolean {
   return tasks.some((t) => t.type === "monitor" && t.text.split("\n").some(runsKiwiJoin));
 }
 
