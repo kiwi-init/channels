@@ -52,7 +52,6 @@ export function AccountSection() {
             </button>
           )}
         </Row>
-        {account.githubMove && <Row label="Devices not moved to GitHub" hint={`Still under ${account.githubMove}.`} />}
         {account.githubCode && !account.github && (
           <Row label="GitHub code" hint="Type it on the GitHub page that opened.">
             <code className="set-value set-key">{account.githubCode.code}</code>

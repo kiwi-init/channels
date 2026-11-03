@@ -7,7 +7,7 @@ import { chromium, type CDPSession, type Page, type Request, type WebSocket as P
 import { daemonSock } from "../src/daemon/protocol.ts";
 import { stopDaemon } from "../src/daemon/rpc.ts";
 import { startLocalRelay } from "./local-relay.ts";
-import { approveSpec, firstRun, letIn, newChannel, panel, ROWS, unfold, view } from "./perf-ui.ts";
+import { approveSpec, firstRun, letIn, newChannel, channelSettings, ROWS, unfold, view } from "./perf-ui.ts";
 import { harnessDist } from "./ui-harness.ts";
 
 if (process.argv.includes("--help")) {
@@ -283,7 +283,7 @@ async function work(cdp: CDPSession): Promise<{ layout: number; style: number }>
 
 async function details(page: Page, cdp: CDPSession, opening: boolean): Promise<{ ms: number; layoutMs: number; styleMs: number }> {
   const before = await work(cdp);
-  const ms = await panel(page, opening);
+  const ms = await channelSettings(page, opening);
   await later(400);
   const after = await work(cdp);
   return { ms, layoutMs: Math.round((after.layout - before.layout) * 1000), styleMs: Math.round((after.style - before.style) * 1000) };

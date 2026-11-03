@@ -1,6 +1,6 @@
 import { kiwiCmd } from "./owner.ts";
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadConfig } from "../src/config.ts";
@@ -14,7 +14,15 @@ setDefaultTimeout(60_000);
 
 const dataDir = mkdtempSync(join(tmpdir(), "kiwi-ms-relay-"));
 const claudeDir = mkdtempSync(join(tmpdir(), "kiwi-ms-claude-"));
-const made: string[] = [dataDir, claudeDir];
+const binDir = mkdtempSync(join(tmpdir(), "kiwi-ms-bin-"));
+const made: string[] = [dataDir, claudeDir, binDir];
+writeFileSync(
+  join(binDir, "kiwi"),
+  `#!/bin/sh\nexec ${kiwiCmd([])
+    .map((a) => `'${a.replace(/'/g, `'\\''`)}'`)
+    .join(" ")} "$@"\n`,
+);
+chmodSync(join(binDir, "kiwi"), 0o755);
 let server: ReturnType<typeof startRelay> | undefined;
 let relay = "";
 
@@ -38,7 +46,7 @@ type Env = Record<string, string>;
 function spawn(home: string, args: string[], env: Env = {}, cwd = home, stdin?: string) {
   return Bun.spawn(kiwiCmd(args), {
     cwd,
-    env: { ...process.env, KIWI_HOME: home, KIWI_RELAY: relay, CLAUDE_CONFIG_DIR: claudeDir, CLAUDE_PROJECT_DIR: "", KIWI_MODEL: "test-model", ...env },
+    env: { ...process.env, PATH: `${binDir}:${process.env.PATH ?? ""}`, KIWI_HOME: home, KIWI_RELAY: relay, CLAUDE_CONFIG_DIR: claudeDir, CLAUDE_PROJECT_DIR: "", KIWI_MODEL: "test-model", ...env },
     stdin: stdin === undefined ? "ignore" : new TextEncoder().encode(stdin),
     stdout: "pipe",
     stderr: "pipe",
