@@ -14,8 +14,9 @@ export interface StoreFile {
   computers: ComputerView[];
   phones?: PhoneView[];
   pending: PendingItem[];
-  signin?: { access: string; refresh: string; exp: number };
-  github?: { login: string; id: number; token: string; at: number; relay?: string; clientId?: string; first?: boolean; moved?: boolean };
+  /** A dev relay's sign-in: the name it took ("dev:<name>"). On any other relay the GitHub link signs in. */
+  signin?: { access: string };
+  github?: { login: string; id: number; token: string; at: number; relay?: string; clientId?: string };
   migrated?: boolean;
   personalities?: Personality[];
   device?: Identity;

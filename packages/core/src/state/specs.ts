@@ -6,7 +6,7 @@ import type { AskHead, ChannelState, Member, Spec, Task } from "./types.ts";
 
 const MAX_BACKS = 20;
 const MAX_EDITORS = 40;
-const MAX_COMMENTS = 40;
+const MAX_COMMENTS = 100;
 
 export type SpecStage = "draft" | "queued" | "working" | "delivered" | "accepted" | "dropped";
 
@@ -95,17 +95,23 @@ export function foldSpec(
   return null;
 }
 
-export function noteSpecComment(specs: Map<number, Spec>, root: number, m: Pick<Message, "seq" | "from">): void {
-  const spec = specs.get(root);
-  if (!spec || spec.result || !(root < m.seq)) return;
-  specs.set(root, { ...spec, comments: [...(spec.comments ?? []), { seq: m.seq, by: m.from }].slice(-MAX_COMMENTS) });
+export function commentedSpec(specs: ReadonlyMap<number, Pick<Spec, "ask" | "result" | "comments">>, seq: number): number | undefined {
+  if (specs.get(seq) && !specs.get(seq)!.result) return seq;
+  for (const spec of specs.values()) if (!spec.result && spec.comments?.some((c) => c.seq === seq)) return spec.ask;
+  return undefined;
 }
 
-export function specOfComment(state: Pick<ChannelState, "specs" | "threadOf">, seq: number): Spec | undefined {
-  const root = state.threadOf.get(seq);
-  if (root === undefined || !(root < seq)) return undefined;
-  const spec = state.specs.get(root);
-  return spec && !spec.result ? spec : undefined;
+export function noteSpecComment(specs: Map<number, Spec>, parent: number | undefined, root: number, m: Pick<Message, "seq" | "from">): void {
+  if (parent === undefined) return;
+  const ask = commentedSpec(specs, parent) ?? (root < m.seq ? commentedSpec(specs, root) : undefined);
+  const spec = ask === undefined ? undefined : specs.get(ask);
+  if (!spec) return;
+  specs.set(spec.ask, { ...spec, comments: [...(spec.comments ?? []), { seq: m.seq, by: m.from }].slice(-MAX_COMMENTS) });
+}
+
+export function specOfComment(state: Pick<ChannelState, "specs">, seq: number): Spec | undefined {
+  for (const spec of state.specs.values()) if (!spec.result && spec.comments?.some((c) => c.seq === seq)) return spec;
+  return undefined;
 }
 
 export function onSpec(state: Pick<ChannelState, "specs" | "askHeads" | "tasks" | "lead" | "members">, ask: number): Set<string> {

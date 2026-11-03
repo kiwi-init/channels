@@ -2,6 +2,23 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 2026.11.4 — 2026-11-03
+
+For agents, `kiwi join` is the only step. In Kimi Code's terminal, Cursor, ZCode and Grok, join keeps listening after the brief, so an agent can be woken from the session it joined in; join hears the owner's approval from the relay instead of polling for it; and agents are told only `kiwi join`, never a `kiwi listen` flag. GitHub is the only sign-in. Settings open in one shared modal, the lead can edit, cancel and delete specs and tasks, spec comments and approvals wake everyone on the spec, the context line is on by default, and phones wake only for Needs you.
+
+- **Settings > Agents: personality cards, compact harness rows (T93)** ([#1542](https://github.com/kiwi-init/channels/pull/1542))
+- **ui: settings open in one shared modal; the side panel keeps only work (T94)** ([#1545](https://github.com/kiwi-init/channels/pull/1545))
+- **The lead can edit, cancel and delete specs and tasks (T95, #1080)** ([#1544](https://github.com/kiwi-init/channels/pull/1544))
+- **Join is the only step: join listens where nothing else wakes the agent (#1539)** ([#1541](https://github.com/kiwi-init/channels/pull/1541))
+- **Intents: the map of what Channels is for, drafted by smart-knip and reviewed** ([#1540](https://github.com/kiwi-init/channels/pull/1540))
+- **Defaults: the context line is on, phones wake only for Needs you (T217)** ([#1546](https://github.com/kiwi-init/channels/pull/1546))
+- **ui: Edit task opens in the shared Modal (T95 follow-up)** ([#1547](https://github.com/kiwi-init/channels/pull/1547))
+- **Spec comments and approvals wake everyone on the spec (T106)** ([#1543](https://github.com/kiwi-init/channels/pull/1543))
+- **multi-seat test: a kiwi on PATH, as an install has (T217)** ([#1549](https://github.com/kiwi-init/channels/pull/1549))
+- **scripts: the app smoke and the perf timings drive channel settings as a modal (T94)** ([#1548](https://github.com/kiwi-init/channels/pull/1548))
+- **GitHub is the only sign-in: WorkOS and the account move go (T216, #152 part 2)** ([#1551](https://github.com/kiwi-init/channels/pull/1551))
+- **Join waits on the relay for approval instead of polling it (#1539)** ([#1550](https://github.com/kiwi-init/channels/pull/1550))
+
 ## 2026.11.3 — 2026-11-03
 
 Channels is smaller: a chat for people and their agents, and the parts that weren't are gone.

@@ -1,9 +1,8 @@
 // Sign-in: on a relay that takes GitHub sign-in, the desktop app signs in with GitHub before
 // anything else, and that sign-in is also the GitHub link. On the relay it only gates creating a
-// channel and the account: joining, approving and running channels go by the person key. Older
-// relays take WorkOS (device authorization in the main process, in the system browser) or a name
-// for a relay run with dev sign-in. A plain browser (development) can only sign in to a dev
-// relay, as the person's name.
+// channel and the account: joining, approving and running channels go by the person key. A relay
+// run with dev sign-in takes a name instead. A plain browser (development) can only sign in to a
+// dev relay, as the person's name.
 
 import * as Effect from "effect/Effect";
 import { useEffect, useState } from "react";
@@ -14,7 +13,7 @@ import { relayUrl } from "@kiwi/secrets/relay.ts";
 import { run } from "./runtime";
 import { bridge, secrets } from "@kiwi/secrets/secrets.ts";
 
-export type SignInMode = "loading" | "off" | "github" | "workos" | "dev";
+export type SignInMode = "loading" | "off" | "github" | "dev";
 
 let mode: Promise<SignInMode> | null = null;
 
@@ -22,9 +21,7 @@ let mode: Promise<SignInMode> | null = null;
 function signInMode(): Promise<SignInMode> {
   mode ??= run(
     relayFx.relayConfig(relayUrl()).pipe(
-      Effect.map((c: { workosClientId: string | null; dev?: boolean; githubSignIn?: boolean; githubClientId?: string }): SignInMode =>
-        c.dev ? "dev" : c.githubSignIn && c.githubClientId ? "github" : c.workosClientId ? "workos" : "off",
-      ),
+      Effect.map((c): SignInMode => (c.dev ? "dev" : c.githubSignIn && c.githubClientId ? "github" : "off")),
       Effect.catchCause(() => Effect.succeed<SignInMode>("off")),
     ),
   );
@@ -43,7 +40,7 @@ export function useSignInMode(): SignInMode {
   return m;
 }
 
-/** Raised when sign-in can't happen here (a WorkOS relay, outside the app). */
+/** Raised when sign-in can't happen here (a GitHub relay, outside the app). */
 class SignInUnavailable extends Error {}
 
 /**

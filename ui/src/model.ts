@@ -214,6 +214,7 @@ export interface Spec {
   changed?: true
   result?: SpecMark & { verdict: "accepted" | "dropped"; note?: string; auto?: true }
   backs: (SpecMark & { note: string })[]
+  comments: number[]
   tasks: number[]
   planner?: string
   queue?: number
@@ -554,7 +555,6 @@ export interface Account {
   email?: string
   github?: { login: string }
   githubSignIn?: boolean
-  githubMove?: string
   computers: Computer[]
   version: string
   update?: { version: string; ready: boolean; state?: "downloading" | "ready" | "available"; progress?: number; blocked?: true }

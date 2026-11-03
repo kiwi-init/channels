@@ -570,6 +570,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
             editors: [c.you],
             stage: "draft",
             backs: [],
+            comments: [],
             tasks: [],
             canJudge: true,
           }

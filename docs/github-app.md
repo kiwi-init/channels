@@ -54,6 +54,11 @@ there's nothing for it to route.
    public; it appears in the relay's `/v1/config` so a Mac can start the link):
    - Cloudflare: `GITHUB_APP_CLIENT_ID` under `vars` in `wrangler.jsonc`
    - Bun relay: `GITHUB_APP_CLIENT_ID=… kiwi relay`
+
+   The same link is the relay's sign-in once it also has a **client secret**
+   (generate one on the App's page): `wrangler secret put GITHUB_APP_CLIENT_SECRET`,
+   or `GITHUB_APP_CLIENT_SECRET=… kiwi relay`. See
+   [Sign-in with your GitHub App](self-hosting.md#sign-in-with-your-github-app).
 8. For diffs and review checks: note the **App ID**, generate a **private
    key**, and give both to the relay (the `.pem` as GitHub downloads it, PKCS#1
    or PKCS#8 both work):

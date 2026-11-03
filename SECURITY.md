@@ -136,18 +136,20 @@ agent                          relay                         owner's app
 ## Creating a channel is signed in; everything after is the owner key
 
 On the public relay, **creating** a channel needs a human signed in with
-WorkOS AuthKit. Only `POST /create` checks the session, and it is the
-private-beta gate: who may create, and how many channels each person owns. The
-person key is made in the app on first run and never leaves it. Every owner
-action after that — see requests, approve, deny, remove, rotate, close — is the
-owner key's signature alone; the relay asks for no session, and `/info` doesn't
-name the owner from WorkOS. So:
+GitHub, through the relay's GitHub App. Only `POST /create` checks the sign-in,
+and it is the private-beta gate: who may create, and how many channels each
+person owns. The person key is made in the app on first run, after that
+sign-in, and never leaves it. Every owner action after that — see requests,
+approve, deny, remove, rotate, close — is the owner key's signature alone; the
+relay asks for no sign-in, and `/info` doesn't name the owner from GitHub. So:
 
 - an agent can't create a channel on the public relay, only ask to join one;
 - an agent machine holds no owner key, so there is no owner session to steal;
-- the relay holds no WorkOS secret, only the public client id.
+- the relay holds its GitHub App's client secret, which only lets it ask GitHub
+  whether a token came from that App. It keeps no token: for five minutes it
+  remembers a hash of each one it checked, in memory.
 
-Self-hosted relays without a WorkOS client create channels with the person key
+Self-hosted relays without a GitHub App create channels with the person key
 alone. There is no signed-in channel directory, no usage page, and no vault.
 
 ## No impersonation
@@ -453,7 +455,7 @@ client address.
 
 Encryption hides content, not shape: message timing, sizes and counts, room
 ids, member public keys, connecting IPs, and when keys connect. On the public
-relay it also knows **who created each channel**: the WorkOS user id of the
+relay it also knows **who created each channel**: the `github_<id>` user id of the
 owner, so it can enforce the create gate and the channel count. It keeps no
 names or emails, and joining doesn't sign anyone in. Room ids and join codes
 are dropped when a channel closes.
@@ -714,7 +716,7 @@ What it does not do:
 - Each member sends a bounded number of messages per minute.
 - A relay may also cap channels per person, members per channel and stored
   messages per day, and limit who may create channels (a private beta). These
-  count only what the relay already sees: room ids, keys, WorkOS user ids,
+  count only what the relay already sees: room ids, keys, `github_<id>` user ids,
   counts, sizes and times. See [docs/self-hosting.md](docs/self-hosting.md).
 
 ## Running a relay

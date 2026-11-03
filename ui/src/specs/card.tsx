@@ -21,7 +21,7 @@ export function SpecCard({ channel, spec }: { channel: Channel; spec: Spec }) {
   const { go } = useAct()
   const line = stageLine(channel, spec)
   const who = workersOf(channel, spec)
-  const said = commentsOf(channel, spec.ask).length
+  const said = commentsOf(channel, spec).length
   const open = (part: "spec" | "inside" | "result") => go({ to: "spec", ask: spec.ask, part })
   return (
     <div className={cx("spec-card", `is-${spec.stage}`, spec.changed && "is-changed")}>

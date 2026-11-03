@@ -16,7 +16,6 @@ const github = store<{ login: string } | null>(null)
 const githubCode = store<{ code: string; url: string } | null>(null)
 const githubGate = store<"unknown" | "needed" | "signed-in" | "off">("unknown")
 const githubBusy = store<string | null>(null)
-const githubMove = store<string | null>(null)
 let codeListener: (() => void) | null = null
 
 function listenForCodes(): void {
@@ -265,7 +264,6 @@ async function refreshGithub(): Promise<void> {
   const s = await b.githubStatus()
   github.set(s.account ? { login: s.account.login } : null)
   githubGate.set(!s.signIn ? "off" : s.account ? "signed-in" : "needed")
-  githubMove.set(s.moveRefused ?? null)
 }
 
 export async function linkGithub(): Promise<void> {
@@ -277,7 +275,6 @@ export async function linkGithub(): Promise<void> {
     const s = await b.githubLink()
     github.set(s.account ? { login: s.account.login } : null)
     if (s.signIn) githubGate.set(s.account ? "signed-in" : "needed")
-    githubMove.set(s.moveRefused ?? null)
     if (s.account) announce(`Signed in with GitHub as ${s.account.login}`)
   } catch (err) {
     githubBusy.set(err instanceof Error ? err.message : String(err))
@@ -447,7 +444,6 @@ export function useAccount(): Account | null {
   const linked = useSyncExternalStore(github.subscribe, github.get)
   const code = useSyncExternalStore(githubCode.subscribe, githubCode.get)
   const gate = useSyncExternalStore(githubGate.subscribe, githubGate.get)
-  const moveRefused = useSyncExternalStore(githubMove.subscribe, githubMove.get)
   const look = useSyncExternalStore(uiUpdate.subscribe, uiUpdate.get)
   const home = useSyncExternalStore(moved.subscribe, moved.get)
   const enroll = useSyncExternalStore(enrollAsk.subscribe, enrollAsk.get)
@@ -465,7 +461,6 @@ export function useAccount(): Account | null {
       handle: handleFor(person.name),
       ...(linked ? { github: linked } : {}),
       ...(gate === "signed-in" ? { githubSignIn: true } : {}),
-      ...(moveRefused ? { githubMove: moveRefused } : {}),
       computers: [...computers.map((c) => computerOf(c, online, agents)), ...phones.map(phoneOf)],
       version,
       ...(update
@@ -492,5 +487,5 @@ export function useAccount(): Account | null {
       ...deviceNotices(news),
       ...(code ? { githubCode: code } : {}),
     }
-  }, [person, linked, gate, moveRefused, computers, phones, online, agents, update, code, look, home, unsealed, enroll, trouble, signed, news])
+  }, [person, linked, gate, computers, phones, online, agents, update, code, look, home, unsealed, enroll, trouble, signed, news])
 }

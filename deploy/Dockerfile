@@ -26,7 +26,7 @@ VOLUME /data
 EXPOSE 8787
 USER bun
 
-# Sign-in and quotas stay off unless WORKOS_* and KIWI_* are set in the
-# environment (same keys as wrangler.jsonc).
+# Sign-in and quotas stay off unless GITHUB_APP_CLIENT_ID/_SECRET and KIWI_* are
+# set in the environment (same keys as wrangler.jsonc).
 ENTRYPOINT ["bun", "src/relay/bun.ts"]
 CMD ["--hostname", "0.0.0.0", "--port", "8787", "--data", "/data"]

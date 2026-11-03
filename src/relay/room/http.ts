@@ -43,11 +43,11 @@ export async function gateRoom(req: Request, roomId: string, rest: string, now =
   return signer ? { signer, open } : refused();
 }
 
+/** What the apps ask a relay first: whether it takes GitHub sign-in (or dev sign-in), and its GitHub App. */
 export function relayConfig(human: HumanAuth | null, githubClientId?: string | null): Response {
   return Response.json({
-    workosClientId: human?.clientId ?? null,
+    githubSignIn: !!human && !human.dev,
     ...(human?.dev ? { dev: true } : {}),
     ...(githubClientId ? { githubClientId } : {}),
-    ...(human?.github ? { githubSignIn: true } : {}),
   });
 }

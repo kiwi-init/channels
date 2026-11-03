@@ -2,7 +2,7 @@ import { MAX_PIN } from "@kiwi/core/pin.ts";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import { openSession } from "../../agent.ts";
-import { Channel, keepHeld, RelayError } from "@kiwi/core/client.ts";
+import { Channel, keepHeld, RelayError, type JoinStatus, type JoinWatch } from "@kiwi/core/client.ts";
 import { Cursor, Keystore, loadConfig } from "../../config.ts";
 import { heldText, seatHeldAway } from "../../hold.ts";
 import { decodeJoinCode, type ChannelAccess } from "@kiwi/core/crypto.ts";
@@ -27,6 +27,8 @@ import { agentName, type Command, config, die, keepDaemon, NAME_RE, out, relayUr
 import { listenAs, modeFor } from "./listen.ts";
 
 const JOIN_POLL_MS = /^[1-9]\d*$/.test(process.env.KIWI_JOIN_POLL_MS ?? "") ? Number(process.env.KIWI_JOIN_POLL_MS) : 1500;
+
+const JOIN_WAIT_S = 20;
 
 const OWNER_NAME = "human";
 
@@ -271,12 +273,16 @@ export const joinCommands: Record<string, Command> = {
       );
       let poked = 0;
       let shown: string | null = null;
+      let seen: string | null = null;
       for (;;) {
         if (req.computer && Date.now() - poked >= POKE_EVERY_MS) {
           poked = Date.now();
           yield* poke;
         }
-        const st = yield* Channel.fx.joinStatus(relay, code, id, req.requestId);
+        const until = req.computer ? Math.min(deadline, poked + POKE_EVERY_MS) : deadline;
+        const watched: JoinWatch = yield* Channel.fx.watchJoin(relay, code, id, req.requestId, seen, Math.max(0, Math.min(JOIN_WAIT_S, Math.ceil((until - Date.now()) / 1000))));
+        seen = watched.tag;
+        const st: JoinStatus = watched.status ?? { status: "pending", code: shown };
         if (st.status === "pending" && st.code && st.code !== shown) {
           shown = st.code;
           out(`verification code ${st.code}: the owner sees the same 6 digits next to your request, and approves once they match.`);
@@ -295,7 +301,7 @@ export const joinCommands: Record<string, Command> = {
             3,
           );
         }
-        yield* Effect.sleep(JOIN_POLL_MS);
+        if (!seen) yield* Effect.sleep(JOIN_POLL_MS);
       }
     }),
 };

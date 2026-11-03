@@ -31,10 +31,10 @@ export { getNote, putNote } from "./room/notes.ts";
 export { registerPush, unregisterPush, wakesFor } from "./room/push.ts";
 export { authenticate, authenticateSocket, gone, missingFingerprint, readMeta, requestToken, UPDATE_KIWI, wsHeaders } from "./room/auth.ts";
 export { append, expire, idleExpired, markRead, storeBlob, touch } from "./room/messages.ts";
-export { create, directory, reown, setIcon, setSettings, setSnapshot, setTitle, type CreateBody } from "./room/lifecycle.ts";
+export { create, directory, setIcon, setSettings, setSnapshot, setTitle, type CreateBody } from "./room/lifecycle.ts";
 export { approve, keysFor, remove, rotate, setCanPost, setRecord, type MemberBody } from "./room/members.ts";
 export { dropDelegation, listDelegations, liveDelegation, putDelegation } from "./room/delegations.ts";
-export { request, requestStatus, requireChecked, reveal, setOwnerNonce, type RequestBody } from "./room/requests.ts";
+export { request, requestsChanged, requestsGone, requestStatus, requestTag, requestWait, requireChecked, reveal, setOwnerNonce, watchRequests, type RequestBody } from "./room/requests.ts";
 export { frame, msgFrame, onClientFrame, socketError, takesPresence, wantsEcho, wantsReads, wantsWatch, watchFrame, welcomeFrames } from "./room/sockets.ts";
 export { errorResponse, gateRoom, parseRoomPath, relayConfig } from "./room/http.ts";
 
@@ -43,7 +43,7 @@ export { errorResponse, gateRoom, parseRoomPath, relayConfig } from "./room/http
  *   GET    /info?fp=<fingerprint>     holder of the join code: owner keys, epoch, whether a rotation is due
  *   POST   /create                    owner: create the room
  *   POST   /requests?fp=<fingerprint> holder of the join code: ask to join (self-signed)
- *   GET    /requests/<id>             the requester: status, and wrapped keys once approved
+ *   GET    /requests/<id>?wait=<s>    the requester: status, and wrapped keys once approved; with If-None-Match, held up to <s> seconds until it changes
  *   POST   /requests/<id>/reveal      the requester: its half of the code check
  *   GET    /requests?v=2              owner: pending requests
  *   POST   /requests/<id>/nonce       owner: its half of the code check (a signature)

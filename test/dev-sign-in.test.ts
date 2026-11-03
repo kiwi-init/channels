@@ -1,5 +1,5 @@
 // Dev sign-in: a local relay where "dev:<name>" is <name>, so the create gate can be
-// tested end to end without WorkOS. Sign-in gates only creation: every owner act takes
+// tested end to end without GitHub. Sign-in gates only creation: every owner act takes
 // the owner key's signature alone.
 
 import { afterAll, beforeAll, expect, setDefaultTimeout, test } from "bun:test";
@@ -34,11 +34,11 @@ test("only on this machine", () => {
 });
 
 test("the relay says it's dev, and dev tokens are the only ones it takes", async () => {
-  expect(await relayConfig(relay)).toMatchObject({ workosClientId: "dev", dev: true });
+  expect(await relayConfig(relay)).toMatchObject({ githubSignIn: false, dev: true });
   const auth = devHumanAuth();
-  // Namespaced, so a dev relay on a copy of real data can never sign in as a real WorkOS user.
+  // Namespaced, so a dev relay on a copy of real data can never sign in as a real GitHub user.
   expect(await auth.verify("dev:alice")).toBe("dev_alice");
-  expect(await auth.verify("dev:user_01HREALID")).toBe("dev_user_01HREALID");
+  expect(await auth.verify("dev:github_583231")).toBe("dev_github_583231");
   expect((await auth.profile!("dev_alice"))?.name).toBe("Alice (dev)");
   for (const bad of ["alice", "dev:", "dev:../x", "dev:a b", "Bearer dev:alice"]) expect(await auth.verify(bad)).toBeNull();
 });

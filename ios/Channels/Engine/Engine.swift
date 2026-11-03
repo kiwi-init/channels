@@ -32,7 +32,6 @@ final class Engine: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
     private let decoder = JSONDecoder()
     private let logger = Logger(subsystem: "com.kiwiinit.channels", category: "engine")
     private static let signIn: Set<String> = [
-        "https://api.workos.com/user_management/authorize/device", "https://api.workos.com/user_management/authenticate",
         "https://github.com/login/device/code", "https://github.com/login/oauth/access_token",
     ]
     var onPush: (Push) -> Void = { _ in }
