@@ -20,7 +20,7 @@ export type Panel =
 
 type Dialog = "new-channel" | "new-room" | "join" | "palette" | null
 
-export type Section = "account" | "appearance" | "notifications" | "computers" | "agents" | "updates" | "about"
+export type Section = "account" | "appearance" | "notifications" | "computers" | "agents" | "about"
 
 interface Place {
   channel: string
