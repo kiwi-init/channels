@@ -23,6 +23,17 @@ export function openRound(task: Task): ReviewRound | undefined {
   return last?.result.kind === "open" ? last : undefined;
 }
 
+export function closeCancelled(task: Task, mark: { seq: number; by: string; at: number }, note: string): void {
+  const open = openRound(task);
+  if (open) open.result = { kind: "withdrawn", seq: mark.seq };
+  task.state = "done";
+  task.cancelled = true;
+  task.closedSeq = mark.seq;
+  task.approvedBy = undefined;
+  task.updatedAt = mark.at;
+  task.notes.push({ seq: mark.seq, by: mark.by, ts: mark.at, text: note });
+}
+
 export function verdictRefusal(task: Task, verdict: Verdict, ev: { state?: string; round?: number; at?: string; body?: "review" }, mayFinish: boolean, open: ReviewRound | undefined): string | null {
   const id = taskId(task.id);
   if (ev.round === undefined) return (verdict === "approved" || ev.body) && task.rounds.length ? `a verdict on ${id} names the round it judges` : null;

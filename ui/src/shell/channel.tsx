@@ -35,10 +35,10 @@ const IssuePanel = later(() => import("~/github/panel").then((m) => m.IssuePanel
 const NeedsYou = later(() => import("~/needs/needs").then((m) => m.NeedsYou))
 const ThreadsView = later(() => import("~/chat/threads-view").then((m) => m.ThreadsView))
 const TaskPanel = later(() => import("~/panels/task").then((m) => m.TaskPanel))
-const PersonPanel = later(() => import("~/panels/person").then((m) => m.PersonPanel))
-const ChannelPanel = later(() => import("~/panels/channel-panel").then((m) => m.ChannelPanel))
-const InvitePanel = later(() => import("~/panels/invite").then((m) => m.InvitePanel))
-const AddAgentPanel = later(() => import("~/panels/add-agent").then((m) => m.AddAgentPanel))
+const Profile = later(() => import("~/modals/profile").then((m) => m.Profile))
+const ChannelSettings = later(() => import("~/modals/channel-settings").then((m) => m.ChannelSettings))
+const Invite = later(() => import("~/modals/invite").then((m) => m.Invite))
+const AddAgent = later(() => import("~/modals/add-agent").then((m) => m.AddAgent))
 
 export function ChannelScreen({ channel }: { channel: Channel }) {
   const { nav, go } = useApp()
@@ -152,8 +152,8 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
           <button
             type="button"
             className="top-chan"
-            aria-pressed={nav.panel?.kind === "channel"}
-            onClick={() => go({ to: "panel", panel: nav.panel?.kind === "channel" ? null : { kind: "channel" } })}
+            aria-pressed={nav.modal?.kind === "channel"}
+            onClick={() => go({ to: "modal", modal: nav.modal?.kind === "channel" ? null : { kind: "channel" } })}
             aria-label={`${channel.title}: channel settings`}
             title="Channel settings"
           >
@@ -274,6 +274,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
           <PanelView channel={channel} />
         </aside>
       )}
+      <ModalView channel={channel} />
     </div>
   )
 }
@@ -290,16 +291,30 @@ function PanelView({ channel }: { channel: Channel }) {
           <TaskPanel channel={channel} id={nav.panel.task} />
         ) : nav.panel.kind === "pr" ? (
           <PrPanel channel={channel} repo={nav.panel.repo} number={nav.panel.number} />
-        ) : nav.panel.kind === "issue" ? (
-          <IssuePanel channel={channel} repo={nav.panel.repo} number={nav.panel.number} />
-        ) : nav.panel.kind === "person" ? (
-          <PersonPanel channel={channel} name={nav.panel.name} />
-        ) : nav.panel.kind === "channel" ? (
-          <ChannelPanel channel={channel} />
-        ) : nav.panel.kind === "invite" ? (
-          <InvitePanel channel={channel} />
         ) : (
-          <AddAgentPanel channel={channel} />
+          <IssuePanel channel={channel} repo={nav.panel.repo} number={nav.panel.number} />
+        )}
+      </Suspense>
+    </Boundary>
+  )
+}
+
+function ModalView({ channel }: { channel: Channel }) {
+  const { nav, go } = useApp()
+  const modal = nav.modal
+  if (!modal) return null
+  const close = () => go({ to: "modal", modal: null })
+  return (
+    <Boundary resetKey={JSON.stringify(modal)}>
+      <Suspense fallback={null}>
+        {modal.kind === "person" ? (
+          <Profile key={modal.name} channel={channel} name={modal.name} onClose={close} />
+        ) : modal.kind === "channel" ? (
+          <ChannelSettings channel={channel} tab={modal.tab} onClose={close} />
+        ) : modal.kind === "invite" ? (
+          <Invite channel={channel} onClose={close} />
+        ) : (
+          <AddAgent channel={channel} onClose={close} />
         )}
       </Suspense>
     </Boundary>

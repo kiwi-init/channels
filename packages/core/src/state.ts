@@ -32,7 +32,7 @@ export { leadCheckpointKey } from "./state/lead.ts";
 export {
   changedSinceApproval,
   doneWhen,
-  editsApproved,
+  changedAfterApproval,
   freeAgents,
   judgesSpec,
   onSpec,

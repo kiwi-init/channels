@@ -320,7 +320,7 @@ describe("one Claude Code session that holds two seats", () => {
 describe("a seat whose own `kiwi listen` takes its messages", () => {
   test("listen --now, finding nothing unread, says that listener runs and already took them (#1170)", async () => {
     const { ownerB, h } = await twoSeats();
-    const tail = spawn(h, ["-c", "beta", "--as", "reviewer", "listen"], S);
+    const tail = spawn(h, ["-c", "beta", "--as", "reviewer", "listen"], PERSON);
     let printed = "";
     void (async () => {
       for await (const chunk of tail.stdout) printed += new TextDecoder().decode(chunk);
@@ -356,12 +356,34 @@ describe("a seat whose own `kiwi listen` takes its messages", () => {
     }
   });
 
+  test("an agent its hooks wake can't start a listener that would take their place: listen reads, open-ended waits are refused, and join reads (#1539)", async () => {
+    const { ownerB, h } = await twoSeats();
+    await ok(ownerB, ["send", "--to", "reviewer", "read by a plain listen"], PERSON);
+    const plain = await run(h, ["-c", "beta", "--as", "reviewer", "listen"], S);
+    expect(plain.code).toBe(0);
+    expect(plain.out).toContain("read by a plain listen");
+    for (const args of [["listen", "--once"], ["tail"], ["wait"]]) {
+      const refused = await run(h, ["-c", "beta", "--as", "reviewer", ...args], S);
+      expect(refused.code).toBe(2);
+      expect(refused.err).toContain("Kiwi already wakes you in this session (Claude Code's hooks), and a listener of yours would take its place.");
+      expect(refused.err).toMatch(/Run `[^`]* -c beta --as reviewer join` to read what's waiting\./);
+    }
+    const bounded = await run(h, ["-c", "beta", "--as", "reviewer", "listen", "--once", "--timeout", "1s"], S);
+    expect(bounded.code).toBe(2);
+    expect(bounded.out).toContain("no messages yet");
+    await ok(ownerB, ["send", "--to", "reviewer", "read by join"], PERSON);
+    const joined = await run(h, ["-c", "beta", "--as", "reviewer", "join"], S);
+    expect(joined.code).toBe(0);
+    expect(joined.out).toContain("read by join");
+    expect((await slots(h)).filter((s) => s === "listen:reviewer")).toEqual([]);
+  });
+
   test("a `kiwi listen` beside the session's hook listener is still named", async () => {
     const { h, input } = await twoSeats();
     const hook = spawn(h, ["hook", "listen"], S, h, input);
     try {
       await until(async () => (await slots(h)).includes("hook:reviewer") && (await slots(h)).includes("listen:reviewer"), "the hook's listener");
-      const tail = spawn(h, ["-c", "beta", "--as", "reviewer", "listen"], S);
+      const tail = spawn(h, ["-c", "beta", "--as", "reviewer", "listen"], PERSON);
       try {
         await until(async () => (await slots(h)).filter((s) => s === "listen:reviewer").length === 2, "the hook's and the tail's listeners");
         const now = await run(h, ["-c", "beta", "--as", "reviewer", "listen", "--now"], S);

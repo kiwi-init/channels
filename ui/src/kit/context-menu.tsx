@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 
-import { Dialog, DialogHead } from "~/kit/bits"
+import { Modal } from "~/kit/bits"
 import { openMenu, type MenuItem, type OpenMenu } from "~/kit/menu-open"
 
 const GUTTER = 8
@@ -65,24 +65,30 @@ export default function Menu({ menu }: { menu: OpenMenu }) {
   }, [])
   if (asking?.confirm)
     return (
-      <Dialog open onClose={() => openMenu.set(null)} label={asking.confirm.title}>
-        <DialogHead title={asking.confirm.title} sub={asking.confirm.sub} onClose={() => openMenu.set(null)} />
-        <div className="dialog-foot">
-          <button type="button" className="btn" onClick={() => openMenu.set(null)}>
-            Cancel
-          </button>
-          <button
-            type="button"
-            className="btn is-danger"
-            onClick={() => {
-              openMenu.set(null)
-              asking.run()
-            }}
-          >
-            {asking.confirm.yes}
-          </button>
-        </div>
-      </Dialog>
+      <Modal
+        open
+        onClose={() => openMenu.set(null)}
+        label={asking.confirm.title}
+        title={asking.confirm.title}
+        sub={asking.confirm.sub}
+        foot={
+          <>
+            <button type="button" className="btn" onClick={() => openMenu.set(null)}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn is-danger"
+              onClick={() => {
+                openMenu.set(null)
+                asking.run()
+              }}
+            >
+              {asking.confirm.yes}
+            </button>
+          </>
+        }
+      />
     )
   return (
     <div ref={box} tabIndex={-1} className="rail-menu is-at-pointer" role="menu" aria-label={menu.label} style={place}>

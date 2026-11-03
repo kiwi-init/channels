@@ -109,7 +109,7 @@ export function Sidebar({ channel }: { channel: Channel }) {
 
       {(humans.length > 0 || orphans.length > 0 || channel.youOwn) && (
         <section aria-label="People">
-          <Heading action={channel.youOwn ? <IconButton icon="plus" label="Invite people" onClick={() => go({ to: "panel", panel: { kind: "invite" } })} /> : undefined}>People</Heading>
+          <Heading action={channel.youOwn ? <IconButton icon="plus" label="Invite people" onClick={() => go({ to: "modal", modal: { kind: "invite" } })} /> : undefined}>People</Heading>
           <ul>
             {humans.map((p) => (
               <Member key={p.name} person={p} channel={channel} direct={directOf.get(p.name)} />
@@ -145,7 +145,7 @@ export function Sidebar({ channel }: { channel: Channel }) {
             )}
             {channel.youOwn && humans.length + orphans.length === 0 && (
               <li>
-                <button type="button" className={cx("side-row is-add", nav.panel?.kind === "invite" && "is-on")} onClick={() => go({ to: "panel", panel: { kind: "invite" } })}>
+                <button type="button" className={cx("side-row is-add", nav.modal?.kind === "invite" && "is-on")} onClick={() => go({ to: "modal", modal: { kind: "invite" } })}>
                   <Icon name="plus" size={14} />
                   <span className="side-label">Invite people</span>
                 </button>
@@ -156,7 +156,7 @@ export function Sidebar({ channel }: { channel: Channel }) {
       )}
 
       <section aria-label="Agents">
-        <Heading action={agents.length > 0 ? <IconButton icon="plus" label="Add an agent" onClick={() => go({ to: "panel", panel: { kind: "add-agent" } })} /> : undefined}>Agents</Heading>
+        <Heading action={agents.length > 0 ? <IconButton icon="plus" label="Add an agent" onClick={() => go({ to: "modal", modal: { kind: "add-agent" } })} /> : undefined}>Agents</Heading>
         {agents.length > 0 && (
           <ul className="side-tiles">
             {agents.map((p) => (
@@ -191,7 +191,7 @@ export function Sidebar({ channel }: { channel: Channel }) {
           )}
           {agents.length === 0 && (
             <li>
-              <button type="button" className={cx("side-row is-add", nav.panel?.kind === "add-agent" && "is-on")} onClick={() => go({ to: "panel", panel: { kind: "add-agent" } })}>
+              <button type="button" className={cx("side-row is-add", nav.modal?.kind === "add-agent" && "is-on")} onClick={() => go({ to: "modal", modal: { kind: "add-agent" } })}>
                 <Icon name="plus" size={14} />
                 <span className="side-label">Add an agent</span>
               </button>

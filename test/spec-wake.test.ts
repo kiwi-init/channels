@@ -105,13 +105,13 @@ describe("a spec's comments and approvals reach everyone on it", () => {
     expect(formatMessage(working[3]!, undefined, fold(working, roster, T0), "kim")).not.toContain("kiwi spec start");
   });
 
-  test("a comment says it's on the spec, and an edit after approval says a person approves it again", async () => {
+  test("a comment says it's on the spec, and an edit after approval says the spec changed", async () => {
     const log = await signedLog(steps.slice(0, 9));
     const s = fold(log, roster, T0);
     expect(formatMessage(log[2]!, undefined, s, "lead")).toStartWith("#3 ops → ana comment on #1's spec: > PR merged with ci-ok");
     expect(formatMessage(log[6]!, undefined, s, "dev")).toStartWith("#7 ana (human, owner) → ops comment on #1's spec: and gzip it too?");
     expect(describeEvent(log[7]!, s)).toBe("wrote the spec of #1: Export annotations as CSV");
-    expect(describeEvent(log[8]!, s)).toBe("changed #1's approved spec, so a person approves the change: Export annotations as CSV");
+    expect(describeEvent(log[8]!, s)).toBe("changed #1's spec after it was approved: Export annotations as CSV");
   });
 
   test("status and the session's first look list the comments waiting for an answer, until the agent answers", async () => {

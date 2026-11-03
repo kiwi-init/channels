@@ -33,6 +33,7 @@ try {
   const design = page.locator(".side-row", { hasText: "design" }).first();
   await design.waitFor();
   expect(!(await design.getAttribute("class"))?.includes("is-muted"), "#design starts unmuted");
+  await page.getByRole("dialog", { name: "Channel settings" }).getByRole("button", { name: "Rooms", exact: true }).click();
   await page.getByRole("button", { name: "Mute #design" }).click();
   await page.waitForTimeout(150);
   expect(!!(await design.getAttribute("class"))?.includes("is-muted"), "muting #design from the channel's settings dims it in the sidebar");

@@ -10,7 +10,11 @@ const MAX_COMMENTS = 40;
 
 export type SpecStage = "draft" | "queued" | "working" | "delivered" | "accepted" | "dropped";
 
-type SpecEvent = { op: "spec.set"; ask: number; text: string } | { op: "spec.approve"; ask: number; v: number } | { op: "spec.result"; ask: number; verdict: SpecVerdict; note?: string };
+type SpecEvent =
+  | { op: "spec.set"; ask: number; text: string }
+  | { op: "spec.approve"; ask: number; v: number }
+  | { op: "spec.result"; ask: number; verdict: SpecVerdict; note?: string }
+  | { op: "spec.delete"; ask: number; why?: string };
 
 export const specLease = (ask: number): string => `spec/${ask}`;
 
@@ -36,6 +40,8 @@ export function judgesSpec(members: ReadonlyMap<string, Member>, head: Pick<AskH
   return m.owner || sameAuthor(members.get(head.by), m) || answersDecisions(members, name);
 }
 
+const JUDGES = "only the person who asked, the owner or a person who answers decisions approves a spec or judges what it delivered";
+
 export function foldSpec(
   specs: Map<number, Spec>,
   askHeads: ReadonlyMap<number, AskHead>,
@@ -43,10 +49,18 @@ export function foldSpec(
   m: Pick<Message, "seq" | "from">,
   ev: SpecEvent,
   at: number,
+  lead = false,
 ): string | null {
   const head = askHeads.get(ev.ask);
   if (!head || !(ev.ask < m.seq)) return `#${ev.ask} isn't a person's message that a spec is written for`;
   const spec = specs.get(ev.ask);
+  const judge = judgesSpec(members, head, m.from);
+  if (ev.op === "spec.delete") {
+    if (!spec) return `#${ev.ask} has no spec to delete`;
+    if (!lead && !judge) return "only the lead, or a person who approves the spec, deletes it";
+    specs.delete(ev.ask);
+    return null;
+  }
   if (spec?.result) return `#${ev.ask}'s spec is ${spec.result.verdict === "accepted" ? "accepted" : "dropped"}, so it no longer changes`;
   const mark = { seq: m.seq, by: m.from, at };
   if (ev.op === "spec.set") {
@@ -55,15 +69,22 @@ export function foldSpec(
       return null;
     }
     const editors = spec.editors.includes(m.from) ? spec.editors : [...spec.editors, m.from].slice(-MAX_EDITORS);
-    specs.set(ev.ask, { ...spec, text: ev.text, v: m.seq, by: m.from, at, edits: spec.edits + 1, editors });
+    const keeps = spec.approved && !changedSinceApproval(spec) && (lead || judge) ? { approved: { ...spec.approved, v: m.seq, text: ev.text } } : {};
+    const changes = spec.approved && unticked(ev.text) !== unticked(spec.text) ? { changes: [...(spec.changes ?? []), m.seq].slice(-MAX_BACKS) } : {};
+    specs.set(ev.ask, { ...spec, text: ev.text, v: m.seq, by: m.from, at, edits: spec.edits + 1, editors, ...keeps, ...changes });
     return null;
   }
   if (!spec) return `#${ev.ask} has no spec yet`;
-  if (!judgesSpec(members, head, m.from)) return "only the person who asked, the owner or a person who answers decisions approves a spec or judges what it delivered";
   if (ev.op === "spec.approve") {
+    if (!judge) return JUDGES;
     if (ev.v !== spec.v) return `#${ev.ask}'s spec changed since that version: read it again, then approve`;
     specs.set(ev.ask, { ...spec, approved: { ...mark, v: ev.v, text: spec.text } });
     return null;
+  }
+  if (!judge) {
+    if (!lead || ev.verdict === "back") return JUDGES;
+    if (ev.verdict === "accepted" && !spec.approved) return `#${ev.ask}'s spec isn't approved: a person approves it before the lead closes it`;
+    if (ev.verdict === "accepted" && !allTicked(spec.text)) return `#${ev.ask}'s spec has boxes left to tick under Done when: the lead closes it once every one is ticked`;
   }
   if (ev.verdict === "back") {
     if (!spec.approved) return `#${ev.ask}'s spec isn't approved, so nothing was delivered to send back`;
@@ -100,6 +121,16 @@ export function unansweredComments(spec: Pick<Spec, "comments" | "by" | "v">, me
   return comments.filter((c, i) => c.by !== me && !answered(c, i)).map((c) => c.seq);
 }
 
+const allTicked = (text: string): boolean => doneWhen(text).every((b) => b.done);
+
+export function closesOnItsOwn(state: Pick<ChannelState, "tasks">, spec: Spec): boolean {
+  return !spec.result && doneWhen(spec.text).length > 0 && specStage(state, spec) === "delivered";
+}
+
+export function cancelledWithSpec(state: Pick<ChannelState, "tasks">, ask: number): Task[] {
+  return specTasks(state, ask).filter((t) => t.state !== "done" && !t.archived);
+}
+
 export function specTitleOf(text: string): string | null {
   const line = text.split("\n").find((l) => /^#\s+\S/.test(l));
   return line ? line.replace(/^#\s+/, "").trim() : null;
@@ -118,8 +149,8 @@ const unticked = (text: string): string =>
     .join("\n")
     .trim();
 
-export function editsApproved(spec: Pick<Spec, "approved">, seq: number, text: string): boolean {
-  return !!spec.approved && spec.approved.seq < seq && unticked(text) !== unticked(spec.approved.text);
+export function changedAfterApproval(spec: Pick<Spec, "changes">, seq: number): boolean {
+  return !!spec.changes?.includes(seq);
 }
 
 export function changedSinceApproval(spec: Pick<Spec, "text" | "approved">): boolean {

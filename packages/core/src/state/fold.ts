@@ -23,8 +23,8 @@ import { omit } from "../omit.ts";
 import { dmPlace, MAIN, summarize } from "./places.ts";
 import { rootOf, sentTo } from "../room-rules.ts";
 import { askHeadOf, askOfMessage, fileTask } from "./asks.ts";
-import { foldSpec, noteSpecComment, specGate } from "./specs.ts";
-import { taskId } from "./tasks.ts";
+import { cancelledWithSpec, closesOnItsOwn, foldSpec, noteSpecComment, specGate } from "./specs.ts";
+import { closeCancelled, taskId } from "./tasks.ts";
 import { linkSafe, prKey, releasesFrom, repoKey } from "./github.ts";
 import { reposOf } from "./repos.ts";
 import { roomName } from "./rooms.ts";
@@ -313,6 +313,10 @@ function folding(
   const threadPeople = new Map<number, Set<string>>(from?.threadPeople.map(([seq, people]) => [seq, new Set(people)]));
   const askHeads = new Map<number, AskHead>(from?.askHeads?.map((h) => [h.id, h]));
   const specs = new Map<number, Spec>(from?.specs?.map((sp) => [sp.ask, sp]));
+  const closeOnItsOwn = (ask: number, m: Pick<Message, "seq" | "from">, at: number): void => {
+    const spec = specs.get(ask);
+    if (spec && closesOnItsOwn({ tasks }, spec)) specs.set(ask, { ...spec, result: { seq: m.seq, by: m.from, at, verdict: "accepted", auto: true } });
+  };
   let specsOnly = from?.specsOnly ?? null;
   let head = from?.n ?? 0;
 
@@ -601,10 +605,13 @@ function folding(
           continue;
         }
       }
-      if (ev.op === "spec.set" || ev.op === "spec.approve" || ev.op === "spec.result") {
+      if (ev.op === "spec.set" || ev.op === "spec.approve" || ev.op === "spec.result" || ev.op === "spec.delete") {
         placeOf.set(m.seq, MAIN);
-        const why = foldSpec(specs, askHeads, members, m, ev, at);
+        const why = foldSpec(specs, askHeads, members, m, ev, at, leads(member));
         if (why) reject(why);
+        else if (ev.op === "spec.delete" || (ev.op === "spec.result" && ev.verdict === "dropped"))
+          for (const t of cancelledWithSpec({ tasks }, ev.ask)) closeCancelled(t, { seq: m.seq, by: m.from, at }, `cancelled with #${ev.ask}'s spec`);
+        else closeOnItsOwn(ev.ask, m, at);
         continue;
       }
       placeOf.set(
@@ -616,7 +623,9 @@ function folding(
             : MAIN,
       );
 
+      const taskAsk = ev.op === "task.update" || ev.op === "task.delete" ? tasks.get(ev.task)?.ask : undefined;
       applyEvent(ctx, m, ev, member, at, reject);
+      if (taskAsk !== undefined && !rejected.has(m.seq)) closeOnItsOwn(taskAsk, m, at);
       const added = ev.op === "task.add" && !rejected.has(m.seq) ? tasks.get(m.seq) : undefined;
       if (added) {
         const re = earlierParent(m);

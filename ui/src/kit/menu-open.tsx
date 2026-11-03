@@ -1,5 +1,6 @@
 import { lazy, Suspense, useSyncExternalStore, type MouseEvent } from "react"
 
+import { Icon } from "~/kit/icons"
 import { nativeMenuAllowed, selectedBeforePress } from "~/kit/native-menu"
 import { store } from "~/live/value"
 
@@ -33,6 +34,21 @@ export function showMenu(e: MouseEvent, label: string, make: (menus: typeof impo
     const groups = make(menus).filter((g) => g.length > 0)
     if (groups.length) openMenu.set({ x, y, label, groups })
   })
+}
+
+function showMenuBelow(el: HTMLElement, label: string, groups: MenuGroups): void {
+  const shown = groups.filter((g) => g.length > 0)
+  if (!shown.length) return
+  const at = el.getBoundingClientRect()
+  openMenu.set({ x: at.left, y: at.bottom + 4, label, groups: shown })
+}
+
+export function MoreButton({ label, groups }: { label: string; groups: () => MenuGroups }) {
+  return (
+    <button type="button" className="icon-btn" aria-label={`More for ${label}`} title="More" aria-haspopup="menu" onClick={(e) => showMenuBelow(e.currentTarget, label, groups())}>
+      <Icon name="more" />
+    </button>
+  )
 }
 
 export function ContextMenus() {

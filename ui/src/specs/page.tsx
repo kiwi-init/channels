@@ -5,6 +5,7 @@ import { useState } from "react"
 import { cx } from "~/kit/bits"
 import { Track } from "~/kit/glide"
 import { Icon } from "~/kit/icons"
+import { MoreButton } from "~/kit/menu-open"
 import { ago } from "~/kit/time"
 import type { Channel, Spec } from "~/model"
 import { useAct, useApp, type SpecPart } from "~/nav"
@@ -56,11 +57,7 @@ export function SpecPage({ channel, spec }: { channel: Channel; spec: Spec }) {
                 )}
               </button>
             </Track>
-            {!spec.result && !editing && (
-              <button type="button" className="btn is-quiet" onClick={edit}>
-                Edit
-              </button>
-            )}
+            {!editing && <SpecMenu channel={channel} spec={spec} onEdit={edit} />}
           </div>
         </div>
         <p className="spec-sub">
@@ -76,7 +73,7 @@ export function SpecPage({ channel, spec }: { channel: Channel; spec: Spec }) {
           {(spec.stage === "queued" || spec.stage === "working") && !spec.changed && <span>{line.line}</span>}
           {spec.result && (
             <span className={line.tone}>
-              {spec.result.verdict} by {nickname(channel, spec.result.by)} {ago(spec.result.at)}
+              {spec.result.auto ? "closed by itself" : `${spec.result.verdict} by ${nickname(channel, spec.result.by)}`} {ago(spec.result.at)}
               {spec.result.note ? `: “${spec.result.note}”` : ""}
             </span>
           )}
@@ -93,6 +90,42 @@ export function SpecPage({ channel, spec }: { channel: Channel; spec: Spec }) {
         <Result channel={channel} spec={spec} />
       )}
     </div>
+  )
+}
+
+function SpecMenu({ channel, spec, onEdit }: { channel: Channel; spec: Spec; onEdit: () => void }) {
+  const { actions } = useAct()
+  const label = `#${spec.ask}'s spec`
+  const open = spec.tasks.filter((id) => channel.tasks.some((t) => t.id === id && t.status !== "done")).length
+  const withTasks = open ? ` Its ${open === 1 ? "open task is" : `${open} open tasks are`} cancelled with it.` : ""
+  if (spec.result && !spec.canJudge) return null
+  return (
+    <MoreButton
+      label={label}
+      groups={() => [
+        [
+          ...(spec.result ? [] : [{ label: "Edit", run: onEdit }]),
+          ...(spec.result || !spec.canJudge
+            ? []
+            : [
+                {
+                  label: "Cancel…",
+                  run: () => actions.judgeSpec(channel.code, spec.ask, "dropped"),
+                  confirm: { title: `Cancel ${label}?`, sub: `It moves under Dropped, and no new work goes under it.${withTasks}`, yes: "Cancel spec" },
+                },
+              ]),
+        ],
+        spec.canJudge
+          ? [
+              {
+                label: "Delete…",
+                run: () => actions.deleteSpec(channel.code, spec.ask),
+                confirm: { title: `Delete ${label}?`, sub: `It leaves the specs list. The history keeps one line saying you deleted it.${withTasks}`, yes: "Delete spec" },
+              },
+            ]
+          : [],
+      ]}
+    />
   )
 }
 

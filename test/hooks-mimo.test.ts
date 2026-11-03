@@ -253,7 +253,7 @@ test("kiwi hooks install mimo writes the plugin, status says so, and an agent in
   expect(extraInstalled("mimo")).toBe(true);
   expect(hooksStatus()).toContain("mimo: installed");
   expect(howMessagesReachYou("kiwi", true, { harness: "mimo", session: "ses_1", pid: 9 })).toBe(
-    "Messages for you arrive on their own: Kiwi's MiMoCode plugin wakes you when one comes. Don't run listen.",
+    "Messages for you arrive on their own: Kiwi's MiMoCode plugin wakes you when one comes. Don't keep a listener running.",
   );
   expect(howMessagesReachYou("kiwi", true, { harness: "mimo", session: "mimo-pid-9", pid: 9 })).toContain("restarting MiMoCode loads it");
   uninstallExtra("mimo");

@@ -53,7 +53,7 @@ export function stageLine(channel: Channel, spec: Spec): StageLine {
     case "delivered":
       return { word: "delivered", tone: "tone-decide", line: spec.canJudge ? "waits for your verdict" : `waits for ${asker}'s verdict` }
     case "accepted":
-      return { word: "accepted", tone: "tone-live", line: `by ${nickname(channel, spec.result?.by ?? spec.by)}` }
+      return { word: "accepted", tone: "tone-live", line: spec.result?.auto ? "closed by itself" : `by ${nickname(channel, spec.result?.by ?? spec.by)}` }
     case "dropped":
       return { word: "dropped", tone: "tone-quiet", line: spec.result?.note ? spec.result.note : `by ${nickname(channel, spec.result?.by ?? spec.by)}` }
   }

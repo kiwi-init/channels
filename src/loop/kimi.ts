@@ -211,7 +211,7 @@ export function isListener(args: string): boolean {
     else if (VALUE_FLAGS.has(w)) i++;
     if (rest.length === 2) break;
   }
-  return rest[0] === "listen" || (rest[0] === "hook" && rest[1] === "listen");
+  return rest[0] === "listen" || rest[0] === "join" || (rest[0] === "hook" && rest[1] === "listen");
 }
 
 export function tmuxPastesFlag(version: string): boolean {

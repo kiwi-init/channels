@@ -1,7 +1,7 @@
 import { personaAnswers } from "@kiwi/core/personality.ts";
 import { isDirectedAt, isForAgent } from "@kiwi/core/client.ts";
 import { GENERAL_ROOM, ignored, type Message } from "@kiwi/core/protocol.ts";
-import { editsApproved, freeAgents, onSpec, openRound, specOfComment, threadMembers, type ChannelState, type Task } from "@kiwi/core/state.ts";
+import { changedAfterApproval, freeAgents, onSpec, openRound, specOfComment, threadMembers, type ChannelState, type Task } from "@kiwi/core/state.ts";
 import type { Delivery } from "./shared.ts";
 
 import { mentionsOf } from "@kiwi/core/changes.ts";
@@ -35,7 +35,7 @@ function specNews(me: string, m: Message, state: ChannelState): boolean {
   if (ev?.op !== "spec.set" && ev?.op !== "spec.approve" && ev?.op !== "spec.result") return false;
   const spec = state.specs.get(ev.ask);
   if (!spec || state.rejected.has(m.seq)) return false;
-  if (ev.op === "spec.set" && !editsApproved(spec, m.seq, ev.text)) return false;
+  if (ev.op === "spec.set" && !changedAfterApproval(spec, m.seq)) return false;
   if (ev.op === "spec.result" && ev.verdict !== "back") return false;
   if (onSpec(state, ev.ask).has(me)) return true;
   return startsSpec(m) && (state.lead === me || freeAgents(state).includes(me));

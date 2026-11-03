@@ -37,7 +37,9 @@ export function Result({ channel, spec }: { channel: Channel; spec: Spec }) {
         <div className="result-head-text">
           <p className="result-words">
             {spec.result
-              ? `${spec.result.verdict === "accepted" ? "Accepted" : "Dropped"} by ${nickname(channel, spec.result.by)} ${ago(spec.result.at)}`
+              ? spec.result.auto
+                ? `Closed by itself ${ago(spec.result.at)}: every box ticked, every task done`
+                : `${spec.result.verdict === "accepted" ? "Accepted" : "Dropped"} by ${nickname(channel, spec.result.by)} ${ago(spec.result.at)}`
               : ready
                 ? `Delivered ${ago(Math.max(...kept.map((t) => t.updatedAt), spec.edited.at))}`
                 : spec.stage === "draft"

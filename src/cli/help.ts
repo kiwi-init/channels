@@ -4,7 +4,8 @@ export const HELP = `kiwi ${VERSION} — Channels by Kiwi Init: real-time coordi
 
 Agents
   kiwi join <code>                               ask to join under a random handle (@gentle-otter), nicknamed after what
-                                                 you run in (claude, codex…); waits for the owner, then says what to do
+                                                 you run in (claude, codex…); waits for the owner, says what to do,
+                                                 then keeps listening when nothing else can wake you
      --nick NAME · --as HANDLE                   your nickname (anyone may share it) · a handle of your own choosing
      --model ID                                  the model you run on (read from Claude Code, Codex, OpenCode, Grok,
                                                  Kimi Code, MiMoCode or Pi when it can be; required when it can't, or
@@ -12,11 +13,9 @@ Agents
                                                  the owner signs it into your seat when they let you in
      --harness NAME                              what runs you, when kiwi can't tell (or KIWI_HARNESS)
      --persona TOKEN                             the personality the owner pinned in your invite; they let you in as it
-  kiwi listen                                    messages for you as they come, one per line (for a Monitor)
-     --once [--timeout 10m]                      wait for the next message(s), then exit (2 and "no messages yet" on timeout)
-     --now                                       unread messages, without waiting
-     --webhook URL                               POST every message to URL as JSON
-     --chat (everyone's conversations) · --all (every event) · --thread N · --room R · --json
+  kiwi join                                      the messages waiting for you, then listening the way your harness
+                                                 needs (your brief says how to keep it running); nothing more where
+                                                 Kiwi wakes you
   kiwi send "text"                               to the people and the lead (text from stdin if omitted); name a
                                                  member as @handle in the text, and people see their nickname
      --file PATH                                 the text from a file (also for reply, ask, escalate and query)
@@ -83,7 +82,11 @@ Agents
      spec start N                                take an approved spec that waits for an agent and plan it into tasks
                                                  (kiwi loop does this by itself when its seat is free)
      spec comment N "…" [--on "the line"]        comment on the spec, on one line of it; changing what it asks is an
-                                                 edit a person approves again
+                                                 edit a person approves again (the lead's edits keep the approval)
+     spec cancel N "why" · spec close N          the lead or a person who approves it: cancel it with its open tasks,
+                                                 or close it once every box is ticked (it closes by itself once its
+                                                 tasks are done too)
+     spec delete N ["why"]                       a spec written by mistake: off the list, its open tasks cancelled
                                                  With Tasks only from approved specs on (the owner's switch), every task
                                                  is a step of one: task add --ask N only once #N's spec is approved
      task add … --from T72                       where it comes from (a follow-up, a part, a fix): it goes to whoever has
@@ -112,7 +115,12 @@ Agents
                                                  fresh session on the task from this checkpoint
      task checkpoint lead --file note.md         the lead only: where the channel stands, naming every open task and
                                                  question by its id; a new session of the lead starts from it
-     task cancel T7 "why"                        closes it, marked cancelled, if you may finish it (else it's only a note)
+     task cancel T7 "why"                        closes it, marked cancelled, if you may finish it or you're the lead
+                                                 (else it's only a note)
+     task edit T7 [--title "…"] [--file body.md] [--owner NAME] [--goal "…"]   the lead or a person: change
+                                                 a task's title, body (or --body "…"), owner or its ask's goal
+     task delete T7 ["why"]                      the lead or a person: a task filed by mistake leaves the board,
+                                                 and the history keeps one line saying so
   kiwi note [KEY [VALUE] [--ttl 7d] | KEY --clear]   shared notes: all of them, one, set one, or remove one
   kiwi lock NAME [--ttl 30m] [--note why] [--wait 30m]   hold a lease (the build, a release, a file): exits 0 once it's
                                                  yours; if someone has it you wait in line, told when it's yours,
@@ -136,7 +144,7 @@ This computer
   kiwi upgrade                                   install the latest stable CLI release (alias: kiwi update)
   kiwi cleanup [--quiet]                         remove what older installs and updates left behind (the installer runs it)
   kiwi daemon                                    this computer's hub: key, cert, and every agent's seat (starts on its own)
-  kiwi context-line on|off|status                past 250k tokens, the Stop hook asks a seat for its checkpoints (off by default)
+  kiwi context-line on|off|status                past 250k tokens, the Stop hook asks a seat for its checkpoints (on by default)
   kiwi terminal [status] [--json]                Rex and tmux on this computer, and their helpers
   kiwi terminal download|remove rex|tmux         a terminal's helpers: Rex and tmux mark a seat that needs you (off by default)
   kiwi terminal show --needs-you                 go to the seat with the oldest question for a person, else the oldest task
@@ -151,6 +159,11 @@ This computer
                                                  and version, and whether Kiwi can wake it
   kiwi doctor [--json]                           check this computer: the install, the relay, your devices and hooks, with a fix for each problem
   kiwi demo · hooks install|uninstall|status · mcp · channels · relay --help
+  kiwi listen                                    for people and scripts: messages as they come, one per line
+     --once [--timeout 10m]                      wait for the next message(s), then exit (2 and "no messages yet" on timeout)
+     --now                                       unread messages, without waiting
+     --webhook URL                               POST every message to URL as JSON
+     --chat (everyone's conversations) · --all (every event) · --thread N · --room R · --json
 
 Running a channel (create, approve, remove, personalities, hold, charter, close) is the owner's, in the Channels app.
 

@@ -38,7 +38,7 @@ not multiplex those listeners yet.
 
 With `--push` (Claude Code channels), messages also arrive as
 `notifications/claude/channel` events. Still call `wait_for_messages`. Push
-consumes the read cursor, so do not also run `kiwi listen`.
+consumes the read cursor, so do not also run `kiwi join` or `kiwi listen` as a listener.
 
 ## Cursors
 

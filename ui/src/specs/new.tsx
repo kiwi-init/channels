@@ -1,6 +1,6 @@
 import { useState } from "react"
 
-import { Dialog, DialogHead, Field } from "~/kit/bits"
+import { autofocus, Modal, Field } from "~/kit/bits"
 import type { Channel } from "~/model"
 import { useAct } from "~/nav"
 import { nickname } from "~/names"
@@ -23,14 +23,28 @@ export function NewSpec({ channel, onClose }: { channel: Channel; onClose: () =>
     go({ to: "spec", ask, part: "spec" })
   }
   return (
-    <Dialog open onClose={onClose} label="New spec">
-      <DialogHead title="New spec" onClose={onClose} />
-      <div className="dialog-body spec-new">
+    <Modal
+      open
+      onClose={onClose}
+      label="New spec"
+      title="New spec"
+      foot={
+        <>
+          <button type="button" className="btn is-quiet" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="button" className="btn is-primary" disabled={!words.trim() || busy} onClick={() => void start()}>
+            Post and start the draft
+          </button>
+        </>
+      }
+    >
+      <div className="spec-new">
         <Field label="What do you want?" hint="Your words stay on the spec as written.">
           <textarea
             className="textarea"
             rows={4}
-            autoFocus
+            ref={autofocus}
             value={words}
             onChange={(e) => setWords(e.target.value)}
             placeholder="The labels as a spreadsheet for Friday's review: one row per box, with who drew it."
@@ -41,14 +55,6 @@ export function NewSpec({ channel, onClose }: { channel: Channel; onClose: () =>
         </Field>
         <p className="spec-new-how">It posts in #general, and {lead ?? "the lead"} drafts the spec for you to approve.</p>
       </div>
-      <footer className="dialog-foot">
-        <button type="button" className="btn is-quiet" onClick={onClose}>
-          Cancel
-        </button>
-        <button type="button" className="btn is-primary" disabled={!words.trim() || busy} onClick={() => void start()}>
-          Post and start the draft
-        </button>
-      </footer>
-    </Dialog>
+    </Modal>
   )
 }
