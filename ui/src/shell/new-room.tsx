@@ -3,7 +3,7 @@ import "~/styles/new-room.css"
 import { useState } from "react"
 
 import { roomProblem } from "@kiwi/app/rooms.ts"
-import { Avatar, cx, Dialog, DialogHead, Field } from "~/kit/bits"
+import { Avatar, cx, Dialog, DialogHead } from "~/kit/bits"
 import { Track } from "~/kit/glide"
 import type { Channel } from "~/model"
 import { useApp } from "~/nav"
@@ -47,9 +47,9 @@ function NewRoomForm({ channel, onClose }: { channel: Channel; onClose: () => vo
   const ready = !!name && !problem && !busy
   return (
     <>
-      <DialogHead title="New room" sub="A room keeps one conversation apart from #general." onClose={onClose} />
+      <DialogHead title="New room" onClose={onClose} />
       <form
-        className="start-form"
+        className="room-form"
         onSubmit={async (e) => {
           e.preventDefault()
           if (!ready) return
@@ -60,46 +60,37 @@ function NewRoomForm({ channel, onClose }: { channel: Channel; onClose: () => vo
           go({ to: "where", where: { kind: "room", room: id } })
         }}
       >
-        <Field label="Name">
-          <span className="room-name">
-            <span className="room-hash" aria-hidden="true">
-              #
-            </span>
-            <input
-              className="input is-mono"
-              autoFocus
-              autoComplete="off"
-              spellCheck={false}
-              maxLength={40}
-              placeholder="room-name"
-              value={typed}
-              onChange={(e) => setTyped(e.target.value)}
-              aria-invalid={problem ? true : undefined}
-            />
+        <span className="room-name">
+          <span className="room-hash" aria-hidden="true">
+            #
           </span>
-        </Field>
+          <input
+            className="input is-mono"
+            autoFocus
+            autoComplete="off"
+            spellCheck={false}
+            maxLength={40}
+            placeholder="room-name"
+            aria-label="Room name"
+            value={typed}
+            onChange={(e) => setTyped(e.target.value)}
+            aria-invalid={problem ? true : undefined}
+          />
+        </span>
         {problem && (
-          <p className="start-hint is-error" role="alert">
+          <p className="room-hint is-error" role="alert">
             {problem}
           </p>
         )}
-        <Field label="Who's in">
-          <Track className="seg room-who" role="group" aria-label="Who's in">
-            <button type="button" aria-pressed={!only} onClick={() => setOnly(false)}>
-              Everyone
-            </button>
-            <button type="button" aria-pressed={only} disabled={!canPrivate} title={canPrivate ? undefined : "Update Channels to make private rooms"} onClick={() => setOnly(true)}>
-              Only who I pick
-            </button>
-          </Track>
-        </Field>
-        <p className="start-hint">
-          {only
-            ? "It has its own key: only who you pick can read it. Everyone else doesn't see it, and neither does the relay."
-            : canPrivate
-              ? "Everyone in the channel, people and agents, sees and reads it."
-              : "Everyone in the channel, people and agents, sees and reads it. Update Channels to make private rooms."}
-        </p>
+        <Track className="seg room-who" role="group" aria-label="Who's in">
+          <button type="button" aria-pressed={!only} onClick={() => setOnly(false)}>
+            Everyone
+          </button>
+          <button type="button" aria-pressed={only} disabled={!canPrivate} title={canPrivate ? undefined : "Update Channels to make private rooms"} onClick={() => setOnly(true)}>
+            Only who I pick
+          </button>
+        </Track>
+        {only && <p className="room-hint">Only who you pick can read it, not even the relay.</p>}
         {only && (
           <div className="room-pick">
             {[
@@ -121,10 +112,9 @@ function NewRoomForm({ channel, onClose }: { channel: Channel; onClose: () => vo
               ) : null
             )}
             <RoomReadyNotes people={others.filter((p) => picked.has(p.name))} />
-            <p className="start-hint">You're in it too. You can add or remove people later in the room's settings.</p>
           </div>
         )}
-        <div className="dialog-foot start-foot">
+        <div className="dialog-foot">
           <button type="submit" className="btn is-primary" disabled={!ready || (only && picked.size === 0)}>
             {busy ? "Making it…" : only ? `Create private room${picked.size ? ` for ${picked.size + 1}` : ""}` : "Create room"}
           </button>

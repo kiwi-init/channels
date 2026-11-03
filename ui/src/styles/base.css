@@ -567,6 +567,10 @@ kbd {
   gap: 12px;
 }
 
+.dialog-head:not(:has(p)) {
+  align-items: center;
+}
+
 .dialog-head h2 {
   font: 600 var(--t-title) var(--ui);
 }
@@ -835,8 +839,6 @@ html .day,
 html .num,
 html .count,
 html .tile-badge,
-html .top-meta,
-html .side-role,
 html .side-status,
 html .panel-sub,
 html .msg-time,
@@ -874,8 +876,6 @@ html .msg-thread-n {
 
 html .heading h3,
 html .day,
-html .top-meta,
-html .side-role,
 html .side-status,
 html .msg-time,
 html .msg-time-hover,
@@ -902,8 +902,6 @@ html .theme-when {
 
 html .heading h3,
 html .day,
-html .top-meta,
-html .side-role,
 html .msg-time,
 html .msg-time-hover,
 html .msg-role,
@@ -924,8 +922,7 @@ html .msg-name {
   font-weight: 600;
 }
 
-html .chip-title,
-html .side-name {
+html .chip-title {
   font-weight: 500;
 }
 
@@ -1069,7 +1066,6 @@ html .md {
 .seg[data-glide] button,
 .tabs[data-glide] button,
 .side[data-glide] .side-row,
-.side[data-glide] .side-member,
 .set-nav[data-glide] .side-row {
   position: relative;
 }
@@ -1119,7 +1115,6 @@ html .feed-jump:active {
 }
 
 .side-row,
-.side-member,
 .board-row,
 .lane-row,
 .lane-task,
@@ -1132,7 +1127,6 @@ html .feed-jump:active {
 }
 
 .side-row:hover,
-.side-member:hover,
 .board-row:hover,
 .lane-row:hover,
 .lane-task:hover,
@@ -1182,7 +1176,6 @@ html .feed-jump:active {
   height: 6px;
 }
 
-html .top-meta,
 html .board-meta,
 html .msg-role,
 html .msg-time,

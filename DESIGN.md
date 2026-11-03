@@ -88,8 +88,7 @@ The two built-in sides, from `tokens.css` and `channels.ts`:
   then `ui-monospace, "SF Mono", Menlo`.
 - Paper Mono carries the machine's words: times, days, counts, task and PR
   ids, roles (`lead`, `owner`), statuses (`running Bash`, `offline · 1d`),
-  the header's summary line, the composer's hint, keys (`kbd`), code and
-  paths. The list is the `html .msg-time, html .count, …` rule and the
+  the composer's hint, keys (`kbd`), code and paths. The list is the `html .msg-time, html .count, …` rule and the
   `code, pre, kbd, .mono, .codebox, …` rule in `base.css`; a new
   machine-word class joins it there, with `letter-spacing: -0.01em`.
 - Six steps and no sizes between them, in `rem`: `--t-stamp` 11px (times,
@@ -210,9 +209,12 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   search and the terminal share a second group (`.top-group`, 2px inset,
   28px buttons at `r-row`). The search field floats the same way when open,
   and on a narrow window it takes the tabs' place. The other bars follow:
-  Settings' back button and a panel's close button float too, and so does
-  the rail: home, every channel tile, + and the Settings gear (a tile still
-  waiting to be let in keeps its outline and no fill). In the terminal
+  Settings' back button floats too (a panel's close is a plain `IconButton`:
+  the panel is already its own column), and so does
+  the rail: home and every channel tile (a tile still waiting to be let in
+  keeps its outline and no fill); + and the Settings gear stay quiet, a bare
+  `ink-3` glyph with `wash` on hover, and the gear floats only while Settings
+  is open. In the terminal
   drawer the tabs and + are one `float` group and close floats. Hover on a
   floating control is `float-2` (the `float` fill, 10% toward `ink`); the
   chosen one is `float-3` (20%).
@@ -224,7 +226,9 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   beside it: the track already says it.
 - `Dialog` / `DialogHead`: `bg-2`, `r-win`, `shadow-pop`, 480px (720px
   wide), rises in. A dialog is for one decision or a short form; Settings
-  and the panels open in place.
+  and the panels open in place. The head is the title and close; a sub line
+  only when it says what the title and the form can't (most dialogs have
+  none, and then close centres on the title).
 - `Avatar` (`.av` 32px, `av-sm` 24px, `av-lg` 56px) with a presence `pip`
   (`live` online, `decide` away, `ink-3` off). A person shows their picture
   or initials in their member colour; an agent shows its role face
@@ -270,20 +274,33 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   The top bar spans the sidebar and the main area (`--top-h`): the sidebar
   toggle first at the left edge, then the channel switcher, both in the same
   place whether the sidebar is open or collapsed; the views in the middle
-  (`# room`, Specs with its count, Agents, GitHub with its open pull
-  requests once a repo is linked and a dot in `alert` while an open one's
-  checks failed, Needs you in `decide` with its count), the open one on
-  `wash-2`; on the right a mono summary
-  (`2 working · 1 merged today · 7 need you`), Search and the terminal.
-  No borders between the columns.
-- **Sidebar.** Every row's text starts on one edge, after a 24px icon column
-  (the `#`, a face, an icon). Sections with a mono head: Rooms (`#` rows), Direct, People
-  (face, name, a mono role and status line), Agents (face with presence,
-  name, what it runs now in `doing`), each with its + row (invite, add
-  agent). The open row is on `wash-2`; a row with news is 600 with a count. A
-  member shows a status line only when there is something to say (working,
-  waiting, away, offline), and a role that repeats their name is left out. Cards
-  for what waits on you (an update, a device) sit at the foot.
+  (`# room`, Specs, Agents, GitHub once a repo is linked, Needs you in
+  `decide` with its count), words only, no icons, the open one on `wash-2`.
+  A tab carries a mark only when something needs a look: a `decide` dot on
+  Specs while one waits on you, an `alert` dot on GitHub while an open pull
+  request's checks failed. Ambient numbers (open specs, open pull requests,
+  who's working, merged today) live in the tab's `title`, not on the bar.
+  On the right, Search and the terminal; a `decide` "paused" chip joins them
+  while the agents are paused, on every view but the conversation, whose
+  banner already says it. No borders between the columns.
+- **Sidebar.** Every row is one `--ctl` line, its text on one edge after a
+  24px icon column (the `#`, a face, an icon). Three sections with a mono
+  head: Rooms (`#` rows, a lock for a private room), People and Agents. Each
+  member is listed once, and the row is your conversation with them: a click
+  opens the DM, its unread count sits on the row, and the profile is in the
+  row's menu (and in the Agents view). You aren't listed. The face's pip
+  carries the state (`live` online, `decide` away or waiting, `doing`
+  working, `ink-3` offline); a working or waiting agent adds what it does
+  now in mono `ink-3` at the row's end (`running Bash`, `thinking`), and
+  everything else (role, offline since) waits in the row's `title`. A DM
+  with someone no longer listed follows the people; conversations between
+  others fold under the agents ("1 between others"). A section's + (New
+  room, Invite people, Add an agent) shows when the pointer is over the
+  section; it becomes a row only while the section is empty. The open row is
+  on `wash-2`; a row with news is 600 with a count. Cards for what waits on
+  you (an update, a device, new recovery words) sit at the foot under a
+  16px fade: the text, then the action on its line's end, or under it when
+  the text needs the width.
 - **Right panel** (`--panel-w` to start, resizable by its grip): a thread,
   a task, a person or the channel slides in from the right (`panel-in`)
   beside the conversation, with a title, a mono sub line and a close button.
@@ -371,7 +388,10 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   the right).
 - **Palette** (⌘K), **Search**, the **terminal drawer** and the **annotator**
   (a picture opened full window, marked up and sent back) float with
-  `shadow-pop` and their own enter animation.
+  `shadow-pop` and their own enter animation. The palette is `bg-2` at
+  `r-win`: the field ("Jump to…") over a hairline, then the groups, the
+  chosen row on `wash-2` at `r-ctl` (8px in, concentric). No footer of key
+  hints: arrows, Enter and Escape are what a list does.
 
 ## 10. Composer
 

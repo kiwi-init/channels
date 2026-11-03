@@ -74,15 +74,13 @@ describe("the top bar's controls float", () => {
     }
   });
 
-  test("the chrome sits on the float: the bars' controls, the rail, the composer and the terminal's tabs and close", () => {
+  test("the chrome sits on the float: the bars' controls, the rail's tiles, the composer and the terminal's tabs and close", () => {
     const controls: [string, string][] = [
       [shell, ".top-chan"],
       [shell, ".top-drawer"],
       [shell, ".tabs,\n.top-group"],
-      [shell, ".panel-head > .icon-btn"],
       [settings, ".set-back"],
       [shell, ".tile"],
-      [shell, ".rail-gear"],
       [chat, ".composer"],
       [term, ".term-tabs"],
       [term, ".term-head > .icon-btn"],
@@ -92,6 +90,15 @@ describe("the top bar's controls float", () => {
       expect(body).toContain("background: var(--float)");
       expect(body).toContain("box-shadow: var(--shadow-float)");
     }
+  });
+
+  test("the rail's + and gear and a panel's close stay quiet; the gear floats while Settings is open", () => {
+    for (const selector of [".tile.is-add", ".rail-gear"]) {
+      expect(rule(shell, selector)).toContain("background: none");
+      expect(rule(shell, selector)).toContain("box-shadow: none");
+    }
+    expect(rule(shell, ".panel-head > .icon-btn")).not.toContain("var(--float)");
+    expect(rule(shell, ".rail-gear.is-on")).toContain("box-shadow: var(--shadow-float)");
   });
 });
 
