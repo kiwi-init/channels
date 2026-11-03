@@ -74,6 +74,7 @@ export const SHOTS: Record<string, Shot> = {
   "needs-panel": kiwi({ tab: "needs", panel: { kind: "person", name: "pixel" } }),
   "needs-empty": { scenario: "full", channel: "landing", nav: { tab: "needs" } },
   "channel-settings": kiwi({ panel: { kind: "channel" } }),
+  "room-members": kiwi({ where: { kind: "room", room: "launch-plan" }, panel: { kind: "channel" } }),
   invite: kiwi({ panel: { kind: "invite" } }),
   "add-agent": kiwi({ panel: { kind: "add-agent" } }),
   "add-agent-command": kiwi({ panel: { kind: "add-agent" } }),

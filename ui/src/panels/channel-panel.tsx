@@ -441,7 +441,7 @@ function Rooms({ channel, own }: { channel: Channel; own: boolean }) {
         <li key={r.id} className={cx("cpanel-room", r.muted && "is-muted")}>
           <span className="cpanel-room-line">
             <span className="cpanel-room-hash" aria-hidden="true">
-              #
+              {r.members ? <Icon name="people" size={12} /> : "#"}
             </span>
             {own ? (
               <InlineEdit value={r.name} label={`Name of #${r.name}`} verb="Rename" onSave={(name) => app.actions.renameRoom(channel.code, r.id, name)} />
