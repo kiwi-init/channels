@@ -140,7 +140,7 @@ export function WordsForm({
         })}
       </ol>
       <p className={cx("start-hint", trouble && "is-error")} aria-live="polite">
-        {trouble ? `${trouble.why[0]!.toUpperCase()}${trouble.why.slice(1)}.` : filled < COUNT ? `${filled} of ${COUNT} words` : "All 24 words in."}
+        {trouble ? `${trouble.why[0]!.toUpperCase()}${trouble.why.slice(1)}.` : `${filled} of ${COUNT}`}
       </p>
       <div className="recover-foot">
         <button type="button" className="btn is-quiet" onClick={onCancel}>
@@ -164,7 +164,7 @@ function Words() {
       <WordsForm
         className="recover-form"
         title="Use your recovery key"
-        lede="Type the 24 words you wrote down, in order, or paste them all into the first box."
+        lede="Type your 24 words, or paste them all at once."
         action="Recover"
         busyLabel="Opening…"
         onSubmit={(words) => app.actions.recoverOpen(words)}
@@ -203,7 +203,6 @@ function Welcome({ name, devices, channels }: { name: string; devices: RecoverDe
         <img src="/icon.svg" width={40} height={40} alt="" />
       </span>
       <h1 className="start-word">Welcome back, {name}</h1>
-      <p className="start-lede">Your recovery key opened. This computer joins as you when you continue.</p>
       {devices.length > 0 && (
         <>
           <p className="start-ask">Tick the devices you lost</p>
@@ -221,7 +220,7 @@ function Welcome({ name, devices, channels }: { name: string; devices: RecoverDe
               </li>
             ))}
           </ul>
-          <p className="start-hint">Ticked devices are forgotten: they can't read or post in your channels any more.</p>
+          <p className="start-hint">Ticked ones can't read or post in your channels any more.</p>
         </>
       )}
       {channels.length > 0 && <p className="recover-back">Coming back: {channels.join(", ")}</p>}

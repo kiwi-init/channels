@@ -2,7 +2,6 @@ import "~/styles/themes.css"
 
 import { use, useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
 
-import { cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import type { Appearance, CustomTheme, ThemeBase } from "~/model"
 import { useApp } from "~/nav"
@@ -94,10 +93,7 @@ export function Themes() {
       ) : (
         <>
           <div className="theme-head">
-            <div className="theme-head-text">
-              <h3 className="theme-title">Theme</h3>
-              <p className="theme-hint">Pick one dark and one light theme. The mode decides which one shows.</p>
-            </div>
+            <h3 className="theme-title">Themes</h3>
             <label className="theme-search">
               <Icon name="search" size={14} />
               <input className="input" type="search" placeholder="Search themes" aria-label="Search themes" value={query} onChange={(e) => setQuery(e.target.value)} />
@@ -111,9 +107,7 @@ export function Themes() {
               <div className="theme-group" key={appearance}>
                 <div className="theme-group-head">
                   <h4>{word}</h4>
-                  <span className={cx("theme-when", now === appearance && "is-now")}>
-                    {now === appearance ? "In use" : prefs.theme === "system" ? `When your computer is in ${appearance} mode` : `When the mode is ${word}`}
-                  </span>
+                  {now === appearance && <span className="theme-when">in use</span>}
                 </div>
                 <ul className="theme-grid">
                   {list.map((t) => {
@@ -194,12 +188,7 @@ function Editor({ start, themes, onDone }: { start: Draft; themes: ColorTheme[];
         onDone()
       }}
     >
-      <div className="theme-head">
-        <div className="theme-head-text">
-          <h3 className="theme-title">{draft.id ? "Edit theme" : "New theme"}</h3>
-          <p className="theme-hint">The whole app shows it while you edit. Everything else follows from these colours.</p>
-        </div>
-      </div>
+      <h3 className="theme-title">{draft.id ? "Edit theme" : "New theme"}</h3>
       <div className="theme-form">
         <label className="theme-field">
           <span className="theme-label">Name</span>
@@ -240,7 +229,7 @@ function Editor({ start, themes, onDone }: { start: Draft; themes: ColorTheme[];
         <Colour label="Text" value={draft.base.text} onChange={(v) => setBase("text", v)} />
         <Colour label="Accent" value={draft.base.accent} onChange={(v) => setBase("accent", v)} />
       </div>
-      {adjusted && <p className="theme-note">Text or accent is a little lighter or darker than picked, so it stays readable.</p>}
+      {adjusted && <p className="theme-note">Text or accent is nudged so it stays readable.</p>}
       <button type="button" className="btn is-quiet is-small theme-more" aria-expanded={more} onClick={() => setMore((m) => !m)}>
         <Icon name={more ? "down" : "chevron"} size={12} />
         More colours
@@ -253,7 +242,7 @@ function Editor({ start, themes, onDone }: { start: Draft; themes: ColorTheme[];
             <Colour label="Needs you" value={draft.base.warning} onChange={(v) => setBase("warning", v)} />
             <Colour label="Failed" value={draft.base.danger} onChange={(v) => setBase("danger", v)} />
           </div>
-          <p className="theme-note">People get these colours. Magenta also marks work in review.</p>
+          <p className="theme-note">Member colours. Magenta also marks work in review.</p>
           <div className="theme-colours">
             <Colour label="Red" value={draft.base.red} onChange={(v) => setBase("red", v)} />
             <Colour label="Yellow" value={draft.base.yellow} onChange={(v) => setBase("yellow", v)} />
@@ -281,7 +270,7 @@ function Editor({ start, themes, onDone }: { start: Draft; themes: ColorTheme[];
       <Confirm
         open={deleting}
         title="Delete this theme?"
-        sub="It goes away on this computer. If it's in use, Channels Dark or Channels Light takes its place."
+        sub="If it's in use, Channels Dark or Channels Light takes its place."
         action="Delete theme"
         onClose={() => setDeleting(false)}
         onConfirm={() => {
