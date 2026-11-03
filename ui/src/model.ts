@@ -489,34 +489,6 @@ interface Fact {
   at: number
 }
 
-interface TermScreen {
-  cols: number
-  rows: number
-  seed: string
-  dead: boolean
-  pane?: string
-}
-
-export interface TermTab {
-  pane: string
-  label: string
-  machine?: string
-}
-
-export interface TermWatch {
-  out(text: string): void
-  ended(): void
-  lost?(): void
-}
-
-export interface TermLink {
-  keys(text: string): void
-  size(cols: number, rows: number): void
-  close(): void
-}
-
-export type TermOpened = { screen: TermScreen; link: TermLink } | { error: string }
-
 export type ComputerChoices = { harnesses?: App["harnesses"]; folders: string[] } | { error: string }
 
 export interface Compacted {
@@ -772,12 +744,6 @@ export interface Actions {
   setPowers(code: string, name: string, powers: Partial<Powers>): void
   addAgent(code: string, agent: NewAgent, seen: (s: Launching) => void): () => void
   showAgent(code: string, name: string): Promise<string | null>
-  openTerm(code: string, name: string, cols: number, rows: number, watch: TermWatch): Promise<TermOpened>
-  openMyTerm(code: string, want: string | null, cols: number, rows: number, watch: TermWatch, machine?: string): Promise<TermOpened>
-  myTerms(): Promise<TermTab[]>
-  closeMyTerm(pane: string): Promise<TermTab[]>
-  remoteTerms(machine: string): Promise<TermTab[]>
-  closeRemoteTerm(machine: string, pane: string): Promise<TermTab[]>
   choicesOn(code: string, computer: string): Promise<ComputerChoices>
   chooseFolder(): Promise<string | null>
   addRoom(code: string, name: string, members?: string[]): Promise<string | null>

@@ -64,11 +64,10 @@ describe("back and forward walk the places you were (T978)", () => {
     expect(navigate(start, { to: "history", step: "forward" })).toBe(start)
   })
 
-  test("going back to another channel closes that channel's panel and terminal", () => {
-    const nav = run(startNav("a"), { to: "channel", code: "c" }, { to: "panel", panel: { kind: "channel" } }, { to: "term", term: { kind: "you" } }, { to: "history", step: "back" })
+  test("going back to another channel closes that channel's panel", () => {
+    const nav = run(startNav("a"), { to: "channel", code: "c" }, { to: "panel", panel: { kind: "channel" } }, { to: "history", step: "back" })
     expect(nav.channel).toBe("a")
     expect(nav.panel).toBeNull()
-    expect(nav.term).toBeUndefined()
   })
 
   test("the history keeps the last 50 places", () => {

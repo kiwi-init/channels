@@ -144,7 +144,6 @@ This computer
   kiwi launches on|off|status                    whether new agents can be started on this computer, from here or another of your devices (on)
      launches bypass on|off|status               whether a launch from your phone or another computer may skip its harness's
                                                  permission prompts here (off)
-  kiwi shells on|off|status [--json]             whether your other devices can open a shell on this computer through the relay (on)
   kiwi seat hold · bind --harness H --session ID [--pid PID] · release   a loop holds a seat between sessions with
                                                  KIWI_SEAT_TOKEN (hold prints a new one): nothing else reads for it until bind
      seat release --stale [--force]              frees a seat whose loop was killed (--force for a hold from an older Kiwi)

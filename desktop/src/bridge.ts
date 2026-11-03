@@ -392,15 +392,6 @@ export interface MachineView {
   online: boolean | null;
 }
 
-export type TermOpenView = { ok: true; term: string; pane: string; window: string; cols: number; rows: number; seed: string; dead: boolean } | { ok: false; detail: string };
-
-export interface TermTabView {
-  pane: string;
-  label: string;
-}
-
-export type TermEvent = { term: string; out: string } | { term: string; ended: true } | { term: string; lost: true };
-
 export type FromMachine<T> = { ok: true; value: T } | { ok: false; detail: string };
 
 export interface LaunchAgentRequest extends LaunchChoices {
@@ -525,19 +516,6 @@ export interface KiwiBridge {
   setPersonalities(list: Personality[]): Promise<void>;
   seatPlaces(): Promise<PlacedSeat[]>;
   showSeat(seat: PlacedSeat): Promise<ShowResult>;
-  /** Watch and type in a hosted agent's tmux pane: the daemon sizes it, then sends the screen and what follows as onTerm events. */
-  termOpen(pane: string, cols: number, rows: number): Promise<TermOpenView>;
-  termMine(roomId: string, want: string | null, cols: number, rows: number): Promise<TermOpenView>;
-  termTabs(): Promise<TermTabView[]>;
-  termTabClose(pane: string): Promise<TermTabView[]>;
-  /** A shell on another of your computers, through the relay: its screen and output come as onTerm events, and lost when the pipe drops. */
-  termRemote(machinePk: string, want: string | null, cols: number, rows: number): Promise<TermOpenView>;
-  termRemoteTabs(machinePk: string): Promise<TermTabView[]>;
-  termRemoteClose(machinePk: string, pane: string): Promise<TermTabView[]>;
-  termKeys(term: string, keys: string): Promise<void>;
-  termSize(term: string, cols: number, rows: number): Promise<void>;
-  termClose(term: string): Promise<void>;
-  onTerm(cb: (e: TermEvent) => void): () => void;
   terminals(): Promise<TerminalsStatus | null>;
   terminalHelpers(id: TerminalId, to: "on" | "off"): Promise<TerminalsStatus | null>;
   terminalPrefer(id: TerminalId): Promise<TerminalsStatus | null>;

@@ -159,7 +159,7 @@ describe("the daemon socket", () => {
     await expect(ask({ id: 1, verb: "listening" })).resolves.toEqual({ id: 1, ok: false, error: expect.stringMatching(/token/) });
     await expect(ask({ id: 1, verb: "listening", token: "not-the-one" })).resolves.toEqual({ id: 1, ok: false, error: expect.stringMatching(/token/) });
     await expect(ask({ id: 1, verb: "launch", token: "not-the-one" })).resolves.toEqual({ id: 1, ok: false, error: expect.stringMatching(/token/) });
-    await expect(ask({ id: 1, verb: "term", pane: "nope", cols: 80, rows: 24, token })).resolves.toEqual({ id: 1, ok: false, error: expect.stringMatching(/term needs/) });
+    await expect(ask({ id: 1, verb: "term", pane: "nope", cols: 80, rows: 24, token })).resolves.toEqual({ id: 1, ok: false, error: expect.stringMatching(/unknown verb "term"/) });
     await expect(ask({ id: 1, verb: "listening", token })).resolves.toMatchObject({ ok: true });
   });
 
