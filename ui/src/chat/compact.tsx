@@ -19,9 +19,7 @@ export function HistoryFold({ channel, compact, earlier, onToggle, names, tasks,
     <section className="compacted" aria-label="Compacted history" data-seq={compact.seq}>
       <p className="fold">
         <span className="sys-line" />
-        <span>
-          History through #{compact.through}, summed up by {compact.by === channel.you ? "you" : nickname(channel, compact.by)}
-        </span>
+        <span title={`History through #${compact.through}`}>Summed up by {compact.by === channel.you ? "you" : nickname(channel, compact.by)}</span>
         <button type="button" className="fold-act" aria-expanded={earlier} onClick={onToggle}>
           {earlier ? "Hide earlier messages" : "Show earlier messages"}
         </button>
@@ -39,28 +37,30 @@ export function ProposalCard({ channel, proposal, names, tasks, onQuote }: Props
   const owner = channel.people.find((p) => p.owner)
   return (
     <section className="compact-card" aria-label="Proposed compact" data-seq={proposal.seq}>
-      <div className="ask is-open">
-        <p className="ask-title">
-          {proposal.by === channel.you ? "You propose" : `${nickname(channel, proposal.by)} proposes`} compacting the history through #{proposal.through}
+      <div className="ask">
+        <p className="ask-title" title={`History through #${proposal.through}`}>
+          {proposal.by === channel.you ? "You propose" : `${nickname(channel, proposal.by)} proposes`} compacting the history
         </p>
         <Body text={proposal.summary} seq={proposal.seq} names={names} tasks={tasks} onImage={openImage} onMessage={onQuote} />
-        <p className="ask-state">Nothing is deleted: earlier messages fold behind this summary, and finished tasks archive.</p>
-        {channel.youOwn ? (
-          <button
-            type="button"
-            className="btn is-primary is-small"
-            disabled={sent}
-            onClick={() => {
-              setSent(true)
-              actions.approveCompact(channel.code, proposal.seq)
-              window.setTimeout(() => setSent(false), 5_000)
-            }}
-          >
-            Approve and compact
-          </button>
-        ) : (
-          <p className="ask-state is-waiting">Waiting for {owner ? shown(owner) : "the owner"} to approve</p>
-        )}
+        <div className="compact-foot">
+          {channel.youOwn ? (
+            <button
+              type="button"
+              className="btn is-primary is-small"
+              disabled={sent}
+              onClick={() => {
+                setSent(true)
+                actions.approveCompact(channel.code, proposal.seq)
+                window.setTimeout(() => setSent(false), 5_000)
+              }}
+            >
+              Approve and compact
+            </button>
+          ) : (
+            <p className="ask-state">Waiting for {owner ? shown(owner) : "the owner"} to approve</p>
+          )}
+          <p className="ask-state">Nothing is deleted: earlier messages fold behind this summary and finished tasks archive.</p>
+        </div>
       </div>
     </section>
   )

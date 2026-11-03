@@ -92,7 +92,7 @@ export function Finder() {
           autoComplete="off"
           autoCapitalize="off"
           spellCheck={false}
-          placeholder="Jump to a channel, room, person or task…"
+          placeholder="Jump to…"
           value={query}
           onChange={(e) => {
             setQuery(e.target.value)
@@ -145,18 +145,6 @@ export function Finder() {
           </div>
         ))}
       </div>
-      <footer className="palette-foot" aria-hidden="true">
-        <span>
-          <kbd className="palette-kbd">↑</kbd>
-          <kbd className="palette-kbd">↓</kbd> move
-        </span>
-        <span>
-          <kbd className="palette-kbd">↵</kbd> open
-        </span>
-        <span>
-          <kbd className="palette-kbd">esc</kbd> close
-        </span>
-      </footer>
     </div>
   )
 }

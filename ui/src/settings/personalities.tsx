@@ -48,16 +48,14 @@ export function Personalities() {
   if (draft) return <Editor key={draft.id} start={draft} isNew={!own.some((p) => p.id === draft.id)} onDone={() => setDraft(null)} />
   return (
     <>
-      <Group title="Personalities" hint="What an agent can be when you let it in: its role, what it may do, where it works, what it's told.">
+      <Group title="Personalities">
         {PRESETS.map((p) => (
           <Row key={p.id} label={p.name} hint={tagline(p)}>
-            <button type="button" className="btn is-quiet is-small" aria-label={`Copy ${p.name}`} onClick={() => setDraft(copy(p))}>
+            <button type="button" className="btn is-quiet is-small set-on-hover" aria-label={`Copy ${p.name}`} onClick={() => setDraft(copy(p))}>
               Copy
             </button>
           </Row>
         ))}
-      </Group>
-      <Group title="Yours" hint="Kept on this computer.">
         {own.map((p) => (
           <Row
             key={p.id}
@@ -71,7 +69,7 @@ export function Personalities() {
             }
             hint={tagline(p)}
           >
-            <button type="button" className="btn is-quiet is-small" aria-label={`Edit ${p.name}`} onClick={() => setDraft(p)}>
+            <button type="button" className="btn is-quiet is-small set-on-hover" aria-label={`Edit ${p.name}`} onClick={() => setDraft(p)}>
               Edit
             </button>
           </Row>
@@ -123,10 +121,7 @@ function Editor({ start, isNew, onDone }: { start: Personality; isNew: boolean; 
         onDone()
       }}
     >
-      <div className="persona-head">
-        <h3 className="persona-title">{isNew ? "New personality" : "Edit personality"}</h3>
-        <p className="persona-hint">Kept on this computer. An agent takes it when you let it in.</p>
-      </div>
+      <h3 className="persona-title">{isNew ? "New personality" : "Edit personality"}</h3>
       <div className="persona-form">
         <label className="persona-field is-glyph">
           <span className="persona-label">Glyph</span>
@@ -138,11 +133,11 @@ function Editor({ start, isNew, onDone }: { start: Personality; isNew: boolean; 
         </label>
       </div>
       <div className="persona-field">
-        <span className="persona-label">Role · what it is for the board</span>
+        <span className="persona-label">Role</span>
         <Seg label="Role" value={draft.role} options={ROLE_OPTIONS} onChange={(role) => set({ role })} />
       </div>
       <div className="persona-field">
-        <span className="persona-label">Capabilities · what it may do, held by every member's client</span>
+        <span className="persona-label">Capabilities</span>
         <div className="set-rows">
           {CAPABILITIES.map((c) => (
             <Row key={c} label={CAPABILITY_TEXT[c][0]} hint={CAPABILITY_TEXT[c][1]}>
@@ -152,7 +147,7 @@ function Editor({ start, isNew, onDone }: { start: Personality; isNew: boolean; 
         </div>
       </div>
       <div className="persona-field">
-        <span className="persona-label">Areas · where it works, for routing</span>
+        <span className="persona-label">Areas</span>
         <div className="persona-areas">
           {draft.areas.length === 0 && <span className="persona-area is-any">Anywhere</span>}
           {draft.areas.map((a) => (
@@ -178,8 +173,14 @@ function Editor({ start, isNew, onDone }: { start: Personality; isNew: boolean; 
         </div>
       </div>
       <label className="persona-field">
-        <span className="persona-label">Instructions · what the agent is told when it joins</span>
-        <textarea className="textarea persona-instructions" value={draft.instructions} maxLength={MAX_INSTRUCTIONS} onChange={(e) => set({ instructions: e.target.value })} />
+        <span className="persona-label">Instructions</span>
+        <textarea
+          className="textarea persona-instructions"
+          placeholder="What the agent is told when it joins"
+          value={draft.instructions}
+          maxLength={MAX_INSTRUCTIONS}
+          onChange={(e) => set({ instructions: e.target.value })}
+        />
       </label>
       <div className="persona-foot">
         {!isNew && (

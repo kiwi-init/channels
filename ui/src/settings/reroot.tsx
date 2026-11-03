@@ -36,7 +36,7 @@ function Keep({ step, onStep, onBack }: { step: Extract<Step, { at: "keep" }>; o
       }}
     >
       <h1 className="start-word">Keep which devices?</h1>
-      <p className="start-lede">Your recovery key opened. Untick any device you don't know or don't have any more: it's signed out of your account and your channels.</p>
+      <p className="start-lede">Untick the ones you don't know or no longer have. They're signed out.</p>
       <ul className="recover-devices set-reroot-devices">
         {step.devices.map((d) => (
           <li key={d.id}>
@@ -51,7 +51,7 @@ function Keep({ step, onStep, onBack }: { step: Extract<Step, { at: "keep" }>; o
           </li>
         ))}
       </ul>
-      <p className="start-hint">Your words stay the same. Your old person key stops working everywhere.</p>
+      <p className="start-hint">Your old person key stops working everywhere. Your words stay the same.</p>
       <div className="recover-foot">
         <button type="button" className="btn is-quiet" disabled={step.busy} onClick={onBack}>
           Cancel
@@ -87,7 +87,7 @@ export function Reroot({ onClose }: { onClose: () => void }) {
         <WordsForm
           className="set-recover-cancel"
           title="Replace your person key"
-          lede="If someone else has your person key, make a new one. Type your 24 words, in order, or paste them all into the first box."
+          lede="Type your 24 words, or paste them all at once."
           action="Next"
           busyLabel="Opening…"
           onSubmit={async (words) => {

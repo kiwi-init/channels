@@ -43,6 +43,14 @@ try {
   for (const theme of themes) {
     for (const name of names) {
       at = `${name}-${theme}`;
+      await page.evaluate(() => {
+        try {
+          localStorage.clear();
+          sessionStorage.clear();
+        } catch {
+          // about:blank before the first shot has no storage to clear
+        }
+      });
       await page.goto(`${base}?shot=${name}&theme=${theme}`);
       await page.waitForLoadState("networkidle");
       if (textScale) await page.evaluate((scale) => document.documentElement.style.setProperty("--text-scale", scale), textScale);

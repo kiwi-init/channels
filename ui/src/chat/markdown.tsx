@@ -75,14 +75,14 @@ const STYLE: MarkdownStyle = {
     lineHeight: 20,
     marginTop: 2,
     marginBottom: 8,
-    headerBackgroundColor: "var(--raise)",
-    headerTextColor: "var(--ink)",
-    rowEvenBackgroundColor: "var(--wash)",
+    headerBackgroundColor: "transparent",
+    headerTextColor: "var(--ink-2)",
+    rowEvenBackgroundColor: "transparent",
     rowOddBackgroundColor: "transparent",
     borderColor: "transparent",
     borderWidth: 0,
     borderRadius: 10,
-    cellPaddingHorizontal: 10,
+    cellPaddingHorizontal: 12,
     cellPaddingVertical: 6,
   },
   taskList: { checkedColor: "var(--accent)", borderColor: "var(--line-3)", checkmarkColor: "var(--on-ink)", checkedTextColor: "var(--ink-2)" },
@@ -148,7 +148,7 @@ function pictureLink(node: ASTNode, inLink: boolean): void {
   const alt = textOf(node) || "image"
   node.type = safe ? "Link" : "Text"
   node.attributes = safe ? { url: safe } : {}
-  if (safe) node.children = [{ type: "Text", content: `${alt} (opens ${new URL(safe).hostname})` }]
+  if (safe) node.children = [{ type: "Text", content: alt }]
   else {
     node.content = alt
     node.children = []
@@ -319,6 +319,10 @@ export default function Markdown({ markdown, onMention, onTask, onMessage, onIma
       } catch {
         // A mention link someone wrote by hand with a stray %: it keeps no hover text.
       }
+    }
+    for (const a of box.current?.querySelectorAll<HTMLAnchorElement>('a[href^="http"], a[href^="mailto:"]') ?? []) {
+      const href = a.getAttribute("href") ?? ""
+      if (!a.title && a.textContent?.trim() !== href) a.title = href
     }
     for (const code of box.current?.querySelectorAll<HTMLElement>("code") ?? []) {
       const text = code.textContent ?? ""

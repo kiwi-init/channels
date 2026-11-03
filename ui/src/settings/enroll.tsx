@@ -5,6 +5,7 @@ import { useState } from "react"
 import { Dialog, DialogHead, Field } from "~/kit/bits"
 import type { EnrollAsk } from "~/model"
 import { useApp } from "~/nav"
+import { autofocus } from "~/settings/controls"
 
 const KIND: Record<EnrollAsk["as"], string> = { desktop: "computer", phone: "phone", computer: "computer for agents" }
 
@@ -33,7 +34,11 @@ export function EnrollDialog() {
 
   return (
     <Dialog open={open} onClose={close} label="Approve a new device">
-      <DialogHead title={`Let ${ask.label} sign in as you?`} sub={`A ${KIND[ask.as]}${ask.os ? ` on ${ask.os}` : ""} signed in with your account.`} onClose={close} />
+      <DialogHead
+        title={`Let ${ask.label} sign in as you?`}
+        sub={`A ${KIND[ask.as]}${ask.os ? ` on ${ask.os}` : ""}. It joins your channels as you: only approve a device you're holding now.`}
+        onClose={close}
+      />
       <form
         className="set-confirm"
         onSubmit={(e) => {
@@ -42,10 +47,6 @@ export function EnrollDialog() {
           else confirm()
         }}
       >
-        <p className="set-enroll-what">
-          If you approve it, it joins your channels as you. Only approve a device you are holding now.
-          {ask.stage === "digits" && ask.fingerprint && ` It then asks you to check your key: ${ask.fingerprint}.`}
-        </p>
         {ask.stage === "waiting" && (
           <p className="set-pair-wait">
             <span className="set-pip is-waiting" aria-hidden="true" />
@@ -53,7 +54,10 @@ export function EnrollDialog() {
           </p>
         )}
         {ask.stage === "digits" && (
-          <Field label={`The 6 digits ${ask.label} shows`} hint={mine.left !== null ? `Those don't match. ${mine.left} ${mine.left === 1 ? "try" : "tries"} left.` : undefined}>
+          <Field
+            label={`The 6 digits ${ask.label} shows`}
+            hint={mine.left !== null ? `Those don't match. ${mine.left} ${mine.left === 1 ? "try" : "tries"} left.` : ask.fingerprint ? `Then it shows your key: ${ask.fingerprint}` : undefined}
+          >
             <input
               className="input set-enroll-digits"
               inputMode="numeric"
@@ -70,7 +74,7 @@ export function EnrollDialog() {
             Not mine
           </button>
           {ask.stage === "new" && (
-            <button type="submit" className="btn is-primary" autoFocus>
+            <button type="submit" className="btn is-primary" ref={autofocus}>
               Continue
             </button>
           )}

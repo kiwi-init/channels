@@ -1,17 +1,41 @@
+.room-form {
+  display: grid;
+  gap: 12px;
+}
+
+.room-form > .dialog-foot {
+  margin-top: 8px;
+}
+
+.room-hint {
+  margin-top: -4px;
+  color: var(--ink-3);
+  font: var(--t-meta) / 1.5 var(--ui);
+}
+
+.room-hint.is-error {
+  color: var(--alert);
+}
+
 .room-name {
+  position: relative;
   display: flex;
-  align-items: center;
-  gap: 8px;
 }
 
 .room-name .input {
   flex: 1;
   min-width: 0;
+  padding-left: 24px;
 }
 
 .room-hash {
+  position: absolute;
+  top: 50%;
+  left: 12px;
   color: var(--ink-3);
   font: var(--t-ui) var(--mono);
+  transform: translateY(-50%);
+  pointer-events: none;
 }
 
 .room-who {
@@ -110,8 +134,4 @@
 .room-ready li.is-old {
   background: var(--decide-wash);
   color: var(--decide);
-}
-
-.room-pick .room-ready + .start-hint {
-  margin-top: 0;
 }

@@ -60,11 +60,11 @@ describe("stageWords", () => {
     expect(stageWords(task(1, { stage: "proving", pr: pr(4, { ticks: { passed: 3, running: 0, failed: [] } }) })).text).toBe("PR #4 · checks passed")
     expect(stageWords(task(1, { stage: "proving", pr: pr(4) })).text).toBe("PR #4 · no checks yet")
   })
-  test("review owed, merged, shipped, no PR yet", () => {
+  test("review owed, merged, shipped, and nothing while it's still being built", () => {
     expect(stageWords(task(1, { stage: "yours" })).text).toBe("review owed")
     expect(stageWords(task(1, { stage: "done", pr: pr(4, { state: "merged" }) })).text).toBe("PR #4 merged")
     expect(stageWords(task(1, { stage: "done", release: "2026.10.9", pr: pr(4, { state: "merged" }) })).text).toBe("PR #4 · shipped in 2026.10.9")
-    expect(stageWords(task(1, { stage: "building" })).text).toBe("no PR yet")
+    expect(stageWords(task(1, { stage: "building" })).text).toBe("")
   })
 })
 

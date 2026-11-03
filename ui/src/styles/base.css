@@ -40,6 +40,36 @@ ol {
   list-style: none;
 }
 
+h1,
+h2,
+h3,
+h4 {
+  text-wrap-style: balance;
+}
+
+p,
+li,
+dd,
+figcaption,
+blockquote {
+  text-wrap-style: pretty;
+}
+
+.av img,
+.tile img,
+.folder-mini img,
+.palette-tile img,
+.cpanel-icon-tile img,
+.msg-images img,
+.md img[role="button"],
+.react-gif img,
+.gifs-item img,
+.compose-file img,
+.annot-thumb img {
+  outline: 1px solid var(--img-edge);
+  outline-offset: -1px;
+}
+
 button,
 input,
 textarea,
@@ -511,6 +541,10 @@ kbd {
   box-shadow: var(--shadow-pop);
 }
 
+.dialog:focus {
+  outline: none;
+}
+
 .dialog.is-wide {
   width: min(720px, calc(100vw - 32px));
 }
@@ -535,6 +569,10 @@ kbd {
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+}
+
+.dialog-head:not(:has(p)) {
+  align-items: center;
 }
 
 .dialog-head h2 {
@@ -729,11 +767,6 @@ kbd {
   color: var(--ink);
 }
 
-.toggle-word {
-  min-width: 22px;
-  text-align: right;
-}
-
 .toggle-track {
   position: relative;
   display: block;
@@ -810,14 +843,10 @@ html .day,
 html .num,
 html .count,
 html .tile-badge,
-html .top-meta,
-html .side-role,
 html .side-status,
 html .panel-sub,
 html .msg-time,
 html .msg-time-hover,
-html .msg-role,
-html .msg-runs,
 html .msg-thread-n,
 html .thread-count,
 html .working,
@@ -838,7 +867,10 @@ html .person-kind,
 html .set-device-meta,
 html .palette-meta,
 html .add-who-meta,
-html .theme-when {
+html .theme-when,
+html .now-counts,
+html .lane-sub,
+html .needs-until {
   font-family: var(--mono);
   letter-spacing: -0.01em;
 }
@@ -850,13 +882,9 @@ html .msg-thread-n {
 
 html .heading h3,
 html .day,
-html .top-meta,
-html .side-role,
 html .side-status,
 html .msg-time,
 html .msg-time-hover,
-html .msg-role,
-html .msg-runs,
 html .thread-count,
 html .working,
 html .sys time,
@@ -879,12 +907,8 @@ html .theme-when {
 
 html .heading h3,
 html .day,
-html .top-meta,
-html .side-role,
 html .msg-time,
 html .msg-time-hover,
-html .msg-role,
-html .msg-runs,
 html .thread-count,
 html .chip-id,
 html .chip-meta,
@@ -902,8 +926,7 @@ html .msg-name {
   font-weight: 600;
 }
 
-html .chip-title,
-html .side-name {
+html .chip-title {
   font-weight: 500;
 }
 
@@ -1047,7 +1070,6 @@ html .md {
 .seg[data-glide] button,
 .tabs[data-glide] button,
 .side[data-glide] .side-row,
-.side[data-glide] .side-member,
 .set-nav[data-glide] .side-row {
   position: relative;
 }
@@ -1097,7 +1119,6 @@ html .feed-jump:active {
 }
 
 .side-row,
-.side-member,
 .board-row,
 .lane-row,
 .lane-task,
@@ -1106,11 +1127,10 @@ html .feed-jump:active {
 .task-pick-row,
 .stash-row,
 .mention-row {
-  transition: background var(--slow) var(--ease);
+  transition: background var(--fast) var(--ease);
 }
 
 .side-row:hover,
-.side-member:hover,
 .board-row:hover,
 .lane-row:hover,
 .lane-task:hover,
@@ -1160,10 +1180,7 @@ html .feed-jump:active {
   height: 6px;
 }
 
-html .top-meta,
 html .board-meta,
-html .msg-role,
-html .msg-runs,
 html .msg-time,
 html .chip-meta,
 html .needs-meta,
@@ -1198,11 +1215,12 @@ html .person-kind {
   border: 0;
   border-radius: 50%;
   background: var(--member);
-  transition: transform var(--fast);
+  transition: outline-color var(--fast);
 }
 
 .swatch:hover {
-  transform: scale(1.12);
+  outline: 2px solid var(--line-3);
+  outline-offset: 2px;
 }
 
 .swatch[aria-pressed="true"] {

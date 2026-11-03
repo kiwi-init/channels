@@ -9,15 +9,16 @@ export function TaskChip({ channel, id }: { channel: Channel; id: number }) {
   const t = channel.tasks.find((t) => t.id === id)
   if (!t) return null
   return (
-    <button type="button" className={cx("chip", `is-${t.status}`)} onClick={() => go({ to: "panel", panel: { kind: "task", task: t.id } })}>
+    <button type="button" className={cx("chip", `is-${t.status}`)} title={STATUS_WORDS[t.status]} onClick={() => go({ to: "panel", panel: { kind: "task", task: t.id } })}>
       <Dot status={t.status} />
       <span className="chip-id">T{t.id}</span>
       <span className="chip-title">{t.title}</span>
-      <span className="chip-meta">
-        {t.owner ? `${nickname(channel, t.owner)} · ` : ""}
-        {STATUS_WORDS[t.status]}
-        {t.pr ? ` · PR #${t.pr.number}` : ""}
-      </span>
+      {(t.owner || t.pr || t.status === "waiting") && (
+        <span className="chip-meta">
+          {[t.owner && nickname(channel, t.owner), t.pr && `#${t.pr.number}`].filter(Boolean).join(" · ")}
+          {t.status === "waiting" && <span className="tone-decide">{t.owner || t.pr ? " · " : ""}needs you</span>}
+        </span>
+      )}
     </button>
   )
 }

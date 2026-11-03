@@ -1,3 +1,5 @@
+import "~/styles/task-panel.css"
+
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import { Composer } from "~/chat/composer"
@@ -10,7 +12,7 @@ import { ANYONE } from "@kiwi/channel/task-actions.ts"
 import { Avatar, cx, Dialog, DialogHead, Dot, Empty, Heading, statusWord } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
-import { memberOf, type Ask, type Channel, type PermissionAsk, type Person, type PullRequest, type QuestionAsk, type ReviewRound, type Task, type TaskEvent } from "~/model"
+import { memberOf, type Ask, type Channel, type PermissionAsk, type Person, type QuestionAsk, type ReviewRound, type Task, type TaskEvent } from "~/model"
 import { useApp } from "~/nav"
 import { nickname } from "~/names"
 import { IssueMark, issueWord, PrCard } from "~/github/parts"
@@ -18,9 +20,6 @@ import { PanelHead } from "~/panels/frame"
 import { moveWords, someone } from "~/panels/task-moves"
 import { TONES } from "~/tasks/row"
 import { SendBack } from "~/tasks/send-back"
-
-const ROUND_WORDS: Record<ReviewRound["result"], string> = { open: "reviewing", approved: "approved", rejected: "sent back", withdrawn: "withdrawn" }
-const ROUND_TONES: Record<ReviewRound["result"], string> = { open: "tone-review", approved: "tone-live", rejected: "", withdrawn: "" }
 
 function since(at: number): string {
   const a = ago(at)
@@ -63,30 +62,34 @@ export function TaskPanel({ channel, id }: { channel: Channel; id: number }) {
   const may = !memberOf(channel, channel.you)?.readOnly
   return (
     <>
-      <PanelHead title={`T${task.id}`} sub={`· ${task.archived ? "archived" : statusWord(task)}`} />
-      <div key={task.id} ref={body} className="panel-body task-body">
-        <section className="panel-section">
+      <PanelHead title={`T${task.id}`} />
+      <div key={task.id} ref={body} className="panel-body task-body tp">
+        <section className="panel-section tp-top">
           <h3 className="task-title">{task.title}</h3>
           {task.detail && <p className="task-detail">{task.detail}</p>}
+          <State key={`state-${task.id}`} channel={channel} task={task} may={may} />
         </section>
         <section className="panel-section">
           <Props key={`props-${task.id}`} channel={channel} task={task} may={may} />
           {may && task.suggested && !task.owner && <Suggested channel={channel} task={task} suggested={task.suggested} />}
         </section>
         {waits.length > 0 && <Waits channel={channel} waits={waits} />}
-        {task.pr && <Pr pr={task.pr} />}
-        <LinkedIssue channel={channel} id={task.id} />
         <Review key={`review-${task.id}`} channel={channel} task={task} />
+        {(task.pr || channel.issues?.some((i) => i.task === task.id)) && (
+          <section className="panel-section tp-links">
+            {task.pr && <PrCard pr={task.pr} />}
+            <LinkedIssue channel={channel} id={task.id} />
+          </section>
+        )}
         {task.history.length > 0 && <Activity key={`activity-${task.id}`} channel={channel} history={task.history} />}
-        {may && <Footer key={`foot-${task.id}`} channel={channel} task={task} />}
-        <section className="panel-section task-talk">
-          <Heading>Conversation</Heading>
-          {talk.length === 0 ? (
-            <p className="task-quiet">No messages about this task yet.</p>
-          ) : (
-            talk.map((m, i) => <MessageRow key={m.seq} channel={channel} m={m} compact={compactAt(talk, i)} names={names} tasks={tasks} inThread quote={quoteOf(talk, i, bySeq)} onQuote={onQuote} />)
-          )}
-        </section>
+        {talk.length > 0 && (
+          <section className="panel-section task-talk">
+            <Heading>Conversation</Heading>
+            {talk.map((m, i) => (
+              <MessageRow key={m.seq} channel={channel} m={m} compact={compactAt(talk, i)} names={names} tasks={tasks} inThread quote={quoteOf(talk, i, bySeq)} onQuote={onQuote} />
+            ))}
+          </section>
+        )}
       </div>
       <Composer key={`compose-${task.id}`} channel={channel} where={{ kind: "task", task: task.id }} placeholder={`Message in T${task.id}`} />
     </>
@@ -110,13 +113,7 @@ function Props({ channel, task, may }: { channel: Channel; task: Task; may: bool
   const open = may && task.status !== "done"
   return (
     <>
-      <dl className="props task-props">
-        <dt>Status</dt>
-        <dd>
-          <Dot status={task.status} />
-          <span className={task.cancelled ? "dim" : TONES[task.status]}>{statusWord(task)}</span>
-          {task.archived && <span className="dimmer">· archived</span>}
-        </dd>
+      <dl className="props task-props tp-props">
         <dt>Owner</dt>
         <dd>
           {task.owner ? <Who channel={channel} name={task.owner} /> : <span className="dimmer">nobody yet</span>}
@@ -130,11 +127,19 @@ function Props({ channel, task, may }: { channel: Channel; task: Task; may: bool
           <>
             <dt>Reviewer</dt>
             <dd>
-              {!task.reviewer ? <span className="dimmer">none</span> : task.reviewer === ANYONE ? <span>anyone who hasn't worked on it</span> : <Who channel={channel} name={task.reviewer} />}
-              {open && (
-                <button type="button" className="task-change" onClick={() => setPicking("reviewer")}>
-                  {task.reviewer ? "Change" : "Ask for a review"}
+              {!task.reviewer ? (
+                <button type="button" className="task-change tp-ask" onClick={() => setPicking("reviewer")}>
+                  Ask for a review
                 </button>
+              ) : (
+                <>
+                  {task.reviewer === ANYONE ? <span>anyone who hasn't worked on it</span> : <Who channel={channel} name={task.reviewer} />}
+                  {open && (
+                    <button type="button" className="task-change" onClick={() => setPicking("reviewer")}>
+                      Change
+                    </button>
+                  )}
+                </>
               )}
             </dd>
           </>
@@ -143,10 +148,6 @@ function Props({ channel, task, may }: { channel: Channel; task: Task; may: bool
         <dd>
           <Who channel={channel} name={task.createdBy} />
         </dd>
-        <dt>Created</dt>
-        <dd>{since(task.createdAt)}</dd>
-        <dt>Updated</dt>
-        <dd>{since(task.updatedAt)}</dd>
       </dl>
       <Assign channel={channel} task={task} open={picking === "owner"} onClose={() => setPicking(null)} />
       <PickReviewer channel={channel} task={task} open={picking === "reviewer"} onClose={() => setPicking(null)} />
@@ -276,8 +277,7 @@ function PickReviewer({ channel, task, open, onClose }: { channel: Channel; task
 function Waits({ channel, waits }: { channel: Channel; waits: (PermissionAsk | QuestionAsk)[] }) {
   const { go } = useApp()
   return (
-    <section className="panel-section">
-      <Heading>Waiting on an answer</Heading>
+    <section className="panel-section" aria-label="Waiting on an answer">
       <div className="task-box is-waiting">
         <ul className="task-waits">
           {waits.map((a) => (
@@ -297,40 +297,27 @@ function Waits({ channel, waits }: { channel: Channel; waits: (PermissionAsk | Q
   )
 }
 
-function Pr({ pr }: { pr: PullRequest }) {
-  return (
-    <section className="panel-section">
-      <Heading>Pull request</Heading>
-      <PrCard pr={pr} />
-    </section>
-  )
-}
-
 function LinkedIssue({ channel, id }: { channel: Channel; id: number }) {
   const { go } = useApp()
   const issue = channel.issues?.find((i) => i.task === id)
   if (!issue) return null
   return (
-    <section className="panel-section">
-      <Heading>Issue</Heading>
-      <button type="button" className="gh-task" onClick={() => go({ to: "panel", panel: { kind: "issue", repo: issue.repo, number: issue.number } })}>
-        <IssueMark issue={issue} size={14} />
-        <span className="gh-task-id num">#{issue.number}</span>
-        <span className="gh-task-title">{issue.title}</span>
-        <span className="gh-task-who">{issueWord(issue)}</span>
-      </button>
-    </section>
+    <button type="button" className="gh-task" onClick={() => go({ to: "panel", panel: { kind: "issue", repo: issue.repo, number: issue.number } })}>
+      <IssueMark issue={issue} size={14} />
+      <span className="gh-task-id num">#{issue.number}</span>
+      <span className="gh-task-title">{issue.title}</span>
+      <span className="gh-task-who">{issueWord(issue)}</span>
+    </button>
   )
 }
 
 function Review({ channel, task }: { channel: Channel; task: Task }) {
   const { app, toast } = useApp()
   const [sending, setSending] = useState(false)
-  const last = task.rounds.at(-1)
+  const last: ReviewRound | undefined = task.rounds.at(-1)
   const yours = task.youReview !== undefined
-  const past = yours && last?.result === "open" ? task.rounds.slice(0, -1) : task.rounds
   const brief = last?.result === "open" ? last.summary : undefined
-  if (!yours && past.length === 0 && !brief) return null
+  if (!yours && !brief) return null
   const owner = task.owner ? nickname(channel, task.owner) : null
   const ask =
     task.youReview === "send-back"
@@ -347,80 +334,80 @@ function Review({ channel, task }: { channel: Channel; task: Task }) {
     setSending(false)
     toast(`Sent T${task.id} back${owner ? ` to ${owner}` : ""}`)
   }
+  const summary = brief && last && (
+    <div className="tp-brief">
+      <p className="tp-brief-head">Round {last.n} in short</p>
+      <p className="tp-brief-text">{named(brief, channel.nicknames)}</p>
+    </div>
+  )
+  if (!yours)
+    return (
+      <section className="panel-section" aria-label="Review">
+        {summary}
+      </section>
+    )
   return (
-    <section className="panel-section">
-      <Heading>Review</Heading>
-      {brief && last && (
-        <div className="task-brief">
-          <p className="task-brief-head">Round {last.n} in short</p>
-          <p className="task-brief-text">{named(brief, channel.nicknames)}</p>
-        </div>
-      )}
-      {yours && (
-        <div className="task-box is-waiting task-review">
-          <p className="task-review-ask">{ask}</p>
-          {sending ? (
-            <SendBack onSend={sendBack} onCancel={() => setSending(false)} />
-          ) : (
-            <div className="actions">
-              {task.youReview === "verdict" && (
-                <button
-                  type="button"
-                  className="btn is-primary"
-                  onClick={() => {
-                    app.actions.approveTask(channel.code, task.id, true)
-                    toast(`Approved T${task.id}`)
-                  }}
-                >
-                  Approve
-                </button>
-              )}
-              <button type="button" className="btn" onClick={() => setSending(true)}>
-                Send back
+    <section className="panel-section" aria-label="Review">
+      <div className="task-box is-waiting tp-review">
+        <p className="task-review-ask">{ask}</p>
+        {summary}
+        {sending ? (
+          <SendBack onSend={sendBack} onCancel={() => setSending(false)} />
+        ) : (
+          <div className="actions">
+            {task.youReview === "verdict" && (
+              <button
+                type="button"
+                className="btn is-primary"
+                onClick={() => {
+                  app.actions.approveTask(channel.code, task.id, true)
+                  toast(`Approved T${task.id}`)
+                }}
+              >
+                Approve
               </button>
-            </div>
-          )}
-        </div>
-      )}
-      {past.length > 0 && (
-        <ol className="task-rounds">
-          {past
-            .filter((r) => r.result !== "open" || !brief)
-            .map((r) => {
-              const who = r.judge ?? r.by
-              return (
-                <li key={r.n}>
-                  Round {r.n} · {who === channel.you ? "you" : nickname(channel, who)} · <span className={ROUND_TONES[r.result]}>{ROUND_WORDS[r.result]}</span> · {ago(r.at)}
-                </li>
-              )
-            })}
-        </ol>
-      )}
+            )}
+            <button type="button" className="btn" onClick={() => setSending(true)}>
+              Send back
+            </button>
+          </div>
+        )}
+      </div>
     </section>
   )
 }
 
-function Footer({ channel, task }: { channel: Channel; task: Task }) {
+function State({ channel, task, may }: { channel: Channel; task: Task; may: boolean }) {
   const { app } = useApp()
   const [cancelling, setCancelling] = useState(false)
   return (
-    <section className="panel-section task-foot actions">
-      {task.status === "done" ? (
-        <button type="button" className="btn is-small" onClick={() => app.actions.setTaskStatus(channel.code, task.id, "todo")}>
-          Reopen
-        </button>
-      ) : (
-        <>
-          <button type="button" className="btn is-small" onClick={() => app.actions.setTaskStatus(channel.code, task.id, "done")}>
-            Mark done
-          </button>
-          <button type="button" className="btn is-small is-quiet" onClick={() => setCancelling(true)}>
-            Cancel task…
-          </button>
-        </>
+    <div className="tp-state">
+      <p className="tp-status" title={`Created ${since(task.createdAt)}`}>
+        <Dot status={task.status} />
+        <span className={task.cancelled ? "dim" : TONES[task.status]}>{statusWord(task)}</span>
+        {task.archived && <span className="dimmer">· archived</span>}
+        <span className="dimmer">· {since(task.updatedAt)}</span>
+      </p>
+      {may && (
+        <span className="tp-moves">
+          {task.status === "done" ? (
+            <button type="button" className="btn is-quiet is-small" onClick={() => app.actions.setTaskStatus(channel.code, task.id, "todo")}>
+              Reopen
+            </button>
+          ) : (
+            <>
+              <button type="button" className="btn is-quiet is-small" onClick={() => app.actions.setTaskStatus(channel.code, task.id, "done")}>
+                Mark done
+              </button>
+              <button type="button" className="btn is-quiet is-small" onClick={() => setCancelling(true)}>
+                Cancel…
+              </button>
+            </>
+          )}
+        </span>
       )}
       <Cancel channel={channel} task={task} open={cancelling} onClose={() => setCancelling(false)} />
-    </section>
+    </div>
   )
 }
 

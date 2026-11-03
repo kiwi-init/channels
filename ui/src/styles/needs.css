@@ -64,9 +64,6 @@
   font: var(--t-ui) var(--ui);
 }
 
-.needs-head .av {
-}
-
 .needs-name {
   padding: 0;
   border: 0;
@@ -99,7 +96,8 @@ button.needs-name:hover {
 
 .needs-time {
   color: var(--ink-3);
-  font-size: var(--t-meta);
+  font: var(--t-stamp) var(--mono);
+  letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
 }
 
@@ -133,6 +131,22 @@ button.needs-name:hover {
   text-underline-offset: 3px;
 }
 
+.needs-meta .needs-link {
+  opacity: 0;
+  transition: opacity var(--fast);
+}
+
+.needs-card:hover .needs-link,
+.needs-card:focus-within .needs-link {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .needs-meta .needs-link {
+    opacity: 1;
+  }
+}
+
 .needs-title {
   font: 600 var(--t-ui) var(--ui);
 }
@@ -140,6 +154,26 @@ button.needs-name:hover {
 .needs-text {
   font: var(--t-body) / 1.5 var(--sans);
   overflow-wrap: anywhere;
+}
+
+.needs-open {
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  text-align: left;
+}
+
+.needs-open:hover {
+  text-decoration: underline;
+  text-decoration-color: var(--ink-3);
+  text-underline-offset: 3px;
+}
+
+.needs-why {
+  color: var(--ink-2);
+  font: var(--t-meta) var(--ui);
 }
 
 .needs-id {
@@ -150,12 +184,6 @@ button.needs-name:hover {
 .needs-line {
   color: var(--ink-2);
   font: var(--t-ui) var(--ui);
-}
-
-.needs-label {
-  margin-top: 2px;
-  color: var(--ink-3);
-  font: var(--t-meta) var(--ui);
 }
 
 .needs-code {
@@ -408,16 +436,36 @@ button.needs-name:hover {
 
 .needs-written {
   display: grid;
-  gap: 4px;
+  overflow: hidden;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-row);
 }
 
 .needs-written .needs-code {
   max-height: 192px;
   overflow: auto;
+  border: 0;
+  border-radius: 0;
+}
+
+.needs-written .needs-code + .needs-code {
+  border-top: 1px solid var(--line);
 }
 
 .needs-code.is-gone {
+  background: var(--alert-wash);
   color: var(--alert);
+}
+
+.needs-cwd {
+  color: var(--ink-3);
+}
+
+.needs-until {
+  margin-left: 4px;
+  color: var(--ink-3);
+  font: var(--t-stamp) var(--mono);
+  letter-spacing: -0.01em;
 }
 
 .needs-body > .dim {

@@ -112,6 +112,7 @@
   --h-opencode: #c9c9c9;
 
   --white: #fff;
+  --img-edge: light-dark(oklch(0 0 0 / 0.1), oklch(1 0 0 / 0.1));
   --shadow-pop: 0 0 0 1px var(--line-2), 0 16px 48px rgb(0 0 0 / 0.32);
   --float: var(--bg-3);
   --float-2: color-mix(in srgb, var(--float) 90%, var(--ink));

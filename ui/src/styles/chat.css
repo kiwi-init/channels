@@ -88,7 +88,8 @@
 }
 
 .feed-start-title {
-  font: 600 var(--t-title) var(--ui);
+  color: var(--ink-3);
+  font: var(--t-ui) var(--ui);
 }
 
 .banner {
@@ -98,16 +99,23 @@
   width: min(var(--col), calc(100% - 48px));
   margin: 12px auto 0;
   padding: 8px 8px 8px 16px;
-  border-radius: var(--r-ctl);
+  border-radius: var(--r-card);
   background: var(--decide-wash);
   color: var(--ink);
   font: var(--t-ui) var(--ui);
 }
 
 .banner-text {
+  display: flex;
   flex: 1;
+  flex-wrap: wrap;
+  gap: 2px 8px;
   min-width: 0;
   padding: 2px 0;
+}
+
+.banner-text b {
+  font-weight: 600;
 }
 
 .banner .btn {
@@ -121,6 +129,11 @@
   margin: 24px 0 12px;
   color: var(--ink-3);
   font: var(--t-stamp) var(--ui);
+}
+
+html .day.is-sealed {
+  font-family: var(--sans);
+  letter-spacing: normal;
 }
 
 .day::before,
@@ -146,37 +159,6 @@
 
 .msg:hover {
   background: var(--wash);
-}
-
-.msg.is-for-you {
-  padding-block: 8px;
-  border-radius: var(--r-card);
-  background: color-mix(in srgb, var(--accent) 7%, transparent);
-}
-
-.msg.is-for-you:hover {
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
-}
-
-.msg.is-for-you + .msg.is-for-you {
-  margin-top: 0;
-  padding-top: 16px;
-  border-top-left-radius: 0;
-  border-top-right-radius: 0;
-}
-
-.msg.is-for-you + .msg.is-for-you.is-compact {
-  padding-top: 4px;
-}
-
-.msg.is-for-you:has(+ .msg.is-for-you) {
-  padding-bottom: 4px;
-  border-bottom-left-radius: 0;
-  border-bottom-right-radius: 0;
-}
-
-.msg.is-for-you::before {
-  content: none;
 }
 
 .msg {
@@ -268,11 +250,6 @@
   text-underline-offset: 3px;
 }
 
-.msg-role,
-.msg-runs {
-  color: var(--ink-2);
-}
-
 .msg-time {
   color: var(--ink-3);
   font-variant-numeric: tabular-nums;
@@ -329,12 +306,6 @@
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-}
-
-.msg-quote.is-earlier,
-.msg-quote.is-earlier:hover {
-  background: none;
-  color: var(--ink-3);
 }
 
 .msg-receipt {
@@ -404,6 +375,21 @@
 .md th,
 .md td {
   border: 0 !important;
+  border-bottom: 1px solid var(--line) !important;
+}
+
+.md tr:last-child > td {
+  border-bottom: 0 !important;
+}
+
+.md th:first-child,
+.md td:first-child {
+  padding-left: 0 !important;
+}
+
+.md th:last-child,
+.md td:last-child {
+  padding-right: 0 !important;
 }
 
 .md-sort {
@@ -712,17 +698,24 @@ button.msg-image-spot:hover {
 
 .ask {
   display: grid;
-  gap: 8px;
+  gap: 12px;
   max-width: 560px;
   margin-top: 8px;
   padding: var(--card-pad);
-  border: 0;
+  border: 1px solid var(--line-2);
   border-radius: var(--r-card);
-  background: var(--raise);
+  background: var(--bg);
 }
 
-.ask.is-open {
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--decide) 40%, transparent);
+.ask.is-choice {
+  gap: 0;
+  padding: 4px;
+}
+
+.ask.is-free {
+  padding: 0;
+  border: 0;
+  background: none;
 }
 
 .ask > .btn {
@@ -737,7 +730,7 @@ button.msg-image-spot:hover {
   padding: 8px 12px;
   border: 0;
   border-radius: var(--r-ctl);
-  background: var(--wash-2);
+  background: var(--bg-3);
   font-size: var(--t-meta);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -748,12 +741,22 @@ button.msg-image-spot:hover {
   font: var(--t-meta) var(--ui);
 }
 
-.ask-state.is-waiting {
-  color: var(--decide);
+.ask-state time,
+.ask-done time {
+  margin-left: 4px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
 }
 
-.ask-state.is-waiting::before {
-  content: "● ";
+.ask-done {
+  margin-top: 4px;
+  color: var(--ink-2);
+  font: var(--t-meta) var(--ui);
+}
+
+.ask-done b {
+  color: var(--ink);
+  font-weight: 500;
 }
 
 .ask-handoff {
@@ -765,42 +768,56 @@ button.msg-image-spot:hover {
 
 .ask-options {
   display: grid;
-  gap: 6px;
 }
 
 .ask-option {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  align-items: baseline;
+  gap: 12px;
   width: 100%;
   padding: 8px 12px;
   border: 0;
   border-radius: var(--r-ctl);
-  background: var(--wash-2);
-  font: var(--t-ui) var(--sans);
+  background: none;
+  color: var(--ink);
+  font: var(--t-body) / 1.375rem var(--sans);
   text-align: left;
   transition: background var(--fast);
 }
 
 .ask-option:hover {
-  background: color-mix(in srgb, var(--ink) 14%, transparent);
+  background: var(--wash-2);
+}
+
+.ask-option.is-else {
+  color: var(--ink-3);
+  font-size: var(--t-ui);
+}
+
+.ask-option.is-else:hover {
+  color: var(--ink);
 }
 
 .ask-letter {
-  display: grid;
-  place-items: center;
-  width: 1.25rem;
-  height: 1.25rem;
-  border: 0;
-  border-radius: var(--r-tag);
-  background: var(--wash-2);
-  color: var(--ink-2);
-  font: 600 var(--t-stamp) var(--ui);
+  flex: none;
+  width: 1ch;
+  color: var(--ink-3);
+  font: 500 var(--t-meta) var(--mono);
+}
+
+.ask.is-choice .ask-reply-form {
+  padding: 4px;
 }
 
 .ask-other {
   display: flex;
+  align-items: center;
   gap: 8px;
+}
+
+.ask-other .input {
+  flex: 1;
+  min-width: 0;
 }
 
 .ask-reply-form {
@@ -808,22 +825,12 @@ button.msg-image-spot:hover {
   gap: 6px;
 }
 
-.ask-reply-label {
-  color: var(--ink-2);
-  font: 600 var(--t-meta) var(--ui);
-}
-
-.ask-reply-hint {
-  color: var(--ink-3);
-  font-weight: 400;
-}
-
 .ask-reply {
-  margin-left: 6px;
+  margin-top: 4px;
   padding: 2px 0 2px 12px;
   border-left: 2px solid var(--line-3);
   color: var(--ink);
-  font: var(--t-body) / 1.5 var(--sans);
+  font: var(--t-body) / 1.375rem var(--sans);
   white-space: pre-wrap;
 }
 
@@ -833,9 +840,14 @@ button.msg-image-spot:hover {
   gap: 8px;
 }
 
+.ask-step-answer .textarea {
+  min-height: var(--ctl);
+  resize: vertical;
+}
+
 .ask-why {
   color: var(--ink-2);
-  font: var(--t-body) / 1.5 var(--sans);
+  font: var(--t-body) / 1.375rem var(--sans);
   white-space: pre-wrap;
 }
 
@@ -845,15 +857,16 @@ button.msg-image-spot:hover {
 }
 
 .ask-label {
-  color: var(--ink);
-  font-weight: 600;
+  margin-right: 4px;
+  color: var(--ink-3);
+  font: 500 var(--t-meta) var(--ui);
 }
 
 .ask-do {
   display: grid;
   gap: 4px;
   padding-left: 20px;
-  font: var(--t-body) / 1.5 var(--sans);
+  font: var(--t-body) / 1.375rem var(--sans);
   list-style: decimal;
   white-space: pre-wrap;
 }
@@ -1306,6 +1319,12 @@ button.msg-image-spot:hover {
   font: var(--t-meta) var(--ui);
 }
 
+@media (min-width: 761px) and (orientation: landscape) {
+  .chan:not(.is-bare) .working {
+    display: none;
+  }
+}
+
 .working-dots {
   display: flex;
   flex: none;
@@ -1547,23 +1566,15 @@ button.msg-image-spot:hover {
   box-shadow: var(--shadow-pop);
 }
 
-.stash-head {
-  display: flex;
-  justify-content: space-between;
-  padding: 6px 6px 4px;
-  color: var(--ink-3);
-  font: var(--t-meta) var(--ui);
-}
-
 .stash-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 6px;
+  padding: 6px 8px;
   border: 0;
-  border-radius: var(--r-row);
+  border-radius: var(--r-tag);
   background: none;
   color: var(--ink);
   font: var(--t-ui) var(--ui);
@@ -1589,7 +1600,7 @@ button.msg-image-spot:hover {
 
 .stash-foot {
   margin: 4px 0 0;
-  padding: 6px 6px 4px;
+  padding: 6px 8px 4px;
   border-top: 1px solid var(--line);
   color: var(--ink-3);
   font: var(--t-stamp) var(--ui);
@@ -1866,10 +1877,7 @@ button.msg-image-spot:hover {
 .compose-note {
   margin: 0;
   padding: 12px 16px;
-  border-radius: var(--r-win);
-  background: var(--bg-2);
-  box-shadow: var(--shadow-pop);
-  color: var(--ink-2);
+  color: var(--ink-3);
   font: var(--t-ui) var(--ui);
   text-align: center;
 }
@@ -1878,7 +1886,7 @@ button.msg-image-spot:hover {
   display: none;
 }
 
-.msg-head > :is(.msg-role, .msg-runs, .msg-said) ~ :is(.msg-runs, .msg-time)::before {
+.msg-head > .msg-said ~ .msg-time::before {
   content: "·";
   margin-right: 8px;
 }
@@ -1893,14 +1901,6 @@ button.msg-image-spot:hover {
 
 .panel .chip {
   row-gap: 2px;
-}
-
-.panel .chip-meta {
-  flex-basis: 100%;
-}
-
-.panel .chip-title + .chip-meta::before {
-  content: none;
 }
 
 .msg-edited {
@@ -1972,7 +1972,7 @@ button.msg-image-spot:hover {
 .threads-list ul {
   display: grid;
   gap: 2px;
-  margin: 0;
+  margin: 0 -12px;
   padding: 0;
   list-style: none;
 }
@@ -1997,7 +1997,6 @@ button.msg-image-spot:hover {
   background: var(--wash-2);
 }
 
-.thread-item-where,
 .thread-item-meta {
   grid-column: 1;
   color: var(--ink-3);
@@ -2019,6 +2018,13 @@ button.msg-image-spot:hover {
 
 .thread-item .count {
   grid-column: 2;
-  grid-row: 1 / span 3;
+  grid-row: 1 / span 2;
   align-self: center;
+}
+
+.compact-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
 }

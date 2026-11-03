@@ -5,23 +5,16 @@
 
 .theme-head {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 16px;
-}
-
-.theme-head-text {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
 }
 
 .theme-title {
   font: 600 var(--t-ui) var(--ui);
 }
 
-.theme-hint,
 .theme-note,
 .theme-none {
   color: var(--ink-3);
@@ -68,14 +61,6 @@
 .theme-when {
   color: var(--ink-3);
   font: var(--t-meta) var(--ui);
-}
-
-.theme-when.is-now {
-  padding: 1px 8px;
-  border-radius: 999px;
-  background: var(--accent-wash);
-  color: var(--accent);
-  font-weight: 500;
 }
 
 .theme-grid {
@@ -274,10 +259,6 @@
   display: grid;
   gap: 16px;
   scroll-margin-top: 20px;
-}
-
-.theme-editor .theme-head {
-  margin-bottom: 0;
 }
 
 .theme-form {

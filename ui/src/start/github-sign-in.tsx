@@ -21,42 +21,33 @@ function Mark() {
 function Ask({ code, problem }: { code: { code: string; url: string } | null; problem: string | null }) {
   const { app } = useApp()
   const known = !!app.account
+  if (code)
+    return (
+      <>
+        <h1 className="start-word">Type this code on GitHub</h1>
+        <p className="start-digits start-gh-code" aria-live="polite">
+          {code.code}
+        </p>
+        <p className="start-asking start-gh-wait">
+          <span className="start-pip" aria-hidden="true" />
+          Waiting for GitHub. The code is copied.
+        </p>
+        <a className="btn is-quiet start-other" href={code.url} target="_blank" rel="noreferrer noopener">
+          Open GitHub again
+        </a>
+      </>
+    )
   return (
     <>
       <h1 className="start-word">channels</h1>
-      <p className="start-lede">
-        {known
-          ? "Channels signs in with GitHub now. Your key, your channels and your name stay as they are."
-          : "A chat for you and your AI agents, like Slack, where they work with you and with each other. End-to-end encrypted."}
+      <p className="start-lede">{known ? "Channels signs in with GitHub now. Your key, channels and name stay as they are." : "Where people and AI agents work together. End‑to‑end encrypted."}</p>
+      <button type="button" className="btn is-primary start-gh" autoFocus onClick={() => app.actions.signInWithGithub()}>
+        <GlyphIcon glyph={GithubIcon} size={16} />
+        Sign in with GitHub
+      </button>
+      <p className={problem ? "start-hint is-error" : "start-hint"} aria-live="polite">
+        {problem}
       </p>
-      {code ? (
-        <>
-          <p className="start-ask">Type this code on the GitHub page that opened</p>
-          <p className="start-digits start-gh-code" aria-live="polite">
-            {code.code}
-          </p>
-          <p className="start-asking start-gh-wait">
-            <span className="start-pip" aria-hidden="true" />
-            Waiting for GitHub. The code is copied too.
-          </p>
-          <a className="btn is-quiet start-other" href={code.url} target="_blank" rel="noreferrer noopener">
-            Open GitHub again
-          </a>
-        </>
-      ) : (
-        <>
-          <button type="button" className="btn is-primary start-gh" autoFocus onClick={() => app.actions.signInWithGithub()}>
-            <GlyphIcon glyph={GithubIcon} size={16} />
-            Sign in with GitHub
-          </button>
-          <p className={problem ? "start-hint is-error" : "start-hint"} aria-live="polite">
-            {problem ??
-              (known
-                ? "Your GitHub picture becomes your face, and your pull requests and their checks show up in tasks."
-                : "Your GitHub name and picture are how people see you. Your pull requests and their checks show up in tasks.")}
-          </p>
-        </>
-      )}
     </>
   )
 }
@@ -67,7 +58,7 @@ function SignedIn({ login }: { login: string }) {
   return (
     <>
       <h1 className="start-word">You're in, {login}</h1>
-      <p className="start-lede">People see you as {name}, with your GitHub picture.</p>
+      {name !== login && <p className="start-lede">People see you as {name}.</p>}
       <div className="start-row start-go">
         <button type="button" className="btn is-primary" autoFocus onClick={() => app.actions.setName(name)}>
           Continue

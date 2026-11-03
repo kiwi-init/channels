@@ -25,7 +25,7 @@ describe("direct messages never claim to be private: every member of the channel
   });
 
   test("an empty DM on the desktop says who can read it", () => {
-    expect(read("ui/src/chat/conversation.tsx")).toContain("This is the start of your messages with ${nickname(channel, where.with)}. Everyone in the channel can read them.");
+    expect(read("ui/src/chat/conversation.tsx")).toContain("Everyone in the channel can read your messages with ${nickname(channel, where.with)}.");
   });
 
   test("the phones' lead chat says who can read it", () => {

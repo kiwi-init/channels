@@ -67,6 +67,9 @@ The two built-in sides, from `tokens.css` and `channels.ts`:
 
 - `selection` is ink at 28%. `white` is for a knob or a glyph on a coloured
   fill.
+- `img-edge` rings every picture (faces, channel icons, message images,
+  GIFs, attachments) with a 1px outline set 1px in: pure black at 10% in
+  light, pure white at 10% in dark, never a tinted grey.
 - `c-red … c-brown` are the member colours: a person's initials and the
   tint behind them (`.av[data-color]`, 18%). They never colour chrome.
 - `h-claude, h-codex, h-gemini, h-opencode` colour the harness badge on an agent's face.
@@ -85,8 +88,7 @@ The two built-in sides, from `tokens.css` and `channels.ts`:
   then `ui-monospace, "SF Mono", Menlo`.
 - Paper Mono carries the machine's words: times, days, counts, task and PR
   ids, roles (`lead`, `owner`), statuses (`running Bash`, `offline · 1d`),
-  the header's summary line, the composer's hint, keys (`kbd`), code and
-  paths. The list is the `html .msg-time, html .count, …` rule and the
+  the composer's hint, keys (`kbd`), code and paths. The list is the `html .msg-time, html .count, …` rule and the
   `code, pre, kbd, .mono, .codebox, …` rule in `base.css`; a new
   machine-word class joins it there, with `letter-spacing: -0.01em`.
 - Six steps and no sizes between them, in `rem`: `--t-stamp` 11px (times,
@@ -111,6 +113,8 @@ The two built-in sides, from `tokens.css` and `channels.ts`:
 - Numbers that line up (counts, times, sizes, diff stats) use
   `font-variant-numeric: tabular-nums` (`.num`).
 - Body text is antialiased with `optimizeLegibility`.
+- Headings balance their lines (`text-wrap-style: balance`); paragraphs, list
+  items and `dd` wrap `pretty`, so no word sits alone on the last line.
 
 ## 5. Radius, shadow, layout
 
@@ -131,6 +135,8 @@ The two built-in sides, from `tokens.css` and `channels.ts`:
   hover), `--r-card 14px` (cards), `--r-win 18px` (the composer, dialogs).
   `999px` is for counts and the toggle track only. Avatars of people are round;
   agents and channel tiles are rounded squares.
+- Nested corners are concentric: the outer radius is the inner radius plus
+  the padding between them (an `r-tag` letter 8px inside an `r-card` option).
 - Two shadows. `--shadow-pop` (`0 0 0 1px line-2`, then a soft black drop)
   for what floats over the page: dialogs, menus, the palette, the stash
   list, Jump to latest. `--shadow-float` for the chrome's controls and the
@@ -157,7 +163,7 @@ The two built-in sides, from `tokens.css` and `channels.ts`:
 - Motion answers an action: something opens, arrives or moves because someone
   did something. It is felt, never watched: short, soft, and nothing plays
   twice for the same event. Three things loop: the working dots under the
-  conversation (`blink`), a working task's `Dot` (`spin`, 6s) and the current
+  conversation when the sidebar is hidden (`blink`), a working task's `Dot` (`spin`, 6s) and the current
   step's mark while adding an agent (`spin`).
 - CSS first, and no animation library. Two speeds and one ease for fades and
   fills: `--fast 0.16s`, `--slow 0.28s`, `--ease cubic-bezier(0.32, 0.72, 0, 1)`.
@@ -168,7 +174,8 @@ The two built-in sides, from `tokens.css` and `channels.ts`:
   (`useGlide` and `Track` in `ui/src/kit/glide.tsx`) instead of each option
   lighting up on its own.
 - Pressing a control dips it to 0.96 and it springs back on `--pop`. This is the
-  only scale on a resting control. Rows take hover at once and let it go slowly.
+  only scale on a resting control. Rows take hover at once and let it go on
+  `--fast`; nothing grows on hover.
 - A change is marked once: a `Dot` pops when its status moves and rings when it
   turns done (`done-ring`), a `Count` rolls to its new number (`count-roll`),
   both through `useMoved`, so opening a view animates nothing that didn't change.
@@ -202,9 +209,12 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   search and the terminal share a second group (`.top-group`, 2px inset,
   28px buttons at `r-row`). The search field floats the same way when open,
   and on a narrow window it takes the tabs' place. The other bars follow:
-  Settings' back button and a panel's close button float too, and so does
-  the rail: home, every channel tile, + and the Settings gear (a tile still
-  waiting to be let in keeps its outline and no fill). In the terminal
+  Settings' back button floats too (a panel's close is a plain `IconButton`:
+  the panel is already its own column), and so does
+  the rail: home and every channel tile (a tile still waiting to be let in
+  keeps its outline and no fill); + and the Settings gear stay quiet, a bare
+  `ink-3` glyph with `wash` on hover, and the gear floats only while Settings
+  is open. In the terminal
   drawer the tabs and + are one `float` group and close floats. Hover on a
   floating control is `float-2` (the `float` fill, 10% toward `ink`); the
   chosen one is `float-3` (20%).
@@ -212,10 +222,13 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   `--ctl` high, `t-ui`; `.input.is-mono` for codes and paths.
 - `Seg` (`.seg`): a `bg-3` track, the chosen segment on `wash-2` in `ink`
   and 600.
-- `Toggle`: a 36×22 track, `live` when on with a white knob.
+- `Toggle`: a 36×22 track, `live` when on with a white knob. No On/Off word
+  beside it: the track already says it.
 - `Dialog` / `DialogHead`: `bg-2`, `r-win`, `shadow-pop`, 480px (720px
   wide), rises in. A dialog is for one decision or a short form; Settings
-  and the panels open in place.
+  and the panels open in place. The head is the title and close; a sub line
+  only when it says what the title and the form can't (most dialogs have
+  none, and then close centres on the title).
 - `Avatar` (`.av` 32px, `av-sm` 24px, `av-lg` 56px) with a presence `pip`
   (`live` online, `decide` away, `ink-3` off). A person shows their picture
   or initials in their member colour; an agent shows its role face
@@ -261,38 +274,54 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   The top bar spans the sidebar and the main area (`--top-h`): the sidebar
   toggle first at the left edge, then the channel switcher, both in the same
   place whether the sidebar is open or collapsed; the views in the middle
-  (`# room`, Specs with its count, Agents, GitHub with its open pull
-  requests once a repo is linked and a dot in `alert` while an open one's
-  checks failed, Needs you in `decide` with its count), the open one on
-  `wash-2`; on the right a mono summary
-  (`2 working · 1 merged today · 7 need you`), Search and the terminal.
-  No borders between the columns.
-- **Sidebar.** Every row's text starts on one edge, after a 24px icon column
-  (the `#`, a face, an icon). Sections with a mono head: Rooms (`#` rows), Direct, People
-  (face, name, a mono role and status line), Agents (face with presence,
-  name, what it runs now in `doing`), each with its + row (invite, add
-  agent). The open row is on `wash-2`; a row with news is 600 with a count. A
-  member shows a status line only when there is something to say (working,
-  waiting, away, offline), and a role that repeats their name is left out. Cards
-  for what waits on you (an update, a device) sit at the foot.
+  (`# room`, Specs, Agents, GitHub once a repo is linked, Needs you in
+  `decide` with its count), words only, no icons, the open one on `wash-2`.
+  A tab carries a mark only when something needs a look: a `decide` dot on
+  Specs while one waits on you, an `alert` dot on GitHub while an open pull
+  request's checks failed. Ambient numbers (open specs, open pull requests,
+  who's working, merged today) live in the tab's `title`, not on the bar.
+  On the right, Search and the terminal; a `decide` "paused" chip joins them
+  while the agents are paused, on every view but the conversation, whose
+  banner already says it. No borders between the columns.
+- **Sidebar.** Every row is one `--ctl` line, its text on one edge after a
+  24px icon column (the `#`, a face, an icon). Three sections with a mono
+  head: Rooms (`#` rows, a lock for a private room), People and Agents. Each
+  member is listed once, and the row is your conversation with them: a click
+  opens the DM, its unread count sits on the row, and the profile is in the
+  row's menu (and in the Agents view). You aren't listed. The face's pip
+  carries the state (`live` online, `decide` away or waiting, `doing`
+  working, `ink-3` offline); a working or waiting agent adds what it does
+  now in mono `ink-3` at the row's end (`running Bash`, `thinking`), and
+  everything else (role, offline since) waits in the row's `title`. A DM
+  with someone no longer listed follows the people; conversations between
+  others fold under the agents ("1 between others"). A section's + (New
+  room, Invite people, Add an agent) shows when the pointer is over the
+  section; it becomes a row only while the section is empty. The open row is
+  on `wash-2`; a row with news is 600 with a count. Cards for what waits on
+  you (an update, a device, new recovery words) sit at the foot under a
+  16px fade: the text, then the action on its line's end, or under it when
+  the text needs the width.
 - **Right panel** (`--panel-w` to start, resizable by its grip): a thread,
   a task, a person or the channel slides in from the right (`panel-in`)
   beside the conversation, with a title, a mono sub line and a close button.
   A thread keeps its own composer.
 - **Conversation.** No bubbles, everyone on the left, in the `--col` column.
-  A message is a 32px face, 16px of gap, then the name (600), a mono role, harness and
-  time, and the text in `t-body` under it. A run from one sender keeps one
+  A message is a 32px face, 16px of gap, then the name (600), the "to you" or
+  "asks you" word when it's for you, and the mono time, and the text in
+  `t-body` under it. Role and harness are not repeated on every message: the
+  role is the name's hover text, the harness is the badge on the face. A run from one sender keeps one
   header (`is-compact`). A reply carries one quoted line with a return arrow.
   Task cards, PR lines and reactions sit under the text on `bg-2`. Under a
   message, "N replies" with who and when opens the thread. A pending message
   is at 55%; a failed one gets an `alert-wash` band. Working agents show as
-  a mono line of dots under the last message.
+  a mono line of dots under the last message only when the sidebar, which
+  already says it, is hidden.
 - **Tasks** live inside specs: the Specs view carries the Now card on top,
   folded to its one line (next step, in progress, needs you, done today) until
   someone opens it. Each spec row ends in a mono `done/all tasks` toggle; its
   open tasks stay folded under it unless one waits on you or is open in the
-  panel. A task row is its `Dot`, the title in `t-body`, and a mono line of id,
-  owner, state and age: on one line, the mono part on the right, when the view
+  panel. A task row is its `Dot`, the title in `t-body`, the owner's face, and a
+  mono line of id, state (only when it says more than the dot), PR and age: on one line, the mono part on the right, when the view
   is wide (820px and up), two lines when it isn't. Tasks filed before specs sit
   in a "Not in a spec" card that shows three until Show all. A person adds a
   task on an approved spec's Inside.
@@ -352,17 +381,22 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   command or a diff in mono boxes), and the answers as buttons, the main one
   `is-primary`.
 - **Agents.** One card per agent, in a grid that wraps (nothing scrolls
-  sideways): face, name, `for person ·
-  model`, a status line with a coloured dot, its tasks with PR and check
-  ticks, Up next, Watching, and its last moves with mono times.
+  sideways): face, name, and one status line under it (what it's doing,
+  "for X" only when it's someone else's; model and sponsor on hover), then
+  its tasks with PR and check ticks, Up next, Watching, and its last moves
+  with mono times.
 - **Settings.** The sidebar trades the channels for Settings' sections (the
   open one on `wash-2`) under a `‹ Settings` back button. The page sits beside
-  them, up to 720px: a `t-display` title, a quiet line, then groups of rows, each
-  group a card (hairlines between rows; a title, a quiet line and the control on
-  the right).
+  them, up to 720px: a `t-display` title (a quiet line under it only when it
+  says a scope or a limit), then groups of rows on the page under mono group
+  heads, hairlines between rows: a title, a quiet line only when it says what
+  the title can't, and the control on the right. No cards around groups.
 - **Palette** (⌘K), **Search**, the **terminal drawer** and the **annotator**
   (a picture opened full window, marked up and sent back) float with
-  `shadow-pop` and their own enter animation.
+  `shadow-pop` and their own enter animation. The palette is `bg-2` at
+  `r-win`: the field ("Jump to…") over a hairline, then the groups, the
+  chosen row on `wash-2` at `r-ctl` (8px in, concentric). No footer of key
+  hints: arrows, Enter and Escape are what a list does.
 
 ## 10. Composer
 
@@ -421,6 +455,14 @@ surfaces.
 Don't: hard-code hex, add a font outside the Font setting, add glass, blur or decorative gradients,
 fill a button with the accent, add coloured shadows, or animate anything
 that isn't answering an action.
+
+Words: show the least that says what someone needs. A line the layout
+already says goes (a page subtitle that repeats its title, a status in a
+header and again in the rows below, the harness name on every message when
+the face carries its badge, an empty state under a composer that invites
+the same thing). Explain only what someone can't see: a consequence, a
+limit, a scope. More specific detail waits for a more specific intent (the
+profile, the task panel), not every row.
 
 Names: people read nicknames, and only nicknames. A handle (`cheery-fox`)
 is for agents and commands; a person never has to read one. Wherever the

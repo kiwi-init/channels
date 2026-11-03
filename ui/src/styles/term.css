@@ -129,10 +129,6 @@
   text-overflow: ellipsis;
 }
 
-.term-size {
-  font-variant-numeric: tabular-nums;
-}
-
 .term-ended {
   color: var(--decide);
 }

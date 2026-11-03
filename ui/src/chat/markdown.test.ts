@@ -126,14 +126,14 @@ describe("the renderer only links what a click opens, and never loads a remote p
     expect(html).toContain("call")
   })
 
-  test("a remote picture, inline, by reference or in a table, is a link that says where it opens", async () => {
+  test("a remote picture, inline, by reference or in a table, is a link named by its alt", async () => {
     const html = await rendered("![a *b*](https://evil.example/a.png)\n\n![r][ref]\n\n| x |\n| - |\n| ![t](https://evil.example/t.png) |\n\n[ref]: https://evil.example/ref.png")
     expect(html).not.toContain("<img")
     expect(html).not.toContain('rel="preload"')
     expect(html).toContain('href="https://evil.example/a.png"')
-    expect(html).toContain(">a b (opens evil.example)</a>")
-    expect(html).toContain(">r (opens evil.example)</a>")
-    expect(html).toContain(">t (opens evil.example)</a>")
+    expect(html).toContain(">a b</a>")
+    expect(html).toContain(">r</a>")
+    expect(html).toContain(">t</a>")
   })
 
   test("a picture at an address a click wouldn't open is its alt text; one inside the message stays a picture", async () => {

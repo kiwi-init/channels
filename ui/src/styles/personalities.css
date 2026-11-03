@@ -21,18 +21,8 @@
   scroll-margin-top: 20px;
 }
 
-.persona-head {
-  display: grid;
-  gap: 4px;
-}
-
 .persona-title {
   font: 600 var(--t-ui) var(--ui);
-}
-
-.persona-hint {
-  color: var(--ink-3);
-  font: var(--t-meta) / 1.45 var(--ui);
 }
 
 .persona-form {

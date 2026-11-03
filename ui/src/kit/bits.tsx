@@ -94,7 +94,7 @@ export function Dialog({ open, onClose, label, children, wide }: { open: boolean
     if (!el) return
     if (open && !el.open) {
       el.showModal()
-      el.querySelector<HTMLElement>("input:not([type=hidden]), textarea, select")?.focus()
+      ;(el.querySelector<HTMLElement>("[autofocus], input:not([type=hidden]), textarea, select") ?? el).focus()
     }
     if (!open && el.open) el.close()
   }, [open])
@@ -103,6 +103,7 @@ export function Dialog({ open, onClose, label, children, wide }: { open: boolean
       ref={ref}
       role="dialog"
       aria-modal="true"
+      tabIndex={-1}
       className={cx("dialog", wide && "is-wide")}
       aria-label={label}
       onClose={() => {
@@ -178,9 +179,6 @@ export function Loading() {
 export function Toggle({ on, onChange, label, id }: { on: boolean; onChange: (on: boolean) => void; label?: string; id?: string }) {
   return (
     <button id={id} type="button" role="switch" aria-checked={on} aria-label={label} className={cx("toggle", on && "is-on")} onClick={() => onChange(!on)}>
-      <span className="toggle-word" aria-hidden="true">
-        {on ? "On" : "Off"}
-      </span>
       <span className="toggle-track" aria-hidden="true">
         <span className="toggle-knob" />
       </span>
