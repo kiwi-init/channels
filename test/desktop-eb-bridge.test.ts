@@ -61,15 +61,15 @@ describe("the bridge answers only our page", () => {
 
   test("a call that isn't the bridge's, or not given as a list, never reaches a handler", async () => {
     for (const method of ["__proto__", "constructor", "toString", "hasOwnProperty", "valueOf", "nope", 7, null]) await expect(answer(table, method, [])).rejects.toThrow("the app has no such call");
-    await expect(answer(table, "notify", "T436")).rejects.toThrow("notify takes its arguments as a list");
+    await expect(answer(table, "openExternal", "https://example.com")).rejects.toThrow("openExternal takes its arguments as a list");
     expect(shell.did).toEqual([]);
   });
 
   test("a bridge call runs its handler with its arguments, and a handler's throw comes back as a rejection", async () => {
-    await answer(table, "notify", ["T436", "done"]);
+    await answer(table, "openExternal", ["https://example.com"]);
     expect(await answer(table, "chooseFolder", [])).toBe("/Users/someone/app");
     await expect(answer(table, "terminalHelpers", ["vim", "on"])).rejects.toThrow("terminalHelpers takes rex or tmux, and on or off");
-    expect(shell.did).toEqual(["notify T436: done"]);
+    expect(shell.did).toEqual(["open https://example.com/"]);
   });
 });
 
