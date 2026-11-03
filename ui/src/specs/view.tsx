@@ -11,7 +11,6 @@ import { later } from "~/kit/later"
 import type { Channel, Spec, Task } from "~/model"
 import { useApp } from "~/nav"
 import { SpecMark } from "~/specs/card"
-import { openAsks } from "~/needs/open"
 import { faceOf, needsYou, tasksOf, workersOf } from "~/specs/read"
 import { NowCard } from "~/tasks/now"
 import { TaskRow } from "~/tasks/row"
@@ -72,33 +71,34 @@ function SpecList({ channel, tall }: { channel: Channel; tall: boolean }) {
   return (
     <div className="board">
       <div className="board-list gh-list specs-list">
-        {live && !tall && <NowCard channel={channel} needs={openAsks(channel).length} />}
+        {live && !tall && <NowCard channel={channel} />}
         <div className="gh-top">
-          <Track className="seg" role="group" aria-label="Open or done">
-            <button type="button" aria-pressed={shown === "open"} onClick={() => setShown("open")}>
-              Open <span className="gh-n num">{open}</span>
-            </button>
-            <button type="button" aria-pressed={shown === "done"} onClick={() => setShown("done")}>
-              Done <span className="gh-n num">{specs.length - open}</span>
-            </button>
-          </Track>
+          {specs.length > 0 && (
+            <Track className="seg" role="group" aria-label="Open or done">
+              <button type="button" aria-pressed={shown === "open"} onClick={() => setShown("open")}>
+                Open <span className="gh-n num">{open}</span>
+              </button>
+              <button type="button" aria-pressed={shown === "done"} onClick={() => setShown("done")}>
+                Done <span className="gh-n num">{specs.length - open}</span>
+              </button>
+            </Track>
+          )}
           <button type="button" className="btn is-primary" onClick={() => setMaking(true)}>
             <Icon name="plus" size={14} />
             New spec
           </button>
         </div>
-        {groups.map((g) => (
-          <GroupCard key={g.key} channel={channel} group={g} />
-        ))}
-        {shown === "open" && loose.length > 0 && <Loose channel={channel} tasks={loose} />}
-        {groups.length || (shown === "open" && loose.length) ? null : channel.loading ? (
+        {groups.length || (shown === "open" && loose.length) ? (
+          <div className="board-stack">
+            {groups.map((g) => (
+              <GroupCard key={g.key} channel={channel} group={g} />
+            ))}
+            {shown === "open" && loose.length > 0 && <Loose channel={channel} tasks={loose} label={specs.length ? "Not in a spec" : "Tasks"} />}
+          </div>
+        ) : channel.loading ? (
           <Loading />
         ) : (
-          <Empty title={shown === "open" ? "No open specs." : "Nothing finished yet."} icon="spec">
-            {shown === "open"
-              ? "Ask for something in your own words. The lead drafts a spec, you all comment on it, and once someone approves it agents take it from there."
-              : "Accepted and dropped specs stay here."}
-          </Empty>
+          <Empty title={shown === "open" ? "No open specs." : "Nothing finished yet."} icon="spec" />
         )}
       </div>
       {making && <NewSpec channel={channel} onClose={() => setMaking(false)} />}
@@ -111,7 +111,6 @@ function GroupCard({ channel, group }: { channel: Channel; group: Group }) {
     <section className={cx("board-group gh-group", `is-${group.key}`)} aria-label={group.label}>
       <div className="board-head">
         <h2 className="board-h">
-          {group.tone && <span className={cx("specs-group-dot", group.tone)} aria-hidden="true" />}
           <span className={cx("board-label", group.tone)}>{group.label}</span>
           <span className="board-n num">{group.rows.length}</span>
         </h2>
@@ -125,16 +124,16 @@ function GroupCard({ channel, group }: { channel: Channel; group: Group }) {
   )
 }
 
-function Loose({ channel, tasks }: { channel: Channel; tasks: Task[] }) {
+function Loose({ channel, tasks, label }: { channel: Channel; tasks: Task[]; label: string }) {
   const { nav } = useApp()
   const [all, setAll] = useState(false)
   const on = nav.panel?.kind === "task" ? nav.panel.task : null
   const rows = all ? tasks : tasks.slice(0, LOOSE_SHOWN)
   return (
-    <section className="board-group gh-group is-loose" aria-label="Not in a spec">
+    <section className="board-group gh-group is-loose" aria-label={label}>
       <div className="board-head">
         <h2 className="board-h">
-          <span className="board-label">Not in a spec</span>
+          <span className="board-label">{label}</span>
           <span className="board-n num">{tasks.length}</span>
         </h2>
       </div>
@@ -147,7 +146,7 @@ function Loose({ channel, tasks }: { channel: Channel; tasks: Task[] }) {
       </ul>
       {tasks.length > LOOSE_SHOWN && (
         <button type="button" className="board-more" onClick={() => setAll(!all)}>
-          {all ? "Show fewer" : `Show all ${tasks.length}`}
+          {all ? "Show fewer" : `Show ${tasks.length - LOOSE_SHOWN} more`}
         </button>
       )}
     </section>

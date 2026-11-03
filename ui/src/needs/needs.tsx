@@ -30,9 +30,6 @@ export function NeedsYou({ channel, onJump }: { channel: Channel; onJump: (jump:
       <div className="needs-list">
         {open.length > 0 ? (
           <>
-            <p className="needs-sum">
-              {open.length} {open.length === 1 ? "thing waits" : "things wait"} on you <span className="dimmer">· oldest first</span>
-            </p>
             {unchecked && <p className="needs-warn">{TOO_MANY_REQUESTS}</p>}
             <ol className="needs-cards">
               {open.map((a) => (
@@ -50,7 +47,7 @@ export function NeedsYou({ channel, onJump }: { channel: Channel; onJump: (jump:
               <circle cx="20" cy="20" r="18" pathLength="1" />
               <path d="M12.5 20.5l5.5 5.5 10-11" pathLength="1" />
             </svg>
-            <Empty title="Nothing needs you.">Asks from agents and people who want in show up here.</Empty>
+            <Empty title="Nothing needs you." />
           </div>
         )}
         {idle.length > 0 && (
@@ -151,6 +148,7 @@ function Shell({
   at,
   children,
   actions,
+  until,
   link,
 }: {
   face: Face | undefined
@@ -161,6 +159,7 @@ function Shell({
   at: number
   children: ReactNode
   actions?: ReactNode
+  until?: ReactNode
   link: ReactNode
 }) {
   const { go } = useApp()
@@ -185,7 +184,12 @@ function Shell({
         </span>
       </header>
       <div className="needs-body">{children}</div>
-      {actions && <footer className="needs-foot">{actions}</footer>}
+      {(actions || until) && (
+        <footer className="needs-foot">
+          {actions}
+          {until && <span className="needs-until">{until}</span>}
+        </footer>
+      )}
     </article>
   )
 }
@@ -224,10 +228,10 @@ function PermissionAskCard({ channel, ask, link }: { channel: Channel; ask: Perm
       face={who}
       name={nickname(channel, ask.from)}
       member={!!who}
-      tag={{ text: "Permission", tone: "decide" }}
       verb={ask.title}
       at={ask.at}
       link={link}
+      until={open && ask.expiresAt !== undefined ? <span title="It asks in its terminal too">until {clock(ask.expiresAt)}</span> : undefined}
       actions={
         open && (ask.canAllow || ask.canDeny || ask.allower) ? (
           <>
@@ -241,37 +245,28 @@ function PermissionAskCard({ channel, ask, link }: { channel: Channel; ask: Perm
                 Deny
               </button>
             )}
-            {!ask.canAllow && ask.allower && <span className="dim">Only {nickname(channel, ask.allower)} can allow it: it runs on their computer.</span>}
+            {!ask.canAllow && ask.allower && <span className="needs-why">Only {nickname(channel, ask.allower)} can allow it: it runs on their computer.</span>}
           </>
         ) : undefined
       }
     >
       {ask.summary && <p className="needs-title">“{ask.summary}”</p>}
-      <pre className="needs-code">{ask.code}</pre>
-      {ask.replaced !== undefined && <Written label="Replaces" text={ask.replaced} gone />}
-      {ask.content !== undefined && <Written label={ask.replaced !== undefined ? "With" : "Writes"} text={ask.content} />}
+      <div className="needs-written">
+        <pre className="needs-code is-head" title={ask.tool}>
+          {ask.code}
+          {ask.cwd && <span className="needs-cwd"> · in {ask.cwd}</span>}
+        </pre>
+        {ask.replaced !== undefined && <pre className="needs-code is-gone">{ask.replaced}</pre>}
+        {ask.content !== undefined && <pre className={ask.replaced !== undefined ? "needs-code is-new" : "needs-code"}>{ask.content}</pre>}
+      </div>
       {ask.notes.map((note) => (
         <p key={note} className="needs-alarm">
           {note}
         </p>
       ))}
-      <p className="needs-line">{[ask.tool, ask.cwd && `in ${ask.cwd}`].filter(Boolean).join(" · ")}</p>
-      {ask.expiresAt !== undefined && !ask.answer && (
-        <p className="dim">
-          {expired ? `It stopped waiting at ${clock(ask.expiresAt)}. If it still needs this, it asks again in its terminal.` : `It waits until ${clock(ask.expiresAt)}, and asks in its terminal too.`}
-        </p>
-      )}
+      {expired && !ask.answer && ask.expiresAt !== undefined && <p className="dim">Stopped waiting at {clock(ask.expiresAt)}. It asks again in its terminal if it still needs this.</p>}
       {ask.task !== undefined && <Holds channel={channel} ids={[ask.task]} />}
     </Shell>
-  )
-}
-
-function Written({ label, text, gone }: { label: string; text: string; gone?: boolean }) {
-  return (
-    <div className="needs-written">
-      <p className="needs-label">{label}</p>
-      <pre className={gone ? "needs-code is-gone" : "needs-code"}>{text}</pre>
-    </div>
   )
 }
 
@@ -290,14 +285,9 @@ function QuestionAskCard({ channel, ask, link }: { channel: Channel; ask: Questi
       link={link}
     >
       <p className="needs-text">{ask.text}</p>
-      {askedOf && <p className="needs-line">Put to {askedOf}. You can answer too, and the first answer counts.</p>}
+      {askedOf && <p className="needs-line">You can answer too: the first answer counts.</p>}
       <QuestionCard channel={channel} ask={ask} />
-      {holds.length > 0 && (
-        <>
-          <p className="needs-label">{holds.length === 1 ? `This task waits on ${askedOf ? "an" : "your"} answer` : `These tasks wait on ${askedOf ? "an" : "your"} answer`}</p>
-          <Holds channel={channel} ids={holds} />
-        </>
-      )}
+      {holds.length > 0 && <Holds channel={channel} ids={holds} />}
     </Shell>
   )
 }
@@ -459,9 +449,7 @@ function JoinAskCard({ channel, ask, link }: { channel: Channel; ask: JoinAsk; l
               <p className="needs-check-hint">If it doesn't match, someone else has the link. Turn them away.</p>
             </>
           ) : unchecked ? (
-            <p className="needs-check-q">
-              Show {agent ? "its" : "their"} code to start the check. It appears here and on {agent ? "its terminal" : "their screen"}, then you compare.
-            </p>
+            <p className="needs-check-q">It shows here and on {agent ? "its terminal" : "their screen"}, then you compare.</p>
           ) : (
             <p className="needs-check-q">Their code shows up here as soon as {ask.name} has it on screen. Then you compare.</p>
           )}
@@ -469,11 +457,7 @@ function JoinAskCard({ channel, ask, link }: { channel: Channel; ask: JoinAsk; l
       )}
       {ready && !ask.revoked && (
         <div className="needs-opts">
-          {agent && (
-            <Opt label="Colour" hint="Its face takes this colour.">
-              {() => <Swatches color={color ?? undefined} onPick={setColor} />}
-            </Opt>
-          )}
+          {agent && <Opt label="Colour">{() => <Swatches color={color ?? undefined} onPick={setColor} />}</Opt>}
           {agent && (
             <Opt label="Personality" hint={app.personas.find((p) => p.id === chosen)?.about ?? "Works the way its harness does by default."}>
               {(id) => (
@@ -551,7 +535,7 @@ function ReviewAskCard({ channel, ask, link }: { channel: Channel; ask: ReviewAs
       face={who}
       name={nickname(channel, ask.from)}
       member={!!who}
-      verb={`asks you to review T${ask.task}`}
+      verb="asks you to review"
       at={ask.at}
       link={link}
       actions={
@@ -565,18 +549,15 @@ function ReviewAskCard({ channel, ask, link }: { channel: Channel; ask: ReviewAs
             <button type="button" className="btn" onClick={() => setSending(true)}>
               Send back
             </button>
-            <button type="button" className="btn is-quiet" onClick={() => go({ to: "panel", panel: { kind: "task", task: ask.task } })}>
-              Open the task
-            </button>
           </>
         )
       }
     >
       {task ? (
         <>
-          <p className="needs-text">
+          <button type="button" className="needs-text needs-open" title="Open the task" onClick={() => go({ to: "panel", panel: { kind: "task", task: task.id } })}>
             <span className="needs-id">T{task.id}</span> {task.title}
-          </p>
+          </button>
           {note && (
             <blockquote className="needs-note">
               {note.text}{" "}

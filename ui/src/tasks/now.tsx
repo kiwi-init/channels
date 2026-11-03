@@ -48,14 +48,11 @@ function TaskLine({ channel, t }: { channel: Channel; t: Task }) {
   )
 }
 
-export function NowCard({ channel, needs }: { channel: Channel; needs: number }) {
-  const { go } = useApp()
+export function NowCard({ channel }: { channel: Channel }) {
   const [folded, setFolded] = useState(readFolded)
   const now = nowOf(channel)
   const working = now.working.length + now.more
-  const summary = [working ? `${working} in progress` : "nothing in progress", needs ? `${needs} ${needs === 1 ? "needs" : "need"} you` : "nothing needs you", `${now.doneCount} done today`].join(
-    " · "
-  )
+  const counts = [working ? `${working} in progress` : null, now.doneCount ? `${now.doneCount} done today` : null].filter(Boolean).join(" · ")
   const fold = () => {
     setFolded(!folded)
     keepFolded(!folded)
@@ -64,7 +61,8 @@ export function NowCard({ channel, needs }: { channel: Channel; needs: number })
     <section className="now" aria-label="Now">
       <button type="button" className="now-head" aria-expanded={!folded} onClick={fold}>
         <span className="now-name">Now</span>
-        <span className="now-next">{folded ? [now.next, summary].filter(Boolean).join(" · ") : now.next}</span>
+        <span className="now-next">{now.next}</span>
+        {counts && <span className="now-counts num">{counts}</span>}
         <Icon name="down" size={14} />
       </button>
       {!folded && (
@@ -81,24 +79,11 @@ export function NowCard({ channel, needs }: { channel: Channel; needs: number })
               <span className="now-quiet">nothing right now</span>
             )}
           </Line>
-          {needs > 0 && (
-            <Line label="Needs you">
-              <button type="button" className="now-link" onClick={() => go({ to: "tab", tab: "needs" })}>
-                <span className="now-alert" aria-hidden="true" />
-                {needs} waiting
-              </button>
+          {now.doneCount > 0 && (
+            <Line label="Done today">
+              <span className="now-done">{now.done.map((t) => t.title).join(" · ")}</span>
             </Line>
           )}
-          <Line label="Done today">
-            {now.doneCount ? (
-              <span className="now-done">
-                <span className="num">{now.doneCount}</span>
-                <span className="now-quiet">{now.done.map((t) => t.title).join(" · ")}</span>
-              </span>
-            ) : (
-              <span className="now-quiet">nothing yet</span>
-            )}
-          </Line>
         </div>
       )}
     </section>

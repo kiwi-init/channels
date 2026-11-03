@@ -130,14 +130,6 @@
   background: var(--wash);
 }
 
-.specs-group-dot {
-  align-self: center;
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  background: currentColor;
-}
-
 .specs-list .board-head {
   padding: 4px 8px;
 }
@@ -157,6 +149,7 @@
 .spec-row > .spec-mark {
   grid-row: 1;
   grid-column: 1;
+  justify-self: center;
   align-self: start;
   margin-top: 4px;
 }
@@ -211,7 +204,7 @@
   }
 
   .specs-list .board-row {
-    grid-template-columns: 8px auto minmax(120px, 1fr) auto;
+    grid-template-columns: 1rem auto minmax(120px, 1fr) auto;
     grid-template-rows: auto;
     column-gap: 16px;
     padding-block: 6px;
@@ -379,7 +372,7 @@
 
 .spec-doc [data-anchor] {
   border-radius: var(--r-tick);
-  box-shadow: -10px 0 0 -8px var(--line-3);
+  background: var(--wash);
   transition: background var(--fast);
 }
 
@@ -593,13 +586,6 @@
   gap: 8px;
 }
 
-.spec-box-hint {
-  margin-right: auto;
-  color: var(--ink-3);
-  font: var(--t-stamp) var(--mono);
-  letter-spacing: -0.01em;
-}
-
 .spec-diff-bar {
   display: flex;
   align-items: center;
@@ -686,15 +672,6 @@
   align-items: center;
   gap: 8px 12px;
   margin-bottom: 12px;
-}
-
-.spec-editor-kind {
-  padding: 2px 8px;
-  border-radius: var(--r-tag);
-  background: var(--bg-3);
-  color: var(--ink-2);
-  font: var(--t-stamp) var(--mono);
-  letter-spacing: -0.01em;
 }
 
 .spec-editor-hint {

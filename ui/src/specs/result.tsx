@@ -44,19 +44,17 @@ export function Result({ channel, spec }: { channel: Channel; spec: Spec }) {
                   ? "Nothing yet"
                   : "Not delivered yet"}
           </p>
-          <p className="result-sub">
-            {spec.result
-              ? spec.result.note
+          {(spec.result?.note || (ready && !spec.canJudge) || (!spec.result && !ready)) && (
+            <p className="result-sub">
+              {spec.result
                 ? `“${spec.result.note}”`
-                : "Its tasks, their PRs and what was tried stay here."
-              : ready
-                ? spec.canJudge
-                  ? "Every task is done and every box under Done when is ticked. Check the proof, then accept it or send it back with a note."
-                  : `Every task is done and every box is ticked. It waits for ${nickname(channel, spec.by)}'s verdict.`
-                : spec.stage === "draft"
-                  ? "The spec isn't approved, so no work has started."
-                  : "It lands here once every task is done and every box under Done when is ticked."}
-          </p>
+                : ready
+                  ? `It waits for ${nickname(channel, spec.by)}'s verdict.`
+                  : spec.stage === "draft"
+                    ? "No work starts before the spec is approved."
+                    : "It lands here once every task is done and every box is ticked."}
+            </p>
+          )}
         </div>
         {judge && !back && (
           <div className="result-actions">
@@ -133,7 +131,7 @@ export function Result({ channel, spec }: { channel: Channel; spec: Spec }) {
                 ))}
               </ul>
             ) : (
-              <p className="inside-none">The spec has no boxes under “## Done when”, so its tasks being done is the whole proof.</p>
+              <p className="inside-none">No boxes: its tasks being done is the proof.</p>
             )}
           </section>
 

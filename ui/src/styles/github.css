@@ -13,8 +13,24 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
   gap: 8px 12px;
+}
+
+.gh-top > .btn,
+.gh-end {
+  margin-left: auto;
+}
+
+.gh-end {
+  display: flex;
+  flex: 1 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.gh-end > .gh-repos {
+  flex: none;
 }
 
 .gh-kind button {
@@ -36,10 +52,10 @@
 
 .gh-find {
   display: flex;
-  flex: 0 1 300px;
+  flex: 0 1 220px;
   align-items: center;
   gap: 8px;
-  min-width: 180px;
+  min-width: 140px;
   height: var(--ctl);
   padding: 0 10px;
   border: 1px solid var(--line-2);
@@ -80,42 +96,10 @@
   color: var(--ink);
 }
 
-.gh-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 12px;
-  margin-bottom: 4px;
-}
-
 .gh-n {
   margin-left: 4px;
   color: var(--ink-3);
   font-weight: 400;
-}
-
-.gh-repos {
-  margin-left: auto;
-}
-
-.gh-group + .gh-group {
-  margin-top: 0;
-}
-
-.gh-group-dot {
-  flex: none;
-  align-self: center;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-}
-
-.gh-group-dot.is-fail {
-  background: var(--alert);
-}
-
-.gh-group-dot.is-running {
-  background: var(--doing);
 }
 
 .gh-rows {
