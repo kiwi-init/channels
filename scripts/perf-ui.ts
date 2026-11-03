@@ -16,7 +16,7 @@ export async function newChannel(page: Page, title: string): Promise<string> {
   await dialog.waitFor({ state: "detached", timeout: 30000 });
   await page.getByRole("textbox", { name: "Message" }).waitFor({ timeout: 30000 });
   await page.getByRole("button", { name: "Invite people", exact: true }).first().click();
-  const link = page.getByRole("complementary", { name: "Details" }).locator("code").filter({ hasText: "#mc2-" }).first();
+  const link = page.getByRole("dialog", { name: "Invite people" }).locator("code").filter({ hasText: "#mc2-" }).first();
   await link.waitFor({ timeout: 15000 });
   const code = (await link.innerText()).trim().replace(/^.*#/, "");
   await page.keyboard.press("Escape");

@@ -23,7 +23,7 @@ import { dmInRoom } from "~/live/dm"
 
 const HistoryFold = later(() => import("~/chat/compact").then((m) => m.HistoryFold))
 const ProposalCard = later(() => import("~/chat/compact").then((m) => m.ProposalCard))
-const AddAgentCard = later(() => import("~/panels/add-agent").then((m) => m.AddAgentCard))
+const AddAgentCard = later(() => import("~/modals/add-agent").then((m) => m.AddAgentCard))
 
 const GROUP_MS = 5 * 60_000
 const NEAR_BOTTOM = 48
@@ -661,7 +661,7 @@ function Working({ people }: { people: Person[] }) {
         {named.map((p, i) => (
           <Fragment key={p.name}>
             {i > 0 && ", "}
-            <button type="button" className="working-name" onClick={() => go({ to: "panel", panel: { kind: "person", name: p.name } })}>
+            <button type="button" className="working-name" onClick={() => go({ to: "modal", modal: { kind: "person", name: p.name } })}>
               {shown(p)}
             </button>{" "}
             {liveOf(p)?.text}

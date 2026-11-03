@@ -9,7 +9,7 @@ import { MessageRow } from "~/chat/message"
 import { preview } from "~/chat/preview"
 import { jumpTo } from "~/chat/reply"
 import { ANYONE } from "@kiwi/channel/task-actions.ts"
-import { Avatar, cx, Dialog, DialogHead, Dot, Empty, Heading, statusWord } from "~/kit/bits"
+import { autofocus, Avatar, cx, Modal, Dot, Empty, Heading, statusWord } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
 import { memberOf, type Ask, type Channel, type PermissionAsk, type Person, type QuestionAsk, type ReviewRound, type Task, type TaskEvent } from "~/model"
@@ -100,7 +100,7 @@ function Who({ channel, name }: { channel: Channel; name: string }) {
   const { go } = useApp()
   const person = memberOf(channel, name)
   return (
-    <button type="button" className="task-who" onClick={() => go({ to: "panel", panel: { kind: "person", name } })}>
+    <button type="button" className="task-who" onClick={() => go({ to: "modal", modal: { kind: "person", name } })}>
       <Avatar person={person} size="sm" />
       <span className="task-who-name">{nickname(channel, name)}</span>
       {name === channel.you && <span className="dimmer">you</span>}
@@ -214,14 +214,15 @@ function Assign({ channel, task, open, onClose }: { channel: Channel; task: Task
     close()
   }
   return (
-    <Dialog open={open} onClose={close} label={`Who works on T${task.id}?`}>
-      <DialogHead
-        title={`Who works on T${task.id}?`}
-        sub={task.owner ? `Now ${someone(channel, task.owner)}. The new owner gets a message with your note.` : "The new owner gets a message with your note."}
-        onClose={close}
-      />
+    <Modal
+      open={open}
+      onClose={close}
+      label={`Who works on T${task.id}?`}
+      title={`Who works on T${task.id}?`}
+      sub={task.owner ? `Now ${someone(channel, task.owner)}. The new owner gets a message with your note.` : "The new owner gets a message with your note."}
+    >
       <div className="task-pick">
-        <input className="input" value={why} aria-label="A note for them" placeholder="A note for them (optional)" maxLength={300} onChange={(e) => setWhy(e.target.value)} />
+        <input ref={autofocus} className="input" value={why} aria-label="A note for them" placeholder="A note for them (optional)" maxLength={300} onChange={(e) => setWhy(e.target.value)} />
         <div className="task-pick-list">
           {[...first, ...rest].map((p) => (
             <Choice
@@ -235,7 +236,7 @@ function Assign({ channel, task, open, onClose }: { channel: Channel; task: Task
           ))}
         </div>
       </div>
-    </Dialog>
+    </Modal>
   )
 }
 
@@ -249,12 +250,13 @@ function PickReviewer({ channel, task, open, onClose }: { channel: Channel; task
   }
   const now = task.reviewer ? (task.reviewer === ANYONE ? "Now anyone who hasn't worked on it. " : `Now ${someone(channel, task.reviewer)}. `) : ""
   return (
-    <Dialog open={open} onClose={onClose} label={`Who reviews T${task.id}?`}>
-      <DialogHead
-        title={`Who reviews T${task.id}?`}
-        sub={`${now}${task.status === "review" ? "They give the verdict on the open round." : "They give the verdict when it's sent for review."}`}
-        onClose={onClose}
-      />
+    <Modal
+      open={open}
+      onClose={onClose}
+      label={`Who reviews T${task.id}?`}
+      title={`Who reviews T${task.id}?`}
+      sub={`${now}${task.status === "review" ? "They give the verdict on the open round." : "They give the verdict when it's sent for review."}`}
+    >
       <div className="task-pick-list">
         <button type="button" className="task-pick-row" aria-pressed={task.reviewer === ANYONE} disabled={task.reviewer === ANYONE} onClick={() => pick(ANYONE)}>
           <span className="task-pick-glyph">
@@ -270,7 +272,7 @@ function PickReviewer({ channel, task, open, onClose }: { channel: Channel; task
           <Choice key={p.name} channel={channel} person={p} on={p.name === task.reviewer} about={aboutOf(p)} onPick={() => pick(p.name)} />
         ))}
       </div>
-    </Dialog>
+    </Modal>
   )
 }
 
@@ -419,8 +421,13 @@ function Cancel({ channel, task, open, onClose }: { channel: Channel; task: Task
     onClose()
   }
   return (
-    <Dialog open={open} onClose={close} label={`Cancel T${task.id}?`}>
-      <DialogHead title={`Cancel T${task.id}?`} sub={`It closes for everyone, marked cancelled${task.status === "review" ? ", and its open review round ends" : ""}.`} onClose={close} />
+    <Modal
+      open={open}
+      onClose={close}
+      label={`Cancel T${task.id}?`}
+      title={`Cancel T${task.id}?`}
+      sub={`It closes for everyone, marked cancelled${task.status === "review" ? ", and its open review round ends" : ""}.`}
+    >
       <form
         className="task-cancel"
         onSubmit={(e) => {
@@ -432,6 +439,7 @@ function Cancel({ channel, task, open, onClose }: { channel: Channel; task: Task
         }}
       >
         <input
+          ref={autofocus}
           className="input"
           value={why}
           aria-label="Why it's cancelled"
@@ -439,7 +447,7 @@ function Cancel({ channel, task, open, onClose }: { channel: Channel; task: Task
           maxLength={500}
           onChange={(e) => setWhy(e.target.value)}
         />
-        <div className="dialog-foot">
+        <div className="modal-foot">
           <button type="button" className="btn is-quiet" onClick={close}>
             Keep it
           </button>
@@ -448,7 +456,7 @@ function Cancel({ channel, task, open, onClose }: { channel: Channel; task: Task
           </button>
         </div>
       </form>
-    </Dialog>
+    </Modal>
   )
 }
 

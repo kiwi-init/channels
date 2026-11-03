@@ -252,7 +252,11 @@ function collect(app: App, nav: Nav, go: (go: Go) => void): Item[] {
         keys: [person.name, person.role ?? "", person.runs ?? "", person.kind === "agent" ? "agent" : "person"],
         lead: <Avatar person={person} size="sm" />,
         meta: [person.you ? "you" : person.role, status].filter(Boolean).join(" · "),
-        run: () => toPanel({ kind: "person", name: person.name }),
+        run: () => {
+          close()
+          if (nav.page !== "channel") go({ to: "back" })
+          go({ to: "modal", modal: { kind: "person", name: person.name } })
+        },
       })
     }
 

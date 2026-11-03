@@ -39,7 +39,7 @@ const copier = (text: string) => () => copyText(text)
 
 export function personItems({ channel, go }: MenuContext, person: Person): MenuItem[] {
   return [
-    { label: "View profile", run: () => go({ to: "panel", panel: { kind: "person", name: person.name } }) },
+    { label: "View profile", run: () => go({ to: "modal", modal: { kind: "person", name: person.name } }) },
     ...(person.you ? [] : [{ label: "Message", run: () => go({ to: "where", where: { kind: "dm", with: seatRoot(channel, person.name) } }) }]),
   ]
 }
@@ -109,7 +109,7 @@ export function roomGroups(
         ? []
         : [hideItem(ctx, actions, { kind: "room", room: room.id }, `#${room.name}`, open, true)]),
     ],
-    channel.youOwn || channel.youTrusted ? [{ label: "Room settings", run: () => go({ to: "panel", panel: { kind: "channel" } }) }] : [],
+    channel.youOwn || channel.youTrusted ? [{ label: "Room settings", run: () => go({ to: "modal", modal: { kind: "channel", tab: "rooms" } }) }] : [],
     room.members && canLeave
       ? [
           {
