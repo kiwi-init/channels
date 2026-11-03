@@ -1,6 +1,7 @@
 # Plan: a shell on any of your computers
 
-Status: design, for Jow to approve (T50, from #38 and the screenshot in #41). Nothing is built yet.
+Status: approved by Jow, 2026-11-03 (#67), with shells on by default (T50, from #38 and the screenshot
+in #41). Nothing is built yet.
 
 ## Why you can't pick a computer today
 
@@ -20,7 +21,7 @@ Status: design, for Jow to approve (T50, from #38 and the screenshot in #41). No
 - Pick one and a shell opens there, in the drawer, like a local one.
 - Tabs say which computer they run on (`vps · 1`) once you have shells on more than one computer.
 - Closing the drawer leaves the shell running, as it does today. Its **×** ends it.
-- The VPS needs `kiwi login`, a running daemon and `kiwi shells on`, nothing more.
+- The VPS needs `kiwi login` and a running daemon, nothing more.
 
 ## Who may open a shell
 
@@ -29,8 +30,8 @@ Status: design, for Jow to approve (T50, from #38 and the screenshot in #41). No
 - That covers your desktops. Computers sign nothing (`role: "computer"`), so the VPS can't open a
   shell on your Mac, and an agent host stays one revocable device.
 - Phones: none. The phone app is Conversation and Tasks only.
-- **The computer must allow it.** `kiwi shells on|off|status` sets it, and only on that computer:
-  no remote switch, so a stolen desktop can't turn shells on. **Off by default** (decision 1).
+- **On by default** (Jow, #67). `kiwi shells off|on|status` sets it, and only on that computer: no
+  remote switch, so a stolen desktop can't turn shells back on where you turned them off.
   A shell is the computer's whole user account, wider than a launch.
 
 ## How it connects
@@ -73,6 +74,7 @@ Status: design, for Jow to approve (T50, from #38 and the screenshot in #41). No
 - **+** shows an offline computer greyed out, with when it was last seen
   (`/v1/person/<pk>/machines` already says `online` and `seenAt`). It can't be picked.
 - A computer with shells off shows "Shells off" and the line to run there: `kiwi shells on`.
+- A computer whose kiwi predates the `shell` verb shows "Update kiwi there".
 - A pipe that drops (Wi-Fi, a sleeping laptop, the relay restarting) shows "Reconnecting…" on its
   tab. The app asks again for the same pane: new keys, new pipe, the screen from `seed`. That retries
   for 2 minutes, then reads "vps is offline. Your shell keeps running there."
@@ -100,8 +102,8 @@ Status: design, for Jow to approve (T50, from #38 and the screenshot in #41). No
 - An agent's own pane on another computer (the drawer's other mode). The same pipe can carry it later.
 - Files, ports, copying between computers.
 
-## Decisions for Jow
+## Decisions (Jow, #67)
 
-1. **Shells off until turned on, on that computer** (recommended), or on by default for every computer
-   you sign in.
-2. **Desktops only** (recommended), or phones too, which would need a terminal in the phone app.
+1. **Shells are on by default** on every computer you sign in; `kiwi shells off` on a computer stops
+   them there.
+2. **Desktops only**; phones have no terminal.
