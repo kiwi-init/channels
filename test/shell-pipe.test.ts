@@ -23,6 +23,7 @@ describe("a shell ask", () => {
   test("reads a new shell, a pane, the tab list and a close", () => {
     expect(readMachineArgs({ verb: "shell", args: shell() })).toEqual({ verb: "shell", shell: shell() as never });
     expect(readMachineArgs({ verb: "shell", args: shell({ want: "%12" }) })).toEqual({ verb: "shell", shell: shell({ want: "%12" }) as never });
+    expect(readMachineArgs({ verb: "shell", args: shell({ want: "any" }) })).toEqual({ verb: "shell", shell: shell({ want: "any" }) as never });
     expect(readMachineArgs({ verb: "shell-tabs", args: {} })).toEqual({ verb: "shell-tabs" });
     expect(readMachineArgs({ verb: "shell-close", args: { pane: "%3" } })).toEqual({ verb: "shell-close", pane: "%3" });
   });
