@@ -126,22 +126,6 @@ html .set-body {
   font: var(--t-ui) / 1.5 var(--ui);
 }
 
-.set-on-hover {
-  opacity: 0;
-  transition: opacity var(--fast) var(--ease);
-}
-
-.set-row:hover .set-on-hover,
-.set-on-hover:focus-visible {
-  opacity: 1;
-}
-
-@media (hover: none) {
-  .set-on-hover {
-    opacity: 1;
-  }
-}
-
 .set-end {
   display: flex;
 }
