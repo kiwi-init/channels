@@ -1332,9 +1332,6 @@ html .rail-gear.is-on {
   display: none;
 }
 
-.msg-role {
-  text-transform: lowercase;
-}
 
 @media (max-width: 760px) {
   :root[data-shell="mac"],

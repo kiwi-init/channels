@@ -163,7 +163,7 @@ The two built-in sides, from `tokens.css` and `channels.ts`:
 - Motion answers an action: something opens, arrives or moves because someone
   did something. It is felt, never watched: short, soft, and nothing plays
   twice for the same event. Three things loop: the working dots under the
-  conversation (`blink`), a working task's `Dot` (`spin`, 6s) and the current
+  conversation when the sidebar is hidden (`blink`), a working task's `Dot` (`spin`, 6s) and the current
   step's mark while adding an agent (`spin`).
 - CSS first, and no animation library. Two speeds and one ease for fades and
   fills: `--fast 0.16s`, `--slow 0.28s`, `--ease cubic-bezier(0.32, 0.72, 0, 1)`.
@@ -306,19 +306,22 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   beside the conversation, with a title, a mono sub line and a close button.
   A thread keeps its own composer.
 - **Conversation.** No bubbles, everyone on the left, in the `--col` column.
-  A message is a 32px face, 16px of gap, then the name (600), a mono role, harness and
-  time, and the text in `t-body` under it. A run from one sender keeps one
+  A message is a 32px face, 16px of gap, then the name (600), the "to you" or
+  "asks you" word when it's for you, and the mono time, and the text in
+  `t-body` under it. Role and harness are not repeated on every message: the
+  role is the name's hover text, the harness is the badge on the face. A run from one sender keeps one
   header (`is-compact`). A reply carries one quoted line with a return arrow.
   Task cards, PR lines and reactions sit under the text on `bg-2`. Under a
   message, "N replies" with who and when opens the thread. A pending message
   is at 55%; a failed one gets an `alert-wash` band. Working agents show as
-  a mono line of dots under the last message.
+  a mono line of dots under the last message only when the sidebar, which
+  already says it, is hidden.
 - **Tasks** live inside specs: the Specs view carries the Now card on top,
   folded to its one line (next step, in progress, needs you, done today) until
   someone opens it. Each spec row ends in a mono `done/all tasks` toggle; its
   open tasks stay folded under it unless one waits on you or is open in the
-  panel. A task row is its `Dot`, the title in `t-body`, and a mono line of id,
-  owner, state and age: on one line, the mono part on the right, when the view
+  panel. A task row is its `Dot`, the title in `t-body`, the owner's face, and a
+  mono line of id, state (only when it says more than the dot), PR and age: on one line, the mono part on the right, when the view
   is wide (820px and up), two lines when it isn't. Tasks filed before specs sit
   in a "Not in a spec" card that shows three until Show all. A person adds a
   task on an approved spec's Inside.
