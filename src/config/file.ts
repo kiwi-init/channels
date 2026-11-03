@@ -76,6 +76,7 @@ export interface Config {
   launch?: "on" | "off";
   launchRoots?: string[];
   remoteBypass?: "on" | "off";
+  shells?: "on" | "off";
   terminals?: Terminals;
 }
 

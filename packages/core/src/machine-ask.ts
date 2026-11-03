@@ -72,7 +72,7 @@ export async function readAsk(
   machine: Identity,
   box: string,
   expect: { person: string; list?: DeviceList | null; now?: number; claim: (id: string) => boolean },
-): Promise<{ ok: true; ask: MachineAsk } | { ok: false; why: AskRefusal }> {
+): Promise<{ ok: true; ask: MachineAsk; by: string } | { ok: false; why: AskRefusal }> {
   if (box.length > ASK_MAX_BYTES) return { ok: false, why: "too-big" };
   const opened = machine.xsk ? await openFrom(machine.xsk, box, ASK_INFO) : null;
   if (opened === null) return { ok: false, why: "unsealed" };
@@ -92,7 +92,7 @@ export async function readAsk(
   if (!yours || signed.machine !== machine.pk) return { ok: false, why: "not-yours" };
   if (Math.abs(now - signed.at) > ASK_FRESH_MS) return { ok: false, why: "stale" };
   if (!expect.claim(signed.id)) return { ok: false, why: "replayed" };
-  return { ok: true, ask: { kind: signed.kind, v: signed.v, machine: signed.machine, verb: signed.verb, args: signed.args, id: signed.id, at: signed.at, reply: signed.reply } };
+  return { ok: true, ask: { kind: signed.kind, v: signed.v, machine: signed.machine, verb: signed.verb, args: signed.args, id: signed.id, at: signed.at, reply: signed.reply }, by: signed.pk };
 }
 
 export function signAnswer(machine: Identity, id: string, result: unknown): Promise<MachineAnswer> {
@@ -115,7 +115,7 @@ export type MachineArgs =
   | { verb: "shell-tabs" }
   | { verb: "shell-close"; pane: string };
 
-interface ShellAsk {
+export interface ShellAsk {
   want: string;
   cols: number;
   rows: number;

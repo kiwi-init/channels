@@ -2,12 +2,13 @@ import * as Effect from "effect/Effect";
 import { isTerminalId, PLACE_NAMES, readPlacedSeat, type TerminalId, type TerminalRow, type TerminalsStatus } from "@kiwi/core/terminals.ts";
 import { loadConfig, updateConfig } from "../../config.ts";
 import { showNeedsYou, type NeedsYou, type ShowWhy } from "../../status.ts";
-import { helpersOn, launchesOn, remoteBypassOn, placeTools, seatPlaces, showSeat, switchHelpers, terminalPlugin, terminalPlugins } from "../../terminals/registry.ts";
+import { helpersOn, launchesOn, remoteBypassOn, placeTools, seatPlaces, shellsOn, showSeat, switchHelpers, terminalPlugin, terminalPlugins } from "../../terminals/registry.ts";
 import { parseJson } from "../../terminals/shared/json.ts";
 import { args, opt } from "../args.ts";
 import { type Command, die, out } from "../context.ts";
 
 const USAGE = "usage: kiwi terminal [status] [--json] | kiwi terminal download|remove rex|tmux | kiwi terminal seats [--json] | kiwi terminal show --needs-you | kiwi terminal show --seat SEAT";
+const SHELLS_USAGE = "usage: kiwi shells on|off|status [--json]";
 const LAUNCHES_USAGE = "usage: kiwi launches on|off|status [--json] | kiwi launches bypass on|off|status [--json]";
 
 async function terminalsStatus(): Promise<TerminalsStatus> {
@@ -34,6 +35,12 @@ function bypassText(bypass: "on" | "off"): string {
   return bypass === "on"
     ? "Bypass from your other devices is on: a launch from your phone or another computer may skip its harness's permission prompts here (kiwi launches bypass off stops it)"
     : "Bypass from your other devices is off: a launch from your phone or another computer can't skip its harness's permission prompts here (kiwi launches bypass on allows it)";
+}
+
+function shellsText(shells: "on" | "off"): string {
+  return shells === "on"
+    ? "Shells from your other devices are on: your desktops can open a shell on this computer through the relay, end to end encrypted (kiwi shells off stops it)"
+    : "Shells from your other devices are off: no other device can open a shell on this computer (kiwi shells on allows it)";
 }
 
 function launchesText(launch: "on" | "off"): string {
@@ -121,5 +128,17 @@ export const terminalCommands: Record<string, Command> = {
       else if (sub !== "status") return yield* die(LAUNCHES_USAGE);
       const launch = launchesOn(loadConfig()) ? "on" : "off";
       return out(opt.json ? JSON.stringify({ launch }) : launchesText(launch));
+    }),
+
+  shells: () =>
+    Effect.gen(function* () {
+      const sub = args[1] ?? "status";
+      if (sub === "on" || sub === "off")
+        updateConfig((c) => {
+          c.shells = sub;
+        });
+      else if (sub !== "status") return yield* die(SHELLS_USAGE);
+      const shells = shellsOn(loadConfig()) ? "on" : "off";
+      return out(opt.json ? JSON.stringify({ shells }) : shellsText(shells));
     }),
 };
