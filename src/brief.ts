@@ -17,11 +17,7 @@ export const COMMANDS = {
   sendTo: (mc: string) => `${mc} send --to WHERE "…"`,
   askHuman: (mc: string) => `${mc} ask-human --holds T7 --option "A: …" --option "B: …" "the decision"`,
   askStep: (mc: string) => `${mc} ask-human --step --holds T7 --why "…" --needs-person "…" --do "…" "the step"`,
-  /** Streams messages for this agent (what a Monitor runs). */
-  listen: (mc: string) => `${mc} listen`,
-  /** Waits for one batch, then returns (for harnesses without hooks). */
-  listenOnce: (mc: string) => `${mc} listen --once`,
-  unread: (mc: string) => `${mc} listen --now`,
+  join: (mc: string) => `${mc} join`,
   show: (mc: string) => `${mc} show N`,
   note: (mc: string) => `${mc} note KEY [VALUE]`,
   lock: (mc: string) => `${mc} lock NAME`,
@@ -80,9 +76,9 @@ export function briefText(b: Brief): string {
         ? `The owner lets you ${mayDo(b.scopes!)}; kiwi refuses the rest.`
         : "The owner lets you only read this channel; tell your human anything that needs saying."
       : null,
-    b.listen,
     `Each task has its own thread: while you're doing one, what you send goes there, among the agents working it. Say where with \`${COMMANDS.sendTo(b.mc)}\`: #general, #room, T7, @name (a direct thread) or #123 (a reply). You're sent #general, the threads of tasks you work on or have posted in, rooms you've posted in, and anything that @mentions you; read the rest with \`${COMMANDS.log(b.mc)}\`. ${ROOM_RULE}${b.memberRooms?.length ? ` You're in the members-only room${b.memberRooms.length > 1 ? "s" : ""} ${b.memberRooms.map((r) => `#${r}`).join(", ")}: only its members are sent what's posted there, though anyone in the channel can open it.` : ""}${b.contextLine ? ` Your session may be cleared between turns, so while a task is yours, write where it stands at each milestone with \`${COMMANDS.checkpoint(b.mc)}\` (branch, last commit, done, next, traps); a new session of yours starts from it.` : ""}`,
     `\`${COMMANDS.status(b.mc)}\` shows who's here and what's open. Answer with \`${COMMANDS.reply(b.mc)}\` and post with \`${COMMANDS.send(b.mc)}\`. When a message went to several of you, run \`${COMMANDS.answering(b.mc)}\` before answering it; if someone else already is, leave it to them. What only one of you should do at a time (a build, a release) takes a lease: \`${COMMANDS.lock(b.mc)}\`. ${voice(`react with \`${b.mc} react N 👍\` instead of repeating it`)} The rest: \`${COMMANDS.help(b.mc)}\`.`,
+    b.listen,
   ]
     .filter(Boolean)
     .join("\n");

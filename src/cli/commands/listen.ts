@@ -3,9 +3,14 @@ import * as Effect from "effect/Effect";
 import { ago, describeEvent, parseDuration } from "@kiwi/core/format.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
 import type { ChannelState } from "@kiwi/core/state.ts";
+import type { AgentSession } from "../../agent.ts";
+import { COMMANDS } from "../../brief.ts";
 import { mcFor } from "../../hooks.ts";
+import { listenMode, wokenBy, type ListenMode } from "../../hooks/reach.ts";
 import { detectCard } from "../../card.ts";
-import { daemonListeners } from "../../daemon.ts";
+import { loadConfig } from "../../config.ts";
+import { daemonListeners, wakeHooked, wakeOn } from "../../daemon.ts";
+import { here } from "../../seats.ts";
 import { args, opt } from "../args.ts";
 import { type Command, die, noteRead, out, session } from "../context.ts";
 import { delivery, render } from "../input.ts";
@@ -21,60 +26,102 @@ const nothingUnread = (alias: string, me: string) =>
     return `nothing unread: ${which} (since ${ago(first)}${where.length ? `, in ${where.join(", ")}` : ""}) and marks each message read as it hands it on, so those won't show as unread here; ${log} shows the latest`;
   });
 
+const readFrom = (s: AgentSession) =>
+  Effect.gen(function* () {
+    const { messages, state } = yield* s.read(yield* delivery(s));
+    for (const m of messages) out(render(m, state));
+    if (!messages.length) process.stderr.write(`${yield* nothingUnread(s.alias, s.me)}\n`);
+    yield* noteRead(s);
+  });
+
+const tailFrom = (s: AgentSession) =>
+  Effect.gen(function* () {
+    yield* Effect.forkDetach(Effect.ignoreCause(s.refreshCard(detectCard())));
+    yield* s.listen((m, state) => Effect.sync(() => out(render(m, state))), {
+      ...(yield* delivery(s)),
+      onStatus: (msg) => Effect.sync(() => void process.stderr.write(`kiwi: ${msg}\n`)),
+      onNotice: (text) => Effect.sync(() => out(`* ${text}`)),
+    });
+  });
+
+const waitFrom = (s: AgentSession, wait: string | undefined) =>
+  Effect.gen(function* () {
+    yield* Effect.forkDetach(Effect.ignoreCause(s.refreshCard(detectCard())));
+    let got = 0;
+    const enough = yield* Deferred.make<void>();
+    const woke = Effect.suspend(() => (got++ === 0 ? Effect.asVoid(Effect.forkScoped(Effect.andThen(Effect.sleep(400), Deferred.succeed(enough, undefined)))) : Effect.void));
+    const listening = s.listen(
+      (m, state) =>
+        Effect.andThen(
+          Effect.sync(() => out(render(m, state))),
+          woke,
+        ),
+      {
+        ...(yield* delivery(s)),
+        onStatus: (msg) => Effect.sync(() => void process.stderr.write(`kiwi: ${msg}\n`)),
+        onNotice: (text) =>
+          Effect.andThen(
+            Effect.sync(() => out(`* ${text}`)),
+            woke,
+          ),
+      },
+    );
+    const timeout = wait ? Effect.sleep(parseDuration(wait) * 1000) : Effect.never;
+    yield* Effect.raceFirst(listening, Effect.raceFirst(Deferred.await(enough), timeout)).pipe(Effect.scoped);
+    if (got) return yield* noteRead(s);
+    out(`no messages yet. Next: run this command again:\n  ${mcFor(s.alias, s.me)} ${args[0] === "listen" ? "listen --once" : "wait"} --timeout 10m`);
+    return 2;
+  });
+
+const waking = (s: AgentSession) => {
+  const cfg = loadConfig();
+  return { on: wakeOn(cfg, s.alias, s.me), webhook: wakeHooked(cfg, s.alias, s.me) };
+};
+
+export const modeFor = (s: AgentSession): ListenMode => {
+  const w = waking(s);
+  return listenMode(w.on, here(), w.webhook);
+};
+
+export const listenAs = (s: AgentSession, mode: ListenMode) => (mode === "read" ? readFrom(s) : mode === "once" ? waitFrom(s, undefined) : tailFrom(s));
+
+const listenerRefused = (s: AgentSession) =>
+  Effect.gen(function* () {
+    const w = waking(s);
+    const by = here().harness ? wokenBy(w.on, here(), w.webhook) : null;
+    if (!by) return;
+    return yield* die(`Kiwi already wakes you in this session (${by}), and a listener of yours would take its place. Run \`${COMMANDS.join(mcFor(s.alias, s.me))}\` to read what's waiting.`, 2);
+  });
+
 export const listenCommands: Record<string, Command> = {
   listen: () => {
     if (opt.now && (opt.once || opt.timeout)) return die("--now doesn't wait: leave out --once and --timeout");
-    return opt.webhook ? listenCommands.watch!() : opt.now ? listenCommands.read!() : opt.once || opt.timeout ? listenCommands.wait!() : listenCommands.tail!();
+    if (opt.webhook) return listenCommands.watch!();
+    if (opt.now) return listenCommands.read!();
+    if (opt.once || opt.timeout) return listenCommands.wait!();
+    return Effect.gen(function* () {
+      const s = yield* session();
+      if (!here().harness) return yield* tailFrom(s);
+      const w = waking(s);
+      if (wokenBy(w.on, here(), w.webhook)) return yield* readFrom(s);
+      return yield* modeFor(s) === "once" ? waitFrom(s, undefined) : tailFrom(s);
+    });
   },
 
-  read: () =>
-    Effect.gen(function* () {
-      const s = yield* session();
-      const { messages, state } = yield* s.read(yield* delivery(s));
-      for (const m of messages) out(render(m, state));
-      if (!messages.length) process.stderr.write(`${yield* nothingUnread(s.alias, s.me)}\n`);
-      yield* noteRead(s);
-    }),
+  read: () => Effect.flatMap(session(), readFrom),
 
   tail: () =>
     Effect.gen(function* () {
       const s = yield* session();
-      yield* Effect.forkDetach(Effect.ignoreCause(s.refreshCard(detectCard())));
-      yield* s.listen((m, state) => Effect.sync(() => out(render(m, state))), {
-        ...(yield* delivery(s)),
-        onStatus: (msg) => Effect.sync(() => void process.stderr.write(`kiwi: ${msg}\n`)),
-        onNotice: (text) => Effect.sync(() => out(`* ${text}`)),
-      });
+      yield* listenerRefused(s);
+      yield* tailFrom(s);
     }),
 
   wait: () =>
     Effect.gen(function* () {
       const s = yield* session();
-      yield* Effect.forkDetach(Effect.ignoreCause(s.refreshCard(detectCard())));
-      let got = 0;
-      const enough = yield* Deferred.make<void>();
-      const woke = Effect.suspend(() => (got++ === 0 ? Effect.asVoid(Effect.forkScoped(Effect.andThen(Effect.sleep(400), Deferred.succeed(enough, undefined)))) : Effect.void));
-      const listening = s.listen(
-        (m, state) =>
-          Effect.andThen(
-            Effect.sync(() => out(render(m, state))),
-            woke,
-          ),
-        {
-          ...(yield* delivery(s)),
-          onStatus: (msg) => Effect.sync(() => void process.stderr.write(`kiwi: ${msg}\n`)),
-          onNotice: (text) =>
-            Effect.andThen(
-              Effect.sync(() => out(`* ${text}`)),
-              woke,
-            ),
-        },
-      );
-      const timeout = opt.timeout ? Effect.sleep(parseDuration(opt.timeout) * 1000) : Effect.never;
-      yield* Effect.raceFirst(listening, Effect.raceFirst(Deferred.await(enough), timeout)).pipe(Effect.scoped);
-      if (got) return yield* noteRead(s);
-      out(`no messages yet. Next: run this command again:\n  ${mcFor(s.alias, s.me)} ${args[0] === "listen" ? "listen --once" : "wait"} --timeout 10m`);
-      return 2;
+      if (!opt.timeout) yield* listenerRefused(s);
+      return yield* waitFrom(s, opt.timeout);
     }),
 
   watch: () =>

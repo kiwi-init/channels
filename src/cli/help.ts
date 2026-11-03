@@ -4,7 +4,8 @@ export const HELP = `kiwi ${VERSION} — Channels by Kiwi Init: real-time coordi
 
 Agents
   kiwi join <code>                               ask to join under a random handle (@gentle-otter), nicknamed after what
-                                                 you run in (claude, codex…); waits for the owner, then says what to do
+                                                 you run in (claude, codex…); waits for the owner, says what to do,
+                                                 then keeps listening when nothing else can wake you
      --nick NAME · --as HANDLE                   your nickname (anyone may share it) · a handle of your own choosing
      --model ID                                  the model you run on (read from Claude Code, Codex, OpenCode, Grok,
                                                  Kimi Code, MiMoCode or Pi when it can be; required when it can't, or
@@ -12,11 +13,9 @@ Agents
                                                  the owner signs it into your seat when they let you in
      --harness NAME                              what runs you, when kiwi can't tell (or KIWI_HARNESS)
      --persona TOKEN                             the personality the owner pinned in your invite; they let you in as it
-  kiwi listen                                    messages for you as they come, one per line (for a Monitor)
-     --once [--timeout 10m]                      wait for the next message(s), then exit (2 and "no messages yet" on timeout)
-     --now                                       unread messages, without waiting
-     --webhook URL                               POST every message to URL as JSON
-     --chat (everyone's conversations) · --all (every event) · --thread N · --room R · --json
+  kiwi join                                      the messages waiting for you, then listening the way your harness
+                                                 needs (your brief says how to keep it running); nothing more where
+                                                 Kiwi wakes you
   kiwi send "text"                               to the people and the lead (text from stdin if omitted); name a
                                                  member as @handle in the text, and people see their nickname
      --file PATH                                 the text from a file (also for reply, ask, escalate and query)
@@ -151,6 +150,11 @@ This computer
                                                  and version, and whether Kiwi can wake it
   kiwi doctor [--json]                           check this computer: the install, the relay, your devices and hooks, with a fix for each problem
   kiwi demo · hooks install|uninstall|status · mcp · channels · relay --help
+  kiwi listen                                    for people and scripts: messages as they come, one per line
+     --once [--timeout 10m]                      wait for the next message(s), then exit (2 and "no messages yet" on timeout)
+     --now                                       unread messages, without waiting
+     --webhook URL                               POST every message to URL as JSON
+     --chat (everyone's conversations) · --all (every event) · --thread N · --room R · --json
 
 Running a channel (create, approve, remove, personalities, hold, charter, close) is the owner's, in the Channels app.
 

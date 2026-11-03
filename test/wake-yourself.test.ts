@@ -55,6 +55,14 @@ async function run(home: string, args: string[], env: Env = {}, cwd = home, stdi
   return { code: await p.exited, out, err };
 }
 
+function printed(p: ReturnType<typeof spawn>): () => string {
+  let text = "";
+  void (async () => {
+    for await (const chunk of p.stdout) text += new TextDecoder().decode(chunk);
+  })();
+  return () => text;
+}
+
 async function ok(home: string, args: string[], env: Env = {}, cwd = home): Promise<string> {
   const r = await run(home, args, env, cwd);
   if (r.code !== 0) throw new Error(`kiwi ${args.join(" ")} exited ${r.code}: ${r.err}`);
@@ -121,7 +129,7 @@ function fakeKimi(home: string, cwd: string, env: Env, name = "kimi") {
     hook: (args: string[], stdin: string) => done(line(args, false, stdin, false)),
     background: (args: string[]) => {
       const id = line(args, true, undefined, true);
-      return { out: () => read(id, "out") };
+      return { out: () => read(id, "out"), err: () => read(id, "err") };
     },
   };
 }
@@ -134,7 +142,7 @@ command = "notify-send kimi"
 `;
 
 describe("Kimi Code keeps its own listener running", () => {
-  test("join installs its Stop hook beside the user's config; Stop blocks with exit 2 until `listen --once` runs, and again once it has ended", async () => {
+  test("join, run in the background, is the listener: it hands over the first message, Stop blocks with exit 2 until `kiwi join` runs again, and again once it has ended (#1539)", async () => {
     const owner = scratch("kimi-own");
     const code = created(await ok(owner, ["create", "kimi-wake", "--as", "boss"]));
     const h = scratch("kimi");
@@ -142,13 +150,14 @@ describe("Kimi Code keeps its own listener running", () => {
     writeFileSync(join(kimiDir, "config.toml"), KIMI_USER);
     const kimi = fakeKimi(h, h, { KIWI_KIMI_DIR: kimiDir });
 
-    const joining = kimi.tool(["join", code, "--timeout", "40s"]);
+    const joined = kimi.background(["join", code, "--timeout", "40s"]);
+    await until(() => joined.out().includes("If this command isn't running in the background, stop it and run it again with the Bash tool as a background task"), "the background hint");
     await approve(owner);
-    const joined = await joining;
-    expect(joined.code).toBe(0);
-    const me = youAre(joined.out);
-    expect(joined.out).toContain("listen --once`, run_in_background: true, disable_timeout: true");
-    expect(joined.err).toContain(`installed Kimi Code hooks (${join(kimiDir, "config.toml")})`);
+    await until(() => joined.out().includes("You're \""), "the brief");
+    const me = youAre(joined.out());
+    expect(joined.out()).toContain("`kiwi join`, run_in_background: true, disable_timeout: true");
+    await until(() => joined.out().includes("Listening now: this command ends when a message for you arrives. While it runs in the background, don't start another"), "join listening");
+    expect(joined.err()).toContain(`installed Kimi Code hooks (${join(kimiDir, "config.toml")})`);
     const config = readFileSync(join(kimiDir, "config.toml"), "utf8");
     expect(config.startsWith(KIMI_USER)).toBe(true);
     const hooks = (Bun.TOML.parse(config) as { hooks: { event: string; command: string; timeout?: number }[] }).hooks;
@@ -157,14 +166,21 @@ describe("Kimi Code keeps its own listener running", () => {
     expect(hooks[1]!.timeout).toBe(30);
 
     const stopInput = JSON.stringify({ hook_event_name: "Stop", session_id: "session_kimi", cwd: h, stop_hook_active: false });
+    await until(async () => (await listenersOf(h, me)).some((l) => l.pid === kimi.pid && l.harness === "kimi"), "join's listener held for this Kimi session");
+    expect(await kimi.hook(["hook", "kimi-stop"], stopInput)).toEqual({ code: 0, out: "", err: "" });
+    await ok(owner, ["send", "--to", me, "handed over by join"]);
+    await until(() => joined.out().includes("handed over by join"), "join handing over the first message");
+    await until(async () => (await listenersOf(h, me)).length === 0, "join gone");
+
     const deaf = await kimi.hook(["hook", "kimi-stop"], stopInput);
     expect(deaf.code).toBe(2);
     expect(deaf.out).toBe("");
     expect(deaf.err).toContain("no Kiwi listener of yours is running for kimi-wake");
-    expect(deaf.err).toContain("listen --once`, run_in_background: true, disable_timeout: true");
+    expect(deaf.err).toContain("`kiwi join`, run_in_background: true, disable_timeout: true");
+    expect(deaf.err).not.toMatch(/ listen\b/);
     expect(deaf.err).toContain("If you are a subagent, ignore this and end your turn.");
 
-    const listener = kimi.background(["listen", "--once"]);
+    const listener = kimi.background(["join"]);
     await until(async () => (await listenersOf(h, me)).some((l) => l.pid === kimi.pid && l.harness === "kimi"), "the listener held for this Kimi session");
     const armed = await kimi.hook(["hook", "kimi-stop"], stopInput);
     expect(armed).toEqual({ code: 0, out: "", err: "" });
@@ -198,7 +214,7 @@ describe("Kimi Code keeps its own listener running", () => {
 });
 
 describe("ZCode keeps its own listener running", () => {
-  test("join installs its Stop hook in config.json; Stop blocks, Claude-shaped, until `listen --once` runs, and again once it has woken the agent", async () => {
+  test("join installs its Stop hook in config.json and stays as the listener; Stop blocks, Claude-shaped, once join has woken the agent, until `kiwi join` runs again (#1539)", async () => {
     const owner = scratch("zcode-own");
     const code = created(await ok(owner, ["create", "zcode-wake", "--as", "boss"]));
     const h = scratch("zcode");
@@ -206,13 +222,12 @@ describe("ZCode keeps its own listener running", () => {
     writeFileSync(join(zcodeDir, "config.json"), JSON.stringify({ model: "glm-5" }));
     const zcode = fakeKimi(h, h, { KIWI_ZCODE_DIR: zcodeDir, ZCODE_RUNTIME_ENV: "1" }, "zcode-cli");
 
-    const joining = zcode.tool(["join", code, "--timeout", "40s"]);
+    const joined = zcode.background(["join", code, "--timeout", "40s"]);
     await approve(owner);
-    const joined = await joining;
-    expect(joined.code).toBe(0);
-    const me = youAre(joined.out);
-    expect(joined.out).toContain("listen --once`, run_in_background: true, and no timeout");
-    expect(joined.err).toContain(`installed ZCode hooks (${join(zcodeDir, "config.json")})`);
+    await until(() => joined.out().includes("You're \""), "the brief");
+    const me = youAre(joined.out());
+    expect(joined.out()).toContain("`kiwi join`, run_in_background: true, and no timeout");
+    await until(() => joined.err().includes(`installed ZCode hooks (${join(zcodeDir, "config.json")})`), "the hooks installed");
     const config = JSON.parse(readFileSync(join(zcodeDir, "config.json"), "utf8")) as { model: string; hooks: { enabled: boolean; events: { Stop: { hooks: { command: string }[] }[] } } };
     expect(config.model).toBe("glm-5");
     expect(config.hooks.enabled).toBe(true);
@@ -221,11 +236,10 @@ describe("ZCode keeps its own listener running", () => {
     expect(command[0]).toEndWith(" hook stop # kiwi");
 
     const otherCode = created(await ok(owner, ["create", "zcode-other", "--as", "boss"]));
-    const second = zcode.tool(["join", otherCode, "--timeout", "40s"]);
+    const joinedOther = zcode.background(["join", otherCode, "--timeout", "40s"]);
     await approve(owner, ["-c", "zcode-other"]);
-    const joinedOther = await second;
-    expect(joinedOther.code).toBe(0);
-    const other = youAre(joinedOther.out);
+    await until(() => joinedOther.out().includes("You're \""), "the other brief");
+    const other = youAre(joinedOther.out());
 
     const stopInput = JSON.stringify({
       hookEventName: "Stop",
@@ -238,25 +252,19 @@ describe("ZCode keeps its own listener running", () => {
       toolCallCount: 0,
     });
     const decision = (r: Ran) => JSON.parse(r.out) as { decision: string; reason: string };
-    const deaf = await zcode.hook(["hook", "stop"], stopInput);
-    expect(deaf.code).toBe(0);
-    expect(decision(deaf).decision).toBe("block");
-    expect(decision(deaf).reason).toContain("no Kiwi listener of yours is running for zcode-wake");
-    expect(decision(deaf).reason).toContain("no Kiwi listener of yours is running for zcode-other");
-    expect(decision(deaf).reason).toContain("listen --once`, run_in_background: true, and no timeout");
-
-    const listener = zcode.background(["-c", "zcode-wake", "listen", "--once"]);
-    zcode.background(["-c", "zcode-other", "listen", "--once"]);
     const held = async (agent: string) => (await listenersOf(h, agent)).some((l) => l.pid === zcode.pid && l.harness === "zcode");
-    await until(async () => (await held(me)) && (await held(other)), "a listener held for each seat of this ZCode process");
+    await until(async () => (await held(me)) && (await held(other)), "join holding a listener for each seat of this ZCode process");
     expect(await zcode.hook(["hook", "stop"], stopInput)).toEqual({ code: 0, out: "", err: "" });
 
     await ok(owner, ["-c", "zcode-wake", "send", "--to", me, "wakes the zcode listener"]);
-    await until(() => listener.out().includes("wakes the zcode listener"), "listen --once handing over the message");
-    await until(async () => (await listenersOf(h, me)).length === 0, "the listener gone");
+    await until(() => joined.out().includes("wakes the zcode listener"), "join handing over the message");
+    await until(async () => (await listenersOf(h, me)).length === 0, "join gone");
     const rearm = await zcode.hook(["hook", "stop"], stopInput);
+    expect(rearm.code).toBe(0);
     expect(decision(rearm).decision).toBe("block");
     expect(decision(rearm).reason).toContain("no Kiwi listener of yours is running for zcode-wake");
+    expect(decision(rearm).reason).toContain("`kiwi -c zcode-wake --as");
+    expect(decision(rearm).reason).toContain(" join`, run_in_background: true, and no timeout");
     expect(decision(rearm).reason).not.toContain("running for zcode-other");
 
     await ok(owner, ["-c", "zcode-wake", "send", "--to", me, "unread at stop"]);
@@ -307,8 +315,8 @@ describe("A Kimi Code session Kimi's server hosts is woken through that server",
       const joined = await joining;
       expect(joined.code).toBe(0);
       const me = youAre(joined.out);
-      expect(joined.out).toContain("Kiwi wakes you in this session when a message for you arrives (Kimi's server). Don't run listen.");
-      expect(joined.out).not.toContain("listen --once");
+      expect(joined.out).toContain("Kiwi wakes you in this session when a message for you arrives (Kimi's server). Don't keep a listener running.");
+      expect(joined.out).not.toMatch(/ listen\b/);
       const seat = () =>
         Object.values((JSON.parse(readFileSync(join(h, "config.json"), "utf8")) as { bindings: Record<string, { as: string; harnessSession?: string }> }).bindings).find((b) => b.as === me);
       expect(seat()?.harnessSession).toBe("session_joined");
@@ -323,7 +331,7 @@ describe("A Kimi Code session Kimi's server hosts is woken through that server",
       expect(posted[0]!.auth).toBe("Bearer srv-token");
       const text = (posted[0]!.body as { content: { type: string; text: string }[] }).content[0]!;
       expect(text.type).toBe("text");
-      expect(text.text).toContain(`--as ${me} listen --now`);
+      expect(text.text).toContain(`--as ${me} join`);
       expect(text.text).not.toContain("attic");
       await until(() => existsSync(join(h, "wake.log")) && readFileSync(join(h, "wake.log"), "utf8").includes(`\t${me}\tkimi-server\t1\tok`), "the wake log");
     } finally {
@@ -333,18 +341,27 @@ describe("A Kimi Code session Kimi's server hosts is woken through that server",
 });
 
 describe("Grok keeps its own monitor running", () => {
-  test("its Stop hook blocks until a monitor runs this seat's listen; SessionStart and prompt hooks, whose output Grok drops, don't use up messages", async () => {
+  test("join keeps streaming as the monitor; its Stop hook blocks until a monitor runs this seat's join; SessionStart and prompt hooks, whose output Grok drops, don't use up messages (#1539)", async () => {
     const owner = scratch("grok-own");
     const code = created(await ok(owner, ["create", "grok-wake", "--as", "boss"]));
     const h = scratch("grok");
     const grokDir = scratch("grok-home");
     const G = { GROK_SESSION_ID: "g1", KIWI_GROK_DIR: grokDir };
-    const joining = run(h, ["join", code, "--timeout", "40s"], G);
+    const joining = spawn(h, ["join", code, "--timeout", "40s"], G);
+    shells.push(joining);
+    const joined = printed(joining);
+    await until(() => joined().includes("stop it and run it again with the monitor tool (persistent: true)"), "the monitor hint");
     await approve(owner);
-    const joined = await joining;
-    expect(joined.code).toBe(0);
-    const me = youAre(joined.out);
-    expect(joined.out).toMatch(/start the monitor tool with command `([^`]+)`, description "\1", persistent: true/);
+    await until(() => joined().includes("You're \""), "the brief");
+    const me = youAre(joined());
+    expect(joined()).toMatch(/start the monitor tool with command `([^`]+)`, description "\1", persistent: true/);
+    await until(() => joined().includes("Listening now: each message for you prints here as it arrives. If this command is your monitor, don't start another"), "join saying it listens");
+    await until(async () => (await listenersOf(h, me)).some((l) => l.session === "g1"), "join streaming for this Grok session");
+    await ok(owner, ["send", "--to", me, "streamed by join"]);
+    await until(() => joined().includes("streamed by join"), "join printing the message");
+    joining.kill();
+    await joining.exited;
+    await until(async () => (await listenersOf(h, me)).length === 0, "join gone");
     const file = JSON.parse(readFileSync(join(grokDir, "hooks", "kiwi.json"), "utf8")) as { hooks: Record<string, { hooks: { command: string }[] }[]> };
     expect(Object.keys(file.hooks)).toEqual(["Stop"]);
 
@@ -373,7 +390,7 @@ describe("Grok keeps its own monitor running", () => {
     expect(deaf?.decision).toBe("block");
     expect(deaf?.reason).toContain("no Kiwi listener of yours is running for grok-wake");
     const listen = /start the monitor tool with command `([^`]+)`/.exec(deaf!.reason)![1]!;
-    expect(listen).toEndWith(" listen");
+    expect(listen).toEndWith(" join");
     expect(await stop({ stop_hook_active: true, backgroundTasks: [] })).toBeNull();
     const activeLogged = readFileSync(join(h, "stop.log"), "utf8").trim().split("\n").at(-1)!;
     expect(activeLogged).toContain("grok-wake");
@@ -396,7 +413,7 @@ describe("Grok keeps its own monitor running", () => {
     expect(await stop({ backgroundTasks: [{ id: "m6", type: "monitor", status: "running", description: `[monitor] ${listen}` }] })).toBeNull();
     expect(await stop({ backgroundTasks: [{ id: "m7", type: "monitor", status: "running", display_command: `[monitor] ${listen}` }] })).toBeNull();
 
-    const monitor = spawn(h, ["listen"], G);
+    const monitor = spawn(h, ["join"], G);
     shells.push(monitor);
     await until(async () => (await listenersOf(h, me)).some((l) => l.session === "g1"), "the monitor's listener held for this Grok session");
     expect(await stop({})).toBeNull();
@@ -413,21 +430,30 @@ describe("Grok keeps its own monitor running", () => {
     ).toBe("block");
     expect(await stop({ backgroundTasks: [{ id: "m5", type: "monitor", status: "running", description: listen }] })).toBeNull();
     monitor.kill();
+    await monitor.exited;
+    await until(async () => (await listenersOf(h, me)).length === 0, "the monitor's join gone");
+    expect(await stop({ backgroundTasks: [{ id: "m8", type: "monitor", status: "running", description: listen.replace(/ join$/, " listen") }] })).toBeNull();
   });
 });
 
 describe("Cursor keeps its own listener running", () => {
-  test("its stop hook asks for `listen --once` in the background until one of this chat runs, and again once it has woken the agent", async () => {
+  test("join stays as the listener until the first message; then its stop hook asks for `kiwi join` in the background until one of this chat runs (#1539)", async () => {
     const owner = scratch("cursor-own");
     const code = created(await ok(owner, ["create", "cursor-wake", "--as", "boss"]));
     const h = scratch("cursor");
     const C = { CURSOR_AGENT: "1", CURSOR_CONVERSATION_ID: "chat-1", KIWI_CURSOR_DIR: scratch("cursor-home") };
-    const joining = run(h, ["join", code, "--timeout", "40s"], C);
+    const joining = spawn(h, ["join", code, "--timeout", "40s"], C);
+    shells.push(joining);
+    const joined = printed(joining);
     await approve(owner);
-    const joined = await joining;
-    expect(joined.code).toBe(0);
-    const me = youAre(joined.out);
-    expect(joined.out).toContain("listen --once` with the Shell tool as a background command (is_background: true)");
+    await until(() => joined().includes("You're \""), "the brief");
+    const me = youAre(joined());
+    expect(joined()).toContain("`kiwi join` with the Shell tool as a background command (is_background: true)");
+    await until(async () => (await listenersOf(h, me)).some((l) => l.session === "chat-1" && l.harness === "cursor"), "join listening for this Cursor chat");
+    await ok(owner, ["send", "--to", me, "handed over by join"]);
+    expect(await joining.exited).toBe(0);
+    await until(() => joined().includes("handed over by join"), "join printing the message");
+    await until(async () => (await listenersOf(h, me)).length === 0, "join gone");
 
     const stop = async (extra: Record<string, unknown> = {}) => {
       const r = await run(
@@ -446,7 +472,7 @@ describe("Cursor keeps its own listener running", () => {
     expect(deaf).toContain("is_background: true");
     expect(await stop({ status: "aborted" })).toBeNull();
 
-    const listener = spawn(h, ["listen", "--once"], C);
+    const listener = spawn(h, ["join"], C);
     shells.push(listener);
     await until(async () => (await listenersOf(h, me)).some((l) => l.session === "chat-1" && l.harness === "cursor"), "the listener held for this Cursor chat");
     expect(await stop()).toBeNull();

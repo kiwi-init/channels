@@ -140,7 +140,8 @@ function listenCheck(input: HookInput, b: Binding, who: Here, mc: string): Liste
     };
     return { kind: "check", listens, settles: false };
   }
-  const commands = [COMMANDS.listen(mc), COMMANDS.listen(`${mcBin()} ${channelOption(b.alias)} ${asOption(b.as)}`)];
+  const full = `${mcBin()} ${channelOption(b.alias)} ${asOption(b.as)}`;
+  const commands = [COMMANDS.join(mc), COMMANDS.join(full), `${mc} listen`, `${full} listen`];
   const listens = () => {
     const heard = grokMonitorListens(tasks, commands);
     if (!heard) noteUnheard(b, tasks, commands);
