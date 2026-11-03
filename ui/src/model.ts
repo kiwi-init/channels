@@ -442,6 +442,25 @@ export interface ReviewAsk {
 
 export type Ask = PermissionAsk | QuestionAsk | JoinAsk | ReviewAsk | SpecAsk
 
+export type HomeAct = { kind: "options"; options: string[] } | { kind: "allow" } | { kind: "approve-spec"; ask: number; v: number } | { kind: "approve-task"; task: number } | { kind: "open" }
+
+export interface HomeAsk {
+  id: string
+  at: number
+  text: string
+  act: HomeAct
+}
+
+export interface HomeChannel {
+  code: string
+  title: string
+  lead: string | null
+  leadName: string | null
+  working: number
+  asks: HomeAsk[]
+  loading?: true
+}
+
 export interface ChannelTile {
   code: string
   title: string
@@ -855,6 +874,7 @@ export interface GoneChannel {
 export interface App {
   account: Account | null
   channels: ChannelTile[]
+  home: HomeChannel[]
   channel: Channel | null
   gone?: GoneChannel
   prefs: Prefs

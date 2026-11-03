@@ -29,7 +29,8 @@ import { ownPrefs, usePrefs } from "~/live/prefs"
 import { useComputer } from "~/live/computer"
 import { useDeviceLists } from "~/live/devices"
 import { useStarts } from "~/live/starts"
-import { useGone, useOpened } from "~/live/store"
+import { useGone, useHome, useOpened } from "~/live/store"
+import { HomeMembers } from "~/live/home"
 import type { App, ChannelTile } from "~/model"
 import type { Go } from "~/nav"
 
@@ -123,11 +124,12 @@ export function useLive(open: string | null): App {
   const signIn = useGithubSignIn()
   const actions = useMemo(() => makeActions(), [])
   const channel = opened && opened.code === open ? opened.channel : null
+  const home = useHome()
   const lost = useGone()
   const gone = !channel && lost && lost.code === open ? lost : null
   return useMemo(
-    () => ({ account, channels, channel, ...(gone ? { gone } : {}), prefs, harnesses, personas, starts, ownPersonalities, computer, enrolling, signIn, actions }),
-    [account, channels, channel, gone, prefs, harnesses, personas, starts, ownPersonalities, computer, enrolling, signIn, actions]
+    () => ({ account, channels, home, channel, ...(gone ? { gone } : {}), prefs, harnesses, personas, starts, ownPersonalities, computer, enrolling, signIn, actions }),
+    [account, channels, home, channel, gone, prefs, harnesses, personas, starts, ownPersonalities, computer, enrolling, signIn, actions]
   )
 }
 
@@ -194,5 +196,6 @@ export function LiveDuties({ open, view, go }: { open: string | null; view: View
   }, [member])
   if (member && !member.relay) return <OpenMember key={member.code} member={member} view={view} />
   if (pending) return <OpenPending key={pending.code} pending={pending} />
+  if (!open && person) return <HomeMembers />
   return null
 }
