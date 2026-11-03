@@ -217,6 +217,7 @@ export interface Spec {
   changed?: true
   result?: SpecMark & { verdict: "accepted" | "dropped"; note?: string; auto?: true }
   backs: (SpecMark & { note: string })[]
+  comments: number[]
   tasks: number[]
   planner?: string
   queue?: number

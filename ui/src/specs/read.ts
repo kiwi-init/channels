@@ -80,9 +80,18 @@ export function splitQuote(text: string): { quote?: string; text: string } {
   return { quote: quoted.join("\n").trim(), text: lines.slice(i).join("\n").trim() }
 }
 
-export function commentsOf(channel: Pick<Channel, "messages">, ask: number): Comment[] {
+type SpecThread = Pick<Spec, "ask" | "comments">
+
+function onSpecThread(channel: Pick<Channel, "specs">, spec: SpecThread): (m: Message) => boolean {
+  const mine = new Set(spec.comments)
+  const elsewhere = new Set((channel.specs ?? []).filter((s) => s.ask !== spec.ask).flatMap((s) => [s.ask, ...s.comments]))
+  return (m) => mine.has(m.seq) || (m.inThread === spec.ask && !elsewhere.has(m.seq))
+}
+
+export function commentsOf(channel: Pick<Channel, "messages" | "specs">, spec: SpecThread): Comment[] {
+  const on = onSpecThread(channel, spec)
   return channel.messages
-    .filter((m) => m.inThread === ask && !m.system && !m.deleted)
+    .filter((m) => on(m) && !m.system && !m.deleted)
     .sort((a, b) => a.seq - b.seq)
     .map((m) => {
       const { quote, text } = splitQuote(m.text)
@@ -213,9 +222,10 @@ export function lastMove(channel: Channel, spec: Spec): number {
   return Math.max(spec.edited.at, spec.approved?.at ?? 0, ...tasksOf(channel, spec).map((t) => t.updatedAt))
 }
 
-export function insideOf(channel: Pick<Channel, "messages">, spec: Pick<Spec, "ask" | "tasks">): Message[] {
+export function insideOf(channel: Pick<Channel, "messages" | "specs">, spec: Pick<Spec, "ask" | "tasks" | "comments">): Message[] {
   const tasks = new Set(spec.tasks)
-  return channel.messages.filter((m) => m.seq === spec.ask || m.inThread === spec.ask || (m.where.kind === "task" && tasks.has(m.where.task))).sort((a, b) => a.at - b.at)
+  const on = onSpecThread(channel, spec)
+  return channel.messages.filter((m) => m.seq === spec.ask || on(m) || (m.where.kind === "task" && tasks.has(m.where.task))).sort((a, b) => a.at - b.at)
 }
 
 export function faceOf(channel: Channel, name: string): Person | undefined {

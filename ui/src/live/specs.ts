@@ -29,6 +29,7 @@ export function specsOf(state: ChannelState, me: string): Spec[] {
         ...(changedSinceApproval(s) ? { changed: true as const } : {}),
         ...(result ? { result } : {}),
         backs: s.backs.map((b) => ({ by: b.by, at: b.at, note: b.note })),
+        comments: (s.comments ?? []).map((c) => c.seq),
         tasks: specTasks(state, s.ask).map((t) => t.id),
         ...(planner ? { planner } : {}),
         ...(place > 0 ? { queue: place } : {}),

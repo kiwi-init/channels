@@ -526,7 +526,7 @@ function folding(
         const parent = earlierParent(m);
         const root = parent === undefined ? m.seq : (threadOf.get(parent) ?? parent);
         threadOf.set(m.seq, root);
-        noteSpecComment(specs, root, m);
+        noteSpecComment(specs, parent, root, m);
         if (isPerson(member)) askHeads.set(m.seq, askHeadOf(m, at));
         let people = threadPeople.get(root);
         if (!people) threadPeople.set(root, (people = new Set()));
@@ -597,7 +597,7 @@ function folding(
       }
       if (ev.op === "task.add" && specsOnly !== null) {
         const re = earlierParent(m);
-        const ask = re !== undefined ? askOfMessage({ askHeads, threadOf, placeOf, tasks }, re) : ev.from !== undefined ? tasks.get(ev.from)?.ask : undefined;
+        const ask = re !== undefined ? askOfMessage({ askHeads, threadOf, placeOf, tasks, specs }, re) : ev.from !== undefined ? tasks.get(ev.from)?.ask : undefined;
         const why = specGate(specs, ask);
         if (why) {
           placeOf.set(m.seq, MAIN);
@@ -629,7 +629,7 @@ function folding(
       const added = ev.op === "task.add" && !rejected.has(m.seq) ? tasks.get(m.seq) : undefined;
       if (added) {
         const re = earlierParent(m);
-        const ask = fileTask({ askHeads, threadOf, placeOf, tasks }, added, re, isPerson(member), at);
+        const ask = fileTask({ askHeads, threadOf, placeOf, tasks, specs }, added, re, isPerson(member), at);
         if (ask !== undefined) added.ask = ask;
       }
       const evPlace = placeOf.get(m.seq);
