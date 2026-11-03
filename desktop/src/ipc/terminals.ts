@@ -87,25 +87,12 @@ function seats(stdout: string): PlacedSeat[] {
   return Array.isArray(parsed) ? parsed.map(readPlacedSeat).filter((s): s is PlacedSeat => s !== null) : [];
 }
 
-export function terminalsCalls(): Serves<
-  "terminals" | "terminalHelpers" | "terminalPrefer" | "setLaunches" | "setRemoteBypass" | "contextLine" | "setContextLine" | "hooks" | "setHooks" | "wakeSeats" | "setWake" | "seatPlaces" | "showSeat"
-> {
+export function terminalsCalls(): Serves<"terminals" | "terminalHelpers" | "contextLine" | "setContextLine" | "hooks" | "setHooks" | "wakeSeats" | "setWake" | "seatPlaces" | "showSeat"> {
   return {
     terminals: () => terminals(),
     terminalHelpers: (id: unknown, to: unknown) => {
       if (!isTerminalId(id) || !isSwitch(to)) throw new Error("terminalHelpers takes rex or tmux, and on or off");
       return change(["terminal", to === "on" ? "download" : "remove", id]);
-    },
-    terminalPrefer: async () => {
-      throw new Error("new agents always open in Channels' own tmux");
-    },
-    setLaunches: (to: unknown) => {
-      if (!isSwitch(to)) throw new Error("setLaunches takes on or off");
-      return change(["launches", to]);
-    },
-    setRemoteBypass: (to: unknown) => {
-      if (!isSwitch(to)) throw new Error("setRemoteBypass takes on or off");
-      return change(["launches", "bypass", to]);
     },
     contextLine: () => contextLine(["context-line", "status", "--json"]),
     setContextLine: (to: unknown) => {

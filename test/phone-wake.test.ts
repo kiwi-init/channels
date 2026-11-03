@@ -117,7 +117,7 @@ describe("a phone's own sends name whose phones to wake", () => {
       follow: (): (() => void) => () => {},
     } as unknown as Keyring;
     const seat = { code: "code", label: "jow-phone", idName: "jow-phone", name: "general", pk: pks("jow-phone")[0], access: {} } as unknown as ChannelIdentityView;
-    const room = new Room(keyring, seat, { emit: () => {}, lost: () => {}, launch: () => {}, person: () => null, log: () => {}, devices: () => {} });
+    const room = new Room(keyring, seat, { emit: () => {}, lost: () => {}, person: () => null, log: () => {}, devices: () => {} });
     await room.start();
     await new Promise((done) => setTimeout(done, 200));
     await room.send("@maya can you look?", null, [], null);

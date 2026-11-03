@@ -5,14 +5,13 @@
 import type { FoldInputs, IndexHit, Searched } from "./search-types.ts";
 import type { ComputerSettings } from "@kiwi/core/computer-settings.ts";
 import type { DeviceLink } from "@kiwi/core/devices.ts";
-import type { HarnessRow, HookHarness, HookRow, KnownHarness } from "@kiwi/core/harnesses.ts";
-import type { LaunchChoices } from "@kiwi/core/launch-options.ts";
+import type { HarnessRow, HookHarness, HookRow } from "@kiwi/core/harnesses.ts";
 import type { WakeSeat } from "@kiwi/core/wake.ts";
 import type { Personality } from "@kiwi/core/personality.ts";
 import type { CachedKept, CachedRow, Unread } from "@kiwi/core/cache-row.ts";
 import type { Channel, OpenKind, PresenceFields } from "@kiwi/core/client.ts";
 import type { DeviceKeep, MemberPicture, Message, Presence, ReadMark } from "@kiwi/core/protocol.ts";
-import type { LaunchedView, PlacedSeat, ShowResult, TerminalId, TerminalsStatus } from "@kiwi/core/terminals.ts";
+import type { PlacedSeat, ShowResult, TerminalId, TerminalsStatus } from "@kiwi/core/terminals.ts";
 import type { TextStep } from "./text-size.ts";
 import type { Wire } from "./wire.ts";
 
@@ -394,17 +393,6 @@ export interface MachineView {
 
 export type FromMachine<T> = { ok: true; value: T } | { ok: false; detail: string };
 
-export interface LaunchAgentRequest extends LaunchChoices {
-  machinePk?: string;
-  launch: string;
-  harness: KnownHarness;
-  folder: string;
-  code: string;
-  relay: string;
-  nick?: string;
-  persona?: string;
-}
-
 export interface KiwiBridge {
   /** The relay URL injected at load (query param, else the default). */
   readonly relayUrl: string;
@@ -518,9 +506,6 @@ export interface KiwiBridge {
   showSeat(seat: PlacedSeat): Promise<ShowResult>;
   terminals(): Promise<TerminalsStatus | null>;
   terminalHelpers(id: TerminalId, to: "on" | "off"): Promise<TerminalsStatus | null>;
-  terminalPrefer(id: TerminalId): Promise<TerminalsStatus | null>;
-  setLaunches(to: "on" | "off"): Promise<TerminalsStatus | null>;
-  setRemoteBypass(to: "on" | "off"): Promise<TerminalsStatus | null>;
   contextLine(): Promise<"on" | "off" | null>;
   setContextLine(to: "on" | "off"): Promise<"on" | "off" | null>;
   hooks(): Promise<HookRow[]>;
@@ -528,15 +513,8 @@ export interface KiwiBridge {
   wakeSeats(): Promise<WakeSeat[]>;
   setWake(room: string, agent: string, to: "on" | "off"): Promise<WakeSeat[]>;
   harnesses(): Promise<HarnessRow[]>;
-  seatFolders(roomId: string): Promise<string[]>;
-  chooseFolder(): Promise<string | null>;
-  launchAgent(req: LaunchAgentRequest): Promise<LaunchedView>;
   machines(): Promise<MachineView[]>;
-  harnessesOn(machinePk: string): Promise<FromMachine<HarnessRow[]>>;
-  foldersOn(machinePk: string, roomId: string): Promise<FromMachine<string[]>>;
   settingsOn(machinePk: string): Promise<FromMachine<ComputerSettings>>;
-  launchRoots(): Promise<string[]>;
-  setLaunchRoot(dir: string, to: "add" | "remove"): Promise<string[]>;
 }
 
 export interface KeysAtRest {

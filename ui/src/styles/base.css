@@ -1015,9 +1015,7 @@ kbd,
 .start-code,
 .set-key,
 .set-pair-line,
-.set-folder-path,
 .palette-kbd,
-.add-said,
 .person-prop code {
   font-family: var(--mono);
 }
@@ -1059,7 +1057,6 @@ html .person-id,
 html .person-kind,
 html .set-device-meta,
 html .palette-meta,
-html .add-who-meta,
 html .theme-when,
 html .now-counts,
 html .lane-sub,
@@ -1092,7 +1089,6 @@ html .person-id,
 html .person-kind,
 html .set-device-meta,
 html .palette-meta,
-html .add-who-meta,
 html .theme-when {
   font-size: var(--t-stamp);
   font-weight: 400;
@@ -1316,7 +1312,6 @@ html .feed-jump:active {
 .lane-row,
 .lane-task,
 .now-task,
-.add-choice,
 .task-pick-row,
 .stash-row,
 .mention-row {
@@ -1328,7 +1323,6 @@ html .feed-jump:active {
 .lane-row:hover,
 .lane-task:hover,
 .now-task:hover,
-.add-choice:hover,
 .task-pick-row:hover,
 .stash-row:hover,
 .mention-row:hover {
@@ -1389,7 +1383,6 @@ html .person-kind {
 .set-title,
 .task-title,
 .dialog-head h2,
-.add-who-name,
 .feed-start-title {
   letter-spacing: -0.01em;
 }

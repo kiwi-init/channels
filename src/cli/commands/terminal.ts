@@ -2,13 +2,12 @@ import * as Effect from "effect/Effect";
 import { isTerminalId, PLACE_NAMES, readPlacedSeat, type TerminalId, type TerminalRow, type TerminalsStatus } from "@kiwi/core/terminals.ts";
 import { loadConfig, updateConfig } from "../../config.ts";
 import { showNeedsYou, type NeedsYou, type ShowWhy } from "../../status.ts";
-import { helpersOn, launchesOn, remoteBypassOn, placeTools, seatPlaces, showSeat, switchHelpers, terminalPlugin, terminalPlugins } from "../../terminals/registry.ts";
+import { helpersOn, placeTools, seatPlaces, showSeat, switchHelpers, terminalPlugin, terminalPlugins } from "../../terminals/registry.ts";
 import { parseJson } from "../../terminals/shared/json.ts";
 import { args, opt } from "../args.ts";
 import { type Command, die, out } from "../context.ts";
 
 const USAGE = "usage: kiwi terminal [status] [--json] | kiwi terminal download|remove rex|tmux | kiwi terminal seats [--json] | kiwi terminal show --needs-you | kiwi terminal show --seat SEAT";
-const LAUNCHES_USAGE = "usage: kiwi launches on|off|status [--json] | kiwi launches bypass on|off|status [--json]";
 
 async function terminalsStatus(): Promise<TerminalsStatus> {
   const cfg = loadConfig();
@@ -19,7 +18,7 @@ async function terminalsStatus(): Promise<TerminalsStatus> {
       return { id: p.manifest.id, name: p.manifest.name, found: found.found, running: found.running, helpers: p.manifest.helpers ? (helpersOn(p.manifest.id, cfg) ? "on" : "off") : null };
     }),
   );
-  return { launch: launchesOn(cfg) ? "on" : "off", bypass: remoteBypassOn(cfg) ? "on" : "off", terminals };
+  return { terminals };
 }
 
 function statusText(s: TerminalsStatus): string {
@@ -27,19 +26,7 @@ function statusText(s: TerminalsStatus): string {
     const state = !t.found ? "not installed" : t.running ? "running" : "installed, not running";
     return `${t.name}: ${state}${t.helpers ? `, helpers ${t.helpers}` : ""}`;
   });
-  return [...rows, `New agents open in ${PLACE_NAMES.hosted}' own tmux`, launchesText(s.launch), bypassText(s.bypass)].join("\n");
-}
-
-function bypassText(bypass: "on" | "off"): string {
-  return bypass === "on"
-    ? "Bypass from your other devices is on: a launch from your phone or another computer may skip its harness's permission prompts here (kiwi launches bypass off stops it)"
-    : "Bypass from your other devices is off: a launch from your phone or another computer can't skip its harness's permission prompts here (kiwi launches bypass on allows it)";
-}
-
-function launchesText(launch: "on" | "off"): string {
-  return launch === "on"
-    ? "Creating new agents is on for this computer: this app and your other devices can start agents here (kiwi launches off stops it)"
-    : "Creating new agents is off for this computer: every launch is refused, from this app or another of your devices (kiwi launches on allows it)";
+  return rows.join("\n");
 }
 
 export function setHelpers(id: TerminalId, on: boolean) {
@@ -99,27 +86,5 @@ export const terminalCommands: Record<string, Command> = {
         return out(opt.json ? JSON.stringify(seats) : seats.map((s) => `${s.alias} ${s.agent} ${PLACE_NAMES[s.place]}${s.place !== "rex" && s.attach ? `: ${s.attach}` : ""}`).join("\n"));
       }
       return yield* die(USAGE);
-    }),
-
-  launches: () =>
-    Effect.gen(function* () {
-      const sub = args[1] ?? "status";
-      if (sub === "bypass") {
-        const to = args[2] ?? "status";
-        if (to === "on" || to === "off")
-          updateConfig((c) => {
-            c.remoteBypass = to;
-          });
-        else if (to !== "status") return yield* die(LAUNCHES_USAGE);
-        const bypass = remoteBypassOn(loadConfig()) ? "on" : "off";
-        return out(opt.json ? JSON.stringify({ bypass }) : bypassText(bypass));
-      }
-      if (sub === "on" || sub === "off")
-        updateConfig((c) => {
-          c.launch = sub;
-        });
-      else if (sub !== "status") return yield* die(LAUNCHES_USAGE);
-      const launch = launchesOn(loadConfig()) ? "on" : "off";
-      return out(opt.json ? JSON.stringify({ launch }) : launchesText(launch));
     }),
 };

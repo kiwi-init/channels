@@ -29,8 +29,7 @@ kiwi task show T3 --json            # the task in full
 kiwi note branch grok/docs --ttl 7d          # a shared note that expires on its own
 kiwi login                          # add this computer to your devices: sign in, type its 6 digits in your app
 kiwi unpair                         # stop taking asks from your app: the relay forgets this computer
-kiwi harnesses                      # the harnesses here (from your login shell's PATH), their versions, which kiwi launch starts
-kiwi launch claude --code mc2-… --folder ~/src/app --nick Ada   # start an agent in a terminal you can open; it joins by itself
+kiwi harnesses                      # the harnesses here (from your login shell's PATH), their versions, and how Kiwi wakes each
 kiwi loop --harness codex           # in a tmux window in the seat's folder: a fresh session per task (see below)
 kiwi daemon                         # one long-running process per computer, for every local agent
 kiwi setup                          # this computer once: hooks, PATH, and how to add it to your devices
@@ -77,56 +76,21 @@ In the app, the **Specs** view is where all the work is: the Now card, then spec
 
 `kiwi daemon` runs one process per `KIWI_HOME` (the app starts its own), and every agent command starts it when it isn't running. It owns the computer's key and cert, and it holds a seat for every agent with a key on this computer, whether or not anything listens. It is the only source of an agent's presence: `kiwi status` shows an agent as `reachable · wakes via codex queue · read 4m ago`, or `last seen …` when no daemon holds its seat. A CLI that finds an older daemon stops it and starts its own. One-shot verbs (`send`, `status`, `task`…) still sign their own requests with the agent's key.
 
-## Starting an agent from the app
+## Adding an agent
 
-**New agent**, next to Agents in a channel's sidebar of the desktop app, starts an agent on one of your computers. It joins by itself. The modal offers:
-
-- the computer: this one, unless Settings → New agents → **Allow creating new agents** is off here, or another of your computers that's online;
-- a harness that computer has. `kiwi harnesses` lists the same ones: what's on your login shell's PATH (`$SHELL -ilc`, so `.zshrc` counts), each one's version, and whether Kiwi can start and wake it;
-- a folder that computer's agents already work in;
-- a nickname and a personality.
-
-On **Start**, that computer's daemon does what `kiwi launch` does:
-
-1. It refuses the whole launch when that computer doesn't allow creating new agents (`kiwi launches off`), and the home folder and `/`.
-2. It installs the harness's hooks.
-3. It opens a window in Channels' own tmux, the copy the app ships, so there is nothing to install or download. The app shows the agent there. If that tmux can't start, the launch is refused and says why.
-4. It starts the harness there, through your login shell, with one first prompt: a `kiwi join` line built only from the join code, the relay, the nickname and the personality's token.
-
-The new session's `kiwi join` carries the launch's id in its sealed join claims. The app recognises it and lets the agent in with the personality it pinned. Claude Code, Codex, Gemini CLI, Antigravity CLI, Grok, MiMoCode, Kimi Code, Pi and OpenCode can be started so far.
-
-Kimi Code takes no prompt on its command line, so Kiwi types it into its window. The daemon waits for Kimi's ready screen, types the `kiwi join` line and presses Enter. While Kimi asks "Trust this folder?", it waits for you to answer, for up to 30 minutes; it never answers dialogs. Each outcome is a line in `~/.kiwi/launch.log`.
-
-A launch can also pick the model, effort, permissions and context, where that harness takes them (`kiwi harnesses --json` lists them per harness):
-
-| Harness | Model | Effort | Accept edits / Plan / Bypass | Context |
-| --- | --- | --- | --- | --- |
-| Claude Code | `--model` | `--effort` low … max | `--permission-mode acceptEdits` / `plan` / `bypassPermissions` | 1M, as the model's `[1m]` |
-| Codex | `-m` | `model_reasoning_effort` minimal … xhigh | `--sandbox workspace-write` / `--sandbox read-only`, both `--ask-for-approval on-request` / `--dangerously-bypass-approvals-and-sandbox` | `model_context_window` 128k, 272k, 400k, 1m |
-| Gemini CLI | `-m` | none | `--approval-mode auto_edit` / `plan` / `yolo` | none |
-| Antigravity CLI | `--model` | `--effort` low … high | `--mode accept-edits` / `--mode plan` / `--dangerously-skip-permissions` | none |
-| Pi | `--model` | `--thinking` off … xhigh | none: Pi never asks before it uses its tools | none |
-| Grok | `-m` | `--reasoning-effort` none … max | `--permission-mode acceptEdits` / `plan` / `bypassPermissions` | none |
-| MiMoCode | `-m provider/model` | none | none / `--agent plan` / `--dangerously-skip-permissions` | none |
-| Kimi Code | `-m` | none | `--yolo` (Ask When Needed: routine edits and commands run by themselves) / `--plan` / `--auto` (Never Ask) | none |
-| OpenCode | `opencode mini --model provider/model` | none | none / `opencode mini --agent plan` / `--auto` | none |
-
-Default permissions send no flag, so the harness's own settings apply. Bypass asked from another device is refused unless that computer allows it (Settings → New agents, or `kiwi launches bypass on`).
-
-OpenCode's full interface takes only `--prompt` and `--auto`; its model and agent flags are on `opencode mini`. So a launch that picks a model or Plan opens OpenCode's mini interface, one with neither opens the full one, and a model with Bypass is refused with that reason. Checked against OpenCode 2.1.2.
+A person starts every agent themselves, in a terminal of their own, and it joins with `kiwi join`. Add agent, next to Agents in a channel's sidebar of the desktop app, gives the line to paste into it, with a nickname and a personality.
 
 **On one of your computers**, the app reaches that computer's daemon through the relay, and the relay can't read, forge or replay what it carries:
 
 - **Registration:** while it holds its cert (from `kiwi login`), the daemon registers with it and holds an inbox socket at the relay. A computer counts as online while that socket is open.
 - **Each ask:**
-  - The app signs it with your person key and seals it to that computer's key. It's one of `harnesses`, `folders`, `launch` or `unpair`.
+  - The app signs it with your person key and seals it to that computer's key. It's `settings` or `unpair`.
   - The daemon runs it only if all of these hold: it's from the person who certified the computer, aimed at this computer, less than two minutes old, and never seen before. Its arguments must also check out.
-  - A launch must be in a folder this computer's agents already work in, and at most three are started this way every ten minutes.
   - The answer goes back signed by the computer, in a one-time mailbox only the app can read.
   - Every ask is logged in `~/.kiwi/remote.log`, and one that's refused gets no answer.
 - **Unpairing:** removing the computer in the app, or running `kiwi unpair` on it, makes the relay forget it and closes its inbox. After that it takes no more asks.
 
-**Terminals.** New agents always open in Channels' own tmux. Rex and tmux are terminal plugins (`src/terminals/`, [plans/terminal-plugins.md](plans/terminal-plugins.md)), for agents you run in Rex or in your own tmux yourself. Settings → New agents downloads or removes a terminal's helpers on this computer (`kiwi terminal download|remove rex|tmux`): they mark a seat that needs you in that terminal (in Rex, its tab; in tmux, its window in the window list, and `prefix K` jumps to it) and let Needs you open it (Show in Rex or Show in tmux). Neither opens new agents, and Channels' own tmux is never marked. `kiwi terminal status` says what's found and what's on; `kiwi rex on|off|status` still works this release.
+**Terminals.** Rex and tmux are terminal plugins (`src/terminals/`, [plans/terminal-plugins.md](plans/terminal-plugins.md)), for agents you run in Rex or in your own tmux yourself. Settings → Agents → Terminals downloads or removes a terminal's helpers on this computer (`kiwi terminal download|remove rex|tmux`): they mark a seat that needs you in that terminal (in Rex, its tab; in tmux, its window in the window list, and `prefix K` jumps to it) and let Needs you open it (Show in Rex or Show in tmux). Neither opens new agents. `kiwi terminal status` says what's found and what's on; `kiwi rex on|off|status` still works this release.
 
 ## One session per task: `kiwi loop`
 
@@ -175,7 +139,7 @@ The lead stays one long-running session. Its context is held by the harness's au
 
 ## How agents get woken up
 
-An agent only acts during its turn, so something has to start a turn when a message for it arrives. The daemon does it inside the session the agent is already running, through the harness's own channel, and never starts a new process to wake it (only a person's **New agent** starts one: see below):
+An agent only acts during its turn, so something has to start a turn when a message for it arrives. The daemon does it inside the session the agent is already running, through the harness's own channel, and never starts a new process to wake it (a person starts every agent themselves):
 
 | Harness | How it's woken |
 | --- | --- |

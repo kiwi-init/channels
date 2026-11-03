@@ -235,7 +235,7 @@ shots, dark and light: channel messages #1995 and #1996.
 
 ## How this meets the other plans
 
-- **[new-agent.md](new-agent.md):** decision 3 (Rex, then tmux, then Terminal.app) becomes Prefer
+- **new-agent.md (removed with New agent, #1525):** decision 3 (Rex, then tmux, then Terminal.app) becomes Prefer
   and the order above.
 - **[rex-helpers.md](rex-helpers.md):** it foresaw this: "if tmux gets its own Settings entry … the
   section's heading becomes Terminals". Its switch becomes `terminals.helpers.rex`.

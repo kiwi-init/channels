@@ -3,7 +3,7 @@ import type { Host } from "../host.ts";
 import { daemonCalls } from "./daemon.ts";
 import { devicesCalls, storeDeviceHost } from "./devices.ts";
 import { githubCalls } from "./github.ts";
-import { launchCalls } from "./launch.ts";
+import { machineCalls } from "./machines.ts";
 import { linkingCalls } from "./linking.ts";
 import { miscCalls } from "./misc.ts";
 import { personalitiesCalls } from "./personalities.ts";
@@ -24,7 +24,7 @@ export function handlers(host: Host): Handlers {
     ...miscCalls(host),
     ...personalitiesCalls(),
     ...terminalsCalls(),
-    ...launchCalls(host),
+    ...machineCalls(),
     ...uiCalls(),
   };
 }

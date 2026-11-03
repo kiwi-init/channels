@@ -1,7 +1,7 @@
 import { useState } from "react"
 
 import type { TerminalId, TerminalRow } from "@kiwi/core/terminals.ts"
-import { Avatar, IconButton, Toggle } from "~/kit/bits"
+import { Avatar, Toggle } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import type { AgentStarts, Finding, ThisComputer } from "~/model"
 import { useApp } from "~/nav"
@@ -55,8 +55,9 @@ function Helpers({ starts }: { starts: AgentStarts }) {
   const { app } = useApp()
   const rows = ORDER.flatMap((id) => starts.terminals.filter((t) => t.id === id))
   const helpers = rows.filter((t): t is TerminalRow & { helpers: "on" | "off" } => t.helpers !== null && (t.found || t.helpers === "on"))
+  if (!helpers.length) return null
   return (
-    <>
+    <Group title="Terminals">
       {helpers.map((t) => {
         const on = t.helpers === "on"
         const note =
@@ -78,7 +79,7 @@ function Helpers({ starts }: { starts: AgentStarts }) {
           </Row>
         )
       })}
-    </>
+    </Group>
   )
 }
 
@@ -163,7 +164,6 @@ export function AgentsSection() {
                       {h.path}
                     </span>
                   )}
-                  {h.why && <span className="set-row-hint">{h.why}</span>}
                   {hook && HOOK_SAYS[hook.state].desc && <span className="set-row-hint">{HOOK_SAYS[hook.state].desc}</span>}
                 </span>
               </span>
@@ -188,36 +188,7 @@ export function AgentsSection() {
           <CheckComputer />
         </Group>
       )}
-      {starts && (
-        <>
-          <Group title="New agents">
-            <Row label="Allow creating new agents" hint="From this app or a paired computer.">
-              <Toggle label="Allow creating new agents" on={starts.launch} onChange={actions.allowNewAgents} />
-            </Row>
-            {starts.launch && (
-              <Row label="Allow bypass from your other devices" hint="Agents started from your phone or another computer may skip permission prompts here.">
-                <Toggle label="Allow bypass from your other devices" on={starts.bypass} onChange={actions.allowRemoteBypass} />
-              </Row>
-            )}
-            <Helpers starts={starts} />
-          </Group>
-          <Group title="Folders agents can start in" hint="Their subfolders count, and so do the folders agents already work in. From this app, also your home folder's git repos.">
-            {starts.folders.map((f) => (
-              <div key={f} className="set-row set-folder">
-                <span className="set-row-text set-folder-path">
-                  <Icon name="folder" size={14} />
-                  <span className="set-value">{f}</span>
-                </span>
-                <IconButton icon="close" label={`Remove ${f}`} onClick={() => actions.removeStartFolder(f)} />
-              </div>
-            ))}
-            <button type="button" className="set-row set-add" onClick={actions.addStartFolder}>
-              <Icon name="plus" size={14} />
-              Add a folder…
-            </button>
-          </Group>
-        </>
-      )}
+      {starts && <Helpers starts={starts} />}
     </Page>
   )
 }

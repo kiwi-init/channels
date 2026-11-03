@@ -55,7 +55,7 @@ beforeAll(async () => {
       paired = paired ? { identity: paired.identity, label: paired.label, relay: paired.relay } : null;
       inbox.close();
     },
-    run: remoteRunner({ inventory: async () => [], folders: () => ["/work"], launch: async () => ({ ok: false, why: "failed", detail: "unused" }) }),
+    run: remoteRunner({ settings: async () => ({ hooks: [], seats: [] }) }),
   });
   await until("the inbox online", async () => ((await status(desk)) as { online?: boolean }).online === true);
 });
@@ -93,16 +93,16 @@ const log = () => readFileSync(join(root, "remote.log"), "utf8");
 describe("a computer paired through its person's device list, with no cert", () => {
   test("registers with the list and answers an ask signed by an approving desktop", async () => {
     const reply = newSecret();
-    const { box, id } = await makeAsk(desk, { pk: machine.pk, xpk: machine.xpk! }, { verb: "folders", args: {}, reply });
+    const { box, id } = await makeAsk(desk, { pk: machine.pk, xpk: machine.xpk! }, { verb: "settings", args: {}, reply });
     expect(await post(desk, box)).toBe(202);
     const got = await (await openMailbox(relay, reply)).wait("b", { timeoutMs: 4_000, everyMs: 100 });
-    expect((await readAnswer(got, { machine: machine.pk, id }))?.result).toEqual({ ok: true, folders: ["/work"] });
+    expect((await readAnswer(got, { machine: machine.pk, id }))?.result).toEqual({ ok: true, settings: { hooks: [], seats: [] } });
   });
 
   test("the relay keeps a phone out, and the daemon refuses a phone's ask that reached it anyway", async () => {
-    const { box } = await makeAsk(phone, { pk: machine.pk, xpk: machine.xpk! }, { verb: "folders", args: {}, reply: newSecret() });
+    const { box } = await makeAsk(phone, { pk: machine.pk, xpk: machine.xpk! }, { verb: "settings", args: {}, reply: newSecret() });
     expect(await post(phone, box)).toBe(403);
-    const signed = await sign(phone, { kind: "kiwi-machine-ask", v: 1, machine: machine.pk, verb: "folders", args: {}, id: "phoneAsk_0001", at: Date.now(), reply: newSecret() });
+    const signed = await sign(phone, { kind: "kiwi-machine-ask", v: 1, machine: machine.pk, verb: "settings", args: {}, id: "phoneAsk_0001", at: Date.now(), reply: newSecret() });
     const smuggled = await sealTo(machine.xpk!, JSON.stringify(signed), "kiwi-machine-ask");
     expect(await post(desk, smuggled)).toBe(202);
     await until("the phone's ask refused", () => log().includes("\trefused\tnot-yours\t"));

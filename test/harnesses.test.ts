@@ -109,16 +109,7 @@ describe("the harness inventory", () => {
     expect(rows.map((r) => r.harness)).toEqual([...KNOWN_HARNESSES]);
     const by = Object.fromEntries(rows.map((r) => [r.harness, r]));
     expect(by.claude).toMatchObject({ path: join(bins, "claude"), version: "2.0.1" });
-    expect(by.codex).toMatchObject({ path: join(bins, "codex"), version: "0.163.0", start: true, wake: "codex-queue", why: null });
-    expect(by.claude?.options).toEqual({ model: true, effort: ["low", "medium", "high", "xhigh", "max"], permission: ["default", "accept-edits", "plan", "bypass"], context: [1_000_000] });
-    expect(by.codex?.options).toEqual({
-      model: true,
-      effort: ["minimal", "low", "medium", "high", "xhigh"],
-      permission: ["default", "accept-edits", "plan", "bypass"],
-      context: [128_000, 272_000, 400_000, 1_000_000],
-    });
-    expect(by.kimi).toMatchObject({ start: true, options: { model: true, effort: [], permission: ["default", "accept-edits", "plan", "bypass"], context: [] } });
-    expect(by.gemini).toMatchObject({ start: false, options: { model: true, effort: [], permission: ["default", "accept-edits", "plan", "bypass"], context: [] } });
+    expect(by.codex).toMatchObject({ path: join(bins, "codex"), version: "0.163.0", wake: "codex-queue", why: null });
     expect(by.kimi).toMatchObject({ path: join(bins, "kimi-code"), version: "1.4.0" });
     expect(by.grok).toMatchObject({ path: null });
     expect(by.gemini).toMatchObject({ path: null, version: null });
@@ -191,39 +182,26 @@ describe("the harness inventory", () => {
 
   test("prints one line per harness", async () => {
     const text = inventoryText(await harnessInventory(`${bins}:/usr/bin:/bin`));
-    expect(text).toContain(
-      `codex: 0.164.0 at ${join(bins, "codex")}; kiwi launch starts it with --model, --effort minimal|low|medium|high|xhigh, --permission default|accept-edits|plan|bypass, --context 128k|272k|400k|1m; Kiwi wakes it via codex queue`,
-    );
+    expect(text).toContain(`codex: 0.164.0 at ${join(bins, "codex")}; Kiwi wakes it via codex queue`);
     expect(text).toContain("claude: 2.0.1 at");
     expect(text).toContain("Kiwi can't wake it: Claude Code 2.0.1 is older than 2.1.296");
     expect(text).toContain("gemini: not installed");
   });
 
   test("a row from the daemon keeps what checks out and drops what doesn't", () => {
-    expect(readHarnessRow({ harness: "codex", path: "/bin/codex", version: "1.0.0", start: true, wake: "codex-queue", why: null })).toEqual({
+    expect(readHarnessRow({ harness: "codex", path: "/bin/codex", version: "1.0.0", wake: "codex-queue", why: null })).toEqual({
       harness: "codex",
       path: "/bin/codex",
       version: "1.0.0",
-      start: true,
       wake: "codex-queue",
       why: null,
-      options: null,
     });
-    expect(readHarnessRow({ harness: "codex", path: 3, version: "", start: "yes", wake: "carrier-pigeon", why: "x", options: { model: "yes" } })).toEqual({
+    expect(readHarnessRow({ harness: "codex", path: 3, version: "", start: true, wake: "carrier-pigeon", why: "x", options: { model: true } })).toEqual({
       harness: "codex",
       path: null,
       version: null,
-      start: false,
       wake: null,
       why: "x",
-      options: null,
-    });
-    const options = { model: true, effort: ["high", "--max"], permission: ["plan", "yolo"], context: [400_000, "1m", 5] };
-    expect(readHarnessRow({ harness: "codex", path: "/bin/codex", version: "1.0.0", start: true, wake: null, why: null, options })?.options).toEqual({
-      model: true,
-      effort: ["high"],
-      permission: ["plan"],
-      context: [400_000],
     });
     expect(readHarnessRow({ harness: "grok-bot" })).toBeNull();
     expect(readHarnessRow("codex")).toBeNull();

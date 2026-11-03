@@ -1,32 +1,19 @@
 import { useEffect, useSyncExternalStore } from "react"
 
-import type { TerminalId, TerminalsStatus } from "@kiwi/core/terminals.ts"
+import type { TerminalId } from "@kiwi/core/terminals.ts"
 import { bridge } from "@kiwi/secrets/secrets.ts"
 import { store } from "~/live/value"
 import type { AgentStarts } from "~/model"
 
 const starts = store<AgentStarts | null>(null)
 
-const switches = (t: TerminalsStatus) => ({ launch: t.launch === "on", bypass: t.bypass === "on", terminals: t.terminals })
-
-function patch(next: Partial<AgentStarts>): void {
-  const now = starts.get()
-  if (now) starts.set({ ...now, ...next })
-}
-
-function need() {
-  const b = bridge()
-  if (!b) throw new Error("agents start from the Channels desktop app")
-  return b
-}
-
 export const startsNow = starts.get
 
 export async function loadStarts(): Promise<void> {
   const b = bridge()
   if (!b) return
-  const [t, folders] = await Promise.all([b.terminals(), b.launchRoots()])
-  starts.set(t ? { folders, ...switches(t) } : null)
+  const t = await b.terminals()
+  starts.set(t ? { terminals: t.terminals } : null)
 }
 
 export function useStarts(): AgentStarts | null {
@@ -39,27 +26,9 @@ export function useStarts(): AgentStarts | null {
   return useSyncExternalStore(starts.subscribe, starts.get)
 }
 
-export async function addStartFolder(): Promise<void> {
-  const b = need()
-  const dir = await b.chooseFolder()
-  if (dir) patch({ folders: await b.setLaunchRoot(dir, "add") })
-}
-
-export async function removeStartFolder(dir: string): Promise<void> {
-  patch({ folders: await need().setLaunchRoot(dir, "remove") })
-}
-
-export async function allowNewAgents(on: boolean): Promise<void> {
-  const t = await need().setLaunches(on ? "on" : "off")
-  if (t) patch(switches(t))
-}
-
-export async function allowRemoteBypass(on: boolean): Promise<void> {
-  const t = await need().setRemoteBypass(on ? "on" : "off")
-  if (t) patch(switches(t))
-}
-
 export async function setTerminalHelpers(id: TerminalId, on: boolean): Promise<void> {
-  const t = await need().terminalHelpers(id, on ? "on" : "off")
-  if (t) patch(switches(t))
+  const b = bridge()
+  if (!b) throw new Error("terminal helpers are set from the Channels desktop app")
+  const t = await b.terminalHelpers(id, on ? "on" : "off")
+  if (t && starts.get()) starts.set({ terminals: t.terminals })
 }

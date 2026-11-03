@@ -15,9 +15,6 @@ export interface CodexStart {
   prompt: string;
 }
 
-export const CODEX_EFFORTS = ["minimal", "low", "medium", "high", "xhigh"];
-export const CODEX_CONTEXTS = [128_000, 272_000, 400_000, 1_000_000];
-
 const CODEX_PERMISSIONS: Record<Permission, string[]> = {
   default: [],
   "accept-edits": ["--sandbox", "workspace-write", "--ask-for-approval", "on-request"],

@@ -26,8 +26,6 @@ import com.kiwiinit.channels.model.AppModel
 import com.kiwiinit.channels.theme.ChannelsTheme
 import com.kiwiinit.channels.ui.ConversationList
 import com.kiwiinit.channels.ui.DetailsScreen
-import com.kiwiinit.channels.ui.NewAgentFrame
-import com.kiwiinit.channels.ui.OptionsForm
 import kotlin.math.roundToInt
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -50,7 +48,7 @@ class KeyboardTest {
 
     @Test
     fun answerInDetailsStaysAboveTheKeyboard() {
-        show { DetailsScreen(it, DEV, "main", back = {}, choose = {}, newAgent = {}) }
+        show { DetailsScreen(it, DEV, "main", back = {}, choose = {}) }
         compose.onAllNodesWithText("Something else")[1].performScrollTo().performClick()
         compose.onNode(hasSetTextAction()).performClick()
         aboveKeyboard(compose.onNode(hasSetTextAction()), keyboard())
@@ -58,22 +56,10 @@ class KeyboardTest {
 
     @Test
     fun sendBackInDetailsStaysAboveTheKeyboard() {
-        show { DetailsScreen(it, DEV, "main", back = {}, choose = {}, newAgent = {}) }
+        show { DetailsScreen(it, DEV, "main", back = {}, choose = {}) }
         compose.onNodeWithText("Send back").performScrollTo().performClick()
         compose.onNode(hasSetTextAction()).performClick()
         aboveKeyboard(compose.onNode(hasSetTextAction()), keyboard())
-    }
-
-    @Test
-    fun newAgentStartScrollsAboveTheKeyboard() {
-        show {
-            NewAgentFrame("Options", root = false, back = {}) {
-                OptionsForm(COMPUTERS.first(), HARNESSES.harnesses.first(), HARNESSES.bypass, FOLDERS.first(), start = {})
-            }
-        }
-        compose.onAllNodes(hasSetTextAction())[0].performClick()
-        val keyboard = keyboard()
-        aboveKeyboard(compose.onNodeWithText("Start").performScrollTo(), keyboard)
     }
 
     @Test

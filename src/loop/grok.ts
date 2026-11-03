@@ -13,8 +13,6 @@ export interface GrokStart {
   prompt: string;
 }
 
-export const GROK_EFFORTS = ["none", "minimal", "low", "medium", "high", "xhigh", "max"];
-
 const GROK_MODES: Record<Permission, string | null> = { default: null, "accept-edits": "acceptEdits", plan: "plan", bypass: "bypassPermissions" };
 
 export type GrokSession = { session: string; dir: string };

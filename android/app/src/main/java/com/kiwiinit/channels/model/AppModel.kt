@@ -18,15 +18,12 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.content.edit
 import androidx.core.net.toUri
-import com.kiwiinit.channels.engine.ComputerView
 import com.kiwiinit.channels.engine.Connection
 import com.kiwiinit.channels.engine.Engine
 import com.kiwiinit.channels.engine.EngineException
 import com.kiwiinit.channels.engine.EnrollDigits
 import com.kiwiinit.channels.engine.EnrollPerson
 import com.kiwiinit.channels.engine.EnrollStart
-import com.kiwiinit.channels.engine.HarnessesOn
-import com.kiwiinit.channels.engine.Launched
 import com.kiwiinit.channels.engine.MessageView
 import com.kiwiinit.channels.engine.Push
 import com.kiwiinit.channels.engine.RoomView
@@ -96,10 +93,6 @@ data class Pending(val id: String, val body: String, val re: Int?, val at: Long,
 
 data class Feed(val messages: List<MessageView>, val whole: Boolean)
 
-data class LaunchSeen(val stage: String, val name: String)
-
-data class AgentChoices(val nick: String? = null, val model: String? = null, val effort: String? = null, val permission: String? = null, val context: Int? = null)
-
 class AppModel(private val app: Application) {
     private val scope = MainScope()
     private val prefs = app.getSharedPreferences("channels", Context.MODE_PRIVATE)
@@ -141,7 +134,6 @@ class AppModel(private val app: Application) {
     val pending = mutableStateMapOf<String, List<Pending>>()
     val sentAs = mutableStateMapOf<Int, String>()
     val visited = mutableStateListOf<Spot>()
-    val launches = mutableStateMapOf<String, LaunchSeen>()
 
     val relinking: Boolean
         get() = phase == Phase.Ready && (relinkAsked || linking != Linking.Idle)
@@ -245,7 +237,6 @@ class AppModel(private val app: Application) {
             }
             is Push.Gone -> rooms.remove(push.code)
             is Push.Log, is Push.Fetch -> Unit
-            is Push.Launch -> launches[push.launch] = LaunchSeen(push.stage, push.name)
             is Push.Removed -> {
                 unlink()
                 linking = Linking.Failed("This phone was removed from your devices by ${push.by}, so it deleted its keys and channels. Sign in to add it again.")
@@ -445,50 +436,6 @@ class AppModel(private val app: Application) {
             },
         )
     }
-
-    suspend fun computers(): List<ComputerView> = read(ListSerializer(ComputerView.serializer()), ask(buildJsonObject { put("op", "computers") }))
-
-    suspend fun harnesses(computer: String): HarnessesOn =
-        read(
-            HarnessesOn.serializer(),
-            ask(
-                buildJsonObject {
-                    put("op", "harnessesOn")
-                    put("computer", computer)
-                },
-            ),
-        )
-
-    suspend fun folders(computer: String, code: String): List<String> =
-        read(
-            ListSerializer(String.serializer()),
-            ask(
-                buildJsonObject {
-                    put("op", "foldersOn")
-                    put("computer", computer)
-                    put("code", code)
-                },
-            ),
-        )
-
-    suspend fun launch(code: String, computer: String, harness: String, folder: String, choices: AgentChoices): Launched =
-        read(
-            Launched.serializer(),
-            ask(
-                buildJsonObject {
-                    put("op", "launch")
-                    put("code", code)
-                    put("computer", computer)
-                    put("harness", harness)
-                    put("folder", folder)
-                    choices.nick?.let { put("nick", it) }
-                    choices.model?.let { put("model", it) }
-                    choices.effort?.let { put("effort", it) }
-                    choices.permission?.let { put("permission", it) }
-                    choices.context?.let { put("context", it) }
-                },
-            ),
-        )
 
     private fun <T> read(serializer: KSerializer<T>, value: JsonElement): T =
         try {
