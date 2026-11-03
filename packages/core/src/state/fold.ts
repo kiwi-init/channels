@@ -23,7 +23,7 @@ import { omit } from "../omit.ts";
 import { dmPlace, MAIN, summarize } from "./places.ts";
 import { rootOf, sentTo } from "../room-rules.ts";
 import { askHeadOf, askOfMessage, fileTask } from "./asks.ts";
-import { foldSpec, specGate } from "./specs.ts";
+import { foldSpec, noteSpecComment, specGate } from "./specs.ts";
 import { taskId } from "./tasks.ts";
 import { linkSafe, prKey, releasesFrom, repoKey } from "./github.ts";
 import { reposOf } from "./repos.ts";
@@ -522,6 +522,7 @@ function folding(
         const parent = earlierParent(m);
         const root = parent === undefined ? m.seq : (threadOf.get(parent) ?? parent);
         threadOf.set(m.seq, root);
+        noteSpecComment(specs, root, m);
         if (isPerson(member)) askHeads.set(m.seq, askHeadOf(m, at));
         let people = threadPeople.get(root);
         if (!people) threadPeople.set(root, (people = new Set()));

@@ -6,6 +6,7 @@ import type { AskHead, ChannelState, Member, Spec, Task } from "./types.ts";
 
 const MAX_BACKS = 20;
 const MAX_EDITORS = 40;
+const MAX_COMMENTS = 40;
 
 export type SpecStage = "draft" | "queued" | "working" | "delivered" | "accepted" | "dropped";
 
@@ -73,6 +74,32 @@ export function foldSpec(
   return null;
 }
 
+export function noteSpecComment(specs: Map<number, Spec>, root: number, m: Pick<Message, "seq" | "from">): void {
+  const spec = specs.get(root);
+  if (!spec || spec.result || !(root < m.seq)) return;
+  specs.set(root, { ...spec, comments: [...(spec.comments ?? []), { seq: m.seq, by: m.from }].slice(-MAX_COMMENTS) });
+}
+
+export function specOfComment(state: Pick<ChannelState, "specs" | "threadOf">, seq: number): Spec | undefined {
+  const root = state.threadOf.get(seq);
+  if (root === undefined || !(root < seq)) return undefined;
+  const spec = state.specs.get(root);
+  return spec && !spec.result ? spec : undefined;
+}
+
+export function onSpec(state: Pick<ChannelState, "specs" | "askHeads" | "tasks" | "lead" | "members">, ask: number): Set<string> {
+  const spec = state.specs.get(ask);
+  if (!spec) return new Set();
+  const named = [state.askHeads.get(ask)?.by, ...spec.editors, ...(spec.comments ?? []).map((c) => c.by), ...specTasks(state, ask).map((t) => t.owner), state.lead];
+  return new Set(named.filter((n): n is string => !!n && !!state.members.get(n)?.active));
+}
+
+export function unansweredComments(spec: Pick<Spec, "comments" | "by" | "v">, me: string): number[] {
+  const comments = spec.comments ?? [];
+  const answered = (c: { seq: number; by: string }, i: number) => comments.slice(i + 1).some((l) => l.by !== c.by) || (spec.v > c.seq && spec.by !== c.by);
+  return comments.filter((c, i) => c.by !== me && !answered(c, i)).map((c) => c.seq);
+}
+
 export function specTitleOf(text: string): string | null {
   const line = text.split("\n").find((l) => /^#\s+\S/.test(l));
   return line ? line.replace(/^#\s+/, "").trim() : null;
@@ -90,6 +117,10 @@ const unticked = (text: string): string =>
     .map((l) => l.replace(BOX_RE, (_, lead: string, _mark: string, rest: string) => `${lead}[ ] ${rest}`).trimEnd())
     .join("\n")
     .trim();
+
+export function editsApproved(spec: Pick<Spec, "approved">, seq: number, text: string): boolean {
+  return !!spec.approved && spec.approved.seq < seq && unticked(text) !== unticked(spec.approved.text);
+}
 
 export function changedSinceApproval(spec: Pick<Spec, "text" | "approved">): boolean {
   return !!spec.approved && unticked(spec.text) !== unticked(spec.approved.text);

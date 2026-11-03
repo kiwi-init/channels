@@ -29,8 +29,8 @@ import {
   type Task,
 } from "./state.ts";
 import { evidenceOf, prLines, refText, stageOf, stageText } from "./stage.ts";
-import { specTitleOf } from "./state/specs.ts";
-import { specLine } from "./spec-lines.ts";
+import { changedSinceApproval, editsApproved, freeAgents, specOfComment, specPlanner, specStage, specTitleOf } from "./state/specs.ts";
+import { commentsLine, commentsWaiting, specLine } from "./spec-lines.ts";
 import { rulesText } from "./prs.ts";
 import { statusOf, statusWord } from "./status.ts";
 import { isWakeVia, wakesInSession, wakeWords, type WakeVia } from "./wake.ts";
@@ -248,8 +248,11 @@ export function describeEvent(m: Message, state?: ChannelState, nameOf: (handle:
       return ev.why ? `closed #${ev.ask}: ${inlineText(ev.why, 160)}` : `closed #${ev.ask}`;
     case "devices":
       return "updated their list of devices";
-    case "spec.set":
-      return `wrote the spec of #${ev.ask}: ${inlineText(specTitleOf(ev.text) ?? ev.text, 120)}`;
+    case "spec.set": {
+      const spec = state?.specs.get(ev.ask);
+      const after = spec && editsApproved(spec, m.seq, ev.text) ? `changed #${ev.ask}'s approved spec, so a person approves the change` : `wrote the spec of #${ev.ask}`;
+      return `${after}: ${inlineText(specTitleOf(ev.text) ?? ev.text, 120)}`;
+    }
     case "spec.approve":
       return `approved the spec of #${ev.ask}: agents start it as soon as one is free`;
     case "specs.only.set":
@@ -340,7 +343,9 @@ export function droppedCount(state: ChannelState): number {
 export function messageHead(m: Message, trust?: Trust, state?: ChannelState, me?: string): string {
   const to = m.to?.includes("*") ? "everyone" : m.to?.length ? m.to.map((t) => inlineText(t, 40)).join(",") : "all";
   const kind = m.step ? " [step]" : m.stepReply ? ` [step: ${m.stepReply.outcome}]` : m.esc ? " [escalation]" : m.kind === "msg" ? "" : ` [${inlineText(m.kind, 20)}]`;
-  const re = m.re?.length ? ` re #${m.re.map((n) => Number(n) || 0).join(",#")}` : "";
+  const spec = m.kind === "event" || !state ? undefined : specOfComment(state, m.seq);
+  const replyTo = m.re?.length ? ` re #${m.re.map((n) => Number(n) || 0).join(",#")}` : "";
+  const re = spec ? ` comment on #${spec.ask}'s spec${m.re?.length === 1 && m.re[0] === spec.ask ? "" : replyTo}` : replyTo;
   // Which room, once there's more than one: every chat line then says it, general included.
   const roomId = m.kind === "event" ? undefined : (state?.roomOf.get(m.seq) ?? m.room ?? GENERAL_ROOM);
   const room = roomId && state && state.rooms.size > 1 ? ` [#${inlineText(state.rooms.get(roomId)?.name ?? roomId, 40)}]` : "";
@@ -380,7 +385,17 @@ export function formatMessage(m: Message, trust?: Trust, state?: ChannelState, m
   const files = !gone && m.files?.length ? ` ${m.files.map((f) => fileMarker({ name: inlineText(f.name, 80), size: f.size })).join(" ")}` : "";
   const link = m.handoff ? " [browser link]" : "";
   const options = m.choices?.length ? ` [options: ${m.choices.map((c) => inlineText(c, 200)).join(" | ")}]` : "";
-  return `${messageHead(m, trust, state, me)}: ${body}${imgs}${files}${link}${options}`;
+  return `${messageHead(m, trust, state, me)}: ${body}${takeSpec(m, state, me)}${imgs}${files}${link}${options}`;
+}
+
+function takeSpec(m: Message, state?: ChannelState, me?: string): string {
+  const ev = m.ev;
+  if (!state || !me || state.rejected.has(m.seq)) return "";
+  if (ev?.op !== "spec.approve" && !(ev?.op === "spec.result" && ev.verdict === "back")) return "";
+  const spec = state.specs.get(ev.ask);
+  const seat = state.members.get(me);
+  if (!spec || !seat || isPerson(seat) || specStage(state, spec) !== "queued" || changedSinceApproval(spec) || specPlanner(state, ev.ask)) return "";
+  return state.lead === me || freeAgents(state).includes(me) ? `; it waits for an agent, so take it now: kiwi spec start ${ev.ask}` : "";
 }
 
 function taskLine(state: ChannelState, t: Task): string {
@@ -606,7 +621,12 @@ export function formatStatus({ alias, me, state, online, unread, now = Date.now(
   const specs = [...state.specs.values()].filter((sp) => !sp.result).sort((a, b) => a.ask - b.ask);
   if (specs.length) {
     out.push("", `specs (${specs.length} open) — read one with: kiwi spec show N`);
-    for (const sp of specs) out.push(`  ${specLine(state, sp)}`);
+    const waiting = new Map(commentsWaiting(state, me).map((w) => [w.spec.ask, w.seqs]));
+    for (const sp of specs) {
+      out.push(`  ${specLine(state, sp)}`);
+      const seqs = waiting.get(sp.ask);
+      if (seqs) out.push(`    ${commentsLine(sp.ask, seqs)}`);
+    }
   }
 
   const tasks = [...state.tasks.values()];
