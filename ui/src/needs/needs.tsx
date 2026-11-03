@@ -166,7 +166,7 @@ function Shell({
       <header className="needs-head">
         <Avatar person={face} size="sm" />
         {member ? (
-          <button type="button" className="needs-name" onClick={() => go({ to: "panel", panel: { kind: "person", name } })}>
+          <button type="button" className="needs-name" onClick={() => go({ to: "modal", modal: { kind: "person", name } })}>
             {name}
           </button>
         ) : (

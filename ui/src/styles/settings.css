@@ -723,3 +723,22 @@ html .set-body {
 .set-rows > .set-findings-none {
   border-top: 0;
 }
+
+.modal .set-group > .heading {
+  min-height: 0;
+  margin: 0 0 4px;
+}
+
+.modal .set-group > .heading h3 {
+  color: var(--ink);
+  font: 600 var(--t-ui) var(--ui);
+  letter-spacing: normal;
+}
+
+.modal .set-group + .set-group {
+  margin-top: 24px;
+}
+
+.modal .set-group-hint {
+  margin-bottom: 4px;
+}

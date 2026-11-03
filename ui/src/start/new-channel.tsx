@@ -1,20 +1,14 @@
 import { useState } from "react"
 
 import "~/styles/start.css"
-import { cx, Dialog, DialogHead, Field } from "~/kit/bits"
+import { cx, Modal, Field } from "~/kit/bits"
 import { useApp } from "~/nav"
 
 const focusFirst = (el: HTMLInputElement | null) => el?.setAttribute("autofocus", "")
 
 export function NewChannelDialog() {
-  const { nav, go } = useApp()
-  const open = nav.dialog === "new-channel"
-  const close = () => go({ to: "dialog", dialog: null })
-  return (
-    <Dialog open={open} onClose={() => open && close()} label="New channel">
-      <NewChannelForm onClose={close} />
-    </Dialog>
-  )
+  const { go } = useApp()
+  return <NewChannelForm onClose={() => go({ to: "dialog", dialog: null })} />
 }
 
 function NewChannelForm({ onClose }: { onClose: () => void }) {
@@ -24,8 +18,7 @@ function NewChannelForm({ onClose }: { onClose: () => void }) {
   const [failed, setFailed] = useState(false)
   const title = name.trim()
   return (
-    <>
-      <DialogHead title="New channel" onClose={onClose} />
+    <Modal onClose={onClose} label="New channel" title="New channel">
       <form
         className="start-form"
         onSubmit={async (e) => {
@@ -54,7 +47,7 @@ function NewChannelForm({ onClose }: { onClose: () => void }) {
         <p className={cx("start-hint", failed && "is-error")} aria-live="polite">
           {failed ? "Couldn't make the channel. Try again." : null}
         </p>
-        <div className="dialog-foot start-foot">
+        <div className="modal-foot start-foot">
           <button type="button" className="btn is-quiet is-small" onClick={() => go({ to: "dialog", dialog: "join" })}>
             Have a code? Join instead
           </button>
@@ -63,6 +56,6 @@ function NewChannelForm({ onClose }: { onClose: () => void }) {
           </button>
         </div>
       </form>
-    </>
+    </Modal>
   )
 }

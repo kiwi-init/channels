@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 
 import { askDelete, startEditing, stopAskingDelete, stopEditing, useAskingDelete } from "~/chat/editing"
-import { Dialog, DialogHead } from "~/kit/bits"
+import { Modal } from "~/kit/bits"
 import { GlyphIcon } from "~/kit/icons"
 import type { Channel, Message } from "~/model"
 import { useAct } from "~/nav"
@@ -26,28 +26,30 @@ function Tools({ channel, m }: { channel: Channel; m: Message }) {
         <GlyphIcon glyph={Delete02Icon} size={14} />
       </button>
       {createPortal(
-        <Dialog open={asking} onClose={stopAskingDelete} label="Delete this message?">
-          <DialogHead
-            title="Delete this message?"
-            sub="It's removed from Channels for everyone. Anyone who already read it may still have it, and the relay keeps its encrypted copy until it ages out."
-            onClose={() => stopAskingDelete()}
-          />
-          <div className="dialog-foot">
-            <button type="button" className="btn" onClick={() => stopAskingDelete()}>
-              Cancel
-            </button>
-            <button
-              type="button"
-              className="btn is-danger"
-              onClick={() => {
-                stopAskingDelete()
-                actions.deleteMessage(channel.code, m.seq)
-              }}
-            >
-              Delete
-            </button>
-          </div>
-        </Dialog>,
+        <Modal
+          open={asking}
+          onClose={stopAskingDelete}
+          label="Delete this message?"
+          title="Delete this message?"
+          sub="It's removed from Channels for everyone. Anyone who already read it may still have it, and the relay keeps its encrypted copy until it ages out."
+          foot={
+            <>
+              <button type="button" className="btn" onClick={() => stopAskingDelete()}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn is-danger"
+                onClick={() => {
+                  stopAskingDelete()
+                  actions.deleteMessage(channel.code, m.seq)
+                }}
+              >
+                Delete
+              </button>
+            </>
+          }
+        />,
         document.body
       )}
     </>

@@ -2,7 +2,7 @@ import "~/styles/settings.css"
 
 import { useState } from "react"
 
-import { Dialog, DialogHead, Field } from "~/kit/bits"
+import { Modal, Field } from "~/kit/bits"
 import type { EnrollAsk } from "~/model"
 import { useApp } from "~/nav"
 import { autofocus } from "~/settings/controls"
@@ -33,12 +33,13 @@ export function EnrollDialog() {
   }
 
   return (
-    <Dialog open={open} onClose={close} label="Approve a new device">
-      <DialogHead
-        title={`Let ${ask.label} sign in as you?`}
-        sub={`A ${KIND[ask.as]}${ask.os ? ` on ${ask.os}` : ""}. It joins your channels as you: only approve a device you're holding now.`}
-        onClose={close}
-      />
+    <Modal
+      open={open}
+      onClose={close}
+      label="Approve a new device"
+      title={`Let ${ask.label} sign in as you?`}
+      sub={`A ${KIND[ask.as]}${ask.os ? ` on ${ask.os}` : ""}. It joins your channels as you: only approve a device you're holding now.`}
+    >
       <form
         className="set-confirm"
         onSubmit={(e) => {
@@ -59,6 +60,7 @@ export function EnrollDialog() {
             hint={mine.left !== null ? `Those don't match. ${mine.left} ${mine.left === 1 ? "try" : "tries"} left.` : ask.fingerprint ? `Then it shows your key: ${ask.fingerprint}` : undefined}
           >
             <input
+              autoFocus
               className="input set-enroll-digits"
               inputMode="numeric"
               autoComplete="one-time-code"
@@ -69,7 +71,7 @@ export function EnrollDialog() {
             />
           </Field>
         )}
-        <div className="dialog-foot">
+        <div className="modal-foot">
           <button type="button" className="btn is-quiet" onClick={deny}>
             Not mine
           </button>
@@ -85,6 +87,6 @@ export function EnrollDialog() {
           )}
         </div>
       </form>
-    </Dialog>
+    </Modal>
   )
 }

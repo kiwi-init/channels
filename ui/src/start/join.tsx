@@ -3,7 +3,7 @@ import { useEffect, useId, useRef, useState } from "react"
 import { handleFor, NAME_RE, RESERVED_NAMES } from "@kiwi/core/membership.ts"
 
 import "~/styles/start.css"
-import { cx, Dialog, DialogHead } from "~/kit/bits"
+import { cx, Modal } from "~/kit/bits"
 import type { InviteInfo } from "~/model"
 import { useApp } from "~/nav"
 
@@ -30,14 +30,8 @@ function inviteCode(text: string): string | null {
 const focusFirst = (el: HTMLInputElement | null) => el?.setAttribute("autofocus", "")
 
 export function JoinDialog() {
-  const { nav, go } = useApp()
-  const open = nav.dialog === "join"
-  const close = () => go({ to: "dialog", dialog: null })
-  return (
-    <Dialog open={open} onClose={() => open && close()} label="Join a channel">
-      <JoinForm onClose={close} />
-    </Dialog>
-  )
+  const { go } = useApp()
+  return <JoinForm onClose={() => go({ to: "dialog", dialog: null })} />
 }
 
 function JoinForm({ onClose }: { onClose: () => void }) {
@@ -79,12 +73,12 @@ function JoinForm({ onClose }: { onClose: () => void }) {
   if (invite) {
     const owner = invite.owner
     return (
-      <>
-        <DialogHead
-          title={owner ? `${owner} invited you to a channel` : "You're invited to a channel"}
-          sub={`${owner ?? "The owner"} sees your name and a code to check, then lets you in.`}
-          onClose={onClose}
-        />
+      <Modal
+        onClose={onClose}
+        label="Join a channel"
+        title={owner ? `${owner} invited you to a channel` : "You're invited to a channel"}
+        sub={`${owner ?? "The owner"} sees your name and a code to check, then lets you in.`}
+      >
         <form
           className="start-form"
           onSubmit={async (e) => {
@@ -118,7 +112,7 @@ function JoinForm({ onClose }: { onClose: () => void }) {
           <p className={cx("start-hint", (nameProblem || error) && "is-error")} aria-live="polite">
             {error ?? nameProblem}
           </p>
-          <div className="dialog-foot start-foot">
+          <div className="modal-foot start-foot">
             <button type="button" className="btn is-quiet" onClick={() => (setInvite(null), setError(null))}>
               Back
             </button>
@@ -127,14 +121,13 @@ function JoinForm({ onClose }: { onClose: () => void }) {
             </button>
           </div>
         </form>
-      </>
+      </Modal>
     )
   }
 
   const hint = error ?? (bad ? "That isn't an invite. It looks like kiwi://join/…, a link with #mc2-…, or a code." : null)
   return (
-    <>
-      <DialogHead title="Join a channel" onClose={onClose} />
+    <Modal onClose={onClose} label="Join a channel" title="Join a channel">
       <form
         className="start-form"
         onSubmit={async (e) => {
@@ -167,12 +160,12 @@ function JoinForm({ onClose }: { onClose: () => void }) {
         <p id={hintId} className={cx("start-hint", (bad || error) && "is-error")} aria-live="polite">
           {hint}
         </p>
-        <div className="dialog-foot start-foot">
+        <div className="modal-foot start-foot">
           <button type="submit" className="btn is-primary" disabled={!code || busy}>
             {busy ? "Checking…" : "Continue"}
           </button>
         </div>
       </form>
-    </>
+    </Modal>
   )
 }

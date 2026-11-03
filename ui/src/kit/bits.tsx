@@ -87,7 +87,35 @@ export function IconButton({ icon, label, onClick, pressed }: { icon: Parameters
   )
 }
 
-export function Dialog({ open, onClose, label, children, wide }: { open: boolean; onClose: () => void; label: string; children: ReactNode; wide?: boolean }) {
+type ModalSize = "narrow" | "wide"
+
+const FOCUSABLE = 'a[href], button:not(:disabled), input:not(:disabled):not([type="hidden"]), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'
+
+export function Modal({
+  open = true,
+  onClose,
+  label,
+  title,
+  sub,
+  lead,
+  tabs,
+  foot,
+  size,
+  className,
+  children,
+}: {
+  open?: boolean
+  onClose: () => void
+  label: string
+  title: ReactNode
+  sub?: ReactNode
+  lead?: ReactNode
+  tabs?: ReactNode
+  foot?: ReactNode
+  size?: ModalSize
+  className?: string
+  children?: ReactNode
+}) {
   const ref = useRef<HTMLDialogElement>(null)
   const wanted = useRef(open)
   useEffect(() => {
@@ -95,8 +123,9 @@ export function Dialog({ open, onClose, label, children, wide }: { open: boolean
     const el = ref.current
     if (!el) return
     if (open && !el.open) {
+      const asked = document.activeElement instanceof HTMLElement && el.contains(document.activeElement) ? document.activeElement : null
       el.showModal()
-      ;(el.querySelector<HTMLElement>("[autofocus], input:not([type=hidden]), textarea, select") ?? el).focus()
+      ;(asked ?? el.querySelector<HTMLElement>("[autofocus]") ?? el).focus()
     }
     if (!open && el.open) el.close()
   }, [open])
@@ -106,7 +135,7 @@ export function Dialog({ open, onClose, label, children, wide }: { open: boolean
       role="dialog"
       aria-modal="true"
       tabIndex={-1}
-      className={cx("dialog", wide && "is-wide")}
+      className={cx("modal", size && `is-${size}`, !!tabs && "has-tabs", !children && "is-bare")}
       aria-label={label}
       onClose={() => {
         if (wanted.current) onClose()
@@ -114,21 +143,32 @@ export function Dialog({ open, onClose, label, children, wide }: { open: boolean
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose()
       }}
+      onKeyDown={(e) => {
+        if (e.key !== "Tab" || e.defaultPrevented) return
+        const stops = [...e.currentTarget.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((el) => el.offsetParent !== null || el === document.activeElement)
+        if (!stops.length) return
+        e.preventDefault()
+        const at = stops.indexOf(document.activeElement as HTMLElement)
+        const next = at < 0 ? (e.shiftKey ? stops.length - 1 : 0) : (at + (e.shiftKey ? -1 : 1) + stops.length) % stops.length
+        stops[next]?.focus()
+      }}
     >
-      {open && <div className="dialog-body">{children}</div>}
+      {open && (
+        <>
+          <header className={cx("modal-head", !!lead && "has-lead")}>
+            {lead && <span className="modal-lead">{lead}</span>}
+            <div className="modal-title">
+              <h2>{title}</h2>
+              {sub && <p>{sub}</p>}
+            </div>
+            <IconButton icon="close" label="Close" onClick={onClose} />
+            {tabs && <div className="modal-tabs">{tabs}</div>}
+          </header>
+          {children && <div className={cx("modal-body", className)}>{children}</div>}
+          {foot && <footer className="modal-foot">{foot}</footer>}
+        </>
+      )}
     </dialog>
-  )
-}
-
-export function DialogHead({ title, onClose, sub }: { title: string; sub?: string; onClose: () => void }) {
-  return (
-    <header className="dialog-head">
-      <div>
-        <h2>{title}</h2>
-        {sub && <p className="dim">{sub}</p>}
-      </div>
-      <IconButton icon="close" label="Close" onClick={onClose} />
-    </header>
   )
 }
 
@@ -178,9 +218,9 @@ export function Loading() {
   )
 }
 
-export function Toggle({ on, onChange, label, id }: { on: boolean; onChange: (on: boolean) => void; label?: string; id?: string }) {
+export function Toggle({ on, onChange, label, id, disabled }: { on: boolean; onChange?: (on: boolean) => void; label?: string; id?: string; disabled?: boolean }) {
   return (
-    <button id={id} type="button" role="switch" aria-checked={on} aria-label={label} className={cx("toggle", on && "is-on")} onClick={() => onChange(!on)}>
+    <button id={id} type="button" role="switch" aria-checked={on} aria-label={label} disabled={disabled} className={cx("toggle", on && "is-on")} onClick={() => onChange?.(!on)}>
       <span className="toggle-track" aria-hidden="true">
         <span className="toggle-knob" />
       </span>

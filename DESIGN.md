@@ -223,11 +223,15 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   and 600.
 - `Toggle`: a 36×22 track, `live` when on with a white knob. No On/Off word
   beside it: the track already says it.
-- `Dialog` / `DialogHead`: `bg-2`, `r-win`, `shadow-pop`, 480px (720px
-  wide), rises in. A dialog is for one decision or a short form; Settings
-  and the panels open in place. The head is the title and close; a sub line
-  only when it says what the title and the form can't (most dialogs have
-  none, and then close centres on the title).
+- `Modal` (`.modal`): the one modal frame. `bg-2`, `r-win`, `shadow-pop`,
+  480px (`narrow` 400px, `wide` 720px), rises in. Its head is an optional
+  lead (an avatar or a tile), the title, an optional sub line and close;
+  tabs, when it has them, sit under the title in the head. The body scrolls
+  and an optional foot holds the actions. Esc, a click outside and Back or
+  Forward close it, and focus stays inside. Settings-like screens (channel
+  settings, profiles, Invite, Add an agent) open in it, built from Settings'
+  `Group` and `Row` with real headings; the side panel is only for work: a
+  thread, a task, a PR or an issue.
 - `Avatar` (`.av` 32px, `av-sm` 24px, `av-lg` 56px). A person shows their
   picture or initials in their member colour, with a presence `pip` (`live`
   online, `decide` away, `ink-3` off). An agent shows its role character
@@ -553,7 +557,7 @@ same gestures, the same speed. The owner asked for it, so on the phone it wins o
 
 1. Use the tokens from `tokens.css` and the shared classes from `base.css`;
    add a class to the mono rule if it shows the machine's words.
-2. Build from `ui/src/kit/` (`Dialog`, `Field`, `Seg`, `Toggle`, `Avatar`,
+2. Build from `ui/src/kit/` (`Modal`, `Field`, `Seg`, `Toggle`, `Avatar`,
    `Dot`, `Count`, `Icon`) before writing a new control.
 3. Check it in dark and light, in OLED Black and one Rex theme, at Large
    text and with reduced motion.
