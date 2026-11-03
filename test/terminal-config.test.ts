@@ -3,7 +3,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSy
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { launchAgent } from "../src/launch/launch.ts";
-import { helpersOn, launchesOn, shellsOn, switchHelpers } from "../src/terminals/registry.ts";
+import { helpersOn, launchesOn, switchHelpers } from "../src/terminals/registry.ts";
 
 setDefaultTimeout(30_000);
 
@@ -58,8 +58,6 @@ describe("terminal helpers, and whether new agents may start", () => {
   test("creating new agents is on unless it was turned off, and off refuses every launch before anything runs", async () => {
     expect(launchesOn({})).toBe(true);
     expect(launchesOn({ launch: "off" })).toBe(false);
-    expect(shellsOn({})).toBe(true);
-    expect(shellsOn({ shells: "off" })).toBe(false);
     const refused = await launchAgent(
       { harness: "claude", folder: "relative", code: "nope" },
       { config: { launch: "off" }, hosted: { ready: async () => null, open: async () => ({ ok: false, why: "failed", detail: "" }), pane: () => null } },
@@ -126,16 +124,6 @@ describe("kiwi terminal and kiwi launches", () => {
     expect(JSON.parse(kiwi(dir, "launches", "status", "--json").stdout)).toEqual({ launch: "off" });
     expect(kiwi(dir, "launches", "on").stdout).toStartWith("Creating new agents is on for this computer");
     expect(kiwi(dir, "launches", "maybe").code).toBe(1);
-  });
-
-  test("kiwi shells is on on a fresh computer, and off and on write the one setting the daemon reads", () => {
-    const dir = kiwiHome();
-    expect(JSON.parse(kiwi(dir, "shells", "--json").stdout)).toEqual({ shells: "on" });
-    expect(kiwi(dir, "shells", "off").stdout).toStartWith("Shells from your other devices are off");
-    expect(saved(dir)).toMatchObject({ shells: "off" });
-    expect(JSON.parse(kiwi(dir, "shells", "status", "--json").stdout)).toEqual({ shells: "off" });
-    expect(kiwi(dir, "shells", "on").stdout).toStartWith("Shells from your other devices are on");
-    expect(kiwi(dir, "shells", "maybe").code).toBe(1);
   });
 
   test("kiwi context-line is off on a fresh computer, and on and off write the one setting Settings reads, as JSON with --json", () => {

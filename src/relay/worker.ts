@@ -47,9 +47,6 @@ import {
   MACHINE_ASKS_PER_MINUTE,
   MACHINE_BOX_TTL_MS,
   MACHINE_UNSEEN_MS,
-  PIPE_JOIN_MS,
-  PIPE_PAIRED,
-  lonelyPipes,
   machineAlarmAt,
   onMachineHttp,
   onPersonHttp,
@@ -60,8 +57,6 @@ import {
   type MachineBox,
   type MachineStore,
   type PersonMachine,
-  type PipeEnd,
-  pipeFrame,
 } from "./machine.ts";
 import { ACCOUNT_ASKS_PER_MINUTE, accountUser, isAccountPath, onAccountHttp, sameEnrollment, sameFresh, type AccountStore, type FreshRecord } from "./account.ts";
 import { ENROLL_TTL_MS, type Enrollment } from "@kiwi/core/enroll.ts";
@@ -391,27 +386,11 @@ export class MachineInbox extends DurableObject<Env> {
     return this.ctx.getWebSockets("machine");
   }
 
-  private pipeSockets(): { ws: WebSocket; end: PipeEnd }[] {
-    return this.ctx.getWebSockets("pipe").flatMap((ws) => {
-      const end = (ws.deserializeAttachment() as { pipe?: PipeEnd } | null)?.pipe;
-      return end ? [{ ws, end }] : [];
-    });
-  }
-
-  private partner(end: PipeEnd): WebSocket | undefined {
-    return this.ctx.getWebSockets(`pipe:${end.id}:${end.side === "app" ? "computer" : "app"}`)[0];
-  }
-
-  private closePipes(which: (end: PipeEnd) => boolean, code: number, reason: string): void {
-    for (const { ws, end } of this.pipeSockets()) if (which(end)) close(ws, code, reason);
-  }
-
   private async schedule(): Promise<void> {
     const sql = this.ctx.storage.sql;
     const oldest = (sql.exec("SELECT MIN(at) AS at FROM boxes").toArray()[0] as { at: number | null } | undefined)?.at ?? null;
     const seen = (sql.exec("SELECT seen_at FROM binding").toArray()[0] as { seen_at: number } | undefined)?.seen_at ?? null;
-    const lonely = lonelyPipes(this.pipeSockets().map((p) => p.end));
-    const at = machineAlarmAt(oldest, seen, lonely.length ? Math.min(...lonely.map((e) => e.at)) : null);
+    const at = machineAlarmAt(oldest, seen);
     const set = await this.ctx.storage.getAlarm();
     if (at === null) await this.ctx.storage.deleteAlarm();
     else if (set === null || at < set) await this.ctx.storage.setAlarm(at);
@@ -466,10 +445,7 @@ export class MachineInbox extends DurableObject<Env> {
       },
       close: () => {
         for (const ws of this.live()) close(ws, 4000, "unpaired");
-        this.closePipes(() => true, 4000, "unpaired");
       },
-      pipes: () => this.pipeSockets().map((p) => p.end),
-      closePipes: (_mpk, which, code, reason) => this.closePipes(which, code, reason),
     };
   }
 
@@ -480,7 +456,6 @@ export class MachineInbox extends DurableObject<Env> {
     sql.exec("DELETE FROM boxes");
     sql.exec("DELETE FROM links");
     for (const ws of this.live()) close(ws, 4000, "unpaired");
-    this.closePipes(() => true, 4000, "unpaired");
     await this.schedule();
   }
 
@@ -500,7 +475,6 @@ export class MachineInbox extends DurableObject<Env> {
       const out = await onMachineHttp(req, store, { perMachine: (key) => allowPerMinute(key, MACHINE_ASKS_PER_MINUTE) });
       if (out instanceof Response) return out;
       if (!out) return withCors(errorResponse(new NotFound({ message: "not found" })));
-      if ("pipe" in out) return await this.openPipe(req, out.pipe);
       for (const old of this.live()) close(old, 4001, "replaced by a newer connection");
       const { 0: client, 1: server } = new WebSocketPair();
       this.ctx.acceptWebSocket(server, ["machine"]);
@@ -512,41 +486,8 @@ export class MachineInbox extends DurableObject<Env> {
     }
   }
 
-  private async openPipe(req: Request, end: PipeEnd): Promise<Response> {
-    const { 0: client, 1: server } = new WebSocketPair();
-    this.ctx.acceptWebSocket(server, ["pipe", `pipe:${end.id}`, `pipe:${end.id}:${end.side}`]);
-    server.serializeAttachment({ pipe: end });
-    const other = this.partner(end);
-    if (other) {
-      send(other, PIPE_PAIRED);
-      send(server, PIPE_PAIRED);
-    } else await this.schedule();
-    return new Response(null, { status: 101, webSocket: client, headers: wsHeaders(req) });
-  }
-
-  override async webSocketMessage(ws: WebSocket, data: string | ArrayBuffer): Promise<void> {
-    const end = (ws.deserializeAttachment() as { pipe?: PipeEnd } | null)?.pipe;
-    if (!end) return;
-    const other = this.partner(end);
-    const frame = pipeFrame(data, PING);
-    if (frame === "ping") return send(ws, PONG);
-    if (frame === "refuse" || typeof data === "string") {
-      close(ws, 1009, "a pipe carries binary frames of at most 64 KB");
-      if (other) close(other, 1011, "the other side sent a frame the relay doesn't carry");
-      return;
-    }
-    if (!other) return close(ws, 4409, "the other side hasn't joined this pipe yet");
-    send(other, data);
-  }
-
   override async webSocketClose(ws: WebSocket, code: number): Promise<void> {
     close(ws, code === 1005 ? 1000 : code, "");
-    const end = (ws.deserializeAttachment() as { pipe?: PipeEnd } | null)?.pipe;
-    if (end) {
-      const other = this.partner(end);
-      if (other && other !== ws) close(other, 1000, "the other side left");
-      return;
-    }
     if (this.live().some((x) => x !== ws)) return;
     this.ctx.storage.sql.exec("UPDATE binding SET seen_at = ?", Date.now());
     await this.schedule();
@@ -557,8 +498,6 @@ export class MachineInbox extends DurableObject<Env> {
     const now = Date.now();
     sql.exec("DELETE FROM boxes WHERE at < ?", now - MACHINE_BOX_TTL_MS);
     if (!this.live().length && sql.exec("DELETE FROM binding WHERE seen_at < ?", now - MACHINE_UNSEEN_MS).rowsWritten) sql.exec("DELETE FROM links");
-    const lonely = new Set(lonelyPipes(this.pipeSockets().map((p) => p.end)).filter((e) => e.at + PIPE_JOIN_MS <= now));
-    this.closePipes((end) => [...lonely].some((l) => l.id === end.id && l.side === end.side), 4408, "the other side didn't join this pipe in time");
     await this.schedule();
   }
 }
@@ -829,7 +768,7 @@ function isWatch(ws: WebSocket): boolean {
   return (ws.deserializeAttachment() as { watch?: boolean } | null)?.watch === true;
 }
 
-function send(ws: WebSocket, f: string | ArrayBuffer): void {
+function send(ws: WebSocket, f: string): void {
   try {
     ws.send(f);
   } catch {

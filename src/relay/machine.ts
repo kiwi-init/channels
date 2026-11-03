@@ -13,10 +13,6 @@ export const MACHINE_BOX_TTL_MS = 3 * 60_000;
 export const MACHINE_UNSEEN_MS = 30 * 24 * 3_600_000;
 export const MACHINE_ASKS_PER_MINUTE = 20;
 export const MACHINE_WRITES_PER_ADDRESS = 60;
-export const PIPE_JOIN_MS = 30_000;
-export const PIPE_FRAME_MAX = 64 * 1024;
-export const PIPES_PER_MACHINE = 16;
-export const PIPE_PAIRED = JSON.stringify({ paired: true });
 const MACHINE_PENDING_MAX = 20;
 const REGISTER_MAX_BYTES = 8_192;
 const INBOX_MAX_BYTES = ASK_MAX_BYTES + 256;
@@ -32,15 +28,6 @@ export interface MachineBinding {
 export interface MachineBox {
   id: string;
   box: string;
-  at: number;
-}
-
-type PipeSide = "app" | "computer";
-
-export interface PipeEnd {
-  id: string;
-  side: PipeSide;
-  signer: string;
   at: number;
 }
 
@@ -60,8 +47,6 @@ export interface MachineStore {
   online(mpk: string): number | null;
   push(mpk: string, b: MachineBox): void;
   close(mpk: string): void;
-  pipes(mpk: string): PipeEnd[];
-  closePipes(mpk: string, which: (end: PipeEnd) => boolean, code: number, reason: string): void;
 }
 
 export interface PersonMachine {
@@ -78,9 +63,9 @@ export interface PersonMachinesStore {
   lists(person: string): Promise<unknown[][]>;
 }
 
-export type MachineOutcome = Response | { upgrade: string } | { pipe: PipeEnd; mpk: string } | null;
+export type MachineOutcome = Response | { upgrade: string } | null;
 
-const PATH = /^\/v1\/machine\/([A-Za-z0-9_-]{43})(?:\/(inbox|ws|pipe)(?:\/([A-Za-z0-9_-]{22}))?)?$/;
+const PATH = /^\/v1\/machine\/([A-Za-z0-9_-]{43})(?:\/(inbox|ws)(?:\/([A-Za-z0-9_-]{22}))?)?$/;
 
 const PERSON_PATH = /^\/v1\/person\/([A-Za-z0-9_-]{43})\/machines$/;
 
@@ -96,12 +81,8 @@ const refuse = (err: unknown): Response => withCors(errorResponse(err));
 const answer = (data: unknown, status = 200): Response => withCors(Response.json(data, { status }));
 const done = (): Response => withCors(new Response(null, { status: 204 }));
 
-export function machineAlarmAt(oldestBoxAt: number | null, seenAt: number | null, lonelyPipeAt: number | null = null): number | null {
-  const times = [
-    ...(oldestBoxAt === null ? [] : [oldestBoxAt + MACHINE_BOX_TTL_MS]),
-    ...(seenAt === null ? [] : [seenAt + MACHINE_UNSEEN_MS]),
-    ...(lonelyPipeAt === null ? [] : [lonelyPipeAt + PIPE_JOIN_MS]),
-  ];
+export function machineAlarmAt(oldestBoxAt: number | null, seenAt: number | null): number | null {
+  const times = [...(oldestBoxAt === null ? [] : [oldestBoxAt + MACHINE_BOX_TTL_MS]), ...(seenAt === null ? [] : [seenAt + MACHINE_UNSEEN_MS])];
   return times.length ? Math.min(...times) : null;
 }
 
@@ -146,17 +127,7 @@ export async function takeNewerList(store: MachineStore, mpk: string, links: unk
     return;
   }
   await store.keepLinks(mpk, links);
-  store.closePipes(mpk, (end) => end.side === "app" && !speaksForPerson(next, end.signer, now), 4003, "the device that opened this shell was removed");
   if (!kept) store.close(mpk);
-}
-
-export const lonelyPipes = (ends: PipeEnd[]): PipeEnd[] => ends.filter((e) => !ends.some((o) => o.id === e.id && o.side !== e.side));
-
-export type PipeFrame = "forward" | "ping" | "refuse";
-
-export function pipeFrame(data: string | ArrayBuffer | Uint8Array, ping: string): PipeFrame {
-  if (typeof data === "string") return data === ping ? "ping" : "refuse";
-  return data.byteLength > 0 && data.byteLength <= PIPE_FRAME_MAX ? "forward" : "refuse";
 }
 
 async function register(store: MachineStore, mpk: string, body: Record<string, unknown> | null, now: number): Promise<Response> {
@@ -261,16 +232,6 @@ export async function onMachineHttp(
     if (!isMachine) return refuse(new Forbidden({ message: "only the machine takes asks out of its inbox" }));
     await store.dropBox(mpk, boxId);
     return done();
-  }
-  if (sub === "pipe" && boxId && req.method === "GET") {
-    const side: PipeSide | null = isMachine ? (bound ? "computer" : null) : isPerson ? "app" : null;
-    if (!side) return refuse(new Forbidden({ message: "only the computer and its person's devices open a shell's pipe" }));
-    if (req.headers.get("upgrade")?.toLowerCase() !== "websocket") return refuse(new UpdateRequired({ message: "expected websocket" }));
-    const ends = store.pipes(mpk);
-    if (ends.some((e) => e.id === boxId && e.side === side)) return refuse(new Conflict({ message: `this pipe already has its ${side}` }));
-    if (!ends.some((e) => e.id === boxId) && new Set(ends.map((e) => e.id)).size >= PIPES_PER_MACHINE)
-      return refuse(new TooMany({ message: `this computer already has ${PIPES_PER_MACHINE} shells open through the relay` }));
-    return { pipe: { id: boxId, side, signer, at: now }, mpk };
   }
   if (sub === "ws" && req.method === "GET") {
     if (!isMachine || !bound) return refuse(new Forbidden({ message: "only a registered machine opens its inbox" }));
