@@ -137,7 +137,6 @@ function GithubRow({ line }: { line: Extract<EventLine, { kind: "github" }> }) {
         ))}
       </span>
       <time>{clock(last.at)}</time>
-      {line.updates > 1 && <span>· {line.updates} updates</span>}
     </p>
   )
 }

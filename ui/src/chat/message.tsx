@@ -120,16 +120,6 @@ function Spot({ code, img }: { code: string; img: ImageSpot }) {
   )
 }
 
-function Earlier() {
-  return (
-    <p className="msg-quote is-earlier">
-      <Icon name="reply" size={12} />
-      <span className="msg-quote-who">Earlier message</span>
-      <span className="msg-quote-text">no longer kept here</span>
-    </p>
-  )
-}
-
 function Quote({ quoted, who, names, onClick }: { quoted: Message; who: string; names: ReadonlyMap<string, string>; onClick?: () => void }) {
   const line = useMemo(() => withNames(quoted.text, names, preview), [quoted.text, names])
   return (
@@ -232,12 +222,12 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
             <button
               type="button"
               className="msg-name"
+              title={who?.role && who.role.toLowerCase() !== nickname(channel, m.from).toLowerCase() ? who.role : undefined}
               onClick={() => go({ to: "panel", panel: { kind: "person", name: m.from } })}
               onContextMenu={(e) => who && showMenu(e, nickname(channel, m.from), (x) => [x.personItems({ channel, go }, who)])}
             >
               {nickname(channel, m.from)}
             </button>
-            {who?.role && who.role.toLowerCase() !== nickname(channel, m.from).toLowerCase() && <span className="msg-role">{who.role}</span>}
             {m.said && <span className={cx("msg-said", `is-${m.said.tone}`)}>{m.said.text}</span>}
             <time className="msg-time" dateTime={new Date(m.at).toISOString()}>
               {clock(m.at)}
@@ -249,7 +239,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
             )}
           </p>
         )}
-        {typeof quote === "number" ? <Earlier /> : quote && <Quote quoted={quote} who={nickname(channel, quote.from)} names={names} onClick={onQuote ? () => onQuote(quote.seq) : undefined} />}
+        {typeof quote === "object" && <Quote quoted={quote} who={nickname(channel, quote.from)} names={names} onClick={onQuote ? () => onQuote(quote.seq) : undefined} />}
         {m.deleted ? (
           <p className="msg-deleted">Message deleted</p>
         ) : editing ? (

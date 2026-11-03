@@ -483,7 +483,7 @@ function Feed({ channel, where, spot, jump }: { channel: Channel; where: Where; 
         <div className="feed-list" ref={content}>
           {list.length === 0 && !compact ? (
             channel.loading ? (
-              <Loading />
+              channel.connection === "live" && <Loading />
             ) : (
               <Start channel={channel} where={where} />
             )
@@ -506,7 +506,7 @@ function Feed({ channel, where, spot, jump }: { channel: Channel; where: Where; 
                     </p>
                   )}
                   {m.locked && !list[i - 1]?.locked && where.kind === "dm" && (
-                    <p className="day" role="separator">
+                    <p className="day is-sealed" role="separator">
                       <span>From here on, just you and {nickname(channel, where.with)} can read new messages</span>
                     </p>
                   )}
@@ -556,7 +556,7 @@ function Feed({ channel, where, spot, jump }: { channel: Channel; where: Where; 
               <ProposalCard channel={channel} proposal={proposal} names={names} tasks={tasks} onQuote={onQuote} />
             </Suspense>
           )}
-          {working.length > 0 && <Working people={working} />}
+          {working.length > 0 && !channel.loading && <Working people={working} />}
         </div>
       </div>
       {(fresh > 0 || far) && (
@@ -601,7 +601,7 @@ function Fold({ run, open, onToggle }: { run: readonly Message[]; open: boolean;
 export function ReadOnly({ channel, between: names }: { channel: Channel; between: readonly [string, string] }) {
   return (
     <div className="compose">
-      <p className="compose-note">Only {between(channel, names)} write here. You read along.</p>
+      <p className="compose-note">Only {between(channel, names)} write here.</p>
     </div>
   )
 }
@@ -610,14 +610,16 @@ function HoldBanner({ channel, hold }: { channel: Channel; hold: NonNullable<Cha
   const { app } = useApp()
   const owner = channel.people.find((p) => p.owner && !p.you)
   const until = channel.youOwn ? "until you resume them" : `until ${owner ? shown(owner) : "the owner"} resumes them`
+  const note = hold.note?.replace(/[.\s]+$/, "")
   return (
-    <div className="banner" role="status">
+    <div className="banner" role="status" title={`They read but don't act ${until}.`}>
       <p className="banner-text">
-        Agents are paused{hold.note ? `: ${hold.note.replace(/[.\s]+$/, "")}` : ""}. <span className="dim">They read but don't act {until}.</span>
+        <b>{channel.youOwn || !owner ? "Agents paused" : `${shown(owner)} paused the agents`}</b>
+        {note && <span className="dim">{note}</span>}
       </p>
       {channel.youOwn && (
         <button type="button" className="btn is-small" onClick={() => app.actions.setHold(channel.code, false)}>
-          Resume agents
+          Resume
         </button>
       )}
     </div>
@@ -625,7 +627,14 @@ function HoldBanner({ channel, hold }: { channel: Channel; hold: NonNullable<Cha
 }
 
 function Start({ channel, where }: { channel: Channel; where: Where }) {
-  const agents = channel.people.filter((p) => p.kind === "agent").length
+  if (where.kind === "room" && !channel.people.some((p) => p.kind === "agent"))
+    return (
+      <div className="feed-start">
+        <Suspense fallback={null}>
+          <AddAgentCard channel={channel} />
+        </Suspense>
+      </div>
+    )
   return (
     <div className="feed-start">
       <p className="feed-start-title">
@@ -633,19 +642,12 @@ function Start({ channel, where }: { channel: Channel; where: Where }) {
           ? `This is the start of #${channel.rooms.find((r) => r.id === where.room)?.name ?? where.room}.`
           : where.kind === "dm"
             ? sealable(channel, where.with)
-              ? `This is the start of your messages with ${nickname(channel, where.with)}. Just you and ${nickname(channel, where.with)} can read them: not the channel, not the relay.`
-              : `This is the start of your messages with ${nickname(channel, where.with)}. Everyone in the channel can read them.`
+              ? `Just you and ${nickname(channel, where.with)} can read these: not the channel, not the relay.`
+              : `Everyone in the channel can read your messages with ${nickname(channel, where.with)}.`
             : where.kind === "theirs"
               ? `This is the start of ${between(channel, where.between)}.`
               : "Nothing here yet."}
       </p>
-      {agents === 0 ? (
-        <Suspense fallback={null}>
-          <AddAgentCard channel={channel} />
-        </Suspense>
-      ) : (
-        <p className="dim">Say what you want done. The lead turns it into tasks.</p>
-      )}
     </div>
   )
 }

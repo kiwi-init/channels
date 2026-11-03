@@ -233,13 +233,15 @@ export default function TermDrawer({ channel, of }: { channel: Channel; of: Term
   return (
     <section className="term" aria-label={name === null ? title : `${title}'s terminal`} style={height ? { height } : undefined} onKeyDown={(e) => e.stopPropagation()}>
       <div className="term-grip" role="separator" aria-orientation="horizontal" aria-label="Resize the terminal" onPointerDown={grip} onDoubleClick={() => setHeight(null)} />
-      <header className="term-head">
-        {name === null ? (
-          <span className="term-mine" aria-hidden="true">
-            <Icon name="terminal" size={14} />
-          </span>
-        ) : (
+      <header className="term-head" title={[name === null ? "This computer" : "Channels' tmux", size].filter(Boolean).join(" · ")}>
+        {name !== null ? (
           <Avatar person={person} size="sm" />
+        ) : (
+          tabs.length === 0 && (
+            <span className="term-mine" aria-hidden="true">
+              <Icon name="terminal" size={14} />
+            </span>
+          )
         )}
         {name === null && tabs.length > 0 ? (
           <div className="term-tabs" role="tablist" aria-label="Your terminals">
@@ -263,11 +265,7 @@ export default function TermDrawer({ channel, of }: { channel: Channel; of: Term
         ) : (
           <span className="term-name">{title}</span>
         )}
-        <span className="term-where">
-          {name === null ? "this computer" : "Channels' tmux"}
-          {size && <span className="term-size"> · {size}</span>}
-          {phase.kind === "ended" && <span className="term-ended"> · exited</span>}
-        </span>
+        <span className="term-where">{phase.kind === "ended" && <span className="term-ended">exited</span>}</span>
         {name !== null && <IconButton icon="external" label="Open in your terminal" onClick={() => void app.actions.showAgent(channel.code, name).then((note) => note && toast(note))} />}
         <IconButton
           icon="close"

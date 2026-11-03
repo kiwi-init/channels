@@ -63,7 +63,7 @@ function placeOf(channel: Channel, where: Where, inThread?: number): string {
   return "here"
 }
 
-function StashList({ list, place, onTake, onDrop, onClose }: { list: readonly Stashed[]; place: string; onTake: (i: number) => void; onDrop: (i: number) => void; onClose: () => void }) {
+function StashList({ list, onTake, onDrop, onClose }: { list: readonly Stashed[]; onTake: (i: number) => void; onDrop: (i: number) => void; onClose: () => void }) {
   const [on, setOn] = useState(0)
   const rows = useRef<HTMLUListElement>(null)
   useEffect(() => {
@@ -88,10 +88,6 @@ function StashList({ list, place, onTake, onDrop, onClose }: { list: readonly St
         }
       }}
     >
-      <div className="stash-head">
-        <span>Stashed in {place}</span>
-        <span>{list.length}</span>
-      </div>
       <ul ref={rows} aria-label="Stashed drafts">
         {list.map((s, i) => (
           <li key={`${s.at}-${i}`}>
@@ -103,7 +99,7 @@ function StashList({ list, place, onTake, onDrop, onClose }: { list: readonly St
         ))}
       </ul>
       <p className="stash-foot">
-        Click to bring back · <kbd>⌫</kbd> drops one · <kbd>⇧⌘S</kbd> brings back the newest
+        <kbd>⌫</kbd> drops one
       </p>
     </div>
   )
@@ -440,7 +436,6 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
             {listOpen && (
               <StashList
                 list={stash.list}
-                place={placeOf(channel, where, inThread)}
                 onTake={bringBack}
                 onDrop={stash.drop}
                 onClose={() => {

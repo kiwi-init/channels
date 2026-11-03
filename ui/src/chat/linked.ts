@@ -13,8 +13,7 @@ function remote(url: string, alt: string): string | null {
   if (/^(?:data|blob):/i.test(url.trim())) return null
   const safe = sanitizeMarkdownUrl(url)
   if (!safe || !/^https?:\/\//i.test(safe)) return literal(alt)
-  const at = new URL(safe)
-  return `[${literal(alt || "image")} (opens ${at.hostname})](<${at.href}>)`
+  return `[${literal(alt || "image")}](<${new URL(safe).href}>)`
 }
 
 export function linked(text: string, nicknames: ReadonlyMap<string, string>, tasks: ReadonlySet<number>, before?: number): string {
