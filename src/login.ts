@@ -108,7 +108,7 @@ export async function loginComputer(o: LoginOpts): Promise<EnrolledDevice> {
       const device: EnrolledDevice = { person: grant.person, links: grant.links };
       saveMachine({ ...m, device, ...(grant.cert ? { cert: grant.cert, person: grant.person } : {}) });
       await mailbox.drop().catch(() => {});
-      say(`"${m.label}" is one of ${name}'s devices now: its agents join your channels on their own and your app can start agents here. Kept in ${join(home(), "machine.json")}.`);
+      say(`"${m.label}" is one of ${name}'s devices now: its agents join your channels on their own. Kept in ${join(home(), "machine.json")}.`);
       return device;
     }
     if (Date.now() > until) throw new PairError(`nothing approved "${m.label}" in time; run kiwi login again to ask again`, 3);

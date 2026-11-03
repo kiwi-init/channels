@@ -676,7 +676,7 @@ devices". Until you confirm, it writes nothing: no device key, no device list, n
 Turning it down drops the grant, and the next ask uses a new device key. A device that already
 holds a person refuses another until it is unpaired or unlinked, and checks again right before
 it saves. A computer approved by the app holding your person key also gets its MachineCert
-there, so the app can start agents on it. A computer in your device list can instead register with
+there, so its agents get in on their own and the app can read its settings. A computer in your device list can instead register with
 the list, and then takes asks from your person key or any current approving desktop in it, never a
 phone or another computer.
 
