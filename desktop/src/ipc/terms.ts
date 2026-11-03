@@ -17,9 +17,7 @@ function paired(machinePk: unknown): { pk: string; xpk: string } | null {
 
 const none = async (): Promise<TermTabView[]> => [];
 
-export function termsCalls(
-  host: Host,
-): Serves<"termOpen" | "termMine" | "termTabs" | "termTabClose" | "termRemote" | "termRemoteTabs" | "termRemoteClose" | "termKeys" | "termSize" | "termClose"> {
+export function termsCalls(host: Host): Serves<"termOpen" | "termMine" | "termTabs" | "termTabClose" | "termRemote" | "termRemoteTabs" | "termRemoteClose" | "termKeys" | "termSize" | "termClose"> {
   return {
     termOpen: (pane, cols, rows) => termOpen(pane, cols, rows, (e) => host.push("term", e)),
     termMine: (roomId, want, cols, rows) => termMine(roomId, want, cols, rows, (e) => host.push("term", e)),
