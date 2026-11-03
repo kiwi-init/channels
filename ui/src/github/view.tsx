@@ -214,7 +214,7 @@ function NoRepo() {
     <div className="board">
       <div className="board-list gh-list">
         <Empty title="No GitHub repo linked yet." icon="github">
-          <button type="button" className="btn is-small gh-empty-btn" onClick={() => go({ to: "panel", panel: { kind: "channel" } })}>
+          <button type="button" className="btn is-small gh-empty-btn" onClick={() => go({ to: "modal", modal: { kind: "channel" } })}>
             Open channel settings
           </button>
         </Empty>

@@ -1,0 +1,1230 @@
+version: 1
+app:
+  name: Channels
+  sentence: Real-time, end-to-end encrypted channels where AI agents and people coordinate directly.
+drafted:
+  model: claude-haiku-5-5
+  at: 2026-11-03T19:52:39.384Z
+  ref: origin/main
+  commit: 86eed843f0fa1a415cf503e957fe202a83d78c2e
+intents:
+  - id: create-channel
+    name: Create Channel
+    status: active
+    sentence: A person creates a channel and owns it, so they approve everyone who joins.
+    actor: user
+    triggers:
+      - "App sidebar: New channel"
+      - "Start screen: New channel"
+    code:
+      - packages/channel/src/join.ts
+      - packages/core/src/client/
+      - ui/src/live/actions.ts
+      - ui/src/start/new-channel.tsx
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T18:53:01.963Z
+  - id: join-channel
+    name: Join Channel
+    status: active
+    sentence: An agent or person asks to join a channel with an invite code.
+    actor: agent
+    triggers:
+      - kiwi join mc2 code in a shell
+      - Invite link opens the app
+    code:
+      - desktop/src/deep-links.ts
+      - packages/app/src/deep-link.ts
+      - src/cli/commands/join.ts
+      - ui/src/start/join.tsx
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T18:53:48.133Z
+  - id: approve-join
+    name: Approve Joining Agent
+    status: active
+    sentence: The owner approves a joining agent after matching the six-digit code.
+    actor: user
+    triggers:
+      - "Needs you: approve join code"
+      - "Channel panel: Let in"
+    code:
+      - packages/app/src/approval-tend.ts
+      - packages/app/src/approval.ts
+      - packages/core/src/sas.ts
+      - ui/src/needs/
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T18:53:53.850Z
+  - id: admit-own-agents
+    name: Admit Own Agents
+    status: active
+    sentence: Agents on a person's own computers join at once while the app runs, with no code.
+    actor: system
+    triggers:
+      - App running on the owner's Mac
+      - Agent starts on a paired computer
+    code:
+      - desktop/src/devices.ts
+      - packages/app/src/auto-approval.ts
+      - src/daemon/admit.ts
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T18:54:14.015Z
+  - id: add-computer
+    name: Add Computer
+    status: active
+    sentence: A person links a computer by typing six digits, so its agents can join.
+    actor: user
+    triggers:
+      - kiwi login on the computer
+      - "Settings: Computers"
+    code:
+      - packages/core/src/devices.ts
+      - packages/core/src/enroll.ts
+      - src/daemon/pair.ts
+      - src/login.ts
+      - ui/src/settings/computers.tsx
+      - ui/src/settings/enroll.tsx
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T18:54:20.136Z
+  - id: recover-account
+    name: Recover Account
+    status: retired
+    sentence: A person restores their keys from a recovery phrase on a new device.
+    actor: user
+    triggers:
+      - Recovery phrase during first run
+      - "Settings: Recovery"
+    code: []
+    confidence: medium
+    doubt: Is recovery reachable in the app, or still only planned?
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T18:57:25.317Z
+  - id: keep-keys-safe
+    name: Keep Keys Safe
+    status: active
+    sentence: The app seals the person's keys with the OS keychain, never in plain files.
+    actor: system
+    triggers:
+      - First run creates the person key
+      - App restart unlocks the keys
+    code:
+      - desktop/native/macos/kiwi-keys.c
+      - desktop/src/keys-eb.ts
+      - desktop/src/keys-server.ts
+      - desktop/src/store-eb.ts
+      - desktop/src/store-v2.ts
+      - packages/secrets/
+      - src/config/identities.ts
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T18:57:29.872Z
+  - id: chat-in-channel
+    name: Chat in Channel
+    status: active
+    sentence: A person reads and sends messages, images, and replies as they arrive.
+    actor: user
+    triggers:
+      - Click a channel in the sidebar
+      - "Composer: type and press Enter"
+    code:
+      - packages/channel/src/
+      - packages/core/src/client/
+      - ui/src/chat/
+      - ui/src/shell/channel.tsx
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T18:57:34.756Z
+  - id: agent-messaging
+    name: Message From Agent Shell
+    status: active
+    sentence: An agent posts, reads, and replies to messages through the kiwi CLI.
+    actor: agent
+    triggers:
+      - kiwi send text
+      - kiwi reply 42 answer
+    code:
+      - src/agent/messaging.ts
+      - src/agent/shared.ts
+      - src/cli/commands/channel.ts
+      - src/cli/commands/messages.ts
+      - src/cli/context.ts
+      - src/cli/input.ts
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T18:57:44.267Z
+  - id: publish-release
+    name: Publish A Release
+    status: active
+    sentence: A version tag builds, signs and publishes the desktop app and CLI.
+    actor: developer
+    triggers:
+      - git tag vYYYY.M.PATCH
+      - Actions, release workflow
+    code:
+      - desktop/scripts/
+      - desktop/src/release-key.ts
+      - scripts/brew-bump.ts
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:03:22.951Z
+  - id: cut-release
+    name: Cut A Release
+    status: active
+    sentence: A maintainer stamps the version and changelog, then tags the commit.
+    actor: developer
+    triggers:
+      - bun scripts/stamp.ts vYYYY.M.PATCH
+      - bun scripts/stamp.ts --next
+    code:
+      - scripts/changelog.ts
+      - scripts/stamp.ts
+      - src/version.ts
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:03:29.382Z
+  - id: install-cli
+    name: Install The CLI
+    status: active
+    sentence: A person runs one line to install kiwi, and again to update it.
+    actor: user
+    triggers:
+      - curl ... | sh
+      - kiwi upgrade
+    code:
+      - scripts/cli-downloads.ts
+      - scripts/install.sh
+      - site/install.sh
+      - src/cli/upgrade.ts
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:03:40.847Z
+  - id: set-up-hooks
+    name: Set Up Agent Hooks
+    status: active
+    sentence: A person installs kiwi hooks into each agent harness, then checks them.
+    actor: user
+    triggers:
+      - kiwi setup
+      - kiwi doctor
+    code:
+      - src/cli/commands/hooks.ts
+      - src/cli/commands/setup.ts
+      - src/cli/doctor.ts
+      - src/hooks/install/
+      - src/hooks/self.ts
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:24:26.228Z
+  - id: set-up-person-key
+    name: Set Up Person Key
+    status: active
+    sentence: The app makes a person's keys on first run and names them.
+    actor: user
+    triggers:
+      - Open Channels for the first time
+    code:
+      - desktop/src/store-eb.ts
+      - packages/secrets/
+      - ui/src/start/first-run.tsx
+    confidence: medium
+    doubt: Does first run still create keys, or is it replaced by sign-in?
+    wants: |-
+      Does first run still create keys, or is it replaced by sign-in?
+
+      if not it should be....
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:24:53.505Z
+  - id: sign-in
+    name: Sign In
+    status: active
+    sentence: A person signs in with WorkOS so the relay knows who they are.
+    actor: user
+    triggers:
+      - Sign In button in the app
+      - kiwi login
+    code:
+      - desktop/src/ipc/signin.ts
+      - desktop/src/signin.ts
+      - packages/core/src/workos.ts
+      - src/login.ts
+      - src/relay/human.ts
+    confidence: high
+    wants: I believe we already switched to just github no ???
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:25:07.587Z
+  - id: start-agent
+    name: Start An Agent
+    status: retired
+    sentence: A person starts an agent in a folder, here or on a paired computer.
+    actor: user
+    triggers:
+      - Add agent in the app
+      - kiwi launch
+    code:
+      - src/launch/
+      - src/terminals/
+      - ui/src/panels/add-agent.tsx
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:26:55.098Z
+  - id: wake-agent
+    name: Wake Agent On Message
+    status: active
+    sentence: An idle agent is woken when a message or task arrives for it.
+    actor: system
+    triggers:
+      - Message sent to an agent's seat
+      - Task assigned to an agent
+    code:
+      - packages/core/src/wake.ts
+      - src/daemon/wake.ts
+      - src/hooks/listen.ts
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:27:01.851Z
+  - id: run-agent-loop
+    name: Run An Agent Loop
+    status: active
+    sentence: An agent takes the next task, works it, then waits for more.
+    actor: agent
+    triggers:
+      - kiwi loop
+    code:
+      - src/cli/commands/loop.ts
+      - src/loop/
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:27:30.503Z
+  - id: track-tasks
+    name: Track Tasks
+    status: active
+    sentence: Anyone adds, claims, reviews and closes tasks; the board shows each.
+    actor: user
+    triggers:
+      - kiwi task add
+      - Tasks panel in the app
+    code:
+      - packages/channel/src/task-actions.ts
+      - packages/core/src/state/tasks.ts
+      - src/cli/commands/tasks.ts
+      - ui/src/panels/task.tsx
+      - ui/src/tasks/
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:27:33.636Z
+  - id: connect-github
+    name: Connect GitHub
+    status: active
+    sentence: A person links a GitHub repo, so its pull requests show as tasks.
+    actor: user
+    triggers:
+      - Channel panel, GitHub
+      - Settings, link GitHub account
+    code:
+      - desktop/src/github-flow.ts
+      - desktop/src/ipc/github.ts
+      - packages/core/src/client/github.ts
+      - src/relay/github-app.ts
+      - src/relay/github.ts
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:27:34.941Z
+  - id: answer-requests
+    name: Answer Agent Requests
+    status: active
+    sentence: A person answers an agent's question or permission request in Needs you.
+    actor: user
+    triggers:
+      - Needs you
+      - kiwi ask-human
+    code:
+      - packages/core/src/permission.ts
+      - src/hooks/permission-call.ts
+      - src/hooks/permission.ts
+      - ui/src/needs/
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:27:42.564Z
+  - id: search-channel
+    name: Search A Channel
+    status: active
+    sentence: A person finds messages and tasks in a channel by text.
+    actor: user
+    triggers:
+      - Search box in a channel
+    code:
+      - packages/core/src/search-rank.ts
+      - ui/src/chat/search-box.tsx
+      - ui/src/chat/search-hits.ts
+      - ui/src/chat/search-paint.ts
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:27:37.618Z
+  - id: query-channel
+    name: Query Channel History
+    status: active
+    sentence: An agent runs read-only SQL over a channel's messages, tasks and members.
+    actor: agent
+    triggers:
+      - kiwi query 'SQL'
+    code:
+      - src/query-arg.ts
+      - src/query.ts
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:28:51.100Z
+  - id: talk-in-rooms
+    name: Talk In Rooms
+    status: active
+    sentence: People and agents talk in rooms, threads and direct messages.
+    actor: user
+    triggers:
+      - Room picker in a channel
+      - kiwi send --dm NAME
+    code:
+      - packages/core/src/state/places.ts
+      - packages/core/src/state/rooms.ts
+      - ui/src/chat/reply.ts
+    confidence: medium
+    doubt: Are rooms and threads separate intents, or one conversation goal?
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:29:04.524Z
+  - id: hold-agents
+    name: Hold All Agents
+    status: active
+    sentence: The owner stops every agent at once until the hold is lifted.
+    actor: admin
+    triggers:
+      - Hold button in a channel
+      - kiwi hold
+    code:
+      - src/hold.ts
+      - ui/src/chat/conversation.tsx
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:29:15.036Z
+  - id: manage-members
+    name: Manage Members
+    status: active
+    sentence: The owner sets each member's role and permissions, or removes them.
+    actor: admin
+    triggers:
+      - Person panel in a channel
+      - Channel panel, Rooms
+    code:
+      - packages/app/src/remove-agents.ts
+      - packages/core/src/membership.ts
+      - packages/core/src/scopes.ts
+      - ui/src/panels/person.tsx
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:29:39.437Z
+  - id: set-personality
+    name: Set Agent Personality
+    status: active
+    sentence: The owner writes an agent's role, instructions and goal, which it follows.
+    actor: admin
+    triggers:
+      - Settings, Personalities
+      - Channel panel, goal
+    code:
+      - packages/core/src/personalities.ts
+      - packages/core/src/personality.ts
+      - packages/core/src/pin.ts
+      - packages/core/src/presets.ts
+      - ui/src/settings/personalities.tsx
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:29:43.493Z
+  - id: see-team-status
+    name: See Team Status
+    status: active
+    sentence: A person sees who is working, what each agent does, and what waits.
+    actor: user
+    triggers:
+      - Now view
+      - kiwi status
+    code:
+      - packages/core/src/standup.ts
+      - packages/core/src/status.ts
+      - src/status.ts
+      - ui/src/now.ts
+      - ui/src/tasks/now.tsx
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:29:56.766Z
+  - id: get-notified
+    name: Get Notified
+    status: active
+    sentence: The app chimes and badges when a message or decision needs a person.
+    actor: user
+    triggers:
+      - App closed to tray, still running
+      - New message in another channel
+    code:
+      - desktop/src/menus-eb.ts
+      - desktop/src/tray-later.ts
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:30:01.458Z
+  - id: update-desktop-app
+    name: Update Desktop App
+    status: active
+    sentence: The installed app finds a newer release and replaces itself.
+    actor: user
+    triggers:
+      - Settings, Updates
+      - Automatic check at start
+    code:
+      - desktop/scripts/update-check/
+      - desktop/src/update-asset.ts
+      - desktop/src/updater.ts
+      - ui/src/live/update.ts
+      - ui/src/settings/update-check.ts
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:30:04.538Z
+  - id: ship-ui-update
+    name: Ship UI Update
+    status: active
+    sentence: A UI change is published so installed apps load it, no new release.
+    actor: developer
+    triggers:
+      - Push to main touching ui or packages
+    code:
+      - desktop/scripts/ui-stage.ts
+      - desktop/src/ui-channel.ts
+      - desktop/src/ui-contract.ts
+      - scripts/ui-bundle.ts
+    confidence: medium
+    doubt: Is UI publishing a shipped path, or only a staging step?
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:30:12.190Z
+  - id: self-host-relay
+    name: Self-Host A Relay
+    status: active
+    sentence: An operator runs their own relay on Bun, Docker or Cloudflare.
+    actor: operator
+    triggers:
+      - bun src/relay/bun.ts
+      - docker build deploy/
+      - bun run relay:deploy
+    code:
+      - src/relay/bun.ts
+      - src/relay/worker.ts
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:30:15.992Z
+  - id: relay-messages
+    name: Relay Channel Messages
+    status: active
+    sentence: The relay passes each channel's encrypted messages to members in real time.
+    actor: system
+    triggers:
+      - Member opens a channel socket
+      - Message posted to a channel
+    code:
+      - src/relay/room.ts
+      - src/relay/room/
+      - src/relay/route.ts
+      - src/relay/schema.ts
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:30:22.631Z
+  - id: gate-beta
+    name: Gate Beta Access
+    status: active
+    sentence: An operator limits who can create channels and how many each owns.
+    actor: operator
+    triggers:
+      - WORKOS and KIWI settings at deploy
+      - Create channel refused with beta message
+    code:
+      - src/relay/account.ts
+      - src/relay/policy.ts
+      - src/relay/room/limits.ts
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:30:28.151Z
+  - id: try-demo
+    name: Try The Demo
+    status: active
+    sentence: A person plays a full sample session on a throwaway relay.
+    actor: user
+    triggers:
+      - kiwi demo
+    code:
+      - scripts/demo.ts
+      - src/demo.ts
+      - ui/src/demo/
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:30:31.356Z
+  - id: phone-app
+    name: Use Channels On Phone
+    status: active
+    sentence: A person signs in on an iPhone or Android phone and reads and sends.
+    actor: user
+    triggers:
+      - Sign In on the phone
+      - Six digits typed into the computer
+    code:
+      - android/
+      - ios/
+    confidence: medium
+    doubt: Is the Android app shipped, or still behind the iPhone app?
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:30:35.123Z
+  - id: manage-computers
+    name: Manage Computers
+    status: active
+    sentence: A person changes a computer's agent settings or removes the computer.
+    actor: user
+    triggers:
+      - Settings, Computers
+    code:
+      - desktop/src/devices.ts
+      - packages/core/src/computer-settings.ts
+      - packages/core/src/devices.ts
+      - ui/src/live/computer.ts
+      - ui/src/settings/computers.tsx
+    confidence: medium
+    doubt: Is computer removal shipped, or only planned in linked-devices.md?
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:30:44.465Z
+  - id: let-people-add-agents
+    name: Let People Add Agents
+    status: active
+    sentence: The owner lets a person's agents join as that person, from their computers.
+    actor: admin
+    triggers:
+      - "Invite: Can add agents"
+      - "Let in: Can add agents"
+    code:
+      - packages/core/src/client/delegate.ts
+      - packages/core/src/client/delegations.ts
+      - packages/core/src/delegation.ts
+      - src/relay/room/delegations.ts
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:30:56.712Z
+  - id: export-log
+    name: Export Channel Log
+    status: active
+    sentence: A person saves a channel's history as a text or JSON file.
+    actor: user
+    triggers:
+      - Export log in channel menu
+    code:
+      - desktop/src/save-file.ts
+      - packages/app/src/log-export.ts
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:30:59.756Z
+  - id: read-history-offline
+    name: Read History Offline
+    status: active
+    sentence: Channels open with history cached, so old messages load without the relay.
+    actor: user
+    triggers:
+      - Open a channel
+      - Scroll to older messages
+    code:
+      - packages/channel/src/history-plan.ts
+      - packages/channel/src/history.ts
+      - packages/core/src/cache-row.ts
+      - src/config/cache.ts
+    confidence: medium
+    doubt: Is the offline history cache a user goal or plumbing?
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:31:04.175Z
+  - id: rotate-sessions
+    name: Rotate Long Agent Sessions
+    status: active
+    sentence: A long-running agent writes a checkpoint, then resumes in a fresh session.
+    actor: agent
+    triggers:
+      - Context line reaches its limit
+    code:
+      - packages/core/src/reentry.ts
+      - src/cli/commands/compact.ts
+      - src/cli/commands/context-line.ts
+      - src/hooks/context-line.ts
+    confidence: low
+    doubt: Is checkpoint rotation enabled by default, or still a plan?
+    wants: should be enable by default
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:31:19.099Z
+  - id: open-terminal
+    name: Open A Terminal
+    status: retired
+    sentence: A person opens a terminal for an agent's seat from the channel header.
+    actor: user
+    triggers:
+      - Terminal icon in channel header
+    code:
+      - src/terminals/
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:31:23.479Z
+  - id: pick-theme
+    name: Pick Theme And Text Size
+    status: active
+    sentence: A person picks a light, dark or OLED theme, accent and text size.
+    actor: user
+    triggers:
+      - Settings, Appearance
+    code:
+      - packages/app/src/theme.ts
+      - ui/src/settings/themes.tsx
+      - ui/src/styles/themes.css
+      - ui/src/theme/
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:31:27.132Z
+  - id: open-desktop-app
+    name: Open The Desktop App
+    status: active
+    sentence: A person opens the Mac or Linux app, which stays in the tray.
+    actor: user
+    triggers:
+      - Open Channels on Mac or Linux
+      - Quit from the tray menu
+    code:
+      - desktop/electrobun.config.ts
+      - desktop/native/
+      - desktop/src/main-eb.ts
+      - desktop/src/window-eb.ts
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:31:29.459Z
+  - id: check-change
+    name: Check A Change
+    status: active
+    sentence: A contributor's change runs the CI checks, build and performance runs.
+    actor: developer
+    triggers:
+      - Pull request opened
+      - bun test
+    code:
+      - scripts/build-cli.ts
+      - scripts/perf-check.ts
+      - scripts/perf-scale.ts
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:31:33.249Z
+  - id: keep-agents-listening
+    name: Keep Agents Listening
+    status: active
+    sentence: A background daemon keeps each computer's agents connected and delivers their messages.
+    actor: system
+    triggers:
+      - Starts with the first kiwi command
+      - kiwi daemon
+    code:
+      - src/daemon/
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:55:19.590Z
+  - id: use-mcp-tools
+    name: Use MCP Tools
+    status: active
+    sentence: An agent reads and posts to channels through MCP tools, without the shell.
+    actor: agent
+    triggers:
+      - MCP server entry in the harness config
+    code:
+      - src/mcp.ts
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:55:33.170Z
+  - id: route-tasks-to-agents
+    name: Route Tasks To Agents
+    status: active
+    sentence: A new task goes to the free agent whose repo areas fit it.
+    actor: system
+    triggers:
+      - A task is opened without an owner
+    code:
+      - packages/core/src/routing.ts
+      - src/areas.ts
+    confidence: medium
+    doubt: Is automatic routing on by default, or behind a setting?
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:55:39.296Z
+  - id: pin-messages
+    name: Pin Messages
+    status: retired
+    sentence: A person pins a message so the channel keeps it at hand.
+    actor: user
+    triggers:
+      - Message menu, Pin
+    code:
+      - packages/core/src/pin.ts
+      - ui/src/live/pins.ts
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:55:44.186Z
+  - id: react-to-messages
+    name: React To Messages
+    status: active
+    sentence: A person adds an emoji or GIF reaction to a message.
+    actor: user
+    triggers:
+      - Message menu, React
+    code:
+      - packages/app/src/reactions.ts
+      - ui/src/chat/gif-picker.tsx
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:55:46.879Z
+  - id: edit-or-delete-message
+    name: Edit Or Delete Message
+    status: active
+    sentence: A person fixes or removes a message they sent.
+    actor: user
+    triggers:
+      - Message menu, Edit
+      - Message menu, Delete
+    code:
+      - packages/core/src/state/fold-events.ts
+      - ui/src/chat/editing.ts
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:55:49.294Z
+  - id: link-to-message
+    name: Link To Message
+    status: active
+    sentence: A person copies a link to one message, and opens it from another.
+    actor: user
+    triggers:
+      - Copy link from message menu
+    code:
+      - packages/core/src/message-link.ts
+      - ui/src/live/open-message.ts
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:55:51.149Z
+  - id: catch-up-on-channel
+    name: Catch Up On Channel
+    status: retired
+    sentence: A returning person sees what changed in a channel since they left.
+    actor: user
+    triggers:
+      - Opening a channel after time away
+    code:
+      - ui/src/chat/since-modal.tsx
+      - ui/src/chat/since.ts
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:55:54.115Z
+  - id: organize-channels
+    name: Organize Channels
+    status: active
+    sentence: A person groups channels into folders and hides the ones they skip.
+    actor: user
+    triggers:
+      - "Rail: drag a channel onto a folder"
+      - Rail menu, Hide
+    code:
+      - ui/src/shell/
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:55:56.737Z
+  - id: jump-with-palette
+    name: Jump With Palette
+    status: active
+    sentence: A person opens any channel, task or setting by typing its name.
+    actor: user
+    triggers:
+      - Palette shortcut
+    code:
+      - ui/src/palette/
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:56:00.861Z
+  - id: steer-from-home
+    name: Steer From Home
+    status: retired
+    sentence: A person sends one command from Home that reaches any channel.
+    actor: user
+    triggers:
+      - Home, command bar
+    code:
+      - ui/src/chat/commands.ts
+      - ui/src/home.ts
+      - ui/src/live/home.tsx
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:56:15.741Z
+  - id: mark-up-screenshots
+    name: Mark Up Screenshots
+    status: active
+    sentence: A person draws on an image before sending it to a channel.
+    actor: user
+    triggers:
+      - Image attachment, Annotate
+    code:
+      - packages/app/src/annotate.ts
+      - ui/src/chat/annotator.tsx
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:56:25.777Z
+  - id: write-and-approve-specs
+    name: Write And Approve Specs
+    status: active
+    sentence: A person writes a message's spec, approves it, and an agent starts the work.
+    actor: user
+    triggers:
+      - Spec panel, Approve
+      - kiwi spec write
+    code:
+      - packages/core/src/state/specs.ts
+      - src/cli/commands/specs.ts
+      - ui/src/specs/
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:56:29.388Z
+  - id: compact-channel
+    name: Compact Channel
+    status: active
+    sentence: A channel proposes folding finished tasks and asks out of view.
+    actor: admin
+    triggers:
+      - Proposal card in the channel
+    code:
+      - packages/core/src/state/compact.ts
+      - src/cli/commands/compact.ts
+      - ui/src/chat/compact.tsx
+    confidence: low
+    doubt: What does compacting remove, and is it still wanted?
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:56:33.986Z
+  - id: read-documents-in-chat
+    name: Read Documents In Chat
+    status: active
+    sentence: A person opens a received document as readable text, converted in the app.
+    actor: user
+    triggers:
+      - Received file, Open as text
+    code:
+      - scripts/assets-stage.ts
+      - src/received-files.ts
+    confidence: medium
+    doubt: Does the converter run in the app, or only in the CLI?
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:56:41.008Z
+  - id: sign-in-with-github
+    name: Sign In With GitHub
+    status: active
+    sentence: A person signs in with their GitHub account instead of WorkOS.
+    actor: user
+    triggers:
+      - Sign-in screen, Continue with GitHub
+    code:
+      - desktop/src/github-flow.ts
+      - ui/src/start/github-sign-in.tsx
+    confidence: medium
+    doubt: Does GitHub sign-in replace WorkOS, or sit beside it?
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:56:42.640Z
+  - id: move-account-to-github
+    name: Move Account To GitHub
+    status: active
+    sentence: A person moves their account from WorkOS sign-in to GitHub sign-in.
+    actor: user
+    triggers:
+      - Settings, Account, Move to GitHub
+    code:
+      - desktop/src/signin.ts
+      - packages/core/src/account.ts
+      - src/relay/move.ts
+    confidence: medium
+    doubt: Is moving accounts still open to people after the beta?
+    wants: we don't have users, new users shall only log in with github, remove workos bs
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:57:23.118Z
+  - id: get-phone-alerts
+    name: Get Phone Alerts
+    status: active
+    sentence: A phone gets a push when a message or decision needs its person.
+    actor: system
+    triggers:
+      - Phone push registered in the app
+    code:
+      - packages/core/src/phone-wake.ts
+      - packages/core/src/push.ts
+      - src/relay/push.ts
+    confidence: high
+    wants: only needs you things
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:57:34.449Z
+  - id: review-pull-requests
+    name: Review Pull Requests
+    status: active
+    sentence: The GitHub app posts diffs and a kiwi/review check on linked pull requests.
+    actor: system
+    triggers:
+      - Pull request opened or pushed on a linked repo
+    code:
+      - packages/channel/src/review-checks.ts
+      - src/relay/github-app.ts
+    confidence: medium
+    doubt: Does the review check block merges, or only report?
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:57:40.868Z
+  - id: migrate-old-app-data
+    name: Migrate Old App Data
+    status: active
+    sentence: The app moves keys, stores and seats from earlier versions into the current format.
+    actor: system
+    triggers:
+      - First launch after an update
+    code:
+      - desktop/src/legacy-keys.ts
+      - desktop/src/legacy-store.ts
+      - packages/channel/src/legacy-seats.ts
+    confidence: medium
+    doubt: Which older versions still need this path? Can it be retired?
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:57:46.503Z
+  - id: lock-phone-app
+    name: Lock Phone App
+    status: active
+    sentence: The phone app locks when away and opens with biometrics or the screen lock.
+    actor: user
+    triggers:
+      - Returning after 30 seconds away
+    code:
+      - android/app/src/main/java/com/kiwiinit/channels/model/Lock.kt
+      - ios/Channels/Model/Lock.swift
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:57:49.435Z
+  - id: sync-settings-across-devices
+    name: Sync Settings Across Devices
+    status: active
+    sentence: A person's settings follow them to each of their computers and phones.
+    actor: user
+    triggers:
+      - Change a setting on any device
+    code:
+      - packages/channel/src/settings-sync.ts
+      - packages/core/src/client/settings.ts
+    confidence: medium
+    doubt: Which settings sync, and which stay per device?
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:57:53.770Z
+  - id: end-channel
+    name: End Channel
+    status: active
+    sentence: The owner ends a channel, closing it for every member.
+    actor: admin
+    triggers:
+      - Channel panel, End
+    code:
+      - src/relay/room/lifecycle.ts
+      - ui/src/panels/channel-panel.tsx
+    confidence: medium
+    doubt: Can an ended channel be reopened, or is it final?
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:57:57.050Z
+  - id: leave-channel
+    name: Leave Channel
+    status: active
+    sentence: A person leaves a channel and wipes its copy from this computer.
+    actor: user
+    triggers:
+      - Channel menu, Leave
+    code:
+      - src/config/wipe.ts
+      - ui/src/live/store.ts
+    confidence: medium
+    doubt: Does leaving remove the person's agents from the channel too?
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:58:00.591Z
+  - id: set-channel-charter
+    name: Set Channel Charter
+    status: active
+    sentence: The owner writes the charter and goal that every agent in the channel follows.
+    actor: admin
+    triggers:
+      - Channel panel, Goal
+    code:
+      - ui/src/panels/channel-panel.tsx
+    confidence: medium
+    doubt: Is the charter separate from each agent's own goal?
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:58:04.141Z
+  - id: show-agent-in-terminal
+    name: Show Agent In Terminal
+    status: retired
+    sentence: A person jumps to an agent's tmux or Rex pane to watch it.
+    actor: user
+    triggers:
+      - Agent tile, Show seat
+    code:
+      - desktop/src/ipc/terminals.ts
+      - src/terminals/
+      - ui/src/kit/show-agent.tsx
+    confidence: low
+    doubt: The in-app terminal was removed; is this still wanted?
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:58:15.836Z
+  - id: label-pr-size
+    name: Label Pull Request Size
+    status: active
+    sentence: CI labels each pull request by its size, so reviewers see its scope.
+    actor: system
+    triggers:
+      - Pull request opened or synchronized
+    code:
+      - scripts/pr-size.ts
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:58:20.109Z
+  - id: rehearse-release
+    name: Rehearse Release
+    status: active
+    sentence: A developer runs the release build without publishing to catch breakage early.
+    actor: developer
+    triggers:
+      - Actions, rehearsal, Run workflow
+    code:
+      - .github/workflows/rehearsal.yml
+      - .github/workflows/release-build.yml
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:58:22.243Z
+  - id: verify-release-key
+    name: Verify Release Key
+    status: active
+    sentence: An operator checks the signing secret and the pinned key are one pair.
+    actor: operator
+    triggers:
+      - Actions, release key, Run workflow
+    code:
+      - desktop/src/release-key.ts
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:58:35.712Z
+  - id: refresh-dependencies
+    name: Refresh Dependencies
+    status: active
+    sentence: A developer updates packages, decides each major upgrade, and keeps size budgets.
+    actor: developer
+    triggers:
+      - Run the refresh-dependencies skill
+      - Livewire release dispatch
+    code:
+      - .claude/skills/refresh-dependencies/
+      - .github/workflows/livewire-bump.yml
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:58:40.875Z
+  - id: back-up-relay
+    name: Back Up Relay
+    status: retired
+    sentence: An operator copies a self-hosted relay's data files to a backup folder.
+    actor: operator
+    triggers:
+      - bun scripts/backup-relay.ts
+    code:
+      - scripts/backup-relay.ts
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:58:48.102Z
+  - id: build-phone-apps
+    name: Build Phone Apps
+    status: active
+    sentence: A developer builds the iPhone and Android apps around the shared engine.
+    actor: developer
+    triggers:
+      - Xcode target, Run on device
+      - Gradle build of the app module
+    code:
+      - android/
+      - ios/
+    confidence: high
+    reviewed:
+      by: ojowwalker77
+      at: 2026-11-03T19:58:55.566Z

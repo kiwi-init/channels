@@ -21,8 +21,10 @@ import { joinedText } from "../brief.ts";
 import { autoInstallExtraHooks, autoInstallHooks, bindDirectory, bindingFor } from "../../hooks.ts";
 import { notePersonaTold, personaMark } from "../../hooks/persona-line.ts";
 import { detectCard, detectModel, detectRuns, mergeCard } from "../../card.ts";
+import { listenMode, runInBackground } from "../../hooks/reach.ts";
 import { args, opt } from "../args.ts";
-import { agentName, type Command, config, die, keepDaemon, NAME_RE, out, relayUrl, seatHere } from "../context.ts";
+import { agentName, type Command, config, die, keepDaemon, NAME_RE, out, relayUrl, seatHere, session } from "../context.ts";
+import { listenAs, modeFor } from "./listen.ts";
 
 const JOIN_POLL_MS = /^[1-9]\d*$/.test(process.env.KIWI_JOIN_POLL_MS ?? "") ? Number(process.env.KIWI_JOIN_POLL_MS) : 1500;
 
@@ -75,7 +77,11 @@ export const joinCommands: Record<string, Command> = {
     Effect.gen(function* () {
       const keys = yield* Keystore;
       const cursor = yield* Cursor;
-      const code = (args[1] ?? (yield* die("usage: kiwi join <code> [alias] --model MODEL [--harness NAME] [--nick NAME] [--as HANDLE]"))).trim();
+      if (args[1] === undefined) {
+        const held = yield* session();
+        return yield* listenAs(held, modeFor(held));
+      }
+      const code = args[1].trim();
       try {
         decodeJoinCode(code);
       } catch {
@@ -211,6 +217,14 @@ export const joinCommands: Record<string, Command> = {
           );
           if (who.session) notePersonaTold(alias, name, who.session, personaMark(seat?.persona));
           yield* keepDaemon;
+          const mode = modeFor(s);
+          if (mode === "read") return;
+          out(
+            mode === "once"
+              ? "Listening now: this command ends when a message for you arrives. While it runs in the background, don't start another; if it runs in the foreground, stop it and start it in the background as above."
+              : "Listening now: each message for you prints here as it arrives. If this command is your monitor, don't start another; if not, stop it and start the monitor as above.",
+          );
+          return yield* listenAs(s, mode);
         });
 
       if (hadKey) {
@@ -234,12 +248,18 @@ export const joinCommands: Record<string, Command> = {
         ),
       );
       const wait = opt.timeout ?? "30m";
+      const background = listenMode(true, who) === "read" ? null : runInBackground(who.harness);
       out(
         [
           `asked to join as ${name}.`,
           `your request says you run on: ${cardLine(card)}`,
           `waiting for the owner to open your request… Leave this running until it prints "joined" (up to ${wait}). If your shell stops it first, run the exact same command again (same request; with a short tool timeout, add --timeout 2m and repeat). Never type or guess the code it shows.`,
-        ].join("\n"),
+          background
+            ? `If this command isn't running in the background, stop it and run it again ${background}: it waits for the owner, then keeps listening for you, and that is what wakes you in this session.`
+            : null,
+        ]
+          .filter(Boolean)
+          .join("\n"),
       );
       const deadline = Date.now() + parseDuration(wait) * 1000;
       const poke = Effect.promise(() =>

@@ -371,6 +371,10 @@
   gap: 4px;
 }
 
+.task-edit {
+  gap: 8px;
+}
+
 .task-earlier {
   margin-bottom: 10px;
 }

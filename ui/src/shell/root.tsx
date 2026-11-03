@@ -27,7 +27,7 @@ export function Root({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => voi
   const ctx = useMemo(() => ({ app, nav, go, toast }), [app, nav, go, toast])
   const act = useMemo(() => ({ actions: app.actions, go, toast }), [app.actions, go, toast])
   usePaletteKey(useCallback(() => go({ to: "dialog", dialog: nav.dialog === "palette" ? null : "palette" }), [go, nav.dialog]))
-  useHistoryKeys(go)
+  useHistoryKeys(go, !!nav.modal)
   useTheme(app)
 
   if (!app.account || app.signIn?.stage === "sign-in")
@@ -89,17 +89,17 @@ export function Root({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => voi
   )
 }
 
-function useHistoryKeys(go: (go: Go) => void) {
+function useHistoryKeys(go: (go: Go) => void, modal: boolean) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const step = historyStep(e)
-      if (!step || e.defaultPrevented || document.querySelector("dialog[open]")) return
+      if (!step || e.defaultPrevented || document.querySelectorAll("dialog[open]").length > (modal ? 1 : 0)) return
       e.preventDefault()
       go({ to: "history", step })
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
-  }, [go])
+  }, [go, modal])
 }
 
 function usePaletteKey(toggle: () => void) {

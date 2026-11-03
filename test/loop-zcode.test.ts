@@ -60,7 +60,7 @@ describe("ZCode under kiwi loop", () => {
     expect(recipe.takesModel).toBe(false);
     expect(recipe.takesEffort).toBe(false);
     expect(recipe.stopSignal).toBe("SIGTERM");
-    expect(recipe.firstLine).toContain("listen --once`, run_in_background: true, and no timeout");
+    expect(recipe.firstLine).toContain("`kiwi join`, run_in_background: true, and no timeout");
   });
 
   test("the session is the top-level one in this folder, started since the launch, whose prompt carries the nonce", () => {

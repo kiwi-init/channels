@@ -80,6 +80,8 @@ interface Terminals {
   helpers?: Partial<Record<TerminalId, "on" | "off">>;
 }
 
+export const contextLineOn = (cfg: Pick<Config, "contextLine">): boolean => cfg.contextLine !== "off";
+
 function migrated(cfg: Config): Config {
   if (cfg.rex === undefined) return cfg;
   const { rex, ...rest } = cfg;

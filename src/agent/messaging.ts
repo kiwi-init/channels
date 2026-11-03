@@ -72,7 +72,7 @@ export class SessionMessaging extends SessionListen {
       if (opts.kind !== "event") for (const re of opts.re ?? []) yield* this.notAnsweredByOthers(state, re, body);
       const inThread = !!opts.re?.length;
       const sending = { ...opts, to, room, ...(inThread ? { task: undefined, dm: undefined } : {}) };
-      const seq = yield* this.ch.fx.send(body, { ...sending, wake: wakeList(state, this.me, body, sending) });
+      const seq = yield* this.ch.fx.send(body, { ...sending, wake: wakeList(state, this.me, sending) });
       return seq;
     },
     oneLook,
@@ -154,7 +154,7 @@ export class SessionMessaging extends SessionListen {
       const to = orig.from === this.me ? orig.to : [orig.from];
       yield* this.mayI({ kind, to });
       const replying = { to, kind, re: [seq], side: true, imgs, room: state.roomOf.get(seq) ?? orig.room, ...extra };
-      const sent = yield* this.ch.fx.send(body, { ...replying, wake: wakeList(state, this.me, body, replying) });
+      const sent = yield* this.ch.fx.send(body, { ...replying, wake: wakeList(state, this.me, replying) });
       return sent;
     },
     oneLook,

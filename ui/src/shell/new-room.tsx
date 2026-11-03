@@ -3,7 +3,7 @@ import "~/styles/new-room.css"
 import { useState } from "react"
 
 import { roomProblem } from "@kiwi/app/rooms.ts"
-import { Avatar, cx, Dialog, DialogHead } from "~/kit/bits"
+import { autofocus, Avatar, cx, Modal } from "~/kit/bits"
 import { Track } from "~/kit/glide"
 import type { Channel } from "~/model"
 import { useApp } from "~/nav"
@@ -13,14 +13,8 @@ import { useAppCan } from "~/live/app-can"
 const roomName = (typed: string): string => typed.trim().replace(/^#/, "").trim().toLowerCase().replace(/\s+/g, "-")
 
 export function NewRoomDialog({ channel }: { channel: Channel }) {
-  const { nav, go } = useApp()
-  const open = nav.dialog === "new-room"
-  const close = () => go({ to: "dialog", dialog: null })
-  return (
-    <Dialog open={open} onClose={() => open && close()} label="New room">
-      <NewRoomForm channel={channel} onClose={close} />
-    </Dialog>
-  )
+  const { go } = useApp()
+  return <NewRoomForm channel={channel} onClose={() => go({ to: "dialog", dialog: null })} />
 }
 
 function NewRoomForm({ channel, onClose }: { channel: Channel; onClose: () => void }) {
@@ -45,8 +39,7 @@ function NewRoomForm({ channel, onClose }: { channel: Channel; onClose: () => vo
     })
   const ready = !!name && !problem && !busy
   return (
-    <>
-      <DialogHead title="New room" onClose={onClose} />
+    <Modal onClose={onClose} label="New room" title="New room">
       <form
         className="room-form"
         onSubmit={async (e) => {
@@ -65,7 +58,7 @@ function NewRoomForm({ channel, onClose }: { channel: Channel; onClose: () => vo
           </span>
           <input
             className="input is-mono"
-            autoFocus
+            ref={autofocus}
             autoComplete="off"
             spellCheck={false}
             maxLength={40}
@@ -112,12 +105,12 @@ function NewRoomForm({ channel, onClose }: { channel: Channel; onClose: () => vo
             )}
           </div>
         )}
-        <div className="dialog-foot">
+        <div className="modal-foot">
           <button type="submit" className="btn is-primary" disabled={!ready || (only && picked.size === 0)}>
             {busy ? "Making it…" : only ? `Create members-only room${picked.size ? ` for ${picked.size + 1}` : ""}` : "Create room"}
           </button>
         </div>
       </form>
-    </>
+    </Modal>
   )
 }

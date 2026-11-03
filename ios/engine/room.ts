@@ -201,7 +201,7 @@ export class Room {
 
   private sendWoken(body: string, opts: SendOptions): Promise<number> {
     const state = this.state;
-    return this.keyring.call(this.code, "send", body, state ? { ...opts, wake: wakeList(state, this.me, body, opts) } : opts);
+    return this.keyring.call(this.code, "send", body, state ? { ...opts, wake: wakeList(state, this.me, opts) } : opts);
   }
 
   async approve(id: number): Promise<number> {

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { repoOffers } from "~/panels/repo-offers"
+import { repoOffers } from "~/modals/repo-offers"
 
 describe("Add a repo offers your GitHub repos (T429)", () => {
   test("in GitHub's order, leaving out the channel's own, whatever their case", () => {

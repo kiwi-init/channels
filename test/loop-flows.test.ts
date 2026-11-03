@@ -570,7 +570,7 @@ test("with --harness grok, the loop asks for a listener, finds the session by it
   expect(start.marker).toBe(false);
   expect(start.argv.slice(0, 4)).toEqual(["-m", "grok-test", "--reasoning-effort", "high"]);
   expect(start.argv.at(-1)).toContain(`This session is for ${id} “grok work”`);
-  expect(start.argv.at(-1)).toContain("start the monitor tool with command `kiwi listen`");
+  expect(start.argv.at(-1)).toContain("start the monitor tool with command `kiwi join`");
   await until(() => seatOf(agent)?.session === start.thread, "the seat bound to the new session").catch(fail);
   expect(seatOf(agent)?.harness).toBe("grok");
 
@@ -764,7 +764,7 @@ test.skipIf(!tmuxPastes)(
       expect(start.marker).toBe(false);
       expect(start.argv).toEqual([]);
       expect(typed.prompt).toContain(`This session is for ${id} “zcode work”`);
-      expect(typed.prompt).toContain("listen --once`, run_in_background: true, and no timeout");
+      expect(typed.prompt).toContain("`kiwi join`, run_in_background: true, and no timeout");
       expect(typed.prompt).toMatch(/\(Kiwi loop launch [0-9a-f]{18}\)$/);
       await until(() => seatOf(agent)?.pid === start.pid, "the seat bound to ZCode's process").catch(fail);
       expect(seatOf(agent)?.harness).toBe("zcode");

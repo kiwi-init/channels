@@ -9,8 +9,9 @@ import { MessageRow } from "~/chat/message"
 import { preview } from "~/chat/preview"
 import { jumpTo } from "~/chat/reply"
 import { ANYONE } from "@kiwi/channel/task-actions.ts"
-import { Avatar, cx, Dialog, DialogHead, Dot, Empty, Heading, statusWord } from "~/kit/bits"
+import { autofocus, Avatar, cx, Modal, Dot, Empty, Heading, statusWord } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
+import { MoreButton } from "~/kit/menu-open"
 import { ago } from "~/kit/time"
 import { memberOf, type Ask, type Channel, type PermissionAsk, type Person, type QuestionAsk, type ReviewRound, type Task, type TaskEvent } from "~/model"
 import { useApp } from "~/nav"
@@ -62,7 +63,7 @@ export function TaskPanel({ channel, id }: { channel: Channel; id: number }) {
   const may = !memberOf(channel, channel.you)?.readOnly
   return (
     <>
-      <PanelHead title={`T${task.id}`} />
+      <PanelHead title={`T${task.id}`}>{may && <TaskMenu key={`menu-${task.id}`} channel={channel} task={task} />}</PanelHead>
       <div key={task.id} ref={body} className="panel-body task-body tp">
         <section className="panel-section tp-top">
           <h3 className="task-title">{task.title}</h3>
@@ -100,7 +101,7 @@ function Who({ channel, name }: { channel: Channel; name: string }) {
   const { go } = useApp()
   const person = memberOf(channel, name)
   return (
-    <button type="button" className="task-who" onClick={() => go({ to: "panel", panel: { kind: "person", name } })}>
+    <button type="button" className="task-who" onClick={() => go({ to: "modal", modal: { kind: "person", name } })}>
       <Avatar person={person} size="sm" />
       <span className="task-who-name">{nickname(channel, name)}</span>
       {name === channel.you && <span className="dimmer">you</span>}
@@ -214,14 +215,15 @@ function Assign({ channel, task, open, onClose }: { channel: Channel; task: Task
     close()
   }
   return (
-    <Dialog open={open} onClose={close} label={`Who works on T${task.id}?`}>
-      <DialogHead
-        title={`Who works on T${task.id}?`}
-        sub={task.owner ? `Now ${someone(channel, task.owner)}. The new owner gets a message with your note.` : "The new owner gets a message with your note."}
-        onClose={close}
-      />
+    <Modal
+      open={open}
+      onClose={close}
+      label={`Who works on T${task.id}?`}
+      title={`Who works on T${task.id}?`}
+      sub={task.owner ? `Now ${someone(channel, task.owner)}. The new owner gets a message with your note.` : "The new owner gets a message with your note."}
+    >
       <div className="task-pick">
-        <input className="input" value={why} aria-label="A note for them" placeholder="A note for them (optional)" maxLength={300} onChange={(e) => setWhy(e.target.value)} />
+        <input ref={autofocus} className="input" value={why} aria-label="A note for them" placeholder="A note for them (optional)" maxLength={300} onChange={(e) => setWhy(e.target.value)} />
         <div className="task-pick-list">
           {[...first, ...rest].map((p) => (
             <Choice
@@ -235,7 +237,7 @@ function Assign({ channel, task, open, onClose }: { channel: Channel; task: Task
           ))}
         </div>
       </div>
-    </Dialog>
+    </Modal>
   )
 }
 
@@ -249,12 +251,13 @@ function PickReviewer({ channel, task, open, onClose }: { channel: Channel; task
   }
   const now = task.reviewer ? (task.reviewer === ANYONE ? "Now anyone who hasn't worked on it. " : `Now ${someone(channel, task.reviewer)}. `) : ""
   return (
-    <Dialog open={open} onClose={onClose} label={`Who reviews T${task.id}?`}>
-      <DialogHead
-        title={`Who reviews T${task.id}?`}
-        sub={`${now}${task.status === "review" ? "They give the verdict on the open round." : "They give the verdict when it's sent for review."}`}
-        onClose={onClose}
-      />
+    <Modal
+      open={open}
+      onClose={onClose}
+      label={`Who reviews T${task.id}?`}
+      title={`Who reviews T${task.id}?`}
+      sub={`${now}${task.status === "review" ? "They give the verdict on the open round." : "They give the verdict when it's sent for review."}`}
+    >
       <div className="task-pick-list">
         <button type="button" className="task-pick-row" aria-pressed={task.reviewer === ANYONE} disabled={task.reviewer === ANYONE} onClick={() => pick(ANYONE)}>
           <span className="task-pick-glyph">
@@ -270,7 +273,7 @@ function PickReviewer({ channel, task, open, onClose }: { channel: Channel; task
           <Choice key={p.name} channel={channel} person={p} on={p.name === task.reviewer} about={aboutOf(p)} onPick={() => pick(p.name)} />
         ))}
       </div>
-    </Dialog>
+    </Modal>
   )
 }
 
@@ -377,9 +380,75 @@ function Review({ channel, task }: { channel: Channel; task: Task }) {
   )
 }
 
+function TaskMenu({ channel, task }: { channel: Channel; task: Task }) {
+  const { app } = useApp()
+  const [editing, setEditing] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
+  const label = `T${task.id}`
+  return (
+    <>
+      <MoreButton
+        label={label}
+        groups={() => [
+          [{ label: "Edit…", run: () => setEditing(true) }, ...(task.status === "done" ? [] : [{ label: "Cancel…", run: () => setCancelling(true) }])],
+          [
+            {
+              label: "Delete…",
+              run: () => app.actions.deleteTask(channel.code, task.id),
+              confirm: { title: `Delete ${label}?`, sub: "It leaves the board and the counts. The history keeps one line saying you deleted it.", yes: "Delete task" },
+            },
+          ],
+        ]}
+      />
+      <EditTask channel={channel} task={task} open={editing} onClose={() => setEditing(false)} />
+      <Cancel channel={channel} task={task} open={cancelling} onClose={() => setCancelling(false)} />
+    </>
+  )
+}
+
+function EditTask({ channel, task, open, onClose }: { channel: Channel; task: Task; open: boolean; onClose: () => void }) {
+  const { app } = useApp()
+  const [title, setTitle] = useState(task.title)
+  const [detail, setDetail] = useState(task.detail ?? "")
+  const close = () => {
+    setTitle(task.title)
+    setDetail(task.detail ?? "")
+    onClose()
+  }
+  return (
+    <Modal
+      open={open}
+      onClose={close}
+      label={`Edit T${task.id}`}
+      title={`Edit T${task.id}`}
+      sub={task.owner ? `${someone(channel, task.owner)} sees the change in the task's history.` : "The change shows in the task's history."}
+    >
+      <form
+        className="task-cancel task-edit"
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (!title.trim()) return
+          app.actions.editTask(channel.code, task.id, { title, detail })
+          onClose()
+        }}
+      >
+        <input ref={autofocus} className="input" value={title} aria-label="Title" placeholder="Title" maxLength={200} onChange={(e) => setTitle(e.target.value)} />
+        <textarea className="textarea" rows={8} value={detail} aria-label="Body" placeholder="What to do, where the code is and why" onChange={(e) => setDetail(e.target.value)} />
+        <div className="modal-foot">
+          <button type="button" className="btn is-quiet" onClick={close}>
+            Cancel
+          </button>
+          <button type="submit" className="btn is-primary" disabled={!title.trim()}>
+            Save
+          </button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
 function State({ channel, task, may }: { channel: Channel; task: Task; may: boolean }) {
   const { app } = useApp()
-  const [cancelling, setCancelling] = useState(false)
   return (
     <div className="tp-state">
       <p className="tp-status" title={`Created ${since(task.createdAt)}`}>
@@ -395,18 +464,12 @@ function State({ channel, task, may }: { channel: Channel; task: Task; may: bool
               Reopen
             </button>
           ) : (
-            <>
-              <button type="button" className="btn is-quiet is-small" onClick={() => app.actions.setTaskStatus(channel.code, task.id, "done")}>
-                Mark done
-              </button>
-              <button type="button" className="btn is-quiet is-small" onClick={() => setCancelling(true)}>
-                Cancel…
-              </button>
-            </>
+            <button type="button" className="btn is-quiet is-small" onClick={() => app.actions.setTaskStatus(channel.code, task.id, "done")}>
+              Mark done
+            </button>
           )}
         </span>
       )}
-      <Cancel channel={channel} task={task} open={cancelling} onClose={() => setCancelling(false)} />
     </div>
   )
 }
@@ -419,8 +482,13 @@ function Cancel({ channel, task, open, onClose }: { channel: Channel; task: Task
     onClose()
   }
   return (
-    <Dialog open={open} onClose={close} label={`Cancel T${task.id}?`}>
-      <DialogHead title={`Cancel T${task.id}?`} sub={`It closes for everyone, marked cancelled${task.status === "review" ? ", and its open review round ends" : ""}.`} onClose={close} />
+    <Modal
+      open={open}
+      onClose={close}
+      label={`Cancel T${task.id}?`}
+      title={`Cancel T${task.id}?`}
+      sub={`It closes for everyone, marked cancelled${task.status === "review" ? ", and its open review round ends" : ""}.`}
+    >
       <form
         className="task-cancel"
         onSubmit={(e) => {
@@ -432,6 +500,7 @@ function Cancel({ channel, task, open, onClose }: { channel: Channel; task: Task
         }}
       >
         <input
+          ref={autofocus}
           className="input"
           value={why}
           aria-label="Why it's cancelled"
@@ -439,7 +508,7 @@ function Cancel({ channel, task, open, onClose }: { channel: Channel; task: Task
           maxLength={500}
           onChange={(e) => setWhy(e.target.value)}
         />
-        <div className="dialog-foot">
+        <div className="modal-foot">
           <button type="button" className="btn is-quiet" onClick={close}>
             Keep it
           </button>
@@ -448,7 +517,7 @@ function Cancel({ channel, task, open, onClose }: { channel: Channel; task: Task
           </button>
         </div>
       </form>
-    </Dialog>
+    </Modal>
   )
 }
 

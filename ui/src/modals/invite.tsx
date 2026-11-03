@@ -1,12 +1,12 @@
 import { Fragment, useEffect, useState } from "react"
 
 import "~/styles/people-add.css"
-import { cx, Heading, Toggle } from "~/kit/bits"
+import { cx, Modal, Toggle } from "~/kit/bits"
 import { Track } from "~/kit/glide"
 import { Icon } from "~/kit/icons"
 import { ALL_POWERS, NO_POWERS, trusted, type Channel } from "~/model"
 import { useApp } from "~/nav"
-import { PanelHead } from "~/panels/frame"
+import { Group, Row } from "~/settings/controls"
 import { copyText } from "~/kit/toasts"
 
 type Link = { code: string; link: string } | { code: string; failed: true }
@@ -84,32 +84,27 @@ const CAN = [
   { id: "write", label: "Write and work", says: "They post, take tasks and bring their own agents." },
 ] as const
 
-export function InvitePanel({ channel }: { channel: Channel }) {
+export function Invite({ channel, onClose }: { channel: Channel; onClose: () => void }) {
   const { app } = useApp()
   const { link, failed, retry } = useInviteLink(channel.code)
   const can = channel.newMembers ?? "write"
   const powers = channel.newPowers ?? NO_POWERS
   const trust = can === "write" && trusted(powers)
   return (
-    <>
-      <PanelHead title="Invite people" />
-      <div className="panel-body invite">
-        <section className="invite-link" aria-label="Invite link">
-          {failed ? (
-            <div className="invite-failed">
-              <span>Couldn't get a link.</span>
-              <button type="button" className="btn is-small" onClick={retry}>
-                Try again
-              </button>
-            </div>
-          ) : (
-            <CopyBox text={link} label="Copy link" />
-          )}
-          <p className="invite-note">Anyone with it can ask to join. You let them in after checking their code.</p>
-        </section>
-        {channel.youOwn && (
-          <section className="invite-can" aria-label="New people can">
-            <Heading>New people can</Heading>
+    <Modal onClose={onClose} label="Invite people" title="Invite people" sub="Anyone with the link can ask to join. You let them in after checking their code." size="narrow" className="invite">
+      {failed ? (
+        <div className="invite-failed">
+          <span>Couldn't get a link.</span>
+          <button type="button" className="btn is-small" onClick={retry}>
+            Try again
+          </button>
+        </div>
+      ) : (
+        <CopyBox text={link} label="Copy link" />
+      )}
+      {channel.youOwn && (
+        <Group title="New people can" hint="You can change it for each person when you let them in.">
+          <div className="invite-can">
             <Track className="seg invite-seg" role="group" aria-label="New people can">
               {CAN.map((c) => (
                 <button key={c.id} type="button" title={c.says} aria-pressed={can === c.id} onClick={() => app.actions.setNewMembers(channel.code, c.id)}>
@@ -117,29 +112,24 @@ export function InvitePanel({ channel }: { channel: Channel }) {
                 </button>
               ))}
             </Track>
-            <div className="invite-powers">
-              <div className="invite-power" title="Every power below at once. The channel stays yours.">
-                <span className="invite-power-label">Full trust</span>
-                <Toggle
-                  label="Full trust"
-                  on={trust}
-                  onChange={(on) => {
-                    if (on) app.actions.setNewMembers(channel.code, "write")
-                    app.actions.setNewPowers(channel.code, on ? ALL_POWERS : NO_POWERS)
-                  }}
-                />
-              </div>
-              {POWERS.map((power) => (
-                <div key={power.id} className="invite-power" title={powers[power.id] ? power.on : power.off}>
-                  <span className="invite-power-label">{power.label}</span>
-                  <Toggle label={power.label} on={powers[power.id]} onChange={(on) => app.actions.setNewPowers(channel.code, { ...powers, [power.id]: on })} />
-                </div>
-              ))}
-            </div>
-            <p className="invite-note">You can change it for each person when you let them in.</p>
-          </section>
-        )}
-      </div>
-    </>
+          </div>
+          <Row label="Full trust" hint="Every power below at once. The channel stays yours.">
+            <Toggle
+              label="Full trust"
+              on={trust}
+              onChange={(on) => {
+                if (on) app.actions.setNewMembers(channel.code, "write")
+                app.actions.setNewPowers(channel.code, on ? ALL_POWERS : NO_POWERS)
+              }}
+            />
+          </Row>
+          {POWERS.map((power) => (
+            <Row key={power.id} label={power.label} hint={powers[power.id] ? power.on : power.off}>
+              <Toggle label={power.label} on={powers[power.id]} onChange={(on) => app.actions.setNewPowers(channel.code, { ...powers, [power.id]: on })} />
+            </Row>
+          ))}
+        </Group>
+      )}
+    </Modal>
   )
 }

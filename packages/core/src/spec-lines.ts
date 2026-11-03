@@ -1,5 +1,5 @@
 import { inlineText } from "./membership.ts";
-import { changedSinceApproval, doneWhen, freeAgents, specPlanner, specQueue, specStage, specTasks, specTitle, type SpecStage } from "./state/specs.ts";
+import { changedSinceApproval, doneWhen, freeAgents, onSpec, specPlanner, specQueue, specStage, specTasks, specTitle, unansweredComments, type SpecStage } from "./state/specs.ts";
 import { taskId } from "./state/tasks.ts";
 import type { ChannelState, Spec } from "./state/types.ts";
 
@@ -26,7 +26,7 @@ function specStageText(state: ChannelState, spec: Spec): string {
     case "delivered":
       return `delivered: waiting on ${asker ?? "a person"}'s verdict`;
     case "accepted":
-      return `accepted by ${spec.result?.by ?? "a person"}`;
+      return spec.result?.auto ? "closed by itself: every box ticked and its tasks done" : `accepted by ${spec.result?.by ?? "a person"}`;
     case "dropped":
       return `dropped by ${spec.result?.by ?? "a person"}${spec.result?.note ? `: ${inlineText(spec.result.note, 120)}` : ""}`;
   }
@@ -39,6 +39,20 @@ function doneLine(spec: Spec): string {
 
 export function specLine(state: ChannelState, spec: Spec): string {
   return `#${spec.ask} ${inlineText(specTitle(spec, state.askHeads.get(spec.ask)), 80)} · ${specStageText(state, spec)}${doneLine(spec)}`;
+}
+
+export function commentsWaiting(state: ChannelState, me: string): { spec: Spec; seqs: number[] }[] {
+  return [...state.specs.values()]
+    .filter((sp) => !sp.result && onSpec(state, sp.ask).has(me))
+    .map((spec) => ({ spec, seqs: unansweredComments(spec, me) }))
+    .filter((w) => w.seqs.length > 0)
+    .sort((a, b) => a.spec.ask - b.spec.ask);
+}
+
+export function commentsLine(ask: number, seqs: readonly number[], mc = "kiwi"): string {
+  const shown = seqs.slice(-5).map((n) => `#${n}`);
+  const more = seqs.length > shown.length ? ` and ${seqs.length - shown.length} earlier` : "";
+  return `${seqs.length === 1 ? "a comment waits" : `${seqs.length} comments wait`} for your answer: ${shown.join(", ")}${more} (${mc} show ${ask}; answer with ${mc} spec comment ${ask} "…")`;
 }
 
 export function formatSpecs(state: ChannelState, all = false): string {

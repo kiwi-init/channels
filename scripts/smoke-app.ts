@@ -85,8 +85,8 @@ try {
 
   at = "the invite carries the join code";
   await page.getByRole("button", { name: "Invite people", exact: true }).first().click();
-  const panel = page.getByRole("complementary", { name: "Details" });
-  const link = panel.locator("code").filter({ hasText: "#mc2-" }).first();
+  const invite = page.getByRole("dialog", { name: "Invite people" });
+  const link = invite.locator("code").filter({ hasText: "#mc2-" }).first();
   await link.waitFor({ timeout: 15000 });
   const code = (await link.innerText()).trim().replace(/^.*#/, "");
   if (!/^mc2-[A-Za-z0-9_-]+-[A-Za-z0-9_-]+$/.test(code)) throw new Error(`the invite link carries no join code: ${code}`);
@@ -114,7 +114,8 @@ try {
   at = "a note the agent sets shows in channel settings, and the owner clears it";
   await kiwi(["-c", "smoke", "--as", "bot", "note", "smoke-url", "https://example.test"]);
   await page.getByRole("button", { name: /: channel settings$/ }).click();
-  const notes = page.getByRole("complementary", { name: "Details" }).locator(".cpanel-facts");
+  const notes = page.getByRole("dialog", { name: "Channel settings" });
+  await notes.getByRole("button", { name: "Notes", exact: true }).click();
   await notes.getByText("smoke-url").waitFor({ timeout: 15000 });
   await notes.getByRole("button", { name: "Clear smoke-url" }).click();
   await notes.getByRole("button", { name: "Clear", exact: true }).click();
@@ -157,11 +158,11 @@ try {
 
   at = "the owner turns on Write to GitHub and sets a branch prefix";
   await page.getByRole("button", { name: /: channel settings$/ }).click();
-  const settings = page.getByRole("complementary", { name: "Details" });
-  await settings.getByLabel("Add a repo").fill("kiwi-init/smoke");
-  await settings.getByLabel("Add a repo").press("Enter");
-  const github = settings.locator(".cpanel-github");
-  await github.waitFor({ timeout: 15000 });
+  const github = page.getByRole("dialog", { name: "Channel settings" });
+  await github.getByRole("button", { name: "GitHub", exact: true }).click();
+  await github.getByLabel("Add a repo").fill("kiwi-init/smoke");
+  await github.getByLabel("Add a repo").press("Enter");
+  await github.getByRole("link", { name: "kiwi-init/smoke" }).waitFor({ timeout: 15000 });
   await github.getByLabel("Write to GitHub").click();
   await github.getByRole("button", { name: "Set" }).click();
   await github.getByRole("textbox", { name: "Branch prefix" }).fill("T");
@@ -184,7 +185,7 @@ try {
   await openSearch();
   await search.fill("smok tas");
   await results.getByRole("option", { name: /Smoke task/ }).click();
-  await panel.getByText("Smoke task").first().waitFor({ timeout: 15000 });
+  await page.getByRole("complementary", { name: "Details" }).getByText("Smoke task").first().waitFor({ timeout: 15000 });
   if (await results.count()) throw new Error("picking a task left the results open");
   await page.keyboard.press("Escape");
   await search.fill("hel bot");
@@ -254,15 +255,16 @@ try {
 
   at = "the owner renames a room and gives the channel an image";
   await page.getByRole("button", { name: /: channel settings$/ }).click();
-  const details = page.getByRole("complementary", { name: "Details" });
-  await details.getByRole("button", { name: "Rename" }).nth(1).click();
+  const details = page.getByRole("dialog", { name: "Channel settings" });
+  await details.getByRole("button", { name: "Rooms", exact: true }).click();
+  await details.getByRole("button", { name: "Rename" }).first().click();
   const roomName = details.getByRole("textbox", { name: /^Name of #/ });
   await roomName.fill("lobby");
   await roomName.press("Enter");
   await page.getByText("lobby", { exact: true }).first().waitFor({ timeout: 15000 });
   const png = join(data, "icon.png");
   writeFileSync(png, Buffer.from(ICON_PNG, "base64"));
-  await details.locator('input[type="file"]').setInputFiles(png);
+  await details.locator('input[type="file"]').first().setInputFiles(png);
   await page.locator(".rail img").first().waitFor({ timeout: 15000 });
   await shot("channel-settings");
   step(at);

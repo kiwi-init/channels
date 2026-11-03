@@ -1,6 +1,6 @@
 import * as Effect from "effect/Effect";
 import { oneLook, openSession } from "../../agent.ts";
-import { Keystore, loadConfig } from "../../config.ts";
+import { contextLineOn, Keystore, loadConfig } from "../../config.ts";
 import { inlineText } from "@kiwi/core/membership.ts";
 import { formatTask, formatTasks, issueLinkText, looksLikeLine, taskStateWord } from "@kiwi/core/format.ts";
 import type { TaskState } from "@kiwi/core/protocol.ts";
@@ -79,13 +79,38 @@ export const taskCommands: Record<string, Command> = {
           const refused = leadCheckpointRefusal((yield* s.state()).state, s.me, where);
           if (refused) return yield* die(refused);
           yield* s.setFact(leadCheckpointKey(s.me), where);
-          return out(loadConfig().contextLine === "on" ? "lead checkpoint saved: a new session of yours starts from it" : "lead checkpoint saved");
+          return out(contextLineOn(loadConfig()) ? "lead checkpoint saved: a new session of yours starts from it" : "lead checkpoint saved");
         }
         const id = yield* taskArg();
         if (sub === "show") {
           const { state, messages } = yield* s.state();
           const shown = state.tasks.get(id) ?? (yield* die(`no task ${taskId(id)}`));
           return out(opt.json ? JSON.stringify(shown) : formatTask(state, shown, Date.now(), messages));
+        }
+        if (sub === "edit") {
+          const { state: now } = yield* s.state();
+          const t = now.tasks.get(id) ?? (yield* die(`no task ${taskId(id)}`));
+          if (opt.body !== undefined && opt.file !== undefined) return yield* die('give the new body once: --body "…" or --file spec.md');
+          const detail = opt.file !== undefined ? (yield* readText(opt.file)).trim() || (yield* die(`${opt.file} is empty`)) : opt.body?.trim();
+          const title = opt.title?.trim();
+          const change = { ...(title ? { title } : {}), ...(detail !== undefined ? { detail } : {}), ...(opt.owner !== undefined ? { owner: opt.owner.trim() || null } : {}) };
+          if (!Object.keys(change).length && opt.goal === undefined) return yield* die('usage: kiwi task edit T7 [--title "…"] [--body "…" | --file spec.md] [--owner NAME] [--goal "…"]');
+          const lines: string[] = [];
+          if (Object.keys(change).length) {
+            const after = (yield* s.taskUpdate(id, change)).tasks.get(id)!;
+            const what = [title ? "title" : null, detail !== undefined ? "body" : null, opt.owner !== undefined ? `owner (${after.owner ?? "nobody"})` : null].filter(Boolean).join(", ");
+            lines.push(`edited ${taskId(id)}'s ${what}: ${inlineText(after.title, 200)}`);
+          }
+          if (opt.goal !== undefined) {
+            if (t.ask === undefined) return yield* die(`${taskId(id)} isn't filed under a person's message, so it has no goal to name`);
+            lines.push(`goal of #${t.ask}: ${(yield* s.nameGoal(t.ask, opt.goal)).goal}`);
+          }
+          return out(lines.join("\n"));
+        }
+        if (sub === "delete") {
+          const why = args.slice(3).join(" ") || opt.note || undefined;
+          yield* s.taskDelete(id, why);
+          return out(`deleted ${taskId(id)}: it's off the board, and the history keeps one line saying so`);
         }
         if (sub === "match" || sub === "after") return yield* die(`kiwi task ${sub} is gone: tasks don't wait on or match anything now. Pick what you can do from the board (kiwi task)`);
         if (sub === "who") {
@@ -165,7 +190,7 @@ export const taskCommands: Record<string, Command> = {
         out(`${taskId(id)} ${taskStateWord(t)}${t.owner ? ` @${t.owner}` : ""}: ${inlineText(t.title, 200)}`);
         if ((sub === "done" || sub === "review") && t.areas?.length) out(`folders it changed (for kiwi task who): ${t.areas.join(", ")}`);
         if (sub === "checkpoint" && opt.fresh) out(`checkpoint saved: end your turn, and the loop starts a fresh session on ${taskId(id)} from it`);
-        else if (sub === "checkpoint") out(loadConfig().contextLine === "on" ? `checkpoint saved: a new session of yours starts ${taskId(id)} from it` : `checkpoint saved on ${taskId(id)}`);
+        else if (sub === "checkpoint") out(contextLineOn(loadConfig()) ? `checkpoint saved: a new session of yours starts ${taskId(id)} from it` : `checkpoint saved on ${taskId(id)}`);
       }),
     ),
 

@@ -4,8 +4,8 @@ import { wantPersona } from "~/live/persona-later"
 import { Icon } from "~/kit/icons"
 import type { Channel } from "~/model"
 import { useApp } from "~/nav"
-import { PanelHead } from "~/panels/frame"
-import { CopyBox } from "~/panels/invite"
+import { Modal } from "~/kit/bits"
+import { CopyBox } from "~/modals/invite"
 
 type Taken = Map<string, "in" | "asking">
 
@@ -36,14 +36,19 @@ function nameProblem(name: string, taken: Taken): string | null {
   return null
 }
 
-export function AddAgentPanel({ channel }: { channel: Channel }) {
+export function AddAgent({ channel, onClose }: { channel: Channel; onClose: () => void }) {
   const taken = takenNames(channel)
   const [name, setName] = useState(() => freeName(taken))
   return (
-    <>
-      <PanelHead title="Add agent" />
+    <Modal
+      onClose={onClose}
+      label="Add an agent"
+      title="Add an agent"
+      sub="Run the command in the folder it should work in. It installs kiwi if that computer has none, then asks to join; you check its code in Needs you."
+      className="add-body"
+    >
       <RunCommand channel={channel} name={name} setName={setName} taken={taken} />
-    </>
+    </Modal>
   )
 }
 
@@ -141,7 +146,7 @@ function RunCommand({ channel, name, setName, taken }: NameProps) {
     if (!channel.youOwn) wantPersona(channel.code, name, persona)
   }, [channel.code, channel.youOwn, name, persona])
   return (
-    <div className="panel-body add-body">
+    <>
       <NameField name={name} setName={setName} problem={problem} />
       {channel.youOwn || channel.youManageAgents ? (
         <PersonaPick value={persona} onPick={setPersona} none={channel.youOwn ? "You can still pick one when you let it in." : "You can still pick one from its profile."} />
@@ -161,8 +166,7 @@ function RunCommand({ channel, name, setName, taken }: NameProps) {
           <CopyBox text={line} label="Copy command" disabled={!!problem} wrap />
         )}
       </div>
-      <p className="add-note">Run it in the folder it should work in. It installs kiwi first if that computer has none, then asks to join; you check its code in Needs you.</p>
-    </div>
+    </>
   )
 }
 

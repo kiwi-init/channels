@@ -1,6 +1,8 @@
 import { ago, markedText, taskStateWord } from "./format.ts";
 import { inlineText } from "./membership.ts";
 import { CHECKPOINT_MAX_LENGTH } from "./protocol.ts";
+import { commentsLine, commentsWaiting } from "./spec-lines.ts";
+import { specTitle } from "./state/specs.ts";
 import { leadCheckpointKey, openRound, taskId, unnamedAsks, unnamedTasks, type ChannelState, type Fact, type Task } from "./state.ts";
 
 export const REENTRY_MAX = 4_000;
@@ -86,6 +88,13 @@ function boardBlock(state: ChannelState, me: string, mc: string): Block | null {
   return { text: ["The board you keep as lead:", ...shown, ...(rest > 0 ? [`and ${rest} more: ${mc} task`] : [])].join("\n"), elsewhere: `the board (${mc} task)` };
 }
 
+function commentBlocks(state: ChannelState, me: string, mc: string): Block[] {
+  return commentsWaiting(state, me).map(({ spec, seqs }) => ({
+    text: `#${spec.ask}'s spec “${inlineText(specTitle(spec, state.askHeads.get(spec.ask)), 120)}”: ${commentsLine(spec.ask, seqs, mc)}`,
+    elsewhere: `comments on #${spec.ask}'s spec (${mc} show ${spec.ask})`,
+  }));
+}
+
 function footer(left: readonly Block[], mc: string): string {
   const ids = left.flatMap((b) => (b.task === undefined ? [] : [taskId(b.task)]));
   const named = ids.slice(0, FOOTER_IDS);
@@ -108,8 +117,10 @@ export function reentryText(state: ChannelState, me: string, now = Date.now(), m
     .sort((a, b) => (a.part === b.part ? a.t.id - b.t.id : a.part === "owner" ? -1 : 1));
   const board = state.lead === me ? boardBlock(state, me, mc) : null;
   const lead = leadCheckpoint(state, me);
+  const comments = commentBlocks(state, me, mc);
   const blocks: Block[] = [
     ...mine.map(({ t, part }) => taskBlock(t, part, now, mc)),
+    ...comments,
     ...(lead ? [leadBlock(lead, now, mc)] : []),
     ...(board ? [board] : []),
     ...(state.compact
@@ -117,7 +128,7 @@ export function reentryText(state: ChannelState, me: string, now = Date.now(), m
       : []),
   ];
   if (!blocks.length) return null;
-  const header = mine.length || lead ? HEADER : null;
+  const header = mine.length || lead || comments.length ? HEADER : null;
   const shown: Block[] = [];
   let used = 0;
   for (const block of blocks) {

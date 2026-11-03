@@ -232,6 +232,9 @@ jobs:
       - name: ui muting a room dims it in the sidebar, in WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-mute-room.ts --dist ui/dist
+      - name: ui settings, profiles, Invite and Add an agent open in one modal that Esc, a click outside and Back close, with focus kept inside, in WebKit
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-modal.ts --dist ui/dist
       - name: ui edit and delete your own message (toolbar, Enter, ↑, Esc, the delete confirm), in WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-edit-delete.ts --dist ui/dist

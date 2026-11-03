@@ -106,15 +106,15 @@ describe("kiwi terminal", () => {
     expect(kiwi(dir, "terminal", "show").code).toBe(1);
   });
 
-  test("kiwi context-line is off on a fresh computer, and on and off write the one setting Settings reads, as JSON with --json", () => {
+  test("kiwi context-line is on on a fresh computer, and off and on write the one setting Settings reads, as JSON with --json", () => {
     const dir = kiwiHome();
-    expect(JSON.parse(kiwi(dir, "context-line", "status", "--json").stdout)).toEqual({ contextLine: "off" });
-    expect(kiwi(dir, "context-line", "status").stdout).toStartWith("the context line is off for this computer");
-    expect(JSON.parse(kiwi(dir, "context-line", "on", "--json").stdout)).toEqual({ contextLine: "on" });
-    expect(saved(dir)).toMatchObject({ contextLine: "on" });
     expect(JSON.parse(kiwi(dir, "context-line", "status", "--json").stdout)).toEqual({ contextLine: "on" });
+    expect(kiwi(dir, "context-line", "status").stdout).toStartWith("the context line is on for this computer");
     expect(kiwi(dir, "context-line", "off").stdout).toStartWith("the context line is off for this computer");
     expect(saved(dir)).toMatchObject({ contextLine: "off" });
+    expect(JSON.parse(kiwi(dir, "context-line", "status", "--json").stdout)).toEqual({ contextLine: "off" });
+    expect(JSON.parse(kiwi(dir, "context-line", "on", "--json").stdout)).toEqual({ contextLine: "on" });
+    expect(saved(dir)).toMatchObject({ contextLine: "on" });
     expect(kiwi(dir, "context-line", "maybe").code).toBe(1);
   });
 

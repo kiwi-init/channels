@@ -61,7 +61,7 @@ export function SpecNeedCard({ channel, ask }: { channel: Channel; ask: SpecAsk 
     <article className="needs-card is-open spec-need" aria-label={`${nickname(channel, by)} ${NEED_VERB[ask.why]}`}>
       <header className="needs-head">
         <Avatar person={faceOf(channel, by)} size="sm" />
-        <button type="button" className="needs-name" onClick={() => go({ to: "panel", panel: { kind: "person", name: by } })}>
+        <button type="button" className="needs-name" onClick={() => go({ to: "modal", modal: { kind: "person", name: by } })}>
           {nickname(channel, by)}
         </button>
         <span className="needs-verb">{NEED_VERB[ask.why]}</span>
