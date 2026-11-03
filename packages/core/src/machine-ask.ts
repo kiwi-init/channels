@@ -152,7 +152,7 @@ function readShellAsk(args: Record<string, unknown>): ShellAsk | null {
   const keys = Object.keys(args);
   if (keys.length !== SHELL_KEYS.length || keys.some((k) => !SHELL_KEYS.includes(k))) return null;
   const { want, cols, rows, pipe, epk } = args;
-  if (want !== "new" && !isPane(want)) return null;
+  if (want !== "new" && want !== "any" && !isPane(want)) return null;
   if (!shellSize(cols) || !shellSize(rows) || typeof pipe !== "string" || !PIPE_RE.test(pipe) || typeof epk !== "string" || !EPK_RE.test(epk)) return null;
   return { want, cols, rows, pipe, epk };
 }

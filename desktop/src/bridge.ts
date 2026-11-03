@@ -399,7 +399,7 @@ export interface TermTabView {
   label: string;
 }
 
-export type TermEvent = { term: string; out: string } | { term: string; ended: true };
+export type TermEvent = { term: string; out: string } | { term: string; ended: true } | { term: string; lost: true };
 
 export type FromMachine<T> = { ok: true; value: T } | { ok: false; detail: string };
 
@@ -530,6 +530,10 @@ export interface KiwiBridge {
   termMine(roomId: string, want: string | null, cols: number, rows: number): Promise<TermOpenView>;
   termTabs(): Promise<TermTabView[]>;
   termTabClose(pane: string): Promise<TermTabView[]>;
+  /** A shell on another of your computers, through the relay: its screen and output come as onTerm events, and lost when the pipe drops. */
+  termRemote(machinePk: string, want: string | null, cols: number, rows: number): Promise<TermOpenView>;
+  termRemoteTabs(machinePk: string): Promise<TermTabView[]>;
+  termRemoteClose(machinePk: string, pane: string): Promise<TermTabView[]>;
   termKeys(term: string, keys: string): Promise<void>;
   termSize(term: string, cols: number, rows: number): Promise<void>;
   termClose(term: string): Promise<void>;
