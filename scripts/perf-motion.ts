@@ -187,7 +187,7 @@ try {
 
   await toTasks();
   await unfold(page, "Check the router numbers");
-  const row = page.getByRole("main").getByRole("button", { name: new RegExp(`^.+ T${ids[1]} · `) });
+  const row = page.getByRole("main").getByRole("button", { name: new RegExp(`^.+ T${ids[1]}\\b`) });
   const closeTasks = closeThread;
   await row.waitFor();
   await measure(
