@@ -8,7 +8,6 @@ import { Track } from "~/kit/glide"
 import type { Channel } from "~/model"
 import { useApp } from "~/nav"
 import { roomPeople, shown } from "~/names"
-import { RoomReadyNotes } from "~/shell/room-ready"
 import { useAppCan } from "~/live/app-can"
 
 const roomName = (typed: string): string => typed.trim().replace(/^#/, "").trim().toLowerCase().replace(/\s+/g, "-")
@@ -28,8 +27,8 @@ function NewRoomForm({ channel, onClose }: { channel: Channel; onClose: () => vo
   const { app, go } = useApp()
   const [typed, setTyped] = useState("")
   const [wantsOnly, setOnly] = useState(false)
-  const canPrivate = useAppCan("makeRoom")
-  const only = wantsOnly && canPrivate
+  const canPick = useAppCan("makeRoom")
+  const only = wantsOnly && canPick
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set())
   const [busy, setBusy] = useState(false)
   const name = roomName(typed)
@@ -86,11 +85,11 @@ function NewRoomForm({ channel, onClose }: { channel: Channel; onClose: () => vo
           <button type="button" aria-pressed={!only} onClick={() => setOnly(false)}>
             Everyone
           </button>
-          <button type="button" aria-pressed={only} disabled={!canPrivate} title={canPrivate ? undefined : "Update Channels to make private rooms"} onClick={() => setOnly(true)}>
-            Only who I pick
+          <button type="button" aria-pressed={only} disabled={!canPick} title={canPick ? undefined : "Update Channels to make members-only rooms"} onClick={() => setOnly(true)}>
+            Members only
           </button>
         </Track>
-        {only && <p className="room-hint">Only who you pick can read it, not even the relay.</p>}
+        {only && <p className="room-hint">Only its members are sent what's said here. Anyone in the channel can still open it.</p>}
         {only && (
           <div className="room-pick">
             {[
@@ -111,12 +110,11 @@ function NewRoomForm({ channel, onClose }: { channel: Channel; onClose: () => vo
                 </fieldset>
               ) : null
             )}
-            <RoomReadyNotes people={others.filter((p) => picked.has(p.name))} />
           </div>
         )}
         <div className="dialog-foot">
           <button type="submit" className="btn is-primary" disabled={!ready || (only && picked.size === 0)}>
-            {busy ? "Making it…" : only ? `Create private room${picked.size ? ` for ${picked.size + 1}` : ""}` : "Create room"}
+            {busy ? "Making it…" : only ? `Create members-only room${picked.size ? ` for ${picked.size + 1}` : ""}` : "Create room"}
           </button>
         </div>
       </form>

@@ -21,7 +21,7 @@ import { applyEvent, type FoldCtx } from "./fold-events.ts";
 import { allowedOnHold, answersAsk, isLeadRole, isPerson, LEAD, ON_HOLD, sameAuthor } from "./people.ts";
 import { omit } from "../omit.ts";
 import { dmPlace, MAIN, summarize } from "./places.ts";
-import { rootOf } from "../room-rules.ts";
+import { rootOf, sentTo } from "../room-rules.ts";
 import { askHeadOf, askOfMessage, fileTask } from "./asks.ts";
 import { foldSpec, specGate } from "./specs.ts";
 import { taskId } from "./tasks.ts";
@@ -326,7 +326,7 @@ function folding(
     rooms.set(r.id, { ...(rooms.get(r.id) ?? known.get(r.id) ?? { id: r.id, createdBy: null, at: 0 }), name });
   }
   for (const [id, r] of known) if (!rooms.has(id)) rooms.set(id, r);
-  const nameTaken = (name: string, except?: string) => [...rooms.values()].some((r) => r.id !== except && r.name.toLowerCase() === name.toLowerCase());
+  const nameTaken = (name: string, except?: string) => [...rooms.values()].some((r) => r.id !== except && !r.members && r.name.toLowerCase() === name.toLowerCase());
   const roomOf = new Map<number, string>(from?.roomOf);
   const placeOf = new Map<number, Place>(from?.placeOf);
   const ctx: FoldCtx = {
@@ -474,6 +474,11 @@ function folding(
         if (!rooms.has(room)) {
           trust.set(m.seq, "refused");
           rejected.set(m.seq, `no room ${room}`);
+          continue;
+        }
+        if (!sentTo(rooms.get(room), m.from, members) && room !== GENERAL_ROOM) {
+          trust.set(m.seq, "refused");
+          rejected.set(m.seq, "only its members post in a members-only room");
           continue;
         }
         roomOf.set(m.seq, room);

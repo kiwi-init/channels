@@ -71,7 +71,11 @@ async function readElsewhere(code: string, after: number, upTo: number, title: s
   const prefs = ownPrefs()
   const now = Date.now()
   const { messages } = await ops().call(code, "history", after)
-  const fresh = messages.filter((m) => m.seq > after && m.seq <= upTo)
+  const sent = await ops()
+    .call(code, "sentRooms")
+    .then((ids) => new Set(ids))
+    .catch(() => null)
+  const fresh = messages.filter((m) => m.seq > after && m.seq <= upTo && (!sent || !m.room || sent.has(m.room)))
   if (!fresh.some((m) => m.sigOk && tells(m, me, prefs, code, true, now))) return
   const members = await ops().call(code, "members")
   const byName = new Map(members.map((m) => [m.name, m]))

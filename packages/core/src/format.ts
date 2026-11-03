@@ -142,13 +142,15 @@ export function describeEvent(m: Message, state?: ChannelState, nameOf: (handle:
     case "mode.set":
       return `${ev.coordinatorOnly ? "turned on" : "turned off"} coordinator-only (gone: it no longer gates anything)`;
     case "room.seal":
-      return "changed a private room";
+      return "changed a members-only room";
     case "room.msg":
-      return "wrote in a private room";
+      return "wrote in a members-only room";
     case "room.create":
-      return `made the room #${inlineText(ev.name, 40)}`;
+      return ev.dm ? "started a direct conversation" : ev.self ? "keeps their own notes" : ev.members ? `made the members-only room #${inlineText(ev.name, 40)}` : `made the room #${inlineText(ev.name, 40)}`;
+    case "room.members":
+      return "changed who a room is for";
     case "room.leave":
-      return "left a private room";
+      return "left a room";
     case "room.rename": {
       // Rooms are named by id in the event; say which one it was, by its name now if it has another.
       const now = state?.rooms.get(ev.id)?.name;

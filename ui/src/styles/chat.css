@@ -131,7 +131,7 @@
   font: var(--t-stamp) var(--ui);
 }
 
-html .day.is-sealed {
+html .day.is-members {
   font-family: var(--sans);
   letter-spacing: normal;
 }

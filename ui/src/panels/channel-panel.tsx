@@ -3,7 +3,6 @@ import "~/styles/channel-panel.css"
 import "~/styles/new-room.css"
 
 import { useEffect, useId, useRef, useState, type ReactNode } from "react"
-import { RoomReadyNotes } from "~/shell/room-ready"
 
 import { Avatar, cx, Field, Heading, IconButton } from "~/kit/bits"
 import { NotificationOff01Icon } from "@hugeicons/core-free-icons"
@@ -478,8 +477,8 @@ function RoomPeople({ channel, id, members, own }: { channel: Channel; id: strin
   if (!editing)
     return (
       <p className="cpanel-hint room-in cpanel-room-who">
-        <Icon name="lock" size={12} />
-        <span>Private: you{names.length ? `, ${names.join(", ")}` : ""}</span>
+        <Icon name="people" size={12} />
+        <span>Members only: you{names.length ? `, ${names.join(", ")}` : ""}</span>
         {own && canChange && (
           <button type="button" className="btn is-quiet is-small cpanel-reveal" onClick={() => setEditing(new Set(roots))}>
             Change who's in
@@ -504,7 +503,6 @@ function RoomPeople({ channel, id, members, own }: { channel: Channel; id: strin
           <span className="room-member-name">{shown(p)}</span>
         </label>
       ))}
-      <RoomReadyNotes people={others.filter((p) => editing.has(p.name))} />
       <p className="cpanel-hint">{out ? "Whoever you take out keeps what they could read, and nothing after: the room moves to a new key." : "Whoever you add reads the room's history."}</p>
       <div className="room-edit-foot">
         <button type="button" className="btn is-quiet is-small" onClick={() => setEditing(null)}>

@@ -19,7 +19,7 @@ const channel: Pick<Channel, "rooms" | "directs" | "people" | "you"> = {
     { id: "general", name: "general", unread: 0, mentions: 0 },
     { id: "r1", name: "launch", unread: 0, mentions: 0, members: ["jow", "maya"] },
   ],
-  directs: [{ with: "maya", unread: 0, last: 1, locked: true }],
+  directs: [{ with: "maya", unread: 0, last: 1, membersOnly: true }],
 }
 
 describe("a mention outside a private conversation is caught before it's sent (T2627)", () => {
