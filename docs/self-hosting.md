@@ -102,30 +102,6 @@ Pairing never touches the relay's records beyond a mailbox that is dropped when
 it ends, and there are no stored channel lists, linked computers or vault. There
 is no device handover.
 
-### Backups
-
-Channel files are SQLite in WAL mode, so copying them while the relay runs can
-catch a write halfway. `scripts/backup-relay.ts` writes a consistent snapshot of
-each file instead, while the relay keeps running:
-
-```bash
-bun scripts/backup-relay.ts ./relay-data ./backup
-# backed up 2 files to ./backup
-```
-
-To restore, stop the relay, put the files in an empty data folder, and start the
-relay on it. Channels, members and messages come back as they were at the backup.
-A channel whose key rotated after the backup comes back behind its members: their
-apps refuse to send under the older key ("the relay is behind this channel's key"),
-and the owner's app can't rotate past it, so restore your newest backup. If the key
-rotated after that one too, the channel can still be read but takes no new
-messages, and its owner closes it and creates a new one.
-
-A backup holds everything the relay holds: ciphertext, member public keys, wrapped
-channel keys, join codes and, on sign-in relays, WorkOS user ids. **A channel closed
-after the backup is still in it.** Keep backups as private as the relay, and delete
-old ones if "closing leaves nothing behind" matters to your users.
-
 ## Putting it on the internet
 
 Clients need HTTPS and WebSockets. Run the relay on loopback and put a TLS reverse

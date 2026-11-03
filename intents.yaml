@@ -49,7 +49,7 @@ intents:
     actor: user
     triggers:
       - "Needs you: approve join code"
-      - "Channel panel: Let in"
+      - "Channel settings: Let in"
     code:
       - packages/app/src/approval-tend.ts
       - packages/app/src/approval.ts
@@ -94,20 +94,6 @@ intents:
     reviewed:
       by: ojowwalker77
       at: 2026-11-03T18:54:20.136Z
-  - id: recover-account
-    name: Recover Account
-    status: retired
-    sentence: A person restores their keys from a recovery phrase on a new device.
-    actor: user
-    triggers:
-      - Recovery phrase during first run
-      - "Settings: Recovery"
-    code: []
-    confidence: medium
-    doubt: Is recovery reachable in the app, or still only planned?
-    reviewed:
-      by: ojowwalker77
-      at: 2026-11-03T18:57:25.317Z
   - id: keep-keys-safe
     name: Keep Keys Safe
     status: active
@@ -270,22 +256,6 @@ intents:
     reviewed:
       by: ojowwalker77
       at: 2026-11-03T19:25:07.587Z
-  - id: start-agent
-    name: Start An Agent
-    status: retired
-    sentence: A person starts an agent in a folder, here or on a paired computer.
-    actor: user
-    triggers:
-      - Add agent in the app
-      - kiwi launch
-    code:
-      - src/launch/
-      - src/terminals/
-      - ui/src/panels/add-agent.tsx
-    confidence: high
-    reviewed:
-      by: ojowwalker77
-      at: 2026-11-03T19:26:55.098Z
   - id: wake-agent
     name: Wake Agent On Message
     status: active
@@ -340,7 +310,7 @@ intents:
     sentence: A person links a GitHub repo, so its pull requests show as tasks.
     actor: user
     triggers:
-      - Channel panel, GitHub
+      - Channel settings, GitHub
       - Settings, link GitHub account
     code:
       - desktop/src/github-flow.ts
@@ -437,13 +407,13 @@ intents:
     sentence: The owner sets each member's role and permissions, or removes them.
     actor: admin
     triggers:
-      - Person panel in a channel
-      - Channel panel, Rooms
+      - Profile in a channel
+      - Channel settings, Rooms
     code:
       - packages/app/src/remove-agents.ts
       - packages/core/src/membership.ts
       - packages/core/src/scopes.ts
-      - ui/src/panels/person.tsx
+      - ui/src/modals/profile.tsx
     confidence: high
     reviewed:
       by: ojowwalker77
@@ -455,7 +425,7 @@ intents:
     actor: admin
     triggers:
       - Settings, Personalities
-      - Channel panel, goal
+      - Channel settings, goal
     code:
       - packages/core/src/personalities.ts
       - packages/core/src/personality.ts
@@ -477,7 +447,6 @@ intents:
     code:
       - packages/core/src/standup.ts
       - packages/core/src/status.ts
-      - src/status.ts
       - ui/src/now.ts
       - ui/src/tasks/now.tsx
     confidence: high
@@ -699,19 +668,6 @@ intents:
     reviewed:
       by: ojowwalker77
       at: 2026-11-03T19:31:19.099Z
-  - id: open-terminal
-    name: Open A Terminal
-    status: retired
-    sentence: A person opens a terminal for an agent's seat from the channel header.
-    actor: user
-    triggers:
-      - Terminal icon in channel header
-    code:
-      - src/terminals/
-    confidence: high
-    reviewed:
-      by: ojowwalker77
-      at: 2026-11-03T19:31:23.479Z
   - id: pick-theme
     name: Pick Theme And Text Size
     status: active
@@ -803,20 +759,6 @@ intents:
     reviewed:
       by: ojowwalker77
       at: 2026-11-03T19:55:39.296Z
-  - id: pin-messages
-    name: Pin Messages
-    status: retired
-    sentence: A person pins a message so the channel keeps it at hand.
-    actor: user
-    triggers:
-      - Message menu, Pin
-    code:
-      - packages/core/src/pin.ts
-      - ui/src/live/pins.ts
-    confidence: high
-    reviewed:
-      by: ojowwalker77
-      at: 2026-11-03T19:55:44.186Z
   - id: react-to-messages
     name: React To Messages
     status: active
@@ -860,20 +802,6 @@ intents:
     reviewed:
       by: ojowwalker77
       at: 2026-11-03T19:55:51.149Z
-  - id: catch-up-on-channel
-    name: Catch Up On Channel
-    status: retired
-    sentence: A returning person sees what changed in a channel since they left.
-    actor: user
-    triggers:
-      - Opening a channel after time away
-    code:
-      - ui/src/chat/since-modal.tsx
-      - ui/src/chat/since.ts
-    confidence: high
-    reviewed:
-      by: ojowwalker77
-      at: 2026-11-03T19:55:54.115Z
   - id: organize-channels
     name: Organize Channels
     status: active
@@ -901,21 +829,6 @@ intents:
     reviewed:
       by: ojowwalker77
       at: 2026-11-03T19:56:00.861Z
-  - id: steer-from-home
-    name: Steer From Home
-    status: retired
-    sentence: A person sends one command from Home that reaches any channel.
-    actor: user
-    triggers:
-      - Home, command bar
-    code:
-      - ui/src/chat/commands.ts
-      - ui/src/home.ts
-      - ui/src/live/home.tsx
-    confidence: high
-    reviewed:
-      by: ojowwalker77
-      at: 2026-11-03T19:56:15.741Z
   - id: mark-up-screenshots
     name: Mark Up Screenshots
     status: active
@@ -1091,10 +1004,10 @@ intents:
     sentence: The owner ends a channel, closing it for every member.
     actor: admin
     triggers:
-      - Channel panel, End
+      - Channel settings, End
     code:
       - src/relay/room/lifecycle.ts
-      - ui/src/panels/channel-panel.tsx
+      - ui/src/modals/channel-settings.tsx
     confidence: medium
     doubt: Can an ended channel be reopened, or is it final?
     reviewed:
@@ -1121,30 +1034,14 @@ intents:
     sentence: The owner writes the charter and goal that every agent in the channel follows.
     actor: admin
     triggers:
-      - Channel panel, Goal
+      - Channel settings, Goal
     code:
-      - ui/src/panels/channel-panel.tsx
+      - ui/src/modals/channel-settings.tsx
     confidence: medium
     doubt: Is the charter separate from each agent's own goal?
     reviewed:
       by: ojowwalker77
       at: 2026-11-03T19:58:04.141Z
-  - id: show-agent-in-terminal
-    name: Show Agent In Terminal
-    status: retired
-    sentence: A person jumps to an agent's tmux or Rex pane to watch it.
-    actor: user
-    triggers:
-      - Agent tile, Show seat
-    code:
-      - desktop/src/ipc/terminals.ts
-      - src/terminals/
-      - ui/src/kit/show-agent.tsx
-    confidence: low
-    doubt: The in-app terminal was removed; is this still wanted?
-    reviewed:
-      by: ojowwalker77
-      at: 2026-11-03T19:58:15.836Z
   - id: label-pr-size
     name: Label Pull Request Size
     status: active
@@ -1200,19 +1097,6 @@ intents:
     reviewed:
       by: ojowwalker77
       at: 2026-11-03T19:58:40.875Z
-  - id: back-up-relay
-    name: Back Up Relay
-    status: retired
-    sentence: An operator copies a self-hosted relay's data files to a backup folder.
-    actor: operator
-    triggers:
-      - bun scripts/backup-relay.ts
-    code:
-      - scripts/backup-relay.ts
-    confidence: high
-    reviewed:
-      by: ojowwalker77
-      at: 2026-11-03T19:58:48.102Z
   - id: build-phone-apps
     name: Build Phone Apps
     status: active

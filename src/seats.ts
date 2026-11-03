@@ -21,8 +21,6 @@ import { loadConfig, updateConfig, type Config, type SeatRecord } from "./config
 import { holdsSeat, seatHeldAway, seatHolds, seatRefusal } from "./hold.ts";
 import { pidAlive } from "./pid.ts";
 import { omit } from "@kiwi/core/omit.ts";
-import type { SeatPlace } from "./terminals/plugin.ts";
-import { locate } from "./terminals/registry.ts";
 
 type Harness = NonNullable<SeatRecord["harness"]>;
 
@@ -361,34 +359,6 @@ export function seatsFor(from: string, opts: SeatOptions = {}): Binding[] {
     return [pick];
   }
   return [];
-}
-
-export function notePlace(seats: readonly Binding[], env: Record<string, string | undefined> = process.env): void {
-  const place: SeatPlace = locate(env);
-  if (!seats.length) return;
-  const keys = new Set(seats.map((b) => `${b.alias}\u0000${b.as}`));
-  const same = (b: Binding) => keys.has(`${b.alias}\u0000${b.as}`);
-  const alike = (a: unknown, b: unknown): boolean => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
-  const held = (b: Binding): boolean => alike(b.term, place.term) && alike(b.rex, place.rex) && alike(b.tmux, place.tmux);
-  if (seats.every(held)) return;
-  updateConfig((c) => {
-    for (const dir of Object.keys(c.bindings ?? {})) {
-      const at = seatsAt(c, dir);
-      if (!at.some(same)) continue;
-      store(
-        c,
-        dir,
-        at.map((b) => {
-          if (!same(b)) return b;
-          const rest = { ...b };
-          delete rest.term;
-          delete rest.rex;
-          delete rest.tmux;
-          return { ...rest, ...(place.term ? { term: place.term } : {}), ...(place.rex ? { rex: place.rex } : {}), ...(place.tmux ? { tmux: place.tmux } : {}) };
-        }),
-      );
-    }
-  });
 }
 
 export function noteHarnessSession(seats: readonly Binding[], id: string): void {

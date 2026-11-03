@@ -1,5 +1,4 @@
 import { allSeats, type Config, type SeatRecord } from "../config.ts";
-import { helpersOn } from "../terminals/registry.ts";
 import type { Activity, Reach } from "@kiwi/core/protocol.ts";
 import { pidAlive } from "../pid.ts";
 import { wakeKey } from "@kiwi/core/wake.ts";
@@ -52,12 +51,6 @@ export function activityEnv(record: SeatRecord, base: Env): Env | null {
 }
 
 export type Attached = "listener" | "session" | "none";
-
-const FILE_FIRST: ReadonlySet<string> = new Set(["claude", "codex", "opencode"]);
-
-export function readsRex(cfg: Pick<Config, "terminals">, record: SeatRecord | null): record is SeatRecord & { rex: NonNullable<SeatRecord["rex"]> } {
-  return helpersOn("rex", cfg) && !!record?.rex && !FILE_FIRST.has(record.harness ?? "");
-}
 
 export function reachOf(attached: Attached, record: SeatRecord | null, activity: Activity | undefined, alive: (pid: number) => boolean = pidAlive): Reach {
   if (attached === "listener") return "listening";

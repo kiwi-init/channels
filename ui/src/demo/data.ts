@@ -83,8 +83,6 @@ const people: Person[] = [
     presence: "online",
     activity: { state: "idle" },
     reach: "listening",
-    seat: "tmux",
-    attach: "tmux -S /private/tmp/tmux-501/default attach -t %12",
     harness: "claude",
     runs: "Claude Code",
     model: "claude-opus-5-5",

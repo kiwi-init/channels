@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import { KNOWN_HARNESSES, readHarnessRow } from "@kiwi/core/harnesses.ts";
 import { daemonHarnesses, startDaemon, type Daemon } from "../src/daemon.ts";
-import { harnessInventory, inventoryText, versionIn, wakeOf } from "../src/launch/harnesses.ts";
-import { loginShell, passwdShell, pathAfterMark, readLoginPath } from "../src/launch/shell.ts";
+import { harnessInventory, inventoryText, versionIn, wakeOf } from "../src/harness-inventory.ts";
+import { loginShell, passwdShell, pathAfterMark, readLoginPath } from "../src/login-shell.ts";
 
 setDefaultTimeout(30_000);
 

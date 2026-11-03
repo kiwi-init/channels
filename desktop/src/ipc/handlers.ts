@@ -9,7 +9,7 @@ import { miscCalls } from "./misc.ts";
 import { personalitiesCalls } from "./personalities.ts";
 import { signInCalls } from "./signin.ts";
 import { storeCalls } from "./store.ts";
-import { terminalsCalls } from "./terminals.ts";
+import { hooksCalls } from "./hooks.ts";
 import { uiCalls } from "./ui.ts";
 
 export function handlers(host: Host): Handlers {
@@ -23,7 +23,7 @@ export function handlers(host: Host): Handlers {
     ...daemonCalls(devices),
     ...miscCalls(host),
     ...personalitiesCalls(),
-    ...terminalsCalls(),
+    ...hooksCalls(),
     ...machineCalls(),
     ...uiCalls(),
   };

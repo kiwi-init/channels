@@ -6,7 +6,7 @@ export const harnessCommands: Record<string, Command> = {
   harnesses: () =>
     Effect.gen(function* () {
       const { daemonHarnesses, ensureDaemon } = yield* Effect.promise(() => import("../../daemon.ts"));
-      const { inventoryText } = yield* Effect.promise(() => import("../../launch/harnesses.ts"));
+      const { inventoryText } = yield* Effect.promise(() => import("../../harness-inventory.ts"));
       yield* Effect.promise(() => ensureDaemon());
       const rows = yield* Effect.promise(() => daemonHarnesses());
       out(opt.json ? JSON.stringify(rows) : inventoryText(rows));

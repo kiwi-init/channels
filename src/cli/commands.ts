@@ -22,8 +22,6 @@ const TABLE: [Load, string[]][] = [
   [() => import("./commands/tools.ts").then((m) => m.toolCommands), ["mcp", "relay", "demo", "doctor"]],
   [() => import("./commands/context-line.ts").then((m) => m.contextLineCommands), ["context-line"]],
   [() => import("./commands/seat.ts").then((m) => m.seatCommands), ["seat"]],
-  [() => import("./commands/rex.ts").then((m) => m.rexCommands), ["rex"]],
-  [() => import("./commands/terminal.ts").then((m) => m.terminalCommands), ["terminal"]],
   [() => import("./commands/harnesses.ts").then((m) => m.harnessCommands), ["harnesses"]],
   [() => import("./commands/loop.ts").then((m) => m.loopCommands), ["loop"]],
 ];

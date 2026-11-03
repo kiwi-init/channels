@@ -157,7 +157,6 @@ describe("main's handlers reach the shell only through the host", () => {
   });
 
   test("a bad argument is refused under the call's name before anything runs", async () => {
-    await expect(bridge.terminalHelpers("vim" as "rex", "on")).rejects.toThrow("terminalHelpers takes rex or tmux, and on or off");
     await expect(bridge.setContextLine("maybe" as "on")).rejects.toThrow("setContextLine takes on or off");
   });
 });

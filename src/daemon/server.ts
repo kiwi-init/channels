@@ -13,14 +13,11 @@ import { compareVersions } from "@kiwi/core/versions.ts";
 import { listenedPath, pullsWake, viaOf } from "@kiwi/core/wake.ts";
 import { ensureMachine, loadPairedMachine, PairError, type PairedMachine, type PairedPerson } from "./pair.ts";
 import { DAEMON_PROTOCOL, daemonSock, daemonToken, readKeepAsk, readListener, type DaemonEvent, type DaemonRead, type DaemonSeat, type DaemonVerb } from "./protocol.ts";
-import { activityEnv, reachOf, readsRex, seatRecordFor, wakeOn, type Attached } from "./reach.ts";
-import { readRexInto } from "./rex-reads.ts";
-import type { RexActivity, RexPlace, SeatPlace, TerminalPlugin } from "../terminals/plugin.ts";
-import { helpersOn, marking, terminalPlugin } from "../terminals/registry.ts";
+import { activityEnv, reachOf, seatRecordFor, wakeOn, type Attached } from "./reach.ts";
 import { pruneHookFiles } from "../hooks/delivered.ts";
 import { hooksRows } from "../hooks/install/extra.ts";
 import { computerSettings } from "./settings.ts";
-import { harnessInventory } from "../launch/harnesses.ts";
+import { harnessInventory } from "../harness-inventory.ts";
 import { forgetAtRelay, startMachineInbox } from "./inbox.ts";
 import { remoteRunner } from "./remote.ts";
 import { beatLock, dropLock, lockPath, ownsLock, takeLock } from "./lock.ts";
@@ -159,30 +156,16 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
   };
   const livePath = async (cfg: Config, seat: Seat, attached: Attached) => listenedPath(await pathOf(cfg, seat.alias, seat.agent), listenedLately(seat, attached));
 
-  const refreshActivity = async (seat: Seat, force = false, read = true): Promise<void> => {
+  const refreshActivity = async (seat: Seat, force = false): Promise<void> => {
     const cfg = loadConfig();
     const record = seatRecordFor(cfg, seat.alias, seat.agent);
-    if (record?.rex?.block !== seat.rexBlock) {
-      seat.rexBlock = record?.rex?.block;
-      seat.rexGone = false;
-      seat.rexActivity = undefined;
-      seat.rexReadAt = undefined;
-    }
     const env = record ? activityEnv(record, process.env) : null;
     const { harnessActivity } = await import("../harness.ts");
-    let now = env ? await harnessActivity(env) : undefined;
-    if (readsRex(cfg, record)) {
-      if (read)
-        readRexInto(seat, record.rex, readRex, () => {
-          if (current(seat)) void refreshActivity(seat, false, false).catch(() => {});
-        });
-      const fromRex = seat.rexActivity;
-      if (fromRex) now = { ...fromRex, ...(now?.model ? { model: now.model } : {}) };
-    }
+    const now = env ? await harnessActivity(env) : undefined;
     const attached = attachedTo(seat);
     const pulled = attached === "listener" && pullsWake(record?.harness);
     const via = wakeOn(cfg, seat.alias, seat.agent) ? (viaOf(await livePath(cfg, seat, attached)) ?? (pulled ? "listener" : null)) : null;
-    const reach = seat.rexGone ? "unreachable" : reachOf(attached, record, now);
+    const reach = reachOf(attached, record, now);
     if (!force && JSON.stringify(now) === JSON.stringify(seat.activity) && via === seat.wakeVia && reach === seat.reach) return;
     seat.activity = now;
     seat.wakeVia = via;
@@ -191,10 +174,6 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
   };
 
   const current = (seat: Seat): boolean => !stopped && seats.get(seat.key) === seat;
-
-  let rexPlugin: Promise<TerminalPlugin> | null = null;
-  const rex = (): Promise<TerminalPlugin> => (rexPlugin ??= terminalPlugin("rex"));
-  const readRex = async (place: RexPlace): Promise<RexActivity | null> => (await rex()).activity?.({ rex: place }) ?? null;
 
   const { scheduleWake } = seatWakes({
     dir,
@@ -829,7 +808,6 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     if (!relays.length || !relays.every(onLoopback)) return false;
     return (await Promise.all(relays.map(answers))).every((up) => !up);
   };
-  let statusWatch: { stop(): void } | null = null;
   let relayForget: Promise<unknown> = Promise.resolve();
   const unpairHere = async (): Promise<void> => {
     const m = loadPairedMachine();
@@ -855,61 +833,6 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
       settings: async () => computerSettings(loadConfig(), hooksRows()),
     }),
   });
-  let rexWatch: { stop(): void } | null = null;
-  const rexSeat = (match: (place: SeatPlace) => boolean, gone: boolean): void => {
-    let cfg: Config;
-    try {
-      cfg = loadConfig();
-    } catch {
-      return;
-    }
-    for (const seat of seats.values()) {
-      const record = seatRecordFor(cfg, seat.alias, seat.agent);
-      if (!record?.rex || !match(record)) continue;
-      seat.rexGone = gone;
-      void refreshActivity(seat, true).catch(() => {});
-    }
-  };
-  const watchStatus = async (): Promise<void> => {
-    const [marks, on] = ((): [boolean, boolean] => {
-      try {
-        const cfg = loadConfig();
-        return [marking(cfg).length > 0, helpersOn("rex", cfg)];
-      } catch {
-        return [false, false];
-      }
-    })();
-    if (marks && !statusWatch) {
-      const { startStatusWatch } = await import("../status.ts");
-      if (stopped) return;
-      statusWatch = startStatusWatch({
-        seats: () => [...seats.values()].map((s) => ({ key: s.key, alias: s.alias, agent: s.agent, head: s.head })),
-        current: (s) => {
-          const seat = seats.get(s.key);
-          return !!seat && current(seat) && seat.alias === s.alias && seat.agent === s.agent;
-        },
-        stopped: () => stopped,
-      });
-    } else if (!marks && statusWatch) {
-      statusWatch.stop();
-      statusWatch = null;
-    }
-    if (on && !rexWatch) {
-      const plugin = await rex();
-      if (stopped) return;
-      rexWatch =
-        plugin.watch?.(() => {
-          const cfg = loadConfig();
-          return [...seats.values()].flatMap((seat) => {
-            const record = seatRecordFor(cfg, seat.alias, seat.agent);
-            return record?.rex ? [record] : [];
-          });
-        }, rexSeat) ?? null;
-    } else if (!on && rexWatch) {
-      rexWatch.stop();
-      rexWatch = null;
-    }
-  };
   let prunedAt = 0;
   const pruneNow = (): void => {
     if (Date.now() - prunedAt < PRUNE_EVERY_MS) return;
@@ -919,7 +842,6 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
   pruneNow();
   const tick = setInterval(() => {
     pruneNow();
-    void watchStatus();
     if (!existsSync(dir) || !beatLock(lock)) return void stop();
     void seatSync.now();
     void orphaned().then((dead) => {
@@ -933,11 +855,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     stopped = true;
     clearInterval(tick);
     admitter.stop();
-    statusWatch?.stop();
-    statusWatch = null;
     inbox.stop();
-    rexWatch?.stop();
-    rexWatch = null;
     resolveStopped();
     for (const conn of [...conns]) {
       try {
@@ -968,7 +886,6 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
   };
 
   await seatSync.now();
-  await watchStatus();
   try {
     for (const c of Object.values(loadConfig().channels)) admitter.watch({ relay: c.relay ?? DEFAULT_RELAY, roomId: c.roomId, ownerPk: c.ownerPk }, 0);
   } catch {
