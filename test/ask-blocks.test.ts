@@ -12,7 +12,7 @@ import { joinAgent, pairComputer, setupChannel, type OwnerSetup } from "./owner.
 
 setDefaultTimeout(30_000);
 
-describe("an agent's ask is a block in the thread's doc, and its message points at it (T1257)", () => {
+describe("an agent's ask stays a plain message that 2026.11.7 desktops and phones read (T1354)", () => {
   const dataDir = mkdtempSync(join(tmpdir(), "kiwi-ask-blocks-"));
   const home = mkdtempSync(join(tmpdir(), "kiwi-ask-blocks-home-"));
   const was = process.env.KIWI_HOME;
@@ -50,15 +50,14 @@ describe("an agent's ask is a block in the thread's doc, and its message points 
     for (const d of [dataDir, home]) rmSync(d, { recursive: true, force: true });
   });
 
-  test("an ask in #general writes the agent's block, and the escalation carries its reference and options", async () => {
+  test("an ask in #general carries no block, so 2026.11.7 clients don't drop it, and the doc gets no copy", async () => {
     const { seq } = await run(dev.escalate("Which look?", undefined, undefined, { choices: ["A: glass", "B: flat"] }));
     const m = await message(seq);
     expect(m.esc).toBe(true);
     expect(m.choices).toEqual(["A: glass", "B: flat"]);
-    expect(m.block?.th).toBe(general.th);
-    const deadline = Date.now() + 5_000;
-    while (!blocksOf(general.doc).some((b) => b.id === m.block?.id) && Date.now() < deadline) await Bun.sleep(20);
-    expect(blocksOf(general.doc).find((b) => b.id === m.block?.id)).toMatchObject({ kind: "agent", author: "dev", text: "Which look?", sent: true });
+    expect(m.block).toBeUndefined();
+    await Bun.sleep(500);
+    expect(blocksOf(general.doc).some((b) => b.text === "Which look?")).toBe(false);
   });
 
   test("an ask that answers a message stays a plain message in that message's thread", async () => {
