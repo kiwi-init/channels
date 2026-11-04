@@ -1,6 +1,6 @@
 import "~/styles/thread-doc.css"
 
-import { useEffect, useLayoutEffect, useReducer, useRef, useState, useSyncExternalStore, type CSSProperties } from "react"
+import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore, type CSSProperties, type RefObject } from "react"
 import { createPortal } from "react-dom"
 import type { Node } from "prosemirror-model"
 import { EditorState, Plugin, type Transaction } from "prosemirror-state"
@@ -111,7 +111,12 @@ class BlockView implements NodeView {
   }
 }
 
-function paintRuns(root: HTMLElement, shown: Map<HTMLElement, BlockView>, me: string): void {
+interface Drafts {
+  is: (block: string) => boolean
+  version: number
+}
+
+function paintRuns(root: HTMLElement, shown: Map<HTMLElement, BlockView>, me: string, drafts: Drafts): void {
   let prev: Node | undefined
   for (const el of root.children) {
     if (!(el instanceof HTMLElement)) continue
@@ -124,17 +129,21 @@ function paintRuns(root: HTMLElement, shown: Map<HTMLElement, BlockView>, me: st
     el.classList.toggle("is-empty", empty)
     el.classList.toggle("is-mine", mine)
     el.classList.toggle("is-hidden", hidden)
+    el.classList.toggle("is-draft", mine && !empty && drafts.is(attrsOf(node).id))
     if (!hidden) prev = node
   }
 }
 
-function runsPlugin(shown: Map<HTMLElement, BlockView>, me: string): Plugin {
+function runsPlugin(shown: Map<HTMLElement, BlockView>, me: string, drafts: RefObject<Drafts>): Plugin {
   return new Plugin({
     view: (view) => {
-      paintRuns(view.dom, shown, me)
+      paintRuns(view.dom, shown, me, drafts.current)
+      let painted = drafts.current.version
       return {
         update: (v, prev) => {
-          if (v.state.doc !== prev.doc) paintRuns(v.dom, shown, me)
+          if (v.state.doc === prev.doc && painted === drafts.current.version) return
+          painted = drafts.current.version
+          paintRuns(v.dom, shown, me, drafts.current)
         },
       }
     },
@@ -252,6 +261,7 @@ interface ViewOpts {
   onKey: (e: KeyboardEvent) => boolean
   scroller: () => HTMLElement | null
   hold: (on: boolean) => void
+  drafts: RefObject<Drafts>
 }
 
 function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, opts: ViewOpts): { view: EditorView; stop: () => void } {
@@ -280,7 +290,7 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
         () => blur.now()
       ),
       herePlugin(),
-      runsPlugin(shown, me),
+      runsPlugin(shown, me, opts.drafts),
       tidyPlugin(me),
       steadyPlugin(opts.scroller, opts.hold, me),
     ],
@@ -305,13 +315,10 @@ function Head({ channel, attrs }: { channel: Channel; attrs: BlockAttrs }) {
   return (
     <>
       <span className="blk-line">
-        <button type="button" className="msg-name" onClick={() => go({ to: "modal", modal: { kind: "person", name: attrs.author } })}>
+        <button type="button" className="msg-name" title={clock(attrs.at)} onClick={() => go({ to: "modal", modal: { kind: "person", name: attrs.author } })}>
           {nickname(channel, attrs.author)}
         </button>
         {(attrs.kind === "tool" || attrs.kind === "comment") && <span className="blk-kind">{attrs.kind}</span>}
-        <time className="msg-time" dateTime={new Date(attrs.at).toISOString()}>
-          {clock(attrs.at)}
-        </time>
       </span>
     </>
   )
@@ -377,6 +384,13 @@ export function ThreadDoc({ channel, where, shared, hold }: { channel: Channel; 
   const canWrite = useRef(!readOnly)
   const latest = useRef(channel)
   const holdRef = useRef(hold)
+  const drafts = useRef<Drafts>({ is: () => false, version: 0 })
+  const sent = useMemo(() => new Set(channel.messages.flatMap((m) => (m.block && !m.pending ? [m.block] : []))), [channel.messages])
+
+  useLayoutEffect(() => {
+    drafts.current = { is: (block) => !!shared.madeHere?.(block) && !sent.has(block), version: drafts.current.version + 1 }
+    view.current?.setProps({})
+  }, [shared, sent])
   const [query, setQuery] = useState<{ q: Query; left: number; top: number } | null>(null)
   const [pick, setPick] = useState(0)
   const options = optionsFor(channel, query?.q ?? null)
@@ -427,6 +441,7 @@ export function ThreadDoc({ channel, where, shared, hold }: { channel: Channel; 
       onKey: (e) => keys.current(e),
       scroller: () => box.current?.closest<HTMLElement>(".feed") ?? null,
       hold: (on) => holdRef.current(on),
+      drafts,
     })
     const v = built.view
     view.current = v

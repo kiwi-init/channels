@@ -15,16 +15,16 @@
 
 .thread-doc .blk {
   display: block;
-  margin: 6px 0 0;
+  margin: 4px 0 0;
   padding: 0 0 0 calc(2rem + 16px);
 }
 
 .thread-doc .blk:not(.is-cont) {
-  margin-top: 18px;
+  margin-top: 14px;
 }
 
 .thread-doc .blk.is-cont {
-  margin-top: 6px;
+  margin-top: 4px;
 }
 
 .thread-doc .blk:not(.is-here) {
@@ -60,16 +60,6 @@
   color: var(--ink-2);
 }
 
-.blk-line .msg-time {
-  color: var(--ink-3);
-  font: inherit;
-}
-
-.blk-line .msg-time::before {
-  content: "·";
-  margin-right: 6px;
-}
-
 .blk-kind {
   color: var(--ink-3);
 }
@@ -83,6 +73,11 @@
   min-width: 0;
   color: var(--ink);
   font: var(--t-body) / 1.5rem var(--sans);
+  transition: opacity var(--fast) var(--ease);
+}
+
+.thread-doc .blk.is-draft .blk-body {
+  opacity: 0.55;
 }
 
 .blk-body p {
@@ -224,11 +219,7 @@
 }
 
 .doc-mention {
-  padding: 0 2px;
-  border-radius: var(--r-tag);
-  background: var(--accent-wash);
   color: var(--accent);
-  font-weight: 500;
 }
 
 .thread-doc .doc-suggest {

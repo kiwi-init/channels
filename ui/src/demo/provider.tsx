@@ -389,6 +389,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
             pending: true,
             ...(root !== undefined && opts?.side ? { side: true as const } : {}),
             ...(images?.length ? { images } : {}),
+            ...(opts?.block ? { block: opts.block.id } : {}),
           })
           if (root === undefined) return next
           return {
