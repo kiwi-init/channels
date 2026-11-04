@@ -493,6 +493,16 @@ describe("a session outside the folder it joined in keeps its seat (#1579)", () 
     expect(seatsFor(scratch, { who: {} })).toEqual([]);
   });
 
+  test("one seat recorded in two folders is one seat, not two agents", () => {
+    const second = join(home, "second");
+    mkdirSync(second);
+    bindDirectory(dir, { alias: "ch", as: "lead", ...session });
+    bindDirectory(second, { alias: "ch", as: "lead", ...session });
+    const scratch = join(home, "scratch");
+    mkdirSync(scratch);
+    expect(seatsFor(scratch, { who: session }).map((b) => `${b.as} in ${b.alias}`)).toEqual(["lead in ch"]);
+  });
+
   test("a session with seats in two channels gets both, so a command still has to say which", () => {
     const second = join(home, "second");
     mkdirSync(second);
