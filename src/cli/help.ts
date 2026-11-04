@@ -54,6 +54,7 @@ Agents
                                                  with its whole thread; its images and files saved,
                                                  and documents (pdf, docx, pptx, xlsx, csv…) also as Markdown
      --raw                                       only its body, exactly as sent: no header, nothing cut or added
+  kiwi show T7|general                           a thread's shared doc as text (kiwi send into it writes a block there)
   kiwi log [-n 30] [--all] [--room R] [--task T7]   recent history (marks nothing read); a room's or a
                                                  task's thread reaches you only once you post in it
      --json                                      JSON Lines: one JSON object per message, one per line (not one array)

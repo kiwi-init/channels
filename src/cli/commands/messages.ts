@@ -13,6 +13,7 @@ import {
   CHOICES_MAX,
   CHOICES_MIN,
   DECISION_KINDS,
+  GENERAL_ROOM,
   HANDOFF_DEFAULT_SECONDS,
   HANDOFF_MAX_SECONDS,
   HANDOFF_MAX_VENDOR,
@@ -31,9 +32,12 @@ import { chooseThread, inGeneral, longForGeneral, parseTaskId, wentTo } from "@k
 import { bareHandleNote } from "../handles.ts";
 import { args, opt, unexpectedOptions } from "../args.ts";
 import { parseWhere } from "../where.ts";
+import { docPlaceOf } from "../../agent/docs.ts";
+import { mentionsOf } from "@kiwi/core/changes.ts";
 import { type Command, die, noteRead, offlineOk, out, type Quit, session } from "../context.ts";
 import { attachments, images, list, render, text } from "../input.ts";
 
+const LOG_DOC_MS = 5_000;
 const PUBLISHING = ["channel", "as", "quiet", "json", "file", "image", "attach"] as const;
 const SEND_OPTIONS = [...PUBLISHING, "to", "kind", "re", "room", "ask", "wait", "escalate", "handoff", "vendor", "expires", "option", "dm", "task", "main"];
 
@@ -73,6 +77,18 @@ export const messageCommands: Record<string, Command> = {
         const imgs = yield* images;
         const files = yield* attachments(s);
         const asking = opt.ask || !!opt.wait;
+        const room = opt.room ?? where.room;
+        const doc =
+          !asking && kind === "msg" && !imgs?.length && !files?.length
+            ? docPlaceOf(state, { ...(chosen.task !== undefined ? { task: chosen.task } : {}), ...(chosen.dm ? { dm: true } : {}), ...(room ? { room } : {}), re })
+            : null;
+        if (doc) {
+          const named = (to ?? []).filter((n) => n !== "*" && !mentionsOf(body).has(n.toLowerCase()));
+          yield* s.sendToDoc(named.length ? `${named.map((n) => `@${n}`).join(" ")} ${body}` : body, doc);
+          out(`sent${wentTo(chosen)}, into its shared doc`);
+          for (const n of [bareHandleNote(state, body)].filter((x) => x !== null)) out(n);
+          return;
+        }
         const head = asking && opt.wait ? yield* s.ch.fx.head() : 0;
         const seq = yield* s.send(body, {
           to,
@@ -80,11 +96,10 @@ export const messageCommands: Record<string, Command> = {
           ...(re.length ? { re } : {}),
           imgs,
           ...(files?.length ? { files } : {}),
-          room: opt.room ?? where.room,
+          room,
           ...(chosen.task !== undefined ? { task: chosen.task } : {}),
           ...(chosen.dm ? { dm: true } : {}),
         });
-        const room = opt.room ?? where.room;
         const general = chosen.task === undefined && !chosen.dm && (!room || room.toLowerCase() === "general") && (re.length === 0 || inGeneral(state, re[0]!));
         const notes = [general ? longForGeneral(state, s.me, body) : null, bareHandleNote(state, body)].filter((n) => n !== null);
         if (!asking || !opt.wait) {
@@ -194,6 +209,19 @@ export const messageCommands: Record<string, Command> = {
 
   show: () =>
     Effect.gen(function* () {
+      const docTask = /^[Tt](\d+)$/.exec(args[1] ?? "");
+      if (docTask || args[1] === "general") {
+        const s = yield* session();
+        const { state } = yield* s.state();
+        const task = docTask ? Number(docTask[1]) : undefined;
+        const name = task === undefined ? "#general" : `T${task}`;
+        if (task !== undefined && !state.tasks.has(task)) return yield* die(`no task ${name}`);
+        const at = docPlaceOf(state, task === undefined ? {} : { task });
+        if (!at) return yield* die(`${name} has no shared doc yet; kiwi log${task === undefined ? "" : ` --task ${name}`} shows its messages`);
+        out(`${name}'s shared doc:`);
+        out((yield* s.docText(at)) || "(empty)");
+        return;
+      }
       const link = messageAt(args[1] ?? "");
       const s = yield* session(link?.code);
       const seq = link?.seq ?? (Number((args[1] ?? "").replace(/^#/, "")) || (yield* die("usage: kiwi show N|LINK [dir] | kiwi show N|LINK --raw")));
@@ -251,6 +279,13 @@ export const messageCommands: Record<string, Command> = {
         if (n === 0) return;
         const shown = (yield* s.earlier(held, n, visible)).filter(visible);
         for (const m of shown.slice(-n)) out(render(m, state));
+        const at = room === undefined || room === GENERAL_ROOM ? docPlaceOf(state, task === undefined ? {} : { task }) : null;
+        if (!at || opt.json) return;
+        const doc = yield* s.docText(at, LOG_DOC_MS).pipe(Effect.orElseSucceed(() => null));
+        const name = task === undefined ? "#general" : `T${task}`;
+        if (doc === null) return out(`${name} has a shared doc, but it couldn't be read now: kiwi show ${task === undefined ? "general" : name} tries again`);
+        out(`${name}'s shared doc:`);
+        out(doc || "(empty)");
       }),
     ),
 
