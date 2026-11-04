@@ -69,6 +69,11 @@
   display: none;
 }
 
+.blk-foot:not(:empty) {
+  margin-top: 6px;
+  user-select: none;
+}
+
 .blk-body {
   min-width: 0;
   color: var(--ink);

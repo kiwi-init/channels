@@ -237,6 +237,8 @@ const pr45 = {
   task: 11,
 } as const
 
+export const DEMO_ASK_BLOCK = "demo-ask-block"
+
 const general = { kind: "room", room: "general" } as const
 
 const tasks: Task[] = [
@@ -601,6 +603,7 @@ const taskThread: Message[] = [
   { seq: 141, from: "atlas", at: m(58), text: "Don't lazy-split shared modules, it grew the first load last time.", where: { kind: "task", task: 10 } },
   { seq: 142, from: "win", at: m(9), text: "Down 38 KB. Icons next.", where: { kind: "task", task: 10 } },
   { seq: 143, from: "win", at: m(4), text: "win linked PR #45 to T10", where: { kind: "task", task: 10 }, task: 10, system: true },
+  { seq: 146, from: "win", at: m(4), text: "Can I clear the CI cache on the Linux runners? It's 9 GB.", where: { kind: "task", task: 10 }, block: DEMO_ASK_BLOCK, ask: "q-2" },
   { seq: 144, from: "pixel", at: m(50), text: "pixel finished T16 “Restore composer spell checking”", where: { kind: "task", task: 16 }, task: 16, system: true },
   { seq: 145, from: "pixel", at: m(12), text: "pixel asked for a review of T14", where: { kind: "task", task: 14 }, task: 14, system: true },
 ]
