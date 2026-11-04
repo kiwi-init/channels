@@ -140,6 +140,49 @@ const checks: { name: string; run: (page: Page) => Promise<string | null> }[] = 
       return c.first && c.last ? null : JSON.stringify(c);
     },
   },
+  {
+    name: "Enter breaks the line and stays in your block; ⌘/Ctrl+Enter sends it and starts the next",
+    run: async (page) => {
+      const blocks = () => page.locator(".thread-doc .blk:not(.is-hidden)").count();
+      await page.locator(".thread-doc .doc-tail").click();
+      await page.keyboard.type("enter check");
+      const typed = await blocks();
+      await page.keyboard.press("Enter");
+      await page.keyboard.type("second line");
+      const afterEnter = await blocks();
+      const lines = await page.evaluate(() => document.getSelection()?.anchorNode?.parentElement?.closest(".blk")?.querySelectorAll("p").length ?? 0);
+      await page.keyboard.press(`${MOD}+Enter`);
+      await page.waitForTimeout(300);
+      const caretLine = await page.evaluate(() => {
+        const sel = document.getSelection()?.anchorNode;
+        const el = sel instanceof Element ? sel : sel?.parentElement;
+        return el?.closest(".blk")?.querySelector(".blk-body")?.textContent ?? null;
+      });
+      return afterEnter === typed && lines >= 2 && caretLine === "" ? null : JSON.stringify({ typed, afterEnter, lines, caretLine });
+    },
+  },
+  {
+    name: "with a suggestion open, ⌘/Ctrl+Enter still sends the line",
+    run: async (page) => {
+      await page.locator(".thread-doc .doc-tail").click();
+      await page.keyboard.type("ping @");
+      const menu = await page
+        .locator(".doc-suggest")
+        .waitFor({ timeout: 3000 })
+        .then(
+          () => true,
+          () => false,
+        );
+      await page.keyboard.press(`${MOD}+Enter`);
+      await page.waitForTimeout(300);
+      const caretLine = await page.evaluate(() => {
+        const sel = document.getSelection()?.anchorNode;
+        const el = sel instanceof Element ? sel : sel?.parentElement;
+        return el?.closest(".blk")?.querySelector(".blk-body")?.textContent ?? null;
+      });
+      return menu && caretLine === "" ? null : JSON.stringify({ menu, caretLine });
+    },
+  },
 ];
 
 const engine = process.argv.includes("--chromium") ? "chromium" : "webkit";

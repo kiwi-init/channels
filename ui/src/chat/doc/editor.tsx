@@ -24,7 +24,7 @@ import { docFeed, oldestAt, setDocFeed } from "~/chat/doc/finished"
 import { postedBlocks } from "~/chat/doc/posted"
 import { markdownRules } from "~/chat/doc/rules"
 import { attrsOf, FRAGMENT, isBack, isSent, schema, type BlockAttrs } from "~/chat/doc/schema"
-import { dismiss, suggestPlugin, type Query } from "~/chat/doc/suggest"
+import { dismiss, menuKey, suggestPlugin, type Query } from "~/chat/doc/suggest"
 import { matchCommands, parseCommand, type Command } from "~/chat/commands"
 import { tooLong } from "~/chat/drafts"
 import { startEditing } from "~/chat/editing"
@@ -665,17 +665,18 @@ export function ThreadDoc({
     keys.current = (e) => {
       const v = view.current
       if (!v || !query || options.length === 0) return false
-      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      const does = menuKey(e)
+      if (does === "move") {
         setPick((p) => (p + (e.key === "ArrowDown" ? 1 : options.length - 1)) % options.length)
         return true
       }
-      if (e.key === "Enter" || e.key === "Tab") {
+      if (does === "choose") {
         const o = options[Math.min(pick, options.length - 1)]
         if (e.key === "Enter" && o?.kind === "/" && o.command.name === query.q.text) return false
         if (o) choose(v, query.q, o)
         return true
       }
-      if (e.key === "Escape") {
+      if (does === "close") {
         dismiss(v)
         return true
       }
