@@ -2,6 +2,8 @@ import * as Y from "yjs"
 
 import { blockOf, markPosted, richOf, threadOf, unmarkSent, type Block } from "@kiwi/core/doc/blocks.ts"
 
+import { onGiveBack } from "~/chat/doc/give-back"
+
 export interface Finished {
   id: string
   text: string
@@ -48,12 +50,17 @@ export function postFinished(doc: Y.Doc, rule: Rule, post: (b: Finished) => void
     }
   }
 
+  const giveBack = (id: string): void => {
+    posted.delete(id)
+    unmarkSent(doc, id)
+  }
   frag.observeDeep(look)
+  const off = onGiveBack(giveBack)
   return {
-    stop: () => frag.unobserveDeep(look),
-    giveBack: (id) => {
-      posted.delete(id)
-      unmarkSent(doc, id)
+    stop: () => {
+      off()
+      frag.unobserveDeep(look)
     },
+    giveBack,
   }
 }
