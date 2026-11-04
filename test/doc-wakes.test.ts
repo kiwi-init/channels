@@ -230,3 +230,30 @@ describe("the daemon's doc cursor survives a restart (T1741)", async () => {
     td.destroy();
   });
 });
+
+describe("the wake's 'before it' (T1741)", () => {
+  test("is the last finished line before the wake, never someone's unsent draft or an empty block", async () => {
+    const me = await generateIdentity("olivia");
+    const key = newChannelKey();
+    const th = newDocId();
+    const td = new ThreadDoc({ roomId: newRoomId(), th, me, keys: { current: async () => ({ key }), opening: async () => [key] }, links: { send: () => {}, aware: () => {} } });
+    const state = { docs: new Map([["main", th]]), tasks: new Map() } as unknown as ChannelState;
+    const T0 = 1_000_000;
+    const f = followDocs(
+      { alias: "context", agent: "olivia", ch: { threadDoc: async () => td, closeDoc: () => {} } },
+      async () => state,
+      () => {},
+      async () => true,
+      () => T0,
+    );
+    f.refresh(0);
+    await Bun.sleep(30);
+    markSent(td.doc, newBlock(td.doc, "text", "rodrigo", "shipped the relay fix", T0 + 1).id);
+    markSent(td.doc, newBlock(td.doc, "text", "rodrigo", "", T0 + 2).id);
+    newBlock(td.doc, "text", "maya", "honestly I think we should drop the vend", T0 + 5);
+    markSent(td.doc, newBlock(td.doc, "text", "ben", "@olivia can you check the build?", T0 + 10).id);
+    expect(pendingDocWakes("context", "olivia").map((w) => w.context)).toEqual(["rodrigo: shipped the relay fix"]);
+    f.stop();
+    td.destroy();
+  });
+});

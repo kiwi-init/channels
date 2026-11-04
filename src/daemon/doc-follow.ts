@@ -1,5 +1,5 @@
 import type { Channel } from "@kiwi/core/client.ts";
-import { watchWakes, type DocWake } from "@kiwi/core/doc/agent.ts";
+import { settledBlocks, watchWakes, type DocWake } from "@kiwi/core/doc/agent.ts";
 import { blocksOf, type Block } from "@kiwi/core/doc/blocks.ts";
 import type { ThreadDoc } from "@kiwi/core/doc/thread-doc.ts";
 import { MAX_DOC_THREADS } from "@kiwi/core/protocol.ts";
@@ -55,7 +55,16 @@ function remember(d: DocSeenDoc, b: Pick<Block, "id" | "at">): void {
 
 function wakeItem(key: string, td: Pick<ThreadDoc, "doc">, w: DocWake): DocWakeItem {
   const blocks = blocksOf(td.doc);
-  const prev = blocks[blocks.findIndex((b) => b.id === w.block.id) - 1];
+  const ready = new Set(settledBlocks(blocks).map((b) => b.id));
+  const prev = blocks
+    .slice(
+      0,
+      Math.max(
+        0,
+        blocks.findIndex((b) => b.id === w.block.id),
+      ),
+    )
+    .findLast((b) => ready.has(b.id) && !!b.text.trim());
   return {
     key,
     th: w.th,

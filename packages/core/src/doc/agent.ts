@@ -39,7 +39,7 @@ interface Watched {
 
 const WAKING_KINDS: readonly BlockKind[] = ["text", "comment", "agent"];
 
-function settledBlocks(blocks: readonly Block[]): Block[] {
+export function settledBlocks(blocks: readonly Block[]): Block[] {
   const later = new Set<string>();
   const out: Block[] = [];
   for (const b of [...blocks].reverse()) {
