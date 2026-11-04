@@ -64,7 +64,7 @@ export const docSnap = Effect.fn("Room.docSnap")(function* (th: unknown, upto: u
   yield* roomFor(ok.ct.length, log.bytes);
   const ts = yield* Clock.currentTimeMillis;
   ok.db.docSnap(ok.th, upto as number, ts, ok.iv, ok.ct, ok.epoch);
-  return upto as number;
+  return { th: ok.th, dseq: upto as number, ts, iv: ok.iv, ct: ok.ct, e: ok.epoch, snap: true as const };
 });
 
 export const docBacklog = Effect.fn("Room.docBacklog")(function* (th: string, since: unknown) {
