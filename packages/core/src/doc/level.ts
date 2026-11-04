@@ -3,16 +3,20 @@ import * as Y from "yjs";
 export const DOC_LEVEL = 1;
 
 const RULES = "rules";
-const WRITER = "writer";
+const LEVEL = /^writer\.([1-9][0-9]{0,8})$/;
 
 export function writerFloor(doc: Y.Doc): number {
-  const v = doc.getMap(RULES).get(WRITER);
-  return typeof v === "number" && Number.isSafeInteger(v) && v > 0 ? v : 0;
+  let floor = 0;
+  for (const key of doc.getMap(RULES).keys()) {
+    const level = Number(LEVEL.exec(key)?.[1] ?? 0);
+    if (level > floor) floor = level;
+  }
+  return floor;
 }
 
 export function raiseWriterFloor(doc: Y.Doc, level: number): boolean {
-  if (writerFloor(doc) >= level) return false;
-  doc.getMap(RULES).set(WRITER, level);
+  if (!Number.isSafeInteger(level) || level < 1 || writerFloor(doc) >= level) return false;
+  doc.getMap(RULES).set(`writer.${level}`, true);
   return true;
 }
 

@@ -390,6 +390,24 @@ describe("an upgraded host takes no writes from a UI older than the doc's writer
     expect(texts(b)).toEqual(["from the new look"]);
   });
 
+  test("the floor never drops when copies raise it at once, in either order", () => {
+    for (const first of [0, 1]) {
+      const a = new Y.Doc();
+      const b = new Y.Doc();
+      a.clientID = 1;
+      b.clientID = 2;
+      raiseWriterFloor(a, 2);
+      raiseWriterFloor(b, 1);
+      const [x, y] = first ? [b, a] : [a, b];
+      Y.applyUpdate(y, Y.encodeStateAsUpdate(x));
+      Y.applyUpdate(x, Y.encodeStateAsUpdate(y));
+      expect(writerFloor(a)).toBe(2);
+      expect(writerFloor(b)).toBe(2);
+      raiseWriterFloor(b, 1);
+      expect(writerFloor(b)).toBe(2);
+    }
+  });
+
   test("an old UI writes as before while no new UI has raised the floor", async () => {
     const { peers, ids } = await setup(1);
     const [a] = peers as [Peer];
