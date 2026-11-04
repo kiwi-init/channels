@@ -7,6 +7,7 @@ import { chromium, webkit, type BrowserContext, type Page } from "playwright-cor
 import { startLocalRelay } from "./local-relay.ts";
 import { harnessDist } from "./ui-harness.ts";
 import { firstRun, letIn, newChannel } from "./perf-ui.ts";
+import { inOrder } from "./doc-oracle.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
 const arg = (name: string): string | undefined => process.argv.find((a) => a.startsWith(`--${name}=`))?.slice(name.length + 3);
@@ -152,7 +153,7 @@ async function windowOf(label: string, from?: BrowserContext): Promise<Win> {
   const context = await browser.newContext({ viewport: { width: 1280, height: 860 }, storageState });
   const lag = await laggy(context, label);
   const page = await context.newPage();
-  page.on("pageerror", (e) => errors.push(`${label}: ${e.message}`));
+  page.on("pageerror", (e) => void (live && errors.push(`${label}: ${e.message}`)));
   await page.goto(BASE);
   if (!from) await firstRun(page, "jow");
   return { label, page, lag, line: null, want: "", sent: [] };
@@ -375,31 +376,31 @@ function nextOp(): Op {
 }
 
 let agentsOn = true;
+let live = true;
+const traffic = new Map<string, { sends: number; edits: number }>();
 async function agent(name: string): Promise<void> {
+  const did = { sends: 0, edits: 0 };
+  traffic.set(name, did);
+  const refused = (what: string) => (e: unknown) => void (agentsOn && errors.push(`${name} ${what}: ${String(e)}`));
   let n = 0;
   while (agentsOn) {
     n++;
-    const sent = await kiwi(["-c", "fuzz", "--as", name, "send", "--to", "#general", `${name} line ${n}: building`]).catch((e: unknown) => (errors.push(String(e)), ""));
-    const seq = /#(\d+)/.exec(sent)?.[1];
-    for (let k = 1; seq && agentsOn && k <= 3; k++) await kiwi(["-c", "fuzz", "--as", name, "edit", seq, `${name} line ${n}: building, step ${k} of 3`]).catch((e: unknown) => errors.push(String(e)));
+    const sent = await kiwi(["-c", "fuzz", "--as", name, "send", "--to", "#general", `${name} line ${n}: building`]).catch(refused("send"));
+    const seq = sent ? /#(\d+)/.exec(sent)?.[1] : undefined;
+    if (sent && !seq && agentsOn) errors.push(`${name} send said no #seq: ${JSON.stringify(sent.trim())}`);
+    if (seq) did.sends++;
+    for (let k = 1; seq && agentsOn && k <= 3; k++) {
+      const edited = await kiwi(["-c", "fuzz", "--as", name, "edit", seq, `${name} line ${n}: building, step ${k} of 3`]).then(
+        () => true,
+        (e: unknown) => (refused("edit")(e), false),
+      );
+      if (edited) did.edits++;
+    }
   }
 }
 
-async function docLines(): Promise<string[]> {
-  const out = await kiwi(["-c", "fuzz", "--as", "bot1", "show", "general"]);
-  return out.split("\n").map((l) => l.trim());
-}
-
-function inOrder(lines: readonly string[], sent: readonly string[]): string | null {
-  let at = 0;
-  for (const s of sent) {
-    const first = s.split("\n")[0]!.trim();
-    const headOf = (k: number): string => lines[k]!.slice(4).trim() || (lines.slice(k + 1).find((x) => x !== "") ?? "");
-    const i = lines.findIndex((l, k) => k >= at && (l === "jow:" || l.startsWith("jow: ")) && headOf(k) === first);
-    if (i < 0) return s;
-    at = i + 1;
-  }
-  return null;
+async function docText(): Promise<string> {
+  return kiwi(["-c", "fuzz", "--as", "bot1", "show", "general"]);
 }
 
 async function dump(w: Win): Promise<string> {
@@ -459,13 +460,19 @@ try {
     agentsOn = false;
     const until = Date.now() + 30_000;
     let docs = await Promise.all(wins.map(shown));
-    let lines = await docLines();
-    while (Date.now() < until && (docs.some((d) => JSON.stringify(d) !== JSON.stringify(docs[0])) || wins.some((w) => inOrder(lines, w.sent)))) {
+    let out = await docText();
+    while (Date.now() < until && (docs.some((d) => JSON.stringify(d) !== JSON.stringify(docs[0])) || wins.some((w) => inOrder(out, w.sent)))) {
       await Bun.sleep(1000);
       docs = await Promise.all(wins.map(shown));
-      lines = await docLines();
+      out = await docText();
     }
-    log(`drained: the CLI shows\n${lines.map((l) => `      ${l}`).join("\n")}`);
+    live = false;
+    log(
+      `drained: the CLI shows\n${out
+        .split("\n")
+        .map((l) => `      ${l}`)
+        .join("\n")}`,
+    );
     for (const w of wins)
       log(
         `drained: ${w.label} sockets\n${w.lag.sockets.map((k) => `      ${k.url} up ${k.up}/${k.upIn} down ${k.down}/${k.downIn} last down ${k.lastDown ? `${Math.round((Date.now() - k.lastDown) / 1000)} s ago` : "never"}${k.closed ? " closed" : " open"}${k.errors ? ` ${k.errors} send errors` : ""}`).join("\n")}`,
@@ -480,8 +487,8 @@ try {
     }
     for (const [i, d] of docs.entries()) log(`drained: ${wins[i]!.label} shows\n${d.map((l) => `      ${JSON.stringify(l)}`).join("\n")}`);
     for (const w of wins) {
-      const lost = inOrder(lines, w.sent);
-      if (lost) fail(`${w.label} sent ${JSON.stringify(lost)}, but the doc doesn't have it as a line of jow's, in order`);
+      const lost = inOrder(out, w.sent);
+      if (lost) fail(`${w.label} sent ${JSON.stringify(lost)}, but the doc doesn't have that whole line as jow's, in order`);
     }
     for (const [i, d] of docs.entries()) if (JSON.stringify(d) !== JSON.stringify(docs[0])) fail(`${wins[i]!.label} shows a different doc than w1 after the relay drained`);
   }
@@ -492,7 +499,10 @@ try {
   relay.kill();
   rmSync(data, { recursive: true, force: true });
 }
-for (const e of errors.slice(0, 5)) log(`note: ${e}`);
+for (const e of errors.slice(0, 10)) log(`error: ${e}`);
+if (!failed && errors.length) fail(`${errors.length} error(s) while the windows and agents ran, first: ${errors[0]}`);
+for (const [name, did] of traffic) if (!failed && did.sends === 0) fail(`${name} never got a line into #general, so the run had no agent traffic`);
+if (!failed && traffic.size < AGENTS) fail(`only ${traffic.size} of ${AGENTS} agents ran`);
 writeFileSync(TRACE, `seed ${SEED}\n${failed ?? "pass"}\n\n${trace.join("\n")}\n`);
 if (failed) {
   console.error(
