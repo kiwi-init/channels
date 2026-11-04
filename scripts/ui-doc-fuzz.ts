@@ -274,7 +274,7 @@ async function docLines(): Promise<string[]> {
 function inOrder(lines: readonly string[], sent: readonly string[]): string | null {
   let at = 0;
   for (const s of sent) {
-    const i = lines.findIndex((l, k) => k >= at && l === `jow: ${s}`);
+    const i = lines.findIndex((l, k) => k >= at && l.startsWith("jow: ") && l.slice(5).trim() === s);
     if (i < 0) return s;
     at = i + 1;
   }
