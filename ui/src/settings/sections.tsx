@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react"
 
-import { IconButton } from "~/kit/bits"
+import { IconButton, Toggle } from "~/kit/bits"
+import { setDebugOptions, useDebugOptions } from "~/kit/debug"
 import { Icon } from "~/kit/icons"
 import type { TextFont } from "@kiwi/app/theme.ts"
 import { personFingerprint } from "@kiwi/core/fingerprint.ts"
@@ -213,6 +214,7 @@ function UpToDate() {
 
 export function AboutSection() {
   const { app } = useApp()
+  const debug = useDebugOptions()
   const account = app.account
   if (!account) return null
   return (
@@ -226,6 +228,11 @@ export function AboutSection() {
             <span className="set-value set-mono">{account.relay ?? "Not connected"}</span>
           </Row>
         )}
+      </Group>
+      <Group>
+        <Row label="Debug options" hint="Adds trace tools to the command palette, to record scrolling or typing for a bug report. On this computer only.">
+          <Toggle label="Debug options" on={debug} onChange={setDebugOptions} />
+        </Row>
       </Group>
       <p className="set-fine">Built on open source software. Each project's license ships inside the app.</p>
     </Page>
