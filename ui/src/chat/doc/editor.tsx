@@ -1,6 +1,6 @@
 import "~/styles/thread-doc.css"
 
-import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore, type CSSProperties, type RefObject } from "react"
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore, type CSSProperties, type RefObject } from "react"
 import { createPortal } from "react-dom"
 import type { Node } from "prosemirror-model"
 import { EditorState, Plugin, type Transaction } from "prosemirror-state"
@@ -22,9 +22,11 @@ import { peopleMatches, taskMatches } from "~/chat/matches"
 import { Avatar, cx, Dot, STATUS_WORDS } from "~/kit/bits"
 import { clock } from "~/kit/time"
 import { announce } from "~/kit/toasts"
-import type { Channel, Person, Task, Where } from "~/model"
+import type { Channel, Person, QuestionAsk, Task, Where } from "~/model"
 import { nickname } from "~/names"
 import { useAct, useApp } from "~/nav"
+
+const QuestionCard = lazy(() => import("~/chat/question-card"))
 
 const IDLE_MS = 4000
 
@@ -70,10 +72,12 @@ class BlockView implements NodeView {
   dom: HTMLElement
   contentDOM: HTMLElement
   private head: HTMLElement
+  private foot: HTMLElement
 
   constructor(
     public node: Node,
     private heads: Heads,
+    private feet: Heads,
     private shown: Map<HTMLElement, BlockView>
   ) {
     this.dom = document.createElement("section")
@@ -83,7 +87,10 @@ class BlockView implements NodeView {
     this.head.contentEditable = "false"
     this.contentDOM = document.createElement("div")
     this.contentDOM.className = "blk-body"
-    this.dom.append(this.head, this.contentDOM)
+    this.foot = document.createElement("div")
+    this.foot.className = "blk-foot"
+    this.foot.contentEditable = "false"
+    this.dom.append(this.head, this.contentDOM, this.foot)
     this.shown.set(this.dom, this)
     this.paint()
   }
@@ -93,6 +100,7 @@ class BlockView implements NodeView {
     this.dom.dataset.kind = a.kind
     this.dom.dataset.block = a.id
     this.heads.set(this.head, a)
+    this.feet.set(this.foot, a)
   }
 
   update(node: Node): boolean {
@@ -103,15 +111,16 @@ class BlockView implements NodeView {
   }
 
   stopEvent(e: Event): boolean {
-    return e.target instanceof globalThis.Node && this.head.contains(e.target)
+    return e.target instanceof globalThis.Node && (this.head.contains(e.target) || this.foot.contains(e.target))
   }
 
   ignoreMutation(m: MutationRecord | { type: "selection"; target: globalThis.Node }): boolean {
-    return (m.type === "attributes" && m.target === this.dom) || this.head.contains(m.target)
+    return (m.type === "attributes" && m.target === this.dom) || this.head.contains(m.target) || this.foot.contains(m.target)
   }
 
   destroy(): void {
     this.heads.drop(this.head)
+    this.feet.drop(this.foot)
     this.shown.delete(this.dom)
   }
 }
@@ -289,7 +298,7 @@ function takeFiles(view: EditorView, me: string, media: DocMedia | null, editabl
   return true
 }
 
-function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, opts: ViewOpts): { view: EditorView; stop: () => void } {
+function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, feet: Heads, opts: ViewOpts): { view: EditorView; stop: () => void } {
   const seen = new Map<number, { key: string; at: number }>()
   const shown = new Map<HTMLElement, BlockView>()
   const watch = ({ added, updated }: { added: number[]; updated: number[] }) => {
@@ -327,7 +336,7 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
     editable: opts.editable,
     attributes: { class: "doc", role: "textbox", "aria-multiline": "true", "aria-label": "Thread" },
     nodeViews: {
-      block: (node) => new BlockView(node, heads, shown),
+      block: (node) => new BlockView(node, heads, feet, shown),
       mention: mentionView(opts.name),
       image: imageView(opts.media, openImage),
       file: fileView(opts.media),
@@ -438,6 +447,16 @@ export function ThreadDoc({ channel, where, shared, hold, media = null }: { chan
   const view = useRef<EditorView | null>(null)
   const [heads] = useState(() => new Heads())
   const list = useSyncExternalStore(heads.subscribe, heads.snapshot)
+  const [feet] = useState(() => new Heads())
+  const footList = useSyncExternalStore(feet.subscribe, feet.snapshot)
+  const asked = useMemo(() => {
+    const out = new Map<string, QuestionAsk>()
+    for (const m of channel.messages) {
+      const ask = m.block && m.ask ? channel.asks.find((a) => a.id === m.ask) : undefined
+      if (m.block && ask?.kind === "question") out.set(m.block, ask)
+    }
+    return out
+  }, [channel.messages, channel.asks])
   const me = channel.you
   const you = channel.people.find((p) => p.you)
   const readOnly = !!you?.readOnly
@@ -490,7 +509,7 @@ export function ThreadDoc({ channel, where, shared, hold, media = null }: { chan
   useLayoutEffect(() => {
     const el = mount.current
     if (!el) return
-    const built = makeView(el, shared, me, heads, {
+    const built = makeView(el, shared, me, heads, feet, {
       editable: () => canWrite.current,
       name: (handle) => nickname(latest.current, handle),
       onQuery: (q, v) => {
@@ -519,7 +538,7 @@ export function ThreadDoc({ channel, where, shared, hold, media = null }: { chan
       v.destroy()
       view.current = null
     }
-  }, [shared, me, heads])
+  }, [shared, me, heads, feet])
 
   useEffect(() => {
     shared.awareness.setLocalStateField("user", { name: nickname(channel, me), color: you?.color ?? "blue" })
@@ -595,6 +614,20 @@ export function ThreadDoc({ channel, where, shared, hold, media = null }: { chan
         />
       )}
       {list.map(([el, key, attrs]) => createPortal(<Head channel={channel} attrs={attrs} />, el, String(key)))}
+      {footList.flatMap(([el, key, attrs]) => {
+        const ask = asked.get(attrs.id)
+        return ask
+          ? [
+              createPortal(
+                <Suspense fallback={null}>
+                  <QuestionCard channel={channel} ask={ask} />
+                </Suspense>,
+                el,
+                `ask-${key}`
+              ),
+            ]
+          : []
+      })}
     </div>
   )
 }

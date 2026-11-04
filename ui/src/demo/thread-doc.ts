@@ -6,11 +6,13 @@ import { prosemirrorToYXmlFragment } from "y-prosemirror"
 
 import { agentBlock } from "@kiwi/core/doc/agent.ts"
 
+import { DEMO_ASK_BLOCK } from "~/demo/data"
 import { demoDoc } from "~/demo/doc-hub"
 import { DEMO_CHART, DEMO_REPORT } from "~/demo/doc-media"
 import { FRAGMENT, fileNode, imageNode, newBlockId, schema, type BlockKind } from "~/chat/doc/schema"
 
 interface Seed {
+  id?: string
   kind: BlockKind
   author: string
   ago: number
@@ -49,6 +51,7 @@ const SEEDS: readonly Seed[] = [
     ],
   },
   { kind: "text", author: "jow", ago: 0, body: [line(mention.create({ name: "win" }), " can you put both numbers on the PR? https://github.com/kiwi-init/channels/pulls")] },
+  { id: DEMO_ASK_BLOCK, kind: "agent", author: "win", ago: 0, body: [line("Can I clear the CI cache on the Linux runners? It's 9 GB.")] },
 ]
 
 const AUTHORS = ["win", "atlas", "maya", "jow", "pixel"] as const
@@ -64,7 +67,7 @@ function filler(n: number): Seed[] {
 }
 
 function block(seed: Seed): Node {
-  return schema.nodes.block.create({ id: newBlockId(), kind: seed.kind, author: seed.author, at: Date.now() - seed.ago * 60_000 }, seed.body)
+  return schema.nodes.block.create({ id: seed.id ?? newBlockId(), kind: seed.kind, author: seed.author, at: Date.now() - seed.ago * 60_000 }, seed.body)
 }
 
 function peer(main: Y.Doc, aware: Awareness, name: string, color: string): { doc: Y.Doc; awareness: Awareness } {

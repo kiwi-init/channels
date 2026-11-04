@@ -1265,7 +1265,7 @@ export function wellFormed(p: unknown): p is WirePayload {
     (m.task === undefined || (Number.isSafeInteger(m.task) && (m.task as number) > 0)) &&
     (m.dm === undefined || m.dm === true) &&
     (m.side === undefined || m.side === true) &&
-    (m.block === undefined || (m.kind === "msg" && wellFormedBlockRef(m.block))) &&
+    (m.block === undefined || ((m.kind === "msg" || m.kind === "ask" || m.kind === "blocking") && wellFormedBlockRef(m.block))) &&
     (m.esc === undefined || m.esc === true) &&
     (m.handoff === undefined || (m.esc === true && wellFormedHandoff(m.handoff))) &&
     (m.choices === undefined || (m.esc === true && m.handoff === undefined && wellFormedChoices(m.choices))) &&
