@@ -94,9 +94,13 @@ describe("two copies of one person's doc never erase each other's typing (T1776)
     expect(texts(desk)).toEqual(["merged #12"])
   })
 
-  test("a window opened or reloaded after another made a line doesn't take that line as its own, though both share local storage", async () => {
-    const storage = (): Storage => {
+  test("a window opened or reloaded after another made a line never takes it as its own, even with that window's storage", async () => {
+    const storage = (from?: Storage): Storage => {
       const kept = new Map<string, string>()
+      for (let i = 0; from && i < from.length; i++) {
+        const k = from.key(i)
+        if (k !== null) kept.set(k, from.getItem(k) ?? "")
+      }
       return {
         get length() {
           return kept.size
@@ -117,23 +121,23 @@ describe("two copies of one person's doc never erase each other's typing (T1776)
       return fresh.madeHere
     }
     try {
-      const desk = new Y.Doc()
-      const phone = new Y.Doc()
-      const sync = net(desk, phone)
-      const a = copy(desk, await load(windowA, "a"))
-      a.dispatch(startBlock(a.state(), "atlas", 0))
-      a.dispatch(a.state().tr.insertText("merged #12"))
-      a.dispatch(startBlock(a.state(), "jow", 1, undefined, a.mine))
-      const b = copy(phone, await load(storage(), "b"))
-      await Promise.resolve()
-      sync()
-      a.dispatch(a.state().tr.insertText("must survive"))
-      b.dispatch(dropEmptyOwn(b.state(), "jow", null, b.mine))
-      sync()
-      expect(texts(desk)).toEqual(["merged #12", "must survive"])
-      expect(texts(phone)).toEqual(["merged #12", "must survive"])
-      const reloaded = await load(windowA, "a-reloaded")
-      expect(blocksOf(desk).every((line) => reloaded.has(line.id) === (line.author === "jow"))).toBe(true)
+      for (const opened of ["empty", "cloned"]) {
+        const desk = new Y.Doc()
+        const phone = new Y.Doc()
+        const sync = net(desk, phone)
+        const a = copy(desk, await load(windowA, `a-${opened}`))
+        a.dispatch(startBlock(a.state(), "atlas", 0))
+        a.dispatch(a.state().tr.insertText("merged #12"))
+        a.dispatch(startBlock(a.state(), "jow", 1, undefined, a.mine))
+        const b = copy(phone, await load(opened === "cloned" ? storage(windowA) : storage(), `b-${opened}`))
+        await Promise.resolve()
+        sync()
+        a.dispatch(a.state().tr.insertText("must survive"))
+        b.dispatch(dropEmptyOwn(b.state(), "jow", null, b.mine))
+        sync()
+        expect([opened, texts(desk)]).toEqual([opened, ["merged #12", "must survive"]])
+        expect([opened, texts(phone)]).toEqual([opened, ["merged #12", "must survive"]])
+      }
     } finally {
       Object.assign(globalThis, { localStorage: before.local, sessionStorage: before.session })
     }
