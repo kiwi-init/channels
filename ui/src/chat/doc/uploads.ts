@@ -1,13 +1,15 @@
 import type { Node } from "prosemirror-model"
 import { TextSelection, type EditorState, type Transaction } from "prosemirror-state"
+import type * as Y from "yjs"
 
+import { attachToBlock, blocksOf, type BlockMedia } from "@kiwi/core/doc/blocks.ts"
 import { blockAt, blocks, startBlock, type Made } from "~/chat/doc/blocks"
-import { attrsOf, isSent, schema } from "~/chat/doc/schema"
+import { attrsOf, fileOf, imageOf, isSent, schema } from "~/chat/doc/schema"
 
 const pending = new Map<string, number>()
 const waiting = new Map<string, (() => void)[]>()
 
-const uploading = (block: string): boolean => (pending.get(block) ?? 0) > 0
+export const uploading = (block: string): boolean => (pending.get(block) ?? 0) > 0
 
 export function startUpload(block: string): () => void {
   pending.set(block, (pending.get(block) ?? 0) + 1)
@@ -50,4 +52,15 @@ export function attachTo(state: EditorState, me: string, id: string, nodes: read
   if (!caretHere) return tr
   const after = at + nodes.reduce((n, x) => n + x.nodeSize, 0) + 1
   return tr.setSelection(TextSelection.create(tr.doc, after)).scrollIntoView()
+}
+
+export function attachToDoc(doc: Y.Doc, me: string, id: string, nodes: readonly Node[]): boolean {
+  const b = blocksOf(doc).find((x) => x.id === id)
+  if (!b || b.author !== me || b.sent) return false
+  const media = nodes.flatMap((n): BlockMedia[] => {
+    if (n.type === schema.nodes.image) return [{ image: imageOf(n) }]
+    const file = fileOf(n)
+    return file ? [{ file }] : []
+  })
+  return attachToBlock(doc, id, media)
 }

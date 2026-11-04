@@ -1,13 +1,14 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, jest, test } from "bun:test"
 import * as Y from "yjs"
 import { EditorState, TextSelection, type Plugin, type PluginView, type Transaction } from "prosemirror-state"
 import type { EditorView } from "prosemirror-view"
 import { ySyncPlugin } from "y-prosemirror"
 
 import { blockAfter, startBlock } from "~/chat/doc/blocks"
+import { holdDoc, LiveDoc } from "~/chat/doc/live"
 import { postFinished, type Finished } from "~/chat/doc/post"
 import { attrsOf, FRAGMENT, imageNode, schema } from "~/chat/doc/schema"
-import { afterUploads, attachTo, startUpload, uploadTarget } from "~/chat/doc/uploads"
+import { afterUploads, attachTo, attachToDoc, startUpload, uploadTarget } from "~/chat/doc/uploads"
 
 interface Editor {
   state: () => EditorState
@@ -121,5 +122,71 @@ describe("a pasted image goes out with the line it was pasted in (#3001)", () =>
     e.dispatch(blockAfter(e.state(), "jow", 2)!)
     await settle()
     expect(sent.map((s) => s.text)).toEqual(["plain line"])
+  })
+
+  test("the thread closes before the upload finishes: the doc stays open, the image lands in its line and the line goes out with it", async () => {
+    const posted: string[] = []
+    const quiet = { update: () => {}, aware: () => {}, close: () => {} }
+    const held = holdDoc(
+      "closed-mid-upload",
+      () =>
+        new LiveDoc(
+          (_, on) => (void Promise.resolve().then(() => on({ _tag: "Open", th: "th-closed" })), quiet),
+          undefined,
+          () => {},
+          { me: "jow", post: (text) => (posted.push(text), Promise.resolve(true)) }
+        )
+    )
+    const live = held.live
+    let destroyed = false
+    live.doc.on("destroy", () => void (destroyed = true))
+    const e = editor(live.doc)
+    await settle()
+    e.dispatch(startBlock(e.state(), "jow", 1))
+    e.dispatch(e.state().tr.insertText("olha a foto"))
+    const target = uploadTarget(e.state(), "jow", 2, () => true)
+    const done = startUpload(target.id)
+    e.dispatch(blockAfter(e.state(), "jow", 3)!)
+    await settle()
+    expect(posted).toEqual([])
+    jest.useFakeTimers()
+    try {
+      held.release()
+      jest.advanceTimersByTime(5 * 60_000)
+      expect(destroyed).toBe(false)
+      expect(attachToDoc(live.doc, "jow", target.id, [image(5)])).toBe(true)
+      done()
+      for (let i = 0; i < 5; i++) {
+        jest.advanceTimersByTime(0)
+        await Promise.resolve()
+      }
+      expect(posted).toHaveLength(1)
+      expect(posted[0]).toContain("olha a foto")
+      expect(posted[0]).toContain("shot-5.png")
+      jest.advanceTimersByTime(60_000)
+      expect(destroyed).toBe(true)
+    } finally {
+      jest.useRealTimers()
+    }
+  })
+
+  test("a finished upload written straight to the doc never lands in someone else's line, nor in a sent one", () => {
+    const doc = new Y.Doc()
+    const thread = doc.getXmlFragment(FRAGMENT)
+    for (const [id, author, sent] of [
+      ["maya-line", "maya", ""],
+      ["sent-line", "jow", "1"],
+    ] as const) {
+      const el = new Y.XmlElement("block")
+      el.setAttribute("id", id)
+      el.setAttribute("kind", "text")
+      el.setAttribute("author", author)
+      el.setAttribute("at", "1")
+      if (sent) el.setAttribute("sent", sent)
+      thread.push([el])
+    }
+    expect(attachToDoc(doc, "jow", "maya-line", [image(6)])).toBe(false)
+    expect(attachToDoc(doc, "jow", "sent-line", [image(7)])).toBe(false)
+    expect(attachToDoc(doc, "jow", "gone-line", [image(8)])).toBe(false)
   })
 })

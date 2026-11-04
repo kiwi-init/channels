@@ -49,6 +49,17 @@ async function lines(page: Page): Promise<Line[]> {
   );
 }
 
+async function switchTo(page: Page, name: string): Promise<void> {
+  await page.evaluate((title) => {
+    const tile = [...document.querySelectorAll<HTMLElement>('nav[aria-label="Channels"] button.tile')].find((b) => (b.getAttribute("aria-label") ?? "").split(",")[0] === title);
+    if (!tile) throw new Error(`no ${title} tile in the rail`);
+    tile.click();
+  }, name);
+  await page.waitForFunction((title) => document.querySelector('nav[aria-label="Channels"] button.tile[aria-current="page"]')?.getAttribute("aria-label")?.split(",")[0] === title, name, {
+    timeout: 15000,
+  });
+}
+
 let failed = 0;
 async function scenario(page: Page, what: string, steps: (text: string) => Promise<void>, text: string): Promise<void> {
   await page.locator(".thread-doc .doc-tail").last().click();
@@ -76,6 +87,7 @@ try {
   const page = await context.newPage();
   await page.goto(BASE);
   await firstRun(page, "jow");
+  await newChannel(page, "away");
   await newChannel(page, "paste");
   await page.locator(".thread-doc .ProseMirror").first().waitFor({ timeout: 30000 });
   await page.route("**/*", async (route) => {
@@ -102,6 +114,24 @@ try {
       await page.keyboard.press(SEND);
     },
     "e essa aqui ?",
+  );
+  await scenario(
+    page,
+    `type, paste an image, send, and open another channel before the upload ends (${UPLOAD_MS} ms)`,
+    async (text) => {
+      await page.keyboard.type(text);
+      await paste(page, "third.png");
+      await page.keyboard.press(SEND);
+      await switchTo(page, "away");
+      if (await page.locator(".thread-doc .ProseMirror").count()) {
+        const shown = await lines(page);
+        if (shown.some((l) => l.text.includes(text))) throw new Error("the paste channel's doc is still on screen after switching away");
+      }
+      await page.waitForTimeout(UPLOAD_MS + 2000);
+      await switchTo(page, "paste");
+      await page.locator(".thread-doc .ProseMirror").first().waitFor({ timeout: 30000 });
+    },
+    "a terceira foi junto ?",
   );
 } finally {
   await browser.close();
