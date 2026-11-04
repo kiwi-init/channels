@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import type { Message } from "@kiwi/core/protocol.ts";
 import type { ChannelState } from "@kiwi/core/state.ts";
 
-import { addMarks, readAt, receipt, recipients, type Marks } from "./receipts.ts";
+import { addMarks, onIt, readAt, receipt, recipients, type Busy, type Marks } from "./receipts.ts";
 
 type Who = { kind?: string; owner?: boolean; active: boolean; joined: number };
 const members = new Map<string, Who>([
@@ -95,5 +95,41 @@ describe("a reply in a thread, with a lead", () => {
   });
   test("a reply to a person has no agent to read it: nothing", () => {
     expect(receipt(msg({ seq: 20, re: [15], to: ["ana"] }), coord, marks, pks, time)).toBeNull();
+  });
+});
+
+describe("an automatic ack under a message: who is on it (T2035)", () => {
+  const NOW = 1_000_000;
+  const withFacts = (facts: [string, { value: string; expires?: number }][]) =>
+    ({ members, tasks: new Map(), lead: null, facts: new Map(facts.map(([k, f]) => [k, { key: k, by: f.value, ts: 0, seq: 1, ...f }])) }) as unknown as Pick<
+      ChannelState,
+      "members" | "tasks" | "lead" | "facts"
+    >;
+  const doing = (who: Record<string, Busy>) => (n: string) => who[n] ?? null;
+  const none = () => false;
+  const m = msg({ to: ["atlas", "win"] });
+
+  test("the agent holding its answering claim is on it, with what it's doing and for how long", () => {
+    const s = withFacts([["answering #10", { value: "atlas", expires: NOW + 60_000 }]]);
+    expect(onIt(m, s, new Map(), pks, doing({ atlas: { text: "thinking", since: NOW - 120_000 } }), none, NOW)).toBe("atlas is on it · thinking 2m");
+    expect(onIt(m, s, new Map(), pks, doing({}), none, NOW)).toBe("atlas is on it");
+  });
+
+  test("without a claim, a recipient that was handed it and is busy now is on it", () => {
+    const marks = addMarks(new Map(), [{ pk: "pk-win", seq: 10, at: 5 }]);
+    expect(onIt(m, withFacts([]), marks, pks, doing({ win: { text: "running Bash" } }), none, NOW)).toBe("win is on it · running Bash");
+  });
+
+  test("nobody is on it: read but idle, busy but not handed it, an expired claim, or a claim by someone it didn't go to", () => {
+    const marks = addMarks(new Map(), [{ pk: "pk-win", seq: 10, at: 5 }]);
+    expect(onIt(m, withFacts([]), marks, pks, doing({}), none, NOW)).toBeNull();
+    expect(onIt(m, withFacts([]), new Map(), pks, doing({ atlas: { text: "thinking" } }), none, NOW)).toBeNull();
+    expect(onIt(m, withFacts([["answering #10", { value: "atlas", expires: NOW - 1 }]]), new Map(), pks, doing({}), none, NOW)).toBeNull();
+    expect(onIt(m, withFacts([["answering #10", { value: "dev" }]]), new Map(), pks, doing({ dev: { text: "thinking" } }), none, NOW)).toBeNull();
+  });
+
+  test("gone once a recipient has replied", () => {
+    const s = withFacts([["answering #10", { value: "atlas" }]]);
+    expect(onIt(m, s, new Map(), pks, doing({ atlas: { text: "thinking" } }), (from) => from.includes("atlas"), NOW)).toBeNull();
   });
 });

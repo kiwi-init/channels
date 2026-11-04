@@ -1,8 +1,9 @@
 import { ignored, type Message as Wire } from "@kiwi/core/protocol.ts"
 import { MAIN, placeKey, type ChannelState } from "@kiwi/core/state.ts"
-import { receipt, type Marks } from "@kiwi/channel/receipts.ts"
+import { onIt, receipt, type Busy, type Marks } from "@kiwi/channel/receipts.ts"
 import { roomOfMessage } from "@kiwi/app/rooms.ts"
-import type { Message } from "~/model"
+import { liveOf } from "~/doing"
+import type { Message, Person } from "~/model"
 
 export function receiptsOf(
   state: ChannelState,
@@ -10,7 +11,9 @@ export function receiptsOf(
   me: string,
   marks: Marks,
   pkOf: (name: string) => string | undefined,
-  time: (at: number) => string
+  time: (at: number) => string,
+  busy: (name: string) => Busy | null = () => null,
+  now = Date.now()
 ): ReadonlyMap<number, string> {
   const last = new Map<string, Wire>()
   for (const m of messages) {
@@ -21,8 +24,12 @@ export function receiptsOf(
     if (root !== undefined && root !== m.seq) last.set(`thread:${root}`, m)
   }
   const out = new Map<number, string>()
+  const replied = (m: Wire) => (from: readonly string[]) => {
+    const root = state.threadOf.get(m.seq) ?? m.seq
+    return messages.some((x) => x.seq > m.seq && x.kind !== "event" && from.includes(x.from) && (x.re?.includes(m.seq) || state.threadOf.get(x.seq) === root))
+  }
   for (const m of new Set(last.values())) {
-    const said = receipt(m, state, marks, pkOf, time)
+    const said = onIt(m, state, marks, pkOf, busy, replied(m), now) ?? receipt(m, state, marks, pkOf, time)
     if (said) out.set(m.seq, said)
   }
   return out
@@ -34,4 +41,13 @@ export function withReceipts(messages: Message[], receipts: ReadonlyMap<number, 
     const said = receipts.get(m.seq)
     return said ? { ...m, receipt: said } : m
   })
+}
+
+export function busyOf(people: readonly Person[]): (name: string) => Busy | null {
+  const by = new Map<string, Busy>()
+  for (const p of people) {
+    const live = liveOf(p)
+    if (live?.busy) by.set(p.name, { text: live.text, ...(live.since ? { since: live.since } : {}) })
+  }
+  return (name) => by.get(name) ?? null
 }
