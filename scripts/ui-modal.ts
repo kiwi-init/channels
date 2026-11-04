@@ -58,7 +58,7 @@ try {
   await page.keyboard.press("ControlOrMeta+BracketLeft");
   await page.waitForTimeout(200);
   expect((await modal.count()) === 0, "Back closes it");
-  expect(page.url().includes("shot=general") && (await page.getByRole("textbox", { name: /^Message/ }).count()) === 1, "and stays where it was");
+  expect(page.url().includes("shot=general") && (await page.getByRole("textbox", { name: "Thread" }).count()) === 1, "and stays where it was");
 
   await page.goto(`http://127.0.0.1:${server.port}/?shot=add-agent`);
   const add = page.getByRole("dialog", { name: "Add an agent" });

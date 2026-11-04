@@ -35,17 +35,18 @@ try {
   const area = page.getByRole("textbox", { name: "Message" });
   const room = (name: string) => page.locator(".side-row", { hasText: name }).first();
 
-  await area.fill("only for general");
-  await page.locator(".compose input[type=file]").setInputFiles({ name: "general.png", mimeType: "image/png", buffer: PNG });
+  await room("atlas").click();
+  await area.fill("only for atlas");
+  await page.locator(".compose input[type=file]").setInputFiles({ name: "atlas.png", mimeType: "image/png", buffer: PNG });
   await page.locator(".compose-file").first().waitFor();
   await room("releases").click();
+  await page.locator(".thread-doc").first().waitFor();
+  expect((await page.getByText("only for atlas").count()) === 0, "a room's doc doesn't pick up the DM's draft text");
+  expect((await page.locator(".compose-file").count()) === 0, "nor the DM's images");
+  await room("atlas").click();
   await page.waitForTimeout(200);
-  expect((await area.inputValue()) === "", "another room's composer starts empty, not with general's text");
-  expect((await page.locator(".compose-file").count()) === 0, "another room's composer has none of general's images");
-  await room("general").click();
-  await page.waitForTimeout(200);
-  expect((await area.inputValue()) === "only for general", "back in general, its draft text is still there");
-  expect((await page.locator(".compose-file").count()) === 1, "back in general, its image is still attached");
+  expect((await area.inputValue()) === "only for atlas", "back in the DM, its draft text is still there");
+  expect((await page.locator(".compose-file").count()) === 1, "back in the DM, its image is still attached");
 
   await area.fill("");
   await page.getByRole("button", { name: "Send" }).click();

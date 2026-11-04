@@ -14,7 +14,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type CDPSession, type Page } from "playwright-core";
 import { startLocalRelay } from "./local-relay.ts";
-import { firstRun, letIn, newChannel } from "./perf-ui.ts";
+import { firstRun, letIn, newChannel, writeBlock } from "./perf-ui.ts";
 import { harnessDist } from "./ui-harness.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
@@ -60,8 +60,7 @@ async function channel(page: Page, title: string): Promise<string> {
     throw e;
   });
   await joining;
-  await page.getByRole("textbox", { name: "Message" }).fill(`Plan the ${title} board`);
-  await page.keyboard.press("Enter");
+  await writeBlock(page, `Plan the ${title} board`);
   return code;
 }
 
