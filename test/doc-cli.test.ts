@@ -3,9 +3,10 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Channel } from "@kiwi/core/client.ts";
-import { blocksOf, newBlock, newDocId } from "@kiwi/core/doc/blocks.ts";
+import * as Y from "yjs";
+import { blocksOf, markBack, markPosted, markSent, newBlock, newDocId } from "@kiwi/core/doc/blocks.ts";
 import { startRelay } from "../src/relay/bun.ts";
-import { docPlaceOf, readDoc, writeBlock } from "../src/agent/docs.ts";
+import { docOnlyText, docPlaceOf, readDoc, writeBlock } from "../src/agent/docs.ts";
 import type { Place } from "@kiwi/core/state.ts";
 import { setupChannel, type OwnerSetup } from "./owner.ts";
 
@@ -44,6 +45,22 @@ describe("where a send goes: the doc of its place, when one is open (T570)", () 
     expect(docPlaceOf(state, { re: [13] })).toBeNull();
     expect(docPlaceOf(state, { re: [12], room: "design" })).toBeNull();
     expect(docPlaceOf(state, { re: [20], room: "design" })).toEqual({ key: "task:7", th });
+  });
+});
+
+describe("kiwi log's doc part: lines written only in the doc (T1353)", () => {
+  test("a finished line shows; a half-typed draft, a line given back and an empty block don't", () => {
+    const doc = new Y.Doc();
+    markPosted(doc, newBlock(doc, "text", "jow", "ship it").id);
+    markSent(doc, newBlock(doc, "text", "rodrigo", "@olivia sent with Enter").id);
+    newBlock(doc, "text", "olivia", "from an older app");
+    newBlock(doc, "text", "olivia", "and a second line");
+    const back = newBlock(doc, "text", "lead", "given back").id;
+    markBack(doc, back);
+    newBlock(doc, "text", "lead", "after it");
+    markSent(doc, newBlock(doc, "text", "rodrigo", "   ").id);
+    newBlock(doc, "text", "jow", "actually don't ship, the rel");
+    expect(docOnlyText(doc)).toBe("rodrigo: @olivia sent with Enter\n\nolivia: from an older app");
   });
 });
 

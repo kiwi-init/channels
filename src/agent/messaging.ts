@@ -119,10 +119,10 @@ export class SessionMessaging extends SessionListen {
     });
   }
 
-  readonly docText = Effect.fn("AgentSession.docText")({ self: this }, function* (this: SessionMessaging, at: DocPlace, ms?: number, drafts = false) {
+  readonly docText = Effect.fn("AgentSession.docText")({ self: this }, function* (this: SessionMessaging, at: DocPlace, ms?: number, docOnly = false) {
     const { state } = yield* this.state();
     return yield* Effect.tryPromise({
-      try: () => readDoc(this.ch, state.head, at, ms, drafts),
+      try: () => readDoc(this.ch, state.head, at, ms, docOnly),
       catch: (e) => new Rejected(`couldn't read the shared doc: ${e instanceof Error ? e.message : "error"}`),
     });
   });
