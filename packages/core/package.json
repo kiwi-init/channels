@@ -7,6 +7,8 @@
     "./*": "./src/*"
   },
   "dependencies": {
-    "effect": "4.0.7"
+    "effect": "4.0.7",
+    "y-protocols": "^1.0.7",
+    "yjs": "^13.6.33"
   }
 }
