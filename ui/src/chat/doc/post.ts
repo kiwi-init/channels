@@ -1,6 +1,6 @@
 import * as Y from "yjs"
 
-import { blockOf, markSent, threadOf, unmarkSent, type Block } from "@kiwi/core/doc/blocks.ts"
+import { blockOf, markPosted, threadOf, unmarkSent, type Block } from "@kiwi/core/doc/blocks.ts"
 
 export interface Finished {
   id: string
@@ -27,7 +27,7 @@ export function postFinished(doc: Y.Doc, rule: Rule, post: (b: Finished) => void
   const send = (b: Block | null): void => {
     if (!b || posted.has(b.id) || !made.has(b.id) || !b.text.trim()) return
     posted.add(b.id)
-    markSent(doc, b.id)
+    markPosted(doc, b.id)
     post({ id: b.id, text: b.text.trim() })
   }
 
