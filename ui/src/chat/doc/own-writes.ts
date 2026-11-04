@@ -1,5 +1,5 @@
 import { Fragment, Node, type Slice } from "prosemirror-model"
-import { EditorState, TextSelection, type Transaction } from "prosemirror-state"
+import { EditorState, TextSelection, type Selection, type Transaction } from "prosemirror-state"
 import { ProsemirrorBinding, ySyncPluginKey, yXmlFragmentToProseMirrorRootNode } from "y-prosemirror"
 import * as Y from "yjs"
 
@@ -394,7 +394,7 @@ function placeOf(before: Node, after: Node, spot: Spot): number | null {
   return start + 1 + Math.min(Math.max(moved, 0), now.content.size)
 }
 
-function keptSelection(before: EditorState, after: EditorState): TextSelection | null {
+function keptSelection(before: EditorState, after: EditorState): Selection | null {
   const sel = before.selection
   if (!(sel instanceof TextSelection)) return null
   const anchor = spotOf(before.doc, sel.anchor)
