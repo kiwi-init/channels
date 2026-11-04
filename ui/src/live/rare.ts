@@ -6,6 +6,7 @@ import { permissionReply } from "@kiwi/core/permission.ts"
 import { GENERAL_ROOM, MAX_GOAL_NAME, MAX_SPEC, MAX_SPEC_NOTE, TASK_BODY_MAX_LENGTH, TASK_TITLE_MAX_LENGTH, type Event, type StepReply } from "@kiwi/core/protocol.ts"
 import { taskId } from "@kiwi/core/state.ts"
 import { bridge } from "@kiwi/secrets/secrets.ts"
+import { changeBlock } from "~/chat/doc/change-block"
 import { stepReplyText } from "~/chat/step"
 import { announce } from "~/kit/toasts"
 import { ownPrefs, setPrefs } from "~/live/prefs"
@@ -133,6 +134,7 @@ export async function change(code: string, seq: number, text: string | null): Pr
   const to = changeTo(original)
   const room = run.state.roomOf.get(seq)
   await run.send(text === null ? `deleted #${seq}` : `edited #${seq}`, { kind: "event", ev, ...(to.length ? { to } : {}), ...(room && room !== GENERAL_ROOM ? { room } : {}) })
+  if (original.block) await changeBlock((thread, th, on) => run.ch.doc(thread, th, on), run.state.docs, original.block, text === null ? null : text.trim())
 }
 
 export async function answerStep(code: string, id: string, reply: StepReply): Promise<void> {
