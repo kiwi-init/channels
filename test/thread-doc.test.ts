@@ -64,6 +64,7 @@ class Peer {
   inbox: Promise<void> = Promise.resolve();
   aware: Uint8Array[] = [];
   lose: ((f: DocIn) => boolean) | null = null;
+  intercept: ((f: DocOut, pass: (f: DocOut) => void) => void) | null = null;
   held: DocIn[] = [];
   deliver(f: DocIn): void {
     if (this.lose?.(f)) return void this.held.push(f);
@@ -79,12 +80,19 @@ async function setup(n: number, opts: { trusts?: (pk: string) => boolean } = {})
   const ids = await Promise.all(Array.from({ length: n }, (_, i) => generateIdentity(`p${i}`)));
   const make = (me: Identity, k = key, keys?: DocKeys) => {
     const peer = new Peer();
+    const pass = relay.link(peer);
     peer.td = new ThreadDoc({
       roomId,
       th,
       me,
       keys: keys ?? { current: async () => ({ key: k, e: 1 }), opening: async (e) => (e === 1 ? [k] : []) },
-      links: { send: relay.link(peer), aware: (_th, u) => peer.aware.push(u) },
+      links: {
+        send: (f) => {
+          if (peer.intercept) peer.intercept(f, pass);
+          else pass(f);
+        },
+        aware: (_th, u) => peer.aware.push(u),
+      },
       flushMs: 1,
       retryMs: 5,
       ...opts,
@@ -610,6 +618,33 @@ describe("a doc frame that never arrives, or arrives late, is fetched again (T29
     expect(subs.length).toBeGreaterThanOrEqual(3);
     expect(subs.length).toBeLessThanOrEqual(7);
     for (const [i, gap] of gaps.entries()) expect(gap).toBeGreaterThanOrEqual(20 * 2 ** i - 2);
+  });
+
+  test("a refused recovery subscription is asked again after the wait, even with no later frame to prompt it", async () => {
+    const { peers, ids } = await setup(2);
+    const [a, b] = peers as [Peer, Peer];
+    a.td.start();
+    b.td.start();
+    await settle(a, b);
+    const blk = newBlock(a.td.doc, "text", ids[0]!.pk, "");
+    await settle(a, b);
+    let lost = false;
+    b.lose = (f) => !lost && live(f) && f.dseq === 2 && (lost = true);
+    let refusals = 2;
+    b.intercept = (f, pass) => {
+      if (f.t === "doc.sub" && refusals-- > 0) return b.deliver({ t: "err", th: f.th, error: "busy", retryAfter: 0 });
+      pass(f);
+    };
+    appendToBlock(a.td.doc, blk.id, "x");
+    await settle(a, b);
+    appendToBlock(a.td.doc, blk.id, "y");
+    await settle(a, b);
+    for (let i = 0; i < 40 && texts(b)[0] !== "xy"; i++) {
+      await Bun.sleep(5);
+      await settle(a, b);
+    }
+    expect(refusals).toBeLessThan(0);
+    expect(texts(b)).toEqual(["xy"]);
   });
 
   test("its own edits, which the relay never sends back, aren't taken for a gap", async () => {

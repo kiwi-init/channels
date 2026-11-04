@@ -299,18 +299,27 @@ export class ThreadDoc {
     this.refetchFails = stuck ? this.refetchFails + 1 : 0;
     this.refetchedAt = this.head;
     if (!stuck) return this.start(this.head);
-    this.refetch = setTimeout(
-      () => {
-        this.refetch = null;
-        if (!this.closed && this.refetching) this.start(this.head);
-      },
-      (this.o.retryMs ?? RETRY_MS) * 2 ** Math.min(this.refetchFails - 1, MAX_BACKOFF_STEPS),
-    );
+    this.refetchLater(0);
+  }
+
+  private refetchLater(retryAfter: number): void {
+    if (this.refetch || this.closed) return;
+    const wait = Math.max(retryAfter * 1000, (this.o.retryMs ?? RETRY_MS) * 2 ** Math.min(Math.max(this.refetchFails - 1, 0), MAX_BACKOFF_STEPS));
+    this.refetch = setTimeout(() => {
+      this.refetch = null;
+      if (!this.closed && this.refetching) this.start(this.head);
+    }, wait);
   }
 
   private subRefused(th: string | undefined, error: string, retryAfter: number | undefined): void {
-    if (th === this.th) this.refetching = false;
-    if (th !== this.th || this.ready || this.resub) return;
+    if (th !== this.th) return;
+    if (this.ready) {
+      if (!this.refetching) return;
+      this.refusedWith = error;
+      this.refetchFails++;
+      return this.refetchLater(retryAfter ?? 0);
+    }
+    if (this.resub) return;
     this.refusedWith = error;
     const wait = Math.max((retryAfter ?? 0) * 1000, (this.o.retryMs ?? RETRY_MS) * 2 ** Math.min(this.subFails++, MAX_BACKOFF_STEPS));
     this.resub = setTimeout(() => {
