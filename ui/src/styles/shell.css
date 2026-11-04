@@ -870,185 +870,35 @@
   white-space: nowrap;
 }
 
-.side-tiles {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(3.5rem, 1fr));
-  gap: 2px;
-  margin-bottom: 4px;
-}
-
-.side-tile {
-  position: relative;
-  display: grid;
-  align-content: start;
-  justify-items: center;
-  gap: 4px;
-  width: 100%;
-  padding: 6px 2px 4px;
-  border: 0;
-  border-radius: var(--r-ctl);
-  background: none;
-  color: var(--ink-2);
-  font: var(--t-meta) var(--ui);
-  transition: background var(--fast);
-}
-
-.side-tile:hover {
-  background: var(--wash);
-  color: var(--ink);
-}
-
-.side-tile.is-on {
-  background: var(--wash-2);
-  color: var(--ink);
-  font-weight: 500;
-}
-
-.side-tile.is-news {
-  color: var(--ink);
-  font-weight: 600;
-}
-
-.side-tile.is-off {
-  color: var(--ink-3);
-}
-
-.side-tile > .av {
-  width: 2.5rem;
-  height: 2.5rem;
-}
-
-.side-tile > .side-label {
-  max-width: 100%;
-  text-align: center;
-}
-
-.side-tile > .count {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-}
-
-.side-tile > .icon {
-  position: absolute;
-  top: 6px;
-  left: 6px;
-  color: var(--ink-3);
-}
-
-.side-tiles > .is-live {
-  display: grid;
-  grid-column: 1 / -1;
-  grid-template-columns: subgrid;
-}
-
-.side-tile.is-live {
-  grid-column: 1 / -1;
-  grid-template-columns: subgrid;
-  justify-items: stretch;
-  gap: 2px;
-  padding: 6px 0 4px;
-}
-
-.side-who {
-  display: grid;
-  justify-items: center;
-  gap: 4px;
+.side-name {
+  flex: 0 1 auto;
   min-width: 0;
-  padding: 0 2px;
-}
-
-.side-who > .av {
-  width: 2.5rem;
-  height: 2.5rem;
-}
-
-.side-who > .side-label {
-  max-width: 100%;
-  text-align: center;
-}
-
-.side-says {
-  position: relative;
-  display: grid;
-  grid-column: 2 / -1;
-  align-self: start;
-  gap: 1px;
-  min-width: 0;
-  margin: 0 6px 0 -8px;
-  padding: 4px 8px;
-  border: 1px solid var(--line-2);
-  border-radius: var(--r-ctl);
-  background: var(--bg-2);
-  color: var(--ink);
-  font-weight: 400;
-  text-align: left;
-  transform-origin: 0 20px;
-  animation: says-in var(--pop) both;
-}
-
-.side-says::before {
-  content: "";
-  position: absolute;
-  top: 16px;
-  left: -4px;
-  width: 6px;
-  height: 6px;
-  border-bottom: 1px solid var(--line-2);
-  border-left: 1px solid var(--line-2);
-  border-radius: 0 0 0 var(--r-tick);
-  background: var(--bg-2);
-  transform: rotate(45deg);
-}
-
-.side-task {
   overflow: hidden;
-  font: var(--t-meta) / 1.4 var(--ui);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.side-id {
-  margin-right: 4px;
+.side-state {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
   color: var(--ink-3);
   font: var(--t-stamp) var(--mono);
-}
-
-.side-now {
-  display: flex;
-  gap: 6px;
-  align-items: baseline;
-  min-width: 0;
-  color: var(--ink-3);
-  font: var(--t-stamp) / 1.4 var(--mono);
-}
-
-.side-what {
-  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.side-member.is-live .side-state {
+  color: var(--ink-2);
   animation: rise var(--fast) var(--ease);
 }
 
-.side-for {
-  flex: none;
-  margin-left: auto;
-}
-
-.side-tile.is-waiting .side-says,
-.side-tile.is-waiting .side-says::before {
-  border-color: var(--decide);
-}
-
-.side-tile.is-waiting .side-what {
+.side-member.is-waiting .side-state {
   color: var(--decide);
 }
 
-@keyframes says-in {
-  from {
-    opacity: 0;
-    transform: scale(0.9);
-  }
+.side-member > .count {
+  margin-left: auto;
 }
 
 .side-member > .av-wrap {
