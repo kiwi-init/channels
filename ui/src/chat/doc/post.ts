@@ -18,6 +18,7 @@ interface Rule {
   posted?: (block: string) => boolean
   owned?: (b: Block) => boolean
   worked?: { add: (block: string) => unknown }
+  hold?: (block: string, then: () => void) => boolean
 }
 
 const isMine = (b: Block | null, me: string): b is Block => !!b && b.author === me && b.kind === "text"
@@ -54,7 +55,8 @@ export function postFinished(doc: Y.Doc, rule: Rule, post: (b: Finished) => void
 
   const send = (el: Y.XmlElement): void => {
     const b = blockOf(el)
-    if (!b) return
+    if (!b || posted.has(b.id)) return
+    if (rule.hold?.(b.id, () => !stopped && frag.toArray().includes(el) && send(el))) return
     posted.add(b.id)
     queueMicrotask(() => {
       if (!stopped) markPosted(doc, b.id)
