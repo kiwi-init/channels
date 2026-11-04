@@ -7,6 +7,8 @@ import { docThread } from "@kiwi/core/doc/threads.ts";
 import { GENERAL_ROOM } from "@kiwi/core/protocol.ts";
 import { MAIN, type ChannelState, type Place } from "@kiwi/core/state.ts";
 import type { DocWakeItem } from "../config/doc-wakes.ts";
+import { mentionsOf } from "@kiwi/core/changes.ts";
+import { EVERYONE } from "./shared.ts";
 
 const DOC_WAIT_MS = 15_000;
 const SENT_POLL_MS = 20;
@@ -21,6 +23,12 @@ export interface Destination {
   dm?: boolean;
   room?: string;
   re?: readonly number[];
+}
+
+export function addressed(text: string, to: readonly string[] | undefined): string {
+  const said = mentionsOf(text);
+  const named = (to ?? []).filter((n) => !EVERYONE.has(n.toLowerCase()) && !n.startsWith("role:") && !said.has(n.toLowerCase()));
+  return named.length ? `${named.map((n) => `@${n}`).join(" ")} ${text}` : text;
 }
 
 function placeOfReply(state: Pick<ChannelState, "placeOf" | "roomOf">, seq: number): Place | null {

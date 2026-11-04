@@ -7,6 +7,7 @@ import { blocksOf } from "@kiwi/core/doc/blocks.ts";
 import type { ThreadDoc } from "@kiwi/core/doc/thread-doc.ts";
 import { saveIdentity, updateConfig } from "../src/config.ts";
 import { startRelay } from "../src/relay/bun.ts";
+import { addressed } from "../src/agent/docs.ts";
 import { joinAgent, kiwiCmd, pairComputer, setupChannel, type OwnerSetup } from "./owner.ts";
 
 setDefaultTimeout(60_000);
@@ -23,10 +24,11 @@ const procs: { kill: () => void }[] = [];
 
 const env = () => ({ ...process.env, KIWI_HOME: agent, KIWI_RELAY: server.url.origin, KIWI_NO_HOOKS: "1", KIWI_CHANNEL: "mcpdoc", KIWI_AS: "dev" });
 
-async function cli(...args: string[]): Promise<number> {
+async function cli(...args: string[]): Promise<{ code: number; out: string }> {
   const p = Bun.spawn(kiwiCmd(args), { cwd: agent, env: env(), stdin: "ignore", stdout: "pipe", stderr: "pipe" });
   procs.push(p);
-  return await p.exited;
+  const [out, err] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text()]);
+  return { code: await p.exited, out: out + err };
 }
 
 function mcp() {
@@ -77,7 +79,9 @@ beforeAll(async () => {
   await new Promise<void>((done) => void owner.ownerCh.stream(0, () => {}, { signal: stop.signal, onReady: () => done() }));
   general = await owner.ownerCh.threadDoc("main");
   await general.whenSynced();
-  const dev = await joinAgent(owner, "dev", await pairComputer(owner.person));
+  const computer = await pairComputer(owner.person);
+  const dev = await joinAgent(owner, "dev", computer);
+  await joinAgent(owner, "rev", computer);
   saveIdentity(dev.id, owner.roomId);
   updateConfig((c) => {
     c.channels.mcpdoc = { ...dev.ch.access, relay: server.url.origin, code: owner.code, as: "dev" };
@@ -95,7 +99,7 @@ afterAll(() => {
 
 describe("MCP send and reply write their line into the shared doc, like the CLI (T1353)", () => {
   test("send into #general and a reply to a #general message both carry a block in #general's doc", async () => {
-    expect(await cli("send", "--to", "#general", "CLI-SEND hello")).toBe(0);
+    expect((await cli("send", "--to", "#general", "CLI-SEND hello")).code).toBe(0);
     const asked = await message((m) => m.body.includes("CLI-SEND"));
     expect(asked.block?.th).toBe(general.th);
 
@@ -117,5 +121,32 @@ describe("MCP send and reply write their line into the shared doc, like the CLI 
         .map((b) => b.id);
     while (inDoc().length < 2 && Date.now() < deadline) await Bun.sleep(50);
     expect(inDoc().sort()).toEqual([sent.block!.id, replied.block!.id].sort());
+  });
+});
+
+describe("kiwi send into a doc: what lands in the line and what it's told (T1353)", () => {
+  test("who it's for leads the line as @handles; everyone, a role and a name already in it don't", () => {
+    expect(addressed("hi", ["all"])).toBe("hi");
+    expect(addressed("hi", ["Everyone", "*"])).toBe("hi");
+    expect(addressed("hi", ["role:reviewer", "rev"])).toBe("@rev hi");
+    expect(addressed("hi @rev", ["rev", "dev"])).toBe("@dev hi @rev");
+    expect(addressed("hi", undefined)).toBe("hi");
+  });
+
+  test("--to all over the CLI writes no @all into the line; a member's name still leads it", async () => {
+    for (const [to, said] of [
+      ["all", "TO-ALL hello"],
+      ["rev", "TO-NAME hello"],
+    ] as const)
+      expect(await cli("send", "--to", to, said)).toMatchObject({ code: 0 });
+    const bodies = await Promise.all(["TO-ALL", "TO-NAME"].map(async (t) => (await message((m) => m.body.includes(t))).body));
+    expect(bodies).toEqual(["TO-ALL hello", "@rev TO-NAME hello"]);
+  });
+
+  test("a long send into #general's doc gets the same 'ran long' note as one that isn't", async () => {
+    const long = Array.from({ length: 12 }, (_, i) => `LONG line ${i}`).join("\n");
+    const viaDoc = await cli("send", "--to", "#general", long);
+    expect(viaDoc.out).toContain("into its shared doc");
+    expect(viaDoc.out).toContain("ran long for #general");
   });
 });
