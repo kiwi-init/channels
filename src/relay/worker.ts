@@ -214,7 +214,7 @@ export class Channel extends DurableObject<Env> {
       this.store(room),
       onClientFrame(typeof data === "string" ? data : new TextDecoder().decode(data), pk, echo !== false, { docs: new Set(docs), watch: watch === true }),
     );
-    for (const f of [fx.reply ?? []].flat()) ws.send(f);
+    for (const f of [fx.reply ?? []].flat()) send(ws, f);
     await this.apply(fx, ws);
   }
 
