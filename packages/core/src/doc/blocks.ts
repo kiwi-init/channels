@@ -255,18 +255,34 @@ export function removeBlock(doc: Y.Doc, id: string): boolean {
 
 const isMedia = (node: unknown): boolean => node instanceof Y.XmlElement && (node.nodeName === "image" || node.nodeName === "file");
 
+function rawText(t: Y.XmlText): string | null {
+  const parts = (t.toDelta() as { insert: unknown }[]).map((d) => d.insert);
+  return parts.every((x) => typeof x === "string") ? parts.join("") : null;
+}
+
 function plainWords(p: Y.XmlElement | Y.XmlText | Y.XmlHook | undefined): Y.XmlText | null {
   if (!(p instanceof Y.XmlElement) || p.nodeName !== "paragraph" || p.length !== 1) return null;
   const t = p.get(0);
-  if (!(t instanceof Y.XmlText)) return null;
-  return (t.toDelta() as { insert: unknown }[]).every((d) => typeof d.insert === "string") ? t : null;
+  return t instanceof Y.XmlText && rawText(t) !== null ? t : null;
 }
+
+function lineText(node: Y.XmlElement | Y.XmlText | Y.XmlHook): string {
+  const words = plainWords(node);
+  return words ? (rawText(words) ?? "") : textOf(node);
+}
+
+const lowHalf = (s: string, at: number): boolean => {
+  const c = s.charCodeAt(at);
+  return c >= 0xdc00 && c <= 0xdfff;
+};
 
 function retype(t: Y.XmlText, from: string, to: string): void {
   let head = 0;
   while (head < from.length && head < to.length && from[head] === to[head]) head++;
+  if (head > 0 && (lowHalf(from, head) || lowHalf(to, head))) head--;
   let tail = 0;
   while (tail < from.length - head && tail < to.length - head && from[from.length - 1 - tail] === to[to.length - 1 - tail]) tail++;
+  while (tail > 0 && (lowHalf(from, from.length - tail) || lowHalf(to, to.length - tail))) tail--;
   if (from.length - head - tail) t.delete(head, from.length - head - tail);
   if (to.length - head - tail) t.insert(head, to.slice(head, to.length - tail));
 }
@@ -277,7 +293,7 @@ export function rewriteBlock(doc: Y.Doc, id: string, text: string): boolean {
   if (!el || !meta || (!meta.sent && !meta.posted)) return false;
   const units = el
     .toArray()
-    .map((node, at) => ({ node, at, lines: textOf(node).split("\n") }))
+    .map((node, at) => ({ node, at, lines: lineText(node).split("\n") }))
     .filter((u) => !isMedia(u.node));
   const lines = text.split("\n");
   const fits = (u: (typeof units)[number], start: number): boolean => u.lines.every((l, i) => lines[start + i] === l);

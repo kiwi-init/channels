@@ -23,6 +23,22 @@ function posted(doc: Y.Doc, text: string): string {
 
 const texts = (doc: Y.Doc): string[] => blocksOf(doc).map((b) => b.text);
 
+function raw(doc: Y.Doc, line = 0): string {
+  const block = threadOf(doc).get(line);
+  if (!(block instanceof Y.XmlElement)) throw new Error("no block");
+  return block
+    .toArray()
+    .map((p) =>
+      p instanceof Y.XmlElement
+        ? p
+            .toArray()
+            .map((t) => t.toString())
+            .join("")
+        : "",
+    )
+    .join("\n");
+}
+
 function words(doc: Y.Doc, line = 0, paragraph = 0): Y.XmlText {
   const block = threadOf(doc).get(line);
   if (!(block instanceof Y.XmlElement)) throw new Error("no block");
@@ -72,15 +88,28 @@ describe("an edit from another client changes only what it changed in the line (
 
   test("whatever the line held, it ends up exactly as the new text", () => {
     let seed = 7;
-    const next = (n: number): number => (seed = (seed * 1103515245 + 12345) % 2147483648) % n;
-    const pick = (): string => ["", "a", "ab", "abc", "b", "xyz", "a b", "@ana"][next(8)]!;
+    const next = (n: number): number => Math.floor((seed = (seed * 1103515245 + 12345) % 2147483648) / 65536) % n;
+    const pick = (): string => ["", "a", "ab", "abc", "b", "xyz", "a b", "@ana", "😀", "a😁b", "<tag>", "1 < 2 > 0"][next(12)]!;
     const doc = new Y.Doc();
     const id = posted(doc, "start");
+    const drawn = new Set<string>();
     for (let round = 0; round < 500; round++) {
       const text = Array.from({ length: 1 + next(5) }, pick).join("\n");
+      for (const line of text.split("\n")) drawn.add(line);
       expect(rewriteBlock(doc, id, text)).toBe(true);
-      expect(texts(doc)).toEqual([text]);
+      expect(raw(doc)).toBe(text);
     }
+    expect(drawn.size).toBe(12);
+  });
+
+  test("an emoji or literal angle brackets in the line come out whole", () => {
+    const doc = new Y.Doc();
+    const id = posted(doc, "hello 😀");
+    expect(rewriteBlock(doc, id, "hello 😁")).toBe(true);
+    expect(texts(doc)).toEqual(["hello 😁"]);
+    const tagged = posted(doc, "use <tag> now");
+    expect(rewriteBlock(doc, tagged, "use <tag> later")).toBe(true);
+    expect(raw(doc, 1)).toBe("use <tag> later");
   });
 
   test("a line that is still someone's unsent draft is never rewritten", () => {
