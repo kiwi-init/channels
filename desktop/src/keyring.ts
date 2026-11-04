@@ -9,6 +9,7 @@ import { Channel, ChannelGone, RelayError, Relay, Unreachable, eachLive, fetchRe
 import type { DocStore } from "@kiwi/core/doc/hub.ts";
 import { heldPipe, type PipeIn } from "@kiwi/core/doc/held-pipe.ts";
 import { pipeDoc } from "@kiwi/core/doc/pipe.ts";
+import { DOC_LEVEL } from "@kiwi/core/doc/level.ts";
 import { encodeJoinCode, keepSeen, newRoomId, ownerFingerprint, type ChannelAccess } from "@kiwi/core/crypto.ts";
 import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
 import { handleFor, type JoinClaims, type Member, type MemberInfo } from "@kiwi/core/membership.ts";
@@ -410,7 +411,7 @@ export class Keyring implements ChannelOps {
     }
   }
 
-  doc(code: string, thread: string, th: string | null, on: (e: DocEvent) => void, level = 0): PipeIn {
+  doc(code: string, thread: string, th: string | null, on: (e: DocEvent) => void, level = DOC_LEVEL): PipeIn {
     const { pipe, attach } = heldPipe();
     let ch: Channel;
     try {

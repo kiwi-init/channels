@@ -12,6 +12,7 @@ import { fromWire, toWire } from "../desktop/src/wire.ts";
 import { remoteOps } from "@kiwi/channel/channel-remote.ts";
 import { ChannelGone } from "@kiwi/core/client.ts";
 import { b64url, decodeJoinCode, encodeJoinCode, fromB64url, newRoomId } from "@kiwi/core/crypto.ts";
+import { DOC_LEVEL, raiseWriterFloor } from "@kiwi/core/doc/level.ts";
 import { fileDocStore } from "@kiwi/core/node/doc-store.ts";
 import type { PipeIn } from "@kiwi/core/doc/held-pipe.ts";
 import * as Y from "yjs";
@@ -345,6 +346,67 @@ describe("the editor's doc crosses the window like the feed (T597, T693)", () =>
     const events: DocEvent[] = [];
     k.doc("nowhere", "main", null, (e) => events.push(e)).update("AA");
     expect(events[0]?._tag).toBe("Failed");
+  });
+});
+
+describe("a doc pipe opens at the doc's write level (T3209)", () => {
+  const join = async (): Promise<{ ka: Keyring; kb: Keyring; code: string; seenB: FollowEvent[]; stop: () => void }> => {
+    const ka = new Keyring(memHost(await generateIdentity("Ada")).host);
+    const kb = new Keyring(memHost(await generateIdentity("Bo")).host);
+    const code = (await ka.create("Level test", null, { name: "Ada" })).code!;
+    const asked = await kb.requestJoin(code, "bo");
+    await ka.call(code, "requests");
+    await kb.joinStatus(code);
+    const req = (await ka.call(code, "requests")).find((r) => r.pk === asked.pk)!;
+    await ka.call(code, "approve", req);
+    expect((await kb.joinStatus(code)).status).toBe("in");
+    const seenB: FollowEvent[] = [];
+    const stopA = ka.follow(code, 0, () => {});
+    const stopB = kb.follow(code, 0, (e) => seenB.push(e));
+    return { ka, kb, code, seenB, stop: () => (stopA(), stopB()) };
+  };
+
+  const raised = async (ops: ChannelOps, code: string): Promise<{ mine: Mirror; th: string }> => {
+    const mine = mirror(ops, code, "main", null);
+    raiseWriterFloor(mine.doc, DOC_LEVEL);
+    mine.doc.getText("t").insert(0, "first");
+    const opened = await until(() => mine.events.find((e): e is Extract<DocEvent, { _tag: "Open" }> => e._tag === "Open"));
+    await until(() => (mine.events.some((e) => e._tag === "Ready") ? true : undefined));
+    return { mine, th: opened.th };
+  };
+
+  test("an in-process caller, as in the browser build, keeps syncing after the doc's floor rises to its level", async () => {
+    const { ka, kb, code, seenB, stop } = await join();
+    const { mine, th } = await raised(ka, code);
+    await until(() => seenB.find((e) => e._tag === "Message" && JSON.stringify(e.message).includes(th)));
+    const theirs = mirror(kb, code, "main", th);
+    await until(() => (theirs.doc.getText("t").toString() === "first" ? true : undefined));
+    theirs.doc.getText("t").insert(0, "Bo: ");
+    await until(() => (mine.doc.getText("t").toString() === "Bo: first" ? true : undefined));
+    mine.doc.getText("t").insert(mine.doc.getText("t").length, ", then Ada");
+    await until(() => (theirs.doc.getText("t").toString() === "Bo: first, then Ada" ? true : undefined));
+    expect([...mine.events, ...theirs.events].filter((e) => e._tag === "Failed")).toEqual([]);
+    mine.pipe.close();
+    theirs.pipe.close();
+    stop();
+  });
+
+  test("a window that names no level is still refused once the floor rises", async () => {
+    const { ka, code, stop } = await join();
+    const { mine, th } = await raised(window(ka).ops, code);
+    const pushes: KeysPush[] = [];
+    const session = serveKeys(ka, (p) => pushes.push(structuredClone(p)));
+    const opened = (await session.handle({ op: "doc", code, thread: "main", th, id: 1 })) as KeysReply;
+    if (!opened.ok) throw new Error("the doc didn't open");
+    const sub = fromWire(opened.value);
+    await until(() => (pushes.some((p) => p.sub === sub && JSON.stringify(p.event).includes("Ready")) ? true : undefined));
+    const old = new Y.Doc();
+    old.getText("t").insert(0, "from an old UI");
+    await session.handle({ op: "docIn", sub, update: b64url(Y.encodeStateAsUpdate(old)), id: 2 });
+    await until(() => (pushes.some((p) => p.sub === sub && JSON.stringify(p.event).includes("old-writer")) ? true : undefined));
+    expect(mine.doc.getText("t").toString()).toBe("first");
+    mine.pipe.close();
+    stop();
   });
 });
 
