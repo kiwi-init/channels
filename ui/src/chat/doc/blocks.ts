@@ -138,12 +138,6 @@ export function atBlockEnd(state: EditorState): boolean {
   return true
 }
 
-export function endsBlock(state: EditorState): boolean {
-  const { $from } = state.selection
-  if (!atBlockEnd(state) || $from.depth !== 2 || $from.parent.type !== schema.nodes.paragraph) return false
-  return $from.parent.content.size > 0 || $from.node(1).childCount > 1
-}
-
 export function noteMade(before: Node, after: Node, me: string, made: { add: (block: string) => unknown }): void {
   const had = new Set<string>()
   before.forEach((n) => {

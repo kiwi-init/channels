@@ -266,7 +266,7 @@ async function send(page: Page, text: string): Promise<{ nextBlockMs: number }> 
       doc.addEventListener("keydown", down, true);
     });
   }, text);
-  await page.keyboard.press("Enter");
+  await page.keyboard.press("ControlOrMeta+Enter");
   return page.evaluate(() => (window as unknown as { __sent: Promise<{ nextBlockMs: number }> }).__sent);
 }
 
