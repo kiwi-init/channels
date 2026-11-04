@@ -436,6 +436,32 @@ describe("docs of members-only rooms and DMs are sealed with the room's key (T60
     expect(dc.awareness.getStates().has(da.doc.clientID)).toBe(false);
   });
 
+  test("a member who closes the room's doc takes its cursor with it, and its last cursor never goes out under the channel key (T1734)", async () => {
+    const w = await world();
+    const k1 = newChannelKey();
+    const [ana, bo, cy] = await Promise.all([generateIdentity("ana"), generateIdentity("bo"), generateIdentity("cy")]);
+    const a = w.hubFor(ana, null, () => roomKeys([k1]));
+    const b = w.hubFor(bo, null, () => roomKeys([k1]));
+    const c = w.hubFor(cy);
+    const [sa, sb, sc] = [w.plug(a).s, w.plug(b).s, w.plug(c).s];
+    const da = await a.open("room:secret");
+    const db = await b.open("room:secret", da.th);
+    await c.open("room:secret", da.th);
+    da.awareness.setLocalStateField("user", { name: "ana" });
+    await w.settle(sa, sb, sc);
+    expect(db.awareness.getStates().has(da.doc.clientID)).toBe(true);
+    da.awareness.setLocalStateField("selection", { block: "b1", text: "the secret line" });
+    a.close("room:secret");
+    await w.settle(sa, sb, sc);
+    expect(db.awareness.getStates().has(da.doc.clientID)).toBe(false);
+    const sent = await Promise.all(w.relay.ephs.map(async (raw) => JSON.stringify(await open(w.key, w.roomId, ...((f) => [f.iv, f.ct] as const)(JSON.parse(raw) as { iv: string; ct: string })))));
+    expect(sent.some((p) => p.includes(da.th))).toBe(true);
+    for (const p of sent) for (const [th, u] of (JSON.parse(p) as { docs: [string, string][] }).docs) if (th === da.th) expect(u.startsWith("~")).toBe(true);
+    a.closeAll();
+    b.closeAll();
+    c.closeAll();
+  });
+
   test("after the room's key changes, a member's client re-seals the doc as a snapshot that only the new key opens", async () => {
     const w = await world();
     const [k1, k2] = [newChannelKey(), newChannelKey()];
