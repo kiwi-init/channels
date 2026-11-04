@@ -10,6 +10,7 @@ import { yCursorPlugin, ySyncPlugin, ySyncPluginKey, yUndoPlugin } from "y-prose
 import { attach, blockAt, blocks, continues, dropEmptyOwn, isEmpty, startBlock } from "~/chat/doc/blocks"
 import { docKeys } from "~/chat/doc/keys"
 import { holdDoc, LiveDoc, type Shared } from "~/chat/doc/live"
+import { linksPlugin } from "~/chat/doc/links"
 import { fileDrag, takeDropped } from "@kiwi/app/dropped.ts"
 import { emptyPaste, takePasted } from "@kiwi/app/pasted.ts"
 import { fileView, filesIn, imageView, uploadAll, type DocMedia } from "~/chat/doc/media"
@@ -306,6 +307,7 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
         () => Date.now(),
         () => blur.now()
       ),
+      linksPlugin(),
       herePlugin(),
       runsPlugin(shown, me, opts.drafts),
       tidyPlugin(me),
