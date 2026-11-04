@@ -8,7 +8,7 @@ const dist = at > 0 ? (process.argv[at + 1] ?? "ui/dist") : "ui/dist";
 if (!existsSync(join(dist, "index.html"))) throw new Error(`no index.html in ${dist}: run bun run ui:build first`);
 const engine = process.argv.includes("--chromium") ? "chromium" : "webkit";
 
-const SHOTS = ["thread-doc", "thread-doc-1000", "thread-doc-events", "thread", "thread-focus", "threads-open", "long-feed", "channel", "dm"] as const;
+const SHOTS = ["thread-doc", "thread-doc-1000", "thread-doc-events", "thread", "thread-focus", "threads-open", "long-feed", "channel", "ci-live", "dm"] as const;
 const SIZES = [
   [1440, 900],
   [900, 1400],

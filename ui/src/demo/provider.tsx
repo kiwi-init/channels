@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 
 import { demoFile, demoImage, putDemoFile, putDemoImage } from "~/demo/doc-media"
 import { inviteLine } from "@kiwi/app/join-line.ts"
@@ -247,6 +247,7 @@ export type Scenario =
   | "left-out"
   | "events"
   | "task-events"
+  | "ci-live"
   | "handoff"
   | "opening"
   | "held"
@@ -291,7 +292,7 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
             ? { ...DEMO_CHANNEL, asks: DEMO_CHANNEL.asks.map((a) => (a.kind === "question" ? { ...a, label: a.label.replace(/ for you$/, ""), askedOf: ["maya"] } : a)) }
             : scenario === "left-out"
               ? withLeftOut(DEMO_CHANNEL)
-              : scenario === "events"
+              : scenario === "events" || scenario === "ci-live"
                 ? withEvents(DEMO_CHANNEL)
                 : scenario === "task-events"
                   ? withTaskEvents(DEMO_CHANNEL)
@@ -389,6 +390,40 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
   const [state, setState] = useState(() => initial(scenario, look))
   const [ownPersonalities, setOwnPersonalities] = useState<Personality[]>([])
   const [computer, setComputer] = useState(COMPUTER)
+
+  useEffect(() => {
+    if (scenario !== "ci-live") return
+    const repo = "kiwi-init/channels"
+    const names = ["test / unit", "repo / static", "build / shots", "ci-ok"]
+    let n = 0
+    const timer = window.setInterval(() => {
+      const at = Date.now()
+      const name = names[n++ % names.length] ?? "ci-ok"
+      setState((s) => {
+        const c = s.channels.get("kiwi")
+        if (!c) return s
+        const channels = new Map(s.channels)
+        const seq = s.seq + 1
+        channels.set("kiwi", {
+          ...c,
+          messages: [
+            ...c.messages,
+            {
+              seq,
+              from: "github",
+              at,
+              text: `GitHub: ${name} success on T10-icons`,
+              where: { kind: "room", room: "general" },
+              system: true,
+              github: [{ event: "check_run", at, repo, name, conclusion: "success" }],
+            },
+          ],
+        })
+        return { ...s, channels, seq }
+      })
+    }, 700)
+    return () => window.clearInterval(timer)
+  }, [scenario])
 
   const actions = useMemo((): Actions => {
     const edit = (code: string, f: (c: Channel, seq: number) => Channel) =>

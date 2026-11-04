@@ -64,6 +64,7 @@ export const SHOTS: Record<string, Shot> = {
   compact: { scenario: "compact", channel: "kiwi" },
   compacted: { scenario: "compacted", channel: "kiwi" },
   events: { scenario: "events", channel: "kiwi" },
+  "ci-live": { scenario: "ci-live", channel: "kiwi" },
   stash: kiwi(),
   "stash-open": kiwi(),
   "needs-step": { scenario: "step", channel: "kiwi", nav: { tab: "needs" } },
