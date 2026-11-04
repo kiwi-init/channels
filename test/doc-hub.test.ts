@@ -520,6 +520,64 @@ describe("docs of members-only rooms and DMs are sealed with the room's key (T60
     c.closeAll();
   });
 
+  test("a member that can't open someone's edit compacts below it, so the relay keeps that edit for everyone (T1776)", async () => {
+    const w = await world();
+    const [k1, k2, k3] = [newChannelKey(), newChannelKey(), newChannelKey()];
+    const [dee, ana, bo, cy] = await Promise.all([generateIdentity("dee"), generateIdentity("ana"), generateIdentity("bo"), generateIdentity("cy")]);
+    const d = w.hubFor(dee, null, () => roomKeys([k1]));
+    const sd = w.plug(d).s;
+    const dd = await d.open("room:secret");
+    await w.settle(sd);
+    newBlock(dd.doc, "text", "dee", "sealed with the old key");
+    await w.settle(sd);
+    const a = w.hubFor(ana, null, () => roomKeys([k3]));
+    const sa = w.plug(a).s;
+    const da = await a.open("room:secret", dd.th);
+    await w.settle(sd, sa);
+    newBlock(da.doc, "text", "ana", "sealed with a key bo hasn't got");
+    await w.settle(sd, sa);
+    expect(w.relay.snaps).toEqual([]);
+    const b = w.hubFor(bo, null, () => roomKeys([k2, k1]));
+    const sb = w.plug(b).s;
+    const db = await b.open("room:secret", da.th);
+    for (let i = 0; i < 50 && !w.relay.snaps.length; i++) await w.settle(sa, sb);
+    expect(texts(db.doc)).toEqual(["sealed with the old key"]);
+    expect(w.relay.snaps).toEqual([da.th]);
+    const c = w.hubFor(cy, null, () => roomKeys([k3, k2, k1]));
+    const sc = w.plug(c).s;
+    const dc = await c.open("room:secret", da.th);
+    await w.settle(sc);
+    expect(texts(dc.doc).toSorted()).toEqual(["sealed with a key bo hasn't got", "sealed with the old key"]);
+  });
+
+  test("a saved doc reopens from below an edit it couldn't open, so a reload never compacts over it (T1776)", async () => {
+    const w = await world();
+    const [k1, k2, k3] = [newChannelKey(), newChannelKey(), newChannelKey()];
+    const [ana, bo] = await Promise.all([generateIdentity("ana"), generateIdentity("bo")]);
+    const a = w.hubFor(ana, null, () => roomKeys([k3]));
+    const sa = w.plug(a).s;
+    const da = await a.open("room:secret");
+    await w.settle(sa);
+    newBlock(da.doc, "text", "ana", "bo can't open this yet");
+    await w.settle(sa);
+    const store = memoryStore();
+    const bos = [k1];
+    const b = w.hubFor(bo, store, () => roomKeys(bos));
+    const sb = w.plug(b).s;
+    await b.open("room:secret", da.th);
+    await w.settle(sa, sb);
+    b.close("room:secret");
+    await w.settle(sa, sb);
+    expect(store.kept.get(da.th)?.head).toBe(0);
+    bos.unshift(k2);
+    bos.push(k3);
+    const again = w.hubFor(bo, store, () => roomKeys(bos));
+    const sb2 = w.plug(again).s;
+    const db = await again.open("room:secret", da.th);
+    for (let i = 0; i < 50 && !w.relay.snaps.length; i++) await w.settle(sa, sb2);
+    expect(texts(db.doc)).toEqual(["bo can't open this yet"]);
+  });
+
   test("after the room's key changes, a member's client re-seals the doc as a snapshot that only the new key opens", async () => {
     const w = await world();
     const [k1, k2] = [newChannelKey(), newChannelKey()];
