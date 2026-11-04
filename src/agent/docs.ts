@@ -71,15 +71,17 @@ async function inThreadDoc<T>(ch: Channel, from: number, at: DocPlace, work: (td
   }
 }
 
-export const writeBlock = (ch: Channel, from: number, at: DocPlace, author: string, body: string, agent: boolean): Promise<string> =>
+export const writeBlock = (ch: Channel, from: number, at: DocPlace, author: string, body: string, agent: boolean, posted = false): Promise<string> =>
   inThreadDoc(ch, from, at, (td) => {
     const block = agentBlock(td.doc, author, agent ? "agent" : "text");
     block.write(body);
-    block.end();
+    if (posted) block.post();
+    else block.end();
     return block.id;
   });
 
-export const readDoc = (ch: Channel, from: number, at: DocPlace, ms = DOC_WAIT_MS): Promise<string> => inThreadDoc(ch, from, at, (td) => threadText(td.doc, (a) => a), ms);
+export const readDoc = (ch: Channel, from: number, at: DocPlace, ms = DOC_WAIT_MS, drafts = false): Promise<string> =>
+  inThreadDoc(ch, from, at, (td) => threadText(td.doc, (a) => a, drafts ? (b) => !b.posted : undefined), ms);
 
 const LINE_TEXT = 800;
 const LINE_CONTEXT = 400;

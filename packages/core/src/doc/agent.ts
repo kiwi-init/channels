@@ -1,7 +1,7 @@
 import type * as Y from "yjs";
 import type { Awareness } from "y-protocols/awareness";
 import { mentionsOf } from "../changes.ts";
-import { appendToBlock, blocksOf, markSent, newBlock, threadText, type Block, type BlockKind } from "./blocks.ts";
+import { appendToBlock, blocksOf, markPosted, markSent, newBlock, threadText, type Block, type BlockKind } from "./blocks.ts";
 
 export const PRESENCE_FIELD = "kiwi";
 
@@ -73,7 +73,7 @@ export function watchWakes(watched: Watched, rule: WakeRule, onWake: (wake: DocW
     const blocks = blocksOf(doc);
     blocks.forEach((block, i) => {
       if (woke.has(block.id) || (rule.after !== undefined && block.at <= rule.after)) return;
-      if (!wakesMe(block, rule)) return;
+      if (block.posted || !wakesMe(block, rule)) return;
       if (block.sent || blocks.slice(i + 1).some((b) => b.author === block.author)) fire(block);
     });
   };
@@ -87,9 +87,10 @@ export interface AgentBlock {
   id: string;
   write: (chunk: string) => boolean;
   end: () => boolean;
+  post: () => boolean;
 }
 
 export function agentBlock(doc: Y.Doc, me: string, kind: BlockKind = "agent", at = Date.now()): AgentBlock {
   const { id } = newBlock(doc, kind, me, "", at);
-  return { id, write: (chunk) => appendToBlock(doc, id, chunk), end: () => markSent(doc, id) };
+  return { id, write: (chunk) => appendToBlock(doc, id, chunk), end: () => markSent(doc, id), post: () => markPosted(doc, id) };
 }
