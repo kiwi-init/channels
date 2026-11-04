@@ -322,4 +322,66 @@ describe("an editor writes only the lines it changed, so a peer out of step neve
       expect(texts(peer)).toEqual(texts(desk))
     }
   })
+
+  test("in a line of repeated letters, a redraw after big pastes keeps a valid caret in your line", async () => {
+    const a = "a".repeat(80)
+    const r = (c: string, n: number) => c.repeat(n)
+    for (const [what, pastes, want] of [
+      [
+        "two pastes around the caret, within reach of the diff",
+        [
+          [79, "Y", 600],
+          [0, "X", 600],
+        ],
+        `${r("X", 600)}${r("a", 30)}?¿${r("a", 49)}${r("Y", 600)}a!`,
+      ],
+      [
+        "two pastes of 1500 around the caret",
+        [
+          [50, "Y", 1500],
+          [0, "X", 1500],
+        ],
+        `${r("X", 1500)}${r("a", 30)}?¿${r("a", 20)}${r("Y", 1500)}${r("a", 30)}!`,
+      ],
+      [
+        "three pastes and no unique context: the end of your line",
+        [
+          [50, "Y", 1500],
+          [20, "Z", 1500],
+          [0, "X", 1500],
+        ],
+        `${r("X", 1500)}${r("a", 20)}${r("Z", 1500)}${r("a", 30)}${r("Y", 1500)}${r("a", 30)}!?¿`,
+      ],
+    ] as const) {
+      const desk = new Y.Doc()
+      const peer = new Y.Doc()
+      const sync = net(desk, peer)
+      const jow = editor(desk, true)
+      const dad = editor(peer, true)
+      await Promise.resolve()
+      dad.dispatch(startBlock(dad.state(), "dad", 1))
+      dad.dispatch(dad.state().tr.insertText(a))
+      sync()
+      await settle()
+      for (const [at, c, n] of pastes) jow.dispatch(jow.state().tr.insertText(r(c, n), lineStart(jow, "dad") + at))
+      const start = lineStart(dad, "dad")
+      dad.dispatch(dad.state().tr.setSelection(TextSelection.create(dad.state().doc, start + 30)))
+      let once = true
+      peer.on("update", (_u: Uint8Array, o: unknown) => {
+        if (!once || o === NET) return
+        once = false
+        sync()
+      })
+      dad.dispatch(dad.state().tr.insert(start + a.length, schema.text("!")))
+      await settle()
+      expect([what, dad.state().selection.$head.parent.inlineContent]).toEqual([what, true])
+      dad.dispatch(dad.state().tr.insertText("?"))
+      await settle()
+      dad.dispatch(dad.state().tr.insertText("¿"))
+      sync()
+      await settle()
+      expect([what, texts(desk)]).toEqual([what, [`dad: ${want}`]])
+      expect(texts(peer)).toEqual(texts(desk))
+    }
+  })
 })

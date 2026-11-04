@@ -261,7 +261,7 @@ interface Hunk {
   b1: number
 }
 
-const MAX_EDITS = 1_000
+const MAX_EDITS = 2_000
 const CONTEXT = 24
 
 function hunksOf(a: readonly string[], b: readonly string[]): Hunk[] | null {
@@ -272,13 +272,28 @@ function hunksOf(a: readonly string[], b: readonly string[]): Hunk[] | null {
   const n = a.length - head - tail
   const m = b.length - head - tail
   if (!n && !m) return []
+  if (!n || !m) return [{ a0: head, a1: head + n, b0: head, b1: head + m }]
+  const inner = n < m ? within(b, head, m, a.slice(head, head + n)) : within(a, head, n, b.slice(head, head + m))
+  if (inner !== null) {
+    const out =
+      n < m
+        ? [
+            { a0: head, a1: head, b0: head, b1: head + inner },
+            { a0: head + n, a1: head + n, b0: head + inner + n, b1: head + m },
+          ]
+        : [
+            { a0: head, a1: head + inner, b0: head, b1: head },
+            { a0: head + inner + m, a1: head + n, b0: head + m, b1: head + m },
+          ]
+    return out.filter((h) => h.a1 > h.a0 || h.b1 > h.b0)
+  }
   const most = Math.min(n + m, MAX_EDITS)
   const off = most + 1
   const v = new Int32Array(2 * most + 3)
   const trace: Int32Array[] = []
   const at = (x: number, y: number): boolean => a[head + x] === b[head + y]
   for (let d = 0; d <= most; d++) {
-    trace.push(v.slice())
+    trace.push(v.slice(off - d, off + d + 1))
     for (let k = -d; k <= d; k += 2) {
       let x = k === -d || (k !== d && v[off + k - 1]! < v[off + k + 1]!) ? v[off + k + 1]! : v[off + k - 1]! + 1
       let y = x - k
@@ -287,21 +302,26 @@ function hunksOf(a: readonly string[], b: readonly string[]): Hunk[] | null {
         y++
       }
       v[off + k] = x
-      if (x >= n && y >= m) return walkBack(trace, off, n, m, d, head)
+      if (x >= n && y >= m) return walkBack(trace, n, m, d, head)
     }
   }
   return null
 }
 
-function walkBack(trace: Int32Array[], off: number, n: number, m: number, last: number, head: number): Hunk[] {
+function within(big: readonly string[], head: number, size: number, small: readonly string[]): number | null {
+  const found = places(big.slice(head, head + size), small, 0)
+  return found.length === 1 ? found[0]! : null
+}
+
+function walkBack(trace: Int32Array[], n: number, m: number, last: number, head: number): Hunk[] {
   const out: Hunk[] = []
   let x = n
   let y = m
   for (let d = last; d > 0; d--) {
     const v = trace[d]!
     const k = x - y
-    const pk = k === -d || (k !== d && v[off + k - 1]! < v[off + k + 1]!) ? k + 1 : k - 1
-    const px = v[off + pk]!
+    const pk = k === -d || (k !== d && v[d + k - 1]! < v[d + k + 1]!) ? k + 1 : k - 1
+    const px = v[d + pk]!
     const py = px - pk
     while (x > px && y > py) {
       x--
@@ -327,7 +347,7 @@ function mapThrough(hunks: readonly Hunk[], p: number): number {
   return p + delta
 }
 
-function seen(b: readonly string[], run: readonly string[], from: number): number[] {
+function places(b: readonly string[], run: readonly string[], from: number): number[] {
   const out: number[] = []
   for (let i = from; i + run.length <= b.length && out.length < 2; i++) {
     let k = 0
@@ -340,7 +360,7 @@ function seen(b: readonly string[], run: readonly string[], from: number): numbe
 function onlyRun(b: readonly string[], runs: (k: number) => readonly string[], most: number, from: number): { at: number; len: number } | null {
   for (let k = most; k > 0; k--) {
     const run = runs(k)
-    const at = seen(b, run, from)
+    const at = places(b, run, from)
     if (at.length === 1) return { at: at[0]!, len: run.length }
     if (at.length > 1) return null
   }
@@ -382,12 +402,9 @@ function keptSelection(before: EditorState, after: EditorState): TextSelection |
   const a = anchor && placeOf(before.doc, after.doc, anchor)
   const h = head && placeOf(before.doc, after.doc, head)
   if (a === null || h === null) return null
-  try {
-    return TextSelection.create(after.doc, a, h)
-  } catch {
-    // a spot that no longer lands in text keeps the selection the redraw chose
-    return null
-  }
+  const $a = after.doc.resolve(a)
+  const $h = after.doc.resolve(h)
+  return $a.parent.inlineContent && $h.parent.inlineContent ? TextSelection.create(after.doc, a, h) : TextSelection.between($a, $h, -1)
 }
 
 export function writeOwnLinesOnly(state: EditorState, seen: () => Seen | null): OwnWrites | null {
