@@ -1,7 +1,7 @@
 import { Fragment, startTransition, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import { Composer } from "~/chat/composer"
-import { useThreadDocs } from "~/chat/doc/switch"
+import { docThread } from "@kiwi/core/doc/threads.ts"
 import { EventRun } from "~/chat/events"
 import { continuesRun, eventRun } from "~/chat/fold-events"
 import { foldText, leftOutRun, runFirst, withLeftOut } from "~/chat/left-out"
@@ -27,7 +27,7 @@ import { dmInRoom } from "~/live/dm"
 const HistoryFold = later(() => import("~/chat/compact").then((m) => m.HistoryFold))
 const ProposalCard = later(() => import("~/chat/compact").then((m) => m.ProposalCard))
 const AddAgentCard = later(() => import("~/modals/add-agent").then((m) => m.AddAgentCard))
-const LocalThreadDoc = later(() => import("~/chat/doc/editor").then((m) => m.LocalThreadDoc))
+const LiveThreadDoc = later(() => import("~/chat/doc/editor").then((m) => m.LiveThreadDoc))
 
 const GROUP_MS = 5 * 60_000
 const NEAR_BOTTOM = 48
@@ -200,6 +200,12 @@ export function useStick(following = true) {
   return { scroller, content, stuck, live, remember, settle, toBottom, toOffset, unstick, hold }
 }
 
+function docOf(channel: Channel, where: Where): string | null {
+  if (where.kind === "task") return docThread({ kind: "task", task: where.task })
+  if (where.kind !== "room" || channel.rooms.find((r) => r.id === where.room)?.members) return null
+  return docThread({ kind: "room", room: where.room })
+}
+
 export function Conversation({ channel, jump }: { channel: Channel; jump: Jump | null }) {
   const { nav } = useApp()
   const where: Where = nav.where
@@ -209,7 +215,7 @@ export function Conversation({ channel, jump }: { channel: Channel; jump: Jump |
     const here = reply?.key === key ? reply : null
     return { to: here?.to ?? null, excerpt: here?.excerpt ?? null, set: (to, excerpt) => setReply(to ? { key, to, excerpt: excerpt ?? null } : null) }
   }, [reply, key])
-  const docs = useThreadDocs() && where.kind !== "theirs"
+  const doc = docOf(channel, where)
   const placeName =
     where.kind === "room"
       ? `#${channel.rooms.find((r) => r.id === where.room)?.name ?? where.room}`
@@ -228,9 +234,9 @@ export function Conversation({ channel, jump }: { channel: Channel; jump: Jump |
         where={where}
         spot={nav.restore !== undefined ? nav.restore : spotAt(key)}
         jump={jump && sameWhere(jump.m.where, where) ? jump : null}
-        doc={docs ? key : null}
+        doc={doc}
       />
-      {where.kind === "theirs" ? <ReadOnly channel={channel} between={where.between} /> : !docs && <Composer channel={channel} where={where} placeholder={`Message ${placeName}`} />}
+      {where.kind === "theirs" ? <ReadOnly channel={channel} between={where.between} /> : !doc && <Composer channel={channel} where={where} placeholder={`Message ${placeName}`} />}
     </ReplyContext.Provider>
   )
 }
@@ -579,7 +585,7 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
           )}
           {doc && following && !channel.loading && (
             <Suspense fallback={null}>
-              <LocalThreadDoc channel={channel} where={where} docKey={doc} hold={hold} />
+              <LiveThreadDoc channel={channel} where={where} thread={doc} hold={hold} />
             </Suspense>
           )}
           {working.length > 0 && !channel.loading && <Working people={working} />}

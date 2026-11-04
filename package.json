@@ -41,7 +41,8 @@
     "oxlint": "1.90.0",
     "playwright-core": "1.64.1",
     "tsrs": "0.20.1-ts7.1.0-beta",
-    "wrangler": "^4.154.0"
+    "wrangler": "^4.154.0",
+    "yjs": "13.6.33"
   },
   "dependencies": {
     "@firecrawl/anydoc-wasm": "0.2.4",
