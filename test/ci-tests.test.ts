@@ -45,7 +45,7 @@ describe("scripts/ci-tests.ts", () => {
   }, 30_000);
 
   test("a run the watchdog has to kill fails, even when no test failed (T3093, #3189)", async () => {
-    const quick = { KIWI_CI_SILENT_MS: "500", KIWI_CI_POLL_MS: "50" };
+    const quick = { KIWI_CI_SILENT_MS: "500", KIWI_CI_POLL_MS: "50", GITHUB_ACTIONS: "true" };
     const hangs = `test("waits forever", async () => { await new Promise(() => {}); }, 300_000);`;
     const only = await runWith(quick, project({ hangs }, ["hangs"]), "flows");
     expect(only.err).toContain("watchdog: bun silent 0.5s after all files reported, killed");

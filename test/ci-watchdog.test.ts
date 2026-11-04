@@ -14,6 +14,8 @@ describe("the unit job's watchdog (T3093)", () => {
     const all = seen(["##[group]test/a.test.ts:", "(pass) adds", "##[endgroup]", "\x1b[1mui/src/b.test.tsx:\x1b[0m", "(pass) shows"]);
     expect(shouldKill(FILES, all, 119_999)).toBe(false);
     expect(shouldKill(FILES, all, 120_000)).toBe(true);
+    const raw = seen(["::group::test/a.test.ts:", "(pass) adds", "::endgroup::", "::group::ui/src/b.test.tsx:"]);
+    expect(shouldKill(FILES, raw, 120_000)).toBe(true);
     const half = seen(["./test/a.test.ts:", "(pass) adds"]);
     expect(shouldKill(FILES, half, 10 * 60_000)).toBe(false);
     const done = seen(["test/a.test.ts:", "ui/src/b.test.tsx:", "Ran 2 tests across 2 files. [1.00s]"]);

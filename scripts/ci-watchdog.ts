@@ -8,7 +8,7 @@ export interface Watch {
 }
 
 const ANSI = /\x1b\[[0-9;]*m/g;
-const HEADER = /^(?:##\[group\])?(?:\.\/)?((?:test|ui\/src|packages)\/\S+\.test\.tsx?):\s*$/;
+const HEADER = /^(?:##\[group\]|::group::)?(?:\.\/)?((?:test|ui\/src|packages)\/\S+\.test\.tsx?):\s*$/;
 
 export function watching(now: number): Watch {
   return { reported: new Set(), failed: false, summary: false, lastOutputAt: now };
