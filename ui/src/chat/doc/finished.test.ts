@@ -3,7 +3,7 @@ import { appendToBlock, blocksOf, markBack, markPosted, newBlock, richBlocks, ty
 import { prosemirrorToYDoc } from "y-prosemirror"
 import * as Y from "yjs"
 
-import { docFeed, withLines, withoutMediaNames } from "~/chat/doc/finished"
+import { docFeed, withDocMedia, withLines, withoutMediaNames } from "~/chat/doc/finished"
 import { FRAGMENT, schema } from "~/chat/doc/schema"
 import type { Message } from "~/model"
 
@@ -103,6 +103,16 @@ describe("finished doc lines with no message sit in the feed at their time (T135
   test("a feed row from an image line carries the image", () => {
     const rows = withLines([msg(1, T + 10)], [{ id: "x", author: "jow", at: T + 20, text: "look", media: { imgs: [shot], files: [] } }], where)
     expect(rows[1]).toMatchObject({ block: "x", docMedia: { imgs: [shot], files: [] } })
+  })
+
+  test("a message that brings its own images, as a CLI --image send does, doesn't draw its block's copies too; its block's files still show", () => {
+    const pdf = { name: "r.pdf", mime: "application/pdf", size: 9, pieces: [] }
+    const cli: Message = { ...msg(3, T), block: "b", images: [{ spot: "s1", alt: "a.png", state: "waiting" }] }
+    expect(withDocMedia(cli, { imgs: [shot], files: [] })).toBe(cli)
+    expect(withDocMedia(cli, { imgs: [shot], files: [pdf] }).docMedia).toEqual({ imgs: [], files: [pdf] })
+    const pasted: Message = { ...msg(4, T), block: "c" }
+    expect(withDocMedia(pasted, { imgs: [shot], files: [] }).docMedia).toEqual({ imgs: [shot], files: [] })
+    expect(withDocMedia(pasted, undefined)).toBe(pasted)
   })
 })
 

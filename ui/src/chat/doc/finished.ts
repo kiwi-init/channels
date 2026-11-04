@@ -23,6 +23,12 @@ export const EMPTY_FEED: DocFeed = { lines: [], hidden: new Set(), media: new Ma
 
 const NO_FILES: BlockFiles = { imgs: [], files: [] }
 
+export function withDocMedia(m: Message, media: BlockFiles | undefined): Message {
+  if (!media) return m
+  const imgs = m.images?.length ? [] : media.imgs
+  return imgs.length || media.files.length ? { ...m, docMedia: { imgs, files: media.files } } : m
+}
+
 export function withoutMediaNames(text: string, media: BlockFiles): string {
   const names = [...media.imgs.map((i) => `[image: ${i.name}]`), ...media.files.map((f) => `[file: ${f.name}]`)]
   return names
