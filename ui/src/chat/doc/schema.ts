@@ -1,5 +1,7 @@
 import { Schema, type Node } from "prosemirror-model"
 
+import type { DocFile, DocImage } from "~/model"
+
 export type BlockKind = "text" | "agent" | "tool" | "comment"
 
 const KINDS: readonly BlockKind[] = ["text", "agent", "tool", "comment"]
@@ -97,19 +99,6 @@ export function newBlockId(): string {
     .replace(/\+/g, "-")
     .replace(/\//g, "_")
     .replace(/=+$/, "")
-}
-
-export interface DocImage {
-  name: string
-  mime: string
-  ref: { id: string; key: string; size: number }
-}
-
-export interface DocFile {
-  name: string
-  mime: string
-  size: number
-  pieces: { id: string; key: string; size: number }[]
 }
 
 export function imageNode(img: DocImage): Node {

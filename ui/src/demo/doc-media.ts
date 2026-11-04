@@ -1,5 +1,4 @@
-import type { DocFile, DocImage } from "~/chat/doc/schema"
-import type { Upload } from "~/model"
+import type { DocFile, DocImage, Upload } from "~/model"
 
 const CHART = `<svg xmlns="http://www.w3.org/2000/svg" width="560" height="240"><rect width="560" height="240" fill="#0b0b0c"/><g font-family="monospace" font-size="14" fill="#f4f4f5"><text x="32" y="44">first-load JS</text><text x="32" y="104">before</text><text x="32" y="164">after</text></g><rect x="120" y="88" width="380" height="22" fill="#a1a1aa"/><rect x="120" y="148" width="296" height="22" fill="#f4f4f5"/><g font-family="monospace" font-size="12" fill="#0b0b0c"><text x="128" y="104">812 KB</text><text x="128" y="164">741 KB</text></g></svg>`
 const REPORT = "first-load JS: 741,425 bytes (budget 760,000)\nmarkdown: 27 KB gzipped\nmermaid: lazy\n"

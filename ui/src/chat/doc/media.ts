@@ -2,8 +2,8 @@ import { MAX_FILE_BYTES, MAX_IMAGE_BYTES, RASTER_MIMES } from "@kiwi/core/protoc
 import type { Node } from "prosemirror-model"
 import type { NodeView } from "prosemirror-view"
 
-import { fileNode, fileOf, imageNode, imageOf, type DocFile, type DocImage } from "~/chat/doc/schema"
-import type { Upload } from "~/model"
+import { fileNode, fileOf, imageNode, imageOf } from "~/chat/doc/schema"
+import type { DocFile, DocImage, Upload } from "~/model"
 
 export interface DocMedia {
   putImage(upload: Upload): Promise<DocImage>

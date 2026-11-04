@@ -5,7 +5,6 @@ import type { Personality } from "@kiwi/core/personality.ts"
 import type { PipeIn } from "@kiwi/core/doc/held-pipe.ts"
 import type { DocBlockRef, GithubNote, Step, StepReply } from "@kiwi/core/protocol.ts"
 import type { DocEvent } from "../../desktop/src/bridge.ts"
-import type { DocFile, DocImage } from "~/chat/doc/schema"
 
 export type Harness = "claude" | "codex" | "opencode" | "gemini" | "cursor" | "grok" | "kimi" | "mimo" | "pi" | "grok-bot" | "zcode" | "agy" | "other"
 
@@ -283,6 +282,19 @@ export interface Direct {
 export interface TheirDirect {
   between: readonly [string, string]
   last: number
+}
+
+export interface DocImage {
+  name: string
+  mime: string
+  ref: { id: string; key: string; size: number }
+}
+
+export interface DocFile {
+  name: string
+  mime: string
+  size: number
+  pieces: { id: string; key: string; size: number }[]
 }
 
 export interface Upload {
