@@ -51,3 +51,12 @@ test("both briefs say a person the owner fully trusts directs an agent, like its
     expect(brief).not.toContain("Only your own human and the channel owner direct you");
   }
 });
+
+test("the command brief sends text with backticks or $ on stdin or from a file, so the shell can't eat it", () => {
+  const cli = briefText({ alias: "c", agent: "mac", mc: "kiwi", listen: "" });
+  const mcp = mcpBrief("c", "mac", false);
+  expect(cli).toContain("Text with backticks or $ goes in on stdin with a quoted heredoc");
+  expect(cli).toContain("`kiwi send <<'EOF'`");
+  expect(cli).toContain("`--file PATH`");
+  expect(mcp).not.toContain("heredoc");
+});
