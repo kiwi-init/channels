@@ -18,6 +18,7 @@ import { homedir, hostname } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { agyHere, geminiAncestor, kimiAncestor, kimiCodePid, mimoHere, piHere, zcodePid, type ProcessTree } from "./ancestry.ts";
 import { loadConfig, updateConfig, type Config, type SeatRecord } from "./config.ts";
+import { pinnedFor } from "./harness-bin.ts";
 import { holdsSeat, seatHeldAway, seatHolds, seatRefusal } from "./hold.ts";
 import { pidAlive } from "./pid.ts";
 import { omit } from "@kiwi/core/omit.ts";
@@ -243,9 +244,24 @@ export function bindDirectory(dir: string, b: Binding, listening: (alias: string
       (s) => !(s.alias === b.alias && s.as === b.as) && (!!s.hold || !(b.harness && !b.session && !s.session && s.harness === b.harness && !listening(s.alias, s.as))),
     );
     const holds = seatHolds(cfg, b.alias, b.as);
-    store(cfg, at, [...others, { ...b, ...(holds ? { holds } : {}), at: Date.now() }]);
+    store(cfg, at, [...others, { ...b, ...pinnedFor(b), ...(holds ? { holds } : {}), at: Date.now() }]);
   });
   return bound;
+}
+
+export function pinSeatBin(alias: string, as: string, session: string | undefined, bin: string): void {
+  updateConfig((cfg) => {
+    for (const dir of Object.keys(cfg.bindings ?? {})) {
+      const seats = seatsAt(cfg, dir);
+      const pins = (s: Binding) => s.alias === alias && s.as === as && s.session === session && !s.bin;
+      if (seats.some(pins))
+        store(
+          cfg,
+          dir,
+          seats.map((s) => (pins(s) ? { ...s, bin } : s)),
+        );
+    }
+  });
 }
 
 export interface SeatOptions {
