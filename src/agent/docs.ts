@@ -2,6 +2,7 @@ import type * as Y from "yjs";
 import type { Channel } from "@kiwi/core/client.ts";
 import { agentBlock } from "@kiwi/core/doc/agent.ts";
 import { blocksOf, mediaOfBlock, removeBlock, rewriteBlock, threadText, type BlockMedia } from "@kiwi/core/doc/blocks.ts";
+import { endsEarlierLines } from "@kiwi/core/doc/ends.ts";
 import type { ThreadDoc } from "@kiwi/core/doc/thread-doc.ts";
 import { docThread } from "@kiwi/core/doc/threads.ts";
 import { GENERAL_ROOM } from "@kiwi/core/protocol.ts";
@@ -118,7 +119,7 @@ export function docOnlyText(doc: Y.Doc): string {
   for (let i = blocks.length - 1; i >= 0; i--) {
     const b = blocks[i]!;
     if (!b.posted && b.text.trim() && (b.sent || (!b.back && later.has(b.author)))) lines.add(b.id);
-    later.add(b.author);
+    if (endsEarlierLines(b)) later.add(b.author);
   }
   return threadText(
     doc,

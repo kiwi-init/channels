@@ -120,7 +120,7 @@ describe("the daemon's follower queues a wake for a finished block (T606)", () =
     await Bun.sleep(30);
     expect(docSeen("follow", "olivia").docs[th]).toEqual({ cut: expect.any(Number), at: {} });
     newBlock(td.doc, "text", "jow", "what's left on T9?", Date.now() + 1);
-    newBlock(td.doc, "text", "jow", "", Date.now() + 2);
+    newBlock(td.doc, "text", "jow", "thanks", Date.now() + 2);
     expect(woke).toBe(1);
     expect(pendingDocWakes("follow", "olivia")).toEqual([expect.objectContaining({ key: "task:9", th, author: "jow", text: "what's left on T9?" })]);
     state = { docs: new Map([["task:9", th]]), tasks: new Map([[9, task(9, { owner: "olivia", state: "done" })]]) } as unknown as ChannelState;

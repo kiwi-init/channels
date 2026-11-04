@@ -9,6 +9,7 @@ import { yCursorPlugin, ySyncPlugin, ySyncPluginKey, yUndoPlugin } from "y-prose
 import * as Y from "yjs"
 
 import { attach, backInDraft, blockAt, blocks, continues, dropEmptyOwn, isEmpty, noteMade, replyIn, startBlock, unreply, type Made } from "~/chat/doc/blocks"
+import { caretShown } from "~/chat/doc/carets"
 import { onGiveBack } from "~/chat/doc/give-back"
 import { writeOwnLinesOnly } from "~/chat/doc/own-writes"
 import { docKeys, type CommandFor } from "~/chat/doc/keys"
@@ -393,7 +394,11 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
     schema,
     plugins: [
       ySyncPlugin(shared.doc.getXmlFragment(FRAGMENT)),
-      yCursorPlugin(shared.awareness, { cursorBuilder: caretBuilder(seen), selectionBuilder: (u: { color: string }) => ({ class: "doc-sel", style: `--member: var(--c-${u.color})` }) }),
+      yCursorPlugin(shared.awareness, {
+        awarenessStateFilter: caretShown(me),
+        cursorBuilder: caretBuilder(seen),
+        selectionBuilder: (u: { color: string }) => ({ class: "doc-sel", style: `--member: var(--c-${u.color})` }),
+      }),
       yUndoPlugin(),
       suggestPlugin(opts.onQuery, opts.onKey),
       markdownRules(),
