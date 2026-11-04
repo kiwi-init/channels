@@ -276,6 +276,7 @@ export interface Direct {
   last: number
   seen?: number
   membersOnly?: true
+  doc?: string
 }
 
 export interface TheirDirect {
