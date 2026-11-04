@@ -5,7 +5,7 @@ import { TextSelection, type Command, type EditorState, type Plugin } from "pros
 import { liftListItem, sinkListItem, splitListItem } from "prosemirror-schema-list"
 import { redo, undo } from "y-prosemirror"
 
-import { blockAfter, blockAt, blocks, endsBlock, isEmpty, joinBack, joinForward, startBlock, unreply } from "~/chat/doc/blocks"
+import { blockAfter, blockAt, blocks, endsBlock, isEmpty, joinBack, joinForward, startBlock, unreply, type Made } from "~/chat/doc/blocks"
 import { attrsOf, isSent, schema } from "~/chat/doc/schema"
 import { noteTyping } from "~/kit/typing-hook"
 
@@ -73,13 +73,13 @@ function join(me: string, how: typeof joinBack, posted: (block: string) => boole
   }
 }
 
-function toYourLine(me: string, posted: (block: string) => boolean): Command {
+function toYourLine(me: string, posted: (block: string) => boolean, made: Made): Command {
   return (state, dispatch, view) => {
     const { $from, empty } = state.selection
     const last = blocks(state.doc).at(-1)
     if (!empty || !last || $from.index(0) !== last.index || (view && !view.endOfTextblock("down"))) return false
     if (isEmpty(last.node) && attrsOf(last.node).author === me) return false
-    if (dispatch) dispatch(startBlock(state, me, Date.now(), posted).scrollIntoView())
+    if (dispatch) dispatch(startBlock(state, me, Date.now(), posted, made).scrollIntoView())
     return true
   }
 }
@@ -134,6 +134,7 @@ export interface DocKeyOpts {
   commandFor?: CommandFor
   refuse?: (line: string) => boolean
   editLast?: () => boolean
+  made?: Made
 }
 
 function mineHere(state: EditorState, me: string): Node | null {
@@ -178,7 +179,7 @@ export function docKeys(me: string, now: () => number, blur: () => void, opts: D
       "Shift-Tab": (state, dispatch) => inList(state) && (liftListItem(item)(state, dispatch) || true),
       Backspace: chainCommands(dropOwnEmpty(me, posted), startOfItem, join(me, joinBack, posted)),
       Delete: join(me, joinForward, posted),
-      ArrowDown: unlessRefused(me, refuse, toYourLine(me, posted)),
+      ArrowDown: unlessRefused(me, refuse, toYourLine(me, posted, opts.made ?? (() => true))),
       ArrowUp: editLast(me, opts.editLast ?? (() => false)),
       Escape: chainCommands(dropReply(me), () => {
         blur()
