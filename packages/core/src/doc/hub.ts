@@ -27,6 +27,7 @@ export interface HubOptions {
   store?: DocStore | null;
   trusts?: (pk: string) => boolean;
   flushMs?: number;
+  retryMs?: number;
   awareMs?: number;
   saveMs?: number;
 }
@@ -113,6 +114,11 @@ export class DocHub {
       if (open) void open.td.receive(f);
       return true;
     }
+    if (f.t === "err" && f.id === undefined) {
+      const open = typeof f.th === "string" ? this.byTh.get(f.th) : undefined;
+      if (open) void open.td.receive(f as DocIn);
+      return !!open;
+    }
     if ((f.t !== "ack" && f.t !== "err") || typeof f.id !== "string") return false;
     for (const { td } of this.byTh.values())
       if (td.owns(f.id)) {
@@ -188,6 +194,7 @@ export class DocHub {
       saved,
       ...(this.o.trusts ? { trusts: this.o.trusts } : {}),
       ...(this.o.flushMs === undefined ? {} : { flushMs: this.o.flushMs }),
+      ...(this.o.retryMs === undefined ? {} : { retryMs: this.o.retryMs }),
     });
     const open: Open = { td, keys, saving: null, onUpdate: () => this.queueSave(open) };
     td.doc.on("update", open.onUpdate);
