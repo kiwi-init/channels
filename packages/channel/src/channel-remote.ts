@@ -1,5 +1,6 @@
 import { ChannelGone, RelayError } from "@kiwi/core/client/relay-errors.ts";
 import type { CachedKept, Unread } from "@kiwi/core/cache-row.ts";
+import { DOC_LEVEL } from "@kiwi/core/doc/level.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
 
 import type {
@@ -115,7 +116,7 @@ export function remoteOps(port: KeysPort): ChannelOps {
         if (!closed) on({ _tag: "Down" });
       };
       docDown.add(down);
-      void port.request({ op: "doc", code, thread, th }).then((r) => {
+      void port.request({ op: "doc", code, thread, th, level: DOC_LEVEL }).then((r) => {
         if (!r.ok) {
           docDown.delete(down);
           if (!closed) on({ _tag: "Failed", error: r.error });
