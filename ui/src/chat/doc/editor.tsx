@@ -2,6 +2,7 @@ import "~/styles/thread-doc.css"
 
 import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore, type CSSProperties, type RefObject } from "react"
 import { createPortal } from "react-dom"
+import { fileDrag, takeDropped } from "@kiwi/app/dropped.ts"
 import type { Node } from "prosemirror-model"
 import { EditorState, Plugin, type Transaction } from "prosemirror-state"
 import { Decoration, DecorationSet, EditorView, type NodeView } from "prosemirror-view"
@@ -268,9 +269,8 @@ interface ViewOpts {
 
 const openImage = (url: string) => void window.open(url, "_blank", "noopener,noreferrer")
 
-function takeFiles(view: EditorView, me: string, opts: ViewOpts, files: readonly File[]): boolean {
-  const media = opts.media()
-  if (!files.length || !media || !opts.editable()) return false
+function takeFiles(view: EditorView, me: string, media: DocMedia | null, editable: boolean, files: readonly File[]): boolean {
+  if (!files.length || !media || !editable) return false
   void uploadAll(files, media, (why) => announce(why, "error")).then((nodes) => {
     if (view.isDestroyed) return
     const tr = attach(view.state, me, Date.now(), nodes)
@@ -322,13 +322,13 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
     },
     handlePaste: (v, e) => {
       const files = filesIn(e.clipboardData)
-      if (!takeFiles(v, me, opts, files)) return false
+      if (!takeFiles(v, me, opts.media(), opts.editable(), files)) return false
       e.preventDefault()
       return true
     },
     handleDrop: (v, e) => {
       const files = filesIn(e.dataTransfer)
-      if (!takeFiles(v, me, opts, files)) return false
+      if (!takeFiles(v, me, opts.media(), opts.editable(), files)) return false
       e.preventDefault()
       return true
     },
@@ -404,6 +404,8 @@ function typedAnywhere(e: KeyboardEvent): boolean {
   if (!(t instanceof HTMLElement)) return true
   return !t.closest("input, textarea, select, [contenteditable='true'], dialog, [role='dialog'], [role='menu'], .ProseMirror")
 }
+
+const within = (r: DOMRect, x: number, y: number): boolean => x >= r.left && x <= r.right && y >= r.top && y <= r.bottom
 
 export function ThreadDoc({ channel, where, shared, hold, media = null }: { channel: Channel; where: Where; shared: Shared; hold: (on: boolean) => void; media?: DocMedia | null }) {
   const mount = useRef<HTMLDivElement>(null)
@@ -507,6 +509,30 @@ export function ThreadDoc({ channel, where, shared, hold, media = null }: { chan
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
+  }, [me])
+
+  useEffect(() => {
+    const onDrag = (e: DragEvent) => {
+      const dt = e.dataTransfer
+      if (!dt || !fileDrag(dt)) return
+      const taken = e.defaultPrevented
+      e.preventDefault()
+      const v = view.current
+      const el = box.current
+      if (e.type !== "drop" || taken || !v || !el || !within(el.getBoundingClientRect(), e.clientX, e.clientY)) return
+      const files = filesIn(dt)
+      if (takeFiles(v, me, mediaRef.current, canWrite.current, files) || files.length) return
+      void takeDropped(dt).then(({ files: dropped, refused }) => {
+        for (const why of refused) announce(why, "error")
+        takeFiles(v, me, mediaRef.current, canWrite.current, dropped)
+      })
+    }
+    window.addEventListener("dragover", onDrag)
+    window.addEventListener("drop", onDrag)
+    return () => {
+      window.removeEventListener("dragover", onDrag)
+      window.removeEventListener("drop", onDrag)
+    }
   }, [me])
 
   const place =

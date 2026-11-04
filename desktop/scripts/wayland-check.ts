@@ -277,34 +277,30 @@ try {
     return { ok: s.files.includes("kiwi-drop.png") && s.files.length === before + 1, detail: { before, s, page } };
   });
 
-  await step(
-    "a PNG dropped on something floating over the thread doc, like a toast, lands in it too (T1000)",
-    async () => {
-      const before = (await state()).files.length;
-      const line = await fresh();
-      const at = await lineAt();
-      if (!at) return { ok: false, detail: "no line to cover" };
-      await driver.evaluate((t: [number, number, number, number]) => {
-        const c = document.createElement("div");
-        c.id = "kiwi-check-cover";
-        Object.assign(c.style, { position: "fixed", left: `${t[0] + t[2] / 2 - 40}px`, top: `${t[1] + t[3] / 2 - 16}px`, width: "80px", height: "32px", zIndex: "99999" });
-        document.body.append(c);
-        const w = window as unknown as { kiwiCheckDropOn?: string[] };
-        w.kiwiCheckDropOn = [];
-        window.addEventListener("drop", (e) => w.kiwiCheckDropOn?.push(e.target instanceof Element ? e.target.id || e.target.tagName : String(e.target)), { capture: true, once: true });
-        return true;
-      }, at);
-      await ask({ op: "drag", from: onHelper("drag"), to: line });
-      await later(2500);
-      const on = await driver.evaluate(() => {
-        document.getElementById("kiwi-check-cover")?.remove();
-        return (window as unknown as { kiwiCheckDropOn?: string[] }).kiwiCheckDropOn ?? null;
-      }, null);
-      const s = await state();
-      return { ok: on?.[0] === "kiwi-check-cover" && s.files.length === before + 1 && s.files.at(-1) === "kiwi-drop.png", detail: { before, at, on, s } };
-    },
-    "the thread doc takes a drop only on its own text; a drop on something floating over it is T946",
-  );
+  await step("a PNG dropped on something floating over the thread doc, like a toast, lands in it too (T1000)", async () => {
+    const before = (await state()).files.length;
+    const line = await fresh();
+    const at = await lineAt();
+    if (!at) return { ok: false, detail: "no line to cover" };
+    await driver.evaluate((t: [number, number, number, number]) => {
+      const c = document.createElement("div");
+      c.id = "kiwi-check-cover";
+      Object.assign(c.style, { position: "fixed", left: `${t[0] + t[2] / 2 - 40}px`, top: `${t[1] + t[3] / 2 - 16}px`, width: "80px", height: "32px", zIndex: "99999" });
+      document.body.append(c);
+      const w = window as unknown as { kiwiCheckDropOn?: string[] };
+      w.kiwiCheckDropOn = [];
+      window.addEventListener("drop", (e) => w.kiwiCheckDropOn?.push(e.target instanceof Element ? e.target.id || e.target.tagName : String(e.target)), { capture: true, once: true });
+      return true;
+    }, at);
+    await ask({ op: "drag", from: onHelper("drag"), to: line });
+    await later(2500);
+    const on = await driver.evaluate(() => {
+      document.getElementById("kiwi-check-cover")?.remove();
+      return (window as unknown as { kiwiCheckDropOn?: string[] }).kiwiCheckDropOn ?? null;
+    }, null);
+    const s = await state();
+    return { ok: on?.[0] === "kiwi-check-cover" && s.files.length === before + 1 && s.files.at(-1) === "kiwi-drop.png", detail: { before, at, on, s } };
+  });
 
   await step("a file dropped elsewhere in the window leaves the page where it was", async () => {
     await ask({ op: "drag", from: onHelper("drag"), to: onPage([page.w / 2 - 100, page.h / 3 - 50, 200, 100]) });
