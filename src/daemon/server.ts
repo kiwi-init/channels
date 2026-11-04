@@ -63,6 +63,7 @@ export interface DaemonOptions {
 }
 
 const WAKE_DELAY_MS = 2_000;
+const FOLLOW_OPS: ReadonlySet<string> = new Set(["doc.open", "task.add", "task.claim", "task.update", "task.delete", "task.first"]);
 const WAKE_GAP_MS = 60_000;
 const WAKE_OUTSTANDING_MS = 10 * 60_000;
 const LISTENER_GRACE_MS = 60_000;
@@ -459,7 +460,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
           if (m.seq > seat.head) seat.head = m.seq;
           heardList(m);
           if (m.from !== seat.agent) scheduleWake(seat);
-          if (m.ev) seat.docs?.refresh();
+          if ((m.ev && FOLLOW_OPS.has(m.ev.op)) || (m.from === seat.agent && m.task !== undefined)) seat.docs?.refresh();
           for (const sub of [...seat.subs]) {
             if (sub.held) sub.held.push(m);
             else if (m.seq > sub.cursor && sendLine(sub.conn, JSON.stringify({ id: sub.id, message: m }))) sub.cursor = m.seq;
