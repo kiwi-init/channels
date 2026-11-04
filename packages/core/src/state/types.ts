@@ -215,6 +215,7 @@ export interface ChannelState {
   members: Map<string, Member>;
   tasks: Map<number, Task>;
   facts: Map<string, Fact>;
+  docs: Map<string, string>;
   leases: Map<string, Lease>;
   trust: Map<number, Trust>;
   rejected: Map<number, string>;
@@ -314,6 +315,7 @@ export interface FoldBase {
   nicknames?: [string, Nickname][];
   tasks: Task[];
   facts: Fact[];
+  docs?: [string, string][];
   leases: Lease[];
   reactions: [number, [string, Reaction][]][];
   reactSeqs: number[];

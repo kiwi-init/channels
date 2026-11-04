@@ -2,8 +2,8 @@ import * as awarenessProtocol from "y-protocols/awareness";
 import * as Y from "yjs";
 import { b64url, fromB64url, openBytes, sealBytes } from "../crypto.ts";
 import { sign, verify, type Identity } from "../identity.ts";
+import { DOC_COMPACT, DOC_THREAD_RE } from "../protocol.ts";
 
-const DOC_ID = /^[A-Za-z0-9_-]{22}$/;
 const FLUSH_MS = 40;
 
 export type DocOut =
@@ -15,9 +15,18 @@ export type DocOut =
 export type DocIn =
   | { t: "doc"; th: string; dseq: number; ts: number; iv: string; ct: string; e?: number; snap?: true }
   | { t: "doc.ready"; th: string; head: number }
-  | { t: "ack"; id: string; seq: number; compact?: true };
+  | { t: "ack"; id: string; seq: number; compact?: true }
+  | { t: "err"; id?: string; error: string; tag?: string };
 
-interface DocKeys {
+export interface DocSaved {
+  head: number;
+  state: Uint8Array;
+  unsent: Uint8Array | null;
+}
+
+const RETRY_MS = 2_000;
+
+export interface DocKeys {
   current: () => Promise<{ key: string; e?: number }>;
   at: (e: number | undefined) => Promise<string | null>;
 }
@@ -35,6 +44,7 @@ export interface DocOptions {
   links: DocLinks;
   trusts?: (pk: string) => boolean;
   flushMs?: number;
+  saved?: DocSaved | null;
 }
 
 interface Signed {
@@ -70,21 +80,32 @@ export class ThreadDoc {
   private readonly waiters: (() => void)[] = [];
 
   constructor(o: DocOptions, doc: Y.Doc = new Y.Doc()) {
-    if (!DOC_ID.test(o.th)) throw new Error(`not a doc id: ${o.th}`);
+    if (!DOC_THREAD_RE.test(o.th)) throw new Error(`not a doc id: ${o.th}`);
     this.o = o;
     this.th = o.th;
     this.doc = doc;
     this.awareness = new awarenessProtocol.Awareness(doc);
+    if (o.saved) {
+      Y.applyUpdate(doc, o.saved.state, REMOTE);
+      this.head = o.saved.head;
+      if (o.saved.unsent) this.pending.push(o.saved.unsent);
+    }
     doc.on("update", this.onUpdate);
     this.awareness.on("update", this.onAwareness);
+    if (this.pending.length) void this.flush();
+  }
+
+  owns(id: string): boolean {
+    return this.inFlight.has(id);
+  }
+
+  save(): DocSaved {
+    const unsent = [...this.pending, ...this.inFlight.values()];
+    return { head: this.head, state: Y.encodeStateAsUpdate(this.doc), unsent: unsent.length ? Y.mergeUpdates(unsent) : null };
   }
 
   get synced(): boolean {
     return this.ready;
-  }
-
-  get seen(): number {
-    return this.head;
   }
 
   whenSynced(): Promise<void> {
@@ -176,7 +197,7 @@ export class ThreadDoc {
   }
 
   private async compact(): Promise<void> {
-    if (this.closed || !this.ready || this.pending.length || this.inFlight.size) return;
+    if (this.closed || !this.ready) return;
     const upto = Math.max(this.head, this.top);
     const id = b64url(crypto.getRandomValues(new Uint8Array(12)));
     this.o.links.send({ t: "doc.snap", id, th: this.th, upto, ...(await this.seal(Y.encodeStateAsUpdate(this.doc))) });
@@ -184,6 +205,20 @@ export class ThreadDoc {
 
   private async take(f: DocIn): Promise<void> {
     if (this.closed) return;
+    if (f.t === "err") {
+      if (!f.id || !this.inFlight.has(f.id)) return;
+      const update = this.inFlight.get(f.id)!;
+      const id = f.id;
+      if (f.error === DOC_COMPACT) {
+        await this.compact();
+        await this.post(update, id);
+        return;
+      }
+      setTimeout(() => {
+        if (this.inFlight.has(id)) this.chain = this.chain.then(() => this.post(update, id));
+      }, RETRY_MS);
+      return;
+    }
     if (f.t === "ack") {
       if (!this.inFlight.delete(f.id)) return;
       this.top = Math.max(this.top, f.seq);

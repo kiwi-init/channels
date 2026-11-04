@@ -36,6 +36,7 @@ export interface FoldCtx {
   setRole: (target: FoldMember, role: string | null, about: string | null | undefined) => void;
   tasks: Map<number, Task>;
   facts: Map<string, Fact>;
+  docs: Map<string, string>;
   leases: Map<string, Lease>;
   rooms: Map<string, Room>;
   secret: Map<string, SecretRoom>;
@@ -562,6 +563,11 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       }
       const ttl = ev.ttl === undefined ? undefined : Math.min(Math.max(Number(ev.ttl) || 0, 60), 30 * 24 * 3600) * 1000;
       facts.set(ev.key, { key: ev.key, value: ev.value, by: m.from, ts: at, seq: m.seq, ...(ttl ? { expires: at + ttl } : {}) });
+      break;
+    }
+
+    case "doc.open": {
+      if (!c.docs.has(ev.thread)) c.docs.set(ev.thread, ev.th);
       break;
     }
 

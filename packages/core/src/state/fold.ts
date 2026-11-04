@@ -277,6 +277,7 @@ function folding(
   };
   const tasks = new Map<number, Task>(from?.tasks.map((t) => [t.id, t]));
   const facts = new Map<string, Fact>(from?.facts.map((f) => [f.key, f]));
+  const docs = new Map<string, string>(from?.docs);
   const leases = new Map<string, Lease>(from?.leases.map((l) => [l.name, l]));
   const reactions = new Map<number, Map<string, Reaction>>(from?.reactions.map(([seq, by]) => [seq, new Map(by)]));
   const reactSeqs = new Set<number>(from?.reactSeqs);
@@ -350,6 +351,7 @@ function folding(
     setRole,
     tasks,
     facts,
+    docs,
     leases,
     rooms,
     secret,
@@ -696,6 +698,7 @@ function folding(
       nicknames: [...nicknames],
       tasks: [...tasks.values()].map((t) => (carded(t) ? card(t) : t)),
       facts: [...facts.values()],
+      docs: [...docs],
       leases: [...leases.values()],
       reactions: recent(reactions).map(([seq, by]): [number, [string, Reaction][]] => [seq, [...by]]),
       reactSeqs: [...reactSeqs].filter((seq) => seq > cut),
@@ -767,6 +770,7 @@ function folding(
     members,
     tasks,
     facts,
+    docs,
     leases,
     trust,
     scopeSets,
