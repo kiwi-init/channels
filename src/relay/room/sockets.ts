@@ -42,14 +42,20 @@ export interface SocketView {
 
 const NO_VIEW: SocketView = { docs: new Set(), watch: false };
 
-export const onClientFrame = Effect.fn("Room.onClientFrame")(function* (raw: string, sender = "", echo = true, view: SocketView = NO_VIEW) {
-  const db = yield* RoomStore;
-  let f: ClientFrame;
+function parseFrame(raw: string): ClientFrame | null {
+  let f: unknown;
   try {
     f = JSON.parse(raw);
   } catch {
-    return { reply: frame({ t: "err", error: "bad json" }) } satisfies Effects;
+    return null;
   }
+  return typeof f === "object" && f !== null && !Array.isArray(f) ? (f as ClientFrame) : null;
+}
+
+export const onClientFrame = Effect.fn("Room.onClientFrame")(function* (raw: string, sender = "", echo = true, view: SocketView = NO_VIEW) {
+  const db = yield* RoomStore;
+  const f = parseFrame(raw);
+  if (!f) return { reply: frame({ t: "err", error: "bad json" }) } satisfies Effects;
   if (f.t === "eph") {
     if (!allow(`eph:${db.roomId}:${sender}`, EPHEMERAL_PER_MINUTE)) return { reply: frame({ t: "err", error: "too many ephemeral frames; slow down" }) } satisfies Effects;
     if (typeof f.iv !== "string" || typeof f.ct !== "string" || f.iv.length > MAX_IV_LENGTH || f.ct.length > MAX_EPH_LENGTH) {
