@@ -27,6 +27,32 @@ describe("the typing trace (T1776)", () => {
     expect(r.flags).toEqual([])
   })
 
+  test("flags the line growing without a key, but not after typing, a paste or an accent", () => {
+    const r = new TypingRecord()
+    r.seen(0, "b1", 3)
+    r.push({ t: 1000, what: "key", key: "char" })
+    r.seen(1001, "b1", 4)
+    r.push({ t: 2000, what: "beforeinput", inputType: "insertFromPaste" })
+    r.seen(2001, "b1", 9)
+    r.push({ t: 3000, what: "compositionend" })
+    r.seen(3001, "b1", 10)
+    r.push({ t: 4000, what: "key", key: "Backspace" })
+    r.seen(4001, "b1", 9)
+    expect(r.flags).toEqual([])
+    r.push({ t: 5000, what: "doc changed", origin: "relay" })
+    r.seen(5001, "b1", 10)
+    expect(r.flags.map((f) => f.at.flag)).toEqual(["GREW WITHOUT A KEY"])
+    expect(r.flags[0]?.before.at(-1)?.what).toBe("doc changed")
+  })
+
+  test("an entry carrying a flag is kept with the 24 entries before it", () => {
+    const r = new TypingRecord()
+    for (let i = 0; i < 30; i++) r.push({ t: i, what: "doc changed", origin: "relay", editor: 4, stored: 4 })
+    r.push({ t: 30, what: "doc changed", origin: "relay", editor: 4, stored: 6, flag: "EDITOR OUT OF STEP WITH THE DOC" })
+    expect(r.flags).toHaveLength(1)
+    expect(r.flags[0]?.before).toHaveLength(24)
+  })
+
   test("never keeps what was typed: keys are 'char', input data is its length and last three characters", () => {
     expect(keyName("a")).toBe("char")
     expect(keyName("ã")).toBe("char")

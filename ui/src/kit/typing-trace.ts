@@ -1,5 +1,5 @@
-import { setTypingSink } from "~/kit/typing-hook"
-import { dataShape, keyName, TypingRecord } from "~/kit/typing-record"
+import { setTypingSink, typingFocus, type TypingNote } from "~/kit/typing-hook"
+import { dataShape, keyName, TypingRecord, type TypingEntry } from "~/kit/typing-record"
 
 const TRACE_MS = 60_000
 
@@ -46,6 +46,15 @@ function look(): void {
   record.seen(t, h.block, lenOf(h.el), h.caret)
 }
 
+function withFocus(n: TypingNote): TypingEntry {
+  const f = typingFocus()
+  if (!f) return { t: now(), ...n }
+  const h = here()
+  const screen = h?.block === f.block ? { screen: lenOf(h.el) } : {}
+  const off = f.editor !== f.stored ? { flag: "EDITOR OUT OF STEP WITH THE DOC" } : {}
+  return { t: now(), ...n, block: n.block ?? f.block, ...screen, editor: f.editor, stored: f.stored, ...(n.doc ? { here: n.doc === f.doc } : {}), ...off }
+}
+
 function stop(): void {
   undo?.()
   undo = null
@@ -75,10 +84,14 @@ export function startTypingTrace(): void {
   }
   const watch = new MutationObserver(look)
   watch.observe(document.body, { subtree: true, childList: true, characterData: true })
-  setTypingSink((n) => record.push({ t: now(), ...n }))
+  const onCompose = (e: CompositionEvent): void => {
+    if (inDoc(e.target)) record.push({ t: now(), what: e.type })
+  }
+  setTypingSink((n) => record.push(withFocus(n)))
   document.addEventListener("keydown", onKey, true)
   document.addEventListener("beforeinput", onBefore, true)
   document.addEventListener("input", onInput, true)
+  for (const type of ["compositionstart", "compositionend"] as const) document.addEventListener(type, onCompose, true)
   const timer = window.setTimeout(stop, TRACE_MS)
   undo = () => {
     setTypingSink(null)
@@ -86,6 +99,7 @@ export function startTypingTrace(): void {
     document.removeEventListener("keydown", onKey, true)
     document.removeEventListener("beforeinput", onBefore, true)
     document.removeEventListener("input", onInput, true)
+    for (const type of ["compositionstart", "compositionend"] as const) document.removeEventListener(type, onCompose, true)
     window.clearTimeout(timer)
   }
 }
