@@ -145,8 +145,64 @@ const fail = (why: string): void => {
 };
 
 async function writes(w: Win): Promise<string> {
-  const got = await w.page.evaluate(() => (globalThis as unknown as { __ow?: unknown[] }).__ow?.slice(-40) ?? []);
-  return got.map((e) => `      ${JSON.stringify(e)}`).join("\n");
+  const got = await w.page.evaluate(() =>
+    ((globalThis as unknown as { __ow?: unknown[] }).__ow?.slice(-40) ?? []).map((e) => {
+      try {
+        return JSON.stringify(e);
+      } catch {
+        // A cyclic entry still shows what it is.
+        return String(e);
+      }
+    }),
+  );
+  return got.map((e) => `      ${e}`).join("\n");
+}
+
+interface Stored {
+  clocks: string;
+  lines: string[];
+}
+
+async function stored(w: Win): Promise<Stored | null> {
+  return w.page.evaluate(() => {
+    interface YText {
+      toString: () => string;
+    }
+    interface YEl {
+      getAttribute: (k: string) => unknown;
+      toArray: () => unknown[];
+      nodeName?: string;
+    }
+    interface YDoc {
+      store: { clients: Map<number, { id: { clock: number }; length: number }[]> };
+      share: Map<string, { toArray: () => unknown[]; length: number }>;
+    }
+    const docs = [...((globalThis as unknown as { __ydocs?: Set<YDoc> }).__ydocs ?? [])];
+    const thread = docs.map((d) => ({ d, f: d.share.get("thread") })).filter((x) => x.f && x.f.length > 0);
+    const pick = thread.sort((a, b) => (b.f?.length ?? 0) - (a.f?.length ?? 0))[0];
+    if (!pick?.f) return null;
+    const textOf = (n: unknown): string => {
+      const el = n as YEl;
+      if (typeof el.toArray === "function" && typeof el.getAttribute === "function")
+        return el
+          .toArray()
+          .map(textOf)
+          .join(el.nodeName === "block" ? "\n" : "");
+      return (n as YText).toString().replace(/<[^>]*>/g, "");
+    };
+    const clocks = [...pick.d.store.clients.entries()]
+      .map(([c, structs]) => {
+        const last = structs.at(-1);
+        return `${c}:${last ? last.id.clock + last.length : 0}`;
+      })
+      .sort()
+      .join(" ");
+    const lines = pick.f.toArray().map((el) => {
+      const e = el as YEl;
+      return `${String(e.getAttribute("id")).slice(0, 6)} ${String(e.getAttribute("author"))} ${JSON.stringify(textOf(el))}`;
+    });
+    return { clocks, lines };
+  });
 }
 
 async function startLine(w: Win): Promise<void> {
@@ -345,6 +401,14 @@ try {
       lines = await docLines();
     }
     log(`drained: the CLI shows\n${lines.map((l) => `      ${l}`).join("\n")}`);
+    const ys = await Promise.all(wins.map(stored));
+    for (const [i, y] of ys.entries())
+      log(`drained: ${wins[i]!.label} Yjs (local instrumented builds only) clocks ${y?.clocks ?? "(not exposed)"}\n${(y?.lines ?? []).map((l) => `      ${l}`).join("\n")}`);
+    if (ys.every((y) => y)) {
+      const sameY = ys.every((y) => y!.clocks === ys[0]!.clocks && JSON.stringify(y!.lines) === JSON.stringify(ys[0]!.lines));
+      log(`drained: the windows' Yjs docs ${sameY ? "match" : "DIFFER"}; their screens ${docs.every((d) => JSON.stringify(d) === JSON.stringify(docs[0])) ? "match" : "DIFFER"}`);
+      console.log(`  Yjs docs ${sameY ? "match" : "differ"} across windows after the drain`);
+    }
     for (const [i, d] of docs.entries()) log(`drained: ${wins[i]!.label} shows\n${d.map((l) => `      ${JSON.stringify(l)}`).join("\n")}`);
     for (const w of wins) {
       const lost = inOrder(lines, w.sent);
