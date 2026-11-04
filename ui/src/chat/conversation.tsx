@@ -78,12 +78,13 @@ export function quoteOf(list: Message[], i: number, bySeq: ReadonlyMap<number, M
 
 interface Anchor {
   el: Element
+  seq: number
   top: number
   at: number
 }
 
 function anchorIn(box: HTMLElement, list: HTMLElement): Anchor | null {
-  const rows = list.children
+  const rows = list.querySelectorAll<HTMLElement>(":scope > [data-seq]")
   const top = box.getBoundingClientRect().top
   let lo = 0
   let hi = rows.length - 1
@@ -93,7 +94,39 @@ function anchorIn(box: HTMLElement, list: HTMLElement): Anchor | null {
     else lo = mid + 1
   }
   const el = rows[lo]
-  return el ? { el, top: el.getBoundingClientRect().top - top, at: box.scrollTop } : null
+  const seq = Number(el?.dataset.seq)
+  return el && Number.isSafeInteger(seq) ? { el, seq, top: el.getBoundingClientRect().top - top, at: box.scrollTop } : null
+}
+
+function caretIn(box: HTMLElement, list: HTMLElement): Anchor | null {
+  const doc = list.querySelector(".thread-doc")
+  const node = doc?.contains(document.activeElement) ? getSelection()?.focusNode : null
+  const el = node instanceof Element ? node : node?.parentElement
+  if (!el || !doc?.contains(el)) return null
+  const view = box.getBoundingClientRect()
+  const at = el.getBoundingClientRect()
+  return at.bottom > view.top && at.top < view.bottom ? { el, seq: Number.NaN, top: at.top - view.top, at: box.scrollTop } : null
+}
+
+function docIn(box: HTMLElement, list: HTMLElement): Anchor | null {
+  const el = list.querySelector(".thread-doc")
+  if (!el) return null
+  const view = box.getBoundingClientRect()
+  const at = el.getBoundingClientRect()
+  return at.bottom > view.top && at.top < view.bottom ? { el, seq: Number.NaN, top: at.top - view.top, at: box.scrollTop } : null
+}
+
+function anchorRow(list: HTMLElement, seq: number): Element | null {
+  let found: Element | null = null
+  let best = -1
+  for (const row of list.querySelectorAll<HTMLElement>(":scope > [data-seq]")) {
+    const at = Number(row.dataset.seq)
+    if (at <= seq && at > best) {
+      best = at
+      found = row
+    }
+  }
+  return found
 }
 
 function spotIn(box: HTMLElement, list: HTMLElement): Spot | null {
@@ -119,7 +152,7 @@ function rowAt(box: HTMLElement, list: readonly Message[], at: number): HTMLElem
   return null
 }
 
-export function useStick(following = true) {
+export function useStick(following = true, still = false) {
   const scroller = useRef<HTMLDivElement>(null)
   const content = useRef<HTMLDivElement>(null)
   const stuck = useRef(true)
@@ -130,33 +163,48 @@ export function useStick(following = true) {
   const anchor = useRef<Anchor | null>(null)
   const height = useRef(0)
   const held = useRef(false)
+  const touched = useRef(false)
+  const room = useRef(0)
 
   const settle = useCallback(() => {
     const box = scroller.current
     const list = content.current
     if (!box || !list) return
     height.current = list.offsetHeight
-    if (stuck.current) {
+    if (stuck.current && !(still && anchor.current)) {
       box.scrollTop = box.scrollHeight
       return
     }
     const a = anchor.current
-    if (!a?.el.isConnected) return
+    if (!a) return
+    const el = a.el.isConnected ? a.el : anchorRow(list, a.seq)
+    if (!el) return
     const top = box.getBoundingClientRect().top
-    const shift = a.el.getBoundingClientRect().top - top - (a.top - (box.scrollTop - a.at))
+    const clamped = still && box.scrollTop < a.at && box.scrollTop >= box.scrollHeight - box.clientHeight - 0.5
+    const shift = el.getBoundingClientRect().top - top - (clamped ? a.top : a.top - (box.scrollTop - a.at))
+    const short = still ? box.scrollTop + shift - (box.scrollHeight - box.clientHeight) : 0
+    if (short > 0.5) {
+      room.current += short
+      list.style.paddingBottom = `${room.current}px`
+    }
     if (Math.abs(shift) > 0.5) box.scrollTop += shift
-    anchor.current = { el: a.el, top: a.el.getBoundingClientRect().top - top, at: box.scrollTop }
-  }, [])
+    anchor.current = { el, seq: a.seq, top: el.getBoundingClientRect().top - top, at: box.scrollTop }
+  }, [still])
 
   const remember = useCallback(() => {
     const box = scroller.current
     const list = content.current
     if (!box || !list) return
     if (height.current && list.offsetHeight !== height.current) settle()
+    const hidden = box.scrollHeight - box.scrollTop - box.clientHeight
+    if (room.current > 0 && hidden > 0.5) {
+      room.current = Math.max(0, room.current - hidden)
+      list.style.paddingBottom = room.current ? `${room.current}px` : ""
+    }
     stuck.current = live.current && !held.current && box.scrollHeight - box.scrollTop - box.clientHeight < NEAR_BOTTOM
-    anchor.current = stuck.current ? null : anchorIn(box, list)
+    anchor.current = (still ? (caretIn(box, list) ?? (touched.current ? docIn(box, list) : null)) : null) ?? (stuck.current ? null : anchorIn(box, list))
     height.current = list.offsetHeight
-  }, [settle])
+  }, [settle, still])
 
   useLayoutEffect(() => {
     const box = scroller.current
@@ -168,11 +216,30 @@ export function useStick(following = true) {
     return () => watch.disconnect()
   }, [settle])
 
+  useLayoutEffect(() => {
+    const box = scroller.current
+    if (!box || !still) return
+    const touch = () => {
+      if (touched.current) return
+      touched.current = true
+      remember()
+    }
+    const kinds = ["wheel", "pointerdown", "keydown", "touchstart"] as const
+    for (const kind of kinds) box.addEventListener(kind, touch, { passive: true })
+    return () => {
+      for (const kind of kinds) box.removeEventListener(kind, touch)
+    }
+  }, [remember, still])
+
   const toBottom = useCallback((smooth: boolean) => {
     const box = scroller.current
     if (!box) return
     stuck.current = true
     anchor.current = null
+    if (room.current && content.current) {
+      room.current = 0
+      content.current.style.paddingBottom = ""
+    }
     box.scrollTo({ top: box.scrollHeight, behavior: smooth && !matchMedia("(prefers-reduced-motion: reduce)").matches ? "smooth" : "auto" })
   }, [])
 
@@ -194,10 +261,10 @@ export function useStick(following = true) {
         stuck.current = false
         const box = scroller.current
         const list = content.current
-        anchor.current = box && list ? anchorIn(box, list) : null
+        anchor.current = box && list ? ((still ? caretIn(box, list) : null) ?? anchorIn(box, list)) : null
       } else remember()
     },
-    [remember]
+    [remember, still]
   )
 
   return { scroller, content, stuck, live, remember, settle, toBottom, toOffset, unstick, hold }
@@ -324,7 +391,7 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
   const start = firstAt >= 0 && firstAt < end ? firstAt : Math.max(0, end - TAIL)
   const following = end === list.length
   const latest = useRef(false)
-  const { scroller, content, stuck, live, remember, settle, toBottom, toOffset, unstick, hold } = useStick(following)
+  const { scroller, content, stuck, live, remember, settle, toBottom, toOffset, unstick, hold } = useStick(following, !!doc)
   const replying = useReplying()
   const quote = useCallback(
     (seq: number, excerpt: string) => {
@@ -393,10 +460,18 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
       queueMicrotask(() => setSpan({ top: null, bottom: null }))
       return
     }
-    if (last.from === channel.you) toBottom(false)
-    else if (!stuck.current) setFresh((n) => n + list.filter((m) => m.seq > before && m.from !== channel.you && !m.system && !m.leftOut).length)
+    if (last.from === channel.you && !doc) toBottom(false)
+    else if (!stuck.current && !doc) setFresh((n) => n + list.filter((m) => m.seq > before && m.from !== channel.you && !m.system && !m.leftOut).length)
     settle()
-  }, [last, list, channel.you, toBottom, settle, stuck, live, content])
+    const box = scroller.current
+    if (doc && box) {
+      const bottom = box.getBoundingClientRect().bottom
+      const below = arriving.filter(
+        (m) => m.from !== channel.you && !m.system && !m.leftOut && (content.current?.querySelector(`[data-seq="${m.seq}"]`)?.getBoundingClientRect().top ?? bottom) >= bottom
+      )
+      if (below.length) setFresh((n) => n + below.length)
+    }
+  }, [last, list, channel.you, toBottom, settle, stuck, live, content, doc, scroller])
 
   const here = spotKey(channel.code, where)
   const onScroll = () => {

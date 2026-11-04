@@ -1,11 +1,12 @@
 import type { Subprocess } from "bun";
 import { appendFileSync, renameSync, statSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import { loadConfig, type Config, type WakeHook } from "../config.ts";
 import { pendingDocWakes } from "../config/doc-wakes.ts";
 import type { ChannelState } from "@kiwi/core/state.ts";
+import { commandOf, findOnPath, runnable } from "../harness-bin.ts";
 import { seatHeldAway } from "../hold.ts";
+import { pinSeatBin } from "../seats.ts";
 import { listenHooksInstalled } from "../hooks/install/claude.ts";
 import { mimoInstalled } from "../hooks/install/mimo.ts";
 import { piInstalled } from "../hooks/install/pi.ts";
@@ -46,12 +47,6 @@ export function appendWakeRow(dir: string, w: WakeRow): void {
 const WAKE_RUN_MS = 60_000;
 
 type Session = import("../agent.ts").AgentSession;
-
-function findExecutable(cmd: string): string | null {
-  const user = process.env.HOME || homedir();
-  const dirs = [process.env.PATH ?? "", join(user, ".local", "bin"), join(user, ".bun", "bin"), "/opt/homebrew/bin", "/usr/local/bin"].filter(Boolean).join(":");
-  return Bun.which(cmd, { PATH: dirs });
-}
 
 export async function runBounded(argv: string[], ms: number, started: (child: Subprocess) => void = () => {}): Promise<{ code: number; err: string } | null> {
   const child = Bun.spawn(argv, { env: { ...process.env }, stdin: "ignore", stdout: "ignore", stderr: "pipe" });
@@ -152,9 +147,21 @@ export function seatWakes({ dir, wakeDelayMs, wakeGapMs, wakeOutstandingMs, stop
     return docs ? { ...counted, unread: counted.unread + docs } : counted;
   };
 
+  const pinnedExe = (seat: Seat, cmd: string): { exe: string } | { why: string } => {
+    const record = seatRecordFor(loadConfig(), seat.alias, seat.agent);
+    if (record?.bin && commandOf(record.harness) === cmd)
+      return runnable(record.bin) ? { exe: record.bin } : { why: `${cmd} pinned at ${record.bin} is gone; join again from the harness to pin it anew` };
+    const found = findOnPath(cmd);
+    if (!found) return { why: `${cmd} not found on PATH` };
+    if (record && commandOf(record.harness) === cmd) pinSeatBin(seat.alias, seat.agent, record.session, found);
+    return { exe: found };
+  };
+
   const runWake = async (seat: Seat, [cmd, ...rest]: string[]): Promise<string | null> => {
-    const exe = cmd ? findExecutable(cmd) : null;
-    if (!exe) return `${cmd ?? "command"} not found on PATH`;
+    if (!cmd) return "command not found on PATH";
+    const pinned = pinnedExe(seat, cmd);
+    if ("why" in pinned) return pinned.why;
+    const { exe } = pinned;
     let mine: Subprocess | null = null;
     try {
       const ran = await runBounded([exe, ...rest], WAKE_RUN_MS, (child) => {

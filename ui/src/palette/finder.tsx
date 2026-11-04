@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react"
 
 import { Avatar, cx, Dot, STATUS_WORDS } from "~/kit/bits"
+import { useDebugOptions } from "~/kit/debug"
 import { Icon } from "~/kit/icons"
 import type { App, Task, TaskStatus, Theme } from "~/model"
 import { useApp, type Go, type Nav, type Panel } from "~/nav"
@@ -50,7 +51,8 @@ export function Finder() {
   const listId = useId()
   const listRef = useRef<HTMLDivElement>(null)
   const q = query.trim().toLowerCase()
-  const groups = rank(collect(app, nav, go), q)
+  const debug = useDebugOptions()
+  const groups = rank(collect(app, nav, go, debug), q)
   const flat = groups.flatMap((g) => g.items)
   const current = Math.max(0, Math.min(active, flat.length - 1))
   const optionId = (i: number) => `${listId}-${i}`
@@ -196,7 +198,7 @@ function rank(items: Item[], q: string): Ranked[] {
 
 const byRecent = (a: Task, b: Task): number => b.updatedAt - a.updatedAt
 
-function collect(app: App, nav: Nav, go: (go: Go) => void): Item[] {
+function collect(app: App, nav: Nav, go: (go: Go) => void, debug: boolean): Item[] {
   const close = () => go({ to: "dialog", dialog: null })
   const toPanel = (panel: Panel) => {
     close()
@@ -328,30 +330,56 @@ function collect(app: App, nav: Nav, go: (go: Go) => void): Item[] {
       },
     })
 
-  items.push(
-    {
-      id: "action:trace-scroll",
-      group: "Actions",
-      label: "Trace scrolling for 20 seconds",
-      keys: ["debug", "flicker", "scroll"],
-      lead: <Icon name="search" size={14} />,
-      run: () => {
-        close()
-        void import("~/kit/scroll-trace").then((m) => m.startScrollTrace())
+  if (debug)
+    items.push(
+      {
+        id: "action:trace-scroll",
+        group: "Actions",
+        label: "Trace scrolling for 20 seconds",
+        keys: ["debug", "flicker", "scroll"],
+        lead: <Icon name="search" size={14} />,
+        run: () => {
+          close()
+          void import("~/kit/scroll-trace").then((m) => m.startScrollTrace())
+        },
       },
-    },
-    {
-      id: "action:copy-scroll-trace",
-      group: "Actions",
-      label: "Copy scroll trace",
-      keys: ["debug", "flicker", "scroll"],
-      lead: <Icon name="copy" size={14} />,
-      run: () => {
-        close()
-        void Promise.all([import("~/kit/scroll-trace"), import("~/kit/toasts")]).then(([m, t]) => t.copyText(m.scrollTrace(), "Scroll trace copied"))
+      {
+        id: "action:copy-scroll-trace",
+        group: "Actions",
+        label: "Copy scroll trace",
+        keys: ["debug", "flicker", "scroll"],
+        lead: <Icon name="copy" size={14} />,
+        run: () => {
+          close()
+          void Promise.all([import("~/kit/scroll-trace"), import("~/kit/toasts")]).then(([m, t]) => t.copyText(m.scrollTrace(), "Scroll trace copied"))
+        },
       },
-    }
-  )
+      {
+        id: "action:trace-typing",
+        group: "Actions",
+        label: "Trace typing for 60 seconds",
+        keys: ["debug", "typing", "doc", "erased"],
+        lead: <Icon name="search" size={14} />,
+        run: () => {
+          close()
+          void Promise.all([import("~/kit/typing-trace"), import("~/kit/toasts")]).then(([m, t]) => {
+            m.startTypingTrace()
+            t.announce("Tracing typing for 60 seconds")
+          })
+        },
+      },
+      {
+        id: "action:copy-typing-trace",
+        group: "Actions",
+        label: "Copy typing trace",
+        keys: ["debug", "typing", "doc", "erased"],
+        lead: <Icon name="copy" size={14} />,
+        run: () => {
+          close()
+          void Promise.all([import("~/kit/typing-trace"), import("~/kit/toasts")]).then(([m, t]) => t.copyText(m.typingTrace(), "Typing trace copied"))
+        },
+      }
+    )
 
   for (const t of THEMES) {
     const on = app.prefs.theme === t.theme

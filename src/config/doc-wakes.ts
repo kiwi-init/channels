@@ -90,19 +90,44 @@ export function tellDocWakes(channel: string, agent: string, blocks: readonly st
   if (!pendingDocWakes(channel, agent).length) writePrivate(`${base(channel, agent)}.wakes`, "");
 }
 
-export function docSince(channel: string, agent: string): Record<string, number> {
-  const path = `${base(channel, agent)}.since.json`;
-  if (!existsSync(path)) return {};
+export interface DocSeenDoc {
+  cut: number;
+  at: Record<string, number>;
+}
+
+export interface DocSeen {
+  alive: number | null;
+  docs: Record<string, DocSeenDoc>;
+}
+
+const isSeenDoc = (x: unknown): x is DocSeenDoc => {
+  const d = x as Partial<DocSeenDoc> | null;
+  return !!d && Number.isFinite(d.cut) && !!d.at && typeof d.at === "object" && Object.values(d.at).every((n) => Number.isFinite(n));
+};
+
+function readJson(path: string): unknown {
+  if (!existsSync(path)) return null;
   try {
-    const x: unknown = JSON.parse(readFileSync(path, "utf8"));
-    if (!x || typeof x !== "object") return {};
-    return Object.fromEntries(Object.entries(x).filter((e): e is [string, number] => Number.isFinite(e[1])));
+    return JSON.parse(readFileSync(path, "utf8"));
   } catch {
     // A torn file: docs are followed from now on, as for a new seat.
-    return {};
+    return null;
   }
 }
 
-export function setDocSince(channel: string, agent: string, since: Record<string, number>): void {
-  writePrivate(`${base(channel, agent)}.since.json`, JSON.stringify(since));
+export function legacyDocSince(channel: string, agent: string): Record<string, number> {
+  const x = readJson(`${base(channel, agent)}.since.json`);
+  if (!x || typeof x !== "object") return {};
+  return Object.fromEntries(Object.entries(x).filter((e): e is [string, number] => Number.isFinite(e[1])));
+}
+
+export function docSeen(channel: string, agent: string): DocSeen {
+  const x = readJson(`${base(channel, agent)}.seen.json`) as Partial<DocSeen> | null;
+  const alive = x && Number.isFinite(x.alive) ? (x.alive as number) : null;
+  const docs = x?.docs && typeof x.docs === "object" ? Object.fromEntries(Object.entries(x.docs).filter((e): e is [string, DocSeenDoc] => isSeenDoc(e[1]))) : {};
+  return { alive, docs };
+}
+
+export function setDocSeen(channel: string, agent: string, seen: DocSeen): void {
+  writePrivate(`${base(channel, agent)}.seen.json`, JSON.stringify(seen));
 }

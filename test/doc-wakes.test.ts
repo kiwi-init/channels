@@ -3,12 +3,12 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { newChannelKey, newRoomId } from "@kiwi/core/crypto.ts";
-import { newBlock, newDocId } from "@kiwi/core/doc/blocks.ts";
+import { markSent, newBlock, newDocId } from "@kiwi/core/doc/blocks.ts";
 import { ThreadDoc } from "@kiwi/core/doc/thread-doc.ts";
 import { generateIdentity } from "@kiwi/core/identity.ts";
 import type { ChannelState, Task } from "@kiwi/core/state.ts";
 import { docWakeLine } from "../src/agent/docs.ts";
-import { addDocWake, docSince, pendingDocWakes, tellDocWakes, type DocWakeItem } from "../src/config/doc-wakes.ts";
+import { addDocWake, docSeen, pendingDocWakes, tellDocWakes, type DocWakeItem } from "../src/config/doc-wakes.ts";
 import { docFollows, followDocs } from "../src/daemon/doc-follow.ts";
 
 const was = process.env.KIWI_HOME;
@@ -86,7 +86,13 @@ describe("the doc wakes an agent hasn't been told yet (T606)", () => {
       "  before it: rodrigo: shipped it",
       '  answer in the doc: kiwi send --to T7 "…" (kiwi show T7 has all of it)',
     ]);
-    expect(docWakeLine(item("b4", { key: "main" }), "kiwi")).toContain('kiwi send --to #general "…" (kiwi show general has all of it)');
+    expect(docWakeLine(item("b4", { key: "main" }), "kiwi")).toContain(`kiwi send --to '#general' "…" (kiwi show general has all of it)`);
+  });
+
+  test("the answer command it suggests survives a shell: #general stays an argument, not a comment (T1353)", async () => {
+    const said = /answer in the doc: kiwi (send .*) \(kiwi show/.exec(docWakeLine(item("b5", { key: "main" }), "kiwi"))?.[1] ?? "";
+    const p = Bun.spawn(["sh", "-c", `printf '%s\\n' ${said}`], { stdout: "pipe" });
+    expect((await new Response(p.stdout).text()).trim().split("\n")).toEqual(["send", "--to", "#general", "…"]);
   });
 });
 
@@ -112,7 +118,7 @@ describe("the daemon's follower queues a wake for a finished block (T606)", () =
     );
     f.refresh(0);
     await Bun.sleep(30);
-    expect(docSince("follow", "olivia")[th]).toBeNumber();
+    expect(docSeen("follow", "olivia").docs[th]).toEqual({ cut: expect.any(Number), at: {} });
     newBlock(td.doc, "text", "jow", "what's left on T9?", Date.now() + 1);
     newBlock(td.doc, "text", "jow", "", Date.now() + 2);
     expect(woke).toBe(1);
@@ -142,5 +148,149 @@ describe("the daemon's follower queues a wake for a finished block (T606)", () =
     await Bun.sleep(30);
     expect(reads).toBe(1);
     f.stop();
+  });
+});
+
+describe("the daemon's doc cursor survives a restart (T1741)", async () => {
+  const me = await generateIdentity("olivia");
+  const key = newChannelKey();
+  const T0 = 1_000_000;
+  const room = () => {
+    const th = newDocId();
+    const td = new ThreadDoc({ roomId: newRoomId(), th, me, keys: { current: async () => ({ key }), opening: async () => [key] }, links: { send: () => {}, aware: () => {} } });
+    return { th, td };
+  };
+  const run = async (alias: string, td: ThreadDoc, state: ChannelState, at: number) => {
+    const f = followDocs(
+      { alias, agent: "olivia", ch: { threadDoc: async () => td, closeDoc: () => {} } },
+      async () => state,
+      () => {},
+      async () => true,
+      () => at,
+    );
+    f.refresh(0);
+    await Bun.sleep(30);
+    return f;
+  };
+  const authors = (alias: string) => pendingDocWakes(alias, "olivia").map((w) => w.author);
+
+  test("a line begun before one that woke the agent, but sent after a restart, still wakes it", async () => {
+    const { th, td } = room();
+    const state = { docs: new Map([["main", th]]), tasks: new Map() } as unknown as ChannelState;
+    const first = await run("restart", td, state, T0);
+    const ana = newBlock(td.doc, "text", "ana", "@olivia the relay keeps refusing snapshots", T0 + 10);
+    markSent(td.doc, newBlock(td.doc, "text", "ben", "@olivia merged #1621", T0 + 20).id);
+    expect(authors("restart")).toEqual(["ben"]);
+    first.stop();
+    markSent(td.doc, ana.id);
+    const second = await run("restart", td, state, T0 + 100);
+    expect(authors("restart")).toEqual(["ben", "ana"]);
+    second.stop();
+    td.destroy();
+  });
+
+  test("a line from a clock an hour fast doesn't hide others' lines after a restart", async () => {
+    const { th, td } = room();
+    const state = { docs: new Map([["main", th]]), tasks: new Map() } as unknown as ChannelState;
+    const first = await run("skew", td, state, T0);
+    markSent(td.doc, newBlock(td.doc, "text", "ben", "@olivia hi from a fast clock", T0 + 3_600_000).id);
+    first.stop();
+    const second = await run("skew", td, state, T0 + 60_000);
+    markSent(td.doc, newBlock(td.doc, "text", "ana", "@olivia are you there?", T0 + 120_000).id);
+    expect(authors("skew")).toEqual(["ben", "ana"]);
+    second.stop();
+    td.destroy();
+  });
+
+  test("a task doc first followed after a restart wakes its owner for a line written while the daemon was down, not for older ones", async () => {
+    const { th, td } = room();
+    const before = { docs: new Map(), tasks: new Map() } as unknown as ChannelState;
+    const after = { docs: new Map([["task:9", th]]), tasks: new Map([[9, task(9, { owner: "olivia" })]]) } as unknown as ChannelState;
+    markSent(td.doc, newBlock(td.doc, "text", "jow", "an old line", T0 - 10).id);
+    const first = await run("newtask", td, before, T0);
+    first.stop();
+    markSent(td.doc, newBlock(td.doc, "text", "jow", "start with the relay, then the CLI", T0 + 30_000).id);
+    const second = await run("newtask", td, after, T0 + 60_000);
+    expect(pendingDocWakes("newtask", "olivia").map((w) => w.text)).toEqual(["start with the relay, then the CLI"]);
+    second.stop();
+    td.destroy();
+  });
+
+  test("history that reaches a newly followed doc late doesn't wake the agent; a restart doesn't wake it twice", async () => {
+    const { th, td } = room();
+    const state = { docs: new Map([["main", th]]), tasks: new Map() } as unknown as ChannelState;
+    const first = await run("late", td, state, T0);
+    markSent(td.doc, newBlock(td.doc, "text", "jow", "@olivia from last week", T0 - 600_000).id);
+    markSent(td.doc, newBlock(td.doc, "text", "jow", "@olivia now", T0 + 10).id);
+    first.stop();
+    const second = await run("late", td, state, T0 + 100);
+    expect(authors("late")).toEqual(["jow"]);
+    expect(pendingDocWakes("late", "olivia").map((w) => w.text)).toEqual(["@olivia now"]);
+    second.stop();
+    td.destroy();
+  });
+});
+
+describe("the wake's 'before it' (T1741)", () => {
+  test("is the last finished line before the wake, never someone's unsent draft or an empty block", async () => {
+    const me = await generateIdentity("olivia");
+    const key = newChannelKey();
+    const th = newDocId();
+    const td = new ThreadDoc({ roomId: newRoomId(), th, me, keys: { current: async () => ({ key }), opening: async () => [key] }, links: { send: () => {}, aware: () => {} } });
+    const state = { docs: new Map([["main", th]]), tasks: new Map() } as unknown as ChannelState;
+    const T0 = 1_000_000;
+    const f = followDocs(
+      { alias: "context", agent: "olivia", ch: { threadDoc: async () => td, closeDoc: () => {} } },
+      async () => state,
+      () => {},
+      async () => true,
+      () => T0,
+    );
+    f.refresh(0);
+    await Bun.sleep(30);
+    markSent(td.doc, newBlock(td.doc, "text", "rodrigo", "shipped the relay fix", T0 + 1).id);
+    markSent(td.doc, newBlock(td.doc, "text", "rodrigo", "", T0 + 2).id);
+    newBlock(td.doc, "text", "maya", "honestly I think we should drop the vend", T0 + 5);
+    markSent(td.doc, newBlock(td.doc, "text", "ben", "@olivia can you check the build?", T0 + 10).id);
+    expect(pendingDocWakes("context", "olivia").map((w) => w.context)).toEqual(["rodrigo: shipped the relay fix"]);
+    f.stop();
+    td.destroy();
+  });
+});
+
+describe("a task doc wakes everyone working the task, as its thread's messages do (T1741)", () => {
+  test("a line without a mention wakes an agent that works on, reviews or posted in the task, not one in #general", async () => {
+    const me = await generateIdentity("olivia");
+    const key = newChannelKey();
+    for (const [alias, t] of [
+      ["worked", { owner: "rodrigo", workedBy: ["olivia"] }],
+      ["reviews", { owner: "rodrigo", review: "olivia" }],
+      ["posted", { owner: "rodrigo", posters: ["olivia"] }],
+    ] satisfies [string, Partial<Task>][]) {
+      const th = newDocId();
+      const main = newDocId();
+      const td = new ThreadDoc({ roomId: newRoomId(), th, me, keys: { current: async () => ({ key }), opening: async () => [key] }, links: { send: () => {}, aware: () => {} } });
+      const gd = new ThreadDoc({ roomId: newRoomId(), th: main, me, keys: { current: async () => ({ key }), opening: async () => [key] }, links: { send: () => {}, aware: () => {} } });
+      const state = {
+        docs: new Map([
+          ["main", main],
+          ["task:9", th],
+        ]),
+        tasks: new Map([[9, task(9, t)]]),
+      } as unknown as ChannelState;
+      const f = followDocs(
+        { alias, agent: "olivia", ch: { threadDoc: async (k: string) => (k === "main" ? gd : td), closeDoc: () => {} } },
+        async () => state,
+        () => {},
+      );
+      f.refresh(0);
+      await Bun.sleep(30);
+      markSent(td.doc, newBlock(td.doc, "text", "jow", "the relay half of T9 is blocked: wait before merging", Date.now() + 1).id);
+      markSent(gd.doc, newBlock(gd.doc, "text", "jow", "lunch at one", Date.now() + 1).id);
+      expect(pendingDocWakes(alias, "olivia").map((w) => w.text)).toEqual(["the relay half of T9 is blocked: wait before merging"]);
+      f.stop();
+      td.destroy();
+      gd.destroy();
+    }
   });
 });

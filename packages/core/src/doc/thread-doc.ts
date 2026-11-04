@@ -61,6 +61,7 @@ const NO_KEY = Symbol("no key");
 const enc = new TextEncoder();
 const dec = new TextDecoder();
 const ad = (roomId: string, th: string) => `kiwi-doc\n${roomId}\n${th}`;
+const sameBytes = (a: Uint8Array, b: Uint8Array): boolean => a.length === b.length && a.every((x, i) => x === b[i]);
 
 const isSigned = (x: unknown): x is Signed => {
   const s = x as Partial<Signed> | null;
@@ -90,6 +91,7 @@ export class ThreadDoc {
   private subFails = 0;
   private resub: ReturnType<typeof setTimeout> | null = null;
   private refusedWith: string | null = null;
+  private resend = false;
 
   constructor(o: DocOptions, doc: Y.Doc = new Y.Doc()) {
     if (!DOC_THREAD_RE.test(o.th)) throw new Error(`not a doc id: ${o.th}`);
@@ -135,8 +137,8 @@ export class ThreadDoc {
 
   reconnect(): void {
     this.ready = false;
+    this.resend = this.inFlight.size > 0;
     this.start(this.head);
-    for (const [id, update] of this.inFlight) void this.queue(() => this.post(update, id));
   }
 
   receive(frame: DocIn): Promise<void> {
@@ -160,10 +162,10 @@ export class ThreadDoc {
 
   destroy(): void {
     if (this.closed) return;
+    this.awareness.setLocalState(null);
     this.closed = true;
     if (this.timer) clearTimeout(this.timer);
     if (this.resub) clearTimeout(this.resub);
-    this.awareness.setLocalState(null);
     this.doc.off("update", this.onUpdate);
     this.awareness.off("update", this.onAwareness);
     this.awareness.destroy();
@@ -266,6 +268,12 @@ export class ThreadDoc {
     this.o.links.send({ t: "doc.snap", id, th: this.th, upto, ...sealed });
   }
 
+  private landed(id: string, seq: number): void {
+    this.inFlight.delete(id);
+    this.refusedWith = null;
+    this.top = Math.max(this.top, seq);
+  }
+
   private subRefused(th: string | undefined, error: string, retryAfter: number | undefined): void {
     if (th !== this.th || this.ready || this.resub) return;
     this.refusedWith = error;
@@ -309,9 +317,8 @@ export class ThreadDoc {
         if (this.big.size) await this.compact();
         return;
       }
-      if (!this.inFlight.delete(f.id)) return;
-      this.refusedWith = null;
-      this.top = Math.max(this.top, f.seq);
+      if (!this.inFlight.has(f.id)) return;
+      this.landed(f.id, f.seq);
       if (f.compact) await this.compact();
       return;
     }
@@ -321,6 +328,10 @@ export class ThreadDoc {
       this.ready = true;
       this.subFails = 0;
       for (const done of this.waiters.splice(0)) done();
+      if (this.resend) {
+        this.resend = false;
+        for (const [id, update] of this.inFlight) void this.queue(() => this.post(update, id));
+      }
       if (this.stale || this.big.size) await this.compact();
       return;
     }
@@ -331,7 +342,10 @@ export class ThreadDoc {
       if (!this.hole || f.dseq < this.hole.dseq) this.hole = { dseq: f.dseq, e: f.e };
       return;
     }
-    if (update) Y.applyUpdate(this.doc, update, REMOTE);
+    if (update) {
+      for (const [id, mine] of this.inFlight) if (!f.snap && sameBytes(mine, update)) this.landed(id, f.dseq);
+      Y.applyUpdate(this.doc, update, REMOTE);
+    }
     await this.refill();
   }
 }

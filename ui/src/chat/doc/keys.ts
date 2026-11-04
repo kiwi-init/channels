@@ -7,6 +7,7 @@ import { redo, undo } from "y-prosemirror"
 
 import { blockAfter, blockAt, blocks, endsBlock, isEmpty, joinBack, joinForward, startBlock, unreply, type Made } from "~/chat/doc/blocks"
 import { attrsOf, isSent, schema } from "~/chat/doc/schema"
+import { noteTyping } from "~/kit/typing-hook"
 
 function inCode(state: EditorState): boolean {
   return !!state.selection.$from.parent.type.spec.code
@@ -56,6 +57,7 @@ export function dropOwnEmpty(me: string, posted: (block: string) => boolean): Co
     const prev = state.doc.child(here.index - 1)
     if (isSent(prev) || posted(attrsOf(prev).id)) return true
     if (dispatch) {
+      noteTyping(() => ({ what: "Backspace dropped an empty line", block: attrsOf(here.node).id }))
       const tr = state.tr.setMeta("addToHistory", false).delete(here.pos, here.pos + here.node.nodeSize)
       dispatch(tr.setSelection(TextSelection.near(tr.doc.resolve(here.pos - 1), -1)).scrollIntoView())
     }

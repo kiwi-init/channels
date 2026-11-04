@@ -30,11 +30,11 @@ const scratch = (tag: string) => {
   return d;
 };
 
-function spawn(home: string, args: string[]) {
+function spawn(home: string, args: string[], stdin: "ignore" | Blob = "ignore") {
   return Bun.spawn(kiwiCmd(args), {
     cwd: home,
     env: { ...process.env, KIWI_HOME: home, KIWI_RELAY: relay, KIWI_NO_HOOKS: "1" },
-    stdin: "ignore",
+    stdin,
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -42,6 +42,12 @@ function spawn(home: string, args: string[]) {
 
 async function run(home: string, ...args: string[]) {
   const p = spawn(home, args);
+  const [out, err] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text()]);
+  return { code: await p.exited, out, err };
+}
+
+async function piped(home: string, input: string, ...args: string[]) {
+  const p = spawn(home, args, new Blob([input]));
   const [out, err] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text()]);
   return { code: await p.exited, out, err };
 }
@@ -247,6 +253,29 @@ describe("ten verbs", () => {
     expect((await run(owner, "note", "build.cmd")).code).toBe(2);
     expect((await run(agent, "note", "--clear")).code).toBe(1);
     expect((await run(agent, "note", "branch", "--ttl", "7d")).code).toBe(1);
+  });
+
+  test("note takes its value from --file or stdin, keeping backticks, $ and newlines", async () => {
+    const record = "deploy with `bun run ship`\nthen check $HOME\n  indented\n";
+    const file = join(scratch("note-file"), "record.md");
+    writeFileSync(file, record);
+    await ok(agent, "note", "workflow", "--file", file);
+    expect(await ok(owner, "note", "workflow")).toBe(`${record}`);
+    const fromStdin = await piped(agent, "from `stdin` $x\nline two\n", "note", "workflow");
+    expect(fromStdin.code).toBe(0);
+    expect(await ok(owner, "note", "workflow")).toBe("from `stdin` $x\nline two\n");
+    expect((await piped(owner, "", "note", "workflow")).out).toBe("from `stdin` $x\nline two\n");
+    expect((await run(agent, "note", "workflow", "words", "--file", file)).code).toBe(1);
+    expect((await run(agent, "note", "workflow", "--file", join(scratch("note-missing"), "none.md"))).code).toBe(1);
+    await ok(agent, "set", "plan", "--file", file);
+    expect(await ok(owner, "get", "plan")).toBe(record);
+    expect((await piped(agent, "piped `plan`", "set", "plan")).code).toBe(0);
+    expect((await ok(owner, "get", "plan")).trim()).toBe("piped `plan`");
+    const empty = join(scratch("note-empty"), "empty.md");
+    writeFileSync(empty, "");
+    expect((await run(agent, "note", "workflow", "--file", empty)).code).toBe(1);
+    expect((await run(agent, "set", "plan", "--file", empty)).code).toBe(1);
+    expect((await ok(owner, "get", "plan")).trim()).toBe("piped `plan`");
   });
 
   test("task add keeps titles short: a long one exits 1 with no id on stdout, and the spec goes in --body or --file", async () => {

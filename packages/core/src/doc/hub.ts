@@ -56,7 +56,7 @@ export class DocHub {
   private readonly byTh = new Map<string, Open>();
   private readonly opening = new Map<string, Promise<ThreadDoc>>();
   private readonly sockets: ((raw: string) => void)[] = [];
-  private readonly awareOut = new Map<string, Uint8Array>();
+  private readonly awareOut = new Map<string, { u: Uint8Array; keys: ThreadKeys }>();
   private awareTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(o: HubOptions) {
@@ -97,9 +97,9 @@ export class DocHub {
   close(thread: string): void {
     const open = this.byThread.get(thread);
     if (!open) return;
+    this.drop(open);
     this.byThread.delete(thread);
     this.byTh.delete(open.td.th);
-    this.drop(open);
   }
 
   closeAll(): void {
@@ -159,7 +159,9 @@ export class DocHub {
   };
 
   private readonly queueAware = (th: string, u: Uint8Array): void => {
-    this.awareOut.set(th, u);
+    const keys = this.byTh.get(th)?.keys;
+    if (!keys) return;
+    this.awareOut.set(th, { u, keys });
     if (!this.awareTimer) this.awareTimer = setTimeout(() => void this.flushAware(), this.o.awareMs ?? AWARE_MS);
   };
 
@@ -169,9 +171,8 @@ export class DocHub {
     const out = [...this.awareOut];
     this.awareOut.clear();
     const docs = await Promise.all(
-      out.map(async ([th, u]) => {
-        const keys = this.byTh.get(th)?.keys;
-        if (!keys?.sealed) return [th, b64url(u)];
+      out.map(async ([th, { u, keys }]) => {
+        if (!keys.sealed) return [th, b64url(u)];
         const { key } = await keys.current();
         return [th, SEALED_AWARE + (await sealWith(key, b64url(u), awareAd(this.o.roomId, th)))];
       }),
@@ -200,8 +201,8 @@ export class DocHub {
     td.doc.on("update", open.onUpdate);
     if (had) {
       Y.applyUpdate(td.doc, Y.encodeStateAsUpdate(had.td.doc));
-      this.byTh.delete(had.td.th);
       this.drop(had);
+      this.byTh.delete(had.td.th);
     }
     this.byThread.set(thread, open);
     this.byTh.set(id, open);

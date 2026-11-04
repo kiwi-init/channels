@@ -3,6 +3,7 @@ import * as Y from "yjs"
 import { blockOf, markBack, markPosted, richOf, threadOf, type Block } from "@kiwi/core/doc/blocks.ts"
 
 import { onGiveBack } from "~/chat/doc/give-back"
+import { noteTyping } from "~/kit/typing-hook"
 
 export interface Finished {
   id: string
@@ -51,6 +52,7 @@ export function postFinished(doc: Y.Doc, rule: Rule, post: (b: Finished) => void
     posted.add(b.id)
     queueMicrotask(() => {
       if (!stopped) markPosted(doc, b.id)
+      noteTyping(() => ({ what: "line posted", block: b.id }))
     })
     post({ id: b.id, text: richOf(el)?.markdown || b.text.trim(), ...(b.re ? { re: b.re } : {}), ...(b.quote ? { quote: b.quote } : {}) })
   }
@@ -70,6 +72,7 @@ export function postFinished(doc: Y.Doc, rule: Rule, post: (b: Finished) => void
   const giveBack = (id: string): void => {
     posted.delete(id)
     markBack(doc, id)
+    noteTyping(() => ({ what: "line given back", block: id }))
   }
   frag.observeDeep(look)
   const off = onGiveBack(giveBack)

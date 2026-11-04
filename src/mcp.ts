@@ -23,7 +23,7 @@ import { keepFiles } from "./received-files.ts";
 import { loadSummary, memberLoad, showsLoad } from "@kiwi/core/load.ts";
 import { Cursor, home, Keystore } from "./config.ts";
 import { holdSession } from "./hooks/listeners.ts";
-import { docWakeToolLine } from "./agent/docs.ts";
+import { docPlaceOf, docWakeToolLine } from "./agent/docs.ts";
 import { pendingDocWakes, tellDocWakes, type DocWakeItem } from "./config/doc-wakes.ts";
 import { ChannelGone, goneText, reason, type Channel, type Refused, type Relay } from "@kiwi/core/client.ts";
 import {
@@ -450,15 +450,14 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
       Effect.gen(function* () {
         const chosen = yield* where(task, main, dm, to, !!re?.length);
         const imgs = images?.length ? yield* Effect.promise(() => loadImages(images)) : undefined;
-        const seq = yield* s.send(text, {
-          to: chosen.to ?? to,
-          kind,
-          re,
-          room,
-          imgs,
-          ...(chosen.task !== undefined ? { task: chosen.task } : {}),
-          ...(chosen.dm ? { dm: true } : {}),
-        });
+        const { state } = yield* s.state();
+        const doc =
+          (kind ?? "msg") === "msg"
+            ? docPlaceOf(state, { ...(chosen.task !== undefined ? { task: chosen.task } : {}), ...(chosen.dm ? { dm: true } : {}), ...(room ? { room } : {}), ...(re?.length ? { re } : {}) })
+            : null;
+        const sending = { to: chosen.to ?? to, re, room, imgs, ...(chosen.task !== undefined ? { task: chosen.task } : {}) };
+        if (doc) return `sent #${yield* s.sendToDoc(text, doc, sending)}${wentTo(chosen)}, into its shared doc`;
+        const seq = yield* s.send(text, { ...sending, kind, ...(chosen.dm ? { dm: true } : {}) });
         return `sent #${seq}${wentTo(chosen)}`;
       }),
     ),
@@ -511,7 +510,8 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
     tool(({ seq, text, kind, images }) =>
       Effect.gen(function* () {
         const imgs = images?.length ? yield* Effect.promise(() => loadImages(images)) : undefined;
-        return `sent #${yield* s.reply(seq, text, kind, imgs)}`;
+        const { state } = yield* s.state();
+        return `sent #${yield* s.reply(seq, text, kind, imgs, {}, (kind ?? "msg") === "msg" ? docPlaceOf(state, { re: [seq] }) : null)}`;
       }),
     ),
   );

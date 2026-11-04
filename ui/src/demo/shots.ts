@@ -30,6 +30,7 @@ export const SHOTS: Record<string, Shot> = {
   "thread-doc": { ...kiwi({ where: { kind: "task", task: 10 } }), docs: 0 },
   "thread-doc-1000": { ...kiwi({ where: { kind: "task", task: 10 } }), docs: 1000 },
   "thread-doc-live": { ...kiwi({ where: { kind: "task", task: 10 } }), docs: 200, streams: true },
+  "thread-doc-busy": { scenario: "doc-busy", channel: "kiwi", nav: { where: { kind: "task", task: 10 } }, docs: 200, streams: true },
   "thread-doc-events": { scenario: "task-events", channel: "kiwi", nav: { where: { kind: "task", task: 10 } }, docs: 0 },
   theirs: kiwi({ where: { kind: "theirs", between: ["atlas", "win"] } }),
   room: kiwi({ where: { kind: "room", room: "releases" } }),

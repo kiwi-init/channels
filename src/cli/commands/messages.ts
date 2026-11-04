@@ -33,7 +33,6 @@ import { bareHandleNote } from "../handles.ts";
 import { args, opt, unexpectedOptions } from "../args.ts";
 import { parseWhere } from "../where.ts";
 import { docPlaceOf } from "../../agent/docs.ts";
-import { mentionsOf } from "@kiwi/core/changes.ts";
 import { type Command, die, noteRead, offlineOk, out, type Quit, session } from "../context.ts";
 import { attachments, images, list, render, text } from "../input.ts";
 
@@ -80,9 +79,10 @@ export const messageCommands: Record<string, Command> = {
         const room = opt.room ?? where.room;
         const doc =
           !asking && kind === "msg" ? docPlaceOf(state, { ...(chosen.task !== undefined ? { task: chosen.task } : {}), ...(chosen.dm ? { dm: true } : {}), ...(room ? { room } : {}), re }) : null;
+        const general = chosen.task === undefined && !chosen.dm && (!room || room.toLowerCase() === "general") && (re.length === 0 || inGeneral(state, re[0]!));
+        const notes = [general ? longForGeneral(state, s.me, body) : null, bareHandleNote(state, body)].filter((n) => n !== null);
         if (doc) {
-          const named = re.length ? [] : (to ?? []).filter((n) => n !== "*" && !mentionsOf(body).has(n.toLowerCase()));
-          const seq = yield* s.sendToDoc(named.length ? `${named.map((n) => `@${n}`).join(" ")} ${body}` : body, doc, {
+          const seq = yield* s.sendToDoc(body, doc, {
             to,
             room,
             ...(re.length ? { re } : {}),
@@ -91,7 +91,7 @@ export const messageCommands: Record<string, Command> = {
             ...(chosen.task !== undefined ? { task: chosen.task } : {}),
           });
           out(`sent #${seq}${wentTo(chosen)}, into its shared doc`);
-          for (const n of [bareHandleNote(state, body)].filter((x) => x !== null)) out(n);
+          for (const n of notes) out(n);
           return;
         }
         const head = asking && opt.wait ? yield* s.ch.fx.head() : 0;
@@ -105,8 +105,6 @@ export const messageCommands: Record<string, Command> = {
           ...(chosen.task !== undefined ? { task: chosen.task } : {}),
           ...(chosen.dm ? { dm: true } : {}),
         });
-        const general = chosen.task === undefined && !chosen.dm && (!room || room.toLowerCase() === "general") && (re.length === 0 || inGeneral(state, re[0]!));
-        const notes = [general ? longForGeneral(state, s.me, body) : null, bareHandleNote(state, body)].filter((n) => n !== null);
         if (!asking || !opt.wait) {
           out(`${asking ? "asked" : "sent"} #${seq}${wentTo(chosen)}`);
           for (const n of notes) out(n);

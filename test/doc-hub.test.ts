@@ -199,6 +199,64 @@ describe("the doc hub keeps each thread's doc on the live socket", () => {
     expect(texts(db.doc)).toEqual(["typed offline"]);
   });
 
+  test("an edit the relay stored before the socket dropped, ack and all, isn't stored again on reconnect (T1734)", async () => {
+    const w = await world();
+    const [ana, bo] = await Promise.all([generateIdentity("ana"), generateIdentity("bo")]);
+    const a = w.hubFor(ana);
+    const b = w.hubFor(bo);
+    const pa = w.plug(a);
+    const sb = w.plug(b).s;
+    const da = await a.open("T5");
+    const db = await b.open("T5", da.th);
+    await w.settle(pa.s, sb);
+    newBlock(da.doc, "text", "ana", "said once");
+    await w.settle(sb);
+    w.relay.hang(pa.s);
+    pa.unplug();
+    const back = w.plug(a).s;
+    await w.settle(back, sb);
+    expect(texts(db.doc)).toEqual(["said once"]);
+    expect(w.relay.rows.filter((r) => r.th === da.th)).toHaveLength(1);
+  });
+
+  test("a second socket doesn't send an edit again while the first still owes its ack (T1734)", async () => {
+    const w = await world();
+    const [ana, bo] = await Promise.all([generateIdentity("ana"), generateIdentity("bo")]);
+    const a = w.hubFor(ana);
+    const b = w.hubFor(bo);
+    const first = w.plug(a);
+    const sb = w.plug(b).s;
+    const da = await a.open("T6");
+    const db = await b.open("T6", da.th);
+    await w.settle(first.s, sb);
+    newBlock(da.doc, "text", "ana", "one copy");
+    await w.settle(sb);
+    const second = w.plug(a).s;
+    await w.settle(first.s, second, sb);
+    expect(texts(db.doc)).toEqual(["one copy"]);
+    expect(w.relay.rows.filter((r) => r.th === da.th)).toHaveLength(1);
+  });
+
+  test("an edit that never reached the relay goes out once the new socket has caught up (T1734)", async () => {
+    const w = await world();
+    const [ana, bo] = await Promise.all([generateIdentity("ana"), generateIdentity("bo")]);
+    const a = w.hubFor(ana);
+    const b = w.hubFor(bo);
+    const pa = w.plug(a);
+    const sb = w.plug(b).s;
+    const da = await a.open("T7");
+    const db = await b.open("T7", da.th);
+    await w.settle(pa.s, sb);
+    w.relay.hang(pa.s);
+    newBlock(da.doc, "text", "ana", "lost in the drop");
+    await w.settle(sb);
+    pa.unplug();
+    const back = w.plug(a).s;
+    await w.settle(back, sb);
+    expect(texts(db.doc)).toEqual(["lost in the drop"]);
+    expect(w.relay.rows.filter((r) => r.th === da.th)).toHaveLength(1);
+  });
+
   test("with two sockets, when the one that subscribed drops, the doc still gets the others' edits (T1444)", async () => {
     const w = await world();
     const [ana, bo] = await Promise.all([generateIdentity("ana"), generateIdentity("bo")]);
@@ -434,6 +492,32 @@ describe("docs of members-only rooms and DMs are sealed with the room's key (T60
     expect(texts(dc.doc)).toEqual([]);
     expect(db.awareness.getStates().get(da.doc.clientID)).toEqual({ user: { name: "ana" } });
     expect(dc.awareness.getStates().has(da.doc.clientID)).toBe(false);
+  });
+
+  test("a member who closes the room's doc takes its cursor with it, and its last cursor never goes out under the channel key (T1734)", async () => {
+    const w = await world();
+    const k1 = newChannelKey();
+    const [ana, bo, cy] = await Promise.all([generateIdentity("ana"), generateIdentity("bo"), generateIdentity("cy")]);
+    const a = w.hubFor(ana, null, () => roomKeys([k1]));
+    const b = w.hubFor(bo, null, () => roomKeys([k1]));
+    const c = w.hubFor(cy);
+    const [sa, sb, sc] = [w.plug(a).s, w.plug(b).s, w.plug(c).s];
+    const da = await a.open("room:secret");
+    const db = await b.open("room:secret", da.th);
+    await c.open("room:secret", da.th);
+    da.awareness.setLocalStateField("user", { name: "ana" });
+    await w.settle(sa, sb, sc);
+    expect(db.awareness.getStates().has(da.doc.clientID)).toBe(true);
+    da.awareness.setLocalStateField("selection", { block: "b1", text: "the secret line" });
+    a.close("room:secret");
+    await w.settle(sa, sb, sc);
+    expect(db.awareness.getStates().has(da.doc.clientID)).toBe(false);
+    const sent = await Promise.all(w.relay.ephs.map(async (raw) => JSON.stringify(await open(w.key, w.roomId, ...((f) => [f.iv, f.ct] as const)(JSON.parse(raw) as { iv: string; ct: string })))));
+    expect(sent.some((p) => p.includes(da.th))).toBe(true);
+    for (const p of sent) for (const [th, u] of (JSON.parse(p) as { docs: [string, string][] }).docs) if (th === da.th) expect(u.startsWith("~")).toBe(true);
+    a.closeAll();
+    b.closeAll();
+    c.closeAll();
   });
 
   test("after the room's key changes, a member's client re-seals the doc as a snapshot that only the new key opens", async () => {
