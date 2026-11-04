@@ -3,8 +3,6 @@ import type { Awareness } from "y-protocols/awareness";
 import { mentionsOf } from "../changes.ts";
 import { appendToBlock, blocksOf, markSent, newBlock, threadText, type Block, type BlockKind } from "./blocks.ts";
 
-const FINISH_IDLE_MS = 3_000;
-
 export const PRESENCE_FIELD = "kiwi";
 
 interface DocSelection {
