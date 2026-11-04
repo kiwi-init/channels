@@ -248,10 +248,12 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
   const all = useMemo(
     () =>
       withLeftOut(
-        channel.messages.filter((m) => sameWhere(m.where, where) && (!m.side || where.kind === "task") && (where.kind !== "room" || m.inThread === undefined || !specAsks.has(m.inThread))),
+        channel.messages.filter(
+          (m) => sameWhere(m.where, where) && (!m.side || where.kind === "task") && (!doc || m.block === undefined) && (where.kind !== "room" || m.inThread === undefined || !specAsks.has(m.inThread))
+        ),
         (channel.leftOut ?? []).filter((m) => sameWhere(m.where, where))
       ),
-    [channel.messages, channel.leftOut, where, specAsks]
+    [channel.messages, channel.leftOut, where, specAsks, doc]
   )
   const general = where.kind === "room" && where.room === "general"
   const compact = general ? channel.compact : undefined

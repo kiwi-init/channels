@@ -3,7 +3,7 @@ import type { GithubHealth } from "@kiwi/core/github-health.ts"
 import type { HookHarness, HookState } from "@kiwi/core/harnesses.ts"
 import type { Personality } from "@kiwi/core/personality.ts"
 import type { PipeIn } from "@kiwi/core/doc/held-pipe.ts"
-import type { GithubNote, Step, StepReply } from "@kiwi/core/protocol.ts"
+import type { DocBlockRef, GithubNote, Step, StepReply } from "@kiwi/core/protocol.ts"
 import type { DocEvent } from "../../desktop/src/bridge.ts"
 
 export type Harness = "claude" | "codex" | "opencode" | "gemini" | "cursor" | "grok" | "kimi" | "mimo" | "pi" | "grok-bot" | "zcode" | "agy" | "other"
@@ -329,6 +329,7 @@ export interface Message {
   from: string
   at: number
   text: string
+  block?: string
   membersOnly?: true
   where: Where
   to?: readonly string[]
@@ -669,6 +670,14 @@ export interface Prefs {
   folders: Folder[]
 }
 
+export interface SendExtras {
+  replyTo?: number
+  inThread?: number
+  side?: true
+  images?: Upload[]
+  block?: DocBlockRef
+}
+
 export interface Folder {
   id: string
   name: string
@@ -677,7 +686,7 @@ export interface Folder {
 }
 
 export interface Actions {
-  send(code: string, where: Where, text: string, opts?: { replyTo?: number; inThread?: number; side?: true; images?: Upload[] }): void
+  send(code: string, where: Where, text: string, opts?: SendExtras): void
   retry(code: string, seq: number): void
   loadImage(code: string, spot: string): void
   discard(code: string, seq: number): void

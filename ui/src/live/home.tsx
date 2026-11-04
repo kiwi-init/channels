@@ -17,7 +17,7 @@ import { refusal } from "~/live/refused"
 import { backWords, composerKey, giveBack } from "~/chat/drafts"
 import { stashText } from "~/chat/stash"
 import { useWakes } from "~/live/wakes"
-import type { Upload, Where } from "~/model"
+import type { SendExtras, Where } from "~/model"
 import { nicknamesOf } from "~/names"
 
 export function HomeMembers() {
@@ -62,7 +62,7 @@ const HomeMember = memo(function HomeMember({ member }: { member: StoredMember }
   )
 
   const post = useCallback(
-    async (where: Where, text: string, opts: { replyTo?: number; inThread?: number; side?: true; images?: Upload[] }): Promise<number> => {
+    async (where: Where, text: string, opts: SendExtras): Promise<number> => {
       if (where.kind === "theirs") throw new Error("Only the two of them write in their direct messages")
       const body = text.trim()
       const room = where.kind === "dm" ? dmRoomOf(state, me, where.with) : undefined

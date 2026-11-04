@@ -824,6 +824,7 @@ export interface Payload {
   /** A chat message to exactly one member, in the direct thread between the two. Older clients see a message to that member. */
   dm?: true;
   side?: true;
+  block?: DocBlockRef;
   /**
    * An agent handing a decision or a step to people instead of acting (`kiwi escalate`): a blocking
    * question to its own human and the owner. Older clients see it as the blocking question it also is.
@@ -1236,6 +1237,16 @@ function eventCheck(ev: unknown): boolean | null {
 }
 
 /** Whether a decrypted payload has the shape every client relies on. Malformed ones are dropped. */
+export interface DocBlockRef {
+  th: string;
+  id: string;
+}
+
+function wellFormedBlockRef(x: unknown): x is DocBlockRef {
+  const b = x as Partial<DocBlockRef> | null;
+  return !!b && typeof b.th === "string" && DOC_THREAD_RE.test(b.th) && typeof b.id === "string" && DOC_THREAD_RE.test(b.id);
+}
+
 export function wellFormed(p: unknown): p is WirePayload {
   if (!p || typeof p !== "object") return false;
   const m = p as Record<string, unknown>;
@@ -1254,6 +1265,7 @@ export function wellFormed(p: unknown): p is WirePayload {
     (m.task === undefined || (Number.isSafeInteger(m.task) && (m.task as number) > 0)) &&
     (m.dm === undefined || m.dm === true) &&
     (m.side === undefined || m.side === true) &&
+    (m.block === undefined || (m.kind === "msg" && wellFormedBlockRef(m.block))) &&
     (m.esc === undefined || m.esc === true) &&
     (m.handoff === undefined || (m.esc === true && wellFormedHandoff(m.handoff))) &&
     (m.choices === undefined || (m.esc === true && m.handoff === undefined && wellFormedChoices(m.choices))) &&
