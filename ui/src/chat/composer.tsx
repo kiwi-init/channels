@@ -3,7 +3,8 @@ import { lazy, Suspense, useCallback, useEffect, useEffectEvent, useLayoutEffect
 import { MAX_IMAGE_BYTES, RASTER_MIMES } from "@kiwi/core/protocol.ts"
 import { fileDrag, takeDropped } from "@kiwi/app/dropped.ts"
 import { takePasted } from "@kiwi/app/pasted.ts"
-import { matchCommands, parseCommand, type Command } from "~/chat/commands"
+import { matchCommands, parseCommand } from "~/chat/commands"
+import { useCommands } from "~/chat/use-commands"
 import { startEditing } from "~/chat/editing"
 import { withExcerpt } from "~/chat/quote"
 import { preview, useReplying } from "~/chat/reply"
@@ -112,7 +113,7 @@ export function Composer(props: ComposerProps) {
 }
 
 function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
-  const { app, go, toast } = useApp()
+  const { app, toast } = useApp()
   const replying = useReplying()
   const replyTo = replying?.to ?? null
   const excerpt = replyTo ? (replying?.excerpt ?? null) : null
@@ -248,19 +249,7 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
   const taskQuery = closed || query !== undefined ? undefined : TASK_REF.exec(typed)?.[2]
   const matches = query === undefined ? [] : peopleMatches(channel.people, query)
   const taskOptions = taskQuery === undefined ? [] : taskMatches(channel.tasks, taskQuery)
-  const commands = useMemo<Command[]>(() => {
-    if (inThread !== undefined) return []
-    const code = channel.code
-    const owner = channel.youOwn
-    return [
-      { name: "compact", summary: "Ask the lead for a summary to fold the history behind", run: () => app.actions.askCompact(code) },
-      { name: "tasks", summary: "Open the tasks", run: () => go({ to: "tab", tab: "tasks" }) },
-      { name: "prs", summary: "Open the pull requests", run: () => go({ to: "github", view: "prs" }) },
-      { name: "issues", summary: "Open the issues", run: () => go({ to: "github", view: "issues" }) },
-      ...(owner && !channel.hold ? [{ name: "pause", summary: "Pause the agents", args: "note", run: (note: string) => app.actions.setHold(code, true, note || undefined) }] : []),
-      ...(owner && channel.hold ? [{ name: "resume", summary: "Let the agents work again", run: () => app.actions.setHold(code, false) }] : []),
-    ]
-  }, [inThread, channel.code, channel.youOwn, channel.hold, app.actions, go])
+  const commands = useCommands(channel, inThread !== undefined)
   const listed = closed || query !== undefined || taskQuery !== undefined ? [] : matchCommands(commands, text)
   const running = files.length ? null : parseCommand(commands, text)
   const options = matches.length || taskOptions.length || listed.length

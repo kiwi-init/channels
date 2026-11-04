@@ -109,7 +109,24 @@ function dropReply(me: string): Command {
   }
 }
 
-export function docKeys(me: string, now: () => number, blur: () => void, posted: (block: string) => boolean = () => false): Plugin[] {
+export type CommandFor = (line: string) => (() => void) | null
+
+function runLine(me: string, commandFor: CommandFor): Command {
+  return (state, dispatch) => {
+    const here = blockAt(state)
+    if (!here || here.node.childCount !== 1 || isSent(here.node) || attrsOf(here.node).author !== me) return false
+    const go = commandFor(here.node.textContent)
+    if (!go) return false
+    if (dispatch) {
+      const tr = state.tr.replaceWith(here.pos + 1, here.pos + here.node.nodeSize - 1, schema.nodes.paragraph.create())
+      dispatch(tr.setSelection(TextSelection.create(tr.doc, here.pos + 2)))
+      go()
+    }
+    return true
+  }
+}
+
+export function docKeys(me: string, now: () => number, blur: () => void, posted: (block: string) => boolean = () => false, commandFor: CommandFor = () => null): Plugin[] {
   const item = schema.nodes.list_item
   return [
     keymap({
@@ -120,8 +137,8 @@ export function docKeys(me: string, now: () => number, blur: () => void, posted:
       "Mod-i": toggleMark(schema.marks.em),
       "Mod-e": toggleMark(schema.marks.code),
       "Mod-Shift-x": toggleMark(schema.marks.strike),
-      "Mod-Enter": nextBlock(me, now),
-      Enter: chainCommands(leaveCode, newline, emptyItem, splitListItem(item), endBlock(me, now), quietEmpty, splitBlock),
+      "Mod-Enter": chainCommands(runLine(me, commandFor), nextBlock(me, now)),
+      Enter: chainCommands(leaveCode, newline, runLine(me, commandFor), emptyItem, splitListItem(item), endBlock(me, now), quietEmpty, splitBlock),
       "Shift-Enter": chainCommands(newline, splitListItem(item), splitBlock),
       Tab: (state, dispatch) => inList(state) && (sinkListItem(item)(state, dispatch) || true),
       "Shift-Tab": (state, dispatch) => inList(state) && (liftListItem(item)(state, dispatch) || true),
