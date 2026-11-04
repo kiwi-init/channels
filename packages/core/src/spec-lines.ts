@@ -16,7 +16,10 @@ function specStageText(state: ChannelState, spec: Spec): string {
         : `draft: once its reviews pass, mark it ready (kiwi spec ready ${spec.ask}) so ${who} is asked to approve it`;
     }
     case "queued": {
-      if (changedSinceApproval(spec)) return "approved, then changed: it waits for a person to approve the changes";
+      if (changedSinceApproval(spec))
+        return spec.ready?.v === spec.v
+          ? "approved, then changed: it waits for a person to approve the changes"
+          : `approved, then changed: once its reviews pass, mark it ready (kiwi spec ready ${spec.ask}) so a person approves the changes`;
       const planner = specPlanner(state, spec.ask);
       if (planner) return `approved: ${planner} is planning it`;
       const place = specQueue(state).findIndex((s) => s.ask === spec.ask) + 1;

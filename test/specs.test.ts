@@ -160,7 +160,7 @@ describe("approved, it starts by itself when an agent is free, and comes back as
     const drifted = fold(log, roster, T0);
     expect(changedSinceApproval(at(drifted, 1))).toBe(true);
     expect(specQueue(drifted)).toEqual([]);
-    expect(formatSpec(drifted, at(drifted, 1))).toContain("approved, then changed: it waits for a person to approve the changes");
+    expect(formatSpec(drifted, at(drifted, 1))).toContain("approved, then changed: once its reviews pass, mark it ready (kiwi spec ready 1) so a person approves the changes");
   });
 
   test("sent back with a note, it waits for an agent again, and is delivered only once new work closes", async () => {

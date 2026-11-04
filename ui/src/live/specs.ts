@@ -48,7 +48,7 @@ export function specAsksOf(specs: readonly Spec[]): SpecAsk[] {
     if (!s.canJudge || s.result) return []
     if (s.stage === "draft" && s.ready) return [{ kind: "spec", id: `spec:${s.ask}:approve:${s.v}`, at: s.edited.at, ask: s.ask, why: "approve" }]
     if (s.stage === "delivered") return [{ kind: "spec", id: `spec:${s.ask}:result`, at: s.edited.at, ask: s.ask, why: "result" }]
-    if (s.changed) return [{ kind: "spec", id: `spec:${s.ask}:changed:${s.v}`, at: s.edited.at, ask: s.ask, why: "changed" }]
+    if (s.changed && s.ready) return [{ kind: "spec", id: `spec:${s.ask}:changed:${s.v}`, at: s.edited.at, ask: s.ask, why: "changed" }]
     return []
   })
 }
