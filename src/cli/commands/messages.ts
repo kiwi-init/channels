@@ -28,13 +28,13 @@ import {
   type Message,
   type Step,
 } from "@kiwi/core/protocol.ts";
-import { chooseThread, inGeneral, longForGeneral, parseTaskId, wentTo } from "@kiwi/core/state.ts";
+import { asksOnSameWork, chooseThread, inGeneral, longForGeneral, parseTaskId, taskId, wentTo } from "@kiwi/core/state.ts";
 import { bareHandleNote } from "../handles.ts";
 import { args, opt, unexpectedOptions } from "../args.ts";
 import { parseWhere } from "../where.ts";
 import { docPlaceOf } from "../../agent/docs.ts";
 import { type Command, die, noteRead, offlineOk, out, type Quit, session } from "../context.ts";
-import { attachments, images, list, render, text } from "../input.ts";
+import { attachments, firstLine, images, list, render, text } from "../input.ts";
 
 const LOG_DOC_MS = 5_000;
 const PUBLISHING = ["channel", "as", "quiet", "json", "file", "image", "attach"] as const;
@@ -346,6 +346,17 @@ export const messageCommands: Record<string, Command> = {
       const hold = { ...(holds?.length ? { holds } : {}), ...(decision ? { decision } : {}) };
       const named = [...new Set([...(task !== undefined ? [`T${task}`] : []), ...(held?.map(([raw]) => raw) ?? [])])];
       const heldText = named.length ? `, holding ${named.join(", ")}` : "";
+      const ids = [...new Set([...(task !== undefined ? [task] : []), ...(holds ?? [])])];
+      const sameWork = (seq: number, to: readonly string[]) =>
+        Effect.gen(function* () {
+          if (!ids.length) return;
+          const { state } = yield* s.state();
+          for (const a of asksOnSameWork(state, s.me, to, ids).filter((x) => x.seq !== seq)) {
+            const shared = ids.filter((id) => a.task === id || a.holds?.includes(id)).map((id) => (state.tasks.has(id) ? taskId(id) : `#${id}`));
+            out(`also open on ${shared.join(", ")}: #${a.seq} ${a.from} → ${a.to?.join(", ")}: ${firstLine(a.body)}`);
+            out(`  if it's the same decision, close yours: kiwi ask-human --close ${seq} "same as #${a.seq}"`);
+          }
+        });
       const digestNote = () => {
         if (!named.length) process.stderr.write("kiwi: this holds nothing up, so it goes to the person's digest, not Needs you; name the task or message it holds with --holds T7,#18\n");
       };
@@ -376,9 +387,10 @@ export const messageCommands: Record<string, Command> = {
           ...(links?.length ? { links } : {}),
         };
         const { seq, to, also } = yield* s.escalate(body, re, undefined, { ...(task !== undefined ? { task } : {}), ...hold, step });
-        return out(
+        out(
           `escalated #${seq} to ${to.join(" and ")} with a step${heldText}${alsoAnswers(also)}; wait for their answer before acting on it (if it comes some other way, close it: kiwi ask-human --close ${seq} "why")`,
         );
+        return yield* sameWork(seq, to);
       }
       if (opt.handoff === undefined) {
         for (const f of ["vendor", "expires", "wait"] as const) if (opt[f] !== undefined) return yield* die(`--${f} goes with --handoff URL`);
@@ -386,9 +398,10 @@ export const messageCommands: Record<string, Command> = {
         if (choices && !wellFormedChoices(choices)) return yield* die(`--option takes ${CHOICES_MIN} to ${CHOICES_MAX} different answers, one line of up to ${CHOICE_MAX_LENGTH} characters each`);
         const { seq, to, also } = yield* s.escalate(body, re, undefined, { ...(choices ? { choices } : {}), ...(task !== undefined ? { task } : {}), ...hold });
         digestNote();
-        return out(
+        out(
           `escalated #${seq} to ${to.join(" and ")}${choices ? ` with ${choices.length} options` : ""}${heldText}${alsoAnswers(also)}; wait for their answer before acting on it (if it comes some other way, close it: kiwi ask-human --close ${seq} "why")`,
         );
+        return yield* sameWork(seq, to);
       }
       if (opt.option !== undefined) return yield* die("--handoff has its own Done and Couldn't answers; leave out --option");
       if (!handoffUrl(opt.handoff)) return yield* die("--handoff takes an https link without a user name or password, up to 2048 characters");
