@@ -6,39 +6,44 @@ export interface MadeLines {
   add: (block: string) => unknown
 }
 
-function load(): string[] {
+type MadeStore = Pick<Storage, "getItem" | "setItem">
+
+function load(store: MadeStore | null): string[] {
   try {
-    const got: unknown = JSON.parse(localStorage.getItem(KEY) ?? "[]")
+    const got: unknown = JSON.parse(store?.getItem(KEY) ?? "[]")
     return Array.isArray(got) ? got.filter((x): x is string => typeof x === "string").slice(-MAX) : []
   } catch {
-    // Storage is off or the list is damaged: this app starts with no lines of its own, so it tidies none of the old ones.
+    // Storage is off or the list is damaged: this window starts with no lines of its own, so it tidies none of the old ones.
     return []
   }
 }
 
-let order: string[] | null = null
-let ids: Set<string> | null = null
-
-function list(): Set<string> {
-  if (!ids) {
-    order = load()
-    ids = new Set(order)
+function madeLines(store: MadeStore | null): MadeLines {
+  const order = load(store)
+  const ids = new Set(order)
+  return {
+    has: (block) => ids.has(block),
+    add: (block) => {
+      if (ids.has(block)) return
+      ids.add(block)
+      order.push(block)
+      if (order.length > MAX) for (const gone of order.splice(0, order.length - MAX)) ids.delete(gone)
+      try {
+        store?.setItem(KEY, JSON.stringify(order))
+      } catch {
+        // Storage is full or off: the line stays this window's until it reloads.
+      }
+    },
   }
-  return ids
 }
 
-export const madeHere: MadeLines = {
-  has: (block) => list().has(block),
-  add: (block) => {
-    const all = list()
-    if (all.has(block) || !order) return
-    all.add(block)
-    order.push(block)
-    if (order.length > MAX) for (const gone of order.splice(0, order.length - MAX)) all.delete(gone)
-    try {
-      localStorage.setItem(KEY, JSON.stringify(order))
-    } catch {
-      // Storage is off: the line stays this app's until it restarts.
-    }
-  },
+function windowStore(): MadeStore | null {
+  try {
+    return sessionStorage
+  } catch {
+    // Session storage is blocked: the lines this window makes are remembered until it reloads.
+    return null
+  }
 }
+
+export const madeHere: MadeLines = madeLines(windowStore())

@@ -6,6 +6,7 @@ import type { EditorView } from "prosemirror-view"
 import { ySyncPlugin } from "y-prosemirror"
 
 import { dropEmptyOwn, noteMade, startBlock } from "~/chat/doc/blocks"
+import type { MadeLines } from "~/chat/doc/made"
 import { FRAGMENT, schema } from "~/chat/doc/schema"
 
 const NET = Symbol("net")
@@ -13,14 +14,12 @@ const NET = Symbol("net")
 interface Copy {
   state: () => EditorState
   dispatch: (tr: Transaction | null) => void
-  made: Set<string>
   mine: (block: string) => boolean
 }
 
-function copy(doc: Y.Doc): Copy {
+function copy(doc: Y.Doc, made: MadeLines = new Set<string>()): Copy {
   const sync: Plugin = ySyncPlugin(doc.getXmlFragment(FRAGMENT))
   let state = EditorState.create({ schema, plugins: [sync] })
-  const made = new Set<string>()
   const views: PluginView[] = []
   const host = {
     get state() {
@@ -37,7 +36,7 @@ function copy(doc: Y.Doc): Copy {
   const view = host as unknown as EditorView
   const shown = sync.spec.view?.(view)
   if (shown) views.push(shown)
-  return { state: () => state, dispatch: (tr) => tr && host.dispatch(tr), made, mine: (block) => made.has(block) }
+  return { state: () => state, dispatch: (tr) => tr && host.dispatch(tr), mine: (block) => made.has(block) }
 }
 
 function net(a: Y.Doc, b: Y.Doc): () => void {
@@ -93,5 +92,50 @@ describe("two copies of one person's doc never erase each other's typing (T1776)
     a.dispatch(dropEmptyOwn(a.state(), "jow", null, a.mine))
     sync()
     expect(texts(desk)).toEqual(["merged #12"])
+  })
+
+  test("a window opened or reloaded after another made a line doesn't take that line as its own, though both share local storage", async () => {
+    const storage = (): Storage => {
+      const kept = new Map<string, string>()
+      return {
+        get length() {
+          return kept.size
+        },
+        clear: () => kept.clear(),
+        getItem: (k) => kept.get(k) ?? null,
+        key: (i) => [...kept.keys()][i] ?? null,
+        removeItem: (k) => void kept.delete(k),
+        setItem: (k, v) => void kept.set(k, v),
+      }
+    }
+    const before = { local: globalThis.localStorage, session: globalThis.sessionStorage }
+    const shared = storage()
+    const windowA = storage()
+    const load = async (session: Storage, name: string): Promise<MadeLines> => {
+      Object.assign(globalThis, { localStorage: shared, sessionStorage: session })
+      const fresh: typeof import("~/chat/doc/made") = await import(`~/chat/doc/made?window=${name}`)
+      return fresh.madeHere
+    }
+    try {
+      const desk = new Y.Doc()
+      const phone = new Y.Doc()
+      const sync = net(desk, phone)
+      const a = copy(desk, await load(windowA, "a"))
+      a.dispatch(startBlock(a.state(), "atlas", 0))
+      a.dispatch(a.state().tr.insertText("merged #12"))
+      a.dispatch(startBlock(a.state(), "jow", 1, undefined, a.mine))
+      const b = copy(phone, await load(storage(), "b"))
+      await Promise.resolve()
+      sync()
+      a.dispatch(a.state().tr.insertText("must survive"))
+      b.dispatch(dropEmptyOwn(b.state(), "jow", null, b.mine))
+      sync()
+      expect(texts(desk)).toEqual(["merged #12", "must survive"])
+      expect(texts(phone)).toEqual(["merged #12", "must survive"])
+      const reloaded = await load(windowA, "a-reloaded")
+      expect(blocksOf(desk).every((line) => reloaded.has(line.id) === (line.author === "jow"))).toBe(true)
+    } finally {
+      Object.assign(globalThis, { localStorage: before.local, sessionStorage: before.session })
+    }
   })
 })
