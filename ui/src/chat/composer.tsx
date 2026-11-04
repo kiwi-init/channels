@@ -5,6 +5,7 @@ import { fileDrag, takeDropped } from "@kiwi/app/dropped.ts"
 import { takePasted } from "@kiwi/app/pasted.ts"
 import { matchCommands, parseCommand, type Command } from "~/chat/commands"
 import { startEditing } from "~/chat/editing"
+import { withExcerpt } from "~/chat/quote"
 import { preview, useReplying } from "~/chat/reply"
 import { attached, composerKey, drafts, tooLong, useGivenBack } from "~/chat/drafts"
 import { STASH_SHOT, useStash, type Stashed } from "~/chat/stash"
@@ -133,6 +134,7 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
   const { app, go, toast } = useApp()
   const replying = useReplying()
   const replyTo = replying?.to ?? null
+  const excerpt = replyTo ? (replying?.excerpt ?? null) : null
   const key = composerKey(channel.code, where, inThread)
   const [text, setText] = useState(() => drafts.get(key) ?? "")
   const [caret, setCaret] = useState(text.length)
@@ -244,7 +246,7 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
 
   useEffect(() => {
     if (replyTo || inThread !== undefined) area.current?.focus()
-  }, [replyTo, inThread])
+  }, [replyTo, excerpt, inThread])
 
   useLayoutEffect(() => {
     const el = box.current
@@ -305,7 +307,8 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
     }
     const body = value.trim()
     if (!body && !files.length) return
-    const sent = mentions.sent(body, picksFor(key))
+    const said = mentions.sent(body, picksFor(key))
+    const sent = excerpt ? withExcerpt(excerpt, said) : said
     const long = tooLong(sent)
     if (long) {
       toast(long, "error")
@@ -358,7 +361,7 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
     })
   }
 
-  const quoteLine = useMemo(() => (replyTo ? withNames(replyTo.text, channel.nicknames, preview) : ""), [replyTo, channel.nicknames])
+  const quoteLine = useMemo(() => (excerpt ? excerpt.replace(/\s+/g, " ") : replyTo ? withNames(replyTo.text, channel.nicknames, preview) : ""), [excerpt, replyTo, channel.nicknames])
 
   return (
     <div className="compose" ref={box}>
@@ -476,10 +479,11 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
           </ul>
         )}
         {replyTo && (
-          <div className="compose-reply">
+          <div className={cx("compose-reply", excerpt && "is-excerpt")}>
             <Icon name="reply" size={13} />
             <span className="compose-reply-text">
-              Replying to <b>{nickname(channel, replyTo.from)}</b> <span className="dim">{quoteLine.slice(0, 160)}</span>
+              {excerpt ? "Quoting" : "Replying to"} <b>{nickname(channel, replyTo.from)}</b>{" "}
+              <span className={excerpt ? "compose-reply-excerpt" : "dim"}>{excerpt ? `“${quoteLine.slice(0, 160)}${quoteLine.length > 160 ? "…" : ""}”` : quoteLine.slice(0, 160)}</span>
             </span>
             <button type="button" className="compose-reply-x" aria-label="Cancel reply" title="Cancel reply (Esc)" onClick={() => replying?.set(null)}>
               <Icon name="close" size={13} />
@@ -512,7 +516,7 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
             aria-autocomplete="list"
             aria-expanded={options > 0}
             aria-controls={matches.length > 0 ? `${key}-people` : taskOptions.length > 0 ? `${key}-tasks` : listed.length > 0 ? `${key}-commands` : undefined}
-            placeholder={replyTo ? `Reply to ${nickname(channel, replyTo.from)}` : placeholder}
+            placeholder={excerpt ? "Say something about it" : replyTo ? `Reply to ${nickname(channel, replyTo.from)}` : placeholder}
             onChange={(e) => {
               setCue(null)
               update(e.target.value, e.target.selectionStart)

@@ -7,7 +7,9 @@ import { foldText, leftOutRun, runFirst, withLeftOut } from "~/chat/left-out"
 import { chatterLine, chatterRuns, type ChatterRun } from "~/chat/chatter"
 import { MessageRow } from "~/chat/message"
 import { linked } from "~/chat/linked"
-import { flash, jumpTo, ReplyContext, type Replying } from "~/chat/reply"
+import { threadReply } from "~/chat/quote"
+import { QuotePick } from "~/chat/quote-pick"
+import { flash, jumpTo, ReplyContext, useReplying, type Replying } from "~/chat/reply"
 import type { Jump } from "~/chat/search-box"
 import { paintHits } from "~/chat/search-paint"
 import { Loading } from "~/kit/bits"
@@ -185,8 +187,11 @@ export function Conversation({ channel, jump }: { channel: Channel; jump: Jump |
   const { nav } = useApp()
   const where: Where = nav.where
   const key = spotKey(channel.code, where)
-  const [reply, setReply] = useState<{ key: string; to: Message } | null>(null)
-  const replying = useMemo((): Replying => ({ to: reply?.key === key ? reply.to : null, set: (to) => setReply(to ? { key, to } : null) }), [reply, key])
+  const [reply, setReply] = useState<{ key: string; to: Message; excerpt: string | null } | null>(null)
+  const replying = useMemo((): Replying => {
+    const here = reply?.key === key ? reply : null
+    return { to: here?.to ?? null, excerpt: here?.excerpt ?? null, set: (to, excerpt) => setReply(to ? { key, to, excerpt: excerpt ?? null } : null) }
+  }, [reply, key])
   const placeName =
     where.kind === "room"
       ? `#${channel.rooms.find((r) => r.id === where.room)?.name ?? where.room}`
@@ -277,6 +282,18 @@ function Feed({ channel, where, spot, jump }: { channel: Channel; where: Where; 
   const following = end === list.length
   const latest = useRef(false)
   const { scroller, content, stuck, live, remember, settle, toBottom, toOffset, unstick } = useStick(following)
+  const replying = useReplying()
+  const quote = useCallback(
+    (seq: number, excerpt: string) => {
+      const m = list.find((x) => x.seq === seq)
+      if (!m) return
+      if (where.kind === "task" && replying) return replying.set(m, excerpt)
+      const root = m.inThread ?? m.seq
+      threadReply.set({ code: channel.code, root, to: m.seq, excerpt })
+      go({ to: "panel", panel: { kind: "thread", seq: root } })
+    },
+    [list, where.kind, replying, channel.code, go]
+  )
 
   useEffect(() => {
     const near = [...list.slice(Math.max(0, start - MORE), start), ...list.slice(end, end + MORE)]
@@ -463,6 +480,7 @@ function Feed({ channel, where, spot, jump }: { channel: Channel; where: Where; 
 
   return (
     <div className="feed-wrap">
+      {where.kind !== "theirs" && <QuotePick root={content} onQuote={quote} />}
       <div className="feed" ref={scroller} onScroll={onScroll}>
         <div className="feed-list" ref={content}>
           {list.length === 0 && !compact ? (

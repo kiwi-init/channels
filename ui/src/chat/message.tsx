@@ -5,6 +5,7 @@ import { isGifReaction } from "@kiwi/core/protocol.ts"
 import { PrChip, TaskChip } from "~/chat/cards"
 import { useEditing } from "~/chat/editing"
 import { parsedFor } from "~/chat/parsed"
+import { quotedExcerpt } from "~/chat/quote"
 import { preview, useReplying } from "~/chat/reply"
 import { Avatar, cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
@@ -120,8 +121,15 @@ function Spot({ code, img }: { code: string; img: ImageSpot }) {
   )
 }
 
-function Quote({ quoted, who, names, onClick }: { quoted: Message; who: string; names: ReadonlyMap<string, string>; onClick?: () => void }) {
+function Quote({ quoted, who, names, excerpt, onClick }: { quoted: Message; who: string; names: ReadonlyMap<string, string>; excerpt: string | null; onClick?: () => void }) {
   const line = useMemo(() => withNames(quoted.text, names, preview), [quoted.text, names])
+  if (excerpt)
+    return (
+      <button type="button" className="msg-quote is-excerpt" onClick={onClick} aria-label={`Quoting ${who}: ${excerpt.slice(0, 80)}. Show it`}>
+        <span className="msg-quote-who">{who}</span>
+        <span className="msg-quote-text">{excerpt}</span>
+      </button>
+    )
   return (
     <button type="button" className="msg-quote" onClick={onClick} aria-label={`Replying to ${who}: ${line.slice(0, 80)}. Show it`}>
       <Icon name="reply" size={12} />
@@ -182,6 +190,8 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
   const editing = useEditing(channel.code, m.seq)
   const ask = m.ask ? channel.asks.find((a) => a.id === m.ask) : undefined
   const spec = channel.specs?.find((s) => s.ask === m.seq)
+  const cited = useMemo(() => (typeof quote === "object" ? quotedExcerpt(m, quote) : null), [m, quote])
+  const text = cited ? cited.rest : m.text
 
   if (m.system)
     return (
@@ -239,7 +249,9 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
             )}
           </p>
         )}
-        {typeof quote === "object" && <Quote quoted={quote} who={nickname(channel, quote.from)} names={names} onClick={onQuote ? () => onQuote(quote.seq) : undefined} />}
+        {typeof quote === "object" && (
+          <Quote quoted={quote} who={nickname(channel, quote.from)} names={names} excerpt={cited?.excerpt ?? null} onClick={onQuote ? () => onQuote(quote.seq) : undefined} />
+        )}
         {m.deleted ? (
           <p className="msg-deleted">Message deleted</p>
         ) : editing ? (
@@ -247,7 +259,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
             <Changes kind="editor" channel={channel} m={m} />
           </Suspense>
         ) : (
-          <Clamp on={who?.kind === "agent" && !inThread}>{m.text && <Body text={m.text} seq={m.seq} names={names} tasks={tasks} onImage={openImage} onMessage={openMessage} />}</Clamp>
+          <Clamp on={who?.kind === "agent" && !inThread}>{text && <Body text={text} seq={m.seq} names={names} tasks={tasks} onImage={openImage} onMessage={openMessage} />}</Clamp>
         )}
         {compact && m.edited !== undefined && !editing && (
           <span className="msg-edited" title={`Edited ${clock(m.edited)}`}>
