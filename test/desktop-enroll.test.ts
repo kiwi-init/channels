@@ -107,6 +107,25 @@ describe("the desktop approves a new device (T636)", () => {
     expect(kept.links).toEqual(a.held.links);
   });
 
+  test("first syncs at once make one device key and one list that holds it (T1480)", async () => {
+    const a = await app();
+    const made = new Set<string>();
+    let held: Identity | null = null;
+    Object.defineProperty(a.held, "device", {
+      get: () => held,
+      set: (d: Identity | null) => {
+        if (d) made.add(d.pk);
+        held = d;
+      },
+    });
+    await Promise.all([a.host.poll(), a.host.list(), a.host.news(), a.host.poll()]);
+    expect(made.size).toBe(1);
+    const kept = (await (await fetch(`${relay}/v1/account`, { headers: { "x-human-token": a.token } })).json()) as { links: DeviceLink[] };
+    const read = await readDeviceList(kept.links);
+    expect(read.ok && read.list.devices.map((d) => d.device)).toEqual([a.held.device!.pk]);
+    expect(kept.links).toEqual(a.held.links);
+  });
+
   test("answer, the device reveals, the person types its digits: the device is listed and gets its grant", async () => {
     const a = await app();
     await a.host.poll();

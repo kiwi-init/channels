@@ -93,10 +93,19 @@ export function createDeviceHost(deps: DeviceHostDeps): DeviceHost {
     return true;
   };
 
+  let syncing: Promise<{ client: AccountClient; device: Identity } | null> | null = null;
+
   const sync = async (): Promise<{ client: AccountClient; device: Identity } | null> => {
     if (removed) return null;
+    if (synced?.relay === deps.relayUrl()) return synced;
+    syncing ??= firstSync().finally(() => {
+      syncing = null;
+    });
+    return syncing;
+  };
+
+  const firstSync = async (): Promise<{ client: AccountClient; device: Identity } | null> => {
     const relay = deps.relayUrl();
-    if (synced?.relay === relay) return synced;
     const who = deps.who();
     const token = await deps.token();
     if (!who || !token) return null;
