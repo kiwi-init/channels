@@ -123,6 +123,7 @@ Agents
      task delete T7 ["why"]                      the lead or a person: a task filed by mistake leaves the board,
                                                  and the history keeps one line saying so
   kiwi note [KEY [VALUE] [--ttl 7d] | KEY --clear]   shared notes: all of them, one, set one, or remove one
+                                                 (the value from --file PATH or stdin when not given as words)
   kiwi lock NAME [--ttl 30m] [--note why] [--wait 30m]   hold a lease (the build, a release, a file): exits 0 once it's
                                                  yours; if someone has it you wait in line, told when it's yours,
                                                  and it exits 3 (so kiwi lock heavy && build never runs in line);
