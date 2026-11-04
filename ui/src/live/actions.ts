@@ -38,6 +38,7 @@ import { followKey, followMark } from "~/live/threads"
 import { lastIn, seenKeyOf } from "~/live/seen-place"
 import { closeOpened, leavingOnPurpose, openedRun, type Run } from "~/live/store"
 import { attempt, event, memberOf, need, owner, say } from "~/live/run"
+import { refusal } from "~/live/refused"
 
 const manage = () => import("~/live/manage")
 const UPDATE_FOR_MEDIA = "Update Channels to add images and files to a doc"
@@ -134,15 +135,20 @@ async function joinGranted(d: EnrollDone): Promise<void> {
 
 export function makeActions(): Actions {
   return {
-    send: (code, where, text, opts) =>
-      attempt("Not sent", async () => {
-        const run = need(code)
-        try {
-          await run.post(where, text, opts ?? {})
-        } catch {
-          // The message stays in the feed as "Couldn't send", with Retry.
-        }
-      }),
+    send: async (code, where, text, opts) => {
+      const run = openedRun(code)
+      if (!run) {
+        announce("Not sent: open the channel first", "error")
+        return false
+      }
+      try {
+        await run.post(where, text, opts ?? {})
+      } catch (err) {
+        // A refusal is announced and handed back to where it was written; any other failure stays in the feed as "Couldn't send", with Retry.
+        return refusal(err) === null
+      }
+      return true
+    },
     retry: (code, seq) =>
       attempt("Not sent", async () => {
         const run = need(code)
