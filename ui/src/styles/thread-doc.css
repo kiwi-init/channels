@@ -239,3 +239,30 @@
 .thread-doc .doc-suggest {
   bottom: auto;
 }
+
+.doc-link {
+  color: var(--link);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.doc-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.blk.is-mine .doc-link {
+  cursor: text;
+}
+
+.doc.is-mod .blk.is-mine .doc-link {
+  cursor: pointer;
+}
+
+.doc-link-md {
+  color: var(--ink-3);
+}
+
+.doc-link-md.is-folded {
+  display: none;
+}

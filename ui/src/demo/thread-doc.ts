@@ -39,11 +39,11 @@ const SEEDS: readonly Seed[] = [
     author: "atlas",
     ago: 1,
     body: [
-      line("Measuring markdown alone: 27 KB gzipped. It can stay."),
+      line("Measuring markdown alone: 27 KB gzipped, see [the bundle report](https://github.com/kiwi-init/channels/actions/workflows/ci.yml). It can stay."),
       bullet_list.create(null, [list_item.create(null, line("markdown stays in the first load")), list_item.create(null, line("mermaid stays lazy, behind ", code("kit/later.ts")))]),
     ],
   },
-  { kind: "text", author: "jow", ago: 0, body: [line(mention.create({ name: "win" }), " can you put both numbers on the PR?")] },
+  { kind: "text", author: "jow", ago: 0, body: [line(mention.create({ name: "win" }), " can you put both numbers on the PR? https://github.com/kiwi-init/channels/pulls")] },
 ]
 
 const AUTHORS = ["win", "atlas", "maya", "jow", "pixel"] as const

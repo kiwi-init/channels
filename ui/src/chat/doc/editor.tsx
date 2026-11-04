@@ -10,6 +10,7 @@ import { yCursorPlugin, ySyncPlugin, ySyncPluginKey, yUndoPlugin } from "y-prose
 import { blockAt, blocks, continues, dropEmptyOwn, isEmpty, startBlock } from "~/chat/doc/blocks"
 import { docKeys } from "~/chat/doc/keys"
 import { holdDoc, LiveDoc, type Shared } from "~/chat/doc/live"
+import { linksPlugin } from "~/chat/doc/links"
 import { markdownRules } from "~/chat/doc/rules"
 import { attrsOf, FRAGMENT, schema, type BlockAttrs } from "~/chat/doc/schema"
 import { dismiss, suggestPlugin, type Query } from "~/chat/doc/suggest"
@@ -279,6 +280,7 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
         () => Date.now(),
         () => blur.now()
       ),
+      linksPlugin(),
       herePlugin(),
       runsPlugin(shown, me),
       tidyPlugin(me),
