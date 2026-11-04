@@ -44,6 +44,7 @@ export interface DocOptions {
   links: DocLinks;
   trusts?: (pk: string) => boolean;
   flushMs?: number;
+  retryMs?: number;
   saved?: DocSaved | null;
 }
 
@@ -55,6 +56,7 @@ interface Signed {
 }
 
 const REMOTE = Symbol("remote");
+const NO_KEY = Symbol("no key");
 const enc = new TextEncoder();
 const dec = new TextDecoder();
 const ad = (roomId: string, th: string) => `kiwi-doc\n${roomId}\n${th}`;
@@ -80,6 +82,7 @@ export class ThreadDoc {
   private readonly waiters: (() => void)[] = [];
   private sealedWith: string | null = null;
   private stale = false;
+  private hole: { dseq: number; e: number | undefined } | null = null;
 
   constructor(o: DocOptions, doc: Y.Doc = new Y.Doc()) {
     if (!DOC_THREAD_RE.test(o.th)) throw new Error(`not a doc id: ${o.th}`);
@@ -103,7 +106,8 @@ export class ThreadDoc {
 
   save(): DocSaved {
     const unsent = [...this.pending, ...this.inFlight.values()];
-    return { head: this.head, state: Y.encodeStateAsUpdate(this.doc), unsent: unsent.length ? Y.mergeUpdates(unsent) : null };
+    const head = this.hole ? Math.min(this.head, this.hole.dseq - 1) : this.head;
+    return { head, state: Y.encodeStateAsUpdate(this.doc), unsent: unsent.length ? Y.mergeUpdates(unsent) : null };
   }
 
   get synced(): boolean {
@@ -121,12 +125,11 @@ export class ThreadDoc {
   reconnect(): void {
     this.ready = false;
     this.start(this.head);
-    for (const [id, update] of this.inFlight) this.chain = this.chain.then(() => this.post(update, id));
+    for (const [id, update] of this.inFlight) void this.queue(() => this.post(update, id));
   }
 
   receive(frame: DocIn): Promise<void> {
-    this.chain = this.chain.then(() => this.take(frame));
-    return this.chain;
+    return this.queue(() => this.take(frame));
   }
 
   applyAwareness(update: Uint8Array): void {
@@ -141,8 +144,7 @@ export class ThreadDoc {
     this.pending = [];
     const id = b64url(crypto.getRandomValues(new Uint8Array(12)));
     this.inFlight.set(id, update);
-    this.chain = this.chain.then(() => this.post(update, id));
-    return this.chain;
+    return this.queue(() => this.post(update, id));
   }
 
   destroy(): void {
@@ -177,8 +179,31 @@ export class ThreadDoc {
     return e === undefined ? box : { ...box, e };
   }
 
-  private async open(iv: string, ct: string, e: number | undefined): Promise<Uint8Array | null> {
+  private queue(step: () => Promise<void>): Promise<void> {
+    this.chain = this.chain.then(step).catch(() => {
+      // A step that threw (a key not there yet, an update Yjs can't read) is dropped so the steps after it still run: a post retries on its own, a gap is fetched again.
+    });
+    return this.chain;
+  }
+
+  private retry(update: Uint8Array, id: string): void {
+    setTimeout(() => {
+      if (this.inFlight.has(id) && !this.closed) void this.queue(() => this.post(update, id));
+    }, this.o.retryMs ?? RETRY_MS);
+  }
+
+  private async refill(): Promise<void> {
+    const hole = this.hole;
+    if (!hole || this.closed || !(await this.o.keys.opening(hole.e)).length) return;
+    this.hole = null;
+    this.head = Math.min(this.head, hole.dseq - 1);
+    this.ready = false;
+    this.start(this.head);
+  }
+
+  private async open(iv: string, ct: string, e: number | undefined): Promise<Uint8Array | null | typeof NO_KEY> {
     const keys = await this.o.keys.opening(e);
+    if (!keys.length) return NO_KEY;
     let plain: Uint8Array<ArrayBuffer> | null = null;
     for (const [i, key] of keys.entries()) {
       plain = await openBytes(key, iv, ct, ad(this.o.roomId, this.th));
@@ -202,12 +227,20 @@ export class ThreadDoc {
 
   private async post(update: Uint8Array, id: string): Promise<void> {
     if (this.closed) return;
-    this.o.links.send({ t: "doc", id, th: this.th, ...(await this.seal(update)) });
+    let sealed: Awaited<ReturnType<ThreadDoc["seal"]>>;
+    try {
+      sealed = await this.seal(update);
+    } catch {
+      // No key to seal with yet (a rotation still on its way): keep the update and send it again shortly.
+      return this.retry(update, id);
+    }
+    this.o.links.send({ t: "doc", id, th: this.th, ...sealed });
+    await this.refill();
     if (this.stale && this.ready) await this.compact();
   }
 
   private async compact(): Promise<void> {
-    if (this.closed || !this.ready) return;
+    if (this.closed || !this.ready || this.hole) return;
     const upto = Math.max(this.head, this.top);
     if (upto === 0) return;
     const id = b64url(crypto.getRandomValues(new Uint8Array(12)));
@@ -227,10 +260,7 @@ export class ThreadDoc {
         await this.post(update, id);
         return;
       }
-      setTimeout(() => {
-        if (this.inFlight.has(id)) this.chain = this.chain.then(() => this.post(update, id));
-      }, RETRY_MS);
-      return;
+      return this.retry(update, id);
     }
     if (f.t === "ack") {
       if (!this.inFlight.delete(f.id)) return;
@@ -249,6 +279,11 @@ export class ThreadDoc {
     if (!f.snap && f.dseq <= this.head) return;
     const update = await this.open(f.iv, f.ct, f.e);
     this.head = Math.max(this.head, f.dseq);
+    if (update === NO_KEY) {
+      if (!this.hole || f.dseq < this.hole.dseq) this.hole = { dseq: f.dseq, e: f.e };
+      return;
+    }
     if (update) Y.applyUpdate(this.doc, update, REMOTE);
+    await this.refill();
   }
 }
