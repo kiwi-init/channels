@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { newChannelKey, newRoomId } from "@kiwi/core/crypto.ts";
 import { appendToBlock, blocksOf, newBlock, newDocId, threadOf, threadText } from "@kiwi/core/doc/blocks.ts";
-import { ThreadDoc, type DocIn, type DocOut } from "@kiwi/core/doc/thread-doc.ts";
+import { ThreadDoc, type DocIn, type DocKeys, type DocOut } from "@kiwi/core/doc/thread-doc.ts";
 import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
 import { MAX_CT_LENGTH } from "@kiwi/core/protocol.ts";
 
@@ -71,20 +71,21 @@ async function setup(n: number, opts: { trusts?: (pk: string) => boolean } = {})
   const th = newDocId();
   const relay = new FakeRelay();
   const ids = await Promise.all(Array.from({ length: n }, (_, i) => generateIdentity(`p${i}`)));
-  const make = (me: Identity, k = key) => {
+  const make = (me: Identity, k = key, keys?: DocKeys) => {
     const peer = new Peer();
     peer.td = new ThreadDoc({
       roomId,
       th,
       me,
-      keys: { current: async () => ({ key: k, e: 1 }), opening: async (e) => (e === 1 ? [k] : []) },
+      keys: keys ?? { current: async () => ({ key: k, e: 1 }), opening: async (e) => (e === 1 ? [k] : []) },
       links: { send: relay.link(peer), aware: (_th, u) => peer.aware.push(u) },
       flushMs: 1,
+      retryMs: 5,
       ...opts,
     });
     return peer;
   };
-  return { relay, ids, make, peers: ids.map((id) => make(id)), th };
+  return { relay, ids, make, key, peers: ids.map((id) => make(id)), th };
 }
 
 async function settle(...peers: Peer[]) {
@@ -212,5 +213,62 @@ describe("a thread doc syncs sealed Yjs updates through the relay", () => {
     expect(texts(b)).toEqual(["small first", pasted, "a short reply"]);
     expect(relay.sent.filter((f) => f.t === "doc" && f.ct.length > MAX_CT_LENGTH)).toHaveLength(0);
     expect(relay.rows[0]!.snap).toBe(true);
+  });
+});
+
+describe("a thread doc keeps going through faults (T1355)", () => {
+  test("a seal that throws once doesn't stop the doc: that edit is sent again and the next ones follow", async () => {
+    const { make, ids, key } = await setup(2);
+    let fail = true;
+    const a = make(ids[0]!, key, {
+      current: async () => {
+        if (!fail) return { key, e: 1 };
+        fail = false;
+        throw new Error("no channel key for this epoch yet");
+      },
+      opening: async (e) => (e === 1 ? [key] : []),
+    });
+    const b = make(ids[1]!);
+    a.td.start();
+    b.td.start();
+    await settle(a, b);
+    newBlock(a.td.doc, "text", ids[0]!.pk, "first");
+    await settle(a, b);
+    newBlock(a.td.doc, "text", ids[0]!.pk, "second");
+    await settle(a, b);
+    await Bun.sleep(20);
+    await settle(a, b);
+    expect(texts(b)).toEqual(["first", "second"]);
+  });
+
+  test("an update sealed under a key it doesn't have yet isn't skipped, and its snapshot never covers it", async () => {
+    const { make, ids, key: k1, relay } = await setup(3);
+    const k2 = newChannelKey();
+    const both = async (e: number | undefined) => (e === 1 ? [k1] : e === 2 ? [k2] : []);
+    let bHasK2 = false;
+    const a = make(ids[0]!, k1, { current: async () => ({ key: k2, e: 2 }), opening: both });
+    const b = make(ids[1]!, k1, {
+      current: async () => (bHasK2 ? { key: k2, e: 2 } : { key: k1, e: 1 }),
+      opening: async (e) => (e === 1 ? [k1] : e === 2 && bHasK2 ? [k2] : []),
+    });
+    b.td.start();
+    await settle(b);
+    newBlock(b.td.doc, "text", ids[1]!.pk, "b before the rotation");
+    await settle(b);
+    a.td.start();
+    await settle(a, b);
+    newBlock(a.td.doc, "text", ids[0]!.pk, "a after the rotation");
+    await settle(a, b);
+    expect(b.td.save().head).toBeLessThan(relay.head);
+    bHasK2 = true;
+    newBlock(b.td.doc, "text", ids[1]!.pk, "b after the rotation");
+    await settle(a, b);
+    newBlock(a.td.doc, "text", ids[0]!.pk, "a again");
+    await settle(a, b);
+    const c = make(ids[2]!, k1, { current: async () => ({ key: k2, e: 2 }), opening: both });
+    c.td.start();
+    await settle(c);
+    expect(relay.rows.some((r) => r.snap)).toBe(true);
+    for (const p of [b, c]) expect(texts(p).sort()).toEqual(["a after the rotation", "a again", "b after the rotation", "b before the rotation"]);
   });
 });

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import * as Y from "yjs"
-import { appendToBlock, blocksOf, newBlock, type BlockKind } from "@kiwi/core/doc/blocks.ts"
+import { appendToBlock, blocksOf, newBlock, threadOf, type BlockKind } from "@kiwi/core/doc/blocks.ts"
 import { heldPipe } from "@kiwi/core/doc/held-pipe.ts"
 
 import type { DocEvent } from "../../../../desktop/src/bridge.ts"
@@ -101,7 +101,13 @@ describe("a person's block posts as their message when they press Enter", () => 
       },
       undefined,
       () => {},
-      { me: "jow", post: (text, block) => posts.push([text, block.th, block.id]) }
+      {
+        me: "jow",
+        post: (text, block) => {
+          posts.push([text, block.th, block.id])
+          return Promise.resolve(true)
+        },
+      }
     )
     const id = start(live.doc, "jow", "hello there")
     start(live.doc, "jow")
@@ -109,6 +115,42 @@ describe("a person's block posts as their message when they press Enter", () => 
     const opened = open as ((e: DocEvent) => void) | null
     opened?.({ _tag: "Open", th: "th1" })
     expect(posts).toEqual([["hello there", "th1", id]])
+    live.destroy()
+  })
+
+  test("a send the channel refuses comes back as your draft, and Enter in it posts it again (T1401)", async () => {
+    const posts: string[] = []
+    let refuse = true
+    let open: ((e: DocEvent) => void) | null = null
+    const live = new LiveDoc(
+      (_th, on) => {
+        open = on
+        return heldPipe().pipe
+      },
+      undefined,
+      () => {},
+      {
+        me: "jow",
+        post: (text) => {
+          posts.push(text)
+          return Promise.resolve(!refuse)
+        },
+      }
+    )
+    const sentOf = (id: string) => blocksOf(live.doc).find((b) => b.id === id)?.sent ?? false
+    const id = start(live.doc, "jow", "ship it")
+    start(live.doc, "jow")
+    const opened = open as ((e: DocEvent) => void) | null
+    opened?.({ _tag: "Open", th: "th1" })
+    expect(posts).toEqual(["ship it"])
+    await wait(0)
+    expect(sentOf(id)).toBe(false)
+    refuse = false
+    live.doc.transact(() => threadOf(live.doc).delete(threadOf(live.doc).length - 1, 1))
+    start(live.doc, "jow")
+    expect(posts).toEqual(["ship it", "ship it"])
+    await wait(0)
+    expect(sentOf(id)).toBe(true)
     live.destroy()
   })
 })
