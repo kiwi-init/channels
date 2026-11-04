@@ -13,6 +13,8 @@ import { caretShown } from "~/chat/doc/carets"
 import { onGiveBack } from "~/chat/doc/give-back"
 import { writeOwnLinesOnly } from "~/chat/doc/own-writes"
 import { keepScreenSelection, withScreenSelection } from "~/chat/doc/screen-selection"
+import { dropLeftovers, leftovers, liveOf } from "~/chat/doc/leftovers"
+import { thisWindow } from "~/chat/doc/made"
 import { attachTo, attachToDoc, startUpload, uploadTarget } from "~/chat/doc/uploads"
 import { docKeys, type CommandFor } from "~/chat/doc/keys"
 import { docTag, holdDoc, LiveDoc, type Shared } from "~/chat/doc/live"
@@ -360,7 +362,7 @@ function shareSelection(view: EditorView, shared: Shared, me: string): void {
   const block = here ? attrsOf(here.node).id : null
   const text = from === to ? "" : view.state.doc.textBetween(from, to, "\n", "￼").slice(0, 2000)
   const was: unknown = shared.awareness.getLocalState()?.kiwi
-  const next = { author: me, selection: block ? { block, text } : null }
+  const next = { author: me, window: thisWindow, selection: block ? { block, text } : null }
   if (JSON.stringify(was) !== JSON.stringify(next)) shared.awareness.setLocalStateField("kiwi", next)
 }
 
@@ -394,6 +396,8 @@ function takeFiles(view: EditorView, doc: Y.Doc, me: string, media: DocMedia | n
     .finally(done)
   return true
 }
+
+const SWEEP_MS = 30_000
 
 function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, feet: Heads, opts: ViewOpts): { view: EditorView; stop: () => void } {
   const seen = new Map<number, { key: string; at: number }>()
@@ -490,10 +494,22 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
     },
   })
   blur.now = () => view.dom.blur()
+  const unheld = new Map<string, number>()
+  const sweep = (): void => {
+    if (view.isDestroyed || !opts.editable()) return
+    const live = liveOf(shared.awareness.getStates().values(), me)
+    const tr = dropLeftovers(
+      view.state,
+      leftovers(view.state.doc, me, Date.now(), live, (b) => opts.drafts.current.made(b), unheld)
+    )
+    if (tr) view.dispatch(tr)
+  }
+  const sweeping = setInterval(sweep, SWEEP_MS)
   const unkeep = keepScreenSelection(view)
   return {
     view,
     stop: () => {
+      clearInterval(sweeping)
       unkeep()
       own?.stop()
       shared.awareness.off("change", watch)
