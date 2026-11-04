@@ -1,6 +1,7 @@
 import { Fragment, startTransition, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import { Composer } from "~/chat/composer"
+import { useThreadDocs } from "~/chat/doc/switch"
 import { EventRun } from "~/chat/events"
 import { continuesRun, eventRun } from "~/chat/fold-events"
 import { foldText, leftOutRun, runFirst, withLeftOut } from "~/chat/left-out"
@@ -26,6 +27,7 @@ import { dmInRoom } from "~/live/dm"
 const HistoryFold = later(() => import("~/chat/compact").then((m) => m.HistoryFold))
 const ProposalCard = later(() => import("~/chat/compact").then((m) => m.ProposalCard))
 const AddAgentCard = later(() => import("~/modals/add-agent").then((m) => m.AddAgentCard))
+const LocalThreadDoc = later(() => import("~/chat/doc/editor").then((m) => m.LocalThreadDoc))
 
 const GROUP_MS = 5 * 60_000
 const NEAR_BOTTOM = 48
@@ -192,6 +194,7 @@ export function Conversation({ channel, jump }: { channel: Channel; jump: Jump |
     const here = reply?.key === key ? reply : null
     return { to: here?.to ?? null, excerpt: here?.excerpt ?? null, set: (to, excerpt) => setReply(to ? { key, to, excerpt: excerpt ?? null } : null) }
   }, [reply, key])
+  const docs = useThreadDocs() && where.kind !== "theirs"
   const placeName =
     where.kind === "room"
       ? `#${channel.rooms.find((r) => r.id === where.room)?.name ?? where.room}`
@@ -210,13 +213,14 @@ export function Conversation({ channel, jump }: { channel: Channel; jump: Jump |
         where={where}
         spot={nav.restore !== undefined ? nav.restore : spotAt(key)}
         jump={jump && sameWhere(jump.m.where, where) ? jump : null}
+        doc={docs ? key : null}
       />
-      {where.kind === "theirs" ? <ReadOnly channel={channel} between={where.between} /> : <Composer channel={channel} where={where} placeholder={`Message ${placeName}`} />}
+      {where.kind === "theirs" ? <ReadOnly channel={channel} between={where.between} /> : !docs && <Composer channel={channel} where={where} placeholder={`Message ${placeName}`} />}
     </ReplyContext.Provider>
   )
 }
 
-function Feed({ channel, where, spot, jump }: { channel: Channel; where: Where; spot: Spot | null; jump: Jump | null }) {
+function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Where; spot: Spot | null; jump: Jump | null; doc: string | null }) {
   const { go } = useApp()
   const specAsks = useMemo(() => new Set((channel.specs ?? []).map((s) => s.ask)), [channel.specs])
   const all = useMemo(
@@ -479,7 +483,7 @@ function Feed({ channel, where, spot, jump }: { channel: Channel; where: Where; 
   }, [jump, onQuote, content, unstick, remember])
 
   return (
-    <div className="feed-wrap">
+    <div className={doc ? "feed-wrap is-doc" : "feed-wrap"}>
       {where.kind !== "theirs" && <QuotePick root={content} onQuote={quote} />}
       <div className="feed" ref={scroller} onScroll={onScroll}>
         <div className="feed-list" ref={content}>
@@ -556,6 +560,11 @@ function Feed({ channel, where, spot, jump }: { channel: Channel; where: Where; 
           {proposal && proposalAt === undefined && end === list.length && (
             <Suspense fallback={null}>
               <ProposalCard channel={channel} proposal={proposal} names={names} tasks={tasks} onQuote={onQuote} />
+            </Suspense>
+          )}
+          {doc && following && !channel.loading && (
+            <Suspense fallback={null}>
+              <LocalThreadDoc channel={channel} where={where} docKey={doc} />
             </Suspense>
           )}
           {working.length > 0 && !channel.loading && <Working people={working} />}
