@@ -14,6 +14,7 @@ import { tmuxSocket } from "./tmux.ts";
 import { firstPrompt, nextWork, step, waitingBehind, waitingText, waitsDue, waitTellsTo, workName, type Wait, type Work } from "./work.ts";
 import { clearFresh, freshAsked, LOOP_TASK_ENV } from "./fresh.ts";
 import { LOOP_ENV } from "../hooks/loop-wait.ts";
+import { pendingDocWakes } from "../config/doc-wakes.ts";
 
 const POLL_MS = 2_000;
 const BIND_MS = 60_000;
@@ -71,7 +72,7 @@ const pauseFor = (ms: number, stop: { asked: boolean }) =>
 const look = (s: AgentSession) =>
   Effect.gen(function* () {
     const { messages, state } = yield* s.state();
-    const forMe = (yield* s.unreadAt(state, messages, { forMe: true })).unread;
+    const forMe = (yield* s.unreadAt(state, messages, { forMe: true })).unread + pendingDocWakes(s.alias, s.me).length;
     return { state, forMe };
   });
 
