@@ -135,7 +135,10 @@ try {
   const asked = (await said("bot")).find((m) => m.body === "smoke test");
   if (asked === undefined) throw new Error("the block the person wrote never became a message in the agent's log");
   if (!asked.block?.th || !asked.block.id) throw new Error(`the message from the block doesn't say which block it came from: ${JSON.stringify(asked)}`);
-  if (await page.locator("article").filter({ hasText: "smoke test" }).count()) throw new Error("the block shows twice: once in the doc and again as a message");
+  await page.locator("article").filter({ hasText: "smoke test" }).first().waitFor({ timeout: 15000 });
+  const inFeed = await page.locator("article").filter({ hasText: "smoke test" }).count();
+  const inDoc = await page.locator(".thread-doc section.blk:not(.is-hidden)").filter({ hasText: "smoke test" }).count();
+  if (inFeed !== 1 || inDoc !== 0) throw new Error(`a posted block shows once, in the feed at its time: ${inFeed} in the feed, ${inDoc} in the doc`);
   const ask = asked.seq;
   await writeBlock(page, "anyone around?");
   let around: number | undefined;
