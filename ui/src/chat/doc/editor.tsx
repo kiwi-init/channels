@@ -8,7 +8,7 @@ import { Decoration, DecorationSet, EditorView, type NodeView } from "prosemirro
 import { yCursorPlugin, ySyncPlugin, ySyncPluginKey, yUndoPlugin } from "y-prosemirror"
 import * as Y from "yjs"
 
-import { attach, backInDraft, blockAt, blocks, continues, dropEmptyOwn, isEmpty, noteMade, replyIn, startBlock, unreply, type Made } from "~/chat/doc/blocks"
+import { attach, backInDraft, blockAt, blocks, continues, dropEmptyOwn, emptyHidden, isEmpty, noteMade, replyIn, startBlock, unreply, type Made } from "~/chat/doc/blocks"
 import { caretShown } from "~/chat/doc/carets"
 import { onGiveBack } from "~/chat/doc/give-back"
 import { writeOwnLinesOnly } from "~/chat/doc/own-writes"
@@ -162,7 +162,7 @@ interface Drafts {
   version: number
 }
 
-function paintRuns(root: HTMLElement, shown: Map<HTMLElement, BlockView>, me: string, drafts: Drafts): void {
+function paintRuns(root: HTMLElement, shown: Map<HTMLElement, BlockView>, me: string, here: string | null, drafts: Drafts): void {
   let prev: Node | undefined
   const last = new Map<string, HTMLElement>()
   for (const el of root.children) {
@@ -172,7 +172,7 @@ function paintRuns(root: HTMLElement, shown: Map<HTMLElement, BlockView>, me: st
     const a = attrsOf(node)
     const empty = isEmpty(node)
     const mine = a.author === me
-    const hidden = (empty && !mine) || drafts.posted(a.id) || drafts.inFeed(a.id)
+    const hidden = emptyHidden(node, me, here, drafts.made) || drafts.posted(a.id) || drafts.inFeed(a.id)
     el.classList.toggle("is-cont", !hidden && continues(prev, node))
     el.classList.toggle("is-empty", empty)
     el.classList.toggle("is-mine", mine)
@@ -187,16 +187,24 @@ function paintRuns(root: HTMLElement, shown: Map<HTMLElement, BlockView>, me: st
   }
 }
 
+function hereOf(state: EditorState): string | null {
+  const at = blockAt(state)
+  return at ? attrsOf(at.node).id : null
+}
+
 function runsPlugin(shown: Map<HTMLElement, BlockView>, me: string, drafts: RefObject<Drafts>): Plugin {
   return new Plugin({
     view: (view) => {
-      paintRuns(view.dom, shown, me, drafts.current)
+      let here = hereOf(view.state)
+      paintRuns(view.dom, shown, me, here, drafts.current)
       let painted = drafts.current.version
       return {
         update: (v, prev) => {
-          if (v.state.doc === prev.doc && painted === drafts.current.version) return
+          const now = hereOf(v.state)
+          if (v.state.doc === prev.doc && painted === drafts.current.version && now === here) return
           painted = drafts.current.version
-          paintRuns(v.dom, shown, me, drafts.current)
+          here = now
+          paintRuns(v.dom, shown, me, here, drafts.current)
         },
       }
     },
