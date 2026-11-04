@@ -1,6 +1,6 @@
 import "~/styles/thread-doc.css"
 
-import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from "react"
+import { useEffect, useLayoutEffect, useReducer, useRef, useState, useSyncExternalStore, type CSSProperties } from "react"
 import { createPortal } from "react-dom"
 import type { Node } from "prosemirror-model"
 import { EditorState, Plugin, type Transaction } from "prosemirror-state"
@@ -9,16 +9,17 @@ import { yCursorPlugin, ySyncPlugin, ySyncPluginKey, yUndoPlugin } from "y-prose
 
 import { blockAt, blocks, continues, dropEmptyOwn, isEmpty, startBlock } from "~/chat/doc/blocks"
 import { docKeys } from "~/chat/doc/keys"
-import { localDoc, type Shared } from "~/chat/doc/local"
+import { holdDoc, LiveDoc, type Shared } from "~/chat/doc/live"
 import { markdownRules } from "~/chat/doc/rules"
 import { attrsOf, FRAGMENT, schema, type BlockAttrs } from "~/chat/doc/schema"
 import { dismiss, suggestPlugin, type Query } from "~/chat/doc/suggest"
 import { peopleMatches, taskMatches } from "~/chat/matches"
 import { Avatar, cx, Dot, STATUS_WORDS } from "~/kit/bits"
 import { clock } from "~/kit/time"
+import { announce } from "~/kit/toasts"
 import type { Channel, Person, Task, Where } from "~/model"
 import { nickname } from "~/names"
-import { useApp } from "~/nav"
+import { useAct, useApp } from "~/nav"
 
 const IDLE_MS = 4000
 
@@ -502,6 +503,34 @@ export function ThreadDoc({ channel, where, shared, hold }: { channel: Channel; 
   )
 }
 
-export function LocalThreadDoc({ channel, where, docKey, hold }: { channel: Channel; where: Where; docKey: string; hold: (on: boolean) => void }) {
-  return <ThreadDoc channel={channel} where={where} shared={localDoc(docKey)} hold={hold} />
+export function LiveThreadDoc({ channel, where, thread, hold }: { channel: Channel; where: Where; thread: string; hold: (on: boolean) => void }) {
+  const { actions } = useAct()
+  const th = channel.docs?.[thread]
+  const first = useRef(th)
+  const [live, setLive] = useState<LiveDoc | null>(null)
+  const [, bump] = useReducer((n: number) => n + 1, 0)
+  const code = channel.code
+
+  useEffect(() => {
+    const held = holdDoc(
+      `${code}\n${thread}`,
+      () =>
+        new LiveDoc(
+          (at, on) => actions.openDoc(code, thread, at, on),
+          first.current,
+          (why) => announce(`The shared doc didn't open: ${why}`, "error")
+        )
+    )
+    setLive(held.live)
+    const off = held.live.whenReady(bump)
+    return () => {
+      off()
+      setLive(null)
+      held.release()
+    }
+  }, [actions, code, thread])
+
+  useEffect(() => live?.want(th), [live, th])
+
+  return live?.isReady ? <ThreadDoc channel={channel} where={where} shared={live} hold={hold} /> : null
 }

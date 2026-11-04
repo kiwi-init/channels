@@ -4,7 +4,7 @@ import { applyAwarenessUpdate, Awareness, encodeAwarenessUpdate } from "y-protoc
 import type { Node } from "prosemirror-model"
 import { prosemirrorToYXmlFragment } from "y-prosemirror"
 
-import { localDoc } from "~/chat/doc/local"
+import { demoDoc } from "~/demo/doc-hub"
 import { FRAGMENT, newBlockId, schema, type BlockKind } from "~/chat/doc/schema"
 
 interface Seed {
@@ -91,8 +91,8 @@ function point(awareness: Awareness, text: Y.XmlText, from: number, to: number):
   })
 }
 
-export function seedThreadDoc(key: string, extra: number): void {
-  const { doc, awareness } = localDoc(key)
+export function seedThreadDoc(code: string, thread: string, extra: number): void {
+  const { doc, awareness } = demoDoc(code, thread)
   const frag = doc.getXmlFragment(FRAGMENT)
   if (frag.length > 0) return
   prosemirrorToYXmlFragment(schema.nodes.doc.create(null, [...filler(extra), ...SEEDS].map(block)), frag)

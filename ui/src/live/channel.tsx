@@ -138,6 +138,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const next = nextOf(state)
   const prs = useMemo(() => prsOf(state), [state])
   const issues = useMemo(() => issuesOf(state), [state])
+  const docs = useMemo(() => Object.fromEntries(state.docs), [state.docs])
   const mergedAt = useMemo(() => [...state.github.prs.values()].flatMap((p) => (p.state === "merged" ? [p.at] : [])), [state.github.prs])
 
   const trusted = !isOwner && fullyTrusted(state.members.get(me))
@@ -183,6 +184,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       free,
       asks: everyAsk,
       connection,
+      docs,
       ...(ready ? {} : { loading: true }),
     }),
     [
@@ -224,6 +226,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       free,
       everyAsk,
       connection,
+      docs,
       ready,
       trusted,
     ]
