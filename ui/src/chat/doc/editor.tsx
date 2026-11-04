@@ -15,7 +15,7 @@ import { fileDrag, takeDropped } from "@kiwi/app/dropped.ts"
 import { emptyPaste, takePasted } from "@kiwi/app/pasted.ts"
 import { fileView, filesIn, imageView, uploadAll, type DocMedia } from "~/chat/doc/media"
 import { markdownRules } from "~/chat/doc/rules"
-import { attrsOf, FRAGMENT, schema, type BlockAttrs } from "~/chat/doc/schema"
+import { attrsOf, FRAGMENT, isSent, schema, type BlockAttrs } from "~/chat/doc/schema"
 import { dismiss, suggestPlugin, type Query } from "~/chat/doc/suggest"
 import { peopleMatches, taskMatches } from "~/chat/matches"
 import { Avatar, cx, Dot, STATUS_WORDS } from "~/kit/bits"
@@ -116,25 +116,32 @@ class BlockView implements NodeView {
 }
 
 interface Drafts {
-  is: (block: string) => boolean
+  posted: (block: string) => boolean
   version: number
 }
 
 function paintRuns(root: HTMLElement, shown: Map<HTMLElement, BlockView>, me: string, drafts: Drafts): void {
   let prev: Node | undefined
+  const last = new Map<string, HTMLElement>()
   for (const el of root.children) {
     if (!(el instanceof HTMLElement)) continue
     const node = shown.get(el)?.node
     if (!node) continue
+    const a = attrsOf(node)
     const empty = isEmpty(node)
-    const mine = attrsOf(node).author === me
+    const mine = a.author === me
     const hidden = empty && !mine
     el.classList.toggle("is-cont", !hidden && continues(prev, node))
     el.classList.toggle("is-empty", empty)
     el.classList.toggle("is-mine", mine)
     el.classList.toggle("is-hidden", hidden)
-    el.classList.toggle("is-draft", mine && !empty && drafts.is(attrsOf(node).id))
+    el.classList.remove("is-draft")
+    if (a.kind === "text" && !empty) last.set(a.author, el)
     if (!hidden) prev = node
+  }
+  for (const el of last.values()) {
+    const node = shown.get(el)?.node
+    if (node && !isSent(node) && !drafts.posted(attrsOf(node).id)) el.classList.add("is-draft")
   }
 }
 
@@ -434,13 +441,13 @@ export function ThreadDoc({ channel, where, shared, hold, media = null }: { chan
   const canWrite = useRef(!readOnly)
   const latest = useRef(channel)
   const holdRef = useRef(hold)
-  const drafts = useRef<Drafts>({ is: () => false, version: 0 })
-  const sent = useMemo(() => new Set(channel.messages.flatMap((m) => (m.block && !m.pending ? [m.block] : []))), [channel.messages])
+  const drafts = useRef<Drafts>({ posted: () => false, version: 0 })
+  const sent = useMemo(() => new Set(channel.messages.flatMap((m) => (m.block ? [m.block] : []))), [channel.messages])
 
   useLayoutEffect(() => {
-    drafts.current = { is: (block) => !!shared.madeHere?.(block) && !sent.has(block), version: drafts.current.version + 1 }
+    drafts.current = { posted: (block) => sent.has(block), version: drafts.current.version + 1 }
     view.current?.setProps({})
-  }, [shared, sent])
+  }, [sent])
   const mediaRef = useRef(media)
   const [query, setQuery] = useState<{ q: Query; left: number; top: number } | null>(null)
   const [pick, setPick] = useState(0)

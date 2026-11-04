@@ -13,7 +13,6 @@ import { FRAGMENT } from "~/chat/doc/schema"
 export interface Shared {
   doc: Y.Doc
   awareness: Awareness
-  madeHere?: (block: string) => boolean
 }
 
 export type OpenDoc = (th: string | null, on: (e: DocEvent) => void) => PipeIn
@@ -64,8 +63,6 @@ export class LiveDoc implements Shared {
   get isReady(): boolean {
     return this.ready
   }
-
-  madeHere = (block: string): boolean => this.posting?.made(block) ?? false
 
   whenReady(l: () => void): () => void {
     this.waiting.add(l)
