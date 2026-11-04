@@ -2,6 +2,7 @@ import { Fragment, startTransition, Suspense, useCallback, useEffect, useLayoutE
 
 import { Composer } from "~/chat/composer"
 import { docThread } from "@kiwi/core/doc/threads.ts"
+import { useEditingIn } from "~/chat/editing"
 import { EventRun } from "~/chat/events"
 import { continuesRun, eventRun } from "~/chat/fold-events"
 import { foldText, leftOutRun, runFirst, withLeftOut } from "~/chat/left-out"
@@ -492,6 +493,25 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
     },
     [go, content]
   )
+
+  const editingSeq = useEditingIn(channel.code)
+  useEffect(() => {
+    if (editingSeq === null) return
+    unstick()
+    let frame = 0
+    let left = 30
+    const show = () => {
+      const box = content.current?.querySelector<HTMLElement>(`[data-seq="${editingSeq}"] .msg-edit`)
+      if (!box) {
+        if (left-- > 0) frame = requestAnimationFrame(show)
+        return
+      }
+      box.scrollIntoView({ block: "nearest" })
+      remember()
+    }
+    frame = requestAnimationFrame(show)
+    return () => cancelAnimationFrame(frame)
+  }, [editingSeq, content, unstick, remember])
 
   useEffect(() => {
     if (!jump) return

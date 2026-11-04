@@ -335,3 +335,23 @@
 .thread-doc .blk-re {
   margin: 8px 0 4px;
 }
+
+.doc-drop {
+  position: absolute;
+  inset: -8px;
+  z-index: 2;
+  display: grid;
+  align-items: end;
+  justify-items: center;
+  border-radius: var(--r-ctl);
+  background: color-mix(in srgb, var(--bg-2) 92%, transparent);
+  pointer-events: none;
+}
+
+.doc-drop span {
+  position: sticky;
+  bottom: 24px;
+  margin-bottom: 24px;
+  color: var(--accent);
+  font: 500 var(--t-ui) var(--ui);
+}

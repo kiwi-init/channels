@@ -481,6 +481,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
             replyTo,
             inThread: root,
             pending: true,
+            canChange: true,
             ...(root !== undefined && opts?.side ? { side: true as const } : {}),
             ...(images?.length ? { images } : {}),
             ...(opts?.block ? { block: opts.block.id } : {}),
