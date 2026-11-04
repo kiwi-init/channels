@@ -1115,12 +1115,8 @@ html .palette-meta,
 html .theme-when,
 html .now-counts,
 html .lane-sub,
-html .home-head-n,
-html .home-card-state,
-html .home-card-needs,
-html .home-task-id,
-html .home-task-state,
-html .home-said-at,
+html .calm-agent-doing,
+html .calm-meta time,
 html .needs-until {
   font-family: var(--mono);
   letter-spacing: -0.01em;
