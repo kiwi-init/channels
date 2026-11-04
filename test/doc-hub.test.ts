@@ -6,7 +6,7 @@ import { Channel } from "@kiwi/core/client.ts";
 import { b64url, newChannelKey, newRoomId, open, seal } from "@kiwi/core/crypto.ts";
 import { appendToBlock, blocksOf, newBlock, newDocId } from "@kiwi/core/doc/blocks.ts";
 import { DocHub, type DocStore, type ThreadKeys } from "@kiwi/core/doc/hub.ts";
-import { docThread, privateRoomOf, type RoomsHere } from "@kiwi/core/doc/threads.ts";
+import { docKeysFor, docThread, privateRoomOf, type RoomsHere } from "@kiwi/core/doc/threads.ts";
 import type { DocOut, DocSaved } from "@kiwi/core/doc/thread-doc.ts";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 import { fileDocStore } from "@kiwi/core/node/doc-store.ts";
@@ -325,6 +325,45 @@ describe("docs of members-only rooms and DMs are sealed with the room's key (T60
     expect(docThread({ kind: "task", task: 7 })).toBe("task:7");
     expect(docThread({ kind: "room", room: "r1" })).toBe("room:r1");
     expect(docThread({ kind: "dm", with: ["ana", "bo"] })).toBe("dm:ana~bo");
+  });
+
+  test("a doc's key follows its room: the room's own key when it has one, the channel key for a known room without one, and never for an unknown room (T693)", async () => {
+    const members = [
+      { name: "ana", pk: "pa" },
+      { name: "bo", pk: "pb" },
+    ];
+    const known = new Map<string, { members?: typeof members; dm?: boolean }>([
+      ["sealed", { members }],
+      ["fresh", { members }],
+      ["d1", { members, dm: true }],
+    ]);
+    const rooms: RoomsHere = { isPublic: (id) => id === "open", members: (id) => known.get(id), all: () => known };
+    const held = new Map<string, string[]>([["sealed", ["k2", "k1"]]]);
+    const here = { rooms, epoch: () => 3, roomKeys: (room: string) => held.get(room) ?? [], keyed: (room: string) => (held.get(room)?.length ?? 0) > 0 };
+    const channel: ThreadKeys = { current: async () => ({ key: "channel", e: 3 }), opening: async () => ["channel"] };
+
+    const keyed = docKeysFor("room:sealed", here, channel);
+    expect(keyed.sealed).toBe(true);
+    expect(await keyed.current()).toEqual({ key: "k2", e: 3 });
+    expect(await keyed.opening(undefined)).toEqual(["k2", "k1"]);
+    held.set("sealed", []);
+    await expect(keyed.current()).rejects.toThrow("no key for room sealed");
+
+    for (const thread of ["room:fresh", "dm:bo~ana"]) {
+      const plain = docKeysFor(thread, here, channel);
+      expect(plain.sealed).toBeUndefined();
+      expect(await plain.current()).toEqual({ key: "channel", e: 3 });
+      expect(await plain.opening(undefined)).toEqual(["channel"]);
+    }
+    const before = docKeysFor("room:fresh", here, channel);
+    held.set("fresh", ["k9"]);
+    await expect(before.current()).rejects.toThrow("has its own key now");
+    expect(await docKeysFor("room:fresh", here, channel).current()).toEqual({ key: "k9", e: 3 });
+
+    expect(docKeysFor("main", here, channel)).toBe(channel);
+    expect(docKeysFor("room:open", here, channel)).toBe(channel);
+    expect(() => docKeysFor("room:unheard", here, channel)).toThrow("doesn't know room");
+    expect(() => docKeysFor("dm:ana~cy", here, channel)).toThrow("no direct-message room");
   });
 
   test("a thread is private only for a room with members; a room the app doesn't know is refused, never sealed for the channel", () => {

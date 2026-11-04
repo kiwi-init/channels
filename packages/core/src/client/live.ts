@@ -28,7 +28,7 @@ import {
   type ServerFrame,
 } from "../protocol.ts";
 import { DocHub, type DocStore, type ThreadKeys } from "../doc/hub.ts";
-import { privateRoomOf, type RoomsHere } from "../doc/threads.ts";
+import { docKeysFor, type RoomsHere } from "../doc/threads.ts";
 import type { ChannelCore } from "./core.ts";
 import { ChannelGone, Dropped, Unreachable } from "./errors.ts";
 import type { ChannelInfo } from "./info.ts";
@@ -228,19 +228,8 @@ export class ChannelLive {
         .map(([k, key]) => [Number(k.slice(room.length + 1)), key] as const)
         .sort((a, b) => b[0] - a[0])
         .map(([, key]) => key);
-    const keysFor = (thread: string): ThreadKeys => {
-      const room = privateRoomOf(thread, rooms);
-      if (!room) return channelKeys;
-      return {
-        sealed: true,
-        current: async () => {
-          const key = roomKeys(room)[0];
-          if (!key) throw new Error(`no key for room ${room} on this computer`);
-          return { key, e: ch.access.epoch };
-        },
-        opening: async () => roomKeys(room),
-      };
-    };
+    const keysFor = (thread: string): ThreadKeys =>
+      docKeysFor(thread, { rooms, roomKeys, epoch: () => ch.access.epoch, keyed: (room) => ch.roomSeals.has(room) || ch.roomNow.has(room) || roomKeys(room).length > 0 }, channelKeys);
     this.docs = new DocHub({
       roomId: ch.roomId,
       me: ch.identity,

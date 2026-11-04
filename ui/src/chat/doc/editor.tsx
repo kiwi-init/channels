@@ -473,6 +473,7 @@ export function ThreadDoc({ channel, where, shared, hold }: { channel: Channel; 
         : where.kind === "dm"
           ? nickname(channel, where.with)
           : ""
+  const prompt = where.kind === "dm" ? `Write to ${place}` : `Write in ${place}`
 
   const write = () => {
     const v = view.current
@@ -482,9 +483,9 @@ export function ThreadDoc({ channel, where, shared, hold }: { channel: Channel; 
   }
 
   return (
-    <div ref={box} className={cx("thread-doc", readOnly && "is-read-only")} style={{ "--place": JSON.stringify(`Write in ${place}`) } as CSSProperties}>
+    <div ref={box} className={cx("thread-doc", readOnly && "is-read-only")} style={{ "--place": JSON.stringify(prompt) } as CSSProperties}>
       <div ref={mount} />
-      {!readOnly && <button type="button" className="doc-tail" aria-label={`Write in ${place}`} onMouseDown={(e) => e.preventDefault()} onClick={write} />}
+      {!readOnly && <button type="button" className="doc-tail" aria-label={prompt} onMouseDown={(e) => e.preventDefault()} onClick={write} />}
       {query && (
         <Suggest
           channel={channel}

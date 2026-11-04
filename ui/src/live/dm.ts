@@ -1,5 +1,6 @@
 import { rootOf } from "@kiwi/core/room-rules.ts"
-import type { ChannelState } from "@kiwi/core/state.ts"
+import { docThread } from "@kiwi/core/doc/threads.ts"
+import { dmPlace, type ChannelState } from "@kiwi/core/state.ts"
 import type { Channel } from "~/model"
 
 export function dmRoomOf(state: Pick<ChannelState, "rooms" | "members">, seat: string, other: string): string | undefined {
@@ -10,6 +11,12 @@ export function dmRoomOf(state: Pick<ChannelState, "rooms" | "members">, seat: s
     if (people.size === 2 && people.has(mine) && people.has(other)) return r.id
   }
   return undefined
+}
+
+export function dmDocOf(state: Pick<ChannelState, "rooms" | "members">, seat: string, other: string): string | undefined {
+  const id = dmRoomOf(state, seat, other)
+  const [a, b, ...more] = (id ? state.rooms.get(id)?.members : undefined) ?? []
+  return a && b && !more.length ? docThread(dmPlace(a.name, b.name)) : undefined
 }
 
 export function dmOther(state: Pick<ChannelState, "members">, seat: string, members: readonly { name: string }[]): string | undefined {
