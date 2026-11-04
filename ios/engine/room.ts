@@ -179,7 +179,7 @@ export class Room {
       }),
     );
     if (write && !Object.keys(mine).length) return {};
-    const merged = await this.keyring.call(this.code, "syncMarks", mine, { write });
+    const merged = await this.keyring.call(this.code, "syncMarks", mine, { write, make: this.since === 0 || this.base !== null });
     return merged ? Object.fromEntries(keys.flatMap((k) => (merged[k] !== undefined ? [[k, merged[k]]] : []))) : {};
   }
 

@@ -13,7 +13,7 @@ import type { Persona, Personality } from "./personality.ts";
 import { fromBase64, newRoomId, toBase64, type ChannelAccess } from "./crypto.ts";
 import type { Identity } from "./identity.ts";
 import type { JoinClaims, JoinRequest, Member, MemberInfo, PersonPowers } from "./membership.ts";
-import { sentTo, withSeats } from "./room-rules.ts";
+import { isPerson, personOf, sentTo, withSeats } from "./room-rules.ts";
 import type { Marks } from "./note.ts";
 import { GENERAL_ROOM, type ChannelIcon, type Envelope, type FileAttachment, type ImageAttachment, type InlineImage, type Message } from "./protocol.ts";
 import type { Scope } from "./scopes.ts";
@@ -68,6 +68,12 @@ const everySeat = (roster: readonly Member[], picked: readonly RoomPick[]): Room
     picked,
     (r) => ({ name: r.name, pk: r.pk, xpk: r.xpk }),
   );
+
+const seatsOf = (roster: readonly Member[], me: string): Member[] => {
+  const mine = roster.find((r) => r.pk === me);
+  const person = mine ? personOf(mine, roster) : `seat:${me}`;
+  return roster.filter((r) => r.pk === me || (isPerson(r) && personOf(r, roster) === person));
+};
 export class Channel {
   private readonly core: ChannelCore;
   private readonly cache: ChannelInfo;
@@ -473,8 +479,8 @@ export class Channel {
   private async openRoom(say: string, name: string, picked: readonly RoomPick[], kind: { dm?: true; self?: true }): Promise<string> {
     const id = newRoomId();
     const members = everySeat(await this.members(), withMe(this.core.identity, picked)).map(({ name, pk }) => ({ name, pk }));
-    await this.send(say, { kind: "event", ev: { op: "room.create", id, name: kind.dm || kind.self ? "" : name, members, ...kind } });
-    this.core.memberRooms.set(id, { members, ...kind });
+    const seq = await this.send(say, { kind: "event", ev: { op: "room.create", id, name: kind.dm || kind.self ? "" : name, members, ...kind } });
+    this.core.memberRooms.set(id, { members, ...kind, seq });
     return id;
   }
 
@@ -490,20 +496,25 @@ export class Channel {
     return this.openRoom("keeps their own notes", "", [], { self: true });
   }
 
-  async syncMarks(local: Marks, opts: { write?: boolean } = {}): Promise<Marks | null> {
+  async syncMarks(local: Marks, opts: { write?: boolean; make?: boolean } = {}): Promise<Marks | null> {
     const write = opts.write ?? true;
     const me = this.core.identity.pk;
     const sealed = [...this.core.roomNow].find(([, r]) => r.key && r.meta?.self && r.meta.members.some((m) => m.pk === me));
-    const own = () => [...this.core.memberRooms].find(([, r]) => r.self && r.members.some((m) => m.pk === me));
-    if (!sealed && !own() && write) await this.makeSelf();
+    const seats = sealed ? [] : seatsOf(await this.members(), me);
+    const person = new Set([me, ...seats.map((r) => r.pk)]);
+    const own = () => [...this.core.memberRooms].filter(([, r]) => r.self && r.members.length > 0 && r.members.every((m) => person.has(m.pk))).sort(([, a], [, b]) => (a.seq ?? 0) - (b.seq ?? 0))[0];
+    if (!sealed && !own() && write && (opts.make ?? true)) await this.makeSelf();
     const plain = sealed ? undefined : own();
+    const listed = plain?.[1].members.some((m) => m.pk === me);
+    const unlisted = seats.some((r) => r.active && r.xpk && !r.unverified && !plain?.[1].members.some((m) => m.pk === r.pk));
+    if (plain && write && listed && unlisted && this.core.identity.xpk) await this.changeRoom(plain[0], { members: [] });
     const [roomId, room] = sealed ?? [];
     const epoch = this.core.access.epoch;
     const key = room?.key ?? (plain ? this.core.access.keys[String(epoch)] : undefined);
     const members = room?.meta?.members ?? plain?.[1].members;
     if (!key || !members) return null;
     const { mergeMarks, noteId, openNote, sealNote } = await import("./note.ts");
-    const mine = new Set(members.map((m) => m.pk));
+    const mine = new Set([...members.map((m) => m.pk), ...seats.filter((r) => r.active).map((r) => r.pk)]);
     const scope = plain ? `${this.roomId}/${plain[0]}` : this.roomId;
     const id = await noteId(scope, key);
     const prevKey = room ? (room.meta?.prev ?? this.core.roomKeys.get(`${roomId}/${room.n - 1}`)) : this.core.access.keys[String(epoch - 1)];
@@ -553,7 +564,8 @@ export class Channel {
         const name = this.core.roomNow.get(id)?.meta?.name ?? "";
         const kind = { ...(now.dm ? { dm: true as const } : {}), ...(now.self ? { self: true as const } : {}) };
         await this.send("changed who a room is for", { kind: "event", ev: { op: "room.members", id, name: kind.dm || kind.self ? "" : name, members, ...kind } });
-        this.core.memberRooms.set(id, { members, ...kind });
+        const seq = this.core.memberRooms.get(id)?.seq;
+        this.core.memberRooms.set(id, { members, ...kind, ...(seq === undefined ? {} : { seq }) });
         changed = true;
       }
     }
@@ -578,7 +590,9 @@ export class Channel {
   async learnRooms<T extends { seq: number }>(rows: readonly (T | Message | null)[]): Promise<(T | Message | null)[]> {
     const isMessage = (m: T | Message | null): m is Message => !!m && "ev" in m && !!(m as Message).ev;
     const settled = new Map<number, Message>();
-    for (const m of rows.filter(isMessage).sort((a, b) => a.seq - b.seq)) if (m.ev?.op === "room.seal") settled.set(m.seq, await run(this.fx.settle(m)));
+    for (const m of rows.filter(isMessage).sort((a, b) => a.seq - b.seq))
+      if (m.ev?.op === "room.seal") settled.set(m.seq, await run(this.fx.settle(m)));
+      else this.core.learnRoom(m);
     return Promise.all(
       rows.map(async (m) => {
         if (!isMessage(m)) return m;
