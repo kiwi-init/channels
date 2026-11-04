@@ -160,6 +160,9 @@ jobs:
       - name: doc replay, a second window of yours never hides or eats the line you type
         if: ${{ !cancelled() }}
         run: bun scripts/ui-doc-replay.ts --chromium --second-window --rounds=2
+      - name: doc paste, an image pasted into a line goes out with that line
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-doc-paste.ts
       - name: doc fuzzer, fixed seeds, two windows of one person and an agent never lose or mix a line
         if: ${{ !cancelled() }}
         run: |
@@ -245,6 +248,9 @@ jobs:
       - name: ui the keyboard runs across doc blocks like an editor (arrows, word jumps, shift-select, select all), in WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-doc-keys.ts --dist ui/dist
+      - name: ui a remote edit landing between your keys never undoes your caret or selection (⇧← and ←), in Chromium and WebKit
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-doc-select-race.ts
       - name: ui a thread, a thread doc and a feed hold still once they open, in WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-still.ts --dist ui/dist

@@ -12,6 +12,8 @@ import { attach, backInDraft, blockAt, blocks, continues, dropEmptyOwn, isEmpty,
 import { caretShown } from "~/chat/doc/carets"
 import { onGiveBack } from "~/chat/doc/give-back"
 import { writeOwnLinesOnly } from "~/chat/doc/own-writes"
+import { keepScreenSelection, withScreenSelection } from "~/chat/doc/screen-selection"
+import { attachTo, attachToDoc, startUpload, uploadTarget } from "~/chat/doc/uploads"
 import { docKeys, type CommandFor } from "~/chat/doc/keys"
 import { docTag, holdDoc, LiveDoc, type Shared } from "~/chat/doc/live"
 import { noteTyping, setTypingFocus, tracingTyping, type TypingFocus } from "~/kit/typing-hook"
@@ -370,13 +372,18 @@ interface ViewOpts {
 
 const openImage = (url: string) => void window.open(url, "_blank", "noopener,noreferrer")
 
-function takeFiles(view: EditorView, me: string, media: DocMedia | null, editable: boolean, files: readonly File[], made: Made): boolean {
+function takeFiles(view: EditorView, doc: Y.Doc, me: string, media: DocMedia | null, editable: boolean, files: readonly File[], made: Made): boolean {
   if (!files.length || !media || !editable) return false
-  void uploadAll(files, media, (why) => announce(why, "error")).then((nodes) => {
-    if (view.isDestroyed) return
-    const tr = attach(view.state, me, Date.now(), nodes, made)
-    if (tr) view.dispatch(tr)
-  })
+  const target = uploadTarget(view.state, me, Date.now(), made)
+  if (target.tr) view.dispatch(target.tr)
+  const done = startUpload(target.id)
+  void uploadAll(files, media, (why) => announce(why, "error"))
+    .then((nodes) => {
+      if (view.isDestroyed) return void attachToDoc(doc, me, target.id, nodes)
+      const tr = attachTo(view.state, me, target.id, nodes) ?? attach(view.state, me, Date.now(), nodes, made)
+      if (tr) view.dispatch(tr)
+    })
+    .finally(done)
   return true
 }
 
@@ -437,18 +444,18 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
     },
     handlePaste: (v, e) => {
       const dt = e.clipboardData
-      if (takeFiles(v, me, opts.media(), opts.editable(), filesIn(dt), opts.drafts.current.made)) {
+      if (takeFiles(v, shared.doc, me, opts.media(), opts.editable(), filesIn(dt), opts.drafts.current.made)) {
         e.preventDefault()
         return true
       }
       if (!dt || !emptyPaste(dt) || !opts.media() || !opts.editable()) return false
       e.preventDefault()
-      void takePasted(dt).then((f) => f && takeFiles(v, me, opts.media(), opts.editable(), [f], opts.drafts.current.made))
+      void takePasted(dt).then((f) => f && takeFiles(v, shared.doc, me, opts.media(), opts.editable(), [f], opts.drafts.current.made))
       return true
     },
     handleDrop: (v, e) => {
       const dt = e.dataTransfer
-      if (takeFiles(v, me, opts.media(), opts.editable(), filesIn(dt), opts.drafts.current.made)) {
+      if (takeFiles(v, shared.doc, me, opts.media(), opts.editable(), filesIn(dt), opts.drafts.current.made)) {
         e.preventDefault()
         return true
       }
@@ -456,12 +463,13 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
       e.preventDefault()
       void takeDropped(dt).then(({ files, refused }) => {
         for (const why of refused) announce(why, "error")
-        takeFiles(v, me, opts.media(), opts.editable(), files, opts.drafts.current.made)
+        takeFiles(v, shared.doc, me, opts.media(), opts.editable(), files, opts.drafts.current.made)
       })
       return true
     },
-    dispatchTransaction(this: EditorView, tr) {
+    dispatchTransaction(this: EditorView, sent) {
       if (this.isDestroyed) return
+      const tr = withScreenSelection(this, sent)
       const before = this.state
       const next = this.state.apply(tr)
       if (tr.docChanged && !remote(tr)) {
@@ -474,9 +482,11 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
     },
   })
   blur.now = () => view.dom.blur()
+  const unkeep = keepScreenSelection(view)
   return {
     view,
     stop: () => {
+      unkeep()
       own?.stop()
       shared.awareness.off("change", watch)
     },
@@ -801,10 +811,10 @@ export function ThreadDoc({
       off = setTimeout(() => setDropping(false), 250)
       if (e.type !== "drop" || taken || !v || !el || !over) return
       const files = filesIn(dt)
-      if (takeFiles(v, me, mediaRef.current, canWrite.current, files, drafts.current.made) || files.length) return
+      if (takeFiles(v, shared.doc, me, mediaRef.current, canWrite.current, files, drafts.current.made) || files.length) return
       void takeDropped(dt).then(({ files: dropped, refused }) => {
         for (const why of refused) announce(why, "error")
-        takeFiles(v, me, mediaRef.current, canWrite.current, dropped, drafts.current.made)
+        takeFiles(v, shared.doc, me, mediaRef.current, canWrite.current, dropped, drafts.current.made)
       })
     }
     window.addEventListener("dragover", onDrag)
@@ -814,7 +824,7 @@ export function ThreadDoc({
       window.removeEventListener("dragover", onDrag)
       window.removeEventListener("drop", onDrag)
     }
-  }, [me])
+  }, [me, shared])
 
   const place =
     where.kind === "room"
