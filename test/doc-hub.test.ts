@@ -450,6 +450,7 @@ describe("docs of members-only rooms and DMs are sealed with the room's key (T60
     const sb = w.plug(b).s;
     const db = await b.open("room:secret", da.th);
     await w.settle(sa, sb);
+    for (let i = 0; i < 50 && !w.relay.snaps.length; i++) await w.settle(sa, sb);
     expect(texts(db.doc)).toEqual(["before the re-key"]);
     expect(w.relay.snaps).toEqual([da.th]);
     const d = w.hubFor(dee, null, () => roomKeys([k2]));
@@ -457,5 +458,36 @@ describe("docs of members-only rooms and DMs are sealed with the room's key (T60
     const dd = await d.open("room:secret", da.th);
     await w.settle(sd);
     expect(texts(dd.doc)).toEqual(["before the re-key"]);
+  });
+});
+
+describe("a refused doc subscribe is tried again, so the doc syncs (T1427)", () => {
+  test("the relay's err for a doc.sub carries no id: the hub routes it by thread, and the doc subscribes again after the wait", async () => {
+    const me = await generateIdentity("me");
+    const key = newChannelKey();
+    const th = newDocId();
+    const subs: number[] = [];
+    const hub = new DocHub({
+      roomId: newRoomId(),
+      me,
+      keysFor: () => ({ current: async () => ({ key }), opening: async () => [key] }),
+      sealAware: async () => ({ iv: "", ct: "" }),
+      announce: async () => {},
+      retryMs: 30,
+    });
+    hub.attach((raw) => {
+      const f = JSON.parse(raw) as DocOut;
+      if (f.t !== "doc.sub") return;
+      subs.push(performance.now());
+      const answer = subs.length < 3 ? { t: "err", th, error: "too many doc subscriptions; slow down", tag: "TooMany" } : { t: "doc.ready", th, head: 0 };
+      setTimeout(() => expect(hub.take(answer)).toBe(true), 1);
+    });
+    const td = await hub.open("main", th);
+    const synced = await Promise.race([td.whenSynced().then(() => true), Bun.sleep(1_000).then(() => false)]);
+    hub.closeAll();
+    expect(synced).toBe(true);
+    expect(subs).toHaveLength(3);
+    expect(subs[1]! - subs[0]!).toBeGreaterThanOrEqual(30);
+    expect(subs[2]! - subs[1]!).toBeGreaterThanOrEqual(60);
   });
 });

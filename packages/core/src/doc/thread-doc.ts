@@ -16,7 +16,7 @@ export type DocIn =
   | { t: "doc"; th: string; dseq: number; ts: number; iv: string; ct: string; e?: number; snap?: true }
   | { t: "doc.ready"; th: string; head: number }
   | { t: "ack"; id: string; seq: number; compact?: true }
-  | { t: "err"; id?: string; error: string; tag?: string };
+  | { t: "err"; id?: string; th?: string; error: string; tag?: string; retryAfter?: number };
 
 export interface DocSaved {
   head: number;
@@ -87,6 +87,8 @@ export class ThreadDoc {
   private readonly big = new Set<string>();
   private snapping: { id: string; covers: string[] } | null = null;
   private snapFails = 0;
+  private subFails = 0;
+  private resub: ReturnType<typeof setTimeout> | null = null;
   private refusedWith: string | null = null;
 
   constructor(o: DocOptions, doc: Y.Doc = new Y.Doc()) {
@@ -160,6 +162,7 @@ export class ThreadDoc {
     if (this.closed) return;
     this.closed = true;
     if (this.timer) clearTimeout(this.timer);
+    if (this.resub) clearTimeout(this.resub);
     this.awareness.setLocalState(null);
     this.doc.off("update", this.onUpdate);
     this.awareness.off("update", this.onAwareness);
@@ -263,9 +266,20 @@ export class ThreadDoc {
     this.o.links.send({ t: "doc.snap", id, th: this.th, upto, ...sealed });
   }
 
+  private subRefused(th: string | undefined, error: string, retryAfter: number | undefined): void {
+    if (th !== this.th || this.ready || this.resub) return;
+    this.refusedWith = error;
+    const wait = Math.max((retryAfter ?? 0) * 1000, (this.o.retryMs ?? RETRY_MS) * 2 ** Math.min(this.subFails++, MAX_BACKOFF_STEPS));
+    this.resub = setTimeout(() => {
+      this.resub = null;
+      if (!this.closed && !this.ready) this.start(this.head);
+    }, wait);
+  }
+
   private async take(f: DocIn): Promise<void> {
     if (this.closed) return;
     if (f.t === "err") {
+      if (f.id === undefined) return this.subRefused(f.th, f.error, f.retryAfter);
       if (f.id && f.id === this.snapping?.id) {
         this.snapping = null;
         this.refusedWith = f.error;
@@ -305,6 +319,7 @@ export class ThreadDoc {
     if (f.t === "doc.ready") {
       this.head = Math.max(this.head, f.head);
       this.ready = true;
+      this.subFails = 0;
       for (const done of this.waiters.splice(0)) done();
       if (this.stale || this.big.size) await this.compact();
       return;
