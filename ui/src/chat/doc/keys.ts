@@ -1,5 +1,6 @@
 import { baseKeymap, chainCommands, splitBlock, toggleMark } from "prosemirror-commands"
 import { keymap } from "prosemirror-keymap"
+import type { Node } from "prosemirror-model"
 import { TextSelection, type Command, type EditorState, type Plugin } from "prosemirror-state"
 import { liftListItem, sinkListItem, splitListItem } from "prosemirror-schema-list"
 import { redo, undo } from "y-prosemirror"
@@ -126,8 +127,39 @@ function runLine(me: string, commandFor: CommandFor): Command {
   }
 }
 
-export function docKeys(me: string, now: () => number, blur: () => void, posted: (block: string) => boolean = () => false, commandFor: CommandFor = () => null): Plugin[] {
+export interface DocKeyOpts {
+  posted?: (block: string) => boolean
+  commandFor?: CommandFor
+  refuse?: (line: string) => boolean
+  editLast?: () => boolean
+}
+
+function mineHere(state: EditorState, me: string): Node | null {
+  const here = blockAt(state)
+  return here && attrsOf(here.node).author === me && !isSent(here.node) ? here.node : null
+}
+
+function unlessRefused(me: string, refuse: (line: string) => boolean, finish: Command): Command {
+  return (state, dispatch, view) => {
+    if (!finish(state, undefined, view)) return false
+    const mine = mineHere(state, me)
+    if (mine && refuse(mine.textContent)) return true
+    return finish(state, dispatch, view)
+  }
+}
+
+function editLast(me: string, edit: () => boolean): Command {
+  return (state) => {
+    const mine = mineHere(state, me)
+    return !!mine && state.selection.empty && isEmpty(mine) && edit()
+  }
+}
+
+export function docKeys(me: string, now: () => number, blur: () => void, opts: DocKeyOpts = {}): Plugin[] {
   const item = schema.nodes.list_item
+  const posted = opts.posted ?? (() => false)
+  const commandFor = opts.commandFor ?? (() => null)
+  const refuse = opts.refuse ?? (() => false)
   return [
     keymap({
       "Mod-z": undo,
@@ -137,14 +169,15 @@ export function docKeys(me: string, now: () => number, blur: () => void, posted:
       "Mod-i": toggleMark(schema.marks.em),
       "Mod-e": toggleMark(schema.marks.code),
       "Mod-Shift-x": toggleMark(schema.marks.strike),
-      "Mod-Enter": chainCommands(runLine(me, commandFor), nextBlock(me, now)),
-      Enter: chainCommands(leaveCode, newline, runLine(me, commandFor), emptyItem, splitListItem(item), endBlock(me, now), quietEmpty, splitBlock),
+      "Mod-Enter": chainCommands(runLine(me, commandFor), unlessRefused(me, refuse, nextBlock(me, now))),
+      Enter: chainCommands(leaveCode, newline, runLine(me, commandFor), emptyItem, splitListItem(item), unlessRefused(me, refuse, endBlock(me, now)), quietEmpty, splitBlock),
       "Shift-Enter": chainCommands(newline, splitListItem(item), splitBlock),
       Tab: (state, dispatch) => inList(state) && (sinkListItem(item)(state, dispatch) || true),
       "Shift-Tab": (state, dispatch) => inList(state) && (liftListItem(item)(state, dispatch) || true),
       Backspace: chainCommands(dropOwnEmpty(me, posted), startOfItem, join(me, joinBack, posted)),
       Delete: join(me, joinForward, posted),
-      ArrowDown: toYourLine(me, posted),
+      ArrowDown: unlessRefused(me, refuse, toYourLine(me, posted)),
+      ArrowUp: editLast(me, opts.editLast ?? (() => false)),
       Escape: chainCommands(dropReply(me), () => {
         blur()
         return true

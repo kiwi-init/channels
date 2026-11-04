@@ -21,6 +21,8 @@ import { markdownRules } from "~/chat/doc/rules"
 import { attrsOf, FRAGMENT, isSent, schema, type BlockAttrs } from "~/chat/doc/schema"
 import { dismiss, suggestPlugin, type Query } from "~/chat/doc/suggest"
 import { matchCommands, parseCommand, type Command } from "~/chat/commands"
+import { tooLong } from "~/chat/drafts"
+import { startEditing } from "~/chat/editing"
 import { withNames } from "~/chat/linked"
 import { peopleMatches, taskMatches } from "~/chat/matches"
 import { withExcerpt } from "~/chat/quote"
@@ -32,7 +34,7 @@ import { clock } from "~/kit/time"
 import { announce } from "~/kit/toasts"
 import type { Channel, Message, Person, QuestionAsk, Task, Where } from "~/model"
 import { nickname } from "~/names"
-import { useAct, useApp } from "~/nav"
+import { sameWhere, useAct, useApp } from "~/nav"
 
 const QuestionCard = lazy(() => import("~/chat/question-card"))
 
@@ -303,6 +305,8 @@ interface ViewOpts {
   drafts: RefObject<Drafts>
   media: () => DocMedia | null
   command: CommandFor
+  refuse: (line: string) => boolean
+  editLast: () => boolean
 }
 
 const openImage = (url: string) => void window.open(url, "_blank", "noopener,noreferrer")
@@ -341,8 +345,7 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
         me,
         () => Date.now(),
         () => blur.now(),
-        (block) => opts.drafts.current.posted(block),
-        opts.command
+        { posted: (block) => opts.drafts.current.posted(block), commandFor: opts.command, refuse: opts.refuse, editLast: opts.editLast }
       ),
       linksPlugin(),
       herePlugin(),
@@ -549,8 +552,10 @@ export function ThreadDoc({
   const mediaRef = useRef(media)
   const [query, setQuery] = useState<{ q: Query; left: number; top: number } | null>(null)
   const [pick, setPick] = useState(0)
+  const [dropping, setDropping] = useState(false)
   const commands = useCommands(channel)
   const commandsRef = useRef(commands)
+  const whereRef = useRef(where)
   const options = optionsFor(channel, commands, query?.q ?? null)
   const keys = useRef<(e: KeyboardEvent) => boolean>(() => false)
   const replying = useReplying()
@@ -568,6 +573,7 @@ export function ThreadDoc({
     holdRef.current = hold
     mediaRef.current = media
     commandsRef.current = commands
+    whereRef.current = where
     if (changed) view.current?.setProps({})
   })
 
@@ -611,6 +617,18 @@ export function ThreadDoc({
       hold: (on) => holdRef.current(on),
       drafts,
       media: () => mediaRef.current,
+      refuse: (line) => {
+        const why = tooLong(line)
+        if (why) announce(why, "error")
+        return !!why
+      },
+      editLast: () => {
+        const c = latest.current
+        const last = c.messages.findLast((m) => m.canChange && m.inThread === undefined && sameWhere(m.where, whereRef.current))
+        if (!last) return false
+        startEditing(c.code, last.seq)
+        return true
+      },
       command: (line) => {
         const found = parseCommand(commandsRef.current, line)
         return found ? () => found.command.run(found.args) : null
@@ -660,6 +678,7 @@ export function ThreadDoc({
   }, [me])
 
   useEffect(() => {
+    let off: ReturnType<typeof setTimeout> | null = null
     const onDrag = (e: DragEvent) => {
       const dt = e.dataTransfer
       if (!dt || !fileDrag(dt)) return
@@ -667,7 +686,11 @@ export function ThreadDoc({
       e.preventDefault()
       const v = view.current
       const el = box.current
-      if (e.type !== "drop" || taken || !v || !el || !within(el.getBoundingClientRect(), e.clientX, e.clientY)) return
+      const over = !!el && within(el.getBoundingClientRect(), e.clientX, e.clientY)
+      if (off) clearTimeout(off)
+      setDropping(e.type !== "drop" && over && canWrite.current && !!mediaRef.current)
+      off = setTimeout(() => setDropping(false), 250)
+      if (e.type !== "drop" || taken || !v || !el || !over) return
       const files = filesIn(dt)
       if (takeFiles(v, me, mediaRef.current, canWrite.current, files) || files.length) return
       void takeDropped(dt).then(({ files: dropped, refused }) => {
@@ -678,6 +701,7 @@ export function ThreadDoc({
     window.addEventListener("dragover", onDrag)
     window.addEventListener("drop", onDrag)
     return () => {
+      if (off) clearTimeout(off)
       window.removeEventListener("dragover", onDrag)
       window.removeEventListener("drop", onDrag)
     }
@@ -703,6 +727,11 @@ export function ThreadDoc({
   return (
     <div ref={box} className={cx("thread-doc", readOnly && "is-read-only")} style={{ "--place": JSON.stringify(prompt) } as CSSProperties}>
       <div ref={mount} />
+      {dropping && (
+        <div className="doc-drop" aria-hidden="true">
+          <span>Drop to add it here</span>
+        </div>
+      )}
       {!readOnly && <button type="button" className="doc-tail" aria-label={prompt} onMouseDown={(e) => e.preventDefault()} onClick={write} />}
       {query && (
         <Suggest
