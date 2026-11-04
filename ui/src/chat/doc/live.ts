@@ -3,12 +3,14 @@ import { Awareness } from "y-protocols/awareness"
 
 import { b64url, fromB64url } from "@kiwi/core/crypto.ts"
 import { blocksOf } from "@kiwi/core/doc/blocks.ts"
+import { DOC_LEVEL, onWriterFloor, raiseWriterFloor } from "@kiwi/core/doc/level.ts"
 import type { PipeIn } from "@kiwi/core/doc/held-pipe.ts"
 import { mirrorAware } from "@kiwi/core/doc/pipe.ts"
 import type { DocBlockRef } from "@kiwi/core/protocol.ts"
 import type { DocEvent, WireError } from "../../../../desktop/src/bridge.ts"
 import { giveBackBlock } from "~/chat/doc/give-back"
-import { madeHere, type MadeLines } from "~/chat/doc/made"
+import { madeHere, thisWindow, type MadeLines } from "~/chat/doc/made"
+import { afterUploads, uploading } from "~/chat/doc/uploads"
 import { postFinished, type Finished, type Posting } from "~/chat/doc/post"
 import { noteTyping, tracingTyping } from "~/kit/typing-hook"
 import { FRAGMENT } from "~/chat/doc/schema"
@@ -62,6 +64,7 @@ export class LiveDoc implements Shared {
   private readonly waiting = new Set<() => void>()
   private readonly unposted: Finished[] = []
   private readonly posting: Posting | null
+  private readonly floorOff: () => void
 
   constructor(
     private readonly open: OpenDoc,
@@ -73,8 +76,16 @@ export class LiveDoc implements Shared {
     this.doc.on("update", this.onUpdate)
     this.doc.on("afterTransaction", this.onTransaction)
     this.awareness.on("change", this.onAware)
-    this.posting = poster ? postFinished(this.doc, { me: poster.me, local: (origin) => origin !== PIPE, posted: poster.posted }, (b) => this.post(b)) : null
+    this.posting = poster
+      ? postFinished(
+          this.doc,
+          { me: poster.me, local: (origin) => origin !== PIPE, posted: poster.posted, owned: (b) => b.by === thisWindow || this.made.has(b.id), worked: this.made, hold: afterUploads },
+          (b) => this.post(b)
+        )
+      : null
+    this.floorOff = onWriterFloor(this.doc, this.holdFloor)
     if (th) this.connect(th)
+    else this.holdFloor()
   }
 
   get isReady(): boolean {
@@ -92,11 +103,16 @@ export class LiveDoc implements Shared {
     this.connect(th)
   }
 
+  busy(): boolean {
+    return blocksOf(this.doc).some((b) => uploading(b.id))
+  }
+
   destroy(): void {
     this.dead = true
     this.posting?.stop()
     this.pipe?.close()
     this.pipe = null
+    this.floorOff()
     this.doc.off("update", this.onUpdate)
     this.doc.off("afterTransaction", this.onTransaction)
     this.awareness.off("change", this.onAware)
@@ -156,9 +172,14 @@ export class LiveDoc implements Shared {
       })
   }
 
+  private readonly holdFloor = (): void => {
+    if (!this.dead && this.ready && !this.gaveUp) raiseWriterFloor(this.doc, DOC_LEVEL)
+  }
+
   private isNowReady(): void {
     if (this.ready) return
     this.ready = true
+    this.holdFloor()
     for (const l of [...this.waiting]) l()
   }
 
@@ -203,11 +224,13 @@ export function holdDoc(key: string, make: () => LiveDoc): { live: LiveDoc; rele
       if (done) return
       done = true
       if (--k.users > 0) return
-      k.timer = setTimeout(() => {
+      const drop = (): void => {
         if (k.users > 0 || kept.get(key) !== k) return
+        if (k.live.busy()) return void (k.timer = setTimeout(drop, KEEP_MS))
         kept.delete(key)
         k.live.destroy()
-      }, KEEP_MS)
+      }
+      k.timer = setTimeout(drop, KEEP_MS)
     },
   }
 }

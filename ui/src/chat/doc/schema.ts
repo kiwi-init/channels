@@ -12,6 +12,7 @@ export interface BlockAttrs {
   kind: BlockKind
   author: string
   at: number
+  by: string
   re: number | null
   quote: string | null
 }
@@ -30,6 +31,7 @@ export const schema = new Schema({
         kind: { default: "text" },
         author: { default: "" },
         at: { default: 0 },
+        by: { default: "" },
         sent: { default: "" },
         posted: { default: "" },
         re: { default: null },
@@ -108,6 +110,7 @@ export function attrsOf(node: Node): BlockAttrs {
     kind: kindOf(a.kind),
     author: String(a.author ?? ""),
     at: Number(a.at) || 0,
+    by: typeof a.by === "string" ? a.by : "",
     re: Number.isSafeInteger(re) && re > 0 ? re : null,
     quote: typeof a.quote === "string" && a.quote ? a.quote : null,
   }

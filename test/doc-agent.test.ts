@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { newChannelKey, newRoomId } from "@kiwi/core/crypto.ts";
-import { agentBlock, PRESENCE_FIELD, watchWakes, wakesMe, type DocWake, type WakeRule } from "@kiwi/core/doc/agent.ts";
-import { appendToBlock, blocksOf, markBack, markPosted, newBlock, newDocId, threadText } from "@kiwi/core/doc/blocks.ts";
+import { agentBlock, PRESENCE_FIELD, settledBlocks, watchWakes, wakesMe, type DocWake, type WakeRule } from "@kiwi/core/doc/agent.ts";
+import { appendToBlock, blocksOf, markBack, markPosted, newBlock, newDocId, threadText, type Block } from "@kiwi/core/doc/blocks.ts";
 import { ThreadDoc } from "@kiwi/core/doc/thread-doc.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
 import { wants } from "../src/agent/wants.ts";
@@ -105,6 +105,14 @@ describe("an agent wakes for a finished block in the thread doc (T500)", () => {
     expect(blocksOf(w.doc).find((b) => b.id === asked.id)?.back).toBeUndefined();
     expect(wakes.map((x) => x.block.id)).toEqual([next.id]);
     stop();
+  });
+
+  test("a line from the author's other window doesn't finish their draft; a line from the same window does (T1776)", () => {
+    const at = (id: string, by: string | undefined, text: string): Block => ({ id, kind: "text", author: "jow", at: 1, text, ...(by ? { by } : {}) });
+    const settled = (later: Block) => settledBlocks([at("draft", "desk", "@olivia half a"), later]).map((b) => b.id);
+    expect(settled(at("phone", "phone", "from the phone"))).toEqual([]);
+    expect(settled(at("next", "desk", "next"))).toEqual(["draft"]);
+    expect(settled(at("old", undefined, "from an older app"))).toEqual(["draft"]);
   });
 
   test("another author's block after it doesn't finish it; the author's own next block does, even with others between", async () => {

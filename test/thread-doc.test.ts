@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { newChannelKey, newRoomId } from "@kiwi/core/crypto.ts";
+import { b64url, fromB64url, newChannelKey, newRoomId } from "@kiwi/core/crypto.ts";
+import { DOC_LEVEL, raiseWriterFloor, writerFloor } from "@kiwi/core/doc/level.ts";
+import { pipeDoc } from "@kiwi/core/doc/pipe.ts";
 import { appendToBlock, blocksOf, newBlock, newDocId, threadOf, threadText } from "@kiwi/core/doc/blocks.ts";
 import * as Y from "yjs";
 import { ThreadDoc, type DocIn, type DocKeys, type DocOut } from "@kiwi/core/doc/thread-doc.ts";
@@ -61,7 +63,11 @@ class Peer {
   td!: ThreadDoc;
   inbox: Promise<void> = Promise.resolve();
   aware: Uint8Array[] = [];
+  lose: ((f: DocIn) => boolean) | null = null;
+  intercept: ((f: DocOut, pass: (f: DocOut) => void) => void) | null = null;
+  held: DocIn[] = [];
   deliver(f: DocIn): void {
+    if (this.lose?.(f)) return void this.held.push(f);
     this.inbox = this.inbox.then(() => this.td.receive(f));
   }
 }
@@ -74,12 +80,19 @@ async function setup(n: number, opts: { trusts?: (pk: string) => boolean } = {})
   const ids = await Promise.all(Array.from({ length: n }, (_, i) => generateIdentity(`p${i}`)));
   const make = (me: Identity, k = key, keys?: DocKeys) => {
     const peer = new Peer();
+    const pass = relay.link(peer);
     peer.td = new ThreadDoc({
       roomId,
       th,
       me,
       keys: keys ?? { current: async () => ({ key: k, e: 1 }), opening: async (e) => (e === 1 ? [k] : []) },
-      links: { send: relay.link(peer), aware: (_th, u) => peer.aware.push(u) },
+      links: {
+        send: (f) => {
+          if (peer.intercept) peer.intercept(f, pass);
+          else pass(f);
+        },
+        aware: (_th, u) => peer.aware.push(u),
+      },
       flushMs: 1,
       retryMs: 5,
       ...opts,
@@ -279,10 +292,27 @@ describe("a refused snapshot backs off, never loops (T1426)", () => {
     const th = newDocId();
     const key = newChannelKey();
     const me = await generateIdentity("a");
+    const roomId = newRoomId();
     const out: { f: DocOut; at: number }[] = [];
     let inbox: Promise<void> = Promise.resolve();
+    const written: Extract<DocOut, { t: "doc" }>[] = [];
+    const writer = new ThreadDoc({
+      roomId,
+      th,
+      me,
+      flushMs: 1,
+      keys: { current: async () => ({ key, e: 1 }), opening: async () => [key] },
+      links: { aware: () => {}, send: (f) => void (f.t === "doc" && written.push(f)) },
+    });
+    const line = newBlock(writer.doc, "text", me.pk, "");
+    for (const ch of "seven!") {
+      appendToBlock(writer.doc, line.id, ch);
+      await writer.flush();
+    }
+    writer.destroy();
+    const backlog: DocIn[] = written.map((f, i) => ({ t: "doc", th, dseq: i + 1, ts: 0, iv: f.iv, ct: f.ct, e: 1 }));
     const td: ThreadDoc = new ThreadDoc({
-      roomId: newRoomId(),
+      roomId,
       th,
       me,
       flushMs: 1,
@@ -292,8 +322,8 @@ describe("a refused snapshot backs off, never loops (T1426)", () => {
         aware: () => {},
         send: (f) => {
           out.push({ f, at: performance.now() });
-          const reply = f.t === "doc.sub" ? { t: "doc.ready" as const, th, head: 7 } : answer(f, td);
-          if (reply) setTimeout(() => void (inbox = inbox.then(() => td.receive(reply))), 5);
+          const replies = f.t === "doc.sub" ? [...backlog, { t: "doc.ready" as const, th, head: backlog.length }] : [answer(f, td)];
+          for (const reply of replies) if (reply) setTimeout(() => void (inbox = inbox.then(() => td.receive(reply))), 5);
         },
       },
     });
@@ -347,5 +377,314 @@ describe("a doc line's text is what was typed (T2141)", () => {
     expect(blocksOf(doc).map((b) => b.text)).toEqual(["use <div> and a<b>c"]);
     words.format(0, 3, { strong: true });
     expect(blocksOf(doc).map((b) => b.text)).toEqual(["use <div> and a<b>c"]);
+  });
+});
+
+function uiOn(host: Peer, level: number) {
+  const doc = new Y.Doc();
+  let refused = false;
+  const pipe = pipeDoc(host.td.doc, host.td.awareness, (out) => out._tag === "Update" && Y.applyUpdate(doc, fromB64url(out.u), "host"), Promise.resolve(), {
+    level,
+    refused: () => void (refused = true),
+  });
+  doc.on("update", (u: Uint8Array, origin: unknown) => origin !== "host" && pipe.update(b64url(u)));
+  return { doc, refused: () => refused };
+}
+
+describe("an upgraded host takes no writes from a UI older than the doc's writer floor (T2558)", () => {
+  test("once a new UI raised the floor, an old UI's line and its offline full-state resend never reach the doc; the new UI's do", async () => {
+    const { peers, ids } = await setup(2);
+    const [a, b] = peers as [Peer, Peer];
+    a.td.start();
+    b.td.start();
+    await settle(a, b);
+    const fresh = uiOn(a, DOC_LEVEL);
+    const old = uiOn(a, 0);
+    await Promise.resolve();
+    raiseWriterFloor(fresh.doc, DOC_LEVEL);
+    newBlock(fresh.doc, "text", ids[0]!.pk, "from the new look");
+    await settle(a, b);
+    expect(writerFloor(b.td.doc)).toBe(DOC_LEVEL);
+    newBlock(old.doc, "text", ids[0]!.pk, "from an old window");
+    const offline = new Y.Doc();
+    newBlock(offline, "text", ids[0]!.pk, "typed while offline");
+    const again = uiOn(a, 0);
+    Y.applyUpdate(again.doc, Y.encodeStateAsUpdate(offline));
+    await settle(a, b);
+    expect(old.refused()).toBe(true);
+    expect(again.refused()).toBe(true);
+    expect(fresh.refused()).toBe(false);
+    expect(texts(a)).toEqual(["from the new look"]);
+    expect(texts(b)).toEqual(["from the new look"]);
+  });
+
+  test("the floor never drops when copies raise it at once, in either order", () => {
+    for (const first of [0, 1]) {
+      const a = new Y.Doc();
+      const b = new Y.Doc();
+      a.clientID = 1;
+      b.clientID = 2;
+      raiseWriterFloor(a, 2);
+      raiseWriterFloor(b, 1);
+      const [x, y] = first ? [b, a] : [a, b];
+      Y.applyUpdate(y, Y.encodeStateAsUpdate(x));
+      Y.applyUpdate(x, Y.encodeStateAsUpdate(y));
+      expect(writerFloor(a)).toBe(2);
+      expect(writerFloor(b)).toBe(2);
+      raiseWriterFloor(b, 1);
+      expect(writerFloor(b)).toBe(2);
+    }
+  });
+
+  test("an old UI writes as before while no new UI has raised the floor", async () => {
+    const { peers, ids } = await setup(1);
+    const [a] = peers as [Peer];
+    a.td.start();
+    await settle(a);
+    const old = uiOn(a, 0);
+    await Promise.resolve();
+    newBlock(old.doc, "text", ids[0]!.pk, "hello");
+    await settle(a);
+    expect(old.refused()).toBe(false);
+    expect(texts(a)).toEqual(["hello"]);
+  });
+
+  test("agents still write after the floor rises: the gate is only on UI pipes", async () => {
+    const { peers, ids } = await setup(2);
+    const [a, b] = peers as [Peer, Peer];
+    a.td.start();
+    b.td.start();
+    await settle(a, b);
+    raiseWriterFloor(uiOn(a, DOC_LEVEL).doc, DOC_LEVEL);
+    await settle(a, b);
+    newBlock(b.td.doc, "text", ids[1]!.pk, "agent on 11.7");
+    newBlock(a.td.doc, "text", ids[0]!.pk, "agent here");
+    await settle(a, b);
+    expect(texts(a).sort()).toEqual(["agent here", "agent on 11.7"]);
+    expect(texts(b).sort()).toEqual(texts(a).sort());
+  });
+
+  test("the limit: a host that isn't upgraded still sends its old UI's deletion, and upgraded hosts apply it", async () => {
+    const { peers, ids } = await setup(2);
+    const [a, b] = peers as [Peer, Peer];
+    a.td.start();
+    b.td.start();
+    await settle(a, b);
+    const fresh = uiOn(a, DOC_LEVEL);
+    await Promise.resolve();
+    raiseWriterFloor(fresh.doc, DOC_LEVEL);
+    newBlock(fresh.doc, "text", ids[0]!.pk, "jow's line");
+    await settle(a, b);
+    const line = threadOf(b.td.doc);
+    line.delete(0, line.length);
+    await settle(a, b);
+    expect(texts(a)).toEqual([]);
+  });
+
+  test("a snapshot taken after a refusal never carries the refused edit to a late joiner", async () => {
+    const { peers, ids, relay, make } = await setup(2);
+    const [a] = peers as [Peer, Peer];
+    relay.compactAfter = 2;
+    a.td.start();
+    await settle(a);
+    const fresh = uiOn(a, DOC_LEVEL);
+    const old = uiOn(a, 0);
+    await Promise.resolve();
+    raiseWriterFloor(fresh.doc, DOC_LEVEL);
+    const blk = newBlock(fresh.doc, "text", ids[0]!.pk, "");
+    for (const ch of "kept") {
+      appendToBlock(fresh.doc, blk.id, ch);
+      await settle(a);
+    }
+    newBlock(old.doc, "text", ids[0]!.pk, "refused");
+    await settle(a);
+    expect(relay.rows[0]!.snap).toBe(true);
+    const late = make(ids[1]!);
+    late.td.start();
+    await settle(late);
+    expect(texts(late)).toEqual(["kept"]);
+  });
+});
+
+describe("a doc frame that never arrives, or arrives late, is fetched again (T2998)", () => {
+  const live = (f: DocIn): f is Extract<DocIn, { t: "doc" }> => f.t === "doc" && !f.snap;
+
+  test("a frame the relay never delivers is fetched again, and every edit after it applies", async () => {
+    const { peers, ids, relay } = await setup(2);
+    const [a, b] = peers as [Peer, Peer];
+    a.td.start();
+    b.td.start();
+    await settle(a, b);
+    const blk = newBlock(a.td.doc, "text", ids[0]!.pk, "");
+    await settle(a, b);
+    let lost = false;
+    b.lose = (f) => !lost && live(f) && f.dseq === 2 && (lost = true);
+    for (const ch of "abc") {
+      appendToBlock(a.td.doc, blk.id, ch);
+      await settle(a, b);
+    }
+    expect(b.held.map((f) => f.t === "doc" && f.dseq)).toEqual([2]);
+    expect(texts(b)).toEqual(["abc"]);
+    expect(texts(a)).toEqual(texts(b));
+    expect(relay.sent.filter((f) => f.t === "doc.sub").length).toBe(3);
+  });
+
+  test("two frames that arrive swapped both apply, and nothing after them is lost", async () => {
+    const { peers, ids } = await setup(2);
+    const [a, b] = peers as [Peer, Peer];
+    a.td.start();
+    b.td.start();
+    await settle(a, b);
+    const blk = newBlock(a.td.doc, "text", ids[0]!.pk, "");
+    await settle(a, b);
+    b.lose = (f) => live(f) && f.dseq === 2;
+    appendToBlock(a.td.doc, blk.id, "x");
+    await settle(a, b);
+    b.lose = null;
+    appendToBlock(a.td.doc, blk.id, "y");
+    await settle(a, b);
+    for (const f of b.held.splice(0)) b.deliver(f);
+    appendToBlock(a.td.doc, blk.id, "z");
+    await settle(a, b);
+    expect(texts(b)).toEqual(["xyz"]);
+  });
+
+  test("a frame missing from the replay when it opens is fetched again, not covered by the relay's head", async () => {
+    const { peers, ids } = await setup(2);
+    const [a, b] = peers as [Peer, Peer];
+    a.td.start();
+    await settle(a);
+    const blk = newBlock(a.td.doc, "text", ids[0]!.pk, "");
+    await settle(a);
+    for (const ch of "abc") {
+      appendToBlock(a.td.doc, blk.id, ch);
+      await settle(a);
+    }
+    let lost = false;
+    b.lose = (f) => !lost && live(f) && f.dseq === 2 && (lost = true);
+    b.td.start();
+    await settle(a, b);
+    expect(lost).toBe(true);
+    expect(texts(b)).toEqual(["abc"]);
+  });
+
+  test("a frame missing from the replay after a reconnect is fetched again", async () => {
+    const { peers, ids } = await setup(2);
+    const [a, b] = peers as [Peer, Peer];
+    a.td.start();
+    b.td.start();
+    await settle(a, b);
+    const blk = newBlock(a.td.doc, "text", ids[0]!.pk, "");
+    await settle(a, b);
+    let lost = false;
+    b.lose = (f) => live(f) && f.dseq >= 2 && !lost;
+    for (const ch of "xyz") {
+      appendToBlock(a.td.doc, blk.id, ch);
+      await settle(a, b);
+    }
+    lost = false;
+    b.held = [];
+    b.lose = (f) => !lost && live(f) && f.dseq === 3 && (lost = true);
+    b.td.reconnect();
+    await settle(a, b);
+    expect(lost).toBe(true);
+    expect(texts(b)).toEqual(["xyz"]);
+  });
+
+  test("a relay that keeps leaving a frame out is asked again with a growing wait, never in a tight loop", async () => {
+    const th = newDocId();
+    const key = newChannelKey();
+    const subs: number[] = [];
+    let inbox: Promise<void> = Promise.resolve();
+    const td: ThreadDoc = new ThreadDoc({
+      roomId: newRoomId(),
+      th,
+      me: await generateIdentity("a"),
+      retryMs: 20,
+      keys: { current: async () => ({ key, e: 1 }), opening: async () => [key] },
+      links: {
+        aware: () => {},
+        send: (f) => {
+          if (f.t !== "doc.sub") return;
+          subs.push(performance.now());
+          setTimeout(() => void (inbox = inbox.then(() => td.receive({ t: "doc.ready", th, head: 3 }))), 1);
+        },
+      },
+    });
+    td.start();
+    await Bun.sleep(400);
+    td.destroy();
+    const gaps = subs.slice(2).map((t, i) => t - subs[i + 1]!);
+    expect(subs.length).toBeGreaterThanOrEqual(3);
+    expect(subs.length).toBeLessThanOrEqual(7);
+    for (const [i, gap] of gaps.entries()) expect(gap).toBeGreaterThanOrEqual(20 * 2 ** i - 2);
+  });
+
+  test("a refused recovery subscription is asked again after the wait, even with no later frame to prompt it", async () => {
+    const { peers, ids } = await setup(2);
+    const [a, b] = peers as [Peer, Peer];
+    a.td.start();
+    b.td.start();
+    await settle(a, b);
+    const blk = newBlock(a.td.doc, "text", ids[0]!.pk, "");
+    await settle(a, b);
+    let lost = false;
+    b.lose = (f) => !lost && live(f) && f.dseq === 2 && (lost = true);
+    let refusals = 2;
+    b.intercept = (f, pass) => {
+      if (f.t === "doc.sub" && refusals-- > 0) return b.deliver({ t: "err", th: f.th, error: "busy", retryAfter: 0 });
+      pass(f);
+    };
+    appendToBlock(a.td.doc, blk.id, "x");
+    await settle(a, b);
+    appendToBlock(a.td.doc, blk.id, "y");
+    await settle(a, b);
+    for (let i = 0; i < 40 && texts(b)[0] !== "xy"; i++) {
+      await Bun.sleep(5);
+      await settle(a, b);
+    }
+    expect(refusals).toBeLessThan(0);
+    expect(texts(b)).toEqual(["xy"]);
+  });
+
+  test("its own edits, which the relay never sends back, aren't taken for a gap", async () => {
+    const { peers, ids, relay } = await setup(2);
+    const [a, b] = peers as [Peer, Peer];
+    a.td.start();
+    b.td.start();
+    await settle(a, b);
+    const blk = newBlock(a.td.doc, "text", ids[0]!.pk, "");
+    await settle(a, b);
+    for (const ch of "abcdef") {
+      appendToBlock((ch < "d" ? a : b).td.doc, blk.id, ch);
+      await settle(a, b);
+    }
+    expect(texts(a)).toEqual(["abcdef"]);
+    expect(texts(b)).toEqual(["abcdef"]);
+    expect(relay.sent.filter((f) => f.t === "doc.sub").length).toBe(2);
+  });
+
+  test("a snapshot never covers a frame it hasn't received, so the relay keeps it for everyone", async () => {
+    const { peers, ids, relay, make } = await setup(2);
+    const [a, b] = peers as [Peer, Peer];
+    relay.compactAfter = 3;
+    a.td.start();
+    b.td.start();
+    await settle(a, b);
+    const blk = newBlock(a.td.doc, "text", ids[0]!.pk, "");
+    await settle(a, b);
+    let lost = false;
+    b.lose = (f) => !lost && live(f) && f.dseq === 2 && (lost = true);
+    appendToBlock(a.td.doc, blk.id, "a");
+    await settle(a, b);
+    appendToBlock(b.td.doc, blk.id, "b");
+    await settle(a, b);
+    expect(relay.rows[0]?.snap).toBe(true);
+    const late = make(ids[1]!);
+    late.td.start();
+    await settle(a, b, late);
+    expect([...(texts(late)[0] ?? "")].toSorted()).toEqual(["a", "b"]);
+    expect(texts(b)).toEqual(texts(late));
+    expect(texts(a)).toEqual(texts(late));
   });
 });

@@ -12,6 +12,8 @@ import { attach, backInDraft, blockAt, blocks, continues, dropEmptyOwn, isEmpty,
 import { caretShown } from "~/chat/doc/carets"
 import { onGiveBack } from "~/chat/doc/give-back"
 import { writeOwnLinesOnly } from "~/chat/doc/own-writes"
+import { keepScreenSelection, withScreenSelection } from "~/chat/doc/screen-selection"
+import { attachTo, attachToDoc, startUpload, uploadTarget } from "~/chat/doc/uploads"
 import { docKeys, type CommandFor } from "~/chat/doc/keys"
 import { docTag, holdDoc, LiveDoc, type Shared } from "~/chat/doc/live"
 import { noteTyping, setTypingFocus, tracingTyping, type TypingFocus } from "~/kit/typing-hook"
@@ -20,11 +22,12 @@ import { fileDrag, takeDropped } from "@kiwi/app/dropped.ts"
 import { emptyPaste, takePasted } from "@kiwi/app/pasted.ts"
 import { fileView, filesIn, imageView, uploadAll, type DocMedia } from "~/chat/doc/media"
 import { blocksOf, richBlocks } from "@kiwi/core/doc/blocks.ts"
+import { DOC_LEVEL, onWriterFloor, writerFloor } from "@kiwi/core/doc/level.ts"
 import { docFeed, oldestAt, setDocFeed } from "~/chat/doc/finished"
 import { postedBlocks } from "~/chat/doc/posted"
 import { markdownRules } from "~/chat/doc/rules"
 import { attrsOf, FRAGMENT, isBack, isSent, schema, type BlockAttrs } from "~/chat/doc/schema"
-import { dismiss, suggestPlugin, type Query } from "~/chat/doc/suggest"
+import { dismiss, menuKey, suggestPlugin, type Query } from "~/chat/doc/suggest"
 import { matchCommands, parseCommand, type Command } from "~/chat/commands"
 import { tooLong } from "~/chat/drafts"
 import { startEditing } from "~/chat/editing"
@@ -44,6 +47,7 @@ import { sameWhere, useAct, useApp } from "~/nav"
 const QuestionCard = lazy(() => import("~/chat/question-card"))
 
 const IDLE_MS = 4000
+const SEND_KEYS = typeof navigator !== "undefined" && /Mac/.test(navigator.platform) ? "⌘↩" : "Ctrl+Enter"
 
 type HeadList = readonly (readonly [HTMLElement, number, BlockAttrs])[]
 
@@ -368,13 +372,18 @@ interface ViewOpts {
 
 const openImage = (url: string) => void window.open(url, "_blank", "noopener,noreferrer")
 
-function takeFiles(view: EditorView, me: string, media: DocMedia | null, editable: boolean, files: readonly File[], made: Made): boolean {
+function takeFiles(view: EditorView, doc: Y.Doc, me: string, media: DocMedia | null, editable: boolean, files: readonly File[], made: Made): boolean {
   if (!files.length || !media || !editable) return false
-  void uploadAll(files, media, (why) => announce(why, "error")).then((nodes) => {
-    if (view.isDestroyed) return
-    const tr = attach(view.state, me, Date.now(), nodes, made)
-    if (tr) view.dispatch(tr)
-  })
+  const target = uploadTarget(view.state, me, Date.now(), made)
+  if (target.tr) view.dispatch(target.tr)
+  const done = startUpload(target.id)
+  void uploadAll(files, media, (why) => announce(why, "error"))
+    .then((nodes) => {
+      if (view.isDestroyed) return void attachToDoc(doc, me, target.id, nodes)
+      const tr = attachTo(view.state, me, target.id, nodes) ?? attach(view.state, me, Date.now(), nodes, made)
+      if (tr) view.dispatch(tr)
+    })
+    .finally(done)
   return true
 }
 
@@ -406,7 +415,14 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
         me,
         () => Date.now(),
         () => blur.now(),
-        { posted: (block) => opts.drafts.current.posted(block), made: (block) => opts.drafts.current.made(block), commandFor: opts.command, refuse: opts.refuse, editLast: opts.editLast }
+        {
+          posted: (block) => opts.drafts.current.posted(block),
+          made: (block) => opts.drafts.current.made(block),
+          commandFor: opts.command,
+          refuse: opts.refuse,
+          editLast: opts.editLast,
+          sending: (block) => shared.made.add(block),
+        }
       ),
       linksPlugin(),
       herePlugin(),
@@ -415,7 +431,7 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
       steadyPlugin(opts.scroller, opts.hold, me),
     ],
   })
-  const own = writeOwnLinesOnly(state, () => (view.isDestroyed ? null : view.state.doc))
+  const own = writeOwnLinesOnly(state, () => (view.isDestroyed ? null : view))
   const view: EditorView = new EditorView(mount, {
     state,
     editable: opts.editable,
@@ -428,18 +444,18 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
     },
     handlePaste: (v, e) => {
       const dt = e.clipboardData
-      if (takeFiles(v, me, opts.media(), opts.editable(), filesIn(dt), opts.drafts.current.made)) {
+      if (takeFiles(v, shared.doc, me, opts.media(), opts.editable(), filesIn(dt), opts.drafts.current.made)) {
         e.preventDefault()
         return true
       }
       if (!dt || !emptyPaste(dt) || !opts.media() || !opts.editable()) return false
       e.preventDefault()
-      void takePasted(dt).then((f) => f && takeFiles(v, me, opts.media(), opts.editable(), [f], opts.drafts.current.made))
+      void takePasted(dt).then((f) => f && takeFiles(v, shared.doc, me, opts.media(), opts.editable(), [f], opts.drafts.current.made))
       return true
     },
     handleDrop: (v, e) => {
       const dt = e.dataTransfer
-      if (takeFiles(v, me, opts.media(), opts.editable(), filesIn(dt), opts.drafts.current.made)) {
+      if (takeFiles(v, shared.doc, me, opts.media(), opts.editable(), filesIn(dt), opts.drafts.current.made)) {
         e.preventDefault()
         return true
       }
@@ -447,12 +463,13 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
       e.preventDefault()
       void takeDropped(dt).then(({ files, refused }) => {
         for (const why of refused) announce(why, "error")
-        takeFiles(v, me, opts.media(), opts.editable(), files, opts.drafts.current.made)
+        takeFiles(v, shared.doc, me, opts.media(), opts.editable(), files, opts.drafts.current.made)
       })
       return true
     },
-    dispatchTransaction(this: EditorView, tr) {
+    dispatchTransaction(this: EditorView, sent) {
       if (this.isDestroyed) return
+      const tr = withScreenSelection(this, sent)
       const before = this.state
       const next = this.state.apply(tr)
       if (tr.docChanged && !remote(tr)) {
@@ -465,9 +482,11 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
     },
   })
   blur.now = () => view.dom.blur()
+  const unkeep = keepScreenSelection(view)
   return {
     view,
     stop: () => {
+      unkeep()
       own?.stop()
       shared.awareness.off("change", watch)
     },
@@ -600,7 +619,12 @@ export function ThreadDoc({
   }, [channel.messages, channel.asks])
   const me = channel.you
   const you = channel.people.find((p) => p.you)
-  const readOnly = !!you?.readOnly
+  const { app } = useApp()
+  const tooOld = useSyncExternalStore(
+    (on) => onWriterFloor(shared.doc, on),
+    () => writerFloor(shared.doc) > DOC_LEVEL
+  )
+  const readOnly = !!you?.readOnly || tooOld
   const canWrite = useRef(!readOnly)
   const latest = useRef(channel)
   const holdRef = useRef(hold)
@@ -657,17 +681,18 @@ export function ThreadDoc({
     keys.current = (e) => {
       const v = view.current
       if (!v || !query || options.length === 0) return false
-      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      const does = menuKey(e)
+      if (does === "move") {
         setPick((p) => (p + (e.key === "ArrowDown" ? 1 : options.length - 1)) % options.length)
         return true
       }
-      if (e.key === "Enter" || e.key === "Tab") {
+      if (does === "choose") {
         const o = options[Math.min(pick, options.length - 1)]
         if (e.key === "Enter" && o?.kind === "/" && o.command.name === query.q.text) return false
         if (o) choose(v, query.q, o)
         return true
       }
-      if (e.key === "Escape") {
+      if (does === "close") {
         dismiss(v)
         return true
       }
@@ -786,10 +811,10 @@ export function ThreadDoc({
       off = setTimeout(() => setDropping(false), 250)
       if (e.type !== "drop" || taken || !v || !el || !over) return
       const files = filesIn(dt)
-      if (takeFiles(v, me, mediaRef.current, canWrite.current, files, drafts.current.made) || files.length) return
+      if (takeFiles(v, shared.doc, me, mediaRef.current, canWrite.current, files, drafts.current.made) || files.length) return
       void takeDropped(dt).then(({ files: dropped, refused }) => {
         for (const why of refused) announce(why, "error")
-        takeFiles(v, me, mediaRef.current, canWrite.current, dropped, drafts.current.made)
+        takeFiles(v, shared.doc, me, mediaRef.current, canWrite.current, dropped, drafts.current.made)
       })
     }
     window.addEventListener("dragover", onDrag)
@@ -799,7 +824,7 @@ export function ThreadDoc({
       window.removeEventListener("dragover", onDrag)
       window.removeEventListener("drop", onDrag)
     }
-  }, [me])
+  }, [me, shared])
 
   const place =
     where.kind === "room"
@@ -819,7 +844,17 @@ export function ThreadDoc({
   }
 
   return (
-    <div ref={box} className={cx("thread-doc", readOnly && "is-read-only")} style={{ "--place": JSON.stringify(prompt) } as CSSProperties}>
+    <div ref={box} className={cx("thread-doc", readOnly && "is-read-only")} style={{ "--place": JSON.stringify(`${prompt} · ${SEND_KEYS} sends`) } as CSSProperties}>
+      {tooOld && (
+        <p className="doc-old">
+          A newer Channels writes here. You can read; typing comes back with the new look.
+          {app.account?.uiUpdate && (
+            <button type="button" onClick={() => app.actions.applyUi()}>
+              Switch
+            </button>
+          )}
+        </p>
+      )}
       <div ref={mount} />
       {dropping && (
         <div className="doc-drop" aria-hidden="true">

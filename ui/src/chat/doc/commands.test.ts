@@ -53,41 +53,59 @@ function doc(text: string, author = "jow", extra: DocKeyOpts = {}) {
     const made = p.spec.view?.(view)
     if (made) views.push(made)
   }
-  const press = (key: string) => {
-    const e = { key, keyCode: key === "Enter" ? 13 : key === "ArrowUp" ? 38 : 0, shiftKey: false, altKey: false, ctrlKey: false, metaKey: false } as KeyboardEvent
+  const press = (key: string, mod = false) => {
+    const e = { key, keyCode: key === "Enter" ? 13 : key === "ArrowUp" ? 38 : 0, shiftKey: false, altKey: false, ctrlKey: mod && !MAC, metaKey: mod && MAC } as KeyboardEvent
     return state.plugins.some((p) => p.props.handleKeyDown?.call(p, view, e) === true)
   }
   const typeText = (s: string) => host.dispatch(state.tr.insertText(s))
   const lines = () => blocks(state.doc).map((b) => b.node.textContent)
-  return { ran, press, typeText, lines, query: () => query }
+  const paragraphs = () => state.doc.child(0).childCount
+  return { ran, press, typeText, lines, paragraphs, query: () => query }
 }
 
+const MAC = typeof navigator !== "undefined" && /Mac|iP(hone|[oa]d)/.test(navigator.platform)
+
 describe("slash commands run from the thread doc (T1408)", () => {
-  test("Enter on /compact runs it and clears your line, and nothing posts", () => {
+  test("⌘/Ctrl+Enter on /compact runs it and clears your line, and nothing posts", () => {
     const d = doc("/compact")
-    expect(d.press("Enter")).toBe(true)
+    expect(d.press("Enter", true)).toBe(true)
     expect(d.ran).toEqual(["compact"])
     expect(d.lines()).toEqual([""])
   })
 
   test("the rest of the line is the command's argument", () => {
     const d = doc("/pause back after the deploy")
-    d.press("Enter")
+    d.press("Enter", true)
     expect(d.ran).toEqual(["pause:back after the deploy"])
   })
 
   test("an unknown /word, or a command later in the line, posts as a line", () => {
     for (const text of ["/shrug fine", "ship it /compact"]) {
       const d = doc(text)
-      d.press("Enter")
+      d.press("Enter", true)
       expect(d.ran).toEqual([])
       expect(d.lines()).toEqual([text, ""])
     }
   })
 
+  test("Enter never runs a command or sends: it breaks your line, also on an empty line and on someone else's (T2565)", () => {
+    for (const [text, author] of [
+      ["/compact", "jow"],
+      ["ship it", "jow"],
+      ["", "jow"],
+      ["her line", "maya"],
+    ] as const) {
+      const d = doc(text, author)
+      expect(d.press("Enter")).toBe(true)
+      expect(d.ran).toEqual([])
+      expect(d.lines()).toEqual([text])
+      expect(d.paragraphs()).toBe(2)
+    }
+  })
+
   test("someone else's line never runs your command", () => {
     const d = doc("/compact", "maya")
-    d.press("Enter")
+    d.press("Enter", true)
     expect(d.ran).toEqual([])
   })
 
@@ -115,15 +133,15 @@ describe("the doc keeps the composer's ↑ and too-long check (T1418)", () => {
     expect(doc("", "jow", { editLast: () => false }).press("ArrowUp")).toBe(false)
   })
 
-  test("Enter on a line that's too long keeps it as your draft instead of posting it", () => {
+  test("⌘/Ctrl+Enter on a line that's too long keeps it as your draft instead of posting it", () => {
     const refused: string[] = []
     const refuse = (line: string) => line.length > 10 && refused.push(line) > 0
     const d = doc("this line is far too long", "jow", { refuse })
-    expect(d.press("Enter")).toBe(true)
+    expect(d.press("Enter", true)).toBe(true)
     expect(refused).toEqual(["this line is far too long"])
     expect(d.lines()).toEqual(["this line is far too long"])
     const short = doc("ship it", "jow", { refuse })
-    short.press("Enter")
+    short.press("Enter", true)
     expect(short.lines()).toEqual(["ship it", ""])
   })
 })

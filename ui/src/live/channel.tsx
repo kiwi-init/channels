@@ -26,7 +26,7 @@ import { usePrefs } from "~/live/prefs"
 import { busyOf, receiptsOf, withReceipts } from "~/live/receipts"
 import { announce } from "~/kit/toasts"
 import { arrivals } from "~/live/persona-later"
-import { lastIn, seenKeyOf } from "~/live/seen-place"
+import { lastIn, seenByThread, seenKeyOf } from "~/live/seen-place"
 import { followsIn, threadSeenKey, threadsOf } from "~/live/threads"
 import { closeOpened, markGone, publish, type Run } from "~/live/store"
 import { useWakes } from "~/live/wakes"
@@ -371,8 +371,9 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const openThread = view.thread
   const lastInThread = useMemo(() => (openThread === null ? 0 : (threads.find((t) => t.root === openThread)?.lastSeq ?? 0)), [openThread, threads])
   useEffect(() => {
-    if (openThread !== null && lastInThread && shown) markSeenIn(roomId, { [threadSeenKey(openThread)]: lastInThread })
-  }, [openThread, lastInThread, roomId, shown])
+    if (openThread === null || !lastInThread || !shown) return
+    markSeenIn(roomId, { ...seenByThread(messages, state, me, openThread, seenIn(roomId)), [threadSeenKey(openThread)]: lastInThread })
+  }, [openThread, lastInThread, roomId, shown, messages, state, me])
   const task = view.task
   const lastInTask = useMemo(() => (task === null ? 0 : (state.places.get(placeKey({ kind: "task", task }))?.last ?? 0)), [task, state.places])
   useEffect(() => {

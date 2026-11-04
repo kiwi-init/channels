@@ -16,6 +16,9 @@ interface Rule {
   me: string
   local: (origin: unknown) => boolean
   posted?: (block: string) => boolean
+  owned?: (b: Block) => boolean
+  worked?: { add: (block: string) => unknown }
+  hold?: (block: string, then: () => void) => boolean
 }
 
 const isMine = (b: Block | null, me: string): b is Block => !!b && b.author === me && b.kind === "text"
@@ -27,28 +30,33 @@ export interface Posting {
 export function postFinished(doc: Y.Doc, rule: Rule, post: (b: Finished) => void): Posting {
   const frag = threadOf(doc)
   const posted = new Set<string>()
+  const here = new Set<string>()
   let stopped = false
+  const owned = (b: Block): boolean => here.has(b.id) || (rule.owned?.(b) ?? false)
 
   const known = (b: Block): boolean => posted.has(b.id) || !!b.sent || !!b.posted || (rule.posted?.(b.id) ?? false)
 
-  const unsentBefore = (el: Y.XmlElement): Y.XmlElement[] => {
-    const out: Y.XmlElement[] = []
+  const lineBefore = (el: Y.XmlElement): Y.XmlElement | null => {
     for (let n = el.prevSibling; n; n = n.prevSibling) {
       const b = blockOf(n)
       if (!isMine(b, rule.me) || !(n instanceof Y.XmlElement)) continue
-      if (known(b)) break
-      if (b.back) {
-        if (n === el.prevSibling && b.text.trim()) out.unshift(n)
-        break
-      }
-      if (b.text.trim()) out.unshift(n)
+      if (known(b)) return null
+      if (!owned(b)) continue
+      return b.text.trim() && (!b.back || n === el.prevSibling) ? n : null
     }
-    return out
+    return null
+  }
+
+  const blockAround = (t: Y.AbstractType<unknown>): Block | null => {
+    let n: Y.AbstractType<unknown> | null = t
+    while (n && n.parent !== frag) n = n.parent instanceof Y.AbstractType ? n.parent : null
+    return n ? blockOf(n) : null
   }
 
   const send = (el: Y.XmlElement): void => {
     const b = blockOf(el)
-    if (!b) return
+    if (!b || posted.has(b.id)) return
+    if (rule.hold?.(b.id, () => !stopped && frag.toArray().includes(el) && send(el))) return
     posted.add(b.id)
     queueMicrotask(() => {
       if (!stopped) markPosted(doc, b.id)
@@ -60,17 +68,28 @@ export function postFinished(doc: Y.Doc, rule: Rule, post: (b: Finished) => void
   const look = (events: Y.YEvent<Y.AbstractType<unknown>>[], tr: Y.Transaction): void => {
     if (!rule.local(tr.origin)) return
     for (const e of events) {
+      const b = e.target === frag ? null : blockAround(e.target)
+      if (!isMine(b, rule.me)) continue
+      here.add(b.id)
+      rule.worked?.add(b.id)
+    }
+    for (const e of events) {
       if (e.target !== frag) continue
       for (const item of e.changes.added)
         for (const el of item.content.getContent()) {
-          if (!(el instanceof Y.XmlElement) || !isMine(blockOf(el), rule.me)) continue
-          for (const before of unsentBefore(el)) send(before)
+          const made = el instanceof Y.XmlElement ? blockOf(el) : null
+          if (!(el instanceof Y.XmlElement) || !isMine(made, rule.me)) continue
+          here.add(made.id)
+          const before = lineBefore(el)
+          if (before) send(before)
         }
     }
   }
 
   const giveBack = (id: string): void => {
     posted.delete(id)
+    here.add(id)
+    rule.worked?.add(id)
     markBack(doc, id)
     noteTyping(() => ({ what: "line given back", block: id }))
   }

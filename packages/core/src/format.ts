@@ -391,12 +391,27 @@ export function formatMessage(m: Message, trust?: Trust, state?: ChannelState, m
           : edit
             ? `${edit.body} (edited)`
             : String(m.body ?? "");
-  const body = cleanBody(said).replace(/\n/g, "\n  │ ");
-  const imgs = !gone && m.imgs?.length ? ` ${m.imgs.map((i) => imageMarker({ name: inlineText(i.name, 80), data: i.data, ref: i.ref })).join(" ")}` : "";
-  const files = !gone && m.files?.length ? ` ${m.files.map((f) => fileMarker({ name: inlineText(f.name, 80), size: f.size })).join(" ")}` : "";
+  let unsaid = cleanBody(said);
+  const alreadyInBody = (kind: "image" | "file", name: string): boolean => {
+    if (gone) return false;
+    for (const written of [name, inlineText(name, 80)]) {
+      const marker = `[${kind}: ${written}]`;
+      const at = unsaid.indexOf(marker);
+      if (at < 0) continue;
+      unsaid = unsaid.slice(0, at) + unsaid.slice(at + marker.length);
+      return true;
+    }
+    return false;
+  };
+  const body = unsaid.replace(/\n/g, "\n  │ ");
+  const media = [
+    ...(m.imgs ?? []).filter((i) => !alreadyInBody("image", i.name)).map((i) => imageMarker({ name: inlineText(i.name, 80), data: i.data, ref: i.ref })),
+    ...(m.files ?? []).filter((f) => !alreadyInBody("file", f.name)).map((f) => fileMarker({ name: inlineText(f.name, 80), size: f.size })),
+  ];
+  const kept = !gone && media.length ? ` ${media.join(" ")}` : "";
   const link = m.handoff ? " [browser link]" : "";
   const options = m.choices?.length ? ` [options: ${m.choices.map((c) => inlineText(c, 200)).join(" | ")}]` : "";
-  return `${messageHead(m, trust, state, me)}: ${body}${takeSpec(m, state, me)}${imgs}${files}${link}${options}`;
+  return `${messageHead(m, trust, state, me)}: ${body}${takeSpec(m, state, me)}${kept}${link}${options}`;
 }
 
 function takeSpec(m: Message, state?: ChannelState, me?: string): string {
