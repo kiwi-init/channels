@@ -363,6 +363,7 @@ export interface Message {
   failed?: string
   mentionsYou?: boolean
   leftOut?: string
+  fromDoc?: true
   receipt?: string
   edited?: number
   deleted?: true
