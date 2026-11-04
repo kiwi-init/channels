@@ -284,10 +284,27 @@ describe("a refused snapshot backs off, never loops (T1426)", () => {
     const th = newDocId();
     const key = newChannelKey();
     const me = await generateIdentity("a");
+    const roomId = newRoomId();
     const out: { f: DocOut; at: number }[] = [];
     let inbox: Promise<void> = Promise.resolve();
+    const written: Extract<DocOut, { t: "doc" }>[] = [];
+    const writer = new ThreadDoc({
+      roomId,
+      th,
+      me,
+      flushMs: 1,
+      keys: { current: async () => ({ key, e: 1 }), opening: async () => [key] },
+      links: { aware: () => {}, send: (f) => void (f.t === "doc" && written.push(f)) },
+    });
+    const line = newBlock(writer.doc, "text", me.pk, "");
+    for (const ch of "seven!") {
+      appendToBlock(writer.doc, line.id, ch);
+      await writer.flush();
+    }
+    writer.destroy();
+    const backlog: DocIn[] = written.map((f, i) => ({ t: "doc", th, dseq: i + 1, ts: 0, iv: f.iv, ct: f.ct, e: 1 }));
     const td: ThreadDoc = new ThreadDoc({
-      roomId: newRoomId(),
+      roomId,
       th,
       me,
       flushMs: 1,
@@ -297,8 +314,8 @@ describe("a refused snapshot backs off, never loops (T1426)", () => {
         aware: () => {},
         send: (f) => {
           out.push({ f, at: performance.now() });
-          const reply = f.t === "doc.sub" ? { t: "doc.ready" as const, th, head: 7 } : answer(f, td);
-          if (reply) setTimeout(() => void (inbox = inbox.then(() => td.receive(reply))), 5);
+          const replies = f.t === "doc.sub" ? [...backlog, { t: "doc.ready" as const, th, head: backlog.length }] : [answer(f, td)];
+          for (const reply of replies) if (reply) setTimeout(() => void (inbox = inbox.then(() => td.receive(reply))), 5);
         },
       },
     });
@@ -522,6 +539,77 @@ describe("a doc frame that never arrives, or arrives late, is fetched again (T29
     appendToBlock(a.td.doc, blk.id, "z");
     await settle(a, b);
     expect(texts(b)).toEqual(["xyz"]);
+  });
+
+  test("a frame missing from the replay when it opens is fetched again, not covered by the relay's head", async () => {
+    const { peers, ids } = await setup(2);
+    const [a, b] = peers as [Peer, Peer];
+    a.td.start();
+    await settle(a);
+    const blk = newBlock(a.td.doc, "text", ids[0]!.pk, "");
+    await settle(a);
+    for (const ch of "abc") {
+      appendToBlock(a.td.doc, blk.id, ch);
+      await settle(a);
+    }
+    let lost = false;
+    b.lose = (f) => !lost && live(f) && f.dseq === 2 && (lost = true);
+    b.td.start();
+    await settle(a, b);
+    expect(lost).toBe(true);
+    expect(texts(b)).toEqual(["abc"]);
+  });
+
+  test("a frame missing from the replay after a reconnect is fetched again", async () => {
+    const { peers, ids } = await setup(2);
+    const [a, b] = peers as [Peer, Peer];
+    a.td.start();
+    b.td.start();
+    await settle(a, b);
+    const blk = newBlock(a.td.doc, "text", ids[0]!.pk, "");
+    await settle(a, b);
+    let lost = false;
+    b.lose = (f) => live(f) && f.dseq >= 2 && !lost;
+    for (const ch of "xyz") {
+      appendToBlock(a.td.doc, blk.id, ch);
+      await settle(a, b);
+    }
+    lost = false;
+    b.held = [];
+    b.lose = (f) => !lost && live(f) && f.dseq === 3 && (lost = true);
+    b.td.reconnect();
+    await settle(a, b);
+    expect(lost).toBe(true);
+    expect(texts(b)).toEqual(["xyz"]);
+  });
+
+  test("a relay that keeps leaving a frame out is asked again with a growing wait, never in a tight loop", async () => {
+    const th = newDocId();
+    const key = newChannelKey();
+    const subs: number[] = [];
+    let inbox: Promise<void> = Promise.resolve();
+    const td: ThreadDoc = new ThreadDoc({
+      roomId: newRoomId(),
+      th,
+      me: await generateIdentity("a"),
+      retryMs: 20,
+      keys: { current: async () => ({ key, e: 1 }), opening: async () => [key] },
+      links: {
+        aware: () => {},
+        send: (f) => {
+          if (f.t !== "doc.sub") return;
+          subs.push(performance.now());
+          setTimeout(() => void (inbox = inbox.then(() => td.receive({ t: "doc.ready", th, head: 3 }))), 1);
+        },
+      },
+    });
+    td.start();
+    await Bun.sleep(400);
+    td.destroy();
+    const gaps = subs.slice(2).map((t, i) => t - subs[i + 1]!);
+    expect(subs.length).toBeGreaterThanOrEqual(3);
+    expect(subs.length).toBeLessThanOrEqual(7);
+    for (const [i, gap] of gaps.entries()) expect(gap).toBeGreaterThanOrEqual(20 * 2 ** i - 2);
   });
 
   test("its own edits, which the relay never sends back, aren't taken for a gap", async () => {

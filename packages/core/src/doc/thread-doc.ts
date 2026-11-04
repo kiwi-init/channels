@@ -79,6 +79,10 @@ export class ThreadDoc {
   private head = 0;
   private readonly seen = new Set<number>();
   private refetching = false;
+  private known = 0;
+  private refetchedAt = -1;
+  private refetchFails = 0;
+  private refetch: ReturnType<typeof setTimeout> | null = null;
   private ready = false;
   private closed = false;
   private chain: Promise<void> = Promise.resolve();
@@ -169,6 +173,7 @@ export class ThreadDoc {
     this.closed = true;
     if (this.timer) clearTimeout(this.timer);
     if (this.resub) clearTimeout(this.resub);
+    if (this.refetch) clearTimeout(this.refetch);
     this.doc.off("update", this.onUpdate);
     this.awareness.off("update", this.onAwareness);
     this.awareness.destroy();
@@ -285,11 +290,22 @@ export class ThreadDoc {
   private saw(dseq: number, head = 0): void {
     if (dseq > this.head) this.seen.add(dseq);
     this.head = Math.max(this.head, head);
+    this.known = Math.max(this.known, dseq, this.head);
     for (const d of this.seen) if (d <= this.head) this.seen.delete(d);
     while (this.seen.delete(this.head + 1)) this.head++;
-    if (!this.seen.size || !this.ready || this.refetching || this.closed) return;
+    if (this.head >= this.known || !this.ready || this.refetching || this.closed) return;
     this.refetching = true;
-    this.start(this.head);
+    const stuck = this.head === this.refetchedAt;
+    this.refetchFails = stuck ? this.refetchFails + 1 : 0;
+    this.refetchedAt = this.head;
+    if (!stuck) return this.start(this.head);
+    this.refetch = setTimeout(
+      () => {
+        this.refetch = null;
+        if (!this.closed && this.refetching) this.start(this.head);
+      },
+      (this.o.retryMs ?? RETRY_MS) * 2 ** Math.min(this.refetchFails - 1, MAX_BACKOFF_STEPS),
+    );
   }
 
   private subRefused(th: string | undefined, error: string, retryAfter: number | undefined): void {
@@ -345,7 +361,8 @@ export class ThreadDoc {
     if (f.t === "doc.ready") {
       this.refetching = false;
       this.ready = true;
-      this.saw(0, f.head);
+      this.known = Math.max(this.known, f.head);
+      this.saw(0);
       this.subFails = 0;
       for (const done of this.waiters.splice(0)) done();
       if (this.resend) {
