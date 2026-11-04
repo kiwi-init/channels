@@ -1,6 +1,6 @@
 import * as Y from "yjs"
 
-import { blockOf, markPosted, threadOf, unmarkSent, type Block } from "@kiwi/core/doc/blocks.ts"
+import { blockOf, markPosted, richOf, threadOf, unmarkSent, type Block } from "@kiwi/core/doc/blocks.ts"
 
 export interface Finished {
   id: string
@@ -24,11 +24,12 @@ export function postFinished(doc: Y.Doc, rule: Rule, post: (b: Finished) => void
   const made = new Set<string>()
   const posted = new Set<string>()
 
-  const send = (b: Block | null): void => {
+  const send = (el: unknown): void => {
+    const b = blockOf(el)
     if (!b || posted.has(b.id) || !made.has(b.id) || !b.text.trim()) return
     posted.add(b.id)
     markPosted(doc, b.id)
-    post({ id: b.id, text: b.text.trim() })
+    post({ id: b.id, text: richOf(el)?.markdown || b.text.trim() })
   }
 
   const look = (events: Y.YEvent<Y.AbstractType<unknown>>[], tr: Y.Transaction): void => {
@@ -40,7 +41,7 @@ export function postFinished(doc: Y.Doc, rule: Rule, post: (b: Finished) => void
           const b = blockOf(el)
           if (!isMine(b, rule.me)) continue
           if (local) made.add(b.id)
-          send(blockOf(el instanceof Y.XmlElement ? el.prevSibling : null))
+          send(el instanceof Y.XmlElement ? el.prevSibling : null)
         }
     }
   }

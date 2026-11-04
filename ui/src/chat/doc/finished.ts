@@ -1,4 +1,4 @@
-import type { Block } from "@kiwi/core/doc/blocks.ts"
+import type { Block, RichBlock } from "@kiwi/core/doc/blocks.ts"
 import { store } from "~/live/value"
 import type { Message, Where } from "~/model"
 
@@ -9,30 +9,51 @@ export interface Line {
   text: string
 }
 
+export interface DocFeed {
+  lines: readonly Line[]
+  hidden: ReadonlySet<string>
+  media: ReadonlySet<string>
+}
+
 const SHOWN: readonly Block["kind"][] = ["text", "agent", "comment"]
 
-export function finishedLines(blocks: readonly Block[], posted: ReadonlySet<string>): Line[] {
+export const EMPTY_FEED: DocFeed = { lines: [], hidden: new Set(), media: new Set() }
+
+export function docFeed(blocks: readonly Block[], rich: ReadonlyMap<string, RichBlock>, posted: ReadonlySet<string>, since: number): DocFeed {
   const later = new Set<string>()
-  const out: Line[] = []
+  const lines: Line[] = []
+  const hidden = new Set<string>()
+  const media = new Set<string>()
   for (let i = blocks.length - 1; i >= 0; i--) {
     const b = blocks[i]!
     const done = b.sent || later.has(b.author)
     later.add(b.author)
-    const text = b.text.trim()
-    if (done && text && SHOWN.includes(b.kind) && !posted.has(b.id)) out.push({ id: b.id, author: b.author, at: b.at, text })
+    const r = rich.get(b.id)
+    if (r?.media) {
+      media.add(b.id)
+      continue
+    }
+    if (!done || posted.has(b.id)) continue
+    hidden.add(b.id)
+    const text = (r?.markdown ?? b.text).trim()
+    if (b.at >= since && text && SHOWN.includes(b.kind)) lines.push({ id: b.id, author: b.author, at: b.at, text })
   }
-  return out.reverse()
+  return { lines: lines.reverse(), hidden, media }
 }
 
-const same = (a: readonly Line[] | undefined, b: readonly Line[]): boolean => !!a && a.length === b.length && a.every((x, i) => x.id === b[i]!.id && x.text === b[i]!.text)
+const sameSet = (a: ReadonlySet<string>, b: ReadonlySet<string>): boolean => a.size === b.size && [...a].every((x) => b.has(x))
+const same = (a: DocFeed | undefined, b: DocFeed): boolean =>
+  !!a && a.lines.length === b.lines.length && a.lines.every((x, i) => x.id === b.lines[i]!.id && x.text === b.lines[i]!.text) && sameSet(a.hidden, b.hidden) && sameSet(a.media, b.media)
 
-export const docLines = store<ReadonlyMap<string, readonly Line[]>>(new Map())
+export const docFeeds = store<ReadonlyMap<string, DocFeed>>(new Map())
 
-export function setDocLines(th: string, lines: readonly Line[]): void {
-  const now = docLines.get()
-  if (same(now.get(th), lines)) return
-  docLines.set(new Map([...now, [th, lines]]))
+export function setDocFeed(key: string, feed: DocFeed): void {
+  const now = docFeeds.get()
+  if (same(now.get(key), feed)) return
+  docFeeds.set(new Map([...now, [key, feed]]))
 }
+
+export const oldestAt = (messages: readonly Pick<Message, "at">[]): number => messages.reduce((min, m) => Math.min(min, m.at), Number.POSITIVE_INFINITY)
 
 export function withLines(list: readonly Message[], lines: readonly Line[], where: Where): Message[] {
   if (!lines.length) return [...list]

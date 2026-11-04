@@ -14,8 +14,8 @@ import { linksPlugin } from "~/chat/doc/links"
 import { fileDrag, takeDropped } from "@kiwi/app/dropped.ts"
 import { emptyPaste, takePasted } from "@kiwi/app/pasted.ts"
 import { fileView, filesIn, imageView, uploadAll, type DocMedia } from "~/chat/doc/media"
-import { blocksOf } from "@kiwi/core/doc/blocks.ts"
-import { finishedLines, setDocLines } from "~/chat/doc/finished"
+import { blocksOf, richBlocks } from "@kiwi/core/doc/blocks.ts"
+import { docFeed, oldestAt, setDocFeed } from "~/chat/doc/finished"
 import { postedBlocks } from "~/chat/doc/posted"
 import { markdownRules } from "~/chat/doc/rules"
 import { attrsOf, FRAGMENT, isSent, schema, type BlockAttrs } from "~/chat/doc/schema"
@@ -482,20 +482,24 @@ export function ThreadDoc({
   const holdRef = useRef(hold)
   const drafts = useRef<Drafts>({ posted: () => false, inFeed: () => false, version: 0 })
   const sent = useMemo(() => postedBlocks(channel.messages), [channel.messages])
-  const linesKey = `${channel.code}\n${thread}`
+  const feedKey = `${channel.code}\n${thread}`
+  const since = useMemo(() => oldestAt(channel.messages), [channel.messages])
 
   useLayoutEffect(() => {
     const publish = () => {
-      const lines = finishedLines(blocksOf(shared.doc), sent)
-      const ids = new Set(lines.map((l) => l.id))
-      setDocLines(linesKey, lines)
-      drafts.current = { posted: (block) => sent.has(block), inFeed: (block) => ids.has(block), version: drafts.current.version + 1 }
+      const feed = docFeed(blocksOf(shared.doc), richBlocks(shared.doc), sent, since)
+      setDocFeed(feedKey, feed)
+      drafts.current = {
+        posted: (block) => sent.has(block) && !feed.media.has(block),
+        inFeed: (block) => feed.hidden.has(block),
+        version: drafts.current.version + 1,
+      }
       view.current?.setProps({})
     }
     publish()
     shared.doc.on("update", publish)
     return () => shared.doc.off("update", publish)
-  }, [sent, shared, linesKey])
+  }, [sent, since, shared, feedKey])
   const mediaRef = useRef(media)
   const [query, setQuery] = useState<{ q: Query; left: number; top: number } | null>(null)
   const [pick, setPick] = useState(0)
