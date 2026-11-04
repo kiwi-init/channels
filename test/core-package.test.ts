@@ -20,7 +20,7 @@ function imports(file: string): string[] {
 }
 
 describe("packages/core (@kiwi/core)", () => {
-  test("imports nothing outside the package but effect, and node: only under src/node", () => {
+  test("imports nothing outside the package but effect and Yjs, and node: only under src/node", () => {
     const bad: string[] = [];
     for (const f of sources(join(core, "src"))) {
       const rel = relative(core, f);
@@ -30,7 +30,7 @@ describe("packages/core (@kiwi/core)", () => {
           if (relative(core, resolve(dirname(f), spec)).startsWith("..")) bad.push(`${rel}: ${spec}`);
         } else if (spec.startsWith("node:")) {
           if (!nodeOnly) bad.push(`${rel}: ${spec}`);
-        } else if (!spec.startsWith("effect/")) bad.push(`${rel}: ${spec}`);
+        } else if (!spec.startsWith("effect/") && spec !== "yjs" && spec !== "y-protocols/awareness") bad.push(`${rel}: ${spec}`);
       }
     }
     expect(bad).toEqual([]);

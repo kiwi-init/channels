@@ -82,6 +82,17 @@ export const MAX_IMAGES = 8;
 /** Largest ephemeral (unstored) frame. */
 export const MAX_EPH_LENGTH = 4 * 1024;
 
+export const MAX_DOC_SNAP_LENGTH = 2 * 1024 * 1024;
+export const DOC_COMPACT_BYTES = 256 * 1024;
+export const DOC_COMPACT_UPDATES = 500;
+export const MAX_DOC_LOG_BYTES = 1024 * 1024;
+export const MAX_DOC_LOG_UPDATES = 5_000;
+export const MAX_DOC_THREADS = 32;
+export const DOC_COMPACT = "this thread's doc is full; post a snapshot first";
+
+const DOC_THREAD_RE = /^[A-Za-z0-9_-]{22}$/;
+export const wellFormedThread = (x: unknown): x is string => typeof x === "string" && DOC_THREAD_RE.test(x);
+
 /** Most messages returned by one history read or replayed on connect. */
 export const PAGE_LIMIT = 1_000;
 
@@ -134,8 +145,8 @@ export type ServerFrame =
   | ({ t: "msg" } & Envelope)
   | { t: "eph"; iv: string; ct: string }
   | { t: "ready"; head: number; more: boolean }
-  | { t: "ack"; id: string; seq: number; ts?: number }
-  | { t: "err"; error: string; id?: string; tag?: string; retryAfter?: number }
+  | { t: "ack"; id: string; seq: number; ts?: number; compact?: true }
+  | { t: "err"; error: string; id?: string; tag?: string; retryAfter?: number; th?: string }
   /** Membership channels: the member list changed; refetch it. */
   | { t: "roster" }
   /** Membership channels: the channel key rotated; fetch the new one. */
@@ -149,7 +160,19 @@ export type ServerFrame =
   /** On connect, before ready: how far each member has read. */
   | { t: "reads"; reads: ReadMark[] }
   | { t: "page" }
-  | { t: "head"; seq: number; ts: number };
+  | { t: "head"; seq: number; ts: number }
+  | ({ t: "doc" } & DocEnvelope)
+  | { t: "doc.ready"; th: string; head: number };
+
+export interface DocEnvelope {
+  th: string;
+  dseq: number;
+  ts: number;
+  iv: string;
+  ct: string;
+  e: number;
+  snap?: true;
+}
 
 /** How far one member has read: a seq and when it got there. A number, never content. */
 export interface ReadMark {
@@ -173,7 +196,11 @@ export type ClientFrame =
   | { t: "eph"; iv: string; ct: string }
   /** This member has read up to `seq` (a listener says it on the socket it already has: cheaper than a request). */
   | { t: "read"; seq: number }
-  | { t: "more"; since: number };
+  | { t: "more"; since: number }
+  | { t: "doc"; id: string; th: string; iv: string; ct: string; e?: number }
+  | { t: "doc.snap"; id: string; th: string; upto: number; iv: string; ct: string; e?: number }
+  | { t: "doc.sub"; th: string; since: number }
+  | { t: "doc.unsub"; th: string };
 
 /** WebSocket close codes the relay uses for membership changes. */
 export const CLOSE_REMOVED = 4403;

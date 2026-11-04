@@ -208,8 +208,12 @@ export class Channel extends DurableObject<Env> {
   }
 
   override async webSocketMessage(ws: WebSocket, data: string | ArrayBuffer): Promise<void> {
-    const { room, pk, echo } = ws.deserializeAttachment() as { room: string; pk: string; echo?: boolean };
-    const fx = runRoomSync(this.relay, this.store(room), onClientFrame(typeof data === "string" ? data : new TextDecoder().decode(data), pk, echo !== false));
+    const { room, pk, echo, watch, docs } = ws.deserializeAttachment() as Attachment;
+    const fx = runRoomSync(
+      this.relay,
+      this.store(room),
+      onClientFrame(typeof data === "string" ? data : new TextDecoder().decode(data), pk, echo !== false, { docs: new Set(docs), watch: watch === true }),
+    );
     for (const f of [fx.reply ?? []].flat()) ws.send(f);
     await this.apply(fx, ws);
   }
@@ -231,6 +235,14 @@ export class Channel extends DurableObject<Env> {
     if (fx.others) for (const ws of sockets) if (ws !== sender && !watching?.has(ws)) send(ws, fx.others);
     if (fx.ephemeral) {
       for (const ws of sockets) if (ws !== sender && (ws.deserializeAttachment() as { presence?: boolean } | null)?.presence !== false) send(ws, fx.ephemeral);
+    }
+    if (fx.follow && sender) {
+      const att = sender.deserializeAttachment() as Attachment;
+      const docs = (att.docs ?? []).filter((th) => th !== fx.follow?.th);
+      sender.serializeAttachment({ ...att, docs: fx.follow.on ? [...docs, fx.follow.th] : docs });
+    }
+    if (fx.doc) {
+      for (const ws of sockets) if (ws !== sender && (ws.deserializeAttachment() as Attachment | null)?.docs?.includes(fx.doc.th)) send(ws, fx.doc.frame);
     }
     if (fx.readers?.length) {
       for (const ws of sockets) {
@@ -630,6 +642,14 @@ export class MailboxBox extends DurableObject<Env> {
   override async alarm(): Promise<void> {
     await this.ctx.storage.deleteAll();
   }
+}
+
+interface Attachment {
+  room: string;
+  pk: string;
+  echo?: boolean;
+  watch?: boolean;
+  docs?: string[];
 }
 
 function isWatch(ws: WebSocket): boolean {
