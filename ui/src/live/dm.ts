@@ -25,3 +25,20 @@ export function dmOther(state: Pick<ChannelState, "members">, seat: string, memb
 }
 
 export const dmInRoom = (channel: Pick<Channel, "people">, other: string): boolean => channel.people.some((p) => p.name === other && p.kind === "human")
+
+export function dmsOnce(): (other: string, make: () => Promise<string | undefined>) => Promise<string | undefined> {
+  const making = new Map<string, Promise<string | undefined>>()
+  return (other, make) => {
+    const had = making.get(other)
+    if (had) return had
+    const next = make()
+    making.set(other, next)
+    void next.then(
+      (room) => {
+        if (room === undefined) making.delete(other)
+      },
+      () => making.delete(other)
+    )
+    return next
+  }
+}
