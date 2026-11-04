@@ -3,7 +3,7 @@ import { newChannelKey, newRoomId } from "@kiwi/core/crypto.ts";
 import { appendToBlock, blocksOf, newBlock, newDocId, threadOf, threadText } from "@kiwi/core/doc/blocks.ts";
 import { ThreadDoc, type DocIn, type DocKeys, type DocOut } from "@kiwi/core/doc/thread-doc.ts";
 import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
-import { MAX_CT_LENGTH } from "@kiwi/core/protocol.ts";
+import { DOC_COMPACT, MAX_CT_LENGTH } from "@kiwi/core/protocol.ts";
 
 interface Row {
   dseq: number;
@@ -270,5 +270,67 @@ describe("a thread doc keeps going through faults (T1355)", () => {
     await settle(c);
     expect(relay.rows.some((r) => r.snap)).toBe(true);
     for (const p of [b, c]) expect(texts(p).sort()).toEqual(["a after the rotation", "a again", "b after the rotation", "b before the rotation"]);
+  });
+});
+
+describe("a refused snapshot backs off, never loops (T1426)", () => {
+  const scripted = async (answer: (f: DocOut, td: ThreadDoc) => DocIn | null) => {
+    const th = newDocId();
+    const key = newChannelKey();
+    const me = await generateIdentity("a");
+    const out: { f: DocOut; at: number }[] = [];
+    let inbox: Promise<void> = Promise.resolve();
+    const td: ThreadDoc = new ThreadDoc({
+      roomId: newRoomId(),
+      th,
+      me,
+      flushMs: 1,
+      retryMs: 40,
+      keys: { current: async () => ({ key, e: 1 }), opening: async () => [key] },
+      links: {
+        aware: () => {},
+        send: (f) => {
+          out.push({ f, at: performance.now() });
+          const reply = f.t === "doc.sub" ? { t: "doc.ready" as const, th, head: 7 } : answer(f, td);
+          if (reply) setTimeout(() => void (inbox = inbox.then(() => td.receive(reply))), 5);
+        },
+      },
+    });
+    td.start();
+    await Bun.sleep(20);
+    newBlock(td.doc, "text", me.pk, "one more line");
+    return { td, out, snaps: () => out.filter((o) => o.f.t === "doc.snap"), updates: () => out.filter((o) => o.f.t === "doc") };
+  };
+
+  test("a snapshot the relay keeps refusing goes again after twice the wait each time, and the update it was for isn't sent again", async () => {
+    const { td, snaps, updates } = await scripted((f) =>
+      f.t === "doc.snap" ? { t: "err", id: f.id, error: "doc snapshot too large", tag: "TooLarge" } : f.t === "doc" ? { t: "err", id: f.id, error: DOC_COMPACT, tag: "TooLarge" } : null,
+    );
+    await Bun.sleep(700);
+    td.destroy();
+    const at = snaps().map((s) => s.at);
+    const gaps = at.slice(1).map((t, i) => t - at[i]!);
+    expect(at.length).toBeGreaterThanOrEqual(3);
+    expect(at.length).toBeLessThanOrEqual(6);
+    for (const [i, gap] of gaps.entries()) expect(gap).toBeGreaterThanOrEqual(40 * 2 ** i);
+    expect(updates()).toHaveLength(1);
+    expect(td.refused).toBe("doc snapshot too large");
+  });
+
+  test("once a snapshot lands, the update it carries is done, the refusal clears and nothing is left unsent; the hub routes the snapshot's answers to its doc", async () => {
+    let refusals = 1;
+    let owned = false;
+    const { td, snaps } = await scripted((f, doc) => {
+      if (f.t === "doc") return { t: "err", id: f.id, error: DOC_COMPACT, tag: "TooLarge" };
+      if (f.t !== "doc.snap") return null;
+      owned = doc.owns(f.id);
+      return refusals-- > 0 ? { t: "err", id: f.id, error: "not ready", tag: "Conflict" } : { t: "ack", id: f.id, seq: 7 };
+    });
+    await Bun.sleep(200);
+    expect(snaps()).toHaveLength(2);
+    expect(owned).toBe(true);
+    expect(td.refused).toBeNull();
+    expect(td.save().unsent).toBeNull();
+    td.destroy();
   });
 });

@@ -53,7 +53,7 @@ async function within<T>(work: Promise<T>, ms: number, what: string): Promise<T>
 async function sent(td: ThreadDoc, until: number): Promise<void> {
   await td.flush();
   while (td.save().unsent) {
-    if (Date.now() > until) throw new Error("the relay didn't take the doc update in time");
+    if (Date.now() > until) throw new Error(`the relay didn't take the doc update in time${td.refused ? `: ${td.refused}` : ""}`);
     await new Promise((done) => setTimeout(done, SENT_POLL_MS));
   }
 }

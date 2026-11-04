@@ -11,6 +11,7 @@ import { DOC_COMPACT, DOC_COMPACT_UPDATES, MAX_DOC_THREADS, WS_PROTOCOL, type Se
 import { startRelay } from "../src/relay/bun.ts";
 import { GithubApp, GithubPush, githubPushFrom } from "../src/relay/github-app.ts";
 import { Human } from "../src/relay/human.ts";
+import { DOC_UPDATES_PER_MINUTE } from "../src/relay/room/limits.ts";
 import { OPEN_POLICY, Policy } from "../src/relay/policy.ts";
 import { Directory, onClientFrame, RoomDb, type Effects, type SocketView, type Sql } from "../src/relay/room.ts";
 import { makeRelay, runRoomSync } from "../src/relay/route.ts";
@@ -128,6 +129,25 @@ describe("the relay stores and relays sealed doc updates (T491)", () => {
       const full = new Set(Array.from({ length: MAX_DOC_THREADS }, (_, i) => `full-${String(i).padStart(17, "0")}`));
       expect(only(sent({ t: "doc.sub", th: TH, since: 0 }, { docs: full, watch: false }))).toMatchObject({ t: "err", tag: "TooMany" });
       expect(replies(sent({ t: "doc.sub", th: [...full][0], since: 0 }, { docs: full, watch: false })).at(-1)).toMatchObject({ t: "doc.ready" });
+    }));
+
+  test("a refused update or snapshot still counts against the minute's updates, so a client looping on refusals is slowed down (T1426)", () =>
+    withRoom((_, mem) => {
+      const limited = makeRelay(
+        Layer.mergeAll(
+          Layer.succeed(Human, null),
+          Layer.succeed(GithubApp, null),
+          Layer.succeed(GithubPush, githubPushFrom()),
+          Layer.succeed(Policy, OPEN_POLICY),
+          Layer.succeed(Directory, { list: async () => [], reserve: async () => true, release: async () => {} }),
+        ),
+      );
+      const looper = "l".repeat(43);
+      mem.query("INSERT INTO members (pk, xpk, rec, rec_e, since, read_only) VALUES (?, 'x', 'r', 0, 0, 0)").run(looper);
+      const sent = (f: object) => only(runRoomSync(limited, new RoomDb(sqlOf(mem), access.roomId), onClientFrame(JSON.stringify(f), looper, true)));
+      for (let i = 0; i < DOC_UPDATES_PER_MINUTE / 2; i++) expect(sent({ t: "doc", id: `r${i}`, th: TH, iv: IV, ct: "eA", e: 7 })).toMatchObject({ t: "err", tag: "Conflict" });
+      for (let i = 0; i < DOC_UPDATES_PER_MINUTE / 2; i++) expect(sent({ t: "doc.snap", id: `q${i}`, th: TH, upto: 0, iv: IV, ct: "eA", e: 0 })).toMatchObject({ t: "err", tag: "Conflict" });
+      expect(sent({ t: "doc", id: "late", th: TH, iv: IV, ct: "eA", e: 0 })).toMatchObject({ t: "err", tag: "TooMany" });
     }));
 
   test("past the soft limit the ack asks for a snapshot; past the hard limit the update is refused until one comes", () =>
