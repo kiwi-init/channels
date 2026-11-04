@@ -65,6 +65,7 @@ export interface ChannelHandle {
   snapshotTooBig: boolean;
   github: GithubHealth | null;
   ready: boolean;
+  caughtUp: boolean;
   older: OlderHistory;
 }
 
@@ -200,6 +201,7 @@ export class ChannelStore {
       snapshotTooBig: this.snapshotTooBig.value,
       github: this.ch.isOwner ? this.githubHealth.value : null,
       ready: this.ready.value,
+      caughtUp: this.caughtUp.value,
       older: this.older,
     }));
   }
