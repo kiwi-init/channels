@@ -149,27 +149,26 @@ describe("a person's block posts as their message when they press Enter", () => 
     expect(out).toEqual([{ id, text: "half a line" }])
   })
 
-  test("Enter posts every unsent line of yours since your last sent one, once each, and never one that already has a message (T1464)", async () => {
+  test("Enter posts only the line it was pressed on: never an earlier line of yours, another window's draft, or one that already has a message (T1464, T1776)", async () => {
     const doc = new Y.Doc()
     const out: Finished[] = []
     const messages = new Set<string>()
-    postFinished(doc, { me: "jow", local: (o) => o !== REMOTE, posted: (b) => messages.has(b) }, (b) => out.push(b))
+    const entered = new Set<string>()
+    postFinished(doc, { me: "jow", local: (o) => o !== REMOTE, posted: (b) => messages.has(b), owned: (b) => entered.has(b.id) }, (b) => out.push(b))
     const legacy = start(doc, "jow", "from before lines posted", "text", REMOTE)
     const answered = start(doc, "jow", "already a message", "text", REMOTE)
     messages.add(answered)
     const a = start(doc, "jow", "one", "text", REMOTE)
     start(doc, "maya", "hers", "text", REMOTE)
     const b = start(doc, "jow", "two", "text", REMOTE)
+    entered.add(b)
     start(doc, "jow")
-    expect(out).toEqual([
-      { id: a, text: "one" },
-      { id: b, text: "two" },
-    ])
+    expect(out).toEqual([{ id: b, text: "two" }])
     await wait(0)
     start(doc, "jow", "three")
     start(doc, "jow")
-    expect(out.map((x) => x.text)).toEqual(["one", "two", "three"])
-    expect(out.some((x) => x.id === legacy)).toBe(false)
+    expect(out.map((x) => x.text)).toEqual(["two", "three"])
+    expect(out.some((x) => x.id === legacy || x.id === a || x.id === answered)).toBe(false)
   })
 
   test("the message carries the doc it came from, once the doc has one", async () => {

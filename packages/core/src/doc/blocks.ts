@@ -14,6 +14,7 @@ export interface BlockMeta {
   kind: BlockKind;
   author: string;
   at: number;
+  by?: string;
   sent?: true;
   posted?: true;
   back?: true;
@@ -41,11 +42,13 @@ function metaOf(el: Y.XmlElement): BlockMeta | null {
   if (typeof id !== "string" || !isKind(kind) || typeof author !== "string" || !Number.isFinite(at)) return null;
   const re = Number(el.getAttribute("re"));
   const quote = el.getAttribute("quote");
+  const by = el.getAttribute("by");
   return {
     id,
     kind,
     author,
     at,
+    ...(typeof by === "string" && by ? { by } : {}),
     ...(el.getAttribute("sent") === "1" ? { sent: true as const } : {}),
     ...(el.getAttribute("posted") === "1" ? { posted: true as const } : {}),
     ...(el.getAttribute("sent") === GIVEN_BACK ? { back: true as const } : {}),
