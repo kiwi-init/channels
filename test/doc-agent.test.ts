@@ -54,6 +54,22 @@ describe("an agent wakes for a finished block in the thread doc (T500)", () => {
     stop();
   });
 
+  test("an agent's block wakes it once the agent ends it: a whole send at once, a stream when it ends", () => {
+    const w = room();
+    const { wakes, stop } = watch(w);
+    const sent = agentBlock(w.doc, "atlas");
+    sent.write("@olivia the relay is merged");
+    sent.end();
+    expect(wakes.map((x) => x.block.text)).toEqual(["@olivia the relay is merged"]);
+    const streaming = agentBlock(w.doc, "rodrigo");
+    streaming.write("@olivia looking");
+    streaming.write(" at the CLI");
+    expect(wakes).toHaveLength(1);
+    streaming.end();
+    expect(wakes.map((x) => x.block.text)).toEqual(["@olivia the relay is merged", "@olivia looking at the CLI"]);
+    stop();
+  });
+
   test("another author's block after it doesn't finish it; the author's own next block does, even with others between", async () => {
     const w = room();
     const { wakes, stop } = watch(w);

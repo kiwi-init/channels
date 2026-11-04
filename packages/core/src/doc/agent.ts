@@ -1,7 +1,7 @@
 import type * as Y from "yjs";
 import type { Awareness } from "y-protocols/awareness";
 import { mentionsOf } from "../changes.ts";
-import { appendToBlock, blocksOf, newBlock, threadText, type Block, type BlockKind } from "./blocks.ts";
+import { appendToBlock, blocksOf, markSent, newBlock, threadText, type Block, type BlockKind } from "./blocks.ts";
 
 export const FINISH_IDLE_MS = 3_000;
 
@@ -76,7 +76,7 @@ export function watchWakes(watched: Watched, rule: WakeRule, onWake: (wake: DocW
     blocks.forEach((block, i) => {
       if (woke.has(block.id) || (rule.after !== undefined && block.at <= rule.after)) return;
       if (!wakesMe(block, rule)) return;
-      if (blocks.slice(i + 1).some((b) => b.author === block.author)) fire(block);
+      if (block.sent || blocks.slice(i + 1).some((b) => b.author === block.author)) fire(block);
     });
   };
 
@@ -88,9 +88,10 @@ export function watchWakes(watched: Watched, rule: WakeRule, onWake: (wake: DocW
 export interface AgentBlock {
   id: string;
   write: (chunk: string) => boolean;
+  end: () => boolean;
 }
 
 export function agentBlock(doc: Y.Doc, me: string, kind: BlockKind = "agent", at = Date.now()): AgentBlock {
   const { id } = newBlock(doc, kind, me, "", at);
-  return { id, write: (chunk) => appendToBlock(doc, id, chunk) };
+  return { id, write: (chunk) => appendToBlock(doc, id, chunk), end: () => markSent(doc, id) };
 }
