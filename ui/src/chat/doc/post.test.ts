@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import * as Y from "yjs"
-import { appendToBlock, newBlock, type BlockKind } from "@kiwi/core/doc/blocks.ts"
+import { appendToBlock, blocksOf, newBlock, type BlockKind } from "@kiwi/core/doc/blocks.ts"
 import { heldPipe } from "@kiwi/core/doc/held-pipe.ts"
 
 import type { DocEvent } from "../../../../desktop/src/bridge.ts"
@@ -49,6 +49,20 @@ describe("a person's block posts as their message when they press Enter", () => 
     expect(out).toEqual([])
     start(doc, "jow")
     expect(out).toEqual([{ id: first, text: "first thought" }])
+  })
+
+  test("Enter marks the block sent in the doc, so every viewer stops showing it as a draft", () => {
+    const doc = new Y.Doc()
+    const peer = new Y.Doc()
+    doc.on("update", (u: Uint8Array) => Y.applyUpdate(peer, u))
+    watch(doc)
+    const first = start(doc, "jow", "first thought")
+    const sentOf = (d: Y.Doc, id: string) => blocksOf(d).find((b) => b.id === id)?.sent ?? false
+    expect(sentOf(peer, first)).toBe(false)
+    const next = start(doc, "jow")
+    expect(sentOf(doc, first)).toBe(true)
+    expect(sentOf(peer, first)).toBe(true)
+    expect(sentOf(peer, next)).toBe(false)
   })
 
   test("other people's blocks, agent and tool blocks, empty blocks and blocks from elsewhere never post", async () => {

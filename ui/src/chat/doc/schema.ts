@@ -93,6 +93,8 @@ export function attrsOf(node: Node): BlockAttrs {
   return { id: String(a.id ?? ""), kind: kindOf(a.kind), author: String(a.author ?? ""), at: Number(a.at) || 0 }
 }
 
+export const isSent = (node: Node): boolean => node.attrs.sent === "1"
+
 export function newBlockId(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(16))
   return btoa(String.fromCharCode(...bytes))
