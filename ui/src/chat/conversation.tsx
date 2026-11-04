@@ -98,11 +98,18 @@ function anchorIn(box: HTMLElement, list: HTMLElement): Anchor | null {
   return el && Number.isSafeInteger(seq) ? { el, seq, top: el.getBoundingClientRect().top - top, at: box.scrollTop } : null
 }
 
-function caretIn(box: HTMLElement, list: HTMLElement): Anchor | null {
+const laidOut = (el: Element): boolean => el.isConnected && el.getClientRects().length > 0
+
+function caretEl(list: HTMLElement): Element | null {
   const doc = list.querySelector(".thread-doc")
   const node = doc?.contains(document.activeElement) ? getSelection()?.focusNode : null
   const el = node instanceof Element ? node : node?.parentElement
-  if (!el || !doc?.contains(el)) return null
+  return el && doc?.contains(el) && laidOut(el) ? el : null
+}
+
+function caretIn(box: HTMLElement, list: HTMLElement): Anchor | null {
+  const el = caretEl(list)
+  if (!el) return null
   const view = box.getBoundingClientRect()
   const at = el.getBoundingClientRect()
   return at.bottom > view.top && at.top < view.bottom ? { el, seq: Number.NaN, top: at.top - view.top, at: box.scrollTop } : null
@@ -177,6 +184,11 @@ export function useStick(following = true, still = false) {
     }
     const a = anchor.current
     if (!a) return
+    if (still && a.el.isConnected && !laidOut(a.el)) {
+      anchor.current = null
+      box.scrollTop = stuck.current ? box.scrollHeight : a.at
+      return
+    }
     const el = a.el.isConnected ? a.el : anchorRow(list, a.seq)
     if (!el) return
     const top = box.getBoundingClientRect().top
