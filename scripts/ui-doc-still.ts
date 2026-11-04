@@ -7,7 +7,7 @@ const at = process.argv.indexOf("--dist");
 const dist = at > 0 ? (process.argv[at + 1] ?? "ui/dist") : "ui/dist";
 if (!existsSync(join(dist, "index.html"))) throw new Error(`no index.html in ${dist}: run bun run ui:build first`);
 
-const MOVES_ALLOWED = 2;
+const MOVES_ALLOWED = 0;
 const MOVE_PX = 4;
 const KEYS = 40;
 const KEY_MS = 120;
@@ -45,11 +45,18 @@ async function typing(browser: Browser): Promise<string | null> {
     for (let i = 0; i < KEYS; i++) {
       await page.keyboard.type("a");
       await page.waitForTimeout(KEY_MS);
-      const y = await page.evaluate(() => {
-        const range = getSelection()?.rangeCount ? getSelection()?.getRangeAt(0) : null;
-        const rect = range?.getClientRects()[0] ?? range?.startContainer.parentElement?.getBoundingClientRect();
-        return rect ? Math.round(rect.top) : null;
-      });
+      const y = await page.evaluate(
+        () =>
+          new Promise<number | null>((done) =>
+            requestAnimationFrame(() =>
+              setTimeout(() => {
+                const range = getSelection()?.rangeCount ? getSelection()?.getRangeAt(0) : null;
+                const rect = range?.getClientRects()[0] ?? range?.startContainer.parentElement?.getBoundingClientRect();
+                done(rect ? Math.round(rect.top) : null);
+              }, 0),
+            ),
+          ),
+      );
       if (y !== null) ys.push(y);
     }
     const n = moves(ys);
@@ -70,7 +77,11 @@ async function watching(browser: Browser): Promise<string | null> {
     const ys: number[] = [];
     for (let i = 0; i < LOOKS; i++) {
       await page.waitForTimeout(LOOK_MS);
-      ys.push(await page.evaluate(() => Math.round(document.querySelector(".thread-doc")?.getBoundingClientRect().top ?? -1)));
+      ys.push(
+        await page.evaluate(
+          () => new Promise<number>((done) => requestAnimationFrame(() => setTimeout(() => done(Math.round(document.querySelector(".thread-doc")?.getBoundingClientRect().top ?? -1)), 0))),
+        ),
+      );
     }
     const n = moves(ys);
     return n <= MOVES_ALLOWED ? null : `the doc moved ${n} times in ${(LOOKS * LOOK_MS) / 1000} s: ${[...new Set(ys)].join(" → ")}`;

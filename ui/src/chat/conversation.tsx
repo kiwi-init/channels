@@ -164,6 +164,7 @@ export function useStick(following = true, still = false) {
   const height = useRef(0)
   const held = useRef(false)
   const touched = useRef(false)
+  const room = useRef(0)
 
   const settle = useCallback(() => {
     const box = scroller.current
@@ -179,7 +180,13 @@ export function useStick(following = true, still = false) {
     const el = a.el.isConnected ? a.el : anchorRow(list, a.seq)
     if (!el) return
     const top = box.getBoundingClientRect().top
-    const shift = el.getBoundingClientRect().top - top - (a.top - (box.scrollTop - a.at))
+    const clamped = still && box.scrollTop < a.at && box.scrollTop >= box.scrollHeight - box.clientHeight - 0.5
+    const shift = el.getBoundingClientRect().top - top - (clamped ? a.top : a.top - (box.scrollTop - a.at))
+    const short = still ? box.scrollTop + shift - (box.scrollHeight - box.clientHeight) : 0
+    if (short > 0.5) {
+      room.current += short
+      list.style.paddingBottom = `${room.current}px`
+    }
     if (Math.abs(shift) > 0.5) box.scrollTop += shift
     anchor.current = { el, seq: a.seq, top: el.getBoundingClientRect().top - top, at: box.scrollTop }
   }, [still])
@@ -189,6 +196,11 @@ export function useStick(following = true, still = false) {
     const list = content.current
     if (!box || !list) return
     if (height.current && list.offsetHeight !== height.current) settle()
+    const hidden = box.scrollHeight - box.scrollTop - box.clientHeight
+    if (room.current > 0 && hidden > 0.5) {
+      room.current = Math.max(0, room.current - hidden)
+      list.style.paddingBottom = room.current ? `${room.current}px` : ""
+    }
     stuck.current = live.current && !held.current && box.scrollHeight - box.scrollTop - box.clientHeight < NEAR_BOTTOM
     anchor.current = (still ? (caretIn(box, list) ?? (touched.current ? docIn(box, list) : null)) : null) ?? (stuck.current ? null : anchorIn(box, list))
     height.current = list.offsetHeight
@@ -201,22 +213,33 @@ export function useStick(following = true, still = false) {
     const watch = new ResizeObserver(settle)
     watch.observe(list)
     watch.observe(box)
+    return () => watch.disconnect()
+  }, [settle])
+
+  useLayoutEffect(() => {
+    const box = scroller.current
+    if (!box || !still) return
     const touch = () => {
+      if (touched.current) return
       touched.current = true
+      remember()
     }
     const kinds = ["wheel", "pointerdown", "keydown", "touchstart"] as const
     for (const kind of kinds) box.addEventListener(kind, touch, { passive: true })
     return () => {
-      watch.disconnect()
       for (const kind of kinds) box.removeEventListener(kind, touch)
     }
-  }, [settle])
+  }, [remember, still])
 
   const toBottom = useCallback((smooth: boolean) => {
     const box = scroller.current
     if (!box) return
     stuck.current = true
     anchor.current = null
+    if (room.current && content.current) {
+      room.current = 0
+      content.current.style.paddingBottom = ""
+    }
     box.scrollTo({ top: box.scrollHeight, behavior: smooth && !matchMedia("(prefers-reduced-motion: reduce)").matches ? "smooth" : "auto" })
   }, [])
 
