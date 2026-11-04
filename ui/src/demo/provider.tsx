@@ -101,6 +101,32 @@ function withEvents(c: Channel): Channel {
   }
 }
 
+function withEventRuns(c: Channel): Channel {
+  const at = Date.now() - 900 * 20_000
+  const seq = Math.max(...c.messages.map((m) => m.seq)) + 1
+  const general = { kind: "room", room: "general" } as const
+  const repo = "kiwi-init/channels"
+  return {
+    ...c,
+    messages: [
+      ...c.messages,
+      ...Array.from({ length: 900 }, (_, i): Message =>
+        i % 12 === 11
+          ? { seq: seq + i, from: "atlas", at: at + i * 20_000, text: `Run ${(i + 1) / 12} is green.`, where: general }
+          : {
+              seq: seq + i,
+              from: "github",
+              at: at + i * 20_000,
+              text: `GitHub: push to T${i % 7}-work`,
+              github: [{ event: "push", at: at + i * 20_000, repo, branch: `T${i % 7}-work` }],
+              where: general,
+              system: true,
+            }
+      ),
+    ],
+  }
+}
+
 function withTaskEvents(c: Channel): Channel {
   const at = Date.now() - 300 * 20_000
   const seq = Math.max(...c.messages.map((m) => m.seq)) + 1
@@ -248,6 +274,7 @@ export type Scenario =
   | "events"
   | "task-events"
   | "ci-live"
+  | "event-runs"
   | "handoff"
   | "opening"
   | "held"
@@ -327,7 +354,9 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
                                     ...DEMO_CHANNEL.asks,
                                   ],
                                 }
-                              : DEMO_CHANNEL,
+                              : scenario === "event-runs"
+                                ? withEventRuns(DEMO_CHANNEL)
+                                : DEMO_CHANNEL,
       DEMO_EMPTY,
       DEMO_WAITING,
       DEMO_INTERLINKED,
