@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import * as Y from "yjs"
-import { blocksOf } from "@kiwi/core/doc/blocks.ts"
-import { EditorState, type Plugin, type PluginView, type Transaction } from "prosemirror-state"
+import { appendToBlock, blocksOf, newBlock } from "@kiwi/core/doc/blocks.ts"
+import { EditorState, TextSelection, type Plugin, type PluginView, type Transaction } from "prosemirror-state"
 import type { EditorView } from "prosemirror-view"
 import { ySyncPlugin, ySyncPluginKey } from "y-prosemirror"
 
@@ -24,7 +24,7 @@ const remote = (tr: Transaction): boolean => {
 function editor(doc: Y.Doc, guarded: boolean): Editor {
   const sync: Plugin = ySyncPlugin(doc.getXmlFragment(FRAGMENT))
   let state = EditorState.create({ schema, plugins: [sync] })
-  const own = guarded ? writeOwnLinesOnly(state, () => state.doc) : null
+  const own = guarded ? writeOwnLinesOnly(state, () => ({ state, dispatch: (tr) => host.dispatch(tr) })) : null
   const views: PluginView[] = []
   const host = {
     get state() {
@@ -262,5 +262,199 @@ describe("an editor writes only the lines it changed, so a peer out of step neve
     me.dispatch(me.state().tr.delete(0, first.nodeSize))
     typeAtEnd(me, "jow", "!")
     expect(texts(doc)).toEqual(["jow: two!"])
+  })
+
+  test("a redraw keeps your caret and selection where they were in your line, even when a line lands above or letters land before them", async () => {
+    const select = (e: Editor, from: number, to: number) => e.dispatch(e.state().tr.setSelection(TextSelection.create(e.state().doc, from, to)))
+    const typeHere = (e: Editor, text: string) => e.dispatch(e.state().tr.insertText(text))
+    const lineAbove = (e: Editor) => {
+      const line = schema.nodes.block!.create({ id: "jow-top", author: "jow", at: 0 }, schema.nodes.paragraph!.create(null, schema.text("jow line")))
+      e.dispatch(e.state().tr.insert(0, line))
+    }
+    const lettersBefore = (e: Editor) => e.dispatch(e.state().tr.insertText("XX", lineStart(e, "dad")))
+    const pasted = (e: Editor) => {
+      e.dispatch(e.state().tr.insertText("Y".repeat(2001), lineStart(e, "dad") + 5))
+      e.dispatch(e.state().tr.insertText("X".repeat(2001), lineStart(e, "dad")))
+    }
+    const lettersAround = (e: Editor) => {
+      e.dispatch(e.state().tr.insertText("YY", lineStart(e, "dad") + 5))
+      lettersBefore(e)
+    }
+    for (const [what, missed, from, to, want] of [
+      ["a caret under a line that lands above", lineAbove, 4, 4, ["jow: jow line", "dad: bom ?¿dia!"]],
+      ["a selection under a line that lands above", lineAbove, 4, 6, ["jow: jow line", "dad: bom ?¿a!"]],
+      ["a caret after letters that land before it in your line", lettersBefore, 3, 3, ["dad: XXbom?¿ dia!"]],
+      ["a selection after letters that land before it in your line", lettersBefore, 0, 3, ["dad: XX?¿ dia!"]],
+      ["a caret between two separate edits in your line", lettersAround, 3, 3, ["dad: XXbom?¿ dYYia!"]],
+      ["a selection between two separate edits in your line", lettersAround, 1, 3, ["dad: XXb?¿ dYYia!"]],
+      ["a caret between two pastes of 2001 letters each", pasted, 3, 3, [`dad: ${"X".repeat(2001)}bom?¿ d${"Y".repeat(2001)}ia!`]],
+      ["a selection between two pastes of 2001 letters each", pasted, 1, 3, [`dad: ${"X".repeat(2001)}b?¿ d${"Y".repeat(2001)}ia!`]],
+    ] as const) {
+      const desk = new Y.Doc()
+      const peer = new Y.Doc()
+      const sync = net(desk, peer)
+      const jow = editor(desk, true)
+      const dad = editor(peer, true)
+      await Promise.resolve()
+      dad.dispatch(startBlock(dad.state(), "dad", 1))
+      dad.dispatch(dad.state().tr.insertText("bom dia"))
+      sync()
+      await settle()
+      missed(jow)
+      const at = lineStart(dad, "dad")
+      select(dad, at + from, at + to)
+      let once = true
+      peer.on("update", (_u: Uint8Array, o: unknown) => {
+        if (!once || o === NET) return
+        once = false
+        sync()
+      })
+      const end = lineStart(dad, "dad") + dad.state().doc.child(dad.state().doc.childCount - 1).content.size - 2
+      dad.dispatch(dad.state().tr.insert(end, schema.text("!")))
+      await settle()
+      expect([what, dad.state().selection.empty]).toEqual([what, from === to])
+      typeHere(dad, "?")
+      await settle()
+      typeHere(dad, "¿")
+      sync()
+      await settle()
+      expect([what, texts(desk)]).toEqual([what, want])
+      expect(texts(peer)).toEqual(texts(desk))
+    }
+  })
+
+  test("in a line of repeated letters, a redraw after big pastes keeps a valid caret in your line", async () => {
+    const a = "a".repeat(80)
+    const r = (c: string, n: number) => c.repeat(n)
+    for (const [what, pastes, want] of [
+      [
+        "two pastes around the caret, within reach of the diff",
+        [
+          [79, "Y", 600],
+          [0, "X", 600],
+        ],
+        `${r("X", 600)}${r("a", 30)}?¿${r("a", 49)}${r("Y", 600)}a!`,
+      ],
+      [
+        "two pastes of 1500 around the caret",
+        [
+          [50, "Y", 1500],
+          [0, "X", 1500],
+        ],
+        `${r("X", 1500)}${r("a", 30)}?¿${r("a", 20)}${r("Y", 1500)}${r("a", 30)}!`,
+      ],
+      [
+        "three pastes and no unique context: the end of your line",
+        [
+          [50, "Y", 1500],
+          [20, "Z", 1500],
+          [0, "X", 1500],
+        ],
+        `${r("X", 1500)}${r("a", 20)}${r("Z", 1500)}${r("a", 30)}${r("Y", 1500)}${r("a", 30)}!?¿`,
+      ],
+    ] as const) {
+      const desk = new Y.Doc()
+      const peer = new Y.Doc()
+      const sync = net(desk, peer)
+      const jow = editor(desk, true)
+      const dad = editor(peer, true)
+      await Promise.resolve()
+      dad.dispatch(startBlock(dad.state(), "dad", 1))
+      dad.dispatch(dad.state().tr.insertText(a))
+      sync()
+      await settle()
+      for (const [at, c, n] of pastes) jow.dispatch(jow.state().tr.insertText(r(c, n), lineStart(jow, "dad") + at))
+      const start = lineStart(dad, "dad")
+      dad.dispatch(dad.state().tr.setSelection(TextSelection.create(dad.state().doc, start + 30)))
+      let once = true
+      peer.on("update", (_u: Uint8Array, o: unknown) => {
+        if (!once || o === NET) return
+        once = false
+        sync()
+      })
+      dad.dispatch(dad.state().tr.insert(start + a.length, schema.text("!")))
+      await settle()
+      expect([what, dad.state().selection.$head.parent.inlineContent]).toEqual([what, true])
+      dad.dispatch(dad.state().tr.insertText("?"))
+      await settle()
+      dad.dispatch(dad.state().tr.insertText("¿"))
+      sync()
+      await settle()
+      expect([what, texts(desk)]).toEqual([what, [`dad: ${want}`]])
+      expect(texts(peer)).toEqual(texts(desk))
+    }
+  })
+
+  test("a new line next to a changed one never takes over another line's place in the doc, so an agent's letters stay in its own line", async () => {
+    const elementOf = (doc: Y.Doc, id: string) =>
+      doc
+        .getXmlFragment(FRAGMENT)
+        .toArray()
+        .find((el) => el instanceof Y.XmlElement && el.getAttribute("id") === id)
+    for (const [what, guarded, before] of [
+      ["guarded", true, null],
+      ["guarded, after a synced line with no id", true, "unnamed"],
+      ["unguarded", false, null],
+    ] as const) {
+      const agentDoc = new Y.Doc()
+      const desk = new Y.Doc()
+      const sync = net(agentDoc, desk)
+      const jow = editor(desk, guarded)
+      await Promise.resolve()
+      if (before) {
+        const unnamed = new Y.XmlElement("block")
+        unnamed.insert(0, [new Y.XmlElement("paragraph")])
+        agentDoc.getXmlFragment(FRAGMENT).insert(0, [unnamed])
+      }
+      const a = newBlock(agentDoc, "text", "agent", "step 1")
+      sync()
+      await settle()
+      const agentLine = elementOf(desk, a.id)
+      appendToBlock(agentDoc, a.id, " of 3")
+      const line = schema.nodes.block!.create({ id: "jow-new", author: "jow", at: 5 }, schema.nodes.paragraph!.create(null, schema.text("ugzyw")))
+      const at = before ? jow.state().doc.child(0).nodeSize : 0
+      const end = at + jow.state().doc.child(before ? 1 : 0).nodeSize - 2
+      jow.dispatch(jow.state().tr.insertText("!", end).insert(at, line))
+      sync()
+      await settle()
+      const lines = texts(desk).filter((l) => l !== ": ")
+      if (!guarded) {
+        expect([what, lines]).not.toContain("jow: ugzyw")
+        continue
+      }
+      expect([what, lines.length, lines.includes("jow: ugzyw")]).toEqual([what, 2, true])
+      const theirs = lines.find((l) => l.startsWith("agent: "))!
+      expect([what, theirs.includes(" of 3"), theirs.includes("!")]).toEqual([what, true, true])
+      expect([what, elementOf(desk, a.id) === agentLine, agentLine instanceof Y.XmlElement && agentLine.getAttribute("author")]).toEqual([what, true, "agent"])
+      expect(texts(agentDoc)).toEqual(texts(desk))
+    }
+  })
+
+  test("a line deleted elsewhere while you were out of step stays deleted when you write", async () => {
+    const agentDoc = new Y.Doc()
+    const desk = new Y.Doc()
+    const sync = net(agentDoc, desk)
+    const jow = editor(desk, true)
+    await Promise.resolve()
+    const a = newBlock(agentDoc, "text", "agent", "temporary")
+    newBlock(agentDoc, "text", "agent", "stays")
+    sync()
+    await settle()
+    const frag = agentDoc.getXmlFragment(FRAGMENT)
+    frag.delete(
+      frag.toArray().findIndex((el) => el instanceof Y.XmlElement && el.getAttribute("id") === a.id),
+      1
+    )
+    const line = schema.nodes.block!.create({ id: "jow-new", author: "jow", at: 5 }, schema.nodes.paragraph!.create(null, schema.text("hi")))
+    jow.dispatch(
+      jow
+        .state()
+        .tr.insertText("!", jow.state().doc.child(0).nodeSize - 2)
+        .insert(0, line)
+    )
+    sync()
+    await settle()
+    expect(texts(desk).sort()).toEqual(["agent: stays", "jow: hi"])
+    expect(texts(agentDoc).sort()).toEqual(texts(desk).sort())
   })
 })
