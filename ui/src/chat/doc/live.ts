@@ -8,7 +8,7 @@ import { mirrorAware } from "@kiwi/core/doc/pipe.ts"
 import type { DocBlockRef } from "@kiwi/core/protocol.ts"
 import type { DocEvent, WireError } from "../../../../desktop/src/bridge.ts"
 import { giveBackBlock } from "~/chat/doc/give-back"
-import { madeHere, type MadeLines } from "~/chat/doc/made"
+import { madeHere, thisWindow, type MadeLines } from "~/chat/doc/made"
 import { postFinished, type Finished, type Posting } from "~/chat/doc/post"
 import { noteTyping, tracingTyping } from "~/kit/typing-hook"
 import { FRAGMENT } from "~/chat/doc/schema"
@@ -73,7 +73,11 @@ export class LiveDoc implements Shared {
     this.doc.on("update", this.onUpdate)
     this.doc.on("afterTransaction", this.onTransaction)
     this.awareness.on("change", this.onAware)
-    this.posting = poster ? postFinished(this.doc, { me: poster.me, local: (origin) => origin !== PIPE, posted: poster.posted }, (b) => this.post(b)) : null
+    this.posting = poster
+      ? postFinished(this.doc, { me: poster.me, local: (origin) => origin !== PIPE, posted: poster.posted, owned: (b) => b.by === thisWindow || this.made.has(b.id), worked: this.made }, (b) =>
+          this.post(b)
+        )
+      : null
     if (th) this.connect(th)
   }
 
