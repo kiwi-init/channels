@@ -10,6 +10,7 @@ import * as Y from "yjs"
 
 import { attach, backInDraft, blockAt, blocks, continues, dropEmptyOwn, isEmpty, noteMade, replyIn, startBlock, unreply, type Made } from "~/chat/doc/blocks"
 import { onGiveBack } from "~/chat/doc/give-back"
+import { writeOwnLinesOnly } from "~/chat/doc/own-writes"
 import { docKeys, type CommandFor } from "~/chat/doc/keys"
 import { docTag, holdDoc, LiveDoc, type Shared } from "~/chat/doc/live"
 import { noteTyping, setTypingFocus, tracingTyping, type TypingFocus } from "~/kit/typing-hook"
@@ -409,6 +410,7 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
       steadyPlugin(opts.scroller, opts.hold, me),
     ],
   })
+  const touch = writeOwnLinesOnly(state)
   const view: EditorView = new EditorView(mount, {
     state,
     editable: opts.editable,
@@ -448,7 +450,10 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
       if (this.isDestroyed) return
       const before = this.state
       const next = this.state.apply(tr)
-      if (tr.docChanged && !remote(tr)) noteMade(before.doc, next.doc, me, shared.made)
+      if (tr.docChanged && !remote(tr)) {
+        noteMade(before.doc, next.doc, me, shared.made)
+        touch?.(before.doc, next.doc)
+      }
       this.updateState(next)
       if (tr.docChanged && tracingTyping()) noteEdit(before, this.state, tr, shared.doc)
       if (tr.selectionSet || tr.docChanged) shareSelection(this, shared, me)
