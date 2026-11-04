@@ -12,6 +12,7 @@ export interface BlockMeta {
   author: string;
   at: number;
   sent?: true;
+  posted?: true;
 }
 
 export interface Block extends BlockMeta {
@@ -30,7 +31,14 @@ function metaOf(el: Y.XmlElement): BlockMeta | null {
   const author = el.getAttribute("author");
   const at = Number(el.getAttribute("at"));
   if (typeof id !== "string" || !isKind(kind) || typeof author !== "string" || !Number.isFinite(at)) return null;
-  return el.getAttribute("sent") === "1" ? { id, kind, author, at, sent: true } : { id, kind, author, at };
+  return {
+    id,
+    kind,
+    author,
+    at,
+    ...(el.getAttribute("sent") === "1" ? { sent: true as const } : {}),
+    ...(el.getAttribute("posted") === "1" ? { posted: true as const } : {}),
+  };
 }
 
 function textOf(node: Y.XmlElement | Y.XmlText | Y.XmlHook): string {
@@ -92,6 +100,16 @@ export function markSent(doc: Y.Doc, id: string): boolean {
   return true;
 }
 
+export function markPosted(doc: Y.Doc, id: string): boolean {
+  const el = blockElement(doc, id);
+  if (!el) return false;
+  doc.transact(() => {
+    if (el.getAttribute("sent") !== "1") el.setAttribute("sent", "1");
+    if (el.getAttribute("posted") !== "1") el.setAttribute("posted", "1");
+  });
+  return true;
+}
+
 export function appendToBlock(doc: Y.Doc, id: string, text: string): boolean {
   const el = blockElement(doc, id);
   if (!el || !text) return false;
@@ -108,8 +126,9 @@ export function appendToBlock(doc: Y.Doc, id: string, text: string): boolean {
   return true;
 }
 
-export function threadText(doc: Y.Doc, name: (pk: string) => string = (pk) => pk.slice(0, 8)): string {
+export function threadText(doc: Y.Doc, name: (pk: string) => string = (pk) => pk.slice(0, 8), keep: (b: Block) => boolean = () => true): string {
   return blocksOf(doc)
+    .filter(keep)
     .map((b) => `${name(b.author)}${b.kind === "text" ? "" : ` (${b.kind})`}: ${b.text}`)
     .join("\n\n");
 }

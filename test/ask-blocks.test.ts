@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as Effect from "effect/Effect";
 import { AgentLive, AgentSession } from "../src/agent.ts";
+import { readDoc } from "../src/agent/docs.ts";
 import { blocksOf } from "@kiwi/core/doc/blocks.ts";
 import type { ThreadDoc } from "@kiwi/core/doc/thread-doc.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
@@ -58,6 +59,21 @@ describe("an agent's ask stays a plain message that 2026.11.7 desktops and phone
     expect(m.block).toBeUndefined();
     await Bun.sleep(500);
     expect(blocksOf(general.doc).some((b) => b.text === "Which look?")).toBe(false);
+  });
+
+  test("a plain send into #general's doc also posts its message, pointing at the block, so phones and pushes get it; kiwi log's doc part leaves it out (T1388)", async () => {
+    const at = { key: "main", th: general.th };
+    const seq = await run(dev.sendToDoc("@jon the relay is merged", at));
+    const m = await message(seq);
+    expect(m.kind).toBe("msg");
+    expect(m.body).toBe("@jon the relay is merged");
+    expect(m.block?.th).toBe(general.th);
+    const deadline = Date.now() + 5_000;
+    while (!blocksOf(general.doc).some((b) => b.id === m.block?.id) && Date.now() < deadline) await Bun.sleep(20);
+    expect(blocksOf(general.doc).find((b) => b.id === m.block?.id)).toMatchObject({ kind: "agent", author: "dev", text: "@jon the relay is merged", sent: true, posted: true });
+    const reader = dev.ch;
+    expect(await readDoc(reader, 0, at)).toContain("the relay is merged");
+    expect(await readDoc(reader, 0, at, undefined, true)).not.toContain("the relay is merged");
   });
 
   test("an ask that answers a message stays a plain message in that message's thread", async () => {
