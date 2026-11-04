@@ -78,6 +78,19 @@ describe("a reply read in an open thread is read in its DM too (#1665)", () => {
     expect(unreadWith(s, messages, "jow", { ...seen, ...marks })).toBe(0)
   })
 
+  test("with history before the thread not loaded, the DM's mark stays where it was", () => {
+    const s = threaded(
+      [
+        [10, place],
+        [11, place],
+      ],
+      [[11, 10]]
+    )
+    const messages = [said(10, "tia"), said(11, "tia", { re: [10] })]
+    expect(seenByThread(messages, s, "jow", 10, { [placeKey(place)]: 7 })).toEqual({})
+    expect(seenByThread(messages, s, "jow", 10, { [placeKey(place)]: 9 })).toEqual({ [placeKey(place)]: 11 })
+  })
+
   test("a DM message outside the thread stays unread, and so does everything after it", () => {
     const s = threaded(
       [
