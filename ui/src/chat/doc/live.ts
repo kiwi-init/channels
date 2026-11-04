@@ -8,6 +8,7 @@ import { mirrorAware } from "@kiwi/core/doc/pipe.ts"
 import type { DocBlockRef } from "@kiwi/core/protocol.ts"
 import type { DocEvent, WireError } from "../../../../desktop/src/bridge.ts"
 import { giveBackBlock } from "~/chat/doc/give-back"
+import { madeHere, type MadeLines } from "~/chat/doc/made"
 import { postFinished, type Finished, type Posting } from "~/chat/doc/post"
 import { noteTyping, tracingTyping } from "~/kit/typing-hook"
 import { FRAGMENT } from "~/chat/doc/schema"
@@ -15,6 +16,7 @@ import { FRAGMENT } from "~/chat/doc/schema"
 export interface Shared {
   doc: Y.Doc
   awareness: Awareness
+  made: MadeLines
 }
 
 export type OpenDoc = (th: string | null, on: (e: DocEvent) => void) => PipeIn
@@ -49,6 +51,7 @@ const whyNot = (e: WireError): string => (e.kind === "gone" ? `the channel was $
 export class LiveDoc implements Shared {
   readonly doc = new Y.Doc()
   readonly awareness = new Awareness(this.doc)
+  readonly made: MadeLines = madeHere
   private pipe: PipeIn | null = null
   private current: object | null = null
   private opened: string | null = null

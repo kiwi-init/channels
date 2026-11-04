@@ -8,7 +8,7 @@ import { Decoration, DecorationSet, EditorView, type NodeView } from "prosemirro
 import { yCursorPlugin, ySyncPlugin, ySyncPluginKey, yUndoPlugin } from "y-prosemirror"
 import * as Y from "yjs"
 
-import { attach, backInDraft, blockAt, blocks, continues, dropEmptyOwn, isEmpty, replyIn, startBlock, unreply } from "~/chat/doc/blocks"
+import { attach, backInDraft, blockAt, blocks, continues, dropEmptyOwn, isEmpty, noteMade, replyIn, startBlock, unreply, type Made } from "~/chat/doc/blocks"
 import { onGiveBack } from "~/chat/doc/give-back"
 import { docKeys, type CommandFor } from "~/chat/doc/keys"
 import { docTag, holdDoc, LiveDoc, type Shared } from "~/chat/doc/live"
@@ -152,6 +152,7 @@ class BlockView implements NodeView {
 interface Drafts {
   posted: (block: string) => boolean
   inFeed: (block: string) => boolean
+  made: Made
   version: number
 }
 
@@ -269,11 +270,11 @@ function noteEdit(before: EditorState, after: EditorState, tr: Transaction, doc:
   }))
 }
 
-function tidyPlugin(me: string): Plugin {
+function tidyPlugin(me: string, drafts: RefObject<Drafts>): Plugin {
   return new Plugin({
     appendTransaction(trs, _old, state) {
       if (!trs.some((tr) => tr.selectionSet || tr.docChanged) || trs.some(remote)) return null
-      const tidy = dropEmptyOwn(state, me, blockAt(state)?.index ?? null)
+      const tidy = dropEmptyOwn(state, me, blockAt(state)?.index ?? null, drafts.current.made)
       if (tidy) noteTyping(() => ({ what: "tidy dropped empty lines", count: tidy.steps.length }))
       return tidy
     },
@@ -365,11 +366,11 @@ interface ViewOpts {
 
 const openImage = (url: string) => void window.open(url, "_blank", "noopener,noreferrer")
 
-function takeFiles(view: EditorView, me: string, media: DocMedia | null, editable: boolean, files: readonly File[]): boolean {
+function takeFiles(view: EditorView, me: string, media: DocMedia | null, editable: boolean, files: readonly File[], made: Made): boolean {
   if (!files.length || !media || !editable) return false
   void uploadAll(files, media, (why) => announce(why, "error")).then((nodes) => {
     if (view.isDestroyed) return
-    const tr = attach(view.state, me, Date.now(), nodes)
+    const tr = attach(view.state, me, Date.now(), nodes, made)
     if (tr) view.dispatch(tr)
   })
   return true
@@ -399,12 +400,12 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
         me,
         () => Date.now(),
         () => blur.now(),
-        { posted: (block) => opts.drafts.current.posted(block), commandFor: opts.command, refuse: opts.refuse, editLast: opts.editLast }
+        { posted: (block) => opts.drafts.current.posted(block), made: (block) => opts.drafts.current.made(block), commandFor: opts.command, refuse: opts.refuse, editLast: opts.editLast }
       ),
       linksPlugin(),
       herePlugin(),
       runsPlugin(shown, me, opts.drafts),
-      tidyPlugin(me),
+      tidyPlugin(me, opts.drafts),
       steadyPlugin(opts.scroller, opts.hold, me),
     ],
   })
@@ -420,18 +421,18 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
     },
     handlePaste: (v, e) => {
       const dt = e.clipboardData
-      if (takeFiles(v, me, opts.media(), opts.editable(), filesIn(dt))) {
+      if (takeFiles(v, me, opts.media(), opts.editable(), filesIn(dt), opts.drafts.current.made)) {
         e.preventDefault()
         return true
       }
       if (!dt || !emptyPaste(dt) || !opts.media() || !opts.editable()) return false
       e.preventDefault()
-      void takePasted(dt).then((f) => f && takeFiles(v, me, opts.media(), opts.editable(), [f]))
+      void takePasted(dt).then((f) => f && takeFiles(v, me, opts.media(), opts.editable(), [f], opts.drafts.current.made))
       return true
     },
     handleDrop: (v, e) => {
       const dt = e.dataTransfer
-      if (takeFiles(v, me, opts.media(), opts.editable(), filesIn(dt))) {
+      if (takeFiles(v, me, opts.media(), opts.editable(), filesIn(dt), opts.drafts.current.made)) {
         e.preventDefault()
         return true
       }
@@ -439,14 +440,16 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
       e.preventDefault()
       void takeDropped(dt).then(({ files, refused }) => {
         for (const why of refused) announce(why, "error")
-        takeFiles(v, me, opts.media(), opts.editable(), files)
+        takeFiles(v, me, opts.media(), opts.editable(), files, opts.drafts.current.made)
       })
       return true
     },
     dispatchTransaction(this: EditorView, tr) {
       if (this.isDestroyed) return
       const before = this.state
-      this.updateState(this.state.apply(tr))
+      const next = this.state.apply(tr)
+      if (tr.docChanged && !remote(tr)) noteMade(before.doc, next.doc, me, shared.made)
+      this.updateState(next)
       if (tr.docChanged && tracingTyping()) noteEdit(before, this.state, tr, shared.doc)
       if (tr.selectionSet || tr.docChanged) shareSelection(this, shared, me)
     },
@@ -585,7 +588,7 @@ export function ThreadDoc({
   const canWrite = useRef(!readOnly)
   const latest = useRef(channel)
   const holdRef = useRef(hold)
-  const drafts = useRef<Drafts>({ posted: () => false, inFeed: () => false, version: 0 })
+  const drafts = useRef<Drafts>({ posted: () => false, inFeed: () => false, made: (block) => shared.made.has(block), version: 0 })
   const sent = useMemo(() => postedBlocks(channel.messages), [channel.messages])
   const feedKey = `${channel.code}\n${thread}`
   const since = useMemo(() => oldestAt(channel.messages), [channel.messages])
@@ -597,6 +600,7 @@ export function ThreadDoc({
       drafts.current = {
         posted: (block) => sent.has(block) && !feed.media.has(block),
         inFeed: (block) => feed.hidden.has(block),
+        made: (block) => shared.made.has(block),
         version: drafts.current.version + 1,
       }
       view.current?.setProps({})
@@ -695,11 +699,11 @@ export function ThreadDoc({
     noteTyping(() => ({ what: "editor mounted" }))
     const unfocus = setTypingFocus(() => focusOf(v, shared.doc))
     if (canWrite.current && !document.activeElement?.closest("input, textarea, [contenteditable='true']")) {
-      v.dispatch(startBlock(v.state, me, Date.now(), drafts.current.posted))
+      v.dispatch(startBlock(v.state, me, Date.now(), drafts.current.posted, drafts.current.made))
       v.focus()
     }
     return () => {
-      const tidy = dropEmptyOwn(v.state, me, null)
+      const tidy = dropEmptyOwn(v.state, me, null, drafts.current.made)
       noteTyping(() => ({ what: "editor unmounted", count: tidy?.steps.length ?? 0 }))
       if (tidy) v.dispatch(tidy)
       unfocus()
@@ -715,7 +719,7 @@ export function ThreadDoc({
     if (!v || !replying || !to) return
     replying.set(null)
     if (!canWrite.current) return
-    v.dispatch(replyIn(v.state, me, Date.now(), to.seq, replying.excerpt, drafts.current.posted))
+    v.dispatch(replyIn(v.state, me, Date.now(), to.seq, replying.excerpt, drafts.current.posted, drafts.current.made))
     v.focus()
     const at = v.domAtPos(v.state.selection.head).node
     const el = at instanceof HTMLElement ? at : at.parentElement
@@ -726,7 +730,7 @@ export function ThreadDoc({
     () =>
       onGiveBack((id) => {
         const v = view.current
-        const tr = v && canWrite.current ? backInDraft(v.state, me, id) : null
+        const tr = v && canWrite.current ? backInDraft(v.state, me, id, drafts.current.made) : null
         if (!v || !tr) return
         noteTyping(() => ({ what: "back to draft", block: id }))
         v.dispatch(tr.scrollIntoView())
@@ -744,7 +748,7 @@ export function ThreadDoc({
     const onKey = (e: KeyboardEvent) => {
       const v = view.current
       if (!v || !canWrite.current || !typedAnywhere(e) || document.querySelector("dialog[open]")) return
-      v.dispatch(startBlock(v.state, me, Date.now(), drafts.current.posted).scrollIntoView())
+      v.dispatch(startBlock(v.state, me, Date.now(), drafts.current.posted, drafts.current.made).scrollIntoView())
       v.focus()
     }
     window.addEventListener("keydown", onKey)
@@ -766,10 +770,10 @@ export function ThreadDoc({
       off = setTimeout(() => setDropping(false), 250)
       if (e.type !== "drop" || taken || !v || !el || !over) return
       const files = filesIn(dt)
-      if (takeFiles(v, me, mediaRef.current, canWrite.current, files) || files.length) return
+      if (takeFiles(v, me, mediaRef.current, canWrite.current, files, drafts.current.made) || files.length) return
       void takeDropped(dt).then(({ files: dropped, refused }) => {
         for (const why of refused) announce(why, "error")
-        takeFiles(v, me, mediaRef.current, canWrite.current, dropped)
+        takeFiles(v, me, mediaRef.current, canWrite.current, dropped, drafts.current.made)
       })
     }
     window.addEventListener("dragover", onDrag)
@@ -794,7 +798,7 @@ export function ThreadDoc({
   const write = () => {
     const v = view.current
     if (!v || !canWrite.current) return
-    v.dispatch(startBlock(v.state, me, Date.now(), drafts.current.posted).scrollIntoView())
+    v.dispatch(startBlock(v.state, me, Date.now(), drafts.current.posted, drafts.current.made).scrollIntoView())
     v.focus()
   }
 
