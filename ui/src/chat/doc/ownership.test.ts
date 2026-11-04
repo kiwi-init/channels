@@ -75,6 +75,79 @@ describe("a draft belongs to the window typing it, not to the person (T1776, @mi
     expect(attrsOf(picked).id).not.toBe(attrsOf(old).id)
   })
 
+  test.each([
+    ["a named shared empty line", "shared-empty"],
+    ["a synced empty line with no id", ""],
+  ])("two windows that both start a line before either syncs never both take %s", async (_what, id) => {
+    const desk = new Y.Doc()
+    const peer = new Y.Doc()
+    const sync = net(desk, peer)
+    const a = editor(desk)
+    const b = editor(peer)
+    await Promise.resolve()
+    newLine(a, "", id, "")
+    sync()
+    await settle()
+    const ta = startBlock(
+      a.state(),
+      "jow",
+      1,
+      () => false,
+      () => false
+    )
+    const tb = startBlock(
+      b.state(),
+      "jow",
+      2,
+      () => false,
+      () => false
+    )
+    a.dispatch(ta)
+    b.dispatch(tb)
+    a.dispatch(a.state().tr.insertText("typed in window a"))
+    b.dispatch(b.state().tr.insertText("typed in window b"))
+    const ida = attrsOf(a.state().doc.child(a.state().selection.$from.index(0))).id
+    const idb = attrsOf(b.state().doc.child(b.state().selection.$from.index(0))).id
+    expect(ida).not.toBe(idb)
+    sync()
+    await settle()
+    sync()
+    await settle()
+    const lines = (e: Editor): string[] => {
+      const out: string[] = []
+      e.state().doc.forEach((n) => void (n.textContent && out.push(n.textContent)))
+      return out
+    }
+    expect(lines(a).sort()).toEqual(["typed in window a", "typed in window b"])
+    expect(lines(b).sort()).toEqual(["typed in window a", "typed in window b"])
+  })
+
+  test("two windows that both take a new doc's first empty line before either syncs keep both lines", async () => {
+    const desk = new Y.Doc()
+    const peer = new Y.Doc()
+    const sync = net(desk, peer)
+    const a = editor(desk)
+    const b = editor(peer)
+    await settle()
+    a.dispatch(startBlock(a.state(), "jow", 1))
+    b.dispatch(startBlock(b.state(), "jow", 2))
+    a.dispatch(a.state().tr.insertText("typed in window a"))
+    b.dispatch(b.state().tr.insertText("typed in window b"))
+    sync()
+    await settle()
+    sync()
+    await settle()
+    const ids = new Set<string>()
+    const lines: string[] = []
+    a.state().doc.forEach((n) => {
+      if (!n.textContent) return
+      lines.push(n.textContent)
+      ids.add(attrsOf(n).id)
+    })
+    expect(lines.sort()).toEqual(["typed in window a", "typed in window b"])
+    expect(ids.size).toBe(2)
+  })
+
   test("another window of yours doesn't take over a line given back to you in this one", async () => {
     const desk = new Y.Doc()
     const peer = new Y.Doc()

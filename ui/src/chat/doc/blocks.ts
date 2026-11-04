@@ -1,5 +1,6 @@
 import type { Node } from "prosemirror-model"
 import { TextSelection, type EditorState, type Transaction } from "prosemirror-state"
+import { ySyncPluginKey } from "y-prosemirror"
 
 import { thisWindow } from "~/chat/doc/made"
 import { attrsOf, isBack, isSent, newBlockId, schema, type BlockAttrs, type BlockKind } from "~/chat/doc/schema"
@@ -56,6 +57,15 @@ export type Made = (block: string) => boolean
 
 const anyMade: Made = () => true
 
+function nothingShared(state: EditorState): boolean {
+  const synced: unknown = ySyncPluginKey.getState(state)
+  if (!synced || typeof synced !== "object" || !("binding" in synced)) return true
+  const binding: unknown = synced.binding
+  if (!binding || typeof binding !== "object" || !("type" in binding)) return true
+  const shared: unknown = binding.type
+  return !!shared && typeof shared === "object" && "length" in shared && shared.length === 0
+}
+
 export function startBlock(state: EditorState, me: string, now: number, posted: (block: string) => boolean = () => false, made: Made = anyMade): Transaction {
   const tr = state.tr.setMeta("addToHistory", false)
   const all = blocks(state.doc)
@@ -68,8 +78,8 @@ export function startBlock(state: EditorState, me: string, now: number, posted: 
   if (last && isEmpty(last.node)) {
     const a = attrsOf(last.node)
     if (a.author === me && made(a.id)) return inside(tr, last.pos)
-    if (a.author === "") {
-      tr.setNodeMarkup(last.pos, undefined, { ...a, id: a.id || newBlockId(), kind: "text", author: me, at: now, by: thisWindow })
+    if (a.author === "" && nothingShared(state)) {
+      tr.setNodeMarkup(last.pos, undefined, { ...a, id: newBlockId(), kind: "text", author: me, at: now, by: thisWindow })
       return inside(tr, last.pos)
     }
   }
