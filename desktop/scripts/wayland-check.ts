@@ -87,7 +87,7 @@ try {
   d = await attach(join(root, "driver.sock"));
   const driver = d;
   await firstChannel(driver, 1);
-  await until("the composer", 30_000, () => driver.evaluate(() => (document.querySelector('textarea[aria-label="Message"]') ? true : null), null, 2_000));
+  await until("the thread doc", 30_000, () => driver.evaluate(() => (document.querySelector('.thread-doc [role="textbox"][aria-label="Thread"]') ? true : null), null, 2_000));
   const geo = (await ask({ op: "layout", windows: { "kiwi-helper": [0, 100, size[0], size[1]], Channels: [420, 100, 1200, 800] } })) as Record<string, Window>;
   const hw = geo["kiwi-helper"];
   const cw = geo["Channels"];
@@ -111,53 +111,62 @@ try {
     }, selector);
   const click = async (p: Point) => void (await ask({ op: "click", x: p[0], y: p[1] }));
   const keys = async (...combo: string[]) => void (await ask({ op: "keys", combo }));
-  const setComposer = (v: string) =>
+  const lineAt = () =>
+    driver.evaluate(() => {
+      const n = getSelection()?.anchorNode ?? null;
+      const el = n instanceof Element ? n : (n?.parentElement ?? null);
+      const r = (el?.closest("p") ?? document.querySelector('.thread-doc [role="textbox"][aria-label="Thread"]'))?.getBoundingClientRect();
+      return r ? ([r.x, r.y, r.width, Math.max(r.height, 16)] as [number, number, number, number]) : null;
+    }, null);
+  const fresh = async (): Promise<Point> => {
+    const tail = await rectOf(".thread-doc .doc-tail");
+    if (!tail) throw new Error("no doc tail to start a line at");
+    await click(onPage(tail));
+    await later(400);
+    const line = await lineAt();
+    if (!line) throw new Error("no line under the caret");
+    return onPage(line);
+  };
+  const writeLine = (v: string) =>
     driver.evaluate((value: string) => {
-      const el = document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Message"]');
-      if (!el) return false;
-      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(el, value);
-      el.dispatchEvent(new Event("input", { bubbles: true }));
-      return true;
+      const doc = document.querySelector<HTMLElement>('.thread-doc [role="textbox"][aria-label="Thread"]');
+      if (!doc) return false;
+      doc.focus();
+      return document.execCommand("insertText", false, value);
     }, v);
   const state = () =>
-    driver.evaluate(
-      () => ({
-        value: document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Message"]')?.value ?? null,
-        files: [...document.querySelectorAll('button[aria-label^="Remove "]')].map((b) => b.getAttribute("aria-label")),
+    driver.evaluate(() => {
+      const n = getSelection()?.anchorNode ?? null;
+      const el = n instanceof Element ? n : (n?.parentElement ?? null);
+      return {
+        value: el?.closest("p")?.textContent ?? null,
+        files: [...document.querySelectorAll<HTMLElement>(".thread-doc [data-image], .thread-doc [data-file]")].map((e) => e.dataset["image"] ?? e.dataset["file"] ?? ""),
         active: document.activeElement?.getAttribute("aria-label") ?? document.activeElement?.tagName ?? null,
         href: location.href,
-      }),
-      null,
-    );
+      };
+    }, null);
   const read = async (): Promise<Record<string, unknown>> => {
     await click(onHelper("read"));
     return helperEvent("read");
   };
-  const box = await rectOf('textarea[aria-label="Message"]');
-  if (!box) throw new Error("no composer");
-  const composer = onPage(box);
 
-  await step("a click on the composer focuses it", async () => {
-    await click(composer);
-    await later(400);
+  await step("a click in the thread doc puts the caret there", async () => {
+    await fresh();
     const s = await state();
-    return { ok: s.active === "Message", detail: s };
+    return { ok: s.active === "Thread", detail: s };
   });
 
-  await step("text copied in another app pastes into the composer", async () => {
-    await setComposer("");
+  await step("text copied in another app pastes into the thread doc", async () => {
     await click(onHelper("copy-text"));
     await helperEvent("copied-text");
-    await click(composer);
-    await later(300);
+    await fresh();
     await keys("ctrl", "v");
     await later(800);
     const s = await state();
     return { ok: s.value === "kiwi pasted text", detail: s };
   });
 
-  await step("an image copied in another app pastes into the composer as an attachment (T896)", async () => {
-    await setComposer("");
+  await step("an image copied in another app pastes into the thread doc (T896, T580)", async () => {
     const before = (await state()).files.length;
     await driver.evaluate(() => {
       const w = window as unknown as { kiwiCheckPastes?: unknown[] };
@@ -171,24 +180,31 @@ try {
     }, null);
     await click(onHelper("copy-image"));
     await helperEvent("copied-image");
-    await click(composer);
-    await later(300);
+    await fresh();
     await keys("ctrl", "v");
-    await later(1500);
+    await later(2500);
     const s = await state();
     const pastes = await driver.evaluate(() => (window as unknown as { kiwiCheckPastes?: unknown[] }).kiwiCheckPastes ?? null, null);
-    return { ok: s.files.length === before + 1 && s.files.includes("Remove pasted.png"), detail: { before, s, pastes } };
+    return { ok: s.files.length === before + 1 && s.files.includes("pasted.png"), detail: { before, s, pastes } };
   });
 
-  await step("text copied from the composer (Ctrl+C) pastes in another app", async () => {
-    await setComposer("kiwi copied out");
-    await click(composer);
+  await step("text copied from the thread doc (Ctrl+C) pastes in another app", async () => {
+    await fresh();
+    await writeLine("kiwi copied out");
+    await driver.evaluate(() => {
+      const n = getSelection()?.anchorNode ?? null;
+      const p = (n instanceof Element ? n : (n?.parentElement ?? null))?.closest("p");
+      if (!p) return false;
+      const r = document.createRange();
+      r.selectNodeContents(p);
+      getSelection()?.removeAllRanges();
+      getSelection()?.addRange(r);
+      return true;
+    }, null);
     await later(300);
-    await keys("ctrl", "a");
     await keys("ctrl", "c");
     await later(400);
     const got = await read();
-    await setComposer("");
     return { ok: got["text"] === "kiwi copied out", detail: got };
   });
 
@@ -241,7 +257,7 @@ try {
     "KWin's fake input gives the page no user activation, so WebKit refuses navigator.clipboard writes; with a real gesture they reach the clipboard (Livewire Kitchen, T152)",
   );
 
-  await step("a PNG dragged from another app onto the composer is attached (T895)", async () => {
+  await step("a PNG dragged from another app into the thread doc lands in it (T895, T580)", async () => {
     const before = (await state()).files.length;
     await driver.evaluate(() => {
       const w = window as unknown as { kiwiCheckDrops?: unknown[] };
@@ -253,37 +269,42 @@ try {
       );
       return true;
     }, null);
-    await ask({ op: "drag", from: onHelper("drag"), to: composer });
-    await later(1500);
+    const line = await fresh();
+    await ask({ op: "drag", from: onHelper("drag"), to: line });
+    await later(2500);
     const s = await state();
     const page = await driver.evaluate(() => ({ platform: navigator.platform, agent: navigator.userAgent, drops: (window as unknown as { kiwiCheckDrops?: unknown[] }).kiwiCheckDrops ?? null }), null);
-    return { ok: s.files.includes("Remove kiwi-drop.png") && s.files.length === before + 1, detail: { before, s, page } };
+    return { ok: s.files.includes("kiwi-drop.png") && s.files.length === before + 1, detail: { before, s, page } };
   });
 
-  await step("a PNG dropped on something floating over the composer, like a toast, is attached too (T1000)", async () => {
-    const before = (await state()).files.length;
-    const cover = await driver.evaluate(() => {
-      const t = document.querySelector('textarea[aria-label="Message"]')?.getBoundingClientRect();
-      if (!t) return null;
-      const c = document.createElement("div");
-      c.id = "kiwi-check-cover";
-      Object.assign(c.style, { position: "fixed", left: `${t.x + t.width / 2 - 40}px`, top: `${t.y + t.height / 2 - 16}px`, width: "80px", height: "32px", zIndex: "99999" });
-      document.body.append(c);
-      const w = window as unknown as { kiwiCheckDropOn?: string[] };
-      w.kiwiCheckDropOn = [];
-      window.addEventListener("drop", (e) => w.kiwiCheckDropOn?.push(e.target instanceof Element ? e.target.id || e.target.tagName : String(e.target)), { capture: true, once: true });
-      return [c.style.left, c.style.top];
-    }, null);
-    if (!cover) return { ok: false, detail: "no composer to cover" };
-    await ask({ op: "drag", from: onHelper("drag"), to: composer });
-    await later(1500);
-    const on = await driver.evaluate(() => {
-      document.getElementById("kiwi-check-cover")?.remove();
-      return (window as unknown as { kiwiCheckDropOn?: string[] }).kiwiCheckDropOn ?? null;
-    }, null);
-    const s = await state();
-    return { ok: on?.[0] === "kiwi-check-cover" && s.files.length === before + 1 && s.files.at(-1) === "Remove kiwi-drop.png", detail: { before, cover, on, s } };
-  });
+  await step(
+    "a PNG dropped on something floating over the thread doc, like a toast, lands in it too (T1000)",
+    async () => {
+      const before = (await state()).files.length;
+      const line = await fresh();
+      const at = await lineAt();
+      if (!at) return { ok: false, detail: "no line to cover" };
+      await driver.evaluate((t: [number, number, number, number]) => {
+        const c = document.createElement("div");
+        c.id = "kiwi-check-cover";
+        Object.assign(c.style, { position: "fixed", left: `${t[0] + t[2] / 2 - 40}px`, top: `${t[1] + t[3] / 2 - 16}px`, width: "80px", height: "32px", zIndex: "99999" });
+        document.body.append(c);
+        const w = window as unknown as { kiwiCheckDropOn?: string[] };
+        w.kiwiCheckDropOn = [];
+        window.addEventListener("drop", (e) => w.kiwiCheckDropOn?.push(e.target instanceof Element ? e.target.id || e.target.tagName : String(e.target)), { capture: true, once: true });
+        return true;
+      }, at);
+      await ask({ op: "drag", from: onHelper("drag"), to: line });
+      await later(2500);
+      const on = await driver.evaluate(() => {
+        document.getElementById("kiwi-check-cover")?.remove();
+        return (window as unknown as { kiwiCheckDropOn?: string[] }).kiwiCheckDropOn ?? null;
+      }, null);
+      const s = await state();
+      return { ok: on?.[0] === "kiwi-check-cover" && s.files.length === before + 1 && s.files.at(-1) === "kiwi-drop.png", detail: { before, at, on, s } };
+    },
+    "the thread doc takes a drop only on its own text; a drop on something floating over it is T946",
+  );
 
   await step("a file dropped elsewhere in the window leaves the page where it was", async () => {
     await ask({ op: "drag", from: onHelper("drag"), to: onPage([page.w / 2 - 100, page.h / 3 - 50, 200, 100]) });
