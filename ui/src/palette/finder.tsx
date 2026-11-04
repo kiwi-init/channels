@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react"
 
+import { setThreadDocs, threadDocsOn } from "~/chat/doc/switch"
 import { Avatar, cx, Dot, STATUS_WORDS } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import type { App, Task, TaskStatus, Theme } from "~/model"
@@ -327,6 +328,18 @@ function collect(app: App, nav: Nav, go: (go: Go) => void): Item[] {
         toggleSide()
       },
     })
+
+  items.push({
+    id: "action:thread-docs",
+    group: "Actions",
+    label: threadDocsOn() ? "Threads: back to the composer" : "Threads: write in one shared doc (preview)",
+    keys: ["composer", "doc", "multiplayer", "yjs"],
+    lead: <Icon name="thread" size={14} />,
+    run: () => {
+      setThreadDocs(!threadDocsOn())
+      close()
+    },
+  })
 
   for (const t of THEMES) {
     const on = app.prefs.theme === t.theme
