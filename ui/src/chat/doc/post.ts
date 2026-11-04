@@ -1,6 +1,6 @@
 import * as Y from "yjs"
 
-import { blockOf, markPosted, threadOf, type Block } from "@kiwi/core/doc/blocks.ts"
+import { blockOf, markPosted, threadOf, unmarkSent, type Block } from "@kiwi/core/doc/blocks.ts"
 
 export interface Finished {
   id: string
@@ -16,6 +16,7 @@ const isMine = (b: Block | null, me: string): b is Block => !!b && b.author === 
 
 export interface Posting {
   stop: () => void
+  giveBack: (id: string) => void
 }
 
 export function postFinished(doc: Y.Doc, rule: Rule, post: (b: Finished) => void): Posting {
@@ -45,5 +46,11 @@ export function postFinished(doc: Y.Doc, rule: Rule, post: (b: Finished) => void
   }
 
   frag.observeDeep(look)
-  return { stop: () => frag.unobserveDeep(look) }
+  return {
+    stop: () => frag.unobserveDeep(look),
+    giveBack: (id) => {
+      posted.delete(id)
+      unmarkSent(doc, id)
+    },
+  }
 }

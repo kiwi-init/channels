@@ -110,6 +110,16 @@ export function markPosted(doc: Y.Doc, id: string): boolean {
   return true;
 }
 
+export function unmarkSent(doc: Y.Doc, id: string): boolean {
+  const el = blockElement(doc, id);
+  if (!el) return false;
+  doc.transact(() => {
+    if (el.getAttribute("sent") === "1") el.removeAttribute("sent");
+    if (el.getAttribute("posted") === "1") el.removeAttribute("posted");
+  });
+  return true;
+}
+
 export function appendToBlock(doc: Y.Doc, id: string, text: string): boolean {
   const el = blockElement(doc, id);
   if (!el || !text) return false;
