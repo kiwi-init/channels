@@ -75,7 +75,7 @@ export function followDocs(
   wanted: () => Promise<boolean> = async () => true,
   now: () => number = Date.now,
 ): DocFollower {
-  const open = new Map<string, { th: string; owns: boolean; stop: () => void }>();
+  const open = new Map<string, { th: string; stop: () => void }>();
   const seen = docSeen(seat.alias, seat.agent);
   const legacy = legacyDocSince(seat.alias, seat.agent);
   const floor = seen.alive ?? now();
@@ -115,7 +115,7 @@ export function followDocs(
       save();
       for (const [key, o] of [...open]) {
         const f = want.get(key);
-        if (!f || f.th !== o.th || f.owns !== o.owns) drop(key, !f || f.th !== o.th);
+        if (!f || f.th !== o.th) drop(key, true);
       }
       for (const f of want.values()) {
         if (open.has(f.key)) continue;
@@ -131,8 +131,8 @@ export function followDocs(
           for (const b of blocks) remember(d, b);
           save();
         };
-        const stop = watchWakes(td, { me: seat.agent, names: [seat.agent], owns: f.owns, known, settled, name: (a) => a }, heard(f.key, td));
-        open.set(f.key, { th: f.th, owns: f.owns, stop });
+        const stop = watchWakes(td, { me: seat.agent, names: [seat.agent], owns: f.key !== "main", known, settled, name: (a) => a }, heard(f.key, td));
+        open.set(f.key, { th: f.th, stop });
       }
     } finally {
       busy = false;
