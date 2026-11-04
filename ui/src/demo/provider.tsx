@@ -465,6 +465,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
           }
         })
         window.setTimeout(() => edit(code, (c) => ({ ...c, messages: c.messages.map((m) => (m.seq === sent ? { ...m, pending: undefined } : m)) })), 700)
+        return Promise.resolve(true)
       },
       retry: (code, seq) => edit(code, (c) => ({ ...c, messages: c.messages.map((m) => (m.seq === seq ? { ...m, failed: undefined } : m)) })),
       loadImage: () => {},

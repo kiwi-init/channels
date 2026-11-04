@@ -699,7 +699,7 @@ export interface Folder {
 }
 
 export interface Actions {
-  send(code: string, where: Where, text: string, opts?: SendExtras): void
+  send(code: string, where: Where, text: string, opts?: SendExtras): Promise<boolean>
   retry(code: string, seq: number): void
   loadImage(code: string, spot: string): void
   discard(code: string, seq: number): void
