@@ -2,6 +2,26 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 2026.11.9 — 2026-11-04
+
+- **ui: a reply read in an open thread is read in its DM or room too (T2395)** ([#1683](https://github.com/kiwi-init/channels/pull/1683))
+- **kiwi show prints a doc line's image once (T2732)** ([#1687](https://github.com/kiwi-init/channels/pull/1687))
+- **doc: a draft belongs to the window typing it, not to the person (T1776)** ([#1680](https://github.com/kiwi-init/channels/pull/1680))
+- **doc: an editor that edits a line it's behind on sends only its own edit (T1776)** ([#1678](https://github.com/kiwi-init/channels/pull/1678))
+- **test: a posted doc line keeps its reply count and receipt in the feed (T2038)** ([#1688](https://github.com/kiwi-init/channels/pull/1688))
+- **Doc: an upgraded host takes no writes from a UI older than the doc (T2558)** ([#1682](https://github.com/kiwi-init/channels/pull/1682))
+- **doc: Enter only breaks the line; Cmd/Ctrl+Enter sends (T2565)** ([#1691](https://github.com/kiwi-init/channels/pull/1691))
+- **Doc: a redraw keeps your caret and selection in your own line (T1776)** ([#1684](https://github.com/kiwi-init/channels/pull/1684))
+- **Doc: the guard writes lines by id, so no line takes over another (T1776)** ([#1689](https://github.com/kiwi-init/channels/pull/1689))
+- **doc: a pasted image goes out with the line it was pasted in (T1776)** ([#1693](https://github.com/kiwi-init/channels/pull/1693))
+- **Doc: a missed or late frame is fetched again, never skipped (T2998)** ([#1694](https://github.com/kiwi-init/channels/pull/1694))
+- **ci: the unit job's watchdog stops a bun that hangs after every file reported (T3093)** ([#1696](https://github.com/kiwi-init/channels/pull/1696))
+- **Doc: an in-process doc pipe opens at the doc's write level (T3209)** ([#1697](https://github.com/kiwi-init/channels/pull/1697))
+- **doc: a remote edit landing between your keys keeps your caret and selection (T1776)** ([#1695](https://github.com/kiwi-init/channels/pull/1695))
+- **ui: sending a doc line keeps the view where it was (T3282)** ([#1698](https://github.com/kiwi-init/channels/pull/1698))
+- **doc: one empty line of yours on screen, not one per window you ever opened (T3317)** ([#1699](https://github.com/kiwi-init/channels/pull/1699))
+- **cli: a doc wake queued while a listener tells is never lost (T3358)** ([#1700](https://github.com/kiwi-init/channels/pull/1700))
+
 ## 2026.11.8 — 2026-11-04
 
 - **core: drop the unused FINISH_IDLE_MS left by Enter-only send (T1109)** ([#1592](https://github.com/kiwi-init/channels/pull/1592))
