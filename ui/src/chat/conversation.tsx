@@ -417,7 +417,7 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
     const top = box.getBoundingClientRect().top
     const cutBelow = (to: number) => to >= end || (at(to) ?? 0) - top > box.clientHeight * 2
     const cutAbove = (from: number) => from <= start || (at(from) ?? Infinity) - (content.current?.getBoundingClientRect().top ?? top) < below - box.clientHeight
-    if (start > 0 && box.scrollTop < box.clientHeight * 3) {
+    if (start > 0 && box.scrollTop < box.clientHeight * 3 && (!stuck.current || box.scrollHeight < box.clientHeight * 2)) {
       const from = Math.max(0, start - MORE)
       const to = Math.min(end, from + CAP)
       const next = spanOf(list, from, cutBelow(to) ? to : end)
@@ -427,8 +427,16 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
       const from = Math.max(start, to - CAP)
       const next = spanOf(list, cutAbove(from) ? from : start, to)
       startTransition(() => setSpan(next))
-    } else if (stuck.current && end - start > TAIL * 2) setSpan({ top: list[end - TAIL]?.seq ?? null, bottom: null })
-    else if (end - start > CAP) {
+    } else if (stuck.current && end - start > TAIL * 2) {
+      const bottom = content.current?.getBoundingClientRect().bottom ?? 0
+      const keeps = (from: number) => {
+        const row = content.current ? rowAt(content.current, list, from) : null
+        return !!row && bottom - row.getBoundingClientRect().top > box.clientHeight * 5
+      }
+      let cut = end - TAIL
+      while (cut > start + MORE && !keeps(cut)) cut -= MORE
+      if (cut > start + MORE) setSpan({ top: list[cut]?.seq ?? null, bottom: null })
+    } else if (end - start > CAP) {
       if (cutAbove(end - CAP)) startTransition(() => setSpan(spanOf(list, end - CAP, end)))
       else if (cutBelow(start + CAP)) startTransition(() => setSpan(spanOf(list, start, start + CAP)))
     }
