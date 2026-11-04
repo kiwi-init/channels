@@ -84,16 +84,20 @@ function toYourLine(me: string, posted: (block: string) => boolean, made: Made):
   }
 }
 
-function nextBlock(me: string, now: () => number): Command {
+function nextBlock(me: string, now: () => number, sending: (block: string) => void): Command {
   return (state, dispatch) => {
     const tr = blockAfter(state, me, now())
-    if (tr && dispatch) dispatch(tr.scrollIntoView())
+    const here = blockAt(state)
+    if (tr && dispatch) {
+      if (here && attrsOf(here.node).author === me) sending(attrsOf(here.node).id)
+      dispatch(tr.scrollIntoView())
+    }
     return !!tr
   }
 }
 
-function endBlock(me: string, now: () => number): Command {
-  return (state, dispatch) => (endsBlock(state) ? nextBlock(me, now)(state, dispatch) : false)
+function endBlock(me: string, now: () => number, sending: (block: string) => void): Command {
+  return (state, dispatch) => (endsBlock(state) ? nextBlock(me, now, sending)(state, dispatch) : false)
 }
 
 const quietEmpty: Command = (state) => {
@@ -135,6 +139,7 @@ export interface DocKeyOpts {
   refuse?: (line: string) => boolean
   editLast?: () => boolean
   made?: Made
+  sending?: (block: string) => void
 }
 
 function mineHere(state: EditorState, me: string): Node | null {
@@ -163,6 +168,7 @@ export function docKeys(me: string, now: () => number, blur: () => void, opts: D
   const posted = opts.posted ?? (() => false)
   const commandFor = opts.commandFor ?? (() => null)
   const refuse = opts.refuse ?? (() => false)
+  const sending = opts.sending ?? (() => {})
   return [
     keymap({
       "Mod-z": undo,
@@ -172,8 +178,8 @@ export function docKeys(me: string, now: () => number, blur: () => void, opts: D
       "Mod-i": toggleMark(schema.marks.em),
       "Mod-e": toggleMark(schema.marks.code),
       "Mod-Shift-x": toggleMark(schema.marks.strike),
-      "Mod-Enter": chainCommands(runLine(me, commandFor), unlessRefused(me, refuse, nextBlock(me, now))),
-      Enter: chainCommands(leaveCode, newline, runLine(me, commandFor), emptyItem, splitListItem(item), unlessRefused(me, refuse, endBlock(me, now)), quietEmpty, splitBlock),
+      "Mod-Enter": chainCommands(runLine(me, commandFor), unlessRefused(me, refuse, nextBlock(me, now, sending))),
+      Enter: chainCommands(leaveCode, newline, runLine(me, commandFor), emptyItem, splitListItem(item), unlessRefused(me, refuse, endBlock(me, now, sending)), quietEmpty, splitBlock),
       "Shift-Enter": chainCommands(newline, splitListItem(item), splitBlock),
       Tab: (state, dispatch) => inList(state) && (sinkListItem(item)(state, dispatch) || true),
       "Shift-Tab": (state, dispatch) => inList(state) && (liftListItem(item)(state, dispatch) || true),

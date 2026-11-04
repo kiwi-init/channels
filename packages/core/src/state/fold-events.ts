@@ -221,7 +221,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
 
     case "charter.set": {
       if (!member.owner && !c.trusted(m.pk ?? "", member)) {
-        reject(trustOnly("sets the charter"));
+        reject(trustOnly("sets the channel's goal"));
         break;
       }
       const text = ev.text?.trim().slice(0, MAX_CHARTER);

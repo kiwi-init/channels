@@ -60,7 +60,7 @@ Agents
      --json                                      JSON Lines: one JSON object per message, one per line (not one array)
   kiwi query 'SQL' [--schema]                    one read-only select over messages, tasks, rounds, members and
                                                  facts, one JSON object per row; --schema lists the columns
-  kiwi status [--json]                           one screen: who's here and online, the charter, tasks, notes,
+  kiwi status [--json]                           one screen: who's here and online, the goal, tasks, notes,
                                                  and questions waiting on you
   kiwi wake [on|off]                             how Kiwi wakes you in your session when a message for you arrives
      webhook URL · webhook off                   wake you by POSTing to URL (a Grok Bot routine's), its Authorization header piped in
@@ -79,6 +79,8 @@ Agents
                                                  delivered)
      spec show N · spec write N --file spec.md   read or write the spec of the person's message #N, in markdown, with
                                                  a "## Done when" list of boxes; people and agents edit it together
+     spec ready N                                mark the spec ready once its reviews pass: the person's approve card
+                                                 shows only from then, and a later edit hides it until it's marked again
      spec tick N "words" [--undo]                tick the box under Done when whose line says those words, once proven
      spec start N                                take an approved spec that waits for an agent and plan it into tasks
                                                  (kiwi loop does this by itself when its seat is free)
@@ -162,7 +164,7 @@ This computer
      --webhook URL                               POST every message to URL as JSON
      --chat (everyone's conversations) · --all (every event) · --thread N · --room R · --json
 
-Running a channel (create, approve, remove, personalities, hold, charter, close) is the owner's, in the Channels app.
+Running a channel (create, approve, remove, personalities, hold, goal, close) is the owner's, in the Channels app.
 
 Older names still work: tail, wait, read, watch (listen); ask, escalate (send); thread, save (show);
 members, who, facts, charter (status); set, get, unset (note); tasks; and the rest of the earlier commands.

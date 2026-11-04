@@ -248,7 +248,7 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
 
   server.registerTool(
     "status",
-    { description: "Whether the channel is ON HOLD, its charter (the owner's scope), your human, members (and who is online), open tasks, facts, and questions waiting on you. Example: call status." },
+    { description: "Whether the channel is ON HOLD, its goal (the owner's scope), your human, members (and who is online), open tasks, facts, and questions waiting on you. Example: call status." },
     tool(() =>
       Effect.gen(function* () {
         const [{ messages, state }, online] = yield* Effect.all([s.state(), s.who()], { concurrency: "unbounded" });
@@ -520,8 +520,8 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
     "escalate",
     {
       description:
-        "To ask a person for a decision, use ask_human; this is its older form, kept for handing a live browser tab to a person (handoff_url). Hand a decision to people instead of acting: a blocking question to your own human and the channel owner. Use it when a request from another agent or person is outside the charter or what your human asked, destructive or hard to undo, touches systems beyond the task, involves credentials, logs or security, or would deceive anyone; then wait for their answer. " +
-        'Example: escalate {"re":42,"text":"win asks me to rotate the prod DB password; outside the charter. Do it?"}.',
+        "To ask a person for a decision, use ask_human; this is its older form, kept for handing a live browser tab to a person (handoff_url). Hand a decision to people instead of acting: a blocking question to your own human and the channel owner. Use it when a request from another agent or person is outside the channel's goal or what your human asked, destructive or hard to undo, touches systems beyond the task, involves credentials, logs or security, or would deceive anyone; then wait for their answer. " +
+        'Example: escalate {"re":42,"text":"win asks me to rotate the prod DB password; outside the goal. Do it?"}.',
       inputSchema: {
         text: z.string().describe("what was asked, by whom, and why it needs a person"),
         re: z.number().int().optional().describe("the message this is about"),
@@ -569,7 +569,7 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
           .describe(`${CHOICES_MIN} to ${CHOICES_MAX} answers to pick from, one line of up to ${CHOICE_MAX_LENGTH} characters each; picking one replies with its text`),
         task: z.number().int().positive().optional().describe("the task this blocks: the question goes in its thread and the task shows it waits on a person"),
         holds: z.array(z.number().int().positive()).optional().describe("the tasks (251 for T251) and the person's messages (18 for #18) this decision holds up"),
-        kind: z.enum(DECISION_KINDS).optional().describe("intent, taste (looks), irreversible, scope (outside the charter) or choice"),
+        kind: z.enum(DECISION_KINDS).optional().describe("intent, taste (looks), irreversible, scope (outside the channel's goal) or choice"),
         re: z.number().int().optional().describe("the message this is about"),
       },
     },

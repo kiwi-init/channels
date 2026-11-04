@@ -12,6 +12,7 @@ import { useApp } from "~/nav"
 import { Confirm, Group, InlineEdit, Row, Seg } from "~/settings/controls"
 import { Themes } from "~/settings/themes"
 import { copyText } from "~/kit/toasts"
+import { UI_VERSION } from "~/settings/ui-version"
 
 export function Page({ title, lede, children }: { title: string; lede?: ReactNode; children: ReactNode }) {
   return (
@@ -221,6 +222,16 @@ export function AboutSection() {
     <Page title="About" lede="Channels by Kiwi Init.">
       <Group>
         <VersionRow account={account} />
+        <Row label="Interface" hint="The look Channels is running. It updates on its own.">
+          <code className="set-value set-mono">{UI_VERSION}</code>
+          <IconButton
+            icon="copy"
+            label="Copy the interface version"
+            onClick={() => {
+              copyText(UI_VERSION, "Version copied")
+            }}
+          />
+        </Row>
         {account.desktop ? (
           <RelayRow relay={account.relay ?? ""} />
         ) : (

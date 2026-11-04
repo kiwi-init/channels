@@ -160,7 +160,7 @@ describe("approved, it starts by itself when an agent is free, and comes back as
     const drifted = fold(log, roster, T0);
     expect(changedSinceApproval(at(drifted, 1))).toBe(true);
     expect(specQueue(drifted)).toEqual([]);
-    expect(formatSpec(drifted, at(drifted, 1))).toContain("approved, then changed: it waits for a person to approve the changes");
+    expect(formatSpec(drifted, at(drifted, 1))).toContain("approved, then changed: once its reviews pass, mark it ready (kiwi spec ready 1) so a person approves the changes");
   });
 
   test("sent back with a note, it waits for an agent again, and is delivered only once new work closes", async () => {
@@ -323,5 +323,28 @@ describe("Tasks only from approved specs: once the owner turns it on, every task
     fold(log.slice(0, 2), roster, T0, null, null, null, (b) => void (base = b));
     expect(base!.specsOnly).toBe(1);
     expect(fold(log, roster, T0, base).rejected.get(3)).toContain("#2 has no spec yet");
+  });
+});
+
+describe("a spec reaches the person for approval only once its author marks it ready (#1625)", () => {
+  const ready = (from: string, ask: number, v: number) => ev(from, { op: "spec.ready", ask, v });
+
+  test("the author marks the current version ready; a later edit leaves the mark on the older version", async () => {
+    const log = await signedLog([say("ana", "labels as a spreadsheet?"), write("dev", 1, SPEC), ready("dev", 1, 2), write("lead", 1, `${SPEC}\n- 3D`)]);
+    const s = fold(log, roster, T0);
+    expect(at(s, 1).ready).toMatchObject({ by: "dev", v: 2 });
+    expect(at(s, 1).v).toBe(4);
+    expect(describeEvent(log[2]!, s)).toBe("marked the spec of #1 ready for approval");
+    expect(formatSpec(s, at(s, 1))).toContain("draft: once its reviews pass, mark it ready (kiwi spec ready 1)");
+    expect(formatSpec(fold(log.slice(0, 3), roster, T0), at(fold(log.slice(0, 3), roster, T0), 1))).toContain("ready: ana or another person approves it");
+  });
+
+  test("a stale version, or someone who never wrote it and doesn't lead, can't mark it ready", async () => {
+    const log = await signedLog([say("ana", "labels as a spreadsheet?"), write("dev", 1, SPEC), write("dev", 1, `${SPEC}\n- 3D`), ready("dev", 1, 2), ready("ops", 1, 3), ready("lead", 1, 3)]);
+    const s = fold(log, roster, T0);
+    expect(s.rejected.get(4)).toContain("changed since that version");
+    expect(s.rejected.get(5)).toContain("who wrote the spec, the lead or a person who approves it");
+    expect(s.rejected.has(6)).toBe(false);
+    expect(at(s, 1).ready).toMatchObject({ by: "lead", v: 3 });
   });
 });
