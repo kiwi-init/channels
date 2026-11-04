@@ -119,3 +119,46 @@ export function attach(state: EditorState, me: string, now: number, nodes: reado
   const after = at + nodes.reduce((n, x) => n + x.nodeSize, 0) + 1
   return tr.setSelection(TextSelection.create(tr.doc, after)).scrollIntoView()
 }
+
+function atBlockStart(state: EditorState): boolean {
+  const { $from, empty } = state.selection
+  if (!empty || $from.depth < 2 || $from.parentOffset !== 0) return false
+  for (let d = $from.depth - 1; d >= 1; d--) if ($from.index(d) !== 0) return false
+  return true
+}
+
+function joinable(a: Node, b: Node, me: string): boolean {
+  const x = attrsOf(a)
+  const y = attrsOf(b)
+  return x.author === me && y.author === me && x.kind === y.kind
+}
+
+function joinInto(state: EditorState, prev: Placed, next: Placed): Transaction {
+  const tr = state.tr
+  const at = prev.pos + prev.node.nodeSize - 1
+  tr.delete(next.pos, next.pos + next.node.nodeSize)
+  tr.insert(at, next.node.content)
+  const last = prev.node.lastChild
+  const first = next.node.firstChild
+  if (last?.isTextblock && first?.type === last.type) {
+    tr.join(at)
+    return tr.setSelection(TextSelection.create(tr.doc, at - 1)).scrollIntoView()
+  }
+  return tr.setSelection(TextSelection.near(tr.doc.resolve(at + 1))).scrollIntoView()
+}
+
+export function joinBack(state: EditorState, me: string): Transaction | null {
+  const here = blockAt(state)
+  if (!here || here.index === 0 || !atBlockStart(state)) return null
+  const prevNode = state.doc.child(here.index - 1)
+  const prev = { node: prevNode, pos: here.pos - prevNode.nodeSize, index: here.index - 1 }
+  return joinable(prev.node, here.node, me) ? joinInto(state, prev, here) : null
+}
+
+export function joinForward(state: EditorState, me: string): Transaction | null {
+  const here = blockAt(state)
+  if (!here || here.index >= state.doc.childCount - 1 || !atBlockEnd(state)) return null
+  const nextNode = state.doc.child(here.index + 1)
+  const next = { node: nextNode, pos: here.pos + here.node.nodeSize, index: here.index + 1 }
+  return joinable(here.node, next.node, me) ? joinInto(state, here, next) : null
+}

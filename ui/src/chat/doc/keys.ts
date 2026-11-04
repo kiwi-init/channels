@@ -4,7 +4,7 @@ import { TextSelection, type Command, type EditorState, type Plugin } from "pros
 import { liftListItem, sinkListItem, splitListItem } from "prosemirror-schema-list"
 import { redo, undo } from "y-prosemirror"
 
-import { blockAfter, blockAt, blocks, endsBlock, isEmpty, startBlock } from "~/chat/doc/blocks"
+import { blockAfter, blockAt, blocks, endsBlock, isEmpty, joinBack, joinForward, startBlock } from "~/chat/doc/blocks"
 import { attrsOf, schema } from "~/chat/doc/schema"
 
 function inCode(state: EditorState): boolean {
@@ -60,6 +60,14 @@ function dropOwnEmpty(me: string): Command {
   }
 }
 
+function join(me: string, how: typeof joinBack): Command {
+  return (state, dispatch) => {
+    const tr = how(state, me)
+    if (tr && dispatch) dispatch(tr)
+    return !!tr
+  }
+}
+
 function toYourLine(me: string): Command {
   return (state, dispatch, view) => {
     const { $from, empty } = state.selection
@@ -104,7 +112,8 @@ export function docKeys(me: string, now: () => number, blur: () => void): Plugin
       "Shift-Enter": chainCommands(newline, splitListItem(item), splitBlock),
       Tab: (state, dispatch) => inList(state) && (sinkListItem(item)(state, dispatch) || true),
       "Shift-Tab": (state, dispatch) => inList(state) && (liftListItem(item)(state, dispatch) || true),
-      Backspace: chainCommands(dropOwnEmpty(me), startOfItem),
+      Backspace: chainCommands(dropOwnEmpty(me), startOfItem, join(me, joinBack)),
+      Delete: join(me, joinForward),
       ArrowDown: toYourLine(me),
       Escape: () => {
         blur()
