@@ -198,7 +198,8 @@ export const messageCommands: Record<string, Command> = {
       const seq = Number((args[1] ?? "").replace(/^#/, "")) || (yield* die("usage: kiwi save N [dir]"));
       const { messages, state } = yield* s.state();
       const found = yield* s.message(seq, messages);
-      const m = found && !ignored(state.trust.get(seq)) ? found : yield* die(`no message #${seq}`);
+      const said = found && !ignored(state.trust.get(seq)) ? found : yield* die(`no message #${seq}`);
+      const m = yield* s.withBlockMedia(said).pipe(Effect.catch((e) => die(e.message)));
       if (!m.imgs?.length && !m.files?.length) return yield* die(`message #${seq} has no images or files`);
       const imgs = m.imgs?.length ? yield* s.ch.fx.images(m.imgs) : [];
       const kept = yield* keepFiles(s.ch, m, args[2] ?? ".");
@@ -230,12 +231,18 @@ export const messageCommands: Record<string, Command> = {
       const seq = link?.seq ?? (Number((args[1] ?? "").replace(/^#/, "")) || (yield* die("usage: kiwi show N|LINK [dir] | kiwi show N|LINK --raw")));
       const { messages, state } = yield* s.state();
       const found = yield* s.message(seq, messages);
-      const m = found && !ignored(state.trust.get(seq)) ? found : yield* die(`no message #${seq}`);
+      const said = found && !ignored(state.trust.get(seq)) ? found : yield* die(`no message #${seq}`);
       if (opt.raw) {
-        process.stdout.write(String(m.body ?? ""));
+        process.stdout.write(String(said.body ?? ""));
         yield* noteRead(s);
         return;
       }
+      const m = yield* s.withBlockMedia(said).pipe(
+        Effect.catch((e) => {
+          process.stderr.write(`kiwi: ${e.message}\n`);
+          return Effect.succeed(said);
+        }),
+      );
       const root = state.threadOf.get(seq) ?? seq;
       const thread = yield* s.threadMessages(root, messages, state);
       const known = [...messages, ...thread.filter((x) => !messages.some((y) => y.seq === x.seq))];
@@ -244,6 +251,8 @@ export const messageCommands: Record<string, Command> = {
         : [];
       const dir = args[2] ?? joinPath(home(), "downloads", s.ch.roomId);
       const saved = fetched.length ? saveImages(seq, fetched, dir) : [];
+      const missing = m.imgs?.length ? missingImages(seq, m.imgs.length, fetched.length) : null;
+      if (missing) process.stderr.write(`kiwi: ${missing}\n`);
       const kept = yield* keepFiles(s.ch, m, dir);
       out(formatShown(m, known, state, saved, s.me, !!opt.reveal && !!m.to?.includes(s.me), kept));
       const near = new Set([seq, ...(m.re ?? []), ...known.filter((x) => x.re?.includes(seq)).map((x) => x.seq)]);

@@ -1,6 +1,6 @@
 import * as Y from "yjs";
 import { b64url } from "../crypto.ts";
-import type { FileAttachment, ImageAttachment } from "../protocol.ts";
+import { fileAttachment, rasterAttachment, type FileAttachment, type ImageAttachment } from "../protocol.ts";
 
 const THREAD_FRAGMENT = "thread";
 
@@ -234,6 +234,40 @@ function mediaElement(m: BlockMedia): Y.XmlElement {
   el.setAttribute("size", String(m.file.size));
   el.setAttribute("pieces", JSON.stringify(m.file.pieces));
   return el;
+}
+
+function mediaOf(el: Y.XmlElement): ImageAttachment | FileAttachment | null {
+  const name = el.getAttribute("name");
+  const mime = el.getAttribute("mime");
+  const size = Number(el.getAttribute("size"));
+  if (el.nodeName === "image") {
+    const img = { name, mime, ref: { id: el.getAttribute("id"), key: el.getAttribute("key"), size } };
+    return rasterAttachment(img) ? img : null;
+  }
+  let pieces: unknown;
+  try {
+    pieces = JSON.parse(String(el.getAttribute("pieces") ?? ""));
+  } catch {
+    // A file whose piece list was torn can't be fetched: leave it out like any other broken attachment.
+    return null;
+  }
+  const file = { name, mime, size, pieces };
+  return fileAttachment(file) ? file : null;
+}
+
+export function mediaOfBlock(doc: Y.Doc, id: string): { imgs: ImageAttachment[]; files: FileAttachment[] } {
+  const imgs: ImageAttachment[] = [];
+  const files: FileAttachment[] = [];
+  const walk = (node: Y.XmlElement | Y.XmlText | Y.XmlHook): void => {
+    if (!(node instanceof Y.XmlElement)) return;
+    if (!isMedia(node)) return node.toArray().forEach(walk);
+    const m = mediaOf(node);
+    if (m && "ref" in m) imgs.push(m);
+    else if (m && "pieces" in m) files.push(m);
+  };
+  const el = blockElement(doc, id);
+  if (el) walk(el);
+  return { imgs, files };
 }
 
 export function attachToBlock(doc: Y.Doc, id: string, media: readonly BlockMedia[]): boolean {

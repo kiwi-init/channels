@@ -620,8 +620,9 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
     tool(({ seq, dir }) =>
       Effect.gen(function* () {
         const { messages, state } = yield* s.state();
-        const m = yield* s.message(seq, messages);
-        if (!m || ignored(state.trust.get(seq))) return yield* new Rejected(`no message #${seq}`);
+        const said = yield* s.message(seq, messages);
+        if (!said || ignored(state.trust.get(seq))) return yield* new Rejected(`no message #${seq}`);
+        const m = yield* s.withBlockMedia(said);
         if (!m.imgs?.length) return yield* new Rejected(`message #${seq} has no images`);
         // Under the channel's own folder, so closing the channel deletes them too.
         const imgs = yield* s.ch.fx.images(m.imgs);
@@ -642,8 +643,9 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
     shaped(({ seq }) =>
       Effect.gen(function* () {
         const { messages, state } = yield* s.state();
-        const m = yield* s.message(seq, messages);
-        if (!m || ignored(state.trust.get(seq))) return fail(`no message #${seq}`);
+        const said = yield* s.message(seq, messages);
+        if (!said || ignored(state.trust.get(seq))) return fail(`no message #${seq}`);
+        const m = yield* s.withBlockMedia(said).pipe(Effect.orElseSucceed(() => said));
         const images = m.imgs?.length ? yield* s.ch.fx.images(m.imgs).pipe(Effect.orElseSucceed((): InlineImage[] => [])) : [];
         const dir = join(home(), "downloads", s.ch.roomId);
         const saved = images.length ? saveImages(seq, images, dir) : [];
