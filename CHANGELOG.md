@@ -20,6 +20,7 @@ Written by `bun scripts/changelog.ts` from each squash-merged pull request's tit
 - **doc: a remote edit landing between your keys keeps your caret and selection (T1776)** ([#1695](https://github.com/kiwi-init/channels/pull/1695))
 - **ui: sending a doc line keeps the view where it was (T3282)** ([#1698](https://github.com/kiwi-init/channels/pull/1698))
 - **doc: one empty line of yours on screen, not one per window you ever opened (T3317)** ([#1699](https://github.com/kiwi-init/channels/pull/1699))
+- **cli: a doc wake queued while a listener tells is never lost (T3358)** ([#1700](https://github.com/kiwi-init/channels/pull/1700))
 
 ## 2026.11.8 — 2026-11-04
 
