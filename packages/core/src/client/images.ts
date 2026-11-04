@@ -1,6 +1,7 @@
 import * as Effect from "effect/Effect";
 import { fromBase64, openBlob, sealBlob, toBase64 } from "../crypto.ts";
-import type { ImageAttachment, InlineImage } from "../protocol.ts";
+import { MAX_IMAGE_BYTES, type ImageAttachment, type InlineImage } from "../protocol.ts";
+import { Rejected } from "../refusals.ts";
 import type { ChannelCore } from "./core.ts";
 import { gone, RelayError, type MemberRefusal } from "./errors.ts";
 import { Relay } from "./relay.ts";
@@ -9,7 +10,10 @@ import type { ChannelSettings } from "./settings.ts";
 export interface ImagesFx {
   image(img: ImageAttachment): Effect.Effect<string | null, MemberRefusal, Relay>;
   images(imgs: readonly ImageAttachment[]): Effect.Effect<InlineImage[], MemberRefusal, Relay>;
+  putImage(img: InlineImage): Effect.Effect<ImageAttachment, MemberRefusal | Rejected, Relay>;
 }
+
+const NO_BLOBS = "this channel's relay doesn't hold images yet: it needs an update";
 
 export class ChannelImages {
   constructor(
@@ -42,6 +46,20 @@ export class ChannelImages {
       if (!raw || raw.length !== ref.size) return null;
       blobMemory.set(this.ch.roomId, ref.id, blob);
       return toBase64(raw);
+    }),
+
+    putImage: Effect.fn("Channel.putImage")({ self: this }, function* (this: ChannelImages, img: InlineImage) {
+      const raw = fromBase64(img.data);
+      if (!raw.length) return yield* new Rejected(`${img.name} is empty`);
+      if (raw.length > MAX_IMAGE_BYTES) return yield* new Rejected(`${img.name} is ${Math.ceil(raw.length / 1024)} KB; an image is at most ${MAX_IMAGE_BYTES / 1024} KB`);
+      const info = yield* this.ch.fx.info();
+      if (info.blobs !== true) return yield* new Rejected(NO_BLOBS);
+      const { id, key, blob } = yield* Effect.promise(() => sealBlob(raw));
+      const relay = yield* Relay;
+      yield* relay.blob(this.ch.relay, this.ch.roomId, id, this.ch.identity, blob).pipe(Effect.mapError(gone));
+      blobMemory.set(this.ch.roomId, id, blob);
+      const stored: ImageAttachment = { name: img.name, mime: img.mime, ref: { id, key, size: raw.length } };
+      return stored;
     }),
 
     images: Effect.fn("Channel.images")({ self: this }, function* (this: ChannelImages, imgs: readonly ImageAttachment[]) {

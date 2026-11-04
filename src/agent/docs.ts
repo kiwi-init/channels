@@ -75,6 +75,7 @@ export const writeBlock = (ch: Channel, from: number, at: DocPlace, author: stri
   inThreadDoc(ch, from, at, (td) => {
     const block = agentBlock(td.doc, author, agent ? "agent" : "text");
     block.write(body);
+    block.end();
     return block.id;
   });
 

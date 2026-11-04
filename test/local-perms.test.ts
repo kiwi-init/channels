@@ -205,7 +205,7 @@ test("installers document the checksum and create a private home", () => {
   expect(sh).toContain("this script does not run it");
 });
 
-test("home() walks and tightens the home once per kiwi version, and again once the home is loosened", () => {
+test("home() walks and tightens the home once per kiwi version, and again once the home is loosened", async () => {
   const dir = scratch("kiwi-once-");
   chmodSync(dir, 0o755);
   writeFileSync(join(dir, "config.json"), "{}\n", { mode: 0o644 });
@@ -213,16 +213,21 @@ test("home() walks and tightens the home once per kiwi version, and again once t
   mkdirSync(room, { recursive: true });
   const img = join(room, "pic");
   writeFileSync(img, "png", { mode: 0o644 });
-  const run = () => Bun.spawnSync([process.execPath, "-e", `import { home } from ${JSON.stringify(join(import.meta.dir, "../src/config.ts"))}; home();`], { env: { ...process.env, KIWI_HOME: dir } });
-  run();
+  process.env.KIWI_HOME = dir;
+  let starts = 0;
+  const run = async () => {
+    const fresh: { home: () => string } = await import(`../src/config/paths.ts?start=${++starts}`);
+    expect(fresh.home()).toBe(dir);
+  };
+  await run();
   expect(mode(dir)).toBe(0o700);
   expect(mode(img)).toBe(0o600);
   expect(readFileSync(join(dir, ".tightened"), "utf8")).toBe(VERSION);
   chmodSync(img, 0o644);
-  run();
+  await run();
   expect(mode(img)).toBe(0o644);
   chmodSync(dir, 0o755);
-  run();
+  await run();
   expect(mode(dir)).toBe(0o700);
   expect(mode(img)).toBe(0o600);
 });

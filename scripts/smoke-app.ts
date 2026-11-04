@@ -5,7 +5,7 @@ import { join, resolve } from "node:path";
 import { chromium } from "playwright-core";
 import { startLocalRelay } from "./local-relay.ts";
 import { harnessDist } from "./ui-harness.ts";
-import { approveSpec, unfold } from "./perf-ui.ts";
+import { approveSpec, threadDoc, unfold, writeBlock } from "./perf-ui.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
 const DIST = harnessDist(process.argv[2]);
@@ -29,10 +29,15 @@ const kiwi = (args: string[], watch?: (out: string) => void): Promise<string> =>
   return new Promise((ok, fail) => p.on("exit", (code) => (code === 0 ? ok(out) : fail(new Error(`kiwi ${args[0]} exited ${code}: ${out.trim().split("\n").pop()}`)))));
 };
 
-const said = async (as: string): Promise<{ seq: number; from: string; body?: string }[]> =>
-  (await kiwi(["-c", "smoke", "--as", as, "log", "-n", "40", "--json"]))
-    .split("\n")
-    .flatMap((line) => (line.trim().startsWith("{") ? [JSON.parse(line) as { seq: number; from: string; body?: string }] : []));
+interface Said {
+  seq: number;
+  from: string;
+  body?: string;
+  block?: { th: string; id: string };
+}
+
+const said = async (as: string): Promise<Said[]> =>
+  (await kiwi(["-c", "smoke", "--as", as, "log", "-n", "40", "--json"])).split("\n").flatMap((line) => (line.trim().startsWith("{") ? [JSON.parse(line) as Said] : []));
 
 const { relay, port } = await startLocalRelay(join(data, "relay"), DIST);
 const BASE = `http://127.0.0.1:${port}/`;
@@ -56,14 +61,8 @@ page.on("console", (m) => {
   if (m.type() === "error" && !m.text().startsWith("Failed to load resource")) errors.push(`${at}: console: ${m.text()}`);
 });
 
-const composer = page.getByRole("textbox", { name: "Message" });
 const views = page.getByRole("navigation", { name: "Views" });
-const send = async (text: string) => {
-  await composer.fill(text);
-  await composer.press("Enter");
-  await page.locator("article").filter({ hasText: text }).first().waitFor({ timeout: 15000 });
-  await page.locator("article.is-pending").filter({ hasText: text }).waitFor({ state: "detached", timeout: 15000 });
-};
+const row = (text: string) => page.locator("article, .thread-doc section.blk").filter({ hasText: text });
 
 try {
   at = "first run";
@@ -79,8 +78,8 @@ try {
   const dialog = page.getByRole("dialog", { name: "New channel" });
   await dialog.getByRole("textbox").fill("smoke");
   await dialog.getByRole("button", { name: "Create channel" }).click();
-  await composer.waitFor({ timeout: 30000 });
-  await send("smoke test");
+  await threadDoc(page).waitFor({ timeout: 30000 });
+  await writeBlock(page, "smoke test");
   step(at);
 
   at = "the invite carries the join code";
@@ -133,9 +132,19 @@ try {
 
   at = "the agent writes a spec, no task goes in before the person approves it, then the agent posts a message and a task";
   await views.getByRole("button", { name: /general/ }).click();
-  await kiwi(["-c", "smoke", "--as", "bot", "send", "hello from bot"]);
-  const ask = (await said("bot")).find((m) => m.body === "smoke test")?.seq;
-  if (ask === undefined) throw new Error("the person's message isn't in the agent's log");
+  const asked = (await said("bot")).find((m) => m.body === "smoke test");
+  if (asked === undefined) throw new Error("the block the person wrote never became a message in the agent's log");
+  if (!asked.block?.th || !asked.block.id) throw new Error(`the message from the block doesn't say which block it came from: ${JSON.stringify(asked)}`);
+  if (await page.locator("article").filter({ hasText: "smoke test" }).count()) throw new Error("the block shows twice: once in the doc and again as a message");
+  const ask = asked.seq;
+  await writeBlock(page, "anyone around?");
+  let around: number | undefined;
+  for (let i = 0; i < 50 && around === undefined; i++) {
+    around = (await said("bot")).find((m) => m.body === "anyone around?")?.seq;
+    if (around === undefined) await page.waitForTimeout(200);
+  }
+  if (around === undefined) throw new Error("the second block never became a message");
+  await kiwi(["-c", "smoke", "--as", "bot", "send", "--re", String(around), "hello from bot"]);
   await kiwi(["-c", "smoke", "--as", "bot", "spec", "write", String(ask), "# Smoke\n\n## Done when\n- [ ] the smoke passes"]);
   const early = await kiwi(["-c", "smoke", "--as", "bot", "task", "add", "Too early", "--ask", String(ask)]).then(
     () => "",
@@ -146,7 +155,7 @@ try {
   const added = await kiwi(["-c", "smoke", "--as", "bot", "task", "add", "Smoke task", "--owner", "bot", "--ask", String(ask)]);
   const task = /\bT(\d+)\b/.exec(added)?.[1];
   if (task === undefined) throw new Error(`kiwi task add printed no task id: ${added.trim()}`);
-  await page.locator("article").filter({ hasText: "hello from bot" }).first().waitFor({ timeout: 30000 });
+  await row("hello from bot").first().waitFor({ timeout: 30000 });
   await page.getByText("Smoke task").first().waitFor({ timeout: 30000 });
   await shot("general");
   await views.getByRole("button", { name: /^Specs/ }).click();
@@ -201,7 +210,7 @@ try {
   if (!(await search.evaluate((el) => el === document.activeElement))) throw new Error("the search shortcut did not focus the open search field");
   await views.getByRole("button", { name: /^Specs/ }).click();
   await views.getByRole("button", { name: /general/ }).click();
-  await page.locator("article").filter({ hasText: "hello from bot" }).first().waitFor({ timeout: 15000 });
+  await row("hello from bot").first().waitFor({ timeout: 15000 });
   await page.waitForTimeout(300);
   if (await page.evaluate(() => CSS.highlights.has("search-hit"))) throw new Error("coming back to the room replayed the old search jump");
   await search.fill("hello");
@@ -219,8 +228,8 @@ try {
   await search.waitFor({ state: "detached" });
   step(at);
 
-  at = "an answer from the composer reaches the agent";
-  await send("@bot got it, thanks");
+  at = "an answer written in the doc reaches the agent";
+  await writeBlock(page, "@bot got it, thanks");
   let heard = false;
   for (let i = 0; i < 50 && !heard; i++) {
     heard = (await said("bot")).some((m) => m.from === "smoke" && m.body === "@bot got it, thanks");
@@ -240,10 +249,11 @@ try {
   const fold = page.getByRole("region", { name: "Compacted history" });
   await fold.waitFor({ timeout: 30000 });
   await card.waitFor({ state: "detached", timeout: 15000 });
-  await page.locator("article").filter({ hasText: "hello from bot" }).waitFor({ state: "detached", timeout: 15000 });
+  const filed = page.getByText(/added task T\d+ “Smoke task”/).first();
+  await filed.waitFor({ state: "detached", timeout: 15000 });
   await shot("compacted");
   await fold.getByRole("button", { name: "Show earlier messages" }).click();
-  await page.locator("article").filter({ hasText: "hello from bot" }).first().waitFor({ timeout: 15000 });
+  await filed.waitFor({ timeout: 15000 });
   await fold.getByRole("button", { name: "Hide earlier messages" }).click();
   let compacted = false;
   for (let i = 0; i < 50 && !compacted; i++) {

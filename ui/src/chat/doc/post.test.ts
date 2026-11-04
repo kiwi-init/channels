@@ -8,12 +8,11 @@ import { LiveDoc } from "~/chat/doc/live"
 import { postFinished, type Finished } from "~/chat/doc/post"
 
 const REMOTE = Symbol("remote")
-const IDLE = 30
 const wait = (ms: number) => new Promise((done) => setTimeout(done, ms))
 
 function watch(doc: Y.Doc): Finished[] {
   const out: Finished[] = []
-  postFinished(doc, { me: "jow", local: (o) => o !== REMOTE, idleMs: IDLE }, (b) => out.push(b))
+  postFinished(doc, { me: "jow", local: (o) => o !== REMOTE }, (b) => out.push(b))
   return out
 }
 
@@ -27,19 +26,19 @@ function start(doc: Y.Doc, author: string, text = "", kind: BlockKind = "text", 
 
 const type = (doc: Y.Doc, id: string, text: string, origin: unknown = null) => doc.transact(() => appendToBlock(doc, id, text), origin)
 
-describe("a person's finished block posts as their message", () => {
-  test("a block posts once you stop typing, once, with its words", async () => {
+describe("a person's block posts as their message when they press Enter", () => {
+  test("a block is a draft while you type, however long you pause, and posts once when you start the next", async () => {
     const doc = new Y.Doc()
     const out = watch(doc)
     const id = start(doc, "jow")
     type(doc, id, "  ship the ")
-    await wait(IDLE / 2)
+    await wait(50)
     type(doc, id, "release ")
-    await wait(IDLE / 2)
+    await wait(50)
     expect(out).toEqual([])
-    await wait(IDLE * 2)
+    start(doc, "jow")
     expect(out).toEqual([{ id, text: "ship the release" }])
-    await wait(IDLE * 2)
+    start(doc, "jow")
     expect(out).toHaveLength(1)
   })
 
@@ -63,18 +62,19 @@ describe("a person's finished block posts as their message", () => {
     start(doc, "jow", "   ")
     const other = start(doc, "jow", "", "text", REMOTE)
     type(doc, other, "typed on my other computer", REMOTE)
-    await wait(IDLE * 3)
+    start(doc, "jow", "", "text", REMOTE)
     expect(out).toEqual([])
   })
 
-  test("an agent's block landing after yours doesn't finish yours early", async () => {
+  test("only Enter in a block sends it: a block after it from someone else, or one you start elsewhere, doesn't", () => {
     const doc = new Y.Doc()
     const out = watch(doc)
     const id = start(doc, "jow", "still typing")
     start(doc, "atlas", "on it", "agent", REMOTE)
     expect(out).toEqual([])
-    await wait(IDLE * 3)
-    expect(out).toEqual([{ id, text: "still typing" }])
+    start(doc, "jow")
+    expect(out).toEqual([])
+    expect(id).toBeTruthy()
   })
 
   test("the message carries the doc it came from, once the doc has one", async () => {

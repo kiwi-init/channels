@@ -67,6 +67,20 @@ describe("the CLI writes and reads a thread's doc over the live socket (T570)", 
     expect(blocksOf(open.doc).at(-1)).toMatchObject({ kind: "text", author: "jow", text: "thanks" });
   });
 
+  test("an image and a file for a doc are stored sealed, and come back by their reference alone (T580)", async () => {
+    const cli = new Channel(s.access, s.relay, s.owner);
+    const png = Buffer.from("not really a png but bytes all the same").toString("base64");
+    const img = await cli.putImage({ name: "shot.png", mime: "image/png", data: png });
+    expect(img.data).toBeUndefined();
+    expect(img.ref?.id).toMatch(/^[0-9a-f]{64}$/);
+    expect(await new Channel(s.access, s.relay, s.owner).image({ name: img.name, mime: img.mime, ref: img.ref! })).toBe(png);
+    const log = Buffer.from("line one\nline two\n").toString("base64");
+    const file = await cli.putFileData("trace.log", "text/plain", log);
+    expect(file.pieces).toHaveLength(1);
+    expect(await new Channel(s.access, s.relay, s.owner).fileData(file)).toBe(log);
+    await expect(cli.putImage({ name: "big.png", mime: "image/png", data: Buffer.alloc(300 * 1024).toString("base64") })).rejects.toThrow(/at most 256 KB/);
+  });
+
   test("a relay that never answers fails within the wait instead of hanging", async () => {
     const quiet = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: () => new Response("no", { status: 503 }) });
     try {
