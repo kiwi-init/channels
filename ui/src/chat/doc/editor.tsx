@@ -302,15 +302,8 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
 function Head({ channel, attrs }: { channel: Channel; attrs: BlockAttrs }) {
   const { go } = useApp()
   if (!attrs.author) return null
-  const who = channel.people.find((p) => p.name === attrs.author) ?? channel.former?.find((p) => p.name === attrs.author)
   return (
     <>
-      <span className="blk-gutter">
-        <Avatar person={who} />
-        <time className="blk-time-hover" dateTime={new Date(attrs.at).toISOString()}>
-          {clock(attrs.at)}
-        </time>
-      </span>
       <span className="blk-line">
         <button type="button" className="msg-name" onClick={() => go({ to: "modal", modal: { kind: "person", name: attrs.author } })}>
           {nickname(channel, attrs.author)}
