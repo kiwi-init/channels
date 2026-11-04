@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { newChannelKey, newRoomId } from "@kiwi/core/crypto.ts";
+import { b64url, fromB64url, newChannelKey, newRoomId } from "@kiwi/core/crypto.ts";
+import { DOC_LEVEL, raiseWriterFloor, writerFloor } from "@kiwi/core/doc/level.ts";
+import { pipeDoc } from "@kiwi/core/doc/pipe.ts";
 import { appendToBlock, blocksOf, newBlock, newDocId, threadOf, threadText } from "@kiwi/core/doc/blocks.ts";
 import * as Y from "yjs";
 import { ThreadDoc, type DocIn, type DocKeys, type DocOut } from "@kiwi/core/doc/thread-doc.ts";
@@ -347,5 +349,131 @@ describe("a doc line's text is what was typed (T2141)", () => {
     expect(blocksOf(doc).map((b) => b.text)).toEqual(["use <div> and a<b>c"]);
     words.format(0, 3, { strong: true });
     expect(blocksOf(doc).map((b) => b.text)).toEqual(["use <div> and a<b>c"]);
+  });
+});
+
+function uiOn(host: Peer, level: number) {
+  const doc = new Y.Doc();
+  let refused = false;
+  const pipe = pipeDoc(host.td.doc, host.td.awareness, (out) => out._tag === "Update" && Y.applyUpdate(doc, fromB64url(out.u), "host"), Promise.resolve(), {
+    level,
+    refused: () => void (refused = true),
+  });
+  doc.on("update", (u: Uint8Array, origin: unknown) => origin !== "host" && pipe.update(b64url(u)));
+  return { doc, refused: () => refused };
+}
+
+describe("an upgraded host takes no writes from a UI older than the doc's writer floor (T2558)", () => {
+  test("once a new UI raised the floor, an old UI's line and its offline full-state resend never reach the doc; the new UI's do", async () => {
+    const { peers, ids } = await setup(2);
+    const [a, b] = peers as [Peer, Peer];
+    a.td.start();
+    b.td.start();
+    await settle(a, b);
+    const fresh = uiOn(a, DOC_LEVEL);
+    const old = uiOn(a, 0);
+    await Promise.resolve();
+    raiseWriterFloor(fresh.doc, DOC_LEVEL);
+    newBlock(fresh.doc, "text", ids[0]!.pk, "from the new look");
+    await settle(a, b);
+    expect(writerFloor(b.td.doc)).toBe(DOC_LEVEL);
+    newBlock(old.doc, "text", ids[0]!.pk, "from an old window");
+    const offline = new Y.Doc();
+    newBlock(offline, "text", ids[0]!.pk, "typed while offline");
+    const again = uiOn(a, 0);
+    Y.applyUpdate(again.doc, Y.encodeStateAsUpdate(offline));
+    await settle(a, b);
+    expect(old.refused()).toBe(true);
+    expect(again.refused()).toBe(true);
+    expect(fresh.refused()).toBe(false);
+    expect(texts(a)).toEqual(["from the new look"]);
+    expect(texts(b)).toEqual(["from the new look"]);
+  });
+
+  test("the floor never drops when copies raise it at once, in either order", () => {
+    for (const first of [0, 1]) {
+      const a = new Y.Doc();
+      const b = new Y.Doc();
+      a.clientID = 1;
+      b.clientID = 2;
+      raiseWriterFloor(a, 2);
+      raiseWriterFloor(b, 1);
+      const [x, y] = first ? [b, a] : [a, b];
+      Y.applyUpdate(y, Y.encodeStateAsUpdate(x));
+      Y.applyUpdate(x, Y.encodeStateAsUpdate(y));
+      expect(writerFloor(a)).toBe(2);
+      expect(writerFloor(b)).toBe(2);
+      raiseWriterFloor(b, 1);
+      expect(writerFloor(b)).toBe(2);
+    }
+  });
+
+  test("an old UI writes as before while no new UI has raised the floor", async () => {
+    const { peers, ids } = await setup(1);
+    const [a] = peers as [Peer];
+    a.td.start();
+    await settle(a);
+    const old = uiOn(a, 0);
+    await Promise.resolve();
+    newBlock(old.doc, "text", ids[0]!.pk, "hello");
+    await settle(a);
+    expect(old.refused()).toBe(false);
+    expect(texts(a)).toEqual(["hello"]);
+  });
+
+  test("agents still write after the floor rises: the gate is only on UI pipes", async () => {
+    const { peers, ids } = await setup(2);
+    const [a, b] = peers as [Peer, Peer];
+    a.td.start();
+    b.td.start();
+    await settle(a, b);
+    raiseWriterFloor(uiOn(a, DOC_LEVEL).doc, DOC_LEVEL);
+    await settle(a, b);
+    newBlock(b.td.doc, "text", ids[1]!.pk, "agent on 11.7");
+    newBlock(a.td.doc, "text", ids[0]!.pk, "agent here");
+    await settle(a, b);
+    expect(texts(a).sort()).toEqual(["agent here", "agent on 11.7"]);
+    expect(texts(b).sort()).toEqual(texts(a).sort());
+  });
+
+  test("the limit: a host that isn't upgraded still sends its old UI's deletion, and upgraded hosts apply it", async () => {
+    const { peers, ids } = await setup(2);
+    const [a, b] = peers as [Peer, Peer];
+    a.td.start();
+    b.td.start();
+    await settle(a, b);
+    const fresh = uiOn(a, DOC_LEVEL);
+    await Promise.resolve();
+    raiseWriterFloor(fresh.doc, DOC_LEVEL);
+    newBlock(fresh.doc, "text", ids[0]!.pk, "jow's line");
+    await settle(a, b);
+    const line = threadOf(b.td.doc);
+    line.delete(0, line.length);
+    await settle(a, b);
+    expect(texts(a)).toEqual([]);
+  });
+
+  test("a snapshot taken after a refusal never carries the refused edit to a late joiner", async () => {
+    const { peers, ids, relay, make } = await setup(2);
+    const [a] = peers as [Peer, Peer];
+    relay.compactAfter = 2;
+    a.td.start();
+    await settle(a);
+    const fresh = uiOn(a, DOC_LEVEL);
+    const old = uiOn(a, 0);
+    await Promise.resolve();
+    raiseWriterFloor(fresh.doc, DOC_LEVEL);
+    const blk = newBlock(fresh.doc, "text", ids[0]!.pk, "");
+    for (const ch of "kept") {
+      appendToBlock(fresh.doc, blk.id, ch);
+      await settle(a);
+    }
+    newBlock(old.doc, "text", ids[0]!.pk, "refused");
+    await settle(a);
+    expect(relay.rows[0]!.snap).toBe(true);
+    const late = make(ids[1]!);
+    late.td.start();
+    await settle(late);
+    expect(texts(late)).toEqual(["kept"]);
   });
 });

@@ -3,6 +3,7 @@ import { Awareness } from "y-protocols/awareness"
 
 import { b64url, fromB64url } from "@kiwi/core/crypto.ts"
 import { blocksOf } from "@kiwi/core/doc/blocks.ts"
+import { DOC_LEVEL, onWriterFloor, raiseWriterFloor } from "@kiwi/core/doc/level.ts"
 import type { PipeIn } from "@kiwi/core/doc/held-pipe.ts"
 import { mirrorAware } from "@kiwi/core/doc/pipe.ts"
 import type { DocBlockRef } from "@kiwi/core/protocol.ts"
@@ -62,6 +63,7 @@ export class LiveDoc implements Shared {
   private readonly waiting = new Set<() => void>()
   private readonly unposted: Finished[] = []
   private readonly posting: Posting | null
+  private readonly floorOff: () => void
 
   constructor(
     private readonly open: OpenDoc,
@@ -78,7 +80,9 @@ export class LiveDoc implements Shared {
           this.post(b)
         )
       : null
+    this.floorOff = onWriterFloor(this.doc, this.holdFloor)
     if (th) this.connect(th)
+    else this.holdFloor()
   }
 
   get isReady(): boolean {
@@ -101,6 +105,7 @@ export class LiveDoc implements Shared {
     this.posting?.stop()
     this.pipe?.close()
     this.pipe = null
+    this.floorOff()
     this.doc.off("update", this.onUpdate)
     this.doc.off("afterTransaction", this.onTransaction)
     this.awareness.off("change", this.onAware)
@@ -160,9 +165,14 @@ export class LiveDoc implements Shared {
       })
   }
 
+  private readonly holdFloor = (): void => {
+    if (!this.dead && this.ready && !this.gaveUp) raiseWriterFloor(this.doc, DOC_LEVEL)
+  }
+
   private isNowReady(): void {
     if (this.ready) return
     this.ready = true
+    this.holdFloor()
     for (const l of [...this.waiting]) l()
   }
 

@@ -20,6 +20,7 @@ import { fileDrag, takeDropped } from "@kiwi/app/dropped.ts"
 import { emptyPaste, takePasted } from "@kiwi/app/pasted.ts"
 import { fileView, filesIn, imageView, uploadAll, type DocMedia } from "~/chat/doc/media"
 import { blocksOf, richBlocks } from "@kiwi/core/doc/blocks.ts"
+import { DOC_LEVEL, onWriterFloor, writerFloor } from "@kiwi/core/doc/level.ts"
 import { docFeed, oldestAt, setDocFeed } from "~/chat/doc/finished"
 import { postedBlocks } from "~/chat/doc/posted"
 import { markdownRules } from "~/chat/doc/rules"
@@ -607,7 +608,12 @@ export function ThreadDoc({
   }, [channel.messages, channel.asks])
   const me = channel.you
   const you = channel.people.find((p) => p.you)
-  const readOnly = !!you?.readOnly
+  const { app } = useApp()
+  const tooOld = useSyncExternalStore(
+    (on) => onWriterFloor(shared.doc, on),
+    () => writerFloor(shared.doc) > DOC_LEVEL
+  )
+  const readOnly = !!you?.readOnly || tooOld
   const canWrite = useRef(!readOnly)
   const latest = useRef(channel)
   const holdRef = useRef(hold)
@@ -827,6 +833,16 @@ export function ThreadDoc({
 
   return (
     <div ref={box} className={cx("thread-doc", readOnly && "is-read-only")} style={{ "--place": JSON.stringify(prompt) } as CSSProperties}>
+      {tooOld && (
+        <p className="doc-old">
+          A newer Channels writes here. You can read; typing comes back with the new look.
+          {app.account?.uiUpdate && (
+            <button type="button" onClick={() => app.actions.applyUi()}>
+              Switch
+            </button>
+          )}
+        </p>
+      )}
       <div ref={mount} />
       {dropping && (
         <div className="doc-drop" aria-hidden="true">
