@@ -10,6 +10,7 @@ import type { WakeSeat } from "@kiwi/core/wake.ts";
 import type { Personality } from "@kiwi/core/personality.ts";
 import type { CachedKept, CachedRow, Unread } from "@kiwi/core/cache-row.ts";
 import type { Channel, OpenKind, PresenceFields } from "@kiwi/core/client.ts";
+import type { PipeIn, PipeOut } from "@kiwi/core/doc/held-pipe.ts";
 import type { DeviceKeep, MemberPicture, Message, Presence, ReadMark } from "@kiwi/core/protocol.ts";
 import type { TextStep } from "./text-size.ts";
 import type { Wire } from "./wire.ts";
@@ -169,8 +170,11 @@ export interface ChannelOps {
   keep(code: string, state: object): Promise<CachedKept | null>;
   openKept(code: string, sealed: CachedKept): Promise<unknown>;
   follow(code: string, since: number, on: (e: FollowEvent) => void, opts?: FollowOptions): () => void;
+  doc(code: string, thread: string, th: string | null, on: (e: DocEvent) => void): PipeIn;
   nudge(): void;
 }
+
+export type DocEvent = PipeOut | { _tag: "Open"; th: string } | { _tag: "Down" } | { _tag: "Failed"; error: WireError };
 
 export interface HistoryAround {
   seq: number;
@@ -216,6 +220,10 @@ export type KeysAsk =
   | { op: "openKept"; code: string; sealed: Wire }
   | { op: "follow"; code: string; since: number; watch?: boolean }
   | { op: "unfollow"; sub: number }
+  | { op: "doc"; code: string; thread: string; th: string | null }
+  | { op: "docIn"; sub: number; update: string }
+  | { op: "docAware"; sub: number; state: Wire }
+  | { op: "undoc"; sub: number }
   | { op: "nudge" };
 
 export type KeysRequest = KeysAsk & { id: number };

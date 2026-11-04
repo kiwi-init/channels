@@ -4,8 +4,7 @@ import { DEMO_PREFS } from "~/demo/data"
 import { useDemo } from "~/demo/provider"
 import { SHOTS } from "~/demo/shots"
 import { seedThreadDoc } from "~/demo/thread-doc"
-import { setThreadDocs } from "~/chat/doc/switch"
-import { spotKey } from "~/places"
+import { docThread } from "@kiwi/core/doc/threads.ts"
 import type { Prefs } from "~/model"
 import { navigate, startNav, useKeepPlace, type Go, type Nav } from "~/nav"
 import { Root } from "~/shell/root"
@@ -21,10 +20,8 @@ const look: Partial<Prefs> = { ...shot?.prefs, ...(theme === "light" || theme ==
 
 export const demoPrefs: Prefs = { ...DEMO_PREFS, ...look }
 
-if (shot?.docs !== undefined && shot.channel && shot.nav?.where) {
-  setThreadDocs(true)
-  seedThreadDoc(spotKey(shot.channel, shot.nav.where), shot.docs)
-}
+const seeded = shot?.nav?.where
+if (shot?.docs !== undefined && shot.channel && seeded && seeded.kind !== "dm" && seeded.kind !== "theirs") seedThreadDoc(shot.channel, docThread(seeded), shot.docs)
 
 const SWITCH_AFTER_MS = 400
 

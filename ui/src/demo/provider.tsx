@@ -13,6 +13,7 @@ import { homeOf, saidIn } from "~/home"
 import type { Account, Actions, App, Enrolling, Finding, GithubSignIn, ThisComputer, Channel, ChannelTile, GoneChannel, Message, Prefs, Spec, Task } from "~/model"
 import { deletedTheme, savedTheme } from "~/theme/themes"
 import { announce } from "~/kit/toasts"
+import { demoDocs, openDemoDoc } from "~/demo/doc-hub"
 import { muteKey } from "~/live/mute"
 
 const unticked = (text: string): string => text.replace(/^(\s*[-*+]\s+)\[[xX]\]/gm, "$1[ ]").trim()
@@ -300,7 +301,7 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
       DEMO_WAITING,
       DEMO_INTERLINKED,
       scenario === "member" ? DEMO_GUEST_MEMBER : DEMO_GUEST,
-    ].map((c) => [c.code, c])
+    ].map((c) => [c.code, { ...c, docs: demoDocs(c.code) }])
   )
   if (scenario === "updates")
     return { account: { ...DEMO_ACCOUNT, uiUpdate: { version: "dev-1542" }, update: { version: "2026.10.7", ready: true, state: "ready" } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
@@ -401,6 +402,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       },
       retry: (code, seq) => edit(code, (c) => ({ ...c, messages: c.messages.map((m) => (m.seq === seq ? { ...m, failed: undefined } : m)) })),
       loadImage: () => {},
+      openDoc: (code, thread, th, on) => openDemoDoc(code, thread, th, on),
       setAgentColor: (code, name, color) => edit(code, (c) => ({ ...c, people: c.people.map((p) => (p.name === name ? { ...p, color: color ?? undefined } : p)) })),
       leaveRoom: (code, room) => edit(code, (c) => ({ ...c, rooms: c.rooms.filter((r) => r.id !== room) })),
       markRead: (code, where) =>

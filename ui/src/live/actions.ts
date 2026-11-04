@@ -162,6 +162,7 @@ export function makeActions(): Actions {
       const last = lastIn(run.messages, run.state, run.me, where)
       if (last) markSeenIn(run.roomId, { [seenKeyOf(run.state, where, run.me)]: last })
     },
+    openDoc: (code, thread, th, on) => link(code).doc(thread, th, on),
     followThread: (code, root, on) => {
       const run = need(code)
       markSeenIn(run.roomId, { [followKey(root)]: followMark(seenIn(run.roomId)[followKey(root)], run.messages.at(-1)?.seq ?? 0, on) })
