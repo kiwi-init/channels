@@ -85,6 +85,7 @@ export class ThreadDoc {
   private sealedWith: string | null = null;
   private stale = false;
   private hole: { dseq: number; e: number | undefined } | null = null;
+  private skipped: number | null = null;
   private readonly big = new Set<string>();
   private snapping: { id: string; covers: string[] } | null = null;
   private snapFails = 0;
@@ -119,7 +120,7 @@ export class ThreadDoc {
 
   save(): DocSaved {
     const unsent = [...this.pending, ...this.inFlight.values()];
-    const head = this.hole ? Math.min(this.head, this.hole.dseq - 1) : this.head;
+    const head = Math.min(this.covered(), this.hole ? this.hole.dseq - 1 : this.head);
     return { head, state: Y.encodeStateAsUpdate(this.doc), unsent: unsent.length ? Y.mergeUpdates(unsent) : null };
   }
 
@@ -259,13 +260,17 @@ export class ThreadDoc {
 
   private async compact(): Promise<void> {
     if (this.closed || !this.ready || this.hole || this.snapping) return;
-    const upto = Math.max(this.head, this.top);
-    if (upto === 0) return;
+    const upto = Math.min(Math.max(this.head, this.top), this.covered());
+    if (upto <= 0) return;
     const id = b64url(crypto.getRandomValues(new Uint8Array(12)));
     const sealed = await this.seal(Y.encodeStateAsUpdate(this.doc));
     this.stale = false;
     this.snapping = { id, covers: [...this.big] };
     this.o.links.send({ t: "doc.snap", id, th: this.th, upto, ...sealed });
+  }
+
+  private covered(): number {
+    return this.skipped === null ? Infinity : this.skipped - 1;
   }
 
   private landed(id: string, seq: number): void {
@@ -342,7 +347,9 @@ export class ThreadDoc {
       if (!this.hole || f.dseq < this.hole.dseq) this.hole = { dseq: f.dseq, e: f.e };
       return;
     }
-    if (update) {
+    if (!update) {
+      if (this.skipped === null || f.dseq < this.skipped) this.skipped = f.dseq;
+    } else {
       for (const [id, mine] of this.inFlight) if (!f.snap && sameBytes(mine, update)) this.landed(id, f.dseq);
       Y.applyUpdate(this.doc, update, REMOTE);
     }
