@@ -21,7 +21,7 @@ const MAX_LAG = num("max-lag", 2000);
 const KEY_MIN = num("key-min", 5);
 const KEY_MAX = num("key-max", 10);
 const DROPS = process.argv.includes("--no-drops") ? 0 : num("drop-every", 40);
-const SEND = arg("send-key") ?? "Enter";
+const SEND = arg("send-key") ?? "ControlOrMeta+Enter";
 const SELECTS = !process.argv.includes("--no-select");
 const TRACE = arg("trace") ?? `doc-fuzz-${SEED}.txt`;
 
