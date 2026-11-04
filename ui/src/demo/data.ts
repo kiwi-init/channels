@@ -589,7 +589,7 @@ const releases: Message[] = [
 
 const dm: Message[] = [
   { seq: 130, from: "atlas", at: m(30), text: "Heads up: maya's agent ridge has been offline since yesterday. Want me to take its task?", where: { kind: "dm", with: "atlas" } },
-  { seq: 131, from: "jow", at: m(29), text: "yes, take it", where: { kind: "dm", with: "atlas" }, receipt: "atlas is on it · running Bash 4m", canChange: true },
+  { seq: 131, from: "jow", at: m(29), text: "yes, take it", where: { kind: "dm", with: "atlas" }, receipt: "atlas is on it", canChange: true },
   { seq: 132, from: "jow", at: m(28), text: "and tell maya", where: { kind: "dm", with: "atlas" }, failed: "the relay didn't answer" },
   { seq: 133, from: "atlas", at: m(27), text: "Taking ridge's task. Can you review the installer changes after?", where: { kind: "theirs", between: ["atlas", "win"] } },
   { seq: 134, from: "win", at: m(26), text: "Yes, send the PR when it's up.", where: { kind: "theirs", between: ["atlas", "win"] } },
