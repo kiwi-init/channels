@@ -116,6 +116,34 @@ describe("an agent's ask stays a plain message that 2026.11.7 desktops and phone
     expect(plain.block).toBeUndefined();
   });
 
+  const until = async (ok: () => boolean) => {
+    const deadline = Date.now() + 5_000;
+    while (!ok() && Date.now() < deadline) await Bun.sleep(20);
+    return ok();
+  };
+  const inDoc = (text: string) => blocksOf(general.doc).some((b) => b.text.includes(text));
+
+  test("a send or reply the client or relay refuses after its block is written takes the block back out (T1353)", async () => {
+    const at = { key: "main", th: general.th };
+    const asked = await run(dev.send("which build?"));
+    await expect(run(dev.sendToDoc("REFUSED-ROOM the second one", at, { re: [asked], room: "desgin" }))).rejects.toThrow(/no room desgin/);
+    await expect(run(dev.sendToDoc(`REFUSED-LONG ${"x".repeat(100_000)}`, at))).rejects.toThrow(/at most 100,000/);
+    await expect(run(dev.reply(asked, `REFUSED-REPLY ${"y".repeat(100_000)}`, "msg", undefined, {}, at))).rejects.toThrow(/at most 100,000/);
+    await Bun.sleep(300);
+    for (const text of ["REFUSED-ROOM", "REFUSED-LONG", "REFUSED-REPLY"]) expect({ text, inDoc: inDoc(text) }).toEqual({ text, inDoc: false });
+  });
+
+  test("kiwi delete takes the message's block out of the doc, and kiwi edit rewrites it (T1353)", async () => {
+    const at = { key: "main", th: general.th };
+    const gone = await run(dev.sendToDoc("DELETE-ME the staging password is hunter2", at));
+    const edited = await run(dev.sendToDoc("EDIT-ME merged in #12", at));
+    expect(await until(() => inDoc("DELETE-ME") && inDoc("EDIT-ME"))).toBe(true);
+    await run(dev.change(gone, null));
+    await run(dev.change(edited, "EDIT-ME merged in #13"));
+    expect(await until(() => !inDoc("hunter2") && inDoc("merged in #13"))).toBe(true);
+    expect(inDoc("merged in #12")).toBe(false);
+  });
+
   test("an ask that answers a message stays a plain message in that message's thread", async () => {
     const said = await run(dev.send("the audit clears evidence on edit"));
     const reply = await run(dev.escalate("Which way?", said, undefined, { choices: ["A: refuse", "B: rebuild"] }));

@@ -42,6 +42,8 @@ describe("where a send goes: the doc of its place, when one is open (T570)", () 
     expect(docPlaceOf(state, { re: [21] })).toBeNull();
     expect(docPlaceOf(state, { re: [22] })).toBeNull();
     expect(docPlaceOf(state, { re: [13] })).toBeNull();
+    expect(docPlaceOf(state, { re: [12], room: "design" })).toBeNull();
+    expect(docPlaceOf(state, { re: [20], room: "design" })).toEqual({ key: "task:7", th });
   });
 });
 
