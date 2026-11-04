@@ -1,4 +1,4 @@
-import { useEffect, useState, type RefObject } from "react"
+import { useEffect, useRef, useState, type RefObject } from "react"
 import { createPortal } from "react-dom"
 
 import { cleanExcerpt } from "~/chat/quote"
@@ -44,6 +44,10 @@ function pickedIn(root: HTMLElement): Picked | null {
 
 export function QuotePick({ root, onQuote }: { root: RefObject<HTMLElement | null>; onQuote: (seq: number, excerpt: string) => void }) {
   const [picked, setPicked] = useState<Picked | null>(null)
+  const showing = useRef(false)
+  useEffect(() => {
+    showing.current = picked !== null
+  }, [picked])
   useEffect(() => {
     let frame = 0
     const look = () => {
@@ -61,6 +65,7 @@ export function QuotePick({ root, onQuote }: { root: RefObject<HTMLElement | nul
       else if (e.shiftKey || e.key === "Shift") look()
     }
     const changed = () => {
+      if (!showing.current) return
       const sel = document.getSelection()
       if (!sel || sel.isCollapsed) setPicked(null)
     }

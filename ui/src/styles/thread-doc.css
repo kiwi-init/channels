@@ -28,6 +28,11 @@
   margin-top: 0;
 }
 
+.thread-doc .blk:not(.is-here) {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 52px;
+}
+
 .thread-doc .blk.is-hidden {
   display: none;
 }
@@ -148,6 +153,7 @@
 }
 
 .doc-caret-tag {
+  animation: doc-tag-idle 4s var(--ease) forwards;
   position: absolute;
   bottom: 100%;
   left: -2px;
@@ -162,4 +168,74 @@
 
 .doc-sel {
   background: color-mix(in srgb, var(--member, var(--accent)) 24%, transparent);
+}
+
+@keyframes doc-tag-idle {
+  0%,
+  75% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .doc-caret-tag {
+    animation-timing-function: steps(1, end);
+  }
+}
+
+.blk-body strong {
+  font-weight: 600;
+}
+
+.blk-body s {
+  color: var(--ink-2);
+}
+
+.blk-body ul,
+.blk-body ol {
+  margin: 2px 0;
+  padding-left: 1.4em;
+}
+
+.blk-body ul {
+  list-style: disc;
+}
+
+.blk-body ol {
+  list-style: decimal;
+}
+
+.blk-body li > p {
+  min-height: 0;
+}
+
+.blk-body pre {
+  margin: 4px 0;
+  padding: 8px 12px;
+  border-radius: var(--r-ctl);
+  background: var(--bg-3);
+  font: var(--t-meta) / 1.5 var(--mono);
+  white-space: pre-wrap;
+}
+
+.blk-body pre code {
+  padding: 0;
+  background: none;
+  font: inherit;
+}
+
+.doc-mention {
+  padding: 0 2px;
+  border-radius: var(--r-tag);
+  background: var(--accent-wash);
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.thread-doc .doc-suggest {
+  bottom: auto;
 }

@@ -126,6 +126,7 @@ export function useStick(following = true) {
   }, [following])
   const anchor = useRef<Anchor | null>(null)
   const height = useRef(0)
+  const held = useRef(false)
 
   const settle = useCallback(() => {
     const box = scroller.current
@@ -149,7 +150,7 @@ export function useStick(following = true) {
     const list = content.current
     if (!box || !list) return
     if (height.current && list.offsetHeight !== height.current) settle()
-    stuck.current = live.current && box.scrollHeight - box.scrollTop - box.clientHeight < NEAR_BOTTOM
+    stuck.current = live.current && !held.current && box.scrollHeight - box.scrollTop - box.clientHeight < NEAR_BOTTOM
     anchor.current = stuck.current ? null : anchorIn(box, list)
     height.current = list.offsetHeight
   }, [settle])
@@ -182,7 +183,21 @@ export function useStick(following = true) {
     anchor.current = null
   }, [])
 
-  return { scroller, content, stuck, live, remember, settle, toBottom, toOffset, unstick }
+  const hold = useCallback(
+    (on: boolean) => {
+      if (held.current === on) return
+      held.current = on
+      if (on) {
+        stuck.current = false
+        const box = scroller.current
+        const list = content.current
+        anchor.current = box && list ? anchorIn(box, list) : null
+      } else remember()
+    },
+    [remember]
+  )
+
+  return { scroller, content, stuck, live, remember, settle, toBottom, toOffset, unstick, hold }
 }
 
 export function Conversation({ channel, jump }: { channel: Channel; jump: Jump | null }) {
@@ -285,7 +300,7 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
   const start = firstAt >= 0 && firstAt < end ? firstAt : Math.max(0, end - TAIL)
   const following = end === list.length
   const latest = useRef(false)
-  const { scroller, content, stuck, live, remember, settle, toBottom, toOffset, unstick } = useStick(following)
+  const { scroller, content, stuck, live, remember, settle, toBottom, toOffset, unstick, hold } = useStick(following)
   const replying = useReplying()
   const quote = useCallback(
     (seq: number, excerpt: string) => {
@@ -564,7 +579,7 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
           )}
           {doc && following && !channel.loading && (
             <Suspense fallback={null}>
-              <LocalThreadDoc channel={channel} where={where} docKey={doc} />
+              <LocalThreadDoc channel={channel} where={where} docKey={doc} hold={hold} />
             </Suspense>
           )}
           {working.length > 0 && !channel.loading && <Working people={working} />}

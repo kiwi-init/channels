@@ -35,6 +35,7 @@ function metaOf(el: Y.XmlElement): BlockMeta | null {
 function textOf(node: Y.XmlElement | Y.XmlText | Y.XmlHook): string {
   if (node instanceof Y.XmlText) return node.toString().replace(/<[^>]*>/g, "");
   if (!(node instanceof Y.XmlElement)) return "";
+  if (node.nodeName === "mention") return `@${node.getAttribute("name") ?? ""}`;
   const parts = node.toArray().map((c) => textOf(c));
   return node.nodeName === "paragraph" ? parts.join("") : parts.join("\n");
 }
