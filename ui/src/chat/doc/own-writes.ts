@@ -1,5 +1,5 @@
 import { Fragment, Node, type Slice } from "prosemirror-model"
-import { EditorState } from "prosemirror-state"
+import { EditorState, TextSelection, type Selection, type Transaction } from "prosemirror-state"
 import { ProsemirrorBinding, ySyncPluginKey, yXmlFragmentToProseMirrorRootNode } from "y-prosemirror"
 import * as Y from "yjs"
 
@@ -216,12 +216,198 @@ function outOfStep(doc: Node, root: Y.XmlFragment, missed: Set<string>): boolean
   return behind
 }
 
+function sameLines(doc: Node, root: Y.XmlFragment): boolean {
+  const drawn = keysOfDoc(doc)
+  const stored = keysOf(root.toArray().map((el) => (el instanceof Y.XmlElement && typeof el.getAttribute("id") === "string" ? String(el.getAttribute("id")) : "")))
+  return drawn.length === stored.length && drawn.every((k, i) => k === stored[i])
+}
+
 export interface OwnWrites {
   touched: (before: Node, after: Node) => void
   stop: () => void
 }
 
-export function writeOwnLinesOnly(state: EditorState, shown: () => Node | null): OwnWrites | null {
+export interface Seen {
+  state: EditorState
+  dispatch: (tr: Transaction) => void
+}
+
+interface Spot {
+  key: string
+  at: number
+}
+
+function spotOf(doc: Node, pos: number): Spot | null {
+  const $p = doc.resolve(pos)
+  if ($p.depth < 1) return null
+  const key = keysOfDoc(doc)[$p.index(0)]
+  return key === undefined ? null : { key, at: pos - $p.before(1) }
+}
+
+function tokensOf(n: Node): string[] {
+  const out: string[] = []
+  n.forEach((c) => {
+    if (c.isText) out.push(...(c.text ?? "").split(""))
+    else if (c.isLeaf) out.push(`<${c.type.name} ${JSON.stringify(c.attrs)}>`)
+    else out.push(`<${c.type.name}`, ...tokensOf(c), ">")
+  })
+  return out
+}
+
+interface Hunk {
+  a0: number
+  a1: number
+  b0: number
+  b1: number
+}
+
+const MAX_EDITS = 2_000
+const CONTEXT = 24
+
+function hunksOf(a: readonly string[], b: readonly string[]): Hunk[] | null {
+  let head = 0
+  while (head < a.length && head < b.length && a[head] === b[head]) head++
+  let tail = 0
+  while (tail < a.length - head && tail < b.length - head && a[a.length - 1 - tail] === b[b.length - 1 - tail]) tail++
+  const n = a.length - head - tail
+  const m = b.length - head - tail
+  if (!n && !m) return []
+  if (!n || !m) return [{ a0: head, a1: head + n, b0: head, b1: head + m }]
+  const inner = n < m ? within(b, head, m, a.slice(head, head + n)) : within(a, head, n, b.slice(head, head + m))
+  if (inner !== null) {
+    const out =
+      n < m
+        ? [
+            { a0: head, a1: head, b0: head, b1: head + inner },
+            { a0: head + n, a1: head + n, b0: head + inner + n, b1: head + m },
+          ]
+        : [
+            { a0: head, a1: head + inner, b0: head, b1: head },
+            { a0: head + inner + m, a1: head + n, b0: head + m, b1: head + m },
+          ]
+    return out.filter((h) => h.a1 > h.a0 || h.b1 > h.b0)
+  }
+  const most = Math.min(n + m, MAX_EDITS)
+  const off = most + 1
+  const v = new Int32Array(2 * most + 3)
+  const trace: Int32Array[] = []
+  const at = (x: number, y: number): boolean => a[head + x] === b[head + y]
+  for (let d = 0; d <= most; d++) {
+    trace.push(v.slice(off - d, off + d + 1))
+    for (let k = -d; k <= d; k += 2) {
+      let x = k === -d || (k !== d && v[off + k - 1]! < v[off + k + 1]!) ? v[off + k + 1]! : v[off + k - 1]! + 1
+      let y = x - k
+      while (x < n && y < m && at(x, y)) {
+        x++
+        y++
+      }
+      v[off + k] = x
+      if (x >= n && y >= m) return walkBack(trace, n, m, d, head)
+    }
+  }
+  return null
+}
+
+function within(big: readonly string[], head: number, size: number, small: readonly string[]): number | null {
+  const found = places(big.slice(head, head + size), small, 0)
+  return found.length === 1 ? found[0]! : null
+}
+
+function walkBack(trace: Int32Array[], n: number, m: number, last: number, head: number): Hunk[] {
+  const out: Hunk[] = []
+  let x = n
+  let y = m
+  for (let d = last; d > 0; d--) {
+    const v = trace[d]!
+    const k = x - y
+    const pk = k === -d || (k !== d && v[d + k - 1]! < v[d + k + 1]!) ? k + 1 : k - 1
+    const px = v[d + pk]!
+    const py = px - pk
+    while (x > px && y > py) {
+      x--
+      y--
+    }
+    const step: Hunk = { a0: head + px, a1: head + x, b0: head + py, b1: head + y }
+    const next = out[0]
+    if (next && next.a0 === step.a1 && next.b0 === step.b1) out[0] = { a0: step.a0, a1: next.a1, b0: step.b0, b1: next.b1 }
+    else out.unshift(step)
+    x = px
+    y = py
+  }
+  return out
+}
+
+function mapThrough(hunks: readonly Hunk[], p: number): number {
+  let delta = 0
+  for (const h of hunks) {
+    if (p < h.a0 || (p === h.a0 && h.a1 > h.a0)) break
+    if (p < h.a1) return h.b1
+    delta = h.b1 - h.a1
+  }
+  return p + delta
+}
+
+function places(b: readonly string[], run: readonly string[], from: number): number[] {
+  const out: number[] = []
+  for (let i = from; i + run.length <= b.length && out.length < 2; i++) {
+    let k = 0
+    while (k < run.length && b[i + k] === run[k]) k++
+    if (k === run.length) out.push(i)
+  }
+  return out
+}
+
+function onlyRun(b: readonly string[], runs: (k: number) => readonly string[], most: number, from: number): { at: number; len: number } | null {
+  for (let k = most; k > 0; k--) {
+    const run = runs(k)
+    const at = places(b, run, from)
+    if (at.length === 1) return { at: at[0]!, len: run.length }
+    if (at.length > 1) return null
+  }
+  return null
+}
+
+function anchored(a: readonly string[], b: readonly string[], p: number): number | null {
+  const left = onlyRun(b, (k) => a.slice(p - k, p), Math.min(CONTEXT, p), 0)
+  const after = (from: number) => onlyRun(b, (k) => a.slice(p, p + k), Math.min(CONTEXT, a.length - p), from)
+  if (!left) return after(0)?.at ?? null
+  const q = left.at + left.len
+  const right = after(q)
+  return right && right.at === after(0)?.at ? right.at : q
+}
+
+function mapped(a: readonly string[], b: readonly string[], p: number): number {
+  const hunks = hunksOf(a, b)
+  if (hunks) return mapThrough(hunks, p)
+  return anchored(a, b, p) ?? b.length
+}
+
+function placeOf(before: Node, after: Node, spot: Spot): number | null {
+  const keys = keysOfDoc(after)
+  const i = keys.indexOf(spot.key)
+  const j = keysOfDoc(before).indexOf(spot.key)
+  if (i < 0 || j < 0) return null
+  let start = 0
+  for (let k = 0; k < i; k++) start += after.child(k).nodeSize
+  const now = after.child(i)
+  const moved = mapped(tokensOf(before.child(j)), tokensOf(now), spot.at - 1)
+  return start + 1 + Math.min(Math.max(moved, 0), now.content.size)
+}
+
+function keptSelection(before: EditorState, after: EditorState): Selection | null {
+  const sel = before.selection
+  if (!(sel instanceof TextSelection)) return null
+  const anchor = spotOf(before.doc, sel.anchor)
+  const head = spotOf(before.doc, sel.head)
+  const a = anchor && placeOf(before.doc, after.doc, anchor)
+  const h = head && placeOf(before.doc, after.doc, head)
+  if (a === null || h === null) return null
+  const $a = after.doc.resolve(a)
+  const $h = after.doc.resolve(h)
+  return $a.parent.inlineContent && $h.parent.inlineContent ? TextSelection.create(after.doc, a, h) : TextSelection.between($a, $h, -1)
+}
+
+export function writeOwnLinesOnly(state: EditorState, seen: () => Seen | null): OwnWrites | null {
   const binding = bindingOf(state)
   if (!binding) return null
   const touched: Touched = { lines: new Map(), gone: new Set() }
@@ -233,25 +419,34 @@ export function writeOwnLinesOnly(state: EditorState, shown: () => Node | null):
     redrawing = false
     const view: unknown = binding.prosemirrorView
     if (stopped || !view || typeof view !== "object" || ("isDestroyed" in view && view.isDestroyed === true)) return
+    const before = seen()?.state ?? null
     binding._forceRerender()
     missed.clear()
+    const now = seen()
+    const kept = before && now ? keptSelection(before, now.state) : null
+    if (now && kept && !kept.eq(now.state.selection)) now.dispatch(now.state.tr.setSelection(kept).setMeta(ySyncPluginKey, { isChangeOrigin: true }).setMeta("addToHistory", false))
   }
   const soon = (): void => {
     if (redrawing) return
     redrawing = true
     queueMicrotask(redraw)
   }
+  let lines = false
   const check = (): void => {
-    const doc = shown()
-    if (!stopped && doc && missed.size && outOfStep(doc, binding.type, missed)) soon()
+    const doc = seen()?.state.doc ?? null
+    const moved = lines
+    lines = false
+    if (stopped || !doc) return
+    if ((moved && !sameLines(doc, binding.type)) || (missed.size && outOfStep(doc, binding.type, missed))) soon()
   }
   const watch = (events: Y.YEvent<Y.AbstractType<unknown>>[], tr: Y.Transaction): void => {
     if (tr.origin === ySyncPluginKey) return
     for (const e of events) {
+      if (e.target === binding.type) lines = true
       const id = topLine(e.target, binding.type)
       if (id) missed.add(id)
     }
-    if (missed.size) queueMicrotask(check)
+    if (missed.size || lines) queueMicrotask(check)
   }
   binding.type.observeDeep(watch)
   binding._prosemirrorChanged = (doc) => {

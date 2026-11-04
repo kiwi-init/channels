@@ -424,7 +424,7 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
       steadyPlugin(opts.scroller, opts.hold, me),
     ],
   })
-  const own = writeOwnLinesOnly(state, () => (view.isDestroyed ? null : view.state.doc))
+  const own = writeOwnLinesOnly(state, () => (view.isDestroyed ? null : view))
   const view: EditorView = new EditorView(mount, {
     state,
     editable: opts.editable,

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import * as Y from "yjs"
 import { blocksOf } from "@kiwi/core/doc/blocks.ts"
-import { EditorState, type Plugin, type PluginView, type Transaction } from "prosemirror-state"
+import { EditorState, TextSelection, type Plugin, type PluginView, type Transaction } from "prosemirror-state"
 import type { EditorView } from "prosemirror-view"
 import { ySyncPlugin, ySyncPluginKey } from "y-prosemirror"
 
@@ -24,7 +24,7 @@ const remote = (tr: Transaction): boolean => {
 function editor(doc: Y.Doc, guarded: boolean): Editor {
   const sync: Plugin = ySyncPlugin(doc.getXmlFragment(FRAGMENT))
   let state = EditorState.create({ schema, plugins: [sync] })
-  const own = guarded ? writeOwnLinesOnly(state, () => state.doc) : null
+  const own = guarded ? writeOwnLinesOnly(state, () => ({ state, dispatch: (tr) => host.dispatch(tr) })) : null
   const views: PluginView[] = []
   const host = {
     get state() {
@@ -262,5 +262,126 @@ describe("an editor writes only the lines it changed, so a peer out of step neve
     me.dispatch(me.state().tr.delete(0, first.nodeSize))
     typeAtEnd(me, "jow", "!")
     expect(texts(doc)).toEqual(["jow: two!"])
+  })
+
+  test("a redraw keeps your caret and selection where they were in your line, even when a line lands above or letters land before them", async () => {
+    const select = (e: Editor, from: number, to: number) => e.dispatch(e.state().tr.setSelection(TextSelection.create(e.state().doc, from, to)))
+    const typeHere = (e: Editor, text: string) => e.dispatch(e.state().tr.insertText(text))
+    const lineAbove = (e: Editor) => {
+      const line = schema.nodes.block!.create({ id: "jow-top", author: "jow", at: 0 }, schema.nodes.paragraph!.create(null, schema.text("jow line")))
+      e.dispatch(e.state().tr.insert(0, line))
+    }
+    const lettersBefore = (e: Editor) => e.dispatch(e.state().tr.insertText("XX", lineStart(e, "dad")))
+    const pasted = (e: Editor) => {
+      e.dispatch(e.state().tr.insertText("Y".repeat(2001), lineStart(e, "dad") + 5))
+      e.dispatch(e.state().tr.insertText("X".repeat(2001), lineStart(e, "dad")))
+    }
+    const lettersAround = (e: Editor) => {
+      e.dispatch(e.state().tr.insertText("YY", lineStart(e, "dad") + 5))
+      lettersBefore(e)
+    }
+    for (const [what, missed, from, to, want] of [
+      ["a caret under a line that lands above", lineAbove, 4, 4, ["jow: jow line", "dad: bom ?¿dia!"]],
+      ["a selection under a line that lands above", lineAbove, 4, 6, ["jow: jow line", "dad: bom ?¿a!"]],
+      ["a caret after letters that land before it in your line", lettersBefore, 3, 3, ["dad: XXbom?¿ dia!"]],
+      ["a selection after letters that land before it in your line", lettersBefore, 0, 3, ["dad: XX?¿ dia!"]],
+      ["a caret between two separate edits in your line", lettersAround, 3, 3, ["dad: XXbom?¿ dYYia!"]],
+      ["a selection between two separate edits in your line", lettersAround, 1, 3, ["dad: XXb?¿ dYYia!"]],
+      ["a caret between two pastes of 2001 letters each", pasted, 3, 3, [`dad: ${"X".repeat(2001)}bom?¿ d${"Y".repeat(2001)}ia!`]],
+      ["a selection between two pastes of 2001 letters each", pasted, 1, 3, [`dad: ${"X".repeat(2001)}b?¿ d${"Y".repeat(2001)}ia!`]],
+    ] as const) {
+      const desk = new Y.Doc()
+      const peer = new Y.Doc()
+      const sync = net(desk, peer)
+      const jow = editor(desk, true)
+      const dad = editor(peer, true)
+      await Promise.resolve()
+      dad.dispatch(startBlock(dad.state(), "dad", 1))
+      dad.dispatch(dad.state().tr.insertText("bom dia"))
+      sync()
+      await settle()
+      missed(jow)
+      const at = lineStart(dad, "dad")
+      select(dad, at + from, at + to)
+      let once = true
+      peer.on("update", (_u: Uint8Array, o: unknown) => {
+        if (!once || o === NET) return
+        once = false
+        sync()
+      })
+      const end = lineStart(dad, "dad") + dad.state().doc.child(dad.state().doc.childCount - 1).content.size - 2
+      dad.dispatch(dad.state().tr.insert(end, schema.text("!")))
+      await settle()
+      expect([what, dad.state().selection.empty]).toEqual([what, from === to])
+      typeHere(dad, "?")
+      await settle()
+      typeHere(dad, "¿")
+      sync()
+      await settle()
+      expect([what, texts(desk)]).toEqual([what, want])
+      expect(texts(peer)).toEqual(texts(desk))
+    }
+  })
+
+  test("in a line of repeated letters, a redraw after big pastes keeps a valid caret in your line", async () => {
+    const a = "a".repeat(80)
+    const r = (c: string, n: number) => c.repeat(n)
+    for (const [what, pastes, want] of [
+      [
+        "two pastes around the caret, within reach of the diff",
+        [
+          [79, "Y", 600],
+          [0, "X", 600],
+        ],
+        `${r("X", 600)}${r("a", 30)}?¿${r("a", 49)}${r("Y", 600)}a!`,
+      ],
+      [
+        "two pastes of 1500 around the caret",
+        [
+          [50, "Y", 1500],
+          [0, "X", 1500],
+        ],
+        `${r("X", 1500)}${r("a", 30)}?¿${r("a", 20)}${r("Y", 1500)}${r("a", 30)}!`,
+      ],
+      [
+        "three pastes and no unique context: the end of your line",
+        [
+          [50, "Y", 1500],
+          [20, "Z", 1500],
+          [0, "X", 1500],
+        ],
+        `${r("X", 1500)}${r("a", 20)}${r("Z", 1500)}${r("a", 30)}${r("Y", 1500)}${r("a", 30)}!?¿`,
+      ],
+    ] as const) {
+      const desk = new Y.Doc()
+      const peer = new Y.Doc()
+      const sync = net(desk, peer)
+      const jow = editor(desk, true)
+      const dad = editor(peer, true)
+      await Promise.resolve()
+      dad.dispatch(startBlock(dad.state(), "dad", 1))
+      dad.dispatch(dad.state().tr.insertText(a))
+      sync()
+      await settle()
+      for (const [at, c, n] of pastes) jow.dispatch(jow.state().tr.insertText(r(c, n), lineStart(jow, "dad") + at))
+      const start = lineStart(dad, "dad")
+      dad.dispatch(dad.state().tr.setSelection(TextSelection.create(dad.state().doc, start + 30)))
+      let once = true
+      peer.on("update", (_u: Uint8Array, o: unknown) => {
+        if (!once || o === NET) return
+        once = false
+        sync()
+      })
+      dad.dispatch(dad.state().tr.insert(start + a.length, schema.text("!")))
+      await settle()
+      expect([what, dad.state().selection.$head.parent.inlineContent]).toEqual([what, true])
+      dad.dispatch(dad.state().tr.insertText("?"))
+      await settle()
+      dad.dispatch(dad.state().tr.insertText("¿"))
+      sync()
+      await settle()
+      expect([what, texts(desk)]).toEqual([what, [`dad: ${want}`]])
+      expect(texts(peer)).toEqual(texts(desk))
+    }
   })
 })
