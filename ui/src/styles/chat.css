@@ -851,6 +851,16 @@ button.msg-image-spot:hover {
   white-space: pre-wrap;
 }
 
+.ask-seq {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .ask-step,
 .ask-step-answer {
   display: grid;

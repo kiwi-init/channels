@@ -2,13 +2,14 @@ import { useEffect, useState } from "react"
 
 import { HANDOFF_DONE, HANDOFF_FAILED } from "@kiwi/core/protocol.ts"
 import { bridge } from "@kiwi/secrets/secrets.ts"
+import { jumpTo } from "~/chat/reply"
 import { StepAnswer, StepHow } from "~/chat/step"
 import { cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { clock } from "~/kit/time"
 import { announce } from "~/kit/toasts"
 import type { Channel, QuestionAsk } from "~/model"
-import { useAct } from "~/nav"
+import { useAct, useApp } from "~/nav"
 import { nickname } from "~/names"
 
 type Handoff = NonNullable<QuestionAsk["handoff"]>
@@ -46,6 +47,38 @@ function HandoffLink({ handoff, now }: { handoff: Handoff; now: number }) {
   )
 }
 
+type Closed = NonNullable<QuestionAsk["closed"]>
+
+function seeAsk(seq: number, go: ReturnType<typeof useApp>["go"]): void {
+  if (!jumpTo(document.body, seq)) go({ to: "panel", panel: { kind: "thread", seq } })
+}
+
+function ClosedAsk({ channel, closed }: { channel: Channel; closed: Closed }) {
+  const { go } = useApp()
+  const who = closed.by === channel.you ? "you" : nickname(channel, closed.by)
+  const parts = closed.why?.split(/(#\d+)/) ?? []
+  return (
+    <div className="ask-done">
+      <p>
+        Closed by {who} <time>{clock(closed.at)}</time>
+      </p>
+      {closed.why && (
+        <p className="ask-reply">
+          {parts.map((part, i) =>
+            /^#\d+$/.test(part) ? (
+              <button key={i} type="button" className="ask-seq" onClick={() => seeAsk(Number(part.slice(1)), go)}>
+                {part}
+              </button>
+            ) : (
+              part
+            )
+          )}
+        </p>
+      )}
+    </div>
+  )
+}
+
 export default function QuestionCard({ channel, ask }: { channel: Channel; ask: QuestionAsk }) {
   const { actions } = useAct()
   const free = !ask.step && !ask.handoff && ask.options.length === 0
@@ -76,6 +109,7 @@ export default function QuestionCard({ channel, ask }: { channel: Channel; ask: 
       </div>
     )
   }
+  if (ask.closed) return <ClosedAsk channel={channel} closed={ask.closed} />
   const choice = ask.options.length > 0 && !ask.step && !ask.handoff
   return (
     <div className={cx("ask", choice && "is-choice", free && "is-free")}>
