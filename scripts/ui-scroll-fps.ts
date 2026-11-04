@@ -269,18 +269,18 @@ try {
   report.jumps = jumps.flatMap((f) => f.jumps).length;
   report.jumpMax = round(Math.max(0, ...jumps.flatMap((f) => f.jumps)));
 
-  const composer = page.getByRole("textbox", { name: /^Message/ });
   const sends: Frames[] = [];
   const sendsUp: Frames[] = [];
+  await page.locator(".main .thread-doc .doc-tail").click();
   for (let i = 0; i < RUNS; i++) {
     await page.evaluate(() => document.querySelector(".main .feed")?.scrollTo({ top: 1e9 }));
     await page.waitForTimeout(200);
-    await composer.fill(`perf send ${i}`);
-    sends.push(await watch(page, 1200, () => composer.press("Enter")));
+    await page.keyboard.type(`perf send ${i}`);
+    sends.push(await watch(page, 1200, () => page.keyboard.press("Enter")));
+    await page.keyboard.type(`perf send up ${i}`);
     await page.evaluate(() => document.querySelector(".main .feed")?.scrollBy({ top: -3000 }));
     await page.waitForTimeout(200);
-    await composer.fill(`perf send up ${i}`);
-    sendsUp.push(await watch(page, 1200, () => composer.press("Enter")));
+    sendsUp.push(await watch(page, 1200, () => page.keyboard.press("Enter")));
   }
   report.sendAtBottom = stats(sends, longOn);
   report.sendScrolledUp = stats(sendsUp, longOn);

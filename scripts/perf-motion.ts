@@ -6,7 +6,7 @@ import { chromium, type Page } from "playwright-core";
 import { daemonSock } from "../src/daemon/protocol.ts";
 import { stopDaemon } from "../src/daemon/rpc.ts";
 import { startLocalRelay } from "./local-relay.ts";
-import { approveSpec, firstRun, letIn, newChannel, unfold } from "./perf-ui.ts";
+import { approveSpec, firstRun, letIn, newChannel, unfold, writeBlock } from "./perf-ui.ts";
 import { harnessDist } from "./ui-harness.ts";
 
 if (process.argv.includes("--help")) {
@@ -132,11 +132,14 @@ try {
   await joining;
 
   const say = async (body: string): Promise<string> => {
-    await page.getByRole("textbox", { name: "Message" }).fill(body);
-    await page.keyboard.press("Enter");
-    await page.waitForTimeout(500);
-    const said = (await atlas("log", "-n", "5", "--json")).split("\n").flatMap((l) => (l.trim() ? [JSON.parse(l) as { seq: number; body?: string }] : []));
-    return String(said.find((m) => m.body === body)?.seq ?? "");
+    await writeBlock(page, body);
+    for (let i = 0; i < 50; i++) {
+      const said = (await atlas("log", "-n", "5", "--json")).split("\n").flatMap((l) => (l.trim().startsWith("{") ? [JSON.parse(l) as { seq: number; body?: string }] : []));
+      const seq = said.find((m) => m.body === body)?.seq;
+      if (seq !== undefined) return String(seq);
+      await page.waitForTimeout(200);
+    }
+    return "";
   };
   const ask = await say("Morning. Can someone check the router numbers?");
   const titles = ["Write fewer rows per message", "Polish the conversation feed", "Cache sealed history in the browser", "Ship 0.8.12", "Trim the relay's cold start", "Move the docs to the site"];
@@ -171,7 +174,8 @@ try {
     );
   };
 
-  const reply = page.getByRole("button", { name: /^1 reply/ }).first();
+  const answer = page.locator("article.msg", { hasText: "p50 0.3ms" }).first();
+  const reply = { click: () => answer.hover().then(() => answer.getByRole("button", { name: "Reply in thread" }).click()) };
   const closeThread = page.getByRole("complementary", { name: "Details" }).getByRole("button", { name: "Close", exact: true });
   await measure(
     "thread open",

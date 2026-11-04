@@ -7,7 +7,7 @@ import { chromium, type CDPSession, type Page, type Request, type WebSocket as P
 import { daemonSock } from "../src/daemon/protocol.ts";
 import { stopDaemon } from "../src/daemon/rpc.ts";
 import { startLocalRelay } from "./local-relay.ts";
-import { approveSpec, firstRun, letIn, newChannel, channelSettings, ROWS, unfold, view } from "./perf-ui.ts";
+import { approveSpec, firstRun, letIn, newChannel, channelSettings, eraseLine, ROWS, unfold, view, writeBlock } from "./perf-ui.ts";
 import { harnessDist } from "./ui-harness.ts";
 
 if (process.argv.includes("--help")) {
@@ -242,37 +242,32 @@ function trace(page: Page, t0: number): () => string[] {
   };
 }
 
-async function send(page: Page, text: string): Promise<{ clearedMs: number; bubbleMs: number }> {
-  const box = page.getByRole("textbox", { name: "Message" }).last();
-  await box.fill(text);
-  await page.evaluate(
-    ([body, rows]) => {
-      const w = window as unknown as { __sent?: Promise<{ clearedMs: number; bubbleMs: number }> };
-      const area = document.querySelectorAll<HTMLTextAreaElement>('textarea[aria-label="Message"]');
-      const el = area[area.length - 1]!;
-      w.__sent = new Promise((done) => {
-        const down = (e: KeyboardEvent) => {
-          if (e.key !== "Enter") return;
-          el.removeEventListener("keydown", down, true);
-          const t0 = performance.now();
-          let cleared = -1;
-          let bubble = -1;
-          const tick = () => {
-            const now = performance.now();
-            if (cleared < 0 && el.value === "") cleared = Math.round(now - t0);
-            if (bubble < 0 && [...document.querySelectorAll(rows)].some((r) => r.textContent?.includes(body))) bubble = Math.round(now - t0);
-            if ((cleared >= 0 && bubble >= 0) || now - t0 > 15000) return done({ clearedMs: cleared, bubbleMs: bubble });
-            requestAnimationFrame(tick);
-          };
+async function send(page: Page, text: string): Promise<{ nextBlockMs: number }> {
+  await page.locator(".thread-doc .doc-tail").last().click();
+  await page.keyboard.type(text);
+  await page.evaluate((body) => {
+    const w = window as unknown as { __sent?: Promise<{ nextBlockMs: number }> };
+    const doc = document.querySelector<HTMLElement>('.thread-doc [role="textbox"][aria-label="Thread"]')!;
+    w.__sent = new Promise((done) => {
+      const down = (e: KeyboardEvent) => {
+        if (e.key !== "Enter") return;
+        doc.removeEventListener("keydown", down, true);
+        const t0 = performance.now();
+        const tick = () => {
+          const now = performance.now();
+          const blocks = [...doc.querySelectorAll(".blk")];
+          const at = blocks.findIndex((b) => b.textContent?.includes(body));
+          const next = at >= 0 ? blocks[at + 1] : undefined;
+          if ((next && !next.querySelector(".blk-body")?.textContent) || now - t0 > 15000) return done({ nextBlockMs: next ? Math.round(now - t0) : -1 });
           requestAnimationFrame(tick);
         };
-        el.addEventListener("keydown", down, true);
-      });
-    },
-    [text, ROWS] as const,
-  );
-  await box.press("Enter");
-  return page.evaluate(() => (window as unknown as { __sent: Promise<{ clearedMs: number; bubbleMs: number }> }).__sent);
+        requestAnimationFrame(tick);
+      };
+      doc.addEventListener("keydown", down, true);
+    });
+  }, text);
+  await page.keyboard.press("Enter");
+  return page.evaluate(() => (window as unknown as { __sent: Promise<{ nextBlockMs: number }> }).__sent);
 }
 
 async function work(cdp: CDPSession): Promise<{ layout: number; style: number }> {
@@ -399,8 +394,7 @@ try {
   const joining = kiwi(["join", code, "feel", "--as", "atlas", "--model", "claude-opus-5-5", "--relay", `${UPSTREAM}/`]).then(() => void (joined = true));
   await letIn(page, () => !joined);
   await joining;
-  await page.getByRole("textbox", { name: "Message" }).fill("Make it feel fast");
-  await page.keyboard.press("Enter");
+  await writeBlock(page, "Make it feel fast");
 
   let ask = "";
   while (!ask) {
@@ -483,9 +477,9 @@ try {
   await view(page, "# general", "M");
   await later(800);
   await drain(page);
-  const sends: { clearedMs: number; bubbleMs: number }[] = [];
+  const sends: { nextBlockMs: number }[] = [];
   for (let i = 0; i < REPS; i++) {
-    let r = { clearedMs: 0, bubbleMs: 0 };
+    let r = { nextBlockMs: 0 };
     const body = `Feel check ${i} ${Date.now()}`;
     if (i === 0) await filmstrip(cdp, "send", async () => (r = await send(page, body)));
     else r = await send(page, body);
@@ -494,8 +488,7 @@ try {
   }
   const sentDrain = await drain(page);
   report.send = {
-    composerEmptiedMs: median(sends.map((s) => s.clearedMs)),
-    bubbleOnScreenMs: median(sends.map((s) => s.bubbleMs)),
+    nextBlockMs: median(sends.map((s) => s.nextBlockMs)),
     runs: sends,
     layoutShift: sentDrain.shifts,
     moved: sentDrain.moved,
@@ -567,12 +560,11 @@ try {
 
   await view(page, "# general", `M${MESSAGES - 1}: `);
   await later(1000);
-  const composer = page.getByRole("textbox", { name: "Message" }).last();
-  await composer.click();
+  await page.locator(".thread-doc .doc-tail").last().click();
   await drain(page);
   for (let i = 0; i < 2; i++) {
-    await composer.pressSequentially("the build is green and the switch is fast now ", { delay: 40 });
-    await composer.fill("");
+    await page.keyboard.type("the build is green and the switch is fast now ", { delay: 40 });
+    await eraseLine(page);
   }
   const idleKeys = (await drain(page)).keys.sort((a, b) => a - b);
   const posting = (async () => {
@@ -580,8 +572,8 @@ try {
   })();
   const typing = (async () => {
     for (let i = 0; i < 3; i++) {
-      await composer.pressSequentially("the build is green and the switch is fast now ", { delay: 40 });
-      await composer.fill("");
+      await page.keyboard.type("the build is green and the switch is fast now ", { delay: 40 });
+      await eraseLine(page);
     }
   })();
   await Promise.all([posting, typing]);

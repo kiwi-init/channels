@@ -301,6 +301,7 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
     attributes: { class: "doc", role: "textbox", "aria-multiline": "true", "aria-label": "Thread" },
     nodeViews: { block: (node) => new BlockView(node, heads, shown), mention: mentionView(opts.name) },
     dispatchTransaction(this: EditorView, tr) {
+      if (this.isDestroyed) return
       this.updateState(this.state.apply(tr))
       if (tr.selectionSet || tr.docChanged) shareSelection(this, shared, me)
     },

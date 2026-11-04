@@ -12,7 +12,7 @@ import { daemonSock } from "../src/daemon/protocol.ts";
 import { stopDaemon } from "../src/daemon/rpc.ts";
 import { startLocalRelay } from "./local-relay.ts";
 import { calibrate } from "./perf-calibrate.ts";
-import { approveSpec, firstRun, letIn, newChannel, channelSettings, ROWS, view } from "./perf-ui.ts";
+import { approveSpec, firstRun, letIn, newChannel, channelSettings, eraseLine, ROWS, view, writeBlock } from "./perf-ui.ts";
 import { harnessDist } from "./ui-harness.ts";
 
 if (process.argv.includes("--help")) {
@@ -269,8 +269,7 @@ try {
   await post(0, early);
   const asked = "Scale it: ten agents and a hundred tasks";
   await tab(page, "Conversation", "");
-  await page.getByRole("textbox", { name: "Message" }).fill(asked);
-  await page.keyboard.press("Enter");
+  await writeBlock(page, asked);
   let ask = 0;
   while (!ask) {
     const { messages } = await patiently(() => runAgent(seats[0]!.state()));
@@ -404,13 +403,12 @@ try {
   await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 });
 
   await tab(page, "Conversation", "M\\d+: ");
-  const composer = page.getByRole("textbox", { name: "Message" });
-  await composer.click();
+  await page.locator(".thread-doc .doc-tail").last().click();
   await drain(page);
   const typing = (async () => {
     for (let i = 0; i < 3; i++) {
-      await composer.pressSequentially("the build is green and the switch is fast now ", { delay: 40 });
-      await composer.fill("");
+      await page.keyboard.type("the build is green and the switch is fast now ", { delay: 40 });
+      await eraseLine(page);
     }
   })();
   const burst = Promise.all(seats.map((s, a) => say(s, `burst ${a}: ${TEXTS[a % TEXTS.length]}`)));
