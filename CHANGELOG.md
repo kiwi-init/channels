@@ -2,6 +2,17 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 2026.11.7 — 2026-11-04
+
+- **changelog: 2026.11.6 lists the four PRs merged after its stamp** ([#1582](https://github.com/kiwi-init/channels/pull/1582))
+- **scripts: smoke, perf and shot checks type in the thread doc (T791)** ([#1584](https://github.com/kiwi-init/channels/pull/1584))
+- **ci: the UI channel ships only what main's full CI passed (T904)** ([#1585](https://github.com/kiwi-init/channels/pull/1585))
+- **core: a doc block wakes an agent only once its author sends it** ([#1587](https://github.com/kiwi-init/channels/pull/1587))
+- **test: local-perms loads home() fresh in-process, not in three bun children (T1025)** ([#1589](https://github.com/kiwi-init/channels/pull/1589))
+- **doc: images and files in a thread doc, by blob (T580)** ([#1583](https://github.com/kiwi-init/channels/pull/1583))
+- **ui: the thread doc reads like one page; drafts fade until Enter (T878)** ([#1586](https://github.com/kiwi-init/channels/pull/1586))
+- **desktop checks: write in the thread doc, not the removed composer (T791)** ([#1588](https://github.com/kiwi-init/channels/pull/1588))
+
 ## 2026.11.6 — 2026-11-04
 
 - **ui: an agent in the sidebar is one row: face, name, what it does now** ([#1559](https://github.com/kiwi-init/channels/pull/1559))
