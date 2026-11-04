@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import type { Node } from "prosemirror-model"
 import { EditorState, TextSelection } from "prosemirror-state"
 
-import { atBlockEnd, attach, blockAfter, joinBack, joinForward, blocks, continues, dropEmptyOwn, endsBlock, makeBlock, startBlock } from "~/chat/doc/blocks"
+import { atBlockEnd, attach, blockAfter, joinBack, joinForward, blocks, continues, dropEmptyOwn, endsBlock, makeBlock, replyIn, startBlock, unreply } from "~/chat/doc/blocks"
 import { attrsOf, imageNode, schema } from "~/chat/doc/schema"
 
 const T = 1_700_000_000_000
@@ -177,5 +177,41 @@ describe("joining blocks like paragraphs", () => {
     const mid = s.apply(s.tr.setSelection(TextSelection.create(s.doc, blocks(s.doc)[1]!.pos + 4)))
     expect(joinBack(mid, "jow")).toBeNull()
     expect(joinBack(caretAtStart(s, 0), "jow")).toBeNull()
+  })
+})
+
+describe("Reply and Quote on a message land in your draft in the doc (T1402)", () => {
+  test("Reply with a draft of yours at the end binds it to that draft and posts nothing", () => {
+    const s = caretAtEnd(stateOf(makeBlock("text", "maya", T, "hi"), makeBlock("text", "jow", T + 1, "half writ")), 0)
+    const next = s.apply(replyIn(s, "jow", T + 2, 12, null))
+    expect(texts(next)).toEqual(["maya:hi", "jow:half writ"])
+    expect(attrsOf(next.doc.child(1))).toMatchObject({ re: 12, quote: null })
+    expect(next.selection.$from.index(0)).toBe(1)
+    expect(next.selection.$from.parentOffset).toBe("half writ".length)
+  })
+
+  test("Quote with no draft of yours starts one that carries the quoted lines", () => {
+    const s = stateOf(makeBlock("text", "maya", T, "hi"))
+    const next = s.apply(replyIn(s, "jow", T + 1, 12, "ship it friday"))
+    expect(texts(next)).toEqual(["maya:hi", "jow:"])
+    expect(attrsOf(next.doc.child(1))).toMatchObject({ author: "jow", re: 12, quote: "ship it friday" })
+    expect(next.selection.$from.index(0)).toBe(1)
+  })
+
+  test("someone else's last block gets a new block of yours, not the reply", () => {
+    const s = stateOf(makeBlock("text", "maya", T, "hi"))
+    const next = s.apply(replyIn(s, "jow", T + 1, 7, null))
+    expect(attrsOf(next.doc.child(0)).re).toBeNull()
+    expect(attrsOf(next.doc.child(1)).re).toBe(7)
+  })
+
+  test("cancelling drops the reply and keeps the words", () => {
+    const s = stateOf(makeBlock("text", "jow", T, "agreed"))
+    const replied = s.apply(replyIn(s, "jow", T + 1, 12, "ship it"))
+    const tr = unreply(replied, attrsOf(replied.doc.child(0)).id)
+    if (!tr) throw new Error("no block")
+    const next = replied.apply(tr)
+    expect(attrsOf(next.doc.child(0))).toMatchObject({ re: null, quote: null })
+    expect(texts(next)).toEqual(["jow:agreed"])
   })
 })

@@ -5,6 +5,8 @@ import { blockOf, markPosted, threadOf, unmarkSent, type Block } from "@kiwi/cor
 export interface Finished {
   id: string
   text: string
+  re?: number
+  quote?: string
 }
 
 interface Rule {
@@ -28,7 +30,7 @@ export function postFinished(doc: Y.Doc, rule: Rule, post: (b: Finished) => void
     if (!b || posted.has(b.id) || !made.has(b.id) || !b.text.trim()) return
     posted.add(b.id)
     markPosted(doc, b.id)
-    post({ id: b.id, text: b.text.trim() })
+    post({ id: b.id, text: b.text.trim(), ...(b.re ? { re: b.re } : {}), ...(b.quote ? { quote: b.quote } : {}) })
   }
 
   const look = (events: Y.YEvent<Y.AbstractType<unknown>>[], tr: Y.Transaction): void => {
