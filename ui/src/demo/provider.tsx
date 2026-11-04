@@ -5,11 +5,11 @@ import type { Personality } from "@kiwi/core/personality.ts"
 import { HANDOFF_DONE } from "@kiwi/core/protocol.ts"
 
 import { stepReplyText } from "~/chat/step"
-import { DEMO_ACCOUNT, DEMO_CHANNEL, DEMO_DEVICES, DEMO_EMPTY, DEMO_GUEST, DEMO_GUEST_MEMBER, DEMO_LAUNCHED, DEMO_PREFS, DEMO_TILES, DEMO_WAITING } from "~/demo/data"
+import { DEMO_ACCOUNT, DEMO_CHANNEL, DEMO_DEVICES, DEMO_EMPTY, DEMO_GUEST, DEMO_GUEST_MEMBER, DEMO_INTERLINKED, DEMO_LAUNCHED, DEMO_PREFS, DEMO_TILES, DEMO_WAITING } from "~/demo/data"
 import { longFeed } from "~/demo/long"
 import { demoAround, demoFetchOlder, demoOlder } from "~/demo/older"
 import { withSpecs } from "~/demo/specs"
-import { homeOf } from "~/home"
+import { homeOf, saidIn } from "~/home"
 import type { Account, Actions, App, Enrolling, Finding, GithubSignIn, ThisComputer, Channel, ChannelTile, GoneChannel, Message, Prefs, Spec, Task } from "~/model"
 import { deletedTheme, savedTheme } from "~/theme/themes"
 import { announce } from "~/kit/toasts"
@@ -298,7 +298,7 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
                             : DEMO_CHANNEL,
       DEMO_EMPTY,
       DEMO_WAITING,
-      { ...DEMO_EMPTY, code: "interlinked", title: "interlinked" },
+      DEMO_INTERLINKED,
       scenario === "member" ? DEMO_GUEST_MEMBER : DEMO_GUEST,
     ].map((c) => [c.code, c])
   )
@@ -794,7 +794,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
     }
   }, [])
 
-  const home = useMemo(() => [...state.channels.values()].map(homeOf), [state.channels])
+  const home = useMemo(() => [...state.channels.values()].map((c) => homeOf(c, saidIn(c.messages))), [state.channels])
 
   return {
     account: state.account,

@@ -18,7 +18,7 @@ export const startOfDay = (now: number): number => {
   return d.getTime()
 }
 
-const live = (channel: Channel): Task[] => channel.tasks.filter((t) => !t.archived && !t.cancelled)
+const live = (channel: Pick<Channel, "tasks">): Task[] => channel.tasks.filter((t) => !t.archived && !t.cancelled)
 
 export function stageWords(t: Task): { text: string; red: boolean } {
   const pr = t.pr ? `PR #${t.pr.number}` : null
@@ -53,7 +53,7 @@ export interface Now {
   doneCount: number
 }
 
-export function nowOf(channel: Channel, now = Date.now()): Now {
+export function nowOf(channel: Pick<Channel, "tasks" | "next">, now = Date.now()): Now {
   const tasks = live(channel)
   const working = tasks.filter(isWorking).sort((a, b) => b.updatedAt - a.updatedAt)
   const since = startOfDay(now)

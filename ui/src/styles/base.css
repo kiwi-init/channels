@@ -1115,7 +1115,8 @@ html .palette-meta,
 html .theme-when,
 html .now-counts,
 html .lane-sub,
-html .home-chip-needs,
+html .calm-agent-doing,
+html .calm-meta time,
 html .needs-until {
   font-family: var(--mono);
   letter-spacing: -0.01em;

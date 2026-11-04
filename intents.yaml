@@ -25,6 +25,18 @@ intents:
     reviewed:
       by: ojowwalker77
       at: 2026-11-03T18:53:01.963Z
+  - id: message-lead-from-home
+    name: Message Lead From Home
+    status: active
+    sentence: A person writes to a channel's lead from Home without opening the channel.
+    actor: user
+    triggers:
+      - "Home: Message <lead> on a channel's line"
+    code:
+      - ui/src/home.ts
+      - ui/src/live/home.tsx
+      - ui/src/start/welcome.tsx
+    confidence: high
   - id: join-channel
     name: Join Channel
     status: active

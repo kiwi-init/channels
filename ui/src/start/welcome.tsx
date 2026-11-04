@@ -1,7 +1,11 @@
 import "~/styles/start.css"
+import { useState, type KeyboardEvent } from "react"
+
+import { takeTurns } from "~/home"
 import { cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
-import type { ChannelTile, HomeAsk, HomeChannel } from "~/model"
+import { ago, useNow } from "~/kit/time"
+import type { ChannelTile, HomeAgent, HomeAsk, HomeChannel } from "~/model"
 import { useApp } from "~/nav"
 
 export function Welcome() {
@@ -29,12 +33,12 @@ function Starts({ quiet }: { quiet?: true }) {
   const { go } = useApp()
   return (
     <>
-      <button type="button" className={quiet ? "home-start-btn" : "btn is-primary"} onClick={() => go({ to: "dialog", dialog: "new-channel" })}>
+      <button type="button" className={quiet ? undefined : "btn is-primary"} onClick={() => go({ to: "dialog", dialog: "new-channel" })}>
         <Icon name="plus" size={quiet ? 12 : 14} />
         New channel
       </button>
       {quiet && <span aria-hidden="true">·</span>}
-      <button type="button" className={quiet ? "home-start-btn" : "btn"} onClick={() => go({ to: "dialog", dialog: "join" })}>
+      <button type="button" className={quiet ? undefined : "btn"} onClick={() => go({ to: "dialog", dialog: "join" })}>
         {!quiet && <Icon name="link" size={14} />}
         Join with a code
       </button>
@@ -42,37 +46,48 @@ function Starts({ quiet }: { quiet?: true }) {
   )
 }
 
+const ASKS_SHOWN = 4
+
 function Hud({ tiles, home }: { tiles: readonly ChannelTile[]; home: readonly HomeChannel[] }) {
+  const [all, setAll] = useState(false)
+  const now = useNow(60_000)
   const byCode = new Map(home.map((h) => [h.code, h]))
   const members = tiles.filter((t) => t.state === "member")
-  const asks = members.flatMap((t) => (byCode.get(t.code)?.asks ?? []).map((ask) => ({ tile: t, ask })))
+  const asks = takeTurns(members.map((t) => (byCode.get(t.code)?.asks ?? []).map((ask) => ({ tile: t, ask }))))
+  const shown = all ? asks : asks.slice(0, ASKS_SHOWN)
   return (
     <main className="start-area home-area">
       <div className="start-drag" />
-      <div className="home">
+      <div className="calm">
         {asks.length > 0 && (
-          <ol className="home-asks" aria-label="Waiting on you">
-            {asks.map(({ tile, ask }) => (
-              <AskRow key={`${tile.code}:${ask.id}`} tile={tile} ask={ask} />
-            ))}
-          </ol>
+          <section className="calm-sec" aria-label="Waiting on you">
+            <h2 className="calm-head">
+              Waiting on you <span className="num">{asks.length}</span>
+            </h2>
+            <ol className="calm-list">
+              {shown.map(({ tile, ask }) => (
+                <AskRow key={`${tile.code}:${ask.id}`} tile={tile} ask={ask} now={now} />
+              ))}
+            </ol>
+            {asks.length > ASKS_SHOWN && (
+              <button type="button" className="calm-more" onClick={() => setAll(!all)}>
+                {all ? "Show fewer" : `${asks.length - ASKS_SHOWN} more`}
+              </button>
+            )}
+          </section>
         )}
-        <ul className="home-chips" aria-label="Your channels">
-          {tiles.map((t) => (
-            <li key={t.code}>
-              <Chip tile={t} summary={byCode.get(t.code)} />
-            </li>
-          ))}
-        </ul>
+        {tiles.map((t) => (
+          <ChannelPart key={t.code} tile={t} summary={byCode.get(t.code)} now={now} />
+        ))}
+        <p className="calm-starts">
+          <Starts quiet />
+        </p>
       </div>
-      <p className="home-start">
-        <Starts quiet />
-      </p>
     </main>
   )
 }
 
-function AskRow({ tile, ask }: { tile: ChannelTile; ask: HomeAsk }) {
+function AskRow({ tile, ask, now }: { tile: ChannelTile; ask: HomeAsk; now: number }) {
   const { app, go } = useApp()
   const { actions } = app
   const code = tile.code
@@ -82,42 +97,42 @@ function AskRow({ tile, ask }: { tile: ChannelTile; ask: HomeAsk }) {
   }
   const act = ask.act
   return (
-    <li className="home-ask">
-      <button type="button" className="home-ask-where" title={`Open ${tile.title}`} onClick={open}>
-        {tile.title}
+    <li className="calm-ask">
+      <button type="button" className="calm-ask-body" title={`Open in ${tile.title}`} onClick={open}>
+        <span className="calm-ask-text">{ask.text}</span>
+        <span className="calm-meta">
+          {tile.title} · {ask.what} · <time dateTime={new Date(ask.at).toISOString()}>{ago(ask.at, now)}</time>
+        </span>
       </button>
-      <span className="home-ask-text" title={ask.text}>
-        {ask.text}
-      </span>
-      <span className="home-ask-acts">
+      <span className="calm-acts">
         {act.kind === "options" &&
-          act.options.map((o, i) => (
-            <button key={o} type="button" className={cx("btn is-small", i === 0 && "is-primary")} onClick={() => actions.answerQuestion(code, ask.id, o)}>
+          act.options.map((o) => (
+            <button key={o} type="button" className="calm-act" onClick={() => actions.answerQuestion(code, ask.id, o)}>
               {o}
             </button>
           ))}
         {act.kind === "allow" && (
           <>
-            <button type="button" className="btn is-small" onClick={() => actions.answerPermission(code, ask.id, false)}>
+            <button type="button" className="calm-act" onClick={() => actions.answerPermission(code, ask.id, false)}>
               Deny
             </button>
-            <button type="button" className="btn is-small is-primary" onClick={() => actions.answerPermission(code, ask.id, true)}>
+            <button type="button" className="calm-act" onClick={() => actions.answerPermission(code, ask.id, true)}>
               Allow
             </button>
           </>
         )}
         {act.kind === "approve-spec" && (
-          <button type="button" className="btn is-small is-primary" onClick={() => actions.approveSpec(code, act.ask, act.v)}>
+          <button type="button" className="calm-act" onClick={() => actions.approveSpec(code, act.ask, act.v)}>
             Approve
           </button>
         )}
         {act.kind === "approve-task" && (
-          <button type="button" className="btn is-small is-primary" onClick={() => actions.approveTask(code, act.task, true)}>
+          <button type="button" className="calm-act" onClick={() => actions.approveTask(code, act.task, true)}>
             Approve
           </button>
         )}
         {act.kind === "open" && (
-          <button type="button" className="btn is-small" onClick={open}>
+          <button type="button" className="calm-act" onClick={open}>
             Open
           </button>
         )}
@@ -126,21 +141,116 @@ function AskRow({ tile, ask }: { tile: ChannelTile; ask: HomeAsk }) {
   )
 }
 
-function Chip({ tile, summary }: { tile: ChannelTile; summary: HomeChannel | undefined }) {
+function stateOf(tile: ChannelTile, summary: HomeChannel | undefined): string {
+  if (tile.state === "waiting") return "waiting to be let in"
+  if (!summary || summary.loading) return "opening"
+  if (summary.doneToday) return `${summary.doneToday} done today`
+  return summary.working || summary.red ? "" : "quiet"
+}
+
+function restLine(agents: readonly HomeAgent[]): string {
+  const idle = agents.filter((a) => a.state === "idle").map((a) => a.nick)
+  const away = agents.filter((a) => a.state === "away").map((a) => a.nick)
+  return [idle.length ? `${idle.join(", ")} idle` : null, away.length ? `${away.join(", ")} away` : null].filter(Boolean).join(" · ")
+}
+
+function ChannelPart({ tile, summary, now }: { tile: ChannelTile; summary: HomeChannel | undefined; now: number }) {
   const { go } = useApp()
   const needs = summary ? summary.asks.length : tile.needsYou
-  const working = summary?.working ?? 0
-  const state = tile.state === "waiting" ? "waiting to be let in" : working ? `${working} working` : "quiet"
+  const open = () => go({ to: "channel", code: tile.code })
+  const agents = summary?.agents ?? []
+  const active = agents.filter((a) => a.state === "working" || a.state === "waiting")
+  const rest = restLine(agents)
+  const state = stateOf(tile, summary)
+  const [writing, setWriting] = useState(false)
+  const member = tile.state === "member"
   return (
-    <button type="button" className="home-chip" onClick={() => go({ to: "channel", code: tile.code })}>
-      <span className={cx("home-dot", tile.state === "waiting" ? "is-waiting" : working ? "is-working" : "is-quiet")} aria-hidden="true" />
-      <span className="home-chip-name">{tile.title}</span>
-      <span className="home-chip-state">· {state}</span>
-      {needs > 0 && (
-        <span className="home-chip-needs" aria-label={`${needs} need you`}>
-          {needs}
-        </span>
+    <section className="calm-sec" aria-label={tile.title}>
+      <div className="calm-chan-row">
+        <button type="button" className="calm-chan" onClick={open}>
+          <span className="calm-chan-name">{tile.title}</span>
+          {state && <span className="calm-meta">{state}</span>}
+          {summary?.red ? <span className="calm-meta tone-alert">{summary.red === 1 ? "1 check red" : `${summary.red} checks red`}</span> : null}
+          {needs > 0 && <span className="calm-needs">{needs === 1 ? "1 needs you" : `${needs} need you`}</span>}
+        </button>
+        {member && summary && !summary.loading && (
+          <button type="button" className={cx("calm-act", writing && "is-on")} onClick={() => setWriting(!writing)}>
+            {summary.leadName ? `Message ${summary.leadName}` : "Message #general"}
+          </button>
+        )}
+      </div>
+      {writing && summary && <LeadNote tile={tile} summary={summary} onDone={() => setWriting(false)} />}
+      {active.length > 0 && (
+        <ul className="calm-list">
+          {active.map((a) => (
+            <AgentLine key={a.name} tile={tile} agent={a} now={now} />
+          ))}
+        </ul>
       )}
-    </button>
+      {rest && <p className="calm-rest">{rest}</p>}
+    </section>
+  )
+}
+
+function AgentLine({ tile, agent, now }: { tile: ChannelTile; agent: HomeAgent; now: number }) {
+  const { go } = useApp()
+  const open = () => {
+    go({ to: "channel", code: tile.code })
+    if (agent.task) go({ to: "panel", panel: { kind: "task", task: agent.task.id } })
+    else go({ to: "modal", modal: { kind: "person", name: agent.name } })
+  }
+  return (
+    <li>
+      <button type="button" className={cx("calm-agent", `is-${agent.state}`)} onClick={open}>
+        <span className="calm-dot" aria-hidden="true" />
+        <span className="calm-agent-name">{agent.nick}</span>
+        <span className="calm-agent-task">{agent.task ? agent.task.title : ""}</span>
+        <span className="calm-agent-doing">
+          {agent.doing}
+          {agent.since ? ` · ${ago(agent.since, now)}` : ""}
+        </span>
+      </button>
+    </li>
+  )
+}
+
+function LeadNote({ tile, summary, onDone }: { tile: ChannelTile; summary: HomeChannel; onDone: () => void }) {
+  const { app, toast } = useApp()
+  const [text, setText] = useState("")
+  const to = summary.leadName
+  const send = () => {
+    const body = text.trim()
+    if (!body) return
+    app.actions.send(tile.code, summary.lead ? { kind: "dm", with: summary.lead } : { kind: "room", room: "general" }, body)
+    setText("")
+    onDone()
+    toast(to ? `Sent to ${to} in ${tile.title}` : `Sent to #general in ${tile.title}`)
+  }
+  const keys = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.nativeEvent.isComposing) return
+    if (e.key === "Escape") {
+      e.preventDefault()
+      onDone()
+      return
+    }
+    if (e.key !== "Enter" || e.shiftKey) return
+    e.preventDefault()
+    send()
+  }
+  return (
+    <div className="calm-note">
+      <textarea
+        rows={1}
+        autoFocus
+        value={text}
+        aria-label={to ? `Message ${to} in ${tile.title}` : `Write to #general in ${tile.title}`}
+        placeholder={to ? `Message ${to}…` : "Write to #general…"}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={keys}
+      />
+      <button type="button" className={cx("calm-send", text.trim() && "is-ready")} aria-label="Send" title="Send (Enter)" disabled={!text.trim()} onClick={send}>
+        <Icon name="send" size={14} />
+      </button>
+    </div>
   )
 }
