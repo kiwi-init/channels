@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 import type { Event, Message } from "@kiwi/core/protocol.ts";
-import { askGroups, askRefusal, fold, heldBy, holdsWork, tasksAwaitingPeople, type ChannelState, type FoldBase, type Roster } from "@kiwi/core/state.ts";
+import { askGroups, askRefusal, asksOnSameWork, fold, heldBy, holdsWork, tasksAwaitingPeople, type ChannelState, type FoldBase, type Roster } from "@kiwi/core/state.ts";
 import { formatStatus, formatTasks } from "@kiwi/core/format.ts";
 
 const T0 = 1_700_000_000_000;
@@ -190,5 +190,29 @@ describe("decisions name the work they hold", () => {
     const s = fold(log, roster, T0);
     expect(holdsWork(s, log[2]!)).toBe(false);
     expect(holdsWork(s, log[3]!)).toBe(true);
+  });
+});
+
+describe("agents see each other's open asks to a person, so a decision is asked once (#1580)", () => {
+  const esc = (body: string, more: Partial<Draft> = {}): Draft => ({ from: "dev", kind: "blocking", body, to: ["jow"], esc: true, ...more });
+
+  test("status lists another agent's open ask to a person, with its holds, for every other agent", async () => {
+    const log = await signedLog([say("jow", "Make the avatars glass"), add("Glass avatars", {}, 1), esc("Glass or frosted?", { holds: [2] })]);
+    const s = fold(log, roster, T0);
+    const lead = formatStatus({ alias: "c", me: "lead", state: s, online: new Map(), unread: 0 });
+    expect(lead).toContain("asked of people by others (1)");
+    expect(lead).toContain("#3 dev → jow · holds T2: Glass or frosted?");
+    expect(formatStatus({ alias: "c", me: "dev", state: s, online: new Map(), unread: 0 })).not.toContain("asked of people by others");
+    expect(formatStatus({ alias: "c", me: "jow", state: s, online: new Map(), unread: 0 })).not.toContain("asked of people by others");
+  });
+
+  test("an ask to the same person holding the same task or ask is found; other work or another person isn't", async () => {
+    const log = await signedLog([say("jow", "Make the avatars glass"), add("Glass avatars", {}, 1), esc("Glass or frosted?", { holds: [2] }), esc("Ship it?", { holds: [1] })]);
+    const s = fold(log, roster, T0);
+    expect(asksOnSameWork(s, "lead", ["jow"], [2]).map((a) => a.seq)).toEqual([3]);
+    expect(asksOnSameWork(s, "lead", ["jow"], [1, 2]).map((a) => a.seq)).toEqual([3, 4]);
+    expect(asksOnSameWork(s, "lead", ["someone"], [2])).toEqual([]);
+    expect(asksOnSameWork(s, "lead", ["jow"], [])).toEqual([]);
+    expect(asksOnSameWork(s, "dev", ["jow"], [2])).toEqual([]);
   });
 });

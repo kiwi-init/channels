@@ -79,6 +79,20 @@ export function heldBy(state: Pick<ChannelState, "tasks" | "askHeads">, m: Pick<
   });
 }
 
+export function askedOfPeopleByOthers(state: Pick<ChannelState, "openAsks" | "members">, me: string): Message[] {
+  return state.openAsks.filter((a) => a.from !== me && !!a.to?.length && !a.to.includes(me) && a.to.some((n) => isPeopleTarget(state, n)));
+}
+
+export function asksOnSameWork(state: Pick<ChannelState, "openAsks" | "members" | "tasks" | "askHeads">, me: string, to: readonly string[], holds: readonly number[]): Message[] {
+  if (!holds.length) return [];
+  return askedOfPeopleByOthers(state, me).filter((a) => a.to?.some((n) => to.includes(n)) && heldBy(state, a).some((id) => holds.includes(id)));
+}
+
+function isPeopleTarget(state: Pick<ChannelState, "members">, name: string): boolean {
+  const m = state.members.get(name);
+  return !!m && isPerson(m);
+}
+
 export function holdsWork(state: Pick<ChannelState, "tasks" | "askHeads" | "members">, m: Pick<Message, "from" | "task" | "holds" | "permission" | "handoff">): boolean {
   const from = state.members.get(m.from);
   return (!!from && isPerson(from)) || !!m.permission || !!m.handoff || heldBy(state, m).length > 0;

@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Message } from "@kiwi/core/protocol.ts";
-import { blocksOf } from "@kiwi/core/doc/blocks.ts";
+import { attachToBlock, blocksOf, markPosted, newBlock } from "@kiwi/core/doc/blocks.ts";
 import type { ThreadDoc } from "@kiwi/core/doc/thread-doc.ts";
 import { saveIdentity, updateConfig } from "../src/config.ts";
 import { startRelay } from "../src/relay/bun.ts";
@@ -148,5 +148,40 @@ describe("kiwi send into a doc: what lands in the line and what it's told (T1353
     const viaDoc = await cli("send", "--to", "#general", long);
     expect(viaDoc.out).toContain("into its shared doc");
     expect(viaDoc.out).toContain("ran long for #general");
+  });
+});
+
+describe("an image pasted in the doc reaches agents through show and save (T2037)", () => {
+  test("a line the app posted with only a block ref: kiwi show and save fetch its image and file, and MCP save does too", async () => {
+    const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    const img = await owner.ownerCh.putImage({ name: "image.webp", mime: "image/png", data: png });
+    const file = await owner.ownerCh.putFileData("trace.log", "text/plain", Buffer.from("line one\n").toString("base64"));
+    const line = newBlock(general.doc, "text", "jon", "@dev PASTED look at this");
+    attachToBlock(general.doc, line.id, [{ image: { name: img.name, mime: img.mime, ref: img.ref! } }, { file }]);
+    markPosted(general.doc, line.id);
+    await general.flush();
+    const seq = await owner.ownerCh.send("@dev PASTED look at this\n[image: image.webp]\n[file: trace.log]", { to: ["dev"], block: { th: general.th, id: line.id } });
+    const posted = await message((m) => m.seq === seq);
+    expect(posted.imgs).toBeUndefined();
+
+    const dir = mkdtempSync(join(tmpdir(), "kiwi-doc-media-"));
+    try {
+      const saved = await cli("save", String(seq), dir);
+      expect(saved).toMatchObject({ code: 0 });
+      expect(saved.out).toContain(join(dir, `#${seq}-image.webp`));
+      expect(saved.out).toContain("trace.log");
+      const shown = await cli("show", String(seq), join(dir, "shown"));
+      expect(shown.code).toBe(0);
+      expect(existsSync(join(dir, "shown", `#${seq}-image.webp`))).toBe(true);
+      const agentMcp = mcp();
+      try {
+        await agentMcp.start();
+        expect(await agentMcp.call("save", { seq, dir: join(dir, "mcp") })).toContain(`#${seq}-image.webp`);
+      } finally {
+        agentMcp.stop();
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

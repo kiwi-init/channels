@@ -14,6 +14,7 @@ import {
   fullyTrusted,
   heldBy,
   holdsWork,
+  askedOfPeopleByOthers,
   humanOf,
   isPerson,
   issueOf,
@@ -620,6 +621,11 @@ export function formatStatus({ alias, me, state, online, unread, now = Date.now(
     for (const a of asks) out.push(`  #${a.seq} ${a.from}${a.kind === "blocking" ? " [blocking]" : ""}${heldLine(state, a)}: ${inlineText(a.body, 140)}`);
   }
   if (digest.length) out.push("", `also asked, holding nothing up (${digest.length}): ${digest.map((a) => `#${a.seq}`).join(", ")}`);
+  const others = askedOfPeopleByOthers(state, me);
+  if (others.length) {
+    out.push("", `asked of people by others (${others.length}) — check these before asking the same:`);
+    for (const a of others) out.push(`  #${a.seq} ${a.from} → ${a.to?.join(",")}${heldLine(state, a)}: ${inlineText(a.body, 140)}`);
+  }
   const mine = state.openAsks.filter((a) => a.from === me);
   if (mine.length) {
     out.push("", `your unanswered questions (${mine.length}):`);

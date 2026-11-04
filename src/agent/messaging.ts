@@ -34,7 +34,7 @@ import { Rejected } from "@kiwi/core/refusals.ts";
 import { canPost, describeScopes, refusal } from "@kiwi/core/scopes.ts";
 import { allowedOnHold, decidersOf, humanOf, isPerson, nextIn, ON_HOLD, ownerOf, placeIn, taskId, unnamedAsks, unnamedTasks, type ChannelState } from "@kiwi/core/state.ts";
 import type { BlockMedia } from "@kiwi/core/doc/blocks.ts";
-import { addressed, docPlaceOfBlock, dropBlock, editBlock, readDoc, writeBlock, type DocPlace } from "./docs.ts";
+import { addressed, blockMedia, docPlaceOfBlock, dropBlock, editBlock, readDoc, writeBlock, type DocPlace } from "./docs.ts";
 import { SessionListen } from "./listen.ts";
 import { EVERYONE, oneLook } from "./shared.ts";
 
@@ -119,6 +119,19 @@ export class SessionMessaging extends SessionListen {
       });
     });
   }
+
+  readonly withBlockMedia = Effect.fn("AgentSession.withBlockMedia")({ self: this }, function* (this: SessionMessaging, m: Message) {
+    if (!m.block || m.imgs?.length || m.files?.length || !/\[(?:image|file): /.test(m.body ?? "")) return m;
+    const { state } = yield* this.state();
+    const at = docPlaceOfBlock(state, m.block.th);
+    if (!at) return yield* new Rejected(`#${m.seq}'s line is in a shared doc this channel doesn't list`);
+    const id = m.block.id;
+    const { imgs, files } = yield* Effect.tryPromise({
+      try: () => blockMedia(this.ch, state.head, at, id),
+      catch: (e) => new Rejected(`couldn't read #${m.seq}'s images from the shared doc: ${e instanceof Error ? e.message : "error"}`),
+    });
+    return { ...m, ...(imgs.length ? { imgs } : {}), ...(files.length ? { files } : {}) };
+  });
 
   readonly docText = Effect.fn("AgentSession.docText")({ self: this }, function* (this: SessionMessaging, at: DocPlace, ms?: number, docOnly = false) {
     const { state } = yield* this.state();

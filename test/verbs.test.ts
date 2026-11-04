@@ -339,6 +339,18 @@ describe("review rounds through the CLI", () => {
     want = /#(\d+)/.exec(await ok(owner, "--as", "human", "send", "review rounds that hold up"))![1]!;
   });
 
+  test("ask-human names another agent's open ask to the same person on the same work, and status lists it (#1580)", async () => {
+    const t = taskNo(await ok(dev, "task", "add", "pick the avatar blur", "--ask", want));
+    const first = seqOf(await ok(dev, "ask-human", "--holds", `T${t}`, "--option", "A: glass", "--option", "B: frosted", "Glass or frosted?"));
+    const second = await ok(other, "ask-human", "--holds", `T${t}`, "--option", "A: 8px", "--option", "B: 12px", "Which blur radius?");
+    const mine = seqOf(second);
+    expect(second).toContain(`also open on T${t}: #${first} dev`);
+    expect(second).toContain(`kiwi ask-human --close ${mine} "same as #${first}"`);
+    expect(await ok(rev, "status")).toContain(`#${first} dev → `);
+    const elsewhere = await ok(other, "ask-human", "--holds", `#${want}`, "Ship it this week?");
+    expect(elsewhere).not.toContain("also open on");
+  });
+
   test("task proof puts a link on the task, and refuses one that isn't https", async () => {
     const t = /T(\d+)/.exec(await ok(dev, "task", "add", "show the preview", "--ask", want))![1]!;
     await ok(dev, "task", "proof", `T${t}`, "https://preview.example.com/pr-1", "--label", "preview");
