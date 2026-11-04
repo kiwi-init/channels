@@ -77,7 +77,8 @@ export class ThreadDoc {
   private timer: ReturnType<typeof setTimeout> | null = null;
   private inFlight = new Map<string, Uint8Array>();
   private head = 0;
-  private top = 0;
+  private readonly seen = new Set<number>();
+  private refetching = false;
   private ready = false;
   private closed = false;
   private chain: Promise<void> = Promise.resolve();
@@ -138,6 +139,7 @@ export class ThreadDoc {
 
   reconnect(): void {
     this.ready = false;
+    this.refetching = false;
     this.resend = this.inFlight.size > 0;
     this.start(this.head);
   }
@@ -212,6 +214,7 @@ export class ThreadDoc {
     if (!hole || this.closed || !(await this.o.keys.opening(hole.e)).length) return;
     this.hole = null;
     this.head = Math.min(this.head, hole.dseq - 1);
+    this.seen.clear();
     this.ready = false;
     this.start(this.head);
   }
@@ -260,7 +263,7 @@ export class ThreadDoc {
 
   private async compact(): Promise<void> {
     if (this.closed || !this.ready || this.hole || this.snapping) return;
-    const upto = Math.min(Math.max(this.head, this.top), this.covered());
+    const upto = Math.min(this.head, this.covered());
     if (upto <= 0) return;
     const id = b64url(crypto.getRandomValues(new Uint8Array(12)));
     const sealed = await this.seal(Y.encodeStateAsUpdate(this.doc));
@@ -276,10 +279,21 @@ export class ThreadDoc {
   private landed(id: string, seq: number): void {
     this.inFlight.delete(id);
     this.refusedWith = null;
-    this.top = Math.max(this.top, seq);
+    this.saw(seq);
+  }
+
+  private saw(dseq: number, head = 0): void {
+    if (dseq > this.head) this.seen.add(dseq);
+    this.head = Math.max(this.head, head);
+    for (const d of this.seen) if (d <= this.head) this.seen.delete(d);
+    while (this.seen.delete(this.head + 1)) this.head++;
+    if (!this.seen.size || !this.ready || this.refetching || this.closed) return;
+    this.refetching = true;
+    this.start(this.head);
   }
 
   private subRefused(th: string | undefined, error: string, retryAfter: number | undefined): void {
+    if (th === this.th) this.refetching = false;
     if (th !== this.th || this.ready || this.resub) return;
     this.refusedWith = error;
     const wait = Math.max((retryAfter ?? 0) * 1000, (this.o.retryMs ?? RETRY_MS) * 2 ** Math.min(this.subFails++, MAX_BACKOFF_STEPS));
@@ -329,8 +343,9 @@ export class ThreadDoc {
     }
     if (f.th !== this.th) return;
     if (f.t === "doc.ready") {
-      this.head = Math.max(this.head, f.head);
+      this.refetching = false;
       this.ready = true;
+      this.saw(0, f.head);
       this.subFails = 0;
       for (const done of this.waiters.splice(0)) done();
       if (this.resend) {
@@ -340,9 +355,10 @@ export class ThreadDoc {
       if (this.stale || this.big.size) await this.compact();
       return;
     }
-    if (!f.snap && f.dseq <= this.head) return;
+    if (!f.snap && (f.dseq <= this.head || this.seen.has(f.dseq))) return;
     const update = await this.open(f.iv, f.ct, f.e);
-    this.head = Math.max(this.head, f.dseq);
+    if (f.snap) this.saw(0, f.dseq);
+    else this.saw(f.dseq);
     if (update === NO_KEY) {
       if (!this.hole || f.dseq < this.hole.dseq) this.hole = { dseq: f.dseq, e: f.e };
       return;

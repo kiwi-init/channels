@@ -63,7 +63,10 @@ class Peer {
   td!: ThreadDoc;
   inbox: Promise<void> = Promise.resolve();
   aware: Uint8Array[] = [];
+  lose: ((f: DocIn) => boolean) | null = null;
+  held: DocIn[] = [];
   deliver(f: DocIn): void {
+    if (this.lose?.(f)) return void this.held.push(f);
     this.inbox = this.inbox.then(() => this.td.receive(f));
   }
 }
@@ -475,5 +478,90 @@ describe("an upgraded host takes no writes from a UI older than the doc's writer
     late.td.start();
     await settle(late);
     expect(texts(late)).toEqual(["kept"]);
+  });
+});
+
+describe("a doc frame that never arrives, or arrives late, is fetched again (T2998)", () => {
+  const live = (f: DocIn): f is Extract<DocIn, { t: "doc" }> => f.t === "doc" && !f.snap;
+
+  test("a frame the relay never delivers is fetched again, and every edit after it applies", async () => {
+    const { peers, ids, relay } = await setup(2);
+    const [a, b] = peers as [Peer, Peer];
+    a.td.start();
+    b.td.start();
+    await settle(a, b);
+    const blk = newBlock(a.td.doc, "text", ids[0]!.pk, "");
+    await settle(a, b);
+    let lost = false;
+    b.lose = (f) => !lost && live(f) && f.dseq === 2 && (lost = true);
+    for (const ch of "abc") {
+      appendToBlock(a.td.doc, blk.id, ch);
+      await settle(a, b);
+    }
+    expect(b.held.map((f) => f.t === "doc" && f.dseq)).toEqual([2]);
+    expect(texts(b)).toEqual(["abc"]);
+    expect(texts(a)).toEqual(texts(b));
+    expect(relay.sent.filter((f) => f.t === "doc.sub").length).toBe(3);
+  });
+
+  test("two frames that arrive swapped both apply, and nothing after them is lost", async () => {
+    const { peers, ids } = await setup(2);
+    const [a, b] = peers as [Peer, Peer];
+    a.td.start();
+    b.td.start();
+    await settle(a, b);
+    const blk = newBlock(a.td.doc, "text", ids[0]!.pk, "");
+    await settle(a, b);
+    b.lose = (f) => live(f) && f.dseq === 2;
+    appendToBlock(a.td.doc, blk.id, "x");
+    await settle(a, b);
+    b.lose = null;
+    appendToBlock(a.td.doc, blk.id, "y");
+    await settle(a, b);
+    for (const f of b.held.splice(0)) b.deliver(f);
+    appendToBlock(a.td.doc, blk.id, "z");
+    await settle(a, b);
+    expect(texts(b)).toEqual(["xyz"]);
+  });
+
+  test("its own edits, which the relay never sends back, aren't taken for a gap", async () => {
+    const { peers, ids, relay } = await setup(2);
+    const [a, b] = peers as [Peer, Peer];
+    a.td.start();
+    b.td.start();
+    await settle(a, b);
+    const blk = newBlock(a.td.doc, "text", ids[0]!.pk, "");
+    await settle(a, b);
+    for (const ch of "abcdef") {
+      appendToBlock((ch < "d" ? a : b).td.doc, blk.id, ch);
+      await settle(a, b);
+    }
+    expect(texts(a)).toEqual(["abcdef"]);
+    expect(texts(b)).toEqual(["abcdef"]);
+    expect(relay.sent.filter((f) => f.t === "doc.sub").length).toBe(2);
+  });
+
+  test("a snapshot never covers a frame it hasn't received, so the relay keeps it for everyone", async () => {
+    const { peers, ids, relay, make } = await setup(2);
+    const [a, b] = peers as [Peer, Peer];
+    relay.compactAfter = 3;
+    a.td.start();
+    b.td.start();
+    await settle(a, b);
+    const blk = newBlock(a.td.doc, "text", ids[0]!.pk, "");
+    await settle(a, b);
+    let lost = false;
+    b.lose = (f) => !lost && live(f) && f.dseq === 2 && (lost = true);
+    appendToBlock(a.td.doc, blk.id, "a");
+    await settle(a, b);
+    appendToBlock(b.td.doc, blk.id, "b");
+    await settle(a, b);
+    expect(relay.rows[0]?.snap).toBe(true);
+    const late = make(ids[1]!);
+    late.td.start();
+    await settle(a, b, late);
+    expect([...(texts(late)[0] ?? "")].toSorted()).toEqual(["a", "b"]);
+    expect(texts(b)).toEqual(texts(late));
+    expect(texts(a)).toEqual(texts(late));
   });
 });
