@@ -4,6 +4,8 @@ import { applyAwarenessUpdate, Awareness, encodeAwarenessUpdate } from "y-protoc
 import type { Node } from "prosemirror-model"
 import { prosemirrorToYXmlFragment } from "y-prosemirror"
 
+import { agentBlock } from "@kiwi/core/doc/agent.ts"
+
 import { DEMO_ASK_BLOCK } from "~/demo/data"
 import { demoDoc } from "~/demo/doc-hub"
 import { DEMO_CHART, DEMO_REPORT } from "~/demo/doc-media"
@@ -97,7 +99,7 @@ function point(awareness: Awareness, text: Y.XmlText, from: number, to: number):
   })
 }
 
-export function seedThreadDoc(code: string, thread: string, extra: number): void {
+export function seedThreadDoc(code: string, thread: string, extra: number, streams = false): void {
   const { doc, awareness } = demoDoc(code, thread)
   const frag = doc.getXmlFragment(FRAGMENT)
   if (frag.length > 0) return
@@ -110,4 +112,18 @@ export function seedThreadDoc(code: string, thread: string, extra: number): void
   const phrase = said?.toString().indexOf("under 30 KB") ?? -1
   if (said && phrase >= 0) point(atlas.awareness, said, phrase, phrase + "under 30 KB".length)
   if (typing) point(maya.awareness, typing, typing.length, typing.length)
+  if (streams) stream(atlas.doc)
+}
+
+function stream(doc: Y.Doc): void {
+  let words = 0
+  let block: ReturnType<typeof agentBlock> | null = null
+  window.setInterval(() => {
+    block ??= agentBlock(doc, "atlas")
+    block.write(`${words % 12 === 11 ? "\n" : words ? " " : ""}${WORDS[words % WORDS.length]}`)
+    if (++words % 60 === 0) {
+      block.end()
+      block = null
+    }
+  }, 60)
 }

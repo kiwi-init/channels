@@ -226,6 +226,9 @@ jobs:
       - name: ui the keyboard runs across doc blocks like an editor (arrows, word jumps, shift-select, select all), in WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-doc-keys.ts --dist ui/dist
+      - name: ui a thread, a thread doc and a feed hold still once they open, in WebKit
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-still.ts --dist ui/dist
       - name: ui Esc in search keeps the panel, and Settings doesn't offer a name change, in WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-esc-and-name.ts --dist ui/dist
