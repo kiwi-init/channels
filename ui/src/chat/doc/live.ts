@@ -5,7 +5,9 @@ import { b64url, fromB64url } from "@kiwi/core/crypto.ts"
 import { blocksOf } from "@kiwi/core/doc/blocks.ts"
 import type { PipeIn } from "@kiwi/core/doc/held-pipe.ts"
 import { mirrorAware } from "@kiwi/core/doc/pipe.ts"
+import type { DocBlockRef } from "@kiwi/core/protocol.ts"
 import type { DocEvent, WireError } from "../../../../desktop/src/bridge.ts"
+import { postFinished, type Finished } from "~/chat/doc/post"
 import { FRAGMENT } from "~/chat/doc/schema"
 
 export interface Shared {
@@ -14,6 +16,11 @@ export interface Shared {
 }
 
 export type OpenDoc = (th: string | null, on: (e: DocEvent) => void) => PipeIn
+
+export interface Poster {
+  me: string
+  post: (text: string, block: DocBlockRef) => void
+}
 
 interface Changed {
   added: number[]
@@ -37,15 +44,19 @@ export class LiveDoc implements Shared {
   private dead = false
   private gaveUp = false
   private readonly waiting = new Set<() => void>()
+  private readonly unposted: Finished[] = []
+  private readonly stopPosting: () => void
 
   constructor(
     private readonly open: OpenDoc,
     th: string | undefined,
-    private readonly onFail: (why: string) => void
+    private readonly onFail: (why: string) => void,
+    private readonly poster?: Poster
   ) {
     this.ready = !th
     this.doc.on("update", this.onUpdate)
     this.awareness.on("change", this.onAware)
+    this.stopPosting = poster ? postFinished(this.doc, { me: poster.me, local: (origin) => origin !== PIPE }, (b) => this.post(b)) : () => {}
     if (th) this.connect(th)
   }
 
@@ -66,6 +77,7 @@ export class LiveDoc implements Shared {
 
   destroy(): void {
     this.dead = true
+    this.stopPosting()
     this.pipe?.close()
     this.pipe = null
     this.doc.off("update", this.onUpdate)
@@ -93,6 +105,7 @@ export class LiveDoc implements Shared {
     switch (e._tag) {
       case "Open":
         this.opened = e.th
+        for (const b of this.unposted.splice(0)) this.post(b)
         return
       case "Update":
         return Y.applyUpdate(this.doc, fromB64url(e.u), PIPE)
@@ -109,6 +122,12 @@ export class LiveDoc implements Shared {
         this.onFail(whyNot(e.error))
         return this.isNowReady()
     }
+  }
+
+  private post(b: Finished): void {
+    if (!this.poster) return
+    if (this.opened === null) this.unposted.push(b)
+    else this.poster.post(b.text, { th: this.opened, id: b.id })
   }
 
   private isNowReady(): void {

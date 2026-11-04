@@ -23,6 +23,7 @@ import {
   wellFormedHandoff,
   wellFormedHolds,
   type DecisionKind,
+  type DocBlockRef,
   type Event,
   type Handoff,
   type FileAttachment,
@@ -66,6 +67,7 @@ export interface SendOptions {
   task?: number;
   dm?: boolean;
   side?: boolean;
+  block?: DocBlockRef;
   slot?: { name: string; ttl: number };
   wake?: readonly string[];
   free?: string[];
@@ -163,6 +165,7 @@ export class ChannelSending {
         ...(opts.task && !opts.ev ? { task: opts.task } : {}),
         ...(opts.dm && !opts.ev && opts.to?.length === 1 ? { dm: true as const } : {}),
         ...(opts.side && opts.re?.length && !opts.ev ? { side: true as const } : {}),
+        ...(opts.block && !opts.ev ? { block: opts.block } : {}),
         ts: Date.now(),
       };
       if (payload.step && !wellFormed(payload))
