@@ -17,7 +17,7 @@ export const schema = new Schema({
   nodes: {
     doc: { content: "block+" },
     block: {
-      content: "paragraph+",
+      content: "(paragraph | code_block | bullet_list | ordered_list)+",
       defining: true,
       isolating: true,
       attrs: { id: { default: "" }, kind: { default: "text" }, author: { default: "" }, at: { default: 0 } },
@@ -29,11 +29,40 @@ export const schema = new Schema({
       ],
       toDOM: (node) => ["section", { "data-block": attrsOf(node).id, "data-kind": attrsOf(node).kind, "data-author": attrsOf(node).author, "data-at": String(attrsOf(node).at) }, 0],
     },
-    paragraph: { content: "text*", parseDOM: [{ tag: "p" }], toDOM: () => ["p", 0] },
-    text: {},
+    paragraph: { content: "inline*", parseDOM: [{ tag: "p" }], toDOM: () => ["p", 0] },
+    mention: {
+      inline: true,
+      group: "inline",
+      atom: true,
+      selectable: false,
+      attrs: { name: { default: "" } },
+      parseDOM: [{ tag: "span[data-mention]", getAttrs: (el) => ({ name: el.dataset.mention ?? "" }) }],
+      toDOM: (node) => ["span", { "data-mention": String(node.attrs.name), class: "doc-mention" }, `@${String(node.attrs.name)}`],
+      leafText: (node) => `@${String(node.attrs.name)}`,
+    },
+    code_block: {
+      content: "text*",
+      marks: "",
+      code: true,
+      defining: true,
+      parseDOM: [{ tag: "pre", preserveWhitespace: "full" }],
+      toDOM: () => ["pre", ["code", 0]],
+    },
+    bullet_list: { content: "list_item+", parseDOM: [{ tag: "ul" }], toDOM: () => ["ul", 0] },
+    ordered_list: {
+      content: "list_item+",
+      attrs: { order: { default: 1 } },
+      parseDOM: [{ tag: "ol", getAttrs: (el) => ({ order: Number(el.getAttribute("start")) || 1 }) }],
+      toDOM: (node) => ["ol", node.attrs.order === 1 ? {} : { start: String(node.attrs.order) }, 0],
+    },
+    list_item: { content: "paragraph (bullet_list | ordered_list)*", defining: true, parseDOM: [{ tag: "li" }], toDOM: () => ["li", 0] },
+    text: { group: "inline" },
   },
   marks: {
-    code: { parseDOM: [{ tag: "code" }], toDOM: () => ["code", 0] },
+    strong: { parseDOM: [{ tag: "strong" }, { tag: "b" }], toDOM: () => ["strong", 0] },
+    em: { parseDOM: [{ tag: "em" }, { tag: "i" }], toDOM: () => ["em", 0] },
+    strike: { parseDOM: [{ tag: "s" }, { tag: "del" }], toDOM: () => ["s", 0] },
+    code: { excludes: "_", parseDOM: [{ tag: "code" }], toDOM: () => ["code", 0] },
   },
 })
 

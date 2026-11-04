@@ -27,7 +27,8 @@ import {
   type ReadMark,
   type ServerFrame,
 } from "../protocol.ts";
-import { DocHub, type DocStore } from "../doc/hub.ts";
+import { DocHub, type DocStore, type ThreadKeys } from "../doc/hub.ts";
+import { privateRoomOf, type RoomsHere } from "../doc/threads.ts";
 import type { ChannelCore } from "./core.ts";
 import { ChannelGone, Dropped, Unreachable } from "./errors.ts";
 import type { ChannelInfo } from "./info.ts";
@@ -201,19 +202,50 @@ export class ChannelLive {
     store: DocStore | null = null,
   ) {
     const keyAt = (e: number | undefined) => ch.access.keys[String(e ?? ch.access.epoch)] ?? null;
+    const channelKeys: ThreadKeys = {
+      current: async () => {
+        const e = ch.access.epoch;
+        const key = keyAt(e);
+        if (!key) throw new Error("no channel key for this epoch yet");
+        return { key, e };
+      },
+      opening: async (e) => {
+        const key = keyAt(e);
+        return key ? [key] : [];
+      },
+    };
+    const rooms: RoomsHere = {
+      isPublic: (id) => ch.publicRooms.has(id),
+      members: (id) => ch.memberRooms.get(id) ?? ch.roomNow.get(id)?.meta,
+      all: function* () {
+        yield* ch.memberRooms;
+        for (const [id, r] of ch.roomNow) if (r.meta) yield [id, r.meta];
+      },
+    };
+    const roomKeys = (room: string): string[] =>
+      [...ch.roomKeys]
+        .filter(([k]) => k.startsWith(`${room}/`))
+        .map(([k, key]) => [Number(k.slice(room.length + 1)), key] as const)
+        .sort((a, b) => b[0] - a[0])
+        .map(([, key]) => key);
+    const keysFor = (thread: string): ThreadKeys => {
+      const room = privateRoomOf(thread, rooms);
+      if (!room) return channelKeys;
+      return {
+        sealed: true,
+        current: async () => {
+          const key = roomKeys(room)[0];
+          if (!key) throw new Error(`no key for room ${room} on this computer`);
+          return { key, e: ch.access.epoch };
+        },
+        opening: async () => roomKeys(room),
+      };
+    };
     this.docs = new DocHub({
       roomId: ch.roomId,
       me: ch.identity,
       store,
-      keys: {
-        current: async () => {
-          const e = ch.access.epoch;
-          const key = keyAt(e);
-          if (!key) throw new Error("no channel key for this epoch yet");
-          return { key, e };
-        },
-        at: async (e) => keyAt(e),
-      },
+      keysFor,
       sealAware: async (payload) => {
         const e = ch.access.epoch;
         return seal(keyAt(e) ?? "", ch.roomId, { ...payload, e });

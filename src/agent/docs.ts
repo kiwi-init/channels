@@ -2,7 +2,8 @@ import type { Channel } from "@kiwi/core/client.ts";
 import { agentBlock } from "@kiwi/core/doc/agent.ts";
 import { threadText } from "@kiwi/core/doc/blocks.ts";
 import type { ThreadDoc } from "@kiwi/core/doc/thread-doc.ts";
-import { MAIN, placeKey, type ChannelState, type Place } from "@kiwi/core/state.ts";
+import { docThread } from "@kiwi/core/doc/threads.ts";
+import { MAIN, type ChannelState } from "@kiwi/core/state.ts";
 import type { DocWakeItem } from "../config/doc-wakes.ts";
 
 const DOC_WAIT_MS = 15_000;
@@ -23,8 +24,7 @@ export interface Destination {
 export function docPlaceOf(state: Pick<ChannelState, "docs">, where: Destination): DocPlace | null {
   if (where.dm || where.re?.length) return null;
   if (where.task === undefined && where.room && where.room.toLowerCase() !== "general") return null;
-  const place: Place = where.task === undefined ? MAIN : { kind: "task", task: where.task };
-  const key = placeKey(place);
+  const key = docThread(where.task === undefined ? MAIN : { kind: "task", task: where.task });
   const th = state.docs.get(key);
   return th ? { key, th } : null;
 }

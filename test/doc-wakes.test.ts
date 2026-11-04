@@ -99,7 +99,7 @@ describe("the daemon's follower queues a wake for a finished block (T606)", () =
       roomId: newRoomId(),
       th,
       me,
-      keys: { current: async () => ({ key }), at: async () => key },
+      keys: { current: async () => ({ key }), opening: async () => [key] },
       links: { send: () => {}, aware: () => {} },
     });
     const closed: string[] = [];
