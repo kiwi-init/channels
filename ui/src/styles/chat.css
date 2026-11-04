@@ -670,6 +670,47 @@ button.msg-image-spot:hover {
   background: var(--wash-2);
 }
 
+.msg-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.msg-file {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  max-width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-ctl);
+  background: var(--wash);
+  color: var(--ink);
+  font: var(--t-meta) var(--ui);
+  cursor: pointer;
+  transition: background var(--fast);
+}
+
+.msg-file:hover:not(:disabled) {
+  background: var(--wash-2);
+}
+
+.msg-file:disabled {
+  cursor: default;
+}
+
+.msg-file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.msg-file-size {
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
 .chip {
   display: flex;
   align-items: baseline;

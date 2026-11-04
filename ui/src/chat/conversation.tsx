@@ -331,14 +331,12 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
   const all = useMemo(() => {
     const fromDoc = doc ? (feeds.get(`${channel.code}\n${doc}`) ?? EMPTY_FEED) : EMPTY_FEED
     const feed = withLeftOut(
-      channel.messages.filter(
-        (m) =>
-          sameWhere(m.where, where) &&
-          (!m.side || where.kind === "task") &&
-          inFeed(m, !!doc) &&
-          !(m.block !== undefined && fromDoc.media.has(m.block)) &&
-          (where.kind !== "room" || m.inThread === undefined || !specAsks.has(m.inThread))
-      ),
+      channel.messages
+        .filter((m) => sameWhere(m.where, where) && (!m.side || where.kind === "task") && inFeed(m, !!doc) && (where.kind !== "room" || m.inThread === undefined || !specAsks.has(m.inThread)))
+        .map((m) => {
+          const media = m.block === undefined ? undefined : fromDoc.media.get(m.block)
+          return media ? { ...m, docMedia: media } : m
+        }),
       (channel.leftOut ?? []).filter((m) => sameWhere(m.where, where))
     )
     if (!doc) return feed
