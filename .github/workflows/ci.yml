@@ -166,6 +166,9 @@ jobs:
       - name: doc paste, an image pasted into a line goes out with that line
         if: ${{ !cancelled() }}
         run: bun scripts/ui-doc-paste.ts
+      - name: doc owners, two people typing next to each other each write and send in their own line
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-doc-owner.ts
       - if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
