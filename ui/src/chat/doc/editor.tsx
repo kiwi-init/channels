@@ -12,6 +12,7 @@ import { attach, backInDraft, blockAt, blocks, continues, dropEmptyOwn, isEmpty,
 import { caretShown } from "~/chat/doc/carets"
 import { onGiveBack } from "~/chat/doc/give-back"
 import { writeOwnLinesOnly } from "~/chat/doc/own-writes"
+import { attachTo, startUpload, uploadTarget } from "~/chat/doc/uploads"
 import { docKeys, type CommandFor } from "~/chat/doc/keys"
 import { docTag, holdDoc, LiveDoc, type Shared } from "~/chat/doc/live"
 import { noteTyping, setTypingFocus, tracingTyping, type TypingFocus } from "~/kit/typing-hook"
@@ -371,11 +372,16 @@ const openImage = (url: string) => void window.open(url, "_blank", "noopener,nor
 
 function takeFiles(view: EditorView, me: string, media: DocMedia | null, editable: boolean, files: readonly File[], made: Made): boolean {
   if (!files.length || !media || !editable) return false
-  void uploadAll(files, media, (why) => announce(why, "error")).then((nodes) => {
-    if (view.isDestroyed) return
-    const tr = attach(view.state, me, Date.now(), nodes, made)
-    if (tr) view.dispatch(tr)
-  })
+  const target = uploadTarget(view.state, me, Date.now(), made)
+  if (target.tr) view.dispatch(target.tr)
+  const done = startUpload(target.id)
+  void uploadAll(files, media, (why) => announce(why, "error"))
+    .then((nodes) => {
+      if (view.isDestroyed) return
+      const tr = attachTo(view.state, me, target.id, nodes) ?? attach(view.state, me, Date.now(), nodes, made)
+      if (tr) view.dispatch(tr)
+    })
+    .finally(done)
   return true
 }
 
