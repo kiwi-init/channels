@@ -162,7 +162,7 @@ function paintRuns(root: HTMLElement, shown: Map<HTMLElement, BlockView>, me: st
     const a = attrsOf(node)
     const empty = isEmpty(node)
     const mine = a.author === me
-    const hidden = (empty && !(mine && drafts.made(a.id))) || drafts.posted(a.id) || drafts.inFeed(a.id)
+    const hidden = (empty && !mine) || drafts.posted(a.id) || drafts.inFeed(a.id)
     el.classList.toggle("is-cont", !hidden && continues(prev, node))
     el.classList.toggle("is-empty", empty)
     el.classList.toggle("is-mine", mine)
@@ -393,9 +393,9 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
     },
     dispatchTransaction(this: EditorView, tr) {
       if (this.isDestroyed) return
-      const before = this.state.doc
-      this.updateState(this.state.apply(tr))
-      if (tr.docChanged && !remote(tr)) noteMade(before, this.state.doc, me, shared.made)
+      const next = this.state.apply(tr)
+      if (tr.docChanged && !remote(tr)) noteMade(this.state.doc, next.doc, me, shared.made)
+      this.updateState(next)
       if (tr.selectionSet || tr.docChanged) shareSelection(this, shared, me)
     },
   })

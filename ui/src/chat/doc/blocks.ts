@@ -133,7 +133,7 @@ export function endsBlock(state: EditorState): boolean {
   return $from.parent.content.size > 0 || $from.node(1).childCount > 1
 }
 
-export function noteMade(before: Node, after: Node, me: string, made: Set<string>): void {
+export function noteMade(before: Node, after: Node, me: string, made: { add: (block: string) => unknown }): void {
   const had = new Set<string>()
   before.forEach((n) => {
     const a = attrsOf(n)
