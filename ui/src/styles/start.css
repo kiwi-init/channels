@@ -304,12 +304,12 @@
 
 .home-area {
   place-items: start center;
-  padding: clamp(48px, 16vh, 168px) var(--gutter) 64px;
+  padding: max(48px, 14vh) var(--gutter) 64px;
 }
 
 .calm {
   display: grid;
-  gap: 44px;
+  gap: 48px;
   width: min(38rem, 100%);
   min-width: 0;
   animation: fade 1.2s var(--ease) both;
@@ -359,7 +359,7 @@
 .calm-ask-body {
   display: grid;
   flex: 1 1 auto;
-  gap: 3px;
+  gap: 4px;
   min-width: 0;
   padding: 10px 0;
   border: 0;
@@ -480,7 +480,7 @@
   min-width: 0;
   min-height: var(--ctl-sm);
   max-height: 8rem;
-  padding: 3px 0;
+  padding: 4px 0;
   border: 0;
   outline: none;
   background: none;
@@ -599,7 +599,7 @@
 
 .calm-rest {
   margin: 0;
-  padding: 2px 8px 0 23px;
+  padding: 2px 8px 0 24px;
   color: var(--ink-3);
   font: var(--t-meta) var(--sans);
 }
