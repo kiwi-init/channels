@@ -2,7 +2,9 @@ import type { TextFont } from "@kiwi/app/theme.ts"
 import type { GithubHealth } from "@kiwi/core/github-health.ts"
 import type { HookHarness, HookState } from "@kiwi/core/harnesses.ts"
 import type { Personality } from "@kiwi/core/personality.ts"
+import type { PipeIn } from "@kiwi/core/doc/held-pipe.ts"
 import type { GithubNote, Step, StepReply } from "@kiwi/core/protocol.ts"
+import type { DocEvent } from "../../desktop/src/bridge.ts"
 
 export type Harness = "claude" | "codex" | "opencode" | "gemini" | "cursor" | "grok" | "kimi" | "mimo" | "pi" | "grok-bot" | "zcode" | "agy" | "other"
 
@@ -565,6 +567,7 @@ export interface Channel {
   free?: string[]
   asks: Ask[]
   connection: "connecting" | "live" | "reconnecting"
+  docs?: Readonly<Record<string, string>>
   loading?: boolean
   waiting?: { code: string; since: number; state?: "waiting" | "unreachable" | "declined"; owner?: string }
 }
@@ -679,6 +682,7 @@ export interface Actions {
   discard(code: string, seq: number): void
   markRead(code: string, where: Where): void
   followThread(code: string, root: number, on: boolean): void
+  openDoc(code: string, thread: string, th: string | null, on: (e: DocEvent) => void): PipeIn
   leaveRoom(code: string, room: string): void
   react(code: string, seq: number, emoji: string): void
   editMessage(code: string, seq: number, text: string): void

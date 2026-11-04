@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import type { ChannelIdentityView, ChannelOps, FollowEvent, KeysAsk, KeysPort, KeysPush, KeysReply } from "../desktop/src/bridge.ts";
+import type { ChannelIdentityView, ChannelOps, DocEvent, FollowEvent, KeysAsk, KeysPort, KeysPush, KeysReply } from "../desktop/src/bridge.ts";
 import { snapshotOf } from "../desktop/src/guard.ts";
 import { editable, Keyring, type KeyHost } from "../desktop/src/keyring.ts";
 import { serveKeys } from "../desktop/src/keys-server.ts";
@@ -11,7 +11,9 @@ import { acceptSeat, mergePublicChannels, migrateEntries, movedRelay, publicChan
 import { fromWire, toWire } from "../desktop/src/wire.ts";
 import { remoteOps } from "@kiwi/channel/channel-remote.ts";
 import { ChannelGone } from "@kiwi/core/client.ts";
-import { decodeJoinCode, encodeJoinCode, newRoomId } from "@kiwi/core/crypto.ts";
+import { b64url, decodeJoinCode, encodeJoinCode, fromB64url, newRoomId } from "@kiwi/core/crypto.ts";
+import type { PipeIn } from "@kiwi/core/doc/held-pipe.ts";
+import * as Y from "yjs";
 import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
 import type { CachedRow } from "@kiwi/core/cache-row.ts";
 import type { Member } from "@kiwi/core/membership.ts";
@@ -221,6 +223,78 @@ describe("channel keys stay out of the window (T203 step 2)", () => {
     const k = new Keyring(memHost(null).host);
     const events: FollowEvent[] = [];
     k.follow("nowhere", 0, (e) => events.push(e));
+    expect(events[0]?._tag).toBe("Failed");
+  });
+});
+
+interface Mirror {
+  doc: Y.Doc;
+  events: DocEvent[];
+  pipe: PipeIn;
+}
+
+function mirror(ops: ChannelOps, code: string, thread: string, th: string | null): Mirror {
+  const doc = new Y.Doc();
+  const events: DocEvent[] = [];
+  const pipe = ops.doc(code, thread, th, (e) => {
+    events.push(e);
+    if (e._tag === "Update") Y.applyUpdate(doc, fromB64url(e.u), "pipe");
+  });
+  doc.on("update", (u: Uint8Array, origin: unknown) => {
+    if (origin !== "pipe") pipe.update(b64url(u));
+  });
+  return { doc, events, pipe };
+}
+
+describe("the editor's doc crosses the window like the feed (T597)", () => {
+  test("two windows share a thread's doc through their own keys, and no key reaches either window", async () => {
+    const ada = await generateIdentity("Ada");
+    const bo = await generateIdentity("Bo");
+    const a = memHost(ada);
+    const b = memHost(bo);
+    const aw = window(new Keyring(a.host));
+    const bw = window(new Keyring(b.host));
+    const code = (await aw.ops.create("Doc test", null, { name: "Ada" })).code!;
+    const asked = await bw.ops.requestJoin(code, "bo");
+    await aw.ops.call(code, "requests");
+    await bw.ops.joinStatus(code);
+    const req = (await aw.ops.call(code, "requests")).find((r) => r.pk === asked.pk)!;
+    await aw.ops.call(code, "approve", req);
+    expect((await bw.ops.joinStatus(code)).status).toBe("in");
+
+    const seenA: FollowEvent[] = [];
+    const seenB: FollowEvent[] = [];
+    const stopA = aw.ops.follow(code, 0, (e) => seenA.push(e));
+    const stopB = bw.ops.follow(code, 0, (e) => seenB.push(e));
+    await until(() => seenA.find((e) => e._tag === "Open"));
+    await until(() => seenB.find((e) => e._tag === "Open"));
+
+    const mine = mirror(aw.ops, code, "main", null);
+    mine.doc.getText("t").insert(0, "first words");
+    const opened = await until(() => mine.events.find((e): e is Extract<DocEvent, { _tag: "Open" }> => e._tag === "Open"));
+    await until(() => (mine.events.some((e) => e._tag === "Ready") ? true : undefined));
+    const announced = await until(() =>
+      seenB.find((e): e is Extract<FollowEvent, { _tag: "Message" }> => e._tag === "Message" && e.message.kind === "event" && JSON.stringify(e.message).includes(opened.th)),
+    );
+    expect(announced).toBeTruthy();
+
+    const theirs = mirror(bw.ops, code, "main", opened.th);
+    await until(() => (theirs.doc.getText("t").toString() === "first words" ? true : undefined));
+    theirs.doc.getText("t").insert(0, "Bo: ");
+    await until(() => (mine.doc.getText("t").toString() === "Bo: first words" ? true : undefined));
+
+    theirs.pipe.close();
+    mine.pipe.close();
+    stopA();
+    stopB();
+    const wire = JSON.stringify([aw.sent, bw.sent]);
+    for (const s of [...secretsOf(a.store, b.store), ada.sk, bo.sk]) expect(wire.includes(s)).toBe(false);
+  });
+
+  test("a doc for a channel this app isn't in fails, it doesn't throw", async () => {
+    const k = new Keyring(memHost(null).host);
+    const events: DocEvent[] = [];
+    k.doc("nowhere", "main", null, (e) => events.push(e)).update("AA");
     expect(events[0]?._tag).toBe("Failed");
   });
 });

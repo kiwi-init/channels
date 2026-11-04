@@ -8,6 +8,7 @@ import type {
   ChannelCalls,
   ChannelOps,
   ChannelView,
+  DocEvent,
   FollowEvent,
   FollowOptions,
   JoinCheck,
@@ -18,6 +19,7 @@ import type {
 } from "../../../desktop/src/bridge.ts";
 import type { IndexHit, Searched } from "../../../desktop/src/search-types.ts";
 import { fromWire, toWire } from "../../../desktop/src/wire.ts";
+import { heldPipe, type PipeIn } from "@kiwi/core/doc/held-pipe.ts";
 
 export function errorOf(w: WireError): Error {
   switch (w.kind) {
@@ -49,6 +51,8 @@ export function remoteOps(port: KeysPort): ChannelOps {
   };
   const subs = new Set<Sub>();
   const byRemote = new Map<number, Sub>();
+  const docs = new Map<number, (e: DocEvent) => void>();
+  const docDown = new Set<() => void>();
   const start = (s: Sub) => {
     void port.request({ op: "follow", code: s.code, since: s.last, ...(s.watch ? { watch: true } : {}) }).then((r) => {
       if (!r.ok) {
@@ -66,6 +70,8 @@ export function remoteOps(port: KeysPort): ChannelOps {
     });
   };
   port.onPush((p) => {
+    const d = docs.get(p.sub);
+    if (d) return d(fromWire(p.event) as DocEvent);
     const s = byRemote.get(p.sub);
     if (!s || s.stopped) return;
     const ev = fromWire(p.event) as FollowEvent;
@@ -75,6 +81,8 @@ export function remoteOps(port: KeysPort): ChannelOps {
     s.on(ev);
   });
   port.onRestart(() => {
+    docs.clear();
+    for (const down of [...docDown]) down();
     byRemote.clear();
     for (const s of subs) {
       s.remote = null;
@@ -98,6 +106,46 @@ export function remoteOps(port: KeysPort): ChannelOps {
     keep: (code, state) => ask({ op: "keep", code, state: toWire(state) }) as Promise<CachedKept | null>,
     openKept: (code, sealed) => ask({ op: "openKept", code, sealed: toWire(sealed) }),
     nudge: () => void port.request({ op: "nudge" }),
+    doc: (code, thread, th, on): PipeIn => {
+      const { pipe, attach } = heldPipe();
+      let sub: number | null = null;
+      let closed = false;
+      const down = (): void => {
+        docDown.delete(down);
+        if (!closed) on({ _tag: "Down" });
+      };
+      docDown.add(down);
+      void port.request({ op: "doc", code, thread, th }).then((r) => {
+        if (!r.ok) {
+          docDown.delete(down);
+          if (!closed) on({ _tag: "Failed", error: r.error });
+          return;
+        }
+        const id = fromWire(r.value);
+        if (typeof id !== "number") return;
+        sub = id;
+        docs.set(id, (e) => {
+          if (!closed) on(e);
+        });
+        attach({
+          update: (update) => void port.request({ op: "docIn", sub: id, update }),
+          aware: (state) => void port.request({ op: "docAware", sub: id, state: toWire(state) }),
+          close: () => {
+            docs.delete(id);
+            void port.request({ op: "undoc", sub: id });
+          },
+        });
+      });
+      return {
+        ...pipe,
+        close: () => {
+          closed = true;
+          docDown.delete(down);
+          pipe.close();
+          if (sub !== null) docs.delete(sub);
+        },
+      };
+    },
     follow: (code, since, on, opts?: FollowOptions) => {
       const s: Sub = { code, on, last: since, remote: null, stopped: false, watch: opts?.watch === true };
       subs.add(s);

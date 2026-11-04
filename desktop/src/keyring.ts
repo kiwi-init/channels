@@ -6,6 +6,8 @@ import * as ManagedRuntime from "effect/ManagedRuntime";
 
 import { openKept as openSealedKept, openRows as openSealedRows, packKept, packRow, packEnvelope, type CachedKept, type CachedRow, type Unread } from "@kiwi/core/cache-row.ts";
 import { Channel, ChannelGone, RelayError, Relay, Unreachable, eachLive, fetchRelay, type Live, type PresenceFields } from "@kiwi/core/client.ts";
+import { heldPipe, type PipeIn } from "@kiwi/core/doc/held-pipe.ts";
+import { pipeDoc } from "@kiwi/core/doc/pipe.ts";
 import { encodeJoinCode, keepSeen, newRoomId, ownerFingerprint, type ChannelAccess } from "@kiwi/core/crypto.ts";
 import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
 import { handleFor, type JoinClaims, type Member, type MemberInfo } from "@kiwi/core/membership.ts";
@@ -23,6 +25,7 @@ import {
   type ChannelIdentityView,
   type ChannelOps,
   type ChannelView,
+  type DocEvent,
   type FollowEvent,
   type FollowOptions,
   type JoinCheck,
@@ -35,6 +38,7 @@ import { indexKey, SearchHost, type SearchPlace } from "./search-host.ts";
 import type { FoldInputs, IndexHit, Searched } from "./search-types.ts";
 
 const OLDER_PAGE = 500;
+const DOC_SYNC_MS = 4_000;
 import { channelAccess, publicChannel } from "./seats.ts";
 
 export interface KeyHost {
@@ -109,6 +113,7 @@ function watched(ev: Live): FollowEvent | null {
 export class Keyring implements ChannelOps {
   private readonly open = new Map<string, Channel>();
   private readonly follows = new Map<number, Follow>();
+  private readonly docUsers = new Map<string, number>();
   private nextSub = 1;
   private searching: { host: SearchHost; place: SearchPlace } | null | undefined;
 
@@ -399,6 +404,46 @@ export class Keyring implements ChannelOps {
       default:
         return null;
     }
+  }
+
+  doc(code: string, thread: string, th: string | null, on: (e: DocEvent) => void): PipeIn {
+    const { pipe, attach } = heldPipe();
+    let ch: Channel;
+    try {
+      ch = this.channel(code);
+    } catch (e) {
+      on({ _tag: "Failed", error: wireError(e) });
+      return pipe;
+    }
+    const key = `${code}\n${thread}`;
+    this.docUsers.set(key, (this.docUsers.get(key) ?? 0) + 1);
+    let released = false;
+    const release = (): void => {
+      if (released) return;
+      released = true;
+      const left = (this.docUsers.get(key) ?? 1) - 1;
+      if (left > 0) return void this.docUsers.set(key, left);
+      this.docUsers.delete(key);
+      ch.closeDoc(thread);
+    };
+    ch.threadDoc(thread, th ?? undefined).then(
+      (td) => {
+        on({ _tag: "Open", th: td.th });
+        const real = pipeDoc(td.doc, td.awareness, on, Promise.race([td.whenSynced(), new Promise<void>((done) => setTimeout(done, DOC_SYNC_MS))]));
+        attach({
+          ...real,
+          close: () => {
+            real.close();
+            release();
+          },
+        });
+      },
+      (e: unknown) => {
+        release();
+        on({ _tag: "Failed", error: wireError(e) });
+      },
+    );
+    return pipe;
   }
 
   nudge(): void {
