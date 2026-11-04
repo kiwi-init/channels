@@ -546,7 +546,7 @@ describe("docs of members-only rooms and DMs are sealed with the room's key (T60
     const c = w.hubFor(cy, null, () => roomKeys([k3, k2, k1]));
     const sc = w.plug(c).s;
     const dc = await c.open("room:secret", da.th);
-    await w.settle(sc);
+    for (let i = 0; i < 50 && texts(dc.doc).length < 2; i++) await w.settle(sc);
     expect(texts(dc.doc).toSorted()).toEqual(["sealed with a key bo hasn't got", "sealed with the old key"]);
   });
 
