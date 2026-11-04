@@ -20,7 +20,7 @@
 }
 
 .thread-doc .blk:not(.is-cont) {
-  margin-top: 14px;
+  margin-top: 12px;
 }
 
 .thread-doc .blk.is-cont {
@@ -148,7 +148,7 @@
   bottom: 100%;
   left: -2px;
   padding: 0 4px;
-  border-radius: 2px 2px 2px 0;
+  border-radius: var(--r-tag) var(--r-tag) var(--r-tag) 0;
   background: var(--member, var(--accent));
   color: var(--white);
   font: 500 var(--t-stamp) / 1.4 var(--ui);
