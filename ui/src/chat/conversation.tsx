@@ -202,8 +202,9 @@ export function useStick(following = true) {
 
 function docOf(channel: Channel, where: Where): string | null {
   if (where.kind === "task") return docThread({ kind: "task", task: where.task })
-  if (where.kind !== "room" || channel.rooms.find((r) => r.id === where.room)?.members) return null
-  return docThread({ kind: "room", room: where.room })
+  if (where.kind === "room") return docThread({ kind: "room", room: where.room })
+  if (where.kind === "dm") return channel.directs.find((d) => d.with === where.with)?.doc ?? null
+  return null
 }
 
 export function Conversation({ channel, jump }: { channel: Channel; jump: Jump | null }) {

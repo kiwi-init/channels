@@ -9,7 +9,7 @@ import { checksOf, FAILED, prLinks, taskOfBranch, taskPr } from "@kiwi/core/prs.
 import { stageOf } from "@kiwi/core/stage.ts"
 import { editable, GENERAL_ROOM, ignored, isQuiet, isRasterMime, isOverlay, type Message as Wire } from "@kiwi/core/protocol.ts"
 import { rootOf, sentTo } from "@kiwi/core/room-rules.ts"
-import { dmOther } from "~/live/dm"
+import { dmDocOf, dmOther } from "~/live/dm"
 import { pickFor, taskCandidates } from "@kiwi/core/routing.ts"
 import { canPost } from "@kiwi/core/scopes.ts"
 import { versionName } from "@kiwi/core/status.ts"
@@ -266,7 +266,10 @@ export function directsOf(state: ChannelState, messages: readonly Wire[], seat: 
     if (!at.has(other)) at.set(other, 0)
   }
   return [...at]
-    .map(([name, last]) => ({ with: name, unread: unread.get(name) ?? 0, last, seen: marks.get(name) ?? 0, ...(membersOnly.has(name) ? { membersOnly: true as const } : {}) }))
+    .map(([name, last]) => {
+      const doc = dmDocOf(state, seat, name)
+      return { with: name, unread: unread.get(name) ?? 0, last, seen: marks.get(name) ?? 0, ...(membersOnly.has(name) ? { membersOnly: true as const } : {}), ...(doc ? { doc } : {}) }
+    })
     .sort((a, b) => b.last - a.last)
 }
 

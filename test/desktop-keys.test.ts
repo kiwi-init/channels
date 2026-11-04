@@ -246,8 +246,8 @@ function mirror(ops: ChannelOps, code: string, thread: string, th: string | null
   return { doc, events, pipe };
 }
 
-describe("the editor's doc crosses the window like the feed (T597)", () => {
-  test("two windows share a thread's doc through their own keys, and no key reaches either window", async () => {
+describe("the editor's doc crosses the window like the feed (T597, T693)", () => {
+  test("two windows share #general's, a members-only room's and a DM's doc through their own keys, and no key reaches either window", async () => {
     const ada = await generateIdentity("Ada");
     const bo = await generateIdentity("Bo");
     const a = memHost(ada);
@@ -269,22 +269,31 @@ describe("the editor's doc crosses the window like the feed (T597)", () => {
     await until(() => seenA.find((e) => e._tag === "Open"));
     await until(() => seenB.find((e) => e._tag === "Open"));
 
-    const mine = mirror(aw.ops, code, "main", null);
-    mine.doc.getText("t").insert(0, "first words");
-    const opened = await until(() => mine.events.find((e): e is Extract<DocEvent, { _tag: "Open" }> => e._tag === "Open"));
-    await until(() => (mine.events.some((e) => e._tag === "Ready") ? true : undefined));
-    const announced = await until(() =>
-      seenB.find((e): e is Extract<FollowEvent, { _tag: "Message" }> => e._tag === "Message" && e.message.kind === "event" && JSON.stringify(e.message).includes(opened.th)),
-    );
-    expect(announced).toBeTruthy();
+    const share = async (thread: string, words: string): Promise<void> => {
+      const mine = mirror(aw.ops, code, thread, null);
+      mine.doc.getText("t").insert(0, words);
+      const opened = await until(() => mine.events.find((e): e is Extract<DocEvent, { _tag: "Open" }> => e._tag === "Open"));
+      expect(mine.events.find((e) => e._tag === "Failed")).toBeUndefined();
+      await until(() => (mine.events.some((e) => e._tag === "Ready") ? true : undefined));
+      await until(() => seenB.find((e) => e._tag === "Message" && e.message.kind === "event" && JSON.stringify(e.message).includes(opened.th)));
+      const theirs = mirror(bw.ops, code, thread, opened.th);
+      await until(() => (theirs.doc.getText("t").toString() === words ? true : undefined));
+      theirs.doc.getText("t").insert(0, "Bo: ");
+      await until(() => (mine.doc.getText("t").toString() === `Bo: ${words}` ? true : undefined));
+      expect(theirs.events.find((e) => e._tag === "Failed")).toBeUndefined();
+      theirs.pipe.close();
+      mine.pipe.close();
+    };
+    await share("main", "first words");
 
-    const theirs = mirror(bw.ops, code, "main", opened.th);
-    await until(() => (theirs.doc.getText("t").toString() === "first words" ? true : undefined));
-    theirs.doc.getText("t").insert(0, "Bo: ");
-    await until(() => (mine.doc.getText("t").toString() === "Bo: first words" ? true : undefined));
-
-    theirs.pipe.close();
-    mine.pipe.close();
+    const boSeat = (await aw.ops.call(code, "members")).find((m) => m.pk === asked.pk)!;
+    const pick = { name: boSeat.name, pk: boSeat.pk, xpk: boSeat.xpk! };
+    const room = await aw.ops.call(code, "makeRoom", "plans", [pick]);
+    const dm = await aw.ops.call(code, "makeDm", pick);
+    for (const id of [room, dm]) await until(() => seenB.find((e) => e._tag === "Message" && JSON.stringify(e.message).includes(id)));
+    await share(`room:${room}`, "members only");
+    const adaSeat = (await aw.ops.call(code, "members")).find((m) => m.owner)!;
+    await share(`dm:${[adaSeat.name, boSeat.name].sort().join("~")}`, "just us");
     stopA();
     stopB();
     const wire = JSON.stringify([aw.sent, bw.sent]);
