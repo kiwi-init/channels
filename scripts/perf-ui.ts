@@ -8,7 +8,7 @@ export async function writeBlock(page: Page, text: string): Promise<void> {
   await page.locator(".thread-doc .doc-tail").last().click();
   await page.keyboard.type(text);
   await page.keyboard.press("Enter");
-  await threadDoc(page).locator(".blk").filter({ hasText: text }).first().waitFor({ timeout: 15000 });
+  await page.locator(`.thread-doc .blk, ${ROWS}`).filter({ hasText: text, visible: true }).first().waitFor({ timeout: 15000 });
 }
 
 export async function eraseLine(page: Page): Promise<void> {
