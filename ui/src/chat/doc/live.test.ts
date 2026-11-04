@@ -4,6 +4,7 @@ import { applyAwarenessUpdate, Awareness, encodeAwarenessUpdate } from "y-protoc
 import { b64url } from "@kiwi/core/crypto.ts"
 import { blocksOf } from "@kiwi/core/doc/blocks.ts"
 import { heldPipe } from "@kiwi/core/doc/held-pipe.ts"
+import { DOC_LEVEL, raiseWriterFloor, writerFloor } from "@kiwi/core/doc/level.ts"
 import { pipeDoc } from "@kiwi/core/doc/pipe.ts"
 import { prosemirrorToYXmlFragment } from "y-prosemirror"
 
@@ -198,5 +199,26 @@ describe("the editor's doc mirrors the channel's live doc", () => {
     expect(asked).toBe(1)
     expect(fails).toEqual(["no key for room r1 on this computer"])
     live.destroy()
+  })
+
+  test("a synced copy raises the doc's writer floor to its own level, and never lowers a newer one (T2558)", async () => {
+    const h = host()
+    write(h.doc, "atlas", "on it")
+    const newer = host()
+    raiseWriterFloor(newer.doc, DOC_LEVEL + 1)
+    const hosts = new Map([
+      ["th1", h],
+      ["th2", newer],
+    ])
+    const live = new LiveDoc(relay(hosts, []), "th1", () => {})
+    expect(writerFloor(h.doc)).toBe(0)
+    await tick()
+    expect(writerFloor(h.doc)).toBe(DOC_LEVEL)
+    const behind = new LiveDoc(relay(hosts, []), "th2", () => {})
+    await tick()
+    expect(writerFloor(newer.doc)).toBe(DOC_LEVEL + 1)
+    expect(writerFloor(behind.doc)).toBeGreaterThan(DOC_LEVEL)
+    live.destroy()
+    behind.destroy()
   })
 })

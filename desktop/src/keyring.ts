@@ -40,6 +40,7 @@ import type { FoldInputs, IndexHit, Searched } from "./search-types.ts";
 
 const OLDER_PAGE = 500;
 const DOC_SYNC_MS = 4_000;
+const OLD_WRITER = "A newer Channels writes in this thread. Switch to the new look or restart Channels to keep typing";
 import { channelAccess, publicChannel } from "./seats.ts";
 
 export interface KeyHost {
@@ -409,7 +410,7 @@ export class Keyring implements ChannelOps {
     }
   }
 
-  doc(code: string, thread: string, th: string | null, on: (e: DocEvent) => void): PipeIn {
+  doc(code: string, thread: string, th: string | null, on: (e: DocEvent) => void, level = 0): PipeIn {
     const { pipe, attach } = heldPipe();
     let ch: Channel;
     try {
@@ -432,7 +433,11 @@ export class Keyring implements ChannelOps {
     ch.threadDoc(thread, th ?? undefined).then(
       (td) => {
         on({ _tag: "Open", th: td.th });
-        const real = pipeDoc(td.doc, td.awareness, on, Promise.race([td.whenSynced(), new Promise<void>((done) => setTimeout(done, DOC_SYNC_MS))]));
+        const refused = (): void => {
+          on({ _tag: "Failed", error: { kind: "other", message: OLD_WRITER, tag: "old-writer" } });
+          release();
+        };
+        const real = pipeDoc(td.doc, td.awareness, on, Promise.race([td.whenSynced(), new Promise<void>((done) => setTimeout(done, DOC_SYNC_MS))]), { level, refused });
         attach({
           ...real,
           close: () => {
