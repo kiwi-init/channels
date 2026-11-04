@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import type { Node } from "prosemirror-model"
 import { EditorState, TextSelection } from "prosemirror-state"
 
-import { atBlockEnd, attach, blockAfter, blocks, continues, dropEmptyOwn, endsBlock, makeBlock, startBlock } from "~/chat/doc/blocks"
+import { atBlockEnd, attach, blockAfter, joinBack, joinForward, blocks, continues, dropEmptyOwn, endsBlock, makeBlock, startBlock } from "~/chat/doc/blocks"
 import { attrsOf, imageNode, schema } from "~/chat/doc/schema"
 
 const T = 1_700_000_000_000
@@ -133,5 +133,41 @@ describe("dropping an image into the doc", () => {
     const next = s.apply(attach(s, "jow", T + 1, [shot])!)
     expect(texts(next)).toEqual(["maya:hi", "jow:[image: shot.png]"])
     expect(kinds(next.doc.child(1))).toEqual(["image", "paragraph"])
+  })
+})
+
+describe("joining blocks like paragraphs", () => {
+  const caretAtStart = (state: EditorState, index: number): EditorState => {
+    const b = blocks(state.doc)[index]
+    if (!b) throw new Error("no block")
+    return state.apply(state.tr.setSelection(TextSelection.create(state.doc, b.pos + 2)))
+  }
+
+  test("Backspace at the start of your block joins it to your block above, caret at the seam", () => {
+    const s = caretAtStart(stateOf(makeBlock("text", "jow", T, "first"), makeBlock("text", "jow", T + 1, "second")), 1)
+    const next = s.apply(joinBack(s, "jow")!)
+    expect(texts(next)).toEqual(["jow:firstsecond"])
+    expect(next.selection.$from.parentOffset).toBe(5)
+  })
+
+  test("Delete at the end of your block pulls your next block up into it", () => {
+    const s = caretAtEnd(stateOf(makeBlock("text", "jow", T, "first"), makeBlock("text", "jow", T + 1, "second")), 0)
+    const next = s.apply(joinForward(s, "jow")!)
+    expect(texts(next)).toEqual(["jow:firstsecond"])
+    expect(next.selection.$from.parentOffset).toBe(5)
+  })
+
+  test("never across authors: someone else's words stay theirs", () => {
+    const s = caretAtStart(stateOf(makeBlock("text", "maya", T, "hers"), makeBlock("text", "jow", T + 1, "mine")), 1)
+    expect(joinBack(s, "jow")).toBeNull()
+    const e = caretAtEnd(stateOf(makeBlock("text", "jow", T, "mine"), makeBlock("text", "maya", T + 1, "hers")), 0)
+    expect(joinForward(e, "jow")).toBeNull()
+  })
+
+  test("only from the very start or end: mid-text and the first block do nothing", () => {
+    const s = stateOf(makeBlock("text", "jow", T, "first"), makeBlock("text", "jow", T + 1, "second"))
+    const mid = s.apply(s.tr.setSelection(TextSelection.create(s.doc, blocks(s.doc)[1]!.pos + 4)))
+    expect(joinBack(mid, "jow")).toBeNull()
+    expect(joinBack(caretAtStart(s, 0), "jow")).toBeNull()
   })
 })
