@@ -123,7 +123,8 @@ function wakeLines(w: DocWakeItem): string[] {
 
 export function docWakeLine(w: DocWakeItem, mc: string): string {
   const where = placeName(w.key);
-  return [...wakeLines(w), `  answer in the doc: ${mc} send --to ${where} "…" (${mc} show ${where === "#general" ? "general" : where} has all of it)`].join("\n");
+  const to = where.startsWith("#") ? `'${where}'` : where;
+  return [...wakeLines(w), `  answer in the doc: ${mc} send --to ${to} "…" (${mc} show ${where === "#general" ? "general" : where} has all of it)`].join("\n");
 }
 
 export function docWakeToolLine(w: DocWakeItem): string {
