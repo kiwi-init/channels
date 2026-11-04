@@ -4,6 +4,7 @@ import { threadText } from "@kiwi/core/doc/blocks.ts";
 import type { ThreadDoc } from "@kiwi/core/doc/thread-doc.ts";
 import { docThread } from "@kiwi/core/doc/threads.ts";
 import { MAIN, type ChannelState } from "@kiwi/core/state.ts";
+import type { DocWakeItem } from "../config/doc-wakes.ts";
 
 const DOC_WAIT_MS = 15_000;
 const SENT_POLL_MS = 20;
@@ -78,3 +79,24 @@ export const writeBlock = (ch: Channel, from: number, at: DocPlace, author: stri
   });
 
 export const readDoc = (ch: Channel, from: number, at: DocPlace, ms = DOC_WAIT_MS): Promise<string> => inThreadDoc(ch, from, at, (td) => threadText(td.doc, (a) => a), ms);
+
+const LINE_TEXT = 800;
+const LINE_CONTEXT = 400;
+const LINE_SELECTION = 200;
+
+function placeName(key: string): string {
+  if (key === "main") return "#general";
+  const t = /^task:(\d+)$/.exec(key);
+  return t ? `T${t[1]}` : key;
+}
+
+const clip = (s: string, n: number): string => (s.length > n ? `${s.slice(0, n)} …` : s);
+
+export function docWakeLine(w: DocWakeItem, mc: string): string {
+  const where = placeName(w.key);
+  const lines = [`▸ ${w.author} in ${where}'s shared doc: ${clip(w.text.trim(), LINE_TEXT)}`];
+  if (w.selection) lines.push(`  about: "${clip(w.selection.trim(), LINE_SELECTION)}"`);
+  if (w.context.trim()) lines.push(`  before it: ${clip(w.context.trim(), LINE_CONTEXT)}`);
+  lines.push(`  answer in the doc: ${mc} send --to ${where} "…" (${mc} show ${where === "#general" ? "general" : where} has all of it)`);
+  return lines.join("\n");
+}

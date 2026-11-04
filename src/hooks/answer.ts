@@ -1,4 +1,6 @@
 import * as Effect from "effect/Effect";
+import { docWakeLine } from "../agent/docs.ts";
+import { pendingDocWakes, tellDocWakes } from "../config/doc-wakes.ts";
 import { writeSync } from "node:fs";
 import { join } from "node:path";
 import type { Relay } from "@kiwi/core/client.ts";
@@ -303,28 +305,41 @@ export function handOver(unread: readonly Unread[], max: number, mc: string): { 
 
 const unreadText = Effect.fn("Hooks.unreadText")(function* (s: AgentSession, mc: string, max = MAX_CONTEXT, d: Delivery = {}) {
   const { messages, state, commit } = yield* s.unread(d);
+  const docs = pendingDocWakes(s.alias, s.me);
   const hand = handOver(
-    messages.map((m) => ({
-      line: formatMessage(m, state.trust.get(m.seq), state, s.me),
-      seq: m.seq,
-      head: messageHead(m, state.trust.get(m.seq), state, s.me).length + 2,
-    })),
+    [
+      ...messages.map((m) => ({
+        line: formatMessage(m, state.trust.get(m.seq), state, s.me),
+        seq: m.seq,
+        head: messageHead(m, state.trust.get(m.seq), state, s.me).length + 2,
+      })),
+      ...docs.map((w) => {
+        const line = docWakeLine(w, mc);
+        return { line, seq: 0, head: (line.split("\n")[0] ?? "").length + 2 };
+      }),
+    ],
     max,
     mc,
   );
   const shownMessages = messages.slice(0, hand.count);
-  const rest = messages.length - hand.count;
+  const shownDocs = docs.slice(0, Math.max(0, hand.count - messages.length));
+  const rest = messages.length - shownMessages.length;
   const last = shownMessages.at(-1);
   const shown = Effect.andThen(
     !rest ? commit() : last ? commit(last.seq) : Effect.void,
-    Effect.sync(() =>
+    Effect.sync(() => {
       noteHeard(
         here().session,
         s.alias,
         s.me,
         shownMessages.map((m) => m.seq),
-      ),
-    ),
+      );
+      tellDocWakes(
+        s.alias,
+        s.me,
+        shownDocs.map((w) => w.block),
+      );
+    }),
   );
   return { text: hand.text, shown };
 });
@@ -482,7 +497,7 @@ export const answer = Effect.fn("Hooks.answer")(function* (event: string, input:
     if (style === "cursor") {
       if (input.status && input.status !== "completed") return null;
       const { messages, state } = yield* s.state();
-      const unread = (yield* s.unreadAt(state, messages, loopDelivery())).unread > 0;
+      const unread = (yield* s.unreadAt(state, messages, loopDelivery())).unread > 0 || pendingDocWakes(b.alias, b.as).length > 0;
       const follow = cursorFollow(b.alias, mc, unread, yield* rearmText(input, b, who, mc), budget);
       return follow ? answered("followup", follow) : null;
     }
