@@ -15,7 +15,7 @@ import { sendsInTurn } from "@kiwi/app/send-order.ts"
 import { markSeenIn, roomsFrom, seenIn, sendFrom, useSeen } from "@kiwi/app/threads.ts"
 import { useNewMembers, useNewPowers } from "~/live/defaults"
 import { kept } from "~/live/keep"
-import { changeUnsent, nextUnsentKey, resendOf, unsentIn } from "~/live/unsent"
+import { changeUnsent, nextUnsentKey, resendOf, unsentBlock, unsentIn } from "~/live/unsent"
 import { asksOf, directsOf, groupsOf, issuesOf, leftOutOf, messagesOf, formerOf, nextOf, peopleOf, prsOf, roomsOf, tasksOf, theirsOf, type Pending } from "~/live/map"
 import { iconUrl } from "~/live/icon"
 import { usePinsHere } from "~/live/pins"
@@ -300,6 +300,14 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   )
 
   const discard = useCallback((key: number) => setPending((list) => list.filter((p) => p.key !== key)), [setPending])
+  const toDraft = useCallback(
+    (key: number) => {
+      const block = unsentBlock(pending, key)
+      discard(key)
+      if (block) giveBackBlock(block)
+    },
+    [pending, discard]
+  )
   const retry = useCallback(
     async (key: number): Promise<number> => {
       const p = pending.find((x) => x.key === key)
@@ -316,8 +324,8 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   )
 
   const run = useMemo(
-    (): Run => ({ code, roomId, me, isOwner, ch, state, messages, roster, requests, send, post, retry, discard, refreshRequests, refreshRoster, foldFrom, older }),
-    [code, roomId, me, isOwner, ch, state, messages, roster, requests, send, post, retry, discard, refreshRequests, refreshRoster, foldFrom, older]
+    (): Run => ({ code, roomId, me, isOwner, ch, state, messages, roster, requests, send, post, retry, discard: toDraft, refreshRequests, refreshRoster, foldFrom, older }),
+    [code, roomId, me, isOwner, ch, state, messages, roster, requests, send, post, retry, toDraft, refreshRequests, refreshRoster, foldFrom, older]
   )
 
   useLayoutEffect(() => {
