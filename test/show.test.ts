@@ -32,6 +32,19 @@ describe("kiwi show", () => {
     expect(out).not.toContain("FORGED");
   });
 
+  test("a doc line that already names its image prints the marker once, with the saved path", async () => {
+    const doc = await generateIdentity("doc");
+    roster.push({ name: "doc", pk: doc.pk, owner: false, at: 0, active: true });
+    const shot = { name: "shot.png", mime: "image/png", data: "AA==" };
+    const other = { name: "other.png", mime: "image/png", data: "AA==" };
+    const m: Message = { ...(await msg(doc, "doc", "[image: shot.png]\nlook at this")), imgs: [shot, other] };
+    const state = fold([m], roster);
+    const out = formatShown(m, [m], state, ["/tmp/#9-shot.png", "/tmp/#9-other.png"]);
+    expect(out.match(/\[image: shot\.png/g)).toHaveLength(1);
+    expect(out).toContain("[image: other.png (");
+    expect(out).toContain("images saved: /tmp/#9-shot.png, /tmp/#9-other.png");
+  });
+
   test("says how many images did not load", async () => {
     const mac = await generateIdentity("mac");
     const img = { name: "a.png", mime: "image/png", data: "AA==" };

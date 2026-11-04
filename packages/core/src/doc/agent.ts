@@ -2,7 +2,7 @@ import type * as Y from "yjs";
 import type { Awareness } from "y-protocols/awareness";
 import { mentionsOf } from "../changes.ts";
 import { appendToBlock, attachToBlock, blocksOf, markPosted, markSent, newBlock, threadText, type Block, type BlockKind, type BlockMedia } from "./blocks.ts";
-import { endsEarlierLines } from "./ends.ts";
+import { laterLines } from "./ends.ts";
 
 export const PRESENCE_FIELD = "kiwi";
 
@@ -41,11 +41,11 @@ interface Watched {
 const WAKING_KINDS: readonly BlockKind[] = ["text", "comment", "agent"];
 
 export function settledBlocks(blocks: readonly Block[]): Block[] {
-  const later = new Set<string>();
+  const later = laterLines();
   const out: Block[] = [];
   for (const b of [...blocks].reverse()) {
-    if (b.sent || b.posted || (!b.back && later.has(b.author))) out.push(b);
-    if (endsEarlierLines(b)) later.add(b.author);
+    if (b.sent || b.posted || (!b.back && later.finish(b))) out.push(b);
+    later.add(b);
   }
   return out.reverse();
 }

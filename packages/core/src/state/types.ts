@@ -165,6 +165,7 @@ export interface Spec {
   started: SpecMark;
   edits: number;
   editors: string[];
+  ready?: SpecMark & { v: number };
   approved?: SpecMark & { v: number; text: string };
   result?: SpecMark & { verdict: SpecVerdict; note?: string; auto?: true };
   backs: (SpecMark & { note: string })[];

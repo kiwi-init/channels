@@ -13,6 +13,7 @@ const USAGE = [
   "       kiwi spec show N                       #N's spec in full: its stage, Done when and tasks",
   "       kiwi spec write N --file spec.md       write or rewrite the spec of the person's message #N (or the text, or - for stdin)",
   '       kiwi spec tick N "words" [--undo]      tick the box under Done when whose line says those words',
+  "       kiwi spec ready N                      mark #N's spec ready once its reviews pass: only then does its approve card reach the person",
   "       kiwi spec start N                      take an approved spec that waits for an agent, and plan it",
   '       kiwi spec comment N "…" [--on "line"]  comment on #N\'s spec, on one line of it',
   '       kiwi spec cancel N "why"               cancel #N\'s spec and its open tasks (the lead or a person who approves it)',
@@ -55,6 +56,12 @@ export const specCommands: Record<string, Command> = {
           const spec = yield* s.writeSpec(ask, body);
           const { state } = yield* s.state();
           return out(`wrote ${specLine(state, spec)}`);
+        }
+        if (sub === "ready") {
+          const ask = yield* askArg(2);
+          const spec = yield* s.readySpec(ask);
+          const { state } = yield* s.state();
+          return out(`ready for approval: ${specLine(state, spec)}`);
         }
         if (sub === "tick") {
           const ask = yield* askArg(2);

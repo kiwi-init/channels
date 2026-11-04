@@ -407,7 +407,14 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
         me,
         () => Date.now(),
         () => blur.now(),
-        { posted: (block) => opts.drafts.current.posted(block), made: (block) => opts.drafts.current.made(block), commandFor: opts.command, refuse: opts.refuse, editLast: opts.editLast }
+        {
+          posted: (block) => opts.drafts.current.posted(block),
+          made: (block) => opts.drafts.current.made(block),
+          commandFor: opts.command,
+          refuse: opts.refuse,
+          editLast: opts.editLast,
+          sending: (block) => shared.made.add(block),
+        }
       ),
       linksPlugin(),
       herePlugin(),

@@ -351,6 +351,7 @@ export type Event =
   | { op: "nickname.set"; member: string; pk: string; nickname: string | null }
   | { op: "spec.set"; ask: number; text: string }
   | { op: "spec.approve"; ask: number; v: number }
+  | { op: "spec.ready"; ask: number; v: number }
   | { op: "spec.result"; ask: number; verdict: SpecVerdict; note?: string }
   | { op: "spec.delete"; ask: number; why?: string }
   | { op: "specs.only.set"; on: boolean };
@@ -866,7 +867,7 @@ export interface NewerEvent {
 
 export type WirePayload = Omit<Payload, "ev"> & { ev?: Event | NewerEvent };
 
-export const EVENT_OPS_VERSION = 18;
+export const EVENT_OPS_VERSION = 19;
 
 export const opsVersion = (x: unknown): x is number => Number.isSafeInteger(x) && (x as number) >= 1 && (x as number) <= 10_000;
 const NEWER_OP_RE = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/;
@@ -1216,6 +1217,7 @@ function eventCheck(ev: unknown): boolean | null {
     case "spec.set":
       return n(e.ask) && (e.ask as number) > 0 && str(e.text, MAX_SPEC) && (e.text as string).trim().length > 0;
     case "spec.approve":
+    case "spec.ready":
       return n(e.ask) && (e.ask as number) > 0 && n(e.v) && (e.v as number) > 0;
     case "spec.delete":
       return n(e.ask) && (e.ask as number) > 0 && opt(e.why, (x): x is string => str(x, MAX_SPEC_NOTE));

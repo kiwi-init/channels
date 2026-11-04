@@ -1,6 +1,8 @@
 import type { Node } from "prosemirror-model"
 import { TextSelection, type EditorState, type Transaction } from "prosemirror-state"
+import { ySyncPluginKey } from "y-prosemirror"
 
+import { thisWindow } from "~/chat/doc/made"
 import { attrsOf, isBack, isSent, newBlockId, schema, type BlockAttrs, type BlockKind } from "~/chat/doc/schema"
 
 const RUN_MS = 5 * 60_000
@@ -31,8 +33,8 @@ export function blockAt(state: EditorState): Placed | null {
   return { node, pos: $from.before(1), index }
 }
 
-export function makeBlock(kind: BlockKind, author: string, at: number, text = ""): Node {
-  const attrs: BlockAttrs = { id: newBlockId(), kind, author, at, re: null, quote: null }
+export function makeBlock(kind: BlockKind, author: string, at: number, text = "", by = thisWindow): Node {
+  const attrs: BlockAttrs = { id: newBlockId(), kind, author, at, by, re: null, quote: null }
   return schema.nodes.block.create(attrs, schema.nodes.paragraph.create(null, text ? schema.text(text) : null))
 }
 
@@ -55,20 +57,29 @@ export type Made = (block: string) => boolean
 
 const anyMade: Made = () => true
 
+function nothingShared(state: EditorState): boolean {
+  const synced: unknown = ySyncPluginKey.getState(state)
+  if (!synced || typeof synced !== "object" || !("binding" in synced)) return true
+  const binding: unknown = synced.binding
+  if (!binding || typeof binding !== "object" || !("type" in binding)) return true
+  const shared: unknown = binding.type
+  return !!shared && typeof shared === "object" && "length" in shared && shared.length === 0
+}
+
 export function startBlock(state: EditorState, me: string, now: number, posted: (block: string) => boolean = () => false, made: Made = anyMade): Transaction {
   const tr = state.tr.setMeta("addToHistory", false)
   const all = blocks(state.doc)
   const own = all.filter((b) => attrsOf(b.node).author === me && attrsOf(b.node).kind === "text")
   const back = own.findLastIndex((b) => isBack(b.node))
-  if (back >= 0 && own.slice(back + 1).every((b) => isEmpty(b.node))) return atEnd(tr, own[back]!)
+  if (back >= 0 && made(attrsOf(own[back]!.node).id) && own.slice(back + 1).every((b) => isEmpty(b.node))) return atEnd(tr, own[back]!)
   const yours = own.at(-1)
-  if (yours && !isEmpty(yours.node) && !isSent(yours.node) && !posted(attrsOf(yours.node).id)) return atEnd(tr, yours)
+  if (yours && !isEmpty(yours.node) && !isSent(yours.node) && !posted(attrsOf(yours.node).id) && made(attrsOf(yours.node).id)) return atEnd(tr, yours)
   const last = all.at(-1)
   if (last && isEmpty(last.node)) {
     const a = attrsOf(last.node)
     if (a.author === me && made(a.id)) return inside(tr, last.pos)
-    if (a.author === "") {
-      tr.setNodeMarkup(last.pos, undefined, { ...a, id: a.id || newBlockId(), kind: "text", author: me, at: now })
+    if (a.author === "" && nothingShared(state)) {
+      tr.setNodeMarkup(last.pos, undefined, { ...a, id: newBlockId(), kind: "text", author: me, at: now, by: thisWindow })
       return inside(tr, last.pos)
     }
   }
