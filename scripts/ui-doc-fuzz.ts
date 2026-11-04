@@ -394,7 +394,8 @@ function inOrder(lines: readonly string[], sent: readonly string[]): string | nu
   let at = 0;
   for (const s of sent) {
     const first = s.split("\n")[0]!.trim();
-    const i = lines.findIndex((l, k) => k >= at && l.startsWith("jow: ") && l.slice(5).trim() === first);
+    const headOf = (k: number): string => lines[k]!.slice(4).trim() || (lines.slice(k + 1).find((x) => x !== "") ?? "");
+    const i = lines.findIndex((l, k) => k >= at && (l === "jow:" || l.startsWith("jow: ")) && headOf(k) === first);
     if (i < 0) return s;
     at = i + 1;
   }
