@@ -27,6 +27,7 @@ export interface SeatRecord {
   harness?: "claude" | "codex" | "gemini" | "cursor" | "grok" | "opencode" | "kimi" | "mimo" | "grok-bot" | "pi" | "zcode" | "agy";
   session?: string;
   harnessSession?: string;
+  bin?: string;
   pid?: number;
   at?: number;
   seen?: number;
