@@ -8,8 +8,21 @@ setDefaultTimeout(60_000);
 
 const MAIN = join(import.meta.dir, "../src/cli/main.ts");
 
+const spawned = new Map<string, Bun.Subprocess[]>();
+
 function daemon(dir: string) {
-  return Bun.spawn([process.execPath, MAIN, "daemon"], { cwd: dir, env: { ...process.env, KIWI_HOME: dir }, stdin: "ignore", stdout: "ignore", stderr: "pipe" });
+  const proc = Bun.spawn([process.execPath, MAIN, "daemon"], { cwd: dir, env: { ...process.env, KIWI_HOME: dir }, stdin: "ignore", stdout: "ignore", stderr: "pipe" });
+  spawned.set(dir, [...(spawned.get(dir) ?? []), proc]);
+  return proc;
+}
+
+async function reap(dir: string): Promise<void> {
+  for (const proc of spawned.get(dir) ?? []) {
+    if (await Promise.race([proc.exited.then(() => true), Bun.sleep(5_000).then(() => false)])) continue;
+    proc.kill("SIGKILL");
+    await proc.exited;
+  }
+  spawned.delete(dir);
 }
 
 const alive = (pid: number) => {
@@ -35,6 +48,7 @@ async function withHome(tag: string, run: (dir: string) => Promise<void>): Promi
     await run(dir);
   } finally {
     await stopDaemon(daemonSock(dir)).catch(() => {});
+    await reap(dir);
     rmSync(dir, { recursive: true, force: true });
   }
 }
