@@ -274,6 +274,7 @@ export type Scenario =
   | "events"
   | "task-events"
   | "ci-live"
+  | "doc-busy"
   | "event-runs"
   | "handoff"
   | "opening"
@@ -448,6 +449,24 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
             },
           ],
         })
+        return { ...s, channels, seq }
+      })
+    }, 700)
+    return () => window.clearInterval(timer)
+  }, [scenario])
+
+  useEffect(() => {
+    if (scenario !== "doc-busy") return
+    let n = 0
+    const timer = window.setInterval(() => {
+      n++
+      setState((s) => {
+        const c = s.channels.get("kiwi")
+        if (!c) return s
+        const channels = new Map(s.channels)
+        const seq = s.seq + 1
+        const text = n % 3 ? `Step ${n} is done.` : `Step ${n} is done.\nThe next one takes longer: it rebuilds the icons and measures the first load again.`
+        channels.set("kiwi", { ...c, messages: [...c.messages, { seq, from: n % 2 ? "atlas" : "win", at: Date.now(), text, where: { kind: "task", task: 10 } }] })
         return { ...s, channels, seq }
       })
     }, 700)
