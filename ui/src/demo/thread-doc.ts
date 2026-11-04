@@ -5,7 +5,8 @@ import type { Node } from "prosemirror-model"
 import { prosemirrorToYXmlFragment } from "y-prosemirror"
 
 import { demoDoc } from "~/demo/doc-hub"
-import { FRAGMENT, newBlockId, schema, type BlockKind } from "~/chat/doc/schema"
+import { DEMO_CHART, DEMO_REPORT } from "~/demo/doc-media"
+import { FRAGMENT, fileNode, imageNode, newBlockId, schema, type BlockKind } from "~/chat/doc/schema"
 
 interface Seed {
   kind: BlockKind
@@ -31,6 +32,8 @@ const SEEDS: readonly Seed[] = [
     body: [
       line("Icons are a sprite now: ", bold("9 KB"), ", down from 31. Markdown is the last big chunk in the first load."),
       code_block.create(null, schema.text("bun scripts/ui-bundle.ts\nfirst-load JS: 741,425 bytes (budget 760,000)")),
+      imageNode(DEMO_CHART),
+      fileNode(DEMO_REPORT),
     ],
   },
   { kind: "text", author: "jow", ago: 4, body: [line("Keep markdown in the first load if it stays under 30 KB, people see it on every open.")] },

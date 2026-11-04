@@ -1,16 +1,17 @@
 import "~/styles/thread-doc.css"
 
-import { useEffect, useLayoutEffect, useReducer, useRef, useState, useSyncExternalStore, type CSSProperties } from "react"
+import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore, type CSSProperties, type RefObject } from "react"
 import { createPortal } from "react-dom"
 import type { Node } from "prosemirror-model"
 import { EditorState, Plugin, type Transaction } from "prosemirror-state"
 import { Decoration, DecorationSet, EditorView, type NodeView } from "prosemirror-view"
 import { yCursorPlugin, ySyncPlugin, ySyncPluginKey, yUndoPlugin } from "y-prosemirror"
 
-import { blockAt, blocks, continues, dropEmptyOwn, isEmpty, startBlock } from "~/chat/doc/blocks"
+import { attach, blockAt, blocks, continues, dropEmptyOwn, isEmpty, startBlock } from "~/chat/doc/blocks"
 import { docKeys } from "~/chat/doc/keys"
 import { holdDoc, LiveDoc, type Shared } from "~/chat/doc/live"
 import { linksPlugin } from "~/chat/doc/links"
+import { fileView, filesIn, imageView, uploadAll, type DocMedia } from "~/chat/doc/media"
 import { markdownRules } from "~/chat/doc/rules"
 import { attrsOf, FRAGMENT, schema, type BlockAttrs } from "~/chat/doc/schema"
 import { dismiss, suggestPlugin, type Query } from "~/chat/doc/suggest"
@@ -112,7 +113,12 @@ class BlockView implements NodeView {
   }
 }
 
-function paintRuns(root: HTMLElement, shown: Map<HTMLElement, BlockView>, me: string): void {
+interface Drafts {
+  is: (block: string) => boolean
+  version: number
+}
+
+function paintRuns(root: HTMLElement, shown: Map<HTMLElement, BlockView>, me: string, drafts: Drafts): void {
   let prev: Node | undefined
   for (const el of root.children) {
     if (!(el instanceof HTMLElement)) continue
@@ -125,17 +131,21 @@ function paintRuns(root: HTMLElement, shown: Map<HTMLElement, BlockView>, me: st
     el.classList.toggle("is-empty", empty)
     el.classList.toggle("is-mine", mine)
     el.classList.toggle("is-hidden", hidden)
+    el.classList.toggle("is-draft", mine && !empty && drafts.is(attrsOf(node).id))
     if (!hidden) prev = node
   }
 }
 
-function runsPlugin(shown: Map<HTMLElement, BlockView>, me: string): Plugin {
+function runsPlugin(shown: Map<HTMLElement, BlockView>, me: string, drafts: RefObject<Drafts>): Plugin {
   return new Plugin({
     view: (view) => {
-      paintRuns(view.dom, shown, me)
+      paintRuns(view.dom, shown, me, drafts.current)
+      let painted = drafts.current.version
       return {
         update: (v, prev) => {
-          if (v.state.doc !== prev.doc) paintRuns(v.dom, shown, me)
+          if (v.state.doc === prev.doc && painted === drafts.current.version) return
+          painted = drafts.current.version
+          paintRuns(v.dom, shown, me, drafts.current)
         },
       }
     },
@@ -253,6 +263,21 @@ interface ViewOpts {
   onKey: (e: KeyboardEvent) => boolean
   scroller: () => HTMLElement | null
   hold: (on: boolean) => void
+  drafts: RefObject<Drafts>
+  media: () => DocMedia | null
+}
+
+const openImage = (url: string) => void window.open(url, "_blank", "noopener,noreferrer")
+
+function takeFiles(view: EditorView, me: string, opts: ViewOpts, files: readonly File[]): boolean {
+  const media = opts.media()
+  if (!files.length || !media || !opts.editable()) return false
+  void uploadAll(files, media, (why) => announce(why, "error")).then((nodes) => {
+    if (view.isDestroyed) return
+    const tr = attach(view.state, me, Date.now(), nodes)
+    if (tr) view.dispatch(tr)
+  })
+  return true
 }
 
 function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, opts: ViewOpts): { view: EditorView; stop: () => void } {
@@ -282,7 +307,7 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
       ),
       linksPlugin(),
       herePlugin(),
-      runsPlugin(shown, me),
+      runsPlugin(shown, me, opts.drafts),
       tidyPlugin(me),
       steadyPlugin(opts.scroller, opts.hold, me),
     ],
@@ -291,7 +316,24 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
     state,
     editable: opts.editable,
     attributes: { class: "doc", role: "textbox", "aria-multiline": "true", "aria-label": "Thread" },
-    nodeViews: { block: (node) => new BlockView(node, heads, shown), mention: mentionView(opts.name) },
+    nodeViews: {
+      block: (node) => new BlockView(node, heads, shown),
+      mention: mentionView(opts.name),
+      image: imageView(opts.media, openImage),
+      file: fileView(opts.media),
+    },
+    handlePaste: (v, e) => {
+      const files = filesIn(e.clipboardData)
+      if (!takeFiles(v, me, opts, files)) return false
+      e.preventDefault()
+      return true
+    },
+    handleDrop: (v, e) => {
+      const files = filesIn(e.dataTransfer)
+      if (!takeFiles(v, me, opts, files)) return false
+      e.preventDefault()
+      return true
+    },
     dispatchTransaction(this: EditorView, tr) {
       if (this.isDestroyed) return
       this.updateState(this.state.apply(tr))
@@ -305,23 +347,13 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
 function Head({ channel, attrs }: { channel: Channel; attrs: BlockAttrs }) {
   const { go } = useApp()
   if (!attrs.author) return null
-  const who = channel.people.find((p) => p.name === attrs.author) ?? channel.former?.find((p) => p.name === attrs.author)
   return (
     <>
-      <span className="blk-gutter">
-        <Avatar person={who} />
-        <time className="blk-time-hover" dateTime={new Date(attrs.at).toISOString()}>
-          {clock(attrs.at)}
-        </time>
-      </span>
       <span className="blk-line">
-        <button type="button" className="msg-name" onClick={() => go({ to: "modal", modal: { kind: "person", name: attrs.author } })}>
+        <button type="button" className="msg-name" title={clock(attrs.at)} onClick={() => go({ to: "modal", modal: { kind: "person", name: attrs.author } })}>
           {nickname(channel, attrs.author)}
         </button>
         {(attrs.kind === "tool" || attrs.kind === "comment") && <span className="blk-kind">{attrs.kind}</span>}
-        <time className="msg-time" dateTime={new Date(attrs.at).toISOString()}>
-          {clock(attrs.at)}
-        </time>
       </span>
     </>
   )
@@ -375,7 +407,7 @@ function typedAnywhere(e: KeyboardEvent): boolean {
   return !t.closest("input, textarea, select, [contenteditable='true'], dialog, [role='dialog'], [role='menu'], .ProseMirror")
 }
 
-export function ThreadDoc({ channel, where, shared, hold }: { channel: Channel; where: Where; shared: Shared; hold: (on: boolean) => void }) {
+export function ThreadDoc({ channel, where, shared, hold, media = null }: { channel: Channel; where: Where; shared: Shared; hold: (on: boolean) => void; media?: DocMedia | null }) {
   const mount = useRef<HTMLDivElement>(null)
   const box = useRef<HTMLDivElement>(null)
   const view = useRef<EditorView | null>(null)
@@ -387,6 +419,14 @@ export function ThreadDoc({ channel, where, shared, hold }: { channel: Channel; 
   const canWrite = useRef(!readOnly)
   const latest = useRef(channel)
   const holdRef = useRef(hold)
+  const drafts = useRef<Drafts>({ is: () => false, version: 0 })
+  const sent = useMemo(() => new Set(channel.messages.flatMap((m) => (m.block && !m.pending ? [m.block] : []))), [channel.messages])
+
+  useLayoutEffect(() => {
+    drafts.current = { is: (block) => !!shared.madeHere?.(block) && !sent.has(block), version: drafts.current.version + 1 }
+    view.current?.setProps({})
+  }, [shared, sent])
+  const mediaRef = useRef(media)
   const [query, setQuery] = useState<{ q: Query; left: number; top: number } | null>(null)
   const [pick, setPick] = useState(0)
   const options = optionsFor(channel, query?.q ?? null)
@@ -397,6 +437,7 @@ export function ThreadDoc({ channel, where, shared, hold }: { channel: Channel; 
     canWrite.current = !readOnly
     latest.current = channel
     holdRef.current = hold
+    mediaRef.current = media
     if (changed) view.current?.setProps({})
   })
 
@@ -437,6 +478,8 @@ export function ThreadDoc({ channel, where, shared, hold }: { channel: Channel; 
       onKey: (e) => keys.current(e),
       scroller: () => box.current?.closest<HTMLElement>(".feed") ?? null,
       hold: (on) => holdRef.current(on),
+      drafts,
+      media: () => mediaRef.current,
     })
     const v = built.view
     view.current = v
@@ -514,6 +557,15 @@ export function LiveThreadDoc({ channel, where, thread, hold }: { channel: Chann
   const [live, setLive] = useState<LiveDoc | null>(null)
   const [, bump] = useReducer((n: number) => n + 1, 0)
   const code = channel.code
+  const media = useMemo<DocMedia>(
+    () => ({
+      putImage: (u) => actions.putDocImage(code, u),
+      putFile: (u) => actions.putDocFile(code, u),
+      image: (img) => actions.docImage(code, img),
+      file: (f) => actions.docFile(code, f),
+    }),
+    [actions, code]
+  )
   const me = channel.you
   const here = useRef(where)
 
@@ -543,5 +595,5 @@ export function LiveThreadDoc({ channel, where, thread, hold }: { channel: Chann
 
   useEffect(() => live?.want(th), [live, th])
 
-  return live?.isReady ? <ThreadDoc channel={channel} where={where} shared={live} hold={hold} /> : null
+  return live?.isReady ? <ThreadDoc channel={channel} where={where} shared={live} hold={hold} media={media} /> : null
 }

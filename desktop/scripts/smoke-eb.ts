@@ -138,28 +138,29 @@ try {
   );
   if (linux) {
     const messageLink = "https://example.com/kiwi-message-link";
-    const linkOpened = await until("a markdown link in a sent message", 30_000, () => d.evaluate(sendMessage, messageLink, 2_000).then((sent) => (sent ? true : null)))
+    const written = `[the message link](${messageLink})`;
+    const linkOpened = await until("a markdown link written in the thread doc", 30_000, () => d.evaluate(sendMessage, written, 2_000).then((sent) => (sent ? true : null)))
       .then(() =>
         d.evaluate((url) => {
-          const a = [...document.querySelectorAll<HTMLAnchorElement>("a")].find((el) => el.href === url);
-          a?.click();
-          return !!a;
+          const a = [...document.querySelectorAll<HTMLAnchorElement>(".thread-doc a.doc-link")].find((el) => el.getAttribute("href") === url);
+          a?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, ctrlKey: true }));
+          return a?.textContent === "the message link";
         }, messageLink),
       )
       .then((clicked) =>
-        until("the system opener receiving the clicked message link", 10_000, async () => (clicked && existsSync(opened) && readFileSync(opened, "utf8").includes(messageLink) ? true : null)),
+        until("the system opener receiving the clicked doc link", 10_000, async () => (clicked && existsSync(opened) && readFileSync(opened, "utf8").includes(messageLink) ? true : null)),
       )
-      .catch((e: Error) => (problems.push(`message link opens the system browser: ${e.message}`), null));
-    if (linkOpened) console.log("a clicked markdown link reached the fake xdg-open with its exact URL");
+      .catch((e: Error) => (problems.push(`a Ctrl-clicked link in the thread doc reaches the system browser: ${e.message}`), null));
+    if (linkOpened) console.log("a Ctrl-clicked markdown link in the thread doc reached the fake xdg-open with its exact URL");
   }
   await check(
-    "the composer checks spelling and fields that opt out stay unchecked",
+    "the thread doc checks spelling and fields that opt out stay unchecked",
     d,
     () => ({
-      composer: document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Message"]')?.spellcheck ?? null,
+      doc: document.querySelector<HTMLElement>('.thread-doc [role="textbox"][aria-label="Thread"]')?.spellcheck ?? null,
       optedOut: [...document.querySelectorAll<HTMLElement>('[spellcheck="false"]')].every((el) => !el.spellcheck),
     }),
-    (v) => v.composer === true && v.optedOut,
+    (v) => v.doc === true && v.optedOut,
   );
 
   const hello = await until("the kiwi daemon the app starts", 60_000, () => daemonHello(kiwiHome, 1_000)).catch((e: Error) => (problems.push(e.message), null));

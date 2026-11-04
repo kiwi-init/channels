@@ -7,12 +7,13 @@ import type { PipeIn } from "@kiwi/core/doc/held-pipe.ts"
 import { mirrorAware } from "@kiwi/core/doc/pipe.ts"
 import type { DocBlockRef } from "@kiwi/core/protocol.ts"
 import type { DocEvent, WireError } from "../../../../desktop/src/bridge.ts"
-import { postFinished, type Finished } from "~/chat/doc/post"
+import { postFinished, type Finished, type Posting } from "~/chat/doc/post"
 import { FRAGMENT } from "~/chat/doc/schema"
 
 export interface Shared {
   doc: Y.Doc
   awareness: Awareness
+  madeHere?: (block: string) => boolean
 }
 
 export type OpenDoc = (th: string | null, on: (e: DocEvent) => void) => PipeIn
@@ -45,7 +46,7 @@ export class LiveDoc implements Shared {
   private gaveUp = false
   private readonly waiting = new Set<() => void>()
   private readonly unposted: Finished[] = []
-  private readonly stopPosting: () => void
+  private readonly posting: Posting | null
 
   constructor(
     private readonly open: OpenDoc,
@@ -56,13 +57,15 @@ export class LiveDoc implements Shared {
     this.ready = !th
     this.doc.on("update", this.onUpdate)
     this.awareness.on("change", this.onAware)
-    this.stopPosting = poster ? postFinished(this.doc, { me: poster.me, local: (origin) => origin !== PIPE }, (b) => this.post(b)) : () => {}
+    this.posting = poster ? postFinished(this.doc, { me: poster.me, local: (origin) => origin !== PIPE }, (b) => this.post(b)) : null
     if (th) this.connect(th)
   }
 
   get isReady(): boolean {
     return this.ready
   }
+
+  madeHere = (block: string): boolean => this.posting?.made(block) ?? false
 
   whenReady(l: () => void): () => void {
     this.waiting.add(l)
@@ -77,7 +80,7 @@ export class LiveDoc implements Shared {
 
   destroy(): void {
     this.dead = true
-    this.stopPosting()
+    this.posting?.stop()
     this.pipe?.close()
     this.pipe = null
     this.doc.off("update", this.onUpdate)

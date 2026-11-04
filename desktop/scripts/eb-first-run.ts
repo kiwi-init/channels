@@ -18,14 +18,19 @@ const clickButton = ({ name, within }: { name: string; within: string }): boolea
 };
 
 export const sendMessage = (text: string): boolean => {
-  if (document.body.innerText.includes(text)) return true;
-  const el = document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Message"]');
-  if (!el || el.disabled) return false;
-  if (el.value === text) el.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
-  else {
-    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(el, text);
-    el.dispatchEvent(new Event("input", { bubbles: true }));
+  const doc = document.querySelector<HTMLElement>('.thread-doc [role="textbox"][aria-label="Thread"]');
+  if (!doc) return false;
+  const lines = [...doc.querySelectorAll<HTMLElement>("p")];
+  const at = lines.findIndex((p) => p.textContent === text);
+  if (at >= 0 && at < lines.length - 1) return true;
+  if (at < 0) {
+    document.querySelector<HTMLButtonElement>(".thread-doc .doc-tail")?.click();
+    doc.focus();
+    document.execCommand("insertText", false, text);
+    return false;
   }
+  doc.focus();
+  doc.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", code: "Enter", keyCode: 13, bubbles: true, cancelable: true }));
   return false;
 };
 
