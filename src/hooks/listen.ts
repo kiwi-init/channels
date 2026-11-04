@@ -10,6 +10,8 @@ import { Cursor, home, loadConfig, type ChannelConfig } from "../config.ts";
 import { wakeOn } from "../daemon/reach.ts";
 import { appendWakeRow } from "../daemon/wake.ts";
 import { formatMessage, messageHead } from "@kiwi/core/format.ts";
+import { docWakeLine } from "../agent/docs.ts";
+import { pendingDocWakes, tellDocWakes } from "../config/doc-wakes.ts";
 import type { Binding, Here } from "../seats.ts";
 import { handOver, seatBudget } from "./answer.ts";
 import { answeringNow, deliveredInProcess, noteDelivered, noteHeard, notePending, settlePending } from "./delivered.ts";
@@ -39,6 +41,7 @@ interface Heard {
 }
 
 const ANSWERED_WAIT_MS = 20_000;
+const DOC_POLL_MS = 1_000;
 const SLOT_RETRY_FIRST_MS = 2_000;
 const SLOT_RETRY_MAX_MS = 60_000;
 
@@ -67,6 +70,25 @@ const tune = Effect.fn("Hooks.tune")(function* ({ b, cfg }: Served, who: Here, w
       },
     )
     .pipe(Effect.provideService(Cursor, peek));
+  const mc = mcFor(b.alias, b.as, process.cwd(), who);
+  const pulled = new Set<string>();
+  const pullDocs = Effect.gen(function* () {
+    const fresh = pendingDocWakes(b.alias, b.as).filter((w) => !pulled.has(w.block));
+    if (!fresh.length) return;
+    for (const w of fresh) {
+      pulled.add(w.block);
+      const text = docWakeLine(w, mc);
+      got.push({ seq: null, text, head: (text.split("\n")[0] ?? "").length + 2 });
+    }
+    tellDocWakes(
+      b.alias,
+      b.as,
+      fresh.map((w) => w.block),
+    );
+    yield* woke;
+  });
+  const docsHeard = Effect.forever(Effect.andThen(pullDocs, Effect.sleep(DOC_POLL_MS)));
+  const hearingAll = Effect.raceFirst(hearing, docsHeard);
   const dropShown = Effect.gen(function* () {
     const shown = (yield* real.read(b.alias, b.as)) ?? 0;
     const seen = yield* real.seen(b.alias, b.as);
@@ -74,7 +96,7 @@ const tune = Effect.fn("Hooks.tune")(function* ({ b, cfg }: Served, who: Here, w
     got.splice(0, got.length, ...left);
     at = Math.max(at, shown);
   });
-  return { b, got, hearing, dropShown, from, reached: () => at, still: s.unheld };
+  return { b, got, hearing: hearingAll, dropShown, from, reached: () => at, still: s.unheld };
 });
 
 const arm = Effect.fn("Hooks.arm")(function* (seat: Served, who: Here, woke: Effect.Effect<void, never, Scope.Scope>) {

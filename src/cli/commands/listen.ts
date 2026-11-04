@@ -14,6 +14,8 @@ import { here } from "../../seats.ts";
 import { args, opt } from "../args.ts";
 import { type Command, die, noteRead, out, session } from "../context.ts";
 import { delivery, render } from "../input.ts";
+import { docWakeLine } from "../../agent/docs.ts";
+import { pendingDocWakes, tellDocWakes } from "../../config/doc-wakes.ts";
 
 const nothingUnread = (alias: string, me: string) =>
   Effect.gen(function* () {
@@ -30,7 +32,14 @@ const readFrom = (s: AgentSession) =>
   Effect.gen(function* () {
     const { messages, state } = yield* s.read(yield* delivery(s));
     for (const m of messages) out(render(m, state));
-    if (!messages.length) process.stderr.write(`${yield* nothingUnread(s.alias, s.me)}\n`);
+    const docs = pendingDocWakes(s.alias, s.me);
+    for (const w of docs) out(docWakeLine(w, mcFor(s.alias, s.me)));
+    tellDocWakes(
+      s.alias,
+      s.me,
+      docs.map((w) => w.block),
+    );
+    if (!messages.length && !docs.length) process.stderr.write(`${yield* nothingUnread(s.alias, s.me)}\n`);
     yield* noteRead(s);
   });
 

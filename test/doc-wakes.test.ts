@@ -1,0 +1,127 @@
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { newChannelKey, newRoomId } from "@kiwi/core/crypto.ts";
+import { newBlock, newDocId } from "@kiwi/core/doc/blocks.ts";
+import { ThreadDoc } from "@kiwi/core/doc/thread-doc.ts";
+import { generateIdentity } from "@kiwi/core/identity.ts";
+import type { ChannelState, Task } from "@kiwi/core/state.ts";
+import { docWakeLine } from "../src/agent/docs.ts";
+import { addDocWake, docSince, pendingDocWakes, tellDocWakes, type DocWakeItem } from "../src/config/doc-wakes.ts";
+import { docFollows, followDocs } from "../src/daemon/doc-follow.ts";
+
+const was = process.env.KIWI_HOME;
+const dir = mkdtempSync(join(tmpdir(), "kiwi-doc-wakes-"));
+beforeAll(() => {
+  process.env.KIWI_HOME = dir;
+});
+afterAll(() => {
+  if (was === undefined) delete process.env.KIWI_HOME;
+  else process.env.KIWI_HOME = was;
+  rmSync(dir, { recursive: true, force: true });
+});
+
+const task = (id: number, t: Partial<Task>): Task => ({ id, title: `t${id}`, state: "doing", workedBy: [], ...t }) as Task;
+
+const item = (block: string, extra: Partial<DocWakeItem> = {}): DocWakeItem => ({
+  key: "task:7",
+  th: "t".repeat(22),
+  block,
+  author: "jow",
+  text: "@olivia look at this",
+  context: "",
+  selection: null,
+  at: 1,
+  ...extra,
+});
+
+describe("which doc threads an agent follows (T606)", () => {
+  test("#general, and open task threads it owns, works on, posted in or reviews; owned ones first, done ones not at all", () => {
+    const docs = new Map([
+      ["main", "m".repeat(22)],
+      ["task:1", "a".repeat(22)],
+      ["task:2", "b".repeat(22)],
+      ["task:3", "c".repeat(22)],
+      ["task:4", "d".repeat(22)],
+      ["task:5", "e".repeat(22)],
+      ["room:x", "f".repeat(22)],
+    ]);
+    const tasks = new Map([
+      [1, task(1, { owner: "rodrigo", workedBy: ["olivia"] })],
+      [2, task(2, { owner: "olivia" })],
+      [3, task(3, { owner: "olivia", state: "done" })],
+      [4, task(4, { owner: "rodrigo" })],
+      [5, task(5, { owner: "rodrigo", review: "olivia" })],
+    ]);
+    const state = { docs, tasks } as Pick<ChannelState, "docs" | "tasks">;
+    expect(docFollows(state, "olivia")).toEqual([
+      { key: "task:2", th: "b".repeat(22), owns: true },
+      { key: "main", th: "m".repeat(22), owns: false },
+      { key: "task:1", th: "a".repeat(22), owns: false },
+      { key: "task:5", th: "e".repeat(22), owns: false },
+    ]);
+  });
+});
+
+describe("the doc wakes an agent hasn't been told yet (T606)", () => {
+  test("a block is queued once; telling it clears it; a torn line doesn't lose the rest", () => {
+    expect(addDocWake("ch", "olivia", item("b1"))).toBe(true);
+    expect(addDocWake("ch", "olivia", item("b1"))).toBe(false);
+    expect(addDocWake("ch", "olivia", item("b2", { at: 2 }))).toBe(true);
+    expect(pendingDocWakes("ch", "olivia").map((w) => w.block)).toEqual(["b1", "b2"]);
+    expect(pendingDocWakes("ch", "rodrigo")).toEqual([]);
+    tellDocWakes("ch", "olivia", ["b1"]);
+    expect(pendingDocWakes("ch", "olivia").map((w) => w.block)).toEqual(["b2"]);
+    expect(addDocWake("ch", "olivia", item("b1"))).toBe(false);
+    tellDocWakes("ch", "olivia", ["b2"]);
+    expect(pendingDocWakes("ch", "olivia")).toEqual([]);
+  });
+
+  test("the line an agent reads names the doc, the author, what it's about, and how to answer", () => {
+    const line = docWakeLine(item("b3", { selection: "the relay", context: "rodrigo: shipped it" }), "kiwi");
+    expect(line.split("\n")).toEqual([
+      "▸ jow in T7's shared doc: @olivia look at this",
+      '  about: "the relay"',
+      "  before it: rodrigo: shipped it",
+      '  answer in the doc: kiwi send --to T7 "…" (kiwi show T7 has all of it)',
+    ]);
+    expect(docWakeLine(item("b4", { key: "main" }), "kiwi")).toContain('kiwi send --to #general "…" (kiwi show general has all of it)');
+  });
+});
+
+describe("the daemon's follower queues a wake for a finished block (T606)", () => {
+  test("a mention in a followed doc lands in the queue once and wakes the seat; a doc it stops following is closed", async () => {
+    const me = await generateIdentity("olivia");
+    const key = newChannelKey();
+    const th = newDocId();
+    const td = new ThreadDoc({
+      roomId: newRoomId(),
+      th,
+      me,
+      keys: { current: async () => ({ key }), at: async () => key },
+      links: { send: () => {}, aware: () => {} },
+    });
+    const closed: string[] = [];
+    let woke = 0;
+    let state = { docs: new Map([["task:9", th]]), tasks: new Map([[9, task(9, { owner: "olivia" })]]) } as unknown as ChannelState;
+    const f = followDocs(
+      { alias: "follow", agent: "olivia", ch: { threadDoc: async () => td, closeDoc: (k: string) => void closed.push(k) } },
+      async () => state,
+      () => void woke++,
+    );
+    f.refresh(0);
+    await Bun.sleep(30);
+    expect(docSince("follow", "olivia")[th]).toBeNumber();
+    newBlock(td.doc, "text", "jow", "what's left on T9?", Date.now() + 1);
+    newBlock(td.doc, "text", "jow", "", Date.now() + 2);
+    expect(woke).toBe(1);
+    expect(pendingDocWakes("follow", "olivia")).toEqual([expect.objectContaining({ key: "task:9", th, author: "jow", text: "what's left on T9?" })]);
+    state = { docs: new Map([["task:9", th]]), tasks: new Map([[9, task(9, { owner: "olivia", state: "done" })]]) } as unknown as ChannelState;
+    f.refresh(0);
+    await Bun.sleep(30);
+    expect(closed).toEqual(["task:9"]);
+    f.stop();
+    td.destroy();
+  });
+});

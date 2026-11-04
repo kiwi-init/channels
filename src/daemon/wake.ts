@@ -3,6 +3,8 @@ import { appendFileSync, renameSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { loadConfig, type Config, type WakeHook } from "../config.ts";
+import { pendingDocWakes } from "../config/doc-wakes.ts";
+import type { ChannelState } from "@kiwi/core/state.ts";
 import { seatHeldAway } from "../hold.ts";
 import { listenHooksInstalled } from "../hooks/install/claude.ts";
 import { mimoInstalled } from "../hooks/install/mimo.ts";
@@ -111,23 +113,42 @@ interface WakeContext {
   current: (seat: Seat) => boolean;
 }
 
-export function seatWakes({ dir, wakeDelayMs, wakeGapMs, wakeOutstandingMs, stopped, current }: WakeContext): { scheduleWake: (seat: Seat, delay?: number) => void } {
+export function seatWakes({ dir, wakeDelayMs, wakeGapMs, wakeOutstandingMs, stopped, current }: WakeContext): {
+  scheduleWake: (seat: Seat, delay?: number) => void;
+  stateOf: (seat: Seat) => Promise<ChannelState | null>;
+} {
   const sessions = new Map<string, { fp: string; session: Session }>();
   const nothingAt = new Map<string, number>();
 
-  const unreadFor = async (seat: Seat): Promise<{ unread: number; cursor: number; seqs: number[] } | { unread: 0 }> => {
+  const sessionOf = async (seat: Seat): Promise<Session | null> => {
     const c = loadConfig().channels[seat.alias];
-    if (!c) return { unread: 0 };
-    const { AgentSession, runAgent } = await import("../agent.ts");
+    if (!c) return null;
+    const { AgentSession } = await import("../agent.ts");
     const fp = JSON.stringify(c);
     let kept = sessions.get(seat.key);
     if (!kept || kept.fp !== fp) {
       kept = { fp, session: await AgentSession.open(seat.alias, c, seat.agent) };
       sessions.set(seat.key, kept);
     }
-    const { messages, state } = await runAgent(kept.session.state());
+    return kept.session;
+  };
+
+  const stateOf = async (seat: Seat): Promise<ChannelState | null> => {
+    const session = await sessionOf(seat);
+    if (!session) return null;
+    const { runAgent } = await import("../agent.ts");
+    return (await runAgent(session.state())).state;
+  };
+
+  const unreadFor = async (seat: Seat): Promise<{ unread: number; cursor: number; seqs: number[] } | { unread: 0 }> => {
+    const session = await sessionOf(seat);
+    if (!session) return { unread: 0 };
+    const { runAgent } = await import("../agent.ts");
+    const { messages, state } = await runAgent(session.state());
     const looped = !!seatRecordFor(loadConfig(), seat.alias, seat.agent)?.loop;
-    return runAgent(kept.session.unreadAt(state, messages, looped ? { loop: true } : {}));
+    const counted = await runAgent(session.unreadAt(state, messages, looped ? { loop: true } : {}));
+    const docs = pendingDocWakes(seat.alias, seat.agent).length;
+    return docs ? { ...counted, unread: counted.unread + docs } : counted;
   };
 
   const runWake = async (seat: Seat, [cmd, ...rest]: string[]): Promise<string | null> => {
@@ -187,7 +208,7 @@ export function seatWakes({ dir, wakeDelayMs, wakeGapMs, wakeOutstandingMs, stop
     if (!(await commandPath(seat))) return;
     const since = Date.now() - (seat.lastWake?.at ?? 0);
     if (since < wakeGapMs) return scheduleWake(seat, wakeGapMs - since);
-    if (nothingAt.get(seat.key) === seat.head) return;
+    if (nothingAt.get(seat.key) === seat.head && !pendingDocWakes(seat.alias, seat.agent).length) return;
     seat.waking = true;
     try {
       const head = seat.head;
@@ -239,5 +260,5 @@ export function seatWakes({ dir, wakeDelayMs, wakeGapMs, wakeOutstandingMs, stop
     }
   };
 
-  return { scheduleWake };
+  return { scheduleWake, stateOf };
 }
