@@ -38,6 +38,7 @@ interface Heard {
   seq: number | null;
   text: string;
   head: number;
+  block?: string;
 }
 
 const ANSWERED_WAIT_MS = 20_000;
@@ -78,13 +79,8 @@ const tune = Effect.fn("Hooks.tune")(function* ({ b, cfg }: Served, who: Here, w
     for (const w of fresh) {
       pulled.add(w.block);
       const text = docWakeLine(w, mc);
-      got.push({ seq: null, text, head: (text.split("\n")[0] ?? "").length + 2 });
+      got.push({ seq: null, text, head: (text.split("\n")[0] ?? "").length + 2, block: w.block });
     }
-    tellDocWakes(
-      b.alias,
-      b.as,
-      fresh.map((w) => w.block),
-    );
     yield* woke;
   });
   const docsHeard = Effect.forever(Effect.andThen(pullDocs, Effect.sleep(DOC_POLL_MS)));
@@ -92,7 +88,8 @@ const tune = Effect.fn("Hooks.tune")(function* ({ b, cfg }: Served, who: Here, w
   const dropShown = Effect.gen(function* () {
     const shown = (yield* real.read(b.alias, b.as)) ?? 0;
     const seen = yield* real.seen(b.alias, b.as);
-    const left = got.filter((g) => g.seq === null || (g.seq > shown && !seen.has(g.seq)));
+    const waiting = new Set(pendingDocWakes(b.alias, b.as).map((w) => w.block));
+    const left = got.filter((g) => (g.block !== undefined ? waiting.has(g.block) : g.seq === null || (g.seq > shown && !seen.has(g.seq))));
     got.splice(0, got.length, ...left);
     at = Math.max(at, shown);
   });
@@ -215,20 +212,24 @@ export const listen = Effect.fn("Hooks.listen")(function* (served: readonly Serv
     const shown = a.got.slice(0, hand.count);
     const rest = a.got.slice(hand.count).filter((g) => g.seq !== null).length;
     const seqs = shown.flatMap((g) => (g.seq === null ? [] : [g.seq]));
-    return { b: a.b, seqs, from: a.from, upTo: rest ? Math.max(0, ...seqs) : a.reached(), text: hand.text, head };
+    const docs = shown.flatMap((g) => (g.block === undefined ? [] : [g.block]));
+    return { b: a.b, seqs, docs, from: a.from, upTo: rest ? Math.max(0, ...seqs) : a.reached(), text: hand.text, head };
   });
   if (extension && !told.length) return 0;
   const blocks = told.map(({ head, text }) => `${head}\n${text}\n`);
   const token = randomUUID();
-  if (handoff.kind === "acked") for (const { b, upTo } of told) notePending(b.alias, b.as, who.session ?? "", token, upTo);
+  if (handoff.kind === "acked") for (const { b, upTo, docs } of told) notePending(b.alias, b.as, who.session ?? "", token, upTo, docs);
   try {
     if (handoff.kind === "acked") writeSync(1, token);
     writeSync(2, blocks.length ? blocks.join("\n") : "Kiwi Channels: a day with no messages for you. Nothing to do; just end your turn.\n");
   } catch {
     return 0;
   }
-  for (const { b, upTo, seqs, from } of told) {
-    if (handoff.kind === "at-once") noteDelivered(b.alias, b.as, who.session ?? "", upTo, who.harness === "claude" ? who.pid : undefined);
+  for (const { b, upTo, seqs, docs, from } of told) {
+    if (handoff.kind === "at-once") {
+      noteDelivered(b.alias, b.as, who.session ?? "", upTo, who.harness === "claude" ? who.pid : undefined);
+      tellDocWakes(b.alias, b.as, docs);
+    }
     noteHeard(who.session, b.alias, b.as, seqs);
     if (via) appendWakeRow(home(), { at: Date.now(), alias: b.alias, agent: b.as, via, unread: seqs.length, result: "handed", why: null, cursor: from });
   }

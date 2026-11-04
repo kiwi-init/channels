@@ -4,6 +4,7 @@ import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync }
 import { join } from "node:path";
 import type { AgentSession } from "../agent.ts";
 import { Cursor, home } from "../config.ts";
+import { tellDocWakes } from "../config/doc-wakes.ts";
 import { alive } from "./listeners.ts";
 
 function deliveredFile(alias: string, as: string, session: string): string {
@@ -80,22 +81,24 @@ function pendingFile(alias: string, as: string, session: string, token: string):
   return join(home(), "listen-hooks", `${encodeURIComponent(alias)}.${encodeURIComponent(as)}.${encodeURIComponent(session)}.${encodeURIComponent(token)}.pending`);
 }
 
-export function notePending(alias: string, as: string, session: string, token: string, seq: number): void {
+export function notePending(alias: string, as: string, session: string, token: string, seq: number, docs: readonly string[] = []): void {
   mkdirSync(join(home(), "listen-hooks"), { recursive: true, mode: 0o700 });
-  writeFileSync(pendingFile(alias, as, session, token), String(seq));
+  writeFileSync(pendingFile(alias, as, session, token), [String(seq), ...docs].join("\n"));
 }
 
 export function settlePending(alias: string, as: string, session: string, landed: string): number | null {
   const file = pendingFile(alias, as, session, landed);
-  let seq: number;
+  let lines: string[];
   try {
-    seq = Number(readFileSync(file, "utf8"));
+    lines = readFileSync(file, "utf8").split("\n");
   } catch {
     // No handoff under that token for this seat: nothing landed here to count as delivered.
     return null;
   }
+  const seq = Number(lines[0]);
   const settled = Number.isInteger(seq) && seq > 0 ? seq : 0;
   if (settled) noteDelivered(alias, as, session, settled);
+  tellDocWakes(alias, as, lines.slice(1).filter(Boolean));
   rmSync(file, { force: true });
   return settled;
 }
