@@ -65,7 +65,14 @@ function gate(sha: string, live: string | null, event = "workflow_run"): { go: s
   writeFileSync(out, "");
   const r = Bun.spawnSync(["bash", GATE], {
     cwd: dir,
-    env: { ...gitEnv, PATH: `${bin}:${gitEnv.PATH}`, SHA: sha, EVENT: event, GITHUB_OUTPUT: out, FAKE_MANIFEST: live === null ? "" : JSON.stringify({ uiVersion: `2026.11.6-${live.slice(0, 10)}`, seq: 1 }) },
+    env: {
+      ...gitEnv,
+      PATH: `${bin}:${gitEnv.PATH}`,
+      SHA: sha,
+      EVENT: event,
+      GITHUB_OUTPUT: out,
+      FAKE_MANIFEST: live === null ? "" : JSON.stringify({ uiVersion: `2026.11.6-${live.slice(0, 10)}`, seq: 1 }),
+    },
   });
   if (r.exitCode !== 0) throw new Error(`gate exited ${r.exitCode}: ${r.stderr.toString()}`);
   const vars = Object.fromEntries(
