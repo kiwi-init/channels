@@ -8,7 +8,7 @@ import { Decoration, DecorationSet, EditorView, type NodeView } from "prosemirro
 import { yCursorPlugin, ySyncPlugin, ySyncPluginKey, yUndoPlugin } from "y-prosemirror"
 
 import { attach, blockAt, blocks, continues, dropEmptyOwn, isEmpty, replyIn, startBlock, unreply } from "~/chat/doc/blocks"
-import { docKeys } from "~/chat/doc/keys"
+import { docKeys, type CommandFor } from "~/chat/doc/keys"
 import { holdDoc, LiveDoc, type Shared } from "~/chat/doc/live"
 import { linksPlugin } from "~/chat/doc/links"
 import { fileDrag, takeDropped } from "@kiwi/app/dropped.ts"
@@ -20,10 +20,12 @@ import { postedBlocks } from "~/chat/doc/posted"
 import { markdownRules } from "~/chat/doc/rules"
 import { attrsOf, FRAGMENT, isSent, schema, type BlockAttrs } from "~/chat/doc/schema"
 import { dismiss, suggestPlugin, type Query } from "~/chat/doc/suggest"
+import { matchCommands, parseCommand, type Command } from "~/chat/commands"
 import { withNames } from "~/chat/linked"
 import { peopleMatches, taskMatches } from "~/chat/matches"
 import { withExcerpt } from "~/chat/quote"
 import { preview, useReplying } from "~/chat/reply"
+import { useCommands } from "~/chat/use-commands"
 import { Icon } from "~/kit/icons"
 import { Avatar, cx, Dot, STATUS_WORDS } from "~/kit/bits"
 import { clock } from "~/kit/time"
@@ -300,6 +302,7 @@ interface ViewOpts {
   hold: (on: boolean) => void
   drafts: RefObject<Drafts>
   media: () => DocMedia | null
+  command: CommandFor
 }
 
 const openImage = (url: string) => void window.open(url, "_blank", "noopener,noreferrer")
@@ -338,7 +341,8 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
         me,
         () => Date.now(),
         () => blur.now(),
-        (block) => opts.drafts.current.posted(block)
+        (block) => opts.drafts.current.posted(block),
+        opts.command
       ),
       linksPlugin(),
       herePlugin(),
@@ -428,16 +432,18 @@ function Head({ channel, attrs, onUnreply }: { channel: Channel; attrs: BlockAtt
   )
 }
 
-type Option = { kind: "@"; person: Person } | { kind: "#"; task: Task }
+type Option = { kind: "@"; person: Person } | { kind: "#"; task: Task } | { kind: "/"; command: Command }
 
-function optionsFor(channel: Channel, q: Query | null): Option[] {
+function optionsFor(channel: Channel, commands: readonly Command[], q: Query | null): Option[] {
   if (!q) return []
+  if (q.kind === "/") return matchCommands(commands, `/${q.text}`).map((command) => ({ kind: "/", command }))
   return q.kind === "@" ? peopleMatches(channel.people, q.text).map((person) => ({ kind: "@", person })) : taskMatches(channel.tasks, q.text).map((task) => ({ kind: "#", task }))
 }
 
 function choose(view: EditorView, q: Query, o: Option): void {
   const tr = view.state.tr
-  if (o.kind === "@") tr.replaceWith(q.from, q.to, [schema.nodes.mention.create({ name: o.person.name }), schema.text(" ")])
+  if (o.kind === "/") tr.insertText(`/${o.command.name} `, q.from, q.to)
+  else if (o.kind === "@") tr.replaceWith(q.from, q.to, [schema.nodes.mention.create({ name: o.person.name }), schema.text(" ")])
   else tr.insertText(`T${o.task.id} `, q.from, q.to)
   view.dispatch(tr.scrollIntoView())
   view.focus()
@@ -446,10 +452,16 @@ function choose(view: EditorView, q: Query, o: Option): void {
 function Suggest({ channel, query, options, pick, at, onPick }: { channel: Channel; query: Query; options: Option[]; pick: number; at: { left: number; top: number }; onPick: (i: number) => void }) {
   if (options.length === 0) return null
   return (
-    <ul className="mentions doc-suggest" role="listbox" aria-label={query.kind === "@" ? "People" : "Tasks"} style={{ left: at.left, top: at.top }}>
+    <ul className="mentions doc-suggest" role="listbox" aria-label={query.kind === "@" ? "People" : query.kind === "/" ? "Commands" : "Tasks"} style={{ left: at.left, top: at.top }}>
       {options.map((o, i) => (
-        <li key={o.kind === "@" ? o.person.name : o.task.id} role="option" aria-selected={i === pick}>
-          {o.kind === "@" ? (
+        <li key={o.kind === "@" ? o.person.name : o.kind === "/" ? o.command.name : o.task.id} role="option" aria-selected={i === pick}>
+          {o.kind === "/" ? (
+            <button type="button" tabIndex={-1} className={cx("mention-row task-row", i === pick && "is-on")} onMouseDown={(e) => e.preventDefault()} onClick={() => onPick(i)}>
+              <span className="command-name">/{o.command.name}</span>
+              {o.command.args && <span className="task-row-id">{o.command.args}</span>}
+              <span className="task-row-title dim">{o.command.summary}</span>
+            </button>
+          ) : o.kind === "@" ? (
             <button type="button" tabIndex={-1} className={cx("mention-row", i === pick && "is-on")} onMouseDown={(e) => e.preventDefault()} onClick={() => onPick(i)}>
               <Avatar person={o.person} size="sm" pip />
               <span className="mention-name">{nickname(channel, o.person.name)}</span>
@@ -537,7 +549,9 @@ export function ThreadDoc({
   const mediaRef = useRef(media)
   const [query, setQuery] = useState<{ q: Query; left: number; top: number } | null>(null)
   const [pick, setPick] = useState(0)
-  const options = optionsFor(channel, query?.q ?? null)
+  const commands = useCommands(channel)
+  const commandsRef = useRef(commands)
+  const options = optionsFor(channel, commands, query?.q ?? null)
   const keys = useRef<(e: KeyboardEvent) => boolean>(() => false)
   const replying = useReplying()
 
@@ -553,6 +567,7 @@ export function ThreadDoc({
     latest.current = channel
     holdRef.current = hold
     mediaRef.current = media
+    commandsRef.current = commands
     if (changed) view.current?.setProps({})
   })
 
@@ -566,6 +581,7 @@ export function ThreadDoc({
       }
       if (e.key === "Enter" || e.key === "Tab") {
         const o = options[Math.min(pick, options.length - 1)]
+        if (e.key === "Enter" && o?.kind === "/" && o.command.name === query.q.text) return false
         if (o) choose(v, query.q, o)
         return true
       }
@@ -595,6 +611,10 @@ export function ThreadDoc({
       hold: (on) => holdRef.current(on),
       drafts,
       media: () => mediaRef.current,
+      command: (line) => {
+        const found = parseCommand(commandsRef.current, line)
+        return found ? () => found.command.run(found.args) : null
+      },
     })
     const v = built.view
     view.current = v

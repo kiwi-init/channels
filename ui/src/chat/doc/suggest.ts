@@ -2,7 +2,7 @@ import { Plugin, PluginKey, type EditorState } from "prosemirror-state"
 import type { EditorView } from "prosemirror-view"
 
 export interface Query {
-  kind: "@" | "#"
+  kind: "@" | "#" | "/"
   text: string
   from: number
   to: number
@@ -10,6 +10,7 @@ export interface Query {
 
 const MENTION = /(^|\s)@([\p{L}\p{N}_.-]*)$/u
 const TASK_REF = /(^|\s)#([^#\n]{0,40})$/u
+const COMMAND = /^\/([^\s/]*)$/
 const DISMISS = "suggest-dismiss"
 
 interface Held {
@@ -23,6 +24,11 @@ function queryAt(state: EditorState): Query | null {
   const { $from, empty } = state.selection
   if (!empty || $from.parent.type.spec.code || !$from.parent.isTextblock) return null
   const before = $from.parent.textBetween(Math.max(0, $from.parentOffset - 60), $from.parentOffset, undefined, "￼")
+  const command = $from.depth === 2 && $from.index(1) === 0 && before.length === $from.parentOffset ? COMMAND.exec(before) : null
+  if (command) {
+    const text = command[1] ?? ""
+    return { kind: "/", text, from: $from.pos - text.length - 1, to: $from.pos }
+  }
   const mention = MENTION.exec(before)
   if (mention) {
     const text = mention[2] ?? ""
