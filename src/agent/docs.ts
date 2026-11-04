@@ -92,11 +92,20 @@ function placeName(key: string): string {
 
 const clip = (s: string, n: number): string => (s.length > n ? `${s.slice(0, n)} …` : s);
 
-export function docWakeLine(w: DocWakeItem, mc: string): string {
-  const where = placeName(w.key);
-  const lines = [`▸ ${w.author} in ${where}'s shared doc: ${clip(w.text.trim(), LINE_TEXT)}`];
+function wakeLines(w: DocWakeItem): string[] {
+  const lines = [`▸ ${w.author} in ${placeName(w.key)}'s shared doc: ${clip(w.text.trim(), LINE_TEXT)}`];
   if (w.selection) lines.push(`  about: "${clip(w.selection.trim(), LINE_SELECTION)}"`);
   if (w.context.trim()) lines.push(`  before it: ${clip(w.context.trim(), LINE_CONTEXT)}`);
-  lines.push(`  answer in the doc: ${mc} send --to ${where} "…" (${mc} show ${where === "#general" ? "general" : where} has all of it)`);
-  return lines.join("\n");
+  return lines;
+}
+
+export function docWakeLine(w: DocWakeItem, mc: string): string {
+  const where = placeName(w.key);
+  return [...wakeLines(w), `  answer in the doc: ${mc} send --to ${where} "…" (${mc} show ${where === "#general" ? "general" : where} has all of it)`].join("\n");
+}
+
+export function docWakeToolLine(w: DocWakeItem): string {
+  const where = placeName(w.key);
+  const to = where === "#general" ? '"main":true' : `"task":"${where}"`;
+  return [...wakeLines(w), `  answer in the doc: send {"text":"…",${to}}`].join("\n");
 }
