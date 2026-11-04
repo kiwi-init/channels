@@ -1,5 +1,5 @@
 import { Fragment, Node, type Slice } from "prosemirror-model"
-import { EditorState } from "prosemirror-state"
+import { EditorState, TextSelection, type Transaction } from "prosemirror-state"
 import { ProsemirrorBinding, ySyncPluginKey, yXmlFragmentToProseMirrorRootNode } from "y-prosemirror"
 import * as Y from "yjs"
 
@@ -216,12 +216,66 @@ function outOfStep(doc: Node, root: Y.XmlFragment, missed: Set<string>): boolean
   return behind
 }
 
+function sameLines(doc: Node, root: Y.XmlFragment): boolean {
+  const drawn = keysOfDoc(doc)
+  const stored = keysOf(root.toArray().map((el) => (el instanceof Y.XmlElement && typeof el.getAttribute("id") === "string" ? String(el.getAttribute("id")) : "")))
+  return drawn.length === stored.length && drawn.every((k, i) => k === stored[i])
+}
+
 export interface OwnWrites {
   touched: (before: Node, after: Node) => void
   stop: () => void
 }
 
-export function writeOwnLinesOnly(state: EditorState, shown: () => Node | null): OwnWrites | null {
+export interface Seen {
+  state: EditorState
+  dispatch: (tr: Transaction) => void
+}
+
+interface Spot {
+  key: string
+  at: number
+}
+
+function spotOf(doc: Node, pos: number): Spot | null {
+  const $p = doc.resolve(pos)
+  if ($p.depth < 1) return null
+  const key = keysOfDoc(doc)[$p.index(0)]
+  return key === undefined ? null : { key, at: pos - $p.before(1) }
+}
+
+function placeOf(before: Node, after: Node, spot: Spot): number | null {
+  const keys = keysOfDoc(after)
+  const i = keys.indexOf(spot.key)
+  const j = keysOfDoc(before).indexOf(spot.key)
+  if (i < 0 || j < 0) return null
+  let start = 0
+  for (let k = 0; k < i; k++) start += after.child(k).nodeSize
+  const was = before.child(j)
+  const now = after.child(i)
+  const change = diffOf(was, now)
+  const inside = spot.at - 1
+  const moved = !change || inside < change.from ? inside : inside >= change.toA ? inside + change.toB - change.toA : change.toB
+  return start + 1 + Math.min(Math.max(moved, 0), now.content.size)
+}
+
+function keptSelection(before: EditorState, after: EditorState): TextSelection | null {
+  const sel = before.selection
+  if (!(sel instanceof TextSelection)) return null
+  const anchor = spotOf(before.doc, sel.anchor)
+  const head = spotOf(before.doc, sel.head)
+  const a = anchor && placeOf(before.doc, after.doc, anchor)
+  const h = head && placeOf(before.doc, after.doc, head)
+  if (a === null || h === null) return null
+  try {
+    return TextSelection.create(after.doc, a, h)
+  } catch {
+    // a spot that no longer lands in text keeps the selection the redraw chose
+    return null
+  }
+}
+
+export function writeOwnLinesOnly(state: EditorState, seen: () => Seen | null): OwnWrites | null {
   const binding = bindingOf(state)
   if (!binding) return null
   const touched: Touched = { lines: new Map(), gone: new Set() }
@@ -233,25 +287,34 @@ export function writeOwnLinesOnly(state: EditorState, shown: () => Node | null):
     redrawing = false
     const view: unknown = binding.prosemirrorView
     if (stopped || !view || typeof view !== "object" || ("isDestroyed" in view && view.isDestroyed === true)) return
+    const before = seen()?.state ?? null
     binding._forceRerender()
     missed.clear()
+    const now = seen()
+    const kept = before && now ? keptSelection(before, now.state) : null
+    if (now && kept && !kept.eq(now.state.selection)) now.dispatch(now.state.tr.setSelection(kept).setMeta(ySyncPluginKey, { isChangeOrigin: true }).setMeta("addToHistory", false))
   }
   const soon = (): void => {
     if (redrawing) return
     redrawing = true
     queueMicrotask(redraw)
   }
+  let lines = false
   const check = (): void => {
-    const doc = shown()
-    if (!stopped && doc && missed.size && outOfStep(doc, binding.type, missed)) soon()
+    const doc = seen()?.state.doc ?? null
+    const moved = lines
+    lines = false
+    if (stopped || !doc) return
+    if ((moved && !sameLines(doc, binding.type)) || (missed.size && outOfStep(doc, binding.type, missed))) soon()
   }
   const watch = (events: Y.YEvent<Y.AbstractType<unknown>>[], tr: Y.Transaction): void => {
     if (tr.origin === ySyncPluginKey) return
     for (const e of events) {
+      if (e.target === binding.type) lines = true
       const id = topLine(e.target, binding.type)
       if (id) missed.add(id)
     }
-    if (missed.size) queueMicrotask(check)
+    if (missed.size || lines) queueMicrotask(check)
   }
   binding.type.observeDeep(watch)
   binding._prosemirrorChanged = (doc) => {

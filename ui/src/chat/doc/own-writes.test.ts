@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import * as Y from "yjs"
 import { blocksOf } from "@kiwi/core/doc/blocks.ts"
-import { EditorState, type Plugin, type PluginView, type Transaction } from "prosemirror-state"
+import { EditorState, TextSelection, type Plugin, type PluginView, type Transaction } from "prosemirror-state"
 import type { EditorView } from "prosemirror-view"
 import { ySyncPlugin, ySyncPluginKey } from "y-prosemirror"
 
@@ -24,7 +24,7 @@ const remote = (tr: Transaction): boolean => {
 function editor(doc: Y.Doc, guarded: boolean): Editor {
   const sync: Plugin = ySyncPlugin(doc.getXmlFragment(FRAGMENT))
   let state = EditorState.create({ schema, plugins: [sync] })
-  const own = guarded ? writeOwnLinesOnly(state, () => state.doc) : null
+  const own = guarded ? writeOwnLinesOnly(state, () => ({ state, dispatch: (tr) => host.dispatch(tr) })) : null
   const views: PluginView[] = []
   const host = {
     get state() {
@@ -262,5 +262,52 @@ describe("an editor writes only the lines it changed, so a peer out of step neve
     me.dispatch(me.state().tr.delete(0, first.nodeSize))
     typeAtEnd(me, "jow", "!")
     expect(texts(doc)).toEqual(["jow: two!"])
+  })
+
+  test("a redraw keeps your caret and selection where they were in your line, even when a line lands above or letters land before them", async () => {
+    const select = (e: Editor, from: number, to: number) => e.dispatch(e.state().tr.setSelection(TextSelection.create(e.state().doc, from, to)))
+    const typeHere = (e: Editor, text: string) => e.dispatch(e.state().tr.insertText(text))
+    const lineAbove = (e: Editor) => {
+      const line = schema.nodes.block!.create({ id: "jow-top", author: "jow", at: 0 }, schema.nodes.paragraph!.create(null, schema.text("jow line")))
+      e.dispatch(e.state().tr.insert(0, line))
+    }
+    const lettersBefore = (e: Editor) => e.dispatch(e.state().tr.insertText("XX", lineStart(e, "dad")))
+    for (const [what, missed, from, to, want] of [
+      ["a caret under a line that lands above", lineAbove, 4, 4, ["jow: jow line", "dad: bom ?¿dia!"]],
+      ["a selection under a line that lands above", lineAbove, 4, 6, ["jow: jow line", "dad: bom ?¿a!"]],
+      ["a caret after letters that land before it in your line", lettersBefore, 3, 3, ["dad: XXbom?¿ dia!"]],
+      ["a selection after letters that land before it in your line", lettersBefore, 0, 3, ["dad: XX?¿ dia!"]],
+    ] as const) {
+      const desk = new Y.Doc()
+      const peer = new Y.Doc()
+      const sync = net(desk, peer)
+      const jow = editor(desk, true)
+      const dad = editor(peer, true)
+      await Promise.resolve()
+      dad.dispatch(startBlock(dad.state(), "dad", 1))
+      dad.dispatch(dad.state().tr.insertText("bom dia"))
+      sync()
+      await settle()
+      missed(jow)
+      const at = lineStart(dad, "dad")
+      select(dad, at + from, at + to)
+      let once = true
+      peer.on("update", (_u: Uint8Array, o: unknown) => {
+        if (!once || o === NET) return
+        once = false
+        sync()
+      })
+      const end = lineStart(dad, "dad") + dad.state().doc.child(dad.state().doc.childCount - 1).content.size - 2
+      dad.dispatch(dad.state().tr.insert(end, schema.text("!")))
+      await settle()
+      expect([what, dad.state().selection.empty]).toEqual([what, from === to])
+      typeHere(dad, "?")
+      await settle()
+      typeHere(dad, "¿")
+      sync()
+      await settle()
+      expect([what, texts(desk)]).toEqual([what, want])
+      expect(texts(peer)).toEqual(texts(desk))
+    }
   })
 })
