@@ -287,7 +287,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
               Retry
             </button>
             <button type="button" className="msg-failed-act" onClick={() => actions.discard(channel.code, m.seq)}>
-              Delete
+              {m.block !== undefined ? "Back to draft" : "Delete"}
             </button>
           </p>
         )}

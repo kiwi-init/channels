@@ -9,6 +9,8 @@ import { ySyncPlugin } from "y-prosemirror"
 import type { DocEvent } from "../../../../desktop/src/bridge.ts"
 import { blockAfter, blocks, startBlock } from "~/chat/doc/blocks"
 import { giveBackBlock } from "~/chat/doc/give-back"
+import type { Pending } from "~/live/map"
+import { unsentBlock } from "~/live/unsent"
 import { LiveDoc } from "~/chat/doc/live"
 import { postFinished, type Finished } from "~/chat/doc/post"
 import { FRAGMENT, isSent, schema } from "~/chat/doc/schema"
@@ -244,6 +246,28 @@ describe("a person's block posts as their message when they press Enter", () => 
     expect(blocks(ed.state().doc).map((b) => isSent(b.node))).toEqual([true, false])
     ed.dispatch(ed.state().tr.insertText("next"))
     expect(blocksOf(doc).map((b) => b.sent ?? false)).toEqual([true, false])
+  })
+
+  test("Back to draft on a failed line gives its block back, and Enter posts it again (T1606)", async () => {
+    const doc = new Y.Doc()
+    const posts: string[] = []
+    const posting = postFinished(doc, { me: "jow", local: (o) => o !== REMOTE }, (f) => posts.push(f.text))
+    const id = start(doc, "jow", "ship it")
+    start(doc, "jow")
+    await wait(0)
+    const failed: Pending[] = [
+      { key: 7, where: { kind: "main" } as Pending["where"], text: "ship it", at: 1, failed: "offline", block: { th: "th1", id } },
+      { key: 8, where: { kind: "main" } as Pending["where"], text: "not a doc line", at: 2, failed: "offline" },
+    ]
+    expect(unsentBlock(failed, 8)).toBeNull()
+    const back = unsentBlock(failed, 7)
+    if (!back) throw new Error("no block")
+    giveBackBlock(back)
+    expect(blocksOf(doc).find((b) => b.id === id)?.sent ?? false).toBe(false)
+    doc.transact(() => threadOf(doc).delete(threadOf(doc).length - 1, 1))
+    start(doc, "jow")
+    expect(posts).toEqual(["ship it", "ship it"])
+    posting.stop()
   })
 
   test("a retried line the channel refuses comes back as a draft in its own doc only, and posts again (T1465)", async () => {

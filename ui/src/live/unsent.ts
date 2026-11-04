@@ -15,6 +15,8 @@ export function changeUnsent(room: string, change: (list: Pending[]) => Pending[
   return next
 }
 
+export const unsentBlock = (list: readonly Pending[], key: number): string | null => list.find((p) => p.key === key)?.block?.id ?? null
+
 export const resendOf = (p: Pending): SendExtras => ({
   ...(p.inThread !== undefined ? { inThread: p.inThread } : {}),
   ...(p.side ? { side: true as const } : {}),
