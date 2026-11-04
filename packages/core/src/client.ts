@@ -29,6 +29,8 @@ import { ChannelInfo, type Info, type MemberRow } from "./client/info.ts";
 import { joinFx, type JoinStatus, type JoinWatch } from "./client/join.ts";
 import { ChannelKeys } from "./client/keys.ts";
 import { ChannelLive, type StreamOptions } from "./client/live.ts";
+import type { DocStore } from "./doc/hub.ts";
+import type { ThreadDoc } from "./doc/thread-doc.ts";
 import { ChannelMembers, type Keeps, type Reconciled } from "./client/members.ts";
 import { run, runUntil } from "./client/relay.ts";
 import { ChannelRequests, type RequestsOptions } from "./client/requests.ts";
@@ -73,13 +75,13 @@ export class Channel {
   private readonly live: ChannelLive;
   readonly fx: ChannelFx;
 
-  constructor(access: ChannelAccess, relay: string, identity: Identity, onAccess?: (a: ChannelAccess) => void, opts: { keepInfo?: boolean; infoMaxAgeMs?: number } = {}) {
+  constructor(access: ChannelAccess, relay: string, identity: Identity, onAccess?: (a: ChannelAccess) => void, opts: { keepInfo?: boolean; infoMaxAgeMs?: number; docStore?: DocStore | null } = {}) {
     this.core = new ChannelCore(access, relay, identity, onAccess);
     this.cache = new ChannelInfo(this.core, opts);
     const settings = new ChannelSettings(this.core, this.cache);
     const history = new ChannelHistory(this.core);
     const images = new ChannelImages(this.core, settings);
-    const live = new ChannelLive(this.core, this.cache);
+    const live = new ChannelLive(this.core, this.cache, opts.docStore ?? null);
     this.live = live;
     this.sending = new ChannelSending(this.core, live, settings, images);
     this.fx = {
@@ -134,6 +136,14 @@ export class Channel {
 
   nudge(): void {
     this.live.nudge();
+  }
+
+  threadDoc(thread: string, th?: string): Promise<ThreadDoc> {
+    return this.live.docs.open(thread, th);
+  }
+
+  closeDoc(thread: string): void {
+    this.live.docs.close(thread);
   }
 
   get roomId(): string {

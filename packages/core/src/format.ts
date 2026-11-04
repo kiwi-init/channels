@@ -158,6 +158,8 @@ export function describeEvent(m: Message, state?: ChannelState, nameOf: (handle:
       return "changed who a room is for";
     case "room.leave":
       return "left a room";
+    case "doc.open":
+      return `started the shared doc of ${inlineText(ev.thread, 60)}`;
     case "room.rename": {
       // Rooms are named by id in the event; say which one it was, by its name now if it has another.
       const now = state?.rooms.get(ev.id)?.name;

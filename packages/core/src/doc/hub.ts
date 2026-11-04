@@ -1,0 +1,198 @@
+import * as Y from "yjs";
+import { b64url, fromB64url } from "../crypto.ts";
+import type { Identity } from "../identity.ts";
+import { DOC_THREAD_RE } from "../protocol.ts";
+import { newDocId } from "./blocks.ts";
+import { ThreadDoc, type DocIn, type DocKeys, type DocOut, type DocSaved } from "./thread-doc.ts";
+
+const AWARE_TYPE = "doc.aw";
+const AWARE_MS = 250;
+const SAVE_MS = 1_000;
+
+export interface DocStore {
+  load: (th: string) => Promise<DocSaved | null>;
+  save: (th: string, saved: DocSaved) => Promise<void>;
+}
+
+export interface HubOptions {
+  roomId: string;
+  me: Identity;
+  keys: DocKeys;
+  sealAware: (payload: object) => Promise<{ iv: string; ct: string }>;
+  announce: (thread: string, th: string) => Promise<void>;
+  store?: DocStore | null;
+  trusts?: (pk: string) => boolean;
+  flushMs?: number;
+  awareMs?: number;
+  saveMs?: number;
+}
+
+interface Open {
+  td: ThreadDoc;
+  saving: ReturnType<typeof setTimeout> | null;
+  onUpdate: () => void;
+}
+
+const isDocFrame = (f: { t?: unknown }): f is Extract<DocIn, { th: string }> => f.t === "doc" || f.t === "doc.ready";
+
+const awareList = (x: unknown): [string, string][] | null => {
+  const p = x as { type?: unknown; docs?: unknown } | null;
+  if (p?.type !== AWARE_TYPE || !Array.isArray(p.docs) || p.docs.length > 64) return null;
+  return p.docs.filter((d): d is [string, string] => Array.isArray(d) && d.length === 2 && typeof d[0] === "string" && typeof d[1] === "string");
+};
+
+export class DocHub {
+  private readonly o: HubOptions;
+  private readonly byThread = new Map<string, Open>();
+  private readonly byTh = new Map<string, Open>();
+  private readonly opening = new Map<string, Promise<ThreadDoc>>();
+  private readonly sockets: ((raw: string) => void)[] = [];
+  private readonly awareOut = new Map<string, Uint8Array>();
+  private awareTimer: ReturnType<typeof setTimeout> | null = null;
+
+  constructor(o: HubOptions) {
+    this.o = o;
+  }
+
+  get size(): number {
+    return this.byTh.size;
+  }
+
+  attach(send: (raw: string) => void): () => void {
+    this.sockets.push(send);
+    if (this.sockets.length === 1) for (const { td } of this.byTh.values()) td.reconnect();
+    return () => {
+      const at = this.sockets.indexOf(send);
+      if (at < 0) return;
+      const wasActive = at === this.sockets.length - 1;
+      this.sockets.splice(at, 1);
+      if (wasActive && this.sockets.length) for (const { td } of this.byTh.values()) td.reconnect();
+    };
+  }
+
+  open(thread: string, th?: string): Promise<ThreadDoc> {
+    const had = this.byThread.get(thread);
+    if (had && (!th || had.td.th === th)) return Promise.resolve(had.td);
+    const key = `${thread}\u0000${th ?? ""}`;
+    const busy = this.opening.get(key);
+    if (busy) return busy;
+    const made = this.make(thread, th ?? null, had ?? null).finally(() => this.opening.delete(key));
+    this.opening.set(key, made);
+    return made;
+  }
+
+  close(thread: string): void {
+    const open = this.byThread.get(thread);
+    if (!open) return;
+    this.byThread.delete(thread);
+    this.byTh.delete(open.td.th);
+    this.drop(open);
+  }
+
+  closeAll(): void {
+    for (const thread of [...this.byThread.keys()]) this.close(thread);
+    if (this.awareTimer) clearTimeout(this.awareTimer);
+    this.awareTimer = null;
+  }
+
+  take(f: { t?: unknown; th?: unknown; id?: unknown }): boolean {
+    if (isDocFrame(f)) {
+      const open = typeof f.th === "string" ? this.byTh.get(f.th) : undefined;
+      if (open) void open.td.receive(f);
+      return true;
+    }
+    if ((f.t !== "ack" && f.t !== "err") || typeof f.id !== "string") return false;
+    for (const { td } of this.byTh.values())
+      if (td.owns(f.id)) {
+        void td.receive(f as DocIn);
+        return true;
+      }
+    return false;
+  }
+
+  awareIn(payload: unknown): boolean {
+    const docs = awareList(payload);
+    if (!docs) return false;
+    for (const [th, u] of docs) {
+      const open = this.byTh.get(th);
+      if (!open) continue;
+      try {
+        open.td.applyAwareness(fromB64url(u));
+      } catch {
+        // A cursor update that doesn't decode is dropped; the next one replaces it.
+      }
+    }
+    return true;
+  }
+
+  private readonly send = (f: DocOut): void => {
+    const s = this.sockets.at(-1);
+    if (s) s(JSON.stringify(f));
+  };
+
+  private readonly queueAware = (th: string, u: Uint8Array): void => {
+    this.awareOut.set(th, u);
+    if (!this.awareTimer) this.awareTimer = setTimeout(() => void this.flushAware(), this.o.awareMs ?? AWARE_MS);
+  };
+
+  private async flushAware(): Promise<void> {
+    this.awareTimer = null;
+    if (!this.awareOut.size || !this.sockets.length) return this.awareOut.clear();
+    const docs = [...this.awareOut].map(([th, u]) => [th, b64url(u)]);
+    this.awareOut.clear();
+    const sealed = await this.o.sealAware({ type: AWARE_TYPE, docs });
+    this.sockets.at(-1)?.(JSON.stringify({ t: "eph", ...sealed }));
+  }
+
+  private async make(thread: string, th: string | null, had: Open | null): Promise<ThreadDoc> {
+    const id = th ?? newDocId();
+    if (!DOC_THREAD_RE.test(id)) throw new Error(`not a doc id: ${id}`);
+    const saved = th ? ((await this.o.store?.load(id)) ?? null) : null;
+    const td = new ThreadDoc({
+      roomId: this.o.roomId,
+      th: id,
+      me: this.o.me,
+      keys: this.o.keys,
+      links: { send: this.send, aware: this.queueAware },
+      saved,
+      ...(this.o.trusts ? { trusts: this.o.trusts } : {}),
+      ...(this.o.flushMs === undefined ? {} : { flushMs: this.o.flushMs }),
+    });
+    const open: Open = { td, saving: null, onUpdate: () => this.queueSave(open) };
+    td.doc.on("update", open.onUpdate);
+    if (had) {
+      Y.applyUpdate(td.doc, Y.encodeStateAsUpdate(had.td.doc));
+      this.byTh.delete(had.td.th);
+      this.drop(had);
+    }
+    this.byThread.set(thread, open);
+    this.byTh.set(id, open);
+    if (this.sockets.length) td.start();
+    if (!th) await this.o.announce(thread, id);
+    return td;
+  }
+
+  private queueSave(open: Open): void {
+    if (!this.o.store || open.saving) return;
+    open.saving = setTimeout(() => {
+      open.saving = null;
+      void this.persist(open);
+    }, this.o.saveMs ?? SAVE_MS);
+  }
+
+  private async persist(open: Open): Promise<void> {
+    try {
+      await this.o.store?.save(open.td.th, open.td.save());
+    } catch {
+      // The local copy only makes opening faster; the relay still has the doc.
+    }
+  }
+
+  private drop(open: Open): void {
+    if (open.saving) clearTimeout(open.saving);
+    open.saving = null;
+    void this.persist(open);
+    open.td.doc.off("update", open.onUpdate);
+    open.td.destroy();
+  }
+}

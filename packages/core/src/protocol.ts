@@ -83,6 +83,7 @@ export const MAX_IMAGES = 8;
 export const MAX_EPH_LENGTH = 4 * 1024;
 
 export const MAX_DOC_SNAP_LENGTH = 2 * 1024 * 1024;
+const MAX_DOC_THREAD = 200;
 export const DOC_COMPACT_BYTES = 256 * 1024;
 export const DOC_COMPACT_UPDATES = 500;
 export const MAX_DOC_LOG_BYTES = 1024 * 1024;
@@ -90,7 +91,7 @@ export const MAX_DOC_LOG_UPDATES = 5_000;
 export const MAX_DOC_THREADS = 32;
 export const DOC_COMPACT = "this thread's doc is full; post a snapshot first";
 
-const DOC_THREAD_RE = /^[A-Za-z0-9_-]{22}$/;
+export const DOC_THREAD_RE = /^[A-Za-z0-9_-]{22}$/;
 export const wellFormedThread = (x: unknown): x is string => typeof x === "string" && DOC_THREAD_RE.test(x);
 
 /** Most messages returned by one history read or replayed on connect. */
@@ -310,6 +311,7 @@ export type Event =
   /** Owner only: a room's new name ("general" included; its id stays). */
   | { op: "room.rename"; id: string; name: string }
   | { op: "room.leave"; id: string }
+  | { op: "doc.open"; thread: string; th: string }
   /**
    * Owner only: what this channel is for and where its limits are (null clears it). Every agent is
    * shown it as the scope it works within; a request outside it is escalated to a person, not done.
@@ -406,6 +408,7 @@ const QUIET_OPS: ReadonlySet<string> = new Set([
   "github.release",
   "devices",
   "spec.set",
+  "doc.open",
 ]);
 
 export const isRunning = (i: GithubNote): boolean => (i.event === "check_run" || i.event === "workflow_run") && i.conclusion === undefined;
@@ -862,7 +865,7 @@ export interface NewerEvent {
 
 export type WirePayload = Omit<Payload, "ev"> & { ev?: Event | NewerEvent };
 
-export const EVENT_OPS_VERSION = 17;
+export const EVENT_OPS_VERSION = 18;
 
 export const opsVersion = (x: unknown): x is number => Number.isSafeInteger(x) && (x as number) >= 1 && (x as number) <= 10_000;
 const NEWER_OP_RE = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/;
@@ -1197,6 +1200,8 @@ function eventCheck(ev: unknown): boolean | null {
       return n(e.seq) && (e.seq as number) > 0;
     case "room.leave":
       return str(e.id, 64);
+    case "doc.open":
+      return str(e.thread, MAX_DOC_THREAD) && (e.thread as string).length > 0 && typeof e.th === "string" && DOC_THREAD_RE.test(e.th);
     case "member.gone":
       return str(e.member, 64) && str(e.pk, 64) && (e.why === undefined || str(e.why, 500));
     case "member.back":

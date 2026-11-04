@@ -19,6 +19,7 @@ const board = (tasks: Task[]): ChannelState =>
     members: new Map(),
     tasks: new Map(tasks.map((t) => [t.id, t])),
     facts: new Map(),
+    docs: new Map(),
     leases: new Map(),
     trust: new Map(),
     scopeSets: new Map(),
