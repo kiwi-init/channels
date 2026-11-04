@@ -3,6 +3,8 @@ import { newChannelKey, newRoomId } from "@kiwi/core/crypto.ts";
 import { agentBlock, PRESENCE_FIELD, watchWakes, wakesMe, type DocWake, type WakeRule } from "@kiwi/core/doc/agent.ts";
 import { appendToBlock, blocksOf, markBack, markPosted, newBlock, newDocId, threadText } from "@kiwi/core/doc/blocks.ts";
 import { ThreadDoc } from "@kiwi/core/doc/thread-doc.ts";
+import type { Message } from "@kiwi/core/protocol.ts";
+import { wants } from "../src/agent/wants.ts";
 import { generateIdentity } from "@kiwi/core/identity.ts";
 
 const me = await generateIdentity("olivia");
@@ -168,5 +170,18 @@ describe("an agent streams its answer into its own block (T500)", () => {
     const mine = blocksOf(a).find((x) => x.id === out.id);
     expect(mine).toMatchObject({ kind: "agent", author: "olivia", text: "Looking at it.\nFirst: the relay\n\nDone." });
     expect(threadText(a)).toBe("jow: @olivia hi\n\nolivia (agent): Looking at it.\nFirst: the relay\n\nDone.");
+  });
+});
+
+describe("a quoted mention wakes nobody, in the doc or as a message (T1741)", () => {
+  test("jow quotes atlas's '@olivia can you review #1621?' and writes 'I'll review it myself': neither the doc line nor its message wakes olivia", () => {
+    const quote = "@olivia can you review #1621?";
+    const block = { id: "b1", kind: "text" as const, author: "jow", at: 1, sent: true as const, re: 40, quote, text: "I'll review it myself" };
+    const body = `> ${quote}\n\nI'll review it myself`;
+    const m = { v: 1, id: "x", seq: 41, from: "jow", kind: "msg", ts: 1, re: [40], to: ["atlas"], body } as unknown as Message;
+    expect(wakesMe(block, { me: "olivia", names: ["olivia"], owns: false })).toBe(false);
+    expect(wants("olivia", m, null, {})).toBe(false);
+    const asked = { ...m, body: `> ${quote}\n\n@olivia yes please` } as Message;
+    expect(wants("olivia", asked, null, {})).toBe(true);
   });
 });

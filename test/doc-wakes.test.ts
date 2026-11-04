@@ -257,3 +257,40 @@ describe("the wake's 'before it' (T1741)", () => {
     td.destroy();
   });
 });
+
+describe("a task doc wakes everyone working the task, as its thread's messages do (T1741)", () => {
+  test("a line without a mention wakes an agent that works on, reviews or posted in the task, not one in #general", async () => {
+    const me = await generateIdentity("olivia");
+    const key = newChannelKey();
+    for (const [alias, t] of [
+      ["worked", { owner: "rodrigo", workedBy: ["olivia"] }],
+      ["reviews", { owner: "rodrigo", review: "olivia" }],
+      ["posted", { owner: "rodrigo", posters: ["olivia"] }],
+    ] satisfies [string, Partial<Task>][]) {
+      const th = newDocId();
+      const main = newDocId();
+      const td = new ThreadDoc({ roomId: newRoomId(), th, me, keys: { current: async () => ({ key }), opening: async () => [key] }, links: { send: () => {}, aware: () => {} } });
+      const gd = new ThreadDoc({ roomId: newRoomId(), th: main, me, keys: { current: async () => ({ key }), opening: async () => [key] }, links: { send: () => {}, aware: () => {} } });
+      const state = {
+        docs: new Map([
+          ["main", main],
+          ["task:9", th],
+        ]),
+        tasks: new Map([[9, task(9, t)]]),
+      } as unknown as ChannelState;
+      const f = followDocs(
+        { alias, agent: "olivia", ch: { threadDoc: async (k: string) => (k === "main" ? gd : td), closeDoc: () => {} } },
+        async () => state,
+        () => {},
+      );
+      f.refresh(0);
+      await Bun.sleep(30);
+      markSent(td.doc, newBlock(td.doc, "text", "jow", "the relay half of T9 is blocked: wait before merging", Date.now() + 1).id);
+      markSent(gd.doc, newBlock(gd.doc, "text", "jow", "lunch at one", Date.now() + 1).id);
+      expect(pendingDocWakes(alias, "olivia").map((w) => w.text)).toEqual(["the relay half of T9 is blocked: wait before merging"]);
+      f.stop();
+      td.destroy();
+      gd.destroy();
+    }
+  });
+});

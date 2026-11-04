@@ -79,6 +79,8 @@ export const messageCommands: Record<string, Command> = {
         const room = opt.room ?? where.room;
         const doc =
           !asking && kind === "msg" ? docPlaceOf(state, { ...(chosen.task !== undefined ? { task: chosen.task } : {}), ...(chosen.dm ? { dm: true } : {}), ...(room ? { room } : {}), re }) : null;
+        const general = chosen.task === undefined && !chosen.dm && (!room || room.toLowerCase() === "general") && (re.length === 0 || inGeneral(state, re[0]!));
+        const notes = [general ? longForGeneral(state, s.me, body) : null, bareHandleNote(state, body)].filter((n) => n !== null);
         if (doc) {
           const seq = yield* s.sendToDoc(body, doc, {
             to,
@@ -89,7 +91,7 @@ export const messageCommands: Record<string, Command> = {
             ...(chosen.task !== undefined ? { task: chosen.task } : {}),
           });
           out(`sent #${seq}${wentTo(chosen)}, into its shared doc`);
-          for (const n of [bareHandleNote(state, body)].filter((x) => x !== null)) out(n);
+          for (const n of notes) out(n);
           return;
         }
         const head = asking && opt.wait ? yield* s.ch.fx.head() : 0;
@@ -103,8 +105,6 @@ export const messageCommands: Record<string, Command> = {
           ...(chosen.task !== undefined ? { task: chosen.task } : {}),
           ...(chosen.dm ? { dm: true } : {}),
         });
-        const general = chosen.task === undefined && !chosen.dm && (!room || room.toLowerCase() === "general") && (re.length === 0 || inGeneral(state, re[0]!));
-        const notes = [general ? longForGeneral(state, s.me, body) : null, bareHandleNote(state, body)].filter((n) => n !== null);
         if (!asking || !opt.wait) {
           out(`${asking ? "asked" : "sent"} #${seq}${wentTo(chosen)}`);
           for (const n of notes) out(n);
