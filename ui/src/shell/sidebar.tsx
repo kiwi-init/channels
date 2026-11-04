@@ -6,8 +6,8 @@ import { showMenu } from "~/kit/menu-open"
 import { useAppCan } from "~/live/app-can"
 import { useGlide } from "~/kit/glide"
 import { Icon } from "~/kit/icons"
-import { ago } from "~/kit/time"
-import { memberOf, type Channel, type Direct, type Person } from "~/model"
+import { ago, useNow } from "~/kit/time"
+import { memberOf, type Channel, type Direct, type Person, type Task } from "~/model"
 import { sameWhere, useAct, useApp } from "~/nav"
 import { between, nickname, onePerPerson, shown } from "~/names"
 import { comingBack, hiddenKey, hiddenPlaces, keptHidden, setHidden } from "~/shell/hidden-places"
@@ -205,7 +205,7 @@ export function Sidebar({ channel }: { channel: Channel }) {
   )
 }
 
-const rank = (p: Person): number => (p.role === "lead" ? 0 : p.presence === "offline" ? 2 : 1)
+const rank = (p: Person): number => (liveOf(p) ? 0 : 3) + (p.role === "lead" ? 0 : p.presence === "offline" ? 2 : 1)
 
 export function statusOf(p: Person, channel: Channel): string {
   const live = liveOf(p)
@@ -225,22 +225,64 @@ function Member({ person, channel, direct, tile }: { person: Person; channel: Ch
   const where = { kind: "dm", with: person.name } as const
   const on = nav.tab === "chat" && sameWhere(nav.where, where)
   const unread = direct?.unread ?? 0
+  const live = tile ? liveOf(person) : null
+  const task = live ? taskOf(person, channel) : undefined
   return (
-    <li>
+    <li className={cx(live && "is-live")}>
       <button
         type="button"
-        className={cx(tile ? "side-tile" : "side-row side-member", on && "is-on", unread > 0 && "is-news", person.presence === "offline" && "is-off")}
+        className={cx(
+          tile ? "side-tile" : "side-row side-member",
+          live && "is-live",
+          live && !live.busy && "is-waiting",
+          on && "is-on",
+          unread > 0 && "is-news",
+          person.presence === "offline" && "is-off"
+        )}
         aria-current={on ? "page" : undefined}
-        title={statusOf(person, channel)}
+        title={task ? `T${task.id} ${task.title} · ${statusOf(person, channel)}` : statusOf(person, channel)}
         onClick={() => go({ to: "where", where })}
         onContextMenu={(e) =>
           showMenu(e, shown(person), (x) => [unread > 0 ? [{ label: "Mark as read", run: () => actions.markRead(channel.code, where) }] : [], x.personItems({ channel, go }, person)])
         }
       >
-        <Avatar person={person} size={tile ? "lg" : "sm"} pip />
-        <span className="side-label">{shown(person)}</span>
+        {live ? (
+          <span className="side-who">
+            <Avatar person={person} size="lg" />
+            <span className="side-label">{shown(person)}</span>
+          </span>
+        ) : (
+          <>
+            <Avatar person={person} size={tile ? "lg" : "sm"} pip />
+            <span className="side-label">{shown(person)}</span>
+          </>
+        )}
+        {live && <Says text={live.busy ? live.text : "needs a person"} since={live.since} task={task} />}
         <Count n={unread} loud />
       </button>
     </li>
+  )
+}
+
+const MIN = 60_000
+
+function Says({ text, since, task }: { text: string; since: number | undefined; task: Task | undefined }) {
+  const now = useNow(since === undefined ? null : 15_000)
+  const long = since !== undefined && now - since >= MIN ? ago(since, now) : null
+  return (
+    <span className="side-says">
+      {task && (
+        <span className="side-task">
+          <span className="side-id">T{task.id}</span>
+          {task.title}
+        </span>
+      )}
+      <span className="side-now">
+        <span key={text} className="side-what">
+          {text}
+        </span>
+        {long && <span className="side-for">{long}</span>}
+      </span>
+    </span>
   )
 }
