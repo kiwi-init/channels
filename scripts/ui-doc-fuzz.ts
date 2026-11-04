@@ -104,12 +104,19 @@ async function laggy(context: BrowserContext, label: string): Promise<Lag> {
     lag.sockets.push(seen);
     ws.onClose(() => void (seen.closed = true));
     server.onClose(() => void (seen.closed = true));
-    let upAt = 0;
-    let downAt = 0;
-    const later = (last: number, send: () => void): number => {
-      const at = Math.max(last, Date.now() + lag.ms + Math.floor(rand() * (lag.jitter + 1)));
-      setTimeout(send, at - Date.now());
-      return at;
+    const pipe = (): ((send: () => void) => void) => {
+      const q: { at: number; send: () => void }[] = [];
+      let timer: ReturnType<typeof setTimeout> | null = null;
+      const pump = (): void => {
+        timer = null;
+        while (q.length && q[0]!.at <= Date.now()) q.shift()!.send();
+        if (q.length) timer = setTimeout(pump, q[0]!.at - Date.now());
+      };
+      return (send) => {
+        const at = Math.max(q.at(-1)?.at ?? 0, Date.now() + lag.ms + Math.floor(rand() * (lag.jitter + 1)));
+        q.push({ at, send });
+        if (!timer) timer = setTimeout(pump, Math.max(0, at - Date.now()));
+      };
     };
     const safely = (send: () => void): void => {
       try {
@@ -119,13 +126,15 @@ async function laggy(context: BrowserContext, label: string): Promise<Lag> {
         seen.errors++;
       }
     };
+    const up = pipe();
+    const down = pipe();
     ws.onMessage((m) => {
       seen.upIn++;
-      upAt = later(upAt, () => safely(() => (server.send(m), seen.up++)));
+      up(() => safely(() => (server.send(m), seen.up++)));
     });
     server.onMessage((m) => {
       seen.downIn++;
-      downAt = later(downAt, () => safely(() => (ws.send(m), seen.down++, (seen.lastDown = Date.now()))));
+      down(() => safely(() => (ws.send(m), seen.down++, (seen.lastDown = Date.now()))));
     });
     lag.closers.push(() => void ws.close().catch(() => undefined));
     log(`${label} socket opened`);
