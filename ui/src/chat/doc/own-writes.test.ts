@@ -272,6 +272,10 @@ describe("an editor writes only the lines it changed, so a peer out of step neve
       e.dispatch(e.state().tr.insert(0, line))
     }
     const lettersBefore = (e: Editor) => e.dispatch(e.state().tr.insertText("XX", lineStart(e, "dad")))
+    const pasted = (e: Editor) => {
+      e.dispatch(e.state().tr.insertText("Y".repeat(2001), lineStart(e, "dad") + 5))
+      e.dispatch(e.state().tr.insertText("X".repeat(2001), lineStart(e, "dad")))
+    }
     const lettersAround = (e: Editor) => {
       e.dispatch(e.state().tr.insertText("YY", lineStart(e, "dad") + 5))
       lettersBefore(e)
@@ -283,6 +287,8 @@ describe("an editor writes only the lines it changed, so a peer out of step neve
       ["a selection after letters that land before it in your line", lettersBefore, 0, 3, ["dad: XX?¿ dia!"]],
       ["a caret between two separate edits in your line", lettersAround, 3, 3, ["dad: XXbom?¿ dYYia!"]],
       ["a selection between two separate edits in your line", lettersAround, 1, 3, ["dad: XXb?¿ dYYia!"]],
+      ["a caret between two pastes of 2001 letters each", pasted, 3, 3, [`dad: ${"X".repeat(2001)}bom?¿ d${"Y".repeat(2001)}ia!`]],
+      ["a selection between two pastes of 2001 letters each", pasted, 1, 3, [`dad: ${"X".repeat(2001)}b?¿ d${"Y".repeat(2001)}ia!`]],
     ] as const) {
       const desk = new Y.Doc()
       const peer = new Y.Doc()

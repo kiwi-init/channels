@@ -261,9 +261,10 @@ interface Hunk {
   b1: number
 }
 
-const MAX_EDITS = 4_000
+const MAX_EDITS = 1_000
+const CONTEXT = 24
 
-function hunksOf(a: readonly string[], b: readonly string[]): Hunk[] {
+function hunksOf(a: readonly string[], b: readonly string[]): Hunk[] | null {
   let head = 0
   while (head < a.length && head < b.length && a[head] === b[head]) head++
   let tail = 0
@@ -271,7 +272,6 @@ function hunksOf(a: readonly string[], b: readonly string[]): Hunk[] {
   const n = a.length - head - tail
   const m = b.length - head - tail
   if (!n && !m) return []
-  const whole: Hunk[] = [{ a0: head, a1: head + n, b0: head, b1: head + m }]
   const most = Math.min(n + m, MAX_EDITS)
   const off = most + 1
   const v = new Int32Array(2 * most + 3)
@@ -290,7 +290,7 @@ function hunksOf(a: readonly string[], b: readonly string[]): Hunk[] {
       if (x >= n && y >= m) return walkBack(trace, off, n, m, d, head)
     }
   }
-  return whole
+  return null
 }
 
 function walkBack(trace: Int32Array[], off: number, n: number, m: number, last: number, head: number): Hunk[] {
@@ -327,6 +327,41 @@ function mapThrough(hunks: readonly Hunk[], p: number): number {
   return p + delta
 }
 
+function seen(b: readonly string[], run: readonly string[], from: number): number[] {
+  const out: number[] = []
+  for (let i = from; i + run.length <= b.length && out.length < 2; i++) {
+    let k = 0
+    while (k < run.length && b[i + k] === run[k]) k++
+    if (k === run.length) out.push(i)
+  }
+  return out
+}
+
+function onlyRun(b: readonly string[], runs: (k: number) => readonly string[], most: number, from: number): { at: number; len: number } | null {
+  for (let k = most; k > 0; k--) {
+    const run = runs(k)
+    const at = seen(b, run, from)
+    if (at.length === 1) return { at: at[0]!, len: run.length }
+    if (at.length > 1) return null
+  }
+  return null
+}
+
+function anchored(a: readonly string[], b: readonly string[], p: number): number | null {
+  const left = onlyRun(b, (k) => a.slice(p - k, p), Math.min(CONTEXT, p), 0)
+  const after = (from: number) => onlyRun(b, (k) => a.slice(p, p + k), Math.min(CONTEXT, a.length - p), from)
+  if (!left) return after(0)?.at ?? null
+  const q = left.at + left.len
+  const right = after(q)
+  return right && right.at === after(0)?.at ? right.at : q
+}
+
+function mapped(a: readonly string[], b: readonly string[], p: number): number {
+  const hunks = hunksOf(a, b)
+  if (hunks) return mapThrough(hunks, p)
+  return anchored(a, b, p) ?? b.length
+}
+
 function placeOf(before: Node, after: Node, spot: Spot): number | null {
   const keys = keysOfDoc(after)
   const i = keys.indexOf(spot.key)
@@ -335,7 +370,7 @@ function placeOf(before: Node, after: Node, spot: Spot): number | null {
   let start = 0
   for (let k = 0; k < i; k++) start += after.child(k).nodeSize
   const now = after.child(i)
-  const moved = mapThrough(hunksOf(tokensOf(before.child(j)), tokensOf(now)), spot.at - 1)
+  const moved = mapped(tokensOf(before.child(j)), tokensOf(now), spot.at - 1)
   return start + 1 + Math.min(Math.max(moved, 0), now.content.size)
 }
 
