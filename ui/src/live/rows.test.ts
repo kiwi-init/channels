@@ -108,7 +108,14 @@ describe("a line written in the doc shows its replies and receipt like any messa
     const reply = wire({ from: "win", to: ["jow"], body: "yes", re: [line.seq] })
     const log = [line, reply]
     const state = fold(log, roster, 0)
-    const read = receiptsOf(state, log, "jow", addMarks(new Map(), [{ pk: "pk-win", seq: reply.seq, at: 42 }]), (n) => `pk-${n}`, (t) => `t${t}`)
+    const read = receiptsOf(
+      state,
+      log,
+      "jow",
+      addMarks(new Map(), [{ pk: "pk-win", seq: reply.seq, at: 42 }]),
+      (n) => `pk-${n}`,
+      (t) => `t${t}`
+    )
     const shown = withReceipts(rows(log), read).find((m) => m.seq === line.seq)
     expect(shown?.block).toBe("b1")
     expect(shown && inFeed(shown, true)).toBe(true)
