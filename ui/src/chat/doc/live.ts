@@ -14,6 +14,7 @@ import { FRAGMENT } from "~/chat/doc/schema"
 export interface Shared {
   doc: Y.Doc
   awareness: Awareness
+  made: Set<string>
 }
 
 export type OpenDoc = (th: string | null, on: (e: DocEvent) => void) => PipeIn
@@ -39,6 +40,7 @@ const whyNot = (e: WireError): string => (e.kind === "gone" ? `the channel was $
 export class LiveDoc implements Shared {
   readonly doc = new Y.Doc()
   readonly awareness = new Awareness(this.doc)
+  readonly made = new Set<string>()
   private pipe: PipeIn | null = null
   private current: object | null = null
   private opened: string | null = null

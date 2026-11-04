@@ -51,7 +51,11 @@ function atEnd(tr: Transaction, b: Placed): Transaction {
   return tr.setSelection(TextSelection.near(tr.doc.resolve(b.pos + b.node.nodeSize - 1), -1))
 }
 
-export function startBlock(state: EditorState, me: string, now: number, posted: (block: string) => boolean = () => false): Transaction {
+export type Made = (block: string) => boolean
+
+const anyMade: Made = () => true
+
+export function startBlock(state: EditorState, me: string, now: number, posted: (block: string) => boolean = () => false, made: Made = anyMade): Transaction {
   const tr = state.tr.setMeta("addToHistory", false)
   const all = blocks(state.doc)
   const own = all.filter((b) => attrsOf(b.node).author === me && attrsOf(b.node).kind === "text")
@@ -62,7 +66,7 @@ export function startBlock(state: EditorState, me: string, now: number, posted: 
   const last = all.at(-1)
   if (last && isEmpty(last.node)) {
     const a = attrsOf(last.node)
-    if (a.author === me) return inside(tr, last.pos)
+    if (a.author === me && made(a.id)) return inside(tr, last.pos)
     if (a.author === "") {
       tr.setNodeMarkup(last.pos, undefined, { ...a, id: a.id || newBlockId(), kind: "text", author: me, at: now })
       return inside(tr, last.pos)
@@ -73,7 +77,7 @@ export function startBlock(state: EditorState, me: string, now: number, posted: 
   return inside(tr, at)
 }
 
-export function backInDraft(state: EditorState, me: string, id: string): Transaction | null {
+export function backInDraft(state: EditorState, me: string, id: string, made: Made = anyMade): Transaction | null {
   const all = blocks(state.doc)
   const at = all.findIndex((b) => attrsOf(b.node).id === id)
   const it = all[at]
@@ -81,14 +85,14 @@ export function backInDraft(state: EditorState, me: string, id: string): Transac
   const here = blockAt(state)
   const a = here ? attrsOf(here.node) : null
   const typing = !!here && !!a && here.index !== at && a.author === me && a.kind === "text" && !isEmpty(here.node) && !isSent(here.node)
-  const gone = all.slice(at + 1).filter((b) => isEmpty(b.node) && attrsOf(b.node).author === me)
+  const gone = all.slice(at + 1).filter((b) => isEmpty(b.node) && attrsOf(b.node).author === me && made(attrsOf(b.node).id))
   const tr = state.tr.setMeta("addToHistory", false)
   for (const b of gone.reverse()) tr.delete(b.pos, b.pos + b.node.nodeSize)
   return typing ? tr : atEnd(tr, it)
 }
 
-export function replyIn(state: EditorState, me: string, now: number, re: number, quote: string | null, posted: (block: string) => boolean = () => false): Transaction {
-  const tr = startBlock(state, me, now, posted)
+export function replyIn(state: EditorState, me: string, now: number, re: number, quote: string | null, posted: (block: string) => boolean = () => false, made: Made = anyMade): Transaction {
+  const tr = startBlock(state, me, now, posted, made)
   const here = blocks(tr.doc)[tr.selection.$from.index(0)]
   return here ? tr.setNodeMarkup(here.pos, undefined, { ...here.node.attrs, re, quote }) : tr
 }
@@ -129,19 +133,31 @@ export function endsBlock(state: EditorState): boolean {
   return $from.parent.content.size > 0 || $from.node(1).childCount > 1
 }
 
-export function dropEmptyOwn(state: EditorState, me: string, keep: number | null): Transaction | null {
-  const gone = blocks(state.doc).filter((b) => b.index !== keep && isEmpty(b.node) && attrsOf(b.node).author === me)
+export function noteMade(before: Node, after: Node, me: string, made: Set<string>): void {
+  const had = new Set<string>()
+  before.forEach((n) => {
+    const a = attrsOf(n)
+    if (a.author === me) had.add(a.id)
+  })
+  after.forEach((n) => {
+    const a = attrsOf(n)
+    if (a.author === me && a.id && !had.has(a.id)) made.add(a.id)
+  })
+}
+
+export function dropEmptyOwn(state: EditorState, me: string, keep: number | null, made: Made = anyMade): Transaction | null {
+  const gone = blocks(state.doc).filter((b) => b.index !== keep && isEmpty(b.node) && attrsOf(b.node).author === me && made(attrsOf(b.node).id))
   if (gone.length === 0 || gone.length === state.doc.childCount) return null
   const tr = state.tr.setMeta("addToHistory", false)
   for (const b of gone.reverse()) tr.delete(b.pos, b.pos + b.node.nodeSize)
   return tr
 }
 
-export function attach(state: EditorState, me: string, now: number, nodes: readonly Node[]): Transaction | null {
+export function attach(state: EditorState, me: string, now: number, nodes: readonly Node[], made: Made = anyMade): Transaction | null {
   if (!nodes.length) return null
   const here = blockAt(state)
   const own = here && attrsOf(here.node).author === me && attrsOf(here.node).kind === "text" && !isSent(here.node) ? here : null
-  const tr = own ? state.tr : startBlock(state, me, now).setMeta("addToHistory", true)
+  const tr = own ? state.tr : startBlock(state, me, now, undefined, made).setMeta("addToHistory", true)
   const index = own ? own.index : tr.selection.$from.index(0)
   const node = tr.doc.child(index)
   let pos = 0
