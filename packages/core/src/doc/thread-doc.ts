@@ -160,10 +160,10 @@ export class ThreadDoc {
 
   destroy(): void {
     if (this.closed) return;
+    this.awareness.setLocalState(null);
     this.closed = true;
     if (this.timer) clearTimeout(this.timer);
     if (this.resub) clearTimeout(this.resub);
-    this.awareness.setLocalState(null);
     this.doc.off("update", this.onUpdate);
     this.awareness.off("update", this.onAwareness);
     this.awareness.destroy();
