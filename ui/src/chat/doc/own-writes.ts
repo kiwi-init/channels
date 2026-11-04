@@ -6,7 +6,7 @@ import * as Y from "yjs"
 import { attrsOf } from "~/chat/doc/schema"
 
 interface Touched {
-  lines: Set<string>
+  lines: Map<string, Node | null>
   gone: Set<string>
 }
 
@@ -65,10 +65,90 @@ function noteTouched(before: Node, after: Node, into: Touched): void {
   before.forEach((n) => void was.set(idOf(n), n))
   after.forEach((n) => {
     const id = idOf(n)
-    if (was.get(id) !== n) into.lines.add(id)
+    if (was.get(id) !== n && !into.lines.has(id)) into.lines.set(id, was.get(id) ?? null)
     was.delete(id)
   })
   for (const id of was.keys()) into.gone.add(id)
+}
+
+const lowHalf = (s: string, at: number): boolean => {
+  const c = s.charCodeAt(at)
+  return c >= 0xdc00 && c <= 0xdfff
+}
+
+function sameEnds(a: string, b: string): { head: number; tail: number } {
+  let head = 0
+  while (head < a.length && head < b.length && a[head] === b[head]) head++
+  if (head > 0 && (lowHalf(a, head) || lowHalf(b, head))) head--
+  let tail = 0
+  while (tail < a.length - head && tail < b.length - head && a[a.length - 1 - tail] === b[b.length - 1 - tail]) tail++
+  while (tail > 0 && (lowHalf(a, a.length - tail) || lowHalf(b, b.length - tail))) tail--
+  return { head, tail }
+}
+
+interface Edit {
+  words: Y.XmlText | Y.XmlElement
+  at: number
+  cut: number
+  put: string
+}
+
+function plainParagraph(n: Node | undefined): string | null {
+  if (!n || n.type.name !== "paragraph") return null
+  let text = ""
+  let plain = true
+  n.forEach((c) => {
+    if (c.isText) text += c.text ?? ""
+    else plain = false
+  })
+  return plain ? text : null
+}
+
+function storedParagraph(el: Y.XmlElement | Y.XmlText | Y.XmlHook | null): { words: Y.XmlText | Y.XmlElement; text: string } | null {
+  if (!(el instanceof Y.XmlElement) || el.nodeName !== "paragraph") return null
+  if (el.length === 0) return { words: el, text: "" }
+  const t = el.get(0)
+  if (el.length !== 1 || !(t instanceof Y.XmlText)) return null
+  const parts = (t.toDelta() as { insert: unknown }[]).map((d) => d.insert)
+  return parts.every((x) => typeof x === "string") ? { words: t, text: parts.join("") } : null
+}
+
+function editOnto(drawn: string, now: string, stored: string): Omit<Edit, "words"> {
+  const mine = sameEnds(drawn, now)
+  const cut = drawn.length - mine.head - mine.tail
+  const put = now.slice(mine.head, now.length - mine.tail)
+  const theirs = sameEnds(drawn, stored)
+  const from = mine.head
+  const to = mine.head + cut
+  if (from >= drawn.length - theirs.tail) return { at: stored.length - (drawn.length - from), cut, put }
+  if (to <= theirs.head) return { at: from, cut, put }
+  return { at: Math.min(from, theirs.head), cut: 0, put }
+}
+
+function mergeLine(el: Y.XmlElement, drawn: Node, now: Node): boolean {
+  const stored = el.toArray()
+  if (drawn.childCount !== now.childCount || drawn.childCount !== stored.length) return false
+  const edits: Edit[] = []
+  for (let i = 0; i < now.childCount; i++) {
+    const was = drawn.child(i)
+    const is = now.child(i)
+    if (was === is || was.eq(is)) continue
+    const a = plainParagraph(was)
+    const b = plainParagraph(is)
+    const y = storedParagraph(stored[i] ?? null)
+    if (a === null || b === null || !y) return false
+    edits.push({ words: y.words, ...editOnto(a, b, y.text) })
+  }
+  for (const e of edits) {
+    const words = e.words instanceof Y.XmlText ? e.words : null
+    if (!words) {
+      if (e.put) e.words.insert(0, [new Y.XmlText(e.put)])
+      continue
+    }
+    if (e.cut) words.delete(e.at, e.cut)
+    if (e.put) words.insert(e.at, e.put)
+  }
+  return true
 }
 
 function ownOnly(doc: Node, binding: ProsemirrorBinding, touched: Touched, missed: Set<string>): { safe: Node; behind: boolean } {
@@ -81,9 +161,19 @@ function ownOnly(doc: Node, binding: ProsemirrorBinding, touched: Touched, misse
   const els = binding.type.toArray()
   const ids = els.map((el) => (el instanceof Y.XmlElement ? el.getAttribute("id") : undefined))
   if (here.has("") || here.size !== order.length || ids.some((id) => typeof id !== "string" || !id)) return { safe: doc, behind: false }
+  const merged = new Set<string>()
+  for (const [i, el] of els.entries()) {
+    const id = ids[i]
+    const drawnBefore = typeof id === "string" ? touched.lines.get(id) : undefined
+    const now = typeof id === "string" ? here.get(id) : undefined
+    if (typeof id !== "string" || !(el instanceof Y.XmlElement) || !drawnBefore || !now) continue
+    if (shapeOfStored(el) === shapeOfDrawn(drawnBefore)) continue
+    mergeLine(el, drawnBefore, now)
+    merged.add(id)
+  }
   let fresh: Map<string, Node> | null = null
   const drawn = (el: Y.XmlElement, id: string): Node | null => {
-    const mapped = binding.mapping.get(el)
+    const mapped = merged.has(id) ? null : binding.mapping.get(el)
     if (mapped instanceof Node) return mapped
     if (!fresh) {
       const all = new Map<string, Node>()
@@ -93,12 +183,12 @@ function ownOnly(doc: Node, binding: ProsemirrorBinding, touched: Touched, misse
     return fresh.get(id) ?? null
   }
   const out: Node[] = []
-  let behind = false
+  let behind = merged.size > 0
   for (const [i, el] of els.entries()) {
     const id = ids[i]
     if (typeof id !== "string" || !(el instanceof Y.XmlElement) || touched.gone.has(id)) continue
     const mine = here.get(id)
-    if (mine && touched.lines.has(id)) {
+    if (mine && touched.lines.has(id) && !merged.has(id)) {
       out.push(mine)
       continue
     }
@@ -148,7 +238,7 @@ export interface OwnWrites {
 export function writeOwnLinesOnly(state: EditorState, shown: () => Node | null): OwnWrites | null {
   const binding = bindingOf(state)
   if (!binding) return null
-  const touched: Touched = { lines: new Set(), gone: new Set() }
+  const touched: Touched = { lines: new Map(), gone: new Set() }
   const missed = new Set<string>()
   const write = binding._prosemirrorChanged.bind(binding)
   let redrawing = false
