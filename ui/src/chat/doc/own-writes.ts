@@ -244,6 +244,89 @@ function spotOf(doc: Node, pos: number): Spot | null {
   return key === undefined ? null : { key, at: pos - $p.before(1) }
 }
 
+function tokensOf(n: Node): string[] {
+  const out: string[] = []
+  n.forEach((c) => {
+    if (c.isText) out.push(...(c.text ?? "").split(""))
+    else if (c.isLeaf) out.push(`<${c.type.name} ${JSON.stringify(c.attrs)}>`)
+    else out.push(`<${c.type.name}`, ...tokensOf(c), ">")
+  })
+  return out
+}
+
+interface Hunk {
+  a0: number
+  a1: number
+  b0: number
+  b1: number
+}
+
+const MAX_EDITS = 4_000
+
+function hunksOf(a: readonly string[], b: readonly string[]): Hunk[] {
+  let head = 0
+  while (head < a.length && head < b.length && a[head] === b[head]) head++
+  let tail = 0
+  while (tail < a.length - head && tail < b.length - head && a[a.length - 1 - tail] === b[b.length - 1 - tail]) tail++
+  const n = a.length - head - tail
+  const m = b.length - head - tail
+  if (!n && !m) return []
+  const whole: Hunk[] = [{ a0: head, a1: head + n, b0: head, b1: head + m }]
+  const most = Math.min(n + m, MAX_EDITS)
+  const off = most + 1
+  const v = new Int32Array(2 * most + 3)
+  const trace: Int32Array[] = []
+  const at = (x: number, y: number): boolean => a[head + x] === b[head + y]
+  for (let d = 0; d <= most; d++) {
+    trace.push(v.slice())
+    for (let k = -d; k <= d; k += 2) {
+      let x = k === -d || (k !== d && v[off + k - 1]! < v[off + k + 1]!) ? v[off + k + 1]! : v[off + k - 1]! + 1
+      let y = x - k
+      while (x < n && y < m && at(x, y)) {
+        x++
+        y++
+      }
+      v[off + k] = x
+      if (x >= n && y >= m) return walkBack(trace, off, n, m, d, head)
+    }
+  }
+  return whole
+}
+
+function walkBack(trace: Int32Array[], off: number, n: number, m: number, last: number, head: number): Hunk[] {
+  const out: Hunk[] = []
+  let x = n
+  let y = m
+  for (let d = last; d > 0; d--) {
+    const v = trace[d]!
+    const k = x - y
+    const pk = k === -d || (k !== d && v[off + k - 1]! < v[off + k + 1]!) ? k + 1 : k - 1
+    const px = v[off + pk]!
+    const py = px - pk
+    while (x > px && y > py) {
+      x--
+      y--
+    }
+    const step: Hunk = { a0: head + px, a1: head + x, b0: head + py, b1: head + y }
+    const next = out[0]
+    if (next && next.a0 === step.a1 && next.b0 === step.b1) out[0] = { a0: step.a0, a1: next.a1, b0: step.b0, b1: next.b1 }
+    else out.unshift(step)
+    x = px
+    y = py
+  }
+  return out
+}
+
+function mapThrough(hunks: readonly Hunk[], p: number): number {
+  let delta = 0
+  for (const h of hunks) {
+    if (p < h.a0 || (p === h.a0 && h.a1 > h.a0)) break
+    if (p < h.a1) return h.b1
+    delta = h.b1 - h.a1
+  }
+  return p + delta
+}
+
 function placeOf(before: Node, after: Node, spot: Spot): number | null {
   const keys = keysOfDoc(after)
   const i = keys.indexOf(spot.key)
@@ -251,11 +334,8 @@ function placeOf(before: Node, after: Node, spot: Spot): number | null {
   if (i < 0 || j < 0) return null
   let start = 0
   for (let k = 0; k < i; k++) start += after.child(k).nodeSize
-  const was = before.child(j)
   const now = after.child(i)
-  const change = diffOf(was, now)
-  const inside = spot.at - 1
-  const moved = !change || inside < change.from ? inside : inside >= change.toA ? inside + change.toB - change.toA : change.toB
+  const moved = mapThrough(hunksOf(tokensOf(before.child(j)), tokensOf(now)), spot.at - 1)
   return start + 1 + Math.min(Math.max(moved, 0), now.content.size)
 }
 

@@ -272,11 +272,17 @@ describe("an editor writes only the lines it changed, so a peer out of step neve
       e.dispatch(e.state().tr.insert(0, line))
     }
     const lettersBefore = (e: Editor) => e.dispatch(e.state().tr.insertText("XX", lineStart(e, "dad")))
+    const lettersAround = (e: Editor) => {
+      lettersBefore(e)
+      typeAtEnd(e, "dad", "YY")
+    }
     for (const [what, missed, from, to, want] of [
       ["a caret under a line that lands above", lineAbove, 4, 4, ["jow: jow line", "dad: bom ?¿dia!"]],
       ["a selection under a line that lands above", lineAbove, 4, 6, ["jow: jow line", "dad: bom ?¿a!"]],
       ["a caret after letters that land before it in your line", lettersBefore, 3, 3, ["dad: XXbom?¿ dia!"]],
       ["a selection after letters that land before it in your line", lettersBefore, 0, 3, ["dad: XX?¿ dia!"]],
+      ["a caret between two separate edits in your line", lettersAround, 3, 3, ["dad: XXbom?¿ diaYY!"]],
+      ["a selection between two separate edits in your line", lettersAround, 4, 6, ["dad: XXbom ?¿aYY!"]],
     ] as const) {
       const desk = new Y.Doc()
       const peer = new Y.Doc()
