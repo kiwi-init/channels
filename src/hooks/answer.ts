@@ -341,7 +341,7 @@ const unreadText = Effect.fn("Hooks.unreadText")(function* (s: AgentSession, mc:
       );
     }),
   );
-  return { text: hand.text, shown };
+  return { text: hand.text, shown, messages: shownMessages.length };
 });
 
 type AnswerKind = "cursor-start" | "start" | "gemini-prompt" | "agy-inject" | "prompt" | "followup" | "block" | "deny" | "agy-continue";
@@ -509,9 +509,10 @@ export const answer = Effect.fn("Hooks.answer")(function* (event: string, input:
     const rearm = fitReminder(yield* rearmText(input, b, who, mc), budget - (nudge ? nudge.text.length + 2 : 0) - (persona ? persona.text.length + 2 : 0));
     const reminder = [nudge?.text ?? null, rearm].filter((t) => t !== null).join("\n\n") || null;
     const unreadMax = stopUnreadMax(stopHead, [persona?.text ?? null, reminder].filter((t) => t !== null).join("\n\n") || null, budget);
-    const unread = unreadMax > 0 ? yield* unreadText(s, mc, unreadMax, loopDelivery()) : { text: "", shown: Effect.void };
+    const unread = unreadMax > 0 ? yield* unreadText(s, mc, unreadMax, loopDelivery()) : { text: "", shown: Effect.void, messages: 0 };
+    const head = unread.messages ? stopHead : `Before stopping: unread lines for you in Kiwi Channels' shared doc (${b.alias}). Each says where to answer:`;
     const decision = style === "gemini" ? "deny" : who.harness === "agy" ? "agy-continue" : "block";
-    const reason = [persona?.text ?? null, stopReason(stopHead, unread.text, reminder) || null].filter((t) => t !== null).join("\n\n");
+    const reason = [persona?.text ?? null, stopReason(head, unread.text, reminder) || null].filter((t) => t !== null).join("\n\n");
     const told = persona ? Effect.andThen(persona.shown, unread.shown) : unread.shown;
     const shown = nudge ? Effect.andThen(nudge.shown, told) : told;
     if (reason) return answered(decision, reason, shown);

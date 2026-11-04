@@ -1,5 +1,6 @@
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import type * as Scope from "effect/Scope";
 import { ago, describeEvent, parseDuration } from "@kiwi/core/format.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
 import type { ChannelState } from "@kiwi/core/state.ts";
@@ -28,30 +29,46 @@ const nothingUnread = (alias: string, me: string) =>
     return `nothing unread: ${which} (since ${ago(first)}${where.length ? `, in ${where.join(", ")}` : ""}) and marks each message read as it hands it on, so those won't show as unread here; ${log} shows the latest`;
   });
 
+const DOC_POLL_MS = 1_000;
+
+const handDocs = (s: AgentSession): number => {
+  const docs = pendingDocWakes(s.alias, s.me);
+  for (const w of docs) out(docWakeLine(w, mcFor(s.alias, s.me)));
+  tellDocWakes(
+    s.alias,
+    s.me,
+    docs.map((w) => w.block),
+  );
+  return docs.length;
+};
+
+const pollDocs = (s: AgentSession, handed: Effect.Effect<void, never, Scope.Scope>) =>
+  Effect.forever(
+    Effect.andThen(
+      Effect.suspend(() => (handDocs(s) ? handed : Effect.void)),
+      Effect.sleep(DOC_POLL_MS),
+    ),
+  );
+
 const readFrom = (s: AgentSession) =>
   Effect.gen(function* () {
     const { messages, state } = yield* s.read(yield* delivery(s));
     for (const m of messages) out(render(m, state));
-    const docs = pendingDocWakes(s.alias, s.me);
-    for (const w of docs) out(docWakeLine(w, mcFor(s.alias, s.me)));
-    tellDocWakes(
-      s.alias,
-      s.me,
-      docs.map((w) => w.block),
-    );
-    if (!messages.length && !docs.length) process.stderr.write(`${yield* nothingUnread(s.alias, s.me)}\n`);
+    const docs = handDocs(s);
+    if (!messages.length && !docs) process.stderr.write(`${yield* nothingUnread(s.alias, s.me)}\n`);
     yield* noteRead(s);
   });
 
 const tailFrom = (s: AgentSession) =>
   Effect.gen(function* () {
     yield* Effect.forkDetach(Effect.ignoreCause(s.refreshCard(detectCard())));
+    yield* Effect.forkScoped(pollDocs(s, Effect.void));
     yield* s.listen((m, state) => Effect.sync(() => out(render(m, state))), {
       ...(yield* delivery(s)),
       onStatus: (msg) => Effect.sync(() => void process.stderr.write(`kiwi: ${msg}\n`)),
       onNotice: (text) => Effect.sync(() => out(`* ${text}`)),
     });
-  });
+  }).pipe(Effect.scoped);
 
 const waitFrom = (s: AgentSession, wait: string | undefined) =>
   Effect.gen(function* () {
@@ -76,7 +93,8 @@ const waitFrom = (s: AgentSession, wait: string | undefined) =>
       },
     );
     const timeout = wait ? Effect.sleep(parseDuration(wait) * 1000) : Effect.never;
-    yield* Effect.raceFirst(listening, Effect.raceFirst(Deferred.await(enough), timeout)).pipe(Effect.scoped);
+    const hearing = Effect.raceFirst(listening, pollDocs(s, woke));
+    yield* Effect.raceFirst(hearing, Effect.raceFirst(Deferred.await(enough), timeout)).pipe(Effect.scoped);
     if (got) return yield* noteRead(s);
     out(`no messages yet. Next: run this command again:\n  ${mcFor(s.alias, s.me)} ${args[0] === "listen" ? "listen --once" : "wait"} --timeout 10m`);
     return 2;
