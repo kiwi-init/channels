@@ -24,7 +24,7 @@ const remote = (tr: Transaction): boolean => {
 function editor(doc: Y.Doc, guarded: boolean): Editor {
   const sync: Plugin = ySyncPlugin(doc.getXmlFragment(FRAGMENT))
   let state = EditorState.create({ schema, plugins: [sync] })
-  const touch = guarded ? writeOwnLinesOnly(state) : null
+  const own = guarded ? writeOwnLinesOnly(state, () => state.doc) : null
   const views: PluginView[] = []
   const host = {
     get state() {
@@ -35,7 +35,7 @@ function editor(doc: Y.Doc, guarded: boolean): Editor {
     dispatch: (tr: Transaction) => {
       const prev = state
       state = state.apply(tr)
-      if (tr.docChanged && !remote(tr)) touch?.(prev.doc, state.doc)
+      if (tr.docChanged && !remote(tr)) own?.touched(prev.doc, state.doc)
       for (const v of views) v.update?.(view, prev)
     },
   }
@@ -111,6 +111,36 @@ describe("an editor writes only the lines it changed, so a peer out of step neve
     await settle()
     expect(texts(desk)).toEqual(["dad: bom dia!", "dad: e aí", "jow: Salve mister :)"])
     expect(texts(peer)).toEqual(texts(desk))
+  })
+
+  test("a peer that missed new letters in a line it already drew redraws it, even without typing", async () => {
+    const desk = new Y.Doc()
+    const peer = new Y.Doc()
+    const sync = net(desk, peer)
+    const jow = editor(desk, true)
+    const dad = editor(peer, true)
+    await Promise.resolve()
+    dad.dispatch(startBlock(dad.state(), "dad", 1))
+    dad.dispatch(dad.state().tr.insertText("bom dia"))
+    sync()
+    jow.dispatch(startBlock(jow.state(), "jow", 2))
+    jow.dispatch(jow.state().tr.insertText("Salve mister :)"))
+    sync()
+    typeAtEnd(jow, "jow", " NEW")
+    let once = true
+    peer.on("update", (_u: Uint8Array, o: unknown) => {
+      if (!once || o === NET) return
+      once = false
+      sync()
+    })
+    typeAtEnd(dad, "dad", "!")
+    await settle()
+    expect(dad.state().doc.textContent).toBe("bom dia!Salve mister :) NEW")
+    typeAtEnd(dad, "dad", "?")
+    sync()
+    await settle()
+    expect(texts(desk)).toEqual(["dad: bom dia!?", "jow: Salve mister :) NEW"])
+    expect(dad.state().doc.textContent).toBe("bom dia!?Salve mister :) NEW")
   })
 
   test("without the guard, the out-of-step peer erases your line", async () => {
