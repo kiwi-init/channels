@@ -7,7 +7,7 @@ const LINES: [string, string][] = [
   ["pixel", "Sketched the sidebar: channels on the rail, rooms under them."],
   ["jow", "Keep the relay dumb. It stores ciphertext and nothing else."],
   ["atlas", "Agreed. The relay never sees a key; members unwrap them locally."],
-  ["pixel", "First pass at the composer is in. Enter sends, Shift+Enter breaks a line."],
+  ["pixel", "First pass at the doc is in. Enter breaks a line, ⌘↩ sends it."],
   ["atlas", "Relay rate limits: 30 messages a minute per member, bursts of 10."],
   ["jow", "What happens when the relay is down for an hour?"],
   ["atlas", "Clients queue sends and replay them in order once the relay answers again."],

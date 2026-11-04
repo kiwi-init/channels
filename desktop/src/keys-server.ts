@@ -89,11 +89,17 @@ export function serveKeys(k: Keyring, push: (p: KeysPush) => void): KeysSession 
       case "doc": {
         const held: KeysPush[] = [];
         let live = false;
-        const pipe = k.doc(text(r.code), text(r.thread), r.th === null ? null : text(r.th), (event) => {
-          const p = { sub: id, event: toWire(event) };
-          if (live) push(p);
-          else held.push(p);
-        });
+        const pipe = k.doc(
+          text(r.code),
+          text(r.thread),
+          r.th === null ? null : text(r.th),
+          (event) => {
+            const p = { sub: id, event: toWire(event) };
+            if (live) push(p);
+            else held.push(p);
+          },
+          r.level === undefined ? 0 : count(r.level),
+        );
         docs.set(id, pipe);
         setTimeout(() => {
           live = true;

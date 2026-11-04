@@ -100,3 +100,26 @@ describe("read receipts under your newest message (T641)", () => {
     expect(receiptsOf(fold([m], roster, 0), [m], "jow", new Map(), (n) => `pk-${n}`, String).size).toBe(0)
   })
 })
+
+describe("a line written in the doc shows its replies and receipt like any message (#1645)", () => {
+  test("a posted doc block in #general has its thread count, its read receipt and its place in the feed", async () => {
+    const { inFeed } = await import("~/chat/doc/posted")
+    const line = wire({ from: "jow", to: ["win"], body: "did you see it?", block: { th: "general", id: "b1" } } as Partial<Wire>)
+    const reply = wire({ from: "win", to: ["jow"], body: "yes", re: [line.seq] })
+    const log = [line, reply]
+    const state = fold(log, roster, 0)
+    const read = receiptsOf(
+      state,
+      log,
+      "jow",
+      addMarks(new Map(), [{ pk: "pk-win", seq: reply.seq, at: 42 }]),
+      (n) => `pk-${n}`,
+      (t) => `t${t}`
+    )
+    const shown = withReceipts(rows(log), read).find((m) => m.seq === line.seq)
+    expect(shown?.block).toBe("b1")
+    expect(shown && inFeed(shown, true)).toBe(true)
+    expect(shown?.thread).toMatchObject({ replies: 1, people: ["win"] })
+    expect(shown?.receipt).toBe("Read t42")
+  })
+})

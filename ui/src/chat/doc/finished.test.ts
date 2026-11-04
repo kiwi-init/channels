@@ -110,4 +110,14 @@ describe("a line given back to its author stays their draft in the doc (T1678)",
     const entered = docFeed([{ ...typing[0]!, sent: true }, typing[1]!], new Map(), new Set(), T)
     expect(entered.hidden.has("draft")).toBe(true)
   })
+
+  test("a line from your other window never finishes the draft you're typing here; your next line here does (T1776)", () => {
+    const draft = line("draft", "jow", T + 10, { text: "Salve mis", by: "desk" })
+    const there = docFeed([draft, line("phone-line", "jow", T + 20, { text: "from the phone", by: "phone" })], new Map(), new Set(), T)
+    expect(there.hidden.has("draft")).toBe(false)
+    const here = docFeed([draft, line("next", "jow", T + 20, { text: "next", by: "desk" })], new Map(), new Set(), T)
+    expect(here.hidden.has("draft")).toBe(true)
+    const old = docFeed([draft, line("old-app", "jow", T + 20, { text: "from an older app" })], new Map(), new Set(), T)
+    expect(old.hidden.has("draft")).toBe(true)
+  })
 })

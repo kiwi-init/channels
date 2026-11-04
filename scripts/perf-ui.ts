@@ -7,7 +7,7 @@ export const threadDoc = (page: Page) => page.getByRole("textbox", { name: "Thre
 export async function writeBlock(page: Page, text: string): Promise<void> {
   await page.locator(".thread-doc .doc-tail").last().click();
   await page.keyboard.type(text);
-  await page.keyboard.press("Enter");
+  await page.keyboard.press("ControlOrMeta+Enter");
   await page.locator(`.thread-doc .blk, ${ROWS}`).filter({ hasText: text, visible: true }).first().waitFor({ timeout: 15000 });
 }
 

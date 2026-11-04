@@ -42,6 +42,16 @@ function queryAt(state: EditorState): Query | null {
   return null
 }
 
+export type MenuKey = "move" | "choose" | "close"
+
+export function menuKey(e: Pick<KeyboardEvent, "key" | "metaKey" | "ctrlKey" | "shiftKey">): MenuKey | null {
+  if (e.metaKey || e.ctrlKey || (e.shiftKey && e.key === "Enter")) return null
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") return "move"
+  if (e.key === "Enter" || e.key === "Tab") return "choose"
+  if (e.key === "Escape") return "close"
+  return null
+}
+
 export function dismiss(view: EditorView): void {
   const q = suggestKey.getState(view.state)?.query
   if (q) view.dispatch(view.state.tr.setMeta(DISMISS, q.from))
