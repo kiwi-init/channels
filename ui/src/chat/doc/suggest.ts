@@ -44,8 +44,8 @@ function queryAt(state: EditorState): Query | null {
 
 export type MenuKey = "move" | "choose" | "close"
 
-export function menuKey(e: Pick<KeyboardEvent, "key" | "metaKey" | "ctrlKey">): MenuKey | null {
-  if (e.metaKey || e.ctrlKey) return null
+export function menuKey(e: Pick<KeyboardEvent, "key" | "metaKey" | "ctrlKey" | "shiftKey">): MenuKey | null {
+  if (e.metaKey || e.ctrlKey || (e.shiftKey && e.key === "Enter")) return null
   if (e.key === "ArrowDown" || e.key === "ArrowUp") return "move"
   if (e.key === "Enter" || e.key === "Tab") return "choose"
   if (e.key === "Escape") return "close"

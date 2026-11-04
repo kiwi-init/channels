@@ -2,12 +2,16 @@ import { describe, expect, test } from "bun:test"
 
 import { menuKey } from "~/chat/doc/suggest"
 
-const key = (k: string, mod: "meta" | "ctrl" | null = null) => ({ key: k, metaKey: mod === "meta", ctrlKey: mod === "ctrl" })
+const key = (k: string, mod: "meta" | "ctrl" | "shift" | null = null) => ({ key: k, metaKey: mod === "meta", ctrlKey: mod === "ctrl", shiftKey: mod === "shift" })
 
 describe("an open suggestion menu never takes ⌘/Ctrl+Enter (T2565)", () => {
   test("⌘/Ctrl+Enter passes through to the doc's keys, so it always sends or runs", () => {
     expect(menuKey(key("Enter", "meta"))).toBeNull()
     expect(menuKey(key("Enter", "ctrl"))).toBeNull()
+  })
+
+  test("Shift+Enter always breaks the line, even with the menu open (#2983)", () => {
+    expect(menuKey(key("Enter", "shift"))).toBeNull()
   })
 
   test("plain Enter and Tab pick the suggestion, the arrows move, Escape closes", () => {
