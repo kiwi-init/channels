@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test"
 import type { Node } from "prosemirror-model"
 import { EditorState, TextSelection } from "prosemirror-state"
 
-import { atBlockEnd, blockAfter, blocks, continues, dropEmptyOwn, endsBlock, makeBlock, startBlock } from "~/chat/doc/blocks"
-import { attrsOf, schema } from "~/chat/doc/schema"
+import { atBlockEnd, attach, blockAfter, blocks, continues, dropEmptyOwn, endsBlock, makeBlock, startBlock } from "~/chat/doc/blocks"
+import { attrsOf, imageNode, schema } from "~/chat/doc/schema"
 
 const T = 1_700_000_000_000
 
@@ -113,5 +113,25 @@ describe("a run of blocks", () => {
     expect(continues(a, makeBlock("text", "maya", T + 60_000, "b"))).toBe(false)
     expect(continues(a, makeBlock("text", "jow", T + 6 * 60_000, "b"))).toBe(false)
     expect(continues(undefined, a)).toBe(false)
+  })
+})
+
+describe("dropping an image into the doc", () => {
+  const shot = imageNode({ name: "shot.png", mime: "image/png", ref: { id: "a".repeat(64), key: "k".repeat(43), size: 10 } })
+  const kinds = (b: Node | undefined) => (b ? Array.from({ length: b.childCount }, (_, i) => b.child(i).type.name) : [])
+
+  test("lands at the end of your block, with a line after it to keep typing on", () => {
+    const s = caretAtEnd(stateOf(makeBlock("text", "jow", T, "look")), 0)
+    const next = s.apply(attach(s, "jow", T + 1, [shot])!)
+    expect(kinds(next.doc.child(0))).toEqual(["paragraph", "image", "paragraph"])
+    expect(next.selection.$from.parent.type.name).toBe("paragraph")
+    expect(next.selection.$from.index(1)).toBe(2)
+  })
+
+  test("in someone else's block, it starts a block of yours instead of writing into theirs", () => {
+    const s = caretAtEnd(stateOf(makeBlock("text", "maya", T, "hi")), 0)
+    const next = s.apply(attach(s, "jow", T + 1, [shot])!)
+    expect(texts(next)).toEqual(["maya:hi", "jow:[image: shot.png]"])
+    expect(kinds(next.doc.child(1))).toEqual(["image", "paragraph"])
   })
 })

@@ -10,12 +10,12 @@
 // agent and the dashboard call, run them and resolve or reject exactly as before.
 
 import type { Persona, Personality } from "./personality.ts";
-import { newRoomId, type ChannelAccess } from "./crypto.ts";
+import { fromBase64, newRoomId, toBase64, type ChannelAccess } from "./crypto.ts";
 import type { Identity } from "./identity.ts";
 import type { JoinClaims, JoinRequest, Member, MemberInfo, PersonPowers } from "./membership.ts";
 import { sentTo, withSeats } from "./room-rules.ts";
 import type { Marks } from "./note.ts";
-import { GENERAL_ROOM, type ChannelIcon, type Envelope, type FileAttachment, type ImageAttachment, type Message } from "./protocol.ts";
+import { GENERAL_ROOM, type ChannelIcon, type Envelope, type FileAttachment, type ImageAttachment, type InlineImage, type Message } from "./protocol.ts";
 import type { Scope } from "./scopes.ts";
 import type { GithubStatus } from "./github-health.ts";
 import type { FoldBase, GithubRelease, GithubRules, GithubState, GuardFloor } from "./state.ts";
@@ -632,6 +632,19 @@ export class Channel {
 
   image(img: ImageAttachment): Promise<string | null> {
     return run(this.fx.image(img));
+  }
+
+  putImage(img: InlineImage): Promise<ImageAttachment> {
+    return run(this.fx.putImage(img));
+  }
+
+  putFileData(name: string, mime: string, data: string): Promise<FileAttachment> {
+    return run(this.fx.putFile(name, mime, fromBase64(data)));
+  }
+
+  async fileData(f: FileAttachment): Promise<string | null> {
+    const bytes = await run(this.fx.file(f));
+    return bytes ? toBase64(bytes) : null;
   }
 
   putFile(name: string, mime: string, bytes: Uint8Array<ArrayBuffer>): Promise<FileAttachment> {

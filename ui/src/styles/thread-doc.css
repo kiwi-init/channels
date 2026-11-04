@@ -239,3 +239,77 @@
 .thread-doc .doc-suggest {
   bottom: auto;
 }
+
+.doc-image {
+  margin: 8px 0;
+  max-width: min(480px, 100%);
+}
+
+.doc-image img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--r-ctl);
+  cursor: zoom-in;
+}
+
+.doc-image-spot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 12rem;
+  height: 7rem;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-ctl);
+  background: var(--wash);
+  color: var(--ink-3);
+  font: var(--t-meta) var(--ui);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.doc-file {
+  margin: 8px 0;
+}
+
+.doc-file-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  max-width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-ctl);
+  background: var(--wash);
+  color: var(--ink);
+  font: var(--t-meta) var(--ui);
+  cursor: pointer;
+  transition: background var(--fast);
+}
+
+.doc-file-chip:hover:not(:disabled) {
+  background: var(--wash-2);
+}
+
+.doc-file-chip:disabled {
+  cursor: default;
+}
+
+.doc-file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.doc-file-size {
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.ProseMirror-selectednode.doc-image img,
+.ProseMirror-selectednode .doc-file-chip,
+.ProseMirror-selectednode.doc-file .doc-file-chip {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

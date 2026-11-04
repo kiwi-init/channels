@@ -17,7 +17,7 @@ export const schema = new Schema({
   nodes: {
     doc: { content: "block+" },
     block: {
-      content: "(paragraph | code_block | bullet_list | ordered_list)+",
+      content: "(paragraph | code_block | bullet_list | ordered_list | image | file)+",
       defining: true,
       isolating: true,
       attrs: { id: { default: "" }, kind: { default: "text" }, author: { default: "" }, at: { default: 0 } },
@@ -39,6 +39,22 @@ export const schema = new Schema({
       parseDOM: [{ tag: "span[data-mention]", getAttrs: (el) => ({ name: el.dataset.mention ?? "" }) }],
       toDOM: (node) => ["span", { "data-mention": String(node.attrs.name), class: "doc-mention" }, `@${String(node.attrs.name)}`],
       leafText: (node) => `@${String(node.attrs.name)}`,
+    },
+    image: {
+      atom: true,
+      selectable: true,
+      draggable: false,
+      attrs: { name: { default: "" }, mime: { default: "" }, size: { default: 0 }, id: { default: "" }, key: { default: "" } },
+      toDOM: (node) => ["figure", { class: "doc-image", "data-image": String(node.attrs.name) }],
+      leafText: (node) => `[image: ${String(node.attrs.name)}]`,
+    },
+    file: {
+      atom: true,
+      selectable: true,
+      draggable: false,
+      attrs: { name: { default: "" }, mime: { default: "" }, size: { default: 0 }, pieces: { default: "[]" } },
+      toDOM: (node) => ["div", { class: "doc-file", "data-file": String(node.attrs.name) }],
+      leafText: (node) => `[file: ${String(node.attrs.name)}]`,
     },
     code_block: {
       content: "text*",
@@ -81,4 +97,43 @@ export function newBlockId(): string {
     .replace(/\+/g, "-")
     .replace(/\//g, "_")
     .replace(/=+$/, "")
+}
+
+export interface DocImage {
+  name: string
+  mime: string
+  ref: { id: string; key: string; size: number }
+}
+
+export interface DocFile {
+  name: string
+  mime: string
+  size: number
+  pieces: { id: string; key: string; size: number }[]
+}
+
+export function imageNode(img: DocImage): Node {
+  return schema.nodes.image.create({ name: img.name, mime: img.mime, size: img.ref.size, id: img.ref.id, key: img.ref.key })
+}
+
+export function fileNode(f: DocFile): Node {
+  return schema.nodes.file.create({ name: f.name, mime: f.mime, size: f.size, pieces: JSON.stringify(f.pieces) })
+}
+
+export function imageOf(node: Node): DocImage {
+  const a = node.attrs
+  return { name: String(a.name ?? ""), mime: String(a.mime ?? ""), ref: { id: String(a.id ?? ""), key: String(a.key ?? ""), size: Number(a.size) || 0 } }
+}
+
+export function fileOf(node: Node): DocFile | null {
+  const a = node.attrs
+  let pieces: unknown
+  try {
+    pieces = JSON.parse(String(a.pieces ?? "[]"))
+  } catch {
+    // A node whose pieces don't parse names a file nobody can open: it shows, without a download.
+    return null
+  }
+  if (!Array.isArray(pieces) || !pieces.every((p) => p && typeof p.id === "string" && typeof p.key === "string" && Number.isFinite(p.size))) return null
+  return { name: String(a.name ?? ""), mime: String(a.mime ?? ""), size: Number(a.size) || 0, pieces: pieces as DocFile["pieces"] }
 }

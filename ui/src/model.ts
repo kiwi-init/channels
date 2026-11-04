@@ -5,6 +5,7 @@ import type { Personality } from "@kiwi/core/personality.ts"
 import type { PipeIn } from "@kiwi/core/doc/held-pipe.ts"
 import type { GithubNote, Step, StepReply } from "@kiwi/core/protocol.ts"
 import type { DocEvent } from "../../desktop/src/bridge.ts"
+import type { DocFile, DocImage } from "~/chat/doc/schema"
 
 export type Harness = "claude" | "codex" | "opencode" | "gemini" | "cursor" | "grok" | "kimi" | "mimo" | "pi" | "grok-bot" | "zcode" | "agy" | "other"
 
@@ -684,6 +685,10 @@ export interface Actions {
   markRead(code: string, where: Where): void
   followThread(code: string, root: number, on: boolean): void
   openDoc(code: string, thread: string, th: string | null, on: (e: DocEvent) => void): PipeIn
+  putDocImage(code: string, upload: Upload): Promise<DocImage>
+  putDocFile(code: string, upload: Upload): Promise<DocFile>
+  docImage(code: string, img: DocImage): Promise<string | null>
+  docFile(code: string, f: DocFile): Promise<string | null>
   leaveRoom(code: string, room: string): void
   react(code: string, seq: number, emoji: string): void
   editMessage(code: string, seq: number, text: string): void
