@@ -871,16 +871,17 @@
 }
 
 .side-name {
-  flex: 0 1 auto;
-  min-width: 0;
+  flex: 1;
+  min-width: 2.5rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .side-state {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
+  max-width: 60%;
   overflow: hidden;
   color: var(--ink-3);
   font: var(--t-stamp) var(--mono);
@@ -895,10 +896,6 @@
 
 .side-member.is-waiting .side-state {
   color: var(--decide);
-}
-
-.side-member > .count {
-  margin-left: auto;
 }
 
 .side-member > .av-wrap {

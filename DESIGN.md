@@ -294,8 +294,8 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   member is listed once, and the row is your conversation with them: a click
   opens the DM, its unread count sits on the row, and the profile is in the
   row's menu (and in the Agents view). You aren't listed. A person's pip
-  carries their presence. Agents are rows like people: the face, the name, then
-  one mono `ink-3` word of what it does now (`thinking`, `running Bash`,
+  carries their presence. Agents are rows like people: the face, the name, and at
+  the row's end one mono `ink-3` word of what it does now (`thinking`, `running Bash`,
   `idle`, `offline`), cut with an ellipsis; at work it reads `ink-2`, and
   "needs a person" reads `decide`. Each new step rises in on `--fast`; the
   task waits in the row's `title`. Working agents come first, the lead first
