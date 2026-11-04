@@ -23,6 +23,8 @@ import { keepFiles } from "./received-files.ts";
 import { loadSummary, memberLoad, showsLoad } from "@kiwi/core/load.ts";
 import { Cursor, home, Keystore } from "./config.ts";
 import { holdSession } from "./hooks/listeners.ts";
+import { docWakeToolLine } from "./agent/docs.ts";
+import { pendingDocWakes, tellDocWakes, type DocWakeItem } from "./config/doc-wakes.ts";
 import { ChannelGone, goneText, reason, type Channel, type Refused, type Relay } from "@kiwi/core/client.ts";
 import {
   ago,
@@ -155,6 +157,7 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
   const committingShaped = <A>(fn: (a: A) => Effect.Effect<Result, unknown, Agent>) => shaped(fn, true);
 
   const pending: { seq: number | null; line: string }[] = [];
+  const DOC_POLL_MS = 1_000;
   let fedTo = 0;
   let heardTo = 0;
   let waiting: Deferred.Deferred<void> | null = null;
@@ -277,9 +280,17 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
         const seen = yield* cursor.seen(s.alias, s.me);
         let lines: string[] = [];
         let taken: typeof pending = [];
+        let docs: DocWakeItem[] = [];
+        const pullDocs = Effect.sync(() => {
+          const have = new Set(docs.map((d) => d.block));
+          const fresh = pendingDocWakes(s.alias, s.me).filter((w) => !have.has(w.block));
+          docs.push(...fresh);
+          return fresh.length;
+        });
         const giveBack = () => {
           pending.unshift(...taken);
           taken = [];
+          docs = [];
           lines = [];
           return Effect.flatMap(cursor.read(s.alias, s.me), (now) => (now !== null && since < now ? cursor.write(s.alias, s.me, since) : Effect.void));
         };
@@ -294,6 +305,14 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
           }
           if (!opts.push && heardTo > since) yield* s.whileOurs(cursor.write(s.alias, s.me, heardTo));
           if (pending.length) yield* Deferred.succeed(arrived, undefined);
+          yield* Effect.forkScoped(
+            Effect.forever(
+              Effect.andThen(
+                Effect.flatMap(pullDocs, (n) => (n ? Effect.asVoid(Deferred.succeed(arrived, undefined)) : Effect.void)),
+                Effect.sleep(DOC_POLL_MS),
+              ),
+            ),
+          );
           const fresh = !opts.push && (following === null || Deferred.isDoneUnsafe(following));
           if (fresh) yield* follow(since);
           else yield* Effect.forkScoped(Effect.ignoreCause(s.notices((line) => arrive({ seq: null, line }))));
@@ -305,7 +324,7 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
             waiting = null;
             if (extra.signal.aborted) return;
             taken = pending.splice(0);
-            lines = taken.flatMap((h) => (h.seq !== null && (h.seq <= since || seen.has(h.seq)) ? [] : [h.line]));
+            lines = [...taken.flatMap((h) => (h.seq !== null && (h.seq <= since || seen.has(h.seq)) ? [] : [h.line])), ...docs.map(docWakeToolLine)];
           });
         }).pipe(
           Effect.ensuring(
@@ -325,6 +344,12 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
         if (!lines.length) return "no messages yet, call wait_for_messages again.\nNext: call wait_for_messages.";
         // Handed back to the session: read now.
         yield* s.markRead((yield* cursor.read(s.alias, s.me)) ?? 0);
+        if (docs.length)
+          tellDocWakes(
+            s.alias,
+            s.me,
+            docs.map((d) => d.block),
+          );
         return `${lines.join("\n")}\nNext: handle these. If one needs an answer, call reply. Then call wait_for_messages.`;
       }),
     ),
@@ -859,6 +884,17 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
 
   if (!opts.push) return yield* Effect.never;
   const push = (content: string, meta: Record<string, string>) => Effect.promise(() => server.server.notification({ method: "notifications/claude/channel", params: { content, meta } }));
+  const pushDocs = Effect.gen(function* () {
+    const fresh = pendingDocWakes(s.alias, s.me);
+    for (const w of fresh) yield* push(docWakeToolLine(w), { kind: "doc", place: w.key, from: w.author });
+    if (fresh.length)
+      tellDocWakes(
+        s.alias,
+        s.me,
+        fresh.map((w) => w.block),
+      );
+  });
+  yield* Effect.forkDetach(Effect.forever(Effect.andThen(Effect.ignoreCause(pushDocs), Effect.sleep(DOC_POLL_MS))));
   yield* s.listen(
     (m, state) => {
       const line = formatMessage(m, state.trust.get(m.seq), state, s.me);
