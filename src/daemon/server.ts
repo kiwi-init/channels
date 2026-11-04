@@ -177,7 +177,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
 
   const current = (seat: Seat): boolean => !stopped && seats.get(seat.key) === seat;
 
-  const { scheduleWake, stateOf } = seatWakes({
+  const { scheduleWake, stateOf, wakeable } = seatWakes({
     dir,
     wakeDelayMs: opts.wakeDelayMs ?? WAKE_DELAY_MS,
     wakeGapMs: opts.wakeGapMs ?? WAKE_GAP_MS,
@@ -447,6 +447,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
         seat,
         () => stateOf(seat),
         () => scheduleWake(seat),
+        async () => seat.subs.size > 0 || (await wakeable(seat)),
       );
       seats.set(key, seat);
       if (stopped) {
@@ -517,6 +518,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     const sub: Sub = { id, cursor, conn, seat, held: [] };
     seat.subs.add(sub);
     conn.subs.add(sub);
+    seat.docs?.refresh(0);
     reachMoved(seat.alias, seat.agent);
     sendLine(conn, JSON.stringify({ id, ok: true, stream: true, head: seat.head, channel, agent: as }));
     try {
