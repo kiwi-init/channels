@@ -57,7 +57,13 @@ function wakeItem(key: string, td: Pick<ThreadDoc, "doc">, w: DocWake): DocWakeI
   };
 }
 
-export function followDocs(seat: FollowedSeat, stateOf: () => Promise<ChannelState | null>, woke: () => void, wanted: () => Promise<boolean> = async () => true, now: () => number = Date.now): DocFollower {
+export function followDocs(
+  seat: FollowedSeat,
+  stateOf: () => Promise<ChannelState | null>,
+  woke: () => void,
+  wanted: () => Promise<boolean> = async () => true,
+  now: () => number = Date.now,
+): DocFollower {
   const open = new Map<string, { th: string; owns: boolean; stop: () => void }>();
   const since = docSince(seat.alias, seat.agent);
   const started = now();
