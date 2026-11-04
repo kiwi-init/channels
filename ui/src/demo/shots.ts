@@ -30,6 +30,7 @@ export const SHOTS: Record<string, Shot> = {
   "thread-doc-1000": { ...kiwi({ where: { kind: "task", task: 10 } }), docs: 1000 },
   theirs: kiwi({ where: { kind: "theirs", between: ["atlas", "win"] } }),
   room: kiwi({ where: { kind: "room", room: "releases" } }),
+  "room-private": kiwi({ where: { kind: "room", room: "launch-plan" } }),
   tasks: kiwi({ tab: "tasks" }),
   agents: kiwi({ tab: "agents" }),
   github: kiwi({ tab: "github" }),

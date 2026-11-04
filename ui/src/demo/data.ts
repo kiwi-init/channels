@@ -863,7 +863,7 @@ export const DEMO_CHANNEL: Channel = {
   ],
   directs: [
     { with: "atlas", unread: 0, last: m(29) },
-    { with: "maya", unread: 1, last: m(50), membersOnly: true },
+    { with: "maya", unread: 1, last: m(50), membersOnly: true, doc: "dm:jow~maya" },
   ],
   threads: [
     { root: 127, following: true, replies: 3, unread: 2, mentions: 0, last: m(0.3), lastSeq: 130, people: ["jow", "atlas", "win"] },
