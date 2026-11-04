@@ -5,6 +5,7 @@ import { docThread } from "@kiwi/core/doc/threads.ts"
 import { EventRun } from "~/chat/events"
 import { continuesRun, eventRun } from "~/chat/fold-events"
 import { foldText, leftOutRun, runFirst, withLeftOut } from "~/chat/left-out"
+import { inFeed } from "~/chat/doc/posted"
 import { chatterLine, chatterRuns, type ChatterRun } from "~/chat/chatter"
 import { MessageRow } from "~/chat/message"
 import { linked } from "~/chat/linked"
@@ -249,7 +250,7 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
     () =>
       withLeftOut(
         channel.messages.filter(
-          (m) => sameWhere(m.where, where) && (!m.side || where.kind === "task") && (!doc || m.block === undefined) && (where.kind !== "room" || m.inThread === undefined || !specAsks.has(m.inThread))
+          (m) => sameWhere(m.where, where) && (!m.side || where.kind === "task") && inFeed(m, !!doc) && (where.kind !== "room" || m.inThread === undefined || !specAsks.has(m.inThread))
         ),
         (channel.leftOut ?? []).filter((m) => sameWhere(m.where, where))
       ),

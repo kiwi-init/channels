@@ -60,9 +60,9 @@ function dropOwnEmpty(me: string): Command {
   }
 }
 
-function join(me: string, how: typeof joinBack): Command {
+function join(me: string, how: typeof joinBack, posted: (block: string) => boolean): Command {
   return (state, dispatch) => {
-    const tr = how(state, me)
+    const tr = how(state, me, posted)
     if (tr && dispatch) dispatch(tr)
     return !!tr
   }
@@ -96,7 +96,7 @@ const quietEmpty: Command = (state) => {
   return !!here && isEmpty(here.node)
 }
 
-export function docKeys(me: string, now: () => number, blur: () => void): Plugin[] {
+export function docKeys(me: string, now: () => number, blur: () => void, posted: (block: string) => boolean = () => false): Plugin[] {
   const item = schema.nodes.list_item
   return [
     keymap({
@@ -112,8 +112,8 @@ export function docKeys(me: string, now: () => number, blur: () => void): Plugin
       "Shift-Enter": chainCommands(newline, splitListItem(item), splitBlock),
       Tab: (state, dispatch) => inList(state) && (sinkListItem(item)(state, dispatch) || true),
       "Shift-Tab": (state, dispatch) => inList(state) && (liftListItem(item)(state, dispatch) || true),
-      Backspace: chainCommands(dropOwnEmpty(me), startOfItem, join(me, joinBack)),
-      Delete: join(me, joinForward),
+      Backspace: chainCommands(dropOwnEmpty(me), startOfItem, join(me, joinBack, posted)),
+      Delete: join(me, joinForward, posted),
       ArrowDown: toYourLine(me),
       Escape: () => {
         blur()

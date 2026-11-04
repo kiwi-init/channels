@@ -1,4 +1,4 @@
-import { afterAll, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -140,20 +140,15 @@ test("bump-main's list of stamped files is scripts/stamp.ts's, plus CHANGELOG.md
   expect(listed).toEqual([...FILES, "CHANGELOG.md"]);
 });
 
-test("bump-main pushes a stamp that edits the stamped files, and refuses one that touches anything else", () => {
-  const git = repo("stamps");
+describe("bump-main pushes a stamp that edits the stamped files, and refuses one that touches anything else", () => {
   const dir = join(root, "stamps");
+  const temp = join(root, "runner");
+  const check = step("bump-main", "Check the stamp only edits the stamped files");
+  let git: (...args: string[]) => string = () => "";
   const write = (file: string, text: string) => {
     mkdirSync(dirname(join(dir, file)), { recursive: true });
     writeFileSync(join(dir, file), text);
   };
-  for (const file of [...FILES, "CHANGELOG.md", ".github/workflows/ci.yml", "version.ts"]) write(file, `${file} 1.0.0\n`);
-  git("add", "-A");
-  git("commit", "-q", "-m", "base");
-
-  const check = step("bump-main", "Check the stamp only edits the stamped files");
-  const temp = join(root, "runner");
-  mkdirSync(join(temp, "stamp"), { recursive: true });
   const patchOf = (change: () => void) => {
     change();
     git("add", "-A");
@@ -167,20 +162,32 @@ test("bump-main pushes a stamp that edits the stamped files, and refuses one tha
     for (const file of [...FILES, "CHANGELOG.md"]) write(file, `${file} 1.0.1\n`);
   };
 
-  expect(patchOf(() => undefined).code).toBe(0);
-  expect(patchOf(stamp).code).toBe(0);
+  beforeAll(() => {
+    git = repo("stamps");
+    for (const file of [...FILES, "CHANGELOG.md", ".github/workflows/ci.yml", "version.ts"]) write(file, `${file} 1.0.0\n`);
+    git("add", "-A");
+    git("commit", "-q", "-m", "base");
+    mkdirSync(join(temp, "stamp"), { recursive: true });
+  });
 
-  const refused: [string, () => void, string][] = [
+  test("an empty stamp passes", () => {
+    expect(patchOf(() => undefined).code).toBe(0);
+  });
+
+  test("a stamp of the stamped files passes", () => {
+    expect(patchOf(stamp).code).toBe(0);
+  });
+
+  test.each([
     ["edits a workflow", () => (stamp(), write(".github/workflows/ci.yml", "evil\n")), ".github/workflows/ci.yml"],
     ["edits a file whose path is part of a stamped one", () => write("version.ts", "evil\n"), "version.ts"],
     ["adds a file", () => write("src/new.ts", "evil\n"), "create mode"],
     ["deletes a file", () => rmSync(join(dir, "site/README.md")), "delete mode"],
     ["renames a file", () => git("mv", "site/app.js", "site/app2.js"), "rename"],
     ["makes a stamped file executable", () => chmodSync(join(dir, "package.json"), 0o755), "mode change"],
-  ];
-  for (const [what, change, says] of refused) {
+  ] as [string, () => void, string][])("a stamp that %s is refused", (_what, change, says) => {
     const r = patchOf(change);
-    expect({ what, code: r.code }).toEqual({ what, code: 1 });
+    expect(r.code).toBe(1);
     expect(r.out).toContain(says);
-  }
+  });
 });

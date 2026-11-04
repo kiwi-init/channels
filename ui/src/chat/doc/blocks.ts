@@ -127,10 +127,10 @@ function atBlockStart(state: EditorState): boolean {
   return true
 }
 
-function joinable(a: Node, b: Node, me: string): boolean {
+function joinable(a: Node, b: Node, me: string, posted: (block: string) => boolean): boolean {
   const x = attrsOf(a)
   const y = attrsOf(b)
-  return x.author === me && y.author === me && x.kind === y.kind
+  return x.author === me && y.author === me && x.kind === y.kind && !posted(x.id) && !posted(y.id)
 }
 
 function joinInto(state: EditorState, prev: Placed, next: Placed): Transaction {
@@ -147,18 +147,18 @@ function joinInto(state: EditorState, prev: Placed, next: Placed): Transaction {
   return tr.setSelection(TextSelection.near(tr.doc.resolve(at + 1))).scrollIntoView()
 }
 
-export function joinBack(state: EditorState, me: string): Transaction | null {
+export function joinBack(state: EditorState, me: string, posted: (block: string) => boolean = () => false): Transaction | null {
   const here = blockAt(state)
   if (!here || here.index === 0 || !atBlockStart(state)) return null
   const prevNode = state.doc.child(here.index - 1)
   const prev = { node: prevNode, pos: here.pos - prevNode.nodeSize, index: here.index - 1 }
-  return joinable(prev.node, here.node, me) ? joinInto(state, prev, here) : null
+  return joinable(prev.node, here.node, me, posted) ? joinInto(state, prev, here) : null
 }
 
-export function joinForward(state: EditorState, me: string): Transaction | null {
+export function joinForward(state: EditorState, me: string, posted: (block: string) => boolean = () => false): Transaction | null {
   const here = blockAt(state)
   if (!here || here.index >= state.doc.childCount - 1 || !atBlockEnd(state)) return null
   const nextNode = state.doc.child(here.index + 1)
   const next = { node: nextNode, pos: here.pos + here.node.nodeSize, index: here.index + 1 }
-  return joinable(here.node, next.node, me) ? joinInto(state, here, next) : null
+  return joinable(here.node, next.node, me, posted) ? joinInto(state, here, next) : null
 }

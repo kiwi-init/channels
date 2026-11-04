@@ -14,6 +14,7 @@ import { linksPlugin } from "~/chat/doc/links"
 import { fileDrag, takeDropped } from "@kiwi/app/dropped.ts"
 import { emptyPaste, takePasted } from "@kiwi/app/pasted.ts"
 import { fileView, filesIn, imageView, uploadAll, type DocMedia } from "~/chat/doc/media"
+import { postedBlocks } from "~/chat/doc/posted"
 import { markdownRules } from "~/chat/doc/rules"
 import { attrsOf, FRAGMENT, isSent, schema, type BlockAttrs } from "~/chat/doc/schema"
 import { dismiss, suggestPlugin, type Query } from "~/chat/doc/suggest"
@@ -130,7 +131,7 @@ function paintRuns(root: HTMLElement, shown: Map<HTMLElement, BlockView>, me: st
     const a = attrsOf(node)
     const empty = isEmpty(node)
     const mine = a.author === me
-    const hidden = empty && !mine
+    const hidden = (empty && !mine) || drafts.posted(a.id)
     el.classList.toggle("is-cont", !hidden && continues(prev, node))
     el.classList.toggle("is-empty", empty)
     el.classList.toggle("is-mine", mine)
@@ -278,9 +279,8 @@ interface ViewOpts {
 
 const openImage = (url: string) => void window.open(url, "_blank", "noopener,noreferrer")
 
-function takeFiles(view: EditorView, me: string, opts: ViewOpts, files: readonly File[]): boolean {
-  const media = opts.media()
-  if (!files.length || !media || !opts.editable()) return false
+function takeFiles(view: EditorView, me: string, media: DocMedia | null, editable: boolean, files: readonly File[]): boolean {
+  if (!files.length || !media || !editable) return false
   void uploadAll(files, media, (why) => announce(why, "error")).then((nodes) => {
     if (view.isDestroyed) return
     const tr = attach(view.state, me, Date.now(), nodes)
@@ -312,7 +312,8 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
       ...docKeys(
         me,
         () => Date.now(),
-        () => blur.now()
+        () => blur.now(),
+        (block) => opts.drafts.current.posted(block)
       ),
       linksPlugin(),
       herePlugin(),
@@ -333,18 +334,18 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
     },
     handlePaste: (v, e) => {
       const dt = e.clipboardData
-      if (takeFiles(v, me, opts, filesIn(dt))) {
+      if (takeFiles(v, me, opts.media(), opts.editable(), filesIn(dt))) {
         e.preventDefault()
         return true
       }
       if (!dt || !emptyPaste(dt) || !opts.media() || !opts.editable()) return false
       e.preventDefault()
-      void takePasted(dt).then((f) => f && takeFiles(v, me, opts, [f]))
+      void takePasted(dt).then((f) => f && takeFiles(v, me, opts.media(), opts.editable(), [f]))
       return true
     },
     handleDrop: (v, e) => {
       const dt = e.dataTransfer
-      if (takeFiles(v, me, opts, filesIn(dt))) {
+      if (takeFiles(v, me, opts.media(), opts.editable(), filesIn(dt))) {
         e.preventDefault()
         return true
       }
@@ -352,7 +353,7 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
       e.preventDefault()
       void takeDropped(dt).then(({ files, refused }) => {
         for (const why of refused) announce(why, "error")
-        takeFiles(v, me, opts, files)
+        takeFiles(v, me, opts.media(), opts.editable(), files)
       })
       return true
     },
@@ -429,6 +430,8 @@ function typedAnywhere(e: KeyboardEvent): boolean {
   return !t.closest("input, textarea, select, [contenteditable='true'], dialog, [role='dialog'], [role='menu'], .ProseMirror")
 }
 
+const within = (r: DOMRect, x: number, y: number): boolean => x >= r.left && x <= r.right && y >= r.top && y <= r.bottom
+
 export function ThreadDoc({ channel, where, shared, hold, media = null }: { channel: Channel; where: Where; shared: Shared; hold: (on: boolean) => void; media?: DocMedia | null }) {
   const mount = useRef<HTMLDivElement>(null)
   const box = useRef<HTMLDivElement>(null)
@@ -442,7 +445,7 @@ export function ThreadDoc({ channel, where, shared, hold, media = null }: { chan
   const latest = useRef(channel)
   const holdRef = useRef(hold)
   const drafts = useRef<Drafts>({ posted: () => false, version: 0 })
-  const sent = useMemo(() => new Set(channel.messages.flatMap((m) => (m.block ? [m.block] : []))), [channel.messages])
+  const sent = useMemo(() => postedBlocks(channel.messages), [channel.messages])
 
   useLayoutEffect(() => {
     drafts.current = { posted: (block) => sent.has(block), version: drafts.current.version + 1 }
@@ -531,6 +534,30 @@ export function ThreadDoc({ channel, where, shared, hold, media = null }: { chan
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
+  }, [me])
+
+  useEffect(() => {
+    const onDrag = (e: DragEvent) => {
+      const dt = e.dataTransfer
+      if (!dt || !fileDrag(dt)) return
+      const taken = e.defaultPrevented
+      e.preventDefault()
+      const v = view.current
+      const el = box.current
+      if (e.type !== "drop" || taken || !v || !el || !within(el.getBoundingClientRect(), e.clientX, e.clientY)) return
+      const files = filesIn(dt)
+      if (takeFiles(v, me, mediaRef.current, canWrite.current, files) || files.length) return
+      void takeDropped(dt).then(({ files: dropped, refused }) => {
+        for (const why of refused) announce(why, "error")
+        takeFiles(v, me, mediaRef.current, canWrite.current, dropped)
+      })
+    }
+    window.addEventListener("dragover", onDrag)
+    window.addEventListener("drop", onDrag)
+    return () => {
+      window.removeEventListener("dragover", onDrag)
+      window.removeEventListener("drop", onDrag)
+    }
   }, [me])
 
   const place =

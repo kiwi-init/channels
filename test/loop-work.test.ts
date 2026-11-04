@@ -532,18 +532,23 @@ describe("the Kimi Code recipe", () => {
   });
 
   test("the kiwi listeners a session left running are found under it, by pid and start time", async () => {
-    const parent = Bun.spawn(["sh", "-c", "bash -c 'exec -a \"kiwi listen --once\" sleep 30' & sleep 30 & wait"], { stdout: "ignore", stderr: "ignore" });
+    const parent = Bun.spawn(["bash", "-c", `(exec -a "kiwi listen --once" bash -c 'echo $$; sleep 30; :') & sleep 30 & wait`], { stdout: "pipe", stderr: "ignore" });
+    let listener = 0;
     try {
-      let found: { pid: number; start: string }[] = [];
-      for (let i = 0; i < 50 && found.length === 0; i++) {
-        await Bun.sleep(50);
-        found = listenersUnder(parent.pid);
+      const reader = parent.stdout.getReader();
+      let line = "";
+      while (!line.includes("\n")) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        line += new TextDecoder().decode(value);
       }
-      expect(found).toHaveLength(1);
+      listener = Number(line.trim());
+      const found = listenersUnder(parent.pid);
+      expect(found.map((s) => s.pid)).toEqual([listener]);
       expect(found[0]!.start).toMatch(/\d{4}$/);
     } finally {
+      if (listener) process.kill(listener, "SIGKILL");
       parent.kill("SIGKILL");
-      for (const s of listenersUnder(parent.pid)) process.kill(s.pid, "SIGKILL");
     }
   });
 

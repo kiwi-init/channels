@@ -149,10 +149,11 @@ describe("against a real repository", () => {
   git(work, "commit", "-qm", "main moves on");
   git(work, "push", "-q", origin, "HEAD:refs/heads/main");
   git(temp, "clone", "-q", origin, clone);
+  git(clone, "fetch", "-q", "origin", "refs/pull/7/head");
+  const pr = git(clone, "rev-parse", "FETCH_HEAD");
 
   test("whitespace and renames cost nothing, main's later commits are not the PR's, tests are left out", () => {
-    git(clone, "fetch", "-q", "origin", "refs/pull/7/head");
-    const files = diffFiles(clone, "origin/main", "FETCH_HEAD");
+    const files = diffFiles(clone, "origin/main", pr);
     expect(files).toEqual([
       { path: "src/a.ts", lines: 7 },
       { path: "src/renamed.ts", lines: 0 },

@@ -2,6 +2,7 @@ import { afterAll, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { perfCheck } from "../scripts/perf-check.ts";
 
 const { reference, limits: budgets } = (await Bun.file("scripts/perf-budgets.json").json()) as {
   reference: Record<"@1x" | "@4x", number>;
@@ -27,8 +28,8 @@ function run(tasksMs: number, i: number, speed = 1, calibrated = true, at: Parti
 }
 
 const check = (files: string[], ...flags: string[]) => {
-  const r = Bun.spawnSync(["bun", "scripts/perf-check.ts", ...flags, ...files]);
-  return { code: r.exitCode, out: r.stdout.toString() };
+  const r = perfCheck(files, flags.includes("--nightly"));
+  return { code: r.code, out: r.text };
 };
 
 test("every limit has a budget, and a gate is either unset or no tighter than its budget", () => {
