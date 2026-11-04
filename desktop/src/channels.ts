@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { keepRecordsIn, type RecordMemory } from "@kiwi/core/client.ts";
+import { fileDocStore, forgetDocs } from "@kiwi/core/node/doc-store.ts";
 import type { Member } from "@kiwi/core/membership.ts";
 import type { JoinClaims } from "@kiwi/core/membership.ts";
 import type { Signed, SigningBudget } from "@kiwi/core/sas.ts";
@@ -32,6 +33,8 @@ let nextId = 1;
 const waiting = new Map<number, (d: Done) => void>();
 
 const memoryFile = (): string => path.join(dir, "kiwi-keys-memory.json");
+
+const docsDir = (roomId: string, pk: string): string => path.join(dir, "docs", `${roomId}-${pk}`.replace(/[^A-Za-z0-9_-]/g, ""));
 
 function loadMemory(): void {
   try {
@@ -95,12 +98,17 @@ const keyring = new Keyring({
   seats: () => seats,
   save: async (entry) => void (await asked({ type: "save", entry })),
   access: async (code, pk, access) => void (await asked({ type: "access", code, pk, access })),
-  forget: async (code) => void (await asked({ type: "forget", code })),
+  forget: async (code) => {
+    const gone = dir ? seats.flatMap((s) => (s.code === code && s.roomId ? [docsDir(s.roomId, s.pk)] : [])) : [];
+    await asked({ type: "forget", code });
+    await Promise.all(gone.map(forgetDocs));
+  },
   prove: async (code, memberPk): Promise<JoinClaims | null> => (await asked({ type: "prove", code, memberPk })).claim ?? null,
   githubToken: async () => (await asked({ type: "githubToken" })).token ?? null,
   person: () => person,
   mine: () => mine,
   budget,
+  docStore: (seat) => (dir ? fileDocStore(docsDir(seat.roomId, seat.pk), seat) : null),
   search: () => {
     const worker = ["search.js", "search-worker.ts"].map((f) => path.join(import.meta.dir, f)).find((f) => fs.existsSync(f));
     return dir && worker ? { file: (name) => path.join(dir, "search", name), spawn: () => bunSearchWorker(worker) } : null;
