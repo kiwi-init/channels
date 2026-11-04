@@ -19,7 +19,7 @@ const room = () =>
 
 const watch = (w: ReturnType<typeof room>, rule: Partial<WakeRule> = {}) => {
   const wakes: DocWake[] = [];
-  const stop = watchWakes(w, { me: "olivia", names: ["olivia"], owns: false, idleMs: 40, ...rule }, (x) => wakes.push(x));
+  const stop = watchWakes(w, { me: "olivia", names: ["olivia"], owns: false, ...rule }, (x) => wakes.push(x));
   return { wakes, stop };
 };
 
@@ -42,27 +42,27 @@ describe("an agent wakes for a finished block in the thread doc (T500)", () => {
     stop();
   });
 
-  test("3 s idle finishes a block; typing restarts the wait", async () => {
+  test("a draft never wakes it, however long it sits: only the author's Enter, their next block, sends it", async () => {
     const w = room();
     const { wakes, stop } = watch(w);
     const b = newBlock(w.doc, "text", "jow", "@olivia");
-    await Bun.sleep(25);
     appendToBlock(w.doc, b.id, " still typing");
-    await Bun.sleep(25);
+    await Bun.sleep(50);
     expect(wakes).toHaveLength(0);
-    await Bun.sleep(40);
+    newBlock(w.doc, "text", "jow", "");
     expect(wakes.map((x) => x.block.text)).toEqual(["@olivia still typing"]);
     stop();
   });
 
-  test("another author's block after it doesn't finish it: someone answering in place isn't the author ending theirs", async () => {
+  test("another author's block after it doesn't finish it; the author's own next block does, even with others between", async () => {
     const w = room();
     const { wakes, stop } = watch(w);
     newBlock(w.doc, "text", "jow", "@olivia first half");
     newBlock(w.doc, "text", "rodrigo", "a reply");
+    await Bun.sleep(50);
     expect(wakes).toHaveLength(0);
-    await Bun.sleep(60);
-    expect(wakes).toHaveLength(1);
+    newBlock(w.doc, "text", "jow", "");
+    expect(wakes.map((x) => x.block.text)).toEqual(["@olivia first half"]);
     stop();
   });
 
@@ -95,13 +95,13 @@ describe("an agent wakes for a finished block in the thread doc (T500)", () => {
     stop();
   });
 
-  test("blocks older than after wake when it's given; stop ends the watch", async () => {
+  test("a block sent while it was away wakes it when it's given after; one older than after doesn't; stop ends the watch", () => {
     const w = room();
     newBlock(w.doc, "text", "jow", "@olivia while you were away", 100);
     newBlock(w.doc, "text", "rodrigo", "@olivia before that", 10);
+    newBlock(w.doc, "text", "rodrigo", "", 11);
+    newBlock(w.doc, "text", "jow", "", 101);
     const { wakes, stop } = watch(w, { after: 50 });
-    expect(wakes.map((x) => x.block.text)).toEqual([]);
-    await Bun.sleep(60);
     expect(wakes.map((x) => x.block.text)).toEqual(["@olivia while you were away"]);
     stop();
     newBlock(w.doc, "text", "jow", "@olivia after stop");
