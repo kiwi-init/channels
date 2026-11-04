@@ -32,7 +32,7 @@ export function blockAt(state: EditorState): Placed | null {
 }
 
 export function makeBlock(kind: BlockKind, author: string, at: number, text = ""): Node {
-  const attrs: BlockAttrs = { id: newBlockId(), kind, author, at }
+  const attrs: BlockAttrs = { id: newBlockId(), kind, author, at, re: null, quote: null }
   return schema.nodes.block.create(attrs, schema.nodes.paragraph.create(null, text ? schema.text(text) : null))
 }
 
@@ -68,6 +68,18 @@ export function startBlock(state: EditorState, me: string, now: number, posted: 
   const at = state.doc.content.size
   tr.insert(at, makeBlock("text", me, now))
   return inside(tr, at)
+}
+
+export function replyIn(state: EditorState, me: string, now: number, re: number, quote: string | null, posted: (block: string) => boolean = () => false): Transaction {
+  const tr = startBlock(state, me, now, posted)
+  const here = blocks(tr.doc)[tr.selection.$from.index(0)]
+  return here ? tr.setNodeMarkup(here.pos, undefined, { ...here.node.attrs, re, quote }) : tr
+}
+
+export function unreply(state: EditorState, id: string): Transaction | null {
+  const b = blocks(state.doc).find((x) => attrsOf(x.node).id === id)
+  if (!b) return null
+  return state.tr.setMeta("addToHistory", false).setNodeMarkup(b.pos, undefined, { ...b.node.attrs, re: null, quote: null })
 }
 
 export function blockAfter(state: EditorState, me: string, now: number): Transaction | null {

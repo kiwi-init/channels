@@ -4,7 +4,7 @@ import { TextSelection, type Command, type EditorState, type Plugin } from "pros
 import { liftListItem, sinkListItem, splitListItem } from "prosemirror-schema-list"
 import { redo, undo } from "y-prosemirror"
 
-import { blockAfter, blockAt, blocks, endsBlock, isEmpty, joinBack, joinForward, startBlock } from "~/chat/doc/blocks"
+import { blockAfter, blockAt, blocks, endsBlock, isEmpty, joinBack, joinForward, startBlock, unreply } from "~/chat/doc/blocks"
 import { attrsOf, isSent, schema } from "~/chat/doc/schema"
 
 function inCode(state: EditorState): boolean {
@@ -98,6 +98,17 @@ const quietEmpty: Command = (state) => {
   return !!here && isEmpty(here.node)
 }
 
+function dropReply(me: string): Command {
+  return (state, dispatch) => {
+    const here = blockAt(state)
+    const a = here ? attrsOf(here.node) : null
+    const tr = a && a.re !== null && a.author === me ? unreply(state, a.id) : null
+    if (!tr) return false
+    dispatch?.(tr)
+    return true
+  }
+}
+
 export function docKeys(me: string, now: () => number, blur: () => void, posted: (block: string) => boolean = () => false): Plugin[] {
   const item = schema.nodes.list_item
   return [
@@ -117,10 +128,10 @@ export function docKeys(me: string, now: () => number, blur: () => void, posted:
       Backspace: chainCommands(dropOwnEmpty(me, posted), startOfItem, join(me, joinBack, posted)),
       Delete: join(me, joinForward, posted),
       ArrowDown: toYourLine(me, posted),
-      Escape: () => {
+      Escape: chainCommands(dropReply(me), () => {
         blur()
         return true
-      },
+      }),
     }),
     keymap(baseKeymap),
   ]

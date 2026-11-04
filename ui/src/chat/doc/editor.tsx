@@ -7,7 +7,7 @@ import { EditorState, Plugin, type Transaction } from "prosemirror-state"
 import { Decoration, DecorationSet, EditorView, type NodeView } from "prosemirror-view"
 import { yCursorPlugin, ySyncPlugin, ySyncPluginKey, yUndoPlugin } from "y-prosemirror"
 
-import { attach, blockAt, blocks, continues, dropEmptyOwn, isEmpty, startBlock } from "~/chat/doc/blocks"
+import { attach, blockAt, blocks, continues, dropEmptyOwn, isEmpty, replyIn, startBlock, unreply } from "~/chat/doc/blocks"
 import { docKeys } from "~/chat/doc/keys"
 import { holdDoc, LiveDoc, type Shared } from "~/chat/doc/live"
 import { linksPlugin } from "~/chat/doc/links"
@@ -20,11 +20,15 @@ import { postedBlocks } from "~/chat/doc/posted"
 import { markdownRules } from "~/chat/doc/rules"
 import { attrsOf, FRAGMENT, isSent, schema, type BlockAttrs } from "~/chat/doc/schema"
 import { dismiss, suggestPlugin, type Query } from "~/chat/doc/suggest"
+import { withNames } from "~/chat/linked"
 import { peopleMatches, taskMatches } from "~/chat/matches"
+import { withExcerpt } from "~/chat/quote"
+import { preview, useReplying } from "~/chat/reply"
+import { Icon } from "~/kit/icons"
 import { Avatar, cx, Dot, STATUS_WORDS } from "~/kit/bits"
 import { clock } from "~/kit/time"
 import { announce } from "~/kit/toasts"
-import type { Channel, Person, QuestionAsk, Task, Where } from "~/model"
+import type { Channel, Message, Person, QuestionAsk, Task, Where } from "~/model"
 import { nickname } from "~/names"
 import { useAct, useApp } from "~/nav"
 
@@ -43,7 +47,16 @@ class Heads {
 
   set(el: HTMLElement, attrs: BlockAttrs): void {
     const was = this.all.get(el)
-    if (was && was.attrs.id === attrs.id && was.attrs.author === attrs.author && was.attrs.kind === attrs.kind && was.attrs.at === attrs.at) return
+    if (
+      was &&
+      was.attrs.id === attrs.id &&
+      was.attrs.author === attrs.author &&
+      was.attrs.kind === attrs.kind &&
+      was.attrs.at === attrs.at &&
+      was.attrs.re === attrs.re &&
+      was.attrs.quote === attrs.quote
+    )
+      return
     this.all.set(el, { key: was?.key ?? this.next++, attrs })
     this.changed()
   }
@@ -379,11 +392,32 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
   return { view, stop: () => shared.awareness.off("change", watch) }
 }
 
-function Head({ channel, attrs }: { channel: Channel; attrs: BlockAttrs }) {
+function ReplyLine({ channel, to, quote, onClose }: { channel: Channel; to: Message | undefined; quote: string | null; onClose: (() => void) | null }) {
+  const line = quote ? quote.replace(/\s+/g, " ") : to ? withNames(to.text, channel.nicknames, preview) : ""
+  return (
+    <div className={cx("compose-reply", "blk-re", quote && "is-excerpt")}>
+      <Icon name="reply" size={13} />
+      <span className="compose-reply-text">
+        {quote ? "Quoting" : "Replying to"} {to && <b>{nickname(channel, to.from)}</b>}{" "}
+        <span className={quote ? "compose-reply-excerpt" : "dim"}>{quote ? `“${line.slice(0, 160)}${line.length > 160 ? "…" : ""}”` : line.slice(0, 160)}</span>
+      </span>
+      {onClose && (
+        <button type="button" className="compose-reply-x" aria-label="Cancel reply" title="Cancel reply (Esc)" onClick={onClose}>
+          <Icon name="close" size={13} />
+        </button>
+      )}
+    </div>
+  )
+}
+
+function Head({ channel, attrs, onUnreply }: { channel: Channel; attrs: BlockAttrs; onUnreply: (id: string) => void }) {
   const { go } = useApp()
   if (!attrs.author) return null
   return (
     <>
+      {attrs.re !== null && (
+        <ReplyLine channel={channel} to={channel.messages.find((m) => m.seq === attrs.re)} quote={attrs.quote} onClose={attrs.author === channel.you ? () => onUnreply(attrs.id) : null} />
+      )}
       <span className="blk-line">
         <button type="button" className="msg-name" title={clock(attrs.at)} onClick={() => go({ to: "modal", modal: { kind: "person", name: attrs.author } })}>
           {nickname(channel, attrs.author)}
@@ -505,6 +539,13 @@ export function ThreadDoc({
   const [pick, setPick] = useState(0)
   const options = optionsFor(channel, query?.q ?? null)
   const keys = useRef<(e: KeyboardEvent) => boolean>(() => false)
+  const replying = useReplying()
+
+  const dropReply = (id: string) => {
+    const v = view.current
+    const tr = v ? unreply(v.state, id) : null
+    if (v && tr) v.dispatch(tr)
+  }
 
   useLayoutEffect(() => {
     const changed = canWrite.current !== !readOnly
@@ -569,6 +610,19 @@ export function ThreadDoc({
       view.current = null
     }
   }, [shared, me, heads, feet])
+
+  useEffect(() => {
+    const v = view.current
+    const to = replying?.to
+    if (!v || !replying || !to) return
+    replying.set(null)
+    if (!canWrite.current) return
+    v.dispatch(replyIn(v.state, me, Date.now(), to.seq, replying.excerpt, drafts.current.posted))
+    v.focus()
+    const at = v.domAtPos(v.state.selection.head).node
+    const el = at instanceof HTMLElement ? at : at.parentElement
+    requestAnimationFrame(() => el?.closest(".blk")?.scrollIntoView({ block: "nearest" }))
+  }, [replying, me])
 
   useEffect(() => {
     shared.awareness.setLocalStateField("user", { name: nickname(channel, me), color: you?.color ?? "blue" })
@@ -643,7 +697,7 @@ export function ThreadDoc({
           }}
         />
       )}
-      {list.map(([el, key, attrs]) => createPortal(<Head channel={channel} attrs={attrs} />, el, String(key)))}
+      {list.map(([el, key, attrs]) => createPortal(<Head channel={channel} attrs={attrs} onUnreply={dropReply} />, el, String(key)))}
       {footList.flatMap(([el, key, attrs]) => {
         const ask = asked.get(attrs.id)
         return ask
@@ -698,7 +752,7 @@ export function LiveThreadDoc({ channel, where, thread, hold }: { channel: Chann
           (why) => announce(`The shared doc didn't open: ${why}`, "error"),
           {
             me,
-            post: (text, block) => actions.send(code, here.current, text, { block }),
+            post: (text, block, reply) => actions.send(code, here.current, reply?.quote ? withExcerpt(reply.quote, text) : text, { block, ...(reply ? { replyTo: reply.re } : {}) }),
             posted: (block) => known.current.has(block),
           }
         )

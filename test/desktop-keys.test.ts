@@ -12,6 +12,7 @@ import { fromWire, toWire } from "../desktop/src/wire.ts";
 import { remoteOps } from "@kiwi/channel/channel-remote.ts";
 import { ChannelGone } from "@kiwi/core/client.ts";
 import { b64url, decodeJoinCode, encodeJoinCode, fromB64url, newRoomId } from "@kiwi/core/crypto.ts";
+import { fileDocStore } from "@kiwi/core/node/doc-store.ts";
 import type { PipeIn } from "@kiwi/core/doc/held-pipe.ts";
 import * as Y from "yjs";
 import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
@@ -298,6 +299,45 @@ describe("the editor's doc crosses the window like the feed (T597, T693)", () =>
     stopB();
     const wire = JSON.stringify([aw.sent, bw.sent]);
     for (const s of [...secretsOf(a.store, b.store), ada.sk, bo.sk]) expect(wire.includes(s)).toBe(false);
+  });
+
+  test("an edit made while the channel is offline survives the app restarting, and reaches the relay once it's back (T1446)", async () => {
+    const docs = mkdtempSync(join(tmpdir(), "mc-docs-"));
+    try {
+      const ada = await generateIdentity("Ada");
+      const a = memHost(ada);
+      const stored: KeyHost = { ...a.host, docStore: (s) => fileDocStore(join(docs, `${s.roomId}-${s.pk}`), s) };
+      const first = window(new Keyring(stored));
+      const code = (await first.ops.create("Offline doc", null, { name: "Ada" })).code!;
+      const stopFirst = first.ops.follow(code, 0, () => {});
+      const mine = mirror(first.ops, code, "main", null);
+      mine.doc.getText("t").insert(0, "online");
+      const th = (await until(() => mine.events.find((e): e is Extract<DocEvent, { _tag: "Open" }> => e._tag === "Open"))).th;
+      await until(() => (mine.events.some((e) => e._tag === "Ready") ? true : undefined));
+      await Bun.sleep(300);
+      stopFirst();
+      await Bun.sleep(100);
+      mine.doc.getText("t").insert(6, ", then offline");
+      await Bun.sleep(1_500);
+      mine.pipe.close();
+      await Bun.sleep(100);
+      expect(readdirSync(docs).length).toBe(1);
+
+      const again = window(new Keyring(stored));
+      const stopAgain = again.ops.follow(code, 0, () => {});
+      const back = mirror(again.ops, code, "main", th);
+      await until(() => (back.doc.getText("t").toString() === "online, then offline" ? true : undefined));
+
+      const elsewhere = window(new Keyring(a.host));
+      const stopElsewhere = elsewhere.ops.follow(code, 0, () => {});
+      const fresh = mirror(elsewhere.ops, code, "main", th);
+      await until(() => (fresh.doc.getText("t").toString() === "online, then offline" ? true : undefined));
+      for (const m of [back, fresh]) m.pipe.close();
+      stopAgain();
+      stopElsewhere();
+    } finally {
+      rmSync(docs, { recursive: true, force: true });
+    }
   });
 
   test("a doc for a channel this app isn't in fails, it doesn't throw", async () => {

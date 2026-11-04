@@ -5,6 +5,8 @@ import { blockOf, markPosted, richOf, threadOf, unmarkSent, type Block } from "@
 export interface Finished {
   id: string
   text: string
+  re?: number
+  quote?: string
 }
 
 interface Rule {
@@ -45,7 +47,7 @@ export function postFinished(doc: Y.Doc, rule: Rule, post: (b: Finished) => void
     queueMicrotask(() => {
       if (!stopped) markPosted(doc, b.id)
     })
-    post({ id: b.id, text: richOf(el)?.markdown || b.text.trim() })
+    post({ id: b.id, text: richOf(el)?.markdown || b.text.trim(), ...(b.re ? { re: b.re } : {}), ...(b.quote ? { quote: b.quote } : {}) })
   }
 
   const look = (events: Y.YEvent<Y.AbstractType<unknown>>[], tr: Y.Transaction): void => {

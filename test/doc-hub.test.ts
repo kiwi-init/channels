@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Channel } from "@kiwi/core/client.ts";
@@ -266,15 +266,23 @@ describe("the doc hub keeps each thread's doc on the live socket", () => {
     expect(texts(d3.doc)).toEqual(["kept", "never sent"]);
   });
 
-  test("the file store keeps a doc between runs and ignores what it can't read", async () => {
+  test("the file store keeps a doc between runs, sealed to the seat, and ignores what it can't read", async () => {
     const dir = mkdtempSync(join(tmpdir(), "kiwi-docs-"));
     try {
-      const store = fileDocStore(dir);
+      const roomId = newRoomId();
+      const seat = { roomId, sk: (await generateIdentity("ana")).sk };
+      const store = fileDocStore(dir, seat);
       const th = newDocId();
       expect(await store.load(th)).toBeNull();
-      await store.save(th, { head: 3, state: Uint8Array.of(1, 2, 3), unsent: null });
-      expect(await store.load(th)).toEqual({ head: 3, state: Uint8Array.of(1, 2, 3), unsent: null });
-      await Bun.write(join(dir, `${th}.json`), "{torn");
+      const words = new TextEncoder().encode("plans nobody else reads");
+      await store.save(th, { head: 3, state: words, unsent: Uint8Array.of(9) });
+      expect(await store.load(th)).toEqual({ head: 3, state: words, unsent: Uint8Array.of(9) });
+      const onDisk = readFileSync(join(dir, `${th}.doc`), "utf8");
+      expect(onDisk).not.toContain(b64url(words));
+      expect(onDisk).not.toContain("head");
+      expect(await fileDocStore(dir, { roomId, sk: (await generateIdentity("bo")).sk }).load(th)).toBeNull();
+      expect(await fileDocStore(dir, { roomId: newRoomId(), sk: seat.sk }).load(th)).toBeNull();
+      await Bun.write(join(dir, `${th}.doc`), "{torn");
       expect(await store.load(th)).toBeNull();
       await expect(store.load("../escape")).rejects.toThrow("not a doc id");
     } finally {

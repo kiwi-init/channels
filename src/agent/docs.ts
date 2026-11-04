@@ -1,9 +1,10 @@
 import type { Channel } from "@kiwi/core/client.ts";
 import { agentBlock } from "@kiwi/core/doc/agent.ts";
-import { threadText } from "@kiwi/core/doc/blocks.ts";
+import { threadText, type BlockMedia } from "@kiwi/core/doc/blocks.ts";
 import type { ThreadDoc } from "@kiwi/core/doc/thread-doc.ts";
 import { docThread } from "@kiwi/core/doc/threads.ts";
-import { MAIN, type ChannelState } from "@kiwi/core/state.ts";
+import { GENERAL_ROOM } from "@kiwi/core/protocol.ts";
+import { MAIN, type ChannelState, type Place } from "@kiwi/core/state.ts";
 import type { DocWakeItem } from "../config/doc-wakes.ts";
 
 const DOC_WAIT_MS = 15_000;
@@ -21,10 +22,18 @@ export interface Destination {
   re?: readonly number[];
 }
 
-export function docPlaceOf(state: Pick<ChannelState, "docs">, where: Destination): DocPlace | null {
-  if (where.dm || where.re?.length) return null;
-  if (where.task === undefined && where.room && where.room.toLowerCase() !== "general") return null;
-  const key = docThread(where.task === undefined ? MAIN : { kind: "task", task: where.task });
+function placeOfReply(state: Pick<ChannelState, "placeOf" | "roomOf">, seq: number): Place | null {
+  const place = state.placeOf.get(seq) ?? MAIN;
+  if (place.kind === "dm") return null;
+  return place.kind === "main" && (state.roomOf.get(seq) ?? GENERAL_ROOM) !== GENERAL_ROOM ? null : place;
+}
+
+export function docPlaceOf(state: Pick<ChannelState, "docs" | "placeOf" | "roomOf">, where: Destination): DocPlace | null {
+  if (where.dm) return null;
+  const re = where.re?.[0];
+  const place = re === undefined ? (where.task === undefined ? MAIN : { kind: "task" as const, task: where.task }) : placeOfReply(state, re);
+  if (!place || (re === undefined && place.kind === "main" && where.room && where.room.toLowerCase() !== "general")) return null;
+  const key = docThread(place);
   const th = state.docs.get(key);
   return th ? { key, th } : null;
 }
@@ -71,10 +80,11 @@ async function inThreadDoc<T>(ch: Channel, from: number, at: DocPlace, work: (td
   }
 }
 
-export const writeBlock = (ch: Channel, from: number, at: DocPlace, author: string, body: string, agent: boolean, posted = false): Promise<string> =>
+export const writeBlock = (ch: Channel, from: number, at: DocPlace, author: string, body: string, agent: boolean, posted = false, media: readonly BlockMedia[] = []): Promise<string> =>
   inThreadDoc(ch, from, at, (td) => {
     const block = agentBlock(td.doc, author, agent ? "agent" : "text");
     block.write(body);
+    block.attach(media);
     if (posted) block.post();
     else block.end();
     return block.id;

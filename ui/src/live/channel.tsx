@@ -86,7 +86,7 @@ function useShown(): boolean {
 
 export const OpenMember = memo(function OpenMember({ member, view }: { member: StoredMember; view: View }) {
   const live = useChannel(member)
-  const { ch, state, messages, roster, online, requests, isOwner, connection, gone, ready, send, refreshRequests, refreshRoster, foldFrom, marks, pkOf, github, older } = live
+  const { ch, state, messages, roster, online, requests, isOwner, connection, gone, ready, caughtUp, send, refreshRequests, refreshRoster, foldFrom, marks, pkOf, github, older } = live
   const me = member.identity.name
   const roomId = member.access.roomId
   const code = member.code
@@ -95,7 +95,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const newMembers = useNewMembers(roomId)
   const newPowers = useNewPowers(roomId)
   const pictures = usePictures(code, ch, messages)
-  useMarksSync(ch, roomId)
+  useMarksSync(ch, roomId, caughtUp)
   const known = useKnownChannels()
   const icon = iconUrl(useIcons().get(roomId) ?? null)
   useLiveIcon(member)

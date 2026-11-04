@@ -19,7 +19,7 @@ export type OpenDoc = (th: string | null, on: (e: DocEvent) => void) => PipeIn
 
 export interface Poster {
   me: string
-  post: (text: string, block: DocBlockRef) => Promise<boolean>
+  post: (text: string, block: DocBlockRef, reply?: { re: number; quote?: string }) => Promise<boolean>
   posted?: (block: string) => boolean
 }
 
@@ -129,7 +129,7 @@ export class LiveDoc implements Shared {
     if (!this.poster) return
     if (this.opened === null) this.unposted.push(b)
     else
-      void this.poster.post(b.text, { th: this.opened, id: b.id }).then((went) => {
+      void this.poster.post(b.text, { th: this.opened, id: b.id }, b.re ? { re: b.re, ...(b.quote ? { quote: b.quote } : {}) } : undefined).then((went) => {
         if (!went) this.posting?.giveBack(b.id)
       })
   }

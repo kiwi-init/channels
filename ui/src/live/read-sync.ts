@@ -1,10 +1,14 @@
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
 import { markSeenIn, seenIn } from "@kiwi/app/threads.ts"
 import type { ChannelLink } from "@kiwi/channel/channel-ops.ts"
 
 const WRITE_EVERY_MS = 45_000
 
-export function useMarksSync(ch: ChannelLink, roomId: string): void {
+export function useMarksSync(ch: ChannelLink, roomId: string, caughtUp: boolean): void {
+  const whole = useRef(caughtUp)
+  useEffect(() => {
+    whole.current = caughtUp
+  }, [caughtUp])
   useEffect(() => {
     let live = true
     let wrote = JSON.stringify(seenIn(roomId))
@@ -23,8 +27,11 @@ export function useMarksSync(ch: ChannelLink, roomId: string): void {
       const text = JSON.stringify(now)
       if (text === wrote) return
       wrote = text
-      ch.syncMarks(now)
-        .then(take)
+      ch.syncMarks(now, { make: whole.current })
+        .then((marks) => {
+          if (!marks) wrote = ""
+          take(marks)
+        })
         .catch(() => {
           // A write that fails is tried again at the next blur or interval, with whatever has moved since.
           wrote = ""

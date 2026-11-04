@@ -73,6 +73,20 @@ describe("a person's block posts as their message when they press Enter", () => 
     expect(out).toHaveLength(1)
   })
 
+  test("a reply or a quote on the block posts with it (T1402)", () => {
+    const doc = new Y.Doc()
+    const out = watch(doc)
+    const id = start(doc, "jow", "agreed")
+    doc.transact(() => {
+      const el = threadOf(doc).get(0)
+      if (!(el instanceof Y.XmlElement)) throw new Error("no block")
+      el.setAttribute("re", 12)
+      el.setAttribute("quote", "ship it friday")
+    })
+    start(doc, "jow")
+    expect(out).toEqual([{ id, text: "agreed", re: 12, quote: "ship it friday" }])
+  })
+
   test("starting your next block posts the one before at once", () => {
     const doc = new Y.Doc()
     const out = watch(doc)

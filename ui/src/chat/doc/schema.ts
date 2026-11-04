@@ -11,6 +11,8 @@ export interface BlockAttrs {
   kind: BlockKind
   author: string
   at: number
+  re: number | null
+  quote: string | null
 }
 
 export const FRAGMENT = "thread"
@@ -22,7 +24,16 @@ export const schema = new Schema({
       content: "(paragraph | code_block | bullet_list | ordered_list | image | file)+",
       defining: true,
       isolating: true,
-      attrs: { id: { default: "" }, kind: { default: "text" }, author: { default: "" }, at: { default: 0 }, sent: { default: "" }, posted: { default: "" } },
+      attrs: {
+        id: { default: "" },
+        kind: { default: "text" },
+        author: { default: "" },
+        at: { default: 0 },
+        sent: { default: "" },
+        posted: { default: "" },
+        re: { default: null },
+        quote: { default: null },
+      },
       parseDOM: [
         {
           tag: "section[data-block]",
@@ -90,7 +101,15 @@ function kindOf(value: unknown): BlockKind {
 
 export function attrsOf(node: Node): BlockAttrs {
   const a = node.attrs
-  return { id: String(a.id ?? ""), kind: kindOf(a.kind), author: String(a.author ?? ""), at: Number(a.at) || 0 }
+  const re = Number(a.re)
+  return {
+    id: String(a.id ?? ""),
+    kind: kindOf(a.kind),
+    author: String(a.author ?? ""),
+    at: Number(a.at) || 0,
+    re: Number.isSafeInteger(re) && re > 0 ? re : null,
+    quote: typeof a.quote === "string" && a.quote ? a.quote : null,
+  }
 }
 
 export const isSent = (node: Node): boolean => node.attrs.sent === "1"

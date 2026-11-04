@@ -23,6 +23,7 @@ import {
   type Color,
   type DecisionKind,
   type Event,
+  type FileAttachment,
   type Handoff,
   type ImageAttachment,
   type Kind,
@@ -32,6 +33,7 @@ import {
 import { Rejected } from "@kiwi/core/refusals.ts";
 import { canPost, describeScopes, refusal } from "@kiwi/core/scopes.ts";
 import { allowedOnHold, decidersOf, humanOf, isPerson, nextIn, ON_HOLD, ownerOf, placeIn, taskId, unnamedAsks, unnamedTasks, type ChannelState } from "@kiwi/core/state.ts";
+import type { BlockMedia } from "@kiwi/core/doc/blocks.ts";
 import { readDoc, writeBlock, type DocPlace } from "./docs.ts";
 import { SessionListen } from "./listen.ts";
 import { EVERYONE, oneLook } from "./shared.ts";
@@ -84,16 +86,31 @@ export class SessionMessaging extends SessionListen {
     function* (this: SessionMessaging, body: string, at: DocPlace, opts: SendOptions = {}) {
       yield* this.mayI({ kind: "msg", to: yield* this.resolveTo(opts.to) });
       const { state } = yield* this.state();
-      const me = state.members.get(this.me);
-      const agent = !me || !isPerson(me);
-      const id = yield* Effect.tryPromise({
-        try: () => writeBlock(this.ch, state.head, at, this.me, body, agent, true),
-        catch: (e) => new Rejected(`couldn't write to the shared doc: ${e instanceof Error ? e.message : "error"}; nothing was sent`),
-      });
+      for (const re of opts.re ?? []) yield* this.notAnsweredByOthers(state, re, body);
+      const id = yield* this.postedBlock(body, at, opts.imgs, opts.files);
       return yield* this.send(body, { ...opts, block: { th: at.th, id } });
     },
     oneLook,
   );
+
+  private postedBlock(body: string, at: DocPlace, imgs: readonly ImageAttachment[] = [], files: readonly FileAttachment[] = []) {
+    return Effect.gen({ self: this }, function* () {
+      const { state } = yield* this.state();
+      const me = state.members.get(this.me);
+      const agent = !me || !isPerson(me);
+      const stored = yield* Effect.forEach(
+        imgs,
+        (img) =>
+          img.ref || img.data === undefined ? Effect.succeed<ImageAttachment>(img) : this.ch.fx.putImage({ name: img.name, mime: img.mime, data: img.data }).pipe(Effect.orElseSucceed(() => img)),
+        { concurrency: 4 },
+      );
+      const media: BlockMedia[] = [...stored.flatMap((img): BlockMedia[] => (img.ref ? [{ image: { ...img, ref: img.ref } }] : [])), ...files.map((file) => ({ file }))];
+      return yield* Effect.tryPromise({
+        try: () => writeBlock(this.ch, state.head, at, this.me, body, agent, true, media),
+        catch: (e) => new Rejected(`couldn't write to the shared doc: ${e instanceof Error ? e.message : "error"}; nothing was sent`),
+      });
+    });
+  }
 
   readonly docText = Effect.fn("AgentSession.docText")({ self: this }, function* (this: SessionMessaging, at: DocPlace, ms?: number, drafts = false) {
     const { state } = yield* this.state();
@@ -171,14 +188,15 @@ export class SessionMessaging extends SessionListen {
 
   readonly reply = Effect.fn("AgentSession.reply")(
     { self: this },
-    function* (this: SessionMessaging, seq: number, body: string, kind: Kind = "msg", imgs?: ImageAttachment[], extra: Pick<SendOptions, "settled" | "files"> = {}) {
+    function* (this: SessionMessaging, seq: number, body: string, kind: Kind = "msg", imgs?: ImageAttachment[], extra: Pick<SendOptions, "settled" | "files"> = {}, at: DocPlace | null = null) {
       const { messages, state } = yield* this.state();
       const orig = yield* this.message(seq, messages);
       if (!orig) return yield* new Rejected(`no message #${seq}`);
       yield* this.notAnsweredByOthers(state, seq, body);
       const to = orig.from === this.me ? orig.to : [orig.from];
       yield* this.mayI({ kind, to });
-      const replying = { to, kind, re: [seq], side: true, imgs, room: state.roomOf.get(seq) ?? orig.room, ...extra };
+      const block = at && kind === "msg" ? { th: at.th, id: yield* this.postedBlock(body, at, imgs, extra.files) } : undefined;
+      const replying = { to, kind, re: [seq], side: true, imgs, room: state.roomOf.get(seq) ?? orig.room, ...extra, ...(block ? { block } : {}) };
       const sent = yield* this.ch.fx.send(body, { ...replying, wake: wakeList(state, this.me, replying) });
       return sent;
     },
