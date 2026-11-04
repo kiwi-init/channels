@@ -14,6 +14,7 @@ import { linksPlugin } from "~/chat/doc/links"
 import { fileDrag, takeDropped } from "@kiwi/app/dropped.ts"
 import { emptyPaste, takePasted } from "@kiwi/app/pasted.ts"
 import { fileView, filesIn, imageView, uploadAll, type DocMedia } from "~/chat/doc/media"
+import { postedBlocks } from "~/chat/doc/posted"
 import { markdownRules } from "~/chat/doc/rules"
 import { attrsOf, FRAGMENT, schema, type BlockAttrs } from "~/chat/doc/schema"
 import { dismiss, suggestPlugin, type Query } from "~/chat/doc/suggest"
@@ -117,6 +118,7 @@ class BlockView implements NodeView {
 
 interface Drafts {
   is: (block: string) => boolean
+  posted: (block: string) => boolean
   version: number
 }
 
@@ -128,7 +130,7 @@ function paintRuns(root: HTMLElement, shown: Map<HTMLElement, BlockView>, me: st
     if (!node) continue
     const empty = isEmpty(node)
     const mine = attrsOf(node).author === me
-    const hidden = empty && !mine
+    const hidden = (empty && !mine) || drafts.posted(attrsOf(node).id)
     el.classList.toggle("is-cont", !hidden && continues(prev, node))
     el.classList.toggle("is-empty", empty)
     el.classList.toggle("is-mine", mine)
@@ -305,7 +307,8 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
       ...docKeys(
         me,
         () => Date.now(),
-        () => blur.now()
+        () => blur.now(),
+        (block) => opts.drafts.current.posted(block)
       ),
       linksPlugin(),
       herePlugin(),
@@ -434,11 +437,11 @@ export function ThreadDoc({ channel, where, shared, hold, media = null }: { chan
   const canWrite = useRef(!readOnly)
   const latest = useRef(channel)
   const holdRef = useRef(hold)
-  const drafts = useRef<Drafts>({ is: () => false, version: 0 })
-  const sent = useMemo(() => new Set(channel.messages.flatMap((m) => (m.block && !m.pending ? [m.block] : []))), [channel.messages])
+  const drafts = useRef<Drafts>({ is: () => false, posted: () => false, version: 0 })
+  const sent = useMemo(() => postedBlocks(channel.messages), [channel.messages])
 
   useLayoutEffect(() => {
-    drafts.current = { is: (block) => !!shared.madeHere?.(block) && !sent.has(block), version: drafts.current.version + 1 }
+    drafts.current = { is: (block) => !!shared.madeHere?.(block) && !sent.has(block), posted: (block) => sent.has(block), version: drafts.current.version + 1 }
     view.current?.setProps({})
   }, [shared, sent])
   const mediaRef = useRef(media)
