@@ -4,6 +4,8 @@ import type { FileAttachment, ImageAttachment } from "../protocol.ts";
 
 const THREAD_FRAGMENT = "thread";
 
+export const GIVEN_BACK = "back";
+
 const BLOCK_KINDS = ["text", "agent", "tool", "comment"] as const;
 export type BlockKind = (typeof BLOCK_KINDS)[number];
 
@@ -14,6 +16,7 @@ export interface BlockMeta {
   at: number;
   sent?: true;
   posted?: true;
+  back?: true;
   re?: number;
   quote?: string;
 }
@@ -45,6 +48,7 @@ function metaOf(el: Y.XmlElement): BlockMeta | null {
     at,
     ...(el.getAttribute("sent") === "1" ? { sent: true as const } : {}),
     ...(el.getAttribute("posted") === "1" ? { posted: true as const } : {}),
+    ...(el.getAttribute("sent") === GIVEN_BACK ? { back: true as const } : {}),
     ...(Number.isSafeInteger(re) && re > 0 ? { re } : {}),
     ...(typeof quote === "string" && quote ? { quote } : {}),
   };
@@ -188,11 +192,11 @@ export function markPosted(doc: Y.Doc, id: string): boolean {
   return true;
 }
 
-export function unmarkSent(doc: Y.Doc, id: string): boolean {
+export function markBack(doc: Y.Doc, id: string): boolean {
   const el = blockElement(doc, id);
   if (!el) return false;
   doc.transact(() => {
-    if (el.getAttribute("sent") === "1") el.removeAttribute("sent");
+    if (el.getAttribute("sent") !== GIVEN_BACK) el.setAttribute("sent", GIVEN_BACK);
     if (el.getAttribute("posted") === "1") el.removeAttribute("posted");
   });
   return true;

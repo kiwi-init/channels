@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test"
+import { GIVEN_BACK } from "@kiwi/core/doc/blocks.ts"
 import type { Node } from "prosemirror-model"
 import { EditorState, TextSelection } from "prosemirror-state"
 
-import { atBlockEnd, attach, blockAfter, joinBack, joinForward, blocks, continues, dropEmptyOwn, endsBlock, makeBlock, replyIn, startBlock, unreply } from "~/chat/doc/blocks"
+import { atBlockEnd, attach, backInDraft, blockAfter, blockAt, joinBack, joinForward, blocks, continues, dropEmptyOwn, endsBlock, makeBlock, replyIn, startBlock, unreply } from "~/chat/doc/blocks"
 import { attrsOf, imageNode, schema } from "~/chat/doc/schema"
 
 const T = 1_700_000_000_000
@@ -17,6 +18,10 @@ function texts(state: EditorState): string[] {
 
 function sent(block: Node): Node {
   return block.type.create({ ...block.attrs, sent: "1" }, block.content)
+}
+
+function back(block: Node): Node {
+  return block.type.create({ ...block.attrs, sent: GIVEN_BACK }, block.content)
 }
 
 function caretAtEnd(state: EditorState, index: number): EditorState {
@@ -255,5 +260,38 @@ describe("Reply and Quote on a message land in your draft in the doc (T1402)", (
     const next = replied.apply(tr)
     expect(attrsOf(next.doc.child(0))).toMatchObject({ re: null, quote: null })
     expect(texts(next)).toEqual(["jow:agreed"])
+  })
+})
+
+describe("a line given back to you as a draft (T1678)", () => {
+  test("drops your empty blocks after it and puts the caret at its end, so typing goes on in it", () => {
+    const line = back(makeBlock("text", "jow", T, "ship it"))
+    const s = caretAtEnd(stateOf(line, makeBlock("text", "maya", T + 1, "hers"), makeBlock("text", "jow", T + 2)), 2)
+    const tr = backInDraft(s, "jow", attrsOf(line).id)
+    if (!tr) throw new Error("no transaction")
+    const next = s.apply(tr)
+    expect(texts(next)).toEqual(["jow:ship it", "maya:hers"])
+    expect(blockAt(next)?.index).toBe(0)
+    expect(next.selection.$from.parentOffset).toBe("ship it".length)
+  })
+
+  test("leaves the caret in the line you're already typing, and your next start goes there, not back", () => {
+    const line = back(makeBlock("text", "jow", T, "ship it"))
+    const s = caretAtEnd(stateOf(line, makeBlock("text", "jow", T + 1, "next line")), 1)
+    const tr = backInDraft(s, "jow", attrsOf(line).id)
+    if (!tr) throw new Error("no transaction")
+    const next = s.apply(tr)
+    expect(texts(next)).toEqual(["jow:ship it", "jow:next line"])
+    expect(blockAt(next)?.index).toBe(1)
+    expect(blockAt(next.apply(startBlock(next, "jow", T + 3)))?.index).toBe(1)
+  })
+
+  test("starting to write lands in it while only your empty blocks follow it; someone else's line is never yours to give back", () => {
+    const line = back(makeBlock("text", "jow", T, "ship it"))
+    const s = stateOf(line, makeBlock("text", "maya", T + 1, "hers"), makeBlock("text", "jow", T + 2))
+    const next = s.apply(startBlock(s, "jow", T + 3))
+    expect(blockAt(next)?.index).toBe(0)
+    expect(texts(next)).toEqual(["jow:ship it", "maya:hers", "jow:"])
+    expect(backInDraft(s, "maya", attrsOf(line).id)).toBeNull()
   })
 })

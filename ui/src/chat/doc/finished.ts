@@ -26,7 +26,7 @@ export function docFeed(blocks: readonly Block[], rich: ReadonlyMap<string, Rich
   const media = new Set<string>()
   for (let i = blocks.length - 1; i >= 0; i--) {
     const b = blocks[i]!
-    const done = b.sent || later.has(b.author)
+    const done = b.sent || (!b.back && later.has(b.author))
     later.add(b.author)
     const r = rich.get(b.id)
     if (r?.media) {

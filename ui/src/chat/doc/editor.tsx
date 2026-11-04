@@ -7,7 +7,8 @@ import { EditorState, Plugin, type Transaction } from "prosemirror-state"
 import { Decoration, DecorationSet, EditorView, type NodeView } from "prosemirror-view"
 import { yCursorPlugin, ySyncPlugin, ySyncPluginKey, yUndoPlugin } from "y-prosemirror"
 
-import { attach, blockAt, blocks, continues, dropEmptyOwn, isEmpty, replyIn, startBlock, unreply } from "~/chat/doc/blocks"
+import { attach, backInDraft, blockAt, blocks, continues, dropEmptyOwn, isEmpty, replyIn, startBlock, unreply } from "~/chat/doc/blocks"
+import { onGiveBack } from "~/chat/doc/give-back"
 import { docKeys, type CommandFor } from "~/chat/doc/keys"
 import { holdDoc, LiveDoc, type Shared } from "~/chat/doc/live"
 import { linksPlugin } from "~/chat/doc/links"
@@ -18,7 +19,7 @@ import { blocksOf, richBlocks } from "@kiwi/core/doc/blocks.ts"
 import { docFeed, oldestAt, setDocFeed } from "~/chat/doc/finished"
 import { postedBlocks } from "~/chat/doc/posted"
 import { markdownRules } from "~/chat/doc/rules"
-import { attrsOf, FRAGMENT, isSent, schema, type BlockAttrs } from "~/chat/doc/schema"
+import { attrsOf, FRAGMENT, isBack, isSent, schema, type BlockAttrs } from "~/chat/doc/schema"
 import { dismiss, suggestPlugin, type Query } from "~/chat/doc/suggest"
 import { matchCommands, parseCommand, type Command } from "~/chat/commands"
 import { withNames } from "~/chat/linked"
@@ -163,7 +164,7 @@ function paintRuns(root: HTMLElement, shown: Map<HTMLElement, BlockView>, me: st
     el.classList.toggle("is-empty", empty)
     el.classList.toggle("is-mine", mine)
     el.classList.toggle("is-hidden", hidden)
-    el.classList.remove("is-draft")
+    el.classList.toggle("is-draft", !hidden && isBack(node))
     if (a.kind === "text" && !empty) last.set(a.author, el)
     if (!hidden) prev = node
   }
@@ -643,6 +644,19 @@ export function ThreadDoc({
     const el = at instanceof HTMLElement ? at : at.parentElement
     requestAnimationFrame(() => el?.closest(".blk")?.scrollIntoView({ block: "nearest" }))
   }, [replying, me])
+
+  useEffect(
+    () =>
+      onGiveBack((id) => {
+        const v = view.current
+        const tr = v && canWrite.current ? backInDraft(v.state, me, id) : null
+        if (!v || !tr) return
+        v.dispatch(tr.scrollIntoView())
+        const here = blockAt(v.state)
+        if (here && attrsOf(here.node).id === id) v.focus()
+      }),
+    [me]
+  )
 
   useEffect(() => {
     shared.awareness.setLocalStateField("user", { name: nickname(channel, me), color: you?.color ?? "blue" })

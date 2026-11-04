@@ -1,3 +1,4 @@
+import { GIVEN_BACK } from "@kiwi/core/doc/blocks.ts"
 import { Schema, type Node } from "prosemirror-model"
 
 import type { DocFile, DocImage } from "~/model"
@@ -113,6 +114,8 @@ export function attrsOf(node: Node): BlockAttrs {
 }
 
 export const isSent = (node: Node): boolean => node.attrs.sent === "1"
+
+export const isBack = (node: Node): boolean => node.attrs.sent === GIVEN_BACK
 
 export function newBlockId(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(16))
