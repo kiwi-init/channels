@@ -3,7 +3,7 @@ import { GIVEN_BACK } from "@kiwi/core/doc/blocks.ts"
 import type { Node } from "prosemirror-model"
 import { EditorState, TextSelection } from "prosemirror-state"
 
-import { atBlockEnd, attach, backInDraft, blockAfter, blockAt, joinBack, joinForward, blocks, continues, dropEmptyOwn, endsBlock, makeBlock, replyIn, startBlock, unreply } from "~/chat/doc/blocks"
+import { atBlockEnd, attach, backInDraft, blockAfter, blockAt, joinBack, joinForward, blocks, continues, dropEmptyOwn, makeBlock, replyIn, startBlock, unreply } from "~/chat/doc/blocks"
 import { attrsOf, imageNode, schema } from "~/chat/doc/schema"
 
 const T = 1_700_000_000_000
@@ -74,35 +74,24 @@ describe("starting to write in a thread", () => {
   })
 })
 
-describe("ending a block", () => {
-  test("Enter at the end of a block with text ends it", () => {
-    expect(endsBlock(caretAtEnd(stateOf(makeBlock("text", "jow", T, "one")), 0))).toBe(true)
-  })
-
-  test("an empty block, or a caret before the end, doesn't end it", () => {
-    expect(endsBlock(caretAtEnd(stateOf(makeBlock("text", "jow", T)), 0))).toBe(false)
+describe("starting your next line (⌘/Ctrl+Enter)", () => {
+  test("a caret before the end isn't at the block's end", () => {
     const s = stateOf(makeBlock("text", "jow", T, "one"))
     const mid = s.apply(s.tr.setSelection(TextSelection.create(s.doc, 3)))
     expect(atBlockEnd(mid)).toBe(false)
-    expect(endsBlock(mid)).toBe(false)
   })
 
-  test("an empty last line (from Shift-Enter) is dropped and a new block of yours starts", () => {
+  test("an empty last line (from Enter) is dropped and a new block of yours starts", () => {
     let s = caretAtEnd(stateOf(makeBlock("text", "jow", T, "one")), 0)
     s = s.apply(s.tr.split(s.selection.from))
-    expect(endsBlock(s)).toBe(true)
     const next = s.apply(blockAfter(s, "jow", T + 1)!)
     expect(texts(next)).toEqual(["jow:one", "jow:"])
     expect(next.doc.child(0).childCount).toBe(1)
     expect(next.selection.$from.index(0)).toBe(1)
   })
 
-  test("a list or code block at the end leaves Enter to the list or code", () => {
-    const item = schema.nodes.list_item.create(null, schema.nodes.paragraph.create(null, schema.text("x")))
-    const list = schema.nodes.block.create({ id: "a", kind: "text", author: "jow", at: T }, schema.nodes.bullet_list.create(null, item))
+  test("a caret at the end of a code block is at the block's end", () => {
     const code = schema.nodes.block.create({ id: "b", kind: "text", author: "jow", at: T }, schema.nodes.code_block.create(null, schema.text("y")))
-    expect(endsBlock(caretAtEnd(stateOf(list), 0))).toBe(false)
-    expect(endsBlock(caretAtEnd(stateOf(code), 0))).toBe(false)
     expect(atBlockEnd(caretAtEnd(stateOf(code), 0))).toBe(true)
   })
 

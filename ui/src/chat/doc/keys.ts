@@ -5,7 +5,7 @@ import { TextSelection, type Command, type EditorState, type Plugin } from "pros
 import { liftListItem, sinkListItem, splitListItem } from "prosemirror-schema-list"
 import { redo, undo } from "y-prosemirror"
 
-import { blockAfter, blockAt, blocks, endsBlock, isEmpty, joinBack, joinForward, startBlock, unreply, type Made } from "~/chat/doc/blocks"
+import { blockAfter, blockAt, blocks, isEmpty, joinBack, joinForward, startBlock, unreply, type Made } from "~/chat/doc/blocks"
 import { attrsOf, isSent, schema } from "~/chat/doc/schema"
 import { noteTyping } from "~/kit/typing-hook"
 
@@ -92,10 +92,6 @@ function nextBlock(me: string, now: () => number): Command {
   }
 }
 
-function endBlock(me: string, now: () => number): Command {
-  return (state, dispatch) => (endsBlock(state) ? nextBlock(me, now)(state, dispatch) : false)
-}
-
 const quietEmpty: Command = (state) => {
   const here = blockAt(state)
   return !!here && isEmpty(here.node)
@@ -172,8 +168,8 @@ export function docKeys(me: string, now: () => number, blur: () => void, opts: D
       "Mod-i": toggleMark(schema.marks.em),
       "Mod-e": toggleMark(schema.marks.code),
       "Mod-Shift-x": toggleMark(schema.marks.strike),
-      "Mod-Enter": chainCommands(runLine(me, commandFor), unlessRefused(me, refuse, nextBlock(me, now))),
-      Enter: chainCommands(leaveCode, newline, runLine(me, commandFor), emptyItem, splitListItem(item), unlessRefused(me, refuse, endBlock(me, now)), quietEmpty, splitBlock),
+      "Mod-Enter": chainCommands(runLine(me, commandFor), quietEmpty, unlessRefused(me, refuse, nextBlock(me, now))),
+      Enter: chainCommands(leaveCode, newline, emptyItem, splitListItem(item), splitBlock),
       "Shift-Enter": chainCommands(newline, splitListItem(item), splitBlock),
       Tab: (state, dispatch) => inList(state) && (sinkListItem(item)(state, dispatch) || true),
       "Shift-Tab": (state, dispatch) => inList(state) && (liftListItem(item)(state, dispatch) || true),
