@@ -1242,7 +1242,7 @@ export interface DocBlockRef {
   id: string;
 }
 
-export function wellFormedBlockRef(x: unknown): x is DocBlockRef {
+function wellFormedBlockRef(x: unknown): x is DocBlockRef {
   const b = x as Partial<DocBlockRef> | null;
   return !!b && typeof b.th === "string" && DOC_THREAD_RE.test(b.th) && typeof b.id === "string" && DOC_THREAD_RE.test(b.id);
 }
