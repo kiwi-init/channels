@@ -86,7 +86,13 @@ describe("the doc wakes an agent hasn't been told yet (T606)", () => {
       "  before it: rodrigo: shipped it",
       '  answer in the doc: kiwi send --to T7 "…" (kiwi show T7 has all of it)',
     ]);
-    expect(docWakeLine(item("b4", { key: "main" }), "kiwi")).toContain('kiwi send --to #general "…" (kiwi show general has all of it)');
+    expect(docWakeLine(item("b4", { key: "main" }), "kiwi")).toContain(`kiwi send --to '#general' "…" (kiwi show general has all of it)`);
+  });
+
+  test("the answer command it suggests survives a shell: #general stays an argument, not a comment (T1353)", async () => {
+    const said = /answer in the doc: kiwi (send .*) \(kiwi show/.exec(docWakeLine(item("b5", { key: "main" }), "kiwi"))?.[1] ?? "";
+    const p = Bun.spawn(["sh", "-c", `printf '%s\\n' ${said}`], { stdout: "pipe" });
+    expect((await new Response(p.stdout).text()).trim().split("\n")).toEqual(["send", "--to", "#general", "…"]);
   });
 });
 
