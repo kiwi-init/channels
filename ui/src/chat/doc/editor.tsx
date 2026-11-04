@@ -410,7 +410,7 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
       steadyPlugin(opts.scroller, opts.hold, me),
     ],
   })
-  const touch = writeOwnLinesOnly(state)
+  const own = writeOwnLinesOnly(state, () => (view.isDestroyed ? null : view.state.doc))
   const view: EditorView = new EditorView(mount, {
     state,
     editable: opts.editable,
@@ -452,7 +452,7 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
       const next = this.state.apply(tr)
       if (tr.docChanged && !remote(tr)) {
         noteMade(before.doc, next.doc, me, shared.made)
-        touch?.(before.doc, next.doc)
+        own?.touched(before.doc, next.doc)
       }
       this.updateState(next)
       if (tr.docChanged && tracingTyping()) noteEdit(before, this.state, tr, shared.doc)
@@ -460,7 +460,13 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
     },
   })
   blur.now = () => view.dom.blur()
-  return { view, stop: () => shared.awareness.off("change", watch) }
+  return {
+    view,
+    stop: () => {
+      own?.stop()
+      shared.awareness.off("change", watch)
+    },
+  }
 }
 
 function ReplyLine({ channel, to, quote, onClose }: { channel: Channel; to: Message | undefined; quote: string | null; onClose: (() => void) | null }) {
