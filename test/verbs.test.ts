@@ -267,6 +267,15 @@ describe("ten verbs", () => {
     expect((await piped(owner, "", "note", "workflow")).out).toBe("from `stdin` $x\nline two\n");
     expect((await run(agent, "note", "workflow", "words", "--file", file)).code).toBe(1);
     expect((await run(agent, "note", "workflow", "--file", join(scratch("note-missing"), "none.md"))).code).toBe(1);
+    await ok(agent, "set", "plan", "--file", file);
+    expect(await ok(owner, "get", "plan")).toBe(record);
+    expect((await piped(agent, "piped `plan`", "set", "plan")).code).toBe(0);
+    expect((await ok(owner, "get", "plan")).trim()).toBe("piped `plan`");
+    const empty = join(scratch("note-empty"), "empty.md");
+    writeFileSync(empty, "");
+    expect((await run(agent, "note", "workflow", "--file", empty)).code).toBe(1);
+    expect((await run(agent, "set", "plan", "--file", empty)).code).toBe(1);
+    expect((await ok(owner, "get", "plan")).trim()).toBe("piped `plan`");
   });
 
   test("task add keeps titles short: a long one exits 1 with no id on stdout, and the spec goes in --body or --file", async () => {
