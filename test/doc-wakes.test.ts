@@ -94,6 +94,35 @@ describe("the doc wakes an agent hasn't been told yet (T606)", () => {
     const p = Bun.spawn(["sh", "-c", `printf '%s\\n' ${said}`], { stdout: "pipe" });
     expect((await new Response(p.stdout).text()).trim().split("\n")).toEqual(["send", "--to", "#general", "…"]);
   });
+
+  test("a wake queued while another process tells the earlier ones is never lost (T3358)", async () => {
+    const stop = join(dir, "race.stop");
+    const teller = Bun.spawn(
+      [
+        process.execPath,
+        "-e",
+        `import { existsSync } from "node:fs";
+         import { pendingDocWakes, tellDocWakes } from ${JSON.stringify(join(import.meta.dir, "../src/config/doc-wakes.ts"))};
+         let last = false;
+         while (!last) {
+           last = existsSync(${JSON.stringify(stop)});
+           tellDocWakes("race", "olivia", pendingDocWakes("race", "olivia").map((w) => w.block));
+           await Bun.sleep(1);
+         }`,
+      ],
+      { env: { ...process.env, KIWI_HOME: dir }, stdout: "ignore", stderr: "inherit" },
+    );
+    const blocks = Array.from({ length: 150 }, (_, i) => `race-${i}`);
+    for (const b of blocks) {
+      addDocWake("race", "olivia", item(b));
+      await Bun.sleep(1);
+    }
+    await Bun.write(stop, "");
+    expect(await teller.exited).toBe(0);
+    const told = (await Bun.file(join(dir, "doc-wakes", "race", "olivia.told")).text()).split("\n");
+    const pending = pendingDocWakes("race", "olivia").map((w) => w.block);
+    expect(blocks.filter((b) => !told.includes(b) && !pending.includes(b))).toEqual([]);
+  });
 });
 
 describe("the daemon's follower queues a wake for a finished block (T606)", () => {

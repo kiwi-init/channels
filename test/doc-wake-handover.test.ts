@@ -163,13 +163,16 @@ test("kiwi tail streams doc-only lines (T1741)", async () => {
     const decoder = new TextDecoder();
     for await (const chunk of p.stdout) out += decoder.decode(chunk, { stream: true });
   })();
-  await until(async () => out.includes("streamed from the doc"), "tail printing the first line");
-  inAgent(() => addDocWake(alias, me, wake("h".repeat(22), `@${me} and a second one`)));
-  await until(async () => out.includes("and a second one"), "tail printing the second line");
-  await until(async () => inAgent(() => pendingDocWakes(alias, me)).length === 0, "tail telling both lines");
-  p.kill();
-  await p.exited;
-  await reading;
+  try {
+    await until(async () => out.includes("streamed from the doc"), "tail printing the first line");
+    inAgent(() => addDocWake(alias, me, wake("h".repeat(22), `@${me} and a second one`)));
+    await until(async () => out.includes("and a second one"), "tail printing the second line");
+    await until(async () => inAgent(() => pendingDocWakes(alias, me)).length === 0, "tail telling both lines");
+  } finally {
+    p.kill();
+    await p.exited;
+    await reading;
+  }
 });
 
 test("hooks with only doc lines say where to answer, not reply N (T1741)", async () => {

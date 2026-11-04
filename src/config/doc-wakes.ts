@@ -67,15 +67,16 @@ export function pendingDocWakes(channel: string, agent: string): DocWakeItem[] {
 }
 
 export function addDocWake(channel: string, agent: string, w: DocWakeItem): boolean {
-  if (told(channel, agent).has(w.block) || queued(channel, agent).some((q) => q.block === w.block)) return false;
+  const all = queued(channel, agent);
+  if (told(channel, agent).has(w.block) || all.some((q) => q.block === w.block)) return false;
   const pending = pendingDocWakes(channel, agent);
-  if (pending.length >= KEEP_PENDING)
+  if (pending.length >= KEEP_PENDING || pending.length < all.length)
     writePrivate(
       `${base(channel, agent)}.wakes`,
       pending
         .slice(1 - KEEP_PENDING)
-        .map((p) => JSON.stringify(p))
-        .join("\n") + "\n",
+        .map((p) => `${JSON.stringify(p)}\n`)
+        .join(""),
     );
   append(`${base(channel, agent)}.wakes`, JSON.stringify(w));
   return true;
@@ -87,7 +88,6 @@ export function tellDocWakes(channel: string, agent: string, blocks: readonly st
   const all = [...readLines(path), ...blocks];
   if (all.length > KEEP_TOLD) writePrivate(path, all.slice(-KEEP_TOLD).join("\n") + "\n");
   else append(path, blocks.join("\n"));
-  if (!pendingDocWakes(channel, agent).length) writePrivate(`${base(channel, agent)}.wakes`, "");
 }
 
 export interface DocSeenDoc {
