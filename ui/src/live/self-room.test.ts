@@ -20,7 +20,15 @@ describe("the room that keeps your read marks never shows as a room (T1299)", ()
     const log = [
       make("jow", { op: "room.create", id: "r-notes-1", name: "", members: [{ name: "jow", pk: "pk-jow" }], self: true }),
       make("jow", { op: "room.create", id: "r-notes-2", name: "", members: [{ name: "jow", pk: "pk-jow" }], self: true }),
-      make("jow", { op: "room.create", id: "r-plan", name: "plan", members: [{ name: "jow", pk: "pk-jow" }, { name: "win", pk: "pk-win" }] }),
+      make("jow", {
+        op: "room.create",
+        id: "r-plan",
+        name: "plan",
+        members: [
+          { name: "jow", pk: "pk-jow" },
+          { name: "win", pk: "pk-win" },
+        ],
+      }),
     ]
     const state = fold(log, roster, 0)
     expect([...state.rooms.values()].filter((r) => r.self).map((r) => r.id)).toEqual(["r-notes-1", "r-notes-2"])
