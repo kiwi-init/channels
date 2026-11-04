@@ -229,6 +229,9 @@ jobs:
       - name: ui a thread, a thread doc and a feed hold still once they open, in WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-still.ts --dist ui/dist
+      - name: ui scrolling up a feed of event runs keeps loading to its first row, in WebKit
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-scroll-up.ts --dist ui/dist
       - name: ui Esc in search keeps the panel, and Settings doesn't offer a name change, in WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-esc-and-name.ts --dist ui/dist
