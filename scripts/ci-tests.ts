@@ -72,7 +72,7 @@ function processDump(pid: number): string {
   return [run(["ps", "-eo", "pid,ppid,etime,stat,args", "--forest"]), ...fds].join("\n");
 }
 
-let killed: ReturnType<typeof verdict> | null = null;
+const outcome: { killed: ReturnType<typeof verdict> | null } = { killed: null };
 const silentMs = Number(process.env.KIWI_CI_SILENT_MS) || SILENT_MS;
 const timer = setInterval(
   () => {
@@ -80,7 +80,7 @@ const timer = setInterval(
     clearInterval(timer);
     console.error(`watchdog: bun silent ${silentMs / 1000}s after all files reported, killed`);
     console.error(processDump(proc.pid));
-    killed = verdict(files, watch);
+    outcome.killed = verdict(files, watch);
     Bun.spawnSync(["pkill", "-KILL", "-P", String(proc.pid)]);
     proc.kill("SIGKILL");
   },
@@ -91,9 +91,9 @@ const code = await proc.exited;
 clearInterval(timer);
 await Promise.race([reading, Bun.sleep(2000)]);
 tmp.cleanup();
-if (killed) {
-  console.error(`watchdog: ${killed.why}`);
-  process.exit(killed.code);
+if (outcome.killed) {
+  console.error(`watchdog: ${outcome.killed.why}`);
+  process.exit(outcome.killed.code);
 }
 const ran = [...tail.matchAll(/Ran \d+ tests? across (\d+) files?\./g)].at(-1)?.[1];
 if (code === 0 && Number(ran) !== files.length) {
