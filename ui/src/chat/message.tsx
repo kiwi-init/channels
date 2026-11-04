@@ -204,7 +204,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
     )
 
   const onMenu = (e: MouseEvent<HTMLElement>) => {
-    if (m.pending || m.failed !== undefined || m.leftOut || m.deleted || editing) return
+    if (m.pending || m.failed !== undefined || m.leftOut || m.fromDoc || m.deleted || editing) return
     const target = e.target
     const reply = replying && quoting ? () => replying.set(m) : null
     showMenu(e, "Message", (x) => x.messageGroups({ channel, go }, m, target, { openImage, reply, inThread: !!inThread || !!older }))
@@ -349,7 +349,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
           </button>
         )}
       </div>
-      {!m.pending && m.failed === undefined && !m.leftOut && !m.deleted && !editing && (
+      {!m.pending && m.failed === undefined && !m.leftOut && !m.fromDoc && !m.deleted && !editing && (
         <div className="msg-tools" role="toolbar" aria-label="Message actions">
           {m.where.kind !== "theirs" &&
             QUICK.map((e) => (

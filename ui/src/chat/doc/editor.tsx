@@ -14,6 +14,8 @@ import { linksPlugin } from "~/chat/doc/links"
 import { fileDrag, takeDropped } from "@kiwi/app/dropped.ts"
 import { emptyPaste, takePasted } from "@kiwi/app/pasted.ts"
 import { fileView, filesIn, imageView, uploadAll, type DocMedia } from "~/chat/doc/media"
+import { blocksOf, richBlocks } from "@kiwi/core/doc/blocks.ts"
+import { docFeed, oldestAt, setDocFeed } from "~/chat/doc/finished"
 import { postedBlocks } from "~/chat/doc/posted"
 import { markdownRules } from "~/chat/doc/rules"
 import { attrsOf, FRAGMENT, isSent, schema, type BlockAttrs } from "~/chat/doc/schema"
@@ -127,6 +129,7 @@ class BlockView implements NodeView {
 
 interface Drafts {
   posted: (block: string) => boolean
+  inFeed: (block: string) => boolean
   version: number
 }
 
@@ -140,7 +143,7 @@ function paintRuns(root: HTMLElement, shown: Map<HTMLElement, BlockView>, me: st
     const a = attrsOf(node)
     const empty = isEmpty(node)
     const mine = a.author === me
-    const hidden = (empty && !mine) || drafts.posted(a.id)
+    const hidden = (empty && !mine) || drafts.posted(a.id) || drafts.inFeed(a.id)
     el.classList.toggle("is-cont", !hidden && continues(prev, node))
     el.classList.toggle("is-empty", empty)
     el.classList.toggle("is-mine", mine)
@@ -441,7 +444,21 @@ function typedAnywhere(e: KeyboardEvent): boolean {
 
 const within = (r: DOMRect, x: number, y: number): boolean => x >= r.left && x <= r.right && y >= r.top && y <= r.bottom
 
-export function ThreadDoc({ channel, where, shared, hold, media = null }: { channel: Channel; where: Where; shared: Shared; hold: (on: boolean) => void; media?: DocMedia | null }) {
+export function ThreadDoc({
+  channel,
+  where,
+  thread,
+  shared,
+  hold,
+  media = null,
+}: {
+  channel: Channel
+  where: Where
+  thread: string
+  shared: Shared
+  hold: (on: boolean) => void
+  media?: DocMedia | null
+}) {
   const mount = useRef<HTMLDivElement>(null)
   const box = useRef<HTMLDivElement>(null)
   const view = useRef<EditorView | null>(null)
@@ -463,13 +480,26 @@ export function ThreadDoc({ channel, where, shared, hold, media = null }: { chan
   const canWrite = useRef(!readOnly)
   const latest = useRef(channel)
   const holdRef = useRef(hold)
-  const drafts = useRef<Drafts>({ posted: () => false, version: 0 })
+  const drafts = useRef<Drafts>({ posted: () => false, inFeed: () => false, version: 0 })
   const sent = useMemo(() => postedBlocks(channel.messages), [channel.messages])
+  const feedKey = `${channel.code}\n${thread}`
+  const since = useMemo(() => oldestAt(channel.messages), [channel.messages])
 
   useLayoutEffect(() => {
-    drafts.current = { posted: (block) => sent.has(block), version: drafts.current.version + 1 }
-    view.current?.setProps({})
-  }, [sent])
+    const publish = () => {
+      const feed = docFeed(blocksOf(shared.doc), richBlocks(shared.doc), sent, since)
+      setDocFeed(feedKey, feed)
+      drafts.current = {
+        posted: (block) => sent.has(block) && !feed.media.has(block),
+        inFeed: (block) => feed.hidden.has(block),
+        version: drafts.current.version + 1,
+      }
+      view.current?.setProps({})
+    }
+    publish()
+    shared.doc.on("update", publish)
+    return () => shared.doc.off("update", publish)
+  }, [sent, since, shared, feedKey])
   const mediaRef = useRef(media)
   const [query, setQuery] = useState<{ q: Query; left: number; top: number } | null>(null)
   const [pick, setPick] = useState(0)
@@ -680,5 +710,5 @@ export function LiveThreadDoc({ channel, where, thread, hold }: { channel: Chann
 
   useEffect(() => live?.want(th), [live, th])
 
-  return live?.isReady ? <ThreadDoc channel={channel} where={where} shared={live} hold={hold} media={media} /> : null
+  return live?.isReady ? <ThreadDoc channel={channel} where={where} thread={thread} shared={live} hold={hold} media={media} /> : null
 }

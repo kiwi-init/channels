@@ -50,6 +50,75 @@ function textOf(node: Y.XmlElement | Y.XmlText | Y.XmlHook): string {
   return node.nodeName === "paragraph" ? parts.join("") : parts.join("\n");
 }
 
+const WRAP: Record<string, string> = { strong: "**", em: "_", strike: "~~", code: "`" };
+
+function inlineMarkdown(t: Y.XmlText): string {
+  return (t.toDelta() as { insert: unknown; attributes?: Record<string, unknown> }[])
+    .map((d) => {
+      if (typeof d.insert !== "string") return "";
+      const marks = Object.keys(d.attributes ?? {}).filter((k) => k in WRAP);
+      const core = d.insert.trim();
+      if (!core || !marks.length) return d.insert;
+      const lead = d.insert.slice(0, d.insert.indexOf(core));
+      const tail = d.insert.slice(lead.length + core.length);
+      const order = [...marks.filter((k) => k !== "code"), ...marks.filter((k) => k === "code")];
+      return `${lead}${order.map((k) => WRAP[k]).join("")}${core}${[...order]
+        .reverse()
+        .map((k) => WRAP[k])
+        .join("")}${tail}`;
+    })
+    .join("");
+}
+
+function markdownOf(node: Y.XmlElement | Y.XmlText | Y.XmlHook, depth: number): string {
+  if (node instanceof Y.XmlText) return inlineMarkdown(node);
+  if (!(node instanceof Y.XmlElement)) return "";
+  const kids = node.toArray();
+  switch (node.nodeName) {
+    case "mention":
+      return `@${node.getAttribute("name") ?? ""}`;
+    case "image":
+    case "file":
+      return `[${node.nodeName}: ${node.getAttribute("name") ?? ""}]`;
+    case "paragraph":
+      return kids.map((c) => markdownOf(c, depth)).join("");
+    case "code_block":
+      return `\`\`\`\n${kids.map((c) => (c instanceof Y.XmlText ? c.toString().replace(/<[^>]*>/g, "") : "")).join("")}\n\`\`\``;
+    case "bullet_list":
+    case "ordered_list":
+      return kids.map((c, i) => `${"  ".repeat(depth)}${node.nodeName === "bullet_list" ? "-" : `${i + 1}.`} ${markdownOf(c, depth + 1)}`).join("\n");
+    case "list_item":
+      return kids.map((c, i) => (i === 0 ? markdownOf(c, depth) : `\n${markdownOf(c, depth)}`)).join("");
+    default:
+      return kids.map((c) => markdownOf(c, depth)).join("\n");
+  }
+}
+
+function hasMedia(node: Y.XmlElement | Y.XmlText | Y.XmlHook): boolean {
+  return node instanceof Y.XmlElement && (node.nodeName === "image" || node.nodeName === "file" || node.toArray().some(hasMedia));
+}
+
+export interface RichBlock {
+  id: string;
+  markdown: string;
+  media: boolean;
+}
+
+export function richOf(node: unknown): RichBlock | null {
+  if (!(node instanceof Y.XmlElement) || node.nodeName !== "block") return null;
+  const id = node.getAttribute("id");
+  return typeof id === "string" ? { id, markdown: markdownOf(node, 0).trim(), media: hasMedia(node) } : null;
+}
+
+export function richBlocks(doc: Y.Doc): Map<string, RichBlock> {
+  const out = new Map<string, RichBlock>();
+  for (const node of threadOf(doc).toArray()) {
+    const r = richOf(node);
+    if (r) out.set(r.id, r);
+  }
+  return out;
+}
+
 export function blockOf(node: unknown): Block | null {
   if (!(node instanceof Y.XmlElement) || node.nodeName !== "block") return null;
   const meta = metaOf(node);
