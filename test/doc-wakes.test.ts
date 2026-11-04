@@ -124,4 +124,23 @@ describe("the daemon's follower queues a wake for a finished block (T606)", () =
     f.stop();
     td.destroy();
   });
+
+  test("a seat nobody can wake doesn't read the channel to follow docs, until a way to wake it shows up", async () => {
+    let reads = 0;
+    let wanted = false;
+    const f = followDocs(
+      { alias: "unwoken", agent: "olivia", ch: { threadDoc: async () => ({}) as ThreadDoc, closeDoc: () => {} } },
+      async () => (reads++, { docs: new Map(), tasks: new Map() } as unknown as ChannelState),
+      () => {},
+      async () => wanted,
+    );
+    f.refresh(0);
+    await Bun.sleep(30);
+    expect(reads).toBe(0);
+    wanted = true;
+    f.refresh(0);
+    await Bun.sleep(30);
+    expect(reads).toBe(1);
+    f.stop();
+  });
 });

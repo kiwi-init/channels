@@ -116,6 +116,7 @@ interface WakeContext {
 export function seatWakes({ dir, wakeDelayMs, wakeGapMs, wakeOutstandingMs, stopped, current }: WakeContext): {
   scheduleWake: (seat: Seat, delay?: number) => void;
   stateOf: (seat: Seat) => Promise<ChannelState | null>;
+  wakeable: (seat: Seat) => Promise<boolean>;
 } {
   const sessions = new Map<string, { fp: string; session: Session }>();
   const nothingAt = new Map<string, number>();
@@ -260,5 +261,5 @@ export function seatWakes({ dir, wakeDelayMs, wakeGapMs, wakeOutstandingMs, stop
     }
   };
 
-  return { scheduleWake, stateOf };
+  return { scheduleWake, stateOf, wakeable: async (seat) => (await commandPath(seat)) !== null };
 }
