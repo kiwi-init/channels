@@ -85,6 +85,16 @@ describe("read receipts under your newest message (T641)", () => {
     expect(shown.find((m) => m.seq === first.seq)?.receipt).toBeUndefined()
   })
 
+  test("an agent handed it and busy is on it, until its reply lands (T2035)", () => {
+    const ask = wire({ from: "jow", to: ["win"], body: "can you look?" })
+    const marks = addMarks(new Map(), [{ pk: "pk-win", seq: ask.seq, at: 1 }])
+    const busy = (n: string) => (n === "win" ? { text: "running Bash", since: 1_000 } : null)
+    const working = [ask]
+    expect([...receiptsOf(fold(working, roster, 0), working, "jow", marks, (n) => `pk-${n}`, String, busy, 181_000)]).toEqual([[ask.seq, "win is on it · running Bash 3m"]])
+    const answered = [ask, wire({ from: "win", to: ["jow"], body: "done", re: [ask.seq] })]
+    expect([...receiptsOf(fold(answered, roster, 0), answered, "jow", marks, (n) => `pk-${n}`, String, busy, 181_000)]).toEqual([[ask.seq, "Read 1"]])
+  })
+
   test("nothing when no recipient has ever sent a mark", () => {
     const m = wire({ from: "jow", to: ["win"], body: "hi" })
     expect(receiptsOf(fold([m], roster, 0), [m], "jow", new Map(), (n) => `pk-${n}`, String).size).toBe(0)

@@ -23,7 +23,7 @@ import { usePublishFace } from "~/live/face"
 import { usePictures } from "~/live/pictures"
 import { isMuted } from "~/live/mute"
 import { usePrefs } from "~/live/prefs"
-import { receiptsOf, withReceipts } from "~/live/receipts"
+import { busyOf, receiptsOf, withReceipts } from "~/live/receipts"
 import { announce } from "~/kit/toasts"
 import { arrivals } from "~/live/persona-later"
 import { lastIn, seenKeyOf } from "~/live/seen-place"
@@ -114,7 +114,8 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const pins = usePinsHere(requests)
   const asks = useMemo(() => asksOf(state, messages, me, isOwner, requests, roster, pins), [state, messages, me, isOwner, requests, roster, pins])
   const rows = useMemo(() => messagesOf(state, messages, me, asks.askOf, pictures, pending), [state, messages, me, asks.askOf, pictures, pending])
-  const receipts = useMemo(() => receiptsOf(state, messages, me, marks, pkOf, clock), [state, messages, me, marks, pkOf])
+  const busy = useMemo(() => busyOf(people), [people])
+  const receipts = useMemo(() => receiptsOf(state, messages, me, marks, pkOf, clock, busy), [state, messages, me, marks, pkOf, busy])
   const mapped = useMemo(() => kept(code, withReceipts(rows, receipts)), [code, rows, receipts])
   const leftOut = useMemo(() => (isOwner ? leftOutOf(state, messages, me) : []), [isOwner, state, messages, me])
   const tasks = useMemo(() => tasksOf(state, asks.held, me, messages), [state, asks.held, me, messages])

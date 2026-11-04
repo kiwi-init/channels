@@ -71,3 +71,39 @@ export function receipt(m: Message, state: Pick<ChannelState, "members" | "tasks
   if (read.length === to.length) return `Read by everyone${when}`;
   return read.length <= 3 ? `Read by ${read.map((x) => x.n).join(", ")}` : `Read by ${read.length} of ${to.length}`;
 }
+
+/** What an agent is doing now, as the app shows it: "thinking", "running Bash", and since when. */
+export interface Busy {
+  text: string;
+  since?: number;
+}
+
+const ANSWERING = (seq: number): string => `answering #${seq}`;
+
+function lasted(ms: number): string {
+  const m = Math.floor(ms / 60_000);
+  return m < 1 ? "" : m < 60 ? ` ${m}m` : ` ${Math.floor(m / 60)}h`;
+}
+
+/**
+ * Who has a message: the agent holding its `kiwi answering` claim, while it lasts, else a recipient that
+ * was handed it (a read mark past it) and is busy now. Null once a recipient has replied in its thread.
+ */
+export function onIt(
+  m: Message,
+  state: Pick<ChannelState, "members" | "tasks" | "lead" | "facts">,
+  marks: Marks,
+  pkOf: (name: string) => string | undefined,
+  busy: (name: string) => Busy | null,
+  replied: (from: readonly string[]) => boolean,
+  now: number,
+): string | null {
+  const to = recipients(m, state);
+  if (!to.length || replied(to)) return null;
+  const claim = state.facts.get(ANSWERING(m.seq));
+  const held = claim && (claim.expires === undefined || claim.expires > now) && to.includes(claim.value) ? claim.value : null;
+  const who = held ?? to.find((n) => readAt(marks, pkOf(n), m.seq) !== null && busy(n) !== null);
+  if (!who) return null;
+  const b = busy(who);
+  return b ? `${who} is on it · ${b.text}${b.since ? lasted(now - b.since) : ""}` : `${who} is on it`;
+}
