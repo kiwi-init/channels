@@ -232,6 +232,9 @@ jobs:
       - name: ui the keyboard runs across doc blocks like an editor (arrows, word jumps, shift-select, select all), in WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-doc-keys.ts --dist ui/dist
+      - name: ui a remote edit landing between your keys never undoes your caret or selection (⇧← and ←), in Chromium and WebKit
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-doc-select-race.ts
       - name: ui a thread, a thread doc and a feed hold still once they open, in WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-still.ts --dist ui/dist
