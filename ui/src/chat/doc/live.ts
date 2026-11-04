@@ -20,6 +20,7 @@ export type OpenDoc = (th: string | null, on: (e: DocEvent) => void) => PipeIn
 export interface Poster {
   me: string
   post: (text: string, block: DocBlockRef, reply?: { re: number; quote?: string }) => Promise<boolean>
+  posted?: (block: string) => boolean
 }
 
 interface Changed {
@@ -56,7 +57,7 @@ export class LiveDoc implements Shared {
     this.ready = !th
     this.doc.on("update", this.onUpdate)
     this.awareness.on("change", this.onAware)
-    this.posting = poster ? postFinished(this.doc, { me: poster.me, local: (origin) => origin !== PIPE }, (b) => this.post(b)) : null
+    this.posting = poster ? postFinished(this.doc, { me: poster.me, local: (origin) => origin !== PIPE, posted: poster.posted }, (b) => this.post(b)) : null
     if (th) this.connect(th)
   }
 

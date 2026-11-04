@@ -599,7 +599,7 @@ export function ThreadDoc({
     const v = built.view
     view.current = v
     if (canWrite.current && !document.activeElement?.closest("input, textarea, [contenteditable='true']")) {
-      v.dispatch(startBlock(v.state, me, Date.now()))
+      v.dispatch(startBlock(v.state, me, Date.now(), drafts.current.posted))
       v.focus()
     }
     return () => {
@@ -617,7 +617,7 @@ export function ThreadDoc({
     if (!v || !replying || !to) return
     replying.set(null)
     if (!canWrite.current) return
-    v.dispatch(replyIn(v.state, me, Date.now(), to.seq, replying.excerpt))
+    v.dispatch(replyIn(v.state, me, Date.now(), to.seq, replying.excerpt, drafts.current.posted))
     v.focus()
     const at = v.domAtPos(v.state.selection.head).node
     const el = at instanceof HTMLElement ? at : at.parentElement
@@ -632,7 +632,7 @@ export function ThreadDoc({
     const onKey = (e: KeyboardEvent) => {
       const v = view.current
       if (!v || !canWrite.current || !typedAnywhere(e) || document.querySelector("dialog[open]")) return
-      v.dispatch(startBlock(v.state, me, Date.now()).scrollIntoView())
+      v.dispatch(startBlock(v.state, me, Date.now(), drafts.current.posted).scrollIntoView())
       v.focus()
     }
     window.addEventListener("keydown", onKey)
@@ -676,7 +676,7 @@ export function ThreadDoc({
   const write = () => {
     const v = view.current
     if (!v || !canWrite.current) return
-    v.dispatch(startBlock(v.state, me, Date.now()).scrollIntoView())
+    v.dispatch(startBlock(v.state, me, Date.now(), drafts.current.posted).scrollIntoView())
     v.focus()
   }
 
@@ -734,9 +734,12 @@ export function LiveThreadDoc({ channel, where, thread, hold }: { channel: Chann
   )
   const me = channel.you
   const here = useRef(where)
+  const sent = useMemo(() => postedBlocks(channel.messages), [channel.messages])
+  const known = useRef(sent)
 
   useEffect(() => {
     here.current = where
+    known.current = sent
   })
 
   useEffect(() => {
@@ -750,6 +753,7 @@ export function LiveThreadDoc({ channel, where, thread, hold }: { channel: Chann
           {
             me,
             post: (text, block, reply) => actions.send(code, here.current, reply?.quote ? withExcerpt(reply.quote, text) : text, { block, ...(reply ? { replyTo: reply.re } : {}) }),
+            posted: (block) => known.current.has(block),
           }
         )
     )
