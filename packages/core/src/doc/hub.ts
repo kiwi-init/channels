@@ -67,8 +67,12 @@ export class DocHub {
   }
 
   attach(send: (raw: string) => void): () => void {
+    const was = this.sockets.at(-1);
     this.sockets.push(send);
-    if (this.sockets.length === 1) for (const { td } of this.byTh.values()) td.reconnect();
+    for (const { td } of this.byTh.values()) {
+      was?.(JSON.stringify({ t: "doc.unsub", th: td.th } satisfies DocOut));
+      td.reconnect();
+    }
     return () => {
       const at = this.sockets.indexOf(send);
       if (at < 0) return;

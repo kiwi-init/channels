@@ -1,11 +1,12 @@
-import { Fragment, startTransition, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { Fragment, startTransition, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 
 import { Composer } from "~/chat/composer"
 import { docThread } from "@kiwi/core/doc/threads.ts"
 import { EventRun } from "~/chat/events"
 import { continuesRun, eventRun } from "~/chat/fold-events"
 import { foldText, leftOutRun, runFirst, withLeftOut } from "~/chat/left-out"
-import { inFeed } from "~/chat/doc/posted"
+import { docFeeds, EMPTY_FEED, withLines } from "~/chat/doc/finished"
+import { inFeed, postedBlocks } from "~/chat/doc/posted"
 import { chatterLine, chatterRuns, type ChatterRun } from "~/chat/chatter"
 import { MessageRow } from "~/chat/message"
 import { linked } from "~/chat/linked"
@@ -246,16 +247,28 @@ export function Conversation({ channel, jump }: { channel: Channel; jump: Jump |
 function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Where; spot: Spot | null; jump: Jump | null; doc: string | null }) {
   const { go } = useApp()
   const specAsks = useMemo(() => new Set((channel.specs ?? []).map((s) => s.ask)), [channel.specs])
-  const all = useMemo(
-    () =>
-      withLeftOut(
-        channel.messages.filter(
-          (m) => sameWhere(m.where, where) && (!m.side || where.kind === "task") && inFeed(m, !!doc) && (where.kind !== "room" || m.inThread === undefined || !specAsks.has(m.inThread))
-        ),
-        (channel.leftOut ?? []).filter((m) => sameWhere(m.where, where))
+  const feeds = useSyncExternalStore(docFeeds.subscribe, docFeeds.get)
+  const all = useMemo(() => {
+    const fromDoc = doc ? (feeds.get(`${channel.code}\n${doc}`) ?? EMPTY_FEED) : EMPTY_FEED
+    const feed = withLeftOut(
+      channel.messages.filter(
+        (m) =>
+          sameWhere(m.where, where) &&
+          (!m.side || where.kind === "task") &&
+          inFeed(m, !!doc) &&
+          !(m.block !== undefined && fromDoc.media.has(m.block)) &&
+          (where.kind !== "room" || m.inThread === undefined || !specAsks.has(m.inThread))
       ),
-    [channel.messages, channel.leftOut, where, specAsks, doc]
-  )
+      (channel.leftOut ?? []).filter((m) => sameWhere(m.where, where))
+    )
+    if (!doc) return feed
+    const posted = postedBlocks(channel.messages)
+    return withLines(
+      feed,
+      fromDoc.lines.filter((l) => !posted.has(l.id)),
+      where
+    )
+  }, [channel.messages, channel.leftOut, channel.code, where, specAsks, doc, feeds])
   const general = where.kind === "room" && where.room === "general"
   const compact = general ? channel.compact : undefined
   const proposal = general ? channel.proposal : undefined

@@ -199,6 +199,28 @@ describe("the doc hub keeps each thread's doc on the live socket", () => {
     expect(texts(db.doc)).toEqual(["typed offline"]);
   });
 
+  test("with two sockets, when the one that subscribed drops, the doc still gets the others' edits (T1444)", async () => {
+    const w = await world();
+    const [ana, bo] = await Promise.all([generateIdentity("ana"), generateIdentity("bo")]);
+    const a = w.hubFor(ana);
+    const b = w.hubFor(bo);
+    const first = w.plug(a);
+    const sb = w.plug(b).s;
+    const da = await a.open("T4");
+    const db = await b.open("T4", da.th);
+    await w.settle(first.s, sb);
+    const second = w.plug(a).s;
+    await w.settle(first.s, second, sb);
+    w.relay.hang(first.s);
+    first.unplug();
+    newBlock(db.doc, "text", "bo", "after the drop");
+    await w.settle(second, sb);
+    expect(texts(da.doc)).toEqual(["after the drop"]);
+    newBlock(da.doc, "text", "ana", "and back");
+    await w.settle(second, sb);
+    expect(texts(db.doc)).toEqual(["after the drop", "and back"]);
+  });
+
   test("two who open the same thread at once end up in the winner's doc with both their words", async () => {
     const w = await world();
     const [ana, bo] = await Promise.all([generateIdentity("ana"), generateIdentity("bo")]);
