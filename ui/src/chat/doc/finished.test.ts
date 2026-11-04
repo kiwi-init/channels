@@ -3,7 +3,7 @@ import { appendToBlock, blocksOf, markBack, markPosted, newBlock, richBlocks, ty
 import { prosemirrorToYDoc } from "y-prosemirror"
 import * as Y from "yjs"
 
-import { docFeed, withLines } from "~/chat/doc/finished"
+import { docFeed, withDocMedia, withLines, withoutMediaNames } from "~/chat/doc/finished"
 import { FRAGMENT, schema } from "~/chat/doc/schema"
 import type { Message } from "~/model"
 
@@ -13,6 +13,7 @@ const where = { kind: "room", room: "general" } as const
 
 const line = (id: string, author: string, at: number, extra: Partial<Block> = {}): Block => ({ id, kind: "text", author, at, text: `${author} at ${at}`, ...extra })
 const msg = (seq: number, at: number): Message => ({ seq, from: "atlas", at, text: `#${seq}`, where })
+const shot = { name: "a.png", mime: "image/png", ref: { id: "img-1", key: "k", size: 3 } }
 
 describe("a posted doc line keeps its formatting (T1463)", () => {
   test("a block reads as markdown: marks, mentions, lists and code; an image makes it a media block", () => {
@@ -38,7 +39,7 @@ describe("a posted doc line keeps its formatting (T1463)", () => {
 })
 
 describe("finished doc lines with no message sit in the feed at their time (T1354)", () => {
-  test("a finished line with no message moves to the feed and leaves the doc; a draft, a posted line and a media line stay", () => {
+  test("a finished line with no message moves to the feed and leaves the doc, media and all; a draft and a posted line stay", () => {
     const blocks = [
       line("old-sent", "atlas", T + 10, { kind: "agent", sent: true }),
       line("jow-1", "jow", T + 20),
@@ -47,10 +48,29 @@ describe("finished doc lines with no message sit in the feed at their time (T135
       line("jow-draft", "jow", T + 50),
     ]
     const rich = new Map([["media", { id: "media", markdown: "look [image: a.png]", media: true }]])
-    const feed = docFeed(blocks, rich, new Set(["posted"]), T)
-    expect(feed.lines.map((l) => l.id)).toEqual(["old-sent", "jow-1"])
-    expect([...feed.hidden].sort()).toEqual(["jow-1", "old-sent"])
-    expect([...feed.media]).toEqual(["media"])
+    const feed = docFeed(blocks, rich, new Set(["posted"]), T, (id) => ({ imgs: id === "media" ? [shot] : [], files: [] }))
+    expect(feed.lines.map((l) => l.id)).toEqual(["old-sent", "jow-1", "media"])
+    expect(feed.lines.at(-1)?.media).toEqual({ imgs: [shot], files: [] })
+    expect([...feed.hidden].sort()).toEqual(["jow-1", "media", "old-sent"])
+    expect([...feed.media.keys()]).toEqual(["media"])
+  })
+
+  test("a sent line with an image keeps its place among messages: its media rides on its message, and a draft's media stays in the doc (T3445)", () => {
+    const blocks = [line("pic", "jow", T + 10, { sent: true }), line("pic-draft", "jow", T + 30)]
+    const rich = new Map([
+      ["pic", { id: "pic", markdown: "look [image: a.png]", media: true }],
+      ["pic-draft", { id: "pic-draft", markdown: "[image: b.png]", media: true }],
+    ])
+    const feed = docFeed(blocks, rich, new Set(["pic"]), T, () => ({ imgs: [shot], files: [] }))
+    expect(feed.lines).toEqual([])
+    expect(feed.hidden.has("pic-draft")).toBe(false)
+    expect([...feed.media.keys()]).toEqual(["pic"])
+  })
+
+  test("an image-only line with no message still becomes a feed row", () => {
+    const rich = new Map([["only", { id: "only", markdown: "", media: true }]])
+    const feed = docFeed([line("only", "jow", T + 10, { sent: true, text: "" })], rich, new Set(), T, () => ({ imgs: [shot], files: [] }))
+    expect(feed.lines).toEqual([{ id: "only", author: "jow", at: T + 10, text: "", media: { imgs: [shot], files: [] } }])
   })
 
   test("a finished line older than the oldest loaded message leaves the doc but doesn't come back as a feed row", () => {
@@ -72,6 +92,27 @@ describe("finished doc lines with no message sit in the feed at their time (T135
     expect(rows[1]).toMatchObject({ from: "jow", block: "x", fromDoc: true })
     expect(rows[1]!.seq).toBeGreaterThan(1)
     expect(rows[1]!.seq).toBeLessThan(2)
+  })
+
+  test("a row drawing its images drops their [image: …] placeholders, and keeps the rest of the text", () => {
+    const files = { imgs: [shot], files: [{ name: "r.pdf", mime: "application/pdf", size: 9, pieces: [] }] }
+    expect(withoutMediaNames("look [image: a.png]\n[file: r.pdf]\nsee [image: other.png]", files)).toBe("look\n\nsee [image: other.png]")
+    expect(withoutMediaNames("[image: a.png]", files)).toBe("")
+  })
+
+  test("a feed row from an image line carries the image", () => {
+    const rows = withLines([msg(1, T + 10)], [{ id: "x", author: "jow", at: T + 20, text: "look", media: { imgs: [shot], files: [] } }], where)
+    expect(rows[1]).toMatchObject({ block: "x", docMedia: { imgs: [shot], files: [] } })
+  })
+
+  test("a message that brings its own images, as a CLI --image send does, doesn't draw its block's copies too; its block's files still show", () => {
+    const pdf = { name: "r.pdf", mime: "application/pdf", size: 9, pieces: [] }
+    const cli: Message = { ...msg(3, T), block: "b", images: [{ spot: "s1", alt: "a.png", state: "waiting" }] }
+    expect(withDocMedia(cli, { imgs: [shot], files: [] })).toBe(cli)
+    expect(withDocMedia(cli, { imgs: [shot], files: [pdf] }).docMedia).toEqual({ imgs: [], files: [pdf] })
+    const pasted: Message = { ...msg(4, T), block: "c" }
+    expect(withDocMedia(pasted, { imgs: [shot], files: [] }).docMedia).toEqual({ imgs: [shot], files: [] })
+    expect(withDocMedia(pasted, undefined)).toBe(pasted)
   })
 })
 

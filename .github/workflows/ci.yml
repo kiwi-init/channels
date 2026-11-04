@@ -166,6 +166,9 @@ jobs:
       - name: doc paste, an image pasted into a line goes out with that line
         if: ${{ !cancelled() }}
         run: bun scripts/ui-doc-paste.ts
+      - name: doc image order, a sent line with an image stays above the lines sent after it
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-doc-image-order.ts
       - name: doc fuzzer, fixed seeds, two windows of one person and an agent never lose or mix a line
         if: ${{ !cancelled() }}
         run: |

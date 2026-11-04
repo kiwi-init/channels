@@ -6,7 +6,7 @@ import { useEditingIn } from "~/chat/editing"
 import { EventRun } from "~/chat/events"
 import { continuesRun, eventRun } from "~/chat/fold-events"
 import { foldText, leftOutRun, runFirst, withLeftOut } from "~/chat/left-out"
-import { docFeeds, EMPTY_FEED, withLines } from "~/chat/doc/finished"
+import { docFeeds, EMPTY_FEED, withDocMedia, withLines } from "~/chat/doc/finished"
 import { inFeed, postedBlocks } from "~/chat/doc/posted"
 import { chatterLine, chatterRuns, type ChatterRun } from "~/chat/chatter"
 import { MessageRow } from "~/chat/message"
@@ -331,14 +331,9 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
   const all = useMemo(() => {
     const fromDoc = doc ? (feeds.get(`${channel.code}\n${doc}`) ?? EMPTY_FEED) : EMPTY_FEED
     const feed = withLeftOut(
-      channel.messages.filter(
-        (m) =>
-          sameWhere(m.where, where) &&
-          (!m.side || where.kind === "task") &&
-          inFeed(m, !!doc) &&
-          !(m.block !== undefined && fromDoc.media.has(m.block)) &&
-          (where.kind !== "room" || m.inThread === undefined || !specAsks.has(m.inThread))
-      ),
+      channel.messages
+        .filter((m) => sameWhere(m.where, where) && (!m.side || where.kind === "task") && inFeed(m, !!doc) && (where.kind !== "room" || m.inThread === undefined || !specAsks.has(m.inThread)))
+        .map((m) => withDocMedia(m, m.block === undefined ? undefined : fromDoc.media.get(m.block))),
       (channel.leftOut ?? []).filter((m) => sameWhere(m.where, where))
     )
     if (!doc) return feed

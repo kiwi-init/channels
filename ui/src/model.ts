@@ -298,6 +298,11 @@ export interface DocFile {
   pieces: { id: string; key: string; size: number }[]
 }
 
+export interface BlockFiles {
+  imgs: readonly DocImage[]
+  files: readonly DocFile[]
+}
+
 export interface Upload {
   name: string
   mime: string
@@ -355,6 +360,7 @@ export interface Message {
   task?: number
   prs?: PullRequest[]
   images?: (Image | ImageSpot)[]
+  docMedia?: BlockFiles
   reactions?: Reaction[]
   ask?: string
   system?: boolean

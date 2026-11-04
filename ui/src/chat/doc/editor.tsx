@@ -21,7 +21,7 @@ import { linksPlugin } from "~/chat/doc/links"
 import { fileDrag, takeDropped } from "@kiwi/app/dropped.ts"
 import { emptyPaste, takePasted } from "@kiwi/app/pasted.ts"
 import { fileView, filesIn, imageView, uploadAll, type DocMedia } from "~/chat/doc/media"
-import { blocksOf, richBlocks } from "@kiwi/core/doc/blocks.ts"
+import { blocksOf, mediaOfBlock, richBlocks } from "@kiwi/core/doc/blocks.ts"
 import { DOC_LEVEL, onWriterFloor, writerFloor } from "@kiwi/core/doc/level.ts"
 import { docFeed, oldestAt, setDocFeed } from "~/chat/doc/finished"
 import { postedBlocks } from "~/chat/doc/posted"
@@ -40,7 +40,7 @@ import { Icon } from "~/kit/icons"
 import { Avatar, cx, Dot, STATUS_WORDS } from "~/kit/bits"
 import { clock } from "~/kit/time"
 import { announce } from "~/kit/toasts"
-import type { Channel, Message, Person, QuestionAsk, Task, Where } from "~/model"
+import type { BlockFiles, Channel, Message, Person, QuestionAsk, Task, Where } from "~/model"
 import { nickname } from "~/names"
 import { sameWhere, useAct, useApp } from "~/nav"
 
@@ -595,6 +595,11 @@ function typedAnywhere(e: KeyboardEvent): boolean {
 
 const within = (r: DOMRect, x: number, y: number): boolean => x >= r.left && x <= r.right && y >= r.top && y <= r.bottom
 
+function filesOf(doc: Y.Doc, block: string): BlockFiles {
+  const { imgs, files } = mediaOfBlock(doc, block)
+  return { imgs: imgs.flatMap((i) => (i.ref ? [{ name: i.name, mime: i.mime, ref: i.ref }] : [])), files }
+}
+
 export function ThreadDoc({
   channel,
   where,
@@ -643,10 +648,10 @@ export function ThreadDoc({
 
   useLayoutEffect(() => {
     const publish = () => {
-      const feed = docFeed(blocksOf(shared.doc), richBlocks(shared.doc), sent, since)
+      const feed = docFeed(blocksOf(shared.doc), richBlocks(shared.doc), sent, since, (block) => filesOf(shared.doc, block))
       setDocFeed(feedKey, feed)
       drafts.current = {
-        posted: (block) => sent.has(block) && !feed.media.has(block),
+        posted: (block) => sent.has(block),
         inFeed: (block) => feed.hidden.has(block),
         made: (block) => shared.made.has(block),
         version: drafts.current.version + 1,
