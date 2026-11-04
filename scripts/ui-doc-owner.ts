@@ -143,33 +143,77 @@ async function shown(p: Person): Promise<string[]> {
 }
 
 let failed = 0;
+interface Posted {
+  from: string;
+  body: string;
+  block?: { id: string };
+}
+
+const isPosted = (m: unknown): m is Posted => !!m && typeof m === "object" && "from" in m && typeof m.from === "string" && "body" in m && typeof m.body === "string";
+
+async function posted(): Promise<Posted[]> {
+  const out = await bot("log", "--json", "-n", "300");
+  return out.split("\n").flatMap((l): Posted[] => {
+    try {
+      const m: unknown = JSON.parse(l);
+      return isPosted(m) ? [m] : [];
+    } catch {
+      // kiwi log --json can print a note line (compacted history) that isn't a message.
+      return [];
+    }
+  });
+}
+
+async function sentAs(line: Here, waitMs: number): Promise<Posted | null> {
+  const end = Date.now() + waitMs;
+  for (;;) {
+    const got = (await posted()).find((m) => m.from === "harry" && m.block?.id === line.id) ?? null;
+    if (got || Date.now() > end) return got;
+    await Bun.sleep(300);
+  }
+}
+
+async function report(what: string, why: string | null, jow: Person, harry: Person): Promise<void> {
+  if (why) failed++;
+  console.log(`${why ? "✗" : "✓"} ${what}${why ? `: ${why}` : ""}`);
+  if (!why && !process.env.OWNER_DEBUG) return;
+  for (const p of [jow, harry]) console.log(`    ${p.label} sees:\n${(await shown(p)).map((l) => `      ${l}`).join("\n")}`);
+  console.log(
+    `    sent:\n${(await posted())
+      .slice(-6)
+      .map((m) => `      ${m.from} ${m.block?.id.slice(0, 6) ?? "(no line)"} ${JSON.stringify(m.body)}`)
+      .join("\n")}`,
+  );
+}
+
+function whose(typed: Here | null, text: string): string | null {
+  if (!typed) return "harry's caret is in no line";
+  if (typed.author !== "harry") return `harry typed into a line by ${JSON.stringify(typed.author)} (${typed.id.slice(0, 6)} ${JSON.stringify(typed.text)})`;
+  if (!typed.text.includes(text)) return `harry's line reads ${JSON.stringify(typed.text)}, not his ${JSON.stringify(text)}`;
+  return null;
+}
+
 async function harrySends(what: string, jow: Person, harry: Person, text: string): Promise<void> {
   await typeIn(harry, text);
   const typed = await here(harry);
   await harry.page.keyboard.press(SEND);
-  await Bun.sleep(SETTLE_MS);
-  const out = await bot("show", "general");
-  const went = out.split("\n").some((l) => l.includes("harry") && l.trim().endsWith(text));
-  const why = !typed
-    ? "harry's caret is in no line"
-    : typed.author !== "harry"
-      ? `harry typed into a line by ${JSON.stringify(typed.author)} (${typed.id.slice(0, 6)} ${JSON.stringify(typed.text)})`
-      : !went
-        ? "harry's line never went out"
-        : null;
-  if (why) failed++;
-  console.log(`${why ? "✗" : "✓"} ${what}${why ? `: ${why}` : ""}`);
-  if (why || process.env.OWNER_DEBUG) {
-    for (const p of [jow, harry]) console.log(`    ${p.label} sees:\n${(await shown(p)).map((l) => `      ${l}`).join("\n")}`);
-    console.log(
-      `    CLI:\n${out
-        .split("\n")
-        .filter((l) => l.trim())
-        .slice(-6)
-        .map((l) => `      ${l.trim()}`)
-        .join("\n")}`,
-    );
-  }
+  const wrong = whose(typed, text);
+  const got = typed && !wrong ? await sentAs(typed, SETTLE_MS * 4) : null;
+  const why =
+    wrong ?? (!got ? "harry's line never went out" : got.body.trim() !== typed!.text.trim() ? `harry's line went out as ${JSON.stringify(got.body)}, not ${JSON.stringify(typed!.text)}` : null);
+  await report(what, why, jow, harry);
+}
+
+async function harryPressesEnter(what: string, jow: Person, harry: Person, text: string): Promise<void> {
+  await typeIn(harry, text);
+  const typed = await here(harry);
+  await harry.page.keyboard.press("Enter");
+  const wrong = whose(typed, text);
+  const early = typed && !wrong ? await sentAs(typed, SETTLE_MS) : null;
+  await harry.page.keyboard.press(SEND);
+  const got = typed && !wrong && !early ? await sentAs(typed, SETTLE_MS * 4) : null;
+  const why = wrong ?? (early ? "Enter sent harry's line" : !got ? "harry's line never went out on ⌘↩ after Enter" : null);
+  await report(what, why, jow, harry);
 }
 
 const want = (name: string): boolean => !ONLY || ONLY.split(",").includes(name);
@@ -186,6 +230,11 @@ try {
   await general(jow);
   await general(harry);
   console.log("ok  jow and harry each have #general open, in their own browser");
+
+  if (want("enter")) {
+    await startLine(harry);
+    await harryPressesEnter("harry presses Enter: the line stays his draft; ⌘↩ then sends it", jow, harry, "harry so deu enter");
+  }
 
   if (want("idle")) {
     await startLine(jow);
