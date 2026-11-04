@@ -44,6 +44,7 @@ import { sameWhere, useAct, useApp } from "~/nav"
 const QuestionCard = lazy(() => import("~/chat/question-card"))
 
 const IDLE_MS = 4000
+const SEND_KEYS = typeof navigator !== "undefined" && /Mac/.test(navigator.platform) ? "⌘↩" : "Ctrl+Enter"
 
 type HeadList = readonly (readonly [HTMLElement, number, BlockAttrs])[]
 
@@ -826,7 +827,7 @@ export function ThreadDoc({
   }
 
   return (
-    <div ref={box} className={cx("thread-doc", readOnly && "is-read-only")} style={{ "--place": JSON.stringify(prompt) } as CSSProperties}>
+    <div ref={box} className={cx("thread-doc", readOnly && "is-read-only")} style={{ "--place": JSON.stringify(`${prompt} · ${SEND_KEYS} sends`) } as CSSProperties}>
       <div ref={mount} />
       {dropping && (
         <div className="doc-drop" aria-hidden="true">

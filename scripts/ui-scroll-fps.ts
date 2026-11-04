@@ -276,11 +276,11 @@ try {
     await page.evaluate(() => document.querySelector(".main .feed")?.scrollTo({ top: 1e9 }));
     await page.waitForTimeout(200);
     await page.keyboard.type(`perf send ${i}`);
-    sends.push(await watch(page, 1200, () => page.keyboard.press("Enter")));
+    sends.push(await watch(page, 1200, () => page.keyboard.press("ControlOrMeta+Enter")));
     await page.keyboard.type(`perf send up ${i}`);
     await page.evaluate(() => document.querySelector(".main .feed")?.scrollBy({ top: -3000 }));
     await page.waitForTimeout(200);
-    sendsUp.push(await watch(page, 1200, () => page.keyboard.press("Enter")));
+    sendsUp.push(await watch(page, 1200, () => page.keyboard.press("ControlOrMeta+Enter")));
   }
   report.sendAtBottom = stats(sends, longOn);
   report.sendScrolledUp = stats(sendsUp, longOn);
