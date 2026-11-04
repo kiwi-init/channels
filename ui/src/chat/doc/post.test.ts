@@ -4,6 +4,7 @@ import { appendToBlock, blocksOf, newBlock, threadOf, type BlockKind } from "@ki
 import { heldPipe } from "@kiwi/core/doc/held-pipe.ts"
 
 import type { DocEvent } from "../../../../desktop/src/bridge.ts"
+import { giveBackBlock } from "~/chat/doc/give-back"
 import { LiveDoc } from "~/chat/doc/live"
 import { postFinished, type Finished } from "~/chat/doc/post"
 
@@ -152,5 +153,28 @@ describe("a person's block posts as their message when they press Enter", () => 
     await wait(0)
     expect(sentOf(id)).toBe(true)
     live.destroy()
+  })
+
+  test("a retried line the channel refuses comes back as a draft in its own doc only, and posts again (T1465)", () => {
+    const a = new Y.Doc()
+    const b = new Y.Doc()
+    const posts: string[] = []
+    const posting = postFinished(a, { me: "jow", local: (o) => o !== REMOTE }, (f) => posts.push(f.text))
+    const other = postFinished(b, { me: "jow", local: (o) => o !== REMOTE }, () => {})
+    const sentOf = (d: Y.Doc, id: string) => blocksOf(d).find((x) => x.id === id)?.sent ?? false
+    const id = start(a, "jow", "ship it")
+    const elsewhere = start(b, "jow", "not this one")
+    start(a, "jow")
+    start(b, "jow")
+    expect([sentOf(a, id), sentOf(b, elsewhere)]).toEqual([true, true])
+    giveBackBlock(id)
+    expect([sentOf(a, id), sentOf(b, elsewhere)]).toEqual([false, true])
+    a.transact(() => threadOf(a).delete(threadOf(a).length - 1, 1))
+    start(a, "jow")
+    expect(posts).toEqual(["ship it", "ship it"])
+    posting.stop()
+    other.stop()
+    giveBackBlock(elsewhere)
+    expect(sentOf(b, elsewhere)).toBe(true)
   })
 })

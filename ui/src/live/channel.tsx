@@ -15,7 +15,7 @@ import { sendsInTurn } from "@kiwi/app/send-order.ts"
 import { markSeenIn, roomsFrom, seenIn, sendFrom, useSeen } from "@kiwi/app/threads.ts"
 import { useNewMembers, useNewPowers } from "~/live/defaults"
 import { kept } from "~/live/keep"
-import { changeUnsent, nextUnsentKey, unsentIn } from "~/live/unsent"
+import { changeUnsent, nextUnsentKey, resendOf, unsentIn } from "~/live/unsent"
 import { asksOf, directsOf, groupsOf, issuesOf, leftOutOf, messagesOf, formerOf, nextOf, peopleOf, prsOf, roomsOf, tasksOf, theirsOf, type Pending } from "~/live/map"
 import { iconUrl } from "~/live/icon"
 import { usePinsHere } from "~/live/pins"
@@ -34,6 +34,7 @@ import { appCan } from "~/live/app-can"
 import { useMarksSync } from "~/live/read-sync"
 import { refusal } from "~/live/refused"
 import { backWords, composerKey, giveBack } from "~/chat/drafts"
+import { giveBackBlock } from "~/chat/doc/give-back"
 import { stashText } from "~/chat/stash"
 import { dmInRoom, dmRoomOf } from "~/live/dm"
 import { freeOf, specAsksOf, specsOf } from "~/live/specs"
@@ -301,12 +302,12 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       const p = pending.find((x) => x.key === key)
       if (!p) throw new Error("that message is gone")
       discard(key)
-      return post(p.where, p.text, {
-        ...(p.inThread !== undefined ? { inThread: p.inThread } : {}),
-        ...(p.side ? { side: true as const } : {}),
-        ...(p.replyTo !== undefined ? { replyTo: p.replyTo } : {}),
-        ...(p.images?.length ? { images: p.images } : {}),
-      })
+      try {
+        return await post(p.where, p.text, resendOf(p))
+      } catch (err) {
+        if (p.block && refusal(err) !== null) giveBackBlock(p.block.id)
+        throw err
+      }
     },
     [pending, discard, post]
   )
