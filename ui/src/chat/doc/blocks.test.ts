@@ -15,6 +15,10 @@ function texts(state: EditorState): string[] {
   return blocks(state.doc).map((b) => `${attrsOf(b.node).author}:${b.node.textContent}`)
 }
 
+function sent(block: Node): Node {
+  return block.type.create({ ...block.attrs, sent: "1" }, block.content)
+}
+
 function caretAtEnd(state: EditorState, index: number): EditorState {
   const b = blocks(state.doc)[index]
   if (!b) throw new Error("no block")
@@ -46,6 +50,22 @@ describe("starting to write in a thread", () => {
     const s = stateOf(makeBlock("text", "maya", T))
     const next = s.apply(startBlock(s, "jow", T))
     expect(texts(next)).toEqual(["maya:", "jow:"])
+  })
+
+  test("your unsent line keeps the caret: starting to write goes to its end, never a new block that would send it (T1464)", () => {
+    const s = stateOf(makeBlock("text", "jow", T, "half a"), makeBlock("agent", "atlas", T + 1, "on it"))
+    const next = s.apply(startBlock(s, "jow", T + 2))
+    expect(texts(next)).toEqual(["jow:half a", "atlas:on it"])
+    expect(next.selection.$from.index(0)).toBe(0)
+    expect(next.selection.$from.parentOffset).toBe(6)
+  })
+
+  test("a sent line, or one already a message, doesn't hold the caret: a new block of yours starts", () => {
+    const s = stateOf(sent(makeBlock("text", "jow", T, "done")), makeBlock("text", "maya", T + 1, "hi"))
+    expect(texts(s.apply(startBlock(s, "jow", T + 2)))).toEqual(["jow:done", "maya:hi", "jow:"])
+    const p = stateOf(makeBlock("text", "jow", T, "done"), makeBlock("text", "maya", T + 1, "hi"))
+    const id = attrsOf(p.doc.child(0)).id
+    expect(texts(p.apply(startBlock(p, "jow", T + 2, (b) => b === id)))).toEqual(["jow:done", "maya:hi", "jow:"])
   })
 })
 
@@ -134,6 +154,14 @@ describe("dropping an image into the doc", () => {
     expect(texts(next)).toEqual(["maya:hi", "jow:[image: shot.png]"])
     expect(kinds(next.doc.child(1))).toEqual(["image", "paragraph"])
   })
+
+  test("dropped while you're in someone else's block, it joins your unsent line instead of sending it early (T1464)", () => {
+    const s = caretAtEnd(stateOf(makeBlock("text", "jow", T, "look"), makeBlock("text", "maya", T + 1, "hi")), 1)
+    const next = s.apply(attach(s, "jow", T + 2, [shot])!)
+    expect(next.doc.childCount).toBe(2)
+    expect(kinds(next.doc.child(0))).toEqual(["paragraph", "image", "paragraph"])
+    expect(next.selection.$from.index(0)).toBe(0)
+  })
 })
 
 describe("joining blocks like paragraphs", () => {
@@ -170,6 +198,12 @@ describe("joining blocks like paragraphs", () => {
     const posted = (block: string) => block === sent
     expect(joinBack(s, "jow", posted)).toBeNull()
     expect(joinForward(caretAtEnd(s, 0), "jow", posted)).toBeNull()
+  })
+
+  test("never into a line already sent, even before its message arrives (T1464)", () => {
+    const s = caretAtStart(stateOf(sent(makeBlock("text", "jow", T, "sent")), makeBlock("text", "jow", T + 1, "draft")), 1)
+    expect(joinBack(s, "jow")).toBeNull()
+    expect(joinForward(caretAtEnd(s, 0), "jow")).toBeNull()
   })
 
   test("only from the very start or end: mid-text and the first block do nothing", () => {

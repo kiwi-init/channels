@@ -5,7 +5,7 @@ import { liftListItem, sinkListItem, splitListItem } from "prosemirror-schema-li
 import { redo, undo } from "y-prosemirror"
 
 import { blockAfter, blockAt, blocks, endsBlock, isEmpty, joinBack, joinForward, startBlock } from "~/chat/doc/blocks"
-import { attrsOf, schema } from "~/chat/doc/schema"
+import { attrsOf, isSent, schema } from "~/chat/doc/schema"
 
 function inCode(state: EditorState): boolean {
   return !!state.selection.$from.parent.type.spec.code
@@ -48,10 +48,12 @@ const startOfItem: Command = (state, dispatch) => {
   return liftListItem(schema.nodes.list_item)(state, dispatch)
 }
 
-function dropOwnEmpty(me: string): Command {
+export function dropOwnEmpty(me: string, posted: (block: string) => boolean): Command {
   return (state, dispatch) => {
     const here = blockAt(state)
     if (!here || here.index === 0 || !isEmpty(here.node) || attrsOf(here.node).author !== me) return false
+    const prev = state.doc.child(here.index - 1)
+    if (isSent(prev) || posted(attrsOf(prev).id)) return true
     if (dispatch) {
       const tr = state.tr.setMeta("addToHistory", false).delete(here.pos, here.pos + here.node.nodeSize)
       dispatch(tr.setSelection(TextSelection.near(tr.doc.resolve(here.pos - 1), -1)).scrollIntoView())
@@ -68,13 +70,13 @@ function join(me: string, how: typeof joinBack, posted: (block: string) => boole
   }
 }
 
-function toYourLine(me: string): Command {
+function toYourLine(me: string, posted: (block: string) => boolean): Command {
   return (state, dispatch, view) => {
     const { $from, empty } = state.selection
     const last = blocks(state.doc).at(-1)
     if (!empty || !last || $from.index(0) !== last.index || (view && !view.endOfTextblock("down"))) return false
     if (isEmpty(last.node) && attrsOf(last.node).author === me) return false
-    if (dispatch) dispatch(startBlock(state, me, Date.now()).scrollIntoView())
+    if (dispatch) dispatch(startBlock(state, me, Date.now(), posted).scrollIntoView())
     return true
   }
 }
@@ -112,9 +114,9 @@ export function docKeys(me: string, now: () => number, blur: () => void, posted:
       "Shift-Enter": chainCommands(newline, splitListItem(item), splitBlock),
       Tab: (state, dispatch) => inList(state) && (sinkListItem(item)(state, dispatch) || true),
       "Shift-Tab": (state, dispatch) => inList(state) && (liftListItem(item)(state, dispatch) || true),
-      Backspace: chainCommands(dropOwnEmpty(me), startOfItem, join(me, joinBack, posted)),
+      Backspace: chainCommands(dropOwnEmpty(me, posted), startOfItem, join(me, joinBack, posted)),
       Delete: join(me, joinForward, posted),
-      ArrowDown: toYourLine(me),
+      ArrowDown: toYourLine(me, posted),
       Escape: () => {
         blur()
         return true

@@ -10,6 +10,7 @@ export interface Finished {
 interface Rule {
   me: string
   local: (origin: unknown) => boolean
+  posted?: (block: string) => boolean
 }
 
 const isMine = (b: Block | null, me: string): b is Block => !!b && b.author === me && b.kind === "text"
@@ -21,34 +22,50 @@ export interface Posting {
 
 export function postFinished(doc: Y.Doc, rule: Rule, post: (b: Finished) => void): Posting {
   const frag = threadOf(doc)
-  const made = new Set<string>()
   const posted = new Set<string>()
+  let stopped = false
 
-  const send = (el: unknown): void => {
+  const known = (b: Block): boolean => posted.has(b.id) || !!b.sent || !!b.posted || (rule.posted?.(b.id) ?? false)
+
+  const unsentBefore = (el: Y.XmlElement): Y.XmlElement[] => {
+    const out: Y.XmlElement[] = []
+    for (let n = el.prevSibling; n; n = n.prevSibling) {
+      const b = blockOf(n)
+      if (!isMine(b, rule.me) || !(n instanceof Y.XmlElement)) continue
+      if (known(b)) break
+      if (b.text.trim()) out.unshift(n)
+    }
+    return out
+  }
+
+  const send = (el: Y.XmlElement): void => {
     const b = blockOf(el)
-    if (!b || posted.has(b.id) || !made.has(b.id) || !b.text.trim()) return
+    if (!b) return
     posted.add(b.id)
-    markPosted(doc, b.id)
+    queueMicrotask(() => {
+      if (!stopped) markPosted(doc, b.id)
+    })
     post({ id: b.id, text: richOf(el)?.markdown || b.text.trim() })
   }
 
   const look = (events: Y.YEvent<Y.AbstractType<unknown>>[], tr: Y.Transaction): void => {
-    const local = rule.local(tr.origin)
+    if (!rule.local(tr.origin)) return
     for (const e of events) {
       if (e.target !== frag) continue
       for (const item of e.changes.added)
         for (const el of item.content.getContent()) {
-          const b = blockOf(el)
-          if (!isMine(b, rule.me)) continue
-          if (local) made.add(b.id)
-          send(el instanceof Y.XmlElement ? el.prevSibling : null)
+          if (!(el instanceof Y.XmlElement) || !isMine(blockOf(el), rule.me)) continue
+          for (const before of unsentBefore(el)) send(before)
         }
     }
   }
 
   frag.observeDeep(look)
   return {
-    stop: () => frag.unobserveDeep(look),
+    stop: () => {
+      stopped = true
+      frag.unobserveDeep(look)
+    },
     giveBack: (id) => {
       posted.delete(id)
       unmarkSent(doc, id)

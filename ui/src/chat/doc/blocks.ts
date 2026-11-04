@@ -1,7 +1,7 @@
 import type { Node } from "prosemirror-model"
 import { TextSelection, type EditorState, type Transaction } from "prosemirror-state"
 
-import { attrsOf, newBlockId, schema, type BlockAttrs, type BlockKind } from "~/chat/doc/schema"
+import { attrsOf, isSent, newBlockId, schema, type BlockAttrs, type BlockKind } from "~/chat/doc/schema"
 
 const RUN_MS = 5 * 60_000
 
@@ -47,9 +47,15 @@ function inside(tr: Transaction, pos: number): Transaction {
   return tr.setSelection(TextSelection.create(tr.doc, pos + 2))
 }
 
-export function startBlock(state: EditorState, me: string, now: number): Transaction {
+function atEnd(tr: Transaction, b: Placed): Transaction {
+  return tr.setSelection(TextSelection.near(tr.doc.resolve(b.pos + b.node.nodeSize - 1), -1))
+}
+
+export function startBlock(state: EditorState, me: string, now: number, posted: (block: string) => boolean = () => false): Transaction {
   const tr = state.tr.setMeta("addToHistory", false)
   const all = blocks(state.doc)
+  const yours = all.findLast((b) => attrsOf(b.node).author === me && attrsOf(b.node).kind === "text")
+  if (yours && !isEmpty(yours.node) && !isSent(yours.node) && !posted(attrsOf(yours.node).id)) return atEnd(tr, yours)
   const last = all.at(-1)
   if (last && isEmpty(last.node)) {
     const a = attrsOf(last.node)
@@ -105,9 +111,9 @@ export function dropEmptyOwn(state: EditorState, me: string, keep: number | null
 export function attach(state: EditorState, me: string, now: number, nodes: readonly Node[]): Transaction | null {
   if (!nodes.length) return null
   const here = blockAt(state)
-  const own = here && attrsOf(here.node).author === me && attrsOf(here.node).kind === "text" ? here : null
+  const own = here && attrsOf(here.node).author === me && attrsOf(here.node).kind === "text" && !isSent(here.node) ? here : null
   const tr = own ? state.tr : startBlock(state, me, now).setMeta("addToHistory", true)
-  const index = own ? own.index : tr.doc.childCount - 1
+  const index = own ? own.index : tr.selection.$from.index(0)
   const node = tr.doc.child(index)
   let pos = 0
   for (let i = 0; i < index; i++) pos += tr.doc.child(i).nodeSize
@@ -130,7 +136,7 @@ function atBlockStart(state: EditorState): boolean {
 function joinable(a: Node, b: Node, me: string, posted: (block: string) => boolean): boolean {
   const x = attrsOf(a)
   const y = attrsOf(b)
-  return x.author === me && y.author === me && x.kind === y.kind && !posted(x.id) && !posted(y.id)
+  return x.author === me && y.author === me && x.kind === y.kind && !isSent(a) && !isSent(b) && !posted(x.id) && !posted(y.id)
 }
 
 function joinInto(state: EditorState, prev: Placed, next: Placed): Transaction {
