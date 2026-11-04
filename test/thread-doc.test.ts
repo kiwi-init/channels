@@ -72,7 +72,7 @@ async function setup(n: number, opts: { trusts?: (pk: string) => boolean } = {})
       roomId,
       th,
       me,
-      keys: { current: async () => ({ key: k, e: 1 }), at: async (e) => (e === 1 ? k : null) },
+      keys: { current: async () => ({ key: k, e: 1 }), opening: async (e) => (e === 1 ? [k] : []) },
       links: { send: relay.link(peer), aware: (_th, u) => peer.aware.push(u) },
       flushMs: 1,
       ...opts,

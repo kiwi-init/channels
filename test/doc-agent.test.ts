@@ -13,7 +13,7 @@ const room = () =>
     roomId: newRoomId(),
     th: newDocId(),
     me,
-    keys: { current: async () => ({ key }), at: async () => key },
+    keys: { current: async () => ({ key }), opening: async () => [key] },
     links: { send: () => {}, aware: () => {} },
   });
 
