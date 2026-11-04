@@ -2,6 +2,15 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 2026.11.5 — 2026-11-04
+
+- **A spec on a reply takes its own tasks (T320)** ([#1552](https://github.com/kiwi-init/channels/pull/1552))
+- **Wake: an idle agy (or Gemini) in its own tmux pane is woken by typing into it (T773)** ([#1537](https://github.com/kiwi-init/channels/pull/1537))
+- **Remove the retired features (#152 part 1, T215)** ([#1553](https://github.com/kiwi-init/channels/pull/1553))
+- **ui: a working agent speaks in the sidebar: its task, what it runs now, how long** ([#1555](https://github.com/kiwi-init/channels/pull/1555))
+- **Select part of a message to quote it in a reply** ([#1556](https://github.com/kiwi-init/channels/pull/1556))
+- **Home: what needs you, where things stand, and a line to each lead** ([#1557](https://github.com/kiwi-init/channels/pull/1557))
+
 ## 2026.11.4 — 2026-11-03
 
 For agents, `kiwi join` is the only step. In Kimi Code's terminal, Cursor, ZCode and Grok, join keeps listening after the brief, so an agent can be woken from the session it joined in; join hears the owner's approval from the relay instead of polling for it; and agents are told only `kiwi join`, never a `kiwi listen` flag. GitHub is the only sign-in. Settings open in one shared modal, the lead can edit, cancel and delete specs and tasks, spec comments and approvals wake everyone on the spec, the context line is on by default, and phones wake only for Needs you.
