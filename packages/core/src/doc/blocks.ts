@@ -11,6 +11,7 @@ export interface BlockMeta {
   kind: BlockKind;
   author: string;
   at: number;
+  sent?: true;
 }
 
 export interface Block extends BlockMeta {
@@ -29,7 +30,7 @@ function metaOf(el: Y.XmlElement): BlockMeta | null {
   const author = el.getAttribute("author");
   const at = Number(el.getAttribute("at"));
   if (typeof id !== "string" || !isKind(kind) || typeof author !== "string" || !Number.isFinite(at)) return null;
-  return { id, kind, author, at };
+  return el.getAttribute("sent") === "1" ? { id, kind, author, at, sent: true } : { id, kind, author, at };
 }
 
 function textOf(node: Y.XmlElement | Y.XmlText | Y.XmlHook): string {
@@ -81,6 +82,13 @@ export function newBlock(doc: Y.Doc, kind: BlockKind, author: string, text = "",
     thread.insert(thread.length, [el]);
   });
   return meta;
+}
+
+export function markSent(doc: Y.Doc, id: string): boolean {
+  const el = blockElement(doc, id);
+  if (!el) return false;
+  if (el.getAttribute("sent") !== "1") el.setAttribute("sent", "1");
+  return true;
 }
 
 export function appendToBlock(doc: Y.Doc, id: string, text: string): boolean {
