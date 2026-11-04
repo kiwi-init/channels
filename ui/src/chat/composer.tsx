@@ -13,35 +13,16 @@ import { Avatar, cx, Dot, STATUS_WORDS } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { openMenu } from "~/kit/menu-open"
 import { ago } from "~/kit/time"
-import type { Channel, Task, Upload, Where } from "~/model"
+import type { Channel, Upload, Where } from "~/model"
 import { sameWhere, useApp } from "~/nav"
 import { nickname, onePerPerson, shown } from "~/names"
 import { mentionNames, withNames, type Picks } from "~/chat/linked"
+import { peopleMatches, taskMatches } from "~/chat/matches"
 
 const Gifs = lazy(() => import("~/chat/gif-picker"))
 
 const MENTION = /(^|\s)@([\p{L}\p{N}_.-]*)$/u
 const TASK_REF = /(^|\s)#([^#\n]{0,40})$/u
-
-function taskMatches(tasks: readonly Task[], query: string): Task[] {
-  const q = query.trim().toLowerCase()
-  const id = q.replace(/^t/, "")
-  const score = (t: Task): number => {
-    if (!q) return 0
-    if (/^\d+$/.test(id) && String(t.id).startsWith(id)) return 0
-    const title = t.title.toLowerCase()
-    if (title.startsWith(q)) return 1
-    if (title.split(/[^\p{L}\p{N}]+/u).some((w) => w.startsWith(q))) return 2
-    return title.includes(q) ? 3 : -1
-  }
-  return tasks
-    .filter((t) => !t.archived)
-    .map((t) => ({ t, s: score(t) }))
-    .filter((x) => x.s >= 0)
-    .sort((a, b) => a.s - b.s || Number(a.t.status === "done") - Number(b.t.status === "done") || b.t.updatedAt - a.t.updatedAt)
-    .slice(0, 6)
-    .map((x) => x.t)
-}
 
 const picked = new Map<string, Picks>()
 function picksFor(key: string): Picks {
@@ -265,13 +246,7 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
   const typed = text.slice(0, caret)
   const query = closed ? undefined : MENTION.exec(typed)?.[2]
   const taskQuery = closed || query !== undefined ? undefined : TASK_REF.exec(typed)?.[2]
-  const matches =
-    query === undefined
-      ? []
-      : onePerPerson(channel.people)
-          .filter((p) => !p.you && (p.name.toLowerCase().startsWith(query.toLowerCase()) || p.display?.toLowerCase().startsWith(query.toLowerCase())))
-          .sort((a, b) => Number(b.presence === "online") - Number(a.presence === "online"))
-          .slice(0, 6)
+  const matches = query === undefined ? [] : peopleMatches(channel.people, query)
   const taskOptions = taskQuery === undefined ? [] : taskMatches(channel.tasks, taskQuery)
   const commands = useMemo<Command[]>(() => {
     if (inThread !== undefined) return []

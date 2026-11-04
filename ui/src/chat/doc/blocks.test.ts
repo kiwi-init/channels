@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import type { Node } from "prosemirror-model"
 import { EditorState, TextSelection } from "prosemirror-state"
 
-import { blockAfter, blocks, continues, dropEmptyOwn, finishesBlock, makeBlock, startBlock } from "~/chat/doc/blocks"
+import { atBlockEnd, blockAfter, blocks, continues, dropEmptyOwn, endsBlock, makeBlock, startBlock } from "~/chat/doc/blocks"
 import { attrsOf, schema } from "~/chat/doc/schema"
 
 const T = 1_700_000_000_000
@@ -18,7 +18,7 @@ function texts(state: EditorState): string[] {
 function caretAtEnd(state: EditorState, index: number): EditorState {
   const b = blocks(state.doc)[index]
   if (!b) throw new Error("no block")
-  return state.apply(state.tr.setSelection(TextSelection.create(state.doc, b.pos + b.node.nodeSize - 2)))
+  return state.apply(state.tr.setSelection(TextSelection.near(state.doc.resolve(b.pos + b.node.nodeSize - 1), -1)))
 }
 
 describe("starting to write in a thread", () => {
@@ -49,21 +49,36 @@ describe("starting to write in a thread", () => {
   })
 })
 
-describe("finishing a block", () => {
-  test("Enter on an empty last line ends the block and starts a new one of yours", () => {
-    let s = stateOf(makeBlock("text", "jow", T, "one"))
-    s = caretAtEnd(s, 0)
+describe("ending a block", () => {
+  test("Enter at the end of a block with text ends it", () => {
+    expect(endsBlock(caretAtEnd(stateOf(makeBlock("text", "jow", T, "one")), 0))).toBe(true)
+  })
+
+  test("an empty block, or a caret before the end, doesn't end it", () => {
+    expect(endsBlock(caretAtEnd(stateOf(makeBlock("text", "jow", T)), 0))).toBe(false)
+    const s = stateOf(makeBlock("text", "jow", T, "one"))
+    const mid = s.apply(s.tr.setSelection(TextSelection.create(s.doc, 3)))
+    expect(atBlockEnd(mid)).toBe(false)
+    expect(endsBlock(mid)).toBe(false)
+  })
+
+  test("an empty last line (from Shift-Enter) is dropped and a new block of yours starts", () => {
+    let s = caretAtEnd(stateOf(makeBlock("text", "jow", T, "one")), 0)
     s = s.apply(s.tr.split(s.selection.from))
-    expect(finishesBlock(s)).toBe(true)
+    expect(endsBlock(s)).toBe(true)
     const next = s.apply(blockAfter(s, "jow", T + 1)!)
     expect(texts(next)).toEqual(["jow:one", "jow:"])
     expect(next.doc.child(0).childCount).toBe(1)
     expect(next.selection.$from.index(0)).toBe(1)
   })
 
-  test("a line with text, or the only line, doesn't end the block", () => {
-    expect(finishesBlock(caretAtEnd(stateOf(makeBlock("text", "jow", T, "one")), 0))).toBe(false)
-    expect(finishesBlock(caretAtEnd(stateOf(makeBlock("text", "jow", T)), 0))).toBe(false)
+  test("a list or code block at the end leaves Enter to the list or code", () => {
+    const item = schema.nodes.list_item.create(null, schema.nodes.paragraph.create(null, schema.text("x")))
+    const list = schema.nodes.block.create({ id: "a", kind: "text", author: "jow", at: T }, schema.nodes.bullet_list.create(null, item))
+    const code = schema.nodes.block.create({ id: "b", kind: "text", author: "jow", at: T }, schema.nodes.code_block.create(null, schema.text("y")))
+    expect(endsBlock(caretAtEnd(stateOf(list), 0))).toBe(false)
+    expect(endsBlock(caretAtEnd(stateOf(code), 0))).toBe(false)
+    expect(atBlockEnd(caretAtEnd(stateOf(code), 0))).toBe(true)
   })
 
   test("a new block goes right after the one you're in, not at the end", () => {
