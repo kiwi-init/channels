@@ -30,7 +30,7 @@ const WORD = process.platform === "darwin" ? "Alt" : "Control";
 async function put(page: Page, block: number, at: "start" | "end"): Promise<void> {
   await page.evaluate(
     ({ block, at }) => {
-      const body = document.querySelectorAll(".thread-doc .blk .blk-body")[block];
+      const body = document.querySelectorAll(".thread-doc .blk:not(.is-hidden) .blk-body")[block];
       if (!body) throw new Error(`no block ${block}`);
       const walk = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
       const texts: Text[] = [];
@@ -47,7 +47,7 @@ async function put(page: Page, block: number, at: "start" | "end"): Promise<void
 async function caret(page: Page): Promise<Caret> {
   return page.evaluate(() => {
     const sel = document.getSelection();
-    const bodies = [...document.querySelectorAll(".thread-doc .blk .blk-body")];
+    const bodies = [...document.querySelectorAll(".thread-doc .blk:not(.is-hidden) .blk-body")];
     const blockOf = (n: Node | null | undefined) => bodies.findIndex((b) => !!n && b.contains(n));
     const a = sel?.anchorNode;
     const f = sel?.focusNode;
@@ -133,7 +133,7 @@ const checks: { name: string; run: (page: Page) => Promise<string | null> }[] = 
       await put(page, 2, "start");
       await page.keyboard.press(`${MOD}+a`);
       const c = await page.evaluate(() => {
-        const bodies = [...document.querySelectorAll(".thread-doc .blk .blk-body")];
+        const bodies = [...document.querySelectorAll(".thread-doc .blk:not(.is-hidden) .blk-body")];
         const sel = document.getSelection();
         return { first: !!sel && sel.containsNode(bodies[0]!, true), last: !!sel && sel.containsNode(bodies.at(-1)!, true) };
       });
@@ -148,7 +148,7 @@ let failed = 0;
 try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   await page.goto(`http://127.0.0.1:${server.port}/?shot=${process.env.DOC_KEYS_SHOT ?? "thread-doc"}`);
-  await page.waitForFunction(() => document.querySelectorAll(".thread-doc .blk").length >= 4, null, { timeout: 30_000 });
+  await page.waitForFunction(() => document.querySelectorAll(".thread-doc .blk:not(.is-hidden)").length >= 3, null, { timeout: 30_000 });
   await page.locator(".thread-doc .ProseMirror").focus();
   for (const check of checks) {
     const why = await check.run(page);
