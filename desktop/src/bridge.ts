@@ -132,6 +132,9 @@ export const CHANNEL_CALLS = [
   "leave",
   "send",
   "image",
+  "putImage",
+  "putFileData",
+  "fileData",
   "history",
 ] as const;
 
