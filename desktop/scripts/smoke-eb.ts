@@ -138,18 +138,20 @@ try {
   );
   if (linux) {
     const messageLink = "https://example.com/kiwi-message-link";
-    const linkOpened = await until("a link written in the thread doc", 30_000, () => d.evaluate(sendMessage, messageLink, 2_000).then((sent) => (sent ? true : null)))
+    const written = `[the message link](${messageLink})`;
+    const linkOpened = await until("a markdown link written in the thread doc", 30_000, () => d.evaluate(sendMessage, written, 2_000).then((sent) => (sent ? true : null)))
       .then(() =>
         d.evaluate((url) => {
-          window.open(url, "_blank", "noopener,noreferrer");
-          return true;
+          const a = [...document.querySelectorAll<HTMLAnchorElement>(".thread-doc a.doc-link")].find((el) => el.getAttribute("href") === url);
+          a?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, ctrlKey: true }));
+          return a?.textContent === "the message link";
         }, messageLink),
       )
       .then((clicked) =>
-        until("the system opener receiving the clicked message link", 10_000, async () => (clicked && existsSync(opened) && readFileSync(opened, "utf8").includes(messageLink) ? true : null)),
+        until("the system opener receiving the clicked doc link", 10_000, async () => (clicked && existsSync(opened) && readFileSync(opened, "utf8").includes(messageLink) ? true : null)),
       )
-      .catch((e: Error) => (problems.push(`a link the page opens reaches the system browser: ${e.message}`), null));
-    if (linkOpened) console.log("a link the page opened (window.open, as markdown links do) reached the fake xdg-open with its exact URL");
+      .catch((e: Error) => (problems.push(`a Ctrl-clicked link in the thread doc reaches the system browser: ${e.message}`), null));
+    if (linkOpened) console.log("a Ctrl-clicked markdown link in the thread doc reached the fake xdg-open with its exact URL");
   }
   await check(
     "the thread doc checks spelling and fields that opt out stay unchecked",

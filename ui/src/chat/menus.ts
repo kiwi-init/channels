@@ -17,7 +17,7 @@ export function webLinkAt(target: unknown): string | null {
   return href && WEB_LINK.test(href) ? href : null
 }
 
-function openWebLink(url: string): void {
+export function openWebLink(url: string): void {
   const b = bridge()
   if (b) void b.openExternal(url).catch(() => {})
   else window.open(url, "_blank", "noopener,noreferrer")

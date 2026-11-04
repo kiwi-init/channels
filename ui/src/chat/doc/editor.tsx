@@ -2,7 +2,6 @@ import "~/styles/thread-doc.css"
 
 import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore, type CSSProperties, type RefObject } from "react"
 import { createPortal } from "react-dom"
-import { fileDrag, takeDropped } from "@kiwi/app/dropped.ts"
 import type { Node } from "prosemirror-model"
 import { EditorState, Plugin, type Transaction } from "prosemirror-state"
 import { Decoration, DecorationSet, EditorView, type NodeView } from "prosemirror-view"
@@ -11,6 +10,9 @@ import { yCursorPlugin, ySyncPlugin, ySyncPluginKey, yUndoPlugin } from "y-prose
 import { attach, blockAt, blocks, continues, dropEmptyOwn, isEmpty, startBlock } from "~/chat/doc/blocks"
 import { docKeys } from "~/chat/doc/keys"
 import { holdDoc, LiveDoc, type Shared } from "~/chat/doc/live"
+import { linksPlugin } from "~/chat/doc/links"
+import { fileDrag, takeDropped } from "@kiwi/app/dropped.ts"
+import { emptyPaste, takePasted } from "@kiwi/app/pasted.ts"
 import { fileView, filesIn, imageView, uploadAll, type DocMedia } from "~/chat/doc/media"
 import { markdownRules } from "~/chat/doc/rules"
 import { attrsOf, FRAGMENT, schema, type BlockAttrs } from "~/chat/doc/schema"
@@ -304,6 +306,7 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
         () => Date.now(),
         () => blur.now()
       ),
+      linksPlugin(),
       herePlugin(),
       runsPlugin(shown, me, opts.drafts),
       tidyPlugin(me),
@@ -321,15 +324,28 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
       file: fileView(opts.media),
     },
     handlePaste: (v, e) => {
-      const files = filesIn(e.clipboardData)
-      if (!takeFiles(v, me, opts.media(), opts.editable(), files)) return false
+      const dt = e.clipboardData
+      if (takeFiles(v, me, opts.media(), opts.editable(), filesIn(dt))) {
+        e.preventDefault()
+        return true
+      }
+      if (!dt || !emptyPaste(dt) || !opts.media() || !opts.editable()) return false
       e.preventDefault()
+      void takePasted(dt).then((f) => f && takeFiles(v, me, opts.media(), opts.editable(), [f]))
       return true
     },
     handleDrop: (v, e) => {
-      const files = filesIn(e.dataTransfer)
-      if (!takeFiles(v, me, opts.media(), opts.editable(), files)) return false
+      const dt = e.dataTransfer
+      if (takeFiles(v, me, opts.media(), opts.editable(), filesIn(dt))) {
+        e.preventDefault()
+        return true
+      }
+      if (!dt || !fileDrag(dt) || !opts.media() || !opts.editable()) return false
       e.preventDefault()
+      void takeDropped(dt).then(({ files, refused }) => {
+        for (const why of refused) announce(why, "error")
+        takeFiles(v, me, opts.media(), opts.editable(), files)
+      })
       return true
     },
     dispatchTransaction(this: EditorView, tr) {
