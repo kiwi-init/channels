@@ -11,7 +11,6 @@ import * as Y from "yjs"
 import { attach, backInDraft, blockAt, blocks, continues, dropEmptyOwn, isEmpty, noteMade, replyIn, startBlock, unreply, type Made } from "~/chat/doc/blocks"
 import { caretShown } from "~/chat/doc/carets"
 import { onGiveBack } from "~/chat/doc/give-back"
-import { workedHere } from "~/chat/doc/made"
 import { writeOwnLinesOnly } from "~/chat/doc/own-writes"
 import { docKeys, type CommandFor } from "~/chat/doc/keys"
 import { docTag, holdDoc, LiveDoc, type Shared } from "~/chat/doc/live"
@@ -413,7 +412,7 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
           commandFor: opts.command,
           refuse: opts.refuse,
           editLast: opts.editLast,
-          sending: (block) => workedHere.add(block),
+          sending: (block) => shared.made.add(block),
         }
       ),
       linksPlugin(),

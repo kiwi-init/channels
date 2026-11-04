@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import * as Y from "yjs"
+import { markBack } from "@kiwi/core/doc/blocks.ts"
 import { EditorState, type Plugin, type PluginView, type Transaction } from "prosemirror-state"
 import type { EditorView } from "prosemirror-view"
 import { ySyncPlugin } from "y-prosemirror"
@@ -72,6 +73,28 @@ describe("a draft belongs to the window typing it, not to the person (T1776, @mi
     )
     const picked = tr.doc.child(tr.selection.$from.index(0))
     expect(attrsOf(picked).id).not.toBe(attrsOf(old).id)
+  })
+
+  test("another window of yours doesn't take over a line given back to you in this one", async () => {
+    const desk = new Y.Doc()
+    const peer = new Y.Doc()
+    const sync = net(desk, peer)
+    const a = editor(desk)
+    const b = editor(peer)
+    await Promise.resolve()
+    a.dispatch(startBlock(a.state(), "jow", 1))
+    a.dispatch(a.state().tr.insertText("given back"))
+    const old = a.state().doc.child(a.state().selection.$from.index(0))
+    markBack(desk, attrsOf(old).id)
+    sync()
+    const tr = startBlock(
+      b.state(),
+      "jow",
+      2,
+      () => false,
+      () => false
+    )
+    expect(attrsOf(tr.doc.child(tr.selection.$from.index(0))).id).not.toBe(attrsOf(old).id)
   })
 
   test("a new line in another window of yours never posts the draft you're still typing", async () => {

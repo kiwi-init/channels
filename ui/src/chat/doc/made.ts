@@ -7,6 +7,4 @@ export interface MadeLines {
 
 export const madeHere: MadeLines = new Set<string>()
 
-export const workedHere: MadeLines = new Set<string>()
-
 export const thisWindow = newBlockId()

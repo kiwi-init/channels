@@ -61,7 +61,7 @@ export function startBlock(state: EditorState, me: string, now: number, posted: 
   const all = blocks(state.doc)
   const own = all.filter((b) => attrsOf(b.node).author === me && attrsOf(b.node).kind === "text")
   const back = own.findLastIndex((b) => isBack(b.node))
-  if (back >= 0 && own.slice(back + 1).every((b) => isEmpty(b.node))) return atEnd(tr, own[back]!)
+  if (back >= 0 && made(attrsOf(own[back]!.node).id) && own.slice(back + 1).every((b) => isEmpty(b.node))) return atEnd(tr, own[back]!)
   const yours = own.at(-1)
   if (yours && !isEmpty(yours.node) && !isSent(yours.node) && !posted(attrsOf(yours.node).id) && made(attrsOf(yours.node).id)) return atEnd(tr, yours)
   const last = all.at(-1)

@@ -86,6 +86,8 @@ export function postFinished(doc: Y.Doc, rule: Rule, post: (b: Finished) => void
 
   const giveBack = (id: string): void => {
     posted.delete(id)
+    here.add(id)
+    rule.worked?.add(id)
     markBack(doc, id)
     noteTyping(() => ({ what: "line given back", block: id }))
   }
