@@ -57,6 +57,12 @@ export type Made = (block: string) => boolean
 
 const anyMade: Made = () => true
 
+export function emptyHidden(block: Node, me: string, here: string | null, made: Made): boolean {
+  if (!isEmpty(block)) return false
+  const { author, id } = attrsOf(block)
+  return author !== me || (id !== here && !made(id))
+}
+
 function nothingShared(state: EditorState): boolean {
   const synced: unknown = ySyncPluginKey.getState(state)
   if (!synced || typeof synced !== "object" || !("binding" in synced)) return true

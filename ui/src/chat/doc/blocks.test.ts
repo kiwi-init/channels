@@ -3,7 +3,7 @@ import { GIVEN_BACK } from "@kiwi/core/doc/blocks.ts"
 import type { Node } from "prosemirror-model"
 import { EditorState, TextSelection } from "prosemirror-state"
 
-import { atBlockEnd, attach, backInDraft, blockAfter, blockAt, joinBack, joinForward, blocks, continues, dropEmptyOwn, makeBlock, replyIn, startBlock, unreply } from "~/chat/doc/blocks"
+import { atBlockEnd, attach, backInDraft, blockAfter, blockAt, joinBack, joinForward, blocks, continues, dropEmptyOwn, emptyHidden, makeBlock, replyIn, startBlock, unreply } from "~/chat/doc/blocks"
 import { attrsOf, imageNode, schema } from "~/chat/doc/schema"
 
 const T = 1_700_000_000_000
@@ -282,5 +282,30 @@ describe("a line given back to you as a draft (T1678)", () => {
     expect(blockAt(next)?.index).toBe(0)
     expect(texts(next)).toEqual(["jow:ship it", "maya:hers", "jow:"])
     expect(backInDraft(s, "maya", attrsOf(line).id)).toBeNull()
+  })
+})
+
+describe("empty lines on screen (T3317)", () => {
+  const empties = (mine: Set<string>, here: string | null, list: Node[]): string[] =>
+    list.filter((n) => !emptyHidden(n, "jow", here, (id) => mine.has(id))).map((n) => `${attrsOf(n).author}:${n.textContent}`)
+
+  test("empty lines your other windows and earlier sessions left behind show no placeholder: only this window's line does", () => {
+    const old = [makeBlock("text", "jow", T), makeBlock("text", "jow", T + 1), makeBlock("text", "jow", T + 2)]
+    const mine = makeBlock("text", "jow", T + 3)
+    const shown = empties(new Set([attrsOf(mine).id]), attrsOf(mine).id, [...old, mine])
+    expect(shown).toEqual(["jow:"])
+  })
+
+  test("an empty line of yours stays visible while your caret is in it, even if another window made it", () => {
+    const other = makeBlock("text", "jow", T)
+    expect(emptyHidden(other, "jow", attrsOf(other).id, () => false)).toBe(false)
+    expect(emptyHidden(other, "jow", null, () => false)).toBe(true)
+  })
+
+  test("someone else's empty line stays hidden, and a line with words always shows", () => {
+    const theirs = makeBlock("text", "harry", T)
+    expect(emptyHidden(theirs, "jow", attrsOf(theirs).id, () => true)).toBe(true)
+    expect(emptyHidden(makeBlock("text", "jow", T, "oi"), "jow", null, () => false)).toBe(false)
+    expect(emptyHidden(makeBlock("text", "harry", T, "oi"), "jow", null, () => false)).toBe(false)
   })
 })
