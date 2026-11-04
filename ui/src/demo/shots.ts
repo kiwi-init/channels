@@ -8,6 +8,7 @@ export interface Shot {
   nav?: Partial<Nav>
   prefs?: Partial<Prefs>
   docs?: number
+  streams?: boolean
 }
 
 const kiwi = (nav: Partial<Nav> = {}): Shot => ({ scenario: "full", channel: "kiwi", nav })
@@ -28,6 +29,8 @@ export const SHOTS: Record<string, Shot> = {
   "dm-private": kiwi({ where: { kind: "dm", with: "maya" } }),
   "thread-doc": { ...kiwi({ where: { kind: "task", task: 10 } }), docs: 0 },
   "thread-doc-1000": { ...kiwi({ where: { kind: "task", task: 10 } }), docs: 1000 },
+  "thread-doc-live": { ...kiwi({ where: { kind: "task", task: 10 } }), docs: 200, streams: true },
+  "thread-doc-events": { scenario: "task-events", channel: "kiwi", nav: { where: { kind: "task", task: 10 } }, docs: 0 },
   theirs: kiwi({ where: { kind: "theirs", between: ["atlas", "win"] } }),
   room: kiwi({ where: { kind: "room", room: "releases" } }),
   "room-private": kiwi({ where: { kind: "room", room: "launch-plan" } }),

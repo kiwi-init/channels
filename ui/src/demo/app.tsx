@@ -21,7 +21,7 @@ const look: Partial<Prefs> = { ...shot?.prefs, ...(theme === "light" || theme ==
 export const demoPrefs: Prefs = { ...DEMO_PREFS, ...look }
 
 const seeded = shot?.nav?.where
-if (shot?.docs !== undefined && shot.channel && seeded && seeded.kind !== "dm" && seeded.kind !== "theirs") seedThreadDoc(shot.channel, docThread(seeded), shot.docs)
+if (shot?.docs !== undefined && shot.channel && seeded && seeded.kind !== "dm" && seeded.kind !== "theirs") seedThreadDoc(shot.channel, docThread(seeded), shot.docs, shot.streams)
 
 const SWITCH_AFTER_MS = 400
 

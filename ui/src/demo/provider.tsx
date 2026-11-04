@@ -101,6 +101,32 @@ function withEvents(c: Channel): Channel {
   }
 }
 
+function withTaskEvents(c: Channel): Channel {
+  const at = Date.now() - 300 * 20_000
+  const seq = Math.max(...c.messages.map((m) => m.seq)) + 1
+  const where = { kind: "task", task: 10 } as const
+  const repo = "kiwi-init/channels"
+  return {
+    ...c,
+    messages: [
+      ...c.messages,
+      ...Array.from({ length: 300 }, (_, i) =>
+        i % 4 === 0
+          ? { seq: seq + i, from: "win", at: at + i * 20_000, text: `Pushed ${i / 4 + 1} of the icon sprite.`, where }
+          : {
+              seq: seq + i,
+              from: "github",
+              at: at + i * 20_000,
+              text: "GitHub: ci-ok success on T10-icons",
+              where,
+              system: true,
+              github: [{ event: "check_run" as const, at: at + i * 20_000, repo, name: "ci-ok", conclusion: "success" }],
+            }
+      ),
+    ],
+  }
+}
+
 function withStep(c: Channel): Channel {
   const at = Date.now() - 30_000
   const text = "Remove commit signing from ~/.gitconfig-personal"
@@ -220,6 +246,7 @@ export type Scenario =
   | "asked-of"
   | "left-out"
   | "events"
+  | "task-events"
   | "handoff"
   | "opening"
   | "held"
@@ -266,38 +293,40 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
               ? withLeftOut(DEMO_CHANNEL)
               : scenario === "events"
                 ? withEvents(DEMO_CHANNEL)
-                : scenario === "handoff"
-                  ? withHandoff(DEMO_CHANNEL)
-                  : scenario === "opening"
-                    ? { ...DEMO_CHANNEL, messages: [], tasks: [], asks: [], connection: "connecting" as const, loading: true }
-                    : scenario === "held"
-                      ? { ...DEMO_CHANNEL, hold: { note: "Waiting on the release key.", by: "jow", at: Date.now() - 40 * 60_000 } }
-                      : scenario === "compact" || scenario === "compacted"
-                        ? withCompact(DEMO_CHANNEL, scenario === "compacted")
-                        : scenario === "specs" || scenario === "spec-changed"
-                          ? withSpecs(DEMO_CHANNEL, scenario === "spec-changed")
-                          : scenario === "forgotten-computer"
-                            ? {
-                                ...DEMO_CHANNEL,
-                                asks: [
-                                  {
-                                    kind: "join" as const,
-                                    id: "join-dudu",
-                                    at: Date.now() - 30 * 60_000,
-                                    name: "dudu",
-                                    who: "agent" as const,
-                                    harness: "claude" as const,
-                                    runs: "Claude Code · claude-opus-5-5",
-                                    machine: "MacBook-Pro-de-Davi",
-                                    sponsor: "harry",
-                                    revoked: true as const,
-                                    said: { machine: "macOS arm64 · 10 cores · 16 GB", repo: "Davi-Vicente/D2N@main", outside: true },
-                                    code: "604-218",
-                                  },
-                                  ...DEMO_CHANNEL.asks,
-                                ],
-                              }
-                            : DEMO_CHANNEL,
+                : scenario === "task-events"
+                  ? withTaskEvents(DEMO_CHANNEL)
+                  : scenario === "handoff"
+                    ? withHandoff(DEMO_CHANNEL)
+                    : scenario === "opening"
+                      ? { ...DEMO_CHANNEL, messages: [], tasks: [], asks: [], connection: "connecting" as const, loading: true }
+                      : scenario === "held"
+                        ? { ...DEMO_CHANNEL, hold: { note: "Waiting on the release key.", by: "jow", at: Date.now() - 40 * 60_000 } }
+                        : scenario === "compact" || scenario === "compacted"
+                          ? withCompact(DEMO_CHANNEL, scenario === "compacted")
+                          : scenario === "specs" || scenario === "spec-changed"
+                            ? withSpecs(DEMO_CHANNEL, scenario === "spec-changed")
+                            : scenario === "forgotten-computer"
+                              ? {
+                                  ...DEMO_CHANNEL,
+                                  asks: [
+                                    {
+                                      kind: "join" as const,
+                                      id: "join-dudu",
+                                      at: Date.now() - 30 * 60_000,
+                                      name: "dudu",
+                                      who: "agent" as const,
+                                      harness: "claude" as const,
+                                      runs: "Claude Code · claude-opus-5-5",
+                                      machine: "MacBook-Pro-de-Davi",
+                                      sponsor: "harry",
+                                      revoked: true as const,
+                                      said: { machine: "macOS arm64 · 10 cores · 16 GB", repo: "Davi-Vicente/D2N@main", outside: true },
+                                      code: "604-218",
+                                    },
+                                    ...DEMO_CHANNEL.asks,
+                                  ],
+                                }
+                              : DEMO_CHANNEL,
       DEMO_EMPTY,
       DEMO_WAITING,
       DEMO_INTERLINKED,
