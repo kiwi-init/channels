@@ -144,6 +144,11 @@ const fail = (why: string): void => {
   log(`FAIL ${why}`);
 };
 
+async function writes(w: Win): Promise<string> {
+  const got = await w.page.evaluate(() => (globalThis as unknown as { __ow?: unknown[] }).__ow?.slice(-40) ?? []);
+  return got.map((e) => `      ${JSON.stringify(e)}`).join("\n");
+}
+
 async function startLine(w: Win): Promise<void> {
   await w.page.locator(".thread-doc .doc-tail").last().click();
   const h = await here(w);
@@ -317,6 +322,7 @@ try {
     const did = await op(w);
     log(`step ${step}: ${w.label} ${did}`);
     for (const v of wins) await check(v, `step ${step} (${w.label} ${did})`);
+    if (failed) for (const v of wins) log(`  ${v.label} doc:\n${await dump(v)}\n  ${v.label} own-writes log (local instrumented builds only):\n${await writes(v)}`);
     if (process.env.FUZZ_DUMP) for (const v of wins) log(`  ${v.label} doc:\n${await dump(v)}`);
     if (step % 25 === 0) console.log(`  step ${step} ok`);
   }
@@ -330,13 +336,20 @@ try {
       w.lag.jitter = 0;
     }
     agentsOn = false;
-    await Bun.sleep(5000);
-    const lines = await docLines();
+    const until = Date.now() + 30_000;
+    let docs = await Promise.all(wins.map(shown));
+    let lines = await docLines();
+    while (Date.now() < until && (docs.some((d) => JSON.stringify(d) !== JSON.stringify(docs[0])) || wins.some((w) => inOrder(lines, w.sent)))) {
+      await Bun.sleep(1000);
+      docs = await Promise.all(wins.map(shown));
+      lines = await docLines();
+    }
+    log(`drained: the CLI shows\n${lines.map((l) => `      ${l}`).join("\n")}`);
+    for (const [i, d] of docs.entries()) log(`drained: ${wins[i]!.label} shows\n${d.map((l) => `      ${JSON.stringify(l)}`).join("\n")}`);
     for (const w of wins) {
       const lost = inOrder(lines, w.sent);
       if (lost) fail(`${w.label} sent ${JSON.stringify(lost)}, but the doc doesn't have it as a line of jow's, in order`);
     }
-    const docs = await Promise.all(wins.map(shown));
     for (const [i, d] of docs.entries()) if (JSON.stringify(d) !== JSON.stringify(docs[0])) fail(`${wins[i]!.label} shows a different doc than w1 after the relay drained`);
   }
 } finally {
