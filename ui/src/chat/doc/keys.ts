@@ -90,7 +90,7 @@ function nextBlock(me: string, now: () => number, sending: (block: string) => vo
     const here = blockAt(state)
     if (tr && dispatch) {
       if (here && attrsOf(here.node).author === me) sending(attrsOf(here.node).id)
-      dispatch(tr.scrollIntoView())
+      dispatch(tr)
     }
     return !!tr
   }
