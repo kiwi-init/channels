@@ -3,6 +3,7 @@ import { newChannelKey, newRoomId } from "@kiwi/core/crypto.ts";
 import { appendToBlock, blocksOf, newBlock, newDocId, threadOf, threadText } from "@kiwi/core/doc/blocks.ts";
 import { ThreadDoc, type DocIn, type DocOut } from "@kiwi/core/doc/thread-doc.ts";
 import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
+import { MAX_CT_LENGTH } from "@kiwi/core/protocol.ts";
 
 interface Row {
   dseq: number;
@@ -38,10 +39,14 @@ class FakeRelay {
       }
       if (f.t === "doc.snap") {
         if (f.upto > this.head) return;
-        this.rows = [{ dseq: f.upto, ts: Date.now(), iv: f.iv, ct: f.ct, ...(f.e === undefined ? {} : { e: f.e }), snap: true }, ...this.rows.filter((r) => !r.snap && r.dseq > f.upto)];
+        const snap: Row = { dseq: f.upto, ts: Date.now(), iv: f.iv, ct: f.ct, ...(f.e === undefined ? {} : { e: f.e }), snap: true };
+        this.rows = [snap, ...this.rows.filter((r) => !r.snap && r.dseq > f.upto)];
         this.sinceSnap = this.rows.length - 1;
+        peer.deliver({ t: "ack", id: f.id, seq: f.upto });
+        for (const [other, th] of this.subs) if (other !== peer && th === f.th) other.deliver({ t: "doc", th, ...snap });
         return;
       }
+      if (f.ct.length > MAX_CT_LENGTH) return peer.deliver({ t: "err", id: f.id, error: "doc update too large", tag: "TooLarge" });
       const row: Row = { dseq: ++this.head, ts: Date.now(), iv: f.iv, ct: f.ct, ...(f.e === undefined ? {} : { e: f.e }) };
       this.rows.push(row);
       this.sinceSnap++;
@@ -189,5 +194,23 @@ describe("a thread doc syncs sealed Yjs updates through the relay", () => {
     appendToBlock(doc, reply.id, ": found it");
     expect(threadOf(doc).length).toBe(2);
     expect(threadText(doc, (pk) => pk.slice(2))).toBe("person: Can you fix it?\nIt breaks on start.\n\nagent (agent): On it: found it");
+  });
+
+  test("an update too big for the relay goes out in a snapshot, and that person's next edits reach everyone", async () => {
+    const { peers, ids, relay } = await setup(2);
+    const [a, b] = peers as [Peer, Peer];
+    a.td.start();
+    b.td.start();
+    await settle(a, b);
+    newBlock(a.td.doc, "text", ids[0]!.pk, "small first");
+    await settle(a, b);
+    const pasted = "x".repeat(400_000);
+    newBlock(a.td.doc, "text", ids[0]!.pk, pasted);
+    await settle(a, b);
+    newBlock(a.td.doc, "text", ids[0]!.pk, "a short reply");
+    await settle(a, b);
+    expect(texts(b)).toEqual(["small first", pasted, "a short reply"]);
+    expect(relay.sent.filter((f) => f.t === "doc" && f.ct.length > MAX_CT_LENGTH)).toHaveLength(0);
+    expect(relay.rows[0]!.snap).toBe(true);
   });
 });

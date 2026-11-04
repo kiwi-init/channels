@@ -98,7 +98,9 @@ describe("the relay stores and relays sealed doc updates (T491)", () => {
   test("a snapshot replaces the updates it covers; backlog sends it first, then what came after", () =>
     withRoom((sent, mem) => {
       expect(only(sent({ t: "doc.snap", id: "s0", th: TH, upto: 3, iv: IV, ct: "c25hcA", e: 0 }))).toMatchObject({ t: "err", id: "s0", th: TH, tag: "Conflict" });
-      expect(only(sent({ t: "doc.snap", id: "s1", th: TH, upto: 2, iv: IV, ct: "c25hcC0y", e: 0 }))).toMatchObject({ t: "ack", id: "s1", seq: 2 });
+      const snapped = sent({ t: "doc.snap", id: "s1", th: TH, upto: 2, iv: IV, ct: "c25hcC0y", e: 0 });
+      expect(only(snapped)).toMatchObject({ t: "ack", id: "s1", seq: 2 });
+      expect(JSON.parse(snapped.doc!.frame)).toMatchObject({ t: "doc", th: TH, dseq: 2, iv: IV, ct: "c25hcC0y", e: 0, snap: true });
       expect(mem.query("SELECT COUNT(*) AS n FROM docs WHERE th = ?").get(TH)).toEqual({ n: 0 });
       expect(mem.query("SELECT COUNT(*) AS n FROM docs WHERE th = ?").get(TH2)).toEqual({ n: 1 });
       expect(only(sent({ t: "doc.snap", id: "s2", th: TH, upto: 2, iv: IV, ct: "c25hcA", e: 0 }))).toMatchObject({ t: "err", tag: "Conflict" });
