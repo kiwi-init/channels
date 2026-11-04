@@ -160,6 +160,9 @@ jobs:
       - name: doc replay, a second window of yours never hides or eats the line you type
         if: ${{ !cancelled() }}
         run: bun scripts/ui-doc-replay.ts --chromium --second-window --rounds=2
+      - name: doc paste, an image pasted into a line goes out with that line
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-doc-paste.ts
       - if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

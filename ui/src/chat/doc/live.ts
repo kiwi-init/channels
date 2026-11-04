@@ -10,6 +10,7 @@ import type { DocBlockRef } from "@kiwi/core/protocol.ts"
 import type { DocEvent, WireError } from "../../../../desktop/src/bridge.ts"
 import { giveBackBlock } from "~/chat/doc/give-back"
 import { madeHere, thisWindow, type MadeLines } from "~/chat/doc/made"
+import { afterUploads, uploading } from "~/chat/doc/uploads"
 import { postFinished, type Finished, type Posting } from "~/chat/doc/post"
 import { noteTyping, tracingTyping } from "~/kit/typing-hook"
 import { FRAGMENT } from "~/chat/doc/schema"
@@ -76,8 +77,10 @@ export class LiveDoc implements Shared {
     this.doc.on("afterTransaction", this.onTransaction)
     this.awareness.on("change", this.onAware)
     this.posting = poster
-      ? postFinished(this.doc, { me: poster.me, local: (origin) => origin !== PIPE, posted: poster.posted, owned: (b) => b.by === thisWindow || this.made.has(b.id), worked: this.made }, (b) =>
-          this.post(b)
+      ? postFinished(
+          this.doc,
+          { me: poster.me, local: (origin) => origin !== PIPE, posted: poster.posted, owned: (b) => b.by === thisWindow || this.made.has(b.id), worked: this.made, hold: afterUploads },
+          (b) => this.post(b)
         )
       : null
     this.floorOff = onWriterFloor(this.doc, this.holdFloor)
@@ -98,6 +101,10 @@ export class LiveDoc implements Shared {
     if (this.dead || !th || (this.pipe && this.opened === th)) return
     this.gaveUp = false
     this.connect(th)
+  }
+
+  busy(): boolean {
+    return blocksOf(this.doc).some((b) => uploading(b.id))
   }
 
   destroy(): void {
@@ -217,11 +224,13 @@ export function holdDoc(key: string, make: () => LiveDoc): { live: LiveDoc; rele
       if (done) return
       done = true
       if (--k.users > 0) return
-      k.timer = setTimeout(() => {
+      const drop = (): void => {
         if (k.users > 0 || kept.get(key) !== k) return
+        if (k.live.busy()) return void (k.timer = setTimeout(drop, KEEP_MS))
         kept.delete(key)
         k.live.destroy()
-      }, KEEP_MS)
+      }
+      k.timer = setTimeout(drop, KEEP_MS)
     },
   }
 }
