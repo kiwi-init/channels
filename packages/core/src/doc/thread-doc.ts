@@ -2,7 +2,7 @@ import * as awarenessProtocol from "y-protocols/awareness";
 import * as Y from "yjs";
 import { b64url, fromB64url, openBytes, sealBytes } from "../crypto.ts";
 import { sign, verify, type Identity } from "../identity.ts";
-import { DOC_COMPACT, DOC_THREAD_RE } from "../protocol.ts";
+import { DOC_COMPACT, DOC_THREAD_RE, MAX_CT_LENGTH } from "../protocol.ts";
 
 const FLUSH_MS = 40;
 
@@ -83,6 +83,8 @@ export class ThreadDoc {
   private sealedWith: string | null = null;
   private stale = false;
   private hole: { dseq: number; e: number | undefined } | null = null;
+  private readonly big = new Set<string>();
+  private snapping: { id: string; covers: string[] } | null = null;
 
   constructor(o: DocOptions, doc: Y.Doc = new Y.Doc()) {
     if (!DOC_THREAD_RE.test(o.th)) throw new Error(`not a doc id: ${o.th}`);
@@ -234,6 +236,10 @@ export class ThreadDoc {
       // No key to seal with yet (a rotation still on its way): keep the update and send it again shortly.
       return this.retry(update, id);
     }
+    if (sealed.ct.length > MAX_CT_LENGTH) {
+      this.big.add(id);
+      return this.compact();
+    }
     this.o.links.send({ t: "doc", id, th: this.th, ...sealed });
     await this.refill();
     if (this.stale && this.ready) await this.compact();
@@ -246,12 +252,18 @@ export class ThreadDoc {
     const id = b64url(crypto.getRandomValues(new Uint8Array(12)));
     const sealed = await this.seal(Y.encodeStateAsUpdate(this.doc));
     this.stale = false;
+    this.snapping = { id, covers: [...this.big] };
     this.o.links.send({ t: "doc.snap", id, th: this.th, upto, ...sealed });
   }
 
   private async take(f: DocIn): Promise<void> {
     if (this.closed) return;
     if (f.t === "err") {
+      if (f.id && f.id === this.snapping?.id) {
+        this.snapping = null;
+        if (this.big.size) setTimeout(() => void this.queue(() => this.compact()), this.o.retryMs ?? RETRY_MS);
+        return;
+      }
       if (!f.id || !this.inFlight.has(f.id)) return;
       const update = this.inFlight.get(f.id)!;
       const id = f.id;
@@ -263,6 +275,14 @@ export class ThreadDoc {
       return this.retry(update, id);
     }
     if (f.t === "ack") {
+      if (f.id === this.snapping?.id) {
+        for (const id of this.snapping.covers) {
+          this.inFlight.delete(id);
+          this.big.delete(id);
+        }
+        this.snapping = null;
+        return;
+      }
       if (!this.inFlight.delete(f.id)) return;
       this.top = Math.max(this.top, f.seq);
       if (f.compact) await this.compact();
@@ -273,7 +293,7 @@ export class ThreadDoc {
       this.head = Math.max(this.head, f.head);
       this.ready = true;
       for (const done of this.waiters.splice(0)) done();
-      if (this.stale) await this.compact();
+      if (this.stale || this.big.size) await this.compact();
       return;
     }
     if (!f.snap && f.dseq <= this.head) return;

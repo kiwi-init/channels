@@ -135,7 +135,7 @@ const onDocFrame = Effect.fn("Room.onDocFrame")(function* (f: DocFrame, sender: 
       counted.refund();
       return refuse(socketError(snapped.cause), failureTag(snapped.cause));
     }
-    return { reply: frame({ t: "ack", id, seq: snapped.value }) } satisfies Effects;
+    return { reply: frame({ t: "ack", id, seq: snapped.value.dseq }), doc: { th, frame: frame({ t: "doc", ...snapped.value }) } } satisfies Effects;
   }
   const stored = yield* Effect.exit(docAppend(th, f.iv, f.ct, e, sender));
   if (stored._tag === "Failure") {

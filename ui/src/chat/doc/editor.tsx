@@ -24,7 +24,6 @@ import { peopleMatches, taskMatches } from "~/chat/matches"
 import { Avatar, cx, Dot, STATUS_WORDS } from "~/kit/bits"
 import { clock } from "~/kit/time"
 import { announce } from "~/kit/toasts"
-import { refusal } from "~/live/refused"
 import type { Channel, Person, QuestionAsk, Task, Where } from "~/model"
 import { nickname } from "~/names"
 import { useAct, useApp } from "~/nav"
@@ -692,11 +691,7 @@ export function LiveThreadDoc({ channel, where, thread, hold }: { channel: Chann
           (why) => announce(`The shared doc didn't open: ${why}`, "error"),
           {
             me,
-            post: (text, block) =>
-              actions.send(code, here.current, text, { block }).then(
-                () => true,
-                (e: unknown) => refusal(e) === null
-              ),
+            post: (text, block) => actions.send(code, here.current, text, { block }),
           }
         )
     )

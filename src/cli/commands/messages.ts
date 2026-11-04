@@ -84,8 +84,12 @@ export const messageCommands: Record<string, Command> = {
             : null;
         if (doc) {
           const named = (to ?? []).filter((n) => n !== "*" && !mentionsOf(body).has(n.toLowerCase()));
-          yield* s.sendToDoc(named.length ? `${named.map((n) => `@${n}`).join(" ")} ${body}` : body, doc);
-          out(`sent${wentTo(chosen)}, into its shared doc`);
+          const seq = yield* s.sendToDoc(named.length ? `${named.map((n) => `@${n}`).join(" ")} ${body}` : body, doc, {
+            to,
+            room,
+            ...(chosen.task !== undefined ? { task: chosen.task } : {}),
+          });
+          out(`sent #${seq}${wentTo(chosen)}, into its shared doc`);
           for (const n of [bareHandleNote(state, body)].filter((x) => x !== null)) out(n);
           return;
         }
@@ -281,7 +285,7 @@ export const messageCommands: Record<string, Command> = {
         for (const m of shown.slice(-n)) out(render(m, state));
         const at = room === undefined || room === GENERAL_ROOM ? docPlaceOf(state, task === undefined ? {} : { task }) : null;
         if (!at || opt.json) return;
-        const doc = yield* s.docText(at, LOG_DOC_MS).pipe(Effect.orElseSucceed(() => null));
+        const doc = yield* s.docText(at, LOG_DOC_MS, true).pipe(Effect.orElseSucceed(() => null));
         const name = task === undefined ? "#general" : `T${task}`;
         if (doc === null) return out(`${name} has a shared doc, but it couldn't be read now: kiwi show ${task === undefined ? "general" : name} tries again`);
         out(`${name}'s shared doc:`);

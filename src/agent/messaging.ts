@@ -81,23 +81,24 @@ export class SessionMessaging extends SessionListen {
 
   readonly sendToDoc = Effect.fn("AgentSession.sendToDoc")(
     { self: this },
-    function* (this: SessionMessaging, body: string, at: DocPlace) {
-      yield* this.mayI({ kind: "msg" });
+    function* (this: SessionMessaging, body: string, at: DocPlace, opts: SendOptions = {}) {
+      yield* this.mayI({ kind: "msg", to: yield* this.resolveTo(opts.to) });
       const { state } = yield* this.state();
       const me = state.members.get(this.me);
       const agent = !me || !isPerson(me);
-      return yield* Effect.tryPromise({
-        try: () => writeBlock(this.ch, state.head, at, this.me, body, agent),
+      const id = yield* Effect.tryPromise({
+        try: () => writeBlock(this.ch, state.head, at, this.me, body, agent, true),
         catch: (e) => new Rejected(`couldn't write to the shared doc: ${e instanceof Error ? e.message : "error"}; nothing was sent`),
       });
+      return yield* this.send(body, { ...opts, block: { th: at.th, id } });
     },
     oneLook,
   );
 
-  readonly docText = Effect.fn("AgentSession.docText")({ self: this }, function* (this: SessionMessaging, at: DocPlace, ms?: number) {
+  readonly docText = Effect.fn("AgentSession.docText")({ self: this }, function* (this: SessionMessaging, at: DocPlace, ms?: number, drafts = false) {
     const { state } = yield* this.state();
     return yield* Effect.tryPromise({
-      try: () => readDoc(this.ch, state.head, at, ms),
+      try: () => readDoc(this.ch, state.head, at, ms, drafts),
       catch: (e) => new Rejected(`couldn't read the shared doc: ${e instanceof Error ? e.message : "error"}`),
     });
   });

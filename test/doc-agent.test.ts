@@ -70,6 +70,21 @@ describe("an agent wakes for a finished block in the thread doc (T500)", () => {
     stop();
   });
 
+  test("a block a message carries wakes nobody from the doc, since the message wakes them; a block from a 2026.11.7 sender, with no message, still does (T1388)", () => {
+    const w = room();
+    const { wakes, stop } = watch(w, { owns: true });
+    const posted = agentBlock(w.doc, "atlas");
+    posted.write("@olivia the relay is merged");
+    posted.post();
+    expect(blocksOf(w.doc).find((b) => b.id === posted.id)).toMatchObject({ sent: true, posted: true });
+    expect(wakes).toHaveLength(0);
+    const old = agentBlock(w.doc, "atlas");
+    old.write("@olivia and the CLI");
+    old.end();
+    expect(wakes.map((x) => x.block.text)).toEqual(["@olivia and the CLI"]);
+    stop();
+  });
+
   test("another author's block after it doesn't finish it; the author's own next block does, even with others between", async () => {
     const w = room();
     const { wakes, stop } = watch(w);
