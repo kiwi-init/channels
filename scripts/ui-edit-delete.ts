@@ -49,14 +49,16 @@ try {
   expect((await mine.innerText()).includes("v1.0.1"), "Enter saves the new text in place");
   expect((await mine.locator(".msg-edited").count()) === 1, "the message is marked edited");
 
+  await page.locator(".side-row", { hasText: "atlas" }).first().click();
   await composer.click();
   await composer.press("ArrowUp");
   await editor.waitFor();
   await editor.fill("never mind");
   await editor.press("Escape");
   await page.waitForTimeout(200);
-  expect((await editor.count()) === 0 && !(await mine.innerText()).includes("never mind"), "↑ in an empty composer edits your last message, and Esc keeps it as it was");
+  expect((await editor.count()) === 0 && (await page.locator("article.msg", { hasText: "never mind" }).count()) === 0, "↑ in an empty composer edits your last message, and Esc keeps it as it was");
 
+  await page.locator(".side-row", { hasText: "general" }).first().click();
   await mine.hover();
   await mine.getByRole("button", { name: "Delete" }).click();
   const dialog = page.getByRole("dialog", { name: "Delete this message?" });

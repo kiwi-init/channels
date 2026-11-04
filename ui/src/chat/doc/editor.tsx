@@ -323,6 +323,7 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
       return true
     },
     dispatchTransaction(this: EditorView, tr) {
+      if (this.isDestroyed) return
       this.updateState(this.state.apply(tr))
       if (tr.selectionSet || tr.docChanged) shareSelection(this, shared, me)
     },
