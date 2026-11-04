@@ -16,6 +16,10 @@ Written by `bun scripts/changelog.ts` from each squash-merged pull request's tit
 - **cli: kiwi send writes a block into a thread's shared doc; show and log read it** ([#1565](https://github.com/kiwi-init/channels/pull/1565))
 - **daemon: wake an agent for a finished block in its doc threads** ([#1568](https://github.com/kiwi-init/channels/pull/1568))
 - **mcp and loop: doc wakes reach agents without hooks** ([#1569](https://github.com/kiwi-init/channels/pull/1569))
+- **hooks: a doc wake is told only once its hand-over lands** ([#1571](https://github.com/kiwi-init/channels/pull/1571))
+- **core, ui: members-only rooms and DMs are docs (T693)** ([#1573](https://github.com/kiwi-init/channels/pull/1573))
+- **app: a person's finished doc block posts as their message (T791)** ([#1581](https://github.com/kiwi-init/channels/pull/1581))
+- **daemon: follow docs only for a seat something can wake (T606)** ([#1574](https://github.com/kiwi-init/channels/pull/1574))
 
 ## 2026.11.5 — 2026-11-04
 
