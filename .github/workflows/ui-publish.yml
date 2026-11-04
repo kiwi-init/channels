@@ -2,18 +2,10 @@ name: ui-publish
 
 on:
   workflow_dispatch:
-  push:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
     branches: [main]
-    paths:
-      - ui/**
-      - packages/app/**
-      - packages/core/**
-      - packages/secrets/**
-      - packages/channel/**
-      - desktop/src/ui-channel.ts
-      - desktop/scripts/ui-stage.ts
-      - .github/workflows/ui-publish.yml
-      - bun.lock
 
 permissions:
   contents: read
@@ -23,8 +15,37 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  gate:
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      !contains(github.event.workflow_run.head_commit.message, 'UI-publish: no'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      sha: ${{ steps.gate.outputs.sha }}
+      go: ${{ steps.gate.outputs.go }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Publish only what main's full CI passed, and only when the UI changed
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: bash scripts/ui-publish-gate.sh
+
   publish:
-    if: "github.ref == 'refs/heads/main' && !contains(github.event.head_commit.message, 'UI-publish: no')"
+    needs: gate
+    if: needs.gate.outputs.go == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: livewire-ui
@@ -33,6 +54,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.gate.outputs.sha }}
           persist-credentials: false
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
@@ -62,7 +84,9 @@ jobs:
         run: bun run ui:build
 
       - name: Stage the UI
-        run: bun desktop/scripts/ui-stage.ts ui/dist "$RUNNER_TEMP/ui" "$GITHUB_SHA"
+        env:
+          SHA: ${{ needs.gate.outputs.sha }}
+        run: bun desktop/scripts/ui-stage.ts ui/dist "$RUNNER_TEMP/ui" "$SHA"
 
       - name: Sign
         env:
