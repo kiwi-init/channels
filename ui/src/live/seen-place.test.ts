@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import type { Message } from "@kiwi/core/protocol.ts"
 import { dmPlace, placeKey, type ChannelState } from "@kiwi/core/state.ts"
 import { directsOf } from "~/live/map"
-import { lastIn, seenKeyOf } from "~/live/seen-place"
+import { lastIn, seenByThread, seenKeyOf } from "~/live/seen-place"
 
 const seat = (name: string, user: string, handle: string) => [name, { name, pk: `pk-${name}`, kind: "human", active: true, owner: false, sponsor: { user, name: handle, handle } }] as const
 const members = new Map([seat("jow", "p-jow", "jow"), seat("jow-2", "p-jow", "jow"), seat("tia", "p-tia", "tia"), seat("ana", "p-ana", "ana")])
@@ -55,5 +55,46 @@ describe("reading a DM clears its badge (T1747)", () => {
     }
     const s = { ...state([[9, "theirs"]]), rooms: new Map([["theirs", other]]) } as unknown as ChannelState
     expect(lastIn([said(9, "tia", { room: "theirs" })], s, "jow", { kind: "dm", with: "tia" })).toBe(0)
+  })
+})
+
+describe("a reply read in an open thread is read in its DM too (#1665)", () => {
+  const place = dmPlace("jow", "tia")
+  const threaded = (placeOf: [number, unknown][], threadOf: [number, number][]) => ({ ...state([], placeOf), threadOf: new Map(threadOf) }) as unknown as ChannelState
+
+  test("opening the thread moves the DM's mark over the replies it shows", () => {
+    const s = threaded(
+      [
+        [7, place],
+        [8, place],
+      ],
+      [[8, 7]]
+    )
+    const messages = [said(7, "jow"), said(8, "tia", { re: [7] })]
+    const seen = { [placeKey(place)]: 7 }
+    expect(unreadWith(s, messages, "jow", seen)).toBe(1)
+    const marks = seenByThread(messages, s, "jow", 7, seen)
+    expect(marks).toEqual({ [placeKey(place)]: 8 })
+    expect(unreadWith(s, messages, "jow", { ...seen, ...marks })).toBe(0)
+  })
+
+  test("a DM message outside the thread stays unread, and so does everything after it", () => {
+    const s = threaded(
+      [
+        [7, place],
+        [8, place],
+        [9, place],
+        [10, place],
+      ],
+      [
+        [8, 7],
+        [10, 7],
+      ]
+    )
+    const messages = [said(7, "jow"), said(8, "tia", { re: [7] }), said(9, "tia"), said(10, "tia", { re: [7] })]
+    const seen = { [placeKey(place)]: 7 }
+    const marks = seenByThread(messages, s, "jow", 7, seen)
+    expect(marks).toEqual({ [placeKey(place)]: 8 })
+    expect(unreadWith(s, messages, "jow", { ...seen, ...marks })).toBe(2)
   })
 })
