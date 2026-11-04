@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react"
 
+import { demoFile, demoImage, putDemoFile, putDemoImage } from "~/demo/doc-media"
 import { inviteLine } from "@kiwi/app/join-line.ts"
 import type { Personality } from "@kiwi/core/personality.ts"
 import { HANDOFF_DONE } from "@kiwi/core/protocol.ts"
@@ -403,6 +404,10 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       retry: (code, seq) => edit(code, (c) => ({ ...c, messages: c.messages.map((m) => (m.seq === seq ? { ...m, failed: undefined } : m)) })),
       loadImage: () => {},
       openDoc: (code, thread, th, on) => openDemoDoc(code, thread, th, on),
+      putDocImage: (_code, upload) => putDemoImage(upload),
+      putDocFile: (_code, upload) => putDemoFile(upload),
+      docImage: (_code, img) => demoImage(img),
+      docFile: (_code, f) => demoFile(f),
       setAgentColor: (code, name, color) => edit(code, (c) => ({ ...c, people: c.people.map((p) => (p.name === name ? { ...p, color: color ?? undefined } : p)) })),
       leaveRoom: (code, room) => edit(code, (c) => ({ ...c, rooms: c.rooms.filter((r) => r.id !== room) })),
       markRead: (code, where) =>

@@ -28,6 +28,7 @@ import {
   type EnrollDone,
 } from "~/live/account"
 import { loadPicture } from "~/live/pictures"
+import { appCan } from "~/live/app-can"
 import { setNewMemberPowers, setNewMemberScopes } from "~/live/defaults"
 import { deleteTheme, saveTheme, setPrefs } from "~/live/prefs"
 import { iconFromFile } from "~/live/icon-file"
@@ -39,6 +40,7 @@ import { closeOpened, leavingOnPurpose, openedRun, type Run } from "~/live/store
 import { attempt, event, memberOf, need, owner, say } from "~/live/run"
 
 const manage = () => import("~/live/manage")
+const UPDATE_FOR_MEDIA = "Update Channels to add images and files to a doc"
 const rare = () => import("~/live/rare")
 import { downloadAndRestart } from "~/live/update"
 import { setWake } from "~/live/wakes"
@@ -163,6 +165,18 @@ export function makeActions(): Actions {
       if (last) markSeenIn(run.roomId, { [seenKeyOf(run.state, where, run.me)]: last })
     },
     openDoc: (code, thread, th, on) => link(code).doc(thread, th, on),
+    putDocImage: async (code, upload) => {
+      if (!(await appCan("putImage"))) throw new Error(UPDATE_FOR_MEDIA)
+      const stored = await link(code).putImage(upload)
+      if (!stored.ref) throw new Error(`${upload.name} wasn't stored`)
+      return { name: stored.name, mime: stored.mime, ref: stored.ref }
+    },
+    putDocFile: async (code, upload) => {
+      if (!(await appCan("putFileData"))) throw new Error(UPDATE_FOR_MEDIA)
+      return link(code).putFileData(upload.name, upload.mime, upload.data)
+    },
+    docImage: (code, img) => link(code).image(img),
+    docFile: async (code, f) => ((await appCan("fileData")) ? link(code).fileData(f) : null),
     followThread: (code, root, on) => {
       const run = need(code)
       markSeenIn(run.roomId, { [followKey(root)]: followMark(seenIn(run.roomId)[followKey(root)], run.messages.at(-1)?.seq ?? 0, on) })

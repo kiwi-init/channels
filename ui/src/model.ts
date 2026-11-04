@@ -284,6 +284,19 @@ export interface TheirDirect {
   last: number
 }
 
+export interface DocImage {
+  name: string
+  mime: string
+  ref: { id: string; key: string; size: number }
+}
+
+export interface DocFile {
+  name: string
+  mime: string
+  size: number
+  pieces: { id: string; key: string; size: number }[]
+}
+
 export interface Upload {
   name: string
   mime: string
@@ -693,6 +706,10 @@ export interface Actions {
   markRead(code: string, where: Where): void
   followThread(code: string, root: number, on: boolean): void
   openDoc(code: string, thread: string, th: string | null, on: (e: DocEvent) => void): PipeIn
+  putDocImage(code: string, upload: Upload): Promise<DocImage>
+  putDocFile(code: string, upload: Upload): Promise<DocFile>
+  docImage(code: string, img: DocImage): Promise<string | null>
+  docFile(code: string, f: DocFile): Promise<string | null>
   leaveRoom(code: string, room: string): void
   react(code: string, seq: number, emoji: string): void
   editMessage(code: string, seq: number, text: string): void

@@ -142,6 +142,9 @@ export class ChannelLink {
   leave = () => this.c("leave");
   send = (...a: Args<"send">) => this.c("send", ...a);
   image = (...a: Args<"image">) => this.c("image", ...a);
+  putImage = (...a: Args<"putImage">) => this.c("putImage", ...a);
+  putFileData = (...a: Args<"putFileData">) => this.c("putFileData", ...a);
+  fileData = (...a: Args<"fileData">) => this.c("fileData", ...a);
   history = (...a: Args<"history">) => this.c("history", ...a);
   presence = (p: PresenceFields) => this.via.presence(this.code, p);
   openRows = (rows: CachedRow[]) => this.via.openRows(this.code, rows);

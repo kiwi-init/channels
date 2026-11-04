@@ -101,3 +101,21 @@ export function dropEmptyOwn(state: EditorState, me: string, keep: number | null
   for (const b of gone.reverse()) tr.delete(b.pos, b.pos + b.node.nodeSize)
   return tr
 }
+
+export function attach(state: EditorState, me: string, now: number, nodes: readonly Node[]): Transaction | null {
+  if (!nodes.length) return null
+  const here = blockAt(state)
+  const own = here && attrsOf(here.node).author === me && attrsOf(here.node).kind === "text" ? here : null
+  const tr = own ? state.tr : startBlock(state, me, now).setMeta("addToHistory", true)
+  const index = own ? own.index : tr.doc.childCount - 1
+  const node = tr.doc.child(index)
+  let pos = 0
+  for (let i = 0; i < index; i++) pos += tr.doc.child(i).nodeSize
+  const block = { pos }
+  const last = node.lastChild
+  const blank = last && last.type === schema.nodes.paragraph && last.content.size === 0
+  const at = blank ? block.pos + node.nodeSize - 1 - last.nodeSize : block.pos + node.nodeSize - 1
+  tr.insert(at, [...nodes, ...(blank ? [] : [schema.nodes.paragraph.create()])])
+  const after = at + nodes.reduce((n, x) => n + x.nodeSize, 0) + 1
+  return tr.setSelection(TextSelection.create(tr.doc, after)).scrollIntoView()
+}
