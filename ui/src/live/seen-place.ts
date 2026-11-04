@@ -43,14 +43,16 @@ export function seenByThread(messages: readonly Wire[], state: ChannelState, me:
   const inThread = (m: Wire) => m.seq === root || state.threadOf.get(m.seq) === root
   const keys = new Set(messages.filter(inThread).map((m) => readKeyOf(state, m, me)))
   const mine = rootOf(me, state.members)
-  const loadedFrom = messages[0]?.seq ?? Number.POSITIVE_INFINITY
   const marks: Record<string, number> = {}
   for (const key of keys) {
     const from = seen[key] ?? 0
-    if (loadedFrom > from + 1) continue
     let mark = from
+    let next = from + 1
     for (const m of messages) {
-      if (m.seq <= from || readKeyOf(state, m, me) !== key) continue
+      if (m.seq <= from) continue
+      if (m.seq !== next) break
+      next = m.seq + 1
+      if (readKeyOf(state, m, me) !== key) continue
       if (inThread(m)) mark = m.seq
       else if (m.kind !== "event" && rootOf(m.from, state.members) !== mine) break
     }

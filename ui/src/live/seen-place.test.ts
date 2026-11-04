@@ -91,6 +91,25 @@ describe("a reply read in an open thread is read in its DM too (#1665)", () => {
     expect(seenByThread(messages, s, "jow", 10, { [placeKey(place)]: 9 })).toEqual({ [placeKey(place)]: 11 })
   })
 
+  test("a gap in the loaded history stops the mark, while known messages elsewhere are passed", () => {
+    const s = threaded(
+      [
+        [7, place],
+        [8, place],
+        [10, place],
+      ],
+      [
+        [8, 7],
+        [10, 7],
+      ]
+    )
+    const gap = [said(7, "jow"), said(8, "tia", { re: [7] }), said(10, "tia", { re: [7] })]
+    expect(seenByThread(gap, s, "jow", 7, { [placeKey(place)]: 7 })).toEqual({ [placeKey(place)]: 8 })
+    const elsewhere = { ...s, roomOf: new Map([[9, "general"]]) } as unknown as ChannelState
+    const known = [said(7, "jow"), said(8, "tia", { re: [7] }), said(9, "ana", { room: "general" }), said(10, "tia", { re: [7] })]
+    expect(seenByThread(known, elsewhere, "jow", 7, { [placeKey(place)]: 7 })).toEqual({ [placeKey(place)]: 10 })
+  })
+
   test("a DM message outside the thread stays unread, and so does everything after it", () => {
     const s = threaded(
       [
