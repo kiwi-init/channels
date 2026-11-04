@@ -134,3 +134,53 @@ test("an acked hand-over tells its doc wakes when the host says it landed, and n
     expect(pendingDocWakes(alias, me)).toEqual([]);
   });
 });
+
+const NOHARNESS: Env = { CLAUDECODE: "", CLAUDE_CODE_SESSION_ID: "", CLAUDE_PID: "", AI_AGENT: "", CODEX_THREAD_ID: "", CURSOR_AGENT: "" };
+
+test("kiwi wait hands over a doc-only line and tells it (T1741)", async () => {
+  const alias = inAgent(() => Object.keys(loadConfig().channels)[0]!);
+  inAgent(() => addDocWake(alias, me, wake("e".repeat(22), `@${me} only in the doc`)));
+  const out = await ok(agent, ["wait", "--timeout", "5s"], NOHARNESS);
+  expect(out).toContain("only in the doc");
+  expect(inAgent(() => pendingDocWakes(alias, me))).toEqual([]);
+});
+
+test("kiwi wait hands over a doc-only line that lands while it waits (T1741)", async () => {
+  const alias = inAgent(() => Object.keys(loadConfig().channels)[0]!);
+  const p = spawn(agent, ["wait", "--timeout", "10s"], NOHARNESS);
+  await Bun.sleep(1_500);
+  inAgent(() => addDocWake(alias, me, wake("f".repeat(22), `@${me} arrived mid-wait`)));
+  expect(await p.exited).toBe(0);
+  expect(await new Response(p.stdout).text()).toContain("arrived mid-wait");
+});
+
+test("kiwi tail streams doc-only lines (T1741)", async () => {
+  const alias = inAgent(() => Object.keys(loadConfig().channels)[0]!);
+  inAgent(() => addDocWake(alias, me, wake("g".repeat(22), `@${me} streamed from the doc`)));
+  const p = spawn(agent, ["tail"], NOHARNESS);
+  let out = "";
+  const reading = new Response(p.stdout).text().then((t) => void (out = t));
+  await until(async () => inAgent(() => pendingDocWakes(alias, me)).length === 0, "tail telling the first line");
+  inAgent(() => addDocWake(alias, me, wake("h".repeat(22), `@${me} and a second one`)));
+  await until(async () => inAgent(() => pendingDocWakes(alias, me)).length === 0, "tail telling the second line");
+  p.kill();
+  await p.exited;
+  await reading;
+  expect(out).toContain("streamed from the doc");
+  expect(out).toContain("and a second one");
+});
+
+test("hooks with only doc lines say where to answer, not reply N (T1741)", async () => {
+  const alias = inAgent(() => Object.keys(loadConfig().channels)[0]!);
+  inAgent(() => addDocWake(alias, me, wake("i".repeat(22), `@${me} a stop-hook line`)));
+  const stop = JSON.parse(await ok(agent, ["hook", "stop"], S, JSON.stringify({ session_id: "dochand", cwd: agent, hook_event_name: "Stop" }))) as { reason: string };
+  expect(stop.reason).toContain("a stop-hook line");
+  expect(stop.reason).toContain("shared doc");
+  expect(stop.reason).not.toContain("reply N");
+  inAgent(() => addDocWake(alias, me, wake("j".repeat(22), `@${me} a listen-hook line`)));
+  const listener = spawn(agent, ["hook", "listen"], S, INPUT);
+  expect(await listener.exited).toBe(2);
+  const told = await new Response(listener.stderr).text();
+  expect(told).toContain("a listen-hook line");
+  expect(told).not.toContain("reply N");
+});
