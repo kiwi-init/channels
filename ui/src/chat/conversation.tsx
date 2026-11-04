@@ -78,12 +78,13 @@ export function quoteOf(list: Message[], i: number, bySeq: ReadonlyMap<number, M
 
 interface Anchor {
   el: Element
+  seq: number
   top: number
   at: number
 }
 
 function anchorIn(box: HTMLElement, list: HTMLElement): Anchor | null {
-  const rows = list.children
+  const rows = list.querySelectorAll<HTMLElement>(":scope > [data-seq]")
   const top = box.getBoundingClientRect().top
   let lo = 0
   let hi = rows.length - 1
@@ -93,7 +94,21 @@ function anchorIn(box: HTMLElement, list: HTMLElement): Anchor | null {
     else lo = mid + 1
   }
   const el = rows[lo]
-  return el ? { el, top: el.getBoundingClientRect().top - top, at: box.scrollTop } : null
+  const seq = Number(el?.dataset.seq)
+  return el && Number.isSafeInteger(seq) ? { el, seq, top: el.getBoundingClientRect().top - top, at: box.scrollTop } : null
+}
+
+function anchorRow(list: HTMLElement, seq: number): Element | null {
+  let found: Element | null = null
+  let best = -1
+  for (const row of list.querySelectorAll<HTMLElement>(":scope > [data-seq]")) {
+    const at = Number(row.dataset.seq)
+    if (at <= seq && at > best) {
+      best = at
+      found = row
+    }
+  }
+  return found
 }
 
 function spotIn(box: HTMLElement, list: HTMLElement): Spot | null {
@@ -141,11 +156,13 @@ export function useStick(following = true) {
       return
     }
     const a = anchor.current
-    if (!a?.el.isConnected) return
+    if (!a) return
+    const el = a.el.isConnected ? a.el : anchorRow(list, a.seq)
+    if (!el) return
     const top = box.getBoundingClientRect().top
-    const shift = a.el.getBoundingClientRect().top - top - (a.top - (box.scrollTop - a.at))
+    const shift = el.getBoundingClientRect().top - top - (a.top - (box.scrollTop - a.at))
     if (Math.abs(shift) > 0.5) box.scrollTop += shift
-    anchor.current = { el: a.el, top: a.el.getBoundingClientRect().top - top, at: box.scrollTop }
+    anchor.current = { el, seq: a.seq, top: el.getBoundingClientRect().top - top, at: box.scrollTop }
   }, [])
 
   const remember = useCallback(() => {
