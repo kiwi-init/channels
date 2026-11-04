@@ -2,6 +2,7 @@ import { applyAwarenessUpdate, encodeAwarenessUpdate, type Awareness } from "y-p
 import * as Y from "yjs";
 import { b64url, fromB64url } from "../crypto.ts";
 import type { PipeIn, PipeOut } from "./held-pipe.ts";
+import { writerFloor } from "./level.ts";
 
 interface Changed {
   added: number[];
@@ -9,7 +10,12 @@ interface Changed {
   removed: number[];
 }
 
-export function pipeDoc(doc: Y.Doc, awareness: Awareness, on: (out: PipeOut) => void, synced: Promise<void> = Promise.resolve()): PipeIn {
+export interface WriterGate {
+  level: number;
+  refused: () => void;
+}
+
+export function pipeDoc(doc: Y.Doc, awareness: Awareness, on: (out: PipeOut) => void, synced: Promise<void> = Promise.resolve(), gate?: WriterGate): PipeIn {
   const tag = Symbol("pipe");
   let closed = false;
   let ready = false;
@@ -31,20 +37,26 @@ export function pipeDoc(doc: Y.Doc, awareness: Awareness, on: (out: PipeOut) => 
     if (ids.length) on({ _tag: "Aware", u: b64url(encodeAwarenessUpdate(awareness, ids)) });
     on({ _tag: "Ready" });
   });
+  const close = (): void => {
+    if (closed) return;
+    closed = true;
+    doc.off("update", onUpdate);
+    awareness.off("update", onAware);
+    awareness.setLocalState(null);
+  };
   return {
     update: (u) => {
-      if (!closed) Y.applyUpdate(doc, fromB64url(u), tag);
+      if (closed) return;
+      if (gate && writerFloor(doc) > gate.level) {
+        close();
+        return gate.refused();
+      }
+      Y.applyUpdate(doc, fromB64url(u), tag);
     },
     aware: (state) => {
       if (!closed) awareness.setLocalState(state);
     },
-    close: () => {
-      if (closed) return;
-      closed = true;
-      doc.off("update", onUpdate);
-      awareness.off("update", onAware);
-      awareness.setLocalState(null);
-    },
+    close,
   };
 }
 

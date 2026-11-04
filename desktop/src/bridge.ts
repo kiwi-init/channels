@@ -223,7 +223,7 @@ export type KeysAsk =
   | { op: "openKept"; code: string; sealed: Wire }
   | { op: "follow"; code: string; since: number; watch?: boolean }
   | { op: "unfollow"; sub: number }
-  | { op: "doc"; code: string; thread: string; th: string | null }
+  | { op: "doc"; code: string; thread: string; th: string | null; level?: number }
   | { op: "docIn"; sub: number; update: string }
   | { op: "docAware"; sub: number; state: Wire }
   | { op: "undoc"; sub: number }
