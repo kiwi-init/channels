@@ -219,12 +219,13 @@ export function roomsOf(state: ChannelState, messages: readonly Wire[], me: stri
     if (m.kind === "event" || m.from === me || ignored(state.trust.get(m.seq)) || (offTheRoom(state, m) && !mentionsYou(m, me))) continue
     if ((state.placeOf.get(m.seq) ?? MAIN).kind !== "main") continue
     const id = roomOfMessage(state, m)
-    if (state.rooms.get(id)?.dm) continue
+    const room = state.rooms.get(id)
+    if (room?.dm || room?.self) continue
     if (m.seq <= (seen[roomSeenKey(id)] ?? (id === GENERAL_ROOM ? 0 : from))) continue
     unread.set(id, (unread.get(id) ?? 0) + 1)
     if (mentionsYou(m, me)) mentions.set(id, (mentions.get(id) ?? 0) + 1)
   }
-  const rooms = [...state.rooms.values()].filter((r) => !r.dm && sentTo(r, me, state.members))
+  const rooms = [...state.rooms.values()].filter((r) => !r.dm && !r.self && sentTo(r, me, state.members))
   const list = rooms.some((r) => r.id === GENERAL_ROOM) ? rooms : [{ id: GENERAL_ROOM, name: GENERAL_ROOM }, ...rooms]
   return list.map((r) => ({
     id: r.id,

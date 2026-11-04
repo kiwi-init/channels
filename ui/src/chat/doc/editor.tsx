@@ -1,6 +1,6 @@
 import "~/styles/thread-doc.css"
 
-import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore, type CSSProperties, type RefObject } from "react"
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore, type CSSProperties, type RefObject } from "react"
 import { createPortal } from "react-dom"
 import type { Node } from "prosemirror-model"
 import { EditorState, Plugin, type Transaction } from "prosemirror-state"
@@ -10,19 +10,23 @@ import { yCursorPlugin, ySyncPlugin, ySyncPluginKey, yUndoPlugin } from "y-prose
 import { attach, blockAt, blocks, continues, dropEmptyOwn, isEmpty, startBlock } from "~/chat/doc/blocks"
 import { docKeys } from "~/chat/doc/keys"
 import { holdDoc, LiveDoc, type Shared } from "~/chat/doc/live"
+import { linksPlugin } from "~/chat/doc/links"
 import { fileDrag, takeDropped } from "@kiwi/app/dropped.ts"
 import { emptyPaste, takePasted } from "@kiwi/app/pasted.ts"
 import { fileView, filesIn, imageView, uploadAll, type DocMedia } from "~/chat/doc/media"
+import { postedBlocks } from "~/chat/doc/posted"
 import { markdownRules } from "~/chat/doc/rules"
-import { attrsOf, FRAGMENT, schema, type BlockAttrs } from "~/chat/doc/schema"
+import { attrsOf, FRAGMENT, isSent, schema, type BlockAttrs } from "~/chat/doc/schema"
 import { dismiss, suggestPlugin, type Query } from "~/chat/doc/suggest"
 import { peopleMatches, taskMatches } from "~/chat/matches"
 import { Avatar, cx, Dot, STATUS_WORDS } from "~/kit/bits"
 import { clock } from "~/kit/time"
 import { announce } from "~/kit/toasts"
-import type { Channel, Person, Task, Where } from "~/model"
+import type { Channel, Person, QuestionAsk, Task, Where } from "~/model"
 import { nickname } from "~/names"
 import { useAct, useApp } from "~/nav"
+
+const QuestionCard = lazy(() => import("~/chat/question-card"))
 
 const IDLE_MS = 4000
 
@@ -68,10 +72,12 @@ class BlockView implements NodeView {
   dom: HTMLElement
   contentDOM: HTMLElement
   private head: HTMLElement
+  private foot: HTMLElement
 
   constructor(
     public node: Node,
     private heads: Heads,
+    private feet: Heads,
     private shown: Map<HTMLElement, BlockView>
   ) {
     this.dom = document.createElement("section")
@@ -81,7 +87,10 @@ class BlockView implements NodeView {
     this.head.contentEditable = "false"
     this.contentDOM = document.createElement("div")
     this.contentDOM.className = "blk-body"
-    this.dom.append(this.head, this.contentDOM)
+    this.foot = document.createElement("div")
+    this.foot.className = "blk-foot"
+    this.foot.contentEditable = "false"
+    this.dom.append(this.head, this.contentDOM, this.foot)
     this.shown.set(this.dom, this)
     this.paint()
   }
@@ -91,6 +100,7 @@ class BlockView implements NodeView {
     this.dom.dataset.kind = a.kind
     this.dom.dataset.block = a.id
     this.heads.set(this.head, a)
+    this.feet.set(this.foot, a)
   }
 
   update(node: Node): boolean {
@@ -101,39 +111,47 @@ class BlockView implements NodeView {
   }
 
   stopEvent(e: Event): boolean {
-    return e.target instanceof globalThis.Node && this.head.contains(e.target)
+    return e.target instanceof globalThis.Node && (this.head.contains(e.target) || this.foot.contains(e.target))
   }
 
   ignoreMutation(m: MutationRecord | { type: "selection"; target: globalThis.Node }): boolean {
-    return (m.type === "attributes" && m.target === this.dom) || this.head.contains(m.target)
+    return (m.type === "attributes" && m.target === this.dom) || this.head.contains(m.target) || this.foot.contains(m.target)
   }
 
   destroy(): void {
     this.heads.drop(this.head)
+    this.feet.drop(this.foot)
     this.shown.delete(this.dom)
   }
 }
 
 interface Drafts {
-  is: (block: string) => boolean
+  posted: (block: string) => boolean
   version: number
 }
 
 function paintRuns(root: HTMLElement, shown: Map<HTMLElement, BlockView>, me: string, drafts: Drafts): void {
   let prev: Node | undefined
+  const last = new Map<string, HTMLElement>()
   for (const el of root.children) {
     if (!(el instanceof HTMLElement)) continue
     const node = shown.get(el)?.node
     if (!node) continue
+    const a = attrsOf(node)
     const empty = isEmpty(node)
-    const mine = attrsOf(node).author === me
-    const hidden = empty && !mine
+    const mine = a.author === me
+    const hidden = (empty && !mine) || drafts.posted(a.id)
     el.classList.toggle("is-cont", !hidden && continues(prev, node))
     el.classList.toggle("is-empty", empty)
     el.classList.toggle("is-mine", mine)
     el.classList.toggle("is-hidden", hidden)
-    el.classList.toggle("is-draft", mine && !empty && drafts.is(attrsOf(node).id))
+    el.classList.remove("is-draft")
+    if (a.kind === "text" && !empty) last.set(a.author, el)
     if (!hidden) prev = node
+  }
+  for (const el of last.values()) {
+    const node = shown.get(el)?.node
+    if (node && !isSent(node) && !drafts.posted(attrsOf(node).id)) el.classList.add("is-draft")
   }
 }
 
@@ -270,9 +288,8 @@ interface ViewOpts {
 
 const openImage = (url: string) => void window.open(url, "_blank", "noopener,noreferrer")
 
-function takeFiles(view: EditorView, me: string, opts: ViewOpts, files: readonly File[]): boolean {
-  const media = opts.media()
-  if (!files.length || !media || !opts.editable()) return false
+function takeFiles(view: EditorView, me: string, media: DocMedia | null, editable: boolean, files: readonly File[]): boolean {
+  if (!files.length || !media || !editable) return false
   void uploadAll(files, media, (why) => announce(why, "error")).then((nodes) => {
     if (view.isDestroyed) return
     const tr = attach(view.state, me, Date.now(), nodes)
@@ -281,7 +298,7 @@ function takeFiles(view: EditorView, me: string, opts: ViewOpts, files: readonly
   return true
 }
 
-function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, opts: ViewOpts): { view: EditorView; stop: () => void } {
+function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, feet: Heads, opts: ViewOpts): { view: EditorView; stop: () => void } {
   const seen = new Map<number, { key: string; at: number }>()
   const shown = new Map<HTMLElement, BlockView>()
   const watch = ({ added, updated }: { added: number[]; updated: number[] }) => {
@@ -304,8 +321,10 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
       ...docKeys(
         me,
         () => Date.now(),
-        () => blur.now()
+        () => blur.now(),
+        (block) => opts.drafts.current.posted(block)
       ),
+      linksPlugin(),
       herePlugin(),
       runsPlugin(shown, me, opts.drafts),
       tidyPlugin(me),
@@ -317,25 +336,25 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
     editable: opts.editable,
     attributes: { class: "doc", role: "textbox", "aria-multiline": "true", "aria-label": "Thread" },
     nodeViews: {
-      block: (node) => new BlockView(node, heads, shown),
+      block: (node) => new BlockView(node, heads, feet, shown),
       mention: mentionView(opts.name),
       image: imageView(opts.media, openImage),
       file: fileView(opts.media),
     },
     handlePaste: (v, e) => {
       const dt = e.clipboardData
-      if (takeFiles(v, me, opts, filesIn(dt))) {
+      if (takeFiles(v, me, opts.media(), opts.editable(), filesIn(dt))) {
         e.preventDefault()
         return true
       }
       if (!dt || !emptyPaste(dt) || !opts.media() || !opts.editable()) return false
       e.preventDefault()
-      void takePasted(dt).then((f) => f && takeFiles(v, me, opts, [f]))
+      void takePasted(dt).then((f) => f && takeFiles(v, me, opts.media(), opts.editable(), [f]))
       return true
     },
     handleDrop: (v, e) => {
       const dt = e.dataTransfer
-      if (takeFiles(v, me, opts, filesIn(dt))) {
+      if (takeFiles(v, me, opts.media(), opts.editable(), filesIn(dt))) {
         e.preventDefault()
         return true
       }
@@ -343,7 +362,7 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
       e.preventDefault()
       void takeDropped(dt).then(({ files, refused }) => {
         for (const why of refused) announce(why, "error")
-        takeFiles(v, me, opts, files)
+        takeFiles(v, me, opts.media(), opts.editable(), files)
       })
       return true
     },
@@ -420,25 +439,37 @@ function typedAnywhere(e: KeyboardEvent): boolean {
   return !t.closest("input, textarea, select, [contenteditable='true'], dialog, [role='dialog'], [role='menu'], .ProseMirror")
 }
 
+const within = (r: DOMRect, x: number, y: number): boolean => x >= r.left && x <= r.right && y >= r.top && y <= r.bottom
+
 export function ThreadDoc({ channel, where, shared, hold, media = null }: { channel: Channel; where: Where; shared: Shared; hold: (on: boolean) => void; media?: DocMedia | null }) {
   const mount = useRef<HTMLDivElement>(null)
   const box = useRef<HTMLDivElement>(null)
   const view = useRef<EditorView | null>(null)
   const [heads] = useState(() => new Heads())
   const list = useSyncExternalStore(heads.subscribe, heads.snapshot)
+  const [feet] = useState(() => new Heads())
+  const footList = useSyncExternalStore(feet.subscribe, feet.snapshot)
+  const asked = useMemo(() => {
+    const out = new Map<string, QuestionAsk>()
+    for (const m of channel.messages) {
+      const ask = m.block && m.ask ? channel.asks.find((a) => a.id === m.ask) : undefined
+      if (m.block && ask?.kind === "question") out.set(m.block, ask)
+    }
+    return out
+  }, [channel.messages, channel.asks])
   const me = channel.you
   const you = channel.people.find((p) => p.you)
   const readOnly = !!you?.readOnly
   const canWrite = useRef(!readOnly)
   const latest = useRef(channel)
   const holdRef = useRef(hold)
-  const drafts = useRef<Drafts>({ is: () => false, version: 0 })
-  const sent = useMemo(() => new Set(channel.messages.flatMap((m) => (m.block && !m.pending ? [m.block] : []))), [channel.messages])
+  const drafts = useRef<Drafts>({ posted: () => false, version: 0 })
+  const sent = useMemo(() => postedBlocks(channel.messages), [channel.messages])
 
   useLayoutEffect(() => {
-    drafts.current = { is: (block) => !!shared.madeHere?.(block) && !sent.has(block), version: drafts.current.version + 1 }
+    drafts.current = { posted: (block) => sent.has(block), version: drafts.current.version + 1 }
     view.current?.setProps({})
-  }, [shared, sent])
+  }, [sent])
   const mediaRef = useRef(media)
   const [query, setQuery] = useState<{ q: Query; left: number; top: number } | null>(null)
   const [pick, setPick] = useState(0)
@@ -478,7 +509,7 @@ export function ThreadDoc({ channel, where, shared, hold, media = null }: { chan
   useLayoutEffect(() => {
     const el = mount.current
     if (!el) return
-    const built = makeView(el, shared, me, heads, {
+    const built = makeView(el, shared, me, heads, feet, {
       editable: () => canWrite.current,
       name: (handle) => nickname(latest.current, handle),
       onQuery: (q, v) => {
@@ -507,7 +538,7 @@ export function ThreadDoc({ channel, where, shared, hold, media = null }: { chan
       v.destroy()
       view.current = null
     }
-  }, [shared, me, heads])
+  }, [shared, me, heads, feet])
 
   useEffect(() => {
     shared.awareness.setLocalStateField("user", { name: nickname(channel, me), color: you?.color ?? "blue" })
@@ -522,6 +553,30 @@ export function ThreadDoc({ channel, where, shared, hold, media = null }: { chan
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
+  }, [me])
+
+  useEffect(() => {
+    const onDrag = (e: DragEvent) => {
+      const dt = e.dataTransfer
+      if (!dt || !fileDrag(dt)) return
+      const taken = e.defaultPrevented
+      e.preventDefault()
+      const v = view.current
+      const el = box.current
+      if (e.type !== "drop" || taken || !v || !el || !within(el.getBoundingClientRect(), e.clientX, e.clientY)) return
+      const files = filesIn(dt)
+      if (takeFiles(v, me, mediaRef.current, canWrite.current, files) || files.length) return
+      void takeDropped(dt).then(({ files: dropped, refused }) => {
+        for (const why of refused) announce(why, "error")
+        takeFiles(v, me, mediaRef.current, canWrite.current, dropped)
+      })
+    }
+    window.addEventListener("dragover", onDrag)
+    window.addEventListener("drop", onDrag)
+    return () => {
+      window.removeEventListener("dragover", onDrag)
+      window.removeEventListener("drop", onDrag)
+    }
   }, [me])
 
   const place =
@@ -559,6 +614,20 @@ export function ThreadDoc({ channel, where, shared, hold, media = null }: { chan
         />
       )}
       {list.map(([el, key, attrs]) => createPortal(<Head channel={channel} attrs={attrs} />, el, String(key)))}
+      {footList.flatMap(([el, key, attrs]) => {
+        const ask = asked.get(attrs.id)
+        return ask
+          ? [
+              createPortal(
+                <Suspense fallback={null}>
+                  <QuestionCard channel={channel} ask={ask} />
+                </Suspense>,
+                el,
+                `ask-${key}`
+              ),
+            ]
+          : []
+      })}
     </div>
   )
 }

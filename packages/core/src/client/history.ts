@@ -89,6 +89,7 @@ export class ChannelHistory {
     }),
 
     openRooms: Effect.fn("Channel.openRooms")({ self: this }, function* (this: ChannelHistory, base: FoldBase) {
+      this.ch.learnBase(base.rooms);
       if (!this.ch.opensRooms || !base.secret?.length) return base;
       return yield* Effect.promise(async () => (await rooms()).openBaseRooms(this.ch, base));
     }),

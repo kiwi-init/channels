@@ -164,6 +164,14 @@ describe("joining blocks like paragraphs", () => {
     expect(joinForward(e, "jow")).toBeNull()
   })
 
+  test("never into a line already posted: it has left the doc for the feed", () => {
+    const s = caretAtStart(stateOf(makeBlock("text", "jow", T, "sent"), makeBlock("text", "jow", T + 1, "draft")), 1)
+    const sent = attrsOf(s.doc.child(0)).id
+    const posted = (block: string) => block === sent
+    expect(joinBack(s, "jow", posted)).toBeNull()
+    expect(joinForward(caretAtEnd(s, 0), "jow", posted)).toBeNull()
+  })
+
   test("only from the very start or end: mid-text and the first block do nothing", () => {
     const s = stateOf(makeBlock("text", "jow", T, "first"), makeBlock("text", "jow", T + 1, "second"))
     const mid = s.apply(s.tr.setSelection(TextSelection.create(s.doc, blocks(s.doc)[1]!.pos + 4)))
