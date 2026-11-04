@@ -1,7 +1,8 @@
 import type { CachedKept, CachedRow } from "@kiwi/core/cache-row.ts";
 import type { PresenceFields } from "@kiwi/core/client.ts";
 
-import type { CallResult, ChannelCallName, ChannelCalls, ChannelOps, FollowEvent, HistoryAround, HistorySearch } from "../../../desktop/src/bridge.ts";
+import type { CallResult, ChannelCallName, ChannelCalls, ChannelOps, DocEvent, FollowEvent, HistoryAround, HistorySearch } from "../../../desktop/src/bridge.ts";
+import { heldPipe } from "@kiwi/core/doc/held-pipe.ts";
 import type { FoldInputs } from "../../../desktop/src/search-types.ts";
 import { errorOf, remoteOps } from "./channel-remote.ts";
 import { bridge } from "@kiwi/secrets/secrets.ts";
@@ -37,6 +38,14 @@ function lazyLocalOps(): ChannelOps {
     openKept: (code, sealed) => local().then((o) => o.openKept(code, sealed)),
     nudge: () => {
       if (real) void real.then((o) => o.nudge());
+    },
+    doc: (code, thread, th, on) => {
+      const { pipe, attach } = heldPipe();
+      void local().then(
+        (o) => attach(o.doc(code, thread, th, on)),
+        (e: unknown) => on({ _tag: "Failed", error: { kind: "other", message: e instanceof Error ? e.message : String(e) } }),
+      );
+      return pipe;
     },
     follow: (code, since, on, opts) => {
       let stop: (() => void) | null = null;
@@ -143,6 +152,7 @@ export class ChannelLink {
   keep = (state: object) => this.via.keep(this.code, state);
   openKept = (sealed: CachedKept) => this.via.openKept(this.code, sealed);
   follow = (since: number, on: (e: FollowEvent) => void) => this.via.follow(this.code, since, on);
+  doc = (thread: string, th: string | null, on: (e: DocEvent) => void) => this.via.doc(this.code, thread, th, on);
 }
 
 export function linkOf(m: { code: string; identity: { pk: string }; access: { roomId: string; ownerPk: string } }): ChannelLink {

@@ -1,6 +1,7 @@
 import type { PresenceFields } from "@kiwi/core/client.ts";
 import type { ChannelAccess } from "@kiwi/core/crypto.ts";
 import type { JoinClaims } from "@kiwi/core/membership.ts";
+import type { PipeIn } from "@kiwi/core/doc/held-pipe.ts";
 import type { ChannelIdentityView, HistoryAround, HistorySearch, KeysPush, KeysReply } from "./bridge.ts";
 import type { FoldInputs } from "./search-types.ts";
 import { isCall, wireError, type Keyring } from "./keyring.ts";
@@ -28,6 +29,7 @@ export interface KeysSession {
 
 export function serveKeys(k: Keyring, push: (p: KeysPush) => void): KeysSession {
   const subs = new Map<number, () => void>();
+  const docs = new Map<number, PipeIn>();
   const run = async (r: Record<string, unknown>, id: number): Promise<unknown> => {
     switch (r.op) {
       case "call": {
@@ -84,6 +86,35 @@ export function serveKeys(k: Keyring, push: (p: KeysPush) => void): KeysSession 
         subs.set(id, stop);
         return id;
       }
+      case "doc": {
+        const held: KeysPush[] = [];
+        let live = false;
+        const pipe = k.doc(text(r.code), text(r.thread), r.th === null ? null : text(r.th), (event) => {
+          const p = { sub: id, event: toWire(event) };
+          if (live) push(p);
+          else held.push(p);
+        });
+        docs.set(id, pipe);
+        setTimeout(() => {
+          live = true;
+          for (const p of held.splice(0)) push(p);
+        }, 0);
+        return id;
+      }
+      case "docIn":
+        docs.get(count(r.sub))?.update(text(r.update));
+        return null;
+      case "docAware": {
+        const state = fromWire(r.state);
+        docs.get(count(r.sub))?.aware(state && typeof state === "object" && !Array.isArray(state) ? (state as Record<string, unknown>) : null);
+        return null;
+      }
+      case "undoc": {
+        const sub = count(r.sub);
+        docs.get(sub)?.close();
+        docs.delete(sub);
+        return null;
+      }
       case "nudge":
         k.nudge();
         return null;
@@ -112,6 +143,8 @@ export function serveKeys(k: Keyring, push: (p: KeysPush) => void): KeysSession 
     close: () => {
       for (const stop of subs.values()) stop();
       subs.clear();
+      for (const pipe of docs.values()) pipe.close();
+      docs.clear();
     },
   };
 }
