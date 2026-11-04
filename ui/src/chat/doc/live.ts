@@ -9,6 +9,7 @@ import type { DocBlockRef } from "@kiwi/core/protocol.ts"
 import type { DocEvent, WireError } from "../../../../desktop/src/bridge.ts"
 import { giveBackBlock } from "~/chat/doc/give-back"
 import { postFinished, type Finished, type Posting } from "~/chat/doc/post"
+import { noteTyping, tracingTyping } from "~/kit/typing-hook"
 import { FRAGMENT } from "~/chat/doc/schema"
 
 export interface Shared {
@@ -32,6 +33,13 @@ interface Changed {
 
 const PIPE = Symbol("pipe")
 
+function originOf(origin: unknown, phase: string): string | null {
+  if (origin === PIPE) return phase
+  if (origin instanceof Y.UndoManager) return "undo"
+  if (origin === null || origin === undefined) return "app"
+  return origin instanceof Object && "key" in origin && origin.key === "y-sync$" ? null : "other"
+}
+
 const said = (doc: Y.Doc): boolean => blocksOf(doc).some((b) => b.text.trim() !== "")
 
 const whyNot = (e: WireError): string => (e.kind === "gone" ? `the channel was ${e.why}` : e.message)
@@ -44,6 +52,7 @@ export class LiveDoc implements Shared {
   private opened: string | null = null
   private ready: boolean
   private dead = false
+  private phase = "sync"
   private gaveUp = false
   private readonly waiting = new Set<() => void>()
   private readonly unposted: Finished[] = []
@@ -57,6 +66,7 @@ export class LiveDoc implements Shared {
   ) {
     this.ready = !th
     this.doc.on("update", this.onUpdate)
+    this.doc.on("afterTransaction", this.onTransaction)
     this.awareness.on("change", this.onAware)
     this.posting = poster ? postFinished(this.doc, { me: poster.me, local: (origin) => origin !== PIPE, posted: poster.posted }, (b) => this.post(b)) : null
     if (th) this.connect(th)
@@ -83,6 +93,7 @@ export class LiveDoc implements Shared {
     this.pipe?.close()
     this.pipe = null
     this.doc.off("update", this.onUpdate)
+    this.doc.off("afterTransaction", this.onTransaction)
     this.awareness.off("change", this.onAware)
     this.awareness.destroy()
     this.doc.destroy()
@@ -92,6 +103,8 @@ export class LiveDoc implements Shared {
     this.pipe?.close()
     this.pipe = null
     this.opened = th
+    this.phase = this.phase === "reconnect" ? "reconnect" : "sync"
+    noteTyping(() => ({ what: "doc pipe opened", origin: this.phase }))
     const token = {}
     this.current = token
     const pipe = this.open(th, (e) => {
@@ -104,6 +117,7 @@ export class LiveDoc implements Shared {
   }
 
   private take(e: DocEvent): void {
+    if (e._tag !== "Update" && e._tag !== "Aware") noteTyping(() => ({ what: `doc pipe: ${e._tag}`, origin: this.phase }))
     switch (e._tag) {
       case "Open":
         this.opened = e.th
@@ -114,8 +128,10 @@ export class LiveDoc implements Shared {
       case "Aware":
         return mirrorAware(this.awareness, e.u, PIPE)
       case "Ready":
+        this.phase = "relay"
         return this.isNowReady()
       case "Down":
+        this.phase = "reconnect"
         return this.connect(this.opened)
       case "Failed":
         this.current = null
@@ -145,6 +161,12 @@ export class LiveDoc implements Shared {
     if (origin === PIPE || this.dead) return
     if (this.pipe) this.pipe.update(b64url(u))
     else if (!this.gaveUp && this.opened === null && said(this.doc)) this.connect(null)
+  }
+
+  private readonly onTransaction = (tr: Y.Transaction): void => {
+    if (!tracingTyping() || (tr.changed.size === 0 && tr.deleteSet.clients.size === 0)) return
+    const origin = originOf(tr.origin, this.phase)
+    if (origin) noteTyping(() => ({ what: "doc changed", origin, count: tr.changed.size }))
   }
 
   private readonly onAware = (_: Changed, origin: unknown): void => {

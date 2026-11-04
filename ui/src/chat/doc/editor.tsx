@@ -11,6 +11,7 @@ import { attach, backInDraft, blockAt, blocks, continues, dropEmptyOwn, isEmpty,
 import { onGiveBack } from "~/chat/doc/give-back"
 import { docKeys, type CommandFor } from "~/chat/doc/keys"
 import { holdDoc, LiveDoc, type Shared } from "~/chat/doc/live"
+import { noteTyping, tracingTyping } from "~/kit/typing-hook"
 import { linksPlugin } from "~/chat/doc/links"
 import { fileDrag, takeDropped } from "@kiwi/app/dropped.ts"
 import { emptyPaste, takePasted } from "@kiwi/app/pasted.ts"
@@ -113,6 +114,7 @@ class BlockView implements NodeView {
     this.dom.append(this.head, this.contentDOM, this.foot)
     this.shown.set(this.dom, this)
     this.paint()
+    noteTyping(() => ({ what: "line mounted", block: attrsOf(node).id }))
   }
 
   private paint(): void {
@@ -139,6 +141,7 @@ class BlockView implements NodeView {
   }
 
   destroy(): void {
+    noteTyping(() => ({ what: "line unmounted", block: attrsOf(this.node).id }))
     this.heads.drop(this.head)
     this.feet.drop(this.foot)
     this.shown.delete(this.dom)
@@ -218,11 +221,36 @@ function remote(tr: Transaction): boolean {
   return !!meta && typeof meta === "object" && "isChangeOrigin" in meta && !!meta.isChangeOrigin
 }
 
+function lineLength(doc: Node, id: string): number {
+  let len = -1
+  doc.forEach((n) => {
+    if (attrsOf(n).id === id) len = n.textContent.length
+  })
+  return len
+}
+
+function noteEdit(before: EditorState, after: EditorState, tr: Transaction): void {
+  const here = blockAt(before)
+  const id = here ? attrsOf(here.node).id : ""
+  const meta: unknown = tr.getMeta(ySyncPluginKey)
+  const undo = !!meta && typeof meta === "object" && "isUndoRedoOperation" in meta && !!meta.isUndoRedoOperation
+  noteTyping(() => ({
+    what: remote(tr) ? "editor redrew from the doc" : "edit",
+    origin: remote(tr) ? (undo ? "undo" : "doc") : "you",
+    block: id,
+    before: lineLength(before.doc, id),
+    after: lineLength(after.doc, id),
+    count: tr.steps.length,
+  }))
+}
+
 function tidyPlugin(me: string): Plugin {
   return new Plugin({
     appendTransaction(trs, _old, state) {
       if (!trs.some((tr) => tr.selectionSet || tr.docChanged) || trs.some(remote)) return null
-      return dropEmptyOwn(state, me, blockAt(state)?.index ?? null)
+      const tidy = dropEmptyOwn(state, me, blockAt(state)?.index ?? null)
+      if (tidy) noteTyping(() => ({ what: "tidy dropped empty lines", count: tidy.steps.length }))
+      return tidy
     },
   })
 }
@@ -392,7 +420,9 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
     },
     dispatchTransaction(this: EditorView, tr) {
       if (this.isDestroyed) return
+      const before = this.state
       this.updateState(this.state.apply(tr))
+      if (tr.docChanged && tracingTyping()) noteEdit(before, this.state, tr)
       if (tr.selectionSet || tr.docChanged) shareSelection(this, shared, me)
     },
   })
@@ -637,12 +667,14 @@ export function ThreadDoc({
     })
     const v = built.view
     view.current = v
+    noteTyping(() => ({ what: "editor mounted" }))
     if (canWrite.current && !document.activeElement?.closest("input, textarea, [contenteditable='true']")) {
       v.dispatch(startBlock(v.state, me, Date.now(), drafts.current.posted))
       v.focus()
     }
     return () => {
       const tidy = dropEmptyOwn(v.state, me, null)
+      noteTyping(() => ({ what: "editor unmounted", count: tidy?.steps.length ?? 0 }))
       if (tidy) v.dispatch(tidy)
       built.stop()
       v.destroy()
@@ -669,6 +701,7 @@ export function ThreadDoc({
         const v = view.current
         const tr = v && canWrite.current ? backInDraft(v.state, me, id) : null
         if (!v || !tr) return
+        noteTyping(() => ({ what: "back to draft", block: id }))
         v.dispatch(tr.scrollIntoView())
         const here = blockAt(v.state)
         if (here && attrsOf(here.node).id === id) v.focus()
