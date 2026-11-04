@@ -73,15 +73,19 @@ function processDump(pid: number): string {
 }
 
 let killed: ReturnType<typeof verdict> | null = null;
-const timer = setInterval(() => {
-  if (!shouldKill(files, watch, Date.now())) return;
-  clearInterval(timer);
-  console.error(`watchdog: bun silent ${SILENT_MS / 1000}s after all files reported, killed`);
-  console.error(processDump(proc.pid));
-  killed = verdict(files, watch);
-  Bun.spawnSync(["pkill", "-KILL", "-P", String(proc.pid)]);
-  proc.kill("SIGKILL");
-}, 5_000);
+const silentMs = Number(process.env.KIWI_CI_SILENT_MS) || SILENT_MS;
+const timer = setInterval(
+  () => {
+    if (!shouldKill(files, watch, Date.now(), silentMs)) return;
+    clearInterval(timer);
+    console.error(`watchdog: bun silent ${silentMs / 1000}s after all files reported, killed`);
+    console.error(processDump(proc.pid));
+    killed = verdict(files, watch);
+    Bun.spawnSync(["pkill", "-KILL", "-P", String(proc.pid)]);
+    proc.kill("SIGKILL");
+  },
+  Number(process.env.KIWI_CI_POLL_MS) || 5_000,
+);
 
 const code = await proc.exited;
 clearInterval(timer);

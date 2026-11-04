@@ -22,8 +22,12 @@ function project(tests: Record<string, string>, flows: string[]): string {
 }
 
 async function run(dir: string, ...args: string[]): Promise<{ code: number; err: string; ms: number }> {
+  return runWith({}, dir, ...args);
+}
+
+async function runWith(env: Record<string, string>, dir: string, ...args: string[]): Promise<{ code: number; err: string; ms: number }> {
   const started = Date.now();
-  const proc = Bun.spawn(["bun", "scripts/ci-tests.ts", ...args], { cwd: dir, stdout: "pipe", stderr: "pipe" });
+  const proc = Bun.spawn(["bun", "scripts/ci-tests.ts", ...args], { cwd: dir, stdout: "pipe", stderr: "pipe", env: { ...process.env, ...env } });
   const [code, err] = await Promise.all([proc.exited, new Response(proc.stderr).text()]);
   return { code, err, ms: Date.now() - started };
 }
@@ -39,6 +43,22 @@ describe("scripts/ci-tests.ts", () => {
     expect((await run(dir, "flows-a")).code).toBe(2);
     expect((await run(dir, "all", "--shard=1/2")).code).toBe(2);
   }, 30_000);
+
+  test("a run the watchdog has to kill fails, even when no test failed (T3093, #3189)", async () => {
+    const quick = { KIWI_CI_SILENT_MS: "500", KIWI_CI_POLL_MS: "50" };
+    const hangs = `test("waits forever", async () => { await new Promise(() => {}); }, 300_000);`;
+    const only = await runWith(quick, project({ hangs }, ["hangs"]), "flows");
+    expect(only.err).toContain("watchdog: bun silent 0.5s after all files reported, killed");
+    expect(only.err).toContain("bun never finished");
+    expect(only.code).toBe(1);
+    const after = await runWith(quick, project({ hangs: `${passing}\n${hangs}` }, ["hangs"]), "flows");
+    expect(after.err).toContain("bun never finished");
+    expect(after.code).toBe(1);
+    const teardown = `import { afterAll } from "bun:test";\nafterAll(async () => { await new Promise(() => {}); }, 300_000);\n${passing}`;
+    const inAfterAll = await runWith(quick, project({ hangs: teardown }, ["hangs"]), "flows");
+    expect(inAfterAll.err).toContain("bun never finished");
+    expect(inAfterAll.code).toBe(1);
+  }, 90_000);
 
   test("a test that ends the run with exit 0 fails the group: it didn't run every file", async () => {
     const r = await run(project({ exits: `test("leaves", () => process.exit(0));`, a: passing }, ["exits"]), "flows");

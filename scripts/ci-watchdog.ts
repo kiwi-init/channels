@@ -31,9 +31,9 @@ export function shouldKill(files: readonly string[], w: Watch, now: number, sile
   return !w.summary && missing(files, w).length === 0 && now - w.lastOutputAt >= silentMs;
 }
 
-export function verdict(files: readonly string[], w: Watch): { code: 0 | 1; why: string } {
+export function verdict(files: readonly string[], w: Watch): { code: 1; why: string } {
   const gone = missing(files, w);
-  if (w.failed) return { code: 1, why: "a test failed" };
-  if (gone.length) return { code: 1, why: `${gone.length} file${gone.length === 1 ? "" : "s"} never reported: ${gone.join(", ")}` };
-  return { code: 0, why: `all ${files.length} files reported and none failed` };
+  if (w.failed) return { code: 1, why: "a test failed, and bun never finished" };
+  if (gone.length) return { code: 1, why: `${gone.length} file${gone.length === 1 ? "" : "s"} never started: ${gone.join(", ")}` };
+  return { code: 1, why: "bun never finished: a file's header says it started, not that its tests passed, so a killed run fails; rerun the job" };
 }

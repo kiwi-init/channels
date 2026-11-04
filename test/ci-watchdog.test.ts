@@ -20,9 +20,10 @@ describe("the unit job's watchdog (T3093)", () => {
     expect(shouldKill(FILES, done, 10 * 60_000)).toBe(false);
   });
 
-  test("after a kill the job passes only when every file reported and none failed", () => {
-    expect(verdict(FILES, seen(["test/a.test.ts:", "ui/src/b.test.tsx:"]))).toEqual({ code: 0, why: "all 2 files reported and none failed" });
-    expect(verdict(FILES, seen(["test/a.test.ts:", "ui/src/b.test.tsx:", "(fail) breaks [1ms]"])).code).toBe(1);
-    expect(verdict(FILES, seen(["test/a.test.ts:"]))).toEqual({ code: 1, why: "1 file never reported: ui/src/b.test.tsx" });
+  test("a killed run always fails, saying why: a header only proves a file started (#3189)", () => {
+    expect(verdict(FILES, seen(["test/a.test.ts:", "ui/src/b.test.tsx:"])).code).toBe(1);
+    expect(verdict(FILES, seen(["test/a.test.ts:", "ui/src/b.test.tsx:"])).why).toContain("bun never finished");
+    expect(verdict(FILES, seen(["test/a.test.ts:", "ui/src/b.test.tsx:", "(fail) breaks [1ms]"])).why).toContain("a test failed");
+    expect(verdict(FILES, seen(["test/a.test.ts:"]))).toEqual({ code: 1, why: "1 file never started: ui/src/b.test.tsx" });
   });
 });
