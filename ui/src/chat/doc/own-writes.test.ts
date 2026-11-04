@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import * as Y from "yjs"
-import { blocksOf } from "@kiwi/core/doc/blocks.ts"
+import { appendToBlock, blocksOf, newBlock } from "@kiwi/core/doc/blocks.ts"
 import { EditorState, TextSelection, type Plugin, type PluginView, type Transaction } from "prosemirror-state"
 import type { EditorView } from "prosemirror-view"
 import { ySyncPlugin, ySyncPluginKey } from "y-prosemirror"
@@ -383,5 +383,78 @@ describe("an editor writes only the lines it changed, so a peer out of step neve
       expect([what, texts(desk)]).toEqual([what, [`dad: ${want}`]])
       expect(texts(peer)).toEqual(texts(desk))
     }
+  })
+
+  test("a new line next to a changed one never takes over another line's place in the doc, so an agent's letters stay in its own line", async () => {
+    const elementOf = (doc: Y.Doc, id: string) =>
+      doc
+        .getXmlFragment(FRAGMENT)
+        .toArray()
+        .find((el) => el instanceof Y.XmlElement && el.getAttribute("id") === id)
+    for (const [what, guarded, before] of [
+      ["guarded", true, null],
+      ["guarded, after a synced line with no id", true, "unnamed"],
+      ["unguarded", false, null],
+    ] as const) {
+      const agentDoc = new Y.Doc()
+      const desk = new Y.Doc()
+      const sync = net(agentDoc, desk)
+      const jow = editor(desk, guarded)
+      await Promise.resolve()
+      if (before) {
+        const unnamed = new Y.XmlElement("block")
+        unnamed.insert(0, [new Y.XmlElement("paragraph")])
+        agentDoc.getXmlFragment(FRAGMENT).insert(0, [unnamed])
+      }
+      const a = newBlock(agentDoc, "text", "agent", "step 1")
+      sync()
+      await settle()
+      const agentLine = elementOf(desk, a.id)
+      appendToBlock(agentDoc, a.id, " of 3")
+      const line = schema.nodes.block!.create({ id: "jow-new", author: "jow", at: 5 }, schema.nodes.paragraph!.create(null, schema.text("ugzyw")))
+      const at = before ? jow.state().doc.child(0).nodeSize : 0
+      const end = at + jow.state().doc.child(before ? 1 : 0).nodeSize - 2
+      jow.dispatch(jow.state().tr.insertText("!", end).insert(at, line))
+      sync()
+      await settle()
+      const lines = texts(desk).filter((l) => l !== ": ")
+      if (!guarded) {
+        expect([what, lines]).not.toContain("jow: ugzyw")
+        continue
+      }
+      expect([what, lines.length, lines.includes("jow: ugzyw")]).toEqual([what, 2, true])
+      const theirs = lines.find((l) => l.startsWith("agent: "))!
+      expect([what, theirs.includes(" of 3"), theirs.includes("!")]).toEqual([what, true, true])
+      expect([what, elementOf(desk, a.id) === agentLine, agentLine instanceof Y.XmlElement && agentLine.getAttribute("author")]).toEqual([what, true, "agent"])
+      expect(texts(agentDoc)).toEqual(texts(desk))
+    }
+  })
+
+  test("a line deleted elsewhere while you were out of step stays deleted when you write", async () => {
+    const agentDoc = new Y.Doc()
+    const desk = new Y.Doc()
+    const sync = net(agentDoc, desk)
+    const jow = editor(desk, true)
+    await Promise.resolve()
+    const a = newBlock(agentDoc, "text", "agent", "temporary")
+    newBlock(agentDoc, "text", "agent", "stays")
+    sync()
+    await settle()
+    const frag = agentDoc.getXmlFragment(FRAGMENT)
+    frag.delete(
+      frag.toArray().findIndex((el) => el instanceof Y.XmlElement && el.getAttribute("id") === a.id),
+      1
+    )
+    const line = schema.nodes.block!.create({ id: "jow-new", author: "jow", at: 5 }, schema.nodes.paragraph!.create(null, schema.text("hi")))
+    jow.dispatch(
+      jow
+        .state()
+        .tr.insertText("!", jow.state().doc.child(0).nodeSize - 2)
+        .insert(0, line)
+    )
+    sync()
+    await settle()
+    expect(texts(desk).sort()).toEqual(["agent: stays", "jow: hi"])
+    expect(texts(agentDoc).sort()).toEqual(texts(desk).sort())
   })
 })

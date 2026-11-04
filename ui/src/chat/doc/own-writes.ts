@@ -1,6 +1,6 @@
 import { Fragment, Node, type Slice } from "prosemirror-model"
 import { EditorState, TextSelection, type Selection, type Transaction } from "prosemirror-state"
-import { ProsemirrorBinding, ySyncPluginKey, yXmlFragmentToProseMirrorRootNode } from "y-prosemirror"
+import { getRelativeSelection, ProsemirrorBinding, updateYFragment, ySyncPluginKey, yXmlFragmentToProseMirrorRootNode } from "y-prosemirror"
 import * as Y from "yjs"
 
 import { attrsOf } from "~/chat/doc/schema"
@@ -138,7 +138,13 @@ function rebase(drawn: Node, now: Node, stored: Node): Node | null {
   return placed(stored, at, at, slice) ?? placed(stored, end, end, slice)
 }
 
-function ownOnly(doc: Node, binding: ProsemirrorBinding, touched: Touched, missed: Set<string>): { safe: Node; behind: boolean } {
+interface Owned {
+  safe: Node
+  behind: boolean
+  keys?: string[]
+}
+
+function ownOnly(doc: Node, binding: ProsemirrorBinding, touched: Touched, missed: Set<string>): Owned {
   const order = keysOfDoc(doc)
   const here = byKey(doc)
   const els = binding.type.toArray()
@@ -194,7 +200,48 @@ function ownOnly(doc: Node, binding: ProsemirrorBinding, touched: Touched, misse
     out.splice(at, 0, here.get(id)!)
     outKeys.splice(at, 0, id)
   }
-  return { safe: doc.copy(Fragment.from(out)), behind }
+  return { safe: doc.copy(Fragment.from(out)), behind, keys: outKeys }
+}
+
+const storedKeys = (els: readonly (Y.XmlElement | Y.XmlText | Y.XmlHook)[]): string[] =>
+  keysOf(
+    els.map((el) => {
+      const id = el instanceof Y.XmlElement ? el.getAttribute("id") : undefined
+      return typeof id === "string" ? id : ""
+    })
+  )
+
+function writeByLine(binding: ProsemirrorBinding, safe: Node, keys: readonly string[], gone: ReadonlySet<string>, state: EditorState | null): void {
+  const root = binding.type
+  binding.doc.transact(() => {
+    const els = root.toArray()
+    const elKeys = storedKeys(els)
+    for (let i = els.length - 1; i >= 0; i--) {
+      if (!gone.has(elKeys[i]!)) continue
+      binding.mapping.delete(els[i]!)
+      root.delete(i, 1)
+    }
+    const kept = els.flatMap((el, i) => (gone.has(elKeys[i]!) ? [] : [{ el, key: elKeys[i]! }]))
+    const want = new Set(keys)
+    let next = 0
+    for (const [i, key] of keys.entries()) {
+      while (next < kept.length && kept[next]!.key !== key && !want.has(kept[next]!.key)) next++
+      const node = safe.child(i)
+      const same = kept[next]?.key === key ? kept[next] : kept.find((k) => k.key === key)
+      if (same) {
+        if (same === kept[next]) next++
+        if (same.el instanceof Y.XmlElement && binding.mapping.get(same.el) !== node) updateYFragment(binding.doc, same.el, node, binding)
+        continue
+      }
+      const before = kept[next]?.el
+      const at = before ? root.toArray().indexOf(before) : root.length
+      const el = new Y.XmlElement(node.type.name)
+      root.insert(at < 0 ? root.length : at, [el])
+      updateYFragment(binding.doc, el, node, binding)
+    }
+    binding.mapping.set(root, safe)
+    if (state) binding.beforeTransactionSelection = getRelativeSelection(binding, state)
+  }, ySyncPluginKey)
 }
 
 function outOfStep(doc: Node, root: Y.XmlFragment, missed: Set<string>): boolean {
@@ -450,10 +497,12 @@ export function writeOwnLinesOnly(state: EditorState, seen: () => Seen | null): 
   }
   binding.type.observeDeep(watch)
   binding._prosemirrorChanged = (doc) => {
-    const { safe, behind } = ownOnly(doc, binding, touched, missed)
+    const { safe, behind, keys } = ownOnly(doc, binding, touched, missed)
+    const gone = new Set(touched.gone)
     touched.lines.clear()
     touched.gone.clear()
-    write(safe)
+    if (keys) writeByLine(binding, safe, keys, gone, seen()?.state ?? null)
+    else write(safe)
     if (behind) soon()
   }
   return {
