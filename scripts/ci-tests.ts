@@ -3,6 +3,7 @@ import { mkdtempSync, realpathSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { FLOWS } from "./ci-flows.ts";
+import { noteLine, shouldKill, SILENT_MS, verdict, watching } from "./ci-watchdog.ts";
 
 const [group = "", ...extra] = process.argv.slice(2);
 const all = [...new Glob("test/*.test.ts").scanSync(), ...new Glob("ui/src/**/*.test.{ts,tsx}").scanSync(), ...new Glob("packages/*/src/**/*.test.{ts,tsx}").scanSync()].sort();
@@ -35,20 +36,61 @@ function tmpBehindSymlink(): { dir: string; cleanup: () => void } {
 
 const tmp = tmpBehindSymlink();
 const proc = Bun.spawn(["bun", "test", "--parallel", ...files.map((f) => `./${f}`)], {
-  stdio: ["inherit", "inherit", "pipe"],
+  stdio: ["inherit", "pipe", "pipe"],
   env: { ...process.env, TMPDIR: tmp.dir },
 });
-const decoder = new TextDecoder();
+const watch = watching(Date.now());
 let tail = "";
-const reading = (async () => {
-  for await (const chunk of proc.stderr) {
-    process.stderr.write(chunk);
-    tail = (tail + decoder.decode(chunk, { stream: true })).slice(-4096);
+async function pump(stream: ReadableStream<Uint8Array>, out: NodeJS.WriteStream, keepTail: boolean): Promise<void> {
+  const decoder = new TextDecoder();
+  let rest = "";
+  for await (const chunk of stream) {
+    out.write(chunk);
+    const text = decoder.decode(chunk, { stream: true });
+    if (keepTail) tail = (tail + text).slice(-4096);
+    const lines = (rest + text).split("\n");
+    rest = lines.pop() ?? "";
+    for (const line of lines) noteLine(watch, line, Date.now());
   }
-})();
+  if (rest) noteLine(watch, rest, Date.now());
+}
+const reading = Promise.all([pump(proc.stdout, process.stdout, false), pump(proc.stderr, process.stderr, true)]);
+
+function processDump(pid: number): string {
+  const run = (cmd: string[]): string => {
+    try {
+      return Bun.spawnSync(cmd).stdout.toString();
+    } catch {
+      // ps, pgrep or /proc missing on this runner: the dump just says less.
+      return "";
+    }
+  };
+  const children = run(["pgrep", "-P", String(pid)])
+    .split("\n")
+    .filter(Boolean);
+  const fds = [String(pid), ...children].map((p) => `open files of ${p}:\n${run(["ls", "-l", `/proc/${p}/fd`])}`);
+  return [run(["ps", "-eo", "pid,ppid,etime,stat,args", "--forest"]), ...fds].join("\n");
+}
+
+let killed: ReturnType<typeof verdict> | null = null;
+const timer = setInterval(() => {
+  if (!shouldKill(files, watch, Date.now())) return;
+  clearInterval(timer);
+  console.error(`watchdog: bun silent ${SILENT_MS / 1000}s after all files reported, killed`);
+  console.error(processDump(proc.pid));
+  killed = verdict(files, watch);
+  Bun.spawnSync(["pkill", "-KILL", "-P", String(proc.pid)]);
+  proc.kill("SIGKILL");
+}, 5_000);
+
 const code = await proc.exited;
+clearInterval(timer);
 await Promise.race([reading, Bun.sleep(2000)]);
 tmp.cleanup();
+if (killed) {
+  console.error(`watchdog: ${killed.why}`);
+  process.exit(killed.code);
+}
 const ran = [...tail.matchAll(/Ran \d+ tests? across (\d+) files?\./g)].at(-1)?.[1];
 if (code === 0 && Number(ran) !== files.length) {
   console.error(`bun test exited 0 after ${ran ?? "an unknown number"} of ${files.length} files: a test ended the run early`);
