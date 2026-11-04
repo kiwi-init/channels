@@ -12,6 +12,24 @@ interface Touched {
 
 const idOf = (n: Node): string => (n.type.name === "block" ? attrsOf(n).id : "")
 
+const unnamed = (key: string): boolean => key.startsWith("#")
+
+function keysOf(names: readonly string[]): string[] {
+  let k = 0
+  return names.map((n) => n || `#${k++}`)
+}
+
+function keysOfDoc(doc: Node): string[] {
+  const names: string[] = []
+  doc.forEach((n) => void names.push(idOf(n)))
+  return keysOf(names)
+}
+
+function byKey(doc: Node): Map<string, Node> {
+  const keys = keysOfDoc(doc)
+  return new Map(keys.map((k, i) => [k, doc.child(i)]))
+}
+
 function bindingOf(state: EditorState): ProsemirrorBinding | null {
   const got: unknown = ySyncPluginKey.getState(state)
   if (!got || typeof got !== "object" || !("binding" in got)) return null
@@ -61,13 +79,11 @@ function topLine(t: Y.AbstractType<unknown>, root: Y.XmlFragment): string | null
 }
 
 function noteTouched(before: Node, after: Node, into: Touched): void {
-  const was = new Map<string, Node>()
-  before.forEach((n) => void was.set(idOf(n), n))
-  after.forEach((n) => {
-    const id = idOf(n)
+  const was = byKey(before)
+  for (const [id, n] of byKey(after)) {
     if (was.get(id) !== n && !into.lines.has(id)) into.lines.set(id, was.get(id) ?? null)
     was.delete(id)
-  })
+  }
   for (const id of was.keys()) into.gone.add(id)
 }
 
@@ -152,22 +168,23 @@ function mergeLine(el: Y.XmlElement, drawn: Node, now: Node): boolean {
 }
 
 function ownOnly(doc: Node, binding: ProsemirrorBinding, touched: Touched, missed: Set<string>): { safe: Node; behind: boolean } {
-  const here = new Map<string, Node>()
-  const order: string[] = []
-  doc.forEach((n) => {
-    here.set(idOf(n), n)
-    order.push(idOf(n))
-  })
+  const order = keysOfDoc(doc)
+  const here = byKey(doc)
   const els = binding.type.toArray()
-  const ids = els.map((el) => (el instanceof Y.XmlElement ? el.getAttribute("id") : undefined))
-  if (here.has("") || here.size !== order.length || ids.some((id) => typeof id !== "string" || !id)) return { safe: doc, behind: false }
+  const stored = els.filter((el): el is Y.XmlElement => el instanceof Y.XmlElement)
+  const ids = keysOf(
+    stored.map((el) => {
+      const id = el.getAttribute("id")
+      return typeof id === "string" ? id : ""
+    })
+  )
+  if (stored.length !== els.length || here.size !== order.length || new Set(ids).size !== ids.length) return { safe: doc, behind: false }
   const merged = new Set<string>()
-  for (const [i, el] of els.entries()) {
-    const id = ids[i]
-    const drawnBefore = typeof id === "string" ? touched.lines.get(id) : undefined
-    const now = typeof id === "string" ? here.get(id) : undefined
-    if (typeof id !== "string" || !(el instanceof Y.XmlElement) || !drawnBefore || !now) continue
-    if (shapeOfStored(el) === shapeOfDrawn(drawnBefore)) continue
+  for (const [i, el] of stored.entries()) {
+    const id = ids[i]!
+    const drawnBefore = touched.lines.get(id)
+    const now = here.get(id)
+    if (!drawnBefore || !now || shapeOfStored(el) === shapeOfDrawn(drawnBefore)) continue
     mergeLine(el, drawnBefore, now)
     merged.add(id)
   }
@@ -175,38 +192,34 @@ function ownOnly(doc: Node, binding: ProsemirrorBinding, touched: Touched, misse
   const drawn = (el: Y.XmlElement, id: string): Node | null => {
     const mapped = merged.has(id) ? null : binding.mapping.get(el)
     if (mapped instanceof Node) return mapped
-    if (!fresh) {
-      const all = new Map<string, Node>()
-      yXmlFragmentToProseMirrorRootNode(binding.type, doc.type.schema).forEach((n) => void all.set(idOf(n), n))
-      fresh = all
-    }
+    fresh ??= byKey(yXmlFragmentToProseMirrorRootNode(binding.type, doc.type.schema))
     return fresh.get(id) ?? null
   }
   const out: Node[] = []
+  const outKeys: string[] = []
   let behind = merged.size > 0
-  for (const [i, el] of els.entries()) {
-    const id = ids[i]
-    if (typeof id !== "string" || !(el instanceof Y.XmlElement) || touched.gone.has(id)) continue
+  for (const [i, el] of stored.entries()) {
+    const id = ids[i]!
+    if (touched.gone.has(id)) continue
     const mine = here.get(id)
-    if (mine && touched.lines.has(id) && !merged.has(id)) {
-      out.push(mine)
-      continue
-    }
-    const theirs = drawn(el, id)
+    const keep = !!mine && touched.lines.has(id) && !merged.has(id)
+    const theirs = keep ? mine : drawn(el, id)
     if (!theirs) return { safe: doc, behind: true }
-    if (mine !== theirs || (missed.has(id) && shapeOfStored(el) !== shapeOfDrawn(theirs))) behind = true
+    if (!keep && (theirs !== mine || (missed.has(id) && shapeOfStored(el) !== shapeOfDrawn(theirs)))) behind = true
     out.push(theirs)
+    outKeys.push(id)
   }
   const inY = new Set(ids)
   for (const [i, id] of order.entries()) {
     if (inY.has(id)) continue
     if (!touched.lines.has(id)) {
-      behind = true
+      if (!unnamed(id)) behind = true
       continue
     }
-    const prev = order.slice(0, i).findLast((p) => out.some((n) => idOf(n) === p))
-    const at = prev === undefined ? 0 : out.findIndex((n) => idOf(n) === prev) + 1
+    const prev = order.slice(0, i).findLast((p) => outKeys.includes(p))
+    const at = prev === undefined ? 0 : outKeys.indexOf(prev) + 1
     out.splice(at, 0, here.get(id)!)
+    outKeys.splice(at, 0, id)
   }
   return { safe: doc.copy(Fragment.from(out)), behind }
 }
@@ -218,7 +231,7 @@ function outOfStep(doc: Node, root: Y.XmlFragment, missed: Set<string>): boolean
     if (el instanceof Y.XmlElement && typeof id === "string" && missed.has(id)) stored.set(id, el)
   }
   const shown = new Map<string, Node>()
-  doc.forEach((n) => void (missed.has(idOf(n)) && shown.set(idOf(n), n)))
+  for (const [id, n] of byKey(doc)) if (missed.has(id)) shown.set(id, n)
   let behind = false
   for (const id of missed) {
     const el = stored.get(id)

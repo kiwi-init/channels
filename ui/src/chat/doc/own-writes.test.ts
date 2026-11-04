@@ -194,6 +194,31 @@ describe("an editor writes only the lines it changed, so a peer out of step neve
     }
   })
 
+  test("a line with no id (a fresh doc's first line) doesn't turn the guard off for the rest", async () => {
+    const desk = new Y.Doc()
+    const peer = new Y.Doc()
+    const sync = net(desk, peer)
+    const jow = editor(desk, true)
+    const dad = editor(peer, true)
+    await Promise.resolve()
+    newLine(jow, "jow", "jow-draft", "hello")
+    newLine(jow, "dad", "dad-draft", "other")
+    sync()
+    typeAtEnd(jow, "jow", " NEW")
+    let once = true
+    peer.on("update", (_u: Uint8Array, o: unknown) => {
+      if (!once || o === NET) return
+      once = false
+      sync()
+    })
+    typeAtEnd(dad, "dad", "!")
+    typeAtEnd(dad, "jow", "?")
+    sync()
+    await settle()
+    expect(texts(desk)).toContain("jow: hello NEW?")
+    expect(texts(peer)).toEqual(texts(desk))
+  })
+
   test("without the guard, the out-of-step peer erases your line", async () => {
     const { desk, sync, dad } = await outOfStep(false)
     newLine(dad, "dad", "dad-2", "e aí")
