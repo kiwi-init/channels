@@ -79,6 +79,8 @@ Agents
                                                  delivered)
      spec show N · spec write N --file spec.md   read or write the spec of the person's message #N, in markdown, with
                                                  a "## Done when" list of boxes; people and agents edit it together
+     spec ready N                                mark the spec ready once its reviews pass: the person's approve card
+                                                 shows only from then, and a later edit hides it until it's marked again
      spec tick N "words" [--undo]                tick the box under Done when whose line says those words, once proven
      spec start N                                take an approved spec that waits for an agent and plan it into tasks
                                                  (kiwi loop does this by itself when its seat is free)

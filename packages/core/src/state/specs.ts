@@ -13,6 +13,7 @@ export type SpecStage = "draft" | "queued" | "working" | "delivered" | "accepted
 type SpecEvent =
   | { op: "spec.set"; ask: number; text: string }
   | { op: "spec.approve"; ask: number; v: number }
+  | { op: "spec.ready"; ask: number; v: number }
   | { op: "spec.result"; ask: number; verdict: SpecVerdict; note?: string }
   | { op: "spec.delete"; ask: number; why?: string };
 
@@ -75,6 +76,12 @@ export function foldSpec(
     return null;
   }
   if (!spec) return `#${ev.ask} has no spec yet`;
+  if (ev.op === "spec.ready") {
+    if (!lead && !judge && !spec.editors.includes(m.from)) return "only who wrote the spec, the lead or a person who approves it marks it ready";
+    if (ev.v !== spec.v) return `#${ev.ask}'s spec changed since that version: read it again, then mark it ready`;
+    specs.set(ev.ask, { ...spec, ready: { ...mark, v: ev.v } });
+    return null;
+  }
   if (ev.op === "spec.approve") {
     if (!judge) return JUDGES;
     if (ev.v !== spec.v) return `#${ev.ask}'s spec changed since that version: read it again, then approve`;

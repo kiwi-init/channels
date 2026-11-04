@@ -260,6 +260,8 @@ export function describeEvent(m: Message, state?: ChannelState, nameOf: (handle:
       const after = spec && changedAfterApproval(spec, m.seq) ? `changed #${ev.ask}'s spec after it was approved` : `wrote the spec of #${ev.ask}`;
       return `${after}: ${inlineText(specTitleOf(ev.text) ?? ev.text, 120)}`;
     }
+    case "spec.ready":
+      return `marked the spec of #${ev.ask} ready for approval`;
     case "spec.approve":
       return `approved the spec of #${ev.ask}: agents start it as soon as one is free`;
     case "specs.only.set":

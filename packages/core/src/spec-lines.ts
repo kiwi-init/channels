@@ -9,8 +9,12 @@ function specStageText(state: ChannelState, spec: Spec): string {
   const stage: SpecStage = specStage(state, spec);
   const asker = state.askHeads.get(spec.ask)?.by;
   switch (stage) {
-    case "draft":
-      return `draft: ${asker ? `${asker} or another person` : "a person"} approves it, then it starts by itself`;
+    case "draft": {
+      const who = asker ? `${asker} or another person` : "a person";
+      return spec.ready?.v === spec.v
+        ? `ready: ${who} approves it, then it starts by itself`
+        : `draft: once its reviews pass, mark it ready (kiwi spec ready ${spec.ask}) so ${who} is asked to approve it`;
+    }
     case "queued": {
       if (changedSinceApproval(spec)) return "approved, then changed: it waits for a person to approve the changes";
       const planner = specPlanner(state, spec.ask);
