@@ -166,3 +166,26 @@ describe("--as", () => {
     expect(files.some((f) => f.toLowerCase().includes("typo"))).toBe(false);
   });
 });
+
+describe("a session outside the folder it joined in (#1579)", () => {
+  test("keeps its seat from a folder no seat binds, while another session there is still asked to say which", async () => {
+    const owner = scratch("own-out");
+    const owner2 = scratch("own-out2");
+    const first = created(await ok(owner, ["create", "first", "--as", "boss"]));
+    const second = created(await ok(owner2, ["create", "second", "--as", "boss2"]));
+    const h = scratch("out-agent");
+    const project = join(h, "project");
+    const other = join(h, "other");
+    mkdirSync(project);
+    mkdirSync(other);
+    const lead = { CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "lead-s", CLAUDE_PID: String(process.pid) };
+    const helper = { CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "helper-s", CLAUDE_PID: String(process.pid) };
+    const me = youAre((await join_(owner, h, first, lead, project)).out);
+    await join_(owner2, h, second, helper, other);
+    const outside = scratch("out-scratch");
+    expect(await ok(h, ["status"], lead, outside)).toContain(`you are ${me}`);
+    const stranger = await run(h, ["status"], { CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "stranger-s", CLAUDE_PID: String(process.pid) }, outside);
+    expect(stranger.code).toBe(1);
+    expect(stranger.err).toContain("pass -c ALIAS --as NAME");
+  });
+});

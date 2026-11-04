@@ -474,3 +474,36 @@ test("listening as a plain-terminal or Gemini agent that isn't listening right n
   ]);
   expect(seatsAt(loadConfig(), dir).find((b) => b.as === "muse")?.plain).toBe(true);
 });
+
+describe("a session outside the folder it joined in keeps its seat (#1579)", () => {
+  const session = { harness: "claude" as const, session: "lead-session" };
+
+  test("from a folder no seat binds, the session's own seat elsewhere is the one", () => {
+    bindDirectory(dir, { alias: "ch", as: "lead", ...session });
+    const scratch = join(home, "scratch");
+    mkdirSync(scratch);
+    expect(seatsFor(scratch, { who: session }).map((b) => `${b.as} in ${b.alias}`)).toEqual(["lead in ch"]);
+  });
+
+  test("another session, or a plain terminal, finds nothing there", () => {
+    bindDirectory(dir, { alias: "ch", as: "lead", ...session });
+    const scratch = join(home, "scratch");
+    mkdirSync(scratch);
+    expect(seatsFor(scratch, { who: { harness: "claude", session: "someone-else" } })).toEqual([]);
+    expect(seatsFor(scratch, { who: {} })).toEqual([]);
+  });
+
+  test("a session with seats in two channels gets both, so a command still has to say which", () => {
+    const second = join(home, "second");
+    mkdirSync(second);
+    bindDirectory(dir, { alias: "ch", as: "lead", ...session });
+    bindDirectory(second, { alias: "other", as: "helper", ...session });
+    const scratch = join(home, "scratch");
+    mkdirSync(scratch);
+    expect(
+      seatsFor(scratch, { who: session })
+        .map((b) => `${b.as} in ${b.alias}`)
+        .sort(),
+    ).toEqual(["helper in other", "lead in ch"]);
+  });
+});

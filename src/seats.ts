@@ -375,7 +375,7 @@ export function seatsFor(from: string, opts: SeatOptions = {}): Binding[] {
     }
     return [pick];
   }
-  return [];
+  return seatsHeldAnywhere(who, opts).filter((b) => !opts.alias || b.alias === opts.alias);
 }
 
 export function notePlace(seats: readonly Binding[], env: Record<string, string | undefined> = process.env): void {
