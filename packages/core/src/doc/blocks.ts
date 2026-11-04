@@ -55,7 +55,7 @@ function metaOf(el: Y.XmlElement): BlockMeta | null {
 }
 
 function textOf(node: Y.XmlElement | Y.XmlText | Y.XmlHook): string {
-  if (node instanceof Y.XmlText) return node.toString().replace(/<[^>]*>/g, "");
+  if (node instanceof Y.XmlText) return (node.toDelta() as { insert: unknown }[]).map((d) => (typeof d.insert === "string" ? d.insert : "")).join("");
   if (!(node instanceof Y.XmlElement)) return "";
   if (node.nodeName === "mention") return `@${node.getAttribute("name") ?? ""}`;
   if (node.nodeName === "image" || node.nodeName === "file") return `[${node.nodeName}: ${node.getAttribute("name") ?? ""}]`;
