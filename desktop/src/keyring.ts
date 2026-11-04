@@ -6,6 +6,7 @@ import * as ManagedRuntime from "effect/ManagedRuntime";
 
 import { openKept as openSealedKept, openRows as openSealedRows, packKept, packRow, packEnvelope, type CachedKept, type CachedRow, type Unread } from "@kiwi/core/cache-row.ts";
 import { Channel, ChannelGone, RelayError, Relay, Unreachable, eachLive, fetchRelay, type Live, type PresenceFields } from "@kiwi/core/client.ts";
+import type { DocStore } from "@kiwi/core/doc/hub.ts";
 import { heldPipe, type PipeIn } from "@kiwi/core/doc/held-pipe.ts";
 import { pipeDoc } from "@kiwi/core/doc/pipe.ts";
 import { encodeJoinCode, keepSeen, newRoomId, ownerFingerprint, type ChannelAccess } from "@kiwi/core/crypto.ts";
@@ -53,6 +54,7 @@ export interface KeyHost {
   mine(): readonly string[] | null;
   budget: SigningBudget;
   search?: () => SearchPlace | null;
+  docStore?: (seat: { roomId: string; pk: string; sk: string }) => DocStore | null;
 }
 
 const runtime = ManagedRuntime.make(Layer.succeed(Relay, fetchRelay));
@@ -142,7 +144,8 @@ export class Keyring implements ChannelOps {
         had.access = { ...had.access, ...access, keys: { ...had.access.keys, ...access.keys }, ...keepSeen(had.access, access) };
       return had;
     }
-    const ch = new Channel(access, relay, identityOf(seat), (a) => void this.host.access(code, seat.pk, a).catch(() => {}));
+    const docStore = this.host.docStore?.({ roomId: access.roomId, pk: seat.pk, sk: seat.sk }) ?? null;
+    const ch = new Channel(access, relay, identityOf(seat), (a) => void this.host.access(code, seat.pk, a).catch(() => {}), { docStore });
     this.open.set(key, ch);
     return ch;
   }
