@@ -61,7 +61,12 @@ const kiwi = (args: string[]): Promise<string> => {
 };
 
 const trace: string[] = [];
-const log = (line: string): void => void trace.push(`${new Date().toISOString().slice(11, 23)} ${line}`);
+const LIVE = process.argv.includes("--live");
+const log = (line: string): void => {
+  const stamped = `${new Date().toISOString().slice(11, 23)} ${line}`;
+  trace.push(stamped);
+  if (LIVE && !line.startsWith("  ")) console.log(stamped);
+};
 
 interface Lag {
   ms: number;
@@ -173,8 +178,12 @@ async function here(w: Win): Promise<Here | null> {
     const el = at instanceof Element ? at : (at?.parentElement ?? null);
     const section = el?.closest<HTMLElement>(".thread-doc section.blk");
     if (!section) return null;
-    const attrs = (section as unknown as { pmViewDesc?: { node?: { attrs: Record<string, unknown>; textContent: string } } }).pmViewDesc?.node;
-    return { id: String(attrs?.attrs.id ?? section.dataset.block ?? ""), by: String(attrs?.attrs.by ?? ""), text: attrs?.textContent ?? "" };
+    const attrs = (
+      section as unknown as {
+        pmViewDesc?: { node?: { attrs: Record<string, unknown>; content: { size: number }; textBetween: (from: number, to: number, sep: string) => string } };
+      }
+    ).pmViewDesc?.node;
+    return { id: String(attrs?.attrs.id ?? section.dataset.block ?? ""), by: String(attrs?.attrs.by ?? ""), text: attrs ? attrs.textBetween(0, attrs.content.size, "\n") : "" };
   });
 }
 
@@ -311,7 +320,7 @@ const ops: [number, Op][] = [
   [
     SELECTS ? 6 : 0,
     async (w) => {
-      if (!w.want) return "skips a line replace on an empty line";
+      if (!w.want || w.want.includes("\n")) return "skips a line replace on an empty or broken line";
       for (let i = 0; i < w.want.length; i++) await w.page.keyboard.press("Shift+ArrowLeft");
       const picked = await w.page.evaluate(() => getSelection()?.toString() ?? "");
       if (picked !== w.want) fail(`${w.label} pressed Shift+← ${w.want.length} times over its line ${JSON.stringify(w.want)} and the selection is ${JSON.stringify(picked)}`);
@@ -330,6 +339,15 @@ const ops: [number, Op][] = [
       log(`${w.label} sends ${JSON.stringify(w.want)} with ${SEND}`);
       await startLine(w);
       return `sends its line with ${SEND}`;
+    },
+  ],
+  [
+    SEND === "Enter" ? 0 : 8,
+    async (w) => {
+      if (!w.want || w.want.endsWith("\n")) return "skips Enter on an empty line";
+      await w.page.keyboard.press("Enter");
+      w.want += "\n";
+      return "presses Enter, which only breaks the line";
     },
   ],
   [
@@ -375,7 +393,8 @@ async function docLines(): Promise<string[]> {
 function inOrder(lines: readonly string[], sent: readonly string[]): string | null {
   let at = 0;
   for (const s of sent) {
-    const i = lines.findIndex((l, k) => k >= at && l.startsWith("jow: ") && l.slice(5).trim() === s);
+    const first = s.split("\n")[0]!.trim();
+    const i = lines.findIndex((l, k) => k >= at && l.startsWith("jow: ") && l.slice(5).trim() === first);
     if (i < 0) return s;
     at = i + 1;
   }
