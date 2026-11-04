@@ -30,7 +30,7 @@ function byKey(doc: Node): Map<string, Node> {
   return new Map(keys.map((k, i) => [k, doc.child(i)]))
 }
 
-function bindingOf(state: EditorState): ProsemirrorBinding | null {
+export function bindingOf(state: EditorState): ProsemirrorBinding | null {
   const got: unknown = ySyncPluginKey.getState(state)
   if (!got || typeof got !== "object" || !("binding" in got)) return null
   return got.binding instanceof ProsemirrorBinding ? got.binding : null

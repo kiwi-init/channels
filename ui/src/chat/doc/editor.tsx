@@ -12,6 +12,7 @@ import { attach, backInDraft, blockAt, blocks, continues, dropEmptyOwn, isEmpty,
 import { caretShown } from "~/chat/doc/carets"
 import { onGiveBack } from "~/chat/doc/give-back"
 import { writeOwnLinesOnly } from "~/chat/doc/own-writes"
+import { keepScreenSelection, withScreenSelection } from "~/chat/doc/screen-selection"
 import { docKeys, type CommandFor } from "~/chat/doc/keys"
 import { docTag, holdDoc, LiveDoc, type Shared } from "~/chat/doc/live"
 import { noteTyping, setTypingFocus, tracingTyping, type TypingFocus } from "~/kit/typing-hook"
@@ -460,8 +461,9 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
       })
       return true
     },
-    dispatchTransaction(this: EditorView, tr) {
+    dispatchTransaction(this: EditorView, sent) {
       if (this.isDestroyed) return
+      const tr = withScreenSelection(this, sent)
       const before = this.state
       const next = this.state.apply(tr)
       if (tr.docChanged && !remote(tr)) {
@@ -474,9 +476,11 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
     },
   })
   blur.now = () => view.dom.blur()
+  const unkeep = keepScreenSelection(view)
   return {
     view,
     stop: () => {
+      unkeep()
       own?.stop()
       shared.awareness.off("change", watch)
     },
