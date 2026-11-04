@@ -331,3 +331,7 @@
 .doc-link-md.is-folded {
   display: none;
 }
+
+.thread-doc .blk-re {
+  margin: 8px 0 4px;
+}

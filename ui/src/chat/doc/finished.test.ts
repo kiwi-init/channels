@@ -17,7 +17,14 @@ describe("a posted doc line keeps its formatting (T1463)", () => {
   test("a block reads as markdown: marks, mentions, lists and code; an image makes it a media block", () => {
     const doc = schema.nodes.doc.create(null, [
       block.create({ id: "AAAAAAAAAAAAAAAAAAAAAA", kind: "text", author: "jow", at: T }, [
-        paragraph.create(null, [schema.text("ping "), mention.create({ name: "atlas" }), schema.text(" the "), schema.text("relay", [schema.marks.strong.create()]), schema.text(" and "), schema.text("bun test", [schema.marks.code.create()])]),
+        paragraph.create(null, [
+          schema.text("ping "),
+          mention.create({ name: "atlas" }),
+          schema.text(" the "),
+          schema.text("relay", [schema.marks.strong.create()]),
+          schema.text(" and "),
+          schema.text("bun test", [schema.marks.code.create()]),
+        ]),
         bullet_list.create(null, [list_item.create(null, paragraph.create(null, schema.text("one"))), list_item.create(null, paragraph.create(null, schema.text("two", [schema.marks.em.create()])))]),
         code_block.create(null, schema.text("bun run ui:build")),
       ]),
@@ -52,7 +59,14 @@ describe("finished doc lines with no message sit in the feed at their time (T135
   })
 
   test("feed rows land between messages by time, and carry no actions", () => {
-    const rows = withLines([msg(1, T + 10), msg(2, T + 30)], [{ id: "x", author: "jow", at: T + 20, text: "between" }, { id: "y", author: "jow", at: T + 40, text: "after" }], where)
+    const rows = withLines(
+      [msg(1, T + 10), msg(2, T + 30)],
+      [
+        { id: "x", author: "jow", at: T + 20, text: "between" },
+        { id: "y", author: "jow", at: T + 40, text: "after" },
+      ],
+      where
+    )
     expect(rows.map((m) => m.text)).toEqual(["#1", "between", "#2", "after"])
     expect(rows[1]).toMatchObject({ from: "jow", block: "x", fromDoc: true })
     expect(rows[1]!.seq).toBeGreaterThan(1)

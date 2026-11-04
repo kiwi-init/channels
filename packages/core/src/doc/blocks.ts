@@ -14,6 +14,8 @@ export interface BlockMeta {
   at: number;
   sent?: true;
   posted?: true;
+  re?: number;
+  quote?: string;
 }
 
 export interface Block extends BlockMeta {
@@ -34,6 +36,8 @@ function metaOf(el: Y.XmlElement): BlockMeta | null {
   const author = el.getAttribute("author");
   const at = Number(el.getAttribute("at"));
   if (typeof id !== "string" || !isKind(kind) || typeof author !== "string" || !Number.isFinite(at)) return null;
+  const re = Number(el.getAttribute("re"));
+  const quote = el.getAttribute("quote");
   return {
     id,
     kind,
@@ -41,6 +45,8 @@ function metaOf(el: Y.XmlElement): BlockMeta | null {
     at,
     ...(el.getAttribute("sent") === "1" ? { sent: true as const } : {}),
     ...(el.getAttribute("posted") === "1" ? { posted: true as const } : {}),
+    ...(Number.isSafeInteger(re) && re > 0 ? { re } : {}),
+    ...(typeof quote === "string" && quote ? { quote } : {}),
   };
 }
 

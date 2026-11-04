@@ -1,7 +1,7 @@
 import type { Node } from "prosemirror-model"
 import { TextSelection, type EditorState, type Transaction } from "prosemirror-state"
 
-import { attrsOf, newBlockId, schema, type BlockAttrs, type BlockKind } from "~/chat/doc/schema"
+import { attrsOf, isSent, newBlockId, schema, type BlockAttrs, type BlockKind } from "~/chat/doc/schema"
 
 const RUN_MS = 5 * 60_000
 
@@ -32,7 +32,7 @@ export function blockAt(state: EditorState): Placed | null {
 }
 
 export function makeBlock(kind: BlockKind, author: string, at: number, text = ""): Node {
-  const attrs: BlockAttrs = { id: newBlockId(), kind, author, at }
+  const attrs: BlockAttrs = { id: newBlockId(), kind, author, at, re: null, quote: null }
   return schema.nodes.block.create(attrs, schema.nodes.paragraph.create(null, text ? schema.text(text) : null))
 }
 
@@ -62,6 +62,21 @@ export function startBlock(state: EditorState, me: string, now: number): Transac
   const at = state.doc.content.size
   tr.insert(at, makeBlock("text", me, now))
   return inside(tr, at)
+}
+
+export function replyIn(state: EditorState, me: string, now: number, re: number, quote: string | null): Transaction {
+  const last = blocks(state.doc).at(-1)
+  const a = last ? attrsOf(last.node) : null
+  const draft = last && a && a.author === me && a.kind === "text" && !isSent(last.node)
+  const tr = draft ? state.tr.setMeta("addToHistory", false).setSelection(TextSelection.atEnd(state.doc)) : startBlock(state, me, now)
+  const here = blocks(tr.doc).at(-1)
+  return here ? tr.setNodeMarkup(here.pos, undefined, { ...here.node.attrs, re, quote }) : tr
+}
+
+export function unreply(state: EditorState, id: string): Transaction | null {
+  const b = blocks(state.doc).find((x) => attrsOf(x.node).id === id)
+  if (!b) return null
+  return state.tr.setMeta("addToHistory", false).setNodeMarkup(b.pos, undefined, { ...b.node.attrs, re: null, quote: null })
 }
 
 export function blockAfter(state: EditorState, me: string, now: number): Transaction | null {
