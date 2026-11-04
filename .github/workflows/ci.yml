@@ -160,6 +160,9 @@ jobs:
       - name: doc replay, a second window of yours never hides or eats the line you type
         if: ${{ !cancelled() }}
         run: bun scripts/ui-doc-replay.ts --chromium --second-window --rounds=2
+      - name: doc send, sending at the bottom, scrolled up or a long line keeps the view where it was
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-send-scroll.ts
       - name: doc paste, an image pasted into a line goes out with that line
         if: ${{ !cancelled() }}
         run: bun scripts/ui-doc-paste.ts
