@@ -1,10 +1,10 @@
 import type { Channel } from "@kiwi/core/client.ts";
 import { watchWakes, type DocWake } from "@kiwi/core/doc/agent.ts";
-import { blocksOf } from "@kiwi/core/doc/blocks.ts";
+import { blocksOf, type Block } from "@kiwi/core/doc/blocks.ts";
 import type { ThreadDoc } from "@kiwi/core/doc/thread-doc.ts";
 import { MAX_DOC_THREADS } from "@kiwi/core/protocol.ts";
 import type { ChannelState } from "@kiwi/core/state.ts";
-import { addDocWake, docSince, setDocSince, type DocWakeItem } from "../config/doc-wakes.ts";
+import { addDocWake, docSeen, legacyDocSince, setDocSeen, type DocSeenDoc, type DocWakeItem } from "../config/doc-wakes.ts";
 
 export interface Follow {
   key: string;
@@ -41,6 +41,17 @@ export interface DocFollower {
 }
 
 const REFRESH_MS = 2_000;
+const KEEP_SEEN = 2_000;
+
+function remember(d: DocSeenDoc, b: Pick<Block, "id" | "at">): void {
+  d.at[b.id] = b.at;
+  const all = Object.entries(d.at);
+  if (all.length <= KEEP_SEEN) return;
+  for (const [id, at] of all.sort((x, y) => x[1] - y[1]).slice(0, all.length - KEEP_SEEN)) {
+    d.cut = Math.max(d.cut, at);
+    delete d.at[id];
+  }
+}
 
 function wakeItem(key: string, td: Pick<ThreadDoc, "doc">, w: DocWake): DocWakeItem {
   const blocks = blocksOf(td.doc);
@@ -65,16 +76,20 @@ export function followDocs(
   now: () => number = Date.now,
 ): DocFollower {
   const open = new Map<string, { th: string; owns: boolean; stop: () => void }>();
-  const since = docSince(seat.alias, seat.agent);
-  const started = now();
+  const seen = docSeen(seat.alias, seat.agent);
+  const legacy = legacyDocSince(seat.alias, seat.agent);
+  const floor = seen.alive ?? now();
   let timer: ReturnType<typeof setTimeout> | null = null;
   let busy = false;
   let again = false;
   let ended = false;
 
+  const save = () => {
+    seen.alive = now();
+    setDocSeen(seat.alias, seat.agent, seen);
+  };
+
   const heard = (key: string, td: ThreadDoc) => (w: DocWake) => {
-    since[w.th] = Math.max(since[w.th] ?? 0, w.block.at);
-    setDocSince(seat.alias, seat.agent, since);
     if (addDocWake(seat.alias, seat.agent, wakeItem(key, td, w))) woke();
   };
 
@@ -95,6 +110,9 @@ export function followDocs(
       const state = await stateOf();
       if (!state || ended) return;
       const want = new Map(docFollows(state, seat.agent).map((f) => [f.key, f]));
+      const live = new Set(state.docs.values());
+      for (const th of Object.keys(seen.docs)) if (!live.has(th)) delete seen.docs[th];
+      save();
       for (const [key, o] of [...open]) {
         const f = want.get(key);
         if (!f || f.th !== o.th || f.owns !== o.owns) drop(key, !f || f.th !== o.th);
@@ -103,11 +121,17 @@ export function followDocs(
         if (open.has(f.key)) continue;
         const td = await seat.ch.threadDoc(f.key, f.th);
         if (ended) return;
-        if (since[f.th] === undefined) {
-          since[f.th] = started;
-          setDocSince(seat.alias, seat.agent, since);
+        const d = seen.docs[f.th] ?? { cut: Math.min(legacy[f.th] ?? floor, floor), at: {} };
+        if (!seen.docs[f.th]) {
+          seen.docs[f.th] = d;
+          save();
         }
-        const stop = watchWakes(td, { me: seat.agent, names: [seat.agent], owns: f.owns, after: since[f.th], name: (a) => a }, heard(f.key, td));
+        const known = (b: Block) => b.at <= d.cut || d.at[b.id] !== undefined;
+        const settled = (blocks: readonly Block[]) => {
+          for (const b of blocks) remember(d, b);
+          save();
+        };
+        const stop = watchWakes(td, { me: seat.agent, names: [seat.agent], owns: f.owns, known, settled, name: (a) => a }, heard(f.key, td));
         open.set(f.key, { th: f.th, owns: f.owns, stop });
       }
     } finally {

@@ -143,13 +143,13 @@ describe("an agent wakes for a finished block in the thread doc (T500)", () => {
     stop();
   });
 
-  test("a block sent while it was away wakes it when it's given after; one older than after doesn't; stop ends the watch", () => {
+  test("a block sent while it was away wakes it unless it's known; stop ends the watch", () => {
     const w = room();
     newBlock(w.doc, "text", "jow", "@olivia while you were away", 100);
     newBlock(w.doc, "text", "rodrigo", "@olivia before that", 10);
     newBlock(w.doc, "text", "rodrigo", "", 11);
     newBlock(w.doc, "text", "jow", "", 101);
-    const { wakes, stop } = watch(w, { after: 50 });
+    const { wakes, stop } = watch(w, { known: (b) => b.at <= 50 });
     expect(wakes.map((x) => x.block.text)).toEqual(["@olivia while you were away"]);
     stop();
     newBlock(w.doc, "text", "jow", "@olivia after stop");

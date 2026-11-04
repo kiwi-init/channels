@@ -27,7 +27,8 @@ export interface WakeRule {
   names: readonly string[];
   owns: boolean;
   name?: (author: string) => string;
-  after?: number;
+  known?: (block: Block) => boolean;
+  settled?: (blocks: readonly Block[]) => void;
 }
 
 interface Watched {
@@ -37,6 +38,16 @@ interface Watched {
 }
 
 const WAKING_KINDS: readonly BlockKind[] = ["text", "comment", "agent"];
+
+function settledBlocks(blocks: readonly Block[]): Block[] {
+  const later = new Set<string>();
+  const out: Block[] = [];
+  for (const b of [...blocks].reverse()) {
+    if (b.sent || b.posted || (!b.back && later.has(b.author))) out.push(b);
+    later.add(b.author);
+  }
+  return out.reverse();
+}
 
 export function wakesMe(block: Block, rule: Pick<WakeRule, "me" | "names" | "owns">): boolean {
   if (block.author === rule.me || !WAKING_KINDS.includes(block.kind) || !block.text.trim()) return false;
@@ -60,22 +71,17 @@ function selectionOf(awareness: Awareness, author: string): DocSelection | null 
 
 export function watchWakes(watched: Watched, rule: WakeRule, onWake: (wake: DocWake) => void): () => void {
   const { doc, awareness, th } = watched;
-  const woke = new Set<string>();
-  if (rule.after === undefined) for (const b of blocksOf(doc)) woke.add(b.id);
-
-  const fire = (block: Block): void => {
-    if (woke.has(block.id)) return;
-    woke.add(block.id);
-    onWake({ th, block, thread: threadText(doc, rule.name), selection: selectionOf(awareness, block.author) });
-  };
+  const before = new Set(blocksOf(doc).map((b) => b.id));
+  const known = rule.known ?? ((b: Block) => before.has(b.id));
+  const done = new Set<string>();
 
   const look = (): void => {
-    const blocks = blocksOf(doc);
-    blocks.forEach((block, i) => {
-      if (woke.has(block.id) || (rule.after !== undefined && block.at <= rule.after)) return;
-      if (block.posted || !wakesMe(block, rule)) return;
-      if (block.sent || (!block.back && blocks.slice(i + 1).some((b) => b.author === block.author))) fire(block);
-    });
+    const fresh = settledBlocks(blocksOf(doc)).filter((b) => !done.has(b.id) && !known(b));
+    for (const block of fresh) {
+      done.add(block.id);
+      if (!block.posted && wakesMe(block, rule)) onWake({ th, block, thread: threadText(doc, rule.name), selection: selectionOf(awareness, block.author) });
+    }
+    if (fresh.length) rule.settled?.(fresh);
   };
 
   doc.on("update", look);
