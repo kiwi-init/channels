@@ -762,6 +762,10 @@ export function asksOf(
   const askOf = new Map<number, string>()
   const held = new Set<number>()
   const folded = { trust: state.trust, members: state.members, bySeq }
+  const closes = new Map<number, { by: string; at: number; why?: string }>()
+  for (const m of messages)
+    if (m.ev?.op === "ask.close" && !state.rejected.has(m.seq) && !ignored(state.trust.get(m.seq)) && !closes.has(m.ev.ask))
+      closes.set(m.ev.ask, { by: m.from, at: m.ts, ...(m.ev.why ? { why: m.ev.why } : {}) })
   for (const m of messages) {
     if (m.from === me || ignored(state.trust.get(m.seq))) continue
     const place = state.placeOf.get(m.seq)
@@ -804,7 +808,8 @@ export function asksOf(
     const answer = (replies.get(m.seq) ?? []).find((r) => r.kind !== "event" && answersAsk(state.members, m, r.from))
     const isOpen = open.has(m.seq)
     const idle = !isOpen && !answer && pending.has(m.seq)
-    if (!isOpen && !answer && !idle) continue
+    const closed = !isOpen && !answer && !idle ? closes.get(m.seq) : undefined
+    if (!isOpen && !answer && !idle && !closed) continue
     const holds = heldBy(state, m)
     const askedOf = m.esc && !m.handoff && m.to?.length && !m.to.includes(me) && !m.to.includes("*") ? [...m.to] : undefined
     if (isOpen) for (const t of holds) held.add(t)
@@ -824,6 +829,7 @@ export function asksOf(
       ...(idle ? { idle: true as const } : {}),
       ...(askedOf ? { askedOf } : {}),
       ...(!isOpen && answer ? { answer: { text: answer.body, by: answer.from, at: answer.ts } } : {}),
+      ...(closed ? { closed } : {}),
     })
     askOf.set(m.seq, id)
   }

@@ -29,7 +29,7 @@ function since(at: number): string {
 }
 
 const holds = (a: Ask, id: number): a is PermissionAsk | QuestionAsk =>
-  a.kind === "permission" ? a.task === id && !a.answer : a.kind === "question" ? (a.task === id || a.holds.includes(id)) && !a.answer : false
+  a.kind === "permission" ? a.task === id && !a.answer : a.kind === "question" ? (a.task === id || a.holds.includes(id)) && !a.answer && !a.closed : false
 
 export function TaskPanel({ channel, id }: { channel: Channel; id: number }) {
   const task = channel.tasks.find((t) => t.id === id)

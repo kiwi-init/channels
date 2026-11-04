@@ -81,6 +81,7 @@ export function NeedsYou({ channel, onJump }: { channel: Channel; onJump: (jump:
 
 function answeredAt(a: Ask): number {
   if (a.kind === "review" || a.kind === "spec") return a.at
+  if (a.kind === "question" && a.closed) return a.closed.at
   return a.answer?.at ?? a.at
 }
 
@@ -93,6 +94,7 @@ function doneLine(channel: Channel, a: Ask): string {
     case "permission":
       return a.answer ? `${a.answer.allow ? "Allowed" : "Denied"} · ${nickname(channel, a.from)} · ${a.code} · ${ago(a.answer.at)}${byWhom(channel, a.answer.by)}` : ""
     case "question":
+      if (a.closed) return `Closed · ${nickname(channel, a.from)} · ${ago(a.closed.at)}${byWhom(channel, a.closed.by)}`
       return a.answer ? `Chose “${a.answer.text}” · ${nickname(channel, a.from)} · ${ago(a.answer.at)}${byWhom(channel, a.answer.by)}` : ""
     case "join":
       return a.answer ? `${a.answer.letIn ? "Let in" : "Turned away"} · ${a.name}${a.sponsor ? ` · brought by ${a.sponsor}` : ""} · ${ago(a.answer.at)}${byWhom(channel, a.answer.by)}` : ""
