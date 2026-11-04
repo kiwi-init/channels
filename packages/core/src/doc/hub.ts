@@ -1,5 +1,5 @@
 import * as Y from "yjs";
-import { b64url, fromB64url } from "../crypto.ts";
+import { b64url, fromB64url, openWith, sealWith } from "../crypto.ts";
 import type { Identity } from "../identity.ts";
 import { DOC_THREAD_RE } from "../protocol.ts";
 import { newDocId } from "./blocks.ts";
@@ -14,10 +14,14 @@ export interface DocStore {
   save: (th: string, saved: DocSaved) => Promise<void>;
 }
 
+export interface ThreadKeys extends DocKeys {
+  sealed?: true;
+}
+
 export interface HubOptions {
   roomId: string;
   me: Identity;
-  keys: DocKeys;
+  keysFor: (thread: string) => ThreadKeys;
   sealAware: (payload: object) => Promise<{ iv: string; ct: string }>;
   announce: (thread: string, th: string) => Promise<void>;
   store?: DocStore | null;
@@ -29,9 +33,13 @@ export interface HubOptions {
 
 interface Open {
   td: ThreadDoc;
+  keys: ThreadKeys;
   saving: ReturnType<typeof setTimeout> | null;
   onUpdate: () => void;
 }
+
+const SEALED_AWARE = "~";
+const awareAd = (roomId: string, th: string) => `kiwi-doc-aware\n${roomId}\n${th}`;
 
 const isDocFrame = (f: { t?: unknown }): f is Extract<DocIn, { th: string }> => f.t === "doc" || f.t === "doc.ready";
 
@@ -115,14 +123,24 @@ export class DocHub {
     if (!docs) return false;
     for (const [th, u] of docs) {
       const open = this.byTh.get(th);
-      if (!open) continue;
-      try {
-        open.td.applyAwareness(fromB64url(u));
-      } catch {
-        // A cursor update that doesn't decode is dropped; the next one replaces it.
-      }
+      if (open) void this.applyAware(open, u);
     }
     return true;
+  }
+
+  private async applyAware(open: Open, u: string): Promise<void> {
+    let raw: string | null = u;
+    if (!!open.keys.sealed !== u.startsWith(SEALED_AWARE)) return;
+    if (open.keys.sealed) {
+      raw = null;
+      for (const key of await open.keys.opening(undefined)) if ((raw = await openWith(key, u.slice(SEALED_AWARE.length), awareAd(this.o.roomId, open.td.th)))) break;
+    }
+    if (!raw) return;
+    try {
+      open.td.applyAwareness(fromB64url(raw));
+    } catch {
+      // A cursor update that doesn't decode is dropped; the next one replaces it.
+    }
   }
 
   private readonly send = (f: DocOut): void => {
@@ -138,8 +156,16 @@ export class DocHub {
   private async flushAware(): Promise<void> {
     this.awareTimer = null;
     if (!this.awareOut.size || !this.sockets.length) return this.awareOut.clear();
-    const docs = [...this.awareOut].map(([th, u]) => [th, b64url(u)]);
+    const out = [...this.awareOut];
     this.awareOut.clear();
+    const docs = await Promise.all(
+      out.map(async ([th, u]) => {
+        const keys = this.byTh.get(th)?.keys;
+        if (!keys?.sealed) return [th, b64url(u)];
+        const { key } = await keys.current();
+        return [th, SEALED_AWARE + (await sealWith(key, b64url(u), awareAd(this.o.roomId, th)))];
+      }),
+    );
     const sealed = await this.o.sealAware({ type: AWARE_TYPE, docs });
     this.sockets.at(-1)?.(JSON.stringify({ t: "eph", ...sealed }));
   }
@@ -147,18 +173,19 @@ export class DocHub {
   private async make(thread: string, th: string | null, had: Open | null): Promise<ThreadDoc> {
     const id = th ?? newDocId();
     if (!DOC_THREAD_RE.test(id)) throw new Error(`not a doc id: ${id}`);
+    const keys = this.o.keysFor(thread);
     const saved = th ? ((await this.o.store?.load(id)) ?? null) : null;
     const td = new ThreadDoc({
       roomId: this.o.roomId,
       th: id,
       me: this.o.me,
-      keys: this.o.keys,
+      keys,
       links: { send: this.send, aware: this.queueAware },
       saved,
       ...(this.o.trusts ? { trusts: this.o.trusts } : {}),
       ...(this.o.flushMs === undefined ? {} : { flushMs: this.o.flushMs }),
     });
-    const open: Open = { td, saving: null, onUpdate: () => this.queueSave(open) };
+    const open: Open = { td, keys, saving: null, onUpdate: () => this.queueSave(open) };
     td.doc.on("update", open.onUpdate);
     if (had) {
       Y.applyUpdate(td.doc, Y.encodeStateAsUpdate(had.td.doc));

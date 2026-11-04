@@ -18,7 +18,9 @@ export function blocks(doc: Node): Placed[] {
 }
 
 export function isEmpty(block: Node): boolean {
-  return block.childCount <= 1 && block.textContent === ""
+  if (block.childCount > 1) return false
+  const only = block.firstChild
+  return !only || (only.isTextblock && only.content.size === 0)
 }
 
 export function blockAt(state: EditorState): Placed | null {
@@ -79,11 +81,17 @@ export function blockAfter(state: EditorState, me: string, now: number): Transac
   return inside(tr, at)
 }
 
-export function finishesBlock(state: EditorState): boolean {
+export function atBlockEnd(state: EditorState): boolean {
   const { $from, empty } = state.selection
-  if (!empty || $from.depth < 2) return false
-  const here = state.doc.child($from.index(0))
-  return $from.parent.content.size === 0 && $from.index(1) === here.childCount - 1 && here.childCount > 1
+  if (!empty || $from.depth < 2 || $from.parentOffset !== $from.parent.content.size) return false
+  for (let d = $from.depth - 1; d >= 1; d--) if ($from.index(d) !== $from.node(d).childCount - 1) return false
+  return true
+}
+
+export function endsBlock(state: EditorState): boolean {
+  const { $from } = state.selection
+  if (!atBlockEnd(state) || $from.depth !== 2 || $from.parent.type !== schema.nodes.paragraph) return false
+  return $from.parent.content.size > 0 || $from.node(1).childCount > 1
 }
 
 export function dropEmptyOwn(state: EditorState, me: string, keep: number | null): Transaction | null {

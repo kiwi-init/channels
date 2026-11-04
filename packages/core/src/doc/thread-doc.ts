@@ -28,7 +28,7 @@ const RETRY_MS = 2_000;
 
 export interface DocKeys {
   current: () => Promise<{ key: string; e?: number }>;
-  at: (e: number | undefined) => Promise<string | null>;
+  opening: (e: number | undefined) => Promise<readonly string[]>;
 }
 
 interface DocLinks {
@@ -78,6 +78,8 @@ export class ThreadDoc {
   private closed = false;
   private chain: Promise<void> = Promise.resolve();
   private readonly waiters: (() => void)[] = [];
+  private sealedWith: string | null = null;
+  private stale = false;
 
   constructor(o: DocOptions, doc: Y.Doc = new Y.Doc()) {
     if (!DOC_THREAD_RE.test(o.th)) throw new Error(`not a doc id: ${o.th}`);
@@ -168,15 +170,22 @@ export class ThreadDoc {
 
   private async seal(update: Uint8Array): Promise<{ iv: string; ct: string; e?: number }> {
     const { key, e } = await this.o.keys.current();
+    if (this.sealedWith && this.sealedWith !== key) this.stale = true;
+    this.sealedWith = key;
     const signed = await sign(this.o.me, { th: this.th, u: b64url(update) });
     const box = await sealBytes(key, enc.encode(JSON.stringify(signed)), ad(this.o.roomId, this.th));
     return e === undefined ? box : { ...box, e };
   }
 
   private async open(iv: string, ct: string, e: number | undefined): Promise<Uint8Array | null> {
-    const key = await this.o.keys.at(e);
-    if (!key) return null;
-    const plain = await openBytes(key, iv, ct, ad(this.o.roomId, this.th));
+    const keys = await this.o.keys.opening(e);
+    let plain: Uint8Array<ArrayBuffer> | null = null;
+    for (const [i, key] of keys.entries()) {
+      plain = await openBytes(key, iv, ct, ad(this.o.roomId, this.th));
+      if (!plain) continue;
+      if (i > 0) this.stale = true;
+      break;
+    }
     if (!plain) return null;
     let body: unknown;
     try {
@@ -194,13 +203,17 @@ export class ThreadDoc {
   private async post(update: Uint8Array, id: string): Promise<void> {
     if (this.closed) return;
     this.o.links.send({ t: "doc", id, th: this.th, ...(await this.seal(update)) });
+    if (this.stale && this.ready) await this.compact();
   }
 
   private async compact(): Promise<void> {
     if (this.closed || !this.ready) return;
     const upto = Math.max(this.head, this.top);
+    if (upto === 0) return;
     const id = b64url(crypto.getRandomValues(new Uint8Array(12)));
-    this.o.links.send({ t: "doc.snap", id, th: this.th, upto, ...(await this.seal(Y.encodeStateAsUpdate(this.doc))) });
+    const sealed = await this.seal(Y.encodeStateAsUpdate(this.doc));
+    this.stale = false;
+    this.o.links.send({ t: "doc.snap", id, th: this.th, upto, ...sealed });
   }
 
   private async take(f: DocIn): Promise<void> {
@@ -230,6 +243,7 @@ export class ThreadDoc {
       this.head = Math.max(this.head, f.head);
       this.ready = true;
       for (const done of this.waiters.splice(0)) done();
+      if (this.stale) await this.compact();
       return;
     }
     if (!f.snap && f.dseq <= this.head) return;

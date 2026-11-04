@@ -21,9 +21,9 @@ const look: Partial<Prefs> = { ...shot?.prefs, ...(theme === "light" || theme ==
 
 export const demoPrefs: Prefs = { ...DEMO_PREFS, ...look }
 
-if (shot?.docs && shot.channel && shot.nav?.where) {
+if (shot?.docs !== undefined && shot.channel && shot.nav?.where) {
   setThreadDocs(true)
-  seedThreadDoc(spotKey(shot.channel, shot.nav.where))
+  seedThreadDoc(spotKey(shot.channel, shot.nav.where), shot.docs)
 }
 
 const SWITCH_AFTER_MS = 400
