@@ -1,7 +1,7 @@
 import type * as Y from "yjs";
 import type { Channel } from "@kiwi/core/client.ts";
 import { agentBlock } from "@kiwi/core/doc/agent.ts";
-import { blocksOf, removeBlock, rewriteBlock, threadText, type BlockMedia } from "@kiwi/core/doc/blocks.ts";
+import { blocksOf, mediaOfBlock, removeBlock, rewriteBlock, threadText, type BlockMedia } from "@kiwi/core/doc/blocks.ts";
 import type { ThreadDoc } from "@kiwi/core/doc/thread-doc.ts";
 import { docThread } from "@kiwi/core/doc/threads.ts";
 import { GENERAL_ROOM } from "@kiwi/core/protocol.ts";
@@ -98,6 +98,9 @@ export const writeBlock = (ch: Channel, from: number, at: DocPlace, author: stri
     else block.end();
     return block.id;
   });
+
+export const blockMedia = (ch: Channel, from: number, at: DocPlace, id: string, ms = DOC_WAIT_MS): Promise<ReturnType<typeof mediaOfBlock>> =>
+  inThreadDoc(ch, from, at, (td) => mediaOfBlock(td.doc, id), ms);
 
 export const dropBlock = (ch: Channel, from: number, at: DocPlace, id: string): Promise<boolean> => inThreadDoc(ch, from, at, (td) => removeBlock(td.doc, id));
 
