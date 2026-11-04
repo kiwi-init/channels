@@ -199,6 +199,64 @@ describe("the doc hub keeps each thread's doc on the live socket", () => {
     expect(texts(db.doc)).toEqual(["typed offline"]);
   });
 
+  test("an edit the relay stored before the socket dropped, ack and all, isn't stored again on reconnect (T1734)", async () => {
+    const w = await world();
+    const [ana, bo] = await Promise.all([generateIdentity("ana"), generateIdentity("bo")]);
+    const a = w.hubFor(ana);
+    const b = w.hubFor(bo);
+    const pa = w.plug(a);
+    const sb = w.plug(b).s;
+    const da = await a.open("T5");
+    const db = await b.open("T5", da.th);
+    await w.settle(pa.s, sb);
+    newBlock(da.doc, "text", "ana", "said once");
+    await w.settle(sb);
+    w.relay.hang(pa.s);
+    pa.unplug();
+    const back = w.plug(a).s;
+    await w.settle(back, sb);
+    expect(texts(db.doc)).toEqual(["said once"]);
+    expect(w.relay.rows.filter((r) => r.th === da.th)).toHaveLength(1);
+  });
+
+  test("a second socket doesn't send an edit again while the first still owes its ack (T1734)", async () => {
+    const w = await world();
+    const [ana, bo] = await Promise.all([generateIdentity("ana"), generateIdentity("bo")]);
+    const a = w.hubFor(ana);
+    const b = w.hubFor(bo);
+    const first = w.plug(a);
+    const sb = w.plug(b).s;
+    const da = await a.open("T6");
+    const db = await b.open("T6", da.th);
+    await w.settle(first.s, sb);
+    newBlock(da.doc, "text", "ana", "one copy");
+    await w.settle(sb);
+    const second = w.plug(a).s;
+    await w.settle(first.s, second, sb);
+    expect(texts(db.doc)).toEqual(["one copy"]);
+    expect(w.relay.rows.filter((r) => r.th === da.th)).toHaveLength(1);
+  });
+
+  test("an edit that never reached the relay goes out once the new socket has caught up (T1734)", async () => {
+    const w = await world();
+    const [ana, bo] = await Promise.all([generateIdentity("ana"), generateIdentity("bo")]);
+    const a = w.hubFor(ana);
+    const b = w.hubFor(bo);
+    const pa = w.plug(a);
+    const sb = w.plug(b).s;
+    const da = await a.open("T7");
+    const db = await b.open("T7", da.th);
+    await w.settle(pa.s, sb);
+    w.relay.hang(pa.s);
+    newBlock(da.doc, "text", "ana", "lost in the drop");
+    await w.settle(sb);
+    pa.unplug();
+    const back = w.plug(a).s;
+    await w.settle(back, sb);
+    expect(texts(db.doc)).toEqual(["lost in the drop"]);
+    expect(w.relay.rows.filter((r) => r.th === da.th)).toHaveLength(1);
+  });
+
   test("with two sockets, when the one that subscribed drops, the doc still gets the others' edits (T1444)", async () => {
     const w = await world();
     const [ana, bo] = await Promise.all([generateIdentity("ana"), generateIdentity("bo")]);
