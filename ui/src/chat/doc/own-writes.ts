@@ -1,5 +1,5 @@
-import { Fragment, Node } from "prosemirror-model"
-import type { EditorState } from "prosemirror-state"
+import { Fragment, Node, type Slice } from "prosemirror-model"
+import { EditorState } from "prosemirror-state"
 import { ProsemirrorBinding, ySyncPluginKey, yXmlFragmentToProseMirrorRootNode } from "y-prosemirror"
 import * as Y from "yjs"
 
@@ -92,79 +92,50 @@ const lowHalf = (s: string, at: number): boolean => {
   return c >= 0xdc00 && c <= 0xdfff
 }
 
-function sameEnds(a: string, b: string): { head: number; tail: number } {
-  let head = 0
-  while (head < a.length && head < b.length && a[head] === b[head]) head++
-  if (head > 0 && (lowHalf(a, head) || lowHalf(b, head))) head--
-  let tail = 0
-  while (tail < a.length - head && tail < b.length - head && a[a.length - 1 - tail] === b[b.length - 1 - tail]) tail++
-  while (tail > 0 && (lowHalf(a, a.length - tail) || lowHalf(b, b.length - tail))) tail--
-  return { head, tail }
-}
+const splitsPair = (n: Node, at: number): boolean => at > 0 && at < n.content.size && lowHalf(n.textBetween(at, at + 1, "", ""), 0)
 
-interface Edit {
-  words: Y.XmlText | Y.XmlElement
-  at: number
-  cut: number
-  put: string
-}
-
-function plainParagraph(n: Node | undefined): string | null {
-  if (!n || n.type.name !== "paragraph") return null
-  let text = ""
-  let plain = true
-  n.forEach((c) => {
-    if (c.isText) text += c.text ?? ""
-    else plain = false
-  })
-  return plain ? text : null
-}
-
-function storedParagraph(el: Y.XmlElement | Y.XmlText | Y.XmlHook | null): { words: Y.XmlText | Y.XmlElement; text: string } | null {
-  if (!(el instanceof Y.XmlElement) || el.nodeName !== "paragraph") return null
-  if (el.length === 0) return { words: el, text: "" }
-  const t = el.get(0)
-  if (el.length !== 1 || !(t instanceof Y.XmlText)) return null
-  const parts = (t.toDelta() as { insert: unknown }[]).map((d) => d.insert)
-  return parts.every((x) => typeof x === "string") ? { words: t, text: parts.join("") } : null
-}
-
-function editOnto(drawn: string, now: string, stored: string): Omit<Edit, "words"> {
-  const mine = sameEnds(drawn, now)
-  const cut = drawn.length - mine.head - mine.tail
-  const put = now.slice(mine.head, now.length - mine.tail)
-  const theirs = sameEnds(drawn, stored)
-  const from = mine.head
-  const to = mine.head + cut
-  if (from >= drawn.length - theirs.tail) return { at: stored.length - (drawn.length - from), cut, put }
-  if (to <= theirs.head) return { at: from, cut, put }
-  return { at: Math.min(from, theirs.head), cut: 0, put }
-}
-
-function mergeLine(el: Y.XmlElement, drawn: Node, now: Node): boolean {
-  const stored = el.toArray()
-  if (drawn.childCount !== now.childCount || drawn.childCount !== stored.length) return false
-  const edits: Edit[] = []
-  for (let i = 0; i < now.childCount; i++) {
-    const was = drawn.child(i)
-    const is = now.child(i)
-    if (was === is || was.eq(is)) continue
-    const a = plainParagraph(was)
-    const b = plainParagraph(is)
-    const y = storedParagraph(stored[i] ?? null)
-    if (a === null || b === null || !y) return false
-    edits.push({ words: y.words, ...editOnto(a, b, y.text) })
+function diffOf(a: Node, b: Node): { from: number; toA: number; toB: number } | null {
+  let from = a.content.findDiffStart(b.content)
+  if (from === null) return null
+  if (splitsPair(a, from) || splitsPair(b, from)) from--
+  let { a: toA, b: toB } = a.content.findDiffEnd(b.content) ?? { a: a.content.size, b: b.content.size }
+  const over = from - Math.min(toA, toB)
+  if (over > 0) {
+    toA += over
+    toB += over
   }
-  for (const e of edits) {
-    const words = e.words instanceof Y.XmlText ? e.words : null
-    if (!words) {
-      if (e.put) e.words.insert(0, [new Y.XmlText(e.put)])
-      continue
-    }
-    if (e.cut) words.delete(e.at, e.cut)
-    if (e.put) words.insert(e.at, e.put)
+  if (splitsPair(a, toA) || splitsPair(b, toB)) {
+    toA++
+    toB++
   }
-  return true
+  return { from, toA, toB }
+}
+
+function placed(stored: Node, from: number, to: number, slice: Slice): Node | null {
+  try {
+    const doc = stored.type.schema.topNodeType.create(null, stored)
+    const tr = EditorState.create({ doc }).tr.replace(from + 1, to + 1, slice)
+    const line = tr.doc.childCount === 1 ? tr.doc.child(0) : null
+    return line && (tr.docChanged || (slice.size === 0 && from === to)) ? line : null
+  } catch {
+    // a slice that can't fit here is tried at the next place
+    return null
+  }
+}
+
+function rebase(drawn: Node, now: Node, stored: Node): Node | null {
+  const mine = diffOf(drawn, now)
+  if (!mine) return stored
+  const slice = now.slice(mine.from, mine.toB)
+  const theirs = diffOf(drawn, stored)
+  const end = stored.content.size
+  if (!theirs || mine.from >= theirs.toA) {
+    const shift = theirs ? theirs.toB - theirs.toA : 0
+    return placed(stored, mine.from + shift, mine.toA + shift, slice) ?? placed(stored, end, end, slice)
+  }
+  if (mine.toA <= theirs.from) return placed(stored, mine.from, mine.toA, slice) ?? placed(stored, end, end, slice)
+  const at = Math.min(mine.from, theirs.from)
+  return placed(stored, at, at, slice) ?? placed(stored, end, end, slice)
 }
 
 function ownOnly(doc: Node, binding: ProsemirrorBinding, touched: Touched, missed: Set<string>): { safe: Node; behind: boolean } {
@@ -179,21 +150,23 @@ function ownOnly(doc: Node, binding: ProsemirrorBinding, touched: Touched, misse
     })
   )
   if (stored.length !== els.length || here.size !== order.length || new Set(ids).size !== ids.length) return { safe: doc, behind: false }
-  const merged = new Set<string>()
+  let fresh: Map<string, Node> | null = null
+  const storedNow = (id: string): Node | null => {
+    fresh ??= byKey(yXmlFragmentToProseMirrorRootNode(binding.type, doc.type.schema))
+    return fresh.get(id) ?? null
+  }
+  const drawn = (el: Y.XmlElement, id: string): Node | null => {
+    const mapped = binding.mapping.get(el)
+    return mapped instanceof Node ? mapped : storedNow(id)
+  }
+  const merged = new Map<string, Node>()
   for (const [i, el] of stored.entries()) {
     const id = ids[i]!
     const drawnBefore = touched.lines.get(id)
     const now = here.get(id)
-    if (!drawnBefore || !now || shapeOfStored(el) === shapeOfDrawn(drawnBefore)) continue
-    mergeLine(el, drawnBefore, now)
-    merged.add(id)
-  }
-  let fresh: Map<string, Node> | null = null
-  const drawn = (el: Y.XmlElement, id: string): Node | null => {
-    const mapped = merged.has(id) ? null : binding.mapping.get(el)
-    if (mapped instanceof Node) return mapped
-    fresh ??= byKey(yXmlFragmentToProseMirrorRootNode(binding.type, doc.type.schema))
-    return fresh.get(id) ?? null
+    const theirs = drawnBefore && now && shapeOfStored(el) !== shapeOfDrawn(drawnBefore) ? storedNow(id) : null
+    if (!drawnBefore || !now || !theirs) continue
+    merged.set(id, rebase(drawnBefore, now, theirs) ?? theirs)
   }
   const out: Node[] = []
   const outKeys: string[] = []
@@ -203,7 +176,7 @@ function ownOnly(doc: Node, binding: ProsemirrorBinding, touched: Touched, misse
     if (touched.gone.has(id)) continue
     const mine = here.get(id)
     const keep = !!mine && touched.lines.has(id) && !merged.has(id)
-    const theirs = keep ? mine : drawn(el, id)
+    const theirs = keep ? mine : (merged.get(id) ?? drawn(el, id))
     if (!theirs) return { safe: doc, behind: true }
     if (!keep && (theirs !== mine || (missed.has(id) && shapeOfStored(el) !== shapeOfDrawn(theirs)))) behind = true
     out.push(theirs)

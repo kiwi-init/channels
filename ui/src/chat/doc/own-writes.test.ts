@@ -177,12 +177,36 @@ describe("an editor writes only the lines it changed, so a peer out of step neve
 
   test("a peer that edits a line it's behind on sends only its own edit, so the letters it missed stay", async () => {
     const append = (e: Editor) => typeAtEnd(e, "jow", " NEW")
+    const split = (e: Editor) => {
+      const at = lineStart(e, "jow") + 2
+      e.dispatch(
+        e
+          .state()
+          .tr.split(at)
+          .insertText("LOCAL", at + 2)
+      )
+    }
+    const list = (e: Editor) => {
+      const { nodes } = schema
+      const item = nodes.list_item!.create(null, nodes.paragraph!.create(null, schema.text("item")))
+      e.dispatch(e.state().tr.insert(lineStart(e, "jow") + 6, nodes.bullet_list!.create(null, item)))
+    }
+    const mention = (name: string) => schema.nodes.mention!.create({ name })
     const replace = (e: Editor) => e.dispatch(e.state().tr.insertText("p", lineStart(e, "jow") + 3, lineStart(e, "jow") + 5))
     for (const [what, missed, edit, want] of [
       ["types at the end", append, (e: Editor) => typeAtEnd(e, "jow", "?"), "hello NEW?"],
       ["deletes at the start", append, (e: Editor) => e.dispatch(e.state().tr.delete(lineStart(e, "jow"), lineStart(e, "jow") + 2)), "llo NEW"],
       ["retypes a span the other side left alone", append, (e: Editor) => e.dispatch(e.state().tr.insertText("y", lineStart(e, "jow") + 2, lineStart(e, "jow") + 5)), "hey NEW"],
       ["retypes the span the other side changed: it adds, never cuts", replace, (e: Editor) => e.dispatch(e.state().tr.insertText("y", lineStart(e, "jow") + 2, lineStart(e, "jow") + 5)), "heylp"],
+      ["splits the line in two", append, split, "he\nLOCALllo NEW"],
+      ["adds a mention", append, (e: Editor) => e.dispatch(e.state().tr.insert(lineStart(e, "jow"), mention("ana"))), "@anahello NEW"],
+      ["types in a line whose missed change is a list", list, (e: Editor) => e.dispatch(e.state().tr.insertText("X", lineStart(e, "jow"))), "Xhello\nitem"],
+      [
+        "types in a line whose missed change is a mention",
+        (e: Editor) => e.dispatch(e.state().tr.insert(lineStart(e, "jow") + 5, mention("ana"))),
+        (e: Editor) => e.dispatch(e.state().tr.insertText("X", lineStart(e, "jow"))),
+        "Xhello@ana",
+      ],
     ] as const) {
       const { desk, peer, sync, dad } = await behindOn("hello", missed)
       edit(dad)
@@ -190,7 +214,7 @@ describe("an editor writes only the lines it changed, so a peer out of step neve
       await settle()
       expect([what, texts(desk)]).toEqual([what, ["dad: bom dia!", `jow: ${want}`]])
       expect(texts(peer)).toEqual(texts(desk))
-      expect([what, dad.state().doc.textContent]).toEqual([what, `bom dia!${want}`])
+      expect([what, dad.state().doc.textContent]).toEqual([what, `bom dia!${want.replace("\n", "")}`])
     }
   })
 
