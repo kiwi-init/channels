@@ -34,7 +34,7 @@ import { Rejected } from "@kiwi/core/refusals.ts";
 import { canPost, describeScopes, refusal } from "@kiwi/core/scopes.ts";
 import { allowedOnHold, decidersOf, humanOf, isPerson, nextIn, ON_HOLD, ownerOf, placeIn, taskId, unnamedAsks, unnamedTasks, type ChannelState } from "@kiwi/core/state.ts";
 import type { BlockMedia } from "@kiwi/core/doc/blocks.ts";
-import { readDoc, writeBlock, type DocPlace } from "./docs.ts";
+import { docPlaceOfBlock, dropBlock, editBlock, readDoc, writeBlock, type DocPlace } from "./docs.ts";
 import { SessionListen } from "./listen.ts";
 import { EVERYONE, oneLook } from "./shared.ts";
 
@@ -88,10 +88,17 @@ export class SessionMessaging extends SessionListen {
       const { state } = yield* this.state();
       for (const re of opts.re ?? []) yield* this.notAnsweredByOthers(state, re, body);
       const id = yield* this.postedBlock(body, at, opts.imgs, opts.files);
-      return yield* this.send(body, { ...opts, block: { th: at.th, id } });
+      return yield* this.send(body, { ...opts, block: { th: at.th, id } }).pipe(Effect.tapError(() => this.unwrite(at, id)));
     },
     oneLook,
   );
+
+  private unwrite(at: DocPlace, id: string) {
+    return Effect.gen({ self: this }, function* () {
+      const { state } = yield* this.state();
+      yield* Effect.tryPromise(() => dropBlock(this.ch, state.head, at, id)).pipe(Effect.ignore);
+    });
+  }
 
   private postedBlock(body: string, at: DocPlace, imgs: readonly ImageAttachment[] = [], files: readonly FileAttachment[] = []) {
     return Effect.gen({ self: this }, function* () {
@@ -197,7 +204,7 @@ export class SessionMessaging extends SessionListen {
       yield* this.mayI({ kind, to });
       const block = at && kind === "msg" ? { th: at.th, id: yield* this.postedBlock(body, at, imgs, extra.files) } : undefined;
       const replying = { to, kind, re: [seq], side: true, imgs, room: state.roomOf.get(seq) ?? orig.room, ...extra, ...(block ? { block } : {}) };
-      const sent = yield* this.ch.fx.send(body, { ...replying, wake: wakeList(state, this.me, replying) });
+      const sent = yield* this.ch.fx.send(body, { ...replying, wake: wakeList(state, this.me, replying) }).pipe(Effect.tapError(() => (at && block ? this.unwrite(at, block.id) : Effect.void)));
       return sent;
     },
     oneLook,
@@ -268,7 +275,13 @@ export class SessionMessaging extends SessionListen {
         ...(to.length ? { to } : {}),
         ...(room && room !== GENERAL_ROOM ? { room } : {}),
       });
-      return yield* this.confirm(sent);
+      const done = yield* this.confirm(sent);
+      const at = original.block ? docPlaceOfBlock(state, original.block.th) : null;
+      if (at && original.block) {
+        const id = original.block.id;
+        yield* Effect.tryPromise(() => (body === null ? dropBlock(this.ch, state.head, at, id) : editBlock(this.ch, state.head, at, id, body))).pipe(Effect.ignore);
+      }
+      return done;
     },
     oneLook,
   );

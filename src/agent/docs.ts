@@ -1,6 +1,6 @@
 import type { Channel } from "@kiwi/core/client.ts";
 import { agentBlock } from "@kiwi/core/doc/agent.ts";
-import { threadText, type BlockMedia } from "@kiwi/core/doc/blocks.ts";
+import { removeBlock, rewriteBlock, threadText, type BlockMedia } from "@kiwi/core/doc/blocks.ts";
 import type { ThreadDoc } from "@kiwi/core/doc/thread-doc.ts";
 import { docThread } from "@kiwi/core/doc/threads.ts";
 import { GENERAL_ROOM } from "@kiwi/core/protocol.ts";
@@ -32,7 +32,7 @@ export function docPlaceOf(state: Pick<ChannelState, "docs" | "placeOf" | "roomO
   if (where.dm) return null;
   const re = where.re?.[0];
   const place = re === undefined ? (where.task === undefined ? MAIN : { kind: "task" as const, task: where.task }) : placeOfReply(state, re);
-  if (!place || (re === undefined && place.kind === "main" && where.room && where.room.toLowerCase() !== "general")) return null;
+  if (!place || (place.kind === "main" && where.room && where.room.toLowerCase() !== "general")) return null;
   const key = docThread(place);
   const th = state.docs.get(key);
   return th ? { key, th } : null;
@@ -89,6 +89,15 @@ export const writeBlock = (ch: Channel, from: number, at: DocPlace, author: stri
     else block.end();
     return block.id;
   });
+
+export const dropBlock = (ch: Channel, from: number, at: DocPlace, id: string): Promise<boolean> => inThreadDoc(ch, from, at, (td) => removeBlock(td.doc, id));
+
+export const editBlock = (ch: Channel, from: number, at: DocPlace, id: string, text: string): Promise<boolean> => inThreadDoc(ch, from, at, (td) => rewriteBlock(td.doc, id, text));
+
+export function docPlaceOfBlock(state: Pick<ChannelState, "docs">, th: string): DocPlace | null {
+  for (const [key, id] of state.docs) if (id === th) return { key, th };
+  return null;
+}
 
 export const readDoc = (ch: Channel, from: number, at: DocPlace, ms = DOC_WAIT_MS, drafts = false): Promise<string> =>
   inThreadDoc(ch, from, at, (td) => threadText(td.doc, (a) => a, drafts ? (b) => !b.posted : undefined), ms);

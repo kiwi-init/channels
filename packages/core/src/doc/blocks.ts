@@ -239,6 +239,29 @@ export function attachToBlock(doc: Y.Doc, id: string, media: readonly BlockMedia
   return true;
 }
 
+export function removeBlock(doc: Y.Doc, id: string): boolean {
+  const el = blockElement(doc, id);
+  if (!el) return false;
+  const thread = threadOf(doc);
+  const at = thread.toArray().indexOf(el);
+  if (at < 0) return false;
+  thread.delete(at, 1);
+  return true;
+}
+
+export function rewriteBlock(doc: Y.Doc, id: string, text: string): boolean {
+  const el = blockElement(doc, id);
+  if (!el) return false;
+  doc.transact(() => {
+    for (let i = el.length - 1; i >= 0; i--) {
+      const child = el.get(i);
+      if (!(child instanceof Y.XmlElement && (child.nodeName === "image" || child.nodeName === "file"))) el.delete(i, 1);
+    }
+    el.insert(0, paragraphs(text));
+  });
+  return true;
+}
+
 export function threadText(doc: Y.Doc, name: (pk: string) => string = (pk) => pk.slice(0, 8), keep: (b: Block) => boolean = () => true): string {
   return blocksOf(doc)
     .filter(keep)
