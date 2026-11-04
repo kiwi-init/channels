@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { newChannelKey, newRoomId } from "@kiwi/core/crypto.ts";
 import { appendToBlock, blocksOf, newBlock, newDocId, threadOf, threadText } from "@kiwi/core/doc/blocks.ts";
+import * as Y from "yjs";
 import { ThreadDoc, type DocIn, type DocKeys, type DocOut } from "@kiwi/core/doc/thread-doc.ts";
 import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
 import { DOC_COMPACT, MAX_CT_LENGTH } from "@kiwi/core/protocol.ts";
@@ -332,5 +333,19 @@ describe("a refused snapshot backs off, never loops (T1426)", () => {
     expect(td.refused).toBeNull();
     expect(td.save().unsent).toBeNull();
     td.destroy();
+  });
+});
+
+describe("a doc line's text is what was typed (T2141)", () => {
+  test("angle brackets in a line stay, bold or not", () => {
+    const doc = new Y.Doc();
+    const made = newBlock(doc, "text", "ana", "use <div> and a<b>c");
+    const block = threadOf(doc)
+      .toArray()
+      .find((x): x is Y.XmlElement => x instanceof Y.XmlElement && x.getAttribute("id") === made.id)!;
+    const words = (block.get(0) as Y.XmlElement).get(0) as Y.XmlText;
+    expect(blocksOf(doc).map((b) => b.text)).toEqual(["use <div> and a<b>c"]);
+    words.format(0, 3, { strong: true });
+    expect(blocksOf(doc).map((b) => b.text)).toEqual(["use <div> and a<b>c"]);
   });
 });
