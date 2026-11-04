@@ -15,6 +15,7 @@ function blank(): ChannelState {
     members: new Map(),
     tasks: new Map(),
     facts: new Map(),
+    docs: new Map(),
     leases: new Map(),
     trust: new Map(),
     rejected: new Map(),

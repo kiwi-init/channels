@@ -27,10 +27,11 @@ import {
   type ReadMark,
   type ServerFrame,
 } from "../protocol.ts";
+import { DocHub, type DocStore } from "../doc/hub.ts";
 import type { ChannelCore } from "./core.ts";
 import { ChannelGone, Dropped, Unreachable } from "./errors.ts";
 import type { ChannelInfo } from "./info.ts";
-import type { Relay } from "./relay.ts";
+import { run, type Relay } from "./relay.ts";
 import { keepAlive, markOn, ownMessage, wireOf, wireOn, type Inbox, type Incoming, type Probe, type Wire } from "./wire.ts";
 
 export interface StreamOptions {
@@ -192,11 +193,36 @@ export class ChannelLive {
   private readonly checks = new Set<() => void>();
   private kicked = false;
   private lastBeacon = 0;
+  readonly docs: DocHub;
 
   constructor(
     private readonly ch: ChannelCore,
     private readonly info: ChannelInfo,
-  ) {}
+    store: DocStore | null = null,
+  ) {
+    const keyAt = (e: number | undefined) => ch.access.keys[String(e ?? ch.access.epoch)] ?? null;
+    this.docs = new DocHub({
+      roomId: ch.roomId,
+      me: ch.identity,
+      store,
+      keys: {
+        current: async () => {
+          const e = ch.access.epoch;
+          const key = keyAt(e);
+          if (!key) throw new Error("no channel key for this epoch yet");
+          return { key, e };
+        },
+        at: async (e) => keyAt(e),
+      },
+      sealAware: async (payload) => {
+        const e = ch.access.epoch;
+        return seal(keyAt(e) ?? "", ch.roomId, { ...payload, e });
+      },
+      announce: async (thread, th) => {
+        await run(ch.fx.send(`started the shared doc of ${thread}`, { kind: "event", ev: { op: "doc.open", thread, th } }));
+      },
+    });
+  }
 
   readonly fx: LiveFx = {
     live: (since: number, opts: LiveOptions = {}) => this.live(since, opts),
@@ -337,6 +363,8 @@ export class ChannelLive {
     const ws = new WebSocket(u, [WS_PROTOCOL, auth]);
     const sock = wireOf(ws, at.seq);
     const wire = send ? wireOn(ws, q) : null;
+    const docsHere = u.searchParams.get("watch") !== "1";
+    let detachDocs: (() => void) | null = null;
     let ended = false;
     let everOpened = false;
     let end!: (c: { code: number; reason: string }) => void;
@@ -344,6 +372,8 @@ export class ChannelLive {
       end = (c) => {
         if (ended) return;
         ended = true;
+        detachDocs?.();
+        detachDocs = null;
         sock.closed();
         if (wire) {
           this.wires.delete(wire);
@@ -369,6 +399,10 @@ export class ChannelLive {
       everOpened = true;
       openedAs = at.next;
       at.next = "reconnect";
+      if (docsHere && !detachDocs)
+        detachDocs = this.docs.attach((raw) => {
+          if (ws.readyState === WebSocket.OPEN) ws.send(raw);
+        });
       Queue.offerUnsafe(q, { t: "open", presence: this.presenceOn(ws), mark: markOn(ws), probe: sock.probe, kind: openedAs });
     };
     let paging = false;
@@ -387,6 +421,8 @@ export class ChannelLive {
         return;
       }
       sock.frame(f);
+      if (this.docs.take(f)) return;
+      if (f.t === "eph" && this.docs.size) void this.awareIn(f);
       if (wire?.answer(f)) return;
       if (f.t === "page") return void (inPage = true);
       if (f.t === "msg" && paging && !inPage) return;
@@ -410,6 +446,11 @@ export class ChannelLive {
       }
     };
     return { ws, closed, ping: sock.ping, heard: sock.heard, silent };
+  }
+
+  private async awareIn(f: { iv: string; ct: string }): Promise<void> {
+    const k = this.ch.access.keys[String(this.ch.access.epoch)];
+    if (k) this.docs.awareIn(await open(k, this.ch.roomId, f.iv, f.ct));
   }
 
   private presenceOn(ws: WebSocket) {
