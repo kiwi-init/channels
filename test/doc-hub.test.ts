@@ -5,7 +5,8 @@ import { join } from "node:path";
 import { Channel } from "@kiwi/core/client.ts";
 import { b64url, newChannelKey, newRoomId, open, seal } from "@kiwi/core/crypto.ts";
 import { appendToBlock, blocksOf, newBlock, newDocId } from "@kiwi/core/doc/blocks.ts";
-import { DocHub, type DocStore } from "@kiwi/core/doc/hub.ts";
+import { DocHub, type DocStore, type ThreadKeys } from "@kiwi/core/doc/hub.ts";
+import { docThread, privateRoomOf, type RoomsHere } from "@kiwi/core/doc/threads.ts";
 import type { DocOut, DocSaved } from "@kiwi/core/doc/thread-doc.ts";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 import { fileDocStore } from "@kiwi/core/node/doc-store.ts";
@@ -26,6 +27,7 @@ class Relay {
   rows: Row[] = [];
   heads = new Map<string, number>();
   ephs: string[] = [];
+  snaps: string[] = [];
   private subs = new Map<Socket, Set<string>>();
 
   connect(): Socket {
@@ -56,7 +58,11 @@ class Relay {
       this.subs.get(from)?.delete(f.th);
       return;
     }
-    if (f.t === "doc.snap") return;
+    if (f.t === "doc.snap") {
+      this.snaps.push(f.th);
+      this.rows = [{ th: f.th, dseq: f.upto, iv: f.iv, ct: f.ct, ...(f.e === undefined ? {} : { e: f.e }), snap: true }, ...this.rows.filter((r) => r.th !== f.th || r.dseq > f.upto)];
+      return;
+    }
     const dseq = (this.heads.get(f.th) ?? 0) + 1;
     this.heads.set(f.th, dseq);
     const row: Row = { th: f.th, dseq, iv: f.iv, ct: f.ct, ...(f.e === undefined ? {} : { e: f.e }) };
@@ -98,12 +104,12 @@ async function world() {
   const key = newChannelKey();
   const relay = new Relay();
   const announced: [string, string][] = [];
-  const hubFor = (me: Identity, store: DocStore | null = null) =>
+  const hubFor = (me: Identity, store: DocStore | null = null, keysFor?: ConstructorParameters<typeof DocHub>[0]["keysFor"]) =>
     new DocHub({
       roomId,
       me,
       store,
-      keys: { current: async () => ({ key, e: 1 }), at: async (e) => (e === 1 ? key : null) },
+      keysFor: keysFor ?? (() => ({ current: async () => ({ key, e: 1 }), opening: async (e) => (e === 1 ? [key] : []) })),
       sealAware: (p) => seal(key, roomId, p),
       announce: async (thread, th) => void announced.push([thread, th]),
       flushMs: 1,
@@ -307,5 +313,80 @@ describe("thread docs over a real relay", () => {
       server.stop(true);
       rmSync(dataDir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("docs of members-only rooms and DMs are sealed with the room's key (T601)", () => {
+  const roomKeys = (gens: string[]): ThreadKeys => ({ sealed: true, current: async () => ({ key: gens[0]!, e: 1 }), opening: async () => gens });
+
+  test("thread names are the same for the app and the CLI", () => {
+    expect(docThread({ kind: "main" })).toBe("main");
+    expect(docThread({ kind: "room", room: "general" })).toBe("main");
+    expect(docThread({ kind: "task", task: 7 })).toBe("task:7");
+    expect(docThread({ kind: "room", room: "r1" })).toBe("room:r1");
+    expect(docThread({ kind: "dm", with: ["ana", "bo"] })).toBe("dm:ana~bo");
+  });
+
+  test("a thread is private only for a room with members; a room the app doesn't know is refused, never sealed for the channel", () => {
+    const members = [
+      { name: "ana", pk: "pa" },
+      { name: "bo", pk: "pb" },
+    ];
+    const known = new Map<string, { members?: typeof members; dm?: boolean }>([
+      ["secret", { members }],
+      ["d1", { members, dm: true }],
+    ]);
+    const rooms: RoomsHere = { isPublic: (id) => id === "open", members: (id) => known.get(id), all: () => known };
+    expect(privateRoomOf("main", rooms)).toBeNull();
+    expect(privateRoomOf("task:3", rooms)).toBeNull();
+    expect(privateRoomOf("room:open", rooms)).toBeNull();
+    expect(privateRoomOf("room:secret", rooms)).toBe("secret");
+    expect(privateRoomOf("dm:bo~ana", rooms)).toBe("d1");
+    expect(() => privateRoomOf("room:unheard", rooms)).toThrow("doesn't know room");
+    expect(() => privateRoomOf("dm:ana~cy", rooms)).toThrow("no direct-message room");
+  });
+
+  test("members read the room's doc and its cursors; a channel member outside the room gets neither", async () => {
+    const w = await world();
+    const k1 = newChannelKey();
+    const [ana, bo, cy] = await Promise.all([generateIdentity("ana"), generateIdentity("bo"), generateIdentity("cy")]);
+    const a = w.hubFor(ana, null, () => roomKeys([k1]));
+    const b = w.hubFor(bo, null, () => roomKeys([k1]));
+    const c = w.hubFor(cy);
+    const [sa, sb, sc] = [w.plug(a).s, w.plug(b).s, w.plug(c).s];
+    const da = await a.open("room:secret");
+    const db = await b.open("room:secret", da.th);
+    const dc = await c.open("room:secret", da.th);
+    await w.settle(sa, sb, sc);
+    newBlock(da.doc, "text", "ana", "members only");
+    da.awareness.setLocalStateField("user", { name: "ana" });
+    await w.settle(sa, sb, sc);
+    expect(texts(db.doc)).toEqual(["members only"]);
+    expect(texts(dc.doc)).toEqual([]);
+    expect(db.awareness.getStates().get(da.doc.clientID)).toEqual({ user: { name: "ana" } });
+    expect(dc.awareness.getStates().has(da.doc.clientID)).toBe(false);
+  });
+
+  test("after the room's key changes, a member's client re-seals the doc as a snapshot that only the new key opens", async () => {
+    const w = await world();
+    const [k1, k2] = [newChannelKey(), newChannelKey()];
+    const [ana, bo, dee] = await Promise.all([generateIdentity("ana"), generateIdentity("bo"), generateIdentity("dee")]);
+    const a = w.hubFor(ana, null, () => roomKeys([k1]));
+    const sa = w.plug(a).s;
+    const da = await a.open("room:secret");
+    await w.settle(sa);
+    newBlock(da.doc, "text", "ana", "before the re-key");
+    await w.settle(sa);
+    const b = w.hubFor(bo, null, () => roomKeys([k2, k1]));
+    const sb = w.plug(b).s;
+    const db = await b.open("room:secret", da.th);
+    await w.settle(sa, sb);
+    expect(texts(db.doc)).toEqual(["before the re-key"]);
+    expect(w.relay.snaps).toEqual([da.th]);
+    const d = w.hubFor(dee, null, () => roomKeys([k2]));
+    const sd = w.plug(d).s;
+    const dd = await d.open("room:secret", da.th);
+    await w.settle(sd);
+    expect(texts(dd.doc)).toEqual(["before the re-key"]);
   });
 });
