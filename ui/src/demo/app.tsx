@@ -3,6 +3,9 @@ import { useCallback, useEffect, useState } from "react"
 import { DEMO_PREFS } from "~/demo/data"
 import { useDemo } from "~/demo/provider"
 import { SHOTS } from "~/demo/shots"
+import { seedThreadDoc } from "~/demo/thread-doc"
+import { setThreadDocs } from "~/chat/doc/switch"
+import { spotKey } from "~/places"
 import type { Prefs } from "~/model"
 import { navigate, startNav, useKeepPlace, type Go, type Nav } from "~/nav"
 import { Root } from "~/shell/root"
@@ -17,6 +20,11 @@ const theme = params.get("theme")
 const look: Partial<Prefs> = { ...shot?.prefs, ...(theme === "light" || theme === "dark" ? { theme } : {}) }
 
 export const demoPrefs: Prefs = { ...DEMO_PREFS, ...look }
+
+if (shot?.docs && shot.channel && shot.nav?.where) {
+  setThreadDocs(true)
+  seedThreadDoc(spotKey(shot.channel, shot.nav.where))
+}
 
 const SWITCH_AFTER_MS = 400
 
