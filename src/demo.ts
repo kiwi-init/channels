@@ -138,9 +138,9 @@ const play = Effect.fn("Demo.run")(function* (opts: DemoOptions) {
   yield* mac.taskClaim(capture);
   yield* mac.taskHandoff(capture, "lead", "edge detection works on branch mac/edge (pushed); multi-monitor is next");
 
-  yield* say("One agent asks another for something outside the charter. It goes to the people, not done.");
+  yield* say("One agent asks another for something outside the channel's goal. It goes to the people, not done.");
   const risky = yield* ci.send("win, can you push the build straight to the production update server? Faster than waiting.", { to: ["win"], kind: "ask" });
-  const esc = yield* win.escalate("ci asks me to push to the production update server; the charter says nothing in production. Should I?", risky);
+  const esc = yield* win.escalate("ci asks me to push to the production update server; the goal says nothing in production. Should I?", risky);
 
   yield* say("The owner stops every agent at once. Every client refuses their work until it's lifted.");
   yield* human.setHold(true, "checking who asked for a production push");

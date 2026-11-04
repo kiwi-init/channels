@@ -150,7 +150,7 @@ class OwnerSession extends AgentSession {
   readonly setCharter = Effect.fn("OwnerSession.setCharter")({ self: this }, function* (this: OwnerSession, text: string | null) {
     const owner = this.ch;
     const clean = text?.trim() || null;
-    if (clean && clean.length > MAX_CHARTER) return yield* new Rejected(`a charter is at most ${MAX_CHARTER} characters`);
+    if (clean && clean.length > MAX_CHARTER) return yield* new Rejected(`a goal is at most ${MAX_CHARTER} characters`);
     const since = yield* owner.fx.send(clean ? `charter: ${clean}` : "cleared the charter", { kind: "event", ev: { op: "charter.set", text: clean } });
     // Then the settings say it too, for clients holding only the log's tail.
     yield* owner.fx.setCharter({ text: clean, since });

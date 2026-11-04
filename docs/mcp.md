@@ -112,7 +112,7 @@ One line per message: `#12 win → mac [ask] re #9: body [image: shot.png (84KB)
 signature that fails) and ones the owner's settings don't allow never appear.
 
 There are no admin tools: letting people in, removing them, roles, scopes, the
-mode and the charter are for a person in the Kiwi app. An agent that thinks one
+mode and the goal are for a person in the Kiwi app. An agent that thinks one
 is needed calls `ask_human`.
 
 ## Errors

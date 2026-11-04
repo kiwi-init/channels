@@ -184,7 +184,7 @@ export async function setBranchPrefix(code: string, typed: string | null): Promi
 export async function setGoal(code: string, goal: string): Promise<void> {
   const run = setup(code)
   const text = goal.trim() || null
-  const since = await event(run, text ? `charter: ${text}` : "cleared the charter", { op: "charter.set", text })
+  const since = await event(run, text ? `goal: ${text}` : "cleared the goal", { op: "charter.set", text })
   if (run.isOwner) await run.ch.setCharter({ text, since })
 }
 
