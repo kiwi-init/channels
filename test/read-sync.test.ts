@@ -7,6 +7,7 @@ import { newRoomId } from "@kiwi/core/crypto.ts";
 import { certUntil, claimDevice, nextLink, readDeviceList, rootLink, type DeviceLink } from "@kiwi/core/devices.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
 import { fold, rosterOf } from "@kiwi/core/state.ts";
+import { runAgent } from "../src/agent.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { joinPerson, setupChannel, type OwnerSetup } from "./owner.ts";
 
@@ -70,6 +71,15 @@ describe("what you've read follows you across your devices (T976)", () => {
   test("the log only gains the person's own room: syncing many times adds nothing", async () => {
     const before = await logSize();
     for (let i = 13; i < 20; i++) await desk.ch.syncMarks({ main: i });
+    expect(await logSize()).toBe(before);
+  });
+
+  test("a new session that starts from a snapshot finds the person's own room instead of making another (T1299)", async () => {
+    expect(await runAgent(s.ownerCh.fx.snapshotIfDue(1))).toBeGreaterThan(0);
+    const fresh = new Channel(desk.ch.access, s.relay, desk.id);
+    expect((await fresh.snapshot())?.rooms.some((r) => r.id === self)).toBe(true);
+    const before = await logSize();
+    expect(await fresh.syncMarks({ main: 19 })).toMatchObject({ main: 19, "task:3": 4 });
     expect(await logSize()).toBe(before);
   });
 

@@ -52,6 +52,12 @@ export class ChannelCore {
     else if (ev?.op === "room.leave" && m.from === this.name) this.memberRooms.delete(ev.id);
   }
 
+  learnBase(rooms: readonly { id: string; members?: RoomMember[]; dm?: true; self?: true }[]): void {
+    for (const r of rooms)
+      if (!r.members) this.publicRooms.add(r.id);
+      else if (!this.memberRooms.has(r.id)) this.memberRooms.set(r.id, { members: r.members, ...(r.dm ? { dm: true as const } : {}), ...(r.self ? { self: true as const } : {}) });
+  }
+
   get roomId(): string {
     return this.access.roomId;
   }
