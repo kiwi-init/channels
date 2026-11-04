@@ -226,6 +226,7 @@
 }
 
 .spec-page {
+  --spec-max: calc(var(--col) + 744px);
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -235,7 +236,7 @@
 }
 
 .spec-top {
-  max-width: calc(var(--col) + 400px);
+  max-width: var(--spec-max);
   margin: 0 auto;
 }
 
@@ -350,12 +351,12 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 24px;
-  max-width: calc(var(--col) + 400px);
+  max-width: var(--spec-max);
   margin: 20px auto 0;
 }
 
 .spec-doc-wrap.is-wide {
-  grid-template-columns: minmax(0, 1fr) 320px;
+  grid-template-columns: minmax(0, var(--col)) minmax(320px, 1fr);
 }
 
 .spec-doc-col {
@@ -507,23 +508,6 @@
   margin-left: calc(1.5rem + 8px);
 }
 
-.spec-box-new.is-line {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
-}
-
-.spec-box-new.is-line .spec-box-text {
-  flex: 1;
-  min-height: var(--ctl);
-  padding-block: 6px;
-  resize: none;
-}
-
-.spec-box-new.is-line .btn {
-  height: var(--ctl);
-}
-
 .spec-box-new {
   display: grid;
   gap: 8px;
@@ -535,8 +519,11 @@
 
 .spec-box-text {
   width: 100%;
-  min-height: 0;
-  resize: vertical;
+  min-height: var(--ctl);
+  max-height: calc(6lh + 14px);
+  padding-block: 6px;
+  overflow-y: auto;
+  resize: none;
 }
 
 .spec-box-foot {
@@ -622,7 +609,7 @@
 }
 
 .spec-editor {
-  max-width: calc(var(--col) + 400px);
+  max-width: var(--spec-max);
   margin: 20px auto 0;
 }
 
@@ -671,7 +658,7 @@
 .spec-result {
   display: grid;
   gap: 20px;
-  max-width: calc(var(--col) + 400px);
+  max-width: var(--spec-max);
   margin: 20px auto 0;
 }
 

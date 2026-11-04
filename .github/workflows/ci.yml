@@ -232,6 +232,9 @@ jobs:
       - name: ui scrolling up a feed of event runs keeps loading to its first row, in WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-scroll-up.ts --dist ui/dist
+      - name: ui the spec page uses a wide window and its comment box grows, in WebKit
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-spec-layout.ts --dist ui/dist
       - name: ui a busy thread doc never scrolls on its own, under the caret or while you read, in WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-doc-still.ts --dist ui/dist

@@ -53,7 +53,7 @@ function placeRail(el: HTMLElement): void {
   const items = [...el.querySelectorAll<HTMLElement>("[data-at]")].sort((a, b) => Number(a.dataset.at) - Number(b.dataset.at))
   const room = talk ? talk.offsetHeight + RAIL_GAP : 0
   const first = items.length ? Number(items[0]!.dataset.at) : Infinity
-  const above = !!talk && room <= first
+  const above = !!talk && (room <= first || talk.contains(document.activeElement))
   if (talk && above) talk.style.top = "0px"
   let floor = above ? room : 0
   for (const item of items) {
@@ -247,6 +247,12 @@ function CommentBox({ channel, spec, quote, onDone }: { channel: Channel; spec: 
   useEffect(() => {
     if (quote) box.current?.focus()
   }, [quote])
+  useLayoutEffect(() => {
+    const el = box.current
+    if (!el) return
+    el.style.height = "auto"
+    el.style.height = `${el.scrollHeight + el.offsetHeight - el.clientHeight}px`
+  }, [text])
   const send = () => {
     if (!text.trim()) return
     actions.send(channel.code, whereOf(channel, spec.ask), quote ? quoted(quote, text) : text.trim(), { inThread: spec.ask })
@@ -265,11 +271,11 @@ function CommentBox({ channel, spec, quote, onDone }: { channel: Channel; spec: 
   }
   if (!quote)
     return (
-      <div className="spec-box-new is-line">
+      <div className="spec-box-new">
         <textarea
           ref={box}
           className="textarea spec-box-text"
-          rows={Math.min(6, text.split("\n").length)}
+          rows={1}
           value={text}
           placeholder="Comment"
           title="Or select words in the spec to comment on them"
@@ -277,9 +283,13 @@ function CommentBox({ channel, spec, quote, onDone }: { channel: Channel; spec: 
           onChange={(e) => setText(e.target.value)}
           onKeyDown={keys}
         />
-        <button type="button" className="btn" disabled={!text.trim()} onClick={send}>
-          Comment
-        </button>
+        {text.trim() && (
+          <div className="spec-box-foot">
+            <button type="button" className="btn" onClick={send}>
+              Comment
+            </button>
+          </div>
+        )}
       </div>
     )
   return (
