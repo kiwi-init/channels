@@ -22,7 +22,6 @@ import {
   type Card,
   type Color,
   type DecisionKind,
-  type DocBlockRef,
   type Event,
   type Handoff,
   type ImageAttachment,
@@ -33,7 +32,7 @@ import {
 import { Rejected } from "@kiwi/core/refusals.ts";
 import { canPost, describeScopes, refusal } from "@kiwi/core/scopes.ts";
 import { allowedOnHold, decidersOf, humanOf, isPerson, nextIn, ON_HOLD, ownerOf, placeIn, taskId, unnamedAsks, unnamedTasks, type ChannelState } from "@kiwi/core/state.ts";
-import { docPlaceOf, readDoc, writeBlock, type DocPlace } from "./docs.ts";
+import { readDoc, writeBlock, type DocPlace } from "./docs.ts";
 import { SessionListen } from "./listen.ts";
 import { EVERYONE, oneLook } from "./shared.ts";
 
@@ -94,17 +93,6 @@ export class SessionMessaging extends SessionListen {
     },
     oneLook,
   );
-
-  readonly askBlock = Effect.fn("AgentSession.askBlock")({ self: this }, function* (this: SessionMessaging, body: string, at: DocPlace | null) {
-    if (!at) return undefined;
-    const { state } = yield* this.state();
-    const me = state.members.get(this.me);
-    const agent = !me || !isPerson(me);
-    return yield* Effect.tryPromise(() => writeBlock(this.ch, state.head, at, this.me, body, agent)).pipe(
-      Effect.map((id): DocBlockRef => ({ th: at.th, id })),
-      Effect.orElseSucceed(() => undefined),
-    );
-  });
 
   readonly docText = Effect.fn("AgentSession.docText")({ self: this }, function* (this: SessionMessaging, at: DocPlace, ms?: number) {
     const { state } = yield* this.state();
@@ -308,13 +296,10 @@ export class SessionMessaging extends SessionListen {
           return yield* new Rejected(`#${re} is ${where}, and an answer to it goes there, not in ${taskId(ask.task)}'s thread: leave out the task or the message it answers`);
         }
       }
-      const at = ask.permission ? null : docPlaceOf(state, { ...(ask.task !== undefined ? { task: ask.task } : {}), ...(re !== undefined ? { re: [re] } : {}) });
-      const block = yield* this.askBlock(body, at);
       const seq = yield* this.send(body, {
         to,
         kind: "blocking",
         esc: true,
-        ...(block ? { block } : {}),
         ...(handoff ? { handoff } : {}),
         ...(ask.choices ? { choices: ask.choices } : {}),
         ...(ask.task !== undefined ? { task: ask.task } : {}),

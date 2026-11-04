@@ -78,11 +78,10 @@ export const messageCommands: Record<string, Command> = {
         const files = yield* attachments(s);
         const asking = opt.ask || !!opt.wait;
         const room = opt.room ?? where.room;
-        const place =
-          (kind === "msg" || (asking && kind === "ask")) && !imgs?.length && !files?.length
+        const doc =
+          !asking && kind === "msg" && !imgs?.length && !files?.length
             ? docPlaceOf(state, { ...(chosen.task !== undefined ? { task: chosen.task } : {}), ...(chosen.dm ? { dm: true } : {}), ...(room ? { room } : {}), re })
             : null;
-        const doc = asking ? null : place;
         if (doc) {
           const named = (to ?? []).filter((n) => n !== "*" && !mentionsOf(body).has(n.toLowerCase()));
           yield* s.sendToDoc(named.length ? `${named.map((n) => `@${n}`).join(" ")} ${body}` : body, doc);
@@ -91,11 +90,9 @@ export const messageCommands: Record<string, Command> = {
           return;
         }
         const head = asking && opt.wait ? yield* s.ch.fx.head() : 0;
-        const block = asking ? yield* s.askBlock(body, place) : undefined;
         const seq = yield* s.send(body, {
           to,
           kind: asking && !opt.kind ? "ask" : kind,
-          ...(block ? { block } : {}),
           ...(re.length ? { re } : {}),
           imgs,
           ...(files?.length ? { files } : {}),
