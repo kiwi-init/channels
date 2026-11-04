@@ -22,6 +22,7 @@ const KEY_MIN = num("key-min", 5);
 const KEY_MAX = num("key-max", 10);
 const DROPS = process.argv.includes("--no-drops") ? 0 : num("drop-every", 40);
 const SEND = arg("send-key") ?? "Enter";
+const SELECTS = !process.argv.includes("--no-select");
 const TRACE = arg("trace") ?? `doc-fuzz-${SEED}.txt`;
 
 function rng(seed: number): () => number {
@@ -66,6 +67,7 @@ interface Lag {
   ms: number;
   jitter: number;
   closers: (() => void)[];
+  sockets: { url: string; upIn: number; up: number; downIn: number; down: number; lastDown: number; closed: boolean; errors: number }[];
 }
 
 interface Win {
@@ -83,9 +85,25 @@ const browser = ENGINE === "webkit" ? await webkit.launch() : await chromium.lau
 const errors: string[] = [];
 
 async function laggy(context: BrowserContext, label: string): Promise<Lag> {
-  const lag: Lag = { ms: 0, jitter: 0, closers: [] };
+  const lag: Lag = { ms: 0, jitter: 0, closers: [], sockets: [] };
   await context.routeWebSocket(/.*/, (ws) => {
     const server = ws.connectToServer();
+    const seen = {
+      url: ws
+        .url()
+        .replace(/^.*\/\/[^/]+/, "")
+        .slice(0, 60),
+      upIn: 0,
+      up: 0,
+      downIn: 0,
+      down: 0,
+      lastDown: 0,
+      closed: false,
+      errors: 0,
+    };
+    lag.sockets.push(seen);
+    ws.onClose(() => void (seen.closed = true));
+    server.onClose(() => void (seen.closed = true));
     let upAt = 0;
     let downAt = 0;
     const later = (last: number, send: () => void): number => {
@@ -93,8 +111,22 @@ async function laggy(context: BrowserContext, label: string): Promise<Lag> {
       setTimeout(send, at - Date.now());
       return at;
     };
-    ws.onMessage((m) => void (upAt = later(upAt, () => server.send(m))));
-    server.onMessage((m) => void (downAt = later(downAt, () => ws.send(m))));
+    const safely = (send: () => void): void => {
+      try {
+        send();
+      } catch {
+        // A message for a socket that already closed: count it, the app reconnects.
+        seen.errors++;
+      }
+    };
+    ws.onMessage((m) => {
+      seen.upIn++;
+      upAt = later(upAt, () => safely(() => (server.send(m), seen.up++)));
+    });
+    server.onMessage((m) => {
+      seen.downIn++;
+      downAt = later(downAt, () => safely(() => (ws.send(m), seen.down++, (seen.lastDown = Date.now()))));
+    });
     lag.closers.push(() => void ws.close().catch(() => undefined));
     log(`${label} socket opened`);
   });
@@ -174,7 +206,7 @@ async function stored(w: Win): Promise<Stored | null> {
       nodeName?: string;
     }
     interface YDoc {
-      store: { clients: Map<number, { id: { clock: number }; length: number }[]> };
+      store: { clients: Map<number, { id: { clock: number }; length: number }[]>; pendingStructs: { missing: Map<number, number> } | null; pendingDs: unknown };
       share: Map<string, { toArray: () => unknown[]; length: number }>;
     }
     const docs = [...((globalThis as unknown as { __ydocs?: Set<YDoc> }).__ydocs ?? [])];
@@ -201,7 +233,9 @@ async function stored(w: Win): Promise<Stored | null> {
       const e = el as YEl;
       return `${String(e.getAttribute("id")).slice(0, 6)} ${String(e.getAttribute("author"))} ${JSON.stringify(textOf(el))}`;
     });
-    return { clocks, lines };
+    const pending = pick.d.store.pendingStructs;
+    const waits = pending ? ` PENDING, waiting for ${[...pending.missing.entries()].map(([c, k]) => `${c}:${k}`).join(" ")}` : "";
+    return { clocks: `${clocks}${waits}${pick.d.store.pendingDs ? " (pending deletes)" : ""}`, lines };
   });
 }
 
@@ -266,10 +300,12 @@ const ops: [number, Op][] = [
     },
   ],
   [
-    6,
+    SELECTS ? 6 : 0,
     async (w) => {
       if (!w.want) return "skips a line replace on an empty line";
       for (let i = 0; i < w.want.length; i++) await w.page.keyboard.press("Shift+ArrowLeft");
+      const picked = await w.page.evaluate(() => getSelection()?.toString() ?? "");
+      if (picked !== w.want) fail(`${w.label} pressed Shift+← ${w.want.length} times over its line ${JSON.stringify(w.want)} and the selection is ${JSON.stringify(picked)}`);
       const t = word(int(1, 8)).trim() || "x";
       await keys(w, t);
       w.want = t;
@@ -401,6 +437,10 @@ try {
       lines = await docLines();
     }
     log(`drained: the CLI shows\n${lines.map((l) => `      ${l}`).join("\n")}`);
+    for (const w of wins)
+      log(
+        `drained: ${w.label} sockets\n${w.lag.sockets.map((k) => `      ${k.url} up ${k.up}/${k.upIn} down ${k.down}/${k.downIn} last down ${k.lastDown ? `${Math.round((Date.now() - k.lastDown) / 1000)} s ago` : "never"}${k.closed ? " closed" : " open"}${k.errors ? ` ${k.errors} send errors` : ""}`).join("\n")}`,
+      );
     const ys = await Promise.all(wins.map(stored));
     for (const [i, y] of ys.entries())
       log(`drained: ${wins[i]!.label} Yjs (local instrumented builds only) clocks ${y?.clocks ?? "(not exposed)"}\n${(y?.lines ?? []).map((l) => `      ${l}`).join("\n")}`);
