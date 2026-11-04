@@ -213,7 +213,7 @@ export function describeEvent(m: Message, state?: ChannelState, nameOf: (handle:
     case "lease.free":
       return `let go of ${ev.name}`;
     case "charter.set":
-      return ev.text ? `set the charter: ${ev.text}` : "cleared the charter";
+      return ev.text ? `set the goal: ${ev.text}` : "cleared the goal";
     case "compact.propose":
       return `proposed compacting the history through #${ev.through}: ${inlineText(ev.summary, 200)}`;
     case "compact":
@@ -551,10 +551,10 @@ export function githubLine(items: readonly GithubNote[]): string {
   return `GitHub: ${said.slice(0, 3).join("; ")}${said.length > 3 ? `; and ${said.length - 3} more` : ""}`;
 }
 
-/** The charter as status shows it: its first line inline, the rest marked. Null when there's none. */
+/** The channel's goal (its charter) as status shows it: its first line inline, the rest marked. Null when there's none. */
 export function charterLines(state: ChannelState): string | null {
   if (!state.charter) return null;
-  return `charter (the owner's scope for this channel; escalate what falls outside it): ${markedText(state.charter.text)}`;
+  return `goal (the owner's scope for this channel, in the app's Channel settings › Goal; escalate what falls outside it): ${markedText(state.charter.text)}`;
 }
 
 function heldLine(state: ChannelState, a: Message): string {
