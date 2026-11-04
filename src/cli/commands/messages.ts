@@ -79,14 +79,15 @@ export const messageCommands: Record<string, Command> = {
         const asking = opt.ask || !!opt.wait;
         const room = opt.room ?? where.room;
         const doc =
-          !asking && kind === "msg" && !imgs?.length && !files?.length
-            ? docPlaceOf(state, { ...(chosen.task !== undefined ? { task: chosen.task } : {}), ...(chosen.dm ? { dm: true } : {}), ...(room ? { room } : {}), re })
-            : null;
+          !asking && kind === "msg" ? docPlaceOf(state, { ...(chosen.task !== undefined ? { task: chosen.task } : {}), ...(chosen.dm ? { dm: true } : {}), ...(room ? { room } : {}), re }) : null;
         if (doc) {
-          const named = (to ?? []).filter((n) => n !== "*" && !mentionsOf(body).has(n.toLowerCase()));
+          const named = re.length ? [] : (to ?? []).filter((n) => n !== "*" && !mentionsOf(body).has(n.toLowerCase()));
           const seq = yield* s.sendToDoc(named.length ? `${named.map((n) => `@${n}`).join(" ")} ${body}` : body, doc, {
             to,
             room,
+            ...(re.length ? { re } : {}),
+            imgs,
+            ...(files?.length ? { files } : {}),
             ...(chosen.task !== undefined ? { task: chosen.task } : {}),
           });
           out(`sent #${seq}${wentTo(chosen)}, into its shared doc`);
@@ -137,7 +138,7 @@ export const messageCommands: Record<string, Command> = {
         const imgs = yield* images;
         const files = yield* attachments(s);
         const { state } = yield* s.state();
-        out(`sent #${yield* s.reply(seq, body, kind, imgs, files?.length ? { files } : {})}`);
+        out(`sent #${yield* s.reply(seq, body, kind, imgs, files?.length ? { files } : {}, kind === "msg" ? docPlaceOf(state, { re: [seq] }) : null)}`);
         const notes = [inGeneral(state, seq) ? longForGeneral(state, s.me, body) : null, bareHandleNote(state, body)].filter((n) => n !== null);
         for (const n of notes) out(n);
       }),

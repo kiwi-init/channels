@@ -6,27 +6,42 @@ import { Channel } from "@kiwi/core/client.ts";
 import { blocksOf, newBlock, newDocId } from "@kiwi/core/doc/blocks.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { docPlaceOf, readDoc, writeBlock } from "../src/agent/docs.ts";
+import type { Place } from "@kiwi/core/state.ts";
 import { setupChannel, type OwnerSetup } from "./owner.ts";
 
 setDefaultTimeout(30_000);
 
 describe("where a send goes: the doc of its place, when one is open (T570)", () => {
   const th = newDocId();
-  const state = {
+  const state: Parameters<typeof docPlaceOf>[0] = {
     docs: new Map([
       ["task:7", th],
       ["main", "m".repeat(22)],
     ]),
+    placeOf: new Map<number, Place>([
+      [20, { kind: "task", task: 7 }],
+      [21, { kind: "task", task: 8 }],
+      [22, { kind: "dm", with: ["jow", "lead"] }],
+    ]),
+    roomOf: new Map([[13, "design"]]),
   };
-  test("a task thread and #general with a doc open take the block; a DM, a reply, another room or a thread without one don't", () => {
+  test("a task thread and #general with a doc open take the block; a DM, another room or a thread without one don't", () => {
     expect(docPlaceOf(state, { task: 7 })).toEqual({ key: "task:7", th });
     expect(docPlaceOf(state, {})).toEqual({ key: "main", th: "m".repeat(22) });
     expect(docPlaceOf(state, { room: "General" })).toEqual({ key: "main", th: "m".repeat(22) });
     expect(docPlaceOf(state, { task: 8 })).toBeNull();
     expect(docPlaceOf(state, { dm: true })).toBeNull();
-    expect(docPlaceOf(state, { re: [12] })).toBeNull();
     expect(docPlaceOf(state, { room: "design" })).toBeNull();
-    expect(docPlaceOf({ docs: new Map() }, {})).toBeNull();
+    expect(docPlaceOf({ docs: new Map(), placeOf: new Map(), roomOf: new Map() }, {})).toBeNull();
+  });
+
+  test("a reply goes into the doc of the thread its message is in, wherever the sender stands (T1256)", () => {
+    expect(docPlaceOf(state, { re: [12] })).toEqual({ key: "main", th: "m".repeat(22) });
+    expect(docPlaceOf(state, { re: [20] })).toEqual({ key: "task:7", th });
+    expect(docPlaceOf(state, { task: 7, re: [12] })).toEqual({ key: "main", th: "m".repeat(22) });
+    expect(docPlaceOf(state, { re: [21] })).toBeNull();
+    expect(docPlaceOf(state, { re: [22] })).toBeNull();
+    expect(docPlaceOf(state, { re: [13] })).toBeNull();
   });
 });
 

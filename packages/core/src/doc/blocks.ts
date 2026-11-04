@@ -1,5 +1,6 @@
 import * as Y from "yjs";
 import { b64url } from "../crypto.ts";
+import type { FileAttachment, ImageAttachment } from "../protocol.ts";
 
 const THREAD_FRAGMENT = "thread";
 
@@ -18,6 +19,8 @@ export interface BlockMeta {
 export interface Block extends BlockMeta {
   text: string;
 }
+
+export type BlockMedia = { image: ImageAttachment & { ref: NonNullable<ImageAttachment["ref"]> } } | { file: FileAttachment };
 
 export const newDocId = (): string => b64url(crypto.getRandomValues(new Uint8Array(16)));
 
@@ -133,6 +136,31 @@ export function appendToBlock(doc: Y.Doc, id: string, text: string): boolean {
     } else if (first !== undefined) el.insert(el.length, paragraphs(first));
     if (rest.length) el.insert(el.length, paragraphs(rest.join("\n")));
   });
+  return true;
+}
+
+function mediaElement(m: BlockMedia): Y.XmlElement {
+  if ("image" in m) {
+    const el = new Y.XmlElement("image");
+    el.setAttribute("name", m.image.name);
+    el.setAttribute("mime", m.image.mime);
+    el.setAttribute("size", String(m.image.ref.size));
+    el.setAttribute("id", m.image.ref.id);
+    el.setAttribute("key", m.image.ref.key);
+    return el;
+  }
+  const el = new Y.XmlElement("file");
+  el.setAttribute("name", m.file.name);
+  el.setAttribute("mime", m.file.mime);
+  el.setAttribute("size", String(m.file.size));
+  el.setAttribute("pieces", JSON.stringify(m.file.pieces));
+  return el;
+}
+
+export function attachToBlock(doc: Y.Doc, id: string, media: readonly BlockMedia[]): boolean {
+  const el = blockElement(doc, id);
+  if (!el || !media.length) return false;
+  el.insert(el.length, media.map(mediaElement));
   return true;
 }
 

@@ -1,7 +1,7 @@
 import type * as Y from "yjs";
 import type { Awareness } from "y-protocols/awareness";
 import { mentionsOf } from "../changes.ts";
-import { appendToBlock, blocksOf, markPosted, markSent, newBlock, threadText, type Block, type BlockKind } from "./blocks.ts";
+import { appendToBlock, attachToBlock, blocksOf, markPosted, markSent, newBlock, threadText, type Block, type BlockKind, type BlockMedia } from "./blocks.ts";
 
 export const PRESENCE_FIELD = "kiwi";
 
@@ -86,11 +86,12 @@ export function watchWakes(watched: Watched, rule: WakeRule, onWake: (wake: DocW
 export interface AgentBlock {
   id: string;
   write: (chunk: string) => boolean;
+  attach: (media: readonly BlockMedia[]) => boolean;
   end: () => boolean;
   post: () => boolean;
 }
 
 export function agentBlock(doc: Y.Doc, me: string, kind: BlockKind = "agent", at = Date.now()): AgentBlock {
   const { id } = newBlock(doc, kind, me, "", at);
-  return { id, write: (chunk) => appendToBlock(doc, id, chunk), end: () => markSent(doc, id), post: () => markPosted(doc, id) };
+  return { id, write: (chunk) => appendToBlock(doc, id, chunk), attach: (media) => attachToBlock(doc, id, media), end: () => markSent(doc, id), post: () => markPosted(doc, id) };
 }
