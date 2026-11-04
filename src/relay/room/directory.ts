@@ -7,6 +7,8 @@ export interface Effects {
   broadcast?: string[];
   others?: string;
   ephemeral?: string;
+  doc?: { th: string; frame: string };
+  follow?: { th: string; on: boolean };
   watch?: string[];
   reply?: string | string[];
   readers?: string[];

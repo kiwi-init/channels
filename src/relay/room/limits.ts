@@ -14,7 +14,9 @@ export function formatBytes(n: number): string {
 
 export const MESSAGES_PER_MINUTE = 120;
 export const MORE_PER_MINUTE = 60;
-export const EPHEMERAL_PER_MINUTE = 60;
+export const EPHEMERAL_PER_MINUTE = 240;
+export const DOC_UPDATES_PER_MINUTE = 600;
+export const DOC_SUBS_PER_MINUTE = 120;
 const MAX_WINDOWS = 10_000;
 const windows = new Map<string, { start: number; n: number }>();
 

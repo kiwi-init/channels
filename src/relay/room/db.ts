@@ -1,6 +1,6 @@
 import * as Context from "effect/Context";
 import { b64url, fromB64url } from "@kiwi/core/crypto.ts";
-import { PAGE_BYTES, PAGE_LIMIT, type Envelope, type ReadMark } from "@kiwi/core/protocol.ts";
+import { PAGE_BYTES, PAGE_LIMIT, type DocEnvelope, type Envelope, type ReadMark } from "@kiwi/core/protocol.ts";
 import type { PushRegistration } from "@kiwi/core/push.ts";
 import type { Policy } from "../policy.ts";
 import type { PushTarget } from "../push.ts";
@@ -40,6 +40,20 @@ const SLOTS_TABLE = "CREATE TABLE slots (id TEXT PRIMARY KEY, holder TEXT NOT NU
 const SENDS_TABLE = "CREATE TABLE sends (sender TEXT NOT NULL, cid TEXT NOT NULL, seq INTEGER NOT NULL, ts INTEGER NOT NULL, PRIMARY KEY (sender, cid))";
 
 const DELEGATIONS_TABLE = "CREATE TABLE delegations (pk TEXT PRIMARY KEY, d TEXT NOT NULL, until INTEGER NOT NULL, keys TEXT NOT NULL)";
+
+const DOCS_TABLE = "CREATE TABLE docs (th TEXT NOT NULL, dseq INTEGER NOT NULL, ts INTEGER NOT NULL, iv TEXT NOT NULL, ct TEXT NOT NULL, e INTEGER NOT NULL, PRIMARY KEY (th, dseq))";
+
+const DOC_SNAPS_TABLE = "CREATE TABLE doc_snaps (th TEXT PRIMARY KEY, upto INTEGER NOT NULL, ts INTEGER NOT NULL, iv TEXT NOT NULL, ct TEXT NOT NULL, e INTEGER NOT NULL)";
+
+export interface DocLog {
+  head: number;
+  upto: number;
+  n: number;
+  bytes: number;
+  oldest: number;
+}
+
+type DocRow = { dseq: number; ts: number; iv: Stored; ct: Stored; e: number };
 
 const REQUEST_COLUMNS = [
   ["kind", "TEXT NOT NULL DEFAULT 'agent'"],
@@ -140,6 +154,8 @@ export class RoomDb {
     this.sql.run(SLOTS_TABLE);
     this.sql.run(SENDS_TABLE);
     this.sql.run(DELEGATIONS_TABLE);
+    this.sql.run(DOCS_TABLE);
+    this.sql.run(DOC_SNAPS_TABLE);
   }
 
   migrate(): void {
@@ -158,6 +174,8 @@ export class RoomDb {
     this.sql.run(SLOTS_TABLE.replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS"));
     this.sql.run(SENDS_TABLE.replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS"));
     this.sql.run(DELEGATIONS_TABLE.replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS"));
+    this.sql.run(DOCS_TABLE.replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS"));
+    this.sql.run(DOC_SNAPS_TABLE.replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS"));
     this.sql.run("DROP TABLE IF EXISTS secrets");
     migrated.add(this.sql);
   }
@@ -449,6 +467,65 @@ export class RoomDb {
     return this.sql
       .all<{ seq: number; ts: number; iv: Stored; ct: Stored; e: number }>("SELECT seq, ts, iv, ct, e FROM msgs WHERE seq > ? AND seq <= ? ORDER BY seq LIMIT ?", after, through, PAGE_LIMIT)
       .map((r) => ({ seq: r.seq, ts: r.ts, iv: unpacked(r.iv), ct: unpacked(r.ct), e: r.e }));
+  }
+
+  docLog(th: string): DocLog {
+    const snap = this.sql.all<{ upto: number; e: number }>("SELECT upto, e FROM doc_snaps WHERE th = ?", th)[0];
+    const log = this.sql.all<{ head: number | null; n: number; bytes: number; oldest: number | null }>(
+      `SELECT MAX(dseq) AS head, COUNT(*) AS n, COALESCE(SUM(${CT_CHARS}), 0) AS bytes, MIN(e) AS oldest FROM docs WHERE th = ?`,
+      th,
+    )[0];
+    const upto = snap?.upto ?? 0;
+    return {
+      head: Math.max(log?.head ?? 0, upto),
+      upto,
+      n: log?.n ?? 0,
+      bytes: log?.bytes ?? 0,
+      oldest: Math.min(log?.oldest ?? Number.MAX_SAFE_INTEGER, snap?.e ?? Number.MAX_SAFE_INTEGER),
+    };
+  }
+
+  docAppend(th: string, dseq: number, ts: number, iv: string, ct: string, e: number): void {
+    this.sql.run("INSERT INTO docs (th, dseq, ts, iv, ct, e) VALUES (?, ?, ?, ?, ?, ?)", th, dseq, ts, packed(iv), packed(ct), e);
+    this.setDocBytes(this.docBytes() + ct.length);
+  }
+
+  docSnap(th: string, upto: number, ts: number, iv: string, ct: string, e: number): void {
+    const covered = this.sql.all<{ n: number }>(`SELECT COALESCE(SUM(${CT_CHARS}), 0) AS n FROM docs WHERE th = ? AND dseq <= ?`, th, upto)[0]?.n ?? 0;
+    const old = this.sql.all<{ n: number }>(`SELECT COALESCE(SUM(${CT_CHARS}), 0) AS n FROM doc_snaps WHERE th = ?`, th)[0]?.n ?? 0;
+    this.sql.run("DELETE FROM docs WHERE th = ? AND dseq <= ?", th, upto);
+    this.sql.run(
+      "INSERT INTO doc_snaps (th, upto, ts, iv, ct, e) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (th) DO UPDATE SET upto = excluded.upto, ts = excluded.ts, iv = excluded.iv, ct = excluded.ct, e = excluded.e",
+      th,
+      upto,
+      ts,
+      packed(iv),
+      packed(ct),
+      e,
+    );
+    this.setDocBytes(Math.max(0, this.docBytes() - covered - old + ct.length));
+  }
+
+  docSince(th: string, since: number): DocEnvelope[] {
+    const snap = this.sql.all<DocRow>("SELECT upto AS dseq, ts, iv, ct, e FROM doc_snaps WHERE th = ?", th)[0];
+    const sent = snap && since < snap.dseq ? snap : null;
+    const rows = this.sql.all<DocRow>("SELECT dseq, ts, iv, ct, e FROM docs WHERE th = ? AND dseq > ? ORDER BY dseq", th, sent ? sent.dseq : since);
+    const envelope = (r: DocRow): DocEnvelope => ({ th, dseq: r.dseq, ts: r.ts, iv: unpacked(r.iv), ct: unpacked(r.ct), e: r.e });
+    return [...(sent ? [{ ...envelope(sent), snap: true as const }] : []), ...rows.map(envelope)];
+  }
+
+  docBytes(): number {
+    const raw = this.get("doc_bytes");
+    if (raw !== undefined) return Number(raw) || 0;
+    const total =
+      (this.sql.all<{ n: number }>(`SELECT COALESCE(SUM(${CT_CHARS}), 0) AS n FROM docs`)[0]?.n ?? 0) +
+      (this.sql.all<{ n: number }>(`SELECT COALESCE(SUM(${CT_CHARS}), 0) AS n FROM doc_snaps`)[0]?.n ?? 0);
+    this.setDocBytes(total);
+    return total;
+  }
+
+  private setDocBytes(n: number): void {
+    this.set("doc_bytes", n);
   }
 
   storedPageGen(): string | null {
