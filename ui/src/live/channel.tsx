@@ -36,7 +36,7 @@ import { refusal } from "~/live/refused"
 import { backWords, composerKey, giveBack } from "~/chat/drafts"
 import { giveBackBlock } from "~/chat/doc/give-back"
 import { stashText } from "~/chat/stash"
-import { dmInRoom, dmRoomOf } from "~/live/dm"
+import { dmInRoom, dmRoomOf, dmsOnce } from "~/live/dm"
 import { freeOf, specAsksOf, specsOf } from "~/live/specs"
 import { clock } from "~/kit/time"
 import type { Channel, SendExtras, Where } from "~/model"
@@ -103,6 +103,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const [pending, setPendingNow] = useState<Pending[]>(() => unsentIn(roomId))
   const setPending = useCallback((change: (list: Pending[]) => Pending[]) => setPendingNow(changeUnsent(roomId, change)), [roomId])
   const [inTurn] = useState(sendsInTurn)
+  const [dmOnce] = useState(dmsOnce)
   const shown = useShown()
 
   usePublishFace(state, me, connection === "live", send)
@@ -242,14 +243,16 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       const sealedIn = async (other: string): Promise<string | undefined> => {
         const had = dmRoomOf(state, me, other)
         if (had || !dmInRoom(channel, other)) return had
-        const seat = roster.find((r) => r.active && r.name === other)
-        if (!seat?.xpk || !(await appCan("makeDm"))) return undefined
-        try {
-          return await ch.makeDm({ name: seat.name, pk: seat.pk, xpk: seat.xpk })
-        } catch (err) {
-          if (/no such call|not a call|unknown call/i.test(err instanceof Error ? err.message : String(err))) return undefined
-          throw err
-        }
+        return dmOnce(other, async () => {
+          const seat = roster.find((r) => r.active && r.name === other)
+          if (!seat?.xpk || !(await appCan("makeDm"))) return undefined
+          try {
+            return await ch.makeDm({ name: seat.name, pk: seat.pk, xpk: seat.xpk })
+          } catch (err) {
+            if (/no such call|not a call|unknown call/i.test(err instanceof Error ? err.message : String(err))) return undefined
+            throw err
+          }
+        })
       }
       const re = opts.replyTo ?? opts.inThread
       const landed = new Set(messages.map((m) => m.seq))
@@ -293,7 +296,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
         throw err
       }
     },
-    [state, messages, me, send, inTurn, setPending, channel, roster, ch, code]
+    [state, messages, me, send, inTurn, dmOnce, setPending, channel, roster, ch, code]
   )
 
   const discard = useCallback((key: number) => setPending((list) => list.filter((p) => p.key !== key)), [setPending])

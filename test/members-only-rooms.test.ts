@@ -188,4 +188,18 @@ describe("a DM is a members-only room of two people (T703)", () => {
       "a room can't become a direct message",
     ]);
   });
+
+  test("two quick first DMs to the same person share one room, and so does every later one, from either side (T1479)", async () => {
+    await s.ownerCh.history(0);
+    const [first, second] = await Promise.all([s.ownerCh.makeDm(pick(tia)), s.ownerCh.makeDm(pick(tia))]);
+    const later = await s.ownerCh.makeDm(pick(tia));
+    await tia.ch.history(0);
+    const back = await tia.ch.makeDm(pick({ id: s.owner }));
+    expect([second, later, back]).toEqual([first, first, first]);
+    const { state, messages } = await seen(s.ownerCh);
+    const ours = (members: readonly { pk: string }[] | undefined) => members?.length === 2 && members.some((x) => x.pk === tia.id.pk) && members.some((x) => x.pk === s.owner.pk);
+    const made = messages.flatMap((m) => (m.ev?.op === "room.create" && m.ev.dm && ours(m.ev.members) ? [m.ev.id] : []));
+    expect(made).toEqual([first]);
+    expect(state.rooms.get(first)?.dm).toBe(true);
+  });
 });

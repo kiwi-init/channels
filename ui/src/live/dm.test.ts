@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import type { ChannelState } from "@kiwi/core/state.ts"
-import { dmInRoom, dmRoomOf } from "~/live/dm"
+import { sendsInTurn } from "@kiwi/app/send-order.ts"
+import { dmInRoom, dmRoomOf, dmsOnce } from "~/live/dm"
 import type { Person } from "~/model"
 
 type Seat = { name: string; pk: string; kind: "human" | "agent"; active: boolean; owner: boolean; sponsor?: { user: string; name: string; handle: string } }
@@ -25,5 +26,32 @@ describe("a DM with a person is a members-only room of the two of them (T703)", 
   test("a DM with a person goes in a room of its own; a DM with an agent stays a thread", () => {
     const people = [person("jow", { you: true }), person("tia"), person("ana", { kind: "agent" })]
     expect([dmInRoom({ people }, "tia"), dmInRoom({ people }, "ana"), dmInRoom({ people }, "nobody")]).toEqual([true, false, false])
+  })
+})
+
+describe("two quick first DMs to someone share one DM room (T1479)", () => {
+  const tick = () => new Promise((done) => setTimeout(done, 1))
+
+  test("a second Enter before the first room lands, in turn or at once, reuses the room being made", async () => {
+    const once = dmsOnce()
+    const inTurn = sendsInTurn()
+    const made: string[] = []
+    const make = async () => {
+      await tick()
+      made.push(`dm${made.length + 1}`)
+      return made.at(-1)
+    }
+    const [a, b] = await Promise.all([inTurn(() => once("tia", make)), inTurn(() => once("tia", make))])
+    const [c, d] = await Promise.all([once("tia", make), once("tia", make)])
+    const other = await once("ana", make)
+    expect([a, b, c, d, other, made]).toEqual(["dm1", "dm1", "dm1", "dm1", "dm2", ["dm1", "dm2"]])
+  })
+
+  test("a try that made no room, or failed, is tried again on the next message", async () => {
+    const once = dmsOnce()
+    expect(await once("tia", async () => undefined)).toBeUndefined()
+    await expect(once("tia", async () => Promise.reject(new Error("offline")))).rejects.toThrow("offline")
+    await tick()
+    expect(await once("tia", async () => "ours")).toBe("ours")
   })
 })

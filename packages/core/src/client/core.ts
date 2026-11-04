@@ -47,9 +47,13 @@ export class ChannelCore {
   learnRoom(m: Message): void {
     const ev = m.ev;
     if (ev?.op === "room.create" && !ev.members) this.publicRooms.add(ev.id);
-    else if ((ev?.op === "room.create" || ev?.op === "room.members") && ev.members)
-      this.memberRooms.set(ev.id, { members: ev.members, ...(ev.dm ? { dm: true as const } : {}), ...(ev.self ? { self: true as const } : {}), seq: this.memberRooms.get(ev.id)?.seq ?? m.seq });
-    else if (ev?.op === "room.leave" && m.from === this.name) this.memberRooms.delete(ev.id);
+    else if ((ev?.op === "room.create" || ev?.op === "room.members") && ev.members) {
+      const had = this.memberRooms.get(ev.id);
+      const was = ev.op === "room.members" ? had : undefined;
+      const dm = was ? was.dm : ev.dm;
+      const self = was ? was.self : ev.self;
+      this.memberRooms.set(ev.id, { members: ev.members, ...(dm ? { dm: true as const } : {}), ...(self ? { self: true as const } : {}), seq: had?.seq ?? m.seq });
+    } else if (ev?.op === "room.leave" && m.from === this.name) this.memberRooms.delete(ev.id);
   }
 
   learnBase(rooms: readonly { id: string; members?: RoomMember[]; dm?: true; self?: true }[]): void {

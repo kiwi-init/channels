@@ -13,7 +13,7 @@ import type { Persona, Personality } from "./personality.ts";
 import { fromBase64, newRoomId, toBase64, type ChannelAccess } from "./crypto.ts";
 import type { Identity } from "./identity.ts";
 import type { JoinClaims, JoinRequest, Member, MemberInfo, PersonPowers } from "./membership.ts";
-import { isPerson, personOf, sentTo, withSeats } from "./room-rules.ts";
+import { isPerson, personOf, sentTo, withSeats, type RoomMember } from "./room-rules.ts";
 import type { Marks } from "./note.ts";
 import { GENERAL_ROOM, type ChannelIcon, type Envelope, type FileAttachment, type ImageAttachment, type InlineImage, type Message } from "./protocol.ts";
 import type { Scope } from "./scopes.ts";
@@ -79,6 +79,7 @@ export class Channel {
   private readonly cache: ChannelInfo;
   private readonly sending: ChannelSending;
   private readonly live: ChannelLive;
+  private readonly makingDm = new Map<string, Promise<string>>();
   readonly fx: ChannelFx;
 
   constructor(access: ChannelAccess, relay: string, identity: Identity, onAccess?: (a: ChannelAccess) => void, opts: { keepInfo?: boolean; infoMaxAgeMs?: number; docStore?: DocStore | null } = {}) {
@@ -476,24 +477,38 @@ export class Channel {
     return run(this.fx.closeIssue(c));
   }
 
-  private async openRoom(say: string, name: string, picked: readonly RoomPick[], kind: { dm?: true; self?: true }): Promise<string> {
+  private async roomSeats(picked: readonly RoomPick[]): Promise<RoomMember[]> {
+    return everySeat(await this.members(), withMe(this.core.identity, picked)).map(({ name, pk }) => ({ name, pk }));
+  }
+
+  private async openRoom(say: string, name: string, members: RoomMember[], kind: { dm?: true; self?: true }): Promise<string> {
     const id = newRoomId();
-    const members = everySeat(await this.members(), withMe(this.core.identity, picked)).map(({ name, pk }) => ({ name, pk }));
     const seq = await this.send(say, { kind: "event", ev: { op: "room.create", id, name: kind.dm || kind.self ? "" : name, members, ...kind } });
     this.core.memberRooms.set(id, { members, ...kind, seq });
     return id;
   }
 
-  makeRoom(name: string, members: readonly RoomPick[]): Promise<string> {
-    return this.openRoom("made a members-only room", name, members, {});
+  async makeRoom(name: string, members: readonly RoomPick[]): Promise<string> {
+    return this.openRoom("made a members-only room", name, await this.roomSeats(members), {});
   }
 
   makeDm(other: RoomPick): Promise<string> {
-    return this.openRoom("started a direct conversation", "", [other], { dm: true });
+    const making = this.makingDm.get(other.pk) ?? this.dmWith(other).finally(() => this.makingDm.delete(other.pk));
+    this.makingDm.set(other.pk, making);
+    return making;
   }
 
-  makeSelf(): Promise<string> {
-    return this.openRoom("keeps their own notes", "", [], { self: true });
+  private async dmWith(other: RoomPick): Promise<string> {
+    const members = await this.roomSeats([other]);
+    const ours = new Set(members.map((m) => m.pk));
+    const me = this.core.identity.pk;
+    const sealed = [...this.core.roomNow].flatMap(([id, r]) => (r.meta ? [[id, r.meta] as const] : []));
+    const had = [...this.core.memberRooms, ...sealed].find(([, r]) => r.dm && r.members.some((m) => m.pk === me) && r.members.some((m) => m.pk === other.pk) && r.members.every((m) => ours.has(m.pk)));
+    return had?.[0] ?? this.openRoom("started a direct conversation", "", members, { dm: true });
+  }
+
+  async makeSelf(): Promise<string> {
+    return this.openRoom("keeps their own notes", "", await this.roomSeats([]), { self: true });
   }
 
   async syncMarks(local: Marks, opts: { write?: boolean; make?: boolean } = {}): Promise<Marks | null> {
