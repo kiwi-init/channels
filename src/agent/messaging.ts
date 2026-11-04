@@ -32,6 +32,7 @@ import {
 import { Rejected } from "@kiwi/core/refusals.ts";
 import { canPost, describeScopes, refusal } from "@kiwi/core/scopes.ts";
 import { allowedOnHold, decidersOf, humanOf, isPerson, nextIn, ON_HOLD, ownerOf, placeIn, taskId, unnamedAsks, unnamedTasks, type ChannelState } from "@kiwi/core/state.ts";
+import { readDoc, writeBlock, type DocPlace } from "./docs.ts";
 import { SessionListen } from "./listen.ts";
 import { EVERYONE, oneLook } from "./shared.ts";
 
@@ -77,6 +78,29 @@ export class SessionMessaging extends SessionListen {
     },
     oneLook,
   );
+
+  readonly sendToDoc = Effect.fn("AgentSession.sendToDoc")(
+    { self: this },
+    function* (this: SessionMessaging, body: string, at: DocPlace) {
+      yield* this.mayI({ kind: "msg" });
+      const { state } = yield* this.state();
+      const me = state.members.get(this.me);
+      const agent = !me || !isPerson(me);
+      return yield* Effect.tryPromise({
+        try: () => writeBlock(this.ch, state.head, at, this.me, body, agent),
+        catch: (e) => new Rejected(`couldn't write to the shared doc: ${e instanceof Error ? e.message : "error"}; nothing was sent`),
+      });
+    },
+    oneLook,
+  );
+
+  readonly docText = Effect.fn("AgentSession.docText")({ self: this }, function* (this: SessionMessaging, at: DocPlace, ms?: number) {
+    const { state } = yield* this.state();
+    return yield* Effect.tryPromise({
+      try: () => readDoc(this.ch, state.head, at, ms),
+      catch: (e) => new Rejected(`couldn't read the shared doc: ${e instanceof Error ? e.message : "error"}`),
+    });
+  });
 
   private mayI(m: { kind: Kind; ev?: Event; to?: string[] }) {
     return Effect.gen({ self: this }, function* () {

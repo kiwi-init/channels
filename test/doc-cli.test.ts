@@ -1,0 +1,81 @@
+import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { Channel } from "@kiwi/core/client.ts";
+import { blocksOf, newBlock, newDocId } from "@kiwi/core/doc/blocks.ts";
+import { startRelay } from "../src/relay/bun.ts";
+import { docPlaceOf, readDoc, writeBlock } from "../src/agent/docs.ts";
+import { setupChannel, type OwnerSetup } from "./owner.ts";
+
+setDefaultTimeout(30_000);
+
+describe("where a send goes: the doc of its place, when one is open (T570)", () => {
+  const th = newDocId();
+  const state = {
+    docs: new Map([
+      ["task:7", th],
+      ["main", "m".repeat(22)],
+    ]),
+  };
+  test("a task thread and #general with a doc open take the block; a DM, a reply, another room or a thread without one don't", () => {
+    expect(docPlaceOf(state, { task: 7 })).toEqual({ key: "task:7", th });
+    expect(docPlaceOf(state, {})).toEqual({ key: "main", th: "m".repeat(22) });
+    expect(docPlaceOf(state, { room: "General" })).toEqual({ key: "main", th: "m".repeat(22) });
+    expect(docPlaceOf(state, { task: 8 })).toBeNull();
+    expect(docPlaceOf(state, { dm: true })).toBeNull();
+    expect(docPlaceOf(state, { re: [12] })).toBeNull();
+    expect(docPlaceOf(state, { room: "design" })).toBeNull();
+    expect(docPlaceOf({ docs: new Map() }, {})).toBeNull();
+  });
+});
+
+describe("the CLI writes and reads a thread's doc over the live socket (T570)", () => {
+  const dataDir = mkdtempSync(join(tmpdir(), "kiwi-doc-cli-"));
+  let server: ReturnType<typeof startRelay>;
+  let s: OwnerSetup;
+  const stop = new AbortController();
+
+  beforeAll(async () => {
+    server = startRelay({ port: 0, hostname: "127.0.0.1", dataDir });
+    s = await setupChannel(server.url.origin, { ownerName: "lead" });
+    await new Promise<void>((done) => void s.ownerCh.stream(0, () => {}, { signal: stop.signal, onReady: () => done() }));
+  });
+  afterAll(() => {
+    stop.abort();
+    server.stop(true);
+    rmSync(dataDir, { recursive: true, force: true });
+  });
+
+  test("a one-shot client writes its answer as its own agent block, and reads the thread as text", async () => {
+    const open = await s.ownerCh.threadDoc("task:7");
+    await open.whenSynced();
+    newBlock(open.doc, "text", "jow", "@lead how far is the relay?");
+    await open.flush();
+
+    const cli = new Channel(s.access, s.relay, s.owner);
+    const at = { key: "task:7", th: open.th };
+    const id = await writeBlock(cli, 0, at, "lead", "Merged.\nNext: the CLI.", true);
+    const deadline = Date.now() + 5_000;
+    while (!blocksOf(open.doc).some((b) => b.id === id) && Date.now() < deadline) await Bun.sleep(20);
+    expect(blocksOf(open.doc).find((b) => b.id === id)).toMatchObject({ kind: "agent", author: "lead", text: "Merged.\nNext: the CLI." });
+
+    const text = await readDoc(new Channel(s.access, s.relay, s.owner), 0, at);
+    expect(text).toBe("jow: @lead how far is the relay?\n\nlead (agent): Merged.\nNext: the CLI.");
+    expect(await writeBlock(new Channel(s.access, s.relay, s.owner), 0, at, "jow", "thanks", false)).toMatch(/^[A-Za-z0-9_-]{22}$/);
+    await Bun.sleep(100);
+    expect(blocksOf(open.doc).at(-1)).toMatchObject({ kind: "text", author: "jow", text: "thanks" });
+  });
+
+  test("a relay that never answers fails within the wait instead of hanging", async () => {
+    const quiet = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: () => new Response("no", { status: 503 }) });
+    try {
+      const cli = new Channel(s.access, quiet.url.origin, s.owner);
+      const started = Date.now();
+      await expect(readDoc(cli, 0, { key: "task:7", th: newDocId() }, 500)).rejects.toThrow();
+      expect(Date.now() - started).toBeLessThan(5_000);
+    } finally {
+      quiet.stop(true);
+    }
+  });
+});
