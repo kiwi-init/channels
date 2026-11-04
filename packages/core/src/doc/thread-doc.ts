@@ -25,6 +25,7 @@ export interface DocSaved {
 }
 
 const RETRY_MS = 2_000;
+const MAX_BACKOFF_STEPS = 5;
 
 export interface DocKeys {
   current: () => Promise<{ key: string; e?: number }>;
@@ -85,6 +86,8 @@ export class ThreadDoc {
   private hole: { dseq: number; e: number | undefined } | null = null;
   private readonly big = new Set<string>();
   private snapping: { id: string; covers: string[] } | null = null;
+  private snapFails = 0;
+  private refusedWith: string | null = null;
 
   constructor(o: DocOptions, doc: Y.Doc = new Y.Doc()) {
     if (!DOC_THREAD_RE.test(o.th)) throw new Error(`not a doc id: ${o.th}`);
@@ -103,7 +106,11 @@ export class ThreadDoc {
   }
 
   owns(id: string): boolean {
-    return this.inFlight.has(id);
+    return this.inFlight.has(id) || this.snapping?.id === id;
+  }
+
+  get refused(): string | null {
+    return this.refusedWith;
   }
 
   save(): DocSaved {
@@ -246,7 +253,7 @@ export class ThreadDoc {
   }
 
   private async compact(): Promise<void> {
-    if (this.closed || !this.ready || this.hole) return;
+    if (this.closed || !this.ready || this.hole || this.snapping) return;
     const upto = Math.max(this.head, this.top);
     if (upto === 0) return;
     const id = b64url(crypto.getRandomValues(new Uint8Array(12)));
@@ -261,16 +268,18 @@ export class ThreadDoc {
     if (f.t === "err") {
       if (f.id && f.id === this.snapping?.id) {
         this.snapping = null;
-        if (this.big.size) setTimeout(() => void this.queue(() => this.compact()), this.o.retryMs ?? RETRY_MS);
+        this.refusedWith = f.error;
+        const wait = (this.o.retryMs ?? RETRY_MS) * 2 ** Math.min(this.snapFails++, MAX_BACKOFF_STEPS);
+        if (this.big.size) setTimeout(() => void this.queue(() => this.compact()), wait);
         return;
       }
       if (!f.id || !this.inFlight.has(f.id)) return;
       const update = this.inFlight.get(f.id)!;
       const id = f.id;
+      this.refusedWith = f.error;
       if (f.error === DOC_COMPACT) {
-        await this.compact();
-        await this.post(update, id);
-        return;
+        this.big.add(id);
+        return this.compact();
       }
       return this.retry(update, id);
     }
@@ -281,9 +290,13 @@ export class ThreadDoc {
           this.big.delete(id);
         }
         this.snapping = null;
+        this.snapFails = 0;
+        this.refusedWith = null;
+        if (this.big.size) await this.compact();
         return;
       }
       if (!this.inFlight.delete(f.id)) return;
+      this.refusedWith = null;
       this.top = Math.max(this.top, f.seq);
       if (f.compact) await this.compact();
       return;

@@ -138,14 +138,14 @@ const onDocFrame = Effect.fn("Room.onDocFrame")(function* (f: DocFrame, sender: 
   if (f.t === "doc.snap") {
     const snapped = yield* Effect.exit(docSnap(th, f.upto, f.iv, f.ct, e, sender));
     if (snapped._tag === "Failure") {
-      counted.refund();
+      if (!isRefusal(Cause.squash(snapped.cause))) counted.refund();
       return refuse(socketError(snapped.cause), failureTag(snapped.cause));
     }
     return { reply: frame({ t: "ack", id, seq: snapped.value.dseq }), doc: { th, frame: frame({ t: "doc", ...snapped.value }) } } satisfies Effects;
   }
   const stored = yield* Effect.exit(docAppend(th, f.iv, f.ct, e, sender));
   if (stored._tag === "Failure") {
-    counted.refund();
+    if (!isRefusal(Cause.squash(stored.cause))) counted.refund();
     return refuse(socketError(stored.cause), failureTag(stored.cause));
   }
   const { update, compact } = stored.value;
