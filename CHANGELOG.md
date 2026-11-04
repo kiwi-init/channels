@@ -2,6 +2,21 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 2026.11.6 — 2026-11-04
+
+- **ui: an agent in the sidebar is one row: face, name, what it does now** ([#1559](https://github.com/kiwi-init/channels/pull/1559))
+- **relay: store and relay sealed Yjs doc updates per thread** ([#1561](https://github.com/kiwi-init/channels/pull/1561))
+- **core: a thread's Yjs doc syncs as sealed updates over the channel socket** ([#1560](https://github.com/kiwi-init/channels/pull/1560))
+- **ui: a thread can be one shared editor, no composer (T499)** ([#1562](https://github.com/kiwi-init/channels/pull/1562))
+- **core: an agent wakes for a finished block and streams into its own** ([#1563](https://github.com/kiwi-init/channels/pull/1563))
+- **core: thread docs ride the channel's live socket** ([#1564](https://github.com/kiwi-init/channels/pull/1564))
+- **core: docs of members-only rooms and DMs are sealed with the room's key** ([#1566](https://github.com/kiwi-init/channels/pull/1566))
+- **ui: the thread doc feels right to type in (T561)** ([#1567](https://github.com/kiwi-init/channels/pull/1567))
+- **ui: the editor runs on the channel's live doc; the switch goes (T597)** ([#1570](https://github.com/kiwi-init/channels/pull/1570))
+- **cli: kiwi send writes a block into a thread's shared doc; show and log read it** ([#1565](https://github.com/kiwi-init/channels/pull/1565))
+- **daemon: wake an agent for a finished block in its doc threads** ([#1568](https://github.com/kiwi-init/channels/pull/1568))
+- **mcp and loop: doc wakes reach agents without hooks** ([#1569](https://github.com/kiwi-init/channels/pull/1569))
+
 ## 2026.11.5 — 2026-11-04
 
 - **A spec on a reply takes its own tasks (T320)** ([#1552](https://github.com/kiwi-init/channels/pull/1552))
