@@ -277,6 +277,7 @@ try {
     if (!ask) await page.waitForTimeout(300);
   }
   await patiently(() => runAgent(seats[0]!.writeSpec(ask, SPEC)));
+  await patiently(() => runAgent(seats[0]!.readySpec(ask)));
   await approveSpec(page);
   const perAgent = Math.ceil(TASKS / AGENTS);
   await Promise.all(

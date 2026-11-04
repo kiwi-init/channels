@@ -68,6 +68,38 @@ function newLine(e: Editor, author: string, id: string, text: string): void {
   e.dispatch(e.state().tr.insert(e.state().doc.content.size, line))
 }
 
+function lineStart(e: Editor, author: string): number {
+  let at = -1
+  e.state().doc.forEach((node, offset) => {
+    if (attrsOf(node).author === author) at = offset + 2
+  })
+  return at
+}
+
+async function behindOn(line: string, missed: (e: Editor) => void) {
+  const desk = new Y.Doc()
+  const peer = new Y.Doc()
+  const sync = net(desk, peer)
+  const jow = editor(desk, true)
+  const dad = editor(peer, true)
+  await Promise.resolve()
+  dad.dispatch(startBlock(dad.state(), "dad", 1))
+  dad.dispatch(dad.state().tr.insertText("bom dia"))
+  sync()
+  jow.dispatch(startBlock(jow.state(), "jow", 2))
+  jow.dispatch(jow.state().tr.insertText(line))
+  sync()
+  missed(jow)
+  let once = true
+  peer.on("update", (_u: Uint8Array, o: unknown) => {
+    if (!once || o === NET) return
+    once = false
+    sync()
+  })
+  typeAtEnd(dad, "dad", "!")
+  return { desk, peer, sync, jow, dad }
+}
+
 async function outOfStep(guarded: boolean) {
   const desk = new Y.Doc()
   const peer = new Y.Doc()
@@ -141,6 +173,74 @@ describe("an editor writes only the lines it changed, so a peer out of step neve
     await settle()
     expect(texts(desk)).toEqual(["dad: bom dia!?", "jow: Salve mister :) NEW"])
     expect(dad.state().doc.textContent).toBe("bom dia!?Salve mister :) NEW")
+  })
+
+  test("a peer that edits a line it's behind on sends only its own edit, so the letters it missed stay", async () => {
+    const append = (e: Editor) => typeAtEnd(e, "jow", " NEW")
+    const split = (e: Editor) => {
+      const at = lineStart(e, "jow") + 2
+      e.dispatch(
+        e
+          .state()
+          .tr.split(at)
+          .insertText("LOCAL", at + 2)
+      )
+    }
+    const list = (e: Editor) => {
+      const { nodes } = schema
+      const item = nodes.list_item!.create(null, nodes.paragraph!.create(null, schema.text("item")))
+      e.dispatch(e.state().tr.insert(lineStart(e, "jow") + 6, nodes.bullet_list!.create(null, item)))
+    }
+    const mention = (name: string) => schema.nodes.mention!.create({ name })
+    const replace = (e: Editor) => e.dispatch(e.state().tr.insertText("p", lineStart(e, "jow") + 3, lineStart(e, "jow") + 5))
+    for (const [what, missed, edit, want] of [
+      ["types at the end", append, (e: Editor) => typeAtEnd(e, "jow", "?"), "hello NEW?"],
+      ["deletes at the start", append, (e: Editor) => e.dispatch(e.state().tr.delete(lineStart(e, "jow"), lineStart(e, "jow") + 2)), "llo NEW"],
+      ["retypes a span the other side left alone", append, (e: Editor) => e.dispatch(e.state().tr.insertText("y", lineStart(e, "jow") + 2, lineStart(e, "jow") + 5)), "hey NEW"],
+      ["retypes the span the other side changed: it adds, never cuts", replace, (e: Editor) => e.dispatch(e.state().tr.insertText("y", lineStart(e, "jow") + 2, lineStart(e, "jow") + 5)), "heylp"],
+      ["splits the line in two", append, split, "he\nLOCALllo NEW"],
+      ["adds a mention", append, (e: Editor) => e.dispatch(e.state().tr.insert(lineStart(e, "jow"), mention("ana"))), "@anahello NEW"],
+      ["types in a line whose missed change is a list", list, (e: Editor) => e.dispatch(e.state().tr.insertText("X", lineStart(e, "jow"))), "Xhello\nitem"],
+      [
+        "types in a line whose missed change is a mention",
+        (e: Editor) => e.dispatch(e.state().tr.insert(lineStart(e, "jow") + 5, mention("ana"))),
+        (e: Editor) => e.dispatch(e.state().tr.insertText("X", lineStart(e, "jow"))),
+        "Xhello@ana",
+      ],
+    ] as const) {
+      const { desk, peer, sync, dad } = await behindOn("hello", missed)
+      edit(dad)
+      sync()
+      await settle()
+      expect([what, texts(desk)]).toEqual([what, ["dad: bom dia!", `jow: ${want}`]])
+      expect(texts(peer)).toEqual(texts(desk))
+      expect([what, dad.state().doc.textContent]).toEqual([what, `bom dia!${want.replace("\n", "")}`])
+    }
+  })
+
+  test("a line with no id (a fresh doc's first line) doesn't turn the guard off for the rest", async () => {
+    const desk = new Y.Doc()
+    const peer = new Y.Doc()
+    const sync = net(desk, peer)
+    const jow = editor(desk, true)
+    const dad = editor(peer, true)
+    await Promise.resolve()
+    newLine(jow, "jow", "jow-draft", "hello")
+    newLine(jow, "dad", "dad-draft", "other")
+    sync()
+    typeAtEnd(jow, "jow", " NEW")
+    let once = true
+    peer.on("update", (_u: Uint8Array, o: unknown) => {
+      if (!once || o === NET) return
+      once = false
+      sync()
+    })
+    typeAtEnd(dad, "dad", "!")
+    typeAtEnd(dad, "jow", "?")
+    sync()
+    await settle()
+    expect(texts(desk)).toContain("jow: hello NEW?")
+    expect(texts(peer)).toEqual(texts(desk))
   })
 
   test("without the guard, the out-of-step peer erases your line", async () => {

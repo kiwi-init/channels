@@ -25,6 +25,7 @@ export function specsOf(state: ChannelState, me: string): Spec[] {
         edits: s.edits,
         editors: s.editors,
         stage: specStage(state, s),
+        ...(s.ready?.v === s.v ? { ready: true as const } : {}),
         ...(s.approved ? { approved: { by: s.approved.by, at: s.approved.at, v: s.approved.v, text: s.approved.text } } : {}),
         ...(changedSinceApproval(s) ? { changed: true as const } : {}),
         ...(result ? { result } : {}),
@@ -45,9 +46,9 @@ export function freeOf(state: ChannelState): string[] {
 export function specAsksOf(specs: readonly Spec[]): SpecAsk[] {
   return specs.flatMap((s): SpecAsk[] => {
     if (!s.canJudge || s.result) return []
-    if (s.stage === "draft") return [{ kind: "spec", id: `spec:${s.ask}:approve:${s.v}`, at: s.edited.at, ask: s.ask, why: "approve" }]
+    if (s.stage === "draft" && s.ready) return [{ kind: "spec", id: `spec:${s.ask}:approve:${s.v}`, at: s.edited.at, ask: s.ask, why: "approve" }]
     if (s.stage === "delivered") return [{ kind: "spec", id: `spec:${s.ask}:result`, at: s.edited.at, ask: s.ask, why: "result" }]
-    if (s.changed) return [{ kind: "spec", id: `spec:${s.ask}:changed:${s.v}`, at: s.edited.at, ask: s.ask, why: "changed" }]
+    if (s.changed && s.ready) return [{ kind: "spec", id: `spec:${s.ask}:changed:${s.v}`, at: s.edited.at, ask: s.ask, why: "changed" }]
     return []
   })
 }
