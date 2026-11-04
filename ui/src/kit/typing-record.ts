@@ -6,6 +6,10 @@ export interface TypingEntry extends TypingNote {
   inputType?: string
   data?: string
   caret?: number
+  screen?: number
+  editor?: number
+  stored?: number
+  here?: boolean
   flag?: string
 }
 
@@ -15,6 +19,8 @@ const TAIL = 3
 
 const isDelete = (e: TypingEntry): boolean =>
   e.key === "Backspace" || e.key === "Delete" || (e.inputType?.startsWith("delete") ?? false) || e.inputType === "historyUndo" || e.inputType === "insertReplacementText"
+
+const isInsert = (e: TypingEntry): boolean => (e.what === "key" && !isDelete(e)) || (!!e.inputType && !e.inputType.startsWith("delete")) || e.what.startsWith("composition")
 
 export const keyName = (key: string): string => ([...key].length === 1 ? "char" : key)
 
@@ -32,17 +38,17 @@ export class TypingRecord {
   push(e: TypingEntry): void {
     if (this.entries.length >= MAX) this.entries.shift()
     this.entries.push(e)
+    if (e.flag) this.flags.push({ at: e, before: this.entries.slice(-25, -1) })
   }
 
   seen(t: number, block: string, len: number, caret?: number): void {
     const was = this.lens.get(block)
     this.lens.set(block, len)
-    if (was === undefined || len >= was) return
+    if (was === undefined || len === was) return
     const recent = this.entries.filter((e) => t - e.t <= DELETE_MS)
-    if (recent.some(isDelete)) return
-    const at: TypingEntry = { t, what: "dom text shrank", block, before: was, after: len, ...(caret === undefined ? {} : { caret }), flag: "SHRANK WITHOUT A DELETE KEY" }
-    this.push(at)
-    this.flags.push({ at, before: this.entries.slice(-25, -1) })
+    const at = { t, block, before: was, after: len, ...(caret === undefined ? {} : { caret }) }
+    if (len < was && !recent.some(isDelete)) this.push({ ...at, what: "dom text shrank", flag: "SHRANK WITHOUT A DELETE KEY" })
+    if (len > was && !recent.some(isInsert)) this.push({ ...at, what: "dom text grew", flag: "GREW WITHOUT A KEY" })
   }
 
   report(about: Record<string, string | number>): string {

@@ -33,6 +33,8 @@ interface Changed {
 
 const PIPE = Symbol("pipe")
 
+export const docTag = (doc: Y.Doc): string => doc.guid.slice(0, 6)
+
 function originOf(origin: unknown, phase: string): string | null {
   if (origin === PIPE) return phase
   if (origin instanceof Y.UndoManager) return "undo"
@@ -166,7 +168,7 @@ export class LiveDoc implements Shared {
   private readonly onTransaction = (tr: Y.Transaction): void => {
     if (!tracingTyping() || (tr.changed.size === 0 && tr.deleteSet.clients.size === 0)) return
     const origin = originOf(tr.origin, this.phase)
-    if (origin) noteTyping(() => ({ what: "doc changed", origin, count: tr.changed.size }))
+    if (origin) noteTyping(() => ({ what: "doc changed", origin, count: tr.changed.size, doc: docTag(this.doc) }))
   }
 
   private readonly onAware = (_: Changed, origin: unknown): void => {

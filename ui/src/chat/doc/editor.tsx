@@ -6,12 +6,13 @@ import type { Node } from "prosemirror-model"
 import { EditorState, Plugin, type Transaction } from "prosemirror-state"
 import { Decoration, DecorationSet, EditorView, type NodeView } from "prosemirror-view"
 import { yCursorPlugin, ySyncPlugin, ySyncPluginKey, yUndoPlugin } from "y-prosemirror"
+import * as Y from "yjs"
 
 import { attach, backInDraft, blockAt, blocks, continues, dropEmptyOwn, isEmpty, replyIn, startBlock, unreply } from "~/chat/doc/blocks"
 import { onGiveBack } from "~/chat/doc/give-back"
 import { docKeys, type CommandFor } from "~/chat/doc/keys"
-import { holdDoc, LiveDoc, type Shared } from "~/chat/doc/live"
-import { noteTyping, tracingTyping } from "~/kit/typing-hook"
+import { docTag, holdDoc, LiveDoc, type Shared } from "~/chat/doc/live"
+import { noteTyping, setTypingFocus, tracingTyping, type TypingFocus } from "~/kit/typing-hook"
 import { linksPlugin } from "~/chat/doc/links"
 import { fileDrag, takeDropped } from "@kiwi/app/dropped.ts"
 import { emptyPaste, takePasted } from "@kiwi/app/pasted.ts"
@@ -229,7 +230,30 @@ function lineLength(doc: Node, id: string): number {
   return len
 }
 
-function noteEdit(before: EditorState, after: EditorState, tr: Transaction): void {
+function storedLength(node: Y.XmlElement | Y.XmlText | Y.XmlHook): number {
+  if (node instanceof Y.XmlText) return node.length
+  if (!(node instanceof Y.XmlElement)) return 0
+  return node.toArray().reduce((n, c) => n + storedLength(c), 0)
+}
+
+function textLength(node: Node): number {
+  let n = 0
+  node.descendants((c) => void (n += c.isText ? (c.text?.length ?? 0) : 0))
+  return n
+}
+
+function focusOf(view: EditorView, doc: Y.Doc): TypingFocus | null {
+  const here = blockAt(view.state)
+  const id = here ? attrsOf(here.node).id : ""
+  if (!here || !id) return null
+  const el = doc
+    .getXmlFragment(FRAGMENT)
+    .toArray()
+    .find((n) => n instanceof Y.XmlElement && n.getAttribute("id") === id)
+  return { block: id, doc: docTag(doc), editor: textLength(here.node), stored: el ? storedLength(el) : -1 }
+}
+
+function noteEdit(before: EditorState, after: EditorState, tr: Transaction, doc: Y.Doc): void {
   const here = blockAt(before)
   const id = here ? attrsOf(here.node).id : ""
   const meta: unknown = tr.getMeta(ySyncPluginKey)
@@ -241,6 +265,7 @@ function noteEdit(before: EditorState, after: EditorState, tr: Transaction): voi
     before: lineLength(before.doc, id),
     after: lineLength(after.doc, id),
     count: tr.steps.length,
+    doc: docTag(doc),
   }))
 }
 
@@ -422,7 +447,7 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
       if (this.isDestroyed) return
       const before = this.state
       this.updateState(this.state.apply(tr))
-      if (tr.docChanged && tracingTyping()) noteEdit(before, this.state, tr)
+      if (tr.docChanged && tracingTyping()) noteEdit(before, this.state, tr, shared.doc)
       if (tr.selectionSet || tr.docChanged) shareSelection(this, shared, me)
     },
   })
@@ -668,6 +693,7 @@ export function ThreadDoc({
     const v = built.view
     view.current = v
     noteTyping(() => ({ what: "editor mounted" }))
+    const unfocus = setTypingFocus(() => focusOf(v, shared.doc))
     if (canWrite.current && !document.activeElement?.closest("input, textarea, [contenteditable='true']")) {
       v.dispatch(startBlock(v.state, me, Date.now(), drafts.current.posted))
       v.focus()
@@ -676,6 +702,7 @@ export function ThreadDoc({
       const tidy = dropEmptyOwn(v.state, me, null)
       noteTyping(() => ({ what: "editor unmounted", count: tidy?.steps.length ?? 0 }))
       if (tidy) v.dispatch(tidy)
+      unfocus()
       built.stop()
       v.destroy()
       view.current = null
