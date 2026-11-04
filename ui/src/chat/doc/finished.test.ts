@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
-import { richBlocks, type Block } from "@kiwi/core/doc/blocks.ts"
+import { appendToBlock, blocksOf, markBack, markPosted, newBlock, richBlocks, type Block } from "@kiwi/core/doc/blocks.ts"
 import { prosemirrorToYDoc } from "y-prosemirror"
+import * as Y from "yjs"
 
 import { docFeed, withLines } from "~/chat/doc/finished"
 import { FRAGMENT, schema } from "~/chat/doc/schema"
@@ -71,5 +72,33 @@ describe("finished doc lines with no message sit in the feed at their time (T135
     expect(rows[1]).toMatchObject({ from: "jow", block: "x", fromDoc: true })
     expect(rows[1]!.seq).toBeGreaterThan(1)
     expect(rows[1]!.seq).toBeLessThan(2)
+  })
+})
+
+describe("a line given back to its author stays their draft in the doc (T1678)", () => {
+  test("a later empty block or a later draft never finishes it; sending it again does", () => {
+    const doc = new Y.Doc()
+    const old = newBlock(doc, "text", "jow", "a line from before lines were sent", T)
+    const a = newBlock(doc, "text", "jow", "ship it", T + 10)
+    markPosted(doc, a.id)
+    const b = newBlock(doc, "text", "jow", "", T + 20)
+    const feed = () => docFeed(blocksOf(doc), richBlocks(doc), new Set(), T)
+    expect([...feed().hidden].sort()).toEqual([old.id, a.id].sort())
+    markBack(doc, a.id)
+    expect(feed().hidden.has(a.id)).toBe(false)
+    expect(feed().lines.map((l) => l.text)).toEqual(["a line from before lines were sent"])
+    appendToBlock(doc, b.id, "next line")
+    markPosted(doc, b.id)
+    newBlock(doc, "text", "jow", "", T + 30)
+    expect(feed().hidden.has(a.id)).toBe(false)
+    expect(feed().lines.map((l) => l.text)).toEqual(["a line from before lines were sent", "next line"])
+    markPosted(doc, a.id)
+    expect(feed().lines.map((l) => l.text)).toEqual(["a line from before lines were sent", "ship it", "next line"])
+  })
+
+  test("a line from before blocks were marked sent still joins the feed once its author writes on (#1612)", () => {
+    const feed = docFeed([line("legacy", "jow", T + 10), line("empty", "jow", T + 20, { text: "" })], new Map(), new Set(), T)
+    expect(feed.lines.map((l) => l.id)).toEqual(["legacy"])
+    expect(feed.hidden.has("legacy")).toBe(true)
   })
 })

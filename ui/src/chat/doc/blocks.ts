@@ -1,7 +1,7 @@
 import type { Node } from "prosemirror-model"
 import { TextSelection, type EditorState, type Transaction } from "prosemirror-state"
 
-import { attrsOf, isSent, newBlockId, schema, type BlockAttrs, type BlockKind } from "~/chat/doc/schema"
+import { attrsOf, isBack, isSent, newBlockId, schema, type BlockAttrs, type BlockKind } from "~/chat/doc/schema"
 
 const RUN_MS = 5 * 60_000
 
@@ -54,7 +54,10 @@ function atEnd(tr: Transaction, b: Placed): Transaction {
 export function startBlock(state: EditorState, me: string, now: number, posted: (block: string) => boolean = () => false): Transaction {
   const tr = state.tr.setMeta("addToHistory", false)
   const all = blocks(state.doc)
-  const yours = all.findLast((b) => attrsOf(b.node).author === me && attrsOf(b.node).kind === "text")
+  const own = all.filter((b) => attrsOf(b.node).author === me && attrsOf(b.node).kind === "text")
+  const back = own.findLastIndex((b) => isBack(b.node))
+  if (back >= 0 && own.slice(back + 1).every((b) => isEmpty(b.node))) return atEnd(tr, own[back]!)
+  const yours = own.at(-1)
   if (yours && !isEmpty(yours.node) && !isSent(yours.node) && !posted(attrsOf(yours.node).id)) return atEnd(tr, yours)
   const last = all.at(-1)
   if (last && isEmpty(last.node)) {
@@ -68,6 +71,20 @@ export function startBlock(state: EditorState, me: string, now: number, posted: 
   const at = state.doc.content.size
   tr.insert(at, makeBlock("text", me, now))
   return inside(tr, at)
+}
+
+export function backInDraft(state: EditorState, me: string, id: string): Transaction | null {
+  const all = blocks(state.doc)
+  const at = all.findIndex((b) => attrsOf(b.node).id === id)
+  const it = all[at]
+  if (!it || attrsOf(it.node).author !== me) return null
+  const here = blockAt(state)
+  const a = here ? attrsOf(here.node) : null
+  const typing = !!here && !!a && here.index !== at && a.author === me && a.kind === "text" && !isEmpty(here.node) && !isSent(here.node)
+  const gone = all.slice(at + 1).filter((b) => isEmpty(b.node) && attrsOf(b.node).author === me)
+  const tr = state.tr.setMeta("addToHistory", false)
+  for (const b of gone.reverse()) tr.delete(b.pos, b.pos + b.node.nodeSize)
+  return typing ? tr : atEnd(tr, it)
 }
 
 export function replyIn(state: EditorState, me: string, now: number, re: number, quote: string | null, posted: (block: string) => boolean = () => false): Transaction {

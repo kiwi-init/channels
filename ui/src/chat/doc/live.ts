@@ -7,6 +7,7 @@ import type { PipeIn } from "@kiwi/core/doc/held-pipe.ts"
 import { mirrorAware } from "@kiwi/core/doc/pipe.ts"
 import type { DocBlockRef } from "@kiwi/core/protocol.ts"
 import type { DocEvent, WireError } from "../../../../desktop/src/bridge.ts"
+import { giveBackBlock } from "~/chat/doc/give-back"
 import { postFinished, type Finished, type Posting } from "~/chat/doc/post"
 import { FRAGMENT } from "~/chat/doc/schema"
 
@@ -130,7 +131,7 @@ export class LiveDoc implements Shared {
     if (this.opened === null) this.unposted.push(b)
     else
       void this.poster.post(b.text, { th: this.opened, id: b.id }, b.re ? { re: b.re, ...(b.quote ? { quote: b.quote } : {}) } : undefined).then((went) => {
-        if (!went) this.posting?.giveBack(b.id)
+        if (!went) giveBackBlock(b.id)
       })
   }
 

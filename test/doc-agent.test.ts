@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { newChannelKey, newRoomId } from "@kiwi/core/crypto.ts";
 import { agentBlock, PRESENCE_FIELD, watchWakes, wakesMe, type DocWake, type WakeRule } from "@kiwi/core/doc/agent.ts";
-import { appendToBlock, blocksOf, newBlock, newDocId, threadText } from "@kiwi/core/doc/blocks.ts";
+import { appendToBlock, blocksOf, markBack, markPosted, newBlock, newDocId, threadText } from "@kiwi/core/doc/blocks.ts";
 import { ThreadDoc } from "@kiwi/core/doc/thread-doc.ts";
 import { generateIdentity } from "@kiwi/core/identity.ts";
 
@@ -82,6 +82,23 @@ describe("an agent wakes for a finished block in the thread doc (T500)", () => {
     old.write("@olivia and the CLI");
     old.end();
     expect(wakes.map((x) => x.block.text)).toEqual(["@olivia and the CLI"]);
+    stop();
+  });
+
+  test("a line given back to its author as a draft wakes nobody, whatever they write after it, until they send it again (T1678)", () => {
+    const w = room();
+    const { wakes, stop } = watch(w, { owns: true });
+    const asked = newBlock(w.doc, "text", "jow", "@olivia ship it");
+    markPosted(w.doc, asked.id);
+    const next = newBlock(w.doc, "text", "jow", "");
+    markBack(w.doc, asked.id);
+    appendToBlock(w.doc, next.id, "next line");
+    newBlock(w.doc, "text", "jow", "");
+    expect(blocksOf(w.doc).find((b) => b.id === asked.id)).toMatchObject({ back: true });
+    expect(wakes.map((x) => x.block.id)).toEqual([next.id]);
+    markPosted(w.doc, asked.id);
+    expect(blocksOf(w.doc).find((b) => b.id === asked.id)?.back).toBeUndefined();
+    expect(wakes.map((x) => x.block.id)).toEqual([next.id]);
     stop();
   });
 

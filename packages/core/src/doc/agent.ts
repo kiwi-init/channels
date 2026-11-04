@@ -74,7 +74,7 @@ export function watchWakes(watched: Watched, rule: WakeRule, onWake: (wake: DocW
     blocks.forEach((block, i) => {
       if (woke.has(block.id) || (rule.after !== undefined && block.at <= rule.after)) return;
       if (block.posted || !wakesMe(block, rule)) return;
-      if (block.sent || blocks.slice(i + 1).some((b) => b.author === block.author)) fire(block);
+      if (block.sent || (!block.back && blocks.slice(i + 1).some((b) => b.author === block.author))) fire(block);
     });
   };
 

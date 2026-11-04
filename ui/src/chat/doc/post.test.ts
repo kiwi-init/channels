@@ -1,19 +1,20 @@
 import { describe, expect, test } from "bun:test"
 import * as Y from "yjs"
-import { appendToBlock, blocksOf, newBlock, threadOf, type BlockKind } from "@kiwi/core/doc/blocks.ts"
+import { appendToBlock, blocksOf, newBlock, richBlocks, threadOf, type BlockKind } from "@kiwi/core/doc/blocks.ts"
 import { heldPipe } from "@kiwi/core/doc/held-pipe.ts"
-import { EditorState, type Plugin, type PluginView, type Transaction } from "prosemirror-state"
+import { EditorState, TextSelection, type Plugin, type PluginView, type Transaction } from "prosemirror-state"
 import type { EditorView } from "prosemirror-view"
 import { ySyncPlugin } from "y-prosemirror"
 
 import type { DocEvent } from "../../../../desktop/src/bridge.ts"
-import { blockAfter, blocks, startBlock } from "~/chat/doc/blocks"
-import { giveBackBlock } from "~/chat/doc/give-back"
+import { backInDraft, blockAfter, blockAt, blocks, startBlock } from "~/chat/doc/blocks"
+import { docFeed } from "~/chat/doc/finished"
+import { giveBackBlock, onGiveBack } from "~/chat/doc/give-back"
 import type { Pending } from "~/live/map"
 import { unsentBlock } from "~/live/unsent"
 import { LiveDoc } from "~/chat/doc/live"
 import { postFinished, type Finished } from "~/chat/doc/post"
-import { FRAGMENT, isSent, schema } from "~/chat/doc/schema"
+import { attrsOf, FRAGMENT, isBack, isSent, schema } from "~/chat/doc/schema"
 
 const REMOTE = Symbol("remote")
 const wait = (ms: number) => new Promise((done) => setTimeout(done, ms))
@@ -292,5 +293,113 @@ describe("a person's block posts as their message when they press Enter", () => 
     other.stop()
     giveBackBlock(elsewhere)
     expect(sentOf(b, elsewhere)).toBe(true)
+  })
+})
+
+describe("Back to draft keeps the line in the doc, so it's never resent (T1678)", () => {
+  const inDoc = (doc: Y.Doc, id: string) => !docFeed(blocksOf(doc), richBlocks(doc), new Set(), 0).hidden.has(id)
+  const enterAtEndOf = (ed: Bound, index: number, at: number) => {
+    const b = blocks(ed.state().doc)[index]
+    if (!b) throw new Error("no block")
+    ed.dispatch(ed.state().tr.setSelection(TextSelection.near(ed.state().doc.resolve(b.pos + b.node.nodeSize - 1), -1)))
+    ed.dispatch(blockAfter(ed.state(), "jow", at))
+  }
+
+  test("Enter, Back to draft, then a line typed in the block below: the given-back line stays a draft and posts only when Enter is pressed on it", async () => {
+    const doc = new Y.Doc()
+    const posts: string[] = []
+    const posting = postFinished(doc, { me: "jow", local: (o) => o !== REMOTE }, (f) => posts.push(f.text))
+    const ed = bound(doc)
+    ed.dispatch(startBlock(ed.state(), "jow", 1))
+    ed.dispatch(ed.state().tr.insertText("ship it"))
+    ed.dispatch(blockAfter(ed.state(), "jow", 2))
+    await wait(0)
+    expect(posts).toEqual(["ship it"])
+    const id = blocksOf(doc)[0]!.id
+    expect(inDoc(doc, id)).toBe(false)
+    giveBackBlock(id)
+    expect(inDoc(doc, id)).toBe(true)
+    expect(isBack(ed.state().doc.child(0))).toBe(true)
+    ed.dispatch(ed.state().tr.insertText("next line"))
+    expect(inDoc(doc, id)).toBe(true)
+    ed.dispatch(blockAfter(ed.state(), "jow", 3))
+    await wait(0)
+    expect(posts).toEqual(["ship it", "next line"])
+    expect(inDoc(doc, id)).toBe(true)
+    ed.dispatch(ed.state().tr.insertText("third"))
+    ed.dispatch(blockAfter(ed.state(), "jow", 4))
+    await wait(0)
+    expect(posts).toEqual(["ship it", "next line", "third"])
+    enterAtEndOf(ed, 0, 5)
+    await wait(0)
+    expect(posts).toEqual(["ship it", "next line", "third", "ship it"])
+    expect(inDoc(doc, id)).toBe(false)
+    expect(blocksOf(doc).find((b) => b.id === id)).toMatchObject({ sent: true, posted: true })
+    posting.stop()
+  })
+
+  test("the editor drops the empty block Enter made and puts the caret back in the line, which posts once more on Enter", async () => {
+    const doc = new Y.Doc()
+    const posts: string[] = []
+    const posting = postFinished(doc, { me: "jow", local: (o) => o !== REMOTE }, (f) => posts.push(f.text))
+    const ed = bound(doc)
+    const off = onGiveBack((block) => ed.dispatch(backInDraft(ed.state(), "jow", block)))
+    ed.dispatch(startBlock(ed.state(), "jow", 1))
+    ed.dispatch(ed.state().tr.insertText("ship it"))
+    ed.dispatch(blockAfter(ed.state(), "jow", 2))
+    await wait(0)
+    const id = blocksOf(doc)[0]!.id
+    giveBackBlock(id)
+    expect(blocksOf(doc).map((b) => b.text)).toEqual(["ship it"])
+    const here = blockAt(ed.state())
+    expect(here && attrsOf(here.node).id).toBe(id)
+    ed.dispatch(startBlock(ed.state(), "jow", 3))
+    expect(blockAt(ed.state())?.index).toBe(0)
+    ed.dispatch(ed.state().tr.insertText(" now"))
+    await wait(50)
+    expect(posts).toEqual(["ship it"])
+    ed.dispatch(blockAfter(ed.state(), "jow", 4))
+    await wait(0)
+    expect(posts).toEqual(["ship it", "ship it now"])
+    off()
+    posting.stop()
+  })
+
+  test("a send the channel refuses comes back the same way: the line below goes out alone, and the editor hears it (T1401)", async () => {
+    const posts: string[] = []
+    const heard: string[] = []
+    const off = onGiveBack((block) => heard.push(block))
+    let refuse = true
+    let open: ((e: DocEvent) => void) | null = null
+    const live = new LiveDoc(
+      (_th, on) => {
+        open = on
+        return heldPipe().pipe
+      },
+      undefined,
+      () => {},
+      {
+        me: "jow",
+        post: (text) => {
+          posts.push(text)
+          return Promise.resolve(!refuse)
+        },
+      }
+    )
+    const id = start(live.doc, "jow", "ship it")
+    const below = start(live.doc, "jow")
+    const opened = open as ((e: DocEvent) => void) | null
+    opened?.({ _tag: "Open", th: "th1" })
+    await wait(0)
+    expect(heard).toEqual([id])
+    expect(inDoc(live.doc, id)).toBe(true)
+    refuse = false
+    type(live.doc, below, "next line")
+    start(live.doc, "jow")
+    await wait(0)
+    expect(posts).toEqual(["ship it", "next line"])
+    expect(inDoc(live.doc, id)).toBe(true)
+    off()
+    live.destroy()
   })
 })

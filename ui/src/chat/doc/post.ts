@@ -1,6 +1,6 @@
 import * as Y from "yjs"
 
-import { blockOf, markPosted, richOf, threadOf, unmarkSent, type Block } from "@kiwi/core/doc/blocks.ts"
+import { blockOf, markBack, markPosted, richOf, threadOf, type Block } from "@kiwi/core/doc/blocks.ts"
 
 import { onGiveBack } from "~/chat/doc/give-back"
 
@@ -21,7 +21,6 @@ const isMine = (b: Block | null, me: string): b is Block => !!b && b.author === 
 
 export interface Posting {
   stop: () => void
-  giveBack: (id: string) => void
 }
 
 export function postFinished(doc: Y.Doc, rule: Rule, post: (b: Finished) => void): Posting {
@@ -37,6 +36,10 @@ export function postFinished(doc: Y.Doc, rule: Rule, post: (b: Finished) => void
       const b = blockOf(n)
       if (!isMine(b, rule.me) || !(n instanceof Y.XmlElement)) continue
       if (known(b)) break
+      if (b.back) {
+        if (n === el.prevSibling && b.text.trim()) out.unshift(n)
+        break
+      }
       if (b.text.trim()) out.unshift(n)
     }
     return out
@@ -66,7 +69,7 @@ export function postFinished(doc: Y.Doc, rule: Rule, post: (b: Finished) => void
 
   const giveBack = (id: string): void => {
     posted.delete(id)
-    unmarkSent(doc, id)
+    markBack(doc, id)
   }
   frag.observeDeep(look)
   const off = onGiveBack(giveBack)
@@ -76,6 +79,5 @@ export function postFinished(doc: Y.Doc, rule: Rule, post: (b: Finished) => void
       off()
       frag.unobserveDeep(look)
     },
-    giveBack,
   }
 }
