@@ -79,6 +79,7 @@ interface SocketData {
   echo: boolean;
   watch: boolean;
   devLimits?: boolean;
+  docs?: Set<string>;
 }
 
 interface MachineRow {
@@ -389,6 +390,12 @@ export function startRelay(
     for (const ws of room) for (const f of (ws.data.watch ? fx.watch : undefined) ?? fx.broadcast ?? []) ws.send(f);
     if (fx.others) for (const ws of room) if (ws !== sender && !ws.data.watch) ws.send(fx.others);
     if (fx.ephemeral) for (const ws of room) if (ws !== sender && ws.data.presence) ws.send(fx.ephemeral);
+    if (fx.follow && sender) {
+      const docs = (sender.data.docs ??= new Set());
+      if (fx.follow.on) docs.add(fx.follow.th);
+      else docs.delete(fx.follow.th);
+    }
+    if (fx.doc) for (const ws of room) if (ws !== sender && ws.data.docs?.has(fx.doc.th)) ws.send(fx.doc.frame);
     for (const f of fx.readers ?? []) for (const ws of room) if (ws.data.reads && !ws.data.watch) ws.send(f);
     if (fx.disconnect) for (const ws of room) if (ws.data.pk === fx.disconnect.pk) ws.close(CLOSE_REMOVED, GONE_WORDS[fx.disconnect.how]);
     for (const l of fx.github ?? []) {
@@ -586,7 +593,7 @@ export function startRelay(
         const db = storeFor(ws.data.roomId, false);
         let fx: Effects;
         try {
-          fx = runRoomSync(ws.data.devLimits ? devRelay : relay, db, onClientFrame(raw, ws.data.pk, ws.data.echo));
+          fx = runRoomSync(ws.data.devLimits ? devRelay : relay, db, onClientFrame(raw, ws.data.pk, ws.data.echo, { docs: ws.data.docs ?? new Set(), watch: ws.data.watch }));
         } finally {
           doneWith(db);
         }

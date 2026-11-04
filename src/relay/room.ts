@@ -35,7 +35,7 @@ export { create, directory, setIcon, setSettings, setSnapshot, setTitle, type Cr
 export { approve, keysFor, remove, rotate, setCanPost, setRecord, type MemberBody } from "./room/members.ts";
 export { dropDelegation, listDelegations, liveDelegation, putDelegation } from "./room/delegations.ts";
 export { request, requestsChanged, requestsGone, requestStatus, requestTag, requestWait, requireChecked, reveal, setOwnerNonce, watchRequests, type RequestBody } from "./room/requests.ts";
-export { frame, msgFrame, onClientFrame, socketError, takesPresence, wantsEcho, wantsReads, wantsWatch, watchFrame, welcomeFrames } from "./room/sockets.ts";
+export { frame, msgFrame, onClientFrame, socketError, type SocketView, takesPresence, wantsEcho, wantsReads, wantsWatch, watchFrame, welcomeFrames } from "./room/sockets.ts";
 export { errorResponse, gateRoom, parseRoomPath, relayConfig } from "./room/http.ts";
 
 /**
