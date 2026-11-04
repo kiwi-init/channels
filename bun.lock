@@ -31,7 +31,7 @@
     },
     "desktop": {
       "name": "kiwi-desktop",
-      "version": "2026.11.7",
+      "version": "2026.11.5",
       "dependencies": {
         "@kiwi/core": "workspace:*",
       },
