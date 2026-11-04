@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Channel } from "@kiwi/core/client.ts";
 import * as Y from "yjs";
-import { blocksOf, markBack, markPosted, markSent, newBlock, newDocId } from "@kiwi/core/doc/blocks.ts";
+import { appendToBlock, blocksOf, markBack, markPosted, markSent, newBlock, newDocId } from "@kiwi/core/doc/blocks.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { docOnlyText, docPlaceOf, readDoc, writeBlock } from "../src/agent/docs.ts";
 import type { Place } from "@kiwi/core/state.ts";
@@ -61,6 +61,15 @@ describe("kiwi log's doc part: lines written only in the doc (T1353)", () => {
     markSent(doc, newBlock(doc, "text", "rodrigo", "   ").id);
     newBlock(doc, "text", "jow", "actually don't ship, the rel");
     expect(docOnlyText(doc)).toBe("rodrigo: @olivia sent with Enter\n\nolivia: from an older app");
+  });
+
+  test("a draft with an empty line after it from its author's other window stays a draft (T2106)", () => {
+    const doc = new Y.Doc();
+    newBlock(doc, "text", "jow", "Salve mis");
+    const other = newBlock(doc, "text", "jow", "");
+    expect(docOnlyText(doc)).toBe("");
+    appendToBlock(doc, other.id, "written in the other window");
+    expect(docOnlyText(doc)).toBe("jow: Salve mis");
   });
 });
 

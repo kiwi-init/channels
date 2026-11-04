@@ -2,6 +2,7 @@ import type * as Y from "yjs";
 import type { Awareness } from "y-protocols/awareness";
 import { mentionsOf } from "../changes.ts";
 import { appendToBlock, attachToBlock, blocksOf, markPosted, markSent, newBlock, threadText, type Block, type BlockKind, type BlockMedia } from "./blocks.ts";
+import { endsEarlierLines } from "./ends.ts";
 
 export const PRESENCE_FIELD = "kiwi";
 
@@ -44,7 +45,7 @@ export function settledBlocks(blocks: readonly Block[]): Block[] {
   const out: Block[] = [];
   for (const b of [...blocks].reverse()) {
     if (b.sent || b.posted || (!b.back && later.has(b.author))) out.push(b);
-    later.add(b.author);
+    if (endsEarlierLines(b)) later.add(b.author);
   }
   return out.reverse();
 }

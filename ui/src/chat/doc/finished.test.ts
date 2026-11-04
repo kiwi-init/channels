@@ -97,8 +97,17 @@ describe("a line given back to its author stays their draft in the doc (T1678)",
   })
 
   test("a line from before blocks were marked sent still joins the feed once its author writes on (#1612)", () => {
-    const feed = docFeed([line("legacy", "jow", T + 10), line("empty", "jow", T + 20, { text: "" })], new Map(), new Set(), T)
+    const feed = docFeed([line("legacy", "jow", T + 10), line("next", "jow", T + 20)], new Map(), new Set(), T)
     expect(feed.lines.map((l) => l.id)).toEqual(["legacy"])
     expect(feed.hidden.has("legacy")).toBe(true)
+  })
+
+  test("an empty line from your other window after the line you're typing never takes it out of your doc (T2106)", () => {
+    const typing = [line("draft", "jow", T + 10, { text: "Salve mis" }), line("other-window", "jow", T + 20, { text: "" })]
+    const feed = docFeed(typing, new Map(), new Set(), T)
+    expect(feed.lines).toEqual([])
+    expect(feed.hidden.has("draft")).toBe(false)
+    const entered = docFeed([{ ...typing[0]!, sent: true }, typing[1]!], new Map(), new Set(), T)
+    expect(entered.hidden.has("draft")).toBe(true)
   })
 })

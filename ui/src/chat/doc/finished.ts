@@ -1,4 +1,5 @@
 import type { Block, RichBlock } from "@kiwi/core/doc/blocks.ts"
+import { endsEarlierLines } from "@kiwi/core/doc/ends.ts"
 import { store } from "~/live/value"
 import type { Message, Where } from "~/model"
 
@@ -27,7 +28,7 @@ export function docFeed(blocks: readonly Block[], rich: ReadonlyMap<string, Rich
   for (let i = blocks.length - 1; i >= 0; i--) {
     const b = blocks[i]!
     const done = b.sent || (!b.back && later.has(b.author))
-    later.add(b.author)
+    if (endsEarlierLines(b)) later.add(b.author)
     const r = rich.get(b.id)
     if (r?.media) {
       media.add(b.id)

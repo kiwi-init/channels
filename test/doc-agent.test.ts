@@ -26,13 +26,15 @@ const watch = (w: ReturnType<typeof room>, rule: Partial<WakeRule> = {}) => {
 };
 
 describe("an agent wakes for a finished block in the thread doc (T500)", () => {
-  test("a mention wakes it once the author starts their next block; the wake carries the thread and the block", () => {
+  test("a mention wakes it once the author writes their next line; the wake carries the thread and the block", () => {
     const w = room();
     newBlock(w.doc, "text", "jow", "an old line before the agent listened");
     const { wakes, stop } = watch(w);
     const asked = newBlock(w.doc, "text", "jow", "@olivia can you look at the relay?");
     expect(wakes).toHaveLength(0);
-    newBlock(w.doc, "text", "jow", "");
+    const next = newBlock(w.doc, "text", "jow", "");
+    expect(wakes).toHaveLength(0);
+    appendToBlock(w.doc, next.id, "and the CLI");
     expect(wakes).toHaveLength(1);
     expect(wakes[0]!.block).toMatchObject({ id: asked.id, author: "jow", text: "@olivia can you look at the relay?" });
     expect(wakes[0]!.thread).toBe(threadText(w.doc));
@@ -44,14 +46,15 @@ describe("an agent wakes for a finished block in the thread doc (T500)", () => {
     stop();
   });
 
-  test("a draft never wakes it, however long it sits: only the author's Enter, their next block, sends it", async () => {
+  test("a draft never wakes it, however long it sits, nor does an empty line after it from the author's other window: only their next line sends it (T2106)", async () => {
     const w = room();
     const { wakes, stop } = watch(w);
     const b = newBlock(w.doc, "text", "jow", "@olivia");
+    const other = newBlock(w.doc, "text", "jow", "");
     appendToBlock(w.doc, b.id, " still typing");
     await Bun.sleep(50);
     expect(wakes).toHaveLength(0);
-    newBlock(w.doc, "text", "jow", "");
+    appendToBlock(w.doc, other.id, "sent from the other window");
     expect(wakes.map((x) => x.block.text)).toEqual(["@olivia still typing"]);
     stop();
   });
@@ -95,7 +98,7 @@ describe("an agent wakes for a finished block in the thread doc (T500)", () => {
     const next = newBlock(w.doc, "text", "jow", "");
     markBack(w.doc, asked.id);
     appendToBlock(w.doc, next.id, "next line");
-    newBlock(w.doc, "text", "jow", "");
+    newBlock(w.doc, "text", "jow", "and on");
     expect(blocksOf(w.doc).find((b) => b.id === asked.id)).toMatchObject({ back: true });
     expect(wakes.map((x) => x.block.id)).toEqual([next.id]);
     markPosted(w.doc, asked.id);
@@ -111,7 +114,7 @@ describe("an agent wakes for a finished block in the thread doc (T500)", () => {
     newBlock(w.doc, "text", "rodrigo", "a reply");
     await Bun.sleep(50);
     expect(wakes).toHaveLength(0);
-    newBlock(w.doc, "text", "jow", "");
+    newBlock(w.doc, "text", "jow", "second half");
     expect(wakes.map((x) => x.block.text)).toEqual(["@olivia first half"]);
     stop();
   });
@@ -126,7 +129,7 @@ describe("an agent wakes for a finished block in the thread doc (T500)", () => {
       ["text", "jow", "@oliviana not you"],
     ] as const) {
       newBlock(w.doc, kind, author, text);
-      newBlock(w.doc, "text", author, "");
+      newBlock(w.doc, "text", author, "next");
     }
     expect(wakes).toHaveLength(0);
     stop();
@@ -140,7 +143,7 @@ describe("an agent wakes for a finished block in the thread doc (T500)", () => {
     w.awareness.states.set(7, { [PRESENCE_FIELD]: { author: "jow", selection: { block: "b1", text: "this line" } } });
     const { wakes, stop } = watch(w);
     newBlock(w.doc, "text", "jow", "@olivia what does this do?");
-    newBlock(w.doc, "text", "jow", "");
+    newBlock(w.doc, "text", "jow", "next");
     expect(wakes[0]!.selection).toEqual({ block: "b1", text: "this line" });
     stop();
   });
@@ -149,13 +152,13 @@ describe("an agent wakes for a finished block in the thread doc (T500)", () => {
     const w = room();
     newBlock(w.doc, "text", "jow", "@olivia while you were away", 100);
     newBlock(w.doc, "text", "rodrigo", "@olivia before that", 10);
-    newBlock(w.doc, "text", "rodrigo", "", 11);
-    newBlock(w.doc, "text", "jow", "", 101);
+    newBlock(w.doc, "text", "rodrigo", "and then", 11);
+    newBlock(w.doc, "text", "jow", "and then", 101);
     const { wakes, stop } = watch(w, { known: (b) => b.at <= 50 });
     expect(wakes.map((x) => x.block.text)).toEqual(["@olivia while you were away"]);
     stop();
     newBlock(w.doc, "text", "jow", "@olivia after stop");
-    newBlock(w.doc, "text", "jow", "");
+    newBlock(w.doc, "text", "jow", "next");
     expect(wakes).toHaveLength(1);
   });
 });
