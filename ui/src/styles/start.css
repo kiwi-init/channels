@@ -315,31 +315,6 @@
   animation: fade 1.2s var(--ease) both;
 }
 
-.calm-quote {
-  display: grid;
-  gap: 12px;
-  margin: 0 0 12px;
-  padding: 0 8px;
-}
-
-.calm-quote blockquote {
-  margin: 0;
-  color: var(--ink-2);
-  font: 300 1.25rem / 1.6 var(--sans);
-  letter-spacing: -0.005em;
-  text-wrap: balance;
-}
-
-.calm-quote figcaption {
-  color: var(--ink-3);
-  font: var(--t-meta) var(--sans);
-}
-
-.calm-quote cite {
-  font-style: normal;
-  opacity: 0.8;
-}
-
 .calm-sec {
   display: grid;
   gap: 6px;
@@ -466,12 +441,84 @@
   color: var(--ink);
 }
 
+.calm-chan-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin-bottom: 2px;
+}
+
+.calm-chan-row > .calm-act {
+  flex: none;
+  margin-right: -2px;
+  color: var(--ink-3);
+}
+
+.calm-chan-row > .calm-act:hover,
+.calm-chan-row > .calm-act.is-on {
+  color: var(--ink);
+}
+
+.calm-note {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  margin: 2px 0 6px;
+  padding: 6px 6px 6px 12px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-ctl);
+  animation: fade var(--fast) var(--ease) both;
+}
+
+.calm-note:focus-within {
+  border-color: var(--line-3);
+}
+
+.calm-note textarea {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--ctl-sm);
+  max-height: 8rem;
+  padding: 3px 0;
+  border: 0;
+  outline: none;
+  background: none;
+  color: var(--ink);
+  font: var(--t-body) / 1.4 var(--sans);
+  field-sizing: content;
+  resize: none;
+}
+
+.calm-note textarea::placeholder {
+  color: var(--ink-3);
+}
+
+.calm-send {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--ctl-sm);
+  height: var(--ctl-sm);
+  border: 0;
+  border-radius: var(--r-tag);
+  background: none;
+  color: var(--ink-3);
+  cursor: default;
+}
+
+.calm-send.is-ready {
+  background: var(--ink);
+  color: var(--on-ink);
+  cursor: pointer;
+}
+
 .calm-chan {
   display: flex;
+  flex: 1 1 auto;
   align-items: baseline;
   gap: 10px;
   min-width: 0;
-  margin-bottom: 2px;
   padding: 6px 8px;
   border: 0;
   border-radius: var(--r-row);

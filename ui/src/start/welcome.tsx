@@ -1,5 +1,5 @@
 import "~/styles/start.css"
-import { useState } from "react"
+import { useState, type KeyboardEvent } from "react"
 
 import { takeTurns } from "~/home"
 import { cx } from "~/kit/bits"
@@ -7,7 +7,6 @@ import { Icon } from "~/kit/icons"
 import { ago, useNow } from "~/kit/time"
 import type { ChannelTile, HomeAgent, HomeAsk, HomeChannel } from "~/model"
 import { useApp } from "~/nav"
-import { quoteOf } from "~/start/quotes"
 
 export function Welcome() {
   const { app } = useApp()
@@ -52,7 +51,6 @@ const ASKS_SHOWN = 4
 function Hud({ tiles, home }: { tiles: readonly ChannelTile[]; home: readonly HomeChannel[] }) {
   const [all, setAll] = useState(false)
   const now = useNow(60_000)
-  const quote = quoteOf(now)
   const byCode = new Map(home.map((h) => [h.code, h]))
   const members = tiles.filter((t) => t.state === "member")
   const asks = takeTurns(members.map((t) => (byCode.get(t.code)?.asks ?? []).map((ask) => ({ tile: t, ask }))))
@@ -61,12 +59,6 @@ function Hud({ tiles, home }: { tiles: readonly ChannelTile[]; home: readonly Ho
     <main className="start-area home-area">
       <div className="start-drag" />
       <div className="calm">
-        <figure className="calm-quote">
-          <blockquote>{quote.text}</blockquote>
-          <figcaption>
-            {quote.by}, <cite>{quote.in}</cite>
-          </figcaption>
-        </figure>
         {asks.length > 0 && (
           <section className="calm-sec" aria-label="Waiting on you">
             <h2 className="calm-head">
@@ -170,14 +162,24 @@ function ChannelPart({ tile, summary, now }: { tile: ChannelTile; summary: HomeC
   const active = agents.filter((a) => a.state === "working" || a.state === "waiting")
   const rest = restLine(agents)
   const state = stateOf(tile, summary)
+  const [writing, setWriting] = useState(false)
+  const member = tile.state === "member"
   return (
     <section className="calm-sec" aria-label={tile.title}>
-      <button type="button" className="calm-chan" onClick={open}>
-        <span className="calm-chan-name">{tile.title}</span>
-        {state && <span className="calm-meta">{state}</span>}
-        {summary?.red ? <span className="calm-meta tone-alert">{summary.red === 1 ? "1 check red" : `${summary.red} checks red`}</span> : null}
-        {needs > 0 && <span className="calm-needs">{needs === 1 ? "1 needs you" : `${needs} need you`}</span>}
-      </button>
+      <div className="calm-chan-row">
+        <button type="button" className="calm-chan" onClick={open}>
+          <span className="calm-chan-name">{tile.title}</span>
+          {state && <span className="calm-meta">{state}</span>}
+          {summary?.red ? <span className="calm-meta tone-alert">{summary.red === 1 ? "1 check red" : `${summary.red} checks red`}</span> : null}
+          {needs > 0 && <span className="calm-needs">{needs === 1 ? "1 needs you" : `${needs} need you`}</span>}
+        </button>
+        {member && summary && !summary.loading && (
+          <button type="button" className={cx("calm-act", writing && "is-on")} onClick={() => setWriting(!writing)}>
+            {summary.leadName ? `Message ${summary.leadName}` : "Message #general"}
+          </button>
+        )}
+      </div>
+      {writing && summary && <LeadNote tile={tile} summary={summary} onDone={() => setWriting(false)} />}
       {active.length > 0 && (
         <ul className="calm-list">
           {active.map((a) => (
@@ -209,5 +211,46 @@ function AgentLine({ tile, agent, now }: { tile: ChannelTile; agent: HomeAgent; 
         </span>
       </button>
     </li>
+  )
+}
+
+function LeadNote({ tile, summary, onDone }: { tile: ChannelTile; summary: HomeChannel; onDone: () => void }) {
+  const { app, toast } = useApp()
+  const [text, setText] = useState("")
+  const to = summary.leadName
+  const send = () => {
+    const body = text.trim()
+    if (!body) return
+    app.actions.send(tile.code, summary.lead ? { kind: "dm", with: summary.lead } : { kind: "room", room: "general" }, body)
+    setText("")
+    onDone()
+    toast(to ? `Sent to ${to} in ${tile.title}` : `Sent to #general in ${tile.title}`)
+  }
+  const keys = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.nativeEvent.isComposing) return
+    if (e.key === "Escape") {
+      e.preventDefault()
+      onDone()
+      return
+    }
+    if (e.key !== "Enter" || e.shiftKey) return
+    e.preventDefault()
+    send()
+  }
+  return (
+    <div className="calm-note">
+      <textarea
+        rows={1}
+        autoFocus
+        value={text}
+        aria-label={to ? `Message ${to} in ${tile.title}` : `Write to #general in ${tile.title}`}
+        placeholder={to ? `Message ${to}…` : "Write to #general…"}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={keys}
+      />
+      <button type="button" className={cx("calm-send", text.trim() && "is-ready")} aria-label="Send" title="Send (Enter)" disabled={!text.trim()} onClick={send}>
+        <Icon name="send" size={14} />
+      </button>
+    </div>
   )
 }
