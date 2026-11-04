@@ -33,7 +33,6 @@ import { bareHandleNote } from "../handles.ts";
 import { args, opt, unexpectedOptions } from "../args.ts";
 import { parseWhere } from "../where.ts";
 import { docPlaceOf } from "../../agent/docs.ts";
-import { mentionsOf } from "@kiwi/core/changes.ts";
 import { type Command, die, noteRead, offlineOk, out, type Quit, session } from "../context.ts";
 import { attachments, images, list, render, text } from "../input.ts";
 
@@ -81,8 +80,7 @@ export const messageCommands: Record<string, Command> = {
         const doc =
           !asking && kind === "msg" ? docPlaceOf(state, { ...(chosen.task !== undefined ? { task: chosen.task } : {}), ...(chosen.dm ? { dm: true } : {}), ...(room ? { room } : {}), re }) : null;
         if (doc) {
-          const named = re.length ? [] : (to ?? []).filter((n) => n !== "*" && !mentionsOf(body).has(n.toLowerCase()));
-          const seq = yield* s.sendToDoc(named.length ? `${named.map((n) => `@${n}`).join(" ")} ${body}` : body, doc, {
+          const seq = yield* s.sendToDoc(body, doc, {
             to,
             room,
             ...(re.length ? { re } : {}),

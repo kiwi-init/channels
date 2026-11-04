@@ -34,6 +34,7 @@ import { Rejected } from "@kiwi/core/refusals.ts";
 import { canPost, describeScopes, refusal } from "@kiwi/core/scopes.ts";
 import { allowedOnHold, decidersOf, humanOf, isPerson, nextIn, ON_HOLD, ownerOf, placeIn, taskId, unnamedAsks, unnamedTasks, type ChannelState } from "@kiwi/core/state.ts";
 import type { BlockMedia } from "@kiwi/core/doc/blocks.ts";
+import { mentionsOf } from "@kiwi/core/changes.ts";
 import { docPlaceOfBlock, dropBlock, editBlock, readDoc, writeBlock, type DocPlace } from "./docs.ts";
 import { SessionListen } from "./listen.ts";
 import { EVERYONE, oneLook } from "./shared.ts";
@@ -83,9 +84,11 @@ export class SessionMessaging extends SessionListen {
 
   readonly sendToDoc = Effect.fn("AgentSession.sendToDoc")(
     { self: this },
-    function* (this: SessionMessaging, body: string, at: DocPlace, opts: SendOptions = {}) {
+    function* (this: SessionMessaging, text: string, at: DocPlace, opts: SendOptions = {}) {
       yield* this.mayI({ kind: "msg", to: yield* this.resolveTo(opts.to) });
       const { state } = yield* this.state();
+      const named = opts.re?.length ? [] : (opts.to ?? []).filter((n) => n !== "*" && !mentionsOf(text).has(n.toLowerCase()));
+      const body = named.length ? `${named.map((n) => `@${n}`).join(" ")} ${text}` : text;
       for (const re of opts.re ?? []) yield* this.notAnsweredByOthers(state, re, body);
       const id = yield* this.postedBlock(body, at, opts.imgs, opts.files);
       return yield* this.send(body, { ...opts, block: { th: at.th, id } }).pipe(Effect.tapError(() => this.unwrite(at, id)));
