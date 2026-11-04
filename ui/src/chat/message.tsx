@@ -2,6 +2,8 @@ import { lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo,
 
 import { isGifReaction } from "@kiwi/core/protocol.ts"
 
+import { BlockFilesView } from "~/chat/block-files"
+import { withoutMediaNames } from "~/chat/doc/finished"
 import { PrChip, TaskChip } from "~/chat/cards"
 import { useEditing } from "~/chat/editing"
 import { parsedFor } from "~/chat/parsed"
@@ -191,7 +193,8 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
   const ask = m.ask ? channel.asks.find((a) => a.id === m.ask) : undefined
   const spec = channel.specs?.find((s) => s.ask === m.seq)
   const cited = useMemo(() => (typeof quote === "object" ? quotedExcerpt(m, quote) : null), [m, quote])
-  const text = cited ? cited.rest : m.text
+  const said = cited ? cited.rest : m.text
+  const text = m.docMedia ? withoutMediaNames(said, m.docMedia) : said
 
   if (m.system)
     return (
@@ -279,6 +282,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
             )}
           </div>
         )}
+        {m.docMedia && <BlockFilesView code={channel.code} media={m.docMedia} open={openImage} />}
         {m.leftOut && <p className="msg-left-out left-out-why">{m.leftOut}</p>}
         {m.failed !== undefined && (
           <p className="msg-failed" role="status" title={m.failed}>

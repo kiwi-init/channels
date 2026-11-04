@@ -2,6 +2,7 @@ import { MAX_FILE_BYTES, MAX_IMAGE_BYTES, RASTER_MIMES } from "@kiwi/core/protoc
 import type { Node } from "prosemirror-model"
 import type { NodeView } from "prosemirror-view"
 
+import { bytesOf, sizeText } from "~/chat/doc/bytes"
 import { fileNode, fileOf, imageNode, imageOf } from "~/chat/doc/schema"
 import type { DocFile, DocImage, Upload } from "~/model"
 
@@ -31,12 +32,6 @@ async function imageUpload(file: File, name: string): Promise<Upload> {
   return { ...done, name: renamed(name, done.mime) }
 }
 
-function sizeText(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
-
 export async function uploadAll(files: readonly File[], media: DocMedia, refused: (why: string) => void): Promise<Node[]> {
   if (files.length > AT_ONCE) refused(`Up to ${AT_ONCE} at once; the rest were left out`)
   const done = await Promise.all(
@@ -63,13 +58,6 @@ export function filesIn(dt: DataTransfer | null): File[] {
     const f = item.kind === "file" ? item.getAsFile() : null
     return f ? [f] : []
   })
-}
-
-function bytesOf(data: string): Uint8Array<ArrayBuffer> {
-  const bin = atob(data)
-  const out = new Uint8Array(bin.length)
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i)
-  return out
 }
 
 export function imageView(media: () => DocMedia | null, open: (url: string, alt: string) => void): (node: Node) => NodeView {
