@@ -41,12 +41,17 @@ function textOf(node: Y.XmlElement | Y.XmlText | Y.XmlHook): string {
   return node.nodeName === "paragraph" ? parts.join("") : parts.join("\n");
 }
 
+export function blockOf(node: unknown): Block | null {
+  if (!(node instanceof Y.XmlElement) || node.nodeName !== "block") return null;
+  const meta = metaOf(node);
+  return meta ? { ...meta, text: textOf(node) } : null;
+}
+
 export function blocksOf(doc: Y.Doc): Block[] {
   const out: Block[] = [];
   for (const node of threadOf(doc).toArray()) {
-    if (!(node instanceof Y.XmlElement) || node.nodeName !== "block") continue;
-    const meta = metaOf(node);
-    if (meta) out.push({ ...meta, text: textOf(node) });
+    const block = blockOf(node);
+    if (block) out.push(block);
   }
   return out;
 }

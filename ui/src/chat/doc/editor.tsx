@@ -555,6 +555,12 @@ export function LiveThreadDoc({ channel, where, thread, hold }: { channel: Chann
     }),
     [actions, code]
   )
+  const me = channel.you
+  const here = useRef(where)
+
+  useEffect(() => {
+    here.current = where
+  })
 
   useEffect(() => {
     const held = holdDoc(
@@ -563,7 +569,8 @@ export function LiveThreadDoc({ channel, where, thread, hold }: { channel: Chann
         new LiveDoc(
           (at, on) => actions.openDoc(code, thread, at, on),
           first.current,
-          (why) => announce(`The shared doc didn't open: ${why}`, "error")
+          (why) => announce(`The shared doc didn't open: ${why}`, "error"),
+          { me, post: (text, block) => actions.send(code, here.current, text, { block }) }
         )
     )
     setLive(held.live)
@@ -573,7 +580,7 @@ export function LiveThreadDoc({ channel, where, thread, hold }: { channel: Chann
       setLive(null)
       held.release()
     }
-  }, [actions, code, thread])
+  }, [actions, code, thread, me])
 
   useEffect(() => live?.want(th), [live, th])
 

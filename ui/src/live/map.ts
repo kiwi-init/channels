@@ -1,7 +1,7 @@
 import { freeHandle, seededPick } from "@kiwi/core/handles.ts"
 import type { JoinRequest, Member as RosterMember } from "@kiwi/core/membership.ts"
 import { nameKey, runsLine } from "@kiwi/core/membership.ts"
-import type { Card, Event } from "@kiwi/core/protocol.ts"
+import type { Card, DocBlockRef, Event } from "@kiwi/core/protocol.ts"
 import { permissionAnswer } from "@kiwi/core/permission.ts"
 import { describeEvent, proofLabel } from "@kiwi/core/format.ts"
 import { memberLoad, showsLoad } from "@kiwi/core/load.ts"
@@ -421,6 +421,7 @@ export interface Pending {
   seq?: number
   failed?: string
   images?: Upload[]
+  block?: DocBlockRef
 }
 
 export interface Pictures {
@@ -525,6 +526,7 @@ export function messagesOf(state: ChannelState, messages: readonly Wire[], me: s
       ...(reactions.length ? { reactions } : {}),
       ...(ask ? { ask } : {}),
       ...(mentionsYou(m, me) ? { mentionsYou: true } : {}),
+      ...(m.block ? { block: m.block.id } : {}),
     })
   }
   for (const p of pending) {
@@ -540,6 +542,7 @@ export function messagesOf(state: ChannelState, messages: readonly Wire[], me: s
       ...(p.inThread !== undefined && p.side ? { side: true as const } : {}),
       ...(p.replyTo !== undefined ? { replyTo: p.replyTo } : {}),
       ...(p.images?.length ? { images: p.images.map((i) => ({ url: `data:${i.mime};base64,${i.data}`, width: 0, height: 0, alt: i.name })) } : {}),
+      ...(p.block ? { block: p.block.id } : {}),
     })
   }
   return out
