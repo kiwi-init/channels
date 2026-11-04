@@ -253,15 +253,66 @@ export function removeBlock(doc: Y.Doc, id: string): boolean {
   return true;
 }
 
+const isMedia = (node: unknown): boolean => node instanceof Y.XmlElement && (node.nodeName === "image" || node.nodeName === "file");
+
+function rawText(t: Y.XmlText): string | null {
+  const parts = (t.toDelta() as { insert: unknown }[]).map((d) => d.insert);
+  return parts.every((x) => typeof x === "string") ? parts.join("") : null;
+}
+
+function plainWords(p: Y.XmlElement | Y.XmlText | Y.XmlHook | undefined): Y.XmlText | null {
+  if (!(p instanceof Y.XmlElement) || p.nodeName !== "paragraph" || p.length !== 1) return null;
+  const t = p.get(0);
+  return t instanceof Y.XmlText && rawText(t) !== null ? t : null;
+}
+
+function lineText(node: Y.XmlElement | Y.XmlText | Y.XmlHook): string {
+  const words = plainWords(node);
+  return words ? (rawText(words) ?? "") : textOf(node);
+}
+
+const lowHalf = (s: string, at: number): boolean => {
+  const c = s.charCodeAt(at);
+  return c >= 0xdc00 && c <= 0xdfff;
+};
+
+function retype(t: Y.XmlText, from: string, to: string): void {
+  let head = 0;
+  while (head < from.length && head < to.length && from[head] === to[head]) head++;
+  if (head > 0 && (lowHalf(from, head) || lowHalf(to, head))) head--;
+  let tail = 0;
+  while (tail < from.length - head && tail < to.length - head && from[from.length - 1 - tail] === to[to.length - 1 - tail]) tail++;
+  while (tail > 0 && (lowHalf(from, from.length - tail) || lowHalf(to, to.length - tail))) tail--;
+  if (from.length - head - tail) t.delete(head, from.length - head - tail);
+  if (to.length - head - tail) t.insert(head, to.slice(head, to.length - tail));
+}
+
 export function rewriteBlock(doc: Y.Doc, id: string, text: string): boolean {
   const el = blockElement(doc, id);
-  if (!el) return false;
+  const meta = el && metaOf(el);
+  if (!el || !meta || (!meta.sent && !meta.posted)) return false;
+  const units = el
+    .toArray()
+    .map((node, at) => ({ node, at, lines: lineText(node).split("\n") }))
+    .filter((u) => !isMedia(u.node));
+  const lines = text.split("\n");
+  const fits = (u: (typeof units)[number], start: number): boolean => u.lines.every((l, i) => lines[start + i] === l);
+  let head = 0;
+  let used = 0;
+  while (head < units.length && fits(units[head]!, used)) used += units[head++]!.lines.length;
+  let tail = 0;
+  let left = lines.length;
+  while (tail < units.length - head && left - units[units.length - 1 - tail]!.lines.length >= used && fits(units[units.length - 1 - tail]!, left - units[units.length - 1 - tail]!.lines.length))
+    left -= units[units.length - 1 - tail++]!.lines.length;
+  const gone = units.slice(head, units.length - tail);
+  const fresh = lines.slice(used, left);
+  if (!gone.length && !fresh.length) return true;
   doc.transact(() => {
-    for (let i = el.length - 1; i >= 0; i--) {
-      const child = el.get(i);
-      if (!(child instanceof Y.XmlElement && (child.nodeName === "image" || child.nodeName === "file"))) el.delete(i, 1);
-    }
-    el.insert(0, paragraphs(text));
+    const only = gone.length === 1 && fresh.length === 1 ? plainWords(gone[0]!.node) : null;
+    if (only) return retype(only, gone[0]!.lines[0]!, fresh[0]!);
+    const at = gone[0]?.at ?? (head ? units[head - 1]!.at + 1 : (units[units.length - tail]?.at ?? 0));
+    for (const u of [...gone].reverse()) el.delete(u.at, 1);
+    if (fresh.length) el.insert(at, paragraphs(fresh.join("\n")));
   });
   return true;
 }
