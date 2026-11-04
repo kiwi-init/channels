@@ -144,6 +144,7 @@ try {
   const ask = await say("Morning. Can someone check the router numbers?");
   const titles = ["Write fewer rows per message", "Polish the conversation feed", "Cache sealed history in the browser", "Ship 0.8.12", "Trim the relay's cold start", "Move the docs to the site"];
   await atlas("spec", "write", ask, "# Check the router numbers\n\n## Done when\n- [ ] the numbers are in");
+  await atlas("spec", "ready", ask);
   await approveSpec(page);
   const ids: string[] = [];
   for (let i = 0; i < TASKS; i++) ids.push(/T(\d+)/.exec(await atlas("task", "add", `${titles[i % titles.length]} (${i + 1})`, "--owner", "atlas", "--ask", ask))![1]!);

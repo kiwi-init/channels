@@ -403,6 +403,7 @@ try {
     if (!ask) await later(300);
   }
   await atlas(["spec", "write", ask, "# Make it feel fast\n\n## Done when\n- [ ] the app feels fast"]);
+  await atlas(["spec", "ready", ask]);
   await approveSpec(page);
   const seedAt = Date.now();
   const tasks: number[] = [];

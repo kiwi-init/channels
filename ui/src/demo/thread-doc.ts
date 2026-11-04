@@ -6,6 +6,7 @@ import { prosemirrorToYXmlFragment } from "y-prosemirror"
 
 import { agentBlock } from "@kiwi/core/doc/agent.ts"
 
+import { madeHere, thisWindow } from "~/chat/doc/made"
 import { DEMO_ASK_BLOCK } from "~/demo/data"
 import { demoDoc } from "~/demo/doc-hub"
 import { DEMO_CHART, DEMO_REPORT } from "~/demo/doc-media"
@@ -13,6 +14,7 @@ import { FRAGMENT, fileNode, imageNode, newBlockId, schema, type BlockKind } fro
 
 interface Seed {
   id?: string
+  by?: string
   kind: BlockKind
   author: string
   ago: number
@@ -50,7 +52,7 @@ const SEEDS: readonly Seed[] = [
       bullet_list.create(null, [list_item.create(null, line("markdown stays in the first load")), list_item.create(null, line("mermaid stays lazy, behind ", code("kit/later.ts")))]),
     ],
   },
-  { kind: "text", author: "jow", ago: 0, body: [line(mention.create({ name: "win" }), " can you put both numbers on the PR? https://github.com/kiwi-init/channels/pulls")] },
+  { kind: "text", author: "jow", by: thisWindow, ago: 0, body: [line(mention.create({ name: "win" }), " can you put both numbers on the PR? https://github.com/kiwi-init/channels/pulls")] },
   { id: DEMO_ASK_BLOCK, kind: "agent", author: "win", ago: 0, body: [line("Can I clear the CI cache on the Linux runners? It's 9 GB.")] },
 ]
 
@@ -67,7 +69,9 @@ function filler(n: number): Seed[] {
 }
 
 function block(seed: Seed): Node {
-  return schema.nodes.block.create({ id: seed.id ?? newBlockId(), kind: seed.kind, author: seed.author, at: Date.now() - seed.ago * 60_000 }, seed.body)
+  const id = seed.id ?? newBlockId()
+  if (seed.by === thisWindow) madeHere.add(id)
+  return schema.nodes.block.create({ id, kind: seed.kind, author: seed.author, at: Date.now() - seed.ago * 60_000, by: seed.by ?? "" }, seed.body)
 }
 
 function peer(main: Y.Doc, aware: Awareness, name: string, color: string): { doc: Y.Doc; awareness: Awareness } {

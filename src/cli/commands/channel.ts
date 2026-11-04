@@ -161,7 +161,7 @@ export const channelCommands: Record<string, Command> = {
       const s = yield* session();
       if (args.length > 1 || opt.clear) return yield* die(ADMIN_GONE);
       const { state } = yield* s.state();
-      out(state.charter ? state.charter.text : "no charter (the owner sets one in the Channels app)");
+      out(state.charter ? state.charter.text : "no goal (the owner sets one in the Channels app: Channel settings › Goal)");
     }),
 
   hold: () =>

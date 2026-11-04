@@ -213,7 +213,7 @@ export function describeEvent(m: Message, state?: ChannelState, nameOf: (handle:
     case "lease.free":
       return `let go of ${ev.name}`;
     case "charter.set":
-      return ev.text ? `set the charter: ${ev.text}` : "cleared the charter";
+      return ev.text ? `set the goal: ${ev.text}` : "cleared the goal";
     case "compact.propose":
       return `proposed compacting the history through #${ev.through}: ${inlineText(ev.summary, 200)}`;
     case "compact":
@@ -260,6 +260,8 @@ export function describeEvent(m: Message, state?: ChannelState, nameOf: (handle:
       const after = spec && changedAfterApproval(spec, m.seq) ? `changed #${ev.ask}'s spec after it was approved` : `wrote the spec of #${ev.ask}`;
       return `${after}: ${inlineText(specTitleOf(ev.text) ?? ev.text, 120)}`;
     }
+    case "spec.ready":
+      return `marked the spec of #${ev.ask} ready for approval`;
     case "spec.approve":
       return `approved the spec of #${ev.ask}: agents start it as soon as one is free`;
     case "specs.only.set":
@@ -389,12 +391,27 @@ export function formatMessage(m: Message, trust?: Trust, state?: ChannelState, m
           : edit
             ? `${edit.body} (edited)`
             : String(m.body ?? "");
-  const body = cleanBody(said).replace(/\n/g, "\n  │ ");
-  const imgs = !gone && m.imgs?.length ? ` ${m.imgs.map((i) => imageMarker({ name: inlineText(i.name, 80), data: i.data, ref: i.ref })).join(" ")}` : "";
-  const files = !gone && m.files?.length ? ` ${m.files.map((f) => fileMarker({ name: inlineText(f.name, 80), size: f.size })).join(" ")}` : "";
+  let unsaid = cleanBody(said);
+  const alreadyInBody = (kind: "image" | "file", name: string): boolean => {
+    if (gone) return false;
+    for (const written of [name, inlineText(name, 80)]) {
+      const marker = `[${kind}: ${written}]`;
+      const at = unsaid.indexOf(marker);
+      if (at < 0) continue;
+      unsaid = unsaid.slice(0, at) + unsaid.slice(at + marker.length);
+      return true;
+    }
+    return false;
+  };
+  const body = unsaid.replace(/\n/g, "\n  │ ");
+  const media = [
+    ...(m.imgs ?? []).filter((i) => !alreadyInBody("image", i.name)).map((i) => imageMarker({ name: inlineText(i.name, 80), data: i.data, ref: i.ref })),
+    ...(m.files ?? []).filter((f) => !alreadyInBody("file", f.name)).map((f) => fileMarker({ name: inlineText(f.name, 80), size: f.size })),
+  ];
+  const kept = !gone && media.length ? ` ${media.join(" ")}` : "";
   const link = m.handoff ? " [browser link]" : "";
   const options = m.choices?.length ? ` [options: ${m.choices.map((c) => inlineText(c, 200)).join(" | ")}]` : "";
-  return `${messageHead(m, trust, state, me)}: ${body}${takeSpec(m, state, me)}${imgs}${files}${link}${options}`;
+  return `${messageHead(m, trust, state, me)}: ${body}${takeSpec(m, state, me)}${kept}${link}${options}`;
 }
 
 function takeSpec(m: Message, state?: ChannelState, me?: string): string {
@@ -551,10 +568,10 @@ export function githubLine(items: readonly GithubNote[]): string {
   return `GitHub: ${said.slice(0, 3).join("; ")}${said.length > 3 ? `; and ${said.length - 3} more` : ""}`;
 }
 
-/** The charter as status shows it: its first line inline, the rest marked. Null when there's none. */
+/** The channel's goal (its charter) as status shows it: its first line inline, the rest marked. Null when there's none. */
 export function charterLines(state: ChannelState): string | null {
   if (!state.charter) return null;
-  return `charter (the owner's scope for this channel; escalate what falls outside it): ${markedText(state.charter.text)}`;
+  return `goal (the owner's scope for this channel, in the app's Channel settings › Goal; escalate what falls outside it): ${markedText(state.charter.text)}`;
 }
 
 function heldLine(state: ChannelState, a: Message): string {

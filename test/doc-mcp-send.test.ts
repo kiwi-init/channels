@@ -173,6 +173,9 @@ describe("an image pasted in the doc reaches agents through show and save (T2037
       const shown = await cli("show", String(seq), join(dir, "shown"));
       expect(shown.code).toBe(0);
       expect(existsSync(join(dir, "shown", `#${seq}-image.webp`))).toBe(true);
+      expect(shown.out.match(/\[image: image\.webp/g)).toHaveLength(1);
+      expect(shown.out.match(/\[file: trace\.log/g)).toHaveLength(1);
+      expect(shown.out).toContain(`images saved: ${join(dir, "shown", `#${seq}-image.webp`)}`);
       const agentMcp = mcp();
       try {
         await agentMcp.start();
