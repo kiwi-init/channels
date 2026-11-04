@@ -154,6 +154,7 @@ try {
     (e: unknown) => String(e),
   );
   if (!early.includes("isn't approved yet")) throw new Error(`a task went in before its spec was approved: ${early || "no refusal"}`);
+  await kiwi(["-c", "smoke", "--as", "bot", "spec", "ready", String(ask)]);
   await approveSpec(page);
   const added = await kiwi(["-c", "smoke", "--as", "bot", "task", "add", "Smoke task", "--owner", "bot", "--ask", String(ask)]);
   const task = /\bT(\d+)\b/.exec(added)?.[1];

@@ -212,6 +212,7 @@ export interface Spec {
   edits: number
   editors: string[]
   stage: SpecStage
+  ready?: true
   approved?: SpecMark & { v: number; text: string }
   changed?: true
   result?: SpecMark & { verdict: "accepted" | "dropped"; note?: string; auto?: true }

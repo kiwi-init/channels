@@ -366,6 +366,20 @@ export class SessionTasks extends SessionMessaging {
     oneLook,
   );
 
+  readonly readySpec = Effect.fn("AgentSession.readySpec")(
+    { self: this },
+    function* (this: SessionTasks, ask: number) {
+      const { state } = yield* this.state();
+      const spec = state.specs.get(ask);
+      if (!spec) return yield* new Rejected(`#${ask} has no spec`);
+      if (spec.ready?.v === spec.v) return spec;
+      const seq = yield* this.event({ op: "spec.ready", ask, v: spec.v }, `spec of #${ask} ready for approval`);
+      const after = yield* this.confirm(seq);
+      return after.specs.get(ask)!;
+    },
+    oneLook,
+  );
+
   readonly tickSpec = Effect.fn("AgentSession.tickSpec")(
     { self: this },
     function* (this: SessionTasks, ask: number, words: string, done: boolean) {
