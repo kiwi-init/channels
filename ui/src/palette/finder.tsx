@@ -328,6 +328,31 @@ function collect(app: App, nav: Nav, go: (go: Go) => void): Item[] {
       },
     })
 
+  items.push(
+    {
+      id: "action:trace-scroll",
+      group: "Actions",
+      label: "Trace scrolling for 20 seconds",
+      keys: ["debug", "flicker", "scroll"],
+      lead: <Icon name="search" size={14} />,
+      run: () => {
+        close()
+        void import("~/kit/scroll-trace").then((m) => m.startScrollTrace())
+      },
+    },
+    {
+      id: "action:copy-scroll-trace",
+      group: "Actions",
+      label: "Copy scroll trace",
+      keys: ["debug", "flicker", "scroll"],
+      lead: <Icon name="copy" size={14} />,
+      run: () => {
+        close()
+        void Promise.all([import("~/kit/scroll-trace"), import("~/kit/toasts")]).then(([m, t]) => t.copyText(m.scrollTrace(), "Scroll trace copied"))
+      },
+    }
+  )
+
   for (const t of THEMES) {
     const on = app.prefs.theme === t.theme
     items.push({

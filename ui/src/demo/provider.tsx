@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 
 import { demoFile, demoImage, putDemoFile, putDemoImage } from "~/demo/doc-media"
 import { inviteLine } from "@kiwi/app/join-line.ts"
@@ -97,6 +97,32 @@ function withEvents(c: Channel): Channel {
       ...c.messages,
       ...events.map((e, i) => ({ ...e, seq: seq + i, at: at + i * 20_000, where: general, system: true })),
       { seq: seq + events.length, from: "atlas", at: at + events.length * 20_000, text: "T9 and T16 are in. T10 is next.", where: general },
+    ],
+  }
+}
+
+function withTaskEvents(c: Channel): Channel {
+  const at = Date.now() - 300 * 20_000
+  const seq = Math.max(...c.messages.map((m) => m.seq)) + 1
+  const where = { kind: "task", task: 10 } as const
+  const repo = "kiwi-init/channels"
+  return {
+    ...c,
+    messages: [
+      ...c.messages,
+      ...Array.from({ length: 300 }, (_, i) =>
+        i % 4 === 0
+          ? { seq: seq + i, from: "win", at: at + i * 20_000, text: `Pushed ${i / 4 + 1} of the icon sprite.`, where }
+          : {
+              seq: seq + i,
+              from: "github",
+              at: at + i * 20_000,
+              text: "GitHub: ci-ok success on T10-icons",
+              where,
+              system: true,
+              github: [{ event: "check_run" as const, at: at + i * 20_000, repo, name: "ci-ok", conclusion: "success" }],
+            }
+      ),
     ],
   }
 }
@@ -220,6 +246,8 @@ export type Scenario =
   | "asked-of"
   | "left-out"
   | "events"
+  | "task-events"
+  | "ci-live"
   | "handoff"
   | "opening"
   | "held"
@@ -264,40 +292,42 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
             ? { ...DEMO_CHANNEL, asks: DEMO_CHANNEL.asks.map((a) => (a.kind === "question" ? { ...a, label: a.label.replace(/ for you$/, ""), askedOf: ["maya"] } : a)) }
             : scenario === "left-out"
               ? withLeftOut(DEMO_CHANNEL)
-              : scenario === "events"
+              : scenario === "events" || scenario === "ci-live"
                 ? withEvents(DEMO_CHANNEL)
-                : scenario === "handoff"
-                  ? withHandoff(DEMO_CHANNEL)
-                  : scenario === "opening"
-                    ? { ...DEMO_CHANNEL, messages: [], tasks: [], asks: [], connection: "connecting" as const, loading: true }
-                    : scenario === "held"
-                      ? { ...DEMO_CHANNEL, hold: { note: "Waiting on the release key.", by: "jow", at: Date.now() - 40 * 60_000 } }
-                      : scenario === "compact" || scenario === "compacted"
-                        ? withCompact(DEMO_CHANNEL, scenario === "compacted")
-                        : scenario === "specs" || scenario === "spec-changed"
-                          ? withSpecs(DEMO_CHANNEL, scenario === "spec-changed")
-                          : scenario === "forgotten-computer"
-                            ? {
-                                ...DEMO_CHANNEL,
-                                asks: [
-                                  {
-                                    kind: "join" as const,
-                                    id: "join-dudu",
-                                    at: Date.now() - 30 * 60_000,
-                                    name: "dudu",
-                                    who: "agent" as const,
-                                    harness: "claude" as const,
-                                    runs: "Claude Code · claude-opus-5-5",
-                                    machine: "MacBook-Pro-de-Davi",
-                                    sponsor: "harry",
-                                    revoked: true as const,
-                                    said: { machine: "macOS arm64 · 10 cores · 16 GB", repo: "Davi-Vicente/D2N@main", outside: true },
-                                    code: "604-218",
-                                  },
-                                  ...DEMO_CHANNEL.asks,
-                                ],
-                              }
-                            : DEMO_CHANNEL,
+                : scenario === "task-events"
+                  ? withTaskEvents(DEMO_CHANNEL)
+                  : scenario === "handoff"
+                    ? withHandoff(DEMO_CHANNEL)
+                    : scenario === "opening"
+                      ? { ...DEMO_CHANNEL, messages: [], tasks: [], asks: [], connection: "connecting" as const, loading: true }
+                      : scenario === "held"
+                        ? { ...DEMO_CHANNEL, hold: { note: "Waiting on the release key.", by: "jow", at: Date.now() - 40 * 60_000 } }
+                        : scenario === "compact" || scenario === "compacted"
+                          ? withCompact(DEMO_CHANNEL, scenario === "compacted")
+                          : scenario === "specs" || scenario === "spec-changed"
+                            ? withSpecs(DEMO_CHANNEL, scenario === "spec-changed")
+                            : scenario === "forgotten-computer"
+                              ? {
+                                  ...DEMO_CHANNEL,
+                                  asks: [
+                                    {
+                                      kind: "join" as const,
+                                      id: "join-dudu",
+                                      at: Date.now() - 30 * 60_000,
+                                      name: "dudu",
+                                      who: "agent" as const,
+                                      harness: "claude" as const,
+                                      runs: "Claude Code · claude-opus-5-5",
+                                      machine: "MacBook-Pro-de-Davi",
+                                      sponsor: "harry",
+                                      revoked: true as const,
+                                      said: { machine: "macOS arm64 · 10 cores · 16 GB", repo: "Davi-Vicente/D2N@main", outside: true },
+                                      code: "604-218",
+                                    },
+                                    ...DEMO_CHANNEL.asks,
+                                  ],
+                                }
+                              : DEMO_CHANNEL,
       DEMO_EMPTY,
       DEMO_WAITING,
       DEMO_INTERLINKED,
@@ -360,6 +390,40 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
   const [state, setState] = useState(() => initial(scenario, look))
   const [ownPersonalities, setOwnPersonalities] = useState<Personality[]>([])
   const [computer, setComputer] = useState(COMPUTER)
+
+  useEffect(() => {
+    if (scenario !== "ci-live") return
+    const repo = "kiwi-init/channels"
+    const names = ["test / unit", "repo / static", "build / shots", "ci-ok"]
+    let n = 0
+    const timer = window.setInterval(() => {
+      const at = Date.now()
+      const name = names[n++ % names.length] ?? "ci-ok"
+      setState((s) => {
+        const c = s.channels.get("kiwi")
+        if (!c) return s
+        const channels = new Map(s.channels)
+        const seq = s.seq + 1
+        channels.set("kiwi", {
+          ...c,
+          messages: [
+            ...c.messages,
+            {
+              seq,
+              from: "github",
+              at,
+              text: `GitHub: ${name} success on T10-icons`,
+              where: { kind: "room", room: "general" },
+              system: true,
+              github: [{ event: "check_run", at, repo, name, conclusion: "success" }],
+            },
+          ],
+        })
+        return { ...s, channels, seq }
+      })
+    }, 700)
+    return () => window.clearInterval(timer)
+  }, [scenario])
 
   const actions = useMemo((): Actions => {
     const edit = (code: string, f: (c: Channel, seq: number) => Channel) =>
