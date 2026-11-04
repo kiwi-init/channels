@@ -33,7 +33,7 @@ async function open(shot: string, width: number, height: number): Promise<Page> 
   const page = await browser.newPage({ viewport: { width, height } });
   page.on("pageerror", (e) => fails.push(`page threw: ${e.message}`));
   await page.goto(`http://127.0.0.1:${server.port}/?shot=${shot}`);
-  await page.locator(".compose").first().waitFor();
+  await page.locator(".thread-doc, .compose").first().waitFor();
   await page.waitForTimeout(400);
   return page;
 }
@@ -45,7 +45,7 @@ try {
   expect(await chat.locator(".tall").isVisible(), "a portrait window shows the channel as one tall page");
   expect((await chat.locator(".crew .crew-agent").count()) > 0, "the agents strip shows each agent across the top");
   expect(await chat.locator(".tall-work .board").isVisible(), "the board is on the page");
-  expect(await chat.locator(".tall-chat .compose").isVisible(), "the conversation and its composer are on the same page");
+  expect(await chat.locator(".tall-chat .thread-doc").isVisible(), "the conversation and its doc are on the same page");
   expect(!(await chat.locator(".side").isVisible()), "the sidebar folds away");
   expect((await chat.locator(".tabs button", { hasText: "Tasks" }).count()) === 0, "no Tasks tab to switch to");
   expect((await chat.locator(".tall-work .now-line").count()) === 0, "the board leaves out the Now card the strip already says");
@@ -68,7 +68,7 @@ try {
   const task = await open("task", 1080, 1620);
   expect((await task.locator("aside.panel").count()) === 0, "an open task floats over nothing");
   expect(await task.locator(".tall-work .panel .panel-head").isVisible(), "the task opens where the board was");
-  expect(await task.locator(".tall-chat .compose").isVisible(), "the conversation stays in view while the task is open");
+  expect(await task.locator(".tall-chat .thread-doc").isVisible(), "the conversation stays in view while the task is open");
   const panel = await box(task, ".tall-work");
   const talk = await box(task, ".tall-chat");
   expect(!!panel && !!talk && panel.y + panel.height <= talk.y + 1, "the task sits above the conversation, not over it");

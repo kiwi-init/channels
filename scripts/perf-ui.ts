@@ -2,6 +2,20 @@ import type { Page } from "playwright-core";
 
 export const ROWS = "article.msg";
 
+export const threadDoc = (page: Page) => page.getByRole("textbox", { name: "Thread" }).last();
+
+export async function writeBlock(page: Page, text: string): Promise<void> {
+  await page.locator(".thread-doc .doc-tail").last().click();
+  await page.keyboard.type(text);
+  await page.keyboard.press("Enter");
+  await threadDoc(page).locator(".blk").filter({ hasText: text }).first().waitFor({ timeout: 15000 });
+}
+
+export async function eraseLine(page: Page): Promise<void> {
+  await page.keyboard.press("Shift+Home");
+  await page.keyboard.press("Backspace");
+}
+
 export async function firstRun(page: Page, name: string): Promise<void> {
   await page.getByRole("textbox", { name: "Your name" }).fill(name);
   await page.getByRole("button", { name: "Continue" }).click();
@@ -14,7 +28,7 @@ export async function newChannel(page: Page, title: string): Promise<string> {
   await dialog.getByRole("textbox").fill(title);
   await dialog.getByRole("button", { name: "Create channel" }).click();
   await dialog.waitFor({ state: "detached", timeout: 30000 });
-  await page.getByRole("textbox", { name: "Message" }).waitFor({ timeout: 30000 });
+  await threadDoc(page).waitFor({ timeout: 30000 });
   await page.getByRole("button", { name: "Invite people", exact: true }).first().click();
   const link = page.getByRole("dialog", { name: "Invite people" }).locator("code").filter({ hasText: "#mc2-" }).first();
   await link.waitFor({ timeout: 15000 });

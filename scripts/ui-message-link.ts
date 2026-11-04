@@ -92,6 +92,7 @@ async function run() {
   await toBottom(page);
   await settle(page);
   expect(!(await visible(page, older.seq)), "the linked message is off screen once the feed is back at the bottom");
+  await page.locator(".side-row", { hasText: "atlas" }).first().click();
   await page.getByRole("textbox", { name: "Message" }).fill(`back to ${link} please`);
   await page.keyboard.press("Enter");
   const pasted = page
@@ -103,7 +104,7 @@ async function run() {
   await pasted.click();
   await page.locator(`.feed-list > .is-flash[data-seq="${older.seq}"]`).waitFor();
   await settle(page);
-  expect(await visible(page, older.seq), "clicking it jumps to the message");
+  expect((await room(page)) === "general" && (await visible(page, older.seq)), "clicking it jumps to the message in its room");
   await page.keyboard.press("ControlOrMeta+BracketLeft");
   await settle(page);
   expect(!(await visible(page, older.seq)), "⌘[ goes back to where you were reading");
