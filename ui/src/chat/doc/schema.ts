@@ -22,7 +22,7 @@ export const schema = new Schema({
       content: "(paragraph | code_block | bullet_list | ordered_list | image | file)+",
       defining: true,
       isolating: true,
-      attrs: { id: { default: "" }, kind: { default: "text" }, author: { default: "" }, at: { default: 0 } },
+      attrs: { id: { default: "" }, kind: { default: "text" }, author: { default: "" }, at: { default: 0 }, sent: { default: "" } },
       parseDOM: [
         {
           tag: "section[data-block]",

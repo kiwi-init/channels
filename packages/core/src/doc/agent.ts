@@ -1,7 +1,7 @@
 import type * as Y from "yjs";
 import type { Awareness } from "y-protocols/awareness";
 import { mentionsOf } from "../changes.ts";
-import { appendToBlock, blocksOf, newBlock, threadText, type Block, type BlockKind } from "./blocks.ts";
+import { appendToBlock, blocksOf, markSent, newBlock, threadText, type Block, type BlockKind } from "./blocks.ts";
 
 export const FINISH_IDLE_MS = 3_000;
 
@@ -29,7 +29,6 @@ export interface WakeRule {
   names: readonly string[];
   owns: boolean;
   name?: (author: string) => string;
-  idleMs?: number;
   after?: number;
 }
 
@@ -63,25 +62,13 @@ function selectionOf(awareness: Awareness, author: string): DocSelection | null 
 
 export function watchWakes(watched: Watched, rule: WakeRule, onWake: (wake: DocWake) => void): () => void {
   const { doc, awareness, th } = watched;
-  const idleMs = rule.idleMs ?? FINISH_IDLE_MS;
   const woke = new Set<string>();
-  const texts = new Map<string, string>();
-  const timers = new Map<string, ReturnType<typeof setTimeout>>();
   if (rule.after === undefined) for (const b of blocksOf(doc)) woke.add(b.id);
 
   const fire = (block: Block): void => {
     if (woke.has(block.id)) return;
     woke.add(block.id);
-    const timer = timers.get(block.id);
-    if (timer) clearTimeout(timer);
-    timers.delete(block.id);
     onWake({ th, block, thread: threadText(doc, rule.name), selection: selectionOf(awareness, block.author) });
-  };
-
-  const settle = (id: string): void => {
-    timers.delete(id);
-    const block = blocksOf(doc).find((b) => b.id === id);
-    if (block && wakesMe(block, rule)) fire(block);
   };
 
   const look = (): void => {
@@ -89,33 +76,22 @@ export function watchWakes(watched: Watched, rule: WakeRule, onWake: (wake: DocW
     blocks.forEach((block, i) => {
       if (woke.has(block.id) || (rule.after !== undefined && block.at <= rule.after)) return;
       if (!wakesMe(block, rule)) return;
-      if (blocks[i + 1]?.author === block.author) return fire(block);
-      if (texts.get(block.id) === block.text && timers.has(block.id)) return;
-      texts.set(block.id, block.text);
-      const timer = timers.get(block.id);
-      if (timer) clearTimeout(timer);
-      timers.set(
-        block.id,
-        setTimeout(() => settle(block.id), idleMs),
-      );
+      if (block.sent || blocks.slice(i + 1).some((b) => b.author === block.author)) fire(block);
     });
   };
 
   doc.on("update", look);
   look();
-  return () => {
-    doc.off("update", look);
-    for (const t of timers.values()) clearTimeout(t);
-    timers.clear();
-  };
+  return () => doc.off("update", look);
 }
 
 export interface AgentBlock {
   id: string;
   write: (chunk: string) => boolean;
+  end: () => boolean;
 }
 
 export function agentBlock(doc: Y.Doc, me: string, kind: BlockKind = "agent", at = Date.now()): AgentBlock {
   const { id } = newBlock(doc, kind, me, "", at);
-  return { id, write: (chunk) => appendToBlock(doc, id, chunk) };
+  return { id, write: (chunk) => appendToBlock(doc, id, chunk), end: () => markSent(doc, id) };
 }

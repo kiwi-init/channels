@@ -44,4 +44,12 @@ describe("what the editor writes, agents read", () => {
     expect(xml).toContain(ref.id)
     expect(xml.length).toBeLessThan(2_000)
   })
+
+  test("a block marked sent stays marked through the editor, and others read as drafts", () => {
+    const doc = schema.nodes.doc.create(null, [
+      block.create({ id: "AAAAAAAAAAAAAAAAAAAAAA", kind: "agent", author: "atlas", at: T, sent: "1" }, paragraph.create(null, schema.text("done"))),
+      block.create({ id: "BBBBBBBBBBBBBBBBBBBBBB", kind: "text", author: "jow", at: T }, paragraph.create(null, schema.text("typing"))),
+    ])
+    expect(blocksOf(prosemirrorToYDoc(doc, FRAGMENT)).map((b) => b.sent ?? false)).toEqual([true, false])
+  })
 })
