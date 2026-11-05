@@ -14,6 +14,11 @@ to=$(curl -fsSI "$release/latest" | awk -F/ 'tolower($1) ~ /^location:/ { print 
 [ "$to" != "$from" ] || { bad "$from is already the latest release, so there's nothing to update to"; exit 0; }
 want=$(curl -fsSL "$release/download/v$to/SHA256SUMS" | awk -v f="Channels-$to-linux-x86_64.AppImage" '$2 == f { print $1 }')
 [ -n "$want" ] || { bad "the SHA256SUMS of $to list no AppImage"; exit 0; }
+export XDG_CURRENT_DESKTOP=KDE KDE_FULL_SESSION=true KDE_SESSION_VERSION=6
+daemon=$(command -v ksecretd || command -v kwalletd6)
+python3 "$(dirname "$0")/kwallet-login.py" "$daemon" "$logs/update-wallet.log"
+for _ in $(seq 1 50); do grep -q "opened by PAM" "$logs/update-wallet.log" && break; sleep 0.2; done
+grep -q "opened by PAM" "$logs/update-wallet.log" || bad "the KWallet a KDE login opens didn't open, so the app may wait on a locked keyring and never look for updates"
 img="$HOME/Applications/Channels.AppImage"
 mkdir -p "$HOME/Applications"
 curl -fsSL -o "$img" "$release/download/v$from/Channels-$from-linux-x86_64.AppImage" || { bad "can't download $from's AppImage"; exit 0; }
@@ -45,7 +50,7 @@ pkill -KILL -f "appimage_extracted" 2> /dev/null
 APPIMAGE_EXTRACT_AND_RUN=1 xvfb-run -a -s "-screen 0 1280x800x24" "$img" > "$logs/update-$to.log" 2>&1 &
 sleep 25
 pid=$(bun_of)
-if [ -n "$pid" ]; then ok "$to's AppImage starts after the update"; else bad "the updated AppImage didn't stay up: $(tail -n 5 "$logs/update-$to.log" | tr '\n' ' ' | cut -c1-300)"; fi
+if [ -n "$pid" ] && [ "$(sum)" = "$want" ]; then ok "$to's AppImage starts after the update"; elif [ -n "$pid" ]; then bad "what starts after the update is still $from's AppImage"; else bad "the updated AppImage didn't stay up: $(tail -n 5 "$logs/update-$to.log" | tr '\n' ' ' | cut -c1-300)"; fi
 [ -n "$pid" ] && kill -TERM "$pid"
 sleep 3
 pkill -KILL -f "appimage_extracted" 2> /dev/null
