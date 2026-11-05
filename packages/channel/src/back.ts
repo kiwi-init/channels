@@ -20,7 +20,10 @@ const below = (rows: readonly CachedRow[], before: number): CachedRow[] =>
 
 async function relayRows(roomId: string, memberPk: string, src: PageSource, before: number, limit: number): Promise<OlderRows> {
   const page = await src.older(before, limit);
-  if (page.rows.length) await db().putRows(roomId, memberPk, page.rows).catch(() => {});
+  if (page.rows.length)
+    await db()
+      .putRows(roomId, memberPk, page.rows)
+      .catch(() => {});
   return page;
 }
 

@@ -6,7 +6,17 @@ import type { Member } from "@kiwi/core/membership.ts";
 import { dropWarm, heldWindow, keepWarm, LIGHT, lighter, WARM_FULL, WARM_LIGHT, warmOf, type Warm } from "./warm.ts";
 
 const msg = (seq: number): Message => ({ v: PROTOCOL_VERSION, id: `id-${seq}`, from: "atlas", kind: "msg", body: `m${seq}`, ts: 1_700_000_000_000 + seq, seq, sigOk: true });
-const held = (seqs: number[], unread: number[] = []): Warm => ({ messages: seqs.map(msg), reach: [], unread, roster: [], requests: [], marks: new Map(), guardFloor: null, roomsFloor: null, base: null });
+const held = (seqs: number[], unread: number[] = []): Warm => ({
+  messages: seqs.map(msg),
+  reach: [],
+  unread,
+  roster: [],
+  requests: [],
+  marks: new Map(),
+  guardFloor: null,
+  roomsFloor: null,
+  base: null,
+});
 const range = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => from + i);
 
 describe("a channel's warm copy, kept for this session", () => {
