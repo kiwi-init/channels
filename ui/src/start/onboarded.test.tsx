@@ -24,7 +24,9 @@ const still = {
 const tile = (code: string): ChannelTile => ({ code, title: `Channel ${code}`, state: "member", unread: 0, needsYou: 0, last: 0 })
 
 const render = (page: ReactNode, app: { account: object | null; channels: ChannelTile[] }): string =>
-  renderToStaticMarkup(<AppContext.Provider value={{ app: { home: [], signIn: null, enrolling: null, actions: {}, ...app }, go: () => {} } as unknown as Ctx}>{page}</AppContext.Provider>)
+  renderToStaticMarkup(
+    <AppContext.Provider value={{ app: { home: [], signIn: null, enrolling: null, actions: {}, prefs: { reduceMotion: true }, ...app }, go: () => {} } as unknown as Ctx}>{page}</AppContext.Provider>
+  )
 
 const newPerson = (): string => render(<FirstRun />, { account: null, channels: [] })
 const noChannels = (): string => render(<Welcome />, { account: { name: "maya" }, channels: [] })
