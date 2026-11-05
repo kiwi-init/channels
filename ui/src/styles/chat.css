@@ -1449,7 +1449,7 @@ button.msg-image-spot:hover {
   position: relative;
   display: flex;
   flex-direction: column;
-  padding: 12px 10px 8px 14px;
+  padding: 12px 10px 8px 12px;
   border: 1px solid var(--line-2);
   border-radius: var(--r-win);
   background: color-mix(in srgb, var(--bg-3) 68%, transparent);
@@ -1665,7 +1665,7 @@ button.msg-image-spot:hover {
   min-width: 0;
   min-height: calc(var(--ctl) * 1.4);
   max-height: 40vh;
-  padding: 2px 0 0;
+  padding: 2px 0 0 2px;
   border: 0;
   background: none;
   font: var(--t-body) / 1.35 var(--sans);

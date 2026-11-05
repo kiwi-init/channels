@@ -73,18 +73,24 @@ describe("the top bar's controls float", () => {
     }
   });
 
-  test("the chrome sits on the float: the bar's tabs, the rail's tiles, the composer and the terminal's tabs and close", () => {
+  test("the chrome sits on the float: the bar's tabs, the rail's tiles and the terminal's tabs and close", () => {
     const controls: [string, string][] = [
       [shell, ".tabs"],
       [settings, ".set-back"],
       [shell, ".tile"],
-      [chat, ".composer"],
     ];
     for (const [css, selector] of controls) {
       const body = rule(css, selector);
       expect(body).toContain("background: var(--float)");
       expect(body).toContain("box-shadow: var(--shadow-float)");
     }
+  });
+
+  test("the composer floats frosted: bg-3 at 68% over an 18px blur, with the float's shadow", () => {
+    const body = rule(chat, ".composer");
+    expect(body).toContain("background: color-mix(in srgb, var(--bg-3) 68%, transparent)");
+    expect(body).toContain("backdrop-filter: blur(18px)");
+    expect(body).toContain("box-shadow: var(--shadow-float)");
   });
 
   test("the rail's + and gear and a panel's close stay quiet; the gear floats while Settings is open", () => {
