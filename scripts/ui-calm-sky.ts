@@ -65,26 +65,22 @@ try {
   check(playing || still, playing ? `${ENGINE} plays the loop` : `${ENGINE} can't play the loop here, and shows its still frame instead of a blank`);
   if (SHOT) await page.screenshot({ path: SHOT });
   if (playing) {
-    await page.evaluate(
-      () =>
-        new Promise<void>((done) => {
-          const v = document.querySelector("video")!;
-          const w = window as unknown as { wrapped: boolean };
-          w.wrapped = false;
-          let last = 0;
-          v.addEventListener("timeupdate", () => {
-            if (v.currentTime < last - 1) w.wrapped = true;
-            last = v.currentTime;
-          });
-          v.addEventListener("seeked", () => done(), { once: true });
-          v.currentTime = Math.max(0, Math.floor((v.duration - 1.5) / 2) * 2);
-        }),
-    );
+    await page.evaluate(() => {
+      const v = document.querySelector("video")!;
+      const w = window as unknown as { wrapped: boolean };
+      w.wrapped = false;
+      let last = v.currentTime;
+      v.addEventListener("timeupdate", () => {
+        if (v.currentTime < last - 1) w.wrapped = true;
+        last = v.currentTime;
+      });
+      v.playbackRate = 2;
+    });
     const wrapped = await page
-      .waitForFunction(() => (window as unknown as { wrapped: boolean }).wrapped, null, { timeout: 10_000 })
+      .waitForFunction(() => (window as unknown as { wrapped: boolean }).wrapped, null, { timeout: 20_000 })
       .then(() => true)
       .catch(() => false);
-    check(wrapped, `the loop wraps at its end (${(await at(page)).toFixed(2)} s after it)`);
+    check(wrapped, `the loop plays through to its end and starts again (at ${(await at(page)).toFixed(2)} s now)`);
     await page.evaluate(() => sky.hide(true));
     await page.waitForTimeout(300);
     const hiddenAt = await at(page);
