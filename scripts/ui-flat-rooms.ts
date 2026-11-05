@@ -51,7 +51,10 @@ try {
   expect((await reply.locator(".msg-quote").count()) === 0, "right under the message it answers, a reply needs no quote");
   const quoted = async (seq: number): Promise<string> => (await feed.locator(`[data-seq="${seq}"] .msg-quote-text`).allTextContents()).join(" ");
   const rootText = (await feed.locator(`[data-seq="${ROOT}"] .msg-text`).first().textContent()) ?? "";
-  expect(rootText.length > 0 && (await quoted(LATER_REPLY)).length > 0 && rootText.includes((await quoted(LATER_REPLY)).replace(/…$/, "").slice(0, 20)), "a reply further down quotes the message it answers");
+  expect(
+    rootText.length > 0 && (await quoted(LATER_REPLY)).length > 0 && rootText.includes((await quoted(LATER_REPLY)).replace(/…$/, "").slice(0, 20)),
+    "a reply further down quotes the message it answers",
+  );
   expect((await feed.locator(`[data-seq="${NESTED_REPLY}"]`).count()) === 1, "a reply to a reply shows inline too");
   expect((await quoted(AFTER_NESTED)).length > 0, "a reply after a reply to a reply quotes its own message");
 
