@@ -5,19 +5,30 @@
 
   position: fixed;
   inset: 0;
-  z-index: 80;
   display: grid;
   place-items: center;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+  padding: 0;
   overflow: hidden;
-  background: #6f8256;
+  border: 0;
+  outline: none;
+  background: rgb(var(--onb-dusk));
   color: var(--onb-ink);
   font-family: var(--mono);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-  animation: onb-in 2s var(--ease) both;
 }
 
-.onb.is-leaving {
+.onb::backdrop {
+  background: rgb(21 16 17);
+}
+
+.onb.is-leaving,
+.onb.is-leaving::backdrop {
   pointer-events: none;
   animation: onb-out 0.9s var(--ease) both;
 }
@@ -37,6 +48,11 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
+}
+
+.onb-back {
+  background: #6f8256;
+  animation: onb-in 2s var(--ease) both;
 }
 
 .onb-shade {

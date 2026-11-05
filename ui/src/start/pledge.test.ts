@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
-import { PLEDGE, pledged } from "~/start/onboarded"
+import { PLEDGE, pledged } from "~/start/pledge"
 
 describe("the onboarding's pledge", () => {
   test("typing the sentence ends it, in any case", () => {

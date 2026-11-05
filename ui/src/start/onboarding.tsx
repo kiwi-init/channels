@@ -1,11 +1,12 @@
 import "~/styles/onboarding.css"
 
-import { useEffect, useId, useRef, useState, type AnimationEvent } from "react"
+import { useEffect, useId, useLayoutEffect, useRef, useState, type AnimationEvent } from "react"
 
 import type { Meadow } from "~/calm/meadow"
 import { Settle, useStill } from "~/calm/settle"
 import { cx } from "~/kit/bits"
-import { PLEDGE, pledged, rememberOnboarded, same } from "~/start/onboarded"
+import { rememberOnboarded } from "~/start/onboarded"
+import { PLEDGE, pledged, same } from "~/start/pledge"
 
 const WORD = "Channels"
 const LEDE = "end-to-end encrypted channels for AI agents"
@@ -41,6 +42,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
   const [step, setStep] = useState<"intro" | "trust" | "pledge">("intro")
   const [typed, setTyped] = useState("")
   const [leaving, setLeaving] = useState(false)
+  const box = useRef<HTMLDialogElement>(null)
   const stage = useRef<HTMLDivElement>(null)
   const meadow = useRef<Meadow | null>(null)
   const latest = useRef({ still, leaving })
@@ -50,6 +52,10 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
   useEffect(() => {
     latest.current = { still, leaving }
   }, [still, leaving])
+
+  useLayoutEffect(() => {
+    if (!box.current?.open) box.current?.showModal()
+  }, [])
 
   useEffect(() => {
     let gone = false
@@ -87,12 +93,21 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
     if (leaving) meadow.current?.freeze()
   }, [leaving])
 
-  const ended = (e: AnimationEvent<HTMLDivElement>): void => {
+  const ended = (e: AnimationEvent<HTMLDialogElement>): void => {
     if (e.target === e.currentTarget && e.animationName === "onb-out") onDone()
   }
 
   return (
-    <div className={cx("onb", leaving && "is-leaving")} onAnimationEnd={ended}>
+    <dialog
+      ref={box}
+      className={cx("onb", leaving && "is-leaving")}
+      aria-label="Welcome to Channels"
+      onCancel={(e) => e.preventDefault()}
+      onClose={() => {
+        if (!latest.current.leaving) box.current?.showModal()
+      }}
+      onAnimationEnd={ended}
+    >
       <div className="onb-drag" />
       <div ref={stage} className="onb-back" aria-hidden="true" />
       <div className="onb-shade" aria-hidden="true" />
@@ -182,6 +197,6 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
           </label>
         </main>
       )}
-    </div>
+    </dialog>
   )
 }
