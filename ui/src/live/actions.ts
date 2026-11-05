@@ -173,8 +173,8 @@ export function makeActions(): Actions {
     },
     openDoc: (code, thread, th, on) => link(code).doc(thread, th, on),
     findDoc: (code, thread) => findDoc(link(code), code, thread),
-    docVersions: (code, th) => import("~/chat/doc/restore-version").then((m) => m.versionsOf(link(code), th)),
-    restoreDocVersion: (code, thread, th, upto) => import("~/chat/doc/restore-version").then((m) => m.restoreOf(link(code), thread, th, upto)),
+    docVersions: async (code, th) => (await rare()).versionsOf(link(code), th),
+    restoreDocVersion: async (code, ...a) => (await rare()).restoreOf(link(code), ...a),
     putDocImage: async (code, upload) => {
       if (!(await appCan("putImage"))) throw new Error(UPDATE_FOR_MEDIA)
       const stored = await link(code).putImage(upload)
