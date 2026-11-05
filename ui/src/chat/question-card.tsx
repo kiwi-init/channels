@@ -2,7 +2,7 @@ import { useEffect, useState } from "react"
 
 import { HANDOFF_DONE, HANDOFF_FAILED } from "@kiwi/core/protocol.ts"
 import { bridge } from "@kiwi/secrets/secrets.ts"
-import { named } from "~/chat/linked"
+import { wordsPlain, wordsRaw, wordsSame } from "~/words"
 import { jumpTo } from "~/chat/reply"
 import { StepAnswer, StepHow } from "~/chat/step"
 import { cx } from "~/kit/bits"
@@ -57,7 +57,7 @@ function seeAsk(code: string, seq: number): void {
 
 function ClosedAsk({ channel, closed }: { channel: Channel; closed: Closed }) {
   const who = closed.by === channel.you ? "you" : nickname(channel, closed.by)
-  const parts = closed.why?.split(/(#\d+)/) ?? []
+  const parts = closed.why ? wordsPlain(closed.why, channel.nicknames).split(/(#\d+)/) : []
   return (
     <div className="ask-done">
       <p>
@@ -71,7 +71,7 @@ function ClosedAsk({ channel, closed }: { channel: Channel; closed: Closed }) {
                 {part}
               </button>
             ) : (
-              named(part, channel.nicknames)
+              part
             )
           )}
         </p>
@@ -89,16 +89,18 @@ export default function QuestionCard({ channel, ask }: { channel: Channel; ask: 
   if (ask.answer) {
     const who = ask.answer.by === channel.you ? "You" : nickname(channel, ask.answer.by)
     const at = <time>{clock(ask.answer.at)}</time>
-    if (ask.handoff && (ask.answer.text === HANDOFF_DONE || ask.answer.text === HANDOFF_FAILED))
+    const reply = wordsRaw(ask.answer.text)
+    if (ask.handoff && (reply === HANDOFF_DONE || reply === HANDOFF_FAILED))
       return (
         <p className="ask-done">
-          {who} {ask.answer.text === HANDOFF_DONE ? "finished in the browser" : "couldn’t finish in the browser"} {at}
+          {who} {reply === HANDOFF_DONE ? "finished in the browser" : "couldn’t finish in the browser"} {at}
         </p>
       )
-    if (ask.options.includes(ask.answer.text))
+    const answered = ask.answer.text
+    if (ask.options.some((o) => wordsSame(o, answered)))
       return (
         <p className="ask-done">
-          {who} chose <b>{named(ask.answer.text, channel.nicknames)}</b> {at}
+          {who} chose <b>{wordsPlain(ask.answer.text, channel.nicknames)}</b> {at}
         </p>
       )
     return (
@@ -106,7 +108,7 @@ export default function QuestionCard({ channel, ask }: { channel: Channel; ask: 
         <p>
           {who} {ask.step ? "answered" : "replied"} {at}
         </p>
-        <p className="ask-reply">{named(ask.answer.text, channel.nicknames)}</p>
+        <p className="ask-reply">{wordsPlain(ask.answer.text, channel.nicknames)}</p>
       </div>
     )
   }
@@ -133,10 +135,10 @@ export default function QuestionCard({ channel, ask }: { channel: Channel; ask: 
       {ask.options.length > 0 && (
         <ol className="ask-options">
           {ask.options.map((o, i) => (
-            <li key={o}>
-              <button type="button" className="ask-option" onClick={() => actions.answerQuestion(channel.code, ask.id, o)}>
+            <li key={wordsRaw(o)}>
+              <button type="button" className="ask-option" onClick={() => actions.answerQuestion(channel.code, ask.id, wordsRaw(o))}>
                 <span className="ask-letter">{String.fromCharCode(65 + i)}</span>
-                {named(o, channel.nicknames)}
+                {wordsPlain(o, channel.nicknames)}
               </button>
             </li>
           ))}

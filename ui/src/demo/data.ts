@@ -1,6 +1,7 @@
 import type { Account, Ask, Channel, ChannelTile, Device, Issue, LaunchedAgent, Message, Person, Prefs, PullRequest, Task, TaskGroup } from "~/model"
 import { nicknamesOf } from "~/names"
 import { omit } from "@kiwi/core/omit.ts"
+import { wrote } from "~/words"
 
 const now = Date.now()
 const m = (min: number): number => now - min * 60_000
@@ -677,9 +678,9 @@ const asks: Ask[] = [
     id: "q-1",
     from: "atlas",
     at: m(2),
-    text: "Should the redesign go to everyone at once, or behind a setting first? @win can build the setting.",
+    text: wrote("Should the redesign go to everyone at once, or behind a setting first? @win can build the setting."),
     label: "Taste call for you",
-    options: ["Everyone at once", "Behind a setting @win adds", "Only on Livewire"],
+    options: ["Everyone at once", "Behind a setting @win adds", "Only on Livewire"].map(wrote),
     holds: [11],
   },
   {
@@ -717,10 +718,10 @@ const asks: Ask[] = [
     id: "q-2",
     from: "win",
     at: m(4),
-    text: "Can I clear the CI cache on the Linux runners? It's 9 GB.",
+    text: wrote("Can I clear the CI cache on the Linux runners? It's 9 GB."),
     label: "Irreversible step for you",
     irreversible: true,
-    options: ["Yes", "Not yet"],
+    options: ["Yes", "Not yet"].map(wrote),
     holds: [],
     idle: true,
   },

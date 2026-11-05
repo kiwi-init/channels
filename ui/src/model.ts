@@ -1,3 +1,4 @@
+import type { Words } from "./words.ts"
 import type { TextFont } from "@kiwi/app/theme.ts"
 import type { GithubHealth } from "@kiwi/core/github-health.ts"
 import type { HookHarness, HookState } from "@kiwi/core/harnesses.ts"
@@ -411,17 +412,17 @@ export interface QuestionAsk {
   id: string
   from: string
   at: number
-  text: string
+  text: Words
   label: string
   irreversible?: true
-  options: string[]
+  options: Words[]
   holds: number[]
   task?: number
   idle?: true
   step?: Step
   handoff?: { url: string; label: string; expiresAt: number }
-  answer?: { text: string; by: string; at: number }
-  closed?: { by: string; at: number; why?: string }
+  answer?: { text: Words; by: string; at: number }
+  closed?: { by: string; at: number; why?: Words }
   askedOf?: string[]
 }
 
@@ -474,7 +475,12 @@ export interface ReviewAsk {
 
 export type Ask = PermissionAsk | QuestionAsk | JoinAsk | ReviewAsk | SpecAsk
 
-export type HomeAct = { kind: "options"; options: string[] } | { kind: "allow" } | { kind: "approve-spec"; ask: number; v: number } | { kind: "approve-task"; task: number } | { kind: "open" }
+export type HomeAct =
+  | { kind: "options"; options: { shown: string; answer: string }[] }
+  | { kind: "allow" }
+  | { kind: "approve-spec"; ask: number; v: number }
+  | { kind: "approve-task"; task: number }
+  | { kind: "open" }
 
 export interface HomeAsk {
   id: string

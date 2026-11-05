@@ -76,6 +76,7 @@ import type {
 } from "~/model"
 import { mentions } from "~/live/mention"
 import { phraseOf } from "~/live/said"
+import { wrote } from "~/words"
 
 type Seen = Readonly<Record<string, number>>
 
@@ -817,18 +818,18 @@ export function asksOf(
       id,
       from: m.from,
       at: m.ts,
-      text: m.body,
+      text: wrote(m.body),
       label: m.handoff ? "Browser for you" : m.esc ? (askedOf ? decisionLabel(m).replace(/ for you$/, "") : decisionLabel(m)) : m.to?.includes(me) ? "Question for you" : "Question for everyone",
       ...(m.decision === "irreversible" ? { irreversible: true as const } : {}),
-      options: m.choices ?? [],
+      options: (m.choices ?? []).map(wrote),
       holds,
       ...(m.step ? { step: m.step } : {}),
       ...(m.handoff ? { handoff: { url: m.handoff.url, label: handoffLabel(m.handoff), expiresAt: m.handoff.expiresAt } } : {}),
       ...(task !== undefined ? { task } : {}),
       ...(idle ? { idle: true as const } : {}),
       ...(askedOf ? { askedOf } : {}),
-      ...(!isOpen && answer ? { answer: { text: answer.body, by: answer.from, at: answer.ts } } : {}),
-      ...(closed ? { closed } : {}),
+      ...(!isOpen && answer ? { answer: { text: wrote(answer.body), by: answer.from, at: answer.ts } } : {}),
+      ...(closed ? { closed: { by: closed.by, at: closed.at, ...(closed.why !== undefined ? { why: wrote(closed.why) } : {}) } } : {}),
     })
     askOf.set(m.seq, id)
   }

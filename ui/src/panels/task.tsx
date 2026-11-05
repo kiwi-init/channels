@@ -19,6 +19,7 @@ import { memberOf, type Ask, type Channel, type PermissionAsk, type Person, type
 import { openMessage } from "~/live/open-message"
 import { useApp } from "~/nav"
 import { nickname } from "~/names"
+import { wordsPlain } from "~/words"
 import { IssueMark, issueWord, PrCard } from "~/github/parts"
 import { PanelHead } from "~/panels/frame"
 import { moveWords, someone } from "~/panels/task-moves"
@@ -290,7 +291,7 @@ function Waits({ channel, waits }: { channel: Channel; waits: (PermissionAsk | Q
         <ul className="task-waits">
           {waits.map((a) => (
             <li key={a.id}>
-              <p className="task-wait-text">{a.kind === "permission" ? a.summary : a.text}</p>
+              <p className="task-wait-text">{a.kind === "permission" ? a.summary : wordsPlain(a.text, channel.nicknames)}</p>
               <p className="task-wait-meta">
                 {nickname(channel, a.from)} · {ago(a.at)}
               </p>

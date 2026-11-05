@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server"
 import type { Channel, Person, QuestionAsk } from "~/model"
 import { ActContext, AppContext, type Act, type Ctx } from "~/nav"
 import { NeedsYou } from "~/needs/needs"
+import { wrote } from "~/words"
 
 const NOW = 1_800_000_000_000
 const person = (name: string, kind: Person["kind"], display: string): Person => ({ name, kind, display, owner: false, you: false, presence: "online", lastSeen: NOW, joined: NOW, messages: 0 })
@@ -13,9 +14,9 @@ const ask = (more: Partial<QuestionAsk>): QuestionAsk => ({
   id: "q1",
   from: "gentle-otter",
   at: NOW - 60_000,
-  text: "Should @gentle-otter or @upbeat-heron take T22?",
+  text: wrote("Should @gentle-otter or @upbeat-heron take T22?"),
   label: "Decision",
-  options: ["A: @gentle-otter takes it", "B: @upbeat-heron takes it"],
+  options: ["A: @gentle-otter takes it", "B: @upbeat-heron takes it"].map(wrote),
   holds: [],
   ...more,
 })
@@ -63,7 +64,7 @@ describe("a decision card shows agents by nickname, never by handle (#1681)", ()
   })
 
   test("the answered line echoes the chosen option by nickname", () => {
-    const html = render([ask({ answer: { text: "B: @upbeat-heron takes it", by: "jow", at: NOW } })])
+    const html = render([ask({ answer: { text: wrote("B: @upbeat-heron takes it"), by: "jow", at: NOW } })])
     expect(html).toContain("Chose “B: @opus2-coder takes it”")
     expect(html).not.toContain("upbeat-heron")
   })

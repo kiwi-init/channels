@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test"
 import { HANDOFF_DONE, type Message as Wire } from "@kiwi/core/protocol.ts"
 import { fold, type Roster } from "@kiwi/core/state.ts"
 import { asksOf, messagesOf } from "~/live/map"
+import { wordsRaw } from "~/words"
 
 const roster: Roster = [
   { name: "jow", pk: "pk-jow", owner: true, at: 0, active: true, kind: "human", display: "Jow" },
@@ -47,6 +48,8 @@ describe("a browser handoff shows in the feed again (T197)", () => {
 
   test("Done answers the card", () => {
     const { asks } = asksOf(fold([ask, done], roster, 0), [ask, done], "jow", true, [], roster, new Map())
-    expect(asks[0]).toMatchObject({ answer: { text: HANDOFF_DONE, by: "jow" } })
+    expect(asks[0]).toMatchObject({ answer: { by: "jow" } })
+    const card = asks[0]
+    expect(card?.kind === "question" && card.answer && wordsRaw(card.answer.text)).toBe(HANDOFF_DONE)
   })
 })
