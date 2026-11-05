@@ -1,6 +1,6 @@
 export type Rgb = readonly [number, number, number]
 
-export interface Look {
+interface Look {
   top: Rgb
   low: Rgb
   haze: Rgb
@@ -9,7 +9,7 @@ export interface Look {
   glow: Rgb
 }
 
-export interface Body {
+interface Body {
   x: number
   y: number
   show: number
