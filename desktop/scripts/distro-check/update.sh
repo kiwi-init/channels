@@ -14,11 +14,9 @@ to=$(curl -fsSI "$release/latest" | awk -F/ 'tolower($1) ~ /^location:/ { print 
 [ "$to" != "$from" ] || { bad "$from is already the latest release, so there's nothing to update to"; exit 0; }
 want=$(curl -fsSL "$release/download/v$to/SHA256SUMS" | awk -v f="Channels-$to-linux-x86_64.AppImage" '$2 == f { print $1 }')
 [ -n "$want" ] || { bad "the SHA256SUMS of $to list no AppImage"; exit 0; }
-export XDG_CURRENT_DESKTOP=KDE KDE_FULL_SESSION=true KDE_SESSION_VERSION=6
-daemon=$(command -v ksecretd || command -v kwalletd6)
-python3 "$(dirname "$0")/kwallet-login.py" "$daemon" "$logs/update-wallet.log"
-for _ in $(seq 1 50); do grep -q "opened by PAM" "$logs/update-wallet.log" && break; sleep 0.2; done
-grep -q "opened by PAM" "$logs/update-wallet.log" || bad "the KWallet a KDE login opens didn't open, so the app may wait on a locked keyring and never look for updates"
+eval "$(printf throwaway | gnome-keyring-daemon --unlock --components=secrets 2> /dev/null)"
+export GNOME_KEYRING_CONTROL
+gdbus call --session --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus --method org.freedesktop.DBus.GetNameOwner org.freedesktop.secrets > /dev/null 2>&1 || bad "no unlocked keyring, so the app may wait on it and never look for updates"
 img="$HOME/Applications/Channels.AppImage"
 mkdir -p "$HOME/Applications"
 curl -fsSL -o "$img" "$release/download/v$from/Channels-$from-linux-x86_64.AppImage" || { bad "can't download $from's AppImage"; exit 0; }
