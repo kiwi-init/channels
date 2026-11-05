@@ -317,7 +317,7 @@ export default function Markdown({ markdown, onMention, onTask, onMessage, onIma
     const cached = parsedFor(markdown)
     return cached ? { markdown, ast: cached } : null
   })
-  const ast = got?.markdown === markdown ? got.ast : (parsedFor(markdown) ?? null)
+  const ast = got?.markdown === markdown ? got.ast : (parsedFor(markdown) ?? got?.ast ?? null)
 
   useEffect(() => {
     let live = true
