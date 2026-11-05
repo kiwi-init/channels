@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test"
 import * as Y from "yjs"
 import { Awareness } from "y-protocols/awareness"
-import { blocksOf, mediaOfBlock, newBlock } from "@kiwi/core/doc/blocks.ts"
+import { blocksOf, mediaOfBlock, newBlock, type BlockMedia } from "@kiwi/core/doc/blocks.ts"
 import { heldPipe } from "@kiwi/core/doc/held-pipe.ts"
+import { DOC_LEVEL, raiseWriterFloor } from "@kiwi/core/doc/level.ts"
 import { pipeDoc } from "@kiwi/core/doc/pipe.ts"
 
 import type { DocEvent } from "../../../../desktop/src/bridge.ts"
@@ -254,5 +255,56 @@ describe("the composer writes into the thread's doc (T5115)", () => {
     expect(sayerAt(key)?.("hi", null, () => {}, [])).toBe(true)
     off()
     expect(sayerAt(key)).toBeNull()
+  })
+
+  test("a doc closing in one view leaves the same thread open in another its composer", () => {
+    const key = "kiwi\nT11"
+    const first = letSay(key, () => true)
+    const second = letSay(key, () => false)
+    first()
+    expect(sayerAt(key)?.("hi", null, () => {}, [])).toBe(false)
+    second()
+    expect(sayerAt(key)).toBeNull()
+  })
+
+  test("lines said into a new thread whose doc the relay won't open come back, one still uploading too, and later sends skip the doc", async () => {
+    let on: ((e: DocEvent) => void) | null = null
+    let uploaded: (m: readonly BlockMedia[]) => void = () => {}
+    const posts: string[] = []
+    const back: string[] = []
+    const live = new LiveDoc(
+      (_th, take) => {
+        on = take
+        return heldPipe().pipe
+      },
+      undefined,
+      () => {},
+      poster("jow", posts),
+      () => Promise.resolve(null)
+    )
+    live.say("first", null, (t) => back.push(t))
+    live.say("uploading", null, (t) => back.push(t), new Promise<readonly BlockMedia[]>((done) => (uploaded = done)))
+    await wait(5)
+    ;(on as ((e: DocEvent) => void) | null)?.({ _tag: "Failed", error: { kind: "relay", status: 403, message: "read-only", tag: "ReadOnly" } })
+    await wait(5)
+    expect(back).toEqual(["first"])
+    uploaded([])
+    await wait(5)
+    expect(back).toEqual(["first", "uploading"])
+    expect(blocksOf(live.doc)).toEqual([])
+    expect(posts).toEqual([])
+    expect(live.say("third", null, (t) => back.push(t))).toBe(false)
+    live.destroy()
+  })
+
+  test("a doc a newer app writes takes no line from this one", async () => {
+    const { live, posts, open } = liveFor("jow")
+    raiseWriterFloor(live.doc, DOC_LEVEL + 1)
+    expect(live.say("from an older app", null, () => {})).toBe(false)
+    open()
+    await wait(0)
+    expect(blocksOf(live.doc)).toEqual([])
+    expect(posts).toEqual([])
+    live.destroy()
   })
 })

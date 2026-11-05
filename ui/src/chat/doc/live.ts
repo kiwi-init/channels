@@ -3,7 +3,7 @@ import { Awareness } from "y-protocols/awareness"
 
 import { b64url, fromB64url } from "@kiwi/core/crypto.ts"
 import { attachToBlock, blocksOf, markPosted, newBlock, removeBlock, type BlockMedia } from "@kiwi/core/doc/blocks.ts"
-import { DOC_LEVEL, onWriterFloor, raiseWriterFloor } from "@kiwi/core/doc/level.ts"
+import { DOC_LEVEL, onWriterFloor, raiseWriterFloor, writerFloor } from "@kiwi/core/doc/level.ts"
 import type { PipeIn } from "@kiwi/core/doc/held-pipe.ts"
 import { mirrorAware } from "@kiwi/core/doc/pipe.ts"
 import type { DocBlockRef } from "@kiwi/core/protocol.ts"
@@ -204,12 +204,13 @@ export class LiveDoc implements Shared {
         this.pipe = null
         this.gaveUp = true
         this.onFail(whyNot(e.error))
+        for (const u of this.unposted.splice(0)) u.failed()
         return this.isNowReady()
     }
   }
 
   say(text: string, reply: { re: number; quote?: string } | null, back: (text: string) => void, media?: Promise<readonly BlockMedia[]>): boolean {
-    if (!this.poster || this.gaveUp || this.dead) return false
+    if (!this.poster || this.gaveUp || this.dead || writerFloor(this.doc) > DOC_LEVEL) return false
     const { id } = newBlock(this.doc, "text", this.poster.me, text)
     markPosted(this.doc, id)
     const re = reply ? { re: reply.re, ...(reply.quote ? { quote: reply.quote } : {}) } : {}
@@ -243,7 +244,8 @@ export class LiveDoc implements Shared {
 
   private post(b: Finished, failed: () => void = () => giveBackBlock(b.id)): void {
     if (!this.poster) return
-    if (this.opened === null) this.unposted.push({ b, failed })
+    if (this.gaveUp) failed()
+    else if (this.opened === null) this.unposted.push({ b, failed })
     else
       void this.poster.post(b.text, { th: this.opened, id: b.id }, b.re ? { re: b.re, ...(b.quote ? { quote: b.quote } : {}) } : undefined).then((went) => {
         if (!went) failed()
