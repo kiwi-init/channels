@@ -41,7 +41,7 @@ const AddAgent = later(() => import("~/modals/add-agent").then((m) => m.AddAgent
 const DocVersions = later(() => import("~/modals/doc-versions").then((m) => m.DocVersions))
 
 export function ChannelScreen({ channel }: { channel: Channel }) {
-  const { nav, go } = useApp()
+  const { nav, go, app } = useApp()
   const hidden = useSidebarHidden()
   const panel = usePanelWidth(hidden)
   const [jumpAt, setJumpAt] = useState<{ jump: Jump; visit: number } | null>(null)
@@ -55,12 +55,19 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   const [focusAsk, setFocusAsk] = useState(0)
   if (jump && (nav.tab !== "chat" || !sameWhere(jump.m.where, nav.where))) setJump(null)
   const wanted = useWantedMessage()
-  const found = findWanted(wanted, channel.code, channel.messages)
+  const found = findWanted(wanted, channel.code, channel.messages, channel.since)
   const target = found.kind === "found" ? found.m : null
   const root = target?.inThread !== undefined && (channel.specs ?? []).some((s) => s.ask === target.inThread) ? target.inThread : undefined
   const anchor = root === undefined ? target : (channel.messages.find((m) => m.seq === root) ?? target)
   const atAnchor = !!anchor && nav.tab === "chat" && sameWhere(anchor.where, nav.where)
   if (anchor && atAnchor && jump?.m.seq !== anchor.seq) setJump({ m: anchor, terms: [] })
+  const earlierTo = app.actions.earlierTo
+  useEffect(() => {
+    if (!wanted || found.kind !== "older") return
+    void earlierTo(wanted.code, wanted.seq).then((held) => {
+      if (!held) dropMessage(wanted)
+    })
+  }, [wanted, found.kind, earlierTo])
   useEffect(() => {
     if (!wanted) return
     if (found.kind === "missing") return dropMessage(wanted)
