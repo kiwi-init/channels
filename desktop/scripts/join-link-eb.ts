@@ -1,5 +1,5 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { startLocalRelay } from "../../scripts/local-relay.ts";
@@ -12,8 +12,6 @@ if (!process.argv[2]) {
 }
 const exe = appExecutable(process.argv[2]);
 const bundle = appRoot(exe);
-const appRun = join(bundle, "bin", "launcher");
-const start = existsSync(appRun) ? appRun : exe;
 const root = mkdtempSync(join(tmpdir(), "kiwi-join-link-eb-"));
 const problems: string[] = [];
 const later = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -26,10 +24,10 @@ const WARM = "kiwi://join/mc2-while-open";
 
 const { relay, port } = await startLocalRelay(join(root, "relay"), null, { rateLimits: false });
 const env = testEnv(root, join(root, "driver.sock"), `http://127.0.0.1:${port}`);
-const open = (link: string): ChildProcess => spawn(start, [link], { env, stdio: "ignore", detached: true });
+const open = (link: string): ChildProcess => spawn(exe, [link], { env, stdio: "ignore", detached: true });
 const waiting = (d: Driver) => d.evaluate(() => (window as unknown as { kiwi: { getDeepLink(): Promise<string | null> } }).kiwi.getDeepLink(), null, 2_000);
 
-console.log(`opening links the way the desktop entry's Exec … %U does: ${start} <link>`);
+console.log(`opening links as kiwi-launcher hands them on, after the desktop entry's Exec … %U: ${exe} <link>`);
 const app = open(COLD);
 try {
   const d = await attach(join(root, "driver.sock"));
