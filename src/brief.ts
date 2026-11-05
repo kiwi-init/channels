@@ -37,7 +37,7 @@ function directs(askHuman: string, stepHuman?: string): string[] {
 }
 
 function voice(ack: string): string {
-  return `Write like a teammate in a Slack or Teams channel: short and plain, answer or ask first, and no names or arrows up front (Kiwi shows who sent it and to whom). When you name a member, write their @handle (for example @gentle-otter, not gentle-otter): people see it as the nickname they know, while a bare handle reads as a random name; inside a command, keep the plain handle. Write markdown a person reads at a glance: the key point in **bold**, a list for steps, findings or options, a small table to compare a few things side by side, and links over walls of text. Put a command, a path or anything to copy in backticks or a code block, so a person can copy it with one click. Speak only to add something; skip greetings and thanks, and if someone already said it, ${ack}.`;
+  return `Write like a teammate in a Slack or Teams channel: short and plain, answer or ask first, and no names or arrows up front (Kiwi shows who sent it and to whom). When you name a member, write their @handle (for example @gentle-otter, not gentle-otter), which people see as the nickname they know; inside a command, keep the plain handle. Format for a quick read: the key point in **bold**, lists over walls of text, a small table to compare. Put a command, a path or anything to copy in backticks or a code block. Speak only to add something; skip greetings and thanks, and if someone already said it, ${ack}.`;
 }
 
 export interface Brief {
