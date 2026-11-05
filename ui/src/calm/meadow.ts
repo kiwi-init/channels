@@ -71,6 +71,9 @@ interface Engine {
 }
 
 const STILL_EVERY = 60_000
+const WARM_SECONDS = 0.5
+const SAMPLE_SECONDS = 1.5
+const SLOWEST_FRAME = 1 / 24
 
 let engine: Promise<Engine | null> | null = null
 
@@ -465,6 +468,11 @@ async function build(): Promise<Engine | null> {
   let host: HTMLElement | null = null
   let alert = 0
   let still = false
+  let asked = false
+  let slow = false
+  let watched = 0
+  let sampleFrames = 0
+  let sampleTime = 0
   let attached = false
   let running = false
   let simClock = 0
@@ -545,16 +553,35 @@ async function build(): Promise<Engine | null> {
     render()
   }
 
+  const mark = (): void => {
+    renderer.domElement.dataset.meadow = slow ? "slow" : still ? "still" : "moving"
+  }
+
+  const govern = (raw: number): void => {
+    watched += raw
+    if (watched < WARM_SECONDS) return
+    if (sampleTime >= SAMPLE_SECONDS) return
+    sampleFrames++
+    sampleTime += raw
+    if (sampleTime < SAMPLE_SECONDS || sampleTime / sampleFrames <= SLOWEST_FRAME) return
+    slow = true
+    still = true
+    stopLoop()
+    renderStill()
+  }
+
   const loop = (): void => {
     const now = performance.now() / 1000
-    const dt = Math.min(1 / 24, Math.max(1 / 240, now - lastNow))
+    const raw = now - lastNow
     lastNow = now
-    frame(dt)
+    frame(Math.min(1 / 24, Math.max(1 / 240, raw)))
+    govern(raw)
   }
   const startLoop = (): void => {
     if (!attached || running || still || document.hidden) return
     running = true
     lastNow = performance.now() / 1000
+    mark()
     void renderer.setAnimationLoop(loop)
   }
   const stopLoop = (): void => {
@@ -564,6 +591,7 @@ async function build(): Promise<Engine | null> {
 
   const renderStill = (): void => {
     if (!attached || !still) return
+    mark()
     uTime.value = 12.0
     uWind.value = 0.9
     uAlert.value = alert
@@ -577,8 +605,12 @@ async function build(): Promise<Engine | null> {
     if (still) requestAnimationFrame(renderStill)
   }
   const onVisibility = (): void => {
-    if (document.hidden) stopLoop()
-    else if (still) renderStill()
+    if (document.hidden) {
+      stopLoop()
+      watched = 0
+      sampleFrames = 0
+      sampleTime = 0
+    } else if (still) renderStill()
     else startLoop()
   }
 
@@ -592,11 +624,26 @@ async function build(): Promise<Engine | null> {
     host = null
   }
 
+  try {
+    renderer.setRenderTarget(rtScene)
+    await renderer.compileAsync(scene, camera)
+    renderer.setRenderTarget(rtBlur)
+    await renderer.compileAsync(quadBlur, quadBlur.camera)
+    renderer.setRenderTarget(null)
+    await renderer.compileAsync(quadOut, quadOut.camera)
+  } catch {
+    // Compiling ahead only saves the first frames; drawing compiles whatever is left.
+  }
+
   return {
     attach(stage, still0) {
       if (attached) detach()
       host = stage
-      still = still0
+      asked = still0
+      still = asked || slow
+      watched = 0
+      sampleFrames = 0
+      sampleTime = 0
       attached = true
       alert = 0
       stage.appendChild(renderer.domElement)
@@ -614,7 +661,9 @@ async function build(): Promise<Engine | null> {
           if (still) requestAnimationFrame(renderStill)
         },
         setStill(next) {
-          if (host !== stage || next === still) return
+          if (host !== stage || next === asked) return
+          asked = next
+          if (slow || still === next) return
           still = next
           if (still) {
             stopLoop()

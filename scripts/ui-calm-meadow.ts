@@ -8,7 +8,8 @@ if (process.argv.includes("--help")) {
   console.log(`The Calm meadow (#5411), the idle screen's scene, in a bare page. It checks that the meadow draws and moves, that its
 light follows the clock (noon is bright, 2 am is dark), that it stops drawing while the window is hidden and draws again
 when shown, that reduced motion gets one still frame and no animation, and that closing and opening it again reuses the
-same renderer instead of a new one per open. An engine with neither WebGPU nor WebGL 2 must leave no page errors.
+same renderer instead of a new one per open. A machine that can't hold 24 fps gets one still frame instead of the
+animation. An engine with neither WebGPU nor WebGL 2 must leave no page errors.
 
   bun scripts/ui-calm-meadow.ts [--chromium] [--shot=meadow.png]`);
   process.exit(0);
@@ -52,6 +53,7 @@ const check = (ok: boolean, said: string): void => {
   if (!ok) failures.push(said);
 };
 
+const mode = (page: Page): Promise<string> => page.evaluate(() => document.querySelector("canvas")?.dataset.meadow ?? "none");
 const frame = (page: Page): Promise<Buffer> => page.screenshot({ clip: { x: 0, y: 0, width: 640, height: 400 } });
 const same = (a: Buffer, b: Buffer): boolean => a.equals(b);
 
@@ -85,7 +87,7 @@ const open = async (browser: Browser, at: string, still: boolean, errors: string
   await page.goto(`http://127.0.0.1:${server.port}/`);
   await page.waitForFunction(() => "meadow" in window);
   const drew = await page.evaluate((s) => meadow.start(s), still);
-  if (drew) await page.waitForTimeout(1500);
+  if (drew) await page.waitForTimeout(2500);
   return { page, drew };
 };
 
@@ -98,21 +100,25 @@ try {
   } else {
     const a = await frame(noon);
     if (SHOT) await noon.screenshot({ path: SHOT });
-    await noon.waitForTimeout(300);
-    const b = await frame(noon);
-    check(!same(a, b), `${ENGINE} draws the meadow and it moves`);
     const day = await brightness(noon, a);
     check(day.spread > 2, `the meadow isn't a blank fill (spread ${day.spread.toFixed(1)})`);
-
-    await noon.evaluate(() => meadow.hide(true));
-    await noon.waitForTimeout(300);
-    const h1 = await frame(noon);
-    await noon.waitForTimeout(700);
-    const h2 = await frame(noon);
-    await noon.evaluate(() => meadow.hide(false));
-    await noon.waitForTimeout(400);
-    const h3 = await frame(noon);
-    check(same(h1, h2) && !same(h2, h3), `hidden, it stops drawing${same(h1, h2) ? "" : " (it didn't)"}, and draws again when shown${same(h2, h3) ? " (it didn't)" : ""}`);
+    const how = await mode(noon);
+    if (how === "slow") {
+      await noon.waitForTimeout(700);
+      check(same(a, await frame(noon)), `${ENGINE} here can't hold 24 fps, so the meadow holds one still frame instead of loading the machine`);
+    } else {
+      await noon.waitForTimeout(300);
+      check(how === "moving" && !same(a, await frame(noon)), `${ENGINE} draws the meadow and it moves (${how})`);
+      await noon.evaluate(() => meadow.hide(true));
+      await noon.waitForTimeout(300);
+      const h1 = await frame(noon);
+      await noon.waitForTimeout(700);
+      const h2 = await frame(noon);
+      await noon.evaluate(() => meadow.hide(false));
+      await noon.waitForTimeout(400);
+      const h3 = await frame(noon);
+      check(same(h1, h2) && !same(h2, h3), `hidden, it stops drawing${same(h1, h2) ? "" : " (it didn't)"}, and draws again when shown${same(h2, h3) ? " (it didn't)" : ""}`);
+    }
 
     const canvas = await noon.evaluate(() => {
       const c = document.querySelector("canvas");
@@ -135,7 +141,11 @@ try {
     await still.waitForTimeout(800);
     const s2 = await frame(still);
     const s = await brightness(still, s1);
-    check(same(s1, s2) && s.spread > 2, `reduced motion: one still frame of the meadow${same(s1, s2) ? "" : ", but it kept moving"}${s.spread > 2 ? "" : ", but it's blank"}`);
+    const stillHow = await mode(still);
+    check(
+      stillHow !== "moving" && same(s1, s2) && s.spread > 2,
+      `reduced motion: one still frame of the meadow (${stillHow})${same(s1, s2) ? "" : ", but it kept moving"}${s.spread > 2 ? "" : ", but it's blank"}`,
+    );
     await still.close();
   }
   await noon.close();
