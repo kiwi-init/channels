@@ -94,6 +94,17 @@
   font-size: var(--t-meta);
 }
 
+.person-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.person-handle > .dimmer {
+  font-size: var(--t-meta);
+}
+
 .person-ref {
   padding: 0;
   border: 0;

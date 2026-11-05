@@ -68,6 +68,15 @@ try {
   expect((await modal.count()) === 0, "Back closes it");
   expect(page.url().includes("shot=general") && (await page.getByRole("textbox", { name: "Thread" }).count()) === 1, "and stays where it was");
 
+  await page.goto(`http://127.0.0.1:${server.port}/?shot=agent-yours-trusted`);
+  const pip = page.getByRole("dialog", { name: "Profile of Pip" });
+  await pip.waitFor();
+  expect((await pip.locator(".person-handle code").textContent()) === "pip", "an agent with a nickname shows its handle in its profile (#1745)");
+  expect((await pip.getByRole("button", { name: "Copy handle", exact: true }).count()) === 1, "with a button that copies it");
+  await page.goto(`http://127.0.0.1:${server.port}/?shot=agent`);
+  await page.getByRole("dialog", { name: "Profile of atlas" }).waitFor();
+  expect((await page.locator(".person-handle").count()) === 0, "an agent without one shows no Handle row, since the header is its handle");
+
   await page.goto(`http://127.0.0.1:${server.port}/?shot=add-agent`);
   const add = page.getByRole("dialog", { name: "Add an agent" });
   await add.waitFor();
