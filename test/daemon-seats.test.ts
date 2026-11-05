@@ -450,6 +450,9 @@ describe("reachOf", () => {
     expect(reachOf("none", seat({ harness: "claude", pid: 7 }), undefined, alive, false)).toBe("running");
     expect(reachOf("none", seat({ harness: "claude", pid: 7 }), { state: "idle", since: 1 }, alive, true)).toBe("running");
     expect(reachOf("listener", seat({ harness: "claude", pid: 7 }), { state: "idle", since: 1 }, alive, false)).toBe("listening");
+    expect(reachOf("session", seat({ harness: "claude", pid: 7 }), { state: "idle", since: 1 }, alive, false)).toBe("unreachable");
+    expect(reachOf("session", seat({ harness: "claude", pid: 7 }), { state: "working" }, alive, false)).toBe("running");
+    expect(reachOf("session", seat({ harness: "claude", pid: 7 }), { state: "idle", since: 1 }, alive, true)).toBe("running");
   });
 
   test("an idle session nobody listens for is unreachable", () => {
