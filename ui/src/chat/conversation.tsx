@@ -162,6 +162,7 @@ function rowAt(box: HTMLElement, list: readonly Message[], at: number): HTMLElem
 export function useStick(following = true, still = false) {
   const scroller = useRef<HTMLDivElement>(null)
   const content = useRef<HTMLDivElement>(null)
+  const spacer = useRef<HTMLDivElement>(null)
   const stuck = useRef(true)
   const live = useRef(following)
   useLayoutEffect(() => {
@@ -201,7 +202,7 @@ export function useStick(following = true, still = false) {
     const short = still ? box.scrollTop + shift - (box.scrollHeight - box.clientHeight) : 0
     if (short > 0.5) {
       room.current += short
-      list.style.paddingBottom = `${room.current}px`
+      if (spacer.current) spacer.current.style.height = `${room.current}px`
     }
     if (Math.abs(shift) > 0.5) box.scrollTop += shift
     const gap = box.scrollHeight - box.clientHeight - box.scrollTop
@@ -217,7 +218,7 @@ export function useStick(following = true, still = false) {
     const hidden = box.scrollHeight - box.scrollTop - box.clientHeight
     if (room.current > 0 && hidden > 0.5) {
       room.current = Math.max(0, room.current - hidden)
-      list.style.paddingBottom = room.current ? `${room.current}px` : ""
+      if (spacer.current) spacer.current.style.height = room.current ? `${room.current}px` : ""
     }
     stuck.current = live.current && !held.current && box.scrollHeight - box.scrollTop - box.clientHeight < NEAR_BOTTOM
     anchor.current = (still ? (caretIn(box, list) ?? (touched.current ? docIn(box, list) : null)) : null) ?? (stuck.current ? null : anchorIn(box, list))
@@ -254,9 +255,9 @@ export function useStick(following = true, still = false) {
     if (!box) return
     stuck.current = true
     anchor.current = null
-    if (room.current && content.current) {
+    if (room.current) {
       room.current = 0
-      content.current.style.paddingBottom = ""
+      if (spacer.current) spacer.current.style.height = ""
     }
     box.scrollTo({ top: box.scrollHeight, behavior: smooth && !matchMedia("(prefers-reduced-motion: reduce)").matches ? "smooth" : "auto" })
   }, [])
@@ -285,7 +286,7 @@ export function useStick(following = true, still = false) {
     [remember, still]
   )
 
-  return { scroller, content, stuck, live, remember, settle, toBottom, toOffset, unstick, hold }
+  return { scroller, content, spacer, stuck, live, remember, settle, toBottom, toOffset, unstick, hold }
 }
 
 function docOf(channel: Channel, where: Where): string | null {
@@ -403,7 +404,7 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
   const start = firstAt >= 0 && firstAt < end ? firstAt : Math.max(0, end - TAIL)
   const following = end === list.length
   const latest = useRef(false)
-  const { scroller, content, stuck, live, remember, settle, toBottom, toOffset, unstick, hold } = useStick(following, !!doc)
+  const { scroller, content, spacer, stuck, live, remember, settle, toBottom, toOffset, unstick, hold } = useStick(following, !!doc)
   const replying = useReplying()
   const quote = useCallback(
     (seq: number, excerpt: string) => {
@@ -719,6 +720,7 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
           )}
           {working.length > 0 && !channel.loading && <Working people={working} />}
         </div>
+        <div className="feed-room" ref={spacer} aria-hidden="true" />
       </div>
       {(fresh > 0 || far) && (
         <button type="button" className="feed-jump" onClick={toLatest}>

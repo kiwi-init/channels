@@ -9,9 +9,9 @@ import { harnessDist } from "./ui-harness.ts";
 import { firstRun, letIn, newChannel } from "./perf-ui.ts";
 
 if (process.argv.includes("--help")) {
-  console.log(`An agent edits its message in #general three times while jow watches. The message keeps its text on screen through every
-edit: an edit that blanked the text for a frame shook the feed's height under its scroll keeper and looped its ResizeObserver
-in WebKit (the doc fuzzer's agents edit like this).
+  console.log(`An agent edits its message in #general three times, then grows it to six paragraphs, while jow writes in the doc below.
+The message keeps its text on screen through every edit, and no ResizeObserver resizes what it watches from inside its own
+callback: both looped the feed's scroll keeper in WebKit (the doc fuzzer's agents edit like this, T4255).
 
   bun scripts/ui-msg-edit.ts [--webkit] [--dist=ui/dist-harness]
 
@@ -53,7 +53,32 @@ const check = (what: string, why: string | null): void => {
 };
 
 try {
-  const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+  const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  await context.addInitScript(() => {
+    const self: string[] = [];
+    (globalThis as unknown as { __self: string[] }).__self = self;
+    const Real = window.ResizeObserver;
+    const size = (el: Element): string => {
+      const s = getComputedStyle(el);
+      const r = el.getBoundingClientRect();
+      const h = r.height - parseFloat(s.paddingTop) - parseFloat(s.paddingBottom) - parseFloat(s.borderTopWidth) - parseFloat(s.borderBottomWidth);
+      const w = r.width - parseFloat(s.paddingLeft) - parseFloat(s.paddingRight) - parseFloat(s.borderLeftWidth) - parseFloat(s.borderRightWidth);
+      return `${Math.round(w * 10) / 10}x${Math.round(h * 10) / 10}`;
+    };
+    window.ResizeObserver = class extends Real {
+      constructor(cb: ResizeObserverCallback) {
+        super((entries, obs) => {
+          const before = entries.map((e) => size(e.target));
+          cb(entries, obs);
+          entries.forEach((e, i) => {
+            const now = size(e.target);
+            if (now !== before[i]) self.push(`${e.target.className || e.target.tagName}: ${before[i]} → ${now}`);
+          });
+        });
+      }
+    };
+  });
+  const page = await context.newPage();
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto(BASE);
@@ -74,6 +99,8 @@ try {
       }
     }).observe(document.body, { subtree: true, childList: true, characterData: true });
   });
+  await page.locator(".thread-doc .doc-tail").last().click();
+  await page.keyboard.type("jow writes below while the bot edits above");
   const sent = await kiwi(["-c", "edits", "--as", "bot", "send", "--to", "#general", "bot line: building"]);
   const seq = /#(\d+)/.exec(sent)?.[1];
   if (!seq) throw new Error(`send said no #seq: ${sent.trim()}`);
@@ -83,7 +110,29 @@ try {
     await kiwi(["-c", "edits", "--as", "bot", "edit", seq, text]);
     await page.waitForFunction((want) => [...document.querySelectorAll(".msg .md")].some((m) => m.textContent?.includes(want)), text, { timeout: 30000 });
   }
+  const long = Array.from({ length: 6 }, (_, i) => `bot line, done: paragraph ${i + 1} of the summary`).join("\n\n");
+  await kiwi(["-c", "edits", "--as", "bot", "edit", seq, long]);
+  await page.waitForFunction(() => [...document.querySelectorAll(".msg .md")].some((m) => m.textContent?.includes("paragraph 6 of the summary")), undefined, { timeout: 30000 });
+  await page.waitForTimeout(500);
+  const overflow = (): Promise<number> =>
+    page.evaluate(() => {
+      const feed = document.querySelector<HTMLElement>(".feed");
+      return feed ? feed.scrollHeight - feed.clientHeight : 0;
+    });
+  await page.locator(".thread-doc .doc-tail").last().click();
+  await page.keyboard.type("a draft taller than the window");
+  for (let i = 1; i <= 80 && (await overflow()) < 200; i++) {
+    await page.keyboard.press("Shift+Enter");
+    await page.keyboard.type(`row ${i}`, { delay: 1 });
+  }
   await page.waitForTimeout(300);
+  for (let i = 0; i < 400 && (await overflow()) > 0; i += 6) {
+    for (let k = 0; k < 6; k++) await page.keyboard.press("Backspace");
+    await page.waitForTimeout(30);
+  }
+  await page.waitForTimeout(500);
+  const own = await page.evaluate(() => (globalThis as unknown as { __self: string[] }).__self.slice(0, 5));
+  check("no ResizeObserver resizes what it watches from inside its own callback, as the message grows and a draft shrinks below the window", own.length ? own.join("; ") : null);
   const blanks = await page.evaluate(() => (globalThis as unknown as { __edits: { blanks: string[] } }).__edits.blanks);
   check(`the message keeps its text through ${EDITS} edits`, blanks.length ? `its text went blank ${blanks.length} time(s), first in "${blanks[0]}"` : null);
   check("no page errors", errors.length ? errors.slice(0, 3).join("; ") : null);
