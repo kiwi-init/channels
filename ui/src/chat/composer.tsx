@@ -36,7 +36,7 @@ function picksFor(key: string): Picks {
   return made
 }
 
-type Cue = { key: string; back: boolean; left: number }
+type Cue = { key: string; back: boolean; left: number; lost?: number }
 
 function placeOf(channel: Channel, where: Where, inThread?: number): string {
   if (inThread !== undefined) return "this thread"
@@ -242,6 +242,19 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
   useEffect(() => {
     if (edit) area.current?.focus()
   }, [edit])
+  const editOpen = useRef<Edit | null>(null)
+  useEffect(() => {
+    editOpen.current = edit
+  }, [edit])
+  useEffect(
+    () => () => {
+      const open = editOpen.current
+      if (!open) return
+      drafts.set(key, open.was)
+      stopEditing()
+    },
+    [key]
+  )
   const send = (value = text) => {
     if (edit) {
       const next = value.trim()
@@ -269,7 +282,7 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
       ...(replyTo ? { replyTo: replyTo.seq } : {}),
       ...(files.length ? { images: files } : {}),
     }
-    const back = (t: string, f: readonly Upload[]) => giveBack(key, t, f, stashText) === "stash" && setCue({ key, back: false, left: 0 })
+    const back = (t: string, f: readonly Upload[]) => giveBack(key, t, f, stashText) === "stash" && setCue({ key, back: false, left: 0, lost: f.length })
     if (!say?.(said, replyTo ? { re: replyTo.seq, quote: excerpt } : null, back, files)) app.actions.send(channel.code, where, sent, Object.keys(opts).length ? opts : undefined)
     picked.delete(key)
     replying?.set(null)
@@ -501,6 +514,11 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
                   return
                 }
               }
+              if (options && e.key === "Enter" && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey) {
+                e.preventDefault()
+                send()
+                return
+              }
               if (options) {
                 if (e.key === "ArrowDown" || e.key === "ArrowUp") {
                   e.preventDefault()
@@ -573,6 +591,7 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
           ) : (
             <>
               <kbd>⇧⌘S</kbd> brings it back
+              {cue.lost ? ` · ${cue.lost === 1 ? "its file" : `its ${cue.lost} files`} didn't fit in the stash` : ""}
             </>
           )}
         </p>
