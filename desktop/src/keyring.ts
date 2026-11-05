@@ -287,6 +287,10 @@ export class Keyring implements ChannelOps {
     return this.searching;
   }
 
+  async flushSearch(): Promise<void> {
+    await this.searching?.host.close();
+  }
+
   private async searchAt(code: string): Promise<{ host: SearchHost; access: ChannelAccess } | null> {
     const s = this.searcher();
     const seat = this.seat(code, true);
