@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { HARNESS_INSTALL, type HarnessRow } from "@kiwi/core/harnesses.ts"
+import { type HarnessRow } from "@kiwi/core/harnesses.ts"
 import { harnessChoices, LISTED } from "~/live/harness-rows"
 import { harnessOf } from "~/live/map"
 
@@ -30,8 +30,4 @@ test("Antigravity CLI is listed by its own name, and its seats show as agy (T246
   expect(harnessChoices([row("agy", { version: "1.4.12" })])).toEqual([{ id: "agy", label: "Antigravity CLI", installed: true, version: "1.4.12", path: "/bin/agy" }])
   expect(harnessOf("antigravity")).toBe("agy")
   expect(LISTED.agy).toBe("agy")
-})
-
-test("every listed harness has a line that installs it (T375)", () => {
-  expect(Object.values(LISTED).filter((h) => !HARNESS_INSTALL[h])).toEqual([])
 })

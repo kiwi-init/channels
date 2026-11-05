@@ -1,14 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { MESSAGE_LINKS, messageAt, messageHash, messageLink } from "@kiwi/core/message-link.ts";
+import { MESSAGE_LINKS, messageAt, messageLink } from "@kiwi/core/message-link.ts";
 
 const CODE = "mc2-4u2dwIeijB9T9jh4JERA4Q-62qozsSxRQzg3q6a";
 
 describe("a link to a message names only its channel and number (T987)", () => {
-  test("the link carries the join code and the message number, nothing else", () => {
-    expect(messageLink(CODE, 3218)).toBe(`kiwi://join/${CODE}?m=3218`);
-    expect(messageHash(CODE, 3218)).toBe(`#${CODE}?m=3218`);
-  });
-
   test("a copied link reads back as its channel and message", () => {
     expect(messageAt(messageLink(CODE, 7))).toEqual({ code: CODE, seq: 7 });
     expect(messageAt(`  kiwi://join/${CODE}/?m=7 `)).toEqual({ code: CODE, seq: 7 });

@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { fold, type AskHead, type ChannelState, type GithubPr, type GithubRelease, type Task } from "@kiwi/core/state.ts";
 
-import { inView, mergedSince, NEXT_RELEASE_NOTE, startOfDay, taskGroups, viewCounts } from "./views";
+import { NEXT_RELEASE_NOTE, taskGroups } from "./views";
 
 const DAY = 24 * 60 * 60 * 1000;
 const NOW = Date.UTC(2026, 9, 18, 15);
@@ -23,40 +23,6 @@ const task = (id: number, state: Task["state"], updatedAt = NOW, extra: Partial<
 const board = (tasks: Task[], extra: Partial<ChannelState> = {}): ChannelState => ({ ...fold([], [], NOW), tasks: new Map(tasks.map((t) => [t.id, t])), ...extra });
 
 describe("the sidebar's views", () => {
-  test("each counts its tasks; done counts only this week; archived counts nowhere", () => {
-    const state = board([
-      task(1, "todo"),
-      task(2, "doing"),
-      task(3, "doing"),
-      task(4, "review"),
-      task(5, "done", NOW - DAY),
-      task(6, "done", NOW - 8 * DAY),
-      task(7, "doing", NOW, { archived: true }),
-    ]);
-    const counts = viewCounts(state, NOW, 3, new Set([1, 5]));
-    expect(counts).toEqual({ everything: 5, needs: 3, doing: 2, review: 1, done: 1 });
-  });
-
-  test("a task waiting on people is in Needs you until it is done", () => {
-    const waiting = new Set([1, 2]);
-    const state = board([]);
-    expect(inView(state, task(1, "doing"), "needs", NOW, waiting)).toBe(true);
-    expect(inView(state, task(2, "done"), "needs", NOW, waiting)).toBe(false);
-    expect(inView(state, task(3, "doing"), "needs", NOW, waiting)).toBe(false);
-  });
-
-  test("merged today counts the PRs merged since the day began", () => {
-    const pr = (number: number, state: GithubPr["state"], at: number): GithubPr => ({ repo: "o/r", number, state, at, seq: number });
-    const github: ChannelState["github"] = {
-      prs: new Map([pr(1, "merged", NOW - 60_000), pr(2, "merged", NOW - 2 * DAY), pr(3, "open", NOW)].map((p) => [String(p.number), p])),
-      checks: new Map(),
-      issues: new Map(),
-      rules: new Map(),
-      releases: new Map(),
-    };
-    expect(mergedSince({ github }, startOfDay(NOW))).toBe(1);
-  });
-
   test("the board groups by the person's message each task serves: latest-moving ask first, unfiled last, in progress first within each", () => {
     const tasks = [
       task(1, "doing", NOW - 5, { ask: 10 }),
@@ -125,7 +91,6 @@ describe("the sidebar's views", () => {
       [{ kind: "cancelled" }, [5]],
     ]);
     expect(taskGroups(state, "doing", NOW).flatMap((g) => g.tasks.map((t) => t.id))).toEqual([1]);
-    expect(viewCounts(state, NOW, 0, new Set())).toEqual({ everything: 5, needs: 0, doing: 1, review: 0, done: 4 });
     expect(taskGroups({ ...state, facts: new Map() }, "done", NOW)[0]?.head).toEqual({ kind: "next", name: null });
   });
 });

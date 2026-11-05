@@ -56,10 +56,6 @@ function shows(f: Fate, view: View, now: number, waiting: ReadonlySet<number>): 
   }
 }
 
-export function inView(state: ChannelState, t: Task, view: View, now: number, waiting: ReadonlySet<number>): boolean {
-  return shows(fateOf(state, t), view, now, waiting);
-}
-
 export type GroupHead = { kind: "ask"; ask: AskHead | null } | { kind: "next"; name: string | null } | { kind: "release"; tag: string; at: number } | { kind: "cancelled" };
 
 export interface TaskGroup {
@@ -103,20 +99,4 @@ export function taskGroups(state: ChannelState, view: View, now: number): TaskGr
   const cancelled = finished.filter((f) => f.status === "cancelled").map((f) => f.task);
   if (cancelled.length) groups.push({ key: "cancelled", head: { kind: "cancelled" }, tasks: cancelled });
   return groups;
-}
-
-export function viewCounts(state: ChannelState, now: number, needs: number, waiting: ReadonlySet<number>): Record<View, number> {
-  const fates = [...state.tasks.values()].map((t) => fateOf(state, t));
-  const count = (v: View) => fates.filter((f) => shows(f, v, now, waiting)).length;
-  return { everything: count("everything"), needs, doing: count("doing"), review: count("review"), done: count("done") };
-}
-
-export function mergedSince(state: Pick<ChannelState, "github">, since: number): number {
-  return [...state.github.prs.values()].filter((p) => p.state === "merged" && p.at >= since).length;
-}
-
-export function startOfDay(now: number): number {
-  const d = new Date(now);
-  d.setHours(0, 0, 0, 0);
-  return d.getTime();
 }

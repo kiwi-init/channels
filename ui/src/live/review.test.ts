@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test"
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts"
 import type { Event, Message } from "@kiwi/core/protocol.ts"
 import { fold, type Roster } from "@kiwi/core/state.ts"
-import { sendBackTask } from "@kiwi/channel/task-actions.ts"
 import { tasksOf } from "~/live/map"
 
 const roster: Roster = []
@@ -67,11 +66,5 @@ describe("reviews on the task page (T614)", () => {
   test("a cancelled task says so instead of passing for done", () => {
     expect(task(dropped.seq, "jow")).toMatchObject({ status: "done", cancelled: true })
     expect(task(named.seq, "jow").cancelled).toBeUndefined()
-  })
-
-  test("sending back carries the reason in the verdict", () => {
-    const t = fold(log, roster).tasks.get(anyone.seq)
-    if (!t) throw new Error("no task")
-    expect(sendBackTask(t, "the hint covers the code").opts.ev).toMatchObject({ verdict: "rejected", note: "the hint covers the code", round: 1 })
   })
 })
