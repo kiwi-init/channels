@@ -170,9 +170,9 @@ jobs:
       - name: ui scroll in WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-scroll-fps.ts --check --dist ui/dist
-      - name: ui a thread, a thread doc and a feed hold still once they open, in WebKit (half the views)
+      - name: ui a thread, a thread doc and a feed hold still once they open, in WebKit
         if: ${{ !cancelled() }}
-        run: bun scripts/ui-still.ts --dist ui/dist --shard 1/2
+        run: bun scripts/ui-still.ts --dist ui/dist
       - name: ui a remote edit landing between your keys never undoes your caret or selection (⇧← and ←), in Chromium and WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-doc-select-race.ts
@@ -293,9 +293,6 @@ jobs:
           bun scripts/shoot-app.ts --dist ui/dist --size 390x844 --only channel,tasks --theme dark "$RUNNER_TEMP/shots/phone" || status=1
           for pid in $pids; do wait "$pid" || status=1; done
           exit "$status"
-      - name: ui a thread, a thread doc and a feed hold still once they open, in WebKit (the other half)
-        if: ${{ !cancelled() }}
-        run: bun scripts/ui-still.ts --dist ui/dist --shard 2/2
       - name: ui stash clicks in WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-stash-click.ts --dist ui/dist

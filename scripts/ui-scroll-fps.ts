@@ -16,7 +16,7 @@ them, how long the feed takes to show, and the frames after sending a message at
 
 Without --dist it builds ui/ into a temporary folder first. --css adds a stylesheet before measuring, to try a change without
 a rebuild. --check fails when the page throws, renders the whole history at once or keeps hundreds of rows on a long fling,
-or the content jumps while scrolling; it never fails on timings, so it skips the timed runs and only scrolls once to look. WebKit is the engine of the Mac and Linux apps: bunx playwright-core install webkit.`);
+or the content jumps while scrolling; it never fails on timings, so it skips the timed runs, scrolls once to look and draws at 1x. WebKit is the engine of the Mac and Linux apps: bunx playwright-core install webkit.`);
   process.exit(0);
 }
 
@@ -35,6 +35,7 @@ const HZ = Number(flag("--hz") ?? 120);
 const BUDGET = 1000 / HZ;
 const check = process.argv.includes("--check");
 const TIMED = check ? 0 : RUNS;
+const SCALE = check ? 1 : 2;
 
 const scratch = mkdtempSync(join(tmpdir(), "kiwi-ui-scroll-"));
 let dist = flag("--dist") ? resolve(flag("--dist") ?? "") : "";
@@ -225,7 +226,7 @@ async function watch(page: Page, ms: number, act: () => Promise<void>): Promise<
 const browser = engine === "webkit" ? await webkit.launch() : await chromium.launch({ executablePath: process.env.SMOKE_CHROMIUM || undefined });
 const report: Record<string, Stats | number> = {};
 try {
-  const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2, colorScheme: theme === "light" ? "light" : "dark" });
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: SCALE, colorScheme: theme === "light" ? "light" : "dark" });
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto(`http://127.0.0.1:${server.port}/?shot=long-feed&theme=${theme}`);
@@ -294,7 +295,7 @@ try {
   rmSync(scratch, { recursive: true, force: true });
 }
 
-console.log(`${engine}, 1440x900@2x, ${theme}: ${report.rows} rows, ${report.nodes} nodes, feed ready in ${report.readyMs} ms`);
+console.log(`${engine}, 1440x900@${SCALE}x, ${theme}: ${report.rows} rows, ${report.nodes} nodes, feed ready in ${report.readyMs} ms`);
 const line = (name: string, s: Stats) =>
   console.log(
     `${name.padEnd(16)} frames ${String(s.frames).padStart(4)}  interval p50 ${s.p50} p95 ${s.p95} max ${s.max} ms  ${s.fps} fps  dropped ${s.dropped}  work p50 ${s.workP50} p95 ${s.workP95} max ${s.workMax} ms, over ${round(BUDGET)} ms ${s.overBudget}${s.longTasks === null ? "" : `  long tasks ${s.longTasks} (${s.longTaskMs} ms)`}`,

@@ -7,9 +7,6 @@ const at = process.argv.indexOf("--dist");
 const dist = at > 0 ? (process.argv[at + 1] ?? "ui/dist") : "ui/dist";
 if (!existsSync(join(dist, "index.html"))) throw new Error(`no index.html in ${dist}: run bun run ui:build first`);
 const engine = process.argv.includes("--chromium") ? "chromium" : "webkit";
-const sharded = process.argv.indexOf("--shard");
-const [shard = 1, shards = 1] = (sharded > 0 ? (process.argv[sharded + 1] ?? "") : "1/1").split("/").map(Number);
-if (!(shards >= 1 && shard >= 1 && shard <= shards)) throw new Error("--shard is i/n, with 1 <= i <= n");
 
 const SHOTS = ["thread-doc", "thread-doc-1000", "thread-doc-events", "thread", "thread-focus", "threads-open", "long-feed", "channel", "ci-live", "event-runs", "dm"] as const;
 const SIZES = [
@@ -59,12 +56,12 @@ async function moves(browser: Browser, shot: string, width: number, height: numb
 const browser = engine === "webkit" ? await webkit.launch() : await chromium.launch({ executablePath: process.env.SMOKE_CHROMIUM || undefined });
 let failed = 0;
 try {
-  const views = SHOTS.flatMap((shot) => SIZES.map(([width, height]) => ({ shot, width, height }))).filter((_, i) => i % shards === shard - 1);
-  for (const { shot, width, height } of views) {
-    const why = await moves(browser, shot, width, height);
-    if (why) failed++;
-    console.log(`${why ? "✗" : "✓"} ${shot} at ${width}x${height} holds still after opening${why ? `: ${why}` : ""}`);
-  }
+  for (const shot of SHOTS)
+    for (const [width, height] of SIZES) {
+      const why = await moves(browser, shot, width, height);
+      if (why) failed++;
+      console.log(`${why ? "✗" : "✓"} ${shot} at ${width}x${height} holds still after opening${why ? `: ${why}` : ""}`);
+    }
 } finally {
   await browser.close();
   server.stop();
