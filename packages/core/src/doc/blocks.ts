@@ -360,3 +360,19 @@ export function threadText(doc: Y.Doc, name: (pk: string) => string = (pk) => pk
     .map((b) => `${name(b.author)}${b.kind === "text" ? "" : ` (${b.kind})`}: ${b.text}`)
     .join("\n\n");
 }
+
+export function restoreThread(doc: Y.Doc, version: Uint8Array): boolean {
+  const old = new Y.Doc();
+  Y.applyUpdate(old, version);
+  const was = threadOf(old).toArray();
+  const now = threadOf(doc);
+  if (!was.length && !now.length) return false;
+  doc.transact(() => {
+    now.delete(0, now.length);
+    now.insert(
+      0,
+      was.flatMap((node) => (node instanceof Y.XmlHook ? [] : [node.clone()])),
+    );
+  });
+  return true;
+}

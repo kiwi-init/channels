@@ -3,8 +3,8 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Channel } from "@kiwi/core/client.ts";
-import { b64url, newChannelKey, newRoomId, open, seal } from "@kiwi/core/crypto.ts";
-import { appendToBlock, blocksOf, newBlock, newDocId } from "@kiwi/core/doc/blocks.ts";
+import { b64url, fromB64url, newChannelKey, newRoomId, open, seal } from "@kiwi/core/crypto.ts";
+import { appendToBlock, blocksOf, newBlock, newDocId, restoreThread } from "@kiwi/core/doc/blocks.ts";
 import { DocHub, type DocStore, type ThreadKeys } from "@kiwi/core/doc/hub.ts";
 import { docKeysFor, docThread, privateRoomOf, type RoomsHere } from "@kiwi/core/doc/threads.ts";
 import type { DocOut, DocSaved } from "@kiwi/core/doc/thread-doc.ts";
@@ -445,6 +445,55 @@ describe("the owner's doc upkeep over a real relay (T1430)", () => {
       expect(await stat()).toMatchObject({ n: 0 });
       expect(da.synced).toBe(true);
       expect(texts(da.doc)).toEqual(["one", "two", "three", "four"]);
+    } finally {
+      stop.abort();
+      server.stop(true);
+      rmSync(dataDir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("restoring an earlier version of a doc (T4606)", () => {
+  test("a member opens a kept version and restores it as a new edit: every copy converges on the old blocks, and the history stays", async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), "kiwi-doc-restore-"));
+    const server = startRelay({ port: 0, hostname: "127.0.0.1", dataDir });
+    const stop = new AbortController();
+    try {
+      const relay = server.url.origin;
+      const owner = await generateIdentity("docs");
+      const { access } = await Channel.create(relay, owner, { name: "docs", kind: "human" }, []);
+      const a = new Channel(access, relay, owner);
+      const b = new Channel(access, relay, owner);
+      const ready = (ch: Channel) =>
+        new Promise<void>((done) => {
+          void ch.stream(0, () => {}, { signal: stop.signal, onReady: () => done() });
+        });
+      await Promise.all([ready(a), ready(b)]);
+      const da = await a.threadDoc("task:9");
+      await da.whenSynced();
+      const db = await b.threadDoc("task:9", da.th);
+      await db.whenSynced();
+      const settled = async (want: string[]) => {
+        const deadline = Date.now() + 4_000;
+        while (JSON.stringify(texts(db.doc)) !== JSON.stringify(want) && Date.now() < deadline) await Bun.sleep(25);
+        return texts(db.doc);
+      };
+      newBlock(da.doc, "text", "docs", "first draft");
+      expect(await settled(["first draft"])).toEqual(["first draft"]);
+      expect(await a.compactDoc("task:9", da.th)).toBe(true);
+      const [kept] = await a.docVersions(da.th);
+
+      newBlock(da.doc, "text", "docs", "a later line");
+      expect(await settled(["first draft", "a later line"])).toEqual(["first draft", "a later line"]);
+
+      const state = await b.docVersionState("task:9", da.th, kept!.upto);
+      expect(state).not.toBeNull();
+      expect(restoreThread(db.doc, fromB64url(state!))).toBe(true);
+      expect(texts(db.doc)).toEqual(["first draft"]);
+      const deadline = Date.now() + 4_000;
+      while (texts(da.doc).length !== 1 && Date.now() < deadline) await Bun.sleep(25);
+      expect(texts(da.doc)).toEqual(["first draft"]);
+      expect(await b.docVersionState("task:9", da.th, 999).catch((e: unknown) => String(e))).toContain("no such version");
     } finally {
       stop.abort();
       server.stop(true);
