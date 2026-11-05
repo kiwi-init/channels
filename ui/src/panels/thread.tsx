@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useSyncExternalStore } from "react"
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 
 import { Composer } from "~/chat/composer"
 import { compactAt, quoteOf, ReadOnly, useNames, useStick, useTaskIds } from "~/chat/conversation"
@@ -30,16 +30,38 @@ export function ThreadPanel({ channel, seq: opened, focus: asked }: { channel: C
       set: (to, excerpt) => threadReply.set(to ? { code: channel.code, root: seq, to: to.seq, excerpt: excerpt ?? null } : null),
     }
   }, [reply, channel.code, seq, root, replies])
+  const { actions } = useAct()
+  const { holdEarlier, earlierTo } = actions
+  const code = channel.code
+  const early = channel.since !== undefined && seq > 0 && seq < channel.since
+  const [tried, setTried] = useState<string | null>(null)
+  const loadKey = `${code}:${seq}`
+  const waiting = early && tried !== loadKey
+  useEffect(() => {
+    holdEarlier(code, "thread", seq)
+    return () => holdEarlier(code, "thread", null)
+  }, [code, seq, holdEarlier])
+  useEffect(() => {
+    if (!early) return
+    let live = true
+    void earlierTo(code, seq).then(() => {
+      if (live) setTried(loadKey)
+    })
+    return () => {
+      live = false
+    }
+  }, [early, code, seq, loadKey, earlierTo])
   const { scroller, content, remember, toBottom, unstick } = useStick()
   const last = replies.at(-1)?.seq
   const shown = useRef({ seq, last })
   useLayoutEffect(() => {
+    if (waiting) return
     if (focus !== undefined) {
       unstick()
       if (jumpTo(content.current, focus, "instant")) return
     }
     toBottom(false)
-  }, [seq, focus, content, toBottom, unstick])
+  }, [seq, focus, content, toBottom, unstick, waiting])
   useLayoutEffect(() => {
     const was = shown.current
     shown.current = { seq, last }
@@ -48,9 +70,15 @@ export function ThreadPanel({ channel, seq: opened, focus: asked }: { channel: C
   }, [seq, last, replies, channel.you, toBottom])
   const onQuote = useCallback((target: number) => void jumpTo(content.current, target), [content])
   const quote = useCallback((at: number, excerpt: string) => threadReply.set({ code: channel.code, root: seq, to: at, excerpt }), [channel.code, seq])
-  const { actions } = useAct()
   const following = channel.threads?.find((t) => t.root === seq)?.following ?? channel.follows?.[seq] ?? (root?.from === channel.you || !!root?.mentionsYou)
 
+  if (waiting)
+    return (
+      <>
+        <PanelHead title="Thread" />
+        <div className="feed" />
+      </>
+    )
   if (!root)
     return (
       <>

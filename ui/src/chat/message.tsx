@@ -2,7 +2,7 @@ import { lazy, memo, Suspense, useCallback, useContext, useEffect, useLayoutEffe
 
 import { isGifReaction } from "@kiwi/core/protocol.ts"
 
-import { BlockFilesView } from "~/chat/block-files"
+import { ShownImage } from "~/chat/feed-image"
 import { withoutMediaNames } from "~/chat/doc/finished"
 import { PrChip, TaskChip } from "~/chat/cards"
 import { EditHere, useEditing } from "~/chat/editing"
@@ -28,6 +28,7 @@ const Changes = lazy(() => import("~/chat/changes"))
 const PermissionCard = lazy(() => import("~/chat/permission-card"))
 const QuestionCard = lazy(() => import("~/chat/question-card"))
 const SpecCard = later(() => import("~/specs/card").then((m) => m.SpecCard))
+const BlockFilesView = later(() => import("~/chat/block-files").then((m) => m.BlockFilesView))
 
 const QUICK = ["👍", "🔥", "👀", "✅"]
 const CLAMP_PX = 12 * 22
@@ -272,19 +273,13 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
           </span>
         )}
         {m.images && (
-          <div className="msg-images">
-            {m.images.map((img) =>
-              "spot" in img ? (
-                <Spot key={img.spot} code={channel.code} img={img} />
-              ) : (
-                <button key={img.url} type="button" className="msg-image" aria-label={`Open ${img.alt || "image"}`} onClick={() => openImage(img.url, img.alt)}>
-                  <img src={img.url} alt={img.alt} width={img.width || undefined} height={img.height || undefined} />
-                </button>
-              )
-            )}
-          </div>
+          <div className="msg-images">{m.images.map((img) => ("spot" in img ? <Spot key={img.spot} code={channel.code} img={img} /> : <ShownImage key={img.url} image={img} open={openImage} />))}</div>
         )}
-        {m.docMedia && <BlockFilesView code={channel.code} media={m.docMedia} open={openImage} />}
+        {m.docMedia && (
+          <Suspense fallback={null}>
+            <BlockFilesView code={channel.code} media={m.docMedia} open={openImage} />
+          </Suspense>
+        )}
         {m.leftOut && <p className="msg-left-out left-out-why">{m.leftOut}</p>}
         {m.failed !== undefined && (
           <p className="msg-failed" role="status" title={m.failed}>

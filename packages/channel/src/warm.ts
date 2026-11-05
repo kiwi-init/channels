@@ -7,6 +7,7 @@ import type { Marks } from "./receipts.ts";
 
 export interface Warm {
   messages: Message[];
+  reach: Message[];
   unread: number[];
   roster: Member[];
   requests: JoinRequest[];
@@ -16,23 +17,54 @@ export interface Warm {
   base: FoldBase | null;
 }
 
-const warm = new Map<string, Warm>();
+export const WARM_FULL = 2;
+export const WARM_LIGHT = 12;
+export const LIGHT = 50;
+export const LEAN = 1_600;
 
-export const warmOf = (code: string): Warm | undefined => warm.get(code);
+const full = new Map<string, Warm>();
+const light = new Map<string, Warm>();
 
-const WARM_KEEP = 4;
+export const warmOf = (code: string): Warm | undefined => full.get(code) ?? light.get(code);
 
-export function keepWarm(code: string, w: Warm): void {
-  warm.delete(code);
-  warm.set(code, w);
-  for (const old of warm.keys()) {
-    if (warm.size <= WARM_KEEP) break;
-    warm.delete(old);
+let lean: typeof import("./lean.ts") | null = null;
+
+export const leanNow = (): typeof import("./lean.ts") | null => lean;
+
+export const leanLoaded = (): Promise<typeof import("./lean.ts")> => import("./lean.ts").then((m) => (lean = m));
+
+function keepLight(code: string, w: Warm): void {
+  light.delete(code);
+  light.set(code, w);
+  for (const old of light.keys()) {
+    if (light.size <= WARM_LIGHT) break;
+    light.delete(old);
+  }
+}
+
+export function keepWarm(code: string, w: Warm, kind: "full" | "light" = "full"): void {
+  if (kind === "light") {
+    if (!full.has(code)) keepLight(code, w);
+    return;
+  }
+  light.delete(code);
+  full.delete(code);
+  full.set(code, w);
+  for (const [old, was] of full) {
+    if (full.size <= WARM_FULL) break;
+    full.delete(old);
+    const ready = leanNow();
+    if (ready) keepLight(old, ready.lighter(was));
+    else
+      void leanLoaded().then((l) => {
+        if (!full.has(old)) keepLight(old, l.lighter(was));
+      });
   }
 }
 
 export function dropWarm(code: string): void {
-  warm.delete(code);
+  full.delete(code);
+  light.delete(code);
 }
 
 /** Where to follow from when this session already holds the window: no cache read, no second verify. */

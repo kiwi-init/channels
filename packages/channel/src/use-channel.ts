@@ -6,8 +6,8 @@ import type { StoredMember } from "./store.ts";
 
 export type { ChannelHandle };
 
-export function useChannel(member: StoredMember, human?: HumanSession | null): ChannelHandle {
-  const store = useMemo(() => new ChannelStore(member, human), [member, human]);
+export function useChannel(member: StoredMember, human?: HumanSession | null, light = false): ChannelHandle {
+  const store = useMemo(() => new ChannelStore(member, human, undefined, light), [member, human, light]);
   const [handle, setHandle] = useState(store.snapshot);
   useEffect(() => {
     const stop = store.subscribe(() => setHandle(store.snapshot()));

@@ -7,7 +7,7 @@ export interface Wanted {
   readonly seq: number
 }
 
-export type Found = { kind: "none" } | { kind: "waiting" } | { kind: "missing" } | { kind: "found"; m: Message }
+export type Found = { kind: "none" } | { kind: "waiting" } | { kind: "older" } | { kind: "missing" } | { kind: "found"; m: Message }
 
 let wanted: Wanted | null = null
 const listeners = new Set<() => void>()
@@ -41,8 +41,9 @@ export function dropMessage(was: Wanted): void {
 
 export const useWantedMessage = (): Wanted | null => useSyncExternalStore(subscribe, () => wanted)
 
-export function findWanted(want: Wanted | null, code: string, messages: readonly Message[]): Found {
+export function findWanted(want: Wanted | null, code: string, messages: readonly Message[], since?: number): Found {
   if (!want || want.code !== code) return { kind: "none" }
+  if (since !== undefined && want.seq > 0 && want.seq < since) return { kind: "older" }
   const m = messages.find((x) => x.seq === want.seq)
   if (m) return { kind: "found", m }
   return messages.some((x) => x.seq > want.seq) ? { kind: "missing" } : { kind: "waiting" }

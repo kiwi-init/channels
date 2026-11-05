@@ -76,32 +76,42 @@ export function imageView(media: () => DocMedia | null, open: (url: string, alt:
     spot.textContent = img.name
     dom.append(spot)
     let live = true
+    let letGo: (() => void) | null = null
+    const lost = (why: string) => {
+      if (!live) return
+      dom.className = "doc-image is-gone"
+      spot.textContent = why
+    }
     const load = () => {
       const m = media()
       if (!m) return
-      void m.image(img).then(
-        (data) => {
-          if (!live) return
-          if (data === null) {
-            dom.className = "doc-image is-gone"
-            spot.textContent = `${img.name} is no longer available`
-            return
-          }
-          const url = `data:${img.mime};base64,${data}`
-          const pic = document.createElement("img")
-          pic.alt = img.name
-          pic.src = url
-          pic.draggable = false
-          pic.addEventListener("click", () => open(url, img.name))
-          dom.className = "doc-image"
-          dom.replaceChildren(pic)
-        },
-        () => {
-          if (!live) return
-          dom.className = "doc-image is-gone"
-          spot.textContent = `${img.name} didn't load`
-        }
-      )
+      void m
+        .image(img)
+        .then(
+          async (data) => {
+            if (!live) return
+            if (data === null) return lost(`${img.name} is no longer available`)
+            const url = `data:${img.mime};base64,${data}`
+            const { DOC_BOX, keyOf, scaleFor, thumbs } = await import("~/chat/thumbs")
+            if (!live) return
+            const scale = scaleFor(window.devicePixelRatio)
+            const key = keyOf(img.ref.id, DOC_BOX, scale)
+            letGo = () => thumbs.free(key)
+            const shot = await thumbs.take(key, url, DOC_BOX, scale)
+            if (!live) return
+            const pic = document.createElement("img")
+            pic.alt = img.name
+            pic.width = shot.width
+            pic.height = shot.height
+            pic.src = shot.thumb ?? url
+            pic.draggable = false
+            pic.addEventListener("click", () => open(url, img.name))
+            dom.className = "doc-image"
+            dom.replaceChildren(pic)
+          },
+          () => lost(`${img.name} didn't load`)
+        )
+        .catch(() => lost(`${img.name} didn't load`))
     }
     load()
     return {
@@ -110,6 +120,7 @@ export function imageView(media: () => DocMedia | null, open: (url: string, alt:
       stopEvent: (e) => e.type === "click",
       destroy: () => {
         live = false
+        letGo?.()
       },
     }
   }

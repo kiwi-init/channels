@@ -22,10 +22,19 @@ export function keepSame(prev: Message[], next: Message[]): Message[] {
   return changed ? out : prev
 }
 
+const KEPT_CHANNELS = 2
+
 const last = new Map<string, Message[]>()
 
 export function kept(code: string, next: Message[]): Message[] {
   const out = keepSame(last.get(code) ?? [], next)
+  last.delete(code)
   last.set(code, out)
+  for (const old of last.keys()) {
+    if (last.size <= KEPT_CHANNELS) break
+    last.delete(old)
+  }
   return out
 }
+
+export const keptCodes = (): string[] => [...last.keys()]

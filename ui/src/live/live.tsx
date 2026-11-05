@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import { Suspense, useEffect, useMemo, useRef, useState } from "react"
 
 import type { HarnessRow } from "@kiwi/core/harnesses.ts"
 import { capabilityLine, type Personality } from "@kiwi/core/personality.ts"
@@ -27,9 +27,11 @@ import { usePrefs } from "~/live/prefs"
 import { useComputer } from "~/live/computer"
 import { useDeviceLists } from "~/live/devices"
 import { useGone, useHome, useOpened } from "~/live/store"
-import { HomeMembers } from "~/live/home"
 import type { App, ChannelTile } from "~/model"
+import { later } from "~/kit/later"
 import type { Go } from "~/nav"
+
+const HomeMembers = later(() => import("~/live/home").then((m) => m.HomeMembers))
 
 const STATE: Record<ChannelRow["state"], ChannelTile["state"]> = { member: "member", pending: "waiting", agents: "gone", elsewhere: "gone" }
 
@@ -189,6 +191,11 @@ export function LiveDuties({ open, view, go }: { open: string | null; view: View
   }, [member])
   if (member && !member.relay) return <OpenMember key={member.code} member={member} view={view} />
   if (pending) return <OpenPending key={pending.code} pending={pending} />
-  if (!open && person) return <HomeMembers />
+  if (!open && person)
+    return (
+      <Suspense fallback={null}>
+        <HomeMembers />
+      </Suspense>
+    )
   return null
 }
