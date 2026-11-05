@@ -92,6 +92,8 @@ export const MAX_DOC_THREADS = 32;
 export const DOC_COMPACT = "this thread's doc is full; post a snapshot first";
 export const DOC_PRUNE_IDLE_MS = 7 * 24 * 60 * 60 * 1000;
 export const MAX_DOC_PRUNE = 200;
+export const DOC_VERSIONS = 10;
+export const DOC_VERSION_EVERY_MS = 60 * 60 * 1000;
 
 export const DOC_THREAD_RE = /^[A-Za-z0-9_-]{22}$/;
 export const wellFormedThread = (x: unknown): x is string => typeof x === "string" && DOC_THREAD_RE.test(x);

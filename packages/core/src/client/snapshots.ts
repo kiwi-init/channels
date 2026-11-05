@@ -1,6 +1,6 @@
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
-import { decodedWhole, olderRules, SNAPSHOT_EVERY, SNAPSHOT_TOO_LARGE } from "../protocol.ts";
+import { decodedWhole, olderRules, SNAPSHOT_EVERY, SNAPSHOT_TOO_LARGE, type DocEnvelope } from "../protocol.ts";
 import { MissingKey } from "../refusals.ts";
 import { openSnapshot, sealSnapshot, wellFormedSnapshot } from "../snapshot.ts";
 import { fold, rosterOf, type FoldBase } from "../state.ts";
@@ -18,6 +18,14 @@ export interface SnapshotsFx {
   snapshotIfDue(every?: number): Effect.Effect<number | null, Refused, Relay>;
   docList(): Effect.Effect<DocStat[], Refused, Relay>;
   pruneDocs(th: readonly string[]): Effect.Effect<DocsPruned, Refused, Relay>;
+  docVersions(th: string): Effect.Effect<DocVersionStat[], Refused, Relay>;
+  docVersion(th: string, upto: number): Effect.Effect<DocEnvelope & { snap?: true }, Refused, Relay>;
+}
+
+export interface DocVersionStat {
+  upto: number;
+  ts: number;
+  bytes: number;
 }
 
 export interface DocStat {
@@ -78,6 +86,14 @@ export class ChannelSnapshots {
       yield* this.ch.ownerOnly();
       if (!th.length) return { dropped: [], kept: [], freed: 0 };
       return yield* this.ch.request<DocsPruned>("/docs/prune", { method: "POST", body: JSON.stringify({ th }) });
+    }),
+
+    docVersions: Effect.fn("Channel.docVersions")({ self: this }, function* (this: ChannelSnapshots, th: string) {
+      return (yield* this.ch.request<{ versions: DocVersionStat[] }>("/docs/versions", {}, { th })).versions;
+    }),
+
+    docVersion: Effect.fn("Channel.docVersion")({ self: this }, function* (this: ChannelSnapshots, th: string, upto: number) {
+      return (yield* this.ch.request<{ version: DocEnvelope & { snap?: true } }>("/docs/version", {}, { th, upto: String(upto) })).version;
     }),
 
     snapshotIfDue: Effect.fn("Channel.snapshotIfDue")({ self: this }, function* (this: ChannelSnapshots, every: number = SNAPSHOT_EVERY) {

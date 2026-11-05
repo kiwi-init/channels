@@ -45,6 +45,14 @@ const DOCS_TABLE = "CREATE TABLE docs (th TEXT NOT NULL, dseq INTEGER NOT NULL, 
 
 const DOC_SNAPS_TABLE = "CREATE TABLE doc_snaps (th TEXT PRIMARY KEY, upto INTEGER NOT NULL, ts INTEGER NOT NULL, iv TEXT NOT NULL, ct TEXT NOT NULL, e INTEGER NOT NULL)";
 
+const DOC_VERSIONS_TABLE = "CREATE TABLE doc_versions (th TEXT NOT NULL, upto INTEGER NOT NULL, ts INTEGER NOT NULL, iv TEXT NOT NULL, ct TEXT NOT NULL, e INTEGER NOT NULL, PRIMARY KEY (th, upto))";
+
+export interface DocVersion {
+  upto: number;
+  ts: number;
+  bytes: number;
+}
+
 export interface DocStat {
   th: string;
   bytes: number;
@@ -164,6 +172,7 @@ export class RoomDb {
     this.sql.run(DELEGATIONS_TABLE);
     this.sql.run(DOCS_TABLE);
     this.sql.run(DOC_SNAPS_TABLE);
+    this.sql.run(DOC_VERSIONS_TABLE);
   }
 
   migrate(): void {
@@ -184,6 +193,7 @@ export class RoomDb {
     this.sql.run(DELEGATIONS_TABLE.replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS"));
     this.sql.run(DOCS_TABLE.replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS"));
     this.sql.run(DOC_SNAPS_TABLE.replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS"));
+    this.sql.run(DOC_VERSIONS_TABLE.replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS"));
     this.sql.run("DROP TABLE IF EXISTS secrets");
     migrated.add(this.sql);
   }
@@ -498,9 +508,21 @@ export class RoomDb {
     this.setDocBytes(this.docBytes() + ct.length);
   }
 
-  docSnap(th: string, upto: number, ts: number, iv: string, ct: string, e: number): void {
+  docSnap(th: string, upto: number, ts: number, iv: string, ct: string, e: number, keep: { versions: number; everyMs: number }): void {
     const covered = this.sql.all<{ n: number }>(`SELECT COALESCE(SUM(${CT_CHARS}), 0) AS n FROM docs WHERE th = ? AND dseq <= ?`, th, upto)[0]?.n ?? 0;
-    const old = this.sql.all<{ n: number }>(`SELECT COALESCE(SUM(${CT_CHARS}), 0) AS n FROM doc_snaps WHERE th = ?`, th)[0]?.n ?? 0;
+    const was = this.sql.all<{ ts: number; n: number }>(`SELECT ts, ${CT_CHARS} AS n FROM doc_snaps WHERE th = ?`, th)[0];
+    const newest = this.sql.all<{ ts: number }>("SELECT MAX(ts) AS ts FROM doc_versions WHERE th = ?", th)[0]?.ts ?? null;
+    const kept = was && keep.versions > 1 && (newest === null || was.ts - newest >= keep.everyMs);
+    if (kept) this.sql.run("INSERT OR REPLACE INTO doc_versions (th, upto, ts, iv, ct, e) SELECT th, upto, ts, iv, ct, e FROM doc_snaps WHERE th = ?", th);
+    const trimmed =
+      this.sql.all<{ n: number }>(
+        `SELECT COALESCE(SUM(${CT_CHARS}), 0) AS n FROM doc_versions WHERE th = ? AND upto NOT IN (SELECT upto FROM doc_versions WHERE th = ? ORDER BY upto DESC LIMIT ?)`,
+        th,
+        th,
+        Math.max(keep.versions - 1, 0),
+      )[0]?.n ?? 0;
+    this.sql.run("DELETE FROM doc_versions WHERE th = ? AND upto NOT IN (SELECT upto FROM doc_versions WHERE th = ? ORDER BY upto DESC LIMIT ?)", th, th, Math.max(keep.versions - 1, 0));
+    const old = kept ? trimmed : (was?.n ?? 0) + trimmed;
     this.sql.run("DELETE FROM docs WHERE th = ? AND dseq <= ?", th, upto);
     this.sql.run(
       "INSERT INTO doc_snaps (th, upto, ts, iv, ct, e) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (th) DO UPDATE SET upto = excluded.upto, ts = excluded.ts, iv = excluded.iv, ct = excluded.ct, e = excluded.e",
@@ -522,11 +544,25 @@ export class RoomDb {
     return [...(sent ? [{ ...envelope(sent), snap: true as const }] : []), ...rows.map(envelope)];
   }
 
+  docVersions(th: string): DocVersion[] {
+    const now = this.sql.all<DocVersion>(`SELECT upto, ts, ${CT_CHARS} AS bytes FROM doc_snaps WHERE th = ?`, th);
+    const older = this.sql.all<DocVersion>(`SELECT upto, ts, ${CT_CHARS} AS bytes FROM doc_versions WHERE th = ? ORDER BY upto DESC`, th);
+    return [...now, ...older];
+  }
+
+  docVersion(th: string, upto: number): DocEnvelope | null {
+    const row =
+      this.sql.all<DocRow>("SELECT upto AS dseq, ts, iv, ct, e FROM doc_snaps WHERE th = ? AND upto = ?", th, upto)[0] ??
+      this.sql.all<DocRow>("SELECT upto AS dseq, ts, iv, ct, e FROM doc_versions WHERE th = ? AND upto = ?", th, upto)[0];
+    return row ? { th, dseq: row.dseq, ts: row.ts, iv: unpacked(row.iv), ct: unpacked(row.ct), e: row.e, snap: true } : null;
+  }
+
   docList(): DocStat[] {
     return this.sql.all<DocStat>(
       `SELECT th, SUM(bytes) AS bytes, SUM(n) AS n, MAX(upto) AS upto, MAX(last) AS last FROM (
         SELECT th, ${CT_CHARS} AS bytes, 1 AS n, 0 AS upto, ts AS last FROM docs
         UNION ALL SELECT th, ${CT_CHARS} AS bytes, 0 AS n, upto, ts AS last FROM doc_snaps
+        UNION ALL SELECT th, ${CT_CHARS} AS bytes, 0 AS n, 0 AS upto, ts AS last FROM doc_versions
       ) GROUP BY th ORDER BY th`,
     );
   }
@@ -534,9 +570,11 @@ export class RoomDb {
   docDrop(th: string): number {
     const freed =
       (this.sql.all<{ n: number }>(`SELECT COALESCE(SUM(${CT_CHARS}), 0) AS n FROM docs WHERE th = ?`, th)[0]?.n ?? 0) +
-      (this.sql.all<{ n: number }>(`SELECT COALESCE(SUM(${CT_CHARS}), 0) AS n FROM doc_snaps WHERE th = ?`, th)[0]?.n ?? 0);
+      (this.sql.all<{ n: number }>(`SELECT COALESCE(SUM(${CT_CHARS}), 0) AS n FROM doc_snaps WHERE th = ?`, th)[0]?.n ?? 0) +
+      (this.sql.all<{ n: number }>(`SELECT COALESCE(SUM(${CT_CHARS}), 0) AS n FROM doc_versions WHERE th = ?`, th)[0]?.n ?? 0);
     this.sql.run("DELETE FROM docs WHERE th = ?", th);
     this.sql.run("DELETE FROM doc_snaps WHERE th = ?", th);
+    this.sql.run("DELETE FROM doc_versions WHERE th = ?", th);
     this.setDocBytes(Math.max(0, this.docBytes() - freed));
     return freed;
   }
@@ -546,7 +584,8 @@ export class RoomDb {
     if (raw !== undefined) return Number(raw) || 0;
     const total =
       (this.sql.all<{ n: number }>(`SELECT COALESCE(SUM(${CT_CHARS}), 0) AS n FROM docs`)[0]?.n ?? 0) +
-      (this.sql.all<{ n: number }>(`SELECT COALESCE(SUM(${CT_CHARS}), 0) AS n FROM doc_snaps`)[0]?.n ?? 0);
+      (this.sql.all<{ n: number }>(`SELECT COALESCE(SUM(${CT_CHARS}), 0) AS n FROM doc_snaps`)[0]?.n ?? 0) +
+      (this.sql.all<{ n: number }>(`SELECT COALESCE(SUM(${CT_CHARS}), 0) AS n FROM doc_versions`)[0]?.n ?? 0);
     this.setDocBytes(total);
     return total;
   }

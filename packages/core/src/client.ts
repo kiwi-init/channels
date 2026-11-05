@@ -15,7 +15,7 @@ import type { Identity } from "./identity.ts";
 import type { JoinClaims, JoinRequest, Member, MemberInfo, PersonPowers } from "./membership.ts";
 import { isPerson, personOf, sentTo, withSeats, type RoomMember } from "./room-rules.ts";
 import type { Marks } from "./note.ts";
-import { GENERAL_ROOM, type ChannelIcon, type Envelope, type FileAttachment, type ImageAttachment, type InlineImage, type Message } from "./protocol.ts";
+import { GENERAL_ROOM, type ChannelIcon, type DocEnvelope, type Envelope, type FileAttachment, type ImageAttachment, type InlineImage, type Message } from "./protocol.ts";
 import type { Scope } from "./scopes.ts";
 import type { GithubStatus } from "./github-health.ts";
 import type { FoldBase, GithubRelease, GithubRules, GithubState, GuardFloor } from "./state.ts";
@@ -38,12 +38,12 @@ import type { Delegation } from "./delegation.ts";
 import type { DeviceList } from "./devices.ts";
 import { ChannelSending, type SendOptions } from "./client/send.ts";
 import { ChannelSettings, type RoomsSetting } from "./client/settings.ts";
-import { ChannelSnapshots, type DocsPruned, type DocStat } from "./client/snapshots.ts";
+import { ChannelSnapshots, type DocsPruned, type DocStat, type DocVersionStat } from "./client/snapshots.ts";
 
 const COMPACT_WAIT_MS = 30_000;
 
 export { ChannelGone, goneText, RelayError, Unreachable, type Refused } from "./client/errors.ts";
-export type { DocsPruned, DocStat } from "./client/snapshots.ts";
+export type { DocsPruned, DocStat, DocVersionStat } from "./client/snapshots.ts";
 export { downWhy, fetchRelay, keepAnswersIn, OfflineReads, Relay, relayConfig, relayDown, settle, type AnswerMemory, type HumanSession } from "./client/relay.ts";
 export { eachLive, QUIET_DROP_MS, reason, type Live, type OpenKind, type PresenceFields, type StreamOptions } from "./client/live.ts";
 export type { Probe } from "./client/wire.ts";
@@ -653,6 +653,14 @@ export class Channel {
 
   pruneDocs(th: readonly string[]): Promise<DocsPruned> {
     return run(this.fx.pruneDocs(th));
+  }
+
+  docVersions(th: string): Promise<DocVersionStat[]> {
+    return run(this.fx.docVersions(th));
+  }
+
+  docVersion(th: string, upto: number): Promise<DocEnvelope & { snap?: true }> {
+    return run(this.fx.docVersion(th, upto));
   }
 
   snapshotAt(): Promise<number | null> {

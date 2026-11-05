@@ -198,6 +198,44 @@ describe("the relay stores and relays sealed doc updates (T491)", () => {
     expect((await ch.docList()).map((d) => d.th)).toContain(BUSY);
   });
 
+  test("each doc keeps its last 10 versions, at most one an hour, counted in the channel's doc bytes and dropped with the doc (T4605)", async () => {
+    const VTH = "versionsversionsvers01";
+    const HOUR = 60 * 60 * 1000;
+    const base = Date.now() - 48 * HOUR;
+    const stored = (mem: Database) => Number((mem.query("SELECT v FROM meta WHERE k = 'doc_bytes'").get() as { v: string }).v);
+    const summed = (mem: Database) =>
+      ["docs", "doc_snaps", "doc_versions"].reduce(
+        (n, table) => n + (mem.query(`SELECT COALESCE(SUM(CASE WHEN typeof(ct) = 'blob' THEN (LENGTH(ct) * 4 + 2) / 3 ELSE LENGTH(ct) END), 0) AS n FROM ${table}`).get() as { n: number }).n,
+        0,
+      );
+    withRoom((sent, mem) => {
+      for (let i = 1; i <= 12; i++) {
+        expect(only(sent({ t: "doc", id: `v${i}`, th: VTH, iv: IV, ct: `dXBkYXRl${i}`, e: 0 }))).toMatchObject({ t: "ack", seq: i });
+        expect(only(sent({ t: "doc.snap", id: `s${i}`, th: VTH, upto: i, iv: IV, ct: `c25hcA${i}`, e: 0 }))).toMatchObject({ t: "ack", seq: i });
+        mem.query("UPDATE doc_snaps SET ts = ? WHERE th = ?").run(base + i * HOUR, VTH);
+      }
+      expect(stored(mem)).toBe(summed(mem));
+      expect(only(sent({ t: "doc", id: "v13", th: VTH, iv: IV, ct: "dXBkYXRl13", e: 0 }))).toMatchObject({ seq: 13 });
+      expect(only(sent({ t: "doc.snap", id: "s13", th: VTH, upto: 13, iv: IV, ct: "c25hcA13", e: 0 }))).toMatchObject({ seq: 13 });
+      mem.query("UPDATE doc_snaps SET ts = ? WHERE th = ?").run(base + 12 * HOUR + 10 * 60 * 1000, VTH);
+      expect(only(sent({ t: "doc", id: "v14", th: VTH, iv: IV, ct: "dXBkYXRl14", e: 0 }))).toMatchObject({ seq: 14 });
+      expect(only(sent({ t: "doc.snap", id: "s14", th: VTH, upto: 14, iv: IV, ct: "c25hcA14", e: 0 }))).toMatchObject({ seq: 14 });
+      expect(stored(mem)).toBe(summed(mem));
+      expect(replies(sent({ t: "doc.sub", th: VTH, since: 0 }))).toEqual([expect.objectContaining({ t: "doc", dseq: 14, ct: "c25hcA14", snap: true }), { t: "doc.ready", th: VTH, head: 14 }]);
+    });
+    const ch = new Channel(access, relay, owner);
+    expect((await ch.docVersions(VTH)).map((v) => v.upto)).toEqual([14, 12, 11, 10, 9, 8, 7, 6, 5, 4]);
+    expect(await ch.docVersion(VTH, 5)).toMatchObject({ th: VTH, dseq: 5, iv: IV, ct: "c25hcA5", e: 0, snap: true });
+    expect(await ch.docVersion(VTH, 14)).toMatchObject({ dseq: 14, ct: "c25hcA14" });
+    expect(await ch.docVersion(VTH, 13).catch((e: unknown) => String(e))).toContain("no such version");
+    expect(await ch.docVersion(VTH, 3).catch((e: unknown) => String(e))).toContain("no such version");
+    withRoom((_, mem) => mem.query("UPDATE doc_versions SET ts = 0 WHERE th = ?").run(VTH));
+    withRoom((_, mem) => mem.query("UPDATE doc_snaps SET ts = 0 WHERE th = ?").run(VTH));
+    expect((await ch.pruneDocs([VTH])).dropped).toEqual([VTH]);
+    expect(await ch.docVersions(VTH)).toEqual([]);
+    withRoom((_, mem) => expect(stored(mem)).toBe(summed(mem)));
+  });
+
   test("over real sockets: a follower gets the update live, the sender and a socket that didn't follow don't", async () => {
     const open = async () => {
       const u = new URL(`/v1/rooms/${access.roomId}/ws?since=0`, relay);
