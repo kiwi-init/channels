@@ -65,12 +65,23 @@ try {
   check(playing || still, playing ? `${ENGINE} plays the loop` : `${ENGINE} can't play the loop here, and shows its still frame instead of a blank`);
   if (SHOT) await page.screenshot({ path: SHOT });
   if (playing) {
-    await page.evaluate(() => {
-      const v = document.querySelector("video")!;
-      v.currentTime = Math.max(0, v.duration - 0.4);
-    });
+    await page.evaluate(
+      () =>
+        new Promise<void>((done) => {
+          const v = document.querySelector("video")!;
+          const w = window as unknown as { wrapped: boolean };
+          w.wrapped = false;
+          let last = 0;
+          v.addEventListener("timeupdate", () => {
+            if (v.currentTime < last - 1) w.wrapped = true;
+            last = v.currentTime;
+          });
+          v.addEventListener("seeked", () => done(), { once: true });
+          v.currentTime = Math.max(0, Math.floor((v.duration - 1.5) / 2) * 2);
+        }),
+    );
     const wrapped = await page
-      .waitForFunction(() => (document.querySelector("video")?.currentTime ?? 99) < 2, null, { timeout: 5000 })
+      .waitForFunction(() => (window as unknown as { wrapped: boolean }).wrapped, null, { timeout: 10_000 })
       .then(() => true)
       .catch(() => false);
     check(wrapped, `the loop wraps at its end (${(await at(page)).toFixed(2)} s after it)`);
