@@ -28,7 +28,14 @@ export function Root({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => voi
   const [toasts, toast, dismissToast] = useToasts()
   const ctx = useMemo(() => ({ app, nav, go, toast }), [app, nav, go, toast])
   const act = useMemo(() => ({ actions: app.actions, go, toast }), [app.actions, go, toast])
-  usePaletteKey(useCallback(() => go({ to: "dialog", dialog: nav.dialog === "palette" ? null : "palette" }), [go, nav.dialog]))
+  usePaletteKey(
+    useCallback(() => go({ to: "dialog", dialog: nav.dialog === "palette" ? null : "palette" }), [go, nav.dialog]),
+    useCallback(() => {
+      if (nav.dialog === "palette") go({ to: "dialog", dialog: null })
+      else if (document.querySelector("dialog[open]")) return
+      showCalm()
+    }, [go, nav.dialog])
+  )
   useHistoryKeys(go, !!nav.modal)
   useTheme(app)
 
@@ -115,7 +122,7 @@ function useHistoryKeys(go: (go: Go) => void, modal: boolean) {
   }, [go, modal])
 }
 
-function usePaletteKey(toggle: () => void) {
+function usePaletteKey(toggle: () => void, calm: () => void) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey)) return
@@ -125,12 +132,12 @@ function usePaletteKey(toggle: () => void) {
         toggle()
       } else if (key === "t" && !e.altKey && !e.shiftKey) {
         e.preventDefault()
-        showCalm()
+        calm()
       }
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
-  }, [toggle])
+  }, [toggle, calm])
 }
 
 function useTheme(app: App) {
