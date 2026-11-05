@@ -109,10 +109,51 @@ async function run(what: (d: Driver) => Promise<void>): Promise<void> {
   }
 }
 
+const loopPath = [...builtInFiles().keys()].find((name) => name.endsWith(".mp4"));
+
+const loopPlays = (d: Driver, src: string, asBlob: boolean): Promise<string> =>
+  d.evaluate(
+    async ({ url, blob }: { url: string; blob: boolean }) => {
+      const blocked: string[] = [];
+      const note = (e: SecurityPolicyViolationEvent): void => void blocked.push(`${e.effectiveDirective} ${e.blockedURI}`);
+      document.addEventListener("securitypolicyviolation", note);
+      const v = document.createElement("video");
+      v.muted = true;
+      v.loop = true;
+      v.playsInline = true;
+      v.src = blob ? URL.createObjectURL(new Blob([await (await fetch(url)).arrayBuffer()], { type: "video/mp4" })) : url;
+      document.body.append(v);
+      try {
+        await v.play();
+      } catch (e) {
+        v.remove();
+        document.removeEventListener("securitypolicyviolation", note);
+        return `play() refused: ${String(e)}; error ${v.error?.code ?? "none"}; canPlayType ${v.canPlayType('video/mp4; codecs="avc1.640028"') || "no"}; blocked by CSP: ${blocked.join(", ") || "nothing"}`;
+      }
+      const start = v.currentTime;
+      await new Promise((r) => setTimeout(r, 2_000));
+      const moved = v.currentTime - start;
+      const said = moved > 0.5 ? "plays" : `stuck: moved ${moved.toFixed(2)} s, readyState ${v.readyState}, error ${v.error?.code ?? "none"}`;
+      v.remove();
+      document.removeEventListener("securitypolicyviolation", note);
+      return said;
+    },
+    { url: src, blob: asBlob },
+    20_000,
+  );
+
 try {
   await run(async (d) => {
     await shows(d, "built-in");
     console.log("nothing published: the built-in UI");
+    if (!loopPath) problems.push("the built-in UI has no Calm loop (.mp4)");
+    else {
+      const url = `views://internal/${loopPath}`;
+      console.log(`the Calm loop straight from ${url}: ${await loopPlays(d, url, false)}`);
+      const said = await loopPlays(d, url, true);
+      if (said !== "plays") problems.push(`the Calm loop doesn't play in the packaged app, fetched into a video/mp4 blob as the sky does: ${said}`);
+      console.log(`the Calm loop as a video/mp4 blob, as the sky plays it: ${said}`);
+    }
   });
 
   const a = publish("a");
