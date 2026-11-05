@@ -215,7 +215,7 @@ export function useStick(following = true, still = false) {
     const box = scroller.current
     const list = content.current
     if (!box || !list) return
-    if (height.current && list.offsetHeight !== height.current) settle()
+    if ((still && anchor.current) || (height.current && list.offsetHeight !== height.current)) settle()
     const hidden = box.scrollHeight - box.scrollTop - box.clientHeight
     if (room.current > 0 && hidden > 0.5) {
       room.current = Math.max(0, room.current - hidden)
@@ -278,13 +278,14 @@ export function useStick(following = true, still = false) {
       if (held.current === on) return
       held.current = on
       if (on) {
+        if (still && anchor.current) settle()
         stuck.current = false
         const box = scroller.current
         const list = content.current
         anchor.current = box && list ? ((still ? caretIn(box, list) : null) ?? anchorIn(box, list)) : null
       } else remember()
     },
-    [remember, still]
+    [remember, settle, still]
   )
 
   return { scroller, content, spacer, stuck, live, remember, settle, toBottom, toOffset, unstick, hold }
@@ -461,7 +462,10 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
   useLayoutEffect(() => {
     const before = lastSeq.current
     lastSeq.current = last?.seq ?? 0
-    if (!last || last.seq === before) return
+    if (!last || last.seq === before) {
+      if (doc) settle()
+      return
+    }
     const arriving = before ? list.filter((m) => m.seq > before) : []
     if (arriving.length <= 3) {
       for (const m of arriving) {
