@@ -1,227 +1,104 @@
 #!/usr/bin/env bun
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, webkit, type Page } from "playwright-core";
 
 if (process.argv.includes("--help")) {
-  console.log(`The Calm sky (T4204) in a bare page: it checks the clouds draw with contrast, drift, hold still for reduced motion,
-pause while the window is hidden, change nothing in the DOM per frame, and free their GL context on stop. Then it prints
-frame times: the rAF interval and each frame's GPU cost (draw + a 1-pixel readback), p50 and p99, at a MacBook Pro 14" size, 2x.
-The times are printed, never gated (Jow #850).
+  console.log(`The Calm sky (T4204), Jow's loop, in a bare page. It checks that the loop plays and wraps at its end, pauses while the
+window is hidden and plays again when shown, shows only its still frame with reduced motion, and leaves nothing behind
+when unmounted. An engine that can't play the video must still show the still frame, never a blank.
 
-  bun scripts/ui-calm-sky.ts [--chromium] [--seconds=6] [--width=1512] [--height=982] [--shot=sky.png] [--seed=1200]`);
+  bun scripts/ui-calm-sky.ts [--chromium] [--shot=sky.png]`);
   process.exit(0);
 }
 
 const ROOT = resolve(import.meta.dir, "..");
 const ENGINE = process.argv.includes("--chromium") ? "chromium" : "webkit";
-const arg = (name: string, fallback: number): number => Number(process.argv.find((a) => a.startsWith(`--${name}=`))?.slice(name.length + 3) ?? fallback);
-const SECONDS = arg("seconds", 6);
-const WIDTH = arg("width", 1512);
-const HEIGHT = arg("height", 982);
 const SHOT = process.argv.find((a) => a.startsWith("--shot="))?.slice(7);
-const SEED = arg("seed", 1200);
 
 const dir = mkdtempSync(join(tmpdir(), "kiwi-calm-sky-"));
-const entry = join(dir, "entry.ts");
-writeFileSync(
-  entry,
-  `import { startClouds, type Clouds } from ${JSON.stringify(join(ROOT, "ui/src/calm/clouds.ts"))}
-let canvas = document.querySelector("canvas")!
-const copy = document.createElement("canvas")
-let clouds: Clouds | null = null
-const state = { frames: 0, costs: [] as number[], sample: null as number[] | null, want: false }
-const grab = () => {
-  copy.width = 96
-  copy.height = 64
-  const ctx = copy.getContext("2d", { willReadFrequently: true })!
-  ctx.drawImage(canvas, 0, 0, 96, 64)
-  const px = ctx.getImageData(0, 0, 96, 64).data
-  const out: number[] = []
-  for (let i = 0; i < px.length; i += 4) out.push(px[i]!)
-  return out
-}
-Object.assign(window, {
-  sky: {
-    state,
-    start(still: boolean, timed: boolean) {
-      clouds?.stop()
-      const fresh = document.createElement("canvas")
-      canvas.replaceWith(fresh)
-      canvas = fresh
-      state.frames = 0
-      state.costs = []
-      clouds = startClouds(canvas, {
-        still,
-        seed: ${SEED},
-        measure(ms) {
-          state.frames++
-          if (timed) state.costs.push(ms)
-          if (state.want) {
-            state.sample = grab()
-            state.want = false
-          }
-        },
-      })
-      return !!clouds
-    },
-    stop() {
-      clouds?.stop()
-      clouds = null
-    },
-    lost() {
-      return (canvas.getContext("webgl2") as WebGL2RenderingContext | null)?.isContextLost() ?? true
-    },
-    hide(hidden: boolean) {
-      Object.defineProperty(document, "hidden", { configurable: true, get: () => hidden })
-      document.dispatchEvent(new Event("visibilitychange"))
-    },
-  },
-})
-`,
-);
-const built = await Bun.build({ entrypoints: [entry], minify: true, target: "browser" });
+const entry = join(ROOT, "ui/src/calm/sky.page.tsx");
+const out = join(dir, "out");
+const built = await Bun.build({ entrypoints: [entry], outdir: out, minify: true, target: "browser", loader: { ".mp4": "file", ".jpg": "file" }, publicPath: "/" });
 if (!built.success) throw new Error(built.logs.join("\n"));
-const script = await built.outputs[0]!.text();
-const html = `<!doctype html><meta charset="utf-8"><style>html,body{margin:0;height:100%;background:#000}canvas{position:fixed;inset:0;width:100%;height:100%;display:block}</style><canvas></canvas><script type="module">${script.replaceAll("</script", "<\\/script")}</script>`;
-const server = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: () => new Response(html, { headers: { "content-type": "text/html" } }) });
+const script = built.outputs.find((o) => o.kind === "entry-point")!.path.slice(out.length + 1);
+const html = `<!doctype html><meta charset="utf-8"><style>html,body{margin:0;height:100%;background:#000}#box{position:fixed;inset:0}</style><div id="box"></div><script type="module" src="/${script}"></script>`;
+const server = Bun.serve({
+  port: 0,
+  hostname: "127.0.0.1",
+  fetch: (req) => {
+    const path = new URL(req.url).pathname;
+    return path === "/" ? new Response(html, { headers: { "content-type": "text/html" } }) : new Response(Bun.file(join(out, path)));
+  },
+});
 
 interface Sky {
-  state: { frames: number; costs: number[]; sample: number[] | null; want: boolean };
-  start(still: boolean, timed: boolean): boolean;
-  stop(): void;
-  lost(): boolean;
+  mount(): void;
+  unmount(): void;
   hide(hidden: boolean): void;
 }
 declare const sky: Sky;
-
-const sample = async (page: Page): Promise<number[]> => {
-  await page.evaluate(() => {
-    sky.state.sample = null;
-    sky.state.want = true;
-  });
-  await page.waitForFunction(() => sky.state.sample !== null, null, { timeout: 5000 });
-  return page.evaluate(() => sky.state.sample ?? []);
-};
-const frames = (page: Page): Promise<number> => page.evaluate(() => sky.state.frames);
-const spread = (px: number[]): { low: number; high: number; sd: number } => {
-  const mean = px.reduce((a, b) => a + b, 0) / px.length;
-  const sorted = [...px].sort((a, b) => a - b);
-  return { low: sorted[Math.floor(px.length * 0.02)]!, high: sorted[Math.floor(px.length * 0.98)]!, sd: Math.sqrt(px.reduce((a, b) => a + (b - mean) ** 2, 0) / px.length) };
-};
-const moved = (a: number[], b: number[]): number => a.reduce((s, v, i) => s + Math.abs(v - (b[i] ?? 0)), 0) / a.length;
-const pct = (xs: number[], p: number): number => {
-  const sorted = [...xs].sort((a, b) => a - b);
-  return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))] ?? NaN;
-};
 
 const failures: string[] = [];
 const check = (ok: boolean, said: string): void => {
   console.log(`${ok ? "✓" : "✗"} ${said}`);
   if (!ok) failures.push(said);
 };
+const at = (page: Page) => page.evaluate(() => document.querySelector("video")?.currentTime ?? -1);
+const paused = (page: Page) => page.evaluate(() => document.querySelector("video")?.paused ?? true);
 
 const browser = ENGINE === "webkit" ? await webkit.launch() : await chromium.launch({ executablePath: process.env.SMOKE_CHROMIUM || undefined });
 try {
-  const page = await browser.newPage({ viewport: { width: WIDTH, height: HEIGHT }, deviceScaleFactor: 2 });
+  const page = await browser.newPage({ viewport: { width: 1512, height: 982 }, deviceScaleFactor: 2 });
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto(`http://127.0.0.1:${server.port}/`);
   await page.waitForFunction(() => "sky" in window);
-
-  const started = await page.evaluate(() => sky.start(false, false));
-  check(started, `${ENGINE}: WebGL2 sky starts`);
-  if (!started) throw new Error("no WebGL2");
-  const first = await sample(page);
-  const look = spread(first);
-  check(look.high - look.low >= 40 && look.sd >= 8, `clouds draw with contrast: 2–98% luminance ${look.low}–${look.high}, sd ${look.sd.toFixed(1)}`);
-  await page.waitForTimeout(1500);
-  const drift = moved(first, await sample(page));
-  check(drift > 0.05, `the sky drifts: ${drift.toFixed(2)} mean change in 1.5 s`);
-
-  const mutations = await page.evaluate(
-    () =>
-      new Promise<number>((done) => {
-        let n = 0;
-        const watch = new MutationObserver((list) => (n += list.length));
-        watch.observe(document, { subtree: true, childList: true, attributes: true, characterData: true });
-        setTimeout(() => {
-          watch.disconnect();
-          done(n);
-        }, 1000);
-      }),
-  );
-  check(mutations === 0, `nothing in the DOM changes per frame: ${mutations} mutations in 1 s`);
-
-  await page.evaluate(() => sky.hide(true));
-  const hiddenAt = await frames(page);
-  await page.waitForTimeout(600);
-  const whileHidden = (await frames(page)) - hiddenAt;
-  await page.evaluate(() => sky.hide(false));
-  const resumed = hiddenAt + whileHidden + 2;
-  await page
-    .waitForFunction((n) => sky.state.frames >= n, resumed, { timeout: 5000 })
-    .catch(() => {
-      // The check below reports a sky that didn't resume; the wait only gives a slow GPU time.
+  await page.evaluate(() => sky.mount());
+  await page.waitForSelector(".calm-sky video");
+  const playing = await page
+    .waitForFunction(() => (document.querySelector("video")?.currentTime ?? 0) > 0.3, null, { timeout: 8000 })
+    .then(() => true)
+    .catch(() => false);
+  const still = await page.evaluate(() => getComputedStyle(document.querySelector(".calm-sky")!).backgroundImage.includes("idle-still"));
+  check(playing || still, playing ? `${ENGINE} plays the loop` : `${ENGINE} can't play the loop here, and shows its still frame instead of a blank`);
+  if (SHOT) await page.screenshot({ path: SHOT });
+  if (playing) {
+    await page.evaluate(() => {
+      const v = document.querySelector("video")!;
+      v.currentTime = Math.max(0, v.duration - 0.4);
     });
-  const back = (await frames(page)) - hiddenAt - whileHidden;
-  check(whileHidden === 0 && back >= 2, `hidden, it draws nothing (${whileHidden} frames in 600 ms) and resumes when shown (${back} frames)`);
-
-  await page.evaluate(() => sky.stop());
-  const stoppedAt = await frames(page);
-  await page.waitForTimeout(400);
-  const after = (await frames(page)) - stoppedAt;
-  check(after === 0 && (await page.evaluate(() => sky.lost())), `stopped, it draws no more frames (${after}) and lets go of its GL context`);
-
+    const wrapped = await page
+      .waitForFunction(() => (document.querySelector("video")?.currentTime ?? 99) < 2, null, { timeout: 5000 })
+      .then(() => true)
+      .catch(() => false);
+    check(wrapped, `the loop wraps at its end (${(await at(page)).toFixed(2)} s after it)`);
+    await page.evaluate(() => sky.hide(true));
+    await page.waitForTimeout(300);
+    const hiddenAt = await at(page);
+    await page.waitForTimeout(700);
+    const stood = (await paused(page)) && (await at(page)) === hiddenAt;
+    await page.evaluate(() => sky.hide(false));
+    const resumed = await page
+      .waitForFunction((t) => (document.querySelector("video")?.currentTime ?? 0) > t + 0.2, hiddenAt, { timeout: 5000 })
+      .then(() => true)
+      .catch(() => false);
+    check(stood && resumed, `hidden, it holds still at ${hiddenAt.toFixed(2)} s, and plays again when shown`);
+  }
+  await page.evaluate(() => sky.unmount());
+  check(await page.evaluate(() => !document.querySelector("video") && !document.querySelector(".calm-sky")), "unmounted, it leaves no video behind");
   await page.close();
-  const still = await browser.newPage({ viewport: { width: WIDTH, height: HEIGHT }, deviceScaleFactor: 2, reducedMotion: "reduce" });
-  await still.goto(`http://127.0.0.1:${server.port}/`);
-  await still.waitForFunction(() => "sky" in window);
-  await still.evaluate(() => sky.start(true, false));
-  await still.waitForTimeout(300);
-  const stillAt = await frames(still);
-  await still.waitForTimeout(1000);
-  const stillFrames = (await frames(still)) - stillAt;
-  check(stillFrames === 0, `reduced motion: a still sky, ${stillFrames} frames drawn in 1 s`);
-  await still.evaluate(() => sky.stop());
-  await still.close();
 
-  const timed = await browser.newPage({ viewport: { width: WIDTH, height: HEIGHT }, deviceScaleFactor: 2 });
-  await timed.goto(`http://127.0.0.1:${server.port}/`);
-  await timed.waitForFunction(() => "sky" in window);
-  const gaps = await timed.evaluate(
-    (ms) =>
-      new Promise<number[]>((done) => {
-        sky.start(false, false);
-        const out: number[] = [];
-        let last = 0;
-        const end = performance.now() + ms;
-        const step = (now: number) => {
-          if (last) out.push(now - last);
-          last = now;
-          if (now < end) requestAnimationFrame(step);
-          else done(out);
-        };
-        requestAnimationFrame(step);
-      }),
-    (SECONDS * 1000) / 2,
-  );
-  await timed.evaluate(() => sky.start(false, true));
-  await timed.waitForTimeout((SECONDS * 1000) / 2);
-  const costs = await timed.evaluate(() => sky.state.costs.slice(5));
-  const size = await timed.evaluate(() => {
-    const c = document.querySelector("canvas")!;
-    return `${c.width}x${c.height}`;
-  });
-  if (SHOT) await timed.screenshot({ path: SHOT });
-  await timed.evaluate(() => sky.stop());
-  console.log(
-    `  ${ENGINE} ${WIDTH}x${HEIGHT}@2x, drawn at ${size}: rAF interval p50 ${pct(gaps, 0.5).toFixed(2)} ms, p99 ${pct(gaps, 0.99).toFixed(2)} ms, max ${Math.max(...gaps).toFixed(2)} ms (${gaps.length} frames)`,
-  );
-  console.log(
-    `  frame cost (draw + a 1-pixel readback) p50 ${pct(costs, 0.5).toFixed(2)} ms, p99 ${pct(costs, 0.99).toFixed(2)} ms, max ${Math.max(...costs).toFixed(2)} ms (${costs.length} frames); 120 Hz needs ≤ 8.3 ms`,
-  );
+  const calm = await browser.newPage({ viewport: { width: 1512, height: 982 }, reducedMotion: "reduce" });
+  calm.on("pageerror", (e) => errors.push(e.message));
+  await calm.goto(`http://127.0.0.1:${server.port}/`);
+  await calm.waitForFunction(() => "sky" in window);
+  await calm.evaluate(() => sky.mount());
+  await calm.waitForSelector(".calm-sky");
+  const calmStill = await calm.evaluate(() => !document.querySelector("video") && getComputedStyle(document.querySelector(".calm-sky")!).backgroundImage.includes("idle-still"));
+  check(calmStill, "reduced motion: the still frame, no video");
+  await calm.close();
   check(errors.length === 0, `no page errors${errors.length ? `: ${errors.join("; ")}` : ""}`);
 } finally {
   await browser.close();
@@ -232,4 +109,4 @@ if (failures.length) {
   console.error(`the Calm sky failed: ${failures.join("; ")}`);
   process.exit(1);
 }
-console.log("the Calm sky draws, drifts, holds still for reduced motion, pauses while hidden and frees its context");
+console.log("the Calm sky plays Jow's loop, pauses while hidden, holds still for reduced motion and cleans up");

@@ -220,9 +220,9 @@ jobs:
       - name: doc follow, at the bottom the view follows an agent's lines, also right after you send while it posts and edits, in Chromium and WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-doc-follow.ts
-      - name: calm sky, the idle clouds draw, drift, hold still for reduced motion, pause while hidden and free their GL context, in WebKit
+      - name: calm sky, the idle loop plays and wraps, pauses while hidden, holds still for reduced motion, in WebKit
         if: ${{ !cancelled() }}
-        run: bun scripts/ui-calm-sky.ts --seconds=2
+        run: bun scripts/ui-calm-sky.ts
       - name: doc paste, an image pasted into a line goes out with that line
         if: ${{ !cancelled() }}
         run: bun scripts/ui-doc-paste.ts
