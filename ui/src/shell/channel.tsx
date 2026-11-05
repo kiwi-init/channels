@@ -13,7 +13,6 @@ import { dropMessage, findWanted, useWantedMessage } from "~/live/open-message"
 import { openAsks } from "~/needs/open"
 import { sameWhere, useApp } from "~/nav"
 import { whereKey } from "~/places"
-import { ThreadPanel } from "~/panels/thread"
 import { SIDEBAR_KEYS, useSidebarHidden } from "@kiwi/app/sidebar-hidden.ts"
 import { usePanelWidth } from "~/shell/panel-width"
 import { isSideKey, setDrawer, toggleSide, useDrawer, useTall } from "~/shell/side"
@@ -34,6 +33,7 @@ const PrPanel = later(() => import("~/github/panel").then((m) => m.PrPanel))
 const IssuePanel = later(() => import("~/github/panel").then((m) => m.IssuePanel))
 const NeedsYou = later(() => import("~/needs/needs").then((m) => m.NeedsYou))
 const TaskPanel = later(() => import("~/panels/task").then((m) => m.TaskPanel))
+const ThreadPanel = later(() => import("~/panels/thread").then((m) => m.ThreadPanel))
 const Profile = later(() => import("~/modals/profile").then((m) => m.Profile))
 const ChannelSettings = later(() => import("~/modals/channel-settings").then((m) => m.ChannelSettings))
 const Invite = later(() => import("~/modals/invite").then((m) => m.Invite))

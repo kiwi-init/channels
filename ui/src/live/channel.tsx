@@ -15,7 +15,7 @@ import { sendsInTurn } from "@kiwi/app/send-order.ts"
 import { markSeenIn, roomsFrom, seenIn, sendFrom, useSeen } from "@kiwi/app/threads.ts"
 import { useNewMembers, useNewPowers } from "~/live/defaults"
 import { kept } from "~/live/keep"
-import { readOnlyBefore, withReach } from "~/live/reach"
+import { withReach } from "~/live/reach"
 import { changeUnsent, nextUnsentKey, resendOf, unsentBlock, unsentIn } from "~/live/unsent"
 import { asksOf, directsOf, groupsOf, issuesOf, leftOutOf, messagesOf, formerOf, nextOf, peopleOf, prsOf, roomsOf, tasksOf, theirsOf, type Pending } from "~/live/map"
 import { iconUrl } from "~/live/icon"
@@ -140,7 +140,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const rows = useMemo(() => messagesOf(state, messages, me, asks.askOf, pictures, pending), [state, messages, me, asks.askOf, pictures, pending])
   const busy = useMemo(() => busyOf(people), [people])
   const receipts = useMemo(() => receiptsOf(state, shownWire, me, marks, pkOf, clock, busy), [state, shownWire, me, marks, pkOf, busy])
-  const mapped = useMemo(() => kept(code, readOnlyBefore(withReceipts(rows, receipts), since)), [code, rows, receipts, since])
+  const mapped = useMemo(() => kept(code, withReceipts(rows, receipts)), [code, rows, receipts])
   const leftOut = useMemo(() => (isOwner ? leftOutOf(state, shownWire, me) : []), [isOwner, state, shownWire, me])
   const tasks = useMemo(() => tasksOf(state, asks.held, me, messages), [state, asks.held, me, messages])
   const taskGroups = useMemo(() => groupsOf(state, me), [state, me])

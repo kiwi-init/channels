@@ -12,7 +12,6 @@ import { chatterLine, chatterRuns, type ChatterRun } from "~/chat/chatter"
 import { MessageRow } from "~/chat/message"
 import { linked } from "~/chat/linked"
 import { threadReply } from "~/chat/quote"
-import { QuotePick } from "~/chat/quote-pick"
 import { flash, jumpTo, ReplyContext, useReplying, type Replying } from "~/chat/reply"
 import type { Jump } from "~/chat/search-box"
 import { paintHits } from "~/chat/search-paint"
@@ -25,13 +24,14 @@ import { liveOf, workingIn } from "~/doing"
 import { sameWhere, useApp } from "~/nav"
 import { keepSpot, spotAt, spotKey, type Spot } from "~/places"
 import { between, nickname, shown } from "~/names"
-import { dmInRoom } from "~/live/dm"
 import { openMessage } from "~/live/open-message"
 
 const HistoryFold = later(() => import("~/chat/compact").then((m) => m.HistoryFold))
 const ProposalCard = later(() => import("~/chat/compact").then((m) => m.ProposalCard))
-const AddAgentCard = later(() => import("~/modals/add-agent").then((m) => m.AddAgentCard))
 const LiveThreadDoc = later(() => import("~/chat/doc/editor").then((m) => m.LiveThreadDoc))
+const QuotePick = later(() => import("~/chat/quote-pick").then((m) => m.QuotePick))
+const HoldBanner = later(() => import("~/chat/feed-notes").then((m) => m.HoldBanner))
+const Start = later(() => import("~/chat/feed-notes").then((m) => m.Start))
 
 const GROUP_MS = 5 * 60_000
 const NEAR_BOTTOM = 48
@@ -335,7 +335,11 @@ export function Conversation({ channel, jump }: { channel: Channel; jump: Jump |
 
   return (
     <ReplyContext.Provider value={replying}>
-      {channel.hold && <HoldBanner channel={channel} hold={channel.hold} />}
+      {channel.hold && (
+        <Suspense fallback={null}>
+          <HoldBanner channel={channel} hold={channel.hold} />
+        </Suspense>
+      )}
       {waiting ? (
         <div className="feed-wrap">
           <div className="feed" />
@@ -710,14 +714,22 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
 
   return (
     <div className={doc ? "feed-wrap is-doc" : "feed-wrap"}>
-      {where.kind !== "theirs" && <QuotePick root={content} onQuote={quote} />}
+      {where.kind !== "theirs" && (
+        <Suspense fallback={null}>
+          <QuotePick root={content} onQuote={quote} />
+        </Suspense>
+      )}
       <Updates channel={channel} runs={runs} here={where.kind === "task" ? where.task : null} jump={jump?.m.seq ?? null} />
       <div className="feed" ref={scroller} onScroll={onScroll}>
         <div className="feed-list" ref={content}>
           {list.length === 0 && !compact
             ? channel.loading
               ? channel.connection === "live" && <Loading />
-              : !olderHere && <Start channel={channel} where={where} />
+              : !olderHere && (
+                  <Suspense fallback={null}>
+                    <Start channel={channel} where={where} />
+                  </Suspense>
+                )
             : list.slice(start, end).map((m, k) => {
                 const i = start + k
                 const run = leftOutRun(list, i)
@@ -828,52 +840,6 @@ export function ReadOnly({ channel, between: names }: { channel: Channel; betwee
   return (
     <div className="compose">
       <p className="compose-note">Only {between(channel, names)} write here.</p>
-    </div>
-  )
-}
-
-function HoldBanner({ channel, hold }: { channel: Channel; hold: NonNullable<Channel["hold"]> }) {
-  const { app } = useApp()
-  const owner = channel.people.find((p) => p.owner && !p.you)
-  const until = channel.youOwn ? "until you resume them" : `until ${owner ? shown(owner) : "the owner"} resumes them`
-  const note = hold.note?.replace(/[.\s]+$/, "")
-  return (
-    <div className="banner" role="status" title={`They read but don't act ${until}.`}>
-      <p className="banner-text">
-        <b>{channel.youOwn || !owner ? "Agents paused" : `${shown(owner)} paused the agents`}</b>
-        {note && <span className="dim">{note}</span>}
-      </p>
-      {channel.youOwn && (
-        <button type="button" className="btn is-small" onClick={() => app.actions.setHold(channel.code, false)}>
-          Resume
-        </button>
-      )}
-    </div>
-  )
-}
-
-function Start({ channel, where }: { channel: Channel; where: Where }) {
-  if (where.kind === "room" && !channel.people.some((p) => p.kind === "agent"))
-    return (
-      <div className="feed-start">
-        <Suspense fallback={null}>
-          <AddAgentCard channel={channel} />
-        </Suspense>
-      </div>
-    )
-  return (
-    <div className="feed-start">
-      <p className="feed-start-title">
-        {where.kind === "room"
-          ? `This is the start of #${channel.rooms.find((r) => r.id === where.room)?.name ?? where.room}.`
-          : where.kind === "dm"
-            ? dmInRoom(channel, where.with)
-              ? `These are sent to you and ${nickname(channel, where.with)} alone. Anyone in the channel can still open them.`
-              : `Everyone in the channel can read your messages with ${nickname(channel, where.with)}.`
-            : where.kind === "theirs"
-              ? `This is the start of ${between(channel, where.between)}.`
-              : "Nothing here yet."}
-      </p>
     </div>
   )
 }
