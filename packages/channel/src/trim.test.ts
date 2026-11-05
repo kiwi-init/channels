@@ -43,3 +43,9 @@ test("a long session folds what it drops into the base, so tasks and facts from 
   expect(after.facts.get("relay")?.value).toBe("v1");
   expect(after.head).toBe(whole.head);
 });
+
+test("a window keeps a quarter of itself as slack before it folds, and no slack folds down to the window exactly", () => {
+  expect(trimmed(log.slice(0, 500), roster, 10_000, null, null, null, 400)).toBeNull();
+  expect(trimmed(log.slice(0, 501), roster, 10_000, null, null, null, 400)?.n).toBe(101);
+  expect(trimmed(log.slice(0, 60), roster, 10_000, null, null, null, 50, 0)?.n).toBe(10);
+});

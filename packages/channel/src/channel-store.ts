@@ -26,9 +26,14 @@ import { trimmed } from "./trim.ts";
 import { foldRoster } from "./fold-roster.ts";
 import { asKept, toKept } from "./kept.ts";
 import { handOver, onceEach, openChannel, warmUp } from "./open.ts";
-import { dropWarm, keepWarm, warmOf, type Warm } from "./warm.ts";
+import { dropWarm, keepWarm, LEAN, LIGHT, warmOf, type Warm } from "./warm.ts";
+import { pageBefore } from "./back.ts";
+import { holdAll, holdImages } from "./image-bytes.ts";
+import { leanTail } from "./lean.ts";
 
-const HISTORY = 2_000;
+export const REACH = 2_000;
+export const WINDOW = 400;
+export const PAGE = 200;
 export const OLDER_PER_CLICK = 5_000;
 const OLDER_GAP_MS = 250;
 const KEEP_DELAY_MS = 3_000;
@@ -41,6 +46,9 @@ type Connection = "connecting" | "live" | "reconnecting";
 export interface OlderHistory {
   reach(): Promise<Reach>;
   fetch(got?: (asked: number) => void): Promise<Reach>;
+  more(): Promise<boolean>;
+  to(seq: number): Promise<boolean>;
+  keep(key: string, seq: number | null): void;
 }
 
 export const APP_BEACON_MS = 60_000;
@@ -50,6 +58,7 @@ export interface ChannelHandle {
   connection: Connection;
   gone: "removed" | "closed" | null;
   messages: Message[];
+  reach: Message[];
   roster: Member[];
   state: ChannelState;
   online: Map<string, Online>;
@@ -92,12 +101,17 @@ export class ChannelStore {
   private readonly human: HumanSession | null | undefined;
   private readonly lend: Watches["lend"];
   private readonly was: Warm | undefined;
+  private readonly light: boolean;
+  private readonly keep: number;
 
   private readonly connection = signal<Connection>("connecting");
   private readonly ready: Signal<boolean>;
   private readonly start = signal<{ head: number; whole: boolean } | null>(null);
   private readonly gone = signal<"removed" | "closed" | null>(null);
   private readonly messages: Signal<Message[]>;
+  private readonly reach: Signal<Message[]>;
+  private readonly back = signal<Message[]>([]);
+  private readonly shown: ReadonlySignal<Message[]>;
   private readonly unread: Signal<number[]>;
   private readonly roster: Signal<Member[]>;
   private readonly online = signal<ReadonlyMap<string, Online>>(new Map());
@@ -115,7 +129,7 @@ export class ChannelStore {
   private readonly state: ReadonlySignal<ChannelState>;
   private readonly caughtUp: ReadonlySignal<boolean>;
   private readonly head: ReadonlySignal<number>;
-  private readonly count: ReadonlySignal<number>;
+  private readonly trimDue: ReadonlySignal<number>;
   private readonly reconcileDue: ReadonlySignal<string>;
 
   private syncing = false;
@@ -134,18 +148,29 @@ export class ChannelStore {
   private reconcileAgain = false;
   private rulesBusy = false;
   private fetchOlder: OlderHistory["fetch"] | null = null;
+  private paging: Promise<boolean> | null = null;
+  private backDone = false;
+  private readonly holds = new Map<string, number>();
   private readonly githubSynced = new Map<string, number>();
   private readonly githubHealth = signal<GithubHealth>({ status: null, errors: [], syncing: null });
 
-  constructor(member: StoredMember, human?: HumanSession | null, deps?: ChannelStoreDeps) {
+  constructor(member: StoredMember, human?: HumanSession | null, deps?: ChannelStoreDeps, light = false) {
     this.ch = deps?.link ?? linkOf(member);
     this.lend = deps?.lend ?? ((code) => watches().lend(code));
     this.code = member.code;
     this.human = human;
+    this.light = light;
+    this.keep = light ? LIGHT : WINDOW;
     const was = warmOf(member.code);
     this.was = was;
     this.ready = signal(!!was);
     this.messages = signal(was?.messages ?? []);
+    this.reach = signal(was?.reach ?? []);
+    this.shown = computed(() => {
+      const back = this.back.value;
+      const messages = this.messages.value;
+      return back.length ? [...back, ...messages] : messages;
+    });
     this.unread = signal(was?.unread ?? []);
     this.roster = signal(was?.roster ?? []);
     this.marks = signal(was?.marks ?? new Map());
@@ -163,7 +188,7 @@ export class ChannelStore {
       return !!start?.whole && (this.messages.value.at(-1)?.seq ?? 0) >= start.head;
     });
     this.head = computed(() => this.state.value.head);
-    this.count = computed(() => this.messages.value.length);
+    this.trimDue = computed(() => (this.start.value ? this.messages.value.length : -1));
     const scopesKey = computed(() => [...this.state.value.members.values()].map((m) => `${m.pk}:${m.scopes.join(",")}`).join("|"));
     const bitsKey = computed(() => this.roster.value.map((m) => `${m.pk}:${m.readOnly ? 0 : 1}`).join("|"));
     const repoList = computed(() => this.state.value.repos.join(","));
@@ -187,7 +212,8 @@ export class ChannelStore {
       ch: this.ch,
       connection: this.connection.value,
       gone: this.gone.value,
-      messages: this.messages.value,
+      messages: this.shown.value,
+      reach: this.reach.value,
       roster: this.roster.value,
       state: this.state.value,
       online: live.value,
@@ -221,7 +247,46 @@ export class ChannelStore {
   readonly older: OlderHistory = {
     reach: () => import("./history-fill.ts").then((f) => f.reach(this.ch.roomId, this.ch.pk)),
     fetch: (got) => (this.fetchOlder ? this.fetchOlder(got) : Promise.reject(new Error("open the channel first"))),
+    more: () => this.page(),
+    to: (seq) => this.pageTo(seq),
+    keep: (key, seq) => this.keepBack(key, seq),
   };
+
+  private page(): Promise<boolean> {
+    this.paging ??= this.pageOnce().finally(() => (this.paging = null));
+    return this.paging;
+  }
+
+  private async pageOnce(): Promise<boolean> {
+    const first = this.shown.peek()[0]?.seq;
+    if (first === undefined || first <= 1 || this.backDone || this.gone.peek()) return false;
+    const { messages, done } = await pageBefore(this.ch.roomId, this.ch.pk, first, PAGE, { older: (before, limit) => this.ch.olderRows(before, limit), open: (rows) => this.ch.openRows(rows) });
+    if (this.shown.peek()[0]?.seq !== first) return true;
+    const older = holdAll(messages.filter((m) => m.seq < first));
+    if (done) this.backDone = true;
+    if (older.length) this.back.value = [...older, ...this.back.peek()];
+    return !done;
+  }
+
+  private async pageTo(seq: number): Promise<boolean> {
+    const has = () => (this.shown.peek()[0]?.seq ?? Infinity) <= seq;
+    const first = this.shown.peek()[0]?.seq;
+    if (first === undefined || seq < 1 || first - seq > REACH) return false;
+    if (seq < (this.messages.peek()[0]?.seq ?? Infinity)) this.holds.set("to", seq);
+    if (has()) return true;
+    for (let tries = Math.ceil(REACH / PAGE) + 2; tries > 0 && !has(); tries--) if (!(await this.page().catch(() => false)) && !has()) return false;
+    return has();
+  }
+
+  private keepBack(key: string, seq: number | null): void {
+    if (seq === null) this.holds.delete(key);
+    else this.holds.set(key, seq);
+    const floor = Math.min(Infinity, ...this.holds.values());
+    const back = this.back.peek();
+    if (!back.length || back[0]!.seq >= floor) return;
+    this.back.value = back.filter((m) => m.seq >= floor);
+    this.backDone = false;
+  }
 
   private wakeFor(opts: SendOptions): string[] {
     const state = this.state.value;
@@ -260,7 +325,7 @@ export class ChannelStore {
       effect(() => this.keepSealed()),
       on(this.infoAt, () => this.readInfo()),
       this.follow(),
-      on(this.count, () => this.trimSoon()),
+      on(this.trimDue, (due) => (due < 0 ? undefined : this.trimSoon())),
       on(this.reconcileDue, () => this.reconcile()),
       on(this.checksDue, () => this.syncSettings()),
       on(this.head, (head) => this.snapshotIfDue(head)),
@@ -296,16 +361,21 @@ export class ChannelStore {
 
   private keepWarm(): void {
     if (this.gone.value) return dropWarm(this.code);
-    keepWarm(this.code, {
-      messages: this.messages.value,
-      unread: this.unread.value,
+    keepWarm(
+      this.code,
+      {
+        messages: this.messages.value,
+        reach: this.reach.value,
+        unread: this.unread.value,
       roster: this.roster.value,
       requests: this.requests.value,
       marks: this.marks.value,
       guardFloor: this.guardFloor.value,
       roomsFloor: this.roomsFloor.value,
-      base: this.base.value,
-    });
+        base: this.base.value,
+      },
+      this.light ? "light" : "full",
+    );
   }
 
   private keepSealed(): (() => void) | undefined {
@@ -434,7 +504,7 @@ export class ChannelStore {
         flush = undefined;
         this.messages.value = merged(
           this.messages.peek(),
-          batched.map((b) => b.message),
+          batched.map((b) => holdImages(b.message)),
         );
         lent.emit({ _tag: "Head", seq: Math.max(...batched.map((b) => b.message.seq)) });
         if (batched.some((b) => b.message.kind === "event" && b.message.ev?.op === "card")) noteAgentWorked();
@@ -465,7 +535,7 @@ export class ChannelStore {
         case "Message":
           return enqueue(ev.message, ev.row);
         case "Unread":
-          this.unread.value = [...this.unread.peek(), ev.seq].slice(-HISTORY);
+          this.unread.value = [...this.unread.peek(), ev.seq].slice(-REACH);
           if (ev.row)
             void rememberRow(ch.roomId, ch.pk, ev.row).then(
               () => void index(),
@@ -510,10 +580,10 @@ export class ChannelStore {
       requests: this.refreshRequests,
       rotate: () => (ch.isOwner ? ch.rotateIfDue().catch((err: unknown) => (this.onGone(err), false)) : Promise.resolve(false)),
       cache: () =>
-        openCached(ch.roomId, ch.pk, ch.openRows, HISTORY)
+        openCached(ch.roomId, ch.pk, ch.openRows, REACH)
           .then((opened) => (markOnce("kiwi:cache-open"), opened))
           .catch(() => null),
-      plan: (opened, head) => planCached(ch.roomId, ch.pk, opened, head, HISTORY).catch(() => null),
+      plan: (opened, head) => planCached(ch.roomId, ch.pk, opened, head, REACH).catch(() => null),
       snapshot: () => ch.snapshot().catch(() => null),
       kept: async () => {
         const sealed = await readKept(ch.roomId, ch.pk).catch(() => null);
@@ -535,10 +605,10 @@ export class ChannelStore {
           if (cached?.unread.length) {
             const seen = cached.unread;
             for (const seq of seen) earlyUnread.add(seq);
-            this.unread.value = [...new Set([...this.unread.peek(), ...seen])].slice(-HISTORY);
+            this.unread.value = [...new Set([...this.unread.peek(), ...seen])].slice(-REACH);
           }
           if (cached?.messages.length) {
-            const shown = cached.messages;
+            const shown = holdAll(cached.messages);
             for (const m of shown) early.add(m.seq);
             this.messages.value = merged(this.messages.peek(), shown);
           }
@@ -557,10 +627,10 @@ export class ChannelStore {
               seen.map((seq) => ({ seq })),
             )
               .map((u) => u.seq)
-              .slice(-HISTORY);
+              .slice(-REACH);
           }
           if (cached?.messages.length || early.size) {
-            const kept = cached?.messages ?? [];
+            const kept = holdAll(cached?.messages ?? []);
             this.messages.value = handOver(this.messages.peek(), early, kept);
             if (kept.some((m) => m.kind === "event" && m.ev?.op === "card")) noteAgentWorked();
           }
@@ -570,9 +640,9 @@ export class ChannelStore {
         void index();
       },
     });
-    warmUp(steps, was, HISTORY);
+    warmUp(steps, was, REACH);
     void untilOpen(
-      () => openChannel(steps, was, HISTORY),
+      () => openChannel(steps, was, REACH),
       () => {
         this.connection.value = "reconnecting";
       },
@@ -603,12 +673,17 @@ export class ChannelStore {
   }
 
   private trim(): void {
-    const next = trimmed(this.messages.peek(), this.rosterForFold.peek(), this.now.peek(), this.roomsFloor.peek(), this.guardFloor.peek(), this.base.peek(), HISTORY);
+    if (!this.start.peek()) return;
+    const messages = this.messages.peek();
+    const next = trimmed(messages, this.rosterForFold.peek(), this.now.peek(), this.roomsFloor.peek(), this.guardFloor.peek(), this.base.peek(), this.keep);
     if (!next) return;
+    const out = messages.filter((m) => m.seq <= next.n);
     batch(() => {
       this.base.value = next;
-      this.messages.value = this.messages.peek().filter((m) => m.seq > next.n);
+      this.messages.value = messages.filter((m) => m.seq > next.n);
       this.unread.value = this.unread.peek().filter((seq) => seq > next.n);
+      this.reach.value = leanTail(this.reach.peek(), out, LEAN);
+      if (this.back.peek().length) this.back.value = [...this.back.peek(), ...out];
     });
   }
 

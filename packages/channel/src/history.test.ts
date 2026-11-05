@@ -40,6 +40,10 @@ function memoryDb(): HistoryDb {
       list(room, pk)
         .filter((r) => r.seq > seq)
         .slice(0, count),
+    before: async (room, pk, seq, count) =>
+      list(room, pk)
+        .filter((r) => r.seq < seq)
+        .slice(-count),
     oldest: async (room, pk) => list(room, pk)[0]?.seq ?? null,
     floor: async (room, pk) => floors.has(`${room}\0${pk}`),
     putFloor: async (room, pk) => void floors.add(`${room}\0${pk}`),

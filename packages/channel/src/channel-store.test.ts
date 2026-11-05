@@ -4,10 +4,10 @@ import type { Member } from "@kiwi/core/membership.ts";
 import { PROTOCOL_VERSION, SNAPSHOT_EVERY, SNAPSHOT_TOO_LARGE, type Message } from "@kiwi/core/protocol.ts";
 import type { ChannelOps, FollowEvent } from "../../../desktop/src/bridge.ts";
 import { ChannelLink } from "./channel-ops.ts";
-import { APP_BEACON_MS, ChannelStore } from "./channel-store.ts";
+import { APP_BEACON_MS, ChannelStore, PAGE, REACH, WINDOW } from "./channel-store.ts";
 import { PRESENCE_TTL } from "./online.ts";
 import type { StoredMember } from "./store.ts";
-import { dropWarm } from "./warm.ts";
+import { dropWarm, LEAN, LIGHT, warmOf } from "./warm.ts";
 import { useHistoryDb, type CachedRow, type HistoryDb } from "./history.ts";
 
 const CODE = "mc2-store-test";
@@ -30,6 +30,7 @@ function relay(
     owner?: boolean;
     answers?: Record<string, Answer>;
     older?: (before: number, limit: number) => { rows: CachedRow[]; done: boolean };
+    open?: (rows: CachedRow[]) => (Message | null)[];
     index?: (rows: CachedRow[], from: number) => number | null;
   } = {},
 ) {
@@ -68,7 +69,10 @@ function relay(
       beacons.push(p);
       return Promise.resolve();
     },
-    openRows: () => Promise.resolve([]),
+    openRows: (_code: string, rows: CachedRow[]) => {
+      calls.push({ op: "openRows", args: [rows.length] });
+      return Promise.resolve(opts.open?.(rows) ?? []);
+    },
     olderRows: (_code: string, before: number, limit: number) => {
       calls.push({ op: "olderRows", args: [before, limit] });
       return Promise.resolve(opts.older?.(before, limit) ?? { rows: [], done: true });
@@ -208,17 +212,20 @@ describe("a channel store", () => {
     close();
   });
 
-  test("past the history window plus slack, the oldest messages fold into a base and the state stays whole", async () => {
+  test(`past the ${WINDOW}-message window plus slack, the oldest fold into a base, lean copies keep the reach, and the state stays whole`, async () => {
     const r = relay(0);
     const { store, close } = await opened(r);
     const all = Array.from({ length: 2_600 }, (_, i) => msg(i + 1));
     for (const m of all) r.say({ _tag: "Message", message: m, row: null });
     await sleep(40);
     await until(() => store.handle.value.messages.length < all.length);
-    const { messages, state } = store.handle.value;
+    const { messages, reach, state } = store.handle.value;
     expect(messages.at(-1)?.seq).toBe(2_600);
-    expect(messages.length).toBeGreaterThanOrEqual(2_000);
-    expect(messages[0]!.seq).toBeGreaterThan(1);
+    expect(messages.length).toBe(WINDOW);
+    expect(messages[0]!.seq).toBe(2_201);
+    expect(reach).toHaveLength(LEAN);
+    expect(reach.at(-1)?.seq).toBe(2_200);
+    expect(reach[0]?.seq).toBe(2_600 - WINDOW - LEAN + 1);
     expect(state.head).toBe(2_600);
     close();
   });
@@ -226,9 +233,22 @@ describe("a channel store", () => {
   test("short of the slack, nothing is trimmed", async () => {
     const r = relay(0);
     const { store, close } = await opened(r);
-    for (let seq = 1; seq <= 2_400; seq++) r.say({ _tag: "Message", message: msg(seq), row: null });
+    for (let seq = 1; seq <= WINDOW + 100; seq++) r.say({ _tag: "Message", message: msg(seq), row: null });
     await sleep(60);
-    expect(store.handle.value.messages).toHaveLength(2_400);
+    expect(store.handle.value.messages).toHaveLength(WINDOW + 100);
+    expect(store.handle.value.reach).toHaveLength(0);
+    close();
+  });
+
+  test(`a store for Home keeps ${LIGHT} messages and leaves a light warm copy that never replaces a whole one`, async () => {
+    const r = relay(0);
+    const store = new ChannelStore(member, undefined, { link: r.link, lend: r.lend }, true);
+    const close = store.open();
+    await until(() => r.follows.length > 0);
+    for (let seq = 1; seq <= 300; seq++) r.say({ _tag: "Message", message: msg(seq), row: null });
+    await until(() => store.handle.value.messages.length === LIGHT);
+    expect(store.handle.value.reach.map((m) => m.seq)).toEqual(Array.from({ length: 250 }, (_, i) => i + 1));
+    expect(warmOf(CODE)?.messages).toHaveLength(LIGHT);
     close();
   });
 });
@@ -406,6 +426,7 @@ describe("history from the relay is fetched only when asked (T977, #1944)", () =
       },
       newest: async (_room, _pk, count) => rows.slice(-count),
       after: async (_room, _pk, seq, count) => rows.filter((r) => r.seq > seq).slice(0, count),
+      before: async (_room, _pk, seq, count) => rows.filter((r) => r.seq < seq).slice(-count),
       oldest: async () => rows[0]?.seq ?? null,
       floor: async () => floor,
       putFloor: async () => {
@@ -433,6 +454,55 @@ describe("history from the relay is fetched only when asked (T977, #1944)", () =
         });
       await sleep(300);
       expect(r.called("olderRows")).toEqual([]);
+      close();
+    } finally {
+      useHistoryDb(null);
+    }
+  });
+
+  test("scrolling back pages older messages in from this device's archive, the view stays whole while new ones arrive, and letting go shrinks it to the window", async () => {
+    useHistoryDb(archive(1, 1_000));
+    try {
+      const r = relay(1_000, { open: (rows) => rows.map((x) => msg(x.seq)) });
+      const { store, close } = await opened(r);
+      const seqs = () => store.handle.value.messages.map((m) => m.seq);
+      const run = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => from + i);
+      await until(() => seqs()[0] === 1_000 - WINDOW + 1);
+      expect(store.handle.value.reach.map((m) => m.seq)).toEqual(run(1, 1_000 - WINDOW));
+      expect(await store.older.more()).toBe(true);
+      expect(seqs()).toEqual(run(1_000 - WINDOW - PAGE + 1, 1_000));
+      expect(await store.older.to(150)).toBe(true);
+      expect(seqs()).toEqual(run(1, 1_000));
+      expect(await store.older.more()).toBe(false);
+      expect(r.called("olderRows")).toEqual([]);
+      for (let seq = 1_001; seq <= 1_150; seq++) r.say({ _tag: "Message", message: msg(seq), row: null });
+      await until(() => store.handle.value.messages.at(-1)?.seq === 1_150);
+      await until(() => store.handle.value.reach.at(-1)?.seq === 750);
+      expect(seqs()).toEqual(run(1, 1_150));
+      store.older.keep("feed", 500);
+      expect(seqs()[0]).toBe(150);
+      store.older.keep("to", null);
+      expect(seqs()).toEqual(run(500, 1_150));
+      store.older.keep("feed", null);
+      expect(seqs()).toEqual(run(751, 1_150));
+      expect(await store.older.to(751 - REACH - 1)).toBe(false);
+      close();
+    } finally {
+      useHistoryDb(null);
+    }
+  });
+
+  test("a page that lands after the view moved on is dropped instead of leaving a gap", async () => {
+    useHistoryDb(archive(1, 1_000));
+    try {
+      const r = relay(1_000, { open: (rows) => rows.map((x) => msg(x.seq)) });
+      const { store, close } = await opened(r);
+      await until(() => store.handle.value.messages[0]?.seq === 1_000 - WINDOW + 1);
+      await store.older.more();
+      const paging = store.older.more();
+      store.older.keep("feed", null);
+      expect(await paging).toBe(true);
+      expect(store.handle.value.messages[0]?.seq).toBe(1_000 - WINDOW + 1);
       close();
     } finally {
       useHistoryDb(null);
