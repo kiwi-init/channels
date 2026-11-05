@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 
 import { HANDOFF_DONE, HANDOFF_FAILED } from "@kiwi/core/protocol.ts"
 import { bridge } from "@kiwi/secrets/secrets.ts"
+import { named } from "~/chat/linked"
 import { jumpTo } from "~/chat/reply"
 import { StepAnswer, StepHow } from "~/chat/step"
 import { cx } from "~/kit/bits"
@@ -70,7 +71,7 @@ function ClosedAsk({ channel, closed }: { channel: Channel; closed: Closed }) {
                 {part}
               </button>
             ) : (
-              part
+              named(part, channel.nicknames)
             )
           )}
         </p>
@@ -97,7 +98,7 @@ export default function QuestionCard({ channel, ask }: { channel: Channel; ask: 
     if (ask.options.includes(ask.answer.text))
       return (
         <p className="ask-done">
-          {who} chose <b>{ask.answer.text}</b> {at}
+          {who} chose <b>{named(ask.answer.text, channel.nicknames)}</b> {at}
         </p>
       )
     return (
@@ -105,7 +106,7 @@ export default function QuestionCard({ channel, ask }: { channel: Channel; ask: 
         <p>
           {who} {ask.step ? "answered" : "replied"} {at}
         </p>
-        <p className="ask-reply">{ask.answer.text}</p>
+        <p className="ask-reply">{named(ask.answer.text, channel.nicknames)}</p>
       </div>
     )
   }
@@ -135,7 +136,7 @@ export default function QuestionCard({ channel, ask }: { channel: Channel; ask: 
             <li key={o}>
               <button type="button" className="ask-option" onClick={() => actions.answerQuestion(channel.code, ask.id, o)}>
                 <span className="ask-letter">{String.fromCharCode(65 + i)}</span>
-                {o}
+                {named(o, channel.nicknames)}
               </button>
             </li>
           ))}

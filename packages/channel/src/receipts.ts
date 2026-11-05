@@ -51,6 +51,8 @@ export function recipients(m: Message, state: Pick<ChannelState, "members" | "ta
   });
 }
 
+const nickOf = (state: Pick<ChannelState, "members">, name: string): string => state.members.get(name)?.display || name;
+
 /**
  * What sits under a message of yours: "Read 10:42", "Read by atlas, win", "Read by 2 of 5", or "Delivered".
  * Only recipients that have ever sent a mark count (an older kiwi never does, and would read as unread for
@@ -69,7 +71,7 @@ export function receipt(m: Message, state: Pick<ChannelState, "members" | "tasks
   const when = times.every((t): t is number => t !== null) ? ` ${time(Math.max(...times))}` : "";
   if (to.length === 1) return `Read${when}`;
   if (read.length === to.length) return `Read by everyone${when}`;
-  return read.length <= 3 ? `Read by ${read.map((x) => x.n).join(", ")}` : `Read by ${read.length} of ${to.length}`;
+  return read.length <= 3 ? `Read by ${read.map((x) => nickOf(state, x.n)).join(", ")}` : `Read by ${read.length} of ${to.length}`;
 }
 
 /** What an agent is doing now, as the app shows it: "thinking", "running Bash", and since when. */
@@ -105,5 +107,6 @@ export function onIt(
   const who = held ?? to.find((n) => readAt(marks, pkOf(n), m.seq) !== null && busy(n) !== null);
   if (!who) return null;
   const b = busy(who);
-  return b ? `${who} is on it · ${b.text}${b.since ? lasted(now - b.since) : ""}` : `${who} is on it`;
+  const name = nickOf(state, who);
+  return b ? `${name} is on it · ${b.text}${b.since ? lasted(now - b.since) : ""}` : `${name} is on it`;
 }
