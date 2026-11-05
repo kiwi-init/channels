@@ -426,7 +426,7 @@ async function dump(w: Win): Promise<string> {
         const a = (s as unknown as { pmViewDesc?: { node?: { attrs: Record<string, unknown>; textContent: string } } }).pmViewDesc?.node;
         return `      ${String(a?.attrs.id)} ${String(a?.attrs.author)} by=${String(a?.attrs.by)} sent=${String(a?.attrs.sent)} posted=${String(a?.attrs.posted)} ${JSON.stringify(a?.textContent)}`;
       })
-      .slice(-8)
+      .slice(-20)
       .join("\n"),
   );
 }
@@ -489,6 +489,9 @@ try {
         .map((l) => `      ${l}`)
         .join("\n")}`,
     );
+    const said = (await kiwi(["-c", "fuzz", "--as", "bot1", "log", "--json", "-n", "300"]).catch((e: unknown) => String(e))).split("\n").filter((l) => l.includes('"from":"jow"'));
+    log(`drained: jow's messages in the log\n${said.map((l) => `      ${l.slice(0, 240)}`).join("\n")}`);
+    for (const w of wins) log(`drained: ${w.label} doc lines\n${await dump(w)}`);
     for (const w of wins)
       log(
         `drained: ${w.label} sockets\n${w.lag.sockets.map((k) => `      ${k.url} up ${k.up}/${k.upIn} down ${k.down}/${k.downIn} last down ${k.lastDown ? `${Math.round((Date.now() - k.lastDown) / 1000)} s ago` : "never"}${k.closed ? " closed" : " open"}${k.errors ? ` ${k.errors} send errors` : ""}`).join("\n")}`,
