@@ -73,11 +73,9 @@ describe("the top bar's controls float", () => {
     }
   });
 
-  test("the chrome sits on the float: the bars' controls, the rail's tiles, the composer and the terminal's tabs and close", () => {
+  test("the chrome sits on the float: the bar's tabs, the rail's tiles, the composer and the terminal's tabs and close", () => {
     const controls: [string, string][] = [
-      [shell, ".top-chan"],
-      [shell, ".top-drawer"],
-      [shell, ".tabs,\n.top-group"],
+      [shell, ".tabs"],
       [settings, ".set-back"],
       [shell, ".tile"],
       [chat, ".composer"],
