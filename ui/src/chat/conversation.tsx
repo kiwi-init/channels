@@ -3,8 +3,8 @@ import { Fragment, startTransition, Suspense, useCallback, useEffect, useLayoutE
 import { Composer } from "~/chat/composer"
 import { docThread } from "@kiwi/core/doc/threads.ts"
 import { useEditingIn } from "~/chat/editing"
-import { EventRun } from "~/chat/events"
-import { continuesRun, eventRun } from "~/chat/fold-events"
+import { Updates } from "~/chat/events"
+import { splitUpdates } from "~/chat/fold-events"
 import { foldText, leftOutRun, runFirst, withLeftOut } from "~/chat/left-out"
 import { docFeeds, EMPTY_FEED, withDocMedia, withLines } from "~/chat/doc/finished"
 import { inFeed, postedBlocks } from "~/chat/doc/posted"
@@ -328,7 +328,7 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
   const { go } = useApp()
   const specAsks = useMemo(() => new Set((channel.specs ?? []).map((s) => s.ask)), [channel.specs])
   const feeds = useSyncExternalStore(docFeeds.subscribe, docFeeds.get)
-  const all = useMemo(() => {
+  const raw = useMemo(() => {
     const fromDoc = doc ? (feeds.get(`${channel.code}\n${doc}`) ?? EMPTY_FEED) : EMPTY_FEED
     const feed = withLeftOut(
       channel.messages
@@ -344,6 +344,7 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
       where
     )
   }, [channel.messages, channel.leftOut, channel.code, where, specAsks, doc, feeds])
+  const { talk: all, runs } = useMemo(() => splitUpdates(raw), [raw])
   const general = where.kind === "room" && where.room === "general"
   const compact = general ? channel.compact : undefined
   const proposal = general ? channel.proposal : undefined
@@ -375,8 +376,6 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
     return first && first !== list[0] ? { seq: first.seq, count: fresh.length } : null
   })
   const mark = unread?.seq ?? null
-  const afterProposal = proposalAt === undefined ? undefined : list[list.findIndex((m) => m.seq === proposalAt) + 1]?.seq
-  const breaks = new Set([mark, foldAt, proposalAt, afterProposal].filter((seq): seq is number => seq !== null && seq !== undefined))
 
   const [back] = useState(() => {
     const at = spot && !jump ? list.findIndex((m) => m.seq === spot.seq) : -1
@@ -596,7 +595,7 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
   }, [editingSeq, content, unstick, remember])
 
   useEffect(() => {
-    if (!jump) return
+    if (!jump || (jump.m.system && !jump.m.leftOut)) return
     const seq = jump.m.seq
     const { list, all } = known.current
     const folded = !list.some((m) => m.seq === seq)
@@ -633,6 +632,7 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
   return (
     <div className={doc ? "feed-wrap is-doc" : "feed-wrap"}>
       {where.kind !== "theirs" && <QuotePick root={content} onQuote={quote} />}
+      <Updates channel={channel} runs={runs} here={where.kind === "task" ? where.task : null} jump={jump?.m.seq ?? null} />
       <div className="feed" ref={scroller} onScroll={onScroll}>
         <div className="feed-list" ref={content}>
           {list.length === 0 && !compact ? (
@@ -644,8 +644,6 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
           ) : (
             list.slice(start, end).map((m, k) => {
               const i = start + k
-              if (continuesRun(list, i, start, breaks)) return null
-              const events = eventRun(list, i, end, breaks)
               const run = leftOutRun(list, i)
               const open = !m.leftOut || shownRuns.has(runFirst(list, i))
               const talk = chatter.get(m.seq)
@@ -680,8 +678,6 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
                     <Suspense fallback={null}>
                       <ProposalCard channel={channel} proposal={proposal} names={names} tasks={tasks} onQuote={onQuote} />
                     </Suspense>
-                  ) : events ? (
-                    <EventRun channel={channel} run={events} here={where.kind === "task" ? where.task : null} jump={jump?.m.seq ?? null} />
                   ) : (
                     open &&
                     talkShown && (
