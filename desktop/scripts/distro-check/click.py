@@ -2,6 +2,7 @@ import importlib
 import subprocess
 import sys
 import tempfile
+import time
 
 from pywayland.client import Display
 
@@ -33,9 +34,14 @@ def main() -> None:
     device.authenticate("kiwi-raise", "a click in the stand-in browser, as a person clicks a link")
     display.roundtrip()
     device.pointer_motion_absolute(x, y)
+    display.roundtrip()
+    time.sleep(0.5)
     device.button(BTN_LEFT, 1)
+    display.roundtrip()
+    time.sleep(0.1)
     device.button(BTN_LEFT, 0)
     display.roundtrip()
+    time.sleep(0.5)
     display.disconnect()
     print(f"click: at {x:.0f},{y:.0f}")
 
