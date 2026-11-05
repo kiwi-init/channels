@@ -60,9 +60,15 @@ try {
     const Real = window.ResizeObserver;
     const size = (el: Element): string => {
       const s = getComputedStyle(el);
-      const r = el.getBoundingClientRect();
-      const h = r.height - parseFloat(s.paddingTop) - parseFloat(s.paddingBottom) - parseFloat(s.borderTopWidth) - parseFloat(s.borderBottomWidth);
-      const w = r.width - parseFloat(s.paddingLeft) - parseFloat(s.paddingRight) - parseFloat(s.borderLeftWidth) - parseFloat(s.borderRightWidth);
+      const side = (a: string, b: string): number =>
+        parseFloat(s.getPropertyValue(`padding-${a}`)) +
+        parseFloat(s.getPropertyValue(`padding-${b}`)) +
+        parseFloat(s.getPropertyValue(`border-${a}-width`)) +
+        parseFloat(s.getPropertyValue(`border-${b}-width`));
+      const axis = (used: string, laid: number, frame: number): number => (used.endsWith("px") ? parseFloat(used) - (s.boxSizing === "border-box" ? frame : 0) : laid - frame);
+      const html = el instanceof HTMLElement ? el : null;
+      const w = axis(s.width, html?.offsetWidth ?? 0, side("left", "right"));
+      const h = axis(s.height, html?.offsetHeight ?? 0, side("top", "bottom"));
       return `${Math.round(w * 10) / 10}x${Math.round(h * 10) / 10}`;
     };
     window.ResizeObserver = class extends Real {
@@ -81,6 +87,46 @@ try {
   const page = await context.newPage();
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
+  const probe = await context.newPage();
+  await probe.route("**/resize-probe", (route) => route.fulfill({ contentType: "text/html", body: "<!doctype html><body></body>" }));
+  await probe.goto(`${BASE}resize-probe`);
+  const caught = await probe.evaluate(
+    () =>
+      new Promise<string[]>((done) => {
+        const make = (name: string): HTMLDivElement => {
+          const el = document.createElement("div");
+          el.className = name;
+          el.style.cssText = "position:fixed;top:0;left:0;width:100px;height:20px";
+          document.body.append(el);
+          return el;
+        };
+        const scaled = make("probe-scaled");
+        const grown = make("probe-grown");
+        let first = true;
+        const watch = new ResizeObserver(() => {
+          if (!first) return;
+          first = false;
+          scaled.style.transform = "scale(0.97)";
+          grown.style.width = "110px";
+        });
+        watch.observe(scaled);
+        watch.observe(grown);
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => {
+            watch.disconnect();
+            scaled.remove();
+            grown.remove();
+            const self = (globalThis as unknown as { __self: string[] }).__self;
+            done(self.splice(0));
+          }),
+        );
+      }),
+  );
+  check(
+    "the resize check sees a box that grows inside its own callback, and not one that only scales",
+    caught.some((c) => c.startsWith("probe-grown")) && !caught.some((c) => c.startsWith("probe-scaled")) ? null : `it caught: ${caught.join("; ") || "nothing"}`,
+  );
+  await probe.close();
   await page.goto(BASE);
   await firstRun(page, "jow");
   const code = await newChannel(page, "edits");
