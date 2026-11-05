@@ -1,6 +1,6 @@
 import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo } from "react"
 
-import { useCalmShown, useIdle } from "~/calm/idle"
+import { showCalm, useCalmShown, useIdle } from "~/calm/idle"
 import { Boundary } from "~/kit/boundary"
 import { later } from "~/kit/later"
 import { Toasts, useToasts } from "~/kit/toasts"
@@ -118,9 +118,14 @@ function useHistoryKeys(go: (go: Go) => void, modal: boolean) {
 function usePaletteKey(toggle: () => void) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+      if (!(e.metaKey || e.ctrlKey)) return
+      const key = e.key.toLowerCase()
+      if (key === "k") {
         e.preventDefault()
         toggle()
+      } else if (key === "t" && !e.altKey && !e.shiftKey) {
+        e.preventDefault()
+        showCalm()
       }
     }
     window.addEventListener("keydown", onKey)
