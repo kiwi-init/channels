@@ -12,7 +12,7 @@ import { appendWakeRow } from "../daemon/wake.ts";
 import { formatMessage, messageHead } from "@kiwi/core/format.ts";
 import { docWakeLine } from "../agent/docs.ts";
 import { pendingDocWakes, tellDocWakes } from "../config/doc-wakes.ts";
-import type { Binding, Here } from "../seats.ts";
+import { claimTaken, type Binding, type Here } from "../seats.ts";
 import { handOver, seatBudget } from "./answer.ts";
 import { answeringNow, deliveredInProcess, noteDelivered, noteHeard, notePending, settlePending } from "./delivered.ts";
 import { hooksListen, installedListenSeconds } from "./install/claude.ts";
@@ -21,6 +21,7 @@ import { mimoInstalled } from "./install/mimo.ts";
 import { piInstalled } from "./install/pi.ts";
 import { alive, isListening, takeListenSlot } from "./listeners.ts";
 import { LISTEN_SECONDS, mcFor } from "./self.ts";
+import { takenText } from "./taken.ts";
 
 export interface Served {
   b: Binding;
@@ -151,6 +152,23 @@ export const listen = Effect.fn("Hooks.listen")(function* (served: readonly Serv
       if (settled !== null && refused && via) appendWakeRow(home(), { at: Date.now(), alias: b.alias, agent: b.as, via, unread: 0, result: "failed", why: refusedWhy(refused), cursor: settled });
     }
   if (who.harness === "pi" ? !piInstalled() : who.harness === "mimo" ? !mimoInstalled() : !hooksListen()) return 0;
+  if (handoff.kind === "at-once") {
+    const lost = takenText(
+      claimTaken(
+        who.session,
+        served.map((s) => s.b),
+      ),
+      loadConfig().channels,
+    );
+    if (lost !== null) {
+      try {
+        writeSync(2, `${lost}\n`);
+      } catch {
+        return 0;
+      }
+      return 2;
+    }
+  }
   let enough = yield* Deferred.make<void>();
   let heard = 0;
   const woke = Effect.suspend(() => {

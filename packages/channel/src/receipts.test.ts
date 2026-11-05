@@ -133,3 +133,63 @@ describe("an automatic ack under a message: who is on it (T2035)", () => {
     expect(onIt(m, s, new Map(), pks, doing({ atlas: { text: "thinking" } }), (from) => from.includes("atlas"), NOW)).toBeNull();
   });
 });
+
+describe("people see agents by nickname in the ack and the receipt (#1681)", () => {
+  const NOW = 1_000_000;
+  const nicked = new Map<string, Who & { display?: string }>([
+    ...members,
+    ["atlas", { kind: "agent", active: true, joined: 0, display: "lead" }],
+    ["win", { kind: "agent", active: true, joined: 0, display: "coder" }],
+  ]);
+  const s = (facts: [string, { value: string }][] = []) =>
+    ({ members: nicked, tasks: new Map(), lead: null, facts: new Map(facts.map(([k, f]) => [k, { key: k, by: f.value, ts: 0, seq: 1, ...f }])) }) as unknown as Pick<
+      ChannelState,
+      "members" | "tasks" | "lead" | "facts"
+    >;
+  const marks = addMarks(new Map(), [
+    { pk: "pk-atlas", seq: 10, at: 500 },
+    { pk: "pk-win", seq: 11, at: 700 },
+    { pk: "pk-dev", seq: 5, at: 100 },
+  ]);
+
+  test("the receipt names its readers by nickname, and by handle only when they have none", () => {
+    expect(receipt(msg({ to: ["atlas", "win", "dev"] }), s(), marks, pks, time)).toBe("Read by lead, coder");
+    expect(receipt(msg({ to: ["atlas", "dev", "late"], ts: 6_000, rts: 6_000 }), s(), addMarks(marks, [{ pk: "pk-late", seq: 10, at: 800 }]), pks, time)).toBe("Read by lead, late");
+  });
+
+  test("the ack names the agent on it by nickname", () => {
+    expect(
+      onIt(
+        msg({ to: ["atlas", "win"] }),
+        s([["answering #10", { value: "atlas" }]]),
+        new Map(),
+        pks,
+        () => ({ text: "thinking" }),
+        () => false,
+        NOW,
+      ),
+    ).toBe("lead is on it · thinking");
+    expect(
+      onIt(
+        msg({ to: ["win"] }),
+        s(),
+        marks,
+        pks,
+        () => null,
+        () => false,
+        NOW,
+      ),
+    ).toBeNull();
+    expect(
+      onIt(
+        msg({ to: ["win"] }),
+        s(),
+        marks,
+        pks,
+        (n) => (n === "win" ? { text: "running Bash" } : null),
+        () => false,
+        NOW,
+      ),
+    ).toBe("coder is on it · running Bash");
+  });
+});
