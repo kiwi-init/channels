@@ -1,4 +1,4 @@
-import { useEffect, useState, useSyncExternalStore } from "react"
+import { Suspense, useEffect, useState, useSyncExternalStore } from "react"
 import { liveOf, restOf } from "~/doing"
 
 import { Avatar, Count, cx, Heading, IconButton, STATUS_WORDS } from "~/kit/bits"
@@ -6,13 +6,15 @@ import { showMenu } from "~/kit/menu-open"
 import { useAppCan } from "~/live/app-can"
 import { useGlide } from "~/kit/glide"
 import { Icon } from "~/kit/icons"
+import { later } from "~/kit/later"
 import { ago } from "~/kit/time"
 import { memberOf, type Channel, type Direct, type Person } from "~/model"
 import { sameWhere, useAct, useApp } from "~/nav"
 import { between, nickname, onePerPerson, shown } from "~/names"
 import { comingBack, hiddenKey, hiddenPlaces, keptHidden, setHidden } from "~/shell/hidden-places"
 import { leftDirects } from "~/shell/left-directs"
-import { SideFoot } from "~/shell/updates"
+
+const SideCards = later(() => import("~/shell/updates").then((m) => m.SideCards))
 
 export function Sidebar({ channel }: { channel: Channel }) {
   const { nav, go } = useApp()
@@ -148,7 +150,11 @@ export function Sidebar({ channel }: { channel: Channel }) {
         </ul>
       </section>
 
-      <SideFoot />
+      <div className="side-foot">
+        <Suspense fallback={null}>
+          <SideCards />
+        </Suspense>
+      </div>
     </div>
   )
 }
