@@ -16,6 +16,7 @@ describe("quiet events", () => {
       { op: "card", os: "macos" },
       { op: "claim", paths: ["src"], ttl: 60 },
       { op: "release" },
+      { op: "room.create", id: "notes", name: "", members: [{ name: "jow", pk: "pk1" }], self: true },
     ];
     for (const ev of quiet) expect(isQuiet(event(ev))).toBe(true);
   });
@@ -28,6 +29,16 @@ describe("quiet events", () => {
       { op: "charter.set", text: "Docs only." },
       { op: "hold.set", on: true },
       { op: "room.create", id: "design", name: "design" },
+      {
+        op: "room.create",
+        id: "ann-bo",
+        name: "",
+        members: [
+          { name: "ann", pk: "pk1" },
+          { name: "bo", pk: "pk2" },
+        ],
+        dm: true,
+      },
     ];
     for (const ev of loud) expect(isQuiet(event(ev))).toBe(false);
     expect(isQuiet({ kind: "msg" })).toBe(false);
