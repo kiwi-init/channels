@@ -945,7 +945,8 @@ export function LiveThreadDoc({ channel, where, thread, hold }: { channel: Chann
             me,
             post: (text, block, reply) => actions.send(code, here.current, reply?.quote ? withExcerpt(reply.quote, text) : text, { block, ...(reply ? { replyTo: reply.re } : {}) }),
             posted: (block) => known.current.has(block),
-          }
+          },
+          () => actions.findDoc(code, thread)
         )
     )
     setLive(held.live)

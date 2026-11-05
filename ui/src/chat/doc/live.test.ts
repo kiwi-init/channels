@@ -222,3 +222,103 @@ describe("the editor's doc mirrors the channel's live doc", () => {
     behind.destroy()
   })
 })
+
+describe("a reopened app never forks a thread's doc (T3805)", () => {
+  test("a line typed before the app knows the thread's doc goes into the doc the channel already has", async () => {
+    const first = host()
+    write(first.doc, "atlas", "already here")
+    const hosts = new Map([["khRiq", first]])
+    const opened: (string | null)[] = []
+    const live = new LiveDoc(
+      relay(hosts, opened),
+      undefined,
+      () => {},
+      undefined,
+      async () => "khRiq"
+    )
+    write(live.doc, "jow", "typed right after reopening")
+    for (let i = 0; i < 6; i++) await tick()
+    expect(opened).toEqual(["khRiq"])
+    expect(hosts.has("fresh")).toBe(false)
+    expect(texts(first.doc).sort()).toEqual(["already here", "typed right after reopening"])
+    live.destroy()
+  })
+
+  test("a thread nobody opened yet still gets a new doc", async () => {
+    const hosts = new Map<string, Host>()
+    const opened: (string | null)[] = []
+    const live = new LiveDoc(
+      relay(hosts, opened),
+      undefined,
+      () => {},
+      undefined,
+      async () => null
+    )
+    write(live.doc, "jow", "first line of a new task")
+    for (let i = 0; i < 6; i++) await tick()
+    expect(opened).toEqual([null])
+    expect(texts(hosts.get("fresh")!.doc)).toEqual(["first line of a new task"])
+    live.destroy()
+  })
+
+  test("typing while the lookup runs asks for it once", async () => {
+    const hosts = new Map<string, Host>()
+    const opened: (string | null)[] = []
+    let asked = 0
+    let answer: (th: string | null) => void = () => {}
+    const live = new LiveDoc(
+      relay(hosts, opened),
+      undefined,
+      () => {},
+      undefined,
+      () => {
+        asked++
+        return new Promise((done) => (answer = done))
+      }
+    )
+    write(live.doc, "jow", "one")
+    write(live.doc, "jow", "two")
+    answer("khRiq")
+    for (let i = 0; i < 6; i++) await tick()
+    expect(asked).toBe(1)
+    expect(opened).toEqual(["khRiq"])
+    live.destroy()
+  })
+
+  test("an app that already forked moves to the thread's first doc and brings its lines along", async () => {
+    const first = host()
+    write(first.doc, "atlas", "agents' line")
+    const fork = host()
+    write(fork.doc, "jow", "jow's line in the fork")
+    const hosts = new Map([
+      ["khRiq", first],
+      ["6JiMl", fork],
+    ])
+    const opened: (string | null)[] = []
+    const live = new LiveDoc(
+      relay(hosts, opened),
+      "6JiMl",
+      () => {},
+      undefined,
+      async () => "khRiq"
+    )
+    for (let i = 0; i < 8; i++) await tick()
+    expect(opened).toEqual(["6JiMl", "khRiq"])
+    expect(texts(first.doc).sort()).toEqual(["agents' line", "jow's line in the fork"])
+    live.want("6JiMl")
+    for (let i = 0; i < 4; i++) await tick()
+    expect(opened).toEqual(["6JiMl", "khRiq"])
+    live.destroy()
+  })
+
+  test("the doc it opened is kept when the lookup agrees or fails", async () => {
+    for (const find of [async () => "th1", async () => null, () => Promise.reject(new Error("offline"))]) {
+      const hosts = new Map([["th1", host()]])
+      const opened: (string | null)[] = []
+      const live = new LiveDoc(relay(hosts, opened), "th1", () => {}, undefined, find)
+      for (let i = 0; i < 6; i++) await tick()
+      expect(opened).toEqual(["th1"])
+      live.destroy()
+    }
+  })
+})

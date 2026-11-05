@@ -519,6 +519,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       retry: (code, seq) => edit(code, (c) => ({ ...c, messages: c.messages.map((m) => (m.seq === seq ? { ...m, failed: undefined } : m)) })),
       loadImage: () => {},
       openDoc: (code, thread, th, on) => openDemoDoc(code, thread, th, on),
+      findDoc: async () => null,
       putDocImage: (_code, upload) => putDemoImage(upload),
       putDocFile: (_code, upload) => putDemoFile(upload),
       docImage: (_code, img) => demoImage(img),
