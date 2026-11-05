@@ -3,7 +3,7 @@ import { spawn } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { chromium, webkit, type Browser, type BrowserContext, type Page, type WebSocketRoute } from "playwright-core";
+import { chromium, webkit, type BrowserContext, type Page, type WebSocketRoute } from "playwright-core";
 import { startLocalRelay } from "./local-relay.ts";
 import { harnessDist } from "./ui-harness.ts";
 import { firstRun, letIn, newChannel } from "./perf-ui.ts";
@@ -39,8 +39,7 @@ const bot = (...args: string[]): Promise<string> => kiwi(["-c", "owner", "--as",
 
 const { relay, port } = await startLocalRelay(join(data, "relay"), DIST, { rateLimits: false });
 const BASE = `http://127.0.0.1:${port}/`;
-const blink = await chromium.launch({ executablePath: process.env.SMOKE_CHROMIUM || undefined });
-const browser = ENGINE === "webkit" ? await webkit.launch() : blink;
+const browser = ENGINE === "webkit" ? await webkit.launch() : await chromium.launch({ executablePath: process.env.SMOKE_CHROMIUM || undefined });
 const errors: string[] = [];
 
 interface Person {
@@ -65,11 +64,9 @@ function inOrder(slow: { ms: number }): (send: () => void) => void {
   };
 }
 
-type Saved = Awaited<ReturnType<BrowserContext["storageState"]>>;
-
-async function person(name: string, base: string, from?: Person, opts: { in?: Browser; state?: Saved } = {}): Promise<Person> {
-  const storageState = opts.state ?? (from ? await from.page.context().storageState({ indexedDB: true }) : undefined);
-  const context: BrowserContext = await (opts.in ?? browser).newContext({ viewport: { width: 1280, height: 860 }, storageState });
+async function person(name: string, base: string, from?: Person): Promise<Person> {
+  const storageState = from ? await from.page.context().storageState({ indexedDB: true }) : undefined;
+  const context: BrowserContext = await browser.newContext({ viewport: { width: 1280, height: 860 }, storageState });
   const slow = { ms: 0, sockets: [] as WebSocketRoute[] };
   await context.routeWebSocket(/.*/, (ws) => {
     const server = ws.connectToServer();
@@ -82,7 +79,7 @@ async function person(name: string, base: string, from?: Person, opts: { in?: Br
   const page = await context.newPage();
   page.on("pageerror", (e) => errors.push(`${name}: ${e.message}`));
   await page.goto(base);
-  if (!from && !opts.state) await firstRun(page, name);
+  if (!from) await firstRun(page, name);
   return { name, label: from ? `${name}'s other window` : name, page, slow };
 }
 
@@ -228,10 +225,8 @@ try {
   const joining = kiwi(["join", code, "owner", "--relay", BASE, "--as", "bot"]).then(() => void (botIn = true));
   await letIn(jow.page, () => !botIn);
   await joining;
-  const asker = await person("harry", BASE, undefined, { in: blink });
-  await joinAs(asker, BASE, code, jow.page);
-  const harry = browser === blink ? asker : await person("harry", BASE, undefined, { state: await asker.page.context().storageState({ indexedDB: true }) });
-  if (harry !== asker) await asker.page.context().close();
+  const harry = await person("harry", BASE);
+  await joinAs(harry, BASE, code, jow.page);
   await general(jow);
   await general(harry);
   console.log("ok  jow and harry each have #general open, in their own browser");
@@ -320,7 +315,6 @@ try {
   }
 } finally {
   await browser.close();
-  if (browser !== blink) await blink.close();
   relay.kill();
   rmSync(data, { recursive: true, force: true });
 }

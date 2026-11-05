@@ -5,7 +5,7 @@ import { readDeviceList } from "../devices.ts";
 import { sign, signText, verifyText, type Identity } from "../identity.ts";
 import { makeRecord, sealRecord, type JoinClaims, type MemberInfo } from "../membership.ts";
 import { MissingKey } from "../refusals.ts";
-import { commitTo, joinCheckCode, joinNonce, ownerNonceStatement } from "../sas.ts";
+import { commitTo, joinCheckCode, joinNonce, ownerNonceStatement, signedJoinNonce } from "../sas.ts";
 import { canPost, scopesOf } from "../scopes.ts";
 import type { Refusal } from "./errors.ts";
 import type { Info } from "./info.ts";
@@ -54,11 +54,15 @@ const statusOf = Effect.fn("Channel.statusOf")(function* (
   if (r.status !== "approved") {
     const ownerNonce = r.ownerNonce;
     if (!ownerNonce) return { status: "pending", code: null };
-    const nonce = yield* Effect.promise(() => joinNonce(id, roomId));
-    const statement = yield* Effect.promise(async () => ownerNonceStatement(roomId, id.pk, await commitTo(roomId, id.pk, nonce)));
-    if (!(yield* Effect.promise(async () => (await verifyText(info.ownerPk, ownerNonce, statement)) || (await delegateNonce(roomId, info.ownerPk, r.delegation, ownerNonce, statement))))) {
-      throw new Error("the relay passed on an owner signature that doesn't check out: don't let the owner approve this request, and tell them");
-    }
+    const signedBy = async (nonce: string): Promise<boolean> => {
+      const statement = ownerNonceStatement(roomId, id.pk, await commitTo(roomId, id.pk, nonce));
+      return (await verifyText(info.ownerPk, ownerNonce, statement)) || (await delegateNonce(roomId, info.ownerPk, r.delegation, ownerNonce, statement));
+    };
+    const nonce = yield* Effect.promise(async () => {
+      for (const n of [await joinNonce(id, roomId), await signedJoinNonce(id, roomId)]) if (await signedBy(n)) return n;
+      return null;
+    });
+    if (!nonce) throw new Error("the relay passed on an owner signature that doesn't check out: don't let the owner approve this request, and tell them");
     if (!r.revealed) yield* callRelay(relay, roomId, `/requests/${requestId}/reveal`, { method: "POST", identity: id, body: JSON.stringify({ nonce }) });
     return { status: "pending", code: yield* Effect.promise(() => joinCheckCode(roomId, id.pk, ownerNonce, nonce)) };
   }
