@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { appMenu, menuAction, shortcutAction, textStepOf, trayItems, type AppMenuItem } from "../desktop/src/app-menus.ts";
-import { claimInstance, handoffFor, LOCK_FILE, readHandoff, SOCKET_FILE, type Handoff, type Instance } from "../desktop/src/single-instance.ts";
+import { claimInstance, handoffFor, launchArgs, LOCK_FILE, readHandoff, SOCKET_FILE, type Handoff, type Instance } from "../desktop/src/single-instance.ts";
 import { slept, watchWake, type WakeClock } from "../desktop/src/wake.ts";
 
 const dirs: string[] = [];
@@ -58,6 +58,16 @@ describe("one Channels per data folder, taken before the store opens (T438)", ()
     const got: Handoff[] = [];
     expect(await claim(fresh(), { kind: "link", url: "kiwi://join/cold" }, got)).toMatchObject({ kind: "first", listening: true });
     expect(got).toEqual([{ kind: "link", url: "kiwi://join/cold" }]);
+  });
+
+  test("on Linux the launch arguments come from /proc/self/cmdline, which a worker's argv may not carry (T4442)", () => {
+    expect(launchArgs("linux", () => "/app/bin/bun\0/app/Resources/main.js\0kiwi://join/abc\0")).toEqual(["/app/bin/bun", "/app/Resources/main.js", "kiwi://join/abc"]);
+    expect(
+      launchArgs("linux", () => {
+        throw new Error("no /proc");
+      }),
+    ).toEqual(process.argv);
+    expect(launchArgs("darwin", () => "kiwi://join/never-read\0")).toEqual(process.argv);
   });
 
   test("a first start without a link opens nothing", async () => {

@@ -16,7 +16,7 @@ import { keepLinuxEntry } from "./linux-entry.ts";
 import { catchMainErrors, logMainError, windowFailure } from "./main-log.ts";
 import { followColorScheme, missingGuard, sandboxOff, watchDrops, watchPaste } from "./native-eb.ts";
 import { watchCancels } from "./secret-service.ts";
-import { claimInstance, handoffFor, type Instance } from "./single-instance.ts";
+import { claimInstance, handoffFor, launchArgs, type Instance } from "./single-instance.ts";
 import { keyringLocked, openStoreForThisBuild, warnIfStoreBroken } from "./store-open-eb.ts";
 import { driveForTests, wrongTestHome } from "./test-build-eb.ts";
 import { runningAppImage } from "./updater.ts";
@@ -88,7 +88,7 @@ const instance = wrongHome
   ? null
   : await claimInstance({
       dir: dataDir,
-      handoff: handoffFor(process.argv, JOIN_SCHEME),
+      handoff: handoffFor(launchArgs(), JOIN_SCHEME),
       scheme: JOIN_SCHEME,
       onHandoff: (h) => {
         if (h.kind === "show") return ebHost.showWindow();
