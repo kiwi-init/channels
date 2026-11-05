@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 
 import "~/styles/doc-versions.css"
-import { Modal } from "~/kit/bits"
+import { cx, Modal } from "~/kit/bits"
 import { announce } from "~/kit/toasts"
 import { ago, clock, day } from "~/kit/time"
 import { useAppCan } from "~/live/app-can"
@@ -63,15 +63,17 @@ export function DocVersions({ channel, thread, name, onClose }: { channel: Chann
   ) : mine.versions.length === 0 ? (
     <p className="set-group-hint">No earlier versions yet. The doc keeps one an hour, up to nine.</p>
   ) : (
-    <Group>
-      {mine.versions.map((v) => (
-        <Row key={v.upto} label={`${day(v.ts)}, ${clock(v.ts)}`} hint={`${ago(v.ts)} ago · ${size(v.bytes)}`}>
-          <button type="button" className="btn is-small" disabled={busy} aria-pressed={picked?.upto === v.upto} onClick={() => setPicked(v)}>
-            Restore
-          </button>
-        </Row>
-      ))}
-    </Group>
+    <div className={cx("doc-versions", picked && "is-picking")}>
+      <Group>
+        {mine.versions.map((v) => (
+          <Row key={v.upto} label={`${day(v.ts)}, ${clock(v.ts)}`} hint={`${ago(v.ts)} ago · ${size(v.bytes)}`}>
+            <button type="button" className="btn is-small" disabled={busy} aria-pressed={picked?.upto === v.upto} onClick={() => setPicked(v)}>
+              Restore
+            </button>
+          </Row>
+        ))}
+      </Group>
+    </div>
   )
   return (
     <Modal onClose={onClose} label="Earlier versions" title="Earlier versions" sub={name} size="narrow" foot={foot}>
