@@ -1,30 +1,34 @@
 import { useEffect, useState } from "react"
 
 import { bytesOf, sizeText } from "~/chat/doc/bytes"
-import type { BlockFiles, DocFile, DocImage } from "~/model"
+import { ImageButton, warmFeed } from "~/chat/image-button"
+import type { BlockFiles, DocFile, DocImage, Image } from "~/model"
 import { useAct } from "~/nav"
 
-type Shot = { state: "loading" } | { state: "gone"; why: string } | { state: "shown"; url: string }
+type Shot = { state: "loading" } | { state: "gone"; why: string } | { state: "shown"; image: Image }
 
 function DocShot({ code, img, open }: { code: string; img: DocImage; open: (url: string, alt: string) => void }) {
   const { actions } = useAct()
   const [shot, setShot] = useState<Shot>({ state: "loading" })
   useEffect(() => {
     let live = true
-    actions.docImage(code, img).then(
-      (data) => live && setShot(data === null ? { state: "gone", why: `${img.name} is no longer available` } : { state: "shown", url: `data:${img.mime};base64,${data}` }),
-      () => live && setShot({ state: "gone", why: `${img.name} didn't load` })
-    )
+    actions
+      .docImage(code, img)
+      .then(async (data): Promise<Image | null> => {
+        if (data === null) return null
+        const url = `data:${img.mime};base64,${data}`
+        const { width, height } = await warmFeed(img.ref.id, url)
+        return { url, width, height, alt: img.name, id: img.ref.id }
+      })
+      .then(
+        (image) => live && setShot(image === null ? { state: "gone", why: `${img.name} is no longer available` } : { state: "shown", image }),
+        () => live && setShot({ state: "gone", why: `${img.name} didn't load` })
+      )
     return () => {
       live = false
     }
   }, [actions, code, img])
-  if (shot.state === "shown")
-    return (
-      <button type="button" className="msg-image" aria-label={`Open ${img.name}`} onClick={() => open(shot.url, img.name)}>
-        <img src={shot.url} alt={img.name} />
-      </button>
-    )
+  if (shot.state === "shown") return <ImageButton image={shot.image} onOpen={open} />
   return (
     <span className="msg-image-spot" title={img.name} role="status">
       {shot.state === "gone" ? shot.why : "Loading image…"}

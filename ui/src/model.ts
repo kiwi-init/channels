@@ -320,6 +320,7 @@ export interface Image {
   width: number
   height: number
   alt: string
+  id?: string
 }
 
 export interface ImageSpot {
