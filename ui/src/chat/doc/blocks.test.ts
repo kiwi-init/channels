@@ -3,7 +3,24 @@ import { GIVEN_BACK } from "@kiwi/core/doc/blocks.ts"
 import type { Node } from "prosemirror-model"
 import { EditorState, TextSelection } from "prosemirror-state"
 
-import { atBlockEnd, attach, backInDraft, blockAfter, blockAt, joinBack, joinForward, blocks, continues, dropEmptyOwn, emptyHidden, makeBlock, replyIn, startBlock, unreply } from "~/chat/doc/blocks"
+import {
+  atBlockEnd,
+  attach,
+  backInDraft,
+  blockAfter,
+  blockAt,
+  caretAway,
+  joinBack,
+  joinForward,
+  blocks,
+  continues,
+  dropEmptyOwn,
+  emptyHidden,
+  makeBlock,
+  replyIn,
+  startBlock,
+  unreply,
+} from "~/chat/doc/blocks"
 import { attrsOf, imageNode, schema } from "~/chat/doc/schema"
 
 const T = 1_700_000_000_000
@@ -307,5 +324,29 @@ describe("empty lines on screen (T3317)", () => {
     expect(emptyHidden(theirs, "jow", attrsOf(theirs).id, () => true)).toBe(true)
     expect(emptyHidden(makeBlock("text", "jow", T, "oi"), "jow", null, () => false)).toBe(false)
     expect(emptyHidden(makeBlock("text", "harry", T, "oi"), "jow", null, () => false)).toBe(false)
+  })
+})
+
+describe("whether the caret is away from the end, so the view holds still (T3644)", () => {
+  const all = () => true
+
+  test("on a line above someone's unsent line, the caret is away", () => {
+    const s = caretAtEnd(stateOf(makeBlock("text", "jow", T, "mine"), makeBlock("agent", "atlas", T + 1, "still writing")), 0)
+    expect(caretAway(s, "jow", all)).toBe(true)
+  })
+
+  test("lines already in the feed after yours don't count: your empty line after a send is at the end", () => {
+    const s = caretAtEnd(
+      stateOf(sent(makeBlock("text", "jow", T, "my question")), makeBlock("text", "jow", T + 1), makeBlock("agent", "atlas", T + 2, "work 1"), makeBlock("agent", "atlas", T + 3, "work 2")),
+      1
+    )
+    const inFeed = new Set([attrsOf(s.doc.child(0)).id, attrsOf(s.doc.child(2)).id, attrsOf(s.doc.child(3)).id])
+    expect(caretAway(s, "jow", all)).toBe(true)
+    expect(caretAway(s, "jow", (b) => !inFeed.has(b))).toBe(false)
+  })
+
+  test("your own empty last line is the end, and so is your last written line", () => {
+    expect(caretAway(caretAtEnd(stateOf(makeBlock("agent", "atlas", T, "hi"), makeBlock("text", "jow", T + 1)), 1), "jow", all)).toBe(false)
+    expect(caretAway(caretAtEnd(stateOf(makeBlock("text", "jow", T, "one"), makeBlock("text", "atlas", T + 1)), 0), "jow", all)).toBe(false)
   })
 })

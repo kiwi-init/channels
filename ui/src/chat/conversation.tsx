@@ -190,7 +190,11 @@ export function useStick(following = true, still = false) {
       return
     }
     const el = a.el.isConnected ? a.el : anchorRow(list, a.seq)
-    if (!el) return
+    if (!el) {
+      anchor.current = null
+      if (stuck.current) box.scrollTop = box.scrollHeight
+      return
+    }
     const top = box.getBoundingClientRect().top
     const clamped = still && box.scrollTop < a.at && box.scrollTop >= box.scrollHeight - box.clientHeight - 0.5
     const shift = el.getBoundingClientRect().top - top - (clamped ? a.top : a.top - (box.scrollTop - a.at))
@@ -200,6 +204,8 @@ export function useStick(following = true, still = false) {
       list.style.paddingBottom = `${room.current}px`
     }
     if (Math.abs(shift) > 0.5) box.scrollTop += shift
+    const gap = box.scrollHeight - box.clientHeight - box.scrollTop
+    if (still && stuck.current && gap > 0.5 && gap < NEAR_BOTTOM) box.scrollTop = box.scrollHeight
     anchor.current = { el, seq: a.seq, top: el.getBoundingClientRect().top - top, at: box.scrollTop }
   }, [still])
 
