@@ -2,7 +2,7 @@ import { Fragment, startTransition, Suspense, useCallback, useEffect, useLayoutE
 
 import { Composer } from "~/chat/composer"
 import { docOf } from "~/chat/doc-of"
-import { useEditingIn } from "~/chat/editing"
+import { EditHere } from "~/chat/editing"
 import { Updates } from "~/chat/events"
 import { splitUpdates } from "~/chat/fold-events"
 import { foldText, leftOutRun, runFirst, withLeftOut } from "~/chat/left-out"
@@ -296,16 +296,18 @@ export function Conversation({ channel, jump }: { channel: Channel; jump: Jump |
 
   return (
     <ReplyContext.Provider value={replying}>
-      {channel.hold && <HoldBanner channel={channel} hold={channel.hold} />}
-      <Feed
-        key={`${key}\n${nav.visit}\n${channel.loading ? "loading" : "ready"}`}
-        channel={channel}
-        where={where}
-        spot={nav.restore !== undefined ? nav.restore : spotAt(key)}
-        jump={jump && sameWhere(jump.m.where, where) ? jump : null}
-        doc={doc}
-      />
-      {where.kind === "theirs" ? <ReadOnly channel={channel} between={where.between} /> : <Composer channel={channel} where={where} placeholder={`Message ${placeName}`} doc={doc} />}
+      <EditHere.Provider value="main">
+        {channel.hold && <HoldBanner channel={channel} hold={channel.hold} />}
+        <Feed
+          key={`${key}\n${nav.visit}\n${channel.loading ? "loading" : "ready"}`}
+          channel={channel}
+          where={where}
+          spot={nav.restore !== undefined ? nav.restore : spotAt(key)}
+          jump={jump && sameWhere(jump.m.where, where) ? jump : null}
+          doc={doc}
+        />
+        {where.kind === "theirs" ? <ReadOnly channel={channel} between={where.between} /> : <Composer channel={channel} where={where} placeholder={`Message ${placeName}`} doc={doc} />}
+      </EditHere.Provider>
     </ReplyContext.Provider>
   )
 }
@@ -563,25 +565,6 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
     },
     [content, channel.code]
   )
-
-  const editingSeq = useEditingIn(channel.code)
-  useEffect(() => {
-    if (editingSeq === null) return
-    unstick()
-    let frame = 0
-    let left = 30
-    const show = () => {
-      const box = content.current?.querySelector<HTMLElement>(`[data-seq="${editingSeq}"] .msg-edit`)
-      if (!box) {
-        if (left-- > 0) frame = requestAnimationFrame(show)
-        return
-      }
-      box.scrollIntoView({ block: "nearest" })
-      remember()
-    }
-    frame = requestAnimationFrame(show)
-    return () => cancelAnimationFrame(frame)
-  }, [editingSeq, content, unstick, remember])
 
   useEffect(() => {
     if (!jump || (jump.m.system && !jump.m.leftOut)) return

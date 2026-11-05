@@ -1,12 +1,16 @@
-import { useSyncExternalStore } from "react"
+import { createContext, useSyncExternalStore } from "react"
+
+export type EditAt = "main" | "panel" | ""
+
+export const EditHere = createContext<EditAt>("")
 
 let editing: string | null = null
 const listeners = new Set<() => void>()
 const emit = () => listeners.forEach((f) => f())
 const subscribe = (f: () => void) => (listeners.add(f), () => void listeners.delete(f))
 
-export function startEditing(code: string, seq: number): void {
-  editing = `${code}:${seq}`
+export function startEditing(code: string, seq: number, at: EditAt = ""): void {
+  editing = `${at}:${code}:${seq}`
   emit()
 }
 
@@ -29,6 +33,7 @@ export function stopEditing(): void {
   emit()
 }
 
-export const useEditing = (code: string, seq: number): boolean => useSyncExternalStore(subscribe, () => editing === `${code}:${seq}`)
+export const useEditing = (code: string, seq: number): boolean => useSyncExternalStore(subscribe, () => editing === `:${code}:${seq}`)
 
-export const useEditingIn = (code: string): number | null => useSyncExternalStore(subscribe, () => (editing?.startsWith(`${code}:`) ? Number(editing.slice(code.length + 1)) : null))
+export const useEditingIn = (code: string, at: EditAt): number | null =>
+  useSyncExternalStore(subscribe, () => (at && editing?.startsWith(`${at}:${code}:`) ? Number(editing.slice(at.length + code.length + 2)) : null))

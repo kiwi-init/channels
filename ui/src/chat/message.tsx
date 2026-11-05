@@ -1,11 +1,11 @@
-import { lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react"
+import { lazy, memo, Suspense, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react"
 
 import { isGifReaction } from "@kiwi/core/protocol.ts"
 
 import { BlockFilesView } from "~/chat/block-files"
 import { withoutMediaNames } from "~/chat/doc/finished"
 import { PrChip, TaskChip } from "~/chat/cards"
-import { useEditing } from "~/chat/editing"
+import { EditHere, useEditing } from "~/chat/editing"
 import { parsedFor } from "~/chat/parsed"
 import { quotedExcerpt } from "~/chat/quote"
 import { preview, useReplying } from "~/chat/reply"
@@ -190,7 +190,8 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
   )
   const quoting = !!replying && m.where.kind !== "theirs"
   const who = memberOf(channel, m.from)
-  const editing = useEditing(channel.code, m.seq) && !m.block
+  const at = useContext(EditHere)
+  const editing = useEditing(channel.code, m.seq)
   const ask = m.ask ? channel.asks.find((a) => a.id === m.ask) : undefined
   const spec = channel.specs?.find((s) => s.ask === m.seq)
   const cited = useMemo(() => (typeof quote === "object" ? quotedExcerpt(m, quote) : null), [m, quote])
@@ -211,7 +212,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
     if (m.pending || m.failed !== undefined || m.leftOut || m.fromDoc || m.deleted || editing) return
     const target = e.target
     const reply = replying && quoting ? () => replying.set(m) : null
-    showMenu(e, "Message", (x) => x.messageGroups({ channel, go }, m, target, { openImage, reply }))
+    showMenu(e, "Message", (x) => x.messageGroups({ channel, go }, m, target, { openImage, reply, at }))
   }
 
   return (
