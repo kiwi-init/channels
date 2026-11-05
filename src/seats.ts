@@ -304,8 +304,7 @@ export function seatsFor(from: string, opts: SeatOptions = {}): Binding[] {
     const mine = who.session ? seats.filter((b) => b.session === who.session) : [];
     if (mine.length) {
       // Note that this session still uses it, so nobody takes it for stale (seats with no process to check).
-      if (opts.claim !== false) keepSeen(d, mine);
-      return mine;
+      return opts.claim !== false ? keepSeen(d, mine, who) : mine;
     }
     // This session listens as an agent from here: that's who it is, even when its seat was lost (a later join
     // from a plain terminal replaced it). It gets its seat back, beside the others.
@@ -420,16 +419,20 @@ export function bindingFor(dir: string, opts: SeatOptions = {}): Binding | null 
   return only && !more.length ? only : null;
 }
 
-function keepSeen(dir: string, mine: Binding[]): void {
-  const stale = mine.filter((m) => !m.pid && Date.now() - (m.seen ?? m.at ?? 0) > SEEN_EVERY_MS);
-  if (!stale.length) return;
+function keepSeen(dir: string, mine: Binding[], who: Here): Binding[] {
+  const moved = (m: Binding) => !!who.pid && m.pid !== who.pid;
+  const stale = mine.filter((m) => moved(m) || (!m.pid && Date.now() - (m.seen ?? m.at ?? 0) > SEEN_EVERY_MS));
+  if (!stale.length) return mine;
+  const now = Date.now();
+  const fresh = (b: Binding): Binding => ({ ...b, ...(moved(b) ? { pid: who.pid } : {}), seen: now });
   updateConfig((c) =>
     store(
       c,
       dir,
-      seatsAt(c, dir).map((b) => (stale.some((m) => sameSeat(b, m)) ? { ...b, seen: Date.now() } : b)),
+      seatsAt(c, dir).map((b) => (stale.some((m) => sameSeat(b, m) && m.session === b.session) ? fresh(b) : b)),
     ),
   );
+  return mine.map((m) => (stale.includes(m) ? fresh(m) : m));
 }
 
 export function seatsHeldAnywhere(who: Here = here(), opts: Pick<SeatOptions, "claim"> = {}): Binding[] {
@@ -437,8 +440,7 @@ export function seatsHeldAnywhere(who: Here = here(), opts: Pick<SeatOptions, "c
   const cfg = loadConfig();
   return Object.keys(cfg.bindings ?? {}).flatMap((d) => {
     const mine = seatsAt(cfg, d).filter((b) => b.session === who.session && cfg.channels[b.alias] && !seatHeldAway(cfg, b.alias, b.as));
-    if (opts.claim !== false) keepSeen(d, mine);
-    return mine;
+    return opts.claim !== false ? keepSeen(d, mine, who) : mine;
   });
 }
 

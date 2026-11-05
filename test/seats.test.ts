@@ -517,3 +517,39 @@ describe("a session outside the folder it joined in keeps its seat (#1579)", () 
     ).toEqual(["helper in other", "lead in ch"]);
   });
 });
+
+describe("a resumed session keeps its seat (#1676)", () => {
+  const resumed = { harness: "claude" as const, session: "lead-session", pid: process.pid };
+  const stranger = { harness: "claude" as const, session: "new-session", pid: process.ppid };
+
+  test("the seat takes the resumed process's pid, so a new session there finds it held", () => {
+    bindDirectory(dir, { alias: "ch", as: "lead", harness: "claude", session: "lead-session", pid: DEAD });
+    expect(seatsFor(dir, { who: resumed }).map((b) => b.pid)).toEqual([process.pid]);
+    expect(seatsAt(loadConfig(), dir).find((b) => b.as === "lead")).toMatchObject({ session: "lead-session", pid: process.pid });
+    expect(seatsFor(dir, { who: stranger })).toEqual([]);
+    expect(seatsAt(loadConfig(), dir).find((b) => b.as === "lead")).toMatchObject({ session: "lead-session", pid: process.pid });
+  });
+
+  test("a resumed session in a subfolder refreshes the seat it walked up to, and a session in another subfolder can't take it", () => {
+    bindDirectory(dir, { alias: "ch", as: "lead", harness: "claude", session: "lead-session", pid: DEAD });
+    const sub = join(dir, "web");
+    mkdirSync(sub);
+    expect(seatsFor(sub, { who: resumed }).map((b) => b.as)).toEqual(["lead"]);
+    const other = join(dir, "docs");
+    mkdirSync(other);
+    expect(seatsFor(other, { who: stranger })).toEqual([]);
+    expect(seatsAt(loadConfig(), dir).find((b) => b.as === "lead")).toMatchObject({ session: "lead-session", pid: process.pid });
+  });
+
+  test("seats found by session anywhere on the machine also take the resumed pid", () => {
+    bindDirectory(dir, { alias: "ch", as: "lead", harness: "claude", session: "lead-session", pid: DEAD });
+    expect(seatsHeldAnywhere(resumed).map((b) => b.pid)).toEqual([process.pid]);
+    expect(seatsAt(loadConfig(), dir).find((b) => b.as === "lead")).toMatchObject({ pid: process.pid });
+  });
+
+  test("a read that doesn't claim leaves the stored pid alone", () => {
+    bindDirectory(dir, { alias: "ch", as: "lead", harness: "claude", session: "lead-session", pid: DEAD });
+    seatsFor(dir, { who: resumed, claim: false });
+    expect(seatsAt(loadConfig(), dir).find((b) => b.as === "lead")).toMatchObject({ pid: DEAD });
+  });
+});
