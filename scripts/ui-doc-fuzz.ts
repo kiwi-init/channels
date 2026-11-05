@@ -175,6 +175,13 @@ async function windowOf(label: string, from?: BrowserContext): Promise<Win> {
           );
           if (calls.length > 60) calls.shift();
           cb(entries, obs);
+          const after = entries.map((e) => {
+            const r = e.target.getBoundingClientRect();
+            const el = e.target instanceof HTMLElement ? e.target : null;
+            return `${Math.round(r.width)}x${Math.round(r.height)}${el?.style.paddingBottom ? ` pb=${el.style.paddingBottom}` : ""}${el && el.scrollHeight > el.clientHeight ? ` scroll=${Math.round(el.scrollTop)}/${el.scrollHeight - el.clientHeight}` : ""}`;
+          });
+          calls.push(`  after ro${id}: ${after.join(", ")}`);
+          if (calls.length > 60) calls.shift();
         });
       }
     };
