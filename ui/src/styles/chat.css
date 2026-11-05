@@ -2122,7 +2122,7 @@ button.msg-image-spot:hover {
   display: flex;
   align-items: center;
   gap: 6px;
-  height: 28px;
+  height: 1.75rem;
   padding: 0 10px;
   border: 0;
   border-radius: var(--r-ctl);
@@ -2143,7 +2143,7 @@ button.msg-image-spot:hover {
   flex-direction: column;
   width: min(420px, calc(100vw - 32px));
   max-height: min(480px, 70vh);
-  padding: 4px 14px 12px;
+  padding: 4px 16px 12px;
   overflow-y: auto;
   overscroll-behavior: contain;
   border-radius: var(--r-card);
