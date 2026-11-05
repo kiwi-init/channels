@@ -193,7 +193,7 @@ jobs:
         if: ${{ !cancelled() }}
         run: bunx wrangler deploy --dry-run --outdir "$RUNNER_TEMP/worker"
 
-  # The thread doc in Chromium and WebKit: replay, send, follow, paste, image order, the slash menu, the keys and a busy doc holding still.
+  # The thread doc in Chromium and WebKit: replay, send, follow, paste, image order, steady, the slash menu, the keys and a busy doc holding still.
   doc:
     name: build / doc
     needs: plan
@@ -226,6 +226,13 @@ jobs:
       - name: doc image order, a sent line with an image stays above the lines sent after it
         if: ${{ !cancelled() }}
         run: bun scripts/ui-doc-image-order.ts
+      - name: doc steady, a draft that grew below the fold keeps its height when you scroll to it, in Chromium and WebKit
+        if: ${{ !cancelled() }}
+        run: |
+          status=0
+          bun scripts/ui-doc-steady.ts || status=1
+          bun scripts/ui-doc-steady.ts --webkit || status=1
+          exit "$status"
       - name: doc slash menu, the doc's / menu opens on screen and keeps its rows inside its box, in Chromium and WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-doc-slash-menu.ts
