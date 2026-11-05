@@ -8,7 +8,7 @@ import { Decoration, DecorationSet, EditorView, type NodeView } from "prosemirro
 import { yCursorPlugin, ySyncPlugin, ySyncPluginKey, yUndoPlugin } from "y-prosemirror"
 import * as Y from "yjs"
 
-import { attach, backInDraft, blockAt, caretAway, continues, dropEmptyOwn, emptyHidden, isEmpty, noteMade, replyIn, startBlock, unreply, type Made } from "~/chat/doc/blocks"
+import { attach, backInDraft, blockAt, caretAway, continues, dropEmptyOwn, emptyHidden, isEmpty, noteMade, startBlock, unreply, type Made } from "~/chat/doc/blocks"
 import { caretShown } from "~/chat/doc/carets"
 import { onGiveBack } from "~/chat/doc/give-back"
 import { writeOwnLinesOnly } from "~/chat/doc/own-writes"
@@ -22,7 +22,6 @@ import { fileDrag, takeDropped } from "@kiwi/app/dropped.ts"
 import { emptyPaste, takePasted } from "@kiwi/app/pasted.ts"
 import { fileView, filesIn, imageView, uploadAll, type DocMedia } from "~/chat/doc/media"
 import { blocksOf, mediaOfBlock, richBlocks } from "@kiwi/core/doc/blocks.ts"
-import { DOC_LEVEL, onWriterFloor, writerFloor } from "@kiwi/core/doc/level.ts"
 import { docFeed, oldestAt, setDocFeed } from "~/chat/doc/finished"
 import { postedBlocks } from "~/chat/doc/posted"
 import { markdownRules } from "~/chat/doc/rules"
@@ -35,7 +34,9 @@ import { startEditing } from "~/chat/editing"
 import { withNames } from "~/chat/linked"
 import { peopleMatches, taskMatches } from "~/chat/matches"
 import { withExcerpt } from "~/chat/quote"
-import { preview, useReplying } from "~/chat/reply"
+import { preview } from "~/chat/reply"
+import { letSay } from "~/chat/doc/sayer"
+import { DOC_LEVEL, onWriterFloor, writerFloor } from "@kiwi/core/doc/level.ts"
 import { useCommands } from "~/chat/use-commands"
 import { Icon } from "~/kit/icons"
 import { Avatar, cx, Dot, STATUS_WORDS } from "~/kit/bits"
@@ -649,7 +650,7 @@ export function ThreadDoc({
     (on) => onWriterFloor(shared.doc, on),
     () => writerFloor(shared.doc) > DOC_LEVEL
   )
-  const readOnly = !!you?.readOnly || tooOld
+  const readOnly = true
   const canWrite = useRef(!readOnly)
   const latest = useRef(channel)
   const holdRef = useRef(hold)
@@ -683,7 +684,6 @@ export function ThreadDoc({
   const whereRef = useRef(where)
   const options = optionsFor(channel, commands, query?.q ?? null)
   const keys = useRef<(e: KeyboardEvent) => boolean>(() => false)
-  const replying = useReplying()
 
   const dropReply = (id: string) => {
     const v = view.current
@@ -778,19 +778,6 @@ export function ThreadDoc({
       view.current = null
     }
   }, [shared, me, heads, feet])
-
-  useEffect(() => {
-    const v = view.current
-    const to = replying?.to
-    if (!v || !replying || !to) return
-    replying.set(null)
-    if (!canWrite.current) return
-    v.dispatch(replyIn(v.state, me, Date.now(), to.seq, replying.excerpt, drafts.current.posted, drafts.current.made))
-    v.focus()
-    const at = v.domAtPos(v.state.selection.head).node
-    const el = at instanceof HTMLElement ? at : at.parentElement
-    requestAnimationFrame(() => el?.closest(".blk")?.scrollIntoView({ block: "nearest" }))
-  }, [replying, me])
 
   useEffect(
     () =>
@@ -971,6 +958,11 @@ export function LiveThreadDoc({ channel, where, thread, hold }: { channel: Chann
   }, [actions, code, thread, me])
 
   useEffect(() => live?.want(th), [live, th])
+
+  useEffect(
+    () => (live?.isReady ? letSay(`${code}\n${thread}`, (text, reply, back) => live.say(text, reply ? { re: reply.re, ...(reply.quote ? { quote: reply.quote } : {}) } : null, back)) : undefined),
+    [live, live?.isReady, code, thread]
+  )
 
   return live?.isReady ? <ThreadDoc channel={channel} where={where} thread={thread} shared={live} hold={hold} media={media} /> : null
 }

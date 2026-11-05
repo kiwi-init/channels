@@ -1219,7 +1219,7 @@
 }
 
 .panel:has(> .compose) .panel-body {
-  padding-bottom: var(--compose-space);
+  padding-bottom: max(var(--compose-space), calc(var(--compose-h, 0px) + 40px));
 }
 
 .tabs .count:not(.is-loud, .is-mention) {

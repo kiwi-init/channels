@@ -2,7 +2,7 @@ import * as Y from "yjs"
 import { Awareness } from "y-protocols/awareness"
 
 import { b64url, fromB64url } from "@kiwi/core/crypto.ts"
-import { blocksOf } from "@kiwi/core/doc/blocks.ts"
+import { blocksOf, markPosted, newBlock, removeBlock } from "@kiwi/core/doc/blocks.ts"
 import { DOC_LEVEL, onWriterFloor, raiseWriterFloor } from "@kiwi/core/doc/level.ts"
 import type { PipeIn } from "@kiwi/core/doc/held-pipe.ts"
 import { mirrorAware } from "@kiwi/core/doc/pipe.ts"
@@ -68,7 +68,7 @@ export class LiveDoc implements Shared {
   private readonly moved = new Map<string, string>()
   private moveTo: { from: string; to: string } | null = null
   private readonly waiting = new Set<() => void>()
-  private readonly unposted: Finished[] = []
+  private readonly unposted: { b: Finished; failed: () => void }[] = []
   private readonly posting: Posting | null
   private readonly floorOff: () => void
 
@@ -187,7 +187,7 @@ export class LiveDoc implements Shared {
     switch (e._tag) {
       case "Open":
         this.opened = e.th
-        for (const b of this.unposted.splice(0)) this.post(b)
+        for (const u of this.unposted.splice(0)) this.post(u.b, u.failed)
         return
       case "Update":
         return Y.applyUpdate(this.doc, fromB64url(e.u), PIPE)
@@ -209,12 +209,23 @@ export class LiveDoc implements Shared {
     }
   }
 
-  private post(b: Finished): void {
+  say(text: string, reply: { re: number; quote?: string } | null, back: (text: string) => void): boolean {
+    if (!this.poster || this.gaveUp || this.dead) return false
+    const { id } = newBlock(this.doc, "text", this.poster.me, text)
+    markPosted(this.doc, id)
+    this.post({ id, text, ...(reply ? { re: reply.re, ...(reply.quote ? { quote: reply.quote } : {}) } : {}) }, () => {
+      removeBlock(this.doc, id)
+      back(text)
+    })
+    return true
+  }
+
+  private post(b: Finished, failed: () => void = () => giveBackBlock(b.id)): void {
     if (!this.poster) return
-    if (this.opened === null) this.unposted.push(b)
+    if (this.opened === null) this.unposted.push({ b, failed })
     else
       void this.poster.post(b.text, { th: this.opened, id: b.id }, b.re ? { re: b.re, ...(b.quote ? { quote: b.quote } : {}) } : undefined).then((went) => {
-        if (!went) giveBackBlock(b.id)
+        if (!went) failed()
       })
   }
 

@@ -7,6 +7,7 @@ import { matchCommands, parseCommand } from "~/chat/commands"
 import { useCommands } from "~/chat/use-commands"
 import { startEditing } from "~/chat/editing"
 import { withExcerpt } from "~/chat/quote"
+import { sayerAt } from "~/chat/doc/sayer"
 import { preview, useReplying } from "~/chat/reply"
 import { attached, composerKey, drafts, tooLong, useGivenBack } from "~/chat/drafts"
 import { STASH_SHOT, useStash, type Stashed } from "~/chat/stash"
@@ -106,13 +107,13 @@ const readBase64 = (file: File): Promise<string> =>
     reader.readAsDataURL(file)
   })
 
-type ComposerProps = { channel: Channel; where: Where; placeholder: string; inThread?: number }
+type ComposerProps = { channel: Channel; where: Where; placeholder: string; inThread?: number; doc?: string | null }
 
 export function Composer(props: ComposerProps) {
   return <ComposerIn key={composerKey(props.channel.code, props.where, props.inThread)} {...props} />
 }
 
-function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
+function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProps) {
   const { app, toast } = useApp()
   const replying = useReplying()
   const replyTo = replying?.to ?? null
@@ -278,12 +279,13 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
       toast(long, "error")
       return
     }
+    const say = doc && !files.length ? sayerAt(`${channel.code}\n${doc}`) : null
     const opts = {
       ...(inThread !== undefined ? { inThread, ...(alsoRoom ? {} : { side: true as const }) } : {}),
       ...(replyTo ? { replyTo: replyTo.seq } : {}),
       ...(files.length ? { images: files } : {}),
     }
-    app.actions.send(channel.code, where, sent, Object.keys(opts).length ? opts : undefined)
+    if (!say?.(said, replyTo ? { re: replyTo.seq, quote: excerpt } : null, update)) app.actions.send(channel.code, where, sent, Object.keys(opts).length ? opts : undefined)
     picked.delete(key)
     replying?.set(null)
     setAlsoRoom(false)
