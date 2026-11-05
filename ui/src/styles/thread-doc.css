@@ -27,11 +27,6 @@
   margin-top: 4px;
 }
 
-.thread-doc .blk:not(.is-here) {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 24px;
-}
-
 .thread-doc .blk.is-hidden {
   display: none;
 }

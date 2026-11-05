@@ -199,6 +199,13 @@ jobs:
           bun scripts/ui-doc-owner.ts || status=1
           bun scripts/ui-doc-owner.ts --webkit || status=1
           exit "$status"
+      - name: doc steady, a draft that grew below the fold keeps its height when you scroll to it, in Chromium and WebKit
+        if: ${{ !cancelled() }}
+        run: |
+          status=0
+          bun scripts/ui-doc-steady.ts || status=1
+          bun scripts/ui-doc-steady.ts --webkit || status=1
+          exit "$status"
       - name: doc slash menu, the doc's / menu opens on screen and keeps its rows inside its box, in Chromium and WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-doc-slash-menu.ts

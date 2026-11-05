@@ -153,7 +153,11 @@ async function windowOf(label: string, from?: BrowserContext): Promise<Win> {
   const context = await browser.newContext({ viewport: { width: 1280, height: 860 }, storageState });
   const lag = await laggy(context, label);
   const page = await context.newPage();
-  page.on("pageerror", (e) => void (live && errors.push(`${label}: ${e.message}`)));
+  page.on("pageerror", (e) => {
+    if (!live) return;
+    errors.push(`${label}: ${e.message}`);
+    log(`error ${label}: ${e.message}`);
+  });
   await page.goto(BASE);
   if (!from) await firstRun(page, "jow");
   return { label, page, lag, line: null, want: "", sent: [] };
