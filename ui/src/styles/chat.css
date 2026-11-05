@@ -1156,28 +1156,6 @@ button.msg-image-spot:hover {
   text-overflow: ellipsis;
 }
 
-.msg-thread {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  margin-top: 4px;
-  padding: 2px 0;
-  border: 0;
-  background: none;
-  font: var(--t-meta) var(--ui);
-}
-
-.msg-thread-n {
-  flex: none;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.msg-thread:hover .msg-thread-n {
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
 .msg-tools {
   position: absolute;
   top: -0.875rem;
@@ -1989,80 +1967,6 @@ button.msg-image-spot:hover {
 
 .msg-edit-foot .dim {
   margin-right: auto;
-}
-
-.threads {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-
-.threads-list {
-  display: grid;
-  gap: 12px;
-  max-width: calc(var(--col) + 2 * var(--gutter));
-  margin-inline: auto;
-  padding: 24px var(--gutter) 48px;
-}
-
-.threads-title {
-  margin: 0;
-  color: var(--ink);
-  font: 600 var(--t-title) var(--ui);
-}
-
-.threads-list ul {
-  display: grid;
-  gap: 2px;
-  margin: 0 -12px;
-  padding: 0;
-  list-style: none;
-}
-
-.thread-item {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 2px 12px;
-  width: 100%;
-  padding: 10px 12px;
-  border: 0;
-  border-radius: var(--r-row);
-  background: none;
-  color: var(--ink-2);
-  font: var(--t-ui) var(--ui);
-  text-align: left;
-  cursor: pointer;
-}
-
-.thread-item:hover,
-.thread-item.is-on {
-  background: var(--wash-2);
-}
-
-.thread-item-meta {
-  grid-column: 1;
-  color: var(--ink-3);
-  font: var(--t-stamp) var(--ui);
-}
-
-.thread-item-root {
-  grid-column: 1;
-  overflow: hidden;
-  color: var(--ink);
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.thread-item-root b,
-.thread-item.is-news .thread-item-root {
-  font-weight: 600;
-}
-
-.thread-item .count {
-  grid-column: 2;
-  grid-row: 1 / span 2;
-  align-self: center;
 }
 
 .compact-foot {

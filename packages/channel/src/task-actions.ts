@@ -72,11 +72,6 @@ export function closeFromGithub(t: Task, c: { cancelled: boolean; note: string }
   };
 }
 
-export function reviewerChoices(t: Task, members: Iterable<{ name: string; active: boolean }>): string[] {
-  const named = [...members].filter((m) => m.active && m.name !== t.owner && m.name !== t.review).map((m) => m.name);
-  return t.review === ANYONE ? named : [ANYONE, ...named];
-}
-
 export function changeReviewer(t: Task, review: string, me: string): TaskSend {
   const to = [...new Set([...(t.owner ? [t.owner] : []), ...(review === ANYONE ? [] : [review])])].filter((n) => n !== me);
   return {

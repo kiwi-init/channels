@@ -16,7 +16,7 @@ const wire = (over: Partial<Wire>): Wire => {
 }
 const pictures = { get: () => ({ spot: "", alt: "", state: "waiting" as const }) }
 
-describe("replies stay in their thread unless also sent to the room (T980)", () => {
+describe("a reply from an old CLI still says it went only to its thread, and rooms show it anyway (T980, T4143)", () => {
   test("a side reply is a well-formed payload, and side is only ever true", () => {
     const p = { v: 1, id: "x", from: "win", kind: "msg", body: "hi", ts: 1, re: [1] }
     expect(wellFormed({ ...p, side: true })).toBe(true)
@@ -39,13 +39,13 @@ describe("replies stay in their thread unless also sent to the room (T980)", () 
     expect(of(root.seq)?.thread?.replies).toBe(2)
   })
 
-  test("a room's unread counts what its feed shows: side replies wait in their thread", () => {
+  test("a room's unread counts what its feed shows: side replies too, since rooms are flat", () => {
     const root = wire({ body: "T10 is merged" })
     const side = wire({ re: [root.seq], side: true, body: "and tagged" })
     const also = wire({ re: [root.seq], body: "release notes are up" })
     const log = [root, side, also]
     const general = roomsOf(fold(log, roster, 0), log, "jow", {}, 0).find((r) => r.id === "general")
-    expect(general?.unread).toBe(2)
+    expect(general?.unread).toBe(3)
   })
 
   test("a side reply for you still counts, as a mention, so an answer to you never goes unseen", () => {

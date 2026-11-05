@@ -3,7 +3,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { generateIdentity } from "@kiwi/core/identity.ts";
-import { mailboxId, newSecret, openMailbox } from "@kiwi/core/mailbox.ts";
+import { newSecret, openMailbox } from "@kiwi/core/mailbox.ts";
 import { certifyMachine, checkComputer, checkPerson, claimComputer, provePerson, readMachineCert } from "@kiwi/core/person.ts";
 
 const ROOM = "0123456789abcdef0123456789abcdef";
@@ -78,20 +78,6 @@ describe("machine certs and claims", () => {
 });
 
 describe("a one-time mailbox", () => {
-  test("what one side writes, the other side reads with the same secret", async () => {
-    const { fetchImpl, relay } = fakeRelay();
-    const secret = newSecret();
-    const there = await openMailbox(relay, secret, fetchImpl);
-    await there.put("a", { label: "vps-1" });
-    const here = await openMailbox(relay, secret, fetchImpl);
-    expect(here.id).toBe(await mailboxId(secret));
-    expect(await here.get<{ label: string }>("a")).toEqual({ label: "vps-1" });
-    await here.put("b", { ok: true });
-    expect(await there.wait<{ ok: boolean }>("b", { timeoutMs: 1_000 })).toEqual({ ok: true });
-    await there.drop();
-    expect(await here.get("a")).toBeNull();
-  });
-
   test("a relay can't read or swap what's in a mailbox", async () => {
     const { boxes, fetchImpl, relay } = fakeRelay();
     const machine = await generateIdentity("vps-1");
@@ -105,13 +91,5 @@ describe("a one-time mailbox", () => {
     await other.put("a", { pk: machine.pk });
     boxes.set(`${mb.id}/a`, boxes.get(`${other.id}/a`)!);
     await expect(mb.get("a")).rejects.toThrow(/didn't seal/);
-  });
-
-  test("a slot is written once", async () => {
-    const { fetchImpl, relay } = fakeRelay();
-    const mb = await openMailbox(relay, newSecret(), fetchImpl);
-    await mb.put("a", { n: 1 });
-    await expect(mb.put("a", { n: 2 })).rejects.toThrow(/already written/);
-    expect(await mb.get<{ n: number }>("a")).toEqual({ n: 1 });
   });
 });

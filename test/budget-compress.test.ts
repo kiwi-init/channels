@@ -3,9 +3,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Channel } from "@kiwi/core/client.ts";
-import { fromB64url, MAX_UNPACKED, newChannelKey, newRoomId, open, PACK_FROM, b64url } from "@kiwi/core/crypto.ts";
-import { generateIdentity, sign } from "@kiwi/core/identity.ts";
-import { PROTOCOL_VERSION, type Event } from "@kiwi/core/protocol.ts";
+import { fromB64url, MAX_UNPACKED, newChannelKey, newRoomId, open, b64url } from "@kiwi/core/crypto.ts";
+import { type Event } from "@kiwi/core/protocol.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { joinAgent, pairComputer, setupChannel, type OwnerSetup } from "./owner.ts";
 
@@ -143,37 +142,6 @@ const corpus: Record<Kind, Item[]> = {
   json: [{ body: `CI run 18234 on perf/compress:\n\n${fence}json\n${ciJson}\n${fence}` }, { body: "card", ev: card }],
   oneLiner: ["on it", "done, see #42", "LGTM", "pushed 51c8938 to perf/compress", "@lead can you approve T7?"].map((body) => ({ body })),
 };
-
-const typicalEvents: Item[] = [
-  { body: "hello", ev: { op: "hello", role: "reviewer", about: "reviews relay changes" } },
-  { body: "card", ev: card },
-  { body: "card", ev: { op: "card", os: "linux", arch: "x64", harness: "codex", model: "gpt-5-codex", tools: ["bun", "git"] } },
-  { body: "added task: fix the reconnect backoff", ev: { op: "task.add", title: "fix the reconnect backoff", owner: "otter-gentle" } },
-  {
-    body: "added task: cache the info call",
-    ev: { op: "task.add", title: "cache the info call", detail: "kiwi send fetches GET /info six times; fetch it once per process and reuse it.", review: "*" },
-  },
-  { body: "claimed T7", ev: { op: "task.claim", task: 7 } },
-  { body: "T7 doing", ev: { op: "task.update", task: 7, state: "doing" } },
-  { body: "T7 review at 51c8938", ev: { op: "task.update", task: 7, state: "review", at: "51c8938a4f0e2d1b7c6a9e8f0d1c2b3a4e5f6a7b", note: "ready for review" } },
-  { body: "T7 approved", ev: { op: "task.update", task: 7, verdict: "approved", round: 1, at: "51c8938a4f0e2d1b7c6a9e8f0d1c2b3a4e5f6a7b" } },
-  { body: "T7 done", ev: { op: "task.update", task: 7, state: "done", note: "merged in #219" } },
-  { body: "fact build=green", ev: { op: "fact.set", key: "build", value: "green", ttl: 3600 } },
-  { body: "fact deleted", ev: { op: "fact.del", key: "build" } },
-  { body: "made otter-gentle coordinator", ev: { op: "role.set", member: "otter-gentle", role: "coordinator", about: "routes work between people and agents" } },
-  { body: "👍", ev: { op: "react", seq: 41, emoji: "👍" } },
-  { body: "👀", ev: { op: "react", seq: 42, emoji: "👀" } },
-  { body: "coordinator-only on (strict)", ev: { op: "mode.set", coordinatorOnly: true, strict: true } },
-  { body: "made the room #relay", ev: { op: "room.create", id: "4f1e2d3c4b5a6978", name: "relay" } },
-  { body: "set what fox-quiet may do: tasks, facts", ev: { op: "scope.set", member: "fox-quiet", pk: "x8Kq1u2V3w4X5y6Z7a8B9c0D1e2F3g4H5i6J7k8L9m0", scopes: ["tasks", "facts"] } },
-  {
-    body: "charter: Get onemouse working end to end",
-    ev: { op: "charter.set", text: "Get onemouse working end to end between a Mac and a PC. This repo only; nothing in production; ask before adding dependencies." },
-  },
-  { body: "on hold: checking who asked for a production push", ev: { op: "hold.set", on: true, note: "checking who asked for a production push" } },
-];
-
-const bytes = (s: string) => new TextEncoder().encode(s).byteLength;
 
 async function legacyOpen(key: string, roomId: string, iv: string, ct: string): Promise<unknown> {
   try {
@@ -348,19 +316,4 @@ describe("unpacking limits", () => {
     const sealed = await rawSeal(key, roomId, Uint8Array.of(0, 0xff, 0xfe, 0xfd, 0x12, 0x34));
     expect(await open(key, roomId, sealed.iv, sealed.ct)).toBeNull();
   });
-});
-
-test("how many typical events are below the packing threshold", async () => {
-  const id = await generateIdentity("otter-gentle");
-  const sizes: number[] = [];
-  for (const it of typicalEvents) {
-    const signed = await sign(id, { v: PROTOCOL_VERSION, id: crypto.randomUUID(), from: id.name, kind: "event" as const, body: it.body, ev: it.ev!, ts: Date.now() });
-    sizes.push(bytes(JSON.stringify(signed)));
-  }
-  const small = sizes.filter((n) => n < PACK_FROM).length;
-  const sorted = [...sizes].sort((a, b) => a - b);
-  console.log(
-    `typical events: ${small}/${sizes.length} (${Math.round((100 * small) / sizes.length)}%) are under ${PACK_FROM} bytes and never packed; sizes min ${sorted[0]} median ${sorted[Math.floor(sorted.length / 2)]} max ${sorted.at(-1)}`,
-  );
-  expect(small).toBeGreaterThan(0);
 });

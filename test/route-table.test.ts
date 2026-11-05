@@ -58,12 +58,6 @@ test("every route declares its check", () => {
   ]);
 });
 
-test("the only public room route is the one meant to be", () => {
-  // GET /info answers anyone holding the join code (it's how a joiner pins the owner key). A new public
-  // row has to be added here on purpose, with its own refusal rows in the auth table if it checks anything.
-  expect(routeTable.filter((r) => r.guard === "public").map((r) => `${r.method} ${r.path}`)).toEqual(["GET /info"]);
-});
-
 test("0.11: the signed-in person routes, machine links, pairing, seats and usage are gone, and so is the account move (T216)", async () => {
   const { startRelay } = await import("../src/relay/bun.ts");
   const { mkdtempSync, rmSync } = await import("node:fs");

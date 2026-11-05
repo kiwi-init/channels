@@ -1,6 +1,6 @@
 import type { Where } from "~/model"
 
-export type Tab = "chat" | "specs" | "tasks" | "agents" | "needs" | "github" | "threads"
+export type Tab = "chat" | "specs" | "tasks" | "agents" | "needs" | "github"
 
 export interface Spot {
   seq: number
@@ -16,7 +16,7 @@ const SPOTS = "mc.spots"
 const PLACES = "mc.places"
 const KEEP = 200
 const WRITE_MS = 500
-const TABS: readonly Tab[] = ["chat", "specs", "tasks", "agents", "github", "threads"]
+const TABS: readonly Tab[] = ["chat", "specs", "tasks", "agents", "github"]
 
 const isRecord = (x: unknown): x is Record<string, unknown> => typeof x === "object" && x !== null && !Array.isArray(x)
 

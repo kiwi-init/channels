@@ -5,7 +5,7 @@ import type { Event, Message } from "@kiwi/core/protocol.ts";
 import { taskDigest } from "@kiwi/core/work.ts";
 import { fold, type ChannelState, type Roster, type Task } from "@kiwi/core/state.ts";
 
-import { ANYONE, approveTask, assignTask, cancelTask, changeReviewer, closedDigest, reviewerChoices, reviewsFor, sendBackTask, taskActions, type TaskSend } from "./task-actions.ts";
+import { ANYONE, approveTask, assignTask, cancelTask, changeReviewer, closedDigest, reviewsFor, sendBackTask, taskActions, type TaskSend } from "./task-actions.ts";
 
 const roster: Roster = [];
 const ids = new Map<string, Identity>();
@@ -157,13 +157,6 @@ describe("the events a person sends from a task", () => {
 });
 
 describe("handing a review to someone else", () => {
-  test("the choices are anyone, or an active member other than the owner and the current reviewer", async () => {
-    const id = await inReview("grok-reviewer");
-    expect(reviewerChoices(task(id), state().members.values())).toEqual([ANYONE, "jon", "codex"]);
-    const open = await inReview(ANYONE);
-    expect(reviewerChoices(task(open), state().members.values())).toEqual(["jon", "grok-reviewer", "codex"]);
-  });
-
   test("a person assigns a task to the suggested agent, with the reason in its note", async () => {
     const id = await inReview("grok-reviewer");
     const sent = assignTask(task(id), "codex", "worked T1, where it came from");

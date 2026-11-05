@@ -39,11 +39,18 @@ function fields(room: string, pk: string, ...rest: [string, RegExp][]): string {
 }
 
 /**
- * The joiner's secret until it reveals it. Derived from its own key (Ed25519
- * signatures are deterministic), so asking again after a restart makes the same
- * commit, and nobody without the key can predict it.
+ * The joiner's secret until it reveals it. An HMAC keyed by its own secret key,
+ * so asking again after a restart makes the same commit on every engine, and
+ * nobody without the key can predict it. WebKit's Ed25519 signs with fresh
+ * randomness each time, so a nonce made from a signature changed between the
+ * request and the reveal there.
  */
 export async function joinNonce(id: Identity, room: string): Promise<string> {
+  const key = await crypto.subtle.importKey("raw", await crypto.subtle.digest("SHA-256", enc.encode(`kiwi-join-nonce-key\n${id.sk}`)), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  return b64url(new Uint8Array(await crypto.subtle.sign("HMAC", key, enc.encode(`kiwi-join-nonce\n${room}`))));
+}
+
+export async function signedJoinNonce(id: Identity, room: string): Promise<string> {
   return b64url(await sha256(`kiwi-join-nonce\n${await signText(id, `kiwi-join-nonce\n${room}`)}`));
 }
 

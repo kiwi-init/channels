@@ -368,9 +368,9 @@ jobs:
       - name: ui top bar in Chromium moves the window only from its background
         if: ${{ !cancelled() }}
         run: bun scripts/ui-drag-regions.ts --dist ui/dist
-      - name: ui thread in Chromium opens on the reply it was asked for, not its bottom
+      - name: ui rooms are flat in Chromium and WebKit, a reply shows inline with its quote and nothing opens a thread
         if: ${{ !cancelled() }}
-        run: bun scripts/ui-thread-focus.ts --dist ui/dist
+        run: bun scripts/ui-flat-rooms.ts --dist ui/dist && bun scripts/ui-flat-rooms.ts --dist ui/dist --webkit
       - name: ui portrait window in WebKit is one tall page, agents, tasks and chat in view, and landscape is unchanged
         if: ${{ !cancelled() }}
         run: bun scripts/ui-tall-page.ts --dist ui/dist

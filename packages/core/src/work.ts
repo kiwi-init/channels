@@ -16,7 +16,7 @@ export { prLinks, taskOfBranch, taskPr } from "./prs.ts";
 /** Quiet this long, with nothing in progress, and an agent reads as idle. */
 const IDLE_AFTER_MS = 15 * 60_000;
 
-export function visible(state: ChannelState, m: Message): boolean {
+function visible(state: ChannelState, m: Message): boolean {
   return !ignored(state.trust.get(m.seq));
 }
 
@@ -50,7 +50,7 @@ function fateIn(text: string, pr: { url: string; number: number }): "merged" | "
 }
 
 /** The text a message carries for links: its body, or a task note and review summary. */
-export const textOf = (m: Message): string => (m.ev?.op === "task.update" ? `${m.ev.note ?? ""}${m.ev.summary ? `\n${m.ev.summary}` : ""}` : m.kind === "event" ? "" : m.body);
+const textOf = (m: Message): string => (m.ev?.op === "task.update" ? `${m.ev.note ?? ""}${m.ev.summary ? `\n${m.ev.summary}` : ""}` : m.kind === "event" ? "" : m.body);
 
 /** PRs linked in these messages, with what later messages (any visible one) say happened to them. */
 export function prsIn(state: ChannelState, messages: Message[], linkedBy: (m: Message) => boolean): PrRef[] {
