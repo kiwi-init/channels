@@ -10,6 +10,7 @@ export interface Shot {
   docs?: number
   streams?: boolean
   calm?: true
+  onboarding?: true
 }
 
 const kiwi = (nav: Partial<Nav> = {}): Shot => ({ scenario: "full", channel: "kiwi", nav })
@@ -138,6 +139,7 @@ export const SHOTS: Record<string, Shot> = {
   "agent-yours": { scenario: "member", channel: "studio", nav: { modal: { kind: "person", name: "pip" } } },
   "agent-theirs": { scenario: "member", channel: "studio", nav: { modal: { kind: "person", name: "quill" } } },
   updates: { scenario: "updates", channel: "kiwi" },
+  onboarding: { scenario: "signed-out", channel: null, onboarding: true },
   "first-run": { scenario: "signed-out", channel: null },
   "github-sign-in": { scenario: "github-sign-in", channel: null },
   "github-code": { scenario: "github-code", channel: null },

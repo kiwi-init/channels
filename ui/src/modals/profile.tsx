@@ -7,6 +7,7 @@ import { Track } from "~/kit/glide"
 import { Swatches } from "~/kit/swatches"
 import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
+import { copyText } from "~/kit/toasts"
 import { ALL_POWERS, memberOf, NO_POWERS, trusted, type App, type Channel, type Person, type Task } from "~/model"
 import { useApp } from "~/nav"
 import { devicesOf, nickname, seatRoot, shown } from "~/names"
@@ -156,9 +157,19 @@ function Facts({ channel, person }: { channel: Channel; person: Person }) {
   )
   const runs = [person.runs, person.model].filter(Boolean).join(" · ")
   const computer = person.machine ?? person.specs
+  const handle = (
+    <span key="handle" className="person-handle" data-handle>
+      <code>{person.name}</code>
+      {person.seatOf && <span className="dimmer">seat of {person.seatOf}</span>}
+      <button type="button" className="icon-btn" aria-label="Copy handle" title="Copy handle" onClick={() => copyText(person.name, "Handle copied")}>
+        <Icon name="copy" />
+      </button>
+    </span>
+  )
   const rows: [string, ReactNode][] =
     person.kind === "agent"
       ? [
+          ...(shown(person) !== person.name ? [["Handle", handle] satisfies [string, ReactNode]] : []),
           ...(runs ? [["Runs", runs] satisfies [string, ReactNode]] : []),
           ...(computer
             ? [
