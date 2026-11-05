@@ -9,7 +9,7 @@ const FILL = { position: "absolute", inset: 0, width: "100%", height: "100%", po
 export default function Sky() {
   const video = useRef<HTMLVideoElement>(null)
   const [reduced, setReduced] = useState(() => window.matchMedia(STILL).matches)
-  const [src, setSrc] = useState<string | null>(null)
+  const [src, setSrc] = useState(loop)
 
   useEffect(() => {
     const query = window.matchMedia(STILL)
@@ -35,13 +35,13 @@ export default function Sky() {
     return () => {
       gone = true
       if (url) URL.revokeObjectURL(url)
-      setSrc(null)
+      setSrc(loop)
     }
   }, [reduced])
 
   useEffect(() => {
     const el = video.current
-    if (!el || !src) return
+    if (!el) return
     const shown = () => {
       if (document.hidden) el.pause()
       else
@@ -68,7 +68,7 @@ export default function Sky() {
 
   return (
     <div className="calm-sky" aria-hidden="true" style={{ ...FILL, background: `#1b2236 url(${still}) center / cover no-repeat` }}>
-      {!reduced && src && <video ref={video} src={src} poster={still} muted loop playsInline preload="auto" disablePictureInPicture style={FILL} />}
+      {!reduced && <video ref={video} src={src} poster={still} muted loop playsInline preload="auto" disablePictureInPicture style={FILL} />}
     </div>
   )
 }
