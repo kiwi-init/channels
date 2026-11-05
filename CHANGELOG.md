@@ -2,6 +2,18 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 2026.11.10 — 2026-11-05
+
+- **Docs: the owner's app prunes stray doc ids and compacts done tasks' docs (T1430)** ([#1730](https://github.com/kiwi-init/channels/pull/1730))
+- **Docs: the relay keeps each doc's last 10 versions, at most one an hour (T4605)** ([#1735](https://github.com/kiwi-init/channels/pull/1735))
+- **ui: a busy doc keeps the caret where it is when an agent's message lands (T4486)** ([#1734](https://github.com/kiwi-init/channels/pull/1734))
+- **CI: Bun 1.4.4, whose spawnSync no longer spins forever after a GC (T4799)** ([#1737](https://github.com/kiwi-init/channels/pull/1737))
+- **desktop/distros: check a published release's AppImage, and kiwi:// links after an update and from Firefox (T4767)** ([#1738](https://github.com/kiwi-init/channels/pull/1738))
+- **Desktop: update checks start with the window, not after the keyring opens (T4874)** ([#1739](https://github.com/kiwi-init/channels/pull/1739))
+- **Docs: restore an earlier version (T4606)** ([#1736](https://github.com/kiwi-init/channels/pull/1736))
+- **Calm: the loop plays in the packaged app, as a video/mp4 blob (T4983)** ([#1742](https://github.com/kiwi-init/channels/pull/1742))
+- **ui: ⌘T / Ctrl+T toggles Calm (spec #5002)** ([#1743](https://github.com/kiwi-init/channels/pull/1743))
+
 ## 2026.11.9 — 2026-11-05
 
 - **ui: a reply read in an open thread is read in its DM or room too (T2395)** ([#1683](https://github.com/kiwi-init/channels/pull/1683))
