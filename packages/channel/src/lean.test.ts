@@ -18,10 +18,16 @@ describe("a lean copy of a message past the window", () => {
     expect([...lean.matchAll(/\bT(\d+)\b/g)].map((m) => m[1])).toEqual(["42", "7"]);
   });
 
-  test("it drops the image bytes, files and signature, and keeps where the message went and who it was for", () => {
+  test("it drops the image bytes, files and signature, keeps where the message went and who it was for, and says it is lean", () => {
     const m = msg(9, { room: "ops", to: ["jow"], re: [3], side: true, sig: "s".repeat(88), imgs: [{ name: "a.png", mime: "image/png", data: "QUJD" }], files: [] });
     const lean = leanOf(m)!;
-    expect(lean).toEqual({ v: PROTOCOL_VERSION, id: "id-9", from: "atlas", kind: "msg", body: "m9", ts: 9, seq: 9, sigOk: true, room: "ops", to: ["jow"], re: [3], side: true });
+    expect(lean).toEqual({ v: PROTOCOL_VERSION, id: "id-9", from: "atlas", kind: "msg", body: "m9", ts: 9, seq: 9, sigOk: true, room: "ops", to: ["jow"], re: [3], side: true, lean: true });
+  });
+
+  test("every lean copy says so, clipped or whole, so nothing saves or shows it as the whole message", () => {
+    expect(leanOf(msg(1, { body: "x".repeat(BODY_KEEP * 2) }))?.lean).toBe(true);
+    expect(leanOf(msg(2, { kind: "ask", body: "x".repeat(BODY_KEEP * 2), choices: ["yes", "no"] }))?.lean).toBe(true);
+    expect(leanOf(event(3, { op: "task.update", task: 4, state: "done" }))?.lean).toBe(true);
   });
 
   test("questions keep their whole text, task and ask events keep their payload, and other events are left out", () => {

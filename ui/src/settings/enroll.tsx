@@ -33,6 +33,7 @@ export function EnrollDialog() {
 
   return (
     <Modal
+      dismiss="x"
       open={open}
       onClose={close}
       label="Approve a new device"

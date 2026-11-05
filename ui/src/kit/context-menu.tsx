@@ -66,6 +66,7 @@ export default function Menu({ menu }: { menu: OpenMenu }) {
   if (asking?.confirm)
     return (
       <Modal
+        dismiss="outside"
         open
         onClose={() => openMenu.set(null)}
         label={asking.confirm.title}

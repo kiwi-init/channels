@@ -382,6 +382,7 @@ export interface Message {
   edited?: number
   deleted?: true
   canChange?: true
+  partial?: true
 }
 
 export interface PermissionAsk {

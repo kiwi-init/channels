@@ -91,7 +91,15 @@ export function Invite({ channel, onClose }: { channel: Channel; onClose: () => 
   const powers = channel.newPowers ?? NO_POWERS
   const trust = can === "write" && trusted(powers)
   return (
-    <Modal onClose={onClose} label="Invite people" title="Invite people" sub="Anyone with the link can ask to join. You let them in after checking their code." size="narrow" className="invite">
+    <Modal
+      dismiss="x"
+      onClose={onClose}
+      label="Invite people"
+      title="Invite people"
+      sub="Anyone with the link can ask to join. You let them in after checking their code."
+      size="narrow"
+      className="invite"
+    >
       {failed ? (
         <div className="invite-failed">
           <span>Couldn't get a link.</span>

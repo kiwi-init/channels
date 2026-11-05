@@ -25,7 +25,7 @@ export function Profile({ channel, name, onClose }: { channel: Channel; name: st
   const person = memberOf(channel, name)
   if (!person)
     return (
-      <Modal onClose={onClose} label="Profile" title="Profile">
+      <Modal dismiss="outside" onClose={onClose} label="Profile" title="Profile">
         <Empty title={`${nickname(channel, name)} isn't in this channel.`}>They may have left or been removed.</Empty>
       </Modal>
     )
@@ -33,6 +33,7 @@ export function Profile({ channel, name, onClose }: { channel: Channel; name: st
   const manages = (channel.youOwn || (channel.youManageAgents && person.kind === "agent") || person.yours) && !person.you && !person.owner && !person.left
   return (
     <Modal
+      dismiss="outside"
       onClose={onClose}
       label={`Profile of ${shown(person)}`}
       className="person"
@@ -304,6 +305,7 @@ function Manage({ channel, person }: { channel: Channel; person: Person }) {
         </div>
       )}
       <Modal
+        dismiss="outside"
         open={confirm}
         onClose={() => setConfirm(false)}
         label={`Remove ${shown(person)}`}

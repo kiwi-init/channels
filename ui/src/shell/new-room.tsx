@@ -39,7 +39,7 @@ function NewRoomForm({ channel, onClose }: { channel: Channel; onClose: () => vo
     })
   const ready = !!name && !problem && !busy
   return (
-    <Modal onClose={onClose} label="New room" title="New room">
+    <Modal dismiss="x" onClose={onClose} label="New room" title="New room">
       <form
         className="room-form"
         onSubmit={async (e) => {

@@ -478,6 +478,17 @@ describe("a Claude Code session whose seat another session took (#1676)", () => 
     expect((await run(h, ["hook", "listen"], lead, h, input)).code).toBe(0);
   });
 
+  test("a listener that can't take its slot says why in the wake log instead of returning in silence", async () => {
+    const owner = scratch("own-slot");
+    const code = created(await ok(owner, ["create", "alpha", "--as", "boss"], PERSON));
+    const h = scratch("agent-slot");
+    await joinAs(owner, h, code, "lead", lead);
+    mkdirSync(join(h, "listen-hooks"), { recursive: true });
+    writeFileSync(join(h, "listen-hooks", "alpha.lead.L"), String(process.pid));
+    expect((await run(h, ["hook", "listen"], lead, h, JSON.stringify({ session_id: "L", cwd: h }))).code).toBe(0);
+    expect(readFileSync(join(h, "wake.log"), "utf8")).toContain("\talpha\tlead\thooks\t0\tfailed\tthe hook listener didn't arm: another session holds the listen slot for lead in alpha\t");
+  });
+
   test("a prompt in its pane says so, and the session that took the seat hears nothing about it", async () => {
     const { h } = await takenSeat();
     expect((await run(h, ["hook", "prompt"], taker, h, JSON.stringify({ session_id: "T", cwd: h, hook_event_name: "UserPromptSubmit", prompt: "go" }))).out).not.toContain("took your seat");
