@@ -11,7 +11,7 @@ import { useHost } from "./host.ts";
 import { keepDaemonAlive, watchPage } from "./keep-alive-eb.ts";
 import { KEYRING_GRACE_MS, openedWithin } from "./keyring-wait.ts";
 import { startKeys } from "./keys-start-eb.ts";
-import { startLife } from "./life-updates-eb.ts";
+import { startLife, startUpdateChecks } from "./life-updates-eb.ts";
 import { keepLinuxEntry } from "./linux-entry.ts";
 import { catchMainErrors, logMainError, windowFailure } from "./main-log.ts";
 import { followColorScheme, missingGuard, sandboxOff, watchDrops, watchPaste } from "./native-eb.ts";
@@ -58,6 +58,7 @@ async function start(instance: Extract<Instance, { kind: "first" }>): Promise<vo
     instance.release();
     return;
   }
+  startUpdateChecks();
   if (!inTime) {
     await opening;
     console.error(`Channels: the keyring answered after ${Math.round((performance.now() - asked) / 1000)} s`);
