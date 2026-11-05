@@ -29,6 +29,7 @@ export interface SearchCalls {
   search: { args: { query: string; rooms: string[]; limit: number }; value: { hits: IndexHit[]; through: number } };
   around: { args: { seq: number; rooms: string[]; span: number }; value: { hits: IndexHit[]; through: number } };
   dropRoom: { args: { room: string }; value: { through: number } };
+  save: { args: Record<never, never>; value: null };
   forget: { args: Record<never, never>; value: null };
   unload: { args: Record<never, never>; value: null };
 }

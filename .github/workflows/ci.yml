@@ -226,9 +226,9 @@ jobs:
       - name: doc follow, at the bottom the view follows an agent's lines, also right after you send while it posts and edits, in Chromium and WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-doc-follow.ts
-      - name: calm sky, the idle loop plays and wraps, pauses while hidden, holds still for reduced motion, in WebKit
+      - name: calm meadow, the idle scene draws and moves, follows the clock, rests while hidden, holds still for reduced motion and reuses its renderer, in WebKit
         if: ${{ !cancelled() }}
-        run: bun scripts/ui-calm-sky.ts
+        run: bun scripts/ui-calm-meadow.ts
       - name: doc image order, a line sent with an image from the composer stays above the lines sent after it
         if: ${{ !cancelled() }}
         run: bun scripts/ui-doc-image-order.ts

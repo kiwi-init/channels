@@ -129,8 +129,8 @@ export class SearchIndex {
     return this.db.query<{ n: number }, []>("SELECT COUNT(*) AS n FROM hits").get()?.n ?? 0;
   }
 
-  bytes(): Uint8Array<ArrayBuffer> {
-    return new Uint8Array(this.db.serialize());
+  bytes(): Uint8Array {
+    return this.db.serialize();
   }
 
   close(): void {
