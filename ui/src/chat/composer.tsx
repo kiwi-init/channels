@@ -134,6 +134,7 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
     void job.finally(() => setReading((n) => n - 1))
   }
   const attach = (list: readonly File[]) => {
+    if (edit) return void toast("An edit changes only the text. Send the image in a new message.", "error")
     const room = MAX_FILES - files.length
     if (list.length > room) toast(`Up to ${MAX_FILES} images in one message`)
     for (const f of list.slice(0, Math.max(0, room))) {
@@ -497,7 +498,17 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
           </div>
         )}
         <div className="composer-row">
-          <button ref={plus} type="button" className="compose-attach" aria-label="Add an image or a GIF" title="Add an image or a GIF" aria-haspopup="menu" data-gif-toggle onClick={addMenu}>
+          <button
+            ref={plus}
+            type="button"
+            className="compose-attach"
+            aria-label="Add an image or a GIF"
+            title="Add an image or a GIF"
+            aria-haspopup="menu"
+            data-gif-toggle
+            disabled={!!edit}
+            onClick={addMenu}
+          >
             <Icon name="plus" />
           </button>
           <Suspense fallback={null}>
