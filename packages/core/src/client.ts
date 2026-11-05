@@ -38,9 +38,12 @@ import type { Delegation } from "./delegation.ts";
 import type { DeviceList } from "./devices.ts";
 import { ChannelSending, type SendOptions } from "./client/send.ts";
 import { ChannelSettings, type RoomsSetting } from "./client/settings.ts";
-import { ChannelSnapshots } from "./client/snapshots.ts";
+import { ChannelSnapshots, type DocsPruned, type DocStat } from "./client/snapshots.ts";
+
+const COMPACT_WAIT_MS = 30_000;
 
 export { ChannelGone, goneText, RelayError, Unreachable, type Refused } from "./client/errors.ts";
+export type { DocsPruned, DocStat } from "./client/snapshots.ts";
 export { downWhy, fetchRelay, keepAnswersIn, OfflineReads, Relay, relayConfig, relayDown, settle, type AnswerMemory, type HumanSession } from "./client/relay.ts";
 export { eachLive, QUIET_DROP_MS, reason, type Live, type OpenKind, type PresenceFields, type StreamOptions } from "./client/live.ts";
 export type { Probe } from "./client/wire.ts";
@@ -151,6 +154,16 @@ export class Channel {
 
   closeDoc(thread: string): void {
     this.live.docs.close(thread);
+  }
+
+  async compactDoc(thread: string, th: string): Promise<boolean> {
+    const had = this.live.docs.has(thread);
+    const td = await this.live.docs.open(thread, th);
+    try {
+      return td.th === th && (await Promise.race([td.compactNow(), new Promise<boolean>((done) => setTimeout(() => done(false), COMPACT_WAIT_MS))]));
+    } finally {
+      if (!had) this.live.docs.close(thread);
+    }
   }
 
   get roomId(): string {
@@ -632,6 +645,14 @@ export class Channel {
 
   envelopes(since: number, limit: number): Promise<{ head: number; messages: Envelope[] }> {
     return run(this.fx.envelopes(since, limit));
+  }
+
+  docList(): Promise<DocStat[]> {
+    return run(this.fx.docList());
+  }
+
+  pruneDocs(th: readonly string[]): Promise<DocsPruned> {
+    return run(this.fx.pruneDocs(th));
   }
 
   snapshotAt(): Promise<number | null> {

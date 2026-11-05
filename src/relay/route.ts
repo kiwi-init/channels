@@ -37,6 +37,8 @@ import {
   create,
   directory,
   Directory,
+  docsListed,
+  docsPrune,
   dropDelegation,
   listDelegations,
   liveDelegation,
@@ -724,6 +726,17 @@ const routes: RoomRoute[] = [
         const { url } = yield* Request_;
         const s = db.snapshot();
         return { data: { snapshot: s && url.searchParams.get("only") === "n" ? { n: s.n, e: s.e, at: s.at } : s } };
+      }),
+  },
+  { method: "GET", path: "/docs", guard: "owner", run: () => Effect.map(docsListed(), (docs) => ({ data: { docs } })) },
+  {
+    method: "POST",
+    path: "/docs/prune",
+    guard: "owner",
+    run: () =>
+      Effect.gen(function* () {
+        const { th } = yield* json<{ th?: unknown }>();
+        return { data: yield* docsPrune(th) };
       }),
   },
   {

@@ -45,6 +45,14 @@ const DOCS_TABLE = "CREATE TABLE docs (th TEXT NOT NULL, dseq INTEGER NOT NULL, 
 
 const DOC_SNAPS_TABLE = "CREATE TABLE doc_snaps (th TEXT PRIMARY KEY, upto INTEGER NOT NULL, ts INTEGER NOT NULL, iv TEXT NOT NULL, ct TEXT NOT NULL, e INTEGER NOT NULL)";
 
+export interface DocStat {
+  th: string;
+  bytes: number;
+  n: number;
+  upto: number;
+  last: number;
+}
+
 export interface DocLog {
   head: number;
   upto: number;
@@ -512,6 +520,25 @@ export class RoomDb {
     const rows = this.sql.all<DocRow>("SELECT dseq, ts, iv, ct, e FROM docs WHERE th = ? AND dseq > ? ORDER BY dseq", th, sent ? sent.dseq : since);
     const envelope = (r: DocRow): DocEnvelope => ({ th, dseq: r.dseq, ts: r.ts, iv: unpacked(r.iv), ct: unpacked(r.ct), e: r.e });
     return [...(sent ? [{ ...envelope(sent), snap: true as const }] : []), ...rows.map(envelope)];
+  }
+
+  docList(): DocStat[] {
+    return this.sql.all<DocStat>(
+      `SELECT th, SUM(bytes) AS bytes, SUM(n) AS n, MAX(upto) AS upto, MAX(last) AS last FROM (
+        SELECT th, ${CT_CHARS} AS bytes, 1 AS n, 0 AS upto, ts AS last FROM docs
+        UNION ALL SELECT th, ${CT_CHARS} AS bytes, 0 AS n, upto, ts AS last FROM doc_snaps
+      ) GROUP BY th ORDER BY th`,
+    );
+  }
+
+  docDrop(th: string): number {
+    const freed =
+      (this.sql.all<{ n: number }>(`SELECT COALESCE(SUM(${CT_CHARS}), 0) AS n FROM docs WHERE th = ?`, th)[0]?.n ?? 0) +
+      (this.sql.all<{ n: number }>(`SELECT COALESCE(SUM(${CT_CHARS}), 0) AS n FROM doc_snaps WHERE th = ?`, th)[0]?.n ?? 0);
+    this.sql.run("DELETE FROM docs WHERE th = ?", th);
+    this.sql.run("DELETE FROM doc_snaps WHERE th = ?", th);
+    this.setDocBytes(Math.max(0, this.docBytes() - freed));
+    return freed;
   }
 
   docBytes(): number {

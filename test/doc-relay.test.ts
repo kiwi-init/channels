@@ -7,7 +7,7 @@ import * as Layer from "effect/Layer";
 import { signRequest } from "@kiwi/core/auth.ts";
 import { Channel } from "@kiwi/core/client.ts";
 import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
-import { DOC_COMPACT, DOC_COMPACT_UPDATES, MAX_DOC_THREADS, WS_PROTOCOL, type ServerFrame } from "@kiwi/core/protocol.ts";
+import { DOC_COMPACT, DOC_COMPACT_UPDATES, DOC_PRUNE_IDLE_MS, MAX_DOC_THREADS, WS_PROTOCOL, type ServerFrame } from "@kiwi/core/protocol.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { GithubApp, GithubPush, githubPushFrom } from "../src/relay/github-app.ts";
 import { Human } from "../src/relay/human.ts";
@@ -164,6 +164,39 @@ describe("the relay stores and relays sealed doc updates (T491)", () => {
       expect(only(sent({ t: "doc.snap", id: "cs", th, upto: DOC_COMPACT_UPDATES + 1, iv: IV, ct: "c25hcA", e: 0 }))).toMatchObject({ t: "ack" });
       expect(fill(3)).toMatchObject({ t: "ack", seq: DOC_COMPACT_UPDATES + 2 });
     }));
+
+  test("the owner lists the docs and prunes only the ones idle for a week; anyone else is refused (T1430)", async () => {
+    const IDLE = "idleidleidleidleidle01";
+    const BUSY = "busybusybusybusybusy01";
+    withRoom((sent, mem) => {
+      for (const th of [IDLE, BUSY]) expect(only(sent({ t: "doc", id: `w-${th}`, th, iv: IV, ct: "d29yZA", e: 0 }))).toMatchObject({ t: "ack" });
+      mem.query("UPDATE docs SET ts = ? WHERE th = ?").run(Date.now() - DOC_PRUNE_IDLE_MS - 1000, IDLE);
+    });
+    const ch = new Channel(access, relay, owner);
+    const listed = await ch.docList();
+    expect(listed.filter((d) => d.th === IDLE || d.th === BUSY)).toEqual([
+      expect.objectContaining({ th: BUSY, n: 1, bytes: 6, upto: 0 }),
+      expect.objectContaining({ th: IDLE, n: 1, bytes: 6, upto: 0 }),
+    ]);
+    expect(await ch.pruneDocs([IDLE, BUSY, "nonenonenonenonenone01"])).toEqual({ dropped: [IDLE], kept: [BUSY], freed: 6 });
+    expect((await ch.docList()).map((d) => d.th)).not.toContain(IDLE);
+    withRoom((sent) => expect(replies(sent({ t: "doc.sub", th: IDLE, since: 0 }))).toEqual([{ t: "doc.ready", th: IDLE, head: 0 }]));
+
+    const stranger = await generateIdentity("stranger");
+    for (const [method, path, body] of [
+      ["GET", "/docs", ""],
+      ["POST", "/docs/prune", JSON.stringify({ th: [BUSY] })],
+    ] as const) {
+      const res = await fetch(`${relay}/v1/rooms/${access.roomId}${path}`, {
+        method,
+        headers: { authorization: `Bearer ${await signRequest(stranger, access.roomId, method, path, body)}`, ...(body ? { "content-type": "application/json" } : {}) },
+        ...(body ? { body } : {}),
+      });
+      expect(res.status).toBeGreaterThanOrEqual(400);
+    }
+    expect(await ch.pruneDocs(["bad"]).catch((e: unknown) => String(e))).toContain("doc ids");
+    expect((await ch.docList()).map((d) => d.th)).toContain(BUSY);
+  });
 
   test("over real sockets: a follower gets the update live, the sender and a socket that didn't follow don't", async () => {
     const open = async () => {
