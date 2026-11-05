@@ -65,13 +65,18 @@ async function caret(page: Page): Promise<Caret> {
   });
 }
 
+async function press(page: Page, keys: string): Promise<Caret> {
+  await page.keyboard.press(keys);
+  await page.waitForTimeout(150);
+  return caret(page);
+}
+
 const checks: { name: string; run: (page: Page) => Promise<string | null> }[] = [
   {
     name: "← at a block's start lands at the end of the one before",
     run: async (page) => {
       await put(page, BELOW, "start");
-      await page.keyboard.press("ArrowLeft");
-      const c = await caret(page);
+      const c = await press(page, "ArrowLeft");
       return c.focusBlock === ABOVE && c.offset === c.length ? null : JSON.stringify(c);
     },
   },
@@ -79,8 +84,7 @@ const checks: { name: string; run: (page: Page) => Promise<string | null> }[] = 
     name: "→ at a block's end lands at the start of the next",
     run: async (page) => {
       await put(page, ABOVE, "end");
-      await page.keyboard.press("ArrowRight");
-      const c = await caret(page);
+      const c = await press(page, "ArrowRight");
       return c.focusBlock === BELOW && c.offset === 0 ? null : JSON.stringify(c);
     },
   },
@@ -88,8 +92,7 @@ const checks: { name: string; run: (page: Page) => Promise<string | null> }[] = 
     name: "↑ on a block's first line goes to the block above",
     run: async (page) => {
       await put(page, BELOW, "start");
-      await page.keyboard.press("ArrowUp");
-      const c = await caret(page);
+      const c = await press(page, "ArrowUp");
       return c.focusBlock === ABOVE ? null : JSON.stringify(c);
     },
   },
@@ -97,8 +100,7 @@ const checks: { name: string; run: (page: Page) => Promise<string | null> }[] = 
     name: "↓ on a block's last line goes to the block below",
     run: async (page) => {
       await put(page, ABOVE, "end");
-      await page.keyboard.press("ArrowDown");
-      const c = await caret(page);
+      const c = await press(page, "ArrowDown");
       return c.focusBlock === BELOW ? null : JSON.stringify(c);
     },
   },
@@ -106,8 +108,7 @@ const checks: { name: string; run: (page: Page) => Promise<string | null> }[] = 
     name: "⌥← at a block's start jumps to the last word of the one before",
     run: async (page) => {
       await put(page, BELOW, "start");
-      await page.keyboard.press(`${WORD}+ArrowLeft`);
-      const c = await caret(page);
+      const c = await press(page, `${WORD}+ArrowLeft`);
       return c.focusBlock === ABOVE && c.offset > 0 && c.offset < c.length ? null : JSON.stringify(c);
     },
   },
@@ -115,8 +116,7 @@ const checks: { name: string; run: (page: Page) => Promise<string | null> }[] = 
     name: "⇧↓ extends the selection into the next block",
     run: async (page) => {
       await put(page, ABOVE, "end");
-      await page.keyboard.press("Shift+ArrowDown");
-      const c = await caret(page);
+      const c = await press(page, "Shift+ArrowDown");
       return c.block === ABOVE && c.focusBlock === BELOW ? null : JSON.stringify(c);
     },
   },
@@ -124,9 +124,16 @@ const checks: { name: string; run: (page: Page) => Promise<string | null> }[] = 
     name: "⇧→ at a block's end extends the selection into the next",
     run: async (page) => {
       await put(page, ABOVE, "end");
-      await page.keyboard.press("Shift+ArrowRight");
-      const c = await caret(page);
+      const c = await press(page, "Shift+ArrowRight");
       return c.block === ABOVE && c.focusBlock === BELOW ? null : JSON.stringify(c);
+    },
+  },
+  {
+    name: "⌥⇧→ at a block's end selects the first word of the next",
+    run: async (page) => {
+      await put(page, ABOVE, "end");
+      const c = await press(page, `${WORD}+Shift+ArrowRight`);
+      return c.block === ABOVE && c.focusBlock === BELOW && c.offset > 0 && c.offset < c.length ? null : JSON.stringify(c);
     },
   },
   {
