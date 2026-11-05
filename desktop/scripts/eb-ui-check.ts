@@ -114,6 +114,9 @@ const loopPath = [...builtInFiles().keys()].find((name) => name.endsWith(".mp4")
 const loopPlays = (d: Driver, src: string, asBlob: boolean): Promise<string> =>
   d.evaluate(
     async ({ url, blob }: { url: string; blob: boolean }) => {
+      const blocked: string[] = [];
+      const note = (e: SecurityPolicyViolationEvent): void => void blocked.push(`${e.effectiveDirective} ${e.blockedURI}`);
+      document.addEventListener("securitypolicyviolation", note);
       const v = document.createElement("video");
       v.muted = true;
       v.loop = true;
@@ -124,13 +127,15 @@ const loopPlays = (d: Driver, src: string, asBlob: boolean): Promise<string> =>
         await v.play();
       } catch (e) {
         v.remove();
-        return `play() refused: ${String(e)}`;
+        document.removeEventListener("securitypolicyviolation", note);
+        return `play() refused: ${String(e)}; error ${v.error?.code ?? "none"}; canPlayType ${v.canPlayType('video/mp4; codecs="avc1.640028"') || "no"}; blocked by CSP: ${blocked.join(", ") || "nothing"}`;
       }
       const start = v.currentTime;
       await new Promise((r) => setTimeout(r, 2_000));
       const moved = v.currentTime - start;
       const said = moved > 0.5 ? "plays" : `stuck: moved ${moved.toFixed(2)} s, readyState ${v.readyState}, error ${v.error?.code ?? "none"}`;
       v.remove();
+      document.removeEventListener("securitypolicyviolation", note);
       return said;
     },
     { url: src, blob: asBlob },

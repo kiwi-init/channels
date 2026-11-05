@@ -27,6 +27,7 @@ describe("the page gets a CSP (T184)", () => {
     expect(d.get("object-src")).toEqual(["'none'"]);
     expect(d.get("frame-ancestors")).toEqual(["'none'"]);
     expect(d.get("form-action")).toEqual(["'none'"]);
+    expect(d.get("media-src")).toEqual(["'self'", "blob:"]);
     expect(csp("http://localhost:8787")).toContain("ws://localhost:8787");
     // A relay that isn't one adds nothing to connect to.
     expect(csp("http://attacker.example")).not.toContain("attacker");

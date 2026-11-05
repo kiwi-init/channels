@@ -53,6 +53,7 @@ export function csp(relay: string): string {
     "script-src 'self' 'wasm-unsafe-eval'",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
+    "media-src 'self' blob:",
     "font-src 'self'",
     `connect-src ${connect}`,
     "object-src 'none'",
