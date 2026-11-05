@@ -50,14 +50,14 @@ test("both briefs keep an answer in the room the message came from, unless the c
   }
 });
 
-test("both briefs say where to post, as a person would in Slack or Teams, and that threads are one level deep (T3844)", () => {
+test("both briefs say where to post, as a person would in Slack or Teams, and that a reply stays where its message is, with no threads in rooms (T3844, T4143)", () => {
   const cli = briefText({ alias: "c", agent: "mac", mc: "kiwi", listen: "" });
   const mcp = mcpBrief("c", "mac", false);
   for (const brief of [cli, mcp]) {
     expect(brief).toContain("a room for what everyone there should see");
     expect(brief).toContain("a direct thread for one person");
     expect(brief).toContain("a task's or spec's thread for its work");
-    expect(brief).toContain("a reply inside a thread stays in that thread: threads are one level deep");
+    expect(brief).toContain("A reply goes where its message is and quotes it there: rooms have no threads.");
   }
 });
 

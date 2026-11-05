@@ -33,7 +33,6 @@ const SpecsView = later(() => import("~/specs/view").then((m) => m.SpecsView))
 const PrPanel = later(() => import("~/github/panel").then((m) => m.PrPanel))
 const IssuePanel = later(() => import("~/github/panel").then((m) => m.IssuePanel))
 const NeedsYou = later(() => import("~/needs/needs").then((m) => m.NeedsYou))
-const ThreadsView = later(() => import("~/chat/threads-view").then((m) => m.ThreadsView))
 const TaskPanel = later(() => import("~/panels/task").then((m) => m.TaskPanel))
 const Profile = later(() => import("~/modals/profile").then((m) => m.Profile))
 const ChannelSettings = later(() => import("~/modals/channel-settings").then((m) => m.ChannelSettings))
@@ -57,7 +56,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   const wanted = useWantedMessage()
   const found = findWanted(wanted, channel.code, channel.messages)
   const target = found.kind === "found" ? found.m : null
-  const root = target?.inThread
+  const root = target?.inThread !== undefined && (channel.specs ?? []).some((s) => s.ask === target.inThread) ? target.inThread : undefined
   const anchor = root === undefined ? target : (channel.messages.find((m) => m.seq === root) ?? target)
   const atAnchor = !!anchor && nav.tab === "chat" && sameWhere(anchor.where, nav.where)
   if (anchor && atAnchor && jump?.m.seq !== anchor.seq) setJump({ m: anchor, terms: [] })
@@ -243,8 +242,6 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
               <SpecsView channel={channel} />
             ) : nav.tab === "needs" ? (
               <NeedsYou channel={channel} onJump={setJump} />
-            ) : nav.tab === "threads" ? (
-              <ThreadsView channel={channel} />
             ) : (
               <Conversation channel={channel} jump={jump} />
             )}

@@ -21,7 +21,7 @@ const subscribe = (listener: () => void): (() => void) => {
   return () => void listeners.delete(listener)
 }
 
-function openMessage(code: string, seq: number): void {
+export function openMessage(code: string, seq: number): void {
   wanted = { code, seq }
   changed()
 }

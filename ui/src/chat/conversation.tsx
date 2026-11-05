@@ -26,6 +26,7 @@ import { sameWhere, useApp } from "~/nav"
 import { keepSpot, spotAt, spotKey, type Spot } from "~/places"
 import { between, nickname, shown } from "~/names"
 import { dmInRoom } from "~/live/dm"
+import { openMessage } from "~/live/open-message"
 
 const HistoryFold = later(() => import("~/chat/compact").then((m) => m.HistoryFold))
 const ProposalCard = later(() => import("~/chat/compact").then((m) => m.ProposalCard))
@@ -338,7 +339,7 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
     const fromDoc = doc ? (feeds.get(`${channel.code}\n${doc}`) ?? EMPTY_FEED) : EMPTY_FEED
     const feed = withLeftOut(
       channel.messages
-        .filter((m) => sameWhere(m.where, where) && (!m.side || where.kind === "task") && inFeed(m, !!doc) && (where.kind !== "room" || m.inThread === undefined || !specAsks.has(m.inThread)))
+        .filter((m) => sameWhere(m.where, where) && inFeed(m, !!doc) && (where.kind !== "room" || m.inThread === undefined || !specAsks.has(m.inThread)))
         .map((m) => withDocMedia(m, m.block === undefined ? undefined : fromDoc.media.get(m.block))),
       (channel.leftOut ?? []).filter((m) => sameWhere(m.where, where))
     )
@@ -409,12 +410,12 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
     (seq: number, excerpt: string) => {
       const m = list.find((x) => x.seq === seq)
       if (!m) return
-      if (where.kind === "task" && replying) return replying.set(m, excerpt)
+      if (replying) return replying.set(m, excerpt)
       const root = m.inThread ?? m.seq
       threadReply.set({ code: channel.code, root, to: m.seq, excerpt })
       go({ to: "panel", panel: { kind: "thread", seq: root } })
     },
-    [list, where.kind, replying, channel.code, go]
+    [list, replying, channel.code, go]
   )
 
   useEffect(() => {
@@ -547,10 +548,10 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
     setSpan({ top: null, bottom: null })
   }
 
-  const known = useRef({ list, all, bySeq })
+  const known = useRef({ list, all })
   const wanted = useRef<number | null>(null)
   useLayoutEffect(() => {
-    known.current = { list, all, bySeq }
+    known.current = { list, all }
     if (latest.current && live.current) {
       latest.current = false
       toBottom(false)
@@ -562,7 +563,7 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
   const onQuote = useCallback(
     (seq: number) => {
       if (jumpTo(content.current, seq)) return
-      const { list, all, bySeq } = known.current
+      const { list, all } = known.current
       const at = list.findIndex((m) => m.seq === seq)
       if (at >= 0) {
         wanted.current = seq
@@ -576,9 +577,9 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
         setSpan(around(all, folded))
         return
       }
-      go({ to: "panel", panel: { kind: "thread", seq: bySeq.get(seq)?.inThread ?? seq } })
+      openMessage(channel.code, seq)
     },
-    [go, content]
+    [content, channel.code]
   )
 
   const editingSeq = useEditingIn(channel.code)

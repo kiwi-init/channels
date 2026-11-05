@@ -11,8 +11,9 @@ import { quotedExcerpt } from "~/chat/quote"
 import { preview, useReplying } from "~/chat/reply"
 import { Avatar, cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
-import { ago, clock } from "~/kit/time"
+import { clock } from "~/kit/time"
 import { memberOf, type Channel, type ImageSpot, type Message, type Person } from "~/model"
+import { openMessage as showMessage } from "~/live/open-message"
 import { useAct } from "~/nav"
 import { nickname } from "~/names"
 import { linked, named, useMentionParser, withNames } from "~/chat/linked"
@@ -183,12 +184,11 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
   const openMessage = useCallback(
     (seq: number) => {
       if (onQuote) return onQuote(seq)
-      go({ to: "panel", panel: { kind: "thread", seq: channel.messages.find((x) => x.seq === seq)?.inThread ?? seq } })
+      showMessage(channel.code, seq)
     },
-    [onQuote, go, channel.messages]
+    [onQuote, channel.code]
   )
-  const flat = !!inThread || m.where.kind === "task"
-  const quoting = !!replying && m.where.kind !== "theirs" && flat
+  const quoting = !!replying && m.where.kind !== "theirs"
   const who = memberOf(channel, m.from)
   const editing = useEditing(channel.code, m.seq)
   const ask = m.ask ? channel.asks.find((a) => a.id === m.ask) : undefined
@@ -211,7 +211,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
     if (m.pending || m.failed !== undefined || m.leftOut || m.fromDoc || m.deleted || editing) return
     const target = e.target
     const reply = replying && quoting ? () => replying.set(m) : null
-    showMenu(e, "Message", (x) => x.messageGroups({ channel, go }, m, target, { openImage, reply, inThread: flat || !!older }))
+    showMenu(e, "Message", (x) => x.messageGroups({ channel, go }, m, target, { openImage, reply }))
   }
 
   return (
@@ -343,16 +343,6 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
             {m.receipt}
           </p>
         )}
-        {m.thread && !flat && (
-          <button type="button" className="msg-thread" onClick={() => go({ to: "panel", panel: { kind: "thread", seq: m.seq } })}>
-            <span className="msg-thread-n">
-              {m.thread.replies} {m.thread.replies === 1 ? "reply" : "replies"}
-            </span>
-            <span className="dim">
-              {m.thread.people.map((p) => nickname(channel, p)).join(", ")} · {ago(m.thread.last)}
-            </span>
-          </button>
-        )}
       </div>
       {!m.pending && m.failed === undefined && !m.leftOut && !m.fromDoc && !m.deleted && !editing && (
         <div className="msg-tools" role="toolbar" aria-label="Message actions">
@@ -375,11 +365,6 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
           {replying && quoting && (
             <button type="button" className="msg-tool" aria-label="Reply" title="Reply" onClick={() => replying.set(m)}>
               <Icon name="reply" size={14} />
-            </button>
-          )}
-          {!flat && !older && (
-            <button type="button" className="msg-tool" aria-label="Reply in thread" title="Reply in thread" onClick={() => go({ to: "panel", panel: { kind: "thread", seq: m.inThread ?? m.seq } })}>
-              <Icon name="thread" size={14} />
             </button>
           )}
           <button type="button" className="msg-tool" aria-label="Copy text" title="Copy text" onClick={() => copyText(m.text)}>

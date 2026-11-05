@@ -32,7 +32,7 @@ try {
   const panel = page.locator("aside.panel");
   const search = page.locator('input[aria-label="Search this channel"]');
 
-  await page.goto(`http://127.0.0.1:${server.port}/?shot=thread`);
+  await page.goto(`http://127.0.0.1:${server.port}/?shot=task-working`);
   await panel.waitFor();
   await page.keyboard.press("Control+f");
   await search.fill("bundle");

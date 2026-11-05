@@ -210,13 +210,11 @@ export function formerOf(state: ChannelState, me: string): Person[] {
     .map((m) => ({ ...personOf(state, m, undefined, undefined, me, new Map()), presence: "offline" as const, left: true }))
 }
 
-const offTheRoom = (state: Pick<ChannelState, "threadOf">, m: Pick<Wire, "seq" | "side">): boolean => m.side === true && (state.threadOf.get(m.seq) ?? m.seq) !== m.seq
-
 export function roomsOf(state: ChannelState, messages: readonly Wire[], me: string, seen: Seen, from: number): Room[] {
   const unread = new Map<string, number>()
   const mentions = new Map<string, number>()
   for (const m of messages) {
-    if (m.kind === "event" || m.from === me || ignored(state.trust.get(m.seq)) || (offTheRoom(state, m) && !mentionsYou(m, me))) continue
+    if (m.kind === "event" || m.from === me || ignored(state.trust.get(m.seq))) continue
     if ((state.placeOf.get(m.seq) ?? MAIN).kind !== "main") continue
     const id = roomOfMessage(state, m)
     const room = state.rooms.get(id)
