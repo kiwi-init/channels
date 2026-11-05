@@ -109,10 +109,44 @@ async function run(what: (d: Driver) => Promise<void>): Promise<void> {
   }
 }
 
+const loopPath = [...builtInFiles().keys()].find((name) => name.endsWith(".mp4"));
+
+const loopPlays = (d: Driver, src: string): Promise<string> =>
+  d.evaluate(
+    async (url: string) => {
+      const v = document.createElement("video");
+      v.muted = true;
+      v.loop = true;
+      v.playsInline = true;
+      v.src = url;
+      document.body.append(v);
+      try {
+        await v.play();
+      } catch (e) {
+        v.remove();
+        return `play() refused: ${String(e)}`;
+      }
+      const start = v.currentTime;
+      await new Promise((r) => setTimeout(r, 2_000));
+      const moved = v.currentTime - start;
+      const said = moved > 0.5 ? "plays" : `stuck: moved ${moved.toFixed(2)} s, readyState ${v.readyState}, error ${v.error?.code ?? "none"}`;
+      v.remove();
+      return said;
+    },
+    src,
+    20_000,
+  );
+
 try {
   await run(async (d) => {
     await shows(d, "built-in");
     console.log("nothing published: the built-in UI");
+    if (!loopPath) problems.push("the built-in UI has no Calm loop (.mp4)");
+    else {
+      const said = await loopPlays(d, `views://internal/${loopPath}`);
+      if (said !== "plays") problems.push(`the Calm loop doesn't play from views:// in the packaged app: ${said}`);
+      console.log(`the Calm loop from views://internal/${loopPath}: ${said}`);
+    }
   });
 
   const a = publish("a");
