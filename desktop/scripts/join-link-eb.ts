@@ -28,6 +28,12 @@ let said = "";
 const open = (link: string): ChildProcess => spawn(exe, [link], { env, stdio: ["ignore", "ignore", "pipe"], detached: true });
 const heard = (): number => said.split("Channels: opening a kiwi:// link").length - 1;
 const heardAt = (n: number, what: string, ms: number) => until(what, ms, () => Promise.resolve(heard() >= n ? true : null)).catch(() => false);
+const carrying = (link: string): string =>
+  spawnSync("ps", ["-eo", "pid=,args="], { encoding: "utf8" })
+    .stdout.split("\n")
+    .filter((l) => l.includes(link) && !l.includes("join-link-eb"))
+    .map((l) => l.trim().replace(/\s+/g, " ").slice(0, 160))
+    .join(" | ") || "none";
 const waiting = (d: Driver) => d.evaluate(() => (window as unknown as { kiwi: { getDeepLink(): Promise<string | null> } }).kiwi.getDeepLink(), null, 2_000);
 
 console.log(`opening links as kiwi-launcher hands them on, after the desktop entry's Exec … %U: ${exe} <link>`);
@@ -37,14 +43,15 @@ try {
   const d = await attach(join(root, "driver.sock"));
   await until("the page", 60_000, () => d.evaluate(() => (document.querySelector("#root")?.childElementCount ? true : null), null, 2_000));
   if (await heardAt(1, "the app opening the link it started with", 10_000)) console.log("a link that starts the app is opened by it");
-  else problems.push(`started with ${COLD}, the app never opened it`);
+  else problems.push(`started with ${COLD}, the app never opened it; processes with the link in argv: ${carrying(COLD)}`);
   console.log(`  the page's waiting link: ${JSON.stringify(await waiting(d))} (null when the page took it already)`);
   const second = open(WARM);
+  const handing = await until("the second start", 5_000, () => Promise.resolve(carrying(WARM) === "none" ? null : carrying(WARM))).catch(() => "none");
   await Promise.race([exited(second), later(15_000)]);
   if (second.exitCode === 0) console.log("a second start with a link hands it over and quits");
   else problems.push(`the second start with ${WARM} ended with ${second.exitCode ?? second.signalCode ?? "nothing, after 15 s"}`);
   if (await heardAt(2, "the running app opening the handed-over link", 10_000)) console.log("a link opened while the app runs is opened by the running app");
-  else problems.push(`opened ${WARM} while the app ran, the running app never opened it`);
+  else problems.push(`opened ${WARM} while the app ran, the running app never opened it; the second start's processes: ${handing}`);
   console.log(`  the page's waiting link: ${JSON.stringify(await waiting(d))} (null when the page took it already)`);
   const visible = await d.main("window");
   if ((visible as { visible?: unknown } | null)?.visible === true) console.log("and the window shows");
@@ -64,4 +71,5 @@ try {
 }
 
 for (const p of problems) console.error(`join-link-eb: ${p}`);
+if (problems.length) console.error(`the app's stderr, last lines:\n${said.split("\n").slice(-25).join("\n")}`);
 process.exit(problems.length ? 1 : 0);
