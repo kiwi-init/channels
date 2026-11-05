@@ -136,6 +136,9 @@ export const CHANNEL_CALLS = [
   "putFileData",
   "fileData",
   "history",
+  "docList",
+  "pruneDocs",
+  "compactDoc",
 ] as const;
 
 export type ChannelCallName = (typeof CHANNEL_CALLS)[number];

@@ -16,6 +16,22 @@ export interface SnapshotsFx {
   snapshotAt(): Effect.Effect<number | null, MemberRefusal, Relay>;
   putSnapshot(base: FoldBase): Effect.Effect<number, Refused, Relay>;
   snapshotIfDue(every?: number): Effect.Effect<number | null, Refused, Relay>;
+  docList(): Effect.Effect<DocStat[], Refused, Relay>;
+  pruneDocs(th: readonly string[]): Effect.Effect<DocsPruned, Refused, Relay>;
+}
+
+export interface DocStat {
+  th: string;
+  bytes: number;
+  n: number;
+  upto: number;
+  last: number;
+}
+
+export interface DocsPruned {
+  dropped: string[];
+  kept: string[];
+  freed: number;
 }
 
 export class ChannelSnapshots {
@@ -51,6 +67,17 @@ export class ChannelSnapshots {
       const sealed = yield* Effect.promise(() => sealSnapshot(this.ch.identity, this.ch.access, kept));
       if (!sealed) return yield* new MissingKey(this.ch.access.keys[String(this.ch.access.epoch)] ? SNAPSHOT_TOO_LARGE : "can't seal a snapshot without this epoch's key");
       return (yield* this.ch.request<{ n: number }>("/snapshot", { method: "PUT", body: JSON.stringify({ snapshot: sealed }) })).n;
+    }),
+
+    docList: Effect.fn("Channel.docList")({ self: this }, function* (this: ChannelSnapshots) {
+      yield* this.ch.ownerOnly();
+      return (yield* this.ch.request<{ docs: DocStat[] }>("/docs")).docs;
+    }),
+
+    pruneDocs: Effect.fn("Channel.pruneDocs")({ self: this }, function* (this: ChannelSnapshots, th: readonly string[]) {
+      yield* this.ch.ownerOnly();
+      if (!th.length) return { dropped: [], kept: [], freed: 0 };
+      return yield* this.ch.request<DocsPruned>("/docs/prune", { method: "POST", body: JSON.stringify({ th }) });
     }),
 
     snapshotIfDue: Effect.fn("Channel.snapshotIfDue")({ self: this }, function* (this: ChannelSnapshots, every: number = SNAPSHOT_EVERY) {

@@ -108,6 +108,9 @@ export class ChannelLink {
   reconcilePosting = (...a: Args<"reconcilePosting">) => this.c("reconcilePosting", ...a);
   rotateIfDue = () => this.c("rotateIfDue");
   snapshotIfDue = () => this.c("snapshotIfDue");
+  docList = () => this.c("docList");
+  pruneDocs = (...a: Args<"pruneDocs">) => this.c("pruneDocs", ...a);
+  compactDoc = (...a: Args<"compactDoc">) => this.c("compactDoc", ...a);
   setGithubRepos = (...a: Args<"setGithubRepos">) => this.c("setGithubRepos", ...a);
   drainGithub = () => this.c("drainGithub");
   syncGithubRules = (...a: Args<"syncGithubRules">) => this.c("syncGithubRules", ...a);

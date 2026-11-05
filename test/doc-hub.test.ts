@@ -404,6 +404,55 @@ describe("thread docs over a real relay", () => {
   });
 });
 
+describe("the owner's doc upkeep over a real relay (T1430)", () => {
+  test("compactDoc folds a doc's log into one snapshot, says no when there's nothing to fold, and a doc already open stays open with all it had", async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), "kiwi-doc-compact-"));
+    const server = startRelay({ port: 0, hostname: "127.0.0.1", dataDir });
+    const stop = new AbortController();
+    try {
+      const relay = server.url.origin;
+      const owner = await generateIdentity("docs");
+      const { access } = await Channel.create(relay, owner, { name: "docs", kind: "human" }, []);
+      const a = new Channel(access, relay, owner);
+      const b = new Channel(access, relay, owner);
+      const ready = (ch: Channel) =>
+        new Promise<void>((done) => {
+          void ch.stream(0, () => {}, { signal: stop.signal, onReady: () => done() });
+        });
+      await Promise.all([ready(a), ready(b)]);
+      const da = await a.threadDoc("task:7");
+      await da.whenSynced();
+      for (const word of ["one", "two", "three"]) {
+        newBlock(da.doc, "text", "docs", word);
+        await tick();
+      }
+      const stat = async () => (await a.docList()).find((d) => d.th === da.th);
+      const logged = async (n: number) => {
+        const deadline = Date.now() + 4_000;
+        while (((await stat())?.n ?? 0) < n && Date.now() < deadline) await Bun.sleep(25);
+        return stat();
+      };
+      const before = await logged(1);
+      expect(before).toMatchObject({ upto: 0 });
+
+      expect(await b.compactDoc("task:7", da.th)).toBe(true);
+      expect(await stat()).toMatchObject({ n: 0, upto: before!.n });
+      expect(await b.compactDoc("task:7", da.th)).toBe(false);
+
+      newBlock(da.doc, "text", "docs", "four");
+      await logged(1);
+      expect(await a.compactDoc("task:7", da.th)).toBe(true);
+      expect(await stat()).toMatchObject({ n: 0 });
+      expect(da.synced).toBe(true);
+      expect(texts(da.doc)).toEqual(["one", "two", "three", "four"]);
+    } finally {
+      stop.abort();
+      server.stop(true);
+      rmSync(dataDir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("docs of members-only rooms and DMs are sealed with the room's key (T601)", () => {
   const roomKeys = (gens: string[]): ThreadKeys => ({ sealed: true, current: async () => ({ key: gens[0]!, e: 1 }), opening: async () => gens });
 

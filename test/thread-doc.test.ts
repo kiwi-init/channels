@@ -165,6 +165,22 @@ describe("a thread doc syncs sealed Yjs updates through the relay", () => {
     expect(texts(c)).toEqual(["one two three four"]);
   });
 
+  test("compactNow folds the whole log into one snapshot and says so; with nothing written it says no (T1430)", async () => {
+    const { peers, ids, relay } = await setup(1);
+    const a = peers[0]!;
+    a.td.start();
+    await settle(a);
+    expect(await a.td.compactNow()).toBe(false);
+    const blk = newBlock(a.td.doc, "text", ids[0]!.pk, "");
+    for (const ch of "done") {
+      appendToBlock(a.td.doc, blk.id, ch);
+      await settle(a);
+    }
+    expect(relay.rows.filter((r) => !r.snap).length).toBeGreaterThan(1);
+    expect(await a.td.compactNow()).toBe(true);
+    expect(relay.rows).toEqual([expect.objectContaining({ snap: true, dseq: relay.head })]);
+  });
+
   test("an update from a key outside the channel, or someone it doesn't trust, is dropped", async () => {
     const outsider = await generateIdentity("x");
     const { make, ids } = await setup(1, { trusts: (pk) => pk !== outsider.pk });

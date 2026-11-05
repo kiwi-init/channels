@@ -94,6 +94,7 @@ export class ThreadDoc {
   private readonly big = new Set<string>();
   private snapping: { id: string; covers: string[] } | null = null;
   private snapFails = 0;
+  private readonly snapDone: ((ok: boolean) => void)[] = [];
   private subFails = 0;
   private resub: ReturnType<typeof setTimeout> | null = null;
   private refusedWith: string | null = null;
@@ -167,10 +168,22 @@ export class ThreadDoc {
     return this.queue(() => this.post(update, id));
   }
 
+  async compactNow(): Promise<boolean> {
+    await this.whenSynced();
+    return new Promise<boolean>((done) => {
+      void this.queue(async () => {
+        await this.compact();
+        if (this.snapping && !this.closed) this.snapDone.push(done);
+        else done(false);
+      });
+    });
+  }
+
   destroy(): void {
     if (this.closed) return;
     this.awareness.setLocalState(null);
     this.closed = true;
+    for (const done of this.snapDone.splice(0)) done(false);
     if (this.timer) clearTimeout(this.timer);
     if (this.resub) clearTimeout(this.resub);
     if (this.refetch) clearTimeout(this.refetch);
@@ -335,6 +348,7 @@ export class ThreadDoc {
       if (f.id && f.id === this.snapping?.id) {
         this.snapping = null;
         this.refusedWith = f.error;
+        for (const done of this.snapDone.splice(0)) done(false);
         const wait = (this.o.retryMs ?? RETRY_MS) * 2 ** Math.min(this.snapFails++, MAX_BACKOFF_STEPS);
         if (this.big.size) setTimeout(() => void this.queue(() => this.compact()), wait);
         return;
@@ -358,6 +372,7 @@ export class ThreadDoc {
         this.snapping = null;
         this.snapFails = 0;
         this.refusedWith = null;
+        for (const done of this.snapDone.splice(0)) done(true);
         if (this.big.size) await this.compact();
         return;
       }

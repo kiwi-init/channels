@@ -83,6 +83,10 @@ export class DocHub {
     };
   }
 
+  has(thread: string): boolean {
+    return this.byThread.has(thread);
+  }
+
   open(thread: string, th?: string): Promise<ThreadDoc> {
     const had = this.byThread.get(thread);
     if (had && (!th || had.td.th === th)) return Promise.resolve(had.td);

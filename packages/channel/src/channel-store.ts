@@ -128,6 +128,8 @@ export class ChannelStore {
   private snapshotNext = nextSnapshotTry(0, 0);
   private snapshotBusy = false;
   private checksBusy = false;
+  private docsBusy = false;
+  private docsNext = 0;
   private reconciling = false;
   private reconcileAgain = false;
   private rulesBusy = false;
@@ -263,6 +265,7 @@ export class ChannelStore {
       on(this.checksDue, () => this.syncSettings()),
       on(this.head, (head) => this.snapshotIfDue(head)),
       on(this.checksDue, () => this.postReviewChecks()),
+      on(this.checksDue, () => this.tendDocs()),
       this.every(60_000, () => this.drainGithub()),
       on(this.rulesDue, () => this.githubRules()),
       subscribeTick(CLOCK_MS, () => {
@@ -677,6 +680,22 @@ export class ChannelStore {
       .catch(() => {})
       .finally(() => {
         this.checksBusy = false;
+      });
+  }
+
+  private tendDocs(): void {
+    const now = Date.now();
+    if (!this.ch.isOwner || !this.caughtUp.value || this.docsBusy || now < this.docsNext) return;
+    this.docsBusy = true;
+    const state = this.state.value;
+    void import("./doc-chores.ts")
+      .then((m) => {
+        this.docsNext = now + m.DOC_CHORES_EVERY_MS;
+        return m.tendDocs(this.ch, state, now);
+      })
+      .catch(() => {})
+      .finally(() => {
+        this.docsBusy = false;
       });
   }
 

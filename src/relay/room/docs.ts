@@ -4,9 +4,11 @@ import {
   DOC_COMPACT,
   DOC_COMPACT_BYTES,
   DOC_COMPACT_UPDATES,
+  DOC_PRUNE_IDLE_MS,
   MAX_CT_LENGTH,
   MAX_DOC_LOG_BYTES,
   MAX_DOC_LOG_UPDATES,
+  MAX_DOC_PRUNE,
   MAX_DOC_SNAP_LENGTH,
   wellFormedThread,
   type DocEnvelope,
@@ -65,6 +67,31 @@ export const docSnap = Effect.fn("Room.docSnap")(function* (th: unknown, upto: u
   const ts = yield* Clock.currentTimeMillis;
   ok.db.docSnap(ok.th, upto as number, ts, ok.iv, ok.ct, ok.epoch);
   return { th: ok.th, dseq: upto as number, ts, iv: ok.iv, ct: ok.ct, e: ok.epoch, snap: true as const };
+});
+
+export const docsListed = Effect.fn("Room.docsListed")(function* () {
+  return (yield* RoomStore).docList();
+});
+
+export const docsPrune = Effect.fn("Room.docsPrune")(function* (ths: unknown) {
+  if (!Array.isArray(ths) || ths.length > MAX_DOC_PRUNE || !ths.every(wellFormedThread)) return yield* new BadRequest({ message: `th: up to ${MAX_DOC_PRUNE} doc ids` });
+  const db = yield* RoomStore;
+  const now = yield* Clock.currentTimeMillis;
+  const listed = new Map(db.docList().map((d) => [d.th, d]));
+  const dropped: string[] = [];
+  const kept: string[] = [];
+  let freed = 0;
+  for (const th of new Set(ths)) {
+    const d = listed.get(th);
+    if (!d) continue;
+    if (now - d.last < DOC_PRUNE_IDLE_MS) {
+      kept.push(th);
+      continue;
+    }
+    freed += db.docDrop(th);
+    dropped.push(th);
+  }
+  return { dropped, kept, freed };
 });
 
 export const docBacklog = Effect.fn("Room.docBacklog")(function* (th: string, since: unknown) {

@@ -54,6 +54,7 @@ exports[`the relay's error texts are exactly these 1`] = `
   "400 seq must be a positive whole number",
   "400 sha: a commit id",
   "400 task: the task's number",
+  "400 th: up to \${MAX_DOC_PRUNE} doc ids",
   "400 that device list doesn't hold up: \${read.why}",
   "400 that isn't a live delegation from this channel's owner",
   "400 that isn't the owner's signature over this request",
