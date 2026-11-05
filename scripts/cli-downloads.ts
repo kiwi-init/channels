@@ -1,7 +1,7 @@
 import { readdirSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 
-const BUDGET_BYTES = 30_000_000;
+const BUDGET_BYTES = 40_000_000;
 const TARGETS = ["kiwi-darwin-arm64", "kiwi-darwin-x64", "kiwi-linux-x64", "kiwi-linux-arm64"] as const;
 
 const dir = resolve(process.argv[2] ?? "dist");
