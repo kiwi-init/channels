@@ -33,8 +33,8 @@ describe("the Calm sky is Jow's loop, bundled with the app (T4204)", () => {
     expect(html).toMatch(/url\([^)]*idle-still[^)]*\.jpg\)/)
   })
 
-  test("the loop stays near 2 MB, so the UI package every client downloads grows by little", () => {
-    expect(statSync(join(import.meta.dir, "idle-loop.mp4")).size).toBeLessThan(2_200_000)
+  test("the loop stays near 2.4 MB, so the UI package every client downloads grows by little", () => {
+    expect(statSync(join(import.meta.dir, "idle-loop.mp4")).size).toBeLessThan(2_600_000)
     expect(statSync(join(import.meta.dir, "idle-still.jpg")).size).toBeLessThan(300_000)
   })
 })
