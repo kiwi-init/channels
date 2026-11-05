@@ -244,7 +244,9 @@ export function bindDirectory(dir: string, b: Binding, listening: (alias: string
       (s) => !(s.alias === b.alias && s.as === b.as) && (!!s.hold || !(b.harness && !b.session && !s.session && s.harness === b.harness && !listening(s.alias, s.as))),
     );
     const holds = seatHolds(cfg, b.alias, b.as);
+    const replaced = seatsAt(cfg, at).find((s) => sameSeat(s, b));
     store(cfg, at, [...others, { ...b, ...pinnedFor(b), ...(holds ? { holds } : {}), at: Date.now() }]);
+    if (replaced?.session && replaced.session !== b.session) noteTaken(cfg, { alias: b.alias, as: b.as, from: replaced.session, dir: at, at: Date.now() });
   });
   return bound;
 }

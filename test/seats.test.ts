@@ -576,6 +576,20 @@ describe("a session whose seat another session took learns it once (#1676)", () 
     const back = { alias: "ch", as: "lead", harness: "claude" as const, session: "lead-session", pid: process.ppid };
     bindDirectory(dir, back);
     expect(claimTaken("lead-session", [back])).toEqual([]);
+    expect(loadConfig().taken?.map((t) => t.from)).toEqual(["new-session"]);
+  });
+
+  test("a join that replaces another session's seat records it for that session", () => {
+    bindDirectory(dir, { alias: "ch", as: "lead", harness: "claude", session: "old-session", pid: process.ppid });
+    bindDirectory(dir, { alias: "ch", as: "lead", harness: "claude", session: "new-session", pid: process.pid });
+    expect(seatsAt(loadConfig(), dir).find((b) => b.as === "lead")).toMatchObject({ session: "new-session" });
+    expect(claimTaken("old-session", [])).toEqual([{ alias: "ch", as: "lead", from: "old-session", dir, at: expect.any(Number) }]);
+    expect(claimTaken("new-session", [])).toEqual([]);
+  });
+
+  test("a session joining its own seat again records nothing", () => {
+    bindDirectory(dir, { alias: "ch", as: "lead", harness: "claude", session: "lead-session", pid: DEAD });
+    bindDirectory(dir, { alias: "ch", as: "lead", harness: "claude", session: "lead-session", pid: process.ppid });
     expect(loadConfig().taken).toBeUndefined();
   });
 
