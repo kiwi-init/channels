@@ -104,6 +104,10 @@ try {
       check(`with the app's Reduce motion on (${motion}), the channel names show whole from the first frame (${seen.join(" then ")})`, motion === "reduced" && seen.length === 1);
       const scene = await still.evaluate(() => document.querySelector(".rest-back canvas")?.getAttribute("data-meadow") ?? "none");
       check(`and the meadow behind it doesn't move (${scene})`, scene !== "moving");
+      await still.goto(`http://127.0.0.1:${server.port}/?shot=onboarding-still`);
+      await still.waitForTimeout(2600);
+      const intro = await still.evaluate(() => document.querySelector("canvas[data-meadow]")?.getAttribute("data-meadow") ?? "none");
+      check(`the onboarding's meadow holds still for it too (${intro})`, intro !== "moving" && intro !== "none");
       await still.close();
     }
     check(`no page errors (${label})`, errors.length === 0);
