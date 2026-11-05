@@ -67,7 +67,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
 
   return (
     <div className={cx("onb", leaving && "is-leaving")} onAnimationEnd={ended}>
-      <div className="start-drag" />
+      <div className="onb-drag" />
       <div ref={stage} className="onb-back" aria-hidden="true" />
       <div className="onb-shade" aria-hidden="true" />
       {step === "intro" ? (

@@ -22,6 +22,16 @@
   animation: onb-out 0.9s var(--ease) both;
 }
 
+.onb-drag {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 1;
+  height: 40px;
+  -webkit-app-region: drag;
+}
+
 .onb-back,
 .onb-shade {
   position: absolute;

@@ -1,4 +1,4 @@
-import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo } from "react"
+import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react"
 
 import { showCalm, useCalmShown, useIdle } from "~/calm/idle"
 import { Boundary } from "~/kit/boundary"
@@ -10,6 +10,7 @@ import { ContextMenus } from "~/kit/menu-open"
 import { Palette } from "~/palette/palette"
 import { ChannelScreen } from "~/shell/channel"
 import { Rail } from "~/shell/rail"
+import { onboarded, rememberOnboarded } from "~/start/onboarded"
 import { applyTheme, colorsOf, usePreview, useSystemDark } from "~/theme/apply"
 import { loadRex, useRex } from "~/theme/rex"
 import { activeTheme, wantsRex } from "~/theme/themes"
@@ -23,6 +24,7 @@ const JoinDialog = later(() => import("~/start/join").then((m) => m.JoinDialog))
 const NewRoomDialog = later(() => import("~/shell/new-room").then((m) => m.NewRoomDialog))
 const Welcome = later(() => import("~/start/welcome").then((m) => m.Welcome))
 const Calm = later(() => import("~/calm/calm").then((m) => m.Calm))
+const Onboarding = later(() => import("~/start/onboarding").then((m) => m.Onboarding))
 
 export function Root({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => void }) {
   const [toasts, toast, dismissToast] = useToasts()
@@ -31,6 +33,19 @@ export function Root({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => voi
   usePaletteKey(useCallback(() => go({ to: "dialog", dialog: nav.dialog === "palette" ? null : "palette" }), [go, nav.dialog]))
   useHistoryKeys(go, !!nav.modal)
   useTheme(app)
+  const [intro, setIntro] = useState(() => !onboarded() && app.channels.length === 0)
+  useEffect(() => {
+    if (!intro) rememberOnboarded()
+  }, [intro])
+
+  if (intro)
+    return (
+      <Boundary>
+        <Suspense fallback={null}>
+          <Onboarding onDone={() => setIntro(false)} />
+        </Suspense>
+      </Boundary>
+    )
 
   if (!app.account || app.signIn?.stage === "sign-in")
     return (
