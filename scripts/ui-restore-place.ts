@@ -113,7 +113,7 @@ async function scroll() {
   expect(!!spot && !near(spot, opened), `the long feed scrolls up to a spot of its own (${JSON.stringify(opened)} → ${JSON.stringify(spot)})`);
   await page.reload();
   await page.locator("article.msg").first().waitFor();
-  await settle(page);
+  await settle(page, 1200);
   const after = await topRow(page);
   expect(near(after, spot), `a restart brings the scroll back to the same message (${JSON.stringify(spot)} → ${JSON.stringify(after)})`);
 
