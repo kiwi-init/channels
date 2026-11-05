@@ -67,7 +67,7 @@ function Row({ row, still, open }: { row: CalmRow; still: boolean; open: (code: 
 export function Calm() {
   const { app, go } = useApp()
   const rows = useMemo(() => calmRows(app.channels, app.home), [app.channels, app.home])
-  const still = useStill()
+  const still = useStill() || app.prefs.reduceMotion
   const [leaving, setLeaving] = useState(false)
   const box = useRef<HTMLDivElement>(null)
   const stage = useRef<HTMLDivElement>(null)

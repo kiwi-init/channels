@@ -86,6 +86,25 @@ try {
       await page.keyboard.press("ControlOrMeta+t");
       await page.waitForTimeout(900);
       check("⌘T / Ctrl+T again closes it", (await page.locator(".rest").count()) === 0);
+      const still = await browser.newPage({ viewport: { width, height } });
+      await still.addInitScript(() => {
+        const seen = new Set<string>();
+        Object.assign(window, { calmNames: seen });
+        const look = (): void => {
+          const names = [...document.querySelectorAll(".rest-row .rest-name")].map((n) => n.textContent ?? "");
+          if (names.length) seen.add(JSON.stringify(names));
+          requestAnimationFrame(look);
+        };
+        requestAnimationFrame(look);
+      });
+      await still.goto(`http://127.0.0.1:${server.port}/?shot=calm-still`);
+      await still.waitForTimeout(2600);
+      const motion = await still.evaluate(() => document.documentElement.dataset.motion ?? "");
+      const seen = await still.evaluate(() => [...((window as unknown as { calmNames: Set<string> }).calmNames ?? [])]);
+      check(`with the app's Reduce motion on (${motion}), the channel names show whole from the first frame (${seen.join(" then ")})`, motion === "reduced" && seen.length === 1);
+      const scene = await still.evaluate(() => document.querySelector(".rest-back canvas")?.getAttribute("data-meadow") ?? "none");
+      check(`and the meadow behind it doesn't move (${scene})`, scene !== "moving");
+      await still.close();
     }
     check(`no page errors (${label})`, errors.length === 0);
     await page.close();
