@@ -165,6 +165,9 @@ jobs:
       - name: doc send, sending at the bottom, scrolled up or a long line keeps the view where it was
         if: ${{ !cancelled() }}
         run: bun scripts/ui-send-scroll.ts
+      - name: doc follow, at the bottom the view follows an agent's lines, also right after you send while it posts and edits, in Chromium and WebKit
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-doc-follow.ts
       - name: doc paste, an image pasted into a line goes out with that line
         if: ${{ !cancelled() }}
         run: bun scripts/ui-doc-paste.ts
@@ -203,6 +206,9 @@ jobs:
           bun scripts/ui-doc-steady.ts || status=1
           bun scripts/ui-doc-steady.ts --webkit || status=1
           exit "$status"
+      - name: doc slash menu, the doc's / menu opens on screen and keeps its rows inside its box, in Chromium and WebKit
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-doc-slash-menu.ts
       - if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

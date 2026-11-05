@@ -1,7 +1,7 @@
 import { baseKeymap, chainCommands, splitBlock, toggleMark } from "prosemirror-commands"
 import { keymap } from "prosemirror-keymap"
 import type { Node } from "prosemirror-model"
-import { TextSelection, type Command, type EditorState, type Plugin } from "prosemirror-state"
+import { Selection, TextSelection, type Command, type EditorState, type Plugin } from "prosemirror-state"
 import { liftListItem, sinkListItem, splitListItem } from "prosemirror-schema-list"
 import { redo, undo } from "y-prosemirror"
 
@@ -35,6 +35,21 @@ const leaveCode: Command = (state, dispatch) => {
     tr.insert(at, schema.nodes.paragraph.create())
     dispatch(tr.setSelection(TextSelection.create(tr.doc, at + 1)).scrollIntoView())
   }
+  return true
+}
+
+export const wordIntoNext: Command = (state, dispatch) => {
+  const { $head } = state.selection
+  if ($head.depth < 1 || $head.parentOffset !== $head.parent.content.size) return false
+  const index = $head.index(0)
+  if (index + 1 >= state.doc.childCount) return false
+  const end = $head.before(1) + state.doc.child(index).nodeSize
+  const next = Selection.findFrom(state.doc.resolve($head.after()), 1, true)
+  if (!next || next.$head.pos < end) return false
+  const $start = next.$head
+  const rest = $start.parent.textBetween($start.parentOffset, $start.parent.content.size, undefined, "\ufffc")
+  const word = /^\s*\S+/.exec(rest)?.[0].length ?? rest.length
+  if (dispatch) dispatch(state.tr.setSelection(TextSelection.create(state.doc, state.selection.anchor, $start.pos + word)).scrollIntoView())
   return true
 }
 
@@ -183,6 +198,8 @@ export function docKeys(me: string, now: () => number, blur: () => void, opts: D
       Delete: join(me, joinForward, posted),
       ArrowDown: unlessRefused(me, refuse, toYourLine(me, posted, opts.made ?? (() => true))),
       ArrowUp: editLast(me, opts.editLast ?? (() => false)),
+      "Ctrl-Shift-ArrowRight": wordIntoNext,
+      "Alt-Shift-ArrowRight": wordIntoNext,
       Escape: chainCommands(dropReply(me), () => {
         blur()
         return true

@@ -23,6 +23,8 @@ export interface Shared {
 
 export type OpenDoc = (th: string | null, on: (e: DocEvent) => void) => PipeIn
 
+export type FindDoc = () => Promise<string | null>
+
 export interface Poster {
   me: string
   post: (text: string, block: DocBlockRef, reply?: { re: number; quote?: string }) => Promise<boolean>
@@ -61,6 +63,10 @@ export class LiveDoc implements Shared {
   private dead = false
   private phase = "sync"
   private gaveUp = false
+  private finding = false
+  private checked = false
+  private readonly moved = new Map<string, string>()
+  private moveTo: { from: string; to: string } | null = null
   private readonly waiting = new Set<() => void>()
   private readonly unposted: Finished[] = []
   private readonly posting: Posting | null
@@ -70,7 +76,8 @@ export class LiveDoc implements Shared {
     private readonly open: OpenDoc,
     th: string | undefined,
     private readonly onFail: (why: string) => void,
-    private readonly poster?: Poster
+    private readonly poster?: Poster,
+    private readonly find?: FindDoc
   ) {
     this.ready = !th
     this.doc.on("update", this.onUpdate)
@@ -84,7 +91,7 @@ export class LiveDoc implements Shared {
         )
       : null
     this.floorOff = onWriterFloor(this.doc, this.holdFloor)
-    if (th) this.connect(th)
+    if (th) this.connectKnown(th)
     else this.holdFloor()
   }
 
@@ -97,10 +104,11 @@ export class LiveDoc implements Shared {
     return () => void this.waiting.delete(l)
   }
 
-  want(th: string | undefined): void {
+  want(wanted: string | undefined): void {
+    const th = wanted && (this.moved.get(wanted) ?? wanted)
     if (this.dead || !th || (this.pipe && this.opened === th)) return
     this.gaveUp = false
-    this.connect(th)
+    this.connectKnown(th)
   }
 
   busy(): boolean {
@@ -118,6 +126,43 @@ export class LiveDoc implements Shared {
     this.awareness.off("change", this.onAware)
     this.awareness.destroy()
     this.doc.destroy()
+  }
+
+  private connectKnown(th: string): void {
+    this.connect(th)
+    if (this.checked || !this.find) return
+    this.checked = true
+    this.find().then(
+      (right) => {
+        if (!right || right === th || this.dead) return
+        this.moved.set(th, right)
+        this.moveTo = { from: th, to: right }
+        if (this.phase === "relay") this.move()
+      },
+      () => {
+        this.checked = false
+      }
+    )
+  }
+
+  private move(): void {
+    const to = this.moveTo
+    if (!to || this.dead || this.opened !== to.from) return
+    this.moveTo = null
+    noteTyping(() => ({ what: "doc moved to the thread's first doc", origin: this.phase }))
+    this.want(to.to)
+  }
+
+  private start(): void {
+    if (this.finding) return
+    if (!this.find) return this.connect(null)
+    this.finding = true
+    const go = (th: string | null): void => {
+      this.finding = false
+      if (this.dead || this.pipe || this.opened !== null) return
+      this.connect(th)
+    }
+    this.find().then(go, () => go(null))
   }
 
   private connect(th: string | null): void {
@@ -150,7 +195,8 @@ export class LiveDoc implements Shared {
         return mirrorAware(this.awareness, e.u, PIPE)
       case "Ready":
         this.phase = "relay"
-        return this.isNowReady()
+        this.isNowReady()
+        return this.move()
       case "Down":
         this.phase = "reconnect"
         return this.connect(this.opened)
@@ -186,7 +232,7 @@ export class LiveDoc implements Shared {
   private readonly onUpdate = (u: Uint8Array, origin: unknown): void => {
     if (origin === PIPE || this.dead) return
     if (this.pipe) this.pipe.update(b64url(u))
-    else if (!this.gaveUp && this.opened === null && said(this.doc)) this.connect(null)
+    else if (!this.gaveUp && this.opened === null && said(this.doc)) this.start()
   }
 
   private readonly onTransaction = (tr: Y.Transaction): void => {

@@ -1,12 +1,11 @@
 import { describe, expect, test } from "bun:test"
 import type { GithubNote } from "@kiwi/core/protocol.ts"
-import { continuesRun, eventRun, githubSummary, linesOf } from "~/chat/fold-events"
+import { githubSummary, linesOf, splitUpdates } from "~/chat/fold-events"
 import type { Message, Task } from "~/model"
 
 const general = { kind: "room", room: "general" } as const
 const day = new Date(2026, 9, 29, 10).getTime()
 const msg = (seq: number, extra: Partial<Message> = {}): Message => ({ seq, from: "atlas", at: day + seq * 60_000, text: `message ${seq}`, where: general, ...extra })
-const none: ReadonlySet<number> = new Set()
 const ev = (seq: number, extra: Partial<Message> = {}): Message => msg(seq, { system: true, text: `event ${seq}`, ...extra })
 const task = (id: number, extra: Partial<Task> = {}): Task => ({
   id,
@@ -31,29 +30,27 @@ const pr = (number: number, action: string, extra: Partial<GithubNote> = {}): Gi
   ...extra,
 })
 
-describe("event runs", () => {
-  test("a run is the events between two messages on one day", () => {
-    const list = [msg(1), ev(2), ev(3), ev(4), msg(5), ev(6)]
-    expect(eventRun(list, 1, list.length, none)?.map((m) => m.seq)).toEqual([2, 3, 4])
-    expect(continuesRun(list, 2, 0, none)).toBe(true)
-    expect(continuesRun(list, 1, 0, none)).toBe(false)
-    expect(eventRun(list, 0, list.length, none)).toBeNull()
-    expect(eventRun(list, 5, list.length, none)?.map((m) => m.seq)).toEqual([6])
+describe("updates leave the thread", () => {
+  test("task events, joins, room creation and GitHub rows go to the panel; messages, asks and left-out rows stay", () => {
+    const list = [
+      msg(1),
+      ev(2, { text: "T12 done", task: 12 }),
+      ev(3, { text: "lucid-marmot joined" }),
+      msg(4, { ask: "which one, A or B?" }),
+      ev(5, { text: "room #ops created" }),
+      ev(6, { leftOut: "Refused: read only" }),
+      ev(7, { github: [pr(9, "opened")] }),
+      msg(8),
+    ]
+    const { talk, runs } = splitUpdates(list)
+    expect(talk.map((m) => m.seq)).toEqual([1, 4, 6, 8])
+    expect(runs.map((r) => r.map((m) => m.seq))).toEqual([[2, 3], [5], [7]])
   })
 
-  test("a new day, a break (the New line, the history fold, a proposal), a left-out event and the window's edge each end a run", () => {
-    const list = [ev(1), ev(2), ev(3, { at: day + 86_400_000 }), ev(4, { leftOut: "Refused: read only" })]
-    expect(eventRun(list, 0, list.length, none)?.map((m) => m.seq)).toEqual([1, 2])
-    expect(eventRun(list, 0, list.length, new Set([2]))?.map((m) => m.seq)).toEqual([1])
-    expect(continuesRun(list, 1, 0, new Set([9, 2]))).toBe(false)
-    expect(eventRun(list, 0, 1, none)?.map((m) => m.seq)).toEqual([1])
-    expect(eventRun(list, 3, list.length, none)).toBeNull()
-  })
-
-  test("the window's first row starts a run even mid-run", () => {
-    const list = [ev(1), ev(2), ev(3)]
-    expect(continuesRun(list, 1, 1, none)).toBe(false)
-    expect(eventRun(list, 1, list.length, none)?.map((m) => m.seq)).toEqual([2, 3])
+  test("a run is the updates between two messages on one day, so each folds on its own", () => {
+    const next = day + 86_400_000
+    const { runs } = splitUpdates([ev(1), ev(2), msg(3), ev(4), ev(5, { at: next }), ev(6, { at: next + 60_000 })])
+    expect(runs.map((r) => r.map((m) => m.seq))).toEqual([[1, 2], [4], [5, 6]])
   })
 })
 

@@ -224,6 +224,8 @@
 
 .thread-doc .doc-suggest {
   bottom: auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .doc-image {

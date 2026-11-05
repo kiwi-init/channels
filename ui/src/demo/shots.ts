@@ -22,6 +22,7 @@ export const SHOTS: Record<string, Shot> = {
   "opening-needs": { scenario: "opening", channel: "kiwi", nav: { tab: "needs" } },
   thread: kiwi({ panel: { kind: "thread", seq: 112 } }),
   "thread-focus": kiwi({ panel: { kind: "thread", seq: 112, focus: 113 } }),
+  "thread-reply": kiwi({ panel: { kind: "thread", seq: 113 } }),
   "thread-other": kiwi({ panel: { kind: "thread", seq: 127 } }),
   threads: kiwi({ tab: "threads" }),
   "threads-open": kiwi({ tab: "threads", panel: { kind: "thread", seq: 127 } }),

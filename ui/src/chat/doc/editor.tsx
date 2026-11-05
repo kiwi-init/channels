@@ -8,7 +8,7 @@ import { Decoration, DecorationSet, EditorView, type NodeView } from "prosemirro
 import { yCursorPlugin, ySyncPlugin, ySyncPluginKey, yUndoPlugin } from "y-prosemirror"
 import * as Y from "yjs"
 
-import { attach, backInDraft, blockAt, blocks, continues, dropEmptyOwn, emptyHidden, isEmpty, noteMade, replyIn, startBlock, unreply, type Made } from "~/chat/doc/blocks"
+import { attach, backInDraft, blockAt, caretAway, continues, dropEmptyOwn, emptyHidden, isEmpty, noteMade, replyIn, startBlock, unreply, type Made } from "~/chat/doc/blocks"
 import { caretShown } from "~/chat/doc/carets"
 import { onGiveBack } from "~/chat/doc/give-back"
 import { writeOwnLinesOnly } from "~/chat/doc/own-writes"
@@ -28,6 +28,7 @@ import { postedBlocks } from "~/chat/doc/posted"
 import { markdownRules } from "~/chat/doc/rules"
 import { attrsOf, FRAGMENT, isBack, isSent, schema, type BlockAttrs } from "~/chat/doc/schema"
 import { dismiss, menuKey, suggestPlugin, type Query } from "~/chat/doc/suggest"
+import { frameOf, menuPlace, type Caret, type Place } from "~/chat/doc/menu-place"
 import { matchCommands, parseCommand, type Command } from "~/chat/commands"
 import { tooLong } from "~/chat/drafts"
 import { startEditing } from "~/chat/editing"
@@ -305,15 +306,11 @@ function caretTop(view: EditorView): number | null {
   }
 }
 
-function steadyPlugin(scroller: () => HTMLElement | null, hold: (on: boolean) => void, me: string): Plugin {
+function steadyPlugin(scroller: () => HTMLElement | null, hold: (on: boolean) => void, me: string, drafts: RefObject<Drafts>): Plugin {
   let before: number | null = null
   let view: EditorView | null = null
-  const away = (v: EditorView): boolean => {
-    if (!v.hasFocus()) return false
-    const here = blockAt(v.state)
-    const last = blocks(v.state.doc).findLast((b) => !isEmpty(b.node) || attrsOf(b.node).author === me)
-    return !!here && !!last && here.index !== last.index
-  }
+  const shown = (block: string): boolean => !drafts.current.posted(block) && !drafts.current.inFeed(block)
+  const away = (v: EditorView): boolean => v.hasFocus() && caretAway(v.state, me, shown)
   return new Plugin({
     filterTransaction: (tr) => {
       if (remote(tr) && view && before === null) before = caretTop(view)
@@ -436,7 +433,7 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
       herePlugin(),
       runsPlugin(shown, me, opts.drafts),
       tidyPlugin(me, opts.drafts),
-      steadyPlugin(opts.scroller, opts.hold, me),
+      steadyPlugin(opts.scroller, opts.hold, me, opts.drafts),
     ],
   })
   const own = writeOwnLinesOnly(state, () => (view.isDestroyed ? null : view))
@@ -554,10 +551,25 @@ function choose(view: EditorView, q: Query, o: Option): void {
   view.focus()
 }
 
-function Suggest({ channel, query, options, pick, at, onPick }: { channel: Channel; query: Query; options: Option[]; pick: number; at: { left: number; top: number }; onPick: (i: number) => void }) {
+function Suggest({ channel, query, options, pick, at, onPick }: { channel: Channel; query: Query; options: Option[]; pick: number; at: Caret; onPick: (i: number) => void }) {
+  const list = useRef<HTMLUListElement>(null)
+  const [place, setPlace] = useState<Place>({ left: at.left, top: at.top, maxHeight: undefined })
+  useLayoutEffect(() => {
+    const ul = list.current
+    const host = ul?.offsetParent
+    if (!ul || !(host instanceof HTMLElement)) return
+    setPlace(menuPlace(at, { width: ul.offsetWidth, height: ul.scrollHeight }, host.getBoundingClientRect(), frameOf(host)))
+  }, [at, options.length])
+  useLayoutEffect(() => {
+    const ul = list.current
+    const row = ul?.children[pick]
+    if (!ul || !(row instanceof HTMLElement)) return
+    if (row.offsetTop < ul.scrollTop) ul.scrollTop = row.offsetTop
+    else if (row.offsetTop + row.offsetHeight > ul.scrollTop + ul.clientHeight) ul.scrollTop = row.offsetTop + row.offsetHeight - ul.clientHeight
+  }, [pick, place])
   if (options.length === 0) return null
   return (
-    <ul className="mentions doc-suggest" role="listbox" aria-label={query.kind === "@" ? "People" : query.kind === "/" ? "Commands" : "Tasks"} style={{ left: at.left, top: at.top }}>
+    <ul ref={list} className="mentions doc-suggest" role="listbox" aria-label={query.kind === "@" ? "People" : query.kind === "/" ? "Commands" : "Tasks"} style={place}>
       {options.map((o, i) => (
         <li key={o.kind === "@" ? o.person.name : o.kind === "/" ? o.command.name : o.task.id} role="option" aria-selected={i === pick}>
           {o.kind === "/" ? (
@@ -663,7 +675,7 @@ export function ThreadDoc({
     return () => shared.doc.off("update", publish)
   }, [sent, since, shared, feedKey])
   const mediaRef = useRef(media)
-  const [query, setQuery] = useState<{ q: Query; left: number; top: number } | null>(null)
+  const [query, setQuery] = useState<{ q: Query; at: Caret } | null>(null)
   const [pick, setPick] = useState(0)
   const [dropping, setDropping] = useState(false)
   const commands = useCommands(channel)
@@ -724,7 +736,7 @@ export function ThreadDoc({
         if (!q) return setQuery(null)
         const host = box.current?.getBoundingClientRect()
         const at = v.coordsAtPos(q.from)
-        setQuery({ q, left: at.left - (host?.left ?? 0), top: at.bottom - (host?.top ?? 0) + 4 })
+        setQuery({ q, at: { left: at.left - (host?.left ?? 0), top: at.bottom - (host?.top ?? 0) + 4, above: at.top - (host?.top ?? 0) - 4 } })
       },
       onKey: (e) => keys.current(e),
       scroller: () => box.current?.closest<HTMLElement>(".feed") ?? null,
@@ -881,7 +893,7 @@ export function ThreadDoc({
           query={query.q}
           options={options}
           pick={Math.min(pick, Math.max(0, options.length - 1))}
-          at={query}
+          at={query.at}
           onPick={(i) => {
             const o = options[i]
             if (o && view.current) choose(view.current, query.q, o)
@@ -945,7 +957,8 @@ export function LiveThreadDoc({ channel, where, thread, hold }: { channel: Chann
             me,
             post: (text, block, reply) => actions.send(code, here.current, reply?.quote ? withExcerpt(reply.quote, text) : text, { block, ...(reply ? { replyTo: reply.re } : {}) }),
             posted: (block) => known.current.has(block),
-          }
+          },
+          () => actions.findDoc(code, thread)
         )
     )
     setLive(held.live)
