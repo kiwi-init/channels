@@ -2,7 +2,7 @@
 # TLS stays in front of this container (see deploy/Caddyfile). Inside the
 # container the relay binds every interface, so a published port can reach it.
 
-FROM oven/bun:1.4.2
+FROM oven/bun:1.4.4
 WORKDIR /app
 # The relay needs only the root workspace's dependencies, @kiwi/core (packages/core)
 # among them; the desktop manifest is copied so the lockfile matches, and --filter

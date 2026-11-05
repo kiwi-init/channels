@@ -14,6 +14,9 @@ to=$(curl -fsSI "$release/latest" | awk -F/ 'tolower($1) ~ /^location:/ { print 
 [ "$to" != "$from" ] || { bad "$from is already the latest release, so there's nothing to update to"; exit 0; }
 want=$(curl -fsSL "$release/download/v$to/SHA256SUMS" | awk -v f="Channels-$to-linux-x86_64.AppImage" '$2 == f { print $1 }')
 [ -n "$want" ] || { bad "the SHA256SUMS of $to list no AppImage"; exit 0; }
+eval "$(printf throwaway | gnome-keyring-daemon --unlock --components=secrets 2> /dev/null)"
+export GNOME_KEYRING_CONTROL
+gdbus call --session --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus --method org.freedesktop.DBus.GetNameOwner org.freedesktop.secrets > /dev/null 2>&1 || bad "no unlocked keyring, so the app may wait on it and never look for updates"
 img="$HOME/Applications/Channels.AppImage"
 mkdir -p "$HOME/Applications"
 curl -fsSL -o "$img" "$release/download/v$from/Channels-$from-linux-x86_64.AppImage" || { bad "can't download $from's AppImage"; exit 0; }
@@ -45,7 +48,7 @@ pkill -KILL -f "appimage_extracted" 2> /dev/null
 APPIMAGE_EXTRACT_AND_RUN=1 xvfb-run -a -s "-screen 0 1280x800x24" "$img" > "$logs/update-$to.log" 2>&1 &
 sleep 25
 pid=$(bun_of)
-if [ -n "$pid" ]; then ok "$to's AppImage starts after the update"; else bad "the updated AppImage didn't stay up: $(tail -n 5 "$logs/update-$to.log" | tr '\n' ' ' | cut -c1-300)"; fi
+if [ -n "$pid" ] && [ "$(sum)" = "$want" ]; then ok "$to's AppImage starts after the update"; elif [ -n "$pid" ]; then bad "what starts after the update is still $from's AppImage"; else bad "the updated AppImage didn't stay up: $(tail -n 5 "$logs/update-$to.log" | tr '\n' ' ' | cut -c1-300)"; fi
 [ -n "$pid" ] && kill -TERM "$pid"
 sleep 3
 pkill -KILL -f "appimage_extracted" 2> /dev/null
