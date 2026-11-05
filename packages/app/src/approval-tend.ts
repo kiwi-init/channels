@@ -4,11 +4,14 @@ import type { Watches } from "@kiwi/channel/watch.ts";
 
 export const TEND_SAFETY_MS = 300_000;
 
-type LetIn = { name: string; sponsor?: { user: string; name: string } };
+type LetIn = { name: string; display?: string; sponsor?: { user: string; name: string } };
+type Asking = { id: string; name: string; display?: string };
+
+const shownAs = (m: { name: string; display?: string }): string => m.display || m.name;
 
 export interface TendApi {
   autoApprove: (person: string) => Promise<readonly LetIn[]>;
-  requests: (opts: { person: string }) => Promise<readonly { id: string; name: string }[]>;
+  requests: (opts: { person: string }) => Promise<readonly Asking[]>;
 }
 
 export interface Tell {
@@ -36,10 +39,14 @@ export async function tendOwned(person: string, api: TendApi, tell?: Tell): Prom
     const from = theirs(one);
     ping(
       title,
-      letIn.length === 1 ? `${one.name} joined from ${from ? `${from}’s computer` : "your computer"}` : letIn.some(theirs) ? `${letIn.length} agents joined` : `${letIn.length} of your agents joined`,
+      letIn.length === 1
+        ? `${shownAs(one)} joined from ${from ? `${from}’s computer` : "your computer"}`
+        : letIn.some(theirs)
+          ? `${letIn.length} agents joined`
+          : `${letIn.length} of your agents joined`,
     );
   }
-  let remaining: readonly { id: string; name: string }[];
+  let remaining: readonly Asking[];
   try {
     remaining = await api.requests({ person });
   } catch {
@@ -48,7 +55,7 @@ export async function tendOwned(person: string, api: TendApi, tell?: Tell): Prom
   for (const r of remaining) {
     if (told.has(r.id)) continue;
     told.add(r.id);
-    ping(title, `${r.name} asks to join`);
+    ping(title, `${shownAs(r)} asks to join`);
   }
 }
 
