@@ -1,0 +1,125 @@
+.rest {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: end center;
+  padding: 24px var(--gutter) 48px;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--ink);
+  outline: none;
+  cursor: default;
+  -webkit-app-region: no-drag;
+  animation: rest-in 2s var(--ease) both;
+}
+
+.rest.is-leaving {
+  pointer-events: none;
+  animation: rest-out 0.5s var(--ease) both;
+}
+
+.rest-back {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.rest-back::after {
+  position: absolute;
+  inset: 40% 0 0;
+  background: linear-gradient(to bottom, transparent, var(--bg) 85%);
+  content: "";
+}
+
+.rest-stub {
+  position: absolute;
+  inset: 0;
+  background: var(--bg-3);
+}
+
+.rest-list {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: min(28rem, 100%);
+  max-height: calc(100vh - 72px);
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  list-style: none;
+}
+
+.rest-list > li {
+  animation: rest-rise 1.2s var(--ease) both;
+}
+
+.rest-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 2px 12px;
+  width: 100%;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: var(--r-row);
+  background: none;
+  color: var(--ink-2);
+  text-align: left;
+  cursor: pointer;
+}
+
+.rest-row:hover,
+.rest-row:focus-visible {
+  background: var(--wash);
+  color: var(--ink);
+  outline: none;
+}
+
+.rest-name {
+  overflow: hidden;
+  font: 400 var(--t-title) var(--sans);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rest-row.is-news .rest-name {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.rest-needs {
+  color: var(--decide);
+  font: var(--t-meta) var(--mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.rest-line {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  color: var(--ink-3);
+  font: var(--t-ui) var(--sans);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@keyframes rest-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes rest-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes rest-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
