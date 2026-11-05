@@ -196,6 +196,9 @@ jobs:
           bun scripts/ui-doc-owner.ts || status=1
           bun scripts/ui-doc-owner.ts --webkit || status=1
           exit "$status"
+      - name: doc slash menu, the doc's / menu opens on screen and keeps its rows inside its box, in Chromium and WebKit
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-doc-slash-menu.ts
       - if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
