@@ -267,6 +267,9 @@ jobs:
           wait "$chromium" || status=1
           wait "$webkit" || status=1
           exit "$status"
+      - name: edit an old message, ↑ on a long line from past the 400-message window opens it whole, and saving keeps it whole for everyone
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-edit-old.ts
 
   # The thread doc's fuzzer and two owners sending side by side, each in Chromium and WebKit at once.
   fuzz:

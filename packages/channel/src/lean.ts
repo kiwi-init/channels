@@ -19,7 +19,7 @@ export function clipped(body: string): string {
 
 export function leanOf(m: Message): Message | null {
   if (m.kind === "event" && !(m.ev && KEPT_OPS.has(m.ev.op))) return null;
-  const rest = omit(m, "imgs", "files", "sig", "newer", "opened", "sealed");
+  const rest = { ...omit(m, "imgs", "files", "sig", "newer", "opened", "sealed"), lean: true as const };
   return keepsBody(m) ? rest : { ...rest, body: clipped(m.body) };
 }
 
