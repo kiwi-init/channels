@@ -16,7 +16,7 @@ import { keepLinuxEntry } from "./linux-entry.ts";
 import { catchMainErrors, logMainError, windowFailure } from "./main-log.ts";
 import { followColorScheme, missingGuard, sandboxOff, watchDrops, watchPaste } from "./native-eb.ts";
 import { watchCancels } from "./secret-service.ts";
-import { claimInstance, handoffFor, launchArgs, type Instance } from "./single-instance.ts";
+import { claimInstance, handoffFor, launchArgs, launchToken, type Instance } from "./single-instance.ts";
 import { keyringLocked, openStoreForThisBuild, warnIfStoreBroken } from "./store-open-eb.ts";
 import { driveForTests, wrongTestHome } from "./test-build-eb.ts";
 import { runningAppImage } from "./updater.ts";
@@ -89,12 +89,12 @@ const instance = wrongHome
   ? null
   : await claimInstance({
       dir: dataDir,
-      handoff: handoffFor(launchArgs(), JOIN_SCHEME),
+      handoff: handoffFor(launchArgs(), JOIN_SCHEME, launchToken()),
       scheme: JOIN_SCHEME,
       onHandoff: (h) => {
-        if (h.kind === "show") return ebHost.showWindow();
-        console.error(`Channels: opening a ${JOIN_SCHEME}:// link`);
-        handleDeepLink(h.url);
+        if (h.kind === "show") return ebHost.showWindow(h.token);
+        console.error(`Channels: opening a ${JOIN_SCHEME}:// link${h.token ? " with the launch's activation token" : ""}`);
+        handleDeepLink(h.url, h.token);
       },
     }).catch((e: unknown) => {
       logMainError(e);

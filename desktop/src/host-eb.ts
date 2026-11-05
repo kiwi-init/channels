@@ -90,8 +90,9 @@ export const ebHost: Host = {
     else if (win.isMaximized()) win.unmaximize();
     else win.maximize();
   },
-  showWindow: () => {
+  showWindow: (token) => {
     if (!shown) return;
+    if (token) shown.win.setActivationToken(token);
     if (shown.win.isMinimized()) shown.win.unminimize();
     shown.win.show();
     shown.win.activate();

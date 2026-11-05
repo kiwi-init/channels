@@ -3,7 +3,7 @@ import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
 
-export type Handoff = { kind: "link"; url: string } | { kind: "show" };
+export type Handoff = ({ kind: "link"; url: string } | { kind: "show" }) & { token?: string };
 
 export type Instance = { kind: "first"; listening: boolean; release: () => void } | { kind: "second"; delivered: boolean };
 
@@ -20,6 +20,8 @@ const LOCK_EX = 2;
 const LOCK_NB = 4;
 const MAX_LINE = 4096;
 const MAX_URL = 2048;
+const TOKEN = /^[\x21-\x7e]{1,512}$/;
+const TOKEN_VARS = ["XDG_ACTIVATION_TOKEN", "DESKTOP_STARTUP_ID"];
 
 export const LOCK_FILE = "app.lock";
 export const SOCKET_FILE = "app.sock";
@@ -41,9 +43,26 @@ export function launchArgs(platform: NodeJS.Platform = process.platform, read: (
   }
 }
 
-export function handoffFor(argv: readonly string[], scheme: string): Handoff {
+export function launchToken(platform: NodeJS.Platform = process.platform, read: () => string = () => fs.readFileSync("/proc/self/environ", "utf8")): string | undefined {
+  if (platform !== "linux") return undefined;
+  let env: string[];
+  try {
+    env = read().split("\0");
+  } catch {
+    // No /proc to read: the runtime's own environment still has what GTK hasn't taken.
+    env = Object.entries(process.env).map(([k, v]) => `${k}=${v ?? ""}`);
+  }
+  for (const name of TOKEN_VARS) {
+    const value = env.find((e) => e.startsWith(`${name}=`))?.slice(name.length + 1);
+    if (value && TOKEN.test(value)) return value;
+  }
+  return undefined;
+}
+
+export function handoffFor(argv: readonly string[], scheme: string, token?: string): Handoff {
   const url = argv.find((a) => a.startsWith(`${scheme}://`));
-  return url && url.length <= MAX_URL ? { kind: "link", url } : { kind: "show" };
+  const h: Handoff = url && url.length <= MAX_URL ? { kind: "link", url } : { kind: "show" };
+  return token && TOKEN.test(token) ? { ...h, token } : h;
 }
 
 export function readHandoff(line: string, scheme: string): Handoff | null {
@@ -55,9 +74,11 @@ export function readHandoff(line: string, scheme: string): Handoff | null {
     return null;
   }
   if (!v || typeof v !== "object") return null;
-  const { kind, url } = v as { kind?: unknown; url?: unknown };
-  if (kind === "show") return { kind: "show" };
-  if (kind === "link" && typeof url === "string" && url.length <= MAX_URL && url.startsWith(`${scheme}://`)) return { kind: "link", url };
+  const { kind, url, token } = v as { kind?: unknown; url?: unknown; token?: unknown };
+  if (token !== undefined && (typeof token !== "string" || !TOKEN.test(token))) return null;
+  const extra = token === undefined ? {} : { token };
+  if (kind === "show") return { kind: "show", ...extra };
+  if (kind === "link" && typeof url === "string" && url.length <= MAX_URL && url.startsWith(`${scheme}://`)) return { kind: "link", url, ...extra };
   return null;
 }
 
