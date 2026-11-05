@@ -27,10 +27,17 @@ export default function Sky() {
           // A loop that won't play leaves its poster, the same still frame, in place.
         })
     }
+    const stayHidden = () => {
+      if (document.hidden) el.pause()
+    }
     document.addEventListener("visibilitychange", shown)
+    el.addEventListener("play", stayHidden)
+    el.addEventListener("playing", stayHidden)
     shown()
     return () => {
       document.removeEventListener("visibilitychange", shown)
+      el.removeEventListener("play", stayHidden)
+      el.removeEventListener("playing", stayHidden)
       el.pause()
       el.removeAttribute("src")
       el.load()

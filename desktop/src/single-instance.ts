@@ -31,6 +31,16 @@ const flock = (platform: NodeJS.Platform) =>
 
 const later = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
+export function launchArgs(platform: NodeJS.Platform = process.platform, read: () => string = () => fs.readFileSync("/proc/self/cmdline", "utf8")): string[] {
+  if (platform !== "linux") return process.argv;
+  try {
+    return read().split("\0").filter(Boolean);
+  } catch {
+    // No /proc to read: the runtime's own argv is all there is.
+    return process.argv;
+  }
+}
+
 export function handoffFor(argv: readonly string[], scheme: string): Handoff {
   const url = argv.find((a) => a.startsWith(`${scheme}://`));
   return url && url.length <= MAX_URL ? { kind: "link", url } : { kind: "show" };
