@@ -34,7 +34,7 @@ import { Rejected } from "@kiwi/core/refusals.ts";
 import { canPost, describeScopes, refusal } from "@kiwi/core/scopes.ts";
 import { allowedOnHold, decidersOf, humanOf, isPerson, nextIn, ON_HOLD, ownerOf, placeIn, taskId, unnamedAsks, unnamedTasks, type ChannelState } from "@kiwi/core/state.ts";
 import type { BlockMedia } from "@kiwi/core/doc/blocks.ts";
-import { addressed, blockMedia, docPlaceOfBlock, dropBlock, editBlock, readDoc, writeBlock, type DocPlace } from "./docs.ts";
+import { addressed, blockMedia, docPlaceOfMessage, dropBlock, editBlock, readDoc, writeBlock, type DocPlace } from "./docs.ts";
 import { SessionListen } from "./listen.ts";
 import { EVERYONE, oneLook } from "./shared.ts";
 
@@ -123,8 +123,8 @@ export class SessionMessaging extends SessionListen {
   readonly withBlockMedia = Effect.fn("AgentSession.withBlockMedia")({ self: this }, function* (this: SessionMessaging, m: Message) {
     if (!m.block || m.imgs?.length || m.files?.length || !/\[(?:image|file): /.test(m.body ?? "")) return m;
     const { state } = yield* this.state();
-    const at = docPlaceOfBlock(state, m.block.th);
-    if (!at) return yield* new Rejected(`#${m.seq}'s line is in a shared doc this channel doesn't list`);
+    const at = docPlaceOfMessage(state, m);
+    if (!at) return yield* new Rejected(`#${m.seq}'s line is in a direct conversation's doc, which agents can't open`);
     const id = m.block.id;
     const { imgs, files } = yield* Effect.tryPromise({
       try: () => blockMedia(this.ch, state.head, at, id),
@@ -290,7 +290,7 @@ export class SessionMessaging extends SessionListen {
         ...(room && room !== GENERAL_ROOM ? { room } : {}),
       });
       const done = yield* this.confirm(sent);
-      const at = original.block ? docPlaceOfBlock(state, original.block.th) : null;
+      const at = docPlaceOfMessage(state, original);
       if (at && original.block) {
         const id = original.block.id;
         yield* Effect.tryPromise(() => (body === null ? dropBlock(this.ch, state.head, at, id) : editBlock(this.ch, state.head, at, id, body))).pipe(Effect.ignore);
