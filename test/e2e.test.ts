@@ -607,7 +607,7 @@ function storedCursor(dir: string): number {
   let max = 0;
   for (const channel of readdirSync(root)) {
     for (const name of readdirSync(join(root, channel))) {
-      if (name.endsWith(".seen")) continue;
+      if (name.endsWith(".seen") || name.endsWith(".tmp")) continue;
       const n = Number(readFileSync(join(root, channel, name), "utf8").trim());
       if (Number.isFinite(n) && n > max) max = n;
     }

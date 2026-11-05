@@ -16,6 +16,16 @@ test("both briefs tell an agent to write like a chat teammate", () => {
   expect(mcp).not.toContain("react N");
 });
 
+test("both briefs ask for markdown a person reads at a glance: bold key point, lists, small tables (T4145)", () => {
+  const cli = briefText({ alias: "c", agent: "mac", mc: "kiwi", listen: "" });
+  const mcp = mcpBrief("c", "mac", false);
+  for (const brief of [cli, mcp]) {
+    expect(brief).toContain("Write markdown a person reads at a glance: the key point in **bold**");
+    expect(brief).toContain("a list for steps, findings or options");
+    expect(brief).toContain("a small table to compare a few things side by side");
+  }
+});
+
 test("both briefs send every decision an agent waits on to ask-human, never a question left in a thread", () => {
   const cli = briefText({ alias: "c", agent: "mac", mc: "kiwi", listen: "" });
   const mcp = mcpBrief("c", "mac", false);

@@ -416,8 +416,6 @@
 .top-drawer {
   position: relative;
   display: none;
-  background: var(--float);
-  box-shadow: var(--shadow-float);
 }
 
 .top-drawer-dot {
@@ -428,7 +426,7 @@
   height: 7px;
   border-radius: 50%;
   background: var(--ink-2);
-  box-shadow: 0 0 0 2px var(--float);
+  box-shadow: 0 0 0 2px var(--bg);
 }
 
 .top-drawer-dot.is-loud {
@@ -463,9 +461,8 @@
   height: var(--ctl);
   padding: 0 8px;
   border: 0;
-  border-radius: var(--r-ctl);
-  background: var(--float);
-  box-shadow: var(--shadow-float);
+  border-radius: var(--r-row);
+  background: none;
   color: var(--ink);
   -webkit-app-region: no-drag;
   transition: background var(--fast);
@@ -479,11 +476,23 @@
 .top-chan[aria-pressed="true"],
 .top-drawer:hover,
 .top-drawer[aria-pressed="true"] {
-  background: var(--float-2);
+  background: var(--wash);
 }
 
-.tabs,
 .top-group {
+  display: flex;
+}
+
+.top-group .icon-btn {
+  width: var(--ctl);
+  height: var(--ctl);
+}
+
+.top-group .icon-btn:hover {
+  background: var(--wash);
+}
+
+.tabs {
   display: flex;
   gap: 2px;
   min-width: 0;
