@@ -1,3 +1,3 @@
 export default function Sky() {
-  return <div className="calm-stub-sky" />
+  return <div className="rest-stub" />
 }

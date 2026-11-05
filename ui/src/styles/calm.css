@@ -1,36 +1,41 @@
-.calm {
+.rest {
+  --rest-ink: #ffffff;
+  --rest-ink-2: rgb(255 255 255 / 0.84);
+  --rest-ink-3: rgb(255 255 255 / 0.62);
+  --rest-panel: rgb(24 62 138 / 0.4);
+  --rest-glow: 0 1px 2px rgb(8 24 56 / 0.35);
   position: fixed;
   inset: 0;
   z-index: 80;
   display: grid;
   place-items: center;
   overflow: hidden;
-  background: var(--bg);
-  color: var(--ink);
+  background: #2157b8;
+  color: var(--rest-ink);
   outline: none;
   cursor: default;
   -webkit-app-region: no-drag;
-  animation: calm-in 2s var(--ease) both;
+  animation: rest-in 2s var(--ease) both;
 }
 
-.calm.is-leaving {
+.rest.is-leaving {
   pointer-events: none;
-  animation: calm-out 0.5s var(--ease) both;
+  animation: rest-out 0.5s var(--ease) both;
 }
 
-.calm-sky {
+.rest-back {
   position: absolute;
   inset: 0;
   pointer-events: none;
 }
 
-.calm-stub-sky {
+.rest-stub {
   position: absolute;
   inset: 0;
-  background: linear-gradient(to bottom, var(--bg), color-mix(in srgb, var(--ink) 18%, var(--bg)));
+  background: linear-gradient(to top, #a8cdf2, #2157b8);
 }
 
-.calm-list {
+.rest-list {
   position: relative;
   display: flex;
   flex-direction: column;
@@ -38,24 +43,19 @@
   width: min(560px, calc(100vw - 48px));
   max-height: calc(100vh - 96px);
   margin: 0;
-  padding: 32px 24px;
+  padding: 16px 8px;
   overflow: hidden;
+  border-radius: var(--r-card);
+  background: var(--rest-panel);
+  box-shadow: 0 24px 64px rgb(8 24 56 / 0.25);
   list-style: none;
 }
 
-.calm-list::before {
-  position: absolute;
-  inset: -64px;
-  z-index: -1;
-  background: radial-gradient(closest-side, color-mix(in srgb, var(--bg) 72%, transparent), transparent);
-  content: "";
+.rest-list > li {
+  animation: rest-rise 1.2s var(--ease) both;
 }
 
-.calm-list > li {
-  animation: calm-rise 1.2s var(--ease) both;
-}
-
-.calm-row {
+.rest-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 2px 16px;
@@ -70,53 +70,58 @@
   transition: background var(--slow) var(--ease);
 }
 
-.calm-row:hover,
-.calm-row:focus-visible {
-  background: color-mix(in srgb, var(--ink) 6%, transparent);
+.rest-row:hover,
+.rest-row:focus-visible {
+  background: rgb(255 255 255 / 0.12);
   outline: none;
 }
 
-.calm-name {
+.rest-name {
   overflow: hidden;
+  text-shadow: var(--rest-glow);
   font: 300 var(--t-display) var(--ui);
   letter-spacing: -0.01em;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.calm-needs {
+.rest-needs {
   align-self: center;
-  color: var(--ink);
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.9);
+  color: #17325f;
   font: 500 var(--t-ui) var(--ui);
   white-space: nowrap;
 }
 
-.calm-line {
+.rest-line {
   grid-column: 1 / -1;
   overflow: hidden;
-  color: var(--ink-2);
+  color: var(--rest-ink-2);
   font: var(--t-body) var(--ui);
+  text-shadow: var(--rest-glow);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.calm-line.is-quiet {
-  color: var(--ink-3);
+.rest-line.is-quiet {
+  color: var(--rest-ink-3);
 }
 
-@keyframes calm-in {
+@keyframes rest-in {
   from {
     opacity: 0;
   }
 }
 
-@keyframes calm-out {
+@keyframes rest-out {
   to {
     opacity: 0;
   }
 }
 
-@keyframes calm-rise {
+@keyframes rest-rise {
   from {
     opacity: 0;
     transform: translateY(8px);

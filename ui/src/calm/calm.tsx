@@ -20,7 +20,7 @@ export function Calm() {
     const was = document.activeElement instanceof HTMLElement ? document.activeElement : null
     box.current?.focus({ preventScroll: true })
     const swallow = (e: Event): void => {
-      if (e.type === "pointerdown" && e.target instanceof Element && e.target.closest(".calm-row")) return
+      if (e.type === "pointerdown" && e.target instanceof Element && e.target.closest(".rest-row")) return
       e.preventDefault()
       e.stopImmediatePropagation()
       if (e.type !== "keyup") setLeaving(true)
@@ -37,23 +37,23 @@ export function Calm() {
     setLeaving(true)
   }
   const ended = (e: AnimationEvent<HTMLDivElement>): void => {
-    if (e.target === e.currentTarget && e.animationName === "calm-out") hideCalm()
+    if (e.target === e.currentTarget && e.animationName === "rest-out") hideCalm()
   }
 
   return (
-    <div ref={box} className={cx("calm", leaving && "is-leaving")} role="dialog" aria-modal="true" aria-label="Calm" tabIndex={-1} onAnimationEnd={ended}>
-      <div className="calm-sky">
+    <div ref={box} className={cx("rest", leaving && "is-leaving")} role="dialog" aria-modal="true" aria-label="Calm" tabIndex={-1} onAnimationEnd={ended}>
+      <div className="rest-back">
         <Suspense fallback={null}>
           <Sky />
         </Suspense>
       </div>
-      <ul className="calm-list">
+      <ul className="rest-list">
         {rows.map((r, i) => (
           <li key={r.code} style={{ animationDelay: `${600 + i * 120}ms` }}>
-            <button type="button" className="calm-row" onClick={() => open(r.code)}>
-              <span className="calm-name">{r.title}</span>
-              {r.needs > 0 && <span className="calm-needs">needs you: {r.needs}</span>}
-              <span className={cx("calm-line", !r.line && "is-quiet")}>{r.line ?? "quiet"}</span>
+            <button type="button" className="rest-row" onClick={() => open(r.code)}>
+              <span className="rest-name">{r.title}</span>
+              {r.needs > 0 && <span className="rest-needs">needs you: {r.needs}</span>}
+              <span className={cx("rest-line", !r.line && "is-quiet")}>{r.line ?? "quiet"}</span>
             </button>
           </li>
         ))}
