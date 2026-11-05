@@ -13,6 +13,7 @@ const KEYS = 40;
 const KEY_MS = 120;
 const LOOKS = 24;
 const LOOK_MS = 250;
+const READ_UP = 200;
 
 const server = Bun.serve({
   port: 0,
@@ -75,6 +76,8 @@ async function watching(browser: Browser): Promise<string | null> {
     if (!box) return "no feed on screen";
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
     await page.mouse.wheel(0, 2000);
+    await page.waitForTimeout(300);
+    await page.mouse.wheel(0, -READ_UP);
     await page.waitForTimeout(500);
     const ys: number[] = [];
     for (let i = 0; i < LOOKS; i++) {
@@ -98,7 +101,7 @@ let failed = 0;
 try {
   for (const [what, check] of [
     ["the composer you type in stays put while lines arrive", typing],
-    ["the doc stays put while you read and lines arrive", watching],
+    ["the doc stays put while you read a little above the bottom and lines arrive", watching],
   ] as const) {
     const why = await check(browser);
     if (why) failed++;
