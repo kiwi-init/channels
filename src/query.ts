@@ -219,6 +219,8 @@ export async function queryIsolated(sql: string, tables: Tables, ms = QUERY_MS, 
     return readRan(text) ?? fail("query: the query process failed\n");
   } finally {
     if (timer) clearTimeout(timer);
+    child.kill("SIGKILL");
+    await child.exited;
   }
 }
 
