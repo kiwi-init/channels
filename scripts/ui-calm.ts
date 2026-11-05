@@ -80,6 +80,12 @@ try {
       await page.mouse.click(20, height - 20);
       await page.waitForTimeout(900);
       check("a click on the sky fades it out", (await page.locator(".rest").count()) === 0);
+      await page.keyboard.press("ControlOrMeta+t");
+      await page.waitForTimeout(600);
+      check("⌘T / Ctrl+T opens it at once", (await page.getByRole("dialog", { name: "Calm" }).count()) === 1);
+      await page.keyboard.press("ControlOrMeta+t");
+      await page.waitForTimeout(900);
+      check("⌘T / Ctrl+T again closes it", (await page.locator(".rest").count()) === 0);
     }
     check(`no page errors (${label})`, errors.length === 0);
     await page.close();

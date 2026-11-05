@@ -1,6 +1,6 @@
 import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo } from "react"
 
-import { useCalmShown, useIdle } from "~/calm/idle"
+import { isCalmKey, showCalm, useCalmShown, useIdle } from "~/calm/idle"
 import { Boundary } from "~/kit/boundary"
 import { later } from "~/kit/later"
 import { Toasts, useToasts } from "~/kit/toasts"
@@ -95,6 +95,17 @@ export function Root({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => voi
 function CalmWatch({ minutes }: { minutes: number }) {
   const shown = useCalmShown()
   useIdle(minutes, shown)
+  useEffect(() => {
+    if (shown) return
+    const onKey = (e: KeyboardEvent): void => {
+      if (!isCalmKey(e) || e.repeat) return
+      e.preventDefault()
+      e.stopPropagation()
+      showCalm()
+    }
+    window.addEventListener("keydown", onKey, { capture: true })
+    return () => window.removeEventListener("keydown", onKey, { capture: true })
+  }, [shown])
   return shown ? (
     <Suspense fallback={null}>
       <Calm />
