@@ -60,6 +60,7 @@ def main() -> None:
     win.add(Gtk.Label(label="a browser, in front of Channels"))
     win.connect("destroy", Gtk.main_quit)
     win.connect("notify::is-active", active)
+    win.add_events(Gdk.EventMask.BUTTON_PRESS_MASK)
     win.connect("button-press-event", pressed)
     win.show_all()
     GLib.timeout_add(200, poll, sys.argv[1])
