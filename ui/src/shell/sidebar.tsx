@@ -19,7 +19,9 @@ const SideCards = later(() => import("~/shell/updates").then((m) => m.SideCards)
 export function Sidebar({ channel }: { channel: Channel }) {
   const { nav, go } = useApp()
   const { actions } = useAct()
-  const humans = onePerPerson(channel.people.filter((p) => p.kind === "human")).filter((p) => !p.you && !p.left)
+  const people = onePerPerson(channel.people.filter((p) => p.kind === "human")).filter((p) => !p.left)
+  const me = people.find((p) => p.you)
+  const humans = people.filter((p) => !p.you)
   const agents = channel.people.filter((p) => p.kind === "agent" && !p.left).sort((a, b) => rank(a) - rank(b))
   const listed = new Set([...humans, ...agents].map((p) => p.name))
   const directOf = new Map(channel.directs.map((d) => [d.with, d]))
@@ -82,10 +84,11 @@ export function Sidebar({ channel }: { channel: Channel }) {
         </ul>
       </section>
 
-      {(humans.length > 0 || leftPeople.length > 0 || channel.youOwn) && (
+      {(me || humans.length > 0 || leftPeople.length > 0 || channel.youOwn) && (
         <section aria-label="People">
           <Heading action={channel.youOwn ? <IconButton icon="plus" label="Invite people" onClick={() => go({ to: "modal", modal: { kind: "invite" } })} /> : undefined}>People</Heading>
           <ul>
+            {me && <You person={me} />}
             {humans.map((p) => (
               <Member key={p.name} person={p} channel={channel} direct={directOf.get(p.name)} />
             ))}
@@ -205,6 +208,19 @@ function Former({ channel, direct }: { channel: Channel; direct: Direct }) {
         <span className={agent ? "side-name" : "side-label"}>{nickname(channel, direct.with)}</span>
         {agent && <span className="side-state">left</span>}
         <Count n={direct.unread} loud />
+      </button>
+    </li>
+  )
+}
+
+function You({ person }: { person: Person }) {
+  const { go } = useApp()
+  return (
+    <li>
+      <button type="button" className="side-row side-member" title="Your profile" onClick={() => go({ to: "modal", modal: { kind: "person", name: person.name } })}>
+        <Avatar person={person} size="sm" pip />
+        <span className="side-name">{shown(person)}</span>
+        <span className="side-state">you</span>
       </button>
     </li>
   )

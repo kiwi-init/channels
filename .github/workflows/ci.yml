@@ -374,6 +374,9 @@ jobs:
       - name: ui muting a room dims it in the sidebar, in WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-mute-room.ts --dist ui/dist
+      - name: ui People lists you first, and your row opens your profile, in WebKit
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-people-you.ts --dist ui/dist
       - name: ui settings, profiles, Invite and Add an agent open in one modal that Esc, a click outside and Back close, with focus kept inside, in WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-modal.ts --dist ui/dist
