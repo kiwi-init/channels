@@ -13,12 +13,12 @@ info() { echo "     [$tag] $*" | tee -a "$results"; }
 
 kwin_log="$logs/$tag-kwin.log"
 unset DISPLAY XDG_CURRENT_DESKTOP KDE_FULL_SESSION KDE_SESSION_VERSION
-QT_LOGGING_RULES="kwin_scripting.debug=true;kwin_core.debug=true" kwin_wayland --virtual --no-lockscreen --socket kiwi-raise --width 1280 --height 800 > "$kwin_log" 2>&1 &
+QT_FORCE_STDERR_LOGGING=1 QT_LOGGING_RULES="kwin_scripting.debug=true;kwin_core.debug=true" kwin_wayland --virtual --no-lockscreen --socket kiwi-raise --width 1280 --height 800 > "$kwin_log" 2>&1 &
 kwin=$!
 for _ in $(seq 1 100); do [ -S "$XDG_RUNTIME_DIR/kiwi-raise" ] && break; sleep 0.2; done
 [ -S "$XDG_RUNTIME_DIR/kiwi-raise" ] || { bad "KWin didn't start: $(tail -n 3 "$kwin_log" | tr '\n' ' ' | cut -c1-300)"; exit 0; }
 export HOME="$home" WAYLAND_DISPLAY=kiwi-raise XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=KDE KDE_FULL_SESSION=true KDE_SESSION_VERSION=6 GSETTINGS_BACKEND=keyfile
-info "$(kwin_wayland --version 2>&1 | head -n 1) on native Wayland, with focus stealing prevention as Plasma ships it"
+info "KWin $(pacman -Q kwin 2> /dev/null | cut -d" " -f2) on native Wayland, with focus stealing prevention as Plasma ships it"
 
 active() { python3 "$here/kwin.py" active "$kwin_log"; }
 front() { python3 "$here/kwin.py" front "$kwin_log"; }
