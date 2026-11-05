@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react"
 import { startClouds } from "~/calm/clouds"
 
 const STILL = "(prefers-reduced-motion: reduce)"
-const FILL = { position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", background: "radial-gradient(120% 90% at 50% 100%, #151515 0%, #050505 70%)" } as const
+const FILL = { position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", background: "linear-gradient(to top, #a8cdf2 0%, #2157b8 100%)" } as const
 
 export default function Sky() {
   const canvas = useRef<HTMLCanvasElement>(null)

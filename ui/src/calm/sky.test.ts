@@ -15,7 +15,7 @@ describe("the Calm sky draws soft clouds within a pixel budget (T4204)", () => {
   test("a laptop window draws below its device pixels, scaled up by the browser", () => {
     const scale = scaleFor(1512, 982, 2)
     expect(scale).toBeLessThan(2)
-    expect(1512 * scale * 982 * scale).toBeLessThanOrEqual(2_000_001)
+    expect(1512 * scale * 982 * scale).toBeLessThanOrEqual(1_500_001)
   })
 
   test("a small window draws at its device pixels, never more", () => {

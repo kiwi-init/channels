@@ -9,6 +9,7 @@ uniform vec2 size;
 uniform float time;
 uniform float later;
 uniform float blend;
+uniform sampler2D grain;
 out vec4 color;
 
 float hash(vec2 p) {
@@ -20,8 +21,7 @@ float hash(vec2 p) {
 float noise(vec2 p) {
   vec2 i = floor(p);
   vec2 f = fract(p);
-  vec2 u = f * f * (3.0 - 2.0 * f);
-  return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
+  return texture(grain, (i + f * f * (3.0 - 2.0 * f) + 0.5) / 256.0).r;
 }
 
 const mat2 TURN = mat2(1.6, 1.2, -1.2, 1.6);
@@ -38,41 +38,50 @@ float fbm(vec2 p, int octaves) {
   return sum;
 }
 
-float density(vec2 p, float t, float speed, int octaves) {
+vec4 layer(vec2 uv, float t, float scale, float speed, float cover, int octaves, vec2 sun, vec3 air, float haze) {
+  vec2 p = uv * scale;
   vec2 flow = vec2(t * speed, t * speed * 0.12);
   vec2 warp = vec2(fbm(p * 0.6 + flow * 0.4, 3), fbm(p * 0.6 + vec2(5.2, 1.3) - flow * 0.3, 3));
-  return fbm(p + flow + 0.9 * warp, octaves);
-}
-
-vec4 layer(vec2 uv, float t, float scale, float speed, float cover, float bright, int octaves, vec2 sun) {
-  vec2 p = uv * scale;
-  float d = density(p, t, speed, octaves);
-  float edge = smoothstep(cover, cover + 0.14, d);
-  float toward = density(p + sun * 0.18, t, speed, 4);
-  float lit = clamp(0.62 + 3.2 * (d - toward), 0.0, 1.0);
-  float body = smoothstep(cover, cover + 0.45, d);
-  float shade = mix(0.34, 1.0, lit) * mix(1.0, 0.72, body) * bright;
-  float rim = (1.0 - smoothstep(cover, cover + 0.07, d)) * edge * 0.5;
-  return vec4(vec3(shade + rim * bright), edge);
+  vec2 q = p + flow + 0.9 * warp;
+  float d = fbm(q, octaves);
+  float edge = smoothstep(cover, cover + 0.12, d);
+  float toward = fbm(q + sun * 0.16, 3);
+  float below = fbm(q - vec2(0.0, 0.12), 2);
+  float lit = clamp(0.55 + 5.0 * (d - toward), 0.0, 1.0);
+  float under = clamp(2.4 * (below - cover), 0.0, 1.0);
+  float body = smoothstep(cover, cover + 0.5, d);
+  vec3 bright = vec3(1.0, 0.99, 0.96);
+  vec3 shadow = vec3(0.47, 0.54, 0.68);
+  vec3 c = mix(shadow, bright, clamp(lit * (1.0 - 0.5 * body) + 0.3 * (1.0 - under), 0.0, 1.0));
+  c += vec3(1.0, 0.97, 0.9) * (1.0 - smoothstep(cover, cover + 0.06, d)) * edge * 0.35;
+  c = mix(c, air, haze);
+  return vec4(c, edge);
 }
 
 vec3 sky(vec2 frag, float t) {
   vec2 uv = frag / size.y;
-  float y = frag.y / size.y;
+  vec2 at = frag / size;
+  float y = at.y;
   float drift = 0.5 + 0.5 * sin(t * 0.021);
   float turn = t * 0.004;
   vec2 sun = normalize(vec2(-0.55 + 0.25 * cos(turn), 0.8 + 0.2 * sin(turn * 1.7)));
-  float light = mix(0.82, 1.0, 0.5 + 0.5 * sin(t * 0.026 + 1.3));
-  vec3 c = mix(vec3(0.19), vec3(0.045), smoothstep(0.0, 1.0, y));
-  c += vec3(0.06) * light * exp(-4.0 * y);
-  vec4 far = layer(uv + vec2(0.0, 0.3), t, 5.2, 0.007, mix(0.54, 0.6, drift), 0.46 * light, 5, sun);
-  c = mix(c, far.rgb, far.a * 0.8);
-  vec4 mid = layer(uv + vec2(7.3, 0.1), t, 3.0, 0.011, mix(0.53, 0.59, 1.0 - drift), 0.64 * light, 5, sun);
+  vec2 sunAt = vec2(0.78 + 0.08 * cos(turn), 0.86 + 0.05 * sin(turn * 1.7));
+  float light = mix(0.9, 1.0, 0.5 + 0.5 * sin(t * 0.026 + 1.3));
+  vec3 zenith = vec3(0.13, 0.34, 0.72);
+  vec3 horizon = vec3(0.66, 0.8, 0.95);
+  vec3 c = mix(horizon, zenith, pow(smoothstep(0.0, 1.0, y), 0.8));
+  float glow = exp(-5.5 * length((at - sunAt) * vec2(size.x / size.y, 1.0)));
+  c = mix(c, vec3(1.0, 0.98, 0.92), clamp(glow * 0.4 + pow(glow, 5.0) * 0.9, 0.0, 1.0));
+  vec3 air = mix(c, horizon, 0.5);
+  vec4 far = layer(uv + vec2(0.0, 0.3), t, 5.0, 0.007, mix(0.5, 0.56, drift), 5, sun, air, 0.45);
+  c = mix(c, far.rgb, far.a * 0.75);
+  vec4 mid = layer(uv + vec2(7.3, 0.1), t, 2.8, 0.011, mix(0.47, 0.53, 1.0 - drift), 5, sun, air, 0.2);
   c = mix(c, mid.rgb, mid.a * 0.92);
-  vec4 near = layer(uv + vec2(3.1, -0.2), t, 1.7, 0.016, 0.56, 0.84 * light, 6, sun);
-  c = mix(c, near.rgb, near.a * smoothstep(1.0, 0.25, y));
-  vec2 v = frag / size - 0.5;
-  c *= 1.0 - 0.5 * dot(v, v);
+  vec4 near = layer(uv + vec2(3.1, -0.2), t, 1.6, 0.016, 0.5, 6, sun, air, 0.0);
+  c = mix(c, near.rgb, near.a * smoothstep(1.05, 0.2, y));
+  c *= light;
+  vec2 v = at - 0.5;
+  c *= 1.0 - 0.22 * dot(v, v);
   return c;
 }
 
@@ -84,7 +93,7 @@ void main() {
 }
 `
 
-const BUDGET = 2_000_000
+const BUDGET = 1_500_000
 const STILL_EVERY = 30_000
 const STILL_FADE = 4_000
 const STILL_STEP = 45
@@ -146,7 +155,20 @@ export function startClouds(canvas: HTMLCanvasElement, options: CloudOptions = {
   const time = gl.getUniformLocation(linked, "time")
   const later = gl.getUniformLocation(linked, "later")
   const blend = gl.getUniformLocation(linked, "blend")
+  const grain = gl.createTexture()
+  const values = new Uint8Array(256 * 256)
+  for (let i = 0; i < values.length; i++) values[i] = Math.floor(Math.random() * 256)
+  gl.activeTexture(gl.TEXTURE0)
+  gl.bindTexture(gl.TEXTURE_2D, grain)
+  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1)
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, 256, 256, 0, gl.RED, gl.UNSIGNED_BYTE, values)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT)
+  gl.uniform1i(gl.getUniformLocation(linked, "grain"), 0)
 
+  const probe = new Uint8Array(4)
   const seed = options.seed ?? (Date.now() / 1000) % 5000
   const began = performance.now()
   let frame = 0
@@ -182,7 +204,7 @@ export function startClouds(canvas: HTMLCanvasElement, options: CloudOptions = {
     const start = options.measure ? performance.now() : 0
     gl.drawArrays(gl.TRIANGLES, 0, 3)
     if (options.measure) {
-      gl.finish()
+      gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, probe)
       options.measure(performance.now() - start)
     }
   }
@@ -240,6 +262,7 @@ export function startClouds(canvas: HTMLCanvasElement, options: CloudOptions = {
       canvas.removeEventListener("webglcontextlost", onLost)
       if (!lost) {
         gl.deleteBuffer(buffer)
+        gl.deleteTexture(grain)
         gl.deleteProgram(linked)
         gl.getExtension("WEBGL_lose_context")?.loseContext()
       }

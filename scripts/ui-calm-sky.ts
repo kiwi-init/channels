@@ -7,7 +7,7 @@ import { chromium, webkit, type Page } from "playwright-core";
 if (process.argv.includes("--help")) {
   console.log(`The Calm sky (T4204) in a bare page: it checks the clouds draw with contrast, drift, hold still for reduced motion,
 pause while the window is hidden, change nothing in the DOM per frame, and free their GL context on stop. Then it prints
-frame times: the rAF interval and each frame's GPU cost (draw + gl.finish), p50 and p99, at a MacBook Pro 14" size, 2x.
+frame times: the rAF interval and each frame's GPU cost (draw + a 1-pixel readback), p50 and p99, at a MacBook Pro 14" size, 2x.
 The times are printed, never gated (Jow #850).
 
   bun scripts/ui-calm-sky.ts [--chromium] [--seconds=6] [--width=1512] [--height=982] [--shot=sky.png] [--seed=1200]`);
@@ -212,7 +212,7 @@ try {
   if (SHOT) await timed.screenshot({ path: SHOT });
   await timed.evaluate(() => sky.stop());
   console.log(`  ${ENGINE} ${WIDTH}x${HEIGHT}@2x, drawn at ${size}: rAF interval p50 ${pct(gaps, 0.5).toFixed(2)} ms, p99 ${pct(gaps, 0.99).toFixed(2)} ms (${gaps.length} frames)`);
-  console.log(`  frame cost (draw + gl.finish) p50 ${pct(costs, 0.5).toFixed(2)} ms, p99 ${pct(costs, 0.99).toFixed(2)} ms (${costs.length} frames); 120 Hz needs ≤ 8.3 ms`);
+  console.log(`  frame cost (draw + a 1-pixel readback) p50 ${pct(costs, 0.5).toFixed(2)} ms, p99 ${pct(costs, 0.99).toFixed(2)} ms (${costs.length} frames); 120 Hz needs ≤ 8.3 ms`);
   check(errors.length === 0, `no page errors${errors.length ? `: ${errors.join("; ")}` : ""}`);
 } finally {
   await browser.close();
