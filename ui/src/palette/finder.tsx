@@ -347,7 +347,10 @@ function collect(app: App, nav: Nav, go: (go: Go) => void, debug: boolean): Item
       label: `Earlier versions of ${versions.name === "This conversation" ? "this doc" : `the ${versions.name} doc`}`,
       keys: ["restore", "history", "undo", "doc"],
       lead: <Icon name="spec" size={14} />,
-      run: () => go({ to: "modal", modal: { kind: "versions", thread: versions.thread, name: versions.name } }),
+      run: () => {
+        close()
+        go({ to: "modal", modal: { kind: "versions", thread: versions.thread, name: versions.name } })
+      },
     })
 
   if (debug)
