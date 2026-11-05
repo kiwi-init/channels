@@ -36,7 +36,8 @@ permissions:
 # One job per area, its checks as steps: each job pays for one checkout and one install.
 # A step that fails doesn't stop the checks after it (`!cancelled()`), so one run shows every failure.
 jobs:
-  # Which jobs run: a pull request runs repo / static and test / unit; a dispatch runs the jobs it
+  # Which jobs run: a pull request runs repo / static and test / unit (a release's stamp PR, titled
+  # "kiwi YYYY.M.PATCH", also cli / macos: the release's Mac tests and packing); a dispatch runs the jobs it
   # names (all when it names none); a push to main and a merge group run everything.
   plan:
     runs-on: ubuntu-latest
@@ -48,10 +49,11 @@ jobs:
         env:
           EVENT: ${{ github.event_name }}
           JOBS: ${{ inputs.jobs }}
+          TITLE: ${{ github.event.pull_request.title }}
         run: |
           all="static test-unit test-flows build doc fuzz shots desktop-mac desktop-linux desktop-distros cli-macos ios android"
           case "$EVENT" in
-            pull_request) pick="static test-unit" ;;
+            pull_request) pick="static test-unit"; if echo "$TITLE" | grep -qE '^kiwi [0-9]{4}\.[0-9]{1,2}\.[0-9]+(-rc\.[0-9]+)?$'; then pick="$pick cli-macos"; fi ;;
             workflow_dispatch) pick=$(echo "${JOBS:-$all}" | tr ',' ' ') ;;
             *) pick="$all" ;;
           esac
@@ -818,6 +820,14 @@ jobs:
           printf 'require("node:fs").writeFileSync("preload-ran", "")\n' > "$probe/p.js"
           (cd "$probe" && "$GITHUB_WORKSPACE/dist/kiwi-darwin-arm64" --version)
           test ! -e "$probe/preload-ran" || { echo "the kiwi CLI ran a bunfig.toml preload from the folder it was started in"; exit 1; }
+      - name: pack, as the release does
+        run: |
+          cd dist
+          for f in kiwi-*; do
+            gzip -9 -n -k "$f"
+            xz -9 -T0 -k "$f"
+          done
+          bun ../scripts/cli-downloads.ts .
 
   # The iPhone app: Swift lint, then an unsigned build for devices with the engine bundled in.
   ios:
