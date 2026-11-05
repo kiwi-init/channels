@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { appMenu, menuAction, shortcutAction, textStepOf, trayItems, type AppMenuItem } from "../desktop/src/app-menus.ts";
-import { claimInstance, handoffFor, launchArgs, LOCK_FILE, readHandoff, SOCKET_FILE, type Handoff, type Instance } from "../desktop/src/single-instance.ts";
+import { claimInstance, handoffFor, launchArgs, launchToken, LOCK_FILE, readHandoff, SOCKET_FILE, type Handoff, type Instance } from "../desktop/src/single-instance.ts";
 import { slept, watchWake, type WakeClock } from "../desktop/src/wake.ts";
 
 const dirs: string[] = [];
@@ -161,6 +161,35 @@ describe("what a start hands over", () => {
     expect(handoffFor(["/Applications/Channels.app/Contents/MacOS/launcher", "kiwi://join/abc"], "kiwi")).toEqual({ kind: "link", url: "kiwi://join/abc" });
     expect(handoffFor(["/usr/bin/channels-desktop", "--flag"], "kiwi")).toEqual({ kind: "show" });
     expect(handoffFor([`kiwi://join/${"x".repeat(3000)}`], "kiwi")).toEqual({ kind: "show" });
+  });
+
+  test("a Linux start hands over its launch's activation token, so the open window can be raised on Wayland (T5063)", () => {
+    const environ =
+      (...vars: string[]) =>
+      () =>
+        [...vars, ""].join("\0");
+    expect(launchToken("linux", environ("HOME=/home/ana", "XDG_ACTIVATION_TOKEN=kwin-42"))).toBe("kwin-42");
+    expect(launchToken("linux", environ("DESKTOP_STARTUP_ID=gnome-7_TIME99"))).toBe("gnome-7_TIME99");
+    expect(launchToken("linux", environ("DESKTOP_STARTUP_ID=x11-1", "XDG_ACTIVATION_TOKEN=kwin-43"))).toBe("kwin-43");
+    expect(launchToken("linux", environ("XDG_ACTIVATION_TOKEN=", "DESKTOP_STARTUP_ID=gnome-8"))).toBe("gnome-8");
+    expect(launchToken("linux", environ("XDG_ACTIVATION_TOKEN=two words"))).toBeUndefined();
+    expect(launchToken("linux", environ(`XDG_ACTIVATION_TOKEN=${"t".repeat(513)}`))).toBeUndefined();
+    expect(launchToken("darwin", environ("XDG_ACTIVATION_TOKEN=kwin-42"))).toBeUndefined();
+    expect(handoffFor(["/usr/bin/channels-desktop", "kiwi://join/abc"], "kiwi", "kwin-42")).toEqual({ kind: "link", url: "kiwi://join/abc", token: "kwin-42" });
+    expect(handoffFor(["/usr/bin/channels-desktop"], "kiwi", "kwin-42")).toEqual({ kind: "show", token: "kwin-42" });
+    expect(handoffFor(["/usr/bin/channels-desktop"], "kiwi", "bad\ntoken")).toEqual({ kind: "show" });
+    expect(readHandoff('{"kind":"link","url":"kiwi://join/x","token":"kwin-42"}', "kiwi")).toEqual({ kind: "link", url: "kiwi://join/x", token: "kwin-42" });
+    expect(readHandoff('{"kind":"show","token":"kwin-42"}', "kiwi")).toEqual({ kind: "show", token: "kwin-42" });
+    for (const bad of ['{"kind":"show","token":7}', '{"kind":"show","token":""}', '{"kind":"show","token":"a b"}', `{"kind":"show","token":"${"t".repeat(513)}"}`])
+      expect(readHandoff(bad, "kiwi")).toBeNull();
+  });
+
+  test("the token reaches the open window over the socket (T5063)", async () => {
+    const dir = fresh();
+    const got: Handoff[] = [];
+    await claim(dir, { kind: "show" }, got);
+    expect(await claim(dir, { kind: "link", url: "kiwi://join/abc", token: "kwin-42" })).toEqual({ kind: "second", delivered: true });
+    expect(got).toEqual([{ kind: "link", url: "kiwi://join/abc", token: "kwin-42" }]);
   });
 
   test("only show and a link of at most 2 KB are read back", () => {

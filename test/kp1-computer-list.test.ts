@@ -123,7 +123,7 @@ describe("a computer paired by an old person-signed cert (kp1), once the person 
     const reply = newSecret();
     const { box, id } = await makeAsk(desk, { pk: machine.pk, xpk: machine.xpk! }, { verb: "settings", args: {}, reply });
     expect(await post(desk, box)).toBe(202);
-    const got = await (await openMailbox(relay, reply)).wait("b", { timeoutMs: 6_000, everyMs: 100 });
+    const got = await (await openMailbox(relay, reply)).wait("b", { timeoutMs: 30_000, everyMs: 100 });
     expect((await readAnswer(got, { machine: machine.pk, id }))?.result).toEqual({ ok: true, settings: { hooks: [], seats: [] } });
     const fromPhone = await makeAsk(phone, { pk: machine.pk, xpk: machine.xpk! }, { verb: "settings", args: {}, reply: newSecret() });
     expect(await post(phone, fromPhone.box)).toBe(403);

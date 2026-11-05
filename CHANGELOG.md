@@ -13,6 +13,7 @@ Written by `bun scripts/changelog.ts` from each squash-merged pull request's tit
 - **Docs: restore an earlier version (T4606)** ([#1736](https://github.com/kiwi-init/channels/pull/1736))
 - **Calm: the loop plays in the packaged app, as a video/mp4 blob (T4983)** ([#1742](https://github.com/kiwi-init/channels/pull/1742))
 - **ui: ⌘T / Ctrl+T toggles Calm (spec #5002)** ([#1743](https://github.com/kiwi-init/channels/pull/1743))
+- **Linux: a kiwi:// link raises the running window on Wayland (T5063)** ([#1749](https://github.com/kiwi-init/channels/pull/1749))
 
 ## 2026.11.9 — 2026-11-05
 

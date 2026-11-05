@@ -17,11 +17,11 @@ export function takeDeepLink(): string | null {
 
 const opensChannel = (link: unknown): string | null => (typeof link === "string" && link.length <= MAX_LINK && link.startsWith(`${JOIN_SCHEME}://join/`) ? link : null);
 
-export function handleDeepLink(url: string): void {
+export function handleDeepLink(url: string, token?: string): void {
   if (!opensChannel(url)) return;
   opened += 1;
   deepLink = url;
   const shell = host();
   shell.push("deepLink", url);
-  if (shell.app.ready()) shell.showWindow();
+  if (shell.app.ready()) shell.showWindow(token);
 }

@@ -31,6 +31,7 @@ export function desktopEntry(exec: string, version?: string): string {
     `Icon=${EXECUTABLE}`,
     "Terminal=false",
     `StartupWMClass=${APP_FOLDER}`,
+    "StartupNotify=true",
     "Categories=Utility;",
     "MimeType=x-scheme-handler/kiwi;",
     ...(version ? [`X-AppImage-Version=${version}`] : []),

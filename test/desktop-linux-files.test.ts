@@ -25,6 +25,7 @@ describe("the Linux AppImage made from Electrobun's bundle (T444)", () => {
     expect(entry).toContain("Name=Channels\n");
     expect(entry).toContain("Exec=channels-desktop %U\n");
     expect(entry).toContain("StartupWMClass=Channels\n");
+    expect(entry).toContain("StartupNotify=true\n");
     expect(entry).toContain("MimeType=x-scheme-handler/kiwi;\n");
     expect(entry).toContain("Icon=channels-desktop\n");
     expect(entry).not.toContain("X-AppImage-Version");
