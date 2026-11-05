@@ -41,6 +41,7 @@ export async function firstChannel(d: Driver, messages: number): Promise<void> {
     );
   const probe = 2_000;
   await step("the onboarding", 60_000, () => d.evaluate(clickButton, { name: "continue", within: ".onb" }, probe));
+  await step("the onboarding's second screen", 10_000, () => d.evaluate(clickButton, { name: "continue", within: ".onb:has(.onb-wire)" }, probe));
   await step("the pledge", 10_000, () => d.evaluate(fillIn, { selector: ".onb input", value: "Channels is not a harness" }, probe));
   await step("the name field", 60_000, () => d.evaluate(fillIn, { selector: 'input[aria-label="Your name"]', value: "Jonatas" }, probe));
   await step("Continue", 10_000, () => d.evaluate(clickButton, { name: "Continue", within: "body" }, probe));

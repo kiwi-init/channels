@@ -37,6 +37,8 @@ export async function passOnboarding(page: Page): Promise<void> {
     .waitFor();
   if (!(await next.isVisible())) return;
   await next.click();
+  await page.locator(".onb-wire").waitFor();
+  await next.click();
   await page.getByRole("textbox", { name: `Type “${PLEDGE}” to begin` }).pressSequentially(PLEDGE);
 }
 
