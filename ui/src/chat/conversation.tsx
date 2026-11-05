@@ -278,10 +278,11 @@ export function useStick(following = true, still = false) {
       if (held.current === on) return
       held.current = on
       if (on) {
-        stuck.current = false
         const box = scroller.current
         const list = content.current
-        anchor.current = box && list ? ((still ? caretIn(box, list) : null) ?? anchorIn(box, list)) : null
+        stuck.current = false
+        const kept = still && list && anchor.current && caretEl(list) === anchor.current.el ? anchor.current : null
+        anchor.current = kept ?? (box && list ? ((still ? caretIn(box, list) : null) ?? anchorIn(box, list)) : null)
       } else remember()
     },
     [remember, still]
@@ -461,7 +462,10 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
   useLayoutEffect(() => {
     const before = lastSeq.current
     lastSeq.current = last?.seq ?? 0
-    if (!last || last.seq === before) return
+    if (!last || last.seq === before) {
+      if (doc) settle()
+      return
+    }
     const arriving = before ? list.filter((m) => m.seq > before) : []
     if (arriving.length <= 3) {
       for (const m of arriving) {
