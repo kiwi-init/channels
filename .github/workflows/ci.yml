@@ -233,6 +233,13 @@ jobs:
           bun scripts/ui-doc-steady.ts || status=1
           bun scripts/ui-doc-steady.ts --webkit || status=1
           exit "$status"
+      - name: msg edit, an agent's edited message keeps its text on screen through every edit, in Chromium and WebKit
+        if: ${{ !cancelled() }}
+        run: |
+          status=0
+          bun scripts/ui-msg-edit.ts || status=1
+          bun scripts/ui-msg-edit.ts --webkit || status=1
+          exit "$status"
       - name: doc slash menu, the doc's / menu opens on screen and keeps its rows inside its box, in Chromium and WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-doc-slash-menu.ts
