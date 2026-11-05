@@ -1,8 +1,8 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 
-import { linesOf, updateDays, type EventLine, type TaskRun } from "~/chat/fold-events"
+import { linesOf, type EventLine, type TaskRun } from "~/chat/fold-events"
 import { cx, Dot, statusWord } from "~/kit/bits"
-import { clock, day } from "~/kit/time"
+import { clock, day, sameDay } from "~/kit/time"
 import type { Channel, Message, Task } from "~/model"
 import { useApp } from "~/nav"
 import { nickname } from "~/names"
@@ -11,46 +11,46 @@ const PAGE = 60
 
 interface Props {
   channel: Channel
-  updates: readonly Message[]
+  runs: readonly Message[][]
   here: number | null
   jump: number | null
 }
 
-export function Updates({ channel, updates, here, jump }: Props) {
+export function Updates({ channel, runs, here, jump }: Props) {
   const [open, setOpen] = useState(false)
   const close = useCallback(() => setOpen(false), [])
-  const target = jump !== null && updates.some((m) => m.seq === jump) ? jump : null
+  const target = jump !== null && runs.some((r) => r.some((m) => m.seq === jump)) ? jump : null
   const [opened, setOpened] = useState<number | null>(null)
   if (target !== opened) {
     setOpened(target)
     if (target !== null) setOpen(true)
   }
-  if (!updates.length) return null
+  if (!runs.length) return null
   return (
     <div className="updates">
       <button type="button" className={cx("updates-toggle", open && "is-on")} data-updates-toggle aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen(!open)}>
         Updates
-        <span className="num">{updates.length}</span>
       </button>
-      {open && <Panel channel={channel} updates={updates} here={here} target={target} onClose={close} />}
+      {open && <Panel channel={channel} runs={runs} here={here} target={target} onClose={close} />}
     </div>
   )
 }
 
 type Item = { kind: "day"; at: number } | { kind: "line"; line: EventLine }
 
-function Panel({ channel, updates, here, target, onClose }: { channel: Channel; updates: readonly Message[]; here: number | null; target: number | null; onClose: () => void }) {
+function Panel({ channel, runs, here, target, onClose }: { channel: Channel; runs: readonly Message[][]; here: number | null; target: number | null; onClose: () => void }) {
   const tasks = useMemo(() => new Map(channel.tasks.map((t) => [t.id, t])), [channel.tasks])
-  const items = useMemo(
-    () =>
-      updateDays(updates).flatMap((list): Item[] => [
-        { kind: "day", at: list[0]!.at },
-        ...linesOf(list, tasks)
-          .reverse()
-          .map((line): Item => ({ kind: "line", line })),
-      ]),
-    [updates, tasks]
-  )
+  const items = useMemo(() => {
+    const out: Item[] = []
+    let last: number | null = null
+    for (const run of [...runs].reverse()) {
+      const at = run[0]!.at
+      if (last === null || !sameDay(last, at)) out.push({ kind: "day", at })
+      last = at
+      for (const line of linesOf(run, tasks).reverse()) out.push({ kind: "line", line })
+    }
+    return out
+  }, [runs, tasks])
   const reach = target === null ? -1 : items.findIndex((i) => i.kind === "line" && (i.line.kind === "one" ? i.line.m.seq === target : i.line.list.some((m) => m.seq === target)))
   const [limit, setLimit] = useState(PAGE)
   const shownTo = Math.max(limit, reach + 1)

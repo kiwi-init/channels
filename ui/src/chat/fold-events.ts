@@ -23,21 +23,18 @@ const FOLD_AT = 3
 
 const isUpdate = (m: Message): boolean => !!m.system && !m.leftOut
 
-export function splitUpdates(list: readonly Message[]): { talk: Message[]; updates: Message[] } {
+export function splitUpdates(list: readonly Message[]): { talk: Message[]; runs: Message[][] } {
   const talk: Message[] = []
-  const updates: Message[] = []
-  for (const m of list) (isUpdate(m) ? updates : talk).push(m)
-  return { talk, updates }
-}
-
-export function updateDays(updates: readonly Message[]): Message[][] {
-  const days: Message[][] = []
-  for (const m of updates) {
-    const last = days[days.length - 1]
-    if (last?.[0] && sameDay(last[0].at, m.at)) last.push(m)
-    else days.push([m])
+  const runs: Message[][] = []
+  let run: Message[] | null = null
+  for (const m of list) {
+    if (!isUpdate(m)) {
+      talk.push(m)
+      run = null
+    } else if (run?.[0] && sameDay(run[0].at, m.at)) run.push(m)
+    else runs.push((run = [m]))
   }
-  return days.reverse()
+  return { talk, runs }
 }
 
 export function linesOf(run: readonly Message[], tasks: ReadonlyMap<number, Task>): EventLine[] {

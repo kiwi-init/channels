@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import type { GithubNote } from "@kiwi/core/protocol.ts"
-import { githubSummary, linesOf, splitUpdates, updateDays } from "~/chat/fold-events"
+import { githubSummary, linesOf, splitUpdates } from "~/chat/fold-events"
 import type { Message, Task } from "~/model"
 
 const general = { kind: "room", room: "general" } as const
@@ -42,18 +42,15 @@ describe("updates leave the thread", () => {
       ev(7, { github: [pr(9, "opened")] }),
       msg(8),
     ]
-    const { talk, updates } = splitUpdates(list)
+    const { talk, runs } = splitUpdates(list)
     expect(talk.map((m) => m.seq)).toEqual([1, 4, 6, 8])
-    expect(updates.map((m) => m.seq)).toEqual([2, 3, 5, 7])
+    expect(runs.map((r) => r.map((m) => m.seq))).toEqual([[2, 3], [5], [7]])
   })
 
-  test("the panel lists days newest first, each day in order", () => {
+  test("a run is the updates between two messages on one day, so each folds on its own", () => {
     const next = day + 86_400_000
-    const days = updateDays([ev(1), ev(2), ev(3, { at: next }), ev(4, { at: next + 60_000 })])
-    expect(days.map((d) => d.map((m) => m.seq))).toEqual([
-      [3, 4],
-      [1, 2],
-    ])
+    const { runs } = splitUpdates([ev(1), ev(2), msg(3), ev(4), ev(5, { at: next }), ev(6, { at: next + 60_000 })])
+    expect(runs.map((r) => r.map((m) => m.seq))).toEqual([[1, 2], [4], [5, 6]])
   })
 })
 

@@ -344,7 +344,7 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
       where
     )
   }, [channel.messages, channel.leftOut, channel.code, where, specAsks, doc, feeds])
-  const { talk: all, updates } = useMemo(() => splitUpdates(raw), [raw])
+  const { talk: all, runs } = useMemo(() => splitUpdates(raw), [raw])
   const general = where.kind === "room" && where.room === "general"
   const compact = general ? channel.compact : undefined
   const proposal = general ? channel.proposal : undefined
@@ -632,7 +632,7 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
   return (
     <div className={doc ? "feed-wrap is-doc" : "feed-wrap"}>
       {where.kind !== "theirs" && <QuotePick root={content} onQuote={quote} />}
-      <Updates channel={channel} updates={updates} here={where.kind === "task" ? where.task : null} jump={jump?.m.seq ?? null} />
+      <Updates channel={channel} runs={runs} here={where.kind === "task" ? where.task : null} jump={jump?.m.seq ?? null} />
       <div className="feed" ref={scroller} onScroll={onScroll}>
         <div className="feed-list" ref={content}>
           {list.length === 0 && !compact ? (

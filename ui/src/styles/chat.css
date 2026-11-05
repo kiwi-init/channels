@@ -2138,11 +2138,6 @@ button.msg-image-spot:hover {
   color: var(--ink);
 }
 
-.updates-toggle .num {
-  color: var(--ink-3);
-  font-variant-numeric: tabular-nums;
-}
-
 .updates-panel {
   display: flex;
   flex-direction: column;
