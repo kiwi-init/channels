@@ -10,7 +10,7 @@
 // agent and the dashboard call, run them and resolve or reject exactly as before.
 
 import type { Persona, Personality } from "./personality.ts";
-import { fromBase64, newRoomId, toBase64, type ChannelAccess } from "./crypto.ts";
+import { b64url, fromBase64, newRoomId, toBase64, type ChannelAccess } from "./crypto.ts";
 import type { Identity } from "./identity.ts";
 import type { JoinClaims, JoinRequest, Member, MemberInfo, PersonPowers } from "./membership.ts";
 import { isPerson, personOf, sentTo, withSeats, type RoomMember } from "./room-rules.ts";
@@ -154,6 +154,18 @@ export class Channel {
 
   closeDoc(thread: string): void {
     this.live.docs.close(thread);
+  }
+
+  async docVersionState(thread: string, th: string, upto: number): Promise<string | null> {
+    const env = await this.docVersion(th, upto);
+    const had = this.live.docs.has(thread);
+    const td = await this.live.docs.open(thread, th);
+    try {
+      const update = td.th === th ? await td.version(env) : null;
+      return update && b64url(update);
+    } finally {
+      if (!had) this.live.docs.close(thread);
+    }
   }
 
   async compactDoc(thread: string, th: string): Promise<boolean> {

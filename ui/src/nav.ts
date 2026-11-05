@@ -12,7 +12,7 @@ export type Panel = { kind: "task"; task: number } | { kind: "pr"; repo: string;
 
 export type ChannelTab = "general" | "rooms" | "github" | "notes"
 
-type ModalView = { kind: "person"; name: string } | { kind: "channel"; tab?: ChannelTab } | { kind: "invite" } | { kind: "add-agent" }
+type ModalView = { kind: "person"; name: string } | { kind: "channel"; tab?: ChannelTab } | { kind: "invite" } | { kind: "add-agent" } | { kind: "versions"; thread: string; name: string }
 
 type Dialog = "new-channel" | "new-room" | "join" | "palette" | null
 

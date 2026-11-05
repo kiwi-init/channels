@@ -7,6 +7,7 @@ import { GENERAL_ROOM, MAX_GOAL_NAME, MAX_SPEC, MAX_SPEC_NOTE, TASK_BODY_MAX_LEN
 import { taskId } from "@kiwi/core/state.ts"
 import { bridge } from "@kiwi/secrets/secrets.ts"
 import { changeBlock } from "~/chat/doc/change-block"
+export { restoreOf, versionsOf } from "~/chat/doc/restore-version"
 import { stepReplyText } from "~/chat/step"
 import { announce } from "~/kit/toasts"
 import { ownPrefs, setPrefs } from "~/live/prefs"

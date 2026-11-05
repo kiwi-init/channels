@@ -111,6 +111,8 @@ export class ChannelLink {
   docList = () => this.c("docList");
   pruneDocs = (...a: Args<"pruneDocs">) => this.c("pruneDocs", ...a);
   compactDoc = (...a: Args<"compactDoc">) => this.c("compactDoc", ...a);
+  docVersions = (...a: Args<"docVersions">) => this.c("docVersions", ...a);
+  docVersionState = (...a: Args<"docVersionState">) => this.c("docVersionState", ...a);
   setGithubRepos = (...a: Args<"setGithubRepos">) => this.c("setGithubRepos", ...a);
   drainGithub = () => this.c("drainGithub");
   syncGithubRules = (...a: Args<"syncGithubRules">) => this.c("syncGithubRules", ...a);

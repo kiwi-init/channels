@@ -520,6 +520,11 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       loadImage: () => {},
       openDoc: (code, thread, th, on) => openDemoDoc(code, thread, th, on),
       findDoc: async () => null,
+      docVersions: async () => {
+        const now = Date.now()
+        return [3, 26, 50, 75].map((hours, i) => ({ upto: 40 - i * 9, ts: now - hours * 3_600_000, bytes: 52_000 - i * 9_400 }))
+      },
+      restoreDocVersion: () => new Promise((done) => window.setTimeout(() => done(true), 600)),
       putDocImage: (_code, upload) => putDemoImage(upload),
       putDocFile: (_code, upload) => putDemoFile(upload),
       docImage: (_code, img) => demoImage(img),

@@ -32,6 +32,8 @@ export const SHOTS: Record<string, Shot> = {
   theirs: kiwi({ where: { kind: "theirs", between: ["atlas", "win"] } }),
   room: kiwi({ where: { kind: "room", room: "releases" } }),
   "room-private": kiwi({ where: { kind: "room", room: "launch-plan" } }),
+  "room-doc": { ...kiwi({ where: { kind: "room", room: "releases" } }), docs: 0 },
+  "doc-versions": { ...kiwi({ where: { kind: "room", room: "releases" }, modal: { kind: "versions", thread: "room:releases", name: "#releases" } }), docs: 0 },
   tasks: kiwi({ tab: "tasks" }),
   agents: kiwi({ tab: "agents" }),
   github: kiwi({ tab: "github" }),

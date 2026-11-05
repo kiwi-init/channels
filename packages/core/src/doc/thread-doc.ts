@@ -168,6 +168,11 @@ export class ThreadDoc {
     return this.queue(() => this.post(update, id));
   }
 
+  async version(env: { iv: string; ct: string; e?: number }): Promise<Uint8Array | null> {
+    const update = await this.open(env.iv, env.ct, env.e);
+    return update && update !== NO_KEY ? update : null;
+  }
+
   async compactNow(): Promise<boolean> {
     await this.whenSynced();
     return new Promise<boolean>((done) => {
