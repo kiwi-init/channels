@@ -13,7 +13,7 @@ info() { echo "     [$tag] $*" | tee -a "$results"; }
 
 kwin_log="$logs/$tag-kwin.log"
 unset DISPLAY XDG_CURRENT_DESKTOP KDE_FULL_SESSION KDE_SESSION_VERSION
-QT_FORCE_STDERR_LOGGING=1 QT_LOGGING_RULES="kwin_scripting.debug=true;kwin_core.debug=true" kwin_wayland --virtual --no-lockscreen --socket kiwi-raise --width 1280 --height 800 > "$kwin_log" 2>&1 &
+KWIN_WAYLAND_NO_PERMISSION_CHECKS=1 QT_FORCE_STDERR_LOGGING=1 QT_LOGGING_RULES="kwin_scripting.debug=true;kwin_core.debug=true" kwin_wayland --virtual --no-lockscreen --socket kiwi-raise --width 1280 --height 800 > "$kwin_log" 2>&1 &
 kwin=$!
 for _ in $(seq 1 100); do [ -S "$XDG_RUNTIME_DIR/kiwi-raise" ] && break; sleep 0.2; done
 [ -S "$XDG_RUNTIME_DIR/kiwi-raise" ] || { bad "KWin didn't start: $(tail -n 3 "$kwin_log" | tr '\n' ' ' | cut -c1-300)"; exit 0; }
@@ -64,6 +64,15 @@ for how in xdg-open gio; do
     kiwi-browser*) ;;
     *)
       bad "couldn't put another window in front of Channels before $how: $now"
+      continue
+      ;;
+  esac
+  where=$(python3 "$here/kwin.py" where "$kwin_log")
+  clicked=$(python3 "$here/click.py" $where 2>&1 | tail -n 1)
+  case "$clicked" in
+    "click: at"*) ;;
+    *)
+      bad "couldn't click the window in front before $how: $clicked"
       continue
       ;;
   esac

@@ -61,7 +61,7 @@ done
 
 id tester > /dev/null 2>&1 || useradd -m tester
 cp "$extract/Channels.AppImage" /home/tester/Channels.AppImage
-cp "$here/session.sh" "$here/update.sh" "$here/link.sh" "$here/raise.sh" "$here/browser.py" "$here/kwin.py" "$here/watcher.py" "$here/kwallet-login.py" "$here/secrets-cancel.py" /home/tester/
+cp "$here/session.sh" "$here/update.sh" "$here/link.sh" "$here/raise.sh" "$here/browser.py" "$here/kwin.py" "$here/click.py" "$here/watcher.py" "$here/kwallet-login.py" "$here/secrets-cancel.py" /home/tester/
 chmod +x /home/tester/Channels.AppImage
 chown -R tester: /home/tester
 
@@ -124,7 +124,7 @@ session gnome-keyring entry-fuse tray "$fuse_home" entry
 mounted entry-fuse /tmp/.mount_ "with fuse3, the entry's start mounts the AppImage"
 install xdg-utils kde-cli-tools firefox || exit 1
 as_tester bash /home/tester/link.sh "$fuse_home" "$results" "$out/logs"
-install kwin && as_tester bash /home/tester/raise.sh "$fuse_home" "$results" "$out/logs"
+install kwin python-pywayland plasma-wayland-protocols && as_tester bash /home/tester/raise.sh "$fuse_home" "$results" "$out/logs"
 if [ -n "$from" ]; then
   as_tester bash /home/tester/update.sh "$from" "$results" "$out/logs"
   entry_check /home/tester '"/home/tester/Applications/Channels.AppImage" %U'
