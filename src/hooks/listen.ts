@@ -99,21 +99,25 @@ const tune = Effect.fn("Hooks.tune")(function* ({ b, cfg }: Served, who: Here, w
   return { b, got, hearing: hearingAll, dropShown, from, reached: () => at, still: s.unheld };
 });
 
+type Tuned = Effect.Success<ReturnType<typeof tune>> & { release: () => void };
+type Arming = { kind: "armed"; tuned: Tuned } | { kind: "not-needed" } | { kind: "failed"; b: Binding; why: string };
+
 const arm = Effect.fn("Hooks.arm")(function* (seat: Served, who: Here, woke: Effect.Effect<void, never, Scope.Scope>) {
   const { b } = seat;
-  if (!wakeOn(loadConfig(), b.alias, b.as) || isListening(b.alias, b.as)) return null;
+  if (!wakeOn(loadConfig(), b.alias, b.as) || isListening(b.alias, b.as)) return { kind: "not-needed" } satisfies Arming;
   const slot = yield* Effect.promise(() => takeListenSlot(b.alias, b.as, who.session ?? "")).pipe(
     Effect.repeat({
       while: (got) => got === "unreachable" && (!who.pid || alive(who.pid)),
       schedule: Schedule.min([Schedule.exponential(SLOT_RETRY_FIRST_MS), Schedule.spaced(SLOT_RETRY_MAX_MS)]),
     }),
   );
-  if (typeof slot === "string") return null;
+  if (slot === "unreachable") return { kind: "not-needed" } satisfies Arming;
+  if (slot === "taken") return { kind: "failed", b, why: `another session holds the listen slot for ${b.as} in ${b.alias}` } satisfies Arming;
   const release = () => slot.close();
   yield* Effect.addFinalizer(() => Effect.sync(release));
   return yield* tune(seat, who, woke).pipe(
-    Effect.map((tuned) => ({ ...tuned, release })),
-    Effect.catchCause(() => Effect.sync(() => (release(), null))),
+    Effect.map((tuned): Arming => ({ kind: "armed", tuned: { ...tuned, release } })),
+    Effect.catchCause(() => Effect.sync((): Arming => (release(), { kind: "failed", b, why: `it couldn't open ${b.alias} to listen` }))),
   );
 });
 
@@ -175,7 +179,11 @@ export const listen = Effect.fn("Hooks.listen")(function* (served: readonly Serv
     heard += 1;
     return heard === 1 ? Effect.asVoid(Effect.forkScoped(Effect.andThen(Effect.sleep(400), Deferred.succeed(enough, undefined)))) : Effect.void;
   });
-  const armed = (yield* Effect.forEach(served, (seat) => arm(seat, who, woke).pipe(Effect.catchCause(() => Effect.succeed(null))))).filter((a) => a !== null);
+  const arming = yield* Effect.forEach(served, (seat) => arm(seat, who, woke).pipe(Effect.catchCause(() => Effect.succeed<Arming>({ kind: "failed", b: seat.b, why: "it couldn't start" }))));
+  for (const a of arming)
+    if (a.kind === "failed")
+      appendWakeRow(home(), { at: Date.now(), alias: a.b.alias, agent: a.b.as, via: via ?? "hooks", unread: 0, result: "failed", why: `the hook listener didn't arm: ${a.why}`, cursor: 0 });
+  const armed = arming.flatMap((a) => (a.kind === "armed" ? [a.tuned] : []));
   let failed = 0;
   const hear = ({ hearing, release }: (typeof armed)[number]) =>
     Effect.as(hearing, "heard" as const).pipe(

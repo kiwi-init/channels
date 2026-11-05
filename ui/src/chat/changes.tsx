@@ -28,6 +28,7 @@ function Tools({ channel, m }: { channel: Channel; m: Message }) {
       </button>
       {createPortal(
         <Modal
+          dismiss="outside"
           open={asking}
           onClose={stopAskingDelete}
           label="Delete this message?"

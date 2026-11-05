@@ -526,6 +526,7 @@ export function messagesOf(state: ChannelState, messages: readonly Wire[], me: s
       ...(ask ? { ask } : {}),
       ...(mentionsYou(m, me) ? { mentionsYou: true } : {}),
       ...(m.block ? { block: m.block.id } : {}),
+      ...(m.lean ? { partial: true as const } : {}),
     })
   }
   for (const p of pending) {

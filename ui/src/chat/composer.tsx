@@ -134,6 +134,7 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
     void job.finally(() => setReading((n) => n - 1))
   }
   const attach = (list: readonly File[]) => {
+    if (edit) return void toast("An edit changes only the text. Send the image in a new message.", "error")
     const room = MAX_FILES - files.length
     if (list.length > room) toast(`Up to ${MAX_FILES} images in one message`)
     for (const f of list.slice(0, Math.max(0, room))) {
@@ -240,7 +241,26 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
   const [edit, setEdit] = useState<Edit | null>(null)
   const at = useContext(EditHere)
   const editingSeq = useEditingIn(channel.code, at)
-  const editing = editingSeq === null ? undefined : channel.messages.find((m) => m.seq === editingSeq)
+  const found = editingSeq === null ? undefined : channel.messages.find((m) => m.seq === editingSeq)
+  const editing = found?.partial ? undefined : found
+  const partialSeq = found?.partial ? found.seq : null
+  const { holdEarlier, earlierTo } = app.actions
+  useEffect(() => {
+    if (partialSeq === null) return
+    let live = true
+    holdEarlier(channel.code, "edit", partialSeq)
+    void earlierTo(channel.code, partialSeq).then((ok) => {
+      if (!live || ok) return
+      toast("The whole message couldn't be loaded, so it can't be edited right now", "error")
+      stopEditing()
+    })
+    return () => {
+      live = false
+    }
+  }, [channel.code, partialSeq, holdEarlier, earlierTo, toast])
+  useEffect(() => {
+    if (editingSeq === null) holdEarlier(channel.code, "edit", null)
+  }, [channel.code, editingSeq, holdEarlier])
   const [editSeen, setEditSeen] = useState<number | undefined>(undefined)
   if (editing?.seq !== editSeen) {
     setEditSeen(editing?.seq)
@@ -478,7 +498,17 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
           </div>
         )}
         <div className="composer-row">
-          <button ref={plus} type="button" className="compose-attach" aria-label="Add an image or a GIF" title="Add an image or a GIF" aria-haspopup="menu" data-gif-toggle onClick={addMenu}>
+          <button
+            ref={plus}
+            type="button"
+            className="compose-attach"
+            aria-label="Add an image or a GIF"
+            title="Add an image or a GIF"
+            aria-haspopup="menu"
+            data-gif-toggle
+            disabled={!!edit}
+            onClick={addMenu}
+          >
             <Icon name="plus" />
           </button>
           <Suspense fallback={null}>

@@ -331,7 +331,10 @@ function collect(app: App, nav: Nav, go: (go: Go) => void, debug: boolean): Item
       keys: ["idle"],
       lead: <Icon name="moon" size={14} />,
       meta: <kbd className="palette-kbd">⌘T</kbd>,
-      run: showCalm,
+      run: () => {
+        close()
+        showCalm()
+      },
     }
   )
 

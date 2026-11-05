@@ -3,6 +3,7 @@ import { useState } from "react"
 import { PrChip } from "~/chat/cards"
 import { compactAt, useNames, useTaskIds } from "~/chat/conversation"
 import { MessageRow } from "~/chat/message"
+import { useWhole } from "~/chat/whole"
 import { Avatar, cx, Dot, Empty, statusWord } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { ago, clock } from "~/kit/time"
@@ -24,6 +25,7 @@ export function Inside({ channel, spec }: { channel: Channel; spec: Spec }) {
   const story = storyOf(channel, spec)
   const shown = all ? story : story.slice(-STORY_SHOWN)
   const messages = insideOf(channel, spec)
+  useWhole(channel.code, "spec", messages)
   const who = workersOf(channel, spec)
   const boxes = boxesOf(spec)
   const counted = tasks.filter((t) => !t.cancelled)

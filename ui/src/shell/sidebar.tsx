@@ -11,6 +11,7 @@ import { memberOf, type Channel, type Direct, type Person } from "~/model"
 import { sameWhere, useAct, useApp } from "~/nav"
 import { between, nickname, onePerPerson, shown } from "~/names"
 import { comingBack, hiddenKey, hiddenPlaces, keptHidden, setHidden } from "~/shell/hidden-places"
+import { leftDirects } from "~/shell/left-directs"
 import { SideFoot } from "~/shell/updates"
 
 export function Sidebar({ channel }: { channel: Channel }) {
@@ -20,7 +21,7 @@ export function Sidebar({ channel }: { channel: Channel }) {
   const agents = channel.people.filter((p) => p.kind === "agent" && !p.left).sort((a, b) => rank(a) - rank(b))
   const listed = new Set([...humans, ...agents].map((p) => p.name))
   const directOf = new Map(channel.directs.map((d) => [d.with, d]))
-  const orphans = channel.directs.filter((d) => !listed.has(d.with))
+  const { people: leftPeople, agents: leftAgents } = leftDirects(channel, listed)
   const onChat = nav.tab === "chat"
   const [openTheirs, setOpenTheirs] = useState(false)
   const onTheirs = onChat && nav.where.kind === "theirs"
@@ -44,8 +45,11 @@ export function Sidebar({ channel }: { channel: Channel }) {
     for (const key of back ? back.split(" ") : []) setHidden(key, false)
   }, [back])
   const shownRow = (key: string, on: boolean) => showHidden || on || !hidden.includes(key)
+  const showDm = (d: Direct) => shownRow(dmKey(d.with), onChat && sameWhere(nav.where, { kind: "dm", with: d.with }))
   const hiddenCount = channel.rooms.filter((r) => hidden.includes(roomKey(r.id))).length
-  const hiddenDirects = orphans.filter((d) => hidden.includes(dmKey(d.with))).length
+  const hiddenDirects = leftPeople.filter((d) => hidden.includes(dmKey(d.with))).length
+  const hiddenAgents = leftAgents.filter((d) => hidden.includes(dmKey(d.with))).length
+  const toggleHidden = () => setShowHidden(!showHidden)
   return (
     <div ref={sideRef} className="side">
       <section aria-label="Rooms">
@@ -72,54 +76,22 @@ export function Sidebar({ channel }: { channel: Channel }) {
               </li>
             )
           })}
-          {hiddenCount > 0 && (
-            <li>
-              <button type="button" className="side-row is-add" aria-expanded={showHidden} onClick={() => setShowHidden(!showHidden)}>
-                <Icon name={showHidden ? "down" : "chevron"} size={14} />
-                <span className="side-label">{showHidden ? "Show less" : `${hiddenCount} hidden`}</span>
-              </button>
-            </li>
-          )}
+          {hiddenCount > 0 && <HiddenRows count={hiddenCount} open={showHidden} toggle={toggleHidden} />}
         </ul>
       </section>
 
-      {(humans.length > 0 || orphans.length > 0 || channel.youOwn) && (
+      {(humans.length > 0 || leftPeople.length > 0 || channel.youOwn) && (
         <section aria-label="People">
           <Heading action={channel.youOwn ? <IconButton icon="plus" label="Invite people" onClick={() => go({ to: "modal", modal: { kind: "invite" } })} /> : undefined}>People</Heading>
           <ul>
             {humans.map((p) => (
               <Member key={p.name} person={p} channel={channel} direct={directOf.get(p.name)} />
             ))}
-            {orphans.map((d) => {
-              const where = { kind: "dm", with: d.with } as const
-              const on = onChat && sameWhere(nav.where, where)
-              const who = memberOf(channel, d.with)
-              if (!shownRow(dmKey(d.with), on)) return null
-              return (
-                <li key={d.with}>
-                  <button
-                    type="button"
-                    className={cx("side-row", on && "is-on", d.unread > 0 && "is-news")}
-                    aria-current={on ? "page" : undefined}
-                    onClick={() => go({ to: "where", where })}
-                    onContextMenu={(e) => showMenu(e, nickname(channel, d.with), (x) => x.directGroups({ channel, go }, actions, on, d, who))}
-                  >
-                    <Avatar person={who} size="sm" />
-                    <span className="side-label">{nickname(channel, d.with)}</span>
-                    <Count n={d.unread} loud />
-                  </button>
-                </li>
-              )
-            })}
-            {hiddenDirects > 0 && (
-              <li>
-                <button type="button" className="side-row is-add" aria-expanded={showHidden} onClick={() => setShowHidden(!showHidden)}>
-                  <Icon name={showHidden ? "down" : "chevron"} size={14} />
-                  <span className="side-label">{showHidden ? "Show less" : `${hiddenDirects} hidden`}</span>
-                </button>
-              </li>
-            )}
-            {channel.youOwn && humans.length + orphans.length === 0 && (
+            {leftPeople.filter(showDm).map((d) => (
+              <Former key={d.with} channel={channel} direct={d} />
+            ))}
+            {hiddenDirects > 0 && <HiddenRows count={hiddenDirects} open={showHidden} toggle={toggleHidden} />}
+            {channel.youOwn && humans.length + leftPeople.length === 0 && (
               <li>
                 <button type="button" className={cx("side-row is-add", nav.modal?.kind === "invite" && "is-on")} onClick={() => go({ to: "modal", modal: { kind: "invite" } })}>
                   <Icon name="plus" size={14} />
@@ -137,6 +109,10 @@ export function Sidebar({ channel }: { channel: Channel }) {
           {agents.map((p) => (
             <Member key={p.name} person={p} channel={channel} direct={directOf.get(p.name)} />
           ))}
+          {leftAgents.filter(showDm).map((d) => (
+            <Former key={d.with} channel={channel} direct={d} />
+          ))}
+          {hiddenAgents > 0 && <HiddenRows count={hiddenAgents} open={showHidden} toggle={toggleHidden} />}
           {theirsShown &&
             channel.theirs.map((t) => {
               const where = { kind: "theirs", between: t.between } as const
@@ -190,6 +166,43 @@ export function statusOf(p: Person, channel: Channel): string {
 }
 
 export const taskOf = (p: Person, channel: Channel) => (p.load?.doing[0] !== undefined ? channel.tasks.find((t) => t.id === p.load?.doing[0]) : undefined)
+
+function HiddenRows({ count, open, toggle }: { count: number; open: boolean; toggle: () => void }) {
+  return (
+    <li>
+      <button type="button" className="side-row is-add" aria-expanded={open} onClick={toggle}>
+        <Icon name={open ? "down" : "chevron"} size={14} />
+        <span className="side-label">{open ? "Show less" : `${count} hidden`}</span>
+      </button>
+    </li>
+  )
+}
+
+function Former({ channel, direct }: { channel: Channel; direct: Direct }) {
+  const { nav, go } = useApp()
+  const { actions } = useAct()
+  const where = { kind: "dm", with: direct.with } as const
+  const on = nav.tab === "chat" && sameWhere(nav.where, where)
+  const who = memberOf(channel, direct.with)
+  const agent = who?.kind === "agent"
+  return (
+    <li>
+      <button
+        type="button"
+        className={cx("side-row", agent && "side-member is-off", on && "is-on", direct.unread > 0 && "is-news")}
+        aria-current={on ? "page" : undefined}
+        title={agent ? "Left the channel" : undefined}
+        onClick={() => go({ to: "where", where })}
+        onContextMenu={(e) => showMenu(e, nickname(channel, direct.with), (x) => x.directGroups({ channel, go }, actions, on, direct, who))}
+      >
+        <Avatar person={who} size="sm" />
+        <span className={agent ? "side-name" : "side-label"}>{nickname(channel, direct.with)}</span>
+        {agent && <span className="side-state">left</span>}
+        <Count n={direct.unread} loud />
+      </button>
+    </li>
+  )
+}
 
 function Member({ person, channel, direct }: { person: Person; channel: Channel; direct: Direct | undefined }) {
   const { nav, go } = useApp()
