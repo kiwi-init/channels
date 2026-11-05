@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react"
 
+import { useApp } from "~/nav"
+
 const STILL = "(prefers-reduced-motion: reduce)"
 
 export function useStill(): boolean {
+  const { app } = useApp()
   const [still, setStill] = useState(() => window.matchMedia(STILL).matches)
   useEffect(() => {
     const query = window.matchMedia(STILL)
@@ -10,7 +13,7 @@ export function useStill(): boolean {
     query.addEventListener("change", changed)
     return () => query.removeEventListener("change", changed)
   }, [])
-  return still
+  return still || app.prefs.reduceMotion
 }
 
 export function Settle({ text, still, rate = 70, delay = 0 }: { text: string; still: boolean; rate?: number; delay?: number }) {

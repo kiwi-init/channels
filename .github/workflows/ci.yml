@@ -398,7 +398,7 @@ jobs:
       - name: ui rooms are flat in Chromium and WebKit, a reply shows inline with its quote and nothing opens a thread
         if: ${{ !cancelled() }}
         run: bun scripts/ui-flat-rooms.ts --dist ui/dist && bun scripts/ui-flat-rooms.ts --dist ui/dist --webkit
-      - name: ui Calm covers the window, a key or a click on the sky dismisses it without reaching the app, a mouse move keeps it, and a channel click opens that channel, in Chromium and WebKit
+      - name: ui Calm covers the window, a key or a click on the sky dismisses it without reaching the app, a mouse move keeps it, a channel click opens that channel, and the app's own Reduce motion keeps it still, in Chromium and WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-calm.ts --dist ui/dist && bun scripts/ui-calm.ts --dist ui/dist --webkit
       - name: ui portrait window in WebKit is one tall page, agents, tasks and chat in view, and landscape is unchanged

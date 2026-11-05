@@ -5,7 +5,7 @@ import type { Color } from "@kiwi/core/protocol.ts"
 import { Swatches } from "~/kit/swatches"
 
 import { PrChip, TaskChip } from "~/chat/cards"
-import { named } from "~/chat/linked"
+import { wordsPlain } from "~/words"
 import QuestionCard from "~/chat/question-card"
 import type { Jump } from "~/chat/search-box"
 import { Avatar, Empty, Loading, Toggle } from "~/kit/bits"
@@ -96,7 +96,7 @@ function doneLine(channel: Channel, a: Ask): string {
       return a.answer ? `${a.answer.allow ? "Allowed" : "Denied"} · ${nickname(channel, a.from)} · ${a.code} · ${ago(a.answer.at)}${byWhom(channel, a.answer.by)}` : ""
     case "question":
       if (a.closed) return `Closed · ${nickname(channel, a.from)} · ${ago(a.closed.at)}${byWhom(channel, a.closed.by)}`
-      return a.answer ? `Chose “${named(a.answer.text, channel.nicknames)}” · ${nickname(channel, a.from)} · ${ago(a.answer.at)}${byWhom(channel, a.answer.by)}` : ""
+      return a.answer ? `Chose “${wordsPlain(a.answer.text, channel.nicknames)}” · ${nickname(channel, a.from)} · ${ago(a.answer.at)}${byWhom(channel, a.answer.by)}` : ""
     case "join":
       return a.answer ? `${a.answer.letIn ? "Let in" : "Turned away"} · ${a.name}${a.sponsor ? ` · brought by ${a.sponsor}` : ""} · ${ago(a.answer.at)}${byWhom(channel, a.answer.by)}` : ""
     case "review":
@@ -282,7 +282,7 @@ function QuestionAskCard({ channel, ask, link }: { channel: Channel; ask: Questi
       at={ask.at}
       link={link}
     >
-      <p className="needs-text">{named(ask.text, channel.nicknames)}</p>
+      <p className="needs-text">{wordsPlain(ask.text, channel.nicknames)}</p>
       {askedOf && <p className="needs-line">You can answer too: the first answer counts.</p>}
       <QuestionCard channel={channel} ask={ask} />
       {holds.length > 0 && <Holds channel={channel} ids={holds} />}

@@ -2,6 +2,7 @@ import type { App, Channel, Person, Where } from "~/model"
 import type { Nav } from "~/nav"
 import { nicknamesOf } from "~/names"
 import { DEMO_AGENT_HANDLES } from "~/demo/handle-names"
+import { Words, wordsRaw, wrote } from "~/words"
 
 export const DEMO_HANDLES = new URLSearchParams(location.search).has("handles")
 
@@ -20,6 +21,7 @@ function renamer(names: readonly string[]): Rename {
 
 function walk(value: unknown, rename: Rename): unknown {
   if (typeof value === "string") return rename(value)
+  if (value instanceof Words) return wrote(rename(wordsRaw(value)))
   if (Array.isArray(value)) return value.map((v) => walk(v, rename))
   if (value instanceof Map) return new Map([...value].map(([k, v]) => [walk(k, rename), walk(v, rename)]))
   if (value instanceof Set) return new Set([...value].map((v) => walk(v, rename)))
