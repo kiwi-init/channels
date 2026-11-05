@@ -110,6 +110,12 @@ else
   bad "no tray icon registered, though a watcher runs$([ "$tray" = tray ] || echo " (the tray needs no libayatana-appindicator)")"
 fi
 
+if grep -q "Channels: update checks are on" "$logs/$tag-app.log"; then
+  ok "update checks are on$([ "$keyring" = kwallet-unanswered ] || [ "${keyring#cancel}" != "$keyring" ] && echo ", though the keyring never opened")"
+else
+  bad "update checks never started, so this install would never get a fix"
+fi
+
 main_log=$(find "$home" -name main.log 2> /dev/null | head -n 1)
 [ -z "$main_log" ] || cp "$main_log" "$logs/$tag-main.log"
 plain=$(grep -h "keeps your keys in .* without encryption" "$logs/$tag-app.log" ${main_log:+"$main_log"} | head -n 1)
