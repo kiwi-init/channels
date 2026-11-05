@@ -40,6 +40,7 @@ export async function passOnboarding(page: Page): Promise<void> {
   await page.locator(".onb-wire").waitFor();
   await next.click();
   await page.getByRole("textbox", { name: `Type “${PLEDGE}” to begin` }).pressSequentially(PLEDGE);
+  await page.locator("dialog.onb").waitFor({ state: "detached" });
 }
 
 export async function firstRun(page: Page, name: string): Promise<void> {
