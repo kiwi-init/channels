@@ -455,12 +455,6 @@ jobs:
         if: ${{ !cancelled() }}
         timeout-minutes: 10
         run: bun desktop/scripts/eb-ui-check.ts desktop/release-eb/build/dev-macos-*/*.app
-      - name: calm sky on the Mac's WebKit and GPU, its frame times printed (T4204)
-        if: ${{ !cancelled() }}
-        timeout-minutes: 5
-        run: |
-          bunx playwright-core install webkit
-          bun scripts/ui-calm-sky.ts --seconds=10
 
   desktop-linux:
     name: desktop / linux, ${{ matrix.os }}
