@@ -152,7 +152,40 @@ async function windowOf(label: string, from?: BrowserContext): Promise<Win> {
   const storageState = from ? await from.storageState({ indexedDB: true }) : undefined;
   const context = await browser.newContext({ viewport: { width: 1280, height: 860 }, storageState });
   const lag = await laggy(context, label);
+  await context.addInitScript(() => {
+    const Real = window.ResizeObserver;
+    const calls: string[] = [];
+    let n = 0;
+    const name = (el: Element): string =>
+      `${el.tagName.toLowerCase()}${el.id ? "#" + el.id : ""}${typeof el.className === "string" && el.className ? "." + el.className.trim().split(/\s+/).slice(0, 3).join(".") : ""}`;
+    window.ResizeObserver = class extends Real {
+      constructor(cb: ResizeObserverCallback) {
+        const id = ++n;
+        const where = (new Error().stack ?? "")
+          .split("\n")
+          .slice(1, 4)
+          .map((l) => l.replace(/https?:\/\/[^/]+\//, "").trim())
+          .join(" < ");
+        super((entries, obs) => {
+          calls.push(
+            `${performance.now().toFixed(1)} ro${id} [${where.slice(0, 160)}] ${entries
+              .map((e) => `${name(e.target)} ${Math.round(e.contentRect.width)}x${Math.round(e.contentRect.height)}`)
+              .join(", ")
+              .slice(0, 300)}`,
+          );
+          if (calls.length > 60) calls.shift();
+          cb(entries, obs);
+        });
+      }
+    };
+    window.addEventListener("error", (e) => {
+      if (String(e.message).includes("ResizeObserver")) console.log(`RO-LOOP at ${performance.now().toFixed(1)}\n${calls.slice(-25).join("\n")}`);
+    });
+  });
   const page = await context.newPage();
+  page.on("console", (m) => {
+    if (m.text().startsWith("RO-LOOP")) log(`${label} ${m.text()}`);
+  });
   page.on("pageerror", (e) => {
     if (!live) return;
     errors.push(`${label}: ${e.message}`);
