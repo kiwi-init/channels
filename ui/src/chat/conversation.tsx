@@ -215,7 +215,7 @@ export function useStick(following = true, still = false) {
     const box = scroller.current
     const list = content.current
     if (!box || !list) return
-    if ((still && anchor.current) || (height.current && list.offsetHeight !== height.current)) settle()
+    if (height.current && list.offsetHeight !== height.current) settle()
     const hidden = box.scrollHeight - box.scrollTop - box.clientHeight
     if (room.current > 0 && hidden > 0.5) {
       room.current = Math.max(0, room.current - hidden)
@@ -278,14 +278,14 @@ export function useStick(following = true, still = false) {
       if (held.current === on) return
       held.current = on
       if (on) {
-        if (still && anchor.current) settle()
-        stuck.current = false
         const box = scroller.current
         const list = content.current
-        anchor.current = box && list ? ((still ? caretIn(box, list) : null) ?? anchorIn(box, list)) : null
+        stuck.current = false
+        const kept = still && list && anchor.current && caretEl(list) === anchor.current.el ? anchor.current : null
+        anchor.current = kept ?? (box && list ? ((still ? caretIn(box, list) : null) ?? anchorIn(box, list)) : null)
       } else remember()
     },
-    [remember, settle, still]
+    [remember, still]
   )
 
   return { scroller, content, spacer, stuck, live, remember, settle, toBottom, toOffset, unstick, hold }
