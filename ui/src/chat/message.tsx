@@ -187,7 +187,8 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
     },
     [onQuote, go, channel.messages]
   )
-  const quoting = !!replying && m.where.kind !== "theirs" && (!!inThread || m.where.kind === "task")
+  const flat = !!inThread || m.where.kind === "task"
+  const quoting = !!replying && m.where.kind !== "theirs" && flat
   const who = memberOf(channel, m.from)
   const editing = useEditing(channel.code, m.seq)
   const ask = m.ask ? channel.asks.find((a) => a.id === m.ask) : undefined
@@ -210,7 +211,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
     if (m.pending || m.failed !== undefined || m.leftOut || m.fromDoc || m.deleted || editing) return
     const target = e.target
     const reply = replying && quoting ? () => replying.set(m) : null
-    showMenu(e, "Message", (x) => x.messageGroups({ channel, go }, m, target, { openImage, reply, inThread: !!inThread || !!older }))
+    showMenu(e, "Message", (x) => x.messageGroups({ channel, go }, m, target, { openImage, reply, inThread: flat || !!older }))
   }
 
   return (
@@ -342,7 +343,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
             {m.receipt}
           </p>
         )}
-        {m.thread && !inThread && (
+        {m.thread && !flat && (
           <button type="button" className="msg-thread" onClick={() => go({ to: "panel", panel: { kind: "thread", seq: m.seq } })}>
             <span className="msg-thread-n">
               {m.thread.replies} {m.thread.replies === 1 ? "reply" : "replies"}
@@ -376,14 +377,8 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
               <Icon name="reply" size={14} />
             </button>
           )}
-          {!inThread && !older && (
-            <button
-              type="button"
-              className="msg-tool"
-              aria-label={m.where.kind === "task" ? "Open thread" : "Reply in thread"}
-              title={m.where.kind === "task" ? "Open thread" : "Reply in thread"}
-              onClick={() => go({ to: "panel", panel: { kind: "thread", seq: m.inThread ?? m.seq } })}
-            >
+          {!flat && !older && (
+            <button type="button" className="msg-tool" aria-label="Reply in thread" title="Reply in thread" onClick={() => go({ to: "panel", panel: { kind: "thread", seq: m.inThread ?? m.seq } })}>
               <Icon name="thread" size={14} />
             </button>
           )}

@@ -4,6 +4,7 @@ import { Composer } from "~/chat/composer"
 import { compactAt, quoteOf, ReadOnly, useNames, useStick, useTaskIds } from "~/chat/conversation"
 import { MessageRow } from "~/chat/message"
 import { threadReply } from "~/chat/quote"
+import { threadRoot } from "~/chat/thread-root"
 import { QuotePick } from "~/chat/quote-pick"
 import { jumpTo, ReplyContext, type Replying } from "~/chat/reply"
 import { Empty } from "~/kit/bits"
@@ -12,7 +13,8 @@ import { nickname } from "~/names"
 import { useAct } from "~/nav"
 import { PanelHead } from "~/panels/frame"
 
-export function ThreadPanel({ channel, seq, focus }: { channel: Channel; seq: number; focus?: number | undefined }) {
+export function ThreadPanel({ channel, seq: opened, focus: asked }: { channel: Channel; seq: number; focus?: number | undefined }) {
+  const { seq, focus } = threadRoot(channel.messages, opened, asked)
   const root = channel.messages.find((m) => m.seq === seq)
   const replies = useMemo(() => channel.messages.filter((m) => m.inThread === seq), [channel.messages, seq])
   const bySeq = useMemo(() => new Map(channel.messages.map((m) => [m.seq, m])), [channel.messages])
