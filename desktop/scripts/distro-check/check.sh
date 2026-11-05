@@ -122,9 +122,13 @@ session gnome-keyring fuse tray "$fuse_home"
 entry_check "$fuse_home" '"/home/tester/Channels.AppImage" %U'
 session gnome-keyring entry-fuse tray "$fuse_home" entry
 mounted entry-fuse /tmp/.mount_ "with fuse3, the entry's start mounts the AppImage"
-install xdg-utils kde-cli-tools || exit 1
+install xdg-utils kde-cli-tools firefox || exit 1
 as_tester bash /home/tester/link.sh "$fuse_home" "$results" "$out/logs"
-[ -z "$from" ] || as_tester bash /home/tester/update.sh "$from" "$results" "$out/logs"
+if [ -n "$from" ]; then
+  as_tester bash /home/tester/update.sh "$from" "$results" "$out/logs"
+  entry_check /home/tester '"/home/tester/Applications/Channels.AppImage" %U'
+  as_tester bash /home/tester/link.sh /home/tester "$results" "$out/logs" updated
+fi
 
 chmod -R a+rX "$out"
 fails=$(grep -c '^FAIL' "$results")

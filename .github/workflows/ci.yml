@@ -16,6 +16,10 @@ on:
         description: "desktop / distros also updates this released version's AppImage to the latest release (update.sh)"
         required: false
         default: ""
+      release:
+        description: "desktop / distros checks this published version's AppImage (checked against its SHA256SUMS) instead of this run's build, and doesn't wait for desktop / linux"
+        required: false
+        default: ""
 
 # A new push to a pull request cancels its run still in progress: only the newest commit's
 # result matters there. Pushes to main share one group but never cancel the run in progress: it
@@ -746,7 +750,7 @@ jobs:
   desktop-distros:
     name: desktop / distros, ${{ matrix.distro }}
     needs: [plan, desktop-linux]
-    if: ${{ !cancelled() && fromJSON(needs.plan.outputs.run)['desktop-distros'] && needs.desktop-linux.result == 'success' }}
+    if: ${{ !cancelled() && fromJSON(needs.plan.outputs.run)['desktop-distros'] && (needs.desktop-linux.result == 'success' || inputs.release != '') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     container:
@@ -762,10 +766,22 @@ jobs:
       - name: git and tar for the checkout
         run: pacman -Sy --noconfirm git tar gzip
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+      - if: ${{ inputs.release == '' }}
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: linux-packages-ubuntu-24.04
           path: ${{ runner.temp }}/packages
+      - name: the published ${{ inputs.release }} AppImage, matching its SHA256SUMS
+        if: ${{ inputs.release != '' }}
+        env:
+          RELEASE: ${{ inputs.release }}
+        run: |
+          base="https://github.com/${{ github.repository }}/releases/download/v$RELEASE"
+          name="Channels-$RELEASE-linux-x86_64.AppImage"
+          mkdir -p "$RUNNER_TEMP/packages" && cd "$RUNNER_TEMP/packages"
+          curl -fsSL -o "$name" "$base/$name"
+          curl -fsSL -o SHA256SUMS "$base/SHA256SUMS"
+          grep " $name\$" SHA256SUMS | sha256sum -c -
       - name: the AppImage on a stock ${{ matrix.distro }}, under headless weston on native Wayland
         env:
           UPDATE_FROM: ${{ inputs.update_from }}
