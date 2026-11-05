@@ -299,7 +299,6 @@ jobs:
           wait "$webkit" || status=1
           exit "$status"
 
-
   shots:
     name: build / shots
     needs: plan
@@ -611,6 +610,10 @@ jobs:
       - name: smoke, under Xvfb
         if: ${{ !cancelled() && matrix.drive }}
         run: xvfb-run -a -s "-screen 0 1280x800x24" bun desktop/scripts/smoke-eb.ts "${{ steps.test-app.outputs.path }}"
+      - name: a kiwi://join link opens the app on its join, cold and while it runs
+        if: ${{ !cancelled() && matrix.drive }}
+        timeout-minutes: 5
+        run: xvfb-run -a -s "-screen 0 1280x800x24" bun desktop/scripts/join-link-eb.ts "${{ steps.test-app.outputs.path }}"
       - name: smoke, in a Wayland session as desktops run it (headless weston with XWayland, no Xvfb)
         if: ${{ !cancelled() && matrix.drive }}
         timeout-minutes: 10
