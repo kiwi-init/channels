@@ -87,7 +87,7 @@ try {
   d = await attach(join(root, "driver.sock"));
   const driver = d;
   await firstChannel(driver, 1);
-  await until("the thread doc", 30_000, () => driver.evaluate(() => (document.querySelector('.thread-doc [role="textbox"][aria-label="Thread"]') ? true : null), null, 2_000));
+  await until("the composer", 30_000, () => driver.evaluate(() => (document.querySelector(".main .composer textarea") ? true : null), null, 2_000));
   const geo = (await ask({ op: "layout", windows: { "kiwi-helper": [0, 100, size[0], size[1]], Channels: [420, 100, 1200, 800] } })) as Record<string, Window>;
   const hw = geo["kiwi-helper"];
   const cw = geo["Channels"];
@@ -111,36 +111,33 @@ try {
     }, selector);
   const click = async (p: Point) => void (await ask({ op: "click", x: p[0], y: p[1] }));
   const keys = async (...combo: string[]) => void (await ask({ op: "keys", combo }));
-  const lineAt = () =>
-    driver.evaluate(() => {
-      const n = getSelection()?.anchorNode ?? null;
-      const el = n instanceof Element ? n : (n?.parentElement ?? null);
-      const r = (el?.closest("p") ?? document.querySelector('.thread-doc [role="textbox"][aria-label="Thread"]'))?.getBoundingClientRect();
-      return r ? ([r.x, r.y, r.width, Math.max(r.height, 16)] as [number, number, number, number]) : null;
-    }, null);
+  const lineAt = () => rectOf(".main .composer textarea");
   const fresh = async (): Promise<Point> => {
-    const tail = await rectOf(".thread-doc .doc-tail");
-    if (!tail) throw new Error("no doc tail to start a line at");
-    await click(onPage(tail));
-    await later(400);
     const line = await lineAt();
-    if (!line) throw new Error("no line under the caret");
+    if (!line) throw new Error("no composer to write in");
+    await click(onPage(line));
+    await later(400);
+    await driver.evaluate(() => {
+      const area = document.querySelector<HTMLTextAreaElement>(".main .composer textarea");
+      if (!area?.value) return true;
+      area.select();
+      return document.execCommand("delete");
+    }, null);
     return onPage(line);
   };
   const writeLine = (v: string) =>
     driver.evaluate((value: string) => {
-      const doc = document.querySelector<HTMLElement>('.thread-doc [role="textbox"][aria-label="Thread"]');
-      if (!doc) return false;
-      doc.focus();
+      const area = document.querySelector<HTMLTextAreaElement>(".main .composer textarea");
+      if (!area) return false;
+      area.focus();
       return document.execCommand("insertText", false, value);
     }, v);
   const state = () =>
     driver.evaluate(() => {
-      const n = getSelection()?.anchorNode ?? null;
-      const el = n instanceof Element ? n : (n?.parentElement ?? null);
+      const area = document.querySelector<HTMLTextAreaElement>(".main .composer textarea");
       return {
-        value: el?.closest("p")?.textContent ?? null,
-        files: [...document.querySelectorAll<HTMLElement>(".thread-doc [data-image], .thread-doc [data-file]")].map((e) => e.dataset["image"] ?? e.dataset["file"] ?? ""),
+        value: area?.value ?? null,
+        files: [...document.querySelectorAll<HTMLImageElement>(".main .composer .compose-file img")].map((e) => e.alt),
         active: document.activeElement?.getAttribute("aria-label") ?? document.activeElement?.tagName ?? null,
         href: location.href,
       };
@@ -150,13 +147,13 @@ try {
     return helperEvent("read");
   };
 
-  await step("a click in the thread doc puts the caret there", async () => {
+  await step("a click in the composer puts the caret there", async () => {
     await fresh();
     const s = await state();
-    return { ok: s.active === "Thread", detail: s };
+    return { ok: s.active === "Message", detail: s };
   });
 
-  await step("text copied in another app pastes into the thread doc", async () => {
+  await step("text copied in another app pastes into the composer", async () => {
     await click(onHelper("copy-text"));
     await helperEvent("copied-text");
     await fresh();
@@ -166,7 +163,7 @@ try {
     return { ok: s.value === "kiwi pasted text", detail: s };
   });
 
-  await step("an image copied in another app pastes into the thread doc (T896, T580)", async () => {
+  await step("an image copied in another app pastes into the composer (T896, T580)", async () => {
     const before = (await state()).files.length;
     await driver.evaluate(() => {
       const w = window as unknown as { kiwiCheckPastes?: unknown[] };
@@ -188,17 +185,14 @@ try {
     return { ok: s.files.length === before + 1 && s.files.includes("pasted.png"), detail: { before, s, pastes } };
   });
 
-  await step("text copied from the thread doc (Ctrl+C) pastes in another app", async () => {
+  await step("text copied from the composer (Ctrl+C) pastes in another app", async () => {
     await fresh();
     await writeLine("kiwi copied out");
     await driver.evaluate(() => {
-      const n = getSelection()?.anchorNode ?? null;
-      const p = (n instanceof Element ? n : (n?.parentElement ?? null))?.closest("p");
-      if (!p) return false;
-      const r = document.createRange();
-      r.selectNodeContents(p);
-      getSelection()?.removeAllRanges();
-      getSelection()?.addRange(r);
+      const area = document.querySelector<HTMLTextAreaElement>(".main .composer textarea");
+      if (!area) return false;
+      area.focus();
+      area.select();
       return true;
     }, null);
     await later(300);
@@ -257,7 +251,7 @@ try {
     "KWin's fake input gives the page no user activation, so WebKit refuses navigator.clipboard writes; with a real gesture they reach the clipboard (Livewire Kitchen, T152)",
   );
 
-  await step("a PNG dragged from another app into the thread doc lands in it (T895, T580)", async () => {
+  await step("a PNG dragged from another app into the composer lands in it (T895, T580)", async () => {
     const before = (await state()).files.length;
     await driver.evaluate(() => {
       const w = window as unknown as { kiwiCheckDrops?: unknown[] };
@@ -277,7 +271,7 @@ try {
     return { ok: s.files.includes("kiwi-drop.png") && s.files.length === before + 1, detail: { before, s, page } };
   });
 
-  await step("a PNG dropped on something floating over the thread doc, like a toast, lands in it too (T1000)", async () => {
+  await step("a PNG dropped on something floating over the composer, like a toast, lands in it too (T1000)", async () => {
     const before = (await state()).files.length;
     const line = await fresh();
     const at = await lineAt();
