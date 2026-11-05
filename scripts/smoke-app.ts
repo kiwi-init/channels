@@ -5,7 +5,7 @@ import { join, resolve } from "node:path";
 import { chromium } from "playwright-core";
 import { startLocalRelay } from "./local-relay.ts";
 import { harnessDist } from "./ui-harness.ts";
-import { approveSpec, threadDoc, unfold, writeBlock } from "./perf-ui.ts";
+import { approveSpec, docOpen, unfold, writeBlock } from "./perf-ui.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
 const DIST = harnessDist(process.argv[2]);
@@ -78,7 +78,7 @@ try {
   const dialog = page.getByRole("dialog", { name: "New channel" });
   await dialog.getByRole("textbox").fill("smoke");
   await dialog.getByRole("button", { name: "Create channel" }).click();
-  await threadDoc(page).waitFor({ timeout: 30000 });
+  await docOpen(page);
   await writeBlock(page, "smoke test");
   step(at);
 
@@ -240,7 +240,7 @@ try {
   await search.waitFor({ state: "detached" });
   step(at);
 
-  at = "an answer written in the doc reaches the agent";
+  at = "an answer sent from the composer reaches the agent";
   await writeBlock(page, "@bot got it, thanks");
   let heard = false;
   for (let i = 0; i < 50 && !heard; i++) {

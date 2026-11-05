@@ -7,7 +7,7 @@ import { chromium, type CDPSession, type Page, type Request, type WebSocket as P
 import { daemonSock } from "../src/daemon/protocol.ts";
 import { stopDaemon } from "../src/daemon/rpc.ts";
 import { startLocalRelay } from "./local-relay.ts";
-import { approveSpec, firstRun, letIn, newChannel, channelSettings, eraseLine, ROWS, unfold, view, writeBlock } from "./perf-ui.ts";
+import { approveSpec, composer, firstRun, letIn, newChannel, channelSettings, eraseLine, ROWS, SEND, unfold, view, writeBlock } from "./perf-ui.ts";
 import { harnessDist } from "./ui-harness.ts";
 
 if (process.argv.includes("--help")) {
@@ -242,32 +242,29 @@ function trace(page: Page, t0: number): () => string[] {
   };
 }
 
-async function send(page: Page, text: string): Promise<{ nextBlockMs: number }> {
-  await page.locator(".thread-doc .doc-tail").last().click();
-  await page.keyboard.type(text);
-  await page.evaluate((body) => {
-    const w = window as unknown as { __sent?: Promise<{ nextBlockMs: number }> };
-    const doc = document.querySelector<HTMLElement>('.thread-doc [role="textbox"][aria-label="Thread"]')!;
+async function send(page: Page, text: string): Promise<{ shownMs: number }> {
+  const area = composer(page);
+  await area.fill(text);
+  await area.evaluate((el, body) => {
+    const w = window as unknown as { __sent?: Promise<{ shownMs: number }> };
     w.__sent = new Promise((done) => {
-      const down = (e: KeyboardEvent) => {
-        if (e.key !== "Enter") return;
-        doc.removeEventListener("keydown", down, true);
+      const down = (e: Event) => {
+        if (!(e instanceof KeyboardEvent) || e.key !== "Enter") return;
+        el.removeEventListener("keydown", down, true);
         const t0 = performance.now();
         const tick = () => {
           const now = performance.now();
-          const blocks = [...doc.querySelectorAll(".blk")];
-          const at = blocks.findIndex((b) => b.textContent?.includes(body));
-          const next = at >= 0 ? blocks[at + 1] : undefined;
-          if ((next && !next.querySelector(".blk-body")?.textContent) || now - t0 > 15000) return done({ nextBlockMs: next ? Math.round(now - t0) : -1 });
+          const shown = [...document.querySelectorAll(".main article.msg")].some((m) => m.textContent?.includes(body));
+          if (shown || now - t0 > 15000) return done({ shownMs: shown ? Math.round(now - t0) : -1 });
           requestAnimationFrame(tick);
         };
         requestAnimationFrame(tick);
       };
-      doc.addEventListener("keydown", down, true);
+      el.addEventListener("keydown", down, true);
     });
   }, text);
-  await page.keyboard.press("ControlOrMeta+Enter");
-  return page.evaluate(() => (window as unknown as { __sent: Promise<{ nextBlockMs: number }> }).__sent);
+  await area.press(SEND);
+  return page.evaluate(() => (window as unknown as { __sent: Promise<{ shownMs: number }> }).__sent);
 }
 
 async function work(cdp: CDPSession): Promise<{ layout: number; style: number }> {
@@ -478,9 +475,9 @@ try {
   await view(page, "# general", "M");
   await later(800);
   await drain(page);
-  const sends: { nextBlockMs: number }[] = [];
+  const sends: { shownMs: number }[] = [];
   for (let i = 0; i < REPS; i++) {
-    let r = { nextBlockMs: 0 };
+    let r = { shownMs: 0 };
     const body = `Feel check ${i} ${Date.now()}`;
     if (i === 0) await filmstrip(cdp, "send", async () => (r = await send(page, body)));
     else r = await send(page, body);
@@ -489,7 +486,7 @@ try {
   }
   const sentDrain = await drain(page);
   report.send = {
-    nextBlockMs: median(sends.map((s) => s.nextBlockMs)),
+    shownMs: median(sends.map((s) => s.shownMs)),
     runs: sends,
     layoutShift: sentDrain.shifts,
     moved: sentDrain.moved,
@@ -561,7 +558,7 @@ try {
 
   await view(page, "# general", `M${MESSAGES - 1}: `);
   await later(1000);
-  await page.locator(".thread-doc .doc-tail").last().click();
+  await composer(page).click();
   await drain(page);
   for (let i = 0; i < 2; i++) {
     await page.keyboard.type("the build is green and the switch is fast now ", { delay: 40 });
