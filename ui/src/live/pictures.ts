@@ -16,15 +16,13 @@ const loaders = new Map<string, (spot: string) => void>()
 
 export const loadPicture = (code: string, spot: string): void => loaders.get(code)?.(spot)
 
-async function picture(ch: ChannelLink, img: ImageAttachment): Promise<Picture | null> {
+async function picture(ch: ChannelLink, img: ImageAttachment, id: string): Promise<Picture | null> {
   if (!isRasterMime(img.mime)) return null
   const data = img.data ?? (await ch.image(img))
   if (!data) return null
   const url = `data:${img.mime};base64,${data}`
-  const el = new window.Image()
-  el.src = url
-  await el.decode()
-  return { url, width: el.naturalWidth, height: el.naturalHeight, alt: img.name }
+  const { width, height } = await import("~/chat/image-button").then((m) => m.warmFeed(id, url))
+  return { url, width, height, alt: img.name, id }
 }
 
 export function spotOf(entry: Entry | undefined, spot: string, alt: string): Picture | ImageSpot {
@@ -57,7 +55,7 @@ export function usePictures(code: string, ch: ChannelLink, messages: readonly Wi
       void (async () => {
         for (let tries = 0; ; tries++) {
           try {
-            const p = await picture(ch, img)
+            const p = await picture(ch, img, img.ref?.id ?? `${code}:${spot}`)
             return settle(p ? { state: "ready", picture: p } : { state: "gone" })
           } catch {
             // The relay or the decoder failed this time: try again a few times, then offer Retry.
@@ -68,7 +66,7 @@ export function usePictures(code: string, ch: ChannelLink, messages: readonly Wi
         }
       })()
     },
-    [ch]
+    [ch, code]
   )
 
   useEffect(() => {
