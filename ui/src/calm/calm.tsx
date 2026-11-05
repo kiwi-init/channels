@@ -72,7 +72,6 @@ export function Calm() {
   const [leaving, setLeaving] = useState(false)
   const box = useRef<HTMLDivElement>(null)
   const stage = useRef<HTMLDivElement>(null)
-  const glance = useRef<HTMLElement>(null)
   const meadow = useRef<Meadow | null>(null)
   const latest = useRef({ rows, still })
   const total = rows.reduce((a, r) => a + r.needs, 0)
@@ -101,8 +100,8 @@ export function Calm() {
     let gone = false
     void import("~/calm/meadow")
       .then(({ startMeadow }) => {
-        if (gone || !stage.current || !glance.current) return null
-        return startMeadow(stage.current, glance.current, latest.current.still)
+        if (gone || !stage.current) return null
+        return startMeadow(stage.current, latest.current.still)
       })
       .then((m) => {
         if (!m) return
@@ -134,9 +133,9 @@ export function Calm() {
   return (
     <div ref={box} className={cx("rest", leaving && "is-leaving")} role="dialog" aria-modal="true" aria-label="Calm" tabIndex={-1} onAnimationEnd={ended}>
       <div ref={stage} className="rest-back" aria-hidden="true" />
-      <section ref={glance} className="rest-glance" aria-label="What needs you">
+      <section className="rest-glance" aria-label="What needs you">
         {total > 0 ? (
-          <p className="rest-count" data-count="">
+          <p className="rest-count">
             <span className="rest-num">{total > 99 ? "99+" : total}</span>
             <span className="rest-label">{total === 1 ? "needs you" : "need you"}</span>
           </p>
