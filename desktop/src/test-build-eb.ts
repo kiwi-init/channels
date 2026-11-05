@@ -6,6 +6,7 @@ import { startupMarks } from "./eb-startup.ts";
 import { testHomeProblem } from "./eb-test-home.ts";
 import { testVault } from "./eb-test-store.ts";
 import { normalizeRelay } from "./guard.ts";
+import { launchArgs } from "./single-instance.ts";
 import { dataDir } from "./host-eb.ts";
 import { forceFrostForTest, frostAllowed, windowLooks } from "./native-eb.ts";
 import { mutate, openStore } from "./store.ts";
@@ -32,6 +33,7 @@ export function driveForTests(win: BrowserWindow): void {
       drive(win.webview, socket, {
         startup: startupMarks,
         linksOpened,
+        argv: () => ({ argv: process.argv, launch: launchArgs() }),
         closeWindow: () => (win.requestClose(), true),
         window: () => ({ visible: win.isVisible(), minimized: win.isMinimized() }),
         frame: () => win.getFrame(),
