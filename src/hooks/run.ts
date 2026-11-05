@@ -3,9 +3,9 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import { ChannelGone } from "@kiwi/core/client.ts";
 import { Keystore } from "../config.ts";
-import { hereAs, kimiHookHere, noteHarnessSession, notePlace, onGrokBot, sameSeat, seatsHeldAnywhere, type Here } from "../seats.ts";
+import { claimTaken, hereAs, kimiHookHere, noteHarnessSession, notePlace, onGrokBot, sameSeat, seatsHeldAnywhere, type Here } from "../seats.ts";
 import { writeSync } from "node:fs";
-import { answer, fromAgy, hookOutput, kimiReason, printed, seatBudget, tellKimi, type Answer, type HookInput } from "./answer.ts";
+import { answer, answered, fromAgy, hookOutput, kimiReason, noticeKind, printed, seatBudget, tellKimi, type Answer, type HookInput } from "./answer.ts";
 import { holdAnswering } from "./delivered.ts";
 import { migrateClaudeHooks } from "./install/claude.ts";
 import { migrateExtraHooks } from "./install/extra.ts";
@@ -14,6 +14,7 @@ import { handoffFrom, listen, refusedFrom, type Served } from "./listen.ts";
 import { refreshListeners, seatsFor } from "./listeners.ts";
 import { decisionJson, runPermission, type PermissionInput } from "./permission.ts";
 import { KIMI_STOP, LISTEN, PERMISSION } from "./self.ts";
+import { takenText } from "./taken.ts";
 
 const HOOK_MS = 1_800;
 const START_MS = 5_000;
@@ -62,7 +63,6 @@ export const runHook = Effect.fn("Hooks.run")(function* (event: string, harness?
   if (event === LISTEN) {
     if (who.harness === "mimo") yield* Effect.sync(migrateMimo);
     const served = yield* seatsServed;
-    if (!served.length) return 0;
     return yield* listen(served, who, handoffFrom(input.landed), refusedFrom(input.refused)).pipe(
       Effect.scoped,
       Effect.catchCause(() => Effect.succeed(0)),
@@ -99,7 +99,18 @@ export const runHook = Effect.fn("Hooks.run")(function* (event: string, harness?
       if (code) yield* shown(got);
       return code;
     }
-    const out = hookOutput(got);
+    const kind = noticeKind(event, input, who);
+    const lost =
+      kind === null
+        ? null
+        : takenText(
+            claimTaken(
+              who.session,
+              served.map((s) => s.b),
+            ),
+            (yield* keys.config).channels,
+          );
+    const out = hookOutput(kind !== null && lost !== null ? [answered(kind, lost), ...got] : got);
     if (out === null) return 0;
     yield* say(out).pipe(
       Effect.andThen(shown(printed(got))),

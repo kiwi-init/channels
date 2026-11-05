@@ -73,6 +73,16 @@ describe("tendOwned", () => {
     expect(pinged).toEqual(["2 agents joined"]);
   });
 
+  test("an agent with a nickname is announced by it, joined or asking (#1681)", async () => {
+    pinged.length = 0;
+    await tendOwned("pk", api({ autoApprove: async () => [{ name: "gentle-otter", display: "lead" }], requests: async () => [{ id: "r1", name: "upbeat-heron", display: "coder" }] }), {
+      title: "chan",
+      ping,
+      told: new Set(),
+    });
+    expect(pinged).toEqual(["lead joined from your computer", "coder asks to join"]);
+  });
+
   test("requests throwing still keeps the joined note", async () => {
     pinged.length = 0;
     await tendOwned(
