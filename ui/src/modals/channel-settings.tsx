@@ -40,6 +40,7 @@ export function ChannelSettings({ channel, tab: first, onClose }: { channel: Cha
   return (
     <>
       <Modal
+        dismiss="x"
         onClose={onClose}
         label="Channel settings"
         size="wide"

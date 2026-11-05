@@ -72,6 +72,7 @@ function JoinForm({ onClose }: { onClose: () => void }) {
     const owner = invite.owner
     return (
       <Modal
+        dismiss="x"
         onClose={onClose}
         label="Join a channel"
         title={owner ? `${owner} invited you to a channel` : "You're invited to a channel"}
@@ -125,7 +126,7 @@ function JoinForm({ onClose }: { onClose: () => void }) {
 
   const hint = error ?? (bad ? "That isn't an invite. It looks like kiwi://join/…, a link with #mc2-…, or a code." : null)
   return (
-    <Modal onClose={onClose} label="Join a channel" title="Join a channel">
+    <Modal dismiss="x" onClose={onClose} label="Join a channel" title="Join a channel">
       <form
         className="start-form"
         onSubmit={async (e) => {

@@ -93,9 +93,12 @@ type ModalSize = "narrow" | "wide"
 
 const FOCUSABLE = 'a[href], button:not(:disabled), input:not(:disabled):not([type="hidden"]), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'
 
+export type ModalDismiss = "x" | "outside"
+
 export function Modal({
   open = true,
   onClose,
+  dismiss,
   label,
   title,
   sub,
@@ -108,6 +111,7 @@ export function Modal({
 }: {
   open?: boolean
   onClose: () => void
+  dismiss: ModalDismiss
   label: string
   title: ReactNode
   sub?: ReactNode
@@ -120,6 +124,7 @@ export function Modal({
 }) {
   const ref = useRef<HTMLDialogElement>(null)
   const wanted = useRef(open)
+  const pressed = useRef<EventTarget | null>(null)
   useEffect(() => {
     wanted.current = open
     const el = ref.current
@@ -141,8 +146,13 @@ export function Modal({
       onClose={() => {
         if (wanted.current) onClose()
       }}
+      onPointerDown={(e) => {
+        pressed.current = e.target
+      }}
       onClick={(e) => {
-        if (e.target === e.currentTarget) onClose()
+        const started = pressed.current
+        pressed.current = null
+        if (dismiss === "outside" && e.target === e.currentTarget && started === e.currentTarget) onClose()
       }}
       onKeyDown={(e) => {
         if (e.key !== "Tab" || e.defaultPrevented) return

@@ -16,7 +16,7 @@ function NewChannelForm({ onClose }: { onClose: () => void }) {
   const [failed, setFailed] = useState(false)
   const title = name.trim()
   return (
-    <Modal onClose={onClose} label="New channel" title="New channel">
+    <Modal dismiss="x" onClose={onClose} label="New channel" title="New channel">
       <form
         className="start-form"
         onSubmit={async (e) => {
