@@ -38,22 +38,21 @@ float fbm(vec2 p, int octaves) {
   return sum;
 }
 
-vec4 layer(vec2 uv, float t, float scale, float speed, float cover, int octaves, vec2 sun, vec3 air, float haze) {
+vec4 layer(vec2 uv, float t, float scale, float speed, float cover, int octaves, vec2 sun, vec3 air, float haze, float g, float h, float reach) {
   vec2 p = uv * scale;
   vec2 flow = vec2(t * speed, t * speed * 0.12);
   vec2 warp = vec2(fbm(p * 0.6 + flow * 0.4, 3), fbm(p * 0.6 + vec2(5.2, 1.3) - flow * 0.3, 3));
   vec2 q = p + flow + 0.9 * warp;
   float d = fbm(q, octaves);
-  float edge = smoothstep(cover, cover + 0.12, d);
+  float edge = step(h, smoothstep(cover, cover + 0.1, d) * reach);
   float toward = fbm(q + sun * 0.16, 3);
   float below = fbm(q - vec2(0.0, 0.12), 2);
   float lit = clamp(0.55 + 5.0 * (d - toward), 0.0, 1.0);
   float under = clamp(2.4 * (below - cover), 0.0, 1.0);
   float body = smoothstep(cover, cover + 0.5, d);
-  vec3 bright = vec3(1.0, 0.99, 0.96);
-  vec3 shadow = vec3(0.47, 0.54, 0.68);
-  vec3 c = mix(shadow, bright, clamp(lit * (1.0 - 0.5 * body) + 0.3 * (1.0 - under), 0.0, 1.0));
-  c += vec3(1.0, 0.97, 0.9) * (1.0 - smoothstep(cover, cover + 0.06, d)) * edge * 0.35;
+  float tone = clamp(lit * (1.0 - 0.5 * body) + 0.3 * (1.0 - under), 0.0, 1.0);
+  tone = clamp(floor(tone * 3.0 + g) / 3.0, 0.0, 1.0);
+  vec3 c = mix(vec3(0.55, 0.63, 0.82), vec3(0.98, 0.96, 0.9), tone);
   c = mix(c, air, haze);
   return vec4(c, edge);
 }
@@ -62,33 +61,38 @@ vec3 sky(vec2 frag, float t) {
   vec2 uv = frag / size.y;
   vec2 at = frag / size;
   float y = at.y;
+  vec2 cell = floor(frag / max(1.0, size.y / 700.0));
+  float g1 = hash(cell);
+  float g2 = hash(cell + 17.3);
+  float g3 = hash(cell + 41.9);
+  float g4 = hash(cell + 73.1);
   float drift = 0.5 + 0.5 * sin(t * 0.021);
   float turn = t * 0.004;
   vec2 sun = normalize(vec2(-0.55 + 0.25 * cos(turn), 0.8 + 0.2 * sin(turn * 1.7)));
   vec2 sunAt = vec2(0.78 + 0.08 * cos(turn), 0.86 + 0.05 * sin(turn * 1.7));
-  float light = mix(0.9, 1.0, 0.5 + 0.5 * sin(t * 0.026 + 1.3));
-  vec3 zenith = vec3(0.13, 0.34, 0.72);
-  vec3 horizon = vec3(0.66, 0.8, 0.95);
-  vec3 c = mix(horizon, zenith, pow(smoothstep(0.0, 1.0, y), 0.8));
-  float glow = exp(-5.5 * length((at - sunAt) * vec2(size.x / size.y, 1.0)));
-  c = mix(c, vec3(1.0, 0.98, 0.92), clamp(glow * 0.4 + pow(glow, 5.0) * 0.9, 0.0, 1.0));
+  float light = mix(0.94, 1.0, 0.5 + 0.5 * sin(t * 0.026 + 1.3));
+  vec3 zenith = vec3(0.2, 0.42, 0.8);
+  vec3 horizon = vec3(0.7, 0.83, 0.95);
+  float glow = exp(-6.0 * length((at - sunAt) * vec2(size.x / size.y, 1.0)));
+  float rise = clamp(pow(smoothstep(0.0, 1.0, y), 0.8) - glow * 0.9, 0.0, 1.0);
+  rise = floor(rise * 6.0 + g1) / 6.0;
+  vec3 c = mix(horizon, zenith, rise);
+  c = mix(c, vec3(1.0, 0.97, 0.88), step(g2, smoothstep(0.35, 0.9, glow)));
   vec3 air = mix(c, horizon, 0.5);
-  vec4 far = layer(uv + vec2(0.0, 0.3), t, 5.0, 0.007, mix(0.5, 0.56, drift), 5, sun, air, 0.45);
-  c = mix(c, far.rgb, far.a * 0.75);
-  vec4 mid = layer(uv + vec2(7.3, 0.1), t, 2.8, 0.011, mix(0.47, 0.53, 1.0 - drift), 5, sun, air, 0.2);
-  c = mix(c, mid.rgb, mid.a * 0.92);
-  vec4 near = layer(uv + vec2(3.1, -0.2), t, 1.6, 0.016, 0.5, 6, sun, air, 0.0);
-  c = mix(c, near.rgb, near.a * smoothstep(1.05, 0.2, y));
+  vec4 far = layer(uv + vec2(0.0, 0.3), t, 5.0, 0.007, mix(0.5, 0.56, drift), 4, sun, air, 0.45, g3, g4, 1.0);
+  c = mix(c, far.rgb, far.a);
+  vec4 mid = layer(uv + vec2(7.3, 0.1), t, 2.8, 0.011, mix(0.47, 0.53, 1.0 - drift), 5, sun, air, 0.18, g2, g1, 1.0);
+  c = mix(c, mid.rgb, mid.a);
+  vec4 near = layer(uv + vec2(3.1, -0.2), t, 1.6, 0.016, 0.5, 5, sun, air, 0.0, g4, g3, smoothstep(1.05, 0.2, y));
+  c = mix(c, near.rgb, near.a);
   c *= light;
-  vec2 v = at - 0.5;
-  c *= 1.0 - 0.22 * dot(v, v);
+  c += (g3 - 0.5) * 0.07;
   return c;
 }
 
 void main() {
   vec3 c = sky(gl_FragCoord.xy, time);
   if (blend > 0.0) c = mix(c, sky(gl_FragCoord.xy, later), blend);
-  c += (hash(gl_FragCoord.xy) - 0.5) / 255.0;
   color = vec4(c, 1.0);
 }
 `
