@@ -1,5 +1,6 @@
 import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo } from "react"
 
+import { useCalmShown, useIdle } from "~/calm/idle"
 import { Boundary } from "~/kit/boundary"
 import { later } from "~/kit/later"
 import { Toasts, useToasts } from "~/kit/toasts"
@@ -21,6 +22,7 @@ const EnrollDialog = later(() => import("~/settings/enroll").then((m) => m.Enrol
 const JoinDialog = later(() => import("~/start/join").then((m) => m.JoinDialog))
 const NewRoomDialog = later(() => import("~/shell/new-room").then((m) => m.NewRoomDialog))
 const Welcome = later(() => import("~/start/welcome").then((m) => m.Welcome))
+const Calm = later(() => import("~/calm/calm").then((m) => m.Calm))
 
 export function Root({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => void }) {
   const [toasts, toast, dismissToast] = useToasts()
@@ -84,9 +86,20 @@ export function Root({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => voi
         <Palette />
         <ContextMenus />
         <Toasts toasts={toasts} onDismiss={dismissToast} />
+        <CalmWatch minutes={app.prefs.calm} />
       </ActContext>
     </AppContext>
   )
+}
+
+function CalmWatch({ minutes }: { minutes: number }) {
+  const shown = useCalmShown()
+  useIdle(minutes, shown)
+  return shown ? (
+    <Suspense fallback={null}>
+      <Calm />
+    </Suspense>
+  ) : null
 }
 
 function useHistoryKeys(go: (go: Go) => void, modal: boolean) {
