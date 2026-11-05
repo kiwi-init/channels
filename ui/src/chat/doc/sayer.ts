@@ -1,4 +1,6 @@
-export type Say = (text: string, reply: { re: number; quote: string | null } | null, back: (text: string) => void) => boolean
+import type { Upload } from "~/model"
+
+export type Say = (text: string, reply: { re: number; quote: string | null } | null, back: (text: string, files: readonly Upload[]) => void, files: readonly Upload[]) => boolean
 
 const sayers = new Map<string, Say>()
 

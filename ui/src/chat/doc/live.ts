@@ -2,7 +2,7 @@ import * as Y from "yjs"
 import { Awareness } from "y-protocols/awareness"
 
 import { b64url, fromB64url } from "@kiwi/core/crypto.ts"
-import { blocksOf, markPosted, newBlock, removeBlock } from "@kiwi/core/doc/blocks.ts"
+import { attachToBlock, blocksOf, markPosted, newBlock, removeBlock, type BlockMedia } from "@kiwi/core/doc/blocks.ts"
 import { DOC_LEVEL, onWriterFloor, raiseWriterFloor } from "@kiwi/core/doc/level.ts"
 import type { PipeIn } from "@kiwi/core/doc/held-pipe.ts"
 import { mirrorAware } from "@kiwi/core/doc/pipe.ts"
@@ -10,7 +10,7 @@ import type { DocBlockRef } from "@kiwi/core/protocol.ts"
 import type { DocEvent, WireError } from "../../../../desktop/src/bridge.ts"
 import { giveBackBlock } from "~/chat/doc/give-back"
 import { madeHere, thisWindow, type MadeLines } from "~/chat/doc/made"
-import { afterUploads, uploading } from "~/chat/doc/uploads"
+import { afterUploads, startUpload, uploading } from "~/chat/doc/uploads"
 import { postFinished, type Finished, type Posting } from "~/chat/doc/post"
 import { noteTyping, tracingTyping } from "~/kit/typing-hook"
 
@@ -208,14 +208,36 @@ export class LiveDoc implements Shared {
     }
   }
 
-  say(text: string, reply: { re: number; quote?: string } | null, back: (text: string) => void): boolean {
+  say(text: string, reply: { re: number; quote?: string } | null, back: (text: string) => void, media?: Promise<readonly BlockMedia[]>): boolean {
     if (!this.poster || this.gaveUp || this.dead) return false
     const { id } = newBlock(this.doc, "text", this.poster.me, text)
     markPosted(this.doc, id)
-    this.post({ id, text, ...(reply ? { re: reply.re, ...(reply.quote ? { quote: reply.quote } : {}) } : {}) }, () => {
+    const re = reply ? { re: reply.re, ...(reply.quote ? { quote: reply.quote } : {}) } : {}
+    const failed = (): void => {
       removeBlock(this.doc, id)
       back(text)
-    })
+    }
+    if (!media) {
+      this.post({ id, text, ...re }, failed)
+      return true
+    }
+    const done = startUpload(id)
+    media
+      .then((m) => {
+        attachToBlock(this.doc, id, m)
+        this.post(
+          {
+            id,
+            text:
+              blocksOf(this.doc)
+                .find((b) => b.id === id)
+                ?.text.trim() ?? text,
+            ...re,
+          },
+          failed
+        )
+      }, failed)
+      .finally(done)
     return true
   }
 

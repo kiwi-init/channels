@@ -20,7 +20,7 @@ import { noteTyping, setTypingFocus, tracingTyping, type TypingFocus } from "~/k
 import { linksPlugin } from "~/chat/doc/links"
 import { fileDrag, takeDropped } from "@kiwi/app/dropped.ts"
 import { emptyPaste, takePasted } from "@kiwi/app/pasted.ts"
-import { fileView, filesIn, imageView, uploadAll, type DocMedia } from "~/chat/doc/media"
+import { fileView, filesIn, imageView, putAll, uploadAll, type DocMedia } from "~/chat/doc/media"
 import { blocksOf, mediaOfBlock, richBlocks } from "@kiwi/core/doc/blocks.ts"
 import { docFeed, oldestAt, setDocFeed } from "~/chat/doc/finished"
 import { postedBlocks } from "~/chat/doc/posted"
@@ -960,8 +960,23 @@ export function LiveThreadDoc({ channel, where, thread, hold }: { channel: Chann
   useEffect(() => live?.want(th), [live, th])
 
   useEffect(
-    () => (live?.isReady ? letSay(`${code}\n${thread}`, (text, reply, back) => live.say(text, reply ? { re: reply.re, ...(reply.quote ? { quote: reply.quote } : {}) } : null, back)) : undefined),
-    [live, live?.isReady, code, thread]
+    () =>
+      live?.isReady
+        ? letSay(`${code}\n${thread}`, (text, reply, back, files) =>
+            live.say(
+              text,
+              reply ? { re: reply.re, ...(reply.quote ? { quote: reply.quote } : {}) } : null,
+              (t) => back(t, files),
+              files.length
+                ? putAll(files, media).catch((e: unknown) => {
+                    announce(`Not sent: ${e instanceof Error && e.message ? e.message : "a file couldn't be uploaded"}`, "error")
+                    throw e
+                  })
+                : undefined
+            )
+          )
+        : undefined,
+    [live, live?.isReady, code, thread, media]
   )
 
   return live?.isReady ? <ThreadDoc channel={channel} where={where} thread={thread} shared={live} hold={hold} media={media} /> : null

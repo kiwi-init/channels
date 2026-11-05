@@ -1827,6 +1827,16 @@ button.msg-image-spot:hover {
   object-fit: cover;
 }
 
+.compose-file-name {
+  display: block;
+  padding: 26px 6px 0;
+  overflow: hidden;
+  font-size: var(--t-stamp);
+  color: var(--ink-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .compose-file-x {
   position: absolute;
   top: 4px;

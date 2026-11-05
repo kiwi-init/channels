@@ -1,12 +1,16 @@
 import { describe, expect, test } from "bun:test"
 import * as Y from "yjs"
 import { Awareness } from "y-protocols/awareness"
-import { blocksOf, newBlock } from "@kiwi/core/doc/blocks.ts"
+import { blocksOf, mediaOfBlock, newBlock } from "@kiwi/core/doc/blocks.ts"
 import { heldPipe } from "@kiwi/core/doc/held-pipe.ts"
 import { pipeDoc } from "@kiwi/core/doc/pipe.ts"
 
 import type { DocEvent } from "../../../../desktop/src/bridge.ts"
+import { changeBlock } from "~/chat/doc/change-block"
 import { LiveDoc, type OpenDoc, type Poster } from "~/chat/doc/live"
+import { putAll, type DocMedia } from "~/chat/doc/media"
+import { attached, composerKey, drafts, giveBack } from "~/chat/drafts"
+import type { Upload } from "~/model"
 import { letSay, sayerAt } from "~/chat/doc/sayer"
 
 const wait = (ms: number) => new Promise((done) => setTimeout(done, ms))
@@ -60,6 +64,22 @@ const poster = (me: string, posts: string[]): Poster => ({
 })
 
 const lines = (doc: Y.Doc): string[] => blocksOf(doc).map((b) => b.text)
+
+function heldPosts(me: string): { live: LiveDoc; answer: (text: string, went: boolean) => void } {
+  const waiting = new Map<string, (went: boolean) => void>()
+  const live = new LiveDoc(relayOf(new Y.Doc()), undefined, () => {}, { me, post: (text) => new Promise<boolean>((done) => void waiting.set(text, done)) })
+  return { live, answer: (text, went) => waiting.get(text)?.(went) }
+}
+
+const BLOB = "a".repeat(64)
+const KEY = "k".repeat(43)
+
+const media: DocMedia = {
+  putImage: (u) => Promise.resolve({ name: u.name, mime: u.mime, ref: { id: BLOB, key: KEY, size: 4 } }),
+  putFile: (u) => Promise.resolve({ name: u.name, mime: u.mime, size: 4, pieces: [{ id: BLOB, key: KEY, size: 4 }] }),
+  image: () => Promise.resolve(null),
+  file: () => Promise.resolve(null),
+}
 
 describe("the composer writes into the thread's doc (T5115)", () => {
   test("a send lands as your block in the doc and posts once, carrying the block", async () => {
@@ -144,11 +164,94 @@ describe("the composer writes into the thread's doc (T5115)", () => {
     b.destroy()
   })
 
+  test("refusals that land late and out of order never overwrite the draft being typed, and both go to the stash", async () => {
+    const key = composerKey("late", { kind: "room", room: "general" })
+    const stashed: string[] = []
+    const back = (t: string, f: readonly Upload[]) => void giveBack(key, t, f, (_k, text) => stashed.push(text))
+    const { live, answer } = heldPosts("jow")
+    live.say("A", null, (t) => back(t, []))
+    live.say("B", null, (t) => back(t, []))
+    await wait(5)
+    drafts.set(key, "C, being typed")
+    answer("B", false)
+    await wait(0)
+    answer("A", false)
+    await wait(0)
+    expect(drafts.get(key)).toBe("C, being typed")
+    expect(stashed).toEqual(["B", "A"])
+    expect(lines(live.doc)).toEqual([])
+    live.destroy()
+  })
+
+  test("a refusal comes back into an empty composer, and a later one waits in the stash", async () => {
+    const key = composerKey("late", { kind: "room", room: "ops" })
+    const stashed: string[] = []
+    const back = (t: string, f: readonly Upload[]) => void giveBack(key, t, f, (_k, text) => stashed.push(text))
+    const { live, answer } = heldPosts("jow")
+    live.say("A", null, (t) => back(t, []))
+    live.say("B", null, (t) => back(t, []))
+    await wait(5)
+    answer("B", false)
+    await wait(0)
+    answer("A", false)
+    await wait(0)
+    expect(drafts.get(key)).toBe("B")
+    expect(attached.get(key)).toBeUndefined()
+    expect(stashed).toEqual(["A"])
+    live.destroy()
+  })
+
+  test("a PDF sent in a doc thread lands as a file in its block, and the post names it", async () => {
+    const { live, posts, open } = liveFor("jow")
+    const pdf: Upload = { name: "notes.pdf", mime: "application/pdf", data: "JVBERi0=" }
+    const png: Upload = { name: "shot.png", mime: "image/png", data: "iVBORw==" }
+    live.say("the notes", null, () => {}, putAll([pdf, png], media))
+    open()
+    await wait(5)
+    const [block] = blocksOf(live.doc)
+    const { files, imgs } = mediaOfBlock(live.doc, block!.id)
+    expect(files.map((f) => f.name)).toEqual(["notes.pdf"])
+    expect(imgs.map((i) => i.name)).toEqual(["shot.png"])
+    expect(posts).toHaveLength(1)
+    expect(posts[0]!.text).toContain("the notes")
+    expect(posts[0]!.text).toContain("[file: notes.pdf]")
+    expect(posts[0]!.id).toBe(block!.id)
+    live.destroy()
+  })
+
+  test("a file that doesn't upload takes the line out of the doc and gives it back", async () => {
+    const { live, posts, open } = liveFor("jow")
+    const back: string[] = []
+    live.say("the notes", null, (t) => back.push(t), Promise.reject(new Error("no room")))
+    open()
+    await wait(5)
+    expect(blocksOf(live.doc)).toEqual([])
+    expect(posts).toEqual([])
+    expect(back).toEqual(["the notes"])
+    live.destroy()
+  })
+
+  test("saving an edit changes the line's block in place: no new block, no new post", async () => {
+    const host = new Y.Doc()
+    const open = relayOf(host)
+    const posts: string[] = []
+    const a = new LiveDoc(open, undefined, () => {}, poster("jow", posts))
+    a.say("ship it today", null, () => {})
+    await wait(5)
+    const [block] = blocksOf(host)
+    const changed = await changeBlock((_thread, th, on) => open(th, on), new Map([["main", "th1"]]), { th: "th1", id: block!.id }, "ship it tomorrow", { wait: 1_000, linger: 0 })
+    await wait(5)
+    expect(changed).toBe(true)
+    for (const doc of [host, a.doc]) expect(blocksOf(doc).map((b) => [b.id, b.text])).toEqual([[block!.id, "ship it tomorrow"]])
+    expect(posts).toEqual(["ship it today"])
+    a.destroy()
+  })
+
   test("the composer finds a thread's doc only while it's open", () => {
     const key = "kiwi\nT10"
     expect(sayerAt(key)).toBeNull()
     const off = letSay(key, () => true)
-    expect(sayerAt(key)?.("hi", null, () => {})).toBe(true)
+    expect(sayerAt(key)?.("hi", null, () => {}, [])).toBe(true)
     off()
     expect(sayerAt(key)).toBeNull()
   })
