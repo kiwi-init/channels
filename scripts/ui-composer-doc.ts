@@ -24,6 +24,7 @@ Needs bun scripts/ui-harness.ts first.`);
 const DIST = harnessDist(process.argv.find((a) => a.startsWith("--dist="))?.slice(7));
 const ENGINE = process.argv.includes("--webkit") ? "webkit" : "chromium";
 const UPLOAD_MS = 3000;
+const READ_MS = 600;
 
 const data = mkdtempSync(join(tmpdir(), "kiwi-composer-doc-"));
 mkdirSync(join(data, "relay"));
@@ -230,6 +231,12 @@ async function edits(page: Page): Promise<void> {
 
 async function pasted(page: Page): Promise<void> {
   uploads.slowMs = UPLOAD_MS;
+  await page.evaluate((ms) => {
+    const read = FileReader.prototype.readAsDataURL;
+    FileReader.prototype.readAsDataURL = function (this: FileReader, blob: Blob): void {
+      setTimeout(() => read.call(this, blob), ms);
+    };
+  }, READ_MS);
   const area = composer(page);
   const files = page.locator(".main .composer .compose-file");
   const scenario = async (what: string, text: string, steps: () => Promise<void>): Promise<void> => {
@@ -246,7 +253,7 @@ async function pasted(page: Page): Promise<void> {
     await page.keyboard.type("Album viu essa imagem ?");
     await page.keyboard.press(SEND);
   });
-  await scenario(`type, paste an image, send at once (uploads take ${UPLOAD_MS} ms)`, "e essa aqui ?", async () => {
+  await scenario(`type, paste an image, send at once (reading it takes ${READ_MS} ms, uploads ${UPLOAD_MS} ms)`, "e essa aqui ?", async () => {
     await page.keyboard.type("e essa aqui ?");
     await paste(page, "second.png");
     await page.keyboard.press(SEND);

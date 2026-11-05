@@ -127,6 +127,12 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
   }
 
   const add = (upload: Upload) => setFiles((now) => (now.length < MAX_FILES ? [...now, upload] : now))
+  const [reading, setReading] = useState(0)
+  const queued = useRef<string | null>(null)
+  const track = (job: Promise<unknown>): void => {
+    setReading((n) => n + 1)
+    void job.finally(() => setReading((n) => n - 1))
+  }
   const attach = (list: readonly File[]) => {
     const room = MAX_FILES - files.length
     if (list.length > room) toast(`Up to ${MAX_FILES} images in one message`)
@@ -142,14 +148,18 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
         continue
       }
       if (image && f.size > MAX_IMAGE_BYTES) {
-        void import("@kiwi/app/compress-image.ts").then(({ compressImage, renamed }) =>
-          compressImage(f, MAX_IMAGE_BYTES).then((done) => (done ? add({ ...done, name: renamed(name, done.mime) }) : toast(`${name} couldn't be read`, "error")))
+        track(
+          import("@kiwi/app/compress-image.ts").then(({ compressImage, renamed }) =>
+            compressImage(f, MAX_IMAGE_BYTES).then((done) => (done ? add({ ...done, name: renamed(name, done.mime) }) : toast(`${name} couldn't be read`, "error")))
+          )
         )
         continue
       }
-      void readBase64(f).then(
-        (data) => add({ name, mime: f.type || "application/octet-stream", data }),
-        () => toast(`${name} couldn't be read`, "error")
+      track(
+        readBase64(f).then(
+          (data) => add({ name, mime: f.type || "application/octet-stream", data }),
+          () => toast(`${name} couldn't be read`, "error")
+        )
       )
     }
   }
@@ -265,6 +275,10 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
       update("")
       return
     }
+    if (reading > 0) {
+      queued.current = value
+      return
+    }
     const body = value.trim()
     if (!body && !files.length) return
     const said = mentions.sent(body, picksFor(key))
@@ -289,6 +303,14 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
     setCue(null)
     update("")
   }
+  const sendQueued = useEffectEvent(() => {
+    const value = queued.current
+    queued.current = null
+    if (value !== null) send(value)
+  })
+  useEffect(() => {
+    if (!reading) sendQueued()
+  }, [reading])
   const ready = !!text.trim() || files.length > 0
   const complete = (name: string) => insert(text.slice(0, caret).replace(MENTION, (_all, pre: string) => `${pre}@${mentions.typed(name, picksFor(key))} `))
   const completeTask = (id: number) => insert(text.slice(0, caret).replace(TASK_REF, (_all, pre: string) => `${pre}T${id} `))
@@ -492,7 +514,7 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
                 .map((item) => item.getAsFile())
                 .filter((file): file is File => !!file)
               const images = (e.clipboardData.files.length ? [...e.clipboardData.files] : fromItems).filter((f) => doc || f.type.startsWith("image/"))
-              if (!images.length) return void takePasted(e.clipboardData).then((f) => f && attach([f]))
+              if (!images.length) return track(takePasted(e.clipboardData).then((f) => f && attach([f])))
               if (!e.clipboardData.getData("text/plain")) e.preventDefault()
               attach(images)
             }}
