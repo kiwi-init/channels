@@ -10,7 +10,7 @@ pause while the window is hidden, change nothing in the DOM per frame, and free 
 frame times: the rAF interval and each frame's GPU cost (draw + gl.finish), p50 and p99, at a MacBook Pro 14" size, 2x.
 The times are printed, never gated (Jow #850).
 
-  bun scripts/ui-calm-sky.ts [--chromium] [--seconds=6] [--width=1512] [--height=982] [--shot=sky.png]`);
+  bun scripts/ui-calm-sky.ts [--chromium] [--seconds=6] [--width=1512] [--height=982] [--shot=sky.png] [--seed=1200]`);
   process.exit(0);
 }
 
@@ -21,6 +21,7 @@ const SECONDS = arg("seconds", 6);
 const WIDTH = arg("width", 1512);
 const HEIGHT = arg("height", 982);
 const SHOT = process.argv.find((a) => a.startsWith("--shot="))?.slice(7);
+const SEED = arg("seed", 1200);
 
 const dir = mkdtempSync(join(tmpdir(), "kiwi-calm-sky-"));
 const entry = join(dir, "entry.ts");
@@ -53,7 +54,7 @@ Object.assign(window, {
       state.costs = []
       clouds = startClouds(canvas, {
         still,
-        seed: 1200,
+        seed: ${SEED},
         measure(ms) {
           state.frames++
           if (timed) state.costs.push(ms)
