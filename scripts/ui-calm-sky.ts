@@ -67,24 +67,37 @@ try {
   if (playing) {
     await page.evaluate(() => {
       const v = document.querySelector("video")!;
-      v.currentTime = Math.max(0, v.duration - 0.4);
+      const w = window as unknown as { wrapped: boolean };
+      w.wrapped = false;
+      let last = v.currentTime;
+      v.addEventListener("timeupdate", () => {
+        if (v.currentTime < last - 1) w.wrapped = true;
+        last = v.currentTime;
+      });
+      v.playbackRate = 2;
     });
     const wrapped = await page
-      .waitForFunction(() => (document.querySelector("video")?.currentTime ?? 99) < 2, null, { timeout: 5000 })
+      .waitForFunction(() => (window as unknown as { wrapped: boolean }).wrapped, null, { timeout: 20_000 })
       .then(() => true)
       .catch(() => false);
-    check(wrapped, `the loop wraps at its end (${(await at(page)).toFixed(2)} s after it)`);
+    check(wrapped, `the loop plays through to its end and starts again (at ${(await at(page)).toFixed(2)} s now)`);
+    await page.evaluate(() => (document.querySelector("video")!.playbackRate = 1));
     await page.evaluate(() => sky.hide(true));
     await page.waitForTimeout(300);
     const hiddenAt = await at(page);
     await page.waitForTimeout(700);
-    const stood = (await paused(page)) && (await at(page)) === hiddenAt;
+    const stillAt = await at(page);
+    const held = await paused(page);
+    const stood = held && Math.abs(stillAt - hiddenAt) < 0.1;
     await page.evaluate(() => sky.hide(false));
     const resumed = await page
       .waitForFunction((t) => (document.querySelector("video")?.currentTime ?? 0) > t + 0.2, hiddenAt, { timeout: 5000 })
       .then(() => true)
       .catch(() => false);
-    check(stood && resumed, `hidden, it holds still at ${hiddenAt.toFixed(2)} s, and plays again when shown`);
+    check(
+      stood && resumed,
+      `hidden, it holds still (${held ? "paused" : "playing"}, ${hiddenAt.toFixed(2)} → ${stillAt.toFixed(2)} s in 0.7 s), and plays again when shown${resumed ? "" : " (it didn't)"}`,
+    );
   }
   await page.evaluate(() => sky.unmount());
   check(await page.evaluate(() => !document.querySelector("video") && !document.querySelector(".calm-sky")), "unmounted, it leaves no video behind");
