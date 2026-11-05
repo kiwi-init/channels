@@ -130,7 +130,7 @@ A PR's CI runs only `repo / static` and `test / unit`, and a refresh reaches
 every job. Dispatch the rest on the branch:
 
 ```
-gh workflow run ci.yml --ref <branch> -f jobs=build,doc,shots,desktop-mac,desktop-linux,cli-macos,ios,android
+gh workflow run ci.yml --ref <branch> -f jobs=build,doc,fuzz,shots,desktop-mac,desktop-linux,cli-macos,ios,android
 ```
 
 Before accepting a workaround for a failure (a pin, a shim, a suppressed

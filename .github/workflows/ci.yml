@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       jobs:
-        description: "Only these jobs, comma-separated (static, test-unit, test-flows, build, doc, shots, desktop-mac, desktop-linux, desktop-distros, cli-macos, ios, android); empty runs everything"
+        description: "Only these jobs, comma-separated (static, test-unit, test-flows, build, doc, fuzz, shots, desktop-mac, desktop-linux, desktop-distros, cli-macos, ios, android); empty runs everything"
         required: false
         default: ""
       update_from:
@@ -45,7 +45,7 @@ jobs:
           EVENT: ${{ github.event_name }}
           JOBS: ${{ inputs.jobs }}
         run: |
-          all="static test-unit test-flows build doc shots desktop-mac desktop-linux desktop-distros cli-macos ios android"
+          all="static test-unit test-flows build doc fuzz shots desktop-mac desktop-linux desktop-distros cli-macos ios android"
           case "$EVENT" in
             pull_request) pick="static test-unit" ;;
             workflow_dispatch) pick=$(echo "${JOBS:-$all}" | tr ',' ' ') ;;
@@ -193,7 +193,7 @@ jobs:
         if: ${{ !cancelled() }}
         run: bunx wrangler deploy --dry-run --outdir "$RUNNER_TEMP/worker"
 
-  # The thread doc in Chromium and WebKit: replay, send, paste, image order, the fuzzer, two owners, the keys and a busy doc holding still.
+  # The thread doc in Chromium and WebKit: replay, send, follow, paste, image order, the slash menu, the keys and a busy doc holding still.
   doc:
     name: build / doc
     needs: plan
@@ -226,6 +226,34 @@ jobs:
       - name: doc image order, a sent line with an image stays above the lines sent after it
         if: ${{ !cancelled() }}
         run: bun scripts/ui-doc-image-order.ts
+      - name: doc slash menu, the doc's / menu opens on screen and keeps its rows inside its box, in Chromium and WebKit
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-doc-slash-menu.ts
+      - name: ui the keyboard runs across doc blocks like an editor (arrows, word jumps, shift-select, select all), in WebKit
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-doc-keys.ts --dist ui/dist
+      - name: ui a busy thread doc never scrolls on its own, under the caret or while you read, in WebKit
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-doc-still.ts --dist ui/dist
+
+  # The thread doc's fuzzer and two owners typing side by side, each in Chromium and WebKit at once.
+  fuzz:
+    name: build / fuzz
+    needs: plan
+    if: fromJSON(needs.plan.outputs.run)['fuzz']
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/browser
+        with:
+          webkit: "true"
+      - name: ui build
+        run: bun run ui:build
+      - name: ui harness build, with the plain-browser key store
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-harness.ts
       - name: doc fuzzer, fixed seeds, two windows of one person and an agent never lose or mix a line, in Chromium and WebKit
         if: ${{ !cancelled() }}
         run: |
@@ -263,15 +291,7 @@ jobs:
           wait "$chromium" || status=1
           wait "$webkit" || status=1
           exit "$status"
-      - name: doc slash menu, the doc's / menu opens on screen and keeps its rows inside its box, in Chromium and WebKit
-        if: ${{ !cancelled() }}
-        run: bun scripts/ui-doc-slash-menu.ts
-      - name: ui the keyboard runs across doc blocks like an editor (arrows, word jumps, shift-select, select all), in WebKit
-        if: ${{ !cancelled() }}
-        run: bun scripts/ui-doc-keys.ts --dist ui/dist
-      - name: ui a busy thread doc never scrolls on its own, under the caret or while you read, in WebKit
-        if: ${{ !cancelled() }}
-        run: bun scripts/ui-doc-still.ts --dist ui/dist
+
 
   shots:
     name: build / shots
@@ -846,7 +866,7 @@ jobs:
   # The one check to require: passes when every job the plan ran passed and the rest were skipped.
   ci-ok:
     name: ci-ok
-    needs: [plan, static, test-unit, test-flows, build, doc, shots, desktop-mac, desktop-linux, desktop-distros, cli-macos, ios, android]
+    needs: [plan, static, test-unit, test-flows, build, doc, fuzz, shots, desktop-mac, desktop-linux, desktop-distros, cli-macos, ios, android]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 2
