@@ -1,8 +1,8 @@
 import { Delete02Icon, PencilEdit02Icon } from "@hugeicons/core-free-icons"
-import { useEffect, useRef, useState } from "react"
+import { useContext, useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 
-import { askDelete, startEditing, stopAskingDelete, stopEditing, useAskingDelete } from "~/chat/editing"
+import { askDelete, EditHere, startEditing, stopAskingDelete, stopEditing, useAskingDelete } from "~/chat/editing"
 import { Modal } from "~/kit/bits"
 import { GlyphIcon } from "~/kit/icons"
 import type { Channel, Message } from "~/model"
@@ -17,9 +17,10 @@ export default function Changes({ kind, channel, m }: Props) {
 function Tools({ channel, m }: { channel: Channel; m: Message }) {
   const { actions } = useAct()
   const asking = useAskingDelete(channel.code, m.seq)
+  const at = useContext(EditHere)
   return (
     <>
-      <button type="button" className="msg-tool" aria-label="Edit" title="Edit" onClick={() => startEditing(channel.code, m.seq)}>
+      <button type="button" className="msg-tool" aria-label="Edit" title="Edit" onClick={() => startEditing(channel.code, m.seq, at)}>
         <GlyphIcon glyph={PencilEdit02Icon} size={14} />
       </button>
       <button type="button" className="msg-tool" aria-label="Delete" title="Delete" onClick={() => askDelete(channel.code, m.seq)}>

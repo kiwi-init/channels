@@ -2,6 +2,7 @@ import "~/styles/task-panel.css"
 
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react"
 
+import { EditHere } from "~/chat/editing"
 import { Composer } from "~/chat/composer"
 import { compactAt, quoteOf, useNames, useTaskIds } from "~/chat/conversation"
 import { named } from "~/chat/linked"
@@ -62,7 +63,7 @@ export function TaskPanel({ channel, id }: { channel: Channel; id: number }) {
   const waits = channel.asks.filter((a) => holds(a, id))
   const may = !memberOf(channel, channel.you)?.readOnly
   return (
-    <>
+    <EditHere.Provider value="panel">
       <PanelHead title={`T${task.id}`}>{may && <TaskMenu key={`menu-${task.id}`} channel={channel} task={task} />}</PanelHead>
       <div key={task.id} ref={body} className="panel-body task-body tp">
         <section className="panel-section tp-top">
@@ -93,7 +94,7 @@ export function TaskPanel({ channel, id }: { channel: Channel; id: number }) {
         )}
       </div>
       <Composer key={`compose-${task.id}`} channel={channel} where={{ kind: "task", task: task.id }} placeholder={`Message in T${task.id}`} />
-    </>
+    </EditHere.Provider>
   )
 }
 

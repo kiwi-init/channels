@@ -1,11 +1,11 @@
-import { lazy, Suspense, useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { lazy, Suspense, useCallback, useContext, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import { MAX_FILE_BYTES, MAX_IMAGE_BYTES, RASTER_MIMES } from "@kiwi/core/protocol.ts"
 import { fileDrag, takeDropped } from "@kiwi/app/dropped.ts"
 import { takePasted } from "@kiwi/app/pasted.ts"
 import { matchCommands, parseCommand } from "~/chat/commands"
 import { useCommands } from "~/chat/use-commands"
-import { startEditing, stopEditing, useEditingIn } from "~/chat/editing"
+import { EditHere, startEditing, stopEditing, useEditingIn } from "~/chat/editing"
 import { lastOwn, nextEdit, type Edit } from "~/chat/compose-edit"
 import { withExcerpt } from "~/chat/quote"
 import { sayerAt } from "~/chat/doc/sayer"
@@ -228,8 +228,9 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
     drafts.set(key, value)
   }
   const [edit, setEdit] = useState<Edit | null>(null)
-  const editingSeq = useEditingIn(channel.code)
-  const editing = doc && editingSeq !== null ? channel.messages.find((m) => m.seq === editingSeq && m.block) : undefined
+  const at = useContext(EditHere)
+  const editingSeq = useEditingIn(channel.code, at)
+  const editing = editingSeq === null ? undefined : channel.messages.find((m) => m.seq === editingSeq)
   const [editSeen, setEditSeen] = useState<number | undefined>(undefined)
   if (editing?.seq !== editSeen) {
     setEditSeen(editing?.seq)
@@ -508,7 +509,7 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
                 const last = lastOwn(channel.messages, where, inThread)
                 if (last) {
                   e.preventDefault()
-                  startEditing(channel.code, last.seq)
+                  startEditing(channel.code, last.seq, at)
                   return
                 }
               }
