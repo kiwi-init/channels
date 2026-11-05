@@ -129,7 +129,7 @@ async function build(): Promise<Engine | null> {
     yolk: color(0xf2b63c),
     lilac: color(0xa69ad6),
     lilacLight: color(0xd8cff3),
-    blush: color(0xe7a39a),
+    decide: color(0xf5b041),
     moon: vec3(0.93, 0.94, 0.98),
   }
 
@@ -450,13 +450,13 @@ async function build(): Promise<Engine | null> {
       col.addAssign(vec3(0.9, 0.93, 1.0).mul(star.mul(sky).mul(uStars)))
     })
 
-    col.assign(mix(col, col.mul(vec3(1.05, 0.9, 0.86)).add(vec3(0.025, 0.0, 0.0)), uAlert.mul(0.75)))
+    col.assign(mix(col, col.mul(vec3(1.05, 0.98, 0.86)).add(vec3(0.02, 0.012, 0.0)), uAlert.mul(0.75)))
 
     col.assign(col.mul(mix(1.0, 0.58, smoothstep(0.6, 1.0, suv.y))))
 
     const vig = smoothstep(1.25, 0.45, suv.sub(0.5).mul(vec2(uAspect, 1.0)).length())
     col.assign(col.mul(vig.mul(0.08).add(0.92)))
-    col.assign(mix(col, C.blush, vig.oneMinus().mul(uAlert).mul(0.3)))
+    col.assign(mix(col, C.decide, vig.oneMinus().mul(uAlert).mul(0.22)))
     const grain = hash(pix.x.floor().add(pix.y.floor().mul(1931.0)).add(uTime.mul(61.0).fract().mul(7919.0)))
       .sub(0.5)
       .mul(0.012)

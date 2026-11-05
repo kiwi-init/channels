@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState, type AnimationEvent } from "react
 import { hideCalm } from "~/calm/idle"
 import type { Meadow } from "~/calm/meadow"
 import { calmRows, type CalmRow } from "~/calm/rows"
-import { cx } from "~/kit/bits"
+import { Count, cx } from "~/kit/bits"
 import { useApp } from "~/nav"
 
 const SWALLOWED = ["keydown", "keyup", "wheel", "pointerdown", "contextmenu"] as const
@@ -48,12 +48,11 @@ function Settle({ text, still }: { text: string; still: boolean }) {
 
 function Row({ row, still, open }: { row: CalmRow; still: boolean; open: (code: string) => void }) {
   const needs = row.needs > 0
-  const count = row.needs > 99 ? "99+" : String(row.needs)
   const label = `${row.title}${needs ? `, ${row.needs} ${row.needs === 1 ? "needs" : "need"} you` : ""}, ${row.line ?? "quiet"}`
   return (
     <li>
       <button type="button" className={cx("rest-row", needs && "is-news")} aria-label={label} onClick={() => open(row.code)}>
-        <span className="rest-mark">{needs ? count : "·"}</span>
+        <span className="rest-mark">{needs ? <Count n={row.needs} loud /> : "·"}</span>
         <span className="rest-name">
           <Settle text={row.title} still={still} />
         </span>
@@ -136,8 +135,7 @@ export function Calm() {
       <section className="rest-glance" aria-label="What needs you">
         {total > 0 ? (
           <p className="rest-count">
-            <span className="rest-num">{total > 99 ? "99+" : total}</span>
-            <span className="rest-label">{total === 1 ? "needs you" : "need you"}</span>
+            Needs you <Count n={total} loud />
           </p>
         ) : (
           <p className="rest-calm">Nothing needs you. Enjoy your time, or go worry about something else.</p>

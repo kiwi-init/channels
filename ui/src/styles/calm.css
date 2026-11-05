@@ -3,7 +3,8 @@
   --meadow-ink: #fff;
   --meadow-ink-2: rgb(255 255 255 / 82%);
   --meadow-ink-3: rgb(255 255 255 / 60%);
-  --meadow-rose: #ffc9b3;
+  --meadow-decide: var(--decide);
+  --meadow-on-decide: var(--on-ink);
 
   position: fixed;
   inset: 0;
@@ -19,6 +20,18 @@
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   animation: rest-in 2s var(--ease) both;
+}
+
+:root[data-theme="light"] .rest {
+  --meadow-decide: #f5b041;
+  --meadow-on-decide: #000;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) .rest {
+    --meadow-decide: #f5b041;
+    --meadow-on-decide: #000;
+  }
 }
 
 .rest.is-leaving {
@@ -45,21 +58,23 @@
 
 .rest-count {
   display: flex;
-  align-items: baseline;
-  gap: 14px;
+  align-items: center;
+  gap: 10px;
   margin: 0;
-  color: var(--meadow-rose);
+  color: var(--meadow-decide);
+  font: 600 clamp(17px, 1.7vw, 22px) / 1.2 var(--ui);
 }
 
-.rest-num {
-  font: 600 clamp(72px, 10vw, 136px) / 0.86 var(--sans);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.045em;
+.rest .count.is-loud {
+  background: var(--meadow-decide);
+  color: var(--meadow-on-decide);
 }
 
-.rest-label {
-  font: 500 clamp(18px, 1.9vw, 26px) / 1.1 var(--sans);
-  letter-spacing: -0.01em;
+.rest-count .count {
+  min-width: 1.3em;
+  height: 1.3em;
+  padding: 0 0.35em;
+  font: 600 0.78em / 1 var(--ui);
 }
 
 .rest-calm {
@@ -89,7 +104,7 @@
 
 .rest-row {
   display: grid;
-  grid-template-columns: 3.2ch minmax(0, 18ch) minmax(0, 1fr);
+  grid-template-columns: 4ch minmax(0, 18ch) minmax(0, 1fr);
   align-items: baseline;
   column-gap: 18px;
   width: 100%;
@@ -140,22 +155,21 @@
   color: var(--meadow-ink);
 }
 
-.rest-row.is-news .rest-mark {
-  color: var(--meadow-rose);
-  font-weight: 500;
+.rest-mark .count {
+  font-family: var(--ui);
 }
 
 .rest-row.is-news .rest-name {
   font-weight: 600;
 }
 
-.rest-row.is-news .rest-line {
-  color: var(--meadow-rose);
+.rest-row.is-news .rest-line:not(.is-quiet) {
+  color: var(--meadow-decide);
 }
 
 @container (max-width: 640px) {
   .rest-row {
-    grid-template-columns: 3.2ch minmax(0, 1fr);
+    grid-template-columns: 4ch minmax(0, 1fr);
     row-gap: 2px;
   }
 
