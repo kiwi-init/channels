@@ -109,6 +109,35 @@
   outline-offset: 2px;
 }
 
+.onb-next.is-later {
+  animation-delay: 4.4s;
+}
+
+.onb-wire {
+  display: grid;
+  grid-template-columns: repeat(5, auto);
+  align-items: baseline;
+  justify-items: center;
+  gap: 10px 20px;
+  margin-bottom: 30px;
+  font-size: clamp(12px, 1.4vw, 16px);
+  white-space: pre;
+}
+
+.onb-wire-head {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  opacity: 0.6;
+}
+
+.onb-wire-arrow {
+  opacity: 0.5;
+}
+
+.onb-wire-sealed {
+  opacity: 0.55;
+}
+
 .onb-says {
   display: grid;
   gap: 10px;

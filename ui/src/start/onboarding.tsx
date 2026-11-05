@@ -9,10 +9,36 @@ import { PLEDGE, pledged, rememberOnboarded, same } from "~/start/onboarded"
 
 const WORD = "Channels"
 const LEDE = "end-to-end encrypted channels for AI agents"
+const PLAIN = "ship it on friday"
+const HEX = "0123456789abcdef"
+const TRUST = ["Messages are sealed on your device. The relay carries them and can't read them.", "Bring any harness: Claude Code, Codex, OpenCode, Pi and more."] as const
 const SAYS = ["Channels is not a harness, nor does it manage your agents.", "Agents connected to a channel are not bots, but they can assume personalities."] as const
+const noise = (n: number): string => Array.from({ length: n }, (_, i) => (i % 5 === 4 ? " " : (HEX[Math.floor(Math.random() * 16)] ?? "0"))).join("")
+
+function Sealed({ still }: { still: boolean }) {
+  const [text, setText] = useState(() => noise(PLAIN.length))
+  useEffect(() => {
+    if (still) return
+    const t = window.setInterval(() => setText(noise(PLAIN.length)), 140)
+    return () => window.clearInterval(t)
+  }, [still])
+  return <>{text}</>
+}
+
+function Line({ text, still, delay }: { text: string; still: boolean; delay: number }) {
+  return (
+    <p className="onb-say">
+      <span className="onb-sr">{text}</span>
+      <span aria-hidden="true">
+        <Settle text={text} still={still} rate={56} delay={delay} />
+      </span>
+    </p>
+  )
+}
+
 export function Onboarding({ onDone }: { onDone: () => void }) {
   const still = useStill()
-  const [step, setStep] = useState<"intro" | "pledge">("intro")
+  const [step, setStep] = useState<"intro" | "trust" | "pledge">("intro")
   const [typed, setTyped] = useState("")
   const [leaving, setLeaving] = useState(false)
   const stage = useRef<HTMLDivElement>(null)
@@ -84,7 +110,36 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
               <Settle text={LEDE} still={still} rate={48} delay={1.4} />
             </span>
           </p>
-          <button type="button" className="onb-next" autoFocus onClick={() => setStep("pledge")}>
+          <button type="button" className="onb-next" autoFocus onClick={() => setStep("trust")}>
+            continue
+          </button>
+        </main>
+      ) : step === "trust" ? (
+        <main key="trust" className="onb-step">
+          <div className="onb-wire" aria-hidden="true">
+            <span className="onb-wire-head">your device</span>
+            <span />
+            <span className="onb-wire-head">relay</span>
+            <span />
+            <span className="onb-wire-head">their device</span>
+            <span>
+              <Settle text={PLAIN} still={still} rate={30} delay={0.3} />
+            </span>
+            <span className="onb-wire-arrow">→</span>
+            <span className="onb-wire-sealed">
+              <Sealed still={still} />
+            </span>
+            <span className="onb-wire-arrow">→</span>
+            <span>
+              <Settle text={PLAIN} still={still} rate={30} delay={1.3} />
+            </span>
+          </div>
+          <div className="onb-says">
+            {TRUST.map((line, i) => (
+              <Line key={line} text={line} still={still} delay={1.8 + i * 1.3} />
+            ))}
+          </div>
+          <button type="button" className="onb-next is-later" autoFocus onClick={() => setStep("pledge")}>
             continue
           </button>
         </main>
@@ -92,12 +147,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
         <main key="pledge" className="onb-step is-pledge">
           <div id={sayId} className="onb-says">
             {SAYS.map((line, i) => (
-              <p key={line} className="onb-say">
-                <span className="onb-sr">{line}</span>
-                <span aria-hidden="true">
-                  <Settle text={line} still={still} rate={56} delay={0.3 + i * 1.3} />
-                </span>
-              </p>
+              <Line key={line} text={line} still={still} delay={0.3 + i * 1.3} />
             ))}
           </div>
           <label className={cx("onb-type", done && "is-done")}>
