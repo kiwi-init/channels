@@ -54,6 +54,18 @@ describe("one Channels per data folder, taken before the store opens (T438)", ()
     expect(got).toEqual([{ kind: "link", url: "kiwi://join/abc" }]);
   });
 
+  test("a first start with a kiwi:// link, as Linux's xdg-open gives it, opens that link itself (T4442)", async () => {
+    const got: Handoff[] = [];
+    expect(await claim(fresh(), { kind: "link", url: "kiwi://join/cold" }, got)).toMatchObject({ kind: "first", listening: true });
+    expect(got).toEqual([{ kind: "link", url: "kiwi://join/cold" }]);
+  });
+
+  test("a first start without a link opens nothing", async () => {
+    const got: Handoff[] = [];
+    await claim(fresh(), { kind: "show" }, got);
+    expect(got).toEqual([]);
+  });
+
   test("a second start without a link asks the first to show its window", async () => {
     const dir = fresh();
     const got: Handoff[] = [];

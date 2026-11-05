@@ -5,6 +5,9 @@ export const JOIN_SCHEME = "kiwi";
 const MAX_LINK = 2048;
 
 let deepLink: string | null = null;
+let opened = 0;
+
+export const linksOpened = (): number => opened;
 
 export function takeDeepLink(): string | null {
   const link = deepLink;
@@ -16,6 +19,7 @@ const opensChannel = (link: unknown): string | null => (typeof link === "string"
 
 export function handleDeepLink(url: string): void {
   if (!opensChannel(url)) return;
+  opened += 1;
   deepLink = url;
   const shell = host();
   shell.push("deepLink", url);

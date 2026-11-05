@@ -1,5 +1,6 @@
 import type { BrowserWindow } from "electrobun/main";
 
+import { linksOpened } from "./deep-links.ts";
 import { drive } from "./eb-driver.ts";
 import { startupMarks } from "./eb-startup.ts";
 import { testHomeProblem } from "./eb-test-home.ts";
@@ -30,6 +31,7 @@ export function driveForTests(win: BrowserWindow): void {
     if (socket)
       drive(win.webview, socket, {
         startup: startupMarks,
+        linksOpened,
         closeWindow: () => (win.requestClose(), true),
         window: () => ({ visible: win.isVisible(), minimized: win.isMinimized() }),
         frame: () => win.getFrame(),

@@ -98,6 +98,7 @@ export async function claimInstance({ dir, handoff, scheme, onHandoff, waitMs = 
   if (flock(platform)(fd, LOCK_EX | LOCK_NB) === 0) {
     fs.rmSync(socket, { force: true });
     const server = await serve(socket, scheme, onHandoff).catch(() => null);
+    if (handoff.kind === "link") onHandoff(handoff);
     let released = false;
     return {
       kind: "first",

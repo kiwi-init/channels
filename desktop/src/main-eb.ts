@@ -90,7 +90,11 @@ const instance = wrongHome
       dir: dataDir,
       handoff: handoffFor(process.argv, JOIN_SCHEME),
       scheme: JOIN_SCHEME,
-      onHandoff: (h) => (h.kind === "link" ? handleDeepLink(h.url) : ebHost.showWindow()),
+      onHandoff: (h) => {
+        if (h.kind === "show") return ebHost.showWindow();
+        console.error(`Channels: opening a ${JOIN_SCHEME}:// link`);
+        handleDeepLink(h.url);
+      },
     }).catch((e: unknown) => {
       logMainError(e);
       console.error("Channels: couldn't take the single-instance lock in its data folder", e);
