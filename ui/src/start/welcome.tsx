@@ -1,5 +1,5 @@
 import "~/styles/start.css"
-import { useState, type KeyboardEvent } from "react"
+import { useEffect, useState, type KeyboardEvent } from "react"
 
 import { takeTurns } from "~/home"
 import { cx } from "~/kit/bits"
@@ -7,6 +7,8 @@ import { Icon } from "~/kit/icons"
 import { ago, useNow } from "~/kit/time"
 import type { ChannelTile, HomeAgent, HomeAsk, HomeChannel } from "~/model"
 import { useApp } from "~/nav"
+import { onboarded } from "~/start/onboarded"
+import { Onboarding } from "~/start/onboarding"
 
 export function Welcome() {
   const { app } = useApp()
@@ -16,8 +18,10 @@ export function Welcome() {
 }
 
 function Empty() {
+  const [intro, setIntro] = useState(() => !onboarded(false))
   return (
     <main className="start-area">
+      {intro && <Onboarding onDone={() => setIntro(false)} />}
       <div className="start-drag" />
       <div className="start-welcome start-home">
         <h1 className="start-title">No channels yet</h1>
@@ -50,6 +54,7 @@ const ASKS_SHOWN = 4
 
 function Hud({ tiles, home }: { tiles: readonly ChannelTile[]; home: readonly HomeChannel[] }) {
   const [all, setAll] = useState(false)
+  useEffect(() => void onboarded(true), [])
   const now = useNow(60_000)
   const byCode = new Map(home.map((h) => [h.code, h]))
   const members = tiles.filter((t) => t.state === "member")

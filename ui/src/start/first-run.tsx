@@ -3,6 +3,8 @@ import { lazy, Suspense, useId, useState } from "react"
 import "~/styles/start.css"
 import { cx } from "~/kit/bits"
 import { useApp } from "~/nav"
+import { onboarded } from "~/start/onboarded"
+import { Onboarding } from "~/start/onboarding"
 
 const Enroll = lazy(() => import("~/start/enroll"))
 const GithubSignIn = lazy(() => import("~/start/github-sign-in"))
@@ -18,6 +20,17 @@ function problemWith(name: string): string | null {
 }
 
 export function FirstRun() {
+  const { app } = useApp()
+  const [intro, setIntro] = useState(() => !app.account && !onboarded(false))
+  return (
+    <>
+      <FirstStep />
+      {intro && <Onboarding onDone={() => setIntro(false)} />}
+    </>
+  )
+}
+
+function FirstStep() {
   const { app } = useApp()
   const signIn = app.signIn
   if (signIn && (signIn.stage === "sign-in" || signIn.stage === "checking" || (signIn.stage === "signed-in" && !app.enrolling)))

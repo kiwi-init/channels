@@ -5,46 +5,11 @@ import { useEffect, useMemo, useRef, useState, type AnimationEvent } from "react
 import { hideCalm } from "~/calm/idle"
 import type { Meadow } from "~/calm/meadow"
 import { calmRows, type CalmRow } from "~/calm/rows"
+import { Settle, useStill } from "~/calm/settle"
 import { Count, cx } from "~/kit/bits"
 import { useApp } from "~/nav"
 
 const SWALLOWED = ["keydown", "keyup", "wheel", "pointerdown", "contextmenu"] as const
-const STILL = "(prefers-reduced-motion: reduce)"
-
-function useStill(): boolean {
-  const [still, setStill] = useState(() => window.matchMedia(STILL).matches)
-  useEffect(() => {
-    const query = window.matchMedia(STILL)
-    const changed = (): void => setStill(query.matches)
-    query.addEventListener("change", changed)
-    return () => query.removeEventListener("change", changed)
-  }, [])
-  return still
-}
-
-function Settle({ text, still }: { text: string; still: boolean }) {
-  const [shown, setShown] = useState(() => (still ? text : ""))
-  useEffect(() => {
-    if (still) return
-    const t0 = performance.now()
-    let raf = 0
-    const step = (): void => {
-      const age = (performance.now() - t0) / 1000
-      let out = ""
-      for (let i = 0; i < text.length; i++) {
-        const a = age - i / 70
-        const ch = text[i] ?? ""
-        out += ch === " " || a > 0.1 ? ch : a > -0.25 ? String.fromCharCode(97 + Math.floor(Math.random() * 26)) : ""
-      }
-      setShown(out)
-      if (age < text.length / 70 + 0.15) raf = requestAnimationFrame(step)
-      else setShown(text)
-    }
-    raf = requestAnimationFrame(step)
-    return () => cancelAnimationFrame(raf)
-  }, [text, still])
-  return <>{still ? text : shown}</>
-}
 
 function Row({ row, still, open }: { row: CalmRow; still: boolean; open: (code: string) => void }) {
   const needs = row.needs > 0
