@@ -852,6 +852,9 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       searchOlder: async (...[, query, before]: Parameters<Actions["searchOlder"]>) => demoOlder(query, before),
       olderAround: async (...[, seq]: Parameters<Actions["olderAround"]>) => demoAround(seq),
       fetchOlder: (...[, got]: Parameters<Actions["fetchOlder"]>) => demoFetchOlder(got),
+      earlier: async () => false,
+      earlierTo: async () => false,
+      holdEarlier: () => {},
       setMute: (code, room, on) => {
         setState((s) => {
           const key = muteKey(code, room)

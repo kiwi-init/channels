@@ -11,6 +11,7 @@ import { dmRoomOf } from "~/live/dm"
 import { asksOf, lastSaidOf, peopleOf, tasksOf } from "~/live/map"
 import { usePinsHere } from "~/live/pins"
 import { specAsksOf, specsOf } from "~/live/specs"
+import { withReach } from "~/live/reach"
 import { publishHome, type Run } from "~/live/store"
 import { changeUnsent, nextUnsentKey } from "~/live/unsent"
 import { refusal } from "~/live/refused"
@@ -27,7 +28,8 @@ export function HomeMembers() {
 }
 
 const HomeMember = memo(function HomeMember({ member }: { member: StoredMember }) {
-  const { ch, state, messages, roster, online, requests, isOwner, gone, ready, send, refreshRequests, refreshRoster, foldFrom, older } = useChannel(member)
+  const { ch, state, messages: shown, reach, roster, online, requests, isOwner, gone, ready, send, refreshRequests, refreshRoster, foldFrom, older } = useChannel(member, undefined, true)
+  const messages = useMemo(() => withReach(reach, shown, state.openAsks), [reach, shown, state.openAsks])
   const me = member.identity.name
   const roomId = member.access.roomId
   const code = member.code

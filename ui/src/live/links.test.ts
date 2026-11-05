@@ -34,6 +34,8 @@ describe("links to a message, and the drawer's news dot", () => {
     expect(findWanted(want, "mc2-abc", [m(5), m(6)])).toEqual({ kind: "waiting" })
     expect(findWanted(want, "mc2-abc", [m(6), m(7)])).toEqual({ kind: "found", m: m(7) })
     expect(findWanted(want, "mc2-abc", [m(6), m(8)])).toEqual({ kind: "missing" })
+    expect(findWanted(want, "mc2-abc", [m(6), m(7), m(9)], 9)).toEqual({ kind: "older" })
+    expect(findWanted(want, "mc2-abc", [m(6), m(7), m(9)], 7)).toEqual({ kind: "found", m: m(7) })
   })
 
   test("a click always shows the channel first, from Settings or the same channel too, and only then asks for the message", () => {

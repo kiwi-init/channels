@@ -25,6 +25,7 @@ export interface HistoryDb {
   putRows(roomId: string, memberPk: string, rows: CachedRow[]): Promise<void>;
   newest(roomId: string, memberPk: string, count: number): Promise<CachedRow[]>;
   after(roomId: string, memberPk: string, seq: number, count: number): Promise<CachedRow[]>;
+  before(roomId: string, memberPk: string, seq: number, count: number): Promise<CachedRow[]>;
   oldest(roomId: string, memberPk: string): Promise<number | null>;
   floor(roomId: string, memberPk: string): Promise<boolean>;
   putFloor(roomId: string, memberPk: string): Promise<void>;
@@ -87,6 +88,20 @@ function idb(): HistoryDb {
       tx.onabort = () => reject(tx.error);
     });
   };
+  const newestIn = async (keys: IDBKeyRange, count: number): Promise<CachedRow[]> => {
+    const db = await openDb();
+    return new Promise<CachedRow[]>((resolve, reject) => {
+      const out: CachedRow[] = [];
+      const req = db.transaction(STORE, "readonly").objectStore(STORE).openCursor(keys, "prev");
+      req.onsuccess = () => {
+        const cursor = req.result;
+        if (!cursor || out.length >= count) return resolve(out.reverse());
+        out.push(cursor.value as CachedRow);
+        cursor.continue();
+      };
+      req.onerror = () => reject(req.error);
+    });
+  };
   const run = async <T>(mode: IDBTransactionMode, fn: (store: IDBObjectStore) => IDBRequest<T> | void, name: string = STORE): Promise<T> => {
     try {
       return await once(mode, fn, name);
@@ -104,23 +119,8 @@ function idb(): HistoryDb {
       run<void>("readwrite", (s) => {
         for (const row of rows) s.put(row, [roomId, memberPk, row.seq]);
       }),
-    newest: async (roomId, memberPk, count) => {
-      const db = await openDb();
-      return new Promise<CachedRow[]>((resolve, reject) => {
-        const out: CachedRow[] = [];
-        const req = db
-          .transaction(STORE, "readonly")
-          .objectStore(STORE)
-          .openCursor(range(roomId, memberPk, Number.MAX_SAFE_INTEGER, false), "prev");
-        req.onsuccess = () => {
-          const cursor = req.result;
-          if (!cursor || out.length >= count) return resolve(out.reverse());
-          out.push(cursor.value as CachedRow);
-          cursor.continue();
-        };
-        req.onerror = () => reject(req.error);
-      });
-    },
+    newest: (roomId, memberPk, count) => newestIn(range(roomId, memberPk, Number.MAX_SAFE_INTEGER, false), count),
+    before: (roomId, memberPk, seq, count) => newestIn(range(roomId, memberPk, seq, true), count),
     after: (roomId, memberPk, seq, count) => run<CachedRow[]>("readonly", (s) => s.getAll(rangeAbove(roomId, memberPk, seq), count)),
     oldest: async (roomId, memberPk) => {
       const key = await run<IDBValidKey | undefined>("readonly", (s) => s.getKey(range(roomId, memberPk, Number.MAX_SAFE_INTEGER, false)));
