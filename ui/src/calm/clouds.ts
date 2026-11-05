@@ -97,7 +97,12 @@ void main() {
 }
 `
 
-const BUDGET = 1_500_000
+export const BUDGETS = [1_500_000, 1_000_000, 700_000] as const
+const WINDOW = 60
+const FRAME_BAR = 8.3
+const MISSED = 1.5
+const CALM = 10
+const PATIENCE_MAX = 80
 const STILL_EVERY = 30_000
 const STILL_FADE = 4_000
 const STILL_STEP = 45
@@ -112,9 +117,36 @@ export interface Clouds {
   stop(): void
 }
 
-export function scaleFor(width: number, height: number, ratio: number): number {
+export function scaleFor(width: number, height: number, ratio: number, budget: number = BUDGETS[0]): number {
   const area = Math.max(1, width * height)
-  return Math.min(ratio, Math.max(0.5, Math.sqrt(BUDGET / area)))
+  return Math.min(ratio, Math.max(0.5, Math.sqrt(budget / area)))
+}
+
+export interface Pace {
+  level: number
+  gaps: number[]
+  calm: number
+  patience: number
+  sinceUp: number
+}
+
+export const freshPace = (): Pace => ({ level: 0, gaps: [], calm: 0, patience: CALM, sinceUp: Infinity })
+
+export function pace(was: Pace, gap: number): Pace {
+  const gaps = [...was.gaps, gap]
+  if (gaps.length < WINDOW) return { ...was, gaps }
+  const sorted = gaps.sort((a, b) => a - b)
+  const period = sorted[Math.floor(sorted.length / 2)] ?? gap
+  const p99 = sorted[Math.floor((sorted.length - 1) * 0.99)] ?? gap
+  const sinceUp = was.sinceUp + 1
+  if (p99 > Math.max(FRAME_BAR, period * MISSED)) {
+    const level = Math.min(BUDGETS.length - 1, was.level + 1)
+    const patience = sinceUp <= 2 ? Math.min(PATIENCE_MAX, was.patience * 2) : was.patience
+    return { level, gaps: [], calm: 0, patience, sinceUp }
+  }
+  const calm = was.calm + 1
+  if (calm >= was.patience && was.level > 0) return { level: was.level - 1, gaps: [], calm: 0, patience: was.patience, sinceUp: 0 }
+  return { ...was, gaps: [], calm, sinceUp }
 }
 
 function compile(gl: WebGL2RenderingContext, type: number, source: string): WebGLShader | null {
@@ -178,10 +210,12 @@ export function startClouds(canvas: HTMLCanvasElement, options: CloudOptions = {
   let frame = 0
   let stopped = false
   let lost = false
+  let paced = freshPace()
+  let last = 0
 
   const fit = () => {
     const box = canvas.getBoundingClientRect()
-    const scale = scaleFor(box.width, box.height, window.devicePixelRatio || 1)
+    const scale = scaleFor(box.width, box.height, window.devicePixelRatio || 1, BUDGETS[paced.level])
     const width = Math.max(1, Math.round(box.width * scale))
     const height = Math.max(1, Math.round(box.height * scale))
     if (canvas.width !== width || canvas.height !== height) {
@@ -221,9 +255,16 @@ export function startClouds(canvas: HTMLCanvasElement, options: CloudOptions = {
   const tick = (now: number) => {
     frame = 0
     if (stopped || document.hidden) return
+    if (last && !options.still) {
+      const level = paced.level
+      paced = pace(paced, now - last)
+      if (paced.level !== level) fit()
+    }
+    last = now
     draw(now)
     if (still(now)) {
       const wait = STILL_EVERY - STILL_FADE - ((now - began) % STILL_EVERY)
+      last = 0
       resting = window.setTimeout(() => (frame = requestAnimationFrame(tick)), wait)
       return
     }
@@ -235,6 +276,7 @@ export function startClouds(canvas: HTMLCanvasElement, options: CloudOptions = {
     frame = requestAnimationFrame(tick)
   }
   const pause = () => {
+    last = 0
     cancelAnimationFrame(frame)
     window.clearTimeout(resting)
     frame = 0
