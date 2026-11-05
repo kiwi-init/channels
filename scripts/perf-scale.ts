@@ -221,7 +221,7 @@ try {
 
   const t0 = performance.now();
   await page.goto(BASE);
-  await page.getByRole("textbox", { name: "Your name" }).waitFor();
+  await page.getByRole("button", { name: "continue", exact: true }).waitFor();
   const cold = await page.evaluate(() => {
     const nav = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming;
     const fcp = performance.getEntriesByName("first-contentful-paint")[0];

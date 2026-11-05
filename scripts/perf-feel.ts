@@ -379,7 +379,7 @@ try {
 
   const coldAt = performance.now();
   await page.goto(BASE);
-  await page.getByRole("textbox", { name: "Your name" }).waitFor();
+  await page.getByRole("button", { name: "continue", exact: true }).waitFor();
   report["cold: first run, empty cache"] = {
     readyMs: Math.round(performance.now() - coldAt),
     ...(await page.evaluate(() => ({ fcpMs: Math.round(performance.getEntriesByName("first-contentful-paint")[0]?.startTime ?? -1) }))),

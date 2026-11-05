@@ -5,7 +5,7 @@ import { join, resolve } from "node:path";
 import { chromium } from "playwright-core";
 import { startLocalRelay } from "./local-relay.ts";
 import { harnessDist } from "./ui-harness.ts";
-import { approveSpec, docOpen, unfold, writeBlock } from "./perf-ui.ts";
+import { approveSpec, docOpen, passOnboarding, unfold, writeBlock } from "./perf-ui.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
 const DIST = harnessDist(process.argv[2]);
@@ -67,6 +67,7 @@ const row = (text: string) => page.locator("article, .thread-doc section.blk").f
 try {
   at = "first run";
   await page.goto(BASE);
+  await passOnboarding(page);
   await page.getByRole("textbox", { name: "Your name" }).fill("smoke");
   await page.getByRole("button", { name: "Continue" }).click();
   const addChannel = page.getByRole("button", { name: "New channel or join one" });
