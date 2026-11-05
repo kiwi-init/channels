@@ -1,7 +1,7 @@
 import { Fragment, startTransition, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 
 import { Composer } from "~/chat/composer"
-import { docThread } from "@kiwi/core/doc/threads.ts"
+import { docOf } from "~/chat/doc-of"
 import { useEditingIn } from "~/chat/editing"
 import { Updates } from "~/chat/events"
 import { splitUpdates } from "~/chat/fold-events"
@@ -288,13 +288,6 @@ export function useStick(following = true, still = false) {
   )
 
   return { scroller, content, spacer, stuck, live, remember, settle, toBottom, toOffset, unstick, hold }
-}
-
-function docOf(channel: Channel, where: Where): string | null {
-  if (where.kind === "task") return docThread({ kind: "task", task: where.task })
-  if (where.kind === "room") return docThread({ kind: "room", room: where.room })
-  if (where.kind === "dm") return channel.directs.find((d) => d.with === where.with)?.doc ?? null
-  return null
 }
 
 export function Conversation({ channel, jump }: { channel: Channel; jump: Jump | null }) {

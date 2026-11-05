@@ -18,7 +18,7 @@ export const CHANNEL_CALLS_SINCE: Readonly<Record<string, readonly string[]>> = 
   "1.17.0": ["goneDevices"],
   "1.21.0": ["sentRooms"],
   "3.1.0": ["putImage", "putFileData", "fileData"],
-  "3.2.0": ["docList", "pruneDocs", "compactDoc"],
+  "3.2.0": ["docList", "pruneDocs", "compactDoc", "docVersions", "docVersionState"],
 };
 
 export const CHANNEL_CALLS_BACKGROUND: readonly string[] = ["syncMarks", "sentRooms", "syncGithub", "githubStatus", "goneDevices", "docList", "pruneDocs", "compactDoc"];

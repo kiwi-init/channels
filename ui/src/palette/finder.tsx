@@ -3,7 +3,8 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode 
 import { Avatar, cx, Dot, STATUS_WORDS } from "~/kit/bits"
 import { useDebugOptions } from "~/kit/debug"
 import { Icon } from "~/kit/icons"
-import type { App, Task, TaskStatus, Theme } from "~/model"
+import { docOf } from "~/chat/doc-of"
+import type { App, Channel, Task, TaskStatus, Theme, Where } from "~/model"
 import { useApp, type Go, type Nav, type Panel } from "~/nav"
 import { nickname, onePerPerson, shown } from "~/names"
 import { SIDEBAR_KEYS } from "@kiwi/app/sidebar-hidden.ts"
@@ -37,6 +38,14 @@ interface Item {
   lead: ReactNode
   meta?: ReactNode
   run: () => void
+}
+
+function versionsHere(channel: Channel, nav: Nav): { thread: string; name: string } | null {
+  const where: Where = nav.panel?.kind === "task" ? { kind: "task", task: nav.panel.task } : nav.where
+  const thread = docOf(channel, where)
+  if (!thread || !channel.docs?.[thread]) return null
+  const name = where.kind === "task" ? `T${where.task}` : where.kind === "room" ? `#${channel.rooms.find((r) => r.id === where.room)?.name ?? where.room}` : "This conversation"
+  return { thread, name }
 }
 
 interface Ranked {
@@ -328,6 +337,17 @@ function collect(app: App, nav: Nav, go: (go: Go) => void, debug: boolean): Item
         close()
         toggleSide()
       },
+    })
+
+  const versions = channel && nav.page === "channel" ? versionsHere(channel, nav) : null
+  if (versions)
+    items.push({
+      id: "action:doc-versions",
+      group: "Actions",
+      label: `Earlier versions of ${versions.name === "This conversation" ? "this doc" : `the ${versions.name} doc`}`,
+      keys: ["restore", "history", "undo", "doc"],
+      lead: <Icon name="spec" size={14} />,
+      run: () => go({ to: "modal", modal: { kind: "versions", thread: versions.thread, name: versions.name } }),
     })
 
   if (debug)

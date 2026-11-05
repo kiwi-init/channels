@@ -29,6 +29,7 @@ import {
 } from "~/live/account"
 import { loadPicture } from "~/live/pictures"
 import { appCan } from "~/live/app-can"
+import { fromB64url } from "@kiwi/core/crypto.ts"
 import { setNewMemberPowers, setNewMemberScopes } from "~/live/defaults"
 import { deleteTheme, saveTheme, setPrefs } from "~/live/prefs"
 import { iconFromFile } from "~/live/icon-file"
@@ -173,6 +174,14 @@ export function makeActions(): Actions {
     },
     openDoc: (code, thread, th, on) => link(code).doc(thread, th, on),
     findDoc: (code, thread) => findDoc(link(code), code, thread),
+    docVersions: async (code, th) => ((await appCan("docVersions")) ? link(code).docVersions(th) : []),
+    restoreDocVersion: async (code, thread, th, upto) => {
+      if (!(await appCan("docVersionState"))) return false
+      const state = await link(code).docVersionState(thread, th, upto)
+      if (!state) return false
+      const { restoreVersion } = await import("~/chat/doc/restore-version")
+      return restoreVersion((at, on) => link(code).doc(thread, at, on), th, fromB64url(state))
+    },
     putDocImage: async (code, upload) => {
       if (!(await appCan("putImage"))) throw new Error(UPDATE_FOR_MEDIA)
       const stored = await link(code).putImage(upload)

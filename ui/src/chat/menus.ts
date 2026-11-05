@@ -8,6 +8,7 @@ import { seatRoot } from "~/names"
 import { hiddenKey, hiddenPlaces, setHidden } from "~/shell/hidden-places"
 import { messageLink } from "@kiwi/core/message-link.ts"
 import { copyText } from "~/kit/toasts"
+import { docOf } from "~/chat/doc-of"
 
 const WEB_LINK = /^(https?:\/\/|mailto:)/i
 
@@ -76,6 +77,11 @@ export function messageGroups(ctx: MenuContext, m: Message, target: EventTarget,
   ]
 }
 
+export function versionsItems({ channel, go }: MenuContext, where: Where, name: string): MenuItem[] {
+  const thread = docOf(channel, where)
+  return thread && channel.docs?.[thread] ? [{ label: "Earlier versions", run: () => go({ to: "modal", modal: { kind: "versions", thread, name } }) }] : []
+}
+
 function hideItem(ctx: MenuContext, actions: Actions, where: Extract<Where, { kind: "room" | "dm" }>, name: string, open: boolean, keep = false): MenuItem {
   const key = hiddenKey(ctx.channel.code, where)
   const hidden = hiddenPlaces.get().includes(key)
@@ -106,6 +112,7 @@ export function roomGroups(
         ? []
         : [hideItem(ctx, actions, { kind: "room", room: room.id }, `#${room.name}`, open, true)]),
     ],
+    versionsItems(ctx, { kind: "room", room: room.id }, `#${room.name}`),
     channel.youOwn || channel.youTrusted ? [{ label: "Room settings", run: () => go({ to: "modal", modal: { kind: "channel", tab: "rooms" } }) }] : [],
     room.members && canLeave
       ? [
@@ -129,6 +136,7 @@ export function directGroups(ctx: MenuContext, actions: Actions, open: boolean, 
       ...(direct.unread > 0 ? [{ label: "Mark as read", run: () => actions.markRead(ctx.channel.code, { kind: "dm", with: direct.with }) }] : []),
       hideItem(ctx, actions, { kind: "dm", with: direct.with }, "conversation", open),
     ],
+    versionsItems(ctx, { kind: "dm", with: direct.with }, "This conversation"),
     who ? personItems(ctx, who).slice(0, 1) : [],
   ]
 }

@@ -1,0 +1,6 @@
+.doc-versions-ask {
+  flex: 1;
+  align-self: center;
+  color: var(--ink-2);
+  font-size: var(--t-meta);
+}

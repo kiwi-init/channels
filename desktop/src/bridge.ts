@@ -139,6 +139,8 @@ export const CHANNEL_CALLS = [
   "docList",
   "pruneDocs",
   "compactDoc",
+  "docVersions",
+  "docVersionState",
 ] as const;
 
 export type ChannelCallName = (typeof CHANNEL_CALLS)[number];

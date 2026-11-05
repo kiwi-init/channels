@@ -38,6 +38,7 @@ const Profile = later(() => import("~/modals/profile").then((m) => m.Profile))
 const ChannelSettings = later(() => import("~/modals/channel-settings").then((m) => m.ChannelSettings))
 const Invite = later(() => import("~/modals/invite").then((m) => m.Invite))
 const AddAgent = later(() => import("~/modals/add-agent").then((m) => m.AddAgent))
+const DocVersions = later(() => import("~/modals/doc-versions").then((m) => m.DocVersions))
 
 export function ChannelScreen({ channel }: { channel: Channel }) {
   const { nav, go } = useApp()
@@ -310,6 +311,8 @@ function ModalView({ channel }: { channel: Channel }) {
           <ChannelSettings channel={channel} tab={modal.tab} onClose={close} />
         ) : modal.kind === "invite" ? (
           <Invite channel={channel} onClose={close} />
+        ) : modal.kind === "versions" ? (
+          <DocVersions channel={channel} thread={modal.thread} name={modal.name} onClose={close} />
         ) : (
           <AddAgent channel={channel} onClose={close} />
         )}

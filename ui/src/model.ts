@@ -245,6 +245,12 @@ export interface TaskGroup {
   tasks: number[]
 }
 
+export interface DocVersion {
+  upto: number
+  ts: number
+  bytes: number
+}
+
 export type Where = { kind: "room"; room: string } | { kind: "dm"; with: string } | { kind: "theirs"; between: readonly [string, string] } | { kind: "task"; task: number }
 
 export interface Room {
@@ -717,6 +723,8 @@ export interface Actions {
   followThread(code: string, root: number, on: boolean): void
   openDoc(code: string, thread: string, th: string | null, on: (e: DocEvent) => void): PipeIn
   findDoc(code: string, thread: string): Promise<string | null>
+  docVersions(code: string, th: string): Promise<DocVersion[]>
+  restoreDocVersion(code: string, thread: string, th: string, upto: number): Promise<boolean>
   putDocImage(code: string, upload: Upload): Promise<DocImage>
   putDocFile(code: string, upload: Upload): Promise<DocFile>
   docImage(code: string, img: DocImage): Promise<string | null>
