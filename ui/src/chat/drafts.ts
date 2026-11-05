@@ -5,7 +5,62 @@ import type { Upload, Where } from "~/model"
 
 export const composerKey = (code: string, where: Where, inThread?: number): string => `${code}:${JSON.stringify(where)}:${inThread ?? ""}`
 
-export const drafts = new Map<string, string>()
+type Shelf = Pick<Storage, "getItem" | "setItem" | "removeItem">
+
+const SAVED = "kiwi:drafts"
+
+function shelf(): Shelf | null {
+  try {
+    return sessionStorage
+  } catch {
+    // No session storage (tests, a locked-down page): drafts last until the window reloads.
+    return null
+  }
+}
+
+function saved(on: Shelf | null): [string, string][] {
+  try {
+    const got: unknown = JSON.parse(on?.getItem(SAVED) ?? "{}")
+    if (typeof got !== "object" || got === null) return []
+    return Object.entries(got).filter((e): e is [string, string] => typeof e[1] === "string" && !!e[1].trim())
+  } catch {
+    // Junk in storage: start with no saved drafts.
+    return []
+  }
+}
+
+class Kept extends Map<string, string> {
+  constructor(private readonly on: Shelf | null) {
+    super(saved(on))
+  }
+
+  override set(key: string, text: string): this {
+    super.set(key, text)
+    this.save()
+    return this
+  }
+
+  override delete(key: string): boolean {
+    const had = super.delete(key)
+    this.save()
+    return had
+  }
+
+  private save(): void {
+    if (!this.on) return
+    const kept = [...this].filter(([, t]) => t.trim())
+    try {
+      if (kept.length) this.on.setItem(SAVED, JSON.stringify(Object.fromEntries(kept)))
+      else this.on.removeItem(SAVED)
+    } catch {
+      // Storage full or off: the draft still lives in memory until the window reloads.
+    }
+  }
+}
+
+export const keptDrafts = (on: Shelf | null): Map<string, string> => new Kept(on)
+
+export const drafts = keptDrafts(shelf())
 export const attached = new Map<string, Upload[]>()
 
 const backs = new Map<string, number>()
