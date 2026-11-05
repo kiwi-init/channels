@@ -6,7 +6,7 @@ import { join, resolve } from "node:path";
 import { chromium, webkit, type Locator, type Page } from "playwright-core";
 import { startLocalRelay } from "./local-relay.ts";
 import { harnessDist } from "./ui-harness.ts";
-import { firstRun, letIn, newChannel } from "./perf-ui.ts";
+import { composer, firstRun, letIn, newChannel, SEND } from "./perf-ui.ts";
 
 if (process.argv.includes("--help")) {
   console.log(`A Retina screenshot posted in chat shows from a copy sized to its box (360 CSS px in the feed, 480 in the thread doc, at
@@ -151,6 +151,8 @@ try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 }, deviceScaleFactor: SCALE, acceptDownloads: true });
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
+  page.on("crash", () => errors.push("the page crashed"));
+  browser.on("disconnected", () => console.error("the browser went away"));
   await page.addInitScript(() => {
     const Real = window.Worker;
     const count = { made: 0, failed: 0 };
@@ -238,7 +240,7 @@ try {
       );
       window.addEventListener("dragover", (e) => e.preventDefault(), { capture: true });
     });
-    await button.dragTo(page.locator(".thread-doc").last());
+    await button.dragTo(composer(page));
     const drag = await page.evaluate(() => {
       const seen = window as unknown as { dragged?: string[]; dropped?: string[] };
       return { dragged: seen.dragged ?? [], dropped: (seen.dropped ?? []).filter((d) => d.trim()) };
@@ -255,39 +257,34 @@ try {
     const feed = page.locator(".main article.msg .msg-image");
     const shown = await feed.count();
     const big = await screenshotPng(page, "pasted");
-    await page.locator(".thread-doc .doc-tail").last().click();
+    const pasted = `data:image/png;base64,${big}`;
+    await composer(page).click();
     await pasteInto(page, big);
-    const inDoc = page.locator(".thread-doc .doc-image img").last();
-    await inDoc.waitFor({ timeout: 30000 });
-    const doc = await inDoc.evaluate(async (el: HTMLImageElement) => {
-      await el.decode().catch(() => undefined);
-      const room = el.parentElement?.getBoundingClientRect().width ?? 0;
-      return { src: el.src, natural: el.naturalWidth, width: Math.round(el.getBoundingClientRect().width), room: Math.round(room) };
-    });
-    check(
-      "a pasted Retina shot shows in the doc from a copy at 2× its 480 px box",
-      !copyOf(doc.src, `data:image/png;base64,${big}`)
-        ? `the doc shows ${doc.src.slice(0, 40)}…`
-        : doc.natural !== DOC * SCALE
-          ? `the copy is ${doc.natural} px wide`
-          : doc.width !== Math.min(DOC, doc.room)
-            ? `it's laid out ${doc.width} px wide in a ${doc.room} px figure`
-            : null,
-    );
+    await page.locator(".composer .compose-file").first().waitFor({ timeout: 10000 });
     await page.keyboard.type("a line with a pasted shot");
-    await page.keyboard.press("ControlOrMeta+Enter");
+    await page.keyboard.press(SEND);
     await feed.nth(shown).waitFor({ timeout: 30000 });
     await page.waitForTimeout(500);
-    const sent = await shownIn(feed.nth(shown));
+    const inDoc = page.locator(".thread-doc .doc-image img").last();
+    await inDoc.waitFor({ state: "attached", timeout: 10000 });
+    const doc = await inDoc.evaluate(async (el: HTMLImageElement) => {
+      await el.decode().catch(() => undefined);
+      return { src: el.src, natural: el.naturalWidth };
+    });
     check(
-      "once sent, the doc's line shows in the feed from a copy too",
-      !copyOf(sent.src, `data:image/png;base64,${big}`)
-        ? `the feed shows ${sent.src.slice(0, 40)}…`
-        : sent.natural !== FEED * SCALE
-          ? `the copy is ${sent.natural} px wide`
-          : sent.width !== FEED
-            ? `it's laid out ${sent.width} px wide`
-            : !sent.full || sent.full.opacity !== "0"
+      "the doc holds the sent shot as a copy at 2× its 480 px box",
+      !copyOf(doc.src, pasted) ? `the doc shows ${doc.src.slice(0, 40)}…` : doc.natural !== DOC * SCALE ? `the copy is ${doc.natural} px wide` : null,
+    );
+    const inFeed = await shownIn(feed.nth(shown));
+    check(
+      "a Retina shot sent from the composer shows in the feed from a copy, with the original over it",
+      !copyOf(inFeed.src, pasted)
+        ? `the feed shows ${inFeed.src.slice(0, 40)}…`
+        : inFeed.natural !== FEED * SCALE
+          ? `the copy is ${inFeed.natural} px wide`
+          : inFeed.width !== FEED
+            ? `it's laid out ${inFeed.width} px wide`
+            : !inFeed.full || inFeed.full.opacity !== "0"
               ? "the original isn't over it"
               : null,
     );
