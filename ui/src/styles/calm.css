@@ -57,12 +57,20 @@
 }
 
 .rest-count {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
+  justify-self: start;
+  height: var(--ctl);
   margin: 0;
-  color: var(--meadow-decide);
-  font: 600 clamp(17px, 1.7vw, 22px) / 1.2 var(--ui);
+  padding: 0 14px;
+  border-radius: var(--r-ctl);
+  background: var(--float);
+  box-shadow: var(--shadow-float);
+  color: var(--decide);
+  color-scheme: normal;
+  font: 600 var(--t-ui) var(--ui);
+  white-space: nowrap;
 }
 
 .rest .count.is-loud {
@@ -70,11 +78,9 @@
   color: var(--meadow-on-decide);
 }
 
-.rest-count .count {
-  min-width: 1.3em;
-  height: 1.3em;
-  padding: 0 0.35em;
-  font: 600 0.78em / 1 var(--ui);
+.rest-count .count.is-loud {
+  background: var(--decide);
+  color: var(--on-ink);
 }
 
 .rest-calm {
