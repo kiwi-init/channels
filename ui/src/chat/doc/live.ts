@@ -13,7 +13,6 @@ import { madeHere, thisWindow, type MadeLines } from "~/chat/doc/made"
 import { afterUploads, uploading } from "~/chat/doc/uploads"
 import { postFinished, type Finished, type Posting } from "~/chat/doc/post"
 import { noteTyping, tracingTyping } from "~/kit/typing-hook"
-import { FRAGMENT } from "~/chat/doc/schema"
 
 export interface Shared {
   doc: Y.Doc
@@ -178,7 +177,7 @@ export class LiveDoc implements Shared {
     })
     if (this.current !== token) return pipe.close()
     this.pipe = pipe
-    if (this.doc.getXmlFragment(FRAGMENT).length) pipe.update(b64url(Y.encodeStateAsUpdate(this.doc)))
+    if (this.doc.store.clients.size) pipe.update(b64url(Y.encodeStateAsUpdate(this.doc)))
     pipe.aware(this.awareness.getLocalState())
   }
 

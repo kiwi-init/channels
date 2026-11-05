@@ -1,10 +1,12 @@
 import { describe, expect, test } from "bun:test"
 import * as Y from "yjs"
+import { Awareness } from "y-protocols/awareness"
 import { blocksOf, newBlock } from "@kiwi/core/doc/blocks.ts"
 import { heldPipe } from "@kiwi/core/doc/held-pipe.ts"
+import { pipeDoc } from "@kiwi/core/doc/pipe.ts"
 
 import type { DocEvent } from "../../../../desktop/src/bridge.ts"
-import { LiveDoc } from "~/chat/doc/live"
+import { LiveDoc, type OpenDoc, type Poster } from "~/chat/doc/live"
 import { letSay, sayerAt } from "~/chat/doc/sayer"
 
 const wait = (ms: number) => new Promise((done) => setTimeout(done, ms))
@@ -36,6 +38,28 @@ function liveFor(me: string, answer: () => boolean = () => true): { live: LiveDo
   )
   return { live, posts, open: () => (on as ((e: DocEvent) => void) | null)?.({ _tag: "Open", th: "th1" }) }
 }
+
+function relayOf(host: Y.Doc): OpenDoc {
+  const awareness = new Awareness(host)
+  return (_th, on) => {
+    const { pipe, attach } = heldPipe()
+    void Promise.resolve().then(() => {
+      on({ _tag: "Open", th: "th1" })
+      attach(pipeDoc(host, awareness, on))
+    })
+    return pipe
+  }
+}
+
+const poster = (me: string, posts: string[]): Poster => ({
+  me,
+  post: (text) => {
+    posts.push(text)
+    return Promise.resolve(true)
+  },
+})
+
+const lines = (doc: Y.Doc): string[] => blocksOf(doc).map((b) => b.text)
 
 describe("the composer writes into the thread's doc (T5115)", () => {
   test("a send lands as your block in the doc and posts once, carrying the block", async () => {
@@ -85,6 +109,39 @@ describe("the composer writes into the thread's doc (T5115)", () => {
     expect(b.posts.map((p) => p.text)).toEqual(["second"])
     a.live.destroy()
     b.live.destroy()
+  })
+
+  test("two windows sending into a new thread before either has its doc both reach the relay", async () => {
+    const host = new Y.Doc()
+    const open = relayOf(host)
+    const posts: string[] = []
+    const a = new LiveDoc(open, undefined, () => {}, poster("jow", posts))
+    const b = new LiveDoc(open, undefined, () => {}, poster("jow", posts))
+    a.say("from one", null, () => {})
+    b.say("from two", null, () => {})
+    await wait(5)
+    for (const doc of [host, a.doc, b.doc]) expect(lines(doc).sort()).toEqual(["from one", "from two"])
+    a.destroy()
+    b.destroy()
+  })
+
+  test("a window that joins the doc another window started still gets its sends to the relay", async () => {
+    const host = new Y.Doc()
+    const open = relayOf(host)
+    const posts: string[] = []
+    const a = new LiveDoc(open, undefined, () => {}, poster("jow", posts))
+    const b = new LiveDoc(open, undefined, () => {}, poster("jow", posts))
+    a.say("first", null, () => {})
+    await wait(5)
+    b.want("th1")
+    await wait(5)
+    b.say("second", null, () => {})
+    a.say("third", null, () => {})
+    await wait(5)
+    for (const doc of [host, a.doc, b.doc]) expect(lines(doc)).toEqual(["first", "second", "third"])
+    expect(posts).toEqual(["first", "second", "third"])
+    a.destroy()
+    b.destroy()
   })
 
   test("the composer finds a thread's doc only while it's open", () => {
