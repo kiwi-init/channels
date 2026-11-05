@@ -3,10 +3,11 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { b64url } from "@kiwi/core/crypto.ts";
+import { b64url, fromB64url } from "@kiwi/core/crypto.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
 import type { Roster } from "@kiwi/core/state.ts";
 import { SearchCore } from "../desktop/src/search-core.ts";
+import { stampFor } from "../desktop/src/search-feed.ts";
 import type { FoldInputs, SearchAsk, SearchReply } from "../desktop/src/search-types.ts";
 import { SearchHost, type SearchWorker } from "../desktop/src/search-host.ts";
 import { SearchIndex, type IndexStamp } from "../desktop/src/search-index.ts";
@@ -102,6 +103,30 @@ describe("the sealed index file (T977)", () => {
       const sealed = await sealIndex(index, { base: null, from: 1, through: 3 }, k, ROOM);
       expect(await openIndex(sealed, k, ROOM)).toBeNull();
     }
+  });
+
+  test("stays the WebCrypto AES-GCM file it was, both ways, past one chunk", async () => {
+    const k = key();
+    const aes = await crypto.subtle.importKey("raw", fromB64url(k), "AES-GCM", false, ["encrypt", "decrypt"]);
+    const additionalData = new TextEncoder().encode(`kiwi-search-index:${ROOM}`);
+    const index = SearchIndex.empty();
+    index.put(Array.from({ length: 6_000 }, (_, i) => ({ seq: i + 1, room: "general", from: "jow", text: `${i} ${"wide words to fill pages ".repeat(12)}`, at: i })));
+    index.setStamp(stampFor({ base: null, from: 1, through: 6_000 }));
+    index.set("base", "null");
+    const plain = new Uint8Array(index.bytes());
+    expect(plain.length).toBeGreaterThan(2 << 20);
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData }, aes, plain));
+    const before = new Uint8Array([0x6b, 0x73, 0x69, 0x01, ...iv, ...ct]);
+    const opened = await openIndex(before, k, ROOM);
+    expect(opened?.fed.through).toBe(6_000);
+    expect(opened?.index.count()).toBe(6_000);
+    const sealed = await sealIndex(index, { base: null, from: 1, through: 6_000 }, k, ROOM);
+    const back = new Uint8Array(await crypto.subtle.decrypt({ name: "AES-GCM", iv: sealed.slice(4, 16), additionalData }, aes, sealed.slice(16)));
+    expect(Buffer.from(back).equals(Buffer.from(index.bytes()))).toBe(true);
+    const damaged = sealed.slice();
+    damaged[damaged.length - 1]! ^= 1;
+    expect(await openIndex(damaged, k, ROOM)).toBeNull();
   });
 });
 
