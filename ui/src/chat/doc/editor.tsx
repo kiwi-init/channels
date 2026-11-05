@@ -28,6 +28,7 @@ import { postedBlocks } from "~/chat/doc/posted"
 import { markdownRules } from "~/chat/doc/rules"
 import { attrsOf, FRAGMENT, isBack, isSent, schema, type BlockAttrs } from "~/chat/doc/schema"
 import { dismiss, menuKey, suggestPlugin, type Query } from "~/chat/doc/suggest"
+import { frameOf, menuPlace, type Caret, type Place } from "~/chat/doc/menu-place"
 import { matchCommands, parseCommand, type Command } from "~/chat/commands"
 import { tooLong } from "~/chat/drafts"
 import { startEditing } from "~/chat/editing"
@@ -554,10 +555,25 @@ function choose(view: EditorView, q: Query, o: Option): void {
   view.focus()
 }
 
-function Suggest({ channel, query, options, pick, at, onPick }: { channel: Channel; query: Query; options: Option[]; pick: number; at: { left: number; top: number }; onPick: (i: number) => void }) {
+function Suggest({ channel, query, options, pick, at, onPick }: { channel: Channel; query: Query; options: Option[]; pick: number; at: Caret; onPick: (i: number) => void }) {
+  const list = useRef<HTMLUListElement>(null)
+  const [place, setPlace] = useState<Place>({ left: at.left, top: at.top, maxHeight: undefined })
+  useLayoutEffect(() => {
+    const ul = list.current
+    const host = ul?.offsetParent
+    if (!ul || !(host instanceof HTMLElement)) return
+    setPlace(menuPlace(at, { width: ul.offsetWidth, height: ul.scrollHeight }, host.getBoundingClientRect(), frameOf(host)))
+  }, [at, options.length])
+  useLayoutEffect(() => {
+    const ul = list.current
+    const row = ul?.children[pick]
+    if (!ul || !(row instanceof HTMLElement)) return
+    if (row.offsetTop < ul.scrollTop) ul.scrollTop = row.offsetTop
+    else if (row.offsetTop + row.offsetHeight > ul.scrollTop + ul.clientHeight) ul.scrollTop = row.offsetTop + row.offsetHeight - ul.clientHeight
+  }, [pick, place])
   if (options.length === 0) return null
   return (
-    <ul className="mentions doc-suggest" role="listbox" aria-label={query.kind === "@" ? "People" : query.kind === "/" ? "Commands" : "Tasks"} style={{ left: at.left, top: at.top }}>
+    <ul ref={list} className="mentions doc-suggest" role="listbox" aria-label={query.kind === "@" ? "People" : query.kind === "/" ? "Commands" : "Tasks"} style={place}>
       {options.map((o, i) => (
         <li key={o.kind === "@" ? o.person.name : o.kind === "/" ? o.command.name : o.task.id} role="option" aria-selected={i === pick}>
           {o.kind === "/" ? (
@@ -663,7 +679,7 @@ export function ThreadDoc({
     return () => shared.doc.off("update", publish)
   }, [sent, since, shared, feedKey])
   const mediaRef = useRef(media)
-  const [query, setQuery] = useState<{ q: Query; left: number; top: number } | null>(null)
+  const [query, setQuery] = useState<{ q: Query; at: Caret } | null>(null)
   const [pick, setPick] = useState(0)
   const [dropping, setDropping] = useState(false)
   const commands = useCommands(channel)
@@ -724,7 +740,7 @@ export function ThreadDoc({
         if (!q) return setQuery(null)
         const host = box.current?.getBoundingClientRect()
         const at = v.coordsAtPos(q.from)
-        setQuery({ q, left: at.left - (host?.left ?? 0), top: at.bottom - (host?.top ?? 0) + 4 })
+        setQuery({ q, at: { left: at.left - (host?.left ?? 0), top: at.bottom - (host?.top ?? 0) + 4, above: at.top - (host?.top ?? 0) - 4 } })
       },
       onKey: (e) => keys.current(e),
       scroller: () => box.current?.closest<HTMLElement>(".feed") ?? null,
@@ -881,7 +897,7 @@ export function ThreadDoc({
           query={query.q}
           options={options}
           pick={Math.min(pick, Math.max(0, options.length - 1))}
-          at={query}
+          at={query.at}
           onPick={(i) => {
             const o = options[i]
             if (o && view.current) choose(view.current, query.q, o)

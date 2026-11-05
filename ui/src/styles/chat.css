@@ -1738,6 +1738,7 @@ button.msg-image-spot:hover {
   left: 28px;
   z-index: 5;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   width: 280px;
   padding: 4px;
   border: 0;

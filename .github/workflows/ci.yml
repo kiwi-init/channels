@@ -266,6 +266,9 @@ jobs:
       - name: ui a remote edit landing between your keys never undoes your caret or selection (⇧← and ←), in Chromium and WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-doc-select-race.ts
+      - name: ui the doc's / menu opens on screen and keeps its rows inside its box, in Chromium and WebKit
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-doc-slash-menu.ts
       - name: ui a thread, a thread doc and a feed hold still once they open, in WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-still.ts --dist ui/dist
