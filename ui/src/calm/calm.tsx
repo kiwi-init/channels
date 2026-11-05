@@ -72,7 +72,7 @@ export function Calm() {
   const box = useRef<HTMLDivElement>(null)
   const stage = useRef<HTMLDivElement>(null)
   const meadow = useRef<Meadow | null>(null)
-  const latest = useRef({ rows, still })
+  const latest = useRef({ rows, still, leaving })
   const total = rows.reduce((a, r) => a + r.needs, 0)
 
   useEffect(() => {
@@ -92,8 +92,8 @@ export function Calm() {
   }, [])
 
   useEffect(() => {
-    latest.current = { rows, still }
-  }, [rows, still])
+    latest.current = { rows, still, leaving }
+  }, [rows, still, leaving])
 
   useEffect(() => {
     let gone = false
@@ -107,6 +107,7 @@ export function Calm() {
         if (gone) return m.dispose()
         meadow.current = m
         m.setRows(latest.current.rows)
+        if (latest.current.leaving) m.freeze()
       })
       .catch(() => {
         // A scene that can't start leaves the haze, and the panel over it still reads.
@@ -120,6 +121,9 @@ export function Calm() {
 
   useEffect(() => meadow.current?.setRows(rows), [rows])
   useEffect(() => meadow.current?.setStill(still), [still])
+  useEffect(() => {
+    if (leaving) meadow.current?.freeze()
+  }, [leaving])
 
   const open = (code: string): void => {
     go({ to: "channel", code })

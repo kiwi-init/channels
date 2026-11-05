@@ -63,6 +63,7 @@ import type { CalmRow } from "~/calm/rows"
 export interface Meadow {
   setRows(rows: readonly CalmRow[]): void
   setStill(still: boolean): void
+  freeze(): void
   dispose(): void
 }
 
@@ -582,7 +583,7 @@ async function build(): Promise<Engine | null> {
     govern(raw)
   }
   const startLoop = (): void => {
-    if (!attached || running || still || document.hidden) return
+    if (!attached || frozen || running || still || document.hidden) return
     running = true
     lastNow = performance.now() / 1000
     mark()
@@ -594,7 +595,7 @@ async function build(): Promise<Engine | null> {
   }
 
   const renderStill = (): void => {
-    if (!attached || !still) return
+    if (!attached || frozen || !still) return
     mark()
     uTime.value = 12.0
     uWind.value = 0.9
@@ -605,6 +606,7 @@ async function build(): Promise<Engine | null> {
   }
 
   let settling = 0
+  let frozen = false
   const settleStill = (): void => {
     const first = settling === 0
     settling = 3
@@ -612,7 +614,7 @@ async function build(): Promise<Engine | null> {
     const go = (): void => {
       renderStill()
       settling--
-      if (settling > 0 && attached && still) requestAnimationFrame(go)
+      if (settling > 0 && attached && !frozen && still) requestAnimationFrame(go)
       else settling = 0
     }
     requestAnimationFrame(go)
@@ -660,6 +662,7 @@ async function build(): Promise<Engine | null> {
       asked = still0
       still = asked || slow
       attached = true
+      frozen = false
       alert = 0
       stage.appendChild(renderer.domElement)
       addEventListener("resize", onResize)
@@ -684,6 +687,11 @@ async function build(): Promise<Engine | null> {
             stopLoop()
             settleStill()
           } else startLoop()
+        },
+        freeze() {
+          if (host !== stage) return
+          frozen = true
+          stopLoop()
         },
         dispose() {
           if (host === stage) detach()
