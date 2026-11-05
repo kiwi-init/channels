@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import { wrote } from "~/words"
 
 import { chatterLine, chatterRuns } from "~/chat/chatter"
 import type { Message, Person } from "~/model"
@@ -7,7 +8,7 @@ const NOW = 1_800_000_000_000
 const general = { kind: "room", room: "general" } as const
 const person = (name: string, kind: Person["kind"]): Person => ({ name, kind, owner: false, you: false, presence: "online", lastSeen: NOW, joined: NOW, messages: 0 })
 const channel = { people: [person("jow", "human"), person("maya", "human"), person("atlas", "agent"), person("win", "agent"), person("pixel", "agent")], lead: "atlas" }
-const say = (seq: number, from: string, text: string, more: Partial<Message> = {}): Message => ({ seq, from, at: NOW + seq, text, where: general, ...more })
+const say = (seq: number, from: string, text: string, more: Partial<Message> = {}): Message => ({ seq, from, at: NOW + seq, text: wrote(text), where: general, ...more })
 
 describe("agents talking among themselves fold into one line for people, and nothing changes for agents", () => {
   test("a run of agent messages that aren't to a person folds; people, the lead and anything for a person break it", () => {

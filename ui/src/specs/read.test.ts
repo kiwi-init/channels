@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import { wrote } from "~/words"
 
 import type { Channel, Message, Person, Spec, Task } from "~/model"
 import { alarmsOf, commentsOf, lineDiff, needsYou, quoteIn, splitQuote, stageLine, storyOf } from "~/specs/read"
@@ -89,20 +90,20 @@ describe("comments sit on the line they quote", () => {
 
   test("the thread under the person's message is the spec's discussion", () => {
     const messages: Message[] = [
-      { seq: 10, from: "maya", at: NOW, text: "board please", where: general },
-      { seq: 12, from: "win", at: NOW, text: "> a button\n\nwhere?", where: general, inThread: 10 },
-      { seq: 13, from: "atlas", at: NOW, text: "elsewhere", where: general, inThread: 99 },
-      { seq: 14, from: "jow", at: NOW, text: "", where: general, inThread: 10, deleted: true },
+      { seq: 10, from: "maya", at: NOW, text: wrote("board please"), where: general },
+      { seq: 12, from: "win", at: NOW, text: wrote("> a button\n\nwhere?"), where: general, inThread: 10 },
+      { seq: 13, from: "atlas", at: NOW, text: wrote("elsewhere"), where: general, inThread: 99 },
+      { seq: 14, from: "jow", at: NOW, text: wrote(""), where: general, inThread: 10, deleted: true },
     ]
     expect(commentsOf({ messages }, { ask: 10, comments: [] }).map((c) => [c.m.seq, c.quote ?? null, c.text])).toEqual([[12, "a button", "where?"]])
   })
 
   test("a spec on a reply keeps its comments, and its thread root's spec doesn't take them", () => {
     const messages: Message[] = [
-      { seq: 10, from: "maya", at: NOW, text: "board please", where: general },
-      { seq: 11, from: "maya", at: NOW, text: "and fix the reply bug", where: general, inThread: 10 },
-      { seq: 12, from: "win", at: NOW, text: "on the board?", where: general, inThread: 10 },
-      { seq: 13, from: "atlas", at: NOW, text: "on the reply's spec", where: general, inThread: 10, replyTo: 11 },
+      { seq: 10, from: "maya", at: NOW, text: wrote("board please"), where: general },
+      { seq: 11, from: "maya", at: NOW, text: wrote("and fix the reply bug"), where: general, inThread: 10 },
+      { seq: 12, from: "win", at: NOW, text: wrote("on the board?"), where: general, inThread: 10 },
+      { seq: 13, from: "atlas", at: NOW, text: wrote("on the reply's spec"), where: general, inThread: 10, replyTo: 11 },
     ]
     const root = { ask: 10, comments: [12] }
     const reply = { ask: 11, comments: [13] }

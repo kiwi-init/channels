@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import { wordsRaw } from "~/words"
 
 import type { Message as Wire } from "@kiwi/core/protocol.ts"
 import { fold, type FoldBase, type Roster } from "@kiwi/core/state.ts"
@@ -39,8 +40,8 @@ function fixture(n: number): Wire[] {
 
 const shown = (log: Wire[], state: ReturnType<typeof fold>, seqs?: ReadonlySet<number>) =>
   messagesOf(state, log, "jow", new Map(), pictures, [])
-    .filter((m) => !m.system && !m.deleted && m.text.trim() && (!seqs || seqs.has(m.seq)))
-    .map((m) => ({ seq: m.seq, text: m.text }))
+    .filter((m) => !m.system && !m.deleted && wordsRaw(m.text).trim() && (!seqs || seqs.has(m.seq)))
+    .map((m) => ({ seq: m.seq, text: wordsRaw(m.text) }))
 
 function mainIndex(log: Wire[], batch: number): SearchIndex {
   const index = SearchIndex.empty()

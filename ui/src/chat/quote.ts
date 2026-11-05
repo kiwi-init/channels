@@ -1,6 +1,7 @@
 import { preview } from "~/chat/preview"
 import { store } from "~/live/value"
 import type { Message } from "~/model"
+import { wordsRaw } from "~/words"
 
 export const MAX_EXCERPT = 600
 
@@ -45,8 +46,8 @@ export function excerptIn(excerpt: string, of: string): boolean {
 
 export function quotedExcerpt(m: Pick<Message, "text">, quoted: Pick<Message, "text"> | undefined): { excerpt: string; rest: string } | null {
   if (!quoted) return null
-  const got = excerptOf(m.text)
-  return got && excerptIn(got.excerpt, quoted.text) ? got : null
+  const got = excerptOf(wordsRaw(m.text))
+  return got && excerptIn(got.excerpt, wordsRaw(quoted.text)) ? got : null
 }
 
 export interface ThreadReply {

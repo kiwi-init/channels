@@ -44,6 +44,7 @@ import { clock } from "~/kit/time"
 import { announce } from "~/kit/toasts"
 import type { BlockFiles, Channel, Message, Person, QuestionAsk, Task, Where } from "~/model"
 import { nickname } from "~/names"
+import { wordsRaw } from "~/words"
 import { sameWhere, useAct, useApp } from "~/nav"
 
 const QuestionCard = lazy(() => import("~/chat/question-card"))
@@ -500,7 +501,7 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
 }
 
 function ReplyLine({ channel, to, quote, onClose }: { channel: Channel; to: Message | undefined; quote: string | null; onClose: (() => void) | null }) {
-  const line = quote ? quote.replace(/\s+/g, " ") : to ? withNames(to.text, channel.nicknames, preview) : ""
+  const line = quote ? quote.replace(/\s+/g, " ") : to ? withNames(wordsRaw(to.text), channel.nicknames, preview) : ""
   return (
     <div className={cx("compose-reply", "blk-re", quote && "is-excerpt")}>
       <Icon name="reply" size={13} />

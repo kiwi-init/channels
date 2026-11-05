@@ -226,14 +226,19 @@ describe("homeOf", () => {
 
   test("the last word in #general reads as plain text from its author's nickname", () => {
     const said = saidIn([
-      { seq: 1, from: "owl", at: 1, text: "## Plan\n- ship **it**", where: { kind: "room", room: "general" } },
-      { seq: 2, from: "owl", at: 2, text: "in a thread", where: { kind: "room", room: "general" }, inThread: 1 },
-      { seq: 3, from: "owl", at: 3, text: "owl took T4", where: { kind: "room", room: "general" }, system: true },
-      { seq: 4, from: "owl", at: 4, text: "in a task", where: { kind: "task", task: 4 } },
+      { seq: 1, from: "owl", at: 1, text: wrote("## Plan\n- ship **it**"), where: { kind: "room", room: "general" } },
+      { seq: 2, from: "owl", at: 2, text: wrote("in a thread"), where: { kind: "room", room: "general" }, inThread: 1 },
+      { seq: 3, from: "owl", at: 3, text: wrote("owl took T4"), where: { kind: "room", room: "general" }, system: true },
+      { seq: 4, from: "owl", at: 4, text: wrote("in a task"), where: { kind: "task", task: 4 } },
     ])
     expect(said).toEqual({ from: "owl", at: 1, text: "## Plan\n- ship **it**" })
     expect(homeOf(channel({ nicknames: new Map([["owl", "lead"]]) }), said).said).toEqual({ from: "lead", at: 1, text: "Plan ship it" })
     expect(saidIn([])).toBeNull()
+  })
+
+  test("the last word in #general names agents by nickname, not handle (#1763)", () => {
+    const said = saidIn([{ seq: 1, from: "jow", at: 1, text: wrote("@gentle-otter ship it"), where: { kind: "room", room: "general" } }])
+    expect(homeOf(channel({ nicknames: new Map([["gentle-otter", "lead"]]) }), said).said?.text).toBe("@lead ship it")
   })
 })
 

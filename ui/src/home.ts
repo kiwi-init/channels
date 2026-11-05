@@ -5,6 +5,7 @@ import { nickname } from "~/names"
 import { openAsks } from "~/needs/open"
 import { nowOf, stageWords } from "~/now"
 import { preview } from "~/chat/preview"
+import { withNames } from "~/chat/linked"
 import { wordsPlain, wordsRaw } from "~/words"
 
 const CLIP = 280
@@ -81,7 +82,7 @@ export function saidIn(messages: readonly Message[]): HomeLine | null {
   for (let i = messages.length - 1; i >= 0; i--) {
     const m = messages[i]!
     if (m.system || m.pending || m.failed || m.inThread !== undefined || m.where.kind !== "room" || m.where.room !== GENERAL_ROOM) continue
-    const text = m.text.trim()
+    const text = wordsRaw(m.text).trim()
     if (text) return { from: m.from, at: m.at, text }
   }
   return null
@@ -107,7 +108,7 @@ export function homeOf(c: Source, said: HomeLine | null = null): HomeChannel {
     doneToday: now.doneCount,
     red: c.tasks.filter((t) => !t.archived && !t.cancelled && t.status !== "done" && stageWords(t).red).length,
     agents,
-    said: said ? { from: nickname(c, said.from), at: said.at, text: clip(preview(said.text), SAID_CLIP) } : null,
+    said: said ? { from: nickname(c, said.from), at: said.at, text: clip(withNames(said.text, c.nicknames, preview), SAID_CLIP) } : null,
     ...(c.loading ? { loading: true as const } : {}),
   }
 }

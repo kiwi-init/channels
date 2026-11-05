@@ -1,6 +1,7 @@
 import { liveOf } from "~/doing"
 import type { Channel, Message, Person, PullRequest, Task } from "~/model"
 import { shown } from "~/names"
+import { wordsPlain } from "~/words"
 
 const WORKING_SHOWN = 5
 const DONE_SHOWN = 3
@@ -89,13 +90,14 @@ export interface Lane {
   recent: Recent[]
 }
 
-function recentOf(messages: readonly Message[], p: Person): Recent[] {
+function recentOf(messages: readonly Message[], p: Person, nicknames: ReadonlyMap<string, string>): Recent[] {
   const who = `${shown(p)} `
   const out: Recent[] = []
   for (let i = messages.length - 1; i >= 0 && out.length < RECENT; i--) {
     const m = messages[i]!
     if (m.from !== p.name || m.task === undefined || !(m.system || m.done) || m.pending || m.failed) continue
-    const text = m.system && m.text.startsWith(who) ? m.text.slice(who.length) : m.text
+    const said = wordsPlain(m.text, nicknames)
+    const text = m.system && said.startsWith(who) ? said.slice(who.length) : said
     out.push({ seq: m.seq, at: m.at, text: clip(text) })
   }
   return out
@@ -108,7 +110,7 @@ export function laneOf(channel: Channel, p: Person): Lane {
   const mine = new Set(current.map((t) => t.id))
   const watching =
     p.name === channel.lead ? [...byId.values()].flatMap((t) => (!mine.has(t.id) && (t.status === "review" || t.status === "doing") && t.pr?.state === "open" ? [{ ...t.pr, task: t.id }] : [])) : []
-  return { person: p, current, next: pick(p.load?.queued ?? []), watching, recent: recentOf(channel.messages, p) }
+  return { person: p, current, next: pick(p.load?.queued ?? []), watching, recent: recentOf(channel.messages, p, channel.nicknames) }
 }
 
 const rank = (channel: Channel, p: Person): number => (p.name === channel.lead ? 0 : liveOf(p)?.busy ? 1 : p.presence === "online" ? 2 : 3)

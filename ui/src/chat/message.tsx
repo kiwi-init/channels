@@ -16,7 +16,8 @@ import { memberOf, type Channel, type ImageSpot, type Message, type Person } fro
 import { openMessage as showMessage } from "~/live/open-message"
 import { useAct } from "~/nav"
 import { nickname } from "~/names"
-import { linked, named, useMentionParser, withNames } from "~/chat/linked"
+import { type Words, wordsPlain, wordsRaw, wrote } from "~/words"
+import { linked, useMentionParser, withNames } from "~/chat/linked"
 import { showMenu } from "~/kit/menu-open"
 import { later } from "~/kit/later"
 import { copyText } from "~/kit/toasts"
@@ -41,7 +42,7 @@ export function Body({
   onImage,
   onMessage,
 }: {
-  text: string
+  text: Words
   seq: number
   names: ReadonlyMap<string, string>
   tasks: ReadonlySet<number>
@@ -50,14 +51,14 @@ export function Body({
 }) {
   const { go } = useAct()
   const parser = useMentionParser()
-  const { markdown } = useMemo(() => ({ parser, markdown: linked(text, names, tasks, seq) }), [parser, text, names, tasks, seq])
+  const { markdown } = useMemo(() => ({ parser, markdown: linked(wordsRaw(text), names, tasks, seq) }), [parser, text, names, tasks, seq])
   const [shown, setShown] = useState(false)
   const onShown = useCallback(() => setShown(true), [])
   const onMention = useCallback((name: string) => go({ to: "modal", modal: { kind: "person", name } }), [go])
   const onTask = useCallback((task: number) => go({ to: "panel", panel: { kind: "task", task } }), [go])
   return (
     <div className="msg-text">
-      {!shown && !parsedFor(markdown) && <p className="md-plain">{named(text, names)}</p>}
+      {!shown && !parsedFor(markdown) && <p className="md-plain">{wordsPlain(text, names)}</p>}
       <Suspense fallback={null}>
         <Markdown markdown={markdown} onMention={onMention} onTask={onTask} onMessage={onMessage} onImage={onImage} onShown={onShown} />
       </Suspense>
@@ -126,7 +127,7 @@ function Spot({ code, img }: { code: string; img: ImageSpot }) {
 }
 
 function Quote({ quoted, who, names, excerpt, onClick }: { quoted: Message; who: string; names: ReadonlyMap<string, string>; excerpt: string | null; onClick?: () => void }) {
-  const line = useMemo(() => withNames(quoted.text, names, preview), [quoted.text, names])
+  const line = useMemo(() => withNames(wordsRaw(quoted.text), names, preview), [quoted.text, names])
   if (excerpt)
     return (
       <button type="button" className="msg-quote is-excerpt" onClick={onClick} aria-label={`Quoting ${who}: ${excerpt.slice(0, 80)}. Show it`}>
@@ -196,14 +197,14 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
   const ask = m.ask ? channel.asks.find((a) => a.id === m.ask) : undefined
   const spec = channel.specs?.find((s) => s.ask === m.seq)
   const cited = useMemo(() => (typeof quote === "object" ? quotedExcerpt(m, quote) : null), [m, quote])
-  const said = cited ? cited.rest : m.text
-  const text = m.docMedia ? withoutMediaNames(said, m.docMedia) : said
+  const said = cited ? cited.rest : wordsRaw(m.text)
+  const body = m.docMedia ? withoutMediaNames(said, m.docMedia) : said
 
   if (m.system)
     return (
       <p className={cx("sys", m.leftOut && "is-left-out")} data-seq={m.seq}>
         <span className="sys-line" />
-        <span className="sys-text">{m.text}</span>
+        <span className="sys-text">{wordsPlain(m.text, names)}</span>
         <time>{clock(m.at)}</time>
         {m.leftOut && <span className="left-out-why">{m.leftOut}</span>}
       </p>
@@ -265,7 +266,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
             <Changes kind="editor" channel={channel} m={m} />
           </Suspense>
         ) : (
-          <Clamp on={who?.kind === "agent" && !inThread}>{text && <Body text={text} seq={m.seq} names={names} tasks={tasks} onImage={openImage} onMessage={openMessage} />}</Clamp>
+          <Clamp on={who?.kind === "agent" && !inThread}>{body && <Body text={wrote(body)} seq={m.seq} names={names} tasks={tasks} onImage={openImage} onMessage={openMessage} />}</Clamp>
         )}
         {compact && m.edited !== undefined && !editing && (
           <span className="msg-edited" title={`Edited ${clock(m.edited)}`}>
@@ -363,7 +364,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
               <Icon name="reply" size={14} />
             </button>
           )}
-          <button type="button" className="msg-tool" aria-label="Copy text" title="Copy text" onClick={() => copyText(m.text)}>
+          <button type="button" className="msg-tool" aria-label="Copy text" title="Copy text" onClick={() => copyText(wordsRaw(m.text))}>
             <Icon name="copy" size={14} />
           </button>
         </div>

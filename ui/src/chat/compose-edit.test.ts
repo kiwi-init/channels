@@ -1,10 +1,11 @@
 import { describe, expect, test } from "bun:test"
+import { wrote } from "~/words"
 
 import { lastOwn, nextEdit } from "~/chat/compose-edit"
 import type { Message, Where } from "~/model"
 
 const general: Where = { kind: "room", room: "general" }
-const msg = (seq: number, text: string, more: Partial<Message> = {}): Message => ({ seq, from: "jow", at: seq, text, where: general, ...more })
+const msg = (seq: number, text: string, more: Partial<Message> = {}): Message => ({ seq, from: "jow", at: seq, text: wrote(text), where: general, ...more })
 
 describe("editing in the composer (T5115)", () => {
   test("↑ in an empty composer opens your last message here", () => {

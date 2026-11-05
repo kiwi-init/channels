@@ -2,6 +2,7 @@ import type { Block, RichBlock } from "@kiwi/core/doc/blocks.ts"
 import { laterLines } from "@kiwi/core/doc/ends.ts"
 import { store } from "~/live/value"
 import type { BlockFiles, Message, Where } from "~/model"
+import { wrote } from "~/words"
 
 export interface Line {
   id: string
@@ -86,7 +87,7 @@ export function withLines(list: readonly Message[], lines: readonly Line[], wher
   let k = 0
   let last = 0
   let n = 0
-  const row = (l: Line): Message => ({ seq: last + ++n / 1000, from: l.author, at: l.at, text: l.text, block: l.id, where, fromDoc: true, ...(l.media ? { docMedia: l.media } : {}) })
+  const row = (l: Line): Message => ({ seq: last + ++n / 1000, from: l.author, at: l.at, text: wrote(l.text), block: l.id, where, fromDoc: true, ...(l.media ? { docMedia: l.media } : {}) })
   for (const m of list) {
     while (k < sorted.length && sorted[k]!.at < m.at) out.push(row(sorted[k++]!))
     out.push(m)

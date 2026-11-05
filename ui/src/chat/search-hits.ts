@@ -3,6 +3,7 @@ import { buildIndex, marks, rank, snippet, terms, type Index } from "@kiwi/core/
 import { preview } from "~/chat/preview"
 import type { Channel, Message, OlderHit, Task, Where } from "~/model"
 import { between, nickname } from "~/names"
+import { wordsPlain, wordsRaw } from "~/words"
 
 export type Hit = { kind: "task"; task: Task } | { kind: "message"; m: Message } | { kind: "older"; o: OlderHit } | { kind: "fetch" }
 
@@ -17,11 +18,11 @@ const taskNumber = (query: string): number | null => {
 export function messageIndex(channel: Pick<Channel, "messages" | "nicknames">): Index<Message> {
   return buildIndex(
     channel.messages
-      .filter((m) => !m.system && !m.pending && m.text.trim())
+      .filter((m) => !m.system && !m.pending && wordsRaw(m.text).trim())
       .map((m) => ({
         item: m,
         fields: [
-          { text: m.text, weight: 1 },
+          { text: wordsPlain(m.text, channel.nicknames), weight: 1 },
           { text: nickname(channel, m.from), weight: 1 },
         ],
       }))

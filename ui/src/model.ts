@@ -355,7 +355,7 @@ export interface Message {
   seq: number
   from: string
   at: number
-  text: string
+  text: Words
   block?: string
   membersOnly?: true
   where: Where

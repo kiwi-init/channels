@@ -9,6 +9,7 @@ import { ago } from "~/kit/time"
 import type { Channel, Message, OlderSearch } from "~/model"
 import { useApp } from "~/nav"
 import { nickname } from "~/names"
+import { wordsPlain, wrote } from "~/words"
 
 const SETTLE_MS = 150
 const OLDER_SHOWN = 30
@@ -165,7 +166,7 @@ export function SearchBox({
       if (!held) return onOlder({ seq: at, terms: wanted })
       const where = hit.kind === "older" ? hit.o.where : hit.m.where
       go({ to: "where", where, jump: true })
-      onJump({ m: hit.kind === "message" ? hit.m : { seq: at, from: hit.o.from, at: hit.o.at, text: hit.o.text, where }, terms: wanted })
+      onJump({ m: hit.kind === "message" ? hit.m : { seq: at, from: hit.o.from, at: hit.o.at, text: wrote(hit.o.text), where }, terms: wanted })
     })
   }
 
@@ -304,7 +305,7 @@ export function SearchBox({
                       <span className="search-when">{ago(hit.m.at)}</span>
                     </span>
                     <span className="search-text">
-                      <Marked text={hitText(hit.m.text, wanted)} wanted={wanted} />
+                      <Marked text={hitText(wordsPlain(hit.m.text, channel.nicknames), wanted)} wanted={wanted} />
                     </span>
                   </span>
                 )}

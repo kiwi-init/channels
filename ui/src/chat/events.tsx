@@ -5,6 +5,7 @@ import { cx, Dot, statusWord } from "~/kit/bits"
 import { clock, day, sameDay } from "~/kit/time"
 import type { Channel, Message, Task } from "~/model"
 import { useApp } from "~/nav"
+import { wordsPlain } from "~/words"
 import { nickname } from "~/names"
 
 const PAGE = 60
@@ -126,11 +127,11 @@ function Line({ channel, line, tasks, here, forced }: { channel: Channel; line: 
 }
 
 function Row({ m, here, yours, more }: { m: Message; here: number | null; yours?: boolean; more?: ReactNode }) {
-  const { go } = useApp()
+  const { app, go } = useApp()
   return (
     <p className={cx("sys", yours && "is-yours")} data-seq={m.seq}>
       <span className="sys-line" />
-      <span className="sys-text">{m.text}</span>
+      <span className="sys-text">{wordsPlain(m.text, app.channel?.nicknames ?? new Map())}</span>
       <time>{clock(m.at)}</time>
       {m.task !== undefined && m.task !== here && (
         <button type="button" className="fold-act" onClick={() => go({ to: "panel", panel: { kind: "task", task: m.task! } })}>

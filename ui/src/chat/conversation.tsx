@@ -24,6 +24,7 @@ import { liveOf, workingIn } from "~/doing"
 import { sameWhere, useApp } from "~/nav"
 import { keepSpot, spotAt, spotKey, type Spot } from "~/places"
 import { between, nickname, shown } from "~/names"
+import { wordsRaw } from "~/words"
 import { openMessage } from "~/live/open-message"
 
 const HistoryFold = later(() => import("~/chat/compact").then((m) => m.HistoryFold))
@@ -481,7 +482,7 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
 
   useEffect(() => {
     const near = [...list.slice(Math.max(0, start - MORE), start), ...list.slice(end, end + MORE)]
-    const texts = near.flatMap((m) => (m.text && !m.system ? [{ text: m.text, seq: m.seq }] : []))
+    const texts = near.flatMap((m) => (wordsRaw(m.text) && !m.system ? [{ text: wordsRaw(m.text), seq: m.seq }] : []))
     let stop = () => {}
     let live = true
     const timer = window.setTimeout(() => {

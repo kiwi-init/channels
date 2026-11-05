@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import { wordsRaw, wrote } from "~/words"
 import { appendToBlock, blocksOf, markBack, markPosted, newBlock, richBlocks, type Block } from "@kiwi/core/doc/blocks.ts"
 import { prosemirrorToYDoc } from "y-prosemirror"
 import * as Y from "yjs"
@@ -12,7 +13,7 @@ const { block, paragraph, mention, bullet_list, list_item, code_block, image } =
 const where = { kind: "room", room: "general" } as const
 
 const line = (id: string, author: string, at: number, extra: Partial<Block> = {}): Block => ({ id, kind: "text", author, at, text: `${author} at ${at}`, ...extra })
-const msg = (seq: number, at: number): Message => ({ seq, from: "atlas", at, text: `#${seq}`, where })
+const msg = (seq: number, at: number): Message => ({ seq, from: "atlas", at, text: wrote(`#${seq}`), where })
 const shot = { name: "a.png", mime: "image/png", ref: { id: "img-1", key: "k", size: 3 } }
 
 describe("a posted doc line keeps its formatting (T1463)", () => {
@@ -88,7 +89,7 @@ describe("finished doc lines with no message sit in the feed at their time (T135
       ],
       where
     )
-    expect(rows.map((m) => m.text)).toEqual(["#1", "between", "#2", "after"])
+    expect(rows.map((m) => wordsRaw(m.text))).toEqual(["#1", "between", "#2", "after"])
     expect(rows[1]).toMatchObject({ from: "jow", block: "x", fromDoc: true })
     expect(rows[1]!.seq).toBeGreaterThan(1)
     expect(rows[1]!.seq).toBeLessThan(2)
