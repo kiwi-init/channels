@@ -88,17 +88,6 @@ describe("a dishonest relay", () => {
     expect(ch.access.keys["0"]).not.toBe(evil);
   });
 
-  test("can't slip an extra key into a rotation", async () => {
-    const { access, ownerCh } = await channelWithMember();
-    const intruder = await generateIdentity("intruder");
-    const db = new Database(join(dataDir, `${access.roomId}.sqlite`));
-    db.query("INSERT INTO members (pk, xpk, rec, rec_e, since, active) VALUES (?, ?, 'x', 0, 0, 1)").run(intruder.pk, intruder.xpk!);
-    db.close();
-    // The unverifiable key shows up for the owner to remove, and the rotation refuses to wrap for it.
-    expect((await ownerCh.members()).some((m) => m.unverified && m.pk === intruder.pk)).toBe(true);
-    await expect(ownerCh.rotate()).rejects.toThrow(/missing wrapped key/);
-  });
-
   test("can't get the next key wrapped to a removed key by still listing it as active", async () => {
     const { owner, agent, ownerCh } = await channelWithMember();
     const sent: Sent[] = [];

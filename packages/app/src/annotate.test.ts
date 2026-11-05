@@ -3,7 +3,7 @@ import { Glob } from "bun";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { arrowHead, base64Blob, base64Bytes, fitSide, markedName, meaningful, penPath, rect, strokeWidth, textSize, toImage, TOOL_KEYS } from "./annotate";
+import { arrowHead, base64Blob, fitSide, markedName, meaningful, penPath, rect, strokeWidth, textSize, toImage, TOOL_KEYS } from "./annotate";
 
 describe("annotate geometry", () => {
   test("a rect from any two corners", () => {
@@ -60,12 +60,6 @@ describe("annotate export", () => {
     expect(markedName("screen.png", "image/png")).toBe("screen-marked.png");
     expect(markedName("screen.png", "image/jpeg")).toBe("screen-marked.jpg");
     expect(markedName("", "image/webp")).toBe("image-marked.webp");
-  });
-
-  test("base64 size is the decoded byte count", () => {
-    expect(base64Bytes(btoa("abc"))).toBe(3);
-    expect(base64Bytes(btoa("abcd"))).toBe(4);
-    expect(base64Bytes(btoa("abcde"))).toBe(5);
   });
 
   test("an image's base64 becomes a Blob of its bytes, with no fetch of a data: URL, which the app's and the site's CSP block", async () => {

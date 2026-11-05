@@ -1,9 +1,7 @@
 import { GENERAL_ROOM, MAX_ROOMS, type Message } from "@kiwi/core/protocol.ts";
-import type { Unread } from "@kiwi/core/standup.ts";
 import { MAIN } from "@kiwi/core/state.ts";
 import { roomName, roomOfMessage } from "@kiwi/core/state/rooms.ts";
 import type { ChannelState, Room } from "@kiwi/core/state/types.ts";
-import { visible } from "@kiwi/core/work.ts";
 
 export interface RoomEntry {
   id: string;
@@ -37,17 +35,4 @@ export function roomLast(state: Pick<ChannelState, "placeOf" | "roomOf">, messag
   const last = new Map<string, number>();
   for (const m of messages) if (inMain(state, m)) last.set(roomOfMessage(state, m), m.seq);
   return last;
-}
-
-export function roomUnread(state: ChannelState, messages: readonly Message[], viewer: string, seen: Readonly<Record<string, number>>, from: number): (id: string) => Unread {
-  const counts = new Map<string, number>();
-  for (const m of messages) {
-    if (m.kind === "event" || m.from === viewer || !inMain(state, m) || !visible(state, m)) continue;
-    const id = roomOfMessage(state, m);
-    if (m.seq > (seen[roomSeenKey(id)] ?? (id === GENERAL_ROOM ? 0 : from))) counts.set(id, (counts.get(id) ?? 0) + 1);
-  }
-  return (id) => {
-    const n = counts.get(id) ?? 0;
-    return { n, forMe: n > 0 };
-  };
 }
