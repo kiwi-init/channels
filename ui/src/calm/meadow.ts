@@ -567,7 +567,7 @@ async function build(): Promise<Engine | null> {
     slow = true
     still = true
     stopLoop()
-    renderStill()
+    settleStill()
   }
 
   const loop = (): void => {
@@ -600,9 +600,23 @@ async function build(): Promise<Engine | null> {
     render()
   }
 
+  let settling = 0
+  const settleStill = (): void => {
+    const first = settling === 0
+    settling = 3
+    if (!first) return
+    const go = (): void => {
+      renderStill()
+      settling--
+      if (settling > 0 && attached && still) requestAnimationFrame(go)
+      else settling = 0
+    }
+    requestAnimationFrame(go)
+  }
+
   const onResize = (): void => {
     layout()
-    if (still) requestAnimationFrame(renderStill)
+    if (still) settleStill()
   }
   const onVisibility = (): void => {
     if (document.hidden) {
@@ -610,7 +624,7 @@ async function build(): Promise<Engine | null> {
       watched = 0
       sampleFrames = 0
       sampleTime = 0
-    } else if (still) renderStill()
+    } else if (still) settleStill()
     else startLoop()
   }
 
@@ -652,13 +666,13 @@ async function build(): Promise<Engine | null> {
       stillTimer = window.setInterval(renderStill, STILL_EVERY)
       layout()
       updateCamera(simClock)
-      if (still) renderStill()
+      if (still) settleStill()
       else startLoop()
       return {
         setRows(next) {
           if (host !== stage) return
           alert = next.some((r) => r.needs > 0) ? 1 : 0
-          if (still) requestAnimationFrame(renderStill)
+          if (still) settleStill()
         },
         setStill(next) {
           if (host !== stage || next === asked) return
@@ -667,7 +681,7 @@ async function build(): Promise<Engine | null> {
           still = next
           if (still) {
             stopLoop()
-            renderStill()
+            settleStill()
           } else startLoop()
         },
         dispose() {
