@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { homeOf, saidIn, takeTurns } from "~/home"
 import type { Ask, Channel, Person, Spec, Task } from "~/model"
+import { wrote } from "~/words"
 
 const agent = (name: string, more: Partial<Person> = {}): Person => ({ name, kind: "agent", owner: false, you: false, presence: "online", lastSeen: 0, joined: 0, messages: 0, ...more })
 
@@ -45,9 +46,9 @@ const question = (id: string, at: number, more: Partial<Extract<Ask, { kind: "qu
   id,
   from: "owl",
   at,
-  text: `question ${id}`,
+  text: wrote(`question ${id}`),
   label: "Decision",
-  options: ["A", "B"],
+  options: ["A", "B"].map(wrote),
   holds: [],
   ...more,
 })
@@ -74,17 +75,36 @@ describe("homeOf", () => {
   test("lists open asks oldest first and drops answered and idle ones", () => {
     const h = homeOf(
       channel({
-        asks: [question("2", 20), question("1", 10), question("3", 5, { answer: { text: "A", by: "jow", at: 30 } }), question("4", 1, { idle: true })],
+        asks: [question("2", 20), question("1", 10), question("3", 5, { answer: { text: wrote("A"), by: "jow", at: 30 } }), question("4", 1, { idle: true })],
       })
     )
     expect(h.asks.map((a) => a.id)).toEqual(["1", "2"])
-    expect(h.asks[0]?.act).toEqual({ kind: "options", options: ["A", "B"] })
+    expect(h.asks[0]?.act).toEqual({
+      kind: "options",
+      options: [
+        { shown: "A", answer: "A" },
+        { shown: "B", answer: "B" },
+      ],
+    })
+  })
+
+  test("an ask and its options name agents by nickname, while answering sends the option as written (#1763)", () => {
+    const ask = question("1", 1, { text: wrote("Should @gentle-otter take T4?"), options: ["@gentle-otter takes it", "Not yet"].map(wrote) })
+    const h = homeOf(channel({ asks: [ask], nicknames: new Map([["gentle-otter", "lead"]]) }))
+    expect(h.asks[0]?.text).toBe("Should @lead take T4?")
+    expect(h.asks[0]?.act).toEqual({
+      kind: "options",
+      options: [
+        { shown: "@lead takes it", answer: "@gentle-otter takes it" },
+        { shown: "Not yet", answer: "Not yet" },
+      ],
+    })
   })
 
   test("sends irreversible, stepped and long-choice questions to the channel instead of answering them here", () => {
     const h = homeOf(
       channel({
-        asks: [question("1", 1, { irreversible: true }), question("2", 2, { options: ["a", "b", "c", "d", "e"] }), question("3", 3, { options: [] })],
+        asks: [question("1", 1, { irreversible: true }), question("2", 2, { options: ["a", "b", "c", "d", "e"].map(wrote) }), question("3", 3, { options: [] })],
       })
     )
     expect(h.asks.map((a) => a.act.kind)).toEqual(["open", "open", "open"])
@@ -135,7 +155,7 @@ describe("homeOf", () => {
 
   test("a long ask reads in full up to its clip, not cut at a line's width", () => {
     const long = "word ".repeat(50).trim()
-    const h = homeOf(channel({ asks: [question("1", 1, { text: long })] }))
+    const h = homeOf(channel({ asks: [question("1", 1, { text: wrote(long) })] }))
     expect(h.asks[0]?.text).toBe(long)
   })
 

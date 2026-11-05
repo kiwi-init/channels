@@ -4,6 +4,7 @@ import type { Message as Wire, Step } from "@kiwi/core/protocol.ts"
 import { fold, type Roster } from "@kiwi/core/state.ts"
 import { stepReplyText } from "~/chat/step"
 import { asksOf } from "~/live/map"
+import { wordsRaw } from "~/words"
 
 const roster: Roster = [
   { name: "jow", pk: "pk-jow", owner: true, at: 0, active: true, kind: "human", display: "Jow" },
@@ -37,7 +38,9 @@ describe("a step card carries its how (T462, #1127)", () => {
   test("the ask keeps the step's why, who and commands, not just its title", () => {
     const { asks } = asksOf(fold([wire], roster, 0), [wire], "jow", true, [], roster, new Map())
     expect(asks).toHaveLength(1)
-    expect(asks[0]).toMatchObject({ kind: "question", text: "Remove commit signing from ~/.gitconfig-personal", options: [], step })
+    expect(asks[0]).toMatchObject({ kind: "question", options: [], step })
+    const card = asks[0]
+    expect(card?.kind === "question" && wordsRaw(card.text)).toBe("Remove commit signing from ~/.gitconfig-personal")
   })
 
   test("a step's answer reads as Done, with its output, or as why it wasn't done", () => {

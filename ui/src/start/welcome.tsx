@@ -107,8 +107,8 @@ function AskRow({ tile, ask, now }: { tile: ChannelTile; ask: HomeAsk; now: numb
       <span className="calm-acts">
         {act.kind === "options" &&
           act.options.map((o) => (
-            <button key={o} type="button" className="calm-act" onClick={() => actions.answerQuestion(code, ask.id, o)}>
-              {o}
+            <button key={o.answer} type="button" className="calm-act" onClick={() => actions.answerQuestion(code, ask.id, o.answer)}>
+              {o.shown}
             </button>
           ))}
         {act.kind === "allow" && (

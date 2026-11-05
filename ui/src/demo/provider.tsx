@@ -16,6 +16,7 @@ import { deletedTheme, savedTheme } from "~/theme/themes"
 import { announce } from "~/kit/toasts"
 import { demoDocs, openDemoDoc } from "~/demo/doc-hub"
 import { muteKey } from "~/live/mute"
+import { wrote } from "~/words"
 
 const unticked = (text: string): string => text.replace(/^(\s*[-*+]\s+)\[[xX]\]/gm, "$1[ ]").trim()
 
@@ -172,7 +173,7 @@ function withStep(c: Channel): Channel {
         id: "step-1",
         from: "win",
         at,
-        text,
+        text: wrote(text),
         label: "A step for you",
         options: [],
         holds: [13],
@@ -183,7 +184,7 @@ function withStep(c: Channel): Channel {
           expect: "git config --file ~/.gitconfig-personal commit.gpgsign prints nothing.",
         },
       },
-      { kind: "question", id: "q-free", from: "atlas", at, text: free, label: "Question for everyone", options: [], holds: [11] },
+      { kind: "question", id: "q-free", from: "atlas", at, text: wrote(free), label: "Question for everyone", options: [], holds: [11] },
     ],
   }
 }
@@ -228,12 +229,12 @@ function withHandoff(c: Channel): Channel {
         id: h.id,
         from: h.from,
         at: at + i * 1_000,
-        text: h.text,
+        text: wrote(h.text),
         label: "Browser for you",
         options: [],
         holds: [13],
         handoff: { url: h.url, label: h.label, expiresAt: Date.now() + h.expires },
-        ...(h.id === "handoff-done" ? { answer: { text: HANDOFF_DONE, by: c.you, at: Date.now() - 60_000 } } : {}),
+        ...(h.id === "handoff-done" ? { answer: { text: wrote(HANDOFF_DONE), by: c.you, at: Date.now() - 60_000 } } : {}),
       })),
     ],
   }
@@ -568,8 +569,9 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
           tasks: c.tasks.map((t) => (c.asks.some((a) => a.kind === "permission" && a.id === id && a.task === t.id) ? { ...t, status: allow ? "doing" : "todo" } : t)),
         })),
       answerStep: (code, id, reply) =>
-        edit(code, (c) => ({ ...c, asks: c.asks.map((a) => (a.kind === "question" && a.id === id ? { ...a, answer: { text: stepReplyText(reply), by: c.you, at: Date.now() } } : a)) })),
-      answerQuestion: (code, id, text) => edit(code, (c) => ({ ...c, asks: c.asks.map((a) => (a.kind === "question" && a.id === id ? { ...a, answer: { text, by: c.you, at: Date.now() } } : a)) })),
+        edit(code, (c) => ({ ...c, asks: c.asks.map((a) => (a.kind === "question" && a.id === id ? { ...a, answer: { text: wrote(stepReplyText(reply)), by: c.you, at: Date.now() } } : a)) })),
+      answerQuestion: (code, id, text) =>
+        edit(code, (c) => ({ ...c, asks: c.asks.map((a) => (a.kind === "question" && a.id === id ? { ...a, answer: { text: wrote(text), by: c.you, at: Date.now() } } : a)) })),
       answerJoin: (code, id, letIn, choice) =>
         edit(code, (c) => {
           const ask = c.asks.find((a) => a.kind === "join" && a.id === id)

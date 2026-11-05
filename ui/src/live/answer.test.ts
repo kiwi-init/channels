@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test"
 import type { Message as Wire } from "@kiwi/core/protocol.ts"
 import { fold, type Roster } from "@kiwi/core/state.ts"
 import { asksOf } from "~/live/map"
+import { wordsRaw } from "~/words"
 
 const roster: Roster = [
   { name: "jow", pk: "pk-jow", owner: true, at: 0, active: true, kind: "human", display: "Jow" },
@@ -20,7 +21,9 @@ describe("a card's answer is the reply that answered it (T465, #1126)", () => {
     const messages = [ask, lead, owner]
     const { asks } = asksOf(fold(messages, roster, 0), messages, "jow", true, [], roster, new Map())
     expect(asks).toHaveLength(1)
-    expect(asks[0]).toMatchObject({ kind: "question", answer: { text: "done, switch it off", by: "jow" } })
+    expect(asks[0]).toMatchObject({ kind: "question", answer: { by: "jow" } })
+    const card = asks[0]
+    expect(card?.kind === "question" && card.answer && wordsRaw(card.answer.text)).toBe("done, switch it off")
   })
 
   test("with only the lead's reply, the card is still waiting", () => {

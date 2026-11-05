@@ -4,6 +4,7 @@ import type { Event, Message as Wire } from "@kiwi/core/protocol.ts"
 import { fold, type Roster } from "@kiwi/core/state.ts"
 import { isOpen, openAsks } from "~/needs/open"
 import { asksOf } from "~/live/map"
+import { wordsRaw } from "~/words"
 
 const roster: Roster = [
   { name: "jow", pk: "pk-jow", owner: true, at: 0, active: true, kind: "human", display: "Jow" },
@@ -37,7 +38,8 @@ describe("a closed ask keeps its card, saying it was closed (#1575)", () => {
     const { asks, askOf } = asksFor(wires)
     expect(askOf.get(5)).toBe("5")
     const closed = asks.find((a) => a.id === "5")
-    expect(closed).toMatchObject({ kind: "question", closed: { by: "win", at: 6000, why: "Superseded by #7, which has the corrected options" } })
+    expect(closed).toMatchObject({ kind: "question", closed: { by: "win", at: 6000 } })
+    expect(closed?.kind === "question" && closed.closed?.why && wordsRaw(closed.closed.why)).toBe("Superseded by #7, which has the corrected options")
     expect(closed && isOpen(closed)).toBe(false)
     expect(openAsks({ asks }).map((a) => a.id)).not.toContain("5")
     expect(asks.find((a) => a.id === "7")).not.toHaveProperty("closed")

@@ -5,6 +5,7 @@ import { nickname } from "~/names"
 import { openAsks } from "~/needs/open"
 import { nowOf, stageWords } from "~/now"
 import { preview } from "~/chat/preview"
+import { wordsPlain, wordsRaw } from "~/words"
 
 const CLIP = 280
 const SAID_CLIP = 200
@@ -22,7 +23,8 @@ function lineOf(c: Source, a: Ask): { what: string; text: string; act: HomeAct }
   switch (a.kind) {
     case "question": {
       const plain = !a.irreversible && !a.step && !a.handoff && a.options.length > 0 && a.options.length <= OPTIONS_SHOWN
-      return { what: `${nickname(c, a.from)} asks`, text: clip(a.text), act: plain ? { kind: "options", options: a.options } : { kind: "open" } }
+      const options = a.options.map((o) => ({ shown: wordsPlain(o, c.nicknames), answer: wordsRaw(o) }))
+      return { what: `${nickname(c, a.from)} asks`, text: clip(wordsPlain(a.text, c.nicknames)), act: plain ? { kind: "options", options } : { kind: "open" } }
     }
     case "permission":
       return { what: `${nickname(c, a.from)} ${a.title}`, text: clip(a.summary || a.code), act: a.canAllow ? { kind: "allow" } : { kind: "open" } }
