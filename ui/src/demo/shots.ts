@@ -9,7 +9,6 @@ export interface Shot {
   prefs?: Partial<Prefs>
   docs?: number
   streams?: boolean
-  calm?: true
 }
 
 const kiwi = (nav: Partial<Nav> = {}): Shot => ({ scenario: "full", channel: "kiwi", nav })
@@ -17,7 +16,6 @@ const kiwi = (nav: Partial<Nav> = {}): Shot => ({ scenario: "full", channel: "ki
 export const SHOTS: Record<string, Shot> = {
   channel: kiwi(),
   home: { scenario: "full", channel: null },
-  calm: { scenario: "full", channel: "kiwi", calm: true },
   "long-feed": { scenario: "long", channel: "kiwi" },
   opening: { scenario: "opening", channel: "kiwi" },
   "opening-tasks": { scenario: "opening", channel: "kiwi", nav: { tab: "tasks" } },
