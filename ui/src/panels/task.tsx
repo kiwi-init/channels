@@ -33,7 +33,7 @@ const holds = (a: Ask, id: number): a is PermissionAsk | QuestionAsk =>
 
 export function TaskPanel({ channel, id }: { channel: Channel; id: number }) {
   const task = channel.tasks.find((t) => t.id === id)
-  const talk = useMemo(() => channel.messages.filter((m) => m.where.kind === "task" && m.where.task === id && m.inThread === undefined), [channel.messages, id])
+  const talk = useMemo(() => channel.messages.filter((m) => m.where.kind === "task" && m.where.task === id), [channel.messages, id])
   const names = useNames(channel)
   const tasks = useTaskIds(channel)
   const bySeq = useMemo(() => new Map(channel.messages.map((m) => [m.seq, m])), [channel.messages])

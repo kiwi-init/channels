@@ -84,7 +84,7 @@ try {
   expect((await hit.getByRole("button", { name: "React 👍" }).count()) === 1, "an older message can still be reacted to");
   expect((await hit.getByRole("button", { name: "Copy text" }).count()) === 1, "and copied");
   expect((await hit.getByRole("button", { name: "Reply" }).count()) === 0, "but not replied to, since the quote couldn't show it");
-  expect((await hit.getByRole("button", { name: "Open thread" }).count()) === 0, "and has no thread to open from here");
+  expect((await hit.getByRole("button", { name: "Reply in thread" }).count()) === 0, "and has no thread to open from here");
 
   await page.getByRole("button", { name: "Back to latest" }).click();
   await bar.waitFor({ state: "detached" });
