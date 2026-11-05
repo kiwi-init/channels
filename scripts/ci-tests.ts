@@ -2,15 +2,16 @@ import { Glob } from "bun";
 import { mkdtempSync, realpathSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { FLOWS } from "./ci-flows.ts";
+import { FLOWS, MAC } from "./ci-flows.ts";
 import { noteLine, shouldKill, SILENT_MS, verdict, watching } from "./ci-watchdog.ts";
 
 const [group = "", ...extra] = process.argv.slice(2);
 const all = [...new Glob("test/*.test.ts").scanSync(), ...new Glob("ui/src/**/*.test.{ts,tsx}").scanSync(), ...new Glob("packages/*/src/**/*.test.{ts,tsx}").scanSync()].sort();
 const flows = FLOWS.map((name) => `test/${name}.test.ts`);
-const files = group === "all" ? all : group === "unit" ? all.filter((f) => !flows.includes(f)) : group === "flows" ? flows : undefined;
+const mac = MAC.map((name) => `test/${name}.test.ts`);
+const files = group === "all" ? all : group === "unit" ? all.filter((f) => !flows.includes(f)) : group === "flows" ? flows : group === "mac" ? mac : undefined;
 if (!files || extra.length) {
-  console.error("usage: bun scripts/ci-tests.ts all | unit | flows");
+  console.error("usage: bun scripts/ci-tests.ts all | unit | flows | mac");
   process.exit(2);
 }
 const missing = files.filter((f) => !all.includes(f));
