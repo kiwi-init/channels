@@ -125,6 +125,12 @@ describe("wake paths, commands and words", () => {
       why: "Kiwi's Pi extension has no listener running for this session (/reload in Pi starts it again)",
     });
     expect(listenedPath({ kind: "hooks" }, false)).toEqual({ kind: "hooks" });
+    expect(listenedPath({ kind: "hooks" }, true, true)).toEqual({ kind: "hooks" });
+    expect(listenedPath({ kind: "hooks" }, false, true)).toEqual({
+      kind: "none",
+      why: "Claude Code's hook listener isn't running in this idle session (it starts when a turn ends; a prompt typed into the session starts it again)",
+    });
+    expect(listenedPath({ kind: "command", via: "codex-queue", session: "t" }, false, true)).toEqual({ kind: "command", via: "codex-queue", session: "t" });
     expect(listenedPath({ kind: "command", via: "codex-queue", session: "t" }, false)).toEqual({ kind: "command", via: "codex-queue", session: "t" });
   });
 
