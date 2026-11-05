@@ -74,6 +74,8 @@ const STILL_EVERY = 60_000
 const WARM_SECONDS = 0.5
 const SAMPLE_SECONDS = 1.5
 const SLOWEST_FRAME = 1 / 24
+const EARLY_SECONDS = 0.5
+const HOPELESS_FRAME = 1 / 12
 
 let engine: Promise<Engine | null> | null = null
 
@@ -563,7 +565,9 @@ async function build(): Promise<Engine | null> {
     if (sampleTime >= SAMPLE_SECONDS) return
     sampleFrames++
     sampleTime += raw
-    if (sampleTime < SAMPLE_SECONDS || sampleTime / sampleFrames <= SLOWEST_FRAME) return
+    const average = sampleTime / sampleFrames
+    const hopeless = sampleTime >= EARLY_SECONDS && average > HOPELESS_FRAME
+    if (!hopeless && (sampleTime < SAMPLE_SECONDS || average <= SLOWEST_FRAME)) return
     slow = true
     still = true
     stopLoop()
@@ -655,9 +659,6 @@ async function build(): Promise<Engine | null> {
       host = stage
       asked = still0
       still = asked || slow
-      watched = 0
-      sampleFrames = 0
-      sampleTime = 0
       attached = true
       alert = 0
       stage.appendChild(renderer.domElement)
