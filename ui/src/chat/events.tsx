@@ -1,27 +1,105 @@
-import { Fragment, useMemo, useState, type ReactNode } from "react"
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 
-import { linesOf, type EventLine, type TaskRun } from "~/chat/fold-events"
+import { linesOf, updateDays, type EventLine, type TaskRun } from "~/chat/fold-events"
 import { cx, Dot, statusWord } from "~/kit/bits"
-import { clock } from "~/kit/time"
+import { clock, day } from "~/kit/time"
 import type { Channel, Message, Task } from "~/model"
 import { useApp } from "~/nav"
 import { nickname } from "~/names"
 
+const PAGE = 60
+
 interface Props {
   channel: Channel
-  run: readonly Message[]
+  updates: readonly Message[]
   here: number | null
   jump: number | null
 }
 
-export function EventRun({ channel, run, here, jump }: Props) {
+export function Updates({ channel, updates, here, jump }: Props) {
+  const [open, setOpen] = useState(false)
+  const close = useCallback(() => setOpen(false), [])
+  const target = jump !== null && updates.some((m) => m.seq === jump) ? jump : null
+  const [opened, setOpened] = useState<number | null>(null)
+  if (target !== opened) {
+    setOpened(target)
+    if (target !== null) setOpen(true)
+  }
+  if (!updates.length) return null
+  return (
+    <div className="updates">
+      <button type="button" className={cx("updates-toggle", open && "is-on")} data-updates-toggle aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen(!open)}>
+        Updates
+        <span className="num">{updates.length}</span>
+      </button>
+      {open && <Panel channel={channel} updates={updates} here={here} target={target} onClose={close} />}
+    </div>
+  )
+}
+
+type Item = { kind: "day"; at: number } | { kind: "line"; line: EventLine }
+
+function Panel({ channel, updates, here, target, onClose }: { channel: Channel; updates: readonly Message[]; here: number | null; target: number | null; onClose: () => void }) {
   const tasks = useMemo(() => new Map(channel.tasks.map((t) => [t.id, t])), [channel.tasks])
-  const lines = linesOf(run, tasks)
-  return lines.map((line) => {
-    const key = `${line.kind}${line.kind === "one" ? line.m.seq : line.list[0]?.seq}`
-    const forced = jump !== null && line.kind !== "one" && line.list.some((m) => m.seq === jump)
-    return <Line key={key} channel={channel} line={line} tasks={tasks} here={here} forced={forced} />
-  })
+  const items = useMemo(
+    () =>
+      updateDays(updates).flatMap((list): Item[] => [
+        { kind: "day", at: list[0]!.at },
+        ...linesOf(list, tasks)
+          .reverse()
+          .map((line): Item => ({ kind: "line", line })),
+      ]),
+    [updates, tasks]
+  )
+  const reach = target === null ? -1 : items.findIndex((i) => i.kind === "line" && (i.line.kind === "one" ? i.line.m.seq === target : i.line.list.some((m) => m.seq === target)))
+  const [limit, setLimit] = useState(PAGE)
+  const shownTo = Math.max(limit, reach + 1)
+  const box = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const esc = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return
+      e.stopPropagation()
+      onClose()
+    }
+    const outside = (e: PointerEvent) => {
+      if (!(e.target instanceof Element) || box.current?.contains(e.target) || e.target.closest("[data-updates-toggle]")) return
+      onClose()
+    }
+    document.addEventListener("keydown", esc, true)
+    document.addEventListener("pointerdown", outside, true)
+    return () => {
+      document.removeEventListener("keydown", esc, true)
+      document.removeEventListener("pointerdown", outside, true)
+    }
+  }, [onClose])
+  useEffect(() => {
+    if (target !== null) box.current?.querySelector(`[data-seq="${target}"]`)?.scrollIntoView({ block: "center" })
+  }, [target])
+  return (
+    <div ref={box} role="dialog" aria-label="Updates" className="updates-panel">
+      {items.slice(0, shownTo).map((item) =>
+        item.kind === "day" ? (
+          <p key={`day${item.at}`} className="updates-day">
+            {day(item.at)}
+          </p>
+        ) : (
+          <Line
+            key={`${item.line.kind}${item.line.kind === "one" ? item.line.m.seq : item.line.list[0]?.seq}`}
+            channel={channel}
+            line={item.line}
+            tasks={tasks}
+            here={here}
+            forced={target !== null && item.line.kind !== "one" && item.line.list.some((m) => m.seq === target)}
+          />
+        )
+      )}
+      {items.length > shownTo && (
+        <button type="button" className="sys-more updates-older" onClick={() => setLimit(shownTo + PAGE)}>
+          Show older
+        </button>
+      )}
+    </div>
+  )
 }
 
 function Line({ channel, line, tasks, here, forced }: { channel: Channel; line: EventLine; tasks: ReadonlyMap<number, Task>; here: number | null; forced: boolean }) {
@@ -36,7 +114,7 @@ function Line({ channel, line, tasks, here, forced }: { channel: Channel; line: 
   if (line.kind === "events") {
     const last = line.list[line.list.length - 1]!
     if (!shown) return <Row m={last} here={here} more={toggle(`${line.list.length - 1} more`)} />
-    return line.list.map((m) => <Row key={m.seq} m={m} here={here} more={m === last ? toggle("") : undefined} />)
+    return [...line.list].reverse().map((m) => <Row key={m.seq} m={m} here={here} more={m === last ? toggle("") : undefined} />)
   }
   if (line.kind === "github") return <GithubRow line={line} />
   return (

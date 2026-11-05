@@ -21,19 +21,23 @@ export type EventLine =
 
 const FOLD_AT = 3
 
-const isEvent = (m: Message | undefined): m is Message => !!m?.system && !m.leftOut
+const isUpdate = (m: Message): boolean => !!m.system && !m.leftOut
 
-const joins = (a: Message | undefined, b: Message | undefined, breaks: ReadonlySet<number>): boolean => isEvent(a) && isEvent(b) && sameDay(a.at, b.at) && !breaks.has(b.seq)
-
-export function continuesRun(list: readonly Message[], i: number, from: number, breaks: ReadonlySet<number>): boolean {
-  return i > from && joins(list[i - 1], list[i], breaks)
+export function splitUpdates(list: readonly Message[]): { talk: Message[]; updates: Message[] } {
+  const talk: Message[] = []
+  const updates: Message[] = []
+  for (const m of list) (isUpdate(m) ? updates : talk).push(m)
+  return { talk, updates }
 }
 
-export function eventRun(list: readonly Message[], i: number, to: number, breaks: ReadonlySet<number>): Message[] | null {
-  if (!isEvent(list[i])) return null
-  let end = i + 1
-  while (end < to && joins(list[end - 1], list[end], breaks)) end++
-  return list.slice(i, end)
+export function updateDays(updates: readonly Message[]): Message[][] {
+  const days: Message[][] = []
+  for (const m of updates) {
+    const last = days[days.length - 1]
+    if (last?.[0] && sameDay(last[0].at, m.at)) last.push(m)
+    else days.push([m])
+  }
+  return days.reverse()
 }
 
 export function linesOf(run: readonly Message[], tasks: ReadonlyMap<number, Task>): EventLine[] {
