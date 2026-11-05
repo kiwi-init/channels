@@ -14,6 +14,7 @@ import { listenedPath, pullsWake, viaOf } from "@kiwi/core/wake.ts";
 import { ensureMachine, loadPairedMachine, PairError, type PairedMachine, type PairedPerson } from "./pair.ts";
 import { DAEMON_PROTOCOL, daemonSock, daemonToken, readKeepAsk, readListener, type DaemonEvent, type DaemonRead, type DaemonSeat, type DaemonVerb } from "./protocol.ts";
 import { activityEnv, reachOf, seatRecordFor, wakeOn, type Attached } from "./reach.ts";
+import { pidAlive } from "../pid.ts";
 import { pruneHookFiles } from "../hooks/delivered.ts";
 import { hooksRows } from "../hooks/install/extra.ts";
 import { computerSettings } from "./settings.ts";
@@ -156,7 +157,8 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     seat.listenerAt = at;
     return true;
   };
-  const livePath = async (cfg: Config, seat: Seat, attached: Attached) => listenedPath(await pathOf(cfg, seat.alias, seat.agent), listenedLately(seat, attached));
+  const livePath = async (cfg: Config, seat: Seat, attached: Attached, activity = seat.activity) =>
+    listenedPath(await pathOf(cfg, seat.alias, seat.agent), listenedLately(seat, attached), activity?.state === "idle");
 
   const refreshActivity = async (seat: Seat, force = false): Promise<void> => {
     const cfg = loadConfig();
@@ -166,8 +168,9 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     const now = env ? await harnessActivity(env) : undefined;
     const attached = attachedTo(seat);
     const pulled = attached === "listener" && pullsWake(record?.harness);
-    const via = wakeOn(cfg, seat.alias, seat.agent) ? (viaOf(await livePath(cfg, seat, attached)) ?? (pulled ? "listener" : null)) : null;
-    const reach = reachOf(attached, record, now);
+    const path = await livePath(cfg, seat, attached, now);
+    const via = wakeOn(cfg, seat.alias, seat.agent) ? (viaOf(path) ?? (pulled ? "listener" : null)) : null;
+    const reach = reachOf(attached, record, now, pidAlive, path.kind !== "none");
     if (!force && JSON.stringify(now) === JSON.stringify(seat.activity) && via === seat.wakeVia && reach === seat.reach) return;
     seat.activity = now;
     seat.wakeVia = via;

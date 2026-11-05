@@ -52,10 +52,10 @@ export function activityEnv(record: SeatRecord, base: Env): Env | null {
 
 export type Attached = "listener" | "session" | "none";
 
-export function reachOf(attached: Attached, record: SeatRecord | null, activity: Activity | undefined, alive: (pid: number) => boolean = pidAlive): Reach {
+export function reachOf(attached: Attached, record: SeatRecord | null, activity: Activity | undefined, alive: (pid: number) => boolean = pidAlive, wakes = true): Reach {
   if (attached === "listener") return "listening";
   if (attached === "session") return "running";
-  if (record?.pid) return alive(record.pid) ? "running" : "unreachable";
+  if (record?.pid) return alive(record.pid) && (wakes || activity?.state !== "idle") ? "running" : "unreachable";
   return record?.harness === "grok" && activity?.state === "working" ? "running" : "unreachable";
 }
 

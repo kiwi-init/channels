@@ -10,6 +10,7 @@ import { activityEnv, reachOf, daemonHello, daemonListening, daemonSock, listenD
 import { presenceAnswers, presenceWords } from "@kiwi/core/format.ts";
 import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
 import { omit } from "@kiwi/core/omit.ts";
+import { installHooks } from "../src/hooks/install/claude.ts";
 import { installMimo } from "../src/hooks/install/mimo.ts";
 import type { Presence } from "@kiwi/core/protocol.ts";
 import { startRelay } from "../src/relay/bun.ts";
@@ -255,6 +256,41 @@ describe("seats always on", () => {
     }
   });
 
+  test("a live Claude seat that is idle with no hook listener says not listening, and one at work stays reachable (#1676)", async () => {
+    const claudeDir = mkdtempSync(join(tmpdir(), "kiwi-daemon-seats-unheard-"));
+    mkdirSync(join(claudeDir, "sessions"), { recursive: true });
+    const registry = join(claudeDir, "sessions", `${process.pid}.json`);
+    writeFileSync(registry, JSON.stringify({ status: "idle", statusUpdatedAt: 123 }));
+    const prev = process.env.CLAUDE_CONFIG_DIR;
+    process.env.CLAUDE_CONFIG_DIR = claudeDir;
+    installHooks(true);
+    try {
+      saveConfig({ ...loadConfig(), bindings: { "/unheard": { alias: "test", as: "claude", harness: "claude", session: "s", pid: process.pid } } });
+      const last = () => from(claudePk).at(-1);
+      await until("an idle Claude seat with no listener to say not listening", () => {
+        const p = last();
+        return p?.activity?.state === "idle" && p.reach === "unreachable";
+      });
+      const idle = last()!;
+      expect(presenceWords(idle)).toStartWith("not listening");
+      expect((await seatOf("claude"))?.wake.path).toEqual({
+        kind: "none",
+        why: "Claude Code's hook listener isn't running in this idle session (it starts when a turn ends; a prompt typed into the session starts it again)",
+      });
+      writeFileSync(registry, JSON.stringify({ status: "busy", statusUpdatedAt: 124 }));
+      await until("a Claude seat at work to be reachable again", () => {
+        const p = last();
+        return p?.activity?.state !== "idle" && p?.reach === "running" && p.wake === "hooks";
+      });
+      expect(presenceWords(last()!)).toStartWith("reachable · wakes via");
+    } finally {
+      saveConfig({ ...loadConfig(), bindings: omit(loadConfig().bindings ?? {}, "/unheard") });
+      if (prev === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+      else process.env.CLAUDE_CONFIG_DIR = prev;
+      rmSync(claudeDir, { recursive: true, force: true });
+    }
+  });
+
   test("a key saved before its join is approved gets its seat once the join is approved", async () => {
     const pending = await generateIdentity("cursor");
     const ask = await Channel.requestJoin(relay, code, pending, { name: "cursor" });
@@ -405,6 +441,15 @@ describe("reachOf", () => {
   test("a Codex or OpenCode session's last saved state is no proof it still runs", () => {
     expect(reachOf("none", seat({ harness: "codex", session: "c" }), { state: "working" }, alive)).toBe("unreachable");
     expect(reachOf("none", seat({ harness: "opencode", session: "o" }), { state: "working" }, alive)).toBe("unreachable");
+  });
+
+  test("a live Claude session that is idle with nothing to wake it is unreachable, and one at work is running (#1676)", () => {
+    expect(reachOf("none", seat({ harness: "claude", pid: 7 }), { state: "idle", since: 1 }, alive, false)).toBe("unreachable");
+    expect(reachOf("none", seat({ harness: "claude", pid: 7 }), { state: "working", tool: "Bash" }, alive, false)).toBe("running");
+    expect(reachOf("none", seat({ harness: "claude", pid: 7 }), { state: "waiting" }, alive, false)).toBe("running");
+    expect(reachOf("none", seat({ harness: "claude", pid: 7 }), undefined, alive, false)).toBe("running");
+    expect(reachOf("none", seat({ harness: "claude", pid: 7 }), { state: "idle", since: 1 }, alive, true)).toBe("running");
+    expect(reachOf("listener", seat({ harness: "claude", pid: 7 }), { state: "idle", since: 1 }, alive, false)).toBe("listening");
   });
 
   test("an idle session nobody listens for is unreachable", () => {
