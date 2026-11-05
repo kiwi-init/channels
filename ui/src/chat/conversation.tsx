@@ -105,21 +105,6 @@ function anchorIn(box: HTMLElement, list: HTMLElement): Anchor | null {
 
 const laidOut = (el: Element): boolean => el.isConnected && el.getClientRects().length > 0
 
-function caretEl(list: HTMLElement): Element | null {
-  const doc = list.querySelector(".thread-doc")
-  const node = doc?.contains(document.activeElement) ? getSelection()?.focusNode : null
-  const el = node instanceof Element ? node : node?.parentElement
-  return el && doc?.contains(el) && laidOut(el) ? el : null
-}
-
-function caretIn(box: HTMLElement, list: HTMLElement): Anchor | null {
-  const el = caretEl(list)
-  if (!el) return null
-  const view = box.getBoundingClientRect()
-  const at = el.getBoundingClientRect()
-  return at.bottom > view.top && at.top < view.bottom ? { el, seq: Number.NaN, top: at.top - view.top, at: box.scrollTop } : null
-}
-
 function docIn(box: HTMLElement, list: HTMLElement): Anchor | null {
   const el = list.querySelector(".thread-doc")
   if (!el) return null
@@ -226,7 +211,7 @@ export function useStick(following = true, still = false) {
       if (spacer.current) spacer.current.style.height = room.current ? `${room.current}px` : ""
     }
     stuck.current = live.current && !held.current && box.scrollHeight - box.scrollTop - box.clientHeight < NEAR_BOTTOM
-    anchor.current = (still ? (caretIn(box, list) ?? (touched.current ? docIn(box, list) : null)) : null) ?? (stuck.current ? null : anchorIn(box, list))
+    anchor.current = (still && touched.current ? docIn(box, list) : null) ?? (stuck.current ? null : anchorIn(box, list))
     height.current = list.offsetHeight
   }, [settle, still])
 
@@ -285,11 +270,10 @@ export function useStick(following = true, still = false) {
         const box = scroller.current
         const list = content.current
         stuck.current = false
-        const kept = still && list && anchor.current && caretEl(list) === anchor.current.el ? anchor.current : null
-        anchor.current = kept ?? (box && list ? ((still ? caretIn(box, list) : null) ?? anchorIn(box, list)) : null)
+        anchor.current = box && list ? anchorIn(box, list) : null
       } else remember()
     },
-    [remember, still]
+    [remember]
   )
 
   return { scroller, content, spacer, stuck, live, remember, settle, toBottom, toOffset, unstick, hold }
@@ -359,7 +343,7 @@ export function Conversation({ channel, jump }: { channel: Channel; jump: Jump |
       ) : (
         <Feed key={`${key}\n${nav.visit}\n${channel.loading ? "loading" : "ready"}`} channel={channel} where={where} spot={spot} jump={here} doc={doc} />
       )}
-      {where.kind === "theirs" ? <ReadOnly channel={channel} between={where.between} /> : !doc && <Composer channel={channel} where={where} placeholder={`Message ${placeName}`} />}
+      {where.kind === "theirs" ? <ReadOnly channel={channel} between={where.between} /> : <Composer channel={channel} where={where} placeholder={`Message ${placeName}`} doc={doc} />}
     </ReplyContext.Provider>
   )
 }

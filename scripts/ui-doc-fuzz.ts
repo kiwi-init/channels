@@ -6,7 +6,7 @@ import { join, resolve } from "node:path";
 import { chromium, webkit, type BrowserContext, type Page } from "playwright-core";
 import { startLocalRelay } from "./local-relay.ts";
 import { harnessDist } from "./ui-harness.ts";
-import { firstRun, letIn, newChannel } from "./perf-ui.ts";
+import { composer, firstRun, letIn, newChannel } from "./perf-ui.ts";
 import { inOrder } from "./doc-oracle.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
@@ -80,7 +80,6 @@ interface Win {
   label: string;
   page: Page;
   lag: Lag;
-  line: string | null;
   want: string;
   sent: string[];
 }
@@ -200,7 +199,7 @@ async function windowOf(label: string, from?: BrowserContext): Promise<Win> {
   });
   await page.goto(BASE);
   if (!from) await firstRun(page, "jow");
-  return { label, page, lag, line: null, want: "", sent: [] };
+  return { label, page, lag, want: "", sent: [] };
 }
 
 async function general(w: Win): Promise<void> {
@@ -208,28 +207,7 @@ async function general(w: Win): Promise<void> {
     .getByRole("navigation", { name: "Views" })
     .getByRole("button", { name: /general/ })
     .click();
-  await w.page.locator(".thread-doc .ProseMirror").first().waitFor({ timeout: 30000 });
-}
-
-interface Here {
-  id: string;
-  by: string;
-  text: string;
-}
-
-async function here(w: Win): Promise<Here | null> {
-  return w.page.evaluate(() => {
-    const at = getSelection()?.anchorNode ?? null;
-    const el = at instanceof Element ? at : (at?.parentElement ?? null);
-    const section = el?.closest<HTMLElement>(".thread-doc section.blk");
-    if (!section) return null;
-    const attrs = (
-      section as unknown as {
-        pmViewDesc?: { node?: { attrs: Record<string, unknown>; content: { size: number }; textBetween: (from: number, to: number, sep: string) => string } };
-      }
-    ).pmViewDesc?.node;
-    return { id: String(attrs?.attrs.id ?? section.dataset.block ?? ""), by: String(attrs?.attrs.by ?? ""), text: attrs ? attrs.textBetween(0, attrs.content.size, "\n") : "" };
-  });
+  await w.page.locator(".thread-doc").first().waitFor({ state: "attached", timeout: 30000 });
 }
 
 let failed: string | null = null;
@@ -302,12 +280,12 @@ async function stored(w: Win): Promise<Stored | null> {
   });
 }
 
-async function startLine(w: Win): Promise<void> {
-  await w.page.locator(".thread-doc .doc-tail").last().click();
-  const h = await here(w);
-  w.line = h?.id ?? null;
-  w.want = h?.text ?? "";
-  log(`${w.label} starts line ${w.line} by ${h?.by} with ${JSON.stringify(w.want)}`);
+async function focus(w: Win): Promise<void> {
+  await composer(w.page).evaluate((el) => {
+    if (!(el instanceof HTMLTextAreaElement) || el === document.activeElement) return;
+    el.focus();
+    el.setSelectionRange(el.value.length, el.value.length);
+  });
 }
 
 async function keys(w: Win, text: string): Promise<void> {
@@ -318,11 +296,9 @@ async function keys(w: Win, text: string): Promise<void> {
 }
 
 async function check(w: Win, after: string): Promise<void> {
-  const h = await here(w);
-  log(`  ${w.label} in ${h?.id} ${JSON.stringify(h?.text)}`);
-  if (!h) return fail(`${w.label} after ${after}: its caret left the doc`);
-  if (h.id !== w.line) return fail(`${w.label} after ${after}: its caret moved from line ${w.line} to ${h.id} (${JSON.stringify(h.text)})`);
-  if (h.text !== w.want) return fail(`${w.label} after ${after}: its line reads ${JSON.stringify(h.text)}, typed ${JSON.stringify(w.want)}`);
+  const value = await composer(w.page).inputValue();
+  log(`  ${w.label} composer ${JSON.stringify(value)}`);
+  if (value !== w.want) return fail(`${w.label} after ${after}: its composer reads ${JSON.stringify(value)}, typed ${JSON.stringify(w.want)}`);
 }
 
 type Op = (w: Win) => Promise<string>;
@@ -353,13 +329,9 @@ const ops: [number, Op][] = [
     8,
     async (w) => {
       const t = word(int(5, 40));
-      await w.page.evaluate((text) => {
-        const dt = new DataTransfer();
-        dt.setData("text/plain", text);
-        document.activeElement?.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
-      }, t);
+      await w.page.keyboard.insertText(t);
       w.want += t;
-      return `pastes ${JSON.stringify(t)}`;
+      return `inserts ${JSON.stringify(t)} at once`;
     },
   ],
   [
@@ -367,7 +339,7 @@ const ops: [number, Op][] = [
     async (w) => {
       if (!w.want || w.want.includes("\n")) return "skips a line replace on an empty or broken line";
       for (let i = 0; i < w.want.length; i++) await w.page.keyboard.press("Shift+ArrowLeft");
-      const picked = await w.page.evaluate(() => getSelection()?.toString() ?? "");
+      const picked = await composer(w.page).evaluate((el) => (el instanceof HTMLTextAreaElement ? el.value.slice(el.selectionStart, el.selectionEnd) : ""));
       if (picked !== w.want) fail(`${w.label} pressed Shift+← ${w.want.length} times over its line ${JSON.stringify(w.want)} and the selection is ${JSON.stringify(picked)}`);
       const t = word(int(1, 8)).trim() || "x";
       await keys(w, t);
@@ -382,17 +354,17 @@ const ops: [number, Op][] = [
       await w.page.keyboard.press(SEND);
       w.sent.push(w.want.trim());
       log(`${w.label} sends ${JSON.stringify(w.want)} with ${SEND}`);
-      await startLine(w);
+      w.want = "";
       return `sends its line with ${SEND}`;
     },
   ],
   [
-    SEND === "Enter" ? 0 : 8,
+    8,
     async (w) => {
-      if (!w.want || w.want.endsWith("\n")) return "skips Enter on an empty line";
-      await w.page.keyboard.press("Enter");
+      if (!w.want || w.want.endsWith("\n")) return "skips Shift+Enter on an empty line";
+      await w.page.keyboard.press("Shift+Enter");
       w.want += "\n";
-      return "presses Enter, which only breaks the line";
+      return "presses Shift+Enter, which only breaks the line";
     },
   ],
   [
@@ -454,7 +426,7 @@ async function dump(w: Win): Promise<string> {
         const a = (s as unknown as { pmViewDesc?: { node?: { attrs: Record<string, unknown>; textContent: string } } }).pmViewDesc?.node;
         return `      ${String(a?.attrs.id)} ${String(a?.attrs.author)} by=${String(a?.attrs.by)} sent=${String(a?.attrs.sent)} posted=${String(a?.attrs.posted)} ${JSON.stringify(a?.textContent)}`;
       })
-      .slice(-8)
+      .slice(-20)
       .join("\n"),
   );
 }
@@ -481,9 +453,9 @@ try {
   for (const w of wins) await general(w);
   for (let i = 1; i <= AGENTS; i++) void agent(`bot${i}`);
   await Bun.sleep(1500);
-  for (const w of wins) await startLine(w);
   for (let step = 1; step <= STEPS && !failed; step++) {
     const w = pick(wins);
+    await focus(w);
     const op = nextOp();
     const did = await op(w);
     log(`step ${step}: ${w.label} ${did}`);
@@ -495,7 +467,7 @@ try {
   if (!failed) {
     for (const w of wins) {
       if (w.want.trim()) {
-        await w.page.keyboard.press(SEND);
+        await composer(w.page).press(SEND);
         w.sent.push(w.want.trim());
       }
       w.lag.ms = 0;
@@ -517,6 +489,9 @@ try {
         .map((l) => `      ${l}`)
         .join("\n")}`,
     );
+    const said = (await kiwi(["-c", "fuzz", "--as", "bot1", "log", "--json", "-n", "300"]).catch((e: unknown) => String(e))).split("\n").filter((l) => l.includes('"from":"jow"'));
+    log(`drained: jow's messages in the log\n${said.map((l) => `      ${l.slice(0, 240)}`).join("\n")}`);
+    for (const w of wins) log(`drained: ${w.label} doc lines\n${await dump(w)}`);
     for (const w of wins)
       log(
         `drained: ${w.label} sockets\n${w.lag.sockets.map((k) => `      ${k.url} up ${k.up}/${k.upIn} down ${k.down}/${k.downIn} last down ${k.lastDown ? `${Math.round((Date.now() - k.lastDown) / 1000)} s ago` : "never"}${k.closed ? " closed" : " open"}${k.errors ? ` ${k.errors} send errors` : ""}`).join("\n")}`,
@@ -553,4 +528,4 @@ if (failed) {
     `✗ seed ${SEED}: ${failed}\n  trace: ${TRACE}\n  replay: bun scripts/ui-doc-fuzz.ts --seed=${SEED} --steps=${STEPS} --windows=${WINDOWS} --agents=${AGENTS} --max-lag=${MAX_LAG}${ENGINE === "chromium" ? " --chromium" : ""}`,
   );
   process.exitCode = 1;
-} else console.log(`✓ seed ${SEED}: ${STEPS} steps, every window's line stayed its own and every sent line is in the doc, in order`);
+} else console.log(`✓ seed ${SEED}: ${STEPS} steps, every window's composer kept what it typed and every sent line is in the doc, in order`);

@@ -6,7 +6,7 @@ import { join, resolve } from "node:path";
 import { chromium, webkit, type Page } from "playwright-core";
 import { startLocalRelay } from "./local-relay.ts";
 import { harnessDist } from "./ui-harness.ts";
-import { eraseLine, firstRun, letIn, newChannel } from "./perf-ui.ts";
+import { composer, firstRun, letIn, newChannel, SEND } from "./perf-ui.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
 const DIST = harnessDist(process.argv.find((a) => a.startsWith("--dist="))?.slice(7));
@@ -58,18 +58,14 @@ async function poster(): Promise<void> {
   }
 }
 
-async function draftLine(page: Page): Promise<string | null> {
-  return page.evaluate(() => {
-    const here = document.querySelector<HTMLElement>(".thread-doc section.blk.is-here");
-    const text = (p: Element): string => {
-      const copy = p.cloneNode(true) as Element;
-      for (const c of copy.querySelectorAll(".doc-caret, .ProseMirror-widget")) c.remove();
-      return copy.textContent ?? "";
-    };
-    if (!here) return null;
-    const line = [...here.querySelectorAll("p")].map(text).join("\n");
-    return getComputedStyle(here).display === "none" ? `${line} (hidden from the doc)` : line;
-  });
+async function lines(page: Page, tag: string): Promise<string[]> {
+  return page.evaluate((t) => {
+    const rows = [...document.querySelectorAll<HTMLElement>(".main article.msg, .main .thread-doc section.blk:not(.is-hidden)")];
+    return rows.flatMap((r) => {
+      const at = r.innerText.indexOf(t);
+      return at < 0 ? [] : [r.innerText.slice(at).split("\n")[0]!.trim()];
+    });
+  }, tag);
 }
 
 async function palette(page: Page, label: string): Promise<void> {
@@ -97,7 +93,7 @@ async function openOther(page: Page): Promise<Page> {
       sleeper.drop.push(() => void ws.close().catch(() => undefined));
     });
   await next.goto(BASE);
-  await next.locator(".thread-doc").first().waitFor({ timeout: 30000 });
+  await next.locator(".thread-doc").first().waitFor({ state: "attached", timeout: 30000 });
   await next.waitForTimeout(1000);
   const views = next.getByRole("navigation", { name: "Views" });
   await views
@@ -106,7 +102,7 @@ async function openOther(page: Page): Promise<Page> {
     .click();
   await next.waitForTimeout(300);
   await views.getByRole("button", { name: /general/ }).click();
-  await next.locator(".thread-doc").first().waitFor({ timeout: 30000 });
+  await next.locator(".thread-doc").first().waitFor({ state: "attached", timeout: 30000 });
   await next.waitForTimeout(500);
   console.log("ok  a second window of the same person went away and back to #general, its doc already synced");
   return next;
@@ -114,18 +110,23 @@ async function openOther(page: Page): Promise<Page> {
 
 async function round(page: Page, i: number): Promise<string | null> {
   if (TRACE) for (const p of [page, other]) if (p) await palette(p, "Trace typing for 60 seconds");
-  await page.locator(".thread-doc .doc-tail").last().click();
+  const tag = `Round ${i}: `;
+  const typed = `${tag}${TYPED}`;
+  const want = typed.slice(0, typed.length - BACKS);
+  const area = composer(page);
+  await area.click();
   if (SECOND && !other) {
     other = await openOther(page);
     if (TRACE) await palette(other, "Trace typing for 60 seconds");
+    await area.click();
   }
   if (SLEEPER) {
-    await page.keyboard.type(TYPED.slice(0, 2), { delay: KEY_MS });
+    await page.keyboard.type(typed.slice(0, tag.length + 2), { delay: KEY_MS });
     await page.waitForTimeout(800);
     sleeper.asleep = true;
     if (DROP) for (const close of sleeper.drop.splice(0)) close();
-    await page.keyboard.type(TYPED.slice(2), { delay: KEY_MS });
-  } else await page.keyboard.type(TYPED, { delay: KEY_MS });
+    await page.keyboard.type(typed.slice(tag.length + 2), { delay: KEY_MS });
+  } else await page.keyboard.type(typed, { delay: KEY_MS });
   if (REMOUNT) {
     const views = page.getByRole("navigation", { name: "Views" });
     await views
@@ -134,37 +135,36 @@ async function round(page: Page, i: number): Promise<string | null> {
       .click();
     await page.waitForTimeout(300);
     await views.getByRole("button", { name: /general/ }).click();
-    await page.locator(".thread-doc section.blk.is-mine").last().waitFor({ timeout: 10000 });
-    await page.locator(".thread-doc section.blk.is-mine p").last().click();
+    await area.click();
     await page.keyboard.press("End");
   }
-  if (process.env.REPLAY_DEBUG) {
-    console.log(
-      await page.evaluate(() => [...document.querySelectorAll<HTMLElement>(".thread-doc section")].map((b) => `${b.className}|${b.dataset.author}|${(b.textContent ?? "").slice(0, 60)}`).join("\n")),
-    );
-    await page.screenshot({ path: process.env.REPLAY_DEBUG });
-  }
   for (let k = 0; k < BACKS; k++) await page.keyboard.press("Backspace", { delay: KEY_MS });
+  const kept = await area.inputValue();
+  await page.keyboard.press(SEND);
   if (SLEEPER) {
     sleeper.asleep = false;
     for (const send of sleeper.held.splice(0)) send();
   }
-  const want = TYPED.slice(0, TYPED.length - BACKS);
+  const windows = other ? [page, other] : [page];
   const seen: string[] = [];
   const until = Date.now() + WATCH_MS;
+  let last: string[][] = [];
+  let off = false;
   while (Date.now() < until) {
-    const line = await draftLine(page);
-    if (line !== null && seen.at(-1) !== line) seen.push(line);
+    last = await Promise.all(windows.map((w) => lines(w, tag)));
+    off ||= last.some((l) => l.length > 1 || l.some((t) => t !== want));
+    const now = last.map((l, w) => `${w ? "B" : "A"} ${JSON.stringify(l)}`).join(", ");
+    if (seen.at(-1) !== now) seen.push(now);
     await page.waitForTimeout(50);
   }
-  const last = seen.at(-1) ?? "(no line)";
+  if (process.env.REPLAY_DEBUG) await page.screenshot({ path: process.env.REPLAY_DEBUG });
   const why =
-    last === want && seen.every((s) => s.length <= want.length + 1)
-      ? null
-      : `round ${i}: after ${BACKS} Backspaces the line went ${seen.map((s) => JSON.stringify(s)).join(" → ")}, wanted ${JSON.stringify(want)}`;
+    kept !== want
+      ? `round ${i}: after ${BACKS} Backspaces the composer held ${JSON.stringify(kept)}, wanted ${JSON.stringify(want)}`
+      : !off && last.every((l) => l.length === 1)
+        ? null
+        : `round ${i}: after sending, the windows showed ${seen.join(" → ")}, wanted one ${JSON.stringify(want)} in each`;
   if (TRACE) writeFileSync(`${TRACE}-round${i}.txt`, `${why ?? "pass"}\n\n== window A (types)\n${await traced(page)}\n\n== window B\n${other ? await traced(other) : "(none)"}\n`);
-  await eraseLine(page);
-  await page.waitForTimeout(300);
   return why;
 }
 
@@ -194,7 +194,9 @@ try {
   for (let i = 1; i <= ROUNDS; i++) {
     const why = await round(page, i);
     if (why) failed++;
-    console.log(why ? `✗ ${why}` : `✓ round ${i}: "${TYPED}" then ${BACKS} Backspaces stays "${TYPED.slice(0, TYPED.length - BACKS)}" while agent lines arrive`);
+    console.log(
+      why ? `✗ ${why}` : `✓ round ${i}: "${TYPED}" then ${BACKS} Backspaces in the composer sends "${TYPED.slice(0, TYPED.length - BACKS)}", shown once in every window while agent lines arrive`,
+    );
   }
 } finally {
   posting = false;
@@ -205,6 +207,6 @@ try {
 }
 for (const e of errors.slice(0, 5)) console.log(`note: ${e}`);
 if (failed) {
-  console.error(`${failed} of ${ROUNDS} rounds lost, brought back or hid letters of the line being typed, in ${ENGINE}`);
+  console.error(`${failed} of ${ROUNDS} rounds lost, doubled or changed the line sent from the composer, in ${ENGINE}`);
   process.exitCode = 1;
 }

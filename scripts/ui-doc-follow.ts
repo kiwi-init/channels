@@ -5,11 +5,10 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, webkit, type Browser, type Page } from "playwright-core";
 import { startLocalRelay } from "./local-relay.ts";
-import { firstRun, letIn, newChannel } from "./perf-ui.ts";
+import { composer, firstRun, letIn, newChannel, say, SEND } from "./perf-ui.ts";
 import { harnessDist } from "./ui-harness.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
-const SEND = "ControlOrMeta+Enter";
 const BURST = 6;
 const MODES = (process.argv.find((a) => a.startsWith("--modes="))?.slice(8) ?? "idle,sent,busy").split(",");
 const ENGINES = (process.argv.find((a) => a.startsWith("--engines="))?.slice(10) ?? "chromium,webkit").split(",");
@@ -59,10 +58,8 @@ async function run(engine: string, browser: Browser): Promise<string[]> {
       for (let i = 0; i < BURST; i++) await kiwi(["-c", "follow", "--as", "bot", "send", "--to", "#general", `${tag} ${i}: the agent answers with a line long enough to take room`]);
     };
     await burst("seed");
-    await page.locator(".thread-doc .doc-tail").last().click();
     for (let i = 0; i < 12; i++) {
-      await page.keyboard.type(`seed line ${i}`);
-      await page.keyboard.press(SEND);
+      await say(page, `seed line ${i}`);
       await page.waitForTimeout(60);
     }
     await page.waitForTimeout(1000);
@@ -77,14 +74,14 @@ async function run(engine: string, browser: Browser): Promise<string[]> {
       }
     };
     for (const mode of MODES) {
-      await page.locator(".thread-doc .doc-tail").last().click();
+      await composer(page).click();
       if (mode !== "busy") await page.mouse.move(5, 500);
       let before: View = { top: 0, below: 0 };
       if (mode === "busy") {
         working = true;
         const loop = work();
         await page.waitForTimeout(1500);
-        await page.locator(".thread-doc .doc-tail").last().click();
+        await composer(page).click();
         await page.keyboard.type("typing while the agent works, every letter should stay", { delay: 30 });
         await page.waitForTimeout(800);
         await page.keyboard.press(SEND);

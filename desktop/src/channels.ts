@@ -146,7 +146,10 @@ parent.on("message", (e) => {
       return;
     case "flush":
       writeMemory();
-      parent.postMessage({ type: "flushed", id: 0 });
+      void keyring
+        .flushSearch()
+        .catch(() => null)
+        .then(() => parent.postMessage({ type: "flushed", id: 0 }));
       return;
     case "relay":
       relay = m.relay;

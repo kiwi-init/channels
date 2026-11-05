@@ -6,7 +6,7 @@ import { join, resolve } from "node:path";
 import { chromium, webkit, type Page } from "playwright-core";
 import { startLocalRelay } from "./local-relay.ts";
 import { harnessDist } from "./ui-harness.ts";
-import { firstRun, letIn, newChannel } from "./perf-ui.ts";
+import { composer, firstRun, letIn, newChannel, SEND } from "./perf-ui.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
 const DIST = harnessDist(process.argv.find((a) => a.startsWith("--dist="))?.slice(7));
@@ -85,13 +85,14 @@ try {
   await page.goto(BASE);
   await firstRun(page, "jow");
   const code = await newChannel(page, "order");
-  await page.locator(".thread-doc .doc-tail").last().click();
+  await composer(page).click();
   await paste(page, "shot.png");
+  await page.locator(".composer .compose-file").first().waitFor({ timeout: 10000 });
   await page.keyboard.type("a line with an image");
-  await page.keyboard.press("ControlOrMeta+Enter");
+  await page.keyboard.press(SEND);
   await page.waitForTimeout(2500);
   await page.keyboard.type("a later line");
-  await page.keyboard.press("ControlOrMeta+Enter");
+  await page.keyboard.press(SEND);
   await page.waitForTimeout(2500);
   const image = await seen(page, "a line with an image");
   const later = await seen(page, "a later line");

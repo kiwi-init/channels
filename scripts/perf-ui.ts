@@ -2,12 +2,23 @@ import type { Page } from "playwright-core";
 
 export const ROWS = "article.msg";
 
-export const threadDoc = (page: Page) => page.getByRole("textbox", { name: "Thread" }).last();
+export const SEND = "ControlOrMeta+Enter";
+
+export const composer = (page: Page) => page.locator(".main .composer textarea").first();
+
+export async function docOpen(page: Page): Promise<void> {
+  await composer(page).waitFor({ timeout: 30000 });
+  await page.locator(".main .thread-doc").first().waitFor({ state: "attached", timeout: 30000 });
+}
+
+export async function say(page: Page, text: string): Promise<void> {
+  const area = composer(page);
+  await area.fill(text);
+  await area.press(SEND);
+}
 
 export async function writeBlock(page: Page, text: string): Promise<void> {
-  await page.locator(".thread-doc .doc-tail").last().click();
-  await page.keyboard.type(text);
-  await page.keyboard.press("ControlOrMeta+Enter");
+  await say(page, text);
   await page.locator(`.thread-doc .blk, ${ROWS}`).filter({ hasText: text, visible: true }).first().waitFor({ timeout: 15000 });
 }
 
@@ -28,7 +39,7 @@ export async function newChannel(page: Page, title: string): Promise<string> {
   await dialog.getByRole("textbox").fill(title);
   await dialog.getByRole("button", { name: "Create channel" }).click();
   await dialog.waitFor({ state: "detached", timeout: 30000 });
-  await threadDoc(page).waitFor({ timeout: 30000 });
+  await docOpen(page);
   await page.getByRole("button", { name: "Invite people", exact: true }).first().click();
   const link = page.getByRole("dialog", { name: "Invite people" }).locator("code").filter({ hasText: "#mc2-" }).first();
   await link.waitFor({ timeout: 15000 });

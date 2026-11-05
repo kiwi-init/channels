@@ -52,7 +52,7 @@ try {
       true,
     );
   });
-  await page.locator(".thread-doc .ProseMirror").focus();
+  await page.locator(".main .composer textarea").first().focus();
   await page.keyboard.type("x".repeat(keys), { delay: 30 });
   await page.waitForTimeout(300);
   const typing = stats(await page.evaluate(() => (window as unknown as { __lat: number[] }).__lat));
@@ -76,7 +76,7 @@ try {
   const long = frames.filter((d) => d > 50).length;
 
   console.log(`blocks: ${blocks}, open to 1,000 blocks: ${openMs} ms`);
-  console.log(`typing (${keys} keys, keydown to after paint): median ${typing.median} ms, p95 ${typing.p95} ms, max ${typing.max} ms`);
+  console.log(`typing in the composer (${keys} keys, keydown to after paint): median ${typing.median} ms, p95 ${typing.p95} ms, max ${typing.max} ms`);
   console.log(`scroll (240 frames): median ${scroll.median} ms, p95 ${scroll.p95} ms, max ${scroll.max} ms, ${long} frames over 50 ms`);
   if (errors.length) {
     console.error(errors.join("\n"));

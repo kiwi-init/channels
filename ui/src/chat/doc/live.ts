@@ -2,18 +2,17 @@ import * as Y from "yjs"
 import { Awareness } from "y-protocols/awareness"
 
 import { b64url, fromB64url } from "@kiwi/core/crypto.ts"
-import { blocksOf } from "@kiwi/core/doc/blocks.ts"
-import { DOC_LEVEL, onWriterFloor, raiseWriterFloor } from "@kiwi/core/doc/level.ts"
+import { attachToBlock, blocksOf, markPosted, newBlock, removeBlock, type BlockMedia } from "@kiwi/core/doc/blocks.ts"
+import { DOC_LEVEL, onWriterFloor, raiseWriterFloor, writerFloor } from "@kiwi/core/doc/level.ts"
 import type { PipeIn } from "@kiwi/core/doc/held-pipe.ts"
 import { mirrorAware } from "@kiwi/core/doc/pipe.ts"
 import type { DocBlockRef } from "@kiwi/core/protocol.ts"
 import type { DocEvent, WireError } from "../../../../desktop/src/bridge.ts"
 import { giveBackBlock } from "~/chat/doc/give-back"
 import { madeHere, thisWindow, type MadeLines } from "~/chat/doc/made"
-import { afterUploads, uploading } from "~/chat/doc/uploads"
+import { afterUploads, startUpload, uploading } from "~/chat/doc/uploads"
 import { postFinished, type Finished, type Posting } from "~/chat/doc/post"
 import { noteTyping, tracingTyping } from "~/kit/typing-hook"
-import { FRAGMENT } from "~/chat/doc/schema"
 
 export interface Shared {
   doc: Y.Doc
@@ -68,7 +67,7 @@ export class LiveDoc implements Shared {
   private readonly moved = new Map<string, string>()
   private moveTo: { from: string; to: string } | null = null
   private readonly waiting = new Set<() => void>()
-  private readonly unposted: Finished[] = []
+  private readonly unposted: { b: Finished; failed: () => void }[] = []
   private readonly posting: Posting | null
   private readonly floorOff: () => void
 
@@ -178,7 +177,7 @@ export class LiveDoc implements Shared {
     })
     if (this.current !== token) return pipe.close()
     this.pipe = pipe
-    if (this.doc.getXmlFragment(FRAGMENT).length) pipe.update(b64url(Y.encodeStateAsUpdate(this.doc)))
+    if (this.doc.store.clients.size) pipe.update(b64url(Y.encodeStateAsUpdate(this.doc)))
     pipe.aware(this.awareness.getLocalState())
   }
 
@@ -187,7 +186,7 @@ export class LiveDoc implements Shared {
     switch (e._tag) {
       case "Open":
         this.opened = e.th
-        for (const b of this.unposted.splice(0)) this.post(b)
+        for (const u of this.unposted.splice(0)) this.post(u.b, u.failed)
         return
       case "Update":
         return Y.applyUpdate(this.doc, fromB64url(e.u), PIPE)
@@ -205,16 +204,51 @@ export class LiveDoc implements Shared {
         this.pipe = null
         this.gaveUp = true
         this.onFail(whyNot(e.error))
+        for (const u of this.unposted.splice(0)) u.failed()
         return this.isNowReady()
     }
   }
 
-  private post(b: Finished): void {
+  say(text: string, reply: { re: number; quote?: string } | null, back: (text: string) => void, media?: Promise<readonly BlockMedia[]>): boolean {
+    if (!this.poster || this.gaveUp || this.dead || writerFloor(this.doc) > DOC_LEVEL) return false
+    const { id } = newBlock(this.doc, "text", this.poster.me, text)
+    markPosted(this.doc, id)
+    const re = reply ? { re: reply.re, ...(reply.quote ? { quote: reply.quote } : {}) } : {}
+    const failed = (): void => {
+      removeBlock(this.doc, id)
+      back(text)
+    }
+    if (!media) {
+      this.post({ id, text, ...re }, failed)
+      return true
+    }
+    const done = startUpload(id)
+    media
+      .then((m) => {
+        attachToBlock(this.doc, id, m)
+        this.post(
+          {
+            id,
+            text:
+              blocksOf(this.doc)
+                .find((b) => b.id === id)
+                ?.text.trim() ?? text,
+            ...re,
+          },
+          failed
+        )
+      }, failed)
+      .finally(done)
+    return true
+  }
+
+  private post(b: Finished, failed: () => void = () => giveBackBlock(b.id)): void {
     if (!this.poster) return
-    if (this.opened === null) this.unposted.push(b)
+    if (this.gaveUp) failed()
+    else if (this.opened === null) this.unposted.push({ b, failed })
     else
       void this.poster.post(b.text, { th: this.opened, id: b.id }, b.re ? { re: b.re, ...(b.quote ? { quote: b.quote } : {}) } : undefined).then((went) => {
-        if (!went) giveBackBlock(b.id)
+        if (!went) failed()
       })
   }
 

@@ -13,6 +13,7 @@ const KEYS = 40;
 const KEY_MS = 120;
 const LOOKS = 24;
 const LOOK_MS = 250;
+const READ_UP = 200;
 
 const server = Bun.serve({
   port: 0,
@@ -39,7 +40,7 @@ function moves(ys: readonly number[]): number {
 async function typing(browser: Browser): Promise<string | null> {
   const page = await open(browser);
   try {
-    await page.locator(".thread-doc .doc-tail").last().click();
+    await page.locator(".main .composer textarea").first().click();
     const ys: number[] = [];
     for (let i = 0; i < KEYS; i++) {
       await page.keyboard.type("a");
@@ -49,9 +50,8 @@ async function typing(browser: Browser): Promise<string | null> {
           new Promise<number | null>((done) =>
             requestAnimationFrame(() =>
               setTimeout(() => {
-                const range = getSelection()?.rangeCount ? getSelection()?.getRangeAt(0) : null;
-                const rect = range?.getClientRects()[0] ?? range?.startContainer.parentElement?.getBoundingClientRect();
-                done(rect ? Math.round(rect.top) : null);
+                const area = document.activeElement instanceof HTMLTextAreaElement ? document.activeElement : null;
+                done(area ? Math.round(area.getBoundingClientRect().top) : null);
               }, 0),
             ),
           ),
@@ -59,7 +59,11 @@ async function typing(browser: Browser): Promise<string | null> {
       if (y !== null) ys.push(y);
     }
     const n = moves(ys);
-    return n <= MOVES_ALLOWED ? null : `the caret moved ${n} times in ${KEYS} keys: ${[...new Set(ys)].join(" → ")}`;
+    return ys.length < KEYS
+      ? `the composer lost the focus after ${ys.length} of ${KEYS} keys`
+      : n <= MOVES_ALLOWED
+        ? null
+        : `the composer moved ${n} times in ${KEYS} keys: ${[...new Set(ys)].join(" → ")}`;
   } finally {
     await page.close();
   }
@@ -72,6 +76,8 @@ async function watching(browser: Browser): Promise<string | null> {
     if (!box) return "no feed on screen";
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
     await page.mouse.wheel(0, 2000);
+    await page.waitForTimeout(300);
+    await page.mouse.wheel(0, -READ_UP);
     await page.waitForTimeout(500);
     const ys: number[] = [];
     for (let i = 0; i < LOOKS; i++) {
@@ -94,8 +100,8 @@ const browser = engine === "webkit" ? await webkit.launch() : await chromium.lau
 let failed = 0;
 try {
   for (const [what, check] of [
-    ["the line you type in stays put while lines arrive", typing],
-    ["the doc stays put while you read and lines arrive", watching],
+    ["the composer you type in stays put while lines arrive", typing],
+    ["the doc stays put while you read a little above the bottom and lines arrive", watching],
   ] as const) {
     const why = await check(browser);
     if (why) failed++;

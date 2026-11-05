@@ -316,7 +316,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
         }
         setPending((list) => list.filter((p) => p.key !== key))
         if (opts.block) {
-          announce(`Not sent: ${why}. It's back in the doc as your draft.`, "error")
+          announce(`Not sent: ${why}.`, "error")
           throw err
         }
         const images = opts.images ?? []

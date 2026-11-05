@@ -40,7 +40,7 @@ try {
   await page.locator(".compose input[type=file]").setInputFiles({ name: "atlas.png", mimeType: "image/png", buffer: PNG });
   await page.locator(".compose-file").first().waitFor();
   await room("releases").click();
-  await page.locator(".thread-doc").first().waitFor();
+  await page.locator(".thread-doc").first().waitFor({ state: "attached" });
   expect((await page.getByText("only for atlas").count()) === 0, "a room's doc doesn't pick up the DM's draft text");
   expect((await page.locator(".compose-file").count()) === 0, "nor the DM's images");
   await room("atlas").click();
