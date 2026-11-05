@@ -104,9 +104,11 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
             <span className="onb-ghost" aria-hidden="true">
               {[...PLEDGE].map((ch, i) => {
                 const got = typed[i]
+                if (got === undefined) return <span key={i}>{ch}</span>
+                const right = same(got, ch)
                 return (
-                  <span key={i} className={got === undefined ? undefined : same(got, ch) ? "is-ok" : "is-bad"}>
-                    {ch}
+                  <span key={i} className={right ? "is-ok" : "is-bad"}>
+                    {right ? ch : got}
                   </span>
                 )
               })}
