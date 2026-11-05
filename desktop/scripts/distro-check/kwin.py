@@ -11,6 +11,7 @@ print("kiwi-active " + (w ? [w.caption, w.resourceClass, w.desktopFileName].join
     "front": """for (const w of workspace.windowList()) if (w.caption === "kiwi-browser") workspace.activeWindow = w;
 const w = workspace.activeWindow;
 print("kiwi-active " + (w ? [w.caption, w.resourceClass, w.desktopFileName].join("|") : "none") + " of " + workspace.windowList().map((x) => x.caption).join(","));""",
+    "cursor": """print("kiwi-active " + Math.round(workspace.cursorPos.x) + "," + Math.round(workspace.cursorPos.y));""",
     "where": """for (const w of workspace.windowList()) if (w.caption === "kiwi-browser") print("kiwi-active " + Math.round(w.frameGeometry.x + w.frameGeometry.width / 2) + " " + Math.round(w.frameGeometry.y + w.frameGeometry.height / 2));""",
 }
 

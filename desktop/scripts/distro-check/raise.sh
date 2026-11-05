@@ -69,13 +69,12 @@ for how in xdg-open gio; do
   esac
   where=$(python3 "$here/kwin.py" where "$kwin_log")
   clicked=$(python3 "$here/click.py" $where 2>&1 | tail -n 1)
-  case "$clicked" in
-    "click: at"*) ;;
-    *)
-      bad "couldn't click the window in front before $how: $clicked"
-      continue
-      ;;
-  esac
+  for _ in $(seq 1 20); do [ "$(grep -c "browser: clicked" "$logs/$tag-browser.log")" -gt "${clicks:-0}" ] && break; sleep 0.2; done
+  if [ "$(grep -c "browser: clicked" "$logs/$tag-browser.log")" -le "${clicks:-0}" ]; then
+    bad "a click on the window in front (at $where) didn't reach it before $how: $clicked; KWin's pointer is at $(python3 "$here/kwin.py" cursor "$kwin_log")"
+    continue
+  fi
+  clicks=$(grep -c "browser: clicked" "$logs/$tag-browser.log")
   before=$(heard)
   echo "$how $url" > "$trigger"
   if ! wait_heard $((before + 1)) 20; then

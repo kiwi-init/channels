@@ -49,12 +49,18 @@ def active(win: Gtk.Window, _spec: object) -> None:
     say(f"active={win.is_active()}")
 
 
+def pressed(_win: Gtk.Window, event: Gdk.EventButton) -> bool:
+    say(f"clicked at {event.x:.0f},{event.y:.0f}")
+    return False
+
+
 def main() -> None:
     win = Gtk.Window(title=TITLE)
     win.set_default_size(900, 600)
     win.add(Gtk.Label(label="a browser, in front of Channels"))
     win.connect("destroy", Gtk.main_quit)
     win.connect("notify::is-active", active)
+    win.connect("button-press-event", pressed)
     win.show_all()
     GLib.timeout_add(200, poll, sys.argv[1])
     say("up")
