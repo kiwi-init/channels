@@ -8,7 +8,7 @@ import { Decoration, DecorationSet, EditorView, type NodeView } from "prosemirro
 import { yCursorPlugin, ySyncPlugin, ySyncPluginKey, yUndoPlugin } from "y-prosemirror"
 import * as Y from "yjs"
 
-import { attach, backInDraft, blockAt, blocks, continues, dropEmptyOwn, emptyHidden, isEmpty, noteMade, replyIn, startBlock, unreply, type Made } from "~/chat/doc/blocks"
+import { attach, backInDraft, blockAt, caretAway, continues, dropEmptyOwn, emptyHidden, isEmpty, noteMade, replyIn, startBlock, unreply, type Made } from "~/chat/doc/blocks"
 import { caretShown } from "~/chat/doc/carets"
 import { onGiveBack } from "~/chat/doc/give-back"
 import { writeOwnLinesOnly } from "~/chat/doc/own-writes"
@@ -305,15 +305,11 @@ function caretTop(view: EditorView): number | null {
   }
 }
 
-function steadyPlugin(scroller: () => HTMLElement | null, hold: (on: boolean) => void, me: string): Plugin {
+function steadyPlugin(scroller: () => HTMLElement | null, hold: (on: boolean) => void, me: string, drafts: RefObject<Drafts>): Plugin {
   let before: number | null = null
   let view: EditorView | null = null
-  const away = (v: EditorView): boolean => {
-    if (!v.hasFocus()) return false
-    const here = blockAt(v.state)
-    const last = blocks(v.state.doc).findLast((b) => !isEmpty(b.node) || attrsOf(b.node).author === me)
-    return !!here && !!last && here.index !== last.index
-  }
+  const shown = (block: string): boolean => !drafts.current.posted(block) && !drafts.current.inFeed(block)
+  const away = (v: EditorView): boolean => v.hasFocus() && caretAway(v.state, me, shown)
   return new Plugin({
     filterTransaction: (tr) => {
       if (remote(tr) && view && before === null) before = caretTop(view)
@@ -436,7 +432,7 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
       herePlugin(),
       runsPlugin(shown, me, opts.drafts),
       tidyPlugin(me, opts.drafts),
-      steadyPlugin(opts.scroller, opts.hold, me),
+      steadyPlugin(opts.scroller, opts.hold, me, opts.drafts),
     ],
   })
   const own = writeOwnLinesOnly(state, () => (view.isDestroyed ? null : view))
