@@ -20,9 +20,7 @@ test("both briefs ask for markdown a person reads at a glance: bold key point, l
   const cli = briefText({ alias: "c", agent: "mac", mc: "kiwi", listen: "" });
   const mcp = mcpBrief("c", "mac", false);
   for (const brief of [cli, mcp]) {
-    expect(brief).toContain("Write markdown a person reads at a glance: the key point in **bold**");
-    expect(brief).toContain("a list for steps, findings or options");
-    expect(brief).toContain("a small table to compare a few things side by side");
+    expect(brief).toContain("Format for a quick read: the key point in **bold**, lists over walls of text, a small table to compare.");
   }
 });
 
