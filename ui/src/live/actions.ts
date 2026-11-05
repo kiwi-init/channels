@@ -46,6 +46,7 @@ const rare = () => import("~/live/rare")
 import { downloadAndRestart } from "~/live/update"
 import { setWake } from "~/live/wakes"
 import { rememberOwner } from "~/live/invites"
+import { findDoc } from "~/chat/doc/find-doc"
 import type { Actions, InviteInfo } from "~/model"
 
 async function tried<T>(what: string, run: () => Promise<T>): Promise<T | null> {
@@ -171,6 +172,7 @@ export function makeActions(): Actions {
       if (last) markSeenIn(run.roomId, { [seenKeyOf(run.state, where, run.me)]: last })
     },
     openDoc: (code, thread, th, on) => link(code).doc(thread, th, on),
+    findDoc: (code, thread) => findDoc(link(code), code, thread),
     putDocImage: async (code, upload) => {
       if (!(await appCan("putImage"))) throw new Error(UPDATE_FOR_MEDIA)
       const stored = await link(code).putImage(upload)

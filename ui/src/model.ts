@@ -715,6 +715,7 @@ export interface Actions {
   markRead(code: string, where: Where): void
   followThread(code: string, root: number, on: boolean): void
   openDoc(code: string, thread: string, th: string | null, on: (e: DocEvent) => void): PipeIn
+  findDoc(code: string, thread: string): Promise<string | null>
   putDocImage(code: string, upload: Upload): Promise<DocImage>
   putDocFile(code: string, upload: Upload): Promise<DocFile>
   docImage(code: string, img: DocImage): Promise<string | null>
