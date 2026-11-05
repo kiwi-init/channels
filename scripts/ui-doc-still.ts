@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { webkit, type Browser, type Page } from "playwright-core";
+import { chromium, webkit, type Browser, type Page } from "playwright-core";
 
 const at = process.argv.indexOf("--dist");
 const dist = at > 0 ? (process.argv[at + 1] ?? "ui/dist") : "ui/dist";
@@ -39,8 +39,7 @@ function moves(ys: readonly number[]): number {
 async function typing(browser: Browser): Promise<string | null> {
   const page = await open(browser);
   try {
-    await page.locator(".thread-doc .ProseMirror").first().click();
-    await page.keyboard.press("Meta+ArrowDown");
+    await page.locator(".thread-doc .doc-tail").last().click();
     const ys: number[] = [];
     for (let i = 0; i < KEYS; i++) {
       await page.keyboard.type("a");
@@ -90,7 +89,8 @@ async function watching(browser: Browser): Promise<string | null> {
   }
 }
 
-const browser = await webkit.launch();
+const engine = process.argv.includes("--chromium") ? "chromium" : "webkit";
+const browser = engine === "webkit" ? await webkit.launch() : await chromium.launch({ executablePath: process.env.SMOKE_CHROMIUM || undefined });
 let failed = 0;
 try {
   for (const [what, check] of [
@@ -106,6 +106,6 @@ try {
   server.stop();
 }
 if (failed) {
-  console.error(`${failed} doc checks moved the view on their own, in WebKit`);
+  console.error(`${failed} doc checks moved the view on their own, in ${engine === "webkit" ? "WebKit" : "Chromium"}`);
   process.exitCode = 1;
 }
