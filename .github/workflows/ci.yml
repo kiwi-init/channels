@@ -197,7 +197,7 @@ jobs:
         if: ${{ !cancelled() }}
         run: bunx wrangler deploy --dry-run --outdir "$RUNNER_TEMP/worker"
 
-  # The thread doc in Chromium and WebKit: replay, send, follow, paste, image order, steady, the slash menu, the keys and a busy doc holding still.
+  # The thread doc in Chromium and WebKit, written from the composer: replay, send, follow, image order, steady and a busy doc holding still.
   doc:
     name: build / doc
     needs: plan
@@ -215,7 +215,7 @@ jobs:
       - name: ui harness build, with the plain-browser key store
         if: ${{ !cancelled() }}
         run: bun scripts/ui-harness.ts
-      - name: doc replay, a second window of yours never hides or eats the line you type
+      - name: doc replay, a line you send from the composer shows once, whole, in a second window of yours too
         if: ${{ !cancelled() }}
         run: bun scripts/ui-doc-replay.ts --chromium --second-window --rounds=2
       - name: doc send, sending at the bottom, scrolled up or a long line keeps the view where it was
@@ -227,13 +227,10 @@ jobs:
       - name: calm sky, the idle loop plays and wraps, pauses while hidden, holds still for reduced motion, in WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-calm-sky.ts
-      - name: doc paste, an image pasted into a line goes out with that line
-        if: ${{ !cancelled() }}
-        run: bun scripts/ui-doc-paste.ts
-      - name: doc image order, a sent line with an image stays above the lines sent after it
+      - name: doc image order, a line sent with an image from the composer stays above the lines sent after it
         if: ${{ !cancelled() }}
         run: bun scripts/ui-doc-image-order.ts
-      - name: doc steady, a draft that grew below the fold keeps its height when you scroll to it, in Chromium and WebKit
+      - name: doc steady, tall lines sent below the fold keep their height when you scroll to them, in Chromium and WebKit
         if: ${{ !cancelled() }}
         run: |
           status=0
@@ -247,17 +244,11 @@ jobs:
           bun scripts/ui-msg-edit.ts || status=1
           bun scripts/ui-msg-edit.ts --webkit || status=1
           exit "$status"
-      - name: doc slash menu, the doc's / menu opens on screen and keeps its rows inside its box, in Chromium and WebKit
-        if: ${{ !cancelled() }}
-        run: bun scripts/ui-doc-slash-menu.ts
-      - name: ui the keyboard runs across doc blocks like an editor (arrows, word jumps, shift-select, select all), in WebKit
-        if: ${{ !cancelled() }}
-        run: bun scripts/ui-doc-keys.ts --dist ui/dist
-      - name: ui a busy thread doc never scrolls on its own, under the caret or while you read, in WebKit
+      - name: ui a busy thread doc never scrolls on its own, under the composer or while you read, in WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-doc-still.ts --dist ui/dist
 
-  # The thread doc's fuzzer and two owners typing side by side, each in Chromium and WebKit at once.
+  # The thread doc's fuzzer and two owners sending side by side, each in Chromium and WebKit at once.
   fuzz:
     name: build / fuzz
     needs: plan
@@ -301,7 +292,7 @@ jobs:
           path: ${{ runner.temp }}/doc-fuzz
           if-no-files-found: ignore
           overwrite: true
-      - name: doc owners, two people typing next to each other each write and send in their own line, in Chromium and WebKit
+      - name: doc owners, two people sending at once from their composers each send one line of the doc as their own, in Chromium and WebKit
         if: ${{ !cancelled() }}
         run: |
           bun scripts/ui-doc-owner.ts &
