@@ -160,8 +160,16 @@ try {
   const task = /\bT(\d+)\b/.exec(added)?.[1];
   if (task === undefined) throw new Error(`kiwi task add printed no task id: ${added.trim()}`);
   await row("hello from bot").first().waitFor({ timeout: 30000 });
-  await page.getByText("Smoke task").first().waitFor({ timeout: 30000 });
+  const updates = page.getByRole("button", { name: "Updates" });
+  await updates.click();
+  await page
+    .getByRole("dialog", { name: "Updates" })
+    .getByText(/added task T\d+ “Smoke task”/)
+    .first()
+    .waitFor({ timeout: 30000 });
+  if (await row("Smoke task").count()) throw new Error("the task's update stayed in the thread instead of the Updates panel");
   await shot("general");
+  await updates.click();
   await views.getByRole("button", { name: /^Specs/ }).click();
   await unfold(page, "Smoke");
   await page.getByRole("main").getByText("Smoke task").first().waitFor({ timeout: 15000 });
@@ -253,7 +261,7 @@ try {
   const fold = page.getByRole("region", { name: "Compacted history" });
   await fold.waitFor({ timeout: 30000 });
   await card.waitFor({ state: "detached", timeout: 15000 });
-  const filed = page.getByText(/added task T\d+ “Smoke task”/).first();
+  const filed = page.locator("article").filter({ hasText: "hello from bot" }).first();
   await filed.waitFor({ state: "detached", timeout: 15000 });
   await shot("compacted");
   await fold.getByRole("button", { name: "Show earlier messages" }).click();
