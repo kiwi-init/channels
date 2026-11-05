@@ -696,7 +696,6 @@ export interface Prefs {
   lightTheme: string
   customThemes: CustomTheme[]
   folders: Folder[]
-  calm: number
 }
 
 export interface SendExtras {
