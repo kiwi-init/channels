@@ -58,6 +58,7 @@ import {
 } from "three/tsl"
 
 import { daylight, type Rgb } from "~/calm/daylight"
+import { freshPace, paced, SLOW_HOLD_MS } from "~/calm/pace"
 import type { CalmRow } from "~/calm/rows"
 
 export interface Meadow {
@@ -72,11 +73,6 @@ interface Engine {
 }
 
 const STILL_EVERY = 60_000
-const WARM_SECONDS = 0.5
-const SAMPLE_SECONDS = 1.5
-const SLOWEST_FRAME = 1 / 24
-const EARLY_SECONDS = 0.5
-const HOPELESS_FRAME = 1 / 12
 
 let engine: Promise<Engine | null> | null = null
 
@@ -473,9 +469,8 @@ async function build(): Promise<Engine | null> {
   let still = false
   let asked = false
   let slow = false
-  let watched = 0
-  let sampleFrames = 0
-  let sampleTime = 0
+  let slowUntil = 0
+  let pace = freshPace()
   let attached = false
   let running = false
   let simClock = 0
@@ -561,15 +556,9 @@ async function build(): Promise<Engine | null> {
   }
 
   const govern = (raw: number): void => {
-    watched += raw
-    if (watched < WARM_SECONDS) return
-    if (sampleTime >= SAMPLE_SECONDS) return
-    sampleFrames++
-    sampleTime += raw
-    const average = sampleTime / sampleFrames
-    const hopeless = sampleTime >= EARLY_SECONDS && average > HOPELESS_FRAME
-    if (!hopeless && (sampleTime < SAMPLE_SECONDS || average <= SLOWEST_FRAME)) return
+    if (paced(pace, raw) !== "slow") return
     slow = true
+    slowUntil = Date.now() + SLOW_HOLD_MS
     still = true
     stopLoop()
     settleStill()
@@ -627,9 +616,7 @@ async function build(): Promise<Engine | null> {
   const onVisibility = (): void => {
     if (document.hidden) {
       stopLoop()
-      watched = 0
-      sampleFrames = 0
-      sampleTime = 0
+      pace = freshPace()
     } else if (still) settleStill()
     else startLoop()
   }
@@ -660,6 +647,10 @@ async function build(): Promise<Engine | null> {
       if (attached) detach()
       host = stage
       asked = still0
+      if (slow && Date.now() >= slowUntil) {
+        slow = false
+        pace = freshPace()
+      }
       still = asked || slow
       attached = true
       frozen = false
