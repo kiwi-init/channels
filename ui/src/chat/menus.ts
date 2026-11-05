@@ -1,5 +1,5 @@
 import { bridge } from "@kiwi/secrets/secrets.ts"
-import { askDelete, startEditing } from "~/chat/editing"
+import { askDelete, startEditing, type EditAt } from "~/chat/editing"
 import { GENERAL_ROOM } from "@kiwi/core/protocol.ts"
 import type { MenuGroups, MenuItem } from "~/kit/menu-open"
 import type { Actions, Channel, Message, Person, Where } from "~/model"
@@ -45,7 +45,7 @@ export function personItems({ channel, go }: MenuContext, person: Person): MenuI
   ]
 }
 
-export function messageGroups(ctx: MenuContext, m: Message, target: EventTarget, more: { openImage: (url: string, alt: string) => void; reply: (() => void) | null }): MenuGroups {
+export function messageGroups(ctx: MenuContext, m: Message, target: EventTarget, more: { openImage: (url: string, alt: string) => void; reply: (() => void) | null; at: EditAt }): MenuGroups {
   const { channel } = ctx
   const link = webLinkAt(target)
   const picture = (target as Partial<Element>).closest?.<HTMLImageElement>(".msg-image img, .msg-text img") ?? null
@@ -65,7 +65,7 @@ export function messageGroups(ctx: MenuContext, m: Message, target: EventTarget,
     more.reply ? [{ label: "Reply", run: more.reply }] : [],
     m.canChange
       ? [
-          { label: "Edit", run: () => startEditing(channel.code, m.seq) },
+          { label: "Edit", run: () => startEditing(channel.code, m.seq, more.at) },
           { label: "Delete", run: () => askDelete(channel.code, m.seq) },
         ]
       : [],

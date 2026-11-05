@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, use
 
 import { Composer } from "~/chat/composer"
 import { compactAt, quoteOf, ReadOnly, useNames, useStick, useTaskIds } from "~/chat/conversation"
+import { EditHere } from "~/chat/editing"
 import { MessageRow } from "~/chat/message"
 import { threadReply } from "~/chat/quote"
 import { threadRoot } from "~/chat/thread-root"
@@ -87,26 +88,28 @@ export function ThreadPanel({ channel, seq: opened, focus: asked }: { channel: C
     )
   return (
     <ReplyContext.Provider value={replying}>
-      <PanelHead title="Thread" sub={`· ${nickname(channel, root.from)}`}>
-        <button type="button" className="btn is-small is-quiet" aria-pressed={following} onClick={() => actions.followThread(channel.code, seq, !following)}>
-          {following ? "Following" : "Follow"}
-        </button>
-      </PanelHead>
-      {root.where.kind !== "theirs" && <QuotePick root={content} onQuote={quote} />}
-      <div className="feed" ref={scroller} onScroll={remember}>
-        <div className="feed-list" ref={content}>
-          <div className="thread-root">
-            <MessageRow channel={channel} m={root} compact={false} names={names} tasks={tasks} inThread />
+      <EditHere.Provider value="panel">
+        <PanelHead title="Thread" sub={`· ${nickname(channel, root.from)}`}>
+          <button type="button" className="btn is-small is-quiet" aria-pressed={following} onClick={() => actions.followThread(channel.code, seq, !following)}>
+            {following ? "Following" : "Follow"}
+          </button>
+        </PanelHead>
+        {root.where.kind !== "theirs" && <QuotePick root={content} onQuote={quote} />}
+        <div className="feed" ref={scroller} onScroll={remember}>
+          <div className="feed-list" ref={content}>
+            <div className="thread-root">
+              <MessageRow channel={channel} m={root} compact={false} names={names} tasks={tasks} inThread />
+            </div>
+            <p className="thread-count">
+              {replies.length} {replies.length === 1 ? "reply" : "replies"}
+            </p>
+            {replies.map((m, i) => (
+              <MessageRow key={m.seq} channel={channel} m={m} compact={compactAt(replies, i)} names={names} tasks={tasks} inThread quote={quoteOf(replies, i, bySeq, seq)} onQuote={onQuote} />
+            ))}
           </div>
-          <p className="thread-count">
-            {replies.length} {replies.length === 1 ? "reply" : "replies"}
-          </p>
-          {replies.map((m, i) => (
-            <MessageRow key={m.seq} channel={channel} m={m} compact={compactAt(replies, i)} names={names} tasks={tasks} inThread quote={quoteOf(replies, i, bySeq, seq)} onQuote={onQuote} />
-          ))}
         </div>
-      </div>
-      {root.where.kind === "theirs" ? <ReadOnly channel={channel} between={root.where.between} /> : <Composer channel={channel} where={root.where} inThread={seq} placeholder="Reply in thread" />}
+        {root.where.kind === "theirs" ? <ReadOnly channel={channel} between={root.where.between} /> : <Composer channel={channel} where={root.where} inThread={seq} placeholder="Reply in thread" />}
+      </EditHere.Provider>
     </ReplyContext.Provider>
   )
 }
