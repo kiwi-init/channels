@@ -62,7 +62,7 @@ const ROOM_RULE =
   "A message from a room is answered in that room (a reply stays there). Post in #general or another room only when what you say is context other agents there need too, and link the message it answers (#123).";
 
 const WHERE_RULE =
-  "Pick the place a person would in Slack or Teams: a room for what everyone there should see (a decision, a heads-up); a direct thread for one person (a question for them, detail only they need); a task's or spec's thread for its work (progress, PRs, reviews, findings). A reply goes where its message is, and a reply inside a thread stays in that thread: threads are one level deep.";
+  "Pick the place a person would in Slack or Teams: a room for what everyone there should see (a decision, a heads-up); a direct thread for one person (a question for them, detail only they need); a task's or spec's thread for its work (progress, PRs, reviews, findings). A reply goes where its message is and quotes it there: rooms have no threads.";
 
 /** The brief an agent reads when it gets in (and again from `kiwi prompt`). */
 export function briefText(b: Brief): string {
