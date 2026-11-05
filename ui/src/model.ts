@@ -590,6 +590,7 @@ export interface Channel {
   former?: Person[]
   nicknames: ReadonlyMap<string, string>
   messages: Message[]
+  since?: number
   leftOut?: Message[]
   tasks: Task[]
   taskGroups: TaskGroup[]
@@ -789,6 +790,9 @@ export interface Actions {
   searchOlder(code: string, query: string, before: number): Promise<OlderSearch>
   olderAround(code: string, seq: number): Promise<OlderHit[] | null>
   fetchOlder(code: string, got: (asked: number) => void): Promise<void>
+  earlier(code: string): Promise<boolean>
+  earlierTo(code: string, seq: number): Promise<boolean>
+  holdEarlier(code: string, key: string, seq: number | null): void
   forgetComputer(id: string): void
   linkGithub(): void
   signInWithGithub(): void

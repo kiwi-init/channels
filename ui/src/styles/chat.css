@@ -1838,7 +1838,7 @@ button.msg-image-spot:hover {
 
 .compose-file-name {
   display: block;
-  padding: 26px 6px 0;
+  padding: 24px 6px 0;
   overflow: hidden;
   font-size: var(--t-stamp);
   color: var(--ink-2);

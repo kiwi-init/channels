@@ -78,7 +78,7 @@ export function SearchBox({
   const settled = useSettled(query)
   const index = useMemo(() => messageIndex(channel), [channel])
   const recent = useMemo(() => searchHits(channel.tasks, index, settled), [channel.tasks, index, settled])
-  const before = useMemo(() => channel.messages.reduce((low, m) => (m.seq > 0 && m.seq < low ? m.seq : low), Number.MAX_SAFE_INTEGER), [channel.messages])
+  const before = useMemo(() => channel.since ?? channel.messages.reduce((low, m) => (m.seq > 0 && m.seq < low ? m.seq : low), Number.MAX_SAFE_INTEGER), [channel.since, channel.messages])
   const [older, setOlder] = useState<{ query: string; found: OlderSearch } | null>(null)
   const [pull, setPull] = useState<Pull | null>(null)
   const [round, setRound] = useState(0)
@@ -100,7 +100,11 @@ export function SearchBox({
   }, [actions, channel.code, settled, before, round])
   const olderNow = older?.query === settled.trim() ? older.found : null
   const more = olderNow?.state !== "none" ? (olderNow?.more ?? null) : null
-  const hits = useMemo((): Hit[] => [...recent, ...(olderNow?.hits ?? []).slice(0, OLDER_SHOWN).map((o): Hit => ({ kind: "older", o })), ...(more ? [FETCH_HIT] : [])], [recent, olderNow, more])
+  const hits = useMemo((): Hit[] => {
+    const seen = new Set(recent.flatMap((h) => (h.kind === "message" ? [h.m.seq] : [])))
+    const olderHits = (olderNow?.hits ?? []).filter((o) => !seen.has(o.seq))
+    return [...recent, ...olderHits.slice(0, OLDER_SHOWN).map((o): Hit => ({ kind: "older", o })), ...(more ? [FETCH_HIT] : [])]
+  }, [recent, olderNow, more])
   const found = hits.filter((h) => h.kind !== "fetch").length
   const wanted = useMemo(() => terms(settled), [settled])
   const [hitsWere, setHitsWere] = useState(hits)
@@ -144,13 +148,25 @@ export function SearchBox({
       go({ to: "panel", panel: { kind: "task", task: hit.task.id } })
       return
     }
-    if (hit.kind === "older") {
-      onJump(null)
-      onOlder({ seq: hit.o.seq, terms: wanted })
+    const since = channel.since
+    const at = hit.kind === "older" ? hit.o.seq : hit.m.seq
+    if (since === undefined || at <= 0 || at >= since) {
+      if (hit.kind === "older") {
+        onJump(null)
+        onOlder({ seq: at, terms: wanted })
+        return
+      }
+      go({ to: "where", where: hit.m.where, jump: true })
+      onJump({ m: hit.m, terms: wanted })
       return
     }
-    go({ to: "where", where: hit.m.where, jump: true })
-    onJump({ m: hit.m, terms: wanted })
+    onJump(null)
+    void actions.earlierTo(channel.code, at).then((held) => {
+      if (!held) return onOlder({ seq: at, terms: wanted })
+      const where = hit.kind === "older" ? hit.o.where : hit.m.where
+      go({ to: "where", where, jump: true })
+      onJump({ m: hit.kind === "message" ? hit.m : { seq: at, from: hit.o.from, at: hit.o.at, text: hit.o.text, where }, terms: wanted })
+    })
   }
 
   const onKey = (e: KeyboardEvent<HTMLInputElement>) => {
