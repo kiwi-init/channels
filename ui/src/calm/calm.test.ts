@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
-import { isCalmKey, untilIdle } from "~/calm/idle"
+import { untilIdle } from "~/calm/idle"
 import { calmRows } from "~/calm/rows"
 import type { ChannelTile, HomeChannel } from "~/model"
 
@@ -66,23 +66,5 @@ describe("the idle wait", () => {
     expect(untilIdle(1000, 61_000, 180_000)).toBe(120_000)
     expect(untilIdle(1000, 181_000, 180_000)).toBe(0)
     expect(untilIdle(1000, 999_000, 180_000)).toBe(0)
-  })
-})
-
-describe("the Calm shortcut", () => {
-  const press = (key: string, over: Partial<Pick<KeyboardEvent, "metaKey" | "ctrlKey" | "altKey" | "shiftKey">> = {}) =>
-    isCalmKey({ key, metaKey: false, ctrlKey: false, altKey: false, shiftKey: false, ...over })
-
-  test("⌘T on a Mac and Ctrl+T elsewhere open it", () => {
-    expect(press("t", { metaKey: true })).toBe(true)
-    expect(press("t", { ctrlKey: true })).toBe(true)
-    expect(press("T", { metaKey: true })).toBe(true)
-  })
-
-  test("a plain t, or T with Shift or Option, is just a key", () => {
-    expect(press("t")).toBe(false)
-    expect(press("t", { metaKey: true, shiftKey: true })).toBe(false)
-    expect(press("t", { metaKey: true, altKey: true })).toBe(false)
-    expect(press("r", { metaKey: true })).toBe(false)
   })
 })

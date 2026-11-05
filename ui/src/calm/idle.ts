@@ -23,14 +23,6 @@ function setShown(next: boolean): void {
   for (const l of listeners) l()
 }
 
-export const CALM_KEYS = "⌘T"
-
-type Keys = Pick<KeyboardEvent, "key" | "metaKey" | "ctrlKey" | "altKey" | "shiftKey">
-
-export function isCalmKey(e: Keys): boolean {
-  return (e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "t"
-}
-
 export const showCalm = (): void => setShown(true)
 export const hideCalm = (): void => setShown(false)
 
