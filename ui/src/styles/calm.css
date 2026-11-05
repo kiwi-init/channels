@@ -152,7 +152,7 @@
   color: var(--decide);
 }
 
-@container (max-width: 640px) {
+@container (max-width: 40rem) {
   .rest-row {
     grid-template-columns: 3ch minmax(0, 1fr);
     row-gap: 2px;
