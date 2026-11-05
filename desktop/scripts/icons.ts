@@ -15,6 +15,7 @@ import { chromium } from "playwright-core";
 const DESKTOP = resolve(import.meta.dir, "..");
 const svg = readFileSync(join(DESKTOP, "build", "icon.svg"), "utf8");
 const traySvg = readFileSync(join(DESKTOP, "build", "tray.svg"), "utf8");
+const trayUnreadSvg = readFileSync(join(DESKTOP, "build", "tray-unread.svg"), "utf8");
 
 const browser = await chromium.launch();
 const page = await browser.newPage();
@@ -31,6 +32,8 @@ writeFileSync(join(DESKTOP, "assets", "icon.png"), await png(512));
 copyFileSync(join(DESKTOP, "build", "tray.svg"), join(DESKTOP, "assets", "channels-tray-symbolic.svg"));
 writeFileSync(join(DESKTOP, "assets", "trayTemplate.png"), await png(16, traySvg));
 writeFileSync(join(DESKTOP, "assets", "trayTemplate@2x.png"), await png(32, traySvg));
+writeFileSync(join(DESKTOP, "assets", "trayUnreadTemplate.png"), await png(16, trayUnreadSvg));
+writeFileSync(join(DESKTOP, "assets", "trayUnreadTemplate@2x.png"), await png(32, trayUnreadSvg));
 
 // The Mac: an iconset (each size and its @2x), packed by iconutil.
 if (process.platform === "darwin") {
