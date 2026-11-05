@@ -2,7 +2,7 @@
   --rest-ink: #ffffff;
   --rest-ink-2: rgb(255 255 255 / 0.84);
   --rest-ink-3: rgb(255 255 255 / 0.62);
-  --rest-panel: rgb(24 62 138 / 0.4);
+  --rest-panel: rgb(16 34 72 / 0.62);
   --rest-glow: 0 1px 2px rgb(8 24 56 / 0.35);
   position: fixed;
   inset: 0;
