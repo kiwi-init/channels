@@ -19,6 +19,12 @@ export function blocks(doc: Node): Placed[] {
   return out
 }
 
+export function caretAway(state: EditorState, me: string, shown: (block: string) => boolean): boolean {
+  const here = blockAt(state)
+  const last = blocks(state.doc).findLast((b) => shown(attrsOf(b.node).id) && (!isEmpty(b.node) || attrsOf(b.node).author === me))
+  return !!here && !!last && here.index !== last.index
+}
+
 export function isEmpty(block: Node): boolean {
   if (block.childCount > 1) return false
   const only = block.firstChild

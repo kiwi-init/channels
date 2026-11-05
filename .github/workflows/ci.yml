@@ -217,6 +217,9 @@ jobs:
       - name: doc send, sending at the bottom, scrolled up or a long line keeps the view where it was
         if: ${{ !cancelled() }}
         run: bun scripts/ui-send-scroll.ts
+      - name: doc follow, at the bottom the view follows an agent's lines, also right after you send while it posts and edits, in Chromium and WebKit
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-doc-follow.ts
       - name: doc paste, an image pasted into a line goes out with that line
         if: ${{ !cancelled() }}
         run: bun scripts/ui-doc-paste.ts
@@ -260,6 +263,9 @@ jobs:
           wait "$chromium" || status=1
           wait "$webkit" || status=1
           exit "$status"
+      - name: doc slash menu, the doc's / menu opens on screen and keeps its rows inside its box, in Chromium and WebKit
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-doc-slash-menu.ts
       - name: ui the keyboard runs across doc blocks like an editor (arrows, word jumps, shift-select, select all), in WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-doc-keys.ts --dist ui/dist
