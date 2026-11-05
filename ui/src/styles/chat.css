@@ -69,7 +69,7 @@
   min-height: 100%;
   max-width: calc(var(--col) + 2 * var(--gutter));
   margin: 0 auto;
-  padding: 24px var(--gutter) var(--compose-space);
+  padding: 24px var(--gutter) max(var(--compose-space), calc(var(--compose-h, 0px) + 40px));
 }
 
 .feed-start {
@@ -1458,24 +1458,28 @@ button.msg-image-spot:hover {
   position: relative;
   display: flex;
   flex-direction: column;
-  padding: 8px;
-  border: 0;
+  padding: 12px 10px 8px 12px;
+  border: 1px solid var(--line-2);
   border-radius: var(--r-win);
-  background: var(--float);
+  background: color-mix(in srgb, var(--bg-3) 68%, transparent);
   box-shadow: var(--shadow-float);
-  transition: box-shadow var(--fast);
+  -webkit-backdrop-filter: blur(18px) saturate(1.5);
+  backdrop-filter: blur(18px) saturate(1.5);
+  transition: border-color var(--fast);
 }
 
 .composer:focus-within {
-  box-shadow:
-    0 0 0 1px var(--line-3),
-    var(--shadow-float);
+  border-color: var(--line-3);
 }
 
 .composer-row {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-areas:
+    "text text text"
+    "plus . send";
+  align-items: center;
+  gap: 6px 4px;
 }
 
 .compose-reply {
@@ -1666,11 +1670,11 @@ button.msg-image-spot:hover {
 }
 
 .composer textarea {
-  flex: 1;
+  grid-area: text;
   min-width: 0;
-  min-height: var(--ctl);
+  min-height: calc(var(--ctl) * 1.4);
   max-height: 40vh;
-  padding: 6px 0;
+  padding: 2px 0 0 2px;
   border: 0;
   background: none;
   font: var(--t-body) / 1.35 var(--sans);
@@ -1687,12 +1691,13 @@ button.msg-image-spot:hover {
 
 .send {
   display: grid;
+  grid-area: send;
   place-items: center;
   flex: none;
-  width: var(--ctl);
-  height: var(--ctl);
+  width: calc(var(--ctl) - 4px);
+  height: calc(var(--ctl) - 4px);
   border: 0;
-  border-radius: var(--r-ctl);
+  border-radius: 50%;
   background: var(--ink);
   color: var(--on-ink);
   transition: opacity var(--fast);
@@ -1790,19 +1795,6 @@ button.msg-image-spot:hover {
   font: var(--t-stamp) var(--ui);
 }
 
-.main:has(> .compose)::after,
-.panel:has(> .compose)::after {
-  content: "";
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  z-index: 3;
-  height: 96px;
-  background: linear-gradient(to bottom, transparent, var(--bg) 70%);
-  pointer-events: none;
-}
-
 .composer.is-dropping {
   box-shadow:
     0 0 0 2px var(--accent),
@@ -1844,6 +1836,16 @@ button.msg-image-spot:hover {
   object-fit: cover;
 }
 
+.compose-file-name {
+  display: block;
+  padding: 26px 6px 0;
+  overflow: hidden;
+  font-size: var(--t-stamp);
+  color: var(--ink-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .compose-file-x {
   position: absolute;
   top: 4px;
@@ -1865,10 +1867,12 @@ button.msg-image-spot:hover {
 
 .compose-attach {
   display: grid;
+  grid-area: plus;
   place-items: center;
   flex: none;
-  width: var(--ctl);
-  height: var(--ctl);
+  width: calc(var(--ctl) - 6px);
+  height: calc(var(--ctl) - 6px);
+  margin-left: -6px;
   padding: 0;
   border: 0;
   border-radius: var(--r-ctl);

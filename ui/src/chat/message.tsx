@@ -191,7 +191,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
   )
   const quoting = !!replying && m.where.kind !== "theirs"
   const who = memberOf(channel, m.from)
-  const editing = useEditing(channel.code, m.seq)
+  const editing = useEditing(channel.code, m.seq) && !m.block
   const ask = m.ask ? channel.asks.find((a) => a.id === m.ask) : undefined
   const spec = channel.specs?.find((s) => s.ask === m.seq)
   const cited = useMemo(() => (typeof quote === "object" ? quotedExcerpt(m, quote) : null), [m, quote])

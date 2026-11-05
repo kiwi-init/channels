@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { chromium, type Page } from "playwright-core";
 import { startLocalRelay } from "./local-relay.ts";
-import { firstRun, newChannel } from "./perf-ui.ts";
+import { composer, firstRun, newChannel, say, SEND } from "./perf-ui.ts";
 import { harnessDist } from "./ui-harness.ts";
 
 interface View {
@@ -29,25 +29,23 @@ try {
   await page.goto(`http://127.0.0.1:${port}/`);
   await firstRun(page, "jow");
   await newChannel(page, "scroll");
-  await page.locator(".thread-doc .doc-tail").last().click();
   for (let i = 0; i < 25; i++) {
-    await page.keyboard.type(`seed message ${i}`);
-    await page.keyboard.press("ControlOrMeta+Enter");
+    await say(page, `seed message ${i}`);
     await page.waitForTimeout(70);
   }
   await page.waitForTimeout(1000);
   for (const mode of ["bottom", "up", "multiline"] as const) {
-    await page.locator(".thread-doc .doc-tail").last().click();
+    await composer(page).click();
     await page.keyboard.type(`measured ${mode}`);
     if (mode === "multiline")
       for (let i = 0; i < 10; i++) {
-        await page.keyboard.press("Enter");
+        await page.keyboard.press("Shift+Enter");
         await page.keyboard.type(`line ${i}`);
       }
     if (mode === "up") await page.evaluate(() => document.querySelector(".main .feed")?.scrollBy({ top: -350 }));
     await page.waitForTimeout(300);
     const before = await view(page);
-    await page.keyboard.press("ControlOrMeta+Enter");
+    await page.keyboard.press(SEND);
     await page.waitForTimeout(1000);
     const after = await view(page);
     const kept = before.bottom <= 2 ? after.bottom <= 2 : Math.abs(after.top - before.top) <= 2;

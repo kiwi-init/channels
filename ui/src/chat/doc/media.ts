@@ -1,4 +1,5 @@
 import { MAX_FILE_BYTES, MAX_IMAGE_BYTES, RASTER_MIMES } from "@kiwi/core/protocol.ts"
+import type { BlockMedia } from "@kiwi/core/doc/blocks.ts"
 import type { Node } from "prosemirror-model"
 import type { NodeView } from "prosemirror-view"
 
@@ -50,6 +51,9 @@ export async function uploadAll(files: readonly File[], media: DocMedia, refused
   )
   return done.filter((n): n is Node => n !== null)
 }
+
+export const putAll = (files: readonly Upload[], media: DocMedia): Promise<BlockMedia[]> =>
+  Promise.all(files.map(async (u): Promise<BlockMedia> => (RASTER.has(u.mime) ? { image: await media.putImage(u) } : { file: await media.putFile(u) })))
 
 export function filesIn(dt: DataTransfer | null): File[] {
   if (!dt) return []

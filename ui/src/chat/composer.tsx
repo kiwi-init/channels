@@ -1,26 +1,28 @@
 import { lazy, Suspense, useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from "react"
 
-import { MAX_IMAGE_BYTES, RASTER_MIMES } from "@kiwi/core/protocol.ts"
+import { MAX_FILE_BYTES, MAX_IMAGE_BYTES, RASTER_MIMES } from "@kiwi/core/protocol.ts"
 import { fileDrag, takeDropped } from "@kiwi/app/dropped.ts"
 import { takePasted } from "@kiwi/app/pasted.ts"
 import { matchCommands, parseCommand } from "~/chat/commands"
 import { useCommands } from "~/chat/use-commands"
-import { startEditing } from "~/chat/editing"
+import { startEditing, stopEditing, useEditingIn } from "~/chat/editing"
+import { lastOwn, nextEdit, type Edit } from "~/chat/compose-edit"
 import { withExcerpt } from "~/chat/quote"
+import { sayerAt } from "~/chat/doc/sayer"
 import { preview, useReplying } from "~/chat/reply"
-import { attached, composerKey, drafts, tooLong, useGivenBack } from "~/chat/drafts"
-import { STASH_SHOT, useStash, type Stashed } from "~/chat/stash"
+import { attached, composerKey, drafts, giveBack, tooLong, useGivenBack } from "~/chat/drafts"
+import { STASH_SHOT, stashText, useStash } from "~/chat/stash"
 import { Avatar, cx, Dot, STATUS_WORDS } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { openMenu } from "~/kit/menu-open"
-import { ago } from "~/kit/time"
 import type { Channel, Upload, Where } from "~/model"
-import { sameWhere, useApp } from "~/nav"
+import { useApp } from "~/nav"
 import { nickname, onePerPerson, shown } from "~/names"
 import { mentionNames, withNames, type Picks } from "~/chat/linked"
 import { peopleMatches, taskMatches } from "~/chat/matches"
 
 const Gifs = lazy(() => import("~/chat/gif-picker"))
+const StashList = lazy(() => import("~/chat/stash-list"))
 
 const MENTION = /(^|\s)@([\p{L}\p{N}_.-]*)$/u
 const TASK_REF = /(^|\s)#([^#\n]{0,40})$/u
@@ -34,7 +36,7 @@ function picksFor(key: string): Picks {
   return made
 }
 
-type Cue = { key: string; back: boolean; left: number }
+type Cue = { key: string; back: boolean; left: number; lost?: number }
 
 function placeOf(channel: Channel, where: Where, inThread?: number): string {
   if (inThread !== undefined) return "this thread"
@@ -42,48 +44,6 @@ function placeOf(channel: Channel, where: Where, inThread?: number): string {
   if (where.kind === "task") return `T${where.task}`
   if (where.kind === "dm") return `your chat with ${nickname(channel, where.with)}`
   return "here"
-}
-
-function StashList({ list, onTake, onDrop, onClose }: { list: readonly Stashed[]; onTake: (i: number) => void; onDrop: (i: number) => void; onClose: () => void }) {
-  const [on, setOn] = useState(0)
-  const rows = useRef<HTMLUListElement>(null)
-  useEffect(() => {
-    rows.current?.querySelectorAll<HTMLButtonElement>(".stash-row")[Math.min(on, list.length - 1)]?.focus()
-  }, [on, list.length])
-  return (
-    <div
-      className="stash-list"
-      onKeyDown={(e) => {
-        if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-          e.preventDefault()
-          setOn((on + (e.key === "ArrowDown" ? 1 : list.length - 1)) % list.length)
-        } else if (e.key === "Backspace" || e.key === "Delete") {
-          e.preventDefault()
-          onDrop(Math.min(on, list.length - 1))
-          setOn(Math.max(0, Math.min(on, list.length - 2)))
-          if (list.length === 1) onClose()
-        } else if (e.key === "Escape") {
-          e.preventDefault()
-          e.stopPropagation()
-          onClose()
-        }
-      }}
-    >
-      <ul ref={rows} aria-label="Stashed drafts">
-        {list.map((s, i) => (
-          <li key={`${s.at}-${i}`}>
-            <button type="button" className="stash-row" onFocus={() => setOn(i)} onMouseEnter={() => setOn(i)} onMouseDown={(e) => e.preventDefault()} onClick={() => onTake(i)}>
-              <span className="stash-text">{s.text}</span>
-              {i === 0 ? <kbd>⇧⌘S</kbd> : <span className="stash-age">{ago(s.at)}</span>}
-            </button>
-          </li>
-        ))}
-      </ul>
-      <p className="stash-foot">
-        <kbd>⌫</kbd> drops one
-      </p>
-    </div>
-  )
 }
 
 const MAX_FILES = 8
@@ -106,13 +66,13 @@ const readBase64 = (file: File): Promise<string> =>
     reader.readAsDataURL(file)
   })
 
-type ComposerProps = { channel: Channel; where: Where; placeholder: string; inThread?: number }
+type ComposerProps = { channel: Channel; where: Where; placeholder: string; inThread?: number; doc?: string | null }
 
 export function Composer(props: ComposerProps) {
   return <ComposerIn key={composerKey(props.channel.code, props.where, props.inThread)} {...props} />
 }
 
-function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
+function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProps) {
   const { app, toast } = useApp()
   const replying = useReplying()
   const replyTo = replying?.to ?? null
@@ -172,18 +132,23 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
     if (list.length > room) toast(`Up to ${MAX_FILES} images in one message`)
     for (const f of list.slice(0, Math.max(0, room))) {
       const name = imageName(f)
-      if (!IMAGE_TYPES.has(f.type)) {
+      const image = IMAGE_TYPES.has(f.type)
+      if (!image && !doc) {
         toast(`${name} isn't a PNG, JPEG, GIF or WebP`, "error")
         continue
       }
-      if (f.size > MAX_IMAGE_BYTES) {
+      if (!image && (!f.size || f.size > MAX_FILE_BYTES)) {
+        toast(`${name} is empty or too big to send`, "error")
+        continue
+      }
+      if (image && f.size > MAX_IMAGE_BYTES) {
         void import("@kiwi/app/compress-image.ts").then(({ compressImage, renamed }) =>
           compressImage(f, MAX_IMAGE_BYTES).then((done) => (done ? add({ ...done, name: renamed(name, done.mime) }) : toast(`${name} couldn't be read`, "error")))
         )
         continue
       }
       void readBase64(f).then(
-        (data) => add({ name, mime: f.type, data }),
+        (data) => add({ name, mime: f.type || "application/octet-stream", data }),
         () => toast(`${name} couldn't be read`, "error")
       )
     }
@@ -262,7 +227,38 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
     setClosed(false)
     drafts.set(key, value)
   }
+  const [edit, setEdit] = useState<Edit | null>(null)
+  const editingSeq = useEditingIn(channel.code)
+  const editing = doc && editingSeq !== null ? channel.messages.find((m) => m.seq === editingSeq && m.block) : undefined
+  const [editSeen, setEditSeen] = useState<number | undefined>(undefined)
+  if (editing?.seq !== editSeen) {
+    setEditSeen(editing?.seq)
+    const next = nextEdit(edit, editing, text)
+    if (next) {
+      setEdit(next.edit)
+      update(next.text)
+    }
+  }
+  const editOpen = useRef<Edit | null>(null)
+  useEffect(() => {
+    editOpen.current = edit
+    if (edit) area.current?.focus()
+  }, [edit])
+  useEffect(
+    () => () => {
+      const open = editOpen.current
+      if (!open) return
+      drafts.set(key, open.was)
+      stopEditing()
+    },
+    [key]
+  )
   const send = (value = text) => {
+    if (edit) {
+      const next = value.trim()
+      if (next && next !== editing?.text.trim()) app.actions.editMessage(channel.code, edit.seq, next)
+      return stopEditing()
+    }
     if (running && value === text) {
       running.command.run(running.args)
       setCue(null)
@@ -278,12 +274,14 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
       toast(long, "error")
       return
     }
+    const say = doc ? sayerAt(`${channel.code}\n${doc}`) : null
     const opts = {
       ...(inThread !== undefined ? { inThread, ...(alsoRoom ? {} : { side: true as const }) } : {}),
       ...(replyTo ? { replyTo: replyTo.seq } : {}),
       ...(files.length ? { images: files } : {}),
     }
-    app.actions.send(channel.code, where, sent, Object.keys(opts).length ? opts : undefined)
+    const back = (t: string, f: readonly Upload[]) => giveBack(key, t, f, stashText) === "stash" && setCue({ key, back: false, left: 0, lost: f.length })
+    if (!say?.(said, replyTo ? { re: replyTo.seq, quote: excerpt } : null, back, files)) app.actions.send(channel.code, where, sent, Object.keys(opts).length ? opts : undefined)
     picked.delete(key)
     replying?.set(null)
     setAlsoRoom(false)
@@ -400,15 +398,17 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
             }}
           >
             {listOpen && (
-              <StashList
-                list={stash.list}
-                onTake={bringBack}
-                onDrop={stash.drop}
-                onClose={() => {
-                  setListOf(null)
-                  area.current?.focus()
-                }}
-              />
+              <Suspense fallback={null}>
+                <StashList
+                  list={stash.list}
+                  onTake={bringBack}
+                  onDrop={stash.drop}
+                  onClose={() => {
+                    setListOf(null)
+                    area.current?.focus()
+                  }}
+                />
+              </Suspense>
             )}
             <button
               type="button"
@@ -434,7 +434,7 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
           <ul className="compose-files" aria-label="Attached images">
             {files.map((f, i) => (
               <li key={`${f.name}-${i}`} className="compose-file">
-                <img src={`data:${f.mime};base64,${f.data}`} alt={f.name} />
+                {f.mime.startsWith("image/") ? <img src={`data:${f.mime};base64,${f.data}`} alt={f.name} /> : <span className="compose-file-name">{f.name}</span>}
                 <button type="button" className="compose-file-x" aria-label={`Remove ${f.name}`} title="Remove" onClick={() => setFiles((now) => now.filter((_, j) => j !== i))}>
                   <Icon name="close" size={12} />
                 </button>
@@ -464,7 +464,7 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
           <input
             ref={picker}
             type="file"
-            accept={[...IMAGE_TYPES].join(",")}
+            accept={doc ? undefined : [...IMAGE_TYPES].join(",")}
             multiple
             hidden
             onChange={(e) => {
@@ -491,7 +491,7 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
                 .filter((item) => item.kind === "file")
                 .map((item) => item.getAsFile())
                 .filter((file): file is File => !!file)
-              const images = (e.clipboardData.files.length ? [...e.clipboardData.files] : fromItems).filter((f) => f.type.startsWith("image/"))
+              const images = (e.clipboardData.files.length ? [...e.clipboardData.files] : fromItems).filter((f) => doc || f.type.startsWith("image/"))
               if (!images.length) return void takePasted(e.clipboardData).then((f) => f && attach([f]))
               if (!e.clipboardData.getData("text/plain")) e.preventDefault()
               attach(images)
@@ -505,14 +505,17 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
                 return
               }
               if (e.key === "ArrowUp" && !options && !text && !files.length && !e.shiftKey && !e.altKey && !e.metaKey && !e.ctrlKey) {
-                const last = channel.messages.findLast(
-                  (m) => m.canChange && sameWhere(m.where, where) && (inThread === undefined ? m.inThread === undefined : m.inThread === inThread || m.seq === inThread)
-                )
+                const last = lastOwn(channel.messages, where, inThread)
                 if (last) {
                   e.preventDefault()
                   startEditing(channel.code, last.seq)
                   return
                 }
+              }
+              if (options && e.key === "Enter" && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey) {
+                e.preventDefault()
+                send()
+                return
               }
               if (options) {
                 if (e.key === "ArrowDown" || e.key === "ArrowUp") {
@@ -538,6 +541,12 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
                   return
                 }
               }
+              if (e.key === "Escape" && edit) {
+                e.preventDefault()
+                e.stopPropagation()
+                stopEditing()
+                return
+              }
               if (e.key === "Escape" && replyTo) {
                 e.preventDefault()
                 e.stopPropagation()
@@ -550,7 +559,7 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
               }
             }}
           />
-          <button type="submit" className={cx("send", ready && "is-ready")} aria-label="Send" title={enterSends ? "Send (Enter)" : "Send (⌘ Enter)"} disabled={!ready}>
+          <button type="submit" className={cx("send", ready && "is-ready")} aria-label={edit ? "Save" : "Send"} title={enterSends ? "Send (Enter)" : "Send (⌘ Enter)"} disabled={!ready}>
             <Icon name="send" />
           </button>
         </div>
@@ -561,7 +570,12 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
           </label>
         )}
       </form>
-      {running && !cue && (
+      {edit && (
+        <p className="compose-hint" role="status">
+          <b>Editing</b> <span>·</span> <kbd>Esc</kbd> cancels
+        </p>
+      )}
+      {running && !cue && !edit && (
         <p className="compose-hint" role="status">
           <b>/{running.command.name}</b> <span>·</span> {running.command.summary} <span>·</span> <kbd>{enterSends ? "↩" : "⌘↩"}</kbd> runs it
           {running.command.args && !running.args ? ` · ${running.command.args}` : ""}
@@ -575,6 +589,7 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
           ) : (
             <>
               <kbd>⇧⌘S</kbd> brings it back
+              {cue.lost ? ` · ${cue.lost === 1 ? "its file" : `its ${cue.lost} files`} didn't fit in the stash` : ""}
             </>
           )}
         </p>

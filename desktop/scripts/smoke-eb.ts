@@ -139,25 +139,25 @@ try {
   if (linux) {
     const messageLink = "https://example.com/kiwi-message-link";
     const written = `[the message link](${messageLink})`;
-    const linkOpened = await until("a markdown link written in the thread doc", 30_000, () => d.evaluate(sendMessage, written, 2_000).then((sent) => (sent ? true : null)))
+    const linkOpened = await until("a markdown link sent from the composer", 30_000, () =>
+      d.evaluate(sendMessage, { text: written, shows: "the message link" }, 2_000).then((sent) => (sent ? true : null)),
+    )
       .then(() =>
         d.evaluate((url) => {
-          const a = [...document.querySelectorAll<HTMLAnchorElement>(".thread-doc a.doc-link")].find((el) => el.getAttribute("href") === url);
+          const a = [...document.querySelectorAll<HTMLAnchorElement>(".main article.msg a")].find((el) => el.getAttribute("href") === url);
           a?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, ctrlKey: true }));
           return a?.textContent === "the message link";
         }, messageLink),
       )
-      .then((clicked) =>
-        until("the system opener receiving the clicked doc link", 10_000, async () => (clicked && existsSync(opened) && readFileSync(opened, "utf8").includes(messageLink) ? true : null)),
-      )
-      .catch((e: Error) => (problems.push(`a Ctrl-clicked link in the thread doc reaches the system browser: ${e.message}`), null));
-    if (linkOpened) console.log("a Ctrl-clicked markdown link in the thread doc reached the fake xdg-open with its exact URL");
+      .then((clicked) => until("the system opener receiving the clicked link", 10_000, async () => (clicked && existsSync(opened) && readFileSync(opened, "utf8").includes(messageLink) ? true : null)))
+      .catch((e: Error) => (problems.push(`a Ctrl-clicked link in a sent message reaches the system browser: ${e.message}`), null));
+    if (linkOpened) console.log("a Ctrl-clicked markdown link in a sent message reached the fake xdg-open with its exact URL");
   }
   await check(
-    "the thread doc checks spelling and fields that opt out stay unchecked",
+    "the composer checks spelling and fields that opt out stay unchecked",
     d,
     () => ({
-      doc: document.querySelector<HTMLElement>('.thread-doc [role="textbox"][aria-label="Thread"]')?.spellcheck ?? null,
+      doc: document.querySelector<HTMLTextAreaElement>(".main .composer textarea")?.spellcheck ?? null,
       optedOut: [...document.querySelectorAll<HTMLElement>('[spellcheck="false"]')].every((el) => !el.spellcheck),
     }),
     (v) => v.doc === true && v.optedOut,

@@ -93,7 +93,7 @@ try {
   d = await attach(join(root, "driver.sock"));
   const driver = d;
   await firstChannel(driver, 3);
-  await until("the thread doc", 30_000, () => driver.evaluate(() => (document.querySelector('.thread-doc [role="textbox"][aria-label="Thread"]') ? true : null), null, 2_000));
+  await until("the composer", 30_000, () => driver.evaluate(() => (document.querySelector(".main .composer textarea") ? true : null), null, 2_000));
   const page = () => driver.evaluate((): Page => ({ w: innerWidth, h: innerHeight, dpr: devicePixelRatio }), null, 5_000);
   const settled = async (what: string, fits: (n: Node, p: Page) => boolean): Promise<{ n: Node; p: Page }> => {
     const got = await until(what, 15_000, async () => {

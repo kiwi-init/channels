@@ -6,10 +6,10 @@ import { join, resolve } from "node:path";
 import { chromium, webkit } from "playwright-core";
 import { startLocalRelay } from "./local-relay.ts";
 import { harnessDist } from "./ui-harness.ts";
-import { firstRun, letIn, newChannel } from "./perf-ui.ts";
+import { composer, firstRun, letIn, newChannel } from "./perf-ui.ts";
 
 if (process.argv.includes("--help")) {
-  console.log(`An agent edits its message in #general three times, then grows it to six paragraphs, while jow writes in the doc below.
+  console.log(`An agent edits its message in #general three times, then grows it to six paragraphs, while jow writes in the composer below.
 The message keeps its text on screen through every edit, and no ResizeObserver resizes what it watches from inside its own
 callback: both looped the feed's scroll keeper in WebKit (the doc fuzzer's agents edit like this, T4255).
 
@@ -145,7 +145,7 @@ try {
       }
     }).observe(document.body, { subtree: true, childList: true, characterData: true });
   });
-  await page.locator(".thread-doc .doc-tail").last().click();
+  await composer(page).click();
   await page.keyboard.type("jow writes below while the bot edits above");
   const sent = await kiwi(["-c", "edits", "--as", "bot", "send", "--to", "#general", "bot line: building"]);
   const seq = /#(\d+)/.exec(sent)?.[1];
@@ -165,7 +165,8 @@ try {
       const feed = document.querySelector<HTMLElement>(".feed");
       return feed ? feed.scrollHeight - feed.clientHeight : 0;
     });
-  await page.locator(".thread-doc .doc-tail").last().click();
+  await composer(page).click();
+  await page.keyboard.press("ControlOrMeta+a");
   await page.keyboard.type("a draft taller than the window");
   for (let i = 1; i <= 80 && (await overflow()) < 200; i++) {
     await page.keyboard.press("Shift+Enter");
@@ -178,7 +179,7 @@ try {
   }
   await page.waitForTimeout(500);
   const own = await page.evaluate(() => (globalThis as unknown as { __self: string[] }).__self.slice(0, 5));
-  check("no ResizeObserver resizes what it watches from inside its own callback, as the message grows and a draft shrinks below the window", own.length ? own.join("; ") : null);
+  check("no ResizeObserver resizes what it watches from inside its own callback, as the message grows and a draft shrinks in the composer", own.length ? own.join("; ") : null);
   const blanks = await page.evaluate(() => (globalThis as unknown as { __edits: { blanks: string[] } }).__edits.blanks);
   check(`the message keeps its text through ${EDITS} edits`, blanks.length ? `its text went blank ${blanks.length} time(s), first in "${blanks[0]}"` : null);
   check("no page errors", errors.length ? errors.slice(0, 3).join("; ") : null);

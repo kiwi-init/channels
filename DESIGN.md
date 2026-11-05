@@ -133,7 +133,7 @@ The two built-in sides, from `tokens.css` and `channels.ts`:
   inline code), `--r-row 8px` (rows, small buttons, icon buttons, segments),
   `--r-ctl 10px` (buttons, fields, segmented tracks, toasts, tiles, messages on
   hover), `--r-card 14px` (cards), `--r-win 18px` (the composer, dialogs).
-  `999px` is for counts and the toggle track only. Avatars of people are round;
+  `999px` is for counts and the toggle track only, and the composer's send is a circle. Avatars of people are round;
   agents and channel tiles are rounded squares.
 - Nested corners are concentric: the outer radius is the inner radius plus
   the padding between them (an `r-tag` letter 8px inside an `r-card` option).
@@ -147,9 +147,9 @@ The two built-in sides, from `tokens.css` and `channels.ts`:
 - Surfaces are told apart by a step of fill (`bg` → `bg-2` → `bg-3`) and by
   hairlines (`line`), not by shadows. Cards on the page are `bg` with a
   `line` border.
-- No glass, no `backdrop-filter`, no blur anywhere. The fade over the bottom
-  of the conversation (`.main::after`, 96px, transparent to `bg`) is a plain
-  gradient: text under it fades but stays sharp.
+- No glass, no `backdrop-filter`, no blur anywhere, with one exception: the
+  composer (§10) is frosted, so the thread scrolls under it. Nothing else
+  takes a blur.
 - Sizes on `:root`: `--rail-w 4rem` (channel tiles), `--side-w 15.5rem`
   (the sidebar), `--panel-w 400px` (the right panel, which people resize),
   `--top-h 3.25rem` (the top bar, which drags the window), `--col 47.5rem`
@@ -414,12 +414,18 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
 
 ## 10. Composer
 
-- A floating `float` card at `r-win` with `shadow-float`, the same object as
-  the chrome's buttons, centred in the column at the bottom of the
-  conversation (and of a panel), over the fade. Top to bottom: the reply
-  bar, attached images, the row with + (attach), the textarea and send.
-- Send is a `--ctl` `r-ctl` square: `ink` with `on-ink` when there is something
-  to send, `line-2` when not. Enter sends (or ⌘Enter, per Settings).
+- A floating, frosted card at `r-win`: `bg-3` at 68% over an 18px blur, a
+  `line-2` border (`line-3` while focused) and `shadow-float`. It's centred in
+  the column at the bottom of the conversation (and of a panel), and the
+  thread scrolls under it. The thread keeps room below its last message for
+  the card's height, so the last message always clears it. Top to bottom: the
+  reply bar, attached images, the writing space, then a control row with +
+  (attach) on the left and send on the right (Jow #5138, #5140, #5153).
+- In a thread with a doc, the composer is where you write: sending adds your
+  block to the doc and posts it, and the doc itself takes no typing.
+- Send is a round button a little under `--ctl`: `ink` with `on-ink` when
+  there is something to send, `line-2` when not. Enter sends (or ⌘Enter, per
+  Settings).
 - Typing `@name` or a task id (`T12`) opens a list of people or tasks just
   above the composer; arrows move, Enter or Tab picks.
 - Drag-and-drop and pasted images attach in the composer; a drop shows

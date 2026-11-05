@@ -275,7 +275,7 @@ try {
 
   const sends: Frames[] = [];
   const sendsUp: Frames[] = [];
-  await page.locator(".main .thread-doc .doc-tail").click();
+  await page.locator(".main .composer textarea").first().click();
   for (let i = 0; i < Math.max(TIMED, 1); i++) {
     await page.evaluate(() => document.querySelector(".main .feed")?.scrollTo({ top: 1e9 }));
     await page.waitForTimeout(200);
