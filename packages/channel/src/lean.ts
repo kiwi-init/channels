@@ -1,5 +1,8 @@
 import { omit } from "@kiwi/core/omit.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
+import { foldRoster } from "./fold-roster.ts";
+import { trimmed } from "./trim.ts";
+import { LEAN, LIGHT, type Warm } from "./warm.ts";
 
 export const BODY_KEEP = 600;
 
@@ -24,4 +27,20 @@ export function leanTail(older: readonly Message[], more: readonly Message[], ke
   const lean = more.flatMap((m) => leanOf(m) ?? []);
   const next = older.length ? [...older, ...lean] : lean;
   return next.length > keep ? next.slice(next.length - keep) : next;
+}
+
+export function lighter(w: Warm, now = Date.now()): Warm {
+  const base = trimmed(w.messages, foldRoster(w.roster.filter((m) => !m.unverified)), now, w.roomsFloor, w.guardFloor, w.base, LIGHT, 0);
+  if (!base) return w;
+  return {
+    ...w,
+    base,
+    messages: w.messages.filter((m) => m.seq > base.n),
+    unread: w.unread.filter((seq) => seq > base.n),
+    reach: leanTail(
+      w.reach,
+      w.messages.filter((m) => m.seq <= base.n),
+      LEAN,
+    ),
+  };
 }

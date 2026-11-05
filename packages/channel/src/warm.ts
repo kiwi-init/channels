@@ -2,11 +2,8 @@ import type { RoomsSetting } from "@kiwi/core/client.ts";
 import type { JoinRequest, Member } from "@kiwi/core/membership.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
 import type { FoldBase, GuardFloor } from "@kiwi/core/state.ts";
-import { foldRoster } from "./fold-roster.ts";
 import { planReload } from "./history-plan.ts";
-import { leanTail } from "./lean.ts";
 import type { Marks } from "./receipts.ts";
-import { trimmed } from "./trim.ts";
 
 export interface Warm {
   messages: Message[];
@@ -30,21 +27,11 @@ const light = new Map<string, Warm>();
 
 export const warmOf = (code: string): Warm | undefined => full.get(code) ?? light.get(code);
 
-export function lighter(w: Warm, now = Date.now()): Warm {
-  const base = trimmed(w.messages, foldRoster(w.roster.filter((m) => !m.unverified)), now, w.roomsFloor, w.guardFloor, w.base, LIGHT, 0);
-  if (!base) return w;
-  return {
-    ...w,
-    base,
-    messages: w.messages.filter((m) => m.seq > base.n),
-    unread: w.unread.filter((seq) => seq > base.n),
-    reach: leanTail(
-      w.reach,
-      w.messages.filter((m) => m.seq <= base.n),
-      LEAN,
-    ),
-  };
-}
+let lean: typeof import("./lean.ts") | null = null;
+
+export const leanNow = (): typeof import("./lean.ts") | null => lean;
+
+export const leanLoaded = (): Promise<typeof import("./lean.ts")> => import("./lean.ts").then((m) => (lean = m));
 
 function keepLight(code: string, w: Warm): void {
   light.delete(code);
@@ -66,7 +53,12 @@ export function keepWarm(code: string, w: Warm, kind: "full" | "light" = "full")
   for (const [old, was] of full) {
     if (full.size <= WARM_FULL) break;
     full.delete(old);
-    keepLight(old, lighter(was));
+    const ready = leanNow();
+    if (ready) keepLight(old, ready.lighter(was));
+    else
+      void leanLoaded().then((l) => {
+        if (!full.has(old)) keepLight(old, l.lighter(was));
+      });
   }
 }
 

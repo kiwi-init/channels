@@ -480,10 +480,13 @@ describe("history from the relay is fetched only when asked (T977, #1944)", () =
       await until(() => store.handle.value.reach.at(-1)?.seq === 750);
       expect(seqs()).toEqual(run(1, 1_150));
       store.older.keep("feed", 500);
+      await sleep(0);
       expect(seqs()[0]).toBe(150);
       store.older.keep("to", null);
+      await sleep(0);
       expect(seqs()).toEqual(run(500, 1_150));
       store.older.keep("feed", null);
+      await sleep(0);
       expect(seqs()).toEqual(run(751, 1_150));
       expect(await store.older.to(751 - REACH - 1)).toBe(false);
       close();

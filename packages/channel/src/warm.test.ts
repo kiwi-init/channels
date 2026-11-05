@@ -3,7 +3,8 @@ import { generateIdentity, sign, verify } from "@kiwi/core/identity.ts";
 import { PROTOCOL_VERSION, type Event, type Message } from "@kiwi/core/protocol.ts";
 import { fold } from "@kiwi/core/state.ts";
 import type { Member } from "@kiwi/core/membership.ts";
-import { dropWarm, heldWindow, keepWarm, LIGHT, lighter, WARM_FULL, WARM_LIGHT, warmOf, type Warm } from "./warm.ts";
+import { lighter } from "./lean.ts";
+import { dropWarm, heldWindow, keepWarm, leanLoaded, LIGHT, WARM_FULL, WARM_LIGHT, warmOf, type Warm } from "./warm.ts";
 
 const msg = (seq: number): Message => ({ v: PROTOCOL_VERSION, id: `id-${seq}`, from: "atlas", kind: "msg", body: `m${seq}`, ts: 1_700_000_000_000 + seq, seq, sigOk: true });
 const held = (seqs: number[], unread: number[] = []): Warm => ({
@@ -46,7 +47,8 @@ describe("a channel's warm copy, kept for this session", () => {
   });
 });
 
-test(`only the last ${WARM_FULL} opened channels stay whole: the one visited longest ago drops to a light copy, and a revisit counts as recent`, () => {
+test(`only the last ${WARM_FULL} opened channels stay whole: the one visited longest ago drops to a light copy, and a revisit counts as recent`, async () => {
+  await leanLoaded();
   for (const c of ["lru-a", "lru-b"]) keepWarm(c, held(range(1, 400)));
   keepWarm("lru-a", held(range(1, 401)));
   keepWarm("lru-c", held(range(1, 400)));

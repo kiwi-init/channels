@@ -26,10 +26,13 @@ import { trimmed } from "./trim.ts";
 import { foldRoster } from "./fold-roster.ts";
 import { asKept, toKept } from "./kept.ts";
 import { handOver, onceEach, openChannel, warmUp } from "./open.ts";
-import { dropWarm, keepWarm, LEAN, LIGHT, warmOf, type Warm } from "./warm.ts";
-import { pageBefore } from "./back.ts";
-import { holdAll, holdImages } from "./image-bytes.ts";
-import { leanTail } from "./lean.ts";
+import type { Scrollback } from "./back.ts";
+import { dropWarm, keepWarm, LEAN, leanLoaded, leanNow, LIGHT, warmOf, type Warm } from "./warm.ts";
+
+let images: typeof import("./image-bytes.ts") | null = null;
+void import("./image-bytes.ts").then((m) => (images = m)).catch(() => {});
+const holdAll = (messages: Message[]): Message[] => (images ? images.holdAll(messages) : messages);
+const holdImages = (m: Message): Message => (images ? images.holdImages(m) : m);
 
 export const REACH = 2_000;
 export const WINDOW = 400;
@@ -148,9 +151,7 @@ export class ChannelStore {
   private reconcileAgain = false;
   private rulesBusy = false;
   private fetchOlder: OlderHistory["fetch"] | null = null;
-  private paging: Promise<boolean> | null = null;
-  private backDone = false;
-  private readonly holds = new Map<string, number>();
+  private scroll: Promise<Scrollback> | null = null;
   private readonly githubSynced = new Map<string, number>();
   private readonly githubHealth = signal<GithubHealth>({ status: null, errors: [], syncing: null });
 
@@ -247,45 +248,13 @@ export class ChannelStore {
   readonly older: OlderHistory = {
     reach: () => import("./history-fill.ts").then((f) => f.reach(this.ch.roomId, this.ch.pk)),
     fetch: (got) => (this.fetchOlder ? this.fetchOlder(got) : Promise.reject(new Error("open the channel first"))),
-    more: () => this.page(),
-    to: (seq) => this.pageTo(seq),
-    keep: (key, seq) => this.keepBack(key, seq),
+    more: () => this.scrollback().then((s) => s.more()),
+    to: (seq) => this.scrollback().then((s) => s.to(seq)),
+    keep: (key, seq) => void this.scrollback().then((s) => s.keep(key, seq)),
   };
 
-  private page(): Promise<boolean> {
-    this.paging ??= this.pageOnce().finally(() => (this.paging = null));
-    return this.paging;
-  }
-
-  private async pageOnce(): Promise<boolean> {
-    const first = this.shown.peek()[0]?.seq;
-    if (first === undefined || first <= 1 || this.backDone || this.gone.peek()) return false;
-    const { messages, done } = await pageBefore(this.ch.roomId, this.ch.pk, first, PAGE, { older: (before, limit) => this.ch.olderRows(before, limit), open: (rows) => this.ch.openRows(rows) });
-    if (this.shown.peek()[0]?.seq !== first) return true;
-    const older = holdAll(messages.filter((m) => m.seq < first));
-    if (done) this.backDone = true;
-    if (older.length) this.back.value = [...older, ...this.back.peek()];
-    return !done;
-  }
-
-  private async pageTo(seq: number): Promise<boolean> {
-    const has = () => (this.shown.peek()[0]?.seq ?? Infinity) <= seq;
-    const first = this.shown.peek()[0]?.seq;
-    if (first === undefined || seq < 1 || first - seq > REACH) return false;
-    if (seq < (this.messages.peek()[0]?.seq ?? Infinity)) this.holds.set("to", seq);
-    if (has()) return true;
-    for (let tries = Math.ceil(REACH / PAGE) + 2; tries > 0 && !has(); tries--) if (!(await this.page().catch(() => false)) && !has()) return false;
-    return has();
-  }
-
-  private keepBack(key: string, seq: number | null): void {
-    if (seq === null) this.holds.delete(key);
-    else this.holds.set(key, seq);
-    const floor = Math.min(Infinity, ...this.holds.values());
-    const back = this.back.peek();
-    if (!back.length || back[0]!.seq >= floor) return;
-    this.back.value = back.filter((m) => m.seq >= floor);
-    this.backDone = false;
+  private scrollback(): Promise<Scrollback> {
+    return (this.scroll ??= import("./back.ts").then((b) => new b.Scrollback({ ch: this.ch, back: this.back, shown: this.shown, messages: this.messages, gone: this.gone, page: PAGE, reach: REACH })));
   }
 
   private wakeFor(opts: SendOptions): string[] {
@@ -677,12 +646,14 @@ export class ChannelStore {
     const messages = this.messages.peek();
     const next = trimmed(messages, this.rosterForFold.peek(), this.now.peek(), this.roomsFloor.peek(), this.guardFloor.peek(), this.base.peek(), this.keep);
     if (!next) return;
+    const lean = leanNow();
+    if (!lean) return void leanLoaded().then(() => this.trim());
     const out = messages.filter((m) => m.seq <= next.n);
     batch(() => {
       this.base.value = next;
       this.messages.value = messages.filter((m) => m.seq > next.n);
       this.unread.value = this.unread.peek().filter((seq) => seq > next.n);
-      this.reach.value = leanTail(this.reach.peek(), out, LEAN);
+      this.reach.value = lean.leanTail(this.reach.peek(), out, LEAN);
       if (this.back.peek().length) this.back.value = [...this.back.peek(), ...out];
     });
   }

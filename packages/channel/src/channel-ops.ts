@@ -5,7 +5,6 @@ import type { CallResult, ChannelCallName, ChannelCalls, ChannelOps, DocEvent, F
 import { heldPipe } from "@kiwi/core/doc/held-pipe.ts";
 import type { FoldInputs } from "../../../desktop/src/search-types.ts";
 import { errorOf, remoteOps } from "./channel-remote.ts";
-import { heldImage } from "./image-bytes.ts";
 import { bridge } from "@kiwi/secrets/secrets.ts";
 import { makeWatches, type Watches } from "./watch.ts";
 
@@ -147,7 +146,7 @@ export class ChannelLink {
   close = () => this.c("close");
   leave = () => this.c("leave");
   send = (...a: Args<"send">) => this.c("send", ...a);
-  image = (...a: Args<"image">) => heldImage(a[0]) ?? this.c("image", ...a);
+  image = (...a: Args<"image">) => import("./image-bytes.ts").then((m) => m.heldImage(a[0]) ?? this.c("image", ...a));
   putImage = (...a: Args<"putImage">) => this.c("putImage", ...a);
   putFileData = (...a: Args<"putFileData">) => this.c("putFileData", ...a);
   fileData = (...a: Args<"fileData">) => this.c("fileData", ...a);
