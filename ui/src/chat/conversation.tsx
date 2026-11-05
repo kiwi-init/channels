@@ -402,9 +402,17 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
   const unfolded = useMemo(() => (through === undefined || earlier ? all : all.filter((m) => m.seq > through)), [all, through, earlier])
   const chatter = useMemo(() => (where.kind === "room" ? chatterRuns(channel, unfolded) : new Map<number, ChatterRun>()), [channel, unfolded, where.kind])
   const [shownChatter, setShownChatter] = useState<ReadonlySet<number>>(() => new Set())
-  const toggleChatter = useCallback((first: number) => setShownChatter((was) => (was.has(first) ? new Set([...was].filter((s) => s !== first)) : new Set([...was, first]))), [])
+  const toggleChatter = useCallback(
+    (run: ChatterRun) =>
+      setShownChatter((was) => {
+        const seqs = new Set(run.run.map((m) => m.seq))
+        return [...was].some((s) => seqs.has(s)) ? new Set([...was].filter((s) => !seqs.has(s))) : new Set([...was, run.first])
+      }),
+    []
+  )
+  const openTalk = useMemo(() => new Set([...new Set(chatter.values())].filter((r) => r.run.some((m) => shownChatter.has(m.seq))).map((r) => r.first)), [chatter, shownChatter])
   const jumpSeq = jump?.m.seq
-  const talkOpen = useCallback((r: ChatterRun | undefined) => !r || shownChatter.has(r.first) || (jumpSeq !== undefined && r.run.some((x) => x.seq === jumpSeq)), [shownChatter, jumpSeq])
+  const talkOpen = useCallback((r: ChatterRun | undefined) => !r || openTalk.has(r.first) || (jumpSeq !== undefined && r.run.some((x) => x.seq === jumpSeq)), [openTalk, jumpSeq])
   const list = useMemo(() => unfolded.filter((m) => talkOpen(chatter.get(m.seq)) || chatter.get(m.seq)?.first === m.seq), [unfolded, chatter, talkOpen])
   const foldAt = through === undefined ? undefined : list.find((m) => m.seq > through)?.seq
   const proposalAt = proposal && list.some((m) => m.seq === proposal.seq) ? proposal.seq : undefined
@@ -757,7 +765,7 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
                       </Suspense>
                     )}
                     {run && <Fold run={run} open={open} onToggle={() => toggleRun(m.seq)} />}
-                    {talk && talk.first === m.seq && <ChatterFold channel={channel} run={talk.run} open={talkShown} onToggle={() => toggleChatter(talk.first)} />}
+                    {talk && talk.first === m.seq && <ChatterFold channel={channel} run={talk.run} open={talkShown} onToggle={() => toggleChatter(talk)} />}
                     {m.seq === proposalAt && proposal ? (
                       <Suspense fallback={null}>
                         <ProposalCard channel={channel} proposal={proposal} names={names} tasks={tasks} onQuote={onQuote} />
