@@ -452,8 +452,6 @@ async function build(): Promise<Engine | null> {
 
     col.assign(mix(col, col.mul(vec3(1.05, 0.98, 0.86)).add(vec3(0.02, 0.012, 0.0)), uAlert.mul(0.75)))
 
-    col.assign(col.mul(mix(1.0, 0.58, smoothstep(0.6, 1.0, suv.y))))
-
     const vig = smoothstep(1.25, 0.45, suv.sub(0.5).mul(vec2(uAspect, 1.0)).length())
     col.assign(col.mul(vig.mul(0.08).add(0.92)))
     col.assign(mix(col, C.decide, vig.oneMinus().mul(uAlert).mul(0.22)))
