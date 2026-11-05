@@ -66,3 +66,8 @@ export function navWithDemoHandles(nav: Nav, app: App): Nav {
     ...(nav.modal?.kind === "person" ? { modal: { ...nav.modal, name: rename(nav.modal.name) } } : {}),
   }
 }
+
+export function renamedAgents(app: App): number {
+  const names: readonly string[] = DEMO_AGENT_HANDLES
+  return (app.channel?.people ?? []).filter((p) => p.kind === "agent" && names.includes(p.name)).length
+}
