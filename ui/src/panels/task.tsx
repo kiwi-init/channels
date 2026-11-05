@@ -14,6 +14,7 @@ import { Icon } from "~/kit/icons"
 import { MoreButton } from "~/kit/menu-open"
 import { ago } from "~/kit/time"
 import { memberOf, type Ask, type Channel, type PermissionAsk, type Person, type QuestionAsk, type ReviewRound, type Task, type TaskEvent } from "~/model"
+import { openMessage } from "~/live/open-message"
 import { useApp } from "~/nav"
 import { nickname } from "~/names"
 import { IssueMark, issueWord, PrCard } from "~/github/parts"
@@ -38,12 +39,11 @@ export function TaskPanel({ channel, id }: { channel: Channel; id: number }) {
   const tasks = useTaskIds(channel)
   const bySeq = useMemo(() => new Map(channel.messages.map((m) => [m.seq, m])), [channel.messages])
   const body = useRef<HTMLDivElement>(null)
-  const { go } = useApp()
   const onQuote = useCallback(
     (seq: number) => {
-      if (!jumpTo(body.current, seq)) go({ to: "panel", panel: { kind: "thread", seq: bySeq.get(seq)?.inThread ?? seq } })
+      if (!jumpTo(body.current, seq)) openMessage(channel.code, seq)
     },
-    [go, bySeq]
+    [channel.code]
   )
   const last = talk.at(-1)?.seq
   const seen = useRef({ id, last })

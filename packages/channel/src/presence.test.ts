@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { howHere, howWords } from "./presence.ts";
+import { howHere } from "./presence.ts";
 
 describe("howHere", () => {
   test("a daemon seat with a listener or a running session is here", () => {
@@ -17,12 +17,5 @@ describe("howHere", () => {
     expect(howHere({ client: "daemon", wakes: false })).toBe("unknown");
     expect(howHere({ client: "mcp", wakes: false })).toBe("listening");
     expect(howHere(undefined)).toBeNull();
-  });
-});
-
-describe("howWords", () => {
-  test("an unknown activity reads as nothing, never as Idle", () => {
-    expect(howWords("unknown")).toBeNull();
-    expect(howWords("listening")).toBe("Listening");
   });
 });

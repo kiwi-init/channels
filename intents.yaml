@@ -455,7 +455,6 @@ intents:
       - Now view
       - kiwi status
     code:
-      - packages/core/src/standup.ts
       - packages/core/src/status.ts
       - ui/src/now.ts
       - ui/src/tasks/now.tsx

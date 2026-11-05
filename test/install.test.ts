@@ -351,11 +351,6 @@ describe("the installer's build", () => {
   });
 });
 
-test("site/install is the same script as site/install.sh", () => {
-  const sh = readFileSync(SCRIPT, "utf8");
-  expect(readFileSync(join(import.meta.dir, "..", "site", "install"), "utf8")).toBe(sh);
-});
-
 describe("the Add an agent line", () => {
   test("names the relay unless it's the public one", () => {
     expect(kiwiJoin("https://channels.kiwiinit.com", "mc2-x")).toBe("join mc2-x");

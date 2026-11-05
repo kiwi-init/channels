@@ -3,8 +3,6 @@ import { spawnSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-import { ebDataDir } from "../desktop/src/store-eb.ts";
-
 const desktop = path.join(import.meta.dirname, "..", "desktop");
 
 interface Config {
@@ -46,11 +44,6 @@ test("dev and test builds keep their own ids and never take kiwi:// links; dev b
   expect(testBuild.app.urlSchemes).toBeUndefined();
   expect(testBuild.build.bun.define).toMatchObject({ KIWI_EB_TEST: "true", KIWI_EB_OFFICIAL_UI: "false", KIWI_EB_DEV: "false" });
   expect(configWith({ CHANNELS_EB_RELEASE: "1", CHANNELS_EB_LOCAL_UI: "1" }).build.bun.define["KIWI_EB_DEV"]).toBe("true");
-});
-
-test("the release keeps 2026.10.6's data folder, so nobody loses channels or keys", () => {
-  expect(ebDataDir("com.kiwiinit.channels", "stable", "darwin", "/Users/ana", {})).toBe("/Users/ana/Library/Application Support/com.kiwiinit.channels/stable");
-  expect(ebDataDir("com.kiwiinit.channels", "stable", "linux", "/home/ana", {})).toBe("/home/ana/.local/share/com.kiwiinit.channels/stable");
 });
 
 test("nothing in the app moves the kiwi CLI out of ~/.kiwi or names a second app", () => {

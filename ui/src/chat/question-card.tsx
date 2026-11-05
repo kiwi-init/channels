@@ -9,7 +9,8 @@ import { Icon } from "~/kit/icons"
 import { clock } from "~/kit/time"
 import { announce } from "~/kit/toasts"
 import type { Channel, QuestionAsk } from "~/model"
-import { useAct, useApp } from "~/nav"
+import { openMessage } from "~/live/open-message"
+import { useAct } from "~/nav"
 import { nickname } from "~/names"
 
 type Handoff = NonNullable<QuestionAsk["handoff"]>
@@ -49,12 +50,11 @@ function HandoffLink({ handoff, now }: { handoff: Handoff; now: number }) {
 
 type Closed = NonNullable<QuestionAsk["closed"]>
 
-function seeAsk(seq: number, go: ReturnType<typeof useApp>["go"]): void {
-  if (!jumpTo(document.body, seq)) go({ to: "panel", panel: { kind: "thread", seq } })
+function seeAsk(code: string, seq: number): void {
+  if (!jumpTo(document.body, seq)) openMessage(code, seq)
 }
 
 function ClosedAsk({ channel, closed }: { channel: Channel; closed: Closed }) {
-  const { go } = useApp()
   const who = closed.by === channel.you ? "you" : nickname(channel, closed.by)
   const parts = closed.why?.split(/(#\d+)/) ?? []
   return (
@@ -66,7 +66,7 @@ function ClosedAsk({ channel, closed }: { channel: Channel; closed: Closed }) {
         <p className="ask-reply">
           {parts.map((part, i) =>
             /^#\d+$/.test(part) ? (
-              <button key={i} type="button" className="ask-seq" onClick={() => seeAsk(Number(part.slice(1)), go)}>
+              <button key={i} type="button" className="ask-seq" onClick={() => seeAsk(channel.code, Number(part.slice(1)))}>
                 {part}
               </button>
             ) : (

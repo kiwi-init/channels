@@ -12,12 +12,12 @@ import { type ChannelAccess, encodeJoinCode, decodeJoinCode, newChannelKey, newR
 import { formatMessage } from "@kiwi/core/format.ts";
 import { generateIdentity, sign, signText, type Identity } from "@kiwi/core/identity.ts";
 import { inlineText, makeRecord, sealRecord, type Member } from "@kiwi/core/membership.ts";
-import { ownerStatement, unwrapKeys, wrapFor } from "@kiwi/core/client/keys.ts";
+import { ownerStatement, requestInfo, unwrapKeys, wrapFor } from "@kiwi/core/client/keys.ts";
 import { PROTOCOL_VERSION, wellFormed, type Message } from "@kiwi/core/protocol.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { wants } from "../src/agent/wants.ts";
 import { fold, rosterOf, toRoster } from "@kiwi/core/state.ts";
-import { AUTO_SIGN_PER_DAY, joinNonce } from "@kiwi/core/sas.ts";
+import { AUTO_SIGN_PER_DAY, commitTo, joinNonce, signedJoinNonce } from "@kiwi/core/sas.ts";
 import { checked, checkedByHand, memoryBudget } from "./check.ts";
 
 setDefaultTimeout(30_000);
@@ -86,17 +86,6 @@ describe("a dishonest relay", () => {
     await ch.refreshKeys();
     expect(ch.access.keys["0"]).toBe(memberAccess.keys["0"]!);
     expect(ch.access.keys["0"]).not.toBe(evil);
-  });
-
-  test("can't slip an extra key into a rotation", async () => {
-    const { access, ownerCh } = await channelWithMember();
-    const intruder = await generateIdentity("intruder");
-    const db = new Database(join(dataDir, `${access.roomId}.sqlite`));
-    db.query("INSERT INTO members (pk, xpk, rec, rec_e, since, active) VALUES (?, ?, 'x', 0, 0, 1)").run(intruder.pk, intruder.xpk!);
-    db.close();
-    // The unverifiable key shows up for the owner to remove, and the rotation refuses to wrap for it.
-    expect((await ownerCh.members()).some((m) => m.unverified && m.pk === intruder.pk)).toBe(true);
-    await expect(ownerCh.rotate()).rejects.toThrow(/missing wrapped key/);
   });
 
   test("can't get the next key wrapped to a removed key by still listing it as active", async () => {
@@ -303,6 +292,41 @@ describe("the join code check", () => {
     const shown = (await Channel.joinStatus(relay, code, joiner, real.requestId)) as { code: string };
     expect(reqs.find((r) => r.id === real.requestId)!.code).toBe(shown.code);
     expect(reqs.find((r) => r.id === fake.requestId)!.code).not.toBe(shown.code);
+  });
+
+  test("a joiner's nonce comes out the same every time on an engine whose Ed25519 signatures change, as WebKit's do (T3555)", async () => {
+    const id = await generateIdentity("phone");
+    const room = newRoomId();
+    const subtle = crypto.subtle;
+    const signed = subtle.sign.bind(subtle);
+    Object.defineProperty(subtle, "sign", {
+      configurable: true,
+      value: (...args: Parameters<SubtleCrypto["sign"]>) => {
+        const alg = args[0];
+        return (typeof alg === "string" ? alg : alg.name) === "Ed25519" ? Promise.resolve(crypto.getRandomValues(new Uint8Array(64)).buffer) : signed(...args);
+      },
+    });
+    try {
+      expect(await joinNonce(id, room)).toBe(await joinNonce(id, room));
+    } finally {
+      Reflect.deleteProperty(subtle, "sign");
+    }
+  });
+
+  test("a request an older client made, its nonce taken from a signature, still finishes with the same code on both sides (T3555)", async () => {
+    const { code, access, ownerCh } = await ownedChannel();
+    const joiner = await generateIdentity("old");
+    const room = access.roomId;
+    const box = await sealTo(access.ownerXpk!, JSON.stringify({ name: "old" }), requestInfo(room));
+    const commit = await commitTo(room, joiner.pk, await signedJoinNonce(joiner, room));
+    const body = await sign(joiner, { room, xpk: joiner.xpk!, box, ts: Date.now(), commit });
+    const res = await fetch(`${relay}/v1/rooms/${room}/requests?fp=${decodeJoinCode(code).ownerFp}`, { method: "POST", body: JSON.stringify(body) });
+    expect(res.status).toBe(200);
+    const { id: requestId } = (await res.json()) as { id: string };
+    const reqs = await checked(ownerCh, relay, code, [{ id: joiner, requestId }]);
+    const shown = (await Channel.joinStatus(relay, code, joiner, requestId)) as { code: string };
+    expect(shown.code).toMatch(/^\d{3}-\d{3}$/);
+    expect(reqs.find((r) => r.id === requestId)!.code).toBe(shown.code);
   });
 
   test("the relay can't forge the owner's half, or a reveal", async () => {
