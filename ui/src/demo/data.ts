@@ -677,9 +677,9 @@ const asks: Ask[] = [
     id: "q-1",
     from: "atlas",
     at: m(2),
-    text: "Should the redesign go to everyone at once, or behind a setting first?",
+    text: "Should the redesign go to everyone at once, or behind a setting first? @win can build the setting.",
     label: "Taste call for you",
-    options: ["Everyone at once", "Behind a setting", "Only on Livewire"],
+    options: ["Everyone at once", "Behind a setting @win adds", "Only on Livewire"],
     holds: [11],
   },
   {

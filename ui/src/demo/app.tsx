@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 
 import { showCalm } from "~/calm/idle"
 import { DEMO_PREFS } from "~/demo/data"
+import { DEMO_HANDLES, navWithDemoHandles, renamedAgents, withDemoHandles } from "~/demo/handles"
 import { useDemo } from "~/demo/provider"
 import { SHOTS } from "~/demo/shots"
 import { seedThreadDoc } from "~/demo/thread-doc"
@@ -57,5 +58,9 @@ export function DemoApp() {
     const timer = setTimeout(() => go({ to: "panel", panel: { kind: "thread", ...switchTo } }), SWITCH_AFTER_MS)
     return () => clearTimeout(timer)
   }, [go])
-  return <Root app={app} nav={nav} go={go} />
+  const shown = useMemo(() => (DEMO_HANDLES ? withDemoHandles(app) : app), [app])
+  useEffect(() => {
+    if (DEMO_HANDLES) document.documentElement.dataset.demoHandles = String(renamedAgents(shown))
+  }, [shown])
+  return <Root app={shown} nav={DEMO_HANDLES ? navWithDemoHandles(nav, app) : nav} go={go} />
 }
