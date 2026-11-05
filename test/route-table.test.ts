@@ -40,6 +40,8 @@ test("every route declares its check", () => {
     "POST /github/ack owner",
     "GET /snapshot member",
     "GET /docs owner",
+    "GET /docs/versions member",
+    "GET /docs/version member",
     "POST /docs/prune owner",
     "PUT /snapshot owner",
     "GET /members reader",

@@ -32,7 +32,7 @@ export { registerPush, unregisterPush, wakesFor } from "./room/push.ts";
 export { authenticate, authenticateSocket, gone, missingFingerprint, readMeta, requestToken, UPDATE_KIWI, wsHeaders } from "./room/auth.ts";
 export { append, expire, idleExpired, markRead, storeBlob, touch } from "./room/messages.ts";
 export { create, directory, setIcon, setSettings, setSnapshot, setTitle, type CreateBody } from "./room/lifecycle.ts";
-export { docsListed, docsPrune } from "./room/docs.ts";
+export { docsListed, docsPrune, docVersion, docVersions } from "./room/docs.ts";
 export { approve, keysFor, remove, rotate, setCanPost, setRecord, type MemberBody } from "./room/members.ts";
 export { dropDelegation, listDelegations, liveDelegation, putDelegation } from "./room/delegations.ts";
 export { request, requestsChanged, requestsGone, requestStatus, requestTag, requestWait, requireChecked, reveal, setOwnerNonce, watchRequests, type RequestBody } from "./room/requests.ts";

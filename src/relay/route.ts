@@ -39,6 +39,8 @@ import {
   Directory,
   docsListed,
   docsPrune,
+  docVersion,
+  docVersions,
   dropDelegation,
   listDelegations,
   liveDelegation,
@@ -729,6 +731,26 @@ const routes: RoomRoute[] = [
       }),
   },
   { method: "GET", path: "/docs", guard: "owner", run: () => Effect.map(docsListed(), (docs) => ({ data: { docs } })) },
+  {
+    method: "GET",
+    path: "/docs/versions",
+    guard: "member",
+    run: () =>
+      Effect.gen(function* () {
+        const { url } = yield* Request_;
+        return { data: { versions: yield* docVersions(url.searchParams.get("th")) } };
+      }),
+  },
+  {
+    method: "GET",
+    path: "/docs/version",
+    guard: "member",
+    run: () =>
+      Effect.gen(function* () {
+        const { url } = yield* Request_;
+        return { data: { version: yield* docVersion(url.searchParams.get("th"), Number(url.searchParams.get("upto"))) } };
+      }),
+  },
   {
     method: "POST",
     path: "/docs/prune",

@@ -5,6 +5,8 @@ import {
   DOC_COMPACT_BYTES,
   DOC_COMPACT_UPDATES,
   DOC_PRUNE_IDLE_MS,
+  DOC_VERSION_EVERY_MS,
+  DOC_VERSIONS,
   MAX_CT_LENGTH,
   MAX_DOC_LOG_BYTES,
   MAX_DOC_LOG_UPDATES,
@@ -13,7 +15,7 @@ import {
   wellFormedThread,
   type DocEnvelope,
 } from "@kiwi/core/protocol.ts";
-import { BadRequest, Conflict, ReadOnly, TooLarge } from "../failures.ts";
+import { BadRequest, Conflict, NotFound, ReadOnly, TooLarge } from "../failures.ts";
 import { Policy } from "../policy.ts";
 import { fits, StoredEnvelope } from "../schema.ts";
 import { readMeta } from "./auth.ts";
@@ -65,12 +67,25 @@ export const docSnap = Effect.fn("Room.docSnap")(function* (th: unknown, upto: u
   }
   yield* roomFor(ok.ct.length, log.bytes);
   const ts = yield* Clock.currentTimeMillis;
-  ok.db.docSnap(ok.th, upto as number, ts, ok.iv, ok.ct, ok.epoch);
+  ok.db.docSnap(ok.th, upto as number, ts, ok.iv, ok.ct, ok.epoch, { versions: DOC_VERSIONS, everyMs: DOC_VERSION_EVERY_MS });
   return { th: ok.th, dseq: upto as number, ts, iv: ok.iv, ct: ok.ct, e: ok.epoch, snap: true as const };
 });
 
 export const docsListed = Effect.fn("Room.docsListed")(function* () {
   return (yield* RoomStore).docList();
+});
+
+export const docVersions = Effect.fn("Room.docVersions")(function* (th: unknown) {
+  if (!wellFormedThread(th)) return yield* new BadRequest({ message: "bad thread id" });
+  return (yield* RoomStore).docVersions(th);
+});
+
+export const docVersion = Effect.fn("Room.docVersion")(function* (th: unknown, upto: unknown) {
+  if (!wellFormedThread(th)) return yield* new BadRequest({ message: "bad thread id" });
+  if (!Number.isSafeInteger(upto) || (upto as number) <= 0) return yield* new BadRequest({ message: "upto: a version's number" });
+  const got = (yield* RoomStore).docVersion(th, upto as number);
+  if (!got) return yield* new NotFound({ message: "no such version of this doc" });
+  return got;
 });
 
 export const docsPrune = Effect.fn("Room.docsPrune")(function* (ths: unknown) {
