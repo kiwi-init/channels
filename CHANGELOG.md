@@ -2,7 +2,7 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
-## 2026.11.9 — 2026-11-04
+## 2026.11.9 — 2026-11-05
 
 - **ui: a reply read in an open thread is read in its DM or room too (T2395)** ([#1683](https://github.com/kiwi-init/channels/pull/1683))
 - **kiwi show prints a doc line's image once (T2732)** ([#1687](https://github.com/kiwi-init/channels/pull/1687))
@@ -21,6 +21,36 @@ Written by `bun scripts/changelog.ts` from each squash-merged pull request's tit
 - **ui: sending a doc line keeps the view where it was (T3282)** ([#1698](https://github.com/kiwi-init/channels/pull/1698))
 - **doc: one empty line of yours on screen, not one per window you ever opened (T3317)** ([#1699](https://github.com/kiwi-init/channels/pull/1699))
 - **cli: a doc wake queued while a listener tells is never lost (T3358)** ([#1700](https://github.com/kiwi-init/channels/pull/1700))
+- **ci: the doc fuzzer runs on fixed seeds in build / bundles (T2559)** ([#1690](https://github.com/kiwi-init/channels/pull/1690))
+- **ui: a sent line with an image keeps its place in the feed (T3445)** ([#1704](https://github.com/kiwi-init/channels/pull/1704))
+- **Reap child processes before returning: kiwi query and the daemon-lock test (T3525)** ([#1705](https://github.com/kiwi-init/channels/pull/1705))
+- **ci: two people typing next to each other each write and send in their own line (T3318)** ([#1703](https://github.com/kiwi-init/channels/pull/1703))
+- **The notes room is made quietly: no row in #general (T3645)** ([#1707](https://github.com/kiwi-init/channels/pull/1707))
+- **shots: the doc keys check walks the demo's two lines still in the doc (T3445)** ([#1706](https://github.com/kiwi-init/channels/pull/1706))
+- **CI: the doc fuzzer runs its seeds in WebKit too (T3726)** ([#1708](https://github.com/kiwi-init/channels/pull/1708))
+- **CLI: an agent gets images from a #general line in any of its docs (T3780)** ([#1709](https://github.com/kiwi-init/channels/pull/1709))
+- **doc: a reopened app never forks a thread's doc, and a forked one moves back (T3805)** ([#1710](https://github.com/kiwi-init/channels/pull/1710))
+- **doc: word select crosses into the next line on Linux; the doc key checks run engine-correct (T3618)** ([#1711](https://github.com/kiwi-init/channels/pull/1711))
+- **Threads are one level deep, and agents know where to post (T3844)** ([#1714](https://github.com/kiwi-init/channels/pull/1714))
+- **The doc's / menu opens on screen and keeps its rows inside its box (T3783)** ([#1712](https://github.com/kiwi-init/channels/pull/1712))
+- **ui: thread updates move to a floating panel (T3766)** ([#1715](https://github.com/kiwi-init/channels/pull/1715))
+- **At the bottom, the view follows an agent's lines right after you send (T3644)** ([#1716](https://github.com/kiwi-init/channels/pull/1716))
+- **ui: doc lines keep their height as they scroll into view (T3583)** ([#1713](https://github.com/kiwi-init/channels/pull/1713))
+- **The MCP abort test reads only stored cursors, not a write in flight (T4114)** ([#1719](https://github.com/kiwi-init/channels/pull/1719))
+- **scripts: the app smoke finds the task's update in the Updates panel (T3766)** ([#1718](https://github.com/kiwi-init/channels/pull/1718))
+- **Agents write markdown a person reads at a glance; a line after a list is its own paragraph (T4145)** ([#1720](https://github.com/kiwi-init/channels/pull/1720))
+- **ui: the top bar's sidebar, channel and search buttons look like the Settings gear (T4165)** ([#1721](https://github.com/kiwi-init/channels/pull/1721))
+- **CI: cut low-signal tests, no job over 6 minutes (T3925)** ([#1717](https://github.com/kiwi-init/channels/pull/1717))
+- **The brief's markdown line fits, so a lead's checkpoint shows again (T4145)** ([#1723](https://github.com/kiwi-init/channels/pull/1723))
+- **Rooms are flat: a reply shows inline with its quote, and nothing opens a thread (T4143)** ([#1722](https://github.com/kiwi-init/channels/pull/1722))
+- **Tests: delete 41 low-signal unit tests and the dead code only they used (T4105)** ([#1725](https://github.com/kiwi-init/channels/pull/1725))
+- **Joins finish on WebKit: the join nonce is an HMAC, not a signature (T3555)** ([#1727](https://github.com/kiwi-init/channels/pull/1727))
+- **ui: an edited message keeps its text on screen while the edit parses (T4255)** ([#1726](https://github.com/kiwi-init/channels/pull/1726))
+- **ui: Calm, an idle overlay over every channel (T4205)** ([#1728](https://github.com/kiwi-init/channels/pull/1728))
+- **Linux: a kiwi://join link that starts the app opens its join (T4442)** ([#1729](https://github.com/kiwi-init/channels/pull/1729))
+- **Calm: Jow's idle loop as the sky, bundled with the app (T4204)** ([#1724](https://github.com/kiwi-init/channels/pull/1724))
+- **Linux: the link in the launch arguments is read from /proc/self/cmdline (T4442)** ([#1731](https://github.com/kiwi-init/channels/pull/1731))
+- **Gate: the resize check measures what ResizeObserver sees, not transforms (T4623)** ([#1732](https://github.com/kiwi-init/channels/pull/1732))
 
 ## 2026.11.8 — 2026-11-04
 
