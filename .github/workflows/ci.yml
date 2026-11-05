@@ -224,6 +224,9 @@ jobs:
       - name: doc follow, at the bottom the view follows an agent's lines, also right after you send while it posts and edits, in Chromium and WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-doc-follow.ts
+      - name: calm sky, the idle loop plays and wraps, pauses while hidden, holds still for reduced motion, in WebKit
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-calm-sky.ts
       - name: doc paste, an image pasted into a line goes out with that line
         if: ${{ !cancelled() }}
         run: bun scripts/ui-doc-paste.ts
@@ -378,6 +381,9 @@ jobs:
       - name: ui rooms are flat in Chromium and WebKit, a reply shows inline with its quote and nothing opens a thread
         if: ${{ !cancelled() }}
         run: bun scripts/ui-flat-rooms.ts --dist ui/dist && bun scripts/ui-flat-rooms.ts --dist ui/dist --webkit
+      - name: ui Calm covers the window, a key or a click on the sky dismisses it without reaching the app, a mouse move keeps it, and a channel click opens that channel, in Chromium and WebKit
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-calm.ts --dist ui/dist && bun scripts/ui-calm.ts --dist ui/dist --webkit
       - name: ui portrait window in WebKit is one tall page, agents, tasks and chat in view, and landscape is unchanged
         if: ${{ !cancelled() }}
         run: bun scripts/ui-tall-page.ts --dist ui/dist
