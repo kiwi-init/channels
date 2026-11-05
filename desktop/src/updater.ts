@@ -398,6 +398,7 @@ export const dismissMovedApp = (): void => fs.rmSync(movedMarker(), { force: tru
 export function startUpdates(onChange: (s: UpdateState) => void): void {
   notify = onChange;
   if (!host().app.packaged()) return;
+  console.error(`Channels: update checks are on, every ${EVERY_MS / 3_600_000} h`);
   const tick = () => void checkForUpdate();
   setTimeout(tick, 20_000);
   setInterval(tick, EVERY_MS);

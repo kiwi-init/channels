@@ -4,8 +4,18 @@ import { startAppLife } from "./app-life-eb.ts";
 import { mark } from "./eb-startup.ts";
 import { keys } from "./keys-start-eb.ts";
 import { ebHost } from "./host-eb.ts";
-import { startUpdates, updateState } from "./updater.ts";
+import { startUpdates, updateState, type UpdateState } from "./updater.ts";
 import { onUiWaiting } from "./ui-signals.ts";
+
+let toTray: ((u: UpdateState) => void) | null = null;
+
+export function startUpdateChecks(): void {
+  startUpdates((u) => {
+    ebHost.push("update", u);
+    toTray?.(u);
+  });
+  mark("updates");
+}
 
 export function startLife(win: BrowserWindow, release: () => void): void {
   const tray = startAppLife({
@@ -21,11 +31,7 @@ export function startLife(win: BrowserWindow, release: () => void): void {
     release,
   });
   mark("life");
-  startUpdates((u) => {
-    ebHost.push("update", u);
-    tray.refresh(u);
-  });
-  mark("updates");
+  toTray = (u) => tray.refresh(u);
   onUiWaiting((u) => ebHost.push("uiUpdate", u));
   Electrobun.events.on("accent-color-changed", (e) => ebHost.push("accent", e.data.color));
 }
