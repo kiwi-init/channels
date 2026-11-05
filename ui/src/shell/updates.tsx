@@ -108,11 +108,3 @@ export function SideCards() {
     </ul>
   )
 }
-
-export function SideFoot() {
-  return (
-    <div className="side-foot">
-      <SideCards />
-    </div>
-  )
-}
