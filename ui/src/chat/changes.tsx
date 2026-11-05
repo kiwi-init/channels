@@ -7,6 +7,7 @@ import { Modal } from "~/kit/bits"
 import { GlyphIcon } from "~/kit/icons"
 import type { Channel, Message } from "~/model"
 import { useAct } from "~/nav"
+import { wordsRaw } from "~/words"
 
 type Props = { kind: "tools" | "editor"; channel: Channel; m: Message }
 
@@ -60,7 +61,7 @@ function Tools({ channel, m }: { channel: Channel; m: Message }) {
 
 function Editor({ channel, m }: { channel: Channel; m: Message }) {
   const { actions } = useAct()
-  const [text, setText] = useState(m.text)
+  const [text, setText] = useState(wordsRaw(m.text))
   const area = useRef<HTMLTextAreaElement>(null)
   useEffect(() => {
     const el = area.current
@@ -70,7 +71,7 @@ function Editor({ channel, m }: { channel: Channel; m: Message }) {
   }, [])
   const save = () => {
     const next = text.trim()
-    if (next && next !== m.text.trim()) actions.editMessage(channel.code, m.seq, next)
+    if (next && next !== wordsRaw(m.text).trim()) actions.editMessage(channel.code, m.seq, next)
     stopEditing()
   }
   return (

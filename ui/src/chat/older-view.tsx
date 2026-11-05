@@ -10,8 +10,9 @@ import { Loading } from "~/kit/bits"
 import { day, sameDay } from "~/kit/time"
 import type { Channel, Message, OlderHit } from "~/model"
 import { useApp } from "~/nav"
+import { wrote } from "~/words"
 
-const asMessage = (o: OlderHit): Message => ({ seq: o.seq, from: o.from, at: o.at, text: o.text, where: o.where })
+const asMessage = (o: OlderHit): Message => ({ seq: o.seq, from: o.from, at: o.at, text: wrote(o.text), where: o.where })
 
 export function OlderView({ channel, older, onBack }: { channel: Channel; older: Older; onBack: () => void }) {
   const { app } = useApp()

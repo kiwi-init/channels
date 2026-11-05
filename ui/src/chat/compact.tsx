@@ -1,6 +1,7 @@
 import { useState } from "react"
 
 import { Body } from "~/chat/message"
+import { wrote } from "~/words"
 import type { Channel, Compacted } from "~/model"
 import { useAct } from "~/nav"
 import { nickname, shown } from "~/names"
@@ -25,7 +26,7 @@ export function HistoryFold({ channel, compact, earlier, onToggle, names, tasks,
         </button>
       </p>
       <div className="compacted-summary">
-        <Body text={compact.summary} seq={compact.seq} names={names} tasks={tasks} onImage={openImage} onMessage={onQuote} />
+        <Body text={wrote(compact.summary)} seq={compact.seq} names={names} tasks={tasks} onImage={openImage} onMessage={onQuote} />
       </div>
     </section>
   )
@@ -41,7 +42,7 @@ export function ProposalCard({ channel, proposal, names, tasks, onQuote }: Props
         <p className="ask-title" title={`History through #${proposal.through}`}>
           {proposal.by === channel.you ? "You propose" : `${nickname(channel, proposal.by)} proposes`} compacting the history
         </p>
-        <Body text={proposal.summary} seq={proposal.seq} names={names} tasks={tasks} onImage={openImage} onMessage={onQuote} />
+        <Body text={wrote(proposal.summary)} seq={proposal.seq} names={names} tasks={tasks} onImage={openImage} onMessage={onQuote} />
         <div className="compact-foot">
           {channel.youOwn ? (
             <button

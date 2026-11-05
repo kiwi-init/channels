@@ -1,4 +1,5 @@
 import type { Channel, Message, PullRequest, Spec, Task } from "~/model"
+import { wrote } from "~/words"
 
 const now = Date.now()
 const m = (min: number): number => now - min * 60_000
@@ -279,17 +280,24 @@ const SPECS: Spec[] = [
   }),
 ]
 
-const comment = (seq: number, from: string, at: number, text: string, ask: number): Message => ({ seq, from, at, text, where: general, inThread: ask })
+const comment = (seq: number, from: string, at: number, text: string, ask: number): Message => ({ seq, from, at, text: wrote(text), where: general, inThread: ask })
 
 const MESSAGES: Message[] = [
-  { seq: 140, from: "jow", at: m(60 * 52), text: "can I group channels? I have too many on the rail", where: general, thread: { replies: 0, last: m(60 * 52), people: [] } },
-  { seq: 170, from: "jow", at: m(60 * 21), text: "write the release notes from what actually merged, not from memory", where: general, thread: { replies: 1, last: m(60 * 19), people: ["atlas"] } },
+  { seq: 140, from: "jow", at: m(60 * 52), text: wrote("can I group channels? I have too many on the rail"), where: general, thread: { replies: 0, last: m(60 * 52), people: [] } },
+  {
+    seq: 170,
+    from: "jow",
+    at: m(60 * 21),
+    text: wrote("write the release notes from what actually merged, not from memory"),
+    where: general,
+    thread: { replies: 1, last: m(60 * 19), people: ["atlas"] },
+  },
   comment(171, "atlas", m(60 * 19), "Drafted the spec. The PRs are the record, so the notes come from them; no tracker.", 170),
   {
     seq: 160,
     from: "jow",
     at: m(175),
-    text: "if the app quits while I'm typing, my draft should be there when it comes back",
+    text: wrote("if the app quits while I'm typing, my draft should be there when it comes back"),
     where: general,
     thread: { replies: 1, last: m(171), people: ["atlas"] },
   },
@@ -298,7 +306,7 @@ const MESSAGES: Message[] = [
     seq: 150,
     from: "maya",
     at: m(55),
-    text: "can we get the board out as a spreadsheet? I plan Friday's release in Numbers",
+    text: wrote("can we get the board out as a spreadsheet? I plan Friday's release in Numbers"),
     where: general,
     thread: { replies: 5, last: m(5), people: ["atlas", "pixel", "maya", "win"] },
   },
@@ -307,15 +315,15 @@ const MESSAGES: Message[] = [
   comment(153, "maya", m(24), "> Anything archived before 0.20\n\nFine to leave those out, nobody plans with them.", 150),
   comment(154, "win", m(12), "I can take the writer once it's approved. The board already has every field.", 150),
   comment(155, "maya", m(5), "> A `cost` column once agent-hours are tracked?\n\nYes please, later. Not for Friday.", 150),
-  { seq: 186, from: "maya", at: m(4), text: "can someone write down what a new agent should do in its first hour? what to read, which commands, who to ask", where: general },
-  { seq: 187, from: "pixel", at: m(3), text: "@win drafts come back, but the DM ones land in #general. Is the key per room or per place?", where: general, to: ["win"], task: 21 },
-  { seq: 188, from: "win", at: m(2.8), text: "Per place: `dm:atlas~jow`. The room id alone loses DMs. Pushing a fix to T21's branch.", where: general, to: ["pixel"] },
-  { seq: 189, from: "pixel", at: m(2.5), text: "Got it. Rerunning test / unit on it.", where: general },
-  { seq: 190, from: "win", at: m(2.2), text: "ci-ok is green on 9f3c2ab.", where: general, to: ["pixel"] },
-  { seq: 191, from: "pixel", at: m(2), text: "Sending T21 round 3.", where: general },
-  { seq: 192, from: "atlas", at: m(1.5), text: "Maya's first-hour spec is approved and next in line. It starts as soon as win or pixel frees up.", where: general },
-  { seq: 193, from: "win", at: m(60), text: "Starting T22. SIGKILL between keystrokes, then reopen.", where: { kind: "task", task: 22 } },
-  { seq: 194, from: "pixel", at: m(26), text: "Round 2 back: threads lose their draft. Keying drafts by thread root too.", where: { kind: "task", task: 21 } },
+  { seq: 186, from: "maya", at: m(4), text: wrote("can someone write down what a new agent should do in its first hour? what to read, which commands, who to ask"), where: general },
+  { seq: 187, from: "pixel", at: m(3), text: wrote("@win drafts come back, but the DM ones land in #general. Is the key per room or per place?"), where: general, to: ["win"], task: 21 },
+  { seq: 188, from: "win", at: m(2.8), text: wrote("Per place: `dm:atlas~jow`. The room id alone loses DMs. Pushing a fix to T21's branch."), where: general, to: ["pixel"] },
+  { seq: 189, from: "pixel", at: m(2.5), text: wrote("Got it. Rerunning test / unit on it."), where: general },
+  { seq: 190, from: "win", at: m(2.2), text: wrote("ci-ok is green on 9f3c2ab."), where: general, to: ["pixel"] },
+  { seq: 191, from: "pixel", at: m(2), text: wrote("Sending T21 round 3."), where: general },
+  { seq: 192, from: "atlas", at: m(1.5), text: wrote("Maya's first-hour spec is approved and next in line. It starts as soon as win or pixel frees up."), where: general },
+  { seq: 193, from: "win", at: m(60), text: wrote("Starting T22. SIGKILL between keystrokes, then reopen."), where: { kind: "task", task: 22 } },
+  { seq: 194, from: "pixel", at: m(26), text: wrote("Round 2 back: threads lose their draft. Keying drafts by thread root too."), where: { kind: "task", task: 21 } },
 ]
 
 function merged(base: readonly Message[], add: readonly Message[]): Message[] {

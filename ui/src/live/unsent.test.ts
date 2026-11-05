@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import { wordsRaw } from "~/words"
 import { fold, type Roster } from "@kiwi/core/state.ts"
 import { inFeed, postedBlocks } from "~/chat/doc/posted"
 import { messagesOf, type Pending } from "~/live/map"
@@ -31,7 +32,7 @@ describe("retrying a failed doc line keeps its block (T1465)", () => {
   const places = (list: Pending[]) => {
     const rows = messagesOf(fold([], roster, 0), [], "jow", new Map(), pictures, list)
     const posted = postedBlocks(rows)
-    return { feed: rows.filter((m) => inFeed(m, true)).map((m) => m.text), fromDoc: posted.has(block.id) ? [] : [block.id] }
+    return { feed: rows.filter((m) => inFeed(m, true)).map((m) => wordsRaw(m.text)), fromDoc: posted.has(block.id) ? [] : [block.id] }
   }
 
   test("the retried line keeps everything it was sent with, its block too", () => {

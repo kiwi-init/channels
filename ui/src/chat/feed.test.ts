@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import { wordsRaw } from "~/words"
 import { DEMO_CHANNEL } from "~/demo/data"
 import { longFeed } from "~/demo/long"
 import { keepSame, same } from "~/live/keep"
@@ -44,15 +45,15 @@ describe("the long-feed demo", () => {
 
   test("is the same 1500 messages every time, oldest first", () => {
     expect(room.length).toBeGreaterThan(1500)
-    expect(longFeed(DEMO_CHANNEL).messages.map((m) => m.text)).toEqual(channel.messages.map((m) => m.text))
+    expect(longFeed(DEMO_CHANNEL).messages.map((m) => wordsRaw(m.text))).toEqual(channel.messages.map((m) => wordsRaw(m.text)))
     const generated = room.slice(0, 1500)
     expect(generated.every((m, i) => i === 0 || m.at >= (generated[i - 1]?.at ?? 0))).toBe(true)
   })
 
   test("mixes what a busy channel carries", () => {
     const seqs = new Set(channel.messages.map((m) => m.seq))
-    expect(room.some((m) => m.text.includes("| ---"))).toBe(true)
-    expect(room.some((m) => m.text.includes("```"))).toBe(true)
+    expect(room.some((m) => wordsRaw(m.text).includes("| ---"))).toBe(true)
+    expect(room.some((m) => wordsRaw(m.text).includes("```"))).toBe(true)
     const oldest = Math.min(...seqs)
     expect(room.filter((m) => m.replyTo !== undefined).every((m) => seqs.has(m.replyTo ?? -1) || (m.replyTo ?? 0) < oldest)).toBe(true)
     expect(room.filter((m) => m.replyTo !== undefined).length).toBeGreaterThan(100)

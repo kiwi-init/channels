@@ -484,7 +484,7 @@ export function messagesOf(state: ChannelState, messages: readonly Wire[], me: s
         seq: m.seq,
         from: m.from,
         at: m.ts,
-        text: eventText(m, state),
+        text: wrote(eventText(m, state)),
         where,
         system: true,
         ...(task !== undefined ? { task } : {}),
@@ -509,7 +509,7 @@ export function messagesOf(state: ChannelState, messages: readonly Wire[], me: s
       seq: m.seq,
       from: m.from,
       at: m.ts,
-      text,
+      text: wrote(text),
       where,
       ...(m.to?.length ? { to: m.to } : {}),
       ...(state.rooms.get(roomOfMessage(state, m))?.dm ? { membersOnly: true as const } : {}),
@@ -536,7 +536,7 @@ export function messagesOf(state: ChannelState, messages: readonly Wire[], me: s
       seq: -p.key,
       from: me,
       at: p.at,
-      text: p.text,
+      text: wrote(p.text),
       where: p.where,
       ...(p.failed !== undefined ? { failed: p.failed } : { pending: true }),
       ...(p.inThread !== undefined ? { inThread: p.inThread } : {}),
@@ -561,12 +561,12 @@ export function leftOutOf(state: ChannelState, messages: readonly Wire[], me: st
         seq: m.seq,
         from: m.from,
         at: m.ts,
-        text: `${nameIn(state, m.from)} ${describeEvent(m, state, (handle) => nameIn(state, handle))}`,
+        text: wrote(`${nameIn(state, m.from)} ${describeEvent(m, state, (handle) => nameIn(state, handle))}`),
         where: { kind: "room", room: GENERAL_ROOM },
         system: true,
         leftOut,
       })
-    else out.push({ seq: m.seq, from: m.from, at: m.ts, text: m.body, where: whereOf(state, m, me), leftOut })
+    else out.push({ seq: m.seq, from: m.from, at: m.ts, text: wrote(m.body), where: whereOf(state, m, me), leftOut })
   }
   return out
 }

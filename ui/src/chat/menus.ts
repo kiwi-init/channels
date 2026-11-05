@@ -4,6 +4,7 @@ import { GENERAL_ROOM } from "@kiwi/core/protocol.ts"
 import type { MenuGroups, MenuItem } from "~/kit/menu-open"
 import type { Actions, Channel, Message, Person, Where } from "~/model"
 import type { Go } from "~/nav"
+import { wordsRaw } from "~/words"
 import { seatRoot } from "~/names"
 import { hiddenKey, hiddenPlaces, setHidden } from "~/shell/hidden-places"
 import { messageLink } from "@kiwi/core/message-link.ts"
@@ -70,7 +71,7 @@ export function messageGroups(ctx: MenuContext, m: Message, target: EventTarget,
         ]
       : [],
     [
-      { label: "Copy text", run: copier(m.text) },
+      { label: "Copy text", run: copier(wordsRaw(m.text)) },
       { label: "Copy link to message", run: copier(messageLink(channel.code, m.seq)) },
       { label: `Copy #${m.seq}`, run: copier(`#${m.seq}`) },
     ],

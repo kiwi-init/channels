@@ -1,5 +1,6 @@
 import type { Channel, Message } from "~/model"
 import { memberOf } from "~/model"
+import { wordsRaw } from "~/words"
 
 const RUN_MIN = 2
 
@@ -51,7 +52,7 @@ export function chatterRuns(channel: Who, list: readonly Message[]): Map<number,
 
 export function chatterLine(run: readonly Message[], names: (name: string) => string): string {
   const who = [...new Set(run.map((m) => m.from))]
-  const tasks = [...new Set(run.flatMap((m) => [...(m.task !== undefined ? [m.task] : []), ...[...m.text.matchAll(/\bT(\d+)\b/g)].map((x) => Number(x[1]))]))].sort((a, b) => a - b)
+  const tasks = [...new Set(run.flatMap((m) => [...(m.task !== undefined ? [m.task] : []), ...[...wordsRaw(m.text).matchAll(/\bT(\d+)\b/g)].map((x) => Number(x[1]))]))].sort((a, b) => a - b)
   const people = who.length <= 3 ? who.map(names).join(", ") : `${who.length} agents`
   const about = tasks.length
     ? ` about ${tasks

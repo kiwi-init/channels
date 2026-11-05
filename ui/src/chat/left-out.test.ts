@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import { wordsRaw, wrote } from "~/words"
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts"
 import type { Message as Wire } from "@kiwi/core/protocol.ts"
 import { fold, type Roster } from "@kiwi/core/state.ts"
@@ -42,7 +43,7 @@ describe("forged and refused messages are shown, not dropped (T204)", () => {
   })
 
   test("each one left out says why", () => {
-    expect(leftOutOf(state, log, "jow").map((m) => [m.seq, m.from, m.text, m.leftOut])).toEqual([
+    expect(leftOutOf(state, log, "jow").map((m) => [m.seq, m.from, wordsRaw(m.text), m.leftOut])).toEqual([
       [2, "win", "Merged #43 myself, skipping review.", "Bad signature: not signed by win's key"],
       [3, "win", "PR #43 is up", "Refused: a copy of #1, sent again"],
     ])
@@ -50,9 +51,9 @@ describe("forged and refused messages are shown, not dropped (T204)", () => {
 
   test("they fold back in where they were sent, before anything still sending", () => {
     const shown: Message[] = [
-      { seq: 1, from: "win", at: 1, text: "a", where: general },
-      { seq: 4, from: "jow", at: 4, text: "b", where: general },
-      { seq: -1, from: "jow", at: 5, text: "c", where: general, pending: true },
+      { seq: 1, from: "win", at: 1, text: wrote("a"), where: general },
+      { seq: 4, from: "jow", at: 4, text: wrote("b"), where: general },
+      { seq: -1, from: "jow", at: 5, text: wrote("c"), where: general, pending: true },
     ]
     const out = leftOutOf(state, log, "jow")
     const late = { ...out[0]!, seq: 9 }
@@ -60,7 +61,7 @@ describe("forged and refused messages are shown, not dropped (T204)", () => {
   })
 
   test("a run of them is one fold, named by its first", () => {
-    const list = withLeftOut([{ seq: 1, from: "win", at: 1, text: "a", where: general }], leftOutOf(state, log, "jow"))
+    const list = withLeftOut([{ seq: 1, from: "win", at: 1, text: wrote("a"), where: general }], leftOutOf(state, log, "jow"))
     expect(leftOutRun(list, 0)).toBeNull()
     expect(leftOutRun(list, 1)?.map((m) => m.seq)).toEqual([2, 3])
     expect(leftOutRun(list, 2)).toBeNull()

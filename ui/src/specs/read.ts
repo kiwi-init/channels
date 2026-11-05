@@ -3,6 +3,7 @@ import { doneWhen, type DoneWhen } from "@kiwi/core/state.ts"
 import type { Channel, Message, Person, Spec, Task } from "~/model"
 import { memberOf } from "~/model"
 import { nickname } from "~/names"
+import { wordsRaw } from "~/words"
 
 type Tone = "tone-quiet" | "tone-doing" | "tone-review" | "tone-decide" | "tone-live" | "tone-alert"
 
@@ -94,7 +95,7 @@ export function commentsOf(channel: Pick<Channel, "messages" | "specs">, spec: S
     .filter((m) => on(m) && !m.system && !m.deleted)
     .sort((a, b) => a.seq - b.seq)
     .map((m) => {
-      const { quote, text } = splitQuote(m.text)
+      const { quote, text } = splitQuote(wordsRaw(m.text))
       return { m, ...(quote ? { quote } : {}), text }
     })
 }

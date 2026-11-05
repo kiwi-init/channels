@@ -1,4 +1,5 @@
 import type { Channel, Image, Message, PullRequest, Reaction } from "~/model"
+import { wrote } from "~/words"
 
 const COUNT = 1500
 const general = { kind: "room", room: "general" } as const
@@ -215,18 +216,18 @@ export function longFeed(base: Channel): Channel {
     const earlier = out.slice(-32).filter((m) => !m.system)
     const target = earlier.length > 2 ? earlier[Math.floor(r() * (earlier.length - 2))] : undefined
     if (roll < 0.03) {
-      out.push({ seq, from: pick(AGENTS), at, text: `${pick(AGENTS)} moved T${pick(TASKS)} to ${pick(["review", "doing", "done", "waiting"])}`, where: general, system: true })
+      out.push({ seq, from: pick(AGENTS), at, text: wrote(`${pick(AGENTS)} moved T${pick(TASKS)} to ${pick(["review", "doing", "done", "waiting"])}`), where: general, system: true })
       continue
     }
-    const msg: Message = { seq, from, at, text: "", where: general }
-    if (agent && roll < 0.2) out.push({ ...msg, text: report(i, pick, int), task: r() < 0.5 ? pick(TASKS) : undefined, reactions: reactions() })
-    else if (roll < 0.33 && target) out.push({ ...msg, text: fill(pick(REPLIES)), replyTo: target.seq })
-    else if (roll < 0.38) out.push({ ...msg, text: `@jow ${fill(pick(agent ? STATUS : CHAT))}`, mentionsYou: true })
-    else if (roll < 0.39) out.push({ ...msg, text: pick(["New feed, dark theme:", "Here's the Linux shot:", "Before and after:"]), images: [shot(i, int(180, 260))] })
+    const msg: Message = { seq, from, at, text: wrote(""), where: general }
+    if (agent && roll < 0.2) out.push({ ...msg, text: wrote(report(i, pick, int)), task: r() < 0.5 ? pick(TASKS) : undefined, reactions: reactions() })
+    else if (roll < 0.33 && target) out.push({ ...msg, text: wrote(fill(pick(REPLIES))), replyTo: target.seq })
+    else if (roll < 0.38) out.push({ ...msg, text: wrote(`@jow ${fill(pick(agent ? STATUS : CHAT))}`), mentionsYou: true })
+    else if (roll < 0.39) out.push({ ...msg, text: wrote(pick(["New feed, dark theme:", "Here's the Linux shot:", "Before and after:"])), images: [shot(i, int(180, 260))] })
     else if (agent) {
       const text = fill(pick(STATUS))
-      out.push({ ...msg, text, task: r() < 0.35 ? pick(TASKS) : undefined, prs: text.includes("PR #") || r() < 0.1 ? [pr()] : undefined, reactions: reactions() })
-    } else out.push({ ...msg, text: fill(pick(CHAT)), reactions: reactions() })
+      out.push({ ...msg, text: wrote(text), task: r() < 0.35 ? pick(TASKS) : undefined, prs: text.includes("PR #") || r() < 0.1 ? [pr()] : undefined, reactions: reactions() })
+    } else out.push({ ...msg, text: wrote(fill(pick(CHAT))), reactions: reactions() })
   }
 
   return { ...base, messages: [...out, ...base.messages] }

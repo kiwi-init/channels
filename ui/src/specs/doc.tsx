@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Keyboar
 
 import { useNames, useTaskIds } from "~/chat/conversation"
 import { Body } from "~/chat/message"
+import { wrote } from "~/words"
 import { Avatar, cx } from "~/kit/bits"
 import { clock } from "~/kit/time"
 import type { Channel, Spec, Where } from "~/model"
@@ -188,7 +189,7 @@ export function SpecDoc({ channel, spec, editing, onEditing }: { channel: Channe
         )}
         {diff && spec.approved && <Diff before={spec.approved.text} after={spec.text} />}
         <div ref={doc} className="spec-doc" onMouseUp={picked} onKeyUp={picked}>
-          <Body text={shownText(spec)} seq={spec.ask} names={names} tasks={tasks} onImage={openImage} onMessage={() => {}} />
+          <Body text={wrote(shownText(spec))} seq={spec.ask} names={names} tasks={tasks} onImage={openImage} onMessage={() => {}} />
           {pop && (
             <button
               type="button"
@@ -235,7 +236,7 @@ function CommentItem({ channel, c, names, tasks, showQuote }: { channel: Channel
         <time className="spec-comment-time">{clock(c.m.at)}</time>
       </header>
       {showQuote && c.quote && <p className="spec-comment-quote">{c.quote}</p>}
-      <Body text={c.text} seq={c.m.seq} names={names} tasks={tasks} onImage={openImage} onMessage={() => {}} />
+      <Body text={wrote(c.text)} seq={c.m.seq} names={names} tasks={tasks} onImage={openImage} onMessage={() => {}} />
     </article>
   )
 }
@@ -391,7 +392,7 @@ function Editor({ channel, spec, onDone }: { channel: Channel; spec: Spec; onDon
       <div className="spec-editor-panes">
         <textarea className="textarea is-mono spec-source" value={text} spellCheck aria-label="The spec, in markdown" onChange={(e) => setText(e.target.value)} onKeyDown={keys} />
         <div className="spec-preview" aria-label="Preview">
-          <Body text={text} seq={spec.ask} names={names} tasks={tasks} onImage={openImage} onMessage={() => {}} />
+          <Body text={wrote(text)} seq={spec.ask} names={names} tasks={tasks} onImage={openImage} onMessage={() => {}} />
         </div>
       </div>
     </div>

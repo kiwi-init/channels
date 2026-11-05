@@ -20,6 +20,7 @@ import { useApp } from "~/nav"
 import { nickname, onePerPerson, shown } from "~/names"
 import { mentionNames, withNames, type Picks } from "~/chat/linked"
 import { peopleMatches, taskMatches } from "~/chat/matches"
+import { wordsRaw } from "~/words"
 
 const Gifs = lazy(() => import("~/chat/gif-picker"))
 const StashList = lazy(() => import("~/chat/stash-list"))
@@ -287,7 +288,7 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
   const send = (value = text) => {
     if (edit) {
       const next = value.trim()
-      if (next && next !== editing?.text.trim()) app.actions.editMessage(channel.code, edit.seq, next)
+      if (next && (!editing || next !== wordsRaw(editing.text).trim())) app.actions.editMessage(channel.code, edit.seq, next)
       return stopEditing()
     }
     if (running && value === text) {
@@ -366,7 +367,7 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
     })
   }
 
-  const quoteLine = useMemo(() => (excerpt ? excerpt.replace(/\s+/g, " ") : replyTo ? withNames(replyTo.text, channel.nicknames, preview) : ""), [excerpt, replyTo, channel.nicknames])
+  const quoteLine = useMemo(() => (excerpt ? excerpt.replace(/\s+/g, " ") : replyTo ? withNames(wordsRaw(replyTo.text), channel.nicknames, preview) : ""), [excerpt, replyTo, channel.nicknames])
 
   return (
     <div className="compose" ref={box}>

@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import { wordsRaw, wrote } from "~/words"
 import { cleanExcerpt, excerptIn, excerptOf, MAX_EXCERPT, quotedExcerpt, withExcerpt } from "~/chat/quote"
 
 describe("a selected excerpt", () => {
@@ -32,20 +33,20 @@ describe("the message a quote sends", () => {
 })
 
 describe("an excerpt of the message it answers", () => {
-  const quoted = { text: "Yes. I'll run **the tests** once at the end, see [the log](https://example.com/log), instead of after each step." }
+  const quoted = { text: wrote("Yes. I'll run **the tests** once at the end, see [the log](https://example.com/log), instead of after each step.") }
 
   test("matches what the reader saw, without the Markdown", () => {
-    expect(excerptIn("run the tests once at the end", quoted.text)).toBe(true)
-    expect(excerptIn("see the log", quoted.text)).toBe(true)
-    expect(excerptIn("Run The Tests", quoted.text)).toBe(true)
-    expect(excerptIn("something else entirely", quoted.text)).toBe(false)
-    expect(excerptIn("", quoted.text)).toBe(false)
+    expect(excerptIn("run the tests once at the end", wordsRaw(quoted.text))).toBe(true)
+    expect(excerptIn("see the log", wordsRaw(quoted.text))).toBe(true)
+    expect(excerptIn("Run The Tests", wordsRaw(quoted.text))).toBe(true)
+    expect(excerptIn("something else entirely", wordsRaw(quoted.text))).toBe(false)
+    expect(excerptIn("", wordsRaw(quoted.text))).toBe(false)
   })
 
   test("is shown as the quote only when it is in that message", () => {
-    expect(quotedExcerpt({ text: "> once at the end\n\nWhy?" }, quoted)).toEqual({ excerpt: "once at the end", rest: "Why?" })
-    expect(quotedExcerpt({ text: "> a line from elsewhere\n\nWhy?" }, quoted)).toBeNull()
-    expect(quotedExcerpt({ text: "> once at the end\n\nWhy?" }, undefined)).toBeNull()
-    expect(quotedExcerpt({ text: `> ${"x".repeat(10)}…\n\nhm` }, { text: "x".repeat(40) })).toEqual({ excerpt: `${"x".repeat(10)}…`, rest: "hm" })
+    expect(quotedExcerpt({ text: wrote("> once at the end\n\nWhy?") }, quoted)).toEqual({ excerpt: "once at the end", rest: "Why?" })
+    expect(quotedExcerpt({ text: wrote("> a line from elsewhere\n\nWhy?") }, quoted)).toBeNull()
+    expect(quotedExcerpt({ text: wrote("> once at the end\n\nWhy?") }, undefined)).toBeNull()
+    expect(quotedExcerpt({ text: wrote(`> ${"x".repeat(10)}…\n\nhm`) }, { text: wrote("x".repeat(40)) })).toEqual({ excerpt: `${"x".repeat(10)}…`, rest: "hm" })
   })
 })

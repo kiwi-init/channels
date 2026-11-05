@@ -1,10 +1,11 @@
 import { describe, expect, test } from "bun:test"
+import { wrote } from "~/words"
 
 import { hitKey, hitText, messageIndex, searchHits, whereLabel } from "~/chat/search-hits"
 import type { Message, Task } from "~/model"
 
 const general = { kind: "room", room: "general" } as const
-const msg = (seq: number, text: string, extra: Partial<Message> = {}): Message => ({ seq, from: "atlas", at: seq * 1000, text, where: general, ...extra })
+const msg = (seq: number, text: string, extra: Partial<Message> = {}): Message => ({ seq, from: "atlas", at: seq * 1000, text: wrote(text), where: general, ...extra })
 const task = (id: number, title: string, extra: Partial<Task> = {}): Task => ({
   id,
   title,
@@ -79,5 +80,13 @@ describe("channel search", () => {
     expect(whereLabel(channel, general)).toBe("# general")
     expect(whereLabel(channel, { kind: "dm", with: "maya" })).toBe("@ Maya Lin")
     expect(whereLabel(channel, { kind: "task", task: 7 })).toBe("T7")
+  })
+})
+
+describe("search reads messages the way people see them (#1763)", () => {
+  test("a mention is found by the agent's nickname, not its handle", () => {
+    const named = messageIndex({ nicknames: new Map([["gentle-otter", "lead"]]), messages: [msg(1, "@gentle-otter take the relay")] })
+    expect(searchHits([], named, "lead").map(hitKey)).toEqual(["message-1"])
+    expect(searchHits([], named, "gentle").map(hitKey)).toEqual([])
   })
 })

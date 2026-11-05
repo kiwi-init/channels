@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import { wrote } from "~/words"
 import type { Channel, Message, Person, PullRequest, Task } from "~/model"
 import { headerLine, lanesOf, laneOf, nowOf, stageWords, startOfDay } from "~/now"
 
@@ -107,7 +108,14 @@ describe("lanes", () => {
     task(4, { owner: "pixel", status: "review", pr: pr(44) }),
     task(5, { owner: "pixel", status: "review", pr: pr(45, { state: "merged" }) }),
   ]
-  const msg = (seq: number, more: Partial<Message>): Message => ({ seq, from: "win", at: ago(100 - seq), text: "", where: { kind: "room", room: "general" }, ...more })
+  const msg = (seq: number, more: Omit<Partial<Message>, "text"> & { text?: string }): Message => ({
+    seq,
+    from: "win",
+    at: ago(100 - seq),
+    where: { kind: "room", room: "general" },
+    ...more,
+    text: wrote(more.text ?? ""),
+  })
   const messages = [
     msg(1, { system: true, task: 1, text: "Win took T1 “Task 1”" }),
     msg(2, { text: "just chatting" }),
