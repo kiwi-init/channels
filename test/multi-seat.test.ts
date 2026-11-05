@@ -451,6 +451,42 @@ describe("one Claude Code session that joined its second seat from another folde
   });
 });
 
+describe("a Claude Code session whose seat another session took (#1676)", () => {
+  const DEAD = String(2 ** 22 + 12345);
+  const lead = { CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "L", CLAUDE_PID: String(process.ppid), AI_AGENT: "claude-code_2-1-296_agent" };
+  const taker = { ...lead, CLAUDE_CODE_SESSION_ID: "T", CLAUDE_PID: String(process.pid) };
+
+  async function takenSeat() {
+    const owner = scratch("own-taken");
+    const code = created(await ok(owner, ["create", "alpha", "--as", "boss"], PERSON));
+    const h = scratch("agent-taken");
+    await joinAs(owner, h, code, "lead", { ...lead, CLAUDE_PID: DEAD });
+    const sub = join(h, "web");
+    mkdirSync(sub);
+    expect((await run(h, ["hook", "prompt"], taker, sub, JSON.stringify({ session_id: "T", cwd: sub, hook_event_name: "UserPromptSubmit", prompt: "hi" }))).code).toBe(0);
+    return { h, code };
+  }
+
+  test("its listener wakes it once to say so, with the command that takes the seat back", async () => {
+    const { h, code } = await takenSeat();
+    const input = JSON.stringify({ session_id: "L", cwd: h });
+    const told = await run(h, ["hook", "listen"], lead, h, input);
+    const at = realpathSync(h);
+    expect(told.code).toBe(2);
+    expect(told.err).toContain(`another session in \`${at}\` took your seat as lead in alpha`);
+    expect(told.err).toContain(`join ${code} --as lead\` from \`${at}\``);
+    expect((await run(h, ["hook", "listen"], lead, h, input)).code).toBe(0);
+  });
+
+  test("a prompt in its pane says so, and the session that took the seat hears nothing about it", async () => {
+    const { h } = await takenSeat();
+    expect((await run(h, ["hook", "prompt"], taker, h, JSON.stringify({ session_id: "T", cwd: h, hook_event_name: "UserPromptSubmit", prompt: "go" }))).out).not.toContain("took your seat");
+    const prompt = (await run(h, ["hook", "prompt"], lead, h, JSON.stringify({ session_id: "L", cwd: h, hook_event_name: "UserPromptSubmit", prompt: "go" }))).out;
+    expect(prompt).toContain("took your seat as lead in alpha");
+    expect((await run(h, ["hook", "prompt"], lead, h, JSON.stringify({ session_id: "L", cwd: h, hook_event_name: "UserPromptSubmit", prompt: "again" }))).out).not.toContain("took your seat");
+  });
+});
+
 test("answers from several seats make one hook answer of the same shape", () => {
   expect(hookOutput([])).toBeNull();
   expect(hookOutput([{ kind: "prompt", text: "a" }])).toBe("a");

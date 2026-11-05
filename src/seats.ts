@@ -17,7 +17,7 @@ import { readFileSync, realpathSync, statSync } from "node:fs";
 import { homedir, hostname } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { agyHere, geminiAncestor, kimiAncestor, kimiCodePid, mimoHere, piHere, zcodePid, type ProcessTree } from "./ancestry.ts";
-import { loadConfig, updateConfig, type Config, type SeatRecord } from "./config.ts";
+import { loadConfig, updateConfig, type Config, type SeatRecord, type SeatTaken } from "./config.ts";
 import { pinnedFor } from "./harness-bin.ts";
 import { holdsSeat, seatHeldAway, seatHolds, seatRefusal } from "./hold.ts";
 import { pidAlive } from "./pid.ts";
@@ -363,18 +363,39 @@ export function seatsFor(from: string, opts: SeatOptions = {}): Binding[] {
       let held = false;
       updateConfig((c) => {
         held = seatHeldAway(c, pick.alias, pick.as);
-        if (!held)
-          store(
-            c,
-            d,
-            seatsAt(c, d).map((b) => (b.alias === pick.alias && b.as === pick.as ? taken : b)),
-          );
+        if (held) return;
+        store(
+          c,
+          d,
+          seatsAt(c, d).map((b) => (b.alias === pick.alias && b.as === pick.as ? taken : b)),
+        );
+        if (pick.session && pick.session !== who.session) noteTaken(c, { alias: pick.alias, as: pick.as, from: pick.session, dir: d, at: Date.now() });
       });
       return held ? [] : [taken];
     }
     return [pick];
   }
   return seatsHeldAnywhere(who, opts).filter((b, i, all) => (!opts.alias || b.alias === opts.alias) && all.findIndex((o) => sameSeat(o, b)) === i);
+}
+
+const TAKEN_KEPT_MS = 7 * 86_400_000;
+
+function noteTaken(c: Config, t: SeatTaken): void {
+  const recent = (c.taken ?? []).filter((o) => t.at - o.at < TAKEN_KEPT_MS && !(o.from === t.from && sameSeat(o, t)));
+  c.taken = [...recent, t];
+}
+
+export function claimTaken(session: string | undefined, still: readonly Binding[]): SeatTaken[] {
+  if (!session || !loadConfig().taken?.some((t) => t.from === session)) return [];
+  let lost: SeatTaken[] = [];
+  updateConfig((c) => {
+    const all = c.taken ?? [];
+    lost = all.filter((t) => t.from === session && !still.some((b) => sameSeat(b, t)));
+    const left = all.filter((t) => t.from !== session);
+    if (left.length) c.taken = left;
+    else delete c.taken;
+  });
+  return lost;
 }
 
 export function notePlace(seats: readonly Binding[], env: Record<string, string | undefined> = process.env): void {
@@ -444,7 +465,7 @@ export function seatsHeldAnywhere(who: Here = here(), opts: Pick<SeatOptions, "c
   });
 }
 
-export function sameSeat(a: Binding, b: Binding): boolean {
+export function sameSeat(a: Pick<Binding, "alias" | "as">, b: Pick<Binding, "alias" | "as">): boolean {
   return a.alias === b.alias && a.as === b.as;
 }
 
