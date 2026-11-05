@@ -85,7 +85,7 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Test
-        run: bun test
+        run: bun scripts/ci-tests.ts mac
 
       - name: Build
         run: |
