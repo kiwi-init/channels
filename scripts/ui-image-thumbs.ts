@@ -127,6 +127,7 @@ const shownIn = (button: Locator): Promise<Shown> =>
     };
   });
 
+let closing = false;
 const failures: string[] = [];
 const check = (what: string, why: string | null): void => {
   if (why) failures.push(`${what}: ${why}`);
@@ -152,7 +153,7 @@ try {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   page.on("crash", () => errors.push("the page crashed"));
-  browser.on("disconnected", () => console.error("the browser went away"));
+  browser.on("disconnected", () => void (closing || console.error("the browser went away")));
   await page.addInitScript(() => {
     const Real = window.Worker;
     const count = { made: 0, failed: 0 };
@@ -293,6 +294,7 @@ try {
     check("no page errors", errors.length ? errors.join("; ") : null);
   }
 } finally {
+  closing = true;
   await browser.close();
   relay.kill();
   rmSync(data, { recursive: true, force: true });
