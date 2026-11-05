@@ -171,13 +171,15 @@ jobs:
       - name: doc image order, a sent line with an image stays above the lines sent after it
         if: ${{ !cancelled() }}
         run: bun scripts/ui-doc-image-order.ts
-      - name: doc fuzzer, fixed seeds, two windows of one person and an agent never lose or mix a line
+      - name: doc fuzzer, fixed seeds, two windows of one person and an agent never lose or mix a line, in Chromium and WebKit
         if: ${{ !cancelled() }}
         run: |
           mkdir -p "$RUNNER_TEMP/doc-fuzz"
           status=0
-          for seed in 1 7 8; do
-            bun scripts/ui-doc-fuzz.ts --chromium --seed="$seed" --steps=120 --windows=2 --agents=1 --trace="$RUNNER_TEMP/doc-fuzz/seed-$seed.txt" || status=1
+          for engine in chromium webkit; do
+            for seed in 1 7 8; do
+              bun scripts/ui-doc-fuzz.ts --"$engine" --seed="$seed" --steps=120 --windows=2 --agents=1 --trace="$RUNNER_TEMP/doc-fuzz/$engine-seed-$seed.txt" || status=1
+            done
           done
           exit "$status"
       - if: failure()

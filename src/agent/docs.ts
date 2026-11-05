@@ -107,9 +107,19 @@ export const dropBlock = (ch: Channel, from: number, at: DocPlace, id: string): 
 
 export const editBlock = (ch: Channel, from: number, at: DocPlace, id: string, text: string): Promise<boolean> => inThreadDoc(ch, from, at, (td) => rewriteBlock(td.doc, id, text));
 
-export function docPlaceOfBlock(state: Pick<ChannelState, "docs">, th: string): DocPlace | null {
+function docPlaceOfBlock(state: Pick<ChannelState, "docs">, th: string): DocPlace | null {
   for (const [key, id] of state.docs) if (id === th) return { key, th };
   return null;
+}
+
+export function docPlaceOfMessage(state: Pick<ChannelState, "docs" | "placeOf" | "roomOf">, m: { seq: number; block?: { th: string } }): DocPlace | null {
+  if (!m.block) return null;
+  const listed = docPlaceOfBlock(state, m.block.th);
+  if (listed) return listed;
+  const place = state.placeOf.get(m.seq) ?? MAIN;
+  if (place.kind === "dm") return null;
+  const key = place.kind === "main" ? docThread({ kind: "room", room: state.roomOf.get(m.seq) ?? GENERAL_ROOM }) : docThread(place);
+  return { key, th: m.block.th };
 }
 
 export function docOnlyText(doc: Y.Doc): string {
