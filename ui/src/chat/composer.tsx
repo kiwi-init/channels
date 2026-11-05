@@ -239,12 +239,10 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
       update(next.text)
     }
   }
-  useEffect(() => {
-    if (edit) area.current?.focus()
-  }, [edit])
   const editOpen = useRef<Edit | null>(null)
   useEffect(() => {
     editOpen.current = edit
+    if (edit) area.current?.focus()
   }, [edit])
   useEffect(
     () => () => {
