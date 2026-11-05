@@ -1,17 +1,13 @@
 .rest {
-  --rest-ink: #ffffff;
-  --rest-ink-2: rgb(255 255 255 / 0.84);
-  --rest-ink-3: rgb(255 255 255 / 0.62);
-  --rest-panel: rgb(16 34 72 / 0.62);
-  --rest-glow: 0 1px 2px rgb(8 24 56 / 0.35);
   position: fixed;
   inset: 0;
   z-index: 80;
   display: grid;
-  place-items: center;
+  place-items: end center;
+  padding: 24px var(--gutter) 48px;
   overflow: hidden;
-  background: #2157b8;
-  color: var(--rest-ink);
+  background: var(--bg);
+  color: var(--ink);
   outline: none;
   cursor: default;
   -webkit-app-region: no-drag;
@@ -29,25 +25,29 @@
   pointer-events: none;
 }
 
+.rest-back::after {
+  position: absolute;
+  inset: 40% 0 0;
+  background: linear-gradient(to bottom, transparent, var(--bg) 85%);
+  content: "";
+}
+
 .rest-stub {
   position: absolute;
   inset: 0;
-  background: linear-gradient(to top, #a8cdf2, #2157b8);
+  background: var(--bg-3);
 }
 
 .rest-list {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  width: min(560px, calc(100vw - 48px));
-  max-height: calc(100vh - 96px);
+  gap: 2px;
+  width: min(28rem, 100%);
+  max-height: calc(100vh - 72px);
   margin: 0;
-  padding: 16px 8px;
+  padding: 0;
   overflow: hidden;
-  border-radius: var(--r-card);
-  background: var(--rest-panel);
-  box-shadow: 0 24px 64px rgb(8 24 56 / 0.25);
   list-style: none;
 }
 
@@ -58,55 +58,51 @@
 .rest-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 2px 16px;
+  align-items: baseline;
+  gap: 2px 12px;
   width: 100%;
-  padding: 10px 16px;
+  padding: 8px 12px;
   border: 0;
-  border-radius: var(--r-card);
+  border-radius: var(--r-row);
   background: none;
-  color: inherit;
+  color: var(--ink-2);
   text-align: left;
   cursor: pointer;
-  transition: background var(--slow) var(--ease);
 }
 
 .rest-row:hover,
 .rest-row:focus-visible {
-  background: rgb(255 255 255 / 0.12);
+  background: var(--wash);
+  color: var(--ink);
   outline: none;
 }
 
 .rest-name {
   overflow: hidden;
-  text-shadow: var(--rest-glow);
-  font: 300 var(--t-display) var(--ui);
-  letter-spacing: -0.01em;
+  font: 400 var(--t-title) var(--sans);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.rest-row.is-news .rest-name {
+  color: var(--ink);
+  font-weight: 600;
+}
+
 .rest-needs {
-  align-self: center;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: rgb(255 255 255 / 0.9);
-  color: #17325f;
-  font: 500 var(--t-ui) var(--ui);
+  color: var(--decide);
+  font: var(--t-meta) var(--mono);
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
 .rest-line {
   grid-column: 1 / -1;
   overflow: hidden;
-  color: var(--rest-ink-2);
-  font: var(--t-body) var(--ui);
-  text-shadow: var(--rest-glow);
+  color: var(--ink-3);
+  font: var(--t-ui) var(--sans);
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.rest-line.is-quiet {
-  color: var(--rest-ink-3);
 }
 
 @keyframes rest-in {

@@ -50,7 +50,7 @@ export function Calm() {
       <ul className="rest-list">
         {rows.map((r, i) => (
           <li key={r.code} style={{ animationDelay: `${600 + i * 120}ms` }}>
-            <button type="button" className="rest-row" onClick={() => open(r.code)}>
+            <button type="button" className={cx("rest-row", r.needs > 0 && "is-news")} onClick={() => open(r.code)}>
               <span className="rest-name">{r.title}</span>
               {r.needs > 0 && <span className="rest-needs">needs you: {r.needs}</span>}
               <span className={cx("rest-line", !r.line && "is-quiet")}>{r.line ?? "quiet"}</span>
