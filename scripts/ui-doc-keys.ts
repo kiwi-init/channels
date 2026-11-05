@@ -25,6 +25,8 @@ interface Caret {
 }
 
 const MOD = process.platform === "darwin" ? "Meta" : "Control";
+const ABOVE = 0;
+const BELOW = 1;
 const WORD = process.platform === "darwin" ? "Alt" : "Control";
 
 async function put(page: Page, block: number, at: "start" | "end"): Promise<void> {
@@ -67,70 +69,70 @@ const checks: { name: string; run: (page: Page) => Promise<string | null> }[] = 
   {
     name: "← at a block's start lands at the end of the one before",
     run: async (page) => {
-      await put(page, 2, "start");
+      await put(page, BELOW, "start");
       await page.keyboard.press("ArrowLeft");
       const c = await caret(page);
-      return c.focusBlock === 1 && c.offset === c.length ? null : JSON.stringify(c);
+      return c.focusBlock === ABOVE && c.offset === c.length ? null : JSON.stringify(c);
     },
   },
   {
     name: "→ at a block's end lands at the start of the next",
     run: async (page) => {
-      await put(page, 1, "end");
+      await put(page, ABOVE, "end");
       await page.keyboard.press("ArrowRight");
       const c = await caret(page);
-      return c.focusBlock === 2 && c.offset === 0 ? null : JSON.stringify(c);
+      return c.focusBlock === BELOW && c.offset === 0 ? null : JSON.stringify(c);
     },
   },
   {
     name: "↑ on a block's first line goes to the block above",
     run: async (page) => {
-      await put(page, 2, "start");
+      await put(page, BELOW, "start");
       await page.keyboard.press("ArrowUp");
       const c = await caret(page);
-      return c.focusBlock === 1 ? null : JSON.stringify(c);
+      return c.focusBlock === ABOVE ? null : JSON.stringify(c);
     },
   },
   {
     name: "↓ on a block's last line goes to the block below",
     run: async (page) => {
-      await put(page, 1, "end");
+      await put(page, ABOVE, "end");
       await page.keyboard.press("ArrowDown");
       const c = await caret(page);
-      return c.focusBlock === 2 ? null : JSON.stringify(c);
+      return c.focusBlock === BELOW ? null : JSON.stringify(c);
     },
   },
   {
     name: "⌥← at a block's start jumps to the last word of the one before",
     run: async (page) => {
-      await put(page, 2, "start");
+      await put(page, BELOW, "start");
       await page.keyboard.press(`${WORD}+ArrowLeft`);
       const c = await caret(page);
-      return c.focusBlock === 1 && c.offset > 0 && c.offset < c.length ? null : JSON.stringify(c);
+      return c.focusBlock === ABOVE && c.offset > 0 && c.offset < c.length ? null : JSON.stringify(c);
     },
   },
   {
     name: "⇧↓ extends the selection into the next block",
     run: async (page) => {
-      await put(page, 1, "end");
+      await put(page, ABOVE, "end");
       await page.keyboard.press("Shift+ArrowDown");
       const c = await caret(page);
-      return c.block === 1 && c.focusBlock === 2 ? null : JSON.stringify(c);
+      return c.block === ABOVE && c.focusBlock === BELOW ? null : JSON.stringify(c);
     },
   },
   {
     name: "⇧→ at a block's end extends the selection into the next",
     run: async (page) => {
-      await put(page, 1, "end");
+      await put(page, ABOVE, "end");
       await page.keyboard.press("Shift+ArrowRight");
       const c = await caret(page);
-      return c.block === 1 && c.focusBlock === 2 ? null : JSON.stringify(c);
+      return c.block === ABOVE && c.focusBlock === BELOW ? null : JSON.stringify(c);
     },
   },
   {
     name: "⌘A selects the whole thread",
     run: async (page) => {
-      await put(page, 2, "start");
+      await put(page, BELOW, "start");
       await page.keyboard.press(`${MOD}+a`);
       const c = await page.evaluate(() => {
         const bodies = [...document.querySelectorAll(".thread-doc .blk:not(.is-hidden) .blk-body")];
@@ -191,7 +193,7 @@ let failed = 0;
 try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   await page.goto(`http://127.0.0.1:${server.port}/?shot=${process.env.DOC_KEYS_SHOT ?? "thread-doc"}`);
-  await page.waitForFunction(() => document.querySelectorAll(".thread-doc .blk:not(.is-hidden)").length >= 3, null, { timeout: 30_000 });
+  await page.waitForFunction((below) => document.querySelectorAll(".thread-doc .blk:not(.is-hidden)").length > below, BELOW, { timeout: 30_000 });
   await page.locator(".thread-doc .ProseMirror").focus();
   for (const check of checks) {
     const why = await check.run(page);

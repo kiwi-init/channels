@@ -417,7 +417,7 @@ export const isRunning = (i: GithubNote): boolean => (i.event === "check_run" ||
 const nothingNew = (items: readonly GithubNote[]): boolean => items.length > 0 && items.every((i) => isRunning(i) || i.action === GITHUB_SYNCED);
 
 export function isQuiet(m: Pick<Message, "kind" | "ev" | "newer">): boolean {
-  return m.kind === "event" && (m.newer !== undefined || (!!m.ev && (QUIET_OPS.has(m.ev.op) || (m.ev.op === "github" && nothingNew(m.ev.items)))));
+  return m.kind === "event" && (m.newer !== undefined || (!!m.ev && (QUIET_OPS.has(m.ev.op) || (m.ev.op === "room.create" && m.ev.self === true) || (m.ev.op === "github" && nothingNew(m.ev.items)))));
 }
 
 /** What a member says about itself (see the card event). Every field is optional and short. */
