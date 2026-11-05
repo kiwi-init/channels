@@ -905,6 +905,7 @@ export interface Message extends Payload {
   opened?: RoomMeta;
   proven?: boolean;
   sealed?: { room: string; n: number };
+  lean?: true;
   seq: number;
   /** When the relay stored it (one clock for everyone, unlike `ts`). */
   rts?: number;

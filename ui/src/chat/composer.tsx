@@ -240,7 +240,26 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
   const [edit, setEdit] = useState<Edit | null>(null)
   const at = useContext(EditHere)
   const editingSeq = useEditingIn(channel.code, at)
-  const editing = editingSeq === null ? undefined : channel.messages.find((m) => m.seq === editingSeq)
+  const found = editingSeq === null ? undefined : channel.messages.find((m) => m.seq === editingSeq)
+  const editing = found?.partial ? undefined : found
+  const partialSeq = found?.partial ? found.seq : null
+  const { holdEarlier, earlierTo } = app.actions
+  useEffect(() => {
+    if (partialSeq === null) return
+    let live = true
+    holdEarlier(channel.code, "edit", partialSeq)
+    void earlierTo(channel.code, partialSeq).then((ok) => {
+      if (!live || ok) return
+      toast("The whole message couldn't be loaded, so it can't be edited right now", "error")
+      stopEditing()
+    })
+    return () => {
+      live = false
+    }
+  }, [channel.code, partialSeq, holdEarlier, earlierTo, toast])
+  useEffect(() => {
+    if (editingSeq === null) holdEarlier(channel.code, "edit", null)
+  }, [channel.code, editingSeq, holdEarlier])
   const [editSeen, setEditSeen] = useState<number | undefined>(undefined)
   if (editing?.seq !== editSeen) {
     setEditSeen(editing?.seq)

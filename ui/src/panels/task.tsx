@@ -9,6 +9,7 @@ import { named } from "~/chat/linked"
 import { MessageRow } from "~/chat/message"
 import { preview } from "~/chat/preview"
 import { jumpTo } from "~/chat/reply"
+import { useWhole } from "~/chat/whole"
 import { ANYONE } from "@kiwi/channel/task-actions.ts"
 import { autofocus, Avatar, cx, Modal, Dot, Empty, Heading, statusWord } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
@@ -36,6 +37,7 @@ const holds = (a: Ask, id: number): a is PermissionAsk | QuestionAsk =>
 export function TaskPanel({ channel, id }: { channel: Channel; id: number }) {
   const task = channel.tasks.find((t) => t.id === id)
   const talk = useMemo(() => channel.messages.filter((m) => m.where.kind === "task" && m.where.task === id), [channel.messages, id])
+  useWhole(channel.code, "task", talk)
   const names = useNames(channel)
   const tasks = useTaskIds(channel)
   const bySeq = useMemo(() => new Map(channel.messages.map((m) => [m.seq, m])), [channel.messages])
