@@ -48,6 +48,14 @@ try {
   const profile = page.getByRole("dialog", { name: "Profile of maya" });
   await profile.waitFor();
   expect((await panel.count()) === 0, "a profile opens in a modal, not the side panel");
+  const box = await profile.boundingBox();
+  if (!box) throw new Error("the profile modal has no box");
+  await page.mouse.move(box.x + box.width / 2, box.y + 40);
+  await page.mouse.down();
+  await page.mouse.move(8, 400, { steps: 4 });
+  await page.mouse.up();
+  await page.waitForTimeout(200);
+  expect((await modal.count()) === 1, "a press inside it that ends outside, like a text selection, keeps it open");
   await page.mouse.click(8, 400);
   await page.waitForTimeout(200);
   expect((await modal.count()) === 0, "a click outside closes it");
@@ -67,6 +75,17 @@ try {
   expect(focused, "focus starts inside the modal");
   for (let i = 0; i < 12; i++) await page.keyboard.press("Tab");
   expect(await page.evaluate(() => !!document.activeElement?.closest("dialog.modal")), "and Tab keeps it there");
+  await page.mouse.click(8, 400);
+  await page.waitForTimeout(200);
+  expect((await modal.count()) === 1, "a click outside Add an agent keeps it open (#1764)");
+  await add.getByRole("button", { name: "Close", exact: true }).click();
+  await page.waitForTimeout(200);
+  expect((await modal.count()) === 0, "its X closes it");
+  await page.goto(`http://127.0.0.1:${server.port}/?shot=add-agent`);
+  await add.waitFor();
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(200);
+  expect((await modal.count()) === 0, "and so does Esc");
 
   for (const [shot, name, field] of [
     ["new-room", "New room", "Room name"],
@@ -81,6 +100,9 @@ try {
       return el instanceof HTMLInputElement ? (el.getAttribute("aria-label") ?? el.labels?.[0]?.textContent ?? "") : "";
     });
     expect(label.trim() === field, `${name} opens with its field focused`);
+    await page.mouse.click(8, 400);
+    await page.waitForTimeout(200);
+    expect((await modal.count()) === 1, `a click outside ${name} keeps its form`);
   }
 } finally {
   await browser.close();

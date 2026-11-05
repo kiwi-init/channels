@@ -109,7 +109,7 @@ export function Confirm({
 }) {
   const safe = children !== undefined || !ready
   return (
-    <Modal open={open} onClose={onClose} label={title} title={title} sub={sub}>
+    <Modal dismiss={children === undefined ? "outside" : "x"} open={open} onClose={onClose} label={title} title={title} sub={sub}>
       <form
         className="set-confirm"
         onSubmit={(e) => {

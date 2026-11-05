@@ -76,7 +76,7 @@ export function DocVersions({ channel, thread, name, onClose }: { channel: Chann
     </div>
   )
   return (
-    <Modal onClose={onClose} label="Earlier versions" title="Earlier versions" sub={name} size="narrow" foot={foot}>
+    <Modal dismiss="outside" onClose={onClose} label="Earlier versions" title="Earlier versions" sub={name} size="narrow" foot={foot}>
       {body}
     </Modal>
   )

@@ -217,6 +217,7 @@ function Assign({ channel, task, open, onClose }: { channel: Channel; task: Task
   }
   return (
     <Modal
+      dismiss="x"
       open={open}
       onClose={close}
       label={`Who works on T${task.id}?`}
@@ -253,6 +254,7 @@ function PickReviewer({ channel, task, open, onClose }: { channel: Channel; task
   const now = task.reviewer ? (task.reviewer === ANYONE ? "Now anyone who hasn't worked on it. " : `Now ${someone(channel, task.reviewer)}. `) : ""
   return (
     <Modal
+      dismiss="outside"
       open={open}
       onClose={onClose}
       label={`Who reviews T${task.id}?`}
@@ -418,6 +420,7 @@ function EditTask({ channel, task, open, onClose }: { channel: Channel; task: Ta
   }
   return (
     <Modal
+      dismiss="x"
       open={open}
       onClose={close}
       label={`Edit T${task.id}`}
@@ -484,6 +487,7 @@ function Cancel({ channel, task, open, onClose }: { channel: Channel; task: Task
   }
   return (
     <Modal
+      dismiss="x"
       open={open}
       onClose={close}
       label={`Cancel T${task.id}?`}

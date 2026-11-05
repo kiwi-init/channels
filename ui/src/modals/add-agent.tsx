@@ -41,6 +41,7 @@ export function AddAgent({ channel, onClose }: { channel: Channel; onClose: () =
   const [name, setName] = useState(() => freeName(taken))
   return (
     <Modal
+      dismiss="x"
       onClose={onClose}
       label="Add an agent"
       title="Add an agent"

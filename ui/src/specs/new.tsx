@@ -24,6 +24,7 @@ export function NewSpec({ channel, onClose }: { channel: Channel; onClose: () =>
   }
   return (
     <Modal
+      dismiss="x"
       open
       onClose={onClose}
       label="New spec"
