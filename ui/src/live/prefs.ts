@@ -2,11 +2,12 @@ import { useMemo, useSyncExternalStore } from "react"
 
 import { setAccessibilityOption, useAccessibilityOption } from "@kiwi/app/accessibility.ts"
 import { setAppearance, setTextFont, setTextSize, useAppearance, useTextFont, useTextSize, type TextSize } from "@kiwi/app/theme.ts"
+import { calmMinutes, DEFAULT_CALM } from "~/calm/idle"
 import type { CustomTheme, Prefs } from "~/model"
 import { cleanFolders } from "~/shell/rail-items"
 import { cleanThemes, deletedTheme, movedDark, savedTheme, type ThemePrefs } from "~/theme/themes"
 
-type Own = Pick<Prefs, "muted" | "enterSends" | "darkTheme" | "lightTheme" | "customThemes" | "folders">
+type Own = Pick<Prefs, "muted" | "enterSends" | "darkTheme" | "lightTheme" | "customThemes" | "folders" | "calm">
 
 const KEY = "ui.prefs"
 const MOVED = "ui.prefs.oled"
@@ -17,6 +18,7 @@ const DEFAULTS: Own = {
   lightTheme: "channels-light",
   customThemes: [],
   folders: [],
+  calm: DEFAULT_CALM,
 }
 const SIZES: readonly TextSize[] = ["small", "default", "large", "larger", "largest"]
 const listeners = new Set<() => void>()
@@ -34,6 +36,7 @@ export function readPrefs(store: Store): Own {
     lightTheme: typeof raw.lightTheme === "string" ? raw.lightTheme : DEFAULTS.lightTheme,
     customThemes: cleanThemes(raw.customThemes),
     folders: cleanFolders(raw.folders),
+    calm: calmMinutes(raw.calm),
   }
   if (!moved) {
     try {
@@ -95,7 +98,7 @@ export function setPrefs(p: Partial<Prefs>): void {
   if (Object.keys(changed).length) writeOwn({ ...readOwn(), ...changed })
 }
 
-const OWN_KEYS = ["muted", "enterSends", "darkTheme", "lightTheme", "customThemes", "folders"] as const satisfies readonly (keyof Own)[]
+const OWN_KEYS = ["muted", "enterSends", "darkTheme", "lightTheme", "customThemes", "folders", "calm"] as const satisfies readonly (keyof Own)[]
 
 export const saveTheme = (theme: CustomTheme): void => writeOwn({ ...readOwn(), ...savedTheme(readOwn(), theme) })
 

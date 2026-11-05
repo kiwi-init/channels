@@ -1,0 +1,63 @@
+import "~/styles/calm.css"
+
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type AnimationEvent } from "react"
+
+import { hideCalm } from "~/calm/idle"
+import { calmRows } from "~/calm/rows"
+import { cx } from "~/kit/bits"
+import { useApp } from "~/nav"
+
+const Sky = lazy(() => import("~/calm/sky"))
+const SWALLOWED = ["keydown", "keyup", "wheel", "pointerdown", "contextmenu"] as const
+
+export function Calm() {
+  const { app, go } = useApp()
+  const rows = useMemo(() => calmRows(app.channels, app.home), [app.channels, app.home])
+  const [leaving, setLeaving] = useState(false)
+  const box = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const was = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    box.current?.focus({ preventScroll: true })
+    const swallow = (e: Event): void => {
+      if (e.type === "pointerdown" && e.target instanceof Element && e.target.closest(".calm-row")) return
+      e.preventDefault()
+      e.stopImmediatePropagation()
+      if (e.type !== "keyup") setLeaving(true)
+    }
+    for (const type of SWALLOWED) window.addEventListener(type, swallow, { capture: true, passive: false })
+    return () => {
+      for (const type of SWALLOWED) window.removeEventListener(type, swallow, { capture: true })
+      if (was?.isConnected) was.focus({ preventScroll: true })
+    }
+  }, [])
+
+  const open = (code: string): void => {
+    go({ to: "channel", code })
+    setLeaving(true)
+  }
+  const ended = (e: AnimationEvent<HTMLDivElement>): void => {
+    if (e.target === e.currentTarget && e.animationName === "calm-out") hideCalm()
+  }
+
+  return (
+    <div ref={box} className={cx("calm", leaving && "is-leaving")} role="dialog" aria-modal="true" aria-label="Calm" tabIndex={-1} onAnimationEnd={ended}>
+      <div className="calm-sky">
+        <Suspense fallback={null}>
+          <Sky />
+        </Suspense>
+      </div>
+      <ul className="calm-list">
+        {rows.map((r, i) => (
+          <li key={r.code} style={{ animationDelay: `${600 + i * 120}ms` }}>
+            <button type="button" className="calm-row" onClick={() => open(r.code)}>
+              <span className="calm-name">{r.title}</span>
+              {r.needs > 0 && <span className="calm-needs">needs you: {r.needs}</span>}
+              <span className={cx("calm-line", !r.line && "is-quiet")}>{r.line ?? "quiet"}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
