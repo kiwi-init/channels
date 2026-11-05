@@ -43,7 +43,7 @@ function keyring(): Keyring {
   return new Keyring(host);
 }
 
-test("main indexes sealed archive rows in a worker, searches them by room, and leaving deletes the index (T977)", async () => {
+test("main indexes sealed archive rows in a worker, searches them by room, seals the index on quit, and leaving deletes it (T977)", async () => {
   const k = keyring();
   const { code } = await k.create("archive", null, null);
   if (!code) throw new Error("no join code");
@@ -63,9 +63,12 @@ test("main indexes sealed archive rows in a worker, searches them by room, and l
   expect(found?.hits.length).toBe(3);
   expect((await k.searchHistory(code, { query: "report", rooms: ["some-other-room"], limit: 50, head }))?.hits).toEqual([]);
 
+  expect(existsSync(searchDir) ? readdirSync(searchDir) : []).toEqual([]);
+  await k.flushSearch();
   const files = readdirSync(searchDir);
   expect(files.length).toBe(1);
   expect(readFileSync(join(searchDir, files[0]!)).includes(Buffer.from("REPORT-SENTINEL"))).toBe(false);
+  expect((await k.searchHistory(code, { query: "report", rooms: ["general"], limit: 50, head }))?.hits.length).toBe(3);
 
   await k.forget(code);
   expect(existsSync(join(searchDir, files[0]!))).toBe(false);

@@ -1,4 +1,5 @@
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { createCipheriv, createDecipheriv } from "node:crypto";
+import { mkdir, open, readFile, rename, rm } from "node:fs/promises";
 import path from "node:path";
 
 import { fromB64url } from "@kiwi/core/crypto.ts";
@@ -9,6 +10,9 @@ import { SearchIndex } from "./search-index.ts";
 
 const MAGIC = Uint8Array.of(0x6b, 0x73, 0x69, 0x01);
 const IV = 12;
+const TAG = 16;
+const CHUNK = 1 << 20;
+const CIPHER = "aes-256-gcm";
 
 export interface Loaded {
   index: SearchIndex;
@@ -17,28 +21,52 @@ export interface Loaded {
 
 const ad = (roomId: string): Uint8Array<ArrayBuffer> => new TextEncoder().encode(`kiwi-search-index:${roomId}`);
 
-const aes = (key: string): Promise<CryptoKey> => crypto.subtle.importKey("raw", fromB64url(key), "AES-GCM", false, ["encrypt", "decrypt"]);
-
-export async function sealIndex(index: SearchIndex, fed: Fed, key: string, roomId: string): Promise<Uint8Array<ArrayBuffer>> {
+function* sealed(index: SearchIndex, fed: Fed, key: string, roomId: string): Generator<Uint8Array> {
   index.setStamp(stampFor(fed));
   index.set("base", JSON.stringify(fed.base));
+  const plain = index.bytes();
   const iv = crypto.getRandomValues(new Uint8Array(IV));
-  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: ad(roomId) }, await aes(key), index.bytes()));
-  const out = new Uint8Array(MAGIC.length + IV + ct.length);
-  out.set(MAGIC, 0);
-  out.set(iv, MAGIC.length);
-  out.set(ct, MAGIC.length + IV);
+  const cipher = createCipheriv(CIPHER, fromB64url(key), iv).setAAD(ad(roomId));
+  const head = new Uint8Array(MAGIC.length + IV);
+  head.set(MAGIC, 0);
+  head.set(iv, MAGIC.length);
+  yield head;
+  for (let at = 0; at < plain.length; at += CHUNK) yield cipher.update(plain.subarray(at, at + CHUNK));
+  yield cipher.final();
+  yield cipher.getAuthTag();
+}
+
+export async function sealIndex(index: SearchIndex, fed: Fed, key: string, roomId: string): Promise<Uint8Array<ArrayBuffer>> {
+  const parts = [...sealed(index, fed, key, roomId)];
+  const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
+  let at = 0;
+  for (const p of parts) {
+    out.set(p, at);
+    at += p.length;
+  }
   return out;
 }
 
-export async function openIndex(sealed: Uint8Array, key: string, roomId: string): Promise<Loaded | null> {
-  if (sealed.length <= MAGIC.length + IV || MAGIC.some((b, i) => sealed[i] !== b)) return null;
-  const iv = sealed.slice(MAGIC.length, MAGIC.length + IV);
-  const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv, additionalData: ad(roomId) }, await aes(key), sealed.slice(MAGIC.length + IV)).then(
-    (b) => new Uint8Array(b),
-    () => null,
-  );
-  const index = plain ? SearchIndex.from(plain) : null;
+export async function openIndex(file: Uint8Array, key: string, roomId: string): Promise<Loaded | null> {
+  if (file.length < MAGIC.length + IV + TAG || MAGIC.some((b, i) => file[i] !== b)) return null;
+  const body = file.subarray(MAGIC.length + IV, file.length - TAG);
+  const plain = new Uint8Array(body.length);
+  try {
+    const decipher = createDecipheriv(CIPHER, fromB64url(key), file.subarray(MAGIC.length, MAGIC.length + IV))
+      .setAAD(ad(roomId))
+      .setAuthTag(file.subarray(file.length - TAG));
+    let to = 0;
+    for (let at = 0; at < body.length; at += CHUNK) {
+      const part = decipher.update(body.subarray(at, at + CHUNK));
+      plain.set(part, to);
+      to += part.length;
+    }
+    plain.set(decipher.final(), to);
+  } catch {
+    // Another key, another room or a damaged file: the index is rebuilt from the archive instead.
+    return null;
+  }
+  const index = SearchIndex.from(plain);
   if (!index) return null;
   const stamp = index.stamp();
   if (!stamp || !sameRules(stamp)) {
@@ -50,15 +78,21 @@ export async function openIndex(sealed: Uint8Array, key: string, roomId: string)
 }
 
 export async function readIndexFile(file: string, key: string, roomId: string): Promise<Loaded | null> {
-  const sealed = await readFile(file).catch(() => null);
-  return sealed ? openIndex(new Uint8Array(sealed), key, roomId) : null;
+  const bytes = await readFile(file).catch(() => null);
+  return bytes ? openIndex(bytes, key, roomId) : null;
 }
 
 export async function writeIndexFile(file: string, index: SearchIndex, fed: Fed, key: string, roomId: string): Promise<void> {
-  const sealed = await sealIndex(index, fed, key, roomId);
   await mkdir(path.dirname(file), { recursive: true });
   const tmp = `${file}.${process.pid}.tmp`;
-  await writeFile(tmp, sealed, { mode: 0o600 });
+  const out = await open(tmp, "w", 0o600);
+  try {
+    for (const part of sealed(index, fed, key, roomId)) {
+      for (let at = 0; at < part.length;) at += (await out.write(part, at)).bytesWritten;
+    }
+  } finally {
+    await out.close();
+  }
   await rename(tmp, file);
 }
 

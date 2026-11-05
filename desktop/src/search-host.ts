@@ -23,8 +23,10 @@ export interface SearchPlace {
   spawn(): SearchWorker;
 }
 
+const SMALL_HEAP = { name: "search", smol: true };
+
 export function bunSearchWorker(file: string): SearchWorker {
-  const worker = new Worker(file);
+  const worker = new Worker(file, SMALL_HEAP);
   return {
     postMessage: (ask) => worker.postMessage(ask),
     terminate: () => worker.terminate(),
@@ -43,7 +45,8 @@ export async function indexKey(sk: string, roomId: string): Promise<string> {
   return b64url(new Uint8Array(bits));
 }
 
-const IDLE_MS = 5 * 60_000;
+const IDLE_MS = 60_000;
+const SAVE_MS = 30_000;
 
 type Args<K extends SearchOp> = SearchCalls[K]["args"];
 
@@ -54,21 +57,32 @@ export class SearchHost {
   private readonly files = new Map<string, IndexFile>();
   private readonly loaded = new Map<string, Promise<number>>();
   private readonly idle = new Map<string, ReturnType<typeof setTimeout>>();
+  private readonly saves = new Map<string, ReturnType<typeof setTimeout>>();
 
   constructor(
     private readonly spawn: () => SearchWorker,
     private readonly idleMs = IDLE_MS,
+    private readonly saveMs = SAVE_MS,
   ) {}
 
   open(code: string, at: IndexFile): Promise<number> {
     const had = this.files.get(code);
     if (!had || had.file !== at.file || had.key !== at.key || had.roomId !== at.roomId) this.loaded.delete(code);
     this.files.set(code, at);
-    return this.ready(code);
+    const ready = this.ready(code);
+    void ready.then(
+      () => {
+        if (!this.idle.has(code)) this.touch(code);
+      },
+      () => null,
+    );
+    return ready;
   }
 
   async feed(code: string, messages: Message[], inputs: FoldInputs, from: number): Promise<number> {
-    return (await this.call(code, "feed", { messages, inputs, from })).through;
+    const { through } = await this.call(code, "feed", { messages, inputs, from });
+    this.saveSoon(code);
+    return through;
   }
 
   async search(code: string, query: string, rooms: string[], limit: number, head: number): Promise<Searched> {
@@ -97,6 +111,15 @@ export class SearchHost {
     this.files.delete(code);
     this.loaded.delete(code);
     this.stopIdle(code);
+    this.stopSave(code);
+    this.retire();
+  }
+
+  async close(): Promise<void> {
+    const codes = [...this.loaded.keys()];
+    this.loaded.clear();
+    if (this.worker) await Promise.all(codes.map((code) => this.send(code, "unload", {}).catch(() => null)));
+    this.stop();
   }
 
   stop(): void {
@@ -119,10 +142,13 @@ export class SearchHost {
   }
 
   private async call<K extends SearchOp>(code: string, op: K, args: Args<K>): Promise<SearchCalls[K]["value"]> {
-    await this.ready(code);
-    const out = await this.send(code, op, args);
-    this.touch(code);
-    return out;
+    this.stopIdle(code);
+    try {
+      await this.ready(code);
+      return await this.send(code, op, args);
+    } finally {
+      this.touch(code);
+    }
   }
 
   private send<K extends SearchOp>(code: string, op: K, args: Args<K>): Promise<SearchCalls[K]["value"]> {
@@ -154,9 +180,44 @@ export class SearchHost {
   private gone(why: string): void {
     this.worker = null;
     this.loaded.clear();
+    for (const t of this.saves.values()) clearTimeout(t);
+    this.saves.clear();
     const pending = [...this.pending.values()];
     this.pending.clear();
     for (const p of pending) p.fail(new WorkerGone(`the search worker stopped: ${why}`));
+  }
+
+  private retire(): void {
+    const w = this.worker;
+    if (!w || this.loaded.size || this.pending.size) return;
+    this.worker = null;
+    w.terminate();
+  }
+
+  private unload(code: string): void {
+    this.stopSave(code);
+    if (!this.loaded.has(code) || !this.worker) return this.retire();
+    this.loaded.delete(code);
+    void this.send(code, "unload", {})
+      .catch(() => null)
+      .then(() => this.retire());
+  }
+
+  private saveSoon(code: string): void {
+    if (this.saves.has(code)) return;
+    this.saves.set(
+      code,
+      setTimeout(() => {
+        this.saves.delete(code);
+        if (this.worker && this.loaded.has(code)) void this.send(code, "save", {}).catch(() => null);
+      }, this.saveMs),
+    );
+  }
+
+  private stopSave(code: string): void {
+    const t = this.saves.get(code);
+    if (t) clearTimeout(t);
+    this.saves.delete(code);
   }
 
   private touch(code: string): void {
@@ -165,9 +226,7 @@ export class SearchHost {
       code,
       setTimeout(() => {
         this.idle.delete(code);
-        if (!this.loaded.has(code) || !this.worker) return;
-        this.loaded.delete(code);
-        void this.send(code, "unload", {}).catch(() => null);
+        this.unload(code);
       }, this.idleMs),
     );
   }
