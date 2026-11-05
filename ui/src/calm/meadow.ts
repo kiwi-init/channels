@@ -3,6 +3,7 @@ import {
   Color,
   DataTexture,
   DoubleSide,
+  FloatType,
   BackSide,
   HalfFloatType,
   InstancedBufferAttribute,
@@ -120,7 +121,20 @@ const clamp = (x: number, a: number, b: number): number => Math.max(a, Math.min(
 const smooth = (x: number): number => x * x * (3 - 2 * x)
 const pick = <T>(arr: readonly T[]): T => arr[Math.floor(Math.random() * arr.length)] as T
 
-export async function startMeadow(stage: HTMLElement, glance: HTMLElement, still0: boolean): Promise<Meadow | null> {
+interface Engine {
+  attach(stage: HTMLElement, glance: HTMLElement, still: boolean): Meadow
+}
+
+let engine: Promise<Engine | null> | null = null
+
+export async function startMeadow(stage: HTMLElement, glance: HTMLElement, still: boolean): Promise<Meadow | null> {
+  engine ??= build()
+  const e = await engine
+  return e ? e.attach(stage, glance, still) : null
+}
+
+async function build(): Promise<Engine | null> {
+  let glance: HTMLElement | null = null
   const small = Math.min(innerWidth, innerHeight) < 700
   const renderer = new WebGPURenderer({ antialias: false, alpha: false })
   try {
@@ -135,13 +149,11 @@ export async function startMeadow(stage: HTMLElement, glance: HTMLElement, still
   renderer.domElement.style.display = "block"
   renderer.domElement.style.width = "100%"
   renderer.domElement.style.height = "100%"
-  stage.appendChild(renderer.domElement)
 
   const scene = new Scene()
   const camera = new PerspectiveCamera(34, innerWidth / innerHeight, 0.05, 120)
   const camBase = new Vector3(0, 0.5, 1.3)
   const camLook = new Vector3(0, 0.92, -6)
-  const disposables: { dispose(): void }[] = []
 
   const C = {
     skyTop: color(0x6e9ccb),
@@ -222,12 +234,7 @@ export async function startMeadow(stage: HTMLElement, glance: HTMLElement, still
     m.depthWrite = true
     m.depthTest = true
     m.side = DoubleSide
-    disposables.push(m)
     return m
-  }
-  const geometry = <G extends { dispose(): void }>(g: G): G => {
-    disposables.push(g)
-    return g
   }
 
   let seed = 7
@@ -237,7 +244,7 @@ export async function startMeadow(stage: HTMLElement, glance: HTMLElement, still
   const GRASS = small ? 4500 : 8000
 
   {
-    const g = geometry(new PlaneGeometry(240, 240))
+    const g = new PlaneGeometry(240, 240)
     g.rotateX(-Math.PI / 2)
     const m = rtMaterial(new MeshBasicNodeMaterial())
     m.colorNode = Fn(() => {
@@ -286,7 +293,7 @@ export async function startMeadow(stage: HTMLElement, glance: HTMLElement, still
   const fKindAttr = new InstancedBufferAttribute(fKind, 4)
 
   {
-    const g = geometry(new PlaneGeometry(1, 1, 1, 6))
+    const g = new PlaneGeometry(1, 1, 1, 6)
     const m = rtMaterial(new MeshBasicNodeMaterial())
     const inst = instancedBufferAttribute<"vec4">(fDataAttr)
     const kind = instancedBufferAttribute<"vec4">(fKindAttr)
@@ -311,7 +318,7 @@ export async function startMeadow(stage: HTMLElement, glance: HTMLElement, still
   }
 
   {
-    const g = geometry(new PlaneGeometry(1, 1, 1, 5))
+    const g = new PlaneGeometry(1, 1, 1, 5)
     const m = rtMaterial(new MeshBasicNodeMaterial())
     const inst = instancedBufferAttribute<"vec4">(fDataAttr)
     const kind = instancedBufferAttribute<"vec4">(fKindAttr)
@@ -407,7 +414,7 @@ export async function startMeadow(stage: HTMLElement, glance: HTMLElement, still
       gData.set([x, z, 0.12 + rand() * 0.28, rand()], i * 4)
     }
     const attr = new InstancedBufferAttribute(gData, 4)
-    const g = geometry(new PlaneGeometry(1, 1, 1, 3))
+    const g = new PlaneGeometry(1, 1, 1, 3)
     const m = rtMaterial(new MeshBasicNodeMaterial())
     const inst = instancedBufferAttribute<"vec4">(attr)
     const f = positionGeometry.y.add(0.5)
@@ -427,7 +434,7 @@ export async function startMeadow(stage: HTMLElement, glance: HTMLElement, still
 
   const hazeClear = new Color(0xe8e4dc)
   const rtScene = new RenderTarget(300, 200, { type: HalfFloatType, depthBuffer: true })
-  disposables.push(rtScene)
+  const rtBlur = new RenderTarget(300, 200, { type: HalfFloatType, depthBuffer: false })
 
   const atlasCanvas = document.createElement("canvas")
   const atlasTex = new CanvasTexture(atlasCanvas)
@@ -435,7 +442,6 @@ export async function startMeadow(stage: HTMLElement, glance: HTMLElement, still
   atlasTex.generateMipmaps = false
   atlasTex.minFilter = LinearFilter
   atlasTex.colorSpace = NoColorSpace
-  disposables.push(atlasTex)
   const charSlots = new Map<string, number>()
   for (let c = 32; c < 127; c++) charSlots.set(String.fromCharCode(c), c - 32)
   for (const ch of ["·", "●", "…", "—", "›", "○"]) charSlots.set(ch, charSlots.size)
@@ -480,7 +486,6 @@ export async function startMeadow(stage: HTMLElement, glance: HTMLElement, still
   ovTex.generateMipmaps = false
   ovTex.colorSpace = NoColorSpace
   ovTex.needsUpdate = true
-  disposables.push(ovTex)
 
   const rayDir = (suv: Node<"vec2">) => normalize(uFwd.add(uRight.mul(suv.x.mul(2).sub(1).mul(uTan).mul(uAspect))).add(uUp.mul(suv.y.mul(-2).add(1).mul(uTan))))
   const glassAt = (suv: Node<"vec2">) => {
@@ -524,8 +529,7 @@ export async function startMeadow(stage: HTMLElement, glance: HTMLElement, still
       return col
     })()
     m.opacityNode = float(0)
-    disposables.push(m)
-    const dome = new Mesh(geometry(new SphereGeometry(100, 24, 12)), m)
+    const dome = new Mesh(new SphereGeometry(100, 24, 12), m)
     dome.renderOrder = -100
     dome.frustumCulled = false
     scene.add(dome)
@@ -568,53 +572,35 @@ export async function startMeadow(stage: HTMLElement, glance: HTMLElement, still
     const c = uFrost.xy.add(uFrost.zw).mul(0.5)
     const hs = uFrost.zw.sub(uFrost.xy).mul(0.5)
     const q = abs(p.sub(c)).sub(hs)
-    const wobble = mx_noise_float(vec3(p.mul(0.003), uTime.mul(0.02)))
-      .mul(uCell)
-      .mul(2.5)
-    const d = vec2(q.x.max(0), q.y.max(0))
+    const d0 = vec2(q.x.max(0), q.y.max(0))
       .length()
       .add(min(max(q.x, q.y), 0))
-      .add(wobble)
-    return smoothstep(uCell.mul(6.0), uCell.mul(-1.5), d).mul(uFrostOn)
+    const f = float(0).toVar()
+    If(d0.lessThan(uCell.mul(9.0)).and(uFrostOn.greaterThan(0.5)), () => {
+      const wobble = mx_noise_float(vec3(p.mul(0.003), uTime.mul(0.02)))
+        .mul(uCell)
+        .mul(2.5)
+      f.assign(smoothstep(uCell.mul(6.0), uCell.mul(-1.5), d0.add(wobble)))
+    })
+    return f
   }
 
-  const matOut = new NodeMaterial()
-  disposables.push(matOut)
-  matOut.fragmentNode = Fn(() => {
-    const suv = screenUV.toVar()
-    const pix = suv.mul(screenSize)
-    const R1 = ripple(suv)
-    const puv = suv.add(R1.off.mul(0.012)).toVar()
+  const matBlur = new NodeMaterial()
+  matBlur.fragmentNode = Fn(() => sceneBlur(screenUV, uTexel.mul(1.7)))()
+  const quadBlur = new QuadMesh(matBlur)
 
-    const sb = sceneBlur(puv, uTexel.mul(1.7))
-    const cover = smoothstep(0.0, 0.15, sb.a)
-    const col = sb.rgb.toVar()
-    const B = beingField(pix)
-    const w = uBeingScr.w.min(1.6)
-    col.assign(mix(col, C.apricot, exp(B.r.mul(B.r).mul(-1.2)).mul(0.62).mul(w).clamp(0, 0.92)))
-    col.addAssign(
-      C.warm.mul(
-        exp(B.r.mul(B.r).mul(-2.6))
-          .mul(0.25)
-          .add(exp(B.r.mul(B.r).mul(-9.0)).mul(0.4))
-          .mul(w)
-      )
-    )
-    col.addAssign(C.white.mul(R1.shine.mul(0.04)))
-    col.addAssign(C.white.mul(exp(abs(R1.wp.y).mul(-70)).mul(0.18)))
+  const uCells = uniform(new Vector2(1, 1))
+  const uScreen = uniform(new Vector2(1, 1))
+  const rtCells = new RenderTarget(1, 1, { type: FloatType, depthBuffer: false, minFilter: NearestFilter, magFilter: NearestFilter, generateMipmaps: false })
 
-    col.assign(mix(col, col.mul(vec3(1.05, 0.9, 0.86)).add(vec3(0.025, 0.0, 0.0)), uAlert.mul(0.75)))
-
-    const frost = frostAt(pix)
-    col.assign(mix(col, mix(C.frost, C.blush, uAlert.mul(0.1)), frost.mul(mix(0.4, 0.58, uAlert))))
-
-    const cellF = pix.div(uCell)
-    const cid = floor(cellF)
-    const local = cellF.sub(cid)
-    const ccuv = cid.add(0.5).mul(uCell).div(screenSize)
+  const matCells = new NodeMaterial()
+  matCells.fragmentNode = Fn(() => {
+    const cid = floor(screenUV.mul(uCells))
     const ccpix = cid.add(0.5).mul(uCell)
+    const ccuv = ccpix.div(uScreen)
     const R2 = ripple(ccuv)
     const s = texture(rtScene.texture, ccuv.add(R2.off.mul(0.012)))
+    const cover = smoothstep(0.0, 0.15, s.a)
     const h = hash(cid.x.mul(1.731).add(cid.y.mul(91.27)))
     const h2 = hash(cid.x.mul(5.17).add(cid.y.mul(13.9)).add(7.0))
     const reveal = smoothstep(h, h.add(0.15), uForm.mul(1.2))
@@ -622,7 +608,7 @@ export async function startMeadow(stage: HTMLElement, glance: HTMLElement, still
     const elig = s.a.sub(0.2).div(0.8).clamp(0, 1)
     const shade = s.rgb
     const Lm = smoothstep(0.1, 0.62, luminance(shade))
-    const frostC = frostAt(cid.add(0.5).mul(uCell))
+    const frostC = frostAt(ccpix)
     const fieldA = smoothstep(0.25, 0.6, elig)
       .mul(step(h2.mul(0.5), elig))
       .mul(reveal)
@@ -663,10 +649,54 @@ export async function startMeadow(stage: HTMLElement, glance: HTMLElement, still
     const gi = select(useOv, ovG, select(useBeing, beingG, select(useField, fieldG, mistG)))
     const ga0 = select(useOv, ovA, select(useBeing, beingA, select(useField, fieldA, mistA.mul(float(1).sub(cover.mul(0.6))))))
     const gc = vec3(select(useOv, ovC, select(useBeing, beingC, select(useField, fieldC, C.cream))))
-    const isInk = select(useOv, step(1.5, ovM), float(0))
+    const mode = select(useOv, select(ovM.lessThan(1.5), float(2), float(3)), select(useBeing, float(1), float(0)))
+    const code = gi.add(mode.mul(256))
+    return vec4(gc, code.mul(2).add(ga0.clamp(0, 0.999)))
+  })()
+  const quadCells = new QuadMesh(matCells)
 
-    const ga = glyphA(gi, local).mul(ga0.clamp(0, 1))
-    const lit = mix(col.add(gc.mul(ga).mul(float(1).sub(col))), mix(col, gc, ga), select(useOv, float(0), select(useBeing, float(0.85), float(0))))
+  const matOut = new NodeMaterial()
+  matOut.fragmentNode = Fn(() => {
+    const suv = screenUV.toVar()
+    const pix = suv.mul(screenSize)
+    const R1 = ripple(suv)
+    const puv = suv.add(R1.off.mul(0.012)).toVar()
+
+    const sb = texture(rtBlur.texture, puv)
+    const col = sb.rgb.toVar()
+    const B = beingField(pix)
+    const w = uBeingScr.w.min(1.6)
+    col.assign(mix(col, C.apricot, exp(B.r.mul(B.r).mul(-1.2)).mul(0.62).mul(w).clamp(0, 0.92)))
+    col.addAssign(
+      C.warm.mul(
+        exp(B.r.mul(B.r).mul(-2.6))
+          .mul(0.25)
+          .add(exp(B.r.mul(B.r).mul(-9.0)).mul(0.4))
+          .mul(w)
+      )
+    )
+    col.addAssign(C.white.mul(R1.shine.mul(0.04)))
+    col.addAssign(C.white.mul(exp(abs(R1.wp.y).mul(-70)).mul(0.18)))
+
+    col.assign(mix(col, col.mul(vec3(1.05, 0.9, 0.86)).add(vec3(0.025, 0.0, 0.0)), uAlert.mul(0.75)))
+
+    const frost = frostAt(pix)
+    col.assign(mix(col, mix(C.frost, C.blush, uAlert.mul(0.1)), frost.mul(mix(0.4, 0.58, uAlert))))
+
+    const cellF = pix.div(uCell)
+    const cid = floor(cellF)
+    const local = cellF.sub(cid)
+    const cell = texture(rtCells.texture, cid.add(0.5).div(uCells))
+    const code = floor(cell.a.mul(0.5))
+    const ga0 = cell.a.sub(code.mul(2))
+    const mode = floor(code.div(256))
+    const gi = code.sub(mode.mul(256))
+    const gc = cell.rgb
+    const isInk = step(2.5, mode)
+    const litMix = select(mode.equal(1), float(0.85), float(0))
+
+    const ga = glyphA(gi, local).mul(ga0)
+    const lit = mix(col.add(gc.mul(ga).mul(float(1).sub(col))), mix(col, gc, ga), litMix)
     const inked = mix(col, gc, ga.mul(0.92))
     const outCol = mix(lit, inked, isInk).toVar()
 
@@ -852,8 +882,8 @@ export async function startMeadow(stage: HTMLElement, glance: HTMLElement, still
 
   const drawRows = (): void => {
     const pr = renderer.getPixelRatio()
-    const r = glance.getBoundingClientRect()
-    if (!r.width || !r.height) {
+    const r = glance?.getBoundingClientRect()
+    if (!glance || !r || !r.width || !r.height) {
       uFrostOn.value = 0
       bannerBox = null
       return
@@ -1048,10 +1078,14 @@ export async function startMeadow(stage: HTMLElement, glance: HTMLElement, still
     const rw = Math.ceil(size.x / (uCell.value / 3))
     const rh = Math.ceil(size.y / (uCell.value / 3))
     rtScene.setSize(rw, rh)
+    rtBlur.setSize(rw, rh)
     uTexel.value.set(1 / rw, 1 / rh)
+    rtCells.setSize(ov.cols, ov.rows)
+    uCells.value.set(ov.cols, ov.rows)
+    uScreen.value.set(size.x, size.y)
   }
 
-  let still = still0
+  let still = false
   const updateCamera = (time: number): void => {
     const m = still ? 0 : 1
     camera.position.set(camBase.x + Math.sin(time * 0.11) * 0.03 * m, camBase.y + Math.sin(time * 0.13) * 0.012 * m, camBase.z)
@@ -1070,6 +1104,10 @@ export async function startMeadow(stage: HTMLElement, glance: HTMLElement, still
     renderer.setRenderTarget(rtScene)
     renderer.setClearColor(hazeClear, 0)
     renderer.render(scene, camera)
+    renderer.setRenderTarget(rtBlur)
+    quadBlur.render(renderer)
+    renderer.setRenderTarget(rtCells)
+    quadCells.render(renderer)
     renderer.setRenderTarget(null)
     quadOut.render(renderer)
   }
@@ -1077,7 +1115,7 @@ export async function startMeadow(stage: HTMLElement, glance: HTMLElement, still
   let simClock = 0
   let lastNow = 0
   let running = false
-  let gone = false
+  let attached = false
 
   const frame = (dt: number): void => {
     simClock += dt
@@ -1099,7 +1137,7 @@ export async function startMeadow(stage: HTMLElement, glance: HTMLElement, still
     frame(dt)
   }
   const startLoop = (): void => {
-    if (gone || running || still || document.hidden) return
+    if (!attached || running || still || document.hidden) return
     running = true
     lastNow = performance.now() / 1000
     void renderer.setAnimationLoop(loop)
@@ -1110,7 +1148,7 @@ export async function startMeadow(stage: HTMLElement, glance: HTMLElement, still
   }
 
   const renderStill = (): void => {
-    if (gone || !still) return
+    if (!attached || !still) return
     words.length = 0
     motes.length = 0
     uForm.value = 1
@@ -1152,48 +1190,68 @@ export async function startMeadow(stage: HTMLElement, glance: HTMLElement, still
     else if (still) renderStill()
     else startLoop()
   }
-  addEventListener("resize", onResize)
-  document.addEventListener("visibilitychange", onVisibility)
-
   try {
     await Promise.race([document.fonts.load(`400 60px ${monoFamily}`), new Promise((r) => setTimeout(r, 1500))])
   } catch {
     // A font that doesn't load leaves the system monospace in the glyphs.
   }
   drawAtlas()
-  layout()
-  updateCamera(0)
-  setState("form", 4)
-  if (still) renderStill()
-  else startLoop()
+
+  let host: HTMLElement | null = null
+  const detach = (): void => {
+    attached = false
+    stopLoop()
+    removeEventListener("resize", onResize)
+    document.removeEventListener("visibilitychange", onVisibility)
+    renderer.domElement.remove()
+    glance = null
+    host = null
+  }
 
   return {
-    setRows(next) {
-      const prevNeeds = totalNeeds()
-      rows = next.slice(0, 8).map((r) => ({ ...r }))
-      const needs = totalNeeds()
-      drawRows()
-      if (needs > 0 && being.state !== "approach" && being.state !== "needs") setState("approach")
-      else if (needs > 0) aimAtList()
-      if (needs === 0 && prevNeeds > 0 && (being.state === "approach" || being.state === "needs")) bloom()
-      if (still) requestAnimationFrame(renderStill)
-    },
-    setStill(next) {
-      if (next === still) return
-      still = next
-      if (still) {
-        stopLoop()
-        renderStill()
-      } else startLoop()
-    },
-    dispose() {
-      gone = true
-      stopLoop()
-      removeEventListener("resize", onResize)
-      document.removeEventListener("visibilitychange", onVisibility)
-      for (const d of disposables) d.dispose()
-      renderer.dispose()
-      renderer.domElement.remove()
+    attach(stage, panel, still0) {
+      if (attached) detach()
+      host = stage
+      glance = panel
+      still = still0
+      attached = true
+      stage.appendChild(renderer.domElement)
+      addEventListener("resize", onResize)
+      document.addEventListener("visibilitychange", onVisibility)
+      words.length = 0
+      motes.length = 0
+      rows = []
+      uForm.value = 0
+      for (const k of uKnocks) k.value.set(0, 0, -99, 0)
+      layout()
+      updateCamera(simClock)
+      setState("form", 4)
+      if (still) renderStill()
+      else startLoop()
+      return {
+        setRows(next) {
+          if (host !== stage) return
+          const prevNeeds = totalNeeds()
+          rows = next.slice(0, 8).map((r) => ({ ...r }))
+          const needs = totalNeeds()
+          drawRows()
+          if (needs > 0 && being.state !== "approach" && being.state !== "needs") setState("approach")
+          else if (needs > 0) aimAtList()
+          if (needs === 0 && prevNeeds > 0 && (being.state === "approach" || being.state === "needs")) bloom()
+          if (still) requestAnimationFrame(renderStill)
+        },
+        setStill(next) {
+          if (host !== stage || next === still) return
+          still = next
+          if (still) {
+            stopLoop()
+            renderStill()
+          } else startLoop()
+        },
+        dispose() {
+          if (host === stage) detach()
+        },
+      }
     },
   }
 }

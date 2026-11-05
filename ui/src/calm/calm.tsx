@@ -141,7 +141,7 @@ export function Calm() {
             <span className="rest-label">{total === 1 ? "needs you" : "need you"}</span>
           </p>
         ) : (
-          <p className="rest-calm">Nothing needs you</p>
+          <p className="rest-calm">Nothing needs you. Enjoy your time, or go worry about something else.</p>
         )}
         <ul className="rest-list" aria-label="Channels">
           {rows.map((r) => (
