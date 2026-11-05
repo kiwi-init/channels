@@ -182,6 +182,9 @@ jobs:
       - name: ui a remote edit landing between your keys never undoes your caret or selection (⇧← and ←), in Chromium and WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-doc-select-race.ts
+      - name: ui people see agents by nickname, never by handle, on the main screens (demo agents get real-looking handles)
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-handles.ts --dist ui/dist
       - name: cli build
         if: ${{ !cancelled() }}
         run: |

@@ -341,13 +341,6 @@ export default function Markdown({ markdown, onMention, onTask, onMessage, onIma
   )
 
   useLayoutEffect(() => {
-    for (const a of box.current?.querySelectorAll<HTMLAnchorElement>('a[href^="kiwi-mention:"]') ?? []) {
-      try {
-        a.title = `@${decodeURIComponent((a.getAttribute("href") ?? "").slice("kiwi-mention:".length))}`
-      } catch {
-        // A mention link someone wrote by hand with a stray %: it keeps no hover text.
-      }
-    }
     for (const a of box.current?.querySelectorAll<HTMLAnchorElement>('a[href^="http"], a[href^="mailto:"]') ?? []) {
       const href = a.getAttribute("href") ?? ""
       if (!a.title && a.textContent?.trim() !== href) a.title = href
