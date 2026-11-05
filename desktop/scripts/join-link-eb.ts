@@ -41,6 +41,7 @@ try {
   await until("the page", 60_000, () => d.evaluate(() => (document.querySelector("#root")?.childElementCount ? true : null), null, 2_000));
   if (await heardAt(d, 1, "the app opening the link it started with", 10_000)) console.log("a link that starts the app is opened by it");
   else problems.push(`started with ${COLD}, the app never opened it; processes with the link in argv: ${carrying(COLD)}`);
+  console.log(`  main's argv: ${JSON.stringify(await d.main("argv"))}`);
   console.log(`  the page's waiting link: ${JSON.stringify(await waiting(d))} (null when the page took it already)`);
   const second = open(WARM);
   const handing = await until("the second start", 5_000, () => Promise.resolve(carrying(WARM) === "none" ? null : carrying(WARM))).catch(() => "none");
