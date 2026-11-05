@@ -344,7 +344,7 @@ const unreadText = Effect.fn("Hooks.unreadText")(function* (s: AgentSession, mc:
   return { text: hand.text, shown, messages: shownMessages.length };
 });
 
-type AnswerKind = "cursor-start" | "start" | "gemini-prompt" | "agy-inject" | "prompt" | "followup" | "block" | "deny" | "agy-continue";
+export type AnswerKind = "cursor-start" | "start" | "gemini-prompt" | "agy-inject" | "prompt" | "followup" | "block" | "deny" | "agy-continue";
 
 export interface Answer {
   kind: AnswerKind;
@@ -374,7 +374,7 @@ function envelope(kind: AnswerKind, texts: readonly string[]): string {
   }
 }
 
-function answered(kind: AnswerKind, text: string, shown: Effect.Effect<void, never, Relay> = Effect.void): Answer {
+export function answered(kind: AnswerKind, text: string, shown: Effect.Effect<void, never, Relay> = Effect.void): Answer {
   return { kind, text, shown };
 }
 
@@ -433,6 +433,34 @@ function promptHead(alias: string): string {
   return `New Kiwi Channels messages for you (${alias}):`;
 }
 
+function startKind(input: HookInput, who: Here): AnswerKind {
+  if (who.harness === "agy") return "agy-inject";
+  if (input.hook_event_name === "sessionStart" || input.composer_mode != null || typeof input.is_background_agent === "boolean") return "cursor-start";
+  return "start";
+}
+
+function promptKind(input: HookInput, who: Here): AnswerKind {
+  if (input.hook_event_name === "BeforeAgent") return "gemini-prompt";
+  if (who.harness === "agy") return "agy-inject";
+  return "prompt";
+}
+
+function stopKind(input: HookInput, who: Here): AnswerKind | null {
+  const style = stopStyle(input);
+  if (style === "cursor") return input.status && input.status !== "completed" ? null : "followup";
+  if (who.harness === "grok" && input.reason !== undefined && input.reason !== "end_turn") return null;
+  if (who.harness === "agy" && input.terminationReason !== undefined && input.terminationReason !== "NO_TOOL_CALL") return null;
+  return style === "gemini" ? "deny" : who.harness === "agy" ? "agy-continue" : "block";
+}
+
+export function noticeKind(event: string, input: HookInput, who: Here): AnswerKind | null {
+  if (event === "stop") return stopKind(input, who);
+  if (who.harness === "grok") return null;
+  if (event === "session-start") return startKind(input, who);
+  if (event === "prompt") return promptKind(input, who);
+  return null;
+}
+
 export const answer = Effect.fn("Hooks.answer")(function* (event: string, input: HookInput, b: Binding, cfg: ChannelConfig, who: Here, budget = HOOK_CONTEXT_MAX) {
   if (who.harness === "grok" && (event === "session-start" || event === "prompt")) return null;
   const mc = mcFor(b.alias, b.as, input.cwd ?? process.cwd(), who);
@@ -473,11 +501,7 @@ export const answer = Effect.fn("Hooks.answer")(function* (event: string, input:
           unread.shown,
         )
       : unread.shown;
-    if (who.harness === "agy") return answered("agy-inject", additionalContext, shown);
-    if (input.hook_event_name === "sessionStart" || input.composer_mode != null || typeof input.is_background_agent === "boolean") {
-      return answered("cursor-start", additionalContext, shown);
-    }
-    return answered("start", additionalContext, shown);
+    return answered(startKind(input, who), additionalContext, shown);
   }
 
   if (event === "prompt") {
@@ -487,22 +511,18 @@ export const answer = Effect.fn("Hooks.answer")(function* (event: string, input:
     if (!unread.text && !persona) return yield* Effect.as(unread.shown, null);
     const text = [persona?.text ?? null, unread.text ? [head, unread.text].join("\n") : null].filter((t) => t !== null).join("\n\n");
     const shown = persona ? Effect.andThen(persona.shown, unread.shown) : unread.shown;
-    if (input.hook_event_name === "BeforeAgent") return answered("gemini-prompt", text, shown);
-    if (who.harness === "agy") return answered("agy-inject", text, shown);
-    return answered("prompt", text, shown);
+    return answered(promptKind(input, who), text, shown);
   }
 
   if (event === "stop") {
-    const style = stopStyle(input);
-    if (style === "cursor") {
-      if (input.status && input.status !== "completed") return null;
+    const kind = stopKind(input, who);
+    if (kind === null) return null;
+    if (kind === "followup") {
       const { messages, state } = yield* s.state();
       const unread = (yield* s.unreadAt(state, messages, loopDelivery())).unread > 0 || pendingDocWakes(b.alias, b.as).length > 0;
       const follow = cursorFollow(b.alias, mc, unread, yield* rearmText(input, b, who, mc), budget);
       return follow ? answered("followup", follow) : null;
     }
-    if (who.harness === "grok" && input.reason !== undefined && input.reason !== "end_turn") return null;
-    if (who.harness === "agy" && input.terminationReason !== undefined && input.terminationReason !== "NO_TOOL_CALL") return null;
     const stopHead = `Before stopping: unread Kiwi Channels messages for you (${b.alias}). Handle them (answer with \`${mc} reply N "…"\`):`;
     const nudge = yield* contextNudge(input, s, who, mc, budget);
     const persona = yield* personaNews(s, who, mc, budget - (nudge ? nudge.text.length + 2 : 0));
@@ -511,11 +531,10 @@ export const answer = Effect.fn("Hooks.answer")(function* (event: string, input:
     const unreadMax = stopUnreadMax(stopHead, [persona?.text ?? null, reminder].filter((t) => t !== null).join("\n\n") || null, budget);
     const unread = unreadMax > 0 ? yield* unreadText(s, mc, unreadMax, loopDelivery()) : { text: "", shown: Effect.void, messages: 0 };
     const head = unread.messages ? stopHead : `Before stopping: unread lines for you in Kiwi Channels' shared doc (${b.alias}). Each says where to answer:`;
-    const decision = style === "gemini" ? "deny" : who.harness === "agy" ? "agy-continue" : "block";
     const reason = [persona?.text ?? null, stopReason(head, unread.text, reminder) || null].filter((t) => t !== null).join("\n\n");
     const told = persona ? Effect.andThen(persona.shown, unread.shown) : unread.shown;
     const shown = nudge ? Effect.andThen(nudge.shown, told) : told;
-    if (reason) return answered(decision, reason, shown);
+    if (reason) return answered(kind, reason, shown);
     yield* unread.shown;
   }
   return null;

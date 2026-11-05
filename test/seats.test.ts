@@ -8,7 +8,7 @@ import { join } from "node:path";
 import type { ProcessTree } from "../src/ancestry.ts";
 import { loadConfig, updateConfig, wipeChannel } from "../src/config.ts";
 import { freeAgentName } from "@kiwi/core/membership.ts";
-import { baseName, bindDirectory, bindingFor, canonicalHarness, here, hereAs, sameHarness, seatsAt, seatsFor, seatsHeldAnywhere } from "../src/seats.ts";
+import { baseName, bindDirectory, bindingFor, canonicalHarness, claimTaken, here, hereAs, sameHarness, seatsAt, seatsFor, seatsHeldAnywhere } from "../src/seats.ts";
 
 let home = "";
 let dir = "";
@@ -551,5 +551,69 @@ describe("a resumed session keeps its seat (#1676)", () => {
     bindDirectory(dir, { alias: "ch", as: "lead", harness: "claude", session: "lead-session", pid: DEAD });
     seatsFor(dir, { who: resumed, claim: false });
     expect(seatsAt(loadConfig(), dir).find((b) => b.as === "lead")).toMatchObject({ pid: DEAD });
+  });
+});
+
+describe("a session whose seat another session took learns it once (#1676)", () => {
+  const lead = { harness: "claude" as const, session: "lead-session", pid: process.ppid };
+  const stranger = { harness: "claude" as const, session: "new-session", pid: process.pid };
+
+  test("taking a seat from another session records it for that session, and the claim hands it over once", () => {
+    bindDirectory(dir, { alias: "ch", as: "lead", harness: "claude", session: "lead-session", pid: DEAD });
+    const sub = join(dir, "web");
+    mkdirSync(sub);
+    expect(seatsFor(sub, { who: stranger }).map((b) => b.session)).toEqual(["new-session"]);
+    expect(seatsFor(dir, { who: lead })).toEqual([]);
+    expect(claimTaken("new-session", [])).toEqual([]);
+    expect(claimTaken("lead-session", [])).toEqual([{ alias: "ch", as: "lead", from: "lead-session", dir, at: expect.any(Number) }]);
+    expect(claimTaken("lead-session", [])).toEqual([]);
+    expect(loadConfig().taken).toBeUndefined();
+  });
+
+  test("a session that has the seat again is not told it lost it", () => {
+    bindDirectory(dir, { alias: "ch", as: "lead", harness: "claude", session: "lead-session", pid: DEAD });
+    seatsFor(dir, { who: stranger });
+    const back = { alias: "ch", as: "lead", harness: "claude" as const, session: "lead-session", pid: process.ppid };
+    bindDirectory(dir, back);
+    expect(claimTaken("lead-session", [back])).toEqual([]);
+    expect(loadConfig().taken?.map((t) => t.from)).toEqual(["new-session"]);
+  });
+
+  test("a join that replaces another session's seat records it for that session", () => {
+    bindDirectory(dir, { alias: "ch", as: "lead", harness: "claude", session: "old-session", pid: process.ppid });
+    bindDirectory(dir, { alias: "ch", as: "lead", harness: "claude", session: "new-session", pid: process.pid });
+    expect(seatsAt(loadConfig(), dir).find((b) => b.as === "lead")).toMatchObject({ session: "new-session" });
+    expect(claimTaken("old-session", [])).toEqual([{ alias: "ch", as: "lead", from: "old-session", dir, at: expect.any(Number) }]);
+    expect(claimTaken("new-session", [])).toEqual([]);
+  });
+
+  test("a session joining its own seat again records nothing", () => {
+    bindDirectory(dir, { alias: "ch", as: "lead", harness: "claude", session: "lead-session", pid: DEAD });
+    bindDirectory(dir, { alias: "ch", as: "lead", harness: "claude", session: "lead-session", pid: process.ppid });
+    expect(loadConfig().taken).toBeUndefined();
+  });
+
+  test("a resumed session keeps its seat, so nothing is recorded", () => {
+    bindDirectory(dir, { alias: "ch", as: "lead", harness: "claude", session: "lead-session", pid: DEAD });
+    seatsFor(dir, { who: lead });
+    expect(loadConfig().taken).toBeUndefined();
+  });
+
+  test("a read that doesn't claim takes nothing and records nothing", () => {
+    bindDirectory(dir, { alias: "ch", as: "lead", harness: "claude", session: "lead-session", pid: DEAD });
+    seatsFor(dir, { who: stranger, claim: false });
+    expect(loadConfig().taken).toBeUndefined();
+  });
+
+  test("records older than a week are dropped when a new one is written, and one per seat and session is kept", () => {
+    updateConfig((c) => {
+      c.taken = [
+        { alias: "ch", as: "old", from: "gone", dir, at: Date.now() - 8 * 86_400_000 },
+        { alias: "ch", as: "lead", from: "lead-session", dir, at: Date.now() - 1000 },
+      ];
+    });
+    bindDirectory(dir, { alias: "ch", as: "lead", harness: "claude", session: "lead-session", pid: DEAD });
+    seatsFor(dir, { who: stranger });
+    expect(loadConfig().taken?.map((t) => `${t.as}:${t.from}`)).toEqual(["lead:lead-session"]);
   });
 });
