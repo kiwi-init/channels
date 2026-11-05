@@ -9,6 +9,7 @@ const FILL = { position: "absolute", inset: 0, width: "100%", height: "100%", po
 export default function Sky() {
   const video = useRef<HTMLVideoElement>(null)
   const [reduced, setReduced] = useState(() => window.matchMedia(STILL).matches)
+  const [src, setSrc] = useState<string | null>(null)
 
   useEffect(() => {
     const query = window.matchMedia(STILL)
@@ -18,8 +19,29 @@ export default function Sky() {
   }, [])
 
   useEffect(() => {
+    if (reduced) return
+    let url: string | null = null
+    let gone = false
+    void fetch(loop)
+      .then((r) => r.arrayBuffer())
+      .then((bytes) => {
+        if (gone) return
+        url = URL.createObjectURL(new Blob([bytes], { type: "video/mp4" }))
+        setSrc(url)
+      })
+      .catch(() => {
+        // A loop that can't load leaves the still frame behind it in place.
+      })
+    return () => {
+      gone = true
+      if (url) URL.revokeObjectURL(url)
+      setSrc(null)
+    }
+  }, [reduced])
+
+  useEffect(() => {
     const el = video.current
-    if (!el) return
+    if (!el || !src) return
     const shown = () => {
       if (document.hidden) el.pause()
       else
@@ -42,11 +64,11 @@ export default function Sky() {
       el.removeAttribute("src")
       el.load()
     }
-  }, [reduced])
+  }, [src])
 
   return (
     <div className="calm-sky" aria-hidden="true" style={{ ...FILL, background: `#1b2236 url(${still}) center / cover no-repeat` }}>
-      {!reduced && <video ref={video} src={loop} poster={still} muted loop playsInline preload="auto" disablePictureInPicture style={FILL} />}
+      {!reduced && src && <video ref={video} src={src} poster={still} muted loop playsInline preload="auto" disablePictureInPicture style={FILL} />}
     </div>
   )
 }

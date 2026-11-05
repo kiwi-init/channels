@@ -111,14 +111,14 @@ async function run(what: (d: Driver) => Promise<void>): Promise<void> {
 
 const loopPath = [...builtInFiles().keys()].find((name) => name.endsWith(".mp4"));
 
-const loopPlays = (d: Driver, src: string): Promise<string> =>
+const loopPlays = (d: Driver, src: string, asBlob: boolean): Promise<string> =>
   d.evaluate(
-    async (url: string) => {
+    async ({ url, blob }: { url: string; blob: boolean }) => {
       const v = document.createElement("video");
       v.muted = true;
       v.loop = true;
       v.playsInline = true;
-      v.src = url;
+      v.src = blob ? URL.createObjectURL(new Blob([await (await fetch(url)).arrayBuffer()], { type: "video/mp4" })) : url;
       document.body.append(v);
       try {
         await v.play();
@@ -133,7 +133,7 @@ const loopPlays = (d: Driver, src: string): Promise<string> =>
       v.remove();
       return said;
     },
-    src,
+    { url: src, blob: asBlob },
     20_000,
   );
 
@@ -143,9 +143,11 @@ try {
     console.log("nothing published: the built-in UI");
     if (!loopPath) problems.push("the built-in UI has no Calm loop (.mp4)");
     else {
-      const said = await loopPlays(d, `views://internal/${loopPath}`);
-      if (said !== "plays") problems.push(`the Calm loop doesn't play from views:// in the packaged app: ${said}`);
-      console.log(`the Calm loop from views://internal/${loopPath}: ${said}`);
+      const url = `views://internal/${loopPath}`;
+      console.log(`the Calm loop straight from ${url}: ${await loopPlays(d, url, false)}`);
+      const said = await loopPlays(d, url, true);
+      if (said !== "plays") problems.push(`the Calm loop doesn't play in the packaged app, fetched into a video/mp4 blob as the sky does: ${said}`);
+      console.log(`the Calm loop as a video/mp4 blob, as the sky plays it: ${said}`);
     }
   });
 
