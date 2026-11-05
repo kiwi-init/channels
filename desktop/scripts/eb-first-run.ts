@@ -17,20 +17,17 @@ const clickButton = ({ name, within }: { name: string; within: string }): boolea
   return !!button;
 };
 
-export const sendMessage = (text: string): boolean => {
-  const doc = document.querySelector<HTMLElement>('.thread-doc [role="textbox"][aria-label="Thread"]');
-  if (!doc) return false;
-  const lines = [...doc.querySelectorAll<HTMLElement>("p")];
-  const at = lines.findIndex((p) => p.textContent === text);
-  if (at >= 0 && at < lines.length - 1) return true;
-  if (at < 0) {
-    document.querySelector<HTMLButtonElement>(".thread-doc .doc-tail")?.click();
-    doc.focus();
-    document.execCommand("insertText", false, text);
+export const sendMessage = ({ text, shows }: { text: string; shows: string }): boolean => {
+  if ([...document.querySelectorAll<HTMLElement>(".main article.msg")].some((m) => m.textContent?.includes(shows))) return true;
+  const area = document.querySelector<HTMLTextAreaElement>(".main .composer textarea");
+  if (!area || !document.querySelector(".main .thread-doc")) return false;
+  area.focus();
+  if (area.value !== text) {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(area, text);
+    area.dispatchEvent(new Event("input", { bubbles: true }));
     return false;
   }
-  doc.focus();
-  doc.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", code: "Enter", keyCode: 13, bubbles: true, cancelable: true }));
+  area.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", code: "Enter", keyCode: 13, bubbles: true, cancelable: true }));
   return false;
 };
 
@@ -49,6 +46,7 @@ export async function firstChannel(d: Driver, messages: number): Promise<void> {
   await step("the new channel's name", 10_000, () => d.evaluate(fillIn, { selector: '[role="dialog"] input', value: "cold" }, probe));
   await step("Create channel", 10_000, () => d.evaluate(clickButton, { name: "Create channel", within: '[role="dialog"]' }, probe));
   for (let i = 0; i < messages; i++) {
-    await step(`message ${i + 1}, sent and in the conversation`, 60_000, () => d.evaluate(sendMessage, `Message ${i + 1}: the relay deploy is done, numbers in a minute.`, probe));
+    const text = `Message ${i + 1}: the relay deploy is done, numbers in a minute.`;
+    await step(`message ${i + 1}, sent and in the conversation`, 60_000, () => d.evaluate(sendMessage, { text, shows: text }, probe));
   }
 }

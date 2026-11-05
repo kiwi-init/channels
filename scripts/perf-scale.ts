@@ -12,7 +12,7 @@ import { daemonSock } from "../src/daemon/protocol.ts";
 import { stopDaemon } from "../src/daemon/rpc.ts";
 import { startLocalRelay } from "./local-relay.ts";
 import { calibrate } from "./perf-calibrate.ts";
-import { approveSpec, firstRun, letIn, newChannel, channelSettings, eraseLine, ROWS, view, writeBlock } from "./perf-ui.ts";
+import { approveSpec, composer, firstRun, letIn, newChannel, channelSettings, eraseLine, ROWS, view, writeBlock } from "./perf-ui.ts";
 import { harnessDist } from "./ui-harness.ts";
 
 if (process.argv.includes("--help")) {
@@ -404,7 +404,7 @@ try {
   await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 });
 
   await tab(page, "Conversation", "M\\d+: ");
-  await page.locator(".thread-doc .doc-tail").last().click();
+  await composer(page).click();
   await drain(page);
   const typing = (async () => {
     for (let i = 0; i < 3; i++) {

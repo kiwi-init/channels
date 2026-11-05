@@ -66,7 +66,7 @@ try {
   d = await attach(join(root, "driver.sock"));
   const driver = d;
   await firstChannel(driver, 3);
-  await until("the thread doc", 30_000, () => driver.evaluate(() => (document.querySelector('.thread-doc [role="textbox"][aria-label="Thread"]') ? true : null), null, 2_000));
+  await until("the composer", 30_000, () => driver.evaluate(() => (document.querySelector(".main .composer textarea") ? true : null), null, 2_000));
   const painted = () => driver.evaluate(() => new Promise<boolean>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(true)))), null, 30_000);
 
   await step("on a floating desktop the page knows windows float there", async () => {

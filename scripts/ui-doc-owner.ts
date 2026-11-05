@@ -6,13 +6,12 @@ import { join, resolve } from "node:path";
 import { chromium, webkit, type BrowserContext, type Page, type WebSocketRoute } from "playwright-core";
 import { startLocalRelay } from "./local-relay.ts";
 import { harnessDist } from "./ui-harness.ts";
-import { firstRun, letIn, newChannel } from "./perf-ui.ts";
+import { composer, firstRun, letIn, newChannel, SEND } from "./perf-ui.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
 const arg = (name: string): string | undefined => process.argv.find((a) => a.startsWith(`--${name}=`))?.slice(name.length + 3);
 const DIST = harnessDist(arg("dist"));
 const ENGINE = process.argv.includes("--webkit") ? "webkit" : "chromium";
-const SEND = arg("send-key") ?? "ControlOrMeta+Enter";
 const ONLY = arg("only");
 const KEY_MS = 90;
 const SETTLE_MS = 2500;
@@ -90,7 +89,7 @@ async function joinAs(p: Person, base: string, code: string, owner: Page): Promi
   const waiting = p.page
     .locator(".thread-doc")
     .first()
-    .waitFor({ timeout: 120000 })
+    .waitFor({ state: "attached", timeout: 120000 })
     .then(() => void (inside = true));
   await letIn(owner, () => !inside);
   await waiting;
@@ -101,44 +100,19 @@ async function general(p: Person): Promise<void> {
     .getByRole("navigation", { name: "Views" })
     .getByRole("button", { name: /general/ })
     .click();
-  await p.page.locator(".thread-doc .ProseMirror").first().waitFor({ timeout: 30000 });
-}
-
-async function startLine(p: Person): Promise<void> {
-  await p.page.locator(".thread-doc .doc-tail").last().click();
-}
-
-interface Here {
-  id: string;
-  author: string;
-  text: string;
-}
-
-async function here(p: Person): Promise<Here | null> {
-  return p.page.evaluate(() => {
-    const at = getSelection()?.anchorNode ?? null;
-    const el = at instanceof Element ? at : (at?.parentElement ?? null);
-    const section = el?.closest<HTMLElement>(".thread-doc section.blk");
-    const node = (section as unknown as { pmViewDesc?: { node?: { attrs: Record<string, unknown>; textContent: string } } } | null)?.pmViewDesc?.node;
-    return node ? { id: String(node.attrs.id ?? ""), author: String(node.attrs.author ?? ""), text: node.textContent } : null;
-  });
+  await p.page.locator(".thread-doc").first().waitFor({ state: "attached", timeout: 30000 });
 }
 
 async function typeIn(p: Person, text: string): Promise<void> {
+  await composer(p.page).click();
   await p.page.keyboard.type(text, { delay: KEY_MS });
-}
-
-async function backspace(p: Person, n: number): Promise<void> {
-  for (let i = 0; i < n; i++) await p.page.keyboard.press("Backspace", { delay: KEY_MS });
 }
 
 async function shown(p: Person): Promise<string[]> {
   return p.page.evaluate(() =>
-    [...document.querySelectorAll<HTMLElement>(".thread-doc section.blk")].map((s) => {
-      const n = (s as unknown as { pmViewDesc?: { node?: { attrs: Record<string, unknown>; textContent: string } } }).pmViewDesc?.node;
-      const flags = ["is-hidden", "is-mine", "is-empty"].filter((c) => s.classList.contains(c)).join(" ");
-      return `${String(n?.attrs.author ?? "?")} ${n?.attrs.sent ? "sent" : "draft"} [${flags}] ${JSON.stringify(n?.textContent ?? "")}`;
-    }),
+    [...document.querySelectorAll<HTMLElement>(".main article.msg, .main .thread-doc section.blk:not(.is-hidden)")]
+      .slice(-6)
+      .map((r) => `${r.tagName.toLowerCase()} ${JSON.stringify(r.innerText.slice(0, 80))}`),
   );
 }
 
@@ -164,11 +138,11 @@ async function posted(): Promise<Posted[]> {
   });
 }
 
-async function sentAs(line: Here, waitMs: number): Promise<Posted | null> {
+async function sentAs(from: string, text: string, waitMs: number): Promise<Posted[]> {
   const end = Date.now() + waitMs;
   for (;;) {
-    const got = (await posted()).find((m) => m.from === "harry" && m.block?.id === line.id) ?? null;
-    if (got || Date.now() > end) return got;
+    const got = (await posted()).filter((m) => m.from === from && m.body.trim() === text);
+    if (got.length || Date.now() > end) return got;
     await Bun.sleep(300);
   }
 }
@@ -186,33 +160,18 @@ async function report(what: string, why: string | null, jow: Person, harry: Pers
   );
 }
 
-function whose(typed: Here | null, text: string): string | null {
-  if (!typed) return "harry's caret is in no line";
-  if (typed.author !== "harry") return `harry typed into a line by ${JSON.stringify(typed.author)} (${typed.id.slice(0, 6)} ${JSON.stringify(typed.text)})`;
-  if (!typed.text.includes(text)) return `harry's line reads ${JSON.stringify(typed.text)}, not his ${JSON.stringify(text)}`;
+async function wentOut(from: string, text: string): Promise<string | null> {
+  const got = await sentAs(from, text, SETTLE_MS * 4);
+  if (!got.length) return `${from}'s ${JSON.stringify(text)} never went out`;
+  if (got.length > 1) return `${from}'s ${JSON.stringify(text)} went out ${got.length} times`;
+  if (!got[0]!.block?.id) return `${from}'s ${JSON.stringify(text)} went out as a plain message, not a line of the doc`;
   return null;
 }
 
-async function harrySends(what: string, jow: Person, harry: Person, text: string): Promise<void> {
-  await typeIn(harry, text);
-  const typed = await here(harry);
-  await harry.page.keyboard.press(SEND);
-  const wrong = whose(typed, text);
-  const got = typed && !wrong ? await sentAs(typed, SETTLE_MS * 4) : null;
-  const why =
-    wrong ?? (!got ? "harry's line never went out" : got.body.trim() !== typed!.text.trim() ? `harry's line went out as ${JSON.stringify(got.body)}, not ${JSON.stringify(typed!.text)}` : null);
-  await report(what, why, jow, harry);
-}
-
-async function harryPressesEnter(what: string, jow: Person, harry: Person, text: string): Promise<void> {
-  await typeIn(harry, text);
-  const typed = await here(harry);
-  await harry.page.keyboard.press("Enter");
-  const wrong = whose(typed, text);
-  const early = typed && !wrong ? await sentAs(typed, SETTLE_MS) : null;
-  await harry.page.keyboard.press(SEND);
-  const got = typed && !wrong && !early ? await sentAs(typed, SETTLE_MS * 4) : null;
-  const why = wrong ?? (early ? "Enter sent harry's line" : !got ? "harry's line never went out on ⌘↩ after Enter" : null);
+async function bothSend(what: string, jow: Person, harry: Person, mine: string, his: string): Promise<void> {
+  await Promise.all([typeIn(jow, mine), typeIn(harry, his)]);
+  await Promise.all([jow.page.keyboard.press(SEND), harry.page.keyboard.press(SEND)]);
+  const why = (await wentOut("jow", mine)) ?? (await wentOut("harry", his));
   await report(what, why, jow, harry);
 }
 
@@ -232,86 +191,39 @@ try {
   console.log("ok  jow and harry each have #general open, in their own browser");
 
   if (want("enter")) {
-    await startLine(harry);
-    await harryPressesEnter("harry presses Enter: the line stays his draft; ⌘↩ then sends it", jow, harry, "harry so deu enter");
-  }
-
-  if (want("idle")) {
-    await startLine(jow);
-    await Bun.sleep(1500);
-    await startLine(harry);
-    await harrySends("jow sits on an empty line; harry clicks below and sends", jow, harry, "harry com jow parado");
-  }
-
-  if (want("deleted")) {
-    await startLine(jow);
-    await typeIn(jow, "abc");
-    await backspace(jow, 3);
-    await Bun.sleep(1500);
-    await startLine(harry);
-    await harrySends("jow types and deletes his line; harry clicks below and sends", jow, harry, "harry depois do apagado");
+    await composer(harry.page).click();
+    await harry.page.keyboard.type("harry so deu shift enter", { delay: KEY_MS });
+    await harry.page.keyboard.press("Shift+Enter");
+    await harry.page.keyboard.type("e segue", { delay: KEY_MS });
+    const early = await sentAs("harry", "harry so deu shift enter", SETTLE_MS);
+    await harry.page.keyboard.press(SEND);
+    const why = early.length ? "Shift+Enter sent harry's line" : await wentOut("harry", "harry so deu shift enter\ne segue");
+    await report("harry presses Shift+Enter: the line stays his draft; Enter then sends both lines as one", why, jow, harry);
   }
 
   if (want("sent")) {
-    await startLine(jow);
-    await typeIn(jow, "jow manda");
-    await jow.page.keyboard.press(SEND);
-    await startLine(harry);
-    await harrySends("jow sends; harry clicks below at once and sends", jow, harry, "harry logo depois");
+    await bothSend("jow and harry send at the same moment, each from his own composer", jow, harry, "jow manda", "harry logo depois");
   }
 
   if (want("race")) {
     jow.slow.ms = 1500;
     harry.slow.ms = 1500;
-    await Promise.all([startLine(jow), startLine(harry)]);
-    await typeIn(jow, "jow na corrida");
-    await harrySends("both click the end line before either claim syncs (1.5 s lag)", jow, harry, "harry na corrida");
+    await bothSend("both send before either's line syncs (1.5 s lag)", jow, harry, "jow na corrida", "harry na corrida");
     jow.slow.ms = 0;
     harry.slow.ms = 0;
-    await jow.page.keyboard.press(SEND);
   }
 
-  if (want("arrow")) {
-    await startLine(jow);
-    await Bun.sleep(1500);
-    await startLine(harry);
-    await typeIn(harry, "harry em cima");
-    await harry.page.keyboard.press("ArrowUp");
-    await harry.page.keyboard.press("ArrowDown");
-    await harry.page.keyboard.press("ArrowDown");
-    await harry.page.keyboard.press("End");
-    await harrySends("harry arrows around jow's empty line and keeps typing", jow, harry, " e embaixo");
-  }
-
-  if (want("click")) {
-    await startLine(jow);
-    await typeIn(jow, "x");
-    await backspace(jow, 1);
-    await Bun.sleep(1500);
-    const lines = harry.page.locator(".thread-doc section.blk");
-    const n = await lines.count();
-    for (let i = n - 1; i >= 0; i--) {
-      const box = await lines.nth(i).boundingBox();
-      if (!box || box.height === 0) continue;
-      await harry.page.mouse.click(box.x + box.width / 2, box.y + box.height + 4);
-      break;
-    }
-    await harrySends("harry clicks just under the last line he can see and sends", jow, harry, "harry clicou embaixo");
-  }
   if (want("windows")) {
     const more = [await person("jow", BASE, jow), await person("jow", BASE, jow)];
     for (const w of more) await general(w);
-    for (const w of [jow, ...more]) {
-      await startLine(w);
-      await Bun.sleep(700);
-    }
-    await Bun.sleep(1500);
-    await startLine(harry);
-    await harrySends("jow has an empty line in each of 3 windows; harry clicks below and sends", jow, harry, "harry com tres janelas do jow");
-    await startLine(more[0]!);
-    await typeIn(more[0]!, "jow na segunda janela");
-    await startLine(harry);
-    await harrySends("jow types in his 2nd window while harry types and sends", jow, harry, "harry junto da segunda janela");
+    await typeIn(more[0]!, "jow rascunho na segunda janela");
+    await bothSend("jow drafts in his 2nd window while jow and harry send from their first", jow, harry, "jow com tres janelas", "harry com tres janelas do jow");
+    await composer(more[1]!.page).click();
+    await more[1]!.page.keyboard.type("jow na terceira janela", { delay: KEY_MS });
+    await more[1]!.page.keyboard.press(SEND);
+    const draft = await composer(more[0]!.page).inputValue();
+    const why = (await wentOut("jow", "jow na terceira janela")) ?? (draft === "jow rascunho na segunda janela" ? null : `the 2nd window's draft reads ${JSON.stringify(draft)}`);
+    await report("jow sends from his 3rd window; his 2nd window keeps its own draft", why, jow, harry);
   }
 } finally {
   await browser.close();
@@ -320,6 +232,6 @@ try {
 }
 for (const e of errors.slice(0, 5)) console.log(`✗ page error: ${e}`);
 if (failed || errors.length) {
-  console.error(`${failed} times harry's line wasn't his or didn't go out, in ${ENGINE}`);
+  console.error(`${failed} times a line didn't go out once, as its sender's line of the doc, in ${ENGINE}`);
   process.exitCode = 1;
 }
