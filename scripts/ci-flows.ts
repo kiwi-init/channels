@@ -31,3 +31,15 @@ export const FLOWS: string[] = [
   "daemon-admits",
   "old-room-history",
 ];
+
+export const MAC: string[] = [
+  "desktop-app-life",
+  "desktop-eb-bundle",
+  "desktop-update-blocked",
+  "desktop-update-failures",
+  "desktop-update-mac-home",
+  "desktop-update-stall",
+  "install",
+  "wake-tmux",
+  "loop-flows",
+];

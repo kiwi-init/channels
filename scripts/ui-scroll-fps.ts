@@ -16,7 +16,7 @@ them, how long the feed takes to show, and the frames after sending a message at
 
 Without --dist it builds ui/ into a temporary folder first. --css adds a stylesheet before measuring, to try a change without
 a rebuild. --check fails when the page throws, renders the whole history at once or keeps hundreds of rows on a long fling,
-or the content jumps while scrolling; it never fails on timings. WebKit is the engine of the Mac and Linux apps: bunx playwright-core install webkit.`);
+or the content jumps while scrolling; it never fails on timings, so it skips the timed runs and only scrolls once to look. WebKit is the engine of the Mac and Linux apps: bunx playwright-core install webkit.`);
   process.exit(0);
 }
 
@@ -34,6 +34,7 @@ const css = flag("--css");
 const HZ = Number(flag("--hz") ?? 120);
 const BUDGET = 1000 / HZ;
 const check = process.argv.includes("--check");
+const TIMED = check ? 0 : RUNS;
 
 const scratch = mkdtempSync(join(tmpdir(), "kiwi-ui-scroll-"));
 let dist = flag("--dist") ? resolve(flag("--dist") ?? "") : "";
@@ -253,7 +254,7 @@ try {
   const runs: Frames[] = [];
   const flings: Frames[] = [];
   const fars: Frames[] = [];
-  for (let i = 0; i < RUNS; i++) {
+  for (let i = 0; i < TIMED; i++) {
     idles.push(await scroll(page, [{ dy: 0, frames: 180 }]));
     runs.push(await scroll(page, trackpad));
     flings.push(await scroll(page, fling));
@@ -261,18 +262,20 @@ try {
     await page.waitForTimeout(300);
   }
   const jumps = [await scroll(page, trackpad, true), await scroll(page, fling, true), await scroll(page, far, true)];
-  report.idle = stats(idles, longOn);
-  report.trackpad = stats(runs, longOn);
-  report.fling = stats(flings, longOn);
-  report.flingFar = stats(fars, longOn);
-  report.mostRows = Math.max(...fars.map((f) => f.most));
+  if (TIMED) {
+    report.idle = stats(idles, longOn);
+    report.trackpad = stats(runs, longOn);
+    report.fling = stats(flings, longOn);
+    report.flingFar = stats(fars, longOn);
+  }
+  report.mostRows = Math.max(...[...fars, ...jumps].map((f) => f.most));
   report.jumps = jumps.flatMap((f) => f.jumps).length;
   report.jumpMax = round(Math.max(0, ...jumps.flatMap((f) => f.jumps)));
 
   const sends: Frames[] = [];
   const sendsUp: Frames[] = [];
   await page.locator(".main .thread-doc .doc-tail").click();
-  for (let i = 0; i < RUNS; i++) {
+  for (let i = 0; i < Math.max(TIMED, 1); i++) {
     await page.evaluate(() => document.querySelector(".main .feed")?.scrollTo({ top: 1e9 }));
     await page.waitForTimeout(200);
     await page.keyboard.type(`perf send ${i}`);

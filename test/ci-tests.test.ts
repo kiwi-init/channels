@@ -9,14 +9,14 @@ afterAll(() => {
   for (const d of dirs) rmSync(d, { recursive: true, force: true });
 });
 
-function project(tests: Record<string, string>, flows: string[]): string {
+function project(tests: Record<string, string>, flows: string[], mac: string[] = []): string {
   const dir = mkdtempSync(join(tmpdir(), "kiwi-ci-tests-"));
   dirs.push(dir);
   mkdirSync(join(dir, "scripts"));
   mkdirSync(join(dir, "test"));
   copyFileSync(join(SCRIPTS, "ci-tests.ts"), join(dir, "scripts", "ci-tests.ts"));
   copyFileSync(join(SCRIPTS, "ci-watchdog.ts"), join(dir, "scripts", "ci-watchdog.ts"));
-  writeFileSync(join(dir, "scripts", "ci-flows.ts"), `export const FLOWS: string[] = ${JSON.stringify(flows)};\n`);
+  writeFileSync(join(dir, "scripts", "ci-flows.ts"), `export const FLOWS: string[] = ${JSON.stringify(flows)};\nexport const MAC: string[] = ${JSON.stringify(mac)};\n`);
   for (const [name, body] of Object.entries(tests)) writeFileSync(join(dir, "test", `${name}.test.ts`), `import { expect, test } from "bun:test";\n${body}\n`);
   return dir;
 }
@@ -35,11 +35,12 @@ async function runWith(env: Record<string, string>, dir: string, ...args: string
 const passing = `test("adds", () => expect(1 + 1).toBe(2));`;
 
 describe("scripts/ci-tests.ts", () => {
-  test("all runs every file, unit leaves the flows out, flows runs only them, and anything else is refused", async () => {
-    const dir = project({ a: passing, b: passing, c: passing }, ["c"]);
+  test("all runs every file, unit leaves the flows out, flows runs only them, mac only its own list, and anything else is refused", async () => {
+    const dir = project({ a: passing, b: passing, c: passing }, ["c"], ["a", "c"]);
     expect((await run(dir, "all")).err).toContain("across 3 files.");
     expect((await run(dir, "unit")).err).toContain("across 2 files.");
     expect((await run(dir, "flows")).err).toContain("across 1 file.");
+    expect((await run(dir, "mac")).err).toContain("across 2 files.");
     expect((await run(dir, "flows-a")).code).toBe(2);
     expect((await run(dir, "all", "--shard=1/2")).code).toBe(2);
   }, 30_000);

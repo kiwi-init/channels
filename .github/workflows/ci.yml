@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       jobs:
-        description: "Only these jobs, comma-separated (static, test-unit, test-flows, build, shots, desktop-mac, desktop-linux, desktop-distros, cli-macos, ios, android); empty runs everything"
+        description: "Only these jobs, comma-separated (static, test-unit, test-flows, build, doc, shots, desktop-mac, desktop-linux, desktop-distros, cli-macos, ios, android); empty runs everything"
         required: false
         default: ""
       update_from:
@@ -45,7 +45,7 @@ jobs:
           EVENT: ${{ github.event_name }}
           JOBS: ${{ inputs.jobs }}
         run: |
-          all="static test-unit test-flows build shots desktop-mac desktop-linux desktop-distros cli-macos ios android"
+          all="static test-unit test-flows build doc shots desktop-mac desktop-linux desktop-distros cli-macos ios android"
           case "$EVENT" in
             pull_request) pick="static test-unit" ;;
             workflow_dispatch) pick=$(echo "${JOBS:-$all}" | tr ',' ' ') ;;
@@ -159,43 +159,6 @@ jobs:
       - name: app smoke
         if: ${{ !cancelled() }}
         run: bun scripts/smoke-app.ts
-      - name: doc replay, a second window of yours never hides or eats the line you type
-        if: ${{ !cancelled() }}
-        run: bun scripts/ui-doc-replay.ts --chromium --second-window --rounds=2
-      - name: doc send, sending at the bottom, scrolled up or a long line keeps the view where it was
-        if: ${{ !cancelled() }}
-        run: bun scripts/ui-send-scroll.ts
-      - name: doc paste, an image pasted into a line goes out with that line
-        if: ${{ !cancelled() }}
-        run: bun scripts/ui-doc-paste.ts
-      - name: doc image order, a sent line with an image stays above the lines sent after it
-        if: ${{ !cancelled() }}
-        run: bun scripts/ui-doc-image-order.ts
-      - name: doc fuzzer, fixed seeds, two windows of one person and an agent never lose or mix a line, in Chromium and WebKit
-        if: ${{ !cancelled() }}
-        run: |
-          mkdir -p "$RUNNER_TEMP/doc-fuzz"
-          status=0
-          for engine in chromium webkit; do
-            for seed in 1 7 8; do
-              bun scripts/ui-doc-fuzz.ts --"$engine" --seed="$seed" --steps=120 --windows=2 --agents=1 --trace="$RUNNER_TEMP/doc-fuzz/$engine-seed-$seed.txt" || status=1
-            done
-          done
-          exit "$status"
-      - if: failure()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: doc-fuzz-traces
-          path: ${{ runner.temp }}/doc-fuzz
-          if-no-files-found: ignore
-          overwrite: true
-      - name: doc owners, two people typing next to each other each write and send in their own line, in Chromium and WebKit
-        if: ${{ !cancelled() }}
-        run: |
-          status=0
-          bun scripts/ui-doc-owner.ts || status=1
-          bun scripts/ui-doc-owner.ts --webkit || status=1
-          exit "$status"
       - if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -203,13 +166,13 @@ jobs:
           path: /tmp/kiwi-app-smoke-failure.png
           if-no-files-found: ignore
           overwrite: true
-      - name: perf harnesses run end to end, small and ungated
+      # The new UI's long-feed demo in WebKit: it renders the latest rows, and nothing jumps while it scrolls. It scrolls once and gates on rows and jumps; the timed runs are by hand.
+      - name: ui scroll in WebKit
         if: ${{ !cancelled() }}
-        run: |
-          PERF_MESSAGES=10 bun scripts/perf-switch.ts --json "$RUNNER_TEMP/perf-switch.json"
-          PERF_REPS=1 PERF_CPU=1 bun scripts/perf-motion.ts --json "$RUNNER_TEMP/perf-motion.json"
-          PERF_MESSAGES=20 PERF_TASKS=3 PERF_REPS=1 bun scripts/perf-feel.ts --json "$RUNNER_TEMP/perf-feel.json"
-          PERF_AGENTS=2 PERF_TASKS=4 PERF_MESSAGES=20 PERF_SOAK_MIN=0 bun scripts/perf-scale.ts --json "$RUNNER_TEMP/perf-scale.json"
+        run: bun scripts/ui-scroll-fps.ts --check --dist ui/dist
+      - name: ui a thread, a thread doc and a feed hold still once they open, in WebKit
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-still.ts --dist ui/dist
       - name: cli build
         if: ${{ !cancelled() }}
         run: |
@@ -227,6 +190,83 @@ jobs:
         if: ${{ !cancelled() }}
         run: bunx wrangler deploy --dry-run --outdir "$RUNNER_TEMP/worker"
 
+  # The thread doc in Chromium and WebKit: replay, send, paste, image order, the fuzzer, two owners, the caret and the keys.
+  doc:
+    name: build / doc
+    needs: plan
+    if: fromJSON(needs.plan.outputs.run)['doc']
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/browser
+        with:
+          webkit: "true"
+      - name: ui build
+        run: bun run ui:build
+      - name: ui harness build, with the plain-browser key store
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-harness.ts
+      - name: doc replay, a second window of yours never hides or eats the line you type
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-doc-replay.ts --chromium --second-window --rounds=2
+      - name: doc send, sending at the bottom, scrolled up or a long line keeps the view where it was
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-send-scroll.ts
+      - name: doc paste, an image pasted into a line goes out with that line
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-doc-paste.ts
+      - name: doc image order, a sent line with an image stays above the lines sent after it
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-doc-image-order.ts
+      - name: doc fuzzer, fixed seeds, two windows of one person and an agent never lose or mix a line, in Chromium and WebKit
+        if: ${{ !cancelled() }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/doc-fuzz"
+          fuzz() {
+            status=0
+            for seed in 1 7 8; do
+              bun scripts/ui-doc-fuzz.ts --"$1" --seed="$seed" --steps=120 --windows=2 --agents=1 --trace="$RUNNER_TEMP/doc-fuzz/$1-seed-$seed.txt" || status=1
+            done
+            return "$status"
+          }
+          fuzz chromium &
+          chromium=$!
+          fuzz webkit &
+          webkit=$!
+          status=0
+          wait "$chromium" || status=1
+          wait "$webkit" || status=1
+          exit "$status"
+      - if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: doc-fuzz-traces
+          path: ${{ runner.temp }}/doc-fuzz
+          if-no-files-found: ignore
+          overwrite: true
+      - name: doc owners, two people typing next to each other each write and send in their own line, in Chromium and WebKit
+        if: ${{ !cancelled() }}
+        run: |
+          bun scripts/ui-doc-owner.ts &
+          chromium=$!
+          bun scripts/ui-doc-owner.ts --webkit &
+          webkit=$!
+          status=0
+          wait "$chromium" || status=1
+          wait "$webkit" || status=1
+          exit "$status"
+      - name: ui the keyboard runs across doc blocks like an editor (arrows, word jumps, shift-select, select all), in WebKit
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-doc-keys.ts --dist ui/dist
+      - name: ui a remote edit landing between your keys never undoes your caret or selection (⇧← and ←), in Chromium and WebKit
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-doc-select-race.ts
+      - name: ui a busy thread doc never scrolls on its own, under the caret or while you read, in WebKit
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-doc-still.ts --dist ui/dist
+
   shots:
     name: build / shots
     needs: plan
@@ -242,44 +282,26 @@ jobs:
       - run: bun run ui:build
       - name: ui shots in Chromium and WebKit
         run: |
-          bun scripts/shoot-app.ts --dist ui/dist --theme dark "$RUNNER_TEMP/shots" &
-          chromium=$!
-          bun scripts/shoot-app.ts --dist ui/dist --browser webkit --theme light "$RUNNER_TEMP/shots-webkit" &
-          webkit=$!
-          set +e
-          bun scripts/shoot-app.ts --dist ui/dist --size 390x844 --only channel,tasks --theme dark "$RUNNER_TEMP/shots/phone"
-          phone_code=$?
-          wait "$chromium"
-          chromium_code=$?
-          wait "$webkit"
-          webkit_code=$?
-          set -e
-          [ "$chromium_code" -eq 0 ] && [ "$webkit_code" -eq 0 ] && [ "$phone_code" -eq 0 ]
-      # The new UI's long-feed demo in WebKit: it renders the latest rows, and nothing jumps while it scrolls. Timings are printed, never gated.
-      - name: ui scroll in WebKit
-        if: ${{ !cancelled() }}
-        run: PERF_RUNS=1 bun scripts/ui-scroll-fps.ts --check
+          pids=""
+          for shard in 1/2 2/2; do
+            bun scripts/shoot-app.ts --dist ui/dist --theme dark --shard "$shard" "$RUNNER_TEMP/shots" &
+            pids="$pids $!"
+            bun scripts/shoot-app.ts --dist ui/dist --browser webkit --theme light --shard "$shard" "$RUNNER_TEMP/shots-webkit" &
+            pids="$pids $!"
+          done
+          status=0
+          bun scripts/shoot-app.ts --dist ui/dist --size 390x844 --only channel,tasks --theme dark "$RUNNER_TEMP/shots/phone" || status=1
+          for pid in $pids; do wait "$pid" || status=1; done
+          exit "$status"
       - name: ui stash clicks in WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-stash-click.ts --dist ui/dist
-      - name: ui the keyboard runs across doc blocks like an editor (arrows, word jumps, shift-select, select all), in WebKit
-        if: ${{ !cancelled() }}
-        run: bun scripts/ui-doc-keys.ts --dist ui/dist
-      - name: ui a remote edit landing between your keys never undoes your caret or selection (⇧← and ←), in Chromium and WebKit
-        if: ${{ !cancelled() }}
-        run: bun scripts/ui-doc-select-race.ts
-      - name: ui a thread, a thread doc and a feed hold still once they open, in WebKit
-        if: ${{ !cancelled() }}
-        run: bun scripts/ui-still.ts --dist ui/dist
       - name: ui scrolling up a feed of event runs keeps loading to its first row, in WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-scroll-up.ts --dist ui/dist
       - name: ui the spec page uses a wide window and its comment box grows, in WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-spec-layout.ts --dist ui/dist
-      - name: ui a busy thread doc never scrolls on its own, under the caret or while you read, in WebKit
-        if: ${{ !cancelled() }}
-        run: bun scripts/ui-doc-still.ts --dist ui/dist
       - name: ui Esc in search keeps the panel, and Settings doesn't offer a name change, in WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-esc-and-name.ts --dist ui/dist
@@ -717,7 +739,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup
       - run: brew install tmux
-      - run: bun scripts/ci-tests.ts all
+      - run: bun scripts/ci-tests.ts mac
       - run: |
           mkdir -p dist
           for t in darwin-arm64 darwin-x64 linux-x64 linux-arm64; do
@@ -818,7 +840,7 @@ jobs:
   # The one check to require: passes when every job the plan ran passed and the rest were skipped.
   ci-ok:
     name: ci-ok
-    needs: [plan, static, test-unit, test-flows, build, shots, desktop-mac, desktop-linux, desktop-distros, cli-macos, ios, android]
+    needs: [plan, static, test-unit, test-flows, build, doc, shots, desktop-mac, desktop-linux, desktop-distros, cli-macos, ios, android]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 2

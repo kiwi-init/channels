@@ -27,12 +27,17 @@ const engine = flag("--browser") ?? "chromium";
 const size = (flag("--size") ?? "1440x900").split("x").map(Number);
 const only = flag("--only")?.split(",").filter(Boolean);
 const textScale = flag("--text-scale");
+const [shard = 1, shards = 1] = (flag("--shard") ?? "1/1").split("/").map(Number);
+if (!(shards >= 1 && shard >= 1 && shard <= shards)) throw new Error("--shard is i/n, with 1 <= i <= n");
 const out = resolve(args[0] ?? "shots");
 mkdirSync(out, { recursive: true });
 
 const page0 = server ? readFileSync(resolve(import.meta.dir, "../ui/src/demo/shots.ts"), "utf8") : await fetch(new URL("/src/demo/shots.ts", base)).then((r) => r.text());
 const block = page0.slice(page0.search(/SHOTS\b[^=]*= \{/));
-const names = [...block.matchAll(/^(?:\t| {2})"?([\w-]+)"?:/gm)].map((m) => m[1] as string).filter((n) => !only || only.includes(n));
+const names = [...block.matchAll(/^(?:\t| {2})"?([\w-]+)"?:/gm)]
+  .map((m) => m[1] as string)
+  .filter((n) => !only || only.includes(n))
+  .filter((_, i) => i % shards === shard - 1);
 
 const browser = engine === "webkit" ? await webkit.launch() : await chromium.launch({ executablePath: process.env.SMOKE_CHROMIUM || undefined });
 try {
