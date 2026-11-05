@@ -199,7 +199,7 @@ jobs:
         if: ${{ !cancelled() }}
         run: bunx wrangler deploy --dry-run --outdir "$RUNNER_TEMP/worker"
 
-  # The thread doc in Chromium and WebKit, written from the composer: replay, send, follow, image order, steady and a busy doc holding still.
+  # The thread doc in Chromium and WebKit, written from the composer: replay, send, follow, image order, steady, a busy doc holding still and what the composer keeps from writing in the doc.
   doc:
     name: build / doc
     needs: plan
@@ -249,6 +249,17 @@ jobs:
       - name: ui a busy thread doc never scrolls on its own, under the composer or while you read, in WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-doc-still.ts --dist ui/dist
+      - name: composer in a doc, late refusals keep the draft, PDFs, Edit in the composer, slow pasted images, the / menu and ⌘Enter, in Chromium and WebKit
+        if: ${{ !cancelled() }}
+        run: |
+          bun scripts/ui-composer-doc.ts &
+          chromium=$!
+          bun scripts/ui-composer-doc.ts --webkit &
+          webkit=$!
+          status=0
+          wait "$chromium" || status=1
+          wait "$webkit" || status=1
+          exit "$status"
 
   # The thread doc's fuzzer and two owners sending side by side, each in Chromium and WebKit at once.
   fuzz:
