@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -169,6 +169,25 @@ describe("the app's mods", () => {
     expect(config('[kiwi]\n\tsource = "https://example.com/a b#c"\n')).toBe("https://example.com/a b#c");
     expect(config('[kiwi "other"]\n\tsource = not/this\n[kiwi]\n\tref = main\n')).toBe("local");
     expect(config("[kiwi]\n\tsource = first/one\n[kiwi]\n\tsource = last/one\n")).toBe("last/one");
+  });
+
+  test("a mod kiwi mod add copied out of a repo of many takes its source from .sources.json, and a kiwi mod dev link is local", () => {
+    const mods = mkdtempSync(join(tmpdir(), "kiwi-mod-copies-"));
+    roots.push(mods);
+    mkdirSync(join(mods, "lint"));
+    expect(modSource(join(mods, "lint"))).toBe("local");
+    writeFileSync(join(mods, ".sources.json"), JSON.stringify({ lint: { source: "github.com/a/many/lint", commit: "abc" } }));
+    expect(modSource(join(mods, "lint"))).toBe("github.com/a/many/lint");
+    writeFileSync(join(mods, ".sources.json"), JSON.stringify({ lint: { source: "github.com/b/many/lint" } }));
+    expect(modSource(join(mods, "lint"))).toBe("github.com/b/many/lint");
+    writeFileSync(join(mods, ".sources.json"), "not json");
+    expect(modSource(join(mods, "lint"))).toBe("local");
+    const real = mkdtempSync(join(tmpdir(), "kiwi-mod-dev-"));
+    roots.push(real);
+    mkdirSync(join(real, ".git"));
+    writeFileSync(join(real, ".git", "config"), "[kiwi]\n\tsource = someone/else\n");
+    symlinkSync(real, join(mods, "dev"));
+    expect(modSource(join(mods, "dev"))).toBe("local");
   });
 
   test("a mod that fails as it starts is off with its reason, until its code changes or the person switches it on", async () => {

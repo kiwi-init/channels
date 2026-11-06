@@ -41,6 +41,7 @@ interface ModsFile {
 }
 
 const LOCAL_SOURCE = "local";
+const COPIES = ".sources.json";
 const LOOP_STARTS = 2;
 const WHY_BYTES = 300;
 
@@ -90,13 +91,26 @@ function configValue(raw: string): string {
   return out.trim();
 }
 
+function copySource(dir: string): string {
+  try {
+    const copies = JSON.parse(fs.readFileSync(path.join(path.dirname(dir), COPIES), "utf8")) as unknown;
+    const copy = copies && typeof copies === "object" ? (copies as Record<string, unknown>)[path.basename(dir)] : null;
+    const source = copy && typeof copy === "object" ? (copy as { source?: unknown }).source : null;
+    return typeof source === "string" && source ? source : LOCAL_SOURCE;
+  } catch {
+    // No mod was copied out of a repo of many, or the file isn't kiwi mod add's: the folder counts as local.
+    return LOCAL_SOURCE;
+  }
+}
+
 export function modSource(dir: string): string {
+  if (fs.lstatSync(dir, { throwIfNoEntry: false })?.isSymbolicLink()) return LOCAL_SOURCE;
   let text: string;
   try {
     text = fs.readFileSync(path.join(dir, ".git", "config"), "utf8");
   } catch {
-    // Not a clone kiwi mod add made (copied in by hand, or a kiwi mod dev folder): it counts as local.
-    return LOCAL_SOURCE;
+    // Not a clone kiwi mod add made: a copy it took from a repo of many, or a folder put there by hand.
+    return copySource(dir);
   }
   let inKiwi = false;
   let source = "";
