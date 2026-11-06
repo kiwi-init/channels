@@ -123,6 +123,22 @@ function update(name: string, patch: Partial<RunningMod>): void {
   changed()
 }
 
+const sizes = new Map<string, number>()
+let sizing = 0
+
+function takeSizes(): void {
+  sizing = 0
+  let moved = false
+  for (const [name, height] of sizes) {
+    const now = state.running.get(name)
+    if (!now?.side || now.side.height === height || !slots.get(keyOf(name, "sidebar"))?.getClientRects().length) continue
+    state.running.set(name, { ...now, side: { ...now.side, height } })
+    moved = true
+  }
+  sizes.clear()
+  if (moved) changed()
+}
+
 async function onMessage(e: MessageEvent): Promise<void> {
   const f = [...frames.values()].find((x) => x.el.contentWindow === e.source)
   const m = f ? fromFrame(e.data) : null
@@ -156,11 +172,10 @@ async function onMessage(e: MessageEvent): Promise<void> {
     case "sidebar":
       update(name, { side: { title: m.title, height: state.running.get(name)?.side?.height ?? SIDE_HEIGHT.min } })
       return
-    case "size": {
-      const side = state.running.get(name)?.side
-      if (side && slots.get(keyOf(name, "sidebar"))?.getClientRects().length) update(name, { side: { ...side, height: m.height } })
+    case "size":
+      sizes.set(name, m.height)
+      sizing ||= requestAnimationFrame(takeSizes)
       return
-    }
     case "fetch": {
       const reply: ToFrame = await b.modFetch(name, { url: m.url, ...m.init }).then(
         (value) => ({ kiwi: MOD_PROTOCOL, type: "reply", id: m.id, ok: true, value }),
