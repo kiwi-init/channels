@@ -46,7 +46,7 @@ function treeOf(text: string): Tree {
 
 export const spansOf = (text: string): Span[] => treeOf(text).spans;
 
-function found(text: string, nicknames: ReadonlyMap<string, string>, before?: number): Found[] {
+export function hitsIn(text: string, nicknames: ReadonlyMap<string, string>, before?: number): Found[] {
   const labelOf = (name: string) => nicknames.get(name) ?? nicknames.get(name.toLowerCase());
   const { spans, images: pictures } = treeOf(text);
   const hits: Found[] = pictures.map((p) => ({ kind: "image", ...p }));
@@ -78,7 +78,7 @@ function found(text: string, nicknames: ReadonlyMap<string, string>, before?: nu
 export function swap(text: string, nicknames: ReadonlyMap<string, string>, out: (hit: Found) => string | null, before?: number): string {
   let result = "";
   let from = 0;
-  for (const hit of found(text, nicknames, before)) {
+  for (const hit of hitsIn(text, nicknames, before)) {
     const said = out(hit);
     if (said === null) continue;
     result += text.slice(from, hit.start) + said;

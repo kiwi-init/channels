@@ -5,7 +5,8 @@ import type { Color } from "@kiwi/core/protocol.ts"
 import { Swatches } from "~/kit/swatches"
 
 import { PrChip, TaskChip } from "~/chat/cards"
-import { wordsPlain } from "~/words"
+import { wordsPlain, wordsRaw } from "~/words"
+import { InlineText } from "~/chat/inline-text"
 import QuestionCard from "~/chat/question-card"
 import type { Jump } from "~/chat/search-box"
 import { Avatar, Loading } from "~/kit/bits"
@@ -284,7 +285,9 @@ function QuestionAskCard({ channel, ask, link }: { channel: Channel; ask: Questi
       at={ask.at}
       link={link}
     >
-      <p className="needs-text">{wordsPlain(ask.text, channel.nicknames)}</p>
+      <p className="needs-text">
+        <InlineText text={wordsRaw(ask.text)} channel={channel} before={Number(ask.id)} />
+      </p>
       {askedOf && <p className="needs-line">You can answer too: the first answer counts.</p>}
       <QuestionCard channel={channel} ask={ask} />
       {holds.length > 0 && <Holds channel={channel} ids={holds} />}
