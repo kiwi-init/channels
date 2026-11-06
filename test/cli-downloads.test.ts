@@ -22,13 +22,15 @@ function check(dir: string) {
 
 const raw = Object.fromEntries(TARGETS.map((t) => [t, 80_000_000]));
 
-test("every CLI download within 40 MB, counting the smaller of .xz and .gz, passes", () => {
+const packed = { "kiwi-darwin-arm64": 24_000_000, "kiwi-darwin-x64": 31_000_000, "kiwi-linux-x64": 38_000_000, "kiwi-linux-arm64": 33_000_000 };
+
+test("every CLI download within its target's budget, counting the smaller of .xz and .gz, passes", () => {
   const dir = release({
     ...raw,
     ...Object.fromEntries(
       TARGETS.flatMap((t) => [
         [`${t}.gz`, 45_000_000],
-        [`${t}.xz`, 38_000_000],
+        [`${t}.xz`, packed[t as keyof typeof packed]],
       ]),
     ),
   });
@@ -36,18 +38,19 @@ test("every CLI download within 40 MB, counting the smaller of .xz and .gz, pass
     const r = check(dir);
     expect(r.code).toBe(0);
     expect(r.out).toContain("kiwi-linux-x64.xz: 38.0 MB (from 80.0 MB)");
+    expect(r.out).toContain("kiwi-darwin-arm64.xz: 24.0 MB (from 80.0 MB)");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 });
 
-test("a download over 40 MB, or a binary with no compressed download, fails", () => {
-  const over = release({ ...raw, ...Object.fromEntries(TARGETS.map((t) => [`${t}.gz`, t === "kiwi-linux-arm64" ? 41_000_000 : 20_000_000])) });
+test("a download over its target's budget, or a binary with no compressed download, fails", () => {
+  const over = release({ ...raw, ...Object.fromEntries(TARGETS.map((t) => [`${t}.xz`, t === "kiwi-darwin-arm64" ? 26_000_000 : 20_000_000])) });
   const missing = release({ ...raw, ...Object.fromEntries(TARGETS.filter((t) => t !== "kiwi-darwin-x64").map((t) => [`${t}.gz`, 20_000_000])) });
   try {
     const a = check(over);
     expect(a.code).toBe(1);
-    expect(a.out).toContain("kiwi-linux-arm64.gz: 41.0 MB (from 80.0 MB), over the 40.0 MB budget");
+    expect(a.out).toContain("kiwi-darwin-arm64.xz: 26.0 MB (from 80.0 MB), over its 25.0 MB budget");
     const b = check(missing);
     expect(b.code).toBe(1);
     expect(b.out).toContain("kiwi-darwin-x64: no compressed download next to it");

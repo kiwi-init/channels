@@ -1,15 +1,19 @@
 import { readdirSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 
-const BUDGET_BYTES = 40_000_000;
-const TARGETS = ["kiwi-darwin-arm64", "kiwi-darwin-x64", "kiwi-linux-x64", "kiwi-linux-arm64"] as const;
+const BUDGETS = {
+  "kiwi-darwin-arm64": 25_000_000,
+  "kiwi-darwin-x64": 32_000_000,
+  "kiwi-linux-x64": 39_000_000,
+  "kiwi-linux-arm64": 34_000_000,
+} as const;
 
 const dir = resolve(process.argv[2] ?? "dist");
 const files = new Set(readdirSync(dir));
 const mb = (n: number) => `${(n / 1_000_000).toFixed(1)} MB`;
 
 let over = false;
-for (const target of TARGETS) {
+for (const [target, budget] of Object.entries(BUDGETS)) {
   if (!files.has(target)) {
     console.error(`${target}: not built in ${dir}`);
     over = true;
@@ -22,8 +26,8 @@ for (const target of TARGETS) {
     over = true;
     continue;
   }
-  const fits = smallest.bytes <= BUDGET_BYTES;
-  console.log(`${smallest.name}: ${mb(smallest.bytes)} (from ${mb(statSync(join(dir, target)).size)})${fits ? "" : `, over the ${mb(BUDGET_BYTES)} budget`}`);
+  const fits = smallest.bytes <= budget;
+  console.log(`${smallest.name}: ${mb(smallest.bytes)} (from ${mb(statSync(join(dir, target)).size)})${fits ? "" : `, over its ${mb(budget)} budget`}`);
   if (!fits) over = true;
 }
 if (over) process.exit(1);
