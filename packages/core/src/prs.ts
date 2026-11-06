@@ -1,7 +1,7 @@
 import { inlineText } from "./membership.ts";
 import { REVIEW_CHECK } from "./protocol.ts";
 import type { Task } from "./state/types.ts";
-import { prChecks, releaseOf, rulesOf, type ChannelState, type GithubPr } from "./state.ts";
+import { prChecks, prKey, releaseOf, rulesOf, type ChannelState, type GithubPr, type GithubState } from "./state.ts";
 
 export interface PrChecks {
   passed: number;
@@ -45,16 +45,33 @@ type TaskPr = { pr: GithubPr; checks?: PrChecks };
 
 const prIndexes = new WeakMap<ChannelState["github"], Map<number, TaskPr>>();
 
+const rankPr = (p: GithubPr): number => (p.state === "open" ? 1 : 0);
+
+const betterPr = (p: GithubPr, held: GithubPr | undefined): boolean => !held || rankPr(p) > rankPr(held) || (rankPr(p) === rankPr(held) && p.at > held.at);
+
+export function proofPr(github: GithubState, t: Pick<Task, "proof">): GithubPr | undefined {
+  for (const p of [...(t.proof ?? [])].reverse())
+    for (const l of prLinks(p.url)) {
+      const pr = github.prs.get(prKey(l.repo, l.number));
+      if (pr) return pr;
+    }
+  return undefined;
+}
+
+export function prOfTask(github: GithubState, prefix: string | null, t: Pick<Task, "id" | "proof">): GithubPr | undefined {
+  let best: GithubPr | undefined;
+  for (const p of github.prs.values()) if (taskOfBranch(p.branch, prefix) === t.id && betterPr(p, best)) best = p;
+  return best ?? proofPr(github, t);
+}
+
 function taskPrIndex(state: ChannelState): Map<number, TaskPr> {
   const known = prIndexes.get(state.github);
   if (known) return known;
-  const rank = (p: GithubPr) => (p.state === "open" ? 1 : 0);
   const best = new Map<number, GithubPr>();
   for (const p of state.github.prs.values()) {
     const id = taskOfBranch(p.branch, state.branchPrefix);
     if (id === null) continue;
-    const held = best.get(id);
-    if (!held || rank(p) > rank(held) || (rank(p) === rank(held) && p.at > held.at)) best.set(id, p);
+    if (betterPr(p, best.get(id))) best.set(id, p);
   }
   const index = new Map<number, TaskPr>();
   for (const [id, pr] of best) {

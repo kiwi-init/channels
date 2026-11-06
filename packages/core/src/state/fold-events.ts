@@ -18,7 +18,7 @@ import { free, take } from "./leases.ts";
 import { unnamedTasks } from "./compact.ts";
 import { leadCheckpointKeyRefusal } from "./lead.ts";
 import { addRelease, applyGithub, dropRelease, prKey, repoKey, type GithubState } from "./github.ts";
-import { prLinks, taskOfBranch } from "../prs.ts";
+import { prLinks, prOfTask, taskOfBranch } from "../prs.ts";
 import { recordedRuns } from "../review-check.ts";
 import { sameHead } from "../stage.ts";
 import { reposOf } from "./repos.ts";
@@ -89,16 +89,8 @@ function membersOnly(c: FoldCtx, member: FoldMember, m: Message, ev: { members: 
 const runsOf = (runs: number[]): { runs?: number[] } => (runs.length ? { runs } : {});
 
 function runsAtHead(c: FoldCtx, t: Task, at: string | undefined): number[] {
-  if (!at) return [];
-  const prs = [...c.github.prs.entries()];
-  const byBranch = prs.find(([, pr]) => taskOfBranch(pr.branch, c.branchPrefix) === t.id)?.[1];
-  const byProof = [...(t.proof ?? [])]
-    .reverse()
-    .flatMap((p) => prLinks(p.url))
-    .map((l) => c.github.prs.get(prKey(l.repo, l.number)))
-    .find((pr) => pr !== undefined);
-  const repo = (byBranch ?? byProof)?.repo;
-  return repo ? recordedRuns(c.github, repo, at) : [];
+  const repo = at ? prOfTask(c.github, c.branchPrefix, t)?.repo : undefined;
+  return repo && at ? recordedRuns(c.github, repo, at) : [];
 }
 
 export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember, at: number, reject: (why: string) => void): void {

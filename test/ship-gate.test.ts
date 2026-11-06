@@ -101,6 +101,18 @@ describe("the ship gate (#623 §4)", () => {
     expect(shipGate(s, s.tasks.get(t)!)).toEqual({ open: true });
   });
 
+  test("the approval snapshots CI from the same PR the gate checks: the open one, not an older merged one in another repo", async () => {
+    const c = await landingChannel();
+    const t = await c.task();
+    await c.github([{ repo: "old/repo", event: "pull_request", action: "closed", number: 3, state: "closed", merged: true, branch: `T${t}-old`, sha: S2 }]);
+    await c.pr(9, S1, t);
+    await c.ci(S1, 11, "failure");
+    await c.approve(t, S1);
+    const s = c.state();
+    expect(s.tasks.get(t)!.rounds.at(-1)!.result).toMatchObject({ kind: "approved", runs: [11] });
+    expect(shipGate(s, s.tasks.get(t)!)).toEqual({ open: false, rejected: false, missing: ["CI run 11 (failure)"] });
+  });
+
   test("reopening a landing task for review shuts the gate, so it posts waiting first", async () => {
     const c = await landingChannel();
     await c.ev("jow", { op: "repos.set", repos: [R] });
