@@ -11,12 +11,12 @@ interface Step {
 }
 
 const BUDGET = {
-  brief: 4_400,
+  brief: 3_700,
   shortHelp: 1_250,
   oneCommandHelp: 1_700,
   wrappingPerMessage: 40,
   everyday: 300,
-  status: 800,
+  status: 850,
   busyTurn: 600,
 } as const;
 
