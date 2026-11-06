@@ -21,7 +21,7 @@ the phone verifies and decrypts exactly as the Mac does. Swift asks it things wi
 handler: a `RoomView` per channel, ready to draw, and the saved keys whenever they change,
 which `Vault.swift` keeps in the keychain.
 
-A phone signs in as one of your devices (`docs/linked-devices.md` §2): Sign In opens the relay's
+A phone signs in as one of your devices (`docs/plans/linked-devices.md` §2): Sign In opens the relay's
 sign-in in Safari, the phone shows six digits, and you type them where Channels on your computer
 asks to approve it. SECURITY.md has what that moves and why the relay can't read it.
 

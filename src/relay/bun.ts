@@ -691,6 +691,8 @@ function webApp(app: WebApp): (pathname: string) => Response {
       if (/^\/install(\.sh|\.ps1)?$/.test(rel)) headers["content-type"] = "text/plain; charset=utf-8";
       return new Response(Bun.file(path), { headers });
     }
+    const page = [`${path}.html`, join(path, "index.html")].find(isFile);
+    if (inside && page) return new Response(Bun.file(page), { headers: { ...security, "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
     // A missing file (it has an extension) is a 404, not the app: a stale script must fail loudly.
     if (/\.[A-Za-z0-9]+$/.test(basename(rel))) return new Response("not found\n", { status: 404, headers: security });
     return new Response(Bun.file(join(root, "index.html")), { headers: { ...security, "cache-control": "no-cache" } });

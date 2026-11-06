@@ -667,7 +667,7 @@ asks to join your devices; an app that already holds them answers, and you type 
 the new device shows. There is no code to carry, no QR and no key copied: each device has its
 own key, and the app signs it into your device list. The digits come from a commitment the new
 device makes before it sees the app's nonce, so a relay that swaps keys can't grind a match
-(`packages/core/src/enroll.ts`; the design is [docs/linked-devices.md](docs/linked-devices.md)).
+(`packages/core/src/enroll.ts`; the design is [docs/plans/linked-devices.md](docs/plans/linked-devices.md)).
 The grant goes through the one-time mailbox, sealed to the two devices' keys, and holds the
 device list, the person's public key and name, and the channel codes it may join, never a
 secret key. Only the approving app checks the digits, so the new device can't tell by itself
@@ -738,7 +738,7 @@ way a served dashboard could. An operator can change two things people may run:
 Install kiwi from https://channels.kiwiinit.com or this repository's releases,
 never from a command a relay prints. Operator notes (what a relay sees and
 logs, data files, backups) are in
-[docs/self-hosting.md](docs/self-hosting.md#security-notes-for-operators).
+[docs/self-hosting.md](docs/self-hosting.md#what-you-see-as-an-operator).
 
 ## Reporting a vulnerability
 
