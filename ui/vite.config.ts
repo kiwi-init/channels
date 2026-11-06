@@ -24,7 +24,10 @@ const modFrame = (): Plugin => ({
       logLevel: "warn",
       plugins: [react()],
       define: { __DEV__: "false", "process.env.NODE_ENV": JSON.stringify("production") },
-      resolve: { ...shared.resolve, alias: { ...shared.resolve?.alias, mermaid: resolve(import.meta.dirname, "./src/mods/frame/no-mermaid.ts") } },
+      resolve: {
+        ...shared.resolve,
+        alias: { "~/kit/outside": resolve(import.meta.dirname, "./src/mods/frame/outside.ts"), ...shared.resolve?.alias, mermaid: resolve(import.meta.dirname, "./src/mods/frame/no-mermaid.ts") },
+      },
       build: {
         outDir: resolve(import.meta.dirname, "dist"),
         emptyOutDir: false,
