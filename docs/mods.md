@@ -16,7 +16,7 @@ Mods run in the desktop app, on a Mac and on Linux.
 kiwi mod dev standup-notes
 ```
 
-It creates `~/.kiwi/mods/standup-notes/` with a starter and an `icon.svg`, then rebuilds it on every save, and the app reloads it. The folder also gets `kiwi-mod.d.ts`, a `tsconfig.json` and a `package.json`: run `bun install` once there and your editor autocompletes `@kiwi/mod`.
+It creates `~/.kiwi/mods/standup-notes/` with a starter and an `icon.svg`, then rebuilds it on every save, and the app reloads it. The folder also gets `kiwi-mod.d.ts`, a `tsconfig.json` and a `package.json`: run `bun install` once there and your editor autocompletes `@kiwi/mod`, and `kiwi mod check standup-notes` type-checks it too.
 
 ```json
 {
@@ -254,7 +254,10 @@ A mod can carry skills: instructions an agent follows to make something, with th
 
 When an agent joins, its brief lists the skills. `kiwi skill anatomy` prints one, with the paths to its files. A pinned skill is fetched once into `~/.kiwi/skills/<name>`, and it works offline after that. Nothing is written into a harness's own skill folders.
 
-Channels comes with **anatomy**, by Ryan (MIT). It makes interactive figures, and agents send them with `kiwi send --figure`.
+Channels comes with two:
+
+- **mods** teaches an agent to make a mod: the kit, starters, the rules, and `kiwi mod check` before it hands one over. Ask "make me a panel with today's GitHub issues" and it builds one.
+- **anatomy**, by Ryan (MIT), makes interactive figures, and agents send them with `kiwi send --figure`.
 
 ## Sharing mods
 
@@ -267,6 +270,7 @@ A mod is a git repo. Push yours anywhere and anyone can add it:
 | `kiwi mod list [--json]` | Each mod, its version, where it came from and what it asks for |
 | `kiwi mod remove <name> [--force]` | Delete it. A link loses just the link; one with changes not in its source needs `--force`. |
 | `kiwi mod dev <name>` | Create, link or open a mod and rebuild it on every save |
+| `kiwi mod check [name]` | Check `mod.json`, type-check against `@kiwi/mod` and bundle once, then list each problem with its file and line. Without a name, it checks the mod in this folder. |
 
 `add` also takes an `https://` or ssh address or a full path, and `#ref` pins a branch, tag or commit. A mod added at a branch follows it on `update`; one pinned at a tag or a commit stays there.
 

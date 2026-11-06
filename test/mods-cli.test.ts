@@ -1,9 +1,26 @@
 import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { addMod, checkUpdates, devRound, git, type Git, KIT_TYPES_FILE, listMods, ModError, modsDir, nudgeApp, parseSource, readManifest, removeMod, startDev, updateMods } from "../src/mods.ts";
+import {
+  addMod,
+  checkMod,
+  checkUpdates,
+  devRound,
+  git,
+  type Git,
+  KIT_TYPES_FILE,
+  listMods,
+  ModError,
+  modsDir,
+  nudgeApp,
+  parseSource,
+  readManifest,
+  removeMod,
+  startDev,
+  updateMods,
+} from "../src/mods.ts";
 import { bundleMod } from "@kiwi/core/node/mod-bundle.ts";
 import { readModIcon } from "@kiwi/core/node/mod-icon.ts";
 import { kiwiCmd } from "./owner.ts";
@@ -319,6 +336,57 @@ describe("kiwi mod dev", () => {
     expect(readFileSync(join(made.dir, KIT_TYPES_FILE), "utf8")).toBe(KIT_TYPES);
   });
 
+  test("check reads mod.json, type-checks with the mod's own typescript and bundles once, and says when there's no typescript to run", async () => {
+    const home = scratch("check");
+    const dir = realpathSync(startDev(home, "standup-notes", scratch("cwd")).dir);
+    const bare = await checkMod(home, "standup-notes", scratch("cwd"));
+    expect(bare).toMatchObject({
+      name: "standup-notes",
+      dir,
+      problems: [],
+      added: [],
+      types: { ran: false, why: `there's no typescript in its node_modules: run bun install (or npm install) once in ${dir}` },
+    });
+    expect(bare.bytes).toBeGreaterThan(0);
+
+    const tsc = (script: string) => {
+      mkdirSync(join(dir, "node_modules", "typescript", "bin"), { recursive: true });
+      writeFileSync(join(dir, "node_modules", "typescript", "bin", "tsc"), script);
+    };
+    tsc('if (!process.argv.includes("--noEmit")) process.exit(9)\n');
+    expect((await checkMod(home, null, dir)).types).toEqual({ ran: true, problems: [] });
+    tsc(
+      [
+        "console.log(\"index.tsx(3,7): error TS2322: Type 'number' is not assignable to type 'string'.\")",
+        "console.log(\"  The expected type comes from property 'title'.\")",
+        "console.log(\"error TS5023: Unknown compiler option 'nope'.\")",
+        "process.exit(2)",
+      ].join("\n"),
+    );
+    expect((await checkMod(home, "standup-notes", scratch("cwd"))).problems).toEqual([
+      "index.tsx:3:7: Type 'number' is not assignable to type 'string'. The expected type comes from property 'title'.",
+      "Unknown compiler option 'nope'.",
+    ]);
+    tsc('console.error("Could not find the typescript binary"); process.exit(1)\n');
+    expect((await checkMod(home, "standup-notes", scratch("cwd"))).types).toEqual({ ran: false, why: "typescript didn't run: Could not find the typescript binary" });
+
+    rmSync(join(dir, "node_modules"), { recursive: true });
+    rmSync(join(dir, KIT_TYPES_FILE));
+    rmSync(join(dir, "tsconfig.json"));
+    writeFileSync(join(dir, "mod.json"), "{");
+    writeFileSync(join(dir, "index.tsx"), "export const = 1\n");
+    const broken = await checkMod(home, "standup-notes", scratch("cwd"));
+    expect(broken.added).toEqual([KIT_TYPES_FILE, "tsconfig.json"]);
+    expect(readFileSync(join(dir, KIT_TYPES_FILE), "utf8")).toBe(KIT_TYPES);
+    expect(broken.manifest).toBeNull();
+    expect(broken.problems).toHaveLength(2);
+    expect(broken.problems[0]).toBe("its mod.json isn't JSON");
+    expect(broken.bytes).toBeNull();
+
+    await expect(checkMod(home, "nope", scratch("cwd"))).rejects.toThrow("there's no mod named nope (kiwi mod list; kiwi mod dev nope makes one)");
+    await expect(checkMod(home, null, scratch("cwd"))).rejects.toThrow("this folder has no mod.json: run kiwi mod check NAME, or run it in a mod's folder");
+  });
+
   test("the starter type-checks against the shipped @kiwi/mod types, so editors autocomplete it", () => {
     const { dir } = startDev(scratch("dev"), "standup-notes", scratch("cwd"));
     symlinkSync(join(import.meta.dir, "../ui/node_modules"), join(dir, "node_modules"));
@@ -426,6 +494,23 @@ describe("the kiwi mod command", () => {
     const [out, err] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text()]);
     return { code: await p.exited, out, err };
   }
+
+  test("check prints each problem and exits 1, or says the mod checks out", async () => {
+    const home = scratch("cli-check");
+    const dir = realpathSync(startDev(home, "standup-notes", scratch("cwd")).dir);
+    const ok = await kiwi(home, "check", "standup-notes");
+    expect(ok.code).toBe(0);
+    expect(ok.out).toContain(`checked standup-notes 0.1.0 in ${dir}\n  types not checked: there's no typescript in its node_modules`);
+    expect(ok.out).toMatch(/standup-notes 0\.1\.0 checks out: mod\.json and bundle, \d+ KB; it asks for panel\n$/);
+    writeFileSync(join(dir, "mod.json"), JSON.stringify({ name: "standup-notes", version: "0.1.0", shell: "^3.6", needs: ["panel", "net:*.example.com"] }));
+    const bad = await kiwi(home, "check", "standup-notes");
+    expect(bad.code).toBe(1);
+    expect(bad.out).toContain("1 problem:\n  ");
+    expect(bad.out).toContain("fix it, then run kiwi mod check standup-notes again\n");
+    const usage = await kiwi(home, "check", "a", "b");
+    expect(usage.code).toBe(1);
+    expect(usage.err).toContain("usage: kiwi mod check [name]");
+  });
 
   test("dev makes a mod, rebuilds it on each save, and says when it asks for more", async () => {
     const home = scratch("cli");

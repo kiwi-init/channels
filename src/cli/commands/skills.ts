@@ -16,7 +16,7 @@ export const skillCommands: Record<string, Command> = {
       if (!name) {
         if (opt.json) return out(JSON.stringify(skills.map((s) => ({ ...s, fetched: fetched(at, s) }))));
         for (const s of skills) {
-          const from = s.source ? `${s.source} @ ${s.ref!.slice(0, 7)}` : `in the ${s.mod} mod`;
+          const from = s.builtin ? "built into Channels" : s.source ? `${s.source} @ ${s.ref!.slice(0, 7)}` : `in the ${s.mod} mod`;
           out(`${s.name}: ${s.about}`);
           out(`  ${from}${fetched(at, s) ? "" : ", fetched on first use"}`);
         }

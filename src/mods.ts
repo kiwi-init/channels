@@ -22,9 +22,11 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
-import { isAbsolute, join } from "node:path";
+import { isAbsolute, join, relative } from "node:path";
 
 import KIT_TYPES from "./mod-kit.txt" with { type: "text" };
+
+export { KIT_TYPES };
 
 const MOD_NAME = /^[a-z0-9][a-z0-9-]{0,62}$/;
 const STARTER_SHELL = "^3.6";
@@ -438,7 +440,7 @@ function starter(dir: string, name: string): void {
   writeFileSync(join(dir, "icon.svg"), STARTER_ICON);
   writeFileSync(join(dir, KIT_TYPES_FILE), KIT_TYPES);
   writeFileSync(join(dir, "tsconfig.json"), json(STARTER_TSCONFIG));
-  writeFileSync(join(dir, "package.json"), json({ private: true, devDependencies: { "@types/react": "^19.3.0" } }));
+  writeFileSync(join(dir, "package.json"), json({ private: true, devDependencies: { "@types/react": "^19.3.0", typescript: "^7.0.2" } }));
   writeFileSync(join(dir, ".gitignore"), "node_modules\n");
   writeFileSync(
     join(dir, "index.tsx"),
@@ -537,4 +539,104 @@ export function nudgeApp(at: string): void {
   if (!lstatSync(at, { throwIfNoEntry: false })?.isSymbolicLink()) return;
   const now = new Date();
   lutimesSync(at, now, now);
+}
+
+type TypeCheck = { ran: true; problems: string[] } | { ran: false; why: string };
+
+const TSC_MS = 120_000;
+
+function tscOf(dir: string): string[] | null {
+  const native = join(dir, "node_modules", "@typescript", `typescript-${process.platform}-${process.arch}`, "lib", process.platform === "win32" ? "tsc.exe" : "tsc");
+  if (existsSync(native)) return [native];
+  const script = join(dir, "node_modules", "typescript", "bin", "tsc");
+  return existsSync(script) ? [process.execPath, script] : null;
+}
+
+function diagnostics(dir: string, text: string): string[] {
+  const out: string[] = [];
+  for (const raw of text.split("\n")) {
+    const line = raw.trimEnd();
+    if (!line) continue;
+    const at = /^(.+?)\((\d+),(\d+)\): error TS\d+: (.*)$/.exec(line);
+    const bare = /^error TS\d+: (.*)$/.exec(line);
+    if (at) out.push(`${relative(dir, join(dir, at[1]!))}:${at[2]}:${at[3]}: ${at[4]}`);
+    else if (bare) out.push(bare[1]!);
+    else if (/^\s/.test(raw) && out.length) out[out.length - 1] += ` ${line.trim()}`;
+  }
+  return out;
+}
+
+function typeCheck(dir: string): TypeCheck {
+  const tsc = tscOf(dir);
+  if (!tsc) return { ran: false, why: `there's no typescript in its node_modules: run bun install (or npm install) once in ${dir}` };
+  const r = Bun.spawnSync([...tsc, "--noEmit", "--pretty", "false", "-p", join(dir, "tsconfig.json")], {
+    cwd: dir,
+    env: { ...process.env, BUN_BE_BUN: "1" },
+    stdout: "pipe",
+    stderr: "pipe",
+    timeout: TSC_MS,
+  });
+  const said = `${r.stdout.toString()}\n${r.stderr.toString()}`;
+  if (r.exitCode === 0) return { ran: true, problems: [] };
+  const problems = diagnostics(dir, said);
+  if (problems.length) return { ran: true, problems };
+  const first = said.split("\n").find((l) => l.trim()) ?? (r.exitCode === null ? `it took over ${TSC_MS / 1000} s` : `it exited with ${r.exitCode}`);
+  return { ran: false, why: `typescript didn't run: ${first.trim()}` };
+}
+
+export interface ModCheckReport {
+  name: string;
+  dir: string;
+  manifest: ModManifest | null;
+  problems: string[];
+  types: TypeCheck;
+  added: string[];
+  bytes: number | null;
+}
+
+function checkedDir(home: string, name: string | null, cwd: string): { name: string; dir: string } {
+  if (name !== null) {
+    if (!MOD_NAME.test(name)) throw new ModError(`"${name}" isn't a mod name: use lowercase letters, digits and dashes`);
+    const at = join(modsDir(home), name);
+    if (!lstatSync(at, { throwIfNoEntry: false })) throw new ModError(`there's no mod named ${name} (kiwi mod list; kiwi mod dev ${name} makes one)`);
+    return { name, dir: realOf(at, name) };
+  }
+  const file = join(cwd, "mod.json");
+  if (!existsSync(file)) throw new ModError("this folder has no mod.json: run kiwi mod check NAME, or run it in a mod's folder");
+  let named: unknown;
+  try {
+    named = (JSON.parse(readFileSync(file, "utf8")) as { name?: unknown } | null)?.name;
+  } catch {
+    // Unreadable: the message below says so.
+  }
+  if (typeof named !== "string" || !MOD_NAME.test(named)) throw new ModError("this folder's mod.json has no name kiwi can read: fix it, then run kiwi mod check again");
+  return { name: named, dir: realpathSync(cwd) };
+}
+
+export async function checkMod(home: string, only: string | null, cwd: string): Promise<ModCheckReport> {
+  const { name, dir } = checkedDir(home, only, cwd);
+  const problems: string[] = [];
+  let manifest: ModManifest | null = null;
+  try {
+    manifest = manifestAt(dir, name);
+  } catch (e) {
+    problems.push((e as Error).message);
+  }
+  const added: string[] = [];
+  freshTypes(dir);
+  if (!existsSync(join(dir, KIT_TYPES_FILE))) {
+    writeFileSync(join(dir, KIT_TYPES_FILE), KIT_TYPES);
+    added.push(KIT_TYPES_FILE);
+  }
+  if (!existsSync(join(dir, "tsconfig.json"))) {
+    writeFileSync(join(dir, "tsconfig.json"), json(STARTER_TSCONFIG));
+    added.push("tsconfig.json");
+  }
+  const types = typeCheck(dir);
+  if (types.ran) problems.push(...types.problems);
+  const built = await bundleMod(dir);
+  if (!built.ok) problems.push(built.why);
+  const art = manifest?.icon ? readModIcon(dir, manifest.icon) : null;
+  if (art && !art.ok) problems.push(art.why);
+  return { name, dir, manifest, problems, types, added, bytes: built.ok ? built.code.length : null };
 }

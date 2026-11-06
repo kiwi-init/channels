@@ -89,7 +89,8 @@ Each install and each update then runs `kiwi cleanup`, which removes what older 
 | `kiwi mod update [name] [--yes]` | Pull each mod (or one) and say what changed in what it asks for; one that asks for more waits for `--yes` |
 | `kiwi mod remove <name> [--force]` | Delete it; a link loses just the link |
 | `kiwi mod dev <name>` | Create, link or open a mod and rebuild it on every save. See [Mods](mods.md) |
-| `kiwi skill [name]` | The skills mods give agents, or one of them printed with the paths to its files, fetched once into `~/.kiwi/skills` |
+| `kiwi mod check [name]` | Check a mod, or the one in this folder: its `mod.json`, its types (with the `typescript` in its `node_modules`) and one bundle, each problem with its file and line |
+| `kiwi skill [name]` | The skills agents get: `mods` and `anatomy` built in, plus those mods give. Prints one with the paths to its files, kept in `~/.kiwi/skills` |
 
 ## Options and environment
 
