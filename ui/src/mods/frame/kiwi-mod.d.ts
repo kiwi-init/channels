@@ -41,6 +41,8 @@ declare module "@kiwi/mod" {
     seq: number
     text: string
     author: string
+    from: string
+    channelId: string
     at: number
     room: string | null
     link: string
@@ -73,10 +75,12 @@ declare module "@kiwi/mod" {
     channel: string
     agent: string
     in: "tmux" | "rex"
+    waits: { asks: number; tasks: number[] }
   }
 
   export function terminals(): Promise<ModTerminal[]>
-  export function focusTerminal(id: string): Promise<void>
+  export function onTerminals(listen: (list: ModTerminal[]) => void): () => void
+  export function focusTerminal(to: string | { room: string; agent: string }): Promise<void>
   export function markTerminal(id: string, mark: Partial<{ asks: number; tasks: number[] }> | null): Promise<void>
 
   export function Button(props: { children: ReactNode; onClick?: () => void; kind?: "primary" | "quiet" | "danger"; disabled?: boolean }): ReactElement
