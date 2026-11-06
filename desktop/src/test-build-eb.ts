@@ -44,6 +44,11 @@ export function driveForTests(win: BrowserWindow): void {
         frostAllowed: () => frostAllowed(),
         solidForTest: () => (forceFrostForTest(false), true),
         frostForTest: () => (forceFrostForTest(true), true),
+        narrowForTest: () => {
+          const f = win.getFrame();
+          win.setFrame(f.x, f.y, 1000, Math.max(f.height, 700));
+          return win.getFrame();
+        },
         placeForTest: () => {
           const f = win.getFrame();
           win.setFrame(f.x + 40, f.y + 30, f.width - 160, f.height - 90);

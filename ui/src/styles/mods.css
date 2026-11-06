@@ -34,3 +34,11 @@
   overflow-wrap: anywhere;
   font: var(--t-meta) / 1.4 var(--mono);
 }
+
+.mod-side {
+  margin-top: 8px;
+}
+
+.mod-side-slot {
+  max-height: min(320px, 40vh);
+}
