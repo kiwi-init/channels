@@ -101,6 +101,12 @@ interface ModFetchInit {
   body?: string | null
 }
 
+export type StorageOp = "get" | "set" | "remove" | "keys"
+
+export type ToastStyle = "success" | "failure"
+
+export const STORAGE = { key: 200, value: 256_000, total: 1_000_000 }
+
 export type TerminalOp = { op: "list" } | { op: "focus"; seat: string } | { op: "focus"; room: string; agent: string } | { op: "mark"; seat: string; mark: ModTerminalMark | null }
 
 export interface ModFetchResult {
@@ -129,6 +135,8 @@ export type ToFrame =
   | { kiwi: typeof MOD_PROTOCOL; type: "terminals"; list: ModTerminal[] }
   | { kiwi: typeof MOD_PROTOCOL; type: "reply"; id: number; ok: true; value: ModFetchResult | ModTerminal[] | null }
   | { kiwi: typeof MOD_PROTOCOL; type: "reply"; id: number; ok: false; error: string }
+  | { kiwi: typeof MOD_PROTOCOL; type: "stored"; id: number; ok: true; value: string | string[] | null }
+  | { kiwi: typeof MOD_PROTOCOL; type: "stored"; id: number; ok: false; error: string }
   | { kiwi: typeof MOD_PROTOCOL; type: "github"; data: ModGithub | null }
   | { kiwi: typeof MOD_PROTOCOL; type: "show"; target: ModTarget }
   | { kiwi: typeof MOD_PROTOCOL; type: "showing"; target: ModTarget | null }
@@ -143,6 +151,8 @@ export type FromFrame =
   | { kiwi: typeof MOD_PROTOCOL; type: "size"; height: number }
   | { kiwi: typeof MOD_PROTOCOL; type: "actions"; list: ModCommand[] }
   | { kiwi: typeof MOD_PROTOCOL; type: "fetch"; id: number; url: string; init: ModFetchInit }
+  | { kiwi: typeof MOD_PROTOCOL; type: "storage"; id: number; op: StorageOp; key: string | null; value: string | null }
+  | { kiwi: typeof MOD_PROTOCOL; type: "toast"; title: string; message: string | null; style: ToastStyle | null }
   | ({ kiwi: typeof MOD_PROTOCOL; type: "terminal"; id: number } & TerminalOp)
   | { kiwi: typeof MOD_PROTOCOL; type: "tab"; title: string; shown: boolean; alert: string | null; hint: string | null }
   | { kiwi: typeof MOD_PROTOCOL; type: "open"; to: ModOpen }
@@ -166,7 +176,10 @@ const GATED: { readonly [K in FromFrame["type"]]?: readonly [need: string, from:
   show: ["panel", ANY],
 }
 
+const RUNNING: ReadonlySet<FromFrame["type"]> = new Set(["storage", "toast", "copy", "link"])
+
 export function heeded(type: FromFrame["type"], from: Surface, mod: { state: string; needs: readonly string[] } | undefined): boolean {
+  if (RUNNING.has(type)) return !!mod && mod.state === "on"
   const gate = GATED[type]
   return !gate || (gate[1].includes(from) && !!mod && mod.state === "on" && mod.needs.includes(gate[0]))
 }
@@ -202,6 +215,8 @@ function webUrl(v: unknown): string | null {
 }
 
 export const sameTarget = (a: ModTarget | null, b: ModTarget | null): boolean => JSON.stringify(a) === JSON.stringify(b)
+
+const OPS: ReadonlySet<string> = new Set<StorageOp>(["get", "set", "remove", "keys"])
 
 function named(v: unknown, max: number): ModCommand[] | null {
   if (!Array.isArray(v) || v.length > max) return null
@@ -267,6 +282,24 @@ export function fromFrame(data: unknown): FromFrame | null {
         id,
         url,
         init: { method: typeof i["method"] === "string" ? i["method"] : "GET", headers, body: typeof i["body"] === "string" ? i["body"] : null },
+      }
+    }
+    case "storage": {
+      const { id, op, key, value } = m
+      if (typeof id !== "number" || !Number.isSafeInteger(id) || typeof op !== "string" || !OPS.has(op)) return null
+      if (op !== "keys" && !short(key, STORAGE.key)) return null
+      if (op === "set" && (typeof value !== "string" || value.length > STORAGE.value)) return null
+      return { kiwi: MOD_PROTOCOL, type: "storage", id, op: op as StorageOp, key: op === "keys" ? null : (key as string), value: op === "set" ? (value as string) : null }
+    }
+    case "toast": {
+      const { title, message, style } = m
+      if (!short(title, 200)) return null
+      return {
+        kiwi: MOD_PROTOCOL,
+        type: "toast",
+        title,
+        message: short(message, 500) ? message : null,
+        style: style === "success" || style === "failure" ? style : null,
       }
     }
     case "terminal":

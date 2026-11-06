@@ -3,20 +3,22 @@ import * as ReactDOM from "react-dom"
 import * as ReactDOMClient from "react-dom/client"
 import * as jsxRuntime from "react/jsx-runtime"
 import type { ComponentType, ReactNode } from "react"
+import type * as Kit from "@kiwi/mod"
 
 import "~/styles/tokens.css"
 import "~/styles/base.css"
+import "~/styles/palette.css"
+import "~/styles/chat.css"
 import "~/mods/frame/frame.css"
 import { Avatar, Count, cx, Dot, Heading } from "~/kit/bits"
-import { Empty } from "~/kit/empty"
 import { Field } from "~/kit/form"
 import { Track } from "~/kit/glide"
 import { ago } from "~/kit/time"
 import { Icon } from "~/mods/frame/glyphs"
+import { Action, Actions, Detail, Empty, Form, List, useFetch } from "~/mods/frame/kit"
+import { copy, failed, modFetch, openUrl, post, replied, request, storage, Toast } from "~/mods/frame/wire"
 import {
   MOD_PROTOCOL,
-  type FromFrame,
-  type ModFetchResult,
   type ModGithub,
   type ModMessage,
   type ModOpen,
@@ -29,21 +31,15 @@ import {
   type ToFrame,
 } from "~/mods/protocol"
 
-type Waiting = { resolve: (r: unknown) => void; reject: (e: Error) => void }
-
 type Draw = (shown: Shown & { dark: boolean }) => ReactNode | void
 
-type Out = { [K in FromFrame["type"]]: Omit<Extract<FromFrame, { type: K }>, "kiwi"> }[FromFrame["type"]]
-
-const post = (m: Out): void => parent.postMessage({ kiwi: MOD_PROTOCOL, ...m }, "*")
+type Shaped = "github" | "useGithub" | "Avatar"
 
 let view: ComponentType | null = null
 let booted = false
 let surface: Surface = "main"
 let needs: ReadonlySet<string> = new Set()
 let values: Readonly<Record<string, string | boolean | null>> = Object.freeze({})
-let nextId = 1
-const waiting = new Map<number, Waiting>()
 const commands = new Map<string, { title: string; run: () => void | Promise<void> }>()
 const actions = new Map<string, { title: string; run: (message: ModMessage) => void | Promise<void> }>()
 const drawers = new Map<string, Draw>()
@@ -68,12 +64,6 @@ const watch = (w: () => void): (() => void) => {
   return () => void watchers.delete(w)
 }
 
-function failed(e: unknown): void {
-  const said = String(e)
-  const stack = e instanceof Error ? (e.stack ?? "") : ""
-  post({ type: "error", message: stack.startsWith(said) ? stack : `${said}\n${stack}`.trim() })
-}
-
 function mount(): void {
   const View = view
   if (View) root.render(<View />)
@@ -87,30 +77,10 @@ function listed<T extends { title: string }>(list: Map<string, T>): { id: string
   return [...list].map(([id, c]) => ({ id, title: c.title }))
 }
 
-function bytes(b64: string): Uint8Array<ArrayBuffer> {
-  const raw = atob(b64)
-  const out = new Uint8Array(raw.length)
-  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i)
-  return out
-}
-
-async function modFetch(input: string | URL, init: { method?: string; headers?: HeadersInit; body?: string | null } = {}): Promise<Response> {
-  if (init.body !== undefined && init.body !== null && typeof init.body !== "string") throw new TypeError("a mod's fetch sends a string body")
-  const id = nextId++
-  const reply = new Promise<unknown>((resolve, reject) => waiting.set(id, { resolve, reject }))
-  post({ type: "fetch", id, url: String(input), init: { method: init.method ?? "GET", headers: Object.fromEntries(new Headers(init.headers).entries()), body: init.body ?? null } })
-  const r = (await reply) as ModFetchResult
-  const empty = r.status === 204 || r.status === 304 || (init.method ?? "GET").toUpperCase() === "HEAD"
-  return new Response(empty ? null : bytes(r.body), { status: r.status, statusText: r.statusText, headers: r.headers })
-}
-
 function terminal(call: string, op: TerminalOp): Promise<unknown> {
   asked("terminal", call)
   if (surface !== "main") return Promise.reject(new Error(`${call}() works in the mod's main frame, not its sidebar`))
-  const id = nextId++
-  const reply = new Promise<unknown>((resolve, reject) => waiting.set(id, { resolve, reject }))
-  post({ type: "terminal", id, ...op })
-  return reply
+  return request((id) => ({ type: "terminal", id, ...op }))
 }
 
 const terminals = async (): Promise<ModTerminal[]> => (await terminal("terminals", { op: "list" })) as ModTerminal[]
@@ -227,9 +197,7 @@ const api = {
     asked("panel", "title")
     if (surface === "main" && view) post({ type: "panel", title: String(title) })
   },
-  copy(text: string, note?: string): void {
-    post({ type: "copy", text: String(text), note: note === undefined ? null : String(note) })
-  },
+  copy,
   render(kind: string, draw: Draw): void {
     asked(`render:${kind}`, "render")
     drawers.set(String(kind), draw)
@@ -243,7 +211,6 @@ const api = {
   Avatar,
   Count,
   Dot,
-  Empty,
   Heading,
   Track,
   ago,
@@ -252,6 +219,28 @@ const api = {
   Field,
   Row,
   Icon,
+  List,
+  Detail,
+  Form,
+  Action,
+  Actions,
+  Empty,
+  Toast,
+  useFetch,
+  storage,
+} satisfies { [K in keyof typeof Kit]: K extends Shaped ? unknown : (typeof Kit)[K] }
+
+try {
+  Object.defineProperty(window, "open", {
+    configurable: true,
+    value: (url?: string | URL) => {
+      if (url) openUrl(String(url))
+      return null
+    },
+  })
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async (text: string) => copy(text) } })
+} catch {
+  // A browser that won't let the frame swap these keeps its own: links and copying then do nothing in mods.
 }
 
 Object.assign(globalThis, {
@@ -289,7 +278,7 @@ const outside = (e: MouseEvent): void => {
   const url = linkOf(e)
   if (!url) return
   e.preventDefault()
-  post({ type: "link", url })
+  openUrl(url)
 }
 
 addEventListener("click", outside)
@@ -337,12 +326,7 @@ addEventListener("message", (e) => {
       } catch (err) {
         failed(err)
       }
-  else if (m.type === "reply") {
-    const w = waiting.get(m.id)
-    waiting.delete(m.id)
-    if (m.ok) w?.resolve(m.value)
-    else w?.reject(new Error(m.error))
-  }
+  else replied(m)
 })
 
 post({ type: "hello" })

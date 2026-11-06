@@ -1,0 +1,1 @@
+../ui/src/mods/frame/kiwi-mod.d.ts
