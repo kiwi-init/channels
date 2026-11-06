@@ -5,7 +5,7 @@ import { wrote } from "~/words"
 
 const agent = (name: string, more: Partial<Person> = {}): Person => ({ name, kind: "agent", owner: false, you: false, presence: "online", lastSeen: 0, joined: 0, messages: 0, ...more })
 
-const task = (id: number, title: string): Task => ({ id, title, status: "review", createdBy: "jow", createdAt: 0, updatedAt: 0, notes: [], rounds: [], archived: false })
+const task = (id: number, title: string): Task => ({ id, title: wrote(title), status: "review", createdBy: "jow", createdAt: 0, updatedAt: 0, notes: [], rounds: [], archived: false })
 
 const spec = (ask: number, title: string, v: number): Spec => ({
   ask,
@@ -157,6 +157,12 @@ describe("homeOf", () => {
     const long = "word ".repeat(50).trim()
     const h = homeOf(channel({ asks: [question("1", 1, { text: wrote(long) })] }))
     expect(h.asks[0]?.text).toBe(long)
+  })
+
+  test("a moving task's title names agents by nickname, not handle (#1763)", () => {
+    const t: Task = { ...task(1, "Pair with @gentle-otter on the relay"), status: "doing", history: [], updatedAt: 1 }
+    const h = homeOf(channel({ tasks: [t], nicknames: new Map([["gentle-otter", "lead"]]) }))
+    expect(h.moving[0]?.title).toBe("Pair with @lead on the relay")
   })
 
   test("shows the tasks moving with who has them and where they stand, and counts the rest and today's done", () => {

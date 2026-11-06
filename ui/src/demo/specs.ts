@@ -95,7 +95,7 @@ const task = (t: Partial<Task> & Pick<Task, "id" | "title" | "status" | "created
 const TASKS: Task[] = [
   task({
     id: 20,
-    title: "Keep drafts in the vault as you type",
+    title: wrote("Keep drafts in the vault as you type"),
     status: "done",
     owner: "win",
     createdAt: m(170),
@@ -113,7 +113,7 @@ const TASKS: Task[] = [
   }),
   task({
     id: 21,
-    title: "Bring each place's draft back on start",
+    title: wrote("Bring each place's draft back on start"),
     status: "review",
     owner: "pixel",
     reviewer: "atlas",
@@ -124,9 +124,9 @@ const TASKS: Task[] = [
       { seq: 2101, by: "atlas", at: m(170), what: "created" },
       { seq: 2102, by: "pixel", at: m(150), what: "took" },
       { seq: 2103, by: "pixel", at: m(80), what: "review", round: 1 },
-      { seq: 2104, by: "atlas", at: m(62), what: "rejected", round: 1, note: "DM drafts land in #general" },
+      { seq: 2104, by: "atlas", at: m(62), what: "rejected", round: 1, note: wrote("DM drafts land in #general") },
       { seq: 2105, by: "pixel", at: m(40), what: "review", round: 2 },
-      { seq: 2106, by: "atlas", at: m(25), what: "rejected", round: 2, note: "threads lose their draft" },
+      { seq: 2106, by: "atlas", at: m(25), what: "rejected", round: 2, note: wrote("threads lose their draft") },
       { seq: 2107, by: "pixel", at: m(2), what: "review", round: 3 },
     ],
     rounds: [
@@ -138,7 +138,7 @@ const TASKS: Task[] = [
   }),
   task({
     id: 22,
-    title: "A test that quits the app mid-draft",
+    title: wrote("A test that quits the app mid-draft"),
     status: "doing",
     owner: "win",
     createdAt: m(170),
@@ -146,13 +146,13 @@ const TASKS: Task[] = [
     history: [
       { seq: 2201, by: "atlas", at: m(170), what: "created" },
       { seq: 2202, by: "win", at: m(90), what: "took" },
-      { seq: 2203, by: "win", at: m(9), what: "checkpoint", note: "kills the app with SIGKILL between keystrokes; one flake left" },
+      { seq: 2203, by: "win", at: m(9), what: "checkpoint", note: wrote("kills the app with SIGKILL between keystrokes; one flake left") },
     ],
     stage: "building",
   }),
   task({
     id: 23,
-    title: "Collect the PRs merged since a tag",
+    title: wrote("Collect the PRs merged since a tag"),
     status: "done",
     owner: "win",
     createdAt: m(60 * 20),
@@ -167,7 +167,7 @@ const TASKS: Task[] = [
   }),
   task({
     id: 24,
-    title: "Group the notes by area, each with its link",
+    title: wrote("Group the notes by area, each with its link"),
     status: "done",
     owner: "pixel",
     reviewer: "atlas",
@@ -186,13 +186,13 @@ const TASKS: Task[] = [
   }),
   task({
     id: 25,
-    title: "Read the notes from the tracker instead",
+    title: wrote("Read the notes from the tracker instead"),
     status: "done",
     cancelled: true,
     owner: "win",
     createdAt: m(60 * 20),
     updatedAt: m(60 * 18),
-    notes: [{ by: "atlas", at: m(60 * 18), text: "there's no tracker to read: the PRs are the record" }],
+    notes: [{ by: "atlas", at: m(60 * 18), text: wrote("there's no tracker to read: the PRs are the record") }],
     history: [
       { seq: 2501, by: "atlas", at: m(60 * 20), what: "created" },
       { seq: 2502, by: "atlas", at: m(60 * 18), what: "cancelled" },

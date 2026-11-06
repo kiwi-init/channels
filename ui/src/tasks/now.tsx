@@ -4,7 +4,7 @@ import { cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import type { Channel, Task } from "~/model"
 import { useApp } from "~/nav"
-import { nickname } from "~/names"
+import { nickname, Shown } from "~/names"
 import { nowOf, stageWords } from "~/now"
 
 const FOLDED = "kiwi:now:folded"
@@ -41,7 +41,9 @@ function TaskLine({ channel, t }: { channel: Channel; t: Task }) {
   return (
     <button type="button" className="now-task" onClick={() => go({ to: "panel", panel: { kind: "task", task: t.id } })}>
       <span className="now-id num">T{t.id}</span>
-      <span className="now-title">{t.title}</span>
+      <span className="now-title">
+        <Shown value={t.title} />
+      </span>
       {t.status === "waiting" && <span className="now-needs">needs you</span>}
       <span className={cx("now-stage", stage.red && "tone-alert")}>{[t.owner ? nickname(channel, t.owner) : null, stage.text].filter(Boolean).join(" · ")}</span>
     </button>

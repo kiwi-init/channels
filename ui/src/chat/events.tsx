@@ -6,7 +6,7 @@ import { clock, day, sameDay } from "~/kit/time"
 import type { Channel, Message, Task } from "~/model"
 import { useApp } from "~/nav"
 import { wordsPlain } from "~/words"
-import { nickname } from "~/names"
+import { nickname, Shown } from "~/names"
 
 const PAGE = 60
 
@@ -144,7 +144,7 @@ function Row({ m, here, yours, more }: { m: Message; here: number | null; yours?
 }
 
 function TasksRow({ line, tasks, more }: { line: Extract<EventLine, { kind: "tasks" }>; tasks: ReadonlyMap<number, Task>; more: ReactNode }) {
-  const { go } = useApp()
+  const { app, go } = useApp()
   const named = line.tasks.slice(0, 3)
   const last = line.list[line.list.length - 1]!
   return (
@@ -156,7 +156,12 @@ function TasksRow({ line, tasks, more }: { line: Extract<EventLine, { kind: "tas
           return (
             <Fragment key={t.id}>
               {i > 0 && ", "}
-              <button type="button" className="sys-task" title={task?.title} onClick={() => go({ to: "panel", panel: { kind: "task", task: t.id } })}>
+              <button
+                type="button"
+                className="sys-task"
+                title={task ? wordsPlain(task.title, app.channel?.nicknames ?? new Map()) : undefined}
+                onClick={() => go({ to: "panel", panel: { kind: "task", task: t.id } })}
+              >
                 T{t.id}
               </button>
               {task && <span className={cx("sys-state", `is-${task.cancelled ? "cancelled" : task.status}`)}> {statusWord(task)}</span>}
@@ -181,7 +186,9 @@ function TaskRow({ channel, run, task }: { channel: Channel; run: TaskRun; task:
       <button type="button" className="sys-task" onClick={() => go({ to: "panel", panel: { kind: "task", task: task.id } })}>
         T{task.id}
       </button>
-      <span className="sys-text">{task.title}</span>
+      <span className="sys-text">
+        <Shown value={task.title} />
+      </span>
       {task.owner && <span>· {nickname(channel, task.owner)}</span>}
       <span className={cx("sys-state", `is-${task.cancelled ? "cancelled" : task.status}`)}>· {statusWord(task)}</span>
       {task.pr && (

@@ -18,8 +18,8 @@ import { ago } from "~/kit/time"
 import { memberOf, type Ask, type Channel, type PermissionAsk, type Person, type QuestionAsk, type ReviewRound, type Task, type TaskEvent } from "~/model"
 import { openMessage } from "~/live/open-message"
 import { useApp } from "~/nav"
-import { nickname } from "~/names"
-import { wordsPlain } from "~/words"
+import { nickname, Shown } from "~/names"
+import { wordsPlain, wordsRaw } from "~/words"
 import { IssueMark, issueWord, PrCard } from "~/github/parts"
 import { PanelHead } from "~/panels/frame"
 import { moveWords, someone } from "~/panels/task-moves"
@@ -70,8 +70,14 @@ export function TaskPanel({ channel, id }: { channel: Channel; id: number }) {
       <PanelHead title={`T${task.id}`}>{may && <TaskMenu key={`menu-${task.id}`} channel={channel} task={task} />}</PanelHead>
       <div key={task.id} ref={body} className="panel-body task-body tp">
         <section className="panel-section tp-top">
-          <h3 className="task-title">{task.title}</h3>
-          {task.detail && <p className="task-detail">{task.detail}</p>}
+          <h3 className="task-title">
+            <Shown value={task.title} />
+          </h3>
+          {task.detail && (
+            <p className="task-detail">
+              <Shown value={task.detail} />
+            </p>
+          )}
           <State key={`state-${task.id}`} channel={channel} task={task} may={may} />
         </section>
         <section className="panel-section">
@@ -166,13 +172,13 @@ function Suggested({ channel, task, suggested }: { channel: Channel; task: Task;
     <div className="task-suggest">
       <Avatar person={memberOf(channel, suggested.name)} size="sm" />
       <p className="task-suggest-text">
-        <span className="dimmer">Suggested</span> {nickname(channel, suggested.name)} <span className="dim">· {named(suggested.why, channel.nicknames)}</span>
+        <span className="dimmer">Suggested</span> {nickname(channel, suggested.name)} <span className="dim">· {wordsPlain(suggested.why, channel.nicknames)}</span>
       </p>
       <button
         type="button"
         className="btn is-small"
         onClick={() => {
-          app.actions.assignTask(channel.code, task.id, suggested.name, suggested.why)
+          app.actions.assignTask(channel.code, task.id, suggested.name, wordsRaw(suggested.why))
           toast(`T${task.id} is ${nickname(channel, suggested.name)}'s now`)
         }}
       >
@@ -214,7 +220,7 @@ function Assign({ channel, task, open, onClose }: { channel: Channel; task: Task
   const first = task.suggested ? people.filter((p) => p.name === task.suggested?.name) : []
   const rest = people.filter((p) => p.name !== task.suggested?.name).sort(agentsFirst)
   const pick = (name: string) => {
-    app.actions.assignTask(channel.code, task.id, name, why.trim() || (name === task.suggested?.name ? task.suggested.why : ""))
+    app.actions.assignTask(channel.code, task.id, name, why.trim() || (name === task.suggested?.name ? wordsRaw(task.suggested.why) : ""))
     toast(`T${task.id} is ${nickname(channel, name)}'s now`)
     close()
   }
@@ -236,7 +242,7 @@ function Assign({ channel, task, open, onClose }: { channel: Channel; task: Task
               channel={channel}
               person={p}
               on={p.name === task.owner}
-              about={p.name === task.suggested?.name ? `Suggested · ${named(task.suggested.why, channel.nicknames)}` : aboutOf(p)}
+              about={p.name === task.suggested?.name ? `Suggested · ${wordsPlain(task.suggested.why, channel.nicknames)}` : aboutOf(p)}
               onPick={() => pick(p.name)}
             />
           ))}
@@ -346,7 +352,7 @@ function Review({ channel, task }: { channel: Channel; task: Task }) {
   const summary = brief && last && (
     <div className="tp-brief">
       <p className="tp-brief-head">Round {last.n} in short</p>
-      <p className="tp-brief-text">{named(brief, channel.nicknames)}</p>
+      <p className="tp-brief-text">{wordsPlain(brief, channel.nicknames)}</p>
     </div>
   )
   if (!yours)
@@ -414,11 +420,11 @@ function TaskMenu({ channel, task }: { channel: Channel; task: Task }) {
 
 function EditTask({ channel, task, open, onClose }: { channel: Channel; task: Task; open: boolean; onClose: () => void }) {
   const { app } = useApp()
-  const [title, setTitle] = useState(task.title)
-  const [detail, setDetail] = useState(task.detail ?? "")
+  const [title, setTitle] = useState(wordsRaw(task.title))
+  const [detail, setDetail] = useState(task.detail ? wordsRaw(task.detail) : "")
   const close = () => {
-    setTitle(task.title)
-    setDetail(task.detail ?? "")
+    setTitle(wordsRaw(task.title))
+    setDetail(task.detail ? wordsRaw(task.detail) : "")
     onClose()
   }
   return (
@@ -557,7 +563,7 @@ function Activity({ channel, history }: { channel: Channel; history: TaskEvent[]
 function Move({ channel, e }: { channel: Channel; e: TaskEvent }) {
   const { go } = useApp()
   const [full, setFull] = useState(false)
-  const note = e.note ? named(e.what === "mention" ? preview(e.note) : e.note, channel.nicknames) : ""
+  const note = e.note ? named(e.what === "mention" ? preview(wordsRaw(e.note)) : wordsRaw(e.note), channel.nicknames) : ""
   const long = note.length > LONG
   const line = (
     <>

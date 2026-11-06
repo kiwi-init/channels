@@ -13,7 +13,7 @@ import { Icon } from "~/kit/icons"
 import { ago, clock } from "~/kit/time"
 import { ALL_POWERS, NO_POWERS, trusted, type Ask, type Channel, type JoinAsk, type Message, type PermissionAsk, type Person, type Powers, type QuestionAsk, type ReviewAsk } from "~/model"
 import { useApp } from "~/nav"
-import { nickname } from "~/names"
+import { nickname, Shown } from "~/names"
 import { SendBack } from "~/tasks/send-back"
 import { isIdle, isOpen, openAsks } from "~/needs/open"
 import { SpecNeedCard } from "~/specs/card"
@@ -542,11 +542,11 @@ function ReviewAskCard({ channel, ask, link }: { channel: Channel; ask: ReviewAs
       {task ? (
         <>
           <button type="button" className="needs-text needs-open" title="Open the task" onClick={() => go({ to: "panel", panel: { kind: "task", task: task.id } })}>
-            <span className="needs-id">T{task.id}</span> {task.title}
+            <span className="needs-id">T{task.id}</span> <Shown value={task.title} />
           </button>
           {note && (
             <blockquote className="needs-note">
-              {note.text}{" "}
+              <Shown value={note.text} />{" "}
               <span className="needs-note-by">
                 {note.by === channel.you ? "you" : nickname(channel, note.by)} · {ago(note.at)}
               </span>

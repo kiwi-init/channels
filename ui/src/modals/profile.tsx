@@ -10,7 +10,7 @@ import { ago } from "~/kit/time"
 import { copyText } from "~/kit/toasts"
 import { ALL_POWERS, memberOf, NO_POWERS, trusted, type App, type Channel, type Person, type Task } from "~/model"
 import { useApp } from "~/nav"
-import { devicesOf, nickname, seatRoot, shown } from "~/names"
+import { devicesOf, nickname, seatRoot, shown, Shown } from "~/names"
 import { contextOf, liveOf, restOf } from "~/doing"
 import { Group, InlineEdit, Row } from "~/settings/controls"
 
@@ -110,7 +110,9 @@ function Tasks({ channel, person }: { channel: Channel; person: Person }) {
         <button key={t.id} type="button" className="person-task" title={statusWord(t)} onClick={() => go({ to: "panel", panel: { kind: "task", task: t.id } })}>
           <Dot status={t.status} />
           <span className="person-task-id num">T{t.id}</span>
-          <span className="person-task-title">{t.title}</span>
+          <span className="person-task-title">
+            <Shown value={t.title} />
+          </span>
         </button>
       ))}
     </Group>

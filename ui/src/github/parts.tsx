@@ -22,7 +22,7 @@ import { copyText } from "~/kit/toasts"
 import { ago } from "~/kit/time"
 import { memberOf, type Channel, type Check, type Issue, type PullRequest } from "~/model"
 import { useApp } from "~/nav"
-import { nickname } from "~/names"
+import { nickname, Shown } from "~/names"
 
 const PR_GLYPHS: Record<PullRequest["state"], Glyph> = { open: GitPullRequestIcon, draft: GitPullRequestDraftIcon, merged: GitMergeIcon, closed: GitPullRequestClosedIcon }
 export const PR_TONES: Record<PullRequest["state"], string> = { open: "tone-live", draft: "tone-quiet", merged: "tone-review", closed: "tone-quiet" }
@@ -177,7 +177,9 @@ export function TaskLink({ channel, id }: { channel: Channel; id: number }) {
     <button type="button" className="gh-task" onClick={() => go({ to: "panel", panel: { kind: "task", task: id } })}>
       <Dot status={task.cancelled ? "todo" : task.status} />
       <span className="gh-task-id num">T{id}</span>
-      <span className="gh-task-title">{task.title}</span>
+      <span className="gh-task-title">
+        <Shown value={task.title} />
+      </span>
       {task.owner && (
         <span className="gh-task-who">
           <Avatar person={memberOf(channel, task.owner)} size="sm" />

@@ -8,7 +8,7 @@ import { cx, Dot } from "~/kit/bits"
 import { ago } from "~/kit/time"
 import type { Channel, Spec } from "~/model"
 import { useAct } from "~/nav"
-import { nickname } from "~/names"
+import { nickname, Shown } from "~/names"
 import { Inline } from "~/specs/inline"
 import { boxesOf, tasksOf } from "~/specs/read"
 
@@ -145,7 +145,7 @@ export function Result({ channel, spec }: { channel: Channel; spec: Spec }) {
               <ul className="result-tried">
                 {tried.map((t) => (
                   <li key={t.id}>
-                    <span className="num">T{t.id}</span> {t.title} <span className="dimmer">· cancelled{t.notes.at(-1) ? `: ${t.notes.at(-1)!.text}` : ""}</span>
+                    <span className="num">T{t.id}</span> <Shown value={t.title} /> <span className="dimmer">· cancelled{t.notes.at(-1) ? `: ${t.notes.at(-1)!.text}` : ""}</span>
                   </li>
                 ))}
                 {spec.backs.map((b) => (
@@ -174,7 +174,9 @@ export function Result({ channel, spec }: { channel: Channel; spec: Spec }) {
                 <li key={t.id}>
                   <button type="button" className="inside-task" onClick={() => go({ to: "panel", panel: { kind: "task", task: t.id } })}>
                     <Dot status={t.status} />
-                    <span className="inside-task-title">{t.title}</span>
+                    <span className="inside-task-title">
+                      <Shown value={t.title} />
+                    </span>
                     <span className="inside-task-meta num">
                       <span>T{t.id}</span>
                       {t.owner && <span>{nickname(channel, t.owner)}</span>}

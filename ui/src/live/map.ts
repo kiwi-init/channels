@@ -76,7 +76,7 @@ import type {
 } from "~/model"
 import { mentions } from "~/live/mention"
 import { phraseOf } from "~/live/said"
-import { wrote } from "~/words"
+import { type Words, wrote } from "~/words"
 
 type Seen = Readonly<Record<string, number>>
 
@@ -593,9 +593,9 @@ type TaskUpdate = Extract<Event, { op: "task.update" }>
 
 type Move = Pick<TaskEvent, "what" | "to" | "round" | "note">
 
-const said = (note: string | undefined, quiet?: string): { note?: string } => {
+const said = (note: string | undefined, quiet?: string): { note?: Words } => {
   const clean = note?.trim()
-  return clean && clean !== quiet ? { note: clean } : {}
+  return clean && clean !== quiet ? { note: wrote(clean) } : {}
 }
 
 function moveOf(state: ChannelState, m: Wire, ev: TaskUpdate): Move | null {
@@ -609,9 +609,9 @@ function moveOf(state: ChannelState, m: Wire, ev: TaskUpdate): Move | null {
   if (ev.state) return { what: STATE_MOVES[ev.state], ...said(ev.note, ev.state) }
   if (ev.owner === null) return { what: "unassigned", ...said(ev.note) }
   if (ev.review !== undefined) return { what: "reviewer", ...(ev.review ? { to: ev.review } : {}), ...said(ev.note) }
-  if (ev.title) return { what: "renamed", note: ev.title.trim() }
-  if (ev.proof) return { what: "proof", note: proofLabel(ev.proof) }
-  if (ev.note?.trim()) return { what: ev.checkpoint ? "checkpoint" : "note", note: ev.note.trim() }
+  if (ev.title) return { what: "renamed", note: wrote(ev.title.trim()) }
+  if (ev.proof) return { what: "proof", note: wrote(proofLabel(ev.proof)) }
+  if (ev.note?.trim()) return { what: ev.checkpoint ? "checkpoint" : "note", note: wrote(ev.note.trim()) }
   return null
 }
 
@@ -646,16 +646,16 @@ function historyOf(state: ChannelState, messages: readonly Wire[], me: string): 
       const key = `${id}:${root}`
       if ((where.kind === "task" && where.task === id) || named.has(key)) continue
       named.add(key)
-      add(id, { ...base, what: "mention", where, root, note: m.body.slice(0, 600) })
+      add(id, { ...base, what: "mention", where, root, note: wrote(m.body.slice(0, 600)) })
     }
   }
   return out
 }
 
-function suggestionFor(state: ChannelState, t: CoreTask): { name: string; why: string } | undefined {
+function suggestionFor(state: ChannelState, t: CoreTask): { name: string; why: Words } | undefined {
   if (t.owner || t.state === "done") return undefined
   const top = pickFor(taskCandidates(state, t.id))
-  return top ? { name: top.name, why: top.reasons[0] ?? "has its context" } : undefined
+  return top ? { name: top.name, why: wrote(top.reasons[0] ?? "has its context") } : undefined
 }
 
 export function tasksOf(state: ChannelState, held: ReadonlySet<number>, me: string, messages: readonly Wire[]): Task[] {
@@ -672,8 +672,8 @@ export function tasksOf(state: ChannelState, held: ReadonlySet<number>, me: stri
     const suggested = person ? suggestionFor(state, t) : undefined
     return {
       id: t.id,
-      title: t.title,
-      ...(t.detail ? { detail: t.detail } : {}),
+      title: wrote(t.title),
+      ...(t.detail ? { detail: wrote(t.detail) } : {}),
       status: t.state !== "done" && (waiting.has(t.id) || held.has(t.id)) ? "waiting" : STATUS[t.state],
       ...(t.owner ? { owner: t.owner } : {}),
       ...(t.review ? { reviewer: t.review } : {}),
@@ -683,13 +683,13 @@ export function tasksOf(state: ChannelState, held: ReadonlySet<number>, me: stri
       ...(linked ? { pr: prOf(state, linked) } : {}),
       stage: stage.stage,
       ...(release ? { release: versionName(release.tag) } : {}),
-      notes: t.notes.map((n) => ({ by: n.by, at: n.ts, text: n.text })),
+      notes: t.notes.map((n) => ({ by: n.by, at: n.ts, text: wrote(n.text) })),
       rounds: t.rounds.map((r) => ({
         n: r.n,
         by: r.by,
         ...(r.result.kind === "open" || r.result.kind === "withdrawn" ? { at: r.ts } : { judge: r.result.by, at: r.result.ts }),
         result: r.result.kind,
-        ...(r.summary ? { summary: r.summary } : {}),
+        ...(r.summary ? { summary: wrote(r.summary) } : {}),
       })),
       history: history.get(t.id) ?? [],
       archived: !!t.archived,

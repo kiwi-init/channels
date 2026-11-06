@@ -127,7 +127,7 @@ export interface Issue {
 interface TaskNote {
   by: string
   at: number
-  text: string
+  text: Words
 }
 
 export interface ReviewRound {
@@ -136,7 +136,7 @@ export interface ReviewRound {
   judge?: string
   at: number
   result: "open" | "approved" | "rejected" | "withdrawn"
-  summary?: string
+  summary?: Words
 }
 
 export type TaskMove =
@@ -166,15 +166,15 @@ export interface TaskEvent {
   what: TaskMove
   to?: string
   round?: number
-  note?: string
+  note?: Words
   where?: Where
   root?: number
 }
 
 export interface Task {
   id: number
-  title: string
-  detail?: string
+  title: Words
+  detail?: Words
   status: TaskStatus
   owner?: string
   reviewer?: string
@@ -190,7 +190,7 @@ export interface Task {
   archived: boolean
   cancelled?: boolean
   youReview?: "verdict" | "send-back"
-  suggested?: { name: string; why: string }
+  suggested?: { name: string; why: Words }
   leftBy?: string
 }
 
