@@ -37,7 +37,7 @@ function lineOf(c: Source, a: Ask): { what: string; text: string; act: HomeAct }
     }
     case "spec": {
       const spec = c.specs?.find((s) => s.ask === a.ask)
-      const text = clip(spec?.title ?? `Spec #${a.ask}`)
+      const text = clip(spec ? wordsPlain(spec.title, c.nicknames) : `Spec #${a.ask}`)
       if (a.why === "result") return { what: `Spec #${a.ask} is done: check it`, text, act: { kind: "open" } }
       if (a.why === "changed") return { what: `Spec #${a.ask} changed`, text, act: spec ? { kind: "approve-spec", ask: a.ask, v: spec.v } : { kind: "open" } }
       return { what: `Approve spec #${a.ask}`, text, act: spec ? { kind: "approve-spec", ask: a.ask, v: spec.v } : { kind: "open" } }

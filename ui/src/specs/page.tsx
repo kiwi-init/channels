@@ -9,7 +9,8 @@ import { MoreButton } from "~/kit/menu-open"
 import { ago } from "~/kit/time"
 import type { Channel, Spec } from "~/model"
 import { useAct, useApp, type SpecPart } from "~/nav"
-import { nickname } from "~/names"
+import { nickname, Shown } from "~/names"
+import { wordsPlain } from "~/words"
 import { SpecDoc } from "~/specs/doc"
 import { Inside } from "~/specs/inside"
 import { Result } from "~/specs/result"
@@ -36,7 +37,9 @@ export function SpecPage({ channel, spec }: { channel: Channel; spec: Spec }) {
           <button type="button" className="icon-btn spec-back" aria-label="All specs" title="All specs" onClick={() => go({ to: "spec", ask: null })}>
             <Icon name="back" />
           </button>
-          <h1 className="spec-title">{spec.title}</h1>
+          <h1 className="spec-title">
+            <Shown value={spec.title} />
+          </h1>
           <span className={cx("spec-chip", line.tone)}>{line.word}</span>
           <div className="spec-head-end">
             <Track className="seg spec-parts" role="group" aria-label="Spec, inside or result">
@@ -74,12 +77,14 @@ export function SpecPage({ channel, spec }: { channel: Channel; spec: Spec }) {
           {spec.result && (
             <span className={line.tone}>
               {spec.result.auto ? "closed by itself" : `${spec.result.verdict} by ${nickname(channel, spec.result.by)}`} {ago(spec.result.at)}
-              {spec.result.note ? `: “${spec.result.note}”` : ""}
+              {spec.result.note ? `: “${wordsPlain(spec.result.note, channel.nicknames)}”` : ""}
             </span>
           )}
           {spec.backs.length > 0 && <span>sent back {spec.backs.length === 1 ? "once" : `${spec.backs.length} times`}</span>}
         </p>
-        <blockquote className="spec-words">“{spec.words}”</blockquote>
+        <blockquote className="spec-words">
+          “<Shown value={spec.words} />”
+        </blockquote>
         {asks && <Gate channel={channel} spec={spec} editing={editing} part={part} />}
       </div>
       {part === "spec" ? (

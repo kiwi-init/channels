@@ -10,11 +10,11 @@ const general = { kind: "room", room: "general" } as const
 
 const spec = (more: Partial<Spec> = {}): Spec => ({
   ask: 10,
-  title: "Export the board",
-  words: "board as a spreadsheet please",
+  title: wrote("Export the board"),
+  words: wrote("board as a spreadsheet please"),
   by: "maya",
   at: NOW - 60_000,
-  text: "# Export the board\n\n## Done when\n- [ ] a button\n- [x] the columns line up",
+  text: wrote("# Export the board\n\n## Done when\n- [ ] a button\n- [x] the columns line up"),
   v: 11,
   edited: { by: "atlas", at: NOW - 30_000 },
   edits: 1,
@@ -65,7 +65,7 @@ describe("a spec reads where it stands, in words a person reads", () => {
     expect(stageLine(channel({ free: [] }), spec({ stage: "queued", queue: 2 })).line).toBe("starts when an agent is free · 2nd in line · none free yet")
     expect(stageLine(channel({ free: ["win"] }), spec({ stage: "queued", queue: 1 })).line).toBe("starts when an agent is free · next in line · 1 free")
     expect(stageLine(channel(), spec({ stage: "queued", planner: "win" })).line).toBe("win is planning it")
-    expect(stageLine(channel(), spec({ stage: "queued", changed: true, approved: { by: "maya", at: NOW, v: 11, text: "" } })).word).toBe("changed")
+    expect(stageLine(channel(), spec({ stage: "queued", changed: true, approved: { by: "maya", at: NOW, v: 11, text: wrote("") } })).word).toBe("changed")
   })
 
   test("working names who's on it and how much is done", () => {
@@ -139,7 +139,7 @@ describe("what changed since approval, and what happened inside", () => {
         task({ id: 4, status: "done", updatedAt: NOW - 90 * 60_000 }),
       ],
     })
-    const kinds = alarmsOf(c, spec({ stage: "working", tasks: [1, 2, 3, 4], changed: true, approved: { by: "maya", at: NOW, v: 1, text: "" } }), NOW).map((a) => [a.kind, a.task ?? null])
+    const kinds = alarmsOf(c, spec({ stage: "working", tasks: [1, 2, 3, 4], changed: true, approved: { by: "maya", at: NOW, v: 1, text: wrote("") } }), NOW).map((a) => [a.kind, a.task ?? null])
     expect(kinds).toEqual([
       ["changed", null],
       ["circling", 1],
@@ -162,7 +162,7 @@ describe("what changed since approval, and what happened inside", () => {
         }),
       ],
     })
-    const story = storyOf(c, spec({ stage: "working", tasks: [1], approved: { by: "maya", at: NOW - 25_000, v: 11, text: "" } })).map((s) => `${s.who} ${s.text}`)
+    const story = storyOf(c, spec({ stage: "working", tasks: [1], approved: { by: "maya", at: NOW - 25_000, v: 11, text: wrote("") } })).map((s) => `${s.who} ${s.text}`)
     expect(story).toEqual(["maya asked: “board as a spreadsheet please”", "atlas wrote the spec", "maya approved the spec", "atlas filed T1 “writer”", "win took T1"])
   })
 
@@ -173,5 +173,19 @@ describe("what changed since approval, and what happened inside", () => {
     })
     const story = storyOf(c, spec({ stage: "working", tasks: [1] })).map((s) => s.text)
     expect(story).toContain("filed T1 “Pair with @opus-coder”")
+  })
+
+  test("the ask and a send-back note in the story name agents by nickname (#1763)", () => {
+    const c = channel({ nicknames: new Map([["gentle-otter", "opus-coder"]]) })
+    const s = spec({ words: wrote("@gentle-otter, export the board"), backs: [{ by: "maya", at: NOW - 10_000, note: wrote("ask @gentle-otter first") }] })
+    const story = storyOf(c, s).map((l) => l.text)
+    expect(story).toContain("asked: “@opus-coder, export the board”")
+    expect(story).toContain("sent it back: “ask @opus-coder first”")
+  })
+
+  test("a dropped spec's note names agents by nickname (#1763)", () => {
+    const c = channel({ nicknames: new Map([["gentle-otter", "opus-coder"]]) })
+    const line = stageLine(c, spec({ stage: "dropped", result: { verdict: "dropped", by: "maya", at: NOW, note: wrote("@gentle-otter shipped it elsewhere") } }))
+    expect(line.line).toBe("@opus-coder shipped it elsewhere")
   })
 })

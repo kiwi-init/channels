@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Keyboar
 
 import { useNames, useTaskIds } from "~/chat/conversation"
 import { Body } from "~/chat/message"
-import { wrote } from "~/words"
+import { type Words, wordsPlain, wordsRaw, wrote } from "~/words"
 import { Avatar, cx } from "~/kit/bits"
 import { clock } from "~/kit/time"
 import type { Channel, Spec, Where } from "~/model"
@@ -28,14 +28,16 @@ function quoted(quote: string, text: string): string {
     .join("\n")}\n\n${text.trim()}`
 }
 
-function shownText(spec: Spec): string {
-  const lines = spec.text.split("\n")
+function shownText(spec: Spec): Words {
+  const lines = wordsRaw(spec.text).split("\n")
   const first = lines.findIndex((l) => l.trim() !== "")
-  return first >= 0 && /^#\s+/.test(lines[first]!) && lines[first]!.replace(/^#\s+/, "").trim() === spec.title
-    ? lines
-        .slice(first + 1)
-        .join("\n")
-        .trim()
+  return first >= 0 && /^#\s+/.test(lines[first]!) && lines[first]!.replace(/^#\s+/, "").trim() === wordsRaw(spec.title)
+    ? wrote(
+        lines
+          .slice(first + 1)
+          .join("\n")
+          .trim()
+      )
     : spec.text
 }
 
@@ -66,7 +68,7 @@ export function SpecDoc({ channel, spec, editing, onEditing }: { channel: Channe
   const [allTalk, setAllTalk] = useState(false)
   const anchored = comments.filter((c) => c.quote && tops.has(c.m.seq)).sort((a, b) => (tops.get(a.m.seq) ?? 0) - (tops.get(b.m.seq) ?? 0))
   const loose = comments.filter((c) => !c.quote || !tops.has(c.m.seq) || !wide)
-  const key = `${spec.text}\n${comments.map((c) => `${c.m.seq}:${c.quote ?? ""}`).join("\n")}`
+  const key = `${wordsRaw(spec.text)}\n${comments.map((c) => `${c.m.seq}:${c.quote ?? ""}`).join("\n")}`
 
   useLayoutEffect(() => {
     const el = wrap.current
@@ -178,9 +180,9 @@ export function SpecDoc({ channel, spec, editing, onEditing }: { channel: Channe
             </button>
           </div>
         )}
-        {diff && spec.approved && <Diff before={spec.approved.text} after={spec.text} />}
+        {diff && spec.approved && <Diff before={wordsPlain(spec.approved.text, channel.nicknames)} after={wordsPlain(spec.text, channel.nicknames)} />}
         <div ref={doc} className="spec-doc" onMouseUp={picked} onKeyUp={picked}>
-          <Body text={wrote(shownText(spec))} seq={spec.ask} names={names} tasks={tasks} onImage={openImage} onMessage={() => {}} />
+          <Body text={shownText(spec)} seq={spec.ask} names={names} tasks={tasks} onImage={openImage} onMessage={() => {}} />
           {pop && (
             <button
               type="button"
@@ -379,11 +381,11 @@ function Editor({ channel, spec, onDone }: { channel: Channel; spec: Spec; onDon
   const { actions } = useAct()
   const names = useNames(channel)
   const tasks = useTaskIds(channel)
-  const [text, setText] = useState(spec.text)
+  const [text, setText] = useState(wordsRaw(spec.text))
   const [base] = useState(spec.v)
   const moved = spec.v !== base
   const save = () => {
-    if (text.trim() && text.trim() !== spec.text.trim()) actions.writeSpec(channel.code, spec.ask, text)
+    if (text.trim() && text.trim() !== wordsRaw(spec.text).trim()) actions.writeSpec(channel.code, spec.ask, text)
     onDone()
   }
   const keys = (e: KeyboardEvent<HTMLTextAreaElement>) => {

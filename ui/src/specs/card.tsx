@@ -7,7 +7,7 @@ import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
 import type { Channel, Spec, SpecAsk } from "~/model"
 import { useAct } from "~/nav"
-import { nickname } from "~/names"
+import { nickname, Shown } from "~/names"
 import { Inline } from "~/specs/inline"
 import { boxesOf, commentsOf, faceOf, stageLine, tasksOf, workersOf } from "~/specs/read"
 
@@ -28,7 +28,9 @@ export function SpecCard({ channel, spec }: { channel: Channel; spec: Spec }) {
       <button type="button" className="spec-card-main" onClick={() => open(spec.stage === "delivered" ? "result" : spec.stage === "working" ? "inside" : "spec")}>
         <SpecMark spec={spec} />
         <span className="spec-card-kind">Spec</span>
-        <span className="spec-card-title">{spec.title}</span>
+        <span className="spec-card-title">
+          <Shown value={spec.title} />
+        </span>
         <span className="spec-card-faces" aria-hidden="true">
           {who.slice(0, 3).map((n) => (
             <Avatar key={n} person={faceOf(channel, n)} size="sm" />
@@ -72,9 +74,11 @@ export function SpecNeedCard({ channel, ask }: { channel: Channel; ask: SpecAsk 
         </span>
       </header>
       <div className="needs-body">
-        <p className="spec-need-title">{spec.title}</p>
+        <p className="spec-need-title">
+          <Shown value={spec.title} />
+        </p>
         <p className="spec-need-words">
-          “{spec.words}” <span className="dimmer">· {nickname(channel, spec.by)}</span>
+          “<Shown value={spec.words} />” <span className="dimmer">· {nickname(channel, spec.by)}</span>
         </p>
         {boxes.length > 0 && (
           <ul className="spec-boxes is-small">

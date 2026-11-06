@@ -203,21 +203,21 @@ interface SpecMark {
 
 export interface Spec {
   ask: number
-  title: string
-  words: string
+  title: Words
+  words: Words
   by: string
   at: number
-  text: string
+  text: Words
   v: number
   edited: SpecMark
   edits: number
   editors: string[]
   stage: SpecStage
   ready?: true
-  approved?: SpecMark & { v: number; text: string }
+  approved?: SpecMark & { v: number; text: Words }
   changed?: true
-  result?: SpecMark & { verdict: "accepted" | "dropped"; note?: string; auto?: true }
-  backs: (SpecMark & { note: string })[]
+  result?: SpecMark & { verdict: "accepted" | "dropped"; note?: Words; auto?: true }
+  backs: (SpecMark & { note: Words })[]
   comments: number[]
   tasks: number[]
   planner?: string
