@@ -13,6 +13,7 @@ import { ago } from "~/kit/time"
 import type { Channel } from "~/model"
 import { useApp } from "~/nav"
 import { PanelHead } from "~/panels/frame"
+import { OutsideLink } from "~/kit/outside"
 
 const same = (a: { repo: string; number: number }, repo: string, number: number): boolean => a.number === number && a.repo.toLowerCase() === repo.toLowerCase()
 
@@ -23,10 +24,10 @@ const since = (at: number): string => {
 
 function Out({ href, children, primary }: { href: string; children: ReactNode; primary?: boolean }) {
   return (
-    <a className={cx("btn is-small", primary && "is-primary")} href={href} target="_blank" rel="noreferrer noopener">
+    <OutsideLink className={cx("btn is-small", primary && "is-primary")} href={href}>
       {children}
       {primary && <GlyphIcon glyph={LinkSquare02Icon} size={12} />}
-    </a>
+    </OutsideLink>
   )
 }
 

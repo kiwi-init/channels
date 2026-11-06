@@ -3,6 +3,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, st
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { RELEASE_ID, TEST_ID } from "../desktop/scripts/bundle-ids.ts";
 import { ENTRY_FILE, entryText, execArgs, hasFusermount, keepEntry, keepLinuxEntry, launchedFile, quotedExec, withKiwiDefault } from "../desktop/src/linux-entry.ts";
 
 const root = mkdtempSync(join(tmpdir(), "kiwi-linux-entry-"));
@@ -136,9 +137,25 @@ describe("the AppImage keeps its own desktop entry (#1284)", () => {
     const p = place();
     const home = join(root, "home");
     const env = { APPDIR: p.appDir, PATH: "", XDG_DATA_HOME: "relative", XDG_CONFIG_HOME: join(root, "xdg-config") };
-    expect(keepLinuxEntry(p.appImage, env, home).kind).toBe("kept");
+    expect(keepLinuxEntry(p.appImage, RELEASE_ID, env, home).kind).toBe("kept");
     expect(readFileSync(join(home, ".local", "share", "applications", ENTRY_FILE), "utf8")).toContain("APPIMAGE_EXTRACT_AND_RUN=1");
     expect(readFileSync(join(root, "xdg-config", "mimeapps.list"), "utf8")).toContain(`x-scheme-handler/kiwi=${ENTRY_FILE}`);
-    expect(keepLinuxEntry(p.appImage, {}, home)).toEqual({ kind: "skipped", why: "the AppImage runtime set no APPDIR" });
+    expect(keepLinuxEntry(p.appImage, RELEASE_ID, {}, home)).toEqual({ kind: "skipped", why: "the AppImage runtime set no APPDIR" });
+  });
+
+  test("a dev or test build leaves the installed app's entry, icons and kiwi default alone (#1806)", () => {
+    const installed = place();
+    const home = join(root, "home-1806");
+    const env = { APPDIR: installed.appDir, PATH: "/usr/bin", XDG_DATA_HOME: installed.dataHome, XDG_CONFIG_HOME: installed.configHome };
+    expect(keepLinuxEntry(installed.appImage, RELEASE_ID, env, home).kind).toBe("kept");
+    const entry = join(installed.dataHome, "applications", ENTRY_FILE);
+    const mimeapps = join(installed.configHome, "mimeapps.list");
+    const before = [readFileSync(entry, "utf8"), readFileSync(mimeapps, "utf8"), statSync(entry).mtimeMs, statSync(mimeapps).mtimeMs];
+    const testBuild = join(root, "Downloads", "T424", "Channels-0.0.0-linux-x86_64.AppImage");
+    for (const id of [`${RELEASE_ID}.dev`, TEST_ID]) {
+      expect(keepLinuxEntry(testBuild, id, env, home)).toEqual({ kind: "skipped", why: `a ${id} build leaves the app menu's entry to the installed ${RELEASE_ID}` });
+    }
+    expect([readFileSync(entry, "utf8"), readFileSync(mimeapps, "utf8"), statSync(entry).mtimeMs, statSync(mimeapps).mtimeMs]).toEqual(before);
+    expect(readFileSync(entry, "utf8")).toContain(installed.appImage);
   });
 });

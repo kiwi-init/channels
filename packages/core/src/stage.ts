@@ -1,6 +1,6 @@
 import { inlineText } from "./membership.ts";
 import { ignored, type Message } from "./protocol.ts";
-import { checksOf, prLinks, rulesText, taskPr } from "./prs.ts";
+import { checksOf, prLinks, proofPr, rulesText, taskPr } from "./prs.ts";
 import { openRound, prKey, rulesOf, type ChannelState, type GithubPr, type ReviewRound, type Task } from "./state.ts";
 
 type Stage = "open" | "building" | "proving" | "red" | "yours" | "done" | "dropped";
@@ -17,7 +17,7 @@ type Ref = { kind: "pr"; repo: string; number: number } | { kind: "sha"; repo: s
 
 const SHA_MIN = 7;
 
-const sameHead = (at: string, head: string): boolean => at === head || (at.length >= SHA_MIN && head.length >= SHA_MIN && (head.startsWith(at) || at.startsWith(head)));
+export const sameHead = (at: string, head: string): boolean => at === head || (at.length >= SHA_MIN && head.length >= SHA_MIN && (head.startsWith(at) || at.startsWith(head)));
 
 const short = (sha: string): string => sha.slice(0, SHA_MIN);
 
@@ -25,15 +25,8 @@ function lastVerdict(t: Task): ReviewRound | undefined {
   return [...t.rounds].reverse().find((r) => r.result.kind === "approved" || r.result.kind === "rejected");
 }
 
-function linkedPr(state: ChannelState, t: Task): GithubPr | undefined {
-  const byBranch = taskPr(state, t.id)?.pr;
-  if (byBranch) return byBranch;
-  for (const p of [...(t.proof ?? [])].reverse())
-    for (const l of prLinks(p.url)) {
-      const pr = state.github.prs.get(prKey(l.repo, l.number));
-      if (pr) return pr;
-    }
-  return undefined;
+export function linkedPr(state: ChannelState, t: Task): GithubPr | undefined {
+  return taskPr(state, t.id)?.pr ?? proofPr(state.github, t);
 }
 
 const failedAt = (state: ChannelState, pr: GithubPr): string[] => checksOf(state, pr)?.failed ?? [];

@@ -184,6 +184,7 @@ export class SessionTasks extends SessionMessaging {
         at?: string;
         summary?: string;
         round?: number;
+        runs?: number[];
         proof?: { url: string; label?: string };
         checkpoint?: true;
         then?: Landing;

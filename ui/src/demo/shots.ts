@@ -146,6 +146,7 @@ export const SHOTS: Record<string, Shot> = {
   },
   "theme-editor": kiwi({ page: "settings", section: "appearance" }),
   "personality-editor": kiwi({ page: "settings", section: "agents" }),
+  "channel-oled": { ...kiwi(), prefs: { darkTheme: "channels-oled" } },
   "channel-merino": { ...kiwi(), prefs: { darkTheme: "merino-dark", lightTheme: "merino-light" } },
   "channel-abyssal": { ...kiwi(), prefs: { darkTheme: "abyssal-trench", lightTheme: "glacier-mint" } },
   "channel-cathode": { ...kiwi(), prefs: { darkTheme: "cathode-amber", lightTheme: "sunlit-parchment" } },

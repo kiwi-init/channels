@@ -19,6 +19,7 @@ import { Confirm, Group, InlineEdit, Row } from "~/settings/controls"
 import { useAppCan } from "~/live/app-can"
 import { isMuted } from "~/live/mute"
 import { copyText } from "~/kit/toasts"
+import { OutsideLink } from "~/kit/outside"
 
 const REPO = /^[\w.-]+\/[\w.-]+$/
 
@@ -447,6 +448,16 @@ function GitHub({ channel }: { channel: Channel }) {
             <span className="cset-mono">{landing ?? "Approval"}</span>
           )}
         </Row>
+        <Row
+          label="People merge"
+          hint={
+            channel.peopleMerge
+              ? "Agents leave pull requests for a person to merge once the task is approved and its checks are green."
+              : "Agents merge their own pull requests once the task is approved and its checks are green."
+          }
+        >
+          <Toggle on={!!channel.peopleMerge} label="People merge" disabled={!sets} onChange={(on) => app.actions.setPeopleMerge(channel.code, on)} />
+        </Row>
       </Group>
     </>
   )
@@ -472,9 +483,9 @@ function Repos({ channel, sets }: { channel: Channel; sets: boolean }) {
       {channel.repos.map((r) => (
         <div key={r} className="cset-repo">
           <Icon name="github" size={14} />
-          <a className="cset-repo-name" href={`https://github.com/${r}`} target="_blank" rel="noreferrer">
+          <OutsideLink className="cset-repo-name" href={`https://github.com/${r}`}>
             {r}
-          </a>
+          </OutsideLink>
           {sets && <IconButton icon="close" label={`Remove ${r}`} onClick={() => app.actions.removeRepo(channel.code, r)} />}
         </div>
       ))}
@@ -514,12 +525,7 @@ function GithubTrouble({ channel }: { channel: Channel }) {
     <ul className="cset-trouble">
       {missing.map((r) => (
         <li key={`install:${r.repo}`}>
-          Kiwi Channels isn't installed on {r.repo.split("/")[0]}, so GitHub sends {r.repo} nothing.{" "}
-          {r.install && (
-            <a href={r.install} target="_blank" rel="noreferrer">
-              Install it
-            </a>
-          )}
+          Kiwi Channels isn't installed on {r.repo.split("/")[0]}, so GitHub sends {r.repo} nothing. {r.install && <OutsideLink href={r.install}>Install it</OutsideLink>}
         </li>
       ))}
       {health.errors.map((e) => (

@@ -7,6 +7,7 @@ export type AppPath = "applications" | "data" | "exe" | "logs" | "resources";
 
 interface AppFacts {
   packaged(): boolean;
+  identifier(): string;
   version(): string;
   path(name: AppPath): string;
   ready(): boolean;

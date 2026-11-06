@@ -24,6 +24,7 @@ import { ago } from "~/kit/time"
 import { memberOf, type Channel, type Check, type Issue, type PullRequest } from "~/model"
 import { useApp } from "~/nav"
 import { nickname, Shown } from "~/names"
+import { OutsideLink } from "~/kit/outside"
 
 const PR_GLYPHS: Record<PullRequest["state"], Glyph> = { open: GitPullRequestIcon, draft: GitPullRequestDraftIcon, merged: GitMergeIcon, closed: GitPullRequestClosedIcon }
 export const PR_TONES: Record<PullRequest["state"], string> = { open: "tone-live", draft: "tone-quiet", merged: "tone-review", closed: "tone-quiet" }
@@ -91,9 +92,9 @@ function CheckRow({ c }: { c: Check }) {
         <GlyphIcon glyph={CHECK_GLYPHS[c.state]} size={14} />
       </span>
       {c.url ? (
-        <a className="gh-check-name" href={c.url} target="_blank" rel="noreferrer noopener" title={`${c.name} on GitHub`}>
+        <OutsideLink className="gh-check-name" href={c.url} title={`${c.name} on GitHub`}>
           {c.name}
-        </a>
+        </OutsideLink>
       ) : (
         <span className="gh-check-name">{c.name}</span>
       )}
@@ -219,13 +220,11 @@ export function PrCard({ pr }: { pr: PullRequest }) {
       <p className="gh-card-foot">
         <span className="dimmer">{pr.repo}</span>
         <span className="gh-card-links">
-          <a href={`${pr.url}/files`} target="_blank" rel="noreferrer noopener">
-            Files
-          </a>
-          <a href={pr.url} target="_blank" rel="noreferrer noopener">
+          <OutsideLink href={`${pr.url}/files`}>Files</OutsideLink>
+          <OutsideLink href={pr.url}>
             Open on GitHub
             <GlyphIcon glyph={LinkSquare02Icon} size={12} />
-          </a>
+          </OutsideLink>
         </span>
       </p>
     </div>

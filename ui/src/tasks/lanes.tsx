@@ -9,6 +9,7 @@ import { useApp } from "~/nav"
 import { TONES } from "~/tasks/row"
 import { nickname, shown, Shown } from "~/names"
 import { lanesOf, type Lane } from "~/now"
+import { OutsideLink } from "~/kit/outside"
 
 const MAX_TICKS = 8
 
@@ -29,9 +30,9 @@ function Ticks({ ticks }: { ticks: NonNullable<PullRequest["ticks"]> }) {
 function PrLine({ pr }: { pr: PullRequest }) {
   return (
     <span className="lane-pr">
-      <a href={pr.url} target="_blank" rel="noreferrer" className="num">
+      <OutsideLink href={pr.url} className="num">
         PR #{pr.number}
-      </a>
+      </OutsideLink>
       {pr.state !== "open" && pr.state !== "draft" ? <span>{pr.state}</span> : pr.ticks ? <Ticks ticks={pr.ticks} /> : <span>no checks yet</span>}
     </span>
   )
@@ -110,9 +111,9 @@ function LaneCard({ channel, lane }: { channel: Channel; lane: Lane }) {
           <ul>
             {lane.watching.map((pr) => (
               <li key={pr.url} className="lane-row">
-                <a href={pr.url} target="_blank" rel="noreferrer" className="lane-id num">
+                <OutsideLink href={pr.url} className="lane-id num">
                   #{pr.number}
-                </a>
+                </OutsideLink>
                 <span className="lane-row-title">{pr.title}</span>
                 {pr.ticks && <Ticks ticks={pr.ticks} />}
               </li>
@@ -144,6 +145,12 @@ export function Lanes({ channel }: { channel: Channel }) {
     )
   return (
     <div className="lanes" role="region" aria-label="Agent lanes">
+      {channel.reviewNotRequired && (
+        <p className="lanes-warning" role="note">
+          Tasks here land on merge, but {channel.reviewNotRequired.join(", ")} doesn't require kiwi/review, so a PR can merge before its task's gate opens. The owner can require it in the repo's
+          ruleset.
+        </p>
+      )}
       {lanes.map((lane) => (
         <LaneCard key={lane.person.name} channel={channel} lane={lane} />
       ))}

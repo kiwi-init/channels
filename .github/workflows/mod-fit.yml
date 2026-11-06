@@ -1,0 +1,53 @@
+name: mod-fit
+
+on:
+  issues:
+    types: [opened, reopened, edited, labeled]
+  pull_request_target:
+    types: [opened, reopened, edited, synchronize, labeled]
+  workflow_dispatch:
+    inputs:
+      number:
+        description: "Judge this issue or pull request (a number)"
+        required: true
+      trial:
+        description: "Judge it as if from outside kiwi-init, and only print what would be posted"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mod-fit-${{ github.event.issue.number || github.event.pull_request.number || inputs.number }}
+  cancel-in-progress: true
+
+jobs:
+  judge:
+    name: pr / mod fit
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.action == 'labeled' && github.event.label.name == 'core') ||
+      (github.event.action != 'labeled' && !endsWith(github.event.sender.login, '[bot]'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - id: app
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.BUS_APP_CLIENT_ID }}
+          private-key: ${{ secrets.BUS_APP_PRIVATE_KEY }}
+          permission-issues: write
+          permission-pull-requests: write
+      - name: core or mod
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          BOT: ${{ steps.app.outputs.app-slug }}[bot]
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || inputs.number }}
+          TRIAL: ${{ inputs.trial }}
+        run: bun scripts/mod-fit.ts

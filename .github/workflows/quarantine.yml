@@ -1,0 +1,42 @@
+name: quarantine
+
+on:
+  pull_request_target:
+    types: [opened, reopened, edited, synchronize, ready_for_review, labeled]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quarantine-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  quarantine:
+    name: pr / quarantine
+    if: >-
+      (github.event_name == 'pull_request_target' && (github.event.action != 'labeled' || github.event.label.name == 'quarantine'))
+      || (github.event_name == 'issue_comment' && github.event.issue.pull_request && github.event.comment.user.type != 'Bot' && contains(github.event.comment.body, '/vouch'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.4
+      - id: app
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.BUS_APP_CLIENT_ID }}
+          private-key: ${{ secrets.BUS_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+      - name: quarantine or lift
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          BOT: ${{ steps.app.outputs.app-slug }}[bot]
+        run: bun scripts/quarantine.ts

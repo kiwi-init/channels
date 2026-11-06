@@ -1,12 +1,11 @@
-import type { Message } from "@kiwi/core/protocol.ts";
 import type { ChannelState } from "@kiwi/core/state.ts";
 import type { ChannelLink } from "./channel-ops.ts";
 import { drain } from "./github-queue.ts";
-import { checksToPost, issuesToPost, linksToPost, setCheckedUpTo, tasksToClose } from "./review-checks.ts";
+import { checkPosted, checksToPost, issuesToPost, linksToPost, setCheckedUpTo, tasksToClose } from "./review-checks.ts";
 import { closeFromGithub } from "./task-actions.ts";
 
-export async function postReviewChores(ch: ChannelLink, state: ChannelState, messages: Message[]): Promise<void> {
-  const due = checksToPost(ch.roomId, state, messages);
+export async function postReviewChores(ch: ChannelLink, state: ChannelState): Promise<void> {
+  const due = checksToPost(ch.roomId, state).map((p, seq) => ({ ...p, seq }));
   const links = linksToPost(ch.roomId, state);
   const issues = issuesToPost(ch.roomId, state);
   const closes = tasksToClose(ch.roomId, state);
@@ -14,8 +13,11 @@ export async function postReviewChores(ch: ChannelLink, state: ChannelState, mes
   if (
     !(await drain(
       due,
-      (c) => ch.postReviewCheck(c),
-      (seq) => setCheckedUpTo(ch.roomId, seq),
+      ({ repo, sha, verdict, tasks, note }) => ch.postReviewCheck({ repo, sha, verdict, tasks, ...(note ? { note } : {}) }),
+      (seq) => {
+        const p = due[seq];
+        if (p) checkPosted(ch.roomId, state, p);
+      },
     ))
   )
     return;

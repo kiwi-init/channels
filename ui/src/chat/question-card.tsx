@@ -2,7 +2,7 @@ import { LinkSquare02Icon } from "@hugeicons/core-free-icons"
 import { useEffect, useMemo, useState } from "react"
 
 import { HANDOFF_DONE, HANDOFF_FAILED } from "@kiwi/core/protocol.ts"
-import { bridge } from "@kiwi/secrets/secrets.ts"
+import { openOutside } from "~/kit/outside"
 import { wordsPlain, wordsRaw, wordsSame } from "~/words"
 import { Body } from "~/chat/body"
 import { jumpTo } from "~/chat/reply"
@@ -30,9 +30,7 @@ function useNow(until: number | undefined): number {
 
 function openBrowser(handoff: Handoff): void {
   if (handoff.expiresAt <= Date.now()) return announce("The link has expired", "error")
-  const b = bridge()
-  if (b) void b.openExternal(handoff.url).catch(() => announce("Couldn't open the browser", "error"))
-  else window.open(handoff.url, "_blank", "noopener,noreferrer")
+  openOutside(handoff.url, () => announce("Couldn't open the browser", "error"))
 }
 
 function HandoffLink({ handoff, now }: { handoff: Handoff; now: number }) {
