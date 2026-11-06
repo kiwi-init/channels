@@ -16,7 +16,7 @@ const BUDGET = {
   oneCommandHelp: 1_700,
   wrappingPerMessage: 40,
   everyday: 300,
-  status: 800,
+  status: 850,
   busyTurn: 600,
 } as const;
 
