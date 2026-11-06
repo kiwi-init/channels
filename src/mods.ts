@@ -22,6 +22,8 @@ import {
 } from "node:fs";
 import { isAbsolute, join } from "node:path";
 
+import KIT_TYPES from "./mod-kit.txt" with { type: "text" };
+
 const MOD_NAME = /^[a-z0-9][a-z0-9-]{0,62}$/;
 const STARTER_SHELL = "^3.6";
 const MANIFEST_BYTES = 64 * 1024;
@@ -440,22 +442,47 @@ const titleOf = (name: string): string =>
     .map((w) => w[0]!.toUpperCase() + w.slice(1))
     .join(" ");
 
+export const KIT_TYPES_FILE = "kiwi-mod.d.ts";
+
+const STARTER_TSCONFIG = {
+  compilerOptions: { target: "ES2022", module: "ESNext", moduleResolution: "Bundler", jsx: "react-jsx", lib: ["ES2022", "DOM", "DOM.Iterable"], strict: true, noEmit: true, skipLibCheck: true },
+};
+
+const json = (v: unknown): string => `${JSON.stringify(v, null, 2)}\n`;
+
+function freshTypes(dir: string): void {
+  const file = join(dir, KIT_TYPES_FILE);
+  if (existsSync(file) && readFileSync(file, "utf8") !== KIT_TYPES) writeFileSync(file, KIT_TYPES);
+}
+
 function starter(dir: string, name: string): void {
   const title = titleOf(name);
-  writeFileSync(join(dir, "mod.json"), `${JSON.stringify({ name, version: "0.1.0", shell: STARTER_SHELL, needs: ["panel"] }, null, 2)}\n`);
+  writeFileSync(join(dir, "mod.json"), json({ name, version: "0.1.0", shell: STARTER_SHELL, needs: ["panel"] }));
+  writeFileSync(join(dir, KIT_TYPES_FILE), KIT_TYPES);
+  writeFileSync(join(dir, "tsconfig.json"), json(STARTER_TSCONFIG));
+  writeFileSync(join(dir, "package.json"), json({ private: true, devDependencies: { "@types/react": "^19.3.0" } }));
+  writeFileSync(join(dir, ".gitignore"), "node_modules\n");
   writeFileSync(
     join(dir, "index.tsx"),
     [
-      'import { useState } from "react"',
-      'import { Button, panel, Row } from "@kiwi/mod"',
+      'import { Action, Actions, List, panel, Toast } from "@kiwi/mod"',
       "",
       "function View() {",
-      "  const [count, setCount] = useState(0)",
       "  return (",
-      "    <>",
-      `      <Row title=${JSON.stringify(title)} sub="Edit index.tsx and save: Channels reloads it." />`,
-      "      <Button onClick={() => setCount(count + 1)}>Pressed {count}</Button>",
-      "    </>",
+      `    <List searchBarPlaceholder=${JSON.stringify(`Search ${title}`)}>`,
+      `      <List.Section title=${JSON.stringify(title)}>`,
+      "        <List.Item",
+      '          title="Edit index.tsx and save"',
+      '          subtitle="Channels reloads it"',
+      '          icon="spec"',
+      "          actions={",
+      "            <Actions>",
+      `              <Action title="Say hi" onAction={() => Toast.show({ title: ${JSON.stringify(`Hi from ${title}`)} })} />`,
+      "            </Actions>",
+      "          }",
+      "        />",
+      "      </List.Section>",
+      "    </List>",
       "  )",
       "}",
       "",
@@ -483,7 +510,11 @@ export function startDev(home: string, name: string, cwd: string): DevStart {
   if (!MOD_NAME.test(name)) throw new ModError(`"${name}" isn't a mod name: use lowercase letters, digits and dashes`);
   if (isAppPrefix(name)) throw new ModError(`"${name}" is a name Channels keeps for its own commands: pick another`);
   const at = join(modsDir(home), name);
-  if (lstatSync(at, { throwIfNoEntry: false })) return { at, dir: realOf(at, name), how: "opened" };
+  if (lstatSync(at, { throwIfNoEntry: false })) {
+    const dir = realOf(at, name);
+    freshTypes(dir);
+    return { at, dir, how: "opened" };
+  }
   mkdirSync(modsDir(home), { recursive: true });
   const here = join(cwd, "mod.json");
   if (existsSync(here)) {
@@ -501,6 +532,7 @@ export function startDev(home: string, name: string, cwd: string): DevStart {
       );
     const dir = realpathSync(cwd);
     symlinkSync(dir, at);
+    freshTypes(dir);
     return { at, dir, how: "linked" };
   }
   mkdirSync(at);

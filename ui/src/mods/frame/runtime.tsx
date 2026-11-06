@@ -3,35 +3,28 @@ import * as ReactDOM from "react-dom"
 import * as ReactDOMClient from "react-dom/client"
 import * as jsxRuntime from "react/jsx-runtime"
 import type { ComponentType, ReactNode } from "react"
+import type * as Kit from "@kiwi/mod"
 
 import "~/styles/tokens.css"
 import "~/styles/base.css"
+import "~/styles/palette.css"
+import "~/styles/chat.css"
 import "~/mods/frame/frame.css"
 import { Field } from "~/kit/form"
 import { Icon } from "~/kit/icons"
-import { MOD_PROTOCOL, type FromFrame, type ModFetchResult, type ModMessage, type Surface, type ToFrame } from "~/mods/protocol"
-
-type Waiting = { resolve: (r: ModFetchResult) => void; reject: (e: Error) => void }
-
-type Out = { [K in FromFrame["type"]]: Omit<Extract<FromFrame, { type: K }>, "kiwi"> }[FromFrame["type"]]
-
-const post = (m: Out): void => parent.postMessage({ kiwi: MOD_PROTOCOL, ...m }, "*")
+import { Action, Actions, Detail, Empty, Form, List, useFetch } from "~/mods/frame/kit"
+import { copy, failed, modFetch, openUrl, post, replied, storage, Toast } from "~/mods/frame/wire"
+import { MOD_PROTOCOL, type ModMessage, type Surface, type ToFrame } from "~/mods/protocol"
 
 let view: ComponentType | null = null
 let booted = false
 let surface: Surface = "main"
 let needs: ReadonlySet<string> = new Set()
-let nextId = 1
-const waiting = new Map<number, Waiting>()
 const commands = new Map<string, { title: string; run: () => void | Promise<void> }>()
 const actions = new Map<string, { title: string; run: (message: ModMessage) => void | Promise<void> }>()
 const box = document.getElementById("root") ?? document.body.appendChild(document.createElement("div"))
 const root = ReactDOMClient.createRoot(box)
 let sized: ResizeObserver | null = null
-
-function failed(e: unknown): void {
-  post({ type: "error", message: e instanceof Error ? (e.stack ?? e.message) : String(e) })
-}
 
 function mount(): void {
   const View = view
@@ -44,23 +37,6 @@ function asked(need: string, call: string): void {
 
 function listed<T extends { title: string }>(list: Map<string, T>): { id: string; title: string }[] {
   return [...list].map(([id, c]) => ({ id, title: c.title }))
-}
-
-function bytes(b64: string): Uint8Array<ArrayBuffer> {
-  const raw = atob(b64)
-  const out = new Uint8Array(raw.length)
-  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i)
-  return out
-}
-
-async function modFetch(input: string | URL, init: { method?: string; headers?: HeadersInit; body?: string | null } = {}): Promise<Response> {
-  if (init.body !== undefined && init.body !== null && typeof init.body !== "string") throw new TypeError("a mod's fetch sends a string body")
-  const id = nextId++
-  const reply = new Promise<ModFetchResult>((resolve, reject) => waiting.set(id, { resolve, reject }))
-  post({ type: "fetch", id, url: String(input), init: { method: init.method ?? "GET", headers: Object.fromEntries(new Headers(init.headers).entries()), body: init.body ?? null } })
-  const r = await reply
-  const empty = r.status === 204 || r.status === 304 || (init.method ?? "GET").toUpperCase() === "HEAD"
-  return new Response(empty ? null : bytes(r.body), { status: r.status, statusText: r.statusText, headers: r.headers })
 }
 
 function Button({ children, onClick, kind, disabled }: { children: ReactNode; onClick?: () => void; kind?: "primary" | "quiet" | "danger"; disabled?: boolean }) {
@@ -123,6 +99,28 @@ const api = {
   Field,
   Row,
   Icon,
+  List,
+  Detail,
+  Form,
+  Action,
+  Actions,
+  Empty,
+  Toast,
+  useFetch,
+  storage,
+} satisfies typeof Kit
+
+try {
+  Object.defineProperty(window, "open", {
+    configurable: true,
+    value: (url?: string | URL) => {
+      if (url) openUrl(String(url))
+      return null
+    },
+  })
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async (text: string) => copy(text) } })
+} catch {
+  // A browser that won't let the frame swap these keeps its own: links and copying then do nothing in mods.
 }
 
 Object.assign(globalThis, {
@@ -164,12 +162,7 @@ addEventListener("message", (e) => {
   } else if (m.type === "theme") theme(m.theme, m.dark)
   else if (m.type === "command") void Promise.resolve(commands.get(m.id)?.run()).catch(failed)
   else if (m.type === "action") void Promise.resolve(actions.get(m.id)?.run(m.message)).catch(failed)
-  else if (m.type === "reply") {
-    const w = waiting.get(m.id)
-    waiting.delete(m.id)
-    if (m.ok) w?.resolve(m.value)
-    else w?.reject(new Error(m.error))
-  }
+  else replied(m)
 })
 
 post({ type: "hello" })

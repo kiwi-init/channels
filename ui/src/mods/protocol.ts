@@ -60,6 +60,12 @@ interface ModFetchInit {
   body?: string | null
 }
 
+export type StorageOp = "get" | "set" | "remove" | "keys"
+
+export type ToastStyle = "success" | "failure"
+
+export const STORAGE = { key: 200, value: 256_000, total: 1_000_000 }
+
 export interface ModFetchResult {
   status: number
   statusText: string
@@ -74,6 +80,8 @@ export type ToFrame =
   | { kiwi: typeof MOD_PROTOCOL; type: "action"; id: string; message: ModMessage }
   | { kiwi: typeof MOD_PROTOCOL; type: "reply"; id: number; ok: true; value: ModFetchResult }
   | { kiwi: typeof MOD_PROTOCOL; type: "reply"; id: number; ok: false; error: string }
+  | { kiwi: typeof MOD_PROTOCOL; type: "stored"; id: number; ok: true; value: string | string[] | null }
+  | { kiwi: typeof MOD_PROTOCOL; type: "stored"; id: number; ok: false; error: string }
 
 export type FromFrame =
   | { kiwi: typeof MOD_PROTOCOL; type: "hello" }
@@ -85,6 +93,10 @@ export type FromFrame =
   | { kiwi: typeof MOD_PROTOCOL; type: "size"; height: number }
   | { kiwi: typeof MOD_PROTOCOL; type: "actions"; list: ModCommand[] }
   | { kiwi: typeof MOD_PROTOCOL; type: "fetch"; id: number; url: string; init: ModFetchInit }
+  | { kiwi: typeof MOD_PROTOCOL; type: "storage"; id: number; op: StorageOp; key: string | null; value: string | null }
+  | { kiwi: typeof MOD_PROTOCOL; type: "toast"; title: string; message: string | null; style: ToastStyle | null }
+  | { kiwi: typeof MOD_PROTOCOL; type: "open"; url: string }
+  | { kiwi: typeof MOD_PROTOCOL; type: "copy"; text: string }
 
 const GATED: { readonly [K in FromFrame["type"]]?: readonly [need: string, from: Surface] } = {
   panel: ["panel", "main"],
@@ -94,12 +106,19 @@ const GATED: { readonly [K in FromFrame["type"]]?: readonly [need: string, from:
   size: ["sidebar", "sidebar"],
 }
 
+const RUNNING: ReadonlySet<FromFrame["type"]> = new Set(["storage", "toast", "open", "copy"])
+
 export function heeded(type: FromFrame["type"], from: Surface, mod: { state: string; needs: readonly string[] } | undefined): boolean {
+  if (RUNNING.has(type)) return !!mod && mod.state === "on"
   const gate = GATED[type]
   return !gate || (gate[1] === from && !!mod && mod.state === "on" && mod.needs.includes(gate[0]))
 }
 
 const short = (v: unknown, max: number): v is string => typeof v === "string" && v.length > 0 && v.length <= max
+
+const OPS: ReadonlySet<string> = new Set<StorageOp>(["get", "set", "remove", "keys"])
+
+const web = (v: unknown): v is string => short(v, 2_000) && /^https?:\/\//i.test(v)
 
 function named(v: unknown, max: number): ModCommand[] | null {
   if (!Array.isArray(v) || v.length > max) return null
@@ -149,6 +168,28 @@ export function fromFrame(data: unknown): FromFrame | null {
         init: { method: typeof i["method"] === "string" ? i["method"] : "GET", headers, body: typeof i["body"] === "string" ? i["body"] : null },
       }
     }
+    case "storage": {
+      const { id, op, key, value } = m
+      if (typeof id !== "number" || !Number.isSafeInteger(id) || typeof op !== "string" || !OPS.has(op)) return null
+      if (op !== "keys" && !short(key, STORAGE.key)) return null
+      if (op === "set" && (typeof value !== "string" || value.length > STORAGE.value)) return null
+      return { kiwi: MOD_PROTOCOL, type: "storage", id, op: op as StorageOp, key: op === "keys" ? null : (key as string), value: op === "set" ? (value as string) : null }
+    }
+    case "toast": {
+      const { title, message, style } = m
+      if (!short(title, 200)) return null
+      return {
+        kiwi: MOD_PROTOCOL,
+        type: "toast",
+        title,
+        message: short(message, 500) ? message : null,
+        style: style === "success" || style === "failure" ? style : null,
+      }
+    }
+    case "open":
+      return web(m["url"]) ? { kiwi: MOD_PROTOCOL, type: "open", url: m["url"] } : null
+    case "copy":
+      return short(m["text"], 100_000) ? { kiwi: MOD_PROTOCOL, type: "copy", text: m["text"] } : null
     default:
       return null
   }

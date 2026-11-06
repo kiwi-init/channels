@@ -3,9 +3,11 @@ import { execFileSync } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { addMod, devRound, git, type Git, listMods, ModError, modsDir, nudgeApp, parseSource, readManifest, removeMod, startDev, updateMods } from "../src/mods.ts";
+import { addMod, devRound, git, type Git, KIT_TYPES_FILE, listMods, ModError, modsDir, nudgeApp, parseSource, readManifest, removeMod, startDev, updateMods } from "../src/mods.ts";
 import { bundleMod } from "@kiwi/core/node/mod-bundle.ts";
 import { kiwiCmd } from "./owner.ts";
+
+const KIT_TYPES = readFileSync(join(import.meta.dir, "../ui/src/mods/frame/kiwi-mod.d.ts"), "utf8");
 
 setDefaultTimeout(60_000);
 
@@ -274,20 +276,30 @@ describe("kiwi mod dev", () => {
     expect(made).toEqual({ at: join(modsDir(home), "standup-notes"), dir: join(modsDir(home), "standup-notes"), how: "created" });
     expect(JSON.parse(readFileSync(join(made.dir, "mod.json"), "utf8"))).toEqual({ name: "standup-notes", version: "0.1.0", shell: "^3.6", needs: ["panel"] });
     expect(readFileSync(join(made.dir, "index.tsx"), "utf8")).toContain('panel({ title: "Standup Notes", render: View })');
+    expect(readdirSync(made.dir).sort()).toEqual([".gitignore", "index.tsx", KIT_TYPES_FILE, "mod.json", "package.json", "tsconfig.json"]);
+    expect(readFileSync(join(made.dir, KIT_TYPES_FILE), "utf8")).toBe(KIT_TYPES);
     const round = await devRound(made.dir, "standup-notes");
     expect(round.ok && round.manifest.needs).toEqual(["panel"]);
+    writeFileSync(join(made.dir, KIT_TYPES_FILE), 'declare module "@kiwi/mod" {}\n');
     expect(startDev(home, "standup-notes", scratch("cwd")).how).toBe("opened");
+    expect(readFileSync(join(made.dir, KIT_TYPES_FILE), "utf8")).toBe(KIT_TYPES);
+  });
+
+  test("the starter type-checks against the shipped @kiwi/mod types, so editors autocomplete it", () => {
+    const { dir } = startDev(scratch("dev"), "standup-notes", scratch("cwd"));
+    symlinkSync(join(import.meta.dir, "../ui/node_modules"), join(dir, "node_modules"));
+    execFileSync(join(import.meta.dir, "../node_modules/.bin/tsrs"), ["--noEmit", "-p", dir], { stdio: ["ignore", "pipe", "pipe"] });
+    writeFileSync(join(dir, "index.tsx"), 'import { List } from "@kiwi/mod"\n\nexport const wrong = <List.Item title={1} />\n');
+    expect(() => execFileSync(join(import.meta.dir, "../node_modules/.bin/tsrs"), ["--noEmit", "-p", dir], { stdio: ["ignore", "pipe", "pipe"] })).toThrow();
   });
 
   test("the starter uses only what the frame's @kiwi/mod offers, and opens a panel that renders its title", async () => {
     const { dir } = startDev(scratch("dev"), "standup-notes", scratch("cwd"));
     const built = await bundleMod(dir);
     if (!built.ok) throw new Error(built.why);
-    const runtime = readFileSync(join(import.meta.dir, "../ui/src/mods/frame/runtime.tsx"), "utf8");
-    const api = runtime.slice(runtime.indexOf("const api = {"), runtime.indexOf("\n}\n", runtime.indexOf("const api = {")));
     const used = [...readFileSync(join(dir, "index.tsx"), "utf8").matchAll(/import \{ ([^}]+) \} from "@kiwi\/mod"/g)].flatMap((m) => m[1]!.split(",").map((n) => n.trim()));
     expect(used.length).toBeGreaterThan(0);
-    for (const name of used) expect(api).toMatch(new RegExp(`\\n  ${name}\\b`));
+    for (const name of used) expect(KIT_TYPES).toMatch(new RegExp(`\\n  export (?:function|const) ${name}\\b`));
     const panels: { title: string; render: () => unknown }[] = [];
     const el = (type: unknown, props: Record<string, unknown>) => ({ type, props });
     const g = globalThis as Record<string, unknown>;
@@ -295,7 +307,13 @@ describe("kiwi mod dev", () => {
       react: { useState: (v: unknown) => [v, () => undefined] },
       "react/jsx-runtime": { jsx: el, jsxs: el, Fragment: "fragment" },
       "react/jsx-dev-runtime": { jsxDEV: el, Fragment: "fragment" },
-      "@kiwi/mod": { panel: (p: { title: string; render: () => unknown }) => panels.push(p), Button: "Button", Row: "Row" },
+      "@kiwi/mod": {
+        panel: (p: { title: string; render: () => unknown }) => panels.push(p),
+        List: Object.assign(() => null, { Section: "List.Section", Item: "List.Item" }),
+        Actions: "Actions",
+        Action: "Action",
+        Toast: { show: () => undefined },
+      },
     };
     try {
       new Function(built.code)();
