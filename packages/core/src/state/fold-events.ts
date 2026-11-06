@@ -22,13 +22,17 @@ import { prLinks, taskOfBranch } from "../prs.ts";
 import { recordedRuns } from "../review-check.ts";
 import { sameHead } from "../stage.ts";
 import { reposOf } from "./repos.ts";
+import { trustedAt } from "./times.ts";
+import { artifactKey, artifactText, doneGate } from "../done-gate.ts";
+import type { CheckArtifact } from "../checks.ts";
+import type { CheckState } from "./checks.ts";
 import { omit } from "../omit.ts";
 import { inlineText } from "../membership.ts";
 import { readScopes, SCOPES, type Scope } from "../scopes.ts";
 import { cleanPersona } from "../personality.ts";
 import { isPerson, ownSeat, sponsorsAgent } from "./people.ts";
 import { roomName } from "./rooms.ts";
-import { currentState, landingRefusal, landingReopens, openRound, reviewClaimRefusal, reviewMoveRefusal, revisedOut, taskId, verdictRefusal, worked } from "./tasks.ts";
+import { currentState, landerOf, landingRefusal, landingReopens, openRound, reviewClaimRefusal, reviewMoveRefusal, revisedOut, taskId, verdictRefusal, worked } from "./tasks.ts";
 import type { Charter, Compact, Fact, FoldMember, Hold, Lease, Nickname, PersonaLead, Room, SecretRoom, Task } from "./types.ts";
 import { dmPair, inRoom, leaveSeal, rootOf, selfOnly, type RoomMember } from "../room-rules.ts";
 
@@ -53,6 +57,7 @@ export interface FoldCtx {
   nicknames: Map<string, Nickname>;
   setRole: (target: FoldMember, role: string | null, about: string | null | undefined) => void;
   tasks: Map<number, Task>;
+  checks: ReadonlyMap<number, CheckState>;
   facts: Map<string, Fact>;
   docs: Map<string, string>;
   leases: Map<string, Lease>;
@@ -70,6 +75,19 @@ export interface FoldCtx {
   merges: Merger;
   compact: Compact | null;
   compactProposal: Compact | null;
+}
+
+function landedRefusal(c: FoldCtx, task: Task, artifact: CheckArtifact, member: FoldMember, from: string): string | null {
+  const id = taskId(task.id);
+  const lander = landerOf(task);
+  if (!member.owner && !c.leads(member) && from !== lander) return `only the owner's app, the lead or ${lander ?? "its lander"} lands ${id}`;
+  if (task.state !== "landing") return task.state === "done" ? `${id} is already done` : `${id} isn't approved and landing: it's ${task.state}`;
+  const gate = doneGate({ github: c.github, checks: c.checks, branchPrefix: c.branchPrefix }, task);
+  if (!gate) return `${id} has no landing step`;
+  if (gate.kind === "waiting") return `${id} hasn't landed: it waits for ${gate.why}`;
+  if (gate.kind === "bypassed") return `${id} shipped while its ship gate was shut (missing ${gate.missing.join(", ")}): a person closes it with a reason`;
+  if (artifactKey(task.id, gate.artifact) !== artifactKey(task.id, artifact)) return `${id} lands at ${artifactText(gate.artifact)}, not ${artifactText(artifact)}`;
+  return null;
 }
 
 function membersOnly(c: FoldCtx, member: FoldMember, m: Message, ev: { members: RoomMember[]; dm?: true; self?: true }, known: Room | undefined): string | null {
@@ -522,6 +540,24 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       break;
     }
 
+    case "task.landed": {
+      const task = tasks.get(ev.task);
+      const key = artifactKey(ev.task, ev.artifact);
+      if (task?.landed?.key === key) break;
+      const why = task ? landedRefusal(c, task, ev.artifact, member, m.from) : `no task ${taskId(ev.task)}`;
+      if (why) {
+        reject(why);
+        break;
+      }
+      if (!task) break;
+      task.state = "done";
+      task.landed = { key, artifact: ev.artifact, seq: m.seq, by: m.from };
+      task.closedSeq = m.seq;
+      task.updatedAt = at;
+      task.notes.push({ seq: m.seq, by: m.from, ts: at, text: `landed: ${artifactText(ev.artifact)}` });
+      break;
+    }
+
     case "task.update": {
       const task = tasks.get(ev.task);
       if (!task) {
@@ -566,12 +602,14 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       const asked =
         ev.state === "cancelled" ? (cancel && (mayFinish || lead || (ev.round !== undefined && revisedOut(task, m.from, open) === ev.round)) ? "done" : undefined) : ev.state && currentState(ev.state);
       const state = reopens ? "review" : lands && asked === "done" ? "landing" : asked;
+      const happened = trustedAt(m);
+      const rts = happened !== undefined ? { rts: happened } : {};
       if (open && state && state !== "review")
         open.result =
           ev.verdict && mayFinish
-            ? { kind: ev.verdict, by: m.from, seq: m.seq, ts: at, ...(ev.verdict === "approved" ? runsOf(ev.runs ?? (open.at ? recordedRuns(c.github, open.at) : [])) : {}) }
+            ? { kind: ev.verdict, by: m.from, seq: m.seq, ts: at, ...rts, ...(ev.verdict === "approved" ? runsOf(ev.runs ?? (open.at ? recordedRuns(c.github, open.at) : [])) : {}) }
             : state === "done" && !cancel && ev.close === undefined
-              ? { kind: "approved", by: m.from, seq: m.seq, ts: at }
+              ? { kind: "approved", by: m.from, seq: m.seq, ts: at, ...rts }
               : { kind: "withdrawn", seq: m.seq };
       if (state === "review") {
         if (open) open.result = { kind: "withdrawn", seq: m.seq };
@@ -583,6 +621,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
           by: m.from,
           seq: m.seq,
           ts: at,
+          ...rts,
           result: { kind: "open" },
         });
       }

@@ -223,6 +223,7 @@ export function makeActions(): Actions {
     setSpecsOnly: (code, on) => attempt("Not changed", async () => (await manage()).setSpecsOnly(code, on)),
     setTaskStatus: (code, id, status) => attempt("Status not changed", async () => (await rare()).setTaskStatus(code, id, status)),
     cancelTask: (code, id, why) => attempt("Not cancelled", async () => (await rare()).cancelTask(code, id, why)),
+    closeTask: (code, id, why) => attempt("Not closed", async () => (await rare()).closeTask(code, id, why)),
     editTask: (code, id, change) => attempt("Not saved", async () => (await rare()).editTask(code, id, change)),
     deleteTask: (code, id) => attempt("Not deleted", async () => (await rare()).deleteTask(code, id)),
     assignTask: (code, id, to, why) =>

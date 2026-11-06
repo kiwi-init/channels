@@ -189,7 +189,7 @@ export interface Task {
   history: TaskEvent[]
   archived: boolean
   cancelled?: boolean
-  lands?: { then: string; by?: string; waits?: string }
+  lands?: { then: string; by?: string; waits?: string; bypassed?: string[] }
   closedWith?: Words
   youReview?: "verdict" | "send-back"
   suggested?: { name: string; why: Words }
@@ -475,7 +475,16 @@ export interface ReviewAsk {
   task: number
 }
 
-export type Ask = PermissionAsk | QuestionAsk | JoinAsk | ReviewAsk | SpecAsk
+export interface BypassAsk {
+  kind: "bypass"
+  id: string
+  at: number
+  from: string
+  task: number
+  missing: string[]
+}
+
+export type Ask = PermissionAsk | QuestionAsk | JoinAsk | ReviewAsk | SpecAsk | BypassAsk
 
 export type HomeAct =
   | { kind: "options"; options: { shown: string; answer: string }[] }
@@ -755,6 +764,7 @@ export interface Actions {
   addTask(code: string, ask: number, title: string): void
   setTaskStatus(code: string, task: number, status: TaskStatus): void
   cancelTask(code: string, task: number, why: string): void
+  closeTask(code: string, task: number, why: string): void
   editTask(code: string, task: number, change: { title?: string; detail?: string }): void
   deleteTask(code: string, task: number): void
   assignTask(code: string, task: number, to: string, why: string): void

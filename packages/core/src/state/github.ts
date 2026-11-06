@@ -10,6 +10,14 @@ export interface GithubCheck {
   attempt?: number;
   at: number;
   completedAt?: number;
+  ends?: CheckEnd[];
+}
+
+interface CheckEnd {
+  run?: number;
+  attempt?: number;
+  conclusion: string;
+  at: number;
 }
 
 export interface GithubPr {
@@ -83,6 +91,20 @@ function behind(i: GithubNote, was: GithubCheck): boolean {
 
 const older = (i: GithubNote, was: { happened?: number } | undefined): boolean => i.happened !== undefined && was?.happened !== undefined && i.happened < was.happened;
 
+const MAX_ENDS = 6;
+
+function endsWith(ends: readonly CheckEnd[] | undefined, i: GithubNote): CheckEnd[] | undefined {
+  if (!i.conclusion || i.happened === undefined) return ends ? [...ends] : undefined;
+  const end: CheckEnd = { conclusion: i.conclusion, at: i.happened, ...(i.run ? { run: i.run } : {}), ...(i.attempt ? { attempt: i.attempt } : {}) };
+  const same = (e: CheckEnd) => e.run === end.run && (e.attempt ?? 1) === (end.attempt ?? 1);
+  return [...(ends ?? []).filter((e) => !same(e)), end].sort((a, b) => a.at - b.at).slice(-MAX_ENDS);
+}
+
+export function succeededBy(check: GithubCheck, run: number, x: number): boolean {
+  const ends = check.ends ?? (check.conclusion && check.completedAt !== undefined ? [{ run: check.run, attempt: check.attempt, conclusion: check.conclusion, at: check.completedAt }] : []);
+  return ends.filter((e) => e.run === run && e.at <= x).at(-1)?.conclusion === "success";
+}
+
 const stalePr = (i: GithubNote, was: GithubPr | undefined): boolean => (was?.state === "merged" && !i.merged) || older(i, was);
 
 export function applyGithub(g: GithubState, items: readonly GithubNote[], seq: number): void {
@@ -118,6 +140,7 @@ export function applyGithub(g: GithubState, items: readonly GithubNote[], seq: n
       const runs = g.checks.get(key) ?? new Map<string, GithubCheck>();
       g.checks.delete(key);
       const was = runs.get(i.name);
+      const ends = endsWith(was?.ends, i);
       if (!was || !behind(i, was))
         runs.set(i.name, {
           name: i.name,
@@ -128,7 +151,9 @@ export function applyGithub(g: GithubState, items: readonly GithubNote[], seq: n
           ...(i.run ? { run: i.run } : {}),
           ...(i.attempt ? { attempt: i.attempt } : {}),
           ...(i.conclusion && i.happened !== undefined ? { completedAt: i.happened } : {}),
+          ...(ends ? { ends } : {}),
         });
+      else if (ends) runs.set(i.name, { ...was, ends });
       g.checks.set(key, runs);
       while (g.checks.size > MAX_SHAS) g.checks.delete(g.checks.keys().next().value!);
     } else if (i.event === "issues" && i.number) {

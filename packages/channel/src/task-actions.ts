@@ -65,6 +65,13 @@ export function cancelTask(t: Task, note: string, me: string): TaskSend {
   };
 }
 
+export function closeLanding(t: Task, why: string): TaskSend {
+  return {
+    body: `${taskId(t.id)} closed without landing: ${why}`,
+    opts: { kind: "event", ev: { op: "task.update", task: t.id, state: "done", close: why }, ...toOwner(t) },
+  };
+}
+
 export function closeFromGithub(t: Task, c: { cancelled: boolean; note: string }): TaskSend {
   const state = c.cancelled ? "cancelled" : hasLanding(t.then) ? "landing" : "done";
   return {

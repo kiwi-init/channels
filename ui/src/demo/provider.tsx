@@ -661,6 +661,12 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
           updatedAt: Date.now(),
         })),
       deleteTask: (code, id) => edit(code, (c) => ({ ...c, tasks: c.tasks.filter((t) => t.id !== id) })),
+      closeTask: (code, id, why) =>
+        edit(code, (c) => ({
+          ...c,
+          tasks: c.tasks.map((t) => (t.id === id ? { ...t, status: "done", closedWith: wrote(why), updatedAt: Date.now() } : t)),
+          asks: c.asks.filter((a) => !(a.kind === "bypass" && a.task === id)),
+        })),
       cancelTask: (code, id, why) =>
         edit(code, (c, seq) => ({
           ...c,

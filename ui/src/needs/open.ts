@@ -1,6 +1,6 @@
 import type { Ask, Channel } from "~/model"
 
-export const isOpen = (a: Ask): boolean => a.kind === "review" || a.kind === "spec" || (!a.answer && !(a.kind === "question" && a.closed))
+export const isOpen = (a: Ask): boolean => a.kind === "review" || a.kind === "spec" || a.kind === "bypass" || (!a.answer && !(a.kind === "question" && a.closed))
 
 export const isIdle = (a: Ask): boolean => a.kind === "question" && !!a.idle && !a.answer
 
