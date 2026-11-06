@@ -192,6 +192,15 @@ describe("issues", () => {
     expect(ranked.map((i) => i.number)).toEqual([2, 4, 1, 3, 5]);
   });
 
+  test("issues labelled fits-a-mod go after the rest and say so", () => {
+    const calls = judged([[1, { severity: "critical", effort: "small", why: "" }]]);
+    const ranked = rankIssues([issue(1, { labels: ["fits-a-mod"] }), issue(2), issue(3, { labels: ["bug"] })], calls);
+    expect(ranked.map((i) => i.number)).toEqual([3, 2, 1]);
+    const body = render([pr(4, { labels: ["size:S", "fits-a-mod"] })], [issue(1, { labels: ["bug", "fits-a-mod"] })], NOW);
+    expect(lines(body, "Merge first")).toEqual(["1. #4 PR 4 · `@jo` · 1d · size:S fits a mod"]);
+    expect(lines(body, "Fix first")).toEqual(["1. #1 Issue 1 · `@ann` · 2d · bug fits a mod"]);
+  });
+
   test("without the model a bug counts as medium and the rest as low", () => {
     const ranked = rankIssues([issue(1, { thumbsUp: 5 }), issue(2, { labels: ["bug"] }), issue(3, { comments: 2 }), issue(4)]);
     expect(ranked.map((i) => i.number)).toEqual([2, 1, 3, 4]);
