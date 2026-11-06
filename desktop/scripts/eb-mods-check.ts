@@ -7,7 +7,7 @@ import { startLocalRelay } from "../../scripts/local-relay.ts";
 import { daemonStop } from "../src/daemon-client.ts";
 import { ASK_AGAIN_URL } from "../src/keyring-wait.ts";
 import { appExecutable, attach, launch, stop, testEnv, until, type Driver } from "./eb-drive.ts";
-import { firstChannel, sendMessage } from "./eb-first-run.ts";
+import { fillIn, firstChannel, sendMessage } from "./eb-first-run.ts";
 
 if (!process.argv[2]) {
   console.error("usage: bun desktop/scripts/eb-mods-check.ts <the app built with CHANNELS_EB_TEST=1> [screenshot dir]");
@@ -202,6 +202,7 @@ try {
   const still = await until("the mod's frame after it tried to leave", 15_000, async () => (await heard(d)).find((m) => m["stillHere"] === true) ?? null).catch(() => null);
   check(!!still, "the mod's frame stays where it is when it navigates itself");
   await step("⌘K again", 10_000, palette);
+  await step("the mod's command, typed into ⌘K", 10_000, () => d.evaluate(fillIn, { selector: ".palette-input", value: "Say hi" }, 2_000));
   await step("the mod's command in ⌘K", 10_000, () => d.evaluate(clickText, { selector: ".palette-item", text: "Say hi from the probe mod" }, 2_000));
   const hi = await until("the command's run", 10_000, async () => (await heard(d)).find((m) => m["command"] === "hi") ?? null).catch(() => null);
   check(!!hi, "the mod's command runs from ⌘K");
