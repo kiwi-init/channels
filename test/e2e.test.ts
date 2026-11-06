@@ -56,9 +56,13 @@ const claudeDir = mkdtempSync(join(tmpdir(), "mc-claude-"));
 const asPerson = (args: string[]) => args.some((a, i) => a === "--as" && args[i + 1] === "human");
 
 function mc(home: string, ...args: string[]) {
+  return mcIn({}, home, ...args);
+}
+
+function mcIn(env: Record<string, string | undefined>, home: string, ...args: string[]) {
   return Bun.spawn(kiwiCmd(args), {
     cwd: home,
-    env: { ...process.env, KIWI_HOME: home, KIWI_RELAY: relay, CLAUDE_CONFIG_DIR: claudeDir, CLAUDECODE: asPerson(args) ? "" : "1" },
+    env: { ...process.env, KIWI_HOME: home, KIWI_RELAY: relay, CLAUDE_CONFIG_DIR: claudeDir, CLAUDECODE: asPerson(args) ? "" : "1", ...env },
     stdin: "ignore",
     stdout: "pipe",
     stderr: "pipe",
@@ -136,8 +140,8 @@ async function codeShown(owner: string, l: { got: string[]; until: (f: (x: strin
  * Join through the real flow: the joiner asks and waits, the owner's machine
  * sees the request, matches the verification code and approves.
  */
-async function joinVia(owner: string, joiner: string, code: string, alias: string, name: string, role?: string): Promise<string> {
-  const p = mc(joiner, "join", code, alias, "--as", name);
+async function joinVia(owner: string, joiner: string, code: string, alias: string, name: string, role?: string, env: Record<string, string | undefined> = {}): Promise<string> {
+  const p = mcIn(env, joiner, "join", code, alias, "--as", name);
   const l = lines(p);
   const v = await codeShown(owner, l);
   expect(await ok(owner, "--as", "human", "requests")).toContain(`${v}  ${name}`);
@@ -623,6 +627,23 @@ describe("status and wait through the CLI", () => {
     const status = await ok(other, "status");
     expect(status).toContain("agent-a — builder forged row");
     for (const line of status.split("\n")) expect(line.startsWith("forged")).toBe(false);
+  });
+
+  test("status --json shows where this computer's agents sit: a Rex block, a tmux pane, or nowhere", async () => {
+    const owner = home("place");
+    const inRex = home("place-rex");
+    const inTmux = home("place-tmux");
+    const code = /join code: (\S+)/.exec(await ok(owner, "create", "p", "--as", "agent-a"))![1]!;
+    const rex = { server: "unix:///tmp/rex-test.sock", session: `session:${crypto.randomUUID()}`, block: `block:${crypto.randomUUID()}` };
+    const outside = { TMUX: undefined, TMUX_PANE: undefined, REX_SERVER: undefined, REX_SESSION: undefined, REX_BLOCK: undefined };
+    await joinVia(owner, inRex, code, "p", "agent-r", undefined, { ...outside, TERM_PROGRAM: "rex", REX_SERVER: rex.server, REX_SESSION: rex.session, REX_BLOCK: rex.block });
+    await joinVia(owner, inTmux, code, "p", "agent-t", undefined, { ...outside, TERM_PROGRAM: "tmux", TMUX: "/tmp/tmux-test/default,1,0", TMUX_PANE: "%7" });
+    const places = async (h: string) => {
+      const { members } = JSON.parse(await ok(h, "status", "--json")) as { members: { name: string; place: unknown }[] };
+      return Object.fromEntries(members.map((m) => [m.name, m.place]));
+    };
+    expect(await places(inRex)).toMatchObject({ "agent-a": null, "agent-r": { rex }, "agent-t": null });
+    expect(await places(inTmux)).toMatchObject({ "agent-a": null, "agent-r": null, "agent-t": { tmux: { socket: "/tmp/tmux-test/default", pane: "%7" } } });
   });
 
   test("wait prints the next command on stdout when nothing arrives", async () => {
