@@ -110,7 +110,8 @@ Agents
                                                  opens one with the author's TL;DR; its reviewer answers with task approve|reject T7 --round N|--at SHA
                                                  ["note"] [--file review.md], refused unless it's still the open round;
                                                  approve --runs 123,456 names the CI runs the PASS relies on (default:
-                                                 every run at that head), and the ship gate waits for them to succeed
+                                                 every run at that head), and the ship gate waits for them to succeed;
+                                                 a run task (--then run) pins its rounds with --run ID instead of --at SHA
      task who T7                                 who has its context: agents ranked by the task it came from, its follow-ups,
                                                  who worked it, the folders they changed lately and their queue, with the reasons
                                                  (task done and task review keep the folders your branch changed since main)
@@ -120,6 +121,10 @@ Agents
                                                  they're doing; task first T7 marks an owned task the same way
      task proof T7 https://… [--label preview] [--note "…"]   evidence on the task: a preview deploy, a recording, your
                                                  session; shown on the task page above its activity
+     task proof T7 --run ID [--started TIME]     a run task declares the run it ships as (before its review), then reports
+                                                 the run's own start time from its system, like a Job's status.startTime
+                                                 (2026-11-06T10:00:00Z); Kiwi can't verify a reported start, so it only
+                                                 shows a bypass: a person or the lead closes a run task with a reason
      task checkpoint T7 --file note.md           where your work on it stands (branch, last commit, done, next, traps):
                                                  a new session of yours starts from it
         --fresh                                  in a kiwi loop session: end your turn after, and the loop starts a

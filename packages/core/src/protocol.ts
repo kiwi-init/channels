@@ -4,7 +4,7 @@
 // and AES-GCM ciphertext. Everything meaningful (sender, recipients, body,
 // coordination events, signatures) lives inside the encrypted payload.
 
-import { wellFormedArtifact, wellFormedCheck, type CheckArtifact, type CheckAsk } from "./checks.ts";
+import { wellFormedArtifact, wellFormedCheck, wellFormedRunId, type CheckArtifact, type CheckAsk } from "./checks.ts";
 import { DEVICE_LIST_MAX, type DeviceLink } from "./devices.ts";
 import { cleanPersona, type Persona } from "./personality.ts";
 import { permissionChoices, wellFormedPermission, wellFormedPermReply, wellFormedSettled, type PermissionReply, type PermissionSettled, type PermissionShown } from "./permission.ts";
@@ -283,6 +283,7 @@ export type Event =
       summary?: string;
       body?: "review";
       proof?: { url: string; label?: string };
+      run?: { id: string; started?: number };
       areas?: string[];
       checkpoint?: true;
       then?: Landing;
@@ -1086,7 +1087,17 @@ function eventCheck(ev: unknown): boolean | null {
         (e.claim === undefined || (e.claim === true && typeof e.review === "string")) &&
         (e.verdict === undefined || e.verdict === "approved" || e.verdict === "rejected") &&
         (e.round === undefined || (Number.isSafeInteger(e.round) && (e.round as number) > 0)) &&
-        opt(e.at, (x): x is string => str(x, 200) && x.trim().length > 0 && !/[\r\n]/.test(x)) &&
+        opt(e.at, (x): x is string => str(x, 204) && x.trim().length > 0 && !/[\r\n]/.test(x)) &&
+        opt(e.run, (x): x is { id: string; started?: number } => {
+          const r = x as { id?: unknown; started?: unknown } | null;
+          return (
+            !!r &&
+            typeof r === "object" &&
+            Object.keys(r).every((k) => k === "id" || k === "started") &&
+            wellFormedRunId(r.id) &&
+            (r.started === undefined || (Number.isSafeInteger(r.started) && (r.started as number) > 0))
+          );
+        }) &&
         (e.summary === undefined || (e.state === "review" && str(e.summary, REVIEW_SUMMARY_MAX_LENGTH) && e.summary.trim().length > 0)) &&
         (e.body === undefined || (e.body === "review" && e.verdict !== undefined)) &&
         opt(e.areas, isAreas) &&

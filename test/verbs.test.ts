@@ -364,6 +364,21 @@ describe("review rounds through the CLI", () => {
     expect((await run(dev, "task", "proof", `T${t}`)).err).toContain("usage: kiwi task proof");
   });
 
+  test("a run task declares its run, is reviewed and approved at --run ID, then records the run's own start time (T1269)", async () => {
+    const t = taskNo(await ok(dev, "task", "add", "run the backfill", "--ask", want, "--then", "run", "--review", "rev"));
+    await ok(dev, "task", "proof", `T${t}`, "--run", "backfill-1");
+    await ok(dev, "task", "review", `T${t}`, "--run", "backfill-1");
+    expect((await run(dev, "task", "review", `T${t}`, "--run", "backfill-1", "--at", "abc")).err).toContain("--at pins a round to a commit and --run to a run");
+    await ok(rev, "task", "approve", `T${t}`, "--run", "backfill-1", "looks right");
+    expect((await run(dev, "task", "proof", `T${t}`, "--run", "backfill-1", "--started", "yesterday")).err).toContain("isn't a start time");
+    expect((await run(dev, "task", "proof", `T${t}`, "--started", "2020-01-01T00:00:00Z")).err).toContain("--started goes on task proof T7 --run ID");
+    await ok(dev, "task", "proof", `T${t}`, "--run", "backfill-1", "--started", "2020-01-01T00:00:00Z");
+    const shown = JSON.parse(await ok(dev, "task", "show", `T${t}`, "--json"));
+    expect(shown.state).toBe("landing");
+    expect(shown.rounds.at(-1)).toMatchObject({ at: "run:backfill-1", result: { kind: "approved" } });
+    expect(shown.run).toMatchObject({ id: "backfill-1", reportedStart: Date.parse("2020-01-01T00:00:00Z") });
+  });
+
   test("start is the one way to take a task: two racing for an unowned one get one winner, the other is told who has it, and on your own task it only starts it", async () => {
     const t = taskNo(await ok(dev, "task", "add", "take me", "--ask", want));
     const [a, b] = await Promise.all([run(dev, "task", "start", `T${t}`), run(rev, "task", "start", `T${t}`)]);

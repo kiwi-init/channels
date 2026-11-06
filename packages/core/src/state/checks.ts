@@ -27,6 +27,8 @@ export interface CheckState {
   supersededAt?: number;
 }
 
+export const atRun = (c: CheckState, id: string): boolean => c.artifact.kind === "run" && c.artifact.id === id;
+
 export const checkPassed = (c: CheckState): boolean => c.closed === undefined && c.supersededBy === undefined && c.answer?.pass === true;
 
 export function replaceRefusal(checks: ReadonlyMap<number, CheckState>, m: { seq: number; from: string; check?: CheckAsk }): string | undefined {

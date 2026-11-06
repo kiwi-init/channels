@@ -1,6 +1,7 @@
 import * as Effect from "effect/Effect";
 import { oneLook, openSession } from "../../agent.ts";
 import { contextLineOn, Keystore, loadConfig } from "../../config.ts";
+import { runPin, wellFormedRunId } from "@kiwi/core/checks.ts";
 import { inlineText } from "@kiwi/core/membership.ts";
 import { formatTask, formatTasks, issueLinkText, looksLikeLine, taskStateWord } from "@kiwi/core/format.ts";
 import { isLanding, type Landing, type TaskState } from "@kiwi/core/protocol.ts";
@@ -17,6 +18,13 @@ import { askFresh, LOOP_TASK_ENV } from "../../loop/fresh.ts";
 const CLAIMS_GONE = "claims are gone: say what you're working on in the task, or post it";
 const LANDING_USAGE = "--then takes merge, release:tag, release:npm:PKG@RANGE, run or none";
 const ANCHORS = "--ask N (the person's message #N it answers), --from T… (the task it comes from) or --issue N (a GitHub issue)";
+
+const ISO_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/;
+
+const startedAt = (said: string): number | undefined => {
+  const ms = ISO_TIME.test(said.trim()) ? Date.parse(said.trim()) : Number.NaN;
+  return Number.isSafeInteger(ms) && ms > 0 ? ms : undefined;
+};
 
 const board = () =>
   offlineOk(
@@ -198,7 +206,15 @@ export const taskCommands: Record<string, Command> = {
         const summary = sub === "review" ? (summaryFile ?? (args.slice(3).join(" ") || opt.note || undefined))?.trim() || undefined : undefined;
         const note = args.slice(3).join(" ") || opt.note || (review ? firstLine(review) : undefined) || undefined;
         const roundNo = opt.round === undefined ? undefined : /^[1-9]\d{0,8}$/.test(opt.round.trim()) ? Number(opt.round.trim()) : yield* die(`"${opt.round}" isn't a round number`);
-        const judged = { ...(roundNo !== undefined ? { round: roundNo } : {}), ...(opt.at?.trim() ? { at: opt.at.trim() } : {}) };
+        const runIds = opt.run ?? [];
+        if (runIds.length > 1) return yield* die("--run names one run: the run id this task declares or its round is pinned to");
+        const runId = runIds[0]?.trim();
+        if (runId !== undefined && !wellFormedRunId(runId)) return yield* die(`"${runIds[0]}" isn't a run id: letters, digits and . _ : / @ + -, at most 200`);
+        if (runId !== undefined && opt.at?.trim()) return yield* die("--at pins a round to a commit and --run to a run: give one");
+        if (runId !== undefined && opt.runs !== undefined) return yield* die("--runs names the CI runs at a PR's head, and a run task has no head: leave it out");
+        const pinned = runId !== undefined && sub !== "proof" ? runPin(runId) : opt.at?.trim() || undefined;
+        if (opt.started !== undefined && (sub !== "proof" || runId === undefined)) return yield* die("--started goes on task proof T7 --run ID: the run's own start time");
+        const judged = { ...(roundNo !== undefined ? { round: roundNo } : {}), ...(pinned ? { at: pinned } : {}) };
         const runList = opt.runs?.replace(/\s/g, "");
         if (runList !== undefined && sub !== "approve") return yield* die("--runs goes on task approve: the CI runs the PASS relies on");
         const runs =
@@ -212,7 +228,7 @@ export const taskCommands: Record<string, Command> = {
         const asker = before?.members.get(s.me);
         if (reviewed && !reviewed.review && opt.review === undefined && asker && !isPerson(asker))
           return yield* die(`${taskId(id)} has no reviewer: kiwi task review ${taskId(id)} --review NAME (or any)`);
-        const kept = reviewed && opt.review !== undefined && !opt.at?.trim() ? openRound(reviewed) : undefined;
+        const kept = reviewed && opt.review !== undefined && !pinned ? openRound(reviewed) : undefined;
         const keptAt = kept ? `round ${kept.n} stays open ${kept.at ? `at ${kept.at}` : "at no commit"}` : "";
         let state: ChannelState;
         const takes = (sub === "start" || sub === "claim") && before?.tasks.get(id)?.owner !== s.me;
@@ -226,7 +242,7 @@ export const taskCommands: Record<string, Command> = {
             state: "review",
             ...(summary ? { summary } : {}),
             ...(opt.review !== undefined ? { review: opt.review } : {}),
-            ...(opt.at?.trim() ? { at: opt.at.trim() } : {}),
+            ...(pinned ? { at: pinned } : {}),
           });
         else if (sub === "approve") state = yield* s.taskUpdate(id, { state: "done", verdict: "approved", note, ...judged, ...runs }, review);
         else if (sub === "reject")
@@ -254,8 +270,17 @@ export const taskCommands: Record<string, Command> = {
           state = yield* s.taskUpdate(id, { note: where.trim(), checkpoint: true });
           if (opt.fresh) askFresh(s.alias, s.me, id);
         } else if (sub === "proof") {
-          const url = args[3] ?? (yield* die('usage: kiwi task proof T7 https://… [--label "preview"] [--note "…"]'));
-          state = yield* s.taskUpdate(id, { proof: { url, ...(opt.label ? { label: opt.label } : {}) }, ...(opt.note ? { note: opt.note } : {}) });
+          const url = args[3];
+          if (url === undefined && runId === undefined) return yield* die('usage: kiwi task proof T7 https://… [--label "preview"] [--note "…"], or kiwi task proof T7 --run ID [--started TIME]');
+          const started =
+            opt.started === undefined
+              ? undefined
+              : (startedAt(opt.started) ?? (yield* die(`"${opt.started}" isn't a start time: give the run's own, like 2026-11-06T10:00:00Z (a Job's status.startTime)`)));
+          state = yield* s.taskUpdate(id, {
+            ...(url !== undefined ? { proof: { url, ...(opt.label ? { label: opt.label } : {}) } } : {}),
+            ...(runId !== undefined ? { run: { id: runId, ...(started !== undefined ? { started } : {}) } } : {}),
+            ...(opt.note ? { note: opt.note } : {}),
+          });
         } else return yield* die(`unknown task command "${sub}"`);
         const t = state.tasks.get(id)!;
         if (kept) return out(`${taskId(id)}'s review moved to ${t.review === "*" ? "anyone who hasn't worked on it" : t.review}: ${keptAt}`);

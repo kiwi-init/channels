@@ -51,11 +51,20 @@ const PR_URL_RE = /^https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/pull\/\d+(?:[/?#]\S
 
 const isPrUrl = (url: string): boolean => PR_URL_RE.test(url);
 
-type LandingChange = { state?: string; verdict?: Verdict; close?: string; then?: Landing; lander?: string | null; owner?: string | null; proof?: { url: string } };
+type LandingChange = { state?: string; verdict?: Verdict; close?: string; then?: Landing; lander?: string | null; owner?: string | null; proof?: { url: string }; run?: { id: string } };
 
 export const landerOf = (task: Pick<Task, "lander" | "owner">): string | undefined => task.lander ?? task.owner;
 
 const newPr = (task: Task, proof: { url: string } | undefined): boolean => !!proof && isPrUrl(proof.url) && !task.proof?.some((p) => p.url === proof.url);
+
+export const newRun = (task: Task, run: { id: string } | undefined): boolean => !!run && !!task.run && task.run.id !== run.id;
+
+export function runRefusal(task: Task, run: { id: string; started?: number } | undefined, received: number | undefined): string | null {
+  if (run?.started === undefined) return null;
+  if (received === undefined || run.started > received) return `run ${run.id} can't have started after its proof arrived`;
+  const known = task.run?.id === run.id ? task.run.reportedStart : undefined;
+  return known !== undefined && known !== run.started ? `run ${run.id}'s start is already recorded` : null;
+}
 
 function landerAfter(task: Task, ev: LandingChange): string | undefined {
   const lander = ev.lander === undefined ? task.lander : ev.lander || undefined;
@@ -72,12 +81,13 @@ export function landingRefusal(task: Task, ev: LandingChange, from: { person: bo
   if (ev.state === "landing" && !hasLanding(task.then)) return `${id} has no landing step: it finishes on approval`;
   if (ev.state === "done" && ev.verdict !== "approved" && hasLanding(task.then) && task.state !== "done") return `${id} lands by its step (${task.then}): approve it, or close it with a reason`;
   if (task.state === "landing" && newPr(task, ev.proof) && !trusted) return `only a person or the lead links another PR to ${id} once it's approved`;
+  if (task.state === "landing" && newRun(task, ev.run) && !trusted) return `only a person or the lead declares another run for ${id} once it's approved`;
   return null;
 }
 
 export function landingReopens(task: Task, ev: LandingChange): boolean {
   if (task.state !== "landing") return false;
-  return (ev.then !== undefined && ev.then !== (task.then ?? "none")) || landerAfter(task, ev) !== landerOf(task) || newPr(task, ev.proof);
+  return (ev.then !== undefined && ev.then !== (task.then ?? "none")) || landerAfter(task, ev) !== landerOf(task) || newPr(task, ev.proof) || newRun(task, ev.run);
 }
 
 export function reviewMoveRefusal(task: Task, from: { name: string; person: boolean; lead: boolean }, review: string | null | undefined): string | null {

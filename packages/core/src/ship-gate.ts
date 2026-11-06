@@ -1,8 +1,8 @@
-import { choiceIn, type CheckAsk } from "./checks.ts";
+import { choiceIn, runPin, type CheckAsk } from "./checks.ts";
 import type { ReviewCheck } from "./client/github.ts";
 import { hasLanding, REVIEW_CHECK, type Event } from "./protocol.ts";
 import { linkedPr, sameHead } from "./stage.ts";
-import { checkPassed } from "./state/checks.ts";
+import { atRun, checkPassed } from "./state/checks.ts";
 import { landingReopens } from "./state/tasks.ts";
 import { shaKey, type GithubCheck, type GithubPr, type GithubState } from "./state/github.ts";
 import type { ChannelState, ReviewRound, Task } from "./state/types.ts";
@@ -17,10 +17,23 @@ const approvedRound = (t: Task): ReviewRound | undefined => {
 const runsAt = (github: GithubState, repo: string, sha: string): GithubCheck[] =>
   [...(github.checks.get(shaKey(repo, sha))?.values() ?? [])].filter((c) => c.name !== REVIEW_CHECK && c.run !== undefined);
 
+function runGate(state: ChannelState, t: Task): Gate {
+  const id = t.run?.id;
+  if (!id) return { open: false, rejected: false, missing: [`a run id: kiwi task proof T${t.id} --run ID`] };
+  const missing: string[] = [];
+  const round = approvedRound(t);
+  if (!round) missing.push("an approval");
+  else if (round.at !== runPin(id)) missing.push(`an approval at run ${id}`);
+  const pre = [...state.checks.values()].filter((c) => c.holds.includes(t.id) && c.phase === "pre-ship" && c.supersededBy === undefined);
+  if (!pre.length) missing.push(`a pre-ship check passed for run ${id}`);
+  for (const c of pre) if (!atRun(c, id) || !checkPassed(c)) missing.push(`check #${c.seq}`);
+  return missing.length ? { open: false, rejected: false, missing } : { open: true };
+}
+
 export function shipGate(state: ChannelState, t: Task, pr: GithubPr | undefined = linkedPr(state, t)): Gate {
   const last = t.rounds.at(-1);
   if (last?.result.kind === "rejected") return { open: false, rejected: true, missing: ["changes requested"] };
-  if (t.then === "run") return { open: false, rejected: false, missing: ["a run task pins a run id (T689)"] };
+  if (t.then === "run") return runGate(state, t);
   if (!pr?.sha) return { open: false, rejected: false, missing: ["no linked PR with a head"] };
   const head = pr.sha;
   const missing: string[] = [];
