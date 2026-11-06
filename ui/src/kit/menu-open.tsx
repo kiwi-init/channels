@@ -30,10 +30,11 @@ export function showMenu(e: MouseEvent, label: string, make: (menus: typeof impo
   e.stopPropagation()
   document.getSelection()?.removeAllRanges()
   const { clientX: x, clientY: y } = e
-  void import("~/chat/menus").then((menus) => {
+  const open = (menus: typeof import("~/chat/menus")) => {
     const groups = make(menus).filter((g) => g.length > 0)
     if (groups.length) openMenu.set({ x, y, label, groups })
-  })
+  }
+  void import("~/chat/menus").then(open)
 }
 
 function showMenuBelow(el: HTMLElement, label: string, groups: MenuGroups): void {

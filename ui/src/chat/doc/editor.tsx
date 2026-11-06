@@ -616,21 +616,7 @@ function filesOf(doc: Y.Doc, block: string): BlockFiles {
   return { imgs: imgs.flatMap((i) => (i.ref ? [{ name: i.name, mime: i.mime, ref: i.ref }] : [])), files }
 }
 
-export function ThreadDoc({
-  channel,
-  where,
-  thread,
-  shared,
-  hold,
-  media = null,
-}: {
-  channel: Channel
-  where: Where
-  thread: string
-  shared: Shared
-  hold: (on: boolean) => void
-  media?: DocMedia | null
-}) {
+function ThreadDoc({ channel, where, thread, shared, hold, media = null }: { channel: Channel; where: Where; thread: string; shared: Shared; hold: (on: boolean) => void; media?: DocMedia | null }) {
   const mount = useRef<HTMLDivElement>(null)
   const box = useRef<HTMLDivElement>(null)
   const view = useRef<EditorView | null>(null)
