@@ -2,8 +2,24 @@ import { isAppPrefix } from "@kiwi/core/mod-names.ts";
 import { bundleMod } from "@kiwi/core/node/mod-bundle.ts";
 import { checkManifest, type ModManifest } from "@kiwi/core/node/mod-manifest.ts";
 import { execFileSync } from "node:child_process";
-import { randomBytes } from "node:crypto";
-import { existsSync, lstatSync, lutimesSync, mkdirSync, readdirSync, readFileSync, readlinkSync, realpathSync, renameSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
+import { createHash, randomBytes } from "node:crypto";
+import {
+  cpSync,
+  existsSync,
+  lstatSync,
+  lutimesSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  readlinkSync,
+  realpathSync,
+  renameSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { isAbsolute, join } from "node:path";
 
 const MOD_NAME = /^[a-z0-9][a-z0-9-]{0,62}$/;
@@ -17,7 +33,19 @@ export interface Source {
   url: string;
   shown: string;
   ref: string | null;
+  path: string | null;
 }
+
+interface Copy {
+  source: string;
+  url: string;
+  path: string;
+  ref: string | null;
+  commit: string;
+  hash: string;
+}
+
+const COPIES = ".sources.json";
 
 export interface ModInfo {
   name: string;
@@ -69,11 +97,18 @@ export function parseSource(raw: string): Source {
   if (ref !== null && !/^[\w./-]{1,200}$/.test(ref)) throw new ModError(`"#${ref}" isn't a branch, tag or commit`);
   if (ref?.startsWith("-") || ref?.includes("..")) throw new ModError(`"#${ref}" isn't a branch, tag or commit`);
   if (!base || base.startsWith("-")) throw new ModError("give a git repo: kiwi mod add github.com/owner/repo");
-  if (/^https:\/\/[^\s]+$/.test(base) || /^ssh:\/\/[^\s]+$/.test(base) || /^file:\/\/\/[^\s]+$/.test(base)) return { url: base, shown: base.replace(/^https:\/\//, "").replace(/\.git$/, ""), ref };
-  if (/^[\w.-]+@[\w.-]+:[^\s]+$/.test(base)) return { url: base, shown: base, ref };
-  if (isAbsolute(base)) return { url: base, shown: base, ref };
-  if (/^[a-z0-9.-]+\.[a-z]{2,}\/[\w.-]+\/[\w.-]+$/i.test(base)) return { url: `https://${base.replace(/\.git$/, "")}.git`, shown: base.replace(/\.git$/, ""), ref };
-  throw new ModError(`"${base}" isn't a repo kiwi can clone: use github.com/owner/repo, an https:// or ssh address, or a full path`);
+  if (/^https:\/\/[^\s]+$/.test(base) || /^ssh:\/\/[^\s]+$/.test(base) || /^file:\/\/\/[^\s]+$/.test(base))
+    return { url: base, shown: base.replace(/^https:\/\//, "").replace(/\.git$/, ""), ref, path: null };
+  if (/^[\w.-]+@[\w.-]+:[^\s]+$/.test(base)) return { url: base, shown: base, ref, path: null };
+  if (isAbsolute(base)) return { url: base, shown: base, ref, path: null };
+  const short = /^([a-z0-9.-]+\.[a-z]{2,}\/[\w.-]+\/[\w.-]+?)(?:\.git)?((?:\/[\w.-]+)+)?$/i.exec(base);
+  if (short) {
+    const repo = short[1]!;
+    const path = short[2]?.slice(1) ?? null;
+    if (path?.split("/").some((p) => p === "." || p === "..")) throw new ModError(`"${base}": a mod's folder in its repo can't walk out of it`);
+    return { url: `https://${repo}.git`, shown: path ? `${repo}/${path}` : repo, ref, path };
+  }
+  throw new ModError(`"${base}" isn't a repo kiwi can clone: use github.com/owner/repo (or github.com/owner/repo/folder for one mod in it), an https:// or ssh address, or a full path`);
 }
 
 export function readManifest(text: string, folder?: string): ModManifest {
@@ -98,6 +133,60 @@ function manifestAt(dir: string, folder?: string): ModManifest {
 
 const isGit = (dir: string): boolean => existsSync(join(dir, ".git"));
 
+function copiesOf(home: string): Record<string, Copy> {
+  try {
+    const raw = JSON.parse(readFileSync(join(modsDir(home), COPIES), "utf8")) as unknown;
+    return raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, Copy>) : {};
+  } catch {
+    // No copied mods yet, or a file that isn't ours: every folder reads as local.
+    return {};
+  }
+}
+
+function keepCopy(home: string, name: string, copy: Copy | null): void {
+  const all = copiesOf(home);
+  if (copy) all[name] = copy;
+  else delete all[name];
+  writeFileSync(join(modsDir(home), COPIES), `${JSON.stringify(all, null, 2)}\n`);
+}
+
+function folderHash(dir: string): string {
+  const hash = createHash("sha256");
+  const walk = (rel: string): void => {
+    for (const entry of readdirSync(join(dir, rel)).sort()) {
+      const path = rel ? `${rel}/${entry}` : entry;
+      const st = lstatSync(join(dir, path));
+      if (st.isDirectory()) walk(path);
+      else hash.update(`${path}\0${st.isSymbolicLink() ? `-> ${readlinkSync(join(dir, path))}` : readFileSync(join(dir, path)).toString("base64")}\0`);
+    }
+  };
+  walk("");
+  return hash.digest("hex");
+}
+
+function cloneAt(source: Source, ref: string | null, tmp: string, run: Git): string {
+  try {
+    run(["clone", "--quiet", "--", source.url, tmp]);
+  } catch (e) {
+    throw new ModError(`couldn't clone ${source.shown}: ${(e as Error).message}`);
+  }
+  const commit = ref ? (commitOf(tmp, `origin/${ref}`, run) ?? commitOf(tmp, ref, run)) : commitOf(tmp, "HEAD", run);
+  if (!commit) throw new ModError(ref ? `${source.shown} has no branch, tag or commit "${ref}"` : `${source.shown} has no commits`);
+  run(["-c", "core.hooksPath=/dev/null", "checkout", "--quiet", "--detach", commit], tmp);
+  return commit;
+}
+
+function placeCopy(from: string, at: string): void {
+  const staged = `${at}.placing-${randomBytes(6).toString("hex")}`;
+  try {
+    cpSync(from, staged, { recursive: true, verbatimSymlinks: true });
+    rmSync(at, { recursive: true, force: true });
+    renameSync(staged, at);
+  } finally {
+    rmSync(staged, { recursive: true, force: true });
+  }
+}
+
 const changedIn = (dir: string, run: Git): boolean => run(["status", "--porcelain"], dir) !== "" || run(["rev-list", "HEAD", "--not", "--remotes", "--tags"], dir) !== "";
 
 function commitOf(dir: string, ref: string, run: Git): string | null {
@@ -115,22 +204,22 @@ export function addMod(home: string, raw: string, run: Git = git): { manifest: M
   mkdirSync(dir, { recursive: true });
   const tmp = join(dir, `.adding-${randomBytes(6).toString("hex")}`);
   try {
-    try {
-      run(["clone", "--quiet", "--", source.url, tmp]);
-    } catch (e) {
-      throw new ModError(`couldn't clone ${source.shown}: ${(e as Error).message}`);
-    }
-    const commit = source.ref ? (commitOf(tmp, `origin/${source.ref}`, run) ?? commitOf(tmp, source.ref, run)) : commitOf(tmp, "HEAD", run);
-    if (!commit) throw new ModError(source.ref ? `${source.shown} has no branch, tag or commit "${source.ref}"` : `${source.shown} has no commits`);
-    run(["checkout", "--quiet", "--detach", commit], tmp);
+    const commit = cloneAt(source, source.ref, tmp, run);
+    const root = source.path ? join(tmp, source.path) : tmp;
     let manifest: ModManifest;
     try {
-      manifest = manifestAt(tmp);
+      if (source.path && !statSync(root, { throwIfNoEntry: false })?.isDirectory()) throw new ModError(`it has no folder ${source.path}`);
+      manifest = manifestAt(root);
     } catch (e) {
       throw new ModError(`${source.shown} isn't a mod: ${(e as Error).message}`);
     }
     const at = join(dir, manifest.name);
     if (existsSync(at)) throw new ModError(`a mod named ${manifest.name} is already in ${dir}: kiwi mod update ${manifest.name}, or kiwi mod remove ${manifest.name} first`);
+    if (source.path) {
+      placeCopy(root, at);
+      keepCopy(home, manifest.name, { source: source.shown, url: source.url, path: source.path, ref: source.ref, commit, hash: folderHash(at) });
+      return { manifest, commit, source };
+    }
     run(["config", "kiwi.source", source.shown], tmp);
     if (source.ref) run(["config", "kiwi.ref", source.ref], tmp);
     renameSync(tmp, at);
@@ -165,6 +254,7 @@ function sourceOf(dir: string, run: Git): string | null {
 }
 
 export function listMods(home: string, run: Git = git): ModInfo[] {
+  const copies = copiesOf(home);
   return folders(home).map((name) => {
     const dir = join(modsDir(home), name);
     const link = lstatSync(dir).isSymbolicLink() ? readlinkSync(dir) : null;
@@ -176,11 +266,17 @@ export function listMods(home: string, run: Git = git): ModInfo[] {
     } catch (e) {
       info.problem = (e as Error).message;
     }
+    const copy = copies[name];
     if (!link && isGit(dir)) {
       info.source = sourceOf(dir, run);
       info.local = info.source === null;
       info.commit = commitOf(dir, "HEAD", run)?.slice(0, 7) ?? null;
       info.changed = changedIn(dir, run);
+    } else if (!link && copy) {
+      info.source = copy.source;
+      info.local = false;
+      info.commit = copy.commit.slice(0, 7);
+      info.changed = folderHash(dir) !== copy.hash;
     }
     return info;
   });
@@ -204,6 +300,53 @@ export interface Updates {
   skipped: { name: string; why: string }[];
 }
 
+function diffNeeds(was: ModManifest | null, next: ModManifest): { added: string[]; dropped: string[] } {
+  const before = new Set(was?.needs ?? []);
+  const after = new Set(next.needs);
+  return { added: next.needs.filter((n) => !before.has(n)), dropped: (was?.needs ?? []).filter((n) => !after.has(n)) };
+}
+
+function updateCopy(home: string, name: string, dir: string, copy: Copy, yes: boolean, run: Git): Change | null {
+  if (folderHash(dir) !== copy.hash) throw new ModError("has changes that aren't in its source: keep them in a repo of your own, or kiwi mod remove --force it and add it again");
+  const tmp = join(modsDir(home), `.updating-${randomBytes(6).toString("hex")}`);
+  try {
+    const to = cloneAt({ url: copy.url, shown: copy.source, ref: copy.ref, path: copy.path }, copy.ref, tmp, run);
+    if (to === copy.commit) return null;
+    const root = join(tmp, copy.path);
+    if (existsSync(root) && folderHash(root) === copy.hash) {
+      keepCopy(home, name, { ...copy, commit: to });
+      return null;
+    }
+    let next: ModManifest;
+    try {
+      next = manifestAt(root, name);
+    } catch (e) {
+      throw new ModError(`its new version can't load: ${(e as Error).message}`);
+    }
+    let was: ModManifest | null = null;
+    try {
+      was = manifestAt(dir, name);
+    } catch {
+      // The current copy is broken: the update can only help, and it lists every need as new.
+    }
+    let commits = 0;
+    try {
+      commits = Number(run(["rev-list", "--count", `${copy.commit}..${to}`, "--", copy.path], tmp)) || 0;
+    } catch {
+      // Its old commit is gone from the source's history: the count is unknown, the update still applies.
+    }
+    const { added, dropped } = diffNeeds(was, next);
+    const applied = !added.length || yes;
+    if (applied) {
+      placeCopy(root, dir);
+      keepCopy(home, name, { ...copy, commit: to, hash: folderHash(dir) });
+    }
+    return { name, from: was?.version ?? null, to: next.version, commits, added, dropped, applied };
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
 export function updateMods(home: string, only: string | null, yes: boolean, run: Git = git): Updates {
   if (only !== null && !MOD_NAME.test(only)) throw new ModError(`"${only}" isn't a mod name`);
   const names = only === null ? folders(home) : [only];
@@ -211,8 +354,20 @@ export function updateMods(home: string, only: string | null, yes: boolean, run:
   const changes: Change[] = [];
   const current: string[] = [];
   const skipped: { name: string; why: string }[] = [];
+  const copies = copiesOf(home);
   for (const name of names) {
     const dir = join(modsDir(home), name);
+    const copy = copies[name];
+    if (copy && !lstatSync(dir).isSymbolicLink() && !isGit(dir)) {
+      try {
+        const change = updateCopy(home, name, dir, copy, yes, run);
+        if (change) changes.push(change);
+        else current.push(name);
+      } catch (e) {
+        skipped.push({ name, why: (e as Error).message });
+      }
+      continue;
+    }
     if (lstatSync(dir).isSymbolicLink() || !isGit(dir) || sourceOf(dir, run) === null) {
       skipped.push({ name, why: "isn't from a git source, so there's nothing to pull" });
       continue;
@@ -242,10 +397,7 @@ export function updateMods(home: string, only: string | null, yes: boolean, run:
       } catch {
         // The current checkout is broken: the update can only help, and it lists every need as new.
       }
-      const before = new Set(was?.needs ?? []);
-      const after = new Set(next.needs);
-      const added = next.needs.filter((n) => !before.has(n));
-      const dropped = (was?.needs ?? []).filter((n) => !after.has(n));
+      const { added, dropped } = diffNeeds(was, next);
       const commits = Number(run(["rev-list", "--count", `HEAD..${to}`], dir)) || 0;
       const applied = !added.length || yes;
       if (applied) run(["checkout", "--quiet", "--detach", to], dir);
@@ -267,11 +419,17 @@ export function removeMod(home: string, name: string, force: boolean, run: Git =
     unlinkSync(dir);
     return { link };
   }
+  const copy = isGit(dir) ? undefined : copiesOf(home)[name];
   if (!force) {
-    if (!isGit(dir) || sourceOf(dir, run) === null) throw new ModError(`${name} isn't from a git source, so removing it deletes its only copy: --force removes it anyway`);
-    if (changedIn(dir, run)) throw new ModError(`${name} has changes that aren't in its source: --force removes them anyway`);
+    if (copy) {
+      if (folderHash(dir) !== copy.hash) throw new ModError(`${name} has changes that aren't in its source: --force removes them anyway`);
+    } else {
+      if (!isGit(dir) || sourceOf(dir, run) === null) throw new ModError(`${name} isn't from a git source, so removing it deletes its only copy: --force removes it anyway`);
+      if (changedIn(dir, run)) throw new ModError(`${name} has changes that aren't in its source: --force removes them anyway`);
+    }
   }
   rmSync(dir, { recursive: true, force: true });
+  if (copy) keepCopy(home, name, null);
   return { link: null };
 }
 

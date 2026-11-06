@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { addMod, devRound, git, listMods, ModError, modsDir, nudgeApp, parseSource, readManifest, removeMod, startDev, updateMods } from "../src/mods.ts";
+import { addMod, devRound, git, type Git, listMods, ModError, modsDir, nudgeApp, parseSource, readManifest, removeMod, startDev, updateMods } from "../src/mods.ts";
 import { bundleMod } from "@kiwi/core/node/mod-bundle.ts";
 import { kiwiCmd } from "./owner.ts";
 
@@ -41,10 +41,10 @@ const LINEAR = { name: "linear-panel", version: "1.0.0", shell: "^3.2", needs: [
 
 describe("a mod's source", () => {
   test("github.com/owner/repo clones over https; ssh, https, file and full paths pass as they are; #ref pins a branch, tag or commit", () => {
-    expect(parseSource("github.com/ana/linear-panel")).toEqual({ url: "https://github.com/ana/linear-panel.git", shown: "github.com/ana/linear-panel", ref: null });
-    expect(parseSource("github.com/ana/linear-panel.git#v1.2.0")).toEqual({ url: "https://github.com/ana/linear-panel.git", shown: "github.com/ana/linear-panel", ref: "v1.2.0" });
+    expect(parseSource("github.com/ana/linear-panel")).toEqual({ url: "https://github.com/ana/linear-panel.git", shown: "github.com/ana/linear-panel", ref: null, path: null });
+    expect(parseSource("github.com/ana/linear-panel.git#v1.2.0")).toEqual({ url: "https://github.com/ana/linear-panel.git", shown: "github.com/ana/linear-panel", ref: "v1.2.0", path: null });
     expect(parseSource("https://gitlab.com/ana/x.git").shown).toBe("gitlab.com/ana/x");
-    expect(parseSource("git@github.com:ana/x.git#main")).toEqual({ url: "git@github.com:ana/x.git", shown: "git@github.com:ana/x.git", ref: "main" });
+    expect(parseSource("git@github.com:ana/x.git#main")).toEqual({ url: "git@github.com:ana/x.git", shown: "git@github.com:ana/x.git", ref: "main", path: null });
     expect(parseSource("/home/ana/code/x").url).toBe("/home/ana/code/x");
   });
 
@@ -193,6 +193,77 @@ describe("kiwi mod add, list, update and remove", () => {
 
   test("git never waits on a password prompt and refuses transports that run commands", () => {
     expect(() => git(["ls-remote", "--", "ext::sh -c true"])).toThrow(ModError);
+  });
+});
+
+describe("one mod from a repo of many (T6870)", () => {
+  test("github.com/owner/repo/folder names one mod in a repo, and the folder can't walk out of it", () => {
+    expect(parseSource("github.com/kiwi-init/mods/anatomy")).toEqual({ url: "https://github.com/kiwi-init/mods.git", shown: "github.com/kiwi-init/mods/anatomy", ref: null, path: "anatomy" });
+    expect(parseSource("github.com/kiwi-init/mods.git/packs/anatomy#v1")).toEqual({
+      url: "https://github.com/kiwi-init/mods.git",
+      shown: "github.com/kiwi-init/mods/packs/anatomy",
+      ref: "v1",
+      path: "packs/anatomy",
+    });
+    expect(() => parseSource("github.com/kiwi-init/mods/..")).toThrow(ModError);
+    expect(() => parseSource("github.com/kiwi-init/mods/a/../../b")).toThrow(ModError);
+  });
+
+  test("add copies the folder, list says where it came from, update follows that folder alone, and remove forgets it", () => {
+    const home = scratch("home");
+    const src = scratch("monorepo");
+    sh(src, "init", "--quiet", "--initial-branch", "main");
+    const anatomy = (version: string, needs: string[]) => {
+      mkdirSync(join(src, "anatomy"), { recursive: true });
+      writeFileSync(join(src, "anatomy", "mod.json"), JSON.stringify({ name: "anatomy", version, shell: "^3.6", needs }));
+      writeFileSync(join(src, "anatomy", "index.tsx"), "export {}\n");
+    };
+    const save = (message: string) => {
+      sh(src, "add", "-A");
+      sh(src, "commit", "--quiet", "-m", message);
+      return sh(src, "rev-parse", "HEAD");
+    };
+    anatomy("0.1.0", []);
+    mkdirSync(join(src, "other"));
+    writeFileSync(join(src, "other", "mod.json"), JSON.stringify({ name: "other", version: "1.0.0", shell: "^3.6" }));
+    writeFileSync(join(src, "mods.json"), "[]\n");
+    const first = save("first");
+    const run: Git = (args, cwd) =>
+      git(
+        args.map((a) => (a === "https://github.com/kiwi-init/mods.git" ? src : a)),
+        cwd,
+      );
+
+    expect(addMod(home, "github.com/kiwi-init/mods/anatomy", run).commit).toBe(first);
+    expect(readdirSync(join(home, "mods", "anatomy")).sort()).toEqual(["index.tsx", "mod.json"]);
+    expect(existsSync(join(home, "mods", "other"))).toBe(false);
+    expect(listMods(home, run)).toEqual([
+      { name: "anatomy", version: "0.1.0", needs: [], source: "github.com/kiwi-init/mods/anatomy", commit: first.slice(0, 7), local: false, link: null, changed: false, problem: null },
+    ]);
+
+    writeFileSync(join(src, "other", "index.tsx"), "export {}\n");
+    const elsewhere = save("other only");
+    expect(updateMods(home, null, false, run)).toEqual({ changes: [], current: ["anatomy"], skipped: [] });
+    expect(listMods(home, run)[0]?.commit).toBe(elsewhere.slice(0, 7));
+
+    anatomy("0.2.0", ["net:example.com"]);
+    const more = save("asks for more");
+    expect(updateMods(home, null, false, run).changes).toEqual([{ name: "anatomy", from: "0.1.0", to: "0.2.0", commits: 1, added: ["net:example.com"], dropped: [], applied: false }]);
+    expect(listMods(home, run)[0]?.version).toBe("0.1.0");
+    expect(updateMods(home, null, true, run).changes[0]).toMatchObject({ to: "0.2.0", applied: true });
+    expect(listMods(home, run)[0]).toMatchObject({ version: "0.2.0", commit: more.slice(0, 7), changed: false });
+
+    writeFileSync(join(home, "mods", "anatomy", "index.tsx"), "export const mine = 1\n");
+    expect(listMods(home, run)[0]?.changed).toBe(true);
+    expect(updateMods(home, null, true, run).skipped).toEqual([
+      { name: "anatomy", why: "has changes that aren't in its source: keep them in a repo of your own, or kiwi mod remove --force it and add it again" },
+    ]);
+    expect(() => removeMod(home, "anatomy", false, run)).toThrow("anatomy has changes that aren't in its source: --force removes them anyway");
+    removeMod(home, "anatomy", true, run);
+    expect(readdirSync(modsDir(home)).filter((n) => !n.startsWith("."))).toEqual([]);
+    expect(JSON.parse(readFileSync(join(modsDir(home), ".sources.json"), "utf8"))).toEqual({});
+    expect(() => addMod(home, "github.com/kiwi-init/mods/missing", run)).toThrow("github.com/kiwi-init/mods/missing isn't a mod: it has no folder missing");
+    expect(readdirSync(modsDir(home)).filter((n) => !n.startsWith("."))).toEqual([]);
   });
 });
 

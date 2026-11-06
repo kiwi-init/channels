@@ -177,8 +177,9 @@ This computer
   kiwi demo · hooks install|uninstall|status · channels · relay --help
   kiwi mod list [--json]                         the mods in ~/.kiwi/mods: version, where each came from, what it asks for
      mod add <repo>[#ref]                        clone a mod (github.com/owner/repo, an https:// or ssh address, or a full
-                                                 path) into ~/.kiwi/mods, pinned at that commit; Channels asks you to
-                                                 approve what it needs before it runs it
+                                                 path) into ~/.kiwi/mods, pinned at that commit; github.com/owner/repo/folder
+                                                 takes the one mod in that folder; Channels asks you to approve what it
+                                                 needs before it runs it
      mod update [name] [--yes]                   pull each mod (or one) and say what changed in what it asks for; one that
                                                  asks for more waits for --yes
      mod remove <name> [--force]                 delete it (a link: just the link); one with changes not in its source
