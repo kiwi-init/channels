@@ -162,7 +162,7 @@ export class ChannelStore {
       const state = this.state.value;
       const from = [...state.members.values()].find((m) => m.pk === member.identity.pk)?.name;
       const may = opts.ev?.op === "task.update" || !!opts.check || !!opts.re?.some((id) => state.checks.has(id));
-      if (from && may) await (await import("@kiwi/core/ship-gate.ts")).postDowngrades(state, { ...opts, from, body }, (c) => this.ch.postReviewCheck(c));
+      return from && may ? (await import("@kiwi/core/ship-gate.ts")).postDowngrades(state, { ...opts, from, body }, (c) => this.ch.postReviewCheck(c)) : [];
     };
     this.lend = deps?.lend ?? ((code) => watches().lend(code));
     this.code = member.code;
@@ -308,6 +308,7 @@ export class ChannelStore {
       on(this.checksDue, () => this.postReviewChecks()),
       on(this.checksDue, () => this.tendDocs()),
       this.every(60_000, () => this.drainGithub()),
+      this.every(60_000, () => this.postReviewChecks()),
       on(this.rulesDue, () => this.githubRules()),
       subscribeTick(CLOCK_MS, () => {
         this.now.value = tickOf(Date.now(), CLOCK_MS);

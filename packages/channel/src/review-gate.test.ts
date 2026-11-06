@@ -5,7 +5,10 @@ import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identi
 import { PROTOCOL_VERSION, type Event, type Kind, type Message, type Payload } from "@kiwi/core/protocol.ts";
 import { postDowngrades, shipGate } from "@kiwi/core/ship-gate.ts";
 import { fold, type ChannelState, type Roster } from "@kiwi/core/state.ts";
+import { RelayError } from "@kiwi/core/client/relay-errors.ts";
 import { ChannelLink } from "./channel-ops.ts";
+import { checksToPost } from "./review-checks.ts";
+import { postReviewChores } from "./review-chores.ts";
 
 const S = "5".repeat(40);
 const T0 = 1_760_000_000_000;
@@ -52,13 +55,17 @@ describe("a person withdrawing a pass from the app, with the owner's app offline
     state = fold(log, roster, T0 + 3_600_000);
   });
 
-  const linkFor = (from: string, reach: "up" | "down") => {
+  const linkFor = (from: string, reach: "up" | "down", fencedSends = 0) => {
     const calls: { op: string; args: unknown[] }[] = [];
+    let tickets = 0;
+    let fenced = fencedSends;
     const ops = {
       call: async (_code: string, op: string, ...args: unknown[]) => {
         calls.push({ op, args });
         if (op === "postReviewCheck" && reach === "down") throw new TypeError("fetch failed");
-        return op === "send" ? 99 : { url: null };
+        if (op === "postReviewCheck") return { url: null, ticket: `t${++tickets}` };
+        if (fenced-- > 0) throw new RelayError(412, "kiwi/review's ticket for this change ran out", "Fenced");
+        return 99;
       },
     } as unknown as ChannelOps;
     const link = new ChannelLink("code", "room", ids[from]!.pk, ids.jow!.pk, ops);
@@ -81,7 +88,7 @@ describe("a person withdrawing a pass from the app, with the owner's app offline
     expect(await link.send("B", { re: [ask] })).toBe(99);
     expect(calls).toEqual([
       { op: "postReviewCheck", args: [{ repo: "o/r", sha: S, verdict: "waiting", tasks: [task], note: `T${task}: a pre-ship check isn't passed` }] },
-      { op: "send", args: ["B", { re: [ask] }] },
+      { op: "send", args: ["B", { re: [ask], tickets: ["t1"] }] },
     ]);
   });
 
@@ -103,5 +110,39 @@ describe("a person withdrawing a pass from the app, with the owner's app offline
     await up.link.send("", reopen);
     expect(up.calls.map((c) => c.op)).toEqual(["postReviewCheck", "send"]);
     expect(up.calls[0]!.args[0]).toMatchObject({ verdict: "waiting", tasks: [task] });
+  });
+
+  test("when the relay says the ticket ran out, the app posts a fresh downgrade and sends again, once", async () => {
+    const { link, calls } = linkFor("pat", "up", 1);
+    expect(await link.send("B", { re: [ask] })).toBe(99);
+    expect(calls.map((c) => [c.op, c.op === "send" ? c.args[1] : undefined])).toEqual([
+      ["postReviewCheck", undefined],
+      ["send", { re: [ask], tickets: ["t1"] }],
+      ["postReviewCheck", undefined],
+      ["send", { re: [ask], tickets: ["t2"] }],
+    ]);
+    const twice = linkFor("pat", "up", 2);
+    await expect(twice.link.send("B", { re: [ask] })).rejects.toThrow(/ran out/);
+  });
+
+  test("the owner's app keeps a success the fence refused as due, and posts it with the seq it folded", async () => {
+    const posts: unknown[] = [];
+    let refuse = true;
+    const ops = {
+      call: async (_code: string, op: string, ...args: unknown[]) => {
+        if (op !== "postReviewCheck") return null;
+        posts.push(args[0]);
+        if (refuse) throw new RelayError(412, "a change at this commit is still on its way", "Fenced");
+        return { url: null };
+      },
+    } as unknown as ChannelOps;
+    const room = `room-${crypto.randomUUID()}`;
+    const owner = new ChannelLink("code", room, ids.jow!.pk, ids.jow!.pk, ops);
+    await postReviewChores(owner, state);
+    expect(posts).toEqual([{ repo: "o/r", sha: S, verdict: "approved", tasks: [task], upTo: state.head }]);
+    expect(checksToPost(room, state)).toHaveLength(1);
+    refuse = false;
+    await postReviewChores(owner, state);
+    expect(checksToPost(room, state)).toEqual([]);
   });
 });

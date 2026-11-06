@@ -1,3 +1,4 @@
+import { RelayError } from "@kiwi/core/client/relay-errors.ts";
 import type { ChannelLink } from "./channel-ops.ts";
 import { drain } from "./github-queue.ts";
 import { checkPosted, checksToPost, issuesToPost, landPosted, landsToPost, linksToPost, setCheckedUpTo, tasksToClose } from "./review-checks.ts";
@@ -16,6 +17,7 @@ export function landTask(t: Task, artifact: CheckArtifact): TaskSend {
 
 export async function postReviewChores(ch: ChannelLink, state: ChannelState): Promise<void> {
   const due = checksToPost(ch.roomId, state).map((p, seq) => ({ ...p, seq }));
+  const fenced = new Set<number>();
   const links = linksToPost(ch.roomId, state);
   const issues = issuesToPost(ch.roomId, state);
   const closes = tasksToClose(ch.roomId, state);
@@ -24,10 +26,18 @@ export async function postReviewChores(ch: ChannelLink, state: ChannelState): Pr
   if (
     !(await drain(
       due,
-      ({ repo, sha, verdict, tasks, note }) => ch.postReviewCheck({ repo, sha, verdict, tasks, ...(note ? { note } : {}) }),
+      async ({ repo, sha, verdict, tasks, note, seq }) => {
+        try {
+          await ch.postReviewCheck({ repo, sha, verdict, tasks, ...(note ? { note } : {}), ...(verdict === "approved" ? { upTo: state.head } : {}) });
+        } catch (err) {
+          if (!(err instanceof RelayError && err.tag === "Fenced")) throw err;
+          // A change at that commit is still on its way, or landed after this state: the next look posts again.
+          fenced.add(seq);
+        }
+      },
       (seq) => {
         const p = due[seq];
-        if (p) checkPosted(ch.roomId, state, p);
+        if (p && !fenced.has(seq)) checkPosted(ch.roomId, state, p);
       },
     ))
   )
