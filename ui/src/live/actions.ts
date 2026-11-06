@@ -1,37 +1,17 @@
-import { handleFor } from "@kiwi/core/membership.ts"
-import { ROBOT_FACES, TASK_TITLE_MAX_LENGTH } from "@kiwi/core/protocol.ts"
+import { TASK_TITLE_MAX_LENGTH } from "@kiwi/core/protocol.ts"
 import { taskId, taskSpecRefusal } from "@kiwi/core/state.ts"
 import { assignTask, type TaskSend } from "@kiwi/channel/task-actions.ts"
 import { tokenForCreate } from "@kiwi/app/auth.ts"
-import { askToJoin, createChannel, inviteInfo } from "@kiwi/channel/join.ts"
-import { forgetChannel, forgetPending, isJoinCode, loadMember, loadPending, renameChannel } from "@kiwi/channel/store.ts"
+import { forgetChannel, forgetPending, loadMember, loadPending, renameChannel } from "@kiwi/channel/store.ts"
 import { linkOf, type ChannelLink } from "@kiwi/channel/channel-ops.ts"
-import { joinCodeFromLink } from "@kiwi/app/deep-link.ts"
 import { relayUrl } from "@kiwi/secrets/relay.ts"
 import { savePersonalities } from "@kiwi/app/personalities.ts"
 import { createPerson, bridge, secrets } from "@kiwi/secrets/secrets.ts"
-import { isSignInGone } from "@kiwi/channel/session.ts"
 import { announce } from "~/kit/toasts"
-import {
-  dismissMoved,
-  enrollAnswer,
-  enrollBegin,
-  enrollCancel,
-  enrollConfirm,
-  enrollDeny,
-  enrollKeep,
-  forgetDevice,
-  launchedFrom,
-  linkGithub,
-  renewDevice,
-  unlinkGithub,
-  type EnrollDone,
-} from "~/live/account"
 import { loadPicture } from "~/live/pictures"
 import { appCan } from "~/live/app-can"
 import { setNewMemberPowers, setNewMemberScopes } from "~/live/defaults"
 import { deleteTheme, saveTheme, setPrefs } from "~/live/prefs"
-import { iconFromFile } from "~/live/icon-file"
 import { checkComputer, computerSettings, setContextLine, setHooks } from "~/live/computer"
 import { markSeenIn, seenIn } from "@kiwi/app/threads.ts"
 import { followKey, followMark } from "~/live/threads"
@@ -43,11 +23,11 @@ import { refusal } from "~/live/refused"
 const manage = () => import("~/live/manage")
 const UPDATE_FOR_MEDIA = "Update Channels to add images and files to a doc"
 const rare = () => import("~/live/rare")
-import { downloadAndRestart } from "~/live/update"
+const account = () => import("~/live/account-rare")
+const joining = () => import("~/live/join-rare")
 import { setWake } from "~/live/wakes"
-import { rememberOwner } from "~/live/invites"
 import { findDoc } from "~/chat/doc/find-doc"
-import type { Actions, InviteInfo } from "~/model"
+import type { Actions } from "~/model"
 
 async function tried<T>(what: string, run: () => Promise<T>): Promise<T | null> {
   try {
@@ -69,69 +49,6 @@ function link(code: string): ChannelLink {
 
 async function sends(run: Run, ...all: TaskSend[]): Promise<void> {
   for (const { body, opts } of all) await run.send(body, opts)
-}
-
-function joinCodeOf(typed: string): string | null {
-  const raw = typed.trim()
-  if (isJoinCode(raw)) return raw
-  const linked = joinCodeFromLink(raw)
-  if (linked) return linked
-  try {
-    const hash = decodeURIComponent(new URL(raw).hash.slice(1)).trim()
-    if (isJoinCode(hash)) return hash
-    const path = /\/join\/([^/?#]+)/.exec(new URL(raw).pathname)?.[1]
-    const fromPath = path ? decodeURIComponent(path) : ""
-    return isJoinCode(fromPath) ? fromPath : null
-  } catch {
-    return null
-  }
-}
-
-async function newChannel(title: string): Promise<string> {
-  const person = secrets().person
-  const make = async (fresh: boolean) => createChannel(title.trim() || "Untitled channel", await tokenForCreate(fresh), person ? { name: person.name } : null)
-  const m = await make(false).catch((err: unknown) => {
-    if (isSignInGone(err) && bridge()) return make(true)
-    throw err
-  })
-  void manage().then((x) => x.freshChannel(m.code))
-  await linkOf(m)
-    .setIcon({ kind: "robot", robot: ROBOT_FACES[Math.floor(Math.random() * ROBOT_FACES.length)] ?? "blue" })
-    .catch(() => {
-      // The channel exists either way; its owner can pick an icon later.
-    })
-  return m.code
-}
-
-async function lookUpInvite(typed: string): Promise<InviteInfo> {
-  const code = joinCodeOf(typed)
-  if (!code) throw new Error("That isn't an invite. Codes start with mc2-")
-  if (loadMember(code) || loadPending(code)) return { code, owner: null, state: "member" }
-  const info = await inviteInfo(code)
-  if (!info) return { code, owner: null, state: "gone" }
-  if (info.ownerName) rememberOwner(code, info.ownerName)
-  return { code, owner: info.ownerName, state: "ok" }
-}
-
-async function joinChannel(typed: string, name?: string): Promise<string> {
-  const code = joinCodeOf(typed)
-  if (!code) throw new Error("That isn't an invite. Codes start with mc2-")
-  if (loadMember(code) || loadPending(code)) return code
-  const person = secrets().person
-  if (!person) throw new Error("Say your name first")
-  await askToJoin(code, name?.trim() || handleFor(person.name))
-  return code
-}
-
-async function joinGranted(d: EnrollDone): Promise<void> {
-  const name = handleFor(d.person.name)
-  let asked = 0
-  for (const c of d.channels) {
-    if (loadMember(c.code) || loadPending(c.code)) continue
-    await askToJoin(c.code, name)
-    asked++
-  }
-  announce(asked ? `Signed in as ${d.person.name}. Asked to join ${asked === 1 ? "1 channel" : `${asked} channels`}` : `Signed in as ${d.person.name}`)
 }
 
 export function makeActions(): Actions {
@@ -271,7 +188,7 @@ export function makeActions(): Actions {
     setIcon: (code, file) =>
       attempt("Icon not changed", async () => {
         const run = owner(code)
-        await run.ch.setIcon(file ? await iconFromFile(file) : null)
+        await run.ch.setIcon(file ? await (await import("~/live/icon-file")).iconFromFile(file) : null)
       }),
     exportHistory: async (code, kind) => (await manage()).exportHistory(code, kind),
     clearFact: (code, key) =>
@@ -326,9 +243,9 @@ export function makeActions(): Actions {
         closeOpened(code)
         await forgetChannel(code)
       }),
-    newChannel,
-    inviteInfo: lookUpInvite,
-    joinChannel,
+    newChannel: async (title) => (await joining()).newChannel(title),
+    inviteInfo: async (typed) => (await joining()).lookUpInvite(typed),
+    joinChannel: async (typed, name) => (await joining()).joinChannel(typed, name),
     setName: (name) =>
       attempt("Name not saved", async () => {
         if (secrets().person) throw new Error("your name stays the one your key was made with")
@@ -343,44 +260,19 @@ export function makeActions(): Actions {
     earlierTo: (code, seq) => (openedRun(code)?.older.to(seq) ?? Promise.resolve(false)).catch(() => false),
     holdEarlier: (code, key, seq) => openedRun(code)?.older.keep(key, seq),
     forgetComputer: (id) => void manage().then((m) => m.forgetComputer(id)),
-    linkGithub: () => attempt("GitHub not linked", linkGithub),
-    signInWithGithub: () => attempt("Not signed in with GitHub", linkGithub),
-    unlinkGithub: () => attempt("GitHub not unlinked", unlinkGithub),
+    linkGithub: () => attempt("GitHub not linked", async () => (await account()).linkGithub()),
+    signInWithGithub: () => attempt("Not signed in with GitHub", async () => (await account()).linkGithub()),
+    unlinkGithub: () => attempt("GitHub not unlinked", async () => (await account()).unlinkGithub()),
     windowControl: (action) =>
       void bridge()
         ?.windowControl(action)
         .catch(() => {}),
     checkUpdate: async () => (await rare()).checkUpdate(),
-    setRelay: async (url) => {
-      const b = bridge()
-      if (!b) return "only the desktop app can change its relay"
-      try {
-        await b.setRelayUrl(url.trim())
-        return null
-      } catch (err) {
-        return err instanceof Error ? err.message.replace(/^.*?Error: /, "") : String(err)
-      }
-    },
-    installUpdate: () =>
-      attempt("Couldn't update", async () => {
-        const b = bridge()
-        if (!b) throw new Error("updates come with the Channels desktop app")
-        await downloadAndRestart(b, announce)
-      }),
-    applyUi: () =>
-      attempt("Couldn't switch to the new look", async () => {
-        const b = bridge()
-        if (!b) throw new Error("the new look comes with the Channels desktop app")
-        await b.applyUi()
-      }),
-    dismissMoved: () => attempt("Couldn't put the note away", dismissMoved),
-    signOut: () =>
-      attempt("Couldn't sign out", async () => {
-        const b = bridge()
-        if (!b) throw new Error("only the desktop app keeps a sign-in")
-        await b.signOut()
-        announce("Signed out of the relay. Your key and channels stay on this computer")
-      }),
+    setRelay: async (url) => (await account()).setRelay(url),
+    installUpdate: () => attempt("Couldn't update", async () => (await account()).installUpdate()),
+    applyUi: () => attempt("Couldn't switch to the new look", async () => (await account()).applyUi()),
+    dismissMoved: () => attempt("Couldn't put the note away", async () => (await account()).dismissMoved()),
+    signOut: () => attempt("Couldn't sign out", async () => (await account()).signOut()),
     setNewMembers: (code, can) =>
       attempt("Not changed", async () => {
         const m = loadMember(code)
@@ -393,27 +285,27 @@ export function makeActions(): Actions {
         if (!m) throw new Error("you're not in that channel")
         setNewMemberPowers(m.access.roomId, powers)
       }),
-    enrollAnswer: (id) => attempt("Couldn't answer the device", () => enrollAnswer(id)),
-    enrollConfirm,
-    enrollDeny: (id) => attempt("Couldn't turn the device away", () => enrollDeny(id)),
-    forgetDevice: (ids, keep) => attempt("Couldn't forget the device", () => forgetDevice(ids, keep)),
-    renewDevice: (...ids) => attempt("Couldn't renew the device", () => renewDevice(...ids)),
+    enrollAnswer: (id) => attempt("Couldn't answer the device", async () => (await account()).enrollAnswer(id)),
+    enrollConfirm: async (id, digits) => (await account()).enrollConfirm(id, digits),
+    enrollDeny: (id) => attempt("Couldn't turn the device away", async () => (await account()).enrollDeny(id)),
+    forgetDevice: (ids, keep) => attempt("Couldn't forget the device", async () => (await account()).forgetDevice(ids, keep)),
+    renewDevice: (...ids) => attempt("Couldn't renew the device", async () => (await account()).renewDevice(...ids)),
     enrollBegin: () =>
-      attempt("Couldn't sign in as one of your devices", () =>
-        enrollBegin(
+      attempt("Couldn't sign in as one of your devices", async () =>
+        (await account()).enrollBegin(
           () => tokenForCreate(),
-          (d) => attempt("Couldn't join your channels", () => joinGranted(d))
+          (d) => attempt("Couldn't join your channels", async () => (await joining()).joinGranted(d))
         )
       ),
-    enrollKeep: () => attempt("Couldn't join as one of your devices", enrollKeep),
-    enrollCancel: () => attempt("Couldn't take the ask back", enrollCancel),
+    enrollKeep: () => attempt("Couldn't join as one of your devices", async () => (await account()).enrollKeep()),
+    enrollCancel: () => attempt("Couldn't take the ask back", async () => (await account()).enrollCancel()),
     saveTheme,
     deleteTheme,
     savePersonalities: (list) => attempt("Not saved", () => savePersonalities(list)),
     setHooks: (harness, on) => attempt("Couldn't change the hooks", () => setHooks(harness, on)),
     checkComputer,
     computerSettings,
-    launchedFrom,
+    launchedFrom: async (ids) => (await account()).launchedFrom(ids),
     setContextLine: (on) => attempt("Couldn't change it", () => setContextLine(on)),
   }
 }

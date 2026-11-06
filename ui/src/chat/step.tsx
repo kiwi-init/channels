@@ -2,6 +2,7 @@ import { useState } from "react"
 
 import type { Step, StepReply } from "@kiwi/core/protocol.ts"
 import { Icon } from "~/kit/icons"
+import { OutsideLink } from "~/kit/outside"
 import { copyText } from "~/kit/toasts"
 
 export function stepReplyText(reply: StepReply): string {
@@ -43,9 +44,7 @@ export function StepHow({ step, you = [] }: { step: Step; you?: readonly string[
         <ul className="ask-links" aria-label="Step links">
           {step.links.map((link) => (
             <li key={link}>
-              <a href={link} target="_blank" rel="noreferrer">
-                {link}
-              </a>
+              <OutsideLink href={link}>{link}</OutsideLink>
             </li>
           ))}
         </ul>

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test"
 
-import { enrollBegin, enrollCancel, enrollKeep, enrollingNow, type EnrollDone } from "~/live/account"
+import { enrollingNow } from "~/live/account"
+import { enrollBegin, enrollCancel, enrollKeep, type EnrollDone } from "~/live/account-rare"
 
 type Status = { stage: "asking" } | { stage: "check"; person: { name: string; fingerprint: string } }
 
