@@ -170,7 +170,8 @@ try {
     d.evaluate(
       () => {
         if (document.querySelector(".palette-box")) return true;
-        dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: navigator.platform.includes("Mac"), ctrlKey: !navigator.platform.includes("Mac"), bubbles: true }));
+        const mac = navigator.platform.includes("Mac");
+        (document.activeElement ?? document.body).dispatchEvent(new KeyboardEvent("keydown", { key: "k", code: "KeyK", metaKey: mac, ctrlKey: !mac, bubbles: true, cancelable: true }));
         return false;
       },
       null,
