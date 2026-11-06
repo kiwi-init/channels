@@ -1,6 +1,10 @@
-import type { ModTerminal, ModTerminalMark } from "../../../desktop/src/bridge.ts"
+import type { ModTerminal as PlacedTerminal, ModTerminalMark } from "../../../desktop/src/bridge.ts"
 
-export type { ModTerminal, ModTerminalMark }
+export type { ModTerminalMark, PlacedTerminal }
+
+export interface ModTerminal extends PlacedTerminal {
+  waits: ModTerminalMark
+}
 
 export const MOD_PROTOCOL = 1
 
@@ -51,6 +55,8 @@ export interface ModMessage {
   seq: number
   text: string
   author: string
+  from: string
+  channelId: string
   at: number
   room: string | null
   link: string
@@ -71,7 +77,7 @@ interface ModFetchInit {
   body?: string | null
 }
 
-export type TerminalOp = { op: "list" } | { op: "focus"; seat: string } | { op: "mark"; seat: string; mark: ModTerminalMark | null }
+export type TerminalOp = { op: "list" } | { op: "focus"; seat: string } | { op: "focus"; room: string; agent: string } | { op: "mark"; seat: string; mark: ModTerminalMark | null }
 
 export interface ModFetchResult {
   status: number
@@ -96,6 +102,7 @@ export type ToFrame =
   | { kiwi: typeof MOD_PROTOCOL; type: "theme"; theme: Record<string, string>; dark: boolean }
   | { kiwi: typeof MOD_PROTOCOL; type: "command"; id: string }
   | { kiwi: typeof MOD_PROTOCOL; type: "action"; id: string; message: ModMessage }
+  | { kiwi: typeof MOD_PROTOCOL; type: "terminals"; list: ModTerminal[] }
   | { kiwi: typeof MOD_PROTOCOL; type: "reply"; id: number; ok: true; value: ModFetchResult | ModTerminal[] | null }
   | { kiwi: typeof MOD_PROTOCOL; type: "reply"; id: number; ok: false; error: string }
 
@@ -183,12 +190,15 @@ export function fromFrame(data: unknown): FromFrame | null {
 }
 
 const SEAT = /^[0-9a-f]{16}$/
+const ROOM = /^[0-9a-f]{32}$/
+const AGENT = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/
 
 function terminalOp(m: Record<string, unknown>): FromFrame | null {
-  const { id, op, seat, mark } = m
+  const { id, op, seat, mark, room, agent } = m
   if (typeof id !== "number" || !Number.isSafeInteger(id)) return null
   const base = { kiwi: MOD_PROTOCOL as typeof MOD_PROTOCOL, type: "terminal" as const, id }
   if (op === "list") return { ...base, op }
+  if (op === "focus" && seat === undefined) return typeof room === "string" && ROOM.test(room) && typeof agent === "string" && AGENT.test(agent) ? { ...base, op, room, agent } : null
   if (typeof seat !== "string" || !SEAT.test(seat)) return null
   if (op === "focus") return { ...base, op, seat }
   if (op !== "mark") return null

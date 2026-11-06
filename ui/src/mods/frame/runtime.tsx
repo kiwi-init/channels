@@ -29,6 +29,7 @@ const waiting = new Map<number, Waiting>()
 const commands = new Map<string, { title: string; run: () => void | Promise<void> }>()
 const actions = new Map<string, { title: string; run: (message: ModMessage) => void | Promise<void> }>()
 const drawers = new Map<string, Draw>()
+const placed = new Set<(list: ModTerminal[]) => void>()
 const box = document.getElementById("root") ?? document.body.appendChild(document.createElement("div"))
 const root = ReactDOMClient.createRoot(box)
 let sized: ResizeObserver | null = null
@@ -80,8 +81,15 @@ function terminal(call: string, op: TerminalOp): Promise<unknown> {
 
 const terminals = async (): Promise<ModTerminal[]> => (await terminal("terminals", { op: "list" })) as ModTerminal[]
 
-const focusTerminal = async (seat: string): Promise<void> => {
-  await terminal("focusTerminal", { op: "focus", seat: String(seat) })
+const focusTerminal = async (to: string | { room: string; agent: string }): Promise<void> => {
+  await terminal("focusTerminal", typeof to === "string" ? { op: "focus", seat: to } : { op: "focus", room: String(to.room), agent: String(to.agent) })
+}
+
+function onTerminals(listen: (list: ModTerminal[]) => void): () => void {
+  asked("terminal", "onTerminals")
+  if (surface !== "main") return () => undefined
+  placed.add(listen)
+  return () => void placed.delete(listen)
 }
 
 const markTerminal = async (seat: string, mark: Partial<ModTerminalMark> | null): Promise<void> => {
@@ -149,6 +157,7 @@ const api = {
   },
   fetch: modFetch,
   terminals,
+  onTerminals,
   focusTerminal,
   markTerminal,
   settings: (): Readonly<Record<string, string | boolean | null>> => values,
@@ -206,6 +215,13 @@ addEventListener("message", (e) => {
   } else if (m.type === "theme") theme(m.theme, m.dark)
   else if (m.type === "command") void Promise.resolve(commands.get(m.id)?.run()).catch(failed)
   else if (m.type === "action") void Promise.resolve(actions.get(m.id)?.run(m.message)).catch(failed)
+  else if (m.type === "terminals")
+    for (const listen of placed)
+      try {
+        listen(m.list)
+      } catch (err) {
+        failed(err)
+      }
   else if (m.type === "reply") {
     const w = waiting.get(m.id)
     waiting.delete(m.id)
