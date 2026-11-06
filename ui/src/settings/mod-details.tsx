@@ -39,7 +39,12 @@ export function ModDetailsPage({ mod }: { mod: ModView }) {
   const d = useDetails(mod)
   const run = runningMod(mod.name)
   const local = mod.source === "local"
-  const adds = [...(run?.title ? [["Panel", run.title] as const] : []), ...(run?.commands ?? []).map((c) => ["Command in ⌘K", c] as const)]
+  const adds: (readonly [string, string])[] = [
+    ...(run?.title ? [["Panel", run.title] as const] : []),
+    ...(run?.side ? [["Sidebar section", run.side.title] as const] : []),
+    ...(run?.commands ?? []).map((c) => ["Command in ⌘K", c] as const),
+    ...(run?.actions ?? []).map((a) => ["In a message's menu", a.title] as const),
+  ]
   return (
     <>
       <header className="set-head mod-head">

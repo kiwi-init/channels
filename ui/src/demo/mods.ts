@@ -16,8 +16,8 @@ const MODS: ModView[] = [
     name: "release-radar",
     version: "1.4.0",
     source: "github.com/kiwi-init/mods/release-radar",
-    needs: ["panel", "command", "net:api.github.com"],
-    approved: ["panel", "command", "net:api.github.com"],
+    needs: ["panel", "sidebar", "command", "message-action", "net:api.github.com"],
+    approved: ["panel", "sidebar", "command", "message-action", "net:api.github.com"],
     state: "on",
     hash: "5f0c2b9e1a7d4c3e",
     icon: "a41c09e2d8b7f310",
@@ -69,5 +69,14 @@ const DETAILS: Record<string, ModDetails> = {
 
 export function showDemoMods(): void {
   showModReads({ modIcon: (name) => Promise.resolve(ICONS[name] ?? null), modDetails: (name) => Promise.resolve(DETAILS[name] ?? null) })
-  showMods(MODS, [{ name: "release-radar", title: "Release Radar", failed: null, commands: ["New release notes", "Open Release Radar"] }])
+  showMods(MODS, [
+    {
+      name: "release-radar",
+      title: "Release Radar",
+      failed: null,
+      side: { title: "Releases", height: 120 },
+      actions: [{ id: "notes", title: "Draft release notes from this" }],
+      commands: ["New release notes", "Open Release Radar"],
+    },
+  ])
 }
