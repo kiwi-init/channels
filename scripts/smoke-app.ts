@@ -1,4 +1,3 @@
-import { spawn } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -6,6 +5,7 @@ import { chromium } from "playwright-core";
 import { startLocalRelay } from "./local-relay.ts";
 import { harnessDist } from "./ui-harness.ts";
 import { approveSpec, docOpen, passOnboarding, unfold, writeBlock } from "./perf-ui.ts";
+import { CallExited, poll, runCall } from "./smoke-calls.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
 const DIST = harnessDist(process.argv[2]);
@@ -20,14 +20,12 @@ for (const opener of ["open", "xdg-open"]) {
 }
 const cliEnv = { KIWI_MODEL: "claude-sonnet-5-5", ...process.env, KIWI_HOME: join(cli, "home"), CLAUDE_CONFIG_DIR: join(cli, "no-claude"), PATH: `${join(cli, "bin")}:${process.env.PATH}` };
 
-const kiwi = (args: string[], watch?: (out: string) => void): Promise<string> => {
-  const p = spawn("bun", ["src/cli/main.ts", ...args], { cwd: ROOT, env: cliEnv, stdio: ["ignore", "pipe", "pipe"] });
-  let out = "";
-  const on = (d: Buffer) => ((out += d.toString("utf8")), watch?.(out));
-  p.stdout.on("data", on);
-  p.stderr.on("data", on);
-  return new Promise((ok, fail) => p.on("exit", (code) => (code === 0 ? ok(out) : fail(new Error(`kiwi ${args[0]} exited ${code}: ${out.trim().split("\n").pop()}`)))));
-};
+const CALL_MS = 30_000;
+const JOIN_MS = 90_000;
+const NOTE_CLEARED_MS = 15_000;
+
+const kiwi = (args: string[], opts: { limitMs?: number; watch?: (out: string) => void } = {}): Promise<string> =>
+  runCall({ cmd: "bun", args: ["src/cli/main.ts", ...args], cwd: ROOT, env: cliEnv, limitMs: opts.limitMs ?? CALL_MS, name: `kiwi ${args.join(" ")}`, ...(opts.watch ? { watch: opts.watch } : {}) });
 
 interface Said {
   seq: number;
@@ -95,8 +93,11 @@ try {
 
   at = "an agent asks to join and is let in after the codes match";
   let cliCode = "";
-  const joining = kiwi(["join", code, "smoke", "--relay", BASE, "--as", "bot"], (out) => {
-    cliCode = /verification code ([\d-]+)/.exec(out)?.[1]?.replace(/\D/g, "") ?? cliCode;
+  const joining = kiwi(["join", code, "smoke", "--relay", BASE, "--as", "bot"], {
+    limitMs: JOIN_MS,
+    watch: (out) => {
+      cliCode = /verification code ([\d-]+)/.exec(out)?.[1]?.replace(/\D/g, "") ?? cliCode;
+    },
   });
   const needsTab = views.getByRole("button", { name: /^Needs you/ });
   await needsTab.waitFor({ timeout: 30000 });
@@ -119,15 +120,16 @@ try {
   await notes.getByText("smoke-url").waitFor({ timeout: 15000 });
   await notes.getByRole("button", { name: "Clear smoke-url" }).click();
   await notes.getByRole("button", { name: "Clear", exact: true }).click();
-  let cleared = false;
-  for (let i = 0; i < 50 && !cleared; i++) {
-    cleared = await kiwi(["-c", "smoke", "--as", "bot", "note", "smoke-url"]).then(
-      () => false,
-      (e: unknown) => String(e).includes("no fact"),
-    );
-    if (!cleared) await page.waitForTimeout(200);
-  }
-  if (!cleared) throw new Error("the agent still has the note after the owner cleared it");
+  await poll("the agent sees the note the owner cleared go", NOTE_CLEARED_MS, 200, async (limitMs) => {
+    try {
+      const value = await kiwi(["-c", "smoke", "--as", "bot", "note", "smoke-url"], { limitMs });
+      return { done: false, seen: `smoke-url is still ${value.trim() || "set"}` };
+    } catch (e) {
+      // Only the CLI's own "no fact" answer means cleared; a timeout or a failed start is reported as itself.
+      if (e instanceof CallExited && e.out.includes("no fact")) return { done: true, value: undefined };
+      throw e;
+    }
+  });
   await page.keyboard.press("Escape");
   step(at);
 
