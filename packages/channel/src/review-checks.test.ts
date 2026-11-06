@@ -79,6 +79,30 @@ describe("posting review checks from the owner's app", () => {
     expect(checkedUpTo(room, "issueTasks")).toBe(4);
   });
 
+  test("an issue closing moves a task with a landing step to landing, never to done (#623)", async () => {
+    const jon = await generateIdentity("jon");
+    const roster = [{ name: "jon", pk: jon.pk, owner: true, at: 0, active: true, kind: "human" as const }];
+    let seq = 0;
+    const ev = async (e: Event, body = ""): Promise<Message> => {
+      seq++;
+      const p = await sign(jon, { v: 1 as const, id: crypto.randomUUID(), from: "jon", kind: "event" as const, body, ts: seq, ev: e });
+      return { ...p, seq, rts: seq, sigOk: await verify(p) };
+    };
+    const room = `room-${crypto.randomUUID()}`;
+    const log = [await ev({ op: "landing.set", then: "merge" }), await ev({ op: "task.add", title: "Export", issue: { repo: "o/r", number: 7 } })];
+    expect(tasksToClose(room, fold(log, roster))).toEqual([]);
+    log.push(await ev({ op: "github", items: [{ event: "issues", repo: "o/r", action: "closed", number: 7, state: "closed", reason: "completed", by: "jow", at: 1 }] }));
+    let s = fold(log, roster);
+    const due = tasksToClose(room, s);
+    expect(due).toHaveLength(1);
+    const { body, opts } = closeFromGithub(s.tasks.get(2)!, due[0]!);
+    expect(body).toBe("T2 landing: o/r#7 closed on GitHub by @jow");
+    log.push(await ev(opts.ev!, body));
+    s = fold(log, roster);
+    expect(s.tasks.get(2)!.state).toBe("landing");
+    expect(tasksToClose(room, s)).toEqual([]);
+  });
+
   test("with Write to GitHub on, a task filed from an issue gets one link comment on it, and not on the first look", async () => {
     const jon = await generateIdentity("jon");
     const roster = [{ name: "jon", pk: jon.pk, owner: true, at: 0, active: true, kind: "human" as const }];

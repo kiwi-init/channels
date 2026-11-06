@@ -585,9 +585,17 @@ function reactionsOf(state: ChannelState, seq: number): Reaction[] {
   return [...chips].sort((a, b) => a[1].first - b[1].first).map(([emoji, c]) => ({ emoji, by: c.by }))
 }
 
-const STATUS: Record<CoreTask["state"], TaskStatus> = { todo: "todo", doing: "doing", review: "review", done: "done" }
+const STATUS: Record<CoreTask["state"], TaskStatus> = { todo: "todo", doing: "doing", review: "review", landing: "landing", done: "done" }
 
-const STATE_MOVES: Record<NonNullable<TaskUpdate["state"]>, TaskMove> = { todo: "reopened", doing: "started", review: "review", done: "done", blocked: "blocked", cancelled: "cancelled" }
+const STATE_MOVES: Record<NonNullable<TaskUpdate["state"]>, TaskMove> = {
+  todo: "reopened",
+  doing: "started",
+  review: "review",
+  landing: "approved",
+  done: "done",
+  blocked: "blocked",
+  cancelled: "cancelled",
+}
 
 const TASK_REF = /\bT(\d+)\b/g
 
@@ -696,6 +704,8 @@ export function tasksOf(state: ChannelState, held: ReadonlySet<number>, me: stri
       history: history.get(t.id) ?? [],
       archived: !!t.archived,
       ...(t.cancelled ? { cancelled: true } : {}),
+      ...(t.then ? { lands: { then: t.then, ...((t.lander ?? t.owner) ? { by: t.lander ?? t.owner } : {}) } } : {}),
+      ...(t.closedWith ? { closedWith: wrote(t.closedWith) } : {}),
       ...(review ? { youReview: review } : {}),
       ...(suggested ? { suggested } : {}),
       ...(t.leftBy && !t.owner ? { leftBy: t.leftBy } : {}),

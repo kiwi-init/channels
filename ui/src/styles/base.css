@@ -618,6 +618,11 @@ kbd {
   background: linear-gradient(90deg, var(--review) 50%, transparent 50%);
 }
 
+.dot.is-landing {
+  border-color: var(--live);
+  background: linear-gradient(90deg, var(--live) 50%, transparent 50%);
+}
+
 .dot.is-done {
   background: var(--live);
   border-color: var(--live);

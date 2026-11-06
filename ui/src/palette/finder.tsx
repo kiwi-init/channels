@@ -23,7 +23,7 @@ const SEP = /[\s#@/._:-]/
 
 const FIRST_QUERY = new URLSearchParams(location.search).get("q") ?? ""
 
-const TONE: Record<TaskStatus, string> = { todo: "", doing: "tone-doing", review: "tone-review", done: "tone-live", waiting: "tone-decide" }
+const TONE: Record<TaskStatus, string> = { todo: "", doing: "tone-doing", review: "tone-review", landing: "tone-review", done: "tone-live", waiting: "tone-decide" }
 
 const THEMES: { theme: Theme; label: string; icon: "moon" | "sun" | "computer" }[] = [
   { theme: "dark", label: "Theme: Dark", icon: "moon" },

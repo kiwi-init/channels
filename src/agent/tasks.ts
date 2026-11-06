@@ -12,6 +12,7 @@ import {
   TASK_TITLE_LIMIT,
   ignored,
   type IssueRef,
+  type Landing,
   type TaskState,
   type Verdict,
 } from "@kiwi/core/protocol.ts";
@@ -20,6 +21,7 @@ import { Rejected } from "@kiwi/core/refusals.ts";
 import {
   isPerson,
   openRound,
+  landingRefusal,
   reviewClaimRefusal,
   reviewMoveRefusal,
   revisedOut,
@@ -73,7 +75,7 @@ export class SessionTasks extends SessionMessaging {
 
   readonly taskAdd = Effect.fn("AgentSession.taskAdd")(
     { self: this },
-    function* (this: SessionTasks, title: string, opts: { detail?: string; owner?: string; review?: string; re?: number; issue?: IssueRef; from?: number } = {}) {
+    function* (this: SessionTasks, title: string, opts: { detail?: string; owner?: string; review?: string; re?: number; issue?: IssueRef; from?: number; then?: Landing; lander?: string } = {}) {
       const long = titleRefusal(title);
       if (long) return yield* new Rejected(long);
       if (opts.detail && opts.detail.length > TASK_BODY_MAX_LENGTH)
@@ -83,6 +85,7 @@ export class SessionTasks extends SessionMessaging {
       if (opts.from !== undefined && !state.tasks.has(opts.from)) return yield* new Rejected(`no task ${taskId(opts.from)} to come from`);
       const owner = opts.owner && (yield* this.resolveTo([opts.owner], state))?.[0];
       const review = opts.review === undefined ? undefined : yield* this.reviewer(state, opts.review);
+      const lander = opts.lander && (yield* this.resolveTo([opts.lander], state))?.[0];
       return yield* this.event(
         {
           op: "task.add",
@@ -92,6 +95,8 @@ export class SessionTasks extends SessionMessaging {
           ...(review ? { review } : {}),
           ...(opts.issue ? { issue: opts.issue } : {}),
           ...(opts.from !== undefined ? { from: opts.from } : {}),
+          ...(opts.then ? { then: opts.then } : {}),
+          ...(lander ? { lander } : {}),
         },
         `task: ${title}`,
         [...(owner ? [owner] : []), ...(review && review !== "*" ? [review] : [])],
@@ -118,7 +123,7 @@ export class SessionTasks extends SessionMessaging {
 
   readonly taskFromIssue = Effect.fn("AgentSession.taskFromIssue")(
     { self: this },
-    function* (this: SessionTasks, ref: string, opts: { title?: string; detail?: string; owner?: string; review?: string; re?: number; from?: number } = {}) {
+    function* (this: SessionTasks, ref: string, opts: { title?: string; detail?: string; owner?: string; review?: string; re?: number; from?: number; then?: Landing; lander?: string } = {}) {
       const { state } = yield* this.state();
       const issue = parseIssueRef(ref, state.repos);
       if (typeof issue === "string") return yield* new Rejected(issue);
@@ -181,6 +186,9 @@ export class SessionTasks extends SessionMessaging {
         round?: number;
         proof?: { url: string; label?: string };
         checkpoint?: true;
+        then?: Landing;
+        lander?: string | null;
+        close?: string;
       },
       reviewText?: string,
     ) {
@@ -206,6 +214,7 @@ export class SessionTasks extends SessionMessaging {
       }
       if (change.state && change.state !== "cancelled" && !TASK_STATES.includes(change.state)) return yield* new Rejected(`state must be one of ${TASK_STATES.join(", ")}`);
       const owner = change.owner ? (yield* this.resolveTo([change.owner], state))?.[0] : change.owner;
+      const lander = change.lander ? (yield* this.resolveTo([change.lander], state))?.[0] : change.lander;
       const finishing = change.state === "done" || change.state === "cancelled";
       const reviewerLeft = !!t.review && t.review !== "*" && state.members.get(t.review)?.active === false;
       const opensReview = finishing && change.review === undefined && reviewerLeft && state.lead === this.me;
@@ -216,12 +225,14 @@ export class SessionTasks extends SessionMessaging {
       if (me) {
         const refused = change.claim ? reviewClaimRefusal(t, this.me, review) : reviewMoveRefusal(t, { name: this.me, person: isPerson(me), lead }, review);
         if (refused) return yield* new Rejected(refused);
+        const unlanded = landingRefusal(t, change, { person: isPerson(me), lead });
+        if (unlanded) return yield* new Rejected(unlanded);
       }
       const gate = review === undefined ? t.review : review || undefined;
       const notReviewer = !!gate && !!me && !isPerson(me) && (gate === "*" ? (owner ?? t.owner) === this.me || t.workedBy.includes(this.me) : gate !== this.me);
       const open = openRound(t);
       const revised = change.state === "cancelled" ? revisedOut(t, this.me, open) : null;
-      if (finishing && t.state !== "done" && notReviewer && revised === null && !(lead && change.state === "cancelled")) {
+      if (finishing && change.close === undefined && t.state !== "done" && notReviewer && revised === null && !(lead && change.state === "cancelled")) {
         const what = change.state === "cancelled" ? "cancelled" : "done";
         if (gate === t.review && reviewerLeft)
           return yield* new Rejected(`${taskId(id)}'s reviewer ${gate} left the channel: the lead or a person opens its review (kiwi task review ${taskId(id)} --review any), then it can be ${what}`);
@@ -233,7 +244,7 @@ export class SessionTasks extends SessionMessaging {
       const judged = change.verdict && t.rounds.length ? yield* judgedRound(t, open, change.round, change.at) : null;
       const round = judged ? { round: judged.n, ...(judged.at ? { at: judged.at } : {}) } : revised !== null && notReviewer ? { round: revised } : {};
       const body = change.verdict && reviewText?.trim() ? { body: "review" as const } : {};
-      const rest = omit(change, "round", "at");
+      const rest = omit(change, "round", "at", "lander");
       const opening = change.state === "review" && change.at?.trim() ? { at: change.at.trim() } : {};
       const worker = t.owner === this.me || t.workedBy.includes(this.me);
       const found = (change.state === "done" || change.state === "review") && worker && me && !isPerson(me) ? this.areasHere(id, state.branchPrefix) : null;
@@ -246,7 +257,18 @@ export class SessionTasks extends SessionMessaging {
       if (review !== undefined && t.review && t.review !== "*" && t.review !== reviewerName && !reviewerLeft) notify.push(t.review);
       if (finishing) notify.push(t.createdBy);
       const seq = yield* this.event(
-        { op: "task.update", task: id, ...rest, ...opening, ...areas, ...(owner !== undefined ? { owner } : {}), ...(review !== undefined ? { review } : {}), ...round, ...body },
+        {
+          op: "task.update",
+          task: id,
+          ...rest,
+          ...opening,
+          ...areas,
+          ...(owner !== undefined ? { owner } : {}),
+          ...(lander !== undefined ? { lander } : {}),
+          ...(review !== undefined ? { review } : {}),
+          ...round,
+          ...body,
+        },
         body.body ? (reviewText ?? "") : `${taskId(id)} ${change.verdict ?? change.state ?? "updated"}`,
         notify,
         undefined,

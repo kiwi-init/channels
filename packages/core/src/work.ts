@@ -241,6 +241,7 @@ const VERB: Record<TaskState | OldTaskState, string> = {
   todo: "reopened it",
   doing: "started it",
   review: "sent it for review",
+  landing: "approved it: it lands next",
   done: "finished it",
   // Older clients' states.
   blocked: "marked it blocked",
@@ -474,7 +475,7 @@ export function tasksClosedOnGithub(state: ChannelState, after: number): TaskClo
   const out: TaskClose[] = [];
   for (const t of state.tasks.values()) {
     const issue = t.issue && issueOf(state.github, t.issue);
-    if (!issue || issue.state !== "closed" || issue.seq <= after || t.state === "done") continue;
+    if (!issue || issue.state !== "closed" || issue.seq <= after || t.state === "done" || (t.state === "landing" && issue.reason !== "not_planned")) continue;
     const how = issue.reason === "not_planned" ? "closed as not planned" : "closed";
     out.push({ task: t.id, seq: issue.seq, cancelled: issue.reason === "not_planned", note: `${issue.repo}#${issue.number} ${how} on GitHub${issue.by ? ` by @${issue.by}` : ""}` });
   }

@@ -76,6 +76,7 @@ const STATE_VERB: Record<TaskState | OldTaskState, string> = {
   todo: "reopened",
   doing: "started",
   review: "sent for review",
+  landing: "approved, landing",
   done: "finished",
   // Older clients' states.
   blocked: "is blocked on",
@@ -84,12 +85,12 @@ const STATE_VERB: Record<TaskState | OldTaskState, string> = {
 
 /** A task's state as people read it: "todo" on the wire is open. */
 export function stateWord(state: TaskState): string {
-  return state === "todo" ? "open" : state === "review" ? "in review" : state;
+  return state === "todo" ? "open" : state === "review" ? "in review" : state === "landing" ? "approved, landing" : state;
 }
 
 /** A task's state, saying when a done one was cancelled rather than finished. */
-export function taskStateWord(t: Pick<Task, "state" | "cancelled">): string {
-  return t.state === "done" && t.cancelled ? "done (cancelled)" : stateWord(t.state);
+export function taskStateWord(t: Pick<Task, "state" | "cancelled" | "closedWith">): string {
+  return t.state === "done" && t.cancelled ? "done (cancelled)" : t.state === "done" && t.closedWith ? "done (closed, not landed)" : stateWord(t.state);
 }
 
 export function looksLikeLine(ids: number[]): string {
@@ -237,6 +238,8 @@ export function describeEvent(m: Message, state?: ChannelState, nameOf: (handle:
       return ev.prefix
         ? `set the branch prefix to ${ev.prefix}: a PR from a branch like ${ev.prefix}7-… shows on task T7`
         : "cleared the branch prefix: a PR shows on a task only when someone posts its link";
+    case "landing.set":
+      return ev.then && ev.then !== "none" ? `set how tasks land to ${ev.then}: an approved task stays landing until that has happened` : "set tasks to finish on approval again";
     case "react":
       return ev.emoji ? `reacted ${ev.emoji} to #${ev.seq}` : `took back the reaction on #${ev.seq}`;
     case "msg.edit":
@@ -426,7 +429,7 @@ function takeSpec(m: Message, state?: ChannelState, me?: string): string {
 
 function taskLine(state: ChannelState, t: Task): string {
   const owner = t.owner ? ` @${inlineText(t.owner, 40)}` : t.leftBy ? ` (${inlineText(t.leftBy, 40)} left)` : "";
-  const review = t.review && t.state !== "done" ? ` [${reviewPhrase(t.review)}]` : "";
+  const review = t.review && t.state !== "done" && t.state !== "landing" ? ` [${reviewPhrase(t.review)}]` : "";
   const stage = stageOf(state, t);
   const evidence = stage.pr || stage.declared ? ` · ${stageText(state, stage)}` : "";
   return `  ${taskId(t.id).padEnd(5)} ${statusWord(statusOf(state, t)).padEnd(9)}${owner} ${inlineText(t.title, 200)}${review}${evidence}`;
@@ -667,7 +670,7 @@ export function formatStatus({ alias, me, state, online, unread, now = Date.now(
   const archived = tasks.filter((t) => t.archived).length;
   out.push("", `tasks (${active.length} open${done ? `, ${done} done${cancelled ? ` (${cancelled} cancelled)` : ""}` : ""}${archived ? `, ${archived} archived` : ""}), by the ask each serves:`);
   if (!active.length) out.push('  none — add one with: kiwi task add "…" --ask N');
-  const order = ["doing", "review", "todo"];
+  const order = ["doing", "review", "landing", "todo"];
   active.sort((a, b) => order.indexOf(a.state) - order.indexOf(b.state) || a.id - b.id);
   out.push(...groupedLines(state, active, "  "));
   if (state.leases.size) {
@@ -740,6 +743,8 @@ export function formatTask(state: ChannelState, t: Task, now = Date.now(), messa
     out.push(
       `  ${reviewPhrase(t.review)}${t.review !== "*" && state.members.get(t.review)?.active === false ? " (they left the channel)" : ""}${t.approvedBy ? `; approved by ${inlineText(t.approvedBy, 40)}` : t.state === "review" ? "; waiting for it" : ""}`,
     );
+  if (t.then) out.push(`  lands on: ${t.then}, landed by ${inlineText(t.lander ?? t.owner ?? "its owner", 40)}${t.state === "landing" ? " (approved, not landed yet)" : ""}`);
+  if (t.closedWith) out.push(`  closed without landing: ${inlineText(t.closedWith, 200)}`);
   const open = openRound(t);
   if (open?.summary) out.push("", `round ${open.n} summary:`, markedText(open.summary));
   if (t.rounds.length) {

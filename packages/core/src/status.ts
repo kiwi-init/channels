@@ -25,7 +25,7 @@ export function statusOf(state: ChannelState, t: Task): TaskStatus {
     return release ? { status: "shipped", release: release.tag, stage } : { status: "done", stage };
   }
   if (needsYou(state, t.id)) return { status: "needs you", stage };
-  if (t.state === "doing" || t.state === "review" || t.state === "done" || stage.pr?.state === "open") return { status: "working", stage };
+  if (t.state === "doing" || t.state === "review" || t.state === "landing" || t.state === "done" || stage.pr?.state === "open") return { status: "working", stage };
   return { status: "planned", stage };
 }
 

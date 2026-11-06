@@ -11,7 +11,7 @@ export type Harness = "claude" | "codex" | "opencode" | "gemini" | "cursor" | "g
 
 type Presence = "online" | "away" | "offline"
 
-export type TaskStatus = "todo" | "doing" | "review" | "done" | "waiting"
+export type TaskStatus = "todo" | "doing" | "review" | "landing" | "done" | "waiting"
 
 type Stage = "open" | "building" | "proving" | "red" | "yours" | "done" | "dropped"
 
@@ -189,6 +189,8 @@ export interface Task {
   history: TaskEvent[]
   archived: boolean
   cancelled?: boolean
+  lands?: { then: string; by?: string }
+  closedWith?: Words
   youReview?: "verdict" | "send-back"
   suggested?: { name: string; why: Words }
   leftBy?: string
@@ -588,6 +590,7 @@ export interface Channel {
   github?: GithubHealth
   githubWrite?: boolean
   branchPrefix?: string
+  landing?: string
   rooms: Room[]
   directs: Direct[]
   threads?: ThreadItem[]
@@ -777,6 +780,7 @@ export interface Actions {
   clearFact(code: string, key: string): void
   setGithubWrite(code: string, on: boolean): void
   setBranchPrefix(code: string, prefix: string | null): void
+  setLanding(code: string, then: string | null): void
   exportHistory(code: string, kind: "transcript" | "log"): Promise<void>
   setGoal(code: string, goal: string): void
   setHold(code: string, on: boolean, note?: string): void

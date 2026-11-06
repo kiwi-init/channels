@@ -1,4 +1,4 @@
-import type { OldTaskState, TaskState, Verdict } from "../protocol.ts";
+import { hasLanding, type Landing, type OldTaskState, type TaskState, type Verdict } from "../protocol.ts";
 import type { ChannelState, ReviewRound, Task } from "./types.ts";
 
 export function taskId(id: number): string {
@@ -39,11 +39,45 @@ export function verdictRefusal(task: Task, verdict: Verdict, ev: { state?: strin
   if (ev.round === undefined) return (verdict === "approved" || ev.body) && task.rounds.length ? `a verdict on ${id} names the round it judges` : null;
   if ((verdict === "approved" && ev.state !== "done") || (verdict === "rejected" && ev.state !== "doing")) return "an approval finishes the task and a rejection sends it back to doing";
   if (task.state === "done") return `${id} is already done`;
+  if (task.state === "landing") return `${id} is already approved: it lands next`;
   if (!mayFinish) return `only ${task.review === "*" ? "someone who hasn't worked on it" : task.review} gives ${id}'s verdict`;
   if (!open) return `${id} has no review round open`;
   if (open.n !== ev.round) return `round ${ev.round} of ${id} isn't the open one: round ${open.n} is`;
   if (ev.at !== undefined && ev.at.trim() !== open.at) return `round ${open.n} of ${id} is ${open.at ? `at ${open.at}` : "at no commit"}, not at ${ev.at.trim()}`;
   return null;
+}
+
+const PR_URL_RE = /^https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/pull\/\d+(?:[/?#]\S*)?$/;
+
+const isPrUrl = (url: string): boolean => PR_URL_RE.test(url);
+
+type LandingChange = { state?: string; verdict?: Verdict; close?: string; then?: Landing; lander?: string | null; owner?: string | null; proof?: { url: string } };
+
+const landerOf = (task: Pick<Task, "lander" | "owner">): string | undefined => task.lander ?? task.owner;
+
+const newPr = (task: Task, proof: { url: string } | undefined): boolean => !!proof && isPrUrl(proof.url) && !task.proof?.some((p) => p.url === proof.url);
+
+function landerAfter(task: Task, ev: LandingChange): string | undefined {
+  const lander = ev.lander === undefined ? task.lander : ev.lander || undefined;
+  const owner = ev.owner === undefined ? task.owner : ev.owner || undefined;
+  return lander ?? owner;
+}
+
+export function landingRefusal(task: Task, ev: LandingChange, from: { person: boolean; lead: boolean }): string | null {
+  const id = taskId(task.id);
+  const trusted = from.person || from.lead;
+  if (ev.close !== undefined) return trusted ? (task.state === "done" ? `${id} is already done` : null) : `only a person or the lead closes ${id} with a reason`;
+  if ((ev.then !== undefined || ev.lander !== undefined) && !trusted) return `only a person or the lead changes how ${id} lands`;
+  if (task.state === "landing" && landerAfter(task, ev) !== landerOf(task) && !trusted) return `only a person or the lead changes who lands ${id}`;
+  if (ev.state === "landing" && !hasLanding(task.then)) return `${id} has no landing step: it finishes on approval`;
+  if (ev.state === "done" && ev.verdict === undefined && hasLanding(task.then) && task.state !== "done") return `${id} lands by its step (${task.then}): approve it, or close it with a reason`;
+  if (task.state === "landing" && newPr(task, ev.proof) && !trusted) return `only a person or the lead links another PR to ${id} once it's approved`;
+  return null;
+}
+
+export function landingReopens(task: Task, ev: LandingChange): boolean {
+  if (task.state !== "landing") return false;
+  return (ev.then !== undefined && ev.then !== (task.then ?? "none")) || landerAfter(task, ev) !== landerOf(task) || newPr(task, ev.proof);
 }
 
 export function reviewMoveRefusal(task: Task, from: { name: string; person: boolean; lead: boolean }, review: string | null | undefined): string | null {
@@ -65,7 +99,7 @@ export function revisedOut(task: Task, from: string, open: ReviewRound | undefin
   return !open && last?.result.kind === "rejected" && (from === task.owner || from === task.createdBy) ? last.n : null;
 }
 
-const OPEN_FOR_TITLE = new Set<TaskState>(["todo", "doing", "review"]);
+const OPEN_FOR_TITLE = new Set<TaskState>(["todo", "doing", "review", "landing"]);
 
 function normTitle(s: string): string {
   return s

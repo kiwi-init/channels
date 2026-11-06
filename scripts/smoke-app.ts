@@ -186,7 +186,7 @@ try {
   await github.getByLabel("Add a repo").press("Enter");
   await github.getByRole("link", { name: "kiwi-init/smoke" }).waitFor({ timeout: 15000 });
   await github.getByLabel("Write to GitHub").click();
-  await github.getByRole("button", { name: "Set" }).click();
+  await github.getByRole("button", { name: "Set" }).first().click();
   await github.getByRole("textbox", { name: "Branch prefix" }).fill("T");
   await github.getByRole("textbox", { name: "Branch prefix" }).press("Enter");
   const wanted = ["turned on Write to GitHub", "branch prefix: T"];

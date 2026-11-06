@@ -16,7 +16,7 @@ import { inviteLine } from "@kiwi/app/join-line.ts"
 import type { Color } from "@kiwi/core/protocol.ts"
 import { openedChannel, openedRun, type Run } from "~/live/store"
 import type { Actions, JoinChoice, Powers } from "~/model"
-import { BRANCH_PREFIX_RE, POWERS, ROOM_ID_RE, type Power } from "@kiwi/core/protocol.ts"
+import { BRANCH_PREFIX_RE, isLanding, POWERS, ROOM_ID_RE, type Power } from "@kiwi/core/protocol.ts"
 import { newRoomId, sponsorsAgent } from "@kiwi/core/state.ts"
 import { cleanRoomName, roomProblem, roomsAfter } from "@kiwi/app/rooms.ts"
 import { revokedComputer } from "@kiwi/app/forgotten-computers.ts"
@@ -173,6 +173,12 @@ const fresh = new Set<string>()
 
 export async function setGithubWrite(code: string, on: boolean): Promise<void> {
   await event(owner(code), on ? "turned on Write to GitHub" : "turned off Write to GitHub", { op: "github.write.set", on })
+}
+
+export async function setLanding(code: string, typed: string | null): Promise<void> {
+  const then = typed?.trim() || null
+  if (then !== null && !isLanding(then)) throw new Error("tasks land on merge, release:tag, release:npm:PKG@RANGE, run or none")
+  await event(setup(code), then && then !== "none" ? `tasks land on: ${then}` : "tasks finish on approval", { op: "landing.set", then })
 }
 
 export async function setBranchPrefix(code: string, typed: string | null): Promise<void> {

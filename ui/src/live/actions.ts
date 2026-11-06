@@ -264,6 +264,7 @@ export function makeActions(): Actions {
       })) ?? false,
     setGithubWrite: (code, on) => attempt("Not changed", async () => (await manage()).setGithubWrite(code, on)),
     setBranchPrefix: (code, typed) => attempt("Branch prefix not changed", async () => (await manage()).setBranchPrefix(code, typed)),
+    setLanding: (code, then) => attempt("How tasks land not changed", async () => (await manage()).setLanding(code, then)),
     renameRoom: (code, id, typed) => attempt("Room not renamed", async () => (await manage()).renameRoom(code, id, typed)),
     setIcon: (code, file) =>
       attempt("Icon not changed", async () => {

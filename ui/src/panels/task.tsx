@@ -157,6 +157,29 @@ function Props({ channel, task, may }: { channel: Channel; task: Task; may: bool
             </dd>
           </>
         )}
+        {task.lands && (
+          <>
+            <dt>Lands on</dt>
+            <dd>
+              <span className="cset-mono">{task.lands.then}</span>
+              {task.lands.by && (
+                <>
+                  {" · by "}
+                  <Who channel={channel} name={task.lands.by} />
+                </>
+              )}
+              {task.status === "landing" && <span className="dimmer"> · approved, not landed yet</span>}
+            </dd>
+          </>
+        )}
+        {task.closedWith && (
+          <>
+            <dt>Closed</dt>
+            <dd>
+              without landing: <Shown value={task.closedWith} />
+            </dd>
+          </>
+        )}
         <dt>Asked by</dt>
         <dd>
           <Who channel={channel} name={task.createdBy} />

@@ -802,6 +802,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       },
       setGithubWrite: (code, on) => edit(code, (c) => ({ ...c, githubWrite: on || undefined })),
       setBranchPrefix: (code, prefix) => edit(code, (c) => ({ ...c, branchPrefix: prefix?.trim() || undefined })),
+      setLanding: (code, then) => edit(code, (c) => ({ ...c, landing: then?.trim() && then.trim() !== "none" ? then.trim() : undefined })),
       setRoomMembers: async (code, id, members) => {
         edit(code, (c) => ({ ...c, rooms: c.rooms.map((r) => (r.id === id ? { ...r, members } : r)) }))
         return true

@@ -51,7 +51,7 @@ export function Avatar({
   )
 }
 
-export const STATUS_WORDS: Record<TaskStatus, string> = { todo: "to do", doing: "working", review: "in review", done: "done", waiting: "needs you" }
+export const STATUS_WORDS: Record<TaskStatus, string> = { todo: "to do", doing: "working", review: "in review", landing: "landing", done: "done", waiting: "needs you" }
 
 export const statusWord = (t: { status: TaskStatus; cancelled?: boolean }): string => (t.cancelled ? "cancelled" : STATUS_WORDS[t.status])
 

@@ -371,6 +371,7 @@ function folding(
     hold: from?.hold ?? null,
     githubWrite: from?.githubWrite ?? null,
     branchPrefix: from?.branchPrefix ?? null,
+    landing: from?.landing ?? null,
   };
 
   const seen = new Set<number>();
@@ -691,6 +692,7 @@ function folding(
       hold: ctx.hold,
       githubWrite: ctx.githubWrite,
       branchPrefix: ctx.branchPrefix,
+      landing: ctx.landing,
       scopesByKey: [...scopesByKey],
       scopeSets: [...scopeSets],
       roleSets: [...roleSets],
@@ -798,6 +800,7 @@ function folding(
     hold: ctx.hold,
     githubWrite: ctx.githubWrite,
     branchPrefix: ctx.branchPrefix,
+    landing: ctx.landing,
     reactions,
     edits,
     deleted,
