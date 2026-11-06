@@ -6,7 +6,8 @@ import { signRequest } from "@kiwi/core/auth.ts";
 import { Channel } from "@kiwi/core/client.ts";
 import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
 import { startRelay } from "../src/relay/bun.ts";
-import { appJwt, githubAppFrom, githubPushFrom, pkcs8Of, REVIEW_CHECK } from "../src/relay/github-app.ts";
+import { REVIEW_CHECK } from "@kiwi/core/prs.ts";
+import { appJwt, githubAppFrom, githubPushFrom, pkcs8Of } from "../src/relay/github-app.ts";
 import { devHumanAuth } from "../src/relay/human.ts";
 import { checked } from "./check.ts";
 

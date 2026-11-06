@@ -189,7 +189,7 @@ export interface Task {
   history: TaskEvent[]
   archived: boolean
   cancelled?: boolean
-  lands?: { then: string; by?: string }
+  lands?: { then: string; by?: string; waits?: string }
   closedWith?: Words
   youReview?: "verdict" | "send-back"
   suggested?: { name: string; why: Words }
@@ -585,6 +585,7 @@ export interface Channel {
   newMembers?: "read" | "write"
   newPowers?: Powers
   repos: string[]
+  reviewNotRequired?: string[]
   prs?: PullRequest[]
   issues?: Issue[]
   github?: GithubHealth
