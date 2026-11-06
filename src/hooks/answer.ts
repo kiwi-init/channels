@@ -9,6 +9,7 @@ import type { Delivery } from "../agent/shared.ts";
 import { briefText, COMMANDS } from "../brief.ts";
 import { detectWhere } from "../card.ts";
 import { contextLineOn, home, loadConfig, type ChannelConfig } from "../config.ts";
+import { listSkills } from "../skills.ts";
 import { wakeHooked, wakeOn } from "../daemon/reach.ts";
 import { appendRotated } from "../daemon/wake.ts";
 import { charterLines, formatMessage, holdLine, leadLine, messageHead } from "@kiwi/core/format.ts";
@@ -489,6 +490,7 @@ export const answer = Effect.fn("Hooks.answer")(function* (event: string, input:
       scopes: seat?.scopes,
       ...(seat?.persona ? { persona: seat.persona } : {}),
       contextLine: contextLineOn(local),
+      skills: listSkills(home()),
     });
     const budgets = startBudgets(b.alias, budget, brief.length);
     const reentry = fresh === null || budgets.reentry === 0 ? null : reentryText(state, b.as, Date.now(), budgets.reentry, mc);

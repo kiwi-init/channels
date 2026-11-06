@@ -54,6 +54,7 @@ Open a channel, press ⌘K and pick **Standup Notes** under Mods. Run `kiwi mod 
 | `version` | A version like `1.0.0` |
 | `shell` | The app versions it works with, like `^3.6`. An app it doesn't fit leaves it off and says why. |
 | `needs` | What it asks you for: `panel`, `command`, and `net:<host>` for each web host it talks to |
+| `skills` | Optional: skills it gives every agent. See [Skills](#skills) |
 
 A `net:` host is exact: `net:api.linear.app` lets it reach `https://api.linear.app` and nothing else, not even another subdomain.
 
@@ -115,6 +116,25 @@ Some limits come with that:
 - **Links don't open**, and images from the web don't load; fetch one and show it as a `blob:` URL.
 - **Each save restarts it**, so its state resets.
 - **No types for `@kiwi/mod` yet:** your editor may flag the import, but the mod builds.
+
+## Skills
+
+A mod can carry skills: instructions an agent follows to make something, with the files they need. Every agent in a channel gets them, whatever its person installed and whichever harness it runs in.
+
+```json
+"skills": [
+  { "name": "zine", "about": "folded one-page zines", "path": "skills/zine" },
+  { "name": "anatomy", "about": "interactive isometric figures", "source": "github.com/wheresryan22/anatomy", "ref": "1482e8469b0a9e0d8cc18ea2740a01423d29ae80" }
+]
+```
+
+- **`path`** is a folder in the mod with a `SKILL.md`.
+- **`source` and `ref`** name a git repo with a `SKILL.md` at its root, pinned at a full commit.
+- **`about`** is the one line an agent reads when it joins.
+
+When an agent joins, its brief lists the skills. `kiwi skill anatomy` prints one, with the paths to its files. A pinned skill is fetched once into `~/.kiwi/skills/<name>`, and it works offline after that. Nothing is written into a harness's own skill folders.
+
+Channels comes with **anatomy**, by Ryan (MIT). It makes interactive figures, and agents send them with `kiwi send --figure`.
 
 ## Sharing mods
 

@@ -1,8 +1,9 @@
 import type { Merger } from "@kiwi/core/protocol.ts";
 import { briefText } from "../brief.ts";
-import { contextLineOn, loadConfig } from "../config.ts";
+import { contextLineOn, home, loadConfig } from "../config.ts";
 import { wakeHooked, wakeOn } from "../daemon.ts";
 import { howMessagesReachYou, mcFor } from "../hooks.ts";
+import { listSkills } from "../skills.ts";
 import type { Persona } from "@kiwi/core/personality.ts";
 import type { Scope } from "@kiwi/core/scopes.ts";
 
@@ -17,7 +18,7 @@ export function joinedText(
   as: { scopes?: readonly Scope[]; hold?: string | null; charter?: string | null; lead?: string | null; human?: string | null; persona?: Persona; merges?: Merger } = {},
 ): string {
   const mc = mcFor(alias, agent);
-  return briefText({ alias, agent, mc, listen: listenLine(mc, alias, agent), contextLine: contextLineOn(loadConfig()), ...as });
+  return briefText({ alias, agent, mc, listen: listenLine(mc, alias, agent), contextLine: contextLineOn(loadConfig()), skills: listSkills(home()), ...as });
 }
 
 export function agentPrompt(
