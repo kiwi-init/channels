@@ -12,6 +12,7 @@ if (!process.argv[2] || process.platform !== "darwin") {
 }
 type Frame = { x: number; y: number; width: number; height: number };
 const QUITS = 5;
+let quitMs = 0;
 const exe = appExecutable(process.argv[2]);
 const root = mkdtempSync(join(tmpdir(), "kiwi-frame-check-"));
 const { relay, port } = await startLocalRelay(join(root, "relay"), null, { rateLimits: false });
@@ -31,7 +32,9 @@ async function run<T>(what: (d: Driver) => Promise<T>): Promise<T> {
       d.close();
     }
   } finally {
+    const quitting = performance.now();
     await stop(app);
+    quitMs = Math.round(performance.now() - quitting);
   }
 }
 
@@ -41,7 +44,7 @@ try {
   if (first.width > 1200 || first.height > 800 || first.width < 768) problems.push(`a first start opens at ${first.width}x${first.height}, not 1200x800 or the screen's size`);
   let placed = await run(async (d) => (await d.main("placeForTest")) as Frame);
   for (let quit = 1; quit <= QUITS; quit++) {
-    console.log(`moved and resized to: ${JSON.stringify(placed)}, then quit at once`);
+    console.log(`moved and resized to: ${JSON.stringify(placed)}, then quit at once, in ${quitMs} ms`);
     const [back, next] = await run(async (d) => {
       const back = (await d.main("frame")) as Frame;
       return [back, quit < QUITS ? ((await d.main("placeForTest")) as Frame) : back] as const;
