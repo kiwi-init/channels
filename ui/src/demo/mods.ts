@@ -21,6 +21,7 @@ const MODS: ModView[] = [
     state: "on",
     hash: "5f0c2b9e1a7d4c3e",
     icon: "a41c09e2d8b7f310",
+    settingsRev: 3,
   },
   { name: "standup-notes", version: "0.1.0", source: "local", needs: ["panel"], approved: ["panel"], state: "on", hash: "9d2e7a1b0c4f6e85", icon: "c7b2e04f19a3d6e8" },
   { name: "weather", version: "2.0.1", source: "github.com/ana-lima/weather-mod", needs: ["panel", "net:api.open-meteo.com"], approved: [], state: "asks" },
@@ -52,6 +53,12 @@ const DETAILS: Record<string, ModDetails> = {
     bytes: 48_213,
     readme: README,
     iconWhy: null,
+    settings: [
+      { id: "token", title: "GitHub token", type: "secret", required: true, set: true },
+      { id: "repos", title: "Repos to watch", type: "text", value: "kiwi-init/channels, kiwi-init/mods" },
+      { id: "since", title: "Changes since", type: "choice", choices: ["The last release", "The last week", "The last month"], value: "The last release" },
+      { id: "drafts", title: "Include draft releases", type: "toggle", value: false },
+    ],
   },
   "standup-notes": {
     name: "standup-notes",
@@ -64,6 +71,7 @@ const DETAILS: Record<string, ModDetails> = {
     bytes: 1_904,
     readme: null,
     iconWhy: null,
+    settings: [],
   },
 }
 
@@ -79,6 +87,7 @@ export function showDemoMods(): void {
   showModReads({
     modIcon: (name) => Promise.resolve(ICONS[name] ?? null),
     modDetails: (name) => Promise.resolve(DETAILS[name] ?? null),
+    setModSetting: () => Promise.resolve(MODS),
     modsInstalled: () => Promise.resolve(INSTALLED),
     modUpdates: () => Promise.resolve({ changes: [RADAR_UPDATE], skipped: [] }),
     updateMod: () => Promise.resolve(MODS),

@@ -70,6 +70,7 @@ describe("the mods that come with the app (T6270)", () => {
     expect(JSON.parse(readFileSync(opts.approvals, "utf8"))).toEqual({
       approved: { github: { needs: ["github", "panel", "tab"], source: "github.com/kiwi-init/mods/github" } },
       off: {},
+      values: {},
       unsettledStarts: 0,
     });
     expect(copiesIn(opts.folder)).toEqual({
