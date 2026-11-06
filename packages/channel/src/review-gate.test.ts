@@ -93,4 +93,15 @@ describe("a person withdrawing a pass from the app, with the owner's app offline
     await other.link.send("B", { re: [ask] });
     expect(other.calls.map((c) => c.op)).toEqual(["send"]);
   });
+
+  test("reopening the approved task for review from the app is held while the relay is down, and posts waiting first when it's up", async () => {
+    const reopen = { kind: "event" as const, ev: { op: "task.update" as const, task, state: "review" as const, at: S } };
+    const down = linkFor("ann", "down");
+    await expect(down.link.send("", reopen)).rejects.toThrow(/has to turn waiting before this goes out, .*nothing was sent/);
+    expect(down.calls.map((c) => c.op)).toEqual(["postReviewCheck"]);
+    const up = linkFor("ann", "up");
+    await up.link.send("", reopen);
+    expect(up.calls.map((c) => c.op)).toEqual(["postReviewCheck", "send"]);
+    expect(up.calls[0]!.args[0]).toMatchObject({ verdict: "waiting", tasks: [task] });
+  });
 });

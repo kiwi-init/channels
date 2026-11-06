@@ -1,9 +1,9 @@
 import type { CheckArtifact } from "./checks.ts";
 import { hasLanding, REVIEW_CHECK, type Landing } from "./protocol.ts";
-import { prLinks, taskOfBranch } from "./prs.ts";
+import { prOfTask } from "./prs.ts";
 import { sameHead } from "./stage.ts";
 import { askedBefore, checkPassed, passedAt, replacedBefore, type CheckState } from "./state/checks.ts";
-import { prKey, releaseOf, shaKey, succeededBy, type GithubPr, type GithubState } from "./state/github.ts";
+import { releaseOf, shaKey, succeededBy, type GithubPr, type GithubState } from "./state/github.ts";
 import { heldBefore } from "./state/times.ts";
 import type { ReviewRound, Task } from "./state/types.ts";
 
@@ -15,21 +15,7 @@ export interface GateView {
   branchPrefix: string | null;
 }
 
-export function landingPr(view: GateView, t: Task): GithubPr | undefined {
-  const rank = (p: GithubPr) => (p.state === "open" ? 1 : 0);
-  let best: GithubPr | undefined;
-  for (const p of view.github.prs.values()) {
-    if (taskOfBranch(p.branch, view.branchPrefix) !== t.id) continue;
-    if (!best || rank(p) > rank(best) || (rank(p) === rank(best) && p.at > best.at)) best = p;
-  }
-  if (best) return best;
-  for (const proof of [...(t.proof ?? [])].reverse())
-    for (const l of prLinks(proof.url)) {
-      const pr = view.github.prs.get(prKey(l.repo, l.number));
-      if (pr) return pr;
-    }
-  return undefined;
-}
+export const landingPr = (view: GateView, t: Task): GithubPr | undefined => prOfTask(view.github, view.branchPrefix, t);
 
 function approvalAt(t: Task, x: number): ReviewRound | undefined {
   const current = t.rounds.filter((r) => r.rts === undefined || r.rts <= x).at(-1);

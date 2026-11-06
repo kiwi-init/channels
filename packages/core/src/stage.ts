@@ -1,6 +1,6 @@
 import { inlineText } from "./membership.ts";
 import { ignored, type Message } from "./protocol.ts";
-import { checksOf, prLinks, rulesText, taskPr } from "./prs.ts";
+import { checksOf, prLinks, proofPr, rulesText, taskPr } from "./prs.ts";
 import { openRound, prKey, rulesOf, type ChannelState, type GithubPr, type ReviewRound, type Task } from "./state.ts";
 
 type Stage = "open" | "building" | "proving" | "red" | "yours" | "done" | "dropped";
@@ -26,14 +26,7 @@ function lastVerdict(t: Task): ReviewRound | undefined {
 }
 
 export function linkedPr(state: ChannelState, t: Task): GithubPr | undefined {
-  const byBranch = taskPr(state, t.id)?.pr;
-  if (byBranch) return byBranch;
-  for (const p of [...(t.proof ?? [])].reverse())
-    for (const l of prLinks(p.url)) {
-      const pr = state.github.prs.get(prKey(l.repo, l.number));
-      if (pr) return pr;
-    }
-  return undefined;
+  return taskPr(state, t.id)?.pr ?? proofPr(state.github, t);
 }
 
 const failedAt = (state: ChannelState, pr: GithubPr): string[] => checksOf(state, pr)?.failed ?? [];

@@ -89,6 +89,40 @@ describe("the ship gate (#623 §4)", () => {
     expect(shipGate(s, s.tasks.get(t)!)).toEqual({ open: false, rejected: false, missing: ["CI run 77 (not at this head)"] });
   });
 
+  test("an approval records only the linked repo's runs, even when another repo has a run at the same commit", async () => {
+    const c = await landingChannel();
+    const t = await c.task();
+    await c.pr(9, S1, t);
+    await c.ci(S1, 11, "success");
+    await c.github([{ repo: "other/fork", event: "check_run", sha: S1, name: "build", run: 22, status: "completed", conclusion: "failure" }]);
+    await c.approve(t, S1);
+    const s = c.state();
+    expect(s.tasks.get(t)!.rounds.at(-1)!.result).toMatchObject({ kind: "approved", runs: [11] });
+    expect(shipGate(s, s.tasks.get(t)!)).toEqual({ open: true });
+  });
+
+  test("the approval snapshots CI from the same PR the gate checks: the open one, not an older merged one in another repo", async () => {
+    const c = await landingChannel();
+    const t = await c.task();
+    await c.github([{ repo: "old/repo", event: "pull_request", action: "closed", number: 3, state: "closed", merged: true, branch: `T${t}-old`, sha: S2 }]);
+    await c.pr(9, S1, t);
+    await c.ci(S1, 11, "failure");
+    await c.approve(t, S1);
+    const s = c.state();
+    expect(s.tasks.get(t)!.rounds.at(-1)!.result).toMatchObject({ kind: "approved", runs: [11] });
+    expect(shipGate(s, s.tasks.get(t)!)).toEqual({ open: false, rejected: false, missing: ["CI run 11 (failure)"] });
+  });
+
+  test("reopening a landing task for review shuts the gate, so it posts waiting first", async () => {
+    const c = await landingChannel();
+    await c.ev("jow", { op: "repos.set", repos: [R] });
+    const t = await c.task();
+    await c.pr(9, S1, t);
+    await c.approve(t, S1);
+    expect(downgrades(c.state(), { from: "ann", body: "", ev: { op: "task.update", task: t, state: "review", at: S1 } })).toMatchObject([{ verdict: "waiting", tasks: [t] }]);
+    expect(downgrades(c.state(), { from: "ann", body: "", ev: { op: "task.update", task: t, note: "still landing" } })).toEqual([]);
+  });
+
   test("a new head after the approval sends the task back to review, with no round opened (a merge of main too)", async () => {
     const c = await landingChannel();
     const t = await c.task();

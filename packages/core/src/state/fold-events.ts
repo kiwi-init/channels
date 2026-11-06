@@ -18,7 +18,7 @@ import { free, take } from "./leases.ts";
 import { unnamedTasks } from "./compact.ts";
 import { leadCheckpointKeyRefusal } from "./lead.ts";
 import { addRelease, applyGithub, dropRelease, prKey, repoKey, type GithubState } from "./github.ts";
-import { prLinks, taskOfBranch } from "../prs.ts";
+import { prLinks, prOfTask, taskOfBranch } from "../prs.ts";
 import { recordedRuns } from "../review-check.ts";
 import { sameHead } from "../stage.ts";
 import { reposOf } from "./repos.ts";
@@ -105,6 +105,11 @@ function membersOnly(c: FoldCtx, member: FoldMember, m: Message, ev: { members: 
 }
 
 const runsOf = (runs: number[]): { runs?: number[] } => (runs.length ? { runs } : {});
+
+function runsAtHead(c: FoldCtx, t: Task, at: string | undefined): number[] {
+  const repo = at ? prOfTask(c.github, c.branchPrefix, t)?.repo : undefined;
+  return repo && at ? recordedRuns(c.github, repo, at) : [];
+}
 
 export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember, at: number, reject: (why: string) => void): void {
   const { members, keysByName, scopesByKey, scopeSets, roleSets, setRole, tasks, facts, rooms, roomsSince, nameTaken } = c;
@@ -543,13 +548,16 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
     case "task.landed": {
       const task = tasks.get(ev.task);
       const key = artifactKey(ev.task, ev.artifact);
-      if (task?.landed?.key === key) break;
-      const why = task ? landedRefusal(c, task, ev.artifact, member, m.from) : `no task ${taskId(ev.task)}`;
+      if (!task) {
+        reject(`no task ${taskId(ev.task)}`);
+        break;
+      }
+      if (task.landed?.key === key) break;
+      const why = landedRefusal(c, task, ev.artifact, member, m.from);
       if (why) {
         reject(why);
         break;
       }
-      if (!task) break;
       task.state = "done";
       task.landed = { key, artifact: ev.artifact, seq: m.seq, by: m.from };
       task.closedSeq = m.seq;
@@ -607,7 +615,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       if (open && state && state !== "review")
         open.result =
           ev.verdict && mayFinish
-            ? { kind: ev.verdict, by: m.from, seq: m.seq, ts: at, ...rts, ...(ev.verdict === "approved" ? runsOf(ev.runs ?? (open.at ? recordedRuns(c.github, open.at) : [])) : {}) }
+            ? { kind: ev.verdict, by: m.from, seq: m.seq, ts: at, ...rts, ...(ev.verdict === "approved" ? runsOf(ev.runs ?? runsAtHead(c, task, open.at)) : {}) }
             : state === "done" && !cancel && ev.close === undefined
               ? { kind: "approved", by: m.from, seq: m.seq, ts: at, ...rts }
               : { kind: "withdrawn", seq: m.seq };

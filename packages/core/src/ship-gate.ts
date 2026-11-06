@@ -1,9 +1,9 @@
 import { choiceIn, type CheckAsk } from "./checks.ts";
 import type { ReviewCheck } from "./client/github.ts";
-import { RelayError } from "./client/relay-errors.ts";
 import { hasLanding, REVIEW_CHECK, type Event } from "./protocol.ts";
 import { linkedPr, sameHead } from "./stage.ts";
 import { checkPassed } from "./state/checks.ts";
+import { landingReopens } from "./state/tasks.ts";
 import { shaKey, type GithubCheck, type GithubPr, type GithubState } from "./state/github.ts";
 import type { ChannelState, ReviewRound, Task } from "./state/types.ts";
 
@@ -106,8 +106,12 @@ function shutBy(state: ChannelState, m: Outgoing): { tasks: Set<number>; rejecte
   const tasks = new Set<number>();
   const ev = m.ev;
   const rejected = ev?.op === "task.update" && ev.verdict === "rejected";
-  if (ev?.op === "task.update" && ev.verdict === "rejected") tasks.add(ev.task);
   const gated = (id: number) => hasLanding(state.tasks.get(id)?.then);
+  if (ev?.op === "task.update") {
+    const task = state.tasks.get(ev.task);
+    const reopens = ev.state === "review" || ev.state === "doing" || ev.state === "todo" || (!!task && landingReopens(task, ev));
+    if (rejected || (reopens && (gated(ev.task) || hasLanding(ev.then)))) tasks.add(ev.task);
+  }
   if (m.check?.phase === "pre-ship") for (const id of m.holds ?? []) if (gated(id)) tasks.add(id);
   const owner = [...state.members.values()].find((x) => x.owner)?.name;
   for (const id of m.re ?? []) {
@@ -148,13 +152,10 @@ export async function postDowngrades(state: ChannelState, m: Outgoing, post: (c:
     try {
       await post(c);
     } catch (err) {
-      // A refusal for good (repo or app not set up for checks) means no green check can exist either; only an unconfirmed post holds the change.
-      if (downgradeHeld(err)) throw new Error(downgradeRefusal(c, err), { cause: err });
+      throw new Error(downgradeRefusal(c, err), { cause: err });
     }
   }
 }
-
-export const downgradeHeld = (err: unknown): boolean => !(err instanceof RelayError) || err.status >= 500 || err.status === 408 || err.status === 429;
 
 export const downgradeRefusal = (c: ReviewCheck, err: unknown): string =>
   `kiwi/review on ${c.repo}@${c.sha.slice(0, 7)} has to turn ${c.verdict} before this goes out, and the relay didn't confirm it (${err instanceof Error && err.message ? err.message : "no answer"}): nothing was sent, try again`;
