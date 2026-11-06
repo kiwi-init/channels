@@ -129,7 +129,7 @@ describe("rule 1: an agent's gate-shutting change goes out only after kiwi/revie
 
   test("a member can't turn kiwi/review green; after a green post, a refused downgrade (403) still holds the change", async () => {
     expect(await refusal(dev.ch.postReviewCheck({ repo: REPO, sha: SHA, verdict: "approved", tasks: [task] }))).toBe("only the channel owner can do that");
-    await owner.ownerCh.postReviewCheck({ repo: REPO, sha: SHA, verdict: "approved", tasks: [task] });
+    await owner.ownerCh.postReviewCheck({ repo: REPO, sha: SHA, verdict: "approved", tasks: [task], upTo: (await run(dev.state())).state.head });
     expect(posted.at(-1)).toMatchObject({ conclusion: "success" });
     checks = "refused";
     expect(await refusal(askCheck("And on GNOME?"))).toMatch(

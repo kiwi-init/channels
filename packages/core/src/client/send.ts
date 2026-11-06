@@ -75,6 +75,7 @@ export interface SendOptions {
   slot?: { name: string; ttl: number };
   wake?: readonly string[];
   free?: string[];
+  tickets?: readonly string[];
 }
 
 export interface SendFx {
@@ -188,7 +189,17 @@ export class ChannelSending {
         if (!known(named)) yield* this.ch.fx.history(listed?.since ?? 0).pipe(Effect.catchCause(() => Effect.succeed(null)));
       }
       if (named && !known(named)) return yield* new Rejected(`this app doesn't know a room ${named} yet, so it won't send there: fetch the channel and try again`);
-      for (const c of this.downgradesFor?.(payload) ?? []) yield* this.ch.fx.postReviewCheck(c).pipe(Effect.mapError((err) => new Rejected(downgradeRefusal(c, err))));
+      const given = opts.tickets ?? [];
+      const downgrade = Effect.gen({ self: this }, function* () {
+        const own: string[] = [];
+        for (const c of this.downgradesFor?.(payload) ?? []) {
+          const r = yield* this.ch.fx.postReviewCheck(c).pipe(Effect.mapError((err) => new Rejected(downgradeRefusal(c, err))));
+          if (r.ticket) own.push(r.ticket);
+        }
+        return own;
+      });
+      const own = yield* downgrade;
+      let tickets = [...given, ...own];
       const signed = yield* Effect.promise(() => sign(this.ch.identity, payload));
       const cid = b64url(crypto.getRandomValues(new Uint8Array(16)));
       const inside = named ? (this.ch.memberRooms.get(named)?.members ?? this.ch.roomNow.get(named)?.meta?.members) : undefined;
@@ -208,7 +219,10 @@ export class ChannelSending {
         const roomId = this.ch.roomId;
         const slot = take ? { slot: { id: yield* Effect.promise(() => slotId(key, roomId, take.name)), ttl: take.ttl } } : {};
         const free = freeing.length ? { free: yield* Effect.promise(() => Promise.all(freeing.map((n) => slotId(key, roomId, n)))) } : {};
-        return yield* this.ch.request<{ seq: number; ts?: number }>("/messages", { method: "POST", body: JSON.stringify({ ...sealed, e, ...slot, ...free, cid, ...(wake.length ? { wake } : {}) }) });
+        return yield* this.ch.request<{ seq: number; ts?: number }>("/messages", {
+          method: "POST",
+          body: JSON.stringify({ ...sealed, e, ...slot, ...free, cid, ...(wake.length ? { wake } : {}), ...(tickets.length ? { tickets } : {}) }),
+        });
       });
       const posted = Effect.gen({ self: this }, function* () {
         const stored = yield* again(post, UNSURE_RETRIES).pipe(
@@ -227,7 +241,7 @@ export class ChannelSending {
         return stored.seq;
       });
       const once = Effect.gen({ self: this }, function* () {
-        const wire = slotted ? undefined : [...this.live.wires].at(-1);
+        const wire = slotted || tickets.length ? undefined : [...this.live.wires].at(-1);
         if (!wire) return yield* posted;
         const { e, sealed } = yield* sealNow;
         const acked = yield* wire.send(sealed, e, signed, cid, wake).pipe(
@@ -240,7 +254,16 @@ export class ChannelSending {
         this.onSent?.(acked, null);
         return acked;
       });
-      return yield* patient(once, RATE_RETRIES);
+      return yield* patient(once, RATE_RETRIES).pipe(
+        Effect.catchIf(
+          (err) => own.length > 0 && !given.length && err instanceof RelayError && err.tag === "Fenced",
+          () =>
+            Effect.gen(function* () {
+              tickets = yield* downgrade;
+              return yield* patient(once, RATE_RETRIES);
+            }),
+        ),
+      );
     }),
   };
 }

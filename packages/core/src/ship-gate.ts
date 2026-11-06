@@ -147,14 +147,17 @@ export function downgrades(state: ChannelState, m: Outgoing): ReviewCheck[] {
   return out;
 }
 
-export async function postDowngrades(state: ChannelState, m: Outgoing, post: (c: ReviewCheck) => Promise<unknown>): Promise<void> {
+export async function postDowngrades(state: ChannelState, m: Outgoing, post: (c: ReviewCheck) => Promise<{ ticket?: string }>): Promise<string[]> {
+  const tickets: string[] = [];
   for (const c of downgrades(state, m)) {
     try {
-      await post(c);
+      const r = await post(c);
+      if (r.ticket) tickets.push(r.ticket);
     } catch (err) {
       throw new Error(downgradeRefusal(c, err), { cause: err });
     }
   }
+  return tickets;
 }
 
 export const downgradeRefusal = (c: ReviewCheck, err: unknown): string =>

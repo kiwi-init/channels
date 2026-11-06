@@ -21,7 +21,7 @@ import type { GithubStatus } from "./github-health.ts";
 import type { FoldBase, GithubRelease, GithubRules, GithubState, GuardFloor } from "./state.ts";
 import { ChannelCore, type ChannelFx } from "./client/core.ts";
 import { ChannelDelegations, type Computer, type Tended } from "./client/delegations.ts";
-import { ChannelGithub, type GithubDiff, type GithubIssueInfo, type ReviewCheck } from "./client/github.ts";
+import { ChannelGithub, type GithubDiff, type GithubIssueInfo, type ReviewCheck, type ReviewPosted } from "./client/github.ts";
 import { ChannelHistory } from "./client/history.ts";
 import { ChannelFiles } from "./client/files.ts";
 import { ChannelImages } from "./client/images.ts";
@@ -491,7 +491,7 @@ export class Channel {
     return run(this.fx.githubDiff(repo, sha));
   }
 
-  postReviewCheck(c: ReviewCheck): Promise<{ url: string | null }> {
+  postReviewCheck(c: ReviewCheck): Promise<ReviewPosted> {
     return run(this.fx.postReviewCheck(c));
   }
 

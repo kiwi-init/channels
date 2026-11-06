@@ -2,7 +2,7 @@ import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import { blobId } from "@kiwi/core/crypto.ts";
 import { MAX_BLOB_BYTES, MAX_CT_LENGTH, type Envelope, type ReadMark, type SlotTake } from "@kiwi/core/protocol.ts";
-import { BadRequest, Conflict, ReadOnly, Taken, TooLarge, TooMany } from "../failures.ts";
+import { BadRequest, Conflict, Fenced, ReadOnly, Taken, TooLarge, TooMany } from "../failures.ts";
 import { Policy } from "../policy.ts";
 import { fits, StoredEnvelope } from "../schema.ts";
 import { readMeta } from "./auth.ts";
@@ -12,6 +12,9 @@ import { formatBytes, untilUtcMidnight, utcDay } from "./limits.ts";
 
 export const READ_ONLY = "the owner lets you only read in this channel";
 const SEND_MEMORY_MS = 3_600_000;
+export const TICKET_TTL_MS = 120_000;
+export const MAX_TICKETS = 10;
+export const TICKET_RE = /^[A-Za-z0-9_-]{22}$/;
 
 interface Repeat {
   repeat: true;
@@ -24,7 +27,7 @@ export interface Slots {
   free?: readonly string[];
 }
 
-export const append = Effect.fn("Room.append")(function* (iv: string, ct: string, e: number, sender: string, slots: Slots = {}, cid?: string) {
+export const append = Effect.fn("Room.append")(function* (iv: string, ct: string, e: number, sender: string, slots: Slots = {}, cid?: string, tickets: readonly string[] = []) {
   const db = yield* RoomStore;
   const policy = yield* Policy;
   if (db.isReadOnly(sender)) return yield* new ReadOnly({ message: READ_ONLY });
@@ -45,6 +48,13 @@ export const append = Effect.fn("Room.append")(function* (iv: string, ct: string
 
   const cap = policy.bytesPerChannel;
   if (ct.length > cap) return yield* new TooLarge({ message: `that message is bigger than this channel may hold (${formatBytes(cap)})` });
+  const sent = cid && tickets.length ? db.sendOf(sender, cid) : null;
+  if (sent) return { repeat: true, seq: sent.seq, ts: sent.ts } satisfies Repeat;
+  for (const id of tickets) {
+    const t = db.ticket(id);
+    if (!t || t.holder !== sender || t.seq !== null || t.issued <= ts - TICKET_TTL_MS)
+      return yield* new Fenced({ message: "kiwi/review's ticket for this change ran out or isn't yours: post the downgrade again, then send" });
+  }
   const seq = db.head() + 1;
   const prior = cid ? db.claimSend(sender, cid, seq, ts) : null;
   if (prior) return { repeat: true, seq: prior.seq, ts: prior.ts } satisfies Repeat;
@@ -54,6 +64,7 @@ export const append = Effect.fn("Room.append")(function* (iv: string, ct: string
   if (bytes + ct.length > cap) bytes -= db.dropSnapshot();
 
   db.insert(seq, ts, iv, ct, e);
+  if (tickets.length) db.deliverTickets(tickets, seq);
   if (slots.free?.length) db.freeSlots(slots.free, sender);
   if (slots.take) db.takeSlot(slots.take.id, sender, seq, ts + slots.take.ttl, ts);
   bytes += ct.length;

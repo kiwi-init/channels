@@ -38,6 +38,12 @@ export interface ReviewCheck {
   verdict: "approved" | "waiting" | "rejected";
   tasks: number[];
   note?: string;
+  upTo?: number;
+}
+
+export interface ReviewPosted {
+  url: string | null;
+  ticket?: string;
 }
 
 export interface GithubFx {
@@ -48,7 +54,7 @@ export interface GithubFx {
   syncGithub(repo: string, known: GithubState): Effect.Effect<number, Refused, Relay>;
   githubStatus(): Effect.Effect<GithubStatus, Refused, Relay>;
   githubDiff(repo: string, sha: string): Effect.Effect<GithubDiff, Refused, Relay>;
-  postReviewCheck(c: ReviewCheck): Effect.Effect<{ url: string | null }, Refused, Relay>;
+  postReviewCheck(c: ReviewCheck): Effect.Effect<ReviewPosted, Refused, Relay>;
   commentOnPr(repo: string, number: number, body: string): Effect.Effect<{ url: string | null }, Refused, Relay>;
   githubIssue(repo: string, number: number): Effect.Effect<GithubIssueInfo, Refused, Relay>;
   closeIssue(c: { repo: string; number: number; reason: "completed" | "not_planned"; body: string }): Effect.Effect<{ url: string | null }, Refused, Relay>;
@@ -82,7 +88,7 @@ export class ChannelGithub {
 
     postReviewCheck: Effect.fn("Channel.postReviewCheck")({ self: this }, function* (this: ChannelGithub, c: ReviewCheck) {
       if (c.verdict === "approved") yield* this.ch.ownerOnly();
-      return yield* this.ch.request<{ url: string | null }>("/github/check", { method: "POST", body: JSON.stringify(c) });
+      return yield* this.ch.request<ReviewPosted>("/github/check", { method: "POST", body: JSON.stringify(c) });
     }),
 
     commentOnPr: Effect.fn("Channel.commentOnPr")({ self: this }, function* (this: ChannelGithub, repo: string, number: number, body: string) {
