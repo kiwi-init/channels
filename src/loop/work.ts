@@ -1,4 +1,5 @@
-import { landingWaits } from "@kiwi/core/prs.ts";
+import type { Landing } from "@kiwi/core/protocol.ts";
+import { landingWaits, taskPr } from "@kiwi/core/prs.ts";
 import { inlineText } from "@kiwi/core/membership.ts";
 import { reentryText } from "@kiwi/core/reentry.ts";
 import { planningText } from "@kiwi/core/spec-lines.ts";
@@ -170,6 +171,16 @@ export function workName(work: Work): string {
   }
 }
 
+function landingDo(state: ChannelState, t: Task, step: Landing): string {
+  if (state.merges !== "people") return "Do what lands it at the approved artifact (for a merge, merge its PR at the approved head once its checks are green).";
+  const id = taskId(t.id);
+  const ready = `once its checks are green, say in ${id}'s thread that it's ready for a person to merge`;
+  if (step === "merge") return `People merge pull requests here, so don't merge it yourself: ${ready}.`;
+  if (step === "release:tag" || taskPr(state, t.id))
+    return `People merge pull requests here, so don't merge its PR yourself: ${ready}. Once a person has merged it, the rest of its ${step} step is yours: do it at the approved artifact.`;
+  return `Its ${step} step is yours: do it at the approved artifact. People merge pull requests here, so if it comes to need one merged, don't merge it yourself: ${ready}.`;
+}
+
 function landingFocus(state: ChannelState, t: Task, me: string, mc: string): string {
   const id = taskId(t.id);
   const lander = landerOf(t);
@@ -177,7 +188,7 @@ function landingFocus(state: ChannelState, t: Task, me: string, mc: string): str
   const waits = landingWaits(state, t);
   return [
     `This session is for landing ${id} “${inlineText(t.title, 160)}”. Its review already approved it, and ${lander === me ? "you land it" : `${inlineText(lander ?? "its owner", 40)} lands it`}: its landing step is ${step}.${waits ? ` It ${waits.replace(/^waits/, "still waits")}.` : ""}`,
-    `Don't run \`${mc} task start ${id}\` or send another \`${mc} task review ${id}\`: that reopens approved work. Do what lands it at the approved artifact (for a merge, merge its PR at the approved head once its checks are green), and ${id} is done when that evidence arrives.`,
+    `Don't run \`${mc} task start ${id}\` or send another \`${mc} task review ${id}\`: that reopens approved work. ${landingDo(state, t, step)} ${id} is done when that evidence arrives.`,
     `If it can't land, say why in ${id}'s thread, and ask the lead or a person to close it with a reason or to name another lander with \`${mc} task edit ${id} --lander NAME\`. Answer messages for you as they come. The session ends when ${id} is done or another lander takes it.`,
   ].join(" ");
 }

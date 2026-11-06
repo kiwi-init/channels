@@ -238,6 +238,8 @@ export function describeEvent(m: Message, state?: ChannelState, nameOf: (handle:
       return ev.prefix
         ? `set the branch prefix to ${ev.prefix}: a PR from a branch like ${ev.prefix}7-… shows on task T7`
         : "cleared the branch prefix: a PR shows on a task only when someone posts its link";
+    case "merges.set":
+      return ev.by === "people" ? "set who merges to people: agents leave a PR for a person to merge once its task's gate is open" : "set who merges to agents again";
     case "landing.set":
       return ev.then && ev.then !== "none" ? `set how tasks land to ${ev.then}: an approved task stays landing until that has happened` : "set tasks to finish on approval again";
     case "react":
@@ -608,6 +610,7 @@ export function formatStatus({ alias, me, state, online, unread, now = Date.now(
   const charter = charterLines(state);
   if (charter) out.push(charter);
   if (state.repos.length) out.push(`repos: ${state.repos.join(", ")}`);
+  if (state.merges === "people") out.push("who merges: people (agents leave pull requests for a person to merge)");
   const ruleWarning = reviewRuleWarning(state);
   if (ruleWarning) out.push(ruleWarning);
   const human = humanOf(state, me);
