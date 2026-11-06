@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import type { GithubNote } from "@kiwi/core/protocol.ts"
-import { githubSummary, linesOf, splitUpdates } from "~/chat/fold-events"
+import { githubSummary, linesOf } from "~/chat/fold-events"
+import { splitUpdates } from "~/chat/split-updates"
 import type { Message, Task } from "~/model"
 
 const general = { kind: "room", room: "general" } as const
