@@ -29,6 +29,7 @@ const check = (ok: boolean, what: string): void => {
 const SECRET = crypto.randomUUID();
 const REPO = "kiwi-init/mods-check";
 const SHA = "c".repeat(40);
+const TASK = "Open the PR in the GitHub mod";
 const relay = startRelay({ port: 0, hostname: "127.0.0.1", dataDir: join(root, "relay"), human: devHumanAuth(), githubSecret: SECRET, githubPush: null, devNoRateLimits: true });
 const RELAY = relay.url.origin;
 
@@ -54,12 +55,31 @@ const clickLabel = ({ selector, label }: { selector: string; label: RegExp | str
   return !!el;
 };
 
-const submitRepo = (): boolean => {
-  const input = document.querySelector<HTMLInputElement>('[role="dialog"] input[aria-label="Add a repo"]');
+const submitIn = (label: string): boolean => {
+  const input = document.querySelector<HTMLInputElement>(`[role="dialog"] input[aria-label="${label}"]`);
   const add = input?.form?.querySelector<HTMLButtonElement>('button[type="submit"]');
   if (!input?.form || !add || add.disabled) return false;
   input.form.requestSubmit();
   return true;
+};
+
+const clickHas = ({ selector, text }: { selector: string; text: string }): boolean => {
+  const el = [...document.querySelectorAll<HTMLElement>(selector)].find((e) => (e.textContent ?? "").includes(text) && e.getClientRects().length > 0);
+  el?.click();
+  return !!el;
+};
+
+const palette = (): boolean => {
+  if (document.querySelector(".palette-box")) return true;
+  const mac = navigator.platform.includes("Mac");
+  (document.activeElement ?? document.body).dispatchEvent(new KeyboardEvent("keydown", { key: "k", code: "KeyK", metaKey: mac, ctrlKey: !mac, bubbles: true, cancelable: true }));
+  return false;
+};
+
+const addTask = async (title: string): Promise<number> => {
+  const k = (window as unknown as { kiwi: { getSnapshot(): { channels: { code: string }[] }; call(code: string, op: "send", body: string, opts: object): Promise<number> } }).kiwi;
+  const code = k.getSnapshot().channels[0]!.code;
+  return k.call(code, "send", `task: ${title}`, { kind: "event", ev: { op: "task.add", title } });
 };
 
 const tabButton = (title: string): { pressed: string | null; alert: string | null } | null => {
@@ -167,8 +187,12 @@ try {
   await step("the channel's settings", 10_000, () => d.evaluate(clickLabel, { selector: "button", label: /: channel settings$/ }, 2_000));
   await step("the settings' GitHub section", 10_000, () => d.evaluate(clickText, { selector: '[role="dialog"] .modal-seg button', text: "GitHub" }, 2_000));
   await step("the repo, typed", 10_000, () => d.evaluate(fillIn, { selector: '[role="dialog"] input[aria-label="Add a repo"]', value: REPO }, 2_000));
-  await step("Add", 10_000, () => d.evaluate(submitRepo, null, 2_000));
+  await step("Add", 10_000, () => d.evaluate(submitIn, "Add a repo", 2_000));
   await step("the repo, linked", 30_000, () => d.evaluate((repo) => [...document.querySelectorAll('[role="dialog"] .cset-repo-name')].some((a) => a.textContent === repo), REPO, 2_000));
+  await step("the branch prefix's Set", 10_000, () => d.evaluate(clickText, { selector: '[role="dialog"] .cset-prefix button', text: "Set" }, 2_000));
+  await step("the branch prefix, typed", 10_000, () => d.evaluate(fillIn, { selector: '[role="dialog"] input[aria-label="Branch prefix"]', value: "T" }, 2_000));
+  await step("the branch prefix, saved", 10_000, () => d.evaluate(submitIn, "Branch prefix", 2_000));
+  await step("the branch prefix, set", 30_000, () => d.evaluate(() => !document.querySelector('[role="dialog"] input[aria-label="Branch prefix"]'), null, 2_000));
   await step("the settings, closed", 10_000, () => d.evaluate(escape, null, 2_000));
 
   const tab = await until("the GitHub tab", 30_000, () => d.evaluate(tabButton, "GitHub", 2_000)).catch(() => null);
@@ -182,13 +206,15 @@ try {
   check(empty?.top === "frame github's tab", "the GitHub tab is the mod's own frame, on top of its slot");
   await shot("github-tab-empty");
 
+  const task = await d.evaluate(addTask, TASK, 15_000);
+  console.log(`the task: T${task}`);
   const pr = {
     number: 42,
     title: "The GitHub tab is a mod",
     html_url: `https://github.com/${REPO}/pull/42`,
     state: "open",
     merged: false,
-    head: { ref: "github-mod", sha: SHA },
+    head: { ref: `T${task}-github-mod`, sha: SHA },
     additions: 120,
     deletions: 80,
     changed_files: 6,
@@ -236,8 +262,27 @@ try {
   }).catch(() => null);
   check(again?.top === "frame github's tab", "coming back to the tab shows the same frame on top again");
   await shot("github-tab-prs");
+
+  await step("⌘K", 10_000, () => d.evaluate(palette, null, 2_000));
+  await step("the task's title, typed into ⌘K", 10_000, () => d.evaluate(fillIn, { selector: ".palette-input", value: "Open the PR" }, 2_000));
+  await step("the task in ⌘K", 10_000, () => d.evaluate(clickHas, { selector: ".palette-item", text: TASK }, 2_000));
+  await step("the task's PR card", 20_000, () => d.evaluate(() => !!document.querySelector(".panel .gh-card-title"), null, 2_000));
+  await shot("github-task-card");
+  await step("the PR card, clicked", 10_000, () => d.evaluate(clickHas, { selector: ".panel .gh-card-title", text: "The GitHub tab is a mod" }, 2_000));
+  const shown = await until("the mod's panel, on the PR", 20_000, async () => {
+    const title = await d.evaluate(() => document.querySelector(".panel .panel-title")?.textContent ?? null, null, 2_000);
+    const at = await d.evaluate(topAt, ".panel .mod-slot", 2_000);
+    return title === "PR #42" && at.top === "frame github" ? { title, at } : null;
+  }).catch(async () => {
+    console.log(`the panel then: ${JSON.stringify(await d.evaluate(() => (document.querySelector(".panel")?.outerHTML ?? null)?.slice(0, 1_500), null, 2_000).catch(String))}`);
+    return null;
+  });
+  check(!!shown, "a task's PR card opens the GitHub mod's panel on that PR, and the mod titles it PR #42");
+  await later(1_000);
+  await shot("github-pr-panel");
   const opens = (await d.main("browserOpens")) as string[];
   console.log(`opened in the browser: ${JSON.stringify(opens)}`);
+  check(!opens.includes(pr.html_url), "with the mod on, the PR card didn't open GitHub in the browser");
   check(app.exitCode === null && app.signalCode === null, "the app is still running");
   d.close();
 } catch (e) {
@@ -257,4 +302,4 @@ try {
   rmSync(root, { recursive: true, force: true });
 }
 if (problems.length) process.exit(1);
-console.log("ok: the GitHub tab is a mod the app installs on first start, it follows the channel's GitHub state, and leaving it doesn't stall the app");
+console.log("ok: the GitHub tab is a mod the app installs on first start; it follows the channel's GitHub state, a task's PR card opens its panel, and leaving the tab doesn't stall the app");
