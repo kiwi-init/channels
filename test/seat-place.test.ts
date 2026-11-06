@@ -110,9 +110,9 @@ describe("on the seat", () => {
           { alias: "ch", as: "bo" },
           { alias: "elsewhere", as: "cy", tmux: { socket: SOCKET, pane: "%2" } },
         ],
-        [other]: { alias: "ch", as: "ana", at: 2, seen: 5, tmux: { socket: SOCKET, pane: "%7" } },
+        [other]: { alias: "ch", as: "ana", at: 2, seen: 5, pid: 4242, tmux: { socket: SOCKET, pane: "%7" } },
       };
     });
-    expect([...placesIn(loadConfig(), "ch")]).toEqual([["ana", { tmux: { socket: SOCKET, pane: "%7" } }]]);
+    expect([...placesIn(loadConfig(), "ch")]).toEqual([["ana", { place: { tmux: { socket: SOCKET, pane: "%7" } }, pid: 4242 }]]);
   });
 });

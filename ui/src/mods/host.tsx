@@ -2,14 +2,14 @@ import { lazy, Suspense, useEffect, useRef, useState, useSyncExternalStore } fro
 import { createPortal } from "react-dom"
 
 import { bridge } from "@kiwi/secrets/secrets.ts"
-import type { ModView } from "../../../desktop/src/bridge.ts"
+import type { KiwiBridge, ModView } from "../../../desktop/src/bridge.ts"
 import type { MOD_MENU as MENU_EVENT, ModMenuAsk } from "~/chat/menus"
 import { addCommands } from "~/commands/rebind"
 import { bootFailed, bootGone, bootStarted } from "~/mods/boot"
 import { useApp } from "~/nav"
 import { openLinksOutside } from "~/kit/outside-links"
 import type { MOD_SIDES as SIDES_EVENT } from "~/shell/updates"
-import { fromFrame, heeded, LOOK, MOD_PROTOCOL, SIDE_HEIGHT, type ModCommand, type ModMessage, type Surface, type ToFrame } from "~/mods/protocol"
+import { fromFrame, heeded, LOOK, MOD_PROTOCOL, SIDE_HEIGHT, type ModCommand, type ModMessage, type ModTerminal, type Surface, type TerminalOp, type ToFrame } from "~/mods/protocol"
 import { keep } from "~/mods/stored"
 
 const FRAME_URL = "views://internal/mod-frame.html"
@@ -214,6 +214,14 @@ async function onMessage(e: MessageEvent): Promise<void> {
       send(f, reply)
       return
     }
+    case "terminal": {
+      const reply: ToFrame = await terminalCall(b, name, m).then(
+        (value) => ({ kiwi: MOD_PROTOCOL, type: "reply", id: m.id, ok: true, value }),
+        (err: unknown) => ({ kiwi: MOD_PROTOCOL, type: "reply", id: m.id, ok: false, error: err instanceof Error ? err.message : String(err) })
+      )
+      send(f, reply)
+      return
+    }
     case "storage": {
       let reply: ToFrame
       try {
@@ -233,6 +241,13 @@ async function onMessage(e: MessageEvent): Promise<void> {
     case "copy":
       if (focused(f) && !often(name, "copy")) void toasts().then((t) => t.copyText(m.text))
   }
+}
+
+function terminalCall(b: KiwiBridge, name: string, m: TerminalOp): Promise<ModTerminal[] | null> {
+  if (typeof b.modTerminals !== "function") return Promise.reject(new Error("this app is too old for a mod's terminals: update it"))
+  if (m.op === "list") return b.modTerminals(name)
+  if (m.op === "focus") return b.modTerminalFocus(name, m.seat).then(() => null)
+  return b.modTerminalMark(name, m.seat, m.mark).then(() => null)
 }
 
 function layerOf(el: HTMLElement): number {

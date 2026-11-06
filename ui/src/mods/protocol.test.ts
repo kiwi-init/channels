@@ -82,6 +82,38 @@ describe("a mod frame's messages", () => {
     expect(at({ type: "copy", text: "x".repeat(100_001) })).toBeNull()
   })
 
+  test("a terminal call is listing, focusing or marking a seat by its id, and nothing else", () => {
+    const seat = "0123456789abcdef"
+    expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "terminal", id: 1, op: "list", seat: "x" })).toEqual({ kiwi: MOD_PROTOCOL, type: "terminal", id: 1, op: "list" })
+    expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "terminal", id: 2, op: "focus", seat })).toEqual({ kiwi: MOD_PROTOCOL, type: "terminal", id: 2, op: "focus", seat })
+    expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "terminal", id: 3, op: "mark", seat, mark: { asks: 2, tasks: [7], text: "#(rm -rf ~)" } })).toEqual({
+      kiwi: MOD_PROTOCOL,
+      type: "terminal",
+      id: 3,
+      op: "mark",
+      seat,
+      mark: { asks: 2, tasks: [7] },
+    })
+    expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "terminal", id: 4, op: "mark", seat, mark: null })).toEqual({ kiwi: MOD_PROTOCOL, type: "terminal", id: 4, op: "mark", seat, mark: null })
+    for (const m of [
+      { op: "run", seat, command: "rm -rf ~" },
+      { op: "keys", seat, keys: "rm -rf ~ Enter" },
+      { op: "type", seat, text: "yes\n" },
+      { op: "read", seat },
+      { op: "screen", seat },
+      { op: "write", seat, path: "~/.zshrc", text: "x" },
+      { op: "install", seat, path: "/etc/hosts" },
+      { op: "focus", seat: "%1; tmux kill-server" },
+      { op: "focus", seat: "../../.ssh" },
+      { op: "focus" },
+      { op: "mark", seat, mark: { asks: -1 } },
+      { op: "mark", seat, mark: { asks: "2" } },
+      { op: "mark", seat, mark: { tasks: ["T7"] } },
+      { op: "mark", seat, mark: { tasks: Array.from({ length: 21 }, (_, i) => i + 1) } },
+    ])
+      expect([m.op, fromFrame({ kiwi: MOD_PROTOCOL, type: "terminal", id: 9, ...m })]).toEqual([m.op, null])
+  })
+
   test("an error always has some words, and never a whole page of them", () => {
     expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "error" })).toEqual({ kiwi: MOD_PROTOCOL, type: "error", message: "it threw with no message" })
     expect((fromFrame({ kiwi: MOD_PROTOCOL, type: "error", message: "x".repeat(5_000) }) as { message: string }).message).toHaveLength(2_000)
@@ -107,6 +139,13 @@ describe("what a mod's frame may do", () => {
     expect(heeded("commands", "sidebar", mod(["command"]))).toBe(false)
     expect(heeded("actions", "sidebar", mod(["message-action"]))).toBe(false)
     expect(heeded("panel", "sidebar", mod(["panel"]))).toBe(false)
+  })
+
+  test("terminals need the approved terminal capability, from the main frame", () => {
+    expect(heeded("terminal", "main", mod(["terminal"]))).toBe(true)
+    expect(heeded("terminal", "main", mod(["panel", "command", "message-action"]))).toBe(false)
+    expect(heeded("terminal", "sidebar", mod(["terminal", "sidebar"]))).toBe(false)
+    expect(heeded("terminal", "main", mod(["terminal"], "asks"))).toBe(false)
   })
 
   test("a mod that isn't on, or is gone, gets nothing", () => {

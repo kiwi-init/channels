@@ -1,3 +1,7 @@
+import type { ModTerminal, ModTerminalMark } from "../../../desktop/src/bridge.ts"
+
+export type { ModTerminal, ModTerminalMark }
+
 export const MOD_PROTOCOL = 1
 
 export const LOOK = [
@@ -66,6 +70,8 @@ export type ToastStyle = "success" | "failure"
 
 export const STORAGE = { key: 200, value: 256_000, total: 1_000_000 }
 
+export type TerminalOp = { op: "list" } | { op: "focus"; seat: string } | { op: "mark"; seat: string; mark: ModTerminalMark | null }
+
 export interface ModFetchResult {
   status: number
   statusText: string
@@ -78,7 +84,7 @@ export type ToFrame =
   | { kiwi: typeof MOD_PROTOCOL; type: "theme"; theme: Record<string, string>; dark: boolean }
   | { kiwi: typeof MOD_PROTOCOL; type: "command"; id: string }
   | { kiwi: typeof MOD_PROTOCOL; type: "action"; id: string; message: ModMessage }
-  | { kiwi: typeof MOD_PROTOCOL; type: "reply"; id: number; ok: true; value: ModFetchResult }
+  | { kiwi: typeof MOD_PROTOCOL; type: "reply"; id: number; ok: true; value: ModFetchResult | ModTerminal[] | null }
   | { kiwi: typeof MOD_PROTOCOL; type: "reply"; id: number; ok: false; error: string }
   | { kiwi: typeof MOD_PROTOCOL; type: "stored"; id: number; ok: true; value: string | string[] | null }
   | { kiwi: typeof MOD_PROTOCOL; type: "stored"; id: number; ok: false; error: string }
@@ -97,6 +103,7 @@ export type FromFrame =
   | { kiwi: typeof MOD_PROTOCOL; type: "toast"; title: string; message: string | null; style: ToastStyle | null }
   | { kiwi: typeof MOD_PROTOCOL; type: "open"; url: string }
   | { kiwi: typeof MOD_PROTOCOL; type: "copy"; text: string }
+  | ({ kiwi: typeof MOD_PROTOCOL; type: "terminal"; id: number } & TerminalOp)
 
 const GATED: { readonly [K in FromFrame["type"]]?: readonly [need: string, from: Surface] } = {
   panel: ["panel", "main"],
@@ -104,6 +111,7 @@ const GATED: { readonly [K in FromFrame["type"]]?: readonly [need: string, from:
   actions: ["message-action", "main"],
   sidebar: ["sidebar", "sidebar"],
   size: ["sidebar", "sidebar"],
+  terminal: ["terminal", "main"],
 }
 
 const RUNNING: ReadonlySet<FromFrame["type"]> = new Set(["storage", "toast", "open", "copy"])
@@ -190,7 +198,26 @@ export function fromFrame(data: unknown): FromFrame | null {
       return web(m["url"]) ? { kiwi: MOD_PROTOCOL, type: "open", url: m["url"] } : null
     case "copy":
       return short(m["text"], 100_000) ? { kiwi: MOD_PROTOCOL, type: "copy", text: m["text"] } : null
+    case "terminal":
+      return terminalOp(m)
     default:
       return null
   }
+}
+
+const SEAT = /^[0-9a-f]{16}$/
+
+function terminalOp(m: Record<string, unknown>): FromFrame | null {
+  const { id, op, seat, mark } = m
+  if (typeof id !== "number" || !Number.isSafeInteger(id)) return null
+  const base = { kiwi: MOD_PROTOCOL as typeof MOD_PROTOCOL, type: "terminal" as const, id }
+  if (op === "list") return { ...base, op }
+  if (typeof seat !== "string" || !SEAT.test(seat)) return null
+  if (op === "focus") return { ...base, op, seat }
+  if (op !== "mark") return null
+  if (mark === null) return { ...base, op, seat, mark: null }
+  const { asks = 0, tasks = [] } = (mark && typeof mark === "object" ? mark : {}) as Record<string, unknown>
+  if (typeof asks !== "number" || !Number.isSafeInteger(asks) || asks < 0 || asks > 999) return null
+  if (!Array.isArray(tasks) || tasks.length > 20 || !tasks.every((t) => typeof t === "number" && Number.isSafeInteger(t) && t > 0)) return null
+  return { ...base, op, seat, mark: { asks, tasks: tasks as number[] } }
 }

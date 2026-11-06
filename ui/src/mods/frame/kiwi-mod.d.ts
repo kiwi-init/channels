@@ -57,6 +57,18 @@ declare module "@kiwi/mod" {
   export function messageAction(action: { id: string; title: string; run: (message: ModMessage) => void | Promise<void> }): void
   export function fetch(input: string | URL, init?: { method?: string; headers?: HeadersInit; body?: string | null }): Promise<Response>
 
+  export interface ModTerminal {
+    id: string
+    room: string
+    channel: string
+    agent: string
+    in: "tmux" | "rex"
+  }
+
+  export function terminals(): Promise<ModTerminal[]>
+  export function focusTerminal(id: string): Promise<void>
+  export function markTerminal(id: string, mark: Partial<{ asks: number; tasks: number[] }> | null): Promise<void>
+
   export function Button(props: { children: ReactNode; onClick?: () => void; kind?: "primary" | "quiet" | "danger"; disabled?: boolean }): ReactElement
   export function Row(props: { title: ReactNode; sub?: ReactNode; onClick?: () => void }): ReactElement
   export function Field(props: { label: string; hint?: string; children: ReactNode }): ReactElement

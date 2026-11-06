@@ -13,8 +13,8 @@ import "~/mods/frame/frame.css"
 import { Field } from "~/kit/form"
 import { Icon } from "~/kit/icons"
 import { Action, Actions, Detail, Empty, Form, List, useFetch } from "~/mods/frame/kit"
-import { copy, failed, modFetch, openUrl, post, replied, storage, Toast } from "~/mods/frame/wire"
-import { MOD_PROTOCOL, type ModMessage, type Surface, type ToFrame } from "~/mods/protocol"
+import { copy, failed, modFetch, openUrl, post, replied, request, storage, Toast } from "~/mods/frame/wire"
+import { MOD_PROTOCOL, type ModMessage, type ModTerminal, type ModTerminalMark, type Surface, type TerminalOp, type ToFrame } from "~/mods/protocol"
 
 let view: ComponentType | null = null
 let booted = false
@@ -37,6 +37,22 @@ function asked(need: string, call: string): void {
 
 function listed<T extends { title: string }>(list: Map<string, T>): { id: string; title: string }[] {
   return [...list].map(([id, c]) => ({ id, title: c.title }))
+}
+
+function terminal(call: string, op: TerminalOp): Promise<unknown> {
+  asked("terminal", call)
+  if (surface !== "main") return Promise.reject(new Error(`${call}() works in the mod's main frame, not its sidebar`))
+  return request((id) => ({ type: "terminal", id, ...op }))
+}
+
+const terminals = async (): Promise<ModTerminal[]> => (await terminal("terminals", { op: "list" })) as ModTerminal[]
+
+const focusTerminal = async (seat: string): Promise<void> => {
+  await terminal("focusTerminal", { op: "focus", seat: String(seat) })
+}
+
+const markTerminal = async (seat: string, mark: Partial<ModTerminalMark> | null): Promise<void> => {
+  await terminal("markTerminal", { op: "mark", seat: String(seat), mark: mark === null ? null : { asks: mark.asks ?? 0, tasks: mark.tasks ?? [] } })
 }
 
 function Button({ children, onClick, kind, disabled }: { children: ReactNode; onClick?: () => void; kind?: "primary" | "quiet" | "danger"; disabled?: boolean }) {
@@ -95,6 +111,9 @@ const api = {
     post({ type: "actions", list: listed(actions) })
   },
   fetch: modFetch,
+  terminals,
+  focusTerminal,
+  markTerminal,
   Button,
   Field,
   Row,

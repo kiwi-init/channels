@@ -5,7 +5,7 @@ type Out = { [K in FromFrame["type"]]: Omit<Extract<FromFrame, { type: K }>, "ki
 type Waiting<T> = { resolve: (v: T) => void; reject: (e: Error) => void }
 
 let nextId = 1
-const fetching = new Map<number, Waiting<ModFetchResult>>()
+const replies = new Map<number, Waiting<unknown>>()
 const storing = new Map<number, Waiting<string | string[] | null>>()
 
 export const post = (m: Out): void => parent.postMessage({ kiwi: MOD_PROTOCOL, ...m }, "*")
@@ -28,8 +28,14 @@ function settle<T>(list: Map<number, Waiting<T>>, id: number, r: { value: T } | 
   else w?.resolve(r.value)
 }
 
+export function request(make: (id: number) => Out): Promise<unknown> {
+  const [id, reply] = wait(replies)
+  post(make(id))
+  return reply
+}
+
 export function replied(m: ToFrame): void {
-  if (m.type === "reply") settle(fetching, m.id, m.ok ? { value: m.value } : { error: m.error })
+  if (m.type === "reply") settle(replies, m.id, m.ok ? { value: m.value } : { error: m.error })
   else if (m.type === "stored") settle(storing, m.id, m.ok ? { value: m.value } : { error: m.error })
 }
 
@@ -42,9 +48,12 @@ function bytes(b64: string): Uint8Array<ArrayBuffer> {
 
 export async function modFetch(input: string | URL, init: { method?: string; headers?: HeadersInit; body?: string | null } = {}): Promise<Response> {
   if (init.body !== undefined && init.body !== null && typeof init.body !== "string") throw new TypeError("a mod's fetch sends a string body")
-  const [id, reply] = wait(fetching)
-  post({ type: "fetch", id, url: String(input), init: { method: init.method ?? "GET", headers: Object.fromEntries(new Headers(init.headers).entries()), body: init.body ?? null } })
-  const r = await reply
+  const r = (await request((id) => ({
+    type: "fetch",
+    id,
+    url: String(input),
+    init: { method: init.method ?? "GET", headers: Object.fromEntries(new Headers(init.headers).entries()), body: init.body ?? null },
+  }))) as ModFetchResult
   const empty = r.status === 204 || r.status === 304 || (init.method ?? "GET").toUpperCase() === "HEAD"
   return new Response(empty ? null : bytes(r.body), { status: r.status, statusText: r.statusText, headers: r.headers })
 }

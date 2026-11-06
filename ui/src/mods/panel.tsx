@@ -3,6 +3,7 @@ import "~/styles/mods.css"
 import { useCallback, useState } from "react"
 
 import { bridge } from "@kiwi/secrets/secrets.ts"
+import type { ModSnippet, ModView } from "../../../desktop/src/bridge.ts"
 import { Empty } from "~/kit/empty"
 import { useApp } from "~/nav"
 import { PanelHead } from "~/panels/frame"
@@ -27,7 +28,7 @@ export function ModPanel({ name }: { name: string }) {
         <Empty title="This mod is gone." />
       </>
     )
-  if (mod.state === "asks") return <Ask name={name} version={mod.version} needs={mod.needs} />
+  if (mod.state === "asks") return <Ask name={name} version={mod.version} needs={mod.needs} terminal={mod.terminal} />
   if (mod.state === "off" || run?.failed)
     return (
       <>
@@ -45,7 +46,21 @@ export function ModPanel({ name }: { name: string }) {
   )
 }
 
-function Ask({ name, version, needs }: { name: string; version: string | null; needs: string[] }) {
+function Snippet({ snippet, into }: { snippet: ModSnippet; into: string }) {
+  return (
+    <div className="mod-snippet">
+      <p>
+        It adds this line to <code>{snippet.file}</code>
+        {into}:
+      </p>
+      <pre>{snippet.line}</pre>
+      <p>which loads:</p>
+      <pre>{snippet.text}</pre>
+    </div>
+  )
+}
+
+function Ask({ name, version, needs, terminal }: { name: string; version: string | null; needs: string[]; terminal: ModView["terminal"] }) {
   const { go, toast } = useApp()
   const [busy, setBusy] = useState(false)
   const approve = () => {
@@ -70,6 +85,9 @@ function Ask({ name, version, needs }: { name: string; version: string | null; n
             <li key={n}>{needWords(n)}</li>
           ))}
         </ul>
+        {terminal?.tmux && <Snippet snippet={terminal.tmux} into=" for tmux" />}
+        {terminal?.rex && <Snippet snippet={terminal.rex} into=" for Rex" />}
+        {terminal && <p>Removing the mod takes these lines back out.</p>}
         <div className="mod-ask-actions">
           <button type="button" className="btn is-primary" disabled={busy} onClick={approve}>
             Turn on
