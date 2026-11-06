@@ -1,6 +1,6 @@
 import { GENERAL_ROOM } from "@kiwi/core/protocol.ts"
 import { liveOf, restOf } from "~/doing"
-import type { Ask, Channel, HomeAct, HomeAgent, HomeAsk, HomeChannel, HomeLine, HomeTask, Message, Person, Task } from "~/model"
+import type { AgentWaits, Ask, Channel, HomeAct, HomeAgent, HomeAsk, HomeChannel, HomeLine, HomeTask, Message, Person, Task } from "~/model"
 import { nickname } from "~/names"
 import { openAsks } from "~/needs/open"
 import { nowOf, stageWords } from "~/now"
@@ -88,10 +88,20 @@ export function saidIn(messages: readonly Message[]): HomeLine | null {
   return null
 }
 
+function waitsOf(asks: readonly Ask[]): Record<string, AgentWaits> {
+  const out: Record<string, AgentWaits> = {}
+  for (const a of asks) {
+    if (a.kind === "join" || !("from" in a)) continue
+    const w = (out[a.from] ??= { asks: 0, tasks: [] })
+    if (a.kind === "review") w.tasks.push(a.task)
+    else w.asks++
+  }
+  return out
+}
+
 export function homeOf(c: Source, said: HomeLine | null = null): HomeChannel {
-  const asks = openAsks(c)
-    .sort((a, b) => a.at - b.at)
-    .map((a): HomeAsk => ({ id: a.id, at: a.at, ...lineOf(c, a) }))
+  const open = openAsks(c)
+  const asks = open.sort((a, b) => a.at - b.at).map((a): HomeAsk => ({ id: a.id, at: a.at, ...lineOf(c, a) }))
   const agents = agentsOf(c)
   const working = agents.filter((a) => a.state === "working").length
   const now = nowOf({ tasks: c.tasks })
@@ -109,6 +119,7 @@ export function homeOf(c: Source, said: HomeLine | null = null): HomeChannel {
     red: c.tasks.filter((t) => !t.archived && !t.cancelled && t.status !== "done" && stageWords(t).red).length,
     agents,
     said: said ? { from: nickname(c, said.from), at: said.at, text: clip(withNames(said.text, c.nicknames, preview), SAID_CLIP) } : null,
+    waits: waitsOf(open),
     ...(c.loading ? { loading: true as const } : {}),
   }
 }

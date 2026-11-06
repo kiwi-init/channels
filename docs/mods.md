@@ -71,7 +71,7 @@ Everything comes from `@kiwi/mod`, plus React:
 | `command({ id, title, run })` | An action in ⌘K. Its id for `keys.json` is `<mod>.<id>`. |
 | `render(kind, draw)` | Draws one kind of attachment in chat. See [Drawing attachments](#drawing-attachments). |
 | `fetch(url, init)` | The mod's only way to the network, to the hosts you approved, over https |
-| `terminals()`, `focusTerminal(id)`, `markTerminal(id, mark)` | Your agents' tmux panes and Rex blocks. See [Terminals](#terminals) |
+| `terminals()`, `onTerminals(fn)`, `focusTerminal(id)`, `markTerminal(id, mark)` | Your agents' tmux panes and Rex blocks. See [Terminals](#terminals) |
 | `Button`, `Row`, `Field`, `Icon` | The app's own button, list row, labelled field and icons |
 
 The frame has the app's colours and styles, and follows your theme as it changes. A mod can also import its own files: code, `.css`, and images (`.svg`, `.png`, `.jpg`, `.gif`, `.webp`).
@@ -115,11 +115,14 @@ With `"terminal"` in its needs, a mod can find this computer's agents in tmux an
 
 | Call | What it does |
 | --- | --- |
-| `terminals()` | This computer's agents that sit in a tmux pane or a Rex block: `{ id, room, channel, agent, in }`, where `in` is `tmux` or `rex` |
-| `focusTerminal(id)` | Brings that pane or block forward |
-| `markTerminal(id, { asks, tasks })` | Marks it: in tmux, the window option `@kiwi` reads like `2? T7 T9`; in Rex, a status on the agent's block. `null` clears it. |
+| `terminals()` | This computer's agents that sit in a tmux pane or a Rex block: `{ id, room, channel, agent, in, waits }`. `in` is `tmux` or `rex`. `waits` is `{ asks, tasks }`: the agent's open questions and permissions for you, and its tasks waiting for your review, as your Needs-you list shows them. |
+| `onTerminals(fn)` | Calls `fn` with the same list whenever what waits on you changes. Returns a function that stops it. |
+| `focusTerminal(id)` | Brings that pane or block forward. `focusTerminal({ room, agent })` does the same for an agent by channel and handle, and says so in a toast when that agent has no terminal here. |
+| `markTerminal(id, { asks, tasks })` | Marks it: in tmux, the window option `@kiwi` reads like `2? T7 T9`; in Rex, a status on the agent's block. `null` clears it. When no terminal mod is on, the app clears every mark. |
 
-A mod can also bring a snippet for each: `terminal/tmux.conf` and `terminal/rex.lua` in its folder. **Turn on** shows both, with the one line each adds: a `source-file` line in your tmux config and a `dofile` line in Rex's `init.lua`. Each line loads a copy the app keeps, so a mod that changes its snippet asks again. Removing the mod takes both lines back out. A snippet is config that tmux or Rex runs as you, like your own, which is why you see all of it first.
+A message a mod's action gets carries `from`, its author's handle, and `channelId`, the channel's `room` in `terminals()`. So `focusTerminal({ room: m.channelId, agent: m.from })` shows the author's terminal.
+
+A mod can also bring a snippet for each: `terminal/tmux.conf` and `terminal/rex.lua` in its folder. **Turn on** shows both, with the one line each adds: a `source-file` line in your tmux config and a `dofile` line in Rex's `init.lua`. Each line loads a copy the app keeps, so a mod that changes its snippet asks again. Turning it on also loads the tmux snippet into the tmux servers already running and has Rex read its `init.lua` again. Removing the mod takes both lines back out; a running tmux server keeps the snippet's settings until it restarts. A snippet is config that tmux or Rex runs as you, like your own, which is why you see all of it first.
 
 ## What a mod can't reach
 

@@ -9,6 +9,7 @@ import { nickname, seatRoot } from "~/names"
 import { hiddenKey, hiddenPlaces, setHidden } from "~/shell/hidden-places"
 import { messageLink } from "@kiwi/core/message-link.ts"
 import { copyText } from "~/kit/toasts"
+import { openedRun } from "~/live/store"
 import { docOf } from "~/chat/doc-of"
 import type { ModMessage } from "~/mods/protocol"
 
@@ -47,6 +48,8 @@ function forMod(channel: Channel, m: Message): ModMessage {
     seq: m.seq,
     text: wordsPlain(m.text, channel.nicknames),
     author: nickname(channel, m.from),
+    from: m.from,
+    channelId: openedRun(channel.code)?.roomId ?? "",
     at: m.at,
     room: room === null ? null : `#${channel.rooms.find((r) => r.id === room)?.name ?? room}`,
     link: messageLink(channel.code, m.seq),

