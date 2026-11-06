@@ -137,6 +137,23 @@ describe("a tab, and showing a pull request or issue", () => {
     expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "open", to: { kind: "url", url: "https://x" } })).toBeNull()
   })
 
+  test("a frame copies text with a short note, and opens web links only", () => {
+    expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "copy", text: "Channels6270-github-mod", note: "Branch name copied" })).toEqual({
+      kiwi: MOD_PROTOCOL,
+      type: "copy",
+      text: "Channels6270-github-mod",
+      note: "Branch name copied",
+    })
+    expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "copy", text: "x", note: "n".repeat(81) })).toEqual({ kiwi: MOD_PROTOCOL, type: "copy", text: "x", note: null })
+    expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "copy", text: "x".repeat(10_001) })).toBeNull()
+    expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "link", url: "https://github.com/kiwi-init/channels/pull/45" })).toEqual({
+      kiwi: MOD_PROTOCOL,
+      type: "link",
+      url: "https://github.com/kiwi-init/channels/pull/45",
+    })
+    for (const url of ["javascript:alert(1)", "file:///etc/passwd", "views://internal/index.html", "kiwi://x", "not a url", ""]) expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "link", url })).toBeNull()
+  })
+
   test("two targets are the same when they name the same thing", () => {
     expect(sameTarget({ kind: "pr", repo: "a/b", number: 1 }, { kind: "pr", repo: "a/b", number: 1 })).toBe(true)
     expect(sameTarget({ kind: "pr", repo: "a/b", number: 1 }, { kind: "issue", repo: "a/b", number: 1 })).toBe(false)
@@ -190,7 +207,7 @@ describe("what a mod's frame may do", () => {
   })
 
   test("what needs no capability always comes through", () => {
-    for (const type of ["hello", "ready", "error", "fetch"] as const) expect(heeded(type, "sidebar", mod([]))).toBe(true)
+    for (const type of ["hello", "ready", "error", "fetch", "copy", "link"] as const) expect(heeded(type, "sidebar", mod([]))).toBe(true)
   })
 })
 

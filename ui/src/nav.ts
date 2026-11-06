@@ -6,10 +6,7 @@ import { keepPlace, keptPlace, spotAt, spotKey, whereKey, type Spot, type Tab } 
 
 export type SpecPart = "spec" | "inside" | "result"
 
-export type Panel =
-  | { kind: "task"; task: number }
-  | { kind: "thread"; seq: number; focus?: number }
-  | { kind: "mod"; name: string }
+export type Panel = { kind: "task"; task: number } | { kind: "thread"; seq: number; focus?: number } | { kind: "mod"; name: string }
 
 export type ChannelTab = "general" | "rooms" | "github" | "notes"
 

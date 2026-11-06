@@ -122,6 +122,8 @@ export type FromFrame =
   | { kiwi: typeof MOD_PROTOCOL; type: "tab"; title: string; shown: boolean; alert: string | null; hint: string | null }
   | { kiwi: typeof MOD_PROTOCOL; type: "open"; to: ModOpen }
   | { kiwi: typeof MOD_PROTOCOL; type: "show"; target: ModTarget }
+  | { kiwi: typeof MOD_PROTOCOL; type: "copy"; text: string; note: string | null }
+  | { kiwi: typeof MOD_PROTOCOL; type: "link"; url: string }
 
 const short = (v: unknown, max: number): v is string => typeof v === "string" && v.length > 0 && v.length <= max
 
@@ -161,6 +163,17 @@ function opened(v: unknown): ModOpen | null {
   const o = v as Record<string, unknown>
   if (o["kind"] === "task") return count(o["id"]) ? { kind: "task", id: o["id"] } : null
   return o["kind"] === "settings" || o["kind"] === "chat" ? { kind: o["kind"] } : null
+}
+
+function webUrl(v: unknown): string | null {
+  if (!short(v, 4_000)) return null
+  try {
+    const u = new URL(v)
+    return u.protocol === "https:" || u.protocol === "http:" ? u.href : null
+  } catch {
+    // Not a URL: the frame's link goes nowhere.
+    return null
+  }
 }
 
 export const sameTarget = (a: ModTarget | null, b: ModTarget | null): boolean => JSON.stringify(a) === JSON.stringify(b)
@@ -210,6 +223,12 @@ export function fromFrame(data: unknown): FromFrame | null {
     case "actions": {
       const list = named(m["list"], m["type"] === "commands" ? 50 : 10)
       return list ? { kiwi: MOD_PROTOCOL, type: m["type"], list } : null
+    }
+    case "copy":
+      return typeof m["text"] === "string" && m["text"].length <= 10_000 ? { kiwi: MOD_PROTOCOL, type: "copy", text: m["text"], note: short(m["note"], 80) ? m["note"] : null } : null
+    case "link": {
+      const url = webUrl(m["url"])
+      return url ? { kiwi: MOD_PROTOCOL, type: "link", url } : null
     }
     case "fetch": {
       const { id, url, init } = m

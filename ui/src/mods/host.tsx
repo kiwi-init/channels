@@ -9,11 +9,29 @@ import { bootFailed, bootGone, bootStarted } from "~/mods/boot"
 import { hostMods, publishTabs } from "~/mods/bus"
 import { useApp, type Go, type Panel } from "~/nav"
 import { openOutside } from "~/kit/outside"
+import { copyText } from "~/kit/toasts"
 import { openLinksOutside } from "~/kit/outside-links"
 import type { MOD_SIDES as SIDES_EVENT } from "~/shell/updates"
-import { fromFrame, heeded, LOOK, MOD_PROTOCOL, sameTarget, SIDE_HEIGHT, type ModCommand, type ModGithub, type ModMessage, type ModOpen, type ModTarget, type ModTerminal, type Surface, type TerminalOp, type ToFrame } from "~/mods/protocol"
+import {
+  fromFrame,
+  heeded,
+  LOOK,
+  MOD_PROTOCOL,
+  sameTarget,
+  SIDE_HEIGHT,
+  type ModCommand,
+  type ModGithub,
+  type ModMessage,
+  type ModOpen,
+  type ModTarget,
+  type ModTerminal,
+  type Surface,
+  type TerminalOp,
+  type ToFrame,
+} from "~/mods/protocol"
 
 const FRAME_URL = "views://internal/mod-frame.html"
+const LINK_GAP_MS = 500
 
 const MOD_MENU: typeof MENU_EVENT = "kiwi-message-menu"
 const MOD_SIDES: typeof SIDES_EVENT = "kiwi-mod-sides"
@@ -37,6 +55,7 @@ interface Frame {
   surface: Surface
   el: HTMLIFrameElement
   ready: boolean
+  linked: number
 }
 
 const state = {
@@ -46,7 +65,7 @@ const state = {
   showing: new Map<string, ModTarget>(),
   pending: new Map<string, Waiting[]>(),
 }
-let app: { go: (g: Go) => void; panel: () => Panel | null } | null = null
+let app: { go: (g: Go) => void; panel: Panel | null } | null = null
 
 interface Waiting {
   target: ModTarget
@@ -133,15 +152,15 @@ function setShowing(name: string, target: ModTarget | null): void {
   for (const f of framesOf(name)) send(f, { kiwi: MOD_PROTOCOL, type: "showing", target })
 }
 
-const panelIs = (name: string): boolean => {
-  const p = app?.panel()
-  return p?.kind === "mod" && p.name === name
-}
+const panelIs = (name: string): boolean => app?.panel?.kind === "mod" && app.panel.name === name
 
 export function showIn(name: string, target: ModTarget, url: string | null = null): boolean {
   const mod = modNamed(name)
   if (!allows(mod, "panel") || state.running.get(name)?.failed || !app) return false
-  if (!panelIs(name)) app.go({ to: "panel", panel: { kind: "mod", name } })
+  if (!panelIs(name)) {
+    app.go({ to: "panel", panel: { kind: "mod", name } })
+    app.panel = { kind: "mod", name }
+  }
   setShowing(name, target)
   const f = frames.get(keyOf(name, "main"))
   if (f?.ready) send(f, { kiwi: MOD_PROTOCOL, type: "show", target })
@@ -162,6 +181,7 @@ export function showTabIn(name: string, target: ModTarget): boolean {
 function showFrom(name: string, target: ModTarget): void {
   if (panelIs(name) && sameTarget(state.showing.get(name) ?? null, target)) {
     app?.go({ to: "panel", panel: null })
+    if (app) app.panel = null
     setShowing(name, null)
   } else showIn(name, target)
 }
@@ -283,6 +303,14 @@ async function onMessage(e: MessageEvent): Promise<void> {
     case "show":
       showFrom(name, m.target)
       return
+    case "copy":
+      copyText(m.text, m.note ?? "Copied")
+      return
+    case "link":
+      if (Date.now() - f.linked < LINK_GAP_MS) return
+      f.linked = Date.now()
+      openOutside(m.url)
+      return
     case "error":
       bootFailed(keyOf(name, surface), m.message)
       update(name, { failed: m.message })
@@ -380,7 +408,7 @@ function startFrames(layer: HTMLElement): void {
     el.dataset["hash"] = hash
     place(el, null)
     el.src = FRAME_URL
-    frames.set(key, { name, surface, el, ready: false })
+    frames.set(key, { name, surface, el, ready: false, linked: 0 })
     bootStarted(key, name, hash)
     if (!state.running.has(name)) state.running.set(name, { name, title: null, failed: null, side: null, tab: null, actions: [], commands: [] })
     layer.append(el)
@@ -391,11 +419,9 @@ export function ModsLayer() {
   const layer = useRef<HTMLDivElement>(null)
   const { toast, go, nav } = useApp()
   const [sides, setSides] = useState(sidesAnchor)
-  const panel = useRef(nav.panel)
-  panel.current = nav.panel
   useModsVersion()
   useEffect(() => {
-    app = { go, panel: () => panel.current }
+    app = { go, panel: null }
     hostMods({ github: setGithub, show: showIn, showTab: showTabIn })
     return () => {
       app = null
@@ -403,8 +429,9 @@ export function ModsLayer() {
     }
   }, [go])
   useEffect(() => {
+    if (app) app.panel = nav.panel
     for (const name of [...state.showing.keys()]) if (!(nav.panel?.kind === "mod" && nav.panel.name === name)) setShowing(name, null)
-  }, [nav.panel])
+  }, [nav.panel, go])
   useEffect(() => {
     const b = bridge()
     if (!b || typeof b.mods !== "function") return

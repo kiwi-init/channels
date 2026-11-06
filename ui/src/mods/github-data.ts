@@ -6,7 +6,19 @@ import { wordsPlain } from "~/words"
 
 type Source = Pick<Channel, "repos" | "prs" | "issues" | "tasks" | "github" | "people" | "former" | "nicknames">
 
-const face = ({ name, kind, harness, presence, color, picture, face, activity, load, red, doneAt }: Person): ModPerson => ({ name, kind, harness, presence, color, picture, face, activity, load, red, doneAt })
+const face = ({ name, kind, harness, presence, color, picture, face, activity, load, red, doneAt }: Person): ModPerson => ({
+  name,
+  kind,
+  harness,
+  presence,
+  color,
+  picture,
+  face,
+  activity,
+  load,
+  red,
+  doneAt,
+})
 
 export function githubData(c: Source): ModGithub {
   const linked = new Set<number>()

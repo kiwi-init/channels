@@ -6,7 +6,8 @@ import { wrote } from "~/words"
 
 const person = (name: string, kind: Person["kind"] = "agent"): Person => ({ name, kind, presence: "online" }) as Person
 const task = (id: number, owner?: string, extra: Partial<Task> = {}): Task => ({ id, title: wrote(`Task ${id}`), status: "doing", ...(owner ? { owner } : {}), ...extra }) as Task
-const pr = (number: number, t?: number): PullRequest => ({ repo: "kiwi-init/channels", number, title: `PR ${number}`, state: "open", url: `https://github.com/kiwi-init/channels/pull/${number}`, ...(t ? { task: t } : {}) }) as PullRequest
+const pr = (number: number, t?: number): PullRequest =>
+  ({ repo: "kiwi-init/channels", number, title: `PR ${number}`, state: "open", url: `https://github.com/kiwi-init/channels/pull/${number}`, ...(t ? { task: t } : {}) }) as PullRequest
 const issue = (number: number, t?: number): Issue => ({ repo: "kiwi-init/channels", number, title: `Issue ${number}`, state: "open", url: "", at: 0, ...(t ? { task: t } : {}) }) as Issue
 
 const channel = (over: Partial<Channel> = {}) =>

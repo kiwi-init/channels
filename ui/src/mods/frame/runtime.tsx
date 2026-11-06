@@ -38,6 +38,7 @@ let tabState: { title: string; shown: boolean; alert: string | null; hint: strin
 const watchers = new Set<() => void>()
 const onShows = new Set<(t: ModTarget) => void>()
 const early: ModTarget[] = []
+const EARLY = 8
 
 const told = (): void => {
   for (const w of watchers) w()
@@ -200,6 +201,9 @@ const api = {
     asked("panel", "title")
     if (surface === "main" && view) post({ type: "panel", title: String(title) })
   },
+  copy(text: string, note?: string): void {
+    post({ type: "copy", text: String(text), note: note === undefined ? null : String(note) })
+  },
   fetch: modFetch,
   terminals,
   focusTerminal,
@@ -235,6 +239,22 @@ function theme(vars: Record<string, string>, dark: boolean): void {
   document.documentElement.dataset["theme"] = dark ? "dark" : "light"
 }
 
+const linkOf = (e: MouseEvent): string | null => {
+  const a = e.target instanceof Element ? e.target.closest("a[href]") : null
+  const href = a instanceof HTMLAnchorElement ? a.href : null
+  return href && /^https?:/.test(href) ? href : null
+}
+
+const outside = (e: MouseEvent): void => {
+  if (e.defaultPrevented || (e.type === "auxclick" && e.button !== 1)) return
+  const url = linkOf(e)
+  if (!url) return
+  e.preventDefault()
+  post({ type: "link", url })
+}
+
+addEventListener("click", outside)
+addEventListener("auxclick", outside)
 addEventListener("error", (e) => failed(e.error ?? e.message))
 addEventListener("unhandledrejection", (e) => failed(e.reason))
 addEventListener("message", (e) => {
@@ -263,9 +283,11 @@ addEventListener("message", (e) => {
     told()
   } else if (m.type === "show") {
     if (onShows.size) for (const run of onShows) run(m.target)
-    else early.push(m.target)
-  }
-  else if (m.type === "command") void Promise.resolve(commands.get(m.id)?.run()).catch(failed)
+    else {
+      early.push(m.target)
+      early.splice(0, Math.max(0, early.length - EARLY))
+    }
+  } else if (m.type === "command") void Promise.resolve(commands.get(m.id)?.run()).catch(failed)
   else if (m.type === "action") void Promise.resolve(actions.get(m.id)?.run(m.message)).catch(failed)
   else if (m.type === "reply") {
     const w = waiting.get(m.id)
