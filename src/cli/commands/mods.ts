@@ -2,11 +2,11 @@ import * as Effect from "effect/Effect";
 import { watch } from "node:fs";
 import { homedir } from "node:os";
 import { home } from "../../config/paths.ts";
-import { addMod, devRound, listMods, modsDir, nudgeApp, removeMod, startDev, updateMods, type DevStart, type ModInfo } from "../../mods.ts";
+import { addMod, checkMod, devRound, listMods, modsDir, nudgeApp, removeMod, startDev, updateMods, type DevStart, type ModCheckReport, type ModInfo } from "../../mods.ts";
 import { args, opt } from "../args.ts";
 import { type Command, die, out, Quit } from "../context.ts";
 
-const USAGE = "usage: kiwi mod add <repo>[#ref] · kiwi mod update [name] [--yes] · kiwi mod list [--json] · kiwi mod remove <name> [--force] · kiwi mod dev <name>";
+const USAGE = "usage: kiwi mod add <repo>[#ref] · kiwi mod update [name] [--yes] · kiwi mod list [--json] · kiwi mod remove <name> [--force] · kiwi mod dev <name> · kiwi mod check [name]";
 
 const tilde = (p: string): string => (p.startsWith(homedir()) ? `~${p.slice(homedir().length)}` : p);
 
@@ -66,6 +66,22 @@ function watchDev(start: DevStart, name: string): void {
   });
 }
 
+function report(r: ModCheckReport): number {
+  const head = `${r.name}${r.manifest ? ` ${r.manifest.version}` : ""}`;
+  out(`checked ${head} in ${tilde(r.dir)}`);
+  if (r.added.length) out(`  added ${r.added.join(" and ")} for the type check`);
+  if (!r.types.ran) out(`  types not checked: ${r.types.why}`);
+  if (r.problems.length) {
+    out(`${r.problems.length} problem${r.problems.length === 1 ? "" : "s"}:`);
+    for (const p of r.problems) out(`  ${p}`);
+    out(`fix ${r.problems.length === 1 ? "it" : "them"}, then run kiwi mod check ${r.name} again`);
+    return 1;
+  }
+  const what = r.types.ran ? "mod.json, types and bundle" : "mod.json and bundle";
+  out(`${head} checks out: ${what}, ${size(r.bytes ?? 0)}; ${r.manifest ? asks(r.manifest.needs) : ""}`);
+  return 0;
+}
+
 const run = <A>(f: () => A) => Effect.try({ try: f, catch: (err) => new Quit({ message: err instanceof Error ? err.message : String(err), code: 1 }) });
 
 export const modCommands: Record<string, Command> = {
@@ -109,6 +125,14 @@ export const modCommands: Record<string, Command> = {
         if (!name || args[3]) return yield* die("usage: kiwi mod remove <name> [--force]");
         const r = yield* run(() => removeMod(at, name, !!opt.force));
         return out(r.link ? `removed the link ${name}; ${tilde(r.link)} stays` : `removed ${name}`);
+      }
+      if (sub === "check") {
+        if (args[3]) return yield* die("usage: kiwi mod check [name]: check a mod's mod.json, types and bundle, or the mod in this folder");
+        const r = yield* Effect.tryPromise({
+          try: () => checkMod(at, args[2] ?? null, process.cwd()),
+          catch: (err) => new Quit({ message: err instanceof Error ? err.message : String(err), code: 1 }),
+        });
+        return report(r);
       }
       if (sub === "dev") {
         const name = args[2];

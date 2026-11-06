@@ -1,0 +1,192 @@
+---
+name: mods
+description: Make a Channels mod (a panel, a command, a channel tab or a chat attachment drawer) in TSX, and check it with kiwi mod check.
+---
+
+# Making a Channels mod
+
+A mod is a folder with a `mod.json` and an `index.tsx`. The desktop app builds it when it changes and runs it in a sandboxed frame of its own. There's no build step, bundler config or package to publish.
+
+## The loop
+
+1. `kiwi mod dev <name>` creates `~/.kiwi/mods/<name>/` with a working starter, or links the current folder when its `mod.json` has that name. It keeps running and rebuilds on every save, so start it in the background and read what it prints.
+2. Run `bun install` (or `npm install`) once in the mod's folder. The starter's `package.json` brings `typescript` and `@types/react` for the type check.
+3. Edit `index.tsx` and `mod.json`. Read `kiwi-mod.d.ts`, in the mod's folder and next to this skill, before you use anything not shown here.
+4. `kiwi mod check <name>` checks `mod.json`, type-checks against the kit's types and bundles once. It prints each problem with its file and line. Fix every one and run it again; the mod isn't done until it says "checks out".
+5. The person opens it in the app: ⌘K, then its title under Mods. The first time, the app asks them to **Turn on** what `needs` lists.
+
+## mod.json
+
+```json
+{
+  "name": "today-issues",
+  "version": "0.1.0",
+  "shell": "^3.6",
+  "needs": ["panel", "github"],
+  "icon": "icon.svg"
+}
+```
+
+- **`name`:** lowercase letters, digits and dashes, the same as the folder. `app`, `nav`, `view`, `chat` and `debug` are taken.
+- **`needs`:** what the mod uses, and nothing more. A call it didn't ask for throws.
+  - `panel`: the panel beside the chat. `sidebar`: a block in the sidebar. `tab`: a tab in the channel's header.
+  - `command`: actions in ⌘K. `message-action`: actions on a message.
+  - `github`: the open channel's repos, pull requests and issues, read-only, with no token.
+  - `terminal`: this computer's agents in tmux and Rex.
+  - `render:<kind>`: draws `X.<kind>.html` attachments in chat.
+  - `net:<host>`: each exact host it fetches, like `net:api.linear.app`. No wildcards, https only.
+- **`icon`:** optional, an `.svg` or `.png` in the folder, up to 64 KB.
+
+## What a mod can use
+
+Everything comes from `@kiwi/mod`, plus React.
+
+| Import | Use |
+| --- | --- |
+| `panel({ title, render })`, `title(text)` | The panel beside the chat, and its title |
+| `sidebar({ title, render })` | A block in the sidebar |
+| `tab({ title, render, shown })`, `showTab({ shown, alert, hint })` | A tab in the channel's header |
+| `command({ id, title, run })` | An action in ⌘K |
+| `messageAction({ id, title, run })` | An action on a message; `run` gets the message |
+| `useGithub()`, `github()` | With `github`: `{ repos, prs, issues, tasks }` for the open channel, or null |
+| `show(target)`, `useShowing()`, `onShow(run)` | Open the panel on a pull request or issue, and follow what it shows |
+| `useFetch(url, options)` | `{ data, error, isLoading, revalidate }`, JSON by default |
+| `fetch(url, init)` | The only network: https, listed hosts only, no cookies, no redirects |
+| `List`, `List.Section`, `List.Item` | A searchable list: ↑ ↓, ↵ runs the first action, a right click shows the rest |
+| `Detail` | Markdown, drawn like a chat message |
+| `Form`, `Form.TextField`, `TextArea`, `Checkbox`, `Dropdown` | A form; `onSubmit` gets the values by field id |
+| `Actions`, `Action`, `Action.OpenInBrowser`, `Action.CopyToClipboard` | What an item, a detail or a form can do; `shortcut: "mod+shift+c"` binds a key |
+| `Toast.show({ title, message, style })`, `copy(text, note)` | A note at the bottom of the app; copying |
+| `Empty` | The empty state: `title`, `description`, `icon`, `actions` |
+| `storage` | `get`, `set`, `remove`, `keys`: JSON values kept on this computer |
+| `render(kind, draw)` | Draws a chat attachment kind |
+| `Button`, `Row`, `Field`, `Icon`, `Avatar`, `Dot`, `Count`, `Heading`, `Track`, `ago`, `cx` | The app's own pieces |
+
+Build the view from `List`, `Detail` and `Form`: they follow the person's theme, keyboard and spacing, so a mod looks like part of the app with no CSS. Icons are the app's names (`IconName` and `GlyphName` in the types), never emoji.
+
+## Starters
+
+### A panel of the channel's GitHub issues
+
+```tsx
+import { Action, Actions, Empty, List, panel, useGithub } from "@kiwi/mod"
+
+const today = (at: number) => new Date(at).toDateString() === new Date().toDateString()
+
+function View() {
+  const github = useGithub()
+  if (!github) return <Empty title="Loading GitHub" icon="github" />
+  if (!github.repos.length) return <Empty title="This channel has no GitHub repo" description="Link one in the channel's settings." icon="github" />
+  const issues = github.issues.filter((i) => i.state === "open" && today(i.at))
+  return (
+    <List searchBarPlaceholder="Search today's issues" emptyView={<Empty title="No new issues today" icon="issue" />}>
+      {issues.map((issue) => (
+        <List.Item
+          key={`${issue.repo}#${issue.number}`}
+          title={issue.title}
+          subtitle={`${issue.repo}#${issue.number}`}
+          icon="issue"
+          accessories={[{ date: issue.at }]}
+          actions={
+            <Actions>
+              <Action.OpenInBrowser url={issue.url} />
+              <Action.CopyToClipboard title="Copy link" content={issue.url} />
+            </Actions>
+          }
+        />
+      ))}
+    </List>
+  )
+}
+
+panel({ title: "Today's issues", render: View })
+```
+
+Needs `["panel", "github"]`.
+
+### A panel over a web API
+
+```tsx
+import { Action, Actions, Empty, List, panel, useFetch } from "@kiwi/mod"
+
+interface Item {
+  id: number
+  title: string
+  url: string
+}
+
+function View() {
+  const { data, error, isLoading, revalidate } = useFetch<Item[]>("https://api.example.com/items")
+  if (error) return <Empty title="Couldn't load the items" description={error.message} icon="info" actions={<Actions><Action title="Try again" onAction={revalidate} /></Actions>} />
+  return (
+    <List isLoading={isLoading} searchBarPlaceholder="Search items">
+      {(data ?? []).map((item) => (
+        <List.Item key={item.id} title={item.title} actions={<Actions><Action.OpenInBrowser url={item.url} /></Actions>} />
+      ))}
+    </List>
+  )
+}
+
+panel({ title: "Items", render: View })
+```
+
+Needs `["panel", "net:api.example.com"]`.
+
+### A setting, like a token, kept in storage
+
+```tsx
+import { Form, Toast, storage } from "@kiwi/mod"
+
+function Settings({ done }: { done: () => void }) {
+  return (
+    <Form
+      submitTitle="Save"
+      onSubmit={async (values) => {
+        await storage.set("token", values["token"])
+        Toast.show({ title: "Saved" })
+        done()
+      }}
+    >
+      <Form.TextField id="token" title="API token" placeholder="Paste a token" />
+    </Form>
+  )
+}
+```
+
+Read it back with `await storage.get<string>("token")`, and send it in `fetch`'s headers.
+
+### A command
+
+```tsx
+import { command, Toast } from "@kiwi/mod"
+
+command({ id: "hello", title: "Say hello", run: () => Toast.show({ title: "Hello" }) })
+```
+
+Needs `["command"]`.
+
+### Drawing an attachment kind
+
+```tsx
+import { render } from "@kiwi/mod"
+
+render("figure", ({ html }) => {
+  const page = new DOMParser().parseFromString(html, "text/html")
+  document.body.replaceWith(document.adoptNode(page.body))
+})
+```
+
+Needs `["render:figure"]`. The page comes from whoever sent the message, so its frame gets no network and none of the mod's other capabilities.
+
+## Rules
+
+- **Sandbox:** a mod can't reach the app's page, the person's keys or messages, other mods or the CLI. It has no `localStorage` or cookies; use `storage`.
+- **No secrets in code.** A mod that needs a token asks for it in a `Form` and keeps it in `storage`.
+- **Links and copying** work while the person is using the mod: a click on a link, `Action.OpenInBrowser`, `Action.CopyToClipboard` or `copy()`. Web images don't load; fetch one and show it as a `blob:` URL.
+- **Imports:** React, `@kiwi/mod`, and the mod's own files (code, `.css`, images). No npm packages at runtime.
+- **Each change restarts it,** so keep what should last in `storage`.
+- **Don't guess what the mod can't know,** like which repo or which account: use `useGithub()`, or ask in a `Form`.
+
+## Done means
+
+`kiwi mod check <name>` says the mod checks out, and you tell the person its name, what it asks for in `needs`, and how to open it (⌘K, then its title).
