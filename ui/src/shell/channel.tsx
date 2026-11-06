@@ -12,7 +12,6 @@ import type { Channel } from "~/model"
 import { drawerNews } from "~/live/links"
 import { dropMessage, findWanted, useWantedMessage } from "~/live/open-message"
 import { shareGithub, useModTabs, useWantsGithub } from "~/mods/bus"
-import { githubData } from "~/mods/github-data"
 import { openAsks } from "~/needs/open"
 import { sameWhere, useApp } from "~/nav"
 import { whereKey } from "~/places"
@@ -120,10 +119,16 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   const modTabs = useModTabs()
   const wantsGithub = useWantsGithub()
   const { repos, prs, issues, tasks: allTasks, github, people, former, nicknames } = channel
-  useEffect(
-    () => shareGithub(wantsGithub ? githubData({ repos, prs, issues, tasks: allTasks, github, people, former, nicknames }) : null),
-    [wantsGithub, repos, prs, issues, allTasks, github, people, former, nicknames]
-  )
+  useEffect(() => {
+    if (!wantsGithub) return shareGithub(null)
+    let live = true
+    void import("~/mods/github-data").then(({ githubData }) => {
+      if (live) shareGithub(githubData({ repos, prs, issues, tasks: allTasks, github, people, former, nicknames }))
+    })
+    return () => {
+      live = false
+    }
+  }, [wantsGithub, repos, prs, issues, allTasks, github, people, former, nicknames])
   useEffect(() => () => shareGithub(null), [])
 
   if (channel.waiting)
