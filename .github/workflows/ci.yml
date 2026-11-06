@@ -445,6 +445,9 @@ jobs:
         env:
           DASH_RELEASE_OFFLINE: "1"
         run: bun run typecheck:eb
+      - name: tmux, for the terminal need's focus and mark against a real server
+        if: ${{ !cancelled() }}
+        run: command -v tmux >/dev/null || brew install tmux
       - working-directory: desktop
         if: ${{ !cancelled() }}
         run: bun test --tsconfig-override tsconfig.eb.json ./eb-tests

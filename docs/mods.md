@@ -54,7 +54,7 @@ Open a channel, press ⌘K and pick **Standup Notes** under Mods. Run `kiwi mod 
 | `name` | Lowercase letters, digits and dashes, the same as the folder's name. `app`, `nav`, `view`, `chat` and `debug` are taken. |
 | `version` | A version like `1.0.0` |
 | `shell` | The app versions it works with, like `^3.6`. An app it doesn't fit leaves it off and says why. |
-| `needs` | What it asks you for: `panel`, `command`, `render:<kind>`, and `net:<host>` for each web host it talks to |
+| `needs` | What it asks you for: `panel`, `command`, `terminal`, `render:<kind>`, and `net:<host>` for each web host it talks to |
 | `icon` | Optional: an `.svg` or `.png` in its folder, up to 64 KB. The app shows it as a picture, so an SVG's scripts never run. Without one, the mod gets its first letter. |
 | `author` | Optional: who made it, up to 100 characters |
 | `skills` | Optional: skills it gives every agent. See [Skills](#skills) |
@@ -71,6 +71,7 @@ Everything comes from `@kiwi/mod`, plus React:
 | `command({ id, title, run })` | An action in ⌘K. Its id for `keys.json` is `<mod>.<id>`. |
 | `render(kind, draw)` | Draws one kind of attachment in chat. See [Drawing attachments](#drawing-attachments). |
 | `fetch(url, init)` | The mod's only way to the network, to the hosts you approved, over https |
+| `terminals()`, `focusTerminal(id)`, `markTerminal(id, mark)` | Your agents' tmux panes and Rex blocks. See [Terminals](#terminals) |
 | `Button`, `Row`, `Field`, `Icon` | The app's own button, list row, labelled field and icons |
 
 The frame has the app's colours and styles, and follows your theme as it changes. A mod can also import its own files: code, `.css`, and images (`.svg`, `.png`, `.jpg`, `.gif`, `.webp`).
@@ -107,6 +108,18 @@ The first time the app sees a mod that asks for something, it asks you: a note s
 Settings → Mods lists every mod; click one for its page: where it came from and at which commit, when it was added and changed, its size, what it may do and adds, and its `README.md`.
 
 The app keeps your approvals on this computer. There's no off switch in the app yet: to stop a mod, remove it.
+
+## Terminals
+
+With `"terminal"` in its needs, a mod can find this computer's agents in tmux and Rex, bring one forward and mark the ones that need you. It never runs a command in a terminal, types into one or reads what one shows.
+
+| Call | What it does |
+| --- | --- |
+| `terminals()` | This computer's agents that sit in a tmux pane or a Rex block: `{ id, room, channel, agent, in }`, where `in` is `tmux` or `rex` |
+| `focusTerminal(id)` | Brings that pane or block forward |
+| `markTerminal(id, { asks, tasks })` | Marks it: in tmux, the window option `@kiwi` reads like `2? T7 T9`; in Rex, a status on the agent's block. `null` clears it. |
+
+A mod can also bring a snippet for each: `terminal/tmux.conf` and `terminal/rex.lua` in its folder. **Turn on** shows both, with the one line each adds: a `source-file` line in your tmux config and a `dofile` line in Rex's `init.lua`. Each line loads a copy the app keeps, so a mod that changes its snippet asks again. Removing the mod takes both lines back out. A snippet is config that tmux or Rex runs as you, like your own, which is why you see all of it first.
 
 ## What a mod can't reach
 
@@ -152,7 +165,7 @@ The page comes from whoever sent the message, so it runs in the mod's frame with
 - **Snapshot only** with reduced motion. The full window still draws it.
 - **No network, and none of the mod's other capabilities,** whatever you approved the mod for.
 - **The snapshot is only an image:** its scripts never run.
-- **Not the app's chat:** a drawing frame gets no panel, sidebar, commands or message actions.
+- **Not the app's chat:** a drawing frame gets no panel, sidebar, commands, message actions or terminals.
 
 ## Skills
 

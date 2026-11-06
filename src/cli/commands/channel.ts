@@ -144,7 +144,7 @@ export const channelCommands: Record<string, Command> = {
       if (opt.json) {
         const json = statusJson(snap);
         const places = placesIn(loadConfig(), s.alias);
-        out(JSON.stringify({ ...json, members: json.members.map((m) => ({ ...m, place: places.get(m.name) ?? null })) }));
+        out(JSON.stringify({ ...json, members: json.members.map((m) => ({ ...m, place: places.get(m.name)?.place ?? null })) }));
       } else out(formatStatus({ ...snap, all }));
       yield* noteRead(s);
     }),
