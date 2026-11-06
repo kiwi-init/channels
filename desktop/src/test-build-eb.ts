@@ -54,7 +54,8 @@ export function driveForTests(win: BrowserWindow): void {
         unminimizeForTest: () => (win.unminimize(), true),
         placeForTest: () => {
           const f = win.getFrame();
-          win.setFrame(f.x + 40, f.y + 30, f.width - 160, f.height - 90);
+          const step = f.width > 800 ? 1 : -1;
+          win.setFrame(f.x + 40 * step, f.y + 30 * step, f.width - 160 * step, f.height - 90 * step);
           return win.getFrame();
         },
       });

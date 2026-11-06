@@ -11,6 +11,7 @@ if (!process.argv[2] || process.platform !== "darwin") {
   process.exit(2);
 }
 type Frame = { x: number; y: number; width: number; height: number };
+const QUITS = 5;
 const exe = appExecutable(process.argv[2]);
 const root = mkdtempSync(join(tmpdir(), "kiwi-frame-check-"));
 const { relay, port } = await startLocalRelay(join(root, "relay"), null, { rateLimits: false });
@@ -38,12 +39,21 @@ try {
   const first = await run(async (d) => (await d.main("frame")) as Frame);
   console.log(`first start: ${JSON.stringify(first)}`);
   if (first.width > 1200 || first.height > 800 || first.width < 768) problems.push(`a first start opens at ${first.width}x${first.height}, not 1200x800 or the screen's size`);
-  const placed = await run(async (d) => (await d.main("placeForTest")) as Frame);
-  console.log(`moved and resized to: ${JSON.stringify(placed)}, then quit`);
-  const back = await run(async (d) => (await d.main("frame")) as Frame);
-  console.log(`after a restart: ${JSON.stringify(back)}`);
-  if (!same(placed, back)) problems.push(`after a restart the window is at ${JSON.stringify(back)}, not where it was left (${JSON.stringify(placed)})`);
-  if (same(first, back)) problems.push("after a restart the window is back where a first start puts it");
+  let placed = await run(async (d) => (await d.main("placeForTest")) as Frame);
+  for (let quit = 1; quit <= QUITS; quit++) {
+    console.log(`moved and resized to: ${JSON.stringify(placed)}, then quit at once`);
+    const [back, next] = await run(async (d) => {
+      const back = (await d.main("frame")) as Frame;
+      return [back, quit < QUITS ? ((await d.main("placeForTest")) as Frame) : back] as const;
+    });
+    console.log(`after restart ${quit} of ${QUITS}: ${JSON.stringify(back)}`);
+    if (same(first, back)) problems.push(`after restart ${quit} of ${QUITS} the window is back where a first start puts it`);
+    if (!same(placed, back)) {
+      problems.push(`after restart ${quit} of ${QUITS} the window is at ${JSON.stringify(back)}, not where it was left (${JSON.stringify(placed)})`);
+      break;
+    }
+    placed = next;
+  }
 } catch (e) {
   problems.push(e instanceof Error ? e.message : String(e));
 } finally {
@@ -54,4 +64,4 @@ if (problems.length) {
   for (const p of problems) console.error(`FAIL ${p}`);
   process.exit(1);
 }
-console.log("ok: the window opens where it was left, at the size it was left");
+console.log(`ok: ${QUITS} times, a quit right after a move, the window opens where it was left, at the size it was left`);

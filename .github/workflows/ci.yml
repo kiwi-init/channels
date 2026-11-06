@@ -501,7 +501,7 @@ jobs:
             ${{ runner.temp }}/mods-check/*.png
             ${{ runner.temp }}/figure-check/*.png
           if-no-files-found: ignore
-      - name: the window opens where it was left, at the size it was left (NSWindow frame autosave)
+      - name: the window opens where it was left, at the size it was left, five times after a quit right after a move (T7485)
         if: ${{ !cancelled() }}
         timeout-minutes: 5
         run: bun desktop/scripts/eb-frame-check.ts desktop/release-eb/build/dev-macos-*/*.app
