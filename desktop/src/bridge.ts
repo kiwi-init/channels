@@ -479,6 +479,35 @@ export interface KiwiBridge {
   harnesses(): Promise<HarnessRow[]>;
   machines(): Promise<MachineView[]>;
   settingsOn(machinePk: string): Promise<FromMachine<ComputerSettings>>;
+  mods(): Promise<ModView[]>;
+  onMods(cb: (mods: ModView[]) => void): () => void;
+  modBundle(name: string): Promise<{ code: string; hash: string } | null>;
+  approveMod(name: string, needs: string[]): Promise<ModView[]>;
+  modFetch(name: string, req: ModFetchRequest): Promise<ModFetchReply>;
+}
+
+export interface ModView {
+  name: string;
+  version: string | null;
+  needs: string[];
+  approved: string[];
+  state: "on" | "asks" | "off";
+  why?: string;
+  hash?: string;
+}
+
+export interface ModFetchRequest {
+  url: string;
+  method?: string;
+  headers?: Record<string, string>;
+  body?: string | null;
+}
+
+export interface ModFetchReply {
+  status: number;
+  statusText: string;
+  headers: Record<string, string>;
+  body: string;
 }
 
 export interface KeysAtRest {

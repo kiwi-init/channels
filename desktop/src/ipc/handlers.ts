@@ -6,6 +6,7 @@ import { githubCalls } from "./github.ts";
 import { machineCalls } from "./machines.ts";
 import { linkingCalls } from "./linking.ts";
 import { miscCalls } from "./misc.ts";
+import { modsCalls } from "./mods.ts";
 import { personalitiesCalls } from "./personalities.ts";
 import { signInCalls } from "./signin.ts";
 import { storeCalls } from "./store.ts";
@@ -28,5 +29,6 @@ export function handlers(host: Host): Handlers {
     ...machineCalls(),
     ...uiCalls(),
     ...themesCalls(host),
+    ...modsCalls(host),
   };
 }
