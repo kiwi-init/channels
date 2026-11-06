@@ -1,5 +1,6 @@
 import type { CachedKept, CachedRow } from "@kiwi/core/cache-row.ts";
 import type { PresenceFields } from "@kiwi/core/client.ts";
+import type { Outgoing } from "@kiwi/core/ship-gate.ts";
 
 import type { CallResult, ChannelCallName, ChannelCalls, ChannelOps, DocEvent, FollowEvent, HistoryAround, HistorySearch } from "../../../desktop/src/bridge.ts";
 import { heldPipe } from "@kiwi/core/doc/held-pipe.ts";
@@ -73,6 +74,7 @@ type Args<K extends ChannelCallName> = Parameters<ChannelCalls[K]>;
 
 export class ChannelLink {
   readonly isOwner: boolean;
+  beforeSend: ((body: string, opts: Omit<Outgoing, "from" | "body">) => Promise<void>) | null = null;
 
   constructor(
     readonly code: string,
@@ -145,7 +147,10 @@ export class ChannelLink {
   setIcon = (...a: Args<"setIcon">) => this.c("setIcon", ...a);
   close = () => this.c("close");
   leave = () => this.c("leave");
-  send = (...a: Args<"send">) => this.c("send", ...a);
+  send = async (...a: Args<"send">) => {
+    await this.beforeSend?.(a[0], a[1] ?? {});
+    return this.c("send", ...a);
+  };
   image = (...a: Args<"image">) => import("./image-bytes.ts").then((m) => m.heldImage(a[0]) ?? this.c("image", ...a));
   putImage = (...a: Args<"putImage">) => this.c("putImage", ...a);
   putFileData = (...a: Args<"putFileData">) => this.c("putFileData", ...a);

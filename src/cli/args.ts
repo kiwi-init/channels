@@ -89,6 +89,7 @@ function parse() {
         file: { type: "string" },
         at: { type: "string" },
         round: { type: "string" },
+        runs: { type: "string" },
         mine: { type: "boolean" },
         "for-me": { type: "boolean" },
         chat: { type: "boolean" },

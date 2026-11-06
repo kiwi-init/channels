@@ -288,6 +288,7 @@ export type Event =
       then?: Landing;
       lander?: string | null;
       close?: string;
+      runs?: number[];
     }
   | { op: "task.first"; task: number }
   | { op: "task.delete"; task: number; why?: string }
@@ -888,6 +889,8 @@ export type WirePayload = Omit<Payload, "ev"> & { ev?: Event | NewerEvent };
 
 export const EVENT_OPS_VERSION = 21;
 
+export const REVIEW_CHECK = "kiwi/review";
+
 export const opsVersion = (x: unknown): x is number => Number.isSafeInteger(x) && (x as number) >= 1 && (x as number) <= 10_000;
 const NEWER_OP_RE = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/;
 
@@ -1087,6 +1090,7 @@ function eventCheck(ev: unknown): boolean | null {
         (e.checkpoint === undefined || (e.checkpoint === true && str(e.note, CHECKPOINT_MAX_LENGTH) && e.note.trim().length > 0)) &&
         opt(e.then, isLanding) &&
         (e.lander === undefined || e.lander === null || str(e.lander, 64)) &&
+        (e.runs === undefined || (e.verdict === "approved" && Array.isArray(e.runs) && e.runs.length <= 50 && e.runs.every((r) => Number.isSafeInteger(r) && (r as number) > 0))) &&
         (e.close === undefined || (e.state === "done" && e.verdict === undefined && str(e.close, 500) && e.close.trim().length > 0)) &&
         opt(e.proof, (x): x is { url: string; label?: string } => {
           const p = x as { url?: unknown; label?: unknown } | null;
