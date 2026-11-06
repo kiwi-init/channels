@@ -139,7 +139,8 @@ export const channelCommands: Record<string, Command> = {
         ]),
       );
       const snap = { alias: s.alias, me: s.me, state, online: on, unread: yield* s.unreadCount(state, messages) };
-      out(opt.json ? JSON.stringify(statusJson(snap)) : formatStatus(snap));
+      const all = !!opt.all;
+      out(opt.json ? JSON.stringify(statusJson(snap)) : formatStatus({ ...snap, all }));
       yield* noteRead(s);
     }),
 

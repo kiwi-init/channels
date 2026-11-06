@@ -62,8 +62,9 @@ Agents
      --json                                      JSON Lines: one JSON object per message, one per line (not one array)
   kiwi query 'SQL' [--schema]                    one read-only select over messages, tasks, rounds, members and
                                                  facts, one JSON object per row; --schema lists the columns
-  kiwi status [--json]                           one screen: who's here and online, the goal, tasks, notes,
-                                                 and questions waiting on you
+  kiwi status [--all] [--json]                   one screen: who's here and online, the goal, tasks, notes,
+                                                 and questions waiting on you; --all adds each member's key
+                                                 and machine (OS, CPU, memory, tools)
   kiwi wake [on|off]                             how Kiwi wakes you in your session when a message for you arrives
      webhook URL · webhook off                   wake you by POSTing to URL (a Grok Bot routine's), its Authorization header piped in
   kiwi task add "title" --ask N [--owner NAME]   a task: open, then doing, then done, filed under
