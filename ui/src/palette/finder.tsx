@@ -2,14 +2,14 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode 
 
 import { Avatar, cx, Dot, STATUS_WORDS } from "~/kit/bits"
 import { useDebugOptions } from "~/kit/debug"
-import { Icon } from "~/kit/icons"
+import { Moon02Icon, Sun03Icon } from "@hugeicons/core-free-icons"
+import { GlyphIcon, Icon, type Glyph, type IconName } from "~/kit/icons"
 import { docOf } from "~/chat/doc-of"
-import type { App, Channel, Task, TaskStatus, Theme, Where } from "~/model"
+import type { App, Channel, Task, TaskStatus, Where } from "~/model"
 import { useApp, type Go, type Nav, type Panel } from "~/nav"
 import { nickname, onePerPerson, shown } from "~/names"
-import { SIDEBAR_KEYS } from "@kiwi/app/sidebar-hidden.ts"
-import { showCalm } from "~/calm/idle"
-import { toggleSide } from "~/shell/side"
+import { APP } from "~/commands/list"
+import { runCommand, shownKeys, useCommandTable, type Table } from "~/commands/table"
 import { statusOf } from "~/shell/sidebar"
 import { wordsPlain } from "~/words"
 
@@ -25,11 +25,26 @@ const FIRST_QUERY = new URLSearchParams(location.search).get("q") ?? ""
 
 const TONE: Record<TaskStatus, string> = { todo: "", doing: "tone-doing", review: "tone-review", landing: "tone-review", done: "tone-live", waiting: "tone-decide" }
 
-const THEMES: { theme: Theme; label: string; icon: "moon" | "sun" | "computer" }[] = [
-  { theme: "dark", label: "Theme: Dark", icon: "moon" },
-  { theme: "light", label: "Theme: Light", icon: "sun" },
-  { theme: "system", label: "Theme: System", icon: "computer" },
-]
+const LOOKS: Record<string, { icon: IconName | Glyph; words: string[]; late?: true }> = {
+  "app.new-channel": { icon: "plus", words: ["create", "start"] },
+  "app.join": { icon: "link", words: ["invite", "link"] },
+  "app.computers": { icon: "computer", words: ["phones", "devices", "machines"] },
+  "app.settings": { icon: "gear", words: ["preferences", "account"] },
+  "app.calm": { icon: Moon02Icon, words: ["idle"] },
+  "view.sidebar": { icon: "sidebar", words: ["hide", "show", "rooms", "people"] },
+  "chat.search": { icon: "search", words: ["find", "messages"] },
+  "nav.back": { icon: "back", words: ["history", "previous"] },
+  "nav.forward": { icon: "chevron", words: ["history", "next"] },
+  "nav.next-news": { icon: "tray", words: ["unread", "channel"] },
+  "nav.previous-news": { icon: "tray", words: ["unread", "channel"] },
+  "view.theme-dark": { icon: Moon02Icon, words: ["appearance", "mode"], late: true },
+  "view.theme-light": { icon: Sun03Icon, words: ["appearance", "mode"], late: true },
+  "view.theme-system": { icon: "computer", words: ["appearance", "mode"], late: true },
+}
+
+const ORDER = Object.keys(LOOKS)
+
+const placeOf = (id: string): number => (ORDER.includes(id) ? ORDER.indexOf(id) : ORDER.length)
 
 interface Item {
   id: string
@@ -63,7 +78,8 @@ export function Finder() {
   const listRef = useRef<HTMLDivElement>(null)
   const q = query.trim().toLowerCase()
   const debug = useDebugOptions()
-  const groups = rank(collect(app, nav, go, debug), q)
+  const table = useCommandTable()
+  const groups = rank(collect(app, nav, go, debug, table), q)
   const flat = groups.flatMap((g) => g.items)
   const current = Math.max(0, Math.min(active, flat.length - 1))
   const optionId = (i: number) => `${listId}-${i}`
@@ -209,7 +225,32 @@ function rank(items: Item[], q: string): Ranked[] {
 
 const byRecent = (a: Task, b: Task): number => b.updatedAt - a.updatedAt
 
-function collect(app: App, nav: Nav, go: (go: Go) => void, debug: boolean): Item[] {
+function commandItems(app: App, table: Table, close: () => void, late: boolean): Item[] {
+  const bound = new Map(table.bound.map((b) => [b.id, b]))
+  const shown = APP.filter((c) => bound.has(c.id) && !("palette" in c) && bound.get(c.id)?.palette !== false)
+  return [...shown.map((c) => ({ id: c.id, title: c.title, from: "" })), ...table.mods]
+    .filter((c) => !!LOOKS[c.id]?.late === late)
+    .sort((a, b) => placeOf(a.id) - placeOf(b.id))
+    .map((c) => {
+      const look = LOOKS[c.id]
+      const keys = shownKeys(table, c.id)
+      const on = c.id === `view.theme-${app.prefs.theme}`
+      return {
+        id: `command:${c.id}`,
+        group: "Actions",
+        label: c.title,
+        keys: [...(look?.words ?? []), ...(c.from ? [c.from] : [])],
+        lead: typeof look?.icon === "object" ? <GlyphIcon glyph={look.icon} size={14} /> : <Icon name={look?.icon ?? "chevron"} size={14} />,
+        meta: on ? <Icon name="check" size={14} label="Current theme" /> : keys ? <kbd className="palette-kbd">{keys}</kbd> : undefined,
+        run: () => {
+          close()
+          setTimeout(() => runCommand(c.id))
+        },
+      }
+    })
+}
+
+function collect(app: App, nav: Nav, go: (go: Go) => void, debug: boolean, table: Table): Item[] {
   const close = () => go({ to: "dialog", dialog: null })
   const toPanel = (panel: Panel) => {
     close()
@@ -292,66 +333,7 @@ function collect(app: App, nav: Nav, go: (go: Go) => void, debug: boolean): Item
     }
   }
 
-  items.push(
-    {
-      id: "action:new-channel",
-      group: "Actions",
-      label: "New channel",
-      keys: ["create", "start"],
-      lead: <Icon name="plus" size={14} />,
-      run: () => go({ to: "dialog", dialog: "new-channel" }),
-    },
-    {
-      id: "action:join",
-      group: "Actions",
-      label: "Join with a code",
-      keys: ["invite", "link"],
-      lead: <Icon name="link" size={14} />,
-      run: () => go({ to: "dialog", dialog: "join" }),
-    },
-    {
-      id: "action:computers",
-      group: "Actions",
-      label: "Your computers",
-      keys: ["phones", "devices", "machines"],
-      lead: <Icon name="computer" size={14} />,
-      run: () => go({ to: "settings", section: "computers" }),
-    },
-    {
-      id: "action:settings",
-      group: "Actions",
-      label: "Settings",
-      keys: ["preferences", "account"],
-      lead: <Icon name="gear" size={14} />,
-      run: () => go({ to: "settings" }),
-    },
-    {
-      id: "action:calm",
-      group: "Actions",
-      label: "Calm",
-      keys: ["idle"],
-      lead: <Icon name="moon" size={14} />,
-      meta: <kbd className="palette-kbd">⌘T</kbd>,
-      run: () => {
-        close()
-        showCalm()
-      },
-    }
-  )
-
-  if (channel && nav.page === "channel")
-    items.push({
-      id: "action:sidebar",
-      group: "Actions",
-      label: "Toggle sidebar",
-      keys: ["hide", "show", "rooms", "people"],
-      lead: <Icon name="sidebar" size={14} />,
-      meta: <kbd className="palette-kbd">{SIDEBAR_KEYS}</kbd>,
-      run: () => {
-        close()
-        toggleSide()
-      },
-    })
+  items.push(...commandItems(app, table, close, false))
 
   const versions = channel && nav.page === "channel" ? versionsHere(channel, nav) : null
   if (versions)
@@ -418,21 +400,7 @@ function collect(app: App, nav: Nav, go: (go: Go) => void, debug: boolean): Item
       }
     )
 
-  for (const t of THEMES) {
-    const on = app.prefs.theme === t.theme
-    items.push({
-      id: `action:theme-${t.theme}`,
-      group: "Actions",
-      label: t.label,
-      keys: ["appearance", "mode"],
-      lead: <Icon name={t.icon} size={14} />,
-      meta: on ? <Icon name="check" size={14} label="Current theme" /> : undefined,
-      run: () => {
-        if (!on) app.actions.setPrefs({ theme: t.theme })
-        close()
-      },
-    })
-  }
+  items.push(...commandItems(app, table, close, true))
 
   return items
 }

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import type { Where } from "~/model"
-import { historyStep, navigate, startNav, type Go, type Nav } from "~/nav"
+import { navigate, startNav, type Go, type Nav } from "~/nav"
 import { keepPlace, keepSpot, spotKey, whereOf } from "~/places"
 
 const room = (id: string): Where => ({ kind: "room", room: id })
@@ -128,20 +128,5 @@ describe("stored places are read strictly (T978)", () => {
     expect(whereOf({ kind: "theirs", between: ["atlas"] })).toBeNull()
     expect(whereOf("general")).toBeNull()
     expect(whereOf(null)).toBeNull()
-  })
-})
-
-describe("⌘[ and ⌘] (Ctrl on Linux) are the keys (T978)", () => {
-  const key = (k: Partial<KeyboardEvent>) => historyStep({ metaKey: false, ctrlKey: false, altKey: false, shiftKey: false, key: "", code: "", ...k })
-  test("with ⌘ or Ctrl, the brackets step back and forward", () => {
-    expect(key({ metaKey: true, key: "[", code: "BracketLeft" })).toBe("back")
-    expect(key({ ctrlKey: true, key: "]", code: "BracketRight" })).toBe("forward")
-    expect(key({ metaKey: true, key: "ü", code: "BracketLeft" })).toBe("back")
-  })
-  test("bare brackets, Shift or Alt with them, and other keys do nothing", () => {
-    expect(key({ key: "[", code: "BracketLeft" })).toBeNull()
-    expect(key({ metaKey: true, shiftKey: true, key: "{", code: "BracketLeft" })).toBeNull()
-    expect(key({ metaKey: true, altKey: true, key: "[", code: "BracketLeft" })).toBeNull()
-    expect(key({ metaKey: true, key: "k", code: "KeyK" })).toBeNull()
   })
 })

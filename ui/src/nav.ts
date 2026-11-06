@@ -16,7 +16,7 @@ type ModalView = { kind: "person"; name: string } | { kind: "channel"; tab?: Cha
 
 type Dialog = "new-channel" | "new-room" | "join" | "palette" | null
 
-export type Section = "account" | "appearance" | "computers" | "agents" | "about"
+export type Section = "account" | "appearance" | "computers" | "agents" | "shortcuts" | "about"
 
 interface Place {
   channel: string
@@ -95,13 +95,6 @@ export function navigate(nav: Nav, go: Go): Nav {
   const jumped = (go.to === "where" || go.to === "channel") && !!go.jump
   if (!jumped && samePlace(was, next)) return restore
   return { ...restore, back: [...nav.back, was].slice(-HISTORY), ahead: [] }
-}
-
-export function historyStep(e: Pick<KeyboardEvent, "metaKey" | "ctrlKey" | "altKey" | "shiftKey" | "key" | "code">): "back" | "forward" | null {
-  if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return null
-  if (e.code === "BracketLeft" || e.key === "[") return "back"
-  if (e.code === "BracketRight" || e.key === "]") return "forward"
-  return null
 }
 
 function travel(nav: Nav, way: "back" | "forward"): Nav {
