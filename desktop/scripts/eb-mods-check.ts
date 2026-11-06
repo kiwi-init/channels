@@ -222,14 +222,18 @@ try {
   );
   const messageLink = "https://example.com/?message-link";
   await step("a message with a link", 30_000, () => d.evaluate(sendMessage, { text: `[the message link](${messageLink})`, shows: "the message link" }, 2_000));
-  const clicked = await d.evaluate(
-    (url) => {
-      const a = [...document.querySelectorAll<HTMLAnchorElement>(".main article.msg a")].find((el) => el.getAttribute("href") === url);
-      a?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, ctrlKey: true }));
-      return a ? { class: a.className, inEditor: !!a.closest(".ProseMirror"), editable: a.closest("[contenteditable]")?.getAttribute("contenteditable") ?? null } : null;
-    },
-    messageLink,
-    3_000,
+  const clicked = await until("the message's link", 15_000, () =>
+    d
+      .evaluate(
+        (url) => {
+          const a = [...document.querySelectorAll<HTMLAnchorElement>(".main article.msg a")].find((el) => el.getAttribute("href") === url);
+          a?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, ctrlKey: true }));
+          return a ? { class: a.className, inEditor: !!a.closest(".ProseMirror") } : null;
+        },
+        messageLink,
+        2_000,
+      )
+      .catch(() => null),
   );
   console.log(`the message link Ctrl-clicked: ${JSON.stringify(clicked)}`);
   writeMod(2);
