@@ -17,12 +17,12 @@ import { readFileSync, realpathSync, statSync } from "node:fs";
 import { homedir, hostname } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { agyHere, geminiAncestor, kimiAncestor, kimiCodePid, mimoHere, piHere, zcodePid, type ProcessTree } from "./ancestry.ts";
-import { loadConfig, updateConfig, type Config, type SeatRecord, type SeatTaken } from "./config.ts";
+import { allSeats, loadConfig, updateConfig, type Config, type SeatRecord, type SeatTaken } from "./config.ts";
 import { pinnedFor } from "./harness-bin.ts";
 import { holdsSeat, seatHeldAway, seatHolds, seatRefusal } from "./hold.ts";
 import { pidAlive } from "./pid.ts";
 import { omit } from "@kiwi/core/omit.ts";
-import { tmuxPlaceFrom } from "./tmux-pane.ts";
+import { placeFrom, samePlace, type SeatPlace } from "./seat-place.ts";
 
 type Harness = NonNullable<SeatRecord["harness"]>;
 
@@ -401,12 +401,11 @@ export function claimTaken(session: string | undefined, still: readonly Binding[
 }
 
 export function notePlace(seats: readonly Binding[], env: Record<string, string | undefined> = process.env): void {
-  const { tmux } = tmuxPlaceFrom(env);
+  const place = placeFrom(env);
   if (!seats.length) return;
   const keys = new Set(seats.map((b) => `${b.alias}\u0000${b.as}`));
   const same = (b: Binding) => keys.has(`${b.alias}\u0000${b.as}`);
-  const held = (b: Binding): boolean => JSON.stringify(b.tmux ?? null) === JSON.stringify(tmux ?? null);
-  if (seats.every(held)) return;
+  if (seats.every((b) => samePlace(b, place))) return;
   updateConfig((c) => {
     for (const dir of Object.keys(c.bindings ?? {})) {
       const at = seatsAt(c, dir);
@@ -414,10 +413,20 @@ export function notePlace(seats: readonly Binding[], env: Record<string, string 
       store(
         c,
         dir,
-        at.map((b) => (same(b) ? { ...omit(b, "tmux"), ...(tmux ? { tmux } : {}) } : b)),
+        at.map((b) => (same(b) ? { ...omit(b, "tmux", "rex"), ...place } : b)),
       );
     }
   });
+}
+
+export function placesIn(cfg: Pick<Config, "bindings">, alias: string): Map<string, SeatPlace> {
+  const latest = (b: Binding): number => b.seen ?? b.at ?? 0;
+  const placed = allSeats(cfg)
+    .filter((b) => b.alias === alias && (b.tmux || b.rex))
+    .sort((a, b) => latest(b) - latest(a));
+  const places = new Map<string, SeatPlace>();
+  for (const b of placed) if (!places.has(b.as)) places.set(b.as, b.tmux ? { tmux: b.tmux } : { rex: b.rex! });
+  return places;
 }
 
 export function noteHarnessSession(seats: readonly Binding[], id: string): void {
