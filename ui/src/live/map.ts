@@ -5,9 +5,9 @@ import type { Card, DocBlockRef, Event } from "@kiwi/core/protocol.ts"
 import { permissionAnswer } from "@kiwi/core/permission.ts"
 import { describeEvent, proofLabel } from "@kiwi/core/format.ts"
 import { memberLoad, showsLoad } from "@kiwi/core/load.ts"
-import { checksOf, FAILED, landingWaits, prLinks, taskOfBranch, taskPr } from "@kiwi/core/prs.ts"
+import { checksOf, FAILED, landingWaits, prLinks, readyForPerson, taskOfBranch, taskPr } from "@kiwi/core/prs.ts"
 import { stageOf } from "@kiwi/core/stage.ts"
-import { doneGate, gateNow } from "@kiwi/core/done-gate.ts"
+import { doneGate } from "@kiwi/core/done-gate.ts"
 import { editable, GENERAL_ROOM, ignored, isQuiet, isRasterMime, isOverlay, type Message as Wire } from "@kiwi/core/protocol.ts"
 import { rootOf, sentTo } from "@kiwi/core/room-rules.ts"
 import { dmDocOf, dmOther } from "~/live/dm"
@@ -673,7 +673,7 @@ function suggestionFor(state: ChannelState, t: CoreTask): { name: string; why: W
 const landsWaiting = (state: ChannelState, t: CoreTask): { waits?: string; bypassed?: string[]; ready?: true } => {
   const waits = landingWaits(state, t)
   const gate = doneGate(state, t)
-  const ready = state.merges === "people" && gateNow(state, t)?.missing.length === 0
+  const ready = readyForPerson(state, t)
   return { ...(waits ? { waits } : {}), ...(gate?.kind === "bypassed" ? { bypassed: gate.missing } : {}), ...(ready ? { ready: true as const } : {}) }
 }
 

@@ -37,6 +37,25 @@ describe("the board says when a PR is ready for a person to merge (#623 §6, T11
     expect(task && stageWords(task).text).toContain("ready for a person to merge")
   })
 
+  test("a failing check on the PR keeps it off ready, and the board stays red", () => {
+    const wires = [
+      ...approved("people"),
+      event(8, "jow", { op: "github", items: [{ event: "check_run", repo: "o/r", sha: HEAD, name: "ci-ok", run: 21, status: "completed", conclusion: "failure", happened: 7500, at: 8000 }] }),
+    ]
+    const task = tasksOf(fold(wires, roster, 0), new Set(), "jow", wires).find((t) => t.id === 4)
+    expect(task?.lands?.ready).toBeUndefined()
+    expect(task?.lands?.waits).toBe("isn't ready for a person to merge: PR #7's ci-ok failed")
+    expect(task && stageWords(task)).toMatchObject({ red: true })
+  })
+
+  test("a required check that hasn't reported yet keeps it off ready", () => {
+    const wires = [...approved("people"), event(8, "jow", { op: "github.rules", repo: "o/r", branch: "main", required: ["ci-ok"], merge: ["squash"] })]
+    const task = tasksOf(fold(wires, roster, 0), new Set(), "jow", wires).find((t) => t.id === 4)
+    expect(task?.lands?.ready).toBeUndefined()
+    expect(task?.lands?.waits).toBe("waits for PR #7's checks to pass before a person merges it")
+    expect(task && stageWords(task).text).not.toContain("ready for a person to merge")
+  })
+
   test("with agents merging, there's no such label", () => {
     const wires = approved("agents")
     const task = tasksOf(fold(wires, roster, 0), new Set(), "jow", wires).find((t) => t.id === 4)
