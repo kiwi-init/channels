@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
+import type { ModView } from "../bridge.ts";
 import type { Serves } from "../calls.ts";
 import { childEnv, sessionEnv } from "../child-env.ts";
 import { kiwiHome } from "../daemon-client.ts";
@@ -75,7 +76,7 @@ export function modsCalls(
   let mods: ModsHost | null = null;
   let started: Promise<ModsHost> | null = null;
   let failed: ModView[] = [];
-  const withFailed = (list: ModView[]): ModView[] => held([...list, ...failed.filter((f) => !list.some((m) => m.name === f.name))]);
+  const withFailed = (list: ModView[]): ModView[] => [...list, ...failed.filter((f) => !list.some((m) => m.name === f.name))];
   const ready = (): Promise<ModsHost> => {
     if (started) return started;
     const folder = path.join(kiwiHome(), "mods");

@@ -682,6 +682,17 @@ jobs:
           name: mods-check-${{ matrix.os }}
           path: ${{ runner.temp }}/mods-check/*.png
           if-no-files-found: ignore
+      - name: the GitHub tab is a mod the app installs on first start, follows the channel's GitHub state, and leaving it doesn't stall the app, under Xvfb (T6270)
+        if: ${{ !cancelled() && matrix.drive }}
+        timeout-minutes: 8
+        run: xvfb-run -a -s "-screen 0 1280x800x24" bun desktop/scripts/eb-github-mod-check.ts "${{ steps.test-app.outputs.path }}" "$RUNNER_TEMP/github-mod-check"
+      - name: the GitHub mod check's screenshots
+        if: ${{ !cancelled() && matrix.drive }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: github-mod-check-${{ matrix.os }}
+          path: ${{ runner.temp }}/github-mod-check/*.png
+          if-no-files-found: ignore
       - name: a kiwi://join link opens the app on its join, cold and while it runs
         if: ${{ !cancelled() && matrix.drive }}
         timeout-minutes: 5
