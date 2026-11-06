@@ -10,14 +10,15 @@ export interface GithubCheck {
   attempt?: number;
   at: number;
   completedAt?: number;
-  ends?: CheckEnd[];
+  attempts?: RunAttempt[];
 }
 
-interface CheckEnd {
-  run?: number;
-  attempt?: number;
-  conclusion: string;
-  at: number;
+interface RunAttempt {
+  run: number;
+  attempt: number;
+  started?: number;
+  conclusion?: string;
+  completed?: number;
 }
 
 export interface GithubPr {
@@ -91,18 +92,28 @@ function behind(i: GithubNote, was: GithubCheck): boolean {
 
 const older = (i: GithubNote, was: { happened?: number } | undefined): boolean => i.happened !== undefined && was?.happened !== undefined && i.happened < was.happened;
 
-const MAX_ENDS = 6;
+const MAX_ATTEMPTS = 8;
 
-function endsWith(ends: readonly CheckEnd[] | undefined, i: GithubNote): CheckEnd[] | undefined {
-  if (!i.conclusion || i.happened === undefined) return ends ? [...ends] : undefined;
-  const end: CheckEnd = { conclusion: i.conclusion, at: i.happened, ...(i.run ? { run: i.run } : {}), ...(i.attempt ? { attempt: i.attempt } : {}) };
-  const same = (e: CheckEnd) => e.run === end.run && (e.attempt ?? 1) === (end.attempt ?? 1);
-  return [...(ends ?? []).filter((e) => !same(e)), end].sort((a, b) => a.at - b.at).slice(-MAX_ENDS);
+function attemptsWith(attempts: readonly RunAttempt[] | undefined, i: GithubNote): RunAttempt[] | undefined {
+  if (!i.run) return attempts ? [...attempts] : undefined;
+  const attempt = i.attempt ?? 1;
+  const was = attempts?.find((a) => a.run === i.run && a.attempt === attempt);
+  const next: RunAttempt = { ...(was ?? { run: i.run, attempt }) };
+  if (i.conclusion) {
+    next.conclusion = i.conclusion;
+    if (i.happened !== undefined) next.completed = i.happened;
+  } else if (i.happened !== undefined && (next.started === undefined || i.happened < next.started)) next.started = i.happened;
+  return [...(attempts ?? []).filter((a) => a !== was), next].sort((a, b) => a.run - b.run || a.attempt - b.attempt).slice(-MAX_ATTEMPTS);
 }
 
 export function succeededBy(check: GithubCheck, run: number, x: number): boolean {
-  const ends = check.ends ?? (check.conclusion && check.completedAt !== undefined ? [{ run: check.run, attempt: check.attempt, conclusion: check.conclusion, at: check.completedAt }] : []);
-  return ends.filter((e) => e.run === run && e.at <= x).at(-1)?.conclusion === "success";
+  const attempts =
+    check.attempts ??
+    (check.run !== undefined
+      ? [{ run: check.run, attempt: check.attempt ?? 1, ...(check.conclusion ? { conclusion: check.conclusion } : {}), ...(check.completedAt !== undefined ? { completed: check.completedAt } : {}) }]
+      : []);
+  const current = attempts.filter((a) => a.run === run && (a.started === undefined || a.started <= x)).at(-1);
+  return current?.conclusion === "success" && current.completed !== undefined && current.completed <= x;
 }
 
 const stalePr = (i: GithubNote, was: GithubPr | undefined): boolean => (was?.state === "merged" && !i.merged) || older(i, was);
@@ -140,7 +151,7 @@ export function applyGithub(g: GithubState, items: readonly GithubNote[], seq: n
       const runs = g.checks.get(key) ?? new Map<string, GithubCheck>();
       g.checks.delete(key);
       const was = runs.get(i.name);
-      const ends = endsWith(was?.ends, i);
+      const attempts = attemptsWith(was?.attempts, i);
       if (!was || !behind(i, was))
         runs.set(i.name, {
           name: i.name,
@@ -151,9 +162,9 @@ export function applyGithub(g: GithubState, items: readonly GithubNote[], seq: n
           ...(i.run ? { run: i.run } : {}),
           ...(i.attempt ? { attempt: i.attempt } : {}),
           ...(i.conclusion && i.happened !== undefined ? { completedAt: i.happened } : {}),
-          ...(ends ? { ends } : {}),
+          ...(attempts ? { attempts } : {}),
         });
-      else if (ends) runs.set(i.name, { ...was, ends });
+      else if (attempts) runs.set(i.name, { ...was, attempts });
       g.checks.set(key, runs);
       while (g.checks.size > MAX_SHAS) g.checks.delete(g.checks.keys().next().value!);
     } else if (i.event === "issues" && i.number) {

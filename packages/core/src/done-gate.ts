@@ -71,16 +71,20 @@ function npmStep(then: Landing): { pkg: string; range: string } | undefined {
 }
 
 export function doneGate(view: GateView, t: Task): DoneGate | undefined {
-  if (t.state !== "landing" || !t.then || !hasLanding(t.then)) return undefined;
-  if (t.then === "run") return { kind: "waiting", why: "a person to close it with a reason: run tasks don't land on their own yet" };
+  if (t.state === "done" || t.archived || !t.then || !hasLanding(t.then)) return undefined;
+  const landing = t.state === "landing";
+  if (t.then === "run") return landing ? { kind: "waiting", why: "a person to close it with a reason: run tasks don't land on their own yet" } : undefined;
   const pr = landingPr(view, t);
-  if (!pr) return { kind: "waiting", why: "its PR to be linked and merged" };
-  if (pr.state === "open") return { kind: "waiting", why: `PR #${pr.number} to merge` };
-  if (pr.state === "closed") return { kind: "waiting", why: `a merged PR: #${pr.number} was closed without merging` };
+  if (pr?.state !== "merged") {
+    if (!landing) return undefined;
+    if (!pr) return { kind: "waiting", why: "its PR to be linked and merged" };
+    return pr.state === "open" ? { kind: "waiting", why: `PR #${pr.number} to merge` } : { kind: "waiting", why: `a merged PR: #${pr.number} was closed without merging` };
+  }
   if (!pr.sha) return { kind: "bypassed", missing: [`PR #${pr.number}'s head at the merge`] };
   if (pr.mergedAt === undefined) return { kind: "bypassed", missing: [`GitHub's time for the merge of PR #${pr.number}`] };
   const missing = heldAtShipping(view, t, pr, pr.sha, pr.mergedAt);
   if (missing.length) return { kind: "bypassed", missing };
+  if (!landing) return undefined;
   const merged: CheckArtifact = { kind: "pr", repo: pr.repo, pr: pr.number, sha: pr.sha };
   if (t.then === "merge") return { kind: "landed", artifact: merged };
   if (t.then === "release:tag") return releaseOf(view.github, pr) ? { kind: "landed", artifact: merged } : { kind: "waiting", why: `a release that contains PR #${pr.number}` };

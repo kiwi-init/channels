@@ -594,6 +594,10 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
         reject(landingWrong);
         break;
       }
+      if (ev.state === "cancelled" && doneGate({ github: c.github, checks: c.checks, branchPrefix: c.branchPrefix }, task)?.kind === "bypassed") {
+        reject(`${taskId(task.id)} shipped while its ship gate was shut: only a person or the lead closes it, with a reason`);
+        break;
+      }
       const open = openRound(task);
       const verdictWrong = ev.verdict ? verdictRefusal(task, ev.verdict, ev, mayFinish, open) : null;
       if (verdictWrong) {

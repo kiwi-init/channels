@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 import type { CheckArtifact, CheckAsk } from "@kiwi/core/checks.ts";
 import { doneGate, inRange, landingsDue } from "@kiwi/core/done-gate.ts";
+import { landingWaits } from "@kiwi/core/prs.ts";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 import { PROTOCOL_VERSION, wellFormed, type Event, type Kind, type Message, type Payload } from "@kiwi/core/protocol.ts";
 import { fold, type Roster } from "@kiwi/core/state.ts";
@@ -41,8 +42,19 @@ async function channel(then: string = "merge") {
   const opened = (t: number, sha: string) => github([{ event: "pull_request", action: "opened", number: 7, state: "open", branch: `T${t}-x`, sha }]);
   const merged = (t: number, sha: string, when: number) =>
     github([{ event: "pull_request", action: "closed", number: 7, state: "closed", merged: true, merge: M1, branch: `T${t}-x`, sha, happened: when }]);
-  const ci = (sha: string, run: number, conclusion: string | undefined, when: number, attempt = 1) =>
-    github([{ event: "check_run", sha, name: "build", run, attempt, status: conclusion ? "completed" : "in_progress", ...(conclusion ? { conclusion, happened: when } : {}) }]);
+  const ci = (sha: string, run: number, conclusion: string | undefined, when: number | undefined, attempt = 1) =>
+    github([
+      {
+        event: "check_run",
+        sha,
+        name: "build",
+        run,
+        attempt,
+        status: conclusion ? "completed" : "in_progress",
+        ...(conclusion ? { conclusion } : {}),
+        ...(when !== undefined ? { happened: when } : {}),
+      },
+    ]);
   const state = () => fold(log, roster, at(10_000));
   const task = async (): Promise<number> => (await ev("ann", { op: "task.add", title: "export", owner: "ann", review: "mac" })).seq;
   const approve = async (t: number, sha: string, runs?: number[]) => {
@@ -161,6 +173,7 @@ describe("the done gate (#623 §5)", () => {
     expect(doneGate(c.state(), c.state().tasks.get(t)!)).toEqual({ kind: "bypassed", missing: ["CI run 11 green before the merge"] });
     await c.ci(S1, 11, "success", merge - 2_000);
     expect(doneGate(c.state(), c.state().tasks.get(t)!)?.kind).toBe("landed");
+    await c.ci(S1, 11, undefined, merge + 30_000, 2);
     await c.ci(S1, 11, "failure", merge + 60_000, 2);
     expect(doneGate(c.state(), c.state().tasks.get(t)!)?.kind).toBe("landed");
   });
@@ -262,6 +275,90 @@ describe("the done gate (#623 §5)", () => {
     expect(wellFormed({ ...base, ev: { op: "task.landed", task: 3, artifact: prAt(S1) } })).toBe(true);
     expect(wellFormed({ ...base, ev: { op: "task.landed", task: 3, artifact: { kind: "pr", repo: R, pr: 7, sha: "abc" } } })).toBe(false);
     expect(wellFormed({ ...base, ev: { op: "task.landed", task: 3 } })).toBe(false);
+  });
+
+  describe("a rerun of a recorded CI run counts as it stood at the merge (#1365)", () => {
+    async function rerun() {
+      const c = await channel();
+      const t = await c.task();
+      await c.opened(t, S1);
+      await c.ci(S1, 11, undefined, at(1));
+      await c.ci(S1, 11, "success", at(2));
+      await c.approve(t, S1, [11]);
+      return { c, t, merge: at(c.log.length + 20) };
+    }
+
+    test("a rerun started before the merge and still running at it shuts the gate", async () => {
+      const { c, t, merge } = await rerun();
+      await c.ci(S1, 11, undefined, merge - 5_000, 2);
+      await c.merged(t, S1, merge);
+      expect(doneGate(c.state(), c.state().tasks.get(t)!)).toEqual({ kind: "bypassed", missing: ["CI run 11 green before the merge"] });
+    });
+
+    test("a rerun started before the merge whose green is reported late still holds", async () => {
+      const { c, t, merge } = await rerun();
+      await c.ci(S1, 11, undefined, merge - 5_000, 2);
+      await c.merged(t, S1, merge);
+      await c.ci(S1, 11, "success", merge - 1_000, 2);
+      expect(doneGate(c.state(), c.state().tasks.get(t)!)?.kind).toBe("landed");
+    });
+
+    test("a rerun that started after the merge doesn't count against it", async () => {
+      const { c, t, merge } = await rerun();
+      await c.merged(t, S1, merge);
+      await c.ci(S1, 11, undefined, merge + 5_000, 2);
+      await c.ci(S1, 11, "failure", merge + 9_000, 2);
+      expect(doneGate(c.state(), c.state().tasks.get(t)!)?.kind).toBe("landed");
+    });
+
+    test("a rerun with no trusted start time counts as started before the merge", async () => {
+      const { c, t, merge } = await rerun();
+      await c.merged(t, S1, merge);
+      await c.ci(S1, 11, undefined, undefined, 2);
+      expect(doneGate(c.state(), c.state().tasks.get(t)!)?.kind).toBe("bypassed");
+    });
+  });
+
+  describe("a merge before the approval is a bypass too (#1365)", () => {
+    test("an unapproved task whose PR merges shows the bypass, and an agent can't cancel it away", async () => {
+      const c = await channel();
+      const t = await c.task();
+      await c.opened(t, S1);
+      await c.ev("ann", { op: "task.update", task: t, state: "review", at: S1 });
+      await c.merged(t, S1, at(c.log.length + 1));
+      const s = c.state();
+      expect(s.tasks.get(t)!.state).toBe("review");
+      expect(doneGate(s, s.tasks.get(t)!)).toEqual({ kind: "bypassed", missing: ["an approval before the merge"] });
+      expect(landingWaits(s, s.tasks.get(t)!)).toBe("shipped while its ship gate was shut (missing an approval before the merge): a person closes it with a reason");
+      const cancel = await c.ev("mac", { op: "task.update", task: t, state: "cancelled", note: "merged anyway" });
+      expect(c.state().rejected.get(cancel.seq)).toBe(`T${t} shipped while its ship gate was shut: only a person or the lead closes it, with a reason`);
+      const late = await c.ev("mac", { op: "task.update", task: t, state: "done", verdict: "approved", round: 1, at: S1 });
+      expect(c.state().rejected.has(late.seq)).toBe(false);
+      expect(c.state().tasks.get(t)!.state).toBe("landing");
+      expect(doneGate(c.state(), c.state().tasks.get(t)!)?.kind).toBe("bypassed");
+      await c.ev("jow", { op: "task.update", task: t, state: "done", close: "merged before review: reviewed after" });
+      expect(c.state().tasks.get(t)!.state).toBe("done");
+      expect(doneGate(c.state(), c.state().tasks.get(t)!)).toBeUndefined();
+    });
+
+    test("a task whose review was rejected and whose PR merged anyway is a bypass", async () => {
+      const c = await channel();
+      const t = await c.task();
+      await c.opened(t, S1);
+      await c.ev("ann", { op: "task.update", task: t, state: "review", at: S1 });
+      await c.ev("mac", { op: "task.update", task: t, state: "doing", verdict: "rejected", round: 1, at: S1, note: "fix it" });
+      await c.merged(t, S1, at(c.log.length + 1));
+      const s = c.state();
+      expect(s.tasks.get(t)!.state).toBe("doing");
+      expect(doneGate(s, s.tasks.get(t)!)).toEqual({ kind: "bypassed", missing: ["an approval before the merge"] });
+    });
+
+    test("a task that isn't merged and isn't landing shows nothing", async () => {
+      const c = await channel();
+      const t = await c.task();
+      await c.opened(t, S1);
+      expect(doneGate(c.state(), c.state().tasks.get(t)!)).toBeUndefined();
+    });
   });
 });
 
