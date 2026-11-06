@@ -6,4 +6,5 @@ const WORDS: Record<string, string> = {
   terminal: "Show your agents' terminals and mark the ones that need you",
 }
 
-export const needWords = (need: string): string => (need.startsWith("net:") ? `Talk to ${need.slice(4)}` : (WORDS[need] ?? need))
+export const needWords = (need: string): string =>
+  need.startsWith("net:") ? `Talk to ${need.slice(4)}` : need.startsWith("render:") ? `Draw ${need.slice(7)} attachments in chat, live` : (WORDS[need] ?? need)

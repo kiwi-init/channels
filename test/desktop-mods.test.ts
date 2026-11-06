@@ -35,6 +35,12 @@ describe("a mod's mod.json", () => {
     expect(checkManifest({ ...base, needs }, "linear-panel", "3.3.0")).toEqual({ ok: true, manifest: { ...base, needs } });
   });
 
+  test("drawing a kind of attachment is offered, named by one lowercase word (T6869)", () => {
+    expect(checkManifest({ ...base, needs: ["render:figure"] }, "linear-panel", "3.3.0")).toEqual({ ok: true, manifest: { ...base, needs: ["render:figure"] } });
+    expect(needKind("render:figure")).toBe("render");
+    for (const bad of ["render", "render:", "render:Figure", "render:figure-light", "render:2d", "render:a.b"]) expect(needKind(bad)).toBeNull();
+  });
+
   test("anything that isn't an object with a version is refused", () => {
     expect(checkManifest(null, "x", "3.3.0").ok).toBe(false);
     expect(checkManifest([], "x", "3.3.0").ok).toBe(false);

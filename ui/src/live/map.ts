@@ -506,6 +506,7 @@ export function messagesOf(state: ChannelState, messages: readonly Wire[], me: s
     const prs = prLinks(text).map((link) => prOf(state, link))
     const said = phraseOf(m, me, (name) => (name === me ? "you" : nameIn(state, name)), new Set((m.re ?? []).flatMap((seq) => bySeq.get(seq)?.from ?? [])))
     const images = gone ? [] : (m.imgs ?? []).flatMap((img, i) => (isRasterMime(img.mime) ? [pictures.get(m.seq, i, img.name)] : []))
+    const files = gone || m.block ? [] : (m.files ?? [])
     const ask = askOf.get(m.seq)
     out.push({
       seq: m.seq,
@@ -525,6 +526,7 @@ export function messagesOf(state: ChannelState, messages: readonly Wire[], me: s
       ...(m.kind === "done" && m.task !== undefined && !state.rejected.has(m.seq) ? { task: m.task, done: true } : {}),
       ...(prs.length ? { prs } : {}),
       ...(images.length ? { images } : {}),
+      ...(files.length ? { files } : {}),
       ...(reactions.length ? { reactions } : {}),
       ...(ask ? { ask } : {}),
       ...(mentionsYou(m, me) ? { mentionsYou: true } : {}),

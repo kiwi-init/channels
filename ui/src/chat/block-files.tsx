@@ -1,9 +1,14 @@
-import { useEffect, useState } from "react"
+import { Suspense, useEffect, useState } from "react"
 
 import { bytesOf, sizeText } from "~/chat/doc/bytes"
 import { ImageButton, warmFeed } from "~/chat/image-button"
+import { later } from "~/kit/later"
 import type { BlockFiles, DocFile, DocImage, Image } from "~/model"
+import { modsNow, useModsVersion } from "~/mods/host"
+import { drawnKinds, shownIn } from "~/mods/shown"
 import { useAct } from "~/nav"
+
+const ShownView = later(() => import("~/mods/shown-view").then((m) => m.ShownView))
 
 type Shot = { state: "loading" } | { state: "gone"; why: string } | { state: "shown"; image: Image }
 
@@ -65,6 +70,9 @@ function DocFileChip({ code, file }: { code: string; file: DocFile }) {
 }
 
 export function BlockFilesView({ code, media, open }: { code: string; media: BlockFiles; open: (url: string, alt: string) => void }) {
+  useModsVersion()
+  const kinds = drawnKinds(modsNow())
+  const { shown, rest } = kinds.size ? shownIn(media.files, new Set(kinds.keys())) : { shown: [], rest: media.files }
   return (
     <>
       {media.imgs.length > 0 && (
@@ -74,9 +82,18 @@ export function BlockFilesView({ code, media, open }: { code: string; media: Blo
           ))}
         </div>
       )}
-      {media.files.length > 0 && (
+      {shown.length > 0 && (
+        <div className="msg-shown-list">
+          <Suspense fallback={null}>
+            {shown.map((s) => (
+              <ShownView key={`${s.kind}:${s.name}`} code={code} shown={s} mod={kinds.get(s.kind)!} />
+            ))}
+          </Suspense>
+        </div>
+      )}
+      {rest.length > 0 && (
         <div className="msg-files">
-          {media.files.map((f) => (
+          {rest.map((f) => (
             <DocFileChip key={f.pieces.map((p) => p.id).join("+") || f.name} code={code} file={f} />
           ))}
         </div>
