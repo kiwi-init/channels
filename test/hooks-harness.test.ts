@@ -370,7 +370,7 @@ test("stop style keeps Grok on the Claude block path and Cursor on followup", ()
 
   const mc = "kiwi -c proj --as mac";
   const unread = cursorStopFollowup("proj", mc, true);
-  expect(unread).toBe(`Unread Kiwi messages (proj). Run \`${mc} read\`, answer with \`${mc} reply N "…"\`, then continue.`);
+  expect(unread).toBe(`Unread Kiwi messages (proj). Run \`${mc} listen --now\`, answer with \`${mc} reply N "…"\`, then continue.`);
   expect(unread!.length).toBeLessThan(180);
   expect(unread).not.toContain("\n");
   expect(cursorStopFollowup("proj", mc, false)).toBeNull();

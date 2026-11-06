@@ -46,7 +46,7 @@ describe("Claude Code's hooks do the listening", () => {
     session.kill();
     expect(await orphan.exited).toBe(0);
     await ok(owner, ["send", "--to", me, "after the session ended"]);
-    expect(await ok(h, ["read"], S)).toContain("after the session ended");
+    expect(await ok(h, ["listen", "--now"], S)).toContain("after the session ended");
 
     // Peek: what the listener handed over is committed by the session's next hook, not by the listener.
     const peeking = spawn(h, ["hook", "listen"], S, h, input);
@@ -61,7 +61,7 @@ describe("Claude Code's hooks do the listening", () => {
     const late = await run(h, ["hook", "listen"], { ...S, CLAUDE_CODE_SESSION_ID: "L3", CLAUDE_PID: DEAD }, h, JSON.stringify({ session_id: "L3", cwd: h }));
     expect(late.code).toBe(0);
     expect(late.err).toBe("");
-    expect(await ok(h, ["read"], S)).toContain("nobody to hand this to");
+    expect(await ok(h, ["listen", "--now"], S)).toContain("nobody to hand this to");
   });
 
   test("an older Claude Code is told it can't be woken, gets no listener, and nothing nags it", async () => {

@@ -16,7 +16,7 @@ import { forgetSecretCopies } from "../config/wipe.ts";
 import { helpFor } from "./help.ts";
 import { args, ignoredOptions, opt, unexpectedOptions } from "./args.ts";
 import { die, out } from "./context.ts";
-import { commandFor, COMMANDS } from "./commands.ts";
+import { commandFor, COMMANDS, RENAMED } from "./commands.ts";
 import { fail } from "./fail.ts";
 
 // Early signals for `kiwi daemon` only (the first positional, same as the CLI). Bun plus the
@@ -63,13 +63,13 @@ if (import.meta.main) {
       process.exit(1);
     }
   }
-  const shortcuts: Record<string, string> = { s: "status", t: "tasks" };
-  const command = await commandFor(shortcuts[cmd] ?? cmd);
+  const command = await commandFor(cmd);
+  const renamed = Object.hasOwn(RENAMED, cmd) ? RENAMED[cmd] : undefined;
   if (command && cmd !== "relay") forgetSecretCopies();
   if (command && cmd !== "daemon" && cmd !== "relay" && cmd !== "hook") await refreshListeners();
   // One runtime for the whole command: the relay over HTTP, and this computer's files.
   const runtime = ManagedRuntime.make(AgentLive);
-  const exit = await runtime.runPromiseExit(command ? command() : die(`unknown command "${cmd}" (see: kiwi help)`));
+  const exit = await runtime.runPromiseExit(command ? command() : die(renamed ? `${cmd} is now kiwi ${renamed}` : `unknown command "${cmd}" (see: kiwi help)`));
   if (Exit.isFailure(exit)) await runtime.runPromise(fail(exit.cause));
   else if (cmd !== "relay") {
     const ignored = cmd === "daemon" || cmd === "hook" ? [] : ignoredOptions();

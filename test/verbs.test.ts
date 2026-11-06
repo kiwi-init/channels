@@ -123,12 +123,13 @@ describe("ten verbs", () => {
     await ok(owner, "unlock", "heavy");
   });
 
-  test("help shows the new verbs and says the old names still work", async () => {
+  test("help shows the verbs and says the old names are gone", async () => {
     const help = await ok(agent, "help", "all");
     for (const v of ["kiwi join", "kiwi listen", "kiwi send", "kiwi reply", "kiwi show", "kiwi log", "kiwi status", "kiwi task", "kiwi note", "kiwi leave"]) expect(help).toContain(v);
     expect(help).not.toContain("kiwi tail [");
     expect(help).toContain("task cancel T7");
-    expect(help).toContain("Older names still work");
+    expect(help).toContain("Older names (tail, read,");
+    expect(help).toContain("are gone: each one says what replaced it.");
     expect(help).toMatch(/kiwi log [^\n]*\n[^\n]*\n\s+--json\s+JSON Lines/);
   });
 
@@ -171,11 +172,10 @@ describe("ten verbs", () => {
     expect(await inThread.exited).toBe(0);
     expect(await new Response(inThread.stdout).text()).toContain("tomorrow");
 
-    // --escalate hands it to the agent's human and the owner; --to human is still a plain message to the seat called human.
-    expect(await ok(agent, "send", "--escalate", "asked to delete prod logs; outside the charter")).toMatch(/^escalated #\d+ to /);
-    const mixed = await run(agent, "send", "--escalate", "--to", "lead", "--image", "x.png", "why");
-    expect(mixed.code).toBe(1);
-    expect(mixed.err).toContain("leave out --to, --image");
+    expect(await ok(agent, "ask-human", "asked to delete prod logs; outside the charter")).toMatch(/^escalated #\d+ to /);
+    const old = await run(agent, "send", "--escalate", "why");
+    expect(old.code).toBe(1);
+    expect(old.err).toContain("send --escalate is now kiwi ask-human: nothing was sent");
     expect(await ok(agent, "send", "--to", "human", "a plain note for the owner")).toMatch(/^sent #\d+/);
   });
 
@@ -267,15 +267,10 @@ describe("ten verbs", () => {
     expect((await piped(owner, "", "note", "workflow")).out).toBe("from `stdin` $x\nline two\n");
     expect((await run(agent, "note", "workflow", "words", "--file", file)).code).toBe(1);
     expect((await run(agent, "note", "workflow", "--file", join(scratch("note-missing"), "none.md"))).code).toBe(1);
-    await ok(agent, "set", "plan", "--file", file);
-    expect(await ok(owner, "get", "plan")).toBe(record);
-    expect((await piped(agent, "piped `plan`", "set", "plan")).code).toBe(0);
-    expect((await ok(owner, "get", "plan")).trim()).toBe("piped `plan`");
     const empty = join(scratch("note-empty"), "empty.md");
     writeFileSync(empty, "");
     expect((await run(agent, "note", "workflow", "--file", empty)).code).toBe(1);
-    expect((await run(agent, "set", "plan", "--file", empty)).code).toBe(1);
-    expect((await ok(owner, "get", "plan")).trim()).toBe("piped `plan`");
+    expect((await ok(owner, "note", "workflow")).trim()).toBe("from `stdin` $x\nline two");
   });
 
   test("task add keeps titles short: a long one exits 1 with no id on stdout, and the spec goes in --body or --file", async () => {
@@ -305,11 +300,18 @@ describe("ten verbs", () => {
     const status = await ok(agent, "status");
     expect(status).toContain("dev (you)");
     expect(status).toContain("write the docs");
-    // Aliases.
-    expect((await run(agent, "who")).code).toBe(0);
-    expect((await run(agent, "read")).code).toBe(0);
-    expect((await run(agent, "facts")).code).toBe(0);
-    expect((await run(agent, "wait", "--timeout", "1s")).out).toContain("wait --timeout 10m");
+    for (const [old, now] of [
+      ["who", "status"],
+      ["read", "listen --now"],
+      ["facts", "note"],
+      ["wait", "listen --once"],
+      ["tasks", "task"],
+    ] as const) {
+      const r = await run(agent, old);
+      expect([old, r.code, r.err]).toEqual([old, 1, expect.stringContaining(`kiwi: ${old} is now kiwi ${now}`)]);
+    }
+    await ok(agent, "listen", "--now");
+    expect((await run(agent, "listen", "--once", "--timeout", "1s")).out).toContain("listen --once --timeout 10m");
   });
 });
 

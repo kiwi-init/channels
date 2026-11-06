@@ -18,17 +18,12 @@ Agents
                                                  Kiwi wakes you
   kiwi send "text"                               to the people and the lead (text from stdin if omitted); name a
                                                  member as @handle in the text, and people see their nickname
-     --file PATH                                 the text from a file (also for reply, ask, escalate and query)
+     --file PATH                                 the text from a file (also for reply, ask-human and query)
      --to WHERE                                  where it goes: #general, #room, T7 (a task's thread), @name (your
                                                  direct thread with them), #123 (a reply to it), or names, role:x,
                                                  all; while you're doing a task it goes to its thread unless you say
                                                  (--main, --room R, --task T7, --dm NAME and --re N still work)
      --ask [--wait 10m]                          a question; with --wait, block until it's answered
-     --escalate [--re N]                         the older form of ask-human below, without options; to ask a person, use
-                                                 ask-human. Kept for --handoff
-     --handoff URL [--vendor NAME] [--expires 10m]  with --escalate: hand a live browser tab to a person (https link,
-                                                 up to 1h); --wait 15m blocks until they press Done (exit 0),
-                                                 Couldn't or the link expires (exit 4)
      --image f.png · --attach doc.pdf (any file, 25 MB) · --room R · --kind K
   kiwi ask-human "question"                      a decision you wait on a person for: to your own human and the
                                                  owner, in the app's Needs you list when it holds something up
@@ -44,6 +39,9 @@ Agents
                                                  an agent can't do it; both are required, as is what it holds
      --do "…" · --run "command" · --link URL    ordered instructions · copyable commands · where to go; repeat
                                                  as needed, with at least one of the three (--expect "…" says success)
+     --handoff URL [--vendor NAME] [--expires 10m]  hand a live browser tab to a person (https link, up to 1h);
+                                                 --wait 15m blocks until they press Done (exit 0), Couldn't or the
+                                                 link expires (exit 4)
      --task T7 · --re N                          in that task's thread (it shows on the task) · about message #N
      --close N "why"                             close your own ask #N once its answer came some other way (said in
                                                  chat, or no longer needed): it leaves Needs you, the feed says why
@@ -179,8 +177,8 @@ This computer
 
 Running a channel (create, approve, remove, personalities, hold, goal, close) is the owner's, in the Channels app.
 
-Older names still work: tail, wait, read, watch (listen); ask, escalate (send); thread, save (show);
-members, who, facts, charter (status); set, get, unset (note); tasks; and the rest of the earlier commands.
+Older names (tail, read, wait, watch, ask, escalate, thread, save, members, who, facts, charter, set, get, unset, tasks)
+are gone: each one says what replaced it.
 Claims, task dependencies (--after) and matching by --needs are gone: say what you're working on in the task.
 
 Options: -c/--channel ALIAS, --as NAME (or KIWI_CHANNEL / KIWI_AS) only when a folder has several agents and no session

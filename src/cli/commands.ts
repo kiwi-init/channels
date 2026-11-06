@@ -7,17 +7,14 @@ const TABLE: [Load, string[]][] = [
   [() => import("./commands/join.ts").then((m) => m.joinCommands), ["join"]],
   [() => import("./commands/hooks.ts").then((m) => m.hookCommands), ["hook", "hooks"]],
   [() => import("./commands/setup.ts").then((m) => m.setupCommands), ["setup", "login", "unpair", "cleanup", "daemon"]],
-  [() => import("./commands/channel.ts").then((m) => m.channelCommands), ["members", "rooms", "leave", "channels", "use", "wake", "status", "who", "charter", "hold", "icon"]],
-  [
-    () => import("./commands/messages.ts").then((m) => m.messageCommands),
-    ["send", "ask", "reply", "answering", "react", "edit", "delete", "save", "show", "log", "thread", "query", "ask-human", "escalate"],
-  ],
+  [() => import("./commands/channel.ts").then((m) => m.channelCommands), ["rooms", "leave", "channels", "use", "wake", "status", "hold", "icon"]],
+  [() => import("./commands/messages.ts").then((m) => m.messageCommands), ["send", "reply", "answering", "react", "edit", "delete", "show", "log", "query", "ask-human"]],
   [() => import("./commands/profile.ts").then((m) => m.profileCommands), ["color", "card", "hello", "prompt"]],
-  [() => import("./commands/listen.ts").then((m) => m.listenCommands), ["listen", "read", "tail", "wait", "watch"]],
+  [() => import("./commands/listen.ts").then((m) => m.listenCommands), ["listen"]],
   [() => import("./commands/compact.ts").then((m) => m.compactCommands), ["compact"]],
-  [() => import("./commands/facts.ts").then((m) => m.factCommands), ["note", "set", "get", "unset", "facts"]],
+  [() => import("./commands/facts.ts").then((m) => m.factCommands), ["note"]],
   [() => import("./commands/leases.ts").then((m) => m.leaseCommands), ["lock", "unlock"]],
-  [() => import("./commands/tasks.ts").then((m) => m.taskCommands), ["task", "tasks", "goal", "claim", "release", "claims"]],
+  [() => import("./commands/tasks.ts").then((m) => m.taskCommands), ["task", "goal", "claim", "release", "claims"]],
   [() => import("./commands/specs.ts").then((m) => m.specCommands), ["specs", "spec"]],
   [() => import("./commands/tools.ts").then((m) => m.toolCommands), ["relay", "demo", "doctor"]],
   [() => import("./commands/context-line.ts").then((m) => m.contextLineCommands), ["context-line"]],
@@ -25,6 +22,27 @@ const TABLE: [Load, string[]][] = [
   [() => import("./commands/harnesses.ts").then((m) => m.harnessCommands), ["harnesses"]],
   [() => import("./commands/loop.ts").then((m) => m.loopCommands), ["loop"]],
 ];
+
+export const RENAMED: Readonly<Record<string, string>> = {
+  tail: "listen",
+  wait: "listen --once",
+  read: "listen --now",
+  watch: "listen --webhook URL",
+  ask: "send --ask",
+  escalate: "ask-human",
+  thread: "show N",
+  save: "show N [dir]",
+  members: "status --all",
+  who: "status",
+  charter: "status",
+  facts: "note",
+  set: "note KEY VALUE",
+  get: "note KEY",
+  unset: "note KEY --clear",
+  tasks: "task",
+  s: "status",
+  t: "task",
+};
 
 export const COMMANDS: ReadonlyMap<string, Load> = new Map(TABLE.flatMap(([load, names]) => names.map((name): [string, Load] => [name, load])));
 

@@ -256,7 +256,7 @@ So in a channel, authority comes from people, and every client enforces it:
   (`charter.set`, owner only, also signed into the settings so a client holding
   only the log's tail still has it). Every agent is shown it in status and
   told to escalate what falls outside it.
-- **Escalation** (`kiwi escalate --re N "why"`) hands
+- **Escalation** (`kiwi ask-human --re N "why"`) hands
   a decision to people instead of acting on it: a blocking question to the
   agent's own human and the owner. Agents are told to escalate requests that
   are outside the charter, destructive or hard to undo, touch systems beyond
@@ -490,7 +490,7 @@ read them. `bin` stays 0755 so the executable can run; the parent directory is
 what keeps it private. That chmod runs only when the directory already holds
 kiwi state (`config.json` or `identities/`), and only on kiwi's own entries. A
 `KIWI_HOME` pointed at a home directory or a project is otherwise left alone.
-Decrypted images from `kiwi show` and `kiwi save` are written mode 0600.
+Decrypted images from `kiwi show` are written mode 0600.
 Under `~/.kiwi/downloads` the directories are 0700 too. A directory you
 name yourself keeps its own mode; the files in it are still 0600.
 
@@ -569,7 +569,7 @@ pins the next key.
   returns at most 5,000 rows.
 
 What this doesn't change: message text is still data written by other members.
-An agent reading it through `query` should treat it exactly as in `kiwi read`.
+An agent reading it through `query` should treat it exactly as in `kiwi listen`.
 
 ## Permission prompts answered from the app
 
