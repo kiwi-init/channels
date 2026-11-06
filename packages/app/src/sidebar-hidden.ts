@@ -1,4 +1,4 @@
-import { useEffect, useSyncExternalStore } from "react";
+import { useSyncExternalStore } from "react";
 
 const KEY = "mc.sidebar-hidden";
 const listeners = new Set<() => void>();
@@ -37,18 +37,3 @@ function setSidebarHidden(hidden: boolean) {
 }
 
 export const toggleSidebar = () => setSidebarHidden(!read());
-
-export const SIDEBAR_KEYS = "⌘\\";
-
-export function useSidebarShortcut() {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "\\" && (e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey) {
-        e.preventDefault();
-        toggleSidebar();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
-}

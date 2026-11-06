@@ -1,6 +1,7 @@
-import { Suspense, useEffect, useEffectEvent, useState, type CSSProperties, type DragEvent } from "react"
+import { Suspense, useState, type CSSProperties, type DragEvent } from "react"
 
 import { nextWithNews } from "@kiwi/channel/news.ts"
+import { useCommands } from "~/commands/table"
 import { cx } from "~/kit/bits"
 import { later } from "~/kit/later"
 import { Icon } from "~/kit/icons"
@@ -35,22 +36,16 @@ export function Rail() {
   const [menu, setMenu] = useState<Menu | null>(null)
   const [fresh, setFresh] = useState<string | null>(null)
   const save = (next: typeof folders) => app.actions.setPrefs({ folders: next })
-  const step = useEffectEvent((dir: 1 | -1) => {
+  const step = (dir: 1 | -1) => {
     const from = ordered.findIndex((c) => c.code === on)
     const news = ordered.map((c, i) => ({ open: i === from, fresh: c.unread > 0, needs: c.needsYou, count: c.unread }))
     const next = nextWithNews(ordered, news, from, dir)
     if (next) go({ to: "channel", code: next.code })
-  })
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (!e.altKey || e.metaKey || e.ctrlKey || e.shiftKey || (e.key !== "ArrowDown" && e.key !== "ArrowUp")) return
-      e.preventDefault()
-      e.stopPropagation()
-      step(e.key === "ArrowDown" ? 1 : -1)
-    }
-    window.addEventListener("keydown", onKey, true)
-    return () => window.removeEventListener("keydown", onKey, true)
-  }, [])
+  }
+  useCommands([
+    { id: "nav.next-news", run: () => step(1) },
+    { id: "nav.previous-news", run: () => step(-1) },
+  ])
   const dragOver = (e: DragEvent) => {
     if (!moving) return
     e.preventDefault()

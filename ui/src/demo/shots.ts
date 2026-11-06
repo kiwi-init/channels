@@ -13,6 +13,7 @@ export interface Shot {
   calm?: true
   onboarding?: true
   folder?: FolderThemesView
+  keys?: unknown
 }
 
 const kiwi = (nav: Partial<Nav> = {}): Shot => ({ scenario: "full", channel: "kiwi", nav })
@@ -149,6 +150,10 @@ export const SHOTS: Record<string, Shot> = {
   "settings-update-downloading": { scenario: "update-downloading", channel: "kiwi", nav: { page: "settings", section: "about" } },
   "settings-update-blocked": { scenario: "update-blocked", channel: "kiwi", nav: { page: "settings", section: "about" } },
   "settings-about": kiwi({ page: "settings", section: "about" }),
+  "settings-shortcuts": {
+    ...kiwi({ page: "settings", section: "shortcuts" }),
+    keys: { "app.palette": ["mod+k", "mod+p"], "view.sidebar": "mod+shift+l", "chat.find": "mod+f", "nav.back": "mod+kk" },
+  },
   "channel-settings-guest": { scenario: "full", channel: "studio", nav: { modal: { kind: "channel" } } },
   "agent-manager": { scenario: "full", channel: "studio", nav: { modal: { kind: "person", name: "quill" } } },
   "agent-yours-trusted": { scenario: "full", channel: "studio", nav: { modal: { kind: "person", name: "pip" } } },

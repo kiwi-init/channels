@@ -1,3 +1,4 @@
+import { LinkSquare02Icon } from "@hugeicons/core-free-icons"
 import "~/styles/tasks.css"
 import "~/styles/github.css"
 
@@ -7,7 +8,7 @@ import { checksSummary } from "~/github/groups"
 import { Branch, Checks, checksLine, IssueMark, issueTone, issueWord, PR_TONES, PR_WORDS, PrMark, Size, TaskLink, Ticks } from "~/github/parts"
 import { cx, Heading } from "~/kit/bits"
 import { Empty } from "~/kit/empty"
-import { Icon } from "~/kit/icons"
+import { GlyphIcon } from "~/kit/icons"
 import { ago } from "~/kit/time"
 import type { Channel } from "~/model"
 import { useApp } from "~/nav"
@@ -24,7 +25,7 @@ function Out({ href, children, primary }: { href: string; children: ReactNode; p
   return (
     <a className={cx("btn is-small", primary && "is-primary")} href={href} target="_blank" rel="noreferrer noopener">
       {children}
-      {primary && <Icon name="external" size={12} />}
+      {primary && <GlyphIcon glyph={LinkSquare02Icon} size={12} />}
     </a>
   )
 }

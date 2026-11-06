@@ -1,4 +1,4 @@
-import { Notification01Icon, NotificationOff01Icon } from "@hugeicons/core-free-icons"
+import { Download01Icon, Notification01Icon, NotificationOff01Icon } from "@hugeicons/core-free-icons"
 import "~/styles/channel-settings.css"
 import "~/styles/new-room.css"
 
@@ -128,13 +128,13 @@ function General({ channel, onEnd }: { channel: Channel; onEnd: () => void }) {
       <Group title="History">
         <Row label="Transcript" hint="Markdown, readable anywhere">
           <button type="button" className="btn is-small" disabled={saving !== null} onClick={() => save("transcript")}>
-            <Icon name="download" size={14} />
+            <GlyphIcon glyph={Download01Icon} size={14} />
             {saving === "transcript" ? "Saving…" : "Download"}
           </button>
         </Row>
         <Row label="Signed log" hint="JSON lines, every message signed">
           <button type="button" className="btn is-small" disabled={saving !== null} onClick={() => save("log")}>
-            <Icon name="download" size={14} />
+            <GlyphIcon glyph={Download01Icon} size={14} />
             {saving === "log" ? "Saving…" : "Download"}
           </button>
         </Row>

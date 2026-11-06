@@ -1,4 +1,4 @@
-import { PaintBoardIcon } from "@hugeicons/core-free-icons"
+import { CommandIcon, ComputerPhoneSyncIcon, PaintBoardIcon } from "@hugeicons/core-free-icons"
 import { useEffect } from "react"
 
 import { cx } from "~/kit/bits"
@@ -8,20 +8,24 @@ import { useApp, type Section } from "~/nav"
 import { AgentsSection } from "~/settings/agents"
 import { ComputersSection } from "~/settings/computers"
 import { AboutSection, AccountSection, AppearanceSection } from "~/settings/sections"
+import { ShortcutsSection } from "~/settings/shortcuts"
+import { useCommandTable } from "~/commands/table"
 import { useSideways } from "~/kit/sideways"
 import { SideCards } from "~/shell/updates"
 
 const SECTIONS: readonly (readonly [Section, string, IconName | Glyph])[] = [
   ["account", "Account", "account"],
   ["appearance", "Appearance", PaintBoardIcon],
-  ["computers", "Computers and phones", "devices"],
+  ["computers", "Computers and phones", ComputerPhoneSyncIcon],
   ["agents", "Agents", "agent"],
+  ["shortcuts", "Shortcuts", CommandIcon],
   ["about", "About", "info"],
 ]
 
 export function Settings() {
   const navRef = useGlide<HTMLElement>(".side-row.is-on")
   const { nav, go } = useApp()
+  const file = useCommandTable().file
   useSideways(navRef, nav.section)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -44,7 +48,7 @@ export function Settings() {
       </header>
       <nav ref={navRef} className="set-nav" aria-label="Settings sections">
         <ul>
-          {SECTIONS.map(([id, label, icon]) => {
+          {SECTIONS.filter(([id]) => id !== "shortcuts" || file).map(([id, label, icon]) => {
             const on = nav.section === id
             return (
               <li key={id}>
@@ -77,6 +81,8 @@ function Current({ section }: { section: Section }) {
       return <ComputersSection />
     case "agents":
       return <AgentsSection />
+    case "shortcuts":
+      return <ShortcutsSection />
     case "about":
       return <AboutSection />
   }
