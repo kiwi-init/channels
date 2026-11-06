@@ -48,7 +48,7 @@ describe("the UI contract", () => {
 
   test("a desktop without the GitHub mod's default install keeps its own UI, and with it its GitHub tab (T6270)", () => {
     const range = `^${UI_REQUIRES}`;
-    for (const old of ["3.0.0", "3.6.0", "3.7.0"]) expect(Bun.semver.satisfies(old, range)).toBe(false);
+    for (const old of ["3.0.0", "3.8.0", "3.9.0"]) expect(Bun.semver.satisfies(old, range)).toBe(false);
     expect(Bun.semver.satisfies(UI_CONTRACT, range)).toBe(true);
   });
 

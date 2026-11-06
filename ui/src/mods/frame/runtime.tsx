@@ -13,7 +13,20 @@ import { Field } from "~/kit/form"
 import { Track } from "~/kit/glide"
 import { ago } from "~/kit/time"
 import { Icon } from "~/mods/frame/glyphs"
-import { MOD_PROTOCOL, type FromFrame, type ModFetchResult, type ModGithub, type ModMessage, type ModOpen, type ModTarget, type ModTerminal, type ModTerminalMark, type Surface, type TerminalOp, type ToFrame } from "~/mods/protocol"
+import {
+  MOD_PROTOCOL,
+  type FromFrame,
+  type ModFetchResult,
+  type ModGithub,
+  type ModMessage,
+  type ModOpen,
+  type ModTarget,
+  type ModTerminal,
+  type ModTerminalMark,
+  type Surface,
+  type TerminalOp,
+  type ToFrame,
+} from "~/mods/protocol"
 
 type Waiting = { resolve: (r: unknown) => void; reject: (e: Error) => void }
 
