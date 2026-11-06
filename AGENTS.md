@@ -15,6 +15,7 @@ and the most important of them all: we can fix everything!
 
 ## Branches and CI
 - Small commits. Before every push, run the checks for the area you touched, then a plain `git push`.
+- A change that touches the UI shows before and after screenshots on its PR. Attach them with `--attach` on `gh pr create`, `gh pr edit` or `gh pr comment` (for example `gh pr comment <N> --attach ./before.png --attach ./after.png`), which needs `gh` 2.99.0 or newer. If `gh --version` is older, ask the human to consider upgrading it. Until they do, push the shots to the `pr-shots` branch under `<PR number>/` and link them in the PR as `raw.githubusercontent.com` URLs at that commit.
 - Long-running processes (CI, checks, tests, builds, servers, waiting on a CI run) run detached, in background, so a turn interruption does not kill them: start them with the agent tool's background mode or, in the shell, with `nohup <command> > file.log 2>&1 &` (or `setsid`), never with a bare `&`, which does not detach the process from the shell; send output to a log file and follow the log or the completion notice instead of blocking the turn waiting.
 
 ## Authorship

@@ -299,7 +299,8 @@ function tellWait(s: AgentSession, state: ChannelState, me: string, w: Work, ses
       wait.tellAt = null;
       return yield* say(`${head}, and there's nobody to tell`);
     }
-    const sent = yield* s.send(waitingText(w, session, minutes), { to }).pipe(
+    const landing = session.kind === "coding" && state.tasks.get(session.task)?.state === "landing";
+    const sent = yield* s.send(waitingText(w, session, minutes, "kiwi", landing), { to }).pipe(
       Effect.as(true),
       Effect.catchCause(() => Effect.succeed(false)),
     );

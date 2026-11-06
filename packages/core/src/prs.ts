@@ -1,5 +1,8 @@
 import { inlineText } from "./membership.ts";
-import { prChecks, rulesOf, type ChannelState, type GithubPr } from "./state.ts";
+import type { Task } from "./state/types.ts";
+import { prChecks, releaseOf, rulesOf, type ChannelState, type GithubPr } from "./state.ts";
+
+export const REVIEW_CHECK = "kiwi/review";
 
 export interface PrChecks {
   passed: number;
@@ -75,4 +78,22 @@ export function taskOfBranch(branch: string | undefined, prefix: string | null):
   if (!re) branchRes.set(prefix, (re = new RegExp(`^(?:[\\w.-]+\\/)?${prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(\\d{1,9})(?:$|[-_/.])`, "i")));
   const m = re.exec(branch);
   return m ? Number(m[1]) : null;
+}
+
+export function reviewNotRequired(state: Pick<ChannelState, "landing" | "repos" | "github">): string[] {
+  if (state.landing !== "merge") return [];
+  return state.repos.filter((repo) => !rulesOf(state.github, repo)?.required.includes(REVIEW_CHECK));
+}
+
+export function landingWaits(state: ChannelState, task: Pick<Task, "id" | "state" | "then">): string | null {
+  if (task.state !== "landing" || !task.then || task.then === "none") return null;
+  if (task.then === "run") return "waits for its run, then a post check quoting the run id";
+  if (task.then.startsWith("release:npm:")) return `waits for ${task.then.slice("release:npm:".length)} on npm, confirmed by a post check`;
+  const linked = taskPr(state, task.id)?.pr;
+  if (!linked) return "waits for its PR to be linked and merged";
+  const pr = `PR #${linked.number}`;
+  if (linked.state === "closed") return `waits: ${pr} was closed without merging`;
+  if (linked.state === "open") return `waits for ${pr} to merge`;
+  if (task.then === "release:tag" && !releaseOf(state.github, linked)) return `waits for a release that contains ${pr}`;
+  return `${pr} ${task.then === "release:tag" ? "is released" : "is merged"}: waits for the done gate to confirm it`;
 }

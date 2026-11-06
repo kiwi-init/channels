@@ -1,9 +1,6 @@
 import { builtinModules } from "node:module";
 import { parseSync, type Argument, type Class, type Directive, type Expression, type Statement } from "oxc-parser";
-
-export const RELEASE_ID = "com.kiwiinit.channels";
-
-export const TEST_ID = "com.kiwiinit.channels.test";
+import { RELEASE_ID, TEST_ID } from "./bundle-ids.ts";
 
 export function testBuildProblems(testBuild: boolean, identifier: string, versionJson: string): string[] {
   if (!testBuild) return [];

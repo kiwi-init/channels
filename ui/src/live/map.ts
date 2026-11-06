@@ -5,7 +5,7 @@ import type { Card, DocBlockRef, Event } from "@kiwi/core/protocol.ts"
 import { permissionAnswer } from "@kiwi/core/permission.ts"
 import { describeEvent, proofLabel } from "@kiwi/core/format.ts"
 import { memberLoad, showsLoad } from "@kiwi/core/load.ts"
-import { checksOf, FAILED, prLinks, taskOfBranch, taskPr } from "@kiwi/core/prs.ts"
+import { checksOf, FAILED, landingWaits, prLinks, taskOfBranch, taskPr } from "@kiwi/core/prs.ts"
 import { stageOf } from "@kiwi/core/stage.ts"
 import { editable, GENERAL_ROOM, ignored, isQuiet, isRasterMime, isOverlay, type Message as Wire } from "@kiwi/core/protocol.ts"
 import { rootOf, sentTo } from "@kiwi/core/room-rules.ts"
@@ -668,6 +668,11 @@ function suggestionFor(state: ChannelState, t: CoreTask): { name: string; why: W
   return top ? { name: top.name, why: wrote(top.reasons[0] ?? "has its context") } : undefined
 }
 
+const landsWaiting = (state: ChannelState, t: CoreTask): { waits?: string } => {
+  const waits = landingWaits(state, t)
+  return waits ? { waits } : {}
+}
+
 export function tasksOf(state: ChannelState, held: ReadonlySet<number>, me: string, messages: readonly Wire[]): Task[] {
   const waiting = tasksAwaitingPeople(state)
   const you = state.members.get(me)
@@ -704,7 +709,7 @@ export function tasksOf(state: ChannelState, held: ReadonlySet<number>, me: stri
       history: history.get(t.id) ?? [],
       archived: !!t.archived,
       ...(t.cancelled ? { cancelled: true } : {}),
-      ...(t.then ? { lands: { then: t.then, ...((t.lander ?? t.owner) ? { by: t.lander ?? t.owner } : {}) } } : {}),
+      ...(t.then ? { lands: { then: t.then, ...((t.lander ?? t.owner) ? { by: t.lander ?? t.owner } : {}), ...landsWaiting(state, t) } } : {}),
       ...(t.closedWith ? { closedWith: wrote(t.closedWith) } : {}),
       ...(review ? { youReview: review } : {}),
       ...(suggested ? { suggested } : {}),
