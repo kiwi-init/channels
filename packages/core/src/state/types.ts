@@ -100,7 +100,7 @@ interface TaskProof {
   label?: string;
 }
 
-type RoundResult = { kind: "open" } | { kind: Verdict; by: string; seq: number; ts: number } | { kind: "withdrawn"; seq: number };
+type RoundResult = { kind: "open" } | { kind: Verdict; by: string; seq: number; ts: number; runs?: number[] } | { kind: "withdrawn"; seq: number };
 
 export interface ReviewRound {
   n: number;
@@ -110,6 +110,7 @@ export interface ReviewRound {
   seq: number;
   ts: number;
   result: RoundResult;
+  stale?: number;
 }
 
 export interface Task {

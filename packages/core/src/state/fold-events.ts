@@ -16,7 +16,10 @@ import {
 import { free, take } from "./leases.ts";
 import { unnamedTasks } from "./compact.ts";
 import { leadCheckpointKeyRefusal } from "./lead.ts";
-import { addRelease, applyGithub, dropRelease, repoKey, type GithubState } from "./github.ts";
+import { addRelease, applyGithub, dropRelease, prKey, repoKey, type GithubState } from "./github.ts";
+import { prLinks, taskOfBranch } from "../prs.ts";
+import { recordedRuns } from "../review-check.ts";
+import { sameHead } from "../stage.ts";
 import { reposOf } from "./repos.ts";
 import { omit } from "../omit.ts";
 import { inlineText } from "../membership.ts";
@@ -80,6 +83,8 @@ function membersOnly(c: FoldCtx, member: FoldMember, m: Message, ev: { members: 
   if (!inRoom(ev, member.name, m.pk)) return "whoever changes a members-only room stays in it";
   return null;
 }
+
+const runsOf = (runs: number[]): { runs?: number[] } => (runs.length ? { runs } : {});
 
 export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember, at: number, reject: (why: string) => void): void {
   const { members, keysByName, scopesByKey, scopeSets, roleSets, setRole, tasks, facts, rooms, roomsSince, nameTaken } = c;
@@ -265,7 +270,22 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
         reject("only the owner's app posts GitHub's news");
         break;
       }
+      const heads = new Map([...c.github.prs].map(([key, pr]) => [key, pr.sha]));
       applyGithub(c.github, ev.items, m.seq);
+      for (const [key, pr] of c.github.prs) {
+        if (!pr.sha || pr.state !== "open" || heads.get(key) === pr.sha) continue;
+        for (const t of tasks.values()) {
+          const last = t.rounds.at(-1);
+          if (t.state !== "landing" || last?.result.kind !== "approved" || !last.at || sameHead(last.at, pr.sha)) continue;
+          const linked = taskOfBranch(pr.branch, c.branchPrefix) === t.id || !!t.proof?.some((p) => prLinks(p.url).some((l) => prKey(l.repo, l.number) === key));
+          if (!linked) continue;
+          last.stale = m.seq;
+          t.state = "review";
+          t.approvedBy = undefined;
+          t.notes.push({ seq: m.seq, by: m.from, ts: at, text: `new head ${pr.sha.slice(0, 7)} on ${pr.repo}#${pr.number} after the approval: back to review` });
+          t.updatedAt = at;
+        }
+      }
       break;
     }
 
@@ -538,7 +558,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       if (open && state && state !== "review")
         open.result =
           ev.verdict && mayFinish
-            ? { kind: ev.verdict, by: m.from, seq: m.seq, ts: at }
+            ? { kind: ev.verdict, by: m.from, seq: m.seq, ts: at, ...(ev.verdict === "approved" ? runsOf(ev.runs ?? (open.at ? recordedRuns(c.github, open.at) : [])) : {}) }
             : state === "done" && !cancel && ev.close === undefined
               ? { kind: "approved", by: m.from, seq: m.seq, ts: at }
               : { kind: "withdrawn", seq: m.seq };

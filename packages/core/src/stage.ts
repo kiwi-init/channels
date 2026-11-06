@@ -17,7 +17,7 @@ type Ref = { kind: "pr"; repo: string; number: number } | { kind: "sha"; repo: s
 
 const SHA_MIN = 7;
 
-const sameHead = (at: string, head: string): boolean => at === head || (at.length >= SHA_MIN && head.length >= SHA_MIN && (head.startsWith(at) || at.startsWith(head)));
+export const sameHead = (at: string, head: string): boolean => at === head || (at.length >= SHA_MIN && head.length >= SHA_MIN && (head.startsWith(at) || at.startsWith(head)));
 
 const short = (sha: string): string => sha.slice(0, SHA_MIN);
 
@@ -25,7 +25,7 @@ function lastVerdict(t: Task): ReviewRound | undefined {
   return [...t.rounds].reverse().find((r) => r.result.kind === "approved" || r.result.kind === "rejected");
 }
 
-function linkedPr(state: ChannelState, t: Task): GithubPr | undefined {
+export function linkedPr(state: ChannelState, t: Task): GithubPr | undefined {
   const byBranch = taskPr(state, t.id)?.pr;
   if (byBranch) return byBranch;
   for (const p of [...(t.proof ?? [])].reverse())

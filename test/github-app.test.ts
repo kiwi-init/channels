@@ -144,18 +144,20 @@ describe("diffs and review checks through the relay", () => {
     expect((await room("GET", "/github/diff?repo=ojow/channels&sha=nope", member)).status).toBe(400);
   });
 
-  test("only the owner posts the kiwi/review check, with the verdict as its conclusion", async () => {
-    const body = { repo: "ojow/channels", sha, verdict: "approved", task: 45, note: "Looks right." };
+  test("only the owner turns kiwi/review green; any member may turn it waiting or failed", async () => {
+    const body = { repo: "ojow/channels", sha, verdict: "approved", tasks: [45], note: "Looks right." };
+    const last = () => JSON.parse(calls.filter((c) => c.path === "/repos/ojow/channels/check-runs").at(-1)!.body) as Record<string, unknown>;
     expect((await room("POST", "/github/check", member, body)).status).toBe(403);
     expect(await (await room("POST", "/github/check", owner, body)).json()).toEqual({ url: "https://github.com/ojow/channels/runs/1" });
-    const posted = JSON.parse(calls.filter((c) => c.path === "/repos/ojow/channels/check-runs").at(-1)!.body) as Record<string, unknown>;
-    expect(posted).toEqual({ name: REVIEW_CHECK, head_sha: sha, status: "completed", conclusion: "success", output: { title: "T45 approved in Kiwi", summary: "Looks right." } });
-    await room("POST", "/github/check", owner, { ...body, verdict: "rejected", note: "" });
-    expect(JSON.parse(calls.filter((c) => c.path === "/repos/ojow/channels/check-runs").at(-1)!.body)).toMatchObject({
-      conclusion: "failure",
-      output: { title: "T45: changes requested in Kiwi", summary: "Changes requested." },
-    });
+    expect(last()).toEqual({ name: REVIEW_CHECK, head_sha: sha, status: "completed", conclusion: "success", output: { title: "T45 approved in Kiwi", summary: "Looks right." } });
+    expect((await room("POST", "/github/check", member, { ...body, verdict: "waiting", tasks: [45, 46], note: "" })).status).toBe(200);
+    expect(last()).toEqual({ name: REVIEW_CHECK, head_sha: sha, status: "in_progress", output: { title: "T45, T46: waiting in Kiwi", summary: "Not ready to ship yet." } });
+    expect((await room("POST", "/github/check", member, { ...body, verdict: "rejected", note: "" })).status).toBe(200);
+    expect(last()).toMatchObject({ status: "completed", conclusion: "failure", output: { title: "T45: changes requested in Kiwi", summary: "Changes requested." } });
+    await room("POST", "/github/check", owner, { repo: "ojow/channels", sha, verdict: "rejected", task: 7 });
+    expect(last()).toMatchObject({ conclusion: "failure", output: { title: "T7: changes requested in Kiwi" } });
     expect((await room("POST", "/github/check", owner, { ...body, verdict: "maybe" })).status).toBe(400);
+    expect((await room("POST", "/github/check", owner, { ...body, tasks: [] })).status).toBe(400);
   });
 
   test("only the owner comments on a PR of a connected repo (the link back to its task)", async () => {

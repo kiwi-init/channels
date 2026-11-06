@@ -38,6 +38,9 @@ import {
 import type { PermissionReply, PermissionSettled, PermissionShown } from "../permission.ts";
 import { MissingKey, Rejected } from "../refusals.ts";
 import type { ChannelCore } from "./core.ts";
+import { downgradeHeld, downgradeRefusal } from "../review-check.ts";
+import type { Outgoing } from "../ship-gate.ts";
+import type { ReviewCheck } from "./github.ts";
 import { RelayError, Unreachable, type Refused } from "./errors.ts";
 import { received } from "./history.ts";
 import { MAX_WAKE } from "../push.ts";
@@ -110,6 +113,7 @@ const patient = <A, E, R>(attempt: Effect.Effect<A, E, R>, left: number): Effect
 
 export class ChannelSending {
   onSent: ((seq: number, message: Message | null) => void) | null = null;
+  downgradesFor: ((m: Outgoing) => ReviewCheck[]) | null = null;
 
   constructor(
     private readonly ch: ChannelCore,
@@ -185,6 +189,14 @@ export class ChannelSending {
         if (!known(named)) yield* this.ch.fx.history(listed?.since ?? 0).pipe(Effect.catchCause(() => Effect.succeed(null)));
       }
       if (named && !known(named)) return yield* new Rejected(`this app doesn't know a room ${named} yet, so it won't send there: fetch the channel and try again`);
+      for (const c of this.downgradesFor?.(payload) ?? [])
+        yield* this.ch.fx.postReviewCheck(c).pipe(
+          Effect.catchIf(
+            (err) => !downgradeHeld(err),
+            () => Effect.succeed(null),
+          ),
+          Effect.mapError((err) => new Rejected(downgradeRefusal(c, err))),
+        );
       const signed = yield* Effect.promise(() => sign(this.ch.identity, payload));
       const cid = b64url(crypto.getRandomValues(new Uint8Array(16)));
       const inside = named ? (this.ch.memberRooms.get(named)?.members ?? this.ch.roomNow.get(named)?.meta?.members) : undefined;
