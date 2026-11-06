@@ -29,6 +29,8 @@ const claudeDir = scratch("claude");
 const owner = scratch("owner");
 const agentA = scratch("a");
 const agentB = scratch("b");
+const bin = scratch("bin");
+writeFileSync(join(bin, "kiwi"), `#!/bin/sh\nexec ${JSON.stringify(process.execPath)} ${JSON.stringify(join(import.meta.dir, "../src/cli/main.ts"))} "$@"\n`, { mode: 0o755 });
 const steps: Step[] = [];
 
 const session = (id: string): Env => ({ CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: id, CLAUDE_PID: String(process.pid), AI_AGENT: "claude-code_2-1-296_agent" });
@@ -36,7 +38,7 @@ const session = (id: string): Env => ({ CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID:
 function spawn(home: string, args: string[], env: Env, stdin?: string) {
   return Bun.spawn(kiwiCmd(args), {
     cwd: home,
-    env: { ...process.env, KIWI_HOME: home, KIWI_RELAY: relay, CLAUDE_CONFIG_DIR: claudeDir, CLAUDE_PROJECT_DIR: "", KIWI_MODEL: "claude-opus-5-5", ...env },
+    env: { ...process.env, PATH: `${bin}:${process.env.PATH ?? ""}`, KIWI_HOME: home, KIWI_RELAY: relay, CLAUDE_CONFIG_DIR: claudeDir, CLAUDE_PROJECT_DIR: "", KIWI_MODEL: "claude-opus-5-5", ...env },
     stdin: stdin === undefined ? "ignore" : new TextEncoder().encode(stdin),
     stdout: "pipe",
     stderr: "pipe",
