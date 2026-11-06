@@ -8,8 +8,8 @@ import { childEnv, sessionEnv } from "../child-env.ts";
 import { kiwiHome } from "../daemon-client.ts";
 import type { Host } from "../host.ts";
 import { modsHost, type ModsHost } from "../mods-host.ts";
-import { placedSeatsOf, terminalCalls, type Run } from "../mods-terminal.ts";
-import type { SnippetHome } from "../mods-terminal-snippet.ts";
+import { placedSeatsOf, terminalCalls, type PlacedSeat, type Run } from "../mods-terminal.ts";
+import type { SnippetHome, TerminalSnippets } from "../mods-terminal-snippet.ts";
 import { UI_CONTRACT } from "../ui-contract.ts";
 import { runKiwi } from "./kiwi.ts";
 
@@ -64,6 +64,25 @@ function writeTty(device: string, text: string): boolean {
   }
 }
 
+const placedSeats = async (): Promise<PlacedSeat[]> => placedSeatsOf((await runKiwi(["wake", "seats", "--json"])).stdout);
+
+const rexBin = (): string | null => found("rex", [process.env["REX_BIN_DIR"] ?? "", REX_APP]);
+
+async function applyLive(copy: string, s: TerminalSnippets | null): Promise<void> {
+  const seats = await placedSeats();
+  const tmux = found("tmux");
+  if (s?.tmux && tmux) {
+    const own = path.join(process.env["TMUX_TMPDIR"] || "/tmp", `tmux-${process.getuid?.() ?? 0}`, "default");
+    const sockets = new Set([own, ...seats.flatMap((x) => (x.tmux ? [x.tmux.socket] : []))]);
+    for (const socket of sockets) if (fs.existsSync(socket)) await run([tmux, "-u", "-S", socket, "source-file", "-q", path.join(copy, "tmux.conf")]);
+  }
+  const rex = rexBin();
+  if (rex && (!s || s.rex)) {
+    const servers = [...new Set(seats.flatMap((x) => (x.rex ? [x.rex.server] : [])))];
+    for (const server of servers.length ? servers : [null]) await run([rex, ...(server ? ["-S", server] : []), "--autostart=false", "config", "reload"]);
+  }
+}
+
 function snippetHome(data: string): SnippetHome {
   return { copies: path.join(data, "mod-terminals"), record: path.join(data, "mod-terminals.json"), home: os.homedir(), env: sessionEnv() };
 }
@@ -73,31 +92,36 @@ export function modsCalls(
 ): Serves<"mods" | "modBundle" | "approveMod" | "modFetch" | "modFailed" | "setModOn" | "modsSettled" | "modIcon" | "modDetails" | "modTerminals" | "modTerminalFocus" | "modTerminalMark"> {
   let mods: ModsHost | null = null;
   let started: Promise<ModsHost> | null = null;
+  const terminal = snippetHome(host.app.path("data"));
+  const terminals = terminalCalls({
+    seats: placedSeats,
+    run,
+    tmux: () => found("tmux"),
+    rex: rexBin,
+    write: writeTty,
+    front: async () => {
+      if (process.platform === "darwin") await run(["/usr/bin/open", "-b", "com.superlogical.rex"]);
+    },
+  });
   const ready = (): Promise<ModsHost> => {
     if (started) return started;
     const m = modsHost({
       folder: path.join(kiwiHome(), "mods"),
       approvals: path.join(host.app.path("data"), "mods.json"),
       contract: UI_CONTRACT,
-      push: (list) => host.push("mods", list),
+      push: (list) => {
+        host.push("mods", list);
+        if (!list.some((v) => v.state === "on" && v.approved.includes("terminal"))) void terminals.clear();
+      },
       safe: safeAtStart,
-      terminal: snippetHome(host.app.path("data")),
+      terminal,
+      onTerminal: (name, s) => void applyLive(path.join(terminal.copies, name), s).catch(() => undefined),
     });
     mods = m;
     started = m.start().then(() => m);
     host.app.onQuit(() => mods?.stop());
     return started;
   };
-  const terminals = terminalCalls({
-    seats: async () => placedSeatsOf((await runKiwi(["wake", "seats", "--json"])).stdout),
-    run,
-    tmux: () => found("tmux"),
-    rex: () => found("rex", [process.env["REX_BIN_DIR"] ?? "", REX_APP]),
-    write: writeTty,
-    front: async () => {
-      if (process.platform === "darwin") await run(["/usr/bin/open", "-b", "com.superlogical.rex"]);
-    },
-  });
   const allowed = async (name: unknown): Promise<void> => {
     const m = (await ready()).list().find((v) => v.name === name);
     if (m?.state !== "on" || !m.needs.includes("terminal") || !m.approved.includes("terminal"))

@@ -127,6 +127,23 @@ describe("homeOf", () => {
     expect(h.asks.map((a) => a.act)).toEqual([{ kind: "approve-spec", ask: 55, v: 90 }, { kind: "approve-task", task: 94 }, { kind: "open" }])
   })
 
+  test("says what waits on you from each agent, for a terminal mod's marks: open questions as asks, reviews as tasks", () => {
+    const h = homeOf(
+      channel({
+        tasks: [task(94, "Home: one command bar"), task(7, "Terminals")],
+        asks: [
+          question("q1", 1),
+          question("q2", 2, { from: "mole" }),
+          question("q3", 3, { from: "mole", idle: true }),
+          { kind: "review", id: "r94", at: 4, from: "mole", task: 94 },
+          { kind: "review", id: "r7", at: 5, from: "mole", task: 7 },
+          { kind: "spec", id: "s55", at: 6, ask: 55, why: "approve" },
+        ],
+      })
+    )
+    expect(h.waits).toEqual({ owl: { asks: 1, tasks: [] }, mole: { asks: 1, tasks: [94, 7] } })
+  })
+
   test("a spec to approve names agents by nickname in its title (#1763)", () => {
     const h = homeOf(
       channel({ nicknames: new Map([["gentle-otter", "lead"]]), specs: [spec(55, "Pair @gentle-otter with the relay", 1)], asks: [{ kind: "spec", id: "s55", at: 1, ask: 55, why: "approve" }] })

@@ -8,8 +8,23 @@ import { addCommands } from "~/commands/rebind"
 import { bootFailed, bootGone, bootStarted } from "~/mods/boot"
 import { useApp } from "~/nav"
 import { openLinksOutside } from "~/kit/outside-links"
+import { announce } from "~/kit/toasts"
+import { homeWaits, onHome } from "~/live/store"
 import type { MOD_SIDES as SIDES_EVENT } from "~/shell/updates"
-import { fromFrame, heeded, LOOK, MOD_PROTOCOL, SIDE_HEIGHT, type ModCommand, type ModMessage, type ModTerminal, type Surface, type TerminalOp, type ToFrame } from "~/mods/protocol"
+import {
+  fromFrame,
+  heeded,
+  LOOK,
+  MOD_PROTOCOL,
+  SIDE_HEIGHT,
+  type ModCommand,
+  type ModMessage,
+  type ModTerminal,
+  type PlacedTerminal,
+  type Surface,
+  type TerminalOp,
+  type ToFrame,
+} from "~/mods/protocol"
 
 const FRAME_URL = "views://internal/mod-frame.html"
 
@@ -208,11 +223,53 @@ async function onMessage(e: MessageEvent): Promise<void> {
   }
 }
 
-function terminalCall(b: KiwiBridge, name: string, m: TerminalOp): Promise<ModTerminal[] | null> {
-  if (typeof b.modTerminals !== "function") return Promise.reject(new Error("this app is too old for a mod's terminals: update it"))
-  if (m.op === "list") return b.modTerminals(name)
-  if (m.op === "focus") return b.modTerminalFocus(name, m.seat).then(() => null)
-  return b.modTerminalMark(name, m.seat, m.mark).then(() => null)
+function withWaits(list: PlacedTerminal[]): ModTerminal[] {
+  const rooms = new Map(homeWaits().map((h) => [h.room, h.waits]))
+  return list.map((t) => ({ ...t, waits: rooms.get(t.room)?.[t.agent] ?? { asks: 0, tasks: [] } }))
+}
+
+async function focusOne(b: KiwiBridge, name: string, m: Extract<TerminalOp, { op: "focus" }>): Promise<void> {
+  try {
+    const seat = "seat" in m ? m.seat : (await b.modTerminals(name)).find((t) => t.room === m.room && t.agent === m.agent)?.id
+    if (!seat) throw new Error("that agent isn't in a tmux pane or Rex block on this computer")
+    await b.modTerminalFocus(name, seat)
+  } catch (e) {
+    announce(`${name}: ${e instanceof Error ? e.message : String(e)}`, "error")
+    throw e
+  }
+}
+
+async function terminalCall(b: KiwiBridge, name: string, m: TerminalOp): Promise<ModTerminal[] | null> {
+  if (typeof b.modTerminals !== "function") throw new Error("this app is too old for a mod's terminals: update it")
+  if (m.op === "list") return withWaits(await b.modTerminals(name))
+  if (m.op === "focus") await focusOne(b, name, m)
+  else await b.modTerminalMark(name, m.seat, m.mark)
+  return null
+}
+
+let waitsSent = ""
+let waitsTimer: ReturnType<typeof setTimeout> | null = null
+
+async function sendTerminals(): Promise<void> {
+  const b = bridge()
+  if (!b || typeof b.modTerminals !== "function") return
+  for (const { mod } of given("terminal")) {
+    if (!mod.approved.includes("terminal")) continue
+    const list = await b.modTerminals(mod.name).catch(() => null)
+    if (list) send(frames.get(keyOf(mod.name, "main")), { kiwi: MOD_PROTOCOL, type: "terminals", list: withWaits(list) })
+  }
+}
+
+function waitsMoved(): void {
+  if (!given("terminal").length) return
+  const now = JSON.stringify(homeWaits())
+  if (now === waitsSent) return
+  waitsSent = now
+  if (waitsTimer) clearTimeout(waitsTimer)
+  waitsTimer = setTimeout(() => {
+    waitsTimer = null
+    void sendTerminals()
+  }, 300)
 }
 
 function layerOf(el: HTMLElement): number {
@@ -296,9 +353,11 @@ export function ModsLayer() {
     const message = (e: MessageEvent) => void onMessage(e)
     addEventListener("message", message)
     addEventListener(MOD_MENU, messageMenu)
+    const offHome = onHome(waitsMoved)
     return () => {
       live = false
       off()
+      offHome()
       removeEventListener("message", message)
       removeEventListener(MOD_MENU, messageMenu)
     }
