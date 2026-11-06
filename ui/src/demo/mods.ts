@@ -90,6 +90,7 @@ export function showDemoMods(ask: boolean): void {
       title: "Release Radar",
       failed: null,
       side: { title: "Releases", height: 120 },
+      tab: null,
       actions: [{ id: "notes", title: "Draft release notes from this" }],
       commands: ["New release notes", "Open Release Radar"],
     },

@@ -85,6 +85,11 @@ function readModsFile(file: string): ModsFile {
 
 const writeModsFile = (file: string, m: ModsFile): void => writePrivate(file, Buffer.from(`${JSON.stringify(m, null, 2)}\n`));
 
+export function preApprove(file: string, name: string, needs: readonly string[], source: string): void {
+  const m = readModsFile(file);
+  writeModsFile(file, { ...m, approved: { ...m.approved, [name]: { needs: [...needs].sort(), source } } });
+}
+
 export function modSource(dir: string): string {
   if (fs.lstatSync(dir, { throwIfNoEntry: false })?.isSymbolicLink()) return LOCAL_SOURCE;
   const keys = kiwiKeys(dir);

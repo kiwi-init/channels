@@ -178,3 +178,8 @@ img.mod-icon {
   background: var(--decide);
   box-shadow: 0 0 0 2px var(--bg);
 }
+
+.mod-tab-slot {
+  flex: 1;
+  min-height: 0;
+}

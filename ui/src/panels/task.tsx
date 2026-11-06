@@ -22,7 +22,7 @@ import { openMessage } from "~/live/open-message"
 import { useApp } from "~/nav"
 import { nickname, Shown } from "~/names"
 import { wordsPlain, wordsRaw } from "~/words"
-import { IssueMark, issueWord, PrCard } from "~/github/parts"
+import { IssueMark, issueWord, openPr, PrCard } from "~/tasks/github-bits"
 import { PanelHead } from "~/panels/frame"
 import { moveWords, someone } from "~/panels/task-moves"
 import { TONES } from "~/tasks/row"
@@ -339,11 +339,10 @@ function Waits({ channel, waits }: { channel: Channel; waits: (PermissionAsk | Q
 }
 
 function LinkedIssue({ channel, id }: { channel: Channel; id: number }) {
-  const { go } = useApp()
   const issue = channel.issues?.find((i) => i.task === id)
   if (!issue) return null
   return (
-    <button type="button" className="gh-task" onClick={() => go({ to: "panel", panel: { kind: "issue", repo: issue.repo, number: issue.number } })}>
+    <button type="button" className="gh-task" onClick={() => openPr(issue, "issue")}>
       <IssueMark issue={issue} size={14} />
       <span className="gh-task-id num">#{issue.number}</span>
       <span className="gh-task-title">{issue.title}</span>
