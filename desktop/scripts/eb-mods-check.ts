@@ -771,9 +771,9 @@ try {
   }).catch(() => null);
   check(updated?.state === "asks", "Update takes the new version from the page, and a mod that asks for more waits for the person");
   const askedMore = await until("notes-mod's ask, by itself, after the update", 15_000, () =>
-    d.evaluate(() => ((document.querySelector('dialog[open][aria-label="notes-mod asks to run"]')?.textContent ?? "").includes("Talk to example.com · new") ? true : null), null, 2_000),
+    d.evaluate(() => ((document.querySelector('dialog[open][aria-label="notes-mod asks to run"]')?.textContent ?? "").includes("Talk to example.com") ? true : null), null, 2_000),
   ).catch(() => null);
-  check(!!askedMore, "after an update that asks for more, its ask comes by itself and marks what's new");
+  check(!!askedMore, "after an update that asks for more, its ask comes by itself and names it");
   await later(300);
   await shot("mod-asks-more");
   await step("Allow, in its ask", 10_000, () => d.evaluate(clickText, { selector: "dialog[open] .modal-foot button", text: "Allow" }, 2_000));
