@@ -25,9 +25,13 @@ on:
 # result matters there. Pushes to main share one group but never cancel the run in progress: it
 # finishes, one run waits, and a newer push replaces the waiting one, so main's full run keeps
 # finishing while merges come every few minutes. Each merge group has a ref of its own, so groups
-# never cancel each other, and a dispatched run never cancels another.
+# never cancel each other. A dispatched run replaces an older dispatched run on the same ref only
+# when it asks for exactly the same thing: the group carries a hash of the jobs, release and
+# update_from inputs, so a jobs=doc run never replaces a jobs=desktop-linux validation on the same
+# head, a release check never replaces a plain one, and dispatches never share a group with a push
+# to main, which stays uncancellable by anything but itself.
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.event.merge_group.head_ref || (github.event_name == 'push' && github.ref) || github.run_id }}
+  group: ci-${{ github.event.pull_request.number || github.event.merge_group.head_ref || (github.event_name == 'push' && github.ref) || (github.event_name == 'workflow_dispatch' && format('{0}-dispatch-j{1}-r{2}-u{3}', github.ref, inputs.jobs, inputs.release, inputs.update_from)) || github.run_id }}
   cancel-in-progress: ${{ github.event_name != 'push' }}
 
 permissions:
