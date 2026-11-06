@@ -1,10 +1,13 @@
 import { bundleMod } from "@kiwi/core/node/mod-bundle.ts";
-import { checkManifest } from "@kiwi/core/node/mod-manifest.ts";
+import { readModIcon, type IconType } from "@kiwi/core/node/mod-icon.ts";
+import { checkManifest, type ModManifest } from "@kiwi/core/node/mod-manifest.ts";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
-import type { ModFetchReply, ModFetchRequest, ModView } from "./bridge.ts";
+import type { ModDetails, ModFetchReply, ModFetchRequest, ModIcon, ModView } from "./bridge.ts";
 import { errorText, writePrivate } from "./guard.ts";
+import { copyOf, kiwiKeys, modDetails } from "./mod-details.ts";
 import { hostAllowed, SAFE_FILE, SAFE_FLAG, SAFE_LOOP, unapproved } from "./mods.ts";
 
 const MANIFEST_BYTES = 64_000;
@@ -16,6 +19,9 @@ const DROPPED_HEADERS = new Set(["cookie", "cookie2", "host", "origin", "referer
 interface Loaded {
   view: ModView;
   code: string | null;
+  art: { type: IconType; bytes: Uint8Array } | null;
+  iconWhy: string | null;
+  author: string | null;
 }
 
 export interface ModsHostOptions {
@@ -41,7 +47,6 @@ interface ModsFile {
 }
 
 const LOCAL_SOURCE = "local";
-const COPIES = ".sources.json";
 const LOOP_STARTS = 2;
 const WHY_BYTES = 300;
 
@@ -76,62 +81,32 @@ function readModsFile(file: string): ModsFile {
 
 const writeModsFile = (file: string, m: ModsFile): void => writePrivate(file, Buffer.from(`${JSON.stringify(m, null, 2)}\n`));
 
-function configValue(raw: string): string {
-  let out = "";
-  let quoted = false;
-  for (let i = 0; i < raw.length; i++) {
-    const c = raw[i];
-    if (c === "\\" && i + 1 < raw.length) {
-      const n = raw[++i];
-      out += n === "n" ? "\n" : n === "t" ? "\t" : n;
-    } else if (c === '"') quoted = !quoted;
-    else if (!quoted && (c === "#" || c === ";")) break;
-    else out += c;
-  }
-  return out.trim();
-}
-
-function copySource(dir: string): string {
-  try {
-    const copies = JSON.parse(fs.readFileSync(path.join(path.dirname(dir), COPIES), "utf8")) as unknown;
-    const copy = copies && typeof copies === "object" ? (copies as Record<string, unknown>)[path.basename(dir)] : null;
-    const source = copy && typeof copy === "object" ? (copy as { source?: unknown }).source : null;
-    return typeof source === "string" && source ? source : LOCAL_SOURCE;
-  } catch {
-    // No mod was copied out of a repo of many, or the file isn't kiwi mod add's: the folder counts as local.
-    return LOCAL_SOURCE;
-  }
-}
-
 export function modSource(dir: string): string {
   if (fs.lstatSync(dir, { throwIfNoEntry: false })?.isSymbolicLink()) return LOCAL_SOURCE;
-  let text: string;
-  try {
-    text = fs.readFileSync(path.join(dir, ".git", "config"), "utf8");
-  } catch {
-    // Not a clone kiwi mod add made: a copy it took from a repo of many, or a folder put there by hand.
-    return copySource(dir);
-  }
-  let inKiwi = false;
-  let source = "";
-  for (const line of text.split("\n")) {
-    let rest = line.trim();
-    const head = /^\[([^\]]*)\](.*)$/.exec(rest);
-    if (head) {
-      inKiwi = (head[1] ?? "").trim().toLowerCase() === "kiwi";
-      rest = (head[2] ?? "").trim();
-    }
-    const kv = inKiwi ? /^source\s*=(.*)$/i.exec(rest) : null;
-    if (kv) source = configValue(kv[1] ?? "");
-  }
-  return source || LOCAL_SOURCE;
+  const keys = kiwiKeys(dir);
+  const source = keys ? keys["source"] : copyOf(dir)?.["source"];
+  return typeof source === "string" && source ? source : LOCAL_SOURCE;
 }
 
 const firstLine = (s: string): string => (s.split("\n").find((l) => l.trim()) ?? "").trim().slice(0, WHY_BYTES);
 
+function iconOf(dir: string, m: ModManifest): Pick<Loaded, "art" | "iconWhy"> {
+  if (!m.icon) return { art: null, iconWhy: null };
+  const got = readModIcon(dir, m.icon);
+  return got.ok ? { art: { type: got.type, bytes: got.bytes }, iconWhy: null } : { art: null, iconWhy: got.why };
+}
+
+const iconHash = (bytes: Uint8Array): string => createHash("sha256").update(bytes).digest("hex").slice(0, 16);
+
 async function loadOne(dir: string, name: string, contract: string, file: ModsFile, safe: string | null): Promise<Loaded> {
   const source = modSource(dir);
-  const off = (why: string, version: string | null = null, needs: string[] = []): Loaded => ({ view: { name, version, source, needs, approved: [], state: "off", why }, code: null });
+  const off = (why: string, version: string | null = null, needs: string[] = []): Loaded => ({
+    view: { name, version, source, needs, approved: [], state: "off", why },
+    code: null,
+    art: null,
+    iconWhy: null,
+    author: null,
+  });
   let raw: unknown;
   try {
     const manifest = path.join(dir, "mod.json");
@@ -143,18 +118,20 @@ async function loadOne(dir: string, name: string, contract: string, file: ModsFi
   const checked = checkManifest(raw, name, contract);
   if (!checked.ok) return off(checked.why);
   const { version, needs } = checked.manifest;
+  const icon = iconOf(dir, checked.manifest);
+  const done = (view: ModView, code: string | null = null): Loaded => ({ view, code, ...icon, author: checked.manifest.author ?? null });
   const approval = file.approved[name];
   const approved = approval?.source === source ? approval.needs : [];
-  const base = { name, version, source, needs, approved: needs.filter((n) => approved.includes(n)) };
+  const base = { name, version, source, needs, approved: needs.filter((n) => approved.includes(n)), ...(icon.art ? { icon: iconHash(icon.art.bytes) } : {}) };
   if (unapproved(needs, approved).length)
-    return { view: approval && approval.source !== source ? { ...base, state: "asks", why: `It comes from ${source} now, not ${approval.source}.` } : { ...base, state: "asks" }, code: null };
+    return done(approval && approval.source !== source ? { ...base, state: "asks", why: `It comes from ${source} now, not ${approval.source}.` } : { ...base, state: "asks" });
   const stopped = file.off[name];
-  if (stopped?.by === "you") return { view: { ...base, state: "off", off: "you", why: "You switched it off." }, code: null };
-  if (safe) return { view: { ...base, state: "off", off: "safe", why: safe }, code: null };
+  if (stopped?.by === "you") return done({ ...base, state: "off", off: "you", why: "You switched it off." });
+  if (safe) return done({ ...base, state: "off", off: "safe", why: safe });
   const built = await bundleMod(dir);
-  if (!built.ok) return { view: { ...base, state: "off", why: built.why }, code: null };
-  if (stopped?.by === "crash" && stopped.hash === built.hash) return { view: { ...base, state: "off", off: "crash", why: `It stopped as it started: ${stopped.why}` }, code: null };
-  return { view: { ...base, state: "on", hash: built.hash }, code: built.code };
+  if (!built.ok) return done({ ...base, state: "off", why: built.why });
+  if (stopped?.by === "crash" && stopped.hash === built.hash) return done({ ...base, state: "off", off: "crash", why: `It stopped as it started: ${stopped.why}` });
+  return done({ ...base, state: "on", hash: built.hash }, built.code);
 }
 
 export function modsHost(o: ModsHostOptions) {
@@ -284,6 +261,16 @@ export function modsHost(o: ModsHostOptions) {
       if (!armed || settled) return;
       settled = true;
       writeModsFile(o.approvals, { ...readModsFile(o.approvals), unsettledStarts: 0 });
+    },
+    icon(name: string): ModIcon | null {
+      const art = loaded.get(name)?.art;
+      return art ? { type: art.type, data: Buffer.from(art.bytes).toString("base64") } : null;
+    },
+    details(name: string): ModDetails | null {
+      const l = loaded.get(name);
+      if (!l) return null;
+      const { version, source } = l.view;
+      return modDetails(path.join(o.folder, name), { name, version, source, author: l.author, iconWhy: l.iconWhy });
     },
     failed(name: string, hash: string, why: string): Promise<ModView[]> {
       const l = loaded.get(name);

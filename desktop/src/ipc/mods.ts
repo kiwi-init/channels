@@ -23,7 +23,7 @@ const offered = ({ name, from, to, commits, added, dropped }: Change): ModUpdate
 
 export function modsCalls(
   host: Host,
-): Serves<"mods" | "modBundle" | "approveMod" | "modFetch" | "modFailed" | "setModOn" | "modsSettled" | "modsInstalled" | "modUpdates" | "updateMod" | "removeMod"> {
+): Serves<"mods" | "modBundle" | "approveMod" | "modFetch" | "modFailed" | "setModOn" | "modsSettled" | "modIcon" | "modDetails" | "modsInstalled" | "modUpdates" | "updateMod" | "removeMod"> {
   let mods: ModsHost | null = null;
   let started: Promise<ModsHost> | null = null;
   const ready = (): Promise<ModsHost> => {
@@ -48,6 +48,8 @@ export function modsCalls(
     modFailed: async (name, hash, why) => (await ready()).failed(String(name), String(hash), String(why)),
     setModOn: async (name, on) => (await ready()).setOn(String(name), on === true),
     modsSettled: async () => (await ready()).settled(),
+    modIcon: async (name) => (await ready()).icon(String(name)),
+    modDetails: async (name) => (await ready()).details(String(name)),
     modsInstalled: async () => (await inModsWorker<Info[]>({ op: "list", home: kiwiHome() })).map(installed),
     modUpdates: async () => {
       const found = await inModsWorker<Found>({ op: "check", home: kiwiHome() });

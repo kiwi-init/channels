@@ -3,10 +3,13 @@ import { useCallback, useEffect, useState } from "react"
 import { bridge } from "@kiwi/secrets/secrets.ts"
 import type { ModInstalled, ModUpdate, ModView } from "../../../desktop/src/bridge.ts"
 import { Toggle } from "~/kit/form"
+import { Icon } from "~/kit/icons"
 import { modsNow, useModsVersion } from "~/mods/host"
+import { ModIcon } from "~/mods/icon"
 import { needWords } from "~/mods/needs"
 import { useApp } from "~/nav"
 import { Confirm, Group, Row } from "~/settings/controls"
+import { ModDetailsPage } from "~/settings/mod-details"
 import { Page } from "~/settings/sections"
 
 const wanted = (m: ModView): boolean => m.state === "on" || m.off === "safe"
@@ -47,12 +50,13 @@ type Asking = { kind: "update"; m: ModView; u: ModUpdate } | { kind: "remove"; m
 
 export function ModsSection() {
   useModsVersion()
-  const { toast } = useApp()
+  const { nav, go, toast } = useApp()
   const [busy, setBusy] = useState<string | null>(null)
   const [installed, setInstalled] = useState<Map<string, ModInstalled>>(new Map())
   const [updates, setUpdates] = useState<Map<string, ModUpdate>>(new Map())
   const [asking, setAsking] = useState<Asking | null>(null)
   const mods = modsNow()
+  const open = nav.mod ? mods.find((m) => m.name === nav.mod) : undefined
   const names = mods.map((m) => `${m.name}@${m.version ?? ""}`).join(" ")
 
   const fail = useCallback(
@@ -96,7 +100,6 @@ export function ModsSection() {
     const done = on && m.state === "asks" ? b.approveMod(m.name, m.needs) : b.setModOn(m.name, on)
     done.then(() => setBusy(null), fail)
   }
-
   const update = (m: ModView) => {
     const b = bridge()
     if (!b || !managed()) return
@@ -122,40 +125,43 @@ export function ModsSection() {
 
   const askUpdate = (m: ModView, u: ModUpdate) => (u.added.length || u.dropped.length ? setAsking({ kind: "update", m, u }) : update(m))
 
+  if (open) return <ModDetailsPage mod={open} />
   return (
     <Page title="Mods" lede="Each one runs in its own frame, away from your keys and messages.">
       <Group hint={mods.find((m) => m.off === "safe")?.why}>
         {mods.length ? (
-          mods.map((m) => {
-            const i = installed.get(m.name)
-            const u = updates.get(m.name)
-            return (
-              <Row
-                key={m.name}
-                label={m.version ? `${m.name} ${m.version}` : m.name}
-                hint={
-                  <>
-                    <Source m={m} i={i} />
+          mods.map((m) => (
+            <div key={m.name} className="set-row mod-row">
+              <button type="button" className="mod-open" onClick={() => go({ to: "settings", section: "mods", mod: m.name })}>
+                <ModIcon name={m.name} icon={m.icon} />
+                <span className="set-row-text">
+                  <span className="set-row-label">{m.version ? `${m.name} ${m.version}` : m.name}</span>
+                  <span className="set-row-hint">
+                    <Source m={m} i={installed.get(m.name)} />
                     {m.needs.length > 0 && <span className="set-note">{m.needs.map(needWords).join(" · ")}</span>}
                     {m.why && m.off !== "safe" && m.off !== "you" && <span className="set-note">{m.why}</span>}
-                    {i?.changed && <span className="set-note">It has changes that aren't in its source.</span>}
-                  </>
-                }
-              >
-                {u && (
-                  <button type="button" className="btn is-quiet is-small" disabled={busy === m.name} onClick={() => askUpdate(m, u)}>
-                    Update to {u.to}
+                    {installed.get(m.name)?.changed && <span className="set-note">It has changes that aren't in its source.</span>}
+                  </span>
+                </span>
+                <span className="mod-open-more">
+                  <Icon name="chevron" size={14} />
+                </span>
+              </button>
+              <div className="set-row-ctl">
+                {updates.get(m.name) && (
+                  <button type="button" className="btn is-quiet is-small" disabled={busy === m.name} onClick={() => askUpdate(m, updates.get(m.name)!)}>
+                    Update to {updates.get(m.name)!.to}
                   </button>
                 )}
                 {managed() && (
-                  <button type="button" className="btn is-quiet is-small" disabled={busy === m.name} onClick={() => setAsking({ kind: "remove", m, i })}>
+                  <button type="button" className="btn is-quiet is-small" disabled={busy === m.name} onClick={() => setAsking({ kind: "remove", m, i: installed.get(m.name) })}>
                     Remove
                   </button>
                 )}
                 {switchable(m) && <Toggle on={wanted(m)} label={`Run ${m.name}`} disabled={busy === m.name} onChange={(on) => flip(m, on)} />}
-              </Row>
-            )
-          })
+              </div>
+            </div>
+          ))
         ) : (
           <Row
             label="No mods yet"

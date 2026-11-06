@@ -118,6 +118,8 @@ export function makeBridge(t: BridgeTransport): KiwiBridge {
     modFailed: (name, hash, why) => t.call("modFailed", name, hash, why),
     setModOn: (name, on) => t.call("setModOn", name, on),
     modsSettled: () => t.call("modsSettled"),
+    modIcon: (name) => t.call("modIcon", name),
+    modDetails: (name) => t.call("modDetails", name),
     modsInstalled: () => t.call("modsInstalled"),
     modUpdates: () => t.call("modUpdates"),
     updateMod: (name) => t.call("updateMod", name),

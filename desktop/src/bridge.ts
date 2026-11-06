@@ -491,6 +491,8 @@ export interface KiwiBridge {
   modFailed(name: string, hash: string, why: string): Promise<ModView[]>;
   setModOn(name: string, on: boolean): Promise<ModView[]>;
   modsSettled(): Promise<void>;
+  modIcon(name: string): Promise<ModIcon | null>;
+  modDetails(name: string): Promise<ModDetails | null>;
   modsInstalled(): Promise<ModInstalled[]>;
   modUpdates(): Promise<ModUpdates>;
   updateMod(name: string): Promise<ModView[]>;
@@ -507,6 +509,25 @@ export interface ModView {
   why?: string;
   off?: "you" | "crash" | "safe";
   hash?: string;
+  icon?: string;
+}
+
+export interface ModIcon {
+  type: "image/svg+xml" | "image/png";
+  data: string;
+}
+
+export interface ModDetails {
+  name: string;
+  version: string | null;
+  author: string | null;
+  source: string;
+  commit: string | null;
+  installed: number | null;
+  updated: number | null;
+  bytes: number | null;
+  readme: string | null;
+  iconWhy: string | null;
 }
 
 export interface ModInstalled {
