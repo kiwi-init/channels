@@ -1,4 +1,4 @@
-import type { ModDetails, ModIcon, ModView } from "../../../desktop/src/bridge.ts"
+import type { ModDetails, ModIcon, ModInstalled, ModUpdate, ModView } from "../../../desktop/src/bridge.ts"
 import { showMods } from "~/mods/host"
 import { showModReads } from "~/mods/served"
 
@@ -67,8 +67,23 @@ const DETAILS: Record<string, ModDetails> = {
   },
 }
 
+const INSTALLED: ModInstalled[] = [
+  { name: "release-radar", source: "github.com/kiwi-init/mods/release-radar", commit: "3f9a2c1", local: false, link: null, changed: false },
+  { name: "standup-notes", source: null, commit: null, local: true, link: null, changed: false },
+  { name: "weather", source: "github.com/ana-lima/weather-mod", commit: "b81e4d0", local: false, link: null, changed: false },
+]
+
+const RADAR_UPDATE: ModUpdate = { name: "release-radar", from: "1.4.0", to: "1.5.0", commits: 3, added: [], dropped: [] }
+
 export function showDemoMods(): void {
-  showModReads({ modIcon: (name) => Promise.resolve(ICONS[name] ?? null), modDetails: (name) => Promise.resolve(DETAILS[name] ?? null) })
+  showModReads({
+    modIcon: (name) => Promise.resolve(ICONS[name] ?? null),
+    modDetails: (name) => Promise.resolve(DETAILS[name] ?? null),
+    modsInstalled: () => Promise.resolve(INSTALLED),
+    modUpdates: () => Promise.resolve({ changes: [RADAR_UPDATE], skipped: [] }),
+    updateMod: () => Promise.resolve(MODS),
+    removeMod: () => Promise.resolve(MODS),
+  })
   showMods(MODS, [
     {
       name: "release-radar",
