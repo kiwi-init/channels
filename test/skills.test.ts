@@ -141,7 +141,7 @@ describe("skills in mods (T6868)", () => {
 
   test("the brief names the skills and the command that prints one", () => {
     const brief = briefText({ alias: "dev", agent: "otter", mc: "kiwi", listen: "", skills: [{ name: "anatomy", about: "interactive figures" }] });
-    expect(brief).toContain("Skills: anatomy (interactive figures). `kiwi skill NAME` prints one when someone wants it.");
+    expect(brief).toContain("Skills: anatomy (interactive figures): `kiwi skill NAME`.");
     expect(briefText({ alias: "dev", agent: "otter", mc: "kiwi", listen: "" })).not.toContain("Skills:");
   });
 
