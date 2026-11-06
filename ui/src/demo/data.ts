@@ -45,7 +45,7 @@ export const DEMO_PREFS: Prefs = {
   reduceMotion: false,
   muted: ["interlinked", "kiwi/releases"],
   enterSends: true,
-  darkTheme: "channels-oled",
+  darkTheme: "cinder-peak",
   lightTheme: "channels-light",
   customThemes: [],
   folders: [],

@@ -12,8 +12,8 @@ Canonical sources: `ui/src/styles/tokens.css` (`:root`), `ui/src/theme/`
 
 ## 1. Identity in one line
 
-Black and white, quiet, fast. A true black canvas (white in light), ink for
-what matters and greys for the rest, the system font for what people read and
+Quiet and fast. Cinder Peak by default: a warm near-black canvas with an
+ember accent (white in light), ink for what matters and greys for the rest, the system font for what people read and
 Paper Mono for the machine's words (times, ids, counts, code). No glass, no
 blur, no gradients for show. Colour means a state, never decoration.
 
@@ -30,40 +30,43 @@ blur, no gradients for show. Colour means a state, never decoration.
   the same in every theme, except `float` and `shadow-float`, which each
   side sets (§5).
 - Settings → Appearance picks system / light / dark, and a theme for each
-  side. Built in: OLED Black (`channels-oled`, the default dark), Channels
-  Dark (`#111113`) and Channels Light (the default light), then the Rex
-  themes (`rex-themes.ts`) and the person's own. `system` leaves
+  side. Built in: Cinder Peak (`cinder-peak`, the default dark, the
+  official Channels scheme), OLED Black (`channels-oled`), Channels Dark
+  (`#111113`) and Channels Light (the default light), then the other Rex
+  themes (`rex-themes.ts`) and the person's own. The website
+  (channels.kiwiinit.com) wears Cinder Peak too. `system` leaves
   `data-theme` unset so the media query decides.
 - A theme that isn't built in is applied by `applyTheme()`: every token set
   inline on `<html>`. A custom theme is 13 base colours (background, text,
   accent, success, warning, danger, info and six ANSI-style hues);
   `compose()` in `derive.ts` derives the whole token set from them.
-- A saved Channels Dark moves to OLED Black once (`movedDark`); every other
-  saved theme is kept.
+- A saved OLED Black or Channels Dark moves to Cinder Peak once (`movedDark`,
+  `ui.prefs.cinder`); a later pick of either stays, and every other saved
+  theme is kept.
 
 ## 3. Color tokens
 
 The two built-in sides, from `tokens.css` and `channels.ts`:
 
-| Token | Dark (OLED Black) | Light |
+| Token | Dark (Cinder Peak) | Light |
 |---|---|---|
-| `bg` (canvas, rail, sidebar, panels) | `#000000` | `#ffffff` |
-| `bg-2` (raised: dialogs, cards) | `#0c0c0d` | `#f7f7f8` |
-| `bg-3` (fills: buttons, fields, tiles, tracks) | `#18181a` | `#efeff1` |
-| `ink` | `#ececef` | `#18181b` |
-| `ink-2` (secondary text, idle controls) | `#a3a3ab` | `#56565e` |
-| `ink-3` (quiet floor: hints, placeholders, meta) | `#808089` | `#6c6c74` |
-| `line` / `line-2` / `line-3` (hairlines, light to strong) | white 8 / 11 / 15% | black 6 / 9 / 13% |
-| `wash` / `wash-2` (hover, pressed, chosen) | white 4.5 / 8% | black 3.5 / 6% |
-| `scrim` (under a dialog) | black 70% | black 22% |
-| `on-ink` (text on an `ink` fill) | `#000000` | `#ffffff` |
-| `accent`, `link` | `#8ab4ff` | `#1a56db` |
+| `bg` (canvas, rail, sidebar, panels) | `#151011` | `#ffffff` |
+| `bg-2` (raised: dialogs, cards) | `#1c1718` | `#f7f7f8` |
+| `bg-3` (fills: buttons, fields, tiles, tracks) | `#252021` | `#efeff1` |
+| `ink` | `#ddccc6` | `#18181b` |
+| `ink-2` (secondary text, idle controls) | `#a39591` | `#56565e` |
+| `ink-3` (quiet floor: hints, placeholders, meta) | `#8a7e7b` | `#6c6c74` |
+| `line` / `line-2` / `line-3` (hairlines, light to strong) | ink 7.5 / 11.2 / 16.2% | black 6 / 9 / 13% |
+| `wash` / `wash-2` (hover, pressed, chosen) | ink 5.6 / 10% | black 3.5 / 6% |
+| `scrim` (under a dialog) | black 55% | black 22% |
+| `on-ink` (text on an `ink` fill) | `#151011` | `#ffffff` |
+| `accent`, `link` (ember) | `#ff6b4a` | `#1a56db` |
 | `accent-wash` | accent 14% | accent 8% |
-| `live` (online, done, passed) | `#32d074` | `#1f9a55` |
-| `doing` (working, running) | `#5b9bff` | `#2f6fe4` |
-| `review` (in review) | `#b48cff` | `#7a4fd6` |
-| `decide` (needs you) and `decide-wash` | `#f5b041`, 12% | `#a35a00`, 10% |
-| `alert` (failed, error, danger) and `alert-wash` | `#ff6259`, 12% | `#d1342a`, 8% |
+| `live` (online, done, passed) | `#97ad72` | `#1f9a55` |
+| `doing` (working, running) | `#9188c4` | `#2f6fe4` |
+| `review` (in review) | `#d47a94` | `#7a4fd6` |
+| `decide` (needs you) and `decide-wash` | `#f0a04f`, 12% | `#a35a00`, 10% |
+| `alert` (failed, error, danger) and `alert-wash` | `#f25c4a`, 12% | `#d1342a`, 8% |
 
 - `selection` is ink at 28%. `white` is for a knob or a glyph on a coloured
   fill.
@@ -73,7 +76,9 @@ The two built-in sides, from `tokens.css` and `channels.ts`:
 - `c-red … c-brown` are the member colours: a person's initials and the
   tint behind them (`.av[data-color]`, 18%). They never colour chrome.
 - `h-claude, h-codex, h-gemini, h-opencode` colour the harness badge on an agent's face.
-- Channels Dark is the same set on `#111113` / `#18181b` / `#212125`.
+- OLED Black is the cool set on true black: `#000000` / `#0c0c0d` /
+  `#18181a`, ink `#ececef`, accent `#8ab4ff`, white hairlines.
+  Channels Dark is that set on `#111113` / `#18181b` / `#212125`.
 
 ## 4. Typography
 
@@ -197,8 +202,8 @@ The two built-in sides, from `tokens.css` and `channels.ts`:
 The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
 
 - Buttons (`.btn`, `--ctl`, `r-ctl`, 500 `t-ui`, 12px sides): default on `bg-3`;
-  `is-primary` is an `ink` fill with `on-ink` text (white on black, black on
-  white), the one loud button in a view; `is-danger` is `alert` on
+  `is-primary` is an `ink` fill with `on-ink` text (light ink on cinder,
+  black on white), the one loud button in a view; `is-danger` is `alert` on
   `alert-wash`; `is-quiet` has no fill until hover (`wash`); `is-small` is
   `--ctl-sm`. There is no blue button.
 - `IconButton` (`.icon-btn`, 28px, `r-row`): `ink-2`, `wash-2` on hover and
@@ -573,7 +578,7 @@ same gestures, the same speed. The owner asked for it, so on the phone it wins o
    add a class to the mono rule if it shows the machine's words.
 2. Build from `ui/src/kit/` (`Modal`, `Field`, `Seg`, `Toggle`, `Avatar`,
    `Dot`, `Count`, `Icon`) before writing a new control.
-3. Check it in dark and light, in OLED Black and one Rex theme, at Large
+3. Check it in dark and light, in Cinder Peak, OLED Black and one other Rex theme, at Large
    text and with reduced motion.
 4. Add it to `ui/src/demo/shots.ts` and look at it:
    `bun scripts/shoot-app.ts --dist ui/dist --only <name> --theme dark,light`,

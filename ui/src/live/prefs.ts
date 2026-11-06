@@ -10,11 +10,11 @@ import { cleanThemes, deletedTheme, movedDark, savedTheme, type ThemePrefs } fro
 type Own = Pick<Prefs, "muted" | "enterSends" | "darkTheme" | "lightTheme" | "customThemes" | "folders" | "calm">
 
 const KEY = "ui.prefs"
-const MOVED = "ui.prefs.oled"
+const MOVED = "ui.prefs.cinder"
 const DEFAULTS: Own = {
   muted: [],
   enterSends: true,
-  darkTheme: "channels-oled",
+  darkTheme: "cinder-peak",
   lightTheme: "channels-light",
   customThemes: [],
   folders: [],
