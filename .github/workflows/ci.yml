@@ -116,6 +116,9 @@ jobs:
       - name: action pins
         if: ${{ !cancelled() }}
         run: bun scripts/action-pins.ts
+      - name: the ci-ok contract and the doc inventory
+        if: ${{ !cancelled() }}
+        run: bun scripts/ciok-contract.ts
 
   test-unit:
     name: test / unit
@@ -953,10 +956,13 @@ jobs:
           NEEDS: ${{ toJSON(needs) }}
           PLAN: ${{ needs.plan.outputs.run }}
         run: |
+          p=$(echo "$NEEDS" | jq -r '.plan.result // "absent from needs"')
+          if [ "$p" != "success" ]; then echo "plan: $p"; exit 1; fi
+          if [ -z "$PLAN" ]; then echo "plan produced no job selection"; exit 1; fi
           bad=$(echo "$NEEDS" | jq -r 'to_entries[] | select(.key != "plan") | select(.value.result != "success" and .value.result != "skipped") | "\(.key): \(.value.result)"')
           if [ -n "$bad" ]; then echo "$bad"; exit 1; fi
           stray=$(echo "$NEEDS" | jq -r --argjson plan "$PLAN" 'to_entries[] | select(.key != "plan") | select($plan[.key] == false) | select(.value.result == "success") | "\(.key): ran but not selected"')
           if [ -n "$stray" ]; then echo "$stray"; exit 1; fi
-          missing=$(echo "$NEEDS" | jq -r --argjson plan "$PLAN" 'to_entries[] | select(.key != "plan") | select($plan[.key] == true) | select(.value.result != "success") | "\(.key): selected by plan, \(.value.result)"')
+          missing=$(jq -n -r --argjson plan "$PLAN" --argjson needs "$NEEDS" '$plan | to_entries[] | select(.value == true) | .key as $k | ($needs[$k].result // "absent from needs") as $r | select($r != "success") | "\($k): selected by plan, \($r)"')
           if [ -n "$missing" ]; then echo "$missing"; exit 1; fi
           echo "every selected job ran and passed"
