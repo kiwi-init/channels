@@ -178,7 +178,15 @@ async function howHeard(d: Driver, why: string): Promise<void> {
   const frames = await d
     .evaluate(() => [...document.querySelectorAll("iframe")].map((f) => `${f.title} ${f.style.width}x${f.style.height} ${f.style.visibility || "shown"}`), null, 3_000)
     .catch((e: unknown) => String(e));
-  console.log(`${why}: the page answered in ${Date.now() - start} ms; heard ${JSON.stringify(kinds)}; frames ${JSON.stringify(frames)}`);
+  const types = await d.evaluate(() => (window as unknown as { __modTypes?: Record<string, number> }).__modTypes ?? {}, null, 3_000).catch((e: unknown) => String(e));
+  const mainStart = Date.now();
+  const main = await d.main("browserOpens", 3_000).then(
+    () => `answered in ${Date.now() - mainStart} ms`,
+    (e: unknown) => String(e),
+  );
+  console.log(
+    `${why}: the page answered in ${Date.now() - start} ms; heard ${JSON.stringify(kinds)}; frames ${JSON.stringify(frames)}; frame messages ${JSON.stringify(types)}; the app's main ${main}`,
+  );
 }
 
 const MESSAGE_LINK = "https://example.com/?message-link";
@@ -246,11 +254,14 @@ try {
   await firstChannel(d, 0);
   await d.evaluate(
     () => {
-      const w = window as unknown as { __modHeard?: unknown[] };
+      const w = window as unknown as { __modHeard?: unknown[]; __modTypes?: Record<string, number> };
       w.__modHeard = [];
+      w.__modTypes = {};
       addEventListener("message", (e) => {
-        const m = (e.data as { kiwiProbe?: unknown } | null)?.kiwiProbe;
+        const data = e.data as { kiwiProbe?: unknown; kiwi?: unknown; type?: unknown } | null;
+        const m = data?.kiwiProbe;
         if (m !== undefined) w.__modHeard?.push(m);
+        if (data?.kiwi === 1 && typeof data.type === "string" && w.__modTypes) w.__modTypes[data.type] = (w.__modTypes[data.type] ?? 0) + 1;
       });
       return true;
     },
@@ -409,8 +420,14 @@ try {
       was,
       2_000,
     );
+    await howHeard(d, "with the sidebar back");
+    await later(1_000);
+    await howHeard(d, "a second after the sidebar came back");
     writeMod(2);
+    await later(3_000);
+    await howHeard(d, "3 s after the mod's source changed");
     const second = await until("the mod again, after its source changed", 30_000, async () => (await heard(d)).find((m) => m["version"] === 2) ?? null).catch(() => null);
+    if (!second) await howHeard(d, "the mod didn't come back");
     check(!!second, "a saved change reloads the mod");
     await later(1_500);
     const opens = (await d.main("browserOpens")) as string[];
