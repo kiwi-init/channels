@@ -660,7 +660,11 @@ test.skipIf(!tmuxPastes)("with --harness kimi in tmux 3.7 or newer, the loop typ
   const where = scratch("tmux");
   const sock = join(where, "s");
   const logFile = join(where, "loop.log");
-  const env: Env = { ...base(agent), PATH: `${bin}:${process.env.PATH}`, SHELL: "/bin/sh", CLAUDECODE: "", CLAUDE_PID: "", CLAUDE_CODE_SESSION_ID: "" };
+  const sttyShim = scratch("stty");
+  const sttyFails = join(sttyShim, "fails");
+  writeFileSync(join(sttyShim, "stty"), `#!/bin/sh\n[ "$1" = -g ] && [ -e ${shWord(sttyFails)} ] && exit 1\nexec ${shWord(Bun.which("stty") ?? "/bin/stty")} "$@"\n`);
+  chmodSync(join(sttyShim, "stty"), 0o755);
+  const env: Env = { ...base(agent), PATH: `${sttyShim}:${bin}:${process.env.PATH}`, SHELL: "/bin/sh", CLAUDECODE: "", CLAUDE_PID: "", CLAUDE_CODE_SESSION_ID: "" };
   const line = ["exec", "env", ...Object.entries(env).map(([k, v]) => shWord(`${k}=${v}`)), ...kiwiCmd(["loop", "--harness", "kimi"]).map(shWord), `2>>${shWord(logFile)}`].join(" ");
   const tmux = (...args: string[]) => Bun.spawnSync(["tmux", "-S", sock, ...args], { stdout: "pipe", stderr: "pipe" });
   expect(tmux("new-session", "-d", "-s", "loop", "-x", "200", "-y", "50", "-c", agent, line).exitCode).toBe(0);
@@ -692,6 +696,7 @@ test.skipIf(!tmuxPastes)("with --harness kimi in tmux 3.7 or newer, the loop typ
     expect(typed.prompt).toMatch(/\(Kiwi loop launch [0-9a-f]{18}\)$/);
     await until(() => seatOf(agent)?.pid === start.pid, "the seat bound to Kimi's process").catch(fail);
     expect(seatOf(agent)?.harness).toBe("kimi");
+    writeFileSync(sttyFails, "");
 
     await until(() => seen().some((s) => s.kind === "term" && s.pid === start.pid), "the Kimi session's end").catch(fail);
     const done = seen().find((s) => s.kind === "done" && s.pid === start.pid);
@@ -699,7 +704,18 @@ test.skipIf(!tmuxPastes)("with --harness kimi in tmux 3.7 or newer, the loop typ
     expect(await ok(owner, ["--as", "human", "task", "show", id], { CLAUDECODE: "" })).toContain("status: done");
     await until(() => !pidAlive(typed.stray), "the stray listener stopped").catch(fail);
 
-    await until(() => log().includes(`${id} is over; its session ended`), "the loop back to waiting").catch(fail);
+    await until(() => log().includes(`${id} is over; its session ended`), "the task's session over").catch(fail);
+    await until(
+      () =>
+        seen()
+          .slice(before)
+          .some((s) => s.kind === "typed" && s.pid !== start.pid),
+      "the session for the task's message, which the fake never read, typed into Kimi's raw terminal",
+    ).catch(fail);
+    const next = seen()
+      .slice(before)
+      .find((s) => s.kind === "typed" && s.pid !== start.pid);
+    expect(next?.kind === "typed" && next.prompt).toContain("This session is for messages waiting on you");
     let pressed = 0;
     await until(
       () => {
