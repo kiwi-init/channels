@@ -22,7 +22,9 @@
     "grim",
     "plutil",
     "secret-tool",
-    "readelf"
+    "readelf",
+    "screencapture",
+    "import"
   ],
   "workspaces": {
     ".": {
@@ -52,7 +54,7 @@
       "project": ["src/**/*.ts", "scripts/**/*.ts"]
     },
     "ui": {
-      "entry": ["src/chat/react-native.ts", "src/chat/no-elk.ts", "src/chat/doc/screen-selection.page.ts", "src/calm/meadow.page.ts", "stubs/react-native/index.js", "src/**/*.test.{ts,tsx}"]
+      "entry": ["src/chat/react-native.ts", "src/chat/no-elk.ts", "src/chat/doc/screen-selection.page.ts", "src/calm/meadow.page.ts", "src/mods/frame/runtime.tsx", "stubs/react-native/index.js", "src/**/*.test.{ts,tsx}"]
     }
   }
 }
