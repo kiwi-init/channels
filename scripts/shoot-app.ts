@@ -2,6 +2,8 @@ import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { chromium, webkit } from "playwright-core";
 
+import { reactionsOn, settleRequests } from "./settle-requests.ts";
+
 const args = process.argv.slice(2);
 const flag = (name: string): string | undefined => {
   const i = args.indexOf(name);
@@ -45,6 +47,7 @@ try {
   const errors: string[] = [];
   let at = "";
   page.on("pageerror", (e) => errors.push(`${at}: ${e.message}`));
+  const reactions = settleRequests(page, reactionsOn(base));
   for (const theme of themes) {
     for (const name of names) {
       at = `${name}-${theme}`;
@@ -56,11 +59,13 @@ try {
           // about:blank before the first shot has no storage to clear
         }
       });
+      await reactions.settled();
       await page.goto(`${base}?shot=${name}&theme=${theme}`);
       await page.waitForLoadState("networkidle");
       if (textScale) await page.evaluate((scale) => document.documentElement.style.setProperty("--text-scale", scale), textScale);
       await page.evaluate(() => document.fonts.ready);
       await page.waitForTimeout(350);
+      await reactions.settled();
       const file = join(out, `${name}-${theme}.png`);
       await page.screenshot({ path: file });
       console.log(file);

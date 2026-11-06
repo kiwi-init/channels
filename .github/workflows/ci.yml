@@ -370,6 +370,11 @@ jobs:
       - name: ui stash clicks in WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-stash-click.ts --dist ui/dist
+      - name: shots wait for reaction requests in Chromium and WebKit
+        if: ${{ !cancelled() }}
+        run: |
+          bun scripts/shots-settle.ts --browser chromium --dist ui/dist
+          bun scripts/shots-settle.ts --browser webkit --dist ui/dist
       - name: ui scrolling up a feed of event runs keeps loading to its first row, in WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-scroll-up.ts --dist ui/dist
