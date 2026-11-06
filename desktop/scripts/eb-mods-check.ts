@@ -246,6 +246,27 @@ function files(dir: string): string[] {
   });
 }
 
+function stacks(why: string): void {
+  if (process.platform !== "darwin" || !app.pid) return;
+  const pids = (args: string[]): string[] => (spawnSync("pgrep", args, { encoding: "utf8" }).stdout ?? "").split("\n").filter(Boolean);
+  for (const pid of [String(app.pid), ...pids(["-P", String(app.pid)]), ...pids(["-f", "com.apple.WebKit.WebContent"])]) {
+    const file = join(root, `sample-${pid}.txt`);
+    const run = process.env["CI"]
+      ? spawnSync("sudo", ["-n", "sample", pid, "1", "-file", file], { stdio: "ignore", timeout: 20_000 })
+      : spawnSync("sample", [pid, "1", "-file", file], { stdio: "ignore", timeout: 20_000 });
+    const lines = existsSync(file) ? readFileSync(file, "utf8").split("\n") : [];
+    const name = lines.find((l) => l.startsWith("Process:"))?.replace(/\s+/g, " ") ?? `no sample (exit ${run.status})`;
+    const at = lines.findIndex((l) => l.includes("com.apple.main-thread"));
+    const total = Number.parseInt(lines[at]?.trim() ?? "", 10);
+    const hot: string[] = [];
+    for (let i = at + 1; at >= 0 && i < lines.length && lines[i]?.trim() && !/^\s{4}\d+ Thread_/.test(lines[i] ?? ""); i++) {
+      const line = (lines[i] ?? "").replace(/^[\s+!:|]*/, "");
+      if (Number.parseInt(line, 10) >= total / 2) hot.push(line.slice(0, 180));
+    }
+    console.log(`${why}: ${name} (${pid}), main thread in ${total} samples:\n  ${hot.join("\n  ")}`);
+  }
+}
+
 writeMod(1);
 writeQuietMod();
 const app = launch(exe, testEnv(root, join(root, "driver.sock"), RELAY));
@@ -427,7 +448,10 @@ try {
     await later(3_000);
     await howHeard(d, "3 s after the mod's source changed");
     const second = await until("the mod again, after its source changed", 30_000, async () => (await heard(d)).find((m) => m["version"] === 2) ?? null).catch(() => null);
-    if (!second) await howHeard(d, "the mod didn't come back");
+    if (!second) {
+      await howHeard(d, "the mod didn't come back");
+      stacks("the mod didn't come back");
+    }
     check(!!second, "a saved change reloads the mod");
     await later(1_500);
     const opens = (await d.main("browserOpens")) as string[];
@@ -441,6 +465,7 @@ try {
 } catch (e) {
   problems.push(e instanceof Error ? e.message : String(e));
   console.log(`FAIL ${problems.at(-1)}`);
+  stacks("stuck");
 } finally {
   await stop(app);
   await daemonStop(join(root, ".kiwi"), 2_000).catch(() => false);
