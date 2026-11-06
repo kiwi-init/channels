@@ -471,6 +471,8 @@ export interface KiwiBridge {
   deleteFolderTheme(file: string): Promise<FolderThemesView>;
   keyBindings(): Promise<KeyBindingsView>;
   onKeyBindings(cb: (view: KeyBindingsView) => void): () => void;
+  layouts(): Promise<LayoutsView>;
+  onLayouts(cb: (view: LayoutsView) => void): () => void;
   setPersonalities(list: Personality[]): Promise<void>;
   contextLine(): Promise<"on" | "off" | null>;
   setContextLine(to: "on" | "off"): Promise<"on" | "off" | null>;
@@ -523,6 +525,21 @@ export interface FolderThemeView extends FolderThemeInput {
 export interface FolderThemesView {
   dir: string;
   themes: FolderThemeView[];
+  skipped: { file: string; why: string }[];
+}
+
+export type LayoutArea = "rail" | "sidebar" | "chat" | "panel";
+
+export interface LayoutView {
+  file: string;
+  name: string;
+  areas: LayoutArea[];
+  widths: Partial<Record<Exclude<LayoutArea, "chat">, number>>;
+}
+
+export interface LayoutsView {
+  dir: string;
+  layouts: LayoutView[];
   skipped: { file: string; why: string }[];
 }
 

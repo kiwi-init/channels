@@ -6,7 +6,8 @@ import path from "node:path";
 import type { FolderThemesView } from "../desktop/src/bridge.ts";
 import { useHost } from "../desktop/src/host.ts";
 import { themesCalls } from "../desktop/src/ipc/themes.ts";
-import { MAX_THEME_BYTES, readFolder, removeTheme, themeOf, themesDir, watchFolder, writeTheme } from "../desktop/src/theme-folder.ts";
+import { MAX_FILE_BYTES as MAX_THEME_BYTES, watchFolder } from "../desktop/src/json-folder.ts";
+import { readFolder, removeTheme, themeOf, themesDir, writeTheme } from "../desktop/src/theme-folder.ts";
 import { fakeHost } from "./fake-host.ts";
 
 const homes: string[] = [];
