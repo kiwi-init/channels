@@ -383,7 +383,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   useEffect(() => {
     if (!firstVisit.current || !messages.length) return
     firstVisit.current = false
-    markSeenIn(roomId, firstMarks(state, messages))
+    markSeenIn(roomId, firstMarks(state, messages, me))
   }, [firstVisit, messages, state, roomId])
 
   useEffect(() => {

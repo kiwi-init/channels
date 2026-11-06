@@ -65,7 +65,7 @@ describe("a fresh device starts caught up in members-only DMs (#1886)", () => {
   test("the first-visit marks clear a read members-only DM on a person's second seat", () => {
     const s = roomState()
     const messages = [said(5, "tia", { room: "ours" })]
-    const marks = firstMarks(s, messages)
+    const marks = firstMarks(s, messages, "jow-2")
     expect(marks[placeKey(dmPlace("jow", "tia"))]).toBe(5)
     expect(unreadWith(s, messages, "jow-2", marks)).toBe(0)
   })
@@ -73,15 +73,15 @@ describe("a fresh device starts caught up in members-only DMs (#1886)", () => {
   test("a message past the marks still counts", () => {
     const s = roomState()
     const messages = [said(5, "tia", { room: "ours" }), said(6, "tia", { room: "ours" })]
-    expect(unreadWith(s, messages, "jow-2", firstMarks(s, [messages[0]!]))).toBe(1)
+    expect(unreadWith(s, messages, "jow-2", firstMarks(s, [messages[0]!], "jow-2"))).toBe(1)
   })
 
   test("a true direct thread and a plain room keep their marks", () => {
     const place = dmPlace("jow", "tia")
     const direct = { ...state([], [[9, place]]), places: new Map([[placeKey(place), { place, last: 9, count: 1 }]]) } as unknown as ChannelState
-    expect(firstMarks(direct, [said(9, "tia")])[placeKey(place)]).toBe(9)
+    expect(firstMarks(direct, [said(9, "tia")], "jow")[placeKey(place)]).toBe(9)
     const plain = { ...state([[8, "r2"]]), rooms: new Map([["r2", { id: "r2", name: "two", createdBy: null, at: 0 }]]) } as unknown as ChannelState
-    expect(firstMarks(plain, [said(8, "ana", { room: "r2" })])[roomSeenKey("r2")]).toBe(8)
+    expect(firstMarks(plain, [said(8, "ana", { room: "r2" })], "jow")[roomSeenKey("r2")]).toBe(8)
   })
 })
 

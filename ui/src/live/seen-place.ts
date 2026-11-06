@@ -39,10 +39,19 @@ function readKeyOf(state: ChannelState, m: Wire, me: string): string {
   return other ? placeKey(dmPlace(mine, other)) : roomSeenKey(id)
 }
 
-export function firstMarks(state: ChannelState, messages: readonly Wire[]): Record<string, number> {
+export function firstMarks(state: ChannelState, messages: readonly Wire[], seat: string): Record<string, number> {
   const marks: Record<string, number> = {}
   for (const [k, v] of state.places) marks[k] = v.last
   for (const [id, seq] of roomLast(state, messages)) marks[roomSeenKey(id)] = seq
+  const me = rootOf(seat, state.members)
+  for (const m of messages) {
+    if (m.kind === "event" || (state.placeOf.get(m.seq) ?? { kind: "main" as const }).kind !== "main") continue
+    const room = state.rooms.get(roomOfMessage(state, m))
+    const other = room?.dm && room.members ? dmOther(state, seat, room.members) : undefined
+    if (!other) continue
+    const key = placeKey(dmPlace(me, other))
+    marks[key] = Math.max(marks[key] ?? 0, m.seq)
+  }
   return marks
 }
 
