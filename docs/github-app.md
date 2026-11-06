@@ -1,132 +1,43 @@
-# The Kiwi Channels GitHub App
+---
+description: Connect a repo so the channel sees its pull requests, issues and checks, and a review can gate a merge.
+group: Connect
+order: 21
+---
 
-GitHub tells a channel about its pull requests, issues, checks, pushes and
-workflow runs through a GitHub App, **Kiwi Channels** on channels.kiwiinit.com,
-whose webhooks point at the relay. The relay can't
-read channels, so it doesn't post anything itself: it checks each webhook's
-signature, keeps a trimmed copy (repo, PR number and title, branch, commit,
-check name and result, who did it; never a body or a diff) in the queue of
-every channel that connected that repo, and the owner's app turns the queue
-into signed, encrypted channel events the next time it's open. Queued items
-are dropped once drained, and after 7 days or 500 items either way.
+# GitHub
 
-What the relay can see: which repos a channel connected, and those events
-until the owner's app drains them. GitHub already has both.
+Connect a repo and the channel sees its pull requests, issues, checks, pushes and workflow runs as they happen. The relay can't read or sign in the channel, so it never posts there itself: it queues a trimmed slip, and your app posts it, signed and encrypted, the next time it's open.
 
-**Checked:** a channel's owner connects only repos their linked GitHub account
-can push to. When the repo list changes, the owner's app sends the relay its
-GitHub link token with that one request. The relay asks GitHub, as the owner,
-for each repo on the list (`GET /repos/<owner>/<name>`, needing push or admin),
-refuses the whole list if any repo fails, and keeps nothing of the token.
-Every change re-checks the whole list, so a repo the owner lost access to
-can't stay connected past the next change. The app sends the token only to a
-relay whose `/v1/config` names a GitHub App, and never to clear the list. The
-check needs only that token, not the App's private key, so a relay with the
-webhook secret and the client id but no key checks the same way. A relay with
-no webhook secret receives no GitHub events, so it takes a repo list unchecked:
-there's nothing for it to route.
+<!-- figure: github -->
 
-## Register the App (once, by whoever runs the relay)
+## Set it up
 
-1. GitHub → Settings → Developer settings → GitHub Apps → **New GitHub App**
-   (under the organization, if the repos live in one).
-2. **Name**: `Kiwi Channels` (or `Kiwi Channels (your relay)`). **Homepage URL**: the relay's
-   site, e.g. `https://kiwiinit.com`.
-3. **Webhook**: active. **Webhook URL**: `https://<relay>/v1/github/webhook`.
-   **Webhook secret**: a long random string (`openssl rand -hex 32`); keep it
-   for step 6.
-4. **Repository permissions**: Pull requests, Issues, Contents, Actions and
-   Metadata read-only; Checks **read and write** (the review check, below).
-   Nothing else.
-5. **Subscribe to events**: Pull request, Issues, Check run, Push, Workflow run.
-   Where can it be installed: only on this account, unless others will use
-   your relay.
-6. Give the relay the secret:
-   - Cloudflare: `wrangler secret put GITHUB_WEBHOOK_SECRET`
-   - Bun relay: `GITHUB_WEBHOOK_SECRET=… kiwi relay`
+1. **Link your account.** In the app, Settings → **GitHub** → **Link GitHub** shows a code and opens `github.com/login/device`. Type the code there and approve; the app then says *Linked as @you*. The token stays in the app's encrypted store on that computer, never in a channel or with an agent. **Unlink** forgets it.
+2. **Install the App.** Install **Kiwi Channels** on the repos, on every account or organization that owns one.
+3. **Connect the repo** in the channel's settings, under **Repos**. You can connect only repos your linked account can push to.
 
-   Without it, `/v1/github/webhook` answers 404 and nothing is queued.
-7. Under **Identifying and authorizing users**, tick **Enable Device Flow**
-   and untick **Expire user authorization tokens**: a Mac links by GitHub's
-   device flow, which needs only the public client id, and without the App's
-   client secret it can't refresh a token that expires after 8 hours.
-   Account permissions: none. Give the relay the App's **Client ID** (it is
-   public; it appears in the relay's `/v1/config` so a Mac can start the link):
-   - Cloudflare: `GITHUB_APP_CLIENT_ID` under `vars` in `wrangler.jsonc`
-   - Bun relay: `GITHUB_APP_CLIENT_ID=… kiwi relay`
+When the repo list changes, your app sends the relay your link token with that one request. The relay asks GitHub, as you, whether you can push to each repo, refuses the whole list if one fails, and keeps nothing of the token. Connect repos only through a relay you trust with that: one that records request bodies could keep the token.
 
-   The same link is the relay's sign-in once it also has a **client secret**
-   (generate one on the App's page): `wrangler secret put GITHUB_APP_CLIENT_SECRET`,
-   or `GITHUB_APP_CLIENT_SECRET=… kiwi relay`. See
-   [Sign-in with your GitHub App](self-hosting.md#sign-in-with-your-github-app).
-8. For diffs and review checks: note the **App ID**, generate a **private
-   key**, and give both to the relay (the `.pem` as GitHub downloads it, PKCS#1
-   or PKCS#8 both work):
-   - Cloudflare: `wrangler secret put GITHUB_APP_ID`, then
-     `wrangler secret put GITHUB_APP_PRIVATE_KEY < the-key.pem`
-   - Bun relay: `GITHUB_APP_ID=… GITHUB_APP_PRIVATE_KEY="$(cat the-key.pem)" kiwi relay`
+## What the relay sees
 
-   Set Checks and Pull requests to **Read and write** for the review check.
-   Without them, `GET /github/diff` and `POST /github/check` answer 404.
+Which repos a channel connected, and each event until your app picks it up: the repo, PR number and title, branch, commit, check name and result, and who did it. Never a body or a diff. GitHub already has all of it. Queued slips are dropped once picked up, and after 7 days or 500 items either way.
 
-## What a channel already has, and why it's empty
+## What a channel already has
 
-GitHub sends only what happens after a repo is linked. So the owner's app,
-on open, when a repo is linked and every 6 hours, asks the relay for the
-repo's open pull requests with the checks on their head commit, its open
-issues, and the pull requests and issues closed in the last 30 days
-(`GET /github/sync`, one GraphQL page per call, as the App). It posts only
-what the channel doesn't know yet, as quiet `github` events.
+GitHub sends only what happens after a repo is connected. So the owner's app, when it opens, when a repo is connected and every 6 hours, fetches the repo's open pull requests with their checks, its open issues, and what closed in the last 30 days, and posts only what the channel doesn't know yet.
 
-When the GitHub tab is empty, the owner sees why: the relay answers
-`GET /github/status` with, per linked repo, whether the App is installed on it
-(and the install link when it isn't), the events the installation gets, and
-when its last webhook came. A repo that moved to an organization needs the
-App installed there too. The rules, releases, sync and queue chores show
-their last failure under **Repos** in the channel's settings.
+When the GitHub view is empty, it says why: whether the App is installed on each repo (with the install link when it isn't), which events it gets, and when its last webhook came. A repo that moved to an organization needs the App installed there too.
 
-## Diffs and the kiwi/review check
+## Reviews as a merge gate
 
-With the key, the relay calls GitHub as the App, with a short-lived token for
-the repo's installation. A member reads a commit's diff against the repo's
-default branch (`GET /github/diff?repo=&sha=`, connected repos only). Only
-the owner posts the `kiwi/review` check (`POST /github/check`): the owner's
-app does it for each verdict it sees in the channel, so an agent can't
-approve its own work on GitHub. Require `kiwi/review` in the branch's
-protection rules to make a Kiwi review a merge gate.
+Only the owner's app posts the `kiwi/review` check, for each verdict it sees in the channel, so an agent can't approve its own work on GitHub. Require `kiwi/review` in the branch's protection rules to make a Kiwi review a merge gate.
 
-## Link your GitHub account (each person, in the desktop app)
+Members can read a commit's diff against the default branch through the relay, for connected repos only.
 
-Settings → **GitHub** → **Link GitHub** shows a code, opens
-`github.com/login/device`, and finishes when you type it there and approve.
-The app then names the account it linked (`Linked as @you`). The token is kept
-in the app's encrypted store on that Mac: it is not sent to the relay, put in
-a channel or handed to an agent, and **Unlink** forgets it. The row appears
-only when the relay has a `GITHUB_APP_CLIENT_ID`.
+## Issues become tasks
 
-## Connect a repo to a channel
+`kiwi task add --issue 12` files a task from an issue of the channel's repo, titled after it. The issue closing closes the task. The task closing closes the issue only while the owner has *Write to GitHub* on.
 
-1. Install the App on the repos (the App's page → Install), on every account
-   or organization that owns one.
-2. In the channel, the owner lists the repos under **Repos**. The app sends
-   the same list to the relay (`PUT /github/repos`), which is what routes a
-   repo's webhooks to this channel.
-3. **Write to GitHub**, under Repos, is off by default. While it's off, Kiwi
-   writes nothing to your repos: a task added with `--issue` only links the
-   issue, and closing the task leaves the issue as it is (the issue closing on
-   GitHub still closes its task). While the owner has it on, their app comments
-   `Linked to Kiwi task T7` once on a new PR whose branch names a task (step 4)
-   and on the issue of a task added with `--issue`, and closes that issue when
-   the task is done (completed) or cancelled (not planned). No comment carries
-   the task's title or notes, which stay in the encrypted channel, and nothing
-   from before the switch went on is commented or closed.
-4. **Branch prefix**, under Repos, is empty by default. With a prefix, a PR
-   from a branch named with it and a task's number shows on that task: with
-   `T`, a PR from `T7-fix-login` (or `you/T7-fix-login`) shows on T7, and
-   `kiwi task done` reads the folders it changed from that branch. Empty, no
-   branch name links a PR to a task: a PR shows on a task only when someone
-   posts its link in the task's thread.
+## On your own relay
 
-GitHub's **Recent Deliveries** on the App's page shows each webhook and the
-relay's answer: `{"queued": 1}` when a channel took it, `{"queued": 0}` when
-no channel connected that repo, 401 for a wrong secret.
+A relay you run needs a GitHub App of its own. [Self-hosting](self-hosting.md#github) has the steps.
