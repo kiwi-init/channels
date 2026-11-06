@@ -3,6 +3,7 @@ import type { HostToKeys } from "../desktop/src/keys-server.ts";
 
 export interface FakeApp {
   packaged?: boolean;
+  identifier?: string;
   version?: string;
   paths?: Partial<Record<AppPath, string>>;
 }
@@ -21,6 +22,7 @@ export function fakeHost(app: FakeApp = {}): FakeHost {
   const host: Host = {
     app: {
       packaged: () => app.packaged ?? false,
+      identifier: () => app.identifier ?? "com.kiwiinit.channels",
       version: () => app.version ?? "0.0.0",
       path: (name) => app.paths?.[name] ?? `/nowhere/${name}`,
       ready: () => true,
