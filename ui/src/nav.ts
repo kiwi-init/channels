@@ -6,14 +6,7 @@ import { keepPlace, keptPlace, spotAt, spotKey, whereKey, type Spot, type Tab } 
 
 export type SpecPart = "spec" | "inside" | "result"
 
-export type GithubView = "prs" | "issues"
-
-export type Panel =
-  | { kind: "task"; task: number }
-  | { kind: "pr"; repo: string; number: number }
-  | { kind: "issue"; repo: string; number: number }
-  | { kind: "thread"; seq: number; focus?: number }
-  | { kind: "mod"; name: string }
+export type Panel = { kind: "task"; task: number } | { kind: "thread"; seq: number; focus?: number } | { kind: "mod"; name: string }
 
 export type ChannelTab = "general" | "rooms" | "github" | "notes"
 
@@ -41,7 +34,6 @@ export interface Nav {
   section: Section
   mod?: string | undefined
   invite?: string
-  github?: GithubView
   spec?: number
   part?: SpecPart
   back: readonly Place[]
@@ -54,7 +46,6 @@ export type Go =
   | { to: "channel"; code: string; jump?: true }
   | { to: "where"; where: Where; jump?: true; replace?: true }
   | { to: "tab"; tab: Tab }
-  | { to: "github"; view: GithubView }
   | { to: "spec"; ask: number | null; part?: SpecPart }
   | { to: "panel"; panel: Panel | null }
   | { to: "modal"; modal: ModalView | null }
@@ -137,8 +128,6 @@ function step(nav: Nav, go: Exclude<Go, { to: "history" }>): Nav {
       return { ...nav, page: "channel", where: go.where, tab: "chat", panel: nav.panel?.kind === "thread" ? null : nav.panel, modal: null }
     case "tab":
       return { ...nav, page: "channel", tab: go.tab }
-    case "github":
-      return { ...nav, page: "channel", tab: "github", github: go.view }
     case "spec":
       return go.ask === null
         ? { ...nav, page: "channel", tab: "specs", spec: undefined, part: undefined }

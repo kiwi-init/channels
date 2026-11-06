@@ -3,7 +3,7 @@ import { useState } from "react"
 import { tickDoneWhen } from "@kiwi/core/state.ts"
 
 import { PrChip } from "~/chat/cards"
-import { DiffBar } from "~/github/parts"
+import { DiffBar } from "~/tasks/github-bits"
 import { cx, Dot } from "~/kit/bits"
 import { ago } from "~/kit/time"
 import type { Channel, Spec, Task } from "~/model"

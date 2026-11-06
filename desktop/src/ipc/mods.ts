@@ -3,11 +3,12 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import type { ModInstalled, ModUpdate, ModUpdates } from "../bridge.ts";
+import type { ModInstalled, ModUpdate, ModUpdates, ModView } from "../bridge.ts";
 import type { Serves } from "../calls.ts";
 import { childEnv, sessionEnv } from "../child-env.ts";
 import { kiwiHome } from "../daemon-client.ts";
 import type { Host } from "../host.ts";
+import { installDefaults } from "../mods-default.ts";
 import { modsHost, type ModsHost, type ModSecrets } from "../mods-host.ts";
 import { inModsWorker } from "../mods-run.ts";
 import { placedSeatsOf, terminalCalls, type PlacedSeat, type Run } from "../mods-terminal.ts";
@@ -151,6 +152,8 @@ export function modsCalls(
 > {
   let mods: ModsHost | null = null;
   let started: Promise<ModsHost> | null = null;
+  let failed: ModView[] = [];
+  const withFailed = (list: ModView[]): ModView[] => [...list, ...failed.filter((f) => !list.some((m) => m.name === f.name))];
   const terminal = snippetHome(host.app.path("data"));
   const terminals = terminalCalls({
     seats: placedSeats,
@@ -164,12 +167,14 @@ export function modsCalls(
   });
   const ready = (): Promise<ModsHost> => {
     if (started) return started;
+    const folder = path.join(kiwiHome(), "mods");
+    const approvals = path.join(host.app.path("data"), "mods.json");
     const m = modsHost({
-      folder: path.join(kiwiHome(), "mods"),
-      approvals: path.join(host.app.path("data"), "mods.json"),
+      folder,
+      approvals,
       contract: UI_CONTRACT,
       push: (list) => {
-        host.push("mods", list);
+        host.push("mods", withFailed(list));
         if (!list.some((v) => v.state === "on" && v.approved.includes("terminal"))) void terminals.clear();
       },
       safe: safeAtStart,
@@ -179,6 +184,12 @@ export function modsCalls(
     });
     mods = m;
     started = m.start().then(() => m);
+    void started
+      .then(() => installDefaults({ folder, approvals, record: path.join(host.app.path("data"), "mods-defaults.json"), contract: UI_CONTRACT }))
+      .then(async (missing) => {
+        failed = missing;
+        await m.rescan();
+      });
     host.app.onQuit(() => mods?.stop());
     return started;
   };
@@ -188,7 +199,7 @@ export function modsCalls(
       throw new Error(`${String(name)} may not reach your terminals: it didn't ask for them, or you didn't approve it`);
   };
   return {
-    mods: async () => (await ready()).list(),
+    mods: async () => withFailed((await ready()).list()),
     modBundle: async (name) => (await ready()).bundle(String(name)),
     approveMod: async (name, needs) => (await ready()).approve(String(name), needs),
     modFetch: async (name, req) => (await ready()).fetch(String(name), req),

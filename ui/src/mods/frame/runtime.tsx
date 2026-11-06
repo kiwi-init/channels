@@ -7,9 +7,27 @@ import type { ComponentType, ReactNode } from "react"
 import "~/styles/tokens.css"
 import "~/styles/base.css"
 import "~/mods/frame/frame.css"
+import { Avatar, Count, cx, Dot, Heading } from "~/kit/bits"
+import { Empty } from "~/kit/empty"
 import { Field } from "~/kit/form"
-import { Icon } from "~/kit/icons"
-import { MOD_PROTOCOL, type FromFrame, type ModFetchResult, type ModMessage, type ModTerminal, type ModTerminalMark, type Shown, type Surface, type TerminalOp, type ToFrame } from "~/mods/protocol"
+import { Track } from "~/kit/glide"
+import { ago } from "~/kit/time"
+import { Icon } from "~/mods/frame/glyphs"
+import {
+  MOD_PROTOCOL,
+  type FromFrame,
+  type ModFetchResult,
+  type ModGithub,
+  type ModMessage,
+  type ModOpen,
+  type ModTarget,
+  type ModTerminal,
+  type ModTerminalMark,
+  type Shown,
+  type Surface,
+  type TerminalOp,
+  type ToFrame,
+} from "~/mods/protocol"
 
 type Waiting = { resolve: (r: unknown) => void; reject: (e: Error) => void }
 
@@ -33,6 +51,22 @@ const placed = new Set<(list: ModTerminal[]) => void>()
 const box = document.getElementById("root") ?? document.body.appendChild(document.createElement("div"))
 const root = ReactDOMClient.createRoot(box)
 let sized: ResizeObserver | null = null
+let github: ModGithub | null = null
+let showing: ModTarget | null = null
+let tabState: { title: string; shown: boolean; alert: string | null; hint: string | null } | null = null
+const watchers = new Set<() => void>()
+const onShows = new Set<(t: ModTarget) => void>()
+const early: ModTarget[] = []
+const EARLY = 8
+
+const told = (): void => {
+  for (const w of watchers) w()
+}
+
+const watch = (w: () => void): (() => void) => {
+  watchers.add(w)
+  return () => void watchers.delete(w)
+}
 
 function failed(e: unknown): void {
   const said = String(e)
@@ -151,6 +185,51 @@ const api = {
     actions.set(String(id), { title: String(title), run })
     post({ type: "actions", list: listed(actions) })
   },
+  tab({ title, render, shown = true, alert = null, hint = null }: { title: string; render: ComponentType; shown?: boolean; alert?: string | null; hint?: string | null }): void {
+    asked("tab", "tab")
+    if (surface !== "tab") return
+    view = render
+    tabState = { title: String(title), shown: shown !== false, alert, hint }
+    post({ type: "tab", ...tabState })
+    mount()
+  },
+  showTab(next: { shown?: boolean; alert?: string | null; hint?: string | null }): void {
+    asked("tab", "showTab")
+    if (surface !== "tab" || !tabState) return
+    tabState = { ...tabState, ...next, shown: next.shown ?? tabState.shown }
+    post({ type: "tab", ...tabState })
+  },
+  github(): ModGithub | null {
+    asked("github", "github")
+    return github
+  },
+  useGithub(): ModGithub | null {
+    asked("github", "useGithub")
+    return React.useSyncExternalStore(watch, () => github)
+  },
+  open(to: ModOpen): void {
+    asked("github", "open")
+    post({ type: "open", to })
+  },
+  show(target: ModTarget): void {
+    asked("panel", "show")
+    post({ type: "show", target })
+  },
+  onShow(run: (t: ModTarget) => void): () => void {
+    onShows.add(run)
+    for (const t of early.splice(0)) run(t)
+    return () => void onShows.delete(run)
+  },
+  useShowing(): ModTarget | null {
+    return React.useSyncExternalStore(watch, () => showing)
+  },
+  title(title: string): void {
+    asked("panel", "title")
+    if (surface === "main" && view) post({ type: "panel", title: String(title) })
+  },
+  copy(text: string, note?: string): void {
+    post({ type: "copy", text: String(text), note: note === undefined ? null : String(note) })
+  },
   render(kind: string, draw: Draw): void {
     asked(`render:${kind}`, "render")
     drawers.set(String(kind), draw)
@@ -161,6 +240,14 @@ const api = {
   focusTerminal,
   markTerminal,
   settings: (): Readonly<Record<string, string | boolean | null>> => values,
+  Avatar,
+  Count,
+  Dot,
+  Empty,
+  Heading,
+  Track,
+  ago,
+  cx,
   Button,
   Field,
   Row,
@@ -191,6 +278,22 @@ function theme(vars: Record<string, string>, dark: boolean): void {
   document.documentElement.dataset["theme"] = dark ? "dark" : "light"
 }
 
+const linkOf = (e: MouseEvent): string | null => {
+  const a = e.target instanceof Element ? e.target.closest("a[href]") : null
+  const href = a instanceof HTMLAnchorElement ? a.href : null
+  return href && /^https?:/.test(href) ? href : null
+}
+
+const outside = (e: MouseEvent): void => {
+  if (e.defaultPrevented || (e.type === "auxclick" && e.button !== 1)) return
+  const url = linkOf(e)
+  if (!url) return
+  e.preventDefault()
+  post({ type: "link", url })
+}
+
+addEventListener("click", outside)
+addEventListener("auxclick", outside)
 addEventListener("error", (e) => failed(e.error ?? e.message))
 addEventListener("unhandledrejection", (e) => failed(e.reason))
 addEventListener("message", (e) => {
@@ -213,7 +316,19 @@ addEventListener("message", (e) => {
       failed(err)
     }
   } else if (m.type === "theme") theme(m.theme, m.dark)
-  else if (m.type === "command") void Promise.resolve(commands.get(m.id)?.run()).catch(failed)
+  else if (m.type === "github") {
+    github = needs.has("github") ? m.data : null
+    told()
+  } else if (m.type === "showing") {
+    showing = m.target
+    told()
+  } else if (m.type === "show") {
+    if (onShows.size) for (const run of onShows) run(m.target)
+    else {
+      early.push(m.target)
+      early.splice(0, Math.max(0, early.length - EARLY))
+    }
+  } else if (m.type === "command") void Promise.resolve(commands.get(m.id)?.run()).catch(failed)
   else if (m.type === "action") void Promise.resolve(actions.get(m.id)?.run(m.message)).catch(failed)
   else if (m.type === "terminals")
     for (const listen of placed)
