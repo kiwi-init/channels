@@ -64,6 +64,8 @@ async function ownScroll(page: Page): Promise<string | null> {
   const top = Math.max(box.y, 0);
   const bottom = Math.min(box.y + box.height, view.height);
   if (bottom - top < 40) return `the comments scrolled out of view with the spec (${Math.round(box.y)}-${Math.round(box.y + box.height)})`;
+  const fits = await rail.evaluate((el) => (el.scrollHeight <= el.clientHeight + 1 ? `${el.scrollHeight} px in ${el.clientHeight}` : ""));
+  if (fits) return `the comments fit (${fits}), so there is nothing to scroll: make the window shorter`;
   const [specBefore, ownBefore] = [await spec(), await own()];
   await page.mouse.move(box.x + box.width / 2, (top + bottom) / 2);
   await page.waitForTimeout(200);
@@ -84,13 +86,13 @@ async function inView(page: Page): Promise<string | null> {
     const view = document.querySelector<HTMLElement>(".spec-page")!.getBoundingClientRect();
     const rail = document.querySelector<HTMLElement>(".spec-rail")?.getBoundingClientRect();
     const box = document.querySelector<HTMLElement>('[aria-label="Comment on the spec"]')?.getBoundingClientRect();
-    return { top: view.top, bottom: view.bottom, rail: rail ? [rail.top, rail.bottom] : null, box: box ? [box.top, box.bottom] : null };
+    return { top: view.top, bottom: view.bottom, rail: rail ? { top: rail.top, bottom: rail.bottom } : null, box: box ? { top: box.top, bottom: box.bottom } : null };
   });
   if (!got.rail || !got.box) return "no comments column or comment box";
-  if (got.rail[1] < got.top + 40) return `the comments scrolled away with the spec (their bottom is at ${Math.round(got.rail[1])}, the page starts at ${Math.round(got.top)})`;
-  return got.box[0] >= got.top && got.box[1] <= got.bottom + 1
+  if (got.rail.bottom < got.top + 40) return `the comments scrolled away with the spec (their bottom is at ${Math.round(got.rail.bottom)}, the page starts at ${Math.round(got.top)})`;
+  return got.box.top >= got.top && got.box.bottom <= got.bottom + 1
     ? null
-    : `the comment box is at ${Math.round(got.box[0])}-${Math.round(got.box[1])}, outside ${Math.round(got.top)}-${Math.round(got.bottom)}`;
+    : `the comment box is at ${Math.round(got.box.top)}-${Math.round(got.box.bottom)}, outside ${Math.round(got.top)}-${Math.round(got.bottom)}`;
 }
 
 async function noGaps(page: Page): Promise<string | null> {
@@ -134,7 +136,7 @@ try {
     if (why) failed++;
     console.log(`${why ? "✗" : "✓"} spec-draft at 1900x1000: ${what}${why ? `: ${why}` : ""}`);
   }
-  const short = await browser.newPage({ viewport: { width: 1400, height: 560 } });
+  const short = await browser.newPage({ viewport: { width: 1400, height: 480 } });
   await short.goto(`http://127.0.0.1:${server.port}/?shot=spec-draft`);
   await short.waitForSelector(".spec-doc-wrap.is-wide", { timeout: 15_000 });
   await short.waitForTimeout(500);
@@ -146,7 +148,7 @@ try {
   ] as const) {
     const why = await check(short);
     if (why) failed++;
-    console.log(`${why ? "✗" : "✓"} spec-draft at 1400x560: ${what}${why ? `: ${why}` : ""}`);
+    console.log(`${why ? "✗" : "✓"} spec-draft at 1400x480: ${what}${why ? `: ${why}` : ""}`);
   }
 } finally {
   await browser.close();
