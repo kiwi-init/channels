@@ -158,7 +158,7 @@ async function onMessage(e: MessageEvent): Promise<void> {
       return
     case "size": {
       const side = state.running.get(name)?.side
-      if (side) update(name, { side: { ...side, height: m.height } })
+      if (side && slots.get(keyOf(name, "sidebar"))?.getClientRects().length) update(name, { side: { ...side, height: m.height } })
       return
     }
     case "fetch": {

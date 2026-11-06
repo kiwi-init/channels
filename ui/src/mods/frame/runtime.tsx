@@ -101,7 +101,9 @@ const api = {
     view = render
     post({ type: "sidebar", title: String(title) })
     mount()
-    sized ??= new ResizeObserver(() => post({ type: "size", height: Math.ceil(box.getBoundingClientRect().height) }))
+    sized ??= new ResizeObserver(() => {
+      if (innerWidth > 0) post({ type: "size", height: Math.ceil(box.getBoundingClientRect().height) })
+    })
     sized.observe(box)
   },
   command({ id, title, run }: { id: string; title: string; run: () => void | Promise<void> }): void {
