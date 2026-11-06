@@ -497,6 +497,9 @@ export interface KiwiBridge {
   modUpdates(): Promise<ModUpdates>;
   updateMod(name: string): Promise<ModView[]>;
   removeMod(name: string, force: boolean): Promise<ModView[]>;
+  modTerminals(name: string): Promise<ModTerminal[]>;
+  modTerminalFocus(name: string, seat: string): Promise<void>;
+  modTerminalMark(name: string, seat: string, mark: ModTerminalMark | null): Promise<void>;
 }
 
 export interface ModView {
@@ -510,6 +513,7 @@ export interface ModView {
   off?: "you" | "crash" | "safe";
   hash?: string;
   icon?: string;
+  terminal?: { hash: string; tmux?: ModSnippet; rex?: ModSnippet };
 }
 
 export interface ModIcon {
@@ -551,6 +555,25 @@ export interface ModUpdate {
 export interface ModUpdates {
   changes: ModUpdate[];
   skipped: { name: string; why: string }[];
+}
+
+export interface ModTerminal {
+  id: string;
+  room: string;
+  channel: string;
+  agent: string;
+  in: "tmux" | "rex";
+}
+
+export interface ModTerminalMark {
+  asks: number;
+  tasks: number[];
+}
+
+export interface ModSnippet {
+  file: string;
+  line: string;
+  text: string;
 }
 
 export interface ModFetchRequest {

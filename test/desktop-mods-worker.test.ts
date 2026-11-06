@@ -1,10 +1,12 @@
-import { afterAll, expect, test } from "bun:test";
+import { afterAll, expect, setDefaultTimeout, test } from "bun:test";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { inModsWorker } from "../desktop/src/mods-run.ts";
+
+setDefaultTimeout(60_000);
 
 const WORKER = join(import.meta.dir, "..", "desktop", "src", "mods-worker.ts");
 const made: string[] = [];
