@@ -1,88 +1,127 @@
+import { existsSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { chromium, webkit, type Page } from "playwright-core";
 
-import { reactionsOn, settleRequests } from "./settle-requests.ts";
+import { reactionsOn, settleRequests, type Settle } from "./settle-requests.ts";
 
-const engine = process.argv.includes("--browser") ? process.argv[process.argv.indexOf("--browser") + 1] : "chromium";
-const SLOW_MS = 600;
+const args = process.argv.slice(2);
+const flag = (name: string): string | undefined => (args.includes(name) ? args[args.indexOf(name) + 1] : undefined);
+const engine = flag("--browser") ?? "chromium";
+const dist = resolve(flag("--dist") ?? "ui/dist");
+if (!existsSync(join(dist, "index.html"))) throw new Error(`no index.html in ${dist}: run bun run ui:build first`);
+
+const CPU_SLOWDOWN = 4;
+const CATALOG_MS = 4000;
+const SHOTS = ["thread-doc-1000", "thread-doc-busy"];
 const later = (ms: number) => new Promise((done) => setTimeout(done, ms));
 const hung: (() => void)[] = [];
-
-const PAGE = `<!doctype html><title>settle</title><script>
-fetch("/reactions/index.json").then((r) => r.json()).then(() => (document.title = "catalog"), () => (document.title = "caught"));
-fetch("/other.json").then((r) => r.text()).then(() => (document.title += " other"), () => {});
-</script>`;
 
 const server = Bun.serve({
   port: 0,
   hostname: "127.0.0.1",
   async fetch(req) {
-    const path = new URL(req.url).pathname;
-    if (path === "/page.html") return new Response(PAGE, { headers: { "content-type": "text/html" } });
-    if (path === "/next.html") return new Response("<!doctype html><title>next</title>", { headers: { "content-type": "text/html" } });
-    if (path === "/hang.html") return new Response(`<!doctype html><script>fetch("/reactions/hang.json").catch(() => {})</script>`, { headers: { "content-type": "text/html" } });
+    const path = decodeURIComponent(new URL(req.url).pathname);
+    if (path === "/probe/other.html") return new Response(`<!doctype html><script>fetch("/probe/other.json")</script>`, { headers: { "content-type": "text/html" } });
+    if (path === "/probe/other.json") return new Response("{}", { headers: { "content-type": "application/json" } });
+    if (path === "/probe/cancel.html")
+      return new Response(`<!doctype html><script>fetch("/reactions/index.json").then((r) => r.json()).catch(() => {})</script>`, { headers: { "content-type": "text/html" } });
+    if (path === "/probe/hang.html") return new Response(`<!doctype html><script>fetch("/reactions/hang.json").catch(() => {})</script>`, { headers: { "content-type": "text/html" } });
     if (path === "/reactions/hang.json") {
       await new Promise<void>((done) => hung.push(done));
       return new Response("{}");
     }
-    await later(SLOW_MS);
-    return new Response("{}", { headers: { "content-type": "application/json" } });
+    if (path === "/reactions/index.json") await later(CATALOG_MS);
+    const file = Bun.file(path.startsWith("/reactions/") ? resolve(import.meta.dir, "../site", "." + path) : join(dist, path === "/" || !path.includes(".") ? "index.html" : path));
+    return (await file.exists()) ? new Response(file) : new Response("not found", { status: 404 });
   },
 });
 const base = `http://127.0.0.1:${server.port}/`;
+const name = engine === "webkit" ? "WebKit" : "Chromium";
 
 const failures: string[] = [];
 const check = (ok: boolean, what: string) => {
   console.log(`${ok ? "✓" : "✗"} ${what}`);
   if (!ok) failures.push(what);
 };
-
-const open = async (page: Page) => {
-  const catalog = page.waitForRequest((r) => r.url().endsWith("/reactions/index.json"));
-  await page.goto(`${base}page.html`, { waitUntil: "commit" });
-  await catalog;
-};
+const note = (what: string) => console.log(`  ${what}`);
 
 const browser = engine === "webkit" ? await webkit.launch() : await chromium.launch({ executablePath: process.env.SMOKE_CHROMIUM || undefined });
+
+const fresh = async (): Promise<{ page: Page; errors: string[]; settle: Settle; catalogAsked: () => boolean }> => {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 });
+  if (engine === "chromium") await (await page.context().newCDPSession(page)).send("Emulation.setCPUThrottlingRate", { rate: CPU_SLOWDOWN });
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  let asked = false;
+  page.on("request", (r) => {
+    if (new URL(r.url()).pathname === "/reactions/index.json") asked = true;
+  });
+  return { page, errors, settle: settleRequests(page, reactionsOn(base)), catalogAsked: () => asked };
+};
+
+type Run = { askedAtIdle: boolean[]; inFlightAtGoto: string[][]; errors: string[] };
+
+const shotLoop = async (wait: boolean): Promise<Run> => {
+  const { page, errors, settle, catalogAsked } = await fresh();
+  const run: Run = { askedAtIdle: [], inFlightAtGoto: [], errors };
+  for (const shot of SHOTS) {
+    if (wait) await settle.settled(CATALOG_MS * 3);
+    run.inFlightAtGoto.push(settle.inFlight());
+    await page.goto(`${base}?shot=${shot}&theme=light`);
+    await page.waitForLoadState("networkidle");
+    run.askedAtIdle.push(catalogAsked());
+    await page.evaluate(() => document.fonts.ready);
+    await page.waitForTimeout(350);
+    if (wait) await settle.settled(CATALOG_MS * 3);
+    await page.screenshot();
+  }
+  await page.goto(`${base}probe/other.html`);
+  await later(500);
+  await page.close();
+  return run;
+};
+
 try {
-  {
-    const page = await browser.newPage();
-    const raced: string[] = [];
-    page.on("pageerror", (e) => raced.push(e.message));
-    const settle = settleRequests(page, reactionsOn(base));
-    await open(page);
-    const atNavigation = settle.inFlight();
+  const before = await shotLoop(false);
+  note(
+    `${name}, the shot loop as it was: catalog asked by networkidle on ${SHOTS[0]}: ${before.askedAtIdle[0]}; in flight when it navigated to ${SHOTS[1]}: ${before.inFlightAtGoto[1]?.join(", ") || "none"}; page errors: ${before.errors.join("; ") || "none"}`,
+  );
+  if (engine === "chromium") {
+    check(before.askedAtIdle[0] === false, `with the CPU ${CPU_SLOWDOWN}x slower, networkidle on ${SHOTS[0]} comes before the app asks for the catalog`);
+    check(!!before.inFlightAtGoto[1]?.some((u) => u.endsWith("/reactions/index.json")), `so the old loop navigates to ${SHOTS[1]} with the catalog request still in flight`);
+  }
+
+  const after = await shotLoop(true);
+  check(
+    after.inFlightAtGoto.every((open) => open.length === 0),
+    "with the wait, no /reactions/ request is in flight at any navigation",
+  );
+  check(after.errors.length === 0, `with the wait, no page error is recorded${after.errors.length ? `: ${after.errors.join("; ")}` : ""}`);
+
+  if (engine === "webkit") {
+    const { page, errors } = await fresh();
+    const asked = page.waitForRequest((r) => r.url().endsWith("/reactions/index.json"));
+    await page.goto(`${base}probe/cancel.html`, { waitUntil: "commit" });
+    await asked;
+    await page.goto(`${base}probe/other.html`);
+    await later(500);
     check(
-      atNavigation.some((u) => u.endsWith("/reactions/index.json")),
-      "without the wait, the catalog request is still in flight when the next navigation starts",
+      errors.some((e) => e.includes("/reactions/index.json") && e.includes("access control checks")),
+      `in WebKit, leaving a page while its caught catalog fetch is in flight raises #1850's page error${errors.length ? `: ${errors.join("; ")}` : ": none seen"}`,
     );
-    check(!atNavigation.some((u) => u.endsWith("/other.json")), "another same-origin request isn't tracked");
-    await page.goto(`${base}next.html`);
-    await later(SLOW_MS);
-    console.log(`  page errors without the wait: ${raced.length ? raced.join("; ") : "none"}`);
     await page.close();
   }
   {
-    const page = await browser.newPage();
-    const errors: string[] = [];
-    page.on("pageerror", (e) => errors.push(e.message));
-    const settle = settleRequests(page, reactionsOn(base));
-    const answered = page.waitForResponse((r) => r.url().endsWith("/reactions/index.json"));
-    const other = page.waitForResponse((r) => r.url().endsWith("/other.json"));
-    await open(page);
-    await settle.settled();
-    check(settle.inFlight().length === 0, "with the wait, the catalog request has settled before the navigation");
-    check((await answered).status() === 200, "the real catalog is served (200)");
-    check((await other).status() === 200, "another same-origin request completes untouched");
-    await page.goto(`${base}next.html`);
-    await later(SLOW_MS);
-    check(errors.length === 0, `no page error is recorded${errors.length ? `: ${errors.join("; ")}` : ""}`);
+    const { page, settle } = await fresh();
+    const other = page.waitForResponse((r) => r.url().endsWith("/probe/other.json"));
+    await page.goto(`${base}probe/other.html`);
+    check((await other).status() === 200 && settle.inFlight().length === 0, "another same-origin request isn't tracked and completes");
     await page.close();
   }
   {
-    const page = await browser.newPage();
-    const settle = settleRequests(page, reactionsOn(base));
+    const { page, settle } = await fresh();
     const asked = page.waitForRequest((r) => r.url().endsWith("/reactions/hang.json"));
-    await page.goto(`${base}hang.html`, { waitUntil: "commit" });
+    await page.goto(`${base}probe/hang.html`, { waitUntil: "commit" });
     await asked;
     const stuck = await settle.settled(300).then(
       () => "",
@@ -97,6 +136,6 @@ try {
   await server.stop(true);
 }
 if (failures.length) {
-  console.error(`${failures.length} settle checks failed in ${engine === "webkit" ? "WebKit" : "Chromium"}`);
+  console.error(`${failures.length} settle checks failed in ${name}`);
   process.exitCode = 1;
 }
