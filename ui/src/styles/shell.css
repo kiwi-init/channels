@@ -1317,7 +1317,7 @@ html .rail-gear.is-on {
   color: var(--ink);
 }
 
-.side-foot:not(:has(.side-card)) {
+.side-foot:not(:has(.side-card, .mod-side)) {
   display: none;
 }
 
