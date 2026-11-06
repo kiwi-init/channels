@@ -145,6 +145,7 @@ export class ChannelStore {
   private snapshotNext = nextSnapshotTry(0, 0);
   private snapshotBusy = false;
   private checksBusy = false;
+  private checksAgain = false;
   private docsBusy = false;
   private docsNext = 0;
   private reconciling = false;
@@ -157,6 +158,12 @@ export class ChannelStore {
 
   constructor(member: StoredMember, human?: HumanSession | null, deps?: ChannelStoreDeps, light = false) {
     this.ch = deps?.link ?? linkOf(member);
+    this.ch.beforeSend = async (body, opts) => {
+      const state = this.state.value;
+      const from = [...state.members.values()].find((m) => m.pk === member.identity.pk)?.name;
+      const may = opts.ev?.op === "task.update" || !!opts.check || !!opts.re?.some((id) => state.checks.has(id));
+      if (from && may) await (await import("@kiwi/core/ship-gate.ts")).postDowngrades(state, { ...opts, from, body }, (c) => this.ch.postReviewCheck(c));
+    };
     this.lend = deps?.lend ?? ((code) => watches().lend(code));
     this.code = member.code;
     this.human = human;
@@ -718,14 +725,19 @@ export class ChannelStore {
 
   private postReviewChecks(): void {
     const state = this.state.value;
-    if (!this.ch.isOwner || !this.caughtUp.value || !state.repos.length || this.checksBusy) return;
+    if (!this.ch.isOwner || !this.caughtUp.value || !state.repos.length) return;
+    if (this.checksBusy) {
+      this.checksAgain = true;
+      return;
+    }
     this.checksBusy = true;
-    const messages = this.messages.value;
+    this.checksAgain = false;
     void import("./review-chores.ts")
-      .then((m) => m.postReviewChores(this.ch, state, messages))
+      .then((m) => m.postReviewChores(this.ch, state))
       .catch(() => {})
       .finally(() => {
         this.checksBusy = false;
+        if (this.checksAgain) this.postReviewChecks();
       });
   }
 

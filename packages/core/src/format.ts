@@ -3,7 +3,7 @@
 import { ROLE_LABEL } from "./personality.ts";
 import { loadJson, loadSummary, memberLoad, showsLoad } from "./load.ts";
 import { inlineText, runsLine, type Runs } from "./membership.ts";
-import { fileMarker, GENERAL_ROOM, ignored, imageMarker, isRunning, powerChange } from "./protocol.ts";
+import { fileMarker, GENERAL_ROOM, ignored, imageMarker, isRunning, powerChange, REVIEW_CHECK } from "./protocol.ts";
 import type { Card, GithubNote, Message, OldTaskState, Reach, TaskState, Trust } from "./protocol.ts";
 import { describeScopes, presetOf, readScopes, SCOPE_LABELS, type Scope } from "./scopes.ts";
 import { sentTo } from "./room-rules.ts";
@@ -32,7 +32,7 @@ import {
 import { evidenceOf, prLines, refText, stageOf, stageText } from "./stage.ts";
 import { changedSinceApproval, changedAfterApproval, freeAgents, specOfComment, specPlanner, specStage, specTitleOf } from "./state/specs.ts";
 import { commentsLine, commentsWaiting, specLine } from "./spec-lines.ts";
-import { landingWaits, REVIEW_CHECK, reviewNotRequired, rulesText } from "./prs.ts";
+import { landingWaits, reviewNotRequired, rulesText } from "./prs.ts";
 import { statusOf, statusWord } from "./status.ts";
 import { isWakeVia, wakesInSession, wakeWords, type WakeVia } from "./wake.ts";
 export function tokensWord(n: number): string {

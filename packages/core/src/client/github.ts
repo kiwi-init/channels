@@ -35,8 +35,8 @@ const sameRules = (a: GithubRulesInfo, b: GithubRulesInfo | undefined): boolean 
 export interface ReviewCheck {
   repo: string;
   sha: string;
-  verdict: "approved" | "rejected";
-  task: number;
+  verdict: "approved" | "waiting" | "rejected";
+  tasks: number[];
   note?: string;
 }
 
@@ -81,7 +81,7 @@ export class ChannelGithub {
     }),
 
     postReviewCheck: Effect.fn("Channel.postReviewCheck")({ self: this }, function* (this: ChannelGithub, c: ReviewCheck) {
-      yield* this.ch.ownerOnly();
+      if (c.verdict === "approved") yield* this.ch.ownerOnly();
       return yield* this.ch.request<{ url: string | null }>("/github/check", { method: "POST", body: JSON.stringify(c) });
     }),
 

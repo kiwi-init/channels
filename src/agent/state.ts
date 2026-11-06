@@ -9,6 +9,7 @@ import { seatHolds, seatRefusal } from "../hold.ts";
 import { daemonMark, daemonPeek } from "../daemon/rpc.ts";
 import { decodedWhole, GENERAL_ROOM, knownOp, olderRules, outgrown, PAGE_LIMIT, type Message } from "@kiwi/core/protocol.ts";
 import { Rejected } from "@kiwi/core/refusals.ts";
+import { downgrades } from "@kiwi/core/ship-gate.ts";
 import { findRoom, fold, rosterOf, type ChannelState, type FoldBase, type GuardFloor, type Roster, type RoomsFloor } from "@kiwi/core/state.ts";
 import { LAST_MARK_MS, lastSeq, Look, orNone, type Agent, type Delivery } from "./shared.ts";
 import { narrows, wants } from "./wants.ts";
@@ -48,6 +49,7 @@ export class SessionState {
   protected base: FoldBase | null = null;
   protected partial = false;
   private replayed: { page: WholeLog | null } | null = null;
+  private folded: ChannelState | null = null;
   readonly opened: number;
 
   constructor(
@@ -62,6 +64,7 @@ export class SessionState {
       if (m && this.log && seq === lastSeq(this.log) + 1) this.log = [...this.log, m];
       else this.owed = Math.max(this.owed, seq);
     };
+    this.ch.downgradesFor = (m) => (this.folded ? downgrades(this.folded, m) : []);
   }
 
   get me(): string {
@@ -193,6 +196,7 @@ export class SessionState {
     const prior = look?.seen.get(this);
     if (prior && prior.messages === messages && prior.roster === roster && prior.rooms === this.roomsFloor && prior.guard === this.guardFloor) return prior.view;
     const view = { messages, state: yield* this.foldState(messages, roster, seen?.info ?? undefined) };
+    this.folded = view.state;
     look?.seen.set(this, { messages, roster, rooms: this.roomsFloor, guard: this.guardFloor, view });
     return view;
   });

@@ -21,6 +21,7 @@ import { ChannelGone, BadRequest, Forbidden, NotFound, NotOwner, Refused, SignIn
 import { answer, buildContext, describeRoutes, dispatch, incoming, json, readCapped, Request_, type Route } from "./http.ts";
 import { githubLinks, githubRepos, type GithubItem } from "./github.ts";
 import { GithubApp, GithubPush, type GithubReply } from "./github-app.ts";
+import { githubReviewHost, reviewStatus } from "./review-host.ts";
 import { Human, HUMAN_HEADER } from "./human.ts";
 import { betaMessage, inBeta, Policy } from "./policy.ts";
 import { offerPages, PAGE_PATH, servePage } from "./pages.ts";
@@ -232,6 +233,8 @@ const connectedCommit = (repo: unknown, sha: unknown) =>
     if (typeof repo !== "string" || !db.githubRepos().includes(repo.toLowerCase())) return yield* new BadRequest({ message: "repo: one of the channel's connected repos" });
     return { repo: repo.toLowerCase(), sha: sha.toLowerCase() };
   });
+
+const MAX_CHECK_TASKS = 50;
 
 const replied = <T>(r: GithubReply<T>) =>
   r.ok ? Effect.succeed(r.value) : Effect.fail(new Refused({ status: r.status, message: r.error, tag: r.status === 404 ? "NotFound" : r.status === 400 ? "BadRequest" : "Internal" }));
@@ -569,23 +572,22 @@ const routes: RoomRoute[] = [
   {
     method: "POST",
     path: "/github/check",
-    guard: "owner",
-    run: () =>
+    guard: "member",
+    run: ({ me }) =>
       Effect.gen(function* () {
-        const b = yield* json<{ repo?: unknown; sha?: unknown; verdict?: unknown; task?: unknown; note?: unknown }>();
+        const b = yield* json<{ repo?: unknown; sha?: unknown; verdict?: unknown; tasks?: unknown; task?: unknown; note?: unknown }>();
         const { repo, sha } = yield* connectedCommit(b.repo, b.sha);
-        if (b.verdict !== "approved" && b.verdict !== "rejected") return yield* new BadRequest({ message: "verdict: approved or rejected" });
-        if (typeof b.task !== "number" || !Number.isSafeInteger(b.task) || b.task <= 0) return yield* new BadRequest({ message: "task: the task's number" });
+        const verdict = b.verdict;
+        if (verdict !== "approved" && verdict !== "waiting" && verdict !== "rejected") return yield* new BadRequest({ message: "verdict: approved, waiting or rejected" });
+        const tasks = b.tasks ?? (b.task === undefined ? undefined : [b.task]);
+        if (!Array.isArray(tasks) || !tasks.length || tasks.length > MAX_CHECK_TASKS || !tasks.every((t): t is number => typeof t === "number" && Number.isSafeInteger(t) && t > 0))
+          return yield* new BadRequest({ message: `tasks: 1 to ${MAX_CHECK_TASKS} task numbers` });
+        const owned = me === (yield* readMeta).ownerPk;
+        if (verdict === "approved" && !owned) return yield* new NotOwner({ message: "only the owner's app turns kiwi/review green; a member posts waiting or rejected" });
+        if (!owned && !allow(`ghcheck:${(yield* RoomStore).roomId}:${me}`, GITHUB_READS_PER_MINUTE)) return yield* new TooMany({ message: "too many kiwi/review posts; wait a minute" });
         const note = typeof b.note === "string" ? b.note.slice(0, 1000) : "";
-        const app = yield* githubApp;
-        const approved = b.verdict === "approved";
-        const reply = yield* Effect.promise(() =>
-          app.check(repo, sha, {
-            conclusion: approved ? "success" : "failure",
-            title: approved ? `T${b.task} approved in Kiwi` : `T${b.task}: changes requested in Kiwi`,
-            summary: note || (approved ? "Approved." : "Changes requested."),
-          }),
-        );
+        const host = githubReviewHost(yield* githubApp);
+        const reply = yield* Effect.promise(() => host.post(repo, sha, reviewStatus(verdict, tasks, note)));
         return { data: yield* replied(reply) };
       }),
   },

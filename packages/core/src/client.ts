@@ -37,6 +37,7 @@ import { ChannelRequests, type RequestsOptions } from "./client/requests.ts";
 import type { Delegation } from "./delegation.ts";
 import type { DeviceList } from "./devices.ts";
 import { ChannelSending, type SendOptions } from "./client/send.ts";
+import type { Outgoing } from "./ship-gate.ts";
 import { ChannelSettings, type RoomsSetting } from "./client/settings.ts";
 import { ChannelSnapshots, type DocsPruned, type DocStat, type DocVersionStat } from "./client/snapshots.ts";
 
@@ -138,6 +139,10 @@ export class Channel {
 
   set onSent(onSent: ((seq: number, message: Message | null) => void) | null) {
     this.sending.onSent = onSent;
+  }
+
+  set downgradesFor(f: ((m: Outgoing) => ReviewCheck[]) | null) {
+    this.sending.downgradesFor = f;
   }
 
   forgetInfo(): void {
