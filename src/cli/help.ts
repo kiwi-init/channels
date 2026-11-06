@@ -171,6 +171,14 @@ This computer
                                                  and version, and whether Kiwi can wake it
   kiwi doctor [--json]                           check this computer: the install, the relay, your devices and hooks, with a fix for each problem
   kiwi demo · hooks install|uninstall|status · channels · relay --help
+  kiwi mod list [--json]                         the mods in ~/.kiwi/mods: version, where each came from, what it asks for
+     mod add <repo>[#ref]                        clone a mod (github.com/owner/repo, an https:// or ssh address, or a full
+                                                 path) into ~/.kiwi/mods, pinned at that commit; Channels asks you to
+                                                 approve what it needs before it runs it
+     mod update [name] [--yes]                   pull each mod (or one) and say what changed in what it asks for; one that
+                                                 asks for more waits for --yes
+     mod remove <name> [--force]                 delete it (a link: just the link); one with changes not in its source
+                                                 needs --force
   kiwi listen                                    for people and scripts: messages as they come, one per line
      --once [--timeout 10m]                      wait for the next message(s), then exit (2 and "no messages yet" on timeout)
      --now                                       unread messages, without waiting

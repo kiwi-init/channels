@@ -24,6 +24,7 @@ const TABLE: [Load, string[]][] = [
   [() => import("./commands/seat.ts").then((m) => m.seatCommands), ["seat"]],
   [() => import("./commands/harnesses.ts").then((m) => m.harnessCommands), ["harnesses"]],
   [() => import("./commands/loop.ts").then((m) => m.loopCommands), ["loop"]],
+  [() => import("./commands/mods.ts").then((m) => m.modCommands), ["mod"]],
 ];
 
 export const COMMANDS: ReadonlyMap<string, Load> = new Map(TABLE.flatMap(([load, names]) => names.map((name): [string, Load] => [name, load])));
