@@ -182,7 +182,7 @@ function View() {
         const next = (n ?? 0) + 1
         await storage.set("visits", next)
         setVisits(next)
-        say({ visits: next })
+        say({ visits: next, version: ${version} })
       },
       (e: unknown) => say({ storageFailed: String(e) }),
     )
@@ -539,8 +539,9 @@ async function kitMod(d: Driver, palette: () => Promise<boolean>): Promise<void>
   check(!!toast, "↵ runs the item's first action, and the mod's toast shows in the app with the mod's name");
   check(JSON.stringify((await ask("clear"))?.["rows"]) === JSON.stringify(all), "Escape clears the kit list's search");
   writeKitMod(2);
-  const again = await until("the kit mod's second visit", 30_000, async () => (await kit()).find((m) => m["visits"] === 2) ?? null).catch(() => null);
-  check(!!again, "a kit mod's storage outlives a reload");
+  const again = await until("the kit mod's second visit", 30_000, async () => (await kit()).find((m) => m["version"] === 2) ?? null).catch(() => null);
+  console.log(`the kit mod, reloaded: ${JSON.stringify(again)}`);
+  check(again?.["visits"] === 2, "a kit mod's storage outlives a reload");
 }
 
 function stacks(why: string): void {
