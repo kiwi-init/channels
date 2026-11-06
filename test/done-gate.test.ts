@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, test } from "bun:test";
 import type { CheckArtifact, CheckAsk } from "@kiwi/core/checks.ts";
 import { doneGate, inRange, landingsDue } from "@kiwi/core/done-gate.ts";
 import { landingWaits } from "@kiwi/core/prs.ts";
+import { shipGate } from "@kiwi/core/ship-gate.ts";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 import { PROTOCOL_VERSION, wellFormed, type Event, type Kind, type Message, type Payload } from "@kiwi/core/protocol.ts";
 import { fold, type Roster } from "@kiwi/core/state.ts";
@@ -263,11 +264,130 @@ describe("the done gate (#623 §5)", () => {
     expect(c.state().tasks.get(t)!.landed?.key).toBe(`T${t}:npm:@scope/lib@1.3.0`);
   });
 
-  test("a run task doesn't land on its own yet", async () => {
-    const c = await channel("run");
-    const t = await c.task();
-    await c.approve(t, S1);
-    expect(doneGate(c.state(), c.state().tasks.get(t)!)?.kind).toBe("waiting");
+  describe("run tasks (T1269)", () => {
+    const job = (id: string): CheckArtifact => ({ kind: "run", id });
+    const runCheck = (phase: CheckAsk["phase"], id: string): CheckAsk => ({ phase, decider: "jow", artifact: job(id) });
+    async function runTask() {
+      const c = await channel("run");
+      const t = await c.task();
+      const declare = (id: string, started?: number) => c.ev("ann", { op: "task.update", task: t, run: { id, ...(started !== undefined ? { started } : {}) } });
+      const approveRun = async (id: string) => {
+        await c.ev("ann", { op: "task.update", task: t, state: "review", at: `run:${id}` });
+        await c.ev("mac", { op: "task.update", task: t, state: "done", verdict: "approved", round: c.state().tasks.get(t)!.rounds.length, at: `run:${id}` });
+      };
+      const passed = async (phase: CheckAsk["phase"], id: string) => {
+        const ask = await c.say("ann", "blocking", "Is the run good?", { to: ["jow"], esc: true, choices: ["A: good", "B: not yet"], holds: [t], check: runCheck(phase, id) });
+        return c.answer(ask, "A: good");
+      };
+      const gate = () => doneGate(c.state(), c.state().tasks.get(t)!);
+      return { c, t, declare, approveRun, passed, gate };
+    }
+
+    test("a run approved at its declared id, cleared before it started and confirmed after, lands at that run", async () => {
+      const r = await runTask();
+      await r.declare("job-1");
+      await r.approveRun("job-1");
+      expect(shipGate(r.c.state(), r.c.state().tasks.get(r.t)!)).toEqual({ open: false, rejected: false, missing: [`check passed for run job-1`] });
+      await r.passed("pre-ship", "job-1");
+      expect(shipGate(r.c.state(), r.c.state().tasks.get(r.t)!)).toEqual({ open: true });
+      expect(r.gate()).toEqual({ kind: "waiting", why: "run job-1 to start: kiwi task proof T" + r.t + " --run job-1 --started TIME records its own start time" });
+      await r.declare("job-1", at(r.c.log.length) + 500);
+      expect(r.gate()).toEqual({ kind: "waiting", why: "a passed post check quoting run job-1" });
+      await r.passed("post", "job-1");
+      expect(r.gate()).toEqual({ kind: "landed", artifact: job("job-1") });
+      await r.c.land("jow", r.t, job("job-1"));
+      expect(r.c.state().tasks.get(r.t)!.state).toBe("done");
+      expect(r.c.state().tasks.get(r.t)!.landed?.key).toBe(`T${r.t}:run:job-1`);
+    });
+
+    test("case 7: a run confirmation quoting a different run id doesn't count", async () => {
+      const r = await runTask();
+      await r.declare("job-1");
+      await r.approveRun("job-1");
+      await r.passed("pre-ship", "job-1");
+      await r.declare("job-1", at(r.c.log.length) + 500);
+      await r.passed("post", "job-2");
+      expect(r.gate()).toEqual({ kind: "waiting", why: "a passed post check quoting run job-1" });
+      const wrong = await r.c.land("jow", r.t, job("job-2"));
+      expect(r.c.state().rejected.get(wrong.seq)).toBe(`T${r.t} hasn't landed: it waits for a passed post check quoting run job-1`);
+      expect(r.c.state().tasks.get(r.t)!.state).toBe("landing");
+    });
+
+    test("case 14: a pre-ship check answered after the run's start counts as a bypass", async () => {
+      const r = await runTask();
+      await r.declare("job-1");
+      await r.approveRun("job-1");
+      const started = at(r.c.log.length) + 500;
+      const late = await r.passed("pre-ship", "job-1");
+      await r.declare("job-1", started);
+      await r.passed("post", "job-1");
+      const ask = late.re![0]!;
+      expect(r.gate()).toEqual({ kind: "bypassed", missing: [`check #${ask} passed before the run`] });
+      expect(landingsDue({ ...r.c.state(), tasks: r.c.state().tasks })).toEqual([]);
+    });
+
+    test("an approval pinned to another run, or none before the start, is a bypass", async () => {
+      const r = await runTask();
+      await r.declare("job-1");
+      await r.approveRun("job-0");
+      await r.passed("pre-ship", "job-1");
+      expect(shipGate(r.c.state(), r.c.state().tasks.get(r.t)!)).toEqual({ open: false, rejected: false, missing: ["an approval at run job-1"] });
+      await r.declare("job-1", at(r.c.log.length) + 500);
+      expect(r.gate()).toEqual({ kind: "bypassed", missing: ["an approval at run job-1"] });
+    });
+
+    test("case 15: started 10:00, pre-ship pass 10:05, proof at 10:10 with no start time: it stays landing and never lands by itself", async () => {
+      const r = await runTask();
+      await r.declare("job-1");
+      await r.approveRun("job-1");
+      await r.passed("pre-ship", "job-1");
+      await r.c.ev("ann", { op: "task.update", task: r.t, run: { id: "job-1" }, note: "ran" });
+      await r.passed("post", "job-1");
+      expect(r.gate()?.kind).toBe("waiting");
+      expect(landingsDue({ ...r.c.state(), tasks: r.c.state().tasks })).toEqual([]);
+      const forced = await r.c.land("jow", r.t, job("job-1"));
+      expect(r.c.state().rejected.get(forced.seq)).toStartWith(`T${r.t} hasn't landed`);
+      expect(r.c.state().tasks.get(r.t)!.state).toBe("landing");
+      await r.c.ev("jow", { op: "task.update", task: r.t, state: "done", close: "ran by hand, no start time" });
+      expect(r.c.state().tasks.get(r.t)!.closedWith).toBe("ran by hand, no start time");
+    });
+
+    test("a start time is the run's own: one later than the proof's receipt is refused, and the first one recorded stays", async () => {
+      const r = await runTask();
+      await r.declare("job-1");
+      const future = await r.declare("job-1", at(r.c.log.length + 5));
+      expect(r.c.state().rejected.get(future.seq)).toBe("run job-1 can't have started after its proof arrived");
+      expect(r.c.state().tasks.get(r.t)!.run).toMatchObject({ id: "job-1" });
+      expect(r.c.state().tasks.get(r.t)!.run?.started).toBeUndefined();
+      const first = at(r.c.log.length);
+      await r.declare("job-1", first);
+      const moved = await r.declare("job-1", first + 100);
+      expect(r.c.state().rejected.get(moved.seq)).toBe(`run job-1's start is already recorded`);
+      expect(r.c.state().tasks.get(r.t)!.run?.started).toBe(first);
+    });
+
+    test("once approved, only a person or the lead declares another run, and that sends it back to review at the new run", async () => {
+      const r = await runTask();
+      await r.declare("job-1");
+      await r.approveRun("job-1");
+      const swap = await r.declare("job-2");
+      expect(r.c.state().rejected.get(swap.seq)).toBe(`only a person or the lead declares another run for T${r.t} once it's approved`);
+      await r.c.ev("jow", { op: "task.update", task: r.t, run: { id: "job-2" } });
+      const t = r.c.state().tasks.get(r.t)!;
+      expect(t.state).toBe("review");
+      expect(t.run?.id).toBe("job-2");
+      expect(t.rounds.at(-1)).toMatchObject({ at: "run:job-2", result: { kind: "open" } });
+    });
+
+    test("run is well formed with a run id and an optional start time", () => {
+      const base = { v: 1, id: "x", from: "ann", kind: "event", body: "", ts: 1 };
+      expect(wellFormed({ ...base, ev: { op: "task.update", task: 3, run: { id: "batch/job-1" } } })).toBe(true);
+      expect(wellFormed({ ...base, ev: { op: "task.update", task: 3, run: { id: "job-1", started: T0 } } })).toBe(true);
+      expect(wellFormed({ ...base, ev: { op: "task.update", task: 3, run: { id: "job 1" } } })).toBe(false);
+      expect(wellFormed({ ...base, ev: { op: "task.update", task: 3, run: { id: "job-1", started: -1 } } })).toBe(false);
+      expect(wellFormed({ ...base, ev: { op: "task.update", task: 3, run: { id: "job-1", extra: 1 } } })).toBe(false);
+      expect(wellFormed({ ...base, ev: { op: "task.update", task: 3, at: `run:${"j".repeat(200)}` } })).toBe(true);
+    });
   });
 
   test("task.landed is well formed only with a task and an artifact", () => {
