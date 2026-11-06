@@ -3,7 +3,7 @@ import { oneLook, openSession } from "../../agent.ts";
 import { contextLineOn, Keystore, loadConfig } from "../../config.ts";
 import { inlineText } from "@kiwi/core/membership.ts";
 import { formatTask, formatTasks, issueLinkText, looksLikeLine, taskStateWord } from "@kiwi/core/format.ts";
-import type { TaskState } from "@kiwi/core/protocol.ts";
+import { isLanding, type Landing, type TaskState } from "@kiwi/core/protocol.ts";
 import { leadCheckpointRefusal } from "@kiwi/core/reentry.ts";
 import { askRefusal, isPerson, taskSpecRefusal, leadCheckpointKey, mayNameGoal, openRound, parseTaskId, similarOpenTasks, taskId, type ChannelState } from "@kiwi/core/state.ts";
 import { formatCandidates, pickFor, taskCandidates } from "@kiwi/core/routing.ts";
@@ -15,6 +15,7 @@ import { LOOP_ENV } from "../../hooks/loop-wait.ts";
 import { askFresh, LOOP_TASK_ENV } from "../../loop/fresh.ts";
 
 const CLAIMS_GONE = "claims are gone: say what you're working on in the task, or post it";
+const LANDING_USAGE = "--then takes merge, release:tag, release:npm:PKG@RANGE, run or none";
 const ANCHORS = "--ask N (the person's message #N it answers), --from T… (the task it comes from) or --issue N (a GitHub issue)";
 
 export const taskCommands: Record<string, Command> = {
@@ -38,6 +39,8 @@ export const taskCommands: Record<string, Command> = {
           const given = [opt.body !== undefined, opt.file !== undefined, opt.detail !== undefined].filter(Boolean).length;
           if (given > 1) return yield* die('give the task\'s body once: --body "…", --file spec.md or --detail "…"');
           const body = opt.file !== undefined ? (yield* readText(opt.file)).trim() || (yield* die(`${opt.file} is empty`)) : (opt.body ?? opt.detail);
+          const then = opt.then === undefined ? undefined : isLanding(opt.then.trim()) ? (opt.then.trim() as Landing) : yield* die(LANDING_USAGE);
+          const landing = { ...(then ? { then } : {}), ...(opt.lander?.trim() ? { lander: opt.lander.trim() } : {}) };
           if (opt.issue !== undefined) {
             const made = yield* s.taskFromIssue(opt.issue, {
               title: args.slice(2).join(" ") || undefined,
@@ -46,13 +49,17 @@ export const taskCommands: Record<string, Command> = {
               ...(opt.review !== undefined ? { review: opt.review } : {}),
               ...(re !== undefined ? { re } : {}),
               ...(from !== undefined ? { from } : {}),
+              ...landing,
             });
             const how = yield* started(made.id);
             const { state: after } = yield* s.state();
             return out(`added ${taskId(made.id)} from ${made.issue}: ${made.title}${how}\n${issueLinkText(after)}`);
           }
           const title = opt.file !== undefined ? args.slice(2).join(" ") : yield* text(2);
-          if (!title.trim()) return yield* die('usage: kiwi task add "title" --ask N|--from T…|--issue N [--body "the spec" | --file spec.md] [--owner NAME | --start] [--review NAME|any]');
+          if (!title.trim())
+            return yield* die(
+              'usage: kiwi task add "title" --ask N|--from T…|--issue N [--body "the spec" | --file spec.md] [--owner NAME | --start] [--review NAME|any] [--then merge|release:tag|release:npm:PKG@RANGE|run|none] [--lander NAME]',
+            );
           for (const gone of ["after", "needs"] as const)
             if (opt[gone] !== undefined) process.stderr.write(`kiwi: --${gone} is gone (tasks don't wait on or match anything now); put it in the body (--body)\n`);
           const { state: before } = yield* s.state();
@@ -62,6 +69,7 @@ export const taskCommands: Record<string, Command> = {
             ...(opt.review !== undefined ? { review: opt.review } : {}),
             ...(re !== undefined ? { re } : {}),
             ...(from !== undefined ? { from } : {}),
+            ...landing,
           });
           const like = similarOpenTasks(before, title).map((t) => t.id);
           const lines = [`added ${taskId(id)}${yield* started(id)}`];
@@ -96,12 +104,30 @@ export const taskCommands: Record<string, Command> = {
           if (opt.body !== undefined && opt.file !== undefined) return yield* die('give the new body once: --body "…" or --file spec.md');
           const detail = opt.file !== undefined ? (yield* readText(opt.file)).trim() || (yield* die(`${opt.file} is empty`)) : opt.body?.trim();
           const title = opt.title?.trim();
-          const change = { ...(title ? { title } : {}), ...(detail !== undefined ? { detail } : {}), ...(opt.owner !== undefined ? { owner: opt.owner.trim() || null } : {}) };
-          if (!Object.keys(change).length && opt.goal === undefined) return yield* die('usage: kiwi task edit T7 [--title "…"] [--body "…" | --file spec.md] [--owner NAME] [--goal "…"]');
+          const then = opt.then === undefined ? undefined : isLanding(opt.then.trim()) ? (opt.then.trim() as Landing) : yield* die(LANDING_USAGE);
+          const change = {
+            ...(title ? { title } : {}),
+            ...(detail !== undefined ? { detail } : {}),
+            ...(opt.owner !== undefined ? { owner: opt.owner.trim() || null } : {}),
+            ...(then ? { then } : {}),
+            ...(opt.lander !== undefined ? { lander: opt.lander.trim() || null } : {}),
+          };
+          if (!Object.keys(change).length && opt.goal === undefined)
+            return yield* die(
+              'usage: kiwi task edit T7 [--title "…"] [--body "…" | --file spec.md] [--owner NAME] [--then merge|release:tag|release:npm:PKG@RANGE|run|none] [--lander NAME] [--goal "…"]',
+            );
           const lines: string[] = [];
           if (Object.keys(change).length) {
             const after = (yield* s.taskUpdate(id, change)).tasks.get(id)!;
-            const what = [title ? "title" : null, detail !== undefined ? "body" : null, opt.owner !== undefined ? `owner (${after.owner ?? "nobody"})` : null].filter(Boolean).join(", ");
+            const what = [
+              title ? "title" : null,
+              detail !== undefined ? "body" : null,
+              opt.owner !== undefined ? `owner (${after.owner ?? "nobody"})` : null,
+              then ? `landing step (${after.then ?? "none"})` : null,
+              opt.lander !== undefined ? `lander (${after.lander ?? after.owner ?? "its owner"})` : null,
+            ]
+              .filter(Boolean)
+              .join(", ");
             lines.push(`edited ${taskId(id)}'s ${what}: ${inlineText(after.title, 200)}`);
           }
           if (opt.goal !== undefined) {
@@ -171,6 +197,8 @@ export const taskCommands: Record<string, Command> = {
         else if (sub in STATE_FOR) state = yield* s.taskUpdate(id, { state: STATE_FOR[sub], note });
         else if (sub === "block") state = yield* s.taskUpdate(id, { note: `blocked${note ? `: ${note}` : ""}` });
         else if (sub === "cancel") state = yield* s.taskUpdate(id, { state: "cancelled", note });
+        else if (sub === "close")
+          state = yield* s.taskUpdate(id, { state: "done", close: note?.trim() || (yield* die('usage: kiwi task close T7 "why it\'s done without landing" (a person or the lead)')) });
         else if (sub === "drop") state = yield* s.taskUpdate(id, { owner: null, note });
         else if (sub === "first") {
           state = yield* s.taskFirst(id);

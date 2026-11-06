@@ -169,7 +169,7 @@ export function roomView(r: RoomInput): RoomView {
     .map((t) => ({
       id: t.id,
       title: t.title,
-      state: t.state,
+      state: t.state === "landing" ? "review" : t.state,
       owner: t.owner ?? null,
       review: t.review ?? null,
       updatedAt: t.updatedAt,

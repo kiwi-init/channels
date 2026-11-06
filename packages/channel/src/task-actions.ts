@@ -1,5 +1,5 @@
 import type { SendOptions } from "@kiwi/core/client.ts";
-import type { Message } from "@kiwi/core/protocol.ts";
+import { hasLanding, type Message } from "@kiwi/core/protocol.ts";
 import { openRound, taskId, type ChannelState, type Task } from "@kiwi/core/state.ts";
 import { taskDigest } from "@kiwi/core/work.ts";
 
@@ -66,9 +66,10 @@ export function cancelTask(t: Task, note: string, me: string): TaskSend {
 }
 
 export function closeFromGithub(t: Task, c: { cancelled: boolean; note: string }): TaskSend {
+  const state = c.cancelled ? "cancelled" : hasLanding(t.then) ? "landing" : "done";
   return {
-    body: `${taskId(t.id)} ${c.cancelled ? "cancelled" : "done"}: ${c.note}`,
-    opts: { kind: "event", ev: { op: "task.update", task: t.id, state: c.cancelled ? "cancelled" : "done", note: c.note }, ...toOwner(t) },
+    body: `${taskId(t.id)} ${state === "landing" ? "landing" : c.cancelled ? "cancelled" : "done"}: ${c.note}`,
+    opts: { kind: "event", ev: { op: "task.update", task: t.id, state, note: c.note }, ...toOwner(t) },
   };
 }
 

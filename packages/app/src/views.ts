@@ -64,7 +64,7 @@ export interface TaskGroup {
   tasks: Task[];
 }
 
-const ORDER: Record<Task["state"], number> = { doing: 0, review: 1, todo: 2, done: 3 };
+const ORDER: Record<Task["state"], number> = { doing: 0, review: 1, landing: 2, todo: 3, done: 4 };
 const NOBODY: ReadonlySet<number> = new Set();
 
 function nextRelease(state: Pick<ChannelState, "facts">, now: number): string | null {

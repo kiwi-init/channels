@@ -81,7 +81,7 @@ function taskBlock(t: Task, part: Part, now: number, mc: string): Block {
 }
 
 function boardBlock(state: ChannelState, me: string, mc: string): Block | null {
-  const open = [...state.tasks.values()].filter((t) => t.state !== "done" && !t.archived && t.owner !== me).sort((a, b) => a.id - b.id);
+  const open = [...state.tasks.values()].filter((t) => t.state !== "done" && t.state !== "landing" && !t.archived && t.owner !== me).sort((a, b) => a.id - b.id);
   if (!open.length) return null;
   const shown = open.slice(0, BOARD_SHOWN).map((t) => `${taskId(t.id)} ${taskStateWord(t)}${t.owner ? ` @${inlineText(t.owner, 40)}` : " unassigned"}: ${inlineText(t.title, 120)}`);
   const rest = open.length - shown.length;

@@ -399,6 +399,7 @@ function GitHub({ channel }: { channel: Channel }) {
   const sets = own || !!channel.youTrusted
   const write = !!channel.githubWrite
   const prefix = channel.branchPrefix
+  const landing = channel.landing
   return (
     <>
       <Group title="Repos" hint="Pull requests and issues from these show on the channel's GitHub tab and on their tasks.">
@@ -423,6 +424,27 @@ function GitHub({ channel }: { channel: Channel }) {
             </span>
           ) : (
             <span className="cset-mono">{prefix ?? "None"}</span>
+          )}
+        </Row>
+        <Row
+          label="Tasks land on"
+          hint={
+            landing
+              ? `An approved task stays landing until its ${landing} has happened; a task can set its own with --then.`
+              : "Approval finishes a task. Set merge, release:tag, release:npm:PKG@RANGE or run to keep it open until that has happened."
+          }
+        >
+          {sets ? (
+            <span className="cset-prefix">
+              {landing && (
+                <button type="button" className="btn is-quiet is-small" onClick={() => app.actions.setLanding(channel.code, null)}>
+                  Clear
+                </button>
+              )}
+              <InlineEdit value={landing ?? ""} label="Tasks land on" verb={landing ? "Change" : "Set"} onSave={(v) => app.actions.setLanding(channel.code, v)} />
+            </span>
+          ) : (
+            <span className="cset-mono">{landing ?? "Approval"}</span>
           )}
         </Row>
       </Group>

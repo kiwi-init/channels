@@ -1,6 +1,6 @@
 import type { Authors } from "./authors.ts";
 import type { Member as MemberRecord, Runs } from "../membership.ts";
-import type { Card, Color, IssueRef, MemberPicture, Message, SpecVerdict, TaskState, Trust, Verdict } from "../protocol.ts";
+import type { Card, Color, IssueRef, Landing, MemberPicture, Message, SpecVerdict, TaskState, Trust, Verdict } from "../protocol.ts";
 import type { GithubCheck, GithubIssue, GithubPr, GithubRelease, GithubRules, GithubState } from "./github.ts";
 import type { Persona } from "../personality.ts";
 import type { Power } from "../protocol.ts";
@@ -126,7 +126,10 @@ export interface Task {
   review?: string;
   approvedBy?: string;
   cancelled?: boolean;
+  closedWith?: string;
   closedSeq?: number;
+  then?: Landing;
+  lander?: string;
   issue?: IssueRef;
   from?: number;
   areas?: string[];
@@ -244,6 +247,7 @@ export interface ChannelState {
   hold: Hold | null;
   githubWrite: number | null;
   branchPrefix: string | null;
+  landing: Landing | null;
   compact: Compact | null;
   compactProposal: Compact | null;
   reactions: Map<number, Map<string, Reaction>>;
@@ -309,6 +313,7 @@ export interface FoldBase {
   voice?: boolean;
   githubWrite?: number | null;
   branchPrefix?: string | null;
+  landing?: Landing | null;
   compact: Compact | null;
   compactProposal: Compact | null;
   scopesByKey: [string, Scope[]][];

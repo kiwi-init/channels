@@ -7,7 +7,7 @@ import { memberOf, type Channel, type PullRequest, type Task, type TaskStatus } 
 import { useApp } from "~/nav"
 import { nickname, Shown } from "~/names"
 
-export const TONES: Record<TaskStatus, string> = { todo: "", doing: "tone-doing", review: "tone-review", done: "tone-live", waiting: "tone-decide" }
+export const TONES: Record<TaskStatus, string> = { todo: "", doing: "tone-doing", review: "tone-review", landing: "tone-review", done: "tone-live", waiting: "tone-decide" }
 
 function stateOf(channel: Channel, t: Task): { text: string; tone: string } | null {
   const owner = t.owner ? memberOf(channel, t.owner) : undefined

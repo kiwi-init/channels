@@ -11,7 +11,7 @@ function whereItStands(state: ChannelState, t: Task): string {
   return `${work}; ${checkpoint ? `its checkpoint (#${checkpoint.seq}) says where it stands` : "no checkpoint written"}`;
 }
 
-export const reviewedBy = (state: Pick<ChannelState, "tasks">, name: string): Task[] => [...state.tasks.values()].filter((t) => t.review === name && t.state !== "done");
+export const reviewedBy = (state: Pick<ChannelState, "tasks">, name: string): Task[] => [...state.tasks.values()].filter((t) => t.review === name && t.state !== "done" && t.state !== "landing");
 
 export function handBackText(state: ChannelState, who: string, how: "left" | "removed", tasks: readonly Task[], reviewing: readonly Task[] = []): string {
   const head = how === "left" ? `${who} is leaving the channel.` : `${who} was removed from the channel.`;

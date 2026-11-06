@@ -108,6 +108,8 @@ function parse() {
         needs: { type: "string" },
         "needs-you": { type: "boolean" },
         review: { type: "string" },
+        then: { type: "string" },
+        lander: { type: "string" },
         once: { type: "boolean" },
         now: { type: "boolean" },
         ask: { type: "boolean" },

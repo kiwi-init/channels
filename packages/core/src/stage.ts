@@ -47,7 +47,7 @@ export function stageOf(state: ChannelState, t: Task): TaskStage {
   const moved = (r: ReviewRound | undefined): r is ReviewRound & { at: string } => !!r?.at && !!head && !sameHead(r.at, head);
   if (t.state === "done" && t.cancelled) return { stage: "dropped", ...withPr };
   if (pr?.state === "merged" && !failedAt(state, pr).length) return { stage: "done", pr };
-  if (t.state === "done" && verdict?.result.kind === "approved" && moved(verdict)) return { stage: "yours", ...withPr, ...owed, judgedAt: verdict.at };
+  if ((t.state === "done" || t.state === "landing") && verdict?.result.kind === "approved" && moved(verdict)) return { stage: "yours", ...withPr, ...owed, judgedAt: verdict.at };
   if (t.state === "done") return { stage: "done", declared: true, ...withPr };
   if (pr?.state === "open" && failedAt(state, pr).length) return { stage: "red", pr };
   const round = openRound(t);

@@ -1,4 +1,18 @@
-import { GENERAL_ROOM, MAX_CHARTER, MAX_NICKNAME, MAX_ROOMS, MAX_TAGS, PROOF_MAX, TASK_TITLE_MAX_LENGTH, type Event, type Message, type Power, powerChange } from "../protocol.ts";
+import {
+  GENERAL_ROOM,
+  MAX_CHARTER,
+  MAX_NICKNAME,
+  MAX_ROOMS,
+  MAX_TAGS,
+  PROOF_MAX,
+  TASK_TITLE_MAX_LENGTH,
+  type Event,
+  hasLanding,
+  type Landing,
+  type Message,
+  type Power,
+  powerChange,
+} from "../protocol.ts";
 import { free, take } from "./leases.ts";
 import { unnamedTasks } from "./compact.ts";
 import { leadCheckpointKeyRefusal } from "./lead.ts";
@@ -10,7 +24,7 @@ import { readScopes, SCOPES, type Scope } from "../scopes.ts";
 import { cleanPersona } from "../personality.ts";
 import { isPerson, ownSeat, sponsorsAgent } from "./people.ts";
 import { roomName } from "./rooms.ts";
-import { currentState, openRound, reviewClaimRefusal, reviewMoveRefusal, revisedOut, taskId, verdictRefusal, worked } from "./tasks.ts";
+import { currentState, landingRefusal, landingReopens, openRound, reviewClaimRefusal, reviewMoveRefusal, revisedOut, taskId, verdictRefusal, worked } from "./tasks.ts";
 import type { Charter, Compact, Fact, FoldMember, Hold, Lease, Nickname, PersonaLead, Room, SecretRoom, Task } from "./types.ts";
 import { dmPair, inRoom, leaveSeal, rootOf, selfOnly, type RoomMember } from "../room-rules.ts";
 
@@ -48,6 +62,7 @@ export interface FoldCtx {
   hold: Hold | null;
   githubWrite: number | null;
   branchPrefix: string | null;
+  landing: Landing | null;
   compact: Compact | null;
   compactProposal: Compact | null;
 }
@@ -313,6 +328,15 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       break;
     }
 
+    case "landing.set": {
+      if (!member.owner && !c.trusted(m.pk ?? "", member)) {
+        reject(trustOnly("sets how tasks land"));
+        break;
+      }
+      c.landing = ev.then;
+      break;
+    }
+
     case "role.set":
     case "role.refuse": {
       const target = members.get(ev.member);
@@ -424,6 +448,8 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
         workedBy: ev.owner ? [ev.owner] : [],
         rounds: [],
         ...(m.re?.length ? { source: m.re[0] } : {}),
+        ...(hasLanding(ev.then ?? c.landing ?? undefined) ? { then: ev.then ?? c.landing ?? undefined } : {}),
+        ...(ev.lander?.trim() ? { lander: ev.lander.trim() } : {}),
       });
       break;
 
@@ -437,6 +463,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       const task = tasks.get(ev.task);
       if (!task) reject(`no task ${taskId(ev.task)}`);
       else if (task.state === "done") reject(`${taskId(task.id)} is already done`);
+      else if (task.state === "landing") reject(`${taskId(task.id)} is approved: its lander lands it`);
       else if (task.owner && task.owner !== m.from) reject(`${taskId(task.id)} is owned by ${task.owner}`);
       else {
         task.owner = m.from;
@@ -483,8 +510,13 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       const review = ev.review === undefined ? task.review : ev.review?.trim() || undefined;
       const owner = ev.owner === undefined ? task.owner : ev.owner || undefined;
       const mayFinish = !review || isPerson(member) || (review === "*" ? m.from !== owner && !task.workedBy.includes(m.from) : m.from === review);
-      if (ev.state === "done" && task.state !== "done" && !mayFinish) {
+      if (ev.state === "done" && ev.close === undefined && task.state !== "done" && !mayFinish) {
         reject(`${taskId(task.id)} needs review by ${review === "*" ? "someone who hasn't worked on it" : review} before it's done (send it for review)`);
+        break;
+      }
+      const landingWrong = landingRefusal(task, ev, { person: isPerson(member), lead });
+      if (landingWrong) {
+        reject(landingWrong);
         break;
       }
       const open = openRound(task);
@@ -493,21 +525,29 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
         reject(verdictWrong);
         break;
       }
+      if (ev.state === "landing" && !mayFinish) {
+        reject(`${taskId(task.id)} needs review by ${review === "*" ? "someone who hasn't worked on it" : review} before it lands`);
+        break;
+      }
+      const reopens = landingReopens(task, ev);
       const cancel = ev.state === "cancelled" && task.state !== "done";
-      const state =
+      const lands = ev.verdict === "approved" && hasLanding(task.then);
+      const asked =
         ev.state === "cancelled" ? (cancel && (mayFinish || lead || (ev.round !== undefined && revisedOut(task, m.from, open) === ev.round)) ? "done" : undefined) : ev.state && currentState(ev.state);
+      const state = reopens ? "review" : lands && asked === "done" ? "landing" : asked;
       if (open && state && state !== "review")
         open.result =
           ev.verdict && mayFinish
             ? { kind: ev.verdict, by: m.from, seq: m.seq, ts: at }
-            : state === "done" && !cancel
+            : state === "done" && !cancel && ev.close === undefined
               ? { kind: "approved", by: m.from, seq: m.seq, ts: at }
               : { kind: "withdrawn", seq: m.seq };
       if (state === "review") {
         if (open) open.result = { kind: "withdrawn", seq: m.seq };
+        const head = reopens ? task.rounds.at(-1)?.at : ev.at?.trim();
         task.rounds.push({
           n: (task.rounds.at(-1)?.n ?? 0) + 1,
-          ...(ev.at ? { at: ev.at.trim() } : {}),
+          ...(head ? { at: head } : {}),
           ...(ev.summary ? { summary: ev.summary.trim() } : {}),
           by: m.from,
           seq: m.seq,
@@ -515,12 +555,18 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
           result: { kind: "open" },
         });
       }
-      const note = ev.note || (ev.state === "blocked" ? "blocked" : ev.state === "cancelled" ? "cancelled" : undefined);
+      const note = ev.note || ev.close?.trim() || (ev.state === "blocked" ? "blocked" : ev.state === "cancelled" ? "cancelled" : reopens ? "changed how it lands: back to review" : undefined);
+      const settled = (s: string) => s === "done" || s === "landing";
       if (ev.review !== undefined) task.review = review;
-      if (ev.state === "done" && task.state !== "done" && task.review) task.approvedBy = m.from;
-      if (state && state !== "done") task.approvedBy = undefined;
+      if (ev.then !== undefined) task.then = hasLanding(ev.then) ? ev.then : undefined;
+      if (ev.lander !== undefined) task.lander = ev.lander?.trim() || undefined;
+      if (ev.verdict === "approved" && state && settled(state) && task.review) task.approvedBy = m.from;
+      if (ev.state === "done" && ev.verdict === undefined && ev.close === undefined && task.state !== "done" && task.review) task.approvedBy = m.from;
+      if (state && !settled(state)) task.approvedBy = undefined;
       if (state === "done" && task.state !== "done") task.cancelled = ev.state === "cancelled" || undefined;
       if (state && state !== "done") task.cancelled = undefined;
+      if (state === "done" && task.state !== "done") task.closedWith = ev.close?.trim() || undefined;
+      if (state && state !== "done") task.closedWith = undefined;
       if (state === "done" && task.state !== "done") task.closedSeq = m.seq;
       if (state && state !== "done") task.closedSeq = undefined;
       if (ev.owner !== undefined) {
@@ -530,7 +576,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
         task.owner = next;
       }
       if (ev.owner) worked(task, ev.owner);
-      if (state && state !== "done" && (m.from === task.owner || state === "review")) worked(task, m.from);
+      if (state && !settled(state) && (m.from === task.owner || state === "review")) worked(task, m.from);
       if (state) task.state = state;
       if (ev.title) task.title = ev.title.slice(0, TASK_TITLE_MAX_LENGTH);
       if (ev.detail !== undefined) task.detail = ev.detail.trim() || undefined;

@@ -128,7 +128,12 @@ Agents
                                                  question by its id; a new session of the lead starts from it
      task cancel T7 "why"                        closes it, marked cancelled, if you may finish it or you're the lead
                                                  (else it's only a note)
-     task edit T7 [--title "…"] [--file body.md] [--owner NAME] [--goal "…"]   the lead or a person: change
+     task add … --then merge|release:tag|release:npm:PKG@RANGE|run|none [--lander NAME]   what has to happen
+                                                 after its approval: the task stays landing until then (the channel's
+                                                 landing setting is the default); the lander (its owner unless named) lands it
+     task close T7 "why"                         the lead or a person: done without its landing step, with the reason
+                                                 kept apart from landed (a plain done can't skip landing)
+     task edit T7 [--title "…"] [--file body.md] [--owner NAME] [--then …] [--lander NAME] [--goal "…"]   the lead or a person: change
                                                  a task's title, body (or --body "…"), owner or its ask's goal
      task delete T7 ["why"]                      the lead or a person: a task filed by mistake leaves the board,
                                                  and the history keeps one line saying so
