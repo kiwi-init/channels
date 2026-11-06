@@ -7,6 +7,7 @@ import { Icon } from "~/kit/icons"
 import { modsNow, useModsVersion } from "~/mods/host"
 import { ModIcon } from "~/mods/icon"
 import { needWords } from "~/mods/needs"
+import { modReads } from "~/mods/served"
 import { useApp } from "~/nav"
 import { Confirm, Group, Row } from "~/settings/controls"
 import { ModDetailsPage } from "~/settings/mod-details"
@@ -16,10 +17,7 @@ const wanted = (m: ModView): boolean => m.state === "on" || m.off === "safe"
 
 const switchable = (m: ModView): boolean => m.state !== "off" || m.off !== undefined
 
-const managed = (): boolean => {
-  const b = bridge()
-  return !!b && typeof b.modsInstalled === "function"
-}
+const managed = (): boolean => typeof modReads().modsInstalled === "function"
 
 const onlyCopy = (i: ModInstalled | undefined): boolean => !!i && i.local && !i.link
 
@@ -68,10 +66,10 @@ export function ModsSection() {
   )
 
   useEffect(() => {
-    const b = bridge()
-    if (!names || !b || !managed()) return
+    const read = modReads().modsInstalled
+    if (!names || !read) return
     let live = true
-    void b.modsInstalled().then(
+    void read().then(
       (list) => live && setInstalled(new Map(list.map((i) => [i.name, i]))),
       () => {}
     )
@@ -81,10 +79,10 @@ export function ModsSection() {
   }, [names])
 
   useEffect(() => {
-    const b = bridge()
-    if (!b || !managed()) return
+    const read = modReads().modUpdates
+    if (!read) return
     let live = true
-    void b.modUpdates().then(
+    void read().then(
       (found) => live && setUpdates(new Map(found.changes.map((c) => [c.name, c]))),
       () => {}
     )
@@ -101,11 +99,11 @@ export function ModsSection() {
     done.then(() => setBusy(null), fail)
   }
   const update = (m: ModView) => {
-    const b = bridge()
-    if (!b || !managed()) return
+    const run = modReads().updateMod
+    if (!run) return
     setAsking(null)
     setBusy(m.name)
-    b.updateMod(m.name).then(() => {
+    run(m.name).then(() => {
       setBusy(null)
       setUpdates((now) => {
         const next = new Map(now)
@@ -116,16 +114,64 @@ export function ModsSection() {
   }
 
   const remove = (m: ModView, i: ModInstalled | undefined) => {
-    const b = bridge()
-    if (!b || !managed()) return
+    const run = modReads().removeMod
+    if (!run) return
     setAsking(null)
     setBusy(m.name)
-    b.removeMod(m.name, !!i?.changed || onlyCopy(i)).then(() => setBusy(null), fail)
+    run(m.name, !!i?.changed || onlyCopy(i)).then(() => {
+      setBusy(null)
+      go({ to: "settings", section: "mods" })
+    }, fail)
   }
 
   const askUpdate = (m: ModView, u: ModUpdate) => (u.added.length || u.dropped.length ? setAsking({ kind: "update", m, u }) : update(m))
 
-  if (open) return <ModDetailsPage mod={open} />
+  const confirms = (
+    <>
+      <Confirm
+        open={asking?.kind === "update"}
+        title={asking?.kind === "update" ? `Update ${asking.m.name} to ${asking.u.to}?` : ""}
+        sub={asking?.kind === "update" ? `${asking.u.commits} new commit${asking.u.commits === 1 ? "" : "s"} from its source.` : ""}
+        action="Update"
+        tone="primary"
+        onClose={() => setAsking(null)}
+        onConfirm={() => asking?.kind === "update" && update(asking.m)}
+      >
+        {asking?.kind === "update" && (
+          <>
+            {asking.u.added.length > 0 && <p className="set-note">It now also asks for: {asking.u.added.map(needWords).join(" · ")}. It waits for you to allow that before it runs again.</p>}
+            {asking.u.dropped.length > 0 && <p className="set-note">It no longer asks for: {asking.u.dropped.map(needWords).join(" · ")}.</p>}
+          </>
+        )}
+      </Confirm>
+      <Confirm
+        open={asking?.kind === "remove"}
+        title={asking?.kind === "remove" ? `Remove ${asking.m.name}?` : ""}
+        sub={asking?.kind === "remove" ? removeWhy(asking.i) : ""}
+        action="Remove"
+        onClose={() => setAsking(null)}
+        onConfirm={() => asking?.kind === "remove" && remove(asking.m, asking.i)}
+      />
+    </>
+  )
+
+  if (open) {
+    const u = updates.get(open.name)
+    const i = installed.get(open.name)
+    return (
+      <>
+        <ModDetailsPage
+          mod={open}
+          manage={
+            managed()
+              ? { busy: busy === open.name, update: u, onUpdate: u ? () => askUpdate(open, u) : undefined, removeWhy: removeWhy(i), onRemove: () => setAsking({ kind: "remove", m: open, i }) }
+              : undefined
+          }
+        />
+        {confirms}
+      </>
+    )
+  }
   return (
     <Page title="Mods" lede="Each one runs in its own frame, away from your keys and messages.">
       <Group hint={mods.find((m) => m.off === "safe")?.why}>
@@ -153,11 +199,6 @@ export function ModsSection() {
                     Update to {updates.get(m.name)!.to}
                   </button>
                 )}
-                {managed() && (
-                  <button type="button" className="btn is-quiet is-small" disabled={busy === m.name} onClick={() => setAsking({ kind: "remove", m, i: installed.get(m.name) })}>
-                    Remove
-                  </button>
-                )}
                 {switchable(m) && <Toggle on={wanted(m)} label={`Run ${m.name}`} disabled={busy === m.name} onChange={(on) => flip(m, on)} />}
               </div>
             </div>
@@ -173,29 +214,7 @@ export function ModsSection() {
           />
         )}
       </Group>
-      <Confirm
-        open={asking?.kind === "update"}
-        title={asking?.kind === "update" ? `Update ${asking.m.name} to ${asking.u.to}?` : ""}
-        sub={asking?.kind === "update" ? `${asking.u.commits} new commit${asking.u.commits === 1 ? "" : "s"} from its source.` : ""}
-        action="Update"
-        onClose={() => setAsking(null)}
-        onConfirm={() => asking?.kind === "update" && update(asking.m)}
-      >
-        {asking?.kind === "update" && (
-          <>
-            {asking.u.added.length > 0 && <p className="set-note">It now also asks for: {asking.u.added.map(needWords).join(" · ")}. It waits for you to allow that before it runs again.</p>}
-            {asking.u.dropped.length > 0 && <p className="set-note">It no longer asks for: {asking.u.dropped.map(needWords).join(" · ")}.</p>}
-          </>
-        )}
-      </Confirm>
-      <Confirm
-        open={asking?.kind === "remove"}
-        title={asking?.kind === "remove" ? `Remove ${asking.m.name}?` : ""}
-        sub={asking?.kind === "remove" ? removeWhy(asking.i) : ""}
-        action="Remove"
-        onClose={() => setAsking(null)}
-        onConfirm={() => asking?.kind === "remove" && remove(asking.m, asking.i)}
-      />
+      {confirms}
     </Page>
   )
 }

@@ -567,11 +567,21 @@ try {
   await step("notes-mod's switch, off", 10_000, () => d.evaluate(inRow, { mod: "notes-mod", control: "Run notes-mod" }, 2_000));
   const off = await until("notes-mod off", 15_000, async () => ((await notes())?.off === "you" ? true : null)).catch(() => null);
   check(!!off, "its switch turns it off again");
-  await step("notes-mod's Remove", 10_000, () => d.evaluate(inRow, { mod: "notes-mod", control: "Remove" }, 2_000));
+  await step("notes-mod's details", 10_000, () => d.evaluate(clickText, { selector: ".set-main .mod-open", text: "notes-mod" }, 2_000));
+  await step("Remove, at the foot of its details", 10_000, () => d.evaluate(inRow, { mod: "Remove", control: "Remove" }, 2_000));
+  await later(300);
+  await shot("settings-mods-remove");
   await step("Remove in the confirm", 10_000, () => d.evaluate(confirmIt, "Remove", 2_000));
   const gone = await until("notes-mod gone", 30_000, async () => ((await notes()) === null ? true : null)).catch(() => null);
   check(!!gone && !existsSync(join(root, ".kiwi", "mods", "notes-mod")), "Remove takes it out of the list and off the disk, without a restart");
-  check((await d.evaluate(() => [...document.querySelectorAll(".set-row-label")].some((l) => (l.textContent ?? "").startsWith("notes-mod ")), null, 2_000)) === false, "the page drops its row");
+  const back = await until("the Mods list again", 10_000, () =>
+    d.evaluate(
+      () => (document.querySelector(".set-main .mod-open") && ![...document.querySelectorAll(".set-row-label")].some((l) => (l.textContent ?? "").startsWith("notes-mod ")) ? true : null),
+      null,
+      2_000,
+    ),
+  ).catch(() => null);
+  check(!!back, "the page goes back to the Mods list, without its row");
   d.close();
   await stop(app);
   writeFileSync(join(root, ".kiwi", "mods", ".safe-mode"), "");
