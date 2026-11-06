@@ -1,4 +1,4 @@
-import { ComputerPhoneSyncIcon, KeyboardIcon, PaintBoardIcon } from "@hugeicons/core-free-icons"
+import { CommandIcon, ComputerPhoneSyncIcon, PaintBoardIcon } from "@hugeicons/core-free-icons"
 import { useEffect } from "react"
 
 import { cx } from "~/kit/bits"
@@ -18,7 +18,7 @@ const SECTIONS: readonly (readonly [Section, string, IconName | Glyph])[] = [
   ["appearance", "Appearance", PaintBoardIcon],
   ["computers", "Computers and phones", ComputerPhoneSyncIcon],
   ["agents", "Agents", "agent"],
-  ["shortcuts", "Shortcuts", KeyboardIcon],
+  ["shortcuts", "Shortcuts", CommandIcon],
   ["about", "About", "info"],
 ]
 

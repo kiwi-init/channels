@@ -152,7 +152,7 @@ export const SHOTS: Record<string, Shot> = {
   "settings-about": kiwi({ page: "settings", section: "about" }),
   "settings-shortcuts": {
     ...kiwi({ page: "settings", section: "shortcuts" }),
-    keys: { "app.palette": ["mod+k", "mod+p"], "view.sidebar": "mod+shift+l", "app.calm": null, "chat.find": "mod+f", "nav.back": "mod+kk" },
+    keys: { "app.palette": ["mod+k", "mod+p"], "view.sidebar": "mod+shift+l", "chat.find": "mod+f", "nav.back": "mod+kk" },
   },
   "channel-settings-guest": { scenario: "full", channel: "studio", nav: { modal: { kind: "channel" } } },
   "agent-manager": { scenario: "full", channel: "studio", nav: { modal: { kind: "person", name: "quill" } } },
