@@ -12,7 +12,7 @@ import { detectCard } from "../../card.ts";
 import { loadConfig } from "../../config.ts";
 import { daemonListeners, wakeHooked, wakeOn } from "../../daemon.ts";
 import { here } from "../../seats.ts";
-import { args, opt } from "../args.ts";
+import { opt } from "../args.ts";
 import { type Command, die, noteRead, out, session } from "../context.ts";
 import { delivery, render } from "../input.ts";
 import { docWakeLine } from "../../agent/docs.ts";
@@ -96,7 +96,7 @@ const waitFrom = (s: AgentSession, wait: string | undefined) =>
     const hearing = Effect.raceFirst(listening, pollDocs(s, woke));
     yield* Effect.raceFirst(hearing, Effect.raceFirst(Deferred.await(enough), timeout)).pipe(Effect.scoped);
     if (got) return yield* noteRead(s);
-    out(`no messages yet. Next: run this command again:\n  ${mcFor(s.alias, s.me)} ${args[0] === "listen" ? "listen --once" : "wait"} --timeout 10m`);
+    out(`no messages yet. Next: run this command again:\n  ${mcFor(s.alias, s.me)} listen --once --timeout 10m`);
     return 2;
   });
 
@@ -120,12 +120,61 @@ const listenerRefused = (s: AgentSession) =>
     return yield* die(`Kiwi already wakes you in this session (${by}), and a listener of yours would take its place. Run \`${COMMANDS.join(mcFor(s.alias, s.me))}\` to read what's waiting.`, 2);
   });
 
+const once = () =>
+  Effect.gen(function* () {
+    const s = yield* session();
+    if (!opt.timeout) yield* listenerRefused(s);
+    return yield* waitFrom(s, opt.timeout);
+  });
+
+const toWebhook = (url: string) =>
+  Effect.gen(function* () {
+    if (!/^https?:\/\//.test(url)) return yield* die("--webhook must be an http(s) URL");
+    const secret = opt.secret ?? process.env.KIWI_WEBHOOK_SECRET ?? process.env.MC_WEBHOOK_SECRET;
+    const s = yield* session();
+    process.stderr.write(`kiwi: watching ${s.alias} as ${s.me}, POSTing to ${url}\n`);
+    const headers = { "content-type": "application/json", ...(secret ? { "x-kiwi-secret": secret } : {}) };
+    const post = (m: Message, state: ChannelState) =>
+      Effect.promise(async () => {
+        const body = JSON.stringify({
+          channel: s.alias,
+          seq: m.seq,
+          from: m.from,
+          to: m.to ?? null,
+          kind: m.kind,
+          re: m.re ?? null,
+          text: m.kind === "event" ? describeEvent(m, state) : m.body,
+          images: m.imgs?.map((i) => i.name) ?? [],
+          files: m.files?.map((f) => f.name) ?? [],
+          trust: state.trust.get(m.seq) ?? null,
+          ts: m.ts,
+        });
+        try {
+          const res = await fetch(url, { method: "POST", headers, body, signal: AbortSignal.timeout(10_000) });
+          if (!res.ok) process.stderr.write(`kiwi: webhook ${res.status} for #${m.seq}\n`);
+          return res.ok;
+        } catch (err) {
+          process.stderr.write(`kiwi: webhook failed for #${m.seq}: ${err instanceof Error ? err.message : err}\n`);
+          return false;
+        }
+      });
+    yield* s.listen(post, {
+      ...(yield* delivery(s)),
+      ...(!opt["for-me"] && opt.thread === undefined ? { chat: true } : {}),
+      onStatus: (msg) => Effect.sync(() => void process.stderr.write(`kiwi: ${msg}\n`)),
+      onNotice: (text) =>
+        Effect.sync(
+          () => void fetch(url, { method: "POST", headers, body: JSON.stringify({ channel: s.alias, kind: "notice", text, ts: Date.now() }), signal: AbortSignal.timeout(10_000) }).catch(() => {}),
+        ),
+    });
+  });
+
 export const listenCommands: Record<string, Command> = {
   listen: () => {
     if (opt.now && (opt.once || opt.timeout)) return die("--now doesn't wait: leave out --once and --timeout");
-    if (opt.webhook) return listenCommands.watch!();
-    if (opt.now) return listenCommands.read!();
-    if (opt.once || opt.timeout) return listenCommands.wait!();
+    if (opt.webhook) return toWebhook(opt.webhook);
+    if (opt.now) return Effect.flatMap(session(), readFrom);
+    if (opt.once || opt.timeout) return once();
     return Effect.gen(function* () {
       const s = yield* session();
       if (!here().harness) return yield* tailFrom(s);
@@ -134,63 +183,4 @@ export const listenCommands: Record<string, Command> = {
       return yield* modeFor(s) === "once" ? waitFrom(s, undefined) : tailFrom(s);
     });
   },
-
-  read: () => Effect.flatMap(session(), readFrom),
-
-  tail: () =>
-    Effect.gen(function* () {
-      const s = yield* session();
-      yield* listenerRefused(s);
-      yield* tailFrom(s);
-    }),
-
-  wait: () =>
-    Effect.gen(function* () {
-      const s = yield* session();
-      if (!opt.timeout) yield* listenerRefused(s);
-      return yield* waitFrom(s, opt.timeout);
-    }),
-
-  watch: () =>
-    Effect.gen(function* () {
-      const url = opt.webhook ?? (yield* die("usage: kiwi watch --webhook URL [--for-me|--all]"));
-      if (!/^https?:\/\//.test(url)) return yield* die("--webhook must be an http(s) URL");
-      const secret = opt.secret ?? process.env.KIWI_WEBHOOK_SECRET ?? process.env.MC_WEBHOOK_SECRET;
-      const s = yield* session();
-      process.stderr.write(`kiwi: watching ${s.alias} as ${s.me}, POSTing to ${url}\n`);
-      const headers = { "content-type": "application/json", ...(secret ? { "x-kiwi-secret": secret } : {}) };
-      const post = (m: Message, state: ChannelState) =>
-        Effect.promise(async () => {
-          const body = JSON.stringify({
-            channel: s.alias,
-            seq: m.seq,
-            from: m.from,
-            to: m.to ?? null,
-            kind: m.kind,
-            re: m.re ?? null,
-            text: m.kind === "event" ? describeEvent(m, state) : m.body,
-            images: m.imgs?.map((i) => i.name) ?? [],
-            files: m.files?.map((f) => f.name) ?? [],
-            trust: state.trust.get(m.seq) ?? null,
-            ts: m.ts,
-          });
-          try {
-            const res = await fetch(url, { method: "POST", headers, body, signal: AbortSignal.timeout(10_000) });
-            if (!res.ok) process.stderr.write(`kiwi: webhook ${res.status} for #${m.seq}\n`);
-            return res.ok;
-          } catch (err) {
-            process.stderr.write(`kiwi: webhook failed for #${m.seq}: ${err instanceof Error ? err.message : err}\n`);
-            return false;
-          }
-        });
-      yield* s.listen(post, {
-        ...(yield* delivery(s)),
-        ...(!opt["for-me"] && opt.thread === undefined ? { chat: true } : {}),
-        onStatus: (msg) => Effect.sync(() => void process.stderr.write(`kiwi: ${msg}\n`)),
-        onNotice: (text) =>
-          Effect.sync(
-            () => void fetch(url, { method: "POST", headers, body: JSON.stringify({ channel: s.alias, kind: "notice", text, ts: Date.now() }), signal: AbortSignal.timeout(10_000) }).catch(() => {}),
-          ),
-      });
-    }),
 };

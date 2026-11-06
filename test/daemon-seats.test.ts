@@ -362,23 +362,23 @@ describe("the CLI and the daemon", () => {
     await until("the CLI's read", async () => (await seatOf("claude"))?.read?.session === "cli-session");
   });
 
-  test("status shows your own seat as the daemon sees it and reports its read; who shows when the rest were last seen", async () => {
+  test("status shows your own seat as the daemon sees it and reports its read, and when the rest were last seen", async () => {
     await until("claude's seat", async () => (await seatOf("claude")) !== null);
     const status = await cli(["-c", "test", "--as", "claude", "status"], "status-session");
     expect(status).toMatch(/claude \(you\).* · not listening · /);
     await until("the status read", async () => (await seatOf("claude"))?.read?.session === "status-session");
-    expect(await cli(["-c", "test", "--as", "claude", "who"])).toMatch(/^human .*· last seen /m);
+    expect(status).toMatch(/^ {2}human .*· last seen /m);
   });
 
-  test("tasks --global starts the daemon", async () => {
+  test("task --global starts the daemon", async () => {
     await stopDaemon(daemonSock(home));
-    await cli(["--as", "claude", "tasks", "--global"]);
+    await cli(["--as", "claude", "task", "--global"]);
     expect((await daemonHello(daemonSock(home))).pid).toBeGreaterThan(0);
   });
 
   test("a relative KIWI_HOME starts the daemon in that home, not inside it", async () => {
     await stopDaemon(daemonSock(home));
-    await cli(["-c", "test", "--as", "claude", "read"], "relative-session", { cwd: dirname(home), kiwiHome: basename(home) });
+    await cli(["-c", "test", "--as", "claude", "listen", "--now"], "relative-session", { cwd: dirname(home), kiwiHome: basename(home) });
     expect((await daemonHello(daemonSock(home))).pid).toBeGreaterThan(0);
     expect(existsSync(join(home, basename(home)))).toBe(false);
     await until("the read from a relative home", async () => (await seatOf("claude"))?.read?.session === "relative-session");

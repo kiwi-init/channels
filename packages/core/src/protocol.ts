@@ -4,7 +4,7 @@
 // and AES-GCM ciphertext. Everything meaningful (sender, recipients, body,
 // coordination events, signatures) lives inside the encrypted payload.
 
-import { wellFormedCheck, type CheckAsk } from "./checks.ts";
+import { wellFormedArtifact, wellFormedCheck, type CheckArtifact, type CheckAsk } from "./checks.ts";
 import { DEVICE_LIST_MAX, type DeviceLink } from "./devices.ts";
 import { cleanPersona, type Persona } from "./personality.ts";
 import { permissionChoices, wellFormedPermission, wellFormedPermReply, wellFormedSettled, type PermissionReply, type PermissionSettled, type PermissionShown } from "./permission.ts";
@@ -291,6 +291,7 @@ export type Event =
       runs?: number[];
     }
   | { op: "task.first"; task: number }
+  | { op: "task.landed"; task: number; artifact: CheckArtifact }
   | { op: "task.delete"; task: number; why?: string }
   /** What a member is and has, said by itself: where it runs, what runs it, what it can use. Shown in People. */
   | ({ op: "card" } & Card)
@@ -846,7 +847,7 @@ export interface Payload {
   side?: true;
   block?: DocBlockRef;
   /**
-   * An agent handing a decision or a step to people instead of acting (`kiwi escalate`): a blocking
+   * An agent handing a decision or a step to people instead of acting (`kiwi ask-human`): a blocking
    * question to its own human and the owner. Older clients see it as the blocking question it also is.
    */
   esc?: true;
@@ -887,7 +888,7 @@ export interface NewerEvent {
 
 export type WirePayload = Omit<Payload, "ev"> & { ev?: Event | NewerEvent };
 
-export const EVENT_OPS_VERSION = 21;
+export const EVENT_OPS_VERSION = 22;
 
 export const REVIEW_CHECK = "kiwi/review";
 
@@ -1069,6 +1070,8 @@ function eventCheck(ev: unknown): boolean | null {
     case "task.claim":
     case "task.first":
       return n(e.task);
+    case "task.landed":
+      return n(e.task) && wellFormedArtifact(e.artifact);
     case "task.delete":
       return n(e.task) && opt(e.why, (x): x is string => str(x, 500));
     case "task.update":

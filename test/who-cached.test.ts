@@ -65,7 +65,7 @@ afterAll(async () => {
 
 async function who(): Promise<{ out: string; ms: number }> {
   const t0 = performance.now();
-  const p = Bun.spawn(kiwiCmd(["-c", "test", "--as", "claude", "who"]), {
+  const p = Bun.spawn(kiwiCmd(["-c", "test", "--as", "claude", "status"]), {
     cwd: home,
     env: { ...process.env, KIWI_HOME: home, KIWI_RELAY: relay, CLAUDECODE: "" },
     stdout: "pipe",
@@ -76,7 +76,7 @@ async function who(): Promise<{ out: string; ms: number }> {
   return { out, ms: performance.now() - t0 };
 }
 
-test("once the daemon has heard a beacon round, kiwi who answers from it without waiting on a probe", async () => {
+test("once the daemon has heard a beacon round, kiwi status answers from it without waiting on a probe", async () => {
   const end = Date.now() + 15_000;
   while (!(await daemonPresence("test", "claude"))?.presence.some((h) => h.presence.from === "codex")) {
     if (Date.now() > end) throw new Error("timed out waiting for the daemon to hear codex");
@@ -86,12 +86,12 @@ test("once the daemon has heard a beacon round, kiwi who answers from it without
   proxy!.reset();
   const fast = await who();
   const traffic = proxy!.reset();
-  console.log(`kiwi who from the daemon's presence: ${Math.round(fast.ms)}ms, ${traffic.sockets} sockets, ${traffic.http} http`);
+  console.log(`kiwi status from the daemon's presence: ${Math.round(fast.ms)}ms, ${traffic.sockets} sockets, ${traffic.http} http`);
   expect(fast.out).toContain("codex");
   expect(traffic.sockets).toBe(0);
 });
 
-test("a third member's beacon naming codex, and one forged with codex's key, leave codex in the daemon's presence and in kiwi who", async () => {
+test("a third member's beacon naming codex, and one forged with codex's key, leave codex in the daemon's presence and in kiwi status", async () => {
   const heard = async () => (await daemonPresence("test", "claude"))?.presence ?? [];
   const end = Date.now() + 15_000;
   while (!(await heard()).some((h) => h.presence.pk === codex.pk)) {
@@ -129,7 +129,7 @@ test("a third member's beacon naming codex, and one forged with codex's key, lea
     })();
     const { out } = await who().finally(() => (posing = false));
     await posed;
-    expect(out).toMatch(/^codex · (?!last seen)/m);
+    expect(out).toMatch(/^ {2}codex\b(?!.*last seen).*$/m);
   } finally {
     socket.close();
   }

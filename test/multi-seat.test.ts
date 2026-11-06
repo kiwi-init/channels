@@ -370,7 +370,7 @@ describe("a seat whose own `kiwi listen` takes its messages", () => {
     const plain = await run(h, ["-c", "beta", "--as", "reviewer", "listen"], S);
     expect(plain.code).toBe(0);
     expect(plain.out).toContain("read by a plain listen");
-    for (const args of [["listen", "--once"], ["tail"], ["wait"]]) {
+    for (const args of [["listen", "--once"]]) {
       const refused = await run(h, ["-c", "beta", "--as", "reviewer", ...args], S);
       expect(refused.code).toBe(2);
       expect(refused.err).toContain("Kiwi already wakes you in this session (Claude Code's hooks), and a listener of yours would take its place.");

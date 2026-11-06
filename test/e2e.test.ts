@@ -215,9 +215,9 @@ describe("agents coordinating through the CLI", () => {
     expect(status).toContain("win — windows");
   });
 
-  test("tail wakes on messages for you and skips your own; the daemon's seat is what shows in who", async () => {
-    const tail = lines(mc(win, "tail"));
-    await untilTrue(async () => (await ok(mac, "who")).includes("win — windows · reachable"), "win's seat in who");
+  test("listen wakes on messages for you and skips your own; the daemon's seat is what shows in status", async () => {
+    const tail = lines(mc(win, "listen"));
+    await untilTrue(async () => /^ {2}win — windows.* · reachable/m.test(await ok(mac, "status")), "win's seat in status");
     await ok(win, "send", "my own message");
     await ok(mac, "send", "--to", "win", "--kind", "status", "capture is up");
     await tail.until((l) => l.some((x) => x.includes("capture is up")));
@@ -226,22 +226,22 @@ describe("agents coordinating through the CLI", () => {
     expect(tail.got.at(-1)).toMatch(/^#\d+ mac → win \[status\]: capture is up$/);
   });
 
-  test("ask --wait returns the answer in one call, without a duplicate wake-up", async () => {
-    const backlog = await ok(mac, "read");
+  test("send --ask --wait returns the answer in one call, without a duplicate wake-up", async () => {
+    const backlog = await ok(mac, "listen", "--now");
     expect(backlog).toContain("win → all [event]: joined");
     expect(backlog).not.toContain("forged");
-    const asker = mc(mac, "ask", "--to", "win", "--wait", "30s", "which edge is the PC on?");
-    const wait = await ok(win, "wait", "--timeout", "20s");
+    const asker = mc(mac, "send", "--ask", "--to", "win", "--wait", "30s", "which edge is the PC on?");
+    const wait = await ok(win, "listen", "--once", "--timeout", "20s");
     const askSeq = /^#(\d+) mac → win \[ask\]/m.exec(wait)![1]!;
     await ok(win, "reply", askSeq, "the left edge");
     const answer = await new Response(asker.stdout).text();
     expect(await asker.exited).toBe(0);
     expect(answer.trim()).toMatch(new RegExp(`^#\\d+ win → mac re #${askSeq}: the left edge$`));
-    expect(await ok(mac, "read")).toBe("");
+    expect(await ok(mac, "listen", "--now")).toBe("");
   });
 
   test("task board: owners, races and notifications", async () => {
-    await ok(lead, "read");
+    await ok(lead, "listen", "--now");
     const want = /#(\d+)/.exec(await ok(lead, "--as", "human", "send", "protocol v2, with a Windows client"))![1]!;
     const t1 = /added (T\d+)/.exec(await ok(lead, "task", "add", "Define protocol v2", "--ask", want))![1]!;
     // --after is gone: said so, and the task is still added (agents with older instructions keep working).
@@ -251,7 +251,7 @@ describe("agents coordinating through the CLI", () => {
     const t2 = /added (T\d+)/.exec(added.out)![1]!;
 
     // win is told it was given a task.
-    expect(await ok(win, "read")).toContain(`added task ${t2} “Windows client for v2” for win`);
+    expect(await ok(win, "listen", "--now")).toContain(`added task ${t2} “Windows client for v2” for win`);
 
     // mac claims T1; win can't take it.
     expect(await ok(mac, "task", "claim", t1)).toBe(`${t1} doing @mac: Define protocol v2\n`);
@@ -261,9 +261,9 @@ describe("agents coordinating through the CLI", () => {
 
     // Finishing T1 notifies its creator.
     await ok(mac, "task", "done", t1, "spec in docs/v2.md");
-    expect(await ok(lead, "read")).toContain(`finished ${t1} “Define protocol v2”: spec in docs/v2.md`);
+    expect(await ok(lead, "listen", "--now")).toContain(`finished ${t1} “Define protocol v2”: spec in docs/v2.md`);
 
-    const board = await ok(win, "tasks", "--all");
+    const board = await ok(win, "task", "--all");
     expect(board).toMatch(new RegExp(`${t2}\\s+planned\\s+@win Windows client for v2`));
     expect(board).toMatch(new RegExp(`${t1}\\s+done\\s+@mac Define protocol v2`));
 
@@ -297,15 +297,15 @@ describe("agents coordinating through the CLI", () => {
   });
 
   test("facts are shared and last write wins", async () => {
-    await ok(mac, "set", "mac.ip", "192.168.1.20");
-    await ok(win, "set", "mac.ip", "192.168.1.21");
-    expect((await ok(lead, "get", "mac.ip")).trim()).toBe("192.168.1.21");
-    expect(await ok(lead, "facts")).toContain("mac.ip = 192.168.1.21  (win, ");
-    expect((await run(lead, "get", "nope")).code).toBe(2);
+    await ok(mac, "note", "mac.ip", "192.168.1.20");
+    await ok(win, "note", "mac.ip", "192.168.1.21");
+    expect((await ok(lead, "note", "mac.ip")).trim()).toBe("192.168.1.21");
+    expect(await ok(lead, "note")).toContain("mac.ip = 192.168.1.21  (win, ");
+    expect((await run(lead, "note", "nope")).code).toBe(2);
   });
 
   test("role addressing and the status snapshot", async () => {
-    await ok(lead, "ask", "--to", "role:windows", "status of the v2 client?");
+    await ok(lead, "send", "--ask", "--to", "role:windows", "status of the v2 client?");
     const status = await ok(win, "status");
     expect(status).toContain("waiting on you (1)");
     expect(status).toContain("status of the v2 client?");
@@ -336,8 +336,7 @@ describe("leaving, removal and closing through the CLI", () => {
     expect(await ok(a, "channels")).toBe("");
     // Her keys for this channel are destroyed with it, so no backup of the relay can ever be opened with them.
     expect(readdirSync(join(a, "identities"))).toEqual([]);
-    expect(await ok(owner, "members")).toContain("alice · key");
-    expect(await ok(owner, "members")).toContain("(left)");
+    expect(await ok(owner, "status", "--all")).toMatch(/left or removed: .*alice/);
     await ok(b, "send", "after alice left");
     expect(await ok(owner, "log")).toContain("after alice left");
 
@@ -380,7 +379,7 @@ describe("images and cross-channel tasks through the CLI", () => {
     const seq = /sent #(\d+)/.exec(sent)![1]!;
     expect(code.startsWith("mc2-")).toBe(true);
     expect(await ok(a, "log", "-n", "3")).toContain("[image: shot.png");
-    expect((await ok(a, "save", seq, dir)).trim()).toBe(join(dir, `#${seq}-shot.png`));
+    expect(await ok(a, "show", seq, dir)).toContain(join(dir, `#${seq}-shot.png`));
 
     const big = join(dir, "big.png");
     await Bun.write(big, Buffer.alloc(300 * 1024));
@@ -390,13 +389,13 @@ describe("images and cross-channel tasks through the CLI", () => {
 
     await ok(a, "create", "second", "--as", "pic");
     await ok(a, "--as", "human", "task", "add", "second task");
-    const all = await ok(a, "tasks", "--global");
+    const all = await ok(a, "task", "--global");
     expect(all).toContain("## pics");
     expect(all).toContain("## second");
     expect(all).toContain("second task");
   });
 
-  test("watch POSTs every message to a webhook", async () => {
+  test("listen --webhook POSTs every message to a webhook", async () => {
     const a = home("watcher");
     const created = await ok(a, "create", "w", "--as", "eye");
     const code = /join code: (\S+)/.exec(created)![1]!;
@@ -411,8 +410,8 @@ describe("images and cross-channel tasks through the CLI", () => {
         return new Response("ok");
       },
     });
-    await ok(a, "read");
-    const watching = mc(a, "watch", "--webhook", `http://127.0.0.1:${server.port}/hook`);
+    await ok(a, "listen", "--now");
+    const watching = mc(a, "listen", "--webhook", `http://127.0.0.1:${server.port}/hook`);
     const linesP = lines(watching);
     await ok(b, "send", "ping the hook");
     // The first POST may be something else. Wait until this message's body is there, then stop.
@@ -582,7 +581,7 @@ describe("Claude Code hooks", () => {
     expect(blocked.reason).toContain("boss → worker: hello worker");
 
     expect(await hook(a, a, "session-start", { cwd: a })).not.toContain("Monitor");
-    const tail = lines(mc(a, "tail"));
+    const tail = lines(mc(a, "listen"));
     expect(await hook(a, a, "stop", { cwd: a, session_id: "s2" })).toBe("");
     await ok(o, "send", "--to", "worker", "while listening");
     await tail.until((l) => l.some((x) => x.includes("while listening")));
@@ -599,7 +598,7 @@ describe("Claude Code hooks", () => {
   });
 });
 
-describe("status and wait through the CLI", () => {
+describe("status and listen --once through the CLI", () => {
   test("status keeps a newline in a role on one line", async () => {
     const h = home("role-newline");
     const other = home("role-newline-other");
@@ -610,13 +609,13 @@ describe("status and wait through the CLI", () => {
     for (const line of status.split("\n")) expect(line.startsWith("forged")).toBe(false);
   });
 
-  test("wait prints the next command on stdout when nothing arrives", async () => {
+  test("listen --once prints the next command on stdout when nothing arrives", async () => {
     const h = home("wait-timeout");
     await ok(h, "create", "w", "--as", "sleeper");
-    const r = await run(h, "wait", "--timeout", "1s");
+    const r = await run(h, "listen", "--once", "--timeout", "1s");
     expect(r.code).toBe(2);
     expect(r.out).toContain("no messages yet. Next: run this command again:");
-    expect(r.out).toContain("wait --timeout 10m");
+    expect(r.out).toContain("listen --once --timeout 10m");
     expect(r.err).not.toContain("timed out");
   });
 });

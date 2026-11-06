@@ -8,7 +8,7 @@ test("the brief tells an agent to write like a chat teammate", () => {
   expect(brief).toContain("Write like a teammate in a Slack or Teams channel");
   expect(brief).toContain("Put a command, a path or anything to copy in backticks or a code block");
   expect(brief).toContain("no names or arrows up front");
-  expect(brief).toContain("When you name a member, write their @handle (for example @gentle-otter, not gentle-otter)");
+  expect(brief).toContain("Name a member by @handle (for example @gentle-otter, not gentle-otter)");
   expect(brief).toContain("if someone already said it");
   expect(brief).toContain("kiwi react N 👍");
 });
@@ -24,23 +24,22 @@ test("the brief sends every decision an agent waits on to ask-human, never a que
   expect(brief).toContain('never end a message with "reply A, B or C"');
 });
 
-test("help names ask-human as the way to ask a person, and --escalate as its older form", () => {
-  const escalate = HELP.slice(HELP.indexOf("--escalate [--re N]"), HELP.indexOf("--handoff URL"));
-  expect(escalate).toContain("use");
-  expect(escalate).toContain("ask-human");
+test("help names ask-human as the one way to ask a person, with --handoff under it", () => {
   expect(HELP).toContain('kiwi ask-human "question"');
+  expect(HELP).not.toContain("--escalate");
+  expect(HELP.indexOf("--handoff URL")).toBeGreaterThan(HELP.indexOf('kiwi ask-human "question"'));
 });
 
 test("the brief keeps an answer in the room the message came from, unless the context helps agents elsewhere", () => {
-  expect(brief).toContain("A message from a room is answered in that room");
-  expect(brief).toContain("only when what you say is context other agents there need too");
+  expect(brief).toContain("a reply stays where its message is, a room's too");
+  expect(brief).toContain("in another room only for context agents there need");
 });
 
 test("the brief says where to post, as a person would in Slack or Teams, and that a reply stays where its message is, with no threads in rooms (T3844, T4143)", () => {
   expect(brief).toContain("a room for what everyone there should see");
   expect(brief).toContain("a direct thread for one person");
   expect(brief).toContain("a task's or spec's thread for its work");
-  expect(brief).toContain("A reply goes where its message is and quotes it there: rooms have no threads.");
+  expect(brief).toContain("(rooms have no threads)");
 });
 
 test("the brief says a person the owner fully trusts directs an agent, like its human and the owner", () => {

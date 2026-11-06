@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { commandFor } from "../src/cli/commands.ts";
+import { commandFor, RENAMED } from "../src/cli/commands.ts";
 import { HELP } from "../src/cli/help.ts";
 import { UI_CONTRACT, UI_SURFACES } from "../desktop/src/ui-contract.ts";
 
@@ -25,6 +25,14 @@ describe("what the intents review retired stays gone (#152)", () => {
   test("the app's bridge offers no terminal calls", () => {
     const now = UI_SURFACES[UI_CONTRACT] ?? [];
     for (const call of ["kiwi.terminals", "kiwi.terminalHelpers", "kiwi.seatPlaces", "kiwi.showSeat"]) expect([call, now.includes(call)]).toEqual([call, false]);
+  });
+
+  test("each older command name runs nothing and names what replaced it, which runs", async () => {
+    for (const [old, now] of Object.entries(RENAMED)) {
+      expect([old, await commandFor(old)]).toEqual([old, undefined]);
+      expect([old, now, await commandFor(now.split(" ")[0]!)]).toEqual([old, now, expect.any(Function)]);
+      expect(HELP).not.toContain(`kiwi ${old} `);
+    }
   });
 
   test("the intents map lists no retired intent", () => {

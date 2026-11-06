@@ -85,15 +85,15 @@ afterAll(async () => {
   for (const d of made) rmSync(d, { recursive: true, force: true });
 });
 
-test("with the relay down, kiwi log and kiwi tasks show what this computer already had and say so", async () => {
+test("with the relay down, kiwi log and kiwi task show what this computer already had and say so", async () => {
   await ok(owner, ["send", "--to", me, "said before the outage"]);
   await ok(owner, ["--as", "human", "task", "add", "a task from before the outage"]);
   expect(await ok(agent, ["log"], SESSION)).toContain("said before the outage");
-  expect(await ok(agent, ["tasks"], SESSION)).toContain("a task from before the outage");
+  expect(await ok(agent, ["task"], SESSION)).toContain("a task from before the outage");
   proxy!.stop();
   for (const [args, want] of [
     [["log"], "said before the outage"],
-    [["tasks"], "a task from before the outage"],
+    [["task"], "a task from before the outage"],
   ] as const) {
     const p = spawn(agent, [...args], SESSION);
     const [out, err] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text()]);

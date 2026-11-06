@@ -81,6 +81,7 @@ const PASSED = new Set(["SUCCESS", "NEUTRAL", "SKIPPED"]);
 const WAITING = new Set(["PENDING", "EXPECTED"]);
 const WEIGHT: Record<Level, number> = { low: 0, medium: 1, high: 2, critical: 3 };
 const NONE: Calls = { issues: new Map(), prs: new Map() };
+const FITS_A_MOD = "fits-a-mod";
 
 export const FIRST = "Merge first";
 export const LATER = "Merge later, carefully";
@@ -169,7 +170,8 @@ export function severityOf(issue: Issue, call: IssueCall | null): Level {
 export function rankIssues(issues: Issue[], calls: Calls = NONE): Issue[] {
   const sev = (i: Issue): number => WEIGHT[severityOf(i, calls.issues.get(i.number) ?? null)];
   const effort = (i: Issue): number => EFFORTS.indexOf(calls.issues.get(i.number)?.effort ?? "medium");
-  return [...issues].sort((a, b) => sev(b) - sev(a) || effort(a) - effort(b) || b.thumbsUp - a.thumbsUp || b.comments - a.comments || a.number - b.number);
+  const modded = (i: Issue): number => (i.labels.includes(FITS_A_MOD) ? 1 : 0);
+  return [...issues].sort((a, b) => modded(a) - modded(b) || sev(b) - sev(a) || effort(a) - effort(b) || b.thumbsUp - a.thumbsUp || b.comments - a.comments || a.number - b.number);
 }
 
 const day = (d: Date): string => d.toISOString().slice(0, 10);
@@ -190,6 +192,7 @@ export function brief(s: string): string {
     cut(
       s
         .replace(/https?:\/\/\S+/g, "")
+        .replace(/<\/?[a-z][^>]*>/gi, " ")
         .replace(/\s+/g, " ")
         .trim(),
       200,
@@ -216,7 +219,9 @@ const prVerdict = (m: Merge): string => (m.value && m.risk ? `${m.value} value, 
 
 const issueVerdict = (call: IssueCall | null): string => (call ? `${call.severity}, ${call.effort} fix` : "");
 
-const prTags = (pr: Pr): string[] => pr.labels.filter((l) => l.startsWith("size:"));
+const modTag = (labels: string[]): string => (labels.includes(FITS_A_MOD) ? "fits a mod" : "");
+
+const prTags = (pr: Pr): string[] => [...pr.labels.filter((l) => l.startsWith("size:")), modTag(pr.labels)].filter(Boolean);
 
 const isNew = (issue: Issue, now: Date): boolean => now.getTime() - Date.parse(issue.createdAt) < DAY;
 
@@ -233,7 +238,7 @@ export function render(prs: Pr[], issues: Issue[], now: Date, calls: Calls = NON
       title: FIX,
       items: ranked.map((issue, i) => {
         const call = calls.issues.get(issue.number) ?? null;
-        const tags = [issue.labels.includes("bug") ? "bug" : "", issue.thumbsUp > 0 ? `👍 ${issue.thumbsUp}` : ""].filter(Boolean);
+        const tags = [issue.labels.includes("bug") ? "bug" : "", modTag(issue.labels), issue.thumbsUp > 0 ? `👍 ${issue.thumbsUp}` : ""].filter(Boolean);
         return line(i + 1, issue, issueVerdict(call), call?.why ?? "", tags, now, isNew(issue, now));
       }),
     },

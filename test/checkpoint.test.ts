@@ -309,9 +309,9 @@ describe("what a hook emits stays inside the seat's share", () => {
         for (const reminder of [r, null]) for (const unread of [true, false]) expect(cursorFollow(alias, cmd, unread, reminder, budget).length).toBeLessThanOrEqual(budget);
       }
     const tight = seatBudget(50);
-    expect(cursorFollow(longAlias, longMc, true, null, seatBudget(1))).toContain(`Unread Kiwi messages (${longAlias}). Run \`${longMc} read\`, answer with`);
-    expect(cursorFollow("proj", "kiwi", true, null, tight)).toBe('Unread Kiwi messages (proj). Run `kiwi read`, answer with `kiwi reply N "…"`, then continue.');
-    expect(cursorFollow(longAlias, longMc, true, null, tight)).toBe(`Unread Kiwi messages: \`${longMc} read\`.`);
+    expect(cursorFollow(longAlias, longMc, true, null, seatBudget(1))).toContain(`Unread Kiwi messages (${longAlias}). Run \`${longMc} listen --now\`, answer with`);
+    expect(cursorFollow("proj", "kiwi", true, null, tight)).toBe('Unread Kiwi messages (proj). Run `kiwi listen --now`, answer with `kiwi reply N "…"`, then continue.');
+    expect(cursorFollow(longAlias, longMc, true, null, tight)).toBe(`Unread Kiwi messages: \`${longMc} listen --now\`.`);
     expect(cursorFollow(hugeAlias, hugeMc, true, null, tight)).toBe("");
     expect(cursorFollow(hugeAlias, hugeMc, true, r, tight).length).toBeLessThanOrEqual(tight);
   });

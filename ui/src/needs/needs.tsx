@@ -5,7 +5,8 @@ import type { Color } from "@kiwi/core/protocol.ts"
 import { Swatches } from "~/kit/swatches"
 
 import { PrChip, TaskChip } from "~/chat/cards"
-import { wordsPlain } from "~/words"
+import { wordsPlain, wordsRaw } from "~/words"
+import { InlineText } from "~/chat/inline-text"
 import QuestionCard from "~/chat/question-card"
 import type { Jump } from "~/chat/search-box"
 import { Avatar, Loading } from "~/kit/bits"
@@ -13,7 +14,21 @@ import { Empty } from "~/kit/empty"
 import { Toggle } from "~/kit/form"
 import { Icon } from "~/kit/icons"
 import { ago, clock } from "~/kit/time"
-import { ALL_POWERS, NO_POWERS, trusted, type Ask, type Channel, type JoinAsk, type Message, type PermissionAsk, type Person, type Powers, type QuestionAsk, type ReviewAsk } from "~/model"
+import {
+  ALL_POWERS,
+  NO_POWERS,
+  trusted,
+  type Ask,
+  type Channel,
+  type JoinAsk,
+  type Message,
+  type PermissionAsk,
+  type Person,
+  type Powers,
+  type QuestionAsk,
+  type ReviewAsk,
+  type BypassAsk,
+} from "~/model"
 import { useApp } from "~/nav"
 import { nickname, Shown } from "~/names"
 import { SendBack } from "~/tasks/send-back"
@@ -83,7 +98,7 @@ export function NeedsYou({ channel, onJump }: { channel: Channel; onJump: (jump:
 }
 
 function answeredAt(a: Ask): number {
-  if (a.kind === "review" || a.kind === "spec") return a.at
+  if (a.kind === "review" || a.kind === "spec" || a.kind === "bypass") return a.at
   if (a.kind === "question" && a.closed) return a.closed.at
   return a.answer?.at ?? a.at
 }
@@ -103,6 +118,7 @@ function doneLine(channel: Channel, a: Ask): string {
       return a.answer ? `${a.answer.letIn ? "Let in" : "Turned away"} · ${a.name}${a.sponsor ? ` · brought by ${a.sponsor}` : ""} · ${ago(a.answer.at)}${byWhom(channel, a.answer.by)}` : ""
     case "review":
     case "spec":
+    case "bypass":
       return ""
   }
 }
@@ -136,6 +152,8 @@ function Card({ channel, ask, onJump }: { channel: Channel; ask: Ask; onJump: (j
       return <ReviewAskCard channel={channel} ask={ask} link={link} />
     case "spec":
       return <SpecNeedCard channel={channel} ask={ask} />
+    case "bypass":
+      return <BypassAskCard channel={channel} ask={ask} link={link} />
   }
 }
 
@@ -284,7 +302,9 @@ function QuestionAskCard({ channel, ask, link }: { channel: Channel; ask: Questi
       at={ask.at}
       link={link}
     >
-      <p className="needs-text">{wordsPlain(ask.text, channel.nicknames)}</p>
+      <p className="needs-text">
+        <InlineText text={wordsRaw(ask.text)} channel={channel} before={Number(ask.id)} />
+      </p>
       {askedOf && <p className="needs-line">You can answer too: the first answer counts.</p>}
       <QuestionCard channel={channel} ask={ask} />
       {holds.length > 0 && <Holds channel={channel} ids={holds} />}
@@ -503,6 +523,45 @@ function JoinAskCard({ channel, ask, link }: { channel: Channel; ask: JoinAsk; l
             ))}
         </div>
       )}
+    </Shell>
+  )
+}
+
+function BypassAskCard({ channel, ask, link }: { channel: Channel; ask: BypassAsk; link: ReactNode }) {
+  const { app, go, toast } = useApp()
+  const who = member(channel, ask.from)
+  const task = channel.tasks.find((t) => t.id === ask.task)
+  const [closing, setClosing] = useState(false)
+  const close = (why: string) => {
+    app.actions.closeTask(channel.code, ask.task, why)
+    setClosing(false)
+    toast(`Closed T${ask.task}`)
+  }
+  return (
+    <Shell
+      face={who}
+      name={nickname(channel, ask.from)}
+      member={!!who}
+      tag={{ text: "Gate shut", tone: "alert" }}
+      verb="shipped while its gate was shut"
+      at={ask.at}
+      link={link}
+      actions={
+        closing ? (
+          <SendBack ask="Why it closes without landing" submit="Close" onSend={close} onCancel={() => setClosing(false)} />
+        ) : (
+          <button type="button" className="btn" onClick={() => setClosing(true)}>
+            Close with a reason
+          </button>
+        )
+      }
+    >
+      {task && (
+        <button type="button" className="needs-text needs-open" title="Open the task" onClick={() => go({ to: "panel", panel: { kind: "task", task: task.id } })}>
+          <span className="needs-id">T{task.id}</span> <Shown value={task.title} />
+        </button>
+      )}
+      <p className="needs-text tone-alert">Missing when it shipped: {ask.missing.join(", ")}. It stays landing until a person closes it.</p>
     </Shell>
   )
 }

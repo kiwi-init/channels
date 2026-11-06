@@ -88,7 +88,7 @@ test("tail started while the relay is down keeps waiting instead of exiting", as
     expect(await cli("create", "r", "--as", "lead").exited).toBe(0);
     server.stop(true);
     // Its first fetch fails (0.5.0 exited here for good); it must keep trying.
-    const tail = cli("-c", "r", "--as", "lead", "tail");
+    const tail = cli("-c", "r", "--as", "lead", "listen");
     const listening = async () => (await daemonListeners(daemonSock(dir)).catch(() => [])).some((l) => l.channel === "r" && l.kind === "listen");
     let downSince: number | null = null;
     await until(async () => {

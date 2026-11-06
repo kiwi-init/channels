@@ -98,8 +98,8 @@ describe("GET /info at most once per agent command (one shared read per process)
     expect(await infoReads("status", ["status"])).toBeLessThanOrEqual(INFO_PER_COMMAND);
   });
 
-  test("kiwi tasks", async () => {
-    expect(await infoReads("tasks", ["tasks"])).toBeLessThanOrEqual(INFO_PER_COMMAND);
+  test("kiwi task", async () => {
+    expect(await infoReads("task", ["task"])).toBeLessThanOrEqual(INFO_PER_COMMAND);
   });
 
   test("kiwi rooms", async () => {

@@ -169,7 +169,7 @@ function Props({ channel, task, may }: { channel: Channel; task: Task; may: bool
                 </>
               )}
               {task.status === "landing" && <span className="dimmer"> · approved, not landed yet</span>}
-              {task.lands.waits && <span className="dimmer"> · {task.lands.waits}</span>}
+              {task.lands.waits && <span className={task.lands.bypassed ? "tone-alert" : "dimmer"}> · {task.lands.waits}</span>}
             </dd>
           </>
         )}

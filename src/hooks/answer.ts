@@ -38,11 +38,11 @@ export function stopStyle(input: { hook_event_name?: string; status?: string; lo
 
 export function cursorStopFollowup(alias: string, mc: string, unread: boolean, max = Number.POSITIVE_INFINITY): string | null {
   if (!unread) return null;
-  const full = `Unread Kiwi messages (${alias}). Run \`${mc} read\`, answer with \`${mc} reply N "…"\`, then continue.`;
+  const full = `Unread Kiwi messages (${alias}). Run \`${mc} listen --now\`, answer with \`${mc} reply N "…"\`, then continue.`;
   if (full.length <= max) return full;
-  const short = `Unread Kiwi messages (${alias}): \`${mc} read\`.`;
+  const short = `Unread Kiwi messages (${alias}): \`${mc} listen --now\`.`;
   if (short.length <= max) return short;
-  const bare = `Unread Kiwi messages: \`${mc} read\`.`;
+  const bare = `Unread Kiwi messages: \`${mc} listen --now\`.`;
   return bare.length <= max ? bare : null;
 }
 
@@ -264,7 +264,7 @@ export function fitting(lines: readonly string[], max = MAX_CONTEXT): { count: n
 }
 
 function moreNote(rest: number, mc: string): string {
-  return `… ${rest} more unread: they come next, or run \`${mc} read\``;
+  return `… ${rest} more unread: they come next, or run \`${mc} listen --now\``;
 }
 
 export const CLIP_MIN = 1_000;
