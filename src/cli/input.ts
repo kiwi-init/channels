@@ -1,8 +1,9 @@
 import * as Effect from "effect/Effect";
 import type { AgentSession, Delivery } from "../agent.ts";
 import { loadFiles, loadImages } from "../attach.ts";
+import { loadFigure, type Figure } from "../figure.ts";
 import { formatMessage } from "@kiwi/core/format.ts";
-import type { Message } from "@kiwi/core/protocol.ts";
+import { MAX_FILES, type Message } from "@kiwi/core/protocol.ts";
 import { parseTaskId, type ChannelState } from "@kiwi/core/state.ts";
 import { args, opt } from "./args.ts";
 import { here } from "../seats.ts";
@@ -39,14 +40,26 @@ export const images = Effect.suspend(() => {
   return Effect.tryPromise({ try: () => loadImages(paths), catch: (err) => new Quit({ message: err instanceof Error ? err.message : String(err), code: 1 }) });
 });
 
+const quit = (err: unknown) => new Quit({ message: err instanceof Error ? err.message : String(err), code: 1 });
+
+let loaded: Figure | undefined;
+export const figure = Effect.suspend(() => {
+  const path = opt.figure;
+  if (path === undefined) return Effect.succeed(undefined);
+  if (loaded) return Effect.succeed(loaded);
+  return Effect.try({ try: () => (loaded = loadFigure(path)), catch: quit });
+});
+
 export const attachments = (s: AgentSession) =>
-  Effect.suspend(() => {
+  Effect.gen(function* () {
     const v = opt.attach as string | string[] | undefined;
     const paths = Array.isArray(v) ? v : v ? [v] : [];
-    if (!paths.length) return Effect.succeed(undefined);
-    return Effect.try({ try: () => loadFiles(paths), catch: (err) => new Quit({ message: err instanceof Error ? err.message : String(err), code: 1 }) }).pipe(
-      Effect.flatMap((files) => Effect.forEach(files, (f) => s.ch.fx.putFile(f.name, f.mime, f.bytes))),
-    );
+    const fig = yield* figure;
+    if (!paths.length && !fig) return undefined;
+    const taken = fig?.files.length ?? 0;
+    if (taken && paths.length + taken > MAX_FILES) return yield* die(`the figure takes ${taken} of a message's ${MAX_FILES} files, so add at most ${MAX_FILES - taken} with --attach`);
+    const files = yield* Effect.try({ try: () => loadFiles(paths), catch: quit });
+    return yield* Effect.forEach([...(fig?.files ?? []), ...files], (f) => s.ch.fx.putFile(f.name, f.mime, f.bytes));
   });
 
 export const taskArg = Effect.fn("kiwi.taskArg")(function* (i = 2) {
