@@ -35,7 +35,8 @@ beforeAll(async () => {
 
 describe("what Channels adds to an agent's session, against a local relay (scripts/agent-cost.ts)", () => {
   test("the brief, once per session", () => {
-    expect(step("session start (hook)").chars).toBeLessThanOrEqual(BUDGET.brief);
+    const s = step("session start (hook)");
+    if (s.chars > BUDGET.brief) throw new Error(`the brief is ${s.chars} chars, the budget ${BUDGET.brief}:\n${s.shown}`);
   });
 
   test("an idle turn adds nothing", () => {
