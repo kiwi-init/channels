@@ -4,13 +4,12 @@ import { GENERAL_ROOM } from "@kiwi/core/protocol.ts"
 import type { MenuGroups, MenuItem } from "~/kit/menu-open"
 import type { Actions, Channel, Message, Person, Where } from "~/model"
 import type { Go } from "~/nav"
-import { wordsPlain, wordsRaw } from "~/words"
-import { nickname, seatRoot } from "~/names"
+import { wordsRaw } from "~/words"
+import { seatRoot } from "~/names"
 import { hiddenKey, hiddenPlaces, setHidden } from "~/shell/hidden-places"
 import { messageLink } from "@kiwi/core/message-link.ts"
 import { copyText } from "~/kit/toasts"
 import { docOf } from "~/chat/doc-of"
-import type { ModMessage } from "~/mods/protocol"
 
 const WEB_LINK = /^(https?:\/\/|mailto:)/i
 
@@ -39,31 +38,6 @@ export function personItems({ channel, go }: MenuContext, person: Person): MenuI
     { label: "View profile", run: () => go({ to: "modal", modal: { kind: "person", name: person.name } }) },
     ...(person.you ? [] : [{ label: "Message", run: () => go({ to: "where", where: { kind: "dm", with: seatRoot(channel, person.name) } }) }]),
   ]
-}
-
-function forMod(channel: Channel, m: Message): ModMessage {
-  const room = m.where.kind === "room" ? m.where.room : null
-  return {
-    seq: m.seq,
-    text: wordsPlain(m.text, channel.nicknames),
-    author: nickname(channel, m.from),
-    at: m.at,
-    room: room === null ? null : `#${channel.rooms.find((r) => r.id === room)?.name ?? room}`,
-    link: messageLink(channel.code, m.seq),
-  }
-}
-
-export const MOD_MENU = "kiwi-message-menu"
-
-export interface ModMenuAsk {
-  message: ModMessage
-  add: (items: MenuItem[]) => void
-}
-
-function modGroups(channel: Channel, m: Message): MenuItem[][] {
-  const groups: MenuItem[][] = []
-  dispatchEvent(new CustomEvent<ModMenuAsk>(MOD_MENU, { detail: { message: forMod(channel, m), add: (items) => groups.push(items) } }))
-  return groups
 }
 
 export function messageGroups(ctx: MenuContext, m: Message, target: EventTarget, more: { openImage: (url: string, alt: string) => void; reply: (() => void) | null; at: EditAt }): MenuGroups {
@@ -95,7 +69,6 @@ export function messageGroups(ctx: MenuContext, m: Message, target: EventTarget,
       { label: "Copy link to message", run: copier(messageLink(channel.code, m.seq)) },
       { label: `Copy #${m.seq}`, run: copier(`#${m.seq}`) },
     ],
-    ...modGroups(channel, m),
   ]
 }
 
