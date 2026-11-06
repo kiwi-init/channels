@@ -72,7 +72,7 @@ export const ebHost: Host = {
   },
   push: (name, value) => shown?.push(name, value),
   openExternal: async (url) => {
-    if (KIWI_EB_TEST) return;
+    if (KIWI_EB_TEST && process.platform === "darwin") return;
     if (!Utils.openExternal(url)) throw new Error("the system browser didn't open the link");
   },
   droppedFiles: () => readDropped(droppedPaths()),
