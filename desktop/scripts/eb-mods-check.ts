@@ -1,5 +1,5 @@
-import { spawnSync } from "node:child_process";
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -143,6 +143,23 @@ if (surface === "main") void probe()
   );
 }
 
+const botHome = join(root, "bot");
+
+function bot(args: string[]): Promise<string> {
+  mkdirSync(join(botHome, "bin"), { recursive: true });
+  for (const opener of ["open", "xdg-open"]) {
+    writeFileSync(join(botHome, "bin", opener), "#!/bin/sh\nexit 0\n");
+    chmodSync(join(botHome, "bin", opener), 0o755);
+  }
+  const env = { KIWI_MODEL: "claude-sonnet-5-5", ...process.env, KIWI_HOME: join(botHome, "home"), CLAUDE_CONFIG_DIR: join(botHome, "no-claude"), PATH: `${join(botHome, "bin")}:${process.env.PATH}` };
+  const p = spawn("bun", ["src/cli/main.ts", ...args], { cwd: join(import.meta.dir, "..", ".."), env });
+  let out = "";
+  const on = (b: Buffer) => void (out += b.toString("utf8"));
+  p.stdout.on("data", on);
+  p.stderr.on("data", on);
+  return new Promise((ok, fail) => p.on("exit", (code) => (code === 0 ? ok(out) : fail(new Error(`kiwi ${args.join(" ").slice(0, 60)} exited ${code}: ${out.trim().split("\n").pop()}`)))));
+}
+
 const clickText = ({ selector, text }: { selector: string; text: string }): boolean => {
   const el = [...document.querySelectorAll<HTMLElement>(selector)].find((e) => (e.textContent ?? "").includes(text) && e.getClientRects().length > 0);
   el?.click();
@@ -156,6 +173,92 @@ const step = (what: string, ms: number, act: () => Promise<boolean>) =>
       () => null,
     ),
   );
+
+async function letBotIn(d: Driver): Promise<void> {
+  await step("Invite people", 10_000, () => d.evaluate(clickText, { selector: "button", text: "Invite people" }, 2_000));
+  const code = await until("the invite code", 15_000, () =>
+    d.evaluate(() => /mc2-[\w-]+/.exec([...document.querySelectorAll("[role=dialog] code")].map((c) => c.textContent ?? "").join(" "))?.[0] ?? null, null, 2_000),
+  );
+  await step("the invite closes", 10_000, () =>
+    d.evaluate(
+      () => {
+        const open = document.querySelector<HTMLElement>('dialog[open][aria-label="Invite people"]');
+        open?.querySelector<HTMLElement>('button[aria-label="Close"]')?.click();
+        return !open;
+      },
+      null,
+      2_000,
+    ),
+  );
+  let joined: true | string | null = null;
+  void bot(["join", code, "mods", "--relay", `${RELAY}/`, "--as", "bot"]).then(
+    () => (joined = true),
+    (e: unknown) => (joined = String(e)),
+  );
+  await until("letting the bot in", 90_000, async () => {
+    if (joined !== null) return joined;
+    await d
+      .evaluate(
+        () => {
+          const views = document.querySelector('nav[aria-label="Views"]');
+          const needs = [...(views?.querySelectorAll("button") ?? [])].find((b) => (b.textContent ?? "").startsWith("Needs you"));
+          if (needs && needs.getAttribute("aria-pressed") !== "true") needs.click();
+          [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => (b.textContent ?? "").startsWith("It matches: let") && !b.disabled)?.click();
+          return true;
+        },
+        null,
+        2_000,
+      )
+      .catch(() => false);
+    await later(250);
+    return null;
+  }).then((r) => {
+    if (r !== true) throw new Error(`the bot couldn't join: ${r}`);
+  });
+  await step("back to #general", 10_000, () => d.evaluate(clickText, { selector: 'nav[aria-label="Views"] button', text: "general" }, 2_000));
+}
+
+async function whileAway(d: Driver, palette: () => Promise<boolean>): Promise<void> {
+  await letBotIn(d);
+  const away = [
+    {
+      how: "with another app in front",
+      put: async () => {
+        spawnSync("open", ["-a", "Finder", root]);
+        return until("another app in front", 10_000, async () => (front().includes("Channels") ? null : true)).catch(() => false);
+      },
+    },
+    { how: "minimized", put: async () => (await d.main("minimizeForTest")) === true && ((await d.main("window")) as { minimized?: unknown }).minimized === true },
+  ];
+  for (const { how, put } of away) {
+    check(await put(), `the window can be put away, ${how}${front()}`);
+    await later(10_000);
+    const text = `from the bot, ${how}, at ${Date.now()}`;
+    const sending = Date.now();
+    await bot(["-c", "mods", "--as", "bot", "send", text]);
+    const sent = Date.now();
+    const shown = await until(`the bot's message, ${how}`, 20_000, () =>
+      d.evaluate((t) => ([...document.querySelectorAll(".main article.msg")].some((m) => (m.textContent ?? "").includes(t)) ? true : null), text, 2_000),
+    ).then(
+      () => Date.now() - sent,
+      () => null,
+    );
+    console.log(`${how}: the bot's message showed ${shown ?? "never"} ms after its send returned (the send took ${sent - sending} ms)${front()}`);
+    check(shown !== null, `a message from another member shows in the window ${how}`);
+    const before = (await heard(d)).filter((m) => m["command"] === "hi").length;
+    await step(`⌘K ${how}`, 10_000, palette);
+    await step(`the mod's command, typed ${how}`, 10_000, () => d.evaluate(fillIn, { selector: ".palette-input", value: "Say hi" }, 2_000));
+    await step(`the mod's command, ${how}`, 10_000, () => d.evaluate(clickText, { selector: ".palette-item", text: "Say hi from the probe mod" }, 2_000));
+    const ran = Date.now();
+    const answered = await until(`the mod's answer, ${how}`, 10_000, async () => ((await heard(d)).filter((m) => m["command"] === "hi").length > before ? true : null)).then(
+      () => Date.now() - ran,
+      () => null,
+    );
+    console.log(`${how}: the mod's frame answered its command ${answered ?? "never"} ms after it was picked${front()}`);
+    check(answered !== null, `a mod's frame answers ${how}`);
+  }
+  await d.main("bringBackForTest");
+}
 
 const pageNow = (): Record<string, unknown> => ({
   palette: !!document.querySelector(".palette-box"),
@@ -461,6 +564,7 @@ try {
   check(opens.includes(MESSAGE_LINK), "with a mod running, a Ctrl-clicked link in a message still opens in the browser");
   check(!opens.some((u) => /forged|mod-self-nav/.test(u)), "nothing the mod forged or navigated to opened in the browser");
   check(app.exitCode === null && app.signalCode === null, "the app is still running after the mod's forged events");
+  if (process.platform === "darwin") await whileAway(d, palette);
   d.close();
 } catch (e) {
   problems.push(e instanceof Error ? e.message : String(e));
@@ -469,6 +573,7 @@ try {
 } finally {
   await stop(app);
   await daemonStop(join(root, ".kiwi"), 2_000).catch(() => false);
+  await daemonStop(join(botHome, "home"), 2_000).catch(() => false);
   relay.kill();
   for (const f of files(join(root, "home"))) {
     if (!/main\.log$/.test(f)) continue;
