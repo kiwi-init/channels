@@ -31,10 +31,16 @@ const TEXT = "four figures";
 function writeMod(): void {
   const dir = join(root, ".kiwi", "mods", MOD);
   mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, "mod.json"), JSON.stringify({ name: MOD, version: "1.0.0", shell: "^3.3", needs: ["render:figure"] }));
+  writeFileSync(join(dir, "mod.json"), JSON.stringify({ name: MOD, version: "1.0.0", shell: "^3.3", needs: ["render:figure", "net:example.com"] }));
   writeFileSync(
     join(dir, "index.tsx"),
-    `import { render } from "@kiwi/mod"
+    `import { fetch as modFetch, render } from "@kiwi/mod"
+
+if (document.documentElement.dataset["surface"] === "main")
+  void modFetch("https://example.com/").then(
+    (r) => parent.postMessage({ kiwiProbe: { mainFetch: r.status } }, "*"),
+    (e) => parent.postMessage({ kiwiProbe: { mainFetch: String(e) } }, "*"),
+  )
 
 const AsyncFunction = (async () => {}).constructor as FunctionConstructor
 const INLINE = "html,body{margin:0;height:100%;overflow:hidden;background:transparent} svg{display:block;width:100%;height:100%}"
@@ -92,6 +98,7 @@ const out = {
   ownFetch: await attempt(async () => (await fetch("https://example.com/"), "reached")),
   relayFetch: await attempt(async () => (await fetch(${JSON.stringify(RELAY)} + "/v1/config"), "reached")),
   modFetch: await attempt(async () => (await w.__kiwiMod["@kiwi/mod"].fetch("https://example.com/")).status),
+  modPanel: await attempt(() => (w.__kiwiMod["@kiwi/mod"].panel({ title: "Figure panel", render: () => null }), "ran")),
   image: await new Promise((r) => {
     const i = new Image()
     i.onload = () => r("loaded")
@@ -227,6 +234,7 @@ try {
   await step("⌘K", 10_000, palette);
   await step(`Set up ${MOD} in ⌘K`, 10_000, () => d.evaluate(clickText, { selector: ".palette-item", text: `Set up ${MOD}` }, 2_000));
   await step("what the mod asks for, in the panel", 10_000, () => d.evaluate(clickText, { selector: ".panel .mod-needs", text: "Draw figure attachments in chat, live" }, 2_000));
+  await step("and the host it asks for", 10_000, () => d.evaluate(clickText, { selector: ".panel .mod-needs", text: "Talk to example.com" }, 2_000));
   check(true, "a mod that draws figures asks for it, in words, before it runs");
   await shot("figure-mod-asks");
   await step("Turn on", 10_000, () => d.evaluate(clickText, { selector: ".panel button", text: "Turn on" }, 2_000));
@@ -263,7 +271,10 @@ try {
   check(String(p["parentDocument"]).startsWith("blocked") && String(p["topDocument"]).startsWith("blocked"), "a figure can't read the page");
   check(String(p["storage"]).startsWith("blocked"), "a figure has no storage of the app's");
   check(String(p["ownFetch"]).startsWith("blocked") && String(p["relayFetch"]).startsWith("blocked"), "a figure's fetch reaches nothing, the relay included");
-  check(String(p["modFetch"]).startsWith("blocked"), "a figure can't reach the network through its mod, which listed no host");
+  const main = (await heard(d)).find((m) => "mainFetch" in m);
+  check(main?.["mainFetch"] === 200, "the mod itself reaches example.com, the host it listed and the person approved");
+  check(String(p["modFetch"]).startsWith("blocked"), "a figure can't reach the network through its mod, even the host the mod was approved for");
+  check(String(p["modPanel"]).startsWith("blocked"), "a figure gets none of its mod's other capabilities");
   check(p["image"] === "blocked", "a figure can't load an image from the network");
   check(p["popup"] === "null" || String(p["popup"]).startsWith("blocked"), "a figure can't open a popup");
   const page = await d.evaluate(() => location.href, null, 2_000);

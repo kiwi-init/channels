@@ -53,13 +53,8 @@ async function onMessage(e: MessageEvent): Promise<void> {
     case "error":
       if (!d.ready) d.done(false)
       return
-    case "fetch": {
-      const reply: ToFrame = await b.modFetch(d.mod, { url: m.url, ...m.init }).then(
-        (value) => ({ kiwi: MOD_PROTOCOL, type: "reply", id: m.id, ok: true, value }),
-        (err: unknown) => ({ kiwi: MOD_PROTOCOL, type: "reply", id: m.id, ok: false, error: err instanceof Error ? err.message : String(err) })
-      )
-      send(el, reply)
-    }
+    case "fetch":
+      send(el, { kiwi: MOD_PROTOCOL, type: "reply", id: m.id, ok: false, error: "a drawn attachment has no network, whatever its mod was approved for" })
   }
 }
 

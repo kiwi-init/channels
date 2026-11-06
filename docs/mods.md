@@ -145,7 +145,8 @@ The page comes from whoever sent the message, so it runs in the mod's frame with
 
 - **At most 3 drawn at once.** One that scrolls far off goes back to its snapshot.
 - **Snapshot only** with reduced motion. The full window still draws it.
-- **No network** unless the mod lists a host.
+- **No network, and none of the mod's other capabilities,** whatever you approved the mod for.
+- **The snapshot is only an image:** its scripts never run.
 - **Not the app's chat:** a drawing frame gets no panel, commands or message actions.
 
 ## Skills
