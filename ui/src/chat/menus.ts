@@ -1,4 +1,4 @@
-import { bridge } from "@kiwi/secrets/secrets.ts"
+import { openOutside } from "~/kit/outside"
 import { askDelete, startEditing, type EditAt } from "~/chat/editing"
 import { GENERAL_ROOM } from "@kiwi/core/protocol.ts"
 import type { MenuGroups, MenuItem } from "~/kit/menu-open"
@@ -17,12 +17,6 @@ export function webLinkAt(target: unknown): string | null {
   const at = (target as Partial<Element> | null)?.closest?.("a[href]")
   const href = at?.getAttribute("href") ?? null
   return href && WEB_LINK.test(href) ? href : null
-}
-
-export function openWebLink(url: string): void {
-  const b = bridge()
-  if (b) void b.openExternal(url).catch(() => {})
-  else window.open(url, "_blank", "noopener,noreferrer")
 }
 
 function saveImage(url: string, name: string): void {
@@ -53,7 +47,7 @@ export function messageGroups(ctx: MenuContext, m: Message, target: EventTarget,
   return [
     link
       ? [
-          { label: "Open link", run: () => openWebLink(link) },
+          { label: "Open link", run: () => openOutside(link) },
           { label: "Copy link", run: copier(link) },
         ]
       : [],

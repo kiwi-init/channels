@@ -5,6 +5,7 @@ import { GithubIcon } from "@hugeicons/core-free-icons"
 import { GlyphIcon } from "~/kit/icons"
 import type { GithubSignIn as SignIn } from "~/model"
 import { useApp } from "~/nav"
+import { OutsideLink } from "~/kit/outside"
 
 const NAME_MAX = 32
 
@@ -32,9 +33,9 @@ function Ask({ code, problem }: { code: { code: string; url: string } | null; pr
           <span className="start-pip" aria-hidden="true" />
           Waiting for GitHub. The code is copied.
         </p>
-        <a className="btn is-quiet start-other" href={code.url} target="_blank" rel="noreferrer noopener">
+        <OutsideLink className="btn is-quiet start-other" href={code.url}>
           Open GitHub again
-        </a>
+        </OutsideLink>
       </>
     )
   return (
