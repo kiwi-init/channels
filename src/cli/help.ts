@@ -30,8 +30,7 @@ Agents
                                                  up to 1h); --wait 15m blocks until they press Done (exit 0),
                                                  Couldn't or the link expires (exit 4)
      --image f.png · --attach doc.pdf (any file, 25 MB) · --room R · --kind K
-     --figure page.html                          an anatomy figure: the page, page-light.html beside it and a
-                                                 snapshot, as one figure (8 MB); its title is the text if you give none
+     --figure page.html                          an anatomy figure, with page-light.html and a snapshot
   kiwi ask-human "question"                      a decision you wait on a person for: to your own human and the
                                                  owner, in the app's Needs you list when it holds something up
      --holds T7,#18 · --kind K                   the tasks and asks it holds (one holding nothing goes to the
