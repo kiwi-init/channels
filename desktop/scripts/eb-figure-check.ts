@@ -144,19 +144,27 @@ const clickText = ({ selector, text }: { selector: string; text: string }): bool
   return !!el;
 };
 
-const attachFiles = (files: { name: string; type: string; text: string }[]): { attached: number; doc: boolean; input: boolean; form: boolean } => {
+const keepFile = (f: { name: string; type: string; text: string }): number => {
+  const w = window as unknown as { __figureFiles?: File[] };
+  w.__figureFiles = [...(w.__figureFiles ?? []).filter((x) => x.name !== f.name), new File([f.text], f.name, { type: f.type })];
+  return w.__figureFiles.length;
+};
+
+const attachFiles = (): { attached: number; kept: number; doc: boolean; input: boolean; form: boolean } => {
+  const kept = (window as unknown as { __figureFiles?: File[] }).__figureFiles ?? [];
   const attached = document.querySelectorAll(".main .compose-file").length;
   const doc = !!document.querySelector(".main .thread-doc");
   const form = document.querySelector<HTMLFormElement>(".main form.composer");
   const input = form?.querySelector<HTMLInputElement>("input[type=file]") ?? null;
-  if (attached || !doc || !form) return { attached, doc, input: !!input, form: !!form };
+  const now = { attached, kept: kept.length, doc, input: !!input, form: !!form };
+  if (attached || !doc || !form || !kept.length) return now;
   const dt = new DataTransfer();
-  for (const f of files) dt.items.add(new File([f.text], f.name, { type: f.type }));
+  for (const f of kept) dt.items.add(f);
   if (input) {
     input.files = dt.files;
     input.dispatchEvent(new Event("change", { bubbles: true }));
   } else form.dispatchEvent(new DragEvent("drop", { dataTransfer: dt, bubbles: true, cancelable: true }));
-  return { attached, doc, input: !!input, form: true };
+  return now;
 };
 
 const figuresNow = (text: string): { shown: number; live: number; chips: number; frames: string[] } => {
@@ -226,11 +234,23 @@ try {
       2_000,
     );
   await step("the channel", 30_000, () => d.evaluate(() => !!document.querySelector(".chan"), null, 2_000));
+  for (const f of FILES) {
+    let why = "";
+    await until(`${f.name}, ready to attach`, 10_000, () =>
+      d.evaluate(keepFile, f, 3_000).catch((e: unknown) => {
+        why = String(e);
+        return null;
+      }),
+    ).catch((e: unknown) => {
+      console.log(`the page then: ${why}`);
+      throw e;
+    });
+  }
   let tried: unknown = null;
   const attached = await until("the four figures, attached", 30_000, async () => {
-    const r = await d.evaluate(attachFiles, FILES, 3_000);
+    const r = await d.evaluate(attachFiles, null, 3_000).catch((e: unknown) => ({ failed: String(e) }));
     tried = r;
-    return r.attached >= FILES.length ? r.attached : null;
+    return "attached" in r && r.attached >= FILES.length ? r.attached : null;
   }).catch((e: unknown) => {
     console.log(`the composer then: ${JSON.stringify(tried)}`);
     throw e;

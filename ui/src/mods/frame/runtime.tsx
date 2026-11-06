@@ -9,7 +9,7 @@ import "~/styles/base.css"
 import "~/mods/frame/frame.css"
 import { Field } from "~/kit/form"
 import { Icon } from "~/kit/icons"
-import { MOD_PROTOCOL, type FromFrame, type ModFetchResult, type Shown, type ToFrame } from "~/mods/protocol"
+import { MOD_PROTOCOL, type FromFrame, type ModFetchResult, type ModMessage, type Shown, type Surface, type ToFrame } from "~/mods/protocol"
 
 type Waiting = { resolve: (r: ModFetchResult) => void; reject: (e: Error) => void }
 
@@ -21,12 +21,16 @@ const post = (m: Out): void => parent.postMessage({ kiwi: MOD_PROTOCOL, ...m }, 
 
 let view: ComponentType | null = null
 let booted = false
-let rendering = false
+let surface: Surface = "main"
+let needs: ReadonlySet<string> = new Set()
 let nextId = 1
 const waiting = new Map<number, Waiting>()
 const commands = new Map<string, { title: string; run: () => void | Promise<void> }>()
+const actions = new Map<string, { title: string; run: (message: ModMessage) => void | Promise<void> }>()
 const drawers = new Map<string, Draw>()
-const root = ReactDOMClient.createRoot(document.getElementById("root") ?? document.body.appendChild(document.createElement("div")))
+const box = document.getElementById("root") ?? document.body.appendChild(document.createElement("div"))
+const root = ReactDOMClient.createRoot(box)
+let sized: ResizeObserver | null = null
 
 function failed(e: unknown): void {
   post({ type: "error", message: e instanceof Error ? (e.stack ?? e.message) : String(e) })
@@ -35,6 +39,14 @@ function failed(e: unknown): void {
 function mount(): void {
   const View = view
   if (View) root.render(<View />)
+}
+
+function asked(need: string, call: string): void {
+  if (!needs.has(need)) throw new Error(`${call}() needs "${need}" in mod.json's needs`)
+}
+
+function listed<T extends { title: string }>(list: Map<string, T>): { id: string; title: string }[] {
+  return [...list].map(([id, c]) => ({ id, title: c.title }))
 }
 
 function bytes(b64: string): Uint8Array<ArrayBuffer> {
@@ -78,23 +90,39 @@ function Row({ title, sub, onClick }: { title: ReactNode; sub?: ReactNode; onCli
   )
 }
 
-function drawing(what: string): void {
-  if (rendering) throw new Error(`a frame drawing an attachment has no ${what}`)
-}
-
 const api = {
   panel({ title, render }: { title: string; render: ComponentType }): void {
-    drawing("panel")
+    asked("panel", "panel")
+    if (surface !== "main") return
     view = render
     post({ type: "panel", title: String(title) })
     mount()
   },
+  sidebar({ title, render }: { title: string; render: ComponentType }): void {
+    asked("sidebar", "sidebar")
+    if (surface !== "sidebar") return
+    view = render
+    post({ type: "sidebar", title: String(title) })
+    mount()
+    sized ??= new ResizeObserver(() => {
+      if (innerWidth > 0) post({ type: "size", height: Math.ceil(box.getBoundingClientRect().height) })
+    })
+    sized.observe(box)
+  },
   command({ id, title, run }: { id: string; title: string; run: () => void | Promise<void> }): void {
-    drawing("command")
+    asked("command", "command")
+    if (surface !== "main") return
     commands.set(String(id), { title: String(title), run })
-    post({ type: "commands", list: [...commands].map(([cid, c]) => ({ id: cid, title: c.title })) })
+    post({ type: "commands", list: listed(commands) })
+  },
+  messageAction({ id, title, run }: { id: string; title: string; run: (message: ModMessage) => void | Promise<void> }): void {
+    asked("message-action", "messageAction")
+    if (surface !== "main") return
+    actions.set(String(id), { title: String(title), run })
+    post({ type: "actions", list: listed(actions) })
   },
   render(kind: string, draw: Draw): void {
+    asked(`render:${kind}`, "render")
     drawers.set(String(kind), draw)
   },
   fetch: modFetch,
@@ -137,17 +165,20 @@ addEventListener("message", (e) => {
   if (m.type === "boot") {
     if (booted) return
     booted = true
-    rendering = m.shown !== undefined
+    surface = m.surface
+    needs = new Set(m.needs)
+    document.documentElement.dataset["surface"] = surface
     theme(m.theme, m.dark)
     try {
       new Function(m.code)()
-      if (rendering) draw(m.shown, m.dark)
+      if (surface === "render") draw(m.shown, m.dark)
       post({ type: "ready" })
     } catch (err) {
       failed(err)
     }
   } else if (m.type === "theme") theme(m.theme, m.dark)
   else if (m.type === "command") void Promise.resolve(commands.get(m.id)?.run()).catch(failed)
+  else if (m.type === "action") void Promise.resolve(actions.get(m.id)?.run(m.message)).catch(failed)
   else if (m.type === "reply") {
     const w = waiting.get(m.id)
     waiting.delete(m.id)

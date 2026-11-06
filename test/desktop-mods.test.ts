@@ -24,10 +24,15 @@ describe("a mod's mod.json", () => {
 
   test("a capability that doesn't exist, or that this app doesn't offer yet, is refused by name", () => {
     expect(checkManifest({ ...base, needs: ["keys"] }, "linear-panel", "3.3.0")).toEqual({ ok: false, why: 'it asks for "keys", which isn\'t a capability' });
-    expect(checkManifest({ ...base, needs: ["sidebar"] }, "linear-panel", "3.3.0")).toEqual({ ok: false, why: 'it needs "sidebar", which this app doesn\'t offer yet' });
+    expect(checkManifest({ ...base, needs: ["read:#general"] }, "linear-panel", "3.3.0")).toEqual({ ok: false, why: 'it needs "read:#general", which this app doesn\'t offer yet' });
     expect(checkManifest({ ...base, needs: ["net:http://x.com"] }, "linear-panel", "3.3.0").ok).toBe(false);
     expect(checkManifest({ ...base, needs: ["net:*.linear.app"] }, "linear-panel", "3.3.0").ok).toBe(false);
     expect(checkManifest({ ...base, needs: "panel" }, "linear-panel", "3.3.0").ok).toBe(false);
+  });
+
+  test("a sidebar section and message actions are offered", () => {
+    const needs = ["sidebar", "message-action"];
+    expect(checkManifest({ ...base, needs }, "linear-panel", "3.3.0")).toEqual({ ok: true, manifest: { ...base, needs } });
   });
 
   test("drawing a kind of attachment is offered, named by one lowercase word (T6869)", () => {

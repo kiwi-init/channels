@@ -1,6 +1,6 @@
 import { isAppPrefix } from "../mod-names.ts";
 
-const MOD_NEEDS_OFFERED = ["panel", "command", "net", "render"] as const;
+const MOD_NEEDS_OFFERED = ["panel", "sidebar", "command", "message-action", "net", "render"] as const;
 
 const NEED_KINDS = ["panel", "sidebar", "command", "message-action", "read", "post", "net", "render"] as const;
 

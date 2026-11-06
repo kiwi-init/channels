@@ -147,7 +147,7 @@ The page comes from whoever sent the message, so it runs in the mod's frame with
 - **Snapshot only** with reduced motion. The full window still draws it.
 - **No network, and none of the mod's other capabilities,** whatever you approved the mod for.
 - **The snapshot is only an image:** its scripts never run.
-- **Not the app's chat:** a drawing frame gets no panel or commands: `panel()` and `command()` throw there.
+- **Not the app's chat:** a drawing frame gets no panel, sidebar, commands or message actions.
 
 ## Skills
 

@@ -6,7 +6,7 @@ import { Icon } from "~/kit/icons"
 import type { DocFile } from "~/model"
 import { useAct } from "~/nav"
 import { look, modsNow, runningMod, useModsVersion } from "~/mods/host"
-import { fromFrame, MOD_PROTOCOL, type ToFrame } from "~/mods/protocol"
+import { fromFrame, heeded, MOD_PROTOCOL, type ToFrame } from "~/mods/protocol"
 import { LIVE_MAX, type ShownFiles } from "~/mods/shown"
 import "~/styles/shown.css"
 
@@ -38,13 +38,24 @@ async function onMessage(e: MessageEvent): Promise<void> {
   const b = bridge()
   if (!at || !m || !b) return
   const [el, d] = at
+  const mod = modsNow().find((x) => x.name === d.mod)
+  if (!heeded(m.type, "render", mod)) return
   switch (m.type) {
     case "hello": {
       if (d.booted) return
       d.booted = true
       const [got, html] = await Promise.all([b.modBundle(d.mod).catch(() => null), d.page().catch(() => null)])
       if (!got || html === null) return d.done(false)
-      send(el, { kiwi: MOD_PROTOCOL, type: "boot", name: d.mod, code: got.code, ...look(), shown: { kind: d.kind, name: d.name, html, full: d.full } })
+      send(el, {
+        kiwi: MOD_PROTOCOL,
+        type: "boot",
+        name: d.mod,
+        surface: "render",
+        needs: (mod?.needs ?? []).filter((n) => n.startsWith("render:")),
+        code: got.code,
+        ...look(),
+        shown: { kind: d.kind, name: d.name, html, full: d.full },
+      })
       return
     }
     case "ready":
