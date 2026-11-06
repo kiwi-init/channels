@@ -58,6 +58,28 @@ describe("a loop and a task that lands after approval (#623 §2)", () => {
     expect(nextWork(s, "bo", 0)).toEqual({ kind: "coding", task: id });
     expect(workOver({ kind: "coding", task: id }, s, "bo")).toBe(false);
   });
+
+  test("a lander that's answering or done planning hands over to landing it, like an owner to its task", async () => {
+    const { id, log } = await approvedLanding("bo");
+    const s = fold(log, roster);
+    expect(step({ kind: "answering" }, s, "bo", null)).toEqual({ kind: "fresh", work: { kind: "coding", task: id }, why: "took" });
+    expect(step({ kind: "planning", ask: 99_999 }, s, "bo", null)).toEqual({ kind: "fresh", work: { kind: "coding", task: id }, why: "took" });
+    expect(step({ kind: "answering" }, s, "ana", null)).toEqual({ kind: "keep", work: { kind: "answering" } });
+  });
+
+  test("the landing session's prompt keeps the approval: it names the step and the lander, and never restarts or re-reviews", async () => {
+    const { id, log } = await approvedLanding("bo");
+    const s = fold(log, roster);
+    const prompt = firstPrompt({ kind: "coding", task: id }, s, "bo", "contrib");
+    expect(prompt).toContain(`This session is for landing T${id}`);
+    expect(prompt).toContain("Its review already approved it, and you land it: its landing step is merge.");
+    expect(prompt).toContain(`Don't run \`kiwi task start T${id}\` or send another \`kiwi task review T${id}\``);
+    expect(prompt).not.toContain("The session ends when the review approves");
+    expect(prompt).toContain(`The session ends when T${id} is done or another lander takes it.`);
+    const waiting = waitingText({ kind: "reviewing", task: 5, round: 1 }, { kind: "coding", task: id }, 30, "kiwi", true);
+    expect(waiting).toContain(`name another lander with \`kiwi task edit T${id} --lander NAME\``);
+    expect(waiting).not.toContain("task assign");
+  });
 });
 
 describe("the work a loop starts a session for", () => {

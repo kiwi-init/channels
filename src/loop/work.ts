@@ -1,3 +1,4 @@
+import { landingWaits } from "@kiwi/core/prs.ts";
 import { inlineText } from "@kiwi/core/membership.ts";
 import { reentryText } from "@kiwi/core/reentry.ts";
 import { planningText } from "@kiwi/core/spec-lines.ts";
@@ -27,6 +28,11 @@ function specToPlan(state: ChannelState, me: string, setAside: ReadonlySet<strin
 const awaitingVerdict = (t: Task) => !!openRound(t);
 
 const worksOn = (t: Task, me: string): boolean => (t.state === "landing" ? landerOf(t) : t.owner) === me;
+
+const takes = (state: ChannelState, id: number, me: string): boolean => {
+  const t = state.tasks.get(id);
+  return !!t && worksOn(t, me);
+};
 
 const owesReview = (t: Task, me: string) => t.owner !== me && (t.review === me || (t.review === "*" && !t.workedBy.includes(me)));
 
@@ -93,16 +99,18 @@ export function waitTellsTo(state: ChannelState, me: string): string[] {
   return [...state.members.values()].filter((m) => m.owner && m.active && m.name !== me).map((m) => m.name);
 }
 
-export function waitingText(waiting: Work, session: Work, minutes: number, mc = "kiwi"): string {
+export function waitingText(waiting: Work, session: Work, minutes: number, mc = "kiwi", landing = false): string {
   const held = workName(session);
   const free =
-    session.kind === "coding"
-      ? `approve it, mark it done, or hand it on with \`${mc} task assign ${held} NAME\``
-      : session.kind === "reviewing"
-        ? `give round ${session.round}'s verdict or move its review to someone else`
-        : session.kind === "planning"
-          ? `file its tasks and take one`
-          : "answer what's waiting";
+    session.kind === "coding" && landing
+      ? `land it, close it with a reason, or name another lander with \`${mc} task edit ${held} --lander NAME\` (the lead or a person)`
+      : session.kind === "coding"
+        ? `approve it, mark it done, or hand it on with \`${mc} task assign ${held} NAME\``
+        : session.kind === "reviewing"
+          ? `give round ${session.round}'s verdict or move its review to someone else`
+          : session.kind === "planning"
+            ? `file its tasks and take one`
+            : "answer what's waiting";
   return `${workName(waiting)} has waited ${minutes} minutes behind my ${workName(session)} session, which is still running: my loop starts it only when that work is over. To start ${workName(waiting)} now, ${free}.`;
 }
 
@@ -134,11 +142,11 @@ export type Step = { kind: "keep"; work: Work } | { kind: "over" } | { kind: "fr
 export function step(work: Work, state: ChannelState, me: string, freshFor: number | null, setAside: ReadonlySet<string> = new Set()): Step {
   if (work.kind === "answering") {
     const taken = nextWork(state, me, 0, setAside);
-    return taken?.kind === "coding" && state.tasks.get(taken.task)?.owner === me ? { kind: "fresh", work: taken, why: "took" } : { kind: "keep", work };
+    return taken?.kind === "coding" && takes(state, taken.task, me) ? { kind: "fresh", work: taken, why: "took" } : { kind: "keep", work };
   }
   if (work.kind === "planning" && workOver(work, state, me, setAside)) {
     const taken = nextWork(state, me, 0, setAside);
-    return taken?.kind === "coding" && state.tasks.get(taken.task)?.owner === me ? { kind: "fresh", work: taken, why: "took" } : { kind: "over" };
+    return taken?.kind === "coding" && takes(state, taken.task, me) ? { kind: "fresh", work: taken, why: "took" } : { kind: "over" };
   }
   if (workOver(work, state, me, setAside)) return { kind: "over" };
   if (work.kind === "coding" && freshFor === work.task) return { kind: "fresh", work, why: "checkpoint" };
@@ -162,6 +170,18 @@ export function workName(work: Work): string {
   }
 }
 
+function landingFocus(state: ChannelState, t: Task, me: string, mc: string): string {
+  const id = taskId(t.id);
+  const lander = landerOf(t);
+  const step = t.then ?? "merge";
+  const waits = landingWaits(state, t);
+  return [
+    `This session is for landing ${id} “${inlineText(t.title, 160)}”. Its review already approved it, and ${lander === me ? "you land it" : `${inlineText(lander ?? "its owner", 40)} lands it`}: its landing step is ${step}.${waits ? ` It ${waits.replace(/^waits/, "still waits")}.` : ""}`,
+    `Don't run \`${mc} task start ${id}\` or send another \`${mc} task review ${id}\`: that reopens approved work. Do what lands it at the approved artifact (for a merge, merge its PR at the approved head once its checks are green), and ${id} is done when that evidence arrives.`,
+    `If it can't land, say why in ${id}'s thread, and ask the lead or a person to close it with a reason or to name another lander with \`${mc} task edit ${id} --lander NAME\`. Answer messages for you as they come. The session ends when ${id} is done or another lander takes it.`,
+  ].join(" ");
+}
+
 function focus(work: Work, state: ChannelState, me: string, mc: string): string {
   switch (work.kind) {
     case "coding": {
@@ -171,6 +191,7 @@ function focus(work: Work, state: ChannelState, me: string, mc: string): string 
       const head = `This session is for ${id}${title}, which you own. Answer messages for you as they come; only other tasks and reviews wait for their own session.`;
       const send = `write where it stands with \`${mc} task checkpoint ${id} --file note.md\`, then send it for review with \`${mc} task review ${id} --at SHA\` (the commit it's at)`;
       const selfReviewed = t?.review === me ? ` You're also its reviewer, so nobody else will give its verdict: ask the lead or a person to name another reviewer.` : "";
+      if (t?.state === "landing") return landingFocus(state, t, me, mc);
       const round = t ? openRound(t) : undefined;
       if (t?.review && round)
         return `${head} Its round ${round.n} is with ${inlineText(t.review, 40)}: wait here for the verdict, and don't run \`${mc} task start ${id}\`, which would withdraw that round. On a rejection, fix what it says, ${send}. The session ends when the review approves ${id}, or sooner if a review you owe comes up while you wait (a rejection then gets a fresh session).${selfReviewed}`;
