@@ -228,27 +228,25 @@ try {
         (url) => {
           const a = [...document.querySelectorAll<HTMLAnchorElement>(".main article.msg a")].find((el) => el.getAttribute("href") === url);
           if (!a) return null;
-          const kiwi = (window as unknown as { kiwi: { openExternal(u: string): Promise<void> } }).kiwi;
-          const asked: string[] = [];
-          const was = kiwi.openExternal;
-          let wrapped = true;
-          try {
-            kiwi.openExternal = (u: string) => (asked.push(u), was.call(kiwi, u));
-          } catch {
-            // A frozen bridge can't be wrapped; the report says so instead of what the page asked for.
-            wrapped = false;
-          }
+          const by: string[] = [];
+          const prevent = Event.prototype.preventDefault;
+          Event.prototype.preventDefault = function (this: Event) {
+            if (this.type === "click") by.push((new Error().stack ?? "").split("\n").slice(1, 6).join(" | "));
+            return prevent.call(this);
+          };
           const ev = new MouseEvent("click", { bubbles: true, cancelable: true, ctrlKey: true });
           a.dispatchEvent(ev);
-          if (wrapped) kiwi.openExternal = was;
-          return { class: a.className, inEditor: !!a.closest(".ProseMirror"), prevented: ev.defaultPrevented, asked: wrapped ? asked : "unwrappable" };
+          Event.prototype.preventDefault = prevent;
+          return { class: a.className, inEditor: !!a.closest(".ProseMirror"), prevented: ev.defaultPrevented, by, frozen: Object.isFrozen((window as unknown as { kiwi: object }).kiwi) };
         },
         messageLink,
         2_000,
       )
       .catch(() => null),
   );
-  console.log(`the message link Ctrl-clicked: ${JSON.stringify(clicked)}`);
+  console.log(`the message link Ctrl-clicked: ${JSON.stringify(clicked, null, 1)}`);
+  await later(1_000);
+  console.log(`main opened, a second after: ${JSON.stringify(await d.main("browserOpens"))}`);
   writeMod(2);
   const second = await until("the mod again, after its source changed", 30_000, async () => (await heard(d)).find((m) => m["version"] === 2) ?? null).catch(() => null);
   check(!!second, "a saved change reloads the mod");
