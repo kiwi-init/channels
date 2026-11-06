@@ -27,7 +27,7 @@ beforeAll(async () => {
 const HEAD = "3333333333333333333333333333333333333333";
 const pr =
   (state: "open" | "closed", merged = false) =>
-  (task: number): GithubNote => ({ event: "pull_request", repo: "o/r", number: 7, state, merged, branch: `T${task}-ship`, sha: HEAD, at: seq });
+  (task: number): GithubNote => ({ event: "pull_request", repo: "o/r", number: 7, state, merged, branch: `T${task}-ship`, sha: HEAD, at: seq, ...(merged ? { happened: seq + 1 } : {}) });
 
 async function landing(then: Landing, github?: (task: number) => GithubNote): Promise<Message[]> {
   const repos = await ev("jon", { op: "repos.set", repos: ["o/r"] });
@@ -56,8 +56,8 @@ describe("what a landing task still waits for (#623 §2)", () => {
     const run = fold(await landing("run"), roster);
     expect(landingWaits(run, [...run.tasks.values()].at(-1)!)).toBe("waits for its run, then a post check quoting the run id");
     const npm = fold(await landing("release:npm:@scope/lib@^1.2.0"), roster);
-    expect(landingWaits(npm, [...npm.tasks.values()].at(-1)!)).toBe("waits for @scope/lib@^1.2.0 on npm, confirmed by a post check");
-    expect(landingWaits(run, { id: 1, state: "review", then: "merge" })).toBeNull();
+    expect(landingWaits(npm, [...npm.tasks.values()].at(-1)!)).toBe("waits for its PR to be linked and merged");
+    expect(landingWaits(run, { ...[...run.tasks.values()].at(-1)!, state: "review" })).toBeNull();
   });
 });
 

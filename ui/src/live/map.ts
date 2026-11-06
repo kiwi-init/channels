@@ -7,6 +7,7 @@ import { describeEvent, proofLabel } from "@kiwi/core/format.ts"
 import { memberLoad, showsLoad } from "@kiwi/core/load.ts"
 import { checksOf, FAILED, landingWaits, prLinks, taskOfBranch, taskPr } from "@kiwi/core/prs.ts"
 import { stageOf } from "@kiwi/core/stage.ts"
+import { doneGate } from "@kiwi/core/done-gate.ts"
 import { editable, GENERAL_ROOM, ignored, isQuiet, isRasterMime, isOverlay, type Message as Wire } from "@kiwi/core/protocol.ts"
 import { rootOf, sentTo } from "@kiwi/core/room-rules.ts"
 import { dmDocOf, dmOther } from "~/live/dm"
@@ -22,6 +23,7 @@ import {
   holdsWork,
   humanOf,
   isPerson,
+  landerOf,
   MAIN,
   mayNameGoal,
   outsideRepos,
@@ -668,9 +670,10 @@ function suggestionFor(state: ChannelState, t: CoreTask): { name: string; why: W
   return top ? { name: top.name, why: wrote(top.reasons[0] ?? "has its context") } : undefined
 }
 
-const landsWaiting = (state: ChannelState, t: CoreTask): { waits?: string } => {
+const landsWaiting = (state: ChannelState, t: CoreTask): { waits?: string; bypassed?: string[] } => {
   const waits = landingWaits(state, t)
-  return waits ? { waits } : {}
+  const gate = doneGate(state, t)
+  return { ...(waits ? { waits } : {}), ...(gate?.kind === "bypassed" ? { bypassed: gate.missing } : {}) }
 }
 
 export function tasksOf(state: ChannelState, held: ReadonlySet<number>, me: string, messages: readonly Wire[]): Task[] {
@@ -887,5 +890,10 @@ export function asksOf(
     }
   const me_ = state.members.get(me)
   for (const t of reviewsFor(state.tasks.values(), me, !!me_ && isPerson(me_))) asks.push({ kind: "review", id: `review-${t.id}`, at: t.updatedAt, from: t.owner ?? t.createdBy, task: t.id })
+  if (me_?.owner)
+    for (const t of state.tasks.values()) {
+      const gate = doneGate(state, t)
+      if (gate?.kind === "bypassed") asks.push({ kind: "bypass", id: `bypass-${t.id}`, at: t.updatedAt, from: landerOf(t) ?? t.createdBy, task: t.id, missing: gate.missing })
+    }
   return { asks, askOf, held }
 }

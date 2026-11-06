@@ -7,6 +7,7 @@ import type { Power } from "../protocol.ts";
 import type { RoomMember, RoomMeta, RoomSeal } from "../room-rules.ts";
 import type { Scope } from "../scopes.ts";
 import type { CheckState } from "./checks.ts";
+import type { CheckArtifact } from "../checks.ts";
 export interface Member {
   name: string;
   kind?: "human" | "agent" | "computer";
@@ -100,7 +101,7 @@ interface TaskProof {
   label?: string;
 }
 
-type RoundResult = { kind: "open" } | { kind: Verdict; by: string; seq: number; ts: number; runs?: number[] } | { kind: "withdrawn"; seq: number };
+type RoundResult = { kind: "open" } | { kind: Verdict; by: string; seq: number; ts: number; rts?: number; runs?: number[] } | { kind: "withdrawn"; seq: number };
 
 export interface ReviewRound {
   n: number;
@@ -109,6 +110,7 @@ export interface ReviewRound {
   by: string;
   seq: number;
   ts: number;
+  rts?: number;
   result: RoundResult;
   stale?: number;
 }
@@ -129,6 +131,7 @@ export interface Task {
   cancelled?: boolean;
   closedWith?: string;
   closedSeq?: number;
+  landed?: { key: string; artifact: CheckArtifact; seq: number; by: string };
   then?: Landing;
   lander?: string;
   issue?: IssueRef;

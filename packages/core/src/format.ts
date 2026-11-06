@@ -33,6 +33,7 @@ import { evidenceOf, prLines, refText, stageOf, stageText } from "./stage.ts";
 import { changedSinceApproval, changedAfterApproval, freeAgents, specOfComment, specPlanner, specStage, specTitleOf } from "./state/specs.ts";
 import { commentsLine, commentsWaiting, specLine } from "./spec-lines.ts";
 import { landingWaits, reviewNotRequired, rulesText } from "./prs.ts";
+import { artifactText } from "./done-gate.ts";
 import { statusOf, statusWord } from "./status.ts";
 import { isWakeVia, wakesInSession, wakeWords, type WakeVia } from "./wake.ts";
 export function tokensWord(n: number): string {
@@ -178,6 +179,8 @@ export function describeEvent(m: Message, state?: ChannelState, nameOf: (handle:
       return `claimed ${task(ev.task)}`;
     case "task.first":
       return `put ${task(ev.task)} before its owner's other tasks`;
+    case "task.landed":
+      return `landed ${task(ev.task)}: ${artifactText(ev.artifact)}`;
     case "task.delete":
       return `deleted ${taskId(ev.task)}${note(ev.why)}`;
     case "task.update": {
@@ -767,6 +770,8 @@ export function formatTask(state: ChannelState, t: Task, now = Date.now(), messa
   const waits = landingWaits(state, t);
   if (waits) out.push(`  ${waits}`);
   if (t.closedWith) out.push(`  closed without landing: ${inlineText(t.closedWith, 200)}`);
+  if (t.landed) out.push(`  landed: ${artifactText(t.landed.artifact)}`);
+  if (t.landed) out.push(`  landed: ${artifactText(t.landed.artifact)}`);
   const open = openRound(t);
   if (open?.summary) out.push("", `round ${open.n} summary:`, markedText(open.summary));
   if (t.rounds.length) {

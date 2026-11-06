@@ -19,7 +19,7 @@ const NAME = /^[\w.-]{1,50}$/;
 
 const record = (x: unknown): Record<string, unknown> | null => (x && typeof x === "object" && !Array.isArray(x) ? (x as Record<string, unknown>) : null);
 
-function wellFormedArtifact(x: unknown): x is CheckArtifact {
+export function wellFormedArtifact(x: unknown): x is CheckArtifact {
   const a = record(x);
   if (!a) return false;
   switch (a.kind) {

@@ -1,5 +1,6 @@
 import { memberName } from "@kiwi/app/format.ts"
-import { ANYONE, approveTask as approving, cancelTask as cancelling, changeReviewer, closedDigest, sendBackTask, type TaskSend } from "@kiwi/channel/task-actions.ts"
+import { ANYONE, approveTask as approving, cancelTask as cancelling, changeReviewer, closeLanding, sendBackTask, type TaskSend } from "@kiwi/channel/task-actions.ts"
+import { closedDigest } from "@kiwi/channel/task-digest.ts"
 import { ALLOW_ONCE, DENY } from "@kiwi/app/permission-settled.ts"
 import { changeTo } from "@kiwi/core/changes.ts"
 import { permissionReply } from "@kiwi/core/permission.ts"
@@ -45,6 +46,15 @@ export async function cancelTask(code: string, id: number, why: string): Promise
   const note = why.trim()
   if (!note) throw new Error("say why it's cancelled")
   await sends(run, cancelling(t, note, run.me), closedDigest(run.state, [...run.messages], t, { by: run.me, cancelled: note }))
+}
+
+export async function closeTask(code: string, id: number, why: string): Promise<void> {
+  const run = need(code)
+  const t = run.state.tasks.get(id)
+  if (!t) throw new Error(`no task ${taskId(id)}`)
+  const note = why.trim()
+  if (!note) throw new Error("say why it's closed without landing")
+  await sends(run, closeLanding(t, note))
 }
 
 export async function editTask(code: string, id: number, change: { title?: string; detail?: string }): Promise<void> {

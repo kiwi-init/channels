@@ -315,7 +315,7 @@ function folding(
   const threadPeople = new Map<number, Set<string>>(from?.threadPeople.map(([seq, people]) => [seq, new Set(people)]));
   const askHeads = new Map<number, AskHead>(from?.askHeads?.map((h) => [h.id, h]));
   const specs = new Map<number, Spec>(from?.specs?.map((sp) => [sp.ask, sp]));
-  const checks = new Map<number, CheckState>(from?.checks?.map((c) => [c.seq, { ...c }]));
+  const checks = new Map<number, CheckState>(from?.checks?.map((c) => [c.seq, { ...c, ...(c.answers ? { answers: [...c.answers] } : {}) }]));
   const closeOnItsOwn = (ask: number, m: Pick<Message, "seq" | "from">, at: number): void => {
     const spec = specs.get(ask);
     if (spec && closesOnItsOwn({ tasks }, spec)) specs.set(ask, { ...spec, result: { seq: m.seq, by: m.from, at, verdict: "accepted", auto: true } });
@@ -352,6 +352,7 @@ function folding(
     nicknames,
     setRole,
     tasks,
+    checks,
     facts,
     docs,
     leases,
@@ -596,7 +597,7 @@ function folding(
         else if (asker !== m.from && !isPerson(member)) reject("only who asked, or a person, closes an ask");
         else {
           closedAsks.add(ev.ask);
-          closeCheck(checks, ev.ask, m.seq);
+          closeCheck(checks, ev.ask, m);
         }
         continue;
       }
@@ -640,7 +641,7 @@ function folding(
         m.seq,
         ev.op === "task.add"
           ? { kind: "task", task: m.seq }
-          : (ev.op === "task.update" || ev.op === "task.claim" || ev.op === "task.first") && tasks.has(ev.task)
+          : (ev.op === "task.update" || ev.op === "task.claim" || ev.op === "task.first" || ev.op === "task.landed") && tasks.has(ev.task)
             ? { kind: "task", task: ev.task }
             : MAIN,
       );

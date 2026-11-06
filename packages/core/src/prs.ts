@@ -1,7 +1,8 @@
 import { inlineText } from "./membership.ts";
 import { REVIEW_CHECK } from "./protocol.ts";
 import type { Task } from "./state/types.ts";
-import { prChecks, prKey, releaseOf, rulesOf, type ChannelState, type GithubPr, type GithubState } from "./state.ts";
+import { prChecks, prKey, rulesOf, type ChannelState, type GithubPr, type GithubState } from "./state.ts";
+import { artifactText, doneGate, landingPr } from "./done-gate.ts";
 
 export interface PrChecks {
   passed: number;
@@ -101,15 +102,14 @@ export function reviewNotRequired(state: Pick<ChannelState, "landing" | "repos" 
   return state.repos.filter((repo) => !rulesOf(state.github, repo)?.required.includes(REVIEW_CHECK));
 }
 
-export function landingWaits(state: ChannelState, task: Pick<Task, "id" | "state" | "then">): string | null {
+export function landingWaits(state: ChannelState, task: Task): string | null {
+  const gate = doneGate(state, task);
+  if (gate?.kind === "bypassed") return `shipped while its ship gate was shut (missing ${gate.missing.join(", ")}): a person closes it with a reason`;
   if (task.state !== "landing" || !task.then || task.then === "none") return null;
   if (task.then === "run") return "waits for its run, then a post check quoting the run id";
-  if (task.then.startsWith("release:npm:")) return `waits for ${task.then.slice("release:npm:".length)} on npm, confirmed by a post check`;
-  const linked = taskPr(state, task.id)?.pr;
-  if (!linked) return "waits for its PR to be linked and merged";
-  const pr = `PR #${linked.number}`;
-  if (linked.state === "closed") return `waits: ${pr} was closed without merging`;
-  if (linked.state === "open") return state.merges === "people" ? `waits for a person to merge ${pr}` : `waits for ${pr} to merge`;
-  if (task.then === "release:tag" && !releaseOf(state.github, linked)) return `waits for a release that contains ${pr}`;
-  return `${pr} ${task.then === "release:tag" ? "is released" : "is merged"}: waits for the done gate to confirm it`;
+  if (!gate) return null;
+  if (gate.kind === "landed") return `is ready to land at ${artifactText(gate.artifact)}: the owner's app marks it landed`;
+  const pr = landingPr(state, task);
+  if (pr?.state === "closed") return `waits: PR #${pr.number} was closed without merging`;
+  return pr?.state === "open" && state.merges === "people" ? `waits for a person to merge PR #${pr.number}` : `waits for ${gate.why}`;
 }

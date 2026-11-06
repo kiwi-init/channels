@@ -1,6 +1,6 @@
 import { useState } from "react"
 
-export function SendBack({ onSend, onCancel }: { onSend: (why: string) => void; onCancel: () => void }) {
+export function SendBack({ onSend, onCancel, ask = "What needs to change?", submit = "Send" }: { onSend: (why: string) => void; onCancel: () => void; ask?: string; submit?: string }) {
   const [why, setWhy] = useState("")
   return (
     <form
@@ -14,8 +14,8 @@ export function SendBack({ onSend, onCancel }: { onSend: (why: string) => void; 
         autoFocus
         className="input"
         value={why}
-        aria-label="What needs to change"
-        placeholder="What needs to change?"
+        aria-label={ask}
+        placeholder={ask}
         onChange={(e) => setWhy(e.target.value)}
         onBlur={() => !why.trim() && onCancel()}
         onKeyDown={(e) => {
@@ -26,7 +26,7 @@ export function SendBack({ onSend, onCancel }: { onSend: (why: string) => void; 
         }}
       />
       <button type="submit" className="btn is-primary" disabled={!why.trim()}>
-        Send
+        {submit}
       </button>
     </form>
   )

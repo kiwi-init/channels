@@ -86,7 +86,18 @@ describe("the owner's app drains GitHub's queue into the channel", () => {
     expect(isQuiet(running)).toBe(true);
     expect(describeEvent(running)).toBe("GitHub: ci-ok queued on T37");
     const again = fold(after, (await ownerCh.members()).map(toRoster));
-    expect(prChecks(again.github, again.github.prs.get("ojow/channels#7")!)).toEqual([{ name: "ci-ok", status: "queued", run: 12, at: expect.any(Number) }]);
+    expect(prChecks(again.github, again.github.prs.get("ojow/channels#7")!)).toEqual([
+      {
+        name: "ci-ok",
+        status: "queued",
+        run: 12,
+        at: expect.any(Number),
+        attempts: [
+          { run: 11, attempt: 1, conclusion: "success" },
+          { run: 12, attempt: 1 },
+        ],
+      },
+    ]);
   });
 });
 

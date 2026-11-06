@@ -2,6 +2,7 @@ import type { ChannelState } from "@kiwi/core/state.ts";
 import { shaKey } from "@kiwi/core/state/github.ts";
 import { REVIEW_CHECK } from "@kiwi/core/protocol.ts";
 import { reviewPosts, type ReviewPost } from "@kiwi/core/ship-gate.ts";
+import { landingsDue } from "@kiwi/core/done-gate.ts";
 import { issuesToClose, issuesToLink, prsToLinkBack, tasksClosedOnGithub } from "@kiwi/core/work.ts";
 
 const memory = new Map<string, number>();
@@ -42,6 +43,14 @@ export const linksToPost = (roomId: string, state: ChannelState) =>
 export const issuesToPost = (roomId: string, state: ChannelState) => dueAfter(roomId, state, "issueCloses", issuesToClose);
 
 export const tasksToClose = (roomId: string, state: ChannelState) => dueAfter(roomId, state, "issueTasks", tasksClosedOnGithub);
+
+const landed = new Set<string>();
+
+export const landsToPost = (roomId: string, state: ChannelState) => landingsDue(state).filter((l) => !landed.has(`${roomId}:${l.key}`));
+
+export const landPosted = (roomId: string, key: string): void => {
+  landed.add(`${roomId}:${key}`);
+};
 
 const sent = new Map<string, { verdict: ReviewPost["verdict"]; seen: string }>();
 

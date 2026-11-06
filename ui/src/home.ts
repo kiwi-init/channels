@@ -35,6 +35,8 @@ function lineOf(c: Source, a: Ask): { what: string; text: string; act: HomeAct }
       const task = c.tasks.find((t) => t.id === a.task)
       return { what: `Review T${a.task}`, text: clip(task ? wordsPlain(task.title, c.nicknames) : `T${a.task}`), act: task ? { kind: "approve-task", task: a.task } : { kind: "open" } }
     }
+    case "bypass":
+      return { what: `T${a.task} shipped with its gate shut`, text: clip(a.missing.join(", ")), act: { kind: "open" } }
     case "spec": {
       const spec = c.specs?.find((s) => s.ask === a.ask)
       const text = clip(spec ? wordsPlain(spec.title, c.nicknames) : `Spec #${a.ask}`)
