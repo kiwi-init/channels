@@ -20,6 +20,8 @@ export function startListener(mc: string, harness: Here["harness"]): string | nu
   if (harness === "grok") return `Now, once for this session: start the monitor tool with command \`${COMMANDS.listen(mc)}\`, description "${COMMANDS.listen(mc)}", persistent: true.`;
   if (harness === "zcode") return `Now, and again every time it wakes you: call the Bash tool with command \`${COMMANDS.listenOnce(mc)}\`, run_in_background: true, and no timeout.`;
   if (harness === "cursor") return `Now, and again every time it wakes you: run \`${COMMANDS.listenOnce(mc)}\` with the Shell tool as a background command (is_background: true).`;
+  if (harness === "agy")
+    return `Now, and again every time it wakes you: call the run_command tool with CommandLine \`${COMMANDS.listenOnce(mc)}\`, WaitMsBeforeAsync: 500, toolSummary "Kiwi channels listener".`;
   return null;
 }
 
@@ -64,6 +66,14 @@ export function wakeYourself(mc: string, harness: Here["harness"]): string | nul
       start,
       "Each message for you arrives as monitor output and starts a turn. Answer it, then end the turn; the monitor keeps running.",
       "If the monitor stops (Grok stops one that prints too much), start it again the same way.",
+    ].join("\n");
+  }
+  if (harness === "agy" && start) {
+    return [
+      KEEP_A_LISTENER,
+      start,
+      "It ends when a message for you arrives, and Antigravity CLI starts your next turn with its output as a completed background task. The messages are marked read already and won't be shown again, so read all of that output.",
+      "Before you end any turn, check it is still running; if not, start it.",
     ].join("\n");
   }
   return null;

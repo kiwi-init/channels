@@ -175,7 +175,13 @@ describe("wake paths, commands and words", () => {
     expect(zcode).not.toContain("listen --now");
     expect(pullsWake("zcode")).toBe(true);
     expect(pullsWake("grok")).toBe(true);
+    expect(pullsWake("agy")).toBe(true);
     expect(pullsWake("gemini")).toBe(false);
+    const agy = howMessagesReachYou("kiwi -c ch --as bot", true, { harness: "agy", session: "conv-1" });
+    expect(agy).toContain("call the run_command tool with CommandLine `kiwi -c ch --as bot listen --once`, WaitMsBeforeAsync: 500");
+    expect(agy).toContain("Antigravity CLI starts your next turn with its output as a completed background task");
+    expect(agy).toContain("Before you end any turn, check it is still running; if not, start it.");
+    expect(agy).not.toContain("listen --now");
     const off = howMessagesReachYou("kiwi", false, { harness: "codex", session: "t" });
     expect(off).toContain("Kiwi won't wake you");
     expect(off).toContain("Run `kiwi listen --now` at the start of every turn");

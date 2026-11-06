@@ -44,7 +44,7 @@ export function wakesInSession(via: string | undefined): boolean {
 const TYPED_IN_TMUX = new Set<WakeHarness | undefined>(["agy", "gemini"]);
 
 export function pullsWake(harness: WakeHarness | undefined): boolean {
-  return harness === "kimi" || harness === "cursor" || harness === "grok" || harness === "zcode";
+  return harness === "kimi" || harness === "cursor" || harness === "grok" || harness === "zcode" || harness === "agy";
 }
 
 export function listenedPath(path: WakePath, listening: boolean): WakePath {

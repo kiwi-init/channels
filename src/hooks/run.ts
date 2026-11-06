@@ -45,7 +45,7 @@ export const runHook = Effect.fn("Hooks.run")(function* (event: string, harness?
   const cursor = typeof input.cursor_version === "string" && typeof input.conversation_id === "string" && input.conversation_id && !onGrokBot() ? input.conversation_id : null;
   const who: Here = kimi ? kimiHookHere() : cursor ? { harness: "cursor", session: cursor, ...(model ? { model } : {}) } : heldOrNamed(hereAs(harness), input.session_id, model);
   const release = event === LISTEN ? () => {} : holdAnswering(who.session);
-  const deadline = event === "session-start" || kimi || cursor !== null || who.harness === "zcode" ? START_MS : HOOK_MS;
+  const deadline = event === "session-start" || kimi || cursor !== null || who.harness === "zcode" || who.harness === "agy" ? START_MS : HOOK_MS;
   const keys = yield* Keystore;
   const seatsServed = Effect.gen(function* () {
     yield* Effect.promise(() => refreshListeners());

@@ -79,6 +79,18 @@ describe("Antigravity CLI's hooks answer in agy's format", () => {
     expect(answer.decision).toBe("continue");
     expect(answer.reason).toContain("second message for agy");
 
-    expect((await hook("stop", agyInput(home, { executionNum: 1, terminationReason: "NO_TOOL_CALL", fullyIdle: true, error: "" }))).out).toBe("");
+    const rearm = await hook("stop", agyInput(home, { executionNum: 1, terminationReason: "NO_TOOL_CALL", fullyIdle: true, error: "" }));
+    expect(rearm.code).toBe(0);
+    const rearmAnswer = JSON.parse(rearm.out) as Continue;
+    expect(rearmAnswer.decision).toBe("continue");
+    expect(rearmAnswer.reason).toContain("no Kiwi listener of yours is running for agyroom");
+    expect(rearmAnswer.reason).toContain("run_command");
+
+    const listener = spawn(home, ["listen", "--once"], { ANTIGRAVITY_AGENT: "1", ANTIGRAVITY_CONVERSATION_ID: CONVERSATION });
+    await until(
+      async () => (await hook("stop", agyInput(home, { executionNum: 1, terminationReason: "NO_TOOL_CALL", fullyIdle: true, error: "" }))).out === "",
+      "stop out is empty when listener is running",
+    );
+    listener.kill();
   });
 });

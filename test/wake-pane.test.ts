@@ -121,6 +121,6 @@ describe("the wake route for an agent in its own tmux pane", () => {
     expect(howMessagesReachYou("kiwi", true, { harness: "agy", session: "c" }, false, "%7")).toBe(
       "Kiwi wakes you in this session when a message for you arrives (typing into its tmux pane). Don't run listen.",
     );
-    expect(howMessagesReachYou("kiwi", true, { harness: "agy", session: "c" }, false, undefined)).toContain("Kiwi wakes it only in tmux");
+    expect(howMessagesReachYou("kiwi", true, { harness: "agy", session: "c" }, false, undefined)).toContain("run_command");
   });
 });
