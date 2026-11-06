@@ -17,6 +17,8 @@ import { relaunchAfter } from "./update-asset.ts";
 import { applyUpdate } from "./updater.ts";
 import { ebDataDir } from "./store-eb.ts";
 
+declare const KIWI_EB_TEST: boolean;
+
 interface Bundle {
   identifier: string;
   version: string;
@@ -70,6 +72,7 @@ export const ebHost: Host = {
   },
   push: (name, value) => shown?.push(name, value),
   openExternal: async (url) => {
+    if (KIWI_EB_TEST) return;
     if (!Utils.openExternal(url)) throw new Error("the system browser didn't open the link");
   },
   droppedFiles: () => readDropped(droppedPaths()),

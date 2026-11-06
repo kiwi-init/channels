@@ -39,6 +39,7 @@ export interface Nav {
   modal: ModalView | null
   dialog: Dialog
   section: Section
+  mod?: string | undefined
   invite?: string
   github?: GithubView
   spec?: number
@@ -58,7 +59,7 @@ export type Go =
   | { to: "panel"; panel: Panel | null }
   | { to: "modal"; modal: ModalView | null }
   | { to: "dialog"; dialog: Dialog }
-  | { to: "settings"; section?: Section }
+  | { to: "settings"; section?: Section; mod?: string }
   | { to: "back" }
   | { to: "home" }
   | { to: "invite"; code: string }
@@ -151,7 +152,7 @@ function step(nav: Nav, go: Exclude<Go, { to: "history" }>): Nav {
     case "invite":
       return { ...nav, dialog: "join", invite: go.code }
     case "settings":
-      return { ...nav, page: "settings", section: go.section ?? nav.section, modal: null, dialog: null }
+      return { ...nav, page: "settings", section: go.section ?? nav.section, mod: go.mod, modal: null, dialog: null }
     case "back":
       return { ...nav, page: "channel" }
     case "home":

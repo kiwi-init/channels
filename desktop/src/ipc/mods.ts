@@ -12,7 +12,7 @@ export const startModsSafe = (why: string): void => {
   safeAtStart ??= why;
 };
 
-export function modsCalls(host: Host): Serves<"mods" | "modBundle" | "approveMod" | "modFetch" | "modFailed" | "setModOn" | "modsSettled"> {
+export function modsCalls(host: Host): Serves<"mods" | "modBundle" | "approveMod" | "modFetch" | "modFailed" | "setModOn" | "modsSettled" | "modIcon" | "modDetails"> {
   let mods: ModsHost | null = null;
   let started: Promise<ModsHost> | null = null;
   const ready = (): Promise<ModsHost> => {
@@ -37,5 +37,7 @@ export function modsCalls(host: Host): Serves<"mods" | "modBundle" | "approveMod
     modFailed: async (name, hash, why) => (await ready()).failed(String(name), String(hash), String(why)),
     setModOn: async (name, on) => (await ready()).setOn(String(name), on === true),
     modsSettled: async () => (await ready()).settled(),
+    modIcon: async (name) => (await ready()).icon(String(name)),
+    modDetails: async (name) => (await ready()).details(String(name)),
   };
 }

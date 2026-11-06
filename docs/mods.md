@@ -16,19 +16,20 @@ Mods run in the desktop app, on a Mac and on Linux.
 kiwi mod dev standup-notes
 ```
 
-It creates `~/.kiwi/mods/standup-notes/` with a starter, then rebuilds it on every save, and the app reloads it. The folder also gets `kiwi-mod.d.ts`, a `tsconfig.json` and a `package.json`: run `bun install` once there and your editor autocompletes `@kiwi/mod`.
+It creates `~/.kiwi/mods/standup-notes/` with a starter and an `icon.svg`, then rebuilds it on every save, and the app reloads it. The folder also gets `kiwi-mod.d.ts`, a `tsconfig.json` and a `package.json`: run `bun install` once there and your editor autocompletes `@kiwi/mod`.
 
 ```json
 {
   "name": "standup-notes",
   "version": "0.1.0",
   "shell": "^3.6",
-  "needs": ["panel"]
+  "needs": ["panel"],
+  "icon": "icon.svg"
 }
 ```
 
 ```tsx
-import { Action, Actions, List, panel, Toast } from "@kiwi/mod"
+import { Action, Actions, List, panel, Toast } from "@kiwi/mod";
 
 function View() {
   return (
@@ -46,23 +47,25 @@ function View() {
         />
       </List.Section>
     </List>
-  )
+  );
 }
 
-panel({ title: "Standup Notes", render: View })
+panel({ title: "Standup Notes", render: View });
 ```
 
 Open a channel, press ⌘K and pick **Standup Notes** under Mods. Run `kiwi mod dev` in a folder whose `mod.json` has that name and it links that folder instead, so you can keep the mod in its own repo.
 
 ## mod.json
 
-| Field | What it is |
-| --- | --- |
-| `name` | Lowercase letters, digits and dashes, the same as the folder's name. `app`, `nav`, `view`, `chat` and `debug` are taken. |
-| `version` | A version like `1.0.0` |
-| `shell` | The app versions it works with, like `^3.6`. An app it doesn't fit leaves it off and says why. |
-| `needs` | What it asks you for: `panel`, `command`, and `net:<host>` for each web host it talks to |
-| `skills` | Optional: skills it gives every agent. See [Skills](#skills) |
+| Field     | What it is                                                                                                                                                          |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`    | Lowercase letters, digits and dashes, the same as the folder's name. `app`, `nav`, `view`, `chat` and `debug` are taken.                                            |
+| `version` | A version like `1.0.0`                                                                                                                                              |
+| `shell`   | The app versions it works with, like `^3.6`. An app it doesn't fit leaves it off and says why.                                                                      |
+| `needs`   | What it asks you for: `panel`, `command`, and `net:<host>` for each web host it talks to                                                                            |
+| `icon`    | Optional: an `.svg` or `.png` in its folder, up to 64 KB. The app shows it as a picture, so an SVG's scripts never run. Without one, the mod gets its first letter. |
+| `author`  | Optional: who made it, up to 100 characters                                                                                                                         |
+| `skills`  | Optional: skills it gives every agent. See [Skills](#skills)                                                                                                        |
 
 A `net:` host is exact: `net:api.linear.app` lets it reach `https://api.linear.app` and nothing else, not even another subdomain.
 
@@ -70,35 +73,35 @@ A `net:` host is exact: `net:api.linear.app` lets it reach `https://api.linear.a
 
 Everything comes from `@kiwi/mod`, plus React:
 
-| Import | What it does |
-| --- | --- |
-| `panel({ title, render })` | The mod's panel beside the chat. Its title shows in the panel's header and in ⌘K. |
-| `command({ id, title, run })` | An action in ⌘K. Its id for `keys.json` is `<mod>.<id>`. |
-| `fetch(url, init)` | The mod's only way to the network, to the hosts you approved, over https |
-| `useFetch(url, options)` | `fetch` as a hook: `{ data, error, isLoading, revalidate }`, JSON by default |
-| `List`, `List.Section`, `List.Item` | A searchable list: ↑ ↓ to move, ↵ for the first action, a right click for the rest. Items take a `subtitle`, an `icon`, `keywords` and `accessories` (text, a tag, a date) |
-| `Detail` | Markdown, drawn like a message |
-| `Form` and `Form.TextField`, `TextArea`, `Checkbox`, `Dropdown` | A form whose `onSubmit` gets the values by field id. ⌘↵ submits |
-| `Actions`, `Action`, `Action.OpenInBrowser`, `Action.CopyToClipboard` | What an item, a detail or a form can do. A `shortcut` like `"mod+shift+c"` runs it from the keyboard |
-| `Toast.show({ title, message, style })` | A note at the bottom of the app |
-| `Empty` | What to show when there's nothing yet |
-| `storage` | `get`, `set`, `remove` and `keys`, kept on this computer for the mod, up to 1,000,000 characters |
-| `Button`, `Row`, `Field`, `Icon` | The app's own button, list row, labelled field and icons |
+| Import                                                                | What it does                                                                                                                                                               |
+| --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `panel({ title, render })`                                            | The mod's panel beside the chat. Its title shows in the panel's header and in ⌘K.                                                                                          |
+| `command({ id, title, run })`                                         | An action in ⌘K. Its id for `keys.json` is `<mod>.<id>`.                                                                                                                   |
+| `fetch(url, init)`                                                    | The mod's only way to the network, to the hosts you approved, over https                                                                                                   |
+| `useFetch(url, options)`                                              | `fetch` as a hook: `{ data, error, isLoading, revalidate }`, JSON by default                                                                                               |
+| `List`, `List.Section`, `List.Item`                                   | A searchable list: ↑ ↓ to move, ↵ for the first action, a right click for the rest. Items take a `subtitle`, an `icon`, `keywords` and `accessories` (text, a tag, a date) |
+| `Detail`                                                              | Markdown, drawn like a message                                                                                                                                             |
+| `Form` and `Form.TextField`, `TextArea`, `Checkbox`, `Dropdown`       | A form whose `onSubmit` gets the values by field id. ⌘↵ submits                                                                                                            |
+| `Actions`, `Action`, `Action.OpenInBrowser`, `Action.CopyToClipboard` | What an item, a detail or a form can do. A `shortcut` like `"mod+shift+c"` runs it from the keyboard                                                                       |
+| `Toast.show({ title, message, style })`                               | A note at the bottom of the app                                                                                                                                            |
+| `Empty`                                                               | What to show when there's nothing yet                                                                                                                                      |
+| `storage`                                                             | `get`, `set`, `remove` and `keys`, kept on this computer for the mod, up to 1,000,000 characters                                                                           |
+| `Button`, `Row`, `Field`, `Icon`                                      | The app's own button, list row, labelled field and icons                                                                                                                   |
 
 The frame has the app's colours and styles, and follows your theme as it changes. A mod can also import its own files: code, `.css`, and images (`.svg`, `.png`, `.jpg`, `.gif`, `.webp`).
 
 ```tsx
-import { Action, Actions, List, panel, storage, Toast, useFetch } from "@kiwi/mod"
+import { Action, Actions, List, panel, storage, Toast, useFetch } from "@kiwi/mod";
 
 interface Issue {
-  id: string
-  title: string
-  url: string
-  state: string
+  id: string;
+  title: string;
+  url: string;
+  state: string;
 }
 
 function View() {
-  const { data, isLoading } = useFetch<Issue[]>("https://api.example.com/issues")
+  const { data, isLoading } = useFetch<Issue[]>("https://api.example.com/issues");
   return (
     <List isLoading={isLoading} searchBarPlaceholder="Search issues">
       {(data ?? []).map((issue) => (
@@ -115,8 +118,8 @@ function View() {
                 title="Pin"
                 shortcut="mod+p"
                 onAction={async () => {
-                  await storage.set("pinned", issue.id)
-                  Toast.show({ title: "Pinned", message: issue.title })
+                  await storage.set("pinned", issue.id);
+                  Toast.show({ title: "Pinned", message: issue.title });
                 }}
               />
             </Actions>
@@ -124,10 +127,10 @@ function View() {
         />
       ))}
     </List>
-  )
+  );
 }
 
-panel({ title: "Issues", render: View })
+panel({ title: "Issues", render: View });
 ```
 
 With `"needs": ["panel", "net:api.example.com"]`, that's a whole mod.
@@ -135,6 +138,8 @@ With `"needs": ["panel", "net:api.example.com"]`, that's a whole mod.
 ## Turning one on
 
 The first time the app sees a mod that asks for something, it asks you: a note says the mod wants to run, ⌘K lists **Set up <name>**, and its panel shows what it asks for, in words. **Turn on** approves all of it, and nothing of the mod runs before that. When an update asks for more, it stops and asks again. A mod that asks for nothing runs without asking.
+
+Settings → Mods lists every mod; click one for its page: where it came from and at which commit, when it was added and changed, its size, what it may do and adds, and its `README.md`.
 
 The app keeps your approvals on this computer. There's no off switch in the app yet: to stop a mod, remove it.
 
@@ -176,13 +181,13 @@ Channels comes with **anatomy**, by Ryan (MIT). It makes interactive figures, an
 
 A mod is a git repo. Push yours anywhere and anyone can add it:
 
-| Command | What it does |
-| --- | --- |
+| Command                                    | What it does                                                                                                         |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
 | `kiwi mod add github.com/owner/repo[#ref]` | Clone it into `~/.kiwi/mods`, pinned at that commit, and print what it asks for. The app asks you before it runs it. |
-| `kiwi mod update [name] [--yes]` | Pull each mod (or one) and say what changed in what it asks for. One that asks for more waits for `--yes`. |
-| `kiwi mod list [--json]` | Each mod, its version, where it came from and what it asks for |
-| `kiwi mod remove <name> [--force]` | Delete it. A link loses just the link; one with changes not in its source needs `--force`. |
-| `kiwi mod dev <name>` | Create, link or open a mod and rebuild it on every save |
+| `kiwi mod update [name] [--yes]`           | Pull each mod (or one) and say what changed in what it asks for. One that asks for more waits for `--yes`.           |
+| `kiwi mod list [--json]`                   | Each mod, its version, where it came from and what it asks for                                                       |
+| `kiwi mod remove <name> [--force]`         | Delete it. A link loses just the link; one with changes not in its source needs `--force`.                           |
+| `kiwi mod dev <name>`                      | Create, link or open a mod and rebuild it on every save                                                              |
 
 `add` also takes an `https://` or ssh address or a full path, and `#ref` pins a branch, tag or commit. A mod added at a branch follows it on `update`; one pinned at a tag or a commit stays there.
 
