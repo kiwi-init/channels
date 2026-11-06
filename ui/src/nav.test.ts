@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import type { Where } from "~/model"
 import { navigate, startNav, type Go, type Nav } from "~/nav"
-import { keepPlace, keepSpot, spotKey, whereOf } from "~/places"
+import { keepPlace, keepSpot, spotKey, tabOf, whereOf } from "~/places"
 
 const room = (id: string): Where => ({ kind: "room", room: id })
 const general = room("general")
@@ -128,5 +128,12 @@ describe("stored places are read strictly (T978)", () => {
     expect(whereOf({ kind: "theirs", between: ["atlas"] })).toBeNull()
     expect(whereOf("general")).toBeNull()
     expect(whereOf(null)).toBeNull()
+  })
+
+  test("a mod's tab reads back, and the old GitHub tab becomes the GitHub mod's (T6270)", () => {
+    expect(tabOf("specs")).toBe("specs")
+    expect(tabOf("mod:linear")).toBe("mod:linear")
+    expect(tabOf("github")).toBe("mod:github")
+    for (const bad of ["mod:", "mod:Linear", "mod:../x", "needs", 3, null]) expect(tabOf(bad)).toBe("chat")
   })
 })

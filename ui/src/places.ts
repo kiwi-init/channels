@@ -1,6 +1,6 @@
 import type { Where } from "~/model"
 
-export type Tab = "chat" | "specs" | "tasks" | "agents" | "needs" | "github"
+export type Tab = "chat" | "specs" | "tasks" | "agents" | "needs" | `mod:${string}`
 
 export interface Spot {
   seq: number
@@ -16,7 +16,14 @@ const SPOTS = "mc.spots"
 const PLACES = "mc.places"
 const KEEP = 200
 const WRITE_MS = 500
-const TABS: readonly Tab[] = ["chat", "specs", "tasks", "agents", "github"]
+const TABS: readonly Tab[] = ["chat", "specs", "tasks", "agents"]
+
+const MOD_TAB = /^mod:[a-z0-9][a-z0-9-]{0,62}$/
+
+export function tabOf(x: unknown): Tab {
+  if (x === "github") return "mod:github"
+  return typeof x === "string" && MOD_TAB.test(x) ? (x as `mod:${string}`) : (TABS.find((t) => t === x) ?? "chat")
+}
 
 const isRecord = (x: unknown): x is Record<string, unknown> => typeof x === "object" && x !== null && !Array.isArray(x)
 
@@ -38,7 +45,7 @@ function spotOf(x: unknown): Spot | null {
 function keptOf(x: unknown): Kept | null {
   if (!isRecord(x)) return null
   const where = whereOf(x.where)
-  const tab = TABS.find((t) => t === x.tab) ?? "chat"
+  const tab = tabOf(x.tab)
   return where ? { where, tab } : null
 }
 

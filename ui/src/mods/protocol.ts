@@ -1,4 +1,7 @@
+import type { GithubHealth } from "@kiwi/core/github-health.ts"
+
 import type { ModTerminal, ModTerminalMark } from "../../../desktop/src/bridge.ts"
+import type { Issue, Person, PullRequest, Task } from "~/model"
 
 export type { ModTerminal, ModTerminalMark }
 
@@ -40,7 +43,28 @@ export const LOOK = [
   "c-brown",
 ]
 
-export type Surface = "main" | "sidebar"
+export type Surface = "main" | "sidebar" | "tab"
+
+export type ModTarget = { kind: "pr" | "issue"; repo: string; number: number } | { kind: "view"; view: string }
+
+export type ModOpen = { kind: "task"; id: number } | { kind: "settings" } | { kind: "chat" }
+
+export type ModPerson = Pick<Person, "name" | "kind" | "harness" | "presence" | "color" | "picture" | "face" | "activity" | "load" | "red" | "doneAt">
+
+export interface ModTask {
+  id: number
+  title: string
+  status: Task["status"]
+  owner: { nickname: string; person: ModPerson | null } | null
+}
+
+export interface ModGithub {
+  repos: string[]
+  prs: PullRequest[]
+  issues: Issue[]
+  tasks: ModTask[]
+  health: GithubHealth | null
+}
 
 export interface ModCommand {
   id: string
@@ -80,6 +104,9 @@ export type ToFrame =
   | { kiwi: typeof MOD_PROTOCOL; type: "action"; id: string; message: ModMessage }
   | { kiwi: typeof MOD_PROTOCOL; type: "reply"; id: number; ok: true; value: ModFetchResult | ModTerminal[] | null }
   | { kiwi: typeof MOD_PROTOCOL; type: "reply"; id: number; ok: false; error: string }
+  | { kiwi: typeof MOD_PROTOCOL; type: "github"; data: ModGithub | null }
+  | { kiwi: typeof MOD_PROTOCOL; type: "show"; target: ModTarget }
+  | { kiwi: typeof MOD_PROTOCOL; type: "showing"; target: ModTarget | null }
 
 export type FromFrame =
   | { kiwi: typeof MOD_PROTOCOL; type: "hello" }
@@ -92,22 +119,51 @@ export type FromFrame =
   | { kiwi: typeof MOD_PROTOCOL; type: "actions"; list: ModCommand[] }
   | { kiwi: typeof MOD_PROTOCOL; type: "fetch"; id: number; url: string; init: ModFetchInit }
   | ({ kiwi: typeof MOD_PROTOCOL; type: "terminal"; id: number } & TerminalOp)
+  | { kiwi: typeof MOD_PROTOCOL; type: "tab"; title: string; shown: boolean; alert: string | null; hint: string | null }
+  | { kiwi: typeof MOD_PROTOCOL; type: "open"; to: ModOpen }
+  | { kiwi: typeof MOD_PROTOCOL; type: "show"; target: ModTarget }
 
-const GATED: { readonly [K in FromFrame["type"]]?: readonly [need: string, from: Surface] } = {
-  panel: ["panel", "main"],
-  commands: ["command", "main"],
-  actions: ["message-action", "main"],
-  sidebar: ["sidebar", "sidebar"],
-  size: ["sidebar", "sidebar"],
-  terminal: ["terminal", "main"],
+const short = (v: unknown, max: number): v is string => typeof v === "string" && v.length > 0 && v.length <= max
+
+const ANY: readonly Surface[] = ["main", "sidebar", "tab"]
+
+const GATED: { readonly [K in FromFrame["type"]]?: readonly [need: string, from: readonly Surface[]] } = {
+  panel: ["panel", ["main"]],
+  commands: ["command", ["main"]],
+  actions: ["message-action", ["main"]],
+  sidebar: ["sidebar", ["sidebar"]],
+  size: ["sidebar", ["sidebar"]],
+  terminal: ["terminal", ["main"]],
+  tab: ["tab", ["tab"]],
+  open: ["github", ANY],
+  show: ["panel", ANY],
 }
 
 export function heeded(type: FromFrame["type"], from: Surface, mod: { state: string; needs: readonly string[] } | undefined): boolean {
   const gate = GATED[type]
-  return !gate || (gate[1] === from && !!mod && mod.state === "on" && mod.needs.includes(gate[0]))
+  return !gate || (gate[1].includes(from) && !!mod && mod.state === "on" && mod.needs.includes(gate[0]))
 }
 
-const short = (v: unknown, max: number): v is string => typeof v === "string" && v.length > 0 && v.length <= max
+const REPO = /^[\w.-]{1,100}\/[\w.-]{1,100}$/
+
+const count = (v: unknown): v is number => typeof v === "number" && Number.isSafeInteger(v) && v > 0
+
+export function target(v: unknown): ModTarget | null {
+  if (!v || typeof v !== "object") return null
+  const t = v as Record<string, unknown>
+  if ((t["kind"] === "pr" || t["kind"] === "issue") && typeof t["repo"] === "string" && REPO.test(t["repo"]) && count(t["number"])) return { kind: t["kind"], repo: t["repo"], number: t["number"] }
+  if (t["kind"] === "view" && short(t["view"], 32)) return { kind: "view", view: t["view"] }
+  return null
+}
+
+function opened(v: unknown): ModOpen | null {
+  if (!v || typeof v !== "object") return null
+  const o = v as Record<string, unknown>
+  if (o["kind"] === "task") return count(o["id"]) ? { kind: "task", id: o["id"] } : null
+  return o["kind"] === "settings" || o["kind"] === "chat" ? { kind: o["kind"] } : null
+}
+
+export const sameTarget = (a: ModTarget | null, b: ModTarget | null): boolean => JSON.stringify(a) === JSON.stringify(b)
 
 function named(v: unknown, max: number): ModCommand[] | null {
   if (!Array.isArray(v) || v.length > max) return null
@@ -134,6 +190,18 @@ export function fromFrame(data: unknown): FromFrame | null {
       return short(m["title"], 80) ? { kiwi: MOD_PROTOCOL, type: "panel", title: m["title"] } : null
     case "sidebar":
       return short(m["title"], 80) ? { kiwi: MOD_PROTOCOL, type: "sidebar", title: m["title"] } : null
+    case "tab":
+      return short(m["title"], 40)
+        ? { kiwi: MOD_PROTOCOL, type: "tab", title: m["title"], shown: m["shown"] !== false, alert: short(m["alert"], 80) ? m["alert"] : null, hint: short(m["hint"], 200) ? m["hint"] : null }
+        : null
+    case "open": {
+      const to = opened(m["to"])
+      return to ? { kiwi: MOD_PROTOCOL, type: "open", to } : null
+    }
+    case "show": {
+      const t = target(m["target"])
+      return t ? { kiwi: MOD_PROTOCOL, type: "show", target: t } : null
+    }
     case "size": {
       const h = m["height"]
       return typeof h === "number" && Number.isFinite(h) && h >= 0 ? { kiwi: MOD_PROTOCOL, type: "size", height: Math.round(Math.min(Math.max(h, SIDE_HEIGHT.min), SIDE_HEIGHT.max)) } : null

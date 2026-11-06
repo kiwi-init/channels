@@ -17,14 +17,13 @@ import {
 
 import { useState } from "react"
 
-import { Avatar, cx, Dot } from "~/kit/bits"
+import { cx } from "~/kit/bits"
 import { GlyphIcon, Icon, ISSUE, type Glyph } from "~/kit/icons"
 import { copyText } from "~/kit/toasts"
 import { ago } from "~/kit/time"
-import { memberOf, type Channel, type Check, type Issue, type PullRequest } from "~/model"
-import { useApp } from "~/nav"
-import { nickname, Shown } from "~/names"
-import { OutsideLink } from "~/kit/outside"
+import type { Check, Issue, PullRequest } from "~/model"
+import { showInMod } from "~/mods/bus"
+import { openOutside, OutsideLink } from "~/kit/outside"
 
 const PR_GLYPHS: Record<PullRequest["state"], Glyph> = { open: GitPullRequestIcon, draft: GitPullRequestDraftIcon, merged: GitMergeIcon, closed: GitPullRequestClosedIcon }
 export const PR_TONES: Record<PullRequest["state"], string> = { open: "tone-live", draft: "tone-quiet", merged: "tone-review", closed: "tone-quiet" }
@@ -171,33 +170,15 @@ export function Branch({ name, copy }: { name: string; copy?: boolean }) {
   )
 }
 
-export function TaskLink({ channel, id }: { channel: Channel; id: number }) {
-  const { go } = useApp()
-  const task = channel.tasks.find((t) => t.id === id)
-  if (!task) return null
-  return (
-    <button type="button" className="gh-task" onClick={() => go({ to: "panel", panel: { kind: "task", task: id } })}>
-      <Dot status={task.cancelled ? "todo" : task.status} />
-      <span className="gh-task-id num">T{id}</span>
-      <span className="gh-task-title">
-        <Shown value={task.title} />
-      </span>
-      {task.owner && (
-        <span className="gh-task-who">
-          <Avatar person={memberOf(channel, task.owner)} size="sm" />
-          {nickname(channel, task.owner)}
-        </span>
-      )}
-    </button>
-  )
+export function openPr(pr: { repo: string; number: number; url: string }, kind: "pr" | "issue" = "pr"): void {
+  if (!showInMod("github", { kind, repo: pr.repo, number: pr.number }, pr.url)) openOutside(pr.url)
 }
 
 export function PrCard({ pr }: { pr: PullRequest }) {
-  const { go } = useApp()
   const line = checksLine(pr)
   return (
     <div className="gh-card">
-      <button type="button" className="gh-card-title" onClick={() => go({ to: "panel", panel: { kind: "pr", repo: pr.repo, number: pr.number } })}>
+      <button type="button" className="gh-card-title" onClick={() => openPr(pr)}>
         <PrMark pr={pr} />
         <span>
           <span className="dim num">#{pr.number}</span> {pr.title}

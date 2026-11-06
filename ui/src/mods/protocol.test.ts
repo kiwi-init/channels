@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
-import { fromFrame, heeded, LOOK, MOD_PROTOCOL, SIDE_HEIGHT } from "~/mods/protocol"
+import { fromFrame, heeded, LOOK, MOD_PROTOCOL, sameTarget, SIDE_HEIGHT, target } from "~/mods/protocol"
 import { TOKENS } from "~/theme/derive"
 
 describe("a mod frame's messages", () => {
@@ -98,6 +98,52 @@ describe("a mod frame's messages", () => {
   })
 })
 
+describe("a tab, and showing a pull request or issue", () => {
+  test("a tab's title, whether it shows, and its alert and hint come through", () => {
+    expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "tab", title: "GitHub", alert: "An open pull request's checks failed", hint: "3 open pull requests" })).toEqual({
+      kiwi: MOD_PROTOCOL,
+      type: "tab",
+      title: "GitHub",
+      shown: true,
+      alert: "An open pull request's checks failed",
+      hint: "3 open pull requests",
+    })
+    expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "tab", title: "GitHub", shown: false, alert: 4 })).toEqual({ kiwi: MOD_PROTOCOL, type: "tab", title: "GitHub", shown: false, alert: null, hint: null })
+    expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "tab", title: "x".repeat(41) })).toBeNull()
+  })
+
+  test("a target names a repo and a number, or a view, and nothing else", () => {
+    expect(target({ kind: "pr", repo: "kiwi-init/channels", number: 45, extra: 1 })).toEqual({ kind: "pr", repo: "kiwi-init/channels", number: 45 })
+    expect(target({ kind: "issue", repo: "a.b/c-d", number: 1 })).toEqual({ kind: "issue", repo: "a.b/c-d", number: 1 })
+    expect(target({ kind: "view", view: "issues" })).toEqual({ kind: "view", view: "issues" })
+    for (const bad of [
+      { kind: "pr", repo: "../../etc", number: 1 },
+      { kind: "pr", repo: "a/b/c", number: 1 },
+      { kind: "pr", repo: "a/b", number: 0 },
+      { kind: "pr", repo: "a/b", number: 1.5 },
+      { kind: "commit", repo: "a/b", number: 1 },
+      { kind: "view", view: "" },
+      null,
+      "pr",
+    ])
+      expect(target(bad)).toBeNull()
+    expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "show", target: { kind: "pr", repo: "a/b", number: -1 } })).toBeNull()
+  })
+
+  test("a mod opens a task, the channel's settings or the chat, and nothing else", () => {
+    expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "open", to: { kind: "task", id: 12 } })).toEqual({ kiwi: MOD_PROTOCOL, type: "open", to: { kind: "task", id: 12 } })
+    expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "open", to: { kind: "settings", tab: "danger" } })).toEqual({ kiwi: MOD_PROTOCOL, type: "open", to: { kind: "settings" } })
+    expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "open", to: { kind: "task", id: "12" } })).toBeNull()
+    expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "open", to: { kind: "url", url: "https://x" } })).toBeNull()
+  })
+
+  test("two targets are the same when they name the same thing", () => {
+    expect(sameTarget({ kind: "pr", repo: "a/b", number: 1 }, { kind: "pr", repo: "a/b", number: 1 })).toBe(true)
+    expect(sameTarget({ kind: "pr", repo: "a/b", number: 1 }, { kind: "issue", repo: "a/b", number: 1 })).toBe(false)
+    expect(sameTarget(null, null)).toBe(true)
+  })
+})
+
 describe("what a mod's frame may do", () => {
   const mod = (needs: string[], state = "on") => ({ state, needs })
 
@@ -124,6 +170,18 @@ describe("what a mod's frame may do", () => {
     expect(heeded("terminal", "main", mod(["panel", "command", "message-action"]))).toBe(false)
     expect(heeded("terminal", "sidebar", mod(["terminal", "sidebar"]))).toBe(false)
     expect(heeded("terminal", "main", mod(["terminal"], "asks"))).toBe(false)
+  })
+
+  test("only the tab's own frame names the tab, opening needs github and showing needs a panel, from any frame", () => {
+    expect(heeded("tab", "tab", mod(["tab"]))).toBe(true)
+    expect(heeded("tab", "main", mod(["tab"]))).toBe(false)
+    expect(heeded("tab", "tab", mod(["panel"]))).toBe(false)
+    for (const from of ["main", "sidebar", "tab"] as const) {
+      expect(heeded("open", from, mod(["github"]))).toBe(true)
+      expect(heeded("show", from, mod(["panel"]))).toBe(true)
+    }
+    expect(heeded("open", "tab", mod(["tab", "panel"]))).toBe(false)
+    expect(heeded("show", "tab", mod(["tab", "github"]))).toBe(false)
   })
 
   test("a mod that isn't on, or is gone, gets nothing", () => {
