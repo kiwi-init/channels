@@ -65,6 +65,7 @@ Open a channel, press ⌘K and pick **Standup Notes** under Mods. Run `kiwi mod 
 | `needs` | What it asks you for: `panel`, `tab`, `command`, `terminal`, `github`, `render:<kind>`, and `net:<host>` for each web host it talks to |
 | `icon` | Optional: an `.svg` or `.png` in its folder, up to 64 KB. The app shows it as a picture, so an SVG's scripts never run. Without one, the mod gets its first letter. |
 | `author` | Optional: who made it, up to 100 characters |
+| `settings` | Optional: what the person fills in for it, like a token. See [Settings](#settings) |
 | `skills` | Optional: skills it gives every agent. See [Skills](#skills) |
 
 A `net:` host is exact: `net:api.linear.app` lets it reach `https://api.linear.app` and nothing else, not even another subdomain.
@@ -85,6 +86,7 @@ Everything comes from `@kiwi/mod`, plus React:
 | `render(kind, draw)` | Draws one kind of attachment in chat. See [Drawing attachments](#drawing-attachments). |
 | `fetch(url, init)` | The mod's only way to the network, to the hosts you approved, over https |
 | `terminals()`, `onTerminals(fn)`, `focusTerminal(id)`, `markTerminal(id, mark)` | Your agents' tmux panes and Rex blocks. See [Terminals](#terminals) |
+| `settings()` | Its settings' values, by id |
 | `useFetch(url, options)` | `fetch` as a hook: `{ data, error, isLoading, revalidate }`, JSON by default |
 | `List`, `List.Section`, `List.Item` | A searchable list: ↑ ↓ to move, ↵ for the first action, a right click for the rest. Items take a `subtitle`, an `icon`, `keywords` and `accessories` (text, a tag, a date) |
 | `Detail` | Markdown, drawn like a message |
@@ -140,6 +142,27 @@ panel({ title: "Issues", render: View })
 ```
 
 With `"needs": ["panel", "net:api.example.com"]`, that's a whole mod.
+
+## Settings
+
+A mod lists what it needs filled in, and its page in Settings → Mods draws the form:
+
+```json
+"settings": [
+  { "id": "token", "title": "Linear API key", "type": "secret", "required": true },
+  { "id": "team", "title": "Team", "type": "text" },
+  { "id": "show", "title": "Show", "type": "choice", "choices": ["Mine", "Everyone's"] },
+  { "id": "done", "title": "Include done issues", "type": "toggle" }
+]
+```
+
+- **Types:** `text`, `toggle`, `choice` (with its `choices`) and `secret`. Up to 20 settings.
+- **`required`:** until it's filled in, the mod stays off and its row says which setting it needs.
+- **Secrets** are sealed on this computer with the key your keychain holds, like your own keys. They're in no file under `~/.kiwi`, and the page never shows one again. On Linux with no keyring, Channels won't keep one and says why.
+- **`settings()`** gives the mod its own values: a string, `true` or `false`, or `null` when empty. No mod gets another's.
+- **A change restarts the mod** with the new values.
+- **Another source:** a mod with the same name from another source starts with none of the old values.
+- **Removing a mod** clears its settings and secrets.
 
 ## The GitHub tab is a mod
 

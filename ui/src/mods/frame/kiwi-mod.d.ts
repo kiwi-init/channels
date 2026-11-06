@@ -163,6 +163,7 @@ declare module "@kiwi/mod" {
 
   export function render(kind: string, draw: (attachment: Attachment) => ReactNode | void): void
   export function fetch(input: string | URL, init?: { method?: string; headers?: HeadersInit; body?: string | null }): Promise<Response>
+  export function settings(): Readonly<Record<string, string | boolean | null>>
 
   export interface ModTerminal {
     id: string

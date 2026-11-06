@@ -22,6 +22,7 @@ export interface StoreFile {
   device?: Identity;
   deviceLinks?: DeviceLink[];
   enrolled?: PublicPerson;
+  modSecrets?: Record<string, { source: string; values: Record<string, string> }>;
 }
 
 export type VaultRead = { ok: true; file: Partial<StoreFile> | null; resave: boolean } | { ok: false; why: string; advice?: string };

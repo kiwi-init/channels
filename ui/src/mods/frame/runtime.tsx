@@ -39,6 +39,7 @@ let view: ComponentType | null = null
 let booted = false
 let surface: Surface = "main"
 let needs: ReadonlySet<string> = new Set()
+let values: Readonly<Record<string, string | boolean | null>> = Object.freeze({})
 const commands = new Map<string, { title: string; run: () => void | Promise<void> }>()
 const actions = new Map<string, { title: string; run: (message: ModMessage) => void | Promise<void> }>()
 const drawers = new Map<string, Draw>()
@@ -206,6 +207,7 @@ const api = {
   onTerminals,
   focusTerminal,
   markTerminal,
+  settings: (): Readonly<Record<string, string | boolean | null>> => values,
   Avatar,
   Count,
   Dot,
@@ -292,6 +294,7 @@ addEventListener("message", (e) => {
     booted = true
     surface = m.surface
     needs = new Set(m.needs)
+    values = Object.freeze({ ...m.settings })
     document.documentElement.dataset["surface"] = surface
     theme(m.theme, m.dark)
     try {

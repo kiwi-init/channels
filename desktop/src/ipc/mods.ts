@@ -9,10 +9,12 @@ import { childEnv, sessionEnv } from "../child-env.ts";
 import { kiwiHome } from "../daemon-client.ts";
 import type { Host } from "../host.ts";
 import { installDefaults } from "../mods-default.ts";
-import { modsHost, type ModsHost } from "../mods-host.ts";
+import { modsHost, type ModsHost, type ModSecrets } from "../mods-host.ts";
 import { inModsWorker } from "../mods-run.ts";
 import { placedSeatsOf, terminalCalls, type PlacedSeat, type Run } from "../mods-terminal.ts";
 import type { SnippetHome, TerminalSnippets } from "../mods-terminal-snippet.ts";
+import { logMainError } from "../main-log.ts";
+import { keysAtRest, mutate, store } from "../store.ts";
 import { UI_CONTRACT } from "../ui-contract.ts";
 import { runKiwi } from "./kiwi.ts";
 
@@ -97,6 +99,36 @@ function snippetHome(data: string): SnippetHome {
   return { copies: path.join(data, "mod-terminals"), record: path.join(data, "mod-terminals.json"), home: os.homedir(), env: sessionEnv() };
 }
 
+const sealedSecrets: ModSecrets = {
+  read: (mod, source) => {
+    const kept = store.modSecrets?.[mod];
+    return kept?.source === source ? { ...kept.values } : {};
+  },
+  write: (mod, source, id, value) => {
+    const atRest = keysAtRest();
+    if (value !== null && !atRest.sealed) throw new Error(`Channels keeps a mod's secrets only sealed, and it can't seal them on this computer: ${atRest.why ?? "it has no keyring"}`);
+    mutate((s) => {
+      const all = (s.modSecrets ??= {});
+      const kept = all[mod]?.source === source ? all[mod] : { source, values: {} };
+      if (value === null) delete kept.values[id];
+      else kept.values[id] = value;
+      if (Object.keys(kept.values).length) all[mod] = kept;
+      else delete all[mod];
+    });
+  },
+  forget: (mod) => {
+    if (!store.modSecrets?.[mod]) return;
+    try {
+      mutate((s) => {
+        delete s.modSecrets?.[mod];
+      });
+    } catch (e) {
+      // The store can't be written now: the secret stays sealed, tied to the removed mod's source, and main.log says why.
+      logMainError(e);
+    }
+  },
+};
+
 export function modsCalls(
   host: Host,
 ): Serves<
@@ -116,6 +148,7 @@ export function modsCalls(
   | "modTerminals"
   | "modTerminalFocus"
   | "modTerminalMark"
+  | "setModSetting"
 > {
   let mods: ModsHost | null = null;
   let started: Promise<ModsHost> | null = null;
@@ -147,6 +180,7 @@ export function modsCalls(
       safe: safeAtStart,
       terminal,
       onTerminal: (name, s) => void applyLive(path.join(terminal.copies, name), s).catch(() => undefined),
+      secrets: sealedSecrets,
     });
     mods = m;
     started = m.start().then(() => m);
@@ -203,5 +237,6 @@ export function modsCalls(
       await allowed(name);
       await terminals.mark(seat, mark);
     },
+    setModSetting: async (name, id, value) => (await ready()).setSetting(String(name), String(id), value),
   };
 }
