@@ -232,7 +232,18 @@ async function whileAway(d: Driver, palette: () => Promise<boolean>): Promise<vo
         return until("another app in front", 10_000, async () => (front().includes("Channels") ? null : true)).catch(() => false);
       },
     },
-    { how: "minimized", put: async () => (await d.main("minimizeForTest")) === true && ((await d.main("window")) as { minimized?: unknown }).minimized === true },
+    {
+      how: "minimized",
+      put: async () => {
+        await d.main("minimizeForTest");
+        const shown = await until("the window minimized", 10_000, async () => {
+          const w = (await d.main("window")) as { minimized?: unknown };
+          return w.minimized === true ? w : null;
+        }).catch(async () => d.main("window"));
+        console.log(`minimized: the window says ${JSON.stringify(shown)}`);
+        return (shown as { minimized?: unknown }).minimized === true;
+      },
+    },
   ];
   for (const { how, put } of away) {
     check(await put(), `the window can be put away, ${how}${front()}`);
@@ -476,11 +487,14 @@ try {
   check(String(first["relayByProxy"]).startsWith("blocked"), "the mod can't reach the relay through the app either");
   await step("the mod's panel title", 10_000, () => d.evaluate(clickText, { selector: ".panel .panel-title", text: "Probe mod" }, 2_000));
   await shot("mod-panel");
+  const sideAsked = Date.now();
+  const sideTops = new Set<string>();
   const sideTop = await until("the mod's sidebar section", 15_000, async () => {
     const t = await d.evaluate(topAt, ".side .mod-side-slot", 2_000);
-    return t.found ? t : null;
+    sideTops.add(JSON.stringify(t));
+    return t.found && t.top === "frame probe-mod in the sidebar" ? t : null;
   }).catch(() => null);
-  console.log(`at the sidebar section: ${JSON.stringify(sideTop)}`);
+  console.log(`at the sidebar section after ${Date.now() - sideAsked} ms: ${JSON.stringify(sideTop)}; seen there: ${[...sideTops].join(", ")}`);
   check(sideTop?.top === "frame probe-mod in the sidebar", "a mod that asked for a sidebar section shows it, drawn by its own frame");
   const titles = await d.evaluate(() => [...document.querySelectorAll(".side .mod-side h3")].map((h) => h.textContent), null, 2_000);
   check(titles.includes("Probe side") && !titles.includes("Quiet side"), "a mod that didn't ask for a sidebar section gets none, even when it posts one");
