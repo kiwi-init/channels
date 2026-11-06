@@ -2,6 +2,7 @@ import { useEffect, useRef, useSyncExternalStore } from "react"
 
 import { bridge } from "@kiwi/secrets/secrets.ts"
 import type { ModView } from "../../../desktop/src/bridge.ts"
+import { addCommands } from "~/commands/rebind"
 import { useApp } from "~/nav"
 import { openLinksOutside } from "~/kit/outside-links"
 import { fromFrame, LOOK, MOD_PROTOCOL, type ModCommand, type ToFrame } from "~/mods/protocol"
@@ -11,7 +12,6 @@ const FRAME_URL = "views://internal/mod-frame.html"
 export interface RunningMod {
   name: string
   title: string | null
-  commands: ModCommand[]
   failed: string | null
 }
 
@@ -19,6 +19,7 @@ const state = { mods: [] as ModView[], running: new Map<string, RunningMod>(), s
 const frames = new Map<string, HTMLIFrameElement>()
 const listeners = new Set<() => void>()
 const told = new Set<string>()
+const unbind = new Map<string, () => void>()
 let version = 0
 
 const changed = (): void => {
@@ -37,8 +38,10 @@ export const modsNow = (): ModView[] => state.mods
 
 export const runningMod = (name: string): RunningMod | undefined => state.running.get(name)
 
-export function runModCommand(name: string, id: string): void {
-  send(name, { kiwi: MOD_PROTOCOL, type: "command", id })
+function bindCommands(name: string, list: ModCommand[] | null): void {
+  unbind.get(name)?.()
+  unbind.delete(name)
+  if (list) unbind.set(name, addCommands(list.map((c) => ({ id: `${name}.${c.id}`, title: c.title, from: name, run: () => send(name, { kiwi: MOD_PROTOCOL, type: "command", id: c.id }) }))))
 }
 
 export function showModIn(name: string, el: HTMLElement | null): void {
@@ -82,7 +85,7 @@ async function onMessage(e: MessageEvent): Promise<void> {
   } else if (m.type === "ready") update(name, { failed: null })
   else if (m.type === "error") update(name, { failed: m.message })
   else if (m.type === "panel") update(name, { title: m.title })
-  else if (m.type === "commands") update(name, { commands: m.list })
+  else if (m.type === "commands") bindCommands(name, m.list)
   else {
     const reply: ToFrame = await b.modFetch(name, { url: m.url, ...m.init }).then(
       (value) => ({ kiwi: MOD_PROTOCOL, type: "reply", id: m.id, ok: true, value }),
@@ -108,6 +111,7 @@ function startFrames(layer: HTMLElement): void {
       f.remove()
       frames.delete(name)
       state.running.delete(name)
+      bindCommands(name, null)
     }
   for (const [name, hash] of on) {
     if (frames.has(name)) continue
@@ -118,7 +122,7 @@ function startFrames(layer: HTMLElement): void {
     place(f, null)
     f.src = FRAME_URL
     frames.set(name, f)
-    state.running.set(name, { name, title: null, commands: [], failed: null })
+    state.running.set(name, { name, title: null, failed: null })
     layer.append(f)
   }
 }

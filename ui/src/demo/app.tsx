@@ -29,6 +29,7 @@ if (shot?.docs !== undefined && shot.channel && seeded && seeded.kind !== "dm" &
 
 if (shot?.calm) showCalm()
 if (shot?.folder) showFolder(shot.folder)
+if (shot?.keys) void import("~/commands/rebind").then((m) => m.takeKeysFile({ file: "/Users/ana/.kiwi/keys.json", present: true, keys: shot.keys }))
 if (!shot?.onboarding) rememberOnboarded(false)
 
 const SWITCH_AFTER_MS = 400

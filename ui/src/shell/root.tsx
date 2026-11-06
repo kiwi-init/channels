@@ -1,14 +1,14 @@
-import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo } from "react"
+import { Suspense, useEffect, useLayoutEffect, useMemo } from "react"
 
-import { showCalm, useCalmShown, useIdle } from "~/calm/idle"
+import { useCalmShown, useIdle } from "~/calm/idle"
+import { useAppCommands } from "~/commands/app"
 import { Boundary } from "~/kit/boundary"
 import { later } from "~/kit/later"
 import { Toasts, useToasts } from "~/kit/toasts"
 import type { App } from "~/model"
-import { ActContext, AppContext, historyStep, type Go, type Nav } from "~/nav"
+import { ActContext, AppContext, type Go, type Nav } from "~/nav"
 import { ContextMenus } from "~/kit/menu-open"
 import { modsServed } from "~/mods/served"
-import { Palette } from "~/palette/palette"
 import { ChannelScreen } from "~/shell/channel"
 import { Rail } from "~/shell/rail"
 import { applyTheme, colorsOf, usePreview, useSystemDark } from "~/theme/apply"
@@ -25,21 +25,15 @@ const JoinDialog = later(() => import("~/start/join").then((m) => m.JoinDialog))
 const NewRoomDialog = later(() => import("~/shell/new-room").then((m) => m.NewRoomDialog))
 const Welcome = later(() => import("~/start/welcome").then((m) => m.Welcome))
 const Calm = later(() => import("~/calm/calm").then((m) => m.Calm))
+const AppCommands = later(() => import("~/commands/app-more").then((m) => m.AppCommands))
+const Palette = later(() => import("~/palette/palette").then((m) => m.Palette))
 const ModsLayer = later(() => import("~/mods/host").then((m) => m.ModsLayer))
 
 export function Root({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => void }) {
   const [toasts, toast, dismissToast] = useToasts()
   const ctx = useMemo(() => ({ app, nav, go, toast }), [app, nav, go, toast])
   const act = useMemo(() => ({ actions: app.actions, go, toast }), [app.actions, go, toast])
-  usePaletteKey(
-    useCallback(() => go({ to: "dialog", dialog: nav.dialog === "palette" ? null : "palette" }), [go, nav.dialog]),
-    useCallback(() => {
-      if (nav.dialog === "palette") go({ to: "dialog", dialog: null })
-      else if (document.querySelector("dialog[open]")) return
-      showCalm()
-    }, [go, nav.dialog])
-  )
-  useHistoryKeys(go, !!nav.modal)
+  useAppCommands(nav, go)
   useTheme(app)
 
   if (!app.account || app.signIn?.stage === "sign-in")
@@ -93,7 +87,10 @@ export function Root({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => voi
             <EnrollDialog />
           </Suspense>
         )}
-        <Palette />
+        <Suspense fallback={null}>
+          <Palette />
+          <AppCommands />
+        </Suspense>
         {modsServed() && (
           <Suspense fallback={null}>
             <ModsLayer />
@@ -115,37 +112,6 @@ function CalmWatch({ minutes }: { minutes: number }) {
       <Calm />
     </Suspense>
   ) : null
-}
-
-function useHistoryKeys(go: (go: Go) => void, modal: boolean) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const step = historyStep(e)
-      if (!step || e.defaultPrevented || document.querySelectorAll("dialog[open]").length > (modal ? 1 : 0)) return
-      e.preventDefault()
-      go({ to: "history", step })
-    }
-    window.addEventListener("keydown", onKey)
-    return () => window.removeEventListener("keydown", onKey)
-  }, [go, modal])
-}
-
-function usePaletteKey(toggle: () => void, calm: () => void) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey)) return
-      const key = e.key.toLowerCase()
-      if (key === "k") {
-        e.preventDefault()
-        toggle()
-      } else if (key === "t" && !e.altKey && !e.shiftKey) {
-        e.preventDefault()
-        calm()
-      }
-    }
-    window.addEventListener("keydown", onKey)
-    return () => window.removeEventListener("keydown", onKey)
-  }, [toggle, calm])
 }
 
 function useTheme(app: App) {

@@ -9,6 +9,7 @@ import {
   GitPullRequestClosedIcon,
   GitPullRequestDraftIcon,
   GitPullRequestIcon,
+  LinkSquare02Icon,
   Loading03Icon,
   MinusSignCircleIcon,
   UnavailableIcon,
@@ -223,7 +224,7 @@ export function PrCard({ pr }: { pr: PullRequest }) {
           </a>
           <a href={pr.url} target="_blank" rel="noreferrer noopener">
             Open on GitHub
-            <Icon name="external" size={12} />
+            <GlyphIcon glyph={LinkSquare02Icon} size={12} />
           </a>
         </span>
       </p>

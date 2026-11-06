@@ -1,3 +1,4 @@
+import { Download01Icon } from "@hugeicons/core-free-icons"
 import "~/styles/annotator.css"
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react"
@@ -24,7 +25,7 @@ import {
 } from "@kiwi/app/annotate.ts"
 import { compressImage, readBase64 } from "@kiwi/app/compress-image.ts"
 import { Avatar, cx } from "~/kit/bits"
-import { Icon } from "~/kit/icons"
+import { GlyphIcon, Icon } from "~/kit/icons"
 import { clock } from "~/kit/time"
 import type { Person, Upload } from "~/model"
 import { useAct } from "~/nav"
@@ -426,7 +427,7 @@ export default function Annotator({ image, sender, face, at, onSend, onClose }: 
             <Icon name={copied ? "check" : "copy"} />
           </button>
           <button type="button" className="icon-btn" aria-label="Download" title="Download" onClick={() => void download()}>
-            <Icon name="download" />
+            <GlyphIcon glyph={Download01Icon} />
           </button>
           <button type="button" className="icon-btn annot-close" aria-label="Close" title="Close" autoFocus onClick={leave}>
             <Icon name="close" />

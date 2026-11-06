@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useState, type CSSProperties } from "react"
 
 import { Conversation } from "~/chat/conversation"
 import type { Jump, Older } from "~/chat/search-box"
+import { useCommands, useShownKeys } from "~/commands/table"
 import { cx, Count, IconButton, useLate } from "~/kit/bits"
 import { useGlide } from "~/kit/glide"
 import { Boundary } from "~/kit/boundary"
@@ -13,9 +14,9 @@ import { dropMessage, findWanted, useWantedMessage } from "~/live/open-message"
 import { openAsks } from "~/needs/open"
 import { sameWhere, useApp } from "~/nav"
 import { whereKey } from "~/places"
-import { SIDEBAR_KEYS, useSidebarHidden } from "@kiwi/app/sidebar-hidden.ts"
+import { useSidebarHidden } from "@kiwi/app/sidebar-hidden.ts"
 import { usePanelWidth } from "~/shell/panel-width"
-import { isSideKey, setDrawer, toggleSide, useDrawer, useTall } from "~/shell/side"
+import { setDrawer, toggleSide, useDrawer, useTall } from "~/shell/side"
 import { Sidebar } from "~/shell/sidebar"
 import { useSideways } from "~/kit/sideways"
 import { openTasks } from "~/tasks/open"
@@ -95,23 +96,27 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   }, [nav.where])
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (isSideKey(e)) {
-        e.preventDefault()
-        toggleSide()
-      }
       if (e.key === "Escape" && !e.defaultPrevented && !document.querySelector("dialog[open]")) {
         if (drawer) setDrawer(false)
         else if (nav.panel) go({ to: "panel", panel: null })
-      }
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f") {
-        e.preventDefault()
-        setSearching(true)
-        setFocusAsk((n) => n + 1)
       }
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
   }, [nav.panel, go, drawer])
+  useCommands([
+    { id: "view.sidebar", ...(channel.waiting ? { palette: false as const } : {}), run: toggleSide },
+    {
+      id: "chat.search",
+      ...(channel.waiting ? { palette: false as const } : {}),
+      run: () => {
+        setSearching(true)
+        setFocusAsk((n) => n + 1)
+      },
+    },
+  ])
+  const sideKeys = useShownKeys("view.sidebar")
+  const searchKeys = useShownKeys("chat.search")
 
   if (channel.waiting)
     return (
@@ -148,8 +153,8 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
         <button
           type="button"
           className="icon-btn top-drawer"
-          aria-label={`Rooms and people${news ? ", new messages" : ""} (${SIDEBAR_KEYS})`}
-          title={`Show or hide rooms and people (${SIDEBAR_KEYS})`}
+          aria-label={`Rooms and people${news ? ", new messages" : ""}${sideKeys ? ` (${sideKeys})` : ""}`}
+          title={`Show or hide rooms and people${sideKeys ? ` (${sideKeys})` : ""}`}
           aria-pressed={drawer}
           onClick={toggleSide}
         >
@@ -220,7 +225,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
             </div>
           )}
           <div className="top-group">
-            <IconButton icon="search" label="Search this channel (⌘F)" onClick={() => setSearching(true)} />
+            <IconButton icon="search" label={`Search this channel${searchKeys ? ` (${searchKeys})` : ""}`} onClick={() => setSearching(true)} />
           </div>
         </div>
       </header>

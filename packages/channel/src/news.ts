@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { bridge } from "@kiwi/secrets/secrets.ts";
 import { pendingWrite, writeLater } from "./write-behind.ts";
 
@@ -179,23 +179,4 @@ async function markIcon(on: boolean) {
   g.arc(50, 14, 10, 0, 2 * Math.PI);
   g.fill();
   link.href = c.toDataURL("image/png");
-}
-
-/** Alt+↓ / Alt+↑: the next (or previous) channel with news. */
-export function useNewsKeys<T>(rows: T[], news: RowNews[], current: number, open: (row: T) => void) {
-  const go = useEffectEvent((dir: 1 | -1) => {
-    const next = nextWithNews(rows, news, current, dir);
-    if (next) open(next);
-  });
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (!e.altKey || e.metaKey || e.ctrlKey || e.shiftKey || (e.key !== "ArrowDown" && e.key !== "ArrowUp")) return;
-      // Ahead of whatever has focus: an arrow on a menu button would open its menu instead.
-      e.preventDefault();
-      e.stopPropagation();
-      go(e.key === "ArrowDown" ? 1 : -1);
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, []);
 }
