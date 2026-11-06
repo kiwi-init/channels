@@ -1,6 +1,5 @@
 import type { CachedKept, CachedRow } from "@kiwi/core/cache-row.ts";
-import type { PresenceFields, ReviewCheck } from "@kiwi/core/client.ts";
-import { downgradeHeld, downgradeRefusal } from "@kiwi/core/review-check.ts";
+import type { PresenceFields } from "@kiwi/core/client.ts";
 import type { Outgoing } from "@kiwi/core/ship-gate.ts";
 
 import type { CallResult, ChannelCallName, ChannelCalls, ChannelOps, DocEvent, FollowEvent, HistoryAround, HistorySearch } from "../../../desktop/src/bridge.ts";
@@ -75,7 +74,7 @@ type Args<K extends ChannelCallName> = Parameters<ChannelCalls[K]>;
 
 export class ChannelLink {
   readonly isOwner: boolean;
-  downgradesFor: ((body: string, opts: Omit<Outgoing, "from" | "body">) => Promise<ReviewCheck[]>) | null = null;
+  beforeSend: ((body: string, opts: Omit<Outgoing, "from" | "body">) => Promise<void>) | null = null;
 
   constructor(
     readonly code: string,
@@ -149,14 +148,7 @@ export class ChannelLink {
   close = () => this.c("close");
   leave = () => this.c("leave");
   send = async (...a: Args<"send">) => {
-    for (const c of (await this.downgradesFor?.(a[0], a[1] ?? {})) ?? []) {
-      try {
-        await this.c("postReviewCheck", c);
-      } catch (err) {
-        // A refusal for good (repo or app not set up for checks) means no green check can exist either; only an unconfirmed post holds the change.
-        if (downgradeHeld(err)) throw new Error(downgradeRefusal(c, err), { cause: err });
-      }
-    }
+    await this.beforeSend?.(a[0], a[1] ?? {});
     return this.c("send", ...a);
   };
   image = (...a: Args<"image">) => import("./image-bytes.ts").then((m) => m.heldImage(a[0]) ?? this.c("image", ...a));

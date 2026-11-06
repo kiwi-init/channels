@@ -1,5 +1,6 @@
 import { choiceIn, type CheckAsk } from "./checks.ts";
 import type { ReviewCheck } from "./client/github.ts";
+import { RelayError } from "./client/relay-errors.ts";
 import { hasLanding, REVIEW_CHECK, type Event } from "./protocol.ts";
 import { linkedPr, sameHead } from "./stage.ts";
 import { checkPassed } from "./state/checks.ts";
@@ -141,3 +142,19 @@ export function downgrades(state: ChannelState, m: Outgoing): ReviewCheck[] {
   }
   return out;
 }
+
+export async function postDowngrades(state: ChannelState, m: Outgoing, post: (c: ReviewCheck) => Promise<unknown>): Promise<void> {
+  for (const c of downgrades(state, m)) {
+    try {
+      await post(c);
+    } catch (err) {
+      // A refusal for good (repo or app not set up for checks) means no green check can exist either; only an unconfirmed post holds the change.
+      if (downgradeHeld(err)) throw new Error(downgradeRefusal(c, err), { cause: err });
+    }
+  }
+}
+
+export const downgradeHeld = (err: unknown): boolean => !(err instanceof RelayError) || err.status >= 500 || err.status === 408 || err.status === 429;
+
+export const downgradeRefusal = (c: ReviewCheck, err: unknown): string =>
+  `kiwi/review on ${c.repo}@${c.sha.slice(0, 7)} has to turn ${c.verdict} before this goes out, and the relay didn't confirm it (${err instanceof Error && err.message ? err.message : "no answer"}): nothing was sent, try again`;

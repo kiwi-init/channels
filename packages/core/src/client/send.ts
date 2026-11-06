@@ -38,8 +38,7 @@ import {
 import type { PermissionReply, PermissionSettled, PermissionShown } from "../permission.ts";
 import { MissingKey, Rejected } from "../refusals.ts";
 import type { ChannelCore } from "./core.ts";
-import { downgradeHeld, downgradeRefusal } from "../review-check.ts";
-import type { Outgoing } from "../ship-gate.ts";
+import { downgradeHeld, downgradeRefusal, type Outgoing } from "../ship-gate.ts";
 import type { ReviewCheck } from "./github.ts";
 import { RelayError, Unreachable, type Refused } from "./errors.ts";
 import { received } from "./history.ts";

@@ -1,5 +1,3 @@
-import type { ReviewCheck } from "./client/github.ts";
-import { RelayError } from "./client/relay-errors.ts";
 import { REVIEW_CHECK } from "./protocol.ts";
 import { sameHead } from "./stage.ts";
 import type { GithubState } from "./state/github.ts";
@@ -13,8 +11,3 @@ export function recordedRuns(github: GithubState, sha: string): number[] {
   }
   return [...out].sort((a, b) => a - b);
 }
-
-export const downgradeHeld = (err: unknown): boolean => !(err instanceof RelayError) || err.status >= 500 || err.status === 408 || err.status === 429;
-
-export const downgradeRefusal = (c: ReviewCheck, err: unknown): string =>
-  `kiwi/review on ${c.repo}@${c.sha.slice(0, 7)} has to turn ${c.verdict} before this goes out, and the relay didn't confirm it (${err instanceof Error && err.message ? err.message : "no answer"}): nothing was sent, try again`;

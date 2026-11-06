@@ -158,11 +158,11 @@ export class ChannelStore {
 
   constructor(member: StoredMember, human?: HumanSession | null, deps?: ChannelStoreDeps, light = false) {
     this.ch = deps?.link ?? linkOf(member);
-    this.ch.downgradesFor = async (body, opts) => {
+    this.ch.beforeSend = async (body, opts) => {
       const state = this.state.value;
       const from = [...state.members.values()].find((m) => m.pk === member.identity.pk)?.name;
       const may = opts.ev?.op === "task.update" ? opts.ev.verdict === "rejected" : !!opts.check || !!opts.re?.some((id) => state.checks.has(id));
-      return from && may ? (await import("@kiwi/core/ship-gate.ts")).downgrades(state, { ...opts, from, body }) : [];
+      if (from && may) await (await import("@kiwi/core/ship-gate.ts")).postDowngrades(state, { ...opts, from, body }, (c) => this.ch.postReviewCheck(c));
     };
     this.lend = deps?.lend ?? ((code) => watches().lend(code));
     this.code = member.code;
