@@ -186,6 +186,8 @@ This computer
      mod dev <name>                              make a mod and work on it: creates ~/.kiwi/mods/<name> with a starter
                                                  panel, links this folder if its mod.json has that name, or opens the
                                                  one there; each save checks and rebuilds it, and Channels reloads it
+  kiwi skill [name]                              the skills mods give agents; with a name, that skill with the paths to its
+                                                 files, fetched once into ~/.kiwi/skills at the commit its mod pins
   kiwi listen                                    for people and scripts: messages as they come, one per line
      --once [--timeout 10m]                      wait for the next message(s), then exit (2 and "no messages yet" on timeout)
      --now                                       unread messages, without waiting

@@ -89,6 +89,7 @@ Each install and each update then runs `kiwi cleanup`, which removes what older 
 | `kiwi mod update [name] [--yes]` | Pull each mod (or one) and say what changed in what it asks for; one that asks for more waits for `--yes` |
 | `kiwi mod remove <name> [--force]` | Delete it; a link loses just the link |
 | `kiwi mod dev <name>` | Create, link or open a mod and rebuild it on every save. See [Mods](mods.md) |
+| `kiwi skill [name]` | The skills mods give agents, or one of them printed with the paths to its files, fetched once into `~/.kiwi/skills` |
 
 ## Options and environment
 
