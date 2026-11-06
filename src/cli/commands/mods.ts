@@ -141,7 +141,7 @@ export const modCommands: Record<string, Command> = {
         if (start.how === "created") out(`created ${tilde(start.at)} with mod.json, index.tsx and icon.svg`);
         else if (start.how === "linked") out(`linked ${tilde(start.at)} to ${tilde(start.dir)}`);
         else out(`opened ${tilde(start.at)}${start.dir === start.at ? "" : `, a link to ${tilde(start.dir)}`}`);
-        out("each save checks and rebuilds it; ctrl-c stops");
+        out(`each save rebuilds it, without a type check: kiwi mod check ${name} does that; ctrl-c stops`);
         watchDev(start, name);
         return yield* Effect.never;
       }
