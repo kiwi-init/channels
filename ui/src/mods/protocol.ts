@@ -1,4 +1,7 @@
+import type { GithubHealth } from "@kiwi/core/github-health.ts"
+
 import type { ModTerminal as PlacedTerminal, ModTerminalMark } from "../../../desktop/src/bridge.ts"
+import type { Issue, Person, PullRequest, Task } from "~/model"
 
 export type { ModTerminalMark, PlacedTerminal }
 
@@ -44,7 +47,28 @@ export const LOOK = [
   "c-brown",
 ]
 
-export type Surface = "main" | "sidebar" | "render"
+export type Surface = "main" | "sidebar" | "tab" | "render"
+
+export type ModTarget = { kind: "pr" | "issue"; repo: string; number: number } | { kind: "view"; view: string }
+
+export type ModOpen = { kind: "task"; id: number } | { kind: "settings" } | { kind: "chat" }
+
+export type ModPerson = Pick<Person, "name" | "kind" | "harness" | "presence" | "color" | "picture" | "face" | "activity" | "load" | "red" | "doneAt">
+
+export interface ModTask {
+  id: number
+  title: string
+  status: Task["status"]
+  owner: { nickname: string; person: ModPerson | null } | null
+}
+
+export interface ModGithub {
+  repos: string[]
+  prs: PullRequest[]
+  issues: Issue[]
+  tasks: ModTask[]
+  health: GithubHealth | null
+}
 
 export interface ModCommand {
   id: string
@@ -102,6 +126,9 @@ export type ToFrame =
   | { kiwi: typeof MOD_PROTOCOL; type: "reply"; id: number; ok: false; error: string }
   | { kiwi: typeof MOD_PROTOCOL; type: "stored"; id: number; ok: true; value: string | string[] | null }
   | { kiwi: typeof MOD_PROTOCOL; type: "stored"; id: number; ok: false; error: string }
+  | { kiwi: typeof MOD_PROTOCOL; type: "github"; data: ModGithub | null }
+  | { kiwi: typeof MOD_PROTOCOL; type: "show"; target: ModTarget }
+  | { kiwi: typeof MOD_PROTOCOL; type: "showing"; target: ModTarget | null }
 
 export type FromFrame =
   | { kiwi: typeof MOD_PROTOCOL; type: "hello" }
@@ -115,32 +142,70 @@ export type FromFrame =
   | { kiwi: typeof MOD_PROTOCOL; type: "fetch"; id: number; url: string; init: ModFetchInit }
   | { kiwi: typeof MOD_PROTOCOL; type: "storage"; id: number; op: StorageOp; key: string | null; value: string | null }
   | { kiwi: typeof MOD_PROTOCOL; type: "toast"; title: string; message: string | null; style: ToastStyle | null }
-  | { kiwi: typeof MOD_PROTOCOL; type: "open"; url: string }
-  | { kiwi: typeof MOD_PROTOCOL; type: "copy"; text: string }
   | ({ kiwi: typeof MOD_PROTOCOL; type: "terminal"; id: number } & TerminalOp)
+  | { kiwi: typeof MOD_PROTOCOL; type: "tab"; title: string; shown: boolean; alert: string | null; hint: string | null }
+  | { kiwi: typeof MOD_PROTOCOL; type: "open"; to: ModOpen }
+  | { kiwi: typeof MOD_PROTOCOL; type: "show"; target: ModTarget }
+  | { kiwi: typeof MOD_PROTOCOL; type: "copy"; text: string; note: string | null }
+  | { kiwi: typeof MOD_PROTOCOL; type: "link"; url: string }
 
-const GATED: { readonly [K in FromFrame["type"]]?: readonly [need: string, from: Surface] } = {
-  panel: ["panel", "main"],
-  commands: ["command", "main"],
-  actions: ["message-action", "main"],
-  sidebar: ["sidebar", "sidebar"],
-  size: ["sidebar", "sidebar"],
-  terminal: ["terminal", "main"],
+const short = (v: unknown, max: number): v is string => typeof v === "string" && v.length > 0 && v.length <= max
+
+const ANY: readonly Surface[] = ["main", "sidebar", "tab"]
+
+const GATED: { readonly [K in FromFrame["type"]]?: readonly [need: string, from: readonly Surface[]] } = {
+  panel: ["panel", ["main"]],
+  commands: ["command", ["main"]],
+  actions: ["message-action", ["main"]],
+  sidebar: ["sidebar", ["sidebar"]],
+  size: ["sidebar", ["sidebar"]],
+  terminal: ["terminal", ["main"]],
+  tab: ["tab", ["tab"]],
+  open: ["github", ANY],
+  show: ["panel", ANY],
 }
 
-const RUNNING: ReadonlySet<FromFrame["type"]> = new Set(["storage", "toast", "open", "copy"])
+const RUNNING: ReadonlySet<FromFrame["type"]> = new Set(["storage", "toast", "copy", "link"])
 
 export function heeded(type: FromFrame["type"], from: Surface, mod: { state: string; needs: readonly string[] } | undefined): boolean {
   if (RUNNING.has(type)) return !!mod && mod.state === "on"
   const gate = GATED[type]
-  return !gate || (gate[1] === from && !!mod && mod.state === "on" && mod.needs.includes(gate[0]))
+  return !gate || (gate[1].includes(from) && !!mod && mod.state === "on" && mod.needs.includes(gate[0]))
 }
 
-const short = (v: unknown, max: number): v is string => typeof v === "string" && v.length > 0 && v.length <= max
+const REPO = /^[\w.-]{1,100}\/[\w.-]{1,100}$/
+
+const count = (v: unknown): v is number => typeof v === "number" && Number.isSafeInteger(v) && v > 0
+
+export function target(v: unknown): ModTarget | null {
+  if (!v || typeof v !== "object") return null
+  const t = v as Record<string, unknown>
+  if ((t["kind"] === "pr" || t["kind"] === "issue") && typeof t["repo"] === "string" && REPO.test(t["repo"]) && count(t["number"])) return { kind: t["kind"], repo: t["repo"], number: t["number"] }
+  if (t["kind"] === "view" && short(t["view"], 32)) return { kind: "view", view: t["view"] }
+  return null
+}
+
+function opened(v: unknown): ModOpen | null {
+  if (!v || typeof v !== "object") return null
+  const o = v as Record<string, unknown>
+  if (o["kind"] === "task") return count(o["id"]) ? { kind: "task", id: o["id"] } : null
+  return o["kind"] === "settings" || o["kind"] === "chat" ? { kind: o["kind"] } : null
+}
+
+function webUrl(v: unknown): string | null {
+  if (!short(v, 4_000)) return null
+  try {
+    const u = new URL(v)
+    return u.protocol === "https:" || u.protocol === "http:" ? u.href : null
+  } catch {
+    // Not a URL: the frame's link goes nowhere.
+    return null
+  }
+}
+
+export const sameTarget = (a: ModTarget | null, b: ModTarget | null): boolean => JSON.stringify(a) === JSON.stringify(b)
 
 const OPS: ReadonlySet<string> = new Set<StorageOp>(["get", "set", "remove", "keys"])
-
-const web = (v: unknown): v is string => short(v, 2_000) && /^https?:\/\//i.test(v)
 
 function named(v: unknown, max: number): ModCommand[] | null {
   if (!Array.isArray(v) || v.length > max) return null
@@ -167,6 +232,18 @@ export function fromFrame(data: unknown): FromFrame | null {
       return short(m["title"], 80) ? { kiwi: MOD_PROTOCOL, type: "panel", title: m["title"] } : null
     case "sidebar":
       return short(m["title"], 80) ? { kiwi: MOD_PROTOCOL, type: "sidebar", title: m["title"] } : null
+    case "tab":
+      return short(m["title"], 40)
+        ? { kiwi: MOD_PROTOCOL, type: "tab", title: m["title"], shown: m["shown"] !== false, alert: short(m["alert"], 80) ? m["alert"] : null, hint: short(m["hint"], 200) ? m["hint"] : null }
+        : null
+    case "open": {
+      const to = opened(m["to"])
+      return to ? { kiwi: MOD_PROTOCOL, type: "open", to } : null
+    }
+    case "show": {
+      const t = target(m["target"])
+      return t ? { kiwi: MOD_PROTOCOL, type: "show", target: t } : null
+    }
     case "size": {
       const h = m["height"]
       return typeof h === "number" && Number.isFinite(h) && h >= 0 ? { kiwi: MOD_PROTOCOL, type: "size", height: Math.round(Math.min(Math.max(h, SIDE_HEIGHT.min), SIDE_HEIGHT.max)) } : null
@@ -175,6 +252,12 @@ export function fromFrame(data: unknown): FromFrame | null {
     case "actions": {
       const list = named(m["list"], m["type"] === "commands" ? 50 : 10)
       return list ? { kiwi: MOD_PROTOCOL, type: m["type"], list } : null
+    }
+    case "copy":
+      return typeof m["text"] === "string" && m["text"].length <= 10_000 ? { kiwi: MOD_PROTOCOL, type: "copy", text: m["text"], note: short(m["note"], 80) ? m["note"] : null } : null
+    case "link": {
+      const url = webUrl(m["url"])
+      return url ? { kiwi: MOD_PROTOCOL, type: "link", url } : null
     }
     case "fetch": {
       const { id, url, init } = m
@@ -208,10 +291,6 @@ export function fromFrame(data: unknown): FromFrame | null {
         style: style === "success" || style === "failure" ? style : null,
       }
     }
-    case "open":
-      return web(m["url"]) ? { kiwi: MOD_PROTOCOL, type: "open", url: m["url"] } : null
-    case "copy":
-      return short(m["text"], 100_000) ? { kiwi: MOD_PROTOCOL, type: "copy", text: m["text"] } : null
     case "terminal":
       return terminalOp(m)
     default:

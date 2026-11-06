@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
-import { fromFrame, heeded, LOOK, MOD_PROTOCOL, SIDE_HEIGHT, STORAGE } from "~/mods/protocol"
+import { fromFrame, heeded, LOOK, MOD_PROTOCOL, sameTarget, SIDE_HEIGHT, STORAGE, target } from "~/mods/protocol"
 import { TOKENS } from "~/theme/derive"
 
 describe("a mod frame's messages", () => {
@@ -60,7 +60,7 @@ describe("a mod frame's messages", () => {
       expect(fromFrame(m)).toBeNull()
   })
 
-  test("a mod's storage, toasts, links and copies come through only in their shapes and sizes", () => {
+  test("a mod's storage and toasts come through only in their shapes and sizes", () => {
     const at = (m: Record<string, unknown>) => fromFrame({ kiwi: MOD_PROTOCOL, ...m })
     expect(at({ type: "storage", id: 1, op: "set", key: "k", value: "1" })).toEqual({ kiwi: MOD_PROTOCOL, type: "storage", id: 1, op: "set", key: "k", value: "1" })
     expect(at({ type: "storage", id: 2, op: "get", key: "k", value: "dropped" })).toEqual({ kiwi: MOD_PROTOCOL, type: "storage", id: 2, op: "get", key: "k", value: null })
@@ -76,10 +76,6 @@ describe("a mod frame's messages", () => {
       expect(at({ type: "storage", ...bad })).toBeNull()
     expect(at({ type: "toast", title: "Saved", message: "", style: "loud" })).toEqual({ kiwi: MOD_PROTOCOL, type: "toast", title: "Saved", message: null, style: null })
     expect(at({ type: "toast", title: "x".repeat(201) })).toBeNull()
-    expect(at({ type: "open", url: "https://linear.app/x" })).toEqual({ kiwi: MOD_PROTOCOL, type: "open", url: "https://linear.app/x" })
-    for (const url of ["javascript:alert(1)", "file:///etc/hosts", "kiwi://join/x", `https://x/${"a".repeat(2_000)}`]) expect(at({ type: "open", url })).toBeNull()
-    expect(at({ type: "copy", text: "KIW-12" })).toEqual({ kiwi: MOD_PROTOCOL, type: "copy", text: "KIW-12" })
-    expect(at({ type: "copy", text: "x".repeat(100_001) })).toBeNull()
   })
 
   test("a terminal call is listing, focusing or marking a seat by its id, and nothing else", () => {
@@ -133,6 +129,69 @@ describe("a mod frame's messages", () => {
   })
 })
 
+describe("a tab, and showing a pull request or issue", () => {
+  test("a tab's title, whether it shows, and its alert and hint come through", () => {
+    expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "tab", title: "GitHub", alert: "An open pull request's checks failed", hint: "3 open pull requests" })).toEqual({
+      kiwi: MOD_PROTOCOL,
+      type: "tab",
+      title: "GitHub",
+      shown: true,
+      alert: "An open pull request's checks failed",
+      hint: "3 open pull requests",
+    })
+    expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "tab", title: "GitHub", shown: false, alert: 4 })).toEqual({ kiwi: MOD_PROTOCOL, type: "tab", title: "GitHub", shown: false, alert: null, hint: null })
+    expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "tab", title: "x".repeat(41) })).toBeNull()
+  })
+
+  test("a target names a repo and a number, or a view, and nothing else", () => {
+    expect(target({ kind: "pr", repo: "kiwi-init/channels", number: 45, extra: 1 })).toEqual({ kind: "pr", repo: "kiwi-init/channels", number: 45 })
+    expect(target({ kind: "issue", repo: "a.b/c-d", number: 1 })).toEqual({ kind: "issue", repo: "a.b/c-d", number: 1 })
+    expect(target({ kind: "view", view: "issues" })).toEqual({ kind: "view", view: "issues" })
+    for (const bad of [
+      { kind: "pr", repo: "../../etc", number: 1 },
+      { kind: "pr", repo: "a/b/c", number: 1 },
+      { kind: "pr", repo: "a/b", number: 0 },
+      { kind: "pr", repo: "a/b", number: 1.5 },
+      { kind: "commit", repo: "a/b", number: 1 },
+      { kind: "view", view: "" },
+      null,
+      "pr",
+    ])
+      expect(target(bad)).toBeNull()
+    expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "show", target: { kind: "pr", repo: "a/b", number: -1 } })).toBeNull()
+  })
+
+  test("a mod opens a task, the channel's settings or the chat, and nothing else", () => {
+    expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "open", to: { kind: "task", id: 12 } })).toEqual({ kiwi: MOD_PROTOCOL, type: "open", to: { kind: "task", id: 12 } })
+    expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "open", to: { kind: "settings", tab: "danger" } })).toEqual({ kiwi: MOD_PROTOCOL, type: "open", to: { kind: "settings" } })
+    expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "open", to: { kind: "task", id: "12" } })).toBeNull()
+    expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "open", to: { kind: "url", url: "https://x" } })).toBeNull()
+  })
+
+  test("a frame copies text with a short note, and opens web links only", () => {
+    expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "copy", text: "Channels6270-github-mod", note: "Branch name copied" })).toEqual({
+      kiwi: MOD_PROTOCOL,
+      type: "copy",
+      text: "Channels6270-github-mod",
+      note: "Branch name copied",
+    })
+    expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "copy", text: "x", note: "n".repeat(81) })).toEqual({ kiwi: MOD_PROTOCOL, type: "copy", text: "x", note: null })
+    expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "copy", text: "x".repeat(10_001) })).toBeNull()
+    expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "link", url: "https://github.com/kiwi-init/channels/pull/45" })).toEqual({
+      kiwi: MOD_PROTOCOL,
+      type: "link",
+      url: "https://github.com/kiwi-init/channels/pull/45",
+    })
+    for (const url of ["javascript:alert(1)", "file:///etc/passwd", "views://internal/index.html", "kiwi://x", "not a url", ""]) expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "link", url })).toBeNull()
+  })
+
+  test("two targets are the same when they name the same thing", () => {
+    expect(sameTarget({ kind: "pr", repo: "a/b", number: 1 }, { kind: "pr", repo: "a/b", number: 1 })).toBe(true)
+    expect(sameTarget({ kind: "pr", repo: "a/b", number: 1 }, { kind: "issue", repo: "a/b", number: 1 })).toBe(false)
+    expect(sameTarget(null, null)).toBe(true)
+  })
+})
+
 describe("what a mod's frame may do", () => {
   const mod = (needs: string[], state = "on") => ({ state, needs })
 
@@ -161,13 +220,25 @@ describe("what a mod's frame may do", () => {
     expect(heeded("terminal", "main", mod(["terminal"], "asks"))).toBe(false)
   })
 
+  test("only the tab's own frame names the tab, opening needs github and showing needs a panel, from any frame", () => {
+    expect(heeded("tab", "tab", mod(["tab"]))).toBe(true)
+    expect(heeded("tab", "main", mod(["tab"]))).toBe(false)
+    expect(heeded("tab", "tab", mod(["panel"]))).toBe(false)
+    for (const from of ["main", "sidebar", "tab"] as const) {
+      expect(heeded("open", from, mod(["github"]))).toBe(true)
+      expect(heeded("show", from, mod(["panel"]))).toBe(true)
+    }
+    expect(heeded("open", "tab", mod(["tab", "panel"]))).toBe(false)
+    expect(heeded("show", "tab", mod(["tab", "github"]))).toBe(false)
+  })
+
   test("a mod that isn't on, or is gone, gets nothing", () => {
     expect(heeded("panel", "main", mod(["panel"], "asks"))).toBe(false)
     expect(heeded("actions", "main", undefined)).toBe(false)
   })
 
   test("storage, toasts, links and copies need no capability, only a mod that is on", () => {
-    for (const type of ["storage", "toast", "open", "copy"] as const) {
+    for (const type of ["storage", "toast", "copy", "link"] as const) {
       expect(heeded(type, "sidebar", mod([]))).toBe(true)
       expect(heeded(type, "main", mod(["panel"], "asks"))).toBe(false)
       expect(heeded(type, "main", undefined)).toBe(false)
@@ -175,7 +246,7 @@ describe("what a mod's frame may do", () => {
   })
 
   test("what needs no capability always comes through", () => {
-    for (const type of ["hello", "ready", "error", "fetch"] as const) expect(heeded(type, "sidebar", mod([]))).toBe(true)
+    for (const type of ["hello", "ready", "error", "fetch", "copy", "link"] as const) expect(heeded(type, "sidebar", mod([]))).toBe(true)
   })
 })
 

@@ -62,7 +62,7 @@ Open a channel, press ⌘K and pick **Standup Notes** under Mods. Run `kiwi mod 
 | `name` | Lowercase letters, digits and dashes, the same as the folder's name. `app`, `nav`, `view`, `chat` and `debug` are taken. |
 | `version` | A version like `1.0.0` |
 | `shell` | The app versions it works with, like `^3.6`. An app it doesn't fit leaves it off and says why. |
-| `needs` | What it asks you for: `panel`, `command`, `terminal`, `render:<kind>`, and `net:<host>` for each web host it talks to |
+| `needs` | What it asks you for: `panel`, `tab`, `command`, `terminal`, `github`, `render:<kind>`, and `net:<host>` for each web host it talks to |
 | `icon` | Optional: an `.svg` or `.png` in its folder, up to 64 KB. The app shows it as a picture, so an SVG's scripts never run. Without one, the mod gets its first letter. |
 | `author` | Optional: who made it, up to 100 characters |
 | `skills` | Optional: skills it gives every agent. See [Skills](#skills) |
@@ -75,7 +75,12 @@ Everything comes from `@kiwi/mod`, plus React:
 
 | Import | What it does |
 | --- | --- |
-| `panel({ title, render })` | The mod's panel beside the chat. Its title shows in the panel's header and in ⌘K. |
+| `panel({ title, render })` | The mod's panel beside the chat. Its title shows in the panel's header and in ⌘K. `title(text)` changes it. |
+| `tab({ title, render, shown })` | A tab in the channel's header, after Agents. `showTab({ shown, alert, hint })` hides or shows it, puts a red dot on it, or sets its tooltip. |
+| `useGithub()` | With `github`: the open channel's repos, pull requests, issues and the tasks they link, read-only. No token reaches the mod. |
+| `show(target)`, `useShowing()`, `onShow(run)` | Open the mod's panel on `{ kind: "pr" \| "issue", repo, number }`; what it shows now; what the app asked it to show, like a task's pull request card |
+| `open({ kind: "task", id })` | With `github`: open a task, the channel's settings (`{ kind: "settings" }`) or the chat (`{ kind: "chat" }`) |
+| `copy(text, note)` | Copy text, with a short note that says so |
 | `command({ id, title, run })` | An action in ⌘K. Its id for `keys.json` is `<mod>.<id>`. |
 | `render(kind, draw)` | Draws one kind of attachment in chat. See [Drawing attachments](#drawing-attachments). |
 | `fetch(url, init)` | The mod's only way to the network, to the hosts you approved, over https |
@@ -86,11 +91,10 @@ Everything comes from `@kiwi/mod`, plus React:
 | `Form` and `Form.TextField`, `TextArea`, `Checkbox`, `Dropdown` | A form whose `onSubmit` gets the values by field id. ⌘↵ submits |
 | `Actions`, `Action`, `Action.OpenInBrowser`, `Action.CopyToClipboard` | What an item, a detail or a form can do. A `shortcut` like `"mod+shift+c"` runs it from the keyboard |
 | `Toast.show({ title, message, style })` | A note at the bottom of the app |
-| `Empty` | What to show when there's nothing yet |
 | `storage` | `get`, `set`, `remove` and `keys`, kept on this computer for the mod, up to 1,000,000 characters |
-| `Button`, `Row`, `Field`, `Icon` | The app's own button, list row, labelled field and icons |
+| `Button`, `Row`, `Field`, `Icon`, `Avatar`, `Dot`, `Count`, `Empty`, `Heading`, `Track`, `ago`, `cx` | The app's own pieces: button, list row, labelled field, icons, faces, a task's status dot, counts, empty states, headings, segmented controls and times |
 
-The frame has the app's colours and styles, and follows your theme as it changes. A mod can also import its own files: code, `.css`, and images (`.svg`, `.png`, `.jpg`, `.gif`, `.webp`).
+The frame has the app's colours and styles, and follows your theme as it changes. A web link in it opens in your browser. A mod can also import its own files: code, `.css`, and images (`.svg`, `.png`, `.jpg`, `.gif`, `.webp`).
 
 ```tsx
 import { Action, Actions, List, panel, storage, Toast, useFetch } from "@kiwi/mod"
@@ -137,6 +141,10 @@ panel({ title: "Issues", render: View })
 
 With `"needs": ["panel", "net:api.example.com"]`, that's a whole mod.
 
+## The GitHub tab is a mod
+
+The channel's GitHub tab is the `github` mod from [kiwi-init/mods](https://github.com/kiwi-init/mods). The app installs it the first time it starts, already turned on, and never again: remove it and it stays removed. It needs no `git`: the app downloads the files it was built with from `raw.githubusercontent.com` at one pinned commit, and refuses them unless they hash to the folder it pinned. **Settings → Mods** says why, if it couldn't be installed, and the app tries again on its next start.
+
 ## Turning one on
 
 The first time the app sees a mod that asks for something, it asks you: a note says the mod wants to run, ⌘K lists **Set up <name>**, and its panel shows what it asks for, in words. **Turn on** approves all of it, and nothing of the mod runs before that. When an update asks for more, it stops and asks again. A mod that asks for nothing runs without asking.
@@ -170,7 +178,7 @@ Each mod runs in a sandboxed frame of its own origin:
 
 Some limits come with that:
 
-- **Links open only on a click:** an `Action.OpenInBrowser`, or `window.open` while you're using the mod, opens http(s) links in your browser. Images from the web don't load; fetch one and show it as a `blob:` URL.
+- **Links and copying wait for you:** a web link, an `Action.OpenInBrowser`, `window.open` or `copy()` works only while you're using the mod, like right after a click in it. Images from the web don't load; fetch one and show it as a `blob:` URL.
 - **Each save restarts it**, so state outside `storage` resets.
 - **Diagrams don't draw** in a mod's `Detail` yet.
 

@@ -96,6 +96,6 @@ export const Toast = {
   },
 }
 
-export const openUrl = (url: string): void => post({ type: "open", url: String(url) })
+export const openUrl = (url: string): void => post({ type: "link", url: String(url) })
 
-export const copy = (text: string): void => post({ type: "copy", text: String(text).slice(0, 100_000) })
+export const copy = (text: string, note?: string): void => post({ type: "copy", text: String(text), note: note === undefined ? null : String(note) })

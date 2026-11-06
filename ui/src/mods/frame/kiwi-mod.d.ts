@@ -1,5 +1,5 @@
 declare module "@kiwi/mod" {
-  import type { ComponentType, ReactElement, ReactNode } from "react"
+  import type { ComponentType, HTMLAttributes, ReactElement, ReactNode } from "react"
 
   export type IconName =
     | "send"
@@ -37,6 +37,22 @@ declare module "@kiwi/mod" {
     | "account"
     | "info"
 
+  export type GlyphName =
+    | "pr-open"
+    | "pr-draft"
+    | "pr-merged"
+    | "pr-closed"
+    | "issue-open"
+    | "issue-done"
+    | "issue-dropped"
+    | "check-pass"
+    | "check-fail"
+    | "check-running"
+    | "check-waiting"
+    | "check-skipped"
+    | "branch"
+    | "out"
+
   export interface ModMessage {
     seq: number
     text: string
@@ -57,6 +73,85 @@ declare module "@kiwi/mod" {
   export function sidebar(view: View): void
   export function command(command: { id: string; title: string; run: () => void | Promise<void> }): void
   export function messageAction(action: { id: string; title: string; run: (message: ModMessage) => void | Promise<void> }): void
+  export function tab(view: View & { shown?: boolean; alert?: string | null; hint?: string | null }): void
+  export function showTab(next: { shown?: boolean; alert?: string | null; hint?: string | null }): void
+  export function title(title: string): void
+  export function copy(text: string, note?: string): void
+
+  export type Target = { kind: "pr" | "issue"; repo: string; number: number } | { kind: "view"; view: string }
+
+  export function show(target: Target): void
+  export function onShow(run: (target: Target) => void): () => void
+  export function useShowing(): Target | null
+  export function open(to: { kind: "task"; id: number } | { kind: "settings" } | { kind: "chat" }): void
+
+  export type TaskStatus = "todo" | "doing" | "review" | "landing" | "done" | "waiting"
+
+  export interface Person {
+    name: string
+    kind: "agent" | "human"
+    color?: string
+    picture?: string
+    presence: string
+    [more: string]: unknown
+  }
+
+  export interface GithubCheck {
+    name: string
+    state: "pass" | "fail" | "running" | "waiting" | "skipped"
+    word: string
+    required?: boolean
+    url?: string
+  }
+
+  export interface GithubPullRequest {
+    repo: string
+    number: number
+    title: string
+    url: string
+    state: "open" | "draft" | "merged" | "closed"
+    checks: "pass" | "fail" | "running" | "none"
+    ticks?: { passed: number; running: number; failed: readonly string[] }
+    list?: readonly GithubCheck[]
+    additions?: number
+    deletions?: number
+    files?: number
+    branch?: string
+    by?: string
+    at?: number
+    task?: number
+    release?: string
+  }
+
+  export interface GithubIssue {
+    repo: string
+    number: number
+    title: string
+    url: string
+    state: "open" | "closed"
+    reason?: string
+    by?: string
+    at: number
+    task?: number
+  }
+
+  export interface GithubTask {
+    id: number
+    title: string
+    status: TaskStatus
+    owner: { nickname: string; person: Person | null } | null
+  }
+
+  export interface Github {
+    repos: string[]
+    prs: GithubPullRequest[]
+    issues: GithubIssue[]
+    tasks: GithubTask[]
+    health: unknown
+  }
+
+  export function github(): Github | null
+  export function useGithub(): Github | null
 
   export interface Attachment {
     kind: string
@@ -86,7 +181,14 @@ declare module "@kiwi/mod" {
   export function Button(props: { children: ReactNode; onClick?: () => void; kind?: "primary" | "quiet" | "danger"; disabled?: boolean }): ReactElement
   export function Row(props: { title: ReactNode; sub?: ReactNode; onClick?: () => void }): ReactElement
   export function Field(props: { label: string; hint?: string; children: ReactNode }): ReactElement
-  export function Icon(props: { name: IconName; size?: number; label?: string }): ReactElement
+  export function Icon(props: { name: IconName | GlyphName; size?: number; label?: string }): ReactElement
+  export function Avatar(props: { person: Person | undefined; size?: "sm" | "md" | "lg"; pip?: boolean }): ReactElement
+  export function Dot(props: { status: TaskStatus }): ReactElement
+  export function Count(props: { n: number; loud?: boolean }): ReactElement | null
+  export function Heading(props: { children: ReactNode; action?: ReactNode }): ReactElement
+  export function Track(props: HTMLAttributes<HTMLDivElement>): ReactElement
+  export function ago(at: number, now?: number): string
+  export function cx(...parts: (string | false | null | undefined)[]): string
 
   export interface ActionProps {
     title: string
@@ -158,7 +260,7 @@ declare module "@kiwi/mod" {
     }
   }
 
-  export function Empty(props: { title: string; description?: string; icon?: IconName; actions?: ReactNode }): ReactElement | null
+  export function Empty(props: { title: string; description?: string; icon?: IconName; actions?: ReactNode; children?: ReactNode }): ReactElement | null
 
   export const Toast: {
     show(toast: { title: string; message?: string; style?: "success" | "failure" }): void

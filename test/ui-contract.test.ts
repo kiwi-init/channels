@@ -46,6 +46,12 @@ describe("the UI contract", () => {
     expect(semver(UI_REQUIRES)[0]).toBe(semver(UI_CONTRACT)[0]);
   });
 
+  test("a desktop without the GitHub mod's default install keeps its own UI, and with it its GitHub tab (T6270)", () => {
+    const range = `^${UI_REQUIRES}`;
+    for (const old of ["3.0.0", "3.8.0", "3.9.0", "3.10.0"]) expect(Bun.semver.satisfies(old, range)).toBe(false);
+    expect(Bun.semver.satisfies(UI_CONTRACT, range)).toBe(true);
+  });
+
   test("within a major version, every later surface keeps all the names of the earlier ones", () => {
     const versions = Object.keys(UI_SURFACES).sort(newer);
     for (const [i, later] of versions.entries())

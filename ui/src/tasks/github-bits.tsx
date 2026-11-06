@@ -17,20 +17,18 @@ import {
 
 import { useState } from "react"
 
-import { Avatar, cx, Dot } from "~/kit/bits"
-import { GlyphIcon, Icon, ISSUE, type Glyph } from "~/kit/icons"
-import { copyText } from "~/kit/toasts"
+import { cx } from "~/kit/bits"
+import { GlyphIcon, ISSUE, type Glyph } from "~/kit/icons"
 import { ago } from "~/kit/time"
-import { memberOf, type Channel, type Check, type Issue, type PullRequest } from "~/model"
-import { useApp } from "~/nav"
-import { nickname, Shown } from "~/names"
-import { OutsideLink } from "~/kit/outside"
+import type { Check, Issue, PullRequest } from "~/model"
+import { showInMod } from "~/mods/bus"
+import { openOutside, OutsideLink } from "~/kit/outside"
 
 const PR_GLYPHS: Record<PullRequest["state"], Glyph> = { open: GitPullRequestIcon, draft: GitPullRequestDraftIcon, merged: GitMergeIcon, closed: GitPullRequestClosedIcon }
-export const PR_TONES: Record<PullRequest["state"], string> = { open: "tone-live", draft: "tone-quiet", merged: "tone-review", closed: "tone-quiet" }
-export const PR_WORDS: Record<PullRequest["state"], string> = { open: "Open", draft: "Draft", merged: "Merged", closed: "Closed" }
+const PR_TONES: Record<PullRequest["state"], string> = { open: "tone-live", draft: "tone-quiet", merged: "tone-review", closed: "tone-quiet" }
+const PR_WORDS: Record<PullRequest["state"], string> = { open: "Open", draft: "Draft", merged: "Merged", closed: "Closed" }
 
-export function PrMark({ pr, size = 16 }: { pr: PullRequest; size?: number }) {
+function PrMark({ pr, size = 16 }: { pr: PullRequest; size?: number }) {
   return (
     <span className={cx("gh-mark", PR_TONES[pr.state])}>
       <GlyphIcon glyph={PR_GLYPHS[pr.state]} size={size} label={PR_WORDS[pr.state]} />
@@ -42,7 +40,7 @@ const issueDone = (i: Issue): boolean => i.state === "closed" && i.reason !== "n
 
 export const issueWord = (i: Issue): string => (i.state === "open" ? "open" : i.reason === "not_planned" ? "not planned" : "closed")
 
-export const issueTone = (i: Issue): string => (i.state === "open" ? "tone-live" : issueDone(i) ? "tone-review" : "tone-quiet")
+const issueTone = (i: Issue): string => (i.state === "open" ? "tone-live" : issueDone(i) ? "tone-review" : "tone-quiet")
 
 export function IssueMark({ issue, size = 16 }: { issue: Issue; size?: number }) {
   const glyph = issue.state === "open" ? ISSUE : issueDone(issue) ? CheckmarkCircle02Icon : UnavailableIcon
@@ -56,7 +54,7 @@ export function IssueMark({ issue, size = 16 }: { issue: Issue; size?: number })
 const CHECK_GLYPHS: Record<Check["state"], Glyph> = { pass: CheckmarkCircle02Icon, fail: CancelCircleIcon, running: Loading03Icon, waiting: CircleDashedIcon, skipped: MinusSignCircleIcon }
 const CHECK_TONES: Record<Check["state"], string> = { pass: "tone-live", fail: "tone-alert", running: "tone-doing", waiting: "tone-quiet", skipped: "tone-quiet" }
 
-export function checksLine(pr: PullRequest): { text: string; tone: string } | null {
+function checksLine(pr: PullRequest): { text: string; tone: string } | null {
   if (pr.state === "merged") return { text: "merged", tone: "" }
   if (pr.state === "closed") return { text: "closed", tone: "" }
   const t = pr.ticks
@@ -70,19 +68,6 @@ export function checksLine(pr: PullRequest): { text: string; tone: string } | nu
   if (pr.checks === "running") return { text: "checks running", tone: "tone-doing" }
   if (pr.checks === "pass") return { text: "checks passed", tone: "" }
   return null
-}
-
-const MAX_TICKS = 12
-
-export function Ticks({ list }: { list: readonly Check[] }) {
-  const shown = list.slice(0, MAX_TICKS)
-  return (
-    <span className="gh-ticks" aria-hidden="true">
-      {shown.map((c) => (
-        <span key={c.name} className={cx("gh-tick", `is-${c.state}`)} />
-      ))}
-    </span>
-  )
 }
 
 function CheckRow({ c }: { c: Check }) {
@@ -104,7 +89,7 @@ function CheckRow({ c }: { c: Check }) {
   )
 }
 
-export function Checks({ list, fold = true }: { list: readonly Check[]; fold?: boolean }) {
+function Checks({ list, fold = true }: { list: readonly Check[]; fold?: boolean }) {
   const [open, setOpen] = useState(!fold)
   const quiet = list.filter((c) => c.state === "pass" || c.state === "skipped")
   const loud = list.filter((c) => c.state !== "pass" && c.state !== "skipped")
@@ -145,7 +130,7 @@ export function DiffBar({ additions, deletions }: { additions: number; deletions
   )
 }
 
-export function Size({ pr }: { pr: PullRequest }) {
+function Size({ pr }: { pr: PullRequest }) {
   if (pr.additions === undefined || pr.deletions === undefined) return null
   return (
     <span className="gh-size num">
@@ -157,47 +142,24 @@ export function Size({ pr }: { pr: PullRequest }) {
   )
 }
 
-export function Branch({ name, copy }: { name: string; copy?: boolean }) {
+function Branch({ name }: { name: string }) {
   return (
     <span className="gh-branch" title={name}>
       <GlyphIcon glyph={GitBranchIcon} size={13} />
       <span className="gh-branch-name">{name}</span>
-      {copy && (
-        <button type="button" className="gh-copy" aria-label={`Copy ${name}`} title="Copy the branch name" onClick={() => copyText(name, "Branch name copied")}>
-          <Icon name="copy" size={13} />
-        </button>
-      )}
     </span>
   )
 }
 
-export function TaskLink({ channel, id }: { channel: Channel; id: number }) {
-  const { go } = useApp()
-  const task = channel.tasks.find((t) => t.id === id)
-  if (!task) return null
-  return (
-    <button type="button" className="gh-task" onClick={() => go({ to: "panel", panel: { kind: "task", task: id } })}>
-      <Dot status={task.cancelled ? "todo" : task.status} />
-      <span className="gh-task-id num">T{id}</span>
-      <span className="gh-task-title">
-        <Shown value={task.title} />
-      </span>
-      {task.owner && (
-        <span className="gh-task-who">
-          <Avatar person={memberOf(channel, task.owner)} size="sm" />
-          {nickname(channel, task.owner)}
-        </span>
-      )}
-    </button>
-  )
+export function openPr(pr: { repo: string; number: number; url: string }, kind: "pr" | "issue" = "pr"): void {
+  if (!showInMod("github", { kind, repo: pr.repo, number: pr.number }, pr.url)) openOutside(pr.url)
 }
 
 export function PrCard({ pr }: { pr: PullRequest }) {
-  const { go } = useApp()
   const line = checksLine(pr)
   return (
     <div className="gh-card">
-      <button type="button" className="gh-card-title" onClick={() => go({ to: "panel", panel: { kind: "pr", repo: pr.repo, number: pr.number } })}>
+      <button type="button" className="gh-card-title" onClick={() => openPr(pr)}>
         <PrMark pr={pr} />
         <span>
           <span className="dim num">#{pr.number}</span> {pr.title}

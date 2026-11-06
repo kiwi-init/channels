@@ -475,14 +475,27 @@ function DropdownItem({ value, title }: { value: string; title: string }) {
 
 export const Form = Object.assign(FormView, { TextField, TextArea, Checkbox, Dropdown: Object.assign(DropdownView, { Item: DropdownItem }) })
 
-export function Empty({ title, description, icon, actions }: { title: string; description?: string; icon?: IconName; actions?: ReactNode }) {
-  return (
+export function Empty({ title, description, icon, actions, children }: { title: string; description?: string; icon?: IconName; actions?: ReactNode; children?: ReactNode }) {
+  const acts = actsOf(actions)
+  const blank = (
+    <Blank title={title} icon={icon}>
+      {description === undefined ? (
+        children
+      ) : (
+        <>
+          {description}
+          {children}
+        </>
+      )}
+    </Blank>
+  )
+  return acts.length ? (
     <div className="mod-empty">
-      <Blank title={title} icon={icon}>
-        {description}
-      </Blank>
-      <Bar acts={actsOf(actions)} />
+      {blank}
+      <Bar acts={acts} />
     </div>
+  ) : (
+    blank
   )
 }
 
