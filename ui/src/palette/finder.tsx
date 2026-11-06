@@ -11,6 +11,7 @@ import { SIDEBAR_KEYS } from "@kiwi/app/sidebar-hidden.ts"
 import { showCalm } from "~/calm/idle"
 import { toggleSide } from "~/shell/side"
 import { statusOf } from "~/shell/sidebar"
+import { wordsPlain } from "~/words"
 
 type Group = "Channels" | "Rooms" | "People" | "Tasks" | "Actions"
 
@@ -276,7 +277,7 @@ function collect(app: App, nav: Nav, go: (go: Go) => void, debug: boolean): Item
       items.push({
         id: `task:${task.id}`,
         group: "Tasks",
-        label: task.title,
+        label: wordsPlain(task.title, channel.nicknames),
         tag: `T${task.id}`,
         keys: [String(task.id), task.owner ?? "", task.owner ? nickname(channel, task.owner) : ""],
         lead: <Dot status={task.status} />,

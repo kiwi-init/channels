@@ -32,7 +32,7 @@ export function messageIndex(channel: Pick<Channel, "messages" | "nicknames">): 
 function matchingTasks(tasks: Task[], query: string): Task[] {
   const id = taskNumber(query)
   if (id !== null) return tasks.filter((t) => t.id === id)
-  return rank(buildIndex(tasks.map((t) => ({ item: t, fields: [{ text: t.title, weight: 1 }] }))), query)
+  return rank(buildIndex(tasks.map((t) => ({ item: t, fields: [{ text: wordsRaw(t.title), weight: 1 }] }))), query)
     .sort((a, b) => Number(a.item.archived) - Number(b.item.archived) || b.score - a.score || b.item.updatedAt - a.item.updatedAt)
     .map((r) => r.item)
 }

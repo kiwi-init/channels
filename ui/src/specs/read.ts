@@ -3,7 +3,7 @@ import { doneWhen, type DoneWhen } from "@kiwi/core/state.ts"
 import type { Channel, Message, Person, Spec, Task } from "~/model"
 import { memberOf } from "~/model"
 import { nickname } from "~/names"
-import { wordsRaw } from "~/words"
+import { wordsPlain, wordsRaw } from "~/words"
 
 type Tone = "tone-quiet" | "tone-doing" | "tone-review" | "tone-decide" | "tone-live" | "tone-alert"
 
@@ -200,7 +200,7 @@ export function storyOf(channel: Channel, spec: Spec): StoryLine[] {
       out.push({
         at: h.at,
         who: h.by,
-        text: `${verb} T${t.id}${h.what === "created" ? ` “${t.title}”` : ""}${h.what === "assigned" && h.to ? ` to ${nickname(channel, h.to)}` : ""}`,
+        text: `${verb} T${t.id}${h.what === "created" ? ` “${wordsPlain(t.title, channel.nicknames)}”` : ""}${h.what === "assigned" && h.to ? ` to ${nickname(channel, h.to)}` : ""}`,
         task: t.id,
         ...(MOVE_TONES[h.what] ? { tone: MOVE_TONES[h.what] } : {}),
       })

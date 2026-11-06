@@ -616,7 +616,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
                   ...t,
                   status: approve ? "done" : "doing",
                   youReview: undefined,
-                  notes: why ? [...t.notes, { by: c.you, at: Date.now(), text: why }] : t.notes,
+                  notes: why ? [...t.notes, { by: c.you, at: Date.now(), text: wrote(why) }] : t.notes,
                   rounds: t.rounds.map((r) => (r.result === "open" ? { ...r, judge: c.you, result: approve ? "approved" : "rejected", at: Date.now() } : r)),
                 }
               : t
@@ -632,7 +632,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
               ...c.tasks,
               {
                 id,
-                title,
+                title: wrote(title),
                 status: "todo",
                 createdBy: c.you,
                 createdAt: Date.now(),
@@ -650,8 +650,8 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       editTask: (code, id, change) =>
         editTask(code, id, (t) => ({
           ...t,
-          ...(change.title?.trim() ? { title: change.title.trim() } : {}),
-          ...(change.detail !== undefined ? { detail: change.detail.trim() || undefined } : {}),
+          ...(change.title?.trim() ? { title: wrote(change.title.trim()) } : {}),
+          ...(change.detail !== undefined ? { detail: change.detail.trim() ? wrote(change.detail.trim()) : undefined } : {}),
           updatedAt: Date.now(),
         })),
       deleteTask: (code, id) => edit(code, (c) => ({ ...c, tasks: c.tasks.filter((t) => t.id !== id) })),
@@ -667,7 +667,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
                   youReview: undefined,
                   rounds: t.rounds.map((r) => (r.result === "open" ? { ...r, result: "withdrawn" } : r)),
                   updatedAt: Date.now(),
-                  history: [...t.history, { seq, by: c.you, at: Date.now(), what: "cancelled", note: why }],
+                  history: [...t.history, { seq, by: c.you, at: Date.now(), what: "cancelled", note: wrote(why) }],
                 }
               : t
           ),
@@ -677,7 +677,13 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
           ...c,
           tasks: c.tasks.map((t) =>
             t.id === id
-              ? { ...t, owner: to, suggested: undefined, updatedAt: Date.now(), history: [...t.history, { seq, by: c.you, at: Date.now(), what: "assigned", to, ...(why ? { note: why } : {}) }] }
+              ? {
+                  ...t,
+                  owner: to,
+                  suggested: undefined,
+                  updatedAt: Date.now(),
+                  history: [...t.history, { seq, by: c.you, at: Date.now(), what: "assigned", to, ...(why ? { note: wrote(why) } : {}) }],
+                }
               : t
           ),
         })),

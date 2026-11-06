@@ -10,6 +10,10 @@ export class Words {
   static raw(value: Words): string {
     return value.#text
   }
+
+  [Symbol.toPrimitive](): never {
+    throw new TypeError("Words can't be shown raw: render it with Shown, or read it with wordsPlain or wordsRaw")
+  }
 }
 
 export const wrote = (text: string): Words => new Words(text)

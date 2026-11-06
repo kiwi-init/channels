@@ -17,7 +17,7 @@ import { Icon } from "~/kit/icons"
 import { openMenu } from "~/kit/menu-open"
 import type { Channel, Upload, Where } from "~/model"
 import { useApp } from "~/nav"
-import { nickname, onePerPerson, shown } from "~/names"
+import { nickname, onePerPerson, shown, Shown } from "~/names"
 import { mentionNames, withNames, type Picks } from "~/chat/linked"
 import { peopleMatches, taskMatches } from "~/chat/matches"
 import { wordsRaw } from "~/words"
@@ -391,7 +391,9 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
               <button type="button" tabIndex={-1} className={cx("mention-row task-row", i === pick && "is-on")} onMouseDown={(e) => e.preventDefault()} onClick={() => completeTask(t.id)}>
                 <Dot status={t.status} />
                 <span className="task-row-id">T{t.id}</span>
-                <span className="task-row-title">{t.title}</span>
+                <span className="task-row-title">
+                  <Shown value={t.title} />
+                </span>
                 <span className="dim">{t.owner ? nickname(channel, t.owner) : STATUS_WORDS[t.status]}</span>
               </button>
             </li>

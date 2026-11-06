@@ -6,7 +6,7 @@ import { Avatar, cx, Dot } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import type { Channel } from "~/model"
 import { useApp } from "~/nav"
-import { shown } from "~/names"
+import { shown, Shown } from "~/names"
 import { statusOf, taskOf } from "~/shell/sidebar"
 
 const KEY = "channels.tall.work"
@@ -102,7 +102,7 @@ function Crew({ channel }: { channel: Channel }) {
               {task ? (
                 <>
                   <Dot status={task.status} />
-                  <span className="num">T{task.id}</span> {task.title}
+                  <span className="num">T{task.id}</span> <Shown value={task.title} />
                 </>
               ) : (
                 <span className="crew-idle">no task</span>

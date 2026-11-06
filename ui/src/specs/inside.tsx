@@ -10,7 +10,7 @@ import { Icon } from "~/kit/icons"
 import { ago, clock } from "~/kit/time"
 import type { Channel, Spec } from "~/model"
 import { useAct } from "~/nav"
-import { nickname } from "~/names"
+import { nickname, Shown } from "~/names"
 import { alarmsOf, boxesOf, faceOf, insideOf, lastMove, storyOf, tasksOf, workersOf } from "~/specs/read"
 
 const STORY_SHOWN = 5
@@ -90,7 +90,9 @@ export function Inside({ channel, spec }: { channel: Channel; spec: Spec }) {
                 <li key={t.id}>
                   <button type="button" className={cx("inside-task", t.cancelled && "is-cancelled")} onClick={() => go({ to: "panel", panel: { kind: "task", task: t.id } })}>
                     <Dot status={t.cancelled ? "todo" : t.status} />
-                    <span className="inside-task-title">{t.title}</span>
+                    <span className="inside-task-title">
+                      <Shown value={t.title} />
+                    </span>
                     <span className="inside-task-meta num">
                       <span>T{t.id}</span>
                       {(t.cancelled || t.status === "waiting") && <span className={cx(t.status === "waiting" && !t.cancelled && "tone-decide")}>{statusWord(t)}</span>}
