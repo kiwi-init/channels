@@ -643,7 +643,7 @@ writeFileSync(TMUX_CONF, TMUX_BEFORE);
 let app = launch(exe, testEnv(root, join(root, "driver.sock"), RELAY, TERMINAL_ENV));
 try {
   const d = await attach(join(root, "driver.sock"));
-  await firstChannel(d, 0);
+  await firstChannel(d, 0, { shots, home: join(root, "home") });
   await d.evaluate(
     () => {
       const w = window as unknown as { __modHeard?: unknown[]; __modQuiet?: unknown; __modTypes?: Record<string, number> };

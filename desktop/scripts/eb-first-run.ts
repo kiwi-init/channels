@@ -1,3 +1,7 @@
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
+
 import { until, type Driver } from "./eb-drive.ts";
 
 export const fillIn = ({ selector, value }: { selector: string; value: string }): boolean => {
@@ -15,9 +19,59 @@ const clickButton = ({ name, within }: { name: string; within: string }): boolea
   const button = [...document.querySelectorAll<HTMLButtonElement>(`${within} button`)].find(
     (b) => (b.getAttribute("aria-label") ?? b.textContent ?? "").trim() === name && b.getClientRects().length > 0 && !b.disabled,
   );
+  if (button) {
+    const w = window as unknown as { kiwiClicks?: string[] };
+    const screen = document.querySelector("dialog.onb .onb-wire") ? "trust" : document.querySelector("dialog.onb .onb-input") ? "pledge" : document.querySelector("dialog.onb") ? "intro" : "app";
+    (w.kiwiClicks ??= []).push(`${Math.round(performance.now())} ms: ${name} in ${within}, on the ${screen} screen`);
+  }
   button?.click();
   return !!button;
 };
+
+const seen = (): string => {
+  const w = window as unknown as { kiwiClicks?: string[] };
+  const onb = document.querySelector("dialog.onb");
+  const screen = onb?.querySelector(".onb-wire") ? "trust" : onb?.querySelector(".onb-input") ? "pledge" : onb ? "intro" : "app";
+  const buttons = [...document.querySelectorAll<HTMLButtonElement>(onb ? "dialog.onb button" : "button")]
+    .slice(0, 12)
+    .map(
+      (b) =>
+        `${JSON.stringify((b.getAttribute("aria-label") ?? b.textContent ?? "").trim())}${b.getClientRects().length ? "" : " hidden"}${b.disabled ? " disabled" : ""} opacity ${getComputedStyle(b).opacity}`,
+    );
+  const focus = document.activeElement;
+  return [
+    `at ${Math.round(performance.now())} ms, on the ${screen} screen${onb ? `, the dialog ${(onb as HTMLDialogElement).open ? "open" : "closed"}` : ""}`,
+    `clicks: ${(w.kiwiClicks ?? []).join("; ") || "none"}`,
+    `buttons: ${buttons.join(", ") || "none"}`,
+    `focus: ${focus ? `${focus.tagName.toLowerCase()}.${focus.className}` : "none"}`,
+    `onboarding: ${onb ? onb.outerHTML.replace(/\s+/g, " ").slice(0, 800) : "none"}`,
+  ].join("\n  ");
+};
+
+interface Evidence {
+  shots?: string | null;
+  home?: string;
+}
+
+function logsUnder(dir: string): string[] {
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir).flatMap((n) => {
+    const p = join(dir, n);
+    return statSync(p).isDirectory() ? logsUnder(p) : n === "main.log" ? [p] : [];
+  });
+}
+
+async function stalled(d: Driver, what: string, evidence: Evidence): Promise<void> {
+  const page = await d.evaluate(seen, null, 10_000).catch((e: Error) => `the page didn't answer: ${e.message}`);
+  console.log(`${what} stalled:\n  ${page}`);
+  if (evidence.shots) {
+    mkdirSync(evidence.shots, { recursive: true });
+    const file = join(evidence.shots, "first-run-stall.png");
+    const r = process.platform === "darwin" ? spawnSync("screencapture", ["-x", file], { stdio: "ignore" }) : spawnSync("import", ["-window", "root", file], { stdio: "ignore" });
+    console.log(r.status === 0 && existsSync(file) ? `shot ${file}` : "no shot of the stall here");
+  }
+  for (const f of evidence.home ? logsUnder(evidence.home) : []) console.log(`${f}, its last 40 lines:\n${readFileSync(f, "utf8").trimEnd().split("\n").slice(-40).join("\n")}`);
+}
 
 export const sendMessage = ({ text, shows }: { text: string; shows: string }): boolean => {
   if ([...document.querySelectorAll<HTMLElement>(".main article.msg")].some((m) => m.textContent?.includes(shows))) return true;
@@ -33,14 +87,22 @@ export const sendMessage = ({ text, shows }: { text: string; shows: string }): b
   return false;
 };
 
-export async function firstChannel(d: Driver, messages: number): Promise<void> {
-  const step = (what: string, ms: number, act: () => Promise<boolean>) =>
-    until(what, ms, () =>
+export async function firstChannel(d: Driver, messages: number, evidence: Evidence = {}): Promise<void> {
+  const step = async (what: string, ms: number, act: () => Promise<boolean>) => {
+    const start = Date.now();
+    const missed: string[] = [];
+    await until(what, ms, () =>
       act().then(
         (done) => (done ? true : null),
-        () => null,
+        (e: Error) => (missed.push(`${Date.now() - start} ms: ${e.message}`), null),
       ),
-    );
+    ).catch(async (e: Error) => {
+      if (missed.length) console.log(`${what}: ${missed.length} probes failed (${missed.slice(0, 5).join("; ")})`);
+      await stalled(d, what, evidence);
+      throw e;
+    });
+    if (missed.length) console.log(`${what}: done after ${Date.now() - start} ms, and ${missed.length} probes failed first (${missed.slice(0, 5).join("; ")})`);
+  };
   const probe = 2_000;
   await step("the onboarding", 60_000, () => d.evaluate(clickButton, { name: "continue", within: ".onb" }, probe));
   await step("the onboarding's second screen", 10_000, () => d.evaluate(clickButton, { name: "continue", within: ".onb:has(.onb-wire)" }, probe));
