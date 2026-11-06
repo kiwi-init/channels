@@ -10,7 +10,7 @@ import { useApp, type Go, type Nav, type Panel } from "~/nav"
 import { nickname, onePerPerson, shown } from "~/names"
 import { APP } from "~/commands/list"
 import { runCommand, shownKeys, useCommandTable, type Table } from "~/commands/table"
-import { modsNow, runningMod, useModsVersion } from "~/mods/host"
+import { askAgain, modsNow, runningMod, useModsVersion } from "~/mods/host"
 import { statusOf } from "~/shell/sidebar"
 import { wordsPlain } from "~/words"
 
@@ -413,7 +413,7 @@ function collect(app: App, nav: Nav, go: (go: Go) => void, debug: boolean, table
         keys: ["mod"],
         lead: <Icon name="spec" size={14} />,
         meta: mod.state === "asks" ? <span className="tone-decide">asks to run</span> : mod.state === "off" ? "off" : "stopped",
-        run: open,
+        run: mod.state === "asks" ? () => (close(), askAgain(mod.name)) : open,
       })
     else if (run?.title) items.push({ id: `mod:${mod.name}`, group: "Mods", label: run.title, keys: [mod.name, "mod"], lead: <Icon name="spec" size={14} />, meta: mod.name, run: open })
   }

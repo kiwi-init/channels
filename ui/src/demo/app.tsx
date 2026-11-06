@@ -29,7 +29,7 @@ const seeded = shot?.nav?.where
 if (shot?.docs !== undefined && shot.channel && seeded && seeded.kind !== "dm" && seeded.kind !== "theirs") seedThreadDoc(shot.channel, docThread(seeded), shot.docs, shot.streams)
 
 if (shot?.calm) showCalm()
-if (shot?.mods) showDemoMods()
+if (shot?.mods) showDemoMods(shot.mods === "ask")
 if (shot?.folder) showFolder(shot.folder)
 if (shot?.layouts) {
   const { view, pick } = shot.layouts

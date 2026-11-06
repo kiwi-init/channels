@@ -15,7 +15,7 @@ export interface Shot {
   folder?: FolderThemesView
   keys?: unknown
   layouts?: { view: LayoutsView; pick?: string }
-  mods?: true
+  mods?: true | "ask"
 }
 
 const kiwi = (nav: Partial<Nav> = {}): Shot => ({ scenario: "full", channel: "kiwi", nav })
@@ -161,6 +161,7 @@ export const SHOTS: Record<string, Shot> = {
   "settings-about": kiwi({ page: "settings", section: "about" }),
   "settings-mods": { ...kiwi({ page: "settings", section: "mods" }), mods: true },
   "settings-mod-details": { ...kiwi({ page: "settings", section: "mods", mod: "release-radar" }), mods: true },
+  "mod-ask": { ...kiwi(), mods: "ask" },
   "settings-layouts": {
     ...kiwi({ page: "settings", section: "appearance" }),
     layouts: {

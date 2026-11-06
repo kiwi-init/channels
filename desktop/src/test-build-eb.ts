@@ -10,6 +10,7 @@ import { launchArgs } from "./single-instance.ts";
 import { dataDir } from "./host-eb.ts";
 import { forceFrostForTest, frostAllowed, windowLooks } from "./native-eb.ts";
 import { browserOpens } from "./open.ts";
+import { minWindowWidth } from "./window-size.ts";
 import { mutate, openStore } from "./store.ts";
 
 declare const KIWI_EB_TEST: boolean;
@@ -54,7 +55,8 @@ export function driveForTests(win: BrowserWindow): void {
         unminimizeForTest: () => (win.unminimize(), true),
         placeForTest: () => {
           const f = win.getFrame();
-          win.setFrame(f.x + 40, f.y + 30, f.width - 160, f.height - 90);
+          const step = f.width - 80 > minWindowWidth(process.platform) + 40 ? 1 : -1;
+          win.setFrame(f.x + 20 * step, f.y + 15 * step, f.width - 80 * step, f.height - 45 * step);
           return win.getFrame();
         },
       });

@@ -6,6 +6,7 @@ import { cx } from "~/kit/bits"
 import { later } from "~/kit/later"
 import { Icon } from "~/kit/icons"
 import type { ChannelTile } from "~/model"
+import { modsServed } from "~/mods/served"
 import { useApp } from "~/nav"
 import type { Menu } from "~/shell/rail-menu"
 import { railItems, type DropTarget } from "~/shell/rail-items"
@@ -28,6 +29,7 @@ export function Rail() {
   const onChannel = nav.page === "channel"
   const home = onChannel && nav.channel === null
   const on = onChannel ? nav.channel : null
+  const settings = nav.page === "settings" && !(nav.section === "mods" && modsServed())
   const folders = app.prefs.folders
   const items = railItems(app.channels, folders)
   const ordered = items.flatMap((i) => (i.kind === "channel" ? [i.tile] : i.tiles))
@@ -139,10 +141,10 @@ export function Rail() {
       <div className="rail-foot">
         <button
           type="button"
-          className={cx("rail-gear", nav.page === "settings" && "is-on")}
+          className={cx("rail-gear", settings && "is-on")}
           aria-label="Settings"
           title="Settings"
-          onClick={() => (nav.page === "settings" ? go({ to: "back" }) : go({ to: "settings" }))}
+          onClick={() => (settings ? go({ to: "back" }) : go({ to: "settings", section: nav.section === "mods" && modsServed() ? "account" : undefined }))}
         >
           <Icon name="gear" size={18} />
         </button>
