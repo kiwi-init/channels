@@ -397,31 +397,44 @@
 }
 
 .spec-rail {
-  position: relative;
+  position: sticky;
+  top: 16px;
+  display: flex;
+  flex-direction: column;
+  align-self: start;
+  min-width: 0;
+  max-height: calc(var(--page-h, 100vh) - 64px);
   margin-top: 24px;
 }
 
+.spec-rail-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.spec-rail-lines {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+}
+
 .spec-rail-item {
-  position: absolute;
-  right: 0;
-  left: 0;
   padding: 8px 0;
   border-top: 1px solid var(--line);
-  background: var(--bg);
-  transition:
-    top var(--slow) var(--ease),
-    border-color var(--fast);
+  transition: border-color var(--fast);
 }
 
 .spec-rail-item.is-hot {
   border-color: var(--ink-3);
 }
 
-.spec-rail-item.is-draft {
-  padding: 10px 12px;
-  border: 1px solid var(--line-3);
-  border-radius: var(--r-ctl);
-  background: var(--bg-2);
+.spec-rail-foot {
+  flex: none;
+  padding-top: 12px;
 }
 
 .spec-comment-head {
@@ -466,14 +479,7 @@
   margin-top: 24px;
 }
 
-.spec-rail-talk {
-  position: absolute;
-  right: 0;
-  left: 0;
-  transition: top var(--slow) var(--ease);
-}
-
-.spec-rail-talk .spec-talk {
+.spec-rail .spec-talk {
   margin: 0;
 }
 
@@ -504,8 +510,35 @@
   border-top: 1px solid var(--line);
 }
 
-.spec-comments .spec-comment-quote {
+.spec-comments .spec-comment-quote,
+.spec-rail-lines .spec-comment-quote {
   margin-left: calc(1.5rem + 8px);
+}
+
+.spec-comment-quote.is-link {
+  display: block;
+  width: calc(100% - 1.5rem - 8px);
+  padding: 0 0 0 8px;
+  border: 0;
+  border-left: 2px solid var(--line-3);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    color var(--fast),
+    border-color var(--fast);
+}
+
+.spec-comment-quote.is-link > span {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.spec-comment-quote.is-link:hover {
+  border-left-color: var(--ink-3);
+  color: var(--ink);
 }
 
 .spec-box-new {
