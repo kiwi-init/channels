@@ -171,6 +171,16 @@ const pageNow = (): Record<string, unknown> => ({
 type Said = Record<string, unknown>;
 const heard = (d: Driver): Promise<Said[]> => d.evaluate(() => ((window as unknown as { __modHeard?: Said[] }).__modHeard ?? []) as Said[], null, 3_000);
 
+async function howHeard(d: Driver, why: string): Promise<void> {
+  const start = Date.now();
+  const said = await heard(d).catch((e: unknown) => String(e));
+  const kinds = typeof said === "string" ? said : Object.entries(said.reduce<Record<string, number>>((n, m) => ({ ...n, [Object.keys(m).join("+")]: (n[Object.keys(m).join("+")] ?? 0) + 1 }), {}));
+  const frames = await d
+    .evaluate(() => [...document.querySelectorAll("iframe")].map((f) => `${f.title} ${f.style.width}x${f.style.height} ${f.style.visibility || "shown"}`), null, 3_000)
+    .catch((e: unknown) => String(e));
+  console.log(`${why}: the page answered in ${Date.now() - start} ms; heard ${JSON.stringify(kinds)}; frames ${JSON.stringify(frames)}`);
+}
+
 const MESSAGE_LINK = "https://example.com/?message-link";
 
 const topAt = (selector: string): { found: boolean; top: string | null } => {
@@ -323,11 +333,13 @@ try {
     check(floating.top === "frame probe-mod", "the mod's panel is on top where the panel floats over the chat, in a window under 1180 px");
     await shot("mod-narrow");
     const still = await until("the mod's frame after it tried to leave", 15_000, async () => (await heard(d)).find((m) => m["stillHere"] === true) ?? null).catch(() => null);
+    if (!still) await howHeard(d, "no stillHere");
     check(!!still, "the mod's frame stays where it is when it navigates itself");
     await step("⌘K again", 10_000, palette);
     await step("the mod's command, typed into ⌘K", 10_000, () => d.evaluate(fillIn, { selector: ".palette-input", value: "Say hi" }, 2_000));
     await step("the mod's command in ⌘K", 10_000, () => d.evaluate(clickText, { selector: ".palette-item", text: "Say hi from the probe mod" }, 2_000));
     const hi = await until("the command's run", 10_000, async () => (await heard(d)).find((m) => m["command"] === "hi") ?? null).catch(() => null);
+    if (!hi) await howHeard(d, "no hi");
     check(!!hi, "the mod's command runs from ⌘K");
     await step("⌘K once more", 10_000, palette);
     await step("the quiet mod's name, typed into ⌘K", 10_000, () => d.evaluate(fillIn, { selector: ".palette-input", value: "Quiet" }, 2_000));
@@ -351,7 +363,8 @@ try {
       3_000,
     );
     await clickMessageLink(d);
-    check(!(await heard(d)).some((m) => "sawMessage" in m || "action" in m), "no message reaches a mod before the person picks its action");
+    await howHeard(d, "after the message link");
+    check(!(await until("what the mods said", 15_000, () => heard(d))).some((m) => "sawMessage" in m || "action" in m), "no message reaches a mod before the person picks its action");
     const items = await until("the message's menu", 10_000, () => d.evaluate(messageMenu, "the message link", 2_000));
     console.log(`the message's menu: ${JSON.stringify(items)}`);
     check(items.includes("Keep in the probe mod"), "a mod that asked for message actions adds one to a message's menu");

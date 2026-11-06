@@ -35,6 +35,7 @@ button.mod-row:hover {
 }
 
 :root[data-surface="sidebar"] #root {
+  height: auto;
   padding: 0;
 }
 
