@@ -218,7 +218,7 @@ describe("the fold applies GitHub's events in the order they happened, whenever 
     applyGithub(g, [pr({ sha: HEAD_A, happened: 100 })], 4);
     const pull = g.prs.get(prKey("o/r", 7));
     if (!pull) throw new Error("no PR");
-    expect(prChecks(g, pull)).toEqual([{ name: "ci-ok", status: "completed", conclusion: "success", run: 5, at: 999, completedAt: 400 }]);
+    expect(prChecks(g, pull)).toEqual([{ name: "ci-ok", status: "completed", conclusion: "success", run: 5, at: 999, completedAt: 400, ends: [{ run: 5, conclusion: "success", at: 400 }] }]);
   });
 });
 

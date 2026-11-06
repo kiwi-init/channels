@@ -122,8 +122,8 @@ describe("review", () => {
     expect(task.state).toBe("done");
     expect(task.approvedBy).toBe("mac");
     expect(task.rounds).toEqual([
-      { n: 1, at: "abc123", by: "win", seq: r1.seq, ts: r1.ts, result: { kind: "rejected", by: "mac", seq: rej.seq, ts: rej.ts } },
-      { n: 2, at: "def456", by: "win", seq: r2.seq, ts: r2.ts, result: { kind: "approved", by: "mac", seq: ok.seq, ts: ok.ts } },
+      { n: 1, at: "abc123", by: "win", seq: r1.seq, ts: r1.ts, rts: r1.rts, result: { kind: "rejected", by: "mac", seq: rej.seq, ts: rej.ts, rts: rej.rts } },
+      { n: 2, at: "def456", by: "win", seq: r2.seq, ts: r2.ts, rts: r2.rts, result: { kind: "approved", by: "mac", seq: ok.seq, ts: ok.ts, rts: ok.rts } },
     ]);
     expect(s.rejected.get(stale.seq)).toBe(`round 1 of T${t} isn't the open one: round 2 is`);
     expect(s.rejected.get(future.seq)).toBe(`round 3 of T${t} isn't the open one: round 2 is`);

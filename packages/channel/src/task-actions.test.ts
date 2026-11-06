@@ -5,7 +5,8 @@ import type { Event, Message } from "@kiwi/core/protocol.ts";
 import { taskDigest } from "@kiwi/core/work.ts";
 import { fold, type ChannelState, type Roster, type Task } from "@kiwi/core/state.ts";
 
-import { ANYONE, approveTask, assignTask, cancelTask, changeReviewer, closedDigest, reviewsFor, sendBackTask, taskActions, type TaskSend } from "./task-actions.ts";
+import { ANYONE, approveTask, assignTask, cancelTask, changeReviewer, reviewsFor, sendBackTask, taskActions, type TaskSend } from "./task-actions.ts";
+import { closedDigest } from "./task-digest.ts";
 
 const roster: Roster = [];
 const ids = new Map<string, Identity>();

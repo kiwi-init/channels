@@ -1,5 +1,6 @@
 import { memberName } from "@kiwi/app/format.ts"
-import { ANYONE, approveTask as approving, cancelTask as cancelling, changeReviewer, closedDigest, closeLanding, sendBackTask, type TaskSend } from "@kiwi/channel/task-actions.ts"
+import { ANYONE, approveTask as approving, cancelTask as cancelling, changeReviewer, closeLanding, sendBackTask, type TaskSend } from "@kiwi/channel/task-actions.ts"
+import { closedDigest } from "@kiwi/channel/task-digest.ts"
 import { ALLOW_ONCE, DENY } from "@kiwi/app/permission-settled.ts"
 import { changeTo } from "@kiwi/core/changes.ts"
 import { permissionReply } from "@kiwi/core/permission.ts"
