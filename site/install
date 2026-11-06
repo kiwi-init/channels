@@ -4,7 +4,8 @@
 # What it does, in order:
 #   1. picks the build for this computer (macOS or Linux, Intel or ARM)
 #   2. downloads it from this project's GitHub release, built from the public source,
-#      compressed (.xz when xz is installed, else .gz) when the release has it
+#      compressed when the release has it: .xz when xz (or macOS's compression_tool)
+#      unpacks it, else .gz
 #   3. checks the release's SHA256SUMS against the minisign signature the release
 #      also carries, with the public key pinned in this script (minisign when
 #      installed, else a self-contained python3 check of the same signature),
@@ -194,26 +195,41 @@ else
   echo "kiwi: KIWI_UNVERIFIED_INSTALL=1: installing on the checksum alone" >&2
 fi
 listed() { grep -q " $1\$" "$tmp/SHA256SUMS"; }
-name="$asset"
-if command -v xz >/dev/null 2>&1 && listed "$asset.xz"; then
-  name="$asset.xz"
-elif command -v gzip >/dev/null 2>&1 && listed "$asset.gz"; then
-  name="$asset.gz"
+has() { command -v "$1" >/dev/null 2>&1; }
+fetch() {
+  echo "Downloading $1 ($VERSION) from github.com/$REPO"
+  curl -fsSL "$base/$1" -o "$tmp/$1"
+  want=$(grep " $1\$" "$tmp/SHA256SUMS" | cut -d' ' -f1)
+  if has sha256sum; then got=$(sha256sum "$tmp/$1" | cut -d' ' -f1); else got=$(shasum -a 256 "$tmp/$1" | cut -d' ' -f1); fi
+  if [ -z "$want" ] || [ "$want" != "$got" ]; then
+    echo "kiwi: checksum doesn't match the release; not installing" >&2
+    exit 1
+  fi
+}
+unxz() {
+  if has xz; then xz -dc "$1"; else compression_tool -decode -a lzma -i "$1"; fi
+}
+gz=no
+if has gzip && listed "$asset.gz"; then gz=yes; fi
+if { has xz || has compression_tool; } && listed "$asset.xz"; then
+  fetch "$asset.xz"
+  if ! unxz "$tmp/$asset.xz" > "$tmp/kiwi" 2>"$tmp/unxz.err"; then
+    if [ "$gz" = no ]; then
+      cat "$tmp/unxz.err" >&2
+      echo "kiwi: couldn't unpack $asset.xz here, and the release has no .gz to fall back on" >&2
+      exit 1
+    fi
+    echo "kiwi: couldn't unpack $asset.xz here (xz 5.4 or newer can); taking the .gz instead" >&2
+    fetch "$asset.gz"
+    gzip -dc "$tmp/$asset.gz" > "$tmp/kiwi"
+  fi
+elif [ "$gz" = yes ]; then
+  fetch "$asset.gz"
+  gzip -dc "$tmp/$asset.gz" > "$tmp/kiwi"
+else
+  fetch "$asset"
+  mv "$tmp/$asset" "$tmp/kiwi"
 fi
-echo "Downloading $name ($VERSION) from github.com/$REPO"
-curl -fsSL "$base/$name" -o "$tmp/$name"
-
-want=$(grep " $name\$" "$tmp/SHA256SUMS" | cut -d' ' -f1)
-if command -v sha256sum >/dev/null 2>&1; then got=$(sha256sum "$tmp/$name" | cut -d' ' -f1); else got=$(shasum -a 256 "$tmp/$name" | cut -d' ' -f1); fi
-if [ -z "$want" ] || [ "$want" != "$got" ]; then
-  echo "kiwi: checksum doesn't match the release; not installing" >&2
-  exit 1
-fi
-case "$name" in
-  *.xz) xz -dc "$tmp/$name" > "$tmp/kiwi" ;;
-  *.gz) gzip -dc "$tmp/$name" > "$tmp/kiwi" ;;
-  *) mv "$tmp/$name" "$tmp/kiwi" ;;
-esac
 
 # ~/.kiwi is private to this account. bin stays 0755 inside that parent.
 # A symlink is left alone: chmod would follow it.
