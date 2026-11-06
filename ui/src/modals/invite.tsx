@@ -1,7 +1,9 @@
 import { Fragment, useEffect, useState } from "react"
 
 import "~/styles/people-add.css"
-import { cx, Modal, Toggle } from "~/kit/bits"
+import { cx } from "~/kit/bits"
+import { Toggle } from "~/kit/form"
+import { Modal } from "~/kit/modal"
 import { Track } from "~/kit/glide"
 import { Icon } from "~/kit/icons"
 import { ALL_POWERS, NO_POWERS, trusted, type Channel } from "~/model"

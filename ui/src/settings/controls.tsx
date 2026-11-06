@@ -2,7 +2,8 @@ import "~/styles/settings.css"
 
 import { useState, type ReactNode } from "react"
 
-import { autofocus, cx, Modal } from "~/kit/bits"
+import { autofocus, cx } from "~/kit/bits"
+import { Modal } from "~/kit/modal"
 import { Track } from "~/kit/glide"
 
 export function Seg<T extends string | number>({ label, value, options, onChange }: { label: string; value: T; options: readonly (readonly [T, string])[]; onChange: (value: T) => void }) {
