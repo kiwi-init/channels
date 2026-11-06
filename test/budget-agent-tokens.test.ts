@@ -11,7 +11,7 @@ interface Step {
 }
 
 const BUDGET = {
-  brief: 4_400,
+  brief: 3_700,
   shortHelp: 1_250,
   oneCommandHelp: 1_700,
   wrappingPerMessage: 40,
