@@ -58,6 +58,8 @@ const str = (x: unknown, max = 200): string | undefined => (typeof x === "string
 const int = (x: unknown): number | undefined => (typeof x === "number" && Number.isSafeInteger(x) && x > 0 ? x : undefined);
 const count = (x: unknown): number | undefined => (typeof x === "number" && Number.isSafeInteger(x) && x >= 0 ? x : undefined);
 const defined = (o: GithubItem): GithubItem => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as GithubItem;
+const when = (x: unknown): number | undefined => (typeof x === "string" ? Date.parse(x) || undefined : undefined);
+const seconds = (x: unknown): number | undefined => (typeof x === "number" && Number.isSafeInteger(x) && x > 0 ? x * 1000 : when(x));
 
 export function githubItem(event: string, payload: unknown, now: number): GithubItem | null {
   const p = obj(payload);
@@ -82,6 +84,7 @@ export function githubItem(event: string, payload: unknown, now: number): Github
       branch: str(obj(pr.head).ref),
       sha: str(obj(pr.head).sha, 40),
       merge: pr.merged === true ? str(pr.merge_commit_sha, 40) : undefined,
+      happened: pr.merged === true ? when(pr.merged_at) : pr.state === "closed" ? when(pr.closed_at) : when(pr.updated_at),
     });
   }
   if (event === "issues") {
@@ -96,6 +99,7 @@ export function githubItem(event: string, payload: unknown, now: number): Github
       url: str(issue.html_url, 300),
       state: str(issue.state, 20),
       reason: str(issue.state_reason, 20),
+      happened: issue.state === "closed" ? when(issue.closed_at) : when(issue.updated_at),
     });
   }
   if (event === "check_run") {
@@ -111,6 +115,7 @@ export function githubItem(event: string, payload: unknown, now: number): Github
       conclusion: str(run.conclusion, 20),
       sha: str(run.head_sha, 40),
       branch: str(obj(run.check_suite).head_branch),
+      happened: run.status === "completed" ? when(run.completed_at) : when(run.started_at),
     });
   }
   if (event === "workflow_run") {
@@ -127,14 +132,21 @@ export function githubItem(event: string, payload: unknown, now: number): Github
       conclusion: str(run.conclusion, 20),
       sha: str(run.head_sha, 40),
       branch: str(run.head_branch),
+      happened: run.status === "completed" ? when(run.updated_at) : when(run.run_started_at),
     });
   }
   const ref = str(p.ref);
-  return defined({ ...base, event: "push", branch: ref?.startsWith("refs/heads/") ? ref.slice(11) : ref, sha: str(p.after, 40), url: str(p.compare, 300) });
+  return defined({
+    ...base,
+    event: "push",
+    branch: ref?.startsWith("refs/heads/") ? ref.slice(11) : ref,
+    sha: str(p.after, 40),
+    url: str(p.compare, 300),
+    happened: seconds(obj(p.repository).pushed_at),
+  });
 }
 
 const lower = (x: unknown, max = 20): string | undefined => str(x, max)?.toLowerCase();
-const when = (x: unknown): number | undefined => (typeof x === "string" ? Date.parse(x) || undefined : undefined);
 const login = (x: unknown): string | undefined => str(obj(x).login, 100);
 
 const list = (x: unknown): Json[] => (Array.isArray(x) ? x.map(obj) : []);
@@ -178,6 +190,7 @@ export function syncNotes(repo: string, prs: readonly unknown[], issues: readonl
         sha,
         merge: merged ? str(obj(pr.mergeCommit).oid, 40) : undefined,
         by: login(pr.author),
+        happened: merged ? when(pr.mergedAt) : state === "OPEN" ? when(pr.updatedAt) : when(pr.closedAt),
       }),
     );
     if (state !== "OPEN" || !sha) continue;
@@ -195,6 +208,7 @@ export function syncNotes(repo: string, prs: readonly unknown[], issues: readonl
           conclusion: lower(run.conclusion),
           sha,
           branch,
+          happened: when(run.completedAt) ?? when(run.startedAt),
         }),
       );
   }
@@ -214,6 +228,7 @@ export function syncNotes(repo: string, prs: readonly unknown[], issues: readonl
         state: state === "OPEN" ? "open" : "closed",
         reason: state === "OPEN" ? undefined : lower(issue.stateReason),
         by: login(issue.author),
+        happened: state === "OPEN" ? when(issue.updatedAt) : when(issue.closedAt),
       }),
     );
   }
