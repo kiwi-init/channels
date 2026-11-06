@@ -9,6 +9,7 @@ export interface GithubCheck {
   run?: number;
   attempt?: number;
   at: number;
+  completedAt?: number;
 }
 
 export interface GithubPr {
@@ -25,6 +26,8 @@ export interface GithubPr {
   deletions?: number;
   files?: number;
   at: number;
+  happened?: number;
+  mergedAt?: number;
   seq: number;
 }
 
@@ -37,6 +40,7 @@ export interface GithubIssue {
   reason?: string;
   by?: string;
   at: number;
+  happened?: number;
   seq: number;
 }
 
@@ -77,12 +81,19 @@ function behind(i: GithubNote, was: GithubCheck): boolean {
   return order < 0 || (order === 0 && !!was.conclusion && !i.conclusion);
 }
 
+const older = (i: GithubNote, was: { happened?: number } | undefined): boolean => i.happened !== undefined && was?.happened !== undefined && i.happened < was.happened;
+
+const stalePr = (i: GithubNote, was: GithubPr | undefined): boolean => (was?.state === "merged" && !i.merged) || older(i, was);
+
 export function applyGithub(g: GithubState, items: readonly GithubNote[], seq: number): void {
   for (const i of items) {
     if (i.event === "pull_request" && i.number) {
       const key = prKey(i.repo, i.number);
       const was = g.prs.get(key);
+      if (stalePr(i, was)) continue;
       const state = i.merged ? "merged" : i.state === "closed" ? "closed" : i.state === "open" ? "open" : (was?.state ?? "open");
+      const happened = i.happened ?? was?.happened;
+      const mergedAt = i.merged ? (i.happened ?? was?.mergedAt) : undefined;
       g.prs.set(key, {
         ...was,
         repo: i.repo,
@@ -90,6 +101,8 @@ export function applyGithub(g: GithubState, items: readonly GithubNote[], seq: n
         state,
         at: i.at,
         seq: was?.seq ?? seq,
+        ...(happened !== undefined ? { happened } : {}),
+        ...(mergedAt !== undefined ? { mergedAt } : {}),
         ...(i.title ? { title: i.title } : {}),
         ...(i.url ? { url: i.url } : {}),
         ...(i.branch ? { branch: i.branch } : {}),
@@ -114,18 +127,21 @@ export function applyGithub(g: GithubState, items: readonly GithubNote[], seq: n
           ...(i.url ? { url: i.url } : {}),
           ...(i.run ? { run: i.run } : {}),
           ...(i.attempt ? { attempt: i.attempt } : {}),
+          ...(i.conclusion && i.happened !== undefined ? { completedAt: i.happened } : {}),
         });
       g.checks.set(key, runs);
       while (g.checks.size > MAX_SHAS) g.checks.delete(g.checks.keys().next().value!);
     } else if (i.event === "issues" && i.number) {
       const key = prKey(i.repo, i.number);
       const was = g.issues.get(key);
+      if (older(i, was)) continue;
       const state = i.state === "closed" ? "closed" : i.state === "open" ? "open" : (was?.state ?? "open");
       const same = !!was && was.state === state;
       const by = same ? was.by : i.by;
       const reason = state === "closed" ? (same ? was.reason : i.reason) : undefined;
       const title = i.title ?? was?.title;
       const url = i.url ?? was?.url;
+      const happened = i.happened ?? was?.happened;
       g.issues.set(key, {
         repo: i.repo,
         number: i.number,
@@ -136,9 +152,12 @@ export function applyGithub(g: GithubState, items: readonly GithubNote[], seq: n
         ...(url ? { url } : {}),
         ...(reason ? { reason } : {}),
         ...(by ? { by } : {}),
+        ...(happened !== undefined ? { happened } : {}),
       });
     } else if (i.event === "push" && i.branch && i.sha) {
-      for (const [key, pr] of g.prs) if (pr.state === "open" && pr.branch === i.branch && pr.repo.toLowerCase() === i.repo.toLowerCase()) g.prs.set(key, { ...pr, sha: i.sha, at: i.at });
+      for (const [key, pr] of g.prs)
+        if (pr.state === "open" && pr.branch === i.branch && pr.repo.toLowerCase() === i.repo.toLowerCase() && !older(i, pr))
+          g.prs.set(key, { ...pr, sha: i.sha, at: i.at, ...(i.happened !== undefined ? { happened: i.happened } : {}) });
     }
   }
 }
@@ -147,11 +166,13 @@ export function githubNews(g: GithubState, notes: readonly GithubNote[]): Github
   return notes.filter((i) => {
     if (i.event === "pull_request" && i.number) {
       const was = g.prs.get(prKey(i.repo, i.number));
+      if (stalePr(i, was)) return false;
       const state = i.merged ? "merged" : i.state === "closed" ? "closed" : "open";
       return !was || was.state !== state || (!!i.title && was.title !== i.title) || (state === "open" && !!i.sha && was.sha !== i.sha);
     }
     if (i.event === "issues" && i.number) {
       const was = g.issues.get(prKey(i.repo, i.number));
+      if (older(i, was)) return false;
       return !was || was.state !== (i.state === "closed" ? "closed" : "open") || (!!i.title && was.title !== i.title);
     }
     if ((i.event === "check_run" || i.event === "workflow_run") && i.sha && i.name) {
