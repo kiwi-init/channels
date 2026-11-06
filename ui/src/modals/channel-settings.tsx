@@ -15,6 +15,7 @@ import type { Channel, Room } from "~/model"
 import { nickname, roomPeople, seatRoot, shown } from "~/names"
 import { useApp, type ChannelTab } from "~/nav"
 import { repoOffers } from "~/modals/repo-offers"
+import { LandingPick } from "~/modals/landing-pick"
 import { Confirm, Group, InlineEdit, Row } from "~/settings/controls"
 import { useAppCan } from "~/live/app-can"
 import { isMuted } from "~/live/mute"
@@ -432,21 +433,10 @@ function GitHub({ channel }: { channel: Channel }) {
           hint={
             landing
               ? `An approved task stays landing until its ${landing} has happened; a task can set its own with --then.`
-              : "Approval finishes a task. Set merge, release:tag, release:npm:PKG@RANGE or run to keep it open until that has happened."
+              : "Approval finishes a task. Pick merge, release:tag or run to keep it open until that has happened; a task can wait for an npm release with --then."
           }
         >
-          {sets ? (
-            <span className="cset-prefix">
-              {landing && (
-                <button type="button" className="btn is-quiet is-small" onClick={() => app.actions.setLanding(channel.code, null)}>
-                  Clear
-                </button>
-              )}
-              <InlineEdit value={landing ?? ""} label="Tasks land on" verb={landing ? "Change" : "Set"} onSave={(v) => app.actions.setLanding(channel.code, v)} />
-            </span>
-          ) : (
-            <span className="cset-mono">{landing ?? "Approval"}</span>
-          )}
+          {sets ? <LandingPick value={landing} onPick={(then) => app.actions.setLanding(channel.code, then)} /> : <span className="cset-mono">{landing ?? "Approval"}</span>}
         </Row>
         <Row
           label="People merge"
