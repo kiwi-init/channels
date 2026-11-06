@@ -17,6 +17,7 @@ const BUDGET = {
   wrappingPerMessage: 40,
   everyday: 300,
   status: 800,
+  busyTurn: 600,
 } as const;
 
 let steps: Step[] = [];
@@ -81,6 +82,14 @@ describe("what Channels adds to an agent's session, against a local relay (scrip
   test("help is a short page, and one command's options on request", () => {
     expect(step("read the help the brief points to").chars).toBeLessThanOrEqual(BUDGET.shortHelp);
     expect(step("read one command's options").chars).toBeLessThanOrEqual(BUDGET.oneCommandHelp);
+  });
+
+  test("in a busy channel an agent is sent only what's for it: #general, and what @mentions it", () => {
+    const s = step("a busy channel: 19 messages, 4 for this agent (prompt hook)");
+    for (const i of [1, 2, 3]) expect(s.shown).toContain(`Heads-up ${i}: staging is frozen`);
+    expect(s.shown).toContain("can you check the new login screen copy?");
+    for (const elsewhere of ["Progress ", "Design note ", "Direct "]) expect([elsewhere, s.shown.includes(elsewhere)]).toEqual([elsewhere, false]);
+    expect(s.chars).toBeLessThanOrEqual(BUDGET.busyTurn);
   });
 
   test("status stays one screen", () => {
