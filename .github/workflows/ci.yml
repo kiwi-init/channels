@@ -493,6 +493,17 @@ jobs:
           name: mods-check-mac
           path: ${{ runner.temp }}/mods-check/*.png
           if-no-files-found: ignore
+      - name: the GitHub tab is a mod the app installs on first start, follows the channel's GitHub state, and leaving it doesn't stall the app (T6270)
+        if: ${{ !cancelled() }}
+        timeout-minutes: 8
+        run: bun desktop/scripts/eb-github-mod-check.ts desktop/release-eb/build/dev-macos-*/*.app "$RUNNER_TEMP/github-mod-check"
+      - name: the GitHub mod check's screenshots
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: github-mod-check-mac
+          path: ${{ runner.temp }}/github-mod-check/*.png
+          if-no-files-found: ignore
       - name: the window opens where it was left, at the size it was left (NSWindow frame autosave)
         if: ${{ !cancelled() }}
         timeout-minutes: 5
