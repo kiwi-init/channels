@@ -491,6 +491,10 @@ export interface KiwiBridge {
   modFailed(name: string, hash: string, why: string): Promise<ModView[]>;
   setModOn(name: string, on: boolean): Promise<ModView[]>;
   modsSettled(): Promise<void>;
+  modsInstalled(): Promise<ModInstalled[]>;
+  modUpdates(): Promise<ModUpdates>;
+  updateMod(name: string): Promise<ModView[]>;
+  removeMod(name: string, force: boolean): Promise<ModView[]>;
 }
 
 export interface ModView {
@@ -503,6 +507,29 @@ export interface ModView {
   why?: string;
   off?: "you" | "crash" | "safe";
   hash?: string;
+}
+
+export interface ModInstalled {
+  name: string;
+  source: string | null;
+  commit: string | null;
+  local: boolean;
+  link: string | null;
+  changed: boolean;
+}
+
+export interface ModUpdate {
+  name: string;
+  from: string | null;
+  to: string;
+  commits: number;
+  added: string[];
+  dropped: string[];
+}
+
+export interface ModUpdates {
+  changes: ModUpdate[];
+  skipped: { name: string; why: string }[];
 }
 
 export interface ModFetchRequest {
