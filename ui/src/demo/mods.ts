@@ -1,5 +1,5 @@
 import type { ModDetails, ModIcon, ModInstalled, ModUpdate, ModView } from "../../../desktop/src/bridge.ts"
-import { showMods } from "~/mods/host"
+import { askLater, showMods } from "~/mods/host"
 import { showModReads } from "~/mods/served"
 
 const svg = (body: string): ModIcon => ({ type: "image/svg+xml", data: btoa(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">${body}</svg>`) })
@@ -75,7 +75,7 @@ const INSTALLED: ModInstalled[] = [
 
 const RADAR_UPDATE: ModUpdate = { name: "release-radar", from: "1.4.0", to: "1.5.0", commits: 3, added: [], dropped: [] }
 
-export function showDemoMods(): void {
+export function showDemoMods(ask: boolean): void {
   showModReads({
     modIcon: (name) => Promise.resolve(ICONS[name] ?? null),
     modDetails: (name) => Promise.resolve(DETAILS[name] ?? null),
@@ -94,4 +94,5 @@ export function showDemoMods(): void {
       commands: ["New release notes", "Open Release Radar"],
     },
   ])
+  if (!ask) for (const m of MODS) if (m.state === "asks") askLater(m)
 }

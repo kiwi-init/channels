@@ -6,12 +6,14 @@ import { cx } from "~/kit/bits"
 import { later } from "~/kit/later"
 import { Icon } from "~/kit/icons"
 import type { ChannelTile } from "~/model"
+import { modsServed } from "~/mods/served"
 import { useApp } from "~/nav"
 import type { Menu } from "~/shell/rail-menu"
 import { railItems, type DropTarget } from "~/shell/rail-items"
 
 const RailMenu = later(() => import("~/shell/rail-menu").then((m) => m.default))
 const FolderTile = later(() => import("~/shell/rail-folder").then((m) => m.default))
+const RailMods = later(() => import("~/shell/rail-mods").then((m) => m.default))
 
 const DRAG = "application/x-kiwi-channel"
 
@@ -28,6 +30,7 @@ export function Rail() {
   const onChannel = nav.page === "channel"
   const home = onChannel && nav.channel === null
   const on = onChannel ? nav.channel : null
+  const settings = nav.page === "settings" && !(nav.section === "mods" && modsServed())
   const folders = app.prefs.folders
   const items = railItems(app.channels, folders)
   const ordered = items.flatMap((i) => (i.kind === "channel" ? [i.tile] : i.tiles))
@@ -137,12 +140,17 @@ export function Rail() {
         </li>
       </ul>
       <div className="rail-foot">
+        {modsServed() && (
+          <Suspense fallback={null}>
+            <RailMods />
+          </Suspense>
+        )}
         <button
           type="button"
-          className={cx("rail-gear", nav.page === "settings" && "is-on")}
+          className={cx("rail-gear", settings && "is-on")}
           aria-label="Settings"
           title="Settings"
-          onClick={() => (nav.page === "settings" ? go({ to: "back" }) : go({ to: "settings" }))}
+          onClick={() => (settings ? go({ to: "back" }) : go({ to: "settings", section: nav.section === "mods" && modsServed() ? "account" : undefined }))}
         >
           <Icon name="gear" size={18} />
         </button>

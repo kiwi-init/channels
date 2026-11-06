@@ -4,7 +4,7 @@ import { bridge } from "@kiwi/secrets/secrets.ts"
 import type { ModInstalled, ModUpdate, ModView } from "../../../desktop/src/bridge.ts"
 import { Toggle } from "~/kit/form"
 import { Icon } from "~/kit/icons"
-import { modsNow, useModsVersion } from "~/mods/host"
+import { askAgain, modsNow, useModsVersion } from "~/mods/host"
 import { ModIcon } from "~/mods/icon"
 import { needWords } from "~/mods/needs"
 import { modReads } from "~/mods/served"
@@ -174,6 +174,19 @@ export function ModsSection() {
   }
   return (
     <Page title="Mods" lede="Each one runs in its own frame, away from your keys and messages.">
+      {mods.some((m) => m.state === "asks") && (
+        <Group title="Waiting for you">
+          {mods
+            .filter((m) => m.state === "asks")
+            .map((m) => (
+              <Row key={m.name} label={`${m.name} asks to run`} hint={m.needs.map(needWords).join(" · ")}>
+                <button type="button" className="btn is-primary is-small" onClick={() => askAgain(m.name)}>
+                  Review
+                </button>
+              </Row>
+            ))}
+        </Group>
+      )}
       <Group hint={mods.find((m) => m.off === "safe")?.why}>
         {mods.length ? (
           mods.map((m) => (

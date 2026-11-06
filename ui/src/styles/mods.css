@@ -163,3 +163,18 @@ img.mod-icon {
 .mod-readme {
   padding-top: 12px;
 }
+
+.rail-mods {
+  position: relative;
+}
+
+.rail-mods-dot {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--decide);
+  box-shadow: 0 0 0 2px var(--bg);
+}

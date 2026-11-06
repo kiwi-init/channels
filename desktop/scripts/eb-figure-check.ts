@@ -242,6 +242,11 @@ try {
       2_000,
     );
   await step("the channel", 30_000, () => d.evaluate(() => !!document.querySelector(".chan"), null, 2_000));
+  const asked = await until("the mod's ask, by itself", 15_000, () =>
+    d.evaluate(() => document.querySelector('dialog[open][aria-label$=" asks to run"]')?.getAttribute("aria-label") ?? null, null, 2_000),
+  ).catch(() => null);
+  check(asked === `${MOD} asks to run`, "a mod that draws figures asks to run by itself");
+  await step("Not now, for the moment", 10_000, () => d.evaluate(clickText, { selector: "dialog[open] .modal-foot button", text: "Not now" }, 2_000));
   for (const f of FILES) {
     let why = "";
     await until(`${f.name}, ready to attach`, 10_000, () =>
@@ -274,11 +279,11 @@ try {
   await shot("figures-before-the-mod");
   await step("⌘K", 10_000, palette);
   await step(`Set up ${MOD} in ⌘K`, 10_000, () => d.evaluate(clickText, { selector: ".palette-item", text: `Set up ${MOD}` }, 2_000));
-  await step("what the mod asks for, in the panel", 10_000, () => d.evaluate(clickText, { selector: ".panel .mod-needs", text: "Draw figure attachments in chat, live" }, 2_000));
-  await step("and the host it asks for", 10_000, () => d.evaluate(clickText, { selector: ".panel .mod-needs", text: "Talk to example.com" }, 2_000));
+  await step("what the mod asks for, in its ask", 10_000, () => d.evaluate(clickText, { selector: "dialog[open] .mod-needs li", text: "Draw figure attachments in chat, live" }, 2_000));
+  await step("and the host it asks for", 10_000, () => d.evaluate(clickText, { selector: "dialog[open] .mod-needs li", text: "Talk to example.com" }, 2_000));
   check(true, "a mod that draws figures asks for it, in words, before it runs");
   await shot("figure-mod-asks");
-  await step("Turn on", 10_000, () => d.evaluate(clickText, { selector: ".panel button", text: "Turn on" }, 2_000));
+  await step("Allow", 10_000, () => d.evaluate(clickText, { selector: "dialog[open] .modal-foot button", text: "Allow" }, 2_000));
   await step("the mod on", 30_000, () =>
     d.evaluate(
       () => (window as unknown as { kiwi: { mods(): Promise<{ name: string; state: string }[]> } }).kiwi.mods().then((l) => l.some((m) => m.name === "figure-probe" && m.state === "on")),

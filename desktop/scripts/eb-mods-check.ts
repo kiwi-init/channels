@@ -519,9 +519,17 @@ try {
       2_000,
     );
   await step("the channel", 30_000, () => d.evaluate(() => !!document.querySelector(".chan"), null, 2_000));
-  await step("⌘K, for the terminal mod", 10_000, palette);
-  await step("Set up terminal-mod in ⌘K", 10_000, () => d.evaluate(clickText, { selector: ".palette-item", text: "Set up terminal-mod" }, 2_000));
-  await step("the terminal mod's snippets, in the panel", 10_000, () => d.evaluate(clickText, { selector: ".panel .mod-snippet pre", text: "source-file -q" }, 2_000));
+  const askOf = () => d.evaluate(() => document.querySelector('dialog[open][aria-label$=" asks to run"]')?.getAttribute("aria-label") ?? null, null, 2_000);
+  const firstAsk = await until("a mod's ask, by itself", 15_000, askOf).catch(() => null);
+  check(firstAsk === "probe-mod asks to run", "a new mod's ask comes to the person by itself, without ⌘K");
+  await step("Not now", 10_000, () => d.evaluate(clickText, { selector: "dialog[open] .modal-foot button", text: "Not now" }, 2_000));
+  const nextAsk = await until("the next mod's ask", 15_000, async () => {
+    const a = await askOf();
+    return a && a !== firstAsk ? a : null;
+  }).catch(() => null);
+  check(nextAsk === "terminal-mod asks to run", "Not now puts it off, and the next mod's ask follows");
+  check(await d.evaluate(() => !!document.querySelector(".rail-mods .rail-mods-dot"), null, 2_000), "a mod put off leaves a dot on the rail's mods icon");
+  await step("the terminal mod's snippets, in its ask", 10_000, () => d.evaluate(clickText, { selector: "dialog[open] .mod-snippet pre", text: "source-file -q" }, 2_000));
   for (const theme of ["dark", "light"]) {
     await d.evaluate(
       (t) => {
@@ -543,7 +551,7 @@ try {
     2_000,
   );
   check(readFileSync(TMUX_CONF, "utf8") === TMUX_BEFORE && !existsSync(REX_INIT), "a terminal mod changes no config while it waits for the person");
-  await step("Turn on the terminal mod", 10_000, () => d.evaluate(clickText, { selector: ".panel button", text: "Turn on" }, 2_000));
+  await step("Allow the terminal mod", 10_000, () => d.evaluate(clickText, { selector: "dialog[open] .modal-foot button", text: "Allow" }, 2_000));
   const heardTerminals = await until("the terminal mod's list", 30_000, async () => (await heard(d)).find((m) => "terminals" in m) ?? null).catch(() => null);
   console.log(`the terminal mod heard: ${JSON.stringify(heardTerminals)}`);
   check(Array.isArray(heardTerminals?.["terminals"]), "an approved terminal mod lists this computer's agents' terminals");
@@ -557,14 +565,25 @@ try {
   const gone = await until("terminal-mod removed", 30_000, async () => ((await modsNow(d)).some((m) => m.name === "terminal-mod") ? null : true)).catch(() => null);
   check(!!gone && readFileSync(TMUX_CONF, "utf8") === TMUX_BEFORE, "removing the mod puts ~/.tmux.conf back byte for byte");
   check(!existsSync(REX_INIT), "and removes the Rex init.lua it made");
+  const railMods = (on: boolean) => d.evaluate((want) => !!document.querySelector(`.rail-mods${want ? '[aria-current="page"]' : ":not([aria-current])"}`), on, 2_000);
+  await step("the rail's mods icon", 10_000, () => railMods(false));
+  await d.evaluate(() => (document.querySelector<HTMLElement>(".rail-mods")?.click(), true), null, 2_000);
+  await step("the Mods page, from the rail", 10_000, () => railMods(true));
+  await step("probe-mod waits at the top of the Mods page", 10_000, () =>
+    d.evaluate(() => (document.querySelector(".set-main .set-group")?.textContent ?? "").includes("probe-mod asks to run"), null, 2_000),
+  );
+  await later(300);
+  await shot("settings-mods-waiting");
+  await d.evaluate(() => (document.querySelector<HTMLElement>(".rail-mods")?.click(), true), null, 2_000);
+  await step("the rail's mods icon takes it back to the channel", 10_000, () => railMods(false));
   await step("⌘K", 10_000, palette);
   await step("Set up probe-mod in ⌘K", 10_000, () => d.evaluate(clickText, { selector: ".palette-item", text: "Set up probe-mod" }, 2_000));
-  await step("what the mod asks for, in the panel", 10_000, () => d.evaluate(clickText, { selector: ".panel .mod-needs", text: "Talk to example.com" }, 2_000)).catch(async (e: unknown) => {
+  await step("what the mod asks for, in its ask", 10_000, () => d.evaluate(clickText, { selector: "dialog[open] .mod-needs li", text: "Talk to example.com" }, 2_000)).catch(async (e: unknown) => {
     console.log(`the page then: ${JSON.stringify(await d.evaluate(pageNow, null, 3_000).catch((x: unknown) => String(x)), null, 1)}`);
     throw e;
   });
   await shot("mod-asks");
-  await step("Turn on", 10_000, () => d.evaluate(clickText, { selector: ".panel button", text: "Turn on" }, 2_000));
+  await step("Allow", 10_000, () => d.evaluate(clickText, { selector: "dialog[open] .modal-foot button", text: "Allow" }, 2_000));
   const first = await until("the mod's report", 60_000, async () => (await heard(d)).find((m) => m["version"] === 1) ?? null);
   console.log(`the mod saw: ${JSON.stringify(first, null, 1)}`);
   check(first["origin"] === "null", "the mod's frame has an origin of its own (opaque)");
@@ -576,7 +595,8 @@ try {
   check(first["listed"] === 200, "the mod reaches the host it listed and the person approved");
   check(String(first["unlisted"]).startsWith("blocked"), "the mod can't reach a host it didn't list");
   check(String(first["relayByProxy"]).startsWith("blocked"), "the mod can't reach the relay through the app either");
-  await step("the mod's panel title", 10_000, () => d.evaluate(clickText, { selector: ".panel .panel-title", text: "Probe mod" }, 2_000));
+  check(!(await d.evaluate(() => !!document.querySelector(".rail-mods-dot"), null, 2_000)), "Allow turns it on, and the rail's dot goes");
+  await step("the mod's panel title, opened by Allow", 10_000, () => d.evaluate(clickText, { selector: ".panel .panel-title", text: "Probe mod" }, 2_000));
   await shot("mod-panel");
   const sideAsked = Date.now();
   const sideTops = new Set<string>();

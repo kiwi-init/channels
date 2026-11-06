@@ -103,7 +103,7 @@ With `"needs": ["panel", "command", "net:example.com"]`, that's a whole mod.
 
 ## Turning one on
 
-The first time the app sees a mod that asks for something, it asks you: a note says the mod wants to run, ⌘K lists **Set up <name>**, and its panel shows what it asks for, in words. **Turn on** approves all of it, and nothing of the mod runs before that. When an update asks for more, it stops and asks again. A mod that asks for nothing runs without asking.
+The first time the app sees a mod that asks for something, it asks you at once: its icon, its name and what it asks for, in words. **Allow** approves all of it, and nothing of the mod runs before that. **Not now** puts it off: a dot stays on the mods icon in the rail, and the ask waits at the top of the Mods page and in ⌘K as **Set up <name>**. When an update asks for more, it stops and asks again. A mod that asks for nothing runs without asking.
 
 Settings → Mods lists every mod; click one for its page: where it came from and at which commit, when it was added and changed, its size, what it may do and adds, and its `README.md`.
 
