@@ -830,7 +830,9 @@ export function asksOf(
       ...(task !== undefined ? { task } : {}),
       ...(idle ? { idle: true as const } : {}),
       ...(askedOf ? { askedOf } : {}),
-      ...(!isOpen && answer ? { answer: { text: wrote(answer.body), by: answer.from, at: answer.ts } } : {}),
+      ...(!isOpen && answer
+        ? { answer: { text: wrote(answer.body), by: answer.from, at: answer.ts, ...(answer.side ? { shownIn: "card" as const } : { shownIn: "feed" as const, seq: answer.seq }) } }
+        : {}),
       ...(closed ? { closed: { by: closed.by, at: closed.at, ...(closed.why !== undefined ? { why: wrote(closed.why) } : {}) } } : {}),
     })
     askOf.set(m.seq, id)

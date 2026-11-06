@@ -1,6 +1,6 @@
 import { useState } from "react"
 
-import { Body } from "~/chat/message"
+import { Body } from "~/chat/body"
 import { wrote } from "~/words"
 import type { Channel, Compacted } from "~/model"
 import { useAct } from "~/nav"

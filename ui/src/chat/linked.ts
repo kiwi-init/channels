@@ -5,7 +5,7 @@ import { literal, onParser, parserVersion, spansOf, swap, takeParser } from "@ki
 
 void import("@kiwi/app/mention-tree.ts").then((m) => takeParser(m.markdownTree))
 
-export const useMentionParser = (): number => useSyncExternalStore(onParser, parserVersion)
+export const useMentionParser = (): number => useSyncExternalStore(onParser, parserVersion, parserVersion)
 
 export { named } from "@kiwi/app/mentions.ts"
 

@@ -421,7 +421,7 @@ export interface QuestionAsk {
   idle?: true
   step?: Step
   handoff?: { url: string; label: string; expiresAt: number }
-  answer?: { text: Words; by: string; at: number }
+  answer?: { text: Words; by: string; at: number } & ({ shownIn: "card" } | { shownIn: "feed"; seq: number })
   closed?: { by: string; at: number; why?: Words }
   askedOf?: string[]
 }
