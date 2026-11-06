@@ -13,7 +13,6 @@ import { railItems, type DropTarget } from "~/shell/rail-items"
 
 const RailMenu = later(() => import("~/shell/rail-menu").then((m) => m.default))
 const FolderTile = later(() => import("~/shell/rail-folder").then((m) => m.default))
-const RailMods = later(() => import("~/shell/rail-mods").then((m) => m.default))
 
 const DRAG = "application/x-kiwi-channel"
 
@@ -140,11 +139,6 @@ export function Rail() {
         </li>
       </ul>
       <div className="rail-foot">
-        {modsServed() && (
-          <Suspense fallback={null}>
-            <RailMods />
-          </Suspense>
-        )}
         <button
           type="button"
           className={cx("rail-gear", settings && "is-on")}

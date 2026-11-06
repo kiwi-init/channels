@@ -166,6 +166,7 @@ img.mod-icon {
 
 .rail-mods {
   position: relative;
+  order: -1;
 }
 
 .rail-mods-dot {

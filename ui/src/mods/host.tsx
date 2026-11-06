@@ -41,6 +41,7 @@ const MOD_SIDES: typeof SIDES_EVENT = "kiwi-mod-sides"
 
 const ModSides = lazy(() => import("~/mods/side").then((m) => ({ default: m.ModSides })))
 const ModAsk = lazy(() => import("~/mods/ask").then((m) => ({ default: m.ModAsk })))
+const RailMods = lazy(() => import("~/shell/rail-mods"))
 
 const sidesAnchor = (): HTMLElement | null => document.querySelector<HTMLElement>(".side .mod-sides")
 
@@ -479,6 +480,11 @@ export function ModsLayer() {
   const layer = useRef<HTMLDivElement>(null)
   const { go, nav } = useApp()
   const [sides, setSides] = useState(sidesAnchor)
+  const [foot, setFoot] = useState(() => document.querySelector(".rail-foot"))
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setFoot(document.querySelector(".rail-foot")))
+    return () => cancelAnimationFrame(id)
+  }, [])
   useModsVersion()
   useEffect(() => {
     app = { go, panel: null }
@@ -550,6 +556,13 @@ export function ModsLayer() {
   return (
     <>
       <div ref={layer} className="mods-layer" style={{ display: "contents" }} />
+      {foot &&
+        createPortal(
+          <Suspense fallback={null}>
+            <RailMods />
+          </Suspense>,
+          foot
+        )}
       {askWaiting() && (
         <Suspense fallback={null}>
           <ModAsk />
