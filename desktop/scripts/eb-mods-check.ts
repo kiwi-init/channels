@@ -68,7 +68,11 @@ setInterval(() => {
 
 function writeMod(version: number): void {
   mkdirSync(folder, { recursive: true });
-  writeFileSync(join(folder, "mod.json"), JSON.stringify({ name: "probe-mod", version: `1.0.${version}`, shell: "^3.3", needs: ["panel", "sidebar", "command", "message-action", "net:example.com"] }));
+  writeFileSync(
+    join(folder, "mod.json"),
+    JSON.stringify({ name: "probe-mod", version: `1.0.${version}`, shell: "^3.3", needs: ["panel", "sidebar", "command", "message-action", "net:example.com"], icon: "icon.svg" }),
+  );
+  writeFileSync(join(folder, "icon.svg"), ICON);
   writeFileSync(
     join(folder, "index.tsx"),
     `import { useState } from "react"
@@ -198,6 +202,8 @@ async function howHeard(d: Driver, why: string): Promise<void> {
 }
 
 const MESSAGE_LINK = "https://example.com/?message-link";
+const ICON_RAN = `top.__iconRan = 1; parent.postMessage({ kiwiProbe: { iconRan: true } }, "*")`;
+const ICON = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" onload='${ICON_RAN}'><script>${ICON_RAN}</script><rect width="64" height="64" rx="14" fill="#9188c4"/></svg>`;
 const CRASH = "crash-mod fails on purpose";
 
 function writeCrashMod(): void {
@@ -485,6 +491,29 @@ try {
   await d.main("activate").catch(() => null);
   await later(1_000);
   await shot("settings-mods");
+  const icon = await until("probe-mod's icon in Settings → Mods", 15_000, () =>
+    d
+      .evaluate(
+        () => {
+          const img = document.querySelector<HTMLImageElement>(".set-main img.mod-icon");
+          if (!img?.complete || img.naturalWidth === 0) return null;
+          return {
+            blob: img.src.startsWith("blob:"),
+            inline: document.querySelectorAll(".set-main svg script, .set-main svg[onload]").length,
+            ran: (window as unknown as { __iconRan?: unknown }).__iconRan ?? null,
+          };
+        },
+        null,
+        2_000,
+      )
+      .catch(() => null),
+  ).catch(() => null);
+  console.log(`probe-mod's icon: ${JSON.stringify(icon)}`);
+  check(!!icon?.blob && icon.inline === 0 && icon.ran === null && !(await heard(d)).some((m) => m["iconRan"]), "a mod's SVG icon shows as an image from a blob, and its script and onload never run");
+  await step("probe-mod's details", 10_000, () => d.evaluate(clickText, { selector: ".set-main .mod-open", text: "probe-mod" }, 2_000));
+  await step("its details page says what it may do", 10_000, () => d.evaluate(() => (document.querySelector(".set-main")?.textContent ?? "").includes("What it may do"), null, 2_000));
+  await later(500);
+  await shot("settings-mod-details");
   d.close();
   await stop(app);
   writeFileSync(join(root, ".kiwi", "mods", ".safe-mode"), "");

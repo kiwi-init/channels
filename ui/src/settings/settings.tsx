@@ -29,15 +29,16 @@ export function Settings() {
   const navRef = useGlide<HTMLElement>(".side-row.is-on")
   const { nav, go } = useApp()
   const file = useCommandTable().file
+  const open = nav.page === "settings" && nav.section === "mods" && !!nav.mod
   useSideways(navRef, nav.section)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape" || e.defaultPrevented || document.querySelector("dialog[open]")) return
-      go({ to: "back" })
+      go(open ? { to: "settings", section: "mods" } : { to: "back" })
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
-  }, [go])
+  }, [go, open])
 
   return (
     <div className="set">
@@ -66,7 +67,7 @@ export function Settings() {
         <SideCards />
       </nav>
       <main className="set-main">
-        <div className="set-body" key={nav.section}>
+        <div className="set-body" key={nav.mod ? `mods/${nav.mod}` : nav.section}>
           <Current section={nav.section} />
         </div>
       </main>

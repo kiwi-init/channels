@@ -171,6 +171,70 @@ describe("the app's mods", () => {
     expect(config("[kiwi]\n\tsource = first/one\n[kiwi]\n\tsource = last/one\n")).toBe("last/one");
   });
 
+  test("a mod's icon reaches the page as bytes with a type the app sets, named by a hash in its view, even before it's approved", async () => {
+    const { host, write } = setup();
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8" onload="top.ran=1"><script>top.ran=2</script><rect width="8" height="8"/></svg>`;
+    write("linear", { ...linear, "mod.json": JSON.stringify({ ...JSON.parse(linear["mod.json"]), icon: "art/icon.svg" }), "art/icon.svg": svg });
+    await host.start();
+    const [view] = host.list();
+    expect(view).toMatchObject({ state: "asks", icon: expect.stringMatching(/^[0-9a-f]{16}$/) });
+    const icon = host.icon("linear");
+    expect(icon?.type).toBe("image/svg+xml");
+    expect(Buffer.from(icon?.data ?? "", "base64").toString("utf8")).toBe(svg);
+    write("linear", { "art/icon.svg": svg.replace("8 8", "9 9") });
+    await host.rescan();
+    expect(host.list()[0]?.icon).not.toBe(view?.icon);
+    expect(host.icon("nope")).toBeNull();
+  });
+
+  test("an icon that's missing, isn't the image it names or links out of the mod's folder is left out, and its details say why", async () => {
+    const { root, host, write } = setup();
+    writeFileSync(join(root, "secret.svg"), "<svg/>");
+    const named = (icon: string) => JSON.stringify({ ...JSON.parse(linear["mod.json"]), icon });
+    write("gone", { "mod.json": named("icon.svg").replace("linear", "gone"), "index.tsx": "" });
+    write("fake", { "mod.json": named("icon.png").replace("linear", "fake"), "index.tsx": "", "icon.png": "<svg/>" });
+    write("out", { "mod.json": named("icon.svg").replace("linear", "out"), "index.tsx": "" });
+    symlinkSync(join(root, "secret.svg"), join(root, ".kiwi", "mods", "out", "icon.svg"));
+    await host.start();
+    expect(host.list().map((m) => [m.name, m.icon])).toEqual([
+      ["fake", undefined],
+      ["gone", undefined],
+      ["out", undefined],
+    ]);
+    expect(host.icon("out")).toBeNull();
+    expect(host.details("gone")?.iconWhy).toBe("its icon icon.svg isn't in its folder");
+    expect(host.details("fake")?.iconWhy).toBe("its icon icon.png isn't a PNG");
+    expect(host.details("out")?.iconWhy).toBe("its icon icon.svg links out of its folder");
+  });
+
+  test("a mod's details: its author, where it came from at which commit, when it was added and changed, its size and its README", async () => {
+    const { folder, host, write } = setup();
+    const commit = "0123456789abcdef0123456789abcdef01234567";
+    write("linear", {
+      ...linear,
+      "mod.json": JSON.stringify({ ...JSON.parse(linear["mod.json"]), author: "Ana Lima" }),
+      "README.md": "# Linear\n\nYour issues beside the chat.\n",
+      ".git/config": "[kiwi]\n\tsource = github.com/ana/linear\n\tadded = 2026-11-01T10:00:00.000Z\n",
+      ".git/HEAD": `${commit}\n`,
+    });
+    write("notes", {
+      "mod.json": JSON.stringify({ name: "notes", version: "0.1.0", shell: "^3.3" }),
+      "index.tsx": "",
+      readme: "plain words",
+      ".git/HEAD": "ref: refs/heads/main\n",
+      ".git/packed-refs": `# pack-refs\n${commit} refs/heads/main\n`,
+    });
+    await host.start();
+    const d = host.details("linear");
+    expect(d).toMatchObject({ name: "linear", version: "1.0.0", author: "Ana Lima", source: "github.com/ana/linear", commit, installed: Date.parse("2026-11-01T10:00:00.000Z"), iconWhy: null });
+    expect(d?.readme).toBe("# Linear\n\nYour issues beside the chat.\n");
+    const files = ["mod.json", "index.tsx", "README.md", ".git/config", ".git/HEAD"].map((f) => statSync(join(folder, "linear", f)));
+    expect(d?.bytes).toBe(files.reduce((n, f) => n + f.size, 0));
+    expect(d?.updated).toBe(Math.round(Math.max(...files.slice(0, 3).map((f) => f.mtimeMs))));
+    expect(host.details("notes")).toMatchObject({ author: null, source: "local", commit, readme: "plain words" });
+    expect(host.details("nope")).toBeNull();
+  });
+
   test("a mod kiwi mod add copied out of a repo of many takes its source from .sources.json, and a kiwi mod dev link is local", () => {
     const mods = mkdtempSync(join(tmpdir(), "kiwi-mod-copies-"));
     roots.push(mods);

@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { addMod, devRound, git, type Git, listMods, ModError, modsDir, nudgeApp, parseSource, readManifest, removeMod, startDev, updateMods } from "../src/mods.ts";
 import { bundleMod } from "@kiwi/core/node/mod-bundle.ts";
+import { readModIcon } from "@kiwi/core/node/mod-icon.ts";
 import { kiwiCmd } from "./owner.ts";
 
 setDefaultTimeout(60_000);
@@ -71,6 +72,10 @@ describe("a mod's source", () => {
     expect(why({ ...LINEAR, name: "chat" })).toBe('"chat" is a name Channels keeps for its own commands: pick another');
     expect(why({ ...LINEAR, needs: ["camera"] })).toBe('it asks for "camera", which isn\'t a capability');
     expect(why({ ...LINEAR, shell: "soon" })).toBe("mod.json's shell isn't a version range, like ^3.3");
+    expect(readManifest(JSON.stringify({ ...LINEAR, icon: "art/Icon.PNG", author: " Ana Lima " }))).toMatchObject({ icon: "art/Icon.PNG", author: "Ana Lima" });
+    for (const icon of ["../icon.svg", "/etc/icon.svg", "icon.gif", ".hidden/icon.svg", "art/../icon.png", "icon.svg/", 7])
+      expect(why({ ...LINEAR, icon })).toBe("mod.json's icon must be an .svg or .png file in the mod's folder, like icon.svg");
+    for (const author of ["", "  ", "a".repeat(101), "Ana\nLima", 3]) expect(why({ ...LINEAR, author })).toBe("mod.json's author must be a name of up to 100 characters on one line");
   });
 });
 
@@ -85,6 +90,7 @@ describe("kiwi mod add, list, update and remove", () => {
     const at = join(modsDir(home), "linear-panel");
     expect(sh(at, "rev-parse", "HEAD")).toBe(head);
     expect(sh(at, "rev-parse", "--abbrev-ref", "HEAD")).toBe("HEAD");
+    expect(Math.abs(Date.parse(sh(at, "config", "kiwi.added")) - Date.now())).toBeLessThan(60_000);
     expect(() => addMod(home, src)).toThrow(`a mod named linear-panel is already in ${modsDir(home)}`);
     expect(readdirSync(modsDir(home))).toEqual(["linear-panel"]);
   }, 60_000);
@@ -236,6 +242,8 @@ describe("one mod from a repo of many (T6870)", () => {
 
     expect(addMod(home, "github.com/kiwi-init/mods/anatomy", run).commit).toBe(first);
     expect(readdirSync(join(home, "mods", "anatomy")).sort()).toEqual(["index.tsx", "mod.json"]);
+    const added = (JSON.parse(readFileSync(join(home, "mods", ".sources.json"), "utf8")) as Record<string, { added: string }>)["anatomy"]?.added ?? "";
+    expect(Math.abs(Date.parse(added) - Date.now())).toBeLessThan(60_000);
     expect(existsSync(join(home, "mods", "other"))).toBe(false);
     expect(listMods(home, run)).toEqual([
       { name: "anatomy", version: "0.1.0", needs: [], source: "github.com/kiwi-init/mods/anatomy", commit: first.slice(0, 7), local: false, link: null, changed: false, problem: null },
@@ -272,11 +280,29 @@ describe("kiwi mod dev", () => {
     const home = scratch("dev");
     const made = startDev(home, "standup-notes", scratch("cwd"));
     expect(made).toEqual({ at: join(modsDir(home), "standup-notes"), dir: join(modsDir(home), "standup-notes"), how: "created" });
-    expect(JSON.parse(readFileSync(join(made.dir, "mod.json"), "utf8"))).toEqual({ name: "standup-notes", version: "0.1.0", shell: "^3.6", needs: ["panel"] });
+    expect(JSON.parse(readFileSync(join(made.dir, "mod.json"), "utf8"))).toEqual({ name: "standup-notes", version: "0.1.0", shell: "^3.6", needs: ["panel"], icon: "icon.svg" });
+    expect(readModIcon(made.dir, "icon.svg")).toMatchObject({ ok: true, type: "image/svg+xml" });
     expect(readFileSync(join(made.dir, "index.tsx"), "utf8")).toContain('panel({ title: "Standup Notes", render: View })');
     const round = await devRound(made.dir, "standup-notes");
     expect(round.ok && round.manifest.needs).toEqual(["panel"]);
+    expect(round.ok && round.icon).toBeNull();
     expect(startDev(home, "standup-notes", scratch("cwd")).how).toBe("opened");
+  });
+
+  test("an icon that isn't the image it names, or is over 64 KB, still builds and says why it won't show", async () => {
+    const home = scratch("dev-icon");
+    const made = startDev(home, "standup-notes", scratch("cwd"));
+    const icon = async (file: string, bytes: string | Uint8Array) => {
+      writeFileSync(join(made.dir, "mod.json"), JSON.stringify({ name: "standup-notes", version: "0.1.0", shell: "^3.6", needs: ["panel"], icon: file }));
+      writeFileSync(join(made.dir, file), bytes);
+      const round = await devRound(made.dir, "standup-notes");
+      return round.ok ? round.icon : `failed: ${round.why}`;
+    };
+    expect(await icon("icon.png", "<svg xmlns='http://www.w3.org/2000/svg'/>")).toBe("its icon icon.png isn't a PNG");
+    expect(await icon("logo.svg", "<html><script>alert(1)</script></html>")).toBe("its icon logo.svg isn't an SVG");
+    expect(await icon("big.svg", `<svg xmlns="http://www.w3.org/2000/svg">${" ".repeat(64 * 1024)}</svg>`)).toBe("its icon big.svg is over 64 KB");
+    expect(await icon("ok.png", new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0]))).toBeNull();
+    expect(await icon("xml.svg", '<?xml version="1.0"?>\n<!-- drawn by hand -->\n<!DOCTYPE svg>\n<svg viewBox="0 0 1 1"/>')).toBeNull();
   });
 
   test("the starter uses only what the frame's @kiwi/mod offers, and opens a panel that renders its title", async () => {
@@ -377,7 +403,7 @@ describe("the kiwi mod command", () => {
       const dir = join(home, "mods", "standup-notes");
       await until("built standup-notes 0.1.0");
       await until("it asks for panel; Channels shows any it doesn't have for you to approve");
-      expect(seen).toContain(`created ${dir} with mod.json and index.tsx`);
+      expect(seen).toContain(`created ${dir} with mod.json, index.tsx and icon.svg`);
       writeFileSync(join(dir, "index.tsx"), readFileSync(join(dir, "index.tsx"), "utf8").replace("Pressed", "Clicked"));
       await until("rebuilt standup-notes 0.1.0");
       writeFileSync(join(dir, "mod.json"), JSON.stringify({ name: "standup-notes", version: "0.2.0", shell: "^3.6", needs: ["panel", "command"] }));

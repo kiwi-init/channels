@@ -1,5 +1,6 @@
 import { isAppPrefix } from "@kiwi/core/mod-names.ts";
 import { bundleMod } from "@kiwi/core/node/mod-bundle.ts";
+import { readModIcon } from "@kiwi/core/node/mod-icon.ts";
 import { checkManifest, type ModManifest } from "@kiwi/core/node/mod-manifest.ts";
 import { execFileSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
@@ -43,6 +44,7 @@ interface Copy {
   ref: string | null;
   commit: string;
   hash: string;
+  added?: string;
 }
 
 const COPIES = ".sources.json";
@@ -217,10 +219,11 @@ export function addMod(home: string, raw: string, run: Git = git): { manifest: M
     if (existsSync(at)) throw new ModError(`a mod named ${manifest.name} is already in ${dir}: kiwi mod update ${manifest.name}, or kiwi mod remove ${manifest.name} first`);
     if (source.path) {
       placeCopy(root, at);
-      keepCopy(home, manifest.name, { source: source.shown, url: source.url, path: source.path, ref: source.ref, commit, hash: folderHash(at) });
+      keepCopy(home, manifest.name, { source: source.shown, url: source.url, path: source.path, ref: source.ref, commit, hash: folderHash(at), added: new Date().toISOString() });
       return { manifest, commit, source };
     }
     run(["config", "kiwi.source", source.shown], tmp);
+    run(["config", "kiwi.added", new Date().toISOString()], tmp);
     if (source.ref) run(["config", "kiwi.ref", source.ref], tmp);
     renameSync(tmp, at);
     return { manifest, commit, source };
@@ -440,9 +443,18 @@ const titleOf = (name: string): string =>
     .map((w) => w[0]!.toUpperCase() + w.slice(1))
     .join(" ");
 
+const STARTER_ICON = [
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">',
+  '  <rect width="64" height="64" rx="14" fill="#2f6fe4"/>',
+  '  <path d="M20 22h24M20 32h24M20 42h14" stroke="#fff" stroke-width="5" stroke-linecap="round"/>',
+  "</svg>",
+  "",
+].join("\n");
+
 function starter(dir: string, name: string): void {
   const title = titleOf(name);
-  writeFileSync(join(dir, "mod.json"), `${JSON.stringify({ name, version: "0.1.0", shell: STARTER_SHELL, needs: ["panel"] }, null, 2)}\n`);
+  writeFileSync(join(dir, "mod.json"), `${JSON.stringify({ name, version: "0.1.0", shell: STARTER_SHELL, needs: ["panel"], icon: "icon.svg" }, null, 2)}\n`);
+  writeFileSync(join(dir, "icon.svg"), STARTER_ICON);
   writeFileSync(
     join(dir, "index.tsx"),
     [
@@ -508,7 +520,7 @@ export function startDev(home: string, name: string, cwd: string): DevStart {
   return { at, dir: at, how: "created" };
 }
 
-export type DevRound = { ok: true; manifest: ModManifest; hash: string; bytes: number } | { ok: false; why: string };
+export type DevRound = { ok: true; manifest: ModManifest; hash: string; bytes: number; icon: string | null } | { ok: false; why: string };
 
 export async function devRound(dir: string, name: string): Promise<DevRound> {
   let manifest: ModManifest;
@@ -518,7 +530,9 @@ export async function devRound(dir: string, name: string): Promise<DevRound> {
     return { ok: false, why: (e as Error).message };
   }
   const built = await bundleMod(dir);
-  return built.ok ? { ok: true, manifest, hash: built.hash, bytes: built.code.length } : { ok: false, why: built.why };
+  if (!built.ok) return { ok: false, why: built.why };
+  const art = manifest.icon ? readModIcon(dir, manifest.icon) : null;
+  return { ok: true, manifest, hash: built.hash, bytes: built.code.length, icon: art && !art.ok ? art.why : null };
 }
 
 export function nudgeApp(at: string): void {
