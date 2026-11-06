@@ -396,7 +396,7 @@ describe("the kiwi mod command", () => {
       await until("built standup-notes 0.1.0");
       await until("it asks for panel; Channels shows any it doesn't have for you to approve");
       expect(seen).toContain(`created ${dir} with mod.json and index.tsx`);
-      writeFileSync(join(dir, "index.tsx"), readFileSync(join(dir, "index.tsx"), "utf8").replace("Pressed", "Clicked"));
+      writeFileSync(join(dir, "index.tsx"), readFileSync(join(dir, "index.tsx"), "utf8").replace("Say hi", "Say hello"));
       await until("rebuilt standup-notes 0.1.0");
       writeFileSync(join(dir, "mod.json"), JSON.stringify({ name: "standup-notes", version: "0.2.0", shell: "^3.6", needs: ["panel", "command"] }));
       await until("it now asks for panel, command");
