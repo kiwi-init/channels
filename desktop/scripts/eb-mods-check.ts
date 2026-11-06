@@ -770,9 +770,15 @@ try {
     return m?.version === "1.1.0" ? m : null;
   }).catch(() => null);
   check(updated?.state === "asks", "Update takes the new version from the page, and a mod that asks for more waits for the person");
-  await step("notes-mod's switch, on", 10_000, () => d.evaluate(inRow, { mod: "notes-mod", control: "Run notes-mod" }, 2_000));
+  const askedMore = await until("notes-mod's ask, by itself, after the update", 15_000, () =>
+    d.evaluate(() => ((document.querySelector('dialog[open][aria-label="notes-mod asks to run"]')?.textContent ?? "").includes("Talk to example.com · new") ? true : null), null, 2_000),
+  ).catch(() => null);
+  check(!!askedMore, "after an update that asks for more, its ask comes by itself and marks what's new");
+  await later(300);
+  await shot("mod-asks-more");
+  await step("Allow, in its ask", 10_000, () => d.evaluate(clickText, { selector: "dialog[open] .modal-foot button", text: "Allow" }, 2_000));
   const allowed = await until("notes-mod on", 15_000, async () => ((await notes())?.state === "on" ? true : null)).catch(() => null);
-  check(!!allowed, "its switch allows what it now asks for and turns it on");
+  check(!!allowed, "Allow turns it on with what it now asks for");
   await step("notes-mod's switch, off", 10_000, () => d.evaluate(inRow, { mod: "notes-mod", control: "Run notes-mod" }, 2_000));
   const off = await until("notes-mod off", 15_000, async () => ((await notes())?.off === "you" ? true : null)).catch(() => null);
   check(!!off, "its switch turns it off again");
