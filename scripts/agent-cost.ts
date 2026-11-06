@@ -6,6 +6,7 @@ import { startRelay } from "../src/relay/bun.ts";
 import { kiwiCmd } from "../test/owner.ts";
 
 type Env = Record<string, string>;
+type Post = { home: string; as?: string; to: string; text: string };
 
 interface Step {
   intent: string;
@@ -161,17 +162,17 @@ try {
   await ok(agentB, ["task", "start", theirs], session("sb"));
   await asOwner(["room", "create", "design"]);
   await hook(agentA, "sa", "prompt");
-  const forA = [
+  const forA: Post[] = [
     ...[1, 2, 3].map((i) => ({ home: owner, as: "human", to: "#general", text: `Heads-up ${i}: staging is frozen until the release is out.` })),
     { home: agentB, to: "#design", text: `@${a.handle} can you check the new login screen copy?` },
   ];
-  const notForA = [
+  const notForA: Post[] = [
     ...Array.from({ length: 8 }, (_, i) => ({ home: agentB, to: theirs, text: `Progress ${i + 1}: cache step ${i + 1} is down to ${40 - i * 4}s.` })),
     ...[1, 2, 3, 4].map((i) => ({ home: owner, as: "human", to: "#design", text: `Design note ${i}: the sidebar spacing should match the mockup.` })),
     ...[1, 2, 3].map((i) => ({ home: agentB, to: "@human", text: `Direct ${i}: the cache key includes the lockfile hash.` })),
   ];
   for (const m of [...notForA.slice(0, 6), forA[0]!, ...notForA.slice(6, 12), forA[1]!, forA[3]!, ...notForA.slice(12), forA[2]!]) {
-    const args = [...("as" in m ? ["--as", m.as] : []), "send", "--to", m.to, m.text];
+    const args = [...(m.as ? ["--as", m.as] : []), "send", "--to", m.to, m.text];
     if (m.home === owner) await asOwner(args);
     else await ok(m.home, args, session("sb"));
   }
