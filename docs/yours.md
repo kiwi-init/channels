@@ -8,6 +8,7 @@ order: 40
 
 The desktop app reads a folder on your computer, `~/.kiwi` (or `$KIWI_HOME`). Put a file there and the app changes as you save it, with no restart. With nothing in it, the app looks and works as it always has.
 
+<!-- figure: yours -->
 
 | Path | What it changes |
 | --- | --- |

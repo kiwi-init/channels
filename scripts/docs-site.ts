@@ -366,14 +366,14 @@ function serve(port: number): void {
     async fetch(req) {
       const { pathname } = new URL(req.url);
       const preview = /^\/preview\/([a-z0-9-]+)$/.exec(pathname)?.[1];
+      if ((pathname === "/" || pathname.startsWith("/docs") || preview) && !extname(pathname)) {
+        const run = Bun.spawnSync(["bun", import.meta.path, "--draft"], { cwd: ROOT, stderr: "pipe" });
+        if (run.exitCode !== 0) return new Response(run.stderr.toString(), { status: 500 });
+      }
       if (preview) {
         const run = Bun.spawnSync(["bun", import.meta.path, "--draft", "--figure", preview], { cwd: ROOT, stderr: "pipe" });
         if (run.exitCode !== 0) return new Response(run.stderr.toString(), { status: 500 });
         return new Response(run.stdout.toString(), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "content-security-policy": CSP } });
-      }
-      if ((pathname === "/" || pathname.startsWith("/docs")) && !extname(pathname)) {
-        const run = Bun.spawnSync(["bun", import.meta.path, "--draft"], { cwd: ROOT, stderr: "pipe" });
-        if (run.exitCode !== 0) return new Response(run.stderr.toString(), { status: 500 });
       }
       const file = fileFor(pathname) ?? (extname(pathname) ? null : join(SITE, "index.html"));
       if (!file) return new Response("not found\n", { status: 404 });
