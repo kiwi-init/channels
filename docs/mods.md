@@ -16,7 +16,7 @@ Mods run in the desktop app, on a Mac and on Linux.
 kiwi mod dev standup-notes
 ```
 
-It creates `~/.kiwi/mods/standup-notes/` with a starter and an `icon.svg`, then rebuilds it on every save, and the app reloads it:
+It creates `~/.kiwi/mods/standup-notes/` with a starter and an `icon.svg`, then rebuilds it on every save, and the app reloads it. The folder also gets `kiwi-mod.d.ts`, a `tsconfig.json` and a `package.json`: run `bun install` once there and your editor autocompletes `@kiwi/mod`.
 
 ```json
 {
@@ -29,16 +29,24 @@ It creates `~/.kiwi/mods/standup-notes/` with a starter and an `icon.svg`, then 
 ```
 
 ```tsx
-import { useState } from "react"
-import { Button, panel, Row } from "@kiwi/mod"
+import { Action, Actions, List, panel, Toast } from "@kiwi/mod"
 
 function View() {
-  const [count, setCount] = useState(0)
   return (
-    <>
-      <Row title="Standup Notes" sub="Edit index.tsx and save: Channels reloads it." />
-      <Button onClick={() => setCount(count + 1)}>Pressed {count}</Button>
-    </>
+    <List searchBarPlaceholder="Search Standup Notes">
+      <List.Section title="Standup Notes">
+        <List.Item
+          title="Edit index.tsx and save"
+          subtitle="Channels reloads it"
+          icon="spec"
+          actions={
+            <Actions>
+              <Action title="Say hi" onAction={() => Toast.show({ title: "Hi from Standup Notes" })} />
+            </Actions>
+          }
+        />
+      </List.Section>
+    </List>
   )
 }
 
@@ -54,9 +62,10 @@ Open a channel, press ⌘K and pick **Standup Notes** under Mods. Run `kiwi mod 
 | `name` | Lowercase letters, digits and dashes, the same as the folder's name. `app`, `nav`, `view`, `chat` and `debug` are taken. |
 | `version` | A version like `1.0.0` |
 | `shell` | The app versions it works with, like `^3.6`. An app it doesn't fit leaves it off and says why. |
-| `needs` | What it asks you for: `panel`, `command`, `terminal`, `render:<kind>`, and `net:<host>` for each web host it talks to |
+| `needs` | What it asks you for: `panel`, `tab`, `command`, `terminal`, `github`, `render:<kind>`, and `net:<host>` for each web host it talks to |
 | `icon` | Optional: an `.svg` or `.png` in its folder, up to 64 KB. The app shows it as a picture, so an SVG's scripts never run. Without one, the mod gets its first letter. |
 | `author` | Optional: who made it, up to 100 characters |
+| `settings` | Optional: what the person fills in for it, like a token. See [Settings](#settings) |
 | `skills` | Optional: skills it gives every agent. See [Skills](#skills) |
 
 A `net:` host is exact: `net:api.linear.app` lets it reach `https://api.linear.app` and nothing else, not even another subdomain.
@@ -67,39 +76,97 @@ Everything comes from `@kiwi/mod`, plus React:
 
 | Import | What it does |
 | --- | --- |
-| `panel({ title, render })` | The mod's panel beside the chat. Its title shows in the panel's header and in ⌘K. |
+| `panel({ title, render })` | The mod's panel beside the chat. Its title shows in the panel's header and in ⌘K. `title(text)` changes it. |
+| `tab({ title, render, shown })` | A tab in the channel's header, after Agents. `showTab({ shown, alert, hint })` hides or shows it, puts a red dot on it, or sets its tooltip. |
+| `useGithub()` | With `github`: the open channel's repos, pull requests, issues and the tasks they link, read-only. No token reaches the mod. |
+| `show(target)`, `useShowing()`, `onShow(run)` | Open the mod's panel on `{ kind: "pr" \| "issue", repo, number }`; what it shows now; what the app asked it to show, like a task's pull request card |
+| `open({ kind: "task", id })` | With `github`: open a task, the channel's settings (`{ kind: "settings" }`) or the chat (`{ kind: "chat" }`) |
+| `copy(text, note)` | Copy text, with a short note that says so |
 | `command({ id, title, run })` | An action in ⌘K. Its id for `keys.json` is `<mod>.<id>`. |
 | `render(kind, draw)` | Draws one kind of attachment in chat. See [Drawing attachments](#drawing-attachments). |
 | `fetch(url, init)` | The mod's only way to the network, to the hosts you approved, over https |
 | `terminals()`, `onTerminals(fn)`, `focusTerminal(id)`, `markTerminal(id, mark)` | Your agents' tmux panes and Rex blocks. See [Terminals](#terminals) |
-| `Button`, `Row`, `Field`, `Icon` | The app's own button, list row, labelled field and icons |
+| `settings()` | Its settings' values, by id |
+| `useFetch(url, options)` | `fetch` as a hook: `{ data, error, isLoading, revalidate }`, JSON by default |
+| `List`, `List.Section`, `List.Item` | A searchable list: ↑ ↓ to move, ↵ for the first action, a right click for the rest. Items take a `subtitle`, an `icon`, `keywords` and `accessories` (text, a tag, a date) |
+| `Detail` | Markdown, drawn like a message |
+| `Form` and `Form.TextField`, `TextArea`, `Checkbox`, `Dropdown` | A form whose `onSubmit` gets the values by field id. ⌘↵ submits |
+| `Actions`, `Action`, `Action.OpenInBrowser`, `Action.CopyToClipboard` | What an item, a detail or a form can do. A `shortcut` like `"mod+shift+c"` runs it from the keyboard |
+| `Toast.show({ title, message, style })` | A note at the bottom of the app |
+| `storage` | `get`, `set`, `remove` and `keys`, kept on this computer for the mod, up to 1,000,000 characters |
+| `Button`, `Row`, `Field`, `Icon`, `Avatar`, `Dot`, `Count`, `Empty`, `Heading`, `Track`, `ago`, `cx` | The app's own pieces: button, list row, labelled field, icons, faces, a task's status dot, counts, empty states, headings, segmented controls and times |
 
-The frame has the app's colours and styles, and follows your theme as it changes. A mod can also import its own files: code, `.css`, and images (`.svg`, `.png`, `.jpg`, `.gif`, `.webp`).
+The frame has the app's colours and styles, and follows your theme as it changes. A web link in it opens in your browser. A mod can also import its own files: code, `.css`, and images (`.svg`, `.png`, `.jpg`, `.gif`, `.webp`). It can't use Bun macros (`with { type: "macro" }`): they would run on your computer as it builds, outside its frame, so a mod that imports one doesn't build.
 
 ```tsx
-import { useState } from "react"
-import { Button, command, fetch, panel, Row } from "@kiwi/mod"
+import { Action, Actions, List, panel, storage, Toast, useFetch } from "@kiwi/mod"
 
-let show: (s: string) => void = () => {}
+interface Issue {
+  id: string
+  title: string
+  url: string
+  state: string
+}
 
 function View() {
-  const [said, setSaid] = useState("nothing yet")
-  show = setSaid
+  const { data, isLoading } = useFetch<Issue[]>("https://api.example.com/issues")
   return (
-    <>
-      <Row title="Status" sub={said} />
-      <Button kind="primary" onClick={async () => setSaid(`example.com answered ${(await fetch("https://example.com/")).status}`)}>
-        Ask example.com
-      </Button>
-    </>
+    <List isLoading={isLoading} searchBarPlaceholder="Search issues">
+      {(data ?? []).map((issue) => (
+        <List.Item
+          key={issue.id}
+          title={issue.title}
+          subtitle={issue.id}
+          accessories={[{ tag: issue.state }]}
+          actions={
+            <Actions>
+              <Action.OpenInBrowser url={issue.url} />
+              <Action.CopyToClipboard content={issue.id} shortcut="mod+shift+c" />
+              <Action
+                title="Pin"
+                shortcut="mod+p"
+                onAction={async () => {
+                  await storage.set("pinned", issue.id)
+                  Toast.show({ title: "Pinned", message: issue.title })
+                }}
+              />
+            </Actions>
+          }
+        />
+      ))}
+    </List>
   )
 }
 
-panel({ title: "Status", render: View })
-command({ id: "hi", title: "Say hi from Status", run: () => show("hi from ⌘K") })
+panel({ title: "Issues", render: View })
 ```
 
-With `"needs": ["panel", "command", "net:example.com"]`, that's a whole mod.
+With `"needs": ["panel", "net:api.example.com"]`, that's a whole mod.
+
+## Settings
+
+A mod lists what it needs filled in, and its page in Settings → Mods draws the form:
+
+```json
+"settings": [
+  { "id": "token", "title": "Linear API key", "type": "secret", "required": true },
+  { "id": "team", "title": "Team", "type": "text" },
+  { "id": "show", "title": "Show", "type": "choice", "choices": ["Mine", "Everyone's"] },
+  { "id": "done", "title": "Include done issues", "type": "toggle" }
+]
+```
+
+- **Types:** `text`, `toggle`, `choice` (with its `choices`) and `secret`. Up to 20 settings.
+- **`required`:** until it's filled in, the mod stays off and its row says which setting it needs.
+- **Secrets** are sealed on this computer with the key your keychain holds, like your own keys. They're in no file under `~/.kiwi`, and the page never shows one again. On Linux with no keyring, Channels won't keep one and says why.
+- **`settings()`** gives the mod its own values: a string, `true` or `false`, or `null` when empty. No mod gets another's.
+- **A change restarts the mod** with the new values.
+- **Another source:** a mod with the same name from another source starts with none of the old values.
+- **Removing a mod** clears its settings and secrets.
+
+## The GitHub tab is a mod
+
+The channel's GitHub tab is the `github` mod from [kiwi-init/mods](https://github.com/kiwi-init/mods). The app installs it the first time it starts, already turned on, and never again: remove it and it stays removed. It needs no `git`: the app downloads the files it was built with from `raw.githubusercontent.com` at one pinned commit, and refuses them unless they hash to the folder it pinned. **Settings → Mods** says why, if it couldn't be installed, and the app tries again on its next start.
 
 ## Turning one on
 
@@ -134,10 +201,9 @@ Each mod runs in a sandboxed frame of its own origin:
 
 Some limits come with that:
 
-- **No storage:** a mod can't keep a setting or a token between reloads.
-- **Links don't open**, and images from the web don't load; fetch one and show it as a `blob:` URL.
-- **Each save restarts it**, so its state resets.
-- **No types for `@kiwi/mod` yet:** your editor may flag the import, but the mod builds.
+- **Links and copying wait for you:** a web link, an `Action.OpenInBrowser`, `window.open` or `copy()` works only while you're using the mod, like right after a click in it. Images from the web don't load; fetch one and show it as a `blob:` URL.
+- **Each save restarts it**, so state outside `storage` resets.
+- **Diagrams don't draw** in a mod's `Detail` yet.
 
 ## Drawing attachments
 

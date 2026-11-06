@@ -3,28 +3,43 @@ import * as ReactDOM from "react-dom"
 import * as ReactDOMClient from "react-dom/client"
 import * as jsxRuntime from "react/jsx-runtime"
 import type { ComponentType, ReactNode } from "react"
+import type * as Kit from "@kiwi/mod"
 
 import "~/styles/tokens.css"
 import "~/styles/base.css"
+import "~/styles/palette.css"
+import "~/styles/chat.css"
 import "~/mods/frame/frame.css"
+import { Avatar, Count, cx, Dot, Heading } from "~/kit/bits"
 import { Field } from "~/kit/form"
-import { Icon } from "~/kit/icons"
-import { MOD_PROTOCOL, type FromFrame, type ModFetchResult, type ModMessage, type ModTerminal, type ModTerminalMark, type Shown, type Surface, type TerminalOp, type ToFrame } from "~/mods/protocol"
-
-type Waiting = { resolve: (r: unknown) => void; reject: (e: Error) => void }
+import { Track } from "~/kit/glide"
+import { ago } from "~/kit/time"
+import { Icon } from "~/mods/frame/glyphs"
+import { Action, Actions, Detail, Empty, Form, List, useFetch } from "~/mods/frame/kit"
+import { copy, failed, modFetch, openUrl, post, replied, request, storage, Toast } from "~/mods/frame/wire"
+import {
+  MOD_PROTOCOL,
+  type ModGithub,
+  type ModMessage,
+  type ModOpen,
+  type ModTarget,
+  type ModTerminal,
+  type ModTerminalMark,
+  type Shown,
+  type Surface,
+  type TerminalOp,
+  type ToFrame,
+} from "~/mods/protocol"
 
 type Draw = (shown: Shown & { dark: boolean }) => ReactNode | void
 
-type Out = { [K in FromFrame["type"]]: Omit<Extract<FromFrame, { type: K }>, "kiwi"> }[FromFrame["type"]]
-
-const post = (m: Out): void => parent.postMessage({ kiwi: MOD_PROTOCOL, ...m }, "*")
+type Shaped = "github" | "useGithub" | "Avatar"
 
 let view: ComponentType | null = null
 let booted = false
 let surface: Surface = "main"
 let needs: ReadonlySet<string> = new Set()
-let nextId = 1
-const waiting = new Map<number, Waiting>()
+let values: Readonly<Record<string, string | boolean | null>> = Object.freeze({})
 const commands = new Map<string, { title: string; run: () => void | Promise<void> }>()
 const actions = new Map<string, { title: string; run: (message: ModMessage) => void | Promise<void> }>()
 const drawers = new Map<string, Draw>()
@@ -32,11 +47,21 @@ const placed = new Set<(list: ModTerminal[]) => void>()
 const box = document.getElementById("root") ?? document.body.appendChild(document.createElement("div"))
 const root = ReactDOMClient.createRoot(box)
 let sized: ResizeObserver | null = null
+let github: ModGithub | null = null
+let showing: ModTarget | null = null
+let tabState: { title: string; shown: boolean; alert: string | null; hint: string | null } | null = null
+const watchers = new Set<() => void>()
+const onShows = new Set<(t: ModTarget) => void>()
+const early: ModTarget[] = []
+const EARLY = 8
 
-function failed(e: unknown): void {
-  const said = String(e)
-  const stack = e instanceof Error ? (e.stack ?? "") : ""
-  post({ type: "error", message: stack.startsWith(said) ? stack : `${said}\n${stack}`.trim() })
+const told = (): void => {
+  for (const w of watchers) w()
+}
+
+const watch = (w: () => void): (() => void) => {
+  watchers.add(w)
+  return () => void watchers.delete(w)
 }
 
 function mount(): void {
@@ -52,30 +77,10 @@ function listed<T extends { title: string }>(list: Map<string, T>): { id: string
   return [...list].map(([id, c]) => ({ id, title: c.title }))
 }
 
-function bytes(b64: string): Uint8Array<ArrayBuffer> {
-  const raw = atob(b64)
-  const out = new Uint8Array(raw.length)
-  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i)
-  return out
-}
-
-async function modFetch(input: string | URL, init: { method?: string; headers?: HeadersInit; body?: string | null } = {}): Promise<Response> {
-  if (init.body !== undefined && init.body !== null && typeof init.body !== "string") throw new TypeError("a mod's fetch sends a string body")
-  const id = nextId++
-  const reply = new Promise<unknown>((resolve, reject) => waiting.set(id, { resolve, reject }))
-  post({ type: "fetch", id, url: String(input), init: { method: init.method ?? "GET", headers: Object.fromEntries(new Headers(init.headers).entries()), body: init.body ?? null } })
-  const r = (await reply) as ModFetchResult
-  const empty = r.status === 204 || r.status === 304 || (init.method ?? "GET").toUpperCase() === "HEAD"
-  return new Response(empty ? null : bytes(r.body), { status: r.status, statusText: r.statusText, headers: r.headers })
-}
-
 function terminal(call: string, op: TerminalOp): Promise<unknown> {
   asked("terminal", call)
   if (surface !== "main") return Promise.reject(new Error(`${call}() works in the mod's main frame, not its sidebar`))
-  const id = nextId++
-  const reply = new Promise<unknown>((resolve, reject) => waiting.set(id, { resolve, reject }))
-  post({ type: "terminal", id, ...op })
-  return reply
+  return request((id) => ({ type: "terminal", id, ...op }))
 }
 
 const terminals = async (): Promise<ModTerminal[]> => (await terminal("terminals", { op: "list" })) as ModTerminal[]
@@ -150,6 +155,49 @@ const api = {
     actions.set(String(id), { title: String(title), run })
     post({ type: "actions", list: listed(actions) })
   },
+  tab({ title, render, shown = true, alert = null, hint = null }: { title: string; render: ComponentType; shown?: boolean; alert?: string | null; hint?: string | null }): void {
+    asked("tab", "tab")
+    if (surface !== "tab") return
+    view = render
+    tabState = { title: String(title), shown: shown !== false, alert, hint }
+    post({ type: "tab", ...tabState })
+    mount()
+  },
+  showTab(next: { shown?: boolean; alert?: string | null; hint?: string | null }): void {
+    asked("tab", "showTab")
+    if (surface !== "tab" || !tabState) return
+    tabState = { ...tabState, ...next, shown: next.shown ?? tabState.shown }
+    post({ type: "tab", ...tabState })
+  },
+  github(): ModGithub | null {
+    asked("github", "github")
+    return github
+  },
+  useGithub(): ModGithub | null {
+    asked("github", "useGithub")
+    return React.useSyncExternalStore(watch, () => github)
+  },
+  open(to: ModOpen): void {
+    asked("github", "open")
+    post({ type: "open", to })
+  },
+  show(target: ModTarget): void {
+    asked("panel", "show")
+    post({ type: "show", target })
+  },
+  onShow(run: (t: ModTarget) => void): () => void {
+    onShows.add(run)
+    for (const t of early.splice(0)) run(t)
+    return () => void onShows.delete(run)
+  },
+  useShowing(): ModTarget | null {
+    return React.useSyncExternalStore(watch, () => showing)
+  },
+  title(title: string): void {
+    asked("panel", "title")
+    if (surface === "main" && view) post({ type: "panel", title: String(title) })
+  },
+  copy,
   render(kind: string, draw: Draw): void {
     asked(`render:${kind}`, "render")
     drawers.set(String(kind), draw)
@@ -159,10 +207,40 @@ const api = {
   onTerminals,
   focusTerminal,
   markTerminal,
+  settings: (): Readonly<Record<string, string | boolean | null>> => values,
+  Avatar,
+  Count,
+  Dot,
+  Heading,
+  Track,
+  ago,
+  cx,
   Button,
   Field,
   Row,
   Icon,
+  List,
+  Detail,
+  Form,
+  Action,
+  Actions,
+  Empty,
+  Toast,
+  useFetch,
+  storage,
+} satisfies { [K in keyof typeof Kit]: K extends Shaped ? unknown : (typeof Kit)[K] }
+
+try {
+  Object.defineProperty(window, "open", {
+    configurable: true,
+    value: (url?: string | URL) => {
+      if (url) openUrl(String(url))
+      return null
+    },
+  })
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async (text: string) => copy(text) } })
+} catch {
+  // A browser that won't let the frame swap these keeps its own: links and copying then do nothing in mods.
 }
 
 Object.assign(globalThis, {
@@ -189,6 +267,22 @@ function theme(vars: Record<string, string>, dark: boolean): void {
   document.documentElement.dataset["theme"] = dark ? "dark" : "light"
 }
 
+const linkOf = (e: MouseEvent): string | null => {
+  const a = e.target instanceof Element ? e.target.closest("a[href]") : null
+  const href = a instanceof HTMLAnchorElement ? a.href : null
+  return href && /^https?:/.test(href) ? href : null
+}
+
+const outside = (e: MouseEvent): void => {
+  if (e.defaultPrevented || (e.type === "auxclick" && e.button !== 1)) return
+  const url = linkOf(e)
+  if (!url) return
+  e.preventDefault()
+  openUrl(url)
+}
+
+addEventListener("click", outside)
+addEventListener("auxclick", outside)
 addEventListener("error", (e) => failed(e.error ?? e.message))
 addEventListener("unhandledrejection", (e) => failed(e.reason))
 addEventListener("message", (e) => {
@@ -200,6 +294,7 @@ addEventListener("message", (e) => {
     booted = true
     surface = m.surface
     needs = new Set(m.needs)
+    values = Object.freeze({ ...m.settings })
     document.documentElement.dataset["surface"] = surface
     theme(m.theme, m.dark)
     try {
@@ -210,7 +305,19 @@ addEventListener("message", (e) => {
       failed(err)
     }
   } else if (m.type === "theme") theme(m.theme, m.dark)
-  else if (m.type === "command") void Promise.resolve(commands.get(m.id)?.run()).catch(failed)
+  else if (m.type === "github") {
+    github = needs.has("github") ? m.data : null
+    told()
+  } else if (m.type === "showing") {
+    showing = m.target
+    told()
+  } else if (m.type === "show") {
+    if (onShows.size) for (const run of onShows) run(m.target)
+    else {
+      early.push(m.target)
+      early.splice(0, Math.max(0, early.length - EARLY))
+    }
+  } else if (m.type === "command") void Promise.resolve(commands.get(m.id)?.run()).catch(failed)
   else if (m.type === "action") void Promise.resolve(actions.get(m.id)?.run(m.message)).catch(failed)
   else if (m.type === "terminals")
     for (const listen of placed)
@@ -219,12 +326,7 @@ addEventListener("message", (e) => {
       } catch (err) {
         failed(err)
       }
-  else if (m.type === "reply") {
-    const w = waiting.get(m.id)
-    waiting.delete(m.id)
-    if (m.ok) w?.resolve(m.value)
-    else w?.reject(new Error(m.error))
-  }
+  else replied(m)
 })
 
 post({ type: "hello" })

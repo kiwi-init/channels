@@ -28,41 +28,45 @@ export async function bundleMod(folder: string): Promise<ModBundle> {
   const entry = ENTRIES.map((f) => path.join(dir, f)).find((f) => existsSync(f));
   if (!entry) return { ok: false, why: "it has no index.tsx" };
   let built: Awaited<ReturnType<typeof Bun.build>>;
-  try {
-    built = await Bun.build({
-      entrypoints: [entry],
-      target: "browser",
-      format: "iife",
-      minify: true,
-      define: { "process.env.NODE_ENV": '"production"' },
-      throw: false,
-      plugins: [
-        {
-          name: "kiwi-mod",
-          setup(b) {
-            b.onResolve({ filter: globalPattern }, (a) => ({ path: a.path, namespace: "kiwi-mod-global" }));
-            b.onLoad({ filter: /.*/, namespace: "kiwi-mod-global" }, (a) => ({ contents: `module.exports = globalThis.__kiwiMod[${JSON.stringify(a.path)}];`, loader: "js" }));
-            b.onLoad({ filter: /.*/, namespace: "file" }, (a) => {
-              const real = realpathSync(a.path);
-              if (!inside(real, dir)) throw new Error(`it imports ${a.path}, which is outside its folder`);
-              const ext = path.extname(real).toLowerCase();
-              const loader = CODE[ext];
-              if (loader) return { contents: readFileSync(real, "utf8"), loader };
-              if (ext === ".css") return { contents: `{const s=document.createElement("style");s.textContent=${JSON.stringify(readFileSync(real, "utf8"))};document.head.append(s)}`, loader: "js" };
-              const type = DATA[ext];
-              if (type) return { contents: `export default ${JSON.stringify(`data:${type};base64,${readFileSync(real).toString("base64")}`)};`, loader: "js" };
-              throw new Error(`it imports ${path.relative(dir, real)}, a kind of file mods can't import`);
-            });
-          },
+  const config: Parameters<typeof Bun.build>[0] & { macros: false } = {
+    entrypoints: [entry],
+    macros: false,
+    target: "browser",
+    format: "iife",
+    minify: true,
+    define: { "process.env.NODE_ENV": '"production"' },
+    throw: false,
+    plugins: [
+      {
+        name: "kiwi-mod",
+        setup(b) {
+          b.onResolve({ filter: globalPattern }, (a) => ({ path: a.path, namespace: "kiwi-mod-global" }));
+          b.onLoad({ filter: /.*/, namespace: "kiwi-mod-global" }, (a) => ({ contents: `module.exports = globalThis.__kiwiMod[${JSON.stringify(a.path)}];`, loader: "js" }));
+          b.onLoad({ filter: /.*/, namespace: "file" }, (a) => {
+            const real = realpathSync(a.path);
+            if (!inside(real, dir)) throw new Error(`it imports ${a.path}, which is outside its folder`);
+            const ext = path.extname(real).toLowerCase();
+            const loader = CODE[ext];
+            if (loader) return { contents: readFileSync(real, "utf8"), loader };
+            if (ext === ".css") return { contents: `{const s=document.createElement("style");s.textContent=${JSON.stringify(readFileSync(real, "utf8"))};document.head.append(s)}`, loader: "js" };
+            const type = DATA[ext];
+            if (type) return { contents: `export default ${JSON.stringify(`data:${type};base64,${readFileSync(real).toString("base64")}`)};`, loader: "js" };
+            throw new Error(`it imports ${path.relative(dir, real)}, a kind of file mods can't import`);
+          });
         },
-      ],
-    });
+      },
+    ],
+  };
+  try {
+    built = await Bun.build(config);
   } catch (e) {
     return { ok: false, why: e instanceof Error ? e.message : String(e) };
   }
   if (!built.success) {
     const first = built.logs.find((l) => l.level === "error") ?? built.logs[0];
-    return { ok: false, why: first ? String(first.message ?? first) : "it didn't build" };
+    const said = first ? String(first.message ?? first) : "";
+    if (said.includes("Macros are disabled")) return { ok: false, why: "it imports a macro, code that would run on this computer as it builds, which a mod may not" };
+    return { ok: false, why: said || "it didn't build" };
   }
   const out = built.outputs.find((o) => o.kind === "entry-point");
   if (!out) return { ok: false, why: "it didn't build" };

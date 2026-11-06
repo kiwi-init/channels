@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import type { ModView } from "../desktop/src/bridge.ts";
-import { modSource, modsHost, type ModsHostOptions } from "../desktop/src/mods-host.ts";
+import type { ModSettingView, ModView } from "../desktop/src/bridge.ts";
+import { memorySecrets, modSource, modsHost, type ModsHostOptions } from "../desktop/src/mods-host.ts";
+import { checkManifest } from "@kiwi/core/node/mod-manifest.ts";
 import { SAFE_FILE, SAFE_LOOP } from "../desktop/src/mods.ts";
 
 const roots: string[] = [];
@@ -233,6 +234,130 @@ describe("the app's mods", () => {
     expect(d?.updated).toBe(Math.round(Math.max(...files.slice(0, 3).map((f) => f.mtimeMs))));
     expect(host.details("notes")).toMatchObject({ author: null, source: "local", commit, readme: "plain words" });
     expect(host.details("nope")).toBeNull();
+  });
+
+  test("a required setting left empty keeps a mod off and names it; once filled, the mod runs and gets its values at boot", async () => {
+    const { host, write } = setup();
+    const token: ModSettingView = { id: "token", title: "API token", type: "secret", required: true };
+    const team: ModSettingView = { id: "team", title: "Team", type: "text" };
+    const depth: ModSettingView = { id: "depth", title: "Depth", type: "choice", choices: ["Mine", "All"], required: true };
+    const quiet: ModSettingView = { id: "quiet", title: "Quiet", type: "toggle" };
+    const settings = [token, team, depth, quiet];
+    write("linear", { ...linear, "mod.json": JSON.stringify({ ...JSON.parse(linear["mod.json"]), settings }) });
+    await host.start();
+    await host.approve("linear", ["panel", "net:api.linear.app"]);
+    expect(host.list()[0]).toMatchObject({ state: "off", off: "settings", settingsRev: 0, why: "It needs its API token setting: fill it in on its page in Settings → Mods." });
+    expect(host.bundle("linear")).toBeNull();
+    await host.setSetting("linear", "token", "lin_api_7f3a");
+    expect(host.list()[0]).toMatchObject({ state: "off", why: "It needs its Depth setting: fill it in on its page in Settings → Mods." });
+    await expect(host.setSetting("linear", "depth", "Some")).rejects.toThrow('Depth has no choice "Some"');
+    await expect(host.setSetting("linear", "quiet", "yes")).rejects.toThrow("Quiet takes on or off");
+    await expect(host.setSetting("linear", "team", "x".repeat(2_001))).rejects.toThrow("Team is too long");
+    await expect(host.setSetting("linear", "nope", "x")).rejects.toThrow("linear has no setting nope");
+    await host.setSetting("linear", "depth", "Mine");
+    expect(host.list()[0]).toMatchObject({ state: "on", settingsRev: 2 });
+    expect(host.bundle("linear")?.settings).toEqual({ token: "lin_api_7f3a", team: null, depth: "Mine", quiet: false });
+    await host.setSetting("linear", "quiet", true);
+    await host.setSetting("linear", "team", "Platform");
+    expect(host.bundle("linear")?.settings).toEqual({ token: "lin_api_7f3a", team: "Platform", depth: "Mine", quiet: true });
+    expect(host.details("linear")?.settings).toEqual([
+      { ...token, set: true },
+      { ...team, value: "Platform" },
+      { ...depth, value: "Mine" },
+      { ...quiet, value: true },
+    ]);
+    await host.setSetting("linear", "token", null);
+    expect(host.list()[0]).toMatchObject({ state: "off", off: "settings" });
+  });
+
+  test("a secret reaches only its own mod, is written to no file, outlasts a restart, and isn't handed to another mod that takes the same name", async () => {
+    const { root, folder, host, write } = setup();
+    const secrets = memorySecrets();
+    const named = (name: string) => ({
+      ...linear,
+      "mod.json": JSON.stringify({ ...JSON.parse(linear["mod.json"]), name, needs: [], settings: [{ id: "token", title: "Token", type: "secret", required: true }] }),
+    });
+    host.stop();
+    const first = modsHost({ folder, approvals: join(root, "data", "mods.json"), contract: "3.3.0", push: () => {}, secrets });
+    stops.push(() => first.stop());
+    write("alpha", named("alpha"));
+    write("beta", named("beta"));
+    await first.start();
+    const SECRET = "sk-only-alpha-91c2";
+    await first.setSetting("alpha", "token", SECRET);
+    await first.setSetting("beta", "token", "sk-beta");
+    expect(first.bundle("alpha")?.settings).toEqual({ token: SECRET });
+    expect(first.bundle("beta")?.settings).toEqual({ token: "sk-beta" });
+    const everyFile = (dir: string): string[] =>
+      readdirSync(dir, { recursive: true, withFileTypes: true })
+        .filter((d) => d.isFile())
+        .map((d) => join(d.parentPath, d.name));
+    expect(everyFile(root).filter((f) => readFileSync(f, "utf8").includes(SECRET))).toEqual([]);
+    first.stop();
+    const again = modsHost({ folder, approvals: join(root, "data", "mods.json"), contract: "3.3.0", push: () => {}, secrets });
+    stops.push(() => again.stop());
+    await again.start();
+    expect(again.bundle("alpha")?.settings).toEqual({ token: SECRET });
+    write("alpha", { ".git/config": "[kiwi]\n\tsource = github.com/someone/alpha\n" });
+    await again.rescan();
+    expect(again.list().find((m) => m.name === "alpha")).toMatchObject({ source: "github.com/someone/alpha", state: "off", off: "settings" });
+    expect(again.details("alpha")?.settings[0]?.set).toBe(false);
+  });
+
+  test("a removed mod takes its settings and secrets with it: added again, it starts with none", async () => {
+    const { root, folder, host, write } = setup();
+    const secrets = memorySecrets();
+    host.stop();
+    const h = modsHost({ folder, approvals: join(root, "data", "mods.json"), contract: "3.3.0", push: () => {}, secrets });
+    stops.push(() => h.stop());
+    const mod = {
+      ...linear,
+      "mod.json": JSON.stringify({
+        ...JSON.parse(linear["mod.json"]),
+        needs: [],
+        settings: [
+          { id: "token", title: "Token", type: "secret", required: true },
+          { id: "team", title: "Team", type: "text" },
+        ],
+      }),
+    };
+    write("linear", mod);
+    await h.start();
+    await h.setSetting("linear", "token", "lin_api_gone");
+    await h.setSetting("linear", "team", "Platform");
+    expect(h.bundle("linear")?.settings).toEqual({ token: "lin_api_gone", team: "Platform" });
+    rmSync(join(folder, "linear"), { recursive: true, force: true });
+    await h.forget("linear");
+    expect(readFileSync(join(root, "data", "mods.json"), "utf8")).not.toContain("Platform");
+    write("linear", mod);
+    await h.rescan();
+    expect(h.list()[0]).toMatchObject({ state: "off", off: "settings" });
+    expect(h.details("linear")?.settings.map((x) => x.set ?? x.value)).toEqual([false, null]);
+  });
+
+  test("mod.json's settings are checked: ids, titles, types and choices", () => {
+    const check = (settings: unknown) => {
+      const r = checkManifest({ name: "linear", version: "1.0.0", shell: "^3.3", settings }, "linear", null);
+      return r.ok ? r.manifest.settings : r.why;
+    };
+    expect(check([{ id: "token", title: " Token ", type: "secret", required: true }])).toEqual([{ id: "token", title: "Token", type: "secret", required: true }]);
+    expect(check([])).toBeUndefined();
+    expect(check("token")).toBe("mod.json's settings must be a list of up to 20");
+    expect(check(Array.from({ length: 21 }, (_, i) => ({ id: `s${i}`, title: "S", type: "text" })))).toBe("mod.json's settings must be a list of up to 20");
+    expect(check([{ id: "Token", title: "T", type: "text" }])).toBe("setting 1 in mod.json needs an id of lowercase letters, digits and dashes");
+    expect(
+      check([
+        { id: "a", title: "A", type: "text" },
+        { id: "a", title: "B", type: "text" },
+      ]),
+    ).toBe('mod.json lists the setting "a" twice');
+    expect(check([{ id: "a", title: "", type: "text" }])).toBe('the setting "a" needs a title of up to 80 characters');
+    expect(check([{ id: "a", title: "A", type: "password" }])).toBe('the setting "a" has to be text, toggle, choice or secret');
+    expect(check([{ id: "a", title: "A", type: "toggle", required: true }])).toBe('the setting "a" is a toggle, which can\'t be required');
+    expect(check([{ id: "a", title: "A", type: "choice", choices: [] }])).toBe('the setting "a" needs choices: a list of up to 30 different names');
+    expect(check([{ id: "a", title: "A", type: "choice", choices: ["x", "x"] }])).toBe('the setting "a" needs choices: a list of up to 30 different names');
+    expect(check([{ id: "a", title: "A", type: "text", choices: ["x"] }])).toBe('the setting "a" has choices, which only a choice takes');
+    expect(check([{ id: "a", title: "A", type: "text", required: "yes" }])).toBe('the setting "a" has a required that isn\'t true or false');
   });
 
   test("a mod kiwi mod add copied out of a repo of many takes its source from .sources.json, and a kiwi mod dev link is local", () => {

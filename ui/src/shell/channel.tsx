@@ -11,6 +11,7 @@ import { later } from "~/kit/later"
 import type { Channel } from "~/model"
 import { drawerNews } from "~/live/links"
 import { dropMessage, findWanted, useWantedMessage } from "~/live/open-message"
+import { shareGithub, useModTabs, useWantsGithub } from "~/mods/bus"
 import { openAsks } from "~/needs/open"
 import { sameWhere, useApp } from "~/nav"
 import { whereKey } from "~/places"
@@ -28,10 +29,8 @@ const Waiting = later(() => import("~/start/waiting").then((m) => m.Waiting))
 const SearchBox = later(() => import("~/chat/search-box").then((m) => m.SearchBox))
 const OlderView = later(() => import("~/chat/older-view").then((m) => m.OlderView))
 const Lanes = later(() => import("~/tasks/lanes").then((m) => m.Lanes))
-const GithubView = later(() => import("~/github/view").then((m) => m.GithubView))
 const SpecsView = later(() => import("~/specs/view").then((m) => m.SpecsView))
-const PrPanel = later(() => import("~/github/panel").then((m) => m.PrPanel))
-const IssuePanel = later(() => import("~/github/panel").then((m) => m.IssuePanel))
+const ModTab = later(() => import("~/mods/tab").then((m) => m.ModTab))
 const NeedsYou = later(() => import("~/needs/needs").then((m) => m.NeedsYou))
 const TaskPanel = later(() => import("~/panels/task").then((m) => m.TaskPanel))
 const ThreadPanel = later(() => import("~/panels/thread").then((m) => m.ThreadPanel))
@@ -117,6 +116,20 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   ])
   const sideKeys = useShownKeys("view.sidebar")
   const searchKeys = useShownKeys("chat.search")
+  const modTabs = useModTabs()
+  const wantsGithub = useWantsGithub()
+  const { repos, prs, issues, tasks: allTasks, github, people, former, nicknames } = channel
+  useEffect(() => {
+    if (!wantsGithub) return shareGithub(null)
+    let live = true
+    void import("~/mods/github-data").then(({ githubData }) => {
+      if (live) shareGithub(githubData({ repos, prs, issues, tasks: allTasks, github, people, former, nicknames }))
+    })
+    return () => {
+      live = false
+    }
+  }, [wantsGithub, repos, prs, issues, allTasks, github, people, former, nicknames])
+  useEffect(() => () => shareGithub(null), [])
 
   if (channel.waiting)
     return (
@@ -128,10 +141,6 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   const needs = openAsks(channel).length
   const tasks = openTasks(channel).length
   const agents = channel.people.some((p) => p.kind === "agent" && !p.left)
-  const github = channel.repos.length > 0 || !!channel.prs?.length || !!channel.issues?.length
-  const openPrs = channel.prs?.filter((p) => p.state === "open" || p.state === "draft") ?? []
-  const red = openPrs.some((p) => p.checks === "fail" || !!p.ticks?.failed.length)
-  const openIssues = channel.issues?.filter((i) => i.state === "open").length ?? 0
   const specs = channel.specs?.filter((s) => !s.result) ?? []
   const specsNeed = specs.filter((s) => s.canJudge && (s.stage === "draft" || s.stage === "delivered" || s.changed)).length
   const line = channel.loading ? [] : headerLine(channel, 0)
@@ -145,7 +154,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
           : `T${nav.where.task}`
 
   const news = drawerNews(channel)
-  const paged = tall && nav.tab !== "needs" && nav.tab !== "github"
+  const paged = tall && nav.tab !== "needs" && !nav.tab.startsWith("mod:")
 
   return (
     <div className={cx("chan", nav.panel && !paged && "has-panel", drawer && "is-drawer", hidden && "is-bare")}>
@@ -194,17 +203,12 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
               Agents
             </button>
           )}
-          {(github || nav.tab === "github") && (
-            <button
-              type="button"
-              aria-pressed={nav.tab === "github"}
-              onClick={() => go({ to: "tab", tab: "github" })}
-              title={red ? "An open pull request's checks failed" : `${openPrs.length} open pull requests, ${openIssues} open issues`}
-            >
-              GitHub
-              {red && <span className="tab-red" role="img" aria-label="checks failed" />}
+          {modTabs.map((t) => (
+            <button key={t.name} type="button" aria-pressed={nav.tab === `mod:${t.name}`} onClick={() => go({ to: "tab", tab: `mod:${t.name}` })} title={t.alert ?? t.hint ?? undefined}>
+              {t.title}
+              {t.alert && <span className="tab-red" role="img" aria-label={t.alert} />}
             </button>
-          )}
+          ))}
           {(needs > 0 || nav.tab === "needs") && (
             <button type="button" className="is-needs" aria-pressed={nav.tab === "needs"} onClick={() => go({ to: "tab", tab: "needs" })}>
               Needs you <Count n={needs} loud />
@@ -250,8 +254,8 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
               />
             ) : nav.tab === "agents" ? (
               <Lanes channel={channel} />
-            ) : nav.tab === "github" ? (
-              <GithubView channel={channel} />
+            ) : nav.tab.startsWith("mod:") ? (
+              <ModTab name={nav.tab.slice(4)} />
             ) : nav.tab === "specs" || nav.tab === "tasks" ? (
               <SpecsView channel={channel} />
             ) : nav.tab === "needs" ? (
@@ -300,12 +304,8 @@ function PanelView({ channel }: { channel: Channel }) {
           <ThreadPanel channel={channel} seq={nav.panel.seq} focus={nav.panel.focus} />
         ) : nav.panel.kind === "task" ? (
           <TaskPanel channel={channel} id={nav.panel.task} />
-        ) : nav.panel.kind === "pr" ? (
-          <PrPanel channel={channel} repo={nav.panel.repo} number={nav.panel.number} />
-        ) : nav.panel.kind === "mod" ? (
-          <ModPanel name={nav.panel.name} />
         ) : (
-          <IssuePanel channel={channel} repo={nav.panel.repo} number={nav.panel.number} />
+          <ModPanel name={nav.panel.name} />
         )}
       </Suspense>
     </Boundary>

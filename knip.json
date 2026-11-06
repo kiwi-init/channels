@@ -54,7 +54,18 @@
       "project": ["src/**/*.ts", "scripts/**/*.ts"]
     },
     "ui": {
-      "entry": ["src/chat/react-native.ts", "src/chat/no-elk.ts", "src/chat/doc/screen-selection.page.ts", "src/calm/meadow.page.ts", "src/mods/frame/runtime.tsx", "stubs/react-native/index.js", "src/**/*.test.{ts,tsx}"]
+      "entry": [
+        "src/chat/react-native.ts",
+        "src/chat/no-elk.ts",
+        "src/chat/doc/screen-selection.page.ts",
+        "src/calm/meadow.page.ts",
+        "src/mods/frame/runtime.tsx",
+        "src/mods/frame/no-mermaid.ts",
+        "src/mods/frame/outside.ts",
+        "stubs/react-native/index.js",
+        "src/**/*.test.{ts,tsx}"
+      ],
+      "ignoreDependencies": ["@kiwi/mod"]
     }
   }
 }

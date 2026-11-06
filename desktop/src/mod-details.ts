@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import type { ModDetails } from "./bridge.ts";
+import type { ModDetails, ModSettingView } from "./bridge.ts";
 
 const COPIES = ".sources.json";
 const README = /^readme(?:\.(?:md|markdown))?$/i;
@@ -148,6 +148,7 @@ export interface DetailsBase {
   source: string;
   author: string | null;
   iconWhy: string | null;
+  settings: ModSettingView[];
 }
 
 export function modDetails(dir: string, base: DetailsBase): ModDetails {

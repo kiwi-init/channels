@@ -1,7 +1,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 
 import { startLocalRelay } from "../../scripts/local-relay.ts";
 import { addMod } from "../../src/mods.ts";
@@ -52,6 +52,19 @@ terminals().then(
   );
 }
 
+const settingsFolder = join(root, ".kiwi", "mods", "settings-mod");
+const SECRET = `sk-settings-mod-${Math.random().toString(36).slice(2)}`;
+
+function writeSettingsMod(): void {
+  mkdirSync(settingsFolder, { recursive: true });
+  const settings = [
+    { id: "token", title: "Token", type: "secret", required: true },
+    { id: "mode", title: "Mode", type: "choice", choices: ["fast", "slow"] },
+  ];
+  writeFileSync(join(settingsFolder, "mod.json"), JSON.stringify({ name: "settings-mod", version: "1.0.0", shell: "^3.3", needs: [], settings }));
+  writeFileSync(join(settingsFolder, "index.tsx"), `import { settings } from "@kiwi/mod"\nparent.postMessage({ kiwiProbe: { settingsMod: settings() } }, "*")\n`);
+}
+
 function writeQuietMod(): void {
   mkdirSync(quietFolder, { recursive: true });
   writeFileSync(join(quietFolder, "mod.json"), JSON.stringify({ name: "quiet-mod", version: "1.0.0", shell: "^3.3", needs: [] }));
@@ -99,7 +112,7 @@ function writeMod(version: number): void {
   writeFileSync(
     join(folder, "index.tsx"),
     `import { useState } from "react"
-import { command, fetch as modFetch, messageAction, panel, sidebar, Button, Row } from "@kiwi/mod"
+import { command, fetch as modFetch, messageAction, panel, settings, sidebar, Button, Row } from "@kiwi/mod"
 
 const surface = document.documentElement.dataset["surface"]
 const say = (m: unknown) => parent.postMessage({ kiwiProbe: m }, "*")
@@ -134,6 +147,7 @@ async function probe() {
   const h = w.webkit?.messageHandlers
   const out: Record<string, unknown> = {
     version: ${version},
+    settings: settings(),
     origin: String(self.origin),
     kiwi: typeof w.kiwi,
     electrobunBridge: typeof w.__electrobunBunBridge,
@@ -166,6 +180,86 @@ async function probe() {
 }
 
 if (surface === "main") void probe()
+`,
+  );
+}
+
+const kitFolder = join(root, ".kiwi", "mods", "kit-mod");
+
+function writeKitMod(version: number): void {
+  mkdirSync(kitFolder, { recursive: true });
+  writeFileSync(join(kitFolder, "mod.json"), JSON.stringify({ name: "kit-mod", version: `1.0.${version}`, shell: "^3.3", needs: ["panel"] }));
+  writeFileSync(
+    join(kitFolder, "index.tsx"),
+    `import { useEffect, useState } from "react"
+import { Action, Actions, List, panel, storage, Toast } from "@kiwi/mod"
+
+const say = (m: Record<string, unknown>) => parent.postMessage({ kiwiProbe: { kit: true, ...m } }, "*")
+const input = () => document.querySelector<HTMLInputElement>(".palette-input")
+const rows = () => [...document.querySelectorAll(".palette-item .palette-label")].map((e) => e.firstChild?.textContent ?? "")
+const settle = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
+
+addEventListener("message", async (e) => {
+  const t = e.source === parent && e.data && typeof e.data.kitTest === "string" ? e.data.kitTest : null
+  const el = input()
+  if (!t || !el) return
+  if (t === "search") {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(el, String(e.data.q))
+    el.dispatchEvent(new Event("input", { bubbles: true }))
+  } else el.dispatchEvent(new KeyboardEvent("keydown", { key: t === "enter" ? "Enter" : "Escape", bubbles: true, cancelable: true }))
+  await settle()
+  say({ test: t, rows: rows() })
+})
+
+function View() {
+  const [visits, setVisits] = useState<number | null>(null)
+  useEffect(() => {
+    storage.get<number>("visits").then(
+      async (n) => {
+        const next = (n ?? 0) + 1
+        await storage.set("visits", next)
+        setVisits(next)
+        say({ visits: next, version: ${version} })
+      },
+      (e: unknown) => say({ storageFailed: String(e) }),
+    )
+  }, [])
+  return (
+    <List searchBarPlaceholder="Search the kit">
+      <List.Section title="Today">
+        <List.Item
+          title="Alpha release"
+          subtitle="KIT-1"
+          icon="tasks"
+          keywords={["first"]}
+          accessories={[{ tag: "open" }, { date: Date.now() - 3_600_000 }]}
+          actions={
+            <Actions>
+              <Action title="Pick Alpha" onAction={() => Toast.show({ title: "Picked Alpha" })} />
+              <Action.CopyToClipboard content="KIT-1" shortcut="mod+shift+c" />
+            </Actions>
+          }
+        />
+        <List.Item
+          title="Beta notes"
+          subtitle="KIT-2"
+          icon="spec"
+          accessories={[{ text: \`visit \${visits ?? "…"}\` }]}
+          actions={
+            <Actions>
+              <Action title="Pick Beta" onAction={() => Toast.show({ title: "Picked Beta", style: "success" })} />
+            </Actions>
+          }
+        />
+      </List.Section>
+      <List.Section title="Later">
+        <List.Item title="Gamma plan" subtitle="KIT-3" icon="github" accessories={[{ tag: "draft" }]} />
+      </List.Section>
+    </List>
+  )
+}
+
+panel({ title: "Kit mod", render: View })
 `,
   );
 }
@@ -450,8 +544,73 @@ function files(dir: string): string[] {
   if (!existsSync(dir)) return [];
   return readdirSync(dir).flatMap((n) => {
     const p = join(dir, n);
-    return lstatSync(p).isDirectory() ? files(p) : [p];
+    const s = lstatSync(p);
+    return s.isDirectory() ? files(p) : s.isFile() ? [p] : [];
   });
+}
+
+const holding = (secret: string): string[] => files(root).filter((f) => readFileSync(f).includes(secret));
+const TEST_STORE = "kiwi-eb-test-store.json";
+const outsideStore = (secret: string): string[] => holding(secret).filter((f) => basename(f) !== TEST_STORE);
+
+async function kitMod(d: Driver, palette: () => Promise<boolean>): Promise<void> {
+  writeKitMod(1);
+  const kit = async () => (await heard(d)).filter((m) => m["kit"] === true);
+  await until("Set up kit-mod in ⌘K", 30_000, async () => {
+    await palette();
+    await d.evaluate(fillIn, { selector: ".palette-input", value: "kit-mod" }, 2_000).catch(() => false);
+    return (await d.evaluate(clickText, { selector: ".palette-item", text: "Set up kit-mod" }, 2_000).catch(() => false)) ? true : null;
+  });
+  await step("Turn on the kit mod", 10_000, () => d.evaluate(clickText, { selector: ".panel button", text: "Turn on" }, 2_000));
+  const first = await until("the kit mod's first visit", 30_000, async () => (await kit()).find((m) => "visits" in m || "storageFailed" in m) ?? null).catch(() => null);
+  console.log(`the kit mod: ${JSON.stringify(first)}`);
+  check(first?.["visits"] === 1, "a mod built only from the kit runs and keeps a value in its own storage");
+  await step("the kit mod's panel title", 10_000, () => d.evaluate(clickText, { selector: ".panel .panel-title", text: "Kit mod" }, 2_000));
+  const was = await d.evaluate(() => document.documentElement.dataset["theme"] ?? null, null, 2_000);
+  for (const theme of ["light", "dark"]) {
+    await d.evaluate((t) => void (document.documentElement.dataset["theme"] = t), theme, 2_000);
+    await later(1_000);
+    await shot(`kit-mod-${theme}`);
+  }
+  await d.evaluate(
+    (t) => {
+      if (t === null) delete document.documentElement.dataset["theme"];
+      else document.documentElement.dataset["theme"] = t;
+      return true;
+    },
+    was,
+    2_000,
+  );
+  const ask = async (test: string, extra: Record<string, unknown> = {}): Promise<Said | null> => {
+    const before = (await kit()).filter((m) => m["test"] === test).length;
+    await d.evaluate(
+      (m) => {
+        const f = document.querySelector<HTMLIFrameElement>('iframe[title="kit-mod"]');
+        f?.contentWindow?.postMessage(m, "*");
+        return !!f;
+      },
+      { kitTest: test, ...extra },
+      2_000,
+    );
+    return until(`the kit mod's ${test}`, 10_000, async () => (await kit()).filter((m) => m["test"] === test)[before] ?? null).catch(() => null);
+  };
+  const all = (await ask("clear"))?.["rows"];
+  const searched = (await ask("search", { q: "beta" }))?.["rows"];
+  console.log(`the kit mod's list: ${JSON.stringify(all)}, and for "beta": ${JSON.stringify(searched)}`);
+  check(
+    JSON.stringify(all) === JSON.stringify(["Alpha release", "Beta notes", "Gamma plan"]) && JSON.stringify(searched) === JSON.stringify(["Beta notes"]),
+    "the kit's list shows its sections' items, and its search keeps only what matches",
+  );
+  await ask("enter");
+  const toast = await until("the kit mod's toast", 10_000, () =>
+    d.evaluate(() => [...document.querySelectorAll(".toasts .toast")].map((t) => t.textContent ?? "").find((t) => t.includes("kit-mod: Picked Beta")) ?? null, null, 2_000),
+  ).catch(() => null);
+  check(!!toast, "↵ runs the item's first action, and the mod's toast shows in the app with the mod's name");
+  check(JSON.stringify((await ask("clear"))?.["rows"]) === JSON.stringify(all), "Escape clears the kit list's search");
+  writeKitMod(2);
+  const again = await until("the kit mod's second visit", 30_000, async () => (await kit()).find((m) => m["version"] === 2) ?? null).catch(() => null);
+  console.log(`the kit mod, reloaded: ${JSON.stringify(again)}`);
+  check(again?.["visits"] === 2, "a kit mod's storage outlives a reload");
 }
 
 function stacks(why: string): void {
@@ -478,6 +637,7 @@ function stacks(why: string): void {
 writeMod(1);
 writeQuietMod();
 writeTerminalMod();
+writeSettingsMod();
 mkdirSync(join(root, "home"), { recursive: true });
 writeFileSync(TMUX_CONF, TMUX_BEFORE);
 let app = launch(exe, testEnv(root, join(root, "driver.sock"), RELAY, TERMINAL_ENV));
@@ -691,6 +851,25 @@ try {
     stacks("the mod didn't come back");
   }
   check(!!second, "a saved change reloads the mod");
+  const waiting = (await modsNow(d)).find((m) => m.name === "settings-mod");
+  console.log(`settings-mod before its secret: ${JSON.stringify(waiting)}`);
+  check(waiting?.state === "off" && waiting.off === "settings" && (waiting.why ?? "").includes("Token"), "a mod whose required setting is empty stays off and says which one");
+  const atRest = (await d.evaluate(() => (window as unknown as { kiwi: { keysAtRest(): Promise<unknown> } }).kiwi.keysAtRest(), null, 10_000)) as { sealed: boolean; why: string | null };
+  check(atRest.sealed, `the app's store is sealed, so a secret can be kept${atRest.why ? `: ${atRest.why}` : ""}`);
+  await d.evaluate((v) => (window as unknown as { kiwi: { setModSetting(n: string, i: string, v: string): Promise<unknown> } }).kiwi.setModSetting("settings-mod", "token", v), SECRET, 10_000);
+  const given = await until("settings-mod's settings", 30_000, async () => (await heard(d)).find((m) => m["settingsMod"]) ?? null).catch(() => null);
+  check((given?.["settingsMod"] as Record<string, unknown> | undefined)?.["token"] === SECRET, "once its secret is saved the mod starts, and settings() hands it the secret");
+  check(!(await heard(d)).some((m) => !m["settingsMod"] && JSON.stringify(m).includes(SECRET)), "no other mod's frame gets it");
+  check(
+    (await heard(d)).filter((m) => m["version"] !== undefined).every((m) => JSON.stringify(m["settings"]) === "{}"),
+    "a mod with no settings gets an empty settings()",
+  );
+  check(
+    holding(SECRET).some((f) => basename(f) === TEST_STORE),
+    `the secret is kept in the app's store, which the test build keeps as ${TEST_STORE} and a release seals`,
+  );
+  const leaked = outsideStore(SECRET);
+  check(!leaked.length, `the secret is in no other file, under ~/.kiwi or anywhere else${leaked.length ? `: ${leaked.join(", ")}` : ""}`);
   await later(1_500);
   const opens = (await d.main("browserOpens")) as string[];
   console.log(`opened in the browser: ${JSON.stringify(opens)}`);
@@ -698,6 +877,7 @@ try {
   check(opens.includes(MESSAGE_LINK), "with a mod running, a Ctrl-clicked link in a message still opens in the browser");
   check(!opens.some((u) => /forged|mod-self-nav/.test(u)), "nothing the mod forged or navigated to opened in the browser");
   check(app.exitCode === null && app.signalCode === null, "the app is still running after the mod's forged events");
+  await kitMod(d, palette);
   if (process.platform === "darwin") await whileAway(d, palette);
   writeCrashMod();
   const crashed = await until("crash-mod switched off", 30_000, async () => (await modsNow(d)).find((m) => m.name === "crash-mod" && m.state === "off") ?? null).catch(() => null);
@@ -781,6 +961,15 @@ try {
   console.log(`mods in safe mode: ${JSON.stringify(listed)}`);
   check(listed.every((m) => m.state !== "on") && listed.find((m) => m.name === "probe-mod")?.off === "safe", "safe mode starts with every mod off, and says why");
   check(!existsSync(join(root, ".kiwi", "mods", ".safe-mode")), "safe mode by .safe-mode lasts one start: the app removes the file");
+  const afterRestart = (await safe.evaluate(() => (window as unknown as { kiwi: { modDetails(n: string): Promise<unknown> } }).kiwi.modDetails("settings-mod"), null, 10_000)) as {
+    settings?: { id: string; set?: boolean; value?: unknown }[];
+  } | null;
+  check(
+    afterRestart?.settings?.find((x) => x.id === "token")?.set === true && !JSON.stringify(afterRestart).includes(SECRET),
+    "the saved secret outlasts a restart, and the details page never gets it back",
+  );
+  const after = outsideStore(SECRET);
+  check(!after.length, `after a restart, the secret is still in no other file${after.length ? `: ${after.join(", ")}` : ""}`);
   await settingsMods(safe, "No mod runs until Channels restarts");
   check((await safe.evaluate(() => document.querySelectorAll('iframe[src*="mod-frame"]').length, null, 2_000)) === 0, "safe mode starts no mod's frame");
   await shot("settings-mods-safe");

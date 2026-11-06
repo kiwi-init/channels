@@ -53,6 +53,7 @@ async function onMessage(e: MessageEvent): Promise<void> {
         surface: "render",
         needs: (mod?.needs ?? []).filter((n) => n.startsWith("render:")),
         code: got.code,
+        settings: got.settings ?? {},
         ...look(),
         shown: { kind: d.kind, name: d.name, html, full: d.full },
       })
@@ -66,6 +67,9 @@ async function onMessage(e: MessageEvent): Promise<void> {
       return
     case "fetch":
       send(el, { kiwi: MOD_PROTOCOL, type: "reply", id: m.id, ok: false, error: "a drawn attachment has no network, whatever its mod was approved for" })
+      return
+    case "storage":
+      send(el, { kiwi: MOD_PROTOCOL, type: "stored", id: m.id, ok: false, error: "a drawn attachment keeps nothing in its mod's storage" })
   }
 }
 

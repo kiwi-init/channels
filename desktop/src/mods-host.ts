@@ -1,11 +1,11 @@
 import { bundleMod } from "@kiwi/core/node/mod-bundle.ts";
 import { readModIcon, type IconType } from "@kiwi/core/node/mod-icon.ts";
-import { checkManifest, type ModManifest } from "@kiwi/core/node/mod-manifest.ts";
+import { checkManifest, type ModManifest, type ModSetting } from "@kiwi/core/node/mod-manifest.ts";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
-import type { ModDetails, ModFetchReply, ModFetchRequest, ModIcon, ModView } from "./bridge.ts";
+import type { ModBundle, ModDetails, ModFetchReply, ModFetchRequest, ModIcon, ModSettingValue, ModView } from "./bridge.ts";
 import { errorText, writePrivate } from "./guard.ts";
 import { copyOf, kiwiKeys, modDetails } from "./mod-details.ts";
 import { hostAllowed, SAFE_FILE, SAFE_FLAG, SAFE_LOOP, unapproved } from "./mods.ts";
@@ -24,6 +24,29 @@ interface Loaded {
   iconWhy: string | null;
   author: string | null;
   snippets?: TerminalSnippets;
+  settings: ModSetting[];
+}
+
+export interface ModSecrets {
+  read(mod: string, source: string): Record<string, string>;
+  write(mod: string, source: string, id: string, value: string | null): void;
+  forget(mod: string): void;
+}
+
+export function memorySecrets(): ModSecrets {
+  const kept = new Map<string, { source: string; values: Record<string, string> }>();
+  return {
+    read: (mod, source) => (kept.get(mod)?.source === source ? { ...kept.get(mod)?.values } : {}),
+    write: (mod, source, id, value) => {
+      const now = kept.get(mod)?.source === source ? (kept.get(mod) ?? { source, values: {} }) : { source, values: {} };
+      if (value === null) delete now.values[id];
+      else now.values[id] = value;
+      kept.set(mod, now);
+    },
+    forget: (mod) => {
+      kept.delete(mod);
+    },
+  };
 }
 
 export interface ModsHostOptions {
@@ -34,6 +57,7 @@ export interface ModsHostOptions {
   request?: typeof fetch;
   safe?: string | null;
   terminal?: SnippetHome;
+  secrets?: ModSecrets;
   onTerminal?: (name: string, snippets: TerminalSnippets | null) => void;
 }
 
@@ -44,11 +68,21 @@ interface Approval {
 
 type Off = { by: "you" } | { by: "crash"; why: string; hash: string };
 
+interface Values {
+  source: string;
+  set: Record<string, string | boolean>;
+  rev: number;
+}
+
 interface ModsFile {
   approved: Record<string, Approval>;
   off: Record<string, Off>;
+  values: Record<string, Values>;
   unsettledStarts: number;
 }
+
+const TEXT_CHARS = 2_000;
+const SECRET_CHARS = 8_000;
 
 const LOCAL_SOURCE = "local";
 const LOOP_STARTS = 2;
@@ -79,11 +113,25 @@ function readModsFile(file: string): ModsFile {
     off: entries<Off>(raw["off"], (o) =>
       o["by"] === "you" ? { by: "you" } : o["by"] === "crash" && typeof o["why"] === "string" && typeof o["hash"] === "string" ? { by: "crash", why: o["why"], hash: o["hash"] } : null,
     ),
+    values: entries<Values>(raw["values"], (v) =>
+      typeof v["source"] === "string" && typeof v["rev"] === "number" && v["set"] && typeof v["set"] === "object"
+        ? {
+            source: v["source"],
+            rev: v["rev"],
+            set: Object.fromEntries(Object.entries(v["set"]).filter((e): e is [string, string | boolean] => typeof e[1] === "string" || typeof e[1] === "boolean")),
+          }
+        : null,
+    ),
     unsettledStarts: typeof raw["unsettledStarts"] === "number" && raw["unsettledStarts"] > 0 ? raw["unsettledStarts"] : 0,
   };
 }
 
 const writeModsFile = (file: string, m: ModsFile): void => writePrivate(file, Buffer.from(`${JSON.stringify(m, null, 2)}\n`));
+
+export function preApprove(file: string, name: string, needs: readonly string[], source: string): void {
+  const m = readModsFile(file);
+  writeModsFile(file, { ...m, approved: { ...m.approved, [name]: { needs: [...needs].sort(), source } } });
+}
 
 export function modSource(dir: string): string {
   if (fs.lstatSync(dir, { throwIfNoEntry: false })?.isSymbolicLink()) return LOCAL_SOURCE;
@@ -102,7 +150,26 @@ function iconOf(dir: string, m: ModManifest): Pick<Loaded, "art" | "iconWhy"> {
 
 const iconHash = (bytes: Uint8Array): string => createHash("sha256").update(bytes).digest("hex").slice(0, 16);
 
-async function loadOne(dir: string, name: string, contract: string, file: ModsFile, safe: string | null, terminal?: SnippetHome): Promise<Loaded> {
+const valuesOf = (file: ModsFile, name: string, source: string): Values | null => (file.values[name]?.source === source ? (file.values[name] ?? null) : null);
+
+function filled(s: ModSetting, plain: Values | null, secret: Record<string, string>): boolean {
+  if (s.type === "secret") return !!secret[s.id];
+  const v = plain?.set[s.id];
+  return s.type === "choice" ? typeof v === "string" && (s.choices ?? []).includes(v) : s.type === "text" ? typeof v === "string" && v !== "" : true;
+}
+
+function settingValues(list: readonly ModSetting[], plain: Values | null, secret: Record<string, string>): Record<string, ModSettingValue> {
+  return Object.fromEntries(
+    list.map((s) => {
+      if (s.type === "secret") return [s.id, secret[s.id] ?? null];
+      const v = plain?.set[s.id];
+      if (s.type === "toggle") return [s.id, v === true];
+      return [s.id, filled(s, plain, secret) && typeof v === "string" ? v : null];
+    }),
+  );
+}
+
+async function loadOne(dir: string, name: string, contract: string, file: ModsFile, safe: string | null, secrets: ModSecrets, terminal?: SnippetHome): Promise<Loaded> {
   const source = modSource(dir);
   const off = (why: string, version: string | null = null, needs: string[] = []): Loaded => ({
     view: { name, version, source, needs, approved: [], state: "off", why },
@@ -110,6 +177,7 @@ async function loadOne(dir: string, name: string, contract: string, file: ModsFi
     art: null,
     iconWhy: null,
     author: null,
+    settings: [],
   });
   let raw: unknown;
   try {
@@ -133,13 +201,27 @@ async function loadOne(dir: string, name: string, contract: string, file: ModsFi
   }
   const shown = snippets ? { terminal: { hash: snippets.hash, ...(snippets.tmux ? { tmux: snippets.tmux } : {}), ...(snippets.rex ? { rex: snippets.rex } : {}) } } : {};
   const icon = iconOf(dir, checked.manifest);
-  const done = (view: ModView, code: string | null = null): Loaded => ({ view, code, ...icon, author: checked.manifest.author ?? null, ...(snippets ? { snippets } : {}) });
+  const settings = checked.manifest.settings ?? [];
+  const done = (view: ModView, code: string | null = null): Loaded => ({ view, code, ...icon, author: checked.manifest.author ?? null, settings, ...(snippets ? { snippets } : {}) });
   const approval = file.approved[name];
   const approved = approval?.source === source ? approval.needs : [];
-  const base = { name, version, source, needs, approved: needs.filter((n) => approved.includes(n)), ...(icon.art ? { icon: iconHash(icon.art.bytes) } : {}), ...shown };
+  const plain = valuesOf(file, name, source);
+  const base = {
+    name,
+    version,
+    source,
+    needs,
+    approved: needs.filter((n) => approved.includes(n)),
+    ...(icon.art ? { icon: iconHash(icon.art.bytes) } : {}),
+    ...shown,
+    ...(settings.length ? { settingsRev: plain?.rev ?? 0 } : {}),
+  };
   if (unapproved(needs, approved).length)
     return done(approval && approval.source !== source ? { ...base, state: "asks", why: `It comes from ${source} now, not ${approval.source}.` } : { ...base, state: "asks" });
   if (snippets && terminal && installedHash(name, terminal) !== snippets.hash) return done({ ...base, approved: base.approved.filter((n) => n !== "terminal"), state: "asks" });
+  const secret = settings.some((s) => s.type === "secret") ? secrets.read(name, source) : {};
+  const missing = settings.find((s) => s.required && !filled(s, plain, secret));
+  if (missing) return done({ ...base, state: "off", off: "settings", why: `It needs its ${missing.title} setting: fill it in on its page in Settings → Mods.` });
   const stopped = file.off[name];
   if (stopped?.by === "you") return done({ ...base, state: "off", off: "you", why: "You switched it off." });
   if (safe) return done({ ...base, state: "off", off: "safe", why: safe });
@@ -150,6 +232,7 @@ async function loadOne(dir: string, name: string, contract: string, file: ModsFi
 }
 
 export function modsHost(o: ModsHostOptions) {
+  const secrets = o.secrets ?? memorySecrets();
   let loaded = new Map<string, Loaded>();
   let scanning: Promise<void> | null = null;
   let queued: Promise<void> | null = null;
@@ -174,7 +257,7 @@ export function modsHost(o: ModsHostOptions) {
       names = [];
     }
     const next = new Map<string, Loaded>();
-    for (const name of names) next.set(name, await loadOne(path.join(o.folder, name), name, o.contract, file, safe, o.terminal));
+    for (const name of names) next.set(name, await loadOne(path.join(o.folder, name), name, o.contract, file, safe, secrets, o.terminal));
     loaded = next;
     if (o.terminal)
       for (const name of installedNames(o.terminal))
@@ -271,7 +354,7 @@ export function modsHost(o: ModsHostOptions) {
     rescan,
     list,
     safe: (): string | null => safe,
-    bundle(name: string): { code: string; hash: string } | null {
+    bundle(name: string): ModBundle | null {
       const l = loaded.get(name);
       if (l?.view.state !== "on" || l.code === null || !l.view.hash) return null;
       if (!armed) {
@@ -279,7 +362,9 @@ export function modsHost(o: ModsHostOptions) {
         const m = readModsFile(o.approvals);
         writeModsFile(o.approvals, { ...m, unsettledStarts: m.unsettledStarts + 1 });
       }
-      return { code: l.code, hash: l.view.hash };
+      const plain = valuesOf(readModsFile(o.approvals), name, l.view.source);
+      const secret = l.settings.some((s) => s.type === "secret") ? secrets.read(name, l.view.source) : {};
+      return { code: l.code, hash: l.view.hash, settings: settingValues(l.settings, plain, secret) };
     },
     settled(): void {
       if (!armed || settled) return;
@@ -294,7 +379,35 @@ export function modsHost(o: ModsHostOptions) {
       const l = loaded.get(name);
       if (!l) return null;
       const { version, source } = l.view;
-      return modDetails(path.join(o.folder, name), { name, version, source, author: l.author, iconWhy: l.iconWhy });
+      const plain = valuesOf(readModsFile(o.approvals), name, source);
+      const secret = l.settings.some((s) => s.type === "secret") ? secrets.read(name, source) : {};
+      const values = settingValues(l.settings, plain, secret);
+      const settings = l.settings.map((s) => (s.type === "secret" ? { ...s, set: !!secret[s.id] } : { ...s, value: values[s.id] ?? null }));
+      return modDetails(path.join(o.folder, name), { name, version, source, author: l.author, iconWhy: l.iconWhy, settings });
+    },
+    setSetting(name: string, id: string, value: unknown): Promise<ModView[]> {
+      const l = loaded.get(name);
+      const s = l?.settings.find((x) => x.id === id);
+      if (!l || !s) return Promise.reject(new Error(`${name} has no setting ${id}`));
+      const cleared = value === null || value === "";
+      if (s.type === "toggle" ? typeof value !== "boolean" : !cleared && typeof value !== "string") return Promise.reject(new Error(`${s.title} takes ${s.type === "toggle" ? "on or off" : "text"}`));
+      if (typeof value === "string" && value.length > (s.type === "secret" ? SECRET_CHARS : TEXT_CHARS)) return Promise.reject(new Error(`${s.title} is too long`));
+      if (s.type === "choice" && !cleared && !(s.choices ?? []).includes(String(value))) return Promise.reject(new Error(`${s.title} has no choice "${String(value)}"`));
+      const source = l.view.source;
+      try {
+        if (s.type === "secret") secrets.write(name, source, id, cleared ? null : String(value));
+      } catch (e) {
+        return Promise.reject(e instanceof Error ? e : new Error(String(e)));
+      }
+      return change((m) => {
+        const was = m.values[name]?.source === source ? m.values[name] : undefined;
+        const set = { ...was?.set };
+        if (s.type !== "secret") {
+          if (cleared) delete set[id];
+          else set[id] = value as string | boolean;
+        }
+        m.values[name] = { source, set, rev: (was?.rev ?? 0) + 1 };
+      });
     },
     failed(name: string, hash: string, why: string): Promise<ModView[]> {
       const l = loaded.get(name);
@@ -311,9 +424,11 @@ export function modsHost(o: ModsHostOptions) {
       });
     },
     forget(name: string): Promise<ModView[]> {
+      secrets.forget(name);
       return change((m) => {
         delete m.approved[name];
         delete m.off[name];
+        delete m.values[name];
       });
     },
     async approve(name: string, needs: readonly string[]): Promise<ModView[]> {

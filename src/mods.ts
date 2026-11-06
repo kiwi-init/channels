@@ -1,9 +1,10 @@
 import { isAppPrefix } from "@kiwi/core/mod-names.ts";
 import { bundleMod } from "@kiwi/core/node/mod-bundle.ts";
+import { copiesIn, folderHash, keepCopyIn, type ModCopy } from "@kiwi/core/node/mod-folder.ts";
 import { readModIcon } from "@kiwi/core/node/mod-icon.ts";
 import { checkManifest, type ModManifest } from "@kiwi/core/node/mod-manifest.ts";
 import { execFileSync } from "node:child_process";
-import { createHash, randomBytes } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import {
   cpSync,
   existsSync,
@@ -23,6 +24,8 @@ import {
 } from "node:fs";
 import { isAbsolute, join } from "node:path";
 
+import KIT_TYPES from "./mod-kit.txt" with { type: "text" };
+
 const MOD_NAME = /^[a-z0-9][a-z0-9-]{0,62}$/;
 const STARTER_SHELL = "^3.6";
 const MANIFEST_BYTES = 64 * 1024;
@@ -36,18 +39,6 @@ export interface Source {
   ref: string | null;
   path: string | null;
 }
-
-interface Copy {
-  source: string;
-  url: string;
-  path: string;
-  ref: string | null;
-  commit: string;
-  hash: string;
-  added?: string;
-}
-
-const COPIES = ".sources.json";
 
 export interface ModInfo {
   name: string;
@@ -135,36 +126,9 @@ function manifestAt(dir: string, folder?: string): ModManifest {
 
 const isGit = (dir: string): boolean => existsSync(join(dir, ".git"));
 
-function copiesOf(home: string): Record<string, Copy> {
-  try {
-    const raw = JSON.parse(readFileSync(join(modsDir(home), COPIES), "utf8")) as unknown;
-    return raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, Copy>) : {};
-  } catch {
-    // No copied mods yet, or a file that isn't ours: every folder reads as local.
-    return {};
-  }
-}
+const copiesOf = (home: string): Record<string, ModCopy> => copiesIn(modsDir(home));
 
-function keepCopy(home: string, name: string, copy: Copy | null): void {
-  const all = copiesOf(home);
-  if (copy) all[name] = copy;
-  else delete all[name];
-  writeFileSync(join(modsDir(home), COPIES), `${JSON.stringify(all, null, 2)}\n`);
-}
-
-function folderHash(dir: string): string {
-  const hash = createHash("sha256");
-  const walk = (rel: string): void => {
-    for (const entry of readdirSync(join(dir, rel)).sort()) {
-      const path = rel ? `${rel}/${entry}` : entry;
-      const st = lstatSync(join(dir, path));
-      if (st.isDirectory()) walk(path);
-      else hash.update(`${path}\0${st.isSymbolicLink() ? `-> ${readlinkSync(join(dir, path))}` : readFileSync(join(dir, path)).toString("base64")}\0`);
-    }
-  };
-  walk("");
-  return hash.digest("hex");
-}
+const keepCopy = (home: string, name: string, copy: ModCopy | null): void => keepCopyIn(modsDir(home), name, copy);
 
 function cloneAt(source: Source, ref: string | null, tmp: string, run: Git): string {
   try {
@@ -309,7 +273,7 @@ function diffNeeds(was: ModManifest | null, next: ModManifest): { added: string[
   return { added: next.needs.filter((n) => !before.has(n)), dropped: (was?.needs ?? []).filter((n) => !after.has(n)) };
 }
 
-function updateCopy(home: string, name: string, dir: string, copy: Copy, take: (added: string[]) => boolean, run: Git): Change | null {
+function updateCopy(home: string, name: string, dir: string, copy: ModCopy, take: (added: string[]) => boolean, run: Git): Change | null {
   if (folderHash(dir) !== copy.hash) throw new ModError("has changes that aren't in its source: keep them in a repo of your own, or kiwi mod remove --force it and add it again");
   const tmp = join(modsDir(home), `.updating-${randomBytes(6).toString("hex")}`);
   try {
@@ -447,6 +411,19 @@ const titleOf = (name: string): string =>
     .map((w) => w[0]!.toUpperCase() + w.slice(1))
     .join(" ");
 
+export const KIT_TYPES_FILE = "kiwi-mod.d.ts";
+
+const STARTER_TSCONFIG = {
+  compilerOptions: { target: "ES2022", module: "ESNext", moduleResolution: "Bundler", jsx: "react-jsx", lib: ["ES2022", "DOM", "DOM.Iterable"], strict: true, noEmit: true, skipLibCheck: true },
+};
+
+const json = (v: unknown): string => `${JSON.stringify(v, null, 2)}\n`;
+
+function freshTypes(dir: string): void {
+  const file = join(dir, KIT_TYPES_FILE);
+  if (existsSync(file) && readFileSync(file, "utf8") !== KIT_TYPES) writeFileSync(file, KIT_TYPES);
+}
+
 const STARTER_ICON = [
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">',
   '  <rect width="64" height="64" rx="14" fill="#2f6fe4"/>',
@@ -457,21 +434,33 @@ const STARTER_ICON = [
 
 function starter(dir: string, name: string): void {
   const title = titleOf(name);
-  writeFileSync(join(dir, "mod.json"), `${JSON.stringify({ name, version: "0.1.0", shell: STARTER_SHELL, needs: ["panel"], icon: "icon.svg" }, null, 2)}\n`);
+  writeFileSync(join(dir, "mod.json"), json({ name, version: "0.1.0", shell: STARTER_SHELL, needs: ["panel"], icon: "icon.svg" }));
   writeFileSync(join(dir, "icon.svg"), STARTER_ICON);
+  writeFileSync(join(dir, KIT_TYPES_FILE), KIT_TYPES);
+  writeFileSync(join(dir, "tsconfig.json"), json(STARTER_TSCONFIG));
+  writeFileSync(join(dir, "package.json"), json({ private: true, devDependencies: { "@types/react": "^19.3.0" } }));
+  writeFileSync(join(dir, ".gitignore"), "node_modules\n");
   writeFileSync(
     join(dir, "index.tsx"),
     [
-      'import { useState } from "react"',
-      'import { Button, panel, Row } from "@kiwi/mod"',
+      'import { Action, Actions, List, panel, Toast } from "@kiwi/mod"',
       "",
       "function View() {",
-      "  const [count, setCount] = useState(0)",
       "  return (",
-      "    <>",
-      `      <Row title=${JSON.stringify(title)} sub="Edit index.tsx and save: Channels reloads it." />`,
-      "      <Button onClick={() => setCount(count + 1)}>Pressed {count}</Button>",
-      "    </>",
+      `    <List searchBarPlaceholder=${JSON.stringify(`Search ${title}`)}>`,
+      `      <List.Section title=${JSON.stringify(title)}>`,
+      "        <List.Item",
+      '          title="Edit index.tsx and save"',
+      '          subtitle="Channels reloads it"',
+      '          icon="spec"',
+      "          actions={",
+      "            <Actions>",
+      `              <Action title="Say hi" onAction={() => Toast.show({ title: ${JSON.stringify(`Hi from ${title}`)} })} />`,
+      "            </Actions>",
+      "          }",
+      "        />",
+      "      </List.Section>",
+      "    </List>",
       "  )",
       "}",
       "",
@@ -499,7 +488,11 @@ export function startDev(home: string, name: string, cwd: string): DevStart {
   if (!MOD_NAME.test(name)) throw new ModError(`"${name}" isn't a mod name: use lowercase letters, digits and dashes`);
   if (isAppPrefix(name)) throw new ModError(`"${name}" is a name Channels keeps for its own commands: pick another`);
   const at = join(modsDir(home), name);
-  if (lstatSync(at, { throwIfNoEntry: false })) return { at, dir: realOf(at, name), how: "opened" };
+  if (lstatSync(at, { throwIfNoEntry: false })) {
+    const dir = realOf(at, name);
+    freshTypes(dir);
+    return { at, dir, how: "opened" };
+  }
   mkdirSync(modsDir(home), { recursive: true });
   const here = join(cwd, "mod.json");
   if (existsSync(here)) {
@@ -517,6 +510,7 @@ export function startDev(home: string, name: string, cwd: string): DevStart {
       );
     const dir = realpathSync(cwd);
     symlinkSync(dir, at);
+    freshTypes(dir);
     return { at, dir, how: "linked" };
   }
   mkdirSync(at);

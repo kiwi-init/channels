@@ -10,7 +10,7 @@ const ran = (): unknown => (globalThis as { __iconRan?: unknown }).__iconRan
 
 describe("a mod's icon", () => {
   test("an SVG with a script is only ever an image from a blob: the page gets no SVG, script or handler, and nothing in it runs", async () => {
-    showModReads({ modIcon: () => Promise.resolve({ type: "image/svg+xml", data: btoa(SVG) }), modDetails: () => Promise.resolve(null) })
+    showModReads({ modIcon: () => Promise.resolve({ type: "image/svg+xml", data: btoa(SVG) }), modDetails: () => Promise.resolve(null), setModSetting: () => Promise.resolve([]) })
     const url = await modIconUrl("probe", "1a2b")
     expect(url).toMatch(/^blob:/)
     const html = renderToStaticMarkup(<ModIcon name="probe" icon="1a2b" />)
@@ -23,7 +23,7 @@ describe("a mod's icon", () => {
   })
 
   test("a new icon replaces the old one's blob, and a type the app didn't set is never shown", async () => {
-    showModReads({ modIcon: () => Promise.resolve({ type: "image/png", data: btoa("\x89PNG\r\n\x1a\n") }), modDetails: () => Promise.resolve(null) })
+    showModReads({ modIcon: () => Promise.resolve({ type: "image/png", data: btoa("\x89PNG\r\n\x1a\n") }), modDetails: () => Promise.resolve(null), setModSetting: () => Promise.resolve([]) })
     const was = await modIconUrl("probe", "1a2b")
     const now = await modIconUrl("probe", "3c4d")
     expect(now).not.toBe(was)
