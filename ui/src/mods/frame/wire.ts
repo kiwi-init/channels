@@ -11,7 +11,9 @@ const storing = new Map<number, Waiting<string | string[] | null>>()
 export const post = (m: Out): void => parent.postMessage({ kiwi: MOD_PROTOCOL, ...m }, "*")
 
 export function failed(e: unknown): void {
-  post({ type: "error", message: e instanceof Error ? (e.stack ?? e.message) : String(e) })
+  const said = String(e)
+  const stack = e instanceof Error ? (e.stack ?? "") : ""
+  post({ type: "error", message: stack.startsWith(said) ? stack : `${said}\n${stack}`.trim() })
 }
 
 function wait<T>(list: Map<number, Waiting<T>>): [number, Promise<T>] {

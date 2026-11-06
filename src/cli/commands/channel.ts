@@ -9,6 +9,7 @@ import { isWakeVia, wakeKey, wakeWords } from "@kiwi/core/wake.ts";
 import { ago, holdLine, formatRooms, formatStatus, presenceWords, statusJson } from "@kiwi/core/format.ts";
 import { describeScopes, presetOf } from "@kiwi/core/scopes.ts";
 import { bindDirectory, seatsFor } from "../../hooks.ts";
+import { placesIn } from "../../seats.ts";
 import { heldText, seatHeldAway } from "../../hold.ts";
 import { setWake, wakeSeats } from "../../wake-seats.ts";
 import { args, opt } from "../args.ts";
@@ -140,7 +141,11 @@ export const channelCommands: Record<string, Command> = {
       );
       const snap = { alias: s.alias, me: s.me, state, online: on, unread: yield* s.unreadCount(state, messages) };
       const all = !!opt.all;
-      out(opt.json ? JSON.stringify(statusJson(snap)) : formatStatus({ ...snap, all }));
+      if (opt.json) {
+        const json = statusJson(snap);
+        const places = placesIn(loadConfig(), s.alias);
+        out(JSON.stringify({ ...json, members: json.members.map((m) => ({ ...m, place: places.get(m.name) ?? null })) }));
+      } else out(formatStatus({ ...snap, all }));
       yield* noteRead(s);
     }),
 
