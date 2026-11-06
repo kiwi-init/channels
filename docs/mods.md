@@ -129,3 +129,5 @@ A mod is a git repo. Push yours anywhere and anyone can add it:
 | `kiwi mod dev <name>` | Create, link or open a mod and rebuild it on every save |
 
 `add` also takes an `https://` or ssh address or a full path, and `#ref` pins a branch, tag or commit. A mod added at a branch follows it on `update`; one pinned at a tag or a commit stays there.
+
+A repo can hold several mods, one per folder: `kiwi mod add github.com/kiwi-init/mods/anatomy` takes just the `anatomy` folder. `update` follows that folder alone.

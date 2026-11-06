@@ -81,7 +81,7 @@ export const modCommands: Record<string, Command> = {
       }
       if (sub === "add") {
         const from = args[2];
-        if (!from || args[3]) return yield* die("usage: kiwi mod add <repo>[#ref], like github.com/owner/repo or github.com/owner/repo#v1.2.0");
+        if (!from || args[3]) return yield* die("usage: kiwi mod add <repo>[#ref], like github.com/owner/repo, github.com/owner/repo#v1.2.0 or github.com/kiwi-init/mods/anatomy");
         const added = yield* run(() => addMod(at, from));
         out(`added ${added.manifest.name} ${added.manifest.version} from ${added.source.shown} @ ${added.commit.slice(0, 7)}`);
         out(`${asks(added.manifest.needs)}; Channels shows these for you to approve before it runs the mod`);
