@@ -148,6 +148,7 @@ try {
   const task = /\bT\d+\b/.exec(added.split("\n").slice(1).join("\n"))?.[0];
   if (!task) throw new Error(`no task id in:\n${added}`);
   await agentDoes(agentA, "sa", "take a task", [["task", "start", task]]);
+  await agentDoes(agentA, "sa", "file a task and take it", [["task", "add", "Remember me across restarts", "--ask", String(askSeq), "--start"]]);
   await agentDoes(agentA, "sa", "ask a person to decide", [["ask-human", "--holds", task, "--option", "A: one day", "--option", "B: one week", "How long should a session last?"]]);
   await agentDoes(agentA, "sa", "finish a task", [["task", "done", task]]);
   await agentDoes(agentA, "sa", "see who's here and what's open", [["status"]]);
