@@ -20,26 +20,26 @@ export interface ActionProps {
   onAction: Run
 }
 
-export interface OpenProps {
+interface OpenProps {
   url: string
   title?: string
   shortcut?: string
 }
 
-export interface CopyProps {
+interface CopyProps {
   content: string
   title?: string
   shortcut?: string
 }
 
-export interface Accessory {
+interface Accessory {
   text?: string
   tag?: string
   date?: Date | number | string
   icon?: IconName
 }
 
-export interface ItemProps {
+interface ItemProps {
   id?: string
   title: string
   subtitle?: string
@@ -49,12 +49,12 @@ export interface ItemProps {
   actions?: ReactNode
 }
 
-export interface SectionProps {
+interface SectionProps {
   title?: string
   children?: ReactNode
 }
 
-export interface Shown {
+interface Shown {
   title: string | undefined
   items: ItemProps[]
 }
@@ -153,7 +153,7 @@ function CopyToClipboard(props: CopyProps) {
 
 export const Action = Object.assign(ActionItem, { OpenInBrowser, CopyToClipboard })
 
-export function sectionsOf(node: ReactNode): Shown[] {
+function sectionsOf(node: ReactNode): Shown[] {
   const out: Shown[] = []
   for (const el of flat(node)) {
     if (el.type === SectionView) {
@@ -369,9 +369,9 @@ export function Detail({ markdown, isLoading = false, actions }: { markdown: str
   )
 }
 
-export type FormValues = Record<string, string | boolean>
+type FormValues = Record<string, string | boolean>
 
-export function valuesOf(form: HTMLFormElement): FormValues {
+function valuesOf(form: HTMLFormElement): FormValues {
   const out: FormValues = {}
   for (const el of Array.from(form.elements)) {
     if (!(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement) || !el.name) continue
