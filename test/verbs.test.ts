@@ -376,7 +376,7 @@ describe("review rounds through the CLI", () => {
     const shown = JSON.parse(await ok(dev, "task", "show", `T${t}`, "--json"));
     expect(shown.state).toBe("landing");
     expect(shown.rounds.at(-1)).toMatchObject({ at: "run:backfill-1", result: { kind: "approved" } });
-    expect(shown.run).toMatchObject({ id: "backfill-1", started: Date.parse("2020-01-01T00:00:00Z") });
+    expect(shown.run).toMatchObject({ id: "backfill-1", reportedStart: Date.parse("2020-01-01T00:00:00Z") });
   });
 
   test("start is the one way to take a task: two racing for an unowned one get one winner, the other is told who has it, and on your own task it only starts it", async () => {

@@ -268,7 +268,7 @@ function onTask(m: Message, state: ChannelState): { text: string; mark: EventMar
       if (ev.owner === null) return { text: "unassigned it", mark: "assign", ...note };
       if (ev.title) return { text: `renamed it to “${inlineText(ev.title, 200)}”`, mark: "other", ...note };
       if (ev.proof) return { text: `added proof: ${inlineText(proofLabel(ev.proof), 80)}`, mark: "note", ...note };
-      if (ev.run) return { text: ev.run.started === undefined ? `declared run ${ev.run.id}` : `recorded run ${ev.run.id}'s start, ${new Date(ev.run.started).toISOString()}`, mark: "note", ...note };
+      if (ev.run) return { text: ev.run.started === undefined ? `declared run ${ev.run.id}` : `reported run ${ev.run.id}'s start, ${new Date(ev.run.started).toISOString()}`, mark: "note", ...note };
       return { text: "added a note", mark: "note", ...note };
     default:
       return { text: describeEvent(m, state), mark: "other" };

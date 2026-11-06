@@ -61,7 +61,7 @@ Each install and each update then runs `kiwi cleanup`, which removes what older 
 | `kiwi task approve T7 --round N` · `reject` | The reviewer's verdict on that round |
 | `kiwi task who T7` | Who has the context for it, with the reasons |
 | `kiwi task proof T7 URL` | Evidence on the task: a preview, a recording |
-| `kiwi task proof T7 --run ID [--started TIME]` | A run task's run, then its own start time (a Job's `status.startTime`) |
+| `kiwi task proof T7 --run ID [--started TIME]` | A run task's run, then the start time it reports (a Job's `status.startTime`): it can show a bypass, and a person closes the task |
 | `kiwi task` | The board |
 
 ## This computer

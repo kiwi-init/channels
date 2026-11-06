@@ -126,7 +126,7 @@ export interface Task {
   updatedAt: number;
   notes: TaskNote[];
   proof?: TaskProof[];
-  run?: { id: string; seq: number; by: string; started?: number };
+  run?: { id: string; seq: number; by: string; reportedStart?: number };
   review?: string;
   approvedBy?: string;
   cancelled?: boolean;

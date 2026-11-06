@@ -50,17 +50,14 @@ function heldAtRun(view: GateView, t: Task, id: string, started: number): string
   return missing;
 }
 
+export const RUN_CLOSES = "a person or the lead to close it with a reason: Kiwi can't verify the start time a runner reports, so a run task doesn't land by itself";
+
 function runGate(view: GateView, t: Task, landing: boolean): DoneGate | undefined {
   const run = t.run;
   if (!run) return landing ? { kind: "waiting", why: `its run id: kiwi task proof T${t.id} --run ID` } : undefined;
-  if (run.started === undefined)
-    return landing ? { kind: "waiting", why: `run ${run.id}'s own start time (kiwi task proof T${t.id} --run ${run.id} --started TIME), or a person closes it with a reason` } : undefined;
-  const missing = heldAtRun(view, t, run.id, run.started);
+  const missing = run.reportedStart === undefined ? [] : heldAtRun(view, t, run.id, run.reportedStart);
   if (missing.length) return { kind: "bypassed", missing };
-  if (!landing) return undefined;
-  const started = run.started;
-  const post = [...view.checks.values()].some((c) => c.phase === "post" && c.holds.includes(t.id) && atRun(c, run.id) && checkPassed(c) && (c.answer?.at ?? Number.POSITIVE_INFINITY) >= started);
-  return post ? { kind: "landed", artifact: { kind: "run", id: run.id } } : { kind: "waiting", why: `a passed post check quoting run ${run.id}` };
+  return landing ? { kind: "waiting", why: RUN_CLOSES } : undefined;
 }
 
 const PLAIN = /^(\d+)\.(\d+)\.(\d+)$/;

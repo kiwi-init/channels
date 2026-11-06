@@ -678,8 +678,8 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
         });
       if (ev.proof && !task.proof?.some((p) => p.url === ev.proof!.url) && (task.proof?.length ?? 0) < PROOF_MAX)
         task.proof = [...(task.proof ?? []), { seq: m.seq, by: m.from, ts: at, url: ev.proof.url, ...(ev.proof.label ? { label: ev.proof.label } : {}) }];
-      if (ev.run && task.run?.id !== ev.run.id) task.run = { id: ev.run.id, seq: m.seq, by: m.from, ...(ev.run.started !== undefined ? { started: ev.run.started } : {}) };
-      else if (ev.run?.started !== undefined && task.run) task.run.started ??= ev.run.started;
+      if (ev.run && task.run?.id !== ev.run.id) task.run = { id: ev.run.id, seq: m.seq, by: m.from, ...(ev.run.started !== undefined ? { reportedStart: ev.run.started } : {}) };
+      else if (ev.run?.started !== undefined && task.run) task.run.reportedStart ??= ev.run.started;
       if (ev.areas?.length) task.areas = [...new Set(ev.areas)];
       if (ev.owner === null && task.state === "doing") task.state = "todo";
       task.updatedAt = at;

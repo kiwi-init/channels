@@ -62,7 +62,7 @@ export const newRun = (task: Task, run: { id: string } | undefined): boolean => 
 export function runRefusal(task: Task, run: { id: string; started?: number } | undefined, received: number | undefined): string | null {
   if (run?.started === undefined) return null;
   if (received === undefined || run.started > received) return `run ${run.id} can't have started after its proof arrived`;
-  const known = task.run?.id === run.id ? task.run.started : undefined;
+  const known = task.run?.id === run.id ? task.run.reportedStart : undefined;
   return known !== undefined && known !== run.started ? `run ${run.id}'s start is already recorded` : null;
 }
 
