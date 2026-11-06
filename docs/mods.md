@@ -29,35 +29,36 @@ It creates `~/.kiwi/mods/standup-notes/` with a starter and an `icon.svg`, then 
 ```
 
 ```tsx
-import { useState } from "react"
-import { Button, panel, Row } from "@kiwi/mod"
+import { useState } from "react";
+import { Button, panel, Row } from "@kiwi/mod";
 
 function View() {
-  const [count, setCount] = useState(0)
+  const [count, setCount] = useState(0);
   return (
     <>
       <Row title="Standup Notes" sub="Edit index.tsx and save: Channels reloads it." />
       <Button onClick={() => setCount(count + 1)}>Pressed {count}</Button>
     </>
-  )
+  );
 }
 
-panel({ title: "Standup Notes", render: View })
+panel({ title: "Standup Notes", render: View });
 ```
 
 Open a channel, press ⌘K and pick **Standup Notes** under Mods. Run `kiwi mod dev` in a folder whose `mod.json` has that name and it links that folder instead, so you can keep the mod in its own repo.
 
 ## mod.json
 
-| Field | What it is |
-| --- | --- |
-| `name` | Lowercase letters, digits and dashes, the same as the folder's name. `app`, `nav`, `view`, `chat` and `debug` are taken. |
-| `version` | A version like `1.0.0` |
-| `shell` | The app versions it works with, like `^3.6`. An app it doesn't fit leaves it off and says why. |
-| `needs` | What it asks you for: `panel`, `command`, `terminal`, `render:<kind>`, and `net:<host>` for each web host it talks to |
-| `icon` | Optional: an `.svg` or `.png` in its folder, up to 64 KB. The app shows it as a picture, so an SVG's scripts never run. Without one, the mod gets its first letter. |
-| `author` | Optional: who made it, up to 100 characters |
-| `skills` | Optional: skills it gives every agent. See [Skills](#skills) |
+| Field      | What it is                                                                                                                                                          |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`     | Lowercase letters, digits and dashes, the same as the folder's name. `app`, `nav`, `view`, `chat` and `debug` are taken.                                            |
+| `version`  | A version like `1.0.0`                                                                                                                                              |
+| `shell`    | The app versions it works with, like `^3.6`. An app it doesn't fit leaves it off and says why.                                                                      |
+| `needs`    | What it asks you for: `panel`, `command`, `terminal`, `render:<kind>`, and `net:<host>` for each web host it talks to                                               |
+| `icon`     | Optional: an `.svg` or `.png` in its folder, up to 64 KB. The app shows it as a picture, so an SVG's scripts never run. Without one, the mod gets its first letter. |
+| `author`   | Optional: who made it, up to 100 characters                                                                                                                         |
+| `settings` | Optional: what the person fills in for it, like a token. See [Settings](#settings)                                                                                  |
+| `skills`   | Optional: skills it gives every agent. See [Skills](#skills)                                                                                                        |
 
 A `net:` host is exact: `net:api.linear.app` lets it reach `https://api.linear.app` and nothing else, not even another subdomain.
 
@@ -65,26 +66,27 @@ A `net:` host is exact: `net:api.linear.app` lets it reach `https://api.linear.a
 
 Everything comes from `@kiwi/mod`, plus React:
 
-| Import | What it does |
-| --- | --- |
-| `panel({ title, render })` | The mod's panel beside the chat. Its title shows in the panel's header and in ⌘K. |
-| `command({ id, title, run })` | An action in ⌘K. Its id for `keys.json` is `<mod>.<id>`. |
-| `render(kind, draw)` | Draws one kind of attachment in chat. See [Drawing attachments](#drawing-attachments). |
-| `fetch(url, init)` | The mod's only way to the network, to the hosts you approved, over https |
-| `terminals()`, `focusTerminal(id)`, `markTerminal(id, mark)` | Your agents' tmux panes and Rex blocks. See [Terminals](#terminals) |
-| `Button`, `Row`, `Field`, `Icon` | The app's own button, list row, labelled field and icons |
+| Import                                                       | What it does                                                                           |
+| ------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| `panel({ title, render })`                                   | The mod's panel beside the chat. Its title shows in the panel's header and in ⌘K.      |
+| `command({ id, title, run })`                                | An action in ⌘K. Its id for `keys.json` is `<mod>.<id>`.                               |
+| `render(kind, draw)`                                         | Draws one kind of attachment in chat. See [Drawing attachments](#drawing-attachments). |
+| `fetch(url, init)`                                           | The mod's only way to the network, to the hosts you approved, over https               |
+| `terminals()`, `focusTerminal(id)`, `markTerminal(id, mark)` | Your agents' tmux panes and Rex blocks. See [Terminals](#terminals)                    |
+| `settings()`                                                 | Its settings' values, by id                                                            |
+| `Button`, `Row`, `Field`, `Icon`                             | The app's own button, list row, labelled field and icons                               |
 
 The frame has the app's colours and styles, and follows your theme as it changes. A mod can also import its own files: code, `.css`, and images (`.svg`, `.png`, `.jpg`, `.gif`, `.webp`).
 
 ```tsx
-import { useState } from "react"
-import { Button, command, fetch, panel, Row } from "@kiwi/mod"
+import { useState } from "react";
+import { Button, command, fetch, panel, Row } from "@kiwi/mod";
 
-let show: (s: string) => void = () => {}
+let show: (s: string) => void = () => {};
 
 function View() {
-  const [said, setSaid] = useState("nothing yet")
-  show = setSaid
+  const [said, setSaid] = useState("nothing yet");
+  show = setSaid;
   return (
     <>
       <Row title="Status" sub={said} />
@@ -92,14 +94,34 @@ function View() {
         Ask example.com
       </Button>
     </>
-  )
+  );
 }
 
-panel({ title: "Status", render: View })
-command({ id: "hi", title: "Say hi from Status", run: () => show("hi from ⌘K") })
+panel({ title: "Status", render: View });
+command({ id: "hi", title: "Say hi from Status", run: () => show("hi from ⌘K") });
 ```
 
 With `"needs": ["panel", "command", "net:example.com"]`, that's a whole mod.
+
+## Settings
+
+A mod lists what it needs filled in, and its page in Settings → Mods draws the form:
+
+```json
+"settings": [
+  { "id": "token", "title": "Linear API key", "type": "secret", "required": true },
+  { "id": "team", "title": "Team", "type": "text" },
+  { "id": "show", "title": "Show", "type": "choice", "choices": ["Mine", "Everyone's"] },
+  { "id": "done", "title": "Include done issues", "type": "toggle" }
+]
+```
+
+- **Types:** `text`, `toggle`, `choice` (with its `choices`) and `secret`. Up to 20 settings.
+- **`required`:** until it's filled in, the mod stays off and its row says which setting it needs.
+- **Secrets** are sealed on this computer with the key your keychain holds, like your own keys. They're in no file under `~/.kiwi`, and the page never shows one again. On Linux with no keyring, Channels won't keep one and says why.
+- **`settings()`** gives the mod its own values: a string, `true` or `false`, or `null` when empty. No mod gets another's.
+- **A change restarts the mod** with the new values.
+- **Another source:** a mod with the same name from another source starts with none of the old values.
 
 ## Turning one on
 
@@ -113,11 +135,11 @@ The app keeps your approvals on this computer. There's no off switch in the app 
 
 With `"terminal"` in its needs, a mod can find this computer's agents in tmux and Rex, bring one forward and mark the ones that need you. It never runs a command in a terminal, types into one or reads what one shows.
 
-| Call | What it does |
-| --- | --- |
-| `terminals()` | This computer's agents that sit in a tmux pane or a Rex block: `{ id, room, channel, agent, in }`, where `in` is `tmux` or `rex` |
-| `focusTerminal(id)` | Brings that pane or block forward |
-| `markTerminal(id, { asks, tasks })` | Marks it: in tmux, the window option `@kiwi` reads like `2? T7 T9`; in Rex, a status on the agent's block. `null` clears it. |
+| Call                                | What it does                                                                                                                     |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `terminals()`                       | This computer's agents that sit in a tmux pane or a Rex block: `{ id, room, channel, agent, in }`, where `in` is `tmux` or `rex` |
+| `focusTerminal(id)`                 | Brings that pane or block forward                                                                                                |
+| `markTerminal(id, { asks, tasks })` | Marks it: in tmux, the window option `@kiwi` reads like `2? T7 T9`; in Rex, a status on the agent's block. `null` clears it.     |
 
 A mod can also bring a snippet for each: `terminal/tmux.conf` and `terminal/rex.lua` in its folder. **Turn on** shows both, with the one line each adds: a `source-file` line in your tmux config and a `dofile` line in Rex's `init.lua`. Each line loads a copy the app keeps, so a mod that changes its snippet asks again. Removing the mod takes both lines back out. A snippet is config that tmux or Rex runs as you, like your own, which is why you see all of it first.
 
@@ -131,7 +153,7 @@ Each mod runs in a sandboxed frame of its own origin:
 
 Some limits come with that:
 
-- **No storage:** a mod can't keep a setting or a token between reloads.
+- **No storage:** a mod can't keep anything between reloads besides its [settings](#settings).
 - **Links don't open**, and images from the web don't load; fetch one and show it as a `blob:` URL.
 - **Each save restarts it**, so its state resets.
 - **No types for `@kiwi/mod` yet:** your editor may flag the import, but the mod builds.
@@ -149,12 +171,12 @@ With `render:<kind>` in its needs, a mod draws that kind of attachment in chat, 
 The snapshot shows first. Once it's on screen, the mod's frame draws over it: `draw` gets `{ kind, name, html, dark, full }`, with the page for your theme, and can return React to show. A button opens it full window, where `full` is true.
 
 ```tsx
-import { render } from "@kiwi/mod"
+import { render } from "@kiwi/mod";
 
 render("figure", ({ html }) => {
-  const page = new DOMParser().parseFromString(html, "text/html")
-  document.body.replaceWith(document.adoptNode(page.body))
-})
+  const page = new DOMParser().parseFromString(html, "text/html");
+  document.body.replaceWith(document.adoptNode(page.body));
+});
 ```
 
 A page moved in that way doesn't run its scripts. The [anatomy mod](https://github.com/kiwi-init/mods/tree/main/anatomy) runs them too.
@@ -191,13 +213,13 @@ Channels comes with **anatomy**, by Ryan (MIT). It makes interactive figures, an
 
 A mod is a git repo. Push yours anywhere and anyone can add it:
 
-| Command | What it does |
-| --- | --- |
+| Command                                    | What it does                                                                                                         |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
 | `kiwi mod add github.com/owner/repo[#ref]` | Clone it into `~/.kiwi/mods`, pinned at that commit, and print what it asks for. The app asks you before it runs it. |
-| `kiwi mod update [name] [--yes]` | Pull each mod (or one) and say what changed in what it asks for. One that asks for more waits for `--yes`. |
-| `kiwi mod list [--json]` | Each mod, its version, where it came from and what it asks for |
-| `kiwi mod remove <name> [--force]` | Delete it. A link loses just the link; one with changes not in its source needs `--force`. |
-| `kiwi mod dev <name>` | Create, link or open a mod and rebuild it on every save |
+| `kiwi mod update [name] [--yes]`           | Pull each mod (or one) and say what changed in what it asks for. One that asks for more waits for `--yes`.           |
+| `kiwi mod list [--json]`                   | Each mod, its version, where it came from and what it asks for                                                       |
+| `kiwi mod remove <name> [--force]`         | Delete it. A link loses just the link; one with changes not in its source needs `--force`.                           |
+| `kiwi mod dev <name>`                      | Create, link or open a mod and rebuild it on every save                                                              |
 
 `add` also takes an `https://` or ssh address or a full path, and `#ref` pins a branch, tag or commit. A mod added at a branch follows it on `update`; one pinned at a tag or a commit stays there.
 

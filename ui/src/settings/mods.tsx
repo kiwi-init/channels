@@ -14,7 +14,7 @@ import { Page } from "~/settings/sections"
 
 const wanted = (m: ModView): boolean => m.state === "on" || m.off === "safe"
 
-const switchable = (m: ModView): boolean => m.state !== "off" || m.off !== undefined
+const switchable = (m: ModView): boolean => m.state !== "off" || (m.off !== undefined && m.off !== "settings")
 
 export function ModsSection() {
   useModsVersion()

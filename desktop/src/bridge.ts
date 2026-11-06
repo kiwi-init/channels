@@ -485,7 +485,7 @@ export interface KiwiBridge {
   settingsOn(machinePk: string): Promise<FromMachine<ComputerSettings>>;
   mods(): Promise<ModView[]>;
   onMods(cb: (mods: ModView[]) => void): () => void;
-  modBundle(name: string): Promise<{ code: string; hash: string } | null>;
+  modBundle(name: string): Promise<ModBundle | null>;
   approveMod(name: string, needs: string[]): Promise<ModView[]>;
   modFetch(name: string, req: ModFetchRequest): Promise<ModFetchReply>;
   modFailed(name: string, hash: string, why: string): Promise<ModView[]>;
@@ -496,6 +496,7 @@ export interface KiwiBridge {
   modTerminals(name: string): Promise<ModTerminal[]>;
   modTerminalFocus(name: string, seat: string): Promise<void>;
   modTerminalMark(name: string, seat: string, mark: ModTerminalMark | null): Promise<void>;
+  setModSetting(name: string, id: string, value: ModSettingValue): Promise<ModView[]>;
 }
 
 export interface ModView {
@@ -506,10 +507,29 @@ export interface ModView {
   approved: string[];
   state: "on" | "asks" | "off";
   why?: string;
-  off?: "you" | "crash" | "safe";
+  off?: "you" | "crash" | "safe" | "settings";
   hash?: string;
   icon?: string;
   terminal?: { hash: string; tmux?: ModSnippet; rex?: ModSnippet };
+  settingsRev?: number;
+}
+
+export type ModSettingValue = string | boolean | null;
+
+export interface ModBundle {
+  code: string;
+  hash: string;
+  settings: Record<string, ModSettingValue>;
+}
+
+export interface ModSettingView {
+  id: string;
+  title: string;
+  type: "text" | "toggle" | "choice" | "secret";
+  choices?: string[];
+  required?: boolean;
+  value?: ModSettingValue;
+  set?: boolean;
 }
 
 export interface ModIcon {
@@ -528,6 +548,7 @@ export interface ModDetails {
   bytes: number | null;
   readme: string | null;
   iconWhy: string | null;
+  settings: ModSettingView[];
 }
 
 export interface ModTerminal {

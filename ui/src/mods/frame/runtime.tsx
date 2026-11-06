@@ -23,6 +23,7 @@ let view: ComponentType | null = null
 let booted = false
 let surface: Surface = "main"
 let needs: ReadonlySet<string> = new Set()
+let values: Readonly<Record<string, string | boolean | null>> = Object.freeze({})
 let nextId = 1
 const waiting = new Map<number, Waiting>()
 const commands = new Map<string, { title: string; run: () => void | Promise<void> }>()
@@ -150,6 +151,7 @@ const api = {
   terminals,
   focusTerminal,
   markTerminal,
+  settings: (): Readonly<Record<string, string | boolean | null>> => values,
   Button,
   Field,
   Row,
@@ -191,6 +193,7 @@ addEventListener("message", (e) => {
     booted = true
     surface = m.surface
     needs = new Set(m.needs)
+    values = Object.freeze({ ...m.settings })
     document.documentElement.dataset["surface"] = surface
     theme(m.theme, m.dark)
     try {

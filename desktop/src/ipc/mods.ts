@@ -7,9 +7,10 @@ import type { Serves } from "../calls.ts";
 import { childEnv, sessionEnv } from "../child-env.ts";
 import { kiwiHome } from "../daemon-client.ts";
 import type { Host } from "../host.ts";
-import { modsHost, type ModsHost } from "../mods-host.ts";
+import { modsHost, type ModsHost, type ModSecrets } from "../mods-host.ts";
 import { placedSeatsOf, terminalCalls, type Run } from "../mods-terminal.ts";
 import type { SnippetHome } from "../mods-terminal-snippet.ts";
+import { keysAtRest, mutate, store } from "../store.ts";
 import { UI_CONTRACT } from "../ui-contract.ts";
 import { runKiwi } from "./kiwi.ts";
 
@@ -68,9 +69,30 @@ function snippetHome(data: string): SnippetHome {
   return { copies: path.join(data, "mod-terminals"), record: path.join(data, "mod-terminals.json"), home: os.homedir(), env: sessionEnv() };
 }
 
+const sealedSecrets: ModSecrets = {
+  read: (mod, source) => {
+    const kept = store.modSecrets?.[mod];
+    return kept?.source === source ? { ...kept.values } : {};
+  },
+  write: (mod, source, id, value) => {
+    const atRest = keysAtRest();
+    if (value !== null && !atRest.sealed) throw new Error(`Channels keeps a mod's secrets only sealed, and it can't seal them on this computer: ${atRest.why ?? "it has no keyring"}`);
+    mutate((s) => {
+      const all = (s.modSecrets ??= {});
+      const kept = all[mod]?.source === source ? all[mod] : { source, values: {} };
+      if (value === null) delete kept.values[id];
+      else kept.values[id] = value;
+      if (Object.keys(kept.values).length) all[mod] = kept;
+      else delete all[mod];
+    });
+  },
+};
+
 export function modsCalls(
   host: Host,
-): Serves<"mods" | "modBundle" | "approveMod" | "modFetch" | "modFailed" | "setModOn" | "modsSettled" | "modIcon" | "modDetails" | "modTerminals" | "modTerminalFocus" | "modTerminalMark"> {
+): Serves<
+  "mods" | "modBundle" | "approveMod" | "modFetch" | "modFailed" | "setModOn" | "modsSettled" | "modIcon" | "modDetails" | "modTerminals" | "modTerminalFocus" | "modTerminalMark" | "setModSetting"
+> {
   let mods: ModsHost | null = null;
   let started: Promise<ModsHost> | null = null;
   const ready = (): Promise<ModsHost> => {
@@ -82,6 +104,7 @@ export function modsCalls(
       push: (list) => host.push("mods", list),
       safe: safeAtStart,
       terminal: snippetHome(host.app.path("data")),
+      secrets: sealedSecrets,
     });
     mods = m;
     started = m.start().then(() => m);
@@ -125,5 +148,6 @@ export function modsCalls(
       await allowed(name);
       await terminals.mark(seat, mark);
     },
+    setModSetting: async (name, id, value) => (await ready()).setSetting(String(name), String(id), value),
   };
 }

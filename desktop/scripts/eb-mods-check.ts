@@ -51,6 +51,19 @@ terminals().then(
   );
 }
 
+const settingsFolder = join(root, ".kiwi", "mods", "settings-mod");
+const SECRET = `sk-settings-mod-${Math.random().toString(36).slice(2)}`;
+
+function writeSettingsMod(): void {
+  mkdirSync(settingsFolder, { recursive: true });
+  const settings = [
+    { id: "token", title: "Token", type: "secret", required: true },
+    { id: "mode", title: "Mode", type: "choice", choices: ["fast", "slow"] },
+  ];
+  writeFileSync(join(settingsFolder, "mod.json"), JSON.stringify({ name: "settings-mod", version: "1.0.0", shell: "^3.3", needs: [], settings }));
+  writeFileSync(join(settingsFolder, "index.tsx"), `import { settings } from "@kiwi/mod"\nparent.postMessage({ kiwiProbe: { settingsMod: settings() } }, "*")\n`);
+}
+
 function writeQuietMod(): void {
   mkdirSync(quietFolder, { recursive: true });
   writeFileSync(join(quietFolder, "mod.json"), JSON.stringify({ name: "quiet-mod", version: "1.0.0", shell: "^3.3", needs: [] }));
@@ -98,7 +111,7 @@ function writeMod(version: number): void {
   writeFileSync(
     join(folder, "index.tsx"),
     `import { useState } from "react"
-import { command, fetch as modFetch, messageAction, panel, sidebar, Button, Row } from "@kiwi/mod"
+import { command, fetch as modFetch, messageAction, panel, settings, sidebar, Button, Row } from "@kiwi/mod"
 
 const surface = document.documentElement.dataset["surface"]
 const say = (m: unknown) => parent.postMessage({ kiwiProbe: m }, "*")
@@ -133,6 +146,7 @@ async function probe() {
   const h = w.webkit?.messageHandlers
   const out: Record<string, unknown> = {
     version: ${version},
+    settings: settings(),
     origin: String(self.origin),
     kiwi: typeof w.kiwi,
     electrobunBridge: typeof w.__electrobunBunBridge,
@@ -422,9 +436,12 @@ function files(dir: string): string[] {
   if (!existsSync(dir)) return [];
   return readdirSync(dir).flatMap((n) => {
     const p = join(dir, n);
-    return lstatSync(p).isDirectory() ? files(p) : [p];
+    const s = lstatSync(p);
+    return s.isDirectory() ? files(p) : s.isFile() ? [p] : [];
   });
 }
+
+const holding = (secret: string): string[] => files(root).filter((f) => readFileSync(f).includes(secret));
 
 function stacks(why: string): void {
   if (process.platform !== "darwin" || !app.pid) return;
@@ -450,6 +467,7 @@ function stacks(why: string): void {
 writeMod(1);
 writeQuietMod();
 writeTerminalMod();
+writeSettingsMod();
 mkdirSync(join(root, "home"), { recursive: true });
 writeFileSync(TMUX_CONF, TMUX_BEFORE);
 let app = launch(exe, testEnv(root, join(root, "driver.sock"), RELAY, TERMINAL_ENV));
@@ -663,6 +681,21 @@ try {
     stacks("the mod didn't come back");
   }
   check(!!second, "a saved change reloads the mod");
+  const waiting = (await modsNow(d)).find((m) => m.name === "settings-mod");
+  console.log(`settings-mod before its secret: ${JSON.stringify(waiting)}`);
+  check(waiting?.state === "off" && waiting.off === "settings" && (waiting.why ?? "").includes("Token"), "a mod whose required setting is empty stays off and says which one");
+  const atRest = (await d.evaluate(() => (window as unknown as { kiwi: { keysAtRest(): Promise<unknown> } }).kiwi.keysAtRest(), null, 10_000)) as { sealed: boolean; why: string | null };
+  check(atRest.sealed, `the app's store is sealed, so a secret can be kept${atRest.why ? `: ${atRest.why}` : ""}`);
+  await d.evaluate((v) => (window as unknown as { kiwi: { setModSetting(n: string, i: string, v: string): Promise<unknown> } }).kiwi.setModSetting("settings-mod", "token", v), SECRET, 10_000);
+  const given = await until("settings-mod's settings", 30_000, async () => (await heard(d)).find((m) => m["settingsMod"]) ?? null).catch(() => null);
+  check((given?.["settingsMod"] as Record<string, unknown> | undefined)?.["token"] === SECRET, "once its secret is saved the mod starts, and settings() hands it the secret");
+  check(!(await heard(d)).some((m) => !m["settingsMod"] && JSON.stringify(m).includes(SECRET)), "no other mod's frame gets it");
+  check(
+    (await heard(d)).filter((m) => m["version"] !== undefined).every((m) => JSON.stringify(m["settings"]) === "{}"),
+    "a mod with no settings gets an empty settings()",
+  );
+  const leaked = holding(SECRET);
+  check(!leaked.length, `the secret is in no file, under ~/.kiwi or anywhere else${leaked.length ? `: ${leaked.join(", ")}` : ""}`);
   await later(1_500);
   const opens = (await d.main("browserOpens")) as string[];
   console.log(`opened in the browser: ${JSON.stringify(opens)}`);
@@ -713,6 +746,12 @@ try {
   console.log(`mods in safe mode: ${JSON.stringify(listed)}`);
   check(listed.every((m) => m.state !== "on") && listed.find((m) => m.name === "probe-mod")?.off === "safe", "safe mode starts with every mod off, and says why");
   check(!existsSync(join(root, ".kiwi", "mods", ".safe-mode")), "safe mode by .safe-mode lasts one start: the app removes the file");
+  const kept = (await safe.evaluate(() => (window as unknown as { kiwi: { modDetails(n: string): Promise<unknown> } }).kiwi.modDetails("settings-mod"), null, 10_000)) as {
+    settings?: { id: string; set?: boolean; value?: unknown }[];
+  } | null;
+  check(kept?.settings?.find((x) => x.id === "token")?.set === true && !JSON.stringify(kept).includes(SECRET), "the saved secret outlasts a restart, and the details page never gets it back");
+  const after = holding(SECRET);
+  check(!after.length, `after a restart, the secret is still in no file${after.length ? `: ${after.join(", ")}` : ""}`);
   await settingsMods(safe, "No mod runs until Channels restarts");
   check((await safe.evaluate(() => document.querySelectorAll('iframe[src*="mod-frame"]').length, null, 2_000)) === 0, "safe mode starts no mod's frame");
   await shot("settings-mods-safe");

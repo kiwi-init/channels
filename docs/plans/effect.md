@@ -10,13 +10,13 @@
 
 ## What "backend" covers
 
-| Part | Files | Lines | Runs in |
-| --- | --- | --- | --- |
-| Relay core (shared) | `src/relay/room.ts`, `policy.ts`, `human.ts`, `devices.ts`, `machines.ts`, `vault.ts` | ~2,000 | Worker and Bun |
-| Relay adapters | `src/relay/worker.ts` (Durable Objects), `src/relay/bun.ts` (bun:sqlite) | ~670 | one each |
-| Client library | `src/client.ts`, `agent.ts`, `config.ts`, `machine.ts`, `hooks.ts` | ~2,300 | Bun (and `client.ts` in the browser) |
-| CLI and MCP | `src/cli/*.ts`, `src/mcp.ts`, `src/query.ts` | ~1,700 | Bun binary |
-| Pure core | `protocol.ts`, `state.ts`, `crypto.ts`, `identity.ts`, `membership.ts`, `sas.ts`, `vault.ts`, `format.ts`, `load.ts` | ~1,900 | everywhere |
+| Part                | Files                                                                                                                | Lines  | Runs in                              |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------- | ------ | ------------------------------------ |
+| Relay core (shared) | `src/relay/room.ts`, `policy.ts`, `human.ts`, `devices.ts`, `machines.ts`, `vault.ts`                                | ~2,000 | Worker and Bun                       |
+| Relay adapters      | `src/relay/worker.ts` (Durable Objects), `src/relay/bun.ts` (bun:sqlite)                                             | ~670   | one each                             |
+| Client library      | `src/client.ts`, `agent.ts`, `config.ts`, `machine.ts`, `hooks.ts`                                                   | ~2,300 | Bun (and `client.ts` in the browser) |
+| CLI and MCP         | `src/cli/*.ts`, `src/mcp.ts`, `src/query.ts`                                                                         | ~1,700 | Bun binary                           |
+| Pure core           | `protocol.ts`, `state.ts`, `crypto.ts`, `identity.ts`, `membership.ts`, `sas.ts`, `vault.ts`, `format.ts`, `load.ts` | ~1,900 | everywhere                           |
 
 ## Ground rules
 
@@ -63,7 +63,7 @@
 - **Request bodies get Schemas** at the relay boundary, replacing hand-written
   `typeof` checks (`wellFormed`, `version()`, `body()`, the vault and icon
   checks). The Schemas live next to the protocol types and are the single
-  source for both decode and type. The *payload* validation inside encrypted
+  source for both decode and type. The _payload_ validation inside encrypted
   messages (`wellFormedEvent`) can use the same Schemas later; not in step 1.
 - **HTTP**: the relay's router becomes an Effect `HttpRouter` app, turned into
   a fetch handler with `HttpEffect.toWebHandler`. The Worker's `fetch`, the
@@ -95,7 +95,7 @@
    and it sets the vocabulary.
 2. **Relay core on Effect.** `room.ts`, `policy.ts`, `vault.ts`, `devices.ts`,
    `machines.ts`, `human.ts` as services and Effect handlers. Both adapters
-   provide Layers. Run the suite against Bun *and* `wrangler dev`
+   provide Layers. Run the suite against Bun _and_ `wrangler dev`
    (`KIWI_TEST_RELAY`, plus the Worker vault test). It ships as a relay deploy
    on its own, with a canary: the workers.dev URL first, the suite run against
    it, then the custom domain; per-request CPU in the Durable Object recorded

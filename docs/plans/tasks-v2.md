@@ -103,17 +103,9 @@ interface Task {
 v2:
 
 ```ts
-type Ref =
-  | { kind: "sha"; repo: string; sha: string }
-  | { kind: "pr"; repo: string; number: number }
-  | { kind: "file"; hash: string; url?: string }
-  | { kind: "release"; version: string };
+type Ref = { kind: "sha"; repo: string; sha: string } | { kind: "pr"; repo: string; number: number } | { kind: "file"; hash: string; url?: string } | { kind: "release"; version: string };
 
-type Proof =
-  | { need: "merged"; check: string }
-  | { need: "released"; version: string }
-  | { need: "verdict"; by: string; on: "head" | "file" }
-  | { need: "page"; url: string };
+type Proof = { need: "merged"; check: string } | { need: "released"; version: string } | { need: "verdict"; by: string; on: "head" | "file" } | { need: "page"; url: string };
 
 interface Ask {
   id: number;
@@ -225,19 +217,19 @@ review.
 - **Amendments by reply, not by clock.** proud-yak chained a person's messages sent within 10
   minutes of each other. In v2, a reply to an ask, or a message in its thread, amends it; the lead
   files the rest with `kiwi ask amend`.
-- **A finding isn't work until it's adopted** (proud-yak). T96 would have been a *scope* decision
+- **A finding isn't work until it's adopted** (proud-yak). T96 would have been a _scope_ decision
   ("adopt it?") before any PR existed, not a PR that then got dropped.
 
 ## Walkthrough: the UI round, #18 to #119
 
-| Today | v2 |
-| --- | --- |
-| #18 and three screenshots; the lead adds T25, T26 and T27 by hand, pointing at the screenshots rather than at #18 | #18 opens A18, amended by #19–#22. Done-when: the person's verdict on a shot |
-| Each builder claims a task, which moves it to `doing` | Builders take holds on W25–W27 (`building`) |
-| Mockups posted as chat (#43–#45, #87–#89); T25 marked done by hand with a note pointing at them | Each mockup is file evidence, and each work goes to `yours` by itself. Needs you shows one line, "A18: 3 shots to look at": a *taste* decision holding W25–W27 |
-| #79 "the best of the three" becomes T81 | #79 amends A18. W81 is `join(25, 26, 27)`, and its capsule is the union of the three |
-| #116 is an escalation with options | #116 is a *choice* decision holding W81 |
-| #119 "discard all": four cancels, four notes, four done cards | One `ask.drop A18`. Holds free, and the capsules fold into `A18.tried`, so the next ask in this area starts from what was rejected |
+| Today                                                                                                             | v2                                                                                                                                                             |
+| ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| #18 and three screenshots; the lead adds T25, T26 and T27 by hand, pointing at the screenshots rather than at #18 | #18 opens A18, amended by #19–#22. Done-when: the person's verdict on a shot                                                                                   |
+| Each builder claims a task, which moves it to `doing`                                                             | Builders take holds on W25–W27 (`building`)                                                                                                                    |
+| Mockups posted as chat (#43–#45, #87–#89); T25 marked done by hand with a note pointing at them                   | Each mockup is file evidence, and each work goes to `yours` by itself. Needs you shows one line, "A18: 3 shots to look at": a _taste_ decision holding W25–W27 |
+| #79 "the best of the three" becomes T81                                                                           | #79 amends A18. W81 is `join(25, 26, 27)`, and its capsule is the union of the three                                                                           |
+| #116 is an escalation with options                                                                                | #116 is a _choice_ decision holding W81                                                                                                                        |
+| #119 "discard all": four cancels, four notes, four done cards                                                     | One `ask.drop A18`. Holds free, and the capsules fold into `A18.tried`, so the next ask in this area starts from what was rejected                             |
 
 The person saw one row in their own words the whole time, plus the questions that held it up.
 

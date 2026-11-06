@@ -4,7 +4,7 @@
 > `kiwi` (not `mc`), env vars are `KIWI_*` (not `MC_*`), the public relay is
 > https://channels.kiwiinit.com, the repo is kiwi-init/channels, `install.sh` downloads
 > attested release binaries (no `MC_REPO`), and computers are paired with `kiwi pair`
-> (the app's *Your computers*; `kiwi setup` is hooks, PATH, and how to pair). Read the brief through that lens.
+> (the app's _Your computers_; `kiwi setup` is hooks, PATH, and how to pair). Read the brief through that lens.
 > The brief arrived cut off at its last line ("Don't deploy to the public relay, and don't change").
 
 The public relay is about to be shared publicly. The owner is paying out of pocket in Brazil and
@@ -12,6 +12,7 @@ needs Cloudflare costs to be **bounded**. Deliver: (1) an invite-only beta gate,
 quotas that become the future free tier, (3) first-class documentation for self-hosting.
 
 ## Hard constraints
+
 - Never weaken end-to-end encryption. Quotas may use only what the relay already sees: room ids,
   member public keys, signed-in user ids, counts, byte sizes, timestamps. No new plaintext fields.
 - All logic in `src/relay/room.ts` or a shared module next to it; both relays behave identically
@@ -23,6 +24,7 @@ quotas that become the future free tier, (3) first-class documentation for self-
 - Don't break the wire protocol. New errors: 403 not allowed, 429 over quota, 413 too large.
 
 ## Part 1: beta gate
+
 - `BETA_USERS`: comma-separated user ids (optionally emails / email domains, via the
   sign-in's profile lookup). When set, `POST /create` from a signed-in user not on the list → 403
   with a clear message and a configurable waitlist URL.
@@ -32,6 +34,7 @@ quotas that become the future free tier, (3) first-class documentation for self-
   sign-in settings.
 
 ## Part 2: per-person quotas [public-relay defaults]
+
 1. Channels owned per person [2], checked on create (Directory DO / people.sqlite); closing frees a slot.
 2. Active members per channel [8], checked in approve.
 3. Stored messages per channel per UTC day [2,000]: counter in the room's meta, reset by date,
@@ -52,6 +55,7 @@ shows it inline, and agents never retry-loop on a 429.
 today, bytes, members. Shown in a small spot on the dashboard.
 
 ## Part 3: docs/self-hosting.md (every command actually run), linked from README
+
 When to self-host; Bun relay (flags, data layout, backups); putting it on the internet (TLS,
 Caddy, systemd, optional Docker); dashboard on a self-hosted relay (serve web/dist with an SPA
 fallback from bun.ts, preferred over documenting the gap); your own Cloudflare Worker (wrangler,
@@ -63,12 +67,14 @@ dashboard JS controls the code holding the owner key). Update SECURITY.md and RE
 promises change (e.g. expiry deletes everything like close).
 
 ## Tests
+
 Every rule: allowlist on/off; each quota at the limit and one past; daily reset with an injected
 clock; byte counter correct after pruning; expiry wiping room and directory entries;
 /v1/me/usage; self-hosted defaults unchanged. Fake sign-in verifier as in test/human.test.ts.
 All on the Bun relay; also against `wrangler dev` if it runs, else say so.
 
 ## Done means
+
 bun test + typecheck pass; no new config → unchanged behavior apart from the safety caps (state
 which defaults changed); wrangler.jsonc enables beta + quotas with the bracketed defaults,
 commented; docs/self-hosting.md exists with every command executed; small focused commits in

@@ -36,13 +36,13 @@ Nothing is typed into a session that is working, and every task starts small.
 
 ## What the spikes found
 
-| Harness | Version, model | First prompt | Ends cleanly on | Fresh session takes the seat | Idle session woken |
-| --- | --- | --- | --- | --- | --- |
-| Claude Code | 2.1.304 | `claude "PROMPT"` | SIGTERM (143) | yes, at its first hook | yes, its listener hook |
-| Codex | 0.163.0, gpt-6-astra | `codex "PROMPT"` | SIGTERM (143) | no: the seat stays on the old thread, and `codex queue` wakes go there | yes, once the seat names the new thread |
-| Grok | 1.0.62, grok-4.7 | `grok "PROMPT"` | SIGTERM (0) | no: "fond-owl works from this folder in another session" | only while the session runs a `kiwi listen` monitor |
-| MiMoCode | 0.1.15, mimo-v2.6-pro | `mimo --prompt "PROMPT"` | SIGINT (130); SIGTERM ignored for 19 s | yes: Kiwi's plugin rebinds it and hands over the pending task | yes, through the plugin |
-| Kimi Code | 2.2.0, K3-256k | none: typed in with `tmux send-keys`, or `POST` to `kimi web` | SIGINT or SIGTERM | yes, at its first `kiwi` command | yes: its own background listener, or `kimi web` |
+| Harness     | Version, model        | First prompt                                                  | Ends cleanly on                        | Fresh session takes the seat                                           | Idle session woken                                  |
+| ----------- | --------------------- | ------------------------------------------------------------- | -------------------------------------- | ---------------------------------------------------------------------- | --------------------------------------------------- |
+| Claude Code | 2.1.304               | `claude "PROMPT"`                                             | SIGTERM (143)                          | yes, at its first hook                                                 | yes, its listener hook                              |
+| Codex       | 0.163.0, gpt-6-astra  | `codex "PROMPT"`                                              | SIGTERM (143)                          | no: the seat stays on the old thread, and `codex queue` wakes go there | yes, once the seat names the new thread             |
+| Grok        | 1.0.62, grok-4.7      | `grok "PROMPT"`                                               | SIGTERM (0)                            | no: "fond-owl works from this folder in another session"               | only while the session runs a `kiwi listen` monitor |
+| MiMoCode    | 0.1.15, mimo-v2.6-pro | `mimo --prompt "PROMPT"`                                      | SIGINT (130); SIGTERM ignored for 19 s | yes: Kiwi's plugin rebinds it and hands over the pending task          | yes, through the plugin                             |
+| Kimi Code   | 2.2.0, K3-256k        | none: typed in with `tmux send-keys`, or `POST` to `kimi web` | SIGINT or SIGTERM                      | yes, at its first `kiwi` command                                       | yes: its own background listener, or `kimi web`     |
 
 With `KIWI_AS` set to the seat's handle in the session's environment, the fresh Grok session found
 and finished its task: `KIWI_AS` names the agent for `kiwi` commands (`src/cli/context.ts:53,83`).

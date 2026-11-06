@@ -158,7 +158,7 @@ async function onMessage(e: MessageEvent): Promise<void> {
   switch (m.type) {
     case "hello": {
       const got = await b.modBundle(name).catch(() => null)
-      if (got) send(f, { kiwi: MOD_PROTOCOL, type: "boot", name, surface, needs: mod?.needs ?? [], code: got.code, ...look() })
+      if (got) send(f, { kiwi: MOD_PROTOCOL, type: "boot", name, surface, needs: mod?.needs ?? [], code: got.code, settings: got.settings ?? {}, ...look() })
       else {
         bootGone(keyOf(name, surface))
         update(name, { failed: "Its code couldn't be built." })
@@ -242,10 +242,11 @@ function surfacesOf(m: ModView): Surface[] {
 }
 
 function startFrames(layer: HTMLElement): void {
-  const want = new Map<string, { name: string; surface: Surface; hash: string }>()
-  for (const m of state.mods) if (m.state === "on" && m.hash) for (const surface of surfacesOf(m)) want.set(keyOf(m.name, surface), { name: m.name, surface, hash: m.hash })
+  const want = new Map<string, { name: string; surface: Surface; hash: string; rev: string }>()
+  for (const m of state.mods)
+    if (m.state === "on" && m.hash) for (const surface of surfacesOf(m)) want.set(keyOf(m.name, surface), { name: m.name, surface, hash: m.hash, rev: String(m.settingsRev ?? 0) })
   for (const [key, f] of frames)
-    if (want.get(key)?.hash !== f.el.dataset["hash"]) {
+    if (want.get(key)?.hash !== f.el.dataset["hash"] || want.get(key)?.rev !== f.el.dataset["rev"]) {
       f.el.remove()
       frames.delete(key)
       bootGone(key)
@@ -255,13 +256,14 @@ function startFrames(layer: HTMLElement): void {
         bindCommands(f.name, null)
       }
     }
-  for (const [key, { name, surface, hash }] of want) {
+  for (const [key, { name, surface, hash, rev }] of want) {
     if (frames.has(key)) continue
     openLinksOutside()
     const el = document.createElement("iframe")
     el.setAttribute("sandbox", "allow-scripts")
     el.title = surface === "main" ? name : `${name} in the sidebar`
     el.dataset["hash"] = hash
+    el.dataset["rev"] = rev
     place(el, null)
     el.src = FRAME_URL
     frames.set(key, { name, surface, el })

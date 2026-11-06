@@ -9,6 +9,7 @@ import { needWords } from "~/mods/needs"
 import { modReads } from "~/mods/served"
 import { useApp } from "~/nav"
 import { Group, Row } from "~/settings/controls"
+import { ModSettings } from "~/settings/mod-settings"
 
 const Markdown = lazy(() => import("~/chat/markdown"))
 
@@ -18,7 +19,7 @@ const date = (at: number): string => new Date(at).toLocaleDateString([], { year:
 
 function useDetails(mod: ModView): ModDetails | null {
   const [got, setGot] = useState<{ key: string; details: ModDetails | null } | null>(null)
-  const key = `${mod.name} ${mod.version ?? ""} ${mod.hash ?? ""} ${mod.icon ?? ""} ${mod.state}`
+  const key = `${mod.name} ${mod.version ?? ""} ${mod.hash ?? ""} ${mod.icon ?? ""} ${mod.state} ${mod.settingsRev ?? ""}`
   useEffect(() => {
     const read = modReads().modDetails
     if (!read) return
@@ -92,6 +93,7 @@ export function ModDetailsPage({ mod }: { mod: ModView }) {
         )}
         {d?.iconWhy && <Row label="Icon" hint={`It shows its first letter: ${d.iconWhy}.`} />}
       </Group>
+      {d && d.settings.length > 0 && <ModSettings mod={mod.name} list={d.settings} />}
       <Group title="What it may do">
         {mod.needs.length ? (
           mod.needs.map((n) => <Row key={n} label={needWords(n)} hint={mod.approved.includes(n) ? undefined : "Waits for you to allow it"} />)
