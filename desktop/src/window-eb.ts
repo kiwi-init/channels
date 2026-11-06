@@ -6,12 +6,13 @@ import { onOurPage, preloadSource, toPageScript } from "./eb-bridge.ts";
 import { lookMarks } from "./frost-eb.ts";
 import { keys, keysToPage } from "./keys-start-eb.ts";
 import { cString, committedPage, mac, setPageHtml, setPreload, windowLook } from "./native-eb.ts";
-import { navigation, openedUrl, PAGE_RULES, PAGE_TEMPLATE, PAGE_URL, pageWithCsp, RULES_CANARY } from "./eb-page.ts";
+import { isPageUrl, navigation, openedUrl, PAGE_RULES, PAGE_TEMPLATE, PAGE_URL, pageWithCsp, RULES_CANARY } from "./eb-page.ts";
 import { mark } from "./eb-startup.ts";
 import { logMainError } from "./main-log.ts";
 import { externalUrl } from "./guard.ts";
 import { attachWindow, ebHost } from "./host-eb.ts";
 import { handlers } from "./ipc/handlers.ts";
+import { modsInUse } from "./ipc/mods.ts";
 import { ASK_AGAIN_URL, keyringPage, type KeyringState } from "./keyring-wait.ts";
 import { openInBrowser } from "./open.ts";
 import { bunBridge } from "./rpc-eb.ts";
@@ -105,14 +106,27 @@ export async function createWindow(keyring: KeyringState | null = null): Promise
   const webview = win.webview;
   view = webview;
   let closing = false;
-  webview.on("will-navigate", (e) => {
-    const nav = navigation(detailOf(e));
-    if (nav.kind === "refused" && nav.url === ASK_AGAIN_URL) return askAgain();
-    if (nav.kind === "refused") openOutside(nav.url);
-    if (nav.kind !== "breach") return;
+  let onNote = keyring !== null;
+  const framesPost = (): boolean => !mac && modsInUse();
+  const breach = (url: string | null): void => {
     closing = true;
     win.hide();
-    fail(`a navigation the rules should have refused went through (${nav.url ?? "unreadable"}); closing`);
+    fail(`a navigation the rules should have refused went through (${url ?? "unreadable"}); closing`);
+  };
+  webview.on("will-navigate", (e) => {
+    const nav = navigation(detailOf(e));
+    if (nav.kind === "refused" && nav.url === ASK_AGAIN_URL) {
+      if (onNote) askAgain();
+      return;
+    }
+    if (nav.kind === "refused" && !framesPost()) openOutside(nav.url);
+    if (nav.kind !== "breach") return;
+    if (!framesPost()) return breach(nav.url);
+    setTimeout(() => {
+      const now = committedPage();
+      if (now === null || !isPageUrl(now)) breach(nav.url);
+      else logMainError(new Error(`a navigation to ${nav.url ?? "an unreadable URL"} was reported but never left the page; a mod's frame can post such reports on Linux`));
+    }, 500);
   });
   webview.setNavigationRules(PAGE_RULES);
   if (!(await rulesHold(webview))) {
@@ -121,7 +135,8 @@ export async function createWindow(keyring: KeyringState | null = null): Promise
     fail("the window's navigation rules didn't take effect; not opening it");
     return null;
   }
-  const load = (html: Uint8Array<ArrayBuffer> = page()): void => {
+  const load = (html: Uint8Array<ArrayBuffer> = page(), note = false): void => {
+    onNote = note;
     setPageHtml(webview.id, html);
     bridge.retire();
     webview.loadURL(PAGE_URL);
@@ -154,11 +169,11 @@ export async function createWindow(keyring: KeyringState | null = null): Promise
       else load();
     },
   });
-  showNote = (state) => load(note(state));
+  showNote = (state) => load(note(state), true);
   if (ui && !keyring) await startUi();
   else {
     ui?.placeBuiltIn();
-    load(first);
+    load(first, keyring !== null);
   }
   mark("load");
   webview.on("will-navigate", () => mark("willNavigate"));
@@ -168,7 +183,8 @@ export async function createWindow(keyring: KeyringState | null = null): Promise
   if (mac) win.setWindowButtonPosition(TRAFFIC_LIGHTS.x, TRAFFIC_LIGHTS.y);
   Electrobun.events.on(`new-window-open-${webview.id}`, (e: { data?: { detail?: unknown } }) => {
     const url = openedUrl(e.data?.detail);
-    if (url) openOutside(url);
+    if (framesPost()) logMainError(new Error(`not opening ${url ?? "an unreadable URL"}: while mods run on Linux, the page opens its links through the bridge`));
+    else if (url) openOutside(url);
     else logMainError(new Error("a new-window request had no readable URL"));
   });
   webview.on("dom-ready", () => {

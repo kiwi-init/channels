@@ -8,6 +8,7 @@ import { Toasts, useToasts } from "~/kit/toasts"
 import type { App } from "~/model"
 import { ActContext, AppContext, type Go, type Nav } from "~/nav"
 import { ContextMenus } from "~/kit/menu-open"
+import { modsServed } from "~/mods/served"
 import { ChannelScreen } from "~/shell/channel"
 import { startLayout } from "~/shell/layout"
 import { Rail } from "~/shell/rail"
@@ -27,6 +28,7 @@ const Welcome = later(() => import("~/start/welcome").then((m) => m.Welcome))
 const Calm = later(() => import("~/calm/calm").then((m) => m.Calm))
 const AppCommands = later(() => import("~/commands/app-more").then((m) => m.AppCommands))
 const Palette = later(() => import("~/palette/palette").then((m) => m.Palette))
+const ModsLayer = later(() => import("~/mods/host").then((m) => m.ModsLayer))
 
 export function Root({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => void }) {
   const [toasts, toast, dismissToast] = useToasts()
@@ -91,6 +93,11 @@ export function Root({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => voi
           <Palette />
           <AppCommands />
         </Suspense>
+        {modsServed() && (
+          <Suspense fallback={null}>
+            <ModsLayer />
+          </Suspense>
+        )}
         <ContextMenus />
         <Toasts toasts={toasts} onDismiss={dismissToast} />
         <CalmWatch minutes={app.prefs.calm} />

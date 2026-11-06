@@ -1,6 +1,6 @@
 import { until, type Driver } from "./eb-drive.ts";
 
-const fillIn = ({ selector, value }: { selector: string; value: string }): boolean => {
+export const fillIn = ({ selector, value }: { selector: string; value: string }): boolean => {
   const el = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(selector);
   if (!el) return false;
   const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;

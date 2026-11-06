@@ -10,12 +10,13 @@ import { useApp, type Go, type Nav, type Panel } from "~/nav"
 import { nickname, onePerPerson, shown } from "~/names"
 import { APP } from "~/commands/list"
 import { runCommand, shownKeys, useCommandTable, type Table } from "~/commands/table"
+import { modsNow, runningMod, useModsVersion } from "~/mods/host"
 import { statusOf } from "~/shell/sidebar"
 import { wordsPlain } from "~/words"
 
-type Group = "Channels" | "Rooms" | "People" | "Tasks" | "Actions"
+type Group = "Channels" | "Rooms" | "People" | "Tasks" | "Mods" | "Actions"
 
-const GROUPS: Group[] = ["Channels", "Rooms", "People", "Tasks", "Actions"]
+const GROUPS: Group[] = ["Channels", "Rooms", "People", "Tasks", "Mods", "Actions"]
 
 const LIMIT = 8
 
@@ -79,6 +80,7 @@ export function Finder() {
   const q = query.trim().toLowerCase()
   const debug = useDebugOptions()
   const table = useCommandTable()
+  useModsVersion()
   const groups = rank(collect(app, nav, go, debug, table), q)
   const flat = groups.flatMap((g) => g.items)
   const current = Math.max(0, Math.min(active, flat.length - 1))
@@ -399,6 +401,22 @@ function collect(app: App, nav: Nav, go: (go: Go) => void, debug: boolean, table
         },
       }
     )
+
+  for (const mod of modsNow()) {
+    const run = runningMod(mod.name)
+    const open = () => toPanel({ kind: "mod", name: mod.name })
+    if (mod.state !== "on" || run?.failed)
+      items.push({
+        id: `mod:${mod.name}`,
+        group: "Mods",
+        label: mod.state === "asks" ? `Set up ${mod.name}` : mod.name,
+        keys: ["mod"],
+        lead: <Icon name="spec" size={14} />,
+        meta: mod.state === "asks" ? <span className="tone-decide">asks to run</span> : mod.state === "off" ? "off" : "stopped",
+        run: open,
+      })
+    else if (run?.title) items.push({ id: `mod:${mod.name}`, group: "Mods", label: run.title, keys: [mod.name, "mod"], lead: <Icon name="spec" size={14} />, meta: mod.name, run: open })
+  }
 
   items.push(...commandItems(app, table, close, true))
 

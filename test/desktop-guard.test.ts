@@ -19,13 +19,14 @@ describe("the window shows the app and nothing else (T183)", () => {
 
 describe("the page gets a CSP (T184)", () => {
   const directives = (p: string) => new Map(p.split("; ").map((d) => [d.split(" ")[0]!, d.split(" ").slice(1)]));
-  test("only the app's own script; its relay over HTTP and WebSocket; nothing framed or posted", () => {
+  test("only the app's own script; its relay over HTTP and WebSocket; only the mods' sandbox framed; nothing posted", () => {
     const d = directives(csp("https://channels.kiwiinit.com"));
     expect(d.get("script-src")).toEqual(["'self'", "'wasm-unsafe-eval'"]);
     expect(d.get("worker-src")).toEqual(["'self'"]);
     expect(d.get("connect-src")).toEqual(expect.arrayContaining(["'self'", "https://channels.kiwiinit.com", "wss://channels.kiwiinit.com"]));
     expect(d.get("object-src")).toEqual(["'none'"]);
     expect(d.get("frame-ancestors")).toEqual(["'none'"]);
+    expect(d.get("frame-src")).toEqual(["views://internal/mod-frame.html"]);
     expect(d.get("form-action")).toEqual(["'none'"]);
     expect(d.get("media-src")).toEqual(["'self'", "blob:"]);
     expect(csp("http://localhost:8787")).toContain("ws://localhost:8787");

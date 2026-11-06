@@ -35,6 +35,7 @@ const IssuePanel = later(() => import("~/github/panel").then((m) => m.IssuePanel
 const NeedsYou = later(() => import("~/needs/needs").then((m) => m.NeedsYou))
 const TaskPanel = later(() => import("~/panels/task").then((m) => m.TaskPanel))
 const ThreadPanel = later(() => import("~/panels/thread").then((m) => m.ThreadPanel))
+const ModPanel = later(() => import("~/mods/panel").then((m) => m.ModPanel))
 const Profile = later(() => import("~/modals/profile").then((m) => m.Profile))
 const ChannelSettings = later(() => import("~/modals/channel-settings").then((m) => m.ChannelSettings))
 const Invite = later(() => import("~/modals/invite").then((m) => m.Invite))
@@ -301,6 +302,8 @@ function PanelView({ channel }: { channel: Channel }) {
           <TaskPanel channel={channel} id={nav.panel.task} />
         ) : nav.panel.kind === "pr" ? (
           <PrPanel channel={channel} repo={nav.panel.repo} number={nav.panel.number} />
+        ) : nav.panel.kind === "mod" ? (
+          <ModPanel name={nav.panel.name} />
         ) : (
           <IssuePanel channel={channel} repo={nav.panel.repo} number={nav.panel.number} />
         )}

@@ -21,6 +21,10 @@ export type Launch = (
   unref(): void;
 };
 
+const opened: string[] = [];
+
+export const browserOpens = (): readonly string[] => opened;
+
 export async function openInBrowser(
   url: ExternalUrl,
   fallback: (url: ExternalUrl) => Promise<void>,
@@ -28,6 +32,7 @@ export async function openInBrowser(
   env: NodeJS.ProcessEnv = process.env,
   launch: Launch = spawn,
 ): Promise<void> {
+  if (opened.length < 100) opened.push(url);
   if (platform !== "linux") return fallback(url);
   const opener = browserEnv(env);
   if (await spawned(launch, "xdg-open", [url], opener)) return;
