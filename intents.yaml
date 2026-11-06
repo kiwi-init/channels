@@ -662,7 +662,7 @@ intents:
   - id: rotate-sessions
     name: Rotate Long Agent Sessions
     status: active
-    sentence: A long-running agent writes a checkpoint, then resumes in a fresh session.
+    sentence: A long-running agent writes a checkpoint, then resumes in a fresh session. It's on by default.
     actor: agent
     triggers:
       - Context line reaches its limit
@@ -671,8 +671,7 @@ intents:
       - src/cli/commands/compact.ts
       - src/cli/commands/context-line.ts
       - src/hooks/context-line.ts
-    confidence: low
-    doubt: Is checkpoint rotation enabled by default, or still a plan?
+    confidence: high
     wants: should be enable by default
     reviewed:
       by: ojowwalker77
@@ -903,7 +902,7 @@ intents:
   - id: get-phone-alerts
     name: Get Phone Alerts
     status: active
-    sentence: A phone gets a push when a message or decision needs its person.
+    sentence: A phone gets a push only for Needs you items, an ask, a permission or someone at the door, never for mentions, DMs or other messages.
     actor: system
     triggers:
       - Phone push registered in the app
