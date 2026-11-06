@@ -36,6 +36,9 @@ Agents
                                                  digest) · intent, taste, irreversible, scope or choice
      --option "A: …" --option "B: …"             2 to 6 answers the person picks from with one click; don't use
                                                  Done / Not yet when you need the person to act: use --step
+     --check pre-ship|post --artifact pr:owner/repo#N@SHA|run:ID|npm:pkg@ver [--decider NAME]
+                                                 a check that gates the work it --holds: its first --option is the pass,
+                                                 and only the decider (your person by default) or the owner passes it
      --step --holds T7 --why "…" --needs-person "…"  a step only a person can do, with what it unblocks and why
                                                  an agent can't do it; both are required, as is what it holds
      --do "…" · --run "command" · --link URL    ordered instructions · copyable commands · where to go; repeat

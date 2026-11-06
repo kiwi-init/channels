@@ -19,6 +19,7 @@ import { inlineText } from "../membership.ts";
 import { canPost, refusal, scopesOf, type Scope } from "../scopes.ts";
 import { applyEvent, type FoldCtx } from "./fold-events.ts";
 import { allowedOnHold, answersAsk, isLeadRole, isPerson, LEAD, ON_HOLD, sameAuthor } from "./people.ts";
+import { answerChecks, closeCheck, openCheck, type CheckState } from "./checks.ts";
 import { omit } from "../omit.ts";
 import { dmPlace, MAIN, summarize } from "./places.ts";
 import { rootOf, sentTo } from "../room-rules.ts";
@@ -314,6 +315,7 @@ function folding(
   const threadPeople = new Map<number, Set<string>>(from?.threadPeople.map(([seq, people]) => [seq, new Set(people)]));
   const askHeads = new Map<number, AskHead>(from?.askHeads?.map((h) => [h.id, h]));
   const specs = new Map<number, Spec>(from?.specs?.map((sp) => [sp.ask, sp]));
+  const checks = new Map<number, CheckState>(from?.checks?.map((c) => [c.seq, { ...c }]));
   const closeOnItsOwn = (ask: number, m: Pick<Message, "seq" | "from">, at: number): void => {
     const spec = specs.get(ask);
     if (spec && closesOnItsOwn({ tasks }, spec)) specs.set(ask, { ...spec, result: { seq: m.seq, by: m.from, at, verdict: "accepted", auto: true } });
@@ -461,6 +463,11 @@ function folding(
           rejected.set(m.seq, "an escalation goes from an agent to its own human and the owner, no one else");
           continue;
         }
+        if (m.check && !m.to.includes(m.check.decider)) {
+          trust.set(m.seq, "refused");
+          rejected.set(m.seq, "a check's decider is one of the people it asks");
+          continue;
+        }
       }
       if (
         ctx.hold &&
@@ -493,6 +500,8 @@ function folding(
           continue;
         }
         roomOf.set(m.seq, room);
+        openCheck(checks, m);
+        answerChecks(checks, m, [...members.values()].find((x) => x.owner)?.name);
         const parentPlace = parent !== undefined ? placeOf.get(parent) : undefined;
         const to = m.to?.length === 1 ? m.to[0]! : undefined;
         const pair = m.dm && to && members.has(to) ? ([rootOf(m.from, members), rootOf(to, members)] as const) : null;
@@ -577,7 +586,10 @@ function folding(
         const asker = askers.get(ev.ask);
         if (asker === undefined || !(ev.ask < m.seq)) reject(`#${ev.ask} isn't a question or a step waiting on someone`);
         else if (asker !== m.from && !isPerson(member)) reject("only who asked, or a person, closes an ask");
-        else closedAsks.add(ev.ask);
+        else {
+          closedAsks.add(ev.ask);
+          closeCheck(checks, ev.ask, m.seq);
+        }
         continue;
       }
       if (ev.op === "ask.name") {
@@ -718,6 +730,7 @@ function folding(
       askHeads: [...askHeads.values()].filter((h) => h.id > cut || filedUnder.has(h.id)),
       specs: keptSpecs,
       specsOnly,
+      checks: [...checks.values()],
       answered: openAsks.flatMap((m): [number, string[]][] => [[m.seq, [...(answered.get(m.seq) ?? [])]]]),
       threadOf: keptThreads,
       threadPeople: [...threadPeople].filter(([root]) => root > cut || keptRoots.has(root)).map(([seq, people]): [number, string[]] => [seq, [...people]]),
@@ -782,6 +795,7 @@ function folding(
     askHeads,
     specs,
     specsOnly,
+    checks,
     threadOf,
     threadPeople,
     lead: theLead ?? null,

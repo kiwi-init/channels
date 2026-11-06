@@ -1,4 +1,5 @@
 import { omit } from "@kiwi/core/omit.ts";
+import type { CheckArtifact, CheckPhase } from "@kiwi/core/checks.ts";
 import { personaAnswers } from "@kiwi/core/personality.ts";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -328,7 +329,10 @@ export class SessionMessaging extends SessionListen {
       body: string,
       re?: number,
       handoff?: Handoff,
-      ask: { choices?: string[]; task?: number; holds?: number[]; decision?: DecisionKind; step?: Step } & Pick<SendOptions, "id" | "permission"> = {},
+      ask: { choices?: string[]; task?: number; holds?: number[]; decision?: DecisionKind; step?: Step; check?: { phase: CheckPhase; decider?: string; artifact: CheckArtifact } } & Pick<
+        SendOptions,
+        "id" | "permission"
+      > = {},
     ) {
       if (!body.trim()) return yield* new Rejected(`say what needs ${ask.step ? "doing" : "deciding"}: the text is empty`);
       const { messages, state } = yield* this.state();
@@ -339,6 +343,10 @@ export class SessionMessaging extends SessionListen {
       const to = [...new Set([humanOf(state, this.me), ownerOf(state)].filter((n): n is string => !!n))];
       if (!to.length) return yield* new Rejected("there's no person in this channel to escalate to");
       if (ask.choices && handoff) return yield* new Rejected("a browser handoff has its own Done and Couldn't answers; leave out the options");
+      const decider = ask.check ? (ask.check.decider ?? humanOf(state, this.me)) : undefined;
+      if (ask.check && (!ask.choices || !ask.holds?.length)) return yield* new Rejected("a check needs its options, the first being the pass, and --holds naming the work it gates");
+      if (ask.check && (!decider || !to.includes(decider))) return yield* new Rejected(`a check's decider is a person it goes to: ${to.join(" or ")}`);
+      const check = ask.check && decider ? { phase: ask.check.phase, decider, artifact: ask.check.artifact } : undefined;
       const unknown = ask.holds?.find((id) => !state.tasks.has(id) && !state.askHeads.has(id));
       if (unknown !== undefined) return yield* new Rejected(`${unknown} is neither a task nor a person's message here: --holds names tasks like T7 and asks like #18`);
       if (ask.task !== undefined && re !== undefined) {
@@ -358,6 +366,7 @@ export class SessionMessaging extends SessionListen {
         ...(ask.holds?.length ? { holds: ask.holds } : {}),
         ...(ask.decision ? { decision: ask.decision } : {}),
         ...(ask.step ? { step: ask.step } : {}),
+        ...(check ? { check } : {}),
         ...(ask.id ? { id: ask.id } : {}),
         ...(ask.permission ? { permission: ask.permission } : {}),
         ...(re !== undefined ? { re: [re] } : {}),

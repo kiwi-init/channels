@@ -4,6 +4,7 @@
 // and AES-GCM ciphertext. Everything meaningful (sender, recipients, body,
 // coordination events, signatures) lives inside the encrypted payload.
 
+import { wellFormedCheck, type CheckAsk } from "./checks.ts";
 import { DEVICE_LIST_MAX, type DeviceLink } from "./devices.ts";
 import { cleanPersona, type Persona } from "./personality.ts";
 import { permissionChoices, wellFormedPermission, wellFormedPermReply, wellFormedSettled, type PermissionReply, type PermissionSettled, type PermissionShown } from "./permission.ts";
@@ -842,6 +843,7 @@ export interface Payload {
   decision?: DecisionKind;
   step?: Step;
   stepReply?: StepReply;
+  check?: CheckAsk;
   permission?: PermissionShown;
   perm?: PermissionReply;
   settled?: PermissionSettled;
@@ -1280,6 +1282,8 @@ export function wellFormed(p: unknown): p is WirePayload {
     (m.holds === undefined || (m.esc === true && wellFormedHolds(m.holds))) &&
     (m.decision === undefined || (m.esc === true && isDecisionKind(m.decision))) &&
     (m.step === undefined || (m.esc === true && m.handoff === undefined && m.choices === undefined && m.decision === undefined && wellFormedHolds(m.holds) && wellFormedStep(m.step))) &&
+    (m.check === undefined ||
+      (m.esc === true && m.handoff === undefined && m.step === undefined && m.permission === undefined && wellFormedChoices(m.choices) && wellFormedHolds(m.holds) && wellFormedCheck(m.check))) &&
     (m.stepReply === undefined || (m.kind !== "event" && Array.isArray(m.re) && m.re.length > 0 && wellFormedStepReply(m.stepReply))) &&
     (m.permission === undefined || (m.esc === true && permissionChoices(m.choices) && wellFormedPermission(m.permission))) &&
     (m.perm === undefined || (m.kind !== "event" && Array.isArray(m.re) && m.re.length > 0 && wellFormedPermReply(m.perm))) &&

@@ -23,6 +23,7 @@ function blank(): ChannelState {
     askHeads: new Map(),
     specs: new Map(),
     specsOnly: null,
+    checks: new Map(),
     threadOf: new Map(),
     threadPeople: new Map(),
     scopeSets: new Map(),
