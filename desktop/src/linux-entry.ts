@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { RELEASE_ID } from "../scripts/eb-bundle.ts";
+import { RELEASE_ID } from "../scripts/bundle-ids.ts";
 import { desktopEntry, EXECUTABLE } from "../scripts/linux-files.ts";
 
 export const ENTRY_FILE = `${EXECUTABLE}.desktop`;

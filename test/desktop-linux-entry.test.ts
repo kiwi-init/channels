@@ -3,7 +3,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, st
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { RELEASE_ID, TEST_ID } from "../desktop/scripts/eb-bundle.ts";
+import { RELEASE_ID, TEST_ID } from "../desktop/scripts/bundle-ids.ts";
 import { ENTRY_FILE, entryText, execArgs, hasFusermount, keepEntry, keepLinuxEntry, launchedFile, quotedExec, withKiwiDefault } from "../desktop/src/linux-entry.ts";
 
 const root = mkdtempSync(join(tmpdir(), "kiwi-linux-entry-"));
