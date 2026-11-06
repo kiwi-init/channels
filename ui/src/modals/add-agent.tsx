@@ -4,7 +4,7 @@ import { wantPersona } from "~/live/persona-later"
 import { Icon } from "~/kit/icons"
 import type { Channel } from "~/model"
 import { useApp } from "~/nav"
-import { Modal } from "~/kit/bits"
+import { Modal } from "~/kit/modal"
 import { CopyBox } from "~/modals/invite"
 
 type Taken = Map<string, "in" | "asking">

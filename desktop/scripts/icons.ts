@@ -1,6 +1,6 @@
 // The app's icons, every size, from build/icon.svg: build/icon.icns for the Mac (iconutil, so on a Mac),
-// build/icons/NxN.png for Linux (scripts/package-linux.ts installs them under hicolor, named after the app), and
-// assets/icon.png for the window itself. Run it after changing the SVG, and commit what it makes:
+// build/icons/NxN.png for Linux (scripts/package-linux.ts installs them under hicolor, named after the app, and the
+// window uses 512x512), and the tray marks in assets/. Run it after changing the SVG, and commit what it makes:
 //
 //   bun desktop/scripts/icons.ts
 //
@@ -15,6 +15,7 @@ import { chromium } from "playwright-core";
 const DESKTOP = resolve(import.meta.dir, "..");
 const svg = readFileSync(join(DESKTOP, "build", "icon.svg"), "utf8");
 const traySvg = readFileSync(join(DESKTOP, "build", "tray.svg"), "utf8");
+const trayUnreadSvg = readFileSync(join(DESKTOP, "build", "tray-unread.svg"), "utf8");
 
 const browser = await chromium.launch();
 const page = await browser.newPage();
@@ -27,10 +28,9 @@ async function png(size: number, source = svg): Promise<Buffer> {
 // Linux: the sizes hicolor has, and the window's own.
 mkdirSync(join(DESKTOP, "build", "icons"), { recursive: true });
 for (const n of [16, 24, 32, 48, 64, 128, 256, 512, 1024]) writeFileSync(join(DESKTOP, "build", "icons", `${n}x${n}.png`), await png(n));
-writeFileSync(join(DESKTOP, "assets", "icon.png"), await png(512));
 copyFileSync(join(DESKTOP, "build", "tray.svg"), join(DESKTOP, "assets", "channels-tray-symbolic.svg"));
-writeFileSync(join(DESKTOP, "assets", "trayTemplate.png"), await png(16, traySvg));
 writeFileSync(join(DESKTOP, "assets", "trayTemplate@2x.png"), await png(32, traySvg));
+writeFileSync(join(DESKTOP, "assets", "trayUnreadTemplate@2x.png"), await png(32, trayUnreadSvg));
 
 // The Mac: an iconset (each size and its @2x), packed by iconutil.
 if (process.platform === "darwin") {

@@ -3,7 +3,7 @@ import { useContext, useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 
 import { askDelete, EditHere, startEditing, stopAskingDelete, stopEditing, useAskingDelete } from "~/chat/editing"
-import { Modal } from "~/kit/bits"
+import { Modal } from "~/kit/modal"
 import { GlyphIcon } from "~/kit/icons"
 import type { Channel, Message } from "~/model"
 import { useAct } from "~/nav"

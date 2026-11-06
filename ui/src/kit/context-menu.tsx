@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 
-import { Modal } from "~/kit/bits"
+import { Modal } from "~/kit/modal"
 import { openMenu, type MenuItem, type OpenMenu } from "~/kit/menu-open"
 
 const GUTTER = 8

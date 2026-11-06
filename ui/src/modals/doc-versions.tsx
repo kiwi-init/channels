@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react"
 
 import "~/styles/doc-versions.css"
-import { cx, Modal } from "~/kit/bits"
+import { cx } from "~/kit/bits"
+import { Modal } from "~/kit/modal"
 import { announce } from "~/kit/toasts"
 import { ago, clock, day } from "~/kit/time"
 import { useAppCan } from "~/live/app-can"

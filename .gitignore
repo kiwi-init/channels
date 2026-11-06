@@ -31,3 +31,6 @@ desktop/.cottontail-tmp/
 
 # scripts/ui-dev-channel.ts: the local signing key
 desktop/.ui-dev/
+
+# scripts/ui-doc-fuzz.ts: its trace, written where it runs
+doc-fuzz-*.txt

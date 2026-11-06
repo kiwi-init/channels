@@ -2,7 +2,10 @@ import "~/styles/person.css"
 
 import { Fragment, useState, type ReactNode } from "react"
 
-import { Avatar, Dot, Empty, Modal, statusWord, Toggle } from "~/kit/bits"
+import { Avatar, Dot, statusWord } from "~/kit/bits"
+import { Empty } from "~/kit/empty"
+import { Toggle } from "~/kit/form"
+import { Modal } from "~/kit/modal"
 import { Track } from "~/kit/glide"
 import { Swatches } from "~/kit/swatches"
 import { Icon } from "~/kit/icons"
