@@ -113,6 +113,16 @@ const step = (what: string, ms: number, act: () => Promise<boolean>) =>
     ),
   );
 
+const pageNow = (): Record<string, unknown> => ({
+  palette: !!document.querySelector(".palette-box"),
+  chan: document.querySelector(".chan")?.className ?? null,
+  panel: (document.querySelector(".panel")?.outerHTML ?? null)?.slice(0, 2_000),
+  dialogs: [...document.querySelectorAll("dialog[open], [role=dialog]")].map((e) => e.className),
+  width: innerWidth,
+  height: innerHeight,
+  text: document.body.innerText.slice(0, 1_500),
+});
+
 type Said = Record<string, unknown>;
 const heard = (d: Driver): Promise<Said[]> => d.evaluate(() => ((window as unknown as { __modHeard?: Said[] }).__modHeard ?? []) as Said[], null, 3_000);
 
@@ -166,9 +176,13 @@ try {
       null,
       2_000,
     );
+  await step("the channel", 30_000, () => d.evaluate(() => !!document.querySelector(".chan"), null, 2_000));
   await step("⌘K", 10_000, palette);
   await step("Set up probe-mod in ⌘K", 10_000, () => d.evaluate(clickText, { selector: ".palette-item", text: "Set up probe-mod" }, 2_000));
-  await step("what the mod asks for, in the panel", 10_000, () => d.evaluate(clickText, { selector: ".panel .mod-needs", text: "Talk to example.com" }, 2_000));
+  await step("what the mod asks for, in the panel", 10_000, () => d.evaluate(clickText, { selector: ".panel .mod-needs", text: "Talk to example.com" }, 2_000)).catch(async (e: unknown) => {
+    console.log(`the page then: ${JSON.stringify(await d.evaluate(pageNow, null, 3_000).catch((x: unknown) => String(x)), null, 1)}`);
+    throw e;
+  });
   await shot("mod-asks");
   await step("Turn on", 10_000, () => d.evaluate(clickText, { selector: ".panel button", text: "Turn on" }, 2_000));
   const first = await until("the mod's report", 60_000, async () => (await heard(d)).find((m) => m["version"] === 1) ?? null);
