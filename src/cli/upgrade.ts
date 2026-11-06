@@ -1,13 +1,16 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { chmod, mkdtemp, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { gunzipSync } from "node:zlib";
 import { compareVersions } from "@kiwi/core/versions.ts";
 import { minisignVerifies } from "./minisign.ts";
 import { RELEASE_KEY } from "./release-key.ts";
 
 const RELEASES = "https://github.com/kiwi-init/channels/releases";
+const MAX_BINARY = 256 * 1024 * 1024;
+
+type Unpacker = readonly [string, ...string[]];
 
 type UpgradeOptions = {
   executable: string;
@@ -18,11 +21,25 @@ type UpgradeOptions = {
   releaseKey?: string;
   request?: (url: string, init: RequestInit) => Promise<Response>;
   report?: (message: string) => void;
+  xz?: Unpacker | null;
 };
 
 function run(file: string, args: string[]): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile(file, args, { timeout: 15_000 }, (error, stdout) => (error ? reject(error) : resolve(stdout.trim())));
+  });
+}
+
+function xzUnpacker(): Unpacker | null {
+  const xz = Bun.which("xz");
+  if (xz) return [xz, "-dc"];
+  const tool = Bun.which("compression_tool");
+  return tool ? [tool, "-decode", "-a", "lzma", "-i"] : null;
+}
+
+function unxz([file, ...args]: Unpacker, packed: string): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    execFile(file, [...args, packed], { encoding: "buffer", maxBuffer: MAX_BINARY, timeout: 120_000 }, (error, stdout) => (error ? reject(error) : resolve(stdout)));
   });
 }
 
@@ -52,7 +69,7 @@ export async function upgrade(options: UpgradeOptions): Promise<void> {
   let stage: string | null = null;
   try {
     const base = `${RELEASES}/download/${tag}`;
-    const name = `kiwi-${options.platform}-${options.arch}.gz`;
+    const asset = `kiwi-${options.platform}-${options.arch}`;
     const sums = await get(`${base}/SHA256SUMS`);
     if (!sums.ok) throw new Error(`could not download SHA256SUMS (HTTP ${sums.status})`);
     const sumsBody = Buffer.from(await sums.arrayBuffer());
@@ -65,17 +82,41 @@ export async function upgrade(options: UpgradeOptions): Promise<void> {
       .toString("utf8")
       .split("\n")
       .map((line) => line.trim().split(/\s+/));
-    const matches = entries.filter((entry) => entry[1] === name);
-    const expected = matches.length === 1 ? matches[0]?.[0] : undefined;
-    if (!expected || !/^[a-f0-9]{64}$/i.test(expected)) throw new Error(`SHA256SUMS does not contain one valid checksum for ${name}`);
-    report(`Downloading Kiwi ${version}…`);
-    const response = await get(`${base}/${name}`);
-    if (!response.ok) throw new Error(`could not download ${name} (HTTP ${response.status})`);
-    const packed = Buffer.from(await response.arrayBuffer());
-    if (createHash("sha256").update(packed).digest("hex") !== expected.toLowerCase()) throw new Error("download checksum does not match; your installed Kiwi was kept");
-    stage = await mkdtemp(join(dirname(executable), `.kiwi-upgrade-${process.pid}-`));
+    const checksum = (name: string): string | undefined => {
+      const matches = entries.filter((entry) => entry[1] === name);
+      const sum = matches.length === 1 ? matches[0]?.[0] : undefined;
+      return sum && /^[a-f0-9]{64}$/i.test(sum) ? sum.toLowerCase() : undefined;
+    };
+    const download = async (name: string, expected: string): Promise<Buffer> => {
+      report(`Downloading Kiwi ${version} (${name})…`);
+      const response = await get(`${base}/${name}`);
+      if (!response.ok) throw new Error(`could not download ${name} (HTTP ${response.status})`);
+      const packed = Buffer.from(await response.arrayBuffer());
+      if (createHash("sha256").update(packed).digest("hex") !== expected) throw new Error("download checksum does not match; your installed Kiwi was kept");
+      return packed;
+    };
+    const unpacker = options.xz === undefined ? xzUnpacker() : options.xz;
+    const xz = unpacker ? checksum(`${asset}.xz`) : undefined;
+    const gz = checksum(`${asset}.gz`);
+    let binary: Buffer | null = null;
+    if (unpacker && xz) {
+      const packed = await download(`${asset}.xz`, xz);
+      stage = await mkdtemp(join(dirname(executable), `.kiwi-upgrade-${process.pid}-`));
+      await writeFile(join(stage, `${asset}.xz`), packed, { mode: 0o600 });
+      try {
+        binary = await unxz(unpacker, join(stage, `${asset}.xz`));
+      } catch (error) {
+        if (!gz) throw new Error(`could not unpack ${asset}.xz here, and the release has no .gz to fall back on; your installed Kiwi was kept`, { cause: error });
+        report(`Couldn't unpack ${asset}.xz here${basename(unpacker[0]) === "xz" ? " (xz 5.4 or newer can)" : ""}; taking the .gz instead.`);
+      }
+    }
+    if (!binary) {
+      if (!gz) throw new Error(`SHA256SUMS does not contain one valid checksum for ${asset}.gz`);
+      binary = gunzipSync(await download(`${asset}.gz`, gz), { maxOutputLength: MAX_BINARY });
+    }
+    stage ??= await mkdtemp(join(dirname(executable), `.kiwi-upgrade-${process.pid}-`));
     const candidate = join(stage, "kiwi");
-    await writeFile(candidate, gunzipSync(packed, { maxOutputLength: 256 * 1024 * 1024 }), { mode: 0o700 });
+    await writeFile(candidate, binary, { mode: 0o700 });
     if ((await run(candidate, ["--version"])) !== version) throw new Error("downloaded Kiwi did not report the expected version; your installed Kiwi was kept");
     await chmod(candidate, before.mode & 0o777);
     const current = await stat(executable);
