@@ -70,6 +70,7 @@ export const profileCommands: Record<string, Command> = {
                 charter: charterLines(state),
                 lead: leadLine(state, name),
                 human: humanOf(state, name),
+                merges: state.merges,
                 ...(me?.persona ? { persona: me.persona } : {}),
               }
             : {},

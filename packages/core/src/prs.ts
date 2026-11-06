@@ -93,7 +93,7 @@ export function landingWaits(state: ChannelState, task: Pick<Task, "id" | "state
   if (!linked) return "waits for its PR to be linked and merged";
   const pr = `PR #${linked.number}`;
   if (linked.state === "closed") return `waits: ${pr} was closed without merging`;
-  if (linked.state === "open") return `waits for ${pr} to merge`;
+  if (linked.state === "open") return state.merges === "people" ? `waits for a person to merge ${pr}` : `waits for ${pr} to merge`;
   if (task.then === "release:tag" && !releaseOf(state.github, linked)) return `waits for a release that contains ${pr}`;
   return `${pr} ${task.then === "release:tag" ? "is released" : "is merged"}: waits for the done gate to confirm it`;
 }

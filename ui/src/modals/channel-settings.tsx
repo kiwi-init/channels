@@ -447,6 +447,16 @@ function GitHub({ channel }: { channel: Channel }) {
             <span className="cset-mono">{landing ?? "Approval"}</span>
           )}
         </Row>
+        <Row
+          label="People merge"
+          hint={
+            channel.peopleMerge
+              ? "Agents leave pull requests for a person to merge once the task is approved and its checks are green."
+              : "Agents merge their own pull requests once the task is approved and its checks are green."
+          }
+        >
+          <Toggle on={!!channel.peopleMerge} label="People merge" disabled={!sets} onChange={(on) => app.actions.setPeopleMerge(channel.code, on)} />
+        </Row>
       </Group>
     </>
   )
