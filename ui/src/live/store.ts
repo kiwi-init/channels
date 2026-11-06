@@ -6,7 +6,7 @@ import type { Message as Wire } from "@kiwi/core/protocol.ts"
 import type { ChannelState, FoldBase } from "@kiwi/core/state.ts"
 import type { ChannelLink } from "@kiwi/channel/channel-ops.ts"
 import type { OlderHistory } from "@kiwi/channel/channel-store.ts"
-import type { Channel, GoneChannel, HomeChannel, SendExtras, Where } from "~/model"
+import type { AgentWaits, Channel, GoneChannel, HomeChannel, SendExtras, Where } from "~/model"
 
 export interface Run {
   code: string
@@ -69,6 +69,13 @@ export function publishHome(code: string, next: { channel: HomeChannel; run: Run
   else if (!home.delete(code)) return
   homeList = [...home.values()].map((h) => h.channel)
   for (const l of homeListeners) l()
+}
+
+export const homeWaits = (): { room: string; waits: Record<string, AgentWaits> }[] => [...home.values()].map((h) => ({ room: h.run.roomId, waits: h.channel.waits ?? {} }))
+
+export function onHome(l: () => void): () => void {
+  homeListeners.add(l)
+  return () => void homeListeners.delete(l)
 }
 
 export function useHome(): HomeChannel[] {

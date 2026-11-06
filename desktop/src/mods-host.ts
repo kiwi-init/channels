@@ -34,6 +34,7 @@ export interface ModsHostOptions {
   request?: typeof fetch;
   safe?: string | null;
   terminal?: SnippetHome;
+  onTerminal?: (name: string, snippets: TerminalSnippets | null) => void;
 }
 
 interface Approval {
@@ -184,7 +185,7 @@ export function modsHost(o: ModsHostOptions) {
       for (const name of installedNames(o.terminal))
         if (!next.get(name)?.view.needs.includes("terminal") || !file.approved[name]?.needs.includes("terminal")) {
           try {
-            removeSnippets(name, o.terminal);
+            if (removeSnippets(name, o.terminal)) o.onTerminal?.(name, null);
           } catch {
             // A config file we can't write now keeps its line; the next scan tries again.
           }
@@ -327,6 +328,7 @@ export function modsHost(o: ModsHostOptions) {
       });
       if (!now || !o.terminal) return after;
       installSnippets(name, now, o.terminal);
+      o.onTerminal?.(name, now);
       await rescan();
       return list();
     },
