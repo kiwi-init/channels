@@ -50,8 +50,9 @@ describe("skills in mods (T6868)", () => {
   test("mod.json's skills are a path inside the mod or a git source pinned to a full commit; anything else is refused", () => {
     expect(skillsIn({ name: "x" }, "x")).toEqual([]);
     expect(skillsIn({ skills: [{ name: "inner", about: " a skill ", path: "skills/inner/" }] }, "x")).toEqual([
-      { name: "inner", about: "a skill", mod: "x", path: "skills/inner/", source: null, ref: null },
+      { name: "inner", about: "a skill", note: null, mod: "x", path: "skills/inner/", source: null, ref: null },
     ]);
+    expect(skillsIn({ skills: [{ name: "inner", about: "a skill", note: "Send it with kiwi send.", path: "inner" }] }, "x")[0]?.note).toBe("Send it with kiwi send.");
     const why = (skills: unknown) => {
       try {
         skillsIn({ skills }, "x");
@@ -63,7 +64,9 @@ describe("skills in mods (T6868)", () => {
     };
     expect(why("anatomy")).toBe("mod.json's skills must be a list");
     expect(why([{ name: "Big", about: "a" }])).toBe("a skill's name must be lowercase letters, digits and dashes");
-    expect(why([{ name: "a", about: "two\nlines" }])).toBe("skill a: about is one line of up to 200 characters");
+    expect(why([{ name: "a", about: "two\nlines" }])).toBe("skill a: about is one line of up to 80 characters");
+    expect(why([{ name: "a", about: "x".repeat(81) }])).toBe("skill a: about is one line of up to 80 characters");
+    expect(why([{ name: "a", about: "x", note: "two\nlines", path: "p" }])).toBe("skill a: note is one line of up to 300 characters");
     expect(why([{ name: "a", about: "x", path: "../up" }])).toBe("skill a: path is a folder inside the mod");
     expect(why([{ name: "a", about: "x", path: "/abs" }])).toBe("skill a: path is a folder inside the mod");
     expect(why([{ name: "a", about: "x", path: "p", source: "github.com/o/r" }])).toBe("skill a: give a path or a source, not both");
@@ -138,7 +141,7 @@ describe("skills in mods (T6868)", () => {
 
   test("the brief names the skills and the command that prints one", () => {
     const brief = briefText({ alias: "dev", agent: "otter", mc: "kiwi", listen: "", skills: [{ name: "anatomy", about: "interactive figures" }] });
-    expect(brief).toContain("Skills: anatomy (interactive figures). When someone wants what one makes, run `kiwi skill NAME` and follow what it prints.");
+    expect(brief).toContain("Skills: anatomy (interactive figures). `kiwi skill NAME` prints one when someone wants it.");
     expect(briefText({ alias: "dev", agent: "otter", mc: "kiwi", listen: "" })).not.toContain("Skills:");
   });
 
@@ -153,7 +156,7 @@ describe("skills in mods (T6868)", () => {
     };
     const list = await cli();
     expect(list.code).toBe(0);
-    expect(list.out).toContain("anatomy: interactive isometric figures");
+    expect(list.out).toContain("anatomy: interactive figures that explain how things work");
     expect(list.out).toContain(`gauge: draws gauges\n  ${src.dir} @ ${src.first.slice(0, 7)}, fetched on first use\n`);
     const shown = await cli("gauge");
     expect(shown.code).toBe(0);

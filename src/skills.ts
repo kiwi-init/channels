@@ -13,6 +13,7 @@ const PATHISH = /(^|[\s`(["'])((?:\.\/)?[\w.-]+(?:\/[\w.-]*)+|[\w-]+\.(?:md|mjs|
 export interface Skill {
   name: string;
   about: string;
+  note: string | null;
   mod: string;
   path: string | null;
   source: string | null;
@@ -22,7 +23,8 @@ export interface Skill {
 export const DEFAULT_SKILLS: readonly Skill[] = [
   {
     name: "anatomy",
-    about: "interactive isometric figures that explain how something works, sent with kiwi send --figure",
+    about: "interactive figures that explain how things work",
+    note: "In Channels, send a figure you built with `kiwi send --figure page.html`: it takes page-light.html beside it and a snapshot too.",
     mod: "anatomy",
     path: null,
     source: "github.com/wheresryan22/anatomy",
@@ -40,18 +42,20 @@ export function skillsIn(raw: unknown, mod: string): Skill[] {
   if (!Array.isArray(list)) throw new ModError("mod.json's skills must be a list");
   return list.map((entry): Skill => {
     if (!entry || typeof entry !== "object" || Array.isArray(entry)) throw new ModError("each of mod.json's skills is an object with a name and an about");
-    const { name, about, path, source, ref } = entry as Record<string, unknown>;
+    const { name, about, note, path, source, ref } = entry as Record<string, unknown>;
     if (typeof name !== "string" || !NAME.test(name)) throw new ModError("a skill's name must be lowercase letters, digits and dashes");
-    if (typeof about !== "string" || !about.trim() || about.length > 200 || about.includes("\n")) throw new ModError(`skill ${name}: about is one line of up to 200 characters`);
+    if (typeof about !== "string" || !about.trim() || about.length > 80 || about.includes("\n")) throw new ModError(`skill ${name}: about is one line of up to 80 characters`);
+    if (note !== undefined && (typeof note !== "string" || note.length > 300 || note.includes("\n"))) throw new ModError(`skill ${name}: note is one line of up to 300 characters`);
+    const told = typeof note === "string" && note.trim() ? note.trim() : null;
     if (path !== undefined) {
       if (source !== undefined || ref !== undefined) throw new ModError(`skill ${name}: give a path or a source, not both`);
       if (typeof path !== "string" || !path || isAbsolute(path) || normalize(path).split(/[\\/]/).includes("..")) throw new ModError(`skill ${name}: path is a folder inside the mod`);
-      return { name, about: about.trim(), mod, path: normalize(path), source: null, ref: null };
+      return { name, about: about.trim(), note: told, mod, path: normalize(path), source: null, ref: null };
     }
     if (typeof source !== "string") throw new ModError(`skill ${name}: give a path inside the mod, or a source and a ref`);
     if (parseSource(source).ref !== null) throw new ModError(`skill ${name}: put the commit in ref, not after # in the source`);
     if (typeof ref !== "string" || !COMMIT.test(ref)) throw new ModError(`skill ${name}: ref is the full 40-character commit it's pinned to`);
-    return { name, about: about.trim(), mod, path: null, source, ref };
+    return { name, about: about.trim(), note: told, mod, path: null, source, ref };
   });
 }
 
@@ -138,5 +142,5 @@ export function skillText(skill: Skill, dir: string): string {
       return `${lead}${join(dir, clean)}`;
     });
   const from = skill.source ? `${skill.source} at ${short(skill.ref!)}` : `the ${skill.mod} mod`;
-  return `Skill "${skill.name}", from ${from}. Its files are in ${dir}, and the paths below point there.\n\n${body.trim()}\n`;
+  return `Skill "${skill.name}", from ${from}. Its files are in ${dir}, and the paths below point there.${skill.note ? ` ${skill.note}` : ""}\n\n${body.trim()}\n`;
 }

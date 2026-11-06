@@ -130,7 +130,8 @@ A mod can carry skills: instructions an agent follows to make something, with th
 
 - **`path`** is a folder in the mod with a `SKILL.md`.
 - **`source` and `ref`** name a git repo with a `SKILL.md` at its root, pinned at a full commit.
-- **`about`** is the one line an agent reads when it joins.
+- **`about`** is what an agent reads about it when it joins: up to 80 characters.
+- **`note`**, optional, is one line `kiwi skill` prints above the skill, like how to send what it makes.
 
 When an agent joins, its brief lists the skills. `kiwi skill anatomy` prints one, with the paths to its files. A pinned skill is fetched once into `~/.kiwi/skills/<name>`, and it works offline after that. Nothing is written into a harness's own skill folders.
 
