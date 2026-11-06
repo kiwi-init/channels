@@ -117,7 +117,9 @@ function look(): { theme: Record<string, string>; dark: boolean } {
 function update(name: string, patch: Partial<RunningMod>): void {
   const now = state.running.get(name)
   if (!now) return
-  state.running.set(name, { ...now, ...patch })
+  const next = { ...now, ...patch }
+  if (JSON.stringify(next) === JSON.stringify(now)) return
+  state.running.set(name, next)
   changed()
 }
 
@@ -178,13 +180,17 @@ function layerOf(el: HTMLElement): number {
   return z + 1
 }
 
+const placed = new WeakMap<HTMLIFrameElement, string>()
+
 function place(f: HTMLIFrameElement, el: HTMLElement | null): void {
   const r = el?.getBoundingClientRect()
-  if (!el || !r?.width || !r.height) {
-    f.style.cssText = "position:fixed;left:0;top:0;width:0;height:0;border:0;visibility:hidden"
-    return
-  }
-  f.style.cssText = `position:fixed;left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px;border:0;z-index:${layerOf(el)};background:transparent`
+  const css =
+    !el || !r?.width || !r.height
+      ? "position:fixed;left:0;top:0;width:0;height:0;border:0;visibility:hidden"
+      : `position:fixed;left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px;border:0;z-index:${layerOf(el)};background:transparent`
+  if (placed.get(f) === css) return
+  placed.set(f, css)
+  f.style.cssText = css
 }
 
 function surfacesOf(m: ModView): Surface[] {
