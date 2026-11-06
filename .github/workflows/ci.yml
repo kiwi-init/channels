@@ -951,7 +951,12 @@ jobs:
     steps:
       - env:
           NEEDS: ${{ toJSON(needs) }}
+          PLAN: ${{ needs.plan.outputs.run }}
         run: |
-          bad=$(echo "$NEEDS" | jq -r 'to_entries[] | select(.value.result != "success" and .value.result != "skipped") | "\(.key): \(.value.result)"')
+          bad=$(echo "$NEEDS" | jq -r 'to_entries[] | select(.key != "plan") | select(.value.result != "success" and .value.result != "skipped") | "\(.key): \(.value.result)"')
           if [ -n "$bad" ]; then echo "$bad"; exit 1; fi
-          echo "every job that ran passed"
+          stray=$(echo "$NEEDS" | jq -r --argjson plan "$PLAN" 'to_entries[] | select(.key != "plan") | select($plan[.key] == false) | select(.value.result == "success") | "\(.key): ran but not selected"')
+          if [ -n "$stray" ]; then echo "$stray"; exit 1; fi
+          missing=$(echo "$NEEDS" | jq -r --argjson plan "$PLAN" 'to_entries[] | select(.key != "plan") | select($plan[.key] == true) | select(.value.result != "success") | "\(.key): selected by plan, \(.value.result)"')
+          if [ -n "$missing" ]; then echo "$missing"; exit 1; fi
+          echo "every selected job ran and passed"
