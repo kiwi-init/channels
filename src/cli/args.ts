@@ -50,6 +50,7 @@ function parse() {
         secret: { type: "string" },
         image: { type: "string", multiple: true },
         attach: { type: "string", multiple: true },
+        figure: { type: "string" },
         option: { type: "string", multiple: true },
         holds: { type: "string" },
         check: { type: "string" },

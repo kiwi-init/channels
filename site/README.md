@@ -1,9 +1,32 @@
 # The relay's static site
 
-The relay serves this folder in place of the old dashboard: a landing page (OLED
-black, full width, plain HTML) with the desktop app's downloads, invite pages
-(`/join/<code>`, which open the app through `kiwi://join/<code>`), and the
-install scripts.
+The relay serves this folder in place of the old dashboard: a landing page (Cinder
+Peak, full width, plain HTML) with the desktop app's downloads, the docs at
+`/docs/`, invite pages (`/join/<code>`, which open the app through
+`kiwi://join/<code>`), and the install scripts.
+
+## The docs
+
+`docs/*.md` at the repo root are the source; `scripts/docs-site.ts` builds them
+into `docs/` here (ignored by git). Wrangler runs it before every deploy and
+`wrangler dev` (its `build` in `wrangler.jsonc`), and the Docker image runs it
+too. `bun scripts/docs-site.ts --serve` builds on every page load and serves the
+site on http://127.0.0.1:4400, with one figure alone at `/preview/<name>`.
+
+- A page's front matter has `description`, `group` (its heading in the side
+  list) and `order`; its `# title` names it. Links to another page (`agents.md`)
+  become `/docs/agents`; links to anything else in the repo go to GitHub.
+- `<!-- figure: <name> -->` on a line of its own places a figure. The build
+  imports `figures/<name>/build.js` and puts its SVG inline, on the page with no
+  card or caption; `figures/<name>/live.js`, when there is one, is the page's
+  module that moves it.
+- `figures/` holds the figures, drawn with the anatomy kit vendored in
+  `anatomy/` (`iso-kit.js`, `lathe.js`, `tube.js`, `iso.css`; MIT, its
+  `LICENSE` beside it). The same files load in Bun at build time and in the
+  browser.
+- `docs.css` and `docs.js` are the pages' style (Cinder Peak, Paper Mono for
+  headings) and their copy buttons. `.iso` in `docs.css` is the figures'
+  palette: every figure takes its tones from there.
 
 - `index.html`, `styles.css`, `app.js` — hand-written static files, no build
   step. `app.js` routes between the landing page and the invite page
@@ -12,13 +35,17 @@ install scripts.
   browser gives them; Safari can't tell a Mac's chip, so Apple silicon), fills
   in the download links and the `curl … | sh -s -- join <code>` line, and the
   copy buttons. There is no inline script, so the CSP stays `script-src 'self'`.
-- `world.js` — the hero: a channel's members (agents as their harness icon and
-  nick, people as a dot and a name) around the app icon's glass, with a short
-  conversation playing on its own. Each message leaves its sender as ciphertext,
-  lights the spectrum in the glass, and reaches every other member. Lines and
-  text draw on a 2D canvas at the screen's resolution; the glass is a WebGL
-  raymarch on its own canvas, redrawn only when its light changes. Without
-  WebGL the room plays without the glass; with reduced motion it holds still.
+- `load-figures.js` — the landing's figures. Each `<figure data-figure>` holds an
+  empty SVG at the figure's size; when it nears the screen this fetches the
+  built SVG from `/docs/figures/<name>.svg`, puts it in and imports the figure's
+  `live.js`. The docs build fails when a figure's size there drifts from the
+  one it builds.
+- `theme.css`, `theme.js` — the colours both the landing and the docs use:
+  Cinder Peak in dark and Channels Light in light, through `light-dark()`, plus
+  the figures' palette (`.iso`). The header's System, Light and Dark buttons
+  set `data-theme` on the page and keep the choice in `localStorage`; with no
+  choice the page follows the system. `?theme=light` or `?theme=dark` shows one
+  page in that theme without keeping it.
 - `install`, `install.sh` — the install script, served at `/install` and
   `/install.sh`. It installs the CLI and then
   run `kiwi join …` or `kiwi login` when given one.
@@ -26,11 +53,7 @@ install scripts.
   scripts, for hosts that read it.
 - `icon.svg` — the site icon.
 - `fonts/` — Paper Mono (`PaperMono.woff2`, SIL OFL 1.1 in `PaperMono-OFL.txt`),
-  for the page's labels and headings; body text is the system's SF Pro.
-- `media/harness/` — the harness icons from `assets/harness/` (LobeHub, MIT,
-  with its `LICENSE`) the hero's agents wear.
-- `media/agents.jpg`, `media/tasks.jpg`, `media/channel.jpg` — the features'
-  screenshots of the app, from CI's `ui-shots`.
+  for the pages' labels and headings; body text is the system's SF Pro.
 - `media/` — the landing page's video (`hello-martha.mp4`, a cut of Century 21
   Calling, 1964, Prelinger Archives, public domain) and its poster frame. Static
   assets on Workers top out at 25 MiB a file, so a longer cut goes to the

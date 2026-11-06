@@ -388,6 +388,21 @@ describe("images and cross-channel tasks through the CLI", () => {
     expect(rej.code).toBe(1);
     expect(rej.err).toContain("couldn't be read as an image");
 
+    const page = (theme: string) =>
+      `<!doctype html><title>Dial gauge</title><style>.iso{--anatomy-hi:#eee}.iso[data-theme="light"]{--anatomy-hi:#222}</style><body class="iso" data-theme="${theme}"><svg class="iso-svg" viewBox="0 0 60 38"><path d="M1 1"/></svg></body>`;
+    await Bun.write(join(dir, "gauge.html"), page("dark"));
+    await Bun.write(join(dir, "gauge-light.html"), page("light"));
+    const figure = /sent #(\d+)/.exec(await ok(a, "send", "--figure", join(dir, "gauge.html")))![1]!;
+    const shown = await ok(a, "log", "-n", "1");
+    expect(shown).toContain("Dial gauge");
+    for (const name of ["gauge.figure.html", "gauge.figure-light.html", "gauge.figure.svg"]) expect(shown).toContain(name);
+    const saved = (await ok(a, "save", figure, dir)).trim().split("\n");
+    expect(saved).toEqual(["gauge.figure.html", "gauge.figure-light.html", "gauge.figure.svg"].map((n) => join(dir, `#${figure}-${n}`)));
+    expect(readFileSync(saved[2]!, "utf8")).toContain("@media (prefers-color-scheme: light){.iso{--anatomy-hi:#222}}");
+    const crowded = await run(a, "send", "--figure", join(dir, "gauge.html"), ...[1, 2, 3, 4, 5, 6].flatMap(() => ["--attach", join(dir, "gauge.html")]), "too many");
+    expect(crowded.code).toBe(1);
+    expect(crowded.err).toContain("the figure takes 3 of a message's 8 files, so add at most 5 with --attach");
+
     await ok(a, "create", "second", "--as", "pic");
     await ok(a, "--as", "human", "task", "add", "second task");
     const all = await ok(a, "tasks", "--global");
