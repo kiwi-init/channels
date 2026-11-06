@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, test } from "bun:test"
+import { afterAll, beforeAll, describe, expect, test } from "bun:test"
 import { renderToStaticMarkup } from "react-dom/server"
 
 import type { Channel, Task } from "~/model"
@@ -6,8 +6,15 @@ import { AppContext, type Ctx } from "~/nav"
 import { NowCard } from "~/tasks/now"
 import { wrote } from "~/words"
 
+const before = Object.getOwnPropertyDescriptor(globalThis, "localStorage")
+
 beforeAll(() => {
-  Object.defineProperty(globalThis, "localStorage", { configurable: true, value: { getItem: () => "0", setItem: () => {} } })
+  Object.defineProperty(globalThis, "localStorage", { configurable: true, writable: true, value: { getItem: () => "0", setItem: () => {} } })
+})
+
+afterAll(() => {
+  if (before) Object.defineProperty(globalThis, "localStorage", before)
+  else Reflect.deleteProperty(globalThis, "localStorage")
 })
 
 const done = (id: number, title: string): Task => ({
