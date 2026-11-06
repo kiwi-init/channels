@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       jobs:
-        description: "Only these jobs, comma-separated (static, test-unit, test-flows, build, doc, fuzz, shots, desktop-mac, desktop-linux, desktop-distros, cli-macos, ios, android); empty runs everything"
+        description: "Only these jobs, comma-separated (static, test-unit, test-flows, build, doc, fuzz, shots, desktop-mac, desktop-linux, desktop-distros, cli-macos, and the phone jobs ios, android); empty runs everything but the phone jobs"
         required: false
         default: ""
       update_from:
@@ -38,7 +38,8 @@ permissions:
 jobs:
   # Which jobs run: a pull request runs repo / static and test / unit (a release's stamp PR, titled
   # "kiwi YYYY.M.PATCH", also cli / macos: the release's Mac tests and packing); a dispatch runs the jobs it
-  # names (all when it names none); a push to main and a merge group run everything.
+  # names (all when it names none); a push to main and a merge group run everything. The phone jobs (ios,
+  # android) are retired for now: they run only when a dispatch names them.
   plan:
     runs-on: ubuntu-latest
     timeout-minutes: 2
@@ -51,14 +52,15 @@ jobs:
           JOBS: ${{ inputs.jobs }}
           TITLE: ${{ github.event.pull_request.title }}
         run: |
-          all="static test-unit test-flows build doc fuzz shots desktop-mac desktop-linux desktop-distros cli-macos ios android"
+          all="static test-unit test-flows build doc fuzz shots desktop-mac desktop-linux desktop-distros cli-macos"
+          phones="ios android"
           case "$EVENT" in
             pull_request) pick="static test-unit"; if echo "$TITLE" | grep -qE '^kiwi [0-9]{4}\.[0-9]{1,2}\.[0-9]+(-rc\.[0-9]+)?$'; then pick="$pick cli-macos"; fi ;;
             workflow_dispatch) pick=$(echo "${JOBS:-$all}" | tr ',' ' ') ;;
             *) pick="$all" ;;
           esac
-          for j in $pick; do case " $all " in *" $j "*) ;; *) echo "no job named $j; the jobs are: $all"; exit 1 ;; esac; done
-          json=$(for j in $all; do case " $pick " in *" $j "*) v=true ;; *) v=false ;; esac; printf '"%s":%s,' "$j" "$v"; done)
+          for j in $pick; do case " $all $phones " in *" $j "*) ;; *) echo "no job named $j; the jobs are: $all $phones"; exit 1 ;; esac; done
+          json=$(for j in $all $phones; do case " $pick " in *" $j "*) v=true ;; *) v=false ;; esac; printf '"%s":%s,' "$j" "$v"; done)
           echo "run={${json%,}}" >> "$GITHUB_OUTPUT"
 
   # Types, lint, format, unused code and action pins.
@@ -90,9 +92,6 @@ jobs:
       - name: desktop types
         if: ${{ !cancelled() }}
         run: cd desktop && bunx tsrs --noEmit
-      - name: phone engine types
-        if: ${{ !cancelled() }}
-        run: bunx tsrs --noEmit -p ios/engine/tsconfig.json && bunx tsrs --noEmit -p ios/scripts/tsconfig.json && bunx tsrs --noEmit -p android/scripts/tsconfig.json
       - name: lint
         if: ${{ !cancelled() }}
         run: bun run lint
@@ -861,7 +860,10 @@ jobs:
         run: |
           sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
           xcodebuild -version
+      - name: phone engine types
+        run: bunx tsrs --noEmit -p ios/engine/tsconfig.json && bunx tsrs --noEmit -p ios/scripts/tsconfig.json
       - name: swift lint
+        if: ${{ !cancelled() }}
         run: xcrun swift-format lint -r --strict --configuration ios/.swift-format ios/Channels ios/ChannelsUITests
       - name: app build
         if: ${{ !cancelled() }}
@@ -890,7 +892,10 @@ jobs:
             ~/.m2/repository/org/robolectric
           key: gradle-${{ runner.os }}-${{ hashFiles('android/**/*.gradle.kts', 'android/gradle/libs.versions.toml', 'android/gradle/wrapper/gradle-wrapper.properties') }}
           restore-keys: gradle-${{ runner.os }}-
+      - name: phone engine types
+        run: bunx tsrs --noEmit -p android/scripts/tsconfig.json
       - name: app build, lint and screens
+        if: ${{ !cancelled() }}
         working-directory: android
         shell: bash
         env:
