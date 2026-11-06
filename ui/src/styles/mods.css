@@ -1,0 +1,36 @@
+.mod-slot {
+  padding: 0;
+}
+
+.mod-ask {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  color: var(--ink-2);
+}
+
+.mod-needs {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--ink);
+}
+
+.mod-needs > li {
+  padding: 6px 0;
+}
+
+.mod-needs > li + li {
+  border-top: 1px solid var(--line);
+}
+
+.mod-ask-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.mod-why {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: var(--t-meta) / 1.4 var(--mono);
+}

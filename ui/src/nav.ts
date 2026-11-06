@@ -8,7 +8,12 @@ export type SpecPart = "spec" | "inside" | "result"
 
 export type GithubView = "prs" | "issues"
 
-export type Panel = { kind: "task"; task: number } | { kind: "pr"; repo: string; number: number } | { kind: "issue"; repo: string; number: number } | { kind: "thread"; seq: number; focus?: number }
+export type Panel =
+  | { kind: "task"; task: number }
+  | { kind: "pr"; repo: string; number: number }
+  | { kind: "issue"; repo: string; number: number }
+  | { kind: "thread"; seq: number; focus?: number }
+  | { kind: "mod"; name: string }
 
 export type ChannelTab = "general" | "rooms" | "github" | "notes"
 

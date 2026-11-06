@@ -7,6 +7,7 @@ import "~/styles/shell.css"
 import "~/styles/chat.css"
 import { Boundary } from "~/kit/boundary"
 import { warmLater } from "~/kit/later"
+import { openLinksOutside } from "~/kit/outside-links"
 import { LiveDuties, useLive } from "~/live/live"
 import { storedThemePrefs } from "~/live/prefs"
 import { navigate, startNav, useKeepPlace, type Go, type Nav } from "~/nav"
@@ -24,6 +25,7 @@ import { uiBooted, watchUiBoot } from "@kiwi/app/ui-boot.ts"
 import { nudgeOnWake } from "@kiwi/app/wake.ts"
 
 watchUiBoot()
+openLinksOutside()
 
 const params = new URLSearchParams(location.search)
 const demo = params.has("demo") || params.has("shot") || import.meta.env.VITE_KIWI_DEMO === "1"

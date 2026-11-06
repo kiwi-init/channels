@@ -9,13 +9,14 @@ import { useApp, type Go, type Nav, type Panel } from "~/nav"
 import { nickname, onePerPerson, shown } from "~/names"
 import { SIDEBAR_KEYS } from "@kiwi/app/sidebar-hidden.ts"
 import { showCalm } from "~/calm/idle"
+import { modsNow, runModCommand, runningMod, useModsVersion } from "~/mods/host"
 import { toggleSide } from "~/shell/side"
 import { statusOf } from "~/shell/sidebar"
 import { wordsPlain } from "~/words"
 
-type Group = "Channels" | "Rooms" | "People" | "Tasks" | "Actions"
+type Group = "Channels" | "Rooms" | "People" | "Tasks" | "Mods" | "Actions"
 
-const GROUPS: Group[] = ["Channels", "Rooms", "People", "Tasks", "Actions"]
+const GROUPS: Group[] = ["Channels", "Rooms", "People", "Tasks", "Mods", "Actions"]
 
 const LIMIT = 8
 
@@ -63,6 +64,7 @@ export function Finder() {
   const listRef = useRef<HTMLDivElement>(null)
   const q = query.trim().toLowerCase()
   const debug = useDebugOptions()
+  useModsVersion()
   const groups = rank(collect(app, nav, go, debug), q)
   const flat = groups.flatMap((g) => g.items)
   const current = Math.max(0, Math.min(active, flat.length - 1))
@@ -417,6 +419,35 @@ function collect(app: App, nav: Nav, go: (go: Go) => void, debug: boolean): Item
         },
       }
     )
+
+  for (const mod of modsNow()) {
+    const run = runningMod(mod.name)
+    const open = () => toPanel({ kind: "mod", name: mod.name })
+    if (mod.state !== "on" || run?.failed)
+      items.push({
+        id: `mod:${mod.name}`,
+        group: "Mods",
+        label: mod.state === "asks" ? `Set up ${mod.name}` : mod.name,
+        keys: ["mod"],
+        lead: <Icon name="spec" size={14} />,
+        meta: mod.state === "asks" ? <span className="tone-decide">asks to run</span> : mod.state === "off" ? "off" : "stopped",
+        run: open,
+      })
+    else if (run?.title) items.push({ id: `mod:${mod.name}`, group: "Mods", label: run.title, keys: [mod.name, "mod"], lead: <Icon name="spec" size={14} />, meta: mod.name, run: open })
+    for (const c of mod.state === "on" ? (run?.commands ?? []) : [])
+      items.push({
+        id: `mod:${mod.name}:${c.id}`,
+        group: "Mods",
+        label: c.title,
+        keys: [mod.name, "mod"],
+        lead: <Icon name="more" size={14} />,
+        meta: mod.name,
+        run: () => {
+          close()
+          runModCommand(mod.name, c.id)
+        },
+      })
+  }
 
   for (const t of THEMES) {
     const on = app.prefs.theme === t.theme
