@@ -104,7 +104,7 @@ export async function firstChannel(d: Driver, messages: number, evidence: Eviden
     if (missed.length) console.log(`${what}: done after ${Date.now() - start} ms, and ${missed.length} probes failed first (${missed.slice(0, 5).join("; ")})`);
   };
   const probe = 2_000;
-  await step("the onboarding", 60_000, () => d.evaluate(clickButton, { name: "continue", within: ".onb" }, probe));
+  await step("the onboarding", 60_000, () => d.evaluate(clickButton, { name: "continue", within: ".onb:not(:has(.onb-wire, .onb-input))" }, probe));
   await step("the onboarding's second screen", 10_000, () => d.evaluate(clickButton, { name: "continue", within: ".onb:has(.onb-wire)" }, probe));
   await step("the pledge", 10_000, () => d.evaluate(fillIn, { selector: ".onb input", value: "Channels is not a harness" }, probe));
   await step("the onboarding closes", 10_000, () => d.evaluate(gone, { selector: "dialog.onb" }, probe));
