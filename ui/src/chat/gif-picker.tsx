@@ -1,8 +1,9 @@
+import { Gif01Icon } from "@hugeicons/core-free-icons"
 import { useCallback, useEffect, useRef, useState } from "react"
 
 import { gifFile, gifHost, useCatalog, useGifSrc, type Catalog, type Gif } from "~/chat/gifs"
 import { cx } from "~/kit/bits"
-import { Icon } from "~/kit/icons"
+import { GlyphIcon } from "~/kit/icons"
 import type { Channel, Message, Reaction } from "~/model"
 import { useAct, useApp } from "~/nav"
 import { nickname } from "~/names"
@@ -38,7 +39,7 @@ function GifTool({ channel, m, catalog }: { channel: Channel; m: Message; catalo
   return (
     <>
       <button type="button" className="msg-tool" aria-label="React with a GIF" title="React with a GIF" aria-expanded={open} data-gif-toggle onClick={() => setOpen((v) => !v)}>
-        <Icon name="gif" size={15} />
+        <GlyphIcon glyph={Gif01Icon} size={15} />
       </button>
       {open && <GifPicker catalog={catalog} className="gifs-on-msg" onClose={close} onPick={(g) => actions.react(channel.code, m.seq, g.key)} />}
     </>

@@ -1,3 +1,4 @@
+import { LinkSquare02Icon } from "@hugeicons/core-free-icons"
 import "~/styles/tasks.css"
 import "~/styles/github.css"
 
@@ -11,7 +12,7 @@ import { checksLine, DiffBar, IssueMark, issueWord, PrMark, Ticks } from "~/gith
 import { Avatar, Count, cx, Dot } from "~/kit/bits"
 import { Empty } from "~/kit/empty"
 import { Track } from "~/kit/glide"
-import { Icon } from "~/kit/icons"
+import { GlyphIcon, Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
 import { memberOf, type Channel, type Issue, type PullRequest } from "~/model"
 import { useApp, type GithubView as Kind } from "~/nav"
@@ -243,7 +244,7 @@ function Item({ on, url, label, open, issue, children }: { on: boolean; url: str
         {children}
       </button>
       <a className="gh-out" href={url} target="_blank" rel="noreferrer noopener" aria-label={`${label} on GitHub`} title="Open on GitHub">
-        <Icon name="external" size={14} />
+        <GlyphIcon glyph={LinkSquare02Icon} size={14} />
       </a>
     </li>
   )

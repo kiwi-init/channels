@@ -1,3 +1,4 @@
+import { LinkSquare02Icon } from "@hugeicons/core-free-icons"
 import { useEffect, useMemo, useState } from "react"
 
 import { HANDOFF_DONE, HANDOFF_FAILED } from "@kiwi/core/protocol.ts"
@@ -7,7 +8,7 @@ import { Body } from "~/chat/body"
 import { jumpTo } from "~/chat/reply"
 import { StepAnswer, StepHow } from "~/chat/step"
 import { cx } from "~/kit/bits"
-import { Icon } from "~/kit/icons"
+import { GlyphIcon } from "~/kit/icons"
 import { clock } from "~/kit/time"
 import { announce } from "~/kit/toasts"
 import type { Channel, QuestionAsk } from "~/model"
@@ -40,7 +41,7 @@ function HandoffLink({ handoff, now }: { handoff: Handoff; now: number }) {
   return (
     <div className="ask-handoff">
       <button type="button" className="btn is-primary is-small" onClick={() => openBrowser(handoff)}>
-        <Icon name="external" size={14} />
+        <GlyphIcon glyph={LinkSquare02Icon} size={14} />
         Open browser
       </button>
       <span className="ask-state">
