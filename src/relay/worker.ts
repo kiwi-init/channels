@@ -149,6 +149,7 @@ export class Channel extends DurableObject<Env> {
     this.sql = {
       run: (q, ...p) => void ctx.storage.sql.exec(q, ...p.map((v) => (v instanceof Uint8Array ? v.slice().buffer : v))),
       all: <T>(q: string, ...p: SqlParam[]) => ctx.storage.sql.exec(q, ...p).toArray() as T[],
+      transaction: <T>(work: () => T): T => ctx.storage.transactionSync(work),
     };
     this.policy = policyFrom(env as unknown as Record<string, string | undefined>);
     this.relay = makeRelay(

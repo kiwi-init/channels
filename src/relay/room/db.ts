@@ -13,6 +13,7 @@ export type SqlParam = string | number | null | Uint8Array;
 export interface Sql {
   run(query: string, ...params: SqlParam[]): void;
   all<T>(query: string, ...params: SqlParam[]): T[];
+  transaction?<T>(work: () => T): T;
 }
 
 type Stored = string | Uint8Array | ArrayBuffer;
@@ -255,6 +256,16 @@ export class RoomDb {
     const w = this.warm;
     w.head ??= Math.max(this.sql.all<{ s: number | null }>("SELECT MAX(seq) AS s FROM msgs")[0]?.s ?? 0, this.counters()?.head ?? 0);
     return w.head;
+  }
+
+  atomically<T>(work: () => T): T {
+    try {
+      return this.sql.transaction ? this.sql.transaction(work) : work();
+    } catch (err) {
+      // The writes rolled back, so what this room holds in memory may not match the file any more: read it again next time.
+      forgetRoom(this.sql);
+      throw err;
+    }
   }
 
   insert(seq: number, ts: number, iv: string, ct: string, e: number): void {

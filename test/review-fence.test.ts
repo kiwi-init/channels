@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
+import { Database } from "bun:sqlite";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -27,6 +28,7 @@ describe("the kiwi/review fence: a success computed from stale state can't win (
   let slowSuccess = false;
   let github: ReturnType<typeof Bun.serve>;
   let server: ReturnType<typeof startRelay>;
+  let githubApp: ReturnType<typeof githubAppFrom>;
   let owner: OwnerSetup;
   let dev: { id: Identity; ch: Channel };
   let rev: { id: Identity; ch: Channel };
@@ -60,6 +62,18 @@ describe("the kiwi/review fence: a success computed from stale state can't win (
     expect(r.status).toBe(200);
     return Number(r.body.seq);
   };
+  const failTicketWrites = () => {
+    const file = new Database(join(dataDir, `${owner.roomId}.sqlite`));
+    file.run("CREATE TRIGGER fail_ticket BEFORE UPDATE ON review_tickets BEGIN SELECT RAISE(ABORT, 'injected'); END");
+    return () => {
+      file.run("DROP TRIGGER fail_ticket");
+      file.close();
+    };
+  };
+  const restartRelay = () => {
+    server.stop(true);
+    server = startRelay({ port: 0, hostname: "127.0.0.1", dataDir, now, githubApp });
+  };
   const writesAt = (sha: string) => arrivals.filter((a) => a.sha === sha).map((a) => a.conclusion ?? a.status);
 
   beforeAll(async () => {
@@ -87,7 +101,8 @@ describe("the kiwi/review fence: a success computed from stale state can't win (
         return new Response("nope", { status: 404 });
       },
     });
-    server = startRelay({ port: 0, hostname: "127.0.0.1", dataDir, now, githubApp: githubAppFrom({ appId: "1", privateKey: pem, api: github.url.origin }) });
+    githubApp = githubAppFrom({ appId: "1", privateKey: pem, api: github.url.origin });
+    server = startRelay({ port: 0, hostname: "127.0.0.1", dataDir, now, githubApp });
     owner = await setupChannel(server.url.origin, { ownerName: "jon" });
     await owner.ownerCh.setGithubRepos([REPO], "ghu_owner");
     const computer = await pairComputer(owner.person);
@@ -191,5 +206,49 @@ describe("the kiwi/review fence: a success computed from stale state can't win (
       dev.ch.downgradesFor = null;
     }
     expect(writesAt(sha)).toEqual(["in_progress", "in_progress"]);
+  });
+
+  test("a failure between storing the message and delivering its ticket stores nothing; the retry with the same send id delivers both", async () => {
+    const sha = shaOf("5");
+    const t = await ticketOf(dev.id, sha);
+    const cid = b64url(crypto.getRandomValues(new Uint8Array(16)));
+    const before = await seqOf(owner.owner);
+    const heal = failTicketWrites();
+    try {
+      expect((await send(dev.id, [t], cid)).status).toBeGreaterThanOrEqual(500);
+    } finally {
+      heal();
+    }
+    expect(await seqOf(owner.owner)).toBe(before + 1);
+    expect((await check(owner.owner, sha, "approved", { upTo: 1_000_000 })).status).toBe(412);
+    const retry = await send(dev.id, [t], cid);
+    expect(retry.status).toBe(200);
+    const landed = Number(retry.body.seq);
+    expect(landed).toBe(before + 2);
+    expect((await check(owner.owner, sha, "approved", { upTo: landed - 1 })).status).toBe(412);
+    expect((await check(owner.owner, sha, "approved", { upTo: landed })).status).toBe(200);
+    expect(writesAt(sha)).toEqual(["in_progress", "success"]);
+  });
+
+  test("after that failure and a relay restart, a retry once the ticket ran out is refused, and the check stays at the downgrade until the owner's next success", async () => {
+    const sha = shaOf("6");
+    const t = await ticketOf(dev.id, sha);
+    const cid = b64url(crypto.getRandomValues(new Uint8Array(16)));
+    const heal = failTicketWrites();
+    try {
+      expect((await send(dev.id, [t], cid)).status).toBeGreaterThanOrEqual(500);
+    } finally {
+      heal();
+    }
+    restartRelay();
+    shift = TTL_PAST;
+    try {
+      expect(await send(dev.id, [t], cid)).toMatchObject({ status: 412, body: { tag: "Fenced" } });
+      const head = await seqOf(owner.owner);
+      expect((await check(owner.owner, sha, "approved", { upTo: head - 1 })).status).toBe(200);
+    } finally {
+      shift = 0;
+    }
+    expect(writesAt(sha)).toEqual(["in_progress", "success"]);
   });
 });

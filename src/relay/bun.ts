@@ -297,6 +297,7 @@ export function startRelay(
     const made: Sql = {
       run: (q, ...p) => void d.query(q).run(...p),
       all: <T>(q: string, ...p: SqlParam[]) => d.query(q).all(...p) as T[],
+      transaction: <T>(work: () => T): T => d.transaction(work)(),
     };
     const sql = stub ? made : (sqls.get(roomId) ?? made);
     if (!stub) {
