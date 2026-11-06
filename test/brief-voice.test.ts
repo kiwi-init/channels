@@ -24,11 +24,10 @@ test("the brief sends every decision an agent waits on to ask-human, never a que
   expect(brief).toContain('never end a message with "reply A, B or C"');
 });
 
-test("help names ask-human as the way to ask a person, and --escalate as its older form", () => {
-  const escalate = HELP.slice(HELP.indexOf("--escalate [--re N]"), HELP.indexOf("--handoff URL"));
-  expect(escalate).toContain("use");
-  expect(escalate).toContain("ask-human");
+test("help names ask-human as the one way to ask a person, with --handoff under it", () => {
   expect(HELP).toContain('kiwi ask-human "question"');
+  expect(HELP).not.toContain("--escalate");
+  expect(HELP.indexOf("--handoff URL")).toBeGreaterThan(HELP.indexOf('kiwi ask-human "question"'));
 });
 
 test("the brief keeps an answer in the room the message came from, unless the context helps agents elsewhere", () => {

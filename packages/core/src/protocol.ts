@@ -847,7 +847,7 @@ export interface Payload {
   side?: true;
   block?: DocBlockRef;
   /**
-   * An agent handing a decision or a step to people instead of acting (`kiwi escalate`): a blocking
+   * An agent handing a decision or a step to people instead of acting (`kiwi ask-human`): a blocking
    * question to its own human and the owner. Older clients see it as the blocking question it also is.
    */
   esc?: true;

@@ -2,12 +2,10 @@ import * as Effect from "effect/Effect";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join as joinPath } from "node:path";
 import { home, Keystore, loadConfig, updateConfig } from "../../config.ts";
-import { describeMember } from "@kiwi/core/membership.ts";
 import { taskId } from "@kiwi/core/state.ts";
 import { daemonSeat, type DaemonSeat } from "../../daemon.ts";
 import { isWakeVia, wakeKey, wakeWords } from "@kiwi/core/wake.ts";
-import { ago, holdLine, formatRooms, formatStatus, presenceWords, statusJson } from "@kiwi/core/format.ts";
-import { describeScopes, presetOf } from "@kiwi/core/scopes.ts";
+import { ago, holdLine, formatRooms, formatStatus, statusJson } from "@kiwi/core/format.ts";
 import { bindDirectory, seatsFor } from "../../hooks.ts";
 import { heldText, seatHeldAway } from "../../hold.ts";
 import { setWake, wakeSeats } from "../../wake-seats.ts";
@@ -16,20 +14,6 @@ import { agentName, type Command, die, noteRead, out, seatHere, session } from "
 import { ADMIN_GONE } from "./admin.ts";
 
 export const channelCommands: Record<string, Command> = {
-  members: () =>
-    Effect.gen(function* () {
-      const s = yield* session();
-      yield* s.members(true);
-      const { state } = yield* s.state();
-      for (const m of yield* s.members()) {
-        if (m.kind === "computer") continue;
-        const scopes = m.active ? state.members.get(m.name)?.scopes : undefined;
-        const may = scopes && presetOf(scopes) !== "full" ? ` · may: ${describeScopes(scopes)}` : "";
-        const persona = m.active ? state.members.get(m.name)?.persona : undefined;
-        out(`${describeMember(m)}${m.name === s.me ? " (you)" : ""}${persona ? ` — ${persona.name}` : ""}${may}${m.active ? "" : "  (left)"}`);
-      }
-    }),
-
   rooms: () =>
     Effect.gen(function* () {
       const s = yield* session();
@@ -142,27 +126,6 @@ export const channelCommands: Record<string, Command> = {
       const all = !!opt.all;
       out(opt.json ? JSON.stringify(statusJson(snap)) : formatStatus({ ...snap, all }));
       yield* noteRead(s);
-    }),
-
-  who: () =>
-    Effect.gen(function* () {
-      const s = yield* session();
-      const [online, { state }] = yield* Effect.all([s.who(), s.state()], { concurrency: "unbounded" });
-      const away = [...state.members.values()].filter((m) => m.active && !online.has(m.name));
-      if (!online.size && !away.length) return out("nobody else is in this channel");
-      for (const [name, p] of online) {
-        const role = state.members.get(name)?.persona?.name;
-        out(`${name}${role ? ` — ${role}` : ""} · ${presenceWords(p)}`);
-      }
-      for (const m of away) out(`${m.name}${m.persona ? ` — ${m.persona?.name}` : ""} · last seen ${ago(m.lastSeen)}`);
-    }),
-
-  charter: () =>
-    Effect.gen(function* () {
-      const s = yield* session();
-      if (args.length > 1 || opt.clear) return yield* die(ADMIN_GONE);
-      const { state } = yield* s.state();
-      out(state.charter ? state.charter.text : "no goal (the owner sets one in the Channels app: Channel settings › Goal)");
     }),
 
   hold: () =>

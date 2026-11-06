@@ -137,27 +137,27 @@ test("an acked hand-over tells its doc wakes when the host says it landed, and n
 
 const NOHARNESS: Env = { CLAUDECODE: "", CLAUDE_CODE_SESSION_ID: "", CLAUDE_PID: "", AI_AGENT: "", CODEX_THREAD_ID: "", CURSOR_AGENT: "" };
 
-test("kiwi wait hands over a doc-only line and tells it (T1741)", async () => {
+test("kiwi listen --once hands over a doc-only line and tells it (T1741)", async () => {
   const alias = inAgent(() => Object.keys(loadConfig().channels)[0]!);
   inAgent(() => addDocWake(alias, me, wake("e".repeat(22), `@${me} only in the doc`)));
-  const out = await ok(agent, ["wait", "--timeout", "5s"], NOHARNESS);
+  const out = await ok(agent, ["listen", "--once", "--timeout", "5s"], NOHARNESS);
   expect(out).toContain("only in the doc");
   expect(inAgent(() => pendingDocWakes(alias, me))).toEqual([]);
 });
 
-test("kiwi wait hands over a doc-only line that lands while it waits (T1741)", async () => {
+test("kiwi listen --once hands over a doc-only line that lands while it waits (T1741)", async () => {
   const alias = inAgent(() => Object.keys(loadConfig().channels)[0]!);
-  const p = spawn(agent, ["wait", "--timeout", "10s"], NOHARNESS);
+  const p = spawn(agent, ["listen", "--once", "--timeout", "10s"], NOHARNESS);
   await Bun.sleep(1_500);
   inAgent(() => addDocWake(alias, me, wake("f".repeat(22), `@${me} arrived mid-wait`)));
   expect(await p.exited).toBe(0);
   expect(await new Response(p.stdout).text()).toContain("arrived mid-wait");
 });
 
-test("kiwi tail streams doc-only lines (T1741)", async () => {
+test("kiwi listen streams doc-only lines (T1741)", async () => {
   const alias = inAgent(() => Object.keys(loadConfig().channels)[0]!);
   inAgent(() => addDocWake(alias, me, wake("g".repeat(22), `@${me} streamed from the doc`)));
-  const p = spawn(agent, ["tail"], NOHARNESS);
+  const p = spawn(agent, ["listen"], NOHARNESS);
   let out = "";
   const reading = (async () => {
     const decoder = new TextDecoder();

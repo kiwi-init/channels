@@ -39,7 +39,7 @@ import { attachments, firstLine, images, list, render, text } from "../input.ts"
 
 const LOG_DOC_MS = 5_000;
 const PUBLISHING = ["channel", "as", "quiet", "json", "file", "image", "attach"] as const;
-const SEND_OPTIONS = [...PUBLISHING, "to", "kind", "re", "room", "ask", "wait", "escalate", "handoff", "vendor", "expires", "option", "dm", "task", "main"];
+const SEND_OPTIONS = [...PUBLISHING, "to", "kind", "re", "room", "ask", "wait", "escalate", "handoff", "option", "dm", "task", "main"];
 
 function refuseUnused(command: string, allowed: readonly string[]): Effect.Effect<void, Quit> {
   const extra = unexpectedOptions(allowed);
@@ -50,13 +50,9 @@ export const messageCommands: Record<string, Command> = {
   send: () =>
     oneLook(
       Effect.gen(function* () {
-        yield* refuseUnused(args[0] === "ask" ? "ask" : "send", SEND_OPTIONS);
-        if (opt.escalate) {
-          const extra = (["to", "image", "kind", "room", "ask", ...(opt.handoff === undefined ? (["wait"] as const) : [])] as const).filter((f) => opt[f] !== undefined);
-          if (extra.length) return yield* die(`--escalate goes to your human and the owner as it is; leave out ${extra.map((f) => `--${f}`).join(", ")}`);
-          return yield* messageCommands.escalate!();
-        }
-        if (opt.handoff !== undefined) return yield* die("--handoff goes with --escalate");
+        yield* refuseUnused("send", SEND_OPTIONS);
+        if (opt.escalate) return yield* die("send --escalate is now kiwi ask-human: nothing was sent");
+        if (opt.handoff !== undefined) return yield* die("--handoff goes with kiwi ask-human: nothing was sent");
         if (opt.option !== undefined) return yield* die("--option goes with kiwi ask-human");
         const s = yield* session();
         const body = yield* text(1);
@@ -117,12 +113,6 @@ export const messageCommands: Record<string, Command> = {
         for (const r of replies) out(render(r));
       }),
     ),
-
-  ask: () => {
-    opt.ask = true;
-    if (opt.kind === undefined) opt.kind = "ask";
-    return messageCommands.send!();
-  },
 
   reply: () =>
     oneLook(
@@ -192,25 +182,6 @@ export const messageCommands: Record<string, Command> = {
         out(`deleted #${seq}: it reads as deleted for everyone, but anyone who already read it may keep a copy`);
       }),
     ),
-
-  save: () =>
-    Effect.gen(function* () {
-      const s = yield* session();
-      const seq = Number((args[1] ?? "").replace(/^#/, "")) || (yield* die("usage: kiwi save N [dir]"));
-      const { messages, state } = yield* s.state();
-      const found = yield* s.message(seq, messages);
-      const said = found && !ignored(state.trust.get(seq)) ? found : yield* die(`no message #${seq}`);
-      const m = yield* s.withBlockMedia(said).pipe(Effect.catch((e) => die(e.message)));
-      if (!m.imgs?.length && !m.files?.length) return yield* die(`message #${seq} has no images or files`);
-      const imgs = m.imgs?.length ? yield* s.ch.fx.images(m.imgs) : [];
-      const kept = yield* keepFiles(s.ch, m, args[2] ?? ".");
-      if (!imgs.length && !kept.saved.length) return yield* die(`message #${seq}'s images and files are no longer on the relay`);
-      for (const path of [...saveImages(seq, imgs, args[2] ?? "."), ...kept.saved, ...kept.markdown]) out(path);
-      const missing = m.imgs?.length ? missingImages(seq, m.imgs.length, imgs.length) : null;
-      if (missing) process.stderr.write(`kiwi: ${missing}\n`);
-      if (m.files && kept.saved.length < m.files.length)
-        process.stderr.write(`kiwi: ${m.files.length - kept.saved.length} of the ${m.files.length} files in #${seq} did not load; the relay may no longer have them\n`);
-    }),
 
   show: () =>
     Effect.gen(function* () {
@@ -302,16 +273,6 @@ export const messageCommands: Record<string, Command> = {
       }),
     ),
 
-  thread: () =>
-    Effect.gen(function* () {
-      const s = yield* session();
-      const seq = Number((args[1] ?? "").replace(/^#/, "")) || (yield* die("usage: kiwi thread N"));
-      const { messages, state } = yield* s.state();
-      if (!(yield* s.message(seq, messages))) return yield* die(`no message #${seq}`);
-      const root = state.threadOf.get(seq) ?? seq;
-      for (const m of yield* s.threadMessages(root, messages, state)) if (!ignored(state.trust.get(m.seq))) out(render(m, state));
-    }),
-
   query: () =>
     Effect.gen(function* () {
       const { schemaText, sessionQuery, USAGE } = yield* Effect.promise(() => import("../../query.ts"));
@@ -326,9 +287,7 @@ export const messageCommands: Record<string, Command> = {
       return r.exitCode;
     }),
 
-  "ask-human": () => messageCommands.escalate!(),
-
-  escalate: () =>
+  "ask-human": () =>
     Effect.gen(function* () {
       const s = yield* session();
       if (opt.close !== undefined) {

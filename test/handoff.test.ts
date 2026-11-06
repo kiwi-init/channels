@@ -147,7 +147,7 @@ describe("handoff escalation", () => {
 
   const waiting = async (args: string[]) => {
     const before = await newest();
-    const p = spawn(agent, ["send", "--escalate", "--handoff", LINK, "--wait", "30s", ...args]);
+    const p = spawn(agent, ["ask-human", "--handoff", LINK, "--wait", "30s", ...args]);
     let seq = "";
     await until(async () => {
       const latest = await newest();
@@ -182,23 +182,23 @@ describe("handoff escalation", () => {
   });
 
   test("a link nobody opens ends the wait with 4 at expiry", async () => {
-    const r = await run(agent, "send", "--escalate", "--handoff", LINK, "--expires", "2s", "--wait", "30s", "Accept the terms");
+    const r = await run(agent, "ask-human", "--handoff", LINK, "--expires", "2s", "--wait", "30s", "Accept the terms");
     expect(r.code).toBe(4);
     expect(r.err).toContain("expired");
   });
 
   test("a wait that ends while the link is open exits 2, not 4", async () => {
-    const r = await run(agent, "send", "--escalate", "--handoff", LINK, "--expires", "10m", "--wait", "2s", "Accept the terms");
+    const r = await run(agent, "ask-human", "--handoff", LINK, "--expires", "10m", "--wait", "2s", "Accept the terms");
     expect(r.code).toBe(2);
     expect(r.err).toContain("still open");
   });
 
   test("the flags are refused where they don't fit", async () => {
-    expect((await run(agent, "send", "--escalate", "--handoff", "http://live.example.com/x", "why")).code).toBe(1);
-    expect((await run(agent, "send", "--escalate", "--handoff", LINK, "--expires", "2h", "why")).code).toBe(1);
-    expect((await run(agent, "send", "--escalate", "--wait", "5s", "why")).code).toBe(1);
+    expect((await run(agent, "ask-human", "--handoff", "http://live.example.com/x", "why")).code).toBe(1);
+    expect((await run(agent, "ask-human", "--handoff", LINK, "--expires", "2h", "why")).code).toBe(1);
+    expect((await run(agent, "ask-human", "--wait", "5s", "why")).code).toBe(1);
     expect((await run(agent, "send", "--handoff", LINK, "hello")).code).toBe(1);
-    expect((await run(agent, "send", "--escalate", "--handoff", LINK, "--expires", "0", "why")).code).toBe(1);
+    expect((await run(agent, "ask-human", "--handoff", LINK, "--expires", "0", "why")).code).toBe(1);
   });
 });
 

@@ -106,7 +106,7 @@ describe("agents in threads", () => {
     expect(await ok(dev2, "listen", "--now")).toContain("bun.lock");
 
     // Asking defaults to the task too; doing two tasks, nothing is guessed.
-    expect(await ok(dev, "ask", "--to", "dev2", "can you review?")).toContain(`in ${task}'s thread`);
+    expect(await ok(dev, "send", "--ask", "--to", "dev2", "can you review?")).toContain(`in ${task}'s thread`);
     const second = /T(\d+)/.exec(await ok(owner, "--as", "lead", "task", "add", "and the tests", "--owner", "dev", "--ask", want))![0];
     await ok(dev, "task", "start", second);
     expect(await ok(dev, "send", "both under way")).toContain(`you're doing ${task} and ${second}, so say which with --to T7`);

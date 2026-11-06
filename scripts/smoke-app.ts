@@ -121,7 +121,7 @@ try {
   await notes.getByRole("button", { name: "Clear", exact: true }).click();
   let cleared = false;
   for (let i = 0; i < 50 && !cleared; i++) {
-    cleared = await kiwi(["-c", "smoke", "--as", "bot", "get", "smoke-url"]).then(
+    cleared = await kiwi(["-c", "smoke", "--as", "bot", "note", "smoke-url"]).then(
       () => false,
       (e: unknown) => String(e).includes("no fact"),
     );

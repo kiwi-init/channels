@@ -128,10 +128,6 @@ describe("an image pasted in the doc reaches agents through show and save (T2037
 
     const dir = mkdtempSync(join(tmpdir(), "kiwi-doc-media-"));
     try {
-      const saved = await cli("save", String(seq), dir);
-      expect(saved).toMatchObject({ code: 0 });
-      expect(saved.out).toContain(join(dir, `#${seq}-image.webp`));
-      expect(saved.out).toContain("trace.log");
       const shown = await cli("show", String(seq), join(dir, "shown"));
       expect(shown.code).toBe(0);
       expect(existsSync(join(dir, "shown", `#${seq}-image.webp`))).toBe(true);

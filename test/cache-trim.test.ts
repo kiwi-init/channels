@@ -71,14 +71,14 @@ async function kiwi(args: string[]): Promise<string> {
 const lines = () => readFileSync(cachePath(roomId), "utf8").split("\n").filter(Boolean).length;
 
 test("a long cache is trimmed to its newest messages above a local fold base, and the channel folds the same from it", async () => {
-  const tasks = await kiwi(["tasks", "--all"]);
+  const tasks = await kiwi(["task", "--all"]);
   const charter = (JSON.parse(await kiwi(["status", "--json"])) as { charter: unknown }).charter;
   expect(tasks).toContain("a task from early on");
   expect(tasks).toContain("a task from late on");
   expect(charter).toBe("the charter from early on");
   expect(existsSync(`${cachePath(roomId)}.base`)).toBe(true);
   expect(lines()).toBeLessThanOrEqual(320);
-  expect(await kiwi(["tasks", "--all"])).toBe(tasks);
+  expect(await kiwi(["task", "--all"])).toBe(tasks);
   expect((JSON.parse(await kiwi(["status", "--json"])) as { charter: unknown }).charter).toBe(charter);
   expect(await kiwi(["log", "-n", "3"])).toContain("says 113");
 });
