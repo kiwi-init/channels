@@ -10,11 +10,11 @@ const CHORES: Record<GithubChore, string> = {
   sync: "Fetching pull requests and issues",
 }
 
-export const choreTitle = (what: GithubChore, repo?: string): string => `${CHORES[what]}${repo ? ` for ${repo}` : ""} failed`
+const choreTitle = (what: GithubChore, repo?: string): string => `${CHORES[what]}${repo ? ` for ${repo}` : ""} failed`
 
 export const choreLine = (e: GithubChoreError): string => `${choreTitle(e.what, e.repo)} ${since(e.at)}: ${e.message}`
 
-export function since(at: number): string {
+function since(at: number): string {
   const when = ago(at)
   return when === "now" ? "just now" : /^\d+[mhd]$/.test(when) ? `${when} ago` : `on ${when}`
 }

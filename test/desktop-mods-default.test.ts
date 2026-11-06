@@ -76,7 +76,9 @@ describe("the mods that come with the app (T6270)", () => {
     const at = join(opts.folder, "github");
     expect(folderHash(at)).toBe(pin.hash);
     expect(JSON.parse(readFileSync(opts.approvals, "utf8"))).toEqual({ approved: { github: ["github", "panel", "tab"] } });
-    expect(copiesIn(opts.folder)).toEqual({ github: { source: "github.com/kiwi-init/mods/github", url: "https://github.com/kiwi-init/mods.git", path: "github", ref: null, commit: COMMIT, hash: pin.hash } });
+    expect(copiesIn(opts.folder)).toEqual({
+      github: { source: "github.com/kiwi-init/mods/github", url: "https://github.com/kiwi-init/mods.git", path: "github", ref: null, commit: COMMIT, hash: pin.hash },
+    });
     expect(readdirSync(opts.folder).sort()).toEqual([".sources.json", "github"]);
     expect(asked.some((u) => u.includes("anatomy"))).toBe(false);
   });

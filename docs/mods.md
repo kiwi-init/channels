@@ -54,7 +54,7 @@ Open a channel, press ⌘K and pick **Standup Notes** under Mods. Run `kiwi mod 
 | `name` | Lowercase letters, digits and dashes, the same as the folder's name. `app`, `nav`, `view`, `chat` and `debug` are taken. |
 | `version` | A version like `1.0.0` |
 | `shell` | The app versions it works with, like `^3.6`. An app it doesn't fit leaves it off and says why. |
-| `needs` | What it asks you for: `panel`, `command`, `terminal`, and `net:<host>` for each web host it talks to |
+| `needs` | What it asks you for: `panel`, `tab`, `command`, `terminal`, `github`, and `net:<host>` for each web host it talks to |
 | `icon` | Optional: an `.svg` or `.png` in its folder, up to 64 KB. The app shows it as a picture, so an SVG's scripts never run. Without one, the mod gets its first letter. |
 | `author` | Optional: who made it, up to 100 characters |
 | `skills` | Optional: skills it gives every agent. See [Skills](#skills) |
@@ -67,13 +67,18 @@ Everything comes from `@kiwi/mod`, plus React:
 
 | Import | What it does |
 | --- | --- |
-| `panel({ title, render })` | The mod's panel beside the chat. Its title shows in the panel's header and in ⌘K. |
+| `panel({ title, render })` | The mod's panel beside the chat. Its title shows in the panel's header and in ⌘K. `title(text)` changes it. |
+| `tab({ title, render, shown })` | A tab in the channel's header, after Agents. `showTab({ shown, alert, hint })` hides or shows it, puts a red dot on it, or sets its tooltip. |
+| `useGithub()` | With `github`: the open channel's repos, pull requests, issues and the tasks they link, read-only. No token reaches the mod. |
+| `show(target)`, `useShowing()`, `onShow(run)` | Open the mod's panel on `{ kind: "pr" \| "issue", repo, number }`; what it shows now; what the app asked it to show, like a task's pull request card |
+| `open({ kind: "task", id })` | With `github`: open a task, the channel's settings (`{ kind: "settings" }`) or the chat (`{ kind: "chat" }`) |
+| `copy(text, note)` | Copy text, with a short note that says so |
 | `command({ id, title, run })` | An action in ⌘K. Its id for `keys.json` is `<mod>.<id>`. |
 | `fetch(url, init)` | The mod's only way to the network, to the hosts you approved, over https |
 | `terminals()`, `focusTerminal(id)`, `markTerminal(id, mark)` | Your agents' tmux panes and Rex blocks. See [Terminals](#terminals) |
-| `Button`, `Row`, `Field`, `Icon` | The app's own button, list row, labelled field and icons |
+| `Button`, `Row`, `Field`, `Icon`, `Avatar`, `Dot`, `Count`, `Empty`, `Heading`, `Track`, `ago`, `cx` | The app's own pieces: button, list row, labelled field, icons, faces, a task's status dot, counts, empty states, headings, segmented controls and times |
 
-The frame has the app's colours and styles, and follows your theme as it changes. A mod can also import its own files: code, `.css`, and images (`.svg`, `.png`, `.jpg`, `.gif`, `.webp`).
+The frame has the app's colours and styles, and follows your theme as it changes. A web link in it opens in your browser. A mod can also import its own files: code, `.css`, and images (`.svg`, `.png`, `.jpg`, `.gif`, `.webp`).
 
 ```tsx
 import { useState } from "react"
@@ -99,6 +104,10 @@ command({ id: "hi", title: "Say hi from Status", run: () => show("hi from ⌘K")
 ```
 
 With `"needs": ["panel", "command", "net:example.com"]`, that's a whole mod.
+
+## The GitHub tab is a mod
+
+The channel's GitHub tab is the `github` mod from [kiwi-init/mods](https://github.com/kiwi-init/mods). The app installs it the first time it starts, already turned on, and never again: remove it and it stays removed. **Settings → Mods** says why, if it couldn't be installed.
 
 ## Turning one on
 
