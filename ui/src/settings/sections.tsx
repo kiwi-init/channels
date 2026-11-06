@@ -12,6 +12,7 @@ import type { Account, Prefs, Theme, UpdateCheck } from "~/model"
 import { updateFound } from "~/settings/update-check"
 import { useApp } from "~/nav"
 import { Confirm, Group, InlineEdit, Row, Seg } from "~/settings/controls"
+import { LayoutRow } from "~/settings/layouts"
 import { Themes } from "~/settings/themes"
 import { copyText } from "~/kit/toasts"
 import { UI_VERSION } from "~/settings/ui-version"
@@ -160,6 +161,7 @@ export function AppearanceSection() {
         <Row label="Calm" hint="After this long without the mouse or keys, a quiet sky shows every channel.">
           <Seg<number> label="Calm" value={prefs.calm} options={CALM} onChange={(calm) => set({ calm })} />
         </Row>
+        <LayoutRow />
       </Group>
       <Themes />
     </Page>

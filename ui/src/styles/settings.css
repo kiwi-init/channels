@@ -741,3 +741,7 @@ html .set-body {
 .modal .set-group-hint {
   margin-bottom: 4px;
 }
+
+.set-layout-note {
+  display: block;
+}

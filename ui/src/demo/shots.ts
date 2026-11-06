@@ -1,4 +1,4 @@
-import type { FolderThemesView } from "@kiwi/secrets/secrets.ts"
+import type { FolderThemesView, LayoutsView, LayoutView } from "@kiwi/secrets/secrets.ts"
 import type { Scenario } from "~/demo/provider"
 import type { Prefs } from "~/model"
 import type { Nav } from "~/nav"
@@ -14,9 +14,22 @@ export interface Shot {
   onboarding?: true
   folder?: FolderThemesView
   keys?: unknown
+  layouts?: { view: LayoutsView; pick?: string }
 }
 
 const kiwi = (nav: Partial<Nav> = {}): Shot => ({ scenario: "full", channel: "kiwi", nav })
+
+const LAYOUTS: LayoutView[] = [
+  { file: "focus.json", name: "Focus", areas: ["chat", "panel"], widths: { panel: 520 } },
+  { file: "mirror.json", name: "Mirror", areas: ["panel", "chat", "sidebar", "rail"], widths: { sidebar: 280 } },
+  { file: "overlay.json", name: "Overlay", areas: ["rail", "sidebar", "chat"], widths: {} },
+  { file: "main.json", name: "Like main", areas: ["rail", "sidebar", "chat", "panel"], widths: {} },
+]
+
+const layout = (pick: string, nav: Partial<Nav> = { panel: { kind: "task", task: 10 } }): Shot => ({
+  ...kiwi(nav),
+  layouts: { view: { dir: "/Users/ana/.kiwi/layouts", layouts: LAYOUTS, skipped: [] }, pick },
+})
 
 export const SHOTS: Record<string, Shot> = {
   channel: kiwi(),
@@ -150,6 +163,17 @@ export const SHOTS: Record<string, Shot> = {
   "settings-update-downloading": { scenario: "update-downloading", channel: "kiwi", nav: { page: "settings", section: "about" } },
   "settings-update-blocked": { scenario: "update-blocked", channel: "kiwi", nav: { page: "settings", section: "about" } },
   "settings-about": kiwi({ page: "settings", section: "about" }),
+  "settings-layouts": {
+    ...kiwi({ page: "settings", section: "appearance" }),
+    layouts: {
+      view: { dir: "/Users/ana/.kiwi/layouts", layouts: LAYOUTS, skipped: [{ file: "dock.json", why: 'has "dock" in "areas": the areas are rail, sidebar, chat and panel' }] },
+      pick: "mirror.json",
+    },
+  },
+  "layout-focus": layout("focus.json"),
+  "layout-mirror": layout("mirror.json"),
+  "layout-overlay": layout("overlay.json"),
+  "layout-main": layout("main.json"),
   "settings-shortcuts": {
     ...kiwi({ page: "settings", section: "shortcuts" }),
     keys: { "app.palette": ["mod+k", "mod+p"], "view.sidebar": "mod+shift+l", "chat.find": "mod+f", "nav.back": "mod+kk" },
