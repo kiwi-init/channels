@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import type { ModView } from "../desktop/src/bridge.ts";
 import { modSource, modsHost, type ModsHostOptions } from "../desktop/src/mods-host.ts";
-import { SAFE_LOOP } from "../desktop/src/mods.ts";
+import { SAFE_FILE, SAFE_LOOP } from "../desktop/src/mods.ts";
 
 const roots: string[] = [];
 const stops: (() => void)[] = [];
@@ -233,6 +233,16 @@ describe("the app's mods", () => {
       ["plain", "off", "safe", "No mod runs until Channels restarts: a test."],
     ]);
     expect(host.bundle("plain")).toBeNull();
+  });
+
+  test("a .safe-mode file in the mods folder starts once with every mod off, and is removed", async () => {
+    const { folder, host, write } = setup();
+    write("plain", { "mod.json": JSON.stringify({ name: "plain", version: "1.0.0", shell: "^3.3" }), "index.ts": "export {}" });
+    writeFileSync(join(folder, ".safe-mode"), "");
+    await host.start();
+    expect(host.list()[0]).toMatchObject({ state: "off", off: "safe", why: SAFE_FILE });
+    expect(host.safe()).toBe(SAFE_FILE);
+    expect(existsSync(join(folder, ".safe-mode"))).toBe(false);
   });
 
   test("two starts in a row whose mods never settle start the next one in safe mode, once", async () => {

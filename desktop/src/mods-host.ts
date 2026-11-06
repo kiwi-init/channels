@@ -5,7 +5,7 @@ import path from "node:path";
 
 import type { ModFetchReply, ModFetchRequest, ModView } from "./bridge.ts";
 import { errorText, writePrivate } from "./guard.ts";
-import { hostAllowed, SAFE_LOOP, unapproved } from "./mods.ts";
+import { hostAllowed, SAFE_FILE, SAFE_FLAG, SAFE_LOOP, unapproved } from "./mods.ts";
 
 const MANIFEST_BYTES = 64_000;
 const FETCH_BYTES = 8_000_000;
@@ -226,6 +226,11 @@ export function modsHost(o: ModsHostOptions) {
 
   return {
     async start(): Promise<void> {
+      const flag = path.join(o.folder, SAFE_FLAG);
+      if (fs.existsSync(flag)) {
+        safe ??= SAFE_FILE;
+        fs.rmSync(flag, { force: true });
+      }
       const m = readModsFile(o.approvals);
       if (m.unsettledStarts >= LOOP_STARTS) {
         safe ??= SAFE_LOOP;

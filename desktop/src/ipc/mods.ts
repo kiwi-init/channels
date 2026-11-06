@@ -4,10 +4,9 @@ import type { Serves } from "../calls.ts";
 import { kiwiHome } from "../daemon-client.ts";
 import type { Host } from "../host.ts";
 import { modsHost, type ModsHost } from "../mods-host.ts";
-import { SAFE_ENV } from "../mods.ts";
 import { UI_CONTRACT } from "../ui-contract.ts";
 
-let safeAtStart: string | null = process.env["KIWI_SAFE_MODE"] ? SAFE_ENV : null;
+let safeAtStart: string | null = null;
 
 export const startModsSafe = (why: string): void => {
   safeAtStart ??= why;

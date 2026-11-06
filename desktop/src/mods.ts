@@ -4,7 +4,8 @@ const safeWhy = (cause: string): string => `No mod runs until Channels restarts:
 
 export const SAFE_LOOP = safeWhy("it didn't finish starting with them twice in a row");
 export const SAFE_SHIFT = safeWhy("Shift was held as it opened");
-export const SAFE_ENV = safeWhy("KIWI_SAFE_MODE is set");
+export const SAFE_FILE = safeWhy("it found .safe-mode in the mods folder");
+export const SAFE_FLAG = ".safe-mode";
 
 export function unapproved(needs: readonly string[], approved: readonly string[]): string[] {
   const yes = new Set(approved);
