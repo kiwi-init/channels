@@ -116,6 +116,9 @@ jobs:
       - name: action pins
         if: ${{ !cancelled() }}
         run: bun scripts/action-pins.ts
+      - name: the ci-ok contract and the doc inventory
+        if: ${{ !cancelled() }}
+        run: bun scripts/ciok-contract.ts
 
   test-unit:
     name: test / unit
@@ -202,13 +205,17 @@ jobs:
         if: ${{ !cancelled() }}
         run: bunx wrangler deploy --dry-run --outdir "$RUNNER_TEMP/worker"
 
-  # The thread doc in Chromium and WebKit, written from the composer: replay, send, follow, image order, image copies, steady, a busy doc holding still and what the composer keeps from writing in the doc.
+  # The thread doc in Chromium and WebKit, written from the composer: replay, send, follow, image order, image copies, steady, a busy doc holding still and what the composer keeps from writing in the doc. Three legs balanced on the 2026-11-06 step medians (note gates/baseline): send ~2.2, edit ~2.4, view ~2.4 min of tests, every test exactly one leg; ci-ok fails unless every leg that ran passed.
   doc:
-    name: build / doc
+    name: build / doc, ${{ matrix.part }}
     needs: plan
     if: fromJSON(needs.plan.outputs.run)['doc']
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [send, edit, view]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup
@@ -221,46 +228,46 @@ jobs:
         if: ${{ !cancelled() }}
         run: bun scripts/ui-harness.ts
       - name: doc replay, a line you send from the composer shows once, whole, in a second window of yours too
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.part == 'send' }}
         run: bun scripts/ui-doc-replay.ts --chromium --second-window --rounds=2
       - name: doc send, sending at the bottom, scrolled up or a long line keeps the view where it was
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.part == 'send' }}
         run: bun scripts/ui-send-scroll.ts
       - name: doc follow, at the bottom the view follows an agent's lines, also right after you send while it posts and edits, in Chromium and WebKit
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.part == 'view' }}
         run: bun scripts/ui-doc-follow.ts
       - name: calm meadow, the idle scene draws and moves, follows the clock, rests while hidden, holds still for reduced motion and reuses its renderer, in WebKit
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.part == 'view' }}
         run: bun scripts/ui-calm-meadow.ts
       - name: doc image order, a line sent with an image from the composer stays above the lines sent after it
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.part == 'send' }}
         run: bun scripts/ui-doc-image-order.ts
       - name: image copies, a Retina shot in the feed and the doc shows from a copy sized to its box, while the viewer, Save image and a drag get the original, in Chromium and WebKit
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.part == 'view' }}
         run: |
           status=0
           bun scripts/ui-image-thumbs.ts || status=1
           bun scripts/ui-image-thumbs.ts --webkit || status=1
           exit "$status"
       - name: doc steady, tall lines sent below the fold keep their height when you scroll to them, in Chromium and WebKit
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.part == 'view' }}
         run: |
           status=0
           bun scripts/ui-doc-steady.ts || status=1
           bun scripts/ui-doc-steady.ts --webkit || status=1
           exit "$status"
       - name: msg edit, an agent's edited message keeps its text on screen through every edit, in Chromium and WebKit
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.part == 'edit' }}
         run: |
           status=0
           bun scripts/ui-msg-edit.ts || status=1
           bun scripts/ui-msg-edit.ts --webkit || status=1
           exit "$status"
       - name: ui a busy thread doc never scrolls on its own, under the composer or while you read, in WebKit
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.part == 'send' }}
         run: bun scripts/ui-doc-still.ts --dist ui/dist
       - name: composer in a doc, late refusals keep the draft, PDFs, Edit in the composer, slow pasted images, the / menu and ⌘Enter, in Chromium and WebKit
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.part == 'send' }}
         run: |
           bun scripts/ui-composer-doc.ts &
           chromium=$!
@@ -271,7 +278,7 @@ jobs:
           wait "$webkit" || status=1
           exit "$status"
       - name: edit an old message, ↑ on a long line from past the 400-message window opens it whole, and saving keeps it whole for everyone
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.part == 'edit' }}
         run: bun scripts/ui-edit-old.ts
 
   # The thread doc's fuzzer and two owners sending side by side, each in Chromium and WebKit at once.
@@ -947,7 +954,15 @@ jobs:
     steps:
       - env:
           NEEDS: ${{ toJSON(needs) }}
+          PLAN: ${{ needs.plan.outputs.run }}
         run: |
-          bad=$(echo "$NEEDS" | jq -r 'to_entries[] | select(.value.result != "success" and .value.result != "skipped") | "\(.key): \(.value.result)"')
+          p=$(echo "$NEEDS" | jq -r '.plan.result // "absent from needs"')
+          if [ "$p" != "success" ]; then echo "plan: $p"; exit 1; fi
+          if [ -z "$PLAN" ]; then echo "plan produced no job selection"; exit 1; fi
+          bad=$(echo "$NEEDS" | jq -r 'to_entries[] | select(.key != "plan") | select(.value.result != "success" and .value.result != "skipped") | "\(.key): \(.value.result)"')
           if [ -n "$bad" ]; then echo "$bad"; exit 1; fi
-          echo "every job that ran passed"
+          stray=$(echo "$NEEDS" | jq -r --argjson plan "$PLAN" 'to_entries[] | select(.key != "plan") | select($plan[.key] == false) | select(.value.result == "success") | "\(.key): ran but not selected"')
+          if [ -n "$stray" ]; then echo "$stray"; exit 1; fi
+          missing=$(jq -n -r --argjson plan "$PLAN" --argjson needs "$NEEDS" '$plan | to_entries[] | select(.value == true) | .key as $k | ($needs[$k].result // "absent from needs") as $r | select($r != "success") | "\($k): selected by plan, \($r)"')
+          if [ -n "$missing" ]; then echo "$missing"; exit 1; fi
+          echo "every selected job ran and passed"
