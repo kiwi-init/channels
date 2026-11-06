@@ -52,9 +52,9 @@ describe("a layout paints", () => {
     })
   })
 
-  test("a mirrored order: the rail on the right, the panel left of the chat, the sidebar's header bare", () => {
+  test("a mirrored order: the rail on the right, the panel left of the chat, the header's sidebar part over the sidebar", () => {
     const p = paintOf(MIRROR)
-    expect(p.attrs).toEqual({ layout: "on", rail: "right", top: "bare", panel: "left" })
+    expect(p.attrs).toEqual({ layout: "on", rail: "right", top: "end", panel: "left" })
     expect(p.vars["--l-cols-p"]).toBe("var(--panel-w) minmax(0, 1fr) var(--side-w)")
     expect(p.vars["--l-bare"]).toBe("minmax(0, 1fr)")
     expect([p.vars["--l-panel-o"], p.vars["--l-main-o"], p.vars["--l-side-o"]]).toEqual(["1", "2", "3"])
@@ -70,6 +70,7 @@ describe("a layout paints", () => {
     expect(focus.shape).toEqual({ rail: 0, side: 0, start: 520, left: false })
     const overlay = paintOf(OVERLAY)
     expect(overlay.attrs).toEqual({ layout: "on", panel: "float" })
+    expect(paintOf(layout("middle.json", ["panel", "sidebar", "chat"])).attrs).toEqual({ layout: "on", rail: "none", top: "bare", panel: "left" })
     expect(overlay.vars["--l-cols-p"]).toBe("var(--side-w) minmax(0, 1fr)")
   })
 
@@ -115,7 +116,7 @@ describe("the picked layout", () => {
     await Bun.sleep(0)
     expect(dataset["rail"]).toBe("right")
     pushed?.({ dir: folder.dir, layouts: [{ ...MIRROR, areas: ["rail", "chat", "sidebar"] }], skipped: [] })
-    expect(dataset).toEqual({ theme: "dark", layout: "on", top: "bare", panel: "float" })
+    expect(dataset).toEqual({ theme: "dark", layout: "on", top: "end", panel: "float" })
     pickLayout(null)
   })
 })

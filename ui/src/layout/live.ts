@@ -25,7 +25,7 @@ export function paintOf({ file, areas, widths }: LayoutView): Painted {
   const attrs: Record<string, string> = { layout: "on" }
   if (rail) attrs["rail"] = rail
   if (side < 0) attrs["side"] = "none"
-  if (side !== 0) attrs["top"] = "bare"
+  if (side !== 0) attrs["top"] = side === inner.length - 1 ? "end" : "bare"
   if (panel < 0) attrs["panel"] = "float"
   else if (left) attrs["panel"] = "left"
   const vars: Record<string, string> = {

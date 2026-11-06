@@ -72,7 +72,7 @@
   z-index: 15;
   display: flex;
   width: min(var(--side-w), calc(100vw - var(--rail-w)));
-  background: var(--bg);
+  background: var(--bg-2);
   box-shadow: var(--shadow-pop);
 }
 
@@ -146,6 +146,27 @@
     padding: 0 10px;
   }
 
+  :root[data-top="end"] .chan:not(.is-bare) .top {
+    grid-template-columns: minmax(0, 1fr) auto var(--side-w);
+    padding-left: var(--l-room, 0px);
+  }
+
+  :root[data-top="end"] .chan:not(.is-bare) .tabs {
+    grid-area: 1 / 1;
+  }
+
+  :root[data-top="end"] .chan:not(.is-bare) .top-tools {
+    grid-area: 1 / 2;
+  }
+
+  :root[data-top="end"] .chan:not(.is-bare) .top-drawer {
+    grid-area: 1 / 3;
+  }
+
+  :root[data-top="end"] .chan:not(.is-bare) .top-title {
+    grid-area: 1 / 3;
+  }
+
   :root[data-side="none"] .chan .top-drawer-dot {
     display: block;
   }
@@ -157,7 +178,8 @@
     bottom: 0;
     z-index: 20;
     width: min(var(--panel-w), 100vw);
-    background: var(--bg);
+    background: var(--bg-2);
+    box-shadow: var(--shadow-pop);
   }
 
   :root[data-panel="float"][data-rail="right"] .chan.has-panel .panel {
