@@ -75,7 +75,7 @@ function listen(): void {
   addEventListener("message", (e) => void onMessage(e))
 }
 
-const still = (): boolean => matchMedia("(prefers-reduced-motion: reduce)").matches
+const still = (): boolean => document.documentElement.dataset["motion"] === "reduced" || matchMedia("(prefers-reduced-motion: reduce)").matches
 
 function canDraw(mod: string): boolean {
   const b = bridge()

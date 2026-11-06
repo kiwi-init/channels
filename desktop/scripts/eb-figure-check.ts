@@ -167,13 +167,21 @@ const attachFiles = (): { attached: number; kept: number; doc: boolean; input: b
   return now;
 };
 
-const figuresNow = (text: string): { shown: number; live: number; chips: number; frames: string[] } => {
+const figuresNow = (text: string): { shown: number; live: number; chips: number; frames: string[]; still: boolean; appStill: boolean; boxes: string[]; anywhere: number; height: number } => {
   const msg = [...document.querySelectorAll<HTMLElement>(".main article.msg")].find((m) => (m.textContent ?? "").includes(text));
   return {
     shown: msg?.querySelectorAll(".msg-shown").length ?? 0,
     live: msg?.querySelectorAll(".msg-shown.is-live").length ?? 0,
     chips: msg?.querySelectorAll(".msg-file").length ?? 0,
     frames: [...(msg?.querySelectorAll<HTMLIFrameElement>(".msg-shown iframe") ?? [])].map((f) => `${f.title} ${f.getAttribute("sandbox")} ${f.getAttribute("src")}`),
+    still: matchMedia("(prefers-reduced-motion: reduce)").matches,
+    appStill: document.documentElement.dataset["motion"] === "reduced",
+    boxes: [...(msg?.querySelectorAll<HTMLElement>(".msg-shown") ?? [])].map((b) => {
+      const r = b.getBoundingClientRect();
+      return `${Math.round(r.top)}..${Math.round(r.bottom)}`;
+    }),
+    anywhere: document.querySelectorAll("iframe.msg-shown-frame").length,
+    height: innerHeight,
   };
 };
 
