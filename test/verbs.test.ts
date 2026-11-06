@@ -375,6 +375,16 @@ describe("review rounds through the CLI", () => {
     expect(JSON.parse(await ok(dev, "task", "show", `T${unowned}`, "--json")).notes.at(-1)).toMatchObject({ by: "dev", text: "on it" });
   });
 
+  test("task add --start files the task and takes it in one call, and refuses another owner", async () => {
+    const added = await ok(dev, "task", "add", "file and take", "--ask", want, "--start");
+    const t = taskNo(added);
+    expect(added).toContain(`added T${t}, doing @dev`);
+    expect(JSON.parse(await ok(dev, "task", "show", `T${t}`, "--json"))).toMatchObject({ state: "doing", owner: "dev" });
+    const other = await run(dev, "task", "add", "not mine", "--ask", want, "--start", "--owner", "rev");
+    expect(other.code).not.toBe(0);
+    expect(other.err).toContain("--start takes the task yourself");
+  });
+
   test("a review change the channel would refuse sends nothing and says why (#1032)", async () => {
     const t = taskNo(await ok(dev, "task", "add", "keep the gate", "--review", "rev", "--ask", want));
     await ok(dev, "task", "claim", `T${t}`);

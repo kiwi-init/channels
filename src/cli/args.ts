@@ -120,6 +120,7 @@ function parse() {
         folder: { type: "string" },
         tools: { type: "string" },
         stay: { type: "boolean" },
+        start: { type: "boolean" },
         room: { type: "string" },
         server: { type: "string" },
         session: { type: "string" },

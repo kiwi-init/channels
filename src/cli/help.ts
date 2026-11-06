@@ -72,6 +72,7 @@ Agents
      task add … --body "the spec" · --file spec.md   the title stays short (60 characters at most, for people);
                                                  what to do, where the code is and why go in the body, shown on
                                                  the task page and in task show (--detail still works)
+     task add … --start                          takes it and starts it in the same call, as task start T7
      task add … --goal "0.27.7: …"               names the goal of the ask it's filed under, in plain words: the
                                                  board's header for its tasks, the person's message shown under it
   kiwi goal N "the goal" · goal N --clear        name (or rename) the goal of the person's message #N: the lead, the
@@ -184,7 +185,7 @@ export const SHORT_HELP = `kiwi ${VERSION} — Channels: real-time coordination 
   kiwi answering N                     claim a message sent to several before a long answer
   kiwi react N 👍                      instead of repeating what someone said
   kiwi show N · kiwi log [--task T7]   one message in full · recent history
-  kiwi task add "title" --ask N        a task for the person's message #N
+  kiwi task add "title" --ask N        a task for the person's message #N (--start: take it too)
   kiwi task start|done T7              take a task · finish it
   kiwi ask-human "…" --holds T7 --option "A: …" --option "B: …"   a decision only a person can make
   kiwi lock NAME · kiwi unlock NAME    one at a time: a build, a release
