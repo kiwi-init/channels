@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { addMod, devRound, git, type Git, listMods, ModError, modsDir, nudgeApp, parseSource, readManifest, removeMod, startDev, updateMods } from "../src/mods.ts";
+import { addMod, checkUpdates, devRound, git, type Git, listMods, ModError, modsDir, nudgeApp, parseSource, readManifest, removeMod, startDev, updateMods } from "../src/mods.ts";
 import { bundleMod } from "@kiwi/core/node/mod-bundle.ts";
 import { readModIcon } from "@kiwi/core/node/mod-icon.ts";
 import { kiwiCmd } from "./owner.ts";
@@ -155,6 +155,26 @@ describe("kiwi mod add, list, update and remove", () => {
     expect(sh(join(modsDir(home), "linear-panel"), "rev-parse", "HEAD")).toBe(more);
   });
 
+  test("checking for updates says what each would bring, the new needs included, and changes nothing", () => {
+    const home = scratch("home");
+    const src = repo(LINEAR);
+    const first = addMod(home, src).commit;
+    expect(checkUpdates(home)).toEqual({ changes: [], current: ["linear-panel"], skipped: [] });
+
+    commit(src, { ...LINEAR, version: "1.1.0" });
+    commit(src, { ...LINEAR, version: "2.0.0", needs: ["panel", "net:api.linear.app"] });
+    const latest = sh(src, "rev-parse", "HEAD");
+    const offered = { name: "linear-panel", from: "1.0.0", to: "2.0.0", commits: 2, added: ["net:api.linear.app"], dropped: ["command"], applied: false };
+    expect(checkUpdates(home)).toEqual({ changes: [offered], current: [], skipped: [] });
+    expect(checkUpdates(home, "linear-panel").changes).toEqual([offered]);
+    expect(sh(join(modsDir(home), "linear-panel"), "rev-parse", "HEAD")).toBe(first);
+    expect(listMods(home)[0]).toMatchObject({ version: "1.0.0", changed: false });
+
+    expect(updateMods(home, "linear-panel", true).changes[0]).toMatchObject({ to: "2.0.0", applied: true });
+    expect(sh(join(modsDir(home), "linear-panel"), "rev-parse", "HEAD")).toBe(latest);
+    expect(checkUpdates(home).current).toEqual(["linear-panel"]);
+  });
+
   test("a mod pinned to a tag stays on it; local changes and hand-made folders aren't pulled over", () => {
     const home = scratch("home");
     const src = repo(LINEAR);
@@ -256,6 +276,10 @@ describe("one mod from a repo of many (T6870)", () => {
 
     anatomy("0.2.0", ["net:example.com"]);
     const more = save("asks for more");
+    const sources = readFileSync(join(modsDir(home), ".sources.json"), "utf8");
+    expect(checkUpdates(home, null, run).changes).toEqual([{ name: "anatomy", from: "0.1.0", to: "0.2.0", commits: 1, added: ["net:example.com"], dropped: [], applied: false }]);
+    expect(readFileSync(join(modsDir(home), ".sources.json"), "utf8")).toBe(sources);
+    expect(readdirSync(modsDir(home)).filter((n) => n.startsWith(".updating"))).toEqual([]);
     expect(updateMods(home, null, false, run).changes).toEqual([{ name: "anatomy", from: "0.1.0", to: "0.2.0", commits: 1, added: ["net:example.com"], dropped: [], applied: false }]);
     expect(listMods(home, run)[0]?.version).toBe("0.1.0");
     expect(updateMods(home, null, true, run).changes[0]).toMatchObject({ to: "0.2.0", applied: true });

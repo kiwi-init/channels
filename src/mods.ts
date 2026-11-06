@@ -271,7 +271,7 @@ function diffNeeds(was: ModManifest | null, next: ModManifest): { added: string[
   return { added: next.needs.filter((n) => !before.has(n)), dropped: (was?.needs ?? []).filter((n) => !after.has(n)) };
 }
 
-function updateCopy(home: string, name: string, dir: string, copy: ModCopy, yes: boolean, run: Git): Change | null {
+function updateCopy(home: string, name: string, dir: string, copy: ModCopy, take: (added: string[]) => boolean, run: Git): Change | null {
   if (folderHash(dir) !== copy.hash) throw new ModError("has changes that aren't in its source: keep them in a repo of your own, or kiwi mod remove --force it and add it again");
   const tmp = join(modsDir(home), `.updating-${randomBytes(6).toString("hex")}`);
   try {
@@ -279,7 +279,7 @@ function updateCopy(home: string, name: string, dir: string, copy: ModCopy, yes:
     if (to === copy.commit) return null;
     const root = join(tmp, copy.path);
     if (existsSync(root) && folderHash(root) === copy.hash) {
-      keepCopy(home, name, { ...copy, commit: to });
+      if (take([])) keepCopy(home, name, { ...copy, commit: to });
       return null;
     }
     let next: ModManifest;
@@ -301,7 +301,7 @@ function updateCopy(home: string, name: string, dir: string, copy: ModCopy, yes:
       // Its old commit is gone from the source's history: the count is unknown, the update still applies.
     }
     const { added, dropped } = diffNeeds(was, next);
-    const applied = !added.length || yes;
+    const applied = take(added);
     if (applied) {
       placeCopy(root, dir);
       keepCopy(home, name, { ...copy, commit: to, hash: folderHash(dir) });
@@ -312,7 +312,11 @@ function updateCopy(home: string, name: string, dir: string, copy: ModCopy, yes:
   }
 }
 
-export function updateMods(home: string, only: string | null, yes: boolean, run: Git = git): Updates {
+export const updateMods = (home: string, only: string | null, yes: boolean, run: Git = git): Updates => updatesOf(home, only, (added) => !added.length || yes, run);
+
+export const checkUpdates = (home: string, only: string | null = null, run: Git = git): Updates => updatesOf(home, only, () => false, run);
+
+function updatesOf(home: string, only: string | null, take: (added: string[]) => boolean, run: Git): Updates {
   if (only !== null && !MOD_NAME.test(only)) throw new ModError(`"${only}" isn't a mod name`);
   const names = only === null ? folders(home) : [only];
   if (only !== null && !folders(home).includes(only)) throw new ModError(`there's no mod named ${only} (kiwi mod list)`);
@@ -325,7 +329,7 @@ export function updateMods(home: string, only: string | null, yes: boolean, run:
     const copy = copies[name];
     if (copy && !lstatSync(dir).isSymbolicLink() && !isGit(dir)) {
       try {
-        const change = updateCopy(home, name, dir, copy, yes, run);
+        const change = updateCopy(home, name, dir, copy, take, run);
         if (change) changes.push(change);
         else current.push(name);
       } catch (e) {
@@ -364,7 +368,7 @@ export function updateMods(home: string, only: string | null, yes: boolean, run:
       }
       const { added, dropped } = diffNeeds(was, next);
       const commits = Number(run(["rev-list", "--count", `HEAD..${to}`], dir)) || 0;
-      const applied = !added.length || yes;
+      const applied = take(added);
       if (applied) run(["checkout", "--quiet", "--detach", to], dir);
       changes.push({ name, from: was?.version ?? null, to: next.version, commits, added, dropped, applied });
     } catch (e) {

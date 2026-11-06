@@ -493,6 +493,10 @@ export interface KiwiBridge {
   modsSettled(): Promise<void>;
   modIcon(name: string): Promise<ModIcon | null>;
   modDetails(name: string): Promise<ModDetails | null>;
+  modsInstalled(): Promise<ModInstalled[]>;
+  modUpdates(): Promise<ModUpdates>;
+  updateMod(name: string): Promise<ModView[]>;
+  removeMod(name: string, force: boolean): Promise<ModView[]>;
   modTerminals(name: string): Promise<ModTerminal[]>;
   modTerminalFocus(name: string, seat: string): Promise<void>;
   modTerminalMark(name: string, seat: string, mark: ModTerminalMark | null): Promise<void>;
@@ -528,6 +532,29 @@ export interface ModDetails {
   bytes: number | null;
   readme: string | null;
   iconWhy: string | null;
+}
+
+export interface ModInstalled {
+  name: string;
+  source: string | null;
+  commit: string | null;
+  local: boolean;
+  link: string | null;
+  changed: boolean;
+}
+
+export interface ModUpdate {
+  name: string;
+  from: string | null;
+  to: string;
+  commits: number;
+  added: string[];
+  dropped: string[];
+}
+
+export interface ModUpdates {
+  changes: ModUpdate[];
+  skipped: { name: string; why: string }[];
 }
 
 export interface ModTerminal {
