@@ -47,6 +47,78 @@ async function grows(page: Page): Promise<string | null> {
   return after.height > before.height * 2 ? null : `the comment box stayed ${Math.round(after.height)} px high (was ${Math.round(before.height)}) with a comment that wraps over several lines`;
 }
 
+const GAP_PX = 64;
+
+async function ownScroll(page: Page): Promise<string | null> {
+  const rail = (await page.locator(".spec-rail-scroll").count()) ? page.locator(".spec-rail-scroll") : page.locator(".spec-rail");
+  const spec = () => page.evaluate(() => document.querySelector<HTMLElement>(".spec-page")!.scrollTop);
+  const own = () => rail.evaluate((el) => el.scrollTop);
+  await page.evaluate(() => {
+    const el = document.querySelector<HTMLElement>(".spec-page")!;
+    el.scrollTop = (el.scrollHeight - el.clientHeight) / 2;
+  });
+  await page.waitForTimeout(300);
+  const box = await rail.boundingBox();
+  const view = page.viewportSize();
+  if (!box || !view) return "the comments aren't on screen";
+  const top = Math.max(box.y, 0);
+  const bottom = Math.min(box.y + box.height, view.height);
+  if (bottom - top < 40) return `the comments scrolled out of view with the spec (${Math.round(box.y)}-${Math.round(box.y + box.height)})`;
+  const [specBefore, ownBefore] = [await spec(), await own()];
+  await page.mouse.move(box.x + box.width / 2, (top + bottom) / 2);
+  await page.waitForTimeout(200);
+  await page.mouse.wheel(0, -400);
+  await page.waitForTimeout(500);
+  const [specAfter, ownAfter] = [await spec(), await own()];
+  if (Math.abs(specAfter - specBefore) > 1) return `a wheel over the comments moved the spec from ${specBefore} to ${specAfter}`;
+  return ownAfter !== ownBefore ? null : `the comments didn't scroll (${ownBefore} → ${ownAfter})`;
+}
+
+async function inView(page: Page): Promise<string | null> {
+  await page.evaluate(() => {
+    const el = document.querySelector<HTMLElement>(".spec-page")!;
+    el.scrollTop = el.scrollHeight;
+  });
+  await page.waitForTimeout(500);
+  const got = await page.evaluate(() => {
+    const view = document.querySelector<HTMLElement>(".spec-page")!.getBoundingClientRect();
+    const rail = document.querySelector<HTMLElement>(".spec-rail")?.getBoundingClientRect();
+    const box = document.querySelector<HTMLElement>('[aria-label="Comment on the spec"]')?.getBoundingClientRect();
+    return { top: view.top, bottom: view.bottom, rail: rail ? [rail.top, rail.bottom] : null, box: box ? [box.top, box.bottom] : null };
+  });
+  if (!got.rail || !got.box) return "no comments column or comment box";
+  if (got.rail[1] < got.top + 40) return `the comments scrolled away with the spec (their bottom is at ${Math.round(got.rail[1])}, the page starts at ${Math.round(got.top)})`;
+  return got.box[0] >= got.top && got.box[1] <= got.bottom + 1
+    ? null
+    : `the comment box is at ${Math.round(got.box[0])}-${Math.round(got.box[1])}, outside ${Math.round(got.top)}-${Math.round(got.bottom)}`;
+}
+
+async function noGaps(page: Page): Promise<string | null> {
+  const tops = await page.evaluate(() =>
+    [...document.querySelectorAll<HTMLElement>(".spec-rail .spec-comment")].map((c) => [c.getBoundingClientRect().top, c.getBoundingClientRect().bottom] as const).sort((a, b) => a[0] - b[0]),
+  );
+  if (tops.length < 3) return `only ${tops.length} comments in the column`;
+  const gaps = tops.slice(1).map(([top], i) => Math.round(top - tops[i]![1]));
+  const worst = Math.max(...gaps);
+  return worst <= GAP_PX ? null : `comments sit ${gaps.join(", ")} px apart, up to ${worst}`;
+}
+
+async function jumps(page: Page): Promise<string | null> {
+  await page.evaluate(() => (document.querySelector<HTMLElement>(".spec-page")!.scrollTop = 0));
+  await page.waitForTimeout(300);
+  const link = page.locator(".spec-rail button.spec-comment-quote", { hasText: "Anything archived before 0.20" });
+  if (!(await link.count())) return "a comment on a line has no link to that line";
+  await link.click();
+  await page.waitForTimeout(600);
+  const shown = await page.evaluate(() => {
+    const view = document.querySelector<HTMLElement>(".spec-page")!.getBoundingClientRect();
+    const line = [...document.querySelectorAll<HTMLElement>(".spec-doc [data-anchor]")].find((b) => b.textContent?.includes("Anything archived before 0.20"));
+    const at = line?.getBoundingClientRect();
+    return at ? at.top >= view.top && at.bottom <= view.bottom : false;
+  });
+  return shown ? null : "the spec line is still out of view after a click on its comment";
+}
+
 const browser = await webkit.launch();
 let failed = 0;
 try {
@@ -61,6 +133,20 @@ try {
     const why = await check(page);
     if (why) failed++;
     console.log(`${why ? "✗" : "✓"} spec-draft at 1900x1000: ${what}${why ? `: ${why}` : ""}`);
+  }
+  const short = await browser.newPage({ viewport: { width: 1400, height: 560 } });
+  await short.goto(`http://127.0.0.1:${server.port}/?shot=spec-draft`);
+  await short.waitForSelector(".spec-doc-wrap.is-wide", { timeout: 15_000 });
+  await short.waitForTimeout(500);
+  for (const [what, check] of [
+    ["a wheel over the comments scrolls them, not the spec", ownScroll],
+    ["at the end of the spec, the comments and their box are still in view", inView],
+    ["the comments stack without gaps", noGaps],
+    ["a comment's quote brings its spec line into view", jumps],
+  ] as const) {
+    const why = await check(short);
+    if (why) failed++;
+    console.log(`${why ? "✗" : "✓"} spec-draft at 1400x560: ${what}${why ? `: ${why}` : ""}`);
   }
 } finally {
   await browser.close();

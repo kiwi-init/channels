@@ -13,7 +13,6 @@ import { commentsOf, faceOf, lineDiff, quoteIn, type Comment } from "~/specs/rea
 const WIDE_PX = 940
 const TALK_SHOWN = 3
 const DIFF_CONTEXT = 1
-const RAIL_GAP = 8
 const BLOCKS = "p, li, h1, h2, h3, h4, h5, h6, td, th, pre"
 
 const openImage = (url: string) => void window.open(url, "_blank", "noopener,noreferrer")
@@ -49,41 +48,23 @@ function anchorOf(blocks: HTMLElement[], quote: string): HTMLElement | undefined
   return undefined
 }
 
-function placeRail(el: HTMLElement): void {
-  const talk = el.querySelector<HTMLElement>(".spec-rail-talk")
-  const items = [...el.querySelectorAll<HTMLElement>("[data-at]")].sort((a, b) => Number(a.dataset.at) - Number(b.dataset.at))
-  const room = talk ? talk.offsetHeight + RAIL_GAP : 0
-  const first = items.length ? Number(items[0]!.dataset.at) : Infinity
-  const above = !!talk && (room <= first || talk.contains(document.activeElement))
-  if (talk && above) talk.style.top = "0px"
-  let floor = above ? room : 0
-  for (const item of items) {
-    const top = Math.max(Number(item.dataset.at), floor)
-    item.style.top = `${top}px`
-    floor = top + item.offsetHeight + RAIL_GAP
-  }
-  if (talk && !above) {
-    talk.style.top = `${floor}px`
-    floor += room
-  }
-  el.style.minHeight = `${floor}px`
-}
-
 export function SpecDoc({ channel, spec, editing, onEditing }: { channel: Channel; spec: Spec; editing: boolean; onEditing: (on: boolean) => void }) {
   const names = useNames(channel)
   const tasks = useTaskIds(channel)
   const comments = commentsOf(channel, spec)
   const wrap = useRef<HTMLDivElement>(null)
   const doc = useRef<HTMLDivElement>(null)
-  const rail = useRef<HTMLDivElement>(null)
+  const scroll = useRef<HTMLDivElement>(null)
+  const readUp = useRef(false)
+  const opened = useRef<number | null>(null)
   const [wide, setWide] = useState(true)
   const [tops, setTops] = useState<ReadonlyMap<number, number>>(new Map())
   const [hot, setHot] = useState<number | null>(null)
-  const [pop, setPop] = useState<{ text: string; top: number; at: number } | null>(null)
-  const [draft, setDraft] = useState<{ quote: string; top: number } | null>(null)
+  const [pop, setPop] = useState<{ text: string; top: number } | null>(null)
+  const [draft, setDraft] = useState<{ quote: string } | null>(null)
   const [diff, setDiff] = useState(!!spec.changed)
   const [allTalk, setAllTalk] = useState(false)
-  const anchored = comments.filter((c) => c.quote && tops.has(c.m.seq))
+  const anchored = comments.filter((c) => c.quote && tops.has(c.m.seq)).sort((a, b) => (tops.get(a.m.seq) ?? 0) - (tops.get(b.m.seq) ?? 0))
   const loose = comments.filter((c) => !c.quote || !tops.has(c.m.seq) || !wide)
   const key = `${spec.text}\n${comments.map((c) => `${c.m.seq}:${c.quote ?? ""}`).join("\n")}`
 
@@ -101,7 +82,7 @@ export function SpecDoc({ channel, spec, editing, onEditing }: { channel: Channe
     const measure = () => {
       const blocks = [...el.querySelectorAll<HTMLElement>(BLOCKS)]
       for (const b of blocks) delete b.dataset.anchor
-      const base = (rail.current ?? el).getBoundingClientRect().top
+      const base = el.getBoundingClientRect().top
       const next = new Map<number, number>()
       for (const c of commentsOf(channel, spec)) {
         if (!c.quote) continue
@@ -119,24 +100,22 @@ export function SpecDoc({ channel, spec, editing, onEditing }: { channel: Channe
   }, [key, editing, channel, spec, wide, diff])
 
   useLayoutEffect(() => {
-    if (rail.current) placeRail(rail.current)
-  })
+    const el = wrap.current
+    const page = el?.closest<HTMLElement>(".spec-page")
+    if (!el || !page) return
+    const fit = new ResizeObserver(() => el.style.setProperty("--page-h", `${page.clientHeight}px`))
+    fit.observe(page)
+    return () => fit.disconnect()
+  }, [])
 
   useLayoutEffect(() => {
-    const el = rail.current
-    const talk = el?.querySelector<HTMLElement>(".spec-rail-talk")
-    if (!el || !talk) return
-    let frame = 0
-    const watch = new ResizeObserver(() => {
-      cancelAnimationFrame(frame)
-      frame = requestAnimationFrame(() => placeRail(el))
-    })
-    watch.observe(talk)
-    return () => {
-      watch.disconnect()
-      cancelAnimationFrame(frame)
+    const el = scroll.current
+    if (opened.current !== spec.ask) {
+      opened.current = spec.ask
+      readUp.current = false
     }
-  }, [wide])
+    if (el && !readUp.current) el.scrollTop = el.scrollHeight
+  })
 
   useEffect(() => {
     const el = doc.current
@@ -150,10 +129,23 @@ export function SpecDoc({ channel, spec, editing, onEditing }: { channel: Channe
     const text = sel?.toString().trim() ?? ""
     if (!el || !sel || !text || sel.rangeCount === 0 || !el.contains(sel.anchorNode)) return setPop(null)
     const rect = sel.getRangeAt(0).getBoundingClientRect()
-    setPop({ text: text.slice(0, 400), top: rect.top - el.getBoundingClientRect().top, at: rect.top - (rail.current ?? el).getBoundingClientRect().top })
+    setPop({ text: text.slice(0, 400), top: rect.top - el.getBoundingClientRect().top })
   }, [])
 
+  const toLine = (seq: number): void => {
+    const lines = [...(doc.current?.querySelectorAll<HTMLElement>("[data-anchor]") ?? [])]
+    lines.find((b) => (b.dataset.anchor ?? "").split(" ").includes(String(seq)))?.scrollIntoView({ block: "center" })
+    setHot(seq)
+  }
+
   if (editing) return <Editor channel={channel} spec={spec} onDone={() => onEditing(false)} />
+
+  const boxes = (
+    <>
+      {draft && <CommentBox channel={channel} spec={spec} quote={draft.quote} onDone={() => setDraft(null)} />}
+      <CommentBox channel={channel} spec={spec} />
+    </>
+  )
 
   const talk = (
     <section className="spec-talk" aria-label="Comments on the whole spec">
@@ -172,8 +164,7 @@ export function SpecDoc({ channel, spec, editing, onEditing }: { channel: Channe
           ))}
         </ul>
       )}
-      {draft && !wide && <CommentBox channel={channel} spec={spec} quote={draft.quote} onDone={() => setDraft(null)} />}
-      <CommentBox channel={channel} spec={spec} />
+      {!wide && boxes}
     </section>
   )
 
@@ -197,7 +188,7 @@ export function SpecDoc({ channel, spec, editing, onEditing }: { channel: Channe
               style={{ top: Math.max(0, pop.top - 40) }}
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => {
-                setDraft({ quote: pop.text, top: pop.at })
+                setDraft({ quote: pop.text })
                 setPop(null)
                 window.getSelection()?.removeAllRanges()
               }}
@@ -209,25 +200,48 @@ export function SpecDoc({ channel, spec, editing, onEditing }: { channel: Channe
         {!wide && talk}
       </div>
       {wide && (
-        <aside ref={rail} className="spec-rail" aria-label="Comments on lines of the spec">
-          {anchored.map((c) => (
-            <div key={c.m.seq} className={cx("spec-rail-item", hot === c.m.seq && "is-hot")} data-at={tops.get(c.m.seq)} onMouseEnter={() => setHot(c.m.seq)} onMouseLeave={() => setHot(null)}>
-              <CommentItem channel={channel} c={c} names={names} tasks={tasks} />
-            </div>
-          ))}
-          {draft && (
-            <div className="spec-rail-item is-draft" data-at={draft.top}>
-              <CommentBox channel={channel} spec={spec} quote={draft.quote} onDone={() => setDraft(null)} />
-            </div>
-          )}
-          <div className="spec-rail-talk">{talk}</div>
+        <aside className="spec-rail" aria-label="Comments">
+          <div
+            ref={scroll}
+            className="spec-rail-scroll"
+            onScroll={(e) => {
+              const el = e.currentTarget
+              readUp.current = el.scrollTop + el.clientHeight < el.scrollHeight - 4
+            }}
+          >
+            {anchored.length > 0 && (
+              <ul className="spec-rail-lines" aria-label="Comments on lines of the spec">
+                {anchored.map((c) => (
+                  <li key={c.m.seq} className={cx("spec-rail-item", hot === c.m.seq && "is-hot")} onMouseEnter={() => setHot(c.m.seq)} onMouseLeave={() => setHot(null)}>
+                    <CommentItem channel={channel} c={c} names={names} tasks={tasks} onQuote={() => toLine(c.m.seq)} />
+                  </li>
+                ))}
+              </ul>
+            )}
+            {talk}
+          </div>
+          <div className="spec-rail-foot">{boxes}</div>
         </aside>
       )}
     </div>
   )
 }
 
-function CommentItem({ channel, c, names, tasks, showQuote }: { channel: Channel; c: Comment; names: ReadonlyMap<string, string>; tasks: ReadonlySet<number>; showQuote?: boolean }) {
+function CommentItem({
+  channel,
+  c,
+  names,
+  tasks,
+  showQuote,
+  onQuote,
+}: {
+  channel: Channel
+  c: Comment
+  names: ReadonlyMap<string, string>
+  tasks: ReadonlySet<number>
+  showQuote?: boolean
+  onQuote?: () => void
+}) {
   return (
     <article className={cx("spec-comment", c.m.pending && "is-pending")}>
       <header className="spec-comment-head">
@@ -236,6 +250,11 @@ function CommentItem({ channel, c, names, tasks, showQuote }: { channel: Channel
         <time className="spec-comment-time">{clock(c.m.at)}</time>
       </header>
       {showQuote && c.quote && <p className="spec-comment-quote">{c.quote}</p>}
+      {onQuote && c.quote && (
+        <button type="button" className="spec-comment-quote is-link" title="Show this line in the spec" onClick={onQuote}>
+          <span>{c.quote}</span>
+        </button>
+      )}
       <Body text={wrote(c.text)} seq={c.m.seq} names={names} tasks={tasks} onImage={openImage} onMessage={() => {}} />
     </article>
   )
