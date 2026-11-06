@@ -299,6 +299,7 @@ async function onMessage(e: MessageEvent): Promise<void> {
         update(name, { failed: "Its code couldn't be built." })
         return
       }
+      if (surface === "render") return
       send(f, { kiwi: MOD_PROTOCOL, type: "boot", name, surface, needs: mod?.needs ?? [], code: got.code, settings: got.settings ?? {}, ...look() })
       sendGithub(f)
       send(f, { kiwi: MOD_PROTOCOL, type: "showing", target: state.showing.get(name) ?? null })
