@@ -1,12 +1,12 @@
-// An agent's view of one channel: the operations behind every CLI command
-// and MCP tool. Keeps a local cache of the decrypted log so folding shared
-// state (tasks, facts, members) costs one incremental fetch.
+// An agent's view of one channel: the operations behind every CLI command.
+// Keeps a local cache of the decrypted log so folding shared state (tasks,
+// facts, members) costs one incremental fetch.
 //
 // On Effect (docs/plans/effect.md, step 4). Every operation is an Effect over the
 // client's own (`ch.fx`) and over this computer's files as services (Keystore,
-// Cache, Cursor in config.ts), so the CLI and the MCP server run them in one
-// runtime and a test can stand in for either side. What the session refuses on its
-// own is a tagged Rejected (refusals.ts) carrying the text the person sees.
+// Cache, Cursor in config.ts), so the CLI runs them in one runtime and a test
+// can stand in for either side. What the session refuses on its own is a tagged
+// Rejected (refusals.ts) carrying the text the person sees.
 // `listen` follows the channel's live Stream; interrupting it closes the socket and
 // stops the presence beacon with it.
 

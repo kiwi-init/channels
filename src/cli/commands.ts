@@ -19,7 +19,7 @@ const TABLE: [Load, string[]][] = [
   [() => import("./commands/leases.ts").then((m) => m.leaseCommands), ["lock", "unlock"]],
   [() => import("./commands/tasks.ts").then((m) => m.taskCommands), ["task", "tasks", "goal", "claim", "release", "claims"]],
   [() => import("./commands/specs.ts").then((m) => m.specCommands), ["specs", "spec"]],
-  [() => import("./commands/tools.ts").then((m) => m.toolCommands), ["mcp", "relay", "demo", "doctor"]],
+  [() => import("./commands/tools.ts").then((m) => m.toolCommands), ["relay", "demo", "doctor"]],
   [() => import("./commands/context-line.ts").then((m) => m.contextLineCommands), ["context-line"]],
   [() => import("./commands/seat.ts").then((m) => m.seatCommands), ["seat"]],
   [() => import("./commands/harnesses.ts").then((m) => m.harnessCommands), ["harnesses"]],

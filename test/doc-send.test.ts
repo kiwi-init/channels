@@ -12,8 +12,8 @@ import { joinAgent, kiwiCmd, pairComputer, setupChannel, type OwnerSetup } from 
 
 setDefaultTimeout(60_000);
 
-const dataDir = mkdtempSync(join(tmpdir(), "kiwi-mcp-doc-relay-"));
-const agent = mkdtempSync(join(tmpdir(), "kiwi-mcp-doc-agent-"));
+const dataDir = mkdtempSync(join(tmpdir(), "kiwi-doc-send-relay-"));
+const agent = mkdtempSync(join(tmpdir(), "kiwi-doc-send-agent-"));
 const was = process.env.KIWI_HOME;
 process.env.KIWI_HOME = agent;
 const stop = new AbortController();
@@ -22,45 +22,13 @@ let owner: OwnerSetup;
 let general: ThreadDoc;
 const procs: { kill: () => void }[] = [];
 
-const env = () => ({ ...process.env, KIWI_HOME: agent, KIWI_RELAY: server.url.origin, KIWI_NO_HOOKS: "1", KIWI_CHANNEL: "mcpdoc", KIWI_AS: "dev" });
+const env = () => ({ ...process.env, KIWI_HOME: agent, KIWI_RELAY: server.url.origin, KIWI_NO_HOOKS: "1", KIWI_CHANNEL: "docsend", KIWI_AS: "dev" });
 
 async function cli(...args: string[]): Promise<{ code: number; out: string }> {
   const p = Bun.spawn(kiwiCmd(args), { cwd: agent, env: env(), stdin: "ignore", stdout: "pipe", stderr: "pipe" });
   procs.push(p);
   const [out, err] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text()]);
   return { code: await p.exited, out: out + err };
-}
-
-function mcp() {
-  const p = Bun.spawn(kiwiCmd(["mcp"]), { cwd: agent, env: env(), stdin: "pipe", stdout: "pipe", stderr: "pipe" });
-  procs.push(p);
-  const reader = p.stdout.getReader();
-  let buf = "";
-  let id = 0;
-  const rpc = async (method: string, params: object = {}): Promise<unknown> => {
-    const mine = ++id;
-    p.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: mine, method, params }) + "\n");
-    p.stdin.flush();
-    for (;;) {
-      const nl = buf.indexOf("\n");
-      if (nl >= 0) {
-        const msg = JSON.parse(buf.slice(0, nl)) as { id?: number; result?: unknown; error?: unknown };
-        buf = buf.slice(nl + 1);
-        if (msg.id === mine) return msg.result ?? msg.error;
-        continue;
-      }
-      const { value, done } = await reader.read();
-      if (done) throw new Error("mcp exited");
-      buf += new TextDecoder().decode(value);
-    }
-  };
-  const call = async (name: string, args: object = {}): Promise<string> => ((await rpc("tools/call", { name, arguments: args })) as { content: { text: string }[] }).content[0]!.text;
-  const start = async () => {
-    await rpc("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "test", version: "0" } });
-    p.stdin.write(JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }) + "\n");
-    p.stdin.flush();
-  };
-  return { call, start, stop: () => p.kill() };
 }
 
 const message = async (pred: (m: Message) => boolean): Promise<Message> => {
@@ -84,7 +52,7 @@ beforeAll(async () => {
   await joinAgent(owner, "rev", computer);
   saveIdentity(dev.id, owner.roomId);
   updateConfig((c) => {
-    c.channels.mcpdoc = { ...dev.ch.access, relay: server.url.origin, code: owner.code, as: "dev" };
+    c.channels.docsend = { ...dev.ch.access, relay: server.url.origin, code: owner.code, as: "dev" };
   });
 });
 
@@ -97,27 +65,21 @@ afterAll(() => {
   for (const d of [dataDir, agent]) rmSync(d, { recursive: true, force: true });
 });
 
-describe("MCP send and reply write their line into the shared doc, like the CLI (T1353)", () => {
+describe("kiwi send and reply write their line into the shared doc (T1353)", () => {
   test("send into #general and a reply to a #general message both carry a block in #general's doc", async () => {
-    expect((await cli("send", "--to", "#general", "CLI-SEND hello")).code).toBe(0);
-    const asked = await message((m) => m.body.includes("CLI-SEND"));
-    expect(asked.block?.th).toBe(general.th);
-
-    const agentMcp = mcp();
-    try {
-      await agentMcp.start();
-      expect(await agentMcp.call("send", { text: "MCP-SEND hello", main: true })).toContain("into its shared doc");
-      expect(await agentMcp.call("reply", { seq: asked.seq, text: "MCP-REPLY ok" })).toMatch(/^sent #\d+/);
-    } finally {
-      agentMcp.stop();
-    }
-    const sent = await message((m) => m.body.includes("MCP-SEND"));
-    const replied = await message((m) => m.body.includes("MCP-REPLY"));
+    const sending = await cli("send", "--to", "#general", "CLI-SEND hello");
+    expect(sending).toMatchObject({ code: 0 });
+    expect(sending.out).toContain("into its shared doc");
+    const sent = await message((m) => m.body.includes("CLI-SEND"));
+    const replying = await cli("reply", String(sent.seq), "CLI-REPLY ok");
+    expect(replying).toMatchObject({ code: 0 });
+    expect(replying.out).toMatch(/^sent #\d+/);
+    const replied = await message((m) => m.body.includes("CLI-REPLY"));
     expect({ send: sent.block?.th, reply: replied.block?.th }).toEqual({ send: general.th, reply: general.th });
     const deadline = Date.now() + 5_000;
     const inDoc = () =>
       blocksOf(general.doc)
-        .filter((b) => b.posted && /MCP-(SEND|REPLY)/.test(b.text))
+        .filter((b) => b.posted && /CLI-(SEND|REPLY)/.test(b.text))
         .map((b) => b.id);
     while (inDoc().length < 2 && Date.now() < deadline) await Bun.sleep(50);
     expect(inDoc().sort()).toEqual([sent.block!.id, replied.block!.id].sort());
@@ -152,7 +114,7 @@ describe("kiwi send into a doc: what lands in the line and what it's told (T1353
 });
 
 describe("an image pasted in the doc reaches agents through show and save (T2037)", () => {
-  test("a line the app posted with only a block ref: kiwi show and save fetch its image and file, and MCP save does too", async () => {
+  test("a line the app posted with only a block ref: kiwi show and save fetch its image and file", async () => {
     const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
     const img = await owner.ownerCh.putImage({ name: "image.webp", mime: "image/png", data: png });
     const file = await owner.ownerCh.putFileData("trace.log", "text/plain", Buffer.from("line one\n").toString("base64"));
@@ -176,13 +138,6 @@ describe("an image pasted in the doc reaches agents through show and save (T2037
       expect(shown.out.match(/\[image: image\.webp/g)).toHaveLength(1);
       expect(shown.out.match(/\[file: trace\.log/g)).toHaveLength(1);
       expect(shown.out).toContain(`images saved: ${join(dir, "shown", `#${seq}-image.webp`)}`);
-      const agentMcp = mcp();
-      try {
-        await agentMcp.start();
-        expect(await agentMcp.call("save", { seq, dir: join(dir, "mcp") })).toContain(`#${seq}-image.webp`);
-      } finally {
-        agentMcp.stop();
-      }
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

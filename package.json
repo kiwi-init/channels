@@ -49,12 +49,10 @@
     "@kiwi/app": "workspace:*",
     "@kiwi/channel": "workspace:*",
     "@kiwi/core": "workspace:*",
-    "@modelcontextprotocol/sdk": "^1.32.2",
     "effect": "4.0.7",
     "mdast-util-from-markdown": "2.1.0",
     "mdast-util-gfm": "3.1.0",
-    "micromark-extension-gfm": "3.0.0",
-    "zod": "^4.6.7"
+    "micromark-extension-gfm": "3.0.0"
   },
   "overrides": {
     "react-native": "file:./ui/stubs/react-native"

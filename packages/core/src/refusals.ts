@@ -1,8 +1,8 @@
 // What a client refuses on its own, before asking the relay: tagged failures,
-// each carrying the text the person sees. The CLI prints it as it is, the MCP
-// tools answer with it, and a Promise caller (the dashboard) reads `.message`
-// as it always has: these are Errors too. The relay's own refusals are
-// RelayError (client.ts), tagged by the relay.
+// each carrying the text the person sees. The CLI prints it as it is, and a
+// Promise caller (the dashboard) reads `.message` as it always has: these are
+// Errors too. The relay's own refusals are RelayError (client.ts), tagged by
+// the relay.
 
 import * as Data from "effect/Data";
 

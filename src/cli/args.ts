@@ -98,7 +98,6 @@ function parse() {
         listen: { type: "boolean" },
         timeout: { type: "string" },
         yes: { type: "boolean", short: "y" },
-        push: { type: "boolean" },
         clear: { type: "boolean" },
         force: { type: "boolean" },
         needs: { type: "string" },

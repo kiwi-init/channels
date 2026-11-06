@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 
-import { CLI_COMPILE, mcpValidatorStub, validatorsIn } from "./cli-bundle.ts";
+import { CLI_COMPILE } from "./cli-bundle.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
 const BUDGET_BYTES = 2_800_000;
@@ -28,7 +28,6 @@ const shared = {
   entrypoints: [join(ROOT, "src/cli/main.ts")],
   minify: true,
   splitting: true,
-  plugins: [mcpValidatorStub()],
 };
 
 function failed(result: Bun.BuildOutput): boolean {
@@ -39,21 +38,16 @@ function failed(result: Bun.BuildOutput): boolean {
 if (values.check) {
   const outdir = mkdtempSync(join(tmpdir(), "kiwi-cli-check-"));
   try {
-    const result = await Bun.build({ ...shared, target: "bun", sourcemap: "external", outdir });
+    const result = await Bun.build({ ...shared, target: "bun", outdir });
     if (failed(result)) process.exit(1);
     const code = result.outputs.filter((o) => o.kind === "entry-point" || o.kind === "chunk");
     const bytes = code.reduce((sum, o) => sum + o.size, 0);
     const entry = code.find((o) => o.kind === "entry-point")?.size ?? 0;
-    const sources: string[] = [];
-    for (const o of result.outputs.filter((o) => o.kind === "sourcemap")) {
-      const map: unknown = await o.json();
-      if (typeof map === "object" && map !== null && "sources" in map && Array.isArray(map.sources)) sources.push(...map.sources.filter((s): s is string => typeof s === "string"));
-    }
-    const validators = validatorsIn(sources);
     console.log(`kiwi JS: ${bytes} bytes in ${code.length} files, ${entry} in the entry (budget ${BUDGET_BYTES})`);
-    if (validators.length) console.error(`the CLI bundle contains ${validators.join(", ")}: the MCP SDK's JSON Schema validator is stubbed out (scripts/cli-bundle.ts), so something else imports it`);
-    if (bytes > BUDGET_BYTES) console.error(`the CLI bundle is ${bytes} bytes, over its ${BUDGET_BYTES}-byte budget`);
-    if (validators.length || bytes > BUDGET_BYTES) process.exit(1);
+    if (bytes > BUDGET_BYTES) {
+      console.error(`the CLI bundle is ${bytes} bytes, over its ${BUDGET_BYTES}-byte budget`);
+      process.exit(1);
+    }
   } finally {
     rmSync(outdir, { recursive: true, force: true });
   }

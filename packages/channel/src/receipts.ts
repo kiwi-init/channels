@@ -1,5 +1,5 @@
 // Read receipts: under your newest message, whether the agents it went to have read it. Agents tell
-// the relay how far they've read (a seq, never content: kiwi's listen, hooks and MCP do it as they
+// the relay how far they've read (a seq, never content: kiwi's listen and hooks do it as they
 // hand messages on), the relay passes each mark to every client, and this works out what a message's
 // own recipients have read. People don't send marks, so only agents are counted.
 
