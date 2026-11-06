@@ -1,10 +1,13 @@
+import { isAppPrefix } from "@kiwi/core/mod-names.ts";
+import { bundleMod } from "@kiwi/core/node/mod-bundle.ts";
+import { checkManifest, type ModManifest } from "@kiwi/core/node/mod-manifest.ts";
 import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, renameSync, rmSync, statSync, unlinkSync } from "node:fs";
+import { existsSync, lstatSync, lutimesSync, mkdirSync, readdirSync, readFileSync, readlinkSync, realpathSync, renameSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 
 const MOD_NAME = /^[a-z0-9][a-z0-9-]{0,62}$/;
-const VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
+const STARTER_SHELL = "^3.6";
 const MANIFEST_BYTES = 64 * 1024;
 const PROTOCOLS = ["-c", "protocol.allow=never", "-c", "protocol.https.allow=always", "-c", "protocol.ssh.allow=always", "-c", "protocol.file.allow=always"];
 
@@ -14,12 +17,6 @@ export interface Source {
   url: string;
   shown: string;
   ref: string | null;
-}
-
-export interface Manifest {
-  name: string;
-  version: string;
-  needs: string[];
 }
 
 export interface ModInfo {
@@ -79,23 +76,20 @@ export function parseSource(raw: string): Source {
   throw new ModError(`"${base}" isn't a repo kiwi can clone: use github.com/owner/repo, an https:// or ssh address, or a full path`);
 }
 
-export function readManifest(text: string, folder?: string): Manifest {
+export function readManifest(text: string, folder?: string): ModManifest {
   let raw: unknown;
   try {
     raw = JSON.parse(text);
   } catch {
     throw new ModError("its mod.json isn't JSON");
   }
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new ModError("its mod.json isn't a JSON object");
-  const { name, version, needs } = raw as Record<string, unknown>;
-  if (typeof name !== "string" || !MOD_NAME.test(name)) throw new ModError("mod.json's name must be lowercase letters, digits and dashes");
-  if (folder !== undefined && name !== folder) throw new ModError(`mod.json names it "${name}", but its folder is "${folder}"`);
-  if (typeof version !== "string" || !VERSION.test(version)) throw new ModError("mod.json's version isn't a version like 1.0.0");
-  if (needs !== undefined && (!Array.isArray(needs) || needs.some((n) => typeof n !== "string"))) throw new ModError("mod.json's needs must be a list of strings");
-  return { name, version, needs: [...new Set((needs ?? []) as string[])] };
+  const named = raw && typeof raw === "object" ? (raw as { name?: unknown }).name : undefined;
+  const checked = checkManifest(raw, folder ?? (typeof named === "string" ? named : ""), null);
+  if (!checked.ok) throw new ModError(checked.why);
+  return checked.manifest;
 }
 
-function manifestAt(dir: string, folder?: string): Manifest {
+function manifestAt(dir: string, folder?: string): ModManifest {
   const file = join(dir, "mod.json");
   if (!existsSync(file)) throw new ModError("it has no mod.json");
   if (statSync(file).size > MANIFEST_BYTES) throw new ModError("its mod.json is over 64 KB");
@@ -115,7 +109,7 @@ function commitOf(dir: string, ref: string, run: Git): string | null {
   }
 }
 
-export function addMod(home: string, raw: string, run: Git = git): { manifest: Manifest; commit: string; source: Source } {
+export function addMod(home: string, raw: string, run: Git = git): { manifest: ModManifest; commit: string; source: Source } {
   const source = parseSource(raw);
   const dir = modsDir(home);
   mkdirSync(dir, { recursive: true });
@@ -129,7 +123,7 @@ export function addMod(home: string, raw: string, run: Git = git): { manifest: M
     const commit = source.ref ? (commitOf(tmp, `origin/${source.ref}`, run) ?? commitOf(tmp, source.ref, run)) : commitOf(tmp, "HEAD", run);
     if (!commit) throw new ModError(source.ref ? `${source.shown} has no branch, tag or commit "${source.ref}"` : `${source.shown} has no commits`);
     run(["checkout", "--quiet", "--detach", commit], tmp);
-    let manifest: Manifest;
+    let manifest: ModManifest;
     try {
       manifest = manifestAt(tmp);
     } catch (e) {
@@ -235,14 +229,14 @@ export function updateMods(home: string, only: string | null, yes: boolean, run:
         current.push(name);
         continue;
       }
-      let next: Manifest;
+      let next: ModManifest;
       try {
         next = readManifest(run(["show", `${to}:mod.json`], dir), name);
       } catch (e) {
         skipped.push({ name, why: `its new version can't load: ${(e as Error).message}` });
         continue;
       }
-      let was: Manifest | null = null;
+      let was: ModManifest | null = null;
       try {
         was = manifestAt(dir, name);
       } catch {
@@ -279,4 +273,98 @@ export function removeMod(home: string, name: string, force: boolean, run: Git =
   }
   rmSync(dir, { recursive: true, force: true });
   return { link: null };
+}
+
+const titleOf = (name: string): string =>
+  name
+    .split("-")
+    .filter(Boolean)
+    .map((w) => w[0]!.toUpperCase() + w.slice(1))
+    .join(" ");
+
+function starter(dir: string, name: string): void {
+  const title = titleOf(name);
+  writeFileSync(join(dir, "mod.json"), `${JSON.stringify({ name, version: "0.1.0", shell: STARTER_SHELL, needs: ["panel"] }, null, 2)}\n`);
+  writeFileSync(
+    join(dir, "index.tsx"),
+    [
+      'import { useState } from "react"',
+      'import { Button, panel, Row } from "@kiwi/mod"',
+      "",
+      "function View() {",
+      "  const [count, setCount] = useState(0)",
+      "  return (",
+      "    <>",
+      `      <Row title=${JSON.stringify(title)} sub="Edit index.tsx and save: Channels reloads it." />`,
+      "      <Button onClick={() => setCount(count + 1)}>Pressed {count}</Button>",
+      "    </>",
+      "  )",
+      "}",
+      "",
+      `panel({ title: ${JSON.stringify(title)}, render: View })`,
+      "",
+    ].join("\n"),
+  );
+}
+
+export interface DevStart {
+  at: string;
+  dir: string;
+  how: "created" | "linked" | "opened";
+}
+
+function realOf(at: string, name: string): string {
+  try {
+    return realpathSync(at);
+  } catch {
+    throw new ModError(`${at} links to ${readlinkSync(at)}, which is gone: kiwi mod remove ${name}, then link it again`);
+  }
+}
+
+export function startDev(home: string, name: string, cwd: string): DevStart {
+  if (!MOD_NAME.test(name)) throw new ModError(`"${name}" isn't a mod name: use lowercase letters, digits and dashes`);
+  if (isAppPrefix(name)) throw new ModError(`"${name}" is a name Channels keeps for its own commands: pick another`);
+  const at = join(modsDir(home), name);
+  if (lstatSync(at, { throwIfNoEntry: false })) return { at, dir: realOf(at, name), how: "opened" };
+  mkdirSync(modsDir(home), { recursive: true });
+  const here = join(cwd, "mod.json");
+  if (existsSync(here)) {
+    let named: unknown;
+    try {
+      named = (JSON.parse(readFileSync(here, "utf8")) as { name?: unknown } | null)?.name;
+    } catch {
+      // Unreadable: the message below says so.
+    }
+    if (named !== name)
+      throw new ModError(
+        typeof named === "string"
+          ? `this folder's mod.json names it "${named}": kiwi mod dev ${named}`
+          : "this folder has a mod.json with no name kiwi can read: fix it, or run kiwi mod dev from another folder",
+      );
+    const dir = realpathSync(cwd);
+    symlinkSync(dir, at);
+    return { at, dir, how: "linked" };
+  }
+  mkdirSync(at);
+  starter(at, name);
+  return { at, dir: at, how: "created" };
+}
+
+export type DevRound = { ok: true; manifest: ModManifest; hash: string; bytes: number } | { ok: false; why: string };
+
+export async function devRound(dir: string, name: string): Promise<DevRound> {
+  let manifest: ModManifest;
+  try {
+    manifest = manifestAt(dir, name);
+  } catch (e) {
+    return { ok: false, why: (e as Error).message };
+  }
+  const built = await bundleMod(dir);
+  return built.ok ? { ok: true, manifest, hash: built.hash, bytes: built.code.length } : { ok: false, why: built.why };
+}
+
+export function nudgeApp(at: string): void {
+  if (!lstatSync(at, { throwIfNoEntry: false })?.isSymbolicLink()) return;
+  const now = new Date();
+  lutimesSync(at, now, now);
 }

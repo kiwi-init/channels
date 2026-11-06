@@ -1,9 +1,10 @@
 import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { addMod, git, listMods, ModError, modsDir, parseSource, readManifest, removeMod, updateMods } from "../src/mods.ts";
+import { addMod, devRound, git, listMods, ModError, modsDir, nudgeApp, parseSource, readManifest, removeMod, startDev, updateMods } from "../src/mods.ts";
+import { bundleMod } from "@kiwi/core/node/mod-bundle.ts";
 import { kiwiCmd } from "./owner.ts";
 
 setDefaultTimeout(60_000);
@@ -53,8 +54,8 @@ describe("a mod's source", () => {
     }
   });
 
-  test("mod.json is checked the way the app reads it: a name that's a folder, a version, a list of needs", () => {
-    expect(readManifest(JSON.stringify(LINEAR))).toEqual({ name: "linear-panel", version: "1.0.0", needs: ["panel", "command"] });
+  test("mod.json is checked the way the app reads it: a name that's a folder and not the app's, a version, a shell range, needs it offers", () => {
+    expect(readManifest(JSON.stringify(LINEAR))).toEqual({ name: "linear-panel", version: "1.0.0", shell: "^3.2", needs: ["panel", "command"] });
     const why = (raw: unknown) => {
       try {
         readManifest(typeof raw === "string" ? raw : JSON.stringify(raw));
@@ -67,6 +68,9 @@ describe("a mod's source", () => {
     expect(why({ ...LINEAR, name: "../evil" })).toBe("mod.json's name must be lowercase letters, digits and dashes");
     expect(why({ ...LINEAR, version: "one" })).toBe("mod.json's version isn't a version like 1.0.0");
     expect(why({ ...LINEAR, needs: "panel" })).toBe("mod.json's needs must be a list of strings");
+    expect(why({ ...LINEAR, name: "chat" })).toBe('"chat" is a name Channels keeps for its own commands: pick another');
+    expect(why({ ...LINEAR, needs: ["camera"] })).toBe('it asks for "camera", which isn\'t a capability');
+    expect(why({ ...LINEAR, shell: "soon" })).toBe("mod.json's shell isn't a version range, like ^3.3");
   });
 });
 
@@ -192,12 +196,128 @@ describe("kiwi mod add, list, update and remove", () => {
   });
 });
 
+describe("kiwi mod dev", () => {
+  test("makes a starter mod that the app's own checks and bundler take, then opens it again", async () => {
+    const home = scratch("dev");
+    const made = startDev(home, "standup-notes", scratch("cwd"));
+    expect(made).toEqual({ at: join(modsDir(home), "standup-notes"), dir: join(modsDir(home), "standup-notes"), how: "created" });
+    expect(JSON.parse(readFileSync(join(made.dir, "mod.json"), "utf8"))).toEqual({ name: "standup-notes", version: "0.1.0", shell: "^3.6", needs: ["panel"] });
+    expect(readFileSync(join(made.dir, "index.tsx"), "utf8")).toContain('panel({ title: "Standup Notes", render: View })');
+    const round = await devRound(made.dir, "standup-notes");
+    expect(round.ok && round.manifest.needs).toEqual(["panel"]);
+    expect(startDev(home, "standup-notes", scratch("cwd")).how).toBe("opened");
+  });
+
+  test("the starter uses only what the frame's @kiwi/mod offers, and opens a panel that renders its title", async () => {
+    const { dir } = startDev(scratch("dev"), "standup-notes", scratch("cwd"));
+    const built = await bundleMod(dir);
+    if (!built.ok) throw new Error(built.why);
+    const runtime = readFileSync(join(import.meta.dir, "../ui/src/mods/frame/runtime.tsx"), "utf8");
+    const api = runtime.slice(runtime.indexOf("const api = {"), runtime.indexOf("\n}\n", runtime.indexOf("const api = {")));
+    const used = [...readFileSync(join(dir, "index.tsx"), "utf8").matchAll(/import \{ ([^}]+) \} from "@kiwi\/mod"/g)].flatMap((m) => m[1]!.split(",").map((n) => n.trim()));
+    expect(used.length).toBeGreaterThan(0);
+    for (const name of used) expect(api).toMatch(new RegExp(`\\n  ${name}\\b`));
+    const panels: { title: string; render: () => unknown }[] = [];
+    const el = (type: unknown, props: Record<string, unknown>) => ({ type, props });
+    const g = globalThis as Record<string, unknown>;
+    g["__kiwiMod"] = {
+      react: { useState: (v: unknown) => [v, () => undefined] },
+      "react/jsx-runtime": { jsx: el, jsxs: el, Fragment: "fragment" },
+      "react/jsx-dev-runtime": { jsxDEV: el, Fragment: "fragment" },
+      "@kiwi/mod": { panel: (p: { title: string; render: () => unknown }) => panels.push(p), Button: "Button", Row: "Row" },
+    };
+    try {
+      new Function(built.code)();
+    } finally {
+      delete g["__kiwiMod"];
+    }
+    expect(panels.map((p) => p.title)).toEqual(["Standup Notes"]);
+    expect(JSON.stringify(panels[0]!.render())).toContain('"title":"Standup Notes"');
+  });
+
+  test("links the folder it runs in when its mod.json has that name, and says when the name is another", () => {
+    const home = scratch("dev");
+    const work = scratch("work");
+    writeFileSync(join(work, "mod.json"), JSON.stringify({ ...LINEAR }));
+    expect(() => startDev(home, "other-panel", work)).toThrow('this folder\'s mod.json names it "linear-panel": kiwi mod dev linear-panel');
+    const linked = startDev(home, "linear-panel", work);
+    expect(linked.how).toBe("linked");
+    expect(lstatSync(linked.at).isSymbolicLink()).toBe(true);
+    expect(startDev(home, "linear-panel", scratch("cwd"))).toMatchObject({ how: "opened", dir: linked.dir });
+    rmSync(work, { recursive: true });
+    expect(() => startDev(home, "linear-panel", scratch("cwd"))).toThrow("which is gone: kiwi mod remove linear-panel, then link it again");
+  });
+
+  test("refuses a name the app keeps or one that isn't a name, and creates nothing", () => {
+    const home = scratch("dev");
+    expect(() => startDev(home, "chat", scratch("cwd"))).toThrow('"chat" is a name Channels keeps for its own commands: pick another');
+    expect(() => startDev(home, "../x", scratch("cwd"))).toThrow('"../x" isn\'t a mod name');
+    expect(existsSync(modsDir(home))).toBe(false);
+  });
+
+  test("a round says why a broken mod.json or code can't load", async () => {
+    const home = scratch("dev");
+    const { dir } = startDev(home, "my-panel", scratch("cwd"));
+    writeFileSync(join(dir, "index.tsx"), "export const = 1\n");
+    const broken = await devRound(dir, "my-panel");
+    expect(broken.ok).toBe(false);
+    writeFileSync(join(dir, "mod.json"), JSON.stringify({ name: "my-panel", version: "0.1.0", shell: "^3.6", needs: ["camera"] }));
+    expect(await devRound(dir, "my-panel")).toEqual({ ok: false, why: 'it asks for "camera", which isn\'t a capability' });
+  });
+
+  test("touches a linked mod's link so the app's watcher sees an edit it can't see through the link", async () => {
+    const home = scratch("dev");
+    const work = scratch("work");
+    writeFileSync(join(work, "mod.json"), JSON.stringify({ ...LINEAR }));
+    const { at } = startDev(home, "linear-panel", work);
+    const before = lstatSync(at).mtimeMs;
+    await Bun.sleep(20);
+    nudgeApp(at);
+    expect(lstatSync(at).mtimeMs).toBeGreaterThan(before);
+    const { at: plain } = startDev(home, "plain-panel", scratch("cwd"));
+    const inside = lstatSync(plain).mtimeMs;
+    nudgeApp(plain);
+    expect(lstatSync(plain).mtimeMs).toBe(inside);
+  });
+});
+
 describe("the kiwi mod command", () => {
   async function kiwi(home: string, ...args: string[]) {
     const p = Bun.spawn(kiwiCmd(["mod", ...args]), { cwd: home, env: { ...ENV, KIWI_HOME: home, KIWI_NO_HOOKS: "1" }, stdout: "pipe", stderr: "pipe" });
     const [out, err] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text()]);
     return { code: await p.exited, out, err };
   }
+
+  test("dev makes a mod, rebuilds it on each save, and says when it asks for more", async () => {
+    const home = scratch("cli");
+    const p = Bun.spawn(kiwiCmd(["mod", "dev", "standup-notes"]), { cwd: scratch("cwd"), env: { ...ENV, KIWI_HOME: home, KIWI_NO_HOOKS: "1" }, stdout: "pipe", stderr: "pipe" });
+    let seen = "";
+    const reader = p.stdout.getReader();
+    const until = async (text: string) => {
+      const end = Date.now() + 30_000;
+      while (!seen.includes(text)) {
+        if (Date.now() > end) throw new Error(`no "${text}" in:\n${seen}`);
+        const { value, done } = await Promise.race([reader.read(), Bun.sleep(500).then(() => ({ value: undefined, done: false }))]);
+        if (done) throw new Error(`kiwi mod dev exited:\n${seen}`);
+        if (value) seen += new TextDecoder().decode(value);
+      }
+    };
+    try {
+      const dir = join(home, "mods", "standup-notes");
+      await until("built standup-notes 0.1.0");
+      expect(seen).toContain(`created ${dir} with mod.json and index.tsx`);
+      expect(seen).toContain("it asks for panel; Channels shows any it doesn't have for you to approve");
+      writeFileSync(join(dir, "index.tsx"), readFileSync(join(dir, "index.tsx"), "utf8").replace("Pressed", "Clicked"));
+      await until("rebuilt standup-notes 0.1.0");
+      writeFileSync(join(dir, "mod.json"), JSON.stringify({ name: "standup-notes", version: "0.2.0", shell: "^3.6", needs: ["panel", "command"] }));
+      await until("it now asks for panel, command");
+      writeFileSync(join(dir, "mod.json"), "{");
+      await until("can't load: its mod.json isn't JSON");
+    } finally {
+      p.kill();
+      await p.exited;
+    }
+  });
 
   test("add, list, update, remove and a wrong word, end to end", async () => {
     const home = scratch("cli");

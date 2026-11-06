@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import { checkManifest, hostAllowed, needKind, netHosts, unapproved } from "../desktop/src/mods.ts";
+import { checkManifest, needKind, netHosts } from "@kiwi/core/node/mod-manifest.ts";
+import { hostAllowed, unapproved } from "../desktop/src/mods.ts";
 
 const base = { name: "linear-panel", version: "1.0.0", shell: "^3.3", needs: ["panel", "command", "net:api.linear.app"] };
 

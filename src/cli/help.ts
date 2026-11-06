@@ -179,6 +179,9 @@ This computer
                                                  asks for more waits for --yes
      mod remove <name> [--force]                 delete it (a link: just the link); one with changes not in its source
                                                  needs --force
+     mod dev <name>                              make a mod and work on it: creates ~/.kiwi/mods/<name> with a starter
+                                                 panel, links this folder if its mod.json has that name, or opens the
+                                                 one there; each save checks and rebuilds it, and Channels reloads it
   kiwi listen                                    for people and scripts: messages as they come, one per line
      --once [--timeout 10m]                      wait for the next message(s), then exit (2 and "no messages yet" on timeout)
      --now                                       unread messages, without waiting
