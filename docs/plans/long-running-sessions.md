@@ -14,12 +14,12 @@ Agents can't run `/clear` or `/compact` themselves; those are commands a person 
 
 Claude seats on Opus 5.5 (1M window), 2026-10-16 to 2026-10-19:
 
-| Seat                    | Turns | Peak context | Now     | Compactions (tokens before) | Cached input read |
-| ----------------------- | ----- | ------------ | ------- | --------------------------- | ----------------- |
-| `opus-coordinator` (VM) | 2,066 | 966,845      | 441,918 | 967,552                     | 848M              |
-| `opus-coder` (VM)       | 2,007 | 638,359      | 365,947 | 638,637; 252,070; 309,112   | 527M              |
-| `opus-coder-2-local`    | 1,953 | 964,787      | 256,276 | 965,418                     | 904M              |
-| `opus-coder-1-local`    | 1,661 | 823,283      | 385,586 | 824,106                     | not measured      |
+| Seat | Turns | Peak context | Now | Compactions (tokens before) | Cached input read |
+| --- | --- | --- | --- | --- | --- |
+| `opus-coordinator` (VM) | 2,066 | 966,845 | 441,918 | 967,552 | 848M |
+| `opus-coder` (VM) | 2,007 | 638,359 | 365,947 | 638,637; 252,070; 309,112 | 527M |
+| `opus-coder-2-local` | 1,953 | 964,787 | 256,276 | 965,418 | 904M |
+| `opus-coder-1-local` | 1,661 | 823,283 | 385,586 | 824,106 | not measured |
 
 `opus-coder-2-local` spent 1,527 of its 1,953 turns above 200k tokens. Claude Code compacts a
 1M-window model at about 967k by default, so a seat carries hundreds of thousands of tokens of
@@ -129,8 +129,8 @@ whether anything is waiting for it, plus one detached process that does the typi
     100k (`ROTATE_FLOOR`), so a small context isn't cleared for nothing;
   - never while a review round it judges is open, or a question of its to a person is, unless
     that question sits in the thread of a task already done or archived.
-    With rotation on, a Stop that keeps the seat writes why to `rotate.log` (the seat as
-    `alias/as`, then the reason), once per reason for each session.
+  With rotation on, a Stop that keeps the seat writes why to `rotate.log` (the seat as
+  `alias/as`, then the reason), once per reason for each session.
 - **The guard.** `kiwi rotate send`, started detached by the hook, waits up to 15 minutes, and on
   every round checks all of these, else waits:
   - rotation is still on for this computer;
@@ -141,9 +141,9 @@ whether anything is waiting for it, plus one detached process that does the typi
   - Claude Code's input box, read between its two rule lines in `tmux capture-pane -e`, holds only
     the dimmed placeholder; anything else on screen (a draft, a dialog, a menu) means wait;
   - no attached tmux client pressed a key in the last 10 seconds.
-    One sender per session: each writes a file named with its pid and goes on only if no other live
-    sender has one; two that start together both back off, and the next Stop tries again. What each
-    one did goes to `rotate.log` in the Kiwi folder.
+  One sender per session: each writes a file named with its pid and goes on only if no other live
+  sender has one; two that start together both back off, and the next Stop tries again. What each
+  one did goes to `rotate.log` in the Kiwi folder.
 - **The act.** It types `/clear` without Enter, then waits up to a second for the box to show
   exactly `/clear` with every check above still holding, and only then presses Enter. If the box
   shows something else it erases its six characters, but only when they are the last thing in it
@@ -188,24 +188,24 @@ whether anything is waiting for it, plus one detached process that does the typi
 
 ## Per role, at a glance
 
-|                 | Lead                                    | Coder                                            | Reviewer                            |
-| --------------- | --------------------------------------- | ------------------------------------------------ | ----------------------------------- |
-| Cleared when    | idle, past the line, after a checkpoint | `task done`, or past the line after a checkpoint | after each verdict                  |
-| Comes back with | board, open questions, its checkpoint   | task, branch, SHA, checkpoint                    | nothing; the next brief is complete |
-| Backstop        | auto-compaction at ~400k                | same                                             | same                                |
+| | Lead | Coder | Reviewer |
+| --- | --- | --- | --- |
+| Cleared when | idle, past the line, after a checkpoint | `task done`, or past the line after a checkpoint | after each verdict |
+| Comes back with | board, open questions, its checkpoint | task, branch, SHA, checkpoint | nothing; the next brief is complete |
+| Backstop | auto-compaction at ~400k | same | same |
 
 ## Other harnesses
 
 The Codex, OpenCode and Grok seats run in tmux too. Claude Code ships first. Probed 2026-10-20 in
 throwaway tmux sessions on a laptop, reading each TUI's own command list (no model calls):
 
-| Harness     | Version | New conversation  | Compact                                       | How Kiwi wakes it                                       |
-| ----------- | ------- | ----------------- | --------------------------------------------- | ------------------------------------------------------- |
-| Claude Code | 2.1.304 | `/clear`          | `/compact`                                    | its own listener hook                                   |
-| Codex       | 0.163.0 | `/new`, `/clear`  | `/compact`                                    | `codex queue --thread <recorded thread>`                |
-| OpenCode    | 2.0.32  | `/new`, `/clear`  | none offered on an empty session              | `opencode api session.prompt` with the recorded session |
-| Grok Build  | 1.0.62  | `/new`, `/clear`  | `/compact`; `/context-window` sets the window | its listener (no wake command)                          |
-| Kimi Code   | K3      | `/new` (`/clear`) | `/compact <instruction>`                      | only when served (`kimi web`)                           |
+| Harness | Version | New conversation | Compact | How Kiwi wakes it |
+| --- | --- | --- | --- | --- |
+| Claude Code | 2.1.304 | `/clear` | `/compact` | its own listener hook |
+| Codex | 0.163.0 | `/new`, `/clear` | `/compact` | `codex queue --thread <recorded thread>` |
+| OpenCode | 2.0.32 | `/new`, `/clear` | none offered on an empty session | `opencode api session.prompt` with the recorded session |
+| Grok Build | 1.0.62 | `/new`, `/clear` | `/compact`; `/context-window` sets the window | its listener (no wake command) |
+| Kimi Code | K3 | `/new` (`/clear`) | `/compact <instruction>` | only when served (`kimi web`) |
 
 Codex and OpenCode are woken by a command that names the recorded thread or session, so after a
 `/new` typed into the pane the wake would still go to the old one. Probed 2026-10-20 with Codex
@@ -239,7 +239,7 @@ Built for Codex windows in tmux, with the same switch, trigger (`rotationAt`), l
   line whose first character is a `›` that is bold, not dim (a submitted prompt) and not reversed (a
   menu row), and every line from there down to the footer: the last block on screen, whose first
   line shows the thread's folder, as written, resolved or under `~`, as a colored span of its own
-  right after a `·` and followed by nothing or another `·`.
+  right after a ` · ` and followed by nothing or another ` · `.
   Codex colors parts of a draft too (a pasted-text placeholder is cyan), so color alone can't tell
   the footer from a draft; the folder can. Continuation lines are indented two spaces, like the
   footer, and a draft can hold blank lines, so the footer is what ends it; with no such footer,

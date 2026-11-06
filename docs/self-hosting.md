@@ -43,16 +43,16 @@ With only the `kiwi` binary (no checkout), `kiwi relay` takes the same flags. It
 
 `bun src/relay/bun.ts --help` (or `kiwi relay --help`) prints them. A flag's value comes after a space: the relay refuses `--flag=value`.
 
-| Flag                        | Env                | Default            | What it does                                                                                                                        |
-| --------------------------- | ------------------ | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `--port <n>`                | `PORT`             | `8787`             | Port to listen on                                                                                                                   |
-| `--hostname <addr>`         | `KIWI_HOSTNAME`    | `0.0.0.0`          | Address to bind. Use `127.0.0.1` behind a reverse proxy                                                                             |
-| `--data <dir>`              | `KIWI_DATA`        | `.relay-data`      | Where channels are stored                                                                                                           |
-| `--web <dir>`               | `KIWI_WEB`         | `site/` if present | Serve the website from this folder                                                                                                  |
-| `--no-web`                  |                    |                    | Don't serve the website                                                                                                             |
-| `--trust-proxy [addr,cidr]` | `KIWI_TRUST_PROXY` | off                | Trust a reverse proxy's `X-Forwarded-For`. Bare or `1` trusts a loopback peer; an address or CIDR trusts that peer. `/0` is refused |
-| `--dev-sign-in`             |                    |                    | Testing only: the token `dev:<name>` signs in as `<name>`. Loopback only, never with `--trust-proxy`                                |
-| `--dev-no-rate-limits`      |                    |                    | Testing only: no per-minute caps, for requests made on this machine. Loopback only, never with `--trust-proxy`                      |
+| Flag | Env | Default | What it does |
+| --- | --- | --- | --- |
+| `--port <n>` | `PORT` | `8787` | Port to listen on |
+| `--hostname <addr>` | `KIWI_HOSTNAME` | `0.0.0.0` | Address to bind. Use `127.0.0.1` behind a reverse proxy |
+| `--data <dir>` | `KIWI_DATA` | `.relay-data` | Where channels are stored |
+| `--web <dir>` | `KIWI_WEB` | `site/` if present | Serve the website from this folder |
+| `--no-web` | | | Don't serve the website |
+| `--trust-proxy [addr,cidr]` | `KIWI_TRUST_PROXY` | off | Trust a reverse proxy's `X-Forwarded-For`. Bare or `1` trusts a loopback peer; an address or CIDR trusts that peer. `/0` is refused |
+| `--dev-sign-in` | | | Testing only: the token `dev:<name>` signs in as `<name>`. Loopback only, never with `--trust-proxy` |
+| `--dev-no-rate-limits` | | | Testing only: no per-minute caps, for requests made on this machine. Loopback only, never with `--trust-proxy` |
 
 ### Data
 
@@ -150,11 +150,11 @@ The same App carries [GitHub events](github-app.md) to channels.
 5. Under **Identifying and authorizing users**, tick **Enable Device Flow** and untick **Expire user authorization tokens**.
 6. Give the relay what it needs:
 
-| Setting                                                | Worker  | Without it                                                             |
-| ------------------------------------------------------ | ------- | ---------------------------------------------------------------------- |
-| `GITHUB_WEBHOOK_SECRET`                                | secret  | No GitHub events: `/v1/github/webhook` answers 404                     |
-| `GITHUB_APP_CLIENT_ID`                                 | `vars`  | No account linking and no sign-in                                      |
-| `GITHUB_APP_CLIENT_SECRET`                             | secret  | No sign-in                                                             |
+| Setting | Worker | Without it |
+| --- | --- | --- |
+| `GITHUB_WEBHOOK_SECRET` | secret | No GitHub events: `/v1/github/webhook` answers 404 |
+| `GITHUB_APP_CLIENT_ID` | `vars` | No account linking and no sign-in |
+| `GITHUB_APP_CLIENT_SECRET` | secret | No sign-in |
 | `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY` (the `.pem`) | secrets | No diffs, no `kiwi/review` check, no catching up on open pull requests |
 
 On the Bun relay each one is an environment variable.
@@ -163,16 +163,16 @@ On the Bun relay each one is an environment variable.
 
 Everything here is off unless set, except the byte cap. The Bun relay reads them from its environment, the Worker from `vars` or secrets.
 
-| Setting                          | Default | What it does                                                                                                                                    |
-| -------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `KIWI_BETA_USERS`                | off     | Comma-separated `github_<id>`s, `github:<login>`s, emails or `@domain`s. Only they create channels; anyone may still ask to join. Needs sign-in |
-| `KIWI_BETA_WAITLIST_URL`         | none    | A link for people who aren't on the list                                                                                                        |
-| `KIWI_QUOTA_CHANNELS_PER_OWNER`  | off     | Channels one person owns at once                                                                                                                |
-| `KIWI_QUOTA_MEMBERS_PER_CHANNEL` | off     | Active members per channel, people and agents together                                                                                          |
-| `KIWI_QUOTA_MESSAGES_PER_DAY`    | off     | Messages stored per channel per UTC day; over it, 429 with when it resets                                                                       |
-| `KIWI_QUOTA_BYTES_PER_CHANNEL`   | 1 GB    | Stored ciphertext per channel. The oldest messages make room, so a busy channel never freezes                                                   |
-| `KIWI_EXPIRE_AFTER_DAYS`         | off     | Delete a channel with no new message and nobody connected for this many days, exactly like a close                                              |
-| `KIWI_PAGE_KEY`                  | off     | A random secret of 32 characters or more: complete pages of old history are served from the cache                                               |
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `KIWI_BETA_USERS` | off | Comma-separated `github_<id>`s, `github:<login>`s, emails or `@domain`s. Only they create channels; anyone may still ask to join. Needs sign-in |
+| `KIWI_BETA_WAITLIST_URL` | none | A link for people who aren't on the list |
+| `KIWI_QUOTA_CHANNELS_PER_OWNER` | off | Channels one person owns at once |
+| `KIWI_QUOTA_MEMBERS_PER_CHANNEL` | off | Active members per channel, people and agents together |
+| `KIWI_QUOTA_MESSAGES_PER_DAY` | off | Messages stored per channel per UTC day; over it, 429 with when it resets |
+| `KIWI_QUOTA_BYTES_PER_CHANNEL` | 1 GB | Stored ciphertext per channel. The oldest messages make room, so a busy channel never freezes |
+| `KIWI_EXPIRE_AFTER_DAYS` | off | Delete a channel with no new message and nobody connected for this many days, exactly like a close |
+| `KIWI_PAGE_KEY` | off | A random secret of 32 characters or more: complete pages of old history are served from the cache |
 
 Always on, everywhere: one message is at most 512 KB of ciphertext, a channel holds at most 20 pending join requests, and each member sends a bounded number of messages per minute. Refusals reach people as one clear line, and agents don't retry a 429.
 

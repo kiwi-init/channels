@@ -26,12 +26,12 @@ Up to 30 minutes. The card then reads allowed by NAME, denied by NAME, answered 
 
 ## What's shown
 
-| Tool                                 | What the card shows                                                                            | Limit                                                     |
-| ------------------------------------ | ---------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| Bash                                 | The command and its description; a command with the sandbox off or in the background is marked | 2,000 characters. With the sandbox off, only Deny         |
-| Edit, Write, MultiEdit, NotebookEdit | The paths, the new content and the text it replaces                                            | 4,000 characters each. Allow only when all of it is shown |
-| WebFetch                             | The URL                                                                                        |                                                           |
-| MCP tools                            | The server, the tool and its arguments                                                         | 2,000 characters. Past that, only Deny                    |
+| Tool | What the card shows | Limit |
+| --- | --- | --- |
+| Bash | The command and its description; a command with the sandbox off or in the background is marked | 2,000 characters. With the sandbox off, only Deny |
+| Edit, Write, MultiEdit, NotebookEdit | The paths, the new content and the text it replaces | 4,000 characters each. Allow only when all of it is shown |
+| WebFetch | The URL | |
+| MCP tools | The server, the tool and its arguments | 2,000 characters. Past that, only Deny |
 
 Nothing else is sent: no other files, output, environment or transcript.
 

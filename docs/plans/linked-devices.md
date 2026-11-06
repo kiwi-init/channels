@@ -52,28 +52,22 @@ given a copy of the person key.
 
 **The device list.** Each person has one append-only device list:
 
-- It is made of _add_ and _revoke_ links, each with a version number.
+- It is made of *add* and *revoke* links, each with a version number.
 - The first link is signed by the person key: a small sigchain rooted in it (Keybase-style).
 - Every later link is signed by a device that is current at that point.
 - **The cert is the add link.** A `DeviceCert` is signed by the approving device, not by the person
   key:
 
   ```ts
-  interface DeviceCert {
-    // one add link in the person's device list
-    kind: "kiwi-device-cert";
-    v: 2;
-    person: string; // the person key the list is rooted in
-    device: string;
-    dxpk: string; // the new device's keys
-    label: string;
-    os: string;
-    role: "app" | "computer";
-    at: number;
-    until: number; // 90 days, renewed while the device is listed
-    seq: number; // the list's version after this link
-    by: string;
-    sig: string; // the approving device's key and its signature
+  interface DeviceCert {          // one add link in the person's device list
+    kind: "kiwi-device-cert"; v: 2
+    person: string                // the person key the list is rooted in
+    device: string; dxpk: string  // the new device's keys
+    label: string; os: string
+    role: "app" | "computer"
+    at: number; until: number     // 90 days, renewed while the device is listed
+    seq: number                   // the list's version after this link
+    by: string; sig: string       // the approving device's key and its signature
   }
   ```
 
@@ -151,18 +145,18 @@ takeover gets one pending ask at most. Approving it needs your app in your hand 
 **At the relay** (step 2, `src/relay/account.ts`). Every route takes the GitHub sign-in
 (`x-human-token`); all but the first are also signed by a device key for `account:<user>`.
 
-| Route                                                     | Who                                                           | What                                                                           |
-| --------------------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `GET /v1/account`                                         | the session                                                   | `{user, links}`: the account's device list, empty at first                     |
-| `PUT /v1/account` `{links}`                               | the person key or an app that approves                        | binds the account to the list's person, then only accepts lists that extend it |
-| `POST /v1/account/ask` `{ask}`                            | the new device                                                | the `EnrollAsk`; one per account for 10 minutes, 5 a minute                    |
-| `GET /v1/account/ask`                                     | the asking device, an app that approves                       | the ask with its answer and reveal                                             |
-| `PUT /v1/account/ask/<id>/answer` `{device, dxpk, nonce}` | an app that approves                                          | once, with the app's own listed keys                                           |
-| `PUT /v1/account/ask/<id>/reveal` `{nonce}`               | the asking device                                             | once, after the answer; checked against the commitment                         |
-| `DELETE /v1/account/ask/<id>`                             | the asking device, an app that approves                       | turns the ask away                                                             |
-| `GET /v1/account/fresh`                                   | the session                                                   | `{fresh}`: the waiting start-over, with its end time, or null (section 6)      |
-| `POST /v1/account/fresh` `{links}`                        | the new desktop                                               | starts over: one link, a new person key adding this desktop                    |
-| `DELETE /v1/account/fresh/<id>`                           | a current device, the person key, the desktop that started it | cancels the start-over                                                         |
+| Route | Who | What |
+| --- | --- | --- |
+| `GET /v1/account` | the session | `{user, links}`: the account's device list, empty at first |
+| `PUT /v1/account` `{links}` | the person key or an app that approves | binds the account to the list's person, then only accepts lists that extend it |
+| `POST /v1/account/ask` `{ask}` | the new device | the `EnrollAsk`; one per account for 10 minutes, 5 a minute |
+| `GET /v1/account/ask` | the asking device, an app that approves | the ask with its answer and reveal |
+| `PUT /v1/account/ask/<id>/answer` `{device, dxpk, nonce}` | an app that approves | once, with the app's own listed keys |
+| `PUT /v1/account/ask/<id>/reveal` `{nonce}` | the asking device | once, after the answer; checked against the commitment |
+| `DELETE /v1/account/ask/<id>` | the asking device, an app that approves | turns the ask away |
+| `GET /v1/account/fresh` | the session | `{fresh}`: the waiting start-over, with its end time, or null (section 6) |
+| `POST /v1/account/fresh` `{links}` | the new desktop | starts over: one link, a new person key adding this desktop |
+| `DELETE /v1/account/fresh/<id>` | a current device, the person key, the desktop that started it | cancels the start-over |
 
 A key revoked in a published list is refused on every account route, can't ask again, and loses its
 computer inbox at once (`/v1/machine/<key>` answers 403 and its socket closes).

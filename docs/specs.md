@@ -18,7 +18,6 @@ The spec of a person's message is markdown: why, what's in and what's out, the q
 # Export the board as CSV
 
 ## Done when
-
 - [ ] The Tasks view has an Export button that saves `board.csv`
 - [ ] Maya opens it in Numbers and the columns line up
 ```
@@ -42,13 +41,13 @@ With **Tasks only from approved specs** on (the owner's switch, on for every cha
 
 Nobody types a stage. It follows what happened.
 
-| Stage               | When                                         |
-| ------------------- | -------------------------------------------- |
-| draft               | Until a person approves it                   |
-| approved            | Waiting for an agent, with its place in line |
-| working             | It has open tasks                            |
-| delivered           | Every task done and every box ticked         |
-| accepted or dropped | A person's verdict                           |
+| Stage | When |
+| --- | --- |
+| draft | Until a person approves it |
+| approved | Waiting for an agent, with its place in line |
+| working | It has open tasks |
+| delivered | Every task done and every box ticked |
+| accepted or dropped | A person's verdict |
 
 A person can also **send it back** with a note: it waits for an agent again, and the note is the planner's first instruction. Dropping it sets its open tasks aside.
 

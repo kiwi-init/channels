@@ -10,12 +10,12 @@ The desktop app reads a folder on your computer, `~/.kiwi` (or `$KIWI_HOME`). Pu
 
 <!-- figure: yours -->
 
-| Path                  | What it changes                                                    |
-| --------------------- | ------------------------------------------------------------------ |
-| `themes/<name>.json`  | A colour theme, next to the built-in ones                          |
-| `keys.json`           | The key for any command                                            |
+| Path | What it changes |
+| --- | --- |
+| `themes/<name>.json` | A colour theme, next to the built-in ones |
+| `keys.json` | The key for any command |
 | `layouts/<name>.json` | Where the rail, sidebar, chat and panel sit, and how wide they are |
-| `mods/<name>/`        | Panels and commands of your own: see [Mods](mods.md)               |
+| `mods/<name>/` | Panels and commands of your own: see [Mods](mods.md) |
 
 Themes, keys and layouts are plain JSON: they can't run code or read anything. A file the app can't use is skipped, and Settings says which one and why.
 
@@ -56,23 +56,23 @@ Save it as `~/.kiwi/themes/ember.json` and it shows in **Settings → Appearance
 - **A key you take wins.** Give a command a key another one has by default, and the other one loses it.
 - **Settings → Shortcuts** appears once the file exists (`{}` is enough). It lists every command, its id and its keys, and any line of the file it couldn't use. You change keys in the file, not there.
 
-| Command                    | Id                  | Mac | Linux  |
-| -------------------------- | ------------------- | --- | ------ |
-| Find anything              | `app.palette`       | ⌘K  | Ctrl+K |
-| Calm                       | `app.calm`          | ⌘T  | Ctrl+T |
-| Toggle sidebar             | `view.sidebar`      | ⌘\  | Ctrl+\ |
-| Search this channel        | `chat.search`       | ⌘F  | Ctrl+F |
-| Go back                    | `nav.back`          | ⌘[  | Ctrl+[ |
-| Go forward                 | `nav.forward`       | ⌘]  | Ctrl+] |
-| Next channel with news     | `nav.next-news`     | ⌥↓  | Alt+↓  |
-| Previous channel with news | `nav.previous-news` | ⌥↑  | Alt+↑  |
-| New channel                | `app.new-channel`   |     |        |
-| Join with a code           | `app.join`          |     |        |
-| Your computers             | `app.computers`     |     |        |
-| Settings                   | `app.settings`      |     |        |
-| Theme: Dark                | `view.theme-dark`   |     |        |
-| Theme: Light               | `view.theme-light`  |     |        |
-| Theme: System              | `view.theme-system` |     |        |
+| Command | Id | Mac | Linux |
+| --- | --- | --- | --- |
+| Find anything | `app.palette` | ⌘K | Ctrl+K |
+| Calm | `app.calm` | ⌘T | Ctrl+T |
+| Toggle sidebar | `view.sidebar` | ⌘\ | Ctrl+\ |
+| Search this channel | `chat.search` | ⌘F | Ctrl+F |
+| Go back | `nav.back` | ⌘[ | Ctrl+[ |
+| Go forward | `nav.forward` | ⌘] | Ctrl+] |
+| Next channel with news | `nav.next-news` | ⌥↓ | Alt+↓ |
+| Previous channel with news | `nav.previous-news` | ⌥↑ | Alt+↑ |
+| New channel | `app.new-channel` | | |
+| Join with a code | `app.join` | | |
+| Your computers | `app.computers` | | |
+| Settings | `app.settings` | | |
+| Theme: Dark | `view.theme-dark` | | |
+| Theme: Light | `view.theme-light` | | |
+| Theme: System | `view.theme-system` | | |
 
 A mod's commands join the table as `<mod>.<id>`, with no key until you give them one.
 
@@ -97,8 +97,8 @@ Save it in `~/.kiwi/layouts/` and pick it in **Settings → Appearance → Layou
 
 Nothing ships in the folder. A few to start from:
 
-| Name    | `areas`                                |
-| ------- | -------------------------------------- |
-| Focus   | `["chat", "panel"]`                    |
-| Mirror  | `["panel", "chat", "sidebar", "rail"]` |
-| Overlay | `["rail", "sidebar", "chat"]`          |
+| Name | `areas` |
+| --- | --- |
+| Focus | `["chat", "panel"]` |
+| Mirror | `["panel", "chat", "sidebar", "rail"]` |
+| Overlay | `["rail", "sidebar", "chat"]` |

@@ -25,12 +25,12 @@ A running session can be woken from outside in two ways:
 
 ## Summary
 
-| Harness     | Path                                                                   | Verified                        | What kiwi needs                                                                                              |
-| ----------- | ---------------------------------------------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| OpenCode v2 | Push: `opencode api session.prompt`, unchanged                         | Yes, end to end                 | Nothing. The current path works.                                                                             |
-| Kimi Code   | Pull: background `Bash` task running `kiwi listen --once`              | Yes, in print mode              | A brief that arms the task, and a `Stop` hook that re-arms it                                                |
-| MiMoCode    | Push: the session's own HTTP server, `POST /session/{id}/prompt_async` | Yes, against a terminal session | The port (from `MIMOCODE_PID`), the session id (`mimocode.db`), and `MIMOCODE_SERVER_PASSWORD` set at launch |
-| Grok        | Pull: the `monitor` tool running `kiwi listen`                         | Yes, in an interactive session  | A brief that arms the monitor, and a `Stop` hook that checks `backgroundTasks` and re-arms it                |
+| Harness | Path | Verified | What kiwi needs |
+| --- | --- | --- | --- |
+| OpenCode v2 | Push: `opencode api session.prompt`, unchanged | Yes, end to end | Nothing. The current path works. |
+| Kimi Code | Pull: background `Bash` task running `kiwi listen --once` | Yes, in print mode | A brief that arms the task, and a `Stop` hook that re-arms it |
+| MiMoCode | Push: the session's own HTTP server, `POST /session/{id}/prompt_async` | Yes, against a terminal session | The port (from `MIMOCODE_PID`), the session id (`mimocode.db`), and `MIMOCODE_SERVER_PASSWORD` set at launch |
+| Grok | Pull: the `monitor` tool running `kiwi listen` | Yes, in an interactive session | A brief that arms the monitor, and a `Stop` hook that checks `backgroundTasks` and re-arms it |
 
 ## OpenCode v2 (2.0.31)
 

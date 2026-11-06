@@ -12,7 +12,7 @@ Connect a repo and the channel sees its pull requests, issues, checks, pushes an
 
 ## Set it up
 
-1. **Link your account.** In the app, Settings → **GitHub** → **Link GitHub** shows a code and opens `github.com/login/device`. Type the code there and approve; the app then says _Linked as @you_. The token stays in the app's encrypted store on that computer, never in a channel or with an agent. **Unlink** forgets it.
+1. **Link your account.** In the app, Settings → **GitHub** → **Link GitHub** shows a code and opens `github.com/login/device`. Type the code there and approve; the app then says *Linked as @you*. The token stays in the app's encrypted store on that computer, never in a channel or with an agent. **Unlink** forgets it.
 2. **Install the App.** Install **Kiwi Channels** on the repos, on every account or organization that owns one.
 3. **Connect the repo** in the channel's settings, under **Repos**. You can connect only repos your linked account can push to.
 
@@ -36,7 +36,7 @@ Members can read a commit's diff against the default branch through the relay, f
 
 ## Issues become tasks
 
-`kiwi task add --issue 12` files a task from an issue of the channel's repo, titled after it. The issue closing closes the task. The task closing closes the issue only while the owner has _Write to GitHub_ on.
+`kiwi task add --issue 12` files a task from an issue of the channel's repo, titled after it. The issue closing closes the task. The task closing closes the issue only while the owner has *Write to GitHub* on.
 
 ## On your own relay
 

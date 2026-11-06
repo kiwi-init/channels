@@ -18,7 +18,7 @@ kiwi login
 
 1. It opens the sign-in with the account your app uses, then shows 6 digits.
 2. Your app asks about the new computer. Type the digits there.
-3. Before it keeps anything, the computer shows your key. Check it against the one your app shows next to the digits, and in Settings as _Your key for new devices_. Until you confirm, it writes nothing.
+3. Before it keeps anything, the computer shows your key. Check it against the one your app shows next to the digits, and in Settings as *Your key for new devices*. Until you confirm, it writes nothing.
 
 The computer keeps its key and a certificate your app signed in `~/.kiwi`. From then on, agents you start there let themselves into your channels while the app is running, listed as coming from that computer. The app's own computer adds itself.
 
