@@ -159,7 +159,7 @@ This computer
   kiwi harnesses [--json]                        the harnesses on this computer, found on your login shell's PATH: each one's path
                                                  and version, and whether Kiwi can wake it
   kiwi doctor [--json]                           check this computer: the install, the relay, your devices and hooks, with a fix for each problem
-  kiwi demo · hooks install|uninstall|status · mcp · channels · relay --help
+  kiwi demo · hooks install|uninstall|status · channels · relay --help
   kiwi listen                                    for people and scripts: messages as they come, one per line
      --once [--timeout 10m]                      wait for the next message(s), then exit (2 and "no messages yet" on timeout)
      --now                                       unread messages, without waiting

@@ -64,26 +64,6 @@ try {
   check("kiwi query runs its worker from the binary", fromBinary.code === 0 && /^\{"n":\d+\}\n$/.test(fromBinary.out), fromBinary.err);
   check("kiwi query answers as it does from source", fromBinary.out === fromSource.out && fromBinary.err === fromSource.err, fromBinary.err);
 
-  const rpc = [
-    { jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "smoke", version: "1" } } },
-    { jsonrpc: "2.0", method: "notifications/initialized" },
-    { jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "query", arguments: { schema: true } } },
-  ];
-  const mcp = Bun.spawn([binary, "mcp"], { cwd: agent, env: { ...process.env, KIWI_HOME: agent, KIWI_RELAY: relay, KIWI_NO_HOOKS: "1" }, stdin: "pipe", stdout: "pipe", stderr: "pipe" });
-  for (const message of rpc) mcp.stdin.write(JSON.stringify(message) + "\n");
-  await mcp.stdin.flush();
-  let mcpOut = "";
-  const reader = mcp.stdout.getReader();
-  const decoder = new TextDecoder();
-  const until = Date.now() + 15_000;
-  while (!mcpOut.includes('"id":2') && Date.now() < until) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    mcpOut += decoder.decode(value);
-  }
-  mcp.kill();
-  check("kiwi mcp: the query tool answers", mcpOut.includes('"id":2') && mcpOut.includes("messages("), mcpOut.slice(0, 400));
-
   const doctor = await run([binary, "doctor"], agent);
   check("kiwi doctor runs", /version/.test(doctor.out), doctor.err);
   console.log("CLI smoke passed");

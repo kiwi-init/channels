@@ -1,6 +1,7 @@
 import "~/styles/tasks.css"
 
-import { Avatar, cx, Empty, statusWord } from "~/kit/bits"
+import { Avatar, cx, statusWord } from "~/kit/bits"
+import { Empty } from "~/kit/empty"
 import { ago, clock } from "~/kit/time"
 import { contextOf, liveOf, restOf } from "~/doing"
 import type { Channel, PullRequest, Task } from "~/model"

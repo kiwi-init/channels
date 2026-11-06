@@ -476,7 +476,7 @@ export interface Snapshot {
   now?: number;
 }
 
-/** One member as `kiwi status --json` and the MCP tools give it: who they are, where, and how busy. */
+/** One member as `kiwi status --json` gives it: who they are, where, and how busy. */
 export function memberJson(state: ChannelState, name: string, online: Snapshot["online"]) {
   const m = state.members.get(name);
   const on = online.get(name);

@@ -1,7 +1,9 @@
 import { useState } from "react"
 
 import "~/styles/start.css"
-import { autofocus, cx, Modal, Field } from "~/kit/bits"
+import { autofocus, cx } from "~/kit/bits"
+import { Field } from "~/kit/form"
+import { Modal } from "~/kit/modal"
 import { useApp } from "~/nav"
 
 export function NewChannelDialog() {

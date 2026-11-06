@@ -4,7 +4,8 @@ import "~/styles/specs.css"
 
 import { useState } from "react"
 
-import { Avatar, cx, Empty, Loading } from "~/kit/bits"
+import { Avatar, cx, Loading } from "~/kit/bits"
+import { Empty } from "~/kit/empty"
 import { Track } from "~/kit/glide"
 import { Icon } from "~/kit/icons"
 import { later } from "~/kit/later"

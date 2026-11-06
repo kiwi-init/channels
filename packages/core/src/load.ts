@@ -52,7 +52,7 @@ export function loadLine(l: Load, maxTitle = 40): string {
   return parts.length ? parts.join(" · ") : "free";
 }
 
-/** The same, as plain data for --json and MCP tools. */
+/** The same, as plain data for --json. */
 export function loadJson(l: Load) {
   return {
     level: l.level,

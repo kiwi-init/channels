@@ -1,6 +1,7 @@
 import { useState } from "react"
 
-import { cx, Toggle } from "~/kit/bits"
+import { cx } from "~/kit/bits"
+import { Toggle } from "~/kit/form"
 import { Icon } from "~/kit/icons"
 import { LOGOS } from "~/kit/logos"
 import { RoleFace } from "~/kit/role-face"

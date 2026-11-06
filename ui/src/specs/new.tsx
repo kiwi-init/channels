@@ -1,6 +1,8 @@
 import { useState } from "react"
 
-import { autofocus, Modal, Field } from "~/kit/bits"
+import { autofocus } from "~/kit/bits"
+import { Field } from "~/kit/form"
+import { Modal } from "~/kit/modal"
 import type { Channel } from "~/model"
 import { useAct } from "~/nav"
 import { nickname } from "~/names"

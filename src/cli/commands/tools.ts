@@ -2,15 +2,9 @@ import * as Effect from "effect/Effect";
 import { existsSync } from "node:fs";
 import { join as joinPath } from "node:path";
 import { opt } from "../args.ts";
-import { type Command, out, session } from "../context.ts";
+import { type Command, out } from "../context.ts";
 
 export const toolCommands: Record<string, Command> = {
-  mcp: () =>
-    Effect.gen(function* () {
-      const { runMcp } = yield* Effect.promise(() => import("../../mcp.ts"));
-      yield* runMcp(yield* session(), { push: opt.push });
-    }),
-
   relay: () =>
     Effect.gen(function* () {
       const { runRelay } = yield* Effect.promise(() => import("../../relay/bun.ts"));

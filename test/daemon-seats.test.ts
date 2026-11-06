@@ -419,7 +419,7 @@ describe("reachOf", () => {
   const seat = (r: Partial<SeatRecord>): SeatRecord => ({ alias: "test", as: "a", ...r });
   const alive = (pid: number) => pid === 7;
 
-  test("a live MCP server's session hold makes a seat running, not listening", () => {
+  test("a session hold, as an older CLI's kiwi mcp takes, makes a seat running, not listening", () => {
     expect(reachOf("session", seat({ harness: "codex", session: "c" }), undefined, alive)).toBe("running");
   });
 
