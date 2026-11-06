@@ -60,17 +60,40 @@ describe("who merges a channel's pull requests (#623 §6)", () => {
     expect(formatStatus({ alias: "contrib", me: "win", state: s, online: new Map(), unread: 0 })).toContain("who merges: people");
   });
 
-  for (const then of ["release:tag", "release:npm:@kiwi/cli@1.2.3", "run"] as const) {
-    test(`with people merging, a ${then} landing leaves the PR merge to a person and keeps the rest of the step with the agent`, async () => {
-      const people = await ev("jon", { op: "merges.set", by: "people" });
-      const add = await ev("jon", { op: "task.add", title: "Ship", owner: "win", review: "mac", then });
-      const round = await ev("win", { op: "task.update", task: add.seq, state: "review", at: HEAD });
-      const pass = await ev("mac", { op: "task.update", task: add.seq, state: "done", verdict: "approved", round: 1, at: HEAD });
-      const s = fold([people, add, round, pass], roster);
-      expect(s.tasks.get(add.seq)!.state).toBe("landing");
-      const prompt = firstPrompt({ kind: "coding", task: add.seq }, s, "win", "contrib");
-      expect(prompt).toContain("People merge pull requests here, so don't merge its PR yourself");
-      expect(prompt).toContain(`the rest of its ${then} step is yours`);
+  async function landingPrompt(then: "release:tag" | "release:npm:@kiwi/cli@1.2.3" | "run", withPr: boolean): Promise<string> {
+    const people = await ev("jon", { op: "merges.set", by: "people" });
+    const prefix = await ev("jon", { op: "branch.prefix.set", prefix: "T" });
+    const add = await ev("jon", { op: "task.add", title: "Ship", owner: "win", review: "mac", then });
+    const round = await ev("win", { op: "task.update", task: add.seq, state: "review", at: HEAD });
+    const pass = await ev("mac", { op: "task.update", task: add.seq, state: "done", verdict: "approved", round: 1, at: HEAD });
+    const pr: GithubNote = { event: "pull_request", repo: "o/r", number: 9, state: "open", branch: `T${add.seq}-ship`, sha: HEAD, at: seq };
+    const news = await ev("jon", { op: "github", items: [pr] });
+    const s = fold([people, prefix, add, round, pass, ...(withPr ? [news] : [])], roster);
+    expect(s.tasks.get(add.seq)!.state).toBe("landing");
+    return firstPrompt({ kind: "coding", task: add.seq }, s, "win", "contrib");
+  }
+
+  const leavesMerge = (prompt: string, then: string) => {
+    expect(prompt).toContain("People merge pull requests here, so don't merge its PR yourself");
+    expect(prompt).toContain(`Once a person has merged it, the rest of its ${then} step is yours`);
+    expect(prompt).not.toContain("merge its PR at the approved head");
+  };
+
+  test("with people merging, a release:tag landing always waits for a person's merge, since its release needs the PR merged", async () => {
+    leavesMerge(await landingPrompt("release:tag", false), "release:tag");
+    leavesMerge(await landingPrompt("release:tag", true), "release:tag");
+  });
+
+  for (const then of ["release:npm:@kiwi/cli@1.2.3", "run"] as const) {
+    test(`with people merging, a ${then} landing with a linked PR leaves that merge to a person, then the step stays with the agent`, async () => {
+      leavesMerge(await landingPrompt(then, true), then);
+    });
+
+    test(`with people merging, a ${then} landing with no PR is the agent's to do now, with no merge to wait for`, async () => {
+      const prompt = await landingPrompt(then, false);
+      expect(prompt).toContain(`Its ${then} step is yours: do it at the approved artifact.`);
+      expect(prompt).toContain("if it comes to need one merged, don't merge it yourself");
+      expect(prompt).not.toContain("Once a person has merged it");
       expect(prompt).not.toContain("merge its PR at the approved head");
     });
   }
