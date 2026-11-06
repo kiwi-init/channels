@@ -17,7 +17,7 @@ export interface Pinned {
 }
 
 export const DEFAULT_MODS: readonly Pinned[] = [
-  { name: "github", repo: "kiwi-init/mods", path: "github", commit: "0000000000000000000000000000000000000000", hash: "0000000000000000000000000000000000000000000000000000000000000000" },
+  { name: "github", repo: "kiwi-init/mods", path: "github", commit: "fef9c2d6fc23f8cce1d0986541362457e3f7e7d7", hash: "124adf9c7a7f821bbd5a9b353bd897d16f5763b822fc72cfb305474526c7f19a" },
 ];
 
 export interface DefaultsOptions {
