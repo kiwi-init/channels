@@ -15,6 +15,7 @@ import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
 import { memberOf, type Channel, type Issue, type PullRequest } from "~/model"
 import { useApp, type GithubView as Kind } from "~/nav"
+import { wordsPlain } from "~/words"
 
 const SHOWN = 8
 
@@ -228,7 +229,7 @@ function Owner({ channel, id }: { channel: Channel; id: number | undefined }) {
   const task = id !== undefined ? channel.tasks.find((t) => t.id === id) : undefined
   if (!task) return <span className="gh-col-task" />
   return (
-    <span className="gh-col-task num" title={`T${task.id} ${task.title}`}>
+    <span className="gh-col-task num" title={`T${task.id} ${wordsPlain(task.title, channel.nicknames)}`}>
       <Dot status={task.cancelled ? "todo" : task.status} />T{task.id}
       {task.owner && <Avatar person={memberOf(channel, task.owner)} size="sm" />}
     </span>

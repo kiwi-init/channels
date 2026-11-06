@@ -6,13 +6,14 @@ import { Avatar, cx, Dot } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import type { Channel } from "~/model"
 import { useApp } from "~/nav"
-import { shown } from "~/names"
+import { shown, Shown } from "~/names"
 import { statusOf, taskOf } from "~/shell/sidebar"
 
 const KEY = "channels.tall.work"
 const SHARE = 0.42
 const MIN = 160
 const MIN_CHAT = 280
+const ROOMY = Number.POSITIVE_INFINITY
 
 const onResize = (l: () => void) => (window.addEventListener("resize", l), () => window.removeEventListener("resize", l))
 
@@ -37,14 +38,19 @@ function keep(h: number): void {
   }
 }
 
-function useSplit() {
+function useSplit(roomy: boolean) {
   const [wanted, setWanted] = useState(stored)
-  const height = room(wanted, useWindowHeight())
-  const set = useCallback((h: number) => {
-    const next = room(h, window.innerHeight)
-    setWanted(next)
-    keep(next)
-  }, [])
+  const [specWanted, setSpecWanted] = useState(ROOMY)
+  const height = room(roomy ? specWanted : wanted, useWindowHeight())
+  const set = useCallback(
+    (h: number) => {
+      const next = room(h, window.innerHeight)
+      if (roomy) return setSpecWanted(next)
+      setWanted(next)
+      keep(next)
+    },
+    [roomy]
+  )
   const onPointerDown = useCallback(
     (e: PointerEvent<HTMLDivElement>) => {
       e.preventDefault()
@@ -76,7 +82,7 @@ function useSplit() {
     },
     [height, set]
   )
-  return { height, grip: { onPointerDown, onKeyDown, onDoubleClick: () => set(Math.round(window.innerHeight * SHARE)) } }
+  return { height, grip: { onPointerDown, onKeyDown, onDoubleClick: () => set(roomy ? ROOMY : Math.round(window.innerHeight * SHARE)) } }
 }
 
 function Crew({ channel }: { channel: Channel }) {
@@ -102,7 +108,7 @@ function Crew({ channel }: { channel: Channel }) {
               {task ? (
                 <>
                   <Dot status={task.status} />
-                  <span className="num">T{task.id}</span> {task.title}
+                  <span className="num">T{task.id}</span> <Shown value={task.title} />
                 </>
               ) : (
                 <span className="crew-idle">no task</span>
@@ -125,7 +131,9 @@ function Crew({ channel }: { channel: Channel }) {
 }
 
 export default function TallPage({ channel, jump, work, open }: { channel: Channel; jump: Jump | null; work: ReactNode; open: ReactNode }) {
-  const split = useSplit()
+  const { nav } = useApp()
+  const roomy = open == null && nav.spec !== undefined && !!channel.specs?.some((s) => s.ask === nav.spec)
+  const split = useSplit(roomy)
   return (
     <div className="tall" style={{ "--work-h": `${split.height}px` } as CSSProperties}>
       <Crew channel={channel} />

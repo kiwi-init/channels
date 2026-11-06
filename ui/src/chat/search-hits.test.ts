@@ -8,7 +8,7 @@ const general = { kind: "room", room: "general" } as const
 const msg = (seq: number, text: string, extra: Partial<Message> = {}): Message => ({ seq, from: "atlas", at: seq * 1000, text: wrote(text), where: general, ...extra })
 const task = (id: number, title: string, extra: Partial<Task> = {}): Task => ({
   id,
-  title,
+  title: wrote(title),
   status: "doing",
   createdBy: "jow",
   createdAt: 0,

@@ -5,7 +5,7 @@ import { Avatar, cx, Dot, statusWord } from "~/kit/bits"
 import { ago } from "~/kit/time"
 import { memberOf, type Channel, type PullRequest, type Task, type TaskStatus } from "~/model"
 import { useApp } from "~/nav"
-import { nickname } from "~/names"
+import { nickname, Shown } from "~/names"
 
 export const TONES: Record<TaskStatus, string> = { todo: "", doing: "tone-doing", review: "tone-review", done: "tone-live", waiting: "tone-decide" }
 
@@ -40,7 +40,9 @@ export function TaskRow({ channel, t, on }: { channel: Channel; t: Task; on: boo
       onClick={() => go({ to: "panel", panel: on ? null : { kind: "task", task: t.id } })}
     >
       <Dot status={t.cancelled ? "todo" : t.status} />
-      <span className="board-title">{t.title}</span>
+      <span className="board-title">
+        <Shown value={t.title} />
+      </span>
       <span className="board-meta">
         T{t.id}
         {state ? (

@@ -7,7 +7,7 @@ import { contextOf, liveOf, restOf } from "~/doing"
 import type { Channel, PullRequest, Task } from "~/model"
 import { useApp } from "~/nav"
 import { TONES } from "~/tasks/row"
-import { nickname, shown } from "~/names"
+import { nickname, shown, Shown } from "~/names"
 import { lanesOf, type Lane } from "~/now"
 
 const MAX_TICKS = 8
@@ -42,7 +42,9 @@ function Current({ t }: { t: Task }) {
   return (
     <li className="lane-task">
       <button type="button" onClick={() => go({ to: "panel", panel: { kind: "task", task: t.id } })}>
-        <span className="lane-title">{t.title}</span>
+        <span className="lane-title">
+          <Shown value={t.title} />
+        </span>
         <span className="lane-meta">
           <span className="num">T{t.id}</span>
           {t.status !== "doing" && <span className={TONES[t.status]}> · {statusWord(t)}</span>} · {ago(t.updatedAt)}
@@ -93,7 +95,9 @@ function LaneCard({ channel, lane }: { channel: Channel; lane: Lane }) {
               <li key={t.id}>
                 <button type="button" className="lane-row" onClick={() => go({ to: "panel", panel: { kind: "task", task: t.id } })}>
                   <span className="lane-id num">T{t.id}</span>
-                  <span className="lane-row-title">{t.title}</span>
+                  <span className="lane-row-title">
+                    <Shown value={t.title} />
+                  </span>
                 </button>
               </li>
             ))}

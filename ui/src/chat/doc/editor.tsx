@@ -43,7 +43,7 @@ import { Avatar, cx, Dot, STATUS_WORDS } from "~/kit/bits"
 import { clock } from "~/kit/time"
 import { announce } from "~/kit/toasts"
 import type { BlockFiles, Channel, Message, Person, QuestionAsk, Task, Where } from "~/model"
-import { nickname } from "~/names"
+import { nickname, Shown } from "~/names"
 import { wordsRaw } from "~/words"
 import { sameWhere, useAct, useApp } from "~/nav"
 
@@ -590,7 +590,9 @@ function Suggest({ channel, query, options, pick, at, onPick }: { channel: Chann
             <button type="button" tabIndex={-1} className={cx("mention-row task-row", i === pick && "is-on")} onMouseDown={(e) => e.preventDefault()} onClick={() => onPick(i)}>
               <Dot status={o.task.status} />
               <span className="task-row-id">T{o.task.id}</span>
-              <span className="task-row-title">{o.task.title}</span>
+              <span className="task-row-title">
+                <Shown value={o.task.title} />
+              </span>
               <span className="dim">{o.task.owner ? nickname(channel, o.task.owner) : STATUS_WORDS[o.task.status]}</span>
             </button>
           )}

@@ -160,10 +160,10 @@ const face = (p: Person | undefined): string => (p ? [p.kind, p.harness, p.prese
 
 const chip = (c: Channel, id: number | undefined): string => {
   const t = id === undefined ? undefined : c.tasks.find((t) => t.id === id)
-  return t ? [t.status, t.title, t.owner, t.pr?.number].join("\n") : ""
+  return t ? [t.status, wordsRaw(t.title), t.owner, t.pr?.number].join("\n") : ""
 }
 
-function sameRow(a: RowProps, b: RowProps): boolean {
+export function sameRow(a: RowProps, b: RowProps): boolean {
   if (a.m !== b.m || a.compact !== b.compact || a.names !== b.names || a.tasks !== b.tasks || a.inThread !== b.inThread || a.quote !== b.quote || a.onQuote !== b.onQuote) return false
   const x = a.channel
   const y = b.channel

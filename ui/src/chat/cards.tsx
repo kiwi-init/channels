@@ -2,7 +2,7 @@ import { cx, Dot, STATUS_WORDS } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import type { Channel, PullRequest } from "~/model"
 import { useAct } from "~/nav"
-import { nickname } from "~/names"
+import { nickname, Shown } from "~/names"
 
 export function TaskChip({ channel, id }: { channel: Channel; id: number }) {
   const { go } = useAct()
@@ -12,7 +12,9 @@ export function TaskChip({ channel, id }: { channel: Channel; id: number }) {
     <button type="button" className={cx("chip", `is-${t.status}`)} title={STATUS_WORDS[t.status]} onClick={() => go({ to: "panel", panel: { kind: "task", task: t.id } })}>
       <Dot status={t.status} />
       <span className="chip-id">T{t.id}</span>
-      <span className="chip-title">{t.title}</span>
+      <span className="chip-title">
+        <Shown value={t.title} />
+      </span>
       {(t.owner || t.pr || t.status === "waiting") && (
         <span className="chip-meta">
           {[t.owner && nickname(channel, t.owner), t.pr && `#${t.pr.number}`].filter(Boolean).join(" · ")}

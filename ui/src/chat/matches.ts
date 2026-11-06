@@ -1,5 +1,6 @@
 import type { Person, Task } from "~/model"
 import { onePerPerson } from "~/names"
+import { wordsRaw } from "~/words"
 
 export function taskMatches(tasks: readonly Task[], query: string): Task[] {
   const q = query.trim().toLowerCase()
@@ -7,7 +8,7 @@ export function taskMatches(tasks: readonly Task[], query: string): Task[] {
   const score = (t: Task): number => {
     if (!q) return 0
     if (/^\d+$/.test(id) && String(t.id).startsWith(id)) return 0
-    const title = t.title.toLowerCase()
+    const title = wordsRaw(t.title).toLowerCase()
     if (title.startsWith(q)) return 1
     if (title.split(/[^\p{L}\p{N}]+/u).some((w) => w.startsWith(q))) return 2
     return title.includes(q) ? 3 : -1

@@ -4,6 +4,7 @@ import type { Event, Message } from "@kiwi/core/protocol.ts"
 import { fold, type Roster } from "@kiwi/core/state.ts"
 import { assignTask, cancelTask, changeReviewer } from "@kiwi/channel/task-actions.ts"
 import { tasksOf } from "~/live/map"
+import { wordsRaw } from "~/words"
 
 const roster: Roster = []
 const ids = new Map<string, Identity>()
@@ -60,8 +61,10 @@ describe("a task's activity (T612)", () => {
     expect(h.map((e) => e.what)).toEqual(["created", "started", "review", "rejected", "note"])
     expect(h[0]).toMatchObject({ by: "jow", to: "wren" })
     expect(h[2]).toMatchObject({ round: 1 })
-    expect(h[3]).toMatchObject({ round: 1, note: "the ring is too thick" })
-    expect(h[4]).toMatchObject({ by: "wren", note: "thinner ring pushed" })
+    expect(h[3]).toMatchObject({ round: 1 })
+    expect(h[3]?.note && wordsRaw(h[3].note)).toBe("the ring is too thick")
+    expect(h[4]).toMatchObject({ by: "wren" })
+    expect(h[4]?.note && wordsRaw(h[4].note)).toBe("thinner ring pushed")
   })
 
   test("messages elsewhere that name it, one row each", () => {
@@ -74,13 +77,16 @@ describe("a task's activity (T612)", () => {
     const h = task(second.seq).history
     expect(h.map((e) => e.what)).toEqual(["created", "reviewer", "assigned", "cancelled"])
     expect(h[1]).toMatchObject({ to: "atlas" })
-    expect(h[2]).toMatchObject({ to: "atlas", note: "worked the avatars" })
-    expect(h[3]).toMatchObject({ note: "folded into the first one" })
+    expect(h[2]).toMatchObject({ to: "atlas" })
+    expect(h[2]?.note && wordsRaw(h[2].note)).toBe("worked the avatars")
+    expect(h[3]?.note && wordsRaw(h[3].note)).toBe("folded into the first one")
     expect(task(second.seq)).toMatchObject({ status: "done", cancelled: true, owner: "atlas", reviewer: "atlas" })
   })
 
   test("the open round carries its summary", () => {
-    expect(task(first.seq).rounds[0]).toMatchObject({ n: 1, result: "rejected", summary: "Avatars sit on glass now." })
+    const round = task(first.seq).rounds[0]
+    expect(round).toMatchObject({ n: 1, result: "rejected" })
+    expect(round?.summary && wordsRaw(round.summary)).toBe("Avatars sit on glass now.")
   })
 
   test("an unowned task suggests the agent with its context, and only to a person", () => {

@@ -291,7 +291,7 @@ export function SearchBox({
                   <>
                     <span className="search-id">T{hit.task.id}</span>
                     <span className="search-title">
-                      <Marked text={hit.task.title} wanted={wanted} />
+                      <Marked text={wordsPlain(hit.task.title, channel.nicknames)} wanted={wanted} />
                     </span>
                     <Dot status={hit.task.status} />
                   </>

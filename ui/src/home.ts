@@ -33,7 +33,7 @@ function lineOf(c: Source, a: Ask): { what: string; text: string; act: HomeAct }
       return { what: "Wants to join", text: a.name, act: { kind: "open" } }
     case "review": {
       const task = c.tasks.find((t) => t.id === a.task)
-      return { what: `Review T${a.task}`, text: clip(task?.title ?? `T${a.task}`), act: task ? { kind: "approve-task", task: a.task } : { kind: "open" } }
+      return { what: `Review T${a.task}`, text: clip(task ? wordsPlain(task.title, c.nicknames) : `T${a.task}`), act: task ? { kind: "approve-task", task: a.task } : { kind: "open" } }
     }
     case "spec": {
       const spec = c.specs?.find((s) => s.ask === a.ask)
@@ -50,7 +50,7 @@ function movingOf(c: Source, t: Task): HomeTask {
   const live = owner ? liveOf(owner) : null
   const stage = stageWords(t)
   const state = stage.text || live?.text || (t.status === "waiting" ? "needs you" : t.status === "review" ? "in review" : "")
-  return { id: t.id, title: t.title, who: t.owner ? nickname(c, t.owner) : null, state, busy: !!live?.busy, red: stage.red }
+  return { id: t.id, title: wordsPlain(t.title, c.nicknames), who: t.owner ? nickname(c, t.owner) : null, state, busy: !!live?.busy, red: stage.red }
 }
 
 const AGENT_ORDER: Record<HomeAgent["state"], number> = { working: 0, waiting: 1, idle: 2, away: 3 }
@@ -67,7 +67,7 @@ function agentOf(c: Source, p: Person): HomeAgent {
     state,
     doing: live?.text ?? (state === "away" ? "offline" : restOf(p)),
     ...(live?.since ? { since: live.since } : {}),
-    task: task ? { id: task.id, title: task.title } : null,
+    task: task ? { id: task.id, title: wordsPlain(task.title, c.nicknames) } : null,
   }
 }
 
