@@ -164,14 +164,16 @@ export function safeLinks(node: ASTNode, inLink = false): void {
 
 const ITEM = /^ {0,3}(?:[-*+]|\d{1,9}[.)])(?:\s|$)/
 const FENCE = /^\s*(`{3,}|~{3,})/
+const DELIMITER = /^(?=.*\|)(?=.*-)[\s|:-]+$/
 
-export function endLists(markdown: string): string {
+export function blockGaps(markdown: string): string {
   const lines = markdown.split("\n")
   const out: string[] = []
   let fence = ""
   let inList = false
-  let gap = false
-  for (const line of lines) {
+  let inTable = false
+  let gap = true
+  for (const [i, line] of lines.entries()) {
     const mark = FENCE.exec(line)?.[1]
     if (fence) {
       if (mark && mark[0] === fence[0] && mark.length >= fence.length) fence = ""
@@ -180,7 +182,10 @@ export function endLists(markdown: string): string {
     }
     const blank = !line.trim()
     const indented = /^\s/.test(line)
-    if (inList && !gap && !blank && !indented && !ITEM.test(line)) out.push("")
+    const piped = line.includes("|")
+    const table = piped && DELIMITER.test(lines[i + 1] ?? "")
+    if (!gap && !blank && (table || (inTable && !piped) || (inList && !indented && !ITEM.test(line)))) out.push("")
+    inTable = table || (inTable && piped)
     if (mark) fence = mark
     if (ITEM.test(line)) inList = true
     else if (!blank && !indented) inList = false
@@ -195,7 +200,7 @@ function parse(markdown: string): Promise<ASTNode> {
   if (done) return Promise.resolve(done)
   const pending = parsing.get(markdown)
   if (pending) return pending
-  const next = parseMarkdown(endLists(markdown), FLAGS)
+  const next = parseMarkdown(blockGaps(markdown), FLAGS)
     .then((ast) => {
       indexTaskItems(ast)
       markInlineImages(ast)

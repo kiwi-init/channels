@@ -189,7 +189,7 @@ export interface Task {
   history: TaskEvent[]
   archived: boolean
   cancelled?: boolean
-  lands?: { then: string; by?: string; waits?: string; bypassed?: string[] }
+  lands?: { then: string; by?: string; waits?: string; bypassed?: string[]; ready?: true }
   closedWith?: Words
   youReview?: "verdict" | "send-back"
   suggested?: { name: string; why: Words }

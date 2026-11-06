@@ -21,7 +21,7 @@ for (const opener of ["open", "xdg-open"]) {
 const cliEnv = { KIWI_MODEL: "claude-sonnet-5-5", ...process.env, KIWI_HOME: join(cli, "home"), CLAUDE_CONFIG_DIR: join(cli, "no-claude"), PATH: `${join(cli, "bin")}:${process.env.PATH}` };
 
 const kiwi = (args: string[], watch?: (out: string) => void): Promise<string> => {
-  const p = spawn("bun", ["src/cli/main.ts", ...args], { cwd: ROOT, env: cliEnv });
+  const p = spawn("bun", ["src/cli/main.ts", ...args], { cwd: ROOT, env: cliEnv, stdio: ["ignore", "pipe", "pipe"] });
   let out = "";
   const on = (d: Buffer) => ((out += d.toString("utf8")), watch?.(out));
   p.stdout.on("data", on);

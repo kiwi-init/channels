@@ -12,7 +12,36 @@ afterEach(() => {
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
-function fixture(settings: { version?: string; checksum?: string; body?: string; status?: number; location?: string; cleanupFails?: boolean; tamper?: boolean; noSig?: boolean } = {}) {
+type Unpacker = readonly [string, ...string[]];
+
+const sha = (bytes: string | Buffer): string => createHash("sha256").update(bytes).digest("hex");
+const XZ_BODY = '#!/bin/sh\ncase "$1" in\n--version) echo 2026.10.4 ;;\nesac\n: from-xz\n';
+const CAT: Unpacker = ["/bin/cat"];
+
+function brokenXz(): Unpacker {
+  const dir = mkdtempSync(join(tmpdir(), "kiwi-upgrade-xz-"));
+  dirs.push(dir);
+  const xz = join(dir, "xz");
+  writeFileSync(xz, '#!/bin/sh\nhead -c 16 "$2"; echo "xz: Unsupported filter chain" >&2; exit 1\n', { mode: 0o755 });
+  return [xz, "-dc"];
+}
+
+function fixture(
+  settings: {
+    version?: string;
+    checksum?: string;
+    body?: string;
+    status?: number;
+    location?: string;
+    cleanupFails?: boolean;
+    tamper?: boolean;
+    noSig?: boolean;
+    xz?: string | Buffer;
+    xzChecksum?: string;
+    noGz?: boolean;
+    unpacker?: Unpacker | null;
+  } = {},
+) {
   const dir = mkdtempSync(join(tmpdir(), "kiwi-upgrade-test-"));
   dirs.push(dir);
   const executable = join(dir, "kiwi");
@@ -20,9 +49,10 @@ function fixture(settings: { version?: string; checksum?: string; body?: string;
   writeFileSync(executable, old, { mode: 0o751 });
   const body = settings.body ?? `#!/bin/sh\ncase "$1" in\n--version) echo 2026.10.4 ;;\ncleanup) ${settings.cleanupFails ? "exit 1" : `printf cleaned > '${join(dir, "cleaned")}'`} ;;\nesac\n`;
   const packed = gzipSync(body);
-  const sum = settings.checksum ?? createHash("sha256").update(packed).digest("hex");
+  const sum = settings.checksum ?? sha(packed);
+  const xz = settings.xz === undefined ? null : Buffer.from(settings.xz);
   const key = throwawayKey();
-  const sumsText = `${sum}  kiwi-linux-x64.gz\n`;
+  const sumsText = (settings.noGz ? "" : `${sum}  kiwi-linux-x64.gz\n`) + (xz ? `${settings.xzChecksum ?? sha(xz)}  kiwi-linux-x64.xz\n` : "");
   const sigText = key.sign(settings.tamper ? "different checksums entirely" : sumsText, "kiwi v2026.10.4 SHA256SUMS");
   const urls: string[] = [];
   const messages: string[] = [];
@@ -38,6 +68,7 @@ function fixture(settings: { version?: string; checksum?: string; body?: string;
       return new Response(sigText);
     }
     if (url.endsWith("SHA256SUMS")) return new Response(sumsText);
+    if (url.endsWith(".xz") && xz) return new Response(xz, { status: settings.status ?? 200 });
     return new Response(packed, { status: settings.status ?? 200 });
   };
   const options = {
@@ -51,6 +82,7 @@ function fixture(settings: { version?: string; checksum?: string; body?: string;
     report: (message: string): void => {
       messages.push(message);
     },
+    ...(settings.unpacker === undefined ? {} : { xz: settings.unpacker }),
   };
   return { dir, executable, old, body, urls, messages, options };
 }
@@ -104,7 +136,7 @@ test.each([
   const f = fixture(settings);
   await expect(upgrade(f.options)).rejects.toThrow(settings.why);
   expect(readFileSync(f.executable, "utf8")).toBe(f.old);
-  expect(f.urls.filter((u) => u.endsWith(".gz"))).toHaveLength(0);
+  expect(f.urls.filter((u) => /\.(gz|xz)$/.test(u))).toHaveLength(0);
 });
 
 test("follows a custom install symlink without replacing the link", async () => {
@@ -174,4 +206,57 @@ test.each(["upgrade", "update"])("%s routes without needing a configured identit
   const child = Bun.spawn([process.execPath, "src/cli/main.ts", command], { env: { ...process.env, KIWI_HOME: f.dir }, stdout: "pipe", stderr: "pipe" });
   expect(await child.exited).toBe(1);
   expect(await new Response(child.stderr).text()).toContain("runs from source");
+});
+
+test("takes the smaller .xz when the release lists it and it unpacks here", async () => {
+  const f = fixture({ xz: XZ_BODY, unpacker: CAT });
+  await upgrade(f.options);
+  expect(readFileSync(f.executable, "utf8")).toBe(XZ_BODY);
+  expect(f.urls.filter((u) => /\.(gz|xz)$/.test(u))).toEqual(["https://github.com/kiwi-init/channels/releases/download/v2026.10.4/kiwi-linux-x64.xz"]);
+  expect(readdirSync(f.dir)).toEqual(["kiwi"]);
+  expect(f.messages.join("\n")).not.toContain(".gz");
+});
+
+test("falls back to the .gz, in one line, when the .xz won't unpack here", async () => {
+  const f = fixture({ xz: XZ_BODY, unpacker: brokenXz() });
+  await upgrade(f.options);
+  expect(readFileSync(f.executable, "utf8")).toBe(f.body);
+  expect(f.urls.filter((u) => /\.(gz|xz)$/.test(u)).map((u) => u.slice(u.lastIndexOf(".")))).toEqual([".xz", ".gz"]);
+  expect(f.messages.filter((m) => m.includes("taking the .gz instead"))).toEqual(["Couldn't unpack kiwi-linux-x64.xz here (xz 5.4 or newer can); taking the .gz instead."]);
+  expect(readdirSync(f.dir).sort()).toEqual(["cleaned", "kiwi"]);
+});
+
+test.each([
+  { why: "the release lists no .xz", settings: { unpacker: CAT } },
+  { why: "nothing here unpacks .xz", settings: { xz: XZ_BODY, unpacker: null } },
+])("takes the .gz when $why", async ({ settings }) => {
+  const f = fixture(settings);
+  await upgrade(f.options);
+  expect(readFileSync(f.executable, "utf8")).toBe(f.body);
+  expect(f.urls.some((u) => u.endsWith(".xz"))).toBe(false);
+  expect(f.messages.join("\n")).not.toContain("taking the .gz instead");
+});
+
+test("refuses a .xz whose checksum doesn't match instead of falling back", async () => {
+  const f = fixture({ xz: XZ_BODY, xzChecksum: sha("something else"), unpacker: CAT });
+  await expect(upgrade(f.options)).rejects.toThrow("download checksum does not match");
+  expect(readFileSync(f.executable, "utf8")).toBe(f.old);
+  expect(f.urls.some((u) => u.endsWith(".gz"))).toBe(false);
+  expect(readdirSync(f.dir)).toEqual(["kiwi"]);
+});
+
+test("keeps the old binary when the .xz won't unpack and the release has no .gz", async () => {
+  const f = fixture({ xz: XZ_BODY, noGz: true, unpacker: brokenXz() });
+  await expect(upgrade(f.options)).rejects.toThrow("no .gz to fall back on");
+  expect(readFileSync(f.executable, "utf8")).toBe(f.old);
+  expect(readdirSync(f.dir)).toEqual(["kiwi"]);
+});
+
+test.skipIf(!Bun.which("xz"))("unpacks a real .xz with the xz found on PATH", async () => {
+  const packed = Bun.spawnSync(["xz", "-c", "--x86", "--lzma2"], { stdin: Buffer.from(XZ_BODY) });
+  expect(packed.exitCode).toBe(0);
+  const f = fixture({ xz: packed.stdout });
+  await upgrade(f.options);
+  expect(readFileSync(f.executable, "utf8")).toBe(XZ_BODY);
+  expect(f.urls.some((u) => u.endsWith(".gz"))).toBe(false);
 });

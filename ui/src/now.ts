@@ -26,6 +26,7 @@ export function stageWords(t: Task): { text: string; red: boolean } {
   const ticks = t.pr?.ticks
   const at = (words: string): string => (pr ? `${pr} · ${words}` : words)
   if (t.lands?.bypassed) return { text: at("shipped with its gate shut"), red: true }
+  if (t.lands?.ready) return { text: at("ready for a person to merge"), red: false }
   switch (t.stage) {
     case "red": {
       const failed = ticks?.failed ?? []
