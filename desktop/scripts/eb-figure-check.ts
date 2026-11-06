@@ -289,21 +289,48 @@ try {
   await d.evaluate(() => (document.activeElement ?? document.body).dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })), null, 2_000);
   const drawn = await until("the figures, drawn", 60_000, async () => {
     const now = await d.evaluate(figuresNow, TEXT, 2_000);
-    return now.shown === 4 && now.live === 3 ? now : null;
+    return now.shown === 4 && (now.still || now.live === 3) ? now : null;
   }).catch(async () => d.evaluate(figuresNow, TEXT, 2_000));
   console.log(`the message's figures: ${JSON.stringify(drawn)}`);
   check(drawn.shown === 4 && drawn.chips === 0, "a message's X.figure.html + X.figure.svg pairs show as figures, not file chips");
   await later(3_000);
   const steady = await d.evaluate(figuresNow, TEXT, 2_000);
-  check(steady.live === 3 && steady.frames.length === 3, "at most 3 figures are live at once; the 4th shows its snapshot");
-  check(
-    steady.frames.every((f) => f.endsWith(" allow-scripts views://internal/mod-frame.html")),
-    "each live figure is the mod's own sandboxed frame page, never srcdoc",
-  );
-  const live = (await heard(d)).filter((m) => typeof m["drawn"] === "number").map((m) => m["drawn"] as number);
-  console.log(`figures that drew: ${JSON.stringify(live)}`);
-  check(new Set(live).size === 3, "the live figures' own scripts run");
-  await shot("figures-in-chat");
+  const openFull = (n: number) =>
+    step(`figure ${n + 1}'s full window button`, 10_000, () =>
+      d.evaluate(
+        ({ text, n }) => {
+          const msg = [...document.querySelectorAll<HTMLElement>(".main article.msg")].find((m) => (m.textContent ?? "").includes(text));
+          const b = msg?.querySelectorAll<HTMLButtonElement>(".msg-shown-open")[n];
+          b?.click();
+          return !!b;
+        },
+        { text: TEXT, n },
+        2_000,
+      ),
+    );
+  const closeFull = async () => {
+    await step("close the full window", 10_000, () => d.evaluate(clickText, { selector: "dialog.shown-full button", text: "" }, 2_000));
+    await step("the full window, closed", 10_000, () => d.evaluate(() => !document.querySelector("dialog.shown-full"), null, 2_000));
+  };
+  if (steady.still) {
+    console.log("this Mac reduces motion, so figures stay snapshots in chat; the probe figure runs full window");
+    check(steady.live === 0 && steady.anywhere === 0, "with reduced motion, figures stay snapshots in chat");
+    await shot("figures-in-chat");
+    await openFull(0);
+  } else {
+    check(steady.live === 3 && steady.frames.length === 3, "at most 3 figures are live at once; the 4th shows its snapshot");
+    check(
+      steady.frames.every((f) => f.endsWith(" allow-scripts views://internal/mod-frame.html")),
+      "each live figure is the mod's own sandboxed frame page, never srcdoc",
+    );
+    const live = await until("the live figures' own scripts", 15_000, async () => {
+      const n = (await heard(d)).filter((m) => typeof m["drawn"] === "number").map((m) => m["drawn"] as number);
+      return new Set(n).size >= 3 ? n : null;
+    }).catch(() => [] as number[]);
+    console.log(`figures that drew: ${JSON.stringify(live)}`);
+    check(new Set(live).size === 3, "the live figures' own scripts run");
+    await shot("figures-in-chat");
+  }
   const probe = await until("the probe figure's report", 30_000, async () => (await heard(d)).find((m) => m["figure"] === true) ?? null).catch(() => null);
   console.log(`the probe figure saw: ${JSON.stringify(probe, null, 1)}`);
   const p = probe ?? {};
@@ -322,18 +349,8 @@ try {
   check(String(p["topNav"]).startsWith("blocked") || page.startsWith("views://"), "a figure can't navigate the app");
   const still = await until("the probe figure, after it tried to navigate", 10_000, async () => (await heard(d)).find((m) => m["figureStill"] === true) ?? null).catch(() => null);
   check(!!still, "a figure that tries to navigate its own frame stays where it is");
-  await step("the full window button", 10_000, () =>
-    d.evaluate(
-      (text) => {
-        const msg = [...document.querySelectorAll<HTMLElement>(".main article.msg")].find((m) => (m.textContent ?? "").includes(text));
-        const b = msg?.querySelectorAll<HTMLButtonElement>(".msg-shown-open")[1];
-        b?.click();
-        return !!b;
-      },
-      TEXT,
-      2_000,
-    ),
-  );
+  if (steady.still) await closeFull();
+  await openFull(1);
   const full = await until("the figure, full window", 15_000, async () => {
     const n = (await heard(d)).filter((m) => m["drawn"] === 2 && (m["wide"] as number) > 600).length;
     return n ? n : null;
@@ -349,7 +366,7 @@ try {
   console.log(`full window: ${JSON.stringify(dialog)}`);
   check(dialog.open && dialog.frame === "allow-scripts" && full > 0, "a figure opens full window, drawn live in its own frame");
   await shot("figure-full-window");
-  await step("close the full window", 10_000, () => d.evaluate(clickText, { selector: "dialog.shown-full button", text: "" }, 2_000));
+  await closeFull();
   await later(1_500);
   const opens = (await d.main("browserOpens")) as string[];
   console.log(`opened in the browser: ${JSON.stringify(opens)}`);
