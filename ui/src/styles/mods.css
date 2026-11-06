@@ -162,4 +162,8 @@ img.mod-icon {
 
 .mod-readme {
   padding-top: 12px;
+
+.mod-tab-slot {
+  flex: 1;
+  min-height: 0;
 }
