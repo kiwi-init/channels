@@ -9,6 +9,7 @@ import { normalizeRelay } from "./guard.ts";
 import { launchArgs } from "./single-instance.ts";
 import { dataDir } from "./host-eb.ts";
 import { forceFrostForTest, frostAllowed, windowLooks } from "./native-eb.ts";
+import { browserOpens } from "./open.ts";
 import { mutate, openStore } from "./store.ts";
 
 declare const KIWI_EB_TEST: boolean;
@@ -33,6 +34,7 @@ export function driveForTests(win: BrowserWindow): void {
       drive(win.webview, socket, {
         startup: startupMarks,
         linksOpened,
+        browserOpens,
         argv: () => ({ argv: process.argv, launch: launchArgs() }),
         closeWindow: () => (win.requestClose(), true),
         window: () => ({ visible: win.isVisible(), minimized: win.isMinimized() }),

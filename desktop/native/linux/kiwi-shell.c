@@ -20,6 +20,7 @@
 
 static void (*page_gone)(void) = NULL;
 static gchar *the_page = NULL;
+static gchar *the_frame = NULL;
 static GMutex committed_lock;
 static char committed[4096] = "";
 static GMutex drop_lock;
@@ -76,6 +77,12 @@ static bool is_the_page(const char *uri) {
   return uri[n] == 0 || uri[n] == '#';
 }
 
+static bool is_the_frame(const char *uri) {
+  size_t n = the_frame ? strlen(the_frame) : 0;
+  if (n == 0 || !uri || strncmp(uri, the_frame, n) != 0) return false;
+  return uri[n] == 0 || uri[n] == '#';
+}
+
 static gboolean only_the_page(GSignalInvocationHint *hint, guint n, const GValue *params, gpointer data) {
   (void)hint;
   (void)data;
@@ -90,7 +97,7 @@ static gboolean only_the_page(GSignalInvocationHint *hint, guint n, const GValue
   }
   WebKitNavigationAction *action = webkit_navigation_policy_decision_get_navigation_action(WEBKIT_NAVIGATION_POLICY_DECISION(decision));
   const char *uri = action ? webkit_uri_request_get_uri(webkit_navigation_action_get_request(action)) : NULL;
-  if (is_the_page(uri)) return TRUE;
+  if (is_the_page(uri) || is_the_frame(uri)) return TRUE;
   if (own_download(uri))
     webkit_policy_decision_download(policy);
   else
@@ -380,6 +387,13 @@ bool kiwi_allow_only(const char *page) {
   the_page = g_strdup(page);
   if (!allowing_only) allowing_only = on_main(install_hook, &PAGE_ONLY);
   return allowing_only;
+}
+
+bool kiwi_allow_frame(const char *url) {
+  if (!url || !*url || !allowing_only) return false;
+  g_free(the_frame);
+  the_frame = g_strdup(url);
+  return true;
 }
 
 bool kiwi_watch_drops(void) {

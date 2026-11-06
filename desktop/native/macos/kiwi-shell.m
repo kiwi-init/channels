@@ -35,10 +35,20 @@ static DecideAction electrobunDecideAction = NULL;
 
 static NSString *thePage = nil;
 
+static NSString *theFrame = nil;
+
 static BOOL isThePage(NSURL *url) {
   NSString *s = url.absoluteString;
   NSUInteger n = thePage.length;
   if (n == 0 || ![s hasPrefix:thePage]) return NO;
+  return s.length == n || [s characterAtIndex:n] == '#';
+}
+
+static BOOL isTheFrame(WKNavigationAction *action) {
+  if (theFrame.length == 0) return NO;
+  NSString *s = action.request.URL.absoluteString;
+  NSUInteger n = theFrame.length;
+  if (![s hasPrefix:theFrame]) return NO;
   return s.length == n || [s characterAtIndex:n] == '#';
 }
 
@@ -48,6 +58,10 @@ static BOOL ownDownload(WKNavigationAction *action) {
 }
 
 static void onlyThePage(id self, SEL cmd, WKWebView *webView, WKNavigationAction *action, void (^decisionHandler)(WKNavigationActionPolicy)) {
+  if (action.targetFrame && !action.targetFrame.isMainFrame) {
+    decisionHandler(isTheFrame(action) ? WKNavigationActionPolicyAllow : WKNavigationActionPolicyCancel);
+    return;
+  }
   if (isThePage(action.request.URL) || ownDownload(action)) {
     electrobunDecideAction(self, cmd, webView, action, decisionHandler);
     return;
@@ -91,6 +105,31 @@ bool kiwi_allow_only(const char *page) {
   thePage = [p copy];
   if (!electrobunDecideAction) electrobunDecideAction = (DecideAction)method_setImplementation(m, (IMP)onlyThePage);
   return electrobunDecideAction != NULL;
+}
+
+bool kiwi_allow_frame(const char *url) {
+  NSString *f = url ? [NSString stringWithUTF8String:url] : nil;
+  if (f.length == 0 || !electrobunDecideAction) return false;
+  theFrame = [f copy];
+  return true;
+}
+
+typedef void (*TakeMessage)(id, SEL, WKUserContentController *, WKScriptMessage *);
+
+static TakeMessage electrobunTakeMessage = NULL;
+
+static void mainFrameMessages(id self, SEL cmd, WKUserContentController *controller, WKScriptMessage *message) {
+  if (!message.frameInfo.isMainFrame) return;
+  electrobunTakeMessage(self, cmd, controller, message);
+}
+
+bool kiwi_main_frame_messages(void) {
+  if (electrobunTakeMessage) return true;
+  Class cls = objc_getClass("MyScriptMessageHandler");
+  Method m = cls ? class_getInstanceMethod(cls, @selector(userContentController:didReceiveScriptMessage:)) : NULL;
+  if (!m) return false;
+  electrobunTakeMessage = (TakeMessage)method_setImplementation(m, (IMP)mainFrameMessages);
+  return true;
 }
 
 static os_unfair_lock committedLock = OS_UNFAIR_LOCK_INIT;

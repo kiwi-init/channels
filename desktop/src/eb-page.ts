@@ -2,13 +2,17 @@ import { csp } from "./guard.ts";
 
 export const PAGE_URL = "views://internal/index.html";
 
-export const PAGE_RULES = ["^*", PAGE_URL, `${PAGE_URL}#*`];
+export const MOD_FRAME_URL = "views://internal/mod-frame.html";
+
+export const PAGE_RULES = ["^*", PAGE_URL, `${PAGE_URL}#*`, MOD_FRAME_URL, `${MOD_FRAME_URL}#*`];
 
 export const PAGE_TEMPLATE = "page/index.html";
 
 export const RULES_CANARY = "views://internal/kiwi-rules-check";
 
 export const isPageUrl = (url: string): boolean => url === PAGE_URL || url.startsWith(`${PAGE_URL}#`);
+
+const isModFrame = (url: string): boolean => url === MOD_FRAME_URL || url.startsWith(`${MOD_FRAME_URL}#`);
 
 const WS = String.raw`[\t\n\f\r ]`;
 
@@ -40,7 +44,7 @@ export function navigation(detail: unknown): Navigation {
   const { url, allowed } = (v && typeof v === "object" ? v : {}) as { url?: unknown; allowed?: unknown };
   if (typeof url !== "string" || typeof allowed !== "boolean") return { kind: "breach", url: null };
   if (!allowed) return { kind: "refused", url };
-  return isPageUrl(url) ? { kind: "page" } : { kind: "breach", url };
+  return isPageUrl(url) || isModFrame(url) ? { kind: "page" } : { kind: "breach", url };
 }
 
 export function openedUrl(detail: unknown): string | null {
