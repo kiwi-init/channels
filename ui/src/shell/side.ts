@@ -15,7 +15,7 @@ export function setDrawer(open: boolean): void {
   for (const l of listeners) l()
 }
 
-const narrow = (): boolean => matchMedia("(max-width: 760px)").matches || matchMedia("(orientation: portrait)").matches
+const narrow = (): boolean => matchMedia("(max-width: 760px)").matches || matchMedia("(orientation: portrait)").matches || document.documentElement.dataset["side"] === "none"
 
 export function toggleSide(): void {
   if (narrow()) setDrawer(!drawer)

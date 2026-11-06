@@ -1,0 +1,204 @@
+:root[data-layout] {
+  --rail-w: var(--l-rail, 4rem);
+  --side-w: var(--l-side, 15.5rem);
+}
+
+:root[data-layout]:is([data-shell="mac"], [data-wm="floating"]) {
+  --rail-w: max(5rem, var(--l-rail, 5rem));
+}
+
+:root[data-layout][data-shell="mac"]:is([data-rail="right"], [data-rail="none"]),
+:root[data-layout][data-wm="floating"][data-rail="none"] {
+  --l-room: 72px;
+}
+
+@media (max-width: 760px) {
+  :root[data-layout],
+  :root[data-layout]:is([data-shell="mac"], [data-wm="floating"]) {
+    --rail-w: 56px;
+  }
+}
+
+:root[data-layout][data-rail="none"] {
+  --rail-w: 0px;
+}
+
+:root[data-rail="none"] .rail {
+  visibility: hidden;
+}
+
+:root[data-rail="none"] .wm-controls {
+  visibility: visible;
+}
+
+:root[data-rail="right"] .app {
+  grid-template-columns: minmax(0, 1fr) var(--rail-w);
+}
+
+:root[data-rail="right"] .rail {
+  order: 1;
+}
+
+:root[data-rail="right"] .rail-menu {
+  right: calc(var(--rail-w) - 4px);
+  left: auto;
+}
+
+:root[data-rail="right"] .tile.is-on::before,
+:root[data-rail="right"] .tile-dot {
+  right: calc((var(--rail-w) - 2.375rem) / -2);
+  left: auto;
+  border-radius: var(--r-tick) 0 0 var(--r-tick);
+  transform-origin: right center;
+}
+
+:root[data-rail="right"] .conn {
+  right: calc(var(--rail-w) + 16px);
+}
+
+:root[data-rail="right"] .chan.is-drawer .side {
+  left: 0;
+}
+
+:root[data-side="none"] .chan .side {
+  display: none;
+}
+
+:root[data-side="none"] .chan.is-drawer .side {
+  position: fixed;
+  top: var(--top-h);
+  bottom: 0;
+  left: var(--rail-w);
+  z-index: 15;
+  display: flex;
+  width: min(var(--side-w), calc(100vw - var(--rail-w)));
+  background: var(--bg);
+  box-shadow: var(--shadow-pop);
+}
+
+:root[data-side="none"][data-rail="right"] .chan.is-drawer .side {
+  left: 0;
+}
+
+:root[data-panel="left"] .panel-grip {
+  right: -5px;
+  left: auto;
+}
+
+:root[data-panel="left"] .chan > .panel {
+  animation-name: panel-in-left;
+}
+
+@keyframes panel-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+}
+
+:root[data-layout] .set-top-title {
+  padding-left: calc(12px + var(--l-room, 0px));
+}
+
+@media (min-width: 761px) and (orientation: landscape) {
+  :root[data-layout] .chan {
+    grid-template-columns: var(--l-cols);
+  }
+
+  :root[data-layout] .chan.is-bare {
+    grid-template-columns: var(--l-bare);
+  }
+
+  :root[data-layout] .chan > .side {
+    order: var(--l-side-o);
+  }
+
+  :root[data-layout] .chan > .main {
+    order: var(--l-main-o);
+  }
+
+  :root[data-layout] .chan > .panel {
+    order: var(--l-panel-o);
+  }
+
+  :root[data-layout]:not([data-top]) .chan:not(.is-bare) .top-drawer {
+    margin-left: calc(8px + var(--l-room, 0px));
+  }
+
+  :root[data-layout]:not([data-top]) .chan:not(.is-bare) .top-title {
+    padding-left: calc(18px + var(--ctl) + var(--l-room, 0px));
+  }
+
+  :root[data-layout] .chan.is-bare .top,
+  :root[data-top="bare"] .chan .top {
+    grid-template-columns: auto auto minmax(0, 1fr) auto;
+    padding-left: calc(8px + var(--l-room, 0px));
+  }
+
+  :root[data-top="bare"] .chan .top-drawer {
+    display: grid;
+    grid-area: auto;
+    margin-left: 0;
+  }
+
+  :root[data-top="bare"] .chan .top-title {
+    grid-area: auto;
+    padding: 0 10px;
+  }
+
+  :root[data-side="none"] .chan .top-drawer-dot {
+    display: block;
+  }
+
+  :root[data-panel="float"] .chan.has-panel .panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 20;
+    width: min(var(--panel-w), 100vw);
+    background: var(--bg);
+  }
+
+  :root[data-panel="float"][data-rail="right"] .chan.has-panel .panel {
+    right: var(--rail-w);
+  }
+}
+
+@media (min-width: 1181px) and (orientation: landscape) {
+  :root[data-layout] .chan.has-panel {
+    grid-template-columns: var(--l-cols-p);
+  }
+
+  :root[data-layout] .chan.is-bare.has-panel {
+    grid-template-columns: var(--l-bare-p);
+  }
+}
+
+@media (min-width: 761px) and (max-width: 1180px) {
+  :root[data-rail="right"] .chan.has-panel .panel {
+    right: var(--rail-w);
+  }
+
+  :root[data-panel="left"] .chan.has-panel .panel {
+    right: auto;
+    left: var(--rail-w);
+  }
+
+  :root[data-panel="left"][data-rail="right"] .chan.has-panel .panel {
+    left: 0;
+  }
+}
+
+@media (max-width: 760px), (orientation: portrait) {
+  :root[data-layout] .chan .top {
+    padding-left: calc(8px + var(--l-room, 0px));
+  }
+}
+
+@media (max-width: 760px) {
+  :root[data-rail="right"] .chan.has-panel .panel {
+    right: var(--rail-w);
+    left: 0;
+  }
+}

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState, type CSSProperties } from "react"
+import { lazy, Suspense, useEffect, useState } from "react"
 
 import { Conversation } from "~/chat/conversation"
 import type { Jump, Older } from "~/chat/search-box"
@@ -147,7 +147,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   const paged = tall && nav.tab !== "needs" && nav.tab !== "github"
 
   return (
-    <div className={cx("chan", nav.panel && !paged && "has-panel", drawer && "is-drawer", hidden && "is-bare")} style={{ "--panel-w": `${panel.width}px` } as CSSProperties}>
+    <div className={cx("chan", nav.panel && !paged && "has-panel", drawer && "is-drawer", hidden && "is-bare")}>
       <header className="top">
         <button
           type="button"
