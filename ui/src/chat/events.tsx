@@ -148,7 +148,7 @@ function TasksRow({ line, tasks, more }: { line: Extract<EventLine, { kind: "tas
   const named = line.tasks.slice(0, 3)
   const last = line.list[line.list.length - 1]!
   return (
-    <p className="sys" data-seq={line.list[0]!.seq} title={line.list.map((m) => m.text).join("\n")}>
+    <p className="sys" data-seq={line.list[0]!.seq} title={line.list.map((m) => wordsPlain(m.text, app.channel?.nicknames ?? new Map())).join("\n")}>
       <span className="sys-line" />
       <span className="sys-text">
         {named.map((t, i) => {
@@ -201,9 +201,10 @@ function TaskRow({ channel, run, task }: { channel: Channel; run: TaskRun; task:
 }
 
 function GithubRow({ line }: { line: Extract<EventLine, { kind: "github" }> }) {
+  const { app } = useApp()
   const last = line.list[line.list.length - 1]!
   return (
-    <p className="sys" data-seq={line.list[0]!.seq} title={line.list.map((m) => m.text).join("\n")}>
+    <p className="sys" data-seq={line.list[0]!.seq} title={line.list.map((m) => wordsPlain(m.text, app.channel?.nicknames ?? new Map())).join("\n")}>
       <span className="sys-line" />
       <span className="sys-text">
         GitHub

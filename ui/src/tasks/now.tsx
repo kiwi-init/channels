@@ -6,6 +6,7 @@ import type { Channel, Task } from "~/model"
 import { useApp } from "~/nav"
 import { nickname, Shown } from "~/names"
 import { nowOf, stageWords } from "~/now"
+import { wordsPlain } from "~/words"
 
 const FOLDED = "kiwi:now:folded"
 
@@ -83,7 +84,7 @@ export function NowCard({ channel }: { channel: Channel }) {
           </Line>
           {now.doneCount > 0 && (
             <Line label="Done today">
-              <span className="now-done">{now.done.map((t) => t.title).join(" · ")}</span>
+              <span className="now-done">{now.done.map((t) => wordsPlain(t.title, channel.nicknames)).join(" · ")}</span>
             </Line>
           )}
         </div>
