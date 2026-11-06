@@ -5,6 +5,7 @@ import { openOutside } from "~/kit/outside"
 import { wordsPlain, wordsRaw, wordsSame } from "~/words"
 import { Body } from "~/chat/body"
 import { jumpTo } from "~/chat/reply"
+import { InlineLinks, InlineText } from "~/chat/inline-text"
 import { StepAnswer, StepHow } from "~/chat/step"
 import { cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
@@ -144,7 +145,7 @@ export default function QuestionCard({ channel, ask }: { channel: Channel; ask: 
           </button>
         </div>
       )}
-      {ask.step && <StepHow step={ask.step} you={[channel.you, nickname(channel, channel.you)]} />}
+      {ask.step && <StepHow step={ask.step} you={[channel.you, nickname(channel, channel.you)]} text={(s) => <InlineText text={s} channel={channel} before={Number(ask.id)} />} />}
       {ask.step && other === null && <StepAnswer onAnswer={(reply) => actions.answerStep(channel.code, ask.id, reply)} onElse={() => setOther("")} />}
       {ask.options.length > 0 && (
         <ol className="ask-options">
@@ -154,6 +155,7 @@ export default function QuestionCard({ channel, ask }: { channel: Channel; ask: 
                 <span className="ask-letter">{String.fromCharCode(65 + i)}</span>
                 {wordsPlain(o, channel.nicknames)}
               </button>
+              <InlineLinks text={wordsRaw(o)} channel={channel} before={Number(ask.id)} />
             </li>
           ))}
         </ol>

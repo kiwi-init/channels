@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 
 import type { Step, StepReply } from "@kiwi/core/protocol.ts"
 import { Icon } from "~/kit/icons"
@@ -12,16 +12,18 @@ export function stepReplyText(reply: StepReply): string {
 
 const copy = (command: string) => copyText(command, "Command copied")
 
-export function StepHow({ step, you = [] }: { step: Step; you?: readonly string[] }) {
+const asIs = (s: string): ReactNode => s
+
+export function StepHow({ step, you = [], text = asIs }: { step: Step; you?: readonly string[]; text?: (s: string) => ReactNode }) {
   const mine = you.some((n) => n.toLowerCase() === step.needsPerson.trim().toLowerCase())
   return (
     <section className="ask-step" aria-label="Step instructions">
-      <p className="ask-why">{step.why}</p>
-      {!mine && <p className="ask-who">Needs a person: {step.needsPerson}</p>}
+      <p className="ask-why">{text(step.why)}</p>
+      {!mine && <p className="ask-who">Needs a person: {text(step.needsPerson)}</p>}
       {step.do?.length ? (
         <ol className="ask-do">
           {step.do.map((item, i) => (
-            <li key={`${i}:${item}`}>{item}</li>
+            <li key={`${i}:${item}`}>{text(item)}</li>
           ))}
         </ol>
       ) : null}
@@ -37,7 +39,7 @@ export function StepHow({ step, you = [] }: { step: Step; you?: readonly string[
       ))}
       {step.expect && (
         <p className="ask-why">
-          <span className="ask-label">Expected</span> {step.expect}
+          <span className="ask-label">Expected</span> {text(step.expect)}
         </p>
       )}
       {step.links?.length ? (

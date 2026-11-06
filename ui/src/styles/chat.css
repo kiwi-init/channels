@@ -901,7 +901,8 @@ button.msg-image-spot:hover {
   white-space: pre-wrap;
 }
 
-.ask-seq {
+.ask-seq,
+.inline-ref {
   padding: 0;
   border: 0;
   background: none;
@@ -909,6 +910,13 @@ button.msg-image-spot:hover {
   font: inherit;
   text-decoration: underline;
   cursor: pointer;
+}
+
+.ask-option-refs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-inline-start: 8px;
 }
 
 .ask-step,
