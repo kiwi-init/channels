@@ -749,7 +749,10 @@ try {
   const afterRestart = (await safe.evaluate(() => (window as unknown as { kiwi: { modDetails(n: string): Promise<unknown> } }).kiwi.modDetails("settings-mod"), null, 10_000)) as {
     settings?: { id: string; set?: boolean; value?: unknown }[];
   } | null;
-  check(afterRestart?.settings?.find((x) => x.id === "token")?.set === true && !JSON.stringify(afterRestart).includes(SECRET), "the saved secret outlasts a restart, and the details page never gets it back");
+  check(
+    afterRestart?.settings?.find((x) => x.id === "token")?.set === true && !JSON.stringify(afterRestart).includes(SECRET),
+    "the saved secret outlasts a restart, and the details page never gets it back",
+  );
   const after = holding(SECRET);
   check(!after.length, `after a restart, the secret is still in no file${after.length ? `: ${after.join(", ")}` : ""}`);
   await settingsMods(safe, "No mod runs until Channels restarts");
