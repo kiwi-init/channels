@@ -389,6 +389,12 @@ img {
   max-width: var(--wide);
 }
 
+.fig.is-missing {
+  aspect-ratio: 16 / 9;
+  border: 1px dashed var(--line-3);
+  border-radius: 14px;
+}
+
 .fig svg {
   display: block;
   width: 100%;

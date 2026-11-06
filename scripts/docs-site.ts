@@ -123,7 +123,10 @@ async function figureOf(name: string): Promise<Figure> {
   return { svg, css, live };
 }
 
+const DRAFT = process.argv.includes("--draft") || process.argv.includes("--serve");
+
 async function figureHtml(name: string): Promise<string> {
+  if (DRAFT && !existsSync(join(SITE, "figures", name, "build.js"))) return `<figure class="fig is-missing" data-figure="${name}"></figure>`;
   const { svg, live } = await figureOf(name);
   return `<figure class="fig iso" data-figure="${name}"${live ? " data-live" : ""}>${svg}</figure>`;
 }
@@ -364,12 +367,12 @@ function serve(port: number): void {
       const { pathname } = new URL(req.url);
       const preview = /^\/preview\/([a-z0-9-]+)$/.exec(pathname)?.[1];
       if (preview) {
-        const run = Bun.spawnSync(["bun", import.meta.path, "--figure", preview], { cwd: ROOT, stderr: "pipe" });
+        const run = Bun.spawnSync(["bun", import.meta.path, "--draft", "--figure", preview], { cwd: ROOT, stderr: "pipe" });
         if (run.exitCode !== 0) return new Response(run.stderr.toString(), { status: 500 });
         return new Response(run.stdout.toString(), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "content-security-policy": CSP } });
       }
       if ((pathname === "/" || pathname.startsWith("/docs")) && !extname(pathname)) {
-        const run = Bun.spawnSync(["bun", import.meta.path], { cwd: ROOT, stderr: "pipe" });
+        const run = Bun.spawnSync(["bun", import.meta.path, "--draft"], { cwd: ROOT, stderr: "pipe" });
         if (run.exitCode !== 0) return new Response(run.stderr.toString(), { status: 500 });
       }
       const file = fileFor(pathname) ?? (extname(pathname) ? null : join(SITE, "index.html"));
