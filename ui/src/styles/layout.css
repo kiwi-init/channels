@@ -126,7 +126,7 @@
   }
 
   :root[data-layout]:not([data-top]) .chan:not(.is-bare) .top-title {
-    padding-left: calc(18px + var(--ctl) + var(--l-room, 0px));
+    padding-left: calc(8px + var(--ctl) + 10px + var(--l-room, 0px));
   }
 
   :root[data-layout] .chan.is-bare .top,
