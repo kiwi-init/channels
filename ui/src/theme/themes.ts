@@ -13,7 +13,9 @@ export const isBuiltin = (t: ColorTheme): boolean => t.id === CHANNELS_OLED.id |
 
 const OURS = [CHANNELS_OLED.id, CHANNELS_DARK.id, CHANNELS_LIGHT.id]
 
-export const wantsRex = (p: Owned): boolean => [p.darkTheme, p.lightTheme].some((id) => !OURS.includes(id) && !p.customThemes.some((c) => c.id === id))
+export const FROM_FOLDER = "file:"
+
+export const wantsRex = (p: Owned): boolean => [p.darkTheme, p.lightTheme].some((id) => !OURS.includes(id) && !id.startsWith(FROM_FOLDER) && !p.customThemes.some((c) => c.id === id))
 
 export function customColors(t: Pick<CustomTheme, "appearance" | "base">): Colors {
   const b = t.base
@@ -78,6 +80,14 @@ export function savedTheme(p: Owned, t: CustomTheme): Owned {
     customThemes,
     darkTheme: t.appearance === "dark" ? t.id : p.darkTheme === t.id ? CHANNELS_OLED.id : p.darkTheme,
     lightTheme: t.appearance === "light" ? t.id : p.lightTheme === t.id ? CHANNELS_LIGHT.id : p.lightTheme,
+  }
+}
+
+export function movedTheme(p: Owned, id: string, to: string): Owned {
+  return {
+    customThemes: p.customThemes.filter((c) => c.id !== id),
+    darkTheme: p.darkTheme === id ? to : p.darkTheme,
+    lightTheme: p.lightTheme === id ? to : p.lightTheme,
   }
 }
 

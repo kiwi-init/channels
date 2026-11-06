@@ -465,6 +465,10 @@ export interface KiwiBridge {
   /** What this app can run: its UI contract version and the channel calls it serves, so a newer UI hides what it can't do. */
   capabilities(): Promise<{ contract: string; channelCalls: string[] }>;
   onAccent(cb: (color: string | null) => void): () => void;
+  folderThemes(): Promise<FolderThemesView>;
+  onFolderThemes(cb: (view: FolderThemesView) => void): () => void;
+  saveFolderTheme(file: string | null, theme: FolderThemeInput): Promise<{ file: string; view: FolderThemesView }>;
+  deleteFolderTheme(file: string): Promise<FolderThemesView>;
   setPersonalities(list: Personality[]): Promise<void>;
   contextLine(): Promise<"on" | "off" | null>;
   setContextLine(to: "on" | "off"): Promise<"on" | "off" | null>;
@@ -500,6 +504,24 @@ export type UpdateCheckView = UpdateView | { state: "current"; version: string }
 export interface MovedView {
   from?: string;
   to: string;
+}
+
+export type ThemeColour = "background" | "text" | "accent" | "success" | "warning" | "danger" | "info" | "red" | "yellow" | "green" | "cyan" | "blue" | "magenta";
+
+export interface FolderThemeInput {
+  name: string;
+  appearance: "dark" | "light";
+  base: Partial<Record<ThemeColour, string>> & { background: string; text: string; accent: string };
+}
+
+export interface FolderThemeView extends FolderThemeInput {
+  file: string;
+}
+
+export interface FolderThemesView {
+  dir: string;
+  themes: FolderThemeView[];
+  skipped: { file: string; why: string }[];
 }
 
 declare global {

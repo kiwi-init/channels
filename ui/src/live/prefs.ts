@@ -5,6 +5,7 @@ import { setAppearance, setTextFont, setTextSize, useAppearance, useTextFont, us
 import { calmMinutes, DEFAULT_CALM } from "~/calm/idle"
 import type { CustomTheme, Prefs } from "~/model"
 import { cleanFolders } from "~/shell/rail-items"
+import { folderThemes } from "~/theme/folder"
 import { cleanThemes, deletedTheme, movedDark, savedTheme, type ThemePrefs } from "~/theme/themes"
 
 type Own = Pick<Prefs, "muted" | "enterSends" | "darkTheme" | "lightTheme" | "customThemes" | "folders" | "calm">
@@ -74,7 +75,7 @@ export const ownPrefs = (): Own => readOwn()
 export function storedThemePrefs(): ThemePrefs {
   const mode = document.documentElement.dataset.theme
   const { darkTheme, lightTheme, customThemes } = readOwn()
-  return { theme: mode === "dark" || mode === "light" ? mode : "system", darkTheme, lightTheme, customThemes }
+  return { theme: mode === "dark" || mode === "light" ? mode : "system", darkTheme, lightTheme, customThemes: [...customThemes, ...folderThemes()] }
 }
 
 export function usePrefs(): Prefs {

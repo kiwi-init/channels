@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 
 import { showCalm } from "~/calm/idle"
+import { showFolder } from "~/theme/folder"
 import { rememberOnboarded } from "~/start/onboarded"
 import { DEMO_PREFS } from "~/demo/data"
 import { DEMO_HANDLES, navWithDemoHandles, renamedAgents, withDemoHandles } from "~/demo/handles"
@@ -27,6 +28,7 @@ const seeded = shot?.nav?.where
 if (shot?.docs !== undefined && shot.channel && seeded && seeded.kind !== "dm" && seeded.kind !== "theirs") seedThreadDoc(shot.channel, docThread(seeded), shot.docs, shot.streams)
 
 if (shot?.calm) showCalm()
+if (shot?.folder) showFolder(shot.folder)
 if (!shot?.onboarding) rememberOnboarded(false)
 
 const SWITCH_AFTER_MS = 400

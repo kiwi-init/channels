@@ -1,3 +1,4 @@
+import type { FolderThemesView } from "@kiwi/secrets/secrets.ts"
 import type { Scenario } from "~/demo/provider"
 import type { Prefs } from "~/model"
 import type { Nav } from "~/nav"
@@ -11,6 +12,7 @@ export interface Shot {
   streams?: boolean
   calm?: true
   onboarding?: true
+  folder?: FolderThemesView
 }
 
 const kiwi = (nav: Partial<Nav> = {}): Shot => ({ scenario: "full", channel: "kiwi", nav })
@@ -112,6 +114,20 @@ export const SHOTS: Record<string, Shot> = {
     ...kiwi({ page: "settings", section: "appearance" }),
     prefs: {
       customThemes: [{ id: "mine-dusk", name: "Dusk", appearance: "dark", base: { background: "#15131a", text: "#e8e2f0", accent: "#f0a86b" } }],
+    },
+  },
+  "settings-themes-folder": {
+    ...kiwi({ page: "settings", section: "appearance" }),
+    prefs: {
+      customThemes: [{ id: "mine-dusk", name: "Dusk", appearance: "dark", base: { background: "#15131a", text: "#e8e2f0", accent: "#f0a86b" } }],
+    },
+    folder: {
+      dir: "/Users/ana/.kiwi/themes",
+      themes: [
+        { file: "ember.json", name: "Ember", appearance: "dark", base: { background: "#1a1210", text: "#f2e6dc", accent: "#ff7a45" } },
+        { file: "sea-glass.json", name: "Sea glass", appearance: "light", base: { background: "#f2f7f6", text: "#12211e", accent: "#2a9d8f" } },
+      ],
+      skipped: [{ file: "neon.json", why: 'needs "appearance": "dark" or "light"' }],
     },
   },
   "theme-editor": kiwi({ page: "settings", section: "appearance" }),

@@ -1,4 +1,4 @@
-import type { KeysPort, KiwiBridge, StoreSnapshot, UiUpdateView, UpdateView } from "./bridge.ts";
+import type { FolderThemesView, KeysPort, KiwiBridge, StoreSnapshot, UiUpdateView, UpdateView } from "./bridge.ts";
 import type { TextStep } from "./text-size.ts";
 
 export type Call = { [K in keyof KiwiBridge]: KiwiBridge[K] extends (...args: never[]) => Promise<unknown> ? K : never }[keyof KiwiBridge];
@@ -17,6 +17,7 @@ export interface Pushes {
   frost: boolean;
   accent: string | null;
   uiUpdate: UiUpdateView | null;
+  folderThemes: FolderThemesView;
 }
 
 export type Push = keyof Pushes;
@@ -107,6 +108,10 @@ export function makeBridge(t: BridgeTransport): KiwiBridge {
     getAccentColor: () => t.call("getAccentColor"),
     capabilities: () => t.call("capabilities"),
     onAccent: (cb) => t.listen("accent", cb),
+    folderThemes: () => t.call("folderThemes"),
+    onFolderThemes: (cb) => t.listen("folderThemes", cb),
+    saveFolderTheme: (file, theme) => t.call("saveFolderTheme", file, theme),
+    deleteFolderTheme: (file) => t.call("deleteFolderTheme", file),
     setPersonalities: (list) => t.call("setPersonalities", list),
     contextLine: () => t.call("contextLine"),
     setContextLine: (to) => t.call("setContextLine", to),
