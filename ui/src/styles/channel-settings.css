@@ -211,6 +211,28 @@
   text-underline-offset: 3px;
 }
 
+.cset-select {
+  position: relative;
+  display: block;
+  width: 11rem;
+}
+
+.cset-select select {
+  appearance: none;
+  width: 100%;
+  padding-right: 32px;
+  cursor: pointer;
+}
+
+.cset-select .icon {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  color: var(--ink-2);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
 .cset-prefix {
   display: inline-flex;
   align-items: center;
