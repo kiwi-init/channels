@@ -2,6 +2,42 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 2026.11.11 — 2026-11-06
+
+- **release: the stamp PR runs the release's Mac tests and packing before the tag (T5174)** ([#1752](https://github.com/kiwi-init/channels/pull/1752))
+- **Calm: the idle screen is Jow's Token Meadow, lit by the person's clock (#5411)** ([#1754](https://github.com/kiwi-init/channels/pull/1754))
+- **search: seal the index every 30 s, not on every feed, and end the idle worker** ([#1753](https://github.com/kiwi-init/channels/pull/1753))
+- **Calm: the still meadow frame is drawn again over the next frames** ([#1755](https://github.com/kiwi-init/channels/pull/1755))
+- **Composer: back in every thread, floating and frosted; sends land in the doc (T5115)** ([#1747](https://github.com/kiwi-init/channels/pull/1747))
+- **Composer: a file chip's name sits on the spacing scale (24px, not 26px)** ([#1758](https://github.com/kiwi-init/channels/pull/1758))
+- **UI memory: a 400-message window with seamless scrollback, two warm channels, light Home, images held once** ([#1757](https://github.com/kiwi-init/channels/pull/1757))
+- **ui: chat images show from a copy sized to their box, the original only in the viewer** ([#1756](https://github.com/kiwi-init/channels/pull/1756))
+- **Calm: the meadow stops drawing while Calm fades out, and its frame-rate verdict carries across opens** ([#1760](https://github.com/kiwi-init/channels/pull/1760))
+- **Edit opens in the composer for every message, and in the panel you edit from (T5115)** ([#1759](https://github.com/kiwi-init/channels/pull/1759))
+- **Composer: Enter right after a paste sends the image with the line** ([#1761](https://github.com/kiwi-init/channels/pull/1761))
+- **ui-restore-place: read the restored place once the feed has settled, 1.2 s after load** ([#1762](https://github.com/kiwi-init/channels/pull/1762))
+- **Seats: a resumed session stores its new pid on its seat, so no other session takes it (#1676)** ([#1765](https://github.com/kiwi-init/channels/pull/1765))
+- **Seats: a session whose seat another session took is told so (#1676)** ([#1766](https://github.com/kiwi-init/channels/pull/1766))
+- **Names: acks, read receipts, join pings and decision cards show nicknames, not handles (#1681)** ([#1767](https://github.com/kiwi-init/channels/pull/1767))
+- **Sidebar: a DM with an agent that left sits under Agents, greyed as left** ([#1768](https://github.com/kiwi-init/channels/pull/1768))
+- **Calm: one slow start no longer keeps the meadow still for the whole session** ([#1771](https://github.com/kiwi-init/channels/pull/1771))
+- **Status: an idle Claude seat with no hook listener says not listening (#1676)** ([#1770](https://github.com/kiwi-init/channels/pull/1770))
+- **Composer: a half-typed draft survives the window reloading** ([#1772](https://github.com/kiwi-init/channels/pull/1772))
+- **Calm: opening it from the palette closes the palette first** ([#1773](https://github.com/kiwi-init/channels/pull/1773))
+- **Composer: an image added while editing doesn't ride along with the next message** ([#1774](https://github.com/kiwi-init/channels/pull/1774))
+- **Editing an old message loads it whole first, so saving never cuts it for everyone (#5717)** ([#1775](https://github.com/kiwi-init/channels/pull/1775))
+- **Modals: forms and copy modals close only from X and Esc; a drag out of the box never closes one (#1764)** ([#1776](https://github.com/kiwi-init/channels/pull/1776))
+- **ui: the sidebar's update cards load lazily, so the first load is back under budget** ([#1780](https://github.com/kiwi-init/channels/pull/1780))
+- **Profile: an agent's handle shows in its profile, with a button that copies it (#1745)** ([#1777](https://github.com/kiwi-init/channels/pull/1777))
+- **Nicknames: a check fails the build when a screen shows people an agent's handle (#1763, part 1)** ([#1778](https://github.com/kiwi-init/channels/pull/1778))
+- **Onboarding: the Calm meadow, what stays encrypted, and a typed "Channels is not a harness" (T5712)** ([#1782](https://github.com/kiwi-init/channels/pull/1782))
+- **Calm: the app's own Reduce motion keeps it still, not only the system's** ([#1781](https://github.com/kiwi-init/channels/pull/1781))
+- **Asks: a question's text, options and answer are Words, so showing them raw fails the build (#1763, part 2)** ([#1784](https://github.com/kiwi-init/channels/pull/1784))
+- **Onboarding gate test: who sees it and who never does (T5931)** ([#1785](https://github.com/kiwi-init/channels/pull/1785))
+- **People lists you again, first, and your row opens your profile (T5960)** ([#1786](https://github.com/kiwi-init/channels/pull/1786))
+- **Messages: a message's text is Words, so showing it raw fails the build (#1763, part 3)** ([#1787](https://github.com/kiwi-init/channels/pull/1787))
+- **Desktop: the tray icon shows the unread count, from the same count as the taskbar badge (#1746)** ([#1783](https://github.com/kiwi-init/channels/pull/1783))
+
 ## 2026.11.10 — 2026-11-05
 
 - **Docs: the owner's app prunes stray doc ids and compacts done tasks' docs (T1430)** ([#1730](https://github.com/kiwi-init/channels/pull/1730))
