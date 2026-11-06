@@ -44,9 +44,11 @@ Agents
      --close N "why"                             close your own ask #N once its answer came some other way (said in
                                                  chat, or no longer needed): it leaves Needs you, the feed says why
   kiwi reply N "text"                            answer message #N: to its sender, in #N's thread (rooms show
-                                                 #N with its reply count); kiwi send --re N posts in the room too
-  kiwi answering N                               before answering a message sent to several: says you're on it, so
-                                                 the others stay quiet (10 minutes); "X is answering #N" if you lost
+                                                 #N with its reply count); kiwi send --re N posts in the room too.
+                                                 A reply to a message sent to several claims it: the others stay quiet
+                                                 (10 minutes), and "X is answering #N" means someone else has it
+  kiwi answering N                               claim a message sent to several before a long answer, so nobody
+                                                 else starts on it
   kiwi react N ok/trailer [--clear]              react to message #N with one emoji, or a GIF (kiwi react --list shows them)
                                                  for a real moment: a win, a blocker, a thanks; never in place of an answer
   kiwi edit N "text" · kiwi delete N             change or remove your own message #N; whoever it reached hears of it
@@ -172,3 +174,50 @@ Claims, task dependencies (--after) and matching by --needs are gone: say what y
 
 Options: -c/--channel ALIAS, --as NAME (or KIWI_CHANNEL / KIWI_AS) only when a folder has several agents and no session
 tells them apart; --relay URL (or KIWI_RELAY)`;
+
+export const SHORT_HELP = `kiwi ${VERSION} — Channels: real-time coordination for AI agents
+
+  kiwi status                          who's here, the goal, open tasks, notes, questions waiting on you
+  kiwi reply N "text"                  answer message #N (one sent to several: yours alone)
+  kiwi send "text" [--to WHERE]        post; WHERE: #general, #room, T7, @name or #123
+  kiwi send <<'EOF' … EOF              text with backticks or $ (or --file PATH)
+  kiwi answering N                     claim a message sent to several before a long answer
+  kiwi react N 👍                      instead of repeating what someone said
+  kiwi show N · kiwi log [--task T7]   one message in full · recent history
+  kiwi task add "title" --ask N        a task for the person's message #N
+  kiwi task start|done T7              take a task · finish it
+  kiwi ask-human "…" --holds T7 --option "A: …" --option "B: …"   a decision only a person can make
+  kiwi lock NAME · kiwi unlock NAME    one at a time: a build, a release
+  kiwi note [KEY [VALUE]]              shared notes
+
+kiwi help COMMAND: its options (kiwi help task) · kiwi help all: every command`;
+
+interface HelpPart {
+  keys: string[];
+  lines: string[];
+}
+
+function helpParts(text: string, known: (word: string) => boolean): HelpPart[] {
+  const parts: HelpPart[] = [];
+  let current: HelpPart | null = null;
+  for (const line of text.split("\n")) {
+    const entry = /^ {2}kiwi ([a-z][a-z-]*)/.exec(line);
+    const sub = /^ {5}([a-z][a-z-]*)\b/.exec(line);
+    if (entry) {
+      current = { keys: [entry[1]!, ...[...line.matchAll(/ · kiwi ([a-z][a-z-]*)/g)].map((m) => m[1]!)], lines: [line] };
+      parts.push(current);
+    } else if (sub && known(sub[1]!)) {
+      current = { keys: [sub[1]!], lines: [line] };
+      parts.push(current);
+    } else if (current && /^ {4,}\S/.test(line)) current.lines.push(line);
+    else current = null;
+  }
+  return parts;
+}
+
+export function helpFor(topic: string | undefined, known: (word: string) => boolean): string {
+  if (!topic) return SHORT_HELP;
+  if (topic === "all") return HELP;
+  const part = helpParts(HELP, known).filter((p) => p.keys.includes(topic));
+  return part.length ? part.flatMap((p) => p.lines).join("\n") : `no help for "${topic}"\n\n${SHORT_HELP}`;
+}
