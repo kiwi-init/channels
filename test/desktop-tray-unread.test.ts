@@ -31,8 +31,8 @@ describe("the tray's unread mark (#1746)", () => {
     expect(() => unreadSvg("not an svg", "1")).toThrow("the tray icon isn't an SVG");
   });
 
-  test("the Mac has its unread template next to the plain one", () => {
-    expect(existsSync(join(assets, "trayUnreadTemplate.png"))).toBe(true);
+  test("the Mac has its unread template next to the plain one, the @2x files the tray loads", () => {
+    expect(existsSync(join(assets, "trayTemplate@2x.png"))).toBe(true);
     expect(existsSync(join(assets, "trayUnreadTemplate@2x.png"))).toBe(true);
   });
 });

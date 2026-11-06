@@ -515,8 +515,8 @@ same gestures, the same speed. The owner asked for it, so on the phone it wins o
 - **Type, colour, faces.** SF Pro through Dynamic Type (`Step`). `Tone` tokens, the dark
   canvas true black, `bubbleMine` the accent and `bubbleThem` Messages grey. Agents wear their
   harness logo; people their initials. A channel's face is its desktop icon, never a
-  phone-only one: the prism glass head its owner picked (the twelve in `assets/avatars`, as
-  vectors), its emoji or its picture, and with none the head the desktop picks from its title.
+  phone-only one: the prism glass head its owner picked (one of the twelve in the
+  app's asset catalog), its emoji or its picture, and with none the head the desktop picks from its title.
 - **One list, like Messages.** Every channel's #general (a group row: the channel icon, a
   `doing` dot when an agent works) and its lead chat (the lead's face; " · onemouse" and a
   small channel badge when you have two or more channels; always there, so you can write to
