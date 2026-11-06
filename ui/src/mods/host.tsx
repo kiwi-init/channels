@@ -26,6 +26,7 @@ export interface RunningMod {
   failed: string | null
   side: { title: string; height: number } | null
   actions: ModCommand[]
+  commands: string[]
 }
 
 interface Frame {
@@ -59,6 +60,12 @@ export const useModsVersion = (): number => useSyncExternalStore(subscribe, () =
 export const modsNow = (): ModView[] => state.mods
 
 export const runningMod = (name: string): RunningMod | undefined => state.running.get(name)
+
+export function showMods(list: ModView[], running: RunningMod[] = []): void {
+  state.mods = list
+  for (const r of running) state.running.set(r.name, r)
+  changed()
+}
 
 const allows = (mod: ModView | undefined, need: string): mod is ModView => !!mod && mod.state === "on" && mod.needs.includes(need)
 
@@ -171,6 +178,7 @@ async function onMessage(e: MessageEvent): Promise<void> {
       return
     case "commands":
       bindCommands(name, m.list)
+      update(name, { commands: m.list.map((c) => c.title) })
       return
     case "actions":
       update(name, { actions: m.list })
@@ -243,7 +251,7 @@ function startFrames(layer: HTMLElement): void {
     el.src = FRAME_URL
     frames.set(key, { name, surface, el })
     bootStarted(key, name, hash)
-    if (!state.running.has(name)) state.running.set(name, { name, title: null, failed: null, side: null, actions: [] })
+    if (!state.running.has(name)) state.running.set(name, { name, title: null, failed: null, side: null, actions: [], commands: [] })
     layer.append(el)
   }
 }

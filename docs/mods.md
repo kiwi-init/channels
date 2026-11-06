@@ -16,14 +16,15 @@ Mods run in the desktop app, on a Mac and on Linux.
 kiwi mod dev standup-notes
 ```
 
-It creates `~/.kiwi/mods/standup-notes/` with a starter, then rebuilds it on every save, and the app reloads it:
+It creates `~/.kiwi/mods/standup-notes/` with a starter and an `icon.svg`, then rebuilds it on every save, and the app reloads it:
 
 ```json
 {
   "name": "standup-notes",
   "version": "0.1.0",
   "shell": "^3.6",
-  "needs": ["panel"]
+  "needs": ["panel"],
+  "icon": "icon.svg"
 }
 ```
 
@@ -54,6 +55,8 @@ Open a channel, press ⌘K and pick **Standup Notes** under Mods. Run `kiwi mod 
 | `version` | A version like `1.0.0` |
 | `shell` | The app versions it works with, like `^3.6`. An app it doesn't fit leaves it off and says why. |
 | `needs` | What it asks you for: `panel`, `command`, `render:<kind>`, and `net:<host>` for each web host it talks to |
+| `icon` | Optional: an `.svg` or `.png` in its folder, up to 64 KB. The app shows it as a picture, so an SVG's scripts never run. Without one, the mod gets its first letter. |
+| `author` | Optional: who made it, up to 100 characters |
 | `skills` | Optional: skills it gives every agent. See [Skills](#skills) |
 
 A `net:` host is exact: `net:api.linear.app` lets it reach `https://api.linear.app` and nothing else, not even another subdomain.
@@ -100,6 +103,8 @@ With `"needs": ["panel", "command", "net:example.com"]`, that's a whole mod.
 ## Turning one on
 
 The first time the app sees a mod that asks for something, it asks you: a note says the mod wants to run, ⌘K lists **Set up <name>**, and its panel shows what it asks for, in words. **Turn on** approves all of it, and nothing of the mod runs before that. When an update asks for more, it stops and asks again. A mod that asks for nothing runs without asking.
+
+Settings → Mods lists every mod; click one for its page: where it came from and at which commit, when it was added and changed, its size, what it may do and adds, and its `README.md`.
 
 The app keeps your approvals on this computer. There's no off switch in the app yet: to stop a mod, remove it.
 

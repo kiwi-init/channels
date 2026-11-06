@@ -1,5 +1,5 @@
-import { spawnSync } from "node:child_process";
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -68,7 +68,11 @@ setInterval(() => {
 
 function writeMod(version: number): void {
   mkdirSync(folder, { recursive: true });
-  writeFileSync(join(folder, "mod.json"), JSON.stringify({ name: "probe-mod", version: `1.0.${version}`, shell: "^3.3", needs: ["panel", "sidebar", "command", "message-action", "net:example.com"] }));
+  writeFileSync(
+    join(folder, "mod.json"),
+    JSON.stringify({ name: "probe-mod", version: `1.0.${version}`, shell: "^3.3", needs: ["panel", "sidebar", "command", "message-action", "net:example.com"], icon: "icon.svg" }),
+  );
+  writeFileSync(join(folder, "icon.svg"), ICON);
   writeFileSync(
     join(folder, "index.tsx"),
     `import { useState } from "react"
@@ -143,6 +147,23 @@ if (surface === "main") void probe()
   );
 }
 
+const botHome = join(root, "bot");
+
+function bot(args: string[]): Promise<string> {
+  mkdirSync(join(botHome, "bin"), { recursive: true });
+  for (const opener of ["open", "xdg-open"]) {
+    writeFileSync(join(botHome, "bin", opener), "#!/bin/sh\nexit 0\n");
+    chmodSync(join(botHome, "bin", opener), 0o755);
+  }
+  const env = { KIWI_MODEL: "claude-sonnet-5-5", ...process.env, KIWI_HOME: join(botHome, "home"), CLAUDE_CONFIG_DIR: join(botHome, "no-claude"), PATH: `${join(botHome, "bin")}:${process.env.PATH}` };
+  const p = spawn("bun", ["src/cli/main.ts", ...args], { cwd: join(import.meta.dir, "..", ".."), env });
+  let out = "";
+  const on = (b: Buffer) => void (out += b.toString("utf8"));
+  p.stdout.on("data", on);
+  p.stderr.on("data", on);
+  return new Promise((ok, fail) => p.on("exit", (code) => (code === 0 ? ok(out) : fail(new Error(`kiwi ${args.join(" ").slice(0, 60)} exited ${code}: ${out.trim().split("\n").pop()}`)))));
+}
+
 const clickText = ({ selector, text }: { selector: string; text: string }): boolean => {
   const el = [...document.querySelectorAll<HTMLElement>(selector)].find((e) => (e.textContent ?? "").includes(text) && e.getClientRects().length > 0);
   el?.click();
@@ -157,6 +178,104 @@ const step = (what: string, ms: number, act: () => Promise<boolean>) =>
     ),
   );
 
+async function letBotIn(d: Driver): Promise<void> {
+  await step("Invite people", 10_000, () => d.evaluate(clickText, { selector: "button", text: "Invite people" }, 2_000));
+  const code = await until("the invite code", 15_000, () =>
+    d.evaluate(() => /mc2-[\w-]+/.exec([...document.querySelectorAll("[role=dialog] code")].map((c) => c.textContent ?? "").join(" "))?.[0] ?? null, null, 2_000),
+  );
+  await step("the invite closes", 10_000, () =>
+    d.evaluate(
+      () => {
+        const open = document.querySelector<HTMLElement>('dialog[open][aria-label="Invite people"]');
+        open?.querySelector<HTMLElement>('button[aria-label="Close"]')?.click();
+        return !open;
+      },
+      null,
+      2_000,
+    ),
+  );
+  let joined: true | string | null = null;
+  void bot(["join", code, "mods", "--relay", `${RELAY}/`, "--as", "bot"]).then(
+    () => (joined = true),
+    (e: unknown) => (joined = String(e)),
+  );
+  await until("letting the bot in", 90_000, async () => {
+    if (joined !== null) return joined;
+    await d
+      .evaluate(
+        () => {
+          const views = document.querySelector('nav[aria-label="Views"]');
+          const needs = [...(views?.querySelectorAll("button") ?? [])].find((b) => (b.textContent ?? "").startsWith("Needs you"));
+          if (needs && needs.getAttribute("aria-pressed") !== "true") needs.click();
+          [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => (b.textContent ?? "").startsWith("It matches: let") && !b.disabled)?.click();
+          return true;
+        },
+        null,
+        2_000,
+      )
+      .catch(() => false);
+    await later(250);
+    return null;
+  }).then((r) => {
+    if (r !== true) throw new Error(`the bot couldn't join: ${r}`);
+  });
+  await step("back to #general", 10_000, () => d.evaluate(clickText, { selector: 'nav[aria-label="Views"] button', text: "general" }, 2_000));
+}
+
+async function whileAway(d: Driver, palette: () => Promise<boolean>): Promise<void> {
+  await letBotIn(d);
+  const away = [
+    {
+      how: "with another app in front",
+      put: async () => {
+        spawnSync("open", ["-a", "Finder", root]);
+        return until("another app in front", 10_000, async () => (front().includes("Channels") ? null : true)).catch(() => false);
+      },
+    },
+    {
+      how: "minimized",
+      put: async () => {
+        await d.main("minimizeForTest");
+        const shown = await until("the window minimized", 10_000, async () => {
+          const w = (await d.main("window")) as { minimized?: unknown };
+          return w.minimized === true ? w : null;
+        }).catch(async () => d.main("window"));
+        console.log(`minimized: the window says ${JSON.stringify(shown)}`);
+        return (shown as { minimized?: unknown }).minimized === true;
+      },
+    },
+  ];
+  for (const { how, put } of away) {
+    check(await put(), `the window can be put away, ${how}${front()}`);
+    await later(10_000);
+    const text = `from the bot, ${how}, at ${Date.now()}`;
+    const sending = Date.now();
+    await bot(["-c", "mods", "--as", "bot", "send", text]);
+    const sent = Date.now();
+    const shown = await until(`the bot's message, ${how}`, 20_000, () =>
+      d.evaluate((t) => ([...document.querySelectorAll(".main article.msg")].some((m) => (m.textContent ?? "").includes(t)) ? true : null), text, 2_000),
+    ).then(
+      () => Date.now() - sent,
+      () => null,
+    );
+    console.log(`${how}: the bot's message showed ${shown ?? "never"} ms after its send returned (the send took ${sent - sending} ms)${front()}`);
+    check(shown !== null, `a message from another member shows in the window ${how}`);
+    const before = (await heard(d)).filter((m) => m["command"] === "hi").length;
+    await step(`⌘K ${how}`, 10_000, palette);
+    await step(`the mod's command, typed ${how}`, 10_000, () => d.evaluate(fillIn, { selector: ".palette-input", value: "Say hi" }, 2_000));
+    await step(`the mod's command, ${how}`, 10_000, () => d.evaluate(clickText, { selector: ".palette-item", text: "Say hi from the probe mod" }, 2_000));
+    const ran = Date.now();
+    const answered = await until(`the mod's answer, ${how}`, 10_000, async () => ((await heard(d)).filter((m) => m["command"] === "hi").length > before ? true : null)).then(
+      () => Date.now() - ran,
+      () => null,
+    );
+    console.log(`${how}: the mod's frame answered its command ${answered ?? "never"} ms after it was picked${front()}`);
+    check(answered !== null, `a mod's frame answers ${how}`);
+  }
+  await d.main("unminimizeForTest");
+  await d.main("activate");
+}
+
 const pageNow = (): Record<string, unknown> => ({
   palette: !!document.querySelector(".palette-box"),
   chan: document.querySelector(".chan")?.className ?? null,
@@ -166,6 +285,13 @@ const pageNow = (): Record<string, unknown> => ({
   height: innerHeight,
   text: document.body.innerText.slice(0, 1_500),
 });
+
+function front(): string {
+  if (process.platform !== "darwin") return "";
+  const asn = (spawnSync("lsappinfo", ["front"], { encoding: "utf8" }).stdout ?? "").trim();
+  const info = asn ? (spawnSync("lsappinfo", ["info", "-only", "name", asn], { encoding: "utf8" }).stdout ?? "") : "";
+  return `; in front: ${/"LSDisplayName"="([^"]*)"/.exec(info)?.[1] ?? (asn || "nothing")}`;
+}
 
 type Said = Record<string, unknown>;
 const heard = (d: Driver): Promise<Said[]> =>
@@ -193,11 +319,13 @@ async function howHeard(d: Driver, why: string): Promise<void> {
     (e: unknown) => String(e),
   );
   console.log(
-    `${why}: the page answered in ${Date.now() - start} ms; heard ${JSON.stringify(kinds)} (${bytes} bytes); frames ${JSON.stringify(frames)}; frame messages ${JSON.stringify(types)}; the app's main ${main}`,
+    `${why}: the page answered in ${Date.now() - start} ms; heard ${JSON.stringify(kinds)} (${bytes} bytes); frames ${JSON.stringify(frames)}; frame messages ${JSON.stringify(types)}; the app's main ${main}${front()}`,
   );
 }
 
 const MESSAGE_LINK = "https://example.com/?message-link";
+const ICON_RAN = `top.__iconRan = 1; parent.postMessage({ kiwiProbe: { iconRan: true } }, "*")`;
+const ICON = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" onload='${ICON_RAN}'><script>${ICON_RAN}</script><rect width="64" height="64" rx="14" fill="#9188c4"/></svg>`;
 const CRASH = "crash-mod fails on purpose";
 
 function writeCrashMod(): void {
@@ -359,11 +487,14 @@ try {
   check(String(first["relayByProxy"]).startsWith("blocked"), "the mod can't reach the relay through the app either");
   await step("the mod's panel title", 10_000, () => d.evaluate(clickText, { selector: ".panel .panel-title", text: "Probe mod" }, 2_000));
   await shot("mod-panel");
+  const sideAsked = Date.now();
+  const sideTops = new Set<string>();
   const sideTop = await until("the mod's sidebar section", 15_000, async () => {
     const t = await d.evaluate(topAt, ".side .mod-side-slot", 2_000);
-    return t.found ? t : null;
+    sideTops.add(JSON.stringify(t));
+    return t.found && t.top === "frame probe-mod in the sidebar" ? t : null;
   }).catch(() => null);
-  console.log(`at the sidebar section: ${JSON.stringify(sideTop)}`);
+  console.log(`at the sidebar section after ${Date.now() - sideAsked} ms: ${JSON.stringify(sideTop)}; seen there: ${[...sideTops].join(", ")}`);
   check(sideTop?.top === "frame probe-mod in the sidebar", "a mod that asked for a sidebar section shows it, drawn by its own frame");
   const titles = await d.evaluate(() => [...document.querySelectorAll(".side .mod-side h3")].map((h) => h.textContent), null, 2_000);
   check(titles.includes("Probe side") && !titles.includes("Quiet side"), "a mod that didn't ask for a sidebar section gets none, even when it posts one");
@@ -476,6 +607,7 @@ try {
   check(opens.includes(MESSAGE_LINK), "with a mod running, a Ctrl-clicked link in a message still opens in the browser");
   check(!opens.some((u) => /forged|mod-self-nav/.test(u)), "nothing the mod forged or navigated to opened in the browser");
   check(app.exitCode === null && app.signalCode === null, "the app is still running after the mod's forged events");
+  if (process.platform === "darwin") await whileAway(d, palette);
   writeCrashMod();
   const crashed = await until("crash-mod switched off", 30_000, async () => (await modsNow(d)).find((m) => m.name === "crash-mod" && m.state === "off") ?? null).catch(() => null);
   console.log(`crash-mod: ${JSON.stringify(crashed)}`);
@@ -485,6 +617,29 @@ try {
   await d.main("activate").catch(() => null);
   await later(1_000);
   await shot("settings-mods");
+  const icon = await until("probe-mod's icon in Settings → Mods", 15_000, () =>
+    d
+      .evaluate(
+        () => {
+          const img = document.querySelector<HTMLImageElement>(".set-main img.mod-icon");
+          if (!img?.complete || img.naturalWidth === 0) return null;
+          return {
+            blob: img.src.startsWith("blob:"),
+            inline: document.querySelectorAll(".set-main svg script, .set-main svg[onload]").length,
+            ran: (window as unknown as { __iconRan?: unknown }).__iconRan ?? null,
+          };
+        },
+        null,
+        2_000,
+      )
+      .catch(() => null),
+  ).catch(() => null);
+  console.log(`probe-mod's icon: ${JSON.stringify(icon)}`);
+  check(!!icon?.blob && icon.inline === 0 && icon.ran === null && !(await heard(d)).some((m) => m["iconRan"]), "a mod's SVG icon shows as an image from a blob, and its script and onload never run");
+  await step("probe-mod's details", 10_000, () => d.evaluate(clickText, { selector: ".set-main .mod-open", text: "probe-mod" }, 2_000));
+  await step("its details page says what it may do", 10_000, () => d.evaluate(() => (document.querySelector(".set-main")?.textContent ?? "").includes("What it may do"), null, 2_000));
+  await later(500);
+  await shot("settings-mod-details");
   d.close();
   await stop(app);
   writeFileSync(join(root, ".kiwi", "mods", ".safe-mode"), "");
@@ -506,6 +661,7 @@ try {
 } finally {
   await stop(app);
   await daemonStop(join(root, ".kiwi"), 2_000).catch(() => false);
+  await daemonStop(join(botHome, "home"), 2_000).catch(() => false);
   relay.kill();
   for (const f of files(join(root, "home"))) {
     if (!/main\.log$/.test(f)) continue;
