@@ -3,7 +3,7 @@ import type { Node } from "prosemirror-model"
 import { Plugin, PluginKey } from "prosemirror-state"
 import { Decoration, DecorationSet, type EditorView } from "prosemirror-view"
 
-import { openWebLink } from "~/chat/menus"
+import { openOutside } from "~/kit/outside"
 
 export interface DocLink {
   from: number
@@ -127,7 +127,7 @@ function opensOnPlainClick(view: EditorView, target: Element): boolean {
   return !!block && !block.classList.contains("is-mine")
 }
 
-export function linksPlugin(open: (url: string) => void = openWebLink): Plugin<LinkState> {
+export function linksPlugin(open: (url: string) => void = openOutside): Plugin<LinkState> {
   return new Plugin<LinkState>({
     key,
     state: {

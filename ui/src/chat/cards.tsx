@@ -1,5 +1,6 @@
 import { cx, Dot, STATUS_WORDS } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
+import { OutsideLink } from "~/kit/outside"
 import type { Channel, PullRequest } from "~/model"
 import { useAct } from "~/nav"
 import { nickname, Shown } from "~/names"
@@ -29,7 +30,7 @@ const CHECKS: Record<PullRequest["checks"], string> = { pass: "checks passed", f
 
 export function PrChip({ pr }: { pr: PullRequest }) {
   return (
-    <a className={cx("chip is-pr", `is-${pr.state}`)} href={pr.url} target="_blank" rel="noreferrer noopener">
+    <OutsideLink className={cx("chip is-pr", `is-${pr.state}`)} href={pr.url}>
       <Icon name="pr" size={14} />
       <span className="chip-id">#{pr.number}</span>
       <span className="chip-title">{pr.title}</span>
@@ -58,6 +59,6 @@ export function PrChip({ pr }: { pr: PullRequest }) {
           {pr.state === "merged" ? "merged" : pr.state === "closed" ? "closed" : CHECKS[pr.checks]}
         </span>
       </span>
-    </a>
+    </OutsideLink>
   )
 }

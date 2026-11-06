@@ -15,6 +15,7 @@ import { Confirm, Group, InlineEdit, Row, Seg } from "~/settings/controls"
 import { Themes } from "~/settings/themes"
 import { copyText } from "~/kit/toasts"
 import { UI_VERSION } from "~/settings/ui-version"
+import { OutsideLink } from "~/kit/outside"
 
 export function Page({ title, lede, children }: { title: string; lede?: ReactNode; children: ReactNode }) {
   return (
@@ -66,9 +67,9 @@ export function AccountSection() {
                 copyText(account.githubCode?.code ?? "", "Code copied")
               }}
             />
-            <a className="btn is-quiet is-small" href={account.githubCode.url} target="_blank" rel="noreferrer noopener">
+            <OutsideLink className="btn is-quiet is-small" href={account.githubCode.url}>
               Open GitHub
-            </a>
+            </OutsideLink>
           </Row>
         )}
         {account.key && (
