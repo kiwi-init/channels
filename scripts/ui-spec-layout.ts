@@ -125,7 +125,7 @@ async function staysInPane(page: Page): Promise<string | null> {
   const got = await page.evaluate(() => {
     const work = document.querySelector<HTMLElement>(".tall-work");
     const spec = work?.querySelector<HTMLElement>(".spec-page");
-    if (!work || !spec) return { error: "no spec in the tall layout's top pane" };
+    if (!work || !spec) return { kind: "missing" as const };
     const bottom = work.getBoundingClientRect().bottom;
     const clipped = (el: HTMLElement): boolean => {
       for (let up: HTMLElement | null = el.parentElement; up; up = up.parentElement) {
@@ -139,9 +139,9 @@ async function staysInPane(page: Page): Promise<string | null> {
       return r.height > 0 && r.width > 0 && r.bottom > bottom + 1 && !clipped(el);
     });
     const scrolls = spec.scrollHeight > spec.clientHeight + 1;
-    return { leaks: leaks.slice(0, 3).map((el) => `${el.tagName.toLowerCase()}.${el.className || "-"}`), n: leaks.length, scrolls, bottom: Math.round(bottom) };
+    return { kind: "seen" as const, leaks: leaks.slice(0, 3).map((el) => `${el.tagName.toLowerCase()}.${el.className || "-"}`), n: leaks.length, scrolls, bottom: Math.round(bottom) };
   });
-  if ("error" in got) return got.error;
+  if (got.kind === "missing") return "no spec in the tall layout's top pane";
   if (!got.scrolls) return "the spec fits its pane, so nothing could spill: make the window shorter or the pane smaller";
   return got.n ? `${got.n} parts of the spec draw below the grip (y ${got.bottom}), such as ${got.leaks.join(", ")}` : null;
 }
