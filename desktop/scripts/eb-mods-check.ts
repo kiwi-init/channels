@@ -5,6 +5,7 @@ import { join } from "node:path";
 
 import { startLocalRelay } from "../../scripts/local-relay.ts";
 import { daemonStop } from "../src/daemon-client.ts";
+import { LINUX_WAIT } from "../src/mods.ts";
 import { ASK_AGAIN_URL } from "../src/keyring-wait.ts";
 import { appExecutable, attach, launch, stop, testEnv, until, type Driver } from "./eb-drive.ts";
 import { fillIn, firstChannel, sendMessage } from "./eb-first-run.ts";
@@ -126,6 +127,28 @@ const pageNow = (): Record<string, unknown> => ({
 type Said = Record<string, unknown>;
 const heard = (d: Driver): Promise<Said[]> => d.evaluate(() => ((window as unknown as { __modHeard?: Said[] }).__modHeard ?? []) as Said[], null, 3_000);
 
+const MESSAGE_LINK = "https://example.com/?message-link";
+
+async function clickMessageLink(d: Driver): Promise<void> {
+  await step("a message with a link", 30_000, () => d.evaluate(sendMessage, { text: `[the message link](${MESSAGE_LINK})`, shows: "the message link" }, 2_000));
+  const clicked = await until("the message's link", 15_000, () =>
+    d
+      .evaluate(
+        (url) => {
+          const a = [...document.querySelectorAll<HTMLAnchorElement>(".main article.msg a")].find((el) => el.getAttribute("href") === url);
+          if (!a) return null;
+          const ev = new MouseEvent("click", { bubbles: true, cancelable: true, ctrlKey: true });
+          a.dispatchEvent(ev);
+          return { prevented: ev.defaultPrevented };
+        },
+        MESSAGE_LINK,
+        2_000,
+      )
+      .catch(() => null),
+  );
+  console.log(`the message link Ctrl-clicked: ${JSON.stringify(clicked)}`);
+}
+
 async function shot(name: string): Promise<void> {
   if (!shots) return;
   mkdirSync(shots, { recursive: true });
@@ -160,103 +183,90 @@ try {
     null,
     3_000,
   );
-  const asks = await d.evaluate(() => (window as unknown as { kiwi: { mods(): Promise<{ name: string; state: string; needs: string[] }[]> } }).kiwi.mods(), null, 15_000);
+  const asks = await d.evaluate(() => (window as unknown as { kiwi: { mods(): Promise<{ name: string; state: string; why?: string }[]> } }).kiwi.mods(), null, 15_000);
   console.log(`mods: ${JSON.stringify(asks)}`);
-  check(
-    asks.some((m) => m.name === "probe-mod" && m.state === "asks"),
-    "a new mod waits for the person before it runs",
-  );
-  const palette = () =>
-    d.evaluate(
+  if (process.platform === "linux") {
+    check(
+      asks.some((m) => m.name === "probe-mod" && m.state === "off" && m.why === LINUX_WAIT),
+      "on Linux a mod stays off, and says why, until the app can tell its frames' events from the page's",
+    );
+    await step("the channel", 30_000, () => d.evaluate(() => !!document.querySelector(".chan"), null, 2_000));
+    await clickMessageLink(d);
+    await later(1_500);
+    const opens = (await d.main("browserOpens")) as string[];
+    console.log(`opened in the browser: ${JSON.stringify(opens)}`);
+    check(opens.includes(MESSAGE_LINK), "a Ctrl-clicked link in a message opens in the browser");
+  } else {
+    check(
+      asks.some((m) => m.name === "probe-mod" && m.state === "asks"),
+      "a new mod waits for the person before it runs",
+    );
+    const palette = () =>
+      d.evaluate(
+        () => {
+          if (document.querySelector(".palette-box")) return true;
+          const mac = navigator.platform.includes("Mac");
+          (document.activeElement ?? document.body).dispatchEvent(new KeyboardEvent("keydown", { key: "k", code: "KeyK", metaKey: mac, ctrlKey: !mac, bubbles: true, cancelable: true }));
+          return false;
+        },
+        null,
+        2_000,
+      );
+    await step("the channel", 30_000, () => d.evaluate(() => !!document.querySelector(".chan"), null, 2_000));
+    await step("⌘K", 10_000, palette);
+    await step("Set up probe-mod in ⌘K", 10_000, () => d.evaluate(clickText, { selector: ".palette-item", text: "Set up probe-mod" }, 2_000));
+    await step("what the mod asks for, in the panel", 10_000, () => d.evaluate(clickText, { selector: ".panel .mod-needs", text: "Talk to example.com" }, 2_000)).catch(async (e: unknown) => {
+      console.log(`the page then: ${JSON.stringify(await d.evaluate(pageNow, null, 3_000).catch((x: unknown) => String(x)), null, 1)}`);
+      throw e;
+    });
+    await shot("mod-asks");
+    await step("Turn on", 10_000, () => d.evaluate(clickText, { selector: ".panel button", text: "Turn on" }, 2_000));
+    const first = await until("the mod's report", 60_000, async () => (await heard(d)).find((m) => m["version"] === 1) ?? null);
+    console.log(`the mod saw: ${JSON.stringify(first, null, 1)}`);
+    check(first["origin"] === "null", "the mod's frame has an origin of its own (opaque)");
+    check(first["kiwi"] === "undefined" && first["electrobunBridge"] === "undefined", "the mod has no window.kiwi and no bridge object");
+    check(String(first["parentDocument"]).startsWith("blocked"), "the mod can't read the page");
+    check(String(first["storage"]).startsWith("blocked"), "the mod has no storage of the app's");
+    check(String(first["ownFetch"]).startsWith("blocked"), "the mod's own fetch reaches nothing");
+    check(String(first["relayFetch"]).startsWith("blocked"), "the mod can't reach the relay");
+    check(first["listed"] === 200, "the mod reaches the host it listed and the person approved");
+    check(String(first["unlisted"]).startsWith("blocked"), "the mod can't reach a host it didn't list");
+    check(String(first["relayByProxy"]).startsWith("blocked"), "the mod can't reach the relay through the app either");
+    await step("the mod's panel title", 10_000, () => d.evaluate(clickText, { selector: ".panel .panel-title", text: "Probe mod" }, 2_000));
+    await shot("mod-panel");
+    const still = await until("the mod's frame after it tried to leave", 15_000, async () => (await heard(d)).find((m) => m["stillHere"] === true) ?? null).catch(() => null);
+    check(!!still, "the mod's frame stays where it is when it navigates itself");
+    await step("⌘K again", 10_000, palette);
+    await step("the mod's command, typed into ⌘K", 10_000, () => d.evaluate(fillIn, { selector: ".palette-input", value: "Say hi" }, 2_000));
+    await step("the mod's command in ⌘K", 10_000, () => d.evaluate(clickText, { selector: ".palette-item", text: "Say hi from the probe mod" }, 2_000));
+    const hi = await until("the command's run", 10_000, async () => (await heard(d)).find((m) => m["command"] === "hi") ?? null).catch(() => null);
+    check(!!hi, "the mod's command runs from ⌘K");
+    await d.evaluate(
       () => {
-        if (document.querySelector(".palette-box")) return true;
-        const mac = navigator.platform.includes("Mac");
-        (document.activeElement ?? document.body).dispatchEvent(new KeyboardEvent("keydown", { key: "k", code: "KeyK", metaKey: mac, ctrlKey: !mac, bubbles: true, cancelable: true }));
-        return false;
+        const a = document.createElement("a");
+        a.href = "https://example.com/?page-link";
+        a.target = "_blank";
+        a.textContent = "a link";
+        document.body.append(a);
+        a.click();
+        a.remove();
+        return true;
       },
       null,
-      2_000,
+      3_000,
     );
-  await step("the channel", 30_000, () => d.evaluate(() => !!document.querySelector(".chan"), null, 2_000));
-  await step("⌘K", 10_000, palette);
-  await step("Set up probe-mod in ⌘K", 10_000, () => d.evaluate(clickText, { selector: ".palette-item", text: "Set up probe-mod" }, 2_000));
-  await step("what the mod asks for, in the panel", 10_000, () => d.evaluate(clickText, { selector: ".panel .mod-needs", text: "Talk to example.com" }, 2_000)).catch(async (e: unknown) => {
-    console.log(`the page then: ${JSON.stringify(await d.evaluate(pageNow, null, 3_000).catch((x: unknown) => String(x)), null, 1)}`);
-    throw e;
-  });
-  await shot("mod-asks");
-  await step("Turn on", 10_000, () => d.evaluate(clickText, { selector: ".panel button", text: "Turn on" }, 2_000));
-  const first = await until("the mod's report", 60_000, async () => (await heard(d)).find((m) => m["version"] === 1) ?? null);
-  console.log(`the mod saw: ${JSON.stringify(first, null, 1)}`);
-  check(first["origin"] === "null", "the mod's frame has an origin of its own (opaque)");
-  check(first["kiwi"] === "undefined" && first["electrobunBridge"] === "undefined", "the mod has no window.kiwi and no bridge object");
-  check(String(first["parentDocument"]).startsWith("blocked"), "the mod can't read the page");
-  check(String(first["storage"]).startsWith("blocked"), "the mod has no storage of the app's");
-  check(String(first["ownFetch"]).startsWith("blocked"), "the mod's own fetch reaches nothing");
-  check(String(first["relayFetch"]).startsWith("blocked"), "the mod can't reach the relay");
-  check(first["listed"] === 200, "the mod reaches the host it listed and the person approved");
-  check(String(first["unlisted"]).startsWith("blocked"), "the mod can't reach a host it didn't list");
-  check(String(first["relayByProxy"]).startsWith("blocked"), "the mod can't reach the relay through the app either");
-  await step("the mod's panel title", 10_000, () => d.evaluate(clickText, { selector: ".panel .panel-title", text: "Probe mod" }, 2_000));
-  await shot("mod-panel");
-  const still = await until("the mod's frame after it tried to leave", 15_000, async () => (await heard(d)).find((m) => m["stillHere"] === true) ?? null).catch(() => null);
-  check(!!still, "the mod's frame stays where it is when it navigates itself");
-  await step("⌘K again", 10_000, palette);
-  await step("the mod's command, typed into ⌘K", 10_000, () => d.evaluate(fillIn, { selector: ".palette-input", value: "Say hi" }, 2_000));
-  await step("the mod's command in ⌘K", 10_000, () => d.evaluate(clickText, { selector: ".palette-item", text: "Say hi from the probe mod" }, 2_000));
-  const hi = await until("the command's run", 10_000, async () => (await heard(d)).find((m) => m["command"] === "hi") ?? null).catch(() => null);
-  check(!!hi, "the mod's command runs from ⌘K");
-  await d.evaluate(
-    () => {
-      const a = document.createElement("a");
-      a.href = "https://example.com/?page-link";
-      a.target = "_blank";
-      a.textContent = "a link";
-      document.body.append(a);
-      a.click();
-      a.remove();
-      return true;
-    },
-    null,
-    3_000,
-  );
-  const messageLink = "https://example.com/?message-link";
-  await step("a message with a link", 30_000, () => d.evaluate(sendMessage, { text: `[the message link](${messageLink})`, shows: "the message link" }, 2_000));
-  const clicked = await until("the message's link", 15_000, () =>
-    d
-      .evaluate(
-        (url) => {
-          const a = [...document.querySelectorAll<HTMLAnchorElement>(".main article.msg a")].find((el) => el.getAttribute("href") === url);
-          if (!a) return null;
-          const by: string[] = [];
-          const prevent = Event.prototype.preventDefault;
-          Event.prototype.preventDefault = function (this: Event) {
-            if (this.type === "click") by.push((new Error().stack ?? "").split("\n").slice(1, 6).join(" | "));
-            return prevent.call(this);
-          };
-          const ev = new MouseEvent("click", { bubbles: true, cancelable: true, ctrlKey: true });
-          a.dispatchEvent(ev);
-          Event.prototype.preventDefault = prevent;
-          return { class: a.className, inEditor: !!a.closest(".ProseMirror"), prevented: ev.defaultPrevented, by, frozen: Object.isFrozen((window as unknown as { kiwi: object }).kiwi) };
-        },
-        messageLink,
-        2_000,
-      )
-      .catch(() => null),
-  );
-  console.log(`the message link Ctrl-clicked: ${JSON.stringify(clicked, null, 1)}`);
-  await later(1_000);
-  console.log(`main opened, a second after: ${JSON.stringify(await d.main("browserOpens"))}`);
-  writeMod(2);
-  const second = await until("the mod again, after its source changed", 30_000, async () => (await heard(d)).find((m) => m["version"] === 2) ?? null).catch(() => null);
-  check(!!second, "a saved change reloads the mod");
-  await later(1_500);
-  const opens = (await d.main("browserOpens")) as string[];
-  console.log(`opened in the browser: ${JSON.stringify(opens)}`);
-  check(opens.includes("https://example.com/?page-link"), "with a mod running, the page's own links still open in the browser");
-  check(opens.includes(messageLink), "with a mod running, a Ctrl-clicked link in a message still opens in the browser");
-  check(!opens.some((u) => /forged|mod-self-nav/.test(u)), "nothing the mod forged or navigated to opened in the browser");
-  check(app.exitCode === null && app.signalCode === null, "the app is still running after the mod's forged events");
+    await clickMessageLink(d);
+    writeMod(2);
+    const second = await until("the mod again, after its source changed", 30_000, async () => (await heard(d)).find((m) => m["version"] === 2) ?? null).catch(() => null);
+    check(!!second, "a saved change reloads the mod");
+    await later(1_500);
+    const opens = (await d.main("browserOpens")) as string[];
+    console.log(`opened in the browser: ${JSON.stringify(opens)}`);
+    check(opens.includes("https://example.com/?page-link"), "with a mod running, the page's own links still open in the browser");
+    check(opens.includes(MESSAGE_LINK), "with a mod running, a Ctrl-clicked link in a message still opens in the browser");
+    check(!opens.some((u) => /forged|mod-self-nav/.test(u)), "nothing the mod forged or navigated to opened in the browser");
+    check(app.exitCode === null && app.signalCode === null, "the app is still running after the mod's forged events");
+  }
   d.close();
 } catch (e) {
   problems.push(e instanceof Error ? e.message : String(e));

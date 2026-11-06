@@ -21,6 +21,8 @@ interface ModManifest {
   needs: string[];
 }
 
+export const LINUX_WAIT = "Mods don't run on Linux yet: they will after an app update that stops a mod from sending link clicks as the app.";
+
 export type ModCheck = { ok: true; manifest: ModManifest } | { ok: false; why: string };
 
 export function needKind(need: string): (typeof NEED_KINDS)[number] | null {
