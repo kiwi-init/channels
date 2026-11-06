@@ -36,16 +36,20 @@ function writeMod(): void {
     join(dir, "index.tsx"),
     `import { fetch as modFetch, render } from "@kiwi/mod"
 
-if (document.documentElement.dataset["surface"] === "main")
-  void modFetch("https://example.com/").then(
-    (r) => parent.postMessage({ kiwiProbe: { mainFetch: r.status } }, "*"),
-    (e) => parent.postMessage({ kiwiProbe: { mainFetch: String(e) } }, "*"),
-  )
+let drawing = false
+queueMicrotask(() => {
+  if (!drawing)
+    void modFetch("https://example.com/").then(
+      (r) => parent.postMessage({ kiwiProbe: { mainFetch: r.status } }, "*"),
+      (e) => parent.postMessage({ kiwiProbe: { mainFetch: String(e) } }, "*"),
+    )
+})
 
 const AsyncFunction = (async () => {}).constructor as FunctionConstructor
 const INLINE = "html,body{margin:0;height:100%;overflow:hidden;background:transparent} svg{display:block;width:100%;height:100%}"
 
 render("figure", ({ html, full }) => {
+  drawing = true
   const page = new DOMParser().parseFromString(html, "text/html")
   for (const el of document.querySelectorAll("link[rel=stylesheet], style")) el.remove()
   const code = [...page.querySelectorAll("script")].flatMap((s) => {
