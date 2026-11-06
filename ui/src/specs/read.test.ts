@@ -26,7 +26,7 @@ const spec = (more: Partial<Spec> = {}): Spec => ({
 })
 
 const task = (more: Partial<Task> & Pick<Task, "id">): Task => ({
-  title: `task ${more.id}`,
+  title: wrote(`task ${more.id}`),
   status: "doing",
   createdBy: "atlas",
   createdAt: NOW,
@@ -153,16 +153,25 @@ describe("what changed since approval, and what happened inside", () => {
       tasks: [
         task({
           id: 1,
-          title: "writer",
+          title: wrote("writer"),
           history: [
             { seq: 1, by: "atlas", at: NOW - 20_000, what: "created" },
             { seq: 2, by: "win", at: NOW - 10_000, what: "took" },
-            { seq: 3, by: "win", at: NOW - 5_000, what: "note", note: "x" },
+            { seq: 3, by: "win", at: NOW - 5_000, what: "note", note: wrote("x") },
           ],
         }),
       ],
     })
     const story = storyOf(c, spec({ stage: "working", tasks: [1], approved: { by: "maya", at: NOW - 25_000, v: 11, text: "" } })).map((s) => `${s.who} ${s.text}`)
     expect(story).toEqual(["maya asked: “board as a spreadsheet please”", "atlas wrote the spec", "maya approved the spec", "atlas filed T1 “writer”", "win took T1"])
+  })
+
+  test("a filed task's title in the story names agents by nickname (#1763)", () => {
+    const c = channel({
+      nicknames: new Map([["gentle-otter", "opus-coder"]]),
+      tasks: [task({ id: 1, title: wrote("Pair with @gentle-otter"), history: [{ seq: 1, by: "atlas", at: NOW - 20_000, what: "created" }] })],
+    })
+    const story = storyOf(c, spec({ stage: "working", tasks: [1] })).map((s) => s.text)
+    expect(story).toContain("filed T1 “Pair with @opus-coder”")
   })
 })

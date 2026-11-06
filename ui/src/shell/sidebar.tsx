@@ -13,6 +13,7 @@ import { sameWhere, useAct, useApp } from "~/nav"
 import { between, nickname, onePerPerson, shown } from "~/names"
 import { comingBack, hiddenKey, hiddenPlaces, keptHidden, setHidden } from "~/shell/hidden-places"
 import { leftDirects } from "~/shell/left-directs"
+import { wordsPlain } from "~/words"
 
 const SideCards = later(() => import("~/shell/updates").then((m) => m.SideCards))
 
@@ -241,7 +242,7 @@ function Member({ person, channel, direct }: { person: Person; channel: Channel;
         type="button"
         className={cx("side-row side-member", live && "is-live", live && !live.busy && "is-waiting", on && "is-on", unread > 0 && "is-news", person.presence === "offline" && "is-off")}
         aria-current={on ? "page" : undefined}
-        title={task ? `T${task.id} ${task.title} · ${statusOf(person, channel)}` : statusOf(person, channel)}
+        title={task ? `T${task.id} ${wordsPlain(task.title, channel.nicknames)} · ${statusOf(person, channel)}` : statusOf(person, channel)}
         onClick={() => go({ to: "where", where })}
         onContextMenu={(e) =>
           showMenu(e, shown(person), (x) => [unread > 0 ? [{ label: "Mark as read", run: () => actions.markRead(channel.code, where) }] : [], x.personItems({ channel, go }, person)])
