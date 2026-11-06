@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
-import { isValidElement, type ReactElement, type ReactNode } from "react"
+import { isValidElement, type ReactNode } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 
 import { StepHow } from "~/chat/step"
@@ -22,21 +22,21 @@ const fakeWindow = (kiwi: object | undefined, opened: string[]) =>
     value: { kiwi, open: (url: string, target: string, features: string) => void opened.push(`${url} ${target} ${features}`) },
   })
 
-type LinkElement = ReactElement<Parameters<typeof OutsideLink>[0]>
-
-function findLink(node: ReactNode, href: string): LinkElement | undefined {
+function findLink(node: ReactNode, href: string): Parameters<typeof OutsideLink>[0] | undefined {
   if (Array.isArray(node)) return node.map((n) => findLink(n, href)).find(Boolean)
   if (!isValidElement<{ href?: string; children?: ReactNode }>(node)) return undefined
-  if (node.type === OutsideLink && node.props.href === href) return node as LinkElement
+  const at = node.props.href
+  if (node.type === OutsideLink && at === href) return { href: at, children: node.props.children }
   return findLink(node.props.children, href)
 }
 
 function clickStepLink(): { prevented: boolean } {
   const link = findLink(StepHow({ step: { why: "w", needsPerson: "jow", links: [LINK] }, you: ["jow"] }), LINK)
   if (!link) throw new Error("the step card has no OutsideLink for its link")
-  const anchor = OutsideLink(link.props)
+  const onClick: unknown = OutsideLink(link).props.onClick
+  if (typeof onClick !== "function") throw new Error("the step link has no click handler")
   let prevented = false
-  anchor.props.onClick?.({ preventDefault: () => (prevented = true) } as never)
+  onClick({ preventDefault: () => (prevented = true) })
   return { prevented }
 }
 
