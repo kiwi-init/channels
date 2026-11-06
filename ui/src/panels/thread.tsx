@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 
 import { Composer } from "~/chat/composer"
-import { compactAt, quoteOf, ReadOnly, useNames, useStick, useTaskIds } from "~/chat/conversation"
+import { compactAt, quoteOf, ReadOnly, useNames, useTaskIds } from "~/chat/conversation"
+import { useStick } from "~/chat/stick"
 import { EditHere } from "~/chat/editing"
 import { MessageRow } from "~/chat/message"
 import { threadReply } from "~/chat/quote"
