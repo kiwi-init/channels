@@ -272,7 +272,10 @@ export const taskCommands: Record<string, Command> = {
         } else if (sub === "proof") {
           const url = args[3];
           if (url === undefined && runId === undefined) return yield* die('usage: kiwi task proof T7 https://… [--label "preview"] [--note "…"], or kiwi task proof T7 --run ID [--started TIME]');
-          const started = opt.started === undefined ? undefined : startedAt(opt.started) ?? (yield* die(`"${opt.started}" isn't a start time: give the run's own, like 2026-11-06T10:00:00Z (a Job's status.startTime)`));
+          const started =
+            opt.started === undefined
+              ? undefined
+              : (startedAt(opt.started) ?? (yield* die(`"${opt.started}" isn't a start time: give the run's own, like 2026-11-06T10:00:00Z (a Job's status.startTime)`)));
           state = yield* s.taskUpdate(id, {
             ...(url !== undefined ? { proof: { url, ...(opt.label ? { label: opt.label } : {}) } } : {}),
             ...(runId !== undefined ? { run: { id: runId, ...(started !== undefined ? { started } : {}) } } : {}),

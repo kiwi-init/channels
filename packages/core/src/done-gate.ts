@@ -59,9 +59,7 @@ function runGate(view: GateView, t: Task, landing: boolean): DoneGate | undefine
   if (missing.length) return { kind: "bypassed", missing };
   if (!landing) return undefined;
   const started = run.started;
-  const post = [...view.checks.values()].some(
-    (c) => c.phase === "post" && c.holds.includes(t.id) && atRun(c, run.id) && checkPassed(c) && (c.answer?.at ?? Number.POSITIVE_INFINITY) >= started,
-  );
+  const post = [...view.checks.values()].some((c) => c.phase === "post" && c.holds.includes(t.id) && atRun(c, run.id) && checkPassed(c) && (c.answer?.at ?? Number.POSITIVE_INFINITY) >= started);
   return post ? { kind: "landed", artifact: { kind: "run", id: run.id } } : { kind: "waiting", why: `a passed post check quoting run ${run.id}` };
 }
 
