@@ -488,15 +488,20 @@ export interface KiwiBridge {
   modBundle(name: string): Promise<{ code: string; hash: string } | null>;
   approveMod(name: string, needs: string[]): Promise<ModView[]>;
   modFetch(name: string, req: ModFetchRequest): Promise<ModFetchReply>;
+  modFailed(name: string, hash: string, why: string): Promise<ModView[]>;
+  setModOn(name: string, on: boolean): Promise<ModView[]>;
+  modsSettled(): Promise<void>;
 }
 
 export interface ModView {
   name: string;
   version: string | null;
+  source: string;
   needs: string[];
   approved: string[];
   state: "on" | "asks" | "off";
   why?: string;
+  off?: "you" | "crash" | "safe";
   hash?: string;
 }
 

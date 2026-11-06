@@ -1,4 +1,4 @@
-import { CommandIcon, ComputerPhoneSyncIcon, PaintBoardIcon } from "@hugeicons/core-free-icons"
+import { CommandIcon, ComputerPhoneSyncIcon, PaintBoardIcon, PuzzleIcon } from "@hugeicons/core-free-icons"
 import { useEffect } from "react"
 
 import { cx } from "~/kit/bits"
@@ -7,10 +7,12 @@ import { GlyphIcon, Icon, type Glyph, type IconName } from "~/kit/icons"
 import { useApp, type Section } from "~/nav"
 import { AgentsSection } from "~/settings/agents"
 import { ComputersSection } from "~/settings/computers"
+import { ModsSection } from "~/settings/mods"
 import { AboutSection, AccountSection, AppearanceSection } from "~/settings/sections"
 import { ShortcutsSection } from "~/settings/shortcuts"
 import { useCommandTable } from "~/commands/table"
 import { useSideways } from "~/kit/sideways"
+import { modsServed } from "~/mods/served"
 import { SideCards } from "~/shell/updates"
 
 const SECTIONS: readonly (readonly [Section, string, IconName | Glyph])[] = [
@@ -19,6 +21,7 @@ const SECTIONS: readonly (readonly [Section, string, IconName | Glyph])[] = [
   ["computers", "Computers and phones", ComputerPhoneSyncIcon],
   ["agents", "Agents", "agent"],
   ["shortcuts", "Shortcuts", CommandIcon],
+  ["mods", "Mods", PuzzleIcon],
   ["about", "About", "info"],
 ]
 
@@ -48,7 +51,7 @@ export function Settings() {
       </header>
       <nav ref={navRef} className="set-nav" aria-label="Settings sections">
         <ul>
-          {SECTIONS.filter(([id]) => id !== "shortcuts" || file).map(([id, label, icon]) => {
+          {SECTIONS.filter(([id]) => (id !== "shortcuts" || file) && (id !== "mods" || modsServed())).map(([id, label, icon]) => {
             const on = nav.section === id
             return (
               <li key={id}>
@@ -83,6 +86,8 @@ function Current({ section }: { section: Section }) {
       return <AgentsSection />
     case "shortcuts":
       return <ShortcutsSection />
+    case "mods":
+      return <ModsSection />
     case "about":
       return <AboutSection />
   }

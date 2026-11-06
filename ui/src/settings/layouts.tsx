@@ -18,12 +18,12 @@ export function LayoutRow() {
         <>
           From <span className="set-mono">{tilde(dir)}</span>
           {gone && !skipped.some((s) => s.file === chosen) && (
-            <span className="set-layout-note">
+            <span className="set-note">
               <span className="set-mono">{chosen}</span> isn't there, so the default shows
             </span>
           )}
           {skipped.map((s) => (
-            <span key={s.file} className="set-layout-note">
+            <span key={s.file} className="set-note">
               <span className="set-mono">{s.file}</span> {s.why}
             </span>
           ))}
