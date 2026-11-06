@@ -6,9 +6,9 @@ import { ShownImage } from "~/chat/feed-image"
 import { withoutMediaNames } from "~/chat/doc/finished"
 import { PrChip, TaskChip } from "~/chat/cards"
 import { EditHere, useEditing } from "~/chat/editing"
-import { parsedFor } from "~/chat/parsed"
 import { quotedExcerpt } from "~/chat/quote"
 import { preview, useReplying } from "~/chat/reply"
+import { Body } from "~/chat/body"
 import { Avatar, cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { clock } from "~/kit/time"
@@ -16,13 +16,12 @@ import { memberOf, type Channel, type ImageSpot, type Message, type Person } fro
 import { openMessage as showMessage } from "~/live/open-message"
 import { useAct } from "~/nav"
 import { nickname } from "~/names"
-import { type Words, wordsPlain, wordsRaw, wrote } from "~/words"
-import { linked, useMentionParser, withNames } from "~/chat/linked"
+import { wordsPlain, wordsRaw, wrote } from "~/words"
+import { withNames } from "~/chat/linked"
 import { showMenu } from "~/kit/menu-open"
 import { later } from "~/kit/later"
 import { copyText } from "~/kit/toasts"
 
-const Markdown = lazy(() => import("~/chat/markdown"))
 const Annotator = lazy(() => import("~/chat/annotator"))
 const Gifs = lazy(() => import("~/chat/gif-picker"))
 const Changes = lazy(() => import("~/chat/changes"))
@@ -33,38 +32,6 @@ const BlockFilesView = later(() => import("~/chat/block-files").then((m) => m.Bl
 
 const QUICK = ["👍", "🔥", "👀", "✅"]
 const CLAMP_PX = 12 * 22
-
-export function Body({
-  text,
-  seq,
-  names,
-  tasks,
-  onImage,
-  onMessage,
-}: {
-  text: Words
-  seq: number
-  names: ReadonlyMap<string, string>
-  tasks: ReadonlySet<number>
-  onImage: (url: string, alt: string) => void
-  onMessage: (seq: number) => void
-}) {
-  const { go } = useAct()
-  const parser = useMentionParser()
-  const { markdown } = useMemo(() => ({ parser, markdown: linked(wordsRaw(text), names, tasks, seq) }), [parser, text, names, tasks, seq])
-  const [shown, setShown] = useState(false)
-  const onShown = useCallback(() => setShown(true), [])
-  const onMention = useCallback((name: string) => go({ to: "modal", modal: { kind: "person", name } }), [go])
-  const onTask = useCallback((task: number) => go({ to: "panel", panel: { kind: "task", task } }), [go])
-  return (
-    <div className="msg-text">
-      {!shown && !parsedFor(markdown) && <p className="md-plain">{wordsPlain(text, names)}</p>}
-      <Suspense fallback={null}>
-        <Markdown markdown={markdown} onMention={onMention} onTask={onTask} onMessage={onMessage} onImage={onImage} onShown={onShown} />
-      </Suspense>
-    </div>
-  )
-}
 
 function Clamp({ on, children }: { on: boolean; children: ReactNode }) {
   const box = useRef<HTMLDivElement>(null)

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react"
 
 import { useNames, useTaskIds } from "~/chat/conversation"
-import { Body } from "~/chat/message"
+import { Body } from "~/chat/body"
 import { type Words, wordsPlain, wordsRaw, wrote } from "~/words"
 import { Avatar, cx } from "~/kit/bits"
 import { clock } from "~/kit/time"

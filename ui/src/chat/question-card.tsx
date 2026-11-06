@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 
 import { HANDOFF_DONE, HANDOFF_FAILED } from "@kiwi/core/protocol.ts"
 import { bridge } from "@kiwi/secrets/secrets.ts"
 import { wordsPlain, wordsRaw, wordsSame } from "~/words"
+import { Body } from "~/chat/body"
 import { jumpTo } from "~/chat/reply"
 import { StepAnswer, StepHow } from "~/chat/step"
 import { cx } from "~/kit/bits"
@@ -55,6 +56,8 @@ function seeAsk(code: string, seq: number): void {
   if (!jumpTo(document.body, seq)) openMessage(code, seq)
 }
 
+const openImage = (url: string) => void window.open(url, "_blank", "noopener,noreferrer")
+
 function ClosedAsk({ channel, closed }: { channel: Channel; closed: Closed }) {
   const who = closed.by === channel.you ? "you" : nickname(channel, closed.by)
   const parts = closed.why ? wordsPlain(closed.why, channel.nicknames).split(/(#\d+)/) : []
@@ -86,6 +89,7 @@ export default function QuestionCard({ channel, ask }: { channel: Channel; ask: 
   const [other, setOther] = useState<string | null>(free ? "" : null)
   const now = useNow(ask.answer ? undefined : ask.handoff?.expiresAt)
   const asker = nickname(channel, ask.from)
+  const tasks = useMemo(() => new Set(channel.tasks.map((t) => t.id)), [channel.tasks])
   if (ask.answer) {
     const who = ask.answer.by === channel.you ? "You" : nickname(channel, ask.answer.by)
     const at = <time>{clock(ask.answer.at)}</time>
@@ -103,12 +107,25 @@ export default function QuestionCard({ channel, ask }: { channel: Channel; ask: 
           {who} chose <b>{wordsPlain(ask.answer.text, channel.nicknames)}</b> {at}
         </p>
       )
+    const verb = ask.step ? "answered" : "replied"
+    const answer = ask.answer
+    if (answer.shownIn === "feed")
+      return (
+        <p className="ask-done">
+          {who} {verb} {at} ·{" "}
+          <button type="button" className="ask-seq" onClick={() => seeAsk(channel.code, answer.seq)}>
+            Show the reply
+          </button>
+        </p>
+      )
     return (
       <div className="ask-done">
         <p>
-          {who} {ask.step ? "answered" : "replied"} {at}
+          {who} {verb} {at}
         </p>
-        <p className="ask-reply">{wordsPlain(ask.answer.text, channel.nicknames)}</p>
+        <div className="ask-reply">
+          <Body text={answer.text} seq={Number(ask.id)} names={channel.nicknames} tasks={tasks} onImage={openImage} onMessage={(seq) => seeAsk(channel.code, seq)} />
+        </div>
       </div>
     )
   }

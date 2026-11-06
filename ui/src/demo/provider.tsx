@@ -234,7 +234,7 @@ function withHandoff(c: Channel): Channel {
         options: [],
         holds: [13],
         handoff: { url: h.url, label: h.label, expiresAt: Date.now() + h.expires },
-        ...(h.id === "handoff-done" ? { answer: { text: wrote(HANDOFF_DONE), by: c.you, at: Date.now() - 60_000 } } : {}),
+        ...(h.id === "handoff-done" ? { answer: { text: wrote(HANDOFF_DONE), by: c.you, at: Date.now() - 60_000, shownIn: "card" as const } } : {}),
       })),
     ],
   }
@@ -573,9 +573,15 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
           tasks: c.tasks.map((t) => (c.asks.some((a) => a.kind === "permission" && a.id === id && a.task === t.id) ? { ...t, status: allow ? "doing" : "todo" } : t)),
         })),
       answerStep: (code, id, reply) =>
-        edit(code, (c) => ({ ...c, asks: c.asks.map((a) => (a.kind === "question" && a.id === id ? { ...a, answer: { text: wrote(stepReplyText(reply)), by: c.you, at: Date.now() } } : a)) })),
+        edit(code, (c) => ({
+          ...c,
+          asks: c.asks.map((a) => (a.kind === "question" && a.id === id ? { ...a, answer: { text: wrote(stepReplyText(reply)), by: c.you, at: Date.now(), shownIn: "card" as const } } : a)),
+        })),
       answerQuestion: (code, id, text) =>
-        edit(code, (c) => ({ ...c, asks: c.asks.map((a) => (a.kind === "question" && a.id === id ? { ...a, answer: { text: wrote(text), by: c.you, at: Date.now() } } : a)) })),
+        edit(code, (c) => ({
+          ...c,
+          asks: c.asks.map((a) => (a.kind === "question" && a.id === id ? { ...a, answer: { text: wrote(text), by: c.you, at: Date.now(), shownIn: "card" as const } } : a)),
+        })),
       answerJoin: (code, id, letIn, choice) =>
         edit(code, (c) => {
           const ask = c.asks.find((a) => a.kind === "join" && a.id === id)

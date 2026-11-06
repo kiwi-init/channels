@@ -33,3 +33,19 @@ describe("a card's answer is the reply that answered it (T465, #1126)", () => {
     expect(asks[0]?.kind === "question" && asks[0].answer).toBeFalsy()
   })
 })
+
+describe("a card knows where its answer shows (#1794)", () => {
+  test("a reply typed in the room shows in the feed, so the card points at it", () => {
+    const messages = [ask, owner]
+    const { asks } = asksOf(fold(messages, roster, 0), messages, "jow", true, [], roster, new Map())
+    expect(asks[0]).toMatchObject({ kind: "question", answer: { shownIn: "feed", seq: 7 } })
+  })
+
+  test("an answer sent from the card is a side reply, so only the card shows it", () => {
+    const fromCard = signed({ id: "d", seq: 8, from: "jow", pk: "pk-jow", kind: "msg", body: "done", re: [5], to: ["win"], side: true })
+    const messages = [ask, fromCard]
+    const { asks } = asksOf(fold(messages, roster, 0), messages, "jow", true, [], roster, new Map())
+    expect(asks[0]).toMatchObject({ kind: "question", answer: { shownIn: "card" } })
+    expect(asks[0]?.kind === "question" && asks[0].answer && "seq" in asks[0].answer).toBe(false)
+  })
+})
