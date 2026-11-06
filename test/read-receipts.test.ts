@@ -19,7 +19,6 @@ import { trafficProxy } from "./traffic.ts";
 
 setDefaultTimeout(60_000);
 
-const MC = [process.execPath, join(import.meta.dir, "../src/cli/main.ts")];
 const dataDir = mkdtempSync(join(tmpdir(), "kiwi-reads-relay-"));
 const made: string[] = [dataDir];
 let server: ReturnType<typeof startRelay> | undefined;
@@ -219,48 +218,6 @@ describe("agents mark as kiwi hands them messages", () => {
     // Committed, so not handed over again; and read.
     expect(out).not.toContain("handed by the listener");
     expect(readUpTo()).toBeGreaterThanOrEqual(sent);
-  });
-
-  test("an MCP wait marks what it returned", async () => {
-    const p = Bun.spawn([...MC, "mcp"], {
-      cwd: agent,
-      env: { ...process.env, KIWI_HOME: agent, KIWI_RELAY: relay, KIWI_NO_HOOKS: "1", KIWI_CHANNEL: "reads", KIWI_AS: "dev" },
-      stdin: "pipe",
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    try {
-      const reader = p.stdout.getReader();
-      let buf = "";
-      let id = 0;
-      const rpc = async (method: string, params: object = {}) => {
-        const myId = ++id;
-        p.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: myId, method, params }) + "\n");
-        p.stdin.flush();
-        for (;;) {
-          const nl = buf.indexOf("\n");
-          if (nl >= 0) {
-            const msg = JSON.parse(buf.slice(0, nl));
-            buf = buf.slice(nl + 1);
-            if (msg.id === myId) return msg.result ?? msg.error;
-            continue;
-          }
-          const { value, done } = await reader.read();
-          if (done) throw new Error("mcp exited");
-          buf += new TextDecoder().decode(value);
-        }
-      };
-      await rpc("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "test", version: "0" } });
-      p.stdin.write(JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }) + "\n");
-      const waiting = rpc("tools/call", { name: "wait_for_messages", arguments: { timeout_seconds: 20 } });
-      await Bun.sleep(1000);
-      const sent = seqOf(await ok(owner, "send", "--to", "dev", "for the mcp wait"));
-      const got = (await waiting) as { content: { text: string }[] };
-      expect(got.content[0]!.text).toContain("for the mcp wait");
-      await until(() => readUpTo() >= sent, "the mark after the wait");
-    } finally {
-      p.kill();
-    }
   });
 
   test("listen --once: marked before it exits", async () => {

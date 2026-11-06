@@ -740,19 +740,6 @@ intents:
     reviewed:
       by: ojowwalker77
       at: 2026-11-03T19:55:19.590Z
-  - id: use-mcp-tools
-    name: Use MCP Tools
-    status: active
-    sentence: An agent reads and posts to channels through MCP tools, without the shell.
-    actor: agent
-    triggers:
-      - MCP server entry in the harness config
-    code:
-      - src/mcp.ts
-    confidence: high
-    reviewed:
-      by: ojowwalker77
-      at: 2026-11-03T19:55:33.170Z
   - id: route-tasks-to-agents
     name: Route Tasks To Agents
     status: active

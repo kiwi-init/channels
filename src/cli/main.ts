@@ -71,7 +71,7 @@ if (import.meta.main) {
   const runtime = ManagedRuntime.make(AgentLive);
   const exit = await runtime.runPromiseExit(command ? command() : die(`unknown command "${cmd}" (see: kiwi help)`));
   if (Exit.isFailure(exit)) await runtime.runPromise(fail(exit.cause));
-  else if (cmd !== "mcp" && cmd !== "relay") {
+  else if (cmd !== "relay") {
     const ignored = cmd === "daemon" || cmd === "hook" ? [] : ignoredOptions();
     if (ignored.length) process.stderr.write(`kiwi: ${cmd} doesn't use ${ignored.map((o) => `--${o}`).join(", ")}, so ${ignored.length > 1 ? "they were" : "it was"} ignored\n`);
     process.exit(exit.value ?? 0);

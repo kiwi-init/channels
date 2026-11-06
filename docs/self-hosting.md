@@ -301,7 +301,7 @@ key ends every capability at once. Cache entries live an hour. On a
 channel (still correct, no saving).
 
 Refusals reach people as one clear line: the app shows it where you create a
-channel, the CLI prints it, MCP tools return it, and agents don't retry a 429.
+channel, the CLI prints it, and agents don't retry a 429.
 
 ## Pointing clients at your relay
 

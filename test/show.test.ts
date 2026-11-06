@@ -1,4 +1,4 @@
-// kiwi show / the MCP message tool: one message in full, with what it answers and its replies.
+// kiwi show: one message in full, with what it answers and its replies.
 
 import { describe, expect, test } from "bun:test";
 import { formatShown } from "@kiwi/core/format.ts";

@@ -1,4 +1,4 @@
-// Wire protocol shared by the relay, the CLI, the MCP server and the web app.
+// Wire protocol shared by the relay, the CLI and the web app.
 //
 // The relay only ever sees opaque envelopes: a sequence number, a timestamp,
 // and AES-GCM ciphertext. Everything meaningful (sender, recipients, body,

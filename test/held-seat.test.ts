@@ -98,54 +98,6 @@ function group(re: RegExp, text: string): string {
   return found;
 }
 
-function field(value: unknown, name: string): unknown {
-  return typeof value === "object" && value !== null && name in value ? Reflect.get(value, name) : undefined;
-}
-
-function mcpText(reply: unknown): string {
-  const content = field(field(reply, "result"), "content");
-  const text = Array.isArray(content) ? field(content[0], "text") : undefined;
-  if (typeof text !== "string") throw new Error(`no tool text in ${JSON.stringify(reply)}`);
-  return text;
-}
-
-function mcp(env: Env) {
-  const p = Bun.spawn(kiwiCmd(["mcp"]), {
-    cwd: agent,
-    env: Object.fromEntries(Object.entries({ ...process.env, KIWI_HOME: agent, KIWI_RELAY: server.url.origin, KIWI_NO_HOOKS: "1", ...env }).filter(([, v]) => v !== "")),
-    stdin: "pipe",
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  const reader = p.stdout.getReader();
-  let buf = "";
-  let id = 0;
-  const rpc = async (method: string, params: object = {}): Promise<unknown> => {
-    const mine = ++id;
-    p.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: mine, method, params }) + "\n");
-    p.stdin.flush();
-    for (;;) {
-      const nl = buf.indexOf("\n");
-      if (nl >= 0) {
-        const msg: unknown = JSON.parse(buf.slice(0, nl));
-        buf = buf.slice(nl + 1);
-        if (field(msg, "id") === mine) return msg;
-        continue;
-      }
-      const { value, done } = await reader.read();
-      if (done) throw new Error("mcp exited");
-      buf += new TextDecoder().decode(value);
-    }
-  };
-  const call = async (name: string, args: object = {}) => mcpText(await rpc("tools/call", { name, arguments: args }));
-  const start = async () => {
-    await rpc("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "test", version: "0" } });
-    p.stdin.write(JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }) + "\n");
-    p.stdin.flush();
-  };
-  return { call, start, stop: () => p.kill() };
-}
-
 const prompt = (env: Env) => ok(agent, ["hook", "prompt"], env, JSON.stringify({ session_id: env.CLAUDE_CODE_SESSION_ID, cwd: agent, hook_event_name: "UserPromptSubmit", prompt: "go on" }));
 const sessionStart = (env: Env) =>
   ok(agent, ["hook", "session-start"], env, JSON.stringify({ session_id: env.CLAUDE_CODE_SESSION_ID, cwd: agent, source: "startup", hook_event_name: "SessionStart" }));
@@ -194,7 +146,7 @@ afterAll(async () => {
   for (const d of made) rmSync(d, { recursive: true, force: true });
 });
 
-test("while a loop holds the seat, no hook, kiwi command, MCP tool or running listener reads for it, and what arrives stays unread", async () => {
+test("while a loop holds the seat, no hook, kiwi command or running listener reads for it, and what arrives stays unread", async () => {
   await send("before the hold");
   expect(await prompt(OLD)).toContain("before the hold");
   const listener = spawn(agent, ["listen"], unhooked(OLD));
@@ -203,9 +155,6 @@ test("while a loop holds the seat, no hook, kiwi command, MCP tool or running li
     for await (const chunk of listener.stdout) heard += new TextDecoder().decode(chunk);
   })();
   const listenerErr = new Response(listener.stderr).text();
-  const tools = mcp({ ...OLD, KIWI_CHANNEL: alias, KIWI_AS: me });
-  await tools.start();
-  expect(await tools.call("wait_for_messages", { timeout_seconds: 1 })).toStartWith("no messages yet");
   await send("heard live");
   await until(() => heard.includes("heard live"), "the running listener hearing a message");
 
@@ -225,19 +174,6 @@ test("while a loop holds the seat, no hook, kiwi command, MCP tool or running li
   expect(await listenerErr).toContain(heldText(alias, me));
   expect(heard).not.toContain("while held");
 
-  for (const [name, args] of [
-    ["wait_for_messages", { timeout_seconds: 1 }],
-    ["read", {}],
-    ["log", {}],
-    ["query", { sql: "select body from messages" }],
-  ] satisfies [string, object][]) {
-    const said = await tools.call(name, args);
-    expect(said).toContain(heldText(alias, me));
-    expect(said).not.toContain("heard live");
-    expect(said).not.toContain("while held");
-  }
-  tools.stop();
-
   expect(await prompt(OLD)).not.toContain("while held");
   expect(await sessionStart(NEW)).not.toContain("while held");
   expect(await prompt(NEW)).not.toContain("while held");
@@ -251,6 +187,8 @@ test("while a loop holds the seat, no hook, kiwi command, MCP tool or running li
     [["listen", "--now"], { ...PLAIN, KIWI_AS: me }],
     [["listen", "--now"], { ...NEW, KIWI_AS: me }],
     [["-c", alias, "--as", me, "status"], OLD],
+    [["--as", me, "log"], OLD],
+    [["--as", me, "query", "select body from messages"], OLD],
     [["use", alias, "--as", me], OLD],
     [["listen", "--now"], { ...PLAIN, KIWI_AS: me, KIWI_SEAT_TOKEN: "not-the-token" }],
   ] satisfies [string[], Env][]) {
