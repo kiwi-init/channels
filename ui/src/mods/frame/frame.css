@@ -34,6 +34,10 @@ button.mod-row:hover {
   font: var(--t-meta) / 1.4 var(--sans);
 }
 
+:root[data-surface="sidebar"] body {
+  overflow-x: hidden;
+}
+
 :root[data-surface="sidebar"] #root {
   height: auto;
   padding: 0;
