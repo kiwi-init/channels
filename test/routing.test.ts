@@ -41,12 +41,17 @@ const cards = async () => [
 ];
 
 describe("cards", () => {
-  test("a member says what it is; tags are lowercase; the card shows in status", async () => {
+  test("a member says what it is; tags are lowercase; status shows where it works, and its machine with --all", async () => {
     const s = fold(await cards(), roster);
     expect(s.members.get("mac")!.card).toMatchObject({ os: "macos", tools: ["git", "xcode", "docker"], repo: "ojow/channels" });
     expect(cardLine(s.members.get("linux")!.card)).toBe("linux x64 · tools: git, docker, gpu · the CI box");
     const status = formatStatus({ alias: "c", me: "mac", state: s, online: new Map(), unread: 0 });
-    expect(status).toContain("codex · windows x64 · ojow/channels · tools: git, dotnet");
+    expect(status).toContain("codex · ojow/channels\n");
+    expect(status).not.toContain("tools:");
+    expect(status).not.toContain(" · key ");
+    const all = formatStatus({ alias: "c", me: "mac", state: s, online: new Map(), unread: 0, all: true });
+    expect(all).toContain("codex · windows x64 · ojow/channels · tools: git, dotnet");
+    expect(all).toContain(" · key ");
   });
 
   test("a later card replaces the earlier one; describeEvent says it", async () => {

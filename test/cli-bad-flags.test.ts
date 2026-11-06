@@ -17,7 +17,7 @@ test("an unknown flag is one line on stderr and exit 2, not a crash with a stack
   const r = await run(["task", "done", "T1", "--pr", "5"]);
   expect(r.code).toBe(2);
   expect(r.out).toBe("");
-  expect(r.err).toBe("kiwi: unknown option --pr; `kiwi help` lists the options\n");
+  expect(r.err).toBe("kiwi: unknown option --pr; `kiwi help task` lists the options\n");
 });
 
 test("a flag missing its value is one line too (T1894)", async () => {

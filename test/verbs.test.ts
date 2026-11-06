@@ -124,7 +124,7 @@ describe("ten verbs", () => {
   });
 
   test("help shows the new verbs and says the old names still work", async () => {
-    const help = await ok(agent, "help");
+    const help = await ok(agent, "help", "all");
     for (const v of ["kiwi join", "kiwi listen", "kiwi send", "kiwi reply", "kiwi show", "kiwi log", "kiwi status", "kiwi task", "kiwi note", "kiwi leave"]) expect(help).toContain(v);
     expect(help).not.toContain("kiwi tail [");
     expect(help).toContain("task cancel T7");
@@ -375,6 +375,16 @@ describe("review rounds through the CLI", () => {
     expect(JSON.parse(await ok(dev, "task", "show", `T${unowned}`, "--json")).notes.at(-1)).toMatchObject({ by: "dev", text: "on it" });
   });
 
+  test("task add --start files the task and takes it in one call, and refuses another owner", async () => {
+    const added = await ok(dev, "task", "add", "file and take", "--ask", want, "--start");
+    const t = taskNo(added);
+    expect(added).toContain(`added T${t}, doing @dev`);
+    expect(JSON.parse(await ok(dev, "task", "show", `T${t}`, "--json"))).toMatchObject({ state: "doing", owner: "dev" });
+    const other = await run(dev, "task", "add", "not mine", "--ask", want, "--start", "--owner", "rev");
+    expect(other.code).not.toBe(0);
+    expect(other.err).toContain("--start takes the task yourself");
+  });
+
   test("a review change the channel would refuse sends nothing and says why (#1032)", async () => {
     const t = taskNo(await ok(dev, "task", "add", "keep the gate", "--review", "rev", "--ask", want));
     await ok(dev, "task", "claim", `T${t}`);
@@ -422,7 +432,7 @@ describe("review rounds through the CLI", () => {
     expect(tooLong.code).toBe(1);
     expect(tooLong.err).toContain("the most it takes is 4000");
     expect(JSON.parse(await ok(dev, "task", "show", `T${t}`, "--json")).rounds).toHaveLength(2);
-    expect(await ok(dev, "help")).toContain('task review T7 [--at SHA] ["summary"] [--file summary.md]');
+    expect(await ok(dev, "help", "task")).toContain('task review T7 [--at SHA] ["summary"] [--file summary.md]');
   });
 
   test("review on a task with no reviewer is refused with how to name one, and opens no round", async () => {

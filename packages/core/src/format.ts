@@ -287,22 +287,26 @@ export function runsStatus(runs: Runs): string {
 }
 
 /** "macos arm64 · claude-code · ojow/channels@main · tools: docker, gpu · note", one line. */
-export function cardLine(c: Card | undefined, runs?: Runs): string {
+export function cardLine(c: Card | undefined, runs?: Runs, machine = true): string {
   if (!c) return "";
   const where = c.repo ? `${inlineText(c.repo, 80)}${c.branch ? `@${inlineText(c.branch, 80)}` : ""}` : "";
   const parts = [
     runs ? "" : inlineText(c.model, 60),
     runs ? "" : inlineText(c.harness, 40),
-    [c.os, c.arch]
-      .filter(Boolean)
-      .map((x) => inlineText(x, 40))
-      .join(" "),
-    [c.cpu, c.memory]
-      .filter(Boolean)
-      .map((x) => inlineText(x, 60))
-      .join(", "),
+    machine
+      ? [c.os, c.arch]
+          .filter(Boolean)
+          .map((x) => inlineText(x, 40))
+          .join(" ")
+      : "",
+    machine
+      ? [c.cpu, c.memory]
+          .filter(Boolean)
+          .map((x) => inlineText(x, 60))
+          .join(", ")
+      : "",
     where,
-    c.tools?.length ? `tools: ${c.tools.map((t) => inlineText(t, 40)).join(", ")}` : "",
+    machine && c.tools?.length ? `tools: ${c.tools.map((t) => inlineText(t, 40)).join(", ")}` : "",
     inlineText(c.note, 200),
   ];
   return parts.filter(Boolean).join(" · ");
@@ -474,6 +478,7 @@ export interface Snapshot {
   online: Map<string, { client: string; role?: string; reach?: Reach; readAt?: number; wake?: WakeVia }>;
   unread: number;
   now?: number;
+  all?: boolean;
 }
 
 /** One member as `kiwi status --json` gives it: who they are, where, and how busy. */
@@ -579,7 +584,7 @@ function heldLine(state: ChannelState, a: Message): string {
   return `${a.step ? " [step]" : a.decision ? ` [${a.decision}]` : ""}${held.length ? ` · holds ${held.join(", ")}` : ""}`;
 }
 
-export function formatStatus({ alias, me, state, online, unread, now = Date.now() }: Snapshot): string {
+export function formatStatus({ alias, me, state, online, unread, now = Date.now(), all = false }: Snapshot): string {
   const out: string[] = [];
   const meM = state.members.get(me);
   out.push(`channel ${alias} · you are ${me}${meM?.persona ? ` (${inlineText(meM.persona?.name, 80)})` : ""} · head #${state.head}${unread ? ` · ${unread} unread` : ""}`);
@@ -613,7 +618,7 @@ export function formatStatus({ alias, me, state, online, unread, now = Date.now(
     const on = online.get(name);
     const where = on ? presenceWords(on, now) : m ? `last seen ${ago(m.lastSeen, now)}` : "online";
     const role = m?.persona ? `${inlineText(m.persona.name, 40)} (${ROLE_LABEL[m.persona.role]})` : "";
-    const key = m?.pk ? ` · key ${m.pk.slice(0, 8)}` : "";
+    const key = all && m?.pk ? ` · key ${m.pk.slice(0, 8)}` : "";
     const kind =
       m?.kind === "human"
         ? ` · human${m.display ? ` (${inlineText(m.display, 80)})` : ""}${m.owner ? ", owner" : fullyTrusted(m) ? ", fully trusted" : ""}`
@@ -624,7 +629,8 @@ export function formatStatus({ alias, me, state, online, unread, now = Date.now(
     // How busy they are, so work goes to whoever's free (people only when they hold tasks).
     const load = memberLoad(state, name);
     if (showsLoad(m, load)) out.push(`      ${loadSummary(load)}`);
-    if (m?.card && cardLine(m.card, m.runs)) out.push(`      ${cardLine(m.card, m.runs)}${outsideRepos(state, m.card) ? " · not one of this channel's repos" : ""}`);
+    const card = m?.card ? cardLine(m.card, m.runs, all) : "";
+    if (m?.card && card) out.push(`      ${card}${outsideRepos(state, m.card) ? " · not one of this channel's repos" : ""}`);
     if (m?.runs) out.push(`      ${runsStatus(m.runs)}`);
   }
   if (left.length) out.push(`  left or removed: ${left.sort().join(", ")}`);

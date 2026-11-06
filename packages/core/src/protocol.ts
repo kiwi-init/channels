@@ -516,6 +516,7 @@ export interface GithubNote {
   reason?: string;
   by?: string;
   at: number;
+  happened?: number;
 }
 
 export const MERGE_METHODS = ["merge", "squash", "rebase"] as const;
@@ -562,7 +563,7 @@ export function cleanGithubNote(x: unknown): GithubNote | null {
     if (typeof r.merged !== "boolean") return null;
     out.merged = r.merged;
   }
-  for (const k of ["additions", "deletions", "files", "run", "attempt"] as const) {
+  for (const k of ["additions", "deletions", "files", "run", "attempt", "happened"] as const) {
     const v = r[k];
     if (v === undefined) continue;
     if (typeof v !== "number" || !Number.isSafeInteger(v) || v < 0) return null;

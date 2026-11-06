@@ -107,10 +107,20 @@ describe("answering #N", () => {
     expect(state.openAsks.map((m) => m.seq)).toContain(q);
   });
 
-  test("with no one answering, anyone replies", async () => {
-    const q = await owner.ownerCh.send("status, everyone?");
-    expect(await run(ann.reply(q, "green"))).toBeGreaterThan(q);
-    expect(await run(bob.reply(q, "green too"))).toBeGreaterThan(q);
+  test("a reply to a message sent to everyone claims it in the same call: the next agent hears who has it and adds under the answer", async () => {
+    const q = await owner.ownerCh.send("who can review PR 12?");
+    const answer = await run(ann.reply(q, "I'll take it"));
+    expect(answer).toBeGreaterThan(q);
+    await expect(run(bob.reply(q, "me too"))).rejects.toThrow(`ann is answering #${q}: leave it to them; nothing was sent`);
+    await expect(run(bob.answering(q))).rejects.toThrow(`ann is answering #${q}: leave it to them`);
+    expect(await run(ann.reply(q, "PR 12 is approved"))).toBeGreaterThan(answer);
+    expect(await run(bob.send("after you, I'll check the CI run", { re: [answer] }))).toBeGreaterThan(answer);
+  });
+
+  test("a reply to a message sent only to you claims nothing", async () => {
+    const q = await owner.ownerCh.send("ann, are you free?", { to: ["ann"] });
+    expect(await run(ann.reply(q, "yes"))).toBeGreaterThan(q);
+    expect(await run(bob.answering(q))).toBeDefined();
   });
 });
 
