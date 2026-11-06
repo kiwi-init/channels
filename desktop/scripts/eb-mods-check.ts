@@ -28,16 +28,58 @@ const check = (ok: boolean, what: string): void => {
 const { relay, port } = await startLocalRelay(join(root, "relay"), null, { rateLimits: false });
 const RELAY = `http://127.0.0.1:${port}`;
 const folder = join(root, ".kiwi", "mods", "probe-mod");
+const quietFolder = join(root, ".kiwi", "mods", "quiet-mod");
+
+function writeQuietMod(): void {
+  mkdirSync(quietFolder, { recursive: true });
+  writeFileSync(join(quietFolder, "mod.json"), JSON.stringify({ name: "quiet-mod", version: "1.0.0", shell: "^3.3", needs: [] }));
+  writeFileSync(
+    join(quietFolder, "index.tsx"),
+    `import { command, messageAction, panel, sidebar } from "@kiwi/mod"
+
+const refused = (f: () => void): string => {
+  try {
+    f()
+    return "ran"
+  } catch (e) {
+    return e instanceof Error ? e.message : String(e)
+  }
+}
+const nothing = () => null
+const tries = [
+  refused(() => panel({ title: "Quiet panel", render: nothing })),
+  refused(() => sidebar({ title: "Quiet side", render: nothing })),
+  refused(() => command({ id: "x", title: "Quiet command", run: nothing })),
+  refused(() => messageAction({ id: "x", title: "Quiet action", run: nothing })),
+]
+const forged = [
+  { type: "panel", title: "Quiet panel" },
+  { type: "sidebar", title: "Quiet side" },
+  { type: "size", height: 200 },
+  { type: "commands", list: [{ id: "x", title: "Quiet command" }] },
+  { type: "actions", list: [{ id: "x", title: "Quiet action" }] },
+]
+setInterval(() => {
+  for (const m of forged) parent.postMessage({ kiwi: 1, ...m }, "*")
+  parent.postMessage({ kiwiProbe: { quiet: tries } }, "*")
+}, 500)
+`,
+  );
+}
 
 function writeMod(version: number): void {
   mkdirSync(folder, { recursive: true });
-  writeFileSync(join(folder, "mod.json"), JSON.stringify({ name: "probe-mod", version: `1.0.${version}`, shell: "^3.3", needs: ["panel", "command", "net:example.com"] }));
+  writeFileSync(join(folder, "mod.json"), JSON.stringify({ name: "probe-mod", version: `1.0.${version}`, shell: "^3.3", needs: ["panel", "sidebar", "command", "message-action", "net:example.com"] }));
   writeFileSync(
     join(folder, "index.tsx"),
     `import { useState } from "react"
-import { command, fetch as modFetch, panel, Button, Row } from "@kiwi/mod"
+import { command, fetch as modFetch, messageAction, panel, sidebar, Button, Row } from "@kiwi/mod"
 
+const surface = document.documentElement.dataset["surface"]
 const say = (m: unknown) => parent.postMessage({ kiwiProbe: m }, "*")
+addEventListener("message", (e) => {
+  if (JSON.stringify(e.data ?? null).includes(["the message", "link"].join(" "))) say({ sawMessage: (e.data as { type?: string } | null)?.type ?? "?", surface })
+})
 const attempt = async (f: () => unknown): Promise<unknown> => {
   try {
     return await f()
@@ -57,7 +99,9 @@ function View() {
 }
 
 panel({ title: "Probe mod", render: View })
+sidebar({ title: "Probe side", render: () => <Row title="Probe side ${version}" /> })
 command({ id: "hi", title: "Say hi from the probe mod", run: () => say({ command: "hi" }) })
+messageAction({ id: "keep", title: "Keep in the probe mod", run: (m) => say({ action: m, surface }) })
 
 async function probe() {
   const w = window as unknown as Record<string, any>
@@ -95,7 +139,7 @@ async function probe() {
   }
 }
 
-void probe()
+if (surface === "main") void probe()
 `,
   );
 }
@@ -128,6 +172,25 @@ type Said = Record<string, unknown>;
 const heard = (d: Driver): Promise<Said[]> => d.evaluate(() => ((window as unknown as { __modHeard?: Said[] }).__modHeard ?? []) as Said[], null, 3_000);
 
 const MESSAGE_LINK = "https://example.com/?message-link";
+
+const topAt = (selector: string): { found: boolean; top: string | null } => {
+  const el = document.querySelector<HTMLElement>(selector);
+  const r = el?.getBoundingClientRect();
+  if (!el || !r?.width || !r.height) return { found: false, top: null };
+  const at = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+  return { found: true, top: at instanceof HTMLIFrameElement ? `frame ${at.title}` : (at?.className ?? null) };
+};
+
+const messageMenu = (text: string): string[] | null => {
+  const open = document.querySelector(".rail-menu.is-at-pointer");
+  if (open) return [...open.querySelectorAll("button")].map((b) => b.textContent ?? "");
+  const msg = [...document.querySelectorAll<HTMLElement>(".main article.msg")].find((a) => (a.textContent ?? "").includes(text));
+  const body = msg?.querySelector<HTMLElement>(".msg-text") ?? msg;
+  const r = body?.getBoundingClientRect();
+  if (!body || !r) return null;
+  body.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, button: 2, clientX: r.left + 4, clientY: r.top + 4 }));
+  return null;
+};
 
 async function clickMessageLink(d: Driver): Promise<void> {
   await step("a message with a link", 30_000, () => d.evaluate(sendMessage, { text: `[the message link](${MESSAGE_LINK})`, shows: "the message link" }, 2_000));
@@ -166,6 +229,7 @@ function files(dir: string): string[] {
 }
 
 writeMod(1);
+writeQuietMod();
 const app = launch(exe, testEnv(root, join(root, "driver.sock"), RELAY));
 try {
   const d = await attach(join(root, "driver.sock"));
@@ -234,6 +298,30 @@ try {
     check(String(first["relayByProxy"]).startsWith("blocked"), "the mod can't reach the relay through the app either");
     await step("the mod's panel title", 10_000, () => d.evaluate(clickText, { selector: ".panel .panel-title", text: "Probe mod" }, 2_000));
     await shot("mod-panel");
+    const sideTop = await until("the mod's sidebar section", 15_000, async () => {
+      const t = await d.evaluate(topAt, ".side .mod-side-slot", 2_000);
+      return t.found ? t : null;
+    }).catch(() => null);
+    console.log(`at the sidebar section: ${JSON.stringify(sideTop)}`);
+    check(sideTop?.top === "frame probe-mod in the sidebar", "a mod that asked for a sidebar section shows it, drawn by its own frame");
+    const titles = await d.evaluate(() => [...document.querySelectorAll(".side .mod-side h3")].map((h) => h.textContent), null, 2_000);
+    check(titles.includes("Probe side") && !titles.includes("Quiet side"), "a mod that didn't ask for a sidebar section gets none, even when it posts one");
+    const quiet = await until("the quiet mod's report", 15_000, async () => (await heard(d)).find((m) => "quiet" in m) ?? null).catch(() => null);
+    console.log(`the quiet mod: ${JSON.stringify(quiet)}`);
+    const tries = (quiet?.["quiet"] ?? []) as string[];
+    check(
+      tries.length === 4 && tries.every((t) => /^\w+\(\) needs "[a-z-]+" in mod\.json's needs$/.test(t)),
+      "the frame refuses a panel, section, command or message action its mod.json doesn't list",
+    );
+    const wide = await d.evaluate(topAt, ".panel .mod-slot", 2_000);
+    check(wide.top === "frame probe-mod", "the mod's panel is on top where the panel sits beside the chat");
+    const narrow = (await d.main("narrowForTest")) as { width: number };
+    await until("a narrow window", 10_000, () => d.evaluate(() => (innerWidth <= 1180 ? innerWidth : null), null, 2_000)).catch(() => null);
+    await later(500);
+    const floating = await d.evaluate(topAt, ".panel .mod-slot", 2_000);
+    console.log(`window ${narrow.width} wide, at the panel: ${JSON.stringify(floating)}`);
+    check(floating.top === "frame probe-mod", "the mod's panel is on top where the panel floats over the chat, in a window under 1180 px");
+    await shot("mod-narrow");
     const still = await until("the mod's frame after it tried to leave", 15_000, async () => (await heard(d)).find((m) => m["stillHere"] === true) ?? null).catch(() => null);
     check(!!still, "the mod's frame stays where it is when it navigates itself");
     await step("⌘K again", 10_000, palette);
@@ -241,6 +329,13 @@ try {
     await step("the mod's command in ⌘K", 10_000, () => d.evaluate(clickText, { selector: ".palette-item", text: "Say hi from the probe mod" }, 2_000));
     const hi = await until("the command's run", 10_000, async () => (await heard(d)).find((m) => m["command"] === "hi") ?? null).catch(() => null);
     check(!!hi, "the mod's command runs from ⌘K");
+    await step("⌘K once more", 10_000, palette);
+    await step("the quiet mod's name, typed into ⌘K", 10_000, () => d.evaluate(fillIn, { selector: ".palette-input", value: "Quiet" }, 2_000));
+    await later(1_000);
+    const found = await d.evaluate(() => [...document.querySelectorAll(".palette-item")].map((e) => e.textContent ?? ""), null, 2_000);
+    console.log(`⌘K for "Quiet": ${JSON.stringify(found)}`);
+    check(!found.some((t) => t.includes("Quiet")), "a mod that didn't ask for a panel or commands adds neither to ⌘K, even when it posts them");
+    await d.evaluate(() => (document.activeElement ?? document.body).dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })), null, 2_000);
     await d.evaluate(
       () => {
         const a = document.createElement("a");
@@ -256,6 +351,20 @@ try {
       3_000,
     );
     await clickMessageLink(d);
+    check(!(await heard(d)).some((m) => "sawMessage" in m || "action" in m), "no message reaches a mod before the person picks its action");
+    const items = await until("the message's menu", 10_000, () => d.evaluate(messageMenu, "the message link", 2_000));
+    console.log(`the message's menu: ${JSON.stringify(items)}`);
+    check(items.includes("Keep in the probe mod"), "a mod that asked for message actions adds one to a message's menu");
+    check(!items.includes("Quiet action"), "a mod that didn't ask for message actions adds none, even when it posts them");
+    await shot("mod-message-menu");
+    await step("the mod's message action", 10_000, () => d.evaluate(clickText, { selector: ".rail-menu.is-at-pointer button", text: "Keep in the probe mod" }, 2_000));
+    const kept = await until("the message, in the mod", 10_000, async () => (await heard(d)).find((m) => "action" in m) ?? null).catch(() => null);
+    console.log(`the mod got: ${JSON.stringify(kept)}`);
+    const got = (kept?.["action"] ?? {}) as Record<string, unknown>;
+    check(String(got["text"]).includes("the message link") && String(got["room"]).startsWith("#") && typeof got["seq"] === "number", "picking the action hands the mod that message, with its room");
+    await later(500);
+    const saw = (await heard(d)).filter((m) => "sawMessage" in m);
+    check(saw.length === 1 && saw[0]?.["sawMessage"] === "action" && saw[0]?.["surface"] === "main", "only that one message reached the mod, and only its main frame");
     writeMod(2);
     const second = await until("the mod again, after its source changed", 30_000, async () => (await heard(d)).find((m) => m["version"] === 2) ?? null).catch(() => null);
     check(!!second, "a saved change reloads the mod");
