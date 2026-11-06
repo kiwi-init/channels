@@ -41,6 +41,8 @@
   // Static assets are free and don't count as Worker requests.
   // SPA fallback so /join/<code> loads the page; API routes always reach the Worker.
   "assets": { "directory": "site", "not_found_handling": "single-page-application", "run_worker_first": ["/v1/*"] },
+  // The docs pages (site/docs/) are built from docs/ before every deploy and dev run.
+  "build": { "command": "bun scripts/docs-site.ts", "watch_dir": ["src", "docs", "site/figures"] },
   "vars": {
     // Humans sign in with the relay's GitHub App: GITHUB_APP_CLIENT_ID and GITHUB_APP_CLIENT_SECRET.
     // Private beta: only people on KIWI_BETA_USERS (github_<id> user ids, "github:<login>", emails
