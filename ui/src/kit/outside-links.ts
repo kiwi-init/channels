@@ -13,9 +13,12 @@ function linkOf(e: MouseEvent): string | null {
   }
 }
 
+let on = false
+
 export function openLinksOutside(): void {
   const b = bridge()
-  if (!b) return
+  if (!b || on) return
+  on = true
   const open = (e: MouseEvent) => {
     if (e.defaultPrevented || (e.type === "auxclick" && e.button !== 1)) return
     const url = linkOf(e)

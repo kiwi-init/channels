@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 
-import { fromFrame, MOD_PROTOCOL } from "~/mods/protocol"
+import { fromFrame, LOOK, MOD_PROTOCOL } from "~/mods/protocol"
+import { TOKENS } from "~/theme/derive"
 
 describe("a mod frame's messages", () => {
   test("only the protocol's shapes come through, trimmed to what the page uses", () => {
@@ -41,4 +42,8 @@ describe("a mod frame's messages", () => {
     expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "error" })).toEqual({ kiwi: MOD_PROTOCOL, type: "error", message: "it threw with no message" })
     expect((fromFrame({ kiwi: MOD_PROTOCOL, type: "error", message: "x".repeat(5_000) }) as { message: string }).message).toHaveLength(2_000)
   })
+})
+
+test("a mod's frame gets every color of the person's theme", () => {
+  expect(LOOK).toEqual([...TOKENS])
 })

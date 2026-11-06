@@ -1,5 +1,41 @@
 export const MOD_PROTOCOL = 1
 
+export const LOOK = [
+  "bg",
+  "bg-2",
+  "bg-3",
+  "ink",
+  "ink-2",
+  "ink-3",
+  "line",
+  "line-2",
+  "line-3",
+  "wash",
+  "wash-2",
+  "scrim",
+  "link",
+  "on-ink",
+  "accent",
+  "accent-wash",
+  "live",
+  "doing",
+  "review",
+  "decide",
+  "decide-wash",
+  "alert",
+  "alert-wash",
+  "c-red",
+  "c-orange",
+  "c-yellow",
+  "c-green",
+  "c-teal",
+  "c-blue",
+  "c-indigo",
+  "c-violet",
+  "c-pink",
+  "c-brown",
+]
+
 export interface ModCommand {
   id: string
   title: string

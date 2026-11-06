@@ -3,8 +3,8 @@ import { useEffect, useRef, useSyncExternalStore } from "react"
 import { bridge } from "@kiwi/secrets/secrets.ts"
 import type { ModView } from "../../../desktop/src/bridge.ts"
 import { useApp } from "~/nav"
-import { TOKENS } from "~/theme/derive"
-import { fromFrame, MOD_PROTOCOL, type ModCommand, type ToFrame } from "~/mods/protocol"
+import { openLinksOutside } from "~/kit/outside-links"
+import { fromFrame, LOOK, MOD_PROTOCOL, type ModCommand, type ToFrame } from "~/mods/protocol"
 
 const FRAME_URL = "views://internal/mod-frame.html"
 
@@ -55,7 +55,7 @@ function send(name: string, m: ToFrame): void {
 function look(): { theme: Record<string, string>; dark: boolean } {
   const css = getComputedStyle(document.documentElement)
   const theme: Record<string, string> = {}
-  for (const t of TOKENS) {
+  for (const t of LOOK) {
     const v = css.getPropertyValue(`--${t}`).trim()
     if (v) theme[`--${t}`] = v
   }
@@ -130,6 +130,7 @@ export function ModsLayer() {
   useEffect(() => {
     const b = bridge()
     if (!b || typeof b.mods !== "function") return
+    openLinksOutside()
     let live = true
     const take = (list: ModView[]) => {
       if (!live) return
