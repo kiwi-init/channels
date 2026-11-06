@@ -4,7 +4,6 @@ import { bridge } from "@kiwi/secrets/secrets.ts"
 import type { ModView } from "../../../desktop/src/bridge.ts"
 import { addCommands } from "~/commands/rebind"
 import { useApp } from "~/nav"
-import { openLinksOutside } from "~/kit/outside-links"
 import { fromFrame, LOOK, MOD_PROTOCOL, type ModCommand, type ToFrame } from "~/mods/protocol"
 
 const FRAME_URL = "views://internal/mod-frame.html"
@@ -115,7 +114,6 @@ function startFrames(layer: HTMLElement): void {
     }
   for (const [name, hash] of on) {
     if (frames.has(name)) continue
-    openLinksOutside()
     const f = document.createElement("iframe")
     f.setAttribute("sandbox", "allow-scripts")
     f.title = name
