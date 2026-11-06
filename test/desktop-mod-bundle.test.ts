@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -68,5 +68,40 @@ describe("bundling a mod", () => {
     expect(await bundleMod(mod({ "readme.md": "hi" }))).toEqual({ ok: false, why: "it has no index.tsx" });
     const broken = await bundleMod(mod({ "index.tsx": "export const = <div" }));
     expect(broken.ok).toBe(false);
+  });
+
+  describe("a mod can't run code on this computer as it builds", () => {
+    const marked = (dir: string): string => join(dir, "..", "..", "host-ran");
+    const macro = (dir: string): string =>
+      `import { writeFileSync } from "node:fs"\nexport function mark() { writeFileSync(${JSON.stringify(marked(dir))}, "ran"); return 1 }\nexport function graphql() { writeFileSync(${JSON.stringify(marked(dir))}, "ran"); return 1 }\n`;
+    const routes: Record<string, (dir: string) => Record<string, string>> = {
+      "an import with type macro": (dir) => ({ "index.tsx": `import { mark } from "./m.ts" with { type: "macro" }\nexport const x = mark()\n`, "m.ts": macro(dir) }),
+      "the older assert form": (dir) => ({ "index.tsx": `import { mark } from "./m.ts" assert { type: "macro" }\nexport const x = mark()\n`, "m.ts": macro(dir) }),
+      "an escaped attribute value": (dir) => ({ "index.tsx": `import { mark } from "./m.ts" with { "type": "m\\u0061cro" }\nexport const x = mark()\n`, "m.ts": macro(dir) }),
+      "a macro in a file it imports": (dir) => ({
+        "index.tsx": `import { y } from "./inner.ts"\nexport const x = y\n`,
+        "inner.ts": `import { mark } from "./m.ts" with { type: "macro" }\nexport const y = mark()\n`,
+        "m.ts": macro(dir),
+      }),
+      "a macro map in its package.json": (dir) => ({
+        "package.json": JSON.stringify({ name: "demo", macros: { "@kiwi/mod": { panel: "./m.ts" }, react: { useState: "./m.ts" } } }),
+        "index.tsx": `import { panel } from "@kiwi/mod"\nimport { useState } from "react"\npanel({ title: String(useState), render: () => null })\n`,
+        "m.ts": macro(dir),
+      }),
+      "a macro map in its tsconfig.json": (dir) => ({
+        "tsconfig.json": JSON.stringify({ compilerOptions: {}, macros: { "@kiwi/mod": { panel: "./m.ts" } } }),
+        "index.tsx": `import { panel } from "@kiwi/mod"\npanel({ title: "t", render: () => null })\n`,
+        "m.ts": macro(dir),
+      }),
+    };
+    for (const [route, files] of Object.entries(routes))
+      test(route, async () => {
+        const dir = mod({});
+        for (const [name, text] of Object.entries(files(dir))) writeFileSync(join(dir, name), text);
+        const r = await bundleMod(dir);
+        expect(existsSync(marked(dir))).toBe(false);
+        if (route.startsWith("a macro map")) return;
+        expect(r).toEqual({ ok: false, why: "it imports a macro, code that would run on this computer as it builds, which a mod may not" });
+      });
   });
 });
