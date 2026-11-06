@@ -3,7 +3,8 @@ import { useEffect, useId, useRef, useState } from "react"
 import { handleFor, NAME_RE, RESERVED_NAMES } from "@kiwi/core/membership.ts"
 
 import "~/styles/start.css"
-import { autofocus, cx, Modal } from "~/kit/bits"
+import { autofocus, cx } from "~/kit/bits"
+import { Modal } from "~/kit/modal"
 import type { InviteInfo } from "~/model"
 import { useApp } from "~/nav"
 

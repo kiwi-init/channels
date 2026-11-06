@@ -1,7 +1,8 @@
 import { useEffect, useState, type ReactNode } from "react"
 
 import { CALM_MINUTES } from "~/calm/idle"
-import { IconButton, Toggle } from "~/kit/bits"
+import { IconButton } from "~/kit/bits"
+import { Toggle } from "~/kit/form"
 import { setDebugOptions, useDebugOptions } from "~/kit/debug"
 import { Icon } from "~/kit/icons"
 import type { TextFont } from "@kiwi/app/theme.ts"
