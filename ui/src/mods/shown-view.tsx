@@ -88,7 +88,17 @@ function useDark(): boolean {
   return dark
 }
 
-function DrawnFrame({ code, shown, mod, dark, full, onDone }: { code: string; shown: ShownFiles<DocFile>; mod: string; dark: boolean; full: boolean; onDone: (ok: boolean) => void }) {
+const fileKey = (f: DocFile | null): string => (f ? f.pieces.map((p) => p.id).join("+") || f.name : "")
+
+function useStable<T extends DocFile | null>(f: T): T {
+  const [kept, setKept] = useState({ key: fileKey(f), f })
+  const key = fileKey(f)
+  if (kept.key === key) return kept.f
+  setKept({ key, f })
+  return f
+}
+
+function DrawnFrame({ code, file, kind, name, mod, full, onDone }: { code: string; file: DocFile; kind: string; name: string; mod: string; full: boolean; onDone: (ok: boolean) => void }) {
   const { actions } = useAct()
   const ref = useRef<HTMLIFrameElement>(null)
   const done = useRef(onDone)
@@ -98,12 +108,11 @@ function DrawnFrame({ code, shown, mod, dark, full, onDone }: { code: string; sh
   useEffect(() => {
     const el = ref.current
     if (!el) return
-    const file = !dark && shown.light ? shown.light : shown.page
     listen()
     drawn.set(el, {
       mod,
-      kind: shown.kind,
-      name: shown.name,
+      kind,
+      name,
       full,
       booted: false,
       ready: false,
@@ -112,8 +121,8 @@ function DrawnFrame({ code, shown, mod, dark, full, onDone }: { code: string; sh
     })
     el.src = FRAME_URL
     return () => void drawn.delete(el)
-  }, [actions, code, shown, mod, dark, full])
-  return <iframe ref={ref} className={full ? "shown-full-frame" : "msg-shown-frame"} title={shown.name} sandbox="allow-scripts" />
+  }, [actions, code, file, kind, name, mod, full])
+  return <iframe ref={ref} className={full ? "shown-full-frame" : "msg-shown-frame"} title={name} sandbox="allow-scripts" />
 }
 
 export function ShownView({ code, shown, mod }: { code: string; shown: ShownFiles<DocFile>; mod: string }) {
@@ -127,13 +136,17 @@ export function ShownView({ code, shown, mod }: { code: string; shown: ShownFile
   const [live, setLive] = useState(false)
   const [broken, setBroken] = useState(false)
   const [full, setFull] = useState(false)
+  const snapshot = useStable(shown.snapshot)
+  const page = useStable(shown.page)
+  const light = useStable(shown.light)
+  const file = !dark && light ? light : page
   const drawable = canDraw(mod) && !broken
   const inline = drawable && snap.state === "shown" && !still()
 
   useEffect(() => {
     let on = true
     let url: string | null = null
-    actions.docFile(code, shown.snapshot).then(
+    actions.docFile(code, snapshot).then(
       (data) => {
         if (!on) return
         if (data === null) return setSnap({ state: "gone", why: `${shown.name} is no longer available` })
@@ -150,7 +163,7 @@ export function ShownView({ code, shown, mod }: { code: string; shown: ShownFile
       on = false
       if (url) URL.revokeObjectURL(url)
     }
-  }, [actions, code, shown])
+  }, [actions, code, snapshot, shown.name])
 
   useEffect(() => {
     const el = box.current
@@ -191,14 +204,14 @@ export function ShownView({ code, shown, mod }: { code: string; shown: ShownFile
   return (
     <div ref={box} className={live ? "msg-shown is-live" : "msg-shown"} style={{ aspectRatio: `${snap.width} / ${snap.height}`, maxWidth: `${snap.width}px` }}>
       <img src={snap.url} alt={shown.name} draggable={false} />
-      {slot && <DrawnFrame key={dark ? "dark" : "light"} code={code} shown={shown} mod={mod} dark={dark} full={false} onDone={done} />}
+      {slot && <DrawnFrame code={code} file={file} kind={shown.kind} name={shown.name} mod={mod} full={false} onDone={done} />}
       <button type="button" className="msg-shown-open" aria-label={`Open ${shown.name} full window`} title="Full window" onClick={() => setFull(true)}>
         <Icon name="expand" size={14} />
       </button>
       {full && (
         <dialog ref={(el) => void (el && !el.open && el.showModal())} className="shown-full" aria-label={shown.name} onClose={() => setFull(false)}>
           {drawable ? (
-            <DrawnFrame key={dark ? "dark" : "light"} code={code} shown={shown} mod={mod} dark={dark} full onDone={() => {}} />
+            <DrawnFrame code={code} file={file} kind={shown.kind} name={shown.name} mod={mod} full onDone={() => {}} />
           ) : (
             <img className="shown-full-frame" src={snap.url} alt={shown.name} />
           )}

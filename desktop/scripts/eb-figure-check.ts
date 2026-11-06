@@ -140,15 +140,19 @@ const clickText = ({ selector, text }: { selector: string; text: string }): bool
   return !!el;
 };
 
-const dropFiles = (files: { name: string; type: string; text: string }[]): number => {
-  const shown = document.querySelectorAll(".main .compose-file").length;
-  if (shown) return shown;
+const attachFiles = (files: { name: string; type: string; text: string }[]): { attached: number; doc: boolean; input: boolean; form: boolean } => {
+  const attached = document.querySelectorAll(".main .compose-file").length;
+  const doc = !!document.querySelector(".main .thread-doc");
   const form = document.querySelector<HTMLFormElement>(".main form.composer");
-  if (!form) return 0;
+  const input = form?.querySelector<HTMLInputElement>("input[type=file]") ?? null;
+  if (attached || !doc || !form) return { attached, doc, input: !!input, form: !!form };
   const dt = new DataTransfer();
   for (const f of files) dt.items.add(new File([f.text], f.name, { type: f.type }));
-  form.dispatchEvent(new DragEvent("drop", { dataTransfer: dt, bubbles: true, cancelable: true }));
-  return 0;
+  if (input) {
+    input.files = dt.files;
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  } else form.dispatchEvent(new DragEvent("drop", { dataTransfer: dt, bubbles: true, cancelable: true }));
+  return { attached, doc, input: !!input, form: true };
 };
 
 const figuresNow = (text: string): { shown: number; live: number; chips: number; frames: string[] } => {
@@ -218,9 +222,14 @@ try {
       2_000,
     );
   await step("the channel", 30_000, () => d.evaluate(() => !!document.querySelector(".chan"), null, 2_000));
+  let tried: unknown = null;
   const attached = await until("the four figures, attached", 30_000, async () => {
-    const n = await d.evaluate(dropFiles, FILES, 3_000);
-    return n >= FILES.length ? n : null;
+    const r = await d.evaluate(attachFiles, FILES, 3_000);
+    tried = r;
+    return r.attached >= FILES.length ? r.attached : null;
+  }).catch((e: unknown) => {
+    console.log(`the composer then: ${JSON.stringify(tried)}`);
+    throw e;
   });
   console.log(`attached ${attached} files`);
   await step("the message with the figures", 60_000, () => d.evaluate(sendMessage, { text: TEXT, shows: TEXT }, 2_000));
