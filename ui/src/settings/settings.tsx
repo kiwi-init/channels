@@ -1,4 +1,4 @@
-import { CommandIcon, ComputerPhoneSyncIcon, PaintBoardIcon } from "@hugeicons/core-free-icons"
+import { CommandIcon, ComputerPhoneSyncIcon, PaintBoardIcon, PuzzleIcon } from "@hugeicons/core-free-icons"
 import { useEffect } from "react"
 
 import { cx } from "~/kit/bits"
@@ -7,10 +7,12 @@ import { GlyphIcon, Icon, type Glyph, type IconName } from "~/kit/icons"
 import { useApp, type Section } from "~/nav"
 import { AgentsSection } from "~/settings/agents"
 import { ComputersSection } from "~/settings/computers"
+import { ModsSection } from "~/settings/mods"
 import { AboutSection, AccountSection, AppearanceSection } from "~/settings/sections"
 import { ShortcutsSection } from "~/settings/shortcuts"
 import { useCommandTable } from "~/commands/table"
 import { useSideways } from "~/kit/sideways"
+import { modsServed } from "~/mods/served"
 import { SideCards } from "~/shell/updates"
 
 const SECTIONS: readonly (readonly [Section, string, IconName | Glyph])[] = [
@@ -19,6 +21,7 @@ const SECTIONS: readonly (readonly [Section, string, IconName | Glyph])[] = [
   ["computers", "Computers and phones", ComputerPhoneSyncIcon],
   ["agents", "Agents", "agent"],
   ["shortcuts", "Shortcuts", CommandIcon],
+  ["mods", "Mods", PuzzleIcon],
   ["about", "About", "info"],
 ]
 
@@ -26,15 +29,16 @@ export function Settings() {
   const navRef = useGlide<HTMLElement>(".side-row.is-on")
   const { nav, go } = useApp()
   const file = useCommandTable().file
+  const open = nav.page === "settings" && nav.section === "mods" && !!nav.mod
   useSideways(navRef, nav.section)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape" || e.defaultPrevented || document.querySelector("dialog[open]")) return
-      go({ to: "back" })
+      go(open ? { to: "settings", section: "mods" } : { to: "back" })
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
-  }, [go])
+  }, [go, open])
 
   return (
     <div className="set">
@@ -48,7 +52,7 @@ export function Settings() {
       </header>
       <nav ref={navRef} className="set-nav" aria-label="Settings sections">
         <ul>
-          {SECTIONS.filter(([id]) => id !== "shortcuts" || file).map(([id, label, icon]) => {
+          {SECTIONS.filter(([id]) => (id !== "shortcuts" || file) && (id !== "mods" || modsServed())).map(([id, label, icon]) => {
             const on = nav.section === id
             return (
               <li key={id}>
@@ -63,7 +67,7 @@ export function Settings() {
         <SideCards />
       </nav>
       <main className="set-main">
-        <div className="set-body" key={nav.section}>
+        <div className="set-body" key={nav.mod ? `mods/${nav.mod}` : nav.section}>
           <Current section={nav.section} />
         </div>
       </main>
@@ -83,6 +87,8 @@ function Current({ section }: { section: Section }) {
       return <AgentsSection />
     case "shortcuts":
       return <ShortcutsSection />
+    case "mods":
+      return <ModsSection />
     case "about":
       return <AboutSection />
   }

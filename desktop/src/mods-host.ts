@@ -1,11 +1,14 @@
 import { bundleMod } from "@kiwi/core/node/mod-bundle.ts";
-import { checkManifest } from "@kiwi/core/node/mod-manifest.ts";
+import { readModIcon, type IconType } from "@kiwi/core/node/mod-icon.ts";
+import { checkManifest, type ModManifest } from "@kiwi/core/node/mod-manifest.ts";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
-import type { ModFetchReply, ModFetchRequest, ModView } from "./bridge.ts";
+import type { ModDetails, ModFetchReply, ModFetchRequest, ModIcon, ModView } from "./bridge.ts";
 import { errorText, writePrivate } from "./guard.ts";
-import { hostAllowed, unapproved } from "./mods.ts";
+import { copyOf, kiwiKeys, modDetails } from "./mod-details.ts";
+import { hostAllowed, SAFE_FILE, SAFE_FLAG, SAFE_LOOP, unapproved } from "./mods.ts";
 
 const MANIFEST_BYTES = 64_000;
 const FETCH_BYTES = 8_000_000;
@@ -16,6 +19,9 @@ const DROPPED_HEADERS = new Set(["cookie", "cookie2", "host", "origin", "referer
 interface Loaded {
   view: ModView;
   code: string | null;
+  art: { type: IconType; bytes: Uint8Array } | null;
+  iconWhy: string | null;
+  author: string | null;
 }
 
 export interface ModsHostOptions {
@@ -24,51 +30,123 @@ export interface ModsHostOptions {
   contract: string;
   push: (mods: ModView[]) => void;
   request?: typeof fetch;
+  safe?: string | null;
 }
 
-function readApprovals(file: string): Record<string, string[]> {
-  try {
-    const raw = JSON.parse(fs.readFileSync(file, "utf8")) as unknown;
-    const approved = raw && typeof raw === "object" ? (raw as { approved?: unknown }).approved : null;
-    if (!approved || typeof approved !== "object") return {};
-    return Object.fromEntries(Object.entries(approved).filter((e): e is [string, string[]] => Array.isArray(e[1]) && e[1].every((n) => typeof n === "string")));
-  } catch {
-    // No approvals yet, or a file that isn't ours: every mod asks again.
-    return {};
+interface Approval {
+  needs: string[];
+  source: string;
+}
+
+type Off = { by: "you" } | { by: "crash"; why: string; hash: string };
+
+interface ModsFile {
+  approved: Record<string, Approval>;
+  off: Record<string, Off>;
+  unsettledStarts: number;
+}
+
+const LOCAL_SOURCE = "local";
+const LOOP_STARTS = 2;
+const WHY_BYTES = 300;
+
+const strings = (v: unknown): v is string[] => Array.isArray(v) && v.every((n) => typeof n === "string");
+
+function entries<T>(v: unknown, keep: (x: Record<string, unknown>) => T | null): Record<string, T> {
+  if (!v || typeof v !== "object") return {};
+  const out: Record<string, T> = {};
+  for (const [k, x] of Object.entries(v)) {
+    const kept = x && typeof x === "object" ? keep(x as Record<string, unknown>) : null;
+    if (kept) out[k] = kept;
   }
+  return out;
 }
 
-async function loadOne(dir: string, name: string, contract: string, approved: readonly string[]): Promise<Loaded> {
-  const off = (why: string, version: string | null = null, needs: string[] = []): Loaded => ({ view: { name, version, needs, approved: [], state: "off", why }, code: null });
+function readModsFile(file: string): ModsFile {
+  let raw: Record<string, unknown> = {};
+  try {
+    const parsed = JSON.parse(fs.readFileSync(file, "utf8")) as unknown;
+    if (parsed && typeof parsed === "object") raw = parsed as Record<string, unknown>;
+  } catch {
+    // No file yet, or one that isn't ours: every mod asks again.
+  }
+  return {
+    approved: entries(raw["approved"], (a) => (strings(a["needs"]) && typeof a["source"] === "string" ? { needs: a["needs"], source: a["source"] } : null)),
+    off: entries<Off>(raw["off"], (o) =>
+      o["by"] === "you" ? { by: "you" } : o["by"] === "crash" && typeof o["why"] === "string" && typeof o["hash"] === "string" ? { by: "crash", why: o["why"], hash: o["hash"] } : null,
+    ),
+    unsettledStarts: typeof raw["unsettledStarts"] === "number" && raw["unsettledStarts"] > 0 ? raw["unsettledStarts"] : 0,
+  };
+}
+
+const writeModsFile = (file: string, m: ModsFile): void => writePrivate(file, Buffer.from(`${JSON.stringify(m, null, 2)}\n`));
+
+export function modSource(dir: string): string {
+  if (fs.lstatSync(dir, { throwIfNoEntry: false })?.isSymbolicLink()) return LOCAL_SOURCE;
+  const keys = kiwiKeys(dir);
+  const source = keys ? keys["source"] : copyOf(dir)?.["source"];
+  return typeof source === "string" && source ? source : LOCAL_SOURCE;
+}
+
+const firstLine = (s: string): string => (s.split("\n").find((l) => l.trim()) ?? "").trim().slice(0, WHY_BYTES);
+
+function iconOf(dir: string, m: ModManifest): Pick<Loaded, "art" | "iconWhy"> {
+  if (!m.icon) return { art: null, iconWhy: null };
+  const got = readModIcon(dir, m.icon);
+  return got.ok ? { art: { type: got.type, bytes: got.bytes }, iconWhy: null } : { art: null, iconWhy: got.why };
+}
+
+const iconHash = (bytes: Uint8Array): string => createHash("sha256").update(bytes).digest("hex").slice(0, 16);
+
+async function loadOne(dir: string, name: string, contract: string, file: ModsFile, safe: string | null): Promise<Loaded> {
+  const source = modSource(dir);
+  const off = (why: string, version: string | null = null, needs: string[] = []): Loaded => ({
+    view: { name, version, source, needs, approved: [], state: "off", why },
+    code: null,
+    art: null,
+    iconWhy: null,
+    author: null,
+  });
   let raw: unknown;
   try {
-    const file = path.join(dir, "mod.json");
-    if (fs.statSync(file).size > MANIFEST_BYTES) return off("its mod.json is over 64 KB");
-    raw = JSON.parse(fs.readFileSync(file, "utf8"));
+    const manifest = path.join(dir, "mod.json");
+    if (fs.statSync(manifest).size > MANIFEST_BYTES) return off("its mod.json is over 64 KB");
+    raw = JSON.parse(fs.readFileSync(manifest, "utf8"));
   } catch (e) {
     return off(e instanceof SyntaxError ? "its mod.json isn't JSON" : "it has no mod.json");
   }
   const checked = checkManifest(raw, name, contract);
   if (!checked.ok) return off(checked.why);
   const { version, needs } = checked.manifest;
-  const ok = needs.filter((n) => approved.includes(n));
-  const asks = unapproved(needs, approved);
-  if (asks.length) return { view: { name, version, needs, approved: ok, state: "asks" }, code: null };
+  const icon = iconOf(dir, checked.manifest);
+  const done = (view: ModView, code: string | null = null): Loaded => ({ view, code, ...icon, author: checked.manifest.author ?? null });
+  const approval = file.approved[name];
+  const approved = approval?.source === source ? approval.needs : [];
+  const base = { name, version, source, needs, approved: needs.filter((n) => approved.includes(n)), ...(icon.art ? { icon: iconHash(icon.art.bytes) } : {}) };
+  if (unapproved(needs, approved).length)
+    return done(approval && approval.source !== source ? { ...base, state: "asks", why: `It comes from ${source} now, not ${approval.source}.` } : { ...base, state: "asks" });
+  const stopped = file.off[name];
+  if (stopped?.by === "you") return done({ ...base, state: "off", off: "you", why: "You switched it off." });
+  if (safe) return done({ ...base, state: "off", off: "safe", why: safe });
   const built = await bundleMod(dir);
-  if (!built.ok) return { view: { name, version, needs, approved: ok, state: "off", why: built.why }, code: null };
-  return { view: { name, version, needs, approved: ok, state: "on", hash: built.hash }, code: built.code };
+  if (!built.ok) return done({ ...base, state: "off", why: built.why });
+  if (stopped?.by === "crash" && stopped.hash === built.hash) return done({ ...base, state: "off", off: "crash", why: `It stopped as it started: ${stopped.why}` });
+  return done({ ...base, state: "on", hash: built.hash }, built.code);
 }
 
 export function modsHost(o: ModsHostOptions) {
   let loaded = new Map<string, Loaded>();
   let scanning: Promise<void> | null = null;
-  let again = false;
+  let queued: Promise<void> | null = null;
   let watcher: fs.FSWatcher | null = null;
   let parentWatcher: fs.FSWatcher | null = null;
   let timer: ReturnType<typeof setTimeout> | null = null;
+  let safe: string | null = o.safe ?? null;
+  let armed = false;
+  let settled = false;
 
   async function scan(): Promise<void> {
-    const approvals = readApprovals(o.approvals);
+    const file = readModsFile(o.approvals);
     let names: string[];
     try {
       names = fs
@@ -81,24 +159,23 @@ export function modsHost(o: ModsHostOptions) {
       names = [];
     }
     const next = new Map<string, Loaded>();
-    for (const name of names) next.set(name, await loadOne(path.join(o.folder, name), name, o.contract, approvals[name] ?? []));
+    for (const name of names) next.set(name, await loadOne(path.join(o.folder, name), name, o.contract, file, safe));
     loaded = next;
     o.push(list());
   }
 
   function rescan(): Promise<void> {
     if (scanning) {
-      again = true;
-      return scanning;
+      queued ??= scanning.then(() => {
+        queued = null;
+        return rescan();
+      });
+      return queued;
     }
     scanning = scan()
       .catch(() => undefined)
       .finally(() => {
         scanning = null;
-        if (again) {
-          again = false;
-          void rescan();
-        }
       });
     return scanning;
   }
@@ -130,8 +207,26 @@ export function modsHost(o: ModsHostOptions) {
     return [...loaded.values()].map((l) => l.view);
   }
 
+  const change = async (edit: (m: ModsFile) => void): Promise<ModView[]> => {
+    const m = readModsFile(o.approvals);
+    edit(m);
+    writeModsFile(o.approvals, m);
+    await rescan();
+    return list();
+  };
+
   return {
     async start(): Promise<void> {
+      const flag = path.join(o.folder, SAFE_FLAG);
+      if (fs.existsSync(flag)) {
+        safe ??= SAFE_FILE;
+        fs.rmSync(flag, { force: true });
+      }
+      const m = readModsFile(o.approvals);
+      if (m.unsettledStarts >= LOOP_STARTS) {
+        safe ??= SAFE_LOOP;
+        writeModsFile(o.approvals, { ...m, unsettledStarts: 0 });
+      }
       await rescan();
       watchFolder();
       const parent = path.dirname(o.folder);
@@ -151,20 +246,55 @@ export function modsHost(o: ModsHostOptions) {
     },
     rescan,
     list,
+    safe: (): string | null => safe,
     bundle(name: string): { code: string; hash: string } | null {
       const l = loaded.get(name);
-      return l?.view.state === "on" && l.code !== null && l.view.hash ? { code: l.code, hash: l.view.hash } : null;
+      if (l?.view.state !== "on" || l.code === null || !l.view.hash) return null;
+      if (!armed) {
+        armed = true;
+        const m = readModsFile(o.approvals);
+        writeModsFile(o.approvals, { ...m, unsettledStarts: m.unsettledStarts + 1 });
+      }
+      return { code: l.code, hash: l.view.hash };
     },
-    async approve(name: string, needs: readonly string[]): Promise<ModView[]> {
+    settled(): void {
+      if (!armed || settled) return;
+      settled = true;
+      writeModsFile(o.approvals, { ...readModsFile(o.approvals), unsettledStarts: 0 });
+    },
+    icon(name: string): ModIcon | null {
+      const art = loaded.get(name)?.art;
+      return art ? { type: art.type, data: Buffer.from(art.bytes).toString("base64") } : null;
+    },
+    details(name: string): ModDetails | null {
       const l = loaded.get(name);
-      if (!l || l.view.state === "off") throw new Error(`there is no mod ${name} waiting for approval`);
+      if (!l) return null;
+      const { version, source } = l.view;
+      return modDetails(path.join(o.folder, name), { name, version, source, author: l.author, iconWhy: l.iconWhy });
+    },
+    failed(name: string, hash: string, why: string): Promise<ModView[]> {
+      const l = loaded.get(name);
+      if (l?.view.state !== "on" || l.view.hash !== hash) return Promise.resolve(list());
+      return change((m) => {
+        m.off[name] = { by: "crash", why: firstLine(String(why)) || "it gave no reason", hash };
+      });
+    },
+    setOn(name: string, on: boolean): Promise<ModView[]> {
+      if (!loaded.has(name)) return Promise.reject(new Error(`there is no mod ${name}`));
+      return change((m) => {
+        if (on) delete m.off[name];
+        else m.off[name] = { by: "you" };
+      });
+    },
+    approve(name: string, needs: readonly string[]): Promise<ModView[]> {
+      const l = loaded.get(name);
+      if (!l || l.view.state === "off") return Promise.reject(new Error(`there is no mod ${name} waiting for approval`));
       const asked = [...l.view.needs].sort();
-      if (!Array.isArray(needs) || [...needs].sort().join("\n") !== asked.join("\n")) throw new Error(`approve exactly what ${name} asks for`);
-      const approvals = readApprovals(o.approvals);
-      approvals[name] = asked;
-      writePrivate(o.approvals, Buffer.from(`${JSON.stringify({ approved: approvals }, null, 2)}\n`));
-      await rescan();
-      return list();
+      if (!Array.isArray(needs) || [...needs].sort().join("\n") !== asked.join("\n")) return Promise.reject(new Error(`approve exactly what ${name} asks for`));
+      return change((m) => {
+        m.approved[name] = { needs: asked, source: l.view.source };
+        delete m.off[name];
+      });
     },
     async fetch(name: string, req: ModFetchRequest): Promise<ModFetchReply> {
       const l = loaded.get(name);

@@ -488,16 +488,42 @@ export interface KiwiBridge {
   modBundle(name: string): Promise<{ code: string; hash: string } | null>;
   approveMod(name: string, needs: string[]): Promise<ModView[]>;
   modFetch(name: string, req: ModFetchRequest): Promise<ModFetchReply>;
+  modFailed(name: string, hash: string, why: string): Promise<ModView[]>;
+  setModOn(name: string, on: boolean): Promise<ModView[]>;
+  modsSettled(): Promise<void>;
+  modIcon(name: string): Promise<ModIcon | null>;
+  modDetails(name: string): Promise<ModDetails | null>;
 }
 
 export interface ModView {
   name: string;
   version: string | null;
+  source: string;
   needs: string[];
   approved: string[];
   state: "on" | "asks" | "off";
   why?: string;
+  off?: "you" | "crash" | "safe";
   hash?: string;
+  icon?: string;
+}
+
+export interface ModIcon {
+  type: "image/svg+xml" | "image/png";
+  data: string;
+}
+
+export interface ModDetails {
+  name: string;
+  version: string | null;
+  author: string | null;
+  source: string;
+  commit: string | null;
+  installed: number | null;
+  updated: number | null;
+  bytes: number | null;
+  readme: string | null;
+  iconWhy: string | null;
 }
 
 export interface ModFetchRequest {

@@ -5,6 +5,7 @@ import { bridge } from "@kiwi/secrets/secrets.ts"
 import type { ModView } from "../../../desktop/src/bridge.ts"
 import type { MOD_MENU as MENU_EVENT, ModMenuAsk } from "~/chat/menus"
 import { addCommands } from "~/commands/rebind"
+import { bootFailed, bootGone, bootStarted } from "~/mods/boot"
 import { useApp } from "~/nav"
 import { openLinksOutside } from "~/kit/outside-links"
 import type { MOD_SIDES as SIDES_EVENT } from "~/shell/updates"
@@ -25,6 +26,7 @@ export interface RunningMod {
   failed: string | null
   side: { title: string; height: number } | null
   actions: ModCommand[]
+  commands: string[]
 }
 
 interface Frame {
@@ -58,6 +60,12 @@ export const useModsVersion = (): number => useSyncExternalStore(subscribe, () =
 export const modsNow = (): ModView[] => state.mods
 
 export const runningMod = (name: string): RunningMod | undefined => state.running.get(name)
+
+export function showMods(list: ModView[], running: RunningMod[] = []): void {
+  state.mods = list
+  for (const r of running) state.running.set(r.name, r)
+  changed()
+}
 
 const allows = (mod: ModView | undefined, need: string): mod is ModView => !!mod && mod.state === "on" && mod.needs.includes(need)
 
@@ -151,13 +159,18 @@ async function onMessage(e: MessageEvent): Promise<void> {
     case "hello": {
       const got = await b.modBundle(name).catch(() => null)
       if (got) send(f, { kiwi: MOD_PROTOCOL, type: "boot", name, surface, needs: mod?.needs ?? [], code: got.code, ...look() })
-      else update(name, { failed: "Its code couldn't be built." })
+      else {
+        bootGone(keyOf(name, surface))
+        update(name, { failed: "Its code couldn't be built." })
+      }
       return
     }
     case "ready":
+      bootGone(keyOf(name, surface))
       if (surface === "main") update(name, { failed: null })
       return
     case "error":
+      bootFailed(keyOf(name, surface), m.message)
       update(name, { failed: m.message })
       return
     case "panel":
@@ -165,6 +178,7 @@ async function onMessage(e: MessageEvent): Promise<void> {
       return
     case "commands":
       bindCommands(name, m.list)
+      update(name, { commands: m.list.map((c) => c.title) })
       return
     case "actions":
       update(name, { actions: m.list })
@@ -219,6 +233,7 @@ function startFrames(layer: HTMLElement): void {
     if (want.get(key)?.hash !== f.el.dataset["hash"]) {
       f.el.remove()
       frames.delete(key)
+      bootGone(key)
       if (f.surface === "sidebar") update(f.name, { side: null })
       else {
         state.running.delete(f.name)
@@ -235,7 +250,8 @@ function startFrames(layer: HTMLElement): void {
     place(el, null)
     el.src = FRAME_URL
     frames.set(key, { name, surface, el })
-    if (!state.running.has(name)) state.running.set(name, { name, title: null, failed: null, side: null, actions: [] })
+    bootStarted(key, name, hash)
+    if (!state.running.has(name)) state.running.set(name, { name, title: null, failed: null, side: null, actions: [], commands: [] })
     layer.append(el)
   }
 }

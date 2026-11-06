@@ -8,13 +8,15 @@ import { lockInternalRpc } from "./eb-bridge.ts";
 import { mark } from "./eb-startup.ts";
 import { dataDir, ebHost } from "./host-eb.ts";
 import { useHost } from "./host.ts";
+import { startModsSafe } from "./ipc/mods.ts";
 import { keepDaemonAlive, watchPage } from "./keep-alive-eb.ts";
 import { KEYRING_GRACE_MS, openedWithin } from "./keyring-wait.ts";
 import { startKeys } from "./keys-start-eb.ts";
 import { startLife, startUpdateChecks } from "./life-updates-eb.ts";
 import { keepLinuxEntry } from "./linux-entry.ts";
 import { catchMainErrors, logMainError, windowFailure } from "./main-log.ts";
-import { followColorScheme, missingGuard, sandboxOff, watchDrops, watchPaste } from "./native-eb.ts";
+import { SAFE_SHIFT } from "./mods.ts";
+import { followColorScheme, missingGuard, sandboxOff, shiftHeld, watchDrops, watchPaste } from "./native-eb.ts";
 import { watchCancels } from "./secret-service.ts";
 import { claimInstance, handoffFor, launchArgs, launchToken, type Instance } from "./single-instance.ts";
 import { keyringLocked, openStoreForThisBuild, warnIfStoreBroken } from "./store-open-eb.ts";
@@ -25,6 +27,7 @@ import { createWindow, fail, showKeyringNote } from "./window-eb.ts";
 declare const KIWI_EB_TEST: boolean;
 
 mark("main");
+if (shiftHeld()) startModsSafe(SAFE_SHIFT);
 
 useHost(KIWI_EB_TEST ? { ...ebHost, app: { ...ebHost.app, packaged: () => true } } : ebHost);
 catchMainErrors();

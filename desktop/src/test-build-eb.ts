@@ -37,6 +37,7 @@ export function driveForTests(win: BrowserWindow): void {
         browserOpens,
         argv: () => ({ argv: process.argv, launch: launchArgs() }),
         closeWindow: () => (win.requestClose(), true),
+        activate: () => (win.activate(), true),
         window: () => ({ visible: win.isVisible(), minimized: win.isMinimized() }),
         frame: () => win.getFrame(),
         spellCheck: () => win.spellCheck,
@@ -50,7 +51,7 @@ export function driveForTests(win: BrowserWindow): void {
           return win.getFrame();
         },
         minimizeForTest: () => (win.minimize(), true),
-        bringBackForTest: () => (win.unminimize(), win.activate(), true),
+        unminimizeForTest: () => (win.unminimize(), true),
         placeForTest: () => {
           const f = win.getFrame();
           win.setFrame(f.x + 40, f.y + 30, f.width - 160, f.height - 90);

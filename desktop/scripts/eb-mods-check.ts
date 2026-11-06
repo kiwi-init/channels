@@ -68,7 +68,11 @@ setInterval(() => {
 
 function writeMod(version: number): void {
   mkdirSync(folder, { recursive: true });
-  writeFileSync(join(folder, "mod.json"), JSON.stringify({ name: "probe-mod", version: `1.0.${version}`, shell: "^3.3", needs: ["panel", "sidebar", "command", "message-action", "net:example.com"] }));
+  writeFileSync(
+    join(folder, "mod.json"),
+    JSON.stringify({ name: "probe-mod", version: `1.0.${version}`, shell: "^3.3", needs: ["panel", "sidebar", "command", "message-action", "net:example.com"], icon: "icon.svg" }),
+  );
+  writeFileSync(join(folder, "icon.svg"), ICON);
   writeFileSync(
     join(folder, "index.tsx"),
     `import { useState } from "react"
@@ -257,7 +261,8 @@ async function whileAway(d: Driver, palette: () => Promise<boolean>): Promise<vo
     console.log(`${how}: the mod's frame answered its command ${answered ?? "never"} ms after it was picked${front()}`);
     check(answered !== null, `a mod's frame answers ${how}`);
   }
-  await d.main("bringBackForTest");
+  await d.main("unminimizeForTest");
+  await d.main("activate");
 }
 
 const pageNow = (): Record<string, unknown> => ({
@@ -308,6 +313,30 @@ async function howHeard(d: Driver, why: string): Promise<void> {
 }
 
 const MESSAGE_LINK = "https://example.com/?message-link";
+const ICON_RAN = `top.__iconRan = 1; parent.postMessage({ kiwiProbe: { iconRan: true } }, "*")`;
+const ICON = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" onload='${ICON_RAN}'><script>${ICON_RAN}</script><rect width="64" height="64" rx="14" fill="#9188c4"/></svg>`;
+const CRASH = "crash-mod fails on purpose";
+
+function writeCrashMod(): void {
+  const dir = join(root, ".kiwi", "mods", "crash-mod");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "mod.json"), JSON.stringify({ name: "crash-mod", version: "1.0.0", shell: "^3.3" }));
+  writeFileSync(join(dir, "index.tsx"), `throw new TypeError(${JSON.stringify(CRASH)})\n`);
+}
+
+type ModNow = { name: string; state: string; off?: string; why?: string };
+const modsNow = (d: Driver): Promise<ModNow[]> => d.evaluate(() => (window as unknown as { kiwi: { mods(): Promise<ModNow[]> } }).kiwi.mods(), null, 15_000);
+
+async function settingsMods(d: Driver, shows: string): Promise<void> {
+  await step("Settings", 10_000, () =>
+    d.evaluate(() => (document.querySelector<HTMLElement>(".set-nav") ? true : (document.querySelector<HTMLElement>('[aria-label="Settings"]')?.click(), false)), null, 2_000),
+  );
+  await step("Settings → Mods", 10_000, () => d.evaluate(clickText, { selector: ".set-nav .side-row", text: "Mods" }, 2_000));
+  await step(`Settings → Mods shows "${shows}"`, 15_000, () => d.evaluate((t) => (document.querySelector(".set-main")?.textContent ?? "").includes(t), shows, 2_000)).catch(async (e: unknown) => {
+    console.log(`the page then: ${JSON.stringify(await d.evaluate(pageNow, null, 3_000).catch((x: unknown) => String(x)), null, 1)}`);
+    throw e;
+  });
+}
 
 const topAt = (selector: string): { found: boolean; top: string | null } => {
   const el = document.querySelector<HTMLElement>(selector);
@@ -387,7 +416,7 @@ function stacks(why: string): void {
 
 writeMod(1);
 writeQuietMod();
-const app = launch(exe, testEnv(root, join(root, "driver.sock"), RELAY));
+let app = launch(exe, testEnv(root, join(root, "driver.sock"), RELAY));
 try {
   const d = await attach(join(root, "driver.sock"));
   await firstChannel(d, 0);
@@ -565,7 +594,52 @@ try {
   check(!opens.some((u) => /forged|mod-self-nav/.test(u)), "nothing the mod forged or navigated to opened in the browser");
   check(app.exitCode === null && app.signalCode === null, "the app is still running after the mod's forged events");
   if (process.platform === "darwin") await whileAway(d, palette);
+  writeCrashMod();
+  const crashed = await until("crash-mod switched off", 30_000, async () => (await modsNow(d)).find((m) => m.name === "crash-mod" && m.state === "off") ?? null).catch(() => null);
+  console.log(`crash-mod: ${JSON.stringify(crashed)}`);
+  check(crashed?.off === "crash" && (crashed.why ?? "").includes(CRASH), "a mod that throws as it starts is switched off, with its error as the reason");
+  check((await modsNow(d)).find((m) => m.name === "probe-mod")?.state === "on", "the other mods keep running");
+  await settingsMods(d, CRASH);
+  await d.main("activate").catch(() => null);
+  await later(1_000);
+  await shot("settings-mods");
+  const icon = await until("probe-mod's icon in Settings → Mods", 15_000, () =>
+    d
+      .evaluate(
+        () => {
+          const img = document.querySelector<HTMLImageElement>(".set-main img.mod-icon");
+          if (!img?.complete || img.naturalWidth === 0) return null;
+          return {
+            blob: img.src.startsWith("blob:"),
+            inline: document.querySelectorAll(".set-main svg script, .set-main svg[onload]").length,
+            ran: (window as unknown as { __iconRan?: unknown }).__iconRan ?? null,
+          };
+        },
+        null,
+        2_000,
+      )
+      .catch(() => null),
+  ).catch(() => null);
+  console.log(`probe-mod's icon: ${JSON.stringify(icon)}`);
+  check(!!icon?.blob && icon.inline === 0 && icon.ran === null && !(await heard(d)).some((m) => m["iconRan"]), "a mod's SVG icon shows as an image from a blob, and its script and onload never run");
+  await step("probe-mod's details", 10_000, () => d.evaluate(clickText, { selector: ".set-main .mod-open", text: "probe-mod" }, 2_000));
+  await step("its details page says what it may do", 10_000, () => d.evaluate(() => (document.querySelector(".set-main")?.textContent ?? "").includes("What it may do"), null, 2_000));
+  await later(500);
+  await shot("settings-mod-details");
   d.close();
+  await stop(app);
+  writeFileSync(join(root, ".kiwi", "mods", ".safe-mode"), "");
+  app = launch(exe, testEnv(root, join(root, "safe.sock"), RELAY));
+  const safe = await attach(join(root, "safe.sock"));
+  await step("the channel, in safe mode", 60_000, () => safe.evaluate(() => !!document.querySelector(".chan"), null, 2_000));
+  const listed = await modsNow(safe);
+  console.log(`mods in safe mode: ${JSON.stringify(listed)}`);
+  check(listed.every((m) => m.state !== "on") && listed.find((m) => m.name === "probe-mod")?.off === "safe", "safe mode starts with every mod off, and says why");
+  check(!existsSync(join(root, ".kiwi", "mods", ".safe-mode")), "safe mode by .safe-mode lasts one start: the app removes the file");
+  await settingsMods(safe, "No mod runs until Channels restarts");
+  check((await safe.evaluate(() => document.querySelectorAll('iframe[src*="mod-frame"]').length, null, 2_000)) === 0, "safe mode starts no mod's frame");
+  await shot("settings-mods-safe");
+  safe.close();
 } catch (e) {
   problems.push(e instanceof Error ? e.message : String(e));
   console.log(`FAIL ${problems.at(-1)}`);
