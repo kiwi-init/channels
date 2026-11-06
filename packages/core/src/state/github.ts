@@ -112,8 +112,8 @@ export function succeededBy(check: GithubCheck, run: number, x: number): boolean
     (check.run !== undefined
       ? [{ run: check.run, attempt: check.attempt ?? 1, ...(check.conclusion ? { conclusion: check.conclusion } : {}), ...(check.completedAt !== undefined ? { completed: check.completedAt } : {}) }]
       : []);
-  const current = attempts.filter((a) => a.run === run && (a.started === undefined || a.started <= x)).at(-1);
-  return current?.conclusion === "success" && current.completed !== undefined && current.completed <= x;
+  const current = attempts.filter((a) => a.started === undefined || a.started <= x).at(-1);
+  return current?.run === run && current.conclusion === "success" && current.completed !== undefined && current.completed <= x;
 }
 
 const stalePr = (i: GithubNote, was: GithubPr | undefined): boolean => (was?.state === "merged" && !i.merged) || older(i, was);

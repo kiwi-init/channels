@@ -311,6 +311,33 @@ describe("the done gate (#623 §5)", () => {
       expect(doneGate(c.state(), c.state().tasks.get(t)!)?.kind).toBe("landed");
     });
 
+    test("a newer run of the same check, running or failed at the merge, shuts the gate the recorded run passed", async () => {
+      const pending = await rerun();
+      await pending.c.ci(S1, 12, undefined, pending.merge - 5_000);
+      await pending.c.merged(pending.t, S1, pending.merge);
+      expect(doneGate(pending.c.state(), pending.c.state().tasks.get(pending.t)!)).toEqual({ kind: "bypassed", missing: ["CI run 11 green before the merge"] });
+      const failed = await rerun();
+      await failed.c.ci(S1, 12, undefined, failed.merge - 5_000);
+      await failed.c.ci(S1, 12, "failure", failed.merge - 2_000);
+      await failed.c.merged(failed.t, S1, failed.merge);
+      expect(doneGate(failed.c.state(), failed.c.state().tasks.get(failed.t)!)?.kind).toBe("bypassed");
+    });
+
+    test("a newer run of the same check that starts after the merge doesn't count against it", async () => {
+      const { c, t, merge } = await rerun();
+      await c.merged(t, S1, merge);
+      await c.ci(S1, 12, undefined, merge + 5_000);
+      await c.ci(S1, 12, "failure", merge + 9_000);
+      expect(doneGate(c.state(), c.state().tasks.get(t)!)?.kind).toBe("landed");
+    });
+
+    test("a newer run of the same check with no trusted start time counts as started before the merge", async () => {
+      const { c, t, merge } = await rerun();
+      await c.merged(t, S1, merge);
+      await c.ci(S1, 12, undefined, undefined);
+      expect(doneGate(c.state(), c.state().tasks.get(t)!)?.kind).toBe("bypassed");
+    });
+
     test("a rerun with no trusted start time counts as started before the merge", async () => {
       const { c, t, merge } = await rerun();
       await c.merged(t, S1, merge);
