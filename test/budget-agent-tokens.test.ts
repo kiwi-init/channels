@@ -16,7 +16,7 @@ const BUDGET = {
   oneCommandHelp: 1_700,
   wrappingPerMessage: 40,
   everyday: 300,
-  status: 1_200,
+  status: 800,
 } as const;
 
 let steps: Step[] = [];
