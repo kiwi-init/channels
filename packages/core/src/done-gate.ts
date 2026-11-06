@@ -25,7 +25,7 @@ function approvalAt(t: Task, x: number): ReviewRound | undefined {
 const atPr = (c: CheckState, pr: GithubPr, head: string): boolean =>
   c.artifact.kind === "pr" && c.artifact.repo.toLowerCase() === pr.repo.toLowerCase() && c.artifact.pr === pr.number && sameHead(c.artifact.sha, head);
 
-export function heldAtShipping(view: GateView, t: Task, pr: GithubPr, head: string, shipped: number): string[] {
+function heldAtShipping(view: GateView, t: Task, pr: GithubPr, head: string, shipped: number): string[] {
   const missing: string[] = [];
   const round = approvalAt(t, shipped);
   if (!round) missing.push("an approval before the merge");

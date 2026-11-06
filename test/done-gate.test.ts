@@ -227,10 +227,22 @@ describe("the done gate (#623 §5)", () => {
     await c.merged(t, S1, at(c.log.length + 1));
     await c.ev("jow", { op: "github.release", repo: R, tag: "v1.3.0", at: at(c.log.length + 1), shas: [M1], prs: [7] });
     expect(doneGate(c.state(), c.state().tasks.get(t)!)).toEqual({ kind: "waiting", why: "a passed post check for @scope/lib@^1.2.0 on npm" });
-    const wrong = await c.say("ann", "blocking", "npm view @scope/lib@2.0.0", { to: ["jow"], esc: true, choices: ["A: published", "B: not there"], holds: [t], check: { phase: "post", decider: "jow", artifact: { kind: "npm", pkg: "@scope/lib", version: "2.0.0" } } });
+    const wrong = await c.say("ann", "blocking", "npm view @scope/lib@2.0.0", {
+      to: ["jow"],
+      esc: true,
+      choices: ["A: published", "B: not there"],
+      holds: [t],
+      check: { phase: "post", decider: "jow", artifact: { kind: "npm", pkg: "@scope/lib", version: "2.0.0" } },
+    });
     await c.answer(wrong, "A: published");
     expect(doneGate(c.state(), c.state().tasks.get(t)!)?.kind).toBe("waiting");
-    const post = await c.say("ann", "blocking", "npm view @scope/lib@1.3.0", { to: ["jow"], esc: true, choices: ["A: published", "B: not there"], holds: [t], check: { phase: "post", decider: "jow", artifact: { kind: "npm", pkg: "@scope/lib", version: "1.3.0" } } });
+    const post = await c.say("ann", "blocking", "npm view @scope/lib@1.3.0", {
+      to: ["jow"],
+      esc: true,
+      choices: ["A: published", "B: not there"],
+      holds: [t],
+      check: { phase: "post", decider: "jow", artifact: { kind: "npm", pkg: "@scope/lib", version: "1.3.0" } },
+    });
     await c.answer(post, "A: published");
     const artifact: CheckArtifact = { kind: "npm", pkg: "@scope/lib", version: "1.3.0" };
     expect(doneGate(c.state(), c.state().tasks.get(t)!)).toEqual({ kind: "landed", artifact });
