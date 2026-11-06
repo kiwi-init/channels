@@ -483,12 +483,18 @@ jobs:
         if: ${{ !cancelled() }}
         timeout-minutes: 8
         run: bun desktop/scripts/eb-mods-check.ts desktop/release-eb/build/dev-macos-*/*.app "$RUNNER_TEMP/mods-check"
+      - name: an agent's figure draws live in chat, in a frame that reaches neither the network, the bridge nor the page (T6869)
+        if: ${{ !cancelled() }}
+        timeout-minutes: 6
+        run: bun desktop/scripts/eb-figure-check.ts desktop/release-eb/build/dev-macos-*/*.app "$RUNNER_TEMP/figure-check"
       - name: the mods check's screenshots
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: mods-check-mac
-          path: ${{ runner.temp }}/mods-check/*.png
+          path: |
+            ${{ runner.temp }}/mods-check/*.png
+            ${{ runner.temp }}/figure-check/*.png
           if-no-files-found: ignore
       - name: the window opens where it was left, at the size it was left (NSWindow frame autosave)
         if: ${{ !cancelled() }}

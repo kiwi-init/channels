@@ -53,7 +53,7 @@ Open a channel, press ⌘K and pick **Standup Notes** under Mods. Run `kiwi mod 
 | `name` | Lowercase letters, digits and dashes, the same as the folder's name. `app`, `nav`, `view`, `chat` and `debug` are taken. |
 | `version` | A version like `1.0.0` |
 | `shell` | The app versions it works with, like `^3.6`. An app it doesn't fit leaves it off and says why. |
-| `needs` | What it asks you for: `panel`, `command`, and `net:<host>` for each web host it talks to |
+| `needs` | What it asks you for: `panel`, `command`, `render:<kind>`, and `net:<host>` for each web host it talks to |
 | `skills` | Optional: skills it gives every agent. See [Skills](#skills) |
 
 A `net:` host is exact: `net:api.linear.app` lets it reach `https://api.linear.app` and nothing else, not even another subdomain.
@@ -66,6 +66,7 @@ Everything comes from `@kiwi/mod`, plus React:
 | --- | --- |
 | `panel({ title, render })` | The mod's panel beside the chat. Its title shows in the panel's header and in ⌘K. |
 | `command({ id, title, run })` | An action in ⌘K. Its id for `keys.json` is `<mod>.<id>`. |
+| `render(kind, draw)` | Draws one kind of attachment in chat. See [Drawing attachments](#drawing-attachments). |
 | `fetch(url, init)` | The mod's only way to the network, to the hosts you approved, over https |
 | `Button`, `Row`, `Field`, `Icon` | The app's own button, list row, labelled field and icons |
 
@@ -116,6 +117,36 @@ Some limits come with that:
 - **Links don't open**, and images from the web don't load; fetch one and show it as a `blob:` URL.
 - **Each save restarts it**, so its state resets.
 - **No types for `@kiwi/mod` yet:** your editor may flag the import, but the mod builds.
+
+## Drawing attachments
+
+With `render:<kind>` in its needs, a mod draws that kind of attachment in chat, in place of its file chips. The kind is one lowercase word, like `figure`. A message has one when it carries:
+
+- **`X.<kind>.html`**, the page to draw
+- **`X.<kind>.svg`**, its snapshot
+- **`X.<kind>-light.html`**, optional, the page for the light theme
+
+`kiwi send --figure page.html` sends a figure that way. Up to 8 MB in all.
+
+The snapshot shows first. Once it's on screen, the mod's frame draws over it: `draw` gets `{ kind, name, html, dark, full }`, with the page for your theme, and can return React to show. A button opens it full window, where `full` is true.
+
+```tsx
+import { render } from "@kiwi/mod"
+
+render("figure", ({ html }) => {
+  const page = new DOMParser().parseFromString(html, "text/html")
+  document.body.replaceWith(document.adoptNode(page.body))
+})
+```
+
+A page moved in that way doesn't run its scripts. The [anatomy mod](https://github.com/kiwi-init/mods/tree/main/anatomy) runs them too.
+
+The page comes from whoever sent the message, so it runs in the mod's frame with the mod's limits, and nothing more:
+
+- **At most 3 drawn at once.** One that scrolls far off goes back to its snapshot.
+- **Snapshot only** with reduced motion. The full window still draws it.
+- **No network** unless the mod lists a host.
+- **Not the app's chat:** a drawing frame gets no panel, commands or message actions.
 
 ## Skills
 

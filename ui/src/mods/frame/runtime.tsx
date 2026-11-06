@@ -9,9 +9,11 @@ import "~/styles/base.css"
 import "~/mods/frame/frame.css"
 import { Field } from "~/kit/form"
 import { Icon } from "~/kit/icons"
-import { MOD_PROTOCOL, type FromFrame, type ModFetchResult, type ToFrame } from "~/mods/protocol"
+import { MOD_PROTOCOL, type FromFrame, type ModFetchResult, type Shown, type ToFrame } from "~/mods/protocol"
 
 type Waiting = { resolve: (r: ModFetchResult) => void; reject: (e: Error) => void }
+
+type Draw = (shown: Shown & { dark: boolean }) => ReactNode | void
 
 type Out = { [K in FromFrame["type"]]: Omit<Extract<FromFrame, { type: K }>, "kiwi"> }[FromFrame["type"]]
 
@@ -19,9 +21,11 @@ const post = (m: Out): void => parent.postMessage({ kiwi: MOD_PROTOCOL, ...m }, 
 
 let view: ComponentType | null = null
 let booted = false
+let rendering = false
 let nextId = 1
 const waiting = new Map<number, Waiting>()
 const commands = new Map<string, { title: string; run: () => void | Promise<void> }>()
+const drawers = new Map<string, Draw>()
 const root = ReactDOMClient.createRoot(document.getElementById("root") ?? document.body.appendChild(document.createElement("div")))
 
 function failed(e: unknown): void {
@@ -74,15 +78,24 @@ function Row({ title, sub, onClick }: { title: ReactNode; sub?: ReactNode; onCli
   )
 }
 
+function drawing(what: string): void {
+  if (rendering) throw new Error(`a frame drawing an attachment has no ${what}`)
+}
+
 const api = {
   panel({ title, render }: { title: string; render: ComponentType }): void {
+    drawing("panel")
     view = render
     post({ type: "panel", title: String(title) })
     mount()
   },
   command({ id, title, run }: { id: string; title: string; run: () => void | Promise<void> }): void {
+    drawing("command")
     commands.set(String(id), { title: String(title), run })
     post({ type: "commands", list: [...commands].map(([cid, c]) => ({ id: cid, title: c.title })) })
+  },
+  render(kind: string, draw: Draw): void {
+    drawers.set(String(kind), draw)
   },
   fetch: modFetch,
   Button,
@@ -102,6 +115,13 @@ Object.assign(globalThis, {
   },
 })
 
+function draw(shown: Shown | undefined, dark: boolean): void {
+  const drawer = shown && drawers.get(shown.kind)
+  if (!shown || !drawer) throw new Error(`the mod has no render("${shown?.kind ?? "?"}") to draw this`)
+  const node = drawer({ ...shown, dark })
+  if (node !== undefined && node !== null) root.render(node)
+}
+
 function theme(vars: Record<string, string>, dark: boolean): void {
   const s = document.documentElement.style
   for (const [k, v] of Object.entries(vars)) if (k.startsWith("--")) s.setProperty(k, v)
@@ -117,9 +137,11 @@ addEventListener("message", (e) => {
   if (m.type === "boot") {
     if (booted) return
     booted = true
+    rendering = m.shown !== undefined
     theme(m.theme, m.dark)
     try {
       new Function(m.code)()
+      if (rendering) draw(m.shown, m.dark)
       post({ type: "ready" })
     } catch (err) {
       failed(err)

@@ -10,7 +10,8 @@ import { modsNow, runningMod, showModIn, useModsVersion } from "~/mods/host"
 
 const WORDS: Record<string, string> = { panel: "A panel beside the chat", command: "Commands in ⌘K" }
 
-const needWords = (need: string): string => (need.startsWith("net:") ? `Talk to ${need.slice(4)}` : (WORDS[need] ?? need))
+const needWords = (need: string): string =>
+  need.startsWith("net:") ? `Talk to ${need.slice(4)}` : need.startsWith("render:") ? `Draw ${need.slice(7)} attachments in chat, live` : (WORDS[need] ?? need)
 
 export function ModPanel({ name }: { name: string }) {
   useModsVersion()

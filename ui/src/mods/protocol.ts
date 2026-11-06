@@ -41,6 +41,13 @@ export interface ModCommand {
   title: string
 }
 
+export interface Shown {
+  kind: string
+  name: string
+  html: string
+  full: boolean
+}
+
 interface ModFetchInit {
   method?: string
   headers?: Record<string, string>
@@ -55,7 +62,7 @@ export interface ModFetchResult {
 }
 
 export type ToFrame =
-  | { kiwi: typeof MOD_PROTOCOL; type: "boot"; name: string; code: string; theme: Record<string, string>; dark: boolean }
+  | { kiwi: typeof MOD_PROTOCOL; type: "boot"; name: string; code: string; theme: Record<string, string>; dark: boolean; shown?: Shown }
   | { kiwi: typeof MOD_PROTOCOL; type: "theme"; theme: Record<string, string>; dark: boolean }
   | { kiwi: typeof MOD_PROTOCOL; type: "command"; id: string }
   | { kiwi: typeof MOD_PROTOCOL; type: "reply"; id: number; ok: true; value: ModFetchResult }

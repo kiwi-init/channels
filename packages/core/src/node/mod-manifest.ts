@@ -1,13 +1,14 @@
 import { isAppPrefix } from "../mod-names.ts";
 
-const MOD_NEEDS_OFFERED = ["panel", "command", "net"] as const;
+const MOD_NEEDS_OFFERED = ["panel", "command", "net", "render"] as const;
 
-const NEED_KINDS = ["panel", "sidebar", "command", "message-action", "read", "post", "net"] as const;
+const NEED_KINDS = ["panel", "sidebar", "command", "message-action", "read", "post", "net", "render"] as const;
 
 const NAME = /^[a-z0-9][a-z0-9-]{0,62}$/;
 const VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 const HOST = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{0,61}[a-z0-9]$/;
 const ROOM = /^#?[a-z0-9][a-z0-9-]{0,63}$/;
+const RENDER_KIND = /^[a-z][a-z0-9]{0,31}$/;
 const COMPARATOR = /^(?:\^|~|>=|<=|>|<|=)?\d+(?:\.(?:\d+|x|\*)){0,2}(?:-[0-9A-Za-z.-]+)?$/;
 
 const isRange = (range: string): boolean =>
@@ -40,6 +41,8 @@ export function needKind(need: string): (typeof NEED_KINDS)[number] | null {
       return rest !== null && ROOM.test(rest) ? kind : null;
     case "net":
       return rest !== null && HOST.test(rest) ? kind : null;
+    case "render":
+      return rest !== null && RENDER_KIND.test(rest) ? kind : null;
     default:
       return null;
   }
