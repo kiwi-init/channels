@@ -30,6 +30,7 @@ interface Loaded {
 export interface ModSecrets {
   read(mod: string, source: string): Record<string, string>;
   write(mod: string, source: string, id: string, value: string | null): void;
+  forget(mod: string): void;
 }
 
 export function memorySecrets(): ModSecrets {
@@ -41,6 +42,9 @@ export function memorySecrets(): ModSecrets {
       if (value === null) delete now.values[id];
       else now.values[id] = value;
       kept.set(mod, now);
+    },
+    forget: (mod) => {
+      kept.delete(mod);
     },
   };
 }
@@ -412,6 +416,14 @@ export function modsHost(o: ModsHostOptions) {
       return change((m) => {
         if (on) delete m.off[name];
         else m.off[name] = { by: "you" };
+      });
+    },
+    forget(name: string): Promise<ModView[]> {
+      secrets.forget(name);
+      return change((m) => {
+        delete m.approved[name];
+        delete m.off[name];
+        delete m.values[name];
       });
     },
     async approve(name: string, needs: readonly string[]): Promise<ModView[]> {

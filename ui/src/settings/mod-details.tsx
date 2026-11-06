@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react"
 
-import type { ModDetails, ModView } from "../../../desktop/src/bridge.ts"
+import type { ModDetails, ModUpdate, ModView } from "../../../desktop/src/bridge.ts"
 import { sizeText } from "~/chat/doc/bytes"
 import { Icon } from "~/kit/icons"
 import { runningMod } from "~/mods/host"
@@ -35,7 +35,9 @@ function useDetails(mod: ModView): ModDetails | null {
   return got?.details ?? null
 }
 
-export function ModDetailsPage({ mod }: { mod: ModView }) {
+type Manage = { busy: boolean; update: ModUpdate | undefined; onUpdate: (() => void) | undefined; removeWhy: string; onRemove: () => void }
+
+export function ModDetailsPage({ mod, manage }: { mod: ModView; manage?: Manage }) {
   const { go } = useApp()
   const d = useDetails(mod)
   const run = runningMod(mod.name)
@@ -74,6 +76,13 @@ export function ModDetailsPage({ mod }: { mod: ModView }) {
             <span className="set-value set-mono" title={d.commit}>
               {d.commit.slice(0, 7)}
             </span>
+          </Row>
+        )}
+        {manage?.update && manage.onUpdate && (
+          <Row label={`${manage.update.to} is out`} hint={`${manage.update.commits} new commit${manage.update.commits === 1 ? "" : "s"} from its source.`}>
+            <button type="button" className="btn is-small" disabled={manage.busy} onClick={manage.onUpdate}>
+              Update
+            </button>
           </Row>
         )}
         {d?.installed !== null && d?.installed !== undefined && (
@@ -115,6 +124,15 @@ export function ModDetailsPage({ mod }: { mod: ModView }) {
               <Markdown markdown={d.readme} onMention={none} onTask={none} onMessage={none} onImage={none} onShown={none} />
             </Suspense>
           </div>
+        </Group>
+      )}
+      {manage && (
+        <Group>
+          <Row label={`Remove ${mod.name}`} hint={manage.removeWhy}>
+            <button type="button" className="btn is-danger is-small" disabled={manage.busy} onClick={manage.onRemove}>
+              Remove
+            </button>
+          </Row>
         </Group>
       )}
     </>

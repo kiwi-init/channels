@@ -304,6 +304,37 @@ describe("the app's mods", () => {
     expect(again.details("alpha")?.settings[0]?.set).toBe(false);
   });
 
+  test("a removed mod takes its settings and secrets with it: added again, it starts with none", async () => {
+    const { root, folder, host, write } = setup();
+    const secrets = memorySecrets();
+    host.stop();
+    const h = modsHost({ folder, approvals: join(root, "data", "mods.json"), contract: "3.3.0", push: () => {}, secrets });
+    stops.push(() => h.stop());
+    const mod = {
+      ...linear,
+      "mod.json": JSON.stringify({
+        ...JSON.parse(linear["mod.json"]),
+        needs: [],
+        settings: [
+          { id: "token", title: "Token", type: "secret", required: true },
+          { id: "team", title: "Team", type: "text" },
+        ],
+      }),
+    };
+    write("linear", mod);
+    await h.start();
+    await h.setSetting("linear", "token", "lin_api_gone");
+    await h.setSetting("linear", "team", "Platform");
+    expect(h.bundle("linear")?.settings).toEqual({ token: "lin_api_gone", team: "Platform" });
+    rmSync(join(folder, "linear"), { recursive: true, force: true });
+    await h.forget("linear");
+    expect(readFileSync(join(root, "data", "mods.json"), "utf8")).not.toContain("Platform");
+    write("linear", mod);
+    await h.rescan();
+    expect(h.list()[0]).toMatchObject({ state: "off", off: "settings" });
+    expect(h.details("linear")?.settings.map((x) => x.set ?? x.value)).toEqual([false, null]);
+  });
+
   test("mod.json's settings are checked: ids, titles, types and choices", () => {
     const check = (settings: unknown) => {
       const r = checkManifest({ name: "linear", version: "1.0.0", shell: "^3.3", settings }, "linear", null);

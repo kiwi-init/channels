@@ -122,6 +122,7 @@ A mod lists what it needs filled in, and its page in Settings → Mods draws the
 - **`settings()`** gives the mod its own values: a string, `true` or `false`, or `null` when empty. No mod gets another's.
 - **A change restarts the mod** with the new values.
 - **Another source:** a mod with the same name from another source starts with none of the old values.
+- **Removing a mod** clears its settings and secrets.
 
 ## Turning one on
 

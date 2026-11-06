@@ -107,7 +107,7 @@ img.mod-icon {
   font-size: var(--t-body);
 }
 
-.mod-row {
+.set-row.mod-row {
   flex-wrap: nowrap;
 }
 

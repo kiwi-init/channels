@@ -94,6 +94,7 @@ export function Confirm({
   title,
   sub,
   action,
+  tone = "danger",
   ready = true,
   onConfirm,
   onClose,
@@ -103,6 +104,7 @@ export function Confirm({
   title: string
   sub: string
   action: string
+  tone?: "danger" | "primary"
   ready?: boolean
   onConfirm: () => void
   onClose: () => void
@@ -123,7 +125,7 @@ export function Confirm({
           <button type="button" className="btn is-quiet" onClick={onClose} ref={safe ? autofocus : undefined}>
             Cancel
           </button>
-          <button type="submit" className="btn is-danger" disabled={!ready} ref={safe ? undefined : autofocus}>
+          <button type="submit" className={`btn is-${tone}`} disabled={!ready} ref={safe ? undefined : autofocus}>
             {action}
           </button>
         </div>
