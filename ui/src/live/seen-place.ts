@@ -1,4 +1,4 @@
-import { roomOfMessage, roomSeenKey } from "@kiwi/app/rooms.ts"
+import { roomLast, roomOfMessage, roomSeenKey } from "@kiwi/app/rooms.ts"
 import { GENERAL_ROOM, type Message as Wire } from "@kiwi/core/protocol.ts"
 import { rootOf } from "@kiwi/core/room-rules.ts"
 import { dmPlace, placeKey, type ChannelState } from "@kiwi/core/state.ts"
@@ -37,6 +37,13 @@ function readKeyOf(state: ChannelState, m: Wire, me: string): string {
   const mine = rootOf(me, state.members)
   const other = room?.dm && room.members?.some((x) => rootOf(x.name, state.members) === mine) ? dmOther(state, me, room.members) : undefined
   return other ? placeKey(dmPlace(mine, other)) : roomSeenKey(id)
+}
+
+export function firstMarks(state: ChannelState, messages: readonly Wire[]): Record<string, number> {
+  const marks: Record<string, number> = {}
+  for (const [k, v] of state.places) marks[k] = v.last
+  for (const [id, seq] of roomLast(state, messages)) marks[roomSeenKey(id)] = seq
+  return marks
 }
 
 export function seenByThread(messages: readonly Wire[], state: ChannelState, me: string, root: number, seen: Readonly<Record<string, number>>): Record<string, number> {

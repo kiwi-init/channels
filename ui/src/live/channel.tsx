@@ -11,7 +11,6 @@ import { type StoredMember } from "@kiwi/channel/store.ts"
 import { useIcons, useLiveIcon } from "@kiwi/app/icons.ts"
 import { markSeen, setOpenNews } from "@kiwi/channel/news.ts"
 import { lastPreview } from "@kiwi/app/preview.ts"
-import { roomLast, roomSeenKey } from "@kiwi/app/rooms.ts"
 import { sendsInTurn } from "@kiwi/app/send-order.ts"
 import { markSeenIn, roomsFrom, seenIn, sendFrom, useSeen } from "@kiwi/app/threads.ts"
 import { useNewMembers, useNewPowers } from "~/live/defaults"
@@ -28,7 +27,7 @@ import { usePrefs } from "~/live/prefs"
 import { busyOf, receiptsOf, withReceipts } from "~/live/receipts"
 import { announce } from "~/kit/toasts"
 import { arrivals } from "~/live/persona-later"
-import { lastIn, seenByThread, seenKeyOf } from "~/live/seen-place"
+import { firstMarks, lastIn, seenByThread, seenKeyOf } from "~/live/seen-place"
 import { followsIn, threadSeenKey, threadsOf } from "~/live/threads"
 import { closeOpened, markGone, publish, type Run } from "~/live/store"
 import { useWakes } from "~/live/wakes"
@@ -384,10 +383,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   useEffect(() => {
     if (!firstVisit.current || !messages.length) return
     firstVisit.current = false
-    markSeenIn(roomId, {
-      ...Object.fromEntries([...state.places].map(([k, v]) => [k, v.last])),
-      ...Object.fromEntries([...roomLast(state, messages)].map(([id, seq]) => [roomSeenKey(id), seq])),
-    })
+    markSeenIn(roomId, firstMarks(state, messages))
   }, [firstVisit, messages, state, roomId])
 
   useEffect(() => {
