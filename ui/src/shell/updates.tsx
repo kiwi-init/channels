@@ -4,12 +4,6 @@ import { Icon } from "~/kit/icons"
 import { copyText } from "~/kit/toasts"
 import { useApp } from "~/nav"
 
-export const MOD_SIDES = "kiwi-mod-sides"
-
-const announce = (el: HTMLDivElement | null): void => {
-  if (el) dispatchEvent(new Event(MOD_SIDES))
-}
-
 type Card = { key: string; text: string; detail?: string; path?: string; act?: string; busy?: string; onAct?: () => void; progress?: number }
 
 function useCards(): Card[] {
@@ -105,16 +99,12 @@ function SideCard({ card }: { card: Card }) {
 
 export function SideCards() {
   const cards = useCards()
+  if (!cards.length) return null
   return (
-    <>
-      {cards.length > 0 && (
-        <ul className="side-cards" aria-label="Waiting on you">
-          {cards.map((c) => (
-            <SideCard key={c.key} card={c} />
-          ))}
-        </ul>
-      )}
-      <div ref={announce} className="mod-sides" style={{ display: "contents" }} />
-    </>
+    <ul className="side-cards" aria-label="Waiting on you">
+      {cards.map((c) => (
+        <SideCard key={c.key} card={c} />
+      ))}
+    </ul>
   )
 }

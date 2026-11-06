@@ -33,13 +33,3 @@ button.mod-row:hover {
   color: var(--ink-2);
   font: var(--t-meta) / 1.4 var(--sans);
 }
-
-:root[data-surface="sidebar"] #root {
-  padding: 0;
-}
-
-:root[data-surface="sidebar"] .mod-row {
-  min-height: var(--ctl);
-  justify-content: center;
-  padding: 4px 8px;
-}
