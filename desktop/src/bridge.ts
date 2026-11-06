@@ -469,6 +469,8 @@ export interface KiwiBridge {
   onFolderThemes(cb: (view: FolderThemesView) => void): () => void;
   saveFolderTheme(file: string | null, theme: FolderThemeInput): Promise<{ file: string; view: FolderThemesView }>;
   deleteFolderTheme(file: string): Promise<FolderThemesView>;
+  keyBindings(): Promise<KeyBindingsView>;
+  onKeyBindings(cb: (view: KeyBindingsView) => void): () => void;
   setPersonalities(list: Personality[]): Promise<void>;
   contextLine(): Promise<"on" | "off" | null>;
   setContextLine(to: "on" | "off"): Promise<"on" | "off" | null>;
@@ -522,6 +524,13 @@ export interface FolderThemesView {
   dir: string;
   themes: FolderThemeView[];
   skipped: { file: string; why: string }[];
+}
+
+export interface KeyBindingsView {
+  file: string;
+  present: boolean;
+  keys: unknown;
+  error?: string;
 }
 
 declare global {
