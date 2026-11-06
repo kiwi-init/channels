@@ -31,7 +31,7 @@ function watchDev(start: DevStart, name: string): void {
   let again = false;
   const round = async (): Promise<void> => {
     const r = await devRound(start.dir, name);
-    const key = r.ok ? `${r.hash} ${r.manifest.version} ${r.manifest.needs.join(" ")}` : `x${r.why}`;
+    const key = r.ok ? `${r.hash} ${r.manifest.version} ${r.manifest.needs.join(" ")} ${r.icon ?? ""}` : `x${r.why}`;
     if (key === last) return;
     const first = last === null;
     last = key;
@@ -41,6 +41,7 @@ function watchDev(start: DevStart, name: string): void {
     if (asks !== needs)
       out(`  ${needs === null ? (asks ? `it asks for ${asks}` : "it asks for no permissions") : `it now asks for ${asks || "nothing"}`}; Channels shows any it doesn't have for you to approve`);
     needs = asks;
+    if (r.icon) out(`  ${r.icon}, so Channels shows its first letter instead`);
     nudgeApp(start.at);
   };
   const go = (): void => {
@@ -113,7 +114,7 @@ export const modCommands: Record<string, Command> = {
         const name = args[2];
         if (!name || args[3]) return yield* die("usage: kiwi mod dev <name>: create a mod, link this folder's mod, or open one, and rebuild it on each save");
         const start = yield* run(() => startDev(at, name, process.cwd()));
-        if (start.how === "created") out(`created ${tilde(start.at)} with mod.json and index.tsx`);
+        if (start.how === "created") out(`created ${tilde(start.at)} with mod.json, index.tsx and icon.svg`);
         else if (start.how === "linked") out(`linked ${tilde(start.at)} to ${tilde(start.dir)}`);
         else out(`opened ${tilde(start.at)}${start.dir === start.at ? "" : `, a link to ${tilde(start.dir)}`}`);
         out("each save checks and rebuilds it; ctrl-c stops");
