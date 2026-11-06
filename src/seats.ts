@@ -419,13 +419,18 @@ export function notePlace(seats: readonly Binding[], env: Record<string, string 
   });
 }
 
-export function placesIn(cfg: Pick<Config, "bindings">, alias: string): Map<string, SeatPlace> {
+export interface Placed {
+  place: SeatPlace;
+  pid?: number;
+}
+
+export function placesIn(cfg: Pick<Config, "bindings">, alias: string): Map<string, Placed> {
   const latest = (b: Binding): number => b.seen ?? b.at ?? 0;
   const placed = allSeats(cfg)
     .filter((b) => b.alias === alias && (b.tmux || b.rex))
     .sort((a, b) => latest(b) - latest(a));
-  const places = new Map<string, SeatPlace>();
-  for (const b of placed) if (!places.has(b.as)) places.set(b.as, b.tmux ? { tmux: b.tmux } : { rex: b.rex! });
+  const places = new Map<string, Placed>();
+  for (const b of placed) if (!places.has(b.as)) places.set(b.as, { place: b.tmux ? { tmux: b.tmux } : { rex: b.rex! }, ...(b.pid ? { pid: b.pid } : {}) });
   return places;
 }
 

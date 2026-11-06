@@ -42,3 +42,12 @@ test("the app turns an agent's wake off and on from this computer's own config, 
   expect(kiwi(["wake", "seat", room, "nobody", "off"]).code).not.toBe(0);
   expect(kiwi(["wake", "seat", room, "atlas", "maybe"]).code).not.toBe(0);
 });
+
+test("each seat says where it sits, for the app's terminal need: its tmux pane or Rex block, and the agent's process", () => {
+  const rex = { server: "unix:///tmp/rex.sock", session: `session:${"1".repeat(8)}-1111-1111-1111-${"1".repeat(12)}`, block: `block:${"2".repeat(8)}-2222-2222-2222-${"2".repeat(12)}` };
+  const cfg = loadConfig();
+  saveConfig({ ...cfg, bindings: { [join(home, "proj")]: { alias: "work", as: "atlas", pid: 4242, at: 1, rex } } });
+  expect(seats()).toEqual([{ room, alias: "work", agent: "atlas", wake: "on", place: { rex }, pid: 4242 }]);
+  saveConfig(cfg);
+  expect(seats()).toEqual([{ room, alias: "work", agent: "atlas", wake: "on" }]);
+});

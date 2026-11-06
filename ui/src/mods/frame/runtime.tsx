@@ -9,9 +9,9 @@ import "~/styles/base.css"
 import "~/mods/frame/frame.css"
 import { Field } from "~/kit/form"
 import { Icon } from "~/kit/icons"
-import { MOD_PROTOCOL, type FromFrame, type ModFetchResult, type ModMessage, type Surface, type ToFrame } from "~/mods/protocol"
+import { MOD_PROTOCOL, type FromFrame, type ModFetchResult, type ModMessage, type ModTerminal, type ModTerminalMark, type Surface, type TerminalOp, type ToFrame } from "~/mods/protocol"
 
-type Waiting = { resolve: (r: ModFetchResult) => void; reject: (e: Error) => void }
+type Waiting = { resolve: (r: unknown) => void; reject: (e: Error) => void }
 
 type Out = { [K in FromFrame["type"]]: Omit<Extract<FromFrame, { type: K }>, "kiwi"> }[FromFrame["type"]]
 
@@ -58,11 +58,30 @@ function bytes(b64: string): Uint8Array<ArrayBuffer> {
 async function modFetch(input: string | URL, init: { method?: string; headers?: HeadersInit; body?: string | null } = {}): Promise<Response> {
   if (init.body !== undefined && init.body !== null && typeof init.body !== "string") throw new TypeError("a mod's fetch sends a string body")
   const id = nextId++
-  const reply = new Promise<ModFetchResult>((resolve, reject) => waiting.set(id, { resolve, reject }))
+  const reply = new Promise<unknown>((resolve, reject) => waiting.set(id, { resolve, reject }))
   post({ type: "fetch", id, url: String(input), init: { method: init.method ?? "GET", headers: Object.fromEntries(new Headers(init.headers).entries()), body: init.body ?? null } })
-  const r = await reply
+  const r = (await reply) as ModFetchResult
   const empty = r.status === 204 || r.status === 304 || (init.method ?? "GET").toUpperCase() === "HEAD"
   return new Response(empty ? null : bytes(r.body), { status: r.status, statusText: r.statusText, headers: r.headers })
+}
+
+function terminal(call: string, op: TerminalOp): Promise<unknown> {
+  asked("terminal", call)
+  if (surface !== "main") return Promise.reject(new Error(`${call}() works in the mod's main frame, not its sidebar`))
+  const id = nextId++
+  const reply = new Promise<unknown>((resolve, reject) => waiting.set(id, { resolve, reject }))
+  post({ type: "terminal", id, ...op })
+  return reply
+}
+
+const terminals = async (): Promise<ModTerminal[]> => (await terminal("terminals", { op: "list" })) as ModTerminal[]
+
+const focusTerminal = async (seat: string): Promise<void> => {
+  await terminal("focusTerminal", { op: "focus", seat: String(seat) })
+}
+
+const markTerminal = async (seat: string, mark: Partial<ModTerminalMark> | null): Promise<void> => {
+  await terminal("markTerminal", { op: "mark", seat: String(seat), mark: mark === null ? null : { asks: mark.asks ?? 0, tasks: mark.tasks ?? [] } })
 }
 
 function Button({ children, onClick, kind, disabled }: { children: ReactNode; onClick?: () => void; kind?: "primary" | "quiet" | "danger"; disabled?: boolean }) {
@@ -121,6 +140,9 @@ const api = {
     post({ type: "actions", list: listed(actions) })
   },
   fetch: modFetch,
+  terminals,
+  focusTerminal,
+  markTerminal,
   Button,
   Field,
   Row,
