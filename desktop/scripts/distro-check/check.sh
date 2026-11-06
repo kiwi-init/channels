@@ -60,10 +60,16 @@ for t in tray:gio-2.0 scheme:webkit2gtk-4.1; do
 done
 
 id tester > /dev/null 2>&1 || useradd -m tester
-bash "$here/release-copy.sh" "$extract/Channels.AppImage" /home/tester/Channels.AppImage com.kiwiinit.channels || bad "no release-id copy of the AppImage to check the menu entry with"
-cp "$extract/Channels.AppImage" /home/tester/Channels-dev.AppImage
+input_id=$(grep -o '"identifier":"[^"]*"' "$extract/squashfs-root/Channels/Resources/version.json" 2> /dev/null | cut -d'"' -f4)
+case "$input_id" in
+  *.dev | *.test)
+    bash "$here/release-copy.sh" "$extract/Channels.AppImage" /home/tester/Channels.AppImage com.kiwiinit.channels || bad "no release-id copy of the AppImage to check the menu entry with"
+    cp "$extract/Channels.AppImage" /home/tester/Channels-dev.AppImage
+    ;;
+  *) cp "$extract/Channels.AppImage" /home/tester/Channels.AppImage ;;
+esac
 cp "$here/session.sh" "$here/update.sh" "$here/link.sh" "$here/raise.sh" "$here/browser.py" "$here/kwin.py" "$here/click.py" "$here/watcher.py" "$here/kwallet-login.py" "$here/secrets-cancel.py" /home/tester/
-chmod +x /home/tester/Channels.AppImage /home/tester/Channels-dev.AppImage
+chmod +x /home/tester/*.AppImage
 chown -R tester: /home/tester
 
 as_tester() {
@@ -101,9 +107,13 @@ activatable=$(grep -lE 'org\.freedesktop\.secrets|org\.gnome\.keyring' /usr/shar
 for f in $activatable; do mv "$f" "$f.off"; done
 if ls /usr/bin/fusermount* > /dev/null 2>&1; then bad "the test tools pulled in FUSE, so the start without it can't be checked"; fi
 session none stock no-tray "$plain_home"
-dev_home=$(runuser -u tester -- mktemp -d)
-app=/home/tester/Channels-dev.AppImage session none dev-build no-tray "$dev_home"
-if [ -e "$dev_home/.local/share/applications/channels-desktop.desktop" ]; then bad "a dev build wrote the app menu's entry (#1806)"; else ok "a dev build leaves the app menu's entry alone (#1806)"; fi
+if [ -e /home/tester/Channels-dev.AppImage ]; then
+  dev_home=$(runuser -u tester -- mktemp -d)
+  app=/home/tester/Channels-dev.AppImage session none dev-build no-tray "$dev_home"
+  if [ -e "$dev_home/.local/share/applications/channels-desktop.desktop" ]; then bad "a dev build wrote the app menu's entry (#1806)"; else ok "a dev build leaves the app menu's entry alone (#1806)"; fi
+else
+  info "the input is ${input_id:-a build whose version.json names no identifier}, not a dev or test build, so the #1806 dev-build check doesn't apply"
+fi
 entry_check "$plain_home" 'env APPIMAGE_EXTRACT_AND_RUN=1 "/home/tester/Channels.AppImage" %U'
 session none entry-no-fuse no-tray "$plain_home" entry
 mounted entry-no-fuse /tmp/appimage_extracted_ "with no FUSE, the entry's start extracts the AppImage and runs it"
