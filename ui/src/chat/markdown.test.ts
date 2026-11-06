@@ -13,7 +13,7 @@ const { normalizeMarkdownStyle } = await import("react-native-enriched-markdown/
 const { buildStyles } = await import("react-native-enriched-markdown/lib/module/web/styles.js")
 const { parseMarkdown } = await import("react-native-enriched-markdown/lib/module/web/parseMarkdown.js")
 const { RenderNode } = await import("react-native-enriched-markdown/lib/module/web/renderers/index.js")
-const { default: Markdown, endLists, withTextSize, safeLinks, sortedRows } = await import("~/chat/markdown")
+const { default: Markdown, blockGaps, withTextSize, safeLinks, sortedRows } = await import("~/chat/markdown")
 const { keepParsed } = await import("~/chat/parsed")
 
 const fixed = (name: string, s: CSSProperties): string[] => [
@@ -77,17 +77,45 @@ const shape = (node: Shape): string => (node.type === "Text" ? (node.content ?? 
 describe("a line after a list is its own paragraph, not glued onto the last item (T4145)", () => {
   test("an unindented line right after a bulleted or numbered list starts a new paragraph", async () => {
     const source = readFileSync(join(import.meta.dir, "markdown.tsx"), "utf8")
-    expect(source).toContain("parseMarkdown(endLists(markdown), FLAGS)")
-    const bullets = await parseMarkdown(endLists("Waits for:\n\n- #1713: rerun\n- T4114: red\nThen: full CI"), FLAGS)
+    expect(source).toContain("parseMarkdown(blockGaps(markdown), FLAGS)")
+    const bullets = await parseMarkdown(blockGaps("Waits for:\n\n- #1713: rerun\n- T4114: red\nThen: full CI"), FLAGS)
     expect((bullets.children ?? []).map(shape)).toEqual(["Paragraph(Waits for:)", "UnorderedList(ListItem(Paragraph(#1713: rerun)) ListItem(Paragraph(T4114: red)))", "Paragraph(Then: full CI)"])
-    const numbered = await parseMarkdown(endLists("1. build\n2. ship\nDone."), FLAGS)
+    const numbered = await parseMarkdown(blockGaps("1. build\n2. ship\nDone."), FLAGS)
     expect((numbered.children ?? []).map((n) => n.type)).toEqual(["OrderedList", "Paragraph"])
   })
 
   test("an indented line, a nested list, a blank-separated paragraph and a fenced block are left as written", () => {
     for (const text of ["- a\n  more of a\n  - nested\n- b", "- a\n\n  still a\n\nafter", "- a\n\nafter", "```\n- a\nb\n```", "~~~md\n- a\n```\nb\n~~~\nc", "plain\ntext"])
-      expect(endLists(text)).toBe(text)
-    expect(endLists("- a\n```\n- b\nc\n```")).toBe("- a\n\n```\n- b\nc\n```")
+      expect(blockGaps(text)).toBe(text)
+    expect(blockGaps("- a\n```\n- b\nc\n```")).toBe("- a\n\n```\n- b\nc\n```")
+  })
+})
+
+describe("a table right under a line of text is a table, as on GitHub (T7015)", () => {
+  test("the table after a text line, a list or a bold label parses as a table", async () => {
+    for (const lead of ["Per the spec, the valid values are:", "**Per the spec:**", "- one item"]) {
+      const ast = await parseMarkdown(blockGaps(`${lead}\n| Value | Done when |\n|---|---|\n| none | approved |\n| merge | it merges |`), FLAGS)
+      const table = (ast.children ?? []).find((n) => n.type === "Table")
+      expect(table && shape(table)).toBe(
+        "Table(TableHead(TableRow(TableHeaderCell(Value) TableHeaderCell(Done when))) TableBody(TableRow(TableCell(none) TableCell(approved)) TableRow(TableCell(merge) TableCell(it merges))))"
+      )
+    }
+  })
+
+  test("the first line after the table without a pipe is text again, not one more row", async () => {
+    const ast = await parseMarkdown(blockGaps("Values:\n| a | b |\n|---|---|\n| 1 | 2 |\nThat's all.\n- and a list"), FLAGS)
+    expect((ast.children ?? []).map((n) => n.type)).toEqual(["Paragraph", "Table", "Paragraph", "UnorderedList"])
+    expect(blockGaps("| a |\n|---|\n| 1 |\nafter")).toBe("| a |\n|---|\n| 1 |\n\nafter")
+  })
+
+  test("a delimiter row without pipes, aligned columns and a table that already has its gap work too", async () => {
+    expect(blockGaps("Totals:\na | b\n:--- | ---:\n1 | 2")).toBe("Totals:\n\na | b\n:--- | ---:\n1 | 2")
+    expect(blockGaps("Totals:\n\n| a | b |\n|---|---|")).toBe("Totals:\n\n| a | b |\n|---|---|")
+    expect(blockGaps("| a | b |\n|---|---|\n| 1 | 2 |")).toBe("| a | b |\n|---|---|\n| 1 | 2 |")
+  })
+
+  test("a heading underline, a pipe in a sentence and a table inside a code fence are left as written", () => {
+    for (const text of ["a | b\n---", "use a | b here\nand more", "a | b\n- c", "Run:\n```\n| a | b |\n|---|---|\n```", "~~~\nx\n| a |\n|---|\n~~~"]) expect(blockGaps(text)).toBe(text)
   })
 })
 
