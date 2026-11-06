@@ -12,6 +12,7 @@ import { storeCalls } from "./store.ts";
 import { hooksCalls } from "./hooks.ts";
 import { themesCalls } from "./themes.ts";
 import { keysCalls } from "./keys.ts";
+import { layoutsCalls } from "./layouts.ts";
 import { uiCalls } from "./ui.ts";
 
 export function handlers(host: Host): Handlers {
@@ -30,5 +31,6 @@ export function handlers(host: Host): Handlers {
     ...uiCalls(),
     ...themesCalls(host),
     ...keysCalls(host),
+    ...layoutsCalls(host),
   };
 }

@@ -2,7 +2,8 @@ import type { Serves } from "../calls.ts";
 import { kiwiHome } from "../daemon-client.ts";
 import type { Host } from "../host.ts";
 import { logMainError } from "../main-log.ts";
-import { readFolder, removeTheme, themesDir, watchFolder, writeTheme } from "../theme-folder.ts";
+import { watchFolder } from "../json-folder.ts";
+import { readFolder, removeTheme, themesDir, writeTheme } from "../theme-folder.ts";
 
 export function themesCalls(host: Host, home: () => string = kiwiHome): Serves<"folderThemes" | "saveFolderTheme" | "deleteFolderTheme"> {
   const dir = () => themesDir(home());

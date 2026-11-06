@@ -31,7 +31,7 @@ interface Draft {
   base: Required<ThemeBase>
 }
 
-const tilde = (dir: string): string => dir.replace(/^\/(?:Users|home)\/[^/]+\//, "~/")
+export const tilde = (dir: string): string => dir.replace(/^\/(?:Users|home)\/[^/]+\//, "~/")
 
 async function toFolder(file: string | null, theme: FolderThemeInput): Promise<string | null> {
   const b = bridge()

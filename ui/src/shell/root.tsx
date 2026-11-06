@@ -9,6 +9,7 @@ import type { App } from "~/model"
 import { ActContext, AppContext, type Go, type Nav } from "~/nav"
 import { ContextMenus } from "~/kit/menu-open"
 import { ChannelScreen } from "~/shell/channel"
+import { startLayout } from "~/shell/layout"
 import { Rail } from "~/shell/rail"
 import { applyTheme, colorsOf, usePreview, useSystemDark } from "~/theme/apply"
 import { startFolder, useFolder } from "~/theme/folder"
@@ -33,6 +34,7 @@ export function Root({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => voi
   const act = useMemo(() => ({ actions: app.actions, go, toast }), [app.actions, go, toast])
   useAppCommands(nav, go)
   useTheme(app)
+  useEffect(startLayout, [])
 
   if (!app.account || app.signIn?.stage === "sign-in")
     return (
