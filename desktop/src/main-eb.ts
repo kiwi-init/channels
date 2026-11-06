@@ -111,7 +111,7 @@ else {
   const appImage = process.platform === "linux" && ebHost.app.packaged() ? runningAppImage() : undefined;
   if (appImage) {
     try {
-      const entry = keepLinuxEntry(appImage);
+      const entry = keepLinuxEntry(appImage, ebHost.app.identifier());
       if (entry.kind === "skipped") console.error(`Channels: no desktop entry written: ${entry.why}`);
       else if (entry.wrote.length) console.error(`Channels: the desktop entry now starts ${appImage}: wrote ${entry.wrote.join(", ")}`);
     } catch (e) {

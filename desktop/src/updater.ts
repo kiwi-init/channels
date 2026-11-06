@@ -358,7 +358,7 @@ function swapIn(next: Staged, relaunch: boolean): boolean {
 function movedFrom(from: string, to: string): void {
   try {
     fs.writeFileSync(movedMarker(), JSON.stringify({ from, to }));
-    const entry = keepLinuxEntry(to, process.env, homeDir());
+    const entry = keepLinuxEntry(to, host().app.identifier(), process.env, homeDir());
     if (entry.kind === "skipped") console.error(`Channels: no desktop entry written: ${entry.why}`);
   } catch (e) {
     // The update is in place either way; only the notice or the menu entry is lost, and main.log says which.
