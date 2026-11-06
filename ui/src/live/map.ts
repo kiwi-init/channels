@@ -217,6 +217,8 @@ export function roomsOf(state: ChannelState, messages: readonly Wire[], me: stri
   for (const m of messages) {
     if (m.kind === "event" || m.from === me || ignored(state.trust.get(m.seq))) continue
     if ((state.placeOf.get(m.seq) ?? MAIN).kind !== "main") continue
+    const root = state.threadOf.get(m.seq)
+    if (root !== undefined && root !== m.seq && state.specs.has(root)) continue
     const id = roomOfMessage(state, m)
     const room = state.rooms.get(id)
     if (room?.dm || room?.self) continue

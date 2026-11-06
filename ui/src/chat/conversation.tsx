@@ -19,7 +19,7 @@ import { Loading } from "~/kit/bits"
 import { land } from "~/kit/glide"
 import { later } from "~/kit/later"
 import { day, sameDay } from "~/kit/time"
-import { type Channel, type Message, type Person, type Where } from "~/model"
+import { inSpecThread, type Channel, type Message, type Person, type Where } from "~/model"
 import { liveOf, workingIn } from "~/doing"
 import { sameWhere, useApp } from "~/nav"
 import { keepSpot, spotAt, spotKey, type Spot } from "~/places"
@@ -365,10 +365,7 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
     const fromDoc = doc ? (feeds.get(`${channel.code}\n${doc}`) ?? EMPTY_FEED) : EMPTY_FEED
     const feed = withLeftOut(
       channel.messages
-        .filter(
-          (m) =>
-            (since === undefined || m.seq < 0 || m.seq >= since) && sameWhere(m.where, where) && inFeed(m, !!doc) && (where.kind !== "room" || m.inThread === undefined || !specAsks.has(m.inThread))
-        )
+        .filter((m) => (since === undefined || m.seq < 0 || m.seq >= since) && sameWhere(m.where, where) && inFeed(m, !!doc) && (where.kind !== "room" || !inSpecThread(m, specAsks)))
         .map((m) => withDocMedia(m, m.block === undefined ? undefined : fromDoc.media.get(m.block))),
       (channel.leftOut ?? []).filter((m) => sameWhere(m.where, where))
     )
