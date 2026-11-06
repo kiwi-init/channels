@@ -81,6 +81,8 @@ describe("rule 1: an agent's gate-shutting change goes out only after kiwi/revie
     await event({ op: "github", items: [{ repo: REPO, at: Date.now(), event: "pull_request", action: "opened", number: 9, state: "open", branch: `T${task}-tray`, sha: SHA }] } as Event);
     await run(dev.taskUpdate(task, { state: "review", at: SHA }));
     await run(rev.taskUpdate(task, { state: "done", verdict: "approved", round: 1, at: SHA }));
+    expect(posted).toMatchObject([{ status: "in_progress" }]);
+    posted.length = 0;
   });
   afterAll(() => {
     server.stop(true);
@@ -95,8 +97,15 @@ describe("rule 1: an agent's gate-shutting change goes out only after kiwi/revie
     expect(posted).toEqual([]);
   });
 
-  test("with GitHub unreachable a new pre-ship check isn't sent, and the agent is told so", async () => {
+  test("with GitHub unreachable, reopening the approved task for review isn't sent either", async () => {
     checks = "down";
+    expect(await refusal(run(dev.taskUpdate(task, { state: "review", at: SHA })))).toMatch(/has to turn waiting before this goes out, .*nothing was sent, try again$/);
+    const { state } = await run(dev.state());
+    expect(state.tasks.get(task)!.state).toBe("landing");
+    expect(await gate()).toEqual({ open: true });
+  });
+
+  test("with GitHub unreachable a new pre-ship check isn't sent, and the agent is told so", async () => {
     expect(await refusal(askCheck("Does the tray icon work on KDE?"))).toMatch(new RegExp(`^kiwi/review on ${REPO}@aaaaaaa has to turn waiting before this goes out, .*nothing was sent, try again$`));
     expect(await gate()).toEqual({ open: true });
     expect(posted).toEqual([]);
@@ -109,20 +118,24 @@ describe("rule 1: an agent's gate-shutting change goes out only after kiwi/revie
     expect(await gate()).toMatchObject({ open: false, rejected: false });
   });
 
-  test("a reviewer's rejection turns kiwi/review failed before the verdict goes out", async () => {
+  test("opening a new round posts waiting first; a reviewer's rejection then posts failure before the verdict goes out", async () => {
+    const before = posted.length;
     await run(dev.taskUpdate(task, { state: "review", at: SHA }));
+    expect(posted.slice(before)).toMatchObject([{ status: "in_progress" }]);
     await run(rev.taskUpdate(task, { state: "doing", verdict: "rejected", note: "the icon is blurry", round: 2 }));
     expect(posted.at(-1)).toMatchObject({ status: "completed", conclusion: "failure", output: { title: `T${task}: changes requested in Kiwi`, summary: `T${task}: changes requested` } });
     expect(await gate()).toMatchObject({ open: false, rejected: true });
   });
 
-  test("a member can't turn kiwi/review green, and a GitHub refusal for good doesn't hold a change", async () => {
+  test("a member can't turn kiwi/review green; after a green post, a refused downgrade (403) still holds the change", async () => {
     expect(await refusal(dev.ch.postReviewCheck({ repo: REPO, sha: SHA, verdict: "approved", tasks: [task] }))).toBe("only the channel owner can do that");
+    await owner.ownerCh.postReviewCheck({ repo: REPO, sha: SHA, verdict: "approved", tasks: [task] });
+    expect(posted.at(-1)).toMatchObject({ conclusion: "success" });
     checks = "refused";
-    const before = posted.length;
-    await askCheck("And on GNOME?");
-    expect(posted).toHaveLength(before);
+    expect(await refusal(askCheck("And on GNOME?"))).toMatch(
+      /has to turn waiting before this goes out, and the relay didn't confirm it \(GitHub won't take the check from the App \(403\).*nothing was sent, try again$/,
+    );
     const { state } = await run(dev.state());
-    expect([...state.checks.values()].filter((c) => c.holds.includes(task))).toHaveLength(2);
+    expect([...state.checks.values()].filter((c) => c.holds.includes(task))).toHaveLength(1);
   });
 });

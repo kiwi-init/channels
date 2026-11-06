@@ -88,6 +88,19 @@ function membersOnly(c: FoldCtx, member: FoldMember, m: Message, ev: { members: 
 
 const runsOf = (runs: number[]): { runs?: number[] } => (runs.length ? { runs } : {});
 
+function runsAtHead(c: FoldCtx, t: Task, at: string | undefined): number[] {
+  if (!at) return [];
+  const prs = [...c.github.prs.entries()];
+  const byBranch = prs.find(([, pr]) => taskOfBranch(pr.branch, c.branchPrefix) === t.id)?.[1];
+  const byProof = [...(t.proof ?? [])]
+    .reverse()
+    .flatMap((p) => prLinks(p.url))
+    .map((l) => c.github.prs.get(prKey(l.repo, l.number)))
+    .find((pr) => pr !== undefined);
+  const repo = (byBranch ?? byProof)?.repo;
+  return repo ? recordedRuns(c.github, repo, at) : [];
+}
+
 export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember, at: number, reject: (why: string) => void): void {
   const { members, keysByName, scopesByKey, scopeSets, roleSets, setRole, tasks, facts, rooms, roomsSince, nameTaken } = c;
   switch (ev.op) {
@@ -569,7 +582,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       if (open && state && state !== "review")
         open.result =
           ev.verdict && mayFinish
-            ? { kind: ev.verdict, by: m.from, seq: m.seq, ts: at, ...(ev.verdict === "approved" ? runsOf(ev.runs ?? (open.at ? recordedRuns(c.github, open.at) : [])) : {}) }
+            ? { kind: ev.verdict, by: m.from, seq: m.seq, ts: at, ...(ev.verdict === "approved" ? runsOf(ev.runs ?? runsAtHead(c, task, open.at)) : {}) }
             : state === "done" && !cancel && ev.close === undefined
               ? { kind: "approved", by: m.from, seq: m.seq, ts: at }
               : { kind: "withdrawn", seq: m.seq };
