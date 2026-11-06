@@ -1,10 +1,44 @@
-import { describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, test } from "bun:test"
 import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
+import { isValidElement, type ReactElement, type ReactNode } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 
 import { StepHow } from "~/chat/step"
-import { openOutside } from "~/kit/outside"
+import { OutsideLink, openOutside } from "~/kit/outside"
+
+const LINK = "https://example.com/doc"
+const had = Object.getOwnPropertyDescriptor(globalThis, "window")
+
+afterEach(() => {
+  if (had) Object.defineProperty(globalThis, "window", had)
+  else Reflect.deleteProperty(globalThis, "window")
+})
+
+const fakeWindow = (kiwi: object | undefined, opened: string[]) =>
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    writable: true,
+    value: { kiwi, open: (url: string, target: string, features: string) => void opened.push(`${url} ${target} ${features}`) },
+  })
+
+type LinkElement = ReactElement<Parameters<typeof OutsideLink>[0]>
+
+function findLink(node: ReactNode, href: string): LinkElement | undefined {
+  if (Array.isArray(node)) return node.map((n) => findLink(n, href)).find(Boolean)
+  if (!isValidElement<{ href?: string; children?: ReactNode }>(node)) return undefined
+  if (node.type === OutsideLink && node.props.href === href) return node as LinkElement
+  return findLink(node.props.children, href)
+}
+
+function clickStepLink(): { prevented: boolean } {
+  const link = findLink(StepHow({ step: { why: "w", needsPerson: "jow", links: [LINK] }, you: ["jow"] }), LINK)
+  if (!link) throw new Error("the step card has no OutsideLink for its link")
+  const anchor = OutsideLink(link.props)
+  let prevented = false
+  anchor.props.onClick?.({ preventDefault: () => (prevented = true) } as never)
+  return { prevented }
+}
 
 const opener = (fail = false) => {
   const opened: string[] = []
@@ -34,6 +68,24 @@ describe("links outside the app open through the desktop bridge (#1818)", () => 
     openOutside("https://example.com", () => (failed = true), via)
     await new Promise((done) => setTimeout(done, 0))
     expect(failed).toBe(true)
+  })
+
+  test("clicking a step link on desktop opens it through the bridge and stops the webview's own navigation", () => {
+    const opened: string[] = []
+    const shown: string[] = []
+    fakeWindow({ getSnapshot: () => ({}), openExternal: async (url: string) => void opened.push(url) }, shown)
+    const { prevented } = clickStepLink()
+    expect(opened).toEqual([LINK])
+    expect(shown).toEqual([])
+    expect(prevented).toBe(true)
+  })
+
+  test("in a browser, with no bridge, a step link opens a new tab", () => {
+    const shown: string[] = []
+    fakeWindow(undefined, shown)
+    const { prevented } = clickStepLink()
+    expect(shown).toEqual([`${LINK} _blank noopener,noreferrer`])
+    expect(prevented).toBe(true)
   })
 
   test("a step card's links don't rely on target=_blank", () => {
