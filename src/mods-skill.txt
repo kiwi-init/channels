@@ -36,6 +36,9 @@ A mod is a folder with a `mod.json` and an `index.tsx`. The desktop app builds i
   - `render:<kind>`: draws `X.<kind>.html` attachments in chat.
   - `net:<host>`: each exact host it fetches, like `net:api.linear.app`. No wildcards, https only.
 - **`icon`:** optional, an `.svg` or `.png` in the folder, up to 64 KB.
+- **`settings`:** optional, what the person fills in on the mod's page in Settings → Mods, like `{ "id": "token", "title": "Linear API key", "type": "secret", "required": true }`.
+  - Types: `text`, `toggle`, `choice` (with its `choices`) and `secret`. Up to 20.
+  - A `required` one keeps the mod off until it's filled in. Secrets stay sealed on the person's computer and reach only this mod.
 
 ## What a mod can use
 
@@ -58,7 +61,8 @@ Everything comes from `@kiwi/mod`, plus React.
 | `Actions`, `Action`, `Action.OpenInBrowser`, `Action.CopyToClipboard` | What an item, a detail or a form can do; `shortcut: "mod+shift+c"` binds a key |
 | `Toast.show({ title, message, style })`, `copy(text, note)` | A note at the bottom of the app; copying |
 | `Empty` | The empty state: `title`, `description`, `icon`, `actions` |
-| `storage` | `get`, `set`, `remove`, `keys`: JSON values kept on this computer |
+| `settings()` | The person's settings for the mod, by id: a string, `true` or `false`, or `null` when empty |
+| `storage` | `get`, `set`, `remove`, `keys`: JSON values the mod keeps on this computer |
 | `render(kind, draw)` | Draws a chat attachment kind |
 | `Button`, `Row`, `Field`, `Icon`, `Avatar`, `Dot`, `Count`, `Heading`, `Track`, `ago`, `cx` | The app's own pieces |
 
@@ -132,28 +136,39 @@ panel({ title: "Items", render: View })
 
 Needs `["panel", "net:api.example.com"]`.
 
-### A setting, like a token, kept in storage
+### A panel that needs the person's API key
 
-```tsx
-import { Form, Toast, storage } from "@kiwi/mod"
+In `mod.json`:
 
-function Settings({ done }: { done: () => void }) {
-  return (
-    <Form
-      submitTitle="Save"
-      onSubmit={async (values) => {
-        await storage.set("token", values["token"])
-        Toast.show({ title: "Saved" })
-        done()
-      }}
-    >
-      <Form.TextField id="token" title="API token" placeholder="Paste a token" />
-    </Form>
-  )
-}
+```json
+"needs": ["panel", "net:api.example.com"],
+"settings": [{ "id": "token", "title": "Example API key", "type": "secret", "required": true }]
 ```
 
-Read it back with `await storage.get<string>("token")`, and send it in `fetch`'s headers.
+```tsx
+import { Empty, List, panel, settings, useFetch } from "@kiwi/mod"
+
+interface Issue {
+  id: string
+  title: string
+}
+
+function View() {
+  const token = settings()["token"]
+  const { data, error, isLoading } = useFetch<Issue[]>(typeof token === "string" ? "https://api.example.com/issues" : null, { headers: { Authorization: `Bearer ${token}` } })
+  if (typeof token !== "string") return <Empty title="Add your API key" description="Settings → Mods, then this mod's page." icon="gear" />
+  if (error) return <Empty title="Couldn't load the issues" description={error.message} icon="info" />
+  return (
+    <List isLoading={isLoading} searchBarPlaceholder="Search issues">
+      {(data ?? []).map((issue) => (
+        <List.Item key={issue.id} title={issue.title} />
+      ))}
+    </List>
+  )
+}
+
+panel({ title: "Issues", render: View })
+```
 
 ### A command
 
@@ -181,11 +196,11 @@ Needs `["render:figure"]`. The page comes from whoever sent the message, so its 
 ## Rules
 
 - **Sandbox:** a mod can't reach the app's page, the person's keys or messages, other mods or the CLI. It has no `localStorage` or cookies; use `storage`.
-- **No secrets in code.** A mod that needs a token asks for it in a `Form` and keeps it in `storage`.
+- **No secrets in code or in `storage`.** A mod that needs a token lists it in `settings` as a `secret`, and reads it with `settings()`.
 - **Links and copying** work while the person is using the mod: a click on a link, `Action.OpenInBrowser`, `Action.CopyToClipboard` or `copy()`. Web images don't load; fetch one and show it as a `blob:` URL.
 - **Imports:** React, `@kiwi/mod`, and the mod's own files (code, `.css`, images). No npm packages at runtime.
-- **Each change restarts it,** so keep what should last in `storage`.
-- **Don't guess what the mod can't know,** like which repo or which account: use `useGithub()`, or ask in a `Form`.
+- **Each change restarts it,** so keep what should last in `storage`. A settings change restarts it too, with the new values.
+- **Don't guess what the mod can't know,** like which repo or which account: use `useGithub()`, or a setting.
 
 ## Done means
 
