@@ -21,3 +21,4 @@ and the most important of them all: we can fix everything!
 ## Authorship
 
 - PRs and Issues: if wrote by AI agent plz disclose with `{model_slug} on behalf of {human_name}`.
+- A PR whose disclosure, or a commit's `Agent:` line, names a model listed in `.github/quarantine.json` is quarantined: the kiwi-bus bot turns it into a draft with the `quarantine` label and says why. It stays there until a person on that file's vouched list, or a stronger model on their behalf, reviews it and comments `/vouch`.
