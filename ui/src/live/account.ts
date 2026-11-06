@@ -3,22 +3,21 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from "react"
 import { handleFor } from "@kiwi/core/membership.ts"
 import { useUnsealedKeys } from "@kiwi/secrets/keys-at-rest.ts"
 import { relayUrl } from "@kiwi/secrets/relay.ts"
-import { bridge, secrets, useSecrets, type ComputerView, type DeviceNewsView, type MovedView, type PhoneView } from "@kiwi/secrets/secrets.ts"
+import { bridge, useSecrets, type ComputerView, type DeviceNewsView, type MovedView, type PhoneView } from "@kiwi/secrets/secrets.ts"
 import { useUpdate } from "@kiwi/app/update.ts"
-import { launchedBy } from "@kiwi/app/forgotten-computers.ts"
 import { announce } from "~/kit/toasts"
-import { deviceNews, postDevicesNow } from "~/live/devices"
+import { deviceNews } from "~/live/devices"
 import { store, type Listener } from "~/live/value"
-import type { Account, Computer, Device, EnrollAsk, Enrolling, GithubSignIn, KeptAgent, LaunchedAgent } from "~/model"
+import type { Account, Computer, Device, EnrollAsk, Enrolling, GithubSignIn } from "~/model"
 import { version } from "../../../package.json"
 
-const github = store<{ login: string } | null>(null)
-const githubCode = store<{ code: string; url: string } | null>(null)
-const githubGate = store<"unknown" | "needed" | "signed-in" | "off">("unknown")
-const githubBusy = store<string | null>(null)
+export const github = store<{ login: string } | null>(null)
+export const githubCode = store<{ code: string; url: string } | null>(null)
+export const githubGate = store<"unknown" | "needed" | "signed-in" | "off">("unknown")
+export const githubBusy = store<string | null>(null)
 let codeListener: (() => void) | null = null
 
-function listenForCodes(): void {
+export function listenForCodes(): void {
   const b = bridge()
   if (!b || codeListener) return
   codeListener = b.onGithubCode((c) => {
@@ -31,81 +30,14 @@ function listenForCodes(): void {
 
 const ENROLL_POLL_MS = 20_000
 const ENROLL_WAIT_MS = 2_000
-const ENROLLING_MS = 2_000
-
-const selfEnroll = store<Enrolling | null>(null)
-let enrollTimer: ReturnType<typeof setTimeout> | null = null
-let enrollRun: { done: (d: EnrollDone) => void } | null = null
-
-export type EnrollDone = { person: { name: string }; channels: { label: string; code: string }[] }
-
-const enrollBridge = () => {
-  const b = bridge()
-  if (!b?.enrollBegin) throw new Error("signing in as one of your devices works in the Channels desktop app")
-  return b
-}
-
-export async function enrollBegin(signIn: () => Promise<unknown>, done: (d: EnrollDone) => void): Promise<void> {
-  const b = enrollBridge()
-  await signIn()
-  await b.enrollBegin()
-  if (enrollTimer) clearTimeout(enrollTimer)
-  const mine = { done }
-  enrollRun = mine
-  selfEnroll.set({ stage: "asking" })
-  const tick = async () => {
-    enrollTimer = null
-    let next: Awaited<ReturnType<typeof b.enrollStatus>>
-    try {
-      next = await b.enrollStatus()
-    } catch (err) {
-      if (enrollRun !== mine) return
-      enrollRun = null
-      selfEnroll.set(null)
-      announce(`Couldn't sign in as one of your devices: ${err instanceof Error ? err.message : String(err)}`, "error")
-      return
-    }
-    if (enrollRun !== mine) return
-    if (!next || next.stage === "gone" || next.stage === "done") {
-      enrollRun = null
-      selfEnroll.set(null)
-      if (next?.stage === "gone") announce("Your other computer turned this one away, or the ask ran out")
-      if (next?.stage === "done") done(next)
-      return
-    }
-    if (JSON.stringify(selfEnroll.get()) !== JSON.stringify(next)) selfEnroll.set(next)
-    if (next.stage === "check") return
-    enrollTimer = setTimeout(() => void tick(), ENROLLING_MS)
-  }
-  enrollTimer = setTimeout(() => void tick(), ENROLLING_MS)
-}
-
-export async function enrollKeep(): Promise<void> {
-  const mine = enrollRun
-  if (selfEnroll.get()?.stage !== "check" || !mine) return
-  enrollRun = null
-  selfEnroll.set(null)
-  mine.done(await enrollBridge().enrollKeep())
-}
-
-export async function enrollCancel(): Promise<void> {
-  if (enrollTimer) clearTimeout(enrollTimer)
-  enrollTimer = null
-  enrollRun = null
-  const shown = selfEnroll.get()
-  selfEnroll.set(null)
-  await enrollBridge().enrollCancel()
-  if (shown?.stage === "check")
-    announce(`Kept nothing. If your other computer never showed ${shown.person.fingerprint}, someone else answered this computer. It may still list this computer under Devices: remove it there.`)
-}
-
+export const selfEnroll = store<Enrolling | null>(null)
 export const enrollingNow = (): Enrolling | null => selfEnroll.get()
 
 export const useEnrolling = (): Enrolling | null => useSyncExternalStore(selfEnroll.subscribe, enrollingNow)
 
 const enrollTrouble = store<string | null>(null)
 
-const enrollAsk = (() => {
+export const enrollAsk = (() => {
   let value: EnrollAsk | null = null
   const listeners = new Set<Listener>()
   let timer: ReturnType<typeof setTimeout> | null = null
@@ -148,7 +80,7 @@ const enrollAsk = (() => {
   }
 })()
 
-const devices = (() => {
+export const devices = (() => {
   let value: Device[] | null = null
   const listeners = new Set<Listener>()
   let started = false
@@ -185,75 +117,6 @@ function deviceNotices(news: DeviceNewsView | null): Pick<Account, "forgotten" |
   return { ...(older.length ? { forgotten: older } : {}), ...(news.removed && !news.removed.wiped ? { forgotHere: { by: news.removed.by } } : {}) }
 }
 
-export async function launchedFrom(ids: readonly string[]): Promise<LaunchedAgent[]> {
-  const person = secrets().person?.pk
-  if (!person) return []
-  const [{ allMembers }, { linkOf }] = await Promise.all([import("@kiwi/channel/store.ts"), import("@kiwi/channel/channel-ops.ts")])
-  const rosters = await Promise.all(
-    allMembers().map(async (m) => {
-      const roster = await linkOf(m)
-        .members()
-        .catch(() => [])
-      return launchedBy(roster, ids, person).map((a) => ({ ...a, code: m.code }))
-    })
-  )
-  return rosters.flat()
-}
-
-export async function forgetDevice(ids: readonly string[], keep: readonly KeptAgent[] = []): Promise<void> {
-  const b = bridge()
-  if (!b?.forgetDevice) throw new Error("forgetting a device needs the next Channels update")
-  if (keep.length) {
-    if (!b.keepAgents) throw new Error("keeping its agents needs the next Channels update")
-    const { keepAgents } = await import("@kiwi/app/device-lists.ts")
-    for (const code of new Set(keep.map((k) => k.code))) {
-      const got = await b.keepAgents(
-        code,
-        keep.filter((k) => k.code === code).map(({ pk, from }) => ({ pk, from }))
-      )
-      if (!got) throw new Error("this computer isn't on your list of devices, so it can't take the agents over")
-      keepAgents(code, got.links, got.keep)
-    }
-  }
-  for (const id of ids) await b.forgetDevice(id)
-  await devices.load()
-  postDevicesNow()
-}
-
-export async function renewDevice(...ids: string[]): Promise<void> {
-  const b = bridge()
-  if (!b?.renewDevice) throw new Error("renewing a device needs the next Channels update")
-  for (const id of ids) await b.renewDevice(id)
-  await devices.load()
-  postDevicesNow()
-}
-
-const enrolling = () => {
-  const b = bridge()
-  if (!b?.enrollPoll) throw new Error("approving a device needs the next Channels update")
-  return b
-}
-
-export async function enrollAnswer(id: string): Promise<void> {
-  await enrolling().enrollAnswer(id)
-  await enrollAsk.check()
-}
-
-export async function enrollConfirm(id: string, digits: string): Promise<{ ok: true } | { ok: false; left: number }> {
-  const r = await enrolling().enrollConfirm(id, digits)
-  if (r.ok) {
-    announce(`${r.label} is one of your devices now`)
-    await devices.load()
-  } else if (r.left === 0) announce("Turned it away: the digits didn't match", "error")
-  await enrollAsk.check()
-  return r.ok ? { ok: true } : { ok: false, left: r.left }
-}
-
-export async function enrollDeny(id: string): Promise<void> {
-  await enrolling().enrollDeny(id)
-  await enrollAsk.check()
-}
-
 async function refreshGithub(): Promise<void> {
   const b = bridge()
   if (!b) {
@@ -264,24 +127,6 @@ async function refreshGithub(): Promise<void> {
   const s = await b.githubStatus()
   github.set(s.account ? { login: s.account.login } : null)
   githubGate.set(!s.signIn ? "off" : s.account ? "signed-in" : "needed")
-}
-
-export async function linkGithub(): Promise<void> {
-  const b = bridge()
-  if (!b) throw new Error("Linking GitHub needs the Channels desktop app")
-  listenForCodes()
-  githubBusy.set(null)
-  try {
-    const s = await b.githubLink()
-    github.set(s.account ? { login: s.account.login } : null)
-    if (s.signIn) githubGate.set(s.account ? "signed-in" : "needed")
-    if (s.account) announce(`Signed in with GitHub as ${s.account.login}`)
-  } catch (err) {
-    githubBusy.set(err instanceof Error ? err.message : String(err))
-    throw err
-  } finally {
-    githubCode.set(null)
-  }
 }
 
 /** Where signing in with GitHub stands, on a relay that takes it; null on one that doesn't. */
@@ -305,13 +150,6 @@ export function useGithubSignIn(): GithubSignIn | null {
 export const useGithubGate = (): "unknown" | "needed" | "signed-in" | "off" => useSyncExternalStore(githubGate.subscribe, githubGate.get)
 
 export const useGithubLogin = (): string | null => useSyncExternalStore(github.subscribe, () => github.get()?.login ?? null)
-
-export async function unlinkGithub(): Promise<void> {
-  const b = bridge()
-  if (!b) throw new Error("Linking GitHub needs the Channels desktop app")
-  const s = await b.githubUnlink()
-  github.set(s.account ? { login: s.account.login } : null)
-}
 
 const OS: Record<string, Computer["os"]> = { macos: "mac", mac: "mac", darwin: "mac", linux: "linux", windows: "windows", win32: "windows" }
 
@@ -409,7 +247,7 @@ const uiUpdate = (() => {
   }
 })()
 
-const moved = (() => {
+export const moved = (() => {
   const value = store<MovedView | null>(null)
   let started = false
   return {
@@ -429,12 +267,6 @@ const moved = (() => {
     },
   }
 })()
-
-export async function dismissMoved(): Promise<void> {
-  moved.set(null)
-  const b = bridge()
-  if (b && typeof b.dismissMovedApp === "function") await b.dismissMovedApp()
-}
 
 export function useAccount(): Account | null {
   const { person, computers, phones } = useSecrets()
