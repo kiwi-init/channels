@@ -166,6 +166,27 @@ describe("a task with a landing step isn't done on approval (#623)", () => {
     expect(s.tasks.get(add.seq)!.state).toBe("todo");
   });
 
+  test("a rejection paired with done can't skip landing, after approval or with no review round", async () => {
+    const { t, log } = await approved({ then: "merge" });
+    const after = await ev("mac", { op: "task.update", task: t, state: "done", verdict: "rejected" });
+    const s = fold([...log, after], roster);
+    expect(s.rejected.has(after.seq)).toBe(true);
+    expect(s.tasks.get(t)!.state).toBe("landing");
+    const add = await ev("owl", { op: "task.add", title: "no rounds", owner: "win", review: "mac", then: "merge" });
+    const noRound = await ev("mac", { op: "task.update", task: add.seq, state: "done", verdict: "rejected" });
+    const s2 = fold([add, noRound], roster);
+    expect(s2.rejected.has(noRound.seq)).toBe(true);
+    expect(s2.tasks.get(add.seq)!.state).toBe("todo");
+  });
+
+  test("an approval with no review round still lands a task with a landing step", async () => {
+    const add = await ev("owl", { op: "task.add", title: "no rounds", owner: "win", review: "mac", then: "merge" });
+    const pass = await ev("mac", { op: "task.update", task: add.seq, state: "done", verdict: "approved" });
+    const s = fold([add, pass], roster);
+    expect(s.rejected.has(pass.seq)).toBe(false);
+    expect(s.tasks.get(add.seq)!.state).toBe("landing");
+  });
+
   test("a landing task can't be approved twice", async () => {
     const { t, log } = await approved({ then: "merge" });
     const again = await ev("mac", { op: "task.update", task: t, state: "done", verdict: "approved", round: 1, at: HEAD });

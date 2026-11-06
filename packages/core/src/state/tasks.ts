@@ -36,10 +36,10 @@ export function closeCancelled(task: Task, mark: { seq: number; by: string; at: 
 
 export function verdictRefusal(task: Task, verdict: Verdict, ev: { state?: string; round?: number; at?: string; body?: "review" }, mayFinish: boolean, open: ReviewRound | undefined): string | null {
   const id = taskId(task.id);
-  if (ev.round === undefined) return (verdict === "approved" || ev.body) && task.rounds.length ? `a verdict on ${id} names the round it judges` : null;
   if ((verdict === "approved" && ev.state !== "done") || (verdict === "rejected" && ev.state !== "doing")) return "an approval finishes the task and a rejection sends it back to doing";
-  if (task.state === "done") return `${id} is already done`;
   if (task.state === "landing") return `${id} is already approved: it lands next`;
+  if (ev.round === undefined) return (verdict === "approved" || ev.body) && task.rounds.length ? `a verdict on ${id} names the round it judges` : null;
+  if (task.state === "done") return `${id} is already done`;
   if (!mayFinish) return `only ${task.review === "*" ? "someone who hasn't worked on it" : task.review} gives ${id}'s verdict`;
   if (!open) return `${id} has no review round open`;
   if (open.n !== ev.round) return `round ${ev.round} of ${id} isn't the open one: round ${open.n} is`;
@@ -70,7 +70,7 @@ export function landingRefusal(task: Task, ev: LandingChange, from: { person: bo
   if ((ev.then !== undefined || ev.lander !== undefined) && !trusted) return `only a person or the lead changes how ${id} lands`;
   if (task.state === "landing" && landerAfter(task, ev) !== landerOf(task) && !trusted) return `only a person or the lead changes who lands ${id}`;
   if (ev.state === "landing" && !hasLanding(task.then)) return `${id} has no landing step: it finishes on approval`;
-  if (ev.state === "done" && ev.verdict === undefined && hasLanding(task.then) && task.state !== "done") return `${id} lands by its step (${task.then}): approve it, or close it with a reason`;
+  if (ev.state === "done" && ev.verdict !== "approved" && hasLanding(task.then) && task.state !== "done") return `${id} lands by its step (${task.then}): approve it, or close it with a reason`;
   if (task.state === "landing" && newPr(task, ev.proof) && !trusted) return `only a person or the lead links another PR to ${id} once it's approved`;
   return null;
 }
