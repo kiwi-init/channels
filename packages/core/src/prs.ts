@@ -2,7 +2,7 @@ import { inlineText } from "./membership.ts";
 import { REVIEW_CHECK } from "./protocol.ts";
 import type { Task } from "./state/types.ts";
 import { prChecks, prKey, rulesOf, type ChannelState, type GithubPr, type GithubState } from "./state.ts";
-import { artifactText, doneGate, landingPr } from "./done-gate.ts";
+import { artifactText, doneGate, gateNow, landingPr } from "./done-gate.ts";
 
 export interface PrChecks {
   passed: number;
@@ -111,5 +111,8 @@ export function landingWaits(state: ChannelState, task: Task): string | null {
   if (gate.kind === "landed") return `is ready to land at ${artifactText(gate.artifact)}: the owner's app marks it landed`;
   const pr = landingPr(state, task);
   if (pr?.state === "closed") return `waits: PR #${pr.number} was closed without merging`;
-  return pr?.state === "open" && state.merges === "people" ? `waits for a person to merge PR #${pr.number}` : `waits for ${gate.why}`;
+  const now = state.merges === "people" ? gateNow(state, task) : undefined;
+  if (now)
+    return now.missing.length ? `waits for its ship gate (missing ${now.missing.join(", ")}) before a person merges PR #${now.pr.number}` : `is ready for a person to merge PR #${now.pr.number}`;
+  return `waits for ${gate.why}`;
 }
