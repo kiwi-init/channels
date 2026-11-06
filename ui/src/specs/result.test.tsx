@@ -25,11 +25,11 @@ const cancelled: Task = {
 
 const spec: Spec = {
   ask: 10,
-  title: "Export the board",
-  words: "board as a spreadsheet",
+  title: wrote("Export the board"),
+  words: wrote("board as a spreadsheet"),
   by: "jow",
   at: NOW,
-  text: "# Export the board\n\n## Done when\n- [x] a button",
+  text: wrote("# Export the board\n\n## Done when\n- [x] a button"),
   v: 2,
   edited: { by: "jow", at: NOW },
   edits: 0,
@@ -57,11 +57,11 @@ const channel = {
   connection: "live",
 } as unknown as Channel
 
-const render = (): string =>
+const render = (shown: Spec = spec): string =>
   renderToStaticMarkup(
     <AppContext.Provider value={{ app: { channel }, go: () => {} } as unknown as Ctx}>
       <ActContext.Provider value={{ actions: {}, go: () => {}, toast: () => {} } as unknown as Act}>
-        <Result channel={channel} spec={spec} />
+        <Result channel={channel} spec={shown} />
       </ActContext.Provider>
     </AppContext.Provider>
   )
@@ -72,6 +72,19 @@ describe("a spec's result names agents by nickname (#1763)", () => {
     expect(html).toContain("Pair with @opus-coder on export")
     expect(html).toContain("cancelled: Superseded by @opus-coder&#x27;s PR")
     expect(html).not.toContain("[object Object]")
+    expect(html).not.toContain("gentle-otter")
+  })
+
+  test("the verdict's note and a send-back note name agents by nickname", () => {
+    const judged: Spec = {
+      ...spec,
+      stage: "accepted",
+      result: { verdict: "accepted", by: "jow", at: NOW, note: wrote("thanks @gentle-otter") },
+      backs: [{ by: "jow", at: NOW - 60_000, note: wrote("@gentle-otter, add the CSV header") }],
+    }
+    const html = render(judged)
+    expect(html).toContain("“thanks @opus-coder”")
+    expect(html).toContain("“@opus-coder, add the CSV header”")
     expect(html).not.toContain("gentle-otter")
   })
 })

@@ -9,11 +9,11 @@ const task = (id: number, title: string): Task => ({ id, title: wrote(title), st
 
 const spec = (ask: number, title: string, v: number): Spec => ({
   ask,
-  title,
-  words: "",
+  title: wrote(title),
+  words: wrote(""),
   by: "jow",
   at: 0,
-  text: "",
+  text: wrote(""),
   v,
   edited: { by: "lead", at: 0 },
   edits: 0,
@@ -125,6 +125,13 @@ describe("homeOf", () => {
     expect(h.asks.map((a) => a.what)).toEqual(["Approve spec #55", "Review T94", "Spec #56 is done: check it"])
     expect(h.asks.map((a) => a.text)).toEqual(["Home steers every channel", "Home: one command bar", "Spec #56"])
     expect(h.asks.map((a) => a.act)).toEqual([{ kind: "approve-spec", ask: 55, v: 90 }, { kind: "approve-task", task: 94 }, { kind: "open" }])
+  })
+
+  test("a spec to approve names agents by nickname in its title (#1763)", () => {
+    const h = homeOf(
+      channel({ nicknames: new Map([["gentle-otter", "lead"]]), specs: [spec(55, "Pair @gentle-otter with the relay", 1)], asks: [{ kind: "spec", id: "s55", at: 1, ask: 55, why: "approve" }] })
+    )
+    expect(h.asks[0]?.text).toBe("Pair @lead with the relay")
   })
 
   test("says who wants to run what, and allows only what may be allowed", () => {

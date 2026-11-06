@@ -1,5 +1,6 @@
 import { changedSinceApproval, freeAgents, judgesSpec, specPlanner, specQueue, specStage, specTasks, specTitle, type ChannelState } from "@kiwi/core/state.ts"
 import type { Spec, SpecAsk } from "~/model"
+import { wrote } from "~/words"
 
 export function specsOf(state: ChannelState, me: string): Spec[] {
   const queue = specQueue(state).map((s) => s.ask)
@@ -11,25 +12,25 @@ export function specsOf(state: ChannelState, me: string): Spec[] {
       const planner = specPlanner(state, s.ask)
       const result =
         s.result && s.result.verdict !== "back"
-          ? { verdict: s.result.verdict, by: s.result.by, at: s.result.at, ...(s.result.note ? { note: s.result.note } : {}), ...(s.result.auto ? { auto: true as const } : {}) }
+          ? { verdict: s.result.verdict, by: s.result.by, at: s.result.at, ...(s.result.note ? { note: wrote(s.result.note) } : {}), ...(s.result.auto ? { auto: true as const } : {}) }
           : undefined
       return {
         ask: s.ask,
-        title: specTitle(s, head),
-        words: head?.words ?? "",
+        title: wrote(specTitle(s, head)),
+        words: wrote(head?.words ?? ""),
         by: head?.by ?? s.started.by,
         at: head?.at ?? s.started.at,
-        text: s.text,
+        text: wrote(s.text),
         v: s.v,
         edited: { by: s.by, at: s.at },
         edits: s.edits,
         editors: s.editors,
         stage: specStage(state, s),
         ...(s.ready?.v === s.v ? { ready: true as const } : {}),
-        ...(s.approved ? { approved: { by: s.approved.by, at: s.approved.at, v: s.approved.v, text: s.approved.text } } : {}),
+        ...(s.approved ? { approved: { by: s.approved.by, at: s.approved.at, v: s.approved.v, text: wrote(s.approved.text) } } : {}),
         ...(changedSinceApproval(s) ? { changed: true as const } : {}),
         ...(result ? { result } : {}),
-        backs: s.backs.map((b) => ({ by: b.by, at: b.at, note: b.note })),
+        backs: s.backs.map((b) => ({ by: b.by, at: b.at, note: wrote(b.note) })),
         comments: (s.comments ?? []).map((c) => c.seq),
         tasks: specTasks(state, s.ask).map((t) => t.id),
         ...(planner ? { planner } : {}),

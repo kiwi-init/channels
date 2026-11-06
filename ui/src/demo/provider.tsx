@@ -16,7 +16,7 @@ import { deletedTheme, savedTheme } from "~/theme/themes"
 import { announce } from "~/kit/toasts"
 import { demoDocs, openDemoDoc } from "~/demo/doc-hub"
 import { muteKey } from "~/live/mute"
-import { wrote } from "~/words"
+import { wordsRaw, wrote } from "~/words"
 
 const unticked = (text: string): string => text.replace(/^(\s*[-*+]\s+)\[[xX]\]/gm, "$1[ ]").trim()
 
@@ -699,11 +699,11 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
               ?.slice(2) ?? words.slice(0, 80)
           const spec: Spec = {
             ask: seq,
-            title,
-            words: words.trim(),
+            title: wrote(title),
+            words: wrote(words.trim()),
             by: c.you,
             at,
-            text,
+            text: wrote(text),
             v: seq,
             edited: { by: c.you, at },
             edits: 1,
@@ -723,16 +723,16 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
           ...c,
           specs: c.specs?.map((sp) => {
             if (sp.ask !== ask) return sp
-            const changed = !!sp.approved && (!!sp.changed || !sp.canJudge) && unticked(sp.approved.text) !== unticked(text)
+            const changed = !!sp.approved && (!!sp.changed || !sp.canJudge) && unticked(wordsRaw(sp.approved.text)) !== unticked(text)
             const title =
               text
                 .split("\n")
                 .find((l) => l.startsWith("# "))
-                ?.slice(2) ?? sp.title
+                ?.slice(2) ?? wordsRaw(sp.title)
             return {
               ...sp,
-              text,
-              title,
+              text: wrote(text),
+              title: wrote(title),
               v: seq,
               edits: sp.edits + 1,
               edited: { by: c.you, at: Date.now() },
@@ -775,8 +775,8 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
             sp.ask !== ask
               ? sp
               : verdict === "back"
-                ? { ...sp, stage: "queued" as const, queue: 1, backs: [...sp.backs, { by: c.you, at: Date.now(), note: note ?? "" }] }
-                : { ...sp, stage: verdict, result: { verdict, by: c.you, at: Date.now(), ...(note ? { note } : {}) } }
+                ? { ...sp, stage: "queued" as const, queue: 1, backs: [...sp.backs, { by: c.you, at: Date.now(), note: wrote(note ?? "") }] }
+                : { ...sp, stage: verdict, result: { verdict, by: c.you, at: Date.now(), ...(note ? { note: wrote(note) } : {}) } }
           ),
         })),
       nameGoal: (code, ask, name) =>

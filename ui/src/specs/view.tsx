@@ -11,10 +11,12 @@ import { Icon } from "~/kit/icons"
 import { later } from "~/kit/later"
 import type { Channel, Spec, Task } from "~/model"
 import { useApp } from "~/nav"
+import { Shown } from "~/names"
 import { SpecMark } from "~/specs/card"
 import { faceOf, needsYou, tasksOf, workersOf } from "~/specs/read"
 import { NowCard } from "~/tasks/now"
 import { TaskRow } from "~/tasks/row"
+import { wordsPlain } from "~/words"
 
 const LOOSE_SHOWN = 3
 
@@ -167,7 +169,9 @@ function SpecRow({ channel, spec }: { channel: Channel; spec: Spec }) {
     <li className={cx("gh-item", shown && "is-unfolded")}>
       <button type="button" className="gh-row spec-row" onClick={() => go({ to: "spec", ask: spec.ask, part })}>
         <SpecMark spec={spec} />
-        <span className="gh-title">{spec.title}</span>
+        <span className="gh-title">
+          <Shown value={spec.title} />
+        </span>
         {who.length > 0 && (
           <span className="spec-card-faces spec-row-faces" aria-hidden="true">
             {who.slice(0, 3).map((n) => (
@@ -181,7 +185,7 @@ function SpecRow({ channel, spec }: { channel: Channel; spec: Spec }) {
           type="button"
           className="spec-fold num"
           aria-expanded={shown}
-          aria-label={`${shown ? "Hide" : "Show"} the ${open.length} open ${open.length === 1 ? "task" : "tasks"} of ${spec.title}`}
+          aria-label={`${shown ? "Hide" : "Show"} the ${open.length} open ${open.length === 1 ? "task" : "tasks"} of ${wordsPlain(spec.title, channel.nicknames)}`}
           onClick={() => setUnfolded(!unfolded)}
         >
           {tasks.length - open.length}/{tasks.length}

@@ -1025,11 +1025,11 @@ export const DEMO_INTERLINKED: Channel = {
   specs: [
     {
       ask: 607,
-      title: "ClickUp's admin-only pieces: automations, forms, dashboards and the time-tracking reports, behind one owner switch",
-      words: "",
+      title: wrote("ClickUp's admin-only pieces: automations, forms, dashboards and the time-tracking reports, behind one owner switch"),
+      words: wrote(""),
       by: "jow",
       at: m(40),
-      text: "",
+      text: wrote(""),
       v: 3,
       edited: { by: "quill", at: m(12) },
       edits: 2,

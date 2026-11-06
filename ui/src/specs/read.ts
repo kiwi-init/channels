@@ -10,7 +10,7 @@ type Tone = "tone-quiet" | "tone-doing" | "tone-review" | "tone-decide" | "tone-
 const ordinal = (n: number): string => (n === 1 ? "next in line" : `${n}${n % 10 === 2 && n % 100 !== 12 ? "nd" : n % 10 === 3 && n % 100 !== 13 ? "rd" : "th"} in line`)
 
 export function boxesOf(spec: Pick<Spec, "text">): DoneWhen[] {
-  return doneWhen(spec.text)
+  return doneWhen(wordsRaw(spec.text))
 }
 
 export function tasksOf(channel: Pick<Channel, "tasks">, spec: Pick<Spec, "tasks">): Task[] {
@@ -56,7 +56,7 @@ export function stageLine(channel: Channel, spec: Spec): StageLine {
     case "accepted":
       return { word: "accepted", tone: "tone-live", line: spec.result?.auto ? "closed by itself" : `by ${nickname(channel, spec.result?.by ?? spec.by)}` }
     case "dropped":
-      return { word: "dropped", tone: "tone-quiet", line: spec.result?.note ? spec.result.note : `by ${nickname(channel, spec.result?.by ?? spec.by)}` }
+      return { word: "dropped", tone: "tone-quiet", line: spec.result?.note ? wordsPlain(spec.result.note, channel.nicknames) : `by ${nickname(channel, spec.result?.by ?? spec.by)}` }
   }
 }
 
@@ -184,7 +184,7 @@ const MOVE_WORDS: Partial<Record<Task["history"][number]["what"], string>> = {
 const MOVE_TONES: Partial<Record<Task["history"][number]["what"], Tone>> = { approved: "tone-live", done: "tone-live", rejected: "tone-alert", review: "tone-review", cancelled: "tone-quiet" }
 
 export function storyOf(channel: Channel, spec: Spec): StoryLine[] {
-  const out: StoryLine[] = [{ at: spec.at, who: spec.by, text: `asked: “${spec.words}”` }]
+  const out: StoryLine[] = [{ at: spec.at, who: spec.by, text: `asked: “${wordsPlain(spec.words, channel.nicknames)}”` }]
   if (spec.edits > 0)
     out.push({
       at: spec.edited.at,
@@ -192,7 +192,7 @@ export function storyOf(channel: Channel, spec: Spec): StoryLine[] {
       text: spec.edits > 1 ? `edited the spec (${spec.edits} edits by ${spec.editors.map((n) => nickname(channel, n)).join(", ")})` : "wrote the spec",
     })
   if (spec.approved) out.push({ at: spec.approved.at, who: spec.approved.by, text: "approved the spec", tone: "tone-live" })
-  for (const b of spec.backs) out.push({ at: b.at, who: b.by, text: `sent it back: “${b.note}”`, tone: "tone-alert" })
+  for (const b of spec.backs) out.push({ at: b.at, who: b.by, text: `sent it back: “${wordsPlain(b.note, channel.nicknames)}”`, tone: "tone-alert" })
   for (const t of tasksOf(channel, spec)) {
     for (const h of t.history) {
       const verb = MOVE_WORDS[h.what]

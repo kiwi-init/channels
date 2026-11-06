@@ -11,7 +11,7 @@ import { useAct } from "~/nav"
 import { nickname, Shown } from "~/names"
 import { Inline } from "~/specs/inline"
 import { boxesOf, tasksOf } from "~/specs/read"
-import { wordsPlain } from "~/words"
+import { wordsPlain, wordsRaw } from "~/words"
 
 const whyCancelled = (task: Task, nicknames: ReadonlyMap<string, string>): string => {
   const note = task.notes.at(-1)
@@ -33,7 +33,7 @@ export function Result({ channel, spec }: { channel: Channel; spec: Spec }) {
   const merged = prs.filter((p) => p.state === "merged").length
   const ready = spec.stage === "delivered"
   const tick = (text: string, done: boolean) => {
-    const next = tickDoneWhen(spec.text, text, done)
+    const next = tickDoneWhen(wordsRaw(spec.text), text, done)
     if ("text" in next) actions.writeSpec(channel.code, spec.ask, next.text)
   }
   const judge = spec.canJudge && !spec.result
@@ -55,7 +55,9 @@ export function Result({ channel, spec }: { channel: Channel; spec: Spec }) {
           {(spec.result?.note || (ready && !spec.canJudge) || (!spec.result && !ready)) && (
             <p className="result-sub">
               {spec.result
-                ? `“${spec.result.note}”`
+                ? spec.result.note
+                  ? `“${wordsPlain(spec.result.note, channel.nicknames)}”`
+                  : ""
                 : ready
                   ? `It waits for ${nickname(channel, spec.by)}'s verdict.`
                   : spec.stage === "draft"
@@ -156,7 +158,10 @@ export function Result({ channel, spec }: { channel: Channel; spec: Spec }) {
                 ))}
                 {spec.backs.map((b) => (
                   <li key={b.at}>
-                    Sent back by {nickname(channel, b.by)} {ago(b.at)}: <span className="dimmer">“{b.note}”</span>
+                    Sent back by {nickname(channel, b.by)} {ago(b.at)}:{" "}
+                    <span className="dimmer">
+                      “<Shown value={b.note} />”
+                    </span>
                   </li>
                 ))}
               </ul>
