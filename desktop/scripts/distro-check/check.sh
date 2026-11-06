@@ -23,7 +23,7 @@ install() {
 
 pacman -Syu --noconfirm >> "$out/logs/install.log" 2>&1
 stock=(gtk3 webkit2gtk-4.1 librsvg)
-tools=(weston dbus libsecret gnome-keyring kwallet python-gobject procps-ng gcc pkgconf xorg-server-xvfb mesa util-linux findutils which gsettings-desktop-schemas)
+tools=(weston dbus libsecret gnome-keyring kwallet python-gobject procps-ng gcc pkgconf xorg-server-xvfb mesa util-linux findutils which gsettings-desktop-schemas squashfs-tools)
 ayatana=(libayatana-appindicator)
 
 install "${stock[@]}" || exit 1
@@ -60,9 +60,10 @@ for t in tray:gio-2.0 scheme:webkit2gtk-4.1; do
 done
 
 id tester > /dev/null 2>&1 || useradd -m tester
-cp "$extract/Channels.AppImage" /home/tester/Channels.AppImage
+bash "$here/release-copy.sh" "$extract/Channels.AppImage" /home/tester/Channels.AppImage com.kiwiinit.channels || bad "no release-id copy of the AppImage to check the menu entry with"
+cp "$extract/Channels.AppImage" /home/tester/Channels-dev.AppImage
 cp "$here/session.sh" "$here/update.sh" "$here/link.sh" "$here/raise.sh" "$here/browser.py" "$here/kwin.py" "$here/click.py" "$here/watcher.py" "$here/kwallet-login.py" "$here/secrets-cancel.py" /home/tester/
-chmod +x /home/tester/Channels.AppImage
+chmod +x /home/tester/Channels.AppImage /home/tester/Channels-dev.AppImage
 chown -R tester: /home/tester
 
 as_tester() {
@@ -70,12 +71,12 @@ as_tester() {
   rt=$(mktemp -d)
   chown tester: "$rt"
   chmod 700 "$rt"
-  runuser -u tester -- env XDG_RUNTIME_DIR="$rt" CHANNELS_ENTRY_FOR_ANY_BUILD="${entry_any:-1}" timeout 900 dbus-run-session -- "$@"
+  runuser -u tester -- env XDG_RUNTIME_DIR="$rt" timeout 900 dbus-run-session -- "$@"
   local code=$?
   rm -rf "$rt"
   return $code
 }
-session() { as_tester bash /home/tester/session.sh "$1" "$2" /home/tester/Channels.AppImage "$results" "$out/logs" "$3" "${4:-}" "${5:-extract}"; }
+session() { as_tester bash /home/tester/session.sh "$1" "$2" "${app:-/home/tester/Channels.AppImage}" "$results" "$out/logs" "$3" "${4:-}" "${5:-extract}"; }
 entry_check() {
   local home=$1 want=$2 file="$1/.local/share/applications/channels-desktop.desktop" exec icons handler
   [ -f "$file" ] || { bad "no desktop entry at $file after a start"; return; }
@@ -101,7 +102,7 @@ for f in $activatable; do mv "$f" "$f.off"; done
 if ls /usr/bin/fusermount* > /dev/null 2>&1; then bad "the test tools pulled in FUSE, so the start without it can't be checked"; fi
 session none stock no-tray "$plain_home"
 dev_home=$(runuser -u tester -- mktemp -d)
-entry_any=0 session none dev-build no-tray "$dev_home"
+app=/home/tester/Channels-dev.AppImage session none dev-build no-tray "$dev_home"
 if [ -e "$dev_home/.local/share/applications/channels-desktop.desktop" ]; then bad "a dev build wrote the app menu's entry (#1806)"; else ok "a dev build leaves the app menu's entry alone (#1806)"; fi
 entry_check "$plain_home" 'env APPIMAGE_EXTRACT_AND_RUN=1 "/home/tester/Channels.AppImage" %U'
 session none entry-no-fuse no-tray "$plain_home" entry

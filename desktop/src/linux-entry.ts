@@ -174,7 +174,7 @@ const executable = (file: string): boolean => {
 const xdgDir = (value: string | undefined, fallback: string): string => (value && path.isAbsolute(value) ? value : fallback);
 
 export function keepLinuxEntry(appImage: string, identifier: string, env: NodeJS.ProcessEnv = process.env, home: string = os.homedir()): EntryOutcome {
-  if (identifier !== RELEASE_ID && env["CHANNELS_ENTRY_FOR_ANY_BUILD"] !== "1") return { kind: "skipped", why: `a ${identifier} build leaves the app menu's entry to the installed ${RELEASE_ID}` };
+  if (identifier !== RELEASE_ID) return { kind: "skipped", why: `a ${identifier} build leaves the app menu's entry to the installed ${RELEASE_ID}` };
   const appDir = env["APPDIR"];
   if (!appDir || !path.isAbsolute(appDir)) return { kind: "skipped", why: "the AppImage runtime set no APPDIR" };
   return keepEntry({
