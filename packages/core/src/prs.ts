@@ -1,8 +1,7 @@
 import { inlineText } from "./membership.ts";
+import { REVIEW_CHECK } from "./protocol.ts";
 import type { Task } from "./state/types.ts";
 import { prChecks, releaseOf, rulesOf, type ChannelState, type GithubPr } from "./state.ts";
-
-export const REVIEW_CHECK = "kiwi/review";
 
 export interface PrChecks {
   passed: number;

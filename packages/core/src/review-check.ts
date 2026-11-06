@@ -1,9 +1,8 @@
 import type { ReviewCheck } from "./client/github.ts";
 import { RelayError } from "./client/relay-errors.ts";
+import { REVIEW_CHECK } from "./protocol.ts";
 import { sameHead } from "./stage.ts";
 import type { GithubState } from "./state/github.ts";
-
-export const REVIEW_CHECK = "kiwi/review";
 
 export function recordedRuns(github: GithubState, sha: string): number[] {
   const out = new Set<number>();

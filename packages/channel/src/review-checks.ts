@@ -1,6 +1,6 @@
 import type { ChannelState } from "@kiwi/core/state.ts";
 import { shaKey } from "@kiwi/core/state/github.ts";
-import { REVIEW_CHECK } from "@kiwi/core/review-check.ts";
+import { REVIEW_CHECK } from "@kiwi/core/protocol.ts";
 import { reviewPosts, type ReviewPost } from "@kiwi/core/ship-gate.ts";
 import { issuesToClose, issuesToLink, prsToLinkBack, tasksClosedOnGithub } from "@kiwi/core/work.ts";
 

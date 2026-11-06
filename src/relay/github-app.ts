@@ -1,4 +1,4 @@
-import { REVIEW_CHECK } from "@kiwi/core/prs.ts";
+import { REVIEW_CHECK } from "@kiwi/core/protocol.ts";
 import * as Context from "effect/Context";
 import { GITHUB_CLOSED_KEEP_MS, MAX_RELEASE_COMMITS, MAX_REQUIRED_CHECKS, MERGE_METHODS, REPO_RE, type GithubNote, type GithubSyncList, type MergeMethod } from "@kiwi/core/protocol.ts";
 import { syncNotes } from "./github.ts";

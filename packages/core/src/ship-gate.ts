@@ -1,7 +1,6 @@
 import { choiceIn, type CheckAsk } from "./checks.ts";
 import type { ReviewCheck } from "./client/github.ts";
-import { hasLanding, type Event } from "./protocol.ts";
-import { REVIEW_CHECK } from "./review-check.ts";
+import { hasLanding, REVIEW_CHECK, type Event } from "./protocol.ts";
 import { linkedPr, sameHead } from "./stage.ts";
 import { checkPassed } from "./state/checks.ts";
 import { shaKey, type GithubCheck, type GithubPr, type GithubState } from "./state/github.ts";

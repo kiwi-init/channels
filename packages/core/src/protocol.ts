@@ -886,6 +886,8 @@ export type WirePayload = Omit<Payload, "ev"> & { ev?: Event | NewerEvent };
 
 export const EVENT_OPS_VERSION = 20;
 
+export const REVIEW_CHECK = "kiwi/review";
+
 export const opsVersion = (x: unknown): x is number => Number.isSafeInteger(x) && (x as number) >= 1 && (x as number) <= 10_000;
 const NEWER_OP_RE = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/;
 
