@@ -40,6 +40,8 @@ const MOD_MENU: typeof MENU_EVENT = "kiwi-message-menu"
 const MOD_SIDES: typeof SIDES_EVENT = "kiwi-mod-sides"
 
 const ModSides = lazy(() => import("~/mods/side").then((m) => ({ default: m.ModSides })))
+const ModAsk = lazy(() => import("~/mods/ask").then((m) => ({ default: m.ModAsk })))
+const RailMods = lazy(() => import("~/shell/rail-mods"))
 
 const sidesAnchor = (): HTMLElement | null => document.querySelector<HTMLElement>(".side .mod-sides")
 
@@ -88,7 +90,7 @@ function giveUp(name: string): void {
 const frames = new Map<string, Frame>()
 const slots = new Map<string, HTMLElement>()
 const listeners = new Set<() => void>()
-const told = new Set<string>()
+const putOff = new Set<string>()
 const unbind = new Map<string, () => void>()
 let version = 0
 
@@ -111,6 +113,20 @@ const subscribe = (l: () => void) => {
 export const useModsVersion = (): number => useSyncExternalStore(subscribe, () => version)
 
 export const modsNow = (): ModView[] => state.mods
+
+const askKey = (m: ModView): string => [m.name, ...m.needs, m.why ?? ""].join("\n")
+
+export const askWaiting = (): ModView | undefined => state.mods.find((m) => m.state === "asks" && !putOff.has(askKey(m)))
+
+export const askLater = (m: ModView): void => {
+  putOff.add(askKey(m))
+  changed()
+}
+
+export const askAgain = (name: string): void => {
+  for (const k of putOff) if (k.startsWith(`${name}\n`)) putOff.delete(k)
+  changed()
+}
 
 export const runningMod = (name: string): RunningMod | undefined => state.running.get(name)
 
@@ -491,8 +507,13 @@ function startFrames(layer: HTMLElement): void {
 
 export function ModsLayer() {
   const layer = useRef<HTMLDivElement>(null)
-  const { toast, go, nav } = useApp()
+  const { go, nav } = useApp()
   const [sides, setSides] = useState(sidesAnchor)
+  const [foot, setFoot] = useState(() => document.querySelector(".rail-foot"))
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setFoot(document.querySelector(".rail-foot")))
+    return () => cancelAnimationFrame(id)
+  }, [])
   useModsVersion()
   useEffect(() => {
     app = { go, panel: null }
@@ -513,11 +534,6 @@ export function ModsLayer() {
     const take = (list: ModView[]) => {
       if (!live) return
       state.mods = list
-      for (const m of list)
-        if (m.state === "asks" && !told.has(m.name)) {
-          told.add(m.name)
-          toast(`The mod ${m.name} asks to run. Find it in ⌘K to see what it needs.`)
-        }
       if (layer.current) startFrames(layer.current)
       changed()
     }
@@ -534,7 +550,7 @@ export function ModsLayer() {
       removeEventListener("message", message)
       removeEventListener(MOD_MENU, messageMenu)
     }
-  }, [toast])
+  }, [])
   useEffect(() => {
     const find = () => setSides(sidesAnchor())
     find()
@@ -569,6 +585,18 @@ export function ModsLayer() {
   return (
     <>
       <div ref={layer} className="mods-layer" style={{ display: "contents" }} />
+      {foot &&
+        createPortal(
+          <Suspense fallback={null}>
+            <RailMods />
+          </Suspense>,
+          foot
+        )}
+      {askWaiting() && (
+        <Suspense fallback={null}>
+          <ModAsk />
+        </Suspense>
+      )}
       {sides &&
         modSides().length > 0 &&
         createPortal(

@@ -164,6 +164,22 @@ img.mod-icon {
   padding-top: 12px;
 }
 
+.rail-mods {
+  position: relative;
+  order: -1;
+}
+
+.rail-mods-dot {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--decide);
+  box-shadow: 0 0 0 2px var(--bg);
+}
+
 .mod-tab-slot {
   flex: 1;
   min-height: 0;
