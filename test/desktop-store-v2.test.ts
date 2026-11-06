@@ -125,6 +125,17 @@ describe("store v2", () => {
     expect(k.sets()).toBe(1);
   });
 
+  for (const platform of ["darwin", "linux"] as const)
+    test(`a mod's secret rests sealed with the rest of the store and comes back after a reopen, on ${platform} (T7402)`, async () => {
+      const dir = folder();
+      const k = keychain();
+      const secret = "lin_api_secret_7f3a91";
+      const withSecret = { ...STORE, modSecrets: { linear: { source: "github.com/kiwi-init/linear", values: { token: secret } } } };
+      opened(await openStore({ dir, key: k.key, legacy: NO_LEGACY, platform })).save(JSON.stringify(withSecret));
+      for (const name of readdirSync(dir)) expect(read(dir, name).includes(secret)).toBe(false);
+      expect(opened(await openStore({ dir, key: k.key, legacy: NO_LEGACY, platform })).json).toEqual(withSecret);
+    });
+
   test("Electron's store is imported once, sealed, and its file is left as it was", async () => {
     const dir = folder();
     const k = keychain();

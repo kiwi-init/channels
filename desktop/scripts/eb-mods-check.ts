@@ -1,7 +1,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 
 import { startLocalRelay } from "../../scripts/local-relay.ts";
 import { daemonStop } from "../src/daemon-client.ts";
@@ -442,6 +442,8 @@ function files(dir: string): string[] {
 }
 
 const holding = (secret: string): string[] => files(root).filter((f) => readFileSync(f).includes(secret));
+const TEST_STORE = "kiwi-eb-test-store.json";
+const outsideStore = (secret: string): string[] => holding(secret).filter((f) => basename(f) !== TEST_STORE);
 
 function stacks(why: string): void {
   if (process.platform !== "darwin" || !app.pid) return;
@@ -694,8 +696,12 @@ try {
     (await heard(d)).filter((m) => m["version"] !== undefined).every((m) => JSON.stringify(m["settings"]) === "{}"),
     "a mod with no settings gets an empty settings()",
   );
-  const leaked = holding(SECRET);
-  check(!leaked.length, `the secret is in no file, under ~/.kiwi or anywhere else${leaked.length ? `: ${leaked.join(", ")}` : ""}`);
+  check(
+    holding(SECRET).some((f) => basename(f) === TEST_STORE),
+    `the secret is kept in the app's store, which the test build keeps as ${TEST_STORE} and a release seals`,
+  );
+  const leaked = outsideStore(SECRET);
+  check(!leaked.length, `the secret is in no other file, under ~/.kiwi or anywhere else${leaked.length ? `: ${leaked.join(", ")}` : ""}`);
   await later(1_500);
   const opens = (await d.main("browserOpens")) as string[];
   console.log(`opened in the browser: ${JSON.stringify(opens)}`);
@@ -753,8 +759,8 @@ try {
     afterRestart?.settings?.find((x) => x.id === "token")?.set === true && !JSON.stringify(afterRestart).includes(SECRET),
     "the saved secret outlasts a restart, and the details page never gets it back",
   );
-  const after = holding(SECRET);
-  check(!after.length, `after a restart, the secret is still in no file${after.length ? `: ${after.join(", ")}` : ""}`);
+  const after = outsideStore(SECRET);
+  check(!after.length, `after a restart, the secret is still in no other file${after.length ? `: ${after.join(", ")}` : ""}`);
   await settingsMods(safe, "No mod runs until Channels restarts");
   check((await safe.evaluate(() => document.querySelectorAll('iframe[src*="mod-frame"]').length, null, 2_000)) === 0, "safe mode starts no mod's frame");
   await shot("settings-mods-safe");
