@@ -1,6 +1,8 @@
+import { roomOfMessage } from "@kiwi/app/rooms.ts"
+import type { Message } from "@kiwi/core/protocol.ts"
 import { rootOf } from "@kiwi/core/room-rules.ts"
 import { docThread } from "@kiwi/core/doc/threads.ts"
-import { dmPlace, type ChannelState } from "@kiwi/core/state.ts"
+import { dmPlace, MAIN, type ChannelState } from "@kiwi/core/state.ts"
 import type { Channel } from "~/model"
 
 export function dmRoomOf(state: Pick<ChannelState, "rooms" | "members">, seat: string, other: string): string | undefined {
@@ -22,6 +24,12 @@ export function dmDocOf(state: Pick<ChannelState, "rooms" | "members">, seat: st
 export function dmOther(state: Pick<ChannelState, "members">, seat: string, members: readonly { name: string }[]): string | undefined {
   const mine = rootOf(seat, state.members)
   return members.map((m) => rootOf(m.name, state.members)).find((root) => root !== mine)
+}
+
+export function dmRoomWith(state: Pick<ChannelState, "placeOf" | "roomOf" | "rooms" | "members">, seat: string, m: Pick<Message, "seq" | "room">): string | undefined {
+  if ((state.placeOf.get(m.seq) ?? MAIN).kind !== "main") return undefined
+  const room = state.rooms.get(roomOfMessage(state, m))
+  return room?.dm && room.members ? dmOther(state, seat, room.members) : undefined
 }
 
 export const dmInRoom = (channel: Pick<Channel, "people">, other: string): boolean => channel.people.some((p) => p.name === other && p.kind === "human")

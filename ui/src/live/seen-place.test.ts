@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test"
+import { roomSeenKey } from "@kiwi/app/rooms.ts"
 import type { Message } from "@kiwi/core/protocol.ts"
 import { dmPlace, placeKey, type ChannelState } from "@kiwi/core/state.ts"
 import { directsOf } from "~/live/map"
-import { lastIn, seenByThread, seenKeyOf } from "~/live/seen-place"
+import { firstMarks, lastIn, seenByThread, seenKeyOf } from "~/live/seen-place"
 
 const seat = (name: string, user: string, handle: string) => [name, { name, pk: `pk-${name}`, kind: "human", active: true, owner: false, sponsor: { user, name: handle, handle } }] as const
 const members = new Map([seat("jow", "p-jow", "jow"), seat("jow-2", "p-jow", "jow"), seat("tia", "p-tia", "tia"), seat("ana", "p-ana", "ana")])
@@ -55,6 +56,32 @@ describe("reading a DM clears its badge (T1747)", () => {
     }
     const s = { ...state([[9, "theirs"]]), rooms: new Map([["theirs", other]]) } as unknown as ChannelState
     expect(lastIn([said(9, "tia", { room: "theirs" })], s, "jow", { kind: "dm", with: "tia" })).toBe(0)
+  })
+})
+
+describe("a fresh device starts caught up in members-only DMs (#1886)", () => {
+  const roomState = (places: [string, unknown][] = []) => ({ ...state([[5, "ours"]]), places: new Map(places) }) as unknown as ChannelState
+
+  test("the first-visit marks clear a read members-only DM on a person's second seat", () => {
+    const s = roomState()
+    const messages = [said(5, "tia", { room: "ours" })]
+    const marks = firstMarks(s, messages, "jow-2")
+    expect(marks[placeKey(dmPlace("jow", "tia"))]).toBe(5)
+    expect(unreadWith(s, messages, "jow-2", marks)).toBe(0)
+  })
+
+  test("a message past the marks still counts", () => {
+    const s = roomState()
+    const messages = [said(5, "tia", { room: "ours" }), said(6, "tia", { room: "ours" })]
+    expect(unreadWith(s, messages, "jow-2", firstMarks(s, [messages[0]!], "jow-2"))).toBe(1)
+  })
+
+  test("a true direct thread and a plain room keep their marks", () => {
+    const place = dmPlace("jow", "tia")
+    const direct = { ...state([], [[9, place]]), places: new Map([[placeKey(place), { place, last: 9, count: 1 }]]) } as unknown as ChannelState
+    expect(firstMarks(direct, [said(9, "tia")], "jow")[placeKey(place)]).toBe(9)
+    const plain = { ...state([[8, "r2"]]), rooms: new Map([["r2", { id: "r2", name: "two", createdBy: null, at: 0 }]]) } as unknown as ChannelState
+    expect(firstMarks(plain, [said(8, "ana", { room: "r2" })], "jow")[roomSeenKey("r2")]).toBe(8)
   })
 })
 

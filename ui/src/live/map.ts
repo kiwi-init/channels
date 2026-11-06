@@ -10,7 +10,7 @@ import { stageOf } from "@kiwi/core/stage.ts"
 import { doneGate } from "@kiwi/core/done-gate.ts"
 import { editable, GENERAL_ROOM, ignored, isQuiet, isRasterMime, isOverlay, type Message as Wire } from "@kiwi/core/protocol.ts"
 import { rootOf, sentTo } from "@kiwi/core/room-rules.ts"
-import { dmDocOf, dmOther } from "~/live/dm"
+import { dmDocOf, dmRoomWith } from "~/live/dm"
 import { pickFor, taskCandidates } from "@kiwi/core/routing.ts"
 import { canPost } from "@kiwi/core/scopes.ts"
 import { versionName } from "@kiwi/core/status.ts"
@@ -255,8 +255,7 @@ export function directsOf(state: ChannelState, messages: readonly Wire[], seat: 
     if (rootOf(m.from, state.members) !== me && m.kind !== "event" && m.seq > (seen[placeKey(place)] ?? 0)) unread.set(other, (unread.get(other) ?? 0) + 1)
   }
   for (const m of messages) {
-    const room = (state.placeOf.get(m.seq) ?? MAIN).kind === "main" ? state.rooms.get(roomOfMessage(state, m)) : undefined
-    const other = room?.dm && room.members ? dmOther(state, seat, room.members) : undefined
+    const other = dmRoomWith(state, seat, m)
     if (!other || ignored(state.trust.get(m.seq))) continue
     const key = placeKey(dmPlace(me, other))
     at.set(other, Math.max(at.get(other) ?? 0, m.ts))
@@ -437,8 +436,7 @@ function whereOf(state: ChannelState, m: Wire, seat: string): Where {
   const place = state.placeOf.get(m.seq) ?? MAIN
   if (place.kind === "task") return { kind: "task", task: place.task }
   if (place.kind === "dm") return place.with.includes(me) ? { kind: "dm", with: place.with[0] === me ? place.with[1] : place.with[0] } : { kind: "theirs", between: place.with }
-  const room = state.rooms.get(roomOfMessage(state, m))
-  const other = room?.dm && room.members ? dmOther(state, seat, room.members) : undefined
+  const other = dmRoomWith(state, seat, m)
   return other ? { kind: "dm", with: other } : { kind: "room", room: roomOfMessage(state, m) }
 }
 
