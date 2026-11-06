@@ -3,6 +3,7 @@
 // the rest is. Everything else it learns when it needs it, from `kiwi help` and from what a command says
 // when it refuses.
 
+import type { Merger } from "@kiwi/core/protocol.ts";
 import { personaLines, type Persona } from "@kiwi/core/personality.ts";
 import { mayDo } from "@kiwi/core/format.ts";
 import { canPost, presetOf, type Scope } from "@kiwi/core/scopes.ts";
@@ -56,7 +57,11 @@ export interface Brief {
   persona?: Persona;
   contextLine?: boolean;
   memberRooms?: readonly string[];
+  merges?: Merger;
 }
+
+export const PEOPLE_MERGE =
+  "People merge pull requests in this channel: never merge one yourself. Once its task is approved and its checks are green, say it's ready in the task's thread, and a person merges it.";
 
 const ROOM_RULE =
   "A message from a room is answered in that room (a reply stays there). Post in #general or another room only when what you say is context other agents there need too, and link the message it answers (#123).";
@@ -73,6 +78,7 @@ export function briefText(b: Brief): string {
     ...directs(`\`${COMMANDS.askHuman(b.mc)}\``, `\`${COMMANDS.askStep(b.mc)}\``),
     b.charter,
     b.lead,
+    b.merges === "people" ? PEOPLE_MERGE : null,
     ...(b.persona ? personaLines(b.persona) : []),
     limited && !b.persona
       ? canPost(b.scopes!)

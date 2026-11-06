@@ -10,7 +10,7 @@ and the most important of them all: we can fix everything!
 
 ## Code
 
-- No comments in code: context goes in the commit and the PR. One exception: a comment inside a `catch` block, saying why the error is ignored or handled that way. Tool directives (`@ts-expect-error`, `@ts-ignore`, `oxlint-disable`, `eslint-disable`, `type: ignore`, `noqa`, `pragma` etc.) stay forbidden. CI does not check this; review does.
+- No comments in code: the codebase is all the context you need. One exception: a comment inside a `catch` block, saying why the error is ignored or handled that way. Tool directives (`@ts-expect-error`, `@ts-ignore`, `oxlint-disable`, `eslint-disable`, `type: ignore`, `noqa`, `pragma` etc.) stay forbidden. CI does not check this; review does.
 - UI work follows `DESIGN.md` (theme, colors, radius, typography, motion).
 
 ## Branches and CI
@@ -21,3 +21,4 @@ and the most important of them all: we can fix everything!
 ## Authorship
 
 - PRs and Issues: if wrote by AI agent plz disclose with `{model_slug} on behalf of {human_name}`.
+- A PR whose disclosure, or a commit's `Agent:` line, names a model listed in `.github/quarantine.json` is quarantined: the kiwi-bus bot turns it into a draft with the `quarantine` label and says why. It stays there until a person on that file's vouched list, or a stronger model on their behalf, reviews it and comments `/vouch`.

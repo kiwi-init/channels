@@ -592,6 +592,7 @@ export interface Channel {
   githubWrite?: boolean
   branchPrefix?: string
   landing?: string
+  peopleMerge?: true
   rooms: Room[]
   directs: Direct[]
   threads?: ThreadItem[]
@@ -782,6 +783,7 @@ export interface Actions {
   setGithubWrite(code: string, on: boolean): void
   setBranchPrefix(code: string, prefix: string | null): void
   setLanding(code: string, then: string | null): void
+  setPeopleMerge(code: string, on: boolean): void
   exportHistory(code: string, kind: "transcript" | "log"): Promise<void>
   setGoal(code: string, goal: string): void
   setHold(code: string, on: boolean, note?: string): void

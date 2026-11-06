@@ -9,6 +9,7 @@ import {
   type Event,
   hasLanding,
   type Landing,
+  type Merger,
   type Message,
   type Power,
   powerChange,
@@ -66,6 +67,7 @@ export interface FoldCtx {
   githubWrite: number | null;
   branchPrefix: string | null;
   landing: Landing | null;
+  merges: Merger;
   compact: Compact | null;
   compactProposal: Compact | null;
 }
@@ -345,6 +347,15 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
         break;
       }
       c.branchPrefix = ev.prefix;
+      break;
+    }
+
+    case "merges.set": {
+      if (!member.owner && !c.trusted(m.pk ?? "", member)) {
+        reject(trustOnly("sets who merges"));
+        break;
+      }
+      c.merges = ev.by;
       break;
     }
 
