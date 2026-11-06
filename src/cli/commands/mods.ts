@@ -116,7 +116,6 @@ export const modCommands: Record<string, Command> = {
         if (start.how === "created") out(`created ${tilde(start.at)} with mod.json and index.tsx`);
         else if (start.how === "linked") out(`linked ${tilde(start.at)} to ${tilde(start.dir)}`);
         else out(`opened ${tilde(start.at)}${start.dir === start.at ? "" : `, a link to ${tilde(start.dir)}`}`);
-        if (process.platform === "linux") out("Channels doesn't run mods on Linux yet; kiwi mod dev still checks and builds it on each save");
         out("each save checks and rebuilds it; ctrl-c stops");
         watchDev(start, name);
         return yield* Effect.never;

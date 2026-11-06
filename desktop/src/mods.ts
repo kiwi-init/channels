@@ -1,7 +1,5 @@
 import { netHosts } from "@kiwi/core/node/mod-manifest.ts";
 
-export const LINUX_WAIT = "Mods don't run on Linux yet: they will after an app update that stops a mod from sending link clicks as the app.";
-
 export function unapproved(needs: readonly string[], approved: readonly string[]): string[] {
   const yes = new Set(approved);
   return needs.filter((n) => !yes.has(n));
