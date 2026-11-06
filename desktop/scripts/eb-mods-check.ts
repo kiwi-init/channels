@@ -169,11 +169,20 @@ const pageNow = (): Record<string, unknown> => ({
 });
 
 type Said = Record<string, unknown>;
-const heard = (d: Driver): Promise<Said[]> => d.evaluate(() => ((window as unknown as { __modHeard?: Said[] }).__modHeard ?? []) as Said[], null, 3_000);
+const heard = (d: Driver): Promise<Said[]> =>
+  d.evaluate(
+    () => {
+      const w = window as unknown as { __modHeard?: Said[]; __modQuiet?: Said };
+      return [...(w.__modHeard ?? []), ...(w.__modQuiet ? [w.__modQuiet] : [])];
+    },
+    null,
+    3_000,
+  );
 
 async function howHeard(d: Driver, why: string): Promise<void> {
   const start = Date.now();
   const said = await heard(d).catch((e: unknown) => String(e));
+  const bytes = typeof said === "string" ? 0 : JSON.stringify(said).length;
   const kinds = typeof said === "string" ? said : Object.entries(said.reduce<Record<string, number>>((n, m) => ({ ...n, [Object.keys(m).join("+")]: (n[Object.keys(m).join("+")] ?? 0) + 1 }), {}));
   const frames = await d
     .evaluate(() => [...document.querySelectorAll("iframe")].map((f) => `${f.title} ${f.style.width}x${f.style.height} ${f.style.visibility || "shown"}`), null, 3_000)
@@ -185,7 +194,7 @@ async function howHeard(d: Driver, why: string): Promise<void> {
     (e: unknown) => String(e),
   );
   console.log(
-    `${why}: the page answered in ${Date.now() - start} ms; heard ${JSON.stringify(kinds)}; frames ${JSON.stringify(frames)}; frame messages ${JSON.stringify(types)}; the app's main ${main}`,
+    `${why}: the page answered in ${Date.now() - start} ms; heard ${JSON.stringify(kinds)} (${bytes} bytes); frames ${JSON.stringify(frames)}; frame messages ${JSON.stringify(types)}; the app's main ${main}`,
   );
 }
 
@@ -275,13 +284,14 @@ try {
   await firstChannel(d, 0);
   await d.evaluate(
     () => {
-      const w = window as unknown as { __modHeard?: unknown[]; __modTypes?: Record<string, number> };
+      const w = window as unknown as { __modHeard?: unknown[]; __modQuiet?: unknown; __modTypes?: Record<string, number> };
       w.__modHeard = [];
       w.__modTypes = {};
       addEventListener("message", (e) => {
         const data = e.data as { kiwiProbe?: unknown; kiwi?: unknown; type?: unknown } | null;
         const m = data?.kiwiProbe;
-        if (m !== undefined) w.__modHeard?.push(m);
+        if (m && typeof m === "object" && "quiet" in m) w.__modQuiet = m;
+        else if (m !== undefined) w.__modHeard?.push(m);
         if (data?.kiwi === 1 && typeof data.type === "string" && w.__modTypes) w.__modTypes[data.type] = (w.__modTypes[data.type] ?? 0) + 1;
       });
       return true;
