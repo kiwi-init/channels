@@ -157,6 +157,30 @@ try {
   await agentDoes(agentA, "sa", "read the help the brief points to", [["help"]]);
   await agentDoes(agentA, "sa", "read one command's options", [["help", "send"]]);
 
+  const theirs = /\bT\d+\b/.exec(await ok(agentB, ["task", "add", "Speed up the CI cache", "--ask", String(askSeq)], session("sb")))![0];
+  await ok(agentB, ["task", "start", theirs], session("sb"));
+  await asOwner(["room", "create", "design"]);
+  await hook(agentA, "sa", "prompt");
+  const forA = [
+    ...[1, 2, 3].map((i) => ({ home: owner, as: "human", to: "#general", text: `Heads-up ${i}: staging is frozen until the release is out.` })),
+    { home: agentB, to: "#design", text: `@${a.handle} can you check the new login screen copy?` },
+  ];
+  const notForA = [
+    ...Array.from({ length: 8 }, (_, i) => ({ home: agentB, to: theirs, text: `Progress ${i + 1}: cache step ${i + 1} is down to ${40 - i * 4}s.` })),
+    ...[1, 2, 3, 4].map((i) => ({ home: owner, as: "human", to: "#design", text: `Design note ${i}: the sidebar spacing should match the mockup.` })),
+    ...[1, 2, 3].map((i) => ({ home: agentB, to: "@human", text: `Direct ${i}: the cache key includes the lockfile hash.` })),
+  ];
+  for (const m of [...notForA.slice(0, 6), forA[0]!, ...notForA.slice(6, 12), forA[1]!, forA[3]!, ...notForA.slice(12), forA[2]!]) {
+    const args = [...("as" in m ? ["--as", m.as] : []), "send", "--to", m.to, m.text];
+    if (m.home === owner) await asOwner(args);
+    else await ok(m.home, args, session("sb"));
+  }
+  const busy = record(`a busy channel: ${forA.length + notForA.length} messages, ${forA.length} for this agent (prompt hook)`, [await hook(agentA, "sa", "prompt")]);
+  if (!asJson)
+    console.log(
+      `  delivered ${forA.filter((m) => busy.includes(m.text)).length} of ${forA.length} meant for it, ${notForA.filter((m) => busy.includes(m.text)).length} of ${notForA.length} that weren't`,
+    );
+
   record("end of a working turn (stop hook)", [await hook(agentA, "sa", "stop")]);
 
   if (asJson) {
