@@ -15,8 +15,12 @@ COPY desktop/package.json ./desktop/
 RUN bun install --frozen-lockfile --production --filter './'
 COPY packages/core/src ./packages/core/src
 COPY src ./src
-# The relay serves this static site at / (downloads, invite links, install scripts).
+# The relay serves this static site at / (downloads, invite links, install scripts),
+# with the docs pages built from docs/.
 COPY site ./site
+COPY docs ./docs
+COPY scripts/docs-site.ts ./scripts/
+RUN bun scripts/docs-site.ts
 
 # Room files must be owned by the runtime user, not root. /data is created
 # before VOLUME so the named volume inherits this ownership.
