@@ -14,10 +14,18 @@ export interface Pinned {
   path: string;
   commit: string;
   hash: string;
+  files: readonly string[];
 }
 
 export const DEFAULT_MODS: readonly Pinned[] = [
-  { name: "github", repo: "kiwi-init/mods", path: "github", commit: "fef9c2d6fc23f8cce1d0986541362457e3f7e7d7", hash: "124adf9c7a7f821bbd5a9b353bd897d16f5763b822fc72cfb305474526c7f19a" },
+  {
+    name: "github",
+    repo: "kiwi-init/mods",
+    path: "github",
+    commit: "fef9c2d6fc23f8cce1d0986541362457e3f7e7d7",
+    hash: "124adf9c7a7f821bbd5a9b353bd897d16f5763b822fc72cfb305474526c7f19a",
+    files: ["github.css", "groups.ts", "health.ts", "index.tsx", "mod.json", "panel.tsx", "parts.tsx", "types.ts", "view.tsx"],
+  },
 ];
 
 export interface DefaultsOptions {
@@ -33,13 +41,6 @@ const FILES = 200;
 const FILE_BYTES = 1_000_000;
 const ALL_BYTES = 8_000_000;
 const FETCH_MS = 30_000;
-
-interface Entry {
-  path: string;
-  mode: string;
-  type: string;
-  size?: number;
-}
 
 function readRecord(file: string): Record<string, string> {
   try {
@@ -59,16 +60,13 @@ async function get(request: typeof fetch, url: string): Promise<Response> {
 }
 
 async function download(pin: Pinned, into: string, request: typeof fetch): Promise<void> {
-  const tree = (await (await get(request, `https://api.github.com/repos/${pin.repo}/git/trees/${pin.commit}?recursive=1`)).json()) as { tree?: Entry[]; truncated?: boolean };
-  if (!Array.isArray(tree.tree) || tree.truncated) throw new Error("GitHub didn't list the whole folder");
-  const files = tree.tree.filter((e) => e.path.startsWith(`${pin.path}/`) && e.type !== "tree");
-  if (!files.length) throw new Error(`${pin.repo} has no folder ${pin.path} at ${pin.commit.slice(0, 7)}`);
-  if (files.length > FILES) throw new Error(`the folder has over ${FILES} files`);
+  if (!pin.files.length || pin.files.length > FILES) throw new Error(`the pin lists ${pin.files.length} files`);
   let total = 0;
-  for (const f of files) {
-    const rel = f.path.slice(pin.path.length + 1);
-    if (f.type !== "blob" || f.mode === "120000" || rel.split("/").some((p) => !p || p === "." || p === "..")) throw new Error(`${f.path} isn't a plain file`);
-    const bytes = new Uint8Array(await (await get(request, `https://raw.githubusercontent.com/${pin.repo}/${pin.commit}/${f.path.split("/").map(encodeURIComponent).join("/")}`)).arrayBuffer());
+  for (const rel of pin.files) {
+    if (rel.split("/").some((p) => !p || p === "." || p === "..")) throw new Error(`${rel} isn't a plain path`);
+    const bytes = new Uint8Array(
+      await (await get(request, `https://raw.githubusercontent.com/${pin.repo}/${pin.commit}/${`${pin.path}/${rel}`.split("/").map(encodeURIComponent).join("/")}`)).arrayBuffer(),
+    );
     total += bytes.byteLength;
     if (bytes.byteLength > FILE_BYTES || total > ALL_BYTES) throw new Error("the folder is too big");
     const at = path.join(into, rel);

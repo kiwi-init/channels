@@ -29,7 +29,7 @@ function setup(files: Record<string, string> = github) {
     mkdirSync(join(source, file, ".."), { recursive: true });
     writeFileSync(join(source, file), text);
   }
-  const pin: Pinned = { name: "github", repo: "kiwi-init/mods", path: "github", commit: COMMIT, hash: folderHash(source) };
+  const pin: Pinned = { name: "github", repo: "kiwi-init/mods", path: "github", commit: COMMIT, hash: folderHash(source), files: Object.keys(files) };
   const asked: string[] = [];
   let fail: ((url: string) => Response | null) | null = null;
   const request = (async (input: string | URL | Request) => {
@@ -37,15 +37,6 @@ function setup(files: Record<string, string> = github) {
     asked.push(url);
     const failed = fail?.(url);
     if (failed) return failed;
-    if (url === `https://api.github.com/repos/kiwi-init/mods/git/trees/${COMMIT}?recursive=1`)
-      return Response.json({
-        tree: [
-          { path: "anatomy/mod.json", mode: "100644", type: "blob" },
-          { path: "github", mode: "040000", type: "tree" },
-          ...Object.keys(files).map((f) => ({ path: `github/${f}`, mode: "100644", type: "blob" })),
-        ],
-        truncated: false,
-      });
     const prefix = `https://raw.githubusercontent.com/kiwi-init/mods/${COMMIT}/github/`;
     if (url.startsWith(prefix)) return new Response(readFileSync(join(source, decodeURIComponent(url.slice(prefix.length)))));
     return new Response("nope", { status: 404 });
@@ -62,11 +53,12 @@ function setup(files: Record<string, string> = github) {
 }
 
 describe("the mods that come with the app (T6270)", () => {
-  test("the app pins the GitHub mod from kiwi-init/mods at one commit and one folder hash", () => {
+  test("the app pins the GitHub mod from kiwi-init/mods at one commit, its files and one folder hash", () => {
     expect(DEFAULT_MODS.map((p) => [p.name, p.repo, p.path])).toEqual([["github", "kiwi-init/mods", "github"]]);
     for (const p of DEFAULT_MODS) {
       expect(p.commit).toMatch(/^[0-9a-f]{40}$/);
       expect(p.hash).toMatch(/^[0-9a-f]{64}$/);
+      expect(p.files).toContain("mod.json");
     }
   });
 
@@ -80,7 +72,7 @@ describe("the mods that come with the app (T6270)", () => {
       github: { source: "github.com/kiwi-init/mods/github", url: "https://github.com/kiwi-init/mods.git", path: "github", ref: null, commit: COMMIT, hash: pin.hash },
     });
     expect(readdirSync(opts.folder).sort()).toEqual([".sources.json", "github"]);
-    expect(asked.some((u) => u.includes("anatomy"))).toBe(false);
+    expect(asked.every((u) => u.startsWith(`https://raw.githubusercontent.com/kiwi-init/mods/${COMMIT}/github/`))).toBe(true);
   });
 
   test("it runs on the next scan without asking", async () => {
@@ -111,9 +103,9 @@ describe("the mods that come with the app (T6270)", () => {
 
   test("a failed install leaves nothing behind, says why, and tries again on the next start", async () => {
     const { opts, failWith } = setup();
-    failWith((url) => (url.startsWith("https://api.github.com/") ? new Response("", { status: 404 }) : null));
+    failWith((url) => (url.endsWith("/mod.json") ? new Response("", { status: 404 }) : null));
     const [off] = await installDefaults(opts);
-    expect(off).toEqual({ name: "github", version: null, needs: [], approved: [], state: "off", why: expect.stringContaining("api.github.com answered 404 (is the repo public?)") });
+    expect(off).toEqual({ name: "github", version: null, needs: [], approved: [], state: "off", why: expect.stringContaining("raw.githubusercontent.com answered 404 (is the repo public?)") });
     expect(off?.why).toContain("tries again when it starts");
     expect(existsSync(opts.record)).toBe(false);
     expect(readdirSync(opts.folder)).toEqual([]);
@@ -129,6 +121,17 @@ describe("the mods that come with the app (T6270)", () => {
     expect(off?.why).toContain("the download isn't the copy this app was built with");
     expect(readdirSync(opts.folder)).toEqual([]);
     expect(existsSync(opts.approvals)).toBe(false);
+  });
+
+  test("a pin that leaves a file out, or names one outside its folder, is refused", async () => {
+    const short = setup();
+    const [missing] = await installDefaults({ ...short.opts, pins: [{ ...short.pin, files: short.pin.files.filter((f) => f !== "parts/view.css") }] });
+    expect(missing?.why).toContain("the download isn't the copy this app was built with");
+    expect(readdirSync(short.opts.folder)).toEqual([]);
+    const out = setup();
+    const [outside] = await installDefaults({ ...out.opts, pins: [{ ...out.pin, files: [...out.pin.files, "../anatomy/mod.json"] }] });
+    expect(outside?.why).toContain("isn't a plain path");
+    expect(out.asked.some((u) => u.includes("anatomy"))).toBe(false);
   });
 
   test("a mod the app's contract can't run is refused, unapproved", async () => {

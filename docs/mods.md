@@ -107,7 +107,7 @@ With `"needs": ["panel", "command", "net:example.com"]`, that's a whole mod.
 
 ## The GitHub tab is a mod
 
-The channel's GitHub tab is the `github` mod from [kiwi-init/mods](https://github.com/kiwi-init/mods). The app installs it the first time it starts, already turned on, and never again: remove it and it stays removed. **Settings → Mods** says why, if it couldn't be installed.
+The channel's GitHub tab is the `github` mod from [kiwi-init/mods](https://github.com/kiwi-init/mods). The app installs it the first time it starts, already turned on, and never again: remove it and it stays removed. It needs no `git`: the app downloads the files it was built with from `raw.githubusercontent.com` at one pinned commit, and refuses them unless they hash to the folder it pinned. **Settings → Mods** says why, if it couldn't be installed, and the app tries again on its next start.
 
 ## Turning one on
 
