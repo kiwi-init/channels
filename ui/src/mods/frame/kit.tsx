@@ -6,6 +6,7 @@ import { Empty as Blank } from "~/kit/empty"
 import { Field, Toggle } from "~/kit/form"
 import { Icon, type IconName } from "~/kit/icons"
 import { ago } from "~/kit/time"
+import { filtered } from "~/mods/frame/filter"
 import { keysLabel, onMac, pressed, shortcut, type Shortcut } from "~/mods/frame/keys"
 import { copy, failed, modFetch, openUrl } from "~/mods/frame/wire"
 
@@ -165,16 +166,6 @@ export function sectionsOf(node: ReactNode): Shown[] {
     }
   }
   return out
-}
-
-export function filtered(sections: Shown[], query: string): Shown[] {
-  const words = query.toLowerCase().split(/\s+/).filter(Boolean)
-  if (!words.length) return sections
-  const fits = (item: ItemProps): boolean => {
-    const hay = [item.title, item.subtitle ?? "", ...(item.keywords ?? [])].join(" ").toLowerCase()
-    return words.every((w) => hay.includes(w))
-  }
-  return sections.map((s) => ({ ...s, items: s.items.filter(fits) })).filter((s) => s.items.length > 0)
 }
 
 function Extra({ a }: { a: Accessory }) {

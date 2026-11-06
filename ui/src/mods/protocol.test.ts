@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
-import { fromFrame, heeded, LOOK, MOD_PROTOCOL, SIDE_HEIGHT } from "~/mods/protocol"
+import { fromFrame, heeded, LOOK, MOD_PROTOCOL, SIDE_HEIGHT, STORAGE } from "~/mods/protocol"
 import { TOKENS } from "~/theme/derive"
 
 describe("a mod frame's messages", () => {
@@ -60,6 +60,28 @@ describe("a mod frame's messages", () => {
       expect(fromFrame(m)).toBeNull()
   })
 
+  test("a mod's storage, toasts, links and copies come through only in their shapes and sizes", () => {
+    const at = (m: Record<string, unknown>) => fromFrame({ kiwi: MOD_PROTOCOL, ...m })
+    expect(at({ type: "storage", id: 1, op: "set", key: "k", value: "1" })).toEqual({ kiwi: MOD_PROTOCOL, type: "storage", id: 1, op: "set", key: "k", value: "1" })
+    expect(at({ type: "storage", id: 2, op: "get", key: "k", value: "dropped" })).toEqual({ kiwi: MOD_PROTOCOL, type: "storage", id: 2, op: "get", key: "k", value: null })
+    expect(at({ type: "storage", id: 3, op: "keys", key: "ignored" })).toEqual({ kiwi: MOD_PROTOCOL, type: "storage", id: 3, op: "keys", key: null, value: null })
+    for (const bad of [
+      { id: 1.5, op: "get", key: "k" },
+      { id: 1, op: "clear", key: "k" },
+      { id: 1, op: "get", key: "" },
+      { id: 1, op: "get", key: "k".repeat(STORAGE.key + 1) },
+      { id: 1, op: "set", key: "k" },
+      { id: 1, op: "set", key: "k", value: "x".repeat(STORAGE.value + 1) },
+    ])
+      expect(at({ type: "storage", ...bad })).toBeNull()
+    expect(at({ type: "toast", title: "Saved", message: "", style: "loud" })).toEqual({ kiwi: MOD_PROTOCOL, type: "toast", title: "Saved", message: null, style: null })
+    expect(at({ type: "toast", title: "x".repeat(201) })).toBeNull()
+    expect(at({ type: "open", url: "https://linear.app/x" })).toEqual({ kiwi: MOD_PROTOCOL, type: "open", url: "https://linear.app/x" })
+    for (const url of ["javascript:alert(1)", "file:///etc/hosts", "kiwi://join/x", `https://x/${"a".repeat(2_000)}`]) expect(at({ type: "open", url })).toBeNull()
+    expect(at({ type: "copy", text: "KIW-12" })).toEqual({ kiwi: MOD_PROTOCOL, type: "copy", text: "KIW-12" })
+    expect(at({ type: "copy", text: "x".repeat(100_001) })).toBeNull()
+  })
+
   test("an error always has some words, and never a whole page of them", () => {
     expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "error" })).toEqual({ kiwi: MOD_PROTOCOL, type: "error", message: "it threw with no message" })
     expect((fromFrame({ kiwi: MOD_PROTOCOL, type: "error", message: "x".repeat(5_000) }) as { message: string }).message).toHaveLength(2_000)
@@ -90,6 +112,14 @@ describe("what a mod's frame may do", () => {
   test("a mod that isn't on, or is gone, gets nothing", () => {
     expect(heeded("panel", "main", mod(["panel"], "asks"))).toBe(false)
     expect(heeded("actions", "main", undefined)).toBe(false)
+  })
+
+  test("storage, toasts, links and copies need no capability, only a mod that is on", () => {
+    for (const type of ["storage", "toast", "open", "copy"] as const) {
+      expect(heeded(type, "sidebar", mod([]))).toBe(true)
+      expect(heeded(type, "main", mod(["panel"], "asks"))).toBe(false)
+      expect(heeded(type, "main", undefined)).toBe(false)
+    }
   })
 
   test("what needs no capability always comes through", () => {

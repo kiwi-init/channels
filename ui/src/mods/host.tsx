@@ -8,7 +8,8 @@ import { addCommands } from "~/commands/rebind"
 import { useApp } from "~/nav"
 import { openLinksOutside } from "~/kit/outside-links"
 import type { MOD_SIDES as SIDES_EVENT } from "~/shell/updates"
-import { fromFrame, heeded, LOOK, MOD_PROTOCOL, SIDE_HEIGHT, STORAGE, type ModCommand, type ModMessage, type StorageOp, type Surface, type ToFrame } from "~/mods/protocol"
+import { fromFrame, heeded, LOOK, MOD_PROTOCOL, SIDE_HEIGHT, type ModCommand, type ModMessage, type Surface, type ToFrame } from "~/mods/protocol"
+import { keep } from "~/mods/stored"
 
 const FRAME_URL = "views://internal/mod-frame.html"
 
@@ -141,7 +142,6 @@ function takeSizes(): void {
   if (moved) changed()
 }
 
-const DATA = "kiwi-mod-data:"
 const QUIET_MS = 1_000
 const lastSaid = new Map<string, number>()
 
@@ -151,30 +151,6 @@ function often(name: string, kind: string): boolean {
   if (now - (lastSaid.get(key) ?? 0) < QUIET_MS) return true
   lastSaid.set(key, now)
   return false
-}
-
-function dataOf(name: string): Record<string, string> {
-  try {
-    const raw = JSON.parse(localStorage.getItem(DATA + name) ?? "{}") as unknown
-    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {}
-    return Object.fromEntries(Object.entries(raw).filter((e): e is [string, string] => typeof e[1] === "string"))
-  } catch {
-    // What the page can't read or parse starts the mod's storage empty.
-    return {}
-  }
-}
-
-export function keep(name: string, op: StorageOp, key: string | null, value: string | null): string | string[] | null {
-  const data = dataOf(name)
-  if (op === "keys") return Object.keys(data)
-  if (key === null) return null
-  if (op === "get") return Object.hasOwn(data, key) ? (data[key] ?? null) : null
-  if (op === "remove") delete data[key]
-  else if (value !== null) data[key] = value
-  const json = JSON.stringify(data)
-  if (json.length > STORAGE.total) throw new Error(`${name} keeps at most ${STORAGE.total.toLocaleString("en")} characters`)
-  localStorage.setItem(DATA + name, json)
-  return null
 }
 
 const focused = (f: Frame): boolean => document.hasFocus() && document.activeElement === f.el
@@ -227,7 +203,7 @@ async function onMessage(e: MessageEvent): Promise<void> {
     case "storage": {
       let reply: ToFrame
       try {
-        reply = { kiwi: MOD_PROTOCOL, type: "stored", id: m.id, ok: true, value: keep(name, m.op, m.key, m.value) }
+        reply = { kiwi: MOD_PROTOCOL, type: "stored", id: m.id, ok: true, value: keep(localStorage, name, m.op, m.key, m.value) }
       } catch (err) {
         reply = { kiwi: MOD_PROTOCOL, type: "stored", id: m.id, ok: false, error: err instanceof Error ? err.message : String(err) }
       }
