@@ -7,6 +7,7 @@ import type { Serves } from "../calls.ts";
 import { childEnv, sessionEnv } from "../child-env.ts";
 import { kiwiHome } from "../daemon-client.ts";
 import type { Host } from "../host.ts";
+import { installDefaults } from "../mods-default.ts";
 import { modsHost, type ModsHost } from "../mods-host.ts";
 import { placedSeatsOf, terminalCalls, type Run } from "../mods-terminal.ts";
 import type { SnippetHome } from "../mods-terminal-snippet.ts";
@@ -73,18 +74,28 @@ export function modsCalls(
 ): Serves<"mods" | "modBundle" | "approveMod" | "modFetch" | "modFailed" | "setModOn" | "modsSettled" | "modIcon" | "modDetails" | "modTerminals" | "modTerminalFocus" | "modTerminalMark"> {
   let mods: ModsHost | null = null;
   let started: Promise<ModsHost> | null = null;
+  let failed: ModView[] = [];
+  const withFailed = (list: ModView[]): ModView[] => held([...list, ...failed.filter((f) => !list.some((m) => m.name === f.name))]);
   const ready = (): Promise<ModsHost> => {
     if (started) return started;
+    const folder = path.join(kiwiHome(), "mods");
+    const approvals = path.join(host.app.path("data"), "mods.json");
     const m = modsHost({
-      folder: path.join(kiwiHome(), "mods"),
-      approvals: path.join(host.app.path("data"), "mods.json"),
+      folder,
+      approvals,
       contract: UI_CONTRACT,
-      push: (list) => host.push("mods", list),
+      push: (list) => host.push("mods", withFailed(list)),
       safe: safeAtStart,
       terminal: snippetHome(host.app.path("data")),
     });
     mods = m;
     started = m.start().then(() => m);
+    void started
+      .then(() => installDefaults({ folder, approvals, record: path.join(host.app.path("data"), "mods-defaults.json"), contract: UI_CONTRACT }))
+      .then(async (missing) => {
+        failed = missing;
+        await m.rescan();
+      });
     host.app.onQuit(() => mods?.stop());
     return started;
   };
@@ -104,7 +115,7 @@ export function modsCalls(
       throw new Error(`${String(name)} may not reach your terminals: it didn't ask for them, or you didn't approve it`);
   };
   return {
-    mods: async () => (await ready()).list(),
+    mods: async () => withFailed((await ready()).list()),
     modBundle: async (name) => (await ready()).bundle(String(name)),
     approveMod: async (name, needs) => (await ready()).approve(String(name), needs),
     modFetch: async (name, req) => (await ready()).fetch(String(name), req),
