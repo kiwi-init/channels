@@ -32,7 +32,6 @@ const FRAME_URL = "views://internal/mod-frame.html"
 const MOD_MENU: typeof MENU_EVENT = "kiwi-message-menu"
 const MOD_SIDES: typeof SIDES_EVENT = "kiwi-mod-sides"
 
-const outside = () => import("~/kit/outside")
 const ModSides = lazy(() => import("~/mods/side").then((m) => ({ default: m.ModSides })))
 
 const sidesAnchor = (): HTMLElement | null => document.querySelector<HTMLElement>(".side .mod-sides")
@@ -250,7 +249,7 @@ async function onMessage(e: MessageEvent): Promise<void> {
       if (!often(name, "toast")) announce(`${name}: ${m.title}${m.message ? ` · ${m.message}` : ""}`, m.style === "failure" ? "error" : "info")
       return
     case "open":
-      if (focused(f) && !often(name, "open")) void outside().then((o) => o.openOutside(m.url))
+      if (focused(f) && !often(name, "open")) void b.openExternal(m.url).catch(() => {})
       return
     case "copy":
       if (focused(f) && !often(name, "copy")) copyText(m.text)
