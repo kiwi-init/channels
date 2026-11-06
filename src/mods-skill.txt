@@ -70,7 +70,7 @@ Everything comes from `@kiwi/mod`, plus React.
 Build the view from `List`, `Detail` and `Form`: they follow the person's theme, keyboard and spacing, so a mod looks like part of the app with no CSS. Icons are the app's names, never emoji: `icon` props take an `IconName`, and a `GlyphName` works only in `<Icon name>`.
 
 - **Lists:** each `List.Item` goes straight inside `List` or `List.Section`, or in an array or fragment there. One returned by a component of your own doesn't show.
-- **GitHub:** `repos` are the repos the person linked to the channel; there's no other way to learn them. `issues` holds the open ones and those closed in the last 30 days, kept live. An issue's `at` is when it last changed (closed ones: when they closed), not when it was opened. `prs` work the same way.
+- **GitHub:** `repos` are the repos the person linked to the channel. To see them yourself, run `kiwi status` and read its `repos:` line. `issues` holds the open ones and those closed in the last 30 days, kept live. An issue's `at` is when it last changed (closed ones: when they closed), not when it was opened. `prs` work the same way.
 
 ## Starters
 
