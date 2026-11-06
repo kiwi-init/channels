@@ -3,11 +3,13 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
+import type { ModInstalled, ModUpdate, ModUpdates } from "../bridge.ts";
 import type { Serves } from "../calls.ts";
 import { childEnv, sessionEnv } from "../child-env.ts";
 import { kiwiHome } from "../daemon-client.ts";
 import type { Host } from "../host.ts";
 import { modsHost, type ModsHost } from "../mods-host.ts";
+import { inModsWorker } from "../mods-run.ts";
 import { placedSeatsOf, terminalCalls, type PlacedSeat, type Run } from "../mods-terminal.ts";
 import type { SnippetHome, TerminalSnippets } from "../mods-terminal-snippet.ts";
 import { UI_CONTRACT } from "../ui-contract.ts";
@@ -18,6 +20,13 @@ let safeAtStart: string | null = null;
 export const startModsSafe = (why: string): void => {
   safeAtStart ??= why;
 };
+
+type Info = ModInstalled & { version: string | null; needs: string[]; problem: string | null };
+type Change = ModUpdate & { applied: boolean };
+type Found = { changes: Change[]; current: string[]; skipped: ModUpdates["skipped"] };
+
+const installed = ({ name, source, commit, local, link, changed }: Info): ModInstalled => ({ name, source, commit, local, link, changed });
+const offered = ({ name, from, to, commits, added, dropped }: Change): ModUpdate => ({ name, from, to, commits, added, dropped });
 
 const RUN_MS = 5_000;
 
@@ -89,7 +98,24 @@ function snippetHome(data: string): SnippetHome {
 
 export function modsCalls(
   host: Host,
-): Serves<"mods" | "modBundle" | "approveMod" | "modFetch" | "modFailed" | "setModOn" | "modsSettled" | "modIcon" | "modDetails" | "modTerminals" | "modTerminalFocus" | "modTerminalMark"> {
+): Serves<
+  | "mods"
+  | "modBundle"
+  | "approveMod"
+  | "modFetch"
+  | "modFailed"
+  | "setModOn"
+  | "modsSettled"
+  | "modIcon"
+  | "modDetails"
+  | "modsInstalled"
+  | "modUpdates"
+  | "updateMod"
+  | "removeMod"
+  | "modTerminals"
+  | "modTerminalFocus"
+  | "modTerminalMark"
+> {
   let mods: ModsHost | null = null;
   let started: Promise<ModsHost> | null = null;
   const terminal = snippetHome(host.app.path("data"));
@@ -137,6 +163,23 @@ export function modsCalls(
     modsSettled: async () => (await ready()).settled(),
     modIcon: async (name) => (await ready()).icon(String(name)),
     modDetails: async (name) => (await ready()).details(String(name)),
+    modsInstalled: async () => (await inModsWorker<Info[]>({ op: "list", home: kiwiHome() })).map(installed),
+    modUpdates: async () => {
+      const found = await inModsWorker<Found>({ op: "check", home: kiwiHome() });
+      return { changes: found.changes.map(offered), skipped: found.skipped };
+    },
+    updateMod: async (name) => {
+      const found = await inModsWorker<Found>({ op: "update", home: kiwiHome(), name: String(name) });
+      const skipped = found.skipped.find((s) => s.name === name);
+      if (skipped) throw new Error(`${skipped.name} ${skipped.why}`);
+      const h = await ready();
+      await h.rescan();
+      return h.list();
+    },
+    removeMod: async (name, force) => {
+      await inModsWorker({ op: "remove", home: kiwiHome(), name: String(name), force: force === true });
+      return (await ready()).forget(String(name));
+    },
     modTerminals: async (name) => {
       await allowed(name);
       return terminals.list();

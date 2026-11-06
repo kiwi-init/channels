@@ -310,6 +310,12 @@ export function modsHost(o: ModsHostOptions) {
         else m.off[name] = { by: "you" };
       });
     },
+    forget(name: string): Promise<ModView[]> {
+      return change((m) => {
+        delete m.approved[name];
+        delete m.off[name];
+      });
+    },
     async approve(name: string, needs: readonly string[]): Promise<ModView[]> {
       const l = loaded.get(name);
       if (!l || l.view.state === "off") throw new Error(`there is no mod ${name} waiting for approval`);
