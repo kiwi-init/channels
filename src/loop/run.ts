@@ -80,12 +80,15 @@ function childEnv(): Record<string, string> {
   return Object.fromEntries(Object.entries(process.env).flatMap(([k, v]) => (v === undefined || k === SEAT_TOKEN || k === "KIWI_CHANNEL" ? [] : [[k, v]])));
 }
 
+type Terminal = { mode: string | null };
+
 export const runLoop = (seat: LoopSeat, stop: { asked: boolean; busy: boolean }): Effect.Effect<void, unknown, Agent> =>
   Effect.gen(function* () {
     process.env[SEAT_TOKEN] = seat.token;
     yield* hold(seat);
+    const terminal: Terminal = { mode: terminalMode() };
     yield* say(`holding ${seat.me} in ${seat.alias}; waiting for work (Ctrl-C stops the loop while no session runs)`);
-    yield* Effect.ensuring(cycles(seat, stop), release(seat));
+    yield* Effect.ensuring(cycles(seat, stop, terminal), release(seat));
   });
 
 const release = (seat: LoopSeat) =>
@@ -103,7 +106,7 @@ const setAside = (claims: Map<string, number>): Set<string> => {
   return new Set(claims.keys());
 };
 
-const cycles = (seat: LoopSeat, stop: { asked: boolean; busy: boolean }): Effect.Effect<void, unknown, Agent> =>
+const cycles = (seat: LoopSeat, stop: { asked: boolean; busy: boolean }, terminal: Terminal): Effect.Effect<void, unknown, Agent> =>
   Effect.gen(function* () {
     const claims = new Map<string, number>();
     while (!stop.asked) {
@@ -131,7 +134,7 @@ const cycles = (seat: LoopSeat, stop: { asked: boolean; busy: boolean }): Effect
         if (!taken) claims.set(workName(work), Date.now() + CLAIM_RETRY_MS);
         continue;
       }
-      const ended = yield* runSession(seat, s, work, firstPrompt(work, seen.state, seat.me, seat.alias), stop, claims);
+      const ended = yield* runSession(seat, s, work, firstPrompt(work, seen.state, seat.me, seat.alias), stop, claims, terminal);
       yield* hold(seat);
       if (ended.kind === "done") yield* say(`${workName(ended.work)} is over; its session ended`);
       if (ended.kind === "fresh")
@@ -181,7 +184,15 @@ function takePlanning(s: AgentSession, me: string, work: Extract<Work, { kind: "
   );
 }
 
-function runSession(seat: LoopSeat, s: AgentSession, first: Work, prompt: string, stop: { asked: boolean; busy: boolean }, claims: Map<string, number>): Effect.Effect<Ended, unknown, Agent> {
+function runSession(
+  seat: LoopSeat,
+  s: AgentSession,
+  first: Work,
+  prompt: string,
+  stop: { asked: boolean; busy: boolean },
+  claims: Map<string, number>,
+  terminal: Terminal,
+): Effect.Effect<Ended, unknown, Agent> {
   return Effect.suspend(() => {
     let spawned: { left: Effect.Effect<void>; mode: string | null } | null = null;
     const leave = Effect.gen(function* () {
@@ -190,7 +201,7 @@ function runSession(seat: LoopSeat, s: AgentSession, first: Work, prompt: string
       restoreTerminal(spawned.mode);
       stop.busy = false;
     });
-    return session(seat, s, first, prompt, stop, claims, (left, mode) => void (spawned = { left, mode })).pipe(Effect.ensuring(leave));
+    return session(seat, s, first, prompt, stop, claims, terminal, (left, mode) => void (spawned = { left, mode })).pipe(Effect.ensuring(leave));
   });
 }
 
@@ -201,6 +212,7 @@ function session(
   prompt: string,
   stop: { asked: boolean; busy: boolean },
   claims: Map<string, number>,
+  terminal: Terminal,
   spawned: (left: Effect.Effect<void>, mode: string | null) => void,
 ): Effect.Effect<Ended, unknown, Agent> {
   return Effect.gen(function* () {
@@ -215,7 +227,7 @@ function session(
     });
     yield* hooksFirst(recipe);
     if (recipe.screen) clearTypedPane();
-    const mode = terminalMode();
+    const mode = (terminal.mode ??= terminalMode());
     const started = Date.now();
     const child = Bun.spawn(argv, { cwd: process.cwd(), env: childEnv(), stdin: "inherit", stdout: "inherit", stderr: "inherit" });
     stop.busy = true;
