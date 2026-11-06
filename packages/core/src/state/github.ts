@@ -74,7 +74,7 @@ const MAX_RELEASES = 30;
 const MAX_SHAS = 300;
 
 export const prKey = (repo: string, number: number): string => `${repo.toLowerCase()}#${number}`;
-const shaKey = (repo: string, sha: string): string => `${repo.toLowerCase()}@${sha}`;
+export const shaKey = (repo: string, sha: string): string => `${repo.toLowerCase()}@${sha}`;
 
 function behind(i: GithubNote, was: GithubCheck): boolean {
   const order = i.run && was.run ? i.run - was.run || (i.attempt ?? 1) - (was.attempt ?? 1) : 0;

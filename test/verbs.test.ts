@@ -479,4 +479,14 @@ describe("review rounds through the CLI", () => {
     expect(await ok(dev, "task", "cancel", `T${t}`, "handed to the runner")).toContain("done (cancelled)");
     expect(await ok(dev, "task", "show", `T${t}`)).toContain("round 2 @ 2222222222222222222222222222222222222222, asked by dev");
   });
+
+  test("approve --runs pins the CI runs the PASS relies on; a bad list, or --runs off approve, is refused", async () => {
+    const t = /T(\d+)/.exec(await ok(dev, "task", "add", "pin the runs", "--review", "rev", "--ask", want))![1]!;
+    await ok(dev, "task", "claim", `T${t}`);
+    await ok(dev, "task", "review", `T${t}`, "--at", "3333333333333333333333333333333333333333");
+    expect((await run(rev, "task", "approve", `T${t}`, "--runs", "12,x")).err).toContain(`"12,x" isn't a list of CI run ids: --runs 123,456`);
+    expect((await run(rev, "task", "reject", `T${t}`, "nope", "--runs", "12")).err).toContain("--runs goes on task approve");
+    await ok(rev, "task", "approve", `T${t}`, "--round", "1", "--runs", "12, 34");
+    expect(JSON.parse(await ok(dev, "task", "show", `T${t}`, "--json"))).toMatchObject({ rounds: [{ n: 1, result: { kind: "approved", runs: [12, 34] } }] });
+  });
 });

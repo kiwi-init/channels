@@ -199,6 +199,14 @@ export const taskCommands: Record<string, Command> = {
         const note = args.slice(3).join(" ") || opt.note || (review ? firstLine(review) : undefined) || undefined;
         const roundNo = opt.round === undefined ? undefined : /^[1-9]\d{0,8}$/.test(opt.round.trim()) ? Number(opt.round.trim()) : yield* die(`"${opt.round}" isn't a round number`);
         const judged = { ...(roundNo !== undefined ? { round: roundNo } : {}), ...(opt.at?.trim() ? { at: opt.at.trim() } : {}) };
+        const runList = opt.runs?.replace(/\s/g, "");
+        if (runList !== undefined && sub !== "approve") return yield* die("--runs goes on task approve: the CI runs the PASS relies on");
+        const runs =
+          runList === undefined
+            ? {}
+            : /^[1-9]\d{0,15}(,[1-9]\d{0,15}){0,49}$/.test(runList)
+              ? { runs: runList.split(",").map(Number) }
+              : yield* die(`"${opt.runs}" isn't a list of CI run ids: --runs 123,456`);
         const before = sub === "review" || sub === "start" || sub === "claim" ? (yield* s.state()).state : undefined;
         const reviewed = sub === "review" ? before?.tasks.get(id) : undefined;
         const asker = before?.members.get(s.me);
@@ -220,7 +228,7 @@ export const taskCommands: Record<string, Command> = {
             ...(opt.review !== undefined ? { review: opt.review } : {}),
             ...(opt.at?.trim() ? { at: opt.at.trim() } : {}),
           });
-        else if (sub === "approve") state = yield* s.taskUpdate(id, { state: "done", verdict: "approved", note, ...judged }, review);
+        else if (sub === "approve") state = yield* s.taskUpdate(id, { state: "done", verdict: "approved", note, ...judged, ...runs }, review);
         else if (sub === "reject")
           state = yield* s.taskUpdate(
             id,

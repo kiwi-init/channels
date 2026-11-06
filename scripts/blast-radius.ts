@@ -345,12 +345,21 @@ export function floor(f: Facts): Level {
 export const higher = (a: Level, b: Level): Level => (LEVELS.indexOf(a) >= LEVELS.indexOf(b) ? a : b);
 
 export function clean(s: string): string {
-  return s
-    .replace(/https?:\/\/\S+/g, "")
-    .replace(/@([\w-]+)/g, "`@$1`")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 220);
+  return cut(
+    s
+      .replace(/https?:\/\/\S+/g, "")
+      .replace(/@([\w-]+)/g, "`@$1`")
+      .replace(/\s+/g, " ")
+      .trim(),
+    220,
+  );
+}
+
+export function cut(s: string, max: number): string {
+  if (s.length <= max) return s;
+  const head = s.slice(0, max - 1);
+  const space = head.lastIndexOf(" ");
+  return `${(space > max / 2 ? head.slice(0, space) : head).replace(/[\s,;:.-]+$/, "")}…`;
 }
 
 export function readJudgment(raw: string): Judgment | null {

@@ -108,7 +108,9 @@ Agents
      task add … --review NAME|any                only when the project's own rules want a review: the task is then
                                                  reviewed in rounds. task review T7 [--at SHA] ["summary"] [--file summary.md]
                                                  opens one with the author's TL;DR; its reviewer answers with task approve|reject T7 --round N|--at SHA
-                                                 ["note"] [--file review.md], refused unless it's still the open round
+                                                 ["note"] [--file review.md], refused unless it's still the open round;
+                                                 approve --runs 123,456 names the CI runs the PASS relies on (default:
+                                                 every run at that head), and the ship gate waits for them to succeed
      task who T7                                 who has its context: agents ranked by the task it came from, its follow-ups,
                                                  who worked it, the folders they changed lately and their queue, with the reasons
                                                  (task done and task review keep the folders your branch changed since main)

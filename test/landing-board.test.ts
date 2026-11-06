@@ -1,7 +1,8 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 import { formatTasks } from "@kiwi/core/format.ts";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
-import { landingWaits, REVIEW_CHECK, reviewNotRequired } from "@kiwi/core/prs.ts";
+import { REVIEW_CHECK } from "@kiwi/core/protocol.ts";
+import { landingWaits, reviewNotRequired } from "@kiwi/core/prs.ts";
 import type { Event, GithubNote, Landing, Message } from "@kiwi/core/protocol.ts";
 import { fold, type Roster } from "@kiwi/core/state.ts";
 
