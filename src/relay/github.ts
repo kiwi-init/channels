@@ -208,7 +208,7 @@ export function syncNotes(repo: string, prs: readonly unknown[], issues: readonl
           conclusion: lower(run.conclusion),
           sha,
           branch,
-          happened: when(run.completedAt) ?? when(run.startedAt),
+          happened: lower(run.status) === "completed" ? when(run.completedAt) : when(run.startedAt),
         }),
       );
   }

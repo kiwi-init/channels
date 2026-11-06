@@ -129,6 +129,40 @@ describe("a GitHub event keeps when it happened on GitHub, not only when it reac
     expect(open[1]).toMatchObject({ event: "check_run", happened: T("2026-11-06T10:25:00Z") });
   });
 
+  test("a finished check with a missing or malformed completion time has none: its start time never stands in for it", () => {
+    const synced = (run: Record<string, unknown>): GithubNote[] =>
+      syncNotes(
+        "o/r",
+        [
+          {
+            number: 8,
+            state: "OPEN",
+            headRefOid: HEAD_B,
+            updatedAt: "2026-11-06T09:00:00Z",
+            commits: { nodes: [{ commit: { checkSuites: { nodes: [{ checkRuns: { nodes: [{ databaseId: 3, name: "ci-ok", ...run }] } }] } } }] },
+          },
+        ],
+        [],
+        0,
+        T("2026-11-06T11:00:00Z"),
+      );
+    const finished = { status: "COMPLETED", conclusion: "SUCCESS", startedAt: "2026-11-06T10:00:00Z" };
+    const shipped = T("2026-11-06T10:05:00Z");
+    for (const run of [finished, { ...finished, completedAt: "not a date" }]) {
+      const notes = synced(run);
+      expect(notes[1]?.happened).toBeUndefined();
+      const g = fresh();
+      applyGithub(g, notes, 2);
+      const pull = g.prs.get(prKey("o/r", 8));
+      if (!pull) throw new Error("no PR");
+      const [check] = prChecks(g, pull);
+      expect(check).toMatchObject({ conclusion: "success" });
+      expect(check?.completedAt).toBeUndefined();
+      expect(heldBefore(check?.completedAt, shipped)).toBe(false);
+    }
+    expect(synced({ status: "IN_PROGRESS", startedAt: "2026-11-06T10:00:00Z" })[1]?.happened).toBe(T("2026-11-06T10:00:00Z"));
+  });
+
   test("the owner's app can post the time, and a bad one drops the note", () => {
     expect(cleanGithubNote({ event: "pull_request", repo: "o/r", at: 1, happened: 2 })).toMatchObject({ happened: 2 });
     expect(cleanGithubNote({ event: "pull_request", repo: "o/r", at: 1, happened: -1 })).toBeNull();
