@@ -46,11 +46,8 @@ const clickText = ({ selector, text }: { selector: string; text: string }): bool
   return !!el;
 };
 
-const clickLabel = ({ selector, label }: { selector: string; label: RegExp | string }): boolean => {
-  const el = [...document.querySelectorAll<HTMLElement>(selector)].find((e) => {
-    const name = e.getAttribute("aria-label") ?? "";
-    return (typeof label === "string" ? name === label : label.test(name)) && e.getClientRects().length > 0;
-  });
+const clickLabelEnding = ({ selector, ending }: { selector: string; ending: string }): boolean => {
+  const el = [...document.querySelectorAll<HTMLElement>(selector)].find((e) => (e.getAttribute("aria-label") ?? "").endsWith(ending) && e.getClientRects().length > 0);
   el?.click();
   return !!el;
 };
@@ -127,13 +124,27 @@ const typeCommand = (text: string): boolean => {
   return true;
 };
 
+const pageNow = (): Record<string, unknown> => ({
+  chan: document.querySelector(".chan")?.className ?? null,
+  top: [...document.querySelectorAll(".top button, nav.tabs button")].map((b) => `${b.getAttribute("aria-label") ?? (b.textContent ?? "").trim()} ${b.getClientRects().length ? "shown" : "hidden"}`),
+  dialog: (document.querySelector('[role="dialog"]')?.textContent ?? null)?.slice(0, 600),
+  panel: (document.querySelector(".panel")?.outerHTML ?? null)?.slice(0, 1_200),
+  palette: [...document.querySelectorAll(".palette-item")].map((e) => (e.textContent ?? "").slice(0, 80)),
+  frames: [...document.querySelectorAll("iframe")].map((f) => `${f.title} ${f.style.width}x${f.style.height} ${f.style.visibility || "shown"}`),
+});
+
+let driver: Driver | null = null;
+
 const step = (what: string, ms: number, act: () => Promise<boolean>) =>
   until(what, ms, () =>
     act().then(
       (done) => (done ? true : null),
       () => null,
     ),
-  );
+  ).catch(async (e: unknown) => {
+    if (driver) console.log(`the page at "${what}": ${JSON.stringify(await driver.evaluate(pageNow, null, 3_000).catch(String), null, 1)}`);
+    throw e;
+  });
 
 async function answers(d: Driver, why: string): Promise<number> {
   const start = Date.now();
@@ -168,6 +179,7 @@ function files(dir: string): string[] {
 const app = launch(exe, testEnv(root, join(root, "driver.sock"), RELAY));
 try {
   const d = await attach(join(root, "driver.sock"));
+  driver = d;
   await firstChannel(d, 0);
   type Mod = { name: string; version: string | null; state: string; why?: string };
   const mods = () => d.evaluate(() => (window as unknown as { kiwi: { mods(): Promise<Mod[]> } }).kiwi.mods(), null, 15_000);
@@ -184,7 +196,7 @@ try {
   await later(2_000);
   check(!(await d.evaluate(tabButton, "GitHub", 2_000)), "a channel with no repos shows no GitHub tab, as on main");
 
-  await step("the channel's settings", 10_000, () => d.evaluate(clickLabel, { selector: "button", label: /: channel settings$/ }, 2_000));
+  await step("the channel's settings", 10_000, () => d.evaluate(clickLabelEnding, { selector: "button", ending: ": channel settings" }, 2_000));
   await step("the settings' GitHub section", 10_000, () => d.evaluate(clickText, { selector: '[role="dialog"] .modal-seg button', text: "GitHub" }, 2_000));
   await step("the repo, typed", 10_000, () => d.evaluate(fillIn, { selector: '[role="dialog"] input[aria-label="Add a repo"]', value: REPO }, 2_000));
   await step("Add", 10_000, () => d.evaluate(submitIn, "Add a repo", 2_000));
