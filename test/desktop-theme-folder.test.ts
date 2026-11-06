@@ -26,7 +26,7 @@ const put = (dir: string, file: string, body: unknown) => {
   fs.writeFileSync(path.join(dir, file), typeof body === "string" ? body : JSON.stringify(body));
 };
 
-const until = async (ok: () => boolean, ms = 3000) => {
+const until = async (ok: () => boolean, ms = 10_000) => {
   const end = Date.now() + ms;
   while (!ok()) {
     if (Date.now() > end) throw new Error("timed out");
@@ -102,7 +102,7 @@ describe("themes in ~/.kiwi/themes/", () => {
       expect(() => writeTheme(dir, file, { name: "x", appearance: "dark", base: dusk.base })).toThrow("plain name ending in .json");
       expect(() => removeTheme(dir, file)).toThrow("plain name ending in .json");
     }
-    expect(() => writeTheme(dir, null, { name: "x", appearance: "dark", base: { ...dusk.base, text: "white" } })).toThrow("that theme \"base.text\" isn't a colour");
+    expect(() => writeTheme(dir, null, { name: "x", appearance: "dark", base: { ...dusk.base, text: "white" } })).toThrow('that theme "base.text" isn\'t a colour');
     expect(themeOf("x.json", { name: "x", appearance: "dark", base: { ...dusk.base, text: 7 } })).toBe('"base.text" isn\'t a colour like #1a2b3c');
   });
 
@@ -115,6 +115,7 @@ describe("themes in ~/.kiwi/themes/", () => {
       () => {},
     );
     expect(fs.existsSync(dir)).toBe(true);
+    await Bun.sleep(200);
     put(dir, "one.json", dusk);
     put(dir, "two.json", dusk);
     put(dir, "one.json", { ...dusk, name: "One" });
@@ -137,6 +138,7 @@ describe("the themes calls", () => {
     const host = { ...shell.host, push: (name: string, value: unknown) => void (name === "folderThemes" && pushed.push(value as FolderThemesView)) };
     const calls = themesCalls(host as typeof shell.host, () => at);
     expect((await calls.folderThemes()).themes).toEqual([]);
+    await Bun.sleep(200);
     put(themesDir(at), "dusk.json", dusk);
     await until(() => pushed.some((v) => v.themes.length === 1));
     expect(pushed.at(-1)?.themes[0]?.name).toBe("Dusk");

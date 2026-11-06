@@ -15,8 +15,7 @@ const OURS = [CHANNELS_OLED.id, CHANNELS_DARK.id, CHANNELS_LIGHT.id]
 
 export const FROM_FOLDER = "file:"
 
-export const wantsRex = (p: Owned): boolean =>
-  [p.darkTheme, p.lightTheme].some((id) => !OURS.includes(id) && !id.startsWith(FROM_FOLDER) && !p.customThemes.some((c) => c.id === id))
+export const wantsRex = (p: Owned): boolean => [p.darkTheme, p.lightTheme].some((id) => !OURS.includes(id) && !id.startsWith(FROM_FOLDER) && !p.customThemes.some((c) => c.id === id))
 
 export function customColors(t: Pick<CustomTheme, "appearance" | "base">): Colors {
   const b = t.base

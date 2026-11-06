@@ -3,10 +3,10 @@ import path from "node:path";
 
 import type { FolderThemeInput, FolderThemesView, FolderThemeView, ThemeColour } from "./bridge.ts";
 
-export const THEME_COLOURS: readonly ThemeColour[] = ["background", "text", "accent", "success", "warning", "danger", "info", "red", "yellow", "green", "cyan", "blue", "magenta"];
+const THEME_COLOURS: readonly ThemeColour[] = ["background", "text", "accent", "success", "warning", "danger", "info", "red", "yellow", "green", "cyan", "blue", "magenta"];
 const REQUIRED: readonly ThemeColour[] = ["background", "text", "accent"];
 export const MAX_THEME_BYTES = 64 * 1024;
-export const MAX_THEMES = 200;
+const MAX_THEMES = 200;
 const HEX = /^#[0-9a-f]{6}$/i;
 const FILE = /^[^./\\][^/\\]{0,79}\.json$/u;
 const WAIT_MS = 150;
@@ -15,7 +15,7 @@ export const themesDir = (home: string): string => path.join(home, "themes");
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 
-export const themeFile = (file: string): boolean => FILE.test(file) && path.basename(file) === file;
+const themeFile = (file: string): boolean => FILE.test(file) && path.basename(file) === file;
 
 export function themeOf(file: string, raw: unknown): FolderThemeView | string {
   if (!isRecord(raw)) return "isn't a JSON object";

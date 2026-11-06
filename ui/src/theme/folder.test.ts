@@ -1,9 +1,10 @@
-import { describe, expect, mock, test } from "bun:test"
+import { afterAll, describe, expect, test } from "bun:test"
 
 import type { FolderThemesView } from "@kiwi/secrets/secrets.ts"
 
 const KEY = "ui.themes.folder"
 const stored = new Map<string, string>()
+const before = { local: globalThis.localStorage }
 Object.assign(globalThis, {
   localStorage: {
     getItem: (k: string) => stored.get(k) ?? null,
@@ -18,11 +19,17 @@ stored.set(KEY, JSON.stringify([{ id: "file:dusk.json", ...dusk }]))
 const pushes: ((v: FolderThemesView) => void)[] = []
 let answer: FolderThemesView = { dir: "/home/ana/.kiwi/themes", themes: [], skipped: [] }
 let asked = 0
-const fake = {
+const kiwi = {
+  getSnapshot: () => ({ relayUrl: "", person: null, channels: [], computers: [], phones: [], pending: [], personalities: [] }),
+  onStore: () => () => {},
   folderThemes: async () => (asked++, answer),
   onFolderThemes: (cb: (v: FolderThemesView) => void) => (pushes.push(cb), () => {}),
 }
-mock.module("@kiwi/secrets/secrets.ts", () => ({ bridge: () => fake }))
+Object.assign(globalThis, { window: { kiwi } })
+afterAll(() => {
+  Reflect.deleteProperty(globalThis, "window")
+  Object.assign(globalThis, { localStorage: before.local })
+})
 
 const { fileOf, folderThemes, startFolder } = await import("~/theme/folder")
 const { activeTheme, movedTheme, wantsRex } = await import("~/theme/themes")

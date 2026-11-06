@@ -117,6 +117,7 @@ export function Themes() {
     if (opened.current) return
     opened.current = true
     if (SHOT === "settings-themes" || SHOT === "theme-editor") ref.current?.scrollIntoView({ block: "start" })
+    if (SHOT === "settings-themes-folder") ref.current?.querySelector(".theme-skipped")?.scrollIntoView({ block: "end" })
   })
 
   const q = query.trim().toLowerCase()

@@ -118,6 +118,9 @@ export const SHOTS: Record<string, Shot> = {
   },
   "settings-themes-folder": {
     ...kiwi({ page: "settings", section: "appearance" }),
+    prefs: {
+      customThemes: [{ id: "mine-dusk", name: "Dusk", appearance: "dark", base: { background: "#15131a", text: "#e8e2f0", accent: "#f0a86b" } }],
+    },
     folder: {
       dir: "/Users/ana/.kiwi/themes",
       themes: [
