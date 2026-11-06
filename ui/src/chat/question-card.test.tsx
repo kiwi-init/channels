@@ -41,6 +41,18 @@ const step = (answer: QuestionAsk["answer"]): QuestionAsk => ({
   ...(answer ? { answer } : {}),
 })
 
+const choice = (answer: QuestionAsk["answer"]): QuestionAsk => ({
+  kind: "question",
+  id: "50",
+  from: "gentle-otter",
+  at: NOW,
+  text: wrote("Deploy the release now?"),
+  label: "A decision for you",
+  options: [wrote("A: Deploy now"), wrote("B: Not yet")],
+  holds: [],
+  ...(answer ? { answer } : {}),
+})
+
 const render = (ask: QuestionAsk): string =>
   renderToStaticMarkup(
     <AppContext.Provider value={{ app: { channel }, go: () => {} } as unknown as Ctx}>
@@ -57,6 +69,19 @@ describe("an answered step shows its answer once (#1794)", () => {
     expect(html).toContain("Show the reply")
     expect(html).not.toContain("Works here")
     expect(html).not.toContain("&gt; Test the build")
+  })
+
+  test("a room reply that matches an option shows in the feed only, not as a choice in the card", () => {
+    const html = render(choice({ text: wrote("A: Deploy now"), by: "jow", at: NOW + 60_000, shownIn: "feed", seq: 41 }))
+    expect(html).toContain("You replied")
+    expect(html).toContain("Show the reply")
+    expect(html).not.toContain("Deploy now")
+  })
+
+  test("an option picked on the card still shows as the choice", () => {
+    const html = render(choice({ text: wrote("A: Deploy now"), by: "jow", at: NOW + 60_000, shownIn: "card" }))
+    expect(html).toContain("You chose <b>A: Deploy now</b>")
+    expect(html).not.toContain("Show the reply")
   })
 
   test("answered from the card: the card shows the answer through the message renderer, with nicknames", () => {

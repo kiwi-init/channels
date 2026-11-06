@@ -100,13 +100,6 @@ export default function QuestionCard({ channel, ask }: { channel: Channel; ask: 
           {who} {reply === HANDOFF_DONE ? "finished in the browser" : "couldn’t finish in the browser"} {at}
         </p>
       )
-    const answered = ask.answer.text
-    if (ask.options.some((o) => wordsSame(o, answered)))
-      return (
-        <p className="ask-done">
-          {who} chose <b>{wordsPlain(ask.answer.text, channel.nicknames)}</b> {at}
-        </p>
-      )
     const verb = ask.step ? "answered" : "replied"
     const answer = ask.answer
     if (answer.shownIn === "feed")
@@ -116,6 +109,12 @@ export default function QuestionCard({ channel, ask }: { channel: Channel; ask: 
           <button type="button" className="ask-seq" onClick={() => seeAsk(channel.code, answer.seq)}>
             Show the reply
           </button>
+        </p>
+      )
+    if (ask.options.some((o) => wordsSame(o, answer.text)))
+      return (
+        <p className="ask-done">
+          {who} chose <b>{wordsPlain(answer.text, channel.nicknames)}</b> {at}
         </p>
       )
     return (
