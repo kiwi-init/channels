@@ -167,6 +167,13 @@ const pageNow = (): Record<string, unknown> => ({
   text: document.body.innerText.slice(0, 1_500),
 });
 
+function front(): string {
+  if (process.platform !== "darwin") return "";
+  const asn = (spawnSync("lsappinfo", ["front"], { encoding: "utf8" }).stdout ?? "").trim();
+  const info = asn ? (spawnSync("lsappinfo", ["info", "-only", "name", asn], { encoding: "utf8" }).stdout ?? "") : "";
+  return `; in front: ${/"LSDisplayName"="([^"]*)"/.exec(info)?.[1] ?? (asn || "nothing")}`;
+}
+
 type Said = Record<string, unknown>;
 const heard = (d: Driver): Promise<Said[]> =>
   d.evaluate(
@@ -193,7 +200,7 @@ async function howHeard(d: Driver, why: string): Promise<void> {
     (e: unknown) => String(e),
   );
   console.log(
-    `${why}: the page answered in ${Date.now() - start} ms; heard ${JSON.stringify(kinds)} (${bytes} bytes); frames ${JSON.stringify(frames)}; frame messages ${JSON.stringify(types)}; the app's main ${main}`,
+    `${why}: the page answered in ${Date.now() - start} ms; heard ${JSON.stringify(kinds)} (${bytes} bytes); frames ${JSON.stringify(frames)}; frame messages ${JSON.stringify(types)}; the app's main ${main}${front()}`,
   );
 }
 
