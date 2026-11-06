@@ -40,7 +40,7 @@ export const LOOK = [
   "c-brown",
 ]
 
-export type Surface = "main" | "sidebar"
+export type Surface = "main" | "sidebar" | "render"
 
 export interface ModCommand {
   id: string
@@ -57,6 +57,13 @@ export interface ModMessage {
 }
 
 export const SIDE_HEIGHT = { min: 24, max: 320 }
+
+export interface Shown {
+  kind: string
+  name: string
+  html: string
+  full: boolean
+}
 
 interface ModFetchInit {
   method?: string
@@ -80,7 +87,7 @@ export interface ModFetchResult {
 }
 
 export type ToFrame =
-  | { kiwi: typeof MOD_PROTOCOL; type: "boot"; name: string; surface: Surface; needs: string[]; code: string; theme: Record<string, string>; dark: boolean }
+  | { kiwi: typeof MOD_PROTOCOL; type: "boot"; name: string; surface: Surface; needs: string[]; code: string; theme: Record<string, string>; dark: boolean; shown?: Shown }
   | { kiwi: typeof MOD_PROTOCOL; type: "theme"; theme: Record<string, string>; dark: boolean }
   | { kiwi: typeof MOD_PROTOCOL; type: "command"; id: string }
   | { kiwi: typeof MOD_PROTOCOL; type: "action"; id: string; message: ModMessage }

@@ -62,7 +62,7 @@ Open a channel, press ⌘K and pick **Standup Notes** under Mods. Run `kiwi mod 
 | `name` | Lowercase letters, digits and dashes, the same as the folder's name. `app`, `nav`, `view`, `chat` and `debug` are taken. |
 | `version` | A version like `1.0.0` |
 | `shell` | The app versions it works with, like `^3.6`. An app it doesn't fit leaves it off and says why. |
-| `needs` | What it asks you for: `panel`, `command`, `terminal`, and `net:<host>` for each web host it talks to |
+| `needs` | What it asks you for: `panel`, `command`, `terminal`, `render:<kind>`, and `net:<host>` for each web host it talks to |
 | `icon` | Optional: an `.svg` or `.png` in its folder, up to 64 KB. The app shows it as a picture, so an SVG's scripts never run. Without one, the mod gets its first letter. |
 | `author` | Optional: who made it, up to 100 characters |
 | `skills` | Optional: skills it gives every agent. See [Skills](#skills) |
@@ -77,6 +77,7 @@ Everything comes from `@kiwi/mod`, plus React:
 | --- | --- |
 | `panel({ title, render })` | The mod's panel beside the chat. Its title shows in the panel's header and in ⌘K. |
 | `command({ id, title, run })` | An action in ⌘K. Its id for `keys.json` is `<mod>.<id>`. |
+| `render(kind, draw)` | Draws one kind of attachment in chat. See [Drawing attachments](#drawing-attachments). |
 | `fetch(url, init)` | The mod's only way to the network, to the hosts you approved, over https |
 | `terminals()`, `focusTerminal(id)`, `markTerminal(id, mark)` | Your agents' tmux panes and Rex blocks. See [Terminals](#terminals) |
 | `useFetch(url, options)` | `fetch` as a hook: `{ data, error, isLoading, revalidate }`, JSON by default |
@@ -169,6 +170,37 @@ Some limits come with that:
 - **Links open only on a click:** an `Action.OpenInBrowser`, or `window.open` while you're using the mod, opens http(s) links in your browser. Images from the web don't load; fetch one and show it as a `blob:` URL.
 - **Each save restarts it**, so state outside `storage` resets.
 - **Diagrams don't draw** in a mod's `Detail` yet.
+
+## Drawing attachments
+
+With `render:<kind>` in its needs, a mod draws that kind of attachment in chat, in place of its file chips. The kind is one lowercase word, like `figure`. A message has one when it carries:
+
+- **`X.<kind>.html`**, the page to draw
+- **`X.<kind>.svg`**, its snapshot
+- **`X.<kind>-light.html`**, optional, the page for the light theme
+
+`kiwi send --figure page.html` sends a figure that way. Up to 8 MB in all.
+
+The snapshot shows first. Once it's on screen, the mod's frame draws over it: `draw` gets `{ kind, name, html, dark, full }`, with the page for your theme, and can return React to show. A button opens it full window, where `full` is true.
+
+```tsx
+import { render } from "@kiwi/mod"
+
+render("figure", ({ html }) => {
+  const page = new DOMParser().parseFromString(html, "text/html")
+  document.body.replaceWith(document.adoptNode(page.body))
+})
+```
+
+A page moved in that way doesn't run its scripts. The [anatomy mod](https://github.com/kiwi-init/mods/tree/main/anatomy) runs them too.
+
+The page comes from whoever sent the message, so it runs in the mod's frame with the mod's limits, and nothing more:
+
+- **At most 3 drawn at once.** One that scrolls far off goes back to its snapshot.
+- **Snapshot only** with reduced motion. The full window still draws it.
+- **No network, and none of the mod's other capabilities,** whatever you approved the mod for.
+- **The snapshot is only an image:** its scripts never run.
+- **Not the app's chat:** a drawing frame gets no panel, sidebar, commands, message actions or terminals.
 
 ## Skills
 

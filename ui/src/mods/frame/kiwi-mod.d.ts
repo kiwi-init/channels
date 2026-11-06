@@ -55,6 +55,16 @@ declare module "@kiwi/mod" {
   export function sidebar(view: View): void
   export function command(command: { id: string; title: string; run: () => void | Promise<void> }): void
   export function messageAction(action: { id: string; title: string; run: (message: ModMessage) => void | Promise<void> }): void
+
+  export interface Attachment {
+    kind: string
+    name: string
+    html: string
+    dark: boolean
+    full: boolean
+  }
+
+  export function render(kind: string, draw: (attachment: Attachment) => ReactNode | void): void
   export function fetch(input: string | URL, init?: { method?: string; headers?: HeadersInit; body?: string | null }): Promise<Response>
 
   export interface ModTerminal {

@@ -371,6 +371,7 @@ export interface Message {
   prs?: PullRequest[]
   images?: (Image | ImageSpot)[]
   docMedia?: BlockFiles
+  files?: readonly DocFile[]
   reactions?: Reaction[]
   ask?: string
   system?: boolean
