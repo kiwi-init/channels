@@ -482,6 +482,8 @@ try {
   check(crashed?.off === "crash" && (crashed.why ?? "").includes(CRASH), "a mod that throws as it starts is switched off, with its error as the reason");
   check((await modsNow(d)).find((m) => m.name === "probe-mod")?.state === "on", "the other mods keep running");
   await settingsMods(d, CRASH);
+  await d.main("activate").catch(() => null);
+  await later(1_000);
   await shot("settings-mods");
   d.close();
   await stop(app);
