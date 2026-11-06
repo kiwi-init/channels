@@ -1,63 +1,161 @@
-import { useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 
 import { bridge } from "@kiwi/secrets/secrets.ts"
-import type { ModView } from "../../../desktop/src/bridge.ts"
+import type { ModInstalled, ModUpdate, ModView } from "../../../desktop/src/bridge.ts"
 import { Toggle } from "~/kit/form"
 import { modsNow, useModsVersion } from "~/mods/host"
 import { needWords } from "~/mods/needs"
 import { useApp } from "~/nav"
-import { Group, Row } from "~/settings/controls"
+import { Confirm, Group, Row } from "~/settings/controls"
 import { Page } from "~/settings/sections"
 
 const wanted = (m: ModView): boolean => m.state === "on" || m.off === "safe"
 
 const switchable = (m: ModView): boolean => m.state !== "off" || m.off !== undefined
 
+const managed = (): boolean => {
+  const b = bridge()
+  return !!b && typeof b.modsInstalled === "function"
+}
+
+const onlyCopy = (i: ModInstalled | undefined): boolean => !!i && i.local && !i.link
+
+function removeWhy(i: ModInstalled | undefined): string {
+  if (i?.link) return `Only the link goes. Your folder ${i.link} stays.`
+  if (onlyCopy(i)) return "This folder is its only copy, so it's gone for good."
+  if (i?.changed) return "It has changes that aren't in its source, and they go with it."
+  return "You can add it again from where it came from."
+}
+
+function Source({ m, i }: { m: ModView; i: ModInstalled | undefined }) {
+  if (i?.link)
+    return (
+      <span className="set-note">
+        Linked to <span className="set-mono">{i.link}</span>
+      </span>
+    )
+  if (m.source === "local") return <span className="set-note">Local</span>
+  return (
+    <span className="set-note">
+      From <span className="set-mono">{m.source}</span>
+      {i?.commit && <span className="set-mono"> · {i.commit}</span>}
+    </span>
+  )
+}
+
+type Asking = { kind: "update"; m: ModView; u: ModUpdate } | { kind: "remove"; m: ModView; i: ModInstalled | undefined }
+
 export function ModsSection() {
   useModsVersion()
   const { toast } = useApp()
   const [busy, setBusy] = useState<string | null>(null)
+  const [installed, setInstalled] = useState<Map<string, ModInstalled>>(new Map())
+  const [updates, setUpdates] = useState<Map<string, ModUpdate>>(new Map())
+  const [asking, setAsking] = useState<Asking | null>(null)
   const mods = modsNow()
+  const names = mods.map((m) => `${m.name}@${m.version ?? ""}`).join(" ")
+
+  const fail = useCallback(
+    (e: unknown) => {
+      setBusy(null)
+      toast(e instanceof Error ? e.message : String(e), "error")
+    },
+    [toast]
+  )
+
+  useEffect(() => {
+    const b = bridge()
+    if (!names || !b || !managed()) return
+    let live = true
+    void b.modsInstalled().then(
+      (list) => live && setInstalled(new Map(list.map((i) => [i.name, i]))),
+      () => {}
+    )
+    return () => {
+      live = false
+    }
+  }, [names])
+
+  useEffect(() => {
+    const b = bridge()
+    if (!b || !managed()) return
+    let live = true
+    void b.modUpdates().then(
+      (found) => live && setUpdates(new Map(found.changes.map((c) => [c.name, c]))),
+      () => {}
+    )
+    return () => {
+      live = false
+    }
+  }, [])
+
   const flip = (m: ModView, on: boolean) => {
     const b = bridge()
     if (!b || typeof b.setModOn !== "function") return
     setBusy(m.name)
     const done = on && m.state === "asks" ? b.approveMod(m.name, m.needs) : b.setModOn(m.name, on)
-    done.then(
-      () => setBusy(null),
-      (e: unknown) => {
-        setBusy(null)
-        toast(e instanceof Error ? e.message : String(e), "error")
-      }
-    )
+    done.then(() => setBusy(null), fail)
   }
+
+  const update = (m: ModView) => {
+    const b = bridge()
+    if (!b || !managed()) return
+    setAsking(null)
+    setBusy(m.name)
+    b.updateMod(m.name).then(() => {
+      setBusy(null)
+      setUpdates((now) => {
+        const next = new Map(now)
+        next.delete(m.name)
+        return next
+      })
+    }, fail)
+  }
+
+  const remove = (m: ModView, i: ModInstalled | undefined) => {
+    const b = bridge()
+    if (!b || !managed()) return
+    setAsking(null)
+    setBusy(m.name)
+    b.removeMod(m.name, !!i?.changed || onlyCopy(i)).then(() => setBusy(null), fail)
+  }
+
+  const askUpdate = (m: ModView, u: ModUpdate) => (u.added.length || u.dropped.length ? setAsking({ kind: "update", m, u }) : update(m))
+
   return (
     <Page title="Mods" lede="Each one runs in its own frame, away from your keys and messages.">
       <Group hint={mods.find((m) => m.off === "safe")?.why}>
         {mods.length ? (
-          mods.map((m) => (
-            <Row
-              key={m.name}
-              label={m.version ? `${m.name} ${m.version}` : m.name}
-              hint={
-                <>
-                  <span className="set-note">
-                    {m.source === "local" ? (
-                      "Local"
-                    ) : (
-                      <>
-                        From <span className="set-mono">{m.source}</span>
-                      </>
-                    )}
-                  </span>
-                  {m.needs.length > 0 && <span className="set-note">{m.needs.map(needWords).join(" · ")}</span>}
-                  {m.why && m.off !== "safe" && m.off !== "you" && <span className="set-note">{m.why}</span>}
-                </>
-              }
-            >
-              {switchable(m) && <Toggle on={wanted(m)} label={`Run ${m.name}`} disabled={busy === m.name} onChange={(on) => flip(m, on)} />}
-            </Row>
-          ))
+          mods.map((m) => {
+            const i = installed.get(m.name)
+            const u = updates.get(m.name)
+            return (
+              <Row
+                key={m.name}
+                label={m.version ? `${m.name} ${m.version}` : m.name}
+                hint={
+                  <>
+                    <Source m={m} i={i} />
+                    {m.needs.length > 0 && <span className="set-note">{m.needs.map(needWords).join(" · ")}</span>}
+                    {m.why && m.off !== "safe" && m.off !== "you" && <span className="set-note">{m.why}</span>}
+                    {i?.changed && <span className="set-note">It has changes that aren't in its source.</span>}
+                  </>
+                }
+              >
+                {u && (
+                  <button type="button" className="btn is-quiet is-small" disabled={busy === m.name} onClick={() => askUpdate(m, u)}>
+                    Update to {u.to}
+                  </button>
+                )}
+                {managed() && (
+                  <button type="button" className="btn is-quiet is-small" disabled={busy === m.name} onClick={() => setAsking({ kind: "remove", m, i })}>
+                    Remove
+                  </button>
+                )}
+                {switchable(m) && <Toggle on={wanted(m)} label={`Run ${m.name}`} disabled={busy === m.name} onChange={(on) => flip(m, on)} />}
+              </Row>
+            )
+          })
         ) : (
           <Row
             label="No mods yet"
@@ -69,6 +167,29 @@ export function ModsSection() {
           />
         )}
       </Group>
+      <Confirm
+        open={asking?.kind === "update"}
+        title={asking?.kind === "update" ? `Update ${asking.m.name} to ${asking.u.to}?` : ""}
+        sub={asking?.kind === "update" ? `${asking.u.commits} new commit${asking.u.commits === 1 ? "" : "s"} from its source.` : ""}
+        action="Update"
+        onClose={() => setAsking(null)}
+        onConfirm={() => asking?.kind === "update" && update(asking.m)}
+      >
+        {asking?.kind === "update" && (
+          <>
+            {asking.u.added.length > 0 && <p className="set-note">It now also asks for: {asking.u.added.map(needWords).join(" · ")}. It waits for you to allow that before it runs again.</p>}
+            {asking.u.dropped.length > 0 && <p className="set-note">It no longer asks for: {asking.u.dropped.map(needWords).join(" · ")}.</p>}
+          </>
+        )}
+      </Confirm>
+      <Confirm
+        open={asking?.kind === "remove"}
+        title={asking?.kind === "remove" ? `Remove ${asking.m.name}?` : ""}
+        sub={asking?.kind === "remove" ? removeWhy(asking.i) : ""}
+        action="Remove"
+        onClose={() => setAsking(null)}
+        onConfirm={() => asking?.kind === "remove" && remove(asking.m, asking.i)}
+      />
     </Page>
   )
 }
