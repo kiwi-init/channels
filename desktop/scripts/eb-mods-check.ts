@@ -198,6 +198,28 @@ async function howHeard(d: Driver, why: string): Promise<void> {
 }
 
 const MESSAGE_LINK = "https://example.com/?message-link";
+const CRASH = "crash-mod fails on purpose";
+
+function writeCrashMod(): void {
+  const dir = join(root, ".kiwi", "mods", "crash-mod");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "mod.json"), JSON.stringify({ name: "crash-mod", version: "1.0.0", shell: "^3.3" }));
+  writeFileSync(join(dir, "index.tsx"), `throw new TypeError(${JSON.stringify(CRASH)})\n`);
+}
+
+type ModNow = { name: string; state: string; off?: string; why?: string };
+const modsNow = (d: Driver): Promise<ModNow[]> => d.evaluate(() => (window as unknown as { kiwi: { mods(): Promise<ModNow[]> } }).kiwi.mods(), null, 15_000);
+
+async function settingsMods(d: Driver, shows: string): Promise<void> {
+  await step("Settings", 10_000, () =>
+    d.evaluate(() => (document.querySelector<HTMLElement>(".set-nav") ? true : (document.querySelector<HTMLElement>('[aria-label="Settings"]')?.click(), false)), null, 2_000),
+  );
+  await step("Settings → Mods", 10_000, () => d.evaluate(clickText, { selector: ".set-nav .side-row", text: "Mods" }, 2_000));
+  await step(`Settings → Mods shows "${shows}"`, 15_000, () => d.evaluate((t) => (document.querySelector(".set-main")?.textContent ?? "").includes(t), shows, 2_000)).catch(async (e: unknown) => {
+    console.log(`the page then: ${JSON.stringify(await d.evaluate(pageNow, null, 3_000).catch((x: unknown) => String(x)), null, 1)}`);
+    throw e;
+  });
+}
 
 const topAt = (selector: string): { found: boolean; top: string | null } => {
   const el = document.querySelector<HTMLElement>(selector);
@@ -277,7 +299,7 @@ function stacks(why: string): void {
 
 writeMod(1);
 writeQuietMod();
-const app = launch(exe, testEnv(root, join(root, "driver.sock"), RELAY));
+let app = launch(exe, testEnv(root, join(root, "driver.sock"), RELAY));
 try {
   const d = await attach(join(root, "driver.sock"));
   await firstChannel(d, 0);
@@ -454,7 +476,29 @@ try {
   check(opens.includes(MESSAGE_LINK), "with a mod running, a Ctrl-clicked link in a message still opens in the browser");
   check(!opens.some((u) => /forged|mod-self-nav/.test(u)), "nothing the mod forged or navigated to opened in the browser");
   check(app.exitCode === null && app.signalCode === null, "the app is still running after the mod's forged events");
+  writeCrashMod();
+  const crashed = await until("crash-mod switched off", 30_000, async () => (await modsNow(d)).find((m) => m.name === "crash-mod" && m.state === "off") ?? null).catch(() => null);
+  console.log(`crash-mod: ${JSON.stringify(crashed)}`);
+  check(crashed?.off === "crash" && (crashed.why ?? "").includes(CRASH), "a mod that throws as it starts is switched off, with its error as the reason");
+  check((await modsNow(d)).find((m) => m.name === "probe-mod")?.state === "on", "the other mods keep running");
+  await settingsMods(d, CRASH);
+  await d.main("activate").catch(() => null);
+  await later(1_000);
+  await shot("settings-mods");
   d.close();
+  await stop(app);
+  writeFileSync(join(root, ".kiwi", "mods", ".safe-mode"), "");
+  app = launch(exe, testEnv(root, join(root, "safe.sock"), RELAY));
+  const safe = await attach(join(root, "safe.sock"));
+  await step("the channel, in safe mode", 60_000, () => safe.evaluate(() => !!document.querySelector(".chan"), null, 2_000));
+  const listed = await modsNow(safe);
+  console.log(`mods in safe mode: ${JSON.stringify(listed)}`);
+  check(listed.every((m) => m.state !== "on") && listed.find((m) => m.name === "probe-mod")?.off === "safe", "safe mode starts with every mod off, and says why");
+  check(!existsSync(join(root, ".kiwi", "mods", ".safe-mode")), "safe mode by .safe-mode lasts one start: the app removes the file");
+  await settingsMods(safe, "No mod runs until Channels restarts");
+  check((await safe.evaluate(() => document.querySelectorAll('iframe[src*="mod-frame"]').length, null, 2_000)) === 0, "safe mode starts no mod's frame");
+  await shot("settings-mods-safe");
+  safe.close();
 } catch (e) {
   problems.push(e instanceof Error ? e.message : String(e));
   console.log(`FAIL ${problems.at(-1)}`);
