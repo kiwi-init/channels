@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { startLocalRelay } from "../../scripts/local-relay.ts";
+import { addMod } from "../../src/mods.ts";
 import { daemonStop } from "../src/daemon-client.ts";
 import { ASK_AGAIN_URL } from "../src/keyring-wait.ts";
 import { appExecutable, attach, launch, stop, testEnv, until, type Driver } from "./eb-drive.ts";
@@ -207,8 +208,35 @@ function writeCrashMod(): void {
   writeFileSync(join(dir, "index.tsx"), `throw new TypeError(${JSON.stringify(CRASH)})\n`);
 }
 
-type ModNow = { name: string; state: string; off?: string; why?: string };
+type ModNow = { name: string; version?: string | null; state: string; off?: string; why?: string };
 const modsNow = (d: Driver): Promise<ModNow[]> => d.evaluate(() => (window as unknown as { kiwi: { mods(): Promise<ModNow[]> } }).kiwi.mods(), null, 15_000);
+
+const NOTES = join(root, "notes-src");
+const GIT_ENV = { ...process.env, GIT_AUTHOR_NAME: "check", GIT_AUTHOR_EMAIL: "check@example.com", GIT_COMMITTER_NAME: "check", GIT_COMMITTER_EMAIL: "check@example.com" };
+
+function notesVersion(version: string, needs: string[]): void {
+  mkdirSync(NOTES, { recursive: true });
+  writeFileSync(join(NOTES, "mod.json"), JSON.stringify({ name: "notes-mod", version, shell: "^3.3", needs }));
+  writeFileSync(join(NOTES, "index.tsx"), `parent.postMessage({ kiwiProbe: { notes: "${version}" } }, "*")\n`);
+  const git = (...args: string[]) => spawnSync("git", args, { cwd: NOTES, env: GIT_ENV, stdio: "ignore" });
+  if (!existsSync(join(NOTES, ".git"))) git("init", "--quiet", "--initial-branch", "main");
+  git("add", "-A");
+  git("commit", "--quiet", "-m", version);
+}
+
+const inRow = ({ mod, control }: { mod: string; control: string }): boolean => {
+  const row = [...document.querySelectorAll<HTMLElement>(".set-row")].find((r) => (r.querySelector(".set-row-label")?.textContent ?? "").startsWith(`${mod} `));
+  const el = row && [...row.querySelectorAll<HTMLElement>("button")].find((b) => (b.textContent ?? "").trim() === control || b.getAttribute("aria-label") === control);
+  if (!el || (el as HTMLButtonElement).disabled) return false;
+  el.click();
+  return true;
+};
+
+const confirmIt = (action: string): boolean => {
+  const b = [...document.querySelectorAll<HTMLButtonElement>("dialog[open] .modal-foot button")].find((x) => (x.textContent ?? "").trim() === action);
+  b?.click();
+  return !!b;
+};
 
 async function settingsMods(d: Driver, shows: string): Promise<void> {
   await step("Settings", 10_000, () =>
@@ -485,6 +513,36 @@ try {
   await d.main("activate").catch(() => null);
   await later(1_000);
   await shot("settings-mods");
+  notesVersion("1.0.0", []);
+  addMod(join(root, ".kiwi"), NOTES);
+  const notes = async () => (await modsNow(d)).find((m) => m.name === "notes-mod") ?? null;
+  const added = await until("notes-mod, added from its repo", 30_000, async () => ((await notes())?.state === "on" ? true : null)).catch(() => null);
+  check(!!added, "a mod added from a git repo runs without a restart");
+  notesVersion("1.1.0", ["net:example.com"]);
+  await step("Settings → About", 10_000, () => d.evaluate(clickText, { selector: ".set-nav .side-row", text: "About" }, 2_000));
+  await settingsMods(d, "notes-mod");
+  await step("notes-mod's Update, once its repo has a new commit", 60_000, () => d.evaluate(inRow, { mod: "notes-mod", control: "Update to 1.1.0" }, 2_000));
+  await step("the update's confirm, which says what it now asks for", 10_000, () =>
+    d.evaluate(() => (document.querySelector("dialog[open]")?.textContent ?? "").includes("Talk to example.com"), null, 2_000),
+  );
+  await shot("settings-mods-update");
+  await step("Update in the confirm", 10_000, () => d.evaluate(confirmIt, "Update", 2_000));
+  const updated = await until("notes-mod 1.1.0", 30_000, async () => {
+    const m = await notes();
+    return m?.version === "1.1.0" ? m : null;
+  }).catch(() => null);
+  check(updated?.state === "asks", "Update takes the new version from the page, and a mod that asks for more waits for the person");
+  await step("notes-mod's switch, on", 10_000, () => d.evaluate(inRow, { mod: "notes-mod", control: "Run notes-mod" }, 2_000));
+  const allowed = await until("notes-mod on", 15_000, async () => ((await notes())?.state === "on" ? true : null)).catch(() => null);
+  check(!!allowed, "its switch allows what it now asks for and turns it on");
+  await step("notes-mod's switch, off", 10_000, () => d.evaluate(inRow, { mod: "notes-mod", control: "Run notes-mod" }, 2_000));
+  const off = await until("notes-mod off", 15_000, async () => ((await notes())?.off === "you" ? true : null)).catch(() => null);
+  check(!!off, "its switch turns it off again");
+  await step("notes-mod's Remove", 10_000, () => d.evaluate(inRow, { mod: "notes-mod", control: "Remove" }, 2_000));
+  await step("Remove in the confirm", 10_000, () => d.evaluate(confirmIt, "Remove", 2_000));
+  const gone = await until("notes-mod gone", 30_000, async () => ((await notes()) === null ? true : null)).catch(() => null);
+  check(!!gone && !existsSync(join(root, ".kiwi", "mods", "notes-mod")), "Remove takes it out of the list and off the disk, without a restart");
+  check((await d.evaluate(() => [...document.querySelectorAll(".set-row-label")].some((l) => (l.textContent ?? "").startsWith("notes-mod ")), null, 2_000)) === false, "the page drops its row");
   d.close();
   await stop(app);
   writeFileSync(join(root, ".kiwi", "mods", ".safe-mode"), "");
