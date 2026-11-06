@@ -109,3 +109,10 @@ export function landingsDue(view: GateView & { tasks: ReadonlyMap<number, Task> 
   }
   return out;
 }
+
+export function gateNow(view: GateView, t: Task): { pr: GithubPr; missing: string[] } | undefined {
+  if (t.state !== "landing" || !t.then || !hasLanding(t.then) || t.then === "run") return undefined;
+  const pr = landingPr(view, t);
+  if (pr?.state !== "open" || !pr.sha) return undefined;
+  return { pr, missing: heldAtShipping(view, t, pr, pr.sha, Number.POSITIVE_INFINITY).map((m) => m.replace(/ before the merge$/, "")) };
+}
