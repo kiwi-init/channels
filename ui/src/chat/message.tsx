@@ -243,9 +243,9 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
         {m.images && (
           <div className="msg-images">{m.images.map((img) => ("spot" in img ? <Spot key={img.spot} code={channel.code} img={img} /> : <ShownImage key={img.url} image={img} open={openImage} />))}</div>
         )}
-        {m.docMedia && (
+        {(m.docMedia || m.files) && (
           <Suspense fallback={null}>
-            <BlockFilesView code={channel.code} media={m.docMedia} open={openImage} />
+            <BlockFilesView code={channel.code} media={m.docMedia ?? { imgs: [], files: m.files ?? [] }} open={openImage} />
           </Suspense>
         )}
         {m.leftOut && <p className="msg-left-out left-out-why">{m.leftOut}</p>}

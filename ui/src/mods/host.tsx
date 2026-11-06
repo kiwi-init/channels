@@ -230,7 +230,7 @@ function send(f: Frame | undefined, m: ToFrame): void {
   f?.el.contentWindow?.postMessage(m, "*")
 }
 
-function look(): { theme: Record<string, string>; dark: boolean } {
+export function look(): { theme: Record<string, string>; dark: boolean } {
   const css = getComputedStyle(document.documentElement)
   const theme: Record<string, string> = {}
   for (const t of LOOK) {

@@ -23,12 +23,15 @@ import {
   type ModTarget,
   type ModTerminal,
   type ModTerminalMark,
+  type Shown,
   type Surface,
   type TerminalOp,
   type ToFrame,
 } from "~/mods/protocol"
 
 type Waiting = { resolve: (r: unknown) => void; reject: (e: Error) => void }
+
+type Draw = (shown: Shown & { dark: boolean }) => ReactNode | void
 
 type Out = { [K in FromFrame["type"]]: Omit<Extract<FromFrame, { type: K }>, "kiwi"> }[FromFrame["type"]]
 
@@ -42,6 +45,7 @@ let nextId = 1
 const waiting = new Map<number, Waiting>()
 const commands = new Map<string, { title: string; run: () => void | Promise<void> }>()
 const actions = new Map<string, { title: string; run: (message: ModMessage) => void | Promise<void> }>()
+const drawers = new Map<string, Draw>()
 const box = document.getElementById("root") ?? document.body.appendChild(document.createElement("div"))
 const root = ReactDOMClient.createRoot(box)
 let sized: ResizeObserver | null = null
@@ -217,6 +221,10 @@ const api = {
   copy(text: string, note?: string): void {
     post({ type: "copy", text: String(text), note: note === undefined ? null : String(note) })
   },
+  render(kind: string, draw: Draw): void {
+    asked(`render:${kind}`, "render")
+    drawers.set(String(kind), draw)
+  },
   fetch: modFetch,
   terminals,
   focusTerminal,
@@ -245,6 +253,13 @@ Object.assign(globalThis, {
     "@kiwi/mod": api,
   },
 })
+
+function draw(shown: Shown | undefined, dark: boolean): void {
+  const drawer = shown && drawers.get(shown.kind)
+  if (!shown || !drawer) throw new Error(`the mod has no render("${shown?.kind ?? "?"}") to draw this`)
+  const node = drawer({ ...shown, dark })
+  if (node !== undefined && node !== null) root.render(node)
+}
 
 function theme(vars: Record<string, string>, dark: boolean): void {
   const s = document.documentElement.style
@@ -283,6 +298,7 @@ addEventListener("message", (e) => {
     theme(m.theme, m.dark)
     try {
       new Function(m.code)()
+      if (surface === "render") draw(m.shown, m.dark)
       post({ type: "ready" })
     } catch (err) {
       failed(err)
