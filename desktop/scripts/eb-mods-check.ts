@@ -227,8 +227,21 @@ try {
       .evaluate(
         (url) => {
           const a = [...document.querySelectorAll<HTMLAnchorElement>(".main article.msg a")].find((el) => el.getAttribute("href") === url);
-          a?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, ctrlKey: true }));
-          return a ? { class: a.className, inEditor: !!a.closest(".ProseMirror") } : null;
+          if (!a) return null;
+          const kiwi = (window as unknown as { kiwi: { openExternal(u: string): Promise<void> } }).kiwi;
+          const asked: string[] = [];
+          const was = kiwi.openExternal;
+          let wrapped = true;
+          try {
+            kiwi.openExternal = (u: string) => (asked.push(u), was.call(kiwi, u));
+          } catch {
+            // A frozen bridge can't be wrapped; the report says so instead of what the page asked for.
+            wrapped = false;
+          }
+          const ev = new MouseEvent("click", { bubbles: true, cancelable: true, ctrlKey: true });
+          a.dispatchEvent(ev);
+          if (wrapped) kiwi.openExternal = was;
+          return { class: a.className, inEditor: !!a.closest(".ProseMirror"), prevented: ev.defaultPrevented, asked: wrapped ? asked : "unwrappable" };
         },
         messageLink,
         2_000,
