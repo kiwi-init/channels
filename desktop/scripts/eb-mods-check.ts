@@ -28,6 +28,28 @@ const { relay, port } = await startLocalRelay(join(root, "relay"), null, { rateL
 const RELAY = `http://127.0.0.1:${port}`;
 const folder = join(root, ".kiwi", "mods", "probe-mod");
 const quietFolder = join(root, ".kiwi", "mods", "quiet-mod");
+const terminalFolder = join(root, ".kiwi", "mods", "terminal-mod");
+const TMUX_CONF = join(root, "home", ".tmux.conf");
+const REX_INIT = join(root, "home", ".config", "rex", "init.lua");
+const TMUX_BEFORE = "set -g mouse on\nbind r source-file ~/.tmux.conf";
+const TERMINAL_ENV = { KIWI_TMUX_CONF: TMUX_CONF, REX_CONFIG: REX_INIT, XDG_CONFIG_HOME: join(root, "home", ".config") };
+
+function writeTerminalMod(): void {
+  mkdirSync(join(terminalFolder, "terminal"), { recursive: true });
+  writeFileSync(join(terminalFolder, "mod.json"), JSON.stringify({ name: "terminal-mod", version: "1.0.0", shell: "^3.9", needs: ["terminal"] }));
+  writeFileSync(join(terminalFolder, "terminal", "tmux.conf"), 'set -g status-right "#{@kiwi} %H:%M"\nbind K display-message "Kiwi"\n');
+  writeFileSync(join(terminalFolder, "terminal", "rex.lua"), 'rex.log("kiwi terminal-mod")\n');
+  writeFileSync(
+    join(terminalFolder, "index.tsx"),
+    `import { terminals } from "@kiwi/mod"
+
+terminals().then(
+  (list) => parent.postMessage({ kiwiProbe: { terminals: list } }, "*"),
+  (e: unknown) => parent.postMessage({ kiwiProbe: { terminals: e instanceof Error ? e.message : String(e) } }, "*"),
+)
+`,
+  );
+}
 
 function writeQuietMod(): void {
   mkdirSync(quietFolder, { recursive: true });
@@ -305,7 +327,10 @@ function stacks(why: string): void {
 
 writeMod(1);
 writeQuietMod();
-let app = launch(exe, testEnv(root, join(root, "driver.sock"), RELAY));
+writeTerminalMod();
+mkdirSync(join(root, "home"), { recursive: true });
+writeFileSync(TMUX_CONF, TMUX_BEFORE);
+let app = launch(exe, testEnv(root, join(root, "driver.sock"), RELAY, TERMINAL_ENV));
 try {
   const d = await attach(join(root, "driver.sock"));
   await firstChannel(d, 0);
@@ -344,6 +369,44 @@ try {
       2_000,
     );
   await step("the channel", 30_000, () => d.evaluate(() => !!document.querySelector(".chan"), null, 2_000));
+  await step("⌘K, for the terminal mod", 10_000, palette);
+  await step("Set up terminal-mod in ⌘K", 10_000, () => d.evaluate(clickText, { selector: ".palette-item", text: "Set up terminal-mod" }, 2_000));
+  await step("the terminal mod's snippets, in the panel", 10_000, () => d.evaluate(clickText, { selector: ".panel .mod-snippet pre", text: "source-file -q" }, 2_000));
+  for (const theme of ["dark", "light"]) {
+    await d.evaluate(
+      (t) => {
+        document.documentElement.dataset["theme"] = t;
+        return true;
+      },
+      theme,
+      2_000,
+    );
+    await later(300);
+    await shot(`mod-asks-terminal-${theme}`);
+  }
+  await d.evaluate(
+    () => {
+      delete document.documentElement.dataset["theme"];
+      return true;
+    },
+    null,
+    2_000,
+  );
+  check(readFileSync(TMUX_CONF, "utf8") === TMUX_BEFORE && !existsSync(REX_INIT), "a terminal mod changes no config while it waits for the person");
+  await step("Turn on the terminal mod", 10_000, () => d.evaluate(clickText, { selector: ".panel button", text: "Turn on" }, 2_000));
+  const heardTerminals = await until("the terminal mod's list", 30_000, async () => (await heard(d)).find((m) => "terminals" in m) ?? null).catch(() => null);
+  console.log(`the terminal mod heard: ${JSON.stringify(heardTerminals)}`);
+  check(Array.isArray(heardTerminals?.["terminals"]), "an approved terminal mod lists this computer's agents' terminals");
+  const conf = readFileSync(TMUX_CONF, "utf8");
+  check(
+    conf.startsWith(`${TMUX_BEFORE}\n`) && /^source-file -q ".*terminal-mod\/tmux\.conf" # Kiwi mod terminal-mod$/m.test(conf.slice(TMUX_BEFORE.length)),
+    "turning it on adds one line to ~/.tmux.conf, after the person's own",
+  );
+  check(existsSync(REX_INIT) && readFileSync(REX_INIT, "utf8").endsWith("-- Kiwi mod terminal-mod\n"), "and one line to Rex's init.lua");
+  rmSync(terminalFolder, { recursive: true, force: true });
+  const gone = await until("terminal-mod removed", 30_000, async () => ((await modsNow(d)).some((m) => m.name === "terminal-mod") ? null : true)).catch(() => null);
+  check(!!gone && readFileSync(TMUX_CONF, "utf8") === TMUX_BEFORE, "removing the mod puts ~/.tmux.conf back byte for byte");
+  check(!existsSync(REX_INIT), "and removes the Rex init.lua it made");
   await step("⌘K", 10_000, palette);
   await step("Set up probe-mod in ⌘K", 10_000, () => d.evaluate(clickText, { selector: ".palette-item", text: "Set up probe-mod" }, 2_000));
   await step("what the mod asks for, in the panel", 10_000, () => d.evaluate(clickText, { selector: ".panel .mod-needs", text: "Talk to example.com" }, 2_000)).catch(async (e: unknown) => {
@@ -517,7 +580,7 @@ try {
   d.close();
   await stop(app);
   writeFileSync(join(root, ".kiwi", "mods", ".safe-mode"), "");
-  app = launch(exe, testEnv(root, join(root, "safe.sock"), RELAY));
+  app = launch(exe, testEnv(root, join(root, "safe.sock"), RELAY, TERMINAL_ENV));
   const safe = await attach(join(root, "safe.sock"));
   await step("the channel, in safe mode", 60_000, () => safe.evaluate(() => !!document.querySelector(".chan"), null, 2_000));
   const listed = await modsNow(safe);

@@ -9,6 +9,7 @@ import type { ModDetails, ModFetchReply, ModFetchRequest, ModIcon, ModView } fro
 import { errorText, writePrivate } from "./guard.ts";
 import { copyOf, kiwiKeys, modDetails } from "./mod-details.ts";
 import { hostAllowed, SAFE_FILE, SAFE_FLAG, SAFE_LOOP, unapproved } from "./mods.ts";
+import { installedHash, installedNames, installSnippets, removeSnippets, snippetsOf, type SnippetHome, type TerminalSnippets } from "./mods-terminal-snippet.ts";
 
 const MANIFEST_BYTES = 64_000;
 const FETCH_BYTES = 8_000_000;
@@ -22,6 +23,7 @@ interface Loaded {
   art: { type: IconType; bytes: Uint8Array } | null;
   iconWhy: string | null;
   author: string | null;
+  snippets?: TerminalSnippets;
 }
 
 export interface ModsHostOptions {
@@ -31,6 +33,7 @@ export interface ModsHostOptions {
   push: (mods: ModView[]) => void;
   request?: typeof fetch;
   safe?: string | null;
+  terminal?: SnippetHome;
 }
 
 interface Approval {
@@ -98,7 +101,7 @@ function iconOf(dir: string, m: ModManifest): Pick<Loaded, "art" | "iconWhy"> {
 
 const iconHash = (bytes: Uint8Array): string => createHash("sha256").update(bytes).digest("hex").slice(0, 16);
 
-async function loadOne(dir: string, name: string, contract: string, file: ModsFile, safe: string | null): Promise<Loaded> {
+async function loadOne(dir: string, name: string, contract: string, file: ModsFile, safe: string | null, terminal?: SnippetHome): Promise<Loaded> {
   const source = modSource(dir);
   const off = (why: string, version: string | null = null, needs: string[] = []): Loaded => ({
     view: { name, version, source, needs, approved: [], state: "off", why },
@@ -118,13 +121,24 @@ async function loadOne(dir: string, name: string, contract: string, file: ModsFi
   const checked = checkManifest(raw, name, contract);
   if (!checked.ok) return off(checked.why);
   const { version, needs } = checked.manifest;
+  let snippets: TerminalSnippets | undefined;
+  if (needs.includes("terminal")) {
+    if (!terminal) return off("this app can't add a mod's terminal snippets", version, needs);
+    try {
+      snippets = snippetsOf(dir, name, terminal);
+    } catch (e) {
+      return off(errorText(e), version, needs);
+    }
+  }
+  const shown = snippets ? { terminal: { hash: snippets.hash, ...(snippets.tmux ? { tmux: snippets.tmux } : {}), ...(snippets.rex ? { rex: snippets.rex } : {}) } } : {};
   const icon = iconOf(dir, checked.manifest);
-  const done = (view: ModView, code: string | null = null): Loaded => ({ view, code, ...icon, author: checked.manifest.author ?? null });
+  const done = (view: ModView, code: string | null = null): Loaded => ({ view, code, ...icon, author: checked.manifest.author ?? null, ...(snippets ? { snippets } : {}) });
   const approval = file.approved[name];
   const approved = approval?.source === source ? approval.needs : [];
-  const base = { name, version, source, needs, approved: needs.filter((n) => approved.includes(n)), ...(icon.art ? { icon: iconHash(icon.art.bytes) } : {}) };
+  const base = { name, version, source, needs, approved: needs.filter((n) => approved.includes(n)), ...(icon.art ? { icon: iconHash(icon.art.bytes) } : {}), ...shown };
   if (unapproved(needs, approved).length)
     return done(approval && approval.source !== source ? { ...base, state: "asks", why: `It comes from ${source} now, not ${approval.source}.` } : { ...base, state: "asks" });
+  if (snippets && terminal && installedHash(name, terminal) !== snippets.hash) return done({ ...base, approved: base.approved.filter((n) => n !== "terminal"), state: "asks" });
   const stopped = file.off[name];
   if (stopped?.by === "you") return done({ ...base, state: "off", off: "you", why: "You switched it off." });
   if (safe) return done({ ...base, state: "off", off: "safe", why: safe });
@@ -159,8 +173,17 @@ export function modsHost(o: ModsHostOptions) {
       names = [];
     }
     const next = new Map<string, Loaded>();
-    for (const name of names) next.set(name, await loadOne(path.join(o.folder, name), name, o.contract, file, safe));
+    for (const name of names) next.set(name, await loadOne(path.join(o.folder, name), name, o.contract, file, safe, o.terminal));
     loaded = next;
+    if (o.terminal)
+      for (const name of installedNames(o.terminal))
+        if (!next.get(name)?.view.needs.includes("terminal") || !file.approved[name]?.needs.includes("terminal")) {
+          try {
+            removeSnippets(name, o.terminal);
+          } catch {
+            // A config file we can't write now keeps its line; the next scan tries again.
+          }
+        }
     o.push(list());
   }
 
@@ -286,15 +309,21 @@ export function modsHost(o: ModsHostOptions) {
         else m.off[name] = { by: "you" };
       });
     },
-    approve(name: string, needs: readonly string[]): Promise<ModView[]> {
+    async approve(name: string, needs: readonly string[]): Promise<ModView[]> {
       const l = loaded.get(name);
-      if (!l || l.view.state === "off") return Promise.reject(new Error(`there is no mod ${name} waiting for approval`));
+      if (!l || l.view.state === "off") throw new Error(`there is no mod ${name} waiting for approval`);
       const asked = [...l.view.needs].sort();
-      if (!Array.isArray(needs) || [...needs].sort().join("\n") !== asked.join("\n")) return Promise.reject(new Error(`approve exactly what ${name} asks for`));
-      return change((m) => {
+      if (!Array.isArray(needs) || [...needs].sort().join("\n") !== asked.join("\n")) throw new Error(`approve exactly what ${name} asks for`);
+      const now = l.snippets && o.terminal ? snippetsOf(path.join(o.folder, name), name, o.terminal) : null;
+      if (now && now.hash !== l.snippets?.hash) throw new Error(`${name}'s terminal snippets changed while you looked: look again`);
+      const after = await change((m) => {
         m.approved[name] = { needs: asked, source: l.view.source };
         delete m.off[name];
       });
+      if (!now || !o.terminal) return after;
+      installSnippets(name, now, o.terminal);
+      await rescan();
+      return list();
     },
     async fetch(name: string, req: ModFetchRequest): Promise<ModFetchReply> {
       const l = loaded.get(name);

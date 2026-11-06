@@ -24,6 +24,23 @@
   border-top: 1px solid var(--line);
 }
 
+.mod-snippet p {
+  margin: 0;
+}
+
+.mod-snippet pre {
+  margin: 4px 0 8px;
+  padding: 8px 12px;
+  max-height: 240px;
+  overflow: auto;
+  border-radius: var(--r-ctl);
+  background: var(--bg-3);
+  color: var(--ink);
+  font: var(--t-meta) / 1.5 var(--mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .mod-ask-actions {
   display: flex;
   gap: 8px;
