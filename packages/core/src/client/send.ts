@@ -1,5 +1,6 @@
 import * as Effect from "effect/Effect";
 import { b64url, seal, slotId } from "../crypto.ts";
+import type { CheckAsk } from "../checks.ts";
 import { sign, verify } from "../identity.ts";
 import {
   CHOICE_MAX_LENGTH,
@@ -60,6 +61,7 @@ export interface SendOptions {
   decision?: DecisionKind;
   step?: Step;
   stepReply?: StepReply;
+  check?: CheckAsk;
   id?: string;
   permission?: PermissionShown;
   perm?: PermissionReply;
@@ -158,6 +160,7 @@ export class ChannelSending {
         ...(opts.esc && opts.holds?.length && !opts.ev ? { holds: opts.holds } : {}),
         ...(opts.esc && opts.decision && !opts.ev ? { decision: opts.decision } : {}),
         ...(opts.esc && opts.step && !opts.ev ? { step: opts.step } : {}),
+        ...(opts.esc && opts.check && !opts.ev ? { check: opts.check } : {}),
         ...(opts.stepReply && opts.re?.length && !opts.ev ? { stepReply: opts.stepReply } : {}),
         ...(opts.esc && opts.choices && opts.permission && !opts.ev ? { permission: opts.permission } : {}),
         ...(opts.perm && opts.re?.length && !opts.ev ? { perm: opts.perm } : {}),

@@ -16,7 +16,7 @@ const BUDGET = {
   oneCommandHelp: 1_700,
   wrappingPerMessage: 40,
   everyday: 300,
-  status: 1_200,
+  status: 800,
 } as const;
 
 let steps: Step[] = [];
@@ -51,11 +51,24 @@ describe("what Channels adds to an agent's session, against a local relay (scrip
   });
 
   test("everyday intentions are one call each, with a short answer", () => {
-    for (const intent of ["reply to a message", "post an update", "answer a message sent to everyone", "file a task", "take a task", "finish a task", "read one message in full"]) {
+    for (const intent of [
+      "reply to a message",
+      "post an update",
+      "answer a message sent to everyone",
+      "file a task",
+      "take a task",
+      "file a task and take it",
+      "finish a task",
+      "read one message in full",
+    ]) {
       const s = step(intent);
       expect([intent, s.calls]).toEqual([intent, 1]);
       expect([intent, s.chars <= BUDGET.everyday]).toEqual([intent, true]);
     }
+  });
+
+  test("filing a task and taking it is one call", () => {
+    expect(step("file a task and take it").shown).toMatch(/added T\d+, doing @/);
   });
 
   test("a second agent replying to a message someone already answers is told who, and sends nothing", () => {

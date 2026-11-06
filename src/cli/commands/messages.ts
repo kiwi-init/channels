@@ -28,6 +28,7 @@ import {
   type Message,
   type Step,
 } from "@kiwi/core/protocol.ts";
+import { ARTIFACT_USAGE, CHECK_PHASES, parseArtifact, type CheckArtifact, type CheckPhase } from "@kiwi/core/checks.ts";
 import { asksOnSameWork, chooseThread, inGeneral, longForGeneral, parseTaskId, taskId, wentTo } from "@kiwi/core/state.ts";
 import { bareHandleNote } from "../handles.ts";
 import { args, opt, unexpectedOptions } from "../args.ts";
@@ -369,6 +370,8 @@ export const messageCommands: Record<string, Command> = {
       const digestNote = () => {
         if (!named.length) process.stderr.write("kiwi: this holds nothing up, so it goes to the person's digest, not Needs you; name the task or message it holds with --holds T7,#18\n");
       };
+      if ((opt.step || opt.handoff !== undefined) && (opt.check ?? opt.decider ?? opt.artifact ?? opt.replaces) !== undefined)
+        return yield* die("--check goes on a decision with --option, not on a step or a handoff");
       const stepFlags = ["do", "run", "expect", "link", "why", "needs-person"] as const;
       if (!opt.step && stepFlags.some((f) => opt[f] !== undefined)) return yield* die(`--${stepFlags.find((f) => opt[f] !== undefined)} goes with --step`);
       if (opt.step) {
@@ -405,7 +408,9 @@ export const messageCommands: Record<string, Command> = {
         for (const f of ["vendor", "expires", "wait"] as const) if (opt[f] !== undefined) return yield* die(`--${f} goes with --handoff URL`);
         const choices = opt.option?.map((o) => o.trim());
         if (choices && !wellFormedChoices(choices)) return yield* die(`--option takes ${CHOICES_MIN} to ${CHOICES_MAX} different answers, one line of up to ${CHOICE_MAX_LENGTH} characters each`);
-        const { seq, to, also } = yield* s.escalate(body, re, undefined, { ...(choices ? { choices } : {}), ...(task !== undefined ? { task } : {}), ...hold });
+        const check = checkOf(opt);
+        if (typeof check === "string") return yield* die(check);
+        const { seq, to, also } = yield* s.escalate(body, re, undefined, { ...(choices ? { choices } : {}), ...(task !== undefined ? { task } : {}), ...hold, ...(check ? { check } : {}) });
         digestNote();
         out(
           `escalated #${seq} to ${to.join(" and ")}${choices ? ` with ${choices.length} options` : ""}${heldText}${alsoAnswers(also)}; wait for their answer before acting on it (if it comes some other way, close it: kiwi ask-human --close ${seq} "why")`,
@@ -433,3 +438,21 @@ export const messageCommands: Record<string, Command> = {
       return yield* die(outcome === "failed" ? `the person couldn't finish the handoff #${seq}` : `no answer to the handoff #${seq} before it expired`, 4);
     }),
 };
+
+function checkOf(o: {
+  check?: string;
+  decider?: string;
+  artifact?: string;
+  replaces?: string;
+}): { phase: CheckPhase; decider?: string; artifact: CheckArtifact; replaces?: number } | string | undefined {
+  if (o.check === undefined) return o.decider !== undefined || o.artifact !== undefined || o.replaces !== undefined ? "--decider, --artifact and --replaces go with --check pre-ship|post" : undefined;
+  const phase = CHECK_PHASES.find((p) => p === o.check);
+  if (!phase) return `--check takes pre-ship or post, not "${o.check}"`;
+  if (o.artifact === undefined) return `a check needs ${ARTIFACT_USAGE}`;
+  const artifact = parseArtifact(o.artifact);
+  if (typeof artifact === "string") return artifact;
+  const decider = o.decider?.trim().replace(/^@/, "");
+  const replaces = o.replaces === undefined ? undefined : Number(o.replaces.trim().replace(/^#/, ""));
+  if (replaces !== undefined && !(Number.isSafeInteger(replaces) && replaces > 0)) return `--replaces takes the check it replaces, like #42, not "${o.replaces}"`;
+  return { phase, ...(decider ? { decider } : {}), artifact, ...(replaces !== undefined ? { replaces } : {}) };
+}

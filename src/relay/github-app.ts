@@ -113,7 +113,7 @@ export function releaseFrom(tag: string, at: number, commits: readonly Commit[])
 
 const RELEASES_READ = 5;
 
-const PR_FIELDS = "number title url state mergeCommit { oid } headRefName headRefOid additions deletions changedFiles author { login } updatedAt closedAt";
+const PR_FIELDS = "number title url state mergeCommit { oid } headRefName headRefOid additions deletions changedFiles author { login } updatedAt closedAt mergedAt";
 const CHECK_FIELDS = "commits(last: 1) { nodes { commit { checkSuites(first: 20) { nodes { checkRuns(first: 50) { nodes { databaseId name status conclusion url startedAt completedAt } } } } } } }";
 const ISSUE_FIELDS = "number title url state stateReason author { login } updatedAt closedAt";
 const NEWEST = "orderBy: { field: UPDATED_AT, direction: DESC }";

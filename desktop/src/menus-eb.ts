@@ -1,9 +1,9 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { ApplicationMenu, BuildConfig, PATHS, Tray, Utils } from "electrobun/main";
 
 import { appMenu, menuAction, trayItems, type MenuAction } from "./app-menus.ts";
-import { trayTitle, unreadLabel, unreadSvg } from "./tray-unread.ts";
+import { trayTitle, unreadFile, unreadLabel, unreadSvg } from "./tray-unread.ts";
 import type { UpdateState } from "./updater.ts";
 
 export function setAppMenu(on: (a: MenuAction) => void): void {
@@ -43,14 +43,16 @@ export function createTray(on: (a: MenuAction) => void, update: UpdateState | nu
     const a = menuAction(e);
     if (a) on(a);
   });
+  const written = new Set<string>();
   const unreadImage = (label: string): string => {
     if (mac) return path.join(assets, "trayUnreadTemplate@2x.png");
     if (!linux) return plain;
     const dir = path.join(Utils.paths.userCache, "tray");
-    const file = path.join(dir, `unread-${label === "9+" ? "many" : label}.svg`);
-    if (!existsSync(file)) {
+    const file = path.join(dir, unreadFile(label));
+    if (!written.has(file)) {
       mkdirSync(dir, { recursive: true });
       writeFileSync(file, unreadSvg(readFileSync(plain, "utf8"), label));
+      written.add(file);
     }
     return file;
   };

@@ -34,6 +34,8 @@ export const taskCommands: Record<string, Command> = {
           if (unfiled) return yield* die(unfiled);
           const unspecced = taskSpecRefusal(now, { re, from });
           if (unspecced) return yield* die(unspecced);
+          if (opt.start && opt.owner !== undefined && opt.owner.trim() !== s.me) return yield* die("--start takes the task yourself: leave out --owner");
+          const started = (id: number) => (opt.start ? s.taskClaim(id).pipe(Effect.map((st) => `, ${taskStateWord(st.tasks.get(id)!)} @${s.me}`)) : Effect.succeed(""));
           const given = [opt.body !== undefined, opt.file !== undefined, opt.detail !== undefined].filter(Boolean).length;
           if (given > 1) return yield* die('give the task\'s body once: --body "…", --file spec.md or --detail "…"');
           const body = opt.file !== undefined ? (yield* readText(opt.file)).trim() || (yield* die(`${opt.file} is empty`)) : (opt.body ?? opt.detail);
@@ -49,13 +51,14 @@ export const taskCommands: Record<string, Command> = {
               ...(from !== undefined ? { from } : {}),
               ...landing,
             });
+            const how = yield* started(made.id);
             const { state: after } = yield* s.state();
-            return out(`added ${taskId(made.id)} from ${made.issue}: ${made.title}\n${issueLinkText(after)}`);
+            return out(`added ${taskId(made.id)} from ${made.issue}: ${made.title}${how}\n${issueLinkText(after)}`);
           }
           const title = opt.file !== undefined ? args.slice(2).join(" ") : yield* text(2);
           if (!title.trim())
             return yield* die(
-              'usage: kiwi task add "title" --ask N|--from T…|--issue N [--body "the spec" | --file spec.md] [--owner NAME] [--review NAME|any] [--then merge|release:tag|release:npm:PKG@RANGE|run|none] [--lander NAME]',
+              'usage: kiwi task add "title" --ask N|--from T…|--issue N [--body "the spec" | --file spec.md] [--owner NAME | --start] [--review NAME|any] [--then merge|release:tag|release:npm:PKG@RANGE|run|none] [--lander NAME]',
             );
           for (const gone of ["after", "needs"] as const)
             if (opt[gone] !== undefined) process.stderr.write(`kiwi: --${gone} is gone (tasks don't wait on or match anything now); put it in the body (--body)\n`);
@@ -69,7 +72,7 @@ export const taskCommands: Record<string, Command> = {
             ...landing,
           });
           const like = similarOpenTasks(before, title).map((t) => t.id);
-          const lines = [`added ${taskId(id)}`];
+          const lines = [`added ${taskId(id)}${yield* started(id)}`];
           if (like.length) lines.push(looksLikeLine(like));
           const { state: added } = yield* s.state();
           const ask = added.tasks.get(id)?.ask;

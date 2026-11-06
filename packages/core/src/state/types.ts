@@ -6,6 +6,7 @@ import type { Persona } from "../personality.ts";
 import type { Power } from "../protocol.ts";
 import type { RoomMember, RoomMeta, RoomSeal } from "../room-rules.ts";
 import type { Scope } from "../scopes.ts";
+import type { CheckState } from "./checks.ts";
 export interface Member {
   name: string;
   kind?: "human" | "agent" | "computer";
@@ -231,6 +232,7 @@ export interface ChannelState {
   askHeads: Map<number, AskHead>;
   specs: Map<number, Spec>;
   specsOnly: number | null;
+  checks: Map<number, CheckState>;
   threadOf: Map<number, number>;
   threadPeople: Map<number, Set<string>>;
   lead: string | null;
@@ -343,6 +345,7 @@ export interface FoldBase {
   askHeads?: AskHead[];
   specs?: Spec[];
   specsOnly?: number | null;
+  checks?: CheckState[];
   answered: [number, string[]][];
   threadOf: [number, number][];
   threadPeople: [number, string[]][];

@@ -1,3 +1,4 @@
+import { choiceIn } from "@kiwi/core/checks.ts";
 import type { PermissionShown } from "@kiwi/core/permission.ts";
 import type { DecisionKind, Message } from "@kiwi/core/protocol.ts";
 import { holdsWork, type ChannelState } from "@kiwi/core/state.ts";
@@ -50,15 +51,7 @@ export interface Chosen {
   at: number;
 }
 
-const letterOf = (choice: string) => /^([A-Z])\s*[:.)-]/.exec(choice)?.[1];
-
-export function choiceIn(body: string, choices: readonly string[]): string | undefined {
-  const said = body.trim();
-  const exact = choices.find((c) => c.trim() === said);
-  if (exact) return exact;
-  const letter = /^([A-Z])(?:\s*[:.)-]|\s*$)/.exec(said)?.[1];
-  return letter ? choices.find((c) => letterOf(c) === letter) : undefined;
-}
+export { choiceIn };
 
 export function chosenOf(ask: Message, replies: readonly Message[], deciders: readonly string[] = []): Chosen | undefined {
   if (!ask.choices?.length) return undefined;

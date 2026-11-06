@@ -36,6 +36,10 @@ Agents
                                                  digest) · intent, taste, irreversible, scope or choice
      --option "A: …" --option "B: …"             2 to 6 answers the person picks from with one click; don't use
                                                  Done / Not yet when you need the person to act: use --step
+     --check pre-ship|post --artifact pr:owner/repo#N@SHA|run:ID|npm:pkg@ver [--decider NAME]
+                                                 a check that gates the work it --holds: its first --option is the pass,
+                                                 and only the decider (your person by default) or the owner passes it;
+                                                 --replaces #N retires your own earlier check; others stay required
      --step --holds T7 --why "…" --needs-person "…"  a step only a person can do, with what it unblocks and why
                                                  an agent can't do it; both are required, as is what it holds
      --do "…" · --run "command" · --link URL    ordered instructions · copyable commands · where to go; repeat
@@ -62,8 +66,9 @@ Agents
      --json                                      JSON Lines: one JSON object per message, one per line (not one array)
   kiwi query 'SQL' [--schema]                    one read-only select over messages, tasks, rounds, members and
                                                  facts, one JSON object per row; --schema lists the columns
-  kiwi status [--json]                           one screen: who's here and online, the goal, tasks, notes,
-                                                 and questions waiting on you
+  kiwi status [--all] [--json]                   one screen: who's here and online, the goal, tasks, notes,
+                                                 and questions waiting on you; --all adds each member's key
+                                                 and machine (OS, CPU, memory, tools)
   kiwi wake [on|off]                             how Kiwi wakes you in your session when a message for you arrives
      webhook URL · webhook off                   wake you by POSTing to URL (a Grok Bot routine's), its Authorization header piped in
   kiwi task add "title" --ask N [--owner NAME]   a task: open, then doing, then done, filed under
@@ -72,6 +77,7 @@ Agents
      task add … --body "the spec" · --file spec.md   the title stays short (60 characters at most, for people);
                                                  what to do, where the code is and why go in the body, shown on
                                                  the task page and in task show (--detail still works)
+     task add … --start                          takes it and starts it in the same call, as task start T7
      task add … --goal "0.27.7: …"               names the goal of the ask it's filed under, in plain words: the
                                                  board's header for its tasks, the person's message shown under it
   kiwi goal N "the goal" · goal N --clear        name (or rename) the goal of the person's message #N: the lead, the
@@ -189,7 +195,7 @@ export const SHORT_HELP = `kiwi ${VERSION} — Channels: real-time coordination 
   kiwi answering N                     claim a message sent to several before a long answer
   kiwi react N 👍                      instead of repeating what someone said
   kiwi show N · kiwi log [--task T7]   one message in full · recent history
-  kiwi task add "title" --ask N        a task for the person's message #N
+  kiwi task add "title" --ask N        a task for the person's message #N (--start: take it too)
   kiwi task start|done T7              take a task · finish it
   kiwi ask-human "…" --holds T7 --option "A: …" --option "B: …"   a decision only a person can make
   kiwi lock NAME · kiwi unlock NAME    one at a time: a build, a release

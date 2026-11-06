@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { trayTitle, unreadLabel, unreadSvg } from "../desktop/src/tray-unread.ts";
+import { trayTitle, unreadFile, unreadLabel, unreadSvg } from "../desktop/src/tray-unread.ts";
 
 const assets = join(import.meta.dir, "..", "desktop", "assets");
 const base = readFileSync(join(assets, "channels-tray-symbolic.svg"), "utf8");
@@ -29,6 +29,20 @@ describe("the tray's unread mark (#1746)", () => {
     expect(svg).toContain(">3</text>");
     expect(unreadSvg(base, "9+")).toContain(">9+</text>");
     expect(() => unreadSvg("not an svg", "1")).toThrow("the tray icon isn't an SVG");
+  });
+
+  test("each unread file is named -symbolic, so Electrobun sends it by name and KDE recolors it for the panel (#420)", () => {
+    const symbolic = /^[^/]+-symbolic\.svg$/;
+    expect(unreadFile("3")).toBe("channels-tray-unread-3-symbolic.svg");
+    expect(unreadFile("9+")).toBe("channels-tray-unread-many-symbolic.svg");
+    expect(["1", "9", "9+"].map(unreadFile).every((name) => symbolic.test(name))).toBe(true);
+  });
+
+  test("the count is centred by its own offset, since KDE's SVG renderer ignores dominant-baseline", () => {
+    const svg = unreadSvg(base, "3");
+    expect(svg).not.toContain("dominant-baseline");
+    expect(svg).toContain('<text x="70" y="39"');
+    expect(unreadSvg(base, "9+")).toContain('<text x="70" y="37"');
   });
 
   test("the Mac has its unread template next to the plain one, the @2x files the tray loads", () => {
