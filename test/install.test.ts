@@ -221,6 +221,66 @@ describe("the installer's download", () => {
     }
   });
 
+  test("an xz too old for the release's filters falls back to the .gz, saying so", () => {
+    const dir = sandbox(["gz", "xz"]);
+    try {
+      writeFileSync(join(dir, "xz"), `#!/bin/sh\necho "xz: Unsupported filter chain or filter options" >&2\nexit 1\n`);
+      chmodSync(join(dir, "xz"), 0o755);
+      const r = install(dir, []);
+      expect(r.exitCode).toBe(0);
+      expect(r.stderr.toString()).toContain("taking the .gz instead");
+      expect(fetched(dir)).toEqual([expect.stringMatching(/\.xz$/), expect.stringMatching(/\.gz$/)]);
+      expect(readFileSync(join(dir, "bin", "kiwi"), "utf8")).toBe(readFileSync(join(dir, "fake-kiwi"), "utf8"));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("an .xz that can't be unpacked, with no .gz to fall back on, isn't installed", () => {
+    const dir = sandbox(["xz"]);
+    try {
+      writeFileSync(join(dir, "xz"), `#!/bin/sh\necho "xz: Unsupported filter chain or filter options" >&2\nexit 1\n`);
+      chmodSync(join(dir, "xz"), 0o755);
+      const r = install(dir, []);
+      expect(r.exitCode).not.toBe(0);
+      expect(r.stderr.toString()).toContain("Unsupported filter chain");
+      expect(r.stderr.toString()).toContain("no .gz to fall back on");
+      expect(existsSync(join(dir, "bin", "kiwi"))).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("without xz, macOS's compression_tool unpacks the .xz", () => {
+    if (process.platform !== "linux") return;
+    const dir = sandbox(["gz", "xz"]);
+    try {
+      writeFileSync(join(dir, "compression_tool"), `#!/bin/sh\necho "$*" >> "${dir}/unpacked"\nwhile IFS= read -r line; do printf '%s\\n' "$line"; done < "${dir}/fake-kiwi"\n`);
+      chmodSync(join(dir, "compression_tool"), 0o755);
+      const r = bare(dir, []);
+      expect(r?.exitCode).toBe(0);
+      expect(fetched(dir)).toEqual([expect.stringMatching(/\.xz$/)]);
+      expect(readFileSync(join(dir, "unpacked"), "utf8").trim()).toMatch(/^-decode -a lzma -i .*\/kiwi-[a-z]+-[a-z0-9]+\.xz$/);
+      expect(readFileSync(join(dir, "bin", "kiwi"), "utf8")).toBe(readFileSync(join(dir, "fake-kiwi"), "utf8"));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("macOS's compression_tool reads an .xz packed with the ARM64 filter, as the release packs it", () => {
+    if (process.platform !== "darwin") return;
+    const dir = mkdtempSync(join(tmpdir(), "kiwi-install-unxz-"));
+    try {
+      const packed = "/Td6WFoAAATm1rRGBMEVwAIKACEBHAAAAAAAAJ4XMQ3gAT8ADV0ANZpLVTCUYrSDAdIAAAAAAACVrZkR/gLWXAABMcACAAAAhSBvT7HEZ/sCAAAAAARZWg==";
+      writeFileSync(join(dir, "kiwi.xz"), Buffer.from(packed, "base64"));
+      const r = Bun.spawnSync(["/usr/bin/compression_tool", "-decode", "-a", "lzma", "-i", join(dir, "kiwi.xz")], { stdout: "pipe", stderr: "pipe" });
+      expect(r.stderr.toString()).toBe("");
+      expect(r.stdout.toString()).toBe("kiwi ".repeat(64));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("a compressed download that doesn't match its checksum isn't installed", () => {
     const dir = sandbox(["gz"]);
     try {

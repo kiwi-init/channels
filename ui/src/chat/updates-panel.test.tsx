@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { renderToStaticMarkup } from "react-dom/server"
 
-import { Updates } from "~/chat/events"
+import { Panel } from "~/chat/updates-panel"
 import type { Channel, Message, Task } from "~/model"
 import { AppContext, type Ctx } from "~/nav"
 import { wrote } from "~/words"
@@ -31,7 +31,7 @@ const channel = {
 const render = (run: Message[]): string =>
   renderToStaticMarkup(
     <AppContext.Provider value={{ app: { channel }, go: () => {} } as unknown as Ctx}>
-      <Updates channel={channel} runs={[run]} here={null} jump={run[0]!.seq} />
+      <Panel channel={channel} runs={[run]} here={null} target={run[0]!.seq} onClose={() => {}} />
     </AppContext.Provider>
   )
 

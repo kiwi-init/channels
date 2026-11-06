@@ -842,7 +842,8 @@ jobs:
           cd dist
           for f in kiwi-*; do
             gzip -9 -n -k "$f"
-            xz -9 -T0 -k "$f"
+            case "$f" in *-arm64) bcj=--arm64 ;; *) bcj=--x86 ;; esac
+            xz "$bcj" --lzma2=preset=9 -T0 -k "$f"
           done
           bun ../scripts/cli-downloads.ts .
 

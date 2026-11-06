@@ -1,5 +1,4 @@
 import { isRunning, type GithubNote } from "@kiwi/core/protocol.ts"
-import { sameDay } from "~/kit/time"
 import type { Message, Task } from "~/model"
 
 export interface GithubPart {
@@ -20,22 +19,6 @@ export type EventLine =
   | { kind: "github"; parts: GithubPart[]; updates: number; list: Message[] }
 
 const FOLD_AT = 3
-
-const isUpdate = (m: Message): boolean => !!m.system && !m.leftOut
-
-export function splitUpdates(list: readonly Message[]): { talk: Message[]; runs: Message[][] } {
-  const talk: Message[] = []
-  const runs: Message[][] = []
-  let run: Message[] | null = null
-  for (const m of list) {
-    if (!isUpdate(m)) {
-      talk.push(m)
-      run = null
-    } else if (run?.[0] && sameDay(run[0].at, m.at)) run.push(m)
-    else runs.push((run = [m]))
-  }
-  return { talk, runs }
-}
 
 export function linesOf(run: readonly Message[], tasks: ReadonlyMap<number, Task>): EventLine[] {
   const out: (EventLine | null)[] = []
