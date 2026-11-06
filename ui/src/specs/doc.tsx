@@ -5,10 +5,11 @@ import { Body } from "~/chat/body"
 import { type Words, wordsPlain, wordsRaw, wrote } from "~/words"
 import { Avatar, cx } from "~/kit/bits"
 import { clock } from "~/kit/time"
-import type { Channel, Spec, Where } from "~/model"
+import type { Channel, Spec } from "~/model"
 import { useAct } from "~/nav"
 import { nickname } from "~/names"
 import { commentsOf, faceOf, lineDiff, quoteIn, type Comment } from "~/specs/read"
+import { CommentBox } from "~/specs/comment-box"
 
 const WIDE_PX = 940
 const TALK_SHOWN = 3
@@ -16,17 +17,6 @@ const DIFF_CONTEXT = 1
 const BLOCKS = "p, li, h1, h2, h3, h4, h5, h6, td, th, pre"
 
 const openImage = (url: string) => void window.open(url, "_blank", "noopener,noreferrer")
-
-function whereOf(channel: Channel, ask: number): Where {
-  return channel.messages.find((m) => m.seq === ask)?.where ?? { kind: "room", room: "general" }
-}
-
-function quoted(quote: string, text: string): string {
-  return `${quote
-    .split("\n")
-    .map((l) => `> ${l}`)
-    .join("\n")}\n\n${text.trim()}`
-}
 
 function shownText(spec: Spec): Words {
   const lines = wordsRaw(spec.text).split("\n")
@@ -259,85 +249,6 @@ function CommentItem({
       )}
       <Body text={wrote(c.text)} seq={c.m.seq} names={names} tasks={tasks} onImage={openImage} onMessage={() => {}} />
     </article>
-  )
-}
-
-function CommentBox({ channel, spec, quote, onDone }: { channel: Channel; spec: Spec; quote?: string; onDone?: () => void }) {
-  const { actions } = useAct()
-  const [text, setText] = useState("")
-  const box = useRef<HTMLTextAreaElement>(null)
-  useEffect(() => {
-    if (quote) box.current?.focus()
-  }, [quote])
-  useLayoutEffect(() => {
-    const el = box.current
-    if (!el) return
-    el.style.height = "auto"
-    el.style.height = `${el.scrollHeight + el.offsetHeight - el.clientHeight}px`
-  }, [text])
-  const send = () => {
-    if (!text.trim()) return
-    actions.send(channel.code, whereOf(channel, spec.ask), quote ? quoted(quote, text) : text.trim(), { inThread: spec.ask })
-    setText("")
-    onDone?.()
-  }
-  const keys = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-      e.preventDefault()
-      send()
-    }
-    if (e.key === "Escape" && onDone) {
-      e.preventDefault()
-      onDone()
-    }
-  }
-  if (!quote)
-    return (
-      <div className="spec-box-new">
-        <textarea
-          ref={box}
-          className="textarea spec-box-text"
-          rows={1}
-          value={text}
-          placeholder="Comment"
-          title="Or select words in the spec to comment on them"
-          aria-label="Comment on the spec"
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={keys}
-        />
-        {text.trim() && (
-          <div className="spec-box-foot">
-            <button type="button" className="btn" onClick={send}>
-              Comment
-            </button>
-          </div>
-        )}
-      </div>
-    )
-  return (
-    <div className="spec-box-new is-anchored">
-      <p className="spec-comment-quote">{quote}</p>
-      <textarea
-        ref={box}
-        className="textarea spec-box-text"
-        rows={3}
-        value={text}
-        placeholder="Say what's off, or ask about it"
-        aria-label="Comment on the selected words"
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={keys}
-      />
-      <div className="spec-box-foot">
-        {onDone && (
-          <button type="button" className="btn is-quiet is-small" onClick={onDone}>
-            Cancel
-          </button>
-        )}
-        <button type="button" className="btn is-small" disabled={!text.trim()} onClick={send}>
-          Comment
-        </button>
-      </div>
-    </div>
   )
 }
 

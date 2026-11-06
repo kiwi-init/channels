@@ -11,6 +11,7 @@ import { withExcerpt } from "~/chat/quote"
 import { sayerAt } from "~/chat/doc/sayer"
 import { preview, useReplying } from "~/chat/reply"
 import { attached, composerKey, drafts, giveBack, tooLong, useGivenBack } from "~/chat/drafts"
+import { composing, sendsOn, sendTitle } from "~/chat/send-keys"
 import { STASH_SHOT, stashText, useStash } from "~/chat/stash"
 import { Avatar, cx, Dot, STATUS_WORDS } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
@@ -553,7 +554,7 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
               attach(images)
             }}
             onKeyDown={(e) => {
-              if (e.nativeEvent.isComposing || e.keyCode === 229) return
+              if (composing(e)) return
               if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === "s") {
                 e.preventDefault()
                 if (e.shiftKey) bringBack(0)
@@ -609,13 +610,13 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
                 replying?.set(null)
                 return
               }
-              if (e.key === "Enter" && (enterSends ? !e.shiftKey && !e.altKey : e.metaKey || e.ctrlKey)) {
+              if (sendsOn(e, enterSends)) {
                 e.preventDefault()
                 send()
               }
             }}
           />
-          <button type="submit" className={cx("send", ready && "is-ready")} aria-label={edit ? "Save" : "Send"} title={enterSends ? "Send (Enter)" : "Send (⌘ Enter)"} disabled={!ready}>
+          <button type="submit" className={cx("send", ready && "is-ready")} aria-label={edit ? "Save" : "Send"} title={sendTitle(enterSends)} disabled={!ready}>
             <Icon name="send" />
           </button>
         </div>
