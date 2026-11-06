@@ -1,7 +1,7 @@
 import type { ElectrobunConfig } from "electrobun";
 
 import pkg from "./package.json" with { type: "json" };
-import { RELEASE_ID, TEST_ID } from "./scripts/eb-bundle.ts";
+import { RELEASE_ID, TEST_ID } from "./scripts/bundle-ids.ts";
 import { JOIN_SCHEME } from "./src/deep-links.ts";
 
 const DEV_ID = `${RELEASE_ID}.dev`;

@@ -17,6 +17,7 @@ import { ago } from "~/kit/time"
 import { memberOf, type Channel, type Issue, type PullRequest } from "~/model"
 import { useApp, type GithubView as Kind } from "~/nav"
 import { wordsPlain } from "~/words"
+import { OutsideLink } from "~/kit/outside"
 
 const SHOWN = 8
 
@@ -180,9 +181,9 @@ function Nothing({ query, clear, what, icon, trouble }: { query: string; clear: 
       <Empty title={`Kiwi Channels isn't installed on ${trouble.owner}.`} icon="github">
         <p>GitHub tells only the Apps installed on a repo about its pull requests, checks and issues.</p>
         {trouble.install && (
-          <a className="btn is-small gh-empty-btn" href={trouble.install} target="_blank" rel="noreferrer">
+          <OutsideLink className="btn is-small gh-empty-btn" href={trouble.install}>
             Install Kiwi Channels on {trouble.owner}
-          </a>
+          </OutsideLink>
         )}
       </Empty>
     )
@@ -243,9 +244,9 @@ function Item({ on, url, label, open, issue, children }: { on: boolean; url: str
       <button type="button" className={cx("gh-row", issue && "is-issue")} aria-current={on || undefined} onClick={open}>
         {children}
       </button>
-      <a className="gh-out" href={url} target="_blank" rel="noreferrer noopener" aria-label={`${label} on GitHub`} title="Open on GitHub">
+      <OutsideLink className="gh-out" href={url} aria-label={`${label} on GitHub`} title="Open on GitHub">
         <GlyphIcon glyph={LinkSquare02Icon} size={14} />
-      </a>
+      </OutsideLink>
     </li>
   )
 }

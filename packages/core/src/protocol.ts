@@ -241,6 +241,8 @@ export const TASK_STATES = ["todo", "doing", "review", "landing", "done"] as con
 const OLD_TASK_STATES = ["blocked", "cancelled"] as const;
 
 export type Landing = "merge" | "release:tag" | `release:npm:${string}` | "run" | "none";
+const MERGERS = ["agents", "people"] as const;
+export type Merger = (typeof MERGERS)[number];
 const NPM_LANDING_RE = /^release:npm:(@[a-z0-9][\w.-]*\/)?[a-z0-9][\w.-]*@\S+$/;
 export const isLanding = (x: unknown): x is Landing => typeof x === "string" && (x === "merge" || x === "release:tag" || x === "run" || x === "none" || NPM_LANDING_RE.test(x));
 export const hasLanding = (then: Landing | undefined): boolean => then !== undefined && then !== "none";
@@ -286,6 +288,7 @@ export type Event =
       then?: Landing;
       lander?: string | null;
       close?: string;
+      runs?: number[];
     }
   | { op: "task.first"; task: number }
   | { op: "task.delete"; task: number; why?: string }
@@ -347,6 +350,7 @@ export type Event =
   | { op: "github.write.set"; on: boolean }
   | { op: "branch.prefix.set"; prefix: string | null }
   | { op: "landing.set"; then: Landing | null }
+  | { op: "merges.set"; by: Merger }
   /** The goal a person's message #ask stands for, in plain words, as its tasks' header (null: their own words again). The lead, the owner or who asked names it. */
   | { op: "ask.name"; ask: number; name: string | null }
   | { op: "ask.close"; ask: number; why?: string }
@@ -883,7 +887,9 @@ export interface NewerEvent {
 
 export type WirePayload = Omit<Payload, "ev"> & { ev?: Event | NewerEvent };
 
-export const EVENT_OPS_VERSION = 20;
+export const EVENT_OPS_VERSION = 21;
+
+export const REVIEW_CHECK = "kiwi/review";
 
 export const opsVersion = (x: unknown): x is number => Number.isSafeInteger(x) && (x as number) >= 1 && (x as number) <= 10_000;
 const NEWER_OP_RE = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/;
@@ -1084,6 +1090,7 @@ function eventCheck(ev: unknown): boolean | null {
         (e.checkpoint === undefined || (e.checkpoint === true && str(e.note, CHECKPOINT_MAX_LENGTH) && e.note.trim().length > 0)) &&
         opt(e.then, isLanding) &&
         (e.lander === undefined || e.lander === null || str(e.lander, 64)) &&
+        (e.runs === undefined || (e.verdict === "approved" && Array.isArray(e.runs) && e.runs.length <= 50 && e.runs.every((r) => Number.isSafeInteger(r) && (r as number) > 0))) &&
         (e.close === undefined || (e.state === "done" && e.verdict === undefined && str(e.close, 500) && e.close.trim().length > 0)) &&
         opt(e.proof, (x): x is { url: string; label?: string } => {
           const p = x as { url?: unknown; label?: unknown } | null;
@@ -1218,6 +1225,8 @@ function eventCheck(ev: unknown): boolean | null {
       return e.prefix === null || (typeof e.prefix === "string" && BRANCH_PREFIX_RE.test(e.prefix));
     case "landing.set":
       return e.then === null || isLanding(e.then);
+    case "merges.set":
+      return (MERGERS as readonly unknown[]).includes(e.by);
     case "react":
       return n(e.seq) && (e.seq as number) > 0 && (e.emoji === null || wellFormedReaction(e.emoji));
     case "msg.edit":

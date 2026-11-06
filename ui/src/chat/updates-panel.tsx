@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "
 
 import { linesOf, type EventLine, type TaskRun } from "~/chat/fold-events"
 import { cx, Dot, statusWord } from "~/kit/bits"
+import { OutsideLink } from "~/kit/outside"
 import { clock, day, sameDay } from "~/kit/time"
 import type { Channel, Message, Task } from "~/model"
 import { useApp } from "~/nav"
@@ -165,9 +166,9 @@ function TaskRow({ channel, run, task }: { channel: Channel; run: TaskRun; task:
       {task.owner && <span>· {nickname(channel, task.owner)}</span>}
       <span className={cx("sys-state", `is-${task.cancelled ? "cancelled" : task.status}`)}>· {statusWord(task)}</span>
       {task.pr && (
-        <a className="sys-task" href={task.pr.url} target="_blank" rel="noreferrer">
+        <OutsideLink className="sys-task" href={task.pr.url}>
           #{task.pr.number}
-        </a>
+        </OutsideLink>
       )}
     </p>
   )
@@ -186,9 +187,9 @@ function GithubRow({ line }: { line: Extract<EventLine, { kind: "github" }> }) {
             {i === 0 ? " · " : ", "}
             {p.ref &&
               (p.url ? (
-                <a className="sys-task" href={p.url} target="_blank" rel="noreferrer">
+                <OutsideLink className="sys-task" href={p.url}>
                   {p.ref}
-                </a>
+                </OutsideLink>
               ) : (
                 <span className="sys-task">{p.ref}</span>
               ))}

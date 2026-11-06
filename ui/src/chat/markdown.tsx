@@ -9,7 +9,7 @@ import { indexTaskItems, markInlineImages } from "react-native-enriched-markdown
 import type { ASTNode, RendererCallbacks } from "react-native-enriched-markdown/lib/typescript/src/web/types"
 import { compareCells, nextSort, sanitizeMarkdownUrl, type SortDir } from "@kiwi/app/markdown.ts"
 import { messageAt, messageHash } from "@kiwi/core/message-link.ts"
-import { bridge } from "@kiwi/secrets/secrets.ts"
+import { openOutside } from "~/kit/outside"
 
 import { MermaidBlock } from "~/chat/mermaid"
 import { keepParsed, parsedFor } from "~/chat/parsed"
@@ -403,9 +403,7 @@ export default function Markdown({ markdown, onMention, onTask, onMessage, onIma
         return
       }
       if (!sanitizeMarkdownUrl(url) || (!/^https?:\/\//i.test(url) && !url.startsWith("mailto:"))) return
-      const b = bridge()
-      if (b) void b.openExternal(url).catch(() => {})
-      else window.open(url, "_blank", "noopener,noreferrer")
+      openOutside(url)
     },
     [onMention, onTask, onMessage]
   )

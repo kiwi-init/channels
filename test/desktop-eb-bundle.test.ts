@@ -3,7 +3,8 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { bundleProblems, keyChannelProblems, RELEASE_ID, shortVersion, testBuildProblems, TEST_ID, urlSchemeProblems, versionProblems } from "../desktop/scripts/eb-bundle.ts";
+import { RELEASE_ID, TEST_ID } from "../desktop/scripts/bundle-ids.ts";
+import { bundleProblems, keyChannelProblems, shortVersion, testBuildProblems, urlSchemeProblems, versionProblems } from "../desktop/scripts/eb-bundle.ts";
 
 const table = "var internalRpcHandlers = { message: { webviewTagExecuteJavascript: (params) => {} } };";
 

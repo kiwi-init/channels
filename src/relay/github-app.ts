@@ -1,8 +1,8 @@
+import { REVIEW_CHECK } from "@kiwi/core/protocol.ts";
 import * as Context from "effect/Context";
 import { GITHUB_CLOSED_KEEP_MS, MAX_RELEASE_COMMITS, MAX_REQUIRED_CHECKS, MERGE_METHODS, REPO_RE, type GithubNote, type GithubSyncList, type MergeMethod } from "@kiwi/core/protocol.ts";
 import { syncNotes } from "./github.ts";
 
-export const REVIEW_CHECK = "kiwi/review";
 const MAX_DIFF = 2 << 20;
 
 const MAX_ISSUE_BODY = 8000;
@@ -162,7 +162,7 @@ export type GithubReply<T> = { ok: true; value: T } | { ok: false; status: numbe
 
 export interface GithubAppApi {
   diff(repo: string, sha: string): Promise<GithubReply<{ diff: string; base: string; truncated: boolean }>>;
-  check(repo: string, sha: string, c: { conclusion: "success" | "failure"; title: string; summary: string }): Promise<GithubReply<{ url: string | null }>>;
+  check(repo: string, sha: string, c: { conclusion: "success" | "failure" | null; title: string; summary: string }): Promise<GithubReply<{ url: string | null }>>;
   comment(repo: string, number: number, body: string): Promise<GithubReply<{ url: string | null }>>;
   issue(repo: string, number: number): Promise<GithubReply<GithubIssueInfo>>;
   closeIssue(repo: string, number: number, reason: "completed" | "not_planned", body: string): Promise<GithubReply<{ url: string | null }>>;
@@ -309,8 +309,14 @@ export function githubAppFrom(opts: { appId?: string | null; privateKey?: string
       const res = await get(`${api}/repos/${repo}/check-runs`, {
         method: "POST",
         headers: { ...headers(t.value), "content-type": "application/json" },
-        body: JSON.stringify({ name: REVIEW_CHECK, head_sha: sha, status: "completed", conclusion: c.conclusion, output: { title: c.title, summary: c.summary } }),
+        body: JSON.stringify({
+          name: REVIEW_CHECK,
+          head_sha: sha,
+          ...(c.conclusion ? { status: "completed", conclusion: c.conclusion } : { status: "in_progress" }),
+          output: { title: c.title, summary: c.summary },
+        }),
       });
+      if (res.status === 403 || res.status === 422) return { ok: false, status: res.status, error: `GitHub won't take the check from the App (${res.status}): does it have Checks write?` };
       if (!res.ok) return fail(res, "the check");
       return { ok: true, value: { url: ((await res.json()) as { html_url?: string }).html_url ?? null } };
     },
