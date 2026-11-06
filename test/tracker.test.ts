@@ -289,8 +289,9 @@ describe("the body", () => {
     expect(plain("  Thanks @someone-else for *this* <b>[x](y)</b> `z` R&D, not me@mail.com ")).toBe("Thanks `@someone-else` for \\*this\\* \\<b\\>\\[x\\](y)\\</b\\> \\`z\\` R\\&D, not me@mail.com");
   });
 
-  test("the model's why loses links, mentions and markdown, and is cut on a word", () => {
-    expect(brief("See https://evil.example/x and ping @jow <img src=x>")).toBe("See and ping `@jow` \\<img src=x\\>");
+  test("the model's why loses links, HTML tags, mentions and markdown, and is cut on a word", () => {
+    expect(brief("See https://evil.example/x and ping @jow <img src=x> a gap.</br>")).toBe("See and ping `@jow` a gap.");
+    expect(brief("when a < b and c > d, *bold*")).toBe("when a \\< b and c \\> d, \\*bold\\*");
     const long = brief(`${"word ".repeat(60)}end`);
     expect(long.length).toBeLessThanOrEqual(200);
     expect(long).toEndWith("word…");

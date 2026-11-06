@@ -190,6 +190,7 @@ export function brief(s: string): string {
     cut(
       s
         .replace(/https?:\/\/\S+/g, "")
+        .replace(/<\/?[a-z][^>]*>/gi, " ")
         .replace(/\s+/g, " ")
         .trim(),
       200,
