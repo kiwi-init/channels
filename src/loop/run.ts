@@ -63,17 +63,45 @@ const hooksFirst = (recipe: Recipe) =>
     return wrote ? say(`installed ${recipe.label}'s Kiwi hooks: ${wrote}`) : Effect.void;
   });
 
+const debugTty = (tag: string) => {
+  const tty = Bun.spawnSync(["ps", "-o", "tty=", "-p", String(process.pid)], { stdout: "pipe", stderr: "ignore" })
+    .stdout.toString()
+    .trim();
+  const ps = Bun.spawnSync(["ps", "-o", "pid=,ppid=,pgid=,tpgid=,stat=,command=", "-t", tty], { stdout: "pipe", stderr: "ignore" })
+    .stdout.toString()
+    .trim()
+    .split("\n")
+    .map((l) => l.slice(0, 120))
+    .join(" ;; ");
+  const stty = Bun.spawnSync(["stty", "-a"], { stdin: "inherit", stdout: "pipe", stderr: "pipe" });
+  process.stderr.write(`kiwi loop: debug: ${tag} tty=${tty} isig=${/\b-?isig\b/.exec(stty.stdout.toString())?.[0] ?? stty.stderr.toString().trim()} procs=${ps}\n`);
+};
+
 const pauseFor = (ms: number, stop: { asked: boolean }) =>
   Effect.gen(function* () {
     const until = Date.now() + ms;
-    while (!stop.asked && Date.now() < until) yield* Effect.sleep(250);
+    let next = 0;
+    while (!stop.asked && Date.now() < until) {
+      if (Date.now() >= next) {
+        debugTty("pause");
+        next = Date.now() + 3_000;
+      }
+      yield* Effect.sleep(250);
+    }
   });
 
 const look = (s: AgentSession) =>
   Effect.gen(function* () {
     const { messages, state } = yield* s.state();
-    const forMe = (yield* s.unreadAt(state, messages, { forMe: true })).unread + pendingDocWakes(s.alias, s.me).length;
-    return { state, forMe };
+    const at = yield* s.unreadAt(state, messages, { forMe: true });
+    const forMe = at.unread + pendingDocWakes(s.alias, s.me).length;
+    const dbg = at.seqs
+      .map((q) => {
+        const m = messages.find((x) => x.seq === q);
+        return `#${q} ${m?.kind}/${m?.ev?.op ?? "-"} from=${m?.from} to=${JSON.stringify(m?.to)} ${JSON.stringify((m?.body ?? "").slice(0, 60))}`;
+      })
+      .join(" | ");
+    return { state, forMe, dbg: `cursor=${at.cursor} head=${state.head} docWakes=${pendingDocWakes(s.alias, s.me).length} unread=[${dbg}]` };
   });
 
 function childEnv(): Record<string, string> {
@@ -115,6 +143,7 @@ const cycles = (seat: LoopSeat, stop: { asked: boolean; busy: boolean }): Effect
         seen = yield* look(s);
         work = nextWork(seen.state, seat.me, seen.forMe, setAside(claims));
       }
+      yield* say(`debug: work=${work ? workName(work) : "none"} asked=${stop.asked} ${seen.dbg}`);
       if (!work || stop.asked) break;
       if (work.kind === "reviewing" && seen.state.tasks.get(work.task)?.review === "*") {
         const taken = yield* claimReview(s, seat.me, work);
@@ -231,6 +260,7 @@ function session(
     });
     spawned(finish, mode);
     yield* say(`${workName(first)}: started ${recipe.label} (pid ${child.pid})`);
+    for (const at of [300, 1_200, 2_500]) setTimeout(() => !exited && debugTty(`session+${at}ms`), at);
 
     let found: Started | null = null;
     const strays = new Set<string>();
@@ -317,6 +347,7 @@ function ownsTerminal(): boolean {
 }
 
 function terminalMode(): string | null {
+  process.stderr.write(`kiwi loop: debug: terminalMode owns=${ownsTerminal()}\n`);
   if (!ownsTerminal()) return null;
   const saved = Bun.spawnSync(["stty", "-g"], { stdin: "inherit", stdout: "pipe", stderr: "ignore" });
   const mode = saved.stdout.toString().trim();
@@ -324,7 +355,14 @@ function terminalMode(): string | null {
 }
 
 function restoreTerminal(mode: string | null): void {
-  if (mode && ownsTerminal()) Bun.spawnSync(["stty", mode], { stdin: "inherit", stdout: "ignore", stderr: "ignore" });
+  const owns = ownsTerminal();
+  const ps = Bun.spawnSync(["ps", "-o", "pid=,pgid=,tpgid=,stat=", "-p", String(process.pid)], { stdout: "pipe", stderr: "ignore" })
+    .stdout.toString()
+    .trim();
+  process.stderr.write(`kiwi loop: debug: restoreTerminal mode=${mode ? "set" : "null"} owns=${owns} ps=${ps}\n`);
+  if (mode && owns) Bun.spawnSync(["stty", mode], { stdin: "inherit", stdout: "ignore", stderr: "ignore" });
+  const after = Bun.spawnSync(["stty", "-a"], { stdin: "inherit", stdout: "pipe", stderr: "pipe" });
+  process.stderr.write(`kiwi loop: debug: stty after: ${/\b-?isig\b/.exec(after.stdout.toString())?.[0] ?? after.stderr.toString().trim()}\n`);
 }
 
 function clearTypedPane(): void {

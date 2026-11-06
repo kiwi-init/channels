@@ -824,6 +824,17 @@ jobs:
       - uses: ./.github/actions/setup
       - run: brew install tmux
       - run: bun scripts/ci-tests.ts mac
+        continue-on-error: true
+      - name: loop flows, repeated
+        run: |
+          failed=0
+          for i in 1 2 3 4 5; do
+            echo "::group::loop-flows repeat $i"
+            bun test ./test/loop-flows.test.ts || failed=$((failed + 1))
+            echo "::endgroup::"
+          done
+          echo "repeats failed: $failed"
+          test "$failed" -eq 0
       - run: |
           mkdir -p dist
           for t in darwin-arm64 darwin-x64 linux-x64 linux-arm64; do

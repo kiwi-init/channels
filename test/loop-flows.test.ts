@@ -700,6 +700,16 @@ test.skipIf(!tmuxPastes)("with --harness kimi in tmux 3.7 or newer, the loop typ
     await until(() => !pidAlive(typed.stray), "the stray listener stopped").catch(fail);
 
     await until(() => log().includes(`${id} is over; its session ended`), "the loop back to waiting").catch(fail);
+    if (process.env.KIMI_RAW_TRIGGER) {
+      await until(
+        () =>
+          seen()
+            .slice(before)
+            .filter((s) => s.kind === "start").length >= 2,
+        "the messages session",
+      ).catch(fail);
+      await Bun.sleep(2_500);
+    }
     let pressed = 0;
     await until(
       () => {
@@ -715,6 +725,13 @@ test.skipIf(!tmuxPastes)("with --harness kimi in tmux 3.7 or newer, the loop typ
     ).catch(fail);
     expect(log()).toContain("stopped 1 kiwi listener the session left running");
     expect(log()).toContain(`${id} is over; its session ended`);
+    process.stderr.write(
+      `KIMI LOOP LOG (pass)\n${JSON.stringify(
+        seen()
+          .slice(before)
+          .map((s) => ({ ...s, prompt: undefined })),
+      )}\n${log()}\nEND KIMI LOOP LOG\n`,
+    );
   } finally {
     tmux("kill-server");
   }
