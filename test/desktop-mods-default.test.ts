@@ -67,7 +67,11 @@ describe("the mods that come with the app (T6270)", () => {
     expect(await installDefaults(opts)).toEqual([]);
     const at = join(opts.folder, "github");
     expect(folderHash(at)).toBe(pin.hash);
-    expect(JSON.parse(readFileSync(opts.approvals, "utf8"))).toEqual({ approved: { github: ["github", "panel", "tab"] } });
+    expect(JSON.parse(readFileSync(opts.approvals, "utf8"))).toEqual({
+      approved: { github: { needs: ["github", "panel", "tab"], source: "github.com/kiwi-init/mods/github" } },
+      off: {},
+      unsettledStarts: 0,
+    });
     expect(copiesIn(opts.folder)).toEqual({
       github: { source: "github.com/kiwi-init/mods/github", url: "https://github.com/kiwi-init/mods.git", path: "github", ref: null, commit: COMMIT, hash: pin.hash },
     });
@@ -105,7 +109,15 @@ describe("the mods that come with the app (T6270)", () => {
     const { opts, failWith } = setup();
     failWith((url) => (url.endsWith("/mod.json") ? new Response("", { status: 404 }) : null));
     const [off] = await installDefaults(opts);
-    expect(off).toEqual({ name: "github", version: null, needs: [], approved: [], state: "off", why: expect.stringContaining("raw.githubusercontent.com answered 404 (is the repo public?)") });
+    expect(off).toEqual({
+      name: "github",
+      version: null,
+      source: "github.com/kiwi-init/mods/github",
+      needs: [],
+      approved: [],
+      state: "off",
+      why: expect.stringContaining("raw.githubusercontent.com answered 404 (is the repo public?)"),
+    });
     expect(off?.why).toContain("tries again when it starts");
     expect(existsSync(opts.record)).toBe(false);
     expect(readdirSync(opts.folder)).toEqual([]);

@@ -6,7 +6,7 @@ import path from "node:path";
 
 import type { ModView } from "./bridge.ts";
 import { errorText, writePrivate } from "./guard.ts";
-import { readApprovals } from "./mods-host.ts";
+import { preApprove } from "./mods-host.ts";
 
 export interface Pinned {
   name: string;
@@ -75,6 +75,8 @@ async function download(pin: Pinned, into: string, request: typeof fetch): Promi
   }
 }
 
+const sourceOf = (pin: Pinned): string => `github.com/${pin.repo}/${pin.path}`;
+
 async function installOne(pin: Pinned, o: DefaultsOptions): Promise<void> {
   const at = path.join(o.folder, pin.name);
   fs.mkdirSync(o.folder, { recursive: true });
@@ -85,11 +87,9 @@ async function installOne(pin: Pinned, o: DefaultsOptions): Promise<void> {
     const checked = checkManifest(JSON.parse(fs.readFileSync(path.join(staged, "mod.json"), "utf8")), pin.name, o.contract);
     if (!checked.ok) throw new Error(checked.why);
     if (fs.lstatSync(at, { throwIfNoEntry: false })) return;
-    const approvals = readApprovals(o.approvals);
-    approvals[pin.name] = [...checked.manifest.needs].sort();
-    writePrivate(o.approvals, Buffer.from(`${JSON.stringify({ approved: approvals }, null, 2)}\n`));
+    preApprove(o.approvals, pin.name, checked.manifest.needs, sourceOf(pin));
     fs.renameSync(staged, at);
-    keepCopyIn(o.folder, pin.name, { source: `github.com/${pin.repo}/${pin.path}`, url: `https://github.com/${pin.repo}.git`, path: pin.path, ref: null, commit: pin.commit, hash: pin.hash });
+    keepCopyIn(o.folder, pin.name, { source: sourceOf(pin), url: `https://github.com/${pin.repo}.git`, path: pin.path, ref: null, commit: pin.commit, hash: pin.hash });
   } finally {
     fs.rmSync(staged, { recursive: true, force: true });
   }
@@ -106,7 +106,15 @@ export async function installDefaults(o: DefaultsOptions): Promise<ModView[]> {
       if (!there) await installOne(pin, o);
       writePrivate(o.record, Buffer.from(`${JSON.stringify({ installed: { ...readRecord(o.record), [pin.name]: there ? "theirs" : pin.commit } }, null, 2)}\n`));
     } catch (e) {
-      failed.push({ name: pin.name, version: null, needs: [], approved: [], state: "off", why: `it couldn't be installed: ${errorText(e)}. The app tries again when it starts` });
+      failed.push({
+        name: pin.name,
+        version: null,
+        source: sourceOf(pin),
+        needs: [],
+        approved: [],
+        state: "off",
+        why: `it couldn't be installed: ${errorText(e)}. The app tries again when it starts`,
+      });
     }
   }
   return failed;
