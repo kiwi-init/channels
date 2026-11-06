@@ -73,6 +73,15 @@ describe("a mod frame's messages", () => {
       mark: { asks: 2, tasks: [7] },
     })
     expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "terminal", id: 4, op: "mark", seat, mark: null })).toEqual({ kiwi: MOD_PROTOCOL, type: "terminal", id: 4, op: "mark", seat, mark: null })
+    const room = "b6d383226365dd0ba576eff3d66f71a0"
+    expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "terminal", id: 5, op: "focus", room, agent: "radiant-otter", pane: "%1" })).toEqual({
+      kiwi: MOD_PROTOCOL,
+      type: "terminal",
+      id: 5,
+      op: "focus",
+      room,
+      agent: "radiant-otter",
+    })
     for (const m of [
       { op: "run", seat, command: "rm -rf ~" },
       { op: "keys", seat, keys: "rm -rf ~ Enter" },
@@ -84,6 +93,10 @@ describe("a mod frame's messages", () => {
       { op: "focus", seat: "%1; tmux kill-server" },
       { op: "focus", seat: "../../.ssh" },
       { op: "focus" },
+      { op: "focus", room: "general", agent: "ana" },
+      { op: "focus", room: "b6d383226365dd0ba576eff3d66f71a0", agent: "../ana" },
+      { op: "focus", room: "b6d383226365dd0ba576eff3d66f71a0", agent: "ana; tmux kill-server" },
+      { op: "focus", room: "b6d383226365dd0ba576eff3d66f71a0" },
       { op: "mark", seat, mark: { asks: -1 } },
       { op: "mark", seat, mark: { asks: "2" } },
       { op: "mark", seat, mark: { tasks: ["T7"] } },

@@ -146,6 +146,7 @@ function foreground(stdout: string): unknown {
 export function terminalCalls(d: TerminalDeps) {
   const windows = new Map<string, Map<string, TerminalMark>>();
   const seatAt = new Map<string, string>();
+  const rexMarked = new Map<string, PlacedSeat & { rex: RexPlace }>();
 
   async function seat(id: unknown): Promise<PlacedSeat> {
     if (typeof id !== "string" || !SEAT_ID.test(id)) throw new Error("a terminal is named by the id terminals() gave");
@@ -230,6 +231,8 @@ export function terminalCalls(d: TerminalDeps) {
     if (got.status !== 0 || foreground(got.stdout) !== s.pid) throw new Error("that agent isn't the program in its Rex block now");
     const tty = (await d.run(["ps", "-o", "tty=", "-p", String(s.pid)])).stdout.trim();
     if (!TTY.test(tty) || !d.write(`/dev/${tty}`, statusFrame(s.id, m))) throw new Error("Rex didn't take the mark");
+    if (m) rexMarked.set(s.id, s);
+    else rexMarked.delete(s.id);
   }
 
   return {
@@ -246,6 +249,18 @@ export function terminalCalls(d: TerminalDeps) {
       const m = readMark(mark);
       if (s.tmux) return markTmux({ ...s, tmux: s.tmux }, m);
       if (s.rex) return markRex({ ...s, rex: s.rex }, m);
+    },
+    async clear(): Promise<void> {
+      const tmux = [...windows.keys()];
+      const rex = [...rexMarked.values()];
+      windows.clear();
+      seatAt.clear();
+      rexMarked.clear();
+      for (const at of tmux) {
+        const [socket = "", window = ""] = at.split("\u0000");
+        await paintTmux({ socket, pane: "" }, window, new Map()).catch(() => undefined);
+      }
+      for (const s of rex) await markRex(s, null).catch(() => undefined);
     },
   };
 }

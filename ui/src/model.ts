@@ -371,6 +371,7 @@ export interface Message {
   prs?: PullRequest[]
   images?: (Image | ImageSpot)[]
   docMedia?: BlockFiles
+  files?: readonly DocFile[]
   reactions?: Reaction[]
   ask?: string
   system?: boolean
@@ -516,6 +517,11 @@ export interface HomeLine {
   text: string
 }
 
+export interface AgentWaits {
+  asks: number
+  tasks: number[]
+}
+
 export interface HomeChannel {
   code: string
   title: string
@@ -529,6 +535,7 @@ export interface HomeChannel {
   red: number
   agents: HomeAgent[]
   said: HomeLine | null
+  waits?: Record<string, AgentWaits>
   loading?: true
 }
 
