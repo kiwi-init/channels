@@ -100,8 +100,8 @@ bun run typecheck:eb                                  # fetches the devkit into 
   AppImage update).
 - `build/icon.svg` — the app icon, and `build/tray.svg` — its one-color tray mark.
   `bun desktop/scripts/icons.ts` (on a Mac) makes every app size (`build/icon.icns`,
-  `build/icons/NxN.png` for Linux, and `assets/icon.png` for the window), the macOS tray
-  template PNGs, and Linux's `assets/channels-tray-symbolic.svg`. On Linux,
+  `build/icons/NxN.png` for Linux and the window), the macOS tray template PNGs (`@2x`,
+  drawn at 16 points), and Linux's `assets/channels-tray-symbolic.svg`. On Linux,
   `native/linux/kiwi-shell.c` names the program `channels-desktop`, so Wayland matches the
   window's app_id to `channels-desktop.desktop` and finds its icon.
 
