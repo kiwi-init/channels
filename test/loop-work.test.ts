@@ -31,6 +31,35 @@ beforeAll(async () => {
   ];
 });
 
+describe("a loop and a task that lands after approval (#623 §2)", () => {
+  const HEAD = "2222222222222222222222222222222222222222";
+  async function approvedLanding(lander?: string): Promise<{ id: number; log: Message[] }> {
+    const add = await ev("jon", { op: "task.add", title: "Ship it", owner: "ana", review: "bo", then: "merge", ...(lander ? { lander } : {}) });
+    const round = await ev("ana", { op: "task.update", task: add.seq, state: "review", at: HEAD });
+    const pass = await ev("bo", { op: "task.update", task: add.seq, state: "done", verdict: "approved", round: 1, at: HEAD });
+    return { id: add.seq, log: [add, round, pass] };
+  }
+
+  test("the reviewer's session ends at approval, and the builder, who lands it by default, keeps it until it's done", async () => {
+    const { id, log } = await approvedLanding();
+    const s = fold(log, roster);
+    expect(s.tasks.get(id)?.state).toBe("landing");
+    expect(workOver({ kind: "reviewing", task: id, round: 1 }, s, "bo")).toBe(true);
+    expect(workOver({ kind: "coding", task: id }, s, "ana")).toBe(false);
+    expect(nextWork(s, "ana", 0)).toEqual({ kind: "coding", task: id });
+  });
+
+  test("with someone else landing it, the builder's session ends at landing and the lander's starts", async () => {
+    const { id, log } = await approvedLanding("bo");
+    const s = fold(log, roster);
+    expect(s.tasks.get(id)).toMatchObject({ state: "landing", lander: "bo" });
+    expect(workOver({ kind: "coding", task: id }, s, "ana")).toBe(true);
+    expect(nextWork(s, "ana", 0)).toBeNull();
+    expect(nextWork(s, "bo", 0)).toEqual({ kind: "coding", task: id });
+    expect(workOver({ kind: "coding", task: id }, s, "bo")).toBe(false);
+  });
+});
+
 describe("the work a loop starts a session for", () => {
   test("nothing owned, nothing to review, nothing unread: no session", async () => {
     const t = await ev("jon", { op: "task.add", title: "Bo's", owner: "bo" });

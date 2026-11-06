@@ -32,7 +32,7 @@ import {
 import { evidenceOf, prLines, refText, stageOf, stageText } from "./stage.ts";
 import { changedSinceApproval, changedAfterApproval, freeAgents, specOfComment, specPlanner, specStage, specTitleOf } from "./state/specs.ts";
 import { commentsLine, commentsWaiting, specLine } from "./spec-lines.ts";
-import { rulesText } from "./prs.ts";
+import { landingWaits, REVIEW_CHECK, reviewNotRequired, rulesText } from "./prs.ts";
 import { statusOf, statusWord } from "./status.ts";
 import { isWakeVia, wakesInSession, wakeWords, type WakeVia } from "./wake.ts";
 export function tokensWord(n: number): string {
@@ -436,7 +436,15 @@ function taskLine(state: ChannelState, t: Task): string {
   const review = t.review && t.state !== "done" && t.state !== "landing" ? ` [${reviewPhrase(t.review)}]` : "";
   const stage = stageOf(state, t);
   const evidence = stage.pr || stage.declared ? ` · ${stageText(state, stage)}` : "";
-  return `  ${taskId(t.id).padEnd(5)} ${statusWord(statusOf(state, t)).padEnd(9)}${owner} ${inlineText(t.title, 200)}${review}${evidence}`;
+  const waits = landingWaits(state, t);
+  return `  ${taskId(t.id).padEnd(5)} ${statusWord(statusOf(state, t)).padEnd(9)}${owner} ${inlineText(t.title, 200)}${review}${evidence}${waits ? ` · ${waits}` : ""}`;
+}
+
+export function reviewRuleWarning(state: ChannelState): string | null {
+  const repos = reviewNotRequired(state);
+  return repos.length
+    ? `warning: tasks here land on merge, but ${repos.join(", ")} doesn't require ${REVIEW_CHECK}, so a PR can merge before its task's gate is open (an owner step: require it in the repo's ruleset)`
+    : null;
 }
 
 export function askLine(head: AskHead | null): string {
@@ -600,6 +608,8 @@ export function formatStatus({ alias, me, state, online, unread, now = Date.now(
   const charter = charterLines(state);
   if (charter) out.push(charter);
   if (state.repos.length) out.push(`repos: ${state.repos.join(", ")}`);
+  const ruleWarning = reviewRuleWarning(state);
+  if (ruleWarning) out.push(ruleWarning);
   const human = humanOf(state, me);
   const trusted = meM && !isPerson(meM) ? trustedOf(state).filter((x) => x !== human) : [];
   if (human) out.push(`your human: ${human}${state.members.get(human)?.owner ? " (the owner)" : ""}. Their word and the owner's direct you; everyone else's are requests`);
@@ -698,8 +708,9 @@ export function formatTasks(state: ChannelState, opts: { all?: boolean; owner?: 
   let tasks = [...state.tasks.values()];
   if (!opts.all) tasks = tasks.filter((t) => t.state !== "done" && !t.archived);
   if (opts.owner) tasks = tasks.filter((t) => t.owner === opts.owner);
-  if (!tasks.length) return "no tasks";
-  return groupedLines(state, tasks, "").join("\n");
+  const warning = reviewRuleWarning(state);
+  if (!tasks.length) return warning ? `${warning}\nno tasks` : "no tasks";
+  return [...(warning ? [warning] : []), ...groupedLines(state, tasks, "")].join("\n");
 }
 
 export function roundTag(t: Task | undefined, seq: number, named: number | undefined): string {
@@ -750,6 +761,8 @@ export function formatTask(state: ChannelState, t: Task, now = Date.now(), messa
       `  ${reviewPhrase(t.review)}${t.review !== "*" && state.members.get(t.review)?.active === false ? " (they left the channel)" : ""}${t.approvedBy ? `; approved by ${inlineText(t.approvedBy, 40)}` : t.state === "review" ? "; waiting for it" : ""}`,
     );
   if (t.then) out.push(`  lands on: ${t.then}, landed by ${inlineText(t.lander ?? t.owner ?? "its owner", 40)}${t.state === "landing" ? " (approved, not landed yet)" : ""}`);
+  const waits = landingWaits(state, t);
+  if (waits) out.push(`  ${waits}`);
   if (t.closedWith) out.push(`  closed without landing: ${inlineText(t.closedWith, 200)}`);
   const open = openRound(t);
   if (open?.summary) out.push("", `round ${open.n} summary:`, markedText(open.summary));

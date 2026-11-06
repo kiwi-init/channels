@@ -1,8 +1,8 @@
+import { REVIEW_CHECK } from "@kiwi/core/prs.ts";
 import * as Context from "effect/Context";
 import { GITHUB_CLOSED_KEEP_MS, MAX_RELEASE_COMMITS, MAX_REQUIRED_CHECKS, MERGE_METHODS, REPO_RE, type GithubNote, type GithubSyncList, type MergeMethod } from "@kiwi/core/protocol.ts";
 import { syncNotes } from "./github.ts";
 
-export const REVIEW_CHECK = "kiwi/review";
 const MAX_DIFF = 2 << 20;
 
 const MAX_ISSUE_BODY = 8000;

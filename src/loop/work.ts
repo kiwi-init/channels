@@ -1,7 +1,7 @@
 import { inlineText } from "@kiwi/core/membership.ts";
 import { reentryText } from "@kiwi/core/reentry.ts";
 import { planningText } from "@kiwi/core/spec-lines.ts";
-import { changedSinceApproval, openRound, setAsideBySpec, specPlanner, specQueue, specStage, taskId, type ChannelState, type Task } from "@kiwi/core/state.ts";
+import { changedSinceApproval, landerOf, openRound, setAsideBySpec, specPlanner, specQueue, specStage, taskId, type ChannelState, type Task } from "@kiwi/core/state.ts";
 
 export type Work = { kind: "coding"; task: number } | { kind: "reviewing"; task: number; round: number } | { kind: "answering" } | { kind: "planning"; ask: number };
 
@@ -26,6 +26,8 @@ function specToPlan(state: ChannelState, me: string, setAside: ReadonlySet<strin
 
 const awaitingVerdict = (t: Task) => !!openRound(t);
 
+const worksOn = (t: Task, me: string): boolean => (t.state === "landing" ? landerOf(t) : t.owner) === me;
+
 const owesReview = (t: Task, me: string) => t.owner !== me && (t.review === me || (t.review === "*" && !t.workedBy.includes(me)));
 
 function owedReview(state: ChannelState, me: string, setAside: ReadonlySet<string> = new Set()): Work | null {
@@ -38,7 +40,7 @@ function owedReview(state: ChannelState, me: string, setAside: ReadonlySet<strin
 }
 
 export function nextWork(state: ChannelState, me: string, unreadForMe: number, setAside: ReadonlySet<string> = new Set()): Work | null {
-  const mine = openTasks(state).filter((t) => t.owner === me);
+  const mine = openTasks(state).filter((t) => worksOn(t, me));
   const first = mine.filter((t) => t.first !== undefined && !awaitingVerdict(t)).sort((a, b) => (b.first ?? 0) - (a.first ?? 0))[0];
   if (first) return { kind: "coding", task: first.id };
   const doing = mine.find((t) => t.state === "doing" && !awaitingVerdict(t));
@@ -65,7 +67,7 @@ export function waitingBehind(work: Work, state: ChannelState, me: string, setAs
     return review && owesReview(t, me) && !(t.review === "*" && setAside.has(workName(review))) ? [review] : [];
   });
   if (work.kind === "answering" || work.kind === "planning") return reviews;
-  const coding = open.filter((t) => t.owner === me && !awaitingVerdict(t)).map((t): Work => ({ kind: "coding", task: t.id }));
+  const coding = open.filter((t) => worksOn(t, me) && !awaitingVerdict(t)).map((t): Work => ({ kind: "coding", task: t.id }));
   return [...coding, ...reviews];
 }
 
@@ -108,7 +110,7 @@ export function workOver(work: Work, state: ChannelState, me: string, setAside: 
   switch (work.kind) {
     case "coding": {
       const t = state.tasks.get(work.task);
-      return !live(t) || t.owner !== me || (awaitingVerdict(t) && owedReview(state, me, setAside) !== null);
+      return !live(t) || !worksOn(t, me) || (awaitingVerdict(t) && owedReview(state, me, setAside) !== null);
     }
     case "reviewing": {
       const t = state.tasks.get(work.task);

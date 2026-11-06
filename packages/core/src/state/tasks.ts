@@ -53,7 +53,7 @@ const isPrUrl = (url: string): boolean => PR_URL_RE.test(url);
 
 type LandingChange = { state?: string; verdict?: Verdict; close?: string; then?: Landing; lander?: string | null; owner?: string | null; proof?: { url: string } };
 
-const landerOf = (task: Pick<Task, "lander" | "owner">): string | undefined => task.lander ?? task.owner;
+export const landerOf = (task: Pick<Task, "lander" | "owner">): string | undefined => task.lander ?? task.owner;
 
 const newPr = (task: Task, proof: { url: string } | undefined): boolean => !!proof && isPrUrl(proof.url) && !task.proof?.some((p) => p.url === proof.url);
 
