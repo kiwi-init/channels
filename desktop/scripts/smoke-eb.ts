@@ -150,7 +150,17 @@ try {
         }, messageLink),
       )
       .then((clicked) => until("the system opener receiving the clicked link", 10_000, async () => (clicked && existsSync(opened) && readFileSync(opened, "utf8").includes(messageLink) ? true : null)))
-      .catch((e: Error) => (problems.push(`a Ctrl-clicked link in a sent message reaches the system browser: ${e.message}`), null));
+      .catch(async (e: Error) => {
+        const link = await d
+          .evaluate((url) => {
+            const a = [...document.querySelectorAll<HTMLAnchorElement>(".main article.msg a")].find((el) => el.getAttribute("href") === url);
+            return a ? { class: a.className, text: a.textContent, inEditor: !!a.closest(".ProseMirror"), editable: a.closest("[contenteditable]")?.getAttribute("contenteditable") ?? null } : null;
+          }, messageLink)
+          .catch((x: unknown) => String(x));
+        const asked = await d.main("browserOpens").catch((x: unknown) => String(x));
+        problems.push(`a Ctrl-clicked link in a sent message reaches the system browser: ${e.message} (the link: ${JSON.stringify(link)}; main was asked to open: ${JSON.stringify(asked)})`);
+        return null;
+      });
     if (linkOpened) console.log("a Ctrl-clicked markdown link in a sent message reached the fake xdg-open with its exact URL");
   }
   await check(

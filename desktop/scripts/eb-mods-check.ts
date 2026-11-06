@@ -7,7 +7,7 @@ import { startLocalRelay } from "../../scripts/local-relay.ts";
 import { daemonStop } from "../src/daemon-client.ts";
 import { ASK_AGAIN_URL } from "../src/keyring-wait.ts";
 import { appExecutable, attach, launch, stop, testEnv, until, type Driver } from "./eb-drive.ts";
-import { firstChannel } from "./eb-first-run.ts";
+import { firstChannel, sendMessage } from "./eb-first-run.ts";
 
 if (!process.argv[2]) {
   console.error("usage: bun desktop/scripts/eb-mods-check.ts <the app built with CHANNELS_EB_TEST=1> [screenshot dir]");
@@ -218,6 +218,18 @@ try {
     null,
     3_000,
   );
+  const messageLink = "https://example.com/?message-link";
+  await step("a message with a link", 30_000, () => d.evaluate(sendMessage, { text: `[the message link](${messageLink})`, shows: "the message link" }, 2_000));
+  const clicked = await d.evaluate(
+    (url) => {
+      const a = [...document.querySelectorAll<HTMLAnchorElement>(".main article.msg a")].find((el) => el.getAttribute("href") === url);
+      a?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, ctrlKey: true }));
+      return a ? { class: a.className, inEditor: !!a.closest(".ProseMirror"), editable: a.closest("[contenteditable]")?.getAttribute("contenteditable") ?? null } : null;
+    },
+    messageLink,
+    3_000,
+  );
+  console.log(`the message link Ctrl-clicked: ${JSON.stringify(clicked)}`);
   writeMod(2);
   const second = await until("the mod again, after its source changed", 30_000, async () => (await heard(d)).find((m) => m["version"] === 2) ?? null).catch(() => null);
   check(!!second, "a saved change reloads the mod");
@@ -225,6 +237,7 @@ try {
   const opens = (await d.main("browserOpens")) as string[];
   console.log(`opened in the browser: ${JSON.stringify(opens)}`);
   check(opens.includes("https://example.com/?page-link"), "with a mod running, the page's own links still open in the browser");
+  check(opens.includes(messageLink), "with a mod running, a Ctrl-clicked link in a message still opens in the browser");
   check(!opens.some((u) => /forged|mod-self-nav/.test(u)), "nothing the mod forged or navigated to opened in the browser");
   check(app.exitCode === null && app.signalCode === null, "the app is still running after the mod's forged events");
   d.close();

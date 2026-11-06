@@ -15,7 +15,6 @@ export function modsCalls(host: Host): Serves<"mods" | "modBundle" | "approveMod
   let started: Promise<ModsHost> | null = null;
   const ready = (): Promise<ModsHost> => {
     if (started) return started;
-    inUse = true;
     const m = modsHost({
       folder: path.join(kiwiHome(), "mods"),
       approvals: path.join(host.app.path("data"), "mods.json"),
@@ -29,7 +28,10 @@ export function modsCalls(host: Host): Serves<"mods" | "modBundle" | "approveMod
   };
   return {
     mods: async () => (await ready()).list(),
-    modBundle: async (name) => (await ready()).bundle(String(name)),
+    modBundle: async (name) => {
+      inUse = true;
+      return (await ready()).bundle(String(name));
+    },
     approveMod: async (name, needs) => (await ready()).approve(String(name), needs),
     modFetch: async (name, req) => (await ready()).fetch(String(name), req),
   };

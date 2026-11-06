@@ -115,6 +115,7 @@ function startFrames(layer: HTMLElement): void {
     }
   for (const [name, hash] of on) {
     if (frames.has(name)) continue
+    openLinksOutside()
     const f = document.createElement("iframe")
     f.setAttribute("sandbox", "allow-scripts")
     f.title = name
@@ -134,7 +135,6 @@ export function ModsLayer() {
   useEffect(() => {
     const b = bridge()
     if (!b || typeof b.mods !== "function") return
-    openLinksOutside()
     let live = true
     const take = (list: ModView[]) => {
       if (!live) return
