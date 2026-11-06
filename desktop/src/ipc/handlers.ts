@@ -10,6 +10,7 @@ import { personalitiesCalls } from "./personalities.ts";
 import { signInCalls } from "./signin.ts";
 import { storeCalls } from "./store.ts";
 import { hooksCalls } from "./hooks.ts";
+import { themesCalls } from "./themes.ts";
 import { uiCalls } from "./ui.ts";
 
 export function handlers(host: Host): Handlers {
@@ -26,5 +27,6 @@ export function handlers(host: Host): Handlers {
     ...hooksCalls(),
     ...machineCalls(),
     ...uiCalls(),
+    ...themesCalls(host),
   };
 }

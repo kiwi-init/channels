@@ -11,6 +11,7 @@ import { Palette } from "~/palette/palette"
 import { ChannelScreen } from "~/shell/channel"
 import { Rail } from "~/shell/rail"
 import { applyTheme, colorsOf, usePreview, useSystemDark } from "~/theme/apply"
+import { startFolder, useFolder } from "~/theme/folder"
 import { loadRex, useRex } from "~/theme/rex"
 import { activeTheme, wantsRex } from "~/theme/themes"
 
@@ -141,7 +142,10 @@ function usePaletteKey(toggle: () => void, calm: () => void) {
 }
 
 function useTheme(app: App) {
-  const { theme, reduceMotion, darkTheme, lightTheme, customThemes } = app.prefs
+  const { theme, reduceMotion, darkTheme, lightTheme, customThemes: own } = app.prefs
+  const folder = useFolder().themes
+  const customThemes = useMemo(() => (folder.length ? [...own, ...folder] : own), [own, folder])
+  useEffect(startFolder, [])
   const systemDark = useSystemDark()
   const preview = usePreview()
   const rex = useRex()

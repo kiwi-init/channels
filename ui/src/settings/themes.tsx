@@ -2,14 +2,17 @@ import "~/styles/themes.css"
 
 import { use, useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
 
+import { bridge, type FolderThemeInput } from "@kiwi/secrets/secrets.ts"
 import { Icon } from "~/kit/icons"
+import { announce } from "~/kit/toasts"
 import type { Appearance, CustomTheme, ThemeBase } from "~/model"
 import { useApp } from "~/nav"
 import { Confirm, Seg } from "~/settings/controls"
 import { setPreview, useSystemDark } from "~/theme/apply"
 import { hex, isHex, TOKENS, type ColorTheme, type Colors } from "~/theme/derive"
+import { fileOf, takeFolder, useFolder } from "~/theme/folder"
 import { loadRex } from "~/theme/rex"
-import { allThemes, baseOf, customColors, resolveMode } from "~/theme/themes"
+import { allThemes, baseOf, customColors, deletedTheme, FROM_FOLDER, movedTheme, resolveMode } from "~/theme/themes"
 
 const SHOT = new URLSearchParams(location.search).get("shot")
 
@@ -22,9 +25,39 @@ const APPEARANCES = [
 
 interface Draft {
   id: string | null
+  file: string | null
   name: string
   appearance: Appearance
   base: Required<ThemeBase>
+}
+
+const tilde = (dir: string): string => dir.replace(/^\/(?:Users|home)\/[^/]+\//, "~/")
+
+async function toFolder(file: string | null, theme: FolderThemeInput): Promise<string | null> {
+  const b = bridge()
+  if (typeof b?.saveFolderTheme !== "function") return null
+  try {
+    const saved = await b.saveFolderTheme(file, theme)
+    takeFolder(saved.view)
+    return saved.file
+  } catch (err) {
+    // The file keeps what it had; the toast says why, and the editor stays open to try again.
+    announce(err instanceof Error ? err.message : "That theme couldn't be saved", "error")
+    return null
+  }
+}
+
+async function outOfFolder(file: string): Promise<boolean> {
+  const b = bridge()
+  if (typeof b?.deleteFolderTheme !== "function") return false
+  try {
+    takeFolder(await b.deleteFolderTheme(file))
+    return true
+  } catch (err) {
+    // The file is still there and still listed; the toast says why.
+    announce(err instanceof Error ? err.message : "That theme couldn't be deleted", "error")
+    return false
+  }
 }
 
 const vars = (colors: Colors): CSSProperties => Object.fromEntries(TOKENS.map((t) => [`--${t}`, colors[t]])) as CSSProperties
@@ -63,20 +96,21 @@ export function Themes() {
   const systemDark = useSystemDark()
   const [query, setQuery] = useState("")
   const rex = use(loadRex())
-  const themes = useMemo(() => allThemes(prefs.customThemes, rex), [prefs.customThemes, rex])
+  const folder = useFolder()
+  const themes = useMemo(() => allThemes([...prefs.customThemes, ...folder.themes], rex), [prefs.customThemes, folder.themes, rex])
   const ref = useRef<HTMLElement>(null)
   const now = resolveMode(prefs.theme, systemDark)
 
   const draftFor = (appearance: Appearance): Draft | null => {
     const from = themes.find((t) => t.id === (appearance === "dark" ? prefs.darkTheme : prefs.lightTheme)) ?? themes.find((t) => t.appearance === appearance)
-    return from ? { id: null, name: "", appearance, base: baseOf(from.colors) } : null
+    return from ? { id: null, file: null, name: "", appearance, base: baseOf(from.colors) } : null
   }
   const [draft, setDraft] = useState<Draft | null>(() => (SHOT === "theme-editor" ? draftFor("dark") : null))
   const startNew = (appearance: Appearance) => {
     const next = draftFor(appearance)
     if (next) setDraft(next)
   }
-  const startEdit = (t: CustomTheme) => setDraft({ id: t.id, name: t.name, appearance: t.appearance, base: { ...baseOf(customColors(t)), ...t.base } })
+  const startEdit = (t: CustomTheme) => setDraft({ id: t.id, file: fileOf(t.id), name: t.name, appearance: t.appearance, base: { ...baseOf(customColors(t)), ...t.base } })
 
   const opened = useRef(false)
   useEffect(() => {
@@ -89,7 +123,7 @@ export function Themes() {
   return (
     <section className="theme" aria-label="Theme" ref={ref}>
       {draft ? (
-        <Editor key={draft.id ?? "new"} start={draft} themes={themes} onDone={() => setDraft(null)} />
+        <Editor key={draft.id ?? "new"} start={draft} themes={themes} dir={folder.dir} onDone={() => setDraft(null)} />
       ) : (
         <>
           <div className="theme-head">
@@ -111,7 +145,7 @@ export function Themes() {
                 </div>
                 <ul className="theme-grid">
                   {list.map((t) => {
-                    const mine = prefs.customThemes.find((c) => c.id === t.id)
+                    const mine = prefs.customThemes.find((c) => c.id === t.id) ?? folder.themes.find((c) => c.id === t.id)
                     const on = chosen === t.id
                     return (
                       <li key={t.id} className="theme-card">
@@ -146,13 +180,25 @@ export function Themes() {
               </div>
             )
           })}
+          {folder.dir && folder.skipped.length > 0 && (
+            <div className="theme-skipped" role="note">
+              <p className="theme-note">Not loaded from {tilde(folder.dir)}:</p>
+              <ul>
+                {folder.skipped.map((s) => (
+                  <li key={s.file} className="theme-note">
+                    <code>{s.file}</code> {s.why}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </>
       )}
     </section>
   )
 }
 
-function Editor({ start, themes, onDone }: { start: Draft; themes: ColorTheme[]; onDone: () => void }) {
+function Editor({ start, themes, dir, onDone }: { start: Draft; themes: ColorTheme[]; dir: string | null; onDone: () => void }) {
   const { app } = useApp()
   const [draft, setDraft] = useState(start)
   const [from, setFrom] = useState("")
@@ -172,6 +218,14 @@ function Editor({ start, themes, onDone }: { start: Draft; themes: ColorTheme[];
   const setBase = (key: keyof ThemeBase, value: string) => setDraft((d) => ({ ...d, base: { ...d.base, [key]: value } }))
   const adjusted = colors.ink !== hex(draft.base.text) || colors.accent !== hex(draft.base.accent)
   const name = draft.name.trim()
+  const theme = (): FolderThemeInput => ({ name: name || "My theme", appearance: draft.appearance, base: draft.base })
+  const moveToFolder = async (id: string) => {
+    const file = await toFolder(null, theme())
+    if (!file) return
+    app.actions.setPrefs(movedTheme(app.prefs, id, `${FROM_FOLDER}${file}`))
+    announce(`Moved to ${tilde(dir ?? "")}/${file}`)
+    onDone()
+  }
 
   return (
     <form
@@ -179,7 +233,11 @@ function Editor({ start, themes, onDone }: { start: Draft; themes: ColorTheme[];
       className="theme-editor"
       onSubmit={(e) => {
         e.preventDefault()
-        app.actions.saveTheme({ id: draft.id ?? `mine-${Date.now().toString(36)}`, name: name || "My theme", appearance: draft.appearance, base: draft.base })
+        if (draft.file) {
+          void toFolder(draft.file, theme()).then((file) => file && onDone())
+          return
+        }
+        app.actions.saveTheme({ id: draft.id ?? `mine-${Date.now().toString(36)}`, ...theme() })
         onDone()
       }}
       onKeyDown={(e) => {
@@ -189,6 +247,11 @@ function Editor({ start, themes, onDone }: { start: Draft; themes: ColorTheme[];
       }}
     >
       <h3 className="theme-title">{draft.id ? "Edit theme" : "New theme"}</h3>
+      {draft.file && dir && (
+        <p className="theme-note">
+          Saved in <code>{`${tilde(dir)}/${draft.file}`}</code>
+        </p>
+      )}
       <div className="theme-form">
         <label className="theme-field">
           <span className="theme-label">Name</span>
@@ -259,6 +322,11 @@ function Editor({ start, themes, onDone }: { start: Draft; themes: ColorTheme[];
             Delete theme
           </button>
         )}
+        {draft.id && !draft.file && dir && (
+          <button type="button" className="btn is-quiet is-small" onClick={() => draft.id && void moveToFolder(draft.id)}>
+            Move to themes folder
+          </button>
+        )}
         <span className="theme-foot-gap" />
         <button type="button" className="btn is-quiet" onClick={onDone}>
           Cancel
@@ -270,12 +338,19 @@ function Editor({ start, themes, onDone }: { start: Draft; themes: ColorTheme[];
       <Confirm
         open={deleting}
         title="Delete this theme?"
-        sub="If it's in use, Channels Dark or Channels Light takes its place."
+        sub={
+          draft.file
+            ? `Its file, ${draft.file}, is deleted from the themes folder. If it's in use, Channels Dark or Channels Light takes its place.`
+            : "If it's in use, Channels Dark or Channels Light takes its place."
+        }
         action="Delete theme"
         onClose={() => setDeleting(false)}
         onConfirm={() => {
           setDeleting(false)
-          if (draft.id) app.actions.deleteTheme(draft.id)
+          if (draft.file && draft.id) {
+            const id = draft.id
+            void outOfFolder(draft.file).then((gone) => gone && app.actions.setPrefs(deletedTheme(app.prefs, id)))
+          } else if (draft.id) app.actions.deleteTheme(draft.id)
           onDone()
         }}
       />
