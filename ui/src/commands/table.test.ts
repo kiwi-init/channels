@@ -1,5 +1,6 @@
 import { afterAll, afterEach, describe, expect, test } from "bun:test"
 
+import { APP_PREFIXES } from "@kiwi/core/mod-names.ts"
 import type { KeyBindingsView } from "@kiwi/secrets/secrets.ts"
 
 const kiwi = {
@@ -10,7 +11,7 @@ Object.assign(globalThis, { window: { kiwi } })
 afterAll(() => Reflect.deleteProperty(globalThis, "window"))
 
 const { bindCommands, commandTable, onKey, runCommand } = await import("~/commands/table")
-const { addCommands, APP_PREFIXES, takeKeysFile: setKeysFile } = await import("~/commands/rebind")
+const { addCommands, takeKeysFile: setKeysFile } = await import("~/commands/rebind")
 
 const FILE = "/home/ana/.kiwi/keys.json"
 const file = (keys: unknown): KeyBindingsView => ({ file: FILE, present: true, keys })

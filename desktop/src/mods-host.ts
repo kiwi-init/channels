@@ -1,10 +1,11 @@
+import { bundleMod } from "@kiwi/core/node/mod-bundle.ts";
+import { checkManifest } from "@kiwi/core/node/mod-manifest.ts";
 import fs from "node:fs";
 import path from "node:path";
 
 import type { ModFetchReply, ModFetchRequest, ModView } from "./bridge.ts";
 import { errorText, writePrivate } from "./guard.ts";
-import { bundleMod } from "./mod-bundle.ts";
-import { checkManifest, hostAllowed, unapproved } from "./mods.ts";
+import { hostAllowed, unapproved } from "./mods.ts";
 
 const MANIFEST_BYTES = 64_000;
 const FETCH_BYTES = 8_000_000;

@@ -1,9 +1,9 @@
+import { APP_PREFIXES } from "@kiwi/core/mod-names.ts"
 import type { KeyBindingsView } from "@kiwi/secrets/secrets.ts"
+
 import { keyLabel } from "~/commands/keys"
 import { APP } from "~/commands/list"
 import { DEFAULT_KEYS, install, type ModCommand, type Table } from "~/commands/table"
-
-export const APP_PREFIXES = ["app", "nav", "view", "chat", "debug"] as const
 
 const MODS = ["mod", "ctrl", "meta", "alt", "shift"]
 

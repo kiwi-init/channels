@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { bundleMod } from "../desktop/src/mod-bundle.ts";
+import { bundleMod } from "@kiwi/core/node/mod-bundle.ts";
 
 const roots: string[] = [];
 
