@@ -33,7 +33,9 @@ const root = ReactDOMClient.createRoot(box)
 let sized: ResizeObserver | null = null
 
 function failed(e: unknown): void {
-  post({ type: "error", message: e instanceof Error ? (e.stack ?? e.message) : String(e) })
+  const said = String(e)
+  const stack = e instanceof Error ? (e.stack ?? "") : ""
+  post({ type: "error", message: stack.startsWith(said) ? stack : `${said}\n${stack}`.trim() })
 }
 
 function mount(): void {

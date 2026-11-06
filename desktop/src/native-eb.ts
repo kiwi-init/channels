@@ -29,6 +29,18 @@ const frostShell = mac
     }).symbols
   : null;
 
+const SHIFT = 0x20000n;
+
+export function shiftHeld(): boolean {
+  if (!mac) return false;
+  const cg = dlopen("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics", { CGEventSourceFlagsState: { args: [FFIType.i32], returns: FFIType.u64 } });
+  try {
+    return (BigInt(cg.symbols.CGEventSourceFlagsState(0)) & SHIFT) !== 0n;
+  } finally {
+    cg.close();
+  }
+}
+
 export const frostAllowed = (): boolean => frostShell?.kiwi_frost_allowed() ?? false;
 
 export const forceFrostForTest = (frost: boolean): void => void frostShell?.kiwi_frost_force_for_test(frost ? 1 : 0);

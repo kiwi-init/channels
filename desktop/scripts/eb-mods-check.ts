@@ -5,7 +5,6 @@ import { join } from "node:path";
 
 import { startLocalRelay } from "../../scripts/local-relay.ts";
 import { daemonStop } from "../src/daemon-client.ts";
-import { LINUX_WAIT } from "../src/mods.ts";
 import { ASK_AGAIN_URL } from "../src/keyring-wait.ts";
 import { appExecutable, attach, launch, stop, testEnv, until, type Driver } from "./eb-drive.ts";
 import { fillIn, firstChannel, sendMessage } from "./eb-first-run.ts";
@@ -199,6 +198,28 @@ async function howHeard(d: Driver, why: string): Promise<void> {
 }
 
 const MESSAGE_LINK = "https://example.com/?message-link";
+const CRASH = "crash-mod fails on purpose";
+
+function writeCrashMod(): void {
+  const dir = join(root, ".kiwi", "mods", "crash-mod");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "mod.json"), JSON.stringify({ name: "crash-mod", version: "1.0.0", shell: "^3.3" }));
+  writeFileSync(join(dir, "index.tsx"), `throw new TypeError(${JSON.stringify(CRASH)})\n`);
+}
+
+type ModNow = { name: string; state: string; off?: string; why?: string };
+const modsNow = (d: Driver): Promise<ModNow[]> => d.evaluate(() => (window as unknown as { kiwi: { mods(): Promise<ModNow[]> } }).kiwi.mods(), null, 15_000);
+
+async function settingsMods(d: Driver, shows: string): Promise<void> {
+  await step("Settings", 10_000, () =>
+    d.evaluate(() => (document.querySelector<HTMLElement>(".set-nav") ? true : (document.querySelector<HTMLElement>('[aria-label="Settings"]')?.click(), false)), null, 2_000),
+  );
+  await step("Settings → Mods", 10_000, () => d.evaluate(clickText, { selector: ".set-nav .side-row", text: "Mods" }, 2_000));
+  await step(`Settings → Mods shows "${shows}"`, 15_000, () => d.evaluate((t) => (document.querySelector(".set-main")?.textContent ?? "").includes(t), shows, 2_000)).catch(async (e: unknown) => {
+    console.log(`the page then: ${JSON.stringify(await d.evaluate(pageNow, null, 3_000).catch((x: unknown) => String(x)), null, 1)}`);
+    throw e;
+  });
+}
 
 const topAt = (selector: string): { found: boolean; top: string | null } => {
   const el = document.querySelector<HTMLElement>(selector);
@@ -278,7 +299,7 @@ function stacks(why: string): void {
 
 writeMod(1);
 writeQuietMod();
-const app = launch(exe, testEnv(root, join(root, "driver.sock"), RELAY));
+let app = launch(exe, testEnv(root, join(root, "driver.sock"), RELAY));
 try {
   const d = await attach(join(root, "driver.sock"));
   await firstChannel(d, 0);
@@ -301,177 +322,183 @@ try {
   );
   const asks = await d.evaluate(() => (window as unknown as { kiwi: { mods(): Promise<{ name: string; state: string; why?: string }[]> } }).kiwi.mods(), null, 15_000);
   console.log(`mods: ${JSON.stringify(asks)}`);
-  if (process.platform === "linux") {
-    check(
-      asks.some((m) => m.name === "probe-mod" && m.state === "off" && m.why === LINUX_WAIT),
-      "on Linux a mod stays off, and says why, until the app can tell its frames' events from the page's",
-    );
-    await step("the channel", 30_000, () => d.evaluate(() => !!document.querySelector(".chan"), null, 2_000));
-    await clickMessageLink(d);
-    await later(1_500);
-    const opens = (await d.main("browserOpens")) as string[];
-    console.log(`opened in the browser: ${JSON.stringify(opens)}`);
-    check(opens.includes(MESSAGE_LINK), "a Ctrl-clicked link in a message opens in the browser");
-  } else {
-    check(
-      asks.some((m) => m.name === "probe-mod" && m.state === "asks"),
-      "a new mod waits for the person before it runs",
-    );
-    const palette = () =>
-      d.evaluate(
-        () => {
-          if (document.querySelector(".palette-box")) return true;
-          const mac = navigator.platform.includes("Mac");
-          (document.activeElement ?? document.body).dispatchEvent(new KeyboardEvent("keydown", { key: "k", code: "KeyK", metaKey: mac, ctrlKey: !mac, bubbles: true, cancelable: true }));
-          return false;
-        },
-        null,
-        2_000,
-      );
-    await step("the channel", 30_000, () => d.evaluate(() => !!document.querySelector(".chan"), null, 2_000));
-    await step("⌘K", 10_000, palette);
-    await step("Set up probe-mod in ⌘K", 10_000, () => d.evaluate(clickText, { selector: ".palette-item", text: "Set up probe-mod" }, 2_000));
-    await step("what the mod asks for, in the panel", 10_000, () => d.evaluate(clickText, { selector: ".panel .mod-needs", text: "Talk to example.com" }, 2_000)).catch(async (e: unknown) => {
-      console.log(`the page then: ${JSON.stringify(await d.evaluate(pageNow, null, 3_000).catch((x: unknown) => String(x)), null, 1)}`);
-      throw e;
-    });
-    await shot("mod-asks");
-    await step("Turn on", 10_000, () => d.evaluate(clickText, { selector: ".panel button", text: "Turn on" }, 2_000));
-    const first = await until("the mod's report", 60_000, async () => (await heard(d)).find((m) => m["version"] === 1) ?? null);
-    console.log(`the mod saw: ${JSON.stringify(first, null, 1)}`);
-    check(first["origin"] === "null", "the mod's frame has an origin of its own (opaque)");
-    check(first["kiwi"] === "undefined" && first["electrobunBridge"] === "undefined", "the mod has no window.kiwi and no bridge object");
-    check(String(first["parentDocument"]).startsWith("blocked"), "the mod can't read the page");
-    check(String(first["storage"]).startsWith("blocked"), "the mod has no storage of the app's");
-    check(String(first["ownFetch"]).startsWith("blocked"), "the mod's own fetch reaches nothing");
-    check(String(first["relayFetch"]).startsWith("blocked"), "the mod can't reach the relay");
-    check(first["listed"] === 200, "the mod reaches the host it listed and the person approved");
-    check(String(first["unlisted"]).startsWith("blocked"), "the mod can't reach a host it didn't list");
-    check(String(first["relayByProxy"]).startsWith("blocked"), "the mod can't reach the relay through the app either");
-    await step("the mod's panel title", 10_000, () => d.evaluate(clickText, { selector: ".panel .panel-title", text: "Probe mod" }, 2_000));
-    await shot("mod-panel");
-    const sideTop = await until("the mod's sidebar section", 15_000, async () => {
-      const t = await d.evaluate(topAt, ".side .mod-side-slot", 2_000);
-      return t.found ? t : null;
-    }).catch(() => null);
-    console.log(`at the sidebar section: ${JSON.stringify(sideTop)}`);
-    check(sideTop?.top === "frame probe-mod in the sidebar", "a mod that asked for a sidebar section shows it, drawn by its own frame");
-    const titles = await d.evaluate(() => [...document.querySelectorAll(".side .mod-side h3")].map((h) => h.textContent), null, 2_000);
-    check(titles.includes("Probe side") && !titles.includes("Quiet side"), "a mod that didn't ask for a sidebar section gets none, even when it posts one");
-    const quiet = await until("the quiet mod's report", 15_000, async () => (await heard(d)).find((m) => "quiet" in m) ?? null).catch(() => null);
-    console.log(`the quiet mod: ${JSON.stringify(quiet)}`);
-    const tries = (quiet?.["quiet"] ?? []) as string[];
-    check(
-      tries.length === 4 && tries.every((t) => /^\w+\(\) needs "[a-z-]+" in mod\.json's needs$/.test(t)),
-      "the frame refuses a panel, section, command or message action its mod.json doesn't list",
-    );
-    const wide = await d.evaluate(topAt, ".panel .mod-slot", 2_000);
-    check(wide.top === "frame probe-mod", "the mod's panel is on top where the panel sits beside the chat");
-    const narrow = (await d.main("narrowForTest")) as { width: number };
-    await until("a narrow window", 10_000, () => d.evaluate(() => (innerWidth <= 1180 ? innerWidth : null), null, 2_000)).catch(() => null);
-    await later(500);
-    const floating = await d.evaluate(topAt, ".panel .mod-slot", 2_000);
-    console.log(`window ${narrow.width} wide, at the panel: ${JSON.stringify(floating)}`);
-    check(floating.top === "frame probe-mod", "the mod's panel is on top where the panel floats over the chat, in a window under 1180 px");
-    await shot("mod-narrow");
-    const still = await until("the mod's frame after it tried to leave", 15_000, async () => (await heard(d)).find((m) => m["stillHere"] === true) ?? null).catch(() => null);
-    if (!still) await howHeard(d, "no stillHere");
-    check(!!still, "the mod's frame stays where it is when it navigates itself");
-    await step("⌘K again", 10_000, palette);
-    await step("the mod's command, typed into ⌘K", 10_000, () => d.evaluate(fillIn, { selector: ".palette-input", value: "Say hi" }, 2_000));
-    await step("the mod's command in ⌘K", 10_000, () => d.evaluate(clickText, { selector: ".palette-item", text: "Say hi from the probe mod" }, 2_000));
-    const hi = await until("the command's run", 10_000, async () => (await heard(d)).find((m) => m["command"] === "hi") ?? null).catch(() => null);
-    if (!hi) await howHeard(d, "no hi");
-    check(!!hi, "the mod's command runs from ⌘K");
-    await step("⌘K once more", 10_000, palette);
-    await step("the quiet mod's name, typed into ⌘K", 10_000, () => d.evaluate(fillIn, { selector: ".palette-input", value: "Quiet" }, 2_000));
-    await later(1_000);
-    const found = await d.evaluate(() => [...document.querySelectorAll(".palette-item")].map((e) => e.textContent ?? ""), null, 2_000);
-    console.log(`⌘K for "Quiet": ${JSON.stringify(found)}`);
-    check(!found.some((t) => t.includes("Quiet")), "a mod that didn't ask for a panel or commands adds neither to ⌘K, even when it posts them");
-    await d.evaluate(() => (document.activeElement ?? document.body).dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })), null, 2_000);
-    await d.evaluate(
+  check(
+    asks.some((m) => m.name === "probe-mod" && m.state === "asks"),
+    "a new mod waits for the person before it runs",
+  );
+  const palette = () =>
+    d.evaluate(
       () => {
-        const a = document.createElement("a");
-        a.href = "https://example.com/?page-link";
-        a.target = "_blank";
-        a.textContent = "a link";
-        document.body.append(a);
-        a.click();
-        a.remove();
-        return true;
-      },
-      null,
-      3_000,
-    );
-    await clickMessageLink(d);
-    await howHeard(d, "after the message link");
-    check(!(await until("what the mods said", 15_000, () => heard(d))).some((m) => "sawMessage" in m || "action" in m), "no message reaches a mod before the person picks its action");
-    const items = await until("the message's menu", 10_000, () => d.evaluate(messageMenu, "the message link", 2_000));
-    console.log(`the message's menu: ${JSON.stringify(items)}`);
-    check(items.includes("Keep in the probe mod"), "a mod that asked for message actions adds one to a message's menu");
-    check(!items.includes("Quiet action"), "a mod that didn't ask for message actions adds none, even when it posts them");
-    await shot("mod-message-menu");
-    await step("the mod's message action", 10_000, () => d.evaluate(clickText, { selector: ".rail-menu.is-at-pointer button", text: "Keep in the probe mod" }, 2_000));
-    const kept = await until("the message, in the mod", 10_000, async () => (await heard(d)).find((m) => "action" in m) ?? null).catch(() => null);
-    console.log(`the mod got: ${JSON.stringify(kept)}`);
-    const got = (kept?.["action"] ?? {}) as Record<string, unknown>;
-    check(String(got["text"]).includes("the message link") && String(got["room"]).startsWith("#") && typeof got["seq"] === "number", "picking the action hands the mod that message, with its room");
-    await later(500);
-    const saw = (await heard(d)).filter((m) => "sawMessage" in m);
-    check(saw.length === 1 && saw[0]?.["sawMessage"] === "action" && saw[0]?.["surface"] === "main", "only that one message reached the mod, and only its main frame");
-    const was = await d.evaluate(
-      () => {
-        const before = document.documentElement.dataset["side"] ?? null;
-        document.documentElement.dataset["side"] = "none";
-        return before;
+        if (document.querySelector(".palette-box")) return true;
+        const mac = navigator.platform.includes("Mac");
+        (document.activeElement ?? document.body).dispatchEvent(new KeyboardEvent("keydown", { key: "k", code: "KeyK", metaKey: mac, ctrlKey: !mac, bubbles: true, cancelable: true }));
+        return false;
       },
       null,
       2_000,
     );
-    await later(2_000);
-    const hiddenSide = await d.evaluate(topAt, ".side .mod-side-slot", 2_000);
-    check(!hiddenSide.found, "with the sidebar hidden, the mod's section and its frame are hidden too");
-    const asked = Date.now();
-    await heard(d);
-    const answered = Date.now() - asked;
-    await howHeard(d, "with the sidebar hidden");
-    check(answered < 1_000, `the page keeps answering while the mod's sidebar frame is hidden (${answered} ms)`);
-    await step("⌘K with the sidebar hidden", 10_000, palette);
-    await step("the mod's command, typed again", 10_000, () => d.evaluate(fillIn, { selector: ".palette-input", value: "Say hi" }, 2_000));
-    await step("the mod's command, again", 10_000, () => d.evaluate(clickText, { selector: ".palette-item", text: "Say hi from the probe mod" }, 2_000));
-    const again = await until("the command's second run", 10_000, async () => ((await heard(d)).filter((m) => m["command"] === "hi").length >= 2 ? true : null)).catch(() => null);
-    check(!!again, "the mod's main frame still runs its command while its sidebar frame is hidden");
-    await d.evaluate(
-      (side) => {
-        if (side === null) delete document.documentElement.dataset["side"];
-        else document.documentElement.dataset["side"] = side;
-        return true;
-      },
-      was,
-      2_000,
-    );
-    await howHeard(d, "with the sidebar back");
-    await later(1_000);
-    await howHeard(d, "a second after the sidebar came back");
-    writeMod(2);
-    await later(3_000);
-    await howHeard(d, "3 s after the mod's source changed");
-    const second = await until("the mod again, after its source changed", 30_000, async () => (await heard(d)).find((m) => m["version"] === 2) ?? null).catch(() => null);
-    if (!second) {
-      await howHeard(d, "the mod didn't come back");
-      stacks("the mod didn't come back");
-    }
-    check(!!second, "a saved change reloads the mod");
-    await later(1_500);
-    const opens = (await d.main("browserOpens")) as string[];
-    console.log(`opened in the browser: ${JSON.stringify(opens)}`);
-    check(opens.includes("https://example.com/?page-link"), "with a mod running, the page's own links still open in the browser");
-    check(opens.includes(MESSAGE_LINK), "with a mod running, a Ctrl-clicked link in a message still opens in the browser");
-    check(!opens.some((u) => /forged|mod-self-nav/.test(u)), "nothing the mod forged or navigated to opened in the browser");
-    check(app.exitCode === null && app.signalCode === null, "the app is still running after the mod's forged events");
+  await step("the channel", 30_000, () => d.evaluate(() => !!document.querySelector(".chan"), null, 2_000));
+  await step("⌘K", 10_000, palette);
+  await step("Set up probe-mod in ⌘K", 10_000, () => d.evaluate(clickText, { selector: ".palette-item", text: "Set up probe-mod" }, 2_000));
+  await step("what the mod asks for, in the panel", 10_000, () => d.evaluate(clickText, { selector: ".panel .mod-needs", text: "Talk to example.com" }, 2_000)).catch(async (e: unknown) => {
+    console.log(`the page then: ${JSON.stringify(await d.evaluate(pageNow, null, 3_000).catch((x: unknown) => String(x)), null, 1)}`);
+    throw e;
+  });
+  await shot("mod-asks");
+  await step("Turn on", 10_000, () => d.evaluate(clickText, { selector: ".panel button", text: "Turn on" }, 2_000));
+  const first = await until("the mod's report", 60_000, async () => (await heard(d)).find((m) => m["version"] === 1) ?? null);
+  console.log(`the mod saw: ${JSON.stringify(first, null, 1)}`);
+  check(first["origin"] === "null", "the mod's frame has an origin of its own (opaque)");
+  check(first["kiwi"] === "undefined" && first["electrobunBridge"] === "undefined", "the mod has no window.kiwi and no bridge object");
+  check(String(first["parentDocument"]).startsWith("blocked"), "the mod can't read the page");
+  check(String(first["storage"]).startsWith("blocked"), "the mod has no storage of the app's");
+  check(String(first["ownFetch"]).startsWith("blocked"), "the mod's own fetch reaches nothing");
+  check(String(first["relayFetch"]).startsWith("blocked"), "the mod can't reach the relay");
+  check(first["listed"] === 200, "the mod reaches the host it listed and the person approved");
+  check(String(first["unlisted"]).startsWith("blocked"), "the mod can't reach a host it didn't list");
+  check(String(first["relayByProxy"]).startsWith("blocked"), "the mod can't reach the relay through the app either");
+  await step("the mod's panel title", 10_000, () => d.evaluate(clickText, { selector: ".panel .panel-title", text: "Probe mod" }, 2_000));
+  await shot("mod-panel");
+  const sideTop = await until("the mod's sidebar section", 15_000, async () => {
+    const t = await d.evaluate(topAt, ".side .mod-side-slot", 2_000);
+    return t.found ? t : null;
+  }).catch(() => null);
+  console.log(`at the sidebar section: ${JSON.stringify(sideTop)}`);
+  check(sideTop?.top === "frame probe-mod in the sidebar", "a mod that asked for a sidebar section shows it, drawn by its own frame");
+  const titles = await d.evaluate(() => [...document.querySelectorAll(".side .mod-side h3")].map((h) => h.textContent), null, 2_000);
+  check(titles.includes("Probe side") && !titles.includes("Quiet side"), "a mod that didn't ask for a sidebar section gets none, even when it posts one");
+  const quiet = await until("the quiet mod's report", 15_000, async () => (await heard(d)).find((m) => "quiet" in m) ?? null).catch(() => null);
+  console.log(`the quiet mod: ${JSON.stringify(quiet)}`);
+  const tries = (quiet?.["quiet"] ?? []) as string[];
+  check(tries.length === 4 && tries.every((t) => /^\w+\(\) needs "[a-z-]+" in mod\.json's needs$/.test(t)), "the frame refuses a panel, section, command or message action its mod.json doesn't list");
+  const wide = await d.evaluate(topAt, ".panel .mod-slot", 2_000);
+  check(wide.top === "frame probe-mod", "the mod's panel is on top where the panel sits beside the chat");
+  const narrow = (await d.main("narrowForTest")) as { width: number };
+  await until("a narrow window", 10_000, () => d.evaluate(() => (innerWidth <= 1180 ? innerWidth : null), null, 2_000)).catch(() => null);
+  await later(500);
+  const floating = await d.evaluate(topAt, ".panel .mod-slot", 2_000);
+  console.log(`window ${narrow.width} wide, at the panel: ${JSON.stringify(floating)}`);
+  check(floating.top === "frame probe-mod", "the mod's panel is on top where the panel floats over the chat, in a window under 1180 px");
+  await shot("mod-narrow");
+  const still = await until("the mod's frame after it tried to leave", 15_000, async () => (await heard(d)).find((m) => m["stillHere"] === true) ?? null).catch(() => null);
+  if (!still) await howHeard(d, "no stillHere");
+  check(!!still, "the mod's frame stays where it is when it navigates itself");
+  await step("⌘K again", 10_000, palette);
+  await step("the mod's command, typed into ⌘K", 10_000, () => d.evaluate(fillIn, { selector: ".palette-input", value: "Say hi" }, 2_000));
+  await step("the mod's command in ⌘K", 10_000, () => d.evaluate(clickText, { selector: ".palette-item", text: "Say hi from the probe mod" }, 2_000));
+  const hi = await until("the command's run", 10_000, async () => (await heard(d)).find((m) => m["command"] === "hi") ?? null).catch(() => null);
+  if (!hi) await howHeard(d, "no hi");
+  check(!!hi, "the mod's command runs from ⌘K");
+  await step("⌘K once more", 10_000, palette);
+  await step("the quiet mod's name, typed into ⌘K", 10_000, () => d.evaluate(fillIn, { selector: ".palette-input", value: "Quiet" }, 2_000));
+  await later(1_000);
+  const found = await d.evaluate(() => [...document.querySelectorAll(".palette-item")].map((e) => e.textContent ?? ""), null, 2_000);
+  console.log(`⌘K for "Quiet": ${JSON.stringify(found)}`);
+  check(!found.some((t) => t.includes("Quiet")), "a mod that didn't ask for a panel or commands adds neither to ⌘K, even when it posts them");
+  await d.evaluate(() => (document.activeElement ?? document.body).dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })), null, 2_000);
+  await d.evaluate(
+    () => {
+      const a = document.createElement("a");
+      a.href = "https://example.com/?page-link";
+      a.target = "_blank";
+      a.textContent = "a link";
+      document.body.append(a);
+      a.click();
+      a.remove();
+      return true;
+    },
+    null,
+    3_000,
+  );
+  await clickMessageLink(d);
+  await howHeard(d, "after the message link");
+  check(!(await until("what the mods said", 15_000, () => heard(d))).some((m) => "sawMessage" in m || "action" in m), "no message reaches a mod before the person picks its action");
+  const items = await until("the message's menu", 10_000, () => d.evaluate(messageMenu, "the message link", 2_000));
+  console.log(`the message's menu: ${JSON.stringify(items)}`);
+  check(items.includes("Keep in the probe mod"), "a mod that asked for message actions adds one to a message's menu");
+  check(!items.includes("Quiet action"), "a mod that didn't ask for message actions adds none, even when it posts them");
+  await shot("mod-message-menu");
+  await step("the mod's message action", 10_000, () => d.evaluate(clickText, { selector: ".rail-menu.is-at-pointer button", text: "Keep in the probe mod" }, 2_000));
+  const kept = await until("the message, in the mod", 10_000, async () => (await heard(d)).find((m) => "action" in m) ?? null).catch(() => null);
+  console.log(`the mod got: ${JSON.stringify(kept)}`);
+  const got = (kept?.["action"] ?? {}) as Record<string, unknown>;
+  check(String(got["text"]).includes("the message link") && String(got["room"]).startsWith("#") && typeof got["seq"] === "number", "picking the action hands the mod that message, with its room");
+  await later(500);
+  const saw = (await heard(d)).filter((m) => "sawMessage" in m);
+  check(saw.length === 1 && saw[0]?.["sawMessage"] === "action" && saw[0]?.["surface"] === "main", "only that one message reached the mod, and only its main frame");
+  const was = await d.evaluate(
+    () => {
+      const before = document.documentElement.dataset["side"] ?? null;
+      document.documentElement.dataset["side"] = "none";
+      return before;
+    },
+    null,
+    2_000,
+  );
+  await later(2_000);
+  const hiddenSide = await d.evaluate(topAt, ".side .mod-side-slot", 2_000);
+  check(!hiddenSide.found, "with the sidebar hidden, the mod's section and its frame are hidden too");
+  const asked = Date.now();
+  await heard(d);
+  const answered = Date.now() - asked;
+  await howHeard(d, "with the sidebar hidden");
+  check(answered < 1_000, `the page keeps answering while the mod's sidebar frame is hidden (${answered} ms)`);
+  await step("⌘K with the sidebar hidden", 10_000, palette);
+  await step("the mod's command, typed again", 10_000, () => d.evaluate(fillIn, { selector: ".palette-input", value: "Say hi" }, 2_000));
+  await step("the mod's command, again", 10_000, () => d.evaluate(clickText, { selector: ".palette-item", text: "Say hi from the probe mod" }, 2_000));
+  const again = await until("the command's second run", 10_000, async () => ((await heard(d)).filter((m) => m["command"] === "hi").length >= 2 ? true : null)).catch(() => null);
+  check(!!again, "the mod's main frame still runs its command while its sidebar frame is hidden");
+  await d.evaluate(
+    (side) => {
+      if (side === null) delete document.documentElement.dataset["side"];
+      else document.documentElement.dataset["side"] = side;
+      return true;
+    },
+    was,
+    2_000,
+  );
+  await howHeard(d, "with the sidebar back");
+  await later(1_000);
+  await howHeard(d, "a second after the sidebar came back");
+  writeMod(2);
+  await later(3_000);
+  await howHeard(d, "3 s after the mod's source changed");
+  const second = await until("the mod again, after its source changed", 30_000, async () => (await heard(d)).find((m) => m["version"] === 2) ?? null).catch(() => null);
+  if (!second) {
+    await howHeard(d, "the mod didn't come back");
+    stacks("the mod didn't come back");
   }
+  check(!!second, "a saved change reloads the mod");
+  await later(1_500);
+  const opens = (await d.main("browserOpens")) as string[];
+  console.log(`opened in the browser: ${JSON.stringify(opens)}`);
+  check(opens.includes("https://example.com/?page-link"), "with a mod running, the page's own links still open in the browser");
+  check(opens.includes(MESSAGE_LINK), "with a mod running, a Ctrl-clicked link in a message still opens in the browser");
+  check(!opens.some((u) => /forged|mod-self-nav/.test(u)), "nothing the mod forged or navigated to opened in the browser");
+  check(app.exitCode === null && app.signalCode === null, "the app is still running after the mod's forged events");
+  writeCrashMod();
+  const crashed = await until("crash-mod switched off", 30_000, async () => (await modsNow(d)).find((m) => m.name === "crash-mod" && m.state === "off") ?? null).catch(() => null);
+  console.log(`crash-mod: ${JSON.stringify(crashed)}`);
+  check(crashed?.off === "crash" && (crashed.why ?? "").includes(CRASH), "a mod that throws as it starts is switched off, with its error as the reason");
+  check((await modsNow(d)).find((m) => m.name === "probe-mod")?.state === "on", "the other mods keep running");
+  await settingsMods(d, CRASH);
+  await d.main("activate").catch(() => null);
+  await later(1_000);
+  await shot("settings-mods");
   d.close();
+  await stop(app);
+  writeFileSync(join(root, ".kiwi", "mods", ".safe-mode"), "");
+  app = launch(exe, testEnv(root, join(root, "safe.sock"), RELAY));
+  const safe = await attach(join(root, "safe.sock"));
+  await step("the channel, in safe mode", 60_000, () => safe.evaluate(() => !!document.querySelector(".chan"), null, 2_000));
+  const listed = await modsNow(safe);
+  console.log(`mods in safe mode: ${JSON.stringify(listed)}`);
+  check(listed.every((m) => m.state !== "on") && listed.find((m) => m.name === "probe-mod")?.off === "safe", "safe mode starts with every mod off, and says why");
+  check(!existsSync(join(root, ".kiwi", "mods", ".safe-mode")), "safe mode by .safe-mode lasts one start: the app removes the file");
+  await settingsMods(safe, "No mod runs until Channels restarts");
+  check((await safe.evaluate(() => document.querySelectorAll('iframe[src*="mod-frame"]').length, null, 2_000)) === 0, "safe mode starts no mod's frame");
+  await shot("settings-mods-safe");
+  safe.close();
 } catch (e) {
   problems.push(e instanceof Error ? e.message : String(e));
   console.log(`FAIL ${problems.at(-1)}`);

@@ -8,7 +8,7 @@ order: 41
 
 A mod is a folder in `~/.kiwi/mods/` with a `mod.json` and an `index.tsx`. It can add a panel beside the chat and commands to ⌘K, and talk to the web hosts you approve. The app builds it when you save, with no build step of yours, and runs it in a frame of its own, away from your keys, your messages and the rest of the app.
 
-Mods run in the desktop app on a Mac. On Linux they're listed but stay off until an app update makes them safe to run there.
+Mods run in the desktop app, on a Mac and on Linux.
 
 ## Your first mod
 
