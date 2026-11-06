@@ -12,6 +12,7 @@ import { readDropped } from "./dropped.ts";
 import { followTheme } from "./frost-eb.ts";
 import { droppedPaths, pastedPng, showBadge, wallpaperImage, wallpaperPixels } from "./native-eb.ts";
 import { freePath } from "./save-file.ts";
+import { trayUnread } from "./menus-eb.ts";
 import { relaunchAfter } from "./update-asset.ts";
 import { applyUpdate } from "./updater.ts";
 import { ebDataDir } from "./store-eb.ts";
@@ -75,7 +76,10 @@ export const ebHost: Host = {
     const png = pastedPng(MAX_PASTED_BYTES);
     return png ? { type: "image/png", data: Buffer.from(png).toString("base64") } : null;
   },
-  badge: (count) => showBadge(count),
+  badge: (count) => {
+    showBadge(count);
+    trayUnread(count);
+  },
   accentColor: () => Utils.getAccentColor(),
   appearance: (appearance) => {
     if (shown?.win.ptr) followTheme(shown.win.ptr, appearance);
