@@ -1,5 +1,5 @@
 {
-  "electrobun": "2026.11.0",
+  "electrobun": "2026.10.2",
   "releasesBaseUrl": "https://github.com/kiwi-init/electrobun-livewire/releases/download",
   "hutch": {
     "version": "0.28.2-canary.8",
@@ -45,7 +45,7 @@
     "macos-arm64": {
       "Contents/MacOS/launcher": "cb56c4ccfa6d2c1a3596e44d143af212b5af3e196199a83c19d511506f28ff4f",
       "Contents/MacOS/bun": "0a2237cdcfa0d16ef501d9acca9f0026309ef348bea7393a64e8d1e3609565cc",
-      "Contents/MacOS/libElectrobunCore.dylib": "ed2f4908fb0228f8473c07e39393f3be2ece417fd11eac82e15e50d6ed00cc7a",
+      "Contents/MacOS/libElectrobunCore.dylib": "84fa116ae14d209dd0ec5b75f12c69663aa65d73eb08d4fcb0ebfdd88131d9de",
       "Contents/MacOS/libNativeWrapper.dylib": "3d6866727a427da9253e1e73c59f9027256d26ba4483114203ebbba12302aa24",
       "Contents/MacOS/libasar.dylib": "775e92fed7238ea1da09ec5ae54a72a19baaccf602a4467f16bb2e36cff9cfbc",
       "Contents/MacOS/zig-zstd": "581944e9e8cac153581cf17109f1f58b5b87202524909d11803bfce2402c2548",
@@ -53,7 +53,7 @@
       "Contents/Resources/main.js": "8afb61682280f0f2bd82abaad23996d043781cf23cd132a2bbfa2a8b8cd001c7",
       "Contents/Resources/preload-full.js": "0de49cdec806dfc7f7e55da5ad02ce69a7211be6e9d656b2b10c06af691d6a3c",
       "Contents/Resources/preload-sandboxed.js": "d358fa4e85148ae6059eca9cfb398faf7a6c0710a03cdc972275f6a61670f3f9",
-      "Contents/Resources/uninstall": "bc77b93a539adc1c05682d388d6d6d293c6fbdb01f17c71821dceeb246b75c5c"
+      "Contents/Resources/uninstall": "be11a753f315733d2bf6616b479422767d767919b088c11c2ca664fb5cfa9a93"
     }
   }
 }
