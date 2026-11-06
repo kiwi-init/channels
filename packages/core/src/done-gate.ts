@@ -1,8 +1,8 @@
-import type { CheckArtifact } from "./checks.ts";
+import { runPin, type CheckArtifact } from "./checks.ts";
 import { hasLanding, REVIEW_CHECK, type Landing } from "./protocol.ts";
 import { prOfTask } from "./prs.ts";
 import { sameHead } from "./stage.ts";
-import { askedBefore, checkPassed, passedAt, replacedBefore, type CheckState } from "./state/checks.ts";
+import { askedBefore, atRun, checkPassed, passedAt, replacedBefore, type CheckState } from "./state/checks.ts";
 import { releaseOf, shaKey, succeededBy, type GithubPr, type GithubState } from "./state/github.ts";
 import { heldBefore } from "./state/times.ts";
 import type { ReviewRound, Task } from "./state/types.ts";
@@ -39,6 +39,32 @@ function heldAtShipping(view: GateView, t: Task, pr: GithubPr, head: string, shi
   return missing;
 }
 
+function heldAtRun(view: GateView, t: Task, id: string, started: number): string[] {
+  const missing: string[] = [];
+  const round = approvalAt(t, started);
+  if (!round) missing.push("an approval before the run");
+  else if (round.at !== runPin(id)) missing.push(`an approval at run ${id}`);
+  const pre = [...view.checks.values()].filter((c) => c.holds.includes(t.id) && c.phase === "pre-ship" && askedBefore(c, started) && !replacedBefore(c, started));
+  if (!pre.length) missing.push("a pre-ship check passed before the run");
+  for (const c of pre) if (!atRun(c, id) || !passedAt(c, started)) missing.push(`check #${c.seq} passed before the run`);
+  return missing;
+}
+
+function runGate(view: GateView, t: Task, landing: boolean): DoneGate | undefined {
+  const run = t.run;
+  if (!run) return landing ? { kind: "waiting", why: `its run id: kiwi task proof T${t.id} --run ID` } : undefined;
+  if (run.started === undefined)
+    return landing ? { kind: "waiting", why: `run ${run.id}'s own start time (kiwi task proof T${t.id} --run ${run.id} --started TIME), or a person closes it with a reason` } : undefined;
+  const missing = heldAtRun(view, t, run.id, run.started);
+  if (missing.length) return { kind: "bypassed", missing };
+  if (!landing) return undefined;
+  const started = run.started;
+  const post = [...view.checks.values()].some(
+    (c) => c.phase === "post" && c.holds.includes(t.id) && atRun(c, run.id) && checkPassed(c) && (c.answer?.at ?? Number.POSITIVE_INFINITY) >= started,
+  );
+  return post ? { kind: "landed", artifact: { kind: "run", id: run.id } } : { kind: "waiting", why: `a passed post check quoting run ${run.id}` };
+}
+
 const PLAIN = /^(\d+)\.(\d+)\.(\d+)$/;
 const RANGE = /^([~^]?)(\d+|[x*])(?:\.(\d+|[x*]))?(?:\.(\d+|[x*]))?$/;
 
@@ -73,7 +99,7 @@ function npmStep(then: Landing): { pkg: string; range: string } | undefined {
 export function doneGate(view: GateView, t: Task): DoneGate | undefined {
   if (t.state === "done" || t.archived || !t.then || !hasLanding(t.then)) return undefined;
   const landing = t.state === "landing";
-  if (t.then === "run") return landing ? { kind: "waiting", why: "a person to close it with a reason: run tasks don't land on their own yet" } : undefined;
+  if (t.then === "run") return runGate(view, t, landing);
   const pr = landingPr(view, t);
   if (pr?.state !== "merged") {
     if (!landing) return undefined;

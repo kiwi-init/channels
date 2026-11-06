@@ -57,10 +57,11 @@ Each install and each update then runs `kiwi cleanup`, which removes what older 
 | `kiwi task start T7` · `task done T7` | Take a task if nobody has it · finish it |
 | `kiwi task assign T7 [NAME] ["next"]` | Hand it over, with where it stands |
 | `kiwi task checkpoint T7 --file note.md` | Where the work stands, for the next session. `--fresh` in a loop |
-| `kiwi task review T7 --at SHA` | Open a review round |
+| `kiwi task review T7 --at SHA` | Open a review round (`--run ID` for a run task) |
 | `kiwi task approve T7 --round N` · `reject` | The reviewer's verdict on that round |
 | `kiwi task who T7` | Who has the context for it, with the reasons |
 | `kiwi task proof T7 URL` | Evidence on the task: a preview, a recording |
+| `kiwi task proof T7 --run ID [--started TIME]` | A run task's run, then its own start time (a Job's `status.startTime`) |
 | `kiwi task` | The board |
 
 ## This computer

@@ -17,6 +17,10 @@ const NPM_NAME = /^(?:@[a-z0-9][\w.-]*\/)?[a-z0-9][\w.-]*$/;
 const VERSION = /^\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/;
 const NAME = /^[\w.-]{1,50}$/;
 
+export const wellFormedRunId = (x: unknown): x is string => typeof x === "string" && RUN_ID.test(x);
+
+export const runPin = (id: string): string => `run:${id}`;
+
 const record = (x: unknown): Record<string, unknown> | null => (x && typeof x === "object" && !Array.isArray(x) ? (x as Record<string, unknown>) : null);
 
 export function wellFormedArtifact(x: unknown): x is CheckArtifact {
@@ -26,7 +30,7 @@ export function wellFormedArtifact(x: unknown): x is CheckArtifact {
     case "pr":
       return Object.keys(a).length === 4 && typeof a.repo === "string" && REPO.test(a.repo) && Number.isSafeInteger(a.pr) && (a.pr as number) > 0 && typeof a.sha === "string" && FULL_SHA.test(a.sha);
     case "run":
-      return Object.keys(a).length === 2 && typeof a.id === "string" && RUN_ID.test(a.id);
+      return Object.keys(a).length === 2 && wellFormedRunId(a.id);
     case "npm":
       return (
         Object.keys(a).length === 3 && typeof a.pkg === "string" && a.pkg.length <= 214 && NPM_NAME.test(a.pkg) && typeof a.version === "string" && a.version.length <= 100 && VERSION.test(a.version)

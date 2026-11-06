@@ -287,10 +287,10 @@ describe("the done gate (#623 §5)", () => {
       const r = await runTask();
       await r.declare("job-1");
       await r.approveRun("job-1");
-      expect(shipGate(r.c.state(), r.c.state().tasks.get(r.t)!)).toEqual({ open: false, rejected: false, missing: [`check passed for run job-1`] });
+      expect(shipGate(r.c.state(), r.c.state().tasks.get(r.t)!)).toEqual({ open: false, rejected: false, missing: ["a pre-ship check passed for run job-1"] });
       await r.passed("pre-ship", "job-1");
       expect(shipGate(r.c.state(), r.c.state().tasks.get(r.t)!)).toEqual({ open: true });
-      expect(r.gate()).toEqual({ kind: "waiting", why: "run job-1 to start: kiwi task proof T" + r.t + " --run job-1 --started TIME records its own start time" });
+      expect(r.gate()).toEqual({ kind: "waiting", why: `run job-1's own start time (kiwi task proof T${r.t} --run job-1 --started TIME), or a person closes it with a reason` });
       await r.declare("job-1", at(r.c.log.length) + 500);
       expect(r.gate()).toEqual({ kind: "waiting", why: "a passed post check quoting run job-1" });
       await r.passed("post", "job-1");
@@ -317,12 +317,12 @@ describe("the done gate (#623 §5)", () => {
       const r = await runTask();
       await r.declare("job-1");
       await r.approveRun("job-1");
+      const ask = await r.c.say("ann", "blocking", "Is the run good?", { to: ["jow"], esc: true, choices: ["A: good", "B: not yet"], holds: [r.t], check: runCheck("pre-ship", "job-1") });
       const started = at(r.c.log.length) + 500;
-      const late = await r.passed("pre-ship", "job-1");
+      await r.c.answer(ask, "A: good");
       await r.declare("job-1", started);
       await r.passed("post", "job-1");
-      const ask = late.re![0]!;
-      expect(r.gate()).toEqual({ kind: "bypassed", missing: [`check #${ask} passed before the run`] });
+      expect(r.gate()).toEqual({ kind: "bypassed", missing: [`check #${ask.seq} passed before the run`] });
       expect(landingsDue({ ...r.c.state(), tasks: r.c.state().tasks })).toEqual([]);
     });
 

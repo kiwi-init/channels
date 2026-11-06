@@ -106,7 +106,6 @@ export function landingWaits(state: ChannelState, task: Task): string | null {
   const gate = doneGate(state, task);
   if (gate?.kind === "bypassed") return `shipped while its ship gate was shut (missing ${gate.missing.join(", ")}): a person closes it with a reason`;
   if (task.state !== "landing" || !task.then || task.then === "none") return null;
-  if (task.then === "run") return "waits for its run, then a post check quoting the run id";
   if (!gate) return null;
   if (gate.kind === "landed") return `is ready to land at ${artifactText(gate.artifact)}: the owner's app marks it landed`;
   const pr = landingPr(state, task);

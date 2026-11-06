@@ -18,6 +18,7 @@ import {
 } from "@kiwi/core/protocol.ts";
 import { omit } from "@kiwi/core/omit.ts";
 import { Rejected } from "@kiwi/core/refusals.ts";
+import { wellFormedRunId } from "@kiwi/core/checks.ts";
 import {
   isPerson,
   openRound,
@@ -186,6 +187,7 @@ export class SessionTasks extends SessionMessaging {
         round?: number;
         runs?: number[];
         proof?: { url: string; label?: string };
+        run?: { id: string; started?: number };
         checkpoint?: true;
         then?: Landing;
         lander?: string | null;
@@ -213,6 +215,7 @@ export class SessionTasks extends SessionMessaging {
         if (label !== undefined && (label.length > PROOF_LABEL_MAX_LENGTH || /[\r\n]/.test(label)))
           return yield* new Rejected(`the proof label is one line of at most ${PROOF_LABEL_MAX_LENGTH} characters`);
       }
+      if (change.run && !wellFormedRunId(change.run.id)) return yield* new Rejected(`"${change.run.id}" isn't a run id: letters, digits and . _ : / @ + -, at most 200`);
       if (change.state && change.state !== "cancelled" && !TASK_STATES.includes(change.state)) return yield* new Rejected(`state must be one of ${TASK_STATES.join(", ")}`);
       const owner = change.owner ? (yield* this.resolveTo([change.owner], state))?.[0] : change.owner;
       const lander = change.lander ? (yield* this.resolveTo([change.lander], state))?.[0] : change.lander;

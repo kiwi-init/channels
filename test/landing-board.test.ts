@@ -54,7 +54,7 @@ describe("what a landing task still waits for (#623 §2)", () => {
 
   test("run and npm steps say what proves them, and other states wait for nothing", async () => {
     const run = fold(await landing("run"), roster);
-    expect(landingWaits(run, [...run.tasks.values()].at(-1)!)).toBe("waits for its run, then a post check quoting the run id");
+    expect(landingWaits(run, [...run.tasks.values()].at(-1)!)).toBe(`waits for its run id: kiwi task proof T${[...run.tasks.values()].at(-1)!.id} --run ID`);
     const npm = fold(await landing("release:npm:@scope/lib@^1.2.0"), roster);
     expect(landingWaits(npm, [...npm.tasks.values()].at(-1)!)).toBe("waits for its PR to be linked and merged");
     expect(landingWaits(run, { ...[...run.tasks.values()].at(-1)!, state: "review" })).toBeNull();

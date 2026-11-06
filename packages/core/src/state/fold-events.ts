@@ -24,7 +24,7 @@ import { sameHead } from "../stage.ts";
 import { reposOf } from "./repos.ts";
 import { trustedAt } from "./times.ts";
 import { artifactKey, artifactText, doneGate } from "../done-gate.ts";
-import type { CheckArtifact } from "../checks.ts";
+import { runPin, type CheckArtifact } from "../checks.ts";
 import type { CheckState } from "./checks.ts";
 import { omit } from "../omit.ts";
 import { inlineText } from "../membership.ts";
@@ -32,7 +32,7 @@ import { readScopes, SCOPES, type Scope } from "../scopes.ts";
 import { cleanPersona } from "../personality.ts";
 import { isPerson, ownSeat, sponsorsAgent } from "./people.ts";
 import { roomName } from "./rooms.ts";
-import { currentState, landerOf, landingRefusal, landingReopens, openRound, reviewClaimRefusal, reviewMoveRefusal, revisedOut, taskId, verdictRefusal, worked } from "./tasks.ts";
+import { currentState, landerOf, landingRefusal, landingReopens, newRun, openRound, reviewClaimRefusal, reviewMoveRefusal, revisedOut, runRefusal, taskId, verdictRefusal, worked } from "./tasks.ts";
 import type { Charter, Compact, Fact, FoldMember, Hold, Lease, Nickname, PersonaLead, Room, SecretRoom, Task } from "./types.ts";
 import { dmPair, inRoom, leaveSeal, rootOf, selfOnly, type RoomMember } from "../room-rules.ts";
 
@@ -604,6 +604,11 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
         reject(verdictWrong);
         break;
       }
+      const runWrong = runRefusal(task, ev.run, trustedAt(m));
+      if (runWrong) {
+        reject(runWrong);
+        break;
+      }
       if (ev.state === "landing" && !mayFinish) {
         reject(`${taskId(task.id)} needs review by ${review === "*" ? "someone who hasn't worked on it" : review} before it lands`);
         break;
@@ -625,7 +630,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
               : { kind: "withdrawn", seq: m.seq };
       if (state === "review") {
         if (open) open.result = { kind: "withdrawn", seq: m.seq };
-        const head = reopens ? task.rounds.at(-1)?.at : ev.at?.trim();
+        const head = reopens ? (ev.run && newRun(task, ev.run) ? runPin(ev.run.id) : task.rounds.at(-1)?.at) : ev.at?.trim();
         task.rounds.push({
           n: (task.rounds.at(-1)?.n ?? 0) + 1,
           ...(head ? { at: head } : {}),
@@ -673,6 +678,8 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
         });
       if (ev.proof && !task.proof?.some((p) => p.url === ev.proof!.url) && (task.proof?.length ?? 0) < PROOF_MAX)
         task.proof = [...(task.proof ?? []), { seq: m.seq, by: m.from, ts: at, url: ev.proof.url, ...(ev.proof.label ? { label: ev.proof.label } : {}) }];
+      if (ev.run && task.run?.id !== ev.run.id) task.run = { id: ev.run.id, seq: m.seq, by: m.from, ...(ev.run.started !== undefined ? { started: ev.run.started } : {}) };
+      else if (ev.run?.started !== undefined && task.run) task.run.started ??= ev.run.started;
       if (ev.areas?.length) task.areas = [...new Set(ev.areas)];
       if (ev.owner === null && task.state === "doing") task.state = "todo";
       task.updatedAt = at;
