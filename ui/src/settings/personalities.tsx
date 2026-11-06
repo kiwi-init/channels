@@ -7,8 +7,9 @@ import { CAPABILITIES, MAX_AREA, MAX_AREAS, MAX_INSTRUCTIONS, MAX_NAME, ROLE_LAB
 import { PRESETS } from "@kiwi/core/presets.ts"
 import { Toggle } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
+import { RoleFace } from "~/kit/role-face"
 import { useApp } from "~/nav"
-import { Confirm, Group, Row, Seg } from "~/settings/controls"
+import { Confirm, Row, Seg } from "~/settings/controls"
 
 const TAGLINE: Record<string, string> = {
   builder: "Takes a task from start to done",
@@ -47,39 +48,54 @@ export function Personalities() {
 
   if (draft) return <Editor key={draft.id} start={draft} isNew={!own.some((p) => p.id === draft.id)} onDone={() => setDraft(null)} />
   return (
-    <>
-      <Group title="Personalities">
+    <section className="set-group" aria-label="Personalities">
+      <div className="heading">
+        <h3>Personalities</h3>
+      </div>
+      <ul className="persona-cards">
         {PRESETS.map((p) => (
-          <Row key={p.id} label={p.name} hint={tagline(p)}>
-            <button type="button" className="btn is-quiet is-small set-on-hover" aria-label={`Copy ${p.name}`} onClick={() => setDraft(copy(p))}>
-              Copy
-            </button>
-          </Row>
+          <Card key={p.id} p={p} verb="Copy" onOpen={() => setDraft(copy(p))} />
         ))}
         {own.map((p) => (
-          <Row
-            key={p.id}
-            label={
-              <span className="persona-name">
-                <span className="persona-glyph" aria-hidden="true">
-                  {p.glyph}
-                </span>
-                {p.name}
-              </span>
-            }
-            hint={tagline(p)}
-          >
-            <button type="button" className="btn is-quiet is-small set-on-hover" aria-label={`Edit ${p.name}`} onClick={() => setDraft(p)}>
-              Edit
-            </button>
-          </Row>
+          <Card key={p.id} p={p} verb="Edit" onOpen={() => setDraft(p)} />
         ))}
-        <button type="button" className="set-row set-add" onClick={() => setDraft({ ...BLANK, id: freeId(BLANK.name, taken) })}>
-          <Icon name="plus" size={14} />
-          New personality
-        </button>
-      </Group>
-    </>
+        <li>
+          <button type="button" className="persona-card is-new" onClick={() => setDraft({ ...BLANK, id: freeId(BLANK.name, taken) })}>
+            <span className="persona-card-face">
+              <Icon name="plus" size={16} />
+            </span>
+            <span className="persona-card-name">New personality</span>
+          </button>
+        </li>
+      </ul>
+    </section>
+  )
+}
+
+function Card({ p, verb, onOpen }: { p: Personality; verb: "Copy" | "Edit"; onOpen: () => void }) {
+  const preset = verb === "Copy"
+  return (
+    <li>
+      <button type="button" className="persona-card" aria-label={`${verb} ${p.name}`} onClick={onOpen}>
+        <span className="persona-card-face" aria-hidden="true">
+          <RoleFace role={p.role} />
+        </span>
+        <span className="persona-card-text">
+          <span className="persona-card-name">
+            {!preset && (
+              <span className="persona-glyph" aria-hidden="true">
+                {p.glyph}
+              </span>
+            )}
+            {p.name}
+          </span>
+          <span className="persona-card-line">{tagline(p)}</span>
+        </span>
+        <span className="persona-card-verb" aria-hidden="true">
+          {verb}
+        </span>
+      </button>
+    </li>
   )
 }
 

@@ -48,7 +48,7 @@ export function Body({
   const { markdown } = useMemo(() => ({ parser, markdown: linked(text, names, tasks, seq) }), [parser, text, names, tasks, seq])
   const [shown, setShown] = useState(false)
   const onShown = useCallback(() => setShown(true), [])
-  const onMention = useCallback((name: string) => go({ to: "panel", panel: { kind: "person", name } }), [go])
+  const onMention = useCallback((name: string) => go({ to: "modal", modal: { kind: "person", name } }), [go])
   const onTask = useCallback((task: number) => go({ to: "panel", panel: { kind: "task", task } }), [go])
   return (
     <div className="msg-text">
@@ -223,7 +223,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
               type="button"
               className="msg-name"
               title={who?.role && who.role.toLowerCase() !== nickname(channel, m.from).toLowerCase() ? who.role : undefined}
-              onClick={() => go({ to: "panel", panel: { kind: "person", name: m.from } })}
+              onClick={() => go({ to: "modal", modal: { kind: "person", name: m.from } })}
               onContextMenu={(e) => who && showMenu(e, nickname(channel, m.from), (x) => [x.personItems({ channel, go }, who)])}
             >
               {nickname(channel, m.from)}

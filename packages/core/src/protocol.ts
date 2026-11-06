@@ -233,6 +233,7 @@ export type Event =
       state?: TaskState | OldTaskState;
       owner?: string | null;
       title?: string;
+      detail?: string;
       note?: string;
       review?: string | null;
       claim?: true;
@@ -246,6 +247,7 @@ export type Event =
       checkpoint?: true;
     }
   | { op: "task.first"; task: number }
+  | { op: "task.delete"; task: number; why?: string }
   /** What a member is and has, said by itself: where it runs, what runs it, what it can use. Shown in People. */
   | ({ op: "card" } & Card)
   /** Claims are gone. Older clients still send these; they fold to nothing. */
@@ -321,6 +323,7 @@ export type Event =
   | { op: "spec.set"; ask: number; text: string }
   | { op: "spec.approve"; ask: number; v: number }
   | { op: "spec.result"; ask: number; verdict: SpecVerdict; note?: string }
+  | { op: "spec.delete"; ask: number; why?: string }
   | { op: "specs.only.set"; on: boolean };
 
 export type SpecVerdict = "accepted" | "back" | "dropped";
@@ -832,7 +835,7 @@ export interface NewerEvent {
 
 export type WirePayload = Omit<Payload, "ev"> & { ev?: Event | NewerEvent };
 
-export const EVENT_OPS_VERSION = 16;
+export const EVENT_OPS_VERSION = 17;
 
 export const opsVersion = (x: unknown): x is number => Number.isSafeInteger(x) && (x as number) >= 1 && (x as number) <= 10_000;
 const NEWER_OP_RE = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/;
@@ -854,7 +857,7 @@ export function asSent(m: Message): Omit<Message, "newer" | "ev"> & { ev?: Event
 
 export const outgrown = (base: { folded?: number; skipped?: true }): boolean => base.skipped === true && (base.folded ?? 0) < EVENT_OPS_VERSION;
 
-export const FOLD_RULES = 23;
+export const FOLD_RULES = 24;
 
 export const olderRules = (base: { rules?: number }): boolean => (base.rules ?? 0) < FOLD_RULES;
 
@@ -1009,12 +1012,15 @@ function eventCheck(ev: unknown): boolean | null {
     case "task.claim":
     case "task.first":
       return n(e.task);
+    case "task.delete":
+      return n(e.task) && opt(e.why, (x): x is string => str(x, 500));
     case "task.update":
       return (
         n(e.task) &&
         opt(e.state, (x): x is string => typeof x === "string" && ([...TASK_STATES, ...OLD_TASK_STATES] as readonly string[]).includes(x)) &&
         (e.owner === undefined || e.owner === null || str(e.owner, 64)) &&
         opt(e.title, (x): x is string => str(x, 500)) &&
+        opt(e.detail, (x): x is string => str(x, TASK_BODY_MAX_LENGTH)) &&
         opt(e.note, (x): x is string => str(x)) &&
         (e.review === undefined || e.review === null || str(e.review, 64)) &&
         (e.claim === undefined || (e.claim === true && typeof e.review === "string")) &&
@@ -1178,6 +1184,8 @@ function eventCheck(ev: unknown): boolean | null {
       return n(e.ask) && (e.ask as number) > 0 && str(e.text, MAX_SPEC) && (e.text as string).trim().length > 0;
     case "spec.approve":
       return n(e.ask) && (e.ask as number) > 0 && n(e.v) && (e.v as number) > 0;
+    case "spec.delete":
+      return n(e.ask) && (e.ask as number) > 0 && opt(e.why, (x): x is string => str(x, MAX_SPEC_NOTE));
     case "specs.only.set":
       return typeof e.on === "boolean";
     case "spec.result":

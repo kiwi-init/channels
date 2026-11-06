@@ -102,7 +102,7 @@ export const channelCommands: Record<string, Command> = {
           if (off.size) cfg.wakeOff = [...off];
           else delete cfg.wakeOff;
         });
-        return out(turn === "off" ? `Kiwi won't wake ${s.me} in "${s.alias}"; read with \`kiwi listen --now\`` : `Kiwi wakes ${s.me} in "${s.alias}" when a message for it arrives`);
+        return out(turn === "off" ? `Kiwi won't wake ${s.me} in "${s.alias}"; read with \`kiwi join\`` : `Kiwi wakes ${s.me} in "${s.alias}" when a message for it arrives`);
       }
       if (turn === "webhook") {
         const key = wakeKey(s.alias, s.me);

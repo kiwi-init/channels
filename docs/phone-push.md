@@ -5,7 +5,7 @@ A phone with the app closed hears about a message meant for its person through a
 ## What each side sees
 
 - **Apple and Google** see a random tag and a sequence number. The tag is one the phone picked when it registered, so they never see a room, a name or any text.
-- **The relay** sees which members a message is for, never what it says. The sender's app names them in a `wake` list next to the ciphertext: whom it is to, who it mentions, the other side of a DM, and who answers an escalated decision. It names them only for what a phone shows: #general, the lead chat, and asks.
+- **The relay** sees which members a message is for, never what it says. The sender's app names them in a `wake` list next to the ciphertext, only for what lands in Needs you: an ask wakes whom it is to and who answers decisions; a permission, a step or a handoff wakes whom it is to. Messages, mentions and DMs wake no phone.
 - **The phone** fetches message `seq` from the room its tag points to, decrypts it with the keys it already holds, and shows it.
 
 ## The relay's side

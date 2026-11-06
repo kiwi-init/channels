@@ -85,7 +85,7 @@ function Crew({ channel }: { channel: Channel }) {
   return (
     <nav className="crew" aria-label="Agents">
       {agents.map((p) => {
-        const on = nav.panel?.kind === "person" && nav.panel.name === p.name
+        const on = nav.modal?.kind === "person" && nav.modal.name === p.name
         const task = taskOf(p, channel)
         return (
           <button
@@ -94,7 +94,7 @@ function Crew({ channel }: { channel: Channel }) {
             className={cx("crew-agent", on && "is-on", p.presence === "offline" && "is-off")}
             aria-pressed={on}
             title={statusOf(p, channel)}
-            onClick={() => go({ to: "panel", panel: on ? null : { kind: "person", name: p.name } })}
+            onClick={() => go({ to: "modal", modal: on ? null : { kind: "person", name: p.name } })}
           >
             <Avatar person={p} size="sm" pip />
             <span className="crew-name">{shown(p)}</span>
@@ -113,10 +113,10 @@ function Crew({ channel }: { channel: Channel }) {
       })}
       <button
         type="button"
-        className={cx("crew-add", nav.panel?.kind === "add-agent" && "is-on")}
+        className={cx("crew-add", nav.modal?.kind === "add-agent" && "is-on")}
         aria-label="Add agent"
         title="Add agent"
-        onClick={() => go({ to: "panel", panel: { kind: "add-agent" } })}
+        onClick={() => go({ to: "modal", modal: { kind: "add-agent" } })}
       >
         <Icon name="plus" size={14} />
       </button>

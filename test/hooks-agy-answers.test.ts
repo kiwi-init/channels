@@ -36,16 +36,23 @@ async function joinFromAgy(owner: string, home: string, code: string): Promise<s
   const env = { ANTIGRAVITY_AGENT: "1", ANTIGRAVITY_CONVERSATION_ID: CONVERSATION, CLAUDECODE: "", KIWI_MODEL: "gemini-3.8-flash-low" };
   const p = spawn(home, ["join", code, "--timeout", "40s"], env, home, undefined, [join(bin, "agy"), cli]);
   let out = "";
+  let err = "";
   void (async () => {
     for await (const chunk of p.stdout) out += new TextDecoder().decode(chunk);
+  })();
+  void (async () => {
+    for await (const chunk of p.stderr) err += new TextDecoder().decode(chunk);
   })();
   await until(() => out.includes("waiting for the owner"), "the join asking");
   let listed = "";
   await until(async () => /\d{3}-\d{3}/.test((listed = await ok(owner, ["--as", "human", "requests"]))), "the request listed with its code");
   await ok(owner, ["--as", "human", "approve", /(\d{3}-\d{3})/.exec(listed)![1]!, "--yes"]);
+  await until(() => out.includes("Listening now"), "join listening");
+  const me = youAre(out);
+  await ok(owner, ["send", "--to", me, "join wake message"]);
   await until(() => out.includes("joined: "), "the join ending");
   expect(out).toContain("joined: 0");
-  return youAre(out);
+  return me;
 }
 
 describe("Antigravity CLI's hooks answer in agy's format", () => {
@@ -86,7 +93,7 @@ describe("Antigravity CLI's hooks answer in agy's format", () => {
     expect(rearmAnswer.reason).toContain("no Kiwi listener of yours is running for agyroom");
     expect(rearmAnswer.reason).toContain("run_command");
 
-    const listener = spawn(home, ["listen", "--once"], { ANTIGRAVITY_AGENT: "1", ANTIGRAVITY_CONVERSATION_ID: CONVERSATION });
+    const listener = spawn(home, ["join"], { ANTIGRAVITY_AGENT: "1", ANTIGRAVITY_CONVERSATION_ID: CONVERSATION });
     await until(
       async () => (await hook("stop", agyInput(home, { executionNum: 1, terminationReason: "NO_TOOL_CALL", fullyIdle: true, error: "" }))).out === "",
       "stop out is empty when listener is running",

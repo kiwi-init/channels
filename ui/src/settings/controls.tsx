@@ -2,7 +2,7 @@ import "~/styles/settings.css"
 
 import { useState, type ReactNode } from "react"
 
-import { cx, Dialog, DialogHead } from "~/kit/bits"
+import { autofocus, cx, Modal } from "~/kit/bits"
 import { Track } from "~/kit/glide"
 
 export function Seg<T extends string | number>({ label, value, options, onChange }: { label: string; value: T; options: readonly (readonly [T, string])[]; onChange: (value: T) => void }) {
@@ -17,8 +17,6 @@ export function Seg<T extends string | number>({ label, value, options, onChange
   )
 }
 
-export const autofocus = (el: HTMLElement | null) => el?.setAttribute("autofocus", "")
-
 export function Row({ label, hint, children, wide, tip }: { label: ReactNode; hint?: ReactNode; children?: ReactNode; wide?: boolean; tip?: string }) {
   return (
     <div className={cx("set-row", wide && "is-wide")} title={tip}>
@@ -31,12 +29,13 @@ export function Row({ label, hint, children, wide, tip }: { label: ReactNode; hi
   )
 }
 
-export function Group({ title, hint, children }: { title?: string; hint?: string; children: ReactNode }) {
+export function Group({ title, hint, aside, children }: { title?: string; hint?: string; aside?: ReactNode; children: ReactNode }) {
   return (
     <section className="set-group" aria-label={title}>
       {title && (
         <div className="heading">
           <h3>{title}</h3>
+          {aside}
         </div>
       )}
       {hint && <p className="set-group-hint">{hint}</p>}
@@ -110,8 +109,7 @@ export function Confirm({
 }) {
   const safe = children !== undefined || !ready
   return (
-    <Dialog open={open} onClose={onClose} label={title}>
-      <DialogHead title={title} sub={sub} onClose={onClose} />
+    <Modal open={open} onClose={onClose} label={title} title={title} sub={sub}>
       <form
         className="set-confirm"
         onSubmit={(e) => {
@@ -120,7 +118,7 @@ export function Confirm({
         }}
       >
         {children}
-        <div className="dialog-foot">
+        <div className="modal-foot">
           <button type="button" className="btn is-quiet" onClick={onClose} ref={safe ? autofocus : undefined}>
             Cancel
           </button>
@@ -129,6 +127,6 @@ export function Confirm({
           </button>
         </div>
       </form>
-    </Dialog>
+    </Modal>
   )
 }

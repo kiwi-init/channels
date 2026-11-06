@@ -59,8 +59,11 @@ import {
   READS_PER_MINUTE,
   remove,
   request,
+  requestsChanged,
   requestStatus,
+  requestTag,
   requestToken,
+  requestWait,
   requireChecked,
   reveal,
   rotate,
@@ -76,6 +79,7 @@ import {
   storeBlob,
   touch,
   UPDATE_KIWI,
+  watchRequests,
   type CreateBody,
   type Effects,
   type MemberBody,
@@ -327,7 +331,22 @@ const routes: RoomRoute[] = [
     method: "GET",
     path: new RegExp(`^/requests/${ID}$`),
     guard: "requester", // signed by the requester's key, which isn't a member yet
-    run: ({ me: pk }, m) => Effect.map(requestStatus(m[1]!, pk), (data) => ({ data })),
+    run: ({ me: pk }, m) =>
+      Effect.gen(function* () {
+        const { req, url } = yield* Request_;
+        const watch = watchRequests((yield* RoomStore).sql);
+        const until = Date.now() + requestWait(url);
+        for (;;) {
+          if (watch.gone()) return yield* gone();
+          const seen = watch.rev();
+          const data = yield* requestStatus(m[1]!, pk).pipe(Effect.catchCause((cause) => (watch.gone() ? Effect.fail(gone()) : Effect.failCause(cause))));
+          const etag = requestTag(data);
+          const left = until - Date.now();
+          if (left <= 0 || !holds(req, etag)) return yield* tagged(etag, () => data);
+          yield* Effect.promise(() => watch.next(seen, left, req.signal));
+          if (req.signal.aborted) return yield* tagged(etag, () => data);
+        }
+      }),
   },
   { method: "GET", path: "/", guard: "member", run: () => withRoom((db) => ({ data: { head: db.head() } })) },
   {
@@ -882,5 +901,10 @@ export async function onHttp(relay: Relay, db: RoomDb, req: Request, path: strin
   if (!got) return { res: Response.json({ error: "request too large", tag: "TooLarge" }, { status: 413 }) };
   const context = inRoom(relay, db).pipe(Context.add(Request_, got));
   // Anything else (a bug, a storage error) propagates, and the adapter answers 500 as before.
-  return Effect.runPromiseWith(context)(program);
+  if (req.method === "GET" || req.method === "HEAD") return Effect.runPromiseWith(context)(program);
+  try {
+    return await Effect.runPromiseWith(context)(program);
+  } finally {
+    requestsChanged(db.sql);
+  }
 }

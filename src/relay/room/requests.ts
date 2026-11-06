@@ -6,8 +6,8 @@ import { commitTo, NONCE_RE, ownerNonceStatement } from "@kiwi/core/sas.ts";
 import { BadRequest, Conflict, Denied, NotFound, Removed, TooLarge, TooMany, UpdateRequired } from "../failures.ts";
 import { fits, JoinRequest } from "../schema.ts";
 import { readMeta, UPDATE_KIWI } from "./auth.ts";
-import { RoomStore } from "./db.ts";
-import { MAX_PENDING, REQUEST_TTL_MS } from "./limits.ts";
+import { RoomStore, type Sql } from "./db.ts";
+import { MAX_PENDING, REQUEST_TTL_MS, REQUEST_WAIT_MAX_S } from "./limits.ts";
 import { liveDelegation } from "./delegations.ts";
 import { keysFor } from "./members.ts";
 
@@ -92,6 +92,64 @@ export const requestStatus = Effect.fn("Room.requestStatus")(function* (id: stri
 });
 
 type RequestStatus = { status: string; ownerNonce?: string | null; revealed?: boolean; epoch?: number; keys?: Record<string, string>; delegation?: string };
+
+export const requestTag = (status: RequestStatus): string => {
+  let h = 0x811c9dc5;
+  for (const c of JSON.stringify(status)) h = Math.imul(h ^ c.charCodeAt(0), 0x01000193);
+  return `"request-${(h >>> 0).toString(36)}"`;
+};
+
+export const requestWait = (url: URL): number => {
+  const wait = Number(url.searchParams.get("wait") ?? 0);
+  return Number.isFinite(wait) && wait > 0 ? Math.min(wait, REQUEST_WAIT_MAX_S) * 1000 : 0;
+};
+
+type Watch = { rev: number; gone: boolean; wakes: Set<() => void> };
+
+const watches = new WeakMap<Sql, Watch>();
+
+const wakeAll = (w: Watch) => {
+  const wakes = [...w.wakes];
+  w.wakes.clear();
+  for (const wake of wakes) wake();
+};
+
+export const requestsChanged = (sql: Sql): void => {
+  const w = watches.get(sql);
+  if (!w) return;
+  w.rev++;
+  wakeAll(w);
+};
+
+export const requestsGone = (sql: Sql): void => {
+  const w = watches.get(sql);
+  if (!w) return;
+  watches.delete(sql);
+  w.gone = true;
+  wakeAll(w);
+};
+
+export const watchRequests = (sql: Sql) => {
+  const w = watches.get(sql) ?? { rev: 0, gone: false, wakes: new Set<() => void>() };
+  watches.set(sql, w);
+  return {
+    rev: () => w.rev,
+    gone: () => w.gone,
+    next: (seen: number, ms: number, signal: AbortSignal) =>
+      new Promise<void>((resolve) => {
+        if (seen !== w.rev || w.gone || signal.aborted) return resolve();
+        const done = () => {
+          clearTimeout(timer);
+          signal.removeEventListener("abort", done);
+          w.wakes.delete(done);
+          resolve();
+        };
+        const timer = setTimeout(done, ms);
+        signal.addEventListener("abort", done);
+        w.wakes.add(done);
+      }),
+  };
+};
 
 const pendingCheck = Effect.fn("Room.pendingCheck")(function* (id: string) {
   const db = yield* RoomStore;

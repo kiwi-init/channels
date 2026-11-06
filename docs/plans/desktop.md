@@ -15,7 +15,7 @@
 > Chromium app is not an issue at all." Then: "this is all I want, go off."
 >
 > Decided with the owner (2026-10-13):
-> 1. **Sign-in stays only to create channels.** WorkOS is the public relay's gate on who may create
+> 1. **Sign-in stays only to create channels.** Sign-in is the public relay's gate on who may create
 >    (the beta list, channels per owner). Nothing else needs a session.
 > 2. **Start fresh.** 0.11 is a breaking release: no import from browser dashboards, 0.10 CLIs are
 >    told to update, and compatibility paths for them can go.
@@ -33,7 +33,7 @@
 | **kiwi** (CLI) | agents' shells, hooks, MCP | agent identities per channel | agent verbs only; talks to the daemon to listen; `kiwi pair` pairs the computer |
 | **relay** | Worker / Bun | rooms, a pairing mailbox | unchanged channel protocol; sign-in only on `POST /create` |
 
-What goes: the hosted web dashboard, WorkOS everywhere but create, the passkey vault, device
+What goes: the hosted web dashboard, sign-in everywhere but create, the passkey vault, device
 handovers, `kiwi setup`'s browser linking and the relay's machine links, the signed-in channel
 directory and usage pages, seats (computer-signed records), `kiwi tui`, `kiwi web` and `#…&id=`
 links, terminal pairing, CLI admin and the "people-only" checks it needed.
@@ -91,7 +91,7 @@ Changed:
   `renewSeat`, `resignAdmitted`, `revokeComputer`, `tendSeats`, `SEAT_DAYS`, and the agent's trust in
   computer-signed keys (`ChannelAccess.via/viaUpTo`).
 - **Sign-in**: only `POST /create` takes `x-human-token` (beta gate, channels per owner). Owner
-  actions are the owner key's signature alone. `/info` no longer names the owner from WorkOS.
+  actions are the owner key's signature alone. `/info` no longer names the owner from sign-in.
 - **Pairing mailbox**: `PUT /v1/mailbox/<id>/<a|b>` `{box}` (write-once, ≤ 64 KiB, the mailbox lives
   10 minutes from its first write), `GET` the same (404 while empty), `DELETE /v1/mailbox/<id>`.
   Unauthenticated (the id is unguessable); rate-limited per client address.
@@ -156,8 +156,8 @@ what the app does through `src/client.ts`.
   (`desktop/src/channels.ts`, a utility process running `keyring.ts`), which holds the channel
   keys, signs, follows the live stream and seals the cache; main makes a join's person claim for
   it and refuses a write that changes a saved channel's keys (T203),
-  `signIn()` (WorkOS device authorization in the main process, opening the system browser; refresh
-  token kept with `safeStorage`; a relay with dev sign-in asks for a name), notifications, opening
+  `signIn()` (device authorization in the main process, opening the system browser; a relay with
+  dev sign-in asks for a name), notifications, opening
   links outside, the daemon (`status`, `adopt`), deep links (`kiwi://join/<code>`).
 - **Tray**: closing the window keeps the app running (it approves your computers' agents and
   notifies you); Quit is in the tray menu.
@@ -168,7 +168,7 @@ what the app does through `src/client.ts`.
   … | sh -s -- pair kp1-…` and `kiwi pair kp1-…`, waits on the mailbox, asks you to confirm) and
   removes one (forgets it, and removes its agents from the channels you own). Every owned channel is
   watched in the background for requests (auto-approval, a notification when something needs you).
-  Creating a channel asks the bridge to sign in when the relay has sign-in. Gone: WorkOS UI, the
+  Creating a channel asks the bridge to sign in when the relay has sign-in. Gone: the sign-in UI, the
   vault and passkeys, Add a device, the link-a-computer page, usage, the signed-in listing (a closed
   channel's "new" dot comes from its member-signed head instead), `#…&id=` links, the terminal
   pairing dialog, seat pickers and "joined via".

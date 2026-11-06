@@ -2,7 +2,7 @@ import { MAX_PIN } from "@kiwi/core/pin.ts";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import { openSession } from "../../agent.ts";
-import { Channel, keepHeld, RelayError } from "@kiwi/core/client.ts";
+import { Channel, keepHeld, RelayError, type JoinStatus, type JoinWatch } from "@kiwi/core/client.ts";
 import { Cursor, Keystore, loadConfig } from "../../config.ts";
 import { heldText, seatHeldAway } from "../../hold.ts";
 import { decodeJoinCode, type ChannelAccess } from "@kiwi/core/crypto.ts";
@@ -21,10 +21,14 @@ import { joinedText } from "../brief.ts";
 import { autoInstallExtraHooks, autoInstallHooks, bindDirectory, bindingFor } from "../../hooks.ts";
 import { notePersonaTold, personaMark } from "../../hooks/persona-line.ts";
 import { detectCard, detectModel, detectRuns, mergeCard } from "../../card.ts";
+import { listenMode, runInBackground } from "../../hooks/reach.ts";
 import { args, opt } from "../args.ts";
-import { agentName, type Command, config, die, keepDaemon, NAME_RE, out, relayUrl, seatHere } from "../context.ts";
+import { agentName, type Command, config, die, keepDaemon, NAME_RE, out, relayUrl, seatHere, session } from "../context.ts";
+import { listenAs, modeFor } from "./listen.ts";
 
 const JOIN_POLL_MS = /^[1-9]\d*$/.test(process.env.KIWI_JOIN_POLL_MS ?? "") ? Number(process.env.KIWI_JOIN_POLL_MS) : 1500;
+
+const JOIN_WAIT_S = 20;
 
 const OWNER_NAME = "human";
 
@@ -75,7 +79,11 @@ export const joinCommands: Record<string, Command> = {
     Effect.gen(function* () {
       const keys = yield* Keystore;
       const cursor = yield* Cursor;
-      const code = (args[1] ?? (yield* die("usage: kiwi join <code> [alias] --model MODEL [--harness NAME] [--nick NAME] [--as HANDLE]"))).trim();
+      if (args[1] === undefined) {
+        const held = yield* session();
+        return yield* listenAs(held, modeFor(held));
+      }
+      const code = args[1].trim();
       try {
         decodeJoinCode(code);
       } catch {
@@ -211,6 +219,14 @@ export const joinCommands: Record<string, Command> = {
           );
           if (who.session) notePersonaTold(alias, name, who.session, personaMark(seat?.persona));
           yield* keepDaemon;
+          const mode = modeFor(s);
+          if (mode === "read") return;
+          out(
+            mode === "once"
+              ? "Listening now: this command ends when a message for you arrives. While it runs in the background, don't start another; if it runs in the foreground, stop it and start it in the background as above."
+              : "Listening now: each message for you prints here as it arrives. If this command is your monitor, don't start another; if not, stop it and start the monitor as above.",
+          );
+          return yield* listenAs(s, mode);
         });
 
       if (hadKey) {
@@ -234,12 +250,18 @@ export const joinCommands: Record<string, Command> = {
         ),
       );
       const wait = opt.timeout ?? "30m";
+      const background = listenMode(true, who) === "read" ? null : runInBackground(who.harness);
       out(
         [
           `asked to join as ${name}.`,
           `your request says you run on: ${cardLine(card)}`,
           `waiting for the owner to open your request… Leave this running until it prints "joined" (up to ${wait}). If your shell stops it first, run the exact same command again (same request; with a short tool timeout, add --timeout 2m and repeat). Never type or guess the code it shows.`,
-        ].join("\n"),
+          background
+            ? `If this command isn't running in the background, stop it and run it again ${background}: it waits for the owner, then keeps listening for you, and that is what wakes you in this session.`
+            : null,
+        ]
+          .filter(Boolean)
+          .join("\n"),
       );
       const deadline = Date.now() + parseDuration(wait) * 1000;
       const poke = Effect.promise(() =>
@@ -251,12 +273,16 @@ export const joinCommands: Record<string, Command> = {
       );
       let poked = 0;
       let shown: string | null = null;
+      let seen: string | null = null;
       for (;;) {
         if (req.computer && Date.now() - poked >= POKE_EVERY_MS) {
           poked = Date.now();
           yield* poke;
         }
-        const st = yield* Channel.fx.joinStatus(relay, code, id, req.requestId);
+        const until = req.computer ? Math.min(deadline, poked + POKE_EVERY_MS) : deadline;
+        const watched: JoinWatch = yield* Channel.fx.watchJoin(relay, code, id, req.requestId, seen, Math.max(0, Math.min(JOIN_WAIT_S, Math.ceil((until - Date.now()) / 1000))));
+        seen = watched.tag;
+        const st: JoinStatus = watched.status ?? { status: "pending", code: shown };
         if (st.status === "pending" && st.code && st.code !== shown) {
           shown = st.code;
           out(`verification code ${st.code}: the owner sees the same 6 digits next to your request, and approves once they match.`);
@@ -275,7 +301,7 @@ export const joinCommands: Record<string, Command> = {
             3,
           );
         }
-        yield* Effect.sleep(JOIN_POLL_MS);
+        if (!seen) yield* Effect.sleep(JOIN_POLL_MS);
       }
     }),
 };

@@ -54,7 +54,7 @@ const COMPUTER: ThisComputer = {
 const FINDINGS: Finding[] = [
   { ok: true, what: "kiwi     2026.10.8 at ~/.local/bin/kiwi" },
   { ok: true, what: "relay    wss://relay.kiwi.sh answers" },
-  { ok: false, what: "Codex's hooks are from an older kiwi", how: "Update them in Settings > Agents > Hooks." },
+  { ok: false, what: "Codex's hooks are from an older kiwi", how: "Update them in Settings > Agents > Harnesses." },
 ]
 
 const STARTS: AgentStarts = {
@@ -528,6 +528,14 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
         }),
       setSpecsOnly: (code, on) => edit(code, (c) => ({ ...c, specsOnly: on ? (true as const) : undefined })),
       setTaskStatus: (code, id, status) => editTask(code, id, (t) => ({ ...t, status, updatedAt: Date.now() })),
+      editTask: (code, id, change) =>
+        editTask(code, id, (t) => ({
+          ...t,
+          ...(change.title?.trim() ? { title: change.title.trim() } : {}),
+          ...(change.detail !== undefined ? { detail: change.detail.trim() || undefined } : {}),
+          updatedAt: Date.now(),
+        })),
+      deleteTask: (code, id) => edit(code, (c) => ({ ...c, tasks: c.tasks.filter((t) => t.id !== id) })),
       cancelTask: (code, id, why) =>
         edit(code, (c, seq) => ({
           ...c,
@@ -577,6 +585,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
             editors: [c.you],
             stage: "draft",
             backs: [],
+            comments: [],
             tasks: [],
             canJudge: true,
           }
@@ -589,7 +598,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
           ...c,
           specs: c.specs?.map((sp) => {
             if (sp.ask !== ask) return sp
-            const changed = !!sp.approved && unticked(sp.approved.text) !== unticked(text)
+            const changed = !!sp.approved && (!!sp.changed || !sp.canJudge) && unticked(sp.approved.text) !== unticked(text)
             const title =
               text
                 .split("\n")
@@ -623,6 +632,16 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
               : sp
           ),
         })),
+      deleteSpec: (code, ask) =>
+        edit(code, (c) => {
+          const under = new Set(c.specs?.find((sp) => sp.ask === ask)?.tasks ?? [])
+          return {
+            ...c,
+            asks: c.asks.filter((a) => !(a.kind === "spec" && a.ask === ask)),
+            specs: c.specs?.filter((sp) => sp.ask !== ask),
+            tasks: c.tasks.map((t) => (under.has(t.id) && t.status !== "done" ? { ...t, status: "done" as const, cancelled: true, updatedAt: Date.now() } : t)),
+          }
+        }),
       judgeSpec: (code, ask, verdict, note) =>
         edit(code, (c) => ({
           ...c,

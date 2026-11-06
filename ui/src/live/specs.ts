@@ -9,7 +9,10 @@ export function specsOf(state: ChannelState, me: string): Spec[] {
       const head = state.askHeads.get(s.ask)
       const place = queue.indexOf(s.ask) + 1
       const planner = specPlanner(state, s.ask)
-      const result = s.result && s.result.verdict !== "back" ? { verdict: s.result.verdict, by: s.result.by, at: s.result.at, ...(s.result.note ? { note: s.result.note } : {}) } : undefined
+      const result =
+        s.result && s.result.verdict !== "back"
+          ? { verdict: s.result.verdict, by: s.result.by, at: s.result.at, ...(s.result.note ? { note: s.result.note } : {}), ...(s.result.auto ? { auto: true as const } : {}) }
+          : undefined
       return {
         ask: s.ask,
         title: specTitle(s, head),
@@ -26,6 +29,7 @@ export function specsOf(state: ChannelState, me: string): Spec[] {
         ...(changedSinceApproval(s) ? { changed: true as const } : {}),
         ...(result ? { result } : {}),
         backs: s.backs.map((b) => ({ by: b.by, at: b.at, note: b.note })),
+        comments: (s.comments ?? []).map((c) => c.seq),
         tasks: specTasks(state, s.ask).map((t) => t.id),
         ...(planner ? { planner } : {}),
         ...(place > 0 ? { queue: place } : {}),

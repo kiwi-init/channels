@@ -215,8 +215,9 @@ export interface Spec {
   stage: SpecStage
   approved?: SpecMark & { v: number; text: string }
   changed?: true
-  result?: SpecMark & { verdict: "accepted" | "dropped"; note?: string }
+  result?: SpecMark & { verdict: "accepted" | "dropped"; note?: string; auto?: true }
   backs: (SpecMark & { note: string })[]
+  comments: number[]
   tasks: number[]
   planner?: string
   queue?: number
@@ -557,7 +558,6 @@ export interface Account {
   email?: string
   github?: { login: string }
   githubSignIn?: boolean
-  githubMove?: string
   computers: Computer[]
   version: string
   update?: { version: string; ready: boolean; state?: "downloading" | "ready" | "available"; progress?: number; blocked?: true }
@@ -663,6 +663,8 @@ export interface Actions {
   addTask(code: string, ask: number, title: string): void
   setTaskStatus(code: string, task: number, status: TaskStatus): void
   cancelTask(code: string, task: number, why: string): void
+  editTask(code: string, task: number, change: { title?: string; detail?: string }): void
+  deleteTask(code: string, task: number): void
   assignTask(code: string, task: number, to: string, why: string): void
   setReviewer(code: string, task: number, reviewer: string): void
   nameGoal(code: string, ask: number, name: string | null): void
@@ -670,6 +672,7 @@ export interface Actions {
   writeSpec(code: string, ask: number, text: string): void
   approveSpec(code: string, ask: number, v: number): void
   judgeSpec(code: string, ask: number, verdict: "accepted" | "back" | "dropped", note?: string): void
+  deleteSpec(code: string, ask: number): void
   setSpecsOnly(code: string, on: boolean): void
   setRole(code: string, name: string, role: string | null): void
   removeMember(code: string, name: string): void

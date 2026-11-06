@@ -6,7 +6,7 @@ import { openSession, type AgentSession } from "../agent.ts";
 import type { Delivery } from "../agent/shared.ts";
 import { briefText, COMMANDS } from "../brief.ts";
 import { detectWhere } from "../card.ts";
-import { home, loadConfig, type ChannelConfig } from "../config.ts";
+import { contextLineOn, home, loadConfig, type ChannelConfig } from "../config.ts";
 import { wakeHooked, wakeOn } from "../daemon/reach.ts";
 import { appendRotated } from "../daemon/wake.ts";
 import { charterLines, formatMessage, holdLine, leadLine, messageHead } from "@kiwi/core/format.ts";
@@ -101,6 +101,19 @@ export function grokMonitorListens(tasks: readonly BackgroundTask[], commands: r
   return tasks.some((t) => t.type === "monitor" && t.text.split("\n").some((line) => commands.includes(line.trim().replace(TAGGED, ""))));
 }
 
+const runsKiwiJoin = (line: string): boolean => {
+  const words = line
+    .replace(TAGGED, "")
+    .split(/[\s'"=;&|()]+/)
+    .filter(Boolean);
+  const at = words.findIndex((w) => w === "kiwi" || w.endsWith("/kiwi"));
+  return at >= 0 && words.slice(at + 1).includes("join");
+};
+
+function grokMonitorJoins(tasks: readonly BackgroundTask[]): boolean {
+  return tasks.some((t) => t.type === "monitor" && t.text.split("\n").some(runsKiwiJoin));
+}
+
 const LOGGED_CHARS = 300;
 
 function noteGrok(b: Binding, text: string): void {
@@ -141,9 +154,11 @@ function listenCheck(input: HookInput, b: Binding, who: Here, mc: string): Liste
     };
     return { kind: "check", listens, settles: false };
   }
-  const commands = [COMMANDS.listen(mc), COMMANDS.listen(`${mcBin()} ${channelOption(b.alias)} ${asOption(b.as)}`)];
+  const full = `${mcBin()} ${channelOption(b.alias)} ${asOption(b.as)}`;
+  const commands = [COMMANDS.join(mc), COMMANDS.join(full), `${mc} listen`, `${full} listen`];
+  const seatListensHere = () => !!who.session && liveListeners().some((l) => l.alias === b.alias && l.as === b.as && l.session === who.session);
   const listens = () => {
-    const heard = grokMonitorListens(tasks, commands);
+    const heard = grokMonitorListens(tasks, commands) || (grokMonitorJoins(tasks) && seatListensHere());
     if (!heard) noteUnheard(b, tasks, commands);
     return heard;
   };
@@ -192,7 +207,7 @@ export function cursorFollow(alias: string, mc: string, unread: boolean, reminde
 }
 
 const contextNudge = Effect.fn("Hooks.contextNudge")(function* (input: HookInput, s: AgentSession, who: Here, mc: string, budget: number) {
-  if (loadConfig().contextLine !== "on") return null;
+  if (!contextLineOn(loadConfig())) return null;
   const session = who.session;
   const file = input.transcript_path;
   if ((who.harness !== "claude" && who.harness !== "codex") || !session || typeof file !== "string" || !file) return null;
@@ -430,7 +445,7 @@ export const answer = Effect.fn("Hooks.answer")(function* (event: string, input:
       lead: leadLine(state, b.as),
       scopes: seat?.scopes,
       ...(seat?.persona ? { persona: seat.persona } : {}),
-      contextLine: local.contextLine === "on",
+      contextLine: contextLineOn(local),
     });
     const budgets = startBudgets(b.alias, budget, brief.length);
     const reentry = fresh === null || budgets.reentry === 0 ? null : reentryText(state, b.as, Date.now(), budgets.reentry, mc);
