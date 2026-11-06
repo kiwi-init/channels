@@ -2,7 +2,7 @@ import { roomLast, roomOfMessage, roomSeenKey } from "@kiwi/app/rooms.ts"
 import { GENERAL_ROOM, type Message as Wire } from "@kiwi/core/protocol.ts"
 import { rootOf } from "@kiwi/core/room-rules.ts"
 import { dmPlace, placeKey, type ChannelState } from "@kiwi/core/state.ts"
-import { dmOther } from "~/live/dm"
+import { dmOther, dmRoomWith } from "~/live/dm"
 import type { Where } from "~/model"
 
 export function seenKeyOf(state: Pick<ChannelState, "members">, where: Where, me: string): string {
@@ -45,9 +45,7 @@ export function firstMarks(state: ChannelState, messages: readonly Wire[], seat:
   for (const [id, seq] of roomLast(state, messages)) marks[roomSeenKey(id)] = seq
   const me = rootOf(seat, state.members)
   for (const m of messages) {
-    if (m.kind === "event" || (state.placeOf.get(m.seq) ?? { kind: "main" as const }).kind !== "main") continue
-    const room = state.rooms.get(roomOfMessage(state, m))
-    const other = room?.dm && room.members ? dmOther(state, seat, room.members) : undefined
+    const other = dmRoomWith(state, seat, m)
     if (!other) continue
     const key = placeKey(dmPlace(me, other))
     marks[key] = Math.max(marks[key] ?? 0, m.seq)
