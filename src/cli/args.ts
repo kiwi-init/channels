@@ -55,6 +55,7 @@ function parse() {
         check: { type: "string" },
         decider: { type: "string" },
         artifact: { type: "string" },
+        replaces: { type: "string" },
         close: { type: "string" },
         step: { type: "boolean" },
         do: { type: "string", multiple: true },

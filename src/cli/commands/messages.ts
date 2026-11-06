@@ -370,7 +370,7 @@ export const messageCommands: Record<string, Command> = {
       const digestNote = () => {
         if (!named.length) process.stderr.write("kiwi: this holds nothing up, so it goes to the person's digest, not Needs you; name the task or message it holds with --holds T7,#18\n");
       };
-      if ((opt.step || opt.handoff !== undefined) && (opt.check ?? opt.decider ?? opt.artifact) !== undefined)
+      if ((opt.step || opt.handoff !== undefined) && (opt.check ?? opt.decider ?? opt.artifact ?? opt.replaces) !== undefined)
         return yield* die("--check goes on a decision with --option, not on a step or a handoff");
       const stepFlags = ["do", "run", "expect", "link", "why", "needs-person"] as const;
       if (!opt.step && stepFlags.some((f) => opt[f] !== undefined)) return yield* die(`--${stepFlags.find((f) => opt[f] !== undefined)} goes with --step`);
@@ -439,13 +439,20 @@ export const messageCommands: Record<string, Command> = {
     }),
 };
 
-function checkOf(o: { check?: string; decider?: string; artifact?: string }): { phase: CheckPhase; decider?: string; artifact: CheckArtifact } | string | undefined {
-  if (o.check === undefined) return o.decider !== undefined || o.artifact !== undefined ? "--decider and --artifact go with --check pre-ship|post" : undefined;
+function checkOf(o: {
+  check?: string;
+  decider?: string;
+  artifact?: string;
+  replaces?: string;
+}): { phase: CheckPhase; decider?: string; artifact: CheckArtifact; replaces?: number } | string | undefined {
+  if (o.check === undefined) return o.decider !== undefined || o.artifact !== undefined || o.replaces !== undefined ? "--decider, --artifact and --replaces go with --check pre-ship|post" : undefined;
   const phase = CHECK_PHASES.find((p) => p === o.check);
   if (!phase) return `--check takes pre-ship or post, not "${o.check}"`;
   if (o.artifact === undefined) return `a check needs ${ARTIFACT_USAGE}`;
   const artifact = parseArtifact(o.artifact);
   if (typeof artifact === "string") return artifact;
   const decider = o.decider?.trim().replace(/^@/, "");
-  return { phase, ...(decider ? { decider } : {}), artifact };
+  const replaces = o.replaces === undefined ? undefined : Number(o.replaces.trim().replace(/^#/, ""));
+  if (replaces !== undefined && !(Number.isSafeInteger(replaces) && replaces > 0)) return `--replaces takes the check it replaces, like #42, not "${o.replaces}"`;
+  return { phase, ...(decider ? { decider } : {}), artifact, ...(replaces !== undefined ? { replaces } : {}) };
 }

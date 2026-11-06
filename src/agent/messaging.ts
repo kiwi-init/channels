@@ -329,10 +329,14 @@ export class SessionMessaging extends SessionListen {
       body: string,
       re?: number,
       handoff?: Handoff,
-      ask: { choices?: string[]; task?: number; holds?: number[]; decision?: DecisionKind; step?: Step; check?: { phase: CheckPhase; decider?: string; artifact: CheckArtifact } } & Pick<
-        SendOptions,
-        "id" | "permission"
-      > = {},
+      ask: {
+        choices?: string[];
+        task?: number;
+        holds?: number[];
+        decision?: DecisionKind;
+        step?: Step;
+        check?: { phase: CheckPhase; decider?: string; artifact: CheckArtifact; replaces?: number };
+      } & Pick<SendOptions, "id" | "permission"> = {},
     ) {
       if (!body.trim()) return yield* new Rejected(`say what needs ${ask.step ? "doing" : "deciding"}: the text is empty`);
       const { messages, state } = yield* this.state();
@@ -346,7 +350,7 @@ export class SessionMessaging extends SessionListen {
       const decider = ask.check ? (ask.check.decider ?? humanOf(state, this.me)) : undefined;
       if (ask.check && (!ask.choices || !ask.holds?.length)) return yield* new Rejected("a check needs its options, the first being the pass, and --holds naming the work it gates");
       if (ask.check && (!decider || !to.includes(decider))) return yield* new Rejected(`a check's decider is a person it goes to: ${to.join(" or ")}`);
-      const check = ask.check && decider ? { phase: ask.check.phase, decider, artifact: ask.check.artifact } : undefined;
+      const check = ask.check && decider ? { phase: ask.check.phase, decider, artifact: ask.check.artifact, ...(ask.check.replaces !== undefined ? { replaces: ask.check.replaces } : {}) } : undefined;
       const unknown = ask.holds?.find((id) => !state.tasks.has(id) && !state.askHeads.has(id));
       if (unknown !== undefined) return yield* new Rejected(`${unknown} is neither a task nor a person's message here: --holds names tasks like T7 and asks like #18`);
       if (ask.task !== undefined && re !== undefined) {

@@ -7,6 +7,7 @@ export interface CheckAsk {
   phase: CheckPhase;
   decider: string;
   artifact: CheckArtifact;
+  replaces?: number;
 }
 
 const REPO = /^[A-Za-z0-9_.-]{1,100}\/[A-Za-z0-9_.-]{1,100}$/;
@@ -37,18 +38,16 @@ function wellFormedArtifact(x: unknown): x is CheckArtifact {
 
 export function wellFormedCheck(x: unknown): x is CheckAsk {
   const c = record(x);
-  return !!c && Object.keys(c).length === 3 && (CHECK_PHASES as readonly unknown[]).includes(c.phase) && typeof c.decider === "string" && NAME.test(c.decider) && wellFormedArtifact(c.artifact);
-}
-
-export function artifactKey(a: CheckArtifact): string {
-  switch (a.kind) {
-    case "pr":
-      return `pr:${a.repo.toLowerCase()}#${a.pr}@${a.sha}`;
-    case "run":
-      return `run:${a.id}`;
-    case "npm":
-      return `npm:${a.pkg}@${a.version}`;
-  }
+  const replaces = c?.replaces === undefined || (Number.isSafeInteger(c.replaces) && (c.replaces as number) > 0);
+  return (
+    !!c &&
+    Object.keys(c).length === (c.replaces === undefined ? 3 : 4) &&
+    replaces &&
+    (CHECK_PHASES as readonly unknown[]).includes(c.phase) &&
+    typeof c.decider === "string" &&
+    NAME.test(c.decider) &&
+    wellFormedArtifact(c.artifact)
+  );
 }
 
 export const ARTIFACT_USAGE = "--artifact pr:owner/repo#N@SHA (the full 40-character head), run:ID or npm:package@version";

@@ -1,4 +1,4 @@
-import { artifactKey, choiceIn, type CheckArtifact, type CheckAsk, type CheckPhase } from "../checks.ts";
+import { choiceIn, type CheckArtifact, type CheckAsk, type CheckPhase } from "../checks.ts";
 import { trustedAt } from "./times.ts";
 
 interface CheckAnswer {
@@ -17,6 +17,7 @@ export interface CheckState {
   artifact: CheckArtifact;
   choices: string[];
   holds: number[];
+  replaces?: number;
   answer?: CheckAnswer;
   closed?: number;
   supersededBy?: number;
@@ -24,13 +25,22 @@ export interface CheckState {
 
 export const checkPassed = (c: CheckState): boolean => c.closed === undefined && c.supersededBy === undefined && c.answer?.pass === true;
 
-const sameSubject = (a: CheckState, b: CheckState): boolean => a.phase === b.phase && artifactKey(a.artifact) === artifactKey(b.artifact) && a.holds.some((h) => b.holds.includes(h));
+export function replaceRefusal(checks: ReadonlyMap<number, CheckState>, m: { seq: number; from: string; check?: CheckAsk }): string | undefined {
+  const id = m.check?.replaces;
+  if (id === undefined) return undefined;
+  const was = checks.get(id);
+  if (!was || !(id < m.seq)) return `#${id} isn't a check to replace`;
+  if (was.by !== m.from) return "a check replaces only a check its own asker made";
+  if (was.closed !== undefined || was.supersededBy !== undefined) return `#${id} is already closed or replaced`;
+  return undefined;
+}
 
 export function openCheck(checks: Map<number, CheckState>, m: { seq: number; from: string; choices?: string[]; holds?: number[]; check?: CheckAsk }): void {
   if (!m.check || !m.choices?.length) return;
-  const added: CheckState = { seq: m.seq, by: m.from, ...m.check, choices: m.choices, holds: m.holds ?? [] };
-  for (const c of checks.values()) if (c.supersededBy === undefined && c.closed === undefined && sameSubject(c, added)) c.supersededBy = m.seq;
-  checks.set(m.seq, added);
+  const { replaces, ...check } = m.check;
+  const was = replaces !== undefined ? checks.get(replaces) : undefined;
+  if (was) was.supersededBy = m.seq;
+  checks.set(m.seq, { seq: m.seq, by: m.from, ...check, choices: m.choices, holds: m.holds ?? [], ...(replaces !== undefined ? { replaces } : {}) });
 }
 
 export function answerChecks(checks: Map<number, CheckState>, m: { seq: number; from: string; body: string; re?: number[]; ts: number; rts?: number }, owner: string | undefined): void {

@@ -85,19 +85,47 @@ describe("a check is an ask with a phase, a decider and the artifact it vouches 
     expect(c && checkPassed(c)).toBe(false);
   });
 
-  test("case 5: a newer check on the same phase, artifact and work supersedes the old one, which no longer passes", async () => {
+  test("independent checks on the same work and artifact all stay required, whoever decides them", async () => {
+    const { task, id } = await withTask();
+    const other = await ev("jon", { op: "task.add", title: "Tray: macOS template", owner: "win" });
+    const kdeCheck = await askCheck([id]);
+    const macCheck = await askCheck([id], { ...kde, decider: "jon" });
+    const sameDecider = await askCheck([id]);
+    const wider = await askCheck([id, other.seq]);
+    const macYes = await reply("jon", macCheck, "A");
+    const s = fold([task, other, kdeCheck, macCheck, sameDecider, wider, macYes], roster);
+    const all = [kdeCheck, macCheck, sameDecider, wider].map((m) => s.checks.get(m.seq));
+    expect(all.map((c) => c?.supersededBy)).toEqual([undefined, undefined, undefined, undefined]);
+    expect(all.map((c) => !!c && checkPassed(c))).toEqual([false, true, false, false]);
+  });
+
+  test("case 5: a check its asker replaces with --replaces no longer passes, and only that one is retired", async () => {
     const { task, id } = await withTask();
     const old = await askCheck([id]);
+    const keep = await askCheck([id], { ...kde, decider: "jon" });
     const yes = await reply("ana", old, "A");
-    const fresh = await askCheck([id]);
+    const fresh = await askCheck([id], { ...kde, replaces: old.seq });
     const lateYes = await reply("ana", old, "A");
-    const s = fold([task, old, yes, fresh, lateYes], roster);
+    const s = fold([task, old, keep, yes, fresh, lateYes], roster);
     const was = s.checks.get(old.seq);
     expect(was?.supersededBy).toBe(fresh.seq);
     expect(was && checkPassed(was)).toBe(false);
+    expect(s.checks.get(keep.seq)?.supersededBy).toBeUndefined();
+    expect(s.checks.get(fresh.seq)).toMatchObject({ replaces: old.seq });
     expect(s.checks.get(fresh.seq)?.answer).toBeUndefined();
-    const other = await askCheck([id], { ...kde, artifact: { ...kde.artifact, sha: "b".repeat(40) } as CheckAsk["artifact"] });
-    expect(fold([task, fresh, other], roster).checks.get(fresh.seq)?.supersededBy).toBeUndefined();
+  });
+
+  test("a check can't replace another asker's check, a closed one, or one that's already replaced", async () => {
+    const { task, id } = await withTask();
+    const winCheck = await askCheck([id]);
+    const fromMac = await msg("mac", "blocking", "Replacing win's check", { to: ["jon"], esc: true, choices: OPTIONS, holds: [id], check: { ...kde, decider: "jon", replaces: winCheck.seq } });
+    const first = await askCheck([id], { ...kde, replaces: winCheck.seq });
+    const again = await askCheck([id], { ...kde, replaces: winCheck.seq });
+    const s = fold([task, winCheck, fromMac, first, again], roster);
+    expect(s.trust.get(fromMac.seq)).toBe("refused");
+    expect(s.rejected.get(fromMac.seq)).toBe("a check replaces only a check its own asker made");
+    expect(s.checks.get(winCheck.seq)?.supersededBy).toBe(first.seq);
+    expect(s.trust.get(again.seq)).toBe("refused");
   });
 
   test("a decider who isn't one of the people asked is refused, and a check needs options and holds", async () => {
@@ -113,6 +141,8 @@ describe("a check is an ask with a phase, a decider and the artifact it vouches 
     expect(wellFormed({ ...base, choices: OPTIONS, holds: [id], check: { ...kde, artifact: { kind: "pr", repo: "o/r", pr: 1, sha: "abc1234" } } })).toBe(false);
     expect(wellFormed({ ...base, choices: OPTIONS, holds: [id], check: { ...kde, phase: "later" } })).toBe(false);
     expect(wellFormed({ ...base, choices: OPTIONS, holds: [id], check: { ...kde, artifact: { kind: "tag", name: "v1" } } })).toBe(false);
+    expect(wellFormed({ ...base, choices: OPTIONS, holds: [id], check: { ...kde, replaces: 3 } })).toBe(true);
+    expect(wellFormed({ ...base, choices: OPTIONS, holds: [id], check: { ...kde, replaces: 0 } })).toBe(false);
   });
 });
 

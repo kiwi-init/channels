@@ -19,7 +19,7 @@ import { inlineText } from "../membership.ts";
 import { canPost, refusal, scopesOf, type Scope } from "../scopes.ts";
 import { applyEvent, type FoldCtx } from "./fold-events.ts";
 import { allowedOnHold, answersAsk, isLeadRole, isPerson, LEAD, ON_HOLD, sameAuthor } from "./people.ts";
-import { answerChecks, closeCheck, openCheck, type CheckState } from "./checks.ts";
+import { answerChecks, closeCheck, openCheck, replaceRefusal, type CheckState } from "./checks.ts";
 import { omit } from "../omit.ts";
 import { dmPlace, MAIN, summarize } from "./places.ts";
 import { rootOf, sentTo } from "../room-rules.ts";
@@ -466,6 +466,12 @@ function folding(
         if (m.check && !m.to.includes(m.check.decider)) {
           trust.set(m.seq, "refused");
           rejected.set(m.seq, "a check's decider is one of the people it asks");
+          continue;
+        }
+        const notReplaced = replaceRefusal(checks, m);
+        if (notReplaced) {
+          trust.set(m.seq, "refused");
+          rejected.set(m.seq, notReplaced);
           continue;
         }
       }
