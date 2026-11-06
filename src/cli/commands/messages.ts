@@ -35,10 +35,10 @@ import { args, opt, unexpectedOptions } from "../args.ts";
 import { parseWhere } from "../where.ts";
 import { docPlaceOf } from "../../agent/docs.ts";
 import { type Command, die, noteRead, offlineOk, out, type Quit, session } from "../context.ts";
-import { attachments, firstLine, images, list, render, text } from "../input.ts";
+import { attachments, figure, firstLine, images, list, render, text } from "../input.ts";
 
 const LOG_DOC_MS = 5_000;
-const PUBLISHING = ["channel", "as", "quiet", "json", "file", "image", "attach"] as const;
+const PUBLISHING = ["channel", "as", "quiet", "json", "file", "image", "attach", "figure"] as const;
 const SEND_OPTIONS = [...PUBLISHING, "to", "kind", "re", "room", "ask", "wait", "escalate", "handoff", "vendor", "expires", "option", "dm", "task", "main"];
 
 function refuseUnused(command: string, allowed: readonly string[]): Effect.Effect<void, Quit> {
@@ -59,7 +59,7 @@ export const messageCommands: Record<string, Command> = {
         if (opt.handoff !== undefined) return yield* die("--handoff goes with --escalate");
         if (opt.option !== undefined) return yield* die("--option goes with kiwi ask-human");
         const s = yield* session();
-        const body = yield* text(1);
+        const body = (yield* text(1)) || ((yield* figure)?.title ?? "");
         if (!body.trim()) return yield* die("empty message");
         if (opt.dm && opt.to) return yield* die("--dm NAME already says where it goes; leave out --to (or use --to @NAME alone)");
         const where = parseWhere(opt.to);
@@ -130,7 +130,7 @@ export const messageCommands: Record<string, Command> = {
         yield* refuseUnused("reply", [...PUBLISHING, "kind"]);
         const s = yield* session();
         const seq = Number((args[1] ?? "").replace(/^#/, "")) || (yield* die('usage: kiwi reply N "text"'));
-        const body = yield* text(2);
+        const body = (yield* text(2)) || ((yield* figure)?.title ?? "");
         if (!body.trim()) return yield* die("empty reply");
         const kind = (opt.kind ?? "msg") as Kind;
         if (!CHAT_KINDS.includes(kind)) return yield* die(`kind must be one of: ${CHAT_KINDS.join(", ")}`);
