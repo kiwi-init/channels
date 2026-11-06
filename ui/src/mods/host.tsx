@@ -6,7 +6,10 @@ import type { KiwiBridge, ModView } from "../../../desktop/src/bridge.ts"
 import type { MOD_MENU as MENU_EVENT, ModMenuAsk } from "~/chat/menus"
 import { addCommands } from "~/commands/rebind"
 import { bootFailed, bootGone, bootStarted } from "~/mods/boot"
-import { useApp } from "~/nav"
+import { hostMods, publishTabs } from "~/mods/bus"
+import { useApp, type Go, type Panel } from "~/nav"
+import { openOutside } from "~/kit/outside"
+import { copyText } from "~/kit/toasts"
 import { openLinksOutside } from "~/kit/outside-links"
 import { announce } from "~/kit/toasts"
 import { homeWaits, onHome } from "~/live/store"
@@ -16,9 +19,13 @@ import {
   heeded,
   LOOK,
   MOD_PROTOCOL,
+  sameTarget,
   SIDE_HEIGHT,
   type ModCommand,
+  type ModGithub,
   type ModMessage,
+  type ModOpen,
+  type ModTarget,
   type ModTerminal,
   type PlacedTerminal,
   type Surface,
@@ -27,6 +34,7 @@ import {
 } from "~/mods/protocol"
 
 const FRAME_URL = "views://internal/mod-frame.html"
+const LINK_GAP_MS = 500
 
 const MOD_MENU: typeof MENU_EVENT = "kiwi-message-menu"
 const MOD_SIDES: typeof SIDES_EVENT = "kiwi-mod-sides"
@@ -40,6 +48,7 @@ export interface RunningMod {
   title: string | null
   failed: string | null
   side: { title: string; height: number } | null
+  tab: { title: string; shown: boolean; alert: string | null; hint: string | null } | null
   actions: ModCommand[]
   commands: string[]
 }
@@ -48,9 +57,34 @@ interface Frame {
   name: string
   surface: Surface
   el: HTMLIFrameElement
+  ready: boolean
+  linked: number
 }
 
-const state = { mods: [] as ModView[], running: new Map<string, RunningMod>() }
+const state = {
+  mods: [] as ModView[],
+  running: new Map<string, RunningMod>(),
+  github: null as ModGithub | null,
+  showing: new Map<string, ModTarget>(),
+  pending: new Map<string, Waiting[]>(),
+}
+let app: { go: (g: Go) => void; panel: Panel | null } | null = null
+
+interface Waiting {
+  target: ModTarget
+  url: string | null
+}
+
+function wait(key: string, target: ModTarget, url: string | null): void {
+  state.pending.set(key, [...(state.pending.get(key) ?? []), { target, url }])
+}
+
+function giveUp(name: string): void {
+  for (const key of [name, `tab:${name}`]) {
+    for (const w of state.pending.get(key) ?? []) if (w.url) openOutside(w.url)
+    state.pending.delete(key)
+  }
+}
 const frames = new Map<string, Frame>()
 const slots = new Map<string, HTMLElement>()
 const listeners = new Set<() => void>()
@@ -63,6 +97,10 @@ const keyOf = (name: string, surface: Surface): string => `${surface}:${name}`
 const changed = (): void => {
   version++
   for (const l of listeners) l()
+  publishTabs(
+    modTabs(),
+    state.mods.some((m) => m.state === "on" && m.needs.includes("github"))
+  )
 }
 
 const subscribe = (l: () => void) => {
@@ -94,6 +132,75 @@ function given(need: string): { mod: ModView; run: RunningMod }[] {
 }
 
 export const modSides = (): { name: string; title: string; height: number }[] => given("sidebar").flatMap(({ mod, run }) => (run.side ? [{ name: mod.name, ...run.side }] : []))
+
+export const modTabs = (): { name: string; title: string; alert: string | null; hint: string | null }[] =>
+  given("tab").flatMap(({ mod, run }) => (run.tab?.shown ? [{ name: mod.name, title: run.tab.title, alert: run.tab.alert, hint: run.tab.hint }] : []))
+
+const framesOf = (name: string): Frame[] => [...frames.values()].filter((f) => f.name === name)
+
+function sendGithub(f: Frame): void {
+  if (modNamed(f.name)?.needs.includes("github")) send(f, { kiwi: MOD_PROTOCOL, type: "github", data: state.github })
+}
+
+export function setGithub(data: ModGithub | null): void {
+  if (JSON.stringify(data) === JSON.stringify(state.github)) return
+  state.github = data
+  for (const f of frames.values()) sendGithub(f)
+}
+
+function setShowing(name: string, target: ModTarget | null): void {
+  if (sameTarget(state.showing.get(name) ?? null, target)) return
+  if (target) state.showing.set(name, target)
+  else state.showing.delete(name)
+  for (const f of framesOf(name)) send(f, { kiwi: MOD_PROTOCOL, type: "showing", target })
+}
+
+const panelIs = (name: string): boolean => app?.panel?.kind === "mod" && app.panel.name === name
+
+export function showIn(name: string, target: ModTarget, url: string | null = null): boolean {
+  const mod = modNamed(name)
+  if (!allows(mod, "panel") || state.running.get(name)?.failed || !app) return false
+  if (!panelIs(name)) {
+    app.go({ to: "panel", panel: { kind: "mod", name } })
+    app.panel = { kind: "mod", name }
+  }
+  setShowing(name, target)
+  const f = frames.get(keyOf(name, "main"))
+  if (f?.ready) send(f, { kiwi: MOD_PROTOCOL, type: "show", target })
+  else wait(name, target, url)
+  return true
+}
+
+export function showTabIn(name: string, target: ModTarget): boolean {
+  const mod = modNamed(name)
+  if (!allows(mod, "tab") || state.running.get(name)?.failed || !app) return false
+  app.go({ to: "tab", tab: `mod:${name}` })
+  const f = frames.get(keyOf(name, "tab"))
+  if (f?.ready) send(f, { kiwi: MOD_PROTOCOL, type: "show", target })
+  else wait(`tab:${name}`, target, null)
+  return true
+}
+
+function showFrom(name: string, target: ModTarget): void {
+  if (panelIs(name) && sameTarget(state.showing.get(name) ?? null, target)) {
+    app?.go({ to: "panel", panel: null })
+    if (app) app.panel = null
+    setShowing(name, null)
+  } else showIn(name, target)
+}
+
+function openFor(to: ModOpen): void {
+  if (to.kind === "task") app?.go({ to: "panel", panel: { kind: "task", task: to.id } })
+  else if (to.kind === "settings") app?.go({ to: "modal", modal: { kind: "channel", tab: "github" } })
+  else app?.go({ to: "tab", tab: "chat" })
+}
+
+function flush(f: Frame): void {
+  const key = f.surface === "tab" ? `tab:${f.name}` : f.surface === "main" ? f.name : null
+  if (!key) return
+  for (const { target } of state.pending.get(key) ?? []) send(f, { kiwi: MOD_PROTOCOL, type: "show", target })
+  state.pending.delete(key)
+}
 
 function runAction(name: string, id: string, message: ModMessage): void {
   if (!allows(modNamed(name), "message-action") || !state.running.get(name)?.actions.some((a) => a.id === id)) return
@@ -140,6 +247,7 @@ export function look(): { theme: Record<string, string>; dark: boolean } {
 function update(name: string, patch: Partial<RunningMod>): void {
   const now = state.running.get(name)
   if (!now) return
+  if (patch.failed) giveUp(name)
   const next = { ...now, ...patch }
   if (JSON.stringify(next) === JSON.stringify(now)) return
   state.running.set(name, next)
@@ -173,16 +281,38 @@ async function onMessage(e: MessageEvent): Promise<void> {
   switch (m.type) {
     case "hello": {
       const got = await b.modBundle(name).catch(() => null)
-      if (got) send(f, { kiwi: MOD_PROTOCOL, type: "boot", name, surface, needs: mod?.needs ?? [], code: got.code, ...look() })
-      else {
+      if (!got) {
         bootGone(keyOf(name, surface))
         update(name, { failed: "Its code couldn't be built." })
+        return
       }
+      send(f, { kiwi: MOD_PROTOCOL, type: "boot", name, surface, needs: mod?.needs ?? [], code: got.code, ...look() })
+      sendGithub(f)
+      send(f, { kiwi: MOD_PROTOCOL, type: "showing", target: state.showing.get(name) ?? null })
       return
     }
     case "ready":
       bootGone(keyOf(name, surface))
+      f.ready = true
       if (surface === "main") update(name, { failed: null })
+      flush(f)
+      return
+    case "tab":
+      update(name, { tab: { title: m.title, shown: m.shown, alert: m.alert, hint: m.hint } })
+      return
+    case "open":
+      openFor(m.to)
+      return
+    case "show":
+      showFrom(name, m.target)
+      return
+    case "copy":
+      copyText(m.text, m.note ?? "Copied")
+      return
+    case "link":
+      if (Date.now() - f.linked < LINK_GAP_MS) return
+      f.linked = Date.now()
+      openOutside(m.url)
       return
     case "error":
       bootFailed(keyOf(name, surface), m.message)
@@ -295,7 +425,7 @@ function place(f: HTMLIFrameElement, el: HTMLElement | null): void {
 }
 
 function surfacesOf(m: ModView): Surface[] {
-  return m.needs.includes("sidebar") ? ["main", "sidebar"] : ["main"]
+  return ["main", ...(m.needs.includes("sidebar") ? (["sidebar"] as const) : []), ...(m.needs.includes("tab") ? (["tab"] as const) : [])]
 }
 
 function startFrames(layer: HTMLElement): void {
@@ -307,9 +437,11 @@ function startFrames(layer: HTMLElement): void {
       frames.delete(key)
       bootGone(key)
       if (f.surface === "sidebar") update(f.name, { side: null })
+      else if (f.surface === "tab") update(f.name, { tab: null })
       else {
         state.running.delete(f.name)
         bindCommands(f.name, null)
+        giveUp(f.name)
       }
     }
   for (const [key, { name, surface, hash }] of want) {
@@ -317,22 +449,34 @@ function startFrames(layer: HTMLElement): void {
     openLinksOutside()
     const el = document.createElement("iframe")
     el.setAttribute("sandbox", "allow-scripts")
-    el.title = surface === "main" ? name : `${name} in the sidebar`
+    el.title = surface === "main" ? name : surface === "tab" ? `${name}'s tab` : `${name} in the sidebar`
     el.dataset["hash"] = hash
     place(el, null)
     el.src = FRAME_URL
-    frames.set(key, { name, surface, el })
+    frames.set(key, { name, surface, el, ready: false, linked: 0 })
     bootStarted(key, name, hash)
-    if (!state.running.has(name)) state.running.set(name, { name, title: null, failed: null, side: null, actions: [], commands: [] })
+    if (!state.running.has(name)) state.running.set(name, { name, title: null, failed: null, side: null, tab: null, actions: [], commands: [] })
     layer.append(el)
   }
 }
 
 export function ModsLayer() {
   const layer = useRef<HTMLDivElement>(null)
-  const { toast } = useApp()
+  const { toast, go, nav } = useApp()
   const [sides, setSides] = useState(sidesAnchor)
   useModsVersion()
+  useEffect(() => {
+    app = { go, panel: null }
+    hostMods({ github: setGithub, show: showIn, showTab: showTabIn })
+    return () => {
+      app = null
+      hostMods(null)
+    }
+  }, [go])
+  useEffect(() => {
+    if (app) app.panel = nav.panel
+    for (const name of [...state.showing.keys()]) if (!(nav.panel?.kind === "mod" && nav.panel.name === name)) setShowing(name, null)
+  }, [nav.panel, go])
   useEffect(() => {
     const b = bridge()
     if (!b || typeof b.mods !== "function") return

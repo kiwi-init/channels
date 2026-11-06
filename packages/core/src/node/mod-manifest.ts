@@ -1,8 +1,8 @@
 import { isAppPrefix } from "../mod-names.ts";
 
-const MOD_NEEDS_OFFERED = ["panel", "sidebar", "command", "message-action", "terminal", "net", "render"] as const;
+const MOD_NEEDS_OFFERED = ["panel", "sidebar", "tab", "command", "message-action", "terminal", "github", "net", "render"] as const;
 
-const NEED_KINDS = ["panel", "sidebar", "command", "message-action", "terminal", "read", "post", "net", "render"] as const;
+const NEED_KINDS = ["panel", "sidebar", "tab", "command", "message-action", "terminal", "github", "read", "post", "net", "render"] as const;
 
 const NAME = /^[a-z0-9][a-z0-9-]{0,62}$/;
 const VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
@@ -37,9 +37,11 @@ export function needKind(need: string): (typeof NEED_KINDS)[number] | null {
   switch (kind) {
     case "panel":
     case "sidebar":
+    case "tab":
     case "command":
     case "message-action":
     case "terminal":
+    case "github":
       return rest === null ? kind : null;
     case "read":
     case "post":

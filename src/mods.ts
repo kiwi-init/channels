@@ -1,9 +1,10 @@
 import { isAppPrefix } from "@kiwi/core/mod-names.ts";
 import { bundleMod } from "@kiwi/core/node/mod-bundle.ts";
+import { copiesIn, folderHash, keepCopyIn, type ModCopy } from "@kiwi/core/node/mod-folder.ts";
 import { readModIcon } from "@kiwi/core/node/mod-icon.ts";
 import { checkManifest, type ModManifest } from "@kiwi/core/node/mod-manifest.ts";
 import { execFileSync } from "node:child_process";
-import { createHash, randomBytes } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import {
   cpSync,
   existsSync,
@@ -36,18 +37,6 @@ export interface Source {
   ref: string | null;
   path: string | null;
 }
-
-interface Copy {
-  source: string;
-  url: string;
-  path: string;
-  ref: string | null;
-  commit: string;
-  hash: string;
-  added?: string;
-}
-
-const COPIES = ".sources.json";
 
 export interface ModInfo {
   name: string;
@@ -135,36 +124,9 @@ function manifestAt(dir: string, folder?: string): ModManifest {
 
 const isGit = (dir: string): boolean => existsSync(join(dir, ".git"));
 
-function copiesOf(home: string): Record<string, Copy> {
-  try {
-    const raw = JSON.parse(readFileSync(join(modsDir(home), COPIES), "utf8")) as unknown;
-    return raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, Copy>) : {};
-  } catch {
-    // No copied mods yet, or a file that isn't ours: every folder reads as local.
-    return {};
-  }
-}
+const copiesOf = (home: string): Record<string, ModCopy> => copiesIn(modsDir(home));
 
-function keepCopy(home: string, name: string, copy: Copy | null): void {
-  const all = copiesOf(home);
-  if (copy) all[name] = copy;
-  else delete all[name];
-  writeFileSync(join(modsDir(home), COPIES), `${JSON.stringify(all, null, 2)}\n`);
-}
-
-function folderHash(dir: string): string {
-  const hash = createHash("sha256");
-  const walk = (rel: string): void => {
-    for (const entry of readdirSync(join(dir, rel)).sort()) {
-      const path = rel ? `${rel}/${entry}` : entry;
-      const st = lstatSync(join(dir, path));
-      if (st.isDirectory()) walk(path);
-      else hash.update(`${path}\0${st.isSymbolicLink() ? `-> ${readlinkSync(join(dir, path))}` : readFileSync(join(dir, path)).toString("base64")}\0`);
-    }
-  };
-  walk("");
-  return hash.digest("hex");
-}
+const keepCopy = (home: string, name: string, copy: ModCopy | null): void => keepCopyIn(modsDir(home), name, copy);
 
 function cloneAt(source: Source, ref: string | null, tmp: string, run: Git): string {
   try {
@@ -309,7 +271,7 @@ function diffNeeds(was: ModManifest | null, next: ModManifest): { added: string[
   return { added: next.needs.filter((n) => !before.has(n)), dropped: (was?.needs ?? []).filter((n) => !after.has(n)) };
 }
 
-function updateCopy(home: string, name: string, dir: string, copy: Copy, take: (added: string[]) => boolean, run: Git): Change | null {
+function updateCopy(home: string, name: string, dir: string, copy: ModCopy, take: (added: string[]) => boolean, run: Git): Change | null {
   if (folderHash(dir) !== copy.hash) throw new ModError("has changes that aren't in its source: keep them in a repo of your own, or kiwi mod remove --force it and add it again");
   const tmp = join(modsDir(home), `.updating-${randomBytes(6).toString("hex")}`);
   try {
