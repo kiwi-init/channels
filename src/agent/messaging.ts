@@ -218,7 +218,13 @@ export class SessionMessaging extends SessionListen {
       yield* this.mayI({ kind, to });
       const block = at && kind === "msg" ? { th: at.th, id: yield* this.postedBlock(body, at, imgs, extra.files) } : undefined;
       const replying = { to, kind, re: [seq], side: true, imgs, room: state.roomOf.get(seq) ?? orig.room, ...extra, ...(block ? { block } : {}) };
-      const sent = yield* this.ch.fx.send(body, { ...replying, wake: wakeList(state, this.me, replying) }).pipe(Effect.tapError(() => (at && block ? this.unwrite(at, block.id) : Effect.void)));
+      const me = state.members.get(this.me);
+      const shared = orig.from !== this.me && !(orig.to?.length === 1 && orig.to[0] === this.me) && !(me && isPerson(me));
+      const claim = shared ? { slot: { name: `re:${seq}`, ttl: ANSWERING_TTL } } : {};
+      const sent = yield* this.ch.fx.send(body, { ...replying, ...claim, wake: wakeList(state, this.me, replying) }).pipe(
+        Effect.tapError(() => (at && block ? this.unwrite(at, block.id) : Effect.void)),
+        this.taken((who) => `${who} is answering #${seq}: leave it to them; nothing was sent`),
+      );
       return sent;
     },
     oneLook,

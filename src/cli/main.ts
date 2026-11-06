@@ -13,10 +13,10 @@ import { AgentLive } from "../agent.ts";
 import { VERSION } from "../version.ts";
 import { refreshListeners } from "../hooks.ts";
 import { forgetSecretCopies } from "../config/wipe.ts";
-import { HELP } from "./help.ts";
+import { helpFor } from "./help.ts";
 import { args, ignoredOptions, opt, unexpectedOptions } from "./args.ts";
 import { die, out } from "./context.ts";
-import { commandFor } from "./commands.ts";
+import { commandFor, COMMANDS } from "./commands.ts";
 import { fail } from "./fail.ts";
 
 // Early signals for `kiwi daemon` only (the first positional, same as the CLI). Bun plus the
@@ -47,7 +47,7 @@ if (import.meta.main) {
     process.exit(0);
   }
   if (!cmd || opt.help || cmd === "help") {
-    out(HELP);
+    out(helpFor(cmd === "help" ? args[1] : cmd, (word) => COMMANDS.has(word)));
     process.exit(0);
   }
   if (cmd === "upgrade" || cmd === "update") {

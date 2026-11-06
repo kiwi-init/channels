@@ -1,6 +1,7 @@
 import { parseArgs } from "node:util";
 import { IDENTITY_ARG, selfIdentity } from "../hooks.ts";
 import { QUERY_ARG } from "../query-arg.ts";
+import { COMMANDS } from "./commands.ts";
 
 if (process.argv[2] === IDENTITY_ARG && process.argv.length === 3) {
   const identity = selfIdentity();
@@ -136,7 +137,8 @@ function parse() {
     const e = err as Error & { code?: string };
     if (!e.code?.startsWith("ERR_PARSE_ARGS")) throw err;
     const unknown = /^Unknown option '([^']+)'/.exec(e.message);
-    process.stderr.write(`kiwi: ${unknown ? `unknown option ${back(unknown[1]!)}` : (e.message.split(". ")[0] ?? e.message)}; \`kiwi help\` lists the options\n`);
+    const command = process.argv.slice(2).find((a) => COMMANDS.has(a));
+    process.stderr.write(`kiwi: ${unknown ? `unknown option ${back(unknown[1]!)}` : (e.message.split(". ")[0] ?? e.message)}; \`kiwi help${command ? ` ${command}` : ""}\` lists the options\n`);
     process.exit(2);
   }
 }

@@ -42,7 +42,7 @@ const SEND_OPTIONS = [...PUBLISHING, "to", "kind", "re", "room", "ask", "wait", 
 
 function refuseUnused(command: string, allowed: readonly string[]): Effect.Effect<void, Quit> {
   const extra = unexpectedOptions(allowed);
-  return extra.length ? die(`kiwi ${command} doesn't take ${extra.map((o) => `--${o}`).join(", ")}: nothing was sent (see kiwi help)`) : Effect.void;
+  return extra.length ? die(`kiwi ${command} doesn't take ${extra.map((o) => `--${o}`).join(", ")}: nothing was sent (see kiwi help ${command})`) : Effect.void;
 }
 
 export const messageCommands: Record<string, Command> = {
