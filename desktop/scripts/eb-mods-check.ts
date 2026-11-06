@@ -378,6 +378,37 @@ try {
     await later(500);
     const saw = (await heard(d)).filter((m) => "sawMessage" in m);
     check(saw.length === 1 && saw[0]?.["sawMessage"] === "action" && saw[0]?.["surface"] === "main", "only that one message reached the mod, and only its main frame");
+    const was = await d.evaluate(
+      () => {
+        const before = document.documentElement.dataset["side"] ?? null;
+        document.documentElement.dataset["side"] = "none";
+        return before;
+      },
+      null,
+      2_000,
+    );
+    await later(2_000);
+    const hiddenSide = await d.evaluate(topAt, ".side .mod-side-slot", 2_000);
+    check(!hiddenSide.found, "with the sidebar hidden, the mod's section and its frame are hidden too");
+    const asked = Date.now();
+    await heard(d);
+    const answered = Date.now() - asked;
+    await howHeard(d, "with the sidebar hidden");
+    check(answered < 1_000, `the page keeps answering while the mod's sidebar frame is hidden (${answered} ms)`);
+    await step("⌘K with the sidebar hidden", 10_000, palette);
+    await step("the mod's command, typed again", 10_000, () => d.evaluate(fillIn, { selector: ".palette-input", value: "Say hi" }, 2_000));
+    await step("the mod's command, again", 10_000, () => d.evaluate(clickText, { selector: ".palette-item", text: "Say hi from the probe mod" }, 2_000));
+    const again = await until("the command's second run", 10_000, async () => ((await heard(d)).filter((m) => m["command"] === "hi").length >= 2 ? true : null)).catch(() => null);
+    check(!!again, "the mod's main frame still runs its command while its sidebar frame is hidden");
+    await d.evaluate(
+      (side) => {
+        if (side === null) delete document.documentElement.dataset["side"];
+        else document.documentElement.dataset["side"] = side;
+        return true;
+      },
+      was,
+      2_000,
+    );
     writeMod(2);
     const second = await until("the mod again, after its source changed", 30_000, async () => (await heard(d)).find((m) => m["version"] === 2) ?? null).catch(() => null);
     check(!!second, "a saved change reloads the mod");
