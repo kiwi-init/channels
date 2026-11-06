@@ -9,9 +9,8 @@ import { bootFailed, bootGone, bootStarted } from "~/mods/boot"
 import { hostMods, publishTabs } from "~/mods/bus"
 import { useApp, type Go, type Panel } from "~/nav"
 import { openOutside } from "~/kit/outside"
-import { copyText } from "~/kit/toasts"
 import { openLinksOutside } from "~/kit/outside-links"
-import { announce } from "~/kit/toasts"
+import { announce, copyText } from "~/kit/toasts"
 import { homeWaits, onHome } from "~/live/store"
 import type { MOD_SIDES as SIDES_EVENT } from "~/shell/updates"
 import {
@@ -32,6 +31,7 @@ import {
   type TerminalOp,
   type ToFrame,
 } from "~/mods/protocol"
+import { keep } from "~/mods/stored"
 
 const FRAME_URL = "views://internal/mod-frame.html"
 const LINK_GAP_MS = 500
@@ -270,6 +270,19 @@ function takeSizes(): void {
   if (moved) changed()
 }
 
+const QUIET_MS = 1_000
+const lastSaid = new Map<string, number>()
+
+function often(name: string, kind: string): boolean {
+  const key = `${kind}:${name}`
+  const now = Date.now()
+  if (now - (lastSaid.get(key) ?? 0) < QUIET_MS) return true
+  lastSaid.set(key, now)
+  return false
+}
+
+const focused = (f: Frame): boolean => document.hasFocus() && document.activeElement === f.el
+
 async function onMessage(e: MessageEvent): Promise<void> {
   const f = [...frames.values()].find((x) => x.el.contentWindow === e.source)
   const m = f ? fromFrame(e.data) : null
@@ -307,10 +320,10 @@ async function onMessage(e: MessageEvent): Promise<void> {
       showFrom(name, m.target)
       return
     case "copy":
-      copyText(m.text, m.note ?? "Copied")
+      if (focused(f)) copyText(m.text, m.note ?? "Copied")
       return
     case "link":
-      if (Date.now() - f.linked < LINK_GAP_MS) return
+      if (!focused(f) || Date.now() - f.linked < LINK_GAP_MS) return
       f.linked = Date.now()
       openOutside(m.url)
       return
@@ -349,7 +362,21 @@ async function onMessage(e: MessageEvent): Promise<void> {
         (err: unknown) => ({ kiwi: MOD_PROTOCOL, type: "reply", id: m.id, ok: false, error: err instanceof Error ? err.message : String(err) })
       )
       send(f, reply)
+      return
     }
+    case "storage": {
+      let reply: ToFrame
+      try {
+        reply = { kiwi: MOD_PROTOCOL, type: "stored", id: m.id, ok: true, value: keep(localStorage, name, m.op, m.key, m.value) }
+      } catch (err) {
+        reply = { kiwi: MOD_PROTOCOL, type: "stored", id: m.id, ok: false, error: err instanceof Error ? err.message : String(err) }
+      }
+      send(f, reply)
+      return
+    }
+    case "toast":
+      if (!often(name, "toast")) announce(`${name}: ${m.title}${m.message ? ` · ${m.message}` : ""}`, m.style === "failure" ? "error" : "info")
+      return
   }
 }
 

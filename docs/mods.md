@@ -16,7 +16,7 @@ Mods run in the desktop app, on a Mac and on Linux.
 kiwi mod dev standup-notes
 ```
 
-It creates `~/.kiwi/mods/standup-notes/` with a starter and an `icon.svg`, then rebuilds it on every save, and the app reloads it:
+It creates `~/.kiwi/mods/standup-notes/` with a starter and an `icon.svg`, then rebuilds it on every save, and the app reloads it. The folder also gets `kiwi-mod.d.ts`, a `tsconfig.json` and a `package.json`: run `bun install` once there and your editor autocompletes `@kiwi/mod`.
 
 ```json
 {
@@ -29,16 +29,24 @@ It creates `~/.kiwi/mods/standup-notes/` with a starter and an `icon.svg`, then 
 ```
 
 ```tsx
-import { useState } from "react"
-import { Button, panel, Row } from "@kiwi/mod"
+import { Action, Actions, List, panel, Toast } from "@kiwi/mod"
 
 function View() {
-  const [count, setCount] = useState(0)
   return (
-    <>
-      <Row title="Standup Notes" sub="Edit index.tsx and save: Channels reloads it." />
-      <Button onClick={() => setCount(count + 1)}>Pressed {count}</Button>
-    </>
+    <List searchBarPlaceholder="Search Standup Notes">
+      <List.Section title="Standup Notes">
+        <List.Item
+          title="Edit index.tsx and save"
+          subtitle="Channels reloads it"
+          icon="spec"
+          actions={
+            <Actions>
+              <Action title="Say hi" onAction={() => Toast.show({ title: "Hi from Standup Notes" })} />
+            </Actions>
+          }
+        />
+      </List.Section>
+    </List>
   )
 }
 
@@ -77,34 +85,61 @@ Everything comes from `@kiwi/mod`, plus React:
 | `render(kind, draw)` | Draws one kind of attachment in chat. See [Drawing attachments](#drawing-attachments). |
 | `fetch(url, init)` | The mod's only way to the network, to the hosts you approved, over https |
 | `terminals()`, `onTerminals(fn)`, `focusTerminal(id)`, `markTerminal(id, mark)` | Your agents' tmux panes and Rex blocks. See [Terminals](#terminals) |
+| `useFetch(url, options)` | `fetch` as a hook: `{ data, error, isLoading, revalidate }`, JSON by default |
+| `List`, `List.Section`, `List.Item` | A searchable list: ↑ ↓ to move, ↵ for the first action, a right click for the rest. Items take a `subtitle`, an `icon`, `keywords` and `accessories` (text, a tag, a date) |
+| `Detail` | Markdown, drawn like a message |
+| `Form` and `Form.TextField`, `TextArea`, `Checkbox`, `Dropdown` | A form whose `onSubmit` gets the values by field id. ⌘↵ submits |
+| `Actions`, `Action`, `Action.OpenInBrowser`, `Action.CopyToClipboard` | What an item, a detail or a form can do. A `shortcut` like `"mod+shift+c"` runs it from the keyboard |
+| `Toast.show({ title, message, style })` | A note at the bottom of the app |
+| `storage` | `get`, `set`, `remove` and `keys`, kept on this computer for the mod, up to 1,000,000 characters |
 | `Button`, `Row`, `Field`, `Icon`, `Avatar`, `Dot`, `Count`, `Empty`, `Heading`, `Track`, `ago`, `cx` | The app's own pieces: button, list row, labelled field, icons, faces, a task's status dot, counts, empty states, headings, segmented controls and times |
 
 The frame has the app's colours and styles, and follows your theme as it changes. A web link in it opens in your browser. A mod can also import its own files: code, `.css`, and images (`.svg`, `.png`, `.jpg`, `.gif`, `.webp`). It can't use Bun macros (`with { type: "macro" }`): they would run on your computer as it builds, outside its frame, so a mod that imports one doesn't build.
 
 ```tsx
-import { useState } from "react"
-import { Button, command, fetch, panel, Row } from "@kiwi/mod"
+import { Action, Actions, List, panel, storage, Toast, useFetch } from "@kiwi/mod"
 
-let show: (s: string) => void = () => {}
+interface Issue {
+  id: string
+  title: string
+  url: string
+  state: string
+}
 
 function View() {
-  const [said, setSaid] = useState("nothing yet")
-  show = setSaid
+  const { data, isLoading } = useFetch<Issue[]>("https://api.example.com/issues")
   return (
-    <>
-      <Row title="Status" sub={said} />
-      <Button kind="primary" onClick={async () => setSaid(`example.com answered ${(await fetch("https://example.com/")).status}`)}>
-        Ask example.com
-      </Button>
-    </>
+    <List isLoading={isLoading} searchBarPlaceholder="Search issues">
+      {(data ?? []).map((issue) => (
+        <List.Item
+          key={issue.id}
+          title={issue.title}
+          subtitle={issue.id}
+          accessories={[{ tag: issue.state }]}
+          actions={
+            <Actions>
+              <Action.OpenInBrowser url={issue.url} />
+              <Action.CopyToClipboard content={issue.id} shortcut="mod+shift+c" />
+              <Action
+                title="Pin"
+                shortcut="mod+p"
+                onAction={async () => {
+                  await storage.set("pinned", issue.id)
+                  Toast.show({ title: "Pinned", message: issue.title })
+                }}
+              />
+            </Actions>
+          }
+        />
+      ))}
+    </List>
   )
 }
 
-panel({ title: "Status", render: View })
-command({ id: "hi", title: "Say hi from Status", run: () => show("hi from ⌘K") })
+panel({ title: "Issues", render: View })
 ```
 
-With `"needs": ["panel", "command", "net:example.com"]`, that's a whole mod.
+With `"needs": ["panel", "net:api.example.com"]`, that's a whole mod.
 
 ## The GitHub tab is a mod
 
@@ -143,10 +178,9 @@ Each mod runs in a sandboxed frame of its own origin:
 
 Some limits come with that:
 
-- **No storage:** a mod can't keep a setting or a token between reloads.
-- **Links don't open**, and images from the web don't load; fetch one and show it as a `blob:` URL.
-- **Each save restarts it**, so its state resets.
-- **No types for `@kiwi/mod` yet:** your editor may flag the import, but the mod builds.
+- **Links and copying wait for you:** a web link, an `Action.OpenInBrowser`, `window.open` or `copy()` works only while you're using the mod, like right after a click in it. Images from the web don't load; fetch one and show it as a `blob:` URL.
+- **Each save restarts it**, so state outside `storage` resets.
+- **Diagrams don't draw** in a mod's `Detail` yet.
 
 ## Drawing attachments
 

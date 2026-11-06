@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
-import { fromFrame, heeded, LOOK, MOD_PROTOCOL, sameTarget, SIDE_HEIGHT, target } from "~/mods/protocol"
+import { fromFrame, heeded, LOOK, MOD_PROTOCOL, sameTarget, SIDE_HEIGHT, STORAGE, target } from "~/mods/protocol"
 import { TOKENS } from "~/theme/derive"
 
 describe("a mod frame's messages", () => {
@@ -58,6 +58,24 @@ describe("a mod frame's messages", () => {
       { kiwi: MOD_PROTOCOL, type: "fetch", id: 1, url: "" },
     ])
       expect(fromFrame(m)).toBeNull()
+  })
+
+  test("a mod's storage and toasts come through only in their shapes and sizes", () => {
+    const at = (m: Record<string, unknown>) => fromFrame({ kiwi: MOD_PROTOCOL, ...m })
+    expect(at({ type: "storage", id: 1, op: "set", key: "k", value: "1" })).toEqual({ kiwi: MOD_PROTOCOL, type: "storage", id: 1, op: "set", key: "k", value: "1" })
+    expect(at({ type: "storage", id: 2, op: "get", key: "k", value: "dropped" })).toEqual({ kiwi: MOD_PROTOCOL, type: "storage", id: 2, op: "get", key: "k", value: null })
+    expect(at({ type: "storage", id: 3, op: "keys", key: "ignored" })).toEqual({ kiwi: MOD_PROTOCOL, type: "storage", id: 3, op: "keys", key: null, value: null })
+    for (const bad of [
+      { id: 1.5, op: "get", key: "k" },
+      { id: 1, op: "clear", key: "k" },
+      { id: 1, op: "get", key: "" },
+      { id: 1, op: "get", key: "k".repeat(STORAGE.key + 1) },
+      { id: 1, op: "set", key: "k" },
+      { id: 1, op: "set", key: "k", value: "x".repeat(STORAGE.value + 1) },
+    ])
+      expect(at({ type: "storage", ...bad })).toBeNull()
+    expect(at({ type: "toast", title: "Saved", message: "", style: "loud" })).toEqual({ kiwi: MOD_PROTOCOL, type: "toast", title: "Saved", message: null, style: null })
+    expect(at({ type: "toast", title: "x".repeat(201) })).toBeNull()
   })
 
   test("a terminal call is listing, focusing or marking a seat by its id, and nothing else", () => {
@@ -217,6 +235,14 @@ describe("what a mod's frame may do", () => {
   test("a mod that isn't on, or is gone, gets nothing", () => {
     expect(heeded("panel", "main", mod(["panel"], "asks"))).toBe(false)
     expect(heeded("actions", "main", undefined)).toBe(false)
+  })
+
+  test("storage, toasts, links and copies need no capability, only a mod that is on", () => {
+    for (const type of ["storage", "toast", "copy", "link"] as const) {
+      expect(heeded(type, "sidebar", mod([]))).toBe(true)
+      expect(heeded(type, "main", mod(["panel"], "asks"))).toBe(false)
+      expect(heeded(type, "main", undefined)).toBe(false)
+    }
   })
 
   test("what needs no capability always comes through", () => {
