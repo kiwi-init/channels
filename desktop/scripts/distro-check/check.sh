@@ -70,7 +70,7 @@ as_tester() {
   rt=$(mktemp -d)
   chown tester: "$rt"
   chmod 700 "$rt"
-  runuser -u tester -- env XDG_RUNTIME_DIR="$rt" timeout 900 dbus-run-session -- "$@"
+  runuser -u tester -- env XDG_RUNTIME_DIR="$rt" CHANNELS_ENTRY_FOR_ANY_BUILD="${entry_any:-1}" timeout 900 dbus-run-session -- "$@"
   local code=$?
   rm -rf "$rt"
   return $code
@@ -100,6 +100,9 @@ activatable=$(grep -lE 'org\.freedesktop\.secrets|org\.gnome\.keyring' /usr/shar
 for f in $activatable; do mv "$f" "$f.off"; done
 if ls /usr/bin/fusermount* > /dev/null 2>&1; then bad "the test tools pulled in FUSE, so the start without it can't be checked"; fi
 session none stock no-tray "$plain_home"
+dev_home=$(runuser -u tester -- mktemp -d)
+entry_any=0 session none dev-build no-tray "$dev_home"
+if [ -e "$dev_home/.local/share/applications/channels-desktop.desktop" ]; then bad "a dev build wrote the app menu's entry (#1806)"; else ok "a dev build leaves the app menu's entry alone (#1806)"; fi
 entry_check "$plain_home" 'env APPIMAGE_EXTRACT_AND_RUN=1 "/home/tester/Channels.AppImage" %U'
 session none entry-no-fuse no-tray "$plain_home" entry
 mounted entry-no-fuse /tmp/appimage_extracted_ "with no FUSE, the entry's start extracts the AppImage and runs it"

@@ -157,5 +157,8 @@ describe("the AppImage keeps its own desktop entry (#1284)", () => {
     }
     expect([readFileSync(entry, "utf8"), readFileSync(mimeapps, "utf8"), statSync(entry).mtimeMs, statSync(mimeapps).mtimeMs]).toEqual(before);
     expect(readFileSync(entry, "utf8")).toContain(installed.appImage);
+    const checked = keepLinuxEntry(testBuild, `${RELEASE_ID}.dev`, { ...env, CHANNELS_ENTRY_FOR_ANY_BUILD: "1" }, home);
+    expect(checked.kind).toBe("kept");
+    expect(readFileSync(entry, "utf8")).toContain(testBuild);
   });
 });
