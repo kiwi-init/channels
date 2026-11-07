@@ -1,10 +1,7 @@
 import { useEffect, useState } from "react"
 
-import { linkOf, type ChannelLink } from "@kiwi/channel/channel-ops.ts"
-import { loadMember } from "@kiwi/channel/store.ts"
 import type { ModRoom } from "../../../desktop/src/bridge.ts"
 import { cx } from "~/kit/bits"
-import { openedRun } from "~/live/store"
 import type { ChannelTile } from "~/model"
 import type { ModRoomGrant } from "~/mods/protocol"
 
@@ -39,17 +36,20 @@ function useRoomsOf(codes: readonly string[], wanted: boolean): Map<string, Set<
     const learn = (code: string, ids: readonly string[]) => {
       if (live) setKnown((m) => new Map(m).set(code, new Set(["general", ...ids])))
     }
-    for (const code of key.split("\n").filter(Boolean))
-      void roomLink(code)
-        .rooms()
-        .then(
-          (s) =>
-            learn(
-              code,
-              (s?.list ?? []).map((r) => r.id)
-            ),
-          () => learn(code, [])
-        )
+    const codes = key.split("\n").filter(Boolean)
+    void import("~/mods/link").then(({ roomLink }) => {
+      for (const code of codes)
+        void Promise.resolve()
+          .then(() => roomLink(code).rooms())
+          .then(
+            (s) =>
+              learn(
+                code,
+                (s?.list ?? []).map((r) => r.id)
+              ),
+            () => learn(code, [])
+          )
+    })
     return () => {
       live = false
     }
@@ -86,14 +86,6 @@ export function RoomPicker({ rooms, channels, value, onChange }: { rooms: readon
       })}
     </div>
   )
-}
-
-export function roomLink(code: string): ChannelLink {
-  const run = openedRun(code)
-  if (run) return run.ch
-  const m = loadMember(code)
-  if (!m) throw new Error("you're not in that channel")
-  return linkOf(m)
 }
 
 interface Granted {

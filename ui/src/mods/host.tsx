@@ -9,7 +9,7 @@ import { bootFailed, bootGone, bootStarted } from "~/mods/boot"
 import { hostMods, publishTabs } from "~/mods/bus"
 import { carryCalm } from "~/mods/carry-calm"
 import { channelsFor, modChannels } from "~/mods/channels"
-import { asksRooms, grantsOf, mayPost, pacer, postBody, roomLink } from "~/mods/needs"
+import { asksRooms, grantsOf, mayPost, pacer, postBody } from "~/mods/needs"
 import { useIdleWait } from "~/mods/idle"
 import { Rest } from "~/mods/rest"
 import { useApp, type Go, type Panel } from "~/nav"
@@ -455,6 +455,7 @@ async function onMessage(e: MessageEvent): Promise<void> {
       const wait = tooSoon(name, Date.now())
       if (wait > 0) return fail(`${name} posts at most once every ${POST_EVERY_MS / 1000} seconds: try again in ${Math.ceil(wait / 1000)} s`)
       try {
+        const { roomLink } = await import("~/mods/link")
         await roomLink(m.code).send(body, { kind: "msg", ...(m.room === "general" ? {} : { room: m.room }) })
         send(f, { kiwi: MOD_PROTOCOL, type: "reply", id: m.id, ok: true, value: null })
       } catch (err) {
