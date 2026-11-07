@@ -556,12 +556,15 @@ const outsideStore = (secret: string): string[] => holding(secret).filter((f) =>
 async function kitMod(d: Driver, palette: () => Promise<boolean>): Promise<void> {
   writeKitMod(1);
   const kit = async () => (await heard(d)).filter((m) => m["kit"] === true);
-  await until("Set up kit-mod in ⌘K", 30_000, async () => {
+  const asking = () => d.evaluate(() => (document.querySelector('dialog[open][aria-label="kit-mod asks to run"]') ? true : null), null, 2_000).catch(() => null);
+  await until("kit-mod's ask, by itself or from ⌘K", 30_000, async () => {
+    if (await asking()) return true;
     await palette();
     await d.evaluate(fillIn, { selector: ".palette-input", value: "kit-mod" }, 2_000).catch(() => false);
-    return (await d.evaluate(clickText, { selector: ".palette-item", text: "Set up kit-mod" }, 2_000).catch(() => false)) ? true : null;
+    await d.evaluate(clickText, { selector: ".palette-item", text: "Set up kit-mod" }, 2_000).catch(() => false);
+    return asking();
   });
-  await step("Turn on the kit mod", 10_000, () => d.evaluate(clickText, { selector: ".panel button", text: "Turn on" }, 2_000));
+  await step("Allow the kit mod", 10_000, () => d.evaluate(clickText, { selector: 'dialog[open][aria-label="kit-mod asks to run"] .modal-foot button', text: "Allow" }, 2_000));
   const first = await until("the kit mod's first visit", 30_000, async () => (await kit()).find((m) => "visits" in m || "storageFailed" in m) ?? null).catch(() => null);
   console.log(`the kit mod: ${JSON.stringify(first)}`);
   check(first?.["visits"] === 1, "a mod built only from the kit runs and keeps a value in its own storage");
