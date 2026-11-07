@@ -48,6 +48,16 @@ describe("eb-bump", () => {
     expect(changes(pins, next)).toEqual(["macos-arm64 Contents/MacOS/libElectrobunCore.dylib", "macos-arm64 Contents/Resources/uninstall", "macos-arm64 devkit", "linux-x64 devkit"]);
   });
 
+  test("a Linux key's files come from the Linux core, by the same names (T7239)", () => {
+    const linux: Pins = { ...pins, app: { ...pins.app, "linux-x64": { "bin/libNativeWrapper.so": "wrapper-1", "Resources/uninstall": "extractor-1", "bin/bun": "bun-1" } } };
+    const core = new Map([
+      ["libNativeWrapper.so", "wrapper-2"],
+      ["extractor", "extractor-2"],
+    ]);
+    const next = bumped(linux, "2026.11.0", { "macos-arm64": "d", "linux-x64": "d" }, { "macos-arm64": new Map(), "linux-x64": core });
+    expect(next.app["linux-x64"]).toEqual({ "bin/libNativeWrapper.so": "wrapper-2", "Resources/uninstall": "extractor-2", "bin/bun": "bun-1" });
+  });
+
   test("a file the release no longer ships keeps its pin, so the build's own check catches it", () => {
     const next = bumped(pins, "2026.11.0", { "macos-arm64": "d", "linux-x64": "d" }, { "macos-arm64": new Map() });
     expect(next.app["macos-arm64"]).toEqual(pins.app["macos-arm64"]);

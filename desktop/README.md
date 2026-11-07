@@ -32,7 +32,9 @@ bun run typecheck:eb                                  # fetches the devkit into 
   installer. `eb-pre-build.ts` refuses a build that didn't start this way, or whose devkit
   (bundled into the main process) isn't the pinned one; `eb-post-build.ts` checks every
   Electrobun file that ships against its pin, and lets nothing unpinned into
-  `Contents/MacOS`. A new Electrobun means new pins, reviewed like code.
+  `Contents/MacOS` on a Mac or `bin/` on Linux, so a swapped core fails the build.
+  `eb-pins-check.ts linux-arm64` checks that core's files on every Linux CI run, since no
+  job builds there. A new Electrobun means new pins (`eb-bump.ts --version X`), reviewed like code.
 - `electrobun.config.ts` — Electrobun 2.0.4, pinned exact, `mainProcess: "bun"`. A build
   is `com.kiwiinit.channels.dev` unless `CHANNELS_EB_RELEASE=1` (the release) or
   `CHANNELS_EB_IDENTIFIER` (a test's own id) says otherwise, so a local run never shares
@@ -131,8 +133,9 @@ and leaves a PNG of each state with `results.json` in the folder it is given. CI
 Ubuntu 26.04 and keeps the PNGs as the `wlroots-check` artifact.
 
 On an Apple silicon Mac, run it in an Ubuntu 26.04 arm64 VM (UTM or Lume). Hutch and the
-devkit are pinned for linux-arm64, but no CI job builds there, so an arm64 build is the
-first to try it.
+devkit and the core's files are pinned for linux-arm64, but no CI job builds there, so an
+arm64 build is the first to try it, and the first to say which of its files (like `bin/bun`)
+still need a pin.
 
 ```sh
 sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev libpipewire-0.3-dev \
