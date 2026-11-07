@@ -9,8 +9,11 @@ import { ebDataDir, openEbStore, plainNote } from "../src/store-eb.ts";
 import { readyMark, STORE_FILE } from "../src/store-v2.ts";
 
 const mode = process.argv[2];
-if (process.platform !== "linux" || (mode !== "keyring" && mode !== "none")) {
-  console.error("usage on Linux: bun desktop/scripts/linux-store-check.ts keyring (inside a session with an unlocked Secret Service) | none (with no session bus)");
+const kept = process.argv[3];
+if (process.platform !== "linux" || (mode !== "keyring" && mode !== "none" && !(mode === "reopen" && kept))) {
+  console.error(
+    "usage on Linux: bun desktop/scripts/linux-store-check.ts keyring [HOME] (inside a session with an unlocked Secret Service; with HOME, the store stays there) | reopen HOME (a later start, on the store keyring left in HOME) | none (with no session bus)",
+  );
   process.exit(2);
 }
 
@@ -20,19 +23,24 @@ function expect(what: string, ok: boolean, detail: string): void {
   if (!ok) failures.push(`${what}: ${detail}`);
 }
 
-const home = fs.mkdtempSync(path.join(os.tmpdir(), "kiwi-linux-store-"));
+const home = kept ? path.resolve(kept) : fs.mkdtempSync(path.join(os.tmpdir(), "kiwi-linux-store-"));
+if (kept) fs.mkdirSync(home, { recursive: true });
 process.env["XDG_CONFIG_HOME"] = path.join(home, ".config");
-const id = `com.kiwiinit.channels.store-check-${randomBytes(4).toString("hex")}`;
+const id = kept ? "com.kiwiinit.channels.store-check" : `com.kiwiinit.channels.store-check-${randomBytes(4).toString("hex")}`;
 const dir = ebDataDir(id, "stable", "linux", home, {});
 const store = path.join(dir, STORE_FILE);
 const privateFile = (file: string): boolean => fs.existsSync(file) && (fs.statSync(file).mode & 0o777) === 0o600;
 const open = () => openEbStore({ dir, keys: keySources("linux"), home, platform: "linux" });
+const old = { relayUrl: "https://old.example", channels: [] };
+const keyHeld = async (): Promise<boolean> => {
+  const key = await Bun.secrets.get({ service: "Channels", name: "store-key" });
+  return key !== null && (await Bun.secrets.get({ service: "Channels", name: "store-key-ready" })) === readyMark(key);
+};
 
 try {
   if (mode === "keyring") {
     const password = randomBytes(16).toString("base64");
     execFileSync("secret-tool", ["store", "--label", "kiwi-desktop Safe Storage", "xdg:schema", "chrome_libsecret_os_crypt_password_v2", "application", "kiwi-desktop"], { input: password });
-    const old = { relayUrl: "https://old.example", channels: [] };
     const legacyDir = path.join(home, ".config", "kiwi-desktop");
     fs.mkdirSync(legacyDir, { recursive: true });
     const cipher = createCipheriv("aes-128-cbc", pbkdf2Sync(password, "saltysalt", 1, 16, "sha1"), Buffer.alloc(16, 0x20));
@@ -40,20 +48,24 @@ try {
     fs.writeFileSync(legacy, Buffer.concat([Buffer.from("v11"), cipher.update(JSON.stringify(old), "utf8"), cipher.final()]));
     const first = await open();
     expect(
-      "a first start imports the Electron app's v11 store through the GNOME keyring's kiwi-desktop Safe Storage, sealed under a key the keyring keeps",
+      "a first start imports the Electron app's v11 store through the keyring's kiwi-desktop Safe Storage, sealed under a key the keyring keeps",
       first.kind === "open" && first.sealed && first.imported === legacy && first.json?.["relayUrl"] === old.relayUrl && first.noKeychain === null,
       JSON.stringify(first),
     );
     expect("both copies are 0600", privateFile(store) && privateFile(`${store}.bak`), `${store}`);
-    const key = await Bun.secrets.get({ service: "Channels", name: "store-key" });
-    expect(
-      "the store key and its ready mark are in the keyring",
-      key !== null && (await Bun.secrets.get({ service: "Channels", name: "store-key-ready" })) === readyMark(key),
-      `key ${key === null ? "missing" : "present"}`,
-    );
+    expect("the store key and its ready mark are in the keyring", await keyHeld(), "no store key with a matching ready mark");
     const second = await open();
     expect("the next start reads store v2 and doesn't import again", second.kind === "open" && second.imported === null && second.json?.["relayUrl"] === old.relayUrl, JSON.stringify(second));
     expect("the Electron app's file is left as it was", fs.existsSync(legacy), legacy);
+  } else if (mode === "reopen") {
+    const again = await open();
+    expect(
+      "a later start, with the keyring started anew, opens the sealed store with the key the keyring kept, and doesn't import again",
+      again.kind === "open" && again.sealed && again.noKeychain === null && again.imported === null && again.json?.["relayUrl"] === old.relayUrl,
+      JSON.stringify(again),
+    );
+    expect("the store key and its ready mark are still in the keyring", await keyHeld(), "no store key with a matching ready mark");
+    expect("both copies are still 0600", privateFile(store) && privateFile(`${store}.bak`), `${store}`);
   } else {
     const opened = await open();
     const note = plainNote(opened);
@@ -65,7 +77,7 @@ try {
     expect("and saves it at 0600", privateFile(store) && fs.readFileSync(store, "utf8") === "{}", store);
   }
 } finally {
-  fs.rmSync(home, { recursive: true, force: true });
+  if (!kept) fs.rmSync(home, { recursive: true, force: true });
 }
 
 if (failures.length) {
