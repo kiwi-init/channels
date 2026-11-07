@@ -4,7 +4,8 @@ import { join, relative, sep } from "node:path";
 
 import { startLocalRelay } from "../../scripts/local-relay.ts";
 import { buildUipack, generateSigningKey, signManifest, uipackFileName, type UiManifest } from "../.hutch/devkit/api/sdks/main/appengine/format.ts";
-import { UI_CONTRACT } from "../src/ui-contract.ts";
+import { UI_CONTRACT, UI_REQUIRES } from "../src/ui-contract.ts";
+import { olderLook } from "../src/ui-older.ts";
 import { appExecutable, appRoot, attach, launch, stop, testEnv, until, type Driver } from "./eb-drive.ts";
 
 if (!process.argv[2] || process.platform !== "darwin") {
@@ -39,6 +40,7 @@ const marked = (index: string, mark: string): string => index.replace(/<head([^>
 
 let manifest: UiManifest | null = null;
 const bundles = new Map<string, Uint8Array>();
+const asked = new Map<string, number>();
 let held: Promise<void> = Promise.resolve();
 let release = (): void => {};
 const holdBundles = (): void => {
@@ -50,13 +52,14 @@ const channel = Bun.serve({
   idleTimeout: 0,
   fetch(request) {
     const name = new URL(request.url).pathname.slice(1);
+    asked.set(name, (asked.get(name) ?? 0) + 1);
     if (name === "manifest.json") return manifest ? Response.json(manifest) : new Response("none yet", { status: 404 });
     const bundle = bundles.get(name);
     return bundle ? held.then(() => new Response(new Blob([bundle as Uint8Array<ArrayBuffer>]))) : new Response("not found", { status: 404 });
   },
 });
 
-function publish(mark: string, change: (files: Map<string, Uint8Array>) => void = () => {}): UiManifest {
+function publish(mark: string, change: (files: Map<string, Uint8Array>) => void = () => {}, requiresContract = `^${UI_CONTRACT}`): UiManifest {
   const files = builtInFiles();
   files.set("index.html", encode(marked(new TextDecoder().decode(files.get("index.html")), mark)));
   change(files);
@@ -65,7 +68,7 @@ function publish(mark: string, change: (files: Map<string, Uint8Array>) => void 
   const name = uipackFileName(uiVersion, sha256);
   bundles.set(name, bytes);
   manifest = signManifest(
-    { format: "livewire-manifest/1", keyId: key.keyId, seq: Date.now(), uiVersion, bundleUrl: name, sha256, requiresContract: `^${UI_CONTRACT}`, dataSchema: 1, publishedAt: Date.now() },
+    { format: "livewire-manifest/1", keyId: key.keyId, seq: Date.now(), uiVersion, bundleUrl: name, sha256, requiresContract, dataSchema: 1, publishedAt: Date.now() },
     key.privateKeyPem,
   );
   return manifest;
@@ -129,6 +132,21 @@ try {
     console.log(`the Calm meadow draws with ${gpu} in the packaged app`);
   });
 
+  const old = publish("old", undefined, `^${UI_REQUIRES.split(".")[0]}.0.0`);
+  if (!olderLook(old)) throw new Error(`${old.requiresContract} isn't older than this build's ${UI_REQUIRES}: pick an older range for the check`);
+  for (const when of ["published", "restarted"]) {
+    const reads = asked.get("manifest.json") ?? 0;
+    await run(async (d) => {
+      await until("the app reading the published look", 30_000, async () => ((asked.get("manifest.json") ?? 0) > reads ? true : null));
+      await d.main("closeWindow");
+      await new Promise((resolve) => setTimeout(resolve, 3_000));
+      if (asked.has(old.bundleUrl)) problems.push(`${when}: the app downloaded a look made for contract ${old.requiresContract}, older than its own ${UI_REQUIRES}`);
+      if ((await showing(d)) !== "built-in") problems.push(`${when}: a look made for an older contract replaced the built-in one`);
+      if (engineState()?.current) problems.push(`${when}: the engine took a look made for an older contract`);
+    });
+    console.log(`${when} a look made for contract ${old.requiresContract}: never downloaded, the built-in UI (${UI_REQUIRES}) stays, the window closed`);
+  }
+
   const a = publish("a");
   holdBundles();
   await run(async (d) => {
@@ -176,4 +194,6 @@ if (problems.length) {
   for (const p of problems) console.error(`FAIL ${p}`);
   process.exit(1);
 }
-console.log("ok: the test build boots its UI from a signed channel, swaps while the window is closed, keeps a good UI across restarts and bans one that fails");
+console.log(
+  "ok: the test build boots its UI from a signed channel, keeps its own over one made for an older contract, swaps while the window is closed, keeps a good UI across restarts and bans one that fails",
+);

@@ -7,6 +7,7 @@ import pkg from "../package.json" with { type: "json" };
 import { PAGE_TEMPLATE } from "./eb-page.ts";
 import { UI_MANIFEST_URL, UI_POLL_MS, UI_PREFIX, UI_READY_MS, UI_TRUSTED_KEYS } from "./ui-channel.ts";
 import { UI_CONTRACT } from "./ui-contract.ts";
+import { olderLook, ownLookSeq } from "./ui-older.ts";
 import { hearApply, hearUi, setUiWaiting } from "./ui-signals.ts";
 import { dataDir } from "./host-eb.ts";
 
@@ -74,16 +75,27 @@ export interface ChannelUi {
   placeBuiltIn(): void;
 }
 
+function engineState(file: string): unknown {
+  try {
+    return JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch {
+    // No state yet, or one the engine itself will reset: nothing installed to weigh against the built-in UI.
+    return null;
+  }
+}
+
 export function channelUi(w: UiWindow): ChannelUi {
   if (!channel) throw new Error("this build shows only its built-in UI");
+  const stateFile = path.join(Utils.paths.userData, "appengine", "engine.json");
   const engine = new AppEngine({
     contractVersion: UI_CONTRACT,
     readyTimeoutMs: UI_READY_MS,
-    channel: { ...channel, pollIntervalMs: devChannel ? 3_000 : UI_POLL_MS },
+    stateFile,
+    channel: { ...channel, pollIntervalMs: devChannel ? 3_000 : UI_POLL_MS, accept: (manifest) => olderLook(manifest) },
     host: {
       viewsRoot: uiViewsRoot(),
       prefix: UI_PREFIX,
-      builtIn: { uiVersion: `built-in-${pkg.version}`, seq: KIWI_UI_SEQ, files: builtInFiles },
+      builtIn: { uiVersion: `built-in-${pkg.version}`, seq: ownLookSeq(engineState(stateFile), KIWI_UI_SEQ), files: builtInFiles },
       show: (ui) => w.show(new TextDecoder().decode(ui.index)),
       canSwap: () => devChannel !== null || accepted || !w.win.isVisible(),
     },
