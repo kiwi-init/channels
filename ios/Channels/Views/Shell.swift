@@ -214,6 +214,7 @@ struct Shell: View {
                 case "members": model.drawer = .right
                 case "board": model.showing = .tasks(first.code)
                 case "settings": settings = true
+                case "tasks": model.path = [.details(first.code, "main")]
                 default: break
                 }
             }
