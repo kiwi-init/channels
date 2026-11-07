@@ -22,7 +22,8 @@
     "grim",
     "plutil",
     "secret-tool",
-    "readelf"
+    "readelf",
+    "foot"
   ],
   "workspaces": {
     ".": {

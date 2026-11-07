@@ -12,7 +12,7 @@ mkdir -p "$out"
 
 pacman -Syu --noconfirm > "$out/install.log" 2>&1
 stock=(gtk3 webkit2gtk-4.1 librsvg)
-tools=(git dbus procps-ng grim jq mesa which)
+tools=(git dbus procps-ng grim jq mesa which foot)
 case "$compositor" in
   sway) desktop=(sway) ;;
   hyprland) desktop=(hyprland seatd) ;;
