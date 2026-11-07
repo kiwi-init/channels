@@ -164,6 +164,7 @@ export type ToFrame =
   | { kiwi: typeof MOD_PROTOCOL; type: "showing"; target: ModTarget | null }
   | { kiwi: typeof MOD_PROTOCOL; type: "channels"; list: ModChannel[] }
   | { kiwi: typeof MOD_PROTOCOL; type: "rest"; shown: boolean }
+  | { kiwi: typeof MOD_PROTOCOL; type: "rooms"; list: ModRoomGrant[] }
 
 export type FromFrame =
   | { kiwi: typeof MOD_PROTOCOL; type: "hello" }
@@ -186,8 +187,18 @@ export type FromFrame =
   | { kiwi: typeof MOD_PROTOCOL; type: "show"; target: ModTarget }
   | { kiwi: typeof MOD_PROTOCOL; type: "copy"; text: string; note: string | null }
   | { kiwi: typeof MOD_PROTOCOL; type: "link"; url: string }
+  | { kiwi: typeof MOD_PROTOCOL; type: "post"; id: number; code: string; room: string; text: string }
 
 const short = (v: unknown, max: number): v is string => typeof v === "string" && v.length > 0 && v.length <= max
+
+export interface ModRoomGrant {
+  channel: string
+  title: string
+  room: string
+}
+
+export const POST_CHARS = 4_000
+export const POST_EVERY_MS = 2_000
 
 const ANY: readonly Surface[] = ["main", "sidebar", "tab"]
 
@@ -213,6 +224,7 @@ const FROM_IDLE: ReadonlySet<FromFrame["type"]> = new Set(["hello", "ready", "er
 export function heeded(type: FromFrame["type"], from: Surface, mod: { state: string; needs: readonly string[] } | undefined): boolean {
   if (from === "idle" && !FROM_IDLE.has(type)) return false
   if (RUNNING.has(type)) return !!mod && mod.state === "on"
+  if (type === "post") return ANY.includes(from) && !!mod && mod.state === "on" && mod.needs.some((n) => n.startsWith("post:"))
   const gate = GATED[type]
   return !gate || (gate[1].includes(from) && !!mod && mod.state === "on" && mod.needs.includes(gate[0]))
 }
@@ -286,6 +298,11 @@ export function fromFrame(data: unknown): FromFrame | null {
     }
     case "channel":
       return short(m["code"], 64) ? { kiwi: MOD_PROTOCOL, type: "channel", code: m["code"] } : null
+    case "post": {
+      const { id, code, room, text } = m
+      if (typeof id !== "number" || !Number.isSafeInteger(id) || !short(code, 64) || !short(room, 33) || typeof text !== "string" || text.length > POST_CHARS) return null
+      return { kiwi: MOD_PROTOCOL, type: "post", id, code, room: room.replace(/^#/, ""), text }
+    }
     case "idle": {
       const after = m["after"]
       if (typeof after !== "number" || !Number.isInteger(after) || after < 0 || after > IDLE_MAX_MINUTES) return null

@@ -486,7 +486,8 @@ export interface KiwiBridge {
   mods(): Promise<ModView[]>;
   onMods(cb: (mods: ModView[]) => void): () => void;
   modBundle(name: string): Promise<ModBundle | null>;
-  approveMod(name: string, needs: string[]): Promise<ModView[]>;
+  approveMod(name: string, needs: string[], rooms?: ModRoom[]): Promise<ModView[]>;
+  setModRooms(name: string, rooms: ModRoom[]): Promise<ModView[]>;
   modFetch(name: string, req: ModFetchRequest): Promise<ModFetchReply>;
   modFailed(name: string, hash: string, why: string): Promise<ModView[]>;
   setModOn(name: string, on: boolean): Promise<ModView[]>;
@@ -521,6 +522,12 @@ export interface ModView {
   icon?: string;
   terminal?: { hash: string; tmux?: ModSnippet; rex?: ModSnippet };
   settingsRev?: number;
+  rooms?: ModRoom[];
+}
+
+export interface ModRoom {
+  code: string;
+  room: string;
 }
 
 export type ModSettingValue = string | boolean | null;

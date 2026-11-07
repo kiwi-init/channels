@@ -9,6 +9,7 @@ import { bootFailed, bootGone, bootStarted } from "~/mods/boot"
 import { hostMods, publishTabs } from "~/mods/bus"
 import { carryCalm } from "~/mods/carry-calm"
 import { channelsFor, modChannels } from "~/mods/channels"
+import { asksRooms, grantsOf, mayPost, pacer, postBody } from "~/mods/needs"
 import { useIdleWait } from "~/mods/idle"
 import { Rest } from "~/mods/rest"
 import { useApp, type Go, type Panel } from "~/nav"
@@ -22,6 +23,7 @@ import {
   heeded,
   LOOK,
   MOD_PROTOCOL,
+  POST_EVERY_MS,
   sameTarget,
   SIDE_HEIGHT,
   type ModChannel,
@@ -201,10 +203,19 @@ function sendChannels(f: Frame): void {
   if (list) send(f, { kiwi: MOD_PROTOCOL, type: "channels", list })
 }
 
+function sendRooms(f: Frame): void {
+  const mod = modNamed(f.name)
+  if (!mod || f.surface === "render" || f.surface === "idle" || !asksRooms(mod.needs).length) return
+  send(f, { kiwi: MOD_PROTOCOL, type: "rooms", list: grantsOf(mod, (code) => state.channels.find((c) => c.code === code)?.title ?? null) })
+}
+
+const tooSoon = pacer(POST_EVERY_MS)
+
 function setChannels(list: ModChannel[]): void {
   if (JSON.stringify(list) === JSON.stringify(state.channels)) return
   state.channels = list
   for (const f of frames.values()) sendChannels(f)
+  for (const f of frames.values()) sendRooms(f)
   if (state.resting) changed()
 }
 
@@ -374,6 +385,7 @@ async function onMessage(e: MessageEvent): Promise<void> {
       send(f, { kiwi: MOD_PROTOCOL, type: "boot", name, surface, needs: mod?.needs ?? [], code: got.code, settings: got.settings ?? {}, ...look() })
       sendGithub(f)
       sendChannels(f)
+      sendRooms(f)
       send(f, { kiwi: MOD_PROTOCOL, type: "showing", target: state.showing.get(name) ?? null })
       return
     }
@@ -435,6 +447,23 @@ async function onMessage(e: MessageEvent): Promise<void> {
       sizes.set(name, m.height)
       sizing ||= requestAnimationFrame(takeSizes)
       return
+    case "post": {
+      const fail = (error: string) => send(f, { kiwi: MOD_PROTOCOL, type: "reply", id: m.id, ok: false, error })
+      if (!mayPost(modNamed(name), m.code, m.room)) return fail(`${name} may not post in #${m.room} there: it isn't a room you picked for it`)
+      const body = postBody(name, m.text)
+      if (!body) return fail("there's nothing to post")
+      const wait = tooSoon(name, Date.now())
+      if (wait > 0) return fail(`${name} posts at most once every ${POST_EVERY_MS / 1000} seconds: try again in ${Math.ceil(wait / 1000)} s`)
+      try {
+        const { roomLink } = await import("~/mods/link")
+        await roomLink(m.code).send(body, { kind: "msg", ...(m.room === "general" ? {} : { room: m.room }) })
+        send(f, { kiwi: MOD_PROTOCOL, type: "reply", id: m.id, ok: true, value: null })
+      } catch (err) {
+        // The mod gets the reason; the person sees nothing, since they didn't write it.
+        fail(err instanceof Error ? err.message : String(err))
+      }
+      return
+    }
     case "fetch": {
       const reply: ToFrame = await b.modFetch(name, { url: m.url, ...m.init }).then(
         (value) => ({ kiwi: MOD_PROTOCOL, type: "reply", id: m.id, ok: true, value }),
@@ -642,6 +671,7 @@ export function ModsLayer() {
       if (after) void b.setModSetting("calm", "after", after).catch(() => null)
       state.mods = list
       if (layer.current) startFrames(layer.current)
+      for (const f of frames.values()) if (f.ready) sendRooms(f)
       changed()
     }
     void b.mods().then(take, () => take([]))

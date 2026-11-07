@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
-import { fromFrame, heeded, LOOK, MOD_PROTOCOL, sameTarget, SIDE_HEIGHT, STORAGE, target } from "~/mods/protocol"
+import { fromFrame, heeded, LOOK, MOD_PROTOCOL, POST_CHARS, sameTarget, SIDE_HEIGHT, STORAGE, target } from "~/mods/protocol"
 import { TOKENS } from "~/theme/derive"
 
 describe("a mod frame's messages", () => {
@@ -121,6 +121,26 @@ describe("a mod frame's messages", () => {
       { op: "mark", seat, mark: { tasks: Array.from({ length: 21 }, (_, i) => i + 1) } },
     ])
       expect([m.op, fromFrame({ kiwi: MOD_PROTOCOL, type: "terminal", id: 9, ...m })]).toEqual([m.op, null])
+  })
+
+  test("a post names a channel, a room with or without its #, and text up to its size (T6837)", () => {
+    const k = MOD_PROTOCOL
+    expect(fromFrame({ kiwi: k, type: "post", id: 3, code: "dev", room: "#general", text: "hi" })).toEqual({ kiwi: k, type: "post", id: 3, code: "dev", room: "general", text: "hi" })
+    expect(fromFrame({ kiwi: k, type: "post", id: 3, code: "dev", room: "ops", text: "x".repeat(POST_CHARS + 1) })).toBeNull()
+    expect(fromFrame({ kiwi: k, type: "post", id: 3, code: "", room: "ops", text: "hi" })).toBeNull()
+    expect(fromFrame({ kiwi: k, type: "post", id: 3, code: "dev", room: "", text: "hi" })).toBeNull()
+    expect(fromFrame({ kiwi: k, type: "post", id: "3", code: "dev", room: "ops", text: "hi" })).toBeNull()
+  })
+
+  test("only a running mod that asked to post in some room may send a post, and never from its idle or drawing frame (T6837)", () => {
+    const poster = { state: "on", needs: ["post:#general"] }
+    expect(heeded("post", "main", poster)).toBe(true)
+    expect(heeded("post", "sidebar", poster)).toBe(true)
+    expect(heeded("post", "idle", poster)).toBe(false)
+    expect(heeded("post", "render", poster)).toBe(false)
+    expect(heeded("post", "main", { state: "asks", needs: ["post:#general"] })).toBe(false)
+    expect(heeded("post", "main", { state: "on", needs: ["read:#general", "panel"] })).toBe(false)
+    expect(heeded("post", "main", undefined)).toBe(false)
   })
 
   test("an error always has some words, and never a whole page of them", () => {

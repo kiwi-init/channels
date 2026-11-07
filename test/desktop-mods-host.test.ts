@@ -67,6 +67,47 @@ describe("the app's mods", () => {
     expect(statSync(join(root, "data", "mods.json")).mode & 0o777).toBe(0o600);
   });
 
+  test("a mod that posts keeps only the channels' rooms the person picked, and only rooms it asked for (T6837)", async () => {
+    const { root, host, write } = setup();
+    write("poster", {
+      "mod.json": JSON.stringify({ name: "poster", version: "1.0.0", shell: "^3.3", needs: ["post:#general", "post:ops"] }),
+      "index.tsx": `import { panel } from "@kiwi/mod"\npanel({ title: "Poster" })\n`,
+    });
+    await host.start();
+    const after = await host.approve(
+      "poster",
+      ["post:ops", "post:#general"],
+      [
+        { code: "dev", room: "general" },
+        { code: "dev", room: "general" },
+        { code: "ops-team", room: "ops" },
+        { code: "dev", room: "secret" },
+        { code: "../evil", room: "general" },
+        { code: "dev", room: "#general" },
+      ],
+    );
+    const kept = [
+      { code: "dev", room: "general" },
+      { code: "ops-team", room: "ops" },
+    ];
+    expect(after[0]).toMatchObject({ state: "on", rooms: kept });
+    expect(JSON.parse(readFileSync(join(root, "data", "mods.json"), "utf8")).approved.poster).toEqual({ needs: ["post:#general", "post:ops"], source: "local", rooms: kept });
+    expect((await host.setRooms("poster", [{ code: "ops-team", room: "ops" }]))[0]?.rooms).toEqual([{ code: "ops-team", room: "ops" }]);
+    expect((await host.setRooms("poster", []))[0]?.rooms).toBeUndefined();
+    expect(JSON.parse(readFileSync(join(root, "data", "mods.json"), "utf8")).approved.poster).toEqual({ needs: ["post:#general", "post:ops"], source: "local" });
+  });
+
+  test("picking rooms for a mod that isn't approved, or no longer comes from where it was approved, is refused (T6837)", async () => {
+    const { host, write } = setup();
+    write("poster", {
+      "mod.json": JSON.stringify({ name: "poster", version: "1.0.0", shell: "^3.3", needs: ["post:general"] }),
+      "index.tsx": `import { panel } from "@kiwi/mod"\npanel({ title: "Poster" })\n`,
+    });
+    await host.start();
+    await expect(host.setRooms("poster", [{ code: "dev", room: "general" }])).rejects.toThrow("isn't approved yet");
+    await expect(host.setRooms("nobody", [])).rejects.toThrow("there is no mod nobody");
+  });
+
   test("a mod that adds a need after approval asks again", async () => {
     const { host, write } = setup();
     write("linear", linear);

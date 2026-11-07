@@ -6,7 +6,7 @@ import { Toggle } from "~/kit/form"
 import { Icon } from "~/kit/icons"
 import { askAgain, modsNow, useModsVersion } from "~/mods/host"
 import { ModIcon } from "~/mods/icon"
-import { needWords } from "~/mods/needs"
+import { asksRooms, needWords } from "~/mods/needs"
 import { modReads } from "~/mods/served"
 import { useApp } from "~/nav"
 import { Confirm, Group, Row } from "~/settings/controls"
@@ -97,6 +97,7 @@ export function ModsSection() {
   const flip = (m: ModView, on: boolean) => {
     const b = bridge()
     if (!b || typeof b.setModOn !== "function") return
+    if (on && m.state === "asks" && asksRooms(m.needs).length) return askAgain(m.name)
     setBusy(m.name)
     const done = on && m.state === "asks" ? b.approveMod(m.name, m.needs) : b.setModOn(m.name, on)
     done.then(() => setBusy(null), fail)

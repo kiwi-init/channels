@@ -1,11 +1,13 @@
 import { lazy, Suspense, useEffect, useState } from "react"
 
+import { bridge } from "@kiwi/secrets/secrets.ts"
+
 import type { ModDetails, ModUpdate, ModView } from "../../../desktop/src/bridge.ts"
 import { sizeText } from "~/chat/doc/bytes"
 import { Icon } from "~/kit/icons"
 import { runningMod } from "~/mods/host"
 import { ModIcon } from "~/mods/icon"
-import { needWords } from "~/mods/needs"
+import { asksRooms, needWords, RoomPicker } from "~/mods/needs"
 import { modReads } from "~/mods/served"
 import { useApp } from "~/nav"
 import { Group, Row } from "~/settings/controls"
@@ -36,6 +38,30 @@ function useDetails(mod: ModView): ModDetails | null {
 }
 
 type Manage = { busy: boolean; update: ModUpdate | undefined; onUpdate: (() => void) | undefined; removeWhy: string; onRemove: () => void }
+
+function ModRooms({ mod }: { mod: ModView }) {
+  const { app, toast } = useApp()
+  const [busy, setBusy] = useState(false)
+  const change = (next: NonNullable<ModView["rooms"]>) => {
+    const b = bridge()
+    if (!b || typeof b.setModRooms !== "function") return
+    setBusy(true)
+    b.setModRooms(mod.name, next).then(
+      () => setBusy(false),
+      (e: unknown) => {
+        setBusy(false)
+        toast(e instanceof Error ? e.message : String(e), "error")
+      }
+    )
+  }
+  return (
+    <Group title="Where it may post" hint={busy ? "Saving…" : "It reaches only the channels you tick, and only these rooms."}>
+      <div className="mod-details-rooms">
+        <RoomPicker rooms={asksRooms(mod.needs)} channels={app.channels.filter((c) => c.state === "member")} value={mod.rooms ?? []} onChange={change} />
+      </div>
+    </Group>
+  )
+}
 
 export function ModDetailsPage({ mod, manage }: { mod: ModView; manage?: Manage }) {
   const { go, toast } = useApp()
@@ -124,6 +150,7 @@ export function ModDetailsPage({ mod, manage }: { mod: ModView; manage?: Manage 
           <Row label="Nothing" hint="It asks for no permissions." />
         )}
       </Group>
+      {mod.state !== "asks" && asksRooms(mod.needs).length > 0 && <ModRooms mod={mod} />}
       {adds.length > 0 && (
         <Group title="What it adds">
           {adds.map(([kind, title], i) => (
