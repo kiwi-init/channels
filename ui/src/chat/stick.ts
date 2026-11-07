@@ -65,7 +65,10 @@ export function useStick(following = true, still = false) {
   const room = useRef(0)
   const seen = useRef(Number.NaN)
 
-  const correct = useCallback((box: HTMLElement, list: HTMLElement) => {
+  const correct = useCallback(() => {
+    const box = scroller.current
+    const list = content.current
+    if (!box || !list) return
     height.current = list.offsetHeight
     if (stuck.current && !(still && anchor.current)) {
       box.scrollTop = box.scrollHeight
@@ -104,7 +107,7 @@ export function useStick(following = true, still = false) {
     if (!box || !list) return
     if (still && box.scrollTop < seen.current - 0.5 && gapIn(box) > 0.5) stuck.current = false
     const from = box.scrollTop
-    correct(box, list)
+    correct()
     if (box.scrollTop !== from) seen.current = box.scrollTop
   }, [correct, still])
 
