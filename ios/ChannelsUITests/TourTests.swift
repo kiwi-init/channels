@@ -52,7 +52,7 @@ final class TourTests: XCTestCase {
         snap("task thread")
         let back = app.navigationBars.buttons.firstMatch
         if back.exists && back.isHittable { back.tap() }
-        Thread.sleep(forTimeInterval: 0.7)
+        try await Task.sleep(for: .milliseconds(700))
         tapFirst("lead")
 
         drag(fromX: 0.85, toX: 0.15)
