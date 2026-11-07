@@ -498,13 +498,7 @@ function entryOf(name: string, start: ModStart): string[] {
       "})",
       "",
     ];
-  return [
-    `import { Action, Actions, List, ${start}, Toast } from "@kiwi/mod"`,
-    "",
-    ...listView(title),
-    `${start}({ title: ${JSON.stringify(title)}, render: View })`,
-    "",
-  ];
+  return [`import { Action, Actions, List, ${start}, Toast } from "@kiwi/mod"`, "", ...listView(title), `${start}({ title: ${JSON.stringify(title)}, render: View })`, ""];
 }
 
 function starter(dir: string, name: string, start: ModStart = "panel"): void {

@@ -197,6 +197,10 @@ img.mod-icon {
   gap: 16px;
 }
 
+.mod-new-start {
+  justify-self: start;
+}
+
 .mod-new-note {
   margin: 0;
   color: var(--ink-2);

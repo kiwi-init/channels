@@ -561,7 +561,7 @@ export interface ModShot {
 
 export type ModStart = "panel" | "command" | "tab" | "figure";
 
-export interface ModOpened {
+interface ModOpened {
   editor: string | null;
   dir: string;
 }

@@ -89,7 +89,7 @@ function Make({ onClose }: { onClose: () => void }) {
       </Field>
       <div className="field">
         <span className="field-label">It starts as</span>
-        <Track className="seg" role="group" aria-label="It starts as">
+        <Track className="seg mod-new-start" role="group" aria-label="It starts as">
           {STARTS.map(([id, label]) => (
             <button key={id} type="button" aria-pressed={start === id} onClick={() => setStart(id)}>
               {label}
@@ -183,7 +183,6 @@ export function NewModDialog() {
       onClose={close}
       label="New mod"
       title="New mod"
-      sub="It runs in its own frame, away from your keys and messages."
       tabs={
         <Track className="seg modal-seg" role="group" aria-label="How">
           <button type="button" aria-pressed={tab === "make"} onClick={() => setTab("make")}>

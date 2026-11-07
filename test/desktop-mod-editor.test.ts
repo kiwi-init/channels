@@ -21,7 +21,10 @@ describe("a new mod opens in the person's editor (T7401)", () => {
       editor: "Visual Studio Code",
     });
     expect(openerFor("/m/notes", { platform: "linux", home: "/home/a", app: () => true, bin: bins({ zeditor: "/usr/bin/zeditor" }) }).editor).toBe("Zed");
-    expect(openerFor("/m/notes", { platform: "linux", home: "/home/a", app: () => true, bin: bins({ "xdg-open": "/usr/bin/xdg-open" }) })).toEqual({ argv: ["/usr/bin/xdg-open", "/m/notes"], editor: null });
+    expect(openerFor("/m/notes", { platform: "linux", home: "/home/a", app: () => true, bin: bins({ "xdg-open": "/usr/bin/xdg-open" }) })).toEqual({
+      argv: ["/usr/bin/xdg-open", "/m/notes"],
+      editor: null,
+    });
     expect(openerFor("/m/notes", { platform: "linux", home: "/home/a", app: () => true, bin: none })).toEqual({ argv: [], editor: null });
   });
 });
