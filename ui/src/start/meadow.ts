@@ -57,12 +57,11 @@ import {
   vec4,
 } from "three/tsl"
 
-import { daylight, type Rgb } from "~/calm/daylight"
-import { freshPace, paced, SLOW_HOLD_MS } from "~/calm/pace"
-import type { CalmRow } from "~/calm/rows"
+import { daylight, type Rgb } from "~/start/daylight"
+import { freshPace, paced, SLOW_HOLD_MS } from "~/start/pace"
 
 export interface Meadow {
-  setRows(rows: readonly CalmRow[]): void
+  setAlert(on: boolean): void
   setStill(still: boolean): void
   freeze(): void
   dispose(): void
@@ -664,9 +663,9 @@ async function build(): Promise<Engine | null> {
       if (still) settleStill()
       else startLoop()
       return {
-        setRows(next) {
+        setAlert(on) {
           if (host !== stage) return
-          alert = next.some((r) => r.needs > 0) ? 1 : 0
+          alert = on ? 1 : 0
           if (still) settleStill()
         },
         setStill(next) {

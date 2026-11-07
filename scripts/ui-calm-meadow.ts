@@ -22,7 +22,7 @@ const SHOT = process.argv.find((a) => a.startsWith("--shot="))?.slice(7);
 const dir = mkdtempSync(join(tmpdir(), "kiwi-calm-meadow-"));
 const out = join(dir, "out");
 const built = await Bun.build({
-  entrypoints: [join(ROOT, "ui/src/calm/meadow.page.ts")],
+  entrypoints: [join(ROOT, "ui/src/start/meadow.page.ts")],
   outdir: out,
   minify: true,
   target: "browser",
