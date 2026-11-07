@@ -20,6 +20,7 @@ const roster: Roster = Object.entries(people).map(([name, kind]) => ({
   kind,
   ...(name === "lead" ? { role: "lead" } : {}),
   ...(kind === "agent" ? { runs: { harness: "claude-code", model: "claude-opus-5-5" } } : {}),
+  ...(name === "jow" ? { color: "teal" as const } : name === "dev" ? { color: "violet" as const } : {}),
   ...(name === "dev" ? { persona: { name: "Builder", role: "builder", capabilities: [], areas: [], instructions: "" } } : {}),
 }));
 

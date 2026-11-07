@@ -813,7 +813,7 @@ struct PollCard: View {
                 .padding(.horizontal, chosen ? 8 : 0)
                 .background {
                     if chosen {
-                        RoundedRectangle(cornerRadius: 12, style: .continuous).fill(.clear).prism(RoundedRectangle(cornerRadius: 12, style: .continuous), band: 0.5)
+                        RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Tone.accentWash)
                     }
                 }
                 .padding(.horizontal, chosen ? -8 : 0)

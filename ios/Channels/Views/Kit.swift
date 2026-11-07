@@ -6,10 +6,12 @@ struct Face: View {
     let member: MemberView?
     var size: CGFloat = 32
 
-    private var initials: String {
-        let words = (member?.display ?? name).split(whereSeparator: { $0 == " " || $0 == "-" || $0 == "_" || $0 == "." })
-        let letters = words.prefix(2).compactMap(\.first).map { String($0).uppercased() }
-        return letters.joined().isEmpty ? "?" : letters.joined()
+    private var letter: String {
+        (member?.display ?? name).first.map { String($0).uppercased() } ?? "?"
+    }
+
+    private var tint: Color? {
+        member?.color.map(Tone.member)
     }
 
     var body: some View {
@@ -43,7 +45,7 @@ struct Face: View {
             Image("face-\(role)")
                 .resizable()
                 .renderingMode(.template)
-                .foregroundStyle(Tone.ink)
+                .foregroundStyle(tint ?? Tone.ink)
                 .frame(width: size, height: size)
             ForEach([-1.0, 1.0], id: \.self) { side in
                 Ellipse()
@@ -67,15 +69,11 @@ struct Face: View {
     }
 
     private var person: some View {
-        let tone = member?.color.flatMap { Palette.fills[$0] }
-        let top = tone.map { Color(hex: $0.fill) } ?? Tone.avatarTop
-        let bottom = tone.map { Color(hex: $0.fill).mix(with: .black, by: 0.28) } ?? Tone.avatarBottom
-        let ink = tone.map { Color(hex: $0.ink) } ?? .white
-        return Text(initials)
-            .font(.system(size: (size * (initials.count > 1 ? 0.4 : 0.46)).rounded(), weight: .semibold, design: .rounded))
-            .foregroundStyle(ink)
+        Text(letter)
+            .font(.system(size: (size * 0.42).rounded(), weight: .semibold))
+            .foregroundStyle(tint ?? Tone.ink2)
             .frame(width: size, height: size)
-            .background(Circle().fill(LinearGradient(colors: [top, bottom], startPoint: .top, endPoint: .bottom)))
+            .background(Circle().fill(tint.map { $0.opacity(0.18) } ?? Tone.raised))
     }
 }
 
