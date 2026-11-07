@@ -28,7 +28,7 @@ const check = (ok: boolean, what: string) => {
 const relay = startRelay({ port: 0, hostname: "127.0.0.1", dataDir: join(root, "relay"), human: devHumanAuth(), githubPush: null, devNoRateLimits: true });
 const RELAY = `http://127.0.0.1:${relay.port}`;
 
-const afkNow = (): { shown: boolean; scene: string | null; frame: string | null; sandbox: string | null; focus: string } => {
+const afkNow = (): { shown: boolean; scene: string | null; frame: string | null; sandbox: string | null; focus: string; dialog: boolean; composer: boolean } => {
   const afk = document.querySelector<HTMLElement>(".afk");
   const f = afk?.querySelector("iframe");
   return {
@@ -37,6 +37,8 @@ const afkNow = (): { shown: boolean; scene: string | null; frame: string | null;
     frame: f?.getAttribute("src") ?? null,
     sandbox: f?.getAttribute("sandbox") ?? null,
     focus: document.activeElement?.tagName ?? "none",
+    dialog: !!document.querySelector("dialog[open]"),
+    composer: !!document.querySelector('textarea[placeholder^="Message #"]'),
   };
 };
 
@@ -78,6 +80,7 @@ try {
       return null;
     });
 
+  check(!!(await waitFor("the channel, with no dialog open", 30_000, (a) => a.composer && !a.dialog)), "the new channel shows with no dialog open, where ⌘T starts AFK");
   check(!existsSync(sceneFile), "a fresh ~/.kiwi has no AFK scene yet");
   await press("t", true);
   const first = await waitFor("the default AFK scene, ready", 30_000, (a) => a.scene === "ready");
