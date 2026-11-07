@@ -8,7 +8,6 @@ struct ConversationList: View {
     @State private var search = ""
     @State private var settings = false
     @FocusState private var searching: Bool
-    @Namespace private var glass
 
     private var query: String { search.trimmingCharacters(in: .whitespaces).lowercased() }
     private var finding: Bool { searching || !query.isEmpty }
@@ -235,7 +234,7 @@ struct ConversationList: View {
     }
 
     private var dock: some View {
-        GlassGroup(spacing: 10) {
+        Group {
             HStack(spacing: 10) {
                 HStack(spacing: 8) {
                     Button {
@@ -263,8 +262,7 @@ struct ConversationList: View {
                 .padding(.leading, 12)
                 .padding(.trailing, 16)
                 .frame(height: 48)
-                .glassCapsule()
-                .glassID("search", in: glass)
+                .raisedCapsule()
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 6)
@@ -534,7 +532,7 @@ struct PeekBubble: View {
             }
             Text(message.body.isEmpty && message.images > 0 ? "Photo" : message.plain)
                 .type(.ui)
-                .foregroundStyle(message.mine ? .white : Tone.ink)
+                .foregroundStyle(message.mine ? Tone.onInk : Tone.ink)
                 .lineLimit(5)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 7)
@@ -694,7 +692,7 @@ struct Setting: View {
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: 30, height: 30)
-                .background(tint.gradient, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                .background(tint, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
         }
     }
 }

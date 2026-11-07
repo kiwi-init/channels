@@ -107,7 +107,7 @@ struct ConversationScreen: View {
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(Tone.ink)
                     .frame(width: 44, height: 44)
-                    .glassCircle()
+                    .raisedCircle()
                     .overlay(alignment: .topTrailing) {
                         if elsewhere {
                             Circle().fill(Tone.accent).frame(width: 10, height: 10).overlay(Circle().stroke(Tone.canvas, lineWidth: 2))
@@ -152,7 +152,7 @@ struct ConversationScreen: View {
                 }
             }
             .frame(width: 44, height: 44)
-            .glassCircle()
+            .raisedCircle()
             .overlay(alignment: .topTrailing) {
                 if asks || fresh {
                     Circle().fill(asks ? Tone.decide : Tone.accent).frame(width: 11, height: 11).overlay(Circle().stroke(Tone.canvas, lineWidth: 2))
@@ -205,7 +205,7 @@ struct TitlePill: View {
     let place: PlaceView?
     let fresh: Bool
     var body: some View {
-        label.glassCapsule().contentShape(Capsule())
+        label.raisedCapsule().contentShape(Capsule())
     }
 
     private var label: some View {
@@ -317,7 +317,7 @@ struct ChannelAvatar: View {
 extension View {
     @ViewBuilder func softEdges() -> some View {
         if #available(iOS 26.0, *) {
-            self.scrollEdgeEffectStyle(.soft, for: .top).scrollEdgeEffectHidden(true, for: .bottom)
+            self.scrollEdgeEffectHidden(true, for: .all)
         } else {
             self
         }
