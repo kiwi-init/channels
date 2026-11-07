@@ -115,6 +115,17 @@ How it has to work:
   - still: true means I asked for less motion. Draw one still frame and stop animating until it's false.
 - Stop drawing while document.hidden. Keep the file under 8 MB.
 
+How to make it beautiful (this is a wallpaper people will stare at, so it has to be gorgeous):
+- Depth: at least three layers (far, middle, near), each moving at its own slow speed. Haze and soften the far one, let the near one go out of focus, and keep the subject sharp.
+- Light: one clear light source whose colour follows the hour (dawn pink, noon white, golden-hour orange, dusk violet, night blue). Blend between them smoothly as at moves, light everything from it, add soft glows and bokeh on lights, and never use hard black.
+- Colour: pick 4 to 6 colours that belong together for each time of day and stay within them. Avoid pure white, pure black and saturated primaries.
+- Atmosphere: fog, haze, dust, rain or snow in the air, in front of and behind the subject. Add a faint film grain and a soft vignette so gradients don't band.
+- Texture: no flat fills or bare geometric shapes. Build surfaces, clouds, water and glass from layered noise (fbm), and give lights a falloff.
+- Motion: nothing moves in straight lines at a fixed speed. Use slow noise and easing so things sway, drift and breathe, and vary the periods so no loop is visible.
+- Focus: one focal point with fine detail; the edges can stay simple.
+- Craft: draw at devicePixelRatio (2 at most) at 30 to 60 fps, light enough for a laptop on battery. Prefer one full-screen WebGL shader, or a few canvas layers, over thousands of DOM nodes, and fall back to canvas 2D if WebGL isn't there.
+- Before replying, picture the first frame at noon, at dusk and at midnight, full screen on a large display. Each should look like a still worth keeping. If it doesn't, keep working on it.
+
 Reply with only the file, scene.html.`;
 };
 
