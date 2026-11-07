@@ -2,6 +2,17 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 2026.11.13 — 2026-11-07
+
+- **Linux: a quiet start, proven on Arch KDE, and spell check proven to underline (T7214)** ([#1931](https://github.com/kiwi-init/channels/pull/1931))
+- **Landing: the AFK scene behind one line and two buttons (T28)** ([#1933](https://github.com/kiwi-init/channels/pull/1933))
+- **Docs: Play demo, the real app in demo mode, is the first page (T29)** ([#1934](https://github.com/kiwi-init/channels/pull/1934))
+- **Run tasks: a run task lands on GitHub's start for its declared run, matched by run-name or run id (T2183)** ([#1910](https://github.com/kiwi-init/channels/pull/1910))
+- **Doc: remove the typing code the read-only doc left (T6307)** ([#1930](https://github.com/kiwi-init/channels/pull/1930))
+- **AFK: the Map, each channel a pin on the meadow whose dot pulses red only when it needs you** ([#1939](https://github.com/kiwi-init/channels/pull/1939))
+- **Icon: the app and site use Jow's Icon Composer icon, Liquid Glass on macOS 26** ([#1942](https://github.com/kiwi-init/channels/pull/1942))
+- **AFK: Calm and Idle become AFK in the app, on main (T89)** ([#1941](https://github.com/kiwi-init/channels/pull/1941))
+
 ## 2026.11.12 — 2026-11-07
 
 - **Rooms: a badge counts only what the room shows; replies in a spec's thread don't raise it (#1779)** ([#1790](https://github.com/kiwi-init/channels/pull/1790))
