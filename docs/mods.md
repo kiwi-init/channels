@@ -12,16 +12,7 @@ Mods run in the desktop app, on a Mac and on Linux.
 
 ## Your first mod
 
-In the app, open **Settings → Mods** and press **New mod**, or pick **New mod** in ⌘K. Give it a name and pick how it starts:
-
-- **Panel:** a panel beside the chat, with a list to start from
-- **Command:** an action in ⌘K
-- **Tab:** a tab in the channel's header
-- **Figure:** draws its own kind of attachment in chat. The kind is its name as one word: `sales-chart` draws `X.saleschart.html`.
-
-**Make it** puts it in `~/.kiwi/mods/`, turns it on and opens its folder in your editor: Cursor, Visual Studio Code, Zed, Windsurf or Sublime Text, whichever it finds first, or else the folder itself. Each save reloads it. A mod you made on this computer has **Open in editor** on its page in Settings → Mods.
-
-**Ask an agent** takes a few words on what the mod should do and sends them to an agent in the channel you have open, the lead unless you pick another. The agent builds it with its `mods` skill and tells you when it's ready to try.
+In the app, open **Settings → Mods** and press **New mod**, or pick **New mod** in ⌘K. Say what it should do and press **Copy prompt**. The prompt holds the mods guide and your words: paste it into any agent, and it builds the mod and tells you how to open it. A mod made on this computer has **Open in editor** on its page in Settings → Mods.
 
 From a terminal, it's one command:
 

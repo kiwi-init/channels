@@ -566,7 +566,7 @@ export interface ModShot {
   data: string;
 }
 
-export type ModStart = "panel" | "command" | "tab" | "figure";
+type ModStart = "panel" | "command" | "tab" | "figure";
 
 interface ModOpened {
   editor: string | null;
