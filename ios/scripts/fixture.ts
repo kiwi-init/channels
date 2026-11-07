@@ -11,7 +11,17 @@ if (!out) throw new Error("usage: bun ios/scripts/fixture.ts OUT.json");
 
 const people = { jow: "human", lead: "agent", dev: "agent" } as const;
 const ids = Object.fromEntries(await Promise.all(Object.keys(people).map(async (n) => [n, await generateIdentity(n)] as const)));
-const roster: Roster = Object.entries(people).map(([name, kind]) => ({ name, pk: ids[name]!.pk, owner: name === "jow", at: 0, active: true, kind, ...(name === "lead" ? { role: "lead" } : {}) }));
+const roster: Roster = Object.entries(people).map(([name, kind]) => ({
+  name,
+  pk: ids[name]!.pk,
+  owner: name === "jow",
+  at: 0,
+  active: true,
+  kind,
+  ...(name === "lead" ? { role: "lead" } : {}),
+  ...(kind === "agent" ? { runs: { harness: "claude-code", model: "claude-opus-5-5" } } : {}),
+  ...(name === "dev" ? { persona: { name: "Builder", role: "builder", capabilities: [], areas: [], instructions: "" } } : {}),
+}));
 
 const long = (n: number) =>
   [

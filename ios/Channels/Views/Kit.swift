@@ -31,20 +31,36 @@ struct Face: View {
         .accessibilityHidden(true)
     }
 
-    @ViewBuilder private var agent: some View {
-        ZStack {
-            Circle().fill(LinearGradient(colors: [Tone.faceTop, Tone.faceBottom], startPoint: .top, endPoint: .bottom))
+    private var role: String {
+        member?.face.flatMap { Faces.eyes[$0] == nil ? nil : $0 } ?? "default"
+    }
+
+    private var agent: some View {
+        let eyes = Faces.eyes[role] ?? Faces.fallback
+        let unit = size / 100
+        let badge = size * 0.35
+        return ZStack(alignment: .topLeading) {
+            Image("face-\(role)")
+                .resizable()
+                .renderingMode(.template)
+                .foregroundStyle(Tone.ink)
+                .frame(width: size, height: size)
+            ForEach([-1.0, 1.0], id: \.self) { side in
+                Ellipse()
+                    .fill(Tone.canvas)
+                    .frame(width: 8.6 * eyes.scale * unit, height: 10.6 * eyes.scale * unit)
+                    .position(x: (eyes.x + side * eyes.spacing / 2) * unit, y: eyes.y * unit)
+            }
             if let harness = member?.harness, UIImage(named: "harness-\(harness)") != nil {
                 Image("harness-\(harness)")
                     .resizable()
                     .renderingMode(member?.mono == true ? .template : .original)
                     .foregroundStyle(Tone.ink)
                     .scaledToFit()
-                    .frame(width: size * 0.56, height: size * 0.56)
-            } else {
-                Image(systemName: "terminal")
-                    .font(.system(size: size * 0.4, weight: .medium))
-                    .foregroundStyle(Tone.ink2)
+                    .frame(width: badge, height: badge)
+                    .padding(size * 0.03)
+                    .background(Circle().fill(Tone.canvas))
+                    .offset(x: -size * 0.06, y: -size * 0.06)
             }
         }
         .frame(width: size, height: size)

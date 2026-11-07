@@ -51,6 +51,7 @@ function memberView(m: FoldMember, state: ChannelState, online: ReadonlyMap<stri
     display: m.display ?? m.name,
     kind: m.kind ?? (m.owner ? "human" : "agent"),
     role: m.role ?? null,
+    face: (m.kind ?? (m.owner ? "human" : "agent")) === "human" ? null : state.lead === m.name ? "lead" : (m.persona?.role ?? null),
     owner: m.owner,
     lead: state.lead === m.name,
     color: m.color ?? null,

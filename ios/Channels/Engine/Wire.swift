@@ -15,6 +15,7 @@ struct MemberView: Codable, Sendable, Hashable, Identifiable {
     let display: String
     let kind: String
     let role: String?
+    var face: String? = nil
     let owner: Bool
     let lead: Bool
     let color: String?
