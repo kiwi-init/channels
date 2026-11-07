@@ -244,11 +244,16 @@ try {
   await step("the settings, closed", 10_000, () => d.evaluate(escape, null, 2_000));
 
   await letBotIn(d);
-  const asked = await bot(["-c", "mods", "--as", "bot", "send", "the GitHub mod check needs a task"]);
-  const added = await bot(["-c", "mods", "--as", "bot", "task", "add", "The GitHub tab is a mod", "--ask", /sent #(\d+)/.exec(asked)?.[1] ?? "1"]);
+  const ASK = "please make the GitHub tab a mod";
+  await step("the person's ask, sent", 15_000, () => d.evaluate(typeCommand, ASK, 2_000));
+  const ask = await until("the person's ask, seen by the bot", 30_000, async () => {
+    const lines = (await bot(["-c", "mods", "--as", "bot", "log", "-n", "20", "--json"])).split("\n").filter((l) => l.trim().startsWith("{"));
+    return (lines.map((l) => JSON.parse(l) as { seq: number; body?: string }).find((m) => m.body === ASK)?.seq ?? null) || null;
+  }).catch(() => null);
+  const added = ask ? await bot(["-c", "mods", "--as", "bot", "task", "add", "The GitHub tab is a mod", "--ask", String(ask)]).catch((e: unknown) => String(e)) : "";
   const task = Number(/added T(\d+)/.exec(added)?.[1] ?? 0);
-  console.log(`the bot: ${asked.trim().split("\n")[0]}; ${added.trim().split("\n")[0]}`);
-  check(task > 0, "an agent in the channel adds a task");
+  console.log(`the person's ask: #${ask}; the bot: ${added.trim().split("\n")[0]}`);
+  check(task > 0, "an agent in the channel adds a task for the person's message");
 
   const tab = await until("the GitHub tab", 30_000, () => d.evaluate(tabButton, "GitHub", 2_000)).catch(() => null);
   check(!!tab, "linking a repo brings the GitHub tab into the channel's header, drawn by the mod's tab()");
