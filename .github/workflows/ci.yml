@@ -885,7 +885,7 @@ jobs:
   desktop-tiling:
     name: desktop / tiling, ${{ matrix.compositor }}
     needs: [plan, desktop-linux]
-    if: ${{ !cancelled() && fromJSON(needs.plan.outputs.run)['tiling'] && needs.desktop-linux.result == 'success' }}
+    if: ${{ !cancelled() && fromJSON(needs.plan.outputs.run)['tiling'] }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
