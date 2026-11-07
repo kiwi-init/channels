@@ -37,3 +37,5 @@ doc-fuzz-*.txt
 
 # scripts/docs-site.ts: the docs pages, built from docs/
 site/docs/
+site/afk/scene.html
+site/afk/frame.html

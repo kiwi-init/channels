@@ -670,6 +670,9 @@ function webApp(app: WebApp): (pathname: string) => Response {
     "referrer-policy": "no-referrer",
     "x-content-type-options": "nosniff",
   };
+  const scene = { ...security, "content-security-policy": "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; frame-ancestors 'self'" };
+  const frame = { ...security, "content-security-policy": "default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval'; style-src 'unsafe-inline'; img-src data: blob:; frame-ancestors 'self'" };
+  const policyFor = (rel: string) => (/^\/afk\/scene(\.html)?$/.test(rel) ? scene : /^\/afk\/frame(\.html)?$/.test(rel) ? frame : security);
   const isFile = (p: string) => existsSync(p) && statSync(p).isFile();
 
   return (pathname) => {
@@ -683,7 +686,7 @@ function webApp(app: WebApp): (pathname: string) => Response {
     // Never outside the dashboard folder, and never Cloudflare's own config files.
     const inside = path.startsWith(root + sep) && !["_headers", "_redirects"].includes(basename(path));
     if (inside && isFile(path)) {
-      const headers: Record<string, string> = { ...security };
+      const headers: Record<string, string> = { ...policyFor(rel) };
       // Vite fingerprints everything under /assets; the rest must be rechecked each time.
       headers["cache-control"] = rel.startsWith("/assets/") ? "public, max-age=31536000, immutable" : rel.startsWith("/reactions/") ? "public, max-age=86400" : "no-cache";
       if (rel.startsWith("/reactions/")) headers["access-control-allow-origin"] = "*";
@@ -692,7 +695,7 @@ function webApp(app: WebApp): (pathname: string) => Response {
       return new Response(Bun.file(path), { headers });
     }
     const page = [`${path}.html`, join(path, "index.html")].find(isFile);
-    if (inside && page) return new Response(Bun.file(page), { headers: { ...security, "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
+    if (inside && page) return new Response(Bun.file(page), { headers: { ...policyFor(rel), "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
     // A missing file (it has an extension) is a 404, not the app: a stale script must fail loudly.
     if (/\.[A-Za-z0-9]+$/.test(basename(rel))) return new Response("not found\n", { status: 404, headers: security });
     return new Response(Bun.file(join(root, "index.html")), { headers: { ...security, "cache-control": "no-cache" } });

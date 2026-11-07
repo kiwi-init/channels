@@ -59,10 +59,10 @@ import {
 
 import { daylight, type Rgb } from "~/calm/daylight"
 import { freshPace, paced, SLOW_HOLD_MS } from "~/calm/pace"
-import type { CalmRow } from "~/calm/rows"
 
 export interface Meadow {
-  setRows(rows: readonly CalmRow[]): void
+  setClock(at: number): void
+  setAlert(on: boolean): void
   setStill(still: boolean): void
   freeze(): void
   dispose(): void
@@ -71,6 +71,10 @@ export interface Meadow {
 interface Engine {
   attach(stage: HTMLElement, still: boolean): Meadow
 }
+
+let clockAhead = 0
+
+const clock = (): Date => new Date(Date.now() + clockAhead)
 
 const STILL_EVERY = 60_000
 
@@ -546,7 +550,7 @@ async function build(): Promise<Engine | null> {
     uTime.value = simClock
     uWind.value = 0.85 + 0.35 * smooth01(Math.sin(simClock * 0.13) * 0.5 + 0.5)
     uAlert.value += (alert - uAlert.value) * (1 - Math.exp(-dt * 1.5))
-    updateSky(new Date())
+    updateSky(clock())
     updateCamera(simClock)
     render()
   }
@@ -589,7 +593,7 @@ async function build(): Promise<Engine | null> {
     uTime.value = 12.0
     uWind.value = 0.9
     uAlert.value = alert
-    updateSky(new Date())
+    updateSky(clock())
     updateCamera(0)
     render()
   }
@@ -647,6 +651,7 @@ async function build(): Promise<Engine | null> {
       if (attached) detach()
       host = stage
       asked = still0
+      clockAhead = 0
       if (slow && Date.now() >= slowUntil) {
         slow = false
         pace = freshPace()
@@ -664,9 +669,14 @@ async function build(): Promise<Engine | null> {
       if (still) settleStill()
       else startLoop()
       return {
-        setRows(next) {
+        setClock(at) {
           if (host !== stage) return
-          alert = next.some((r) => r.needs > 0) ? 1 : 0
+          clockAhead = Number.isFinite(at) ? at - Date.now() : 0
+          if (still) settleStill()
+        },
+        setAlert(on) {
+          if (host !== stage) return
+          alert = on ? 1 : 0
           if (still) settleStill()
         },
         setStill(next) {

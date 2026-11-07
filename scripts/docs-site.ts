@@ -334,7 +334,31 @@ async function build(): Promise<string[]> {
     }
   }
   written.push(...(await writeFigures()));
+  written.push(...(await writeAfk()));
   return written;
+}
+
+const AFK = join(SITE, "afk");
+
+const sceneLoader = async (): Promise<string> => {
+  const built = await Bun.build({ entrypoints: [join(ROOT, "ui/src/afk/frame.ts")], minify: true, target: "browser" });
+  if (!built.success) throw new Error(built.logs.join("\n"));
+  const code = await built.outputs[0]?.text();
+  if (!code) throw new Error("ui/src/afk/frame.ts built nothing");
+  return code.replaceAll("</script", "<\\/script");
+};
+
+async function writeAfk(): Promise<string[]> {
+  const scene = join(AFK, "scene.html");
+  const frame = join(AFK, "frame.html");
+  if (DRAFT && existsSync(scene) && existsSync(frame)) return [];
+  const { afkSceneHtml } = await import("../ui/afk-scene.build.ts");
+  writeFileSync(scene, await afkSceneHtml());
+  writeFileSync(
+    frame,
+    `<!doctype html>\n<html>\n  <head>\n    <meta charset="utf-8" />\n    <title>AFK scene preview</title>\n    <style>html,body{margin:0;height:100%;overflow:hidden;background:transparent}</style>\n  </head>\n  <body>\n    <script>${await sceneLoader()}</script>\n  </body>\n</html>\n`,
+  );
+  return [scene, frame].map((f) => relative(ROOT, f));
 }
 
 const TYPES: Record<string, string> = {
@@ -357,7 +381,36 @@ function fileFor(pathname: string): string | null {
   return null;
 }
 
-const CSP = /Content-Security-Policy:\s*(.+)/.exec(readFileSync(join(SITE, "_headers"), "utf8"))?.[1]?.trim() ?? "";
+interface HeaderRule {
+  path: RegExp;
+  drop: string[];
+  set: [string, string][];
+}
+
+const HEADER_RULES: HeaderRule[] = readFileSync(join(SITE, "_headers"), "utf8")
+  .split(/\n(?=\S)/)
+  .map((block) => {
+    const [path = "", ...lines] = block.split("\n").filter((l) => l.trim() && !l.trim().startsWith("#"));
+    const glob = path
+      .trim()
+      .replace(/[.+?^${}()|[\]\\]/g, "\\$&")
+      .replace(/\*/g, ".*");
+    const rules = lines.map((l) => l.trim());
+    return {
+      path: new RegExp(`^${glob}$`),
+      drop: rules.filter((l) => l.startsWith("!")).map((l) => l.slice(1).trim().toLowerCase()),
+      set: rules.filter((l) => !l.startsWith("!") && l.includes(":")).map((l) => [l.slice(0, l.indexOf(":")).trim().toLowerCase(), l.slice(l.indexOf(":") + 1).trim()]),
+    };
+  });
+
+function headersFor(pathname: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const rule of HEADER_RULES.filter((r) => r.path.test(pathname))) {
+    for (const name of rule.drop) delete out[name];
+    for (const [name, value] of rule.set) out[name] = out[name] ? `${out[name]}, ${value}` : value;
+  }
+  return out;
+}
 
 function serve(port: number): void {
   const server = Bun.serve({
@@ -369,7 +422,7 @@ function serve(port: number): void {
       if (preview) {
         const run = Bun.spawnSync(["bun", import.meta.path, "--draft", "--figure", preview], { cwd: ROOT, stderr: "pipe" });
         if (run.exitCode !== 0) return new Response(run.stderr.toString(), { status: 500 });
-        return new Response(run.stdout.toString(), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "content-security-policy": CSP } });
+        return new Response(run.stdout.toString(), { headers: { ...headersFor(pathname), "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
       }
       if ((pathname === "/" || pathname.startsWith("/docs")) && !extname(pathname)) {
         const run = Bun.spawnSync(["bun", import.meta.path, "--draft"], { cwd: ROOT, stderr: "pipe" });
@@ -377,7 +430,7 @@ function serve(port: number): void {
       }
       const file = fileFor(pathname) ?? (extname(pathname) ? null : join(SITE, "index.html"));
       if (!file) return new Response("not found\n", { status: 404 });
-      return new Response(Bun.file(file), { headers: { "content-type": TYPES[extname(file)] ?? "application/octet-stream", "cache-control": "no-store", "content-security-policy": CSP } });
+      return new Response(Bun.file(file), { headers: { ...headersFor(pathname), "content-type": TYPES[extname(file)] ?? "application/octet-stream", "cache-control": "no-store" } });
     },
   });
   console.log(`docs on http://127.0.0.1:${server.port}/docs/ (rebuilt on every page load), one figure at /preview/<name>; Ctrl-C stops it`);
