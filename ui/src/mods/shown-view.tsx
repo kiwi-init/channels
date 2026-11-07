@@ -53,7 +53,6 @@ async function onMessage(e: MessageEvent): Promise<void> {
         surface: "render",
         needs: (mod?.needs ?? []).filter((n) => n.startsWith("render:")),
         code: got.code,
-        settings: got.settings ?? {},
         ...look(),
         shown: { kind: d.kind, name: d.name, html, full: d.full },
       })

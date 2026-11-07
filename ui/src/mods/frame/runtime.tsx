@@ -294,12 +294,12 @@ addEventListener("message", (e) => {
     booted = true
     surface = m.surface
     needs = new Set(m.needs)
-    values = Object.freeze({ ...m.settings })
+    values = Object.freeze(m.surface === "render" ? {} : { ...m.settings })
     document.documentElement.dataset["surface"] = surface
     theme(m.theme, m.dark)
     try {
       new Function(m.code)()
-      if (surface === "render") draw(m.shown, m.dark)
+      if (m.surface === "render") draw(m.shown, m.dark)
       post({ type: "ready" })
     } catch (err) {
       failed(err)

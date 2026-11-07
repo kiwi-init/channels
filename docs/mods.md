@@ -160,6 +160,7 @@ A mod lists what it needs filled in, and its page in Settings → Mods draws the
 - **`required`:** until it's filled in, the mod stays off and its row says which setting it needs.
 - **Secrets** are sealed on this computer with the key your keychain holds, like your own keys. They're in no file under `~/.kiwi`, and the page never shows one again. On Linux with no keyring, Channels won't keep one and says why.
 - **`settings()`** gives the mod its own values: a string, `true` or `false`, or `null` when empty. No mod gets another's.
+- **Not in figures:** a frame that draws an attachment runs the sender's page, so there `settings()` is empty and the values never reach that frame.
 - **A change restarts the mod** with the new values.
 - **Another source:** a mod with the same name from another source starts with none of the old values.
 - **Removing a mod** clears its settings and secrets.

@@ -26,22 +26,26 @@ const check = (ok: boolean, what: string): void => {
 const { relay, port } = await startLocalRelay(join(root, "relay"), null, { rateLimits: false });
 const RELAY = `http://127.0.0.1:${port}`;
 const MOD = "figure-probe";
+const SECRET = `sk-figure-probe-${Math.random().toString(36).slice(2)}`;
 const TEXT = "four figures";
 
 function writeMod(): void {
   const dir = join(root, ".kiwi", "mods", MOD);
   mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, "mod.json"), JSON.stringify({ name: MOD, version: "1.0.0", shell: "^3.3", needs: ["render:figure", "net:example.com"] }));
+  writeFileSync(
+    join(dir, "mod.json"),
+    JSON.stringify({ name: MOD, version: "1.0.0", shell: "^3.3", needs: ["render:figure", "net:example.com"], settings: [{ id: "token", title: "Token", type: "secret" }] }),
+  );
   writeFileSync(
     join(dir, "index.tsx"),
-    `import { fetch as modFetch, render } from "@kiwi/mod"
+    `import { fetch as modFetch, render, settings } from "@kiwi/mod"
 
 let drawing = false
 queueMicrotask(() => {
   if (!drawing)
     void modFetch("https://example.com/").then(
-      (r) => parent.postMessage({ kiwiProbe: { mainFetch: r.status } }, "*"),
-      (e) => parent.postMessage({ kiwiProbe: { mainFetch: String(e) } }, "*"),
+      (r) => parent.postMessage({ kiwiProbe: { mainFetch: r.status, mainToken: settings()["token"] } }, "*"),
+      (e) => parent.postMessage({ kiwiProbe: { mainFetch: String(e), mainToken: settings()["token"] } }, "*"),
     )
 })
 
@@ -103,6 +107,7 @@ const out = {
   relayFetch: await attempt(async () => (await fetch(${JSON.stringify(RELAY)} + "/v1/config"), "reached")),
   modFetch: await attempt(async () => (await w.__kiwiMod["@kiwi/mod"].fetch("https://example.com/")).status),
   modPanel: await attempt(() => (w.__kiwiMod["@kiwi/mod"].panel({ title: "Figure panel", render: () => null }), "ran")),
+  modSettings: await attempt(() => JSON.stringify(w.__kiwiMod["@kiwi/mod"].settings())),
   image: await new Promise((r) => {
     const i = new Image()
     i.onload = () => r("loaded")
@@ -283,6 +288,7 @@ try {
   await step("and the host it asks for", 10_000, () => d.evaluate(clickText, { selector: "dialog[open] .mod-needs li", text: "Talk to example.com" }, 2_000));
   check(true, "a mod that draws figures asks for it, in words, before it runs");
   await shot("figure-mod-asks");
+  await d.evaluate((v) => (window as unknown as { kiwi: { setModSetting(n: string, i: string, v: string): Promise<unknown> } }).kiwi.setModSetting("figure-probe", "token", v), SECRET, 10_000);
   await step("Allow", 10_000, () => d.evaluate(clickText, { selector: "dialog[open] .modal-foot button", text: "Allow" }, 2_000));
   await step("the mod on", 30_000, () =>
     d.evaluate(
@@ -348,6 +354,9 @@ try {
   check(main?.["mainFetch"] === 200, "the mod itself reaches example.com, the host it listed and the person approved");
   check(String(p["modFetch"]).startsWith("blocked"), "a figure can't reach the network through its mod, even the host the mod was approved for");
   check(String(p["modPanel"]).startsWith("blocked"), "a figure gets none of its mod's other capabilities");
+  check(main?.["mainToken"] === SECRET, "the figure mod's own frame gets its secret through settings()");
+  check(p["modSettings"] === "{}", `a figure gets none of its mod's settings, its secret included: ${String(p["modSettings"])}`);
+  check(!(await heard(d)).some((m) => !("mainFetch" in m) && JSON.stringify(m).includes(SECRET)), "no figure frame's message carries the mod's secret");
   check(p["image"] === "blocked", "a figure can't load an image from the network");
   check(p["popup"] === "null" || String(p["popup"]).startsWith("blocked"), "a figure can't open a popup");
   const page = await d.evaluate(() => location.href, null, 2_000);
