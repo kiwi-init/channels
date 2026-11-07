@@ -116,17 +116,6 @@ final class GestureTests: XCTestCase {
     }
 
     @MainActor
-    func testSwipingABubbleLeftReplies() async throws {
-        let screen = try Screen.list()
-        try await screen.enter(after: .milliseconds(800))
-        let window = screen.window
-        screen.drag(from: CGPoint(x: window.width * 0.7, y: window.height * 0.42), by: CGVector(dx: -160, dy: 4), hold: 0.2)
-        let any = screen.app.descendants(matching: .any)
-        let reply = any.matching(NSPredicate(format: "placeholderValue BEGINSWITH 'Reply to'")).firstMatch
-        XCTAssertTrue(reply.waitForExistence(timeout: 3), "swiping a bubble left didn't start a reply")
-    }
-
-    @MainActor
     private func bubble(_ screen: Screen) async throws -> XCUICoordinate {
         let shown = try await screen.shownOnceABubbleIs()
         let probe = try XCTUnwrap(screen.measurable(screen.bubbles(in: shown)).first, "no bubble on the screen")

@@ -11,11 +11,6 @@ struct ConversationScreen: View {
     @State private var position = ScrollPosition(edge: .bottom)
     @State private var follow = Follow()
     @FocusState private var typing: Bool
-    @State private var side: CGFloat = 0
-    @State private var sideAtStart: CGFloat = 0
-
-    private static let sideWidth: CGFloat = 320
-    private static let edge: CGFloat = 24
 
     init(start: Spot) {
         _spot = State(initialValue: start)
@@ -34,7 +29,7 @@ struct ConversationScreen: View {
             if let room = model.shown(spot) {
                 Conversation(
                     room: room, replyTo: $replyTo, position: $position, follow: $follow, typing: $typing, elsewhere: spot.general ? room.elsewhere() : [],
-                    reviews: spot.general ? room.reviews : [], needs: spot.general ? room.open : []
+                    reviews: reviews(room), needs: needs(room), worker: worker(room)
                 ) { ask in
                     replyTo = nil
                     sendingBack = nil
@@ -54,15 +49,6 @@ struct ConversationScreen: View {
                 }
                 .navigationTitle(room.spotTitle(spot.place))
                 .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button {
-                            withAnimation(.spring(duration: 0.3, bounce: 0.05)) { side = 1 }
-                            sideAtStart = 1
-                        } label: {
-                            Image(systemName: "sidebar.left")
-                        }
-                        .accessibilityLabel("Show \(room.title)'s rooms and people")
-                    }
                     ToolbarItem(placement: .principal) {
                         Button {
                             details = true
@@ -79,14 +65,8 @@ struct ConversationScreen: View {
                         switchTo(Spot(code: room.code, place: key))
                     }
                 }
-                .simultaneousGesture(sideDrag)
-                .overlay(alignment: .leading) { sidebar(room) }
                 .onAppear(perform: seen)
                 .onChange(of: room.placeView(spot.place)?.lastSeq) { _, _ in seen() }
-                .onDisappear {
-                    side = 0
-                    sideAtStart = 0
-                }
             } else {
                 Centered(title: "This channel is gone", detail: "Its owner closed it, or this phone was removed from it.")
             }
@@ -101,47 +81,24 @@ struct ConversationScreen: View {
         }
     }
 
-    private var sideDrag: some Gesture {
-        DragGesture(minimumDistance: 16)
-            .onChanged { drag in
-                let dx = drag.translation.width
-                guard abs(dx) > abs(drag.translation.height) * 1.3 else { return }
-                if side == 0 && sideAtStart == 0 && (dx < 0 || drag.startLocation.x < Self.edge) { return }
-                if sideAtStart == 0 && side == 0 { typing = false }
-                side = min(1, max(0, sideAtStart + dx / Self.sideWidth))
-            }
-            .onEnded { drag in
-                let fling = drag.predictedEndTranslation.width / Self.sideWidth
-                let open = sideAtStart + fling > 0.5
-                withAnimation(.spring(duration: 0.3, bounce: 0.05)) { side = open ? 1 : 0 }
-                sideAtStart = open ? 1 : 0
-            }
+    private func needs(_ room: RoomView) -> [NeedView] {
+        if spot.general { return room.open }
+        guard let place = room.placeView(spot.place) else { return [] }
+        if let task = place.task { return room.open.filter { $0.task == task } }
+        if let other = room.other(in: place) { return room.open.filter { $0.from == other } }
+        return []
     }
 
-    @ViewBuilder private func sidebar(_ room: RoomView) -> some View {
-        if side > 0 {
-            ZStack(alignment: .leading) {
-                Color.black.opacity(0.35 * side)
-                    .ignoresSafeArea()
-                    .onTapGesture { close() }
-                List {
-                    ChannelSection(room: room)
-                }
-                .listStyle(.insetGrouped)
-                .scrollContentBackground(.hidden)
-                .background(Tone.canvas)
-                .frame(width: Self.sideWidth)
-                .offset(x: -Self.sideWidth * (1 - side))
-                .simultaneousGesture(sideDrag)
-            }
-            .accessibilityAddTraits(.isModal)
-            .accessibilityAction(.escape) { close() }
-        }
+    private func reviews(_ room: RoomView) -> [ReviewView] {
+        if spot.general { return room.reviews }
+        guard let task = room.placeView(spot.place)?.task else { return [] }
+        return room.reviews.filter { $0.task == task }
     }
 
-    private func close() {
-        withAnimation(.spring(duration: 0.3, bounce: 0.05)) { side = 0 }
-        sideAtStart = 0
+    private func worker(_ room: RoomView) -> MemberView? {
+        guard let place = room.placeView(spot.place) else { return nil }
+        let name = place.task.flatMap { id in room.tasks.first { $0.id == id }?.owner } ?? room.other(in: place)
+        return name.flatMap { room.member($0) }.flatMap { $0.isAgent ? $0 : nil }
     }
 
     private func seen() {

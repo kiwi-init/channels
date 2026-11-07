@@ -72,6 +72,7 @@ struct Conversation: View {
     var elsewhere: [AskView] = []
     var reviews: [ReviewView] = []
     var needs: [NeedView] = []
+    var worker: MemberView?
     var answer: (AskView) -> Void = { _ in }
     var sendBack: (ReviewView) -> Void = { _ in }
     @Environment(AppModel.self) private var model
@@ -107,6 +108,9 @@ struct Conversation: View {
                     }
                     .id(line.id)
                     .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity), removal: .opacity))
+                }
+                if let worker, worker.working {
+                    WorkingRow(member: worker, room: room).id("working")
                 }
                 Color.clear.frame(height: 6).id("bottom")
             }
@@ -146,6 +150,39 @@ struct Conversation: View {
                 withAnimation(Motion.ease) { position.scrollTo(edge: .bottom) }
             }
         }
+    }
+}
+
+struct WorkingRow: View {
+    let member: MemberView
+    let room: RoomView
+
+    private var doing: String {
+        if let tool = member.activity?.tool, !tool.isEmpty { return tool }
+        if let id = member.doing.first, let task = room.tasks.first(where: { $0.id == id }) { return "\(taskLabel(id)) \(task.title)" }
+        return "Working"
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Face(name: member.name, member: member, size: 22)
+            Dot(color: Tone.doing, size: 6)
+            Text(doing).type(.meta, .medium).foregroundStyle(Tone.ink2).lineLimit(1)
+            if let since = member.activity?.since {
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    Text(When.elapsed(from: Date(timeIntervalSince1970: since / 1000), to: context.date))
+                        .font(.mono(.stamp))
+                        .foregroundStyle(Tone.ink3)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(Tone.wash, in: RoundedRectangle(cornerRadius: Radius.ctl, style: .continuous))
+        .padding(.top, 10)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(room.display(member.name)) is working: \(doing)")
     }
 }
 
@@ -300,11 +337,8 @@ struct BubbleRow: View {
     let reply: (MessageView) -> Void
     let jump: (Int) -> Void
     let answer: (Int) -> Void
-    @State private var pull: CGFloat = 0
-    @State private var armed = false
 
     private let avatar: CGFloat = 30
-    private static let replyAt: CGFloat = 56
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 8) {
@@ -342,62 +376,6 @@ struct BubbleRow: View {
             if !message.mine { Spacer(minLength: 40) }
         }
         .padding(.top, first ? 8 : 2)
-        .offset(x: -pull)
-        .background(alignment: .trailing) {
-            Image(systemName: "arrowshape.turn.up.left.fill")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(armed ? Tone.accent : Tone.ink3)
-                .frame(width: 30, height: 30)
-                .background(Tone.wash2, in: Circle())
-                .opacity(Double(min(1, pull / Self.replyAt)))
-                .scaleEffect(armed ? 1.1 : 0.85)
-                .offset(x: 36 - pull * 0.6)
-        }
-        .gesture(
-            Leftward { dx in
-                pull = min(84, max(0, -dx) * 0.6)
-                let now = pull >= Self.replyAt
-                if now != armed {
-                    armed = now
-                    if now { Haptic.tap() }
-                }
-            } ended: {
-                if armed { reply(message) }
-                armed = false
-                withAnimation(.spring(duration: 0.3, bounce: 0.2)) { pull = 0 }
-            }
-        )
-    }
-}
-
-struct Leftward: UIGestureRecognizerRepresentable {
-    let moved: (CGFloat) -> Void
-    let ended: () -> Void
-
-    func makeCoordinator(converter: CoordinateSpaceConverter) -> Only {
-        Only()
-    }
-
-    func makeUIGestureRecognizer(context: Context) -> UIPanGestureRecognizer {
-        let pan = UIPanGestureRecognizer()
-        pan.delegate = context.coordinator
-        return pan
-    }
-
-    func handleUIGestureRecognizerAction(_ pan: UIPanGestureRecognizer, context: Context) {
-        switch pan.state {
-        case .began, .changed: moved(pan.translation(in: pan.view).x)
-        case .ended, .cancelled, .failed: ended()
-        default: break
-        }
-    }
-
-    final class Only: NSObject, UIGestureRecognizerDelegate {
-        func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
-            guard let pan = recognizer as? UIPanGestureRecognizer else { return false }
-            let v = pan.velocity(in: pan.view)
-            return v.x < 0 && -v.x > abs(v.y) * 1.3
-        }
     }
 }
 
