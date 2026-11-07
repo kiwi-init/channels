@@ -4,7 +4,17 @@ import { tmpdir } from "node:os";
 import { join as joinPath } from "node:path";
 import { Channel } from "@kiwi/core/client.ts";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
-import { looksSecret, PERMISSION_CHOICES, permissionAnswer, permissionChoices, permissionReply, permissionShown, wellFormedPermission, type PermissionShown } from "@kiwi/core/permission.ts";
+import {
+  answersAsHuman,
+  looksSecret,
+  PERMISSION_CHOICES,
+  permissionAnswer,
+  permissionChoices,
+  permissionReply,
+  permissionShown,
+  wellFormedPermission,
+  type PermissionShown,
+} from "@kiwi/core/permission.ts";
 import { wellFormed, type Kind, type Message, type Payload } from "@kiwi/core/protocol.ts";
 import { fold, type Roster } from "@kiwi/core/state.ts";
 import { startRelay } from "../src/relay/bun.ts";
@@ -863,4 +873,51 @@ describe("secret filter follow-ups (T1923)", () => {
   ];
   for (const [name, said] of flagged) test(`flagged: ${name}`, () => expect([looksSecret(said, true), looksSecret(said)]).toEqual([true, true]));
   for (const [name, said] of clean) test(`not flagged as content: ${name}`, () => expect(looksSecret(said)).toBe(false));
+});
+
+describe("a person's other seats answer as that person (channels-mobile #135)", () => {
+  let seats: Roster;
+  beforeAll(async () => {
+    for (const n of ["jow", "jow-2", "bot"]) ids[n] = await generateIdentity(n);
+    seats = [
+      { name: "jow", pk: ids.jow!.pk, owner: true, at: 0, active: true, kind: "human" },
+      { name: "jow-2", pk: ids["jow-2"]!.pk, owner: false, at: 1, active: true, kind: "human", sponsor: { user: "u-jow", name: "Jow", handle: "jow" } },
+      { name: "eve", pk: ids.eve!.pk, owner: false, at: 2, active: true, kind: "human", sponsor: { user: "u-eve", name: "Eve" } },
+      { name: "bot", pk: ids.bot!.pk, owner: false, at: 3, active: true, kind: "agent", sponsor: { user: "u-jow", name: "Jow" } },
+    ];
+  });
+  const judged = (ask: Message, reply: Message) => {
+    const ms = [ask, reply];
+    return permissionAnswer(ask, reply, { ...fold(ms, seats), bySeq: new Map(ms.map((m) => [m.seq, m])) });
+  };
+
+  test("the owner's app allows its own agent when the agent's human is the owner's phone", async () => {
+    const ask = await askFrom("bot", ["jow-2", "jow"]);
+    expect(judged(ask, await answer("jow", ask, true))).toBe("allow");
+    expect(judged(ask, await answer("jow-2", ask, true))).toBe("allow");
+    expect(judged(ask, await answer("jow", ask, false))).toBe("deny");
+  });
+
+  test("another person still can't allow, and a seat the ask isn't to still can't answer", async () => {
+    const ask = await askFrom("bot", ["jow-2", "jow"]);
+    expect(judged(ask, await answer("eve", ask, true))).toBeNull();
+    const phoneOnly = await askFrom("bot", ["jow-2"]);
+    expect(judged(phoneOnly, await answer("jow", phoneOnly, true))).toBeNull();
+  });
+});
+
+describe("answersAsHuman (channels-mobile #135)", () => {
+  test("the agent's human and that person's other seats, nobody else", async () => {
+    for (const n of ["jow", "jow-2", "bot", "eve", "old"]) ids[n] ??= await generateIdentity(n);
+    const roster: Roster = [
+      { name: "jow", pk: ids.jow!.pk, owner: true, at: 0, active: true, kind: "human" },
+      { name: "jow-2", pk: ids["jow-2"]!.pk, owner: false, at: 1, active: true, kind: "human", sponsor: { user: "u-jow", name: "Jow", handle: "jow" } },
+      { name: "eve", pk: ids.eve!.pk, owner: false, at: 2, active: true, kind: "human", sponsor: { user: "u-eve", name: "Eve" } },
+      { name: "bot", pk: ids.bot!.pk, owner: false, at: 3, active: true, kind: "agent", sponsor: { user: "u-jow", name: "Jow" } },
+      { name: "old", pk: ids.old!.pk, owner: false, at: 4, active: false, kind: "human", sponsor: { user: "u-jow", name: "Jow", handle: "jow" } },
+    ];
+    const s = fold([], roster);
+    expect(["jow", "jow-2", "eve", "bot", "old", "nobody"].map((n) => answersAsHuman(s, "bot", n))).toEqual([true, true, false, false, false, false]);
+    expect(answersAsHuman(s, "eve", "jow")).toBe(false);
+  });
 });
