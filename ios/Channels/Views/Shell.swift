@@ -68,12 +68,12 @@ struct Shell: View {
                 }
             let x = min(left, max(-Self.members, base + drag))
             ZStack(alignment: .topLeading) {
-                Tone.rail.ignoresSafeArea()
+                Tone.canvas.ignoresSafeArea()
                 if x > 0 {
                     HStack(spacing: 0) {
                         Rail(search: $search, settings: $settings)
                         SidePane()
-                            .disabled(axis == .horizontal)
+                            .disabled(abs(drag) > 30)
                     }
                     .frame(width: left)
                     .transition(.identity)
@@ -81,20 +81,15 @@ struct Shell: View {
                 }
                 if x < 0, let code = model.frontCode, let room = model.rooms[code] {
                     MembersPane(room: room)
-                        .disabled(axis == .horizontal)
+                        .disabled(abs(drag) > 30)
                         .frame(width: Self.members)
                         .frame(maxWidth: .infinity, alignment: .trailing)
                         .simultaneousGesture(swipe(left: left))
                 }
                 front
-                    .disabled(axis == .horizontal)
+                    .disabled(abs(drag) > 30)
                     .frame(width: width)
-                    .overlay {
-                        Tone.rail.opacity(0.6 * min(1, abs(x) / 120)).allowsHitTesting(false).ignoresSafeArea()
-                    }
-                    .background {
-                        Rectangle().fill(Tone.canvas).shadow(color: .black.opacity(x == 0 ? 0 : 0.25), radius: 18).ignoresSafeArea()
-                    }
+                    .background(Tone.canvas.ignoresSafeArea())
                     .offset(x: x)
                     .overlay {
                         if model.drawer != .closed {
@@ -145,6 +140,7 @@ struct Shell: View {
                     }
                 }
             }
+            .toolbarBackground(.hidden, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
@@ -291,6 +287,7 @@ struct Rail: View {
             .padding(.bottom, 8)
         }
         .frame(width: 72)
+        .background(Tone.rail.ignoresSafeArea())
         .buttonStyle(.plain)
     }
 }
@@ -364,7 +361,6 @@ struct SidePane: View {
                 }
             }
         }
-        .background(Tone.canvas, in: UnevenRoundedRectangle(topLeadingRadius: 20, style: .continuous))
     }
 }
 
@@ -385,7 +381,6 @@ struct SideHeader: View {
         .padding(.horizontal, 18)
         .padding(.top, 14)
         .padding(.bottom, 12)
-        .overlay(alignment: .bottom) { Rectangle().fill(Tone.line).frame(height: 1) }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
     }
@@ -428,7 +423,6 @@ struct MembersPane: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .contentMargins(.top, 4, for: .scrollContent)
-        .background(Tone.canvas, in: UnevenRoundedRectangle(topTrailingRadius: 20, style: .continuous))
     }
 
     private func detail(_ member: MemberView) -> String? {
