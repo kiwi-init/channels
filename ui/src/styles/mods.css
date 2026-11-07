@@ -24,6 +24,65 @@
   border-top: 1px solid var(--line);
 }
 
+.mod-rooms {
+  display: grid;
+  gap: 12px;
+}
+
+.mod-room-group {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.mod-room-group legend {
+  margin-bottom: 4px;
+  color: var(--ink-3);
+  font: 600 var(--t-meta) var(--ui);
+}
+
+.mod-room {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--ctl);
+  padding: 0 8px;
+  border-radius: var(--r-row);
+  color: var(--ink);
+  font: var(--t-ui) var(--ui);
+  cursor: pointer;
+}
+
+.mod-room:hover {
+  background: var(--wash);
+}
+
+.mod-room.is-on {
+  background: var(--wash-2);
+}
+
+.mod-room input {
+  margin: 0;
+  accent-color: var(--ink);
+}
+
+.mod-room-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mod-room-none {
+  margin: 0;
+  padding: 0 8px;
+  color: var(--ink-3);
+  font: var(--t-meta) var(--ui);
+}
+
 .mod-snippet p {
   margin: 0;
 }
@@ -211,4 +270,8 @@ img.mod-icon {
 .mod-tab-slot {
   flex: 1;
   min-height: 0;
+}
+
+.mod-details-rooms {
+  padding: 4px 0;
 }

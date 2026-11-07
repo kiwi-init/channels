@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { checkManifest, needKind, netHosts } from "@kiwi/core/node/mod-manifest.ts";
+import { checkManifest, needKind, needRoom, netHosts } from "@kiwi/core/node/mod-manifest.ts";
 import { hostAllowed, unapproved } from "../desktop/src/mods.ts";
 
 const base = { name: "linear-panel", version: "1.0.0", shell: "^3.3", needs: ["panel", "command", "net:api.linear.app"] };
@@ -28,6 +28,14 @@ describe("a mod's mod.json", () => {
     expect(checkManifest({ ...base, needs: ["net:http://x.com"] }, "linear-panel", "3.3.0").ok).toBe(false);
     expect(checkManifest({ ...base, needs: ["net:*.linear.app"] }, "linear-panel", "3.3.0").ok).toBe(false);
     expect(checkManifest({ ...base, needs: "panel" }, "linear-panel", "3.3.0").ok).toBe(false);
+  });
+
+  test("posting into a room is offered; the room is a room id of up to 32 characters (T6837)", () => {
+    expect(checkManifest({ ...base, needs: ["post:#general"] }, "linear-panel", "3.3.0")).toEqual({ ok: true, manifest: { ...base, needs: ["post:#general"] } });
+    expect(checkManifest({ ...base, needs: [`post:${"a".repeat(33)}`] }, "linear-panel", "3.3.0").ok).toBe(false);
+    expect(needRoom("post:#general")).toBe("general");
+    expect(needRoom("read:ops")).toBe("ops");
+    expect(needRoom("panel")).toBeNull();
   });
 
   test("a sidebar section and message actions are offered", () => {

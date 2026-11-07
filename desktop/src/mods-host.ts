@@ -1,11 +1,11 @@
 import { bundleMod } from "@kiwi/core/node/mod-bundle.ts";
 import { readModIcon, type IconType } from "@kiwi/core/node/mod-icon.ts";
-import { checkManifest, type ModManifest, type ModSetting } from "@kiwi/core/node/mod-manifest.ts";
+import { checkManifest, needRoom, type ModManifest, type ModSetting } from "@kiwi/core/node/mod-manifest.ts";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
-import type { ModBundle, ModDetails, ModFetchReply, ModFetchRequest, ModIcon, ModSettingValue, ModView } from "./bridge.ts";
+import type { ModBundle, ModDetails, ModFetchReply, ModFetchRequest, ModIcon, ModRoom, ModSettingValue, ModView } from "./bridge.ts";
 import { errorText, writePrivate } from "./guard.ts";
 import { copyOf, kiwiKeys, modDetails } from "./mod-details.ts";
 import { hostAllowed, SAFE_FILE, SAFE_FLAG, SAFE_LOOP, unapproved } from "./mods.ts";
@@ -64,6 +64,7 @@ export interface ModsHostOptions {
 interface Approval {
   needs: string[];
   source: string;
+  rooms?: ModRoom[];
 }
 
 type Off = { by: "you" } | { by: "crash"; why: string; hash: string };
@@ -90,6 +91,23 @@ const WHY_BYTES = 300;
 
 const strings = (v: unknown): v is string[] => Array.isArray(v) && v.every((n) => typeof n === "string");
 
+const CHANNEL_CODE = /^[A-Za-z0-9_-]{1,64}$/;
+const MAX_ROOMS = 200;
+
+function roomsFor(needs: readonly string[], rooms: unknown): ModRoom[] {
+  const asked = new Set(needs.flatMap((n) => needRoom(n) ?? []));
+  const out: ModRoom[] = [];
+  if (!Array.isArray(rooms)) return out;
+  for (const r of rooms) {
+    const { code, room } = (r && typeof r === "object" ? r : {}) as Record<string, unknown>;
+    if (typeof code !== "string" || !CHANNEL_CODE.test(code) || typeof room !== "string" || !asked.has(room)) continue;
+    if (out.some((x) => x.code === code && x.room === room)) continue;
+    out.push({ code, room });
+    if (out.length >= MAX_ROOMS) break;
+  }
+  return out;
+}
+
 function entries<T>(v: unknown, keep: (x: Record<string, unknown>) => T | null): Record<string, T> {
   if (!v || typeof v !== "object") return {};
   const out: Record<string, T> = {};
@@ -109,7 +127,11 @@ function readModsFile(file: string): ModsFile {
     // No file yet, or one that isn't ours: every mod asks again.
   }
   return {
-    approved: entries(raw["approved"], (a) => (strings(a["needs"]) && typeof a["source"] === "string" ? { needs: a["needs"], source: a["source"] } : null)),
+    approved: entries(raw["approved"], (a) => {
+      if (!strings(a["needs"]) || typeof a["source"] !== "string") return null;
+      const rooms = roomsFor(a["needs"], a["rooms"]);
+      return { needs: a["needs"], source: a["source"], ...(rooms.length ? { rooms } : {}) };
+    }),
     off: entries<Off>(raw["off"], (o) =>
       o["by"] === "you" ? { by: "you" } : o["by"] === "crash" && typeof o["why"] === "string" && typeof o["hash"] === "string" ? { by: "crash", why: o["why"], hash: o["hash"] } : null,
     ),
@@ -215,6 +237,7 @@ async function loadOne(dir: string, name: string, contract: string, file: ModsFi
     ...(icon.art ? { icon: iconHash(icon.art.bytes) } : {}),
     ...shown,
     ...(settings.length ? { settingsRev: plain?.rev ?? 0 } : {}),
+    ...(approval?.source === source && approval.rooms?.length ? { rooms: roomsFor(needs, approval.rooms) } : {}),
   };
   if (unapproved(needs, approved).length)
     return done(approval && approval.source !== source ? { ...base, state: "asks", why: `It comes from ${source} now, not ${approval.source}.` } : { ...base, state: "asks" });
@@ -431,15 +454,16 @@ export function modsHost(o: ModsHostOptions) {
         delete m.values[name];
       });
     },
-    async approve(name: string, needs: readonly string[]): Promise<ModView[]> {
+    async approve(name: string, needs: readonly string[], rooms: readonly ModRoom[] = []): Promise<ModView[]> {
       const l = loaded.get(name);
       if (!l || l.view.state === "off") throw new Error(`there is no mod ${name} waiting for approval`);
       const asked = [...l.view.needs].sort();
       if (!Array.isArray(needs) || [...needs].sort().join("\n") !== asked.join("\n")) throw new Error(`approve exactly what ${name} asks for`);
       const now = l.snippets && o.terminal ? snippetsOf(path.join(o.folder, name), name, o.terminal) : null;
       if (now && now.hash !== l.snippets?.hash) throw new Error(`${name}'s terminal snippets changed while you looked: look again`);
+      const picked = roomsFor(asked, rooms);
       const after = await change((m) => {
-        m.approved[name] = { needs: asked, source: l.view.source };
+        m.approved[name] = { needs: asked, source: l.view.source, ...(picked.length ? { rooms: picked } : {}) };
         delete m.off[name];
       });
       if (!now || !o.terminal) return after;
@@ -447,6 +471,16 @@ export function modsHost(o: ModsHostOptions) {
       o.onTerminal?.(name, now);
       await rescan();
       return list();
+    },
+    setRooms(name: string, rooms: readonly ModRoom[]): Promise<ModView[]> {
+      const l = loaded.get(name);
+      if (!l) return Promise.reject(new Error(`there is no mod ${name}`));
+      return change((m) => {
+        const now = m.approved[name];
+        if (!now || now.source !== l.view.source) throw new Error(`${name} isn't approved yet: allow it first`);
+        const picked = roomsFor(now.needs, rooms);
+        m.approved[name] = { needs: now.needs, source: now.source, ...(picked.length ? { rooms: picked } : {}) };
+      });
     },
     async fetch(name: string, req: ModFetchRequest): Promise<ModFetchReply> {
       const l = loaded.get(name);

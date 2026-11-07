@@ -22,6 +22,7 @@ import {
   MOD_PROTOCOL,
   type ModChannel,
   type ModGithub,
+  type ModRoomGrant,
   type ModMessage,
   type ModOpen,
   type ModTarget,
@@ -51,6 +52,7 @@ const root = ReactDOMClient.createRoot(box)
 let sized: ResizeObserver | null = null
 let github: ModGithub | null = null
 let channelList: ModChannel[] | null = null
+let roomList: ModRoomGrant[] = []
 let still = false
 let rests = 0
 let showing: ModTarget | null = null
@@ -85,6 +87,10 @@ const minutes = (after: unknown): number => Math.min(IDLE_MAX_MINUTES, Math.max(
 
 function asked(need: string, call: string): void {
   if (!needs.has(need)) throw new Error(`${call}() needs "${need}" in mod.json's needs`)
+}
+
+function askedRoom(kinds: readonly string[], call: string): void {
+  if (![...needs].some((n) => kinds.some((k) => n.startsWith(`${k}:`)))) throw new Error(`${call}() needs ${kinds.map((k) => `"${k}:<room>"`).join(" or ")} in mod.json's needs`)
 }
 
 function listed<T extends { title: string }>(list: Map<string, T>): { id: string; title: string }[] {
@@ -221,6 +227,18 @@ const api = {
     asked("channels", "useChannels")
     return React.useSyncExternalStore(watch, () => channelList)
   },
+  async post({ channel, room, text }: { channel: string; room: string; text: string }): Promise<void> {
+    askedRoom(["post"], "post")
+    await request((id) => ({ type: "post", id, code: String(channel), room: String(room).replace(/^#/, ""), text: String(text) }))
+  },
+  rooms(): ModRoomGrant[] {
+    askedRoom(["post", "read"], "rooms")
+    return roomList
+  },
+  useRooms(): ModRoomGrant[] {
+    askedRoom(["post", "read"], "useRooms")
+    return React.useSyncExternalStore(watch, () => roomList)
+  },
   show(target: ModTarget): void {
     asked("panel", "show")
     post({ type: "show", target })
@@ -353,6 +371,9 @@ addEventListener("message", (e) => {
   } else if (m.type === "theme") theme(m.theme, m.dark, m.still === true)
   else if (m.type === "channels") {
     channelList = needs.has("channels") ? m.list : null
+    told()
+  } else if (m.type === "rooms") {
+    roomList = m.list
     told()
   } else if (m.type === "rest") rest(m.shown)
   else if (m.type === "github") {

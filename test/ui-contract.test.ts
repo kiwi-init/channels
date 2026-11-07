@@ -58,6 +58,12 @@ describe("the UI contract", () => {
     expect(Bun.semver.satisfies(UI_CONTRACT, range)).toBe(true);
   });
 
+  test("a desktop that can't keep a mod's picked rooms keeps its own UI (T6837)", () => {
+    const range = `^${UI_REQUIRES}`;
+    for (const old of ["3.14.0", "3.15.0"]) expect(Bun.semver.satisfies(old, range)).toBe(false);
+    expect(Bun.semver.satisfies(UI_CONTRACT, range)).toBe(true);
+  });
+
   test("within a major version, every later surface keeps all the names of the earlier ones", () => {
     const versions = Object.keys(UI_SURFACES).sort(newer);
     for (const [i, later] of versions.entries())
