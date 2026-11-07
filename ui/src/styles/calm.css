@@ -29,10 +29,9 @@
 
 .rest-map {
   --on: rgb(255 255 255 / 0.96);
-  --on-2: rgb(255 255 255 / 0.8);
-  --on-3: rgb(255 255 255 / 0.64);
-  --on-shade: 0 1px 2px rgb(0 0 0 / 0.5), 0 0 16px rgb(0 0 0 / 0.3);
-  --on-glow: rgb(0 0 0 / 0.42);
+  --on-2: rgb(255 255 255 / 0.86);
+  --on-3: rgb(255 255 255 / 0.72);
+  --on-shade: 0 1px 2px rgb(0 0 0 / 0.6), 0 0 12px rgb(0 0 0 / 0.5);
 
   position: absolute;
   inset: 0;
@@ -43,11 +42,10 @@
 }
 
 .rest-map[data-sky="day"] {
-  --on: rgb(24 18 16 / 0.94);
-  --on-2: rgb(24 18 16 / 0.74);
-  --on-3: rgb(24 18 16 / 0.58);
-  --on-shade: 0 0 1px rgb(255 255 255 / 0.5), 0 0 14px rgb(255 255 255 / 0.6);
-  --on-glow: rgb(255 255 255 / 0.5);
+  --on: rgb(24 18 16 / 0.96);
+  --on-2: rgb(24 18 16 / 0.86);
+  --on-3: rgb(24 18 16 / 0.72);
+  --on-shade: 0 0 1px rgb(255 255 255 / 0.6), 0 0 12px rgb(255 255 255 / 0.7);
 }
 
 .rest-spot {
@@ -103,7 +101,7 @@
   padding: 24px 32px;
   border: 0;
   border-radius: var(--r-card);
-  background: radial-gradient(farthest-side, var(--on-glow) 40%, transparent);
+  background: none;
   color: var(--on);
   font: 400 var(--t-ui) var(--ui);
   text-align: left;

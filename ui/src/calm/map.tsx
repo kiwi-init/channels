@@ -1,6 +1,6 @@
 import { useMemo, type CSSProperties } from "react"
 
-import { daylight } from "~/calm/daylight"
+import { daylight, type Daylight, type Rgb } from "~/calm/daylight"
 import { Avatar, cx } from "~/kit/bits"
 import { useNow } from "~/kit/time"
 import type { ChannelTile, HomeAgent, HomeChannel } from "~/model"
@@ -19,6 +19,10 @@ interface Pin {
   home: HomeChannel
   crew: HomeAgent[]
 }
+
+const luma = ([r, g, b]: Rgb): number => 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+const darkBehind = (d: Daylight): boolean => (luma(d.look.low) + luma(d.look.haze)) / 2 < 0.45
 
 function lineOf(home: HomeChannel): string | null {
   const ask = home.asks[0]
@@ -39,7 +43,7 @@ function countsOf(home: HomeChannel): string {
 export function MapView({ open }: { open: (code: string, needs: boolean) => void }) {
   const { app } = useApp()
   const now = useNow(60_000)
-  const sky = daylight(new Date(now)).night > 0.5 ? "night" : "day"
+  const sky = darkBehind(daylight(new Date(now))) ? "night" : "day"
   const pins = useMemo((): Pin[] => {
     const byCode = new Map(app.home.map((h) => [h.code, h]))
     return app.channels
