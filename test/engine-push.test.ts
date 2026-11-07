@@ -17,7 +17,7 @@ describe("the phone registers its push token", () => {
     const seats = [await seat("one", "room-one"), await seat("two", "room-two"), await seat("asking", "room-three", null)];
     const seen: { url: string; body: string; auth: string }[] = [];
     const f = (async (url: string | URL, init?: RequestInit) => {
-      seen.push({ url: String(url), body: String(init?.body), auth: String((init?.headers as Record<string, string>).authorization) });
+      seen.push({ url: String(url), body: String(init?.body), auth: String((init?.headers as Record<string, string> | undefined)?.authorization) });
       return new Response("{}", { status: 200 });
     }) as typeof fetch;
 

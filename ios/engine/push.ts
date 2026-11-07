@@ -4,7 +4,7 @@ import { PUSH_PATH, type PushRegistration } from "@kiwi/core/push.ts";
 
 import type { ChannelIdentityView } from "../../desktop/src/bridge.ts";
 
-export interface PushTag {
+interface PushTag {
   tag: string;
   code: string;
   label: string;
