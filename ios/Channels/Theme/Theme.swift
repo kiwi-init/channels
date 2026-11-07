@@ -53,25 +53,27 @@ enum Tone {
     static var doing: Color { Palettes.color("doing", light: Shade(0x2f6fe4), dark: Shade(0x9188c4)) }
     static var bubbleThem: Color { Palettes.color("bg-3", light: Shade(0xefeff1), dark: Shade(0x252021)) }
     static var bubbleMine: Color { Palettes.color("ink", light: Shade(0x18181b), dark: Shade(0xddccc6)) }
-    static var avatarTop: Color { Palettes.color("ink-3", light: Shade(0x8a8a92), dark: Shade(0x4a403e)) }
-    static var avatarBottom: Color { Palettes.color("ink-3", light: Shade(0x8a8a92), dark: Shade(0x4a403e)) }
     static var popEdge: Color { Palettes.color("line-2", light: Shade(0x000000, 0.08), dark: Shade(0xddccc6, 0.11)) }
+    static func member(_ name: String) -> Color {
+        let fill = Palette.fills[name] ?? 0x8a7e7b
+        return Palettes.color("c-\(name)", light: Shade(fill), dark: Shade(fill))
+    }
     static var glassTint: Color { raised.opacity(0.6) }
     static let popShade = Color(Shade(0x000000, 0.16), Shade(0x000000, 0.55))
 }
 
 enum Palette {
-    static let fills: [String: (fill: UInt32, ink: UInt32)] = [
-        "red": (0xf0605d, 0xffffff),
-        "orange": (0xff9a3c, 0xffffff),
-        "yellow": (0xf5c542, 0x1a1a1a),
-        "green": (0x3fbf74, 0xffffff),
-        "teal": (0x2fb8b0, 0xffffff),
-        "blue": (0x4a8df0, 0xffffff),
-        "indigo": (0x6f74f2, 0xffffff),
-        "violet": (0x9a63f0, 0xffffff),
-        "pink": (0xf2559a, 0xffffff),
-        "brown": (0xb08463, 0xffffff),
+    static let fills: [String: UInt32] = [
+        "red": 0xf0605d,
+        "orange": 0xff9a3c,
+        "yellow": 0xf5c542,
+        "green": 0x3fbf74,
+        "teal": 0x2fb8b0,
+        "blue": 0x4a8df0,
+        "indigo": 0x6f74f2,
+        "violet": 0x9a63f0,
+        "pink": 0xf2559a,
+        "brown": 0xb08463,
     ]
 }
 
