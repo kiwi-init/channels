@@ -1,0 +1,37 @@
+name: kwallet-probe
+
+on:
+  push:
+    branches: [Channels8192-kwallet-probe]
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - name: what KWallet this runner has
+        run: |
+          sudo apt-get update -q
+          apt-cache policy kwallet6 libkf6wallet6 libkf6wallet-bin libpam-kwallet5 libpam-kwallet6 qt6-qpa-plugins | grep -E '^[a-z]|Installed|Candidate'
+          ls /usr/lib/x86_64-linux-gnu/qt6/plugins/platforms/ || echo "no qt6 platforms dir"
+          sudo apt-get install -y --no-install-recommends kwallet6 libsecret-tools dbus libglib2.0-bin gnome-keyring
+          dpkg -L kwallet6 | grep -vE '/share/(locale|doc|man)/' | grep -E 'bin/|libexec|dbus-1|/lib/'
+          ls /usr/lib/x86_64-linux-gnu/qt6/plugins/platforms/ || echo "no qt6 platforms dir"
+          grep -l -E 'secrets|kwallet|ksecret' /usr/share/dbus-1/services/* || true
+          for f in $(grep -l -E 'secrets|kwallet|ksecret' /usr/share/dbus-1/services/*); do echo "== $f"; cat "$f"; done
+      - name: KWallet, with only kwallet6 installed
+        continue-on-error: true
+        timeout-minutes: 5
+        run: bash desktop/scripts/linux-kwallet-check.sh
+      - name: Qt's platform plugins
+        run: |
+          sudo apt-get install -y --no-install-recommends qt6-qpa-plugins
+          ls /usr/lib/x86_64-linux-gnu/qt6/plugins/platforms/
+      - name: KWallet, with Qt's offscreen plugin
+        timeout-minutes: 5
+        run: bash desktop/scripts/linux-kwallet-check.sh
