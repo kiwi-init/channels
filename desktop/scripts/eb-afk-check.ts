@@ -45,6 +45,7 @@ const afkNow = (): { shown: boolean; scene: string | null; frame: string | null;
 async function shot(name: string): Promise<void> {
   if (!shots) return;
   mkdirSync(shots, { recursive: true });
+  await new Promise((r) => setTimeout(r, 3_000));
   const file = join(shots, `${name}.png`);
   const r = spawnSync("screencapture", ["-x", file], { stdio: "ignore" });
   console.log(r.status === 0 && existsSync(file) ? `shot ${file}` : `no shot for ${name} here`);
