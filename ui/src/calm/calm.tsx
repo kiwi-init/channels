@@ -2,7 +2,7 @@ import "~/styles/calm.css"
 
 import { useEffect, useMemo, useRef, useState, type AnimationEvent } from "react"
 
-import { Glance } from "~/calm/glance"
+import { DayView } from "~/calm/day-view"
 import { hideCalm } from "~/calm/idle"
 import type { Meadow } from "~/calm/meadow"
 import { calmRows } from "~/calm/rows"
@@ -13,7 +13,7 @@ import { useApp } from "~/nav"
 const SWALLOWED = ["keydown", "keyup", "wheel", "pointerdown", "contextmenu"] as const
 
 export function Calm() {
-  const { app, nav } = useApp()
+  const { app, go } = useApp()
   const rows = useMemo(() => calmRows(app.channels, app.home), [app.channels, app.home])
   const still = useStill()
   const [leaving, setLeaving] = useState(false)
@@ -21,13 +21,13 @@ export function Calm() {
   const stage = useRef<HTMLDivElement>(null)
   const meadow = useRef<Meadow | null>(null)
   const latest = useRef({ rows, still, leaving })
-  const opened = useRef(nav)
+  const [since] = useState(() => Date.now() - Math.max(1, app.prefs.calm) * 60_000)
 
   useEffect(() => {
     const was = document.activeElement instanceof HTMLElement ? document.activeElement : null
     box.current?.focus({ preventScroll: true })
     const swallow = (e: Event): void => {
-      if (e.target instanceof Element && e.target.closest("[data-afk-keep]")) return
+      if (e.type === "pointerdown" && e.target instanceof Element && e.target.closest("[data-afk-open]")) return
       e.preventDefault()
       e.stopImmediatePropagation()
       if (e.type !== "keyup") setLeaving(true)
@@ -73,10 +73,11 @@ export function Calm() {
     if (leaving) meadow.current?.freeze()
   }, [leaving])
 
-  useEffect(() => {
-    if (nav !== opened.current) setLeaving(true)
-  }, [nav])
-
+  const open = (code: string, needs: boolean): void => {
+    go({ to: "channel", code })
+    if (needs) go({ to: "tab", tab: "needs" })
+    setLeaving(true)
+  }
   const ended = (e: AnimationEvent<HTMLDivElement>): void => {
     if (e.target === e.currentTarget && e.animationName === "rest-out") hideCalm()
   }
@@ -84,7 +85,7 @@ export function Calm() {
   return (
     <div ref={box} className={cx("rest", leaving && "is-leaving")} role="dialog" aria-modal="true" aria-label="Calm" tabIndex={-1} onAnimationEnd={ended}>
       <div ref={stage} className="rest-back" aria-hidden="true" />
-      <Glance />
+      <DayView since={since} rows={rows} open={open} />
     </div>
   )
 }

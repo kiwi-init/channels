@@ -2,7 +2,7 @@ import "~/styles/start.css"
 import { useEffect, useState, type KeyboardEvent } from "react"
 
 import { takeTurns } from "~/home"
-import { Count, cx } from "~/kit/bits"
+import { cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { ago, useNow } from "~/kit/time"
 import type { ChannelTile, HomeAgent, HomeAsk, HomeChannel } from "~/model"
@@ -52,38 +52,35 @@ function Starts({ quiet }: { quiet?: true }) {
 
 const ASKS_SHOWN = 4
 
-export function Waiting({ tiles, home, most, now, loud }: { tiles: readonly ChannelTile[]; home: readonly HomeChannel[]; most: number; now: number; loud?: true }) {
-  const [all, setAll] = useState(false)
-  const byCode = new Map(home.map((h) => [h.code, h]))
-  const asks = takeTurns(tiles.filter((t) => t.state === "member").map((t) => (byCode.get(t.code)?.asks ?? []).map((ask) => ({ tile: t, ask }))))
-  if (!asks.length) return null
-  const shown = all ? asks : asks.slice(0, most)
-  return (
-    <section className="calm-sec" aria-label="Waiting on you">
-      <h2 className="calm-head">Waiting on you {loud ? <Count n={asks.length} loud /> : <span className="num">{asks.length}</span>}</h2>
-      <ol className="calm-list">
-        {shown.map(({ tile, ask }) => (
-          <AskRow key={`${tile.code}:${ask.id}`} tile={tile} ask={ask} now={now} />
-        ))}
-      </ol>
-      {asks.length > most && (
-        <button type="button" className="calm-more" onClick={() => setAll(!all)}>
-          {all ? "Show fewer" : `${asks.length - most} more`}
-        </button>
-      )}
-    </section>
-  )
-}
-
 function Hud({ tiles, home }: { tiles: readonly ChannelTile[]; home: readonly HomeChannel[] }) {
+  const [all, setAll] = useState(false)
   useEffect(() => void onboarded(true), [])
   const now = useNow(60_000)
   const byCode = new Map(home.map((h) => [h.code, h]))
+  const members = tiles.filter((t) => t.state === "member")
+  const asks = takeTurns(members.map((t) => (byCode.get(t.code)?.asks ?? []).map((ask) => ({ tile: t, ask }))))
+  const shown = all ? asks : asks.slice(0, ASKS_SHOWN)
   return (
     <main className="start-area home-area">
       <div className="start-drag" />
       <div className="calm">
-        <Waiting tiles={tiles} home={home} most={ASKS_SHOWN} now={now} />
+        {asks.length > 0 && (
+          <section className="calm-sec" aria-label="Waiting on you">
+            <h2 className="calm-head">
+              Waiting on you <span className="num">{asks.length}</span>
+            </h2>
+            <ol className="calm-list">
+              {shown.map(({ tile, ask }) => (
+                <AskRow key={`${tile.code}:${ask.id}`} tile={tile} ask={ask} now={now} />
+              ))}
+            </ol>
+            {asks.length > ASKS_SHOWN && (
+              <button type="button" className="calm-more" onClick={() => setAll(!all)}>
+                {all ? "Show fewer" : `${asks.length - ASKS_SHOWN} more`}
+              </button>
+            )}
+          </section>
+        )}
         {tiles.map((t) => (
           <ChannelPart key={t.code} tile={t} summary={byCode.get(t.code)} now={now} />
         ))}
@@ -162,15 +159,13 @@ function restLine(agents: readonly HomeAgent[]): string {
   return [idle.length ? `${idle.join(", ")} idle` : null, away.length ? `${away.join(", ")} away` : null].filter(Boolean).join(" · ")
 }
 
-export function ChannelPart({ tile, summary, now, most }: { tile: ChannelTile; summary: HomeChannel | undefined; now: number; most?: number }) {
+function ChannelPart({ tile, summary, now }: { tile: ChannelTile; summary: HomeChannel | undefined; now: number }) {
   const { go } = useApp()
   const needs = summary ? summary.asks.length : tile.needsYou
   const open = () => go({ to: "channel", code: tile.code })
   const agents = summary?.agents ?? []
-  const busy = agents.filter((a) => a.state === "working" || a.state === "waiting")
-  const active = most === undefined ? busy : busy.slice(0, most)
-  const more = busy.length - active.length
-  const rest = [more > 0 ? `${more} more working` : null, restLine(agents) || null].filter(Boolean).join(" · ")
+  const active = agents.filter((a) => a.state === "working" || a.state === "waiting")
+  const rest = restLine(agents)
   const state = stateOf(tile, summary)
   const [writing, setWriting] = useState(false)
   const member = tile.state === "member"
