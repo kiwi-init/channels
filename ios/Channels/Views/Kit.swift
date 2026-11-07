@@ -78,34 +78,29 @@ extension View {
         modifier(Outlined(radius: radius, color: color, width: width))
     }
 
-    @ViewBuilder func glass(_ radius: CGFloat) -> some View {
-        if #available(iOS 26.0, *) {
-            self.glassEffect(.regular, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
-        } else {
-            self
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(Tone.glassEdge, lineWidth: 0.5))
-        }
+    func raised(_ radius: CGFloat) -> some View {
+        self
+            .background(Tone.raised, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(Tone.line, lineWidth: 0.5))
     }
 
-    @ViewBuilder func glassCapsule() -> some View {
-        if #available(iOS 26.0, *) {
-            self.glassEffect(.regular.interactive(), in: Capsule())
-        } else {
-            self
-                .background(.ultraThinMaterial, in: Capsule())
-                .overlay(Capsule().strokeBorder(Tone.glassEdge, lineWidth: 0.5))
-        }
+    func grouped() -> some View {
+        self
+            .listStyle(.insetGrouped)
+            .scrollContentBackground(.hidden)
+            .background(Tone.canvas)
     }
 
-    @ViewBuilder func glassCircle() -> some View {
-        if #available(iOS 26.0, *) {
-            self.glassEffect(.regular.interactive(), in: Circle())
-        } else {
-            self
-                .background(.ultraThinMaterial, in: Circle())
-                .overlay(Circle().strokeBorder(Tone.glassEdge, lineWidth: 0.5))
-        }
+    func raisedCapsule() -> some View {
+        self
+            .background(Tone.raised, in: Capsule())
+            .overlay(Capsule().strokeBorder(Tone.line, lineWidth: 0.5))
+    }
+
+    func raisedCircle() -> some View {
+        self
+            .background(Tone.raised, in: Circle())
+            .overlay(Circle().strokeBorder(Tone.line, lineWidth: 0.5))
     }
 }
 
