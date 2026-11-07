@@ -1,6 +1,17 @@
 import { resolve } from "node:path"
 import react from "@vitejs/plugin-react"
 import { build, defineConfig, type Plugin, type UserConfig } from "vite"
+import { slimIcon } from "./src/kit/slim-icons.ts"
+
+function compactIcons(): Plugin {
+  return {
+    name: "compact-icons",
+    transform(code, id) {
+      if (!id.includes("/@hugeicons/core-free-icons/dist/esm/")) return null
+      return { code: slimIcon(code), map: null }
+    },
+  }
+}
 
 const shared: Pick<UserConfig, "resolve"> = {
   resolve: {
@@ -22,7 +33,7 @@ const modFrame = (): Plugin => ({
       configFile: false,
       root: import.meta.dirname,
       logLevel: "warn",
-      plugins: [react()],
+      plugins: [react(), compactIcons()],
       define: { __DEV__: "false", "process.env.NODE_ENV": JSON.stringify("production") },
       resolve: {
         ...shared.resolve,
@@ -39,7 +50,7 @@ const modFrame = (): Plugin => ({
 })
 
 export default defineConfig(({ mode }) => ({
-  plugins: [react(), modFrame()],
+  plugins: [react(), compactIcons(), modFrame()],
   define: { __DEV__: "false", ...(mode === "harness" ? { "import.meta.env.DEV": "true" } : {}) },
   ...shared,
   server: {
