@@ -5,8 +5,7 @@ struct NeedsScreen: View {
     @Environment(AppModel.self) private var model
 
     private func open(_ spot: Spot) {
-        model.tab = .home
-        model.path.append(.place(spot))
+        model.open(.place(spot))
     }
 
     private var rooms: [RoomView] {

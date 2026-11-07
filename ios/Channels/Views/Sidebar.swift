@@ -1,51 +1,5 @@
 import SwiftUI
 
-enum AppTab: Hashable {
-    case home, needs, search, you
-}
-
-struct RootTabs: View {
-    @Environment(AppModel.self) private var model
-
-    var body: some View {
-        TabView(selection: Binding(get: { model.tab }, set: { model.tab = $0 })) {
-            Tab("Home", systemImage: "house", value: AppTab.home) {
-                HomeTab()
-            }
-            Tab("Needs You", systemImage: "tray", value: AppTab.needs) {
-                NavigationStack {
-                    NeedsScreen()
-                        .navigationDestination(for: Route.self) { RouteScreen(route: $0) }
-                }
-            }
-            .badge(model.waiting)
-            Tab(value: AppTab.search, role: .search) {
-                SearchTab()
-            }
-            Tab("You", systemImage: "person.crop.circle", value: AppTab.you) {
-                NavigationStack {
-                    SettingsScreen()
-                }
-            }
-        }
-        .tint(Tone.accent)
-        #if DEBUG
-            .onChange(of: model.channels.first?.code, initial: true) { _, code in
-                guard let code, model.path.isEmpty, let shot = UserDefaults.standard.string(forKey: "shot") else { return }
-                if let text = UserDefaults.standard.string(forKey: "draft") { model.keep(Draft(text: text), code, "main") }
-                switch shot {
-                case "settings": model.tab = .you
-                case "needs": model.tab = .needs
-                case "search": model.tab = .search
-                case "list": break
-                case "board": model.path = [.tasks(code)]
-                default: model.path = [.place(Spot(code: code, place: UserDefaults.standard.string(forKey: "place") ?? "main"))]
-                }
-            }
-        #endif
-    }
-}
-
 struct RouteScreen: View {
     let route: Route
 
@@ -57,60 +11,9 @@ struct RouteScreen: View {
     }
 }
 
-struct HomeTab: View {
-    @Environment(AppModel.self) private var model
-
-    var body: some View {
-        NavigationStack(path: Binding(get: { model.path }, set: { model.path = $0 })) {
-            List {
-                if let unsaved = model.unsaved {
-                    Text(unsaved).foregroundStyle(Tone.alert).listRowBackground(Tone.raised)
-                }
-                if model.channels.isEmpty {
-                    ContentUnavailableView {
-                        Label(model.joining > 0 ? "Waiting to Be Let In" : "No Channels", systemImage: "bubble.left.and.bubble.right")
-                    } description: {
-                        Text(emptyDetail)
-                    } actions: {
-                        if !model.enrolled {
-                            Button("Link Again") { model.relinkAsked = true }
-                        }
-                    }
-                    .listRowBackground(Color.clear)
-                }
-                ForEach(model.channels.sorted { ($0.latest?.at ?? 0) > ($1.latest?.at ?? 0) }, id: \.code) { room in
-                    ChannelSection(room: room)
-                }
-            }
-            .listStyle(.insetGrouped)
-            .scrollContentBackground(.hidden)
-            .background(Tone.canvas)
-            .refreshable { model.nudge() }
-            .navigationTitle("Home")
-            .toolbar {
-                if !model.rows(.unread).isEmpty {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button("Read All") {
-                            withAnimation(Motion.ease) { model.markAllRead() }
-                        }
-                    }
-                }
-            }
-            .navigationDestination(for: Route.self) { RouteScreen(route: $0) }
-        }
-    }
-
-    private var emptyDetail: String {
-        if model.joining > 0 {
-            let channels = model.joining == 1 ? "1 channel" : "\(model.joining) channels"
-            return "Asked to join \(channels) as you. Channels you own let this iPhone in while Channels is open on your computer."
-        }
-        return model.enrolled ? "This iPhone joins the channels your computer had when it approved it." : "Link your Mac again to bring your channels."
-    }
-}
-
 struct ChannelSection: View {
     let room: RoomView
+    var titled = true
     @Environment(AppModel.self) private var model
 
     private var directs: [MemberView] {
@@ -128,7 +31,9 @@ struct ChannelSection: View {
 
     var body: some View {
         Section {
-            NavigationLink(value: Route.place(Spot(code: room.code))) {
+            Button {
+                model.open(.place(Spot(code: room.code)))
+            } label: {
                 PlaceLabel(title: "general", detail: line(room.placeView("main")?.last ?? room.last), unread: model.unread(Spot(code: room.code))) {
                     Image(systemName: "number").foregroundStyle(Tone.ink2)
                 }
@@ -136,28 +41,38 @@ struct ChannelSection: View {
             .swipeActions(edge: .leading) { readToggle(Spot(code: room.code)) }
             ForEach(directs) { member in
                 let spot = Spot(code: room.code, place: room.dmKey(with: member.name))
-                NavigationLink(value: Route.place(spot)) {
+                Button {
+                    model.open(.place(spot))
+                } label: {
                     PlaceLabel(title: member.display, detail: status(member, spot), unread: model.unread(spot)) {
                         Face(name: member.name, member: member, size: 28)
                     }
                 }
                 .swipeActions(edge: .leading) { readToggle(spot) }
             }
-            NavigationLink(value: Route.tasks(room.code)) {
+            Button {
+                model.open(.tasks(room.code))
+            } label: {
                 Label("Tasks", systemImage: "checklist")
                     .foregroundStyle(Tone.ink)
                     .badge(open)
             }
         } header: {
-            HStack(spacing: 8) {
-                ChannelAvatar(room: room, size: 20)
-                Text(room.title)
-                if room.working > 0 {
-                    Text("· \(room.working) working").foregroundStyle(Tone.ink3)
-                }
+            if titled {
+                header
             }
         }
         .listRowBackground(Tone.raised)
+    }
+
+    private var header: some View {
+        HStack(spacing: 8) {
+            ChannelAvatar(room: room, size: 20)
+            Text(room.title)
+            if room.working > 0 {
+                Text("· \(room.working) working").foregroundStyle(Tone.ink3)
+            }
+        }
     }
 
     @ViewBuilder private func readToggle(_ spot: Spot) -> some View {
@@ -212,10 +127,10 @@ struct PlaceLabel<Icon: View>: View {
     }
 }
 
-struct SearchTab: View {
+struct SearchScreen: View {
     @Environment(AppModel.self) private var model
     @State private var query = ""
-    @State private var path: [Route] = []
+    @Environment(\.dismiss) private var dismiss
 
     private var words: String { query.trimmingCharacters(in: .whitespaces).lowercased() }
 
@@ -244,14 +159,21 @@ struct SearchTab: View {
         .map { $0 }
     }
 
+    private func go(_ spot: Spot) {
+        dismiss()
+        model.open(.place(spot))
+    }
+
     var body: some View {
-        NavigationStack(path: $path) {
+        NavigationStack {
             List {
                 if !places.isEmpty {
                     Section("Conversations") {
                         ForEach(places, id: \.0) { found in
                             let (room, place) = (found.1, found.2)
-                            NavigationLink(value: Route.place(Spot(code: room.code, place: place.key))) {
+                            Button {
+                                go(Spot(code: room.code, place: place.key))
+                            } label: {
                                 Label(
                                     place.kind == "main" ? "general · \(room.title)" : place.title,
                                     systemImage: place.kind == "main" ? "number" : place.kind == "task" ? "checklist" : "person")
@@ -264,7 +186,9 @@ struct SearchTab: View {
                     Section("Messages") {
                         ForEach(hits, id: \.id) { hit in
                             let (room, key, message) = (hit.room, hit.key, hit.message)
-                            NavigationLink(value: Route.place(Spot(code: room.code, place: key))) {
+                            Button {
+                                go(Spot(code: room.code, place: key))
+                            } label: {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("\(message.mine ? "You" : room.display(message.from)) · \(When.list(message.date))")
                                         .font(.subheadline).foregroundStyle(Tone.ink3)
@@ -285,8 +209,13 @@ struct SearchTab: View {
                 }
             }
             .navigationTitle("Search")
-            .searchable(text: $query, prompt: "Conversations and messages")
-            .navigationDestination(for: Route.self) { RouteScreen(route: $0) }
+            .navigationBarTitleDisplayMode(.inline)
+            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Conversations and messages")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
         }
     }
 }
