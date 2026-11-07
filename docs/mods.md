@@ -64,6 +64,7 @@ Open a channel, press ⌘K and pick **Standup Notes** under Mods. Run `kiwi mod 
 | `shell` | The app versions it works with, like `^3.6`. An app it doesn't fit leaves it off and says why. |
 | `needs` | What it asks you for: `panel`, `tab`, `command`, `terminal`, `github`, `render:<kind>`, and `net:<host>` for each web host it talks to |
 | `icon` | Optional: an `.svg` or `.png` in its folder, up to 64 KB. The app shows it as a picture, so an SVG's scripts never run. Without one, the mod gets its first letter. |
+| `description` | Optional: one line, up to 200 characters, on what it does. `kiwi mod publish` needs it, and **From Kiwi** shows it. |
 | `author` | Optional: who made it, up to 100 characters |
 | `settings` | Optional: what the person fills in for it, like a token. See [Settings](#settings) |
 | `skills` | Optional: skills it gives every agent. See [Skills](#skills) |
@@ -272,7 +273,19 @@ A mod is a git repo. Push yours anywhere and anyone can add it:
 | `kiwi mod remove <name> [--force]` | Delete it. A link loses just the link; one with changes not in its source needs `--force`. |
 | `kiwi mod dev <name>` | Create, link or open a mod and rebuild it on every save |
 | `kiwi mod check [name]` | Check `mod.json`, type-check against `@kiwi/mod` and bundle once, then list each problem with its file and line. Without a name, it checks the mod in this folder. |
+| `kiwi mod publish [name]` | Check it, then open the pull request that puts it in **From Kiwi**. Run it again for a new version. |
 
 `add` also takes an `https://` or ssh address or a full path, and `#ref` pins a branch, tag or commit. A mod added at a branch follows it on `update`; one pinned at a tag or a commit stays there.
 
 A repo can hold several mods, one per folder: `kiwi mod add github.com/kiwi-init/mods/anatomy` takes just the `anatomy` folder. `update` follows that folder alone.
+
+### Putting a mod in From Kiwi
+
+`kiwi mod publish standup-notes` (or `kiwi mod publish` in the mod's folder) opens a pull request to [kiwi-init/mods](https://github.com/kiwi-init/mods):
+
+1. It runs `kiwi mod check`, and stops on any problem.
+2. It commits the mod's folder: every file except dotfiles, `node_modules`, `kiwi-mod.d.ts`, and a `tsconfig.json` or `package.json` still as the starter made them. A link stops it, and so do more than 200 files, 1 MB in one file or 8 MB in all.
+3. It adds the mod's entry to `mods.json` and pins it there: that commit, the folder's hash and its files. The entry also carries the `description`, what the mod asks for, its icon and its author (the `author` from `mod.json`, or your GitHub login).
+4. It opens the pull request from your fork, or from a branch on kiwi-init/mods if you can push there.
+
+It signs in to GitHub as `gh` does (`gh auth login`), or with `GH_TOKEN`. We review the code at the pinned commit. Once the pull request is merged, **Install** in **From Kiwi** fetches exactly that copy and refuses any other. Running it again moves the same pull request, or opens a new one after a merge.
