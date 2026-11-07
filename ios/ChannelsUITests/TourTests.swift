@@ -12,7 +12,7 @@ final class TourTests: XCTestCase {
         app.launchEnvironment["CHANNELS_FIXTURE"] = try String(contentsOf: url, encoding: .utf8)
         app.launchArguments = ["-shot", "tour"]
         app.launch()
-        try await Task.sleep(for: .seconds(3))
+        try await Task.sleep(for: .seconds(6))
         snap("open")
 
         app.swipeUp()
@@ -38,26 +38,18 @@ final class TourTests: XCTestCase {
             drag(fromX: 0.9, toX: 0.1)
         }
 
-        tapFirst("Channels")
-        snap("menu button")
+        drag(fromX: 0.25, toX: 0.9)
         tapFirst("Needs You")
         snap("needs")
-        if app.cells.firstMatch.waitForExistence(timeout: 2) {
-            app.cells.firstMatch.tap()
-            try await Task.sleep(for: .milliseconds(600))
-            snap("need form")
-        }
-
-        tapFirst("Channels")
+        tapFirst("Run a command")
+        snap("need form")
+        tapFirst("Needs You")
         tapFirst("channels-dev")
         snap("channel sidebar")
         tapFirst("Tasks")
         snap("tasks")
-        if app.cells.firstMatch.waitForExistence(timeout: 2) {
-            app.cells.firstMatch.tap()
-            try await Task.sleep(for: .milliseconds(600))
-            snap("task thread")
-        }
+        tapFirst("Composer empties after Send, every time")
+        snap("task thread")
 
         drag(fromX: 0.85, toX: 0.15)
         snap("members")
@@ -71,11 +63,11 @@ final class TourTests: XCTestCase {
             app.tap()
         }
 
-        tapFirst("Channels")
+        drag(fromX: 0.25, toX: 0.9)
         tapFirst("Search")
         snap("search")
-        app.swipeDown()
-        tapFirst("Channels")
+        tapFirst("Done")
+        drag(fromX: 0.25, toX: 0.9)
         tapFirst("You")
         snap("you")
     }
@@ -102,7 +94,7 @@ final class TourTests: XCTestCase {
             app.launchEnvironment["CHANNELS_FIXTURE"] = try String(contentsOf: url, encoding: .utf8)
             app.launchArguments = ["-shot", shot]
             app.launch()
-            try await Task.sleep(for: .seconds(3))
+            try await Task.sleep(for: .seconds(6))
             snap("shot \(shot)")
             app.terminate()
         }
@@ -110,9 +102,10 @@ final class TourTests: XCTestCase {
 
     @MainActor
     private func tapFirst(_ label: String) {
-        let match = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@ OR label BEGINSWITH %@", label, label + " ")).firstMatch
-        if match.waitForExistence(timeout: 2) && match.isHittable {
-            match.tap()
+        let matches = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@ OR label BEGINSWITH %@", label, label + " "))
+        _ = matches.firstMatch.waitForExistence(timeout: 2)
+        if let hit = matches.allElementsBoundByIndex.first(where: { $0.isHittable }) {
+            hit.tap()
         } else {
             print("TOUR couldn't tap \(label)")
         }
