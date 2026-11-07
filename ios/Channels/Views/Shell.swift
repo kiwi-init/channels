@@ -88,8 +88,9 @@ struct Shell: View {
                     .overlay {
                         Tone.rail.opacity(0.6 * min(1, abs(x) / 120)).allowsHitTesting(false).ignoresSafeArea()
                     }
-                    .clipShape(RoundedRectangle(cornerRadius: x == 0 ? 0 : 24, style: .continuous))
-                    .shadow(color: .black.opacity(x == 0 ? 0 : 0.25), radius: 18)
+                    .background {
+                        Rectangle().fill(Tone.canvas).shadow(color: .black.opacity(x == 0 ? 0 : 0.25), radius: 18).ignoresSafeArea()
+                    }
                     .offset(x: x)
                     .overlay {
                         if model.drawer != .closed {
