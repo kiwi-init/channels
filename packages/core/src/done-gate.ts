@@ -50,14 +50,28 @@ function heldAtRun(view: GateView, t: Task, id: string, started: number): string
   return missing;
 }
 
-export const RUN_CLOSES = "a person or the lead to close it with a reason: Kiwi can't verify the start time a runner reports, so a run task doesn't land by itself";
+export const runStarts = (id: string): string =>
+  `GitHub to start run ${id} (a workflow run whose run-name is ${id}), or a person or the lead to close it with a reason: Kiwi can't verify a start time a runner reports`;
+
+const runPost = (id: string): string => `a passed post check at run ${id}, answered after it started`;
+
+export const runBlind = (id: string): string =>
+  `a person or the lead to close it with a reason: Kiwi doesn't hold every GitHub run since the task was created, so it can't rule out an earlier run ${id}`;
+
+function confirmedAfter(view: GateView, t: Task, id: string, started: number): boolean {
+  return [...view.checks.values()].some((c) => c.phase === "post" && c.holds.includes(t.id) && atRun(c, id) && checkPassed(c) && c.answer?.at !== undefined && c.answer.at >= started);
+}
 
 function runGate(view: GateView, t: Task, landing: boolean): DoneGate | undefined {
   const run = t.run;
   if (!run) return landing ? { kind: "waiting", why: `its run id: kiwi task proof T${t.id} --run ID` } : undefined;
-  const missing = run.reportedStart === undefined ? [] : heldAtRun(view, t, run.id, run.reportedStart);
+  const starts = [run.start?.started, run.reportedStart].filter((x) => x !== undefined);
+  const missing = [...new Set(starts.flatMap((started) => heldAtRun(view, t, run.id, started)))];
   if (missing.length) return { kind: "bypassed", missing };
-  return landing ? { kind: "waiting", why: RUN_CLOSES } : undefined;
+  if (!landing) return undefined;
+  if (run.blind) return { kind: "waiting", why: runBlind(run.id) };
+  if (!run.start) return { kind: "waiting", why: runStarts(run.id) };
+  return confirmedAfter(view, t, run.id, run.start.started) ? { kind: "landed", artifact: { kind: "run", id: run.id } } : { kind: "waiting", why: runPost(run.id) };
 }
 
 const PLAIN = /^(\d+)\.(\d+)\.(\d+)$/;
