@@ -1,8 +1,12 @@
 import { describe, expect, test } from "bun:test"
 import { readdirSync, readFileSync } from "node:fs"
-import { join } from "node:path"
+import { dirname, join } from "node:path"
+import { createElement } from "react"
+import { renderToStaticMarkup } from "react-dom/server"
+import { GlyphIcon, type Glyph } from "~/kit/icons"
 import { LOGOS } from "~/kit/logos"
 import { harnessOf } from "~/live/map"
+import { slimIcon } from "~/kit/slim-icons"
 
 const ASSETS = join(import.meta.dir, "../../../assets/harness")
 
@@ -45,4 +49,18 @@ describe("each harness an agent runs shows its own mark", () => {
     expect(harnessOf("something-new")).toBe("other")
     expect(harnessOf(undefined)).toBeUndefined()
   })
+})
+
+test("an icon draws the same after the build drops its round-stroke attributes", () => {
+  const dir = dirname(Bun.resolveSync("@hugeicons/core-free-icons", import.meta.dir))
+  const glyphOf = (code: string) => new Function(code.replace(/^export .*$/m, "").replace(/^const \w+ = /m, "return "))() as Glyph
+  const drawn = (code: string) => renderToStaticMarkup(createElement(GlyphIcon, { glyph: glyphOf(code) }))
+  let slimmed = 0
+  for (const file of readdirSync(dir).filter((f) => f.endsWith("Icon.js"))) {
+    const code = readFileSync(join(dir, file), "utf8")
+    const slim = slimIcon(code)
+    if (slim.length < code.length) slimmed++
+    expect([file, drawn(slim)]).toEqual([file, drawn(code)])
+  }
+  expect(slimmed).toBeGreaterThan(1000)
 })
