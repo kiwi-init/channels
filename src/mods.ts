@@ -439,42 +439,76 @@ const STARTER_ICON = [
   "",
 ].join("\n");
 
-function starter(dir: string, name: string): void {
+export const MOD_STARTS = ["panel", "command", "tab", "figure"] as const;
+
+export type ModStart = (typeof MOD_STARTS)[number];
+
+export function figureKind(name: string): string {
+  const word = name.replace(/[^a-z0-9]/g, "");
+  return (/^[a-z]/.test(word) ? word : `m${word}`).slice(0, 32);
+}
+
+function needsOf(name: string, start: ModStart): string[] {
+  if (start === "figure") return [`render:${figureKind(name)}`];
+  return [start];
+}
+
+const listView = (title: string): string[] => [
+  "function View() {",
+  "  return (",
+  `    <List searchBarPlaceholder=${JSON.stringify(`Search ${title}`)}>`,
+  `      <List.Section title=${JSON.stringify(title)}>`,
+  "        <List.Item",
+  '          title="Edit index.tsx and save"',
+  '          subtitle="Channels reloads it"',
+  '          icon="spec"',
+  "          actions={",
+  "            <Actions>",
+  `              <Action title="Say hi" onAction={() => Toast.show({ title: ${JSON.stringify(`Hi from ${title}`)} })} />`,
+  "            </Actions>",
+  "          }",
+  "        />",
+  "      </List.Section>",
+  "    </List>",
+  "  )",
+  "}",
+  "",
+];
+
+function entryOf(name: string, start: ModStart): string[] {
   const title = titleOf(name);
-  writeFileSync(join(dir, "mod.json"), json({ name, version: "0.1.0", shell: STARTER_SHELL, needs: ["panel"], icon: "icon.svg" }));
+  if (start === "command")
+    return [
+      'import { command, Toast } from "@kiwi/mod"',
+      "",
+      "command({",
+      '  id: "say-hi",',
+      `  title: ${JSON.stringify(`${title}: say hi`)},`,
+      `  run: () => Toast.show({ title: ${JSON.stringify(`Hi from ${title}`)}, message: "Edit index.tsx and save: Channels reloads it" }),`,
+      "})",
+      "",
+    ];
+  if (start === "figure")
+    return [
+      'import { render } from "@kiwi/mod"',
+      "",
+      `render(${JSON.stringify(figureKind(name))}, ({ html }) => {`,
+      '  const page = new DOMParser().parseFromString(html, "text/html")',
+      "  document.body.replaceWith(document.adoptNode(page.body))",
+      "})",
+      "",
+    ];
+  return [`import { Action, Actions, List, ${start}, Toast } from "@kiwi/mod"`, "", ...listView(title), `${start}({ title: ${JSON.stringify(title)}, render: View })`, ""];
+}
+
+function starter(dir: string, name: string, start: ModStart = "panel"): void {
+  writeFileSync(join(dir, "mod.json"), json({ name, version: "0.1.0", shell: STARTER_SHELL, needs: needsOf(name, start), icon: "icon.svg" }));
   writeFileSync(join(dir, "icon.svg"), STARTER_ICON);
   writeFileSync(join(dir, KIT_TYPES_FILE), KIT_TYPES);
   writeFileSync(join(dir, "tsconfig.json"), SCAFFOLD["tsconfig.json"]);
   writeFileSync(join(dir, "package.json"), SCAFFOLD["package.json"]);
   writeFileSync(join(dir, ".gitignore"), "node_modules\n");
-  writeFileSync(
-    join(dir, "index.tsx"),
-    [
-      'import { Action, Actions, List, panel, Toast } from "@kiwi/mod"',
-      "",
-      "function View() {",
-      "  return (",
-      `    <List searchBarPlaceholder=${JSON.stringify(`Search ${title}`)}>`,
-      `      <List.Section title=${JSON.stringify(title)}>`,
-      "        <List.Item",
-      '          title="Edit index.tsx and save"',
-      '          subtitle="Channels reloads it"',
-      '          icon="spec"',
-      "          actions={",
-      "            <Actions>",
-      `              <Action title="Say hi" onAction={() => Toast.show({ title: ${JSON.stringify(`Hi from ${title}`)} })} />`,
-      "            </Actions>",
-      "          }",
-      "        />",
-      "      </List.Section>",
-      "    </List>",
-      "  )",
-      "}",
-      "",
-      `panel({ title: ${JSON.stringify(title)}, render: View })`,
-      "",
-    ].join("\n"),
-  );
+  writeFileSync(join(dir, "index.tsx"), entryOf(name, start).join("\n"));
 }
 
 export interface DevStart {
@@ -491,9 +525,30 @@ function realOf(at: string, name: string): string {
   }
 }
 
-export function startDev(home: string, name: string, cwd: string): DevStart {
+function checkNewName(name: string): void {
   if (!MOD_NAME.test(name)) throw new ModError(`"${name}" isn't a mod name: use lowercase letters, digits and dashes`);
   if (isAppPrefix(name)) throw new ModError(`"${name}" is a name Channels keeps for its own commands: pick another`);
+}
+
+export interface ModCreated {
+  name: string;
+  dir: string;
+  needs: string[];
+}
+
+export function createMod(home: string, name: string, start: ModStart): ModCreated {
+  checkNewName(name);
+  if (!MOD_STARTS.includes(start)) throw new ModError(`"${String(start)}" isn't a start: pick ${MOD_STARTS.join(", ")}`);
+  const at = join(modsDir(home), name);
+  if (lstatSync(at, { throwIfNoEntry: false })) throw new ModError(`there's already a mod named ${name}: pick another name`);
+  mkdirSync(modsDir(home), { recursive: true });
+  mkdirSync(at);
+  starter(at, name, start);
+  return { name, dir: at, needs: needsOf(name, start) };
+}
+
+export function startDev(home: string, name: string, cwd: string): DevStart {
+  checkNewName(name);
   const at = join(modsDir(home), name);
   if (lstatSync(at, { throwIfNoEntry: false })) {
     const dir = realOf(at, name);

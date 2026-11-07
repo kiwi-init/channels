@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode 
 
 import { Avatar, cx, Dot, STATUS_WORDS } from "~/kit/bits"
 import { useDebugOptions } from "~/kit/debug"
-import { Moon02Icon, Sun03Icon } from "@hugeicons/core-free-icons"
+import { Moon02Icon, PuzzleIcon, Sun03Icon } from "@hugeicons/core-free-icons"
 import { GlyphIcon, Icon, type Glyph, type IconName } from "~/kit/icons"
 import { docOf } from "~/chat/doc-of"
 import type { App, Channel, Task, TaskStatus, Where } from "~/model"
@@ -29,6 +29,7 @@ const TONE: Record<TaskStatus, string> = { todo: "", doing: "tone-doing", review
 const LOOKS: Record<string, { icon: IconName | Glyph; words: string[]; late?: true }> = {
   "app.new-channel": { icon: "plus", words: ["create", "start"] },
   "app.join": { icon: "link", words: ["invite", "link"] },
+  "app.new-mod": { icon: PuzzleIcon, words: ["make", "create", "extension", "plugin", "panel", "command"] },
   "app.computers": { icon: "computer", words: ["phones", "devices", "machines"] },
   "app.settings": { icon: "gear", words: ["preferences", "account"] },
   "app.calm": { icon: Moon02Icon, words: ["idle"] },

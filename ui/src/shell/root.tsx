@@ -23,6 +23,7 @@ const NewChannelDialog = later(() => import("~/start/new-channel").then((m) => m
 const EnrollDialog = later(() => import("~/settings/enroll").then((m) => m.EnrollDialog))
 const JoinDialog = later(() => import("~/start/join").then((m) => m.JoinDialog))
 const NewRoomDialog = later(() => import("~/shell/new-room").then((m) => m.NewRoomDialog))
+const NewModDialog = later(() => import("~/mods/new-mod").then((m) => m.NewModDialog))
 const Welcome = later(() => import("~/start/welcome").then((m) => m.Welcome))
 const AppCommands = later(() => import("~/commands/app-more").then((m) => m.AppCommands))
 const Palette = later(() => import("~/palette/palette").then((m) => m.Palette))
@@ -80,6 +81,11 @@ export function Root({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => voi
         {nav.dialog === "join" && (
           <Suspense fallback={null}>
             <JoinDialog />
+          </Suspense>
+        )}
+        {nav.dialog === "new-mod" && (
+          <Suspense fallback={null}>
+            <NewModDialog />
           </Suspense>
         )}
         {app.account?.enrollAsk && (

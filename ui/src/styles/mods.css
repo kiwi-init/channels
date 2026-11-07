@@ -251,6 +251,25 @@ img.mod-icon {
   border-radius: var(--r-ctl);
 }
 
+.mod-new {
+  display: grid;
+  gap: 16px;
+}
+
+.mod-new-start {
+  justify-self: start;
+}
+
+.mod-new-note {
+  margin: 0;
+  color: var(--ink-2);
+  font: var(--t-meta) / 1.5 var(--ui);
+}
+
+.mod-new-note.is-error {
+  color: var(--alert);
+}
+
 .rail-mods {
   position: relative;
   order: -1;

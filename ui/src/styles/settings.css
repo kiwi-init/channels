@@ -45,6 +45,17 @@ html .set-body {
   margin-bottom: 24px;
 }
 
+.set-head.has-action {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 16px;
+}
+
+.set-head.has-action .set-lede {
+  grid-column: 1 / -1;
+}
+
 .set-title {
   font: 600 var(--t-display) / 1.2 var(--ui);
   letter-spacing: -0.02em;

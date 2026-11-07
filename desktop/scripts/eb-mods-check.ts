@@ -704,6 +704,79 @@ async function fromKiwi(d: Driver): Promise<void> {
   check(!(await heard(d)).some((m) => m["tamperedRan"]), "the tampered code never ran");
 }
 
+async function newMod(d: Driver, palette: () => Promise<boolean>, agent: boolean): Promise<void> {
+  const made = join(root, ".kiwi", "mods", "made-here");
+  const dialog = 'dialog[open][aria-label="New mod"]';
+  await step("the Mods page", 10_000, () =>
+    d.evaluate(
+      () => (document.querySelector('.rail-mods[aria-current="page"]') && document.querySelector(".set-head-act") ? true : (document.querySelector<HTMLElement>(".rail-mods")?.click(), false)),
+      null,
+      2_000,
+    ),
+  );
+  await step("New mod, on the Mods page", 10_000, () => d.evaluate(clickText, { selector: ".set-head-act button", text: "New mod" }, 2_000));
+  await step("its name", 10_000, () => d.evaluate(fillIn, { selector: `${dialog} input.input`, value: "made-here" }, 2_000));
+  await later(300);
+  await shot("new-mod-make");
+  await step("Make it", 10_000, () => d.evaluate(clickText, { selector: `${dialog} .modal-foot button`, text: "Make it" }, 2_000));
+  const on = await until("made-here on", 30_000, async () => ((await modsNow(d)).find((m) => m.name === "made-here")?.state === "on" ? true : null)).catch(() => null);
+  const said = await until("its toast", 10_000, () =>
+    d.evaluate(() => [...document.querySelectorAll(".toasts .toast")].map((t) => t.textContent ?? "").find((t) => t.includes("made-here is on")) ?? null, null, 2_000),
+  ).catch(() => null);
+  console.log(`made-here: ${JSON.stringify(said)}`);
+  check(!!on && existsSync(join(made, "index.tsx")), "New mod makes a mod in ~/.kiwi/mods and turns it on, with no terminal");
+  check(!!said?.includes("each save reloads it"), "it says where its folder opened");
+  await d.evaluate(() => (document.querySelector<HTMLElement>(".rail-mods")?.click(), true), null, 2_000);
+  await step("the channel again", 10_000, () => d.evaluate(() => !!document.querySelector(".chan"), null, 2_000));
+  const titles = () =>
+    d.evaluate(
+      () =>
+        [...document.querySelectorAll(".panel .panel-title")].map((p) =>
+          [...p.childNodes]
+            .filter((n) => n.nodeType === Node.TEXT_NODE)
+            .map((n) => n.textContent ?? "")
+            .join("")
+            .trim(),
+        ),
+      null,
+      2_000,
+    );
+  const panelIs = async (title: string) => (await titles()).includes(title);
+  await until("its panel, from ⌘K", 30_000, async () => {
+    if (await panelIs("Made Here")) return true;
+    await palette();
+    await d.evaluate(fillIn, { selector: ".palette-input", value: "Made Here" }, 2_000).catch(() => false);
+    await d.evaluate(clickText, { selector: ".palette-item", text: "Made Here" }, 2_000).catch(() => false);
+    return null;
+  }).catch(() => null);
+  console.log(`made-here's panel: ${JSON.stringify(await titles().catch((x: unknown) => String(x)))}`);
+  check(await panelIs("Made Here"), "its panel opens from ⌘K");
+  writeFileSync(join(made, "index.tsx"), readFileSync(join(made, "index.tsx"), "utf8").replace('panel({ title: "Made Here"', 'panel({ title: "Made Here, saved"'));
+  const saved = await until("the saved title", 30_000, async () => ((await panelIs("Made Here, saved")) ? true : null)).catch(() => null);
+  check(!!saved, "a save to its index.tsx reloads it in the app");
+  await shot("new-mod-panel");
+  if (!agent) return;
+  await until("New mod, from ⌘K", 20_000, async () => {
+    if (await d.evaluate((sel) => !!document.querySelector(sel), dialog, 2_000)) return true;
+    await palette();
+    await d.evaluate(fillIn, { selector: ".palette-input", value: "New mod" }, 2_000).catch(() => false);
+    await d.evaluate(clickText, { selector: ".palette-item", text: "New mod" }, 2_000).catch(() => false);
+    return null;
+  });
+  await step("Ask an agent", 10_000, () => d.evaluate(clickText, { selector: `${dialog} .modal-tabs button`, text: "Ask an agent" }, 2_000));
+  await step("what it should do", 10_000, () => d.evaluate(fillIn, { selector: `${dialog} textarea`, value: "A panel that counts my open tasks" }, 2_000));
+  await later(300);
+  await shot("new-mod-ask");
+  await step("Ask", 10_000, () => d.evaluate(clickText, { selector: `${dialog} .modal-foot button`, text: "Ask" }, 2_000));
+  const asked = await until("the ask in the agent's thread", 20_000, () =>
+    d.evaluate(() => [...document.querySelectorAll(".main article.msg")].some((m) => (m.textContent ?? "").includes("Make me a mod: A panel that counts my open tasks")) || null, null, 2_000),
+  ).catch(() => null);
+  const where = await d.evaluate(() => [...document.querySelectorAll(".toasts .toast")].map((t) => t.textContent ?? "").find((t) => t.startsWith("Sent to")) ?? null, null, 2_000).catch(() => null);
+  console.log(`the ask: ${JSON.stringify(where)}`);
+  check(!!asked, "Ask an agent posts the ask to an agent in this channel, and opens that thread");
+  await shot("new-mod-asked");
+}
+
 const confirmIt = (action: string): boolean => {
   const b = [...document.querySelectorAll<HTMLButtonElement>("dialog[open] .modal-foot button")].find((x) => (x.textContent ?? "").trim() === action);
   b?.click();
@@ -1206,6 +1279,7 @@ try {
   check(!!back, "the page goes back to the Mods list, without its row");
   await fromKiwi(d);
   await posts(d);
+  await newMod(d, palette, process.platform === "darwin" || !!desk);
   d.close();
   await stop(app);
   writeFileSync(join(root, ".kiwi", "mods", ".safe-mode"), "");
