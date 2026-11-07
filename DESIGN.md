@@ -509,12 +509,11 @@ in text.
 
 ## 14. The iPhone app
 
-The native app in `ios/` (SwiftUI) is laid out like Slack or Discord on iPhone and built only
-from stock SwiftUI (owner, 11-07 #187: "no app on iphone uses this paradigms"; #196): a tab
-bar, large titles, `List` rows, the system back button, `.searchable`, swipe actions, badges.
-It carries the desktop's structure (#160): channels, then each channel's rooms, people, agents
-and tasks. The goal is that a VPS and an iPhone are enough (#165), so whatever the sidebar can
-do, the phone should reach. Its look is the desktop's: §3's tokens on stock controls.
+The native app in `ios/` (SwiftUI) is Discord's shell around the Claude Code app's sessions
+(owner, 11-07 #230), built from stock SwiftUI controls (#187). It carries the desktop's
+structure (#160): channels, then each channel's rooms, people, agents and tasks. The goal is
+that a VPS and an iPhone are enough (#165), so whatever the sidebar can do, the phone should
+reach. Its look is the desktop's: §3's tokens on stock controls.
 
 - **Every place in the channel.** Rooms, direct threads (with people, with agents, between
   others) and task threads all open on the phone, each as one conversation screen.
@@ -528,18 +527,20 @@ do, the phone should reach. Its look is the desktop's: §3's tokens on stock con
   harness as a top-left badge, drawn in the member colour (`c-*`) when it has one; a person is
   one letter in a circle, in their colour on an 18% wash of it. A channel's face is the desktop rail's:
   its picture, else its title's first letter.
-- **Tabs: Home, Needs You, Search, You.** Each tab keeps its own navigation stack.
-- **Home** is one inset-grouped `List` titled "Home", a section per channel (newest first,
-  headed by the channel's face, name and "· 2 working"): #general, then a direct thread with
-  every member (the lead first, then who is working, then the latest), then Tasks with its
-  open count. A row is the place's face, its name (semibold when unread), one quiet line (the
-  last message, or for a working agent its task) and an unread dot. Swipe for Read/Unread;
-  "Read All" in the bar when anything is unread.
-- **Needs You** lists what waits on you across channels, answered in place (Allow once, Deny,
-  Approve, Let in, an answer); its tab carries the count as a badge.
-- **Search** is `.searchable` over every conversation's name and the loaded messages.
-- **You** is Settings with a large title.
-- **Tasks** (from Home): Working, In review, To do, Done; a task opens its thread.
+- **The shell.** It opens on your last conversation, full screen. Swipe right (or tap the
+  menu button, which wears a dot when something elsewhere is unread or waits on you) and the
+  conversation slides aside to show the rail and the sidebar; swipe left for the members.
+  Horizontal swipes belong to the shell, so a conversation has none of its own.
+- **The rail** (72pt): Needs You on top (an inbox, `decide` when anything waits, with its
+  count), then each channel's face with a white pill for unread or the one you're on and an
+  `alert` count of what waits there; Search and You at the bottom, as sheets.
+- **The sidebar** is the picked channel's stock list: #general, a direct thread with every
+  member (lead first, then who works, then the latest) and Tasks with its open count. A tap
+  opens it in front and closes the drawer.
+- **Needs You** in the sidebar lists what waits on you across channels; a tap opens it.
+- **Members** (from the right): the lead, who works and on what, everyone else; a tap writes
+  to them.
+- **Tasks** (from the sidebar): Working, In review, To do, Done; a task opens its thread.
 - **A conversation is one screen.** Header: a round back button (a blue dot when another
   channel is unread; hold it and slide for Previous, Needs You, Unread, Recent across
   channels), the centred name pill ("2 working · 1 needs you", "working on T8",

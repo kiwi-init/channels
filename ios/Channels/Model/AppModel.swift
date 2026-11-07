@@ -46,7 +46,9 @@ final class AppModel {
     var linking: Linking = .idle
     var relinkAsked = false
     var path: [Route] = []
-    var tab: AppTab = .home
+    var showing: Route?
+    var drawer: Drawer = .closed
+    var pane: Pane = .needs
     var enrolled = false
     var joining = 0
     var unsaved: String?

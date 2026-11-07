@@ -4,7 +4,6 @@ import UIKit
 struct ConversationScreen: View {
     @Environment(AppModel.self) private var model
     @State private var spot: Spot
-    @State private var details = ConversationScreen.opensDetails
     @State private var replyTo: MessageView?
     @State private var answering: AskView?
     @State private var sendingBack: ReviewView?
@@ -14,14 +13,6 @@ struct ConversationScreen: View {
 
     init(start: Spot) {
         _spot = State(initialValue: start)
-    }
-
-    private static var opensDetails: Bool {
-        #if DEBUG
-            UserDefaults.standard.string(forKey: "shot") == "tasks"
-        #else
-            false
-        #endif
     }
 
     var body: some View {
@@ -51,18 +42,12 @@ struct ConversationScreen: View {
                 .toolbar {
                     ToolbarItem(placement: .principal) {
                         Button {
-                            details = true
+                            model.path.append(.details(room.code, spot.place))
                         } label: {
                             TitlePill(room: room, place: room.placeView(spot.place), fresh: false, key: spot.place)
                         }
                         .buttonStyle(.plain)
                         .accessibilityHint("Shows the details")
-                    }
-                }
-                .navigationDestination(isPresented: $details) {
-                    DetailsScreen(code: room.code, current: spot.place) { key in
-                        details = false
-                        switchTo(Spot(code: room.code, place: key))
                     }
                 }
                 .onAppear(perform: seen)
@@ -104,14 +89,6 @@ struct ConversationScreen: View {
 
     private func seen() {
         model.markRead(spot)
-    }
-
-    private func switchTo(_ next: Spot) {
-        guard next != spot else { return }
-        replyTo = nil
-        answering = nil
-        sendingBack = nil
-        spot = next
     }
 }
 
@@ -218,10 +195,12 @@ struct ChannelAvatar: View {
             if room.icon?.kind == "image", let picture = Icons.picture(room) {
                 Image(uiImage: picture).resizable().scaledToFill().background(Tone.wash2)
             } else {
+                let tint = Tone.member(Palette.tint(for: room.code))
                 Text(room.title.prefix(1).uppercased())
                     .font(.system(size: size * 0.42, weight: .semibold))
-                    .foregroundStyle(Tone.ink)
+                    .foregroundStyle(tint)
                     .frame(width: size, height: size)
+                    .background(tint.opacity(0.18))
                     .background(Tone.raised)
             }
         }

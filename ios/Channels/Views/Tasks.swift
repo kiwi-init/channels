@@ -3,6 +3,7 @@ import SwiftUI
 enum Route: Hashable {
     case place(Spot)
     case tasks(String)
+    case details(String, String)
 }
 
 struct TasksScreen: View {
@@ -16,26 +17,27 @@ struct TasksScreen: View {
         let tasks = room?.tasks.filter { !$0.archived } ?? []
         List {
             if tasks.isEmpty {
-                Text("No tasks yet").type(.ui).foregroundStyle(Tone.ink3).listRowBackground(Tone.raised)
+                Text("No tasks yet").type(.ui).foregroundStyle(Tone.ink3).sideRow(on: false)
             }
             ForEach(Self.groups, id: \.state) { group in
                 let shown = tasks.filter { $0.state == group.state }.prefix(group.state == "done" ? 20 : 200)
                 if !shown.isEmpty {
-                    Section(group.title) {
-                        ForEach(Array(shown)) { task in
-                            Button {
-                                model.path.append(.place(Spot(code: code, place: "task:\(task.id)")))
-                            } label: {
-                                TaskRow(task: task, room: room)
-                            }
-                            .buttonStyle(.plain)
+                    SideHeading(title: group.title)
+                    ForEach(Array(shown)) { task in
+                        Button {
+                            model.path.append(.place(Spot(code: code, place: "task:\(task.id)")))
+                        } label: {
+                            TaskRow(task: task, room: room)
                         }
+                        .buttonStyle(.plain)
+                        .sideRow(on: false)
                     }
-                    .listRowBackground(Tone.raised)
                 }
             }
         }
-        .grouped()
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(Tone.canvas)
         .navigationTitle("Tasks")
         .navigationBarTitleDisplayMode(.inline)
     }
