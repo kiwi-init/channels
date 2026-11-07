@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#151011" media="(prefers-color-scheme: dark)" />
+    <title>AFK studio · Channels</title>
+    <meta name="description" content="Make your own AFK scene for Channels: ask your agent for one, look at it here, then swap it in." />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <link rel="preload" href="/fonts/PaperMono.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="/theme.css" />
+    <link rel="stylesheet" href="/docs.css" />
+    <link rel="stylesheet" href="/afk/studio.css" />
+    <script src="/theme.js"></script>
+    <script type="module" src="/docs.js"></script>
+    <script type="module" src="/afk/studio.js"></script>
+  </head>
+  <body>
+    <header class="bar">
+      <a class="brand" href="/"><img src="/icon.svg" alt="" width="22" height="22" />Channels</a>
+      <a class="section" href="/afk/">AFK studio</a>
+      <span class="grow"></span>
+      <a class="quiet" href="/docs/">Docs</a>
+      <a class="quiet gh" href="https://github.com/kiwi-init/channels" aria-label="Source on GitHub" title="Source on GitHub"><svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"></path></svg></a>
+      <div class="theme" role="group" aria-label="Theme"><button type="button" data-theme-pick="system" aria-label="Match the system" title="Match the system"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.75" y="2.75" width="12.5" height="8.5" rx="1.5"></rect><path d="M5.5 14h5M8 11.25V14"></path></svg></button><button type="button" data-theme-pick="light" aria-label="Light" title="Light"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="2.75"></circle><path d="M8 1.25v1.5M8 13.25v1.5M1.25 8h1.5M13.25 8h1.5M3.23 3.23l1.06 1.06M11.71 11.71l1.06 1.06M3.23 12.77l1.06-1.06M11.71 4.29l1.06-1.06"></path></svg></button><button type="button" data-theme-pick="dark" aria-label="Dark" title="Dark"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.6 10.1A5.75 5.75 0 0 1 5.9 2.4a5.75 5.75 0 1 0 7.7 7.7Z"></path></svg></button></div>
+    </header>
+
+    <main class="studio">
+      <h1>AFK studio</h1>
+      <p class="lede">When you step away, Channels shows a scene: one HTML file at <code>~/.kiwi/afk/scene.html</code>. Pick one here, or have your agent change one into yours, then swap it in.</p>
+
+      <section class="viewer" aria-label="Preview">
+        <div id="stage" class="stage" data-state="starting">
+          <iframe id="scene" title="AFK scene preview" sandbox="allow-scripts"></iframe>
+          <p id="sky" class="sky" hidden>Plain sky: the scene never said it was ready.</p>
+        </div>
+        <div class="controls">
+          <label class="time"><span>Time</span><input id="time" type="range" min="0" max="1439" step="5" /><output id="time-out">now</output></label>
+          <button id="now" type="button" class="chip">Now</button>
+          <label class="chip"><input id="needs" type="checkbox" />Needs you</label>
+          <label class="chip"><input id="still" type="checkbox" />Less motion</label>
+          <button id="full" type="button" class="chip">Full screen</button>
+        </div>
+        <p id="status" class="status" role="status">Meadow, the scene Channels ships.</p>
+        <div id="gallery" class="gallery" role="radiogroup" aria-label="Scenes">
+          <button type="button" class="pick" role="radio" aria-checked="true" data-src="/afk/scene" data-name="Meadow" data-remix="no"><img src="/afk/scenes/meadow.jpg" alt="" width="320" height="200" /><span>Meadow</span></button>
+          <button type="button" class="pick" role="radio" aria-checked="false" data-src="/afk/scenes/rain" data-name="Rain on glass"><img src="/afk/scenes/rain.jpg" alt="" width="320" height="200" loading="lazy" /><span>Rain on glass</span></button>
+          <button type="button" class="pick" role="radio" aria-checked="false" data-src="/afk/scenes/ocean" data-name="Ocean"><img src="/afk/scenes/ocean.jpg" alt="" width="320" height="200" loading="lazy" /><span>Ocean</span></button>
+          <button type="button" class="pick" role="radio" aria-checked="false" data-src="/afk/scenes/snow" data-name="Snowy pines"><img src="/afk/scenes/snow.jpg" alt="" width="320" height="200" loading="lazy" /><span>Snowy pines</span></button>
+          <button type="button" class="pick" role="radio" aria-checked="false" data-src="/afk/scenes/lake" data-name="Mountain lake"><img src="/afk/scenes/lake.jpg" alt="" width="320" height="200" loading="lazy" /><span>Mountain lake</span></button>
+        </div>
+      </section>
+
+      <ol class="steps">
+        <li>
+          <h2>Make it yours</h2>
+          <p>Pick the scene closest to what you want, say what to change and send the prompt to your agent. It edits a finished scene instead of starting from nothing, so it's faster and starts from something good.</p>
+          <div class="ask">
+            <input id="describe" type="text" placeholder="Make it a rooftop in Tokyo at night" aria-label="What to change" />
+            <button id="copy-prompt" type="button" class="primary">Copy prompt</button>
+          </div>
+          <p id="base" class="quiet"></p>
+          <details class="prompt">
+            <summary>See the prompt</summary>
+            <div class="code"><pre><code id="prompt"></code></pre></div>
+          </details>
+        </li>
+        <li>
+          <h2>Paste what it wrote</h2>
+          <p>Paste the file here, or drop it on the box. It plays above, the way the app would play it.</p>
+          <textarea id="paste" spellcheck="false" placeholder="&lt;!doctype html&gt; …" aria-label="Your scene's HTML"></textarea>
+          <ul id="notes" class="notes"></ul>
+        </li>
+        <li>
+          <h2>Swap it in</h2>
+          <p>Download the scene playing above, then move it into place. Channels picks it up the next time you go AFK, no restart.</p>
+          <p><a id="download" class="primary" href="/afk/scene" download="scene.html">Download scene.html</a></p>
+          <div class="code"><pre><code>mkdir -p ~/.kiwi/afk &amp;&amp; mv ~/Downloads/scene.html ~/.kiwi/afk/scene.html</code></pre><button class="copy" type="button">copy</button></div>
+          <p class="quiet">To go back to the meadow, download the default the same way: <a href="/afk/scene" download="scene.html">the default scene</a>. Delete the file and Channels shows a plain sky.</p>
+        </li>
+      </ol>
+    </main>
+  </body>
+</html>

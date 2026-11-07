@@ -1,0 +1,862 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Night Rain</title>
+<style>
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#06080f;}
+canvas{position:fixed;left:0;top:0;width:100%;height:100%;display:block;user-select:none;-webkit-user-select:none;}
+</style>
+</head>
+<body>
+<canvas id="scene" aria-hidden="true"></canvas>
+<script>
+(function () {
+  "use strict";
+
+  var Y0 = 0.64;
+  var WIN = [[255, 198, 132], [255, 214, 164], [255, 182, 108], [198, 216, 255], [228, 238, 255]];
+  var NEON = [[255, 112, 160], [112, 214, 206], [255, 164, 84], [176, 146, 255], [255, 104, 88]];
+  var PAL = {
+    night: { top: [5, 7, 15], mid: [11, 14, 27], hor: [40, 31, 42], r0: [18, 16, 22], r1: [6, 7, 11], far: [15, 17, 28], near: [8, 9, 16], cloud: [52, 40, 54], glow: [255, 128, 58], haze: [0.07, 0.068, 0.09] },
+    dusk: { top: [26, 28, 58], mid: [74, 56, 94], hor: [196, 116, 92], r0: [54, 42, 54], r1: [20, 18, 28], far: [44, 36, 60], near: [26, 22, 40], cloud: [130, 84, 104], glow: [255, 150, 96], haze: [0.26, 0.2, 0.25] },
+    day: { top: [88, 98, 112], mid: [122, 130, 141], hor: [158, 163, 169], r0: [94, 98, 104], r1: [52, 56, 62], far: [100, 108, 120], near: [64, 72, 85], cloud: [152, 158, 166], glow: [214, 220, 228], haze: [0.46, 0.49, 0.53] }
+  };
+
+  var VS = "attribute vec2 aPos;varying vec2 vUv;void main(){vUv=aPos*.5+.5;gl_Position=vec4(aPos,0.,1.);}";
+
+  var FS = `
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
+precision mediump float;
+#endif
+varying vec2 vUv;
+uniform sampler2D uSoft;
+uniform sampler2D uSharp;
+uniform vec2 uRes;
+uniform float uT;
+uniform float uDay;
+uniform float uLamp;
+uniform vec3 uHaze;
+uniform vec4 uCar[6];
+uniform vec2 uSig;
+uniform vec3 uSigCol;
+uniform vec3 uBea;
+
+float h21(vec2 p){vec3 q=fract(vec3(p.xyx)*.1031);q+=dot(q,q.yzx+33.33);return fract((q.x+q.y)*q.z);}
+vec3 h31(float p){vec3 q=fract(vec3(p)*vec3(.1031,.103,.0973));q+=dot(q,q.yzx+33.33);return fract((q.xxy+q.yzz)*q.zyx);}
+float vn(vec2 p){vec2 i=floor(p);vec2 f=fract(p);f=f*f*(3.-2.*f);return mix(mix(h21(i),h21(i+vec2(1.,0.)),f.x),mix(h21(i+vec2(0.,1.)),h21(i+vec2(1.,1.)),f.x),f.y);}
+float rainAt(float t){return .56+.2*sin(t*.00041+1.3)+.08*sin(t*.0013+.4);}
+vec2 unit(vec2 v){return v/max(1.,length(v));}
+
+vec3 runners(vec2 p,float cols,float vb,float rb,float seed,float px,inout float trail){
+  float W=1./cols;
+  float cx=p.x*cols;
+  float col=floor(cx);
+  float lx=(fract(cx)-.5)*W;
+  vec3 cn=h31(col*13.17+seed*71.3);
+  float v=vb*(.6+.8*cn.x);
+  float P=mix(16.,36.,cn.y);
+  float ph=cn.z*50.;
+  float s=.62-p.y;
+  float K=(uT-s/v)/P+ph;
+  float k0=floor(K);
+  vec2 off=vec2(0.);
+  float mask=0.;
+  for(int j=-1;j<=1;j++){
+    float k=k0+float(j);
+    vec3 n=h31(k*1.618+col*57.3+seed*13.1);
+    vec3 m=h31(k*3.71+col*11.9+seed*5.3+.5);
+    float jit=(n.x-.5)*.3;
+    float tk=(k-ph+jit)*P;
+    float ex=step(m.x,rainAt(tk));
+    float tau=uT-tk;
+    float w=mix(.6,1.5,n.y);
+    float sh=v*(tau+.85*sin(w*tau+n.z*6.283)/w);
+    float r=rb*W*(.75+.5*m.y);
+    float amp=W*.07;
+    float x0=(n.z-.5)*W*.28;
+    float fa=n.y*6.283;
+    float fb=m.z*6.283;
+    float hx=x0+amp*sin(sh*9.+fa)+amp*.5*sin(sh*23.+fb);
+    vec2 d=vec2(lx-hx,sh-s);
+    vec2 e=vec2(d.x*(1.+.35*smoothstep(0.,r*1.5,d.y)),d.y*(d.y>0.?.6:1.05));
+    float ed=max(r*.22,1.5*px);
+    float hm=(1.-smoothstep(r-ed,r,length(e)))*ex;
+    off+=unit(e/r)*hm;
+    mask=max(mask,hm);
+    float age=(K-k-jit)*P;
+    float life=ex*smoothstep(0.,r*1.5,sh-s)*(1.-smoothstep(.2*P,1.6*P,age));
+    float tx=x0+amp*sin(s*9.+fa)+amp*.5*sin(s*23.+fb);
+    float tw=r*.45;
+    trail=max(trail,(1.-smoothstep(tw*.4,tw,abs(lx-tx)))*life);
+    float sp=r*2.6;
+    float si=floor(s/sp);
+    float sc=(si+.5)*sp;
+    vec3 nb=h31(si*7.31+k*19.1+col*3.7+seed);
+    float ab=age+(s-sc)/v;
+    float lb=ex*step(nb.x,.6)*smoothstep(r*1.6,r*2.6,sh-sc)*(1.-smoothstep(.15*P,1.5*P,ab));
+    float rr=r*(.2+.28*nb.y)*sqrt(lb);
+    float bx=x0+amp*sin(sc*9.+fa)+amp*.5*sin(sc*23.+fb)+(nb.z-.5)*r*.5;
+    vec2 bd=vec2(lx-bx,sc-s);
+    float be=max(rr*.3,1.5*px);
+    float bm=(1.-smoothstep(rr-be,rr,length(bd)))*step(.0004,rr);
+    off+=unit(bd/max(rr,1e-4))*bm;
+    mask=max(mask,bm);
+  }
+  return vec3(off,mask);
+}
+
+vec3 beads(vec2 p,float sc,float rate,float dens,float px){
+  vec2 g=p*sc;
+  vec2 id=floor(g);
+  vec2 f=fract(g)-.5;
+  float ph=h21(id+11.7);
+  float cyc=uT*rate*(.6+.8*ph)+ph*7.;
+  float k=floor(cyc);
+  float lf=cyc-k;
+  vec3 n=h31(id.x*127.1+id.y*311.7+k*74.7);
+  float gr=smoothstep(0.,.3,lf)*(1.-smoothstep(.75,1.,lf));
+  float r=(.1+.22*n.x*n.x)*gr;
+  vec2 c=(vec2(n.y,fract(n.x*13.7))-.5)*.36;
+  vec2 d=(f-c)*vec2(1.,1.08);
+  float ed=max(r*.3,1.5*px*sc);
+  float m=(1.-smoothstep(r-ed,r,length(d)))*step(1.-dens,n.z)*step(.02,r);
+  return vec3(unit(d/max(r,1e-3))*m,m);
+}
+
+float spot(vec2 q,vec2 c,float rs,float rp,float fo){
+  float d=length(q-c);
+  float b=(1.-smoothstep(rs*.82,rs,d))*(.78+.22*smoothstep(rs*.2,rs,d))*.3;
+  float k=d*d/(rp*rp);
+  float pt=exp(-k)*1.2+exp(-k*.06)*.1;
+  return mix(b,pt,fo);
+}
+
+float streak(vec2 q,vec2 c,float rs,float fo){
+  vec2 d=q-c;
+  float wx=mix(rs*.5,rs*.2,fo);
+  return exp(-d.x*d.x/(wx*wx))*(1.-smoothstep(-.02,0.,d.y))*exp(d.y*8.)*.14;
+}
+
+vec3 lights(vec2 uv,float fo,float asp){
+  vec2 q=vec2(uv.x*asp,uv.y);
+  vec3 acc=vec3(0.);
+  for(int i=0;i<6;i++){
+    vec4 c=uCar[i];
+    if(c.w>0.){
+      float rs=c.y>.24?.027:.034;
+      vec2 cf=vec2(c.x+.024*c.z,c.y);
+      vec2 cb=vec2(c.x-.024*c.z,c.y);
+      acc+=c.w*(vec3(1.,.9,.72)*(spot(q,cf,rs,.009,fo)+streak(q,cf,rs,fo))+vec3(1.,.16,.1)*(spot(q,cb,rs*.9,.008,fo)*.85+streak(q,cb,rs,fo)*.8));
+    }
+  }
+  vec2 sc=vec2(uSig.x*asp,uSig.y);
+  acc+=uSigCol*(spot(q,sc,.022,.007,fo)+streak(q,vec2(sc.x,.345),.022,fo)*.6);
+  if(uBea.z>0.){acc+=vec3(1.,.14,.1)*spot(q,vec2(uBea.x*asp,uBea.y),.014,.006,fo)*uBea.z;}
+  return acc;
+}
+
+void main(){
+  vec2 uv=vUv;
+  float asp=uRes.x/uRes.y;
+  float px=1./uRes.y;
+  vec2 p=vec2((uv.x-.5)*asp,uv.y-.5);
+  float trail=0.;
+  vec3 A=runners(p,9.,.05,.19,1.,px,trail);
+  vec3 B=runners(p+vec2(.031,0.),16.,.042,.17,2.,px,trail);
+  vec3 C=beads(p,26.,.012,.34,px);
+  vec3 D=beads(p+vec2(3.1,1.7),58.,.018,.5,px);
+  float wipe=1.-trail;
+  vec2 off=A.xy+B.xy+(C.xy+D.xy)*wipe;
+  float drop=clamp(A.z+B.z+(C.z+D.z)*wipe,0.,1.);
+  vec2 uvR=uv-off*vec2(1./asp,1.)*.2;
+  float mist=vn(vec2(uv.x*asp*1.4+uT*.007,uv.y*2.6))*.65+vn(vec2(uv.x*asp*3.1-uT*.005,uv.y*5.2+4.))*.35;
+  vec3 soft=texture2D(uSoft,uv).rgb;
+  vec3 fog=soft*.88+uHaze*(.32+.3*mist);
+  vec3 crisp=texture2D(uSharp,uv).rgb;
+  vec3 lens=texture2D(uSharp,uvR).rgb;
+  vec3 col=mix(fog,crisp*.96+uHaze*.12,trail*.55*(1.-drop));
+  col=mix(col,lens*1.16,drop);
+  col+=lights(mix(uv,uvR,drop),drop,asp);
+  float ol=clamp(length(off),0.,1.);
+  col*=1.-.3*smoothstep(.55,1.,ol)*drop;
+  float spec=(1.-smoothstep(0.,.32,length(off-vec2(-.32,.42))))*drop;
+  col+=spec*mix(vec3(.05,.055,.07),vec3(.3,.31,.33),uDay);
+  vec2 lq=vec2(uv.x*asp,uv.y)-vec2(asp*.84,.17);
+  float halo=exp(-dot(lq,lq)*9.);
+  vec2 lc=lq*vec2(1.,.72);
+  float core=exp(-dot(lc,lc)*240.)*.5+(1.-smoothstep(.035,.075,length(lc)))*.12;
+  vec3 warm=vec3(1.,.6,.27);
+  col+=warm*(halo*.15+core)*uLamp;
+  col+=warm*(drop*.4+spec*1.6)*halo*uLamp;
+  vec2 vv=(uv-.5)*vec2(1.6,2.);
+  col*=1.-.25*smoothstep(.4,1.6,dot(vv,vv));
+  col+=(h21(gl_FragCoord.xy)-.5)/255.;
+  gl_FragColor=vec4(col,1.);
+}
+`;
+
+  var canvas = document.getElementById("scene");
+  var gl = null;
+  var ctx2d = null;
+  var prog = null;
+  var U = {};
+  var texSoft = null;
+  var texSharp = null;
+  var lost = false;
+  var softCv = document.createElement("canvas");
+  var sharpCv = document.createElement("canvas");
+  var workCv = document.createElement("canvas");
+  var baseCv = document.createElement("canvas");
+  var baseCtx = baseCv.getContext("2d", { willReadFrequently: true });
+  var city = makeCity();
+  var cars = makeCars();
+  var carBuf = new Float32Array(24);
+  var st = { at: null, atPerf: 0, needs: 0, still: false };
+  var lamp = 0;
+  var lampGoal = 0;
+  var clock = 900 + ((Date.now() / 1000) % 3600);
+  var running = false;
+  var raf = 0;
+  var lastTs = -1;
+  var asp = 1;
+  var look = null;
+  var bgKey = "";
+  var bgChecked = -1e9;
+  var beacon = [0, 0, 0];
+  var sentReady = false;
+
+  function rng(a) {
+    return function () {
+      a = (a + 0x6d2b79f5) | 0;
+      var t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function hj(x) {
+    var s = Math.sin(x * 91.3458 + 7.13) * 47453.5453;
+    return s - Math.floor(s);
+  }
+
+  function smooth(a, b, x) {
+    var t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+    return t * t * (3 - 2 * t);
+  }
+
+  function mix3(a, b, t) {
+    return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+  }
+
+  function css(c) {
+    return "rgb(" + Math.round(c[0]) + "," + Math.round(c[1]) + "," + Math.round(c[2]) + ")";
+  }
+
+  function rgba(c, a) {
+    return "rgba(" + Math.round(c[0]) + "," + Math.round(c[1]) + "," + Math.round(c[2]) + "," + Math.min(1, Math.max(0, a)).toFixed(4) + ")";
+  }
+
+  function building(R, x, w, h, sx, sy) {
+    var b = { x: x, w: w, h: h, sx: sx, sy: sy, boost: 0.55 + R() * 1.0, win: [] };
+    var cols = Math.max(1, Math.floor((w - sx * 0.4) / sx));
+    var rows = Math.max(1, Math.floor((h - sy * 0.6) / sy));
+    var mx = (w - cols * sx) / 2;
+    for (var r = 0; r < rows; r++) {
+      var fb = R();
+      for (var k = 0; k < cols; k++) {
+        b.win.push({
+          x: x + mx + (k + 0.5) * sx,
+          y: Y0 - h + sy * 0.7 + r * sy,
+          t: R() * 0.6 + fb * 0.4,
+          c: Math.floor(R() * WIN.length),
+          a: 0.55 + R() * 0.45,
+          big: R() < 0.07
+        });
+      }
+    }
+    return b;
+  }
+
+  function makeCity() {
+    var R = rng(20261107);
+    var c = { far: [], mid: [], lamps: [], neon: [], shops: [], clouds: [], glow: [] };
+    var x = -2.3;
+    while (x < 2.3) {
+      var w = 0.05 + R() * 0.11;
+      var h = 0.05 + R() * 0.13 + (R() < 0.16 ? 0.05 + R() * 0.13 : 0);
+      c.far.push(building(R, x, w, h, 0.014, 0.018));
+      x += w + R() * 0.012;
+    }
+    x = -2.3 + R() * 0.1;
+    while (x < 2.3) {
+      var w2 = 0.1 + R() * 0.16;
+      var h2 = 0.1 + R() * 0.24 + (R() < 0.26 ? 0.08 + R() * 0.2 : 0);
+      c.mid.push(building(R, x, w2, h2, 0.021, 0.027));
+      x += w2 + 0.04 + R() * 0.16;
+    }
+    x = -2.3 + R() * 0.2;
+    while (x < 2.3) {
+      c.lamps.push({ x: x, y: Y0 - 0.085 - R() * 0.02, r: 0.042 + R() * 0.014, col: R() < 0.7 ? [255, 158, 72] : [226, 232, 255], a: 0.75 + R() * 0.25 });
+      x += 0.4 + R() * 0.2;
+    }
+    for (var i = 0; i < 11; i++) {
+      c.neon.push({ x: -2.25 + R() * 4.5, y: Y0 - 0.015 - R() * 0.05, r: 0.026 + R() * 0.016, col: NEON[Math.floor(R() * NEON.length)], a: 0.5 + R() * 0.4 });
+    }
+    x = -2.3;
+    while (x < 2.3) {
+      var sw = 0.05 + R() * 0.09;
+      c.shops.push({ x: x, w: sw, col: WIN[Math.floor(R() * 3)], a: 0.4 + R() * 0.5 });
+      x += sw + 0.05 + R() * 0.25;
+    }
+    for (var g = 0; g < 96; g++) {
+      var u = R();
+      var gc = u < 0.7 ? WIN[Math.floor(R() * 3)] : u < 0.93 ? WIN[3 + Math.floor(R() * 2)] : NEON[Math.floor(R() * NEON.length)];
+      c.glow.push({ x: -2.3 + R() * 4.6, y: Y0 + 0.02 - Math.pow(R(), 2) * 0.4, r: 0.022 + R() * 0.014, col: gc, a: 0.05 + Math.pow(R(), 2.2) * 0.32, t: R(), soft: R() });
+    }
+    for (var j = 0; j < 22; j++) {
+      c.clouds.push({ x: -2.3 + R() * 4.6, y: 0.04 + R() * 0.34, rx: 0.2 + R() * 0.4, ry: 0.05 + R() * 0.08, a: 0.2 + R() * 0.3 });
+    }
+    return c;
+  }
+
+  function makeCars() {
+    var R = rng(4242);
+    var out = [];
+    for (var i = 0; i < 6; i++) {
+      var lane = i < 3 ? 0 : 1;
+      out.push({ sp: 1 / (42 + R() * 38), ph: R() * 10, y: lane ? 0.262 : 0.214, dir: lane ? -1 : 1 });
+    }
+    return out;
+  }
+
+  function lookAt(ms) {
+    var d = new Date(isFinite(ms) ? ms : Date.now());
+    var h = d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 3600;
+    var s = Math.sin(((h - 6.5) / 24) * Math.PI * 2);
+    var day = smooth(-0.06, 0.32, s);
+    var dk = 1 - Math.min(1, Math.abs(s + 0.03) / 0.2);
+    var dusk = dk * dk * (3 - 2 * dk);
+    var late = smooth(0.5, 2.5, h) * (1 - smooth(4.5, 6, h));
+    var lit = (0.44 - 0.24 * late) * (1 - day) + 0.1 * day;
+    return { day: day, dusk: dusk, lit: lit };
+  }
+
+  function tone(P, k) {
+    var a = PAL.night[k];
+    var b = PAL.day[k];
+    var d = PAL.dusk[k];
+    var o = [];
+    for (var i = 0; i < a.length; i++) {
+      var v = a[i] + (b[i] - a[i]) * P.day;
+      o.push(v + (d[i] - v) * P.dusk * 0.8);
+    }
+    return o;
+  }
+
+  function glowE(c, x, y, rx, ry, col, a) {
+    if (a <= 0.002 || rx <= 0 || ry <= 0) return;
+    c.save();
+    c.translate(x, y);
+    c.scale(rx / ry, 1);
+    var g = c.createRadialGradient(0, 0, 0, 0, 0, ry);
+    g.addColorStop(0, rgba(col, a));
+    g.addColorStop(1, rgba(col, 0));
+    c.fillStyle = g;
+    c.fillRect(-ry, -ry, ry * 2, ry * 2);
+    c.restore();
+  }
+
+  function light(c, x, y, rs, rp, col, a, sharp, soft) {
+    if (a <= 0.003) return;
+    var g;
+    var sf = soft || 0;
+    if (!sharp) {
+      g = c.createRadialGradient(x, y, 0, x, y, rs);
+      g.addColorStop(0, rgba(col, a * 0.72));
+      g.addColorStop(0.7 - 0.3 * sf, rgba(col, a * 0.84));
+      g.addColorStop(0.9 - 0.22 * sf, rgba(col, a));
+      g.addColorStop(1, rgba(col, 0));
+      c.fillStyle = g;
+      c.fillRect(x - rs, y - rs, rs * 2, rs * 2);
+      return;
+    }
+    var R = rp * 6;
+    g = c.createRadialGradient(x, y, 0, x, y, R);
+    g.addColorStop(0, rgba(mix3(col, [255, 255, 255], 0.5), a * 1.5));
+    g.addColorStop(0.12, rgba(col, a));
+    g.addColorStop(0.4, rgba(col, a * 0.15));
+    g.addColorStop(1, rgba(col, 0));
+    c.fillStyle = g;
+    c.fillRect(x - R, y - R, R * 2, R * 2);
+  }
+
+  function drawRow(c, list, X, w, h, col, P, wa, fw, fh) {
+    var i, j, b, x0, x1;
+    c.fillStyle = css(col);
+    for (i = 0; i < list.length; i++) {
+      b = list[i];
+      x0 = X(b.x);
+      x1 = X(b.x + b.w);
+      if (x1 < -2 || x0 > w + 2) continue;
+      c.fillRect(x0, (Y0 - b.h) * h, x1 - x0, (b.h + 0.004) * h);
+    }
+    for (i = 0; i < list.length; i++) {
+      b = list[i];
+      x0 = X(b.x);
+      x1 = X(b.x + b.w);
+      if (x1 < -2 || x0 > w + 2) continue;
+      var ww = b.sx * fw * h;
+      var wh = b.sy * fh * h;
+      var lim = P.lit * b.boost;
+      for (j = 0; j < b.win.length; j++) {
+        var wn = b.win[j];
+        if (wn.t >= lim) continue;
+        c.fillStyle = rgba(WIN[wn.c], wn.a * wa);
+        c.fillRect(X(wn.x) - ww / 2, wn.y * h - wh / 2, ww, wh);
+      }
+    }
+  }
+
+  function paintBase(c, w, h, P) {
+    var a = w / h;
+    var n = 1 - P.day;
+    var X = function (x) { return (x + a / 2) * h; };
+    var g = c.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, css(tone(P, "top")));
+    g.addColorStop(0.34, css(tone(P, "mid")));
+    g.addColorStop(Y0 - 0.003, css(tone(P, "hor")));
+    g.addColorStop(Y0 + 0.003, css(tone(P, "r0")));
+    g.addColorStop(1, css(tone(P, "r1")));
+    c.globalCompositeOperation = "source-over";
+    c.fillStyle = g;
+    c.fillRect(0, 0, w, h);
+    glowE(c, w / 2, Y0 * h, w * 0.85, h * 0.36, tone(P, "glow"), 0.06 + 0.2 * n);
+    var cl = tone(P, "cloud");
+    for (var i = 0; i < city.clouds.length; i++) {
+      var k = city.clouds[i];
+      glowE(c, X(k.x), k.y * h, k.rx * h, k.ry * h, cl, k.a);
+    }
+    glowE(c, w / 2, (Y0 + 0.06) * h, w * 0.8, h * 0.08, tone(P, "glow"), 0.1 * n);
+    drawRow(c, city.far, X, w, h, tone(P, "far"), P, 0.15 + 0.4 * n, 0.5, 0.42);
+    drawRow(c, city.mid, X, w, h, tone(P, "near"), P, 0.3 + 0.7 * n, 0.62, 0.52);
+    for (var j = 0; j < city.shops.length; j++) {
+      var s = city.shops[j];
+      c.fillStyle = rgba(s.col, s.a * (0.3 + 0.6 * n));
+      c.fillRect(X(s.x), (Y0 - 0.03) * h, s.w * h, 0.028 * h);
+    }
+  }
+
+  function paintLights(c, w, h, P, sharp) {
+    var a = w / h;
+    var n = 1 - P.day;
+    var X = function (x) { return (x + a / 2) * h; };
+    var vis = 0.25 + 0.75 * n;
+    var lampOn = 1 - smooth(0.25, 0.75, P.day);
+    var i, j, b, x, la;
+    for (i = 0; i < city.mid.length; i++) {
+      b = city.mid[i];
+      if (X(b.x + b.w) < -40 || X(b.x) > w + 40) continue;
+      var lim = P.lit * b.boost;
+      for (j = 0; j < b.win.length; j++) {
+        var wn = b.win[j];
+        if (!wn.big || wn.t >= lim) continue;
+        light(c, X(wn.x), wn.y * h, 0.024 * h, 0.004 * h, WIN[wn.c], 0.22 * wn.a * vis, sharp, 0.4);
+      }
+    }
+    for (i = 0; i < city.glow.length; i++) {
+      var G = city.glow[i];
+      if (G.t >= P.lit * 1.8) continue;
+      x = X(G.x);
+      if (x < -0.1 * h || x > w + 0.1 * h) continue;
+      light(c, x, G.y * h, G.r * h, 0.0035 * h, G.col, G.a * vis, sharp, G.soft);
+      if (G.y > Y0 - 0.14) glowE(c, x, (Y0 + 0.1) * h, (sharp ? 0.006 : G.r * 0.5) * h, 0.09 * h, G.col, G.a * vis * 0.3);
+    }
+    for (i = 0; i < city.far.length; i++) {
+      b = city.far[i];
+      if (b.h < 0.17) continue;
+      x = X(b.x + b.w / 2);
+      if (x < -20 || x > w + 20) continue;
+      light(c, x, (Y0 - b.h - 0.006) * h, 0.009 * h, 0.003 * h, [255, 60, 48], 0.45 * n, sharp);
+    }
+    for (i = 0; i < city.lamps.length; i++) {
+      var L = city.lamps[i];
+      x = X(L.x);
+      if (x < -0.2 * h || x > w + 0.2 * h) continue;
+      la = L.a * lampOn * 0.42;
+      if (la < 0.01) continue;
+      if (!sharp) glowE(c, x, L.y * h, L.r * 2.8 * h, L.r * 2.8 * h, L.col, la * 0.14);
+      light(c, x, L.y * h, L.r * h, 0.005 * h, L.col, la, sharp);
+      glowE(c, x, (Y0 + 0.14) * h, (sharp ? 0.008 : L.r * 0.6) * h, 0.13 * h, L.col, la * 0.5);
+    }
+    for (i = 0; i < city.neon.length; i++) {
+      var N = city.neon[i];
+      x = X(N.x);
+      if (x < -0.2 * h || x > w + 0.2 * h) continue;
+      la = N.a * (0.35 + 0.65 * n) * 0.4;
+      if (!sharp) glowE(c, x, N.y * h, N.r * 2.4 * h, N.r * 2 * h, N.col, la * 0.12);
+      light(c, x, N.y * h, N.r * h, 0.0045 * h, N.col, la, sharp);
+      glowE(c, x, (Y0 + 0.1) * h, (sharp ? 0.007 : N.r * 0.55) * h, 0.095 * h, N.col, la * 0.45);
+    }
+    for (i = 0; i < city.shops.length; i++) {
+      var S = city.shops[i];
+      x = X(S.x + S.w / 2);
+      if (x < -0.2 * h || x > w + 0.2 * h) continue;
+      glowE(c, x, (Y0 + 0.06) * h, S.w * 0.5 * h, 0.06 * h, S.col, S.a * 0.16 * (0.4 + 0.6 * n));
+    }
+  }
+
+  function boxPass(s, o, len, lines, r, step, lineStep) {
+    var n = r * 2 + 1;
+    for (var L = 0; L < lines; L++) {
+      var base = L * lineStep;
+      for (var ch = 0; ch < 3; ch++) {
+        var b0 = base + ch;
+        var acc = 0;
+        var k;
+        for (k = -r; k <= r; k++) acc += s[b0 + Math.min(Math.max(k, 0), len - 1) * step];
+        for (k = 0; k < len; k++) {
+          o[b0 + k * step] = acc / n;
+          var ad = k + r + 1;
+          if (ad > len - 1) ad = len - 1;
+          var sb = k - r;
+          if (sb < 0) sb = 0;
+          acc += s[b0 + ad * step] - s[b0 + sb * step];
+        }
+      }
+      for (var m = 0; m < len; m++) o[base + 3 + m * step] = 255;
+    }
+  }
+
+  function blur(c, w, h, r) {
+    if (r < 1) return;
+    var img = c.getImageData(0, 0, w, h);
+    var d = img.data;
+    var t = new Uint8ClampedArray(d.length);
+    for (var it = 0; it < 3; it++) {
+      boxPass(d, t, w, h, r, 4, w * 4);
+      boxPass(t, d, h, w, r, w * 4, 4);
+    }
+    c.putImageData(img, 0, 0);
+  }
+
+  function paintTex(out, lh, bh, br, sharp, P, a, pw, ph) {
+    var lw = Math.max(4, Math.round(lh * a));
+    var bw = Math.max(4, Math.round(bh * a));
+    baseCv.width = bw;
+    baseCv.height = bh;
+    paintBase(baseCtx, bw, bh, P);
+    blur(baseCtx, bw, bh, br);
+    var tgt = pw ? workCv : out;
+    tgt.width = lw;
+    tgt.height = lh;
+    var c = tgt.getContext("2d");
+    c.drawImage(baseCv, 0, 0, lw, lh);
+    c.globalCompositeOperation = "lighter";
+    paintLights(c, lw, lh, P, sharp);
+    c.globalCompositeOperation = "source-over";
+    if (pw) {
+      out.width = pw;
+      out.height = ph;
+      out.getContext("2d").drawImage(workCv, 0, 0, pw, ph);
+    }
+  }
+
+  function placeBeacon(a) {
+    var best = null;
+    for (var i = 0; i < city.mid.length; i++) {
+      var b = city.mid[i];
+      if (Math.abs(b.x + b.w / 2) > a / 2 - 0.08) continue;
+      if (!best || b.h > best.h) best = b;
+    }
+    beacon = best ? [(best.x + best.w / 2 + a / 2) / a, 1 - (Y0 - best.h - 0.01), 1] : [0, 0, 0];
+  }
+
+  function upload(unit, tex, cv, mip) {
+    gl.activeTexture(gl.TEXTURE0 + unit);
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, cv);
+    if (mip) gl.generateMipmap(gl.TEXTURE_2D);
+  }
+
+  function repaint(P) {
+    var a = Math.min(4, Math.max(0.25, asp));
+    paintTex(softCv, 360, 120, 4, false, P, a, 0, 0);
+    var pw = Math.min(4096, Math.max(128, Math.pow(2, Math.round(Math.log(512 * a) / Math.LN2))));
+    paintTex(sharpCv, 512, 256, 1, true, P, a, pw, 512);
+    placeBeacon(a);
+    if (gl && !lost) {
+      upload(0, texSoft, softCv, false);
+      upload(1, texSharp, sharpCv, true);
+    }
+  }
+
+  function sceneMs() {
+    return st.at === null ? Date.now() : st.at + (performance.now() - st.atPerf);
+  }
+
+  function refreshLook() {
+    var P = lookAt(sceneMs());
+    look = P;
+    var key = Math.round(P.day * 50) + "|" + Math.round(P.dusk * 50) + "|" + Math.round(P.lit * 80) + "|" + asp.toFixed(3);
+    if (key !== bgKey) {
+      bgKey = key;
+      repaint(P);
+    }
+  }
+
+  function sigCol(t, n) {
+    var cy = t % 64;
+    var g = [0.25, 1, 0.55];
+    var c = mix3(g, [1, 0.68, 0.18], smooth(28, 29, cy));
+    c = mix3(c, [1, 0.18, 0.12], smooth(32, 33, cy));
+    c = mix3(c, g, smooth(63, 64, cy));
+    var k = 0.55 + 0.45 * n;
+    return [c[0] * k, c[1] * k, c[2] * k];
+  }
+
+  function fillCars(t, n) {
+    var vis = 0.45 + 0.55 * n;
+    for (var i = 0; i < 6; i++) {
+      var c = cars[i];
+      var cy = t * c.sp + c.ph;
+      var ci = Math.floor(cy);
+      var x = -0.35 + (cy - ci) * (asp + 0.7);
+      if (c.dir < 0) x = asp - x;
+      carBuf[i * 4] = x;
+      carBuf[i * 4 + 1] = c.y;
+      carBuf[i * 4 + 2] = c.dir;
+      carBuf[i * 4 + 3] = hj(ci * 1.37 + i * 9.1) < 0.6 ? vis : 0;
+    }
+  }
+
+  function draw2D(L) {
+    var w = canvas.width;
+    var h = canvas.height;
+    var hz = tone(look, "haze");
+    ctx2d.globalCompositeOperation = "source-over";
+    ctx2d.drawImage(softCv, 0, 0, w, h);
+    ctx2d.fillStyle = rgba([hz[0] * 255, hz[1] * 255, hz[2] * 255], 0.35);
+    ctx2d.fillRect(0, 0, w, h);
+    if (L > 0.01) {
+      ctx2d.globalCompositeOperation = "lighter";
+      glowE(ctx2d, w * 0.84, h * 0.83, h * 0.42, h * 0.42, [255, 153, 69], 0.18 * L);
+      glowE(ctx2d, w * 0.84, h * 0.83, h * 0.05, h * 0.07, [255, 172, 96], 0.5 * L);
+      ctx2d.globalCompositeOperation = "source-over";
+    }
+  }
+
+  function draw(t) {
+    var n = 1 - look.day;
+    var L = lamp * (0.94 + 0.035 * Math.sin(t * 1.1) + 0.025 * Math.sin(t * 2.3 + 1.7));
+    if (!gl) {
+      if (ctx2d) draw2D(L);
+      return;
+    }
+    if (lost || gl.isContextLost()) return;
+    fillCars(t, n);
+    var sc = sigCol(t, n);
+    var hz = tone(look, "haze");
+    var bb = beacon[2] ? Math.pow(0.5 + 0.5 * Math.sin(t * 1.15), 2.2) * n * 1.3 : 0;
+    gl.viewport(0, 0, canvas.width, canvas.height);
+    gl.uniform2f(U.uRes, canvas.width, canvas.height);
+    gl.uniform1f(U.uT, t);
+    gl.uniform1f(U.uDay, look.day);
+    gl.uniform1f(U.uLamp, L);
+    gl.uniform3f(U.uHaze, hz[0], hz[1], hz[2]);
+    gl.uniform4fv(U.uCar, carBuf);
+    gl.uniform2f(U.uSig, 0.7, 0.4);
+    gl.uniform3f(U.uSigCol, sc[0], sc[1], sc[2]);
+    gl.uniform3f(U.uBea, beacon[0], beacon[1], bb);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
+  function step(dt, t) {
+    var pn = performance.now();
+    if (!look || pn - bgChecked > 2000) {
+      bgChecked = pn;
+      refreshLook();
+    }
+    if (dt < 0) lamp = lampGoal;
+    else if (dt > 0) lamp += (lampGoal - lamp) * (1 - Math.exp(-dt / 1.6));
+    if (Math.abs(lamp - lampGoal) < 0.002) lamp = lampGoal;
+    draw(t);
+  }
+
+  function frame(ts) {
+    raf = 0;
+    if (!running) return;
+    raf = requestAnimationFrame(frame);
+    if (lastTs >= 0 && ts - lastTs < 30) return;
+    var dt = lastTs < 0 ? 0 : Math.min(0.1, (ts - lastTs) / 1000);
+    lastTs = ts;
+    clock = (clock + dt) % 36000;
+    step(dt, clock);
+  }
+
+  function update() {
+    var live = !!gl && !lost && !st.still && !document.hidden;
+    if (live) {
+      if (!running) {
+        running = true;
+        lastTs = -1;
+        raf = requestAnimationFrame(frame);
+      }
+      return;
+    }
+    if (running) {
+      running = false;
+      if (raf) cancelAnimationFrame(raf);
+      raf = 0;
+    }
+    if (!document.hidden) {
+      bgChecked = -1e9;
+      step(-1, clock);
+    }
+  }
+
+  function resize() {
+    var cw = Math.max(1, window.innerWidth || document.documentElement.clientWidth || 1);
+    var ch = Math.max(1, window.innerHeight || document.documentElement.clientHeight || 1);
+    var dpr = window.devicePixelRatio || 1;
+    var k = Math.min(dpr, Math.sqrt(900000 / (cw * ch)));
+    var w = Math.max(1, Math.round(cw * k));
+    var h = Math.max(1, Math.round(ch * k));
+    if (canvas.width !== w) canvas.width = w;
+    if (canvas.height !== h) canvas.height = h;
+    asp = cw / ch;
+  }
+
+  function compile(type, src) {
+    var s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    return gl.getShaderParameter(s, gl.COMPILE_STATUS) ? s : null;
+  }
+
+  function makeTex(unit, mip) {
+    var t = gl.createTexture();
+    gl.activeTexture(gl.TEXTURE0 + unit);
+    gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, mip ? gl.LINEAR_MIPMAP_LINEAR : gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([6, 8, 15, 255]));
+    if (mip) gl.generateMipmap(gl.TEXTURE_2D);
+    return t;
+  }
+
+  function setupGL() {
+    var vs = compile(gl.VERTEX_SHADER, VS);
+    var fs = compile(gl.FRAGMENT_SHADER, FS);
+    if (!vs || !fs) return false;
+    prog = gl.createProgram();
+    gl.attachShader(prog, vs);
+    gl.attachShader(prog, fs);
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return false;
+    gl.useProgram(prog);
+    var buf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+    var ap = gl.getAttribLocation(prog, "aPos");
+    gl.enableVertexAttribArray(ap);
+    gl.vertexAttribPointer(ap, 2, gl.FLOAT, false, 0, 0);
+    ["uSoft", "uSharp", "uRes", "uT", "uDay", "uLamp", "uHaze", "uCar", "uSig", "uSigCol", "uBea"].forEach(function (k) {
+      U[k] = gl.getUniformLocation(prog, k);
+    });
+    gl.uniform1i(U.uSoft, 0);
+    gl.uniform1i(U.uSharp, 1);
+    texSoft = makeTex(0, false);
+    texSharp = makeTex(1, true);
+    return true;
+  }
+
+  function initGL() {
+    var opt = { alpha: false, antialias: false, depth: false, stencil: false, premultipliedAlpha: false, preserveDrawingBuffer: false, powerPreference: "low-power" };
+    var g = null;
+    try {
+      g = canvas.getContext("webgl", opt) || canvas.getContext("experimental-webgl", opt);
+    } catch (err) {
+      /* no WebGL here: the 2D picture takes over */
+      g = null;
+    }
+    if (!g) return false;
+    gl = g;
+    if (setupGL()) return true;
+    gl = null;
+    return false;
+  }
+
+  function init2D() {
+    var fresh = document.createElement("canvas");
+    fresh.id = "scene";
+    fresh.setAttribute("aria-hidden", "true");
+    canvas.parentNode.replaceChild(fresh, canvas);
+    canvas = fresh;
+    gl = null;
+    ctx2d = canvas.getContext("2d");
+    resize();
+  }
+
+  function announce() {
+    if (sentReady) return;
+    sentReady = true;
+    try {
+      parent.postMessage({ kiwi: "afk", type: "ready" }, "*");
+    } catch (err) {
+      /* opened outside the app: there is nobody to tell */
+      sentReady = true;
+    }
+  }
+
+  function onMessage(e) {
+    var d = e && e.data;
+    if (!d || typeof d !== "object" || d.kiwi !== "afk" || d.type !== "state") return;
+    if (typeof d.at === "number" && isFinite(d.at)) {
+      st.at = d.at;
+      st.atPerf = performance.now();
+    }
+    if (typeof d.needs === "number" && isFinite(d.needs)) st.needs = Math.max(0, d.needs);
+    if ("still" in d) st.still = d.still === true;
+    lampGoal = st.needs > 0 ? 0.7 + 0.3 * Math.min(1, (st.needs - 1) / 4) : 0;
+    bgChecked = -1e9;
+    update();
+  }
+
+  resize();
+  if (!initGL()) init2D();
+  if (gl) {
+    canvas.addEventListener("webglcontextlost", function (e) {
+      e.preventDefault();
+      lost = true;
+      update();
+    }, false);
+    canvas.addEventListener("webglcontextrestored", function () {
+      lost = !setupGL();
+      bgKey = "";
+      bgChecked = -1e9;
+      update();
+    }, false);
+  }
+  window.addEventListener("message", onMessage);
+  document.addEventListener("visibilitychange", update);
+  window.addEventListener("resize", function () {
+    resize();
+    bgChecked = -1e9;
+    if (!document.hidden) step(running ? 0 : -1, clock);
+  });
+
+  step(-1, clock);
+  requestAnimationFrame(function () { requestAnimationFrame(announce); });
+  setTimeout(announce, 600);
+  update();
+})();
+</script>
+</body>
+</html>

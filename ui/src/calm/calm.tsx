@@ -71,7 +71,7 @@ export function Calm() {
         if (!m) return
         if (gone) return m.dispose()
         meadow.current = m
-        m.setRows(latest.current.rows)
+        m.setAlert(latest.current.rows.some((r) => r.needs > 0))
         if (latest.current.leaving) m.freeze()
       })
       .catch(() => {
@@ -84,7 +84,7 @@ export function Calm() {
     }
   }, [])
 
-  useEffect(() => meadow.current?.setRows(rows), [rows])
+  useEffect(() => meadow.current?.setAlert(rows.some((r) => r.needs > 0)), [rows])
   useEffect(() => meadow.current?.setStill(still), [still])
   useEffect(() => {
     if (leaving) meadow.current?.freeze()

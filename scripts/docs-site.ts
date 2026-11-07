@@ -345,7 +345,31 @@ async function build(): Promise<string[]> {
     }
   }
   written.push(...(await writeFigures()));
+  written.push(...(await writeAfk()));
   return written;
+}
+
+const AFK = join(SITE, "afk");
+
+const sceneLoader = async (): Promise<string> => {
+  const built = await Bun.build({ entrypoints: [join(ROOT, "ui/src/afk/frame.ts")], minify: true, target: "browser" });
+  if (!built.success) throw new Error(built.logs.join("\n"));
+  const code = await built.outputs[0]?.text();
+  if (!code) throw new Error("ui/src/afk/frame.ts built nothing");
+  return code.replaceAll("</script", "<\\/script");
+};
+
+async function writeAfk(): Promise<string[]> {
+  const scene = join(AFK, "scene.html");
+  const frame = join(AFK, "frame.html");
+  if (DRAFT && existsSync(scene) && existsSync(frame)) return [];
+  const { afkSceneHtml } = await import("../ui/afk-scene.build.ts");
+  writeFileSync(scene, await afkSceneHtml());
+  writeFileSync(
+    frame,
+    `<!doctype html>\n<html>\n  <head>\n    <meta charset="utf-8" />\n    <title>AFK scene preview</title>\n    <style>html,body{margin:0;height:100%;overflow:hidden;background:transparent}</style>\n  </head>\n  <body>\n    <script>${await sceneLoader()}</script>\n  </body>\n</html>\n`,
+  );
+  return [scene, frame].map((f) => relative(ROOT, f));
 }
 
 const TYPES: Record<string, string> = {
