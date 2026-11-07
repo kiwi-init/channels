@@ -33,40 +33,48 @@
   bottom: 0;
   left: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1040px);
+  grid-template-columns: minmax(0, 880px);
   gap: 16px;
-  padding: 160px max(5vw, 16px) max(5vh, 24px);
-  background: linear-gradient(
-    to top,
-    color-mix(in srgb, var(--bg) 76%, transparent) 0%,
-    color-mix(in srgb, var(--bg) 72%, transparent) 34%,
-    color-mix(in srgb, var(--bg) 62%, transparent) 52%,
-    color-mix(in srgb, var(--bg) 46%, transparent) 66%,
-    color-mix(in srgb, var(--bg) 29%, transparent) 77%,
-    color-mix(in srgb, var(--bg) 15%, transparent) 86%,
-    color-mix(in srgb, var(--bg) 5%, transparent) 94%,
-    transparent 100%
-  );
+  padding: 64px max(5vw, 16px) max(5vh, 24px);
+  isolation: isolate;
   color: var(--ink);
   pointer-events: none;
   animation: rest-rise 1.2s 0.6s var(--ease) both;
 }
 
+.rest-day::before {
+  position: absolute;
+  inset: -96px 0 0;
+  z-index: -1;
+  background: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--bg) 72%, transparent) 0,
+    color-mix(in srgb, var(--bg) 72%, transparent) min(960px, 68%),
+    color-mix(in srgb, var(--bg) 56%, transparent) calc(min(960px, 68%) + 64px),
+    color-mix(in srgb, var(--bg) 32%, transparent) calc(min(960px, 68%) + 144px),
+    color-mix(in srgb, var(--bg) 12%, transparent) calc(min(960px, 68%) + 224px),
+    transparent calc(min(960px, 68%) + 320px)
+  );
+  mask-image: linear-gradient(to bottom, transparent, rgb(0 0 0 / 0.12) 40px, rgb(0 0 0 / 0.4) 80px, rgb(0 0 0 / 0.75) 120px, #000 160px);
+  content: "";
+  pointer-events: none;
+}
+
 .rest-day-needs {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   justify-self: start;
   min-width: 0;
   max-width: 100%;
-  height: calc(var(--ctl) + 10px);
-  padding: 0 16px 0 8px;
+  height: var(--ctl);
+  padding: 0 12px 0 6px;
   border: 0;
   border-radius: var(--r-ctl);
-  background: var(--decide);
-  box-shadow: 0 6px 24px -8px color-mix(in srgb, var(--decide) 70%, transparent);
-  color: var(--on-ink);
-  font: 500 var(--t-ui) var(--ui);
+  background: var(--float);
+  box-shadow: var(--shadow-float);
+  color: var(--ink);
+  font: 400 var(--t-ui) var(--ui);
   text-align: left;
   cursor: pointer;
   pointer-events: auto;
@@ -74,12 +82,7 @@
 }
 
 .rest-day-needs:hover {
-  background: color-mix(in srgb, var(--decide) 88%, var(--on-ink));
-}
-
-.rest-day-needs .count.is-loud {
-  background: var(--on-ink);
-  color: var(--decide);
+  background: color-mix(in srgb, var(--float) 90%, var(--ink));
 }
 
 .rest-day-needs:focus-visible {
@@ -91,7 +94,8 @@
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  color: var(--decide);
   font-weight: 600;
 }
 
@@ -104,7 +108,7 @@
 
 .rest-day-needs-more {
   flex: none;
-  color: color-mix(in srgb, var(--on-ink) 72%, var(--decide));
+  color: var(--ink-2);
 }
 
 .rest-day-head {
