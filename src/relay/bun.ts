@@ -672,7 +672,12 @@ function webApp(app: WebApp): (pathname: string) => Response {
   };
   const scene = { ...security, "content-security-policy": "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; frame-ancestors 'self'" };
   const frame = { ...security, "content-security-policy": "default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval'; style-src 'unsafe-inline'; img-src data: blob:; frame-ancestors 'self'" };
-  const policyFor = (rel: string) => (/^\/afk\/scene(\.html)?$/.test(rel) ? scene : /^\/afk\/frame(\.html)?$/.test(rel) ? frame : security);
+  const demo = {
+    ...security,
+    "content-security-policy":
+      "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob:; font-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'",
+  };
+  const policyFor = (rel: string) => (/^\/afk\/scene(\.html)?$/.test(rel) ? scene : /^\/afk\/frame(\.html)?$/.test(rel) ? frame : rel.startsWith("/demo/") ? demo : security);
   const isFile = (p: string) => existsSync(p) && statSync(p).isFile();
 
   return (pathname) => {

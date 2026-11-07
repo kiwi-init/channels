@@ -14,6 +14,8 @@ writeFileSync(join(dist, "install.sh"), "#!/bin/sh\necho hi\n");
 mkdirSync(join(dist, "afk"));
 writeFileSync(join(dist, "afk", "scene.html"), "<!doctype html><title>scene</title>");
 writeFileSync(join(dist, "afk", "index.html"), "<!doctype html><title>studio</title>");
+mkdirSync(join(dist, "demo"));
+writeFileSync(join(dist, "demo", "index.html"), "<!doctype html><title>demo</title>");
 writeFileSync(join(dist, "_headers"), "/*\n  X-Test: 1\n");
 writeFileSync(join(tmp, "secret.txt"), "outside the dashboard");
 
@@ -65,6 +67,15 @@ describe("dashboard on the Bun relay", () => {
       expect(scene).not.toContain("connect-src");
     }
     for (const path of ["/", "/afk/"]) expect((await fetch(relay + path)).headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
+  });
+
+  test("the demo app may be framed by the site's own pages, nobody else's", async () => {
+    const res = await fetch(`${relay}/demo/`);
+    expect(await res.text()).toContain("<title>demo</title>");
+    const policy = res.headers.get("content-security-policy") ?? "";
+    expect(policy).toContain("frame-ancestors 'self'");
+    expect(policy).toContain("connect-src 'self'");
+    expect(policy).toContain("img-src 'self' data: blob:");
   });
 
   test("a missing file is a 404, not the app", async () => {

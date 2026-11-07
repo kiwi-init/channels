@@ -11,3 +11,13 @@ for (const button of document.querySelectorAll(".code .copy")) {
     setTimeout(() => (button.textContent = "copy"), 1600);
   });
 }
+
+const demo = document.querySelector("iframe.demo-app");
+if (demo) {
+  const load = () => {
+    const theme = document.documentElement.dataset.theme;
+    demo.src = theme === "light" || theme === "dark" ? `/demo/?theme=${theme}` : "/demo/";
+  };
+  load();
+  new MutationObserver(load).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+}

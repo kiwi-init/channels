@@ -9,6 +9,8 @@ const ROOT = resolve(import.meta.dir, "..");
 const DOCS = join(ROOT, "docs");
 const SITE = join(ROOT, "site");
 const OUT = join(SITE, "docs");
+const UI = join(ROOT, "ui");
+const DEMO = join(SITE, "demo");
 const REPO = "https://github.com/kiwi-init/channels";
 
 type Node = {
@@ -102,6 +104,25 @@ interface Render {
 }
 
 const FIGURE = /^<!--\s*figure:\s*([a-z0-9-]+)\s*-->$/;
+const DEMO_MARK = /^<!--\s*demo\s*-->$/;
+
+function buildDemo(): boolean {
+  if (!existsSync(join(UI, "vite.config.ts"))) return false;
+  const run = Bun.spawnSync(["bunx", "vite", "build", "--base", "/demo/", "--outDir", DEMO, "--emptyOutDir", "--logLevel", "error"], {
+    cwd: UI,
+    env: { ...process.env, VITE_KIWI_DEMO: "1" },
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (run.exitCode !== 0) throw new Error(`the demo's build of ui/ failed:\n${run.stderr.toString()}${run.stdout.toString()}`);
+  rmSync(join(DEMO, "_headers"), { force: true });
+  return true;
+}
+
+const demoHtml = (): string =>
+  existsSync(join(DEMO, "index.html"))
+    ? `<div class="demo"><iframe class="demo-app" title="The Channels app in demo mode"></iframe></div>\n`
+    : `<p>This copy of the docs was built without the app: play the demo on <a href="https://channels.kiwiinit.com/docs/">channels.kiwiinit.com</a>.</p>\n`;
 
 type Figure = { svg: string; css: string; live: boolean };
 
@@ -209,6 +230,7 @@ async function render(node: Node, r: Render): Promise<string> {
       return `<div class="table"><table><thead>${head}</thead><tbody>${body}</tbody></table></div>\n`;
     }
     case "html": {
+      if (DEMO_MARK.test((node.value ?? "").trim())) return demoHtml();
       const fig = FIGURE.exec((node.value ?? "").trim());
       const name = fig?.[1];
       if (name) {
@@ -303,6 +325,7 @@ ${body}
 }
 
 async function build(): Promise<string[]> {
+  if (!DRAFT) buildDemo();
   const pages = readPages();
   const slugs = new Set(pages.map((p) => p.slug));
   rmSync(OUT, { recursive: true, force: true });
@@ -437,6 +460,7 @@ if (import.meta.main) {
   if (figure >= 0) {
     process.stdout.write(await previewHtml(process.argv[figure + 1] ?? ""));
   } else if (at >= 0) {
+    buildDemo();
     await build();
     serve(Number(process.argv[at + 1] ?? 4400) || 4400);
   } else {
