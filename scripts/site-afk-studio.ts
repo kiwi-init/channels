@@ -37,7 +37,7 @@ const check = (what: string, ok: boolean) => {
 };
 
 const csp = async (path: string) => (await fetch(base + path)).headers.get("content-security-policy") ?? "";
-for (const path of ["/afk/scene", "/afk/scene.html", "/afk/frame", "/afk/frame.html"]) {
+for (const path of ["/afk/scene", "/afk/scene.html", "/afk/scenes/rain", "/afk/frame", "/afk/frame.html"]) {
   const policy = await csp(path);
   check(`${path} has its own CSP with no network`, policy.startsWith("default-src 'none'") && !policy.includes("connect-src") && policy.includes("frame-ancestors 'self'"));
 }
@@ -76,7 +76,7 @@ try {
         );
 
     await page.goto(`${base}/afk/`);
-    check(`${theme}: the default scene says ready`, await waitStatus(/default scene.*Ready in/));
+    check(`${theme}: the default scene says ready`, await waitStatus(/scene Channels ships.*Ready in/));
     check(`${theme}: the default scene shows`, (await page.locator("#stage").getAttribute("data-state")) === "ready");
     await page.waitForTimeout(1200);
     if (out) await page.screenshot({ path: join(out, `afk-studio-${tag}-${theme}.png`) });
@@ -118,11 +118,25 @@ try {
     if (out) await page.screenshot({ path: join(out, `afk-studio-${tag}-plain.png`) });
 
     await page.fill("#paste", "");
-    check("clearing the box brings the default back", await waitStatus(/default scene.*Ready in/));
+    check("clearing the box brings the default back", await waitStatus(/scene Channels ships.*Ready in/));
     check("Download gives the default again", (await page.locator("#download").getAttribute("href")) === "/afk/scene");
 
     await page.fill("#describe", "a lighthouse in fog");
     check("the prompt carries the description", ((await page.locator("#prompt").textContent()) ?? "").includes("The scene I'd like: a lighthouse in fog"));
+    check("the meadow, built from the app's code, gets the blank-page prompt", ((await page.locator("#base").textContent()) ?? "").includes("blank page"));
+
+    await page.click('.pick[data-name="Rain on glass"]');
+    check("a gallery scene plays when picked", await waitStatus(/^Rain on glass\. Ready in/));
+    check("the picked scene is the checked one", (await page.locator('.pick[aria-checked="true"]').getAttribute("data-name")) === "Rain on glass");
+    check("Download gives the picked scene", ((await page.locator("#download").getAttribute("href")) ?? "").startsWith("blob:"));
+    const remix = (await page.locator("#prompt").textContent()) ?? "";
+    check(
+      "the prompt now starts from the picked scene",
+      remix.includes("What I'd like: a lighthouse in fog") && remix.includes('Start from the finished scene at the end of this message, "Rain on glass"') && remix.includes("(Rain on glass,"),
+    );
+    check("and says so under the button", ((await page.locator("#base").textContent()) ?? "").includes("starts from Rain on glass"));
+    await page.click('.pick[data-name="Meadow"]');
+    check("picking the meadow again plays it", await waitStatus(/scene Channels ships.*Ready in/));
     if (out) await page.screenshot({ path: join(out, `afk-studio-${tag}-page.png`), fullPage: true });
 
     check("nothing left the site", offsite.length === 0);

@@ -29,7 +29,7 @@
 
     <main class="studio">
       <h1>AFK studio</h1>
-      <p class="lede">When you step away, Channels shows a scene: one HTML file at <code>~/.kiwi/afk/scene.html</code>. Ask your agent for a new one, try it here, then swap it in.</p>
+      <p class="lede">When you step away, Channels shows a scene: one HTML file at <code>~/.kiwi/afk/scene.html</code>. Pick one here, or have your agent change one into yours, then swap it in.</p>
 
       <section class="viewer" aria-label="Preview">
         <div id="stage" class="stage" data-state="starting">
@@ -43,17 +43,22 @@
           <label class="chip"><input id="still" type="checkbox" />Less motion</label>
           <button id="full" type="button" class="chip">Full screen</button>
         </div>
-        <p id="status" class="status" role="status">The default scene, the one Channels ships.</p>
+        <p id="status" class="status" role="status">Meadow, the scene Channels ships.</p>
+        <div id="gallery" class="gallery" role="radiogroup" aria-label="Scenes">
+          <button type="button" class="pick" role="radio" aria-checked="true" data-src="/afk/scene" data-name="Meadow" data-remix="no"><img src="/afk/scenes/meadow.jpg" alt="" width="320" height="200" /><span>Meadow</span></button>
+          <button type="button" class="pick" role="radio" aria-checked="false" data-src="/afk/scenes/rain" data-name="Rain on glass"><img src="/afk/scenes/rain.jpg" alt="" width="320" height="200" loading="lazy" /><span>Rain on glass</span></button>
+        </div>
       </section>
 
       <ol class="steps">
         <li>
-          <h2>Ask your agent</h2>
-          <p>Say what you'd like to see, copy the prompt and send it to your agent.</p>
+          <h2>Make it yours</h2>
+          <p>Pick the scene closest to what you want, say what to change and send the prompt to your agent. It edits a finished scene instead of starting from nothing, so it's faster and starts from something good.</p>
           <div class="ask">
-            <input id="describe" type="text" placeholder="Rain on a window at night, city lights behind it" aria-label="The scene you'd like" />
+            <input id="describe" type="text" placeholder="Make it a rooftop in Tokyo at night" aria-label="What to change" />
             <button id="copy-prompt" type="button" class="primary">Copy prompt</button>
           </div>
+          <p id="base" class="quiet"></p>
           <details class="prompt">
             <summary>See the prompt</summary>
             <div class="code"><pre><code id="prompt"></code></pre></div>
@@ -67,7 +72,7 @@
         </li>
         <li>
           <h2>Swap it in</h2>
-          <p>Download it, then move it into place. Channels picks it up the next time you go AFK, no restart.</p>
+          <p>Download the scene playing above, then move it into place. Channels picks it up the next time you go AFK, no restart.</p>
           <p><a id="download" class="primary" href="/afk/scene" download="scene.html">Download scene.html</a></p>
           <div class="code"><pre><code>mkdir -p ~/.kiwi/afk &amp;&amp; mv ~/Downloads/scene.html ~/.kiwi/afk/scene.html</code></pre><button class="copy" type="button">copy</button></div>
           <p class="quiet">To go back to the meadow, download the default the same way: <a href="/afk/scene" download="scene.html">the default scene</a>. Delete the file and Channels shows a plain sky.</p>

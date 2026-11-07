@@ -113,6 +113,60 @@
   font: 13px/1.6 var(--mono);
 }
 
+.gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.pick {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-2);
+  font: 13px var(--mono);
+  text-align: left;
+  cursor: pointer;
+}
+
+.pick img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  border-radius: 8px;
+  outline: 1px solid var(--line-2);
+  outline-offset: -1px;
+  background: var(--bg-2);
+  transition: outline-color 0.2s var(--ease);
+}
+
+.pick:hover {
+  color: var(--ink);
+}
+
+.pick[aria-checked="true"] {
+  color: var(--ink);
+}
+
+.pick[aria-checked="true"] img {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.pick:focus-visible {
+  outline: none;
+}
+
+.pick:focus-visible img {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .steps {
   margin: 56px 0 0;
   padding: 0;
@@ -164,6 +218,10 @@
 .ask {
   display: flex;
   gap: 8px;
+}
+
+.steps .ask + .quiet {
+  margin: 10px 0 0;
 }
 
 .ask input {
