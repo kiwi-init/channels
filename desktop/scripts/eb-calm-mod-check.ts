@@ -293,6 +293,7 @@ try {
   press("t", true);
   await step("the probe's idle frame", 15_000, async () => !!(await d.evaluate(restNow, null, 2_000)).frame);
   await later(1_500);
+  await d.evaluate(traceFocus, null, 2_000);
   clickAt(...at(size.width / 2, size.height / 2));
   await later(800);
   const stays = await d.evaluate(restNow, null, 2_000);
@@ -300,6 +301,7 @@ try {
   press("x");
   await step("the probe, gone after a key", 10_000, async () => !(await d.evaluate(restNow, null, 2_000)).shown);
   const home = await d.evaluate(current, null, 2_000);
+  if (home !== "Home") console.log(`focus since the click inside the probe:\n  ${(await d.evaluate(focusTrace, null, 2_000).catch(() => [] as string[])).join("\n  ")}`);
   check(
     home === "Home",
     `after a click inside it, a key still never reaches the idle frame: the shell takes it and leaves, and the probe's keydown, which would open ${channel}, never runs (now on ${home})`,

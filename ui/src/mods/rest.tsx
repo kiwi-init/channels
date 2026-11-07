@@ -40,16 +40,23 @@ export function Rest({ name, leaving, meadow, alert, still, slot, frame, leave, 
 
   useEffect(() => {
     const was = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    let framed = false
     const hold = (): void => {
-      unframe()
+      if (framed) window.focus()
+      else unframe()
       box.current?.focus({ preventScroll: true })
     }
     const keep = (): void => {
-      if (document.activeElement !== box.current) hold()
+      if (framed || document.activeElement !== box.current) hold()
     }
-    const later = (): void => {
-      keep()
-      setTimeout(keep, 0)
+    const later = (): void => void setTimeout(keep, 0)
+    const blurred = (e: Event): void => {
+      if (e.target !== window) return
+      framed = document.hasFocus()
+      later()
+    }
+    const focused = (e: Event): void => {
+      if (e.target === window) framed = false
     }
     const swallow = (e: Event): void => {
       e.preventDefault()
@@ -60,13 +67,15 @@ export function Rest({ name, leaving, meadow, alert, still, slot, frame, leave, 
     hold()
     const every = window.setInterval(keep, 50)
     for (const type of SWALLOWED) window.addEventListener(type, swallow, { capture: true, passive: false })
-    window.addEventListener("blur", later)
+    window.addEventListener("blur", blurred)
+    window.addEventListener("focus", focused)
     document.addEventListener("focusin", later, true)
     el?.addEventListener("focusout", later)
     return () => {
       window.clearInterval(every)
       for (const type of SWALLOWED) window.removeEventListener(type, swallow, { capture: true })
-      window.removeEventListener("blur", later)
+      window.removeEventListener("blur", blurred)
+      window.removeEventListener("focus", focused)
       document.removeEventListener("focusin", later, true)
       el?.removeEventListener("focusout", later)
       unframe()
