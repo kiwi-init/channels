@@ -44,7 +44,7 @@ export function Afk() {
     const was = document.activeElement instanceof HTMLElement ? document.activeElement : null
     box.current?.focus({ preventScroll: true })
     const swallow = (e: Event): void => {
-      if (e.type === "pointerdown" && e.target instanceof Element && e.target.closest(".rest-row")) return
+      if (e.type === "pointerdown" && e.target instanceof Element && e.target.closest(".afk-row")) return
       e.preventDefault()
       e.stopImmediatePropagation()
       if (e.type !== "keyup") setLeaving(true)

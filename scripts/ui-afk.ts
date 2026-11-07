@@ -41,7 +41,7 @@ try {
       await page.evaluate(() => document.fonts.ready);
       await page.waitForTimeout(3600);
       if (out) await page.screenshot({ path: join(out, `afk-${label}-${theme}.png`) });
-      const row = page.locator(".rest-row").first();
+      const row = page.locator(".afk-row").first();
       await row.hover();
       await page.waitForTimeout(400);
       if (out) await page.screenshot({ path: join(out, `afk-${label}-${theme}-hover.png`) });
@@ -50,7 +50,7 @@ try {
       await page.goto(`http://127.0.0.1:${server.port}/?shot=afk`);
       await page.waitForTimeout(2600);
       check("the overlay is a dialog over the app", (await page.getByRole("dialog", { name: "AFK" }).count()) === 1);
-      const box = await page.locator(".rest").boundingBox();
+      const box = await page.locator(".afk").boundingBox();
       check(`it covers the whole window (${JSON.stringify(box)})`, !!box && box.x === 0 && box.y === 0 && box.width === width && box.height === height);
       const typed = await page.evaluate(() => {
         let reached = false;
@@ -62,36 +62,36 @@ try {
       });
       check("a key that wakes it never reaches the app", !typed);
       await page.waitForTimeout(900);
-      check("a key fades it out", (await page.locator(".rest").count()) === 0);
+      check("a key fades it out", (await page.locator(".afk").count()) === 0);
       await page.goto(`http://127.0.0.1:${server.port}/?shot=afk`);
       await page.waitForTimeout(2600);
-      const target = page.locator(".rest-row").nth(1);
-      const name = (await target.locator(".rest-name").textContent()) ?? "";
+      const target = page.locator(".afk-row").nth(1);
+      const name = (await target.locator(".afk-name").textContent()) ?? "";
       await target.click();
       await page.waitForTimeout(900);
       const current = await page.evaluate(() => document.querySelector('nav[aria-label="Channels"] button.tile[aria-current="page"]')?.getAttribute("aria-label")?.split(",")[0] ?? "");
-      check(`a click on a channel (${name}) opens it and the sky goes`, current === name && (await page.locator(".rest").count()) === 0);
+      check(`a click on a channel (${name}) opens it and the sky goes`, current === name && (await page.locator(".afk").count()) === 0);
       await page.goto(`http://127.0.0.1:${server.port}/?shot=afk`);
       await page.waitForTimeout(2600);
       await page.mouse.move(10, 10);
       await page.mouse.move(400, 300);
       await page.waitForTimeout(300);
-      check("moving the mouse keeps it, so a channel can be picked", (await page.locator(".rest").count()) === 1);
+      check("moving the mouse keeps it, so a channel can be picked", (await page.locator(".afk").count()) === 1);
       await page.mouse.click(20, height - 20);
       await page.waitForTimeout(900);
-      check("a click on the sky fades it out", (await page.locator(".rest").count()) === 0);
+      check("a click on the sky fades it out", (await page.locator(".afk").count()) === 0);
       await page.keyboard.press("ControlOrMeta+t");
       await page.waitForTimeout(600);
       check("⌘T / Ctrl+T opens it at once", (await page.getByRole("dialog", { name: "AFK" }).count()) === 1);
       await page.keyboard.press("ControlOrMeta+t");
       await page.waitForTimeout(900);
-      check("⌘T / Ctrl+T again closes it", (await page.locator(".rest").count()) === 0);
+      check("⌘T / Ctrl+T again closes it", (await page.locator(".afk").count()) === 0);
       const still = await browser.newPage({ viewport: { width, height } });
       await still.addInitScript(() => {
         const seen = new Set<string>();
         Object.assign(window, { afkNames: seen });
         const look = (): void => {
-          const names = [...document.querySelectorAll(".rest-row .rest-name")].map((n) => n.textContent ?? "");
+          const names = [...document.querySelectorAll(".afk-row .afk-name")].map((n) => n.textContent ?? "");
           if (names.length) seen.add(JSON.stringify(names));
           requestAnimationFrame(look);
         };
@@ -102,7 +102,7 @@ try {
       const motion = await still.evaluate(() => document.documentElement.dataset.motion ?? "");
       const seen = await still.evaluate(() => [...((window as unknown as { afkNames: Set<string> }).afkNames ?? [])]);
       check(`with the app's Reduce motion on (${motion}), the channel names show whole from the first frame (${seen.join(" then ")})`, motion === "reduced" && seen.length === 1);
-      const scene = await still.evaluate(() => document.querySelector(".rest-back canvas")?.getAttribute("data-meadow") ?? "none");
+      const scene = await still.evaluate(() => document.querySelector(".afk-back canvas")?.getAttribute("data-meadow") ?? "none");
       check(`and the meadow behind it doesn't move (${scene})`, scene !== "moving");
       await still.goto(`http://127.0.0.1:${server.port}/?shot=onboarding-still`);
       await still.waitForTimeout(2600);
