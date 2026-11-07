@@ -3,6 +3,7 @@ import UIKit
 
 struct NeedsScreen: View {
     @Environment(AppModel.self) private var model
+    @State private var failed: String?
 
     private func open(_ spot: Spot) {
         model.open(.place(spot))
@@ -27,6 +28,28 @@ struct NeedsScreen: View {
                         NeedsRow(face: need.kind == "join" ? nil : need.from, room: room, kind: NeedText.label(need), text: NeedText.title(need), at: need.at)
                     }
                     .bare()
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        if need.kind == "permission" {
+                            Button("Deny", systemImage: "xmark", role: .destructive) { quick { try await model.allow(room.code, id: need.id, allow: false) } }
+                        }
+                    }
+                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                        if need.kind == "permission" && need.canAllow == true {
+                            Button("Allow Once", systemImage: "checkmark") { quick { try await model.allow(room.code, id: need.id, allow: true) } }
+                                .tint(.green)
+                        }
+                    }
+                    .contextMenu {
+                        if need.kind == "permission" && need.canAllow == true {
+                            Button("Allow Once", systemImage: "checkmark") { quick { try await model.allow(room.code, id: need.id, allow: true) } }
+                        }
+                        if need.kind == "permission" {
+                            Button("Deny", systemImage: "xmark", role: .destructive) { quick { try await model.allow(room.code, id: need.id, allow: false) } }
+                        }
+                        Button("Open the Conversation", systemImage: "bubble.left") {
+                            open(Spot(code: room.code, place: need.task.map { "task:\($0)" } ?? "main"))
+                        }
+                    }
                 }
                 ForEach(room.asks) { ask in
                     NavigationLink {
@@ -35,6 +58,9 @@ struct NeedsScreen: View {
                         NeedsRow(face: ask.from, room: room, kind: NeedText.asked(ask, room), text: ask.plain, at: ask.at)
                     }
                     .bare()
+                    .contextMenu {
+                        Button("Open the Conversation", systemImage: "bubble.left") { open(Spot(code: room.code, place: ask.place ?? "main")) }
+                    }
                 }
                 ForEach(room.reviews) { review in
                     NavigationLink {
@@ -43,6 +69,14 @@ struct NeedsScreen: View {
                         NeedsRow(face: review.by, room: room, kind: "Review \(taskLabel(review.task))", text: review.title, at: review.at)
                     }
                     .bare()
+                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                        Button("Approve", systemImage: "checkmark") { quick { try await model.approve(room.code, task: review.task) } }
+                            .tint(.green)
+                    }
+                    .contextMenu {
+                        Button("Approve", systemImage: "checkmark") { quick { try await model.approve(room.code, task: review.task) } }
+                        Button("Open \(taskLabel(review.task))", systemImage: "bubble.left") { open(Spot(code: room.code, place: "task:\(review.task)")) }
+                    }
                 }
             }
         }
@@ -54,6 +88,25 @@ struct NeedsScreen: View {
             }
         }
         .navigationTitle("Needs You")
+        .navigationBarTitleDisplayMode(.inline)
+        .alert("Couldn't do that", isPresented: Binding(get: { failed != nil }, set: { if !$0 { failed = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(failed ?? "")
+        }
+    }
+
+    private func quick(_ go: @escaping () async throws -> Void) {
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        Task {
+            do {
+                try await go()
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+            } catch {
+                failed = error.localizedDescription
+                UINotificationFeedbackGenerator().notificationOccurred(.error)
+            }
+        }
     }
 }
 
