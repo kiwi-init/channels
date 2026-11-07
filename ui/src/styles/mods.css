@@ -126,6 +126,15 @@ img.mod-icon {
   cursor: pointer;
 }
 
+.mod-catalog-row .mod-open {
+  cursor: default;
+}
+
+.mod-installed {
+  color: var(--ink-3);
+  font-size: var(--t-meta);
+}
+
 .mod-open-more {
   display: flex;
   margin-left: auto;

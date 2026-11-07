@@ -1,11 +1,10 @@
-import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { startLocalRelay } from "../../scripts/local-relay.ts";
 import { daemonStop } from "../src/daemon-client.ts";
-import { appExecutable, attach, launch, stop, testEnv, until, type Driver } from "./eb-drive.ts";
+import { appExecutable, attach, launch, screenshot, stop, testEnv, until, type Driver } from "./eb-drive.ts";
 import { firstChannel, sendMessage } from "./eb-first-run.ts";
 
 if (!process.argv[2]) {
@@ -139,7 +138,7 @@ const PAGE = (n: number, probe: boolean) =>
   `<!doctype html><html><head><meta charset="utf-8"><title>Figure ${n}</title><style>body{margin:0;background:#202020;color:#ddd;font:14px sans-serif}</style></head><body><svg viewBox="0 0 200 80"><rect width="200" height="80" rx="6" fill="#3a3a3a"/><circle cx="100" cy="40" r="30" fill="none" stroke="#999" stroke-width="2"/><line id="needle" x1="100" y1="40" x2="100" y2="14" stroke="#ffcc33" stroke-width="3"/><text x="8" y="72" fill="#ffcc33" font-size="10">live ${n}</text></svg><script type="module">${DRAW(n)}${probe ? PROBE : ""}</script></body></html>`;
 
 const FILES = [1, 2, 3, 4].flatMap((n) => [
-  { name: `gauge${n}.figure.html`, type: "text/html", text: PAGE(n, n === 1) },
+  { name: `gauge${n}.figure.html`, type: "text/html", text: PAGE(n, true) },
   { name: `gauge${n}.figure.svg`, type: "image/svg+xml", text: SNAPSHOT(n) },
 ]);
 
@@ -202,11 +201,7 @@ type Said = Record<string, unknown>;
 const heard = (d: Driver): Promise<Said[]> => d.evaluate(() => ((window as unknown as { __modHeard?: Said[] }).__modHeard ?? []) as Said[], null, 3_000);
 
 async function shot(name: string): Promise<void> {
-  if (!shots) return;
-  mkdirSync(shots, { recursive: true });
-  const file = join(shots, `${name}.png`);
-  const r = process.platform === "darwin" ? spawnSync("screencapture", ["-x", file], { stdio: "ignore" }) : spawnSync("import", ["-window", "root", file], { stdio: "ignore" });
-  console.log(r.status === 0 && existsSync(file) ? `shot ${file}` : `no shot for ${name} here`);
+  screenshot(shots, name);
 }
 
 function files(dir: string): string[] {
