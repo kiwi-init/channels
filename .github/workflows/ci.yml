@@ -729,7 +729,7 @@ jobs:
           if [ "$code" -ne 0 ]; then
             echo "::group::weston's log"; cat "$RUNNER_TEMP/weston.log"; echo "::endgroup::"
             echo "::group::the test app alone in this session, for 20 s"
-            mkdir -p "$RUNNER_TEMP/wayland-home" && HOME="$RUNNER_TEMP/wayland-home" session timeout 20 "${{ steps.test-app.outputs.path }}/bin/electrobun-launcher" > "$RUNNER_TEMP/wayland-app.log" 2>&1 || echo "exited $?"
+            mkdir -p "$RUNNER_TEMP/wayland-home" && HOME="$RUNNER_TEMP/wayland-home" CFFIXED_USER_HOME="$RUNNER_TEMP/wayland-home" session timeout 20 "${{ steps.test-app.outputs.path }}/bin/electrobun-launcher" > "$RUNNER_TEMP/wayland-app.log" 2>&1 || echo "exited $?"
             tail -n 120 "$RUNNER_TEMP/wayland-app.log"
             echo "::endgroup::"
           fi
@@ -756,7 +756,7 @@ jobs:
           if [ "$code" -ne 0 ]; then
             echo "::group::weston's log"; cat "$RUNNER_TEMP/weston-native.log"; echo "::endgroup::"
             echo "::group::the test app alone in this session, for 20 s"
-            mkdir -p "$RUNNER_TEMP/wayland-native-home" && HOME="$RUNNER_TEMP/wayland-native-home" session timeout 20 "${{ steps.test-app.outputs.path }}/bin/electrobun-launcher" > "$RUNNER_TEMP/wayland-native-app.log" 2>&1 || echo "exited $?"
+            mkdir -p "$RUNNER_TEMP/wayland-native-home" && HOME="$RUNNER_TEMP/wayland-native-home" CFFIXED_USER_HOME="$RUNNER_TEMP/wayland-native-home" session timeout 20 "${{ steps.test-app.outputs.path }}/bin/electrobun-launcher" > "$RUNNER_TEMP/wayland-native-app.log" 2>&1 || echo "exited $?"
             tail -n 120 "$RUNNER_TEMP/wayland-native-app.log"
             echo "::endgroup::"
           fi
