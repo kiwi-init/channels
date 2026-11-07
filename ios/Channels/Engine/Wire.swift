@@ -158,6 +158,8 @@ struct PlaceView: Codable, Sendable, Hashable, Identifiable {
     let task: Int?
     let lastSeq: Int
     let last: MessageView?
+    var count: Int? = nil
+    var done: Bool? = nil
 
     var id: String { key }
 }

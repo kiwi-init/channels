@@ -181,6 +181,8 @@ export interface PlaceView {
   task: number | null;
   lastSeq: number;
   last: MessageView | null;
+  count: number;
+  done: boolean;
 }
 
 export type IconView = { kind: "robot"; robot: string } | { kind: "emoji"; emoji: string } | { kind: "image"; mime: string; data: string };
