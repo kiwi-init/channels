@@ -58,7 +58,7 @@ struct RootView: View {
         Group {
             switch model.phase {
             case .starting:
-                Tone.canvas.ignoresSafeArea()
+                Starting()
             case .unlinked:
                 LinkView()
             case .ready:
@@ -81,6 +81,28 @@ struct RootView: View {
         }
         .background(Tone.canvas)
         .tint(Tone.accent)
+    }
+}
+
+struct Starting: View {
+    @State private var slow = false
+
+    var body: some View {
+        ZStack {
+            Tone.canvas.ignoresSafeArea()
+            if slow {
+                VStack(spacing: 14) {
+                    Image("Mark").resizable().scaledToFit().frame(width: 56, height: 56)
+                    ProgressView()
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Starting Channels")
+            }
+        }
+        .task {
+            try? await Task.sleep(for: .milliseconds(600))
+            slow = true
+        }
     }
 }
 
