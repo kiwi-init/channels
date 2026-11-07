@@ -215,7 +215,7 @@ jobs:
     needs: plan
     if: fromJSON(needs.plan.outputs.run)['doc']
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -269,7 +269,7 @@ jobs:
           exit "$status"
       - name: ui a busy thread doc never scrolls on its own, under the composer or while you read, in WebKit
         if: ${{ !cancelled() && matrix.part == 'send' }}
-        run: bun scripts/ui-doc-still.ts --dist ui/dist --trace --loops 100
+        run: bun scripts/ui-doc-still.ts --dist ui/dist
       - name: composer in a doc, late refusals keep the draft, PDFs, Edit in the composer, slow pasted images, the / menu and ⌘Enter, in Chromium and WebKit
         if: ${{ !cancelled() && matrix.part == 'send' }}
         run: |
