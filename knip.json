@@ -18,6 +18,8 @@
     "gdbus",
     "pgrep",
     "xdotool",
+    "screencapture",
+    "import",
     "swaymsg",
     "grim",
     "plutil",
