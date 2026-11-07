@@ -3,7 +3,7 @@ import fs from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { hostKey, mismatches, pinFor, PINS, sha256, treeSha256 } from "../desktop/scripts/eb-pins.ts";
+import { hostKey, mismatches, pinFor, PINS, sha256, treeSha256, unpinned } from "../desktop/scripts/eb-pins.ts";
 
 const dirs: string[] = [];
 const fresh = (): string => {
@@ -42,10 +42,34 @@ describe("Electrobun's toolchain and what it ships are pinned in the repo (T804)
   });
 
   test("a host without pins is refused by name", () => {
-    expect(() => pinFor(PINS.app, "linux-x64", "app files")).toThrow("pins no app files for linux-x64");
+    expect(() => pinFor(PINS.app, "linux-riscv64", "app files")).toThrow("pins no app files for linux-riscv64");
     expect(hostKey("darwin", "arm64")).toBe("macos-arm64");
     expect(hostKey("linux", "x64")).toBe("linux-x64");
     expect(() => hostKey("win32", "x64")).toThrow("doesn't build on win32-x64");
+  });
+
+  test("the Linux core's files are pinned like the Mac ones, and the build checks them (T7239)", () => {
+    for (const key of ["linux-x64", "linux-arm64"]) {
+      const files = pinFor(PINS.app, key, "app files");
+      expect(Object.keys(files)).toEqual(expect.arrayContaining(["bin/launcher", "bin/libElectrobunCore.so", "bin/libNativeWrapper.so", "Resources/preload-full.js", "Resources/uninstall"]));
+      for (const sha of Object.values(files)) expect(sha).toMatch(/^[0-9a-f]{64}$/);
+    }
+    expect(pinFor(PINS.app, "linux-x64", "app files")["bin/libNativeWrapper.so"]).not.toBe(pinFor(PINS.app, "linux-arm64", "app files")["bin/libNativeWrapper.so"]);
+    const postBuild = fs.readFileSync(path.join(import.meta.dirname, "..", "desktop", "scripts", "eb-post-build.ts"), "utf8");
+    expect(postBuild).toContain('unpinned(root, "bin", pins)');
+    expect(postBuild.indexOf('unpinned(root, "bin", pins)')).toBeLessThan(postBuild.indexOf("fs.renameSync(theirs"));
+  });
+
+  test("a file nobody pinned is named with its hash, except the app's own", () => {
+    const d = fresh();
+    fs.mkdirSync(path.join(d, "bin", "sub"), { recursive: true });
+    for (const [name, text] of [
+      ["pinned", "a"],
+      ["ours", "b"],
+      ["stray", "c"],
+    ])
+      fs.writeFileSync(path.join(d, "bin", name as string), text as string);
+    expect(unpinned(d, "bin", { "bin/pinned": "x" }, new Set(["ours"])).sort()).toEqual([`bin/stray (sha256 ${sha256(new TextEncoder().encode("c"))})`, "bin/sub (not a file)"]);
   });
 
   test("a file that changed, went missing or was swapped is named", () => {

@@ -8,7 +8,7 @@ import { JOIN_SCHEME } from "../src/deep-links.ts";
 import { PAGE_TEMPLATE, pageWithCsp } from "../src/eb-page.ts";
 import type { FromWorker, ToWorker } from "../src/keys-shim.ts";
 import { bundleProblems, keyChannelProblems, shortVersion, testBuildProblems, urlSchemeProblems, versionProblems } from "./eb-bundle.ts";
-import { hostKey, mismatches, pinFor, PINS } from "./eb-pins.ts";
+import { hostKey, mismatches, pinFor, PINS, unpinned } from "./eb-pins.ts";
 import { sealApp } from "./eb-seal.ts";
 import { ELECTROBUN_LAUNCHER } from "./linux-files.ts";
 
@@ -64,7 +64,13 @@ if (answered !== "ok") throw new Error(`the bundled keys worker didn't answer a 
 if (os === "linux") {
   const host = process.arch === "x64" ? "x64" : process.arch === "arm64" ? "arm64" : process.arch;
   if (host !== arch) throw new Error(`eb-post-build: the Linux launcher is built with this machine's cc, for ${host}, not the ${arch} app`);
-  const bin = path.join(path.dirname(resources[0] as string), "bin");
+  const root = path.dirname(resources[0] as string);
+  const key = hostKey("linux", arch);
+  const pins = pinFor(PINS.app, key, "app files");
+  const swapped = [...mismatches(root, pins), ...unpinned(root, "bin", pins).map((f) => `${f}: nobody pinned it`)];
+  if (swapped.length) throw new Error(`eb-post-build: the ${key} app's Electrobun files aren't Livewire ${PINS.electrobun}'s pinned ones (desktop/electrobun-pins.json): ${swapped.join("; ")}`);
+  console.log(`eb-post-build: the ${key} app's ${Object.keys(pins).length} Electrobun files match Livewire ${PINS.electrobun}'s pins`);
+  const bin = path.join(root, "bin");
   const theirs = path.join(bin, "launcher");
   if (!fs.existsSync(theirs)) throw new Error(`eb-post-build: no Electrobun launcher at ${theirs}`);
   fs.renameSync(theirs, path.join(bin, ELECTROBUN_LAUNCHER));
@@ -91,7 +97,7 @@ const pinned = pinFor(PINS.app, key, "app files");
 const bad = mismatches(bundle, pinned);
 if (bad.length) throw new Error(`eb-post-build: Electrobun's files in the app don't match their pins: ${bad.join("; ")}`);
 const OURS = new Set(["libkiwi-shell.dylib", "kiwi-launcher"]);
-const extra = fs.readdirSync(path.join(contents, "MacOS")).filter((f) => !OURS.has(f) && !Object.hasOwn(pinned, `Contents/MacOS/${f}`));
+const extra = unpinned(bundle, "Contents/MacOS", pinned, OURS);
 if (extra.length) throw new Error(`eb-post-build: Contents/MacOS holds files nobody pinned: ${extra.join(", ")}`);
 
 execFileSync(

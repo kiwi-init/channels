@@ -3,7 +3,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { mismatches, pinFor, PINS, sha256, treeSha256 } from "./eb-pins.ts";
+import { coreName, coreUrl as releaseCoreUrl } from "./eb-bump.ts";
+import { fileSha256, mismatches, pinFor, PINS, sha256, treeSha256 } from "./eb-pins.ts";
 
 const keys = process.argv.slice(2);
 if (!keys.length) {
@@ -11,7 +12,7 @@ if (!keys.length) {
   process.exit(2);
 }
 
-const coreUrl = (key: string): string => `${PINS.releasesBaseUrl}/v${PINS.electrobun}/electrobun-core-${key.replace(/^macos-/, "darwin-")}.tar.gz`;
+const coreUrl = (key: string): string => releaseCoreUrl(PINS.releasesBaseUrl, PINS.electrobun, key);
 
 async function fetched(url: string): Promise<Uint8Array> {
   const res = await fetch(url, { signal: AbortSignal.timeout(120_000) });
@@ -37,13 +38,24 @@ async function problemsOf(key: string, tmp: string): Promise<string[]> {
   unpacked(await fetched(coreUrl(key)), path.join(tmp, key, "core"));
   const devkit = treeSha256(path.join(tmp, key, "core", "api"));
   const pinned = pinFor(PINS.devkit, key, "devkit");
-  return devkit === pinned ? bad : [...bad, `${key}: the devkit api tree in ${coreUrl(key)} is ${devkit}, pinned ${pinned}`];
+  const tree = devkit === pinned ? [] : [`${key}: the devkit api tree in ${coreUrl(key)} is ${devkit}, pinned ${pinned}`];
+  return [...bad, ...tree, ...appProblems(key, path.join(tmp, key, "core"))];
+}
+
+function appProblems(key: string, core: string): string[] {
+  return Object.entries(pinFor(PINS.app, key, "app files")).flatMap(([rel, want]) => {
+    const file = path.join(core, coreName(rel));
+    if (!fs.existsSync(file)) return [];
+    const got = fileSha256(file);
+    return got === want ? [] : [`${key}: ${rel} is ${coreName(rel)} in ${coreUrl(key)}, sha256 ${got}; pinned ${want}`];
+  });
 }
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "eb-pins-check-"));
 try {
   const problems = (await Promise.all(keys.map((k) => problemsOf(k, tmp)))).flat();
-  for (const k of keys) if (!problems.some((p) => p.startsWith(k))) console.log(`${k}: Hutch ${PINS.hutch.version} and the Electrobun ${PINS.electrobun} devkit match their pins`);
+  for (const k of keys)
+    if (!problems.some((p) => p.startsWith(k))) console.log(`${k}: Hutch ${PINS.hutch.version}, the Electrobun ${PINS.electrobun} devkit and the app files its core ships match their pins`);
   for (const p of problems) console.error(`eb-pins-check: ${p}`);
   process.exitCode = problems.length ? 1 : 0;
 } finally {
