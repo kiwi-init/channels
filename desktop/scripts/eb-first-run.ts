@@ -15,21 +15,21 @@ export const fillIn = ({ selector, value }: { selector: string; value: string })
 
 const gone = ({ selector }: { selector: string }): boolean => !document.querySelector(selector);
 
-const clickButton = ({ name, within }: { name: string; within: string }): boolean => {
+const clickButton = ({ name, within, step }: { name: string; within: string; step: string }): boolean => {
+  const w = window as unknown as { kiwiClicks?: { step: string; said: string }[] };
+  if (w.kiwiClicks?.some((c) => c.step === step)) return true;
   const button = [...document.querySelectorAll<HTMLButtonElement>(`${within} button`)].find(
     (b) => (b.getAttribute("aria-label") ?? b.textContent ?? "").trim() === name && b.getClientRects().length > 0 && !b.disabled,
   );
-  if (button) {
-    const w = window as unknown as { kiwiClicks?: string[] };
-    const screen = document.querySelector("dialog.onb .onb-wire") ? "trust" : document.querySelector("dialog.onb .onb-input") ? "pledge" : document.querySelector("dialog.onb") ? "intro" : "app";
-    (w.kiwiClicks ??= []).push(`${Math.round(performance.now())} ms: ${name} in ${within}, on the ${screen} screen`);
-  }
-  button?.click();
-  return !!button;
+  if (!button) return false;
+  const screen = document.querySelector("dialog.onb .onb-wire") ? "trust" : document.querySelector("dialog.onb .onb-input") ? "pledge" : document.querySelector("dialog.onb") ? "intro" : "app";
+  (w.kiwiClicks ??= []).push({ step, said: `${Math.round(performance.now())} ms: ${name} in ${within}, on the ${screen} screen` });
+  button.click();
+  return true;
 };
 
 const seen = (): string => {
-  const w = window as unknown as { kiwiClicks?: string[] };
+  const w = window as unknown as { kiwiClicks?: { step: string; said: string }[] };
   const onb = document.querySelector("dialog.onb");
   const screen = onb?.querySelector(".onb-wire") ? "trust" : onb?.querySelector(".onb-input") ? "pledge" : onb ? "intro" : "app";
   const buttons = [...document.querySelectorAll<HTMLButtonElement>(onb ? "dialog.onb button" : "button")]
@@ -41,7 +41,7 @@ const seen = (): string => {
   const focus = document.activeElement;
   return [
     `at ${Math.round(performance.now())} ms, on the ${screen} screen${onb ? `, the dialog ${(onb as HTMLDialogElement).open ? "open" : "closed"}` : ""}`,
-    `clicks: ${(w.kiwiClicks ?? []).join("; ") || "none"}`,
+    `clicks: ${(w.kiwiClicks ?? []).map((c) => c.said).join("; ") || "none"}`,
     `buttons: ${buttons.join(", ") || "none"}`,
     `focus: ${focus ? `${focus.tagName.toLowerCase()}.${focus.className}` : "none"}`,
     `onboarding: ${onb ? onb.outerHTML.replace(/\s+/g, " ").slice(0, 800) : "none"}`,
@@ -104,15 +104,16 @@ export async function firstChannel(d: Driver, messages: number, evidence: Eviden
     if (missed.length) console.log(`${what}: done after ${Date.now() - start} ms, and ${missed.length} probes failed first (${missed.slice(0, 5).join("; ")})`);
   };
   const probe = 2_000;
-  await step("the onboarding", 60_000, () => d.evaluate(clickButton, { name: "continue", within: ".onb:not(:has(.onb-wire, .onb-input))" }, probe));
-  await step("the onboarding's second screen", 10_000, () => d.evaluate(clickButton, { name: "continue", within: ".onb:has(.onb-wire)" }, probe));
+  const click = (what: string, ms: number, name: string, within: string) => step(what, ms, () => d.evaluate(clickButton, { name, within, step: what }, probe));
+  await click("the onboarding", 60_000, "continue", ".onb");
+  await click("the onboarding's second screen", 10_000, "continue", ".onb:has(.onb-wire)");
   await step("the pledge", 10_000, () => d.evaluate(fillIn, { selector: ".onb input", value: "Channels is not a harness" }, probe));
   await step("the onboarding closes", 10_000, () => d.evaluate(gone, { selector: "dialog.onb" }, probe));
   await step("the name field", 60_000, () => d.evaluate(fillIn, { selector: 'input[aria-label="Your name"]', value: "Jonatas" }, probe));
-  await step("Continue", 10_000, () => d.evaluate(clickButton, { name: "Continue", within: "body" }, probe));
-  await step("New channel", 60_000, () => d.evaluate(clickButton, { name: "New channel", within: "body" }, probe));
+  await click("Continue", 10_000, "Continue", "body");
+  await click("New channel", 60_000, "New channel", "body");
   await step("the new channel's name", 10_000, () => d.evaluate(fillIn, { selector: '[role="dialog"] input', value: "cold" }, probe));
-  await step("Create channel", 10_000, () => d.evaluate(clickButton, { name: "Create channel", within: '[role="dialog"]' }, probe));
+  await click("Create channel", 10_000, "Create channel", '[role="dialog"]');
   for (let i = 0; i < messages; i++) {
     const text = `Message ${i + 1}: the relay deploy is done, numbers in a minute.`;
     await step(`message ${i + 1}, sent and in the conversation`, 60_000, () => d.evaluate(sendMessage, { text, shows: text }, probe));
