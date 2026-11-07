@@ -2,7 +2,7 @@ import { freeHandle, seededPick } from "@kiwi/core/handles.ts"
 import type { JoinRequest, Member as RosterMember } from "@kiwi/core/membership.ts"
 import { nameKey, runsLine } from "@kiwi/core/membership.ts"
 import type { Card, DocBlockRef, Event } from "@kiwi/core/protocol.ts"
-import { permissionAnswer } from "@kiwi/core/permission.ts"
+import { answersAsHuman, permissionAnswer } from "@kiwi/core/permission.ts"
 import { describeEvent, proofLabel } from "@kiwi/core/format.ts"
 import { memberLoad, showsLoad } from "@kiwi/core/load.ts"
 import { checksOf, FAILED, landingWaits, prLinks, readyForPerson, taskOfBranch, taskPr } from "@kiwi/core/prs.ts"
@@ -798,15 +798,16 @@ export function asksOf(
       if (isOpen) for (const t of heldBy(state, m)) held.add(t)
       if (isOpen && task !== undefined) held.add(task)
       const human = humanOf(state, m.from)
+      const mine = answersAsHuman(state, m.from, me)
       asks.push({
         kind: "permission",
         id,
         from: m.from,
         at: m.ts,
         expiresAt: m.permission.expiresAt,
-        canAllow: human === me && m.permission.canAllow,
-        canDeny: human === me || owner,
-        ...(m.permission.canAllow && human && human !== me ? { allower: human } : {}),
+        canAllow: mine && m.permission.canAllow,
+        canDeny: mine || owner,
+        ...(m.permission.canAllow && human && !mine ? { allower: human } : {}),
         tool: m.permission.tool,
         title: permissionTitle(m.permission),
         ...(m.permission.description ? { summary: m.permission.description } : {}),

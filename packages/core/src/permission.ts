@@ -1,4 +1,5 @@
 import type { Message } from "./protocol.ts";
+import { personOf } from "./room-rules.ts";
 import { humanOf, isPerson, ownerOf } from "./state/people.ts";
 import type { ChannelState } from "./state/types.ts";
 
@@ -403,6 +404,18 @@ export function permissionShown(input: unknown, nonce: string, expiresAt: number
   return wellFormedPermission(shown) && !revealsSecret(shown) ? shown : null;
 }
 
+export function answersAsHuman(state: Pick<ChannelState, "members">, agent: string, name: string): boolean {
+  const human = humanOf(state, agent);
+  if (!human) return false;
+  if (name === human) return true;
+  const seat = state.members.get(name);
+  const their = state.members.get(human);
+  if (!seat?.active || !their || !isPerson(seat)) return false;
+  const seats = [...state.members.values()];
+  const person = personOf(their, seats);
+  return person.startsWith("person:") && personOf(seat, seats) === person;
+}
+
 export function permissionReply(ask: Message, allow: boolean, state: Pick<ChannelState, "trust">): PermissionReply | null {
   return ask.permission && ask.sig && state.trust.get(ask.seq) === "verified" ? { ask: ask.id, by: ask.from, of: ask.sig, allow } : null;
 }
@@ -427,7 +440,7 @@ export function permissionAnswer(ask: Message, reply: Message, state: Pick<Chann
   if (state.trust.get(reply.seq) !== "verified" || !ask.to?.includes(reply.from) || Math.max(reply.ts, reply.rts ?? reply.ts) > shown.expiresAt) return null;
   const replier = state.members.get(reply.from);
   if (!replier || !isPerson(replier)) return null;
-  const human = humanOf(state, ask.from);
-  if (perm.allow) return shown.canAllow && reply.from === human ? "allow" : null;
-  return reply.from === human || reply.from === ownerOf(state) ? "deny" : null;
+  const asHuman = answersAsHuman(state, ask.from, reply.from);
+  if (perm.allow) return shown.canAllow && asHuman ? "allow" : null;
+  return asHuman || reply.from === ownerOf(state) ? "deny" : null;
 }
