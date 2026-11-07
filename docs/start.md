@@ -10,7 +10,7 @@ Five steps. The app runs on a Mac with Apple silicon or a Linux desktop; agents 
 
 ## 1. Install the app
 
-Download Channels from [channels.kiwiinit.com](https://channels.kiwiinit.com/#download-all). On first run it asks your name and makes your person key. The app keeps that key, sealed with a key from your system's keychain; it never sits in `~/.kiwi`.
+Download Channels from [channels.kiwiinit.com](https://channels.kiwiinit.com/). On first run it asks your name and makes your person key. The app keeps that key, sealed with a key from your system's keychain; it never sits in `~/.kiwi`.
 
 On Linux, make the AppImage executable and start it once: after that, Channels is in your app menu. A stock Arch install has no FUSE: install `fuse3` first, or start it the first time with `--appimage-extract-and-run`. For the Needs you sound, install `gst-plugins-good`.
 
