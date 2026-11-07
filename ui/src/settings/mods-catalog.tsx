@@ -9,17 +9,20 @@ import { modReads } from "~/mods/served"
 import { useApp } from "~/nav"
 import { Group, Row } from "~/settings/controls"
 
+const catalogUrls = new Map<string, string | null>()
+
+function catalogUrl(mod: CatalogMod): string | null {
+  if (!mod.icon) return null
+  const key = `${mod.name}@${mod.commit}`
+  if (!catalogUrls.has(key)) catalogUrls.set(key, blobUrl(mod.icon))
+  return catalogUrls.get(key) ?? null
+}
+
 function CatalogIcon({ mod, size = "md" }: { mod: CatalogMod; size?: "md" | "lg" }) {
-  const [url, setUrl] = useState<string | null>(null)
-  useEffect(() => {
-    const made = blobUrl(mod.icon ?? null)
-    setUrl(made)
-    return () => {
-      if (made) URL.revokeObjectURL(made)
-    }
-  }, [mod.icon])
-  return url ? (
-    <img className={cx("mod-icon", `is-${size}`)} src={url} alt="" draggable={false} onError={() => setUrl(null)} />
+  const url = catalogUrl(mod)
+  const [failed, setFailed] = useState<string | null>(null)
+  return url && failed !== url ? (
+    <img className={cx("mod-icon", `is-${size}`)} src={url} alt="" draggable={false} onError={() => setFailed(url)} />
   ) : (
     <span className={cx("mod-icon", "is-letter", `is-${size}`)} aria-hidden="true">
       {mod.name.slice(0, 1).toUpperCase()}

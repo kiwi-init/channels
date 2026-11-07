@@ -31,7 +31,7 @@ export function modsCatalog(o: PinnedOptions) {
     if (!e.icon) return null;
     const key = `${e.name}@${e.commit}`;
     if (icons.has(key)) return icons.get(key) ?? null;
-    let icon: ModIcon | null = null;
+    let icon: ModIcon | null;
     try {
       const bytes = new Uint8Array(await (await get(request, rawUrl(base, CATALOG_REPO, e.commit, `${e.name}/${e.icon}`))).arrayBuffer());
       const read = iconFromBytes(e.icon, bytes);
