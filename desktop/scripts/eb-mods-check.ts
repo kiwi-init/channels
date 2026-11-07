@@ -113,7 +113,7 @@ function writeSettingsMod(): void {
 
 function writePosterMod(): void {
   mkdirSync(posterFolder, { recursive: true });
-  writeFileSync(join(posterFolder, "mod.json"), JSON.stringify({ name: "poster-probe", version: "1.0.0", shell: "^3.15", needs: ["post:#general"] }));
+  writeFileSync(join(posterFolder, "mod.json"), JSON.stringify({ name: "poster-probe", version: "1.0.0", shell: "^3.16", needs: ["post:#general"] }));
   writeFileSync(
     join(posterFolder, "index.tsx"),
     `import { post, rooms } from "@kiwi/mod"
