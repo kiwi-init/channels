@@ -50,6 +50,10 @@ final class TourTests: XCTestCase {
         snap("tasks")
         tapFirst("Composer empties after Send, every time")
         snap("task thread")
+        let back = app.navigationBars.buttons.firstMatch
+        if back.exists && back.isHittable { back.tap() }
+        Thread.sleep(forTimeInterval: 0.7)
+        tapFirst("lead")
 
         drag(fromX: 0.85, toX: 0.15)
         snap("members")
