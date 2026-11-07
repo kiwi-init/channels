@@ -1,5 +1,5 @@
 {
-  "electrobun": "2026.11.2",
+  "electrobun": "2026.11.3",
   "releasesBaseUrl": "https://github.com/kiwi-init/electrobun-livewire/releases/download",
   "hutch": {
     "version": "0.28.2-canary.8",
@@ -53,13 +53,13 @@
       "Contents/Resources/main.js": "db3593eeb506247d154a0c868bf05fb6c0a1dad82b7c7885c891d8b8a45b9755",
       "Contents/Resources/preload-full.js": "0de49cdec806dfc7f7e55da5ad02ce69a7211be6e9d656b2b10c06af691d6a3c",
       "Contents/Resources/preload-sandboxed.js": "d358fa4e85148ae6059eca9cfb398faf7a6c0710a03cdc972275f6a61670f3f9",
-      "Contents/Resources/uninstall": "234235419d71dde64108341b5ab97913ed979bfd0829e253e3d30f20f79b21b6"
+      "Contents/Resources/uninstall": "55cf0c096dc6b913d276439d922220a8c2f418931065611f6bc405b01c9c3c3e"
     },
     "linux-x64": {
       "bin/launcher": "3e5ac50d79450102cf7a7ca94ce3042b0d493d6d0cd2c184c8e283f0a95bbe4a",
       "bin/bun": "10702245766b225e70bbf6235fd6b47214fd94b4760d00ffaed8ab0df57ac235",
       "bin/libElectrobunCore.so": "ca8ddce49cc0ef8af402d06e6ee362e3bf234819c7c08a12833e52d8309a44df",
-      "bin/libNativeWrapper.so": "c64971e4783a4a17c1172af24b7b5427c0a479524e9e42c7f9497807b11c2ae1",
+      "bin/libNativeWrapper.so": "914f8273f0d3a377e1582d82e25bf8cca364157784de9dbd845bedc9977e1325",
       "bin/libasar.so": "2b3363eab51436f8df6077d99f4663ce5c6eb7be184d8df53561f4117a49654c",
       "bin/zig-zstd": "552b4211e699232c4983c223b94be3b7c74a8e58f41b647d014ebc25aca7ec7e",
       "bin/bspatch": "21a4678c0c8f90926438c6cd5626b46fb8e6b95eac41a1461dae2ec55d82ea70",
@@ -71,7 +71,7 @@
     "linux-arm64": {
       "bin/launcher": "efb6953345c1160403826e4f161c4a8103c51d08befb0eb6e1d7756c6ed18f5e",
       "bin/libElectrobunCore.so": "31410c2427dc285c6d891b1278d22a1b1c3128b76ff43cd831da5b317dfe7896",
-      "bin/libNativeWrapper.so": "ccc8bcf41442c4a058f3ac7320c6ba66636b653df75c78675d7216d3ae5243af",
+      "bin/libNativeWrapper.so": "4c1695a1f5155c59dcf9741ed23f1abf20a86b941b4435ed93c1218a927cd56f",
       "bin/libasar.so": "b2290cc159d7c85768de1fdc48bc90782042ed6b5cf59c11c462db61557f989c",
       "bin/zig-zstd": "03e661e3fd8f2c8715d0d6b7c7a009d7b2f00b5591bc070e3ccf3b9987599de6",
       "bin/bspatch": "0cc582dbf94b5a11cd416f147a8631997e439cfa2536af72b8692a03266b993b",
