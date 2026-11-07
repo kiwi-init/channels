@@ -64,3 +64,13 @@ export function mismatches(root: string, files: Record<string, string>): string[
     return got === want ? [] : [`${rel}: ${got}, pinned ${want}`];
   });
 }
+
+export function unpinned(root: string, dir: string, pinned: Record<string, string>, ours: ReadonlySet<string> = new Set()): string[] {
+  return fs
+    .readdirSync(path.join(root, dir))
+    .filter((name) => !ours.has(name) && !Object.hasOwn(pinned, `${dir}/${name}`))
+    .map((name) => {
+      const file = path.join(root, dir, name);
+      return fs.lstatSync(file).isFile() ? `${dir}/${name} (sha256 ${fileSha256(file)})` : `${dir}/${name} (not a file)`;
+    });
+}
