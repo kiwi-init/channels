@@ -31,15 +31,25 @@
   position: absolute;
   bottom: max(5vh, 24px);
   left: max(5vw, 16px);
-  gap: 24px;
-  width: min(38rem, calc(100% - 2 * max(5vw, 16px)));
-  max-height: calc(100% - 2 * max(5vh, 24px));
+  gap: 20px;
+  width: min(36rem, calc(100% - 2 * max(5vw, 16px)));
+  max-height: min(34rem, calc(100% - 2 * max(5vh, 24px)), 64vh);
   overflow: auto;
-  padding: 16px 8px;
+  padding: 12px 8px;
   border-radius: var(--r-card);
-  background: var(--bg);
+  background: var(--float);
+  box-shadow: var(--shadow-float);
   overscroll-behavior: contain;
+  scrollbar-width: none;
   animation: rest-rise 1.2s 0.6s var(--ease) both;
+}
+
+.rest-card .calm-ask-body {
+  padding: 6px 0;
+}
+
+.rest-card .calm-agent {
+  min-height: 1.75rem;
 }
 
 @keyframes rest-in {
