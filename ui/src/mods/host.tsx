@@ -9,7 +9,7 @@ import { bootFailed, bootGone, bootStarted } from "~/mods/boot"
 import { hostMods, publishTabs } from "~/mods/bus"
 import { carryCalm } from "~/mods/carry-calm"
 import { channelsFor, modChannels } from "~/mods/channels"
-import { asksRooms, grantsOf, mayPost, pacer, postBody } from "~/mods/needs"
+import { asksRooms, grantsOf, mayPost, mayRead, pacer, postBody, readWanted, sameMessages } from "~/mods/needs"
 import { useIdleWait } from "~/mods/idle"
 import { Rest } from "~/mods/rest"
 import { useApp, type Go, type Panel } from "~/nav"
@@ -31,6 +31,7 @@ import {
   type ModGithub,
   type ModMessage,
   type ModOpen,
+  type ModRoomMessage,
   type ModTarget,
   type ModTerminal,
   type PlacedTerminal,
@@ -51,6 +52,7 @@ const MOD_SIDES: typeof SIDES_EVENT = "kiwi-mod-sides"
 const ModSides = lazy(() => import("~/mods/side").then((m) => ({ default: m.ModSides })))
 const ModAsk = lazy(() => import("~/mods/ask").then((m) => ({ default: m.ModAsk })))
 const RailMods = lazy(() => import("~/shell/rail-mods"))
+const Readers = lazy(() => import("~/mods/readers"))
 
 const sidesAnchor = (): HTMLElement | null => document.querySelector<HTMLElement>(".side .mod-sides")
 
@@ -210,6 +212,28 @@ function sendRooms(f: Frame): void {
 }
 
 const tooSoon = pacer(POST_EVERY_MS)
+
+const heardRooms = new Map<string, ModRoomMessage[]>()
+
+function sendHeard(f: Frame, code: string, room: string): void {
+  const list = heardRooms.get(`${code}\n${room}`)
+  if (!list || f.surface === "render" || f.surface === "idle" || !mayRead(modNamed(f.name), code, room)) return
+  send(f, { kiwi: MOD_PROTOCOL, type: "messages", channel: code, room, list })
+}
+
+function sendRead(f: Frame): void {
+  for (const key of heardRooms.keys()) {
+    const [code = "", room = ""] = key.split("\n")
+    sendHeard(f, code, room)
+  }
+}
+
+function heard(code: string, room: string, list: ModRoomMessage[]): void {
+  const key = `${code}\n${room}`
+  if (sameMessages(heardRooms.get(key), list)) return
+  heardRooms.set(key, list)
+  for (const f of frames.values()) sendHeard(f, code, room)
+}
 
 function setChannels(list: ModChannel[]): void {
   if (JSON.stringify(list) === JSON.stringify(state.channels)) return
@@ -386,6 +410,7 @@ async function onMessage(e: MessageEvent): Promise<void> {
       sendGithub(f)
       sendChannels(f)
       sendRooms(f)
+      sendRead(f)
       send(f, { kiwi: MOD_PROTOCOL, type: "showing", target: state.showing.get(name) ?? null })
       return
     }
@@ -618,6 +643,7 @@ export function ModsLayer() {
   const { go, nav, app: current } = useApp()
   const still = useStill()
   const idle = idleMod()
+  const wanted = readWanted(state.mods)
   useIdleWait(idle?.after ?? 0, state.resting !== null, restNow)
   useEffect(() => setChannels(modChannels(current.channels, current.home)), [current.channels, current.home])
   useEffect(() => {
@@ -672,6 +698,7 @@ export function ModsLayer() {
       state.mods = list
       if (layer.current) startFrames(layer.current)
       for (const f of frames.values()) if (f.ready) sendRooms(f)
+      for (const f of frames.values()) sendRead(f)
       changed()
     }
     void b.mods().then(take, () => take([]))
@@ -742,6 +769,11 @@ export function ModsLayer() {
           </Suspense>,
           foot
         )}
+      {wanted.size > 0 && (
+        <Suspense fallback={null}>
+          <Readers wanted={wanted} heard={heard} />
+        </Suspense>
+      )}
       {askWaiting() && (
         <Suspense fallback={null}>
           <ModAsk />

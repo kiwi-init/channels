@@ -165,6 +165,7 @@ export type ToFrame =
   | { kiwi: typeof MOD_PROTOCOL; type: "channels"; list: ModChannel[] }
   | { kiwi: typeof MOD_PROTOCOL; type: "rest"; shown: boolean }
   | { kiwi: typeof MOD_PROTOCOL; type: "rooms"; list: ModRoomGrant[] }
+  | { kiwi: typeof MOD_PROTOCOL; type: "messages"; channel: string; room: string; list: ModRoomMessage[] }
 
 export type FromFrame =
   | { kiwi: typeof MOD_PROTOCOL; type: "hello" }
@@ -195,6 +196,13 @@ export interface ModRoomGrant {
   channel: string
   title: string
   room: string
+}
+
+export interface ModRoomMessage {
+  id: number
+  author: string
+  text: string
+  at: number
 }
 
 export const POST_CHARS = 4_000
