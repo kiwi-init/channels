@@ -62,10 +62,11 @@ struct Row: Identifiable {
     var id: String { spot.id }
     var last: MessageView? { kind == .group ? room.latest ?? place?.last : place?.last }
     var lastAt: Double { last?.at ?? 0 }
-    var needs: Int { asks.count + reviews.count }
+    var others: [NeedView] { kind == .group ? room.open : [] }
+    var needs: Int { asks.count + reviews.count + others.count }
 
     var need: String? {
-        let words = asks.first?.plain ?? reviews.first.map { "\(taskLabel($0.task)) \($0.title)" }
+        let words = others.first?.line ?? asks.first?.plain ?? reviews.first.map { "\(taskLabel($0.task)) \($0.title)" }
         return words?.replacingOccurrences(of: "\n", with: " ")
     }
 
@@ -99,6 +100,8 @@ struct Row: Identifiable {
 }
 
 extension RoomView {
+    var open: [NeedView] { needs ?? [] }
+
     var leadSpot: Spot? { sideKey.map { Spot(code: code, place: $0) } }
 
     func other(than spot: Spot) -> Spot? {
@@ -117,7 +120,7 @@ extension RoomView {
         RoomView(
             code: code, title: title, icon: icon, me: me, isOwner: isOwner, connection: connection, gone: gone, error: error, head: head,
             whole: feed?.whole ?? false, hold: hold, charter: charter, lead: lead, members: members, messages: feed?.messages ?? [], side: side,
-            sideKey: sideKey, tasks: tasks, asks: asks, reviews: reviews, last: last, latest: latest, latestIn: latestIn, place: key, places: places)
+            sideKey: sideKey, tasks: tasks, asks: asks, reviews: reviews, needs: needs, last: last, latest: latest, latestIn: latestIn, place: key, places: places)
     }
 
     func spotTitle(_ key: String) -> String {
@@ -157,7 +160,7 @@ extension AppModel {
         rows(.all).first { $0.spot == spot }
     }
 
-    var waiting: Int { channels.reduce(0) { $0 + $1.asks.count + $1.reviews.count } }
+    var waiting: Int { channels.reduce(0) { $0 + $1.asks.count + $1.reviews.count + $1.open.count } }
 
     func isPinned(_ spot: Spot) -> Bool { pinned.contains(spot.id) }
 
