@@ -334,7 +334,7 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
   useEffect(() => {
     if (!reading) sendQueued()
   }, [reading])
-  const ready = !!text.trim() || files.length > 0
+  const ready = !!text.trim() || (!edit && files.length > 0)
   const complete = (name: string) => insert(text.slice(0, caret).replace(MENTION, (_all, pre: string) => `${pre}@${mentions.typed(name, picksFor(key))} `))
   const completeTask = (id: number) => insert(text.slice(0, caret).replace(TASK_REF, (_all, pre: string) => `${pre}T${id} `))
   const insert = (before: string) => {
@@ -477,7 +477,7 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
             Drop images to attach
           </div>
         )}
-        {files.length > 0 && (
+        {files.length > 0 && !edit && (
           <ul className="compose-files" aria-label="Attached images">
             {files.map((f, i) => (
               <li key={`${f.name}-${i}`} className="compose-file">

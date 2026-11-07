@@ -20,6 +20,7 @@ const server = Bun.serve({
     return (await file.exists()) ? new Response(file) : new Response("not found", { status: 404 });
   },
 });
+const DOT = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
 const browser = await (engine === "webkit" ? webkit : chromium).launch();
 const fails: string[] = [];
 const expect = (ok: boolean, what: string) => {
@@ -41,17 +42,29 @@ try {
   expect((await theirs.getByRole("button", { name: "Edit" }).count()) === 0, "someone else's message offers no Edit");
   expect((await theirs.getByRole("button", { name: "Delete" }).count()) === 0, "someone else's message offers no Delete");
 
+  const chips = page.locator(".main .compose-files .compose-file");
   await composer.fill("a draft from before");
+  await page.locator('.main .composer input[type="file"]').setInputFiles({ name: "dot.png", mimeType: "image/png", buffer: Buffer.from(DOT, "base64") });
+  await chips
+    .first()
+    .waitFor({ timeout: 5000 })
+    .catch(() => {});
+  expect((await chips.count()) === 1, "the draft has an image attached");
+  const rowImages = await mine.locator("img").count();
   await mine.hover();
   await mine.getByRole("button", { name: "Edit" }).click();
   await editing.waitFor({ timeout: 5000 }).catch(() => {});
   expect((await composer.inputValue()) === "@win ship it: tag v1.0.0" && (await editor.count()) === 0, "Edit on a message without a doc block opens it in the composer, not in the row");
+  expect((await chips.count()) === 0, "while you edit, the draft's image is out of sight, so it doesn't look like it goes with the edit");
   await composer.fill("@win ship it: tag v1.0.1");
   await composer.press("Enter");
   await page.waitForTimeout(200);
   expect((await mine.innerText()).includes("v1.0.1"), "Enter saves the new text in place");
   expect((await mine.locator(".msg-edited").count()) === 1, "the message is marked edited");
+  expect((await mine.locator("img").count()) === rowImages, "the edit adds no image to the message");
   expect((await composer.inputValue()) === "a draft from before" && (await editing.count()) === 0, "saving puts the draft from before back");
+  expect((await chips.count()) === 1, "and its image comes back with it");
+  await page.locator(".main .compose-file-x").click();
   await composer.fill("");
 
   await page.locator(".side-row", { hasText: "atlas" }).first().click();
