@@ -637,6 +637,7 @@ struct SettingsScreen: View {
                     Setting(symbol: "lock.fill", tint: Tone.ink3, title: "Lock")
                 }
             }
+            .listRowBackground(Tone.raised)
             if !model.enrolled {
                 Section {
                     Button {
@@ -648,6 +649,7 @@ struct SettingsScreen: View {
                 } footer: {
                     Text("Brings the channels you joined on your Mac since you linked.")
                 }
+                .listRowBackground(Tone.raised)
             }
             Section {
                 Button(role: .destructive) {
@@ -661,12 +663,13 @@ struct SettingsScreen: View {
                         ? "This iPhone holds its own device key and its channels' keys in its keychain. Signing out deletes them from this phone; forget it in Settings → Devices on your computer too."
                         : "This iPhone holds your person key and your channels' keys in its keychain. Unlinking deletes them from this phone.")
             }
+            .listRowBackground(Tone.raised)
             Section {
             } footer: {
                 Text("Channels \(version)").frame(maxWidth: .infinity)
             }
         }
-        .listStyle(.insetGrouped)
+        .grouped()
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
         .confirmationDialog(model.enrolled ? "Sign out of this iPhone?" : "Unlink this iPhone?", isPresented: $confirm, titleVisibility: .visible) {

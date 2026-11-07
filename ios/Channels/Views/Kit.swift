@@ -84,6 +84,13 @@ extension View {
             .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(Tone.line, lineWidth: 0.5))
     }
 
+    func grouped() -> some View {
+        self
+            .listStyle(.insetGrouped)
+            .scrollContentBackground(.hidden)
+            .background(Tone.canvas)
+    }
+
     func raisedCapsule() -> some View {
         self
             .background(Tone.raised, in: Capsule())
