@@ -131,28 +131,16 @@ async function figureHtml(name: string): Promise<string> {
   return `<figure class="fig iso" data-figure="${name}"${live ? " data-live" : ""}>${svg}</figure>`;
 }
 
-const viewBoxOf = (svg: string): string => /viewBox="([^"]*)"/.exec(svg)?.[1] ?? "";
-
 async function writeFigures(): Promise<string[]> {
-  const dir = join(OUT, "figures");
-  mkdirSync(dir, { recursive: true });
-  const boxes = new Map<string, string>();
   const css: string[] = [];
   for (const name of readdirSync(join(SITE, "figures")).sort()) {
     if (!existsSync(join(SITE, "figures", name, "build.js"))) continue;
     const figure = await figureOf(name);
-    boxes.set(name, viewBoxOf(figure.svg));
     if (figure.css) css.push(figure.css);
-    writeFileSync(join(dir, `${name}.svg`), figure.svg.includes("xmlns=") ? figure.svg : figure.svg.replace("<svg ", '<svg xmlns="http://www.w3.org/2000/svg" '));
   }
+  mkdirSync(OUT, { recursive: true });
   writeFileSync(join(OUT, "figures.css"), css.join("\n") + "\n");
-  const landing = readFileSync(join(SITE, "index.html"), "utf8");
-  for (const [, name, box] of landing.matchAll(/data-figure="([a-z0-9-]+)"[^>]*><svg class="iso-svg" viewBox="([^"]*)"/g)) {
-    const real = boxes.get(name ?? "");
-    if (real === undefined) throw new Error(`site/index.html shows the figure ${name}, which site/figures/ doesn't build`);
-    if (real !== box) throw new Error(`site/index.html sizes the ${name} figure ${box}, but it builds at ${real}: change its viewBox there`);
-  }
-  return [...[...boxes.keys()].map((name) => join(dir, `${name}.svg`)), join(OUT, "figures.css")].map((f) => relative(ROOT, f));
+  return [relative(ROOT, join(OUT, "figures.css"))];
 }
 
 async function render(node: Node, r: Render): Promise<string> {
@@ -296,7 +284,7 @@ function pageHtml(pages: Page[], at: number, body: string, figures: Set<string>)
       <a class="brand" href="/"><img src="/icon.svg" alt="" width="22" height="22" />Channels</a>
       <a class="section" href="/docs/">Docs</a>
       <span class="grow"></span>
-      <a class="quiet" href="/#download-all">Download</a>
+      <a class="quiet" href="/">Download</a>
       <a class="quiet gh" href="${REPO}" aria-label="Source on GitHub" title="Source on GitHub">${GITHUB_ICON}</a>
       ${THEME_PICK}
     </header>
