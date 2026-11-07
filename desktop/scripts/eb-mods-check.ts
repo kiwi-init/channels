@@ -532,7 +532,12 @@ async function fromKiwi(d: Driver): Promise<void> {
   await step("Settings → Mods", 10_000, () => d.evaluate(clickText, { selector: ".set-nav .side-row", text: "Mods" }, 2_000));
   await step("From Kiwi lists the catalog's mods", 15_000, () =>
     d.evaluate(() => [...document.querySelectorAll(".mod-catalog-row .set-row-label")].map((l) => l.textContent).join(" ") === "catalog-mod tampered-mod", null, 2_000),
-  );
+  ).catch(async (e: unknown) => {
+    const asked = await d.evaluate(() => (window as unknown as { kiwi: { modCatalog(): Promise<unknown> } }).kiwi.modCatalog(), null, 40_000).catch((x: unknown) => String(x));
+    console.log(`the catalog, asked: ${JSON.stringify(asked)}`);
+    console.log(`the page then: ${JSON.stringify(await d.evaluate(pageNow, null, 3_000).catch((x: unknown) => String(x)), null, 1)}`);
+    throw e;
+  });
   await shot("settings-mods-from-kiwi");
   await step("catalog-mod's Install", 10_000, () => d.evaluate(catalogInstall, "catalog-mod", 2_000));
   await step("its ask says what it asks for", 10_000, () =>
