@@ -1,47 +1,79 @@
-// The app's icons, every size, from build/icon.svg: build/icon.icns for the Mac (iconutil, so on a Mac),
-// build/icons/NxN.png for Linux (scripts/package-linux.ts installs them under hicolor, named after the app, and the
-// window uses 512x512), and the tray marks in assets/. Run it after changing the SVG, and commit what it makes:
-//
-//   bun desktop/scripts/icons.ts
-//
-// Needs Playwright's Chromium: bunx playwright-core install --only-shell chromium
-
 import { execFileSync } from "node:child_process";
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium } from "playwright-core";
 
 const DESKTOP = resolve(import.meta.dir, "..");
-const svg = readFileSync(join(DESKTOP, "build", "icon.svg"), "utf8");
-const traySvg = readFileSync(join(DESKTOP, "build", "tray.svg"), "utf8");
-const trayUnreadSvg = readFileSync(join(DESKTOP, "build", "tray-unread.svg"), "utf8");
+const BUILD = join(DESKTOP, "build");
+const ICON = join(BUILD, "channels.icon");
+const ICTOOL = process.env.ICTOOL ?? "/Applications/Icon Composer.app/Contents/Executables/ictool";
+const MAC_BODY = 824 / 1024;
+
+if (process.platform !== "darwin") throw new Error("icons.ts runs on a Mac: Icon Composer's ictool renders build/channels.icon, iconutil and actool pack it");
+if (!existsSync(ICTOOL)) throw new Error(`no ictool at ${ICTOOL}: install Icon Composer, or point ICTOOL at its Contents/Executables/ictool`);
+
+const work = mkdtempSync(join(tmpdir(), "kiwi-icon-"));
+const full = join(work, "default.png");
+execFileSync(ICTOOL, [ICON, "--export-image", "--output-file", full, "--platform", "macOS", "--rendition", "Default", "--width", "1024", "--height", "1024", "--scale", "1"], { stdio: "inherit" });
+const composed = `data:image/png;base64,${readFileSync(full).toString("base64")}`;
 
 const browser = await chromium.launch();
 const page = await browser.newPage();
-async function png(size: number, source = svg): Promise<Buffer> {
+async function shot(size: number, html: string): Promise<Buffer> {
   await page.setViewportSize({ width: size, height: size });
-  await page.setContent(`<style>html,body{margin:0;background:transparent}svg{display:block;width:${size}px;height:${size}px}</style>${source}`);
+  await page.setContent(`<style>html,body{margin:0;background:transparent;width:${size}px;height:${size}px;display:grid;place-items:center}svg,img{display:block}</style>${html}`);
+  await page.waitForFunction(() => [...document.images].every((i) => i.complete));
+  return page.screenshot({ omitBackground: true, type: "png" });
+}
+const app = (size: number) => {
+  const body = Math.round(size * MAC_BODY);
+  return shot(size, `<img src="${composed}" width="${body}" height="${body}">`);
+};
+async function mark(size: number, file: string): Promise<Buffer> {
+  await page.setViewportSize({ width: size, height: size });
+  await page.setContent(`<style>html,body{margin:0;background:transparent}svg{display:block;width:${size}px;height:${size}px}</style>${readFileSync(join(BUILD, file), "utf8")}`);
   return page.screenshot({ omitBackground: true, type: "png" });
 }
 
-// Linux: the sizes hicolor has, and the window's own.
-mkdirSync(join(DESKTOP, "build", "icons"), { recursive: true });
-for (const n of [16, 24, 32, 48, 64, 128, 256, 512, 1024]) writeFileSync(join(DESKTOP, "build", "icons", `${n}x${n}.png`), await png(n));
-copyFileSync(join(DESKTOP, "build", "tray.svg"), join(DESKTOP, "assets", "channels-tray-symbolic.svg"));
-writeFileSync(join(DESKTOP, "assets", "trayTemplate@2x.png"), await png(32, traySvg));
-writeFileSync(join(DESKTOP, "assets", "trayUnreadTemplate@2x.png"), await png(32, trayUnreadSvg));
+mkdirSync(join(BUILD, "icons"), { recursive: true });
+for (const n of [16, 24, 32, 48, 64, 128, 256, 512, 1024]) writeFileSync(join(BUILD, "icons", `${n}x${n}.png`), await app(n));
+copyFileSync(join(BUILD, "tray.svg"), join(DESKTOP, "assets", "channels-tray-symbolic.svg"));
+writeFileSync(join(DESKTOP, "assets", "trayTemplate@2x.png"), await mark(32, "tray.svg"));
+writeFileSync(join(DESKTOP, "assets", "trayUnreadTemplate@2x.png"), await mark(32, "tray-unread.svg"));
 
-// The Mac: an iconset (each size and its @2x), packed by iconutil.
-if (process.platform === "darwin") {
-  const dir = join(mkdtempSync(join(tmpdir(), "kiwi-icon-")), "icon.iconset");
-  mkdirSync(dir);
-  for (const n of [16, 32, 128, 256, 512]) {
-    writeFileSync(join(dir, `icon_${n}x${n}.png`), await png(n));
-    writeFileSync(join(dir, `icon_${n}x${n}@2x.png`), await png(n * 2));
-  }
-  execFileSync("iconutil", ["-c", "icns", dir, "-o", join(DESKTOP, "build", "icon.icns")]);
-  rmSync(resolve(dir, ".."), { recursive: true, force: true });
-} else console.warn("not a Mac: build/icon.icns left as it was (iconutil makes it)");
-
+const iconset = join(work, "icon.iconset");
+mkdirSync(iconset);
+for (const n of [16, 32, 128, 256, 512]) {
+  writeFileSync(join(iconset, `icon_${n}x${n}.png`), await app(n));
+  writeFileSync(join(iconset, `icon_${n}x${n}@2x.png`), await app(n * 2));
+}
 await browser.close();
+execFileSync("iconutil", ["-c", "icns", iconset, "-o", join(BUILD, "icon.icns")]);
+
+const car = join(work, "car");
+mkdirSync(car);
+execFileSync(
+  "xcrun",
+  [
+    "actool",
+    ICON,
+    "--compile",
+    car,
+    "--app-icon",
+    "channels",
+    "--include-all-app-icons",
+    "--platform",
+    "macosx",
+    "--target-device",
+    "mac",
+    "--minimum-deployment-target",
+    "12.0",
+    "--output-partial-info-plist",
+    join(car, "partial.plist"),
+  ],
+  { stdio: "inherit" },
+);
+copyFileSync(join(car, "Assets.car"), join(BUILD, "Assets.car"));
+rmSync(work, { recursive: true, force: true });
+console.log("icons.ts: build/icons/NxN.png, build/icon.icns, build/Assets.car and the tray marks are made from build/channels.icon");
