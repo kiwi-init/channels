@@ -4,8 +4,9 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, unlinkSync, 
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
+import { CATALOG_REPO, readCatalog } from "@kiwi/core/node/mod-catalog.ts";
 import { folderHash } from "@kiwi/core/node/mod-folder.ts";
-import { MODS_REPO, publishMod } from "../src/mod-publish.ts";
+import { publishMod } from "../src/mod-publish.ts";
 import { KIT_TYPES_FILE, startDev } from "../src/mods.ts";
 
 setDefaultTimeout(60_000);
@@ -54,7 +55,7 @@ function fakeGitHub(o: { login: string; push: boolean; catalog: unknown; folders
   for (const [p, text] of Object.entries(o.folders ?? {})) start.set(p, putBlob(Buffer.from(text)));
   const base = sha("commit", "base");
   commits.set(base, { tree: putTree(start), parents: [], message: "base" });
-  refs.set(`${MODS_REPO}:heads/main`, base);
+  refs.set(`${CATALOG_REPO}:heads/main`, base);
   const fork = `${o.login}/mods`;
 
   const json = (status: number, v: unknown) => new Response(JSON.stringify(v), { status, headers: { "content-type": "application/json" } });
@@ -71,20 +72,20 @@ function fakeGitHub(o: { login: string; push: boolean; catalog: unknown; folders
         return m ? { repo: m[1]!, tail: m[2]! } : null;
       };
       if (path === "/user") return json(200, { login: o.login });
-      if (path === `/repos/${MODS_REPO}`) return json(200, { default_branch: "main", permissions: { push: o.push } });
-      if (path === `/repos/${MODS_REPO}/forks`) return json(202, { full_name: fork });
+      if (path === `/repos/${CATALOG_REPO}`) return json(200, { default_branch: "main", permissions: { push: o.push } });
+      if (path === `/repos/${CATALOG_REPO}/forks`) return json(202, { full_name: fork });
       const at = repoOf(url.pathname);
       if (!at) return json(404, { message: "Not Found" });
       const { repo, tail } = at;
       if (repo === fork && o.push) return json(404, { message: "Not Found" });
       if (repo === fork && tail === "git/ref/heads/main" && forkReadyAfter-- > 0) return json(404, { message: "Not Found" });
       if (tail === "merge-upstream") {
-        refs.set(`${repo}:heads/main`, refs.get(`${MODS_REPO}:heads/main`)!);
+        refs.set(`${repo}:heads/main`, refs.get(`${CATALOG_REPO}:heads/main`)!);
         return json(200, { merge_type: "fast-forward" });
       }
       const ref = /^git\/refs?\/heads\/(.+)$/.exec(tail);
       if (req.method === "GET" && ref) {
-        const s = refs.get(`${repo}:heads/${ref[1]}`) ?? (repo === fork ? refs.get(`${MODS_REPO}:heads/${ref[1]}`) : undefined);
+        const s = refs.get(`${repo}:heads/${ref[1]}`) ?? (repo === fork ? refs.get(`${CATALOG_REPO}:heads/${ref[1]}`) : undefined);
         return s ? json(200, { object: { sha: s } }) : json(404, { message: "Not Found" });
       }
       const commit = /^git\/commits\/([0-9a-f]+)$/.exec(tail);
@@ -126,20 +127,20 @@ function fakeGitHub(o: { login: string; push: boolean; catalog: unknown; folders
         refs.set(`${repo}:heads/${ref[1]}`, String(body!["sha"]));
         return json(200, {});
       }
-      if (repo === MODS_REPO && tail === "pulls" && req.method === "GET")
+      if (repo === CATALOG_REPO && tail === "pulls" && req.method === "GET")
         return json(
           200,
           pulls.filter((p) => p.head === url.searchParams.get("head")),
         );
       const pull = /^pulls\/(\d+)$/.exec(tail);
-      if (repo === MODS_REPO && pull && req.method === "PATCH") {
+      if (repo === CATALOG_REPO && pull && req.method === "PATCH") {
         const pr = pulls.find((p) => p.number === Number(pull[1]));
         if (!pr) return json(404, { message: "Not Found" });
         Object.assign(pr.body, body);
         return json(200, pr);
       }
-      if (repo === MODS_REPO && tail === "pulls" && req.method === "POST") {
-        const pr = { number: 7 + pulls.length, head: String(body!["head"]), html_url: `https://github.com/${MODS_REPO}/pull/${7 + pulls.length}`, body: body! };
+      if (repo === CATALOG_REPO && tail === "pulls" && req.method === "POST") {
+        const pr = { number: 7 + pulls.length, head: String(body!["head"]), html_url: `https://github.com/${CATALOG_REPO}/pull/${7 + pulls.length}`, body: body! };
         pulls.push(pr);
         return json(201, pr);
       }
@@ -199,7 +200,7 @@ describe("kiwi mod publish", () => {
       expect(p.files).not.toContain(KIT_TYPES_FILE);
       expect(pauses).toEqual([1_000, 1_000]);
       expect(gh.calls.some((c) => c.path === `/repos/ada/mods/merge-upstream`)).toBe(true);
-      expect(gh.calls.filter((c) => c.method !== "GET" && c.path.startsWith(`/repos/${MODS_REPO}/git/`))).toEqual([]);
+      expect(gh.calls.filter((c) => c.method !== "GET" && c.path.startsWith(`/repos/${CATALOG_REPO}/git/`))).toEqual([]);
 
       const folder = gh.commits.get(p.commit)!;
       expect(folder.parents).toEqual([gh.base]);
@@ -223,11 +224,14 @@ describe("kiwi mod publish", () => {
         author: "ada",
       });
       expect(installAt(gh, { commit: p.commit, files: p.files }, "standup-notes")).toBe(p.hash);
+      const listed = readCatalog(catalog);
+      expect(listed.entries.map((e) => e.name)).toEqual(["standup-notes"]);
+      expect(listed.entries[0]).toMatchObject({ commit: p.commit, hash: p.hash, files: p.files, icon: "icon.svg", author: "ada" });
 
       expect(gh.pulls).toHaveLength(1);
       expect(gh.pulls[0]!.body).toMatchObject({ title: "standup-notes 0.1.0", head: "ada:publish-standup-notes", base: "main", maintainer_can_modify: true });
       expect(String(gh.pulls[0]!.body["body"])).toContain("keeps the day's standup notes beside the chat");
-      expect(p.url).toBe(`https://github.com/${MODS_REPO}/pull/7`);
+      expect(p.url).toBe(`https://github.com/${CATALOG_REPO}/pull/7`);
 
       const manifest = JSON.parse(readFileSync(join(dir, "mod.json"), "utf8")) as Record<string, unknown>;
       writeFileSync(join(dir, "mod.json"), JSON.stringify({ ...manifest, version: "0.2.0", author: "Ada Lovelace" }, null, 2));
@@ -262,10 +266,10 @@ describe("kiwi mod publish", () => {
     });
     try {
       const p = await publishMod({ home, only: "standup-notes", cwd: scratch("cwd"), token: "t0ken", api: gh.api });
-      expect(p.repo).toBe(MODS_REPO);
+      expect(p.repo).toBe(CATALOG_REPO);
       expect(gh.calls.some((c) => c.path.includes("/forks"))).toBe(false);
       expect(gh.pathsAt(p.commit)).toEqual(["github/index.tsx", "mods.json", "standup-notes/icon.svg", "standup-notes/index.tsx", "standup-notes/mod.json", "standup-notes/parts/list.ts"]);
-      const catalog = JSON.parse(gh.read(gh.refs.get(`${MODS_REPO}:heads/publish-standup-notes`)!, "mods.json")!.toString()) as { mods: Record<string, unknown>[] };
+      const catalog = JSON.parse(gh.read(gh.refs.get(`${CATALOG_REPO}:heads/publish-standup-notes`)!, "mods.json")!.toString()) as { mods: Record<string, unknown>[] };
       expect(catalog.mods.map((m) => m["name"])).toEqual(["standup-notes", "github", "anatomy"]);
       expect(catalog.mods[0]).toMatchObject({ does: "keeps the day's standup notes beside the chat", commit: p.commit, author: "jow" });
       expect(gh.pulls[0]!.body).toMatchObject({ head: "kiwi-init:publish-standup-notes" });

@@ -1,11 +1,10 @@
+import { CATALOG_REPO } from "@kiwi/core/node/mod-catalog.ts";
 import { folderHash } from "@kiwi/core/node/mod-folder.ts";
 import { copyFileSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
 import { checkMod, KIT_TYPES_FILE, ModError, SCAFFOLD, type ModCheckReport } from "./mods.ts";
-
-export const MODS_REPO = "kiwi-init/mods";
 
 const FILES = 200;
 const FILE_BYTES = 1_000_000;
@@ -148,7 +147,7 @@ function github(o: PublishOptions): Call {
 const later = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 async function forkOf(call: Call, branch: string, pause: (ms: number) => Promise<void>): Promise<string> {
-  const { json } = await call<{ full_name: string }>("POST", `/repos/${MODS_REPO}/forks`, { default_branch_only: true });
+  const { json } = await call<{ full_name: string }>("POST", `/repos/${CATALOG_REPO}/forks`, { default_branch_only: true });
   const end = Date.now() + FORK_WAIT_MS;
   while ((await call("GET", `/repos/${json.full_name}/git/ref/heads/${branch}`, undefined, [404, 409])).status !== 200) {
     if (Date.now() > end) throw new ModError(`GitHub hasn't finished making your fork ${json.full_name}: run kiwi mod publish again in a minute`);
@@ -171,21 +170,21 @@ export async function publishMod(o: PublishOptions): Promise<Published> {
 
   const call = github(o);
   const me = (await call<{ login: string }>("GET", "/user")).json.login;
-  const upstream = (await call<{ default_branch: string; permissions?: { push?: boolean } }>("GET", `/repos/${MODS_REPO}`)).json;
-  const repo = upstream.permissions?.push ? MODS_REPO : await forkOf(call, upstream.default_branch, o.pause ?? later);
+  const upstream = (await call<{ default_branch: string; permissions?: { push?: boolean } }>("GET", `/repos/${CATALOG_REPO}`)).json;
+  const repo = upstream.permissions?.push ? CATALOG_REPO : await forkOf(call, upstream.default_branch, o.pause ?? later);
   const owner = repo.split("/")[0]!;
-  const base = (await call<{ object: { sha: string } }>("GET", `/repos/${MODS_REPO}/git/ref/heads/${upstream.default_branch}`)).json.object.sha;
-  const baseTree = (await call<{ tree: { sha: string } }>("GET", `/repos/${MODS_REPO}/git/commits/${base}`)).json.tree.sha;
-  const listed = (await call<{ tree: { path: string; type: string }[]; truncated?: boolean }>("GET", `/repos/${MODS_REPO}/git/trees/${baseTree}?recursive=1`)).json;
-  if (listed.truncated) throw new ModError(`${MODS_REPO} is too big to read in one go: open the pull request by hand`);
+  const base = (await call<{ object: { sha: string } }>("GET", `/repos/${CATALOG_REPO}/git/ref/heads/${upstream.default_branch}`)).json.object.sha;
+  const baseTree = (await call<{ tree: { sha: string } }>("GET", `/repos/${CATALOG_REPO}/git/commits/${base}`)).json.tree.sha;
+  const listed = (await call<{ tree: { path: string; type: string }[]; truncated?: boolean }>("GET", `/repos/${CATALOG_REPO}/git/trees/${baseTree}?recursive=1`)).json;
+  if (listed.truncated) throw new ModError(`${CATALOG_REPO} is too big to read in one go: open the pull request by hand`);
   const gone = listed.tree.filter((e) => e.type === "blob" && e.path.startsWith(`${report.name}/`) && !files.includes(e.path.slice(report.name.length + 1))).map((e) => e.path);
-  const index = (await call<{ content: string }>("GET", `/repos/${MODS_REPO}/contents/mods.json?ref=${base}`)).json;
+  const index = (await call<{ content: string }>("GET", `/repos/${CATALOG_REPO}/contents/mods.json?ref=${base}`)).json;
   let catalog: unknown;
   try {
     catalog = JSON.parse(Buffer.from(index.content, "base64").toString("utf8"));
   } catch {
     // A mods.json that isn't JSON can't take an entry: the reviewer fixes it first.
-    throw new ModError(`${MODS_REPO}'s mods.json isn't JSON`);
+    throw new ModError(`${CATALOG_REPO}'s mods.json isn't JSON`);
   }
 
   const blob = async (bytes: Buffer): Promise<string> => (await call<{ sha: string }>("POST", `/repos/${repo}/git/blobs`, { content: bytes.toString("base64"), encoding: "base64" })).json.sha;
@@ -199,7 +198,7 @@ export async function publishMod(o: PublishOptions): Promise<Published> {
   const pin: CatalogPin = {
     name: report.name,
     does,
-    add: `kiwi mod add github.com/${MODS_REPO}/${report.name}`,
+    add: `kiwi mod add github.com/${CATALOG_REPO}/${report.name}`,
     needs: [...manifest.needs],
     commit,
     hash,
@@ -237,18 +236,18 @@ export async function publishMod(o: PublishOptions): Promise<Published> {
     "",
     `Opened with \`kiwi mod publish\`. Running it again moves this pull request to the new version.`,
   ].join("\n");
-  const open = (await call<{ number: number; html_url: string }[]>("GET", `/repos/${MODS_REPO}/pulls?state=open&head=${encodeURIComponent(`${owner}:${branch}`)}`)).json;
+  const open = (await call<{ number: number; html_url: string }[]>("GET", `/repos/${CATALOG_REPO}/pulls?state=open&head=${encodeURIComponent(`${owner}:${branch}`)}`)).json;
   if (open[0]) {
-    await call("PATCH", `/repos/${MODS_REPO}/pulls/${open[0].number}`, { title, body });
+    await call("PATCH", `/repos/${CATALOG_REPO}/pulls/${open[0].number}`, { title, body });
     return { name: report.name, version: manifest.version, report, commit, hash, files, repo, branch, url: open[0].html_url, number: open[0].number, opened: false };
   }
   const pr = (
-    await call<{ number: number; html_url: string }>("POST", `/repos/${MODS_REPO}/pulls`, {
+    await call<{ number: number; html_url: string }>("POST", `/repos/${CATALOG_REPO}/pulls`, {
       title,
       head: `${owner}:${branch}`,
       base: upstream.default_branch,
       body,
-      ...(repo === MODS_REPO ? {} : { maintainer_can_modify: true }),
+      ...(repo === CATALOG_REPO ? {} : { maintainer_can_modify: true }),
     })
   ).json;
   return { name: report.name, version: manifest.version, report, commit, hash, files, repo, branch, url: pr.html_url, number: pr.number, opened: true };
