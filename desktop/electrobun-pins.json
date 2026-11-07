@@ -57,6 +57,7 @@
     },
     "linux-x64": {
       "bin/launcher": "3e5ac50d79450102cf7a7ca94ce3042b0d493d6d0cd2c184c8e283f0a95bbe4a",
+      "bin/bun": "10702245766b225e70bbf6235fd6b47214fd94b4760d00ffaed8ab0df57ac235",
       "bin/libElectrobunCore.so": "ca8ddce49cc0ef8af402d06e6ee362e3bf234819c7c08a12833e52d8309a44df",
       "bin/libNativeWrapper.so": "c64971e4783a4a17c1172af24b7b5427c0a479524e9e42c7f9497807b11c2ae1",
       "bin/libasar.so": "2b3363eab51436f8df6077d99f4663ce5c6eb7be184d8df53561f4117a49654c",
