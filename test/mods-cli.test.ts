@@ -7,11 +7,14 @@ import {
   addMod,
   checkMod,
   checkUpdates,
+  createMod,
   devRound,
+  figureKind,
   git,
   type Git,
   KIT_TYPES_FILE,
   listMods,
+  MOD_STARTS,
   ModError,
   modsDir,
   nudgeApp,
@@ -485,6 +488,41 @@ describe("kiwi mod dev", () => {
     const inside = lstatSync(plain).mtimeMs;
     nudgeApp(plain);
     expect(lstatSync(plain).mtimeMs).toBe(inside);
+  });
+});
+
+describe("a new mod from the app (T7401)", () => {
+  test("each start makes a mod that asks only for what it uses, builds, and type-checks against the shipped @kiwi/mod types", async () => {
+    const home = scratch("create");
+    const asks: Record<string, string[]> = {};
+    for (const start of MOD_STARTS) {
+      const name = `my-${start}`;
+      const made = createMod(home, name, start);
+      expect(made).toEqual({ name, dir: join(modsDir(home), name), needs: made.needs });
+      expect(JSON.parse(readFileSync(join(made.dir, "mod.json"), "utf8"))).toEqual({ name, version: "0.1.0", shell: "^3.6", needs: made.needs, icon: "icon.svg" });
+      asks[start] = made.needs;
+      const round = await devRound(made.dir, name);
+      expect(round.ok ? round.manifest.needs : round.why).toEqual(made.needs);
+      symlinkSync(join(import.meta.dir, "../ui/node_modules"), join(made.dir, "node_modules"));
+      execFileSync(join(import.meta.dir, "../node_modules/.bin/tsrs"), ["--noEmit", "-p", made.dir], { stdio: ["ignore", "pipe", "pipe"] });
+    }
+    expect(asks).toEqual({ panel: ["panel"], command: ["command"], tab: ["tab"], figure: ["render:myfigure"] });
+    expect(readFileSync(join(modsDir(home), "my-tab", "index.tsx"), "utf8")).toContain('tab({ title: "My Tab", render: View })');
+    expect(readFileSync(join(modsDir(home), "my-command", "index.tsx"), "utf8")).toContain('title: "My Command: say hi"');
+    expect(readFileSync(join(modsDir(home), "my-figure", "index.tsx"), "utf8")).toContain('render("myfigure", ({ html }) => {');
+  });
+
+  test("a figure's kind is the name as one word, and a taken or wrong name or start is refused", () => {
+    expect(figureKind("sales-chart")).toBe("saleschart");
+    expect(figureKind("3d-map")).toBe("m3dmap");
+    expect(figureKind(`a-${"b".repeat(60)}`)).toHaveLength(32);
+    const home = scratch("create-no");
+    createMod(home, "notes", "panel");
+    expect(() => createMod(home, "notes", "tab")).toThrow("there's already a mod named notes: pick another name");
+    expect(() => createMod(home, "Notes", "panel")).toThrow(ModError);
+    expect(() => createMod(home, "chat", "panel")).toThrow("is a name Channels keeps for its own commands");
+    expect(() => createMod(home, "other", "sidebar" as never)).toThrow('"sidebar" isn\'t a start: pick panel, command, tab, figure');
+    expect(existsSync(join(modsDir(home), "other"))).toBe(false);
   });
 });
 

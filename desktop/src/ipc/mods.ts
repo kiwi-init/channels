@@ -1,8 +1,9 @@
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
+import type { ModCreated, ModStart } from "../../../src/mods.ts";
 import type { ModInstalled, ModUpdate, ModUpdates, ModView } from "../bridge.ts";
 import type { Serves } from "../calls.ts";
 import { childEnv, sessionEnv } from "../child-env.ts";
@@ -10,6 +11,7 @@ import { kiwiHome } from "../daemon-client.ts";
 import type { Host } from "../host.ts";
 import { modsCatalog, type ModsCatalog } from "../mods-catalog.ts";
 import { installDefaults } from "../mods-default.ts";
+import { openerFor } from "../mod-editor.ts";
 import { modsHost, type ModsHost, type ModSecrets } from "../mods-host.ts";
 import { inModsWorker } from "../mods-run.ts";
 import { placedSeatsOf, terminalCalls, type PlacedSeat, type Run } from "../mods-terminal.ts";
@@ -33,6 +35,8 @@ const installed = ({ name, source, commit, local, link, changed }: Info): ModIns
 const offered = ({ name, from, to, commits, added, dropped }: Change): ModUpdate => ({ name, from, to, commits, added, dropped });
 
 const RUN_MS = 5_000;
+
+const MOD_FOLDER = /^[a-z0-9][a-z0-9-]{0,62}$/;
 
 const run: Run = (argv) =>
   new Promise((resolve) => {
@@ -155,6 +159,8 @@ export function modsCalls(
   | "modCatalog"
   | "installMod"
   | "modStorePage"
+  | "createMod"
+  | "openModFolder"
 > {
   let mods: ModsHost | null = null;
   let started: Promise<ModsHost> | null = null;
@@ -261,6 +267,22 @@ export function modsCalls(
     modStorePage: async (name) => {
       await ready();
       return catalogOf().page(String(name));
+    },
+    createMod: async (name, start) => {
+      const made = await inModsWorker<ModCreated>({ op: "create", home: kiwiHome(), name: String(name), start: String(start) as ModStart });
+      const h = await ready();
+      await h.rescan();
+      return h.approve(made.name, made.needs);
+    },
+    openModFolder: async (name) => {
+      const at = path.join(kiwiHome(), "mods", String(name));
+      if (!MOD_FOLDER.test(String(name)) || !fs.statSync(at, { throwIfNoEntry: false })?.isDirectory()) throw new Error(`there's no mod folder named ${String(name)}`);
+      const dir = fs.realpathSync(at);
+      const o = openerFor(dir, { platform: process.platform, home: os.homedir(), app: (p) => fs.existsSync(p), bin: (n) => found(n) });
+      const [bin, ...args] = o.argv;
+      if (!bin) throw new Error(`nothing on this computer opens folders: open ${dir} yourself`);
+      if (!(typeof KIWI_EB_TEST !== "undefined" && KIWI_EB_TEST)) spawn(bin, args, { detached: true, stdio: "ignore", env: childEnv() }).unref();
+      return { editor: o.editor, dir: dir.startsWith(os.homedir()) ? `~${dir.slice(os.homedir().length)}` : dir };
     },
   };
 }

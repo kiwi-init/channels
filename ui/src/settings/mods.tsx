@@ -182,7 +182,16 @@ export function ModsSection() {
       </Suspense>
     )
   return (
-    <Page title="Mods" lede="Each one runs in its own frame, away from your keys and messages.">
+    <Page
+      title="Mods"
+      lede="Each one runs in its own frame, away from your keys and messages."
+      action={
+        <button type="button" className="btn is-small" onClick={() => go({ to: "dialog", dialog: "new-mod" })}>
+          <Icon name="plus" size={14} />
+          New mod
+        </button>
+      }
+    >
       {mods.some((m) => m.state === "asks") && (
         <Group title="Waiting for you">
           {mods
@@ -230,7 +239,7 @@ export function ModsSection() {
             label="No mods yet"
             hint={
               <>
-                Add one with <span className="set-mono">kiwi mod add</span>.
+                Make one with <b>New mod</b>, or add one with <span className="set-mono">kiwi mod add</span>.
               </>
             }
           />

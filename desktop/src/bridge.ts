@@ -504,6 +504,8 @@ export interface KiwiBridge {
   modCatalog(fresh?: boolean): Promise<ModCatalog>;
   installMod(name: string, needs: string[]): Promise<ModView[]>;
   modStorePage(name: string): Promise<ModStorePage>;
+  createMod(name: string, start: ModStart): Promise<ModView[]>;
+  openModFolder(name: string): Promise<ModOpened>;
 }
 
 export interface ModView {
@@ -555,6 +557,13 @@ export interface ModShot {
   name: string;
   type: "image/png" | "image/jpeg" | "image/webp";
   data: string;
+}
+
+export type ModStart = "panel" | "command" | "tab" | "figure";
+
+export interface ModOpened {
+  editor: string | null;
+  dir: string;
 }
 
 export interface ModStorePage {

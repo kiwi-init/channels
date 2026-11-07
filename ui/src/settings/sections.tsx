@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react"
 
-import { IconButton } from "~/kit/bits"
+import { cx, IconButton } from "~/kit/bits"
 import { Toggle } from "~/kit/form"
 import { setDebugOptions, useDebugOptions } from "~/kit/debug"
 import { Icon } from "~/kit/icons"
@@ -17,11 +17,12 @@ import { copyText } from "~/kit/toasts"
 import { UI_VERSION } from "~/settings/ui-version"
 import { OutsideLink } from "~/kit/outside"
 
-export function Page({ title, lede, children }: { title: string; lede?: ReactNode; children: ReactNode }) {
+export function Page({ title, lede, action, children }: { title: string; lede?: ReactNode; action?: ReactNode; children: ReactNode }) {
   return (
     <>
-      <header className="set-head">
+      <header className={cx("set-head", !!action && "has-action")}>
         <h2 className="set-title">{title}</h2>
+        {action && <div className="set-head-act">{action}</div>}
         {lede && <p className="set-lede">{lede}</p>}
       </header>
       {children}

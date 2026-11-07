@@ -38,7 +38,15 @@ function useDetails(mod: ModView): ModDetails | null {
 type Manage = { busy: boolean; update: ModUpdate | undefined; onUpdate: (() => void) | undefined; removeWhy: string; onRemove: () => void }
 
 export function ModDetailsPage({ mod, manage }: { mod: ModView; manage?: Manage }) {
-  const { go } = useApp()
+  const { go, toast } = useApp()
+  const open = modReads().openModFolder
+  const openFolder = open
+    ? () =>
+        open(mod.name).then(
+          (o) => toast(o.editor ? `Opened in ${o.editor}` : `Opened ${o.dir}`),
+          (e: unknown) => toast(e instanceof Error ? e.message : String(e), "error")
+        )
+    : null
   const d = useDetails(mod)
   const run = runningMod(mod.name)
   const local = mod.source === "local"
@@ -68,8 +76,14 @@ export function ModDetailsPage({ mod, manage }: { mod: ModView; manage?: Manage 
         </div>
       </header>
       <Group hint={mod.state === "on" ? undefined : mod.why}>
-        <Row label="Source">
-          <span className="set-value">{local ? "A folder on this computer" : <span className="set-mono">{mod.source}</span>}</span>
+        <Row label="Source" hint={local && openFolder ? "A folder on this computer" : undefined}>
+          {local && openFolder ? (
+            <button type="button" className="btn is-small" onClick={() => void openFolder()}>
+              Open in editor
+            </button>
+          ) : (
+            <span className="set-value">{local ? "A folder on this computer" : <span className="set-mono">{mod.source}</span>}</span>
+          )}
         </Row>
         {d?.commit && (
           <Row label="Commit">

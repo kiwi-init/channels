@@ -2,6 +2,7 @@ export const APP = [
   { id: "app.palette", title: "Find anything", palette: false },
   { id: "app.new-channel", title: "New channel" },
   { id: "app.join", title: "Join with a code" },
+  { id: "app.new-mod", title: "New mod" },
   { id: "app.computers", title: "Your computers" },
   { id: "app.settings", title: "Settings" },
   { id: "app.calm", title: "Calm" },

@@ -159,6 +159,7 @@ export const SHOTS: Record<string, Shot> = {
   "settings-mods": { ...kiwi({ page: "settings", section: "mods" }), mods: true },
   "settings-mod-details": { ...kiwi({ page: "settings", section: "mods", mod: "release-radar" }), mods: true },
   "settings-mod-store": { ...kiwi({ page: "settings", section: "mods", mod: "github" }), mods: true },
+  "new-mod": { ...kiwi({ page: "settings", section: "mods", dialog: "new-mod" }), mods: true },
   "mod-ask": { ...kiwi(), mods: "ask" },
   "settings-layouts": {
     ...kiwi({ page: "settings", section: "appearance" }),

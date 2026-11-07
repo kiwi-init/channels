@@ -8,6 +8,7 @@ export function AppCommands() {
   useCommands([
     { id: "app.new-channel", run: () => go({ to: "dialog", dialog: "new-channel" }) },
     { id: "app.join", run: () => go({ to: "dialog", dialog: "join" }) },
+    { id: "app.new-mod", run: () => go({ to: "dialog", dialog: "new-mod" }) },
     { id: "app.computers", run: () => go({ to: "settings", section: "computers" }) },
     { id: "app.settings", run: () => go({ to: "settings" }) },
     ...THEMES.map((theme) => ({
