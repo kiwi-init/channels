@@ -79,7 +79,7 @@ struct ConversationScreen: View {
         .task(id: spot) {
             model.visit(spot)
             follow = Follow()
-            await model.open(spot.code, place: "main")
+            await model.open(spot.code, place: spot.place == model.rooms[spot.code]?.sideKey ? "main" : spot.place)
         }
     }
 

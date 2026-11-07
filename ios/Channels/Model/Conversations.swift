@@ -109,7 +109,7 @@ extension RoomView {
     }
 
     func asks(in key: String) -> [AskView] {
-        key == sideKey ? asks.filter { $0.place == key } : asks.filter { $0.place != sideKey }
+        key == "main" ? asks.filter { $0.place != sideKey } : asks.filter { $0.place == key }
     }
 
     func elsewhere() -> [AskView] {
@@ -124,8 +124,9 @@ extension RoomView {
     }
 
     func spotTitle(_ key: String) -> String {
-        guard key != "main", let lead else { return title }
-        return display(lead)
+        guard key != "main" else { return title }
+        if key == sideKey, let lead { return display(lead) }
+        return placeView(key)?.title ?? title
     }
 }
 
@@ -214,7 +215,7 @@ extension AppModel {
     func shown(_ spot: Spot) -> RoomView? {
         guard let room = rooms[spot.code] else { return nil }
         if spot.place == room.sideKey { return room.showing(spot.place, Feed(messages: room.side ?? [], whole: room.whole)) }
-        return room.place == "main" ? room : room.showing("main", feeds[spot.id])
+        return room.place == spot.place ? room : room.showing(spot.place, feeds[spot.id])
     }
 
     func visit(_ spot: Spot) {

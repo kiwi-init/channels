@@ -167,7 +167,15 @@ struct Conversation: View {
 struct Intro: View {
     let room: RoomView
 
-    private var lead: String? { room.place == "main" ? nil : room.lead }
+    private var place: PlaceView? { room.placeView(room.place) }
+    private var person: String? {
+        if room.place == room.sideKey { return room.lead }
+        return place.flatMap { room.other(in: $0) }
+    }
+    private var task: TaskView? {
+        guard let id = place?.task else { return nil }
+        return room.tasks.first { $0.id == id }
+    }
 
     var body: some View {
         VStack(spacing: 4) {
@@ -184,25 +192,32 @@ struct Intro: View {
     }
 
     @ViewBuilder private var face: some View {
-        if let lead {
-            Face(name: lead, member: room.member(lead), size: 72)
+        if let person {
+            Face(name: person, member: room.member(person), size: 72)
         } else {
             ChannelAvatar(room: room, size: 72)
         }
     }
 
     private var title: String {
-        lead.map { room.display($0) } ?? room.title
+        person.map { room.display($0) } ?? room.spotTitle(room.place)
     }
 
     private var lines: [String] {
-        guard let lead else {
+        let empty = room.messages.isEmpty
+        if room.place == "main" {
             let names = room.members.filter { $0.name != room.me }.map(\.display)
-            return ["You, \(names.joined(separator: ", "))", room.messages.isEmpty ? "No messages yet" : "The start of #general"]
+            return ["You, \(names.joined(separator: ", "))", empty ? "No messages yet" : "The start of #general"]
         }
-        let member = room.member(lead)
+        if let task {
+            let who = task.owner.map { "\(room.display($0)) · " } ?? ""
+            return ["\(who)\(task.state.capitalized) in \(room.title)", empty ? "No messages yet" : "The start of this task's thread"]
+        }
+        guard let person else { return [empty ? "No messages yet" : "The start of this thread"] }
+        let member = room.member(person)
         let now: String? = member?.working == true ? (member?.doing.first.map { "Working on \(taskLabel($0))" } ?? "Working") : nil
-        return ["Lead of \(room.title)", now ?? (room.messages.isEmpty ? "Everyone in the channel can read this" : nil)].compactMap { $0 }
+        let role = person == room.lead ? "Lead of \(room.title)" : "In \(room.title)"
+        return [role, now ?? (empty ? "Everyone in the channel can read this" : nil)].compactMap { $0 }
     }
 }
 
