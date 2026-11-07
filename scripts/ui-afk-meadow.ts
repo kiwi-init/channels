@@ -5,13 +5,13 @@ import { join, resolve } from "node:path";
 import { chromium, webkit, type Browser, type Page } from "playwright-core";
 
 if (process.argv.includes("--help")) {
-  console.log(`The Calm meadow (#5411), the idle screen's scene, in a bare page. It checks that the meadow draws and moves, that its
+  console.log(`The AFK meadow (#5411), the AFK screen's scene, in a bare page. It checks that the meadow draws and moves, that its
 light follows the clock (noon is bright, 2 am is dark), that it stops drawing while the window is hidden and draws again
 when shown, that reduced motion gets one still frame and no animation, and that closing and opening it again reuses the
 same renderer instead of a new one per open. A machine that can't hold 24 fps gets one still frame instead of the
 animation. An engine with neither WebGPU nor WebGL 2 must leave no page errors.
 
-  bun scripts/ui-calm-meadow.ts [--chromium] [--shot=meadow.png]`);
+  bun scripts/ui-afk-meadow.ts [--chromium] [--shot=meadow.png]`);
   process.exit(0);
 }
 
@@ -19,10 +19,10 @@ const ROOT = resolve(import.meta.dir, "..");
 const ENGINE = process.argv.includes("--chromium") ? "chromium" : "webkit";
 const SHOT = process.argv.find((a) => a.startsWith("--shot="))?.slice(7);
 
-const dir = mkdtempSync(join(tmpdir(), "kiwi-calm-meadow-"));
+const dir = mkdtempSync(join(tmpdir(), "kiwi-afk-meadow-"));
 const out = join(dir, "out");
 const built = await Bun.build({
-  entrypoints: [join(ROOT, "ui/src/calm/meadow.page.ts")],
+  entrypoints: [join(ROOT, "ui/src/afk/meadow.page.ts")],
   outdir: out,
   minify: true,
   target: "browser",
@@ -156,7 +156,7 @@ try {
   rmSync(dir, { recursive: true, force: true });
 }
 if (failures.length) {
-  console.error(`the Calm meadow failed: ${failures.join("; ")}`);
+  console.error(`the AFK meadow failed: ${failures.join("; ")}`);
   process.exit(1);
 }
-console.log("the Calm meadow draws and moves, follows the clock, rests while hidden, holds still for reduced motion and reuses its renderer");
+console.log("the AFK meadow draws and moves, follows the clock, rests while hidden, holds still for reduced motion and reuses its renderer");

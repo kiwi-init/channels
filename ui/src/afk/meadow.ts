@@ -57,8 +57,8 @@ import {
   vec4,
 } from "three/tsl"
 
-import { daylight, type Rgb } from "~/calm/daylight"
-import { freshPace, paced, SLOW_HOLD_MS } from "~/calm/pace"
+import { daylight, type Rgb } from "~/afk/daylight"
+import { freshPace, paced, SLOW_HOLD_MS } from "~/afk/pace"
 
 export interface Meadow {
   setClock(at: number): void
