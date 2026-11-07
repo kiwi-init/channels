@@ -338,6 +338,19 @@ const say = (m: unknown) => parent.postMessage({ kiwiProbe: m }, "*")
 addEventListener("message", (e) => {
   if (JSON.stringify(e.data ?? null).includes(["the message", "link"].join(" "))) say({ sawMessage: (e.data as { type?: string } | null)?.type ?? "?", surface })
 })
+addEventListener("message", (e) => {
+  const settle = (e.data as { floodSizes?: number } | null)?.floodSizes
+  if (surface !== "sidebar" || typeof settle !== "number") return
+  const stop = Date.now() + 2_000
+  let n = 0
+  const burst = () => {
+    for (let i = 0; i < 400; i++) parent.postMessage({ kiwi: 1, type: "size", height: n++ % 2 ? 40 : 300 }, "*")
+    if (Date.now() < stop) return void setTimeout(burst, 0)
+    parent.postMessage({ kiwi: 1, type: "size", height: settle }, "*")
+    say({ flooded: n })
+  }
+  burst()
+})
 const attempt = async (f: () => unknown): Promise<unknown> => {
   try {
     return await f()
@@ -897,6 +910,68 @@ async function settingsMods(d: Driver, shows: string): Promise<void> {
   });
 }
 
+async function floodSizes(d: Driver): Promise<void> {
+  const before = await d.evaluate(() => document.querySelector<HTMLElement>(".side .mod-side-slot")?.getBoundingClientRect().height ?? null, null, 2_000);
+  const started = await d.evaluate(
+    (settle) => {
+      const slot = document.querySelector<HTMLElement>(".side .mod-side-slot");
+      const frame = document.querySelector<HTMLIFrameElement>('iframe[title="probe-mod in the sidebar"]');
+      if (!slot || !frame?.contentWindow || settle === null) return false;
+      const flood = { applied: 0, frames: 0, live: true, seen: null as MutationObserver | null };
+      const tick = (): void => {
+        if (!flood.live) return;
+        flood.frames++;
+        requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+      flood.seen = new MutationObserver((records) => void (flood.applied += records.length));
+      flood.seen.observe(slot, { attributes: true, attributeFilter: ["style"] });
+      (window as unknown as { __sizeFlood?: typeof flood }).__sizeFlood = flood;
+      frame.contentWindow.postMessage({ floodSizes: settle }, "*");
+      return true;
+    },
+    before,
+    2_000,
+  );
+  check(started, "the probe's sidebar section is there to flood");
+  if (!started) return;
+  let slowest = 0;
+  for (const end = Date.now() + 2_500; Date.now() < end;) {
+    const asked = Date.now();
+    await d.evaluate(() => true, null, 10_000).catch(() => false);
+    slowest = Math.max(slowest, Date.now() - asked);
+    await later(100);
+  }
+  const flooded = await until("the flood's end", 10_000, async () => ((await heard(d)).find((m) => "flooded" in m)?.["flooded"] as number | undefined) ?? null).catch(() => null);
+  await later(500);
+  const heights: number[] = [];
+  for (let i = 0; i < 3; i++) {
+    heights.push(await d.evaluate(() => document.querySelector<HTMLElement>(".side .mod-side-slot")?.getBoundingClientRect().height ?? -1, null, 2_000));
+    await later(300);
+  }
+  const counted = await d.evaluate(
+    () => {
+      const flood = (window as unknown as { __sizeFlood?: { applied: number; frames: number; live: boolean; seen: MutationObserver | null } }).__sizeFlood;
+      if (!flood) return null;
+      flood.live = false;
+      flood.seen?.disconnect();
+      return { applied: flood.applied, frames: flood.frames };
+    },
+    null,
+    2_000,
+  );
+  console.log(
+    `a sidebar frame posted ${flooded} sizes in 2 s: the page answered in ${slowest} ms at worst; ${counted?.applied} sizes applied over ${counted?.frames} frames; then ${JSON.stringify(heights)} (before: ${before})`,
+  );
+  check((flooded ?? 0) > 1_000, "the probe's sidebar frame floods the host with sizes");
+  check(slowest < 1_000, "the page answers within 1 s while a sidebar frame floods sizes");
+  check(!!counted && counted.applied <= counted.frames + 1, "the host applies at most one size per animation frame");
+  check(
+    heights.every((h) => h === before),
+    "the section settles at one height, the one it had",
+  );
+}
+
 const topAt = (selector: string): { found: boolean; top: string | null } => {
   const el = document.querySelector<HTMLElement>(selector);
   const r = el?.getBoundingClientRect();
@@ -1172,6 +1247,7 @@ try {
   check(sideTop?.top === "frame probe-mod in the sidebar", "a mod that asked for a sidebar section shows it, drawn by its own frame");
   const titles = await d.evaluate(() => [...document.querySelectorAll(".side .mod-side h3")].map((h) => h.textContent), null, 2_000);
   check(titles.includes("Probe side") && !titles.includes("Quiet side"), "a mod that didn't ask for a sidebar section gets none, even when it posts one");
+  await floodSizes(d);
   const quiet = await until("the quiet mod's report", 15_000, async () => (await heard(d)).find((m) => "quiet" in m) ?? null).catch(() => null);
   console.log(`the quiet mod: ${JSON.stringify(quiet)}`);
   const tries = (quiet?.["quiet"] ?? []) as string[];
