@@ -53,8 +53,11 @@ function setup(files: Record<string, string> = github) {
 }
 
 describe("the mods that come with the app (T6270)", () => {
-  test("the app pins the GitHub mod from kiwi-init/mods at one commit, its files and one folder hash", () => {
-    expect(DEFAULT_MODS.map((p) => [p.name, p.repo, p.path])).toEqual([["github", "kiwi-init/mods", "github"]]);
+  test("the app pins the GitHub and Calm mods from kiwi-init/mods, each at one commit, its files and one folder hash", () => {
+    expect(DEFAULT_MODS.map((p) => [p.name, p.repo, p.path])).toEqual([
+      ["github", "kiwi-init/mods", "github"],
+      ["calm", "kiwi-init/mods", "calm"],
+    ]);
     for (const p of DEFAULT_MODS) {
       expect(p.commit).toMatch(/^[0-9a-f]{40}$/);
       expect(p.hash).toMatch(/^[0-9a-f]{64}$/);
