@@ -50,6 +50,7 @@ final class AppModel {
     var enrolled = false
     var joining = 0
     var unsaved: String?
+    private let push = PushTags()
 
     var relinking: Bool {
         phase == .ready && (relinkAsked || linking != .idle)
@@ -144,6 +145,7 @@ final class AppModel {
     }
 
     func awake() async {
+        if phase == .ready, push.stale(Set(rooms.keys)), let token = push.token { await registerPush(token) }
         if shut {
             await resume()
         } else if let keeping {
@@ -172,6 +174,8 @@ final class AppModel {
         do {
             try await engine.ask(["op": "start", "saved": object])
             phase = .ready
+            PushDelegate.onToken = { [weak self] token in Task { await self?.registerPush(token) } }
+            Task { await PushTags.ask() }
         } catch {
             phase = .broken(error.localizedDescription)
         }
@@ -259,6 +263,21 @@ final class AppModel {
         linking = .failed(
             "Kept nothing. If your computer never showed \(fingerprint), someone else answered this iPhone. Your computer may still list it under Devices: remove it there.")
         try? await engine.ask(["op": "enrollCancel"])
+    }
+
+    private func registerPush(_ token: String) async {
+        #if DEBUG
+            let sandbox = true
+        #else
+            let sandbox = false
+        #endif
+        do {
+            let seats = try await engine.ask(["op": "push", "token": token, "sandbox": sandbox], as: [PushSeat].self)
+            push.take(seats, token: token)
+            for seat in seats where !seat.ok { NSLog("push: \(seat.label) refused: \(seat.error ?? "")") }
+        } catch {
+            NSLog("push: couldn't register: \(error.localizedDescription)")
+        }
     }
 
     func cancelLink() async {
@@ -394,6 +413,7 @@ final class AppModel {
 
     func unlink() {
         Vault.wipe()
+        push.forget()
         keeping = nil
         unsaved = nil
         rooms = [:]
