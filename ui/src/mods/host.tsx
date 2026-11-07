@@ -17,7 +17,7 @@ import { openOutside } from "~/kit/outside"
 import { openLinksOutside } from "~/kit/outside-links"
 import { announce, copyText } from "~/kit/toasts"
 import { homeWaits, onHome } from "~/live/store"
-import { channelLink } from "~/live/actions"
+import { roomLink } from "~/mods/link"
 import type { MOD_SIDES as SIDES_EVENT } from "~/shell/updates"
 import {
   fromFrame,
@@ -456,7 +456,7 @@ async function onMessage(e: MessageEvent): Promise<void> {
       const wait = tooSoon(name, Date.now())
       if (wait > 0) return fail(`${name} posts at most once every ${POST_EVERY_MS / 1000} seconds: try again in ${Math.ceil(wait / 1000)} s`)
       try {
-        await channelLink(m.code).send(body, { kind: "msg", ...(m.room === "general" ? {} : { room: m.room }) })
+        await roomLink(m.code).send(body, { kind: "msg", ...(m.room === "general" ? {} : { room: m.room }) })
         send(f, { kiwi: MOD_PROTOCOL, type: "reply", id: m.id, ok: true, value: null })
       } catch (err) {
         // The mod gets the reason; the person sees nothing, since they didn't write it.

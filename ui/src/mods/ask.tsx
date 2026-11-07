@@ -7,8 +7,7 @@ import type { ModRoom, ModSnippet, ModView } from "../../../desktop/src/bridge.t
 import { Modal } from "~/kit/modal"
 import { askLater, askWaiting, useModsVersion } from "~/mods/host"
 import { ModIcon } from "~/mods/icon"
-import { needWords } from "~/mods/needs"
-import { RoomPicker } from "~/mods/room-picker"
+import { needWords, RoomPicker } from "~/mods/needs"
 import { asksRooms, startPick } from "~/mods/rooms"
 import { useApp } from "~/nav"
 

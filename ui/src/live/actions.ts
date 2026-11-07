@@ -39,7 +39,7 @@ async function tried<T>(what: string, run: () => Promise<T>): Promise<T | null> 
   }
 }
 
-export function channelLink(code: string): ChannelLink {
+function link(code: string): ChannelLink {
   const run = openedRun(code)
   if (run) return run.ch
   const m = loadMember(code)
@@ -88,22 +88,22 @@ export function makeActions(): Actions {
       const last = lastIn(run.messages, run.state, run.me, where)
       if (last) markSeenIn(run.roomId, { [seenKeyOf(run.state, where, run.me)]: last })
     },
-    openDoc: (code, thread, th, on) => channelLink(code).doc(thread, th, on),
-    findDoc: (code, thread) => findDoc(channelLink(code), code, thread),
-    docVersions: async (code, th) => (await rare()).versionsOf(channelLink(code), th),
-    restoreDocVersion: async (code, ...a) => (await rare()).restoreOf(channelLink(code), ...a),
+    openDoc: (code, thread, th, on) => link(code).doc(thread, th, on),
+    findDoc: (code, thread) => findDoc(link(code), code, thread),
+    docVersions: async (code, th) => (await rare()).versionsOf(link(code), th),
+    restoreDocVersion: async (code, ...a) => (await rare()).restoreOf(link(code), ...a),
     putDocImage: async (code, upload) => {
       if (!(await appCan("putImage"))) throw new Error(UPDATE_FOR_MEDIA)
-      const stored = await channelLink(code).putImage(upload)
+      const stored = await link(code).putImage(upload)
       if (!stored.ref) throw new Error(`${upload.name} wasn't stored`)
       return { name: stored.name, mime: stored.mime, ref: stored.ref }
     },
     putDocFile: async (code, upload) => {
       if (!(await appCan("putFileData"))) throw new Error(UPDATE_FOR_MEDIA)
-      return channelLink(code).putFileData(upload.name, upload.mime, upload.data)
+      return link(code).putFileData(upload.name, upload.mime, upload.data)
     },
-    docImage: (code, img) => channelLink(code).image(img),
-    docFile: async (code, f) => ((await appCan("fileData")) ? channelLink(code).fileData(f) : null),
+    docImage: (code, img) => link(code).image(img),
+    docFile: async (code, f) => ((await appCan("fileData")) ? link(code).fileData(f) : null),
     followThread: (code, root, on) => {
       const run = need(code)
       markSeenIn(run.roomId, { [followKey(root)]: followMark(seenIn(run.roomId)[followKey(root)], run.messages.at(-1)?.seq ?? 0, on) })
@@ -199,7 +199,7 @@ export function makeActions(): Actions {
       attempt("Not renamed", async () => {
         const name = title.trim().slice(0, 80)
         if (!name) throw new Error("a channel needs a name")
-        await channelLink(code).setTitle(name)
+        await link(code).setTitle(name)
         if (loadMember(code)) await renameChannel(code, name)
       }),
     setGoal: (code, goal) => attempt("Goal not set", async () => (await manage()).setGoal(code, goal)),
@@ -230,7 +230,7 @@ export function makeActions(): Actions {
           closeOpened(code)
           return forgetPending(code)
         }
-        await channelLink(code).leave()
+        await link(code).leave()
         closeOpened(code)
         await forgetChannel(code)
       }),
