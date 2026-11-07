@@ -359,7 +359,7 @@ function movedFrom(from: string, to: string): void {
   try {
     fs.writeFileSync(movedMarker(), JSON.stringify({ from, to }));
     const entry = keepLinuxEntry(to, host().app.identifier(), process.env, homeDir());
-    if (entry.kind === "skipped") console.error(`Channels: no desktop entry written: ${entry.why}`);
+    if (entry.kind === "skipped") console.log(`Channels: no desktop entry written: ${entry.why}`);
   } catch (e) {
     // The update is in place either way; only the notice or the menu entry is lost, and main.log says which.
     logMainError(e);
@@ -398,7 +398,7 @@ export const dismissMovedApp = (): void => fs.rmSync(movedMarker(), { force: tru
 export function startUpdates(onChange: (s: UpdateState) => void): void {
   notify = onChange;
   if (!host().app.packaged()) return;
-  console.error(`Channels: update checks are on, every ${EVERY_MS / 3_600_000} h`);
+  console.log(`Channels: update checks are on, every ${EVERY_MS / 3_600_000} h`);
   const tick = () => void checkForUpdate();
   setTimeout(tick, 20_000);
   setInterval(tick, EVERY_MS);

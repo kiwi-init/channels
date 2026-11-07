@@ -67,13 +67,14 @@ HOME="$home" gsettings set org.gnome.desktop.background picture-uri "file://$hom
 HOME="$home" gsettings set org.gnome.desktop.background picture-uri-dark "file://$home/wall.ppm" 2> /dev/null || true
 HOME="$home" gsettings set org.gnome.desktop.interface color-scheme prefer-dark 2> /dev/null || true
 start=$(date +%s)
+: > "$logs/$tag-app.log"
 if [ "$launch" = entry ]; then
   exec_line=$(sed -n 's/^Exec=//p' "$home/.local/share/applications/channels-desktop.desktop" 2> /dev/null | sed 's/ %U$//')
   [ -n "$exec_line" ] || { bad "no desktop entry to start the app from"; kill "$watcher" "$proto" "$weston" 2> /dev/null; exit 0; }
   info "started the way the app menu does: $exec_line"
-  HOME="$home" setsid sh -c "exec $exec_line" > "$logs/$tag-app.log" 2>&1 &
+  HOME="$home" setsid sh -c "exec $exec_line" >> "$logs/$tag-app.log" 2> >(tee "$logs/$tag-app.err" >> "$logs/$tag-app.log") &
 else
-  HOME="$home" setsid "$image" --appimage-extract-and-run > "$logs/$tag-app.log" 2>&1 &
+  HOME="$home" setsid "$image" --appimage-extract-and-run >> "$logs/$tag-app.log" 2> >(tee "$logs/$tag-app.err" >> "$logs/$tag-app.log") &
 fi
 pid=$!
 up=""
@@ -91,6 +92,24 @@ sleep 15
 shot=$(cd "$logs" && timeout 10 weston-screenshooter > /dev/null 2>&1; ls -t wayland-screenshot-*.png 2> /dev/null | head -n 1)
 if [ -n "$shot" ]; then mv "$logs/$shot" "$logs/$tag-window.png"; info "screenshot: $tag-window.png"; else info "no screenshot: weston-screenshooter didn't write one"; fi
 if kill -0 "$pid" 2> /dev/null; then ok "still running 15 s later"; else bad "the app exited: $(tail -n 5 "$logs/$tag-app.log" | tr '\n' ' ' | cut -c1-300)"; fi
+
+if [ "$tag" = kwallet ]; then
+  chatter='Launcher starting on|^Current directory:|^Spawning: |Setting LD_PRELOAD|Child process spawned with PID|\[LAUNCHER\] |ELECTROBUN NATIVE WRAPPER|setJSUtils called|^GlobalShortcut: |Application menus are not supported|GTK WebKit: Applied|setWebviewHTMLContent: |getWebviewHTMLContent: Retrieved'
+  said=$(grep -hE "$chatter" "$logs/$tag-app.log" | head -n 4 | cut -c1-120 | tr '\n' ';')
+  if [ -z "$said" ]; then ok "a plain start on KDE prints none of Electrobun's start-up lines"; else bad "a plain start on KDE printed Electrobun's start-up lines: $said"; fi
+  enchant=$(grep -h "Error loading plugin" "$logs/$tag-app.log" | head -n 2 | cut -c1-200 | tr '\n' ';')
+  if [ -z "$enchant" ]; then ok "and no libenchant plugin warnings, with hunspell its only backend"; else bad "libenchant warned about the backends it lacks: $enchant"; fi
+  ours=$(grep -h "^Channels" "$logs/$tag-app.err" 2> /dev/null | head -n 3 | cut -c1-200 | tr '\n' ';')
+  if [ -e "$logs/$tag-app.err" ]; then
+    if [ -z "$ours" ]; then ok "and Channels writes nothing to stderr"; else bad "Channels wrote to stderr: $ours"; fi
+  else
+    bad "no stderr of the app's to check"
+  fi
+  info "stderr from elsewhere, in this headless session: $(grep -v '^$' "$logs/$tag-app.err" 2> /dev/null | sed -E 's/^\([^)]*\): //; s/ [0-9]{2}:[0-9]{2}:[0-9.]+: / /' | sort | uniq -c | sort -rn | head -n 6 | tr -s ' ' | tr '\n' ';' | cut -c1-500)"
+  hunspell=""
+  for p in $(ps -e -o pid=,sid= | awk -v s="$pid" '$2 == s {print $1}'); do grep -q enchant_hunspell "/proc/$p/maps" 2> /dev/null && hunspell=$p; done
+  if [ -n "$hunspell" ]; then ok "its spell checker loaded enchant's hunspell backend (process $hunspell)"; else bad "no process of the app's loaded enchant's hunspell backend"; fi
+fi
 
 web=$(pgrep -s "$pid" -x WebKitWebProces | head -n 1)
 boxed=""

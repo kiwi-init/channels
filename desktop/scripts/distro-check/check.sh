@@ -122,6 +122,7 @@ lib_test kiwi-tray-test "$tests/kiwi-tray-test" "$lib" no-indicator
 install "${ayatana[@]}" || exit 1
 sealed_home=$(runuser -u tester -- mktemp -d)
 session gnome-keyring gnome-keyring tray "$sealed_home"
+install hunspell hunspell-en_us || exit 1
 session kwallet kwallet tray
 session gnome-keyring migrate tray "$plain_home"
 session kwallet-unanswered kwallet-unanswered tray

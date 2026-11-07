@@ -61,7 +61,7 @@ async function start(instance: Extract<Instance, { kind: "first" }>): Promise<vo
   startUpdateChecks();
   if (!inTime) {
     await opening;
-    console.error(`Channels: the keyring answered after ${Math.round((performance.now() - asked) / 1000)} s`);
+    console.log(`Channels: the keyring answered after ${Math.round((performance.now() - asked) / 1000)} s`);
     if (keyringLocked() && !cancelled) showKeyringNote("locked");
   }
   if (keyringLocked()) {
@@ -93,7 +93,7 @@ const instance = wrongHome
       scheme: JOIN_SCHEME,
       onHandoff: (h) => {
         if (h.kind === "show") return ebHost.showWindow(h.token);
-        console.error(`Channels: opening a ${JOIN_SCHEME}:// link${h.token ? " with the launch's activation token" : ""}`);
+        console.log(`Channels: opening a ${JOIN_SCHEME}:// link${h.token ? " with the launch's activation token" : ""}`);
         handleDeepLink(h.url, h.token);
       },
     }).catch((e: unknown) => {
@@ -112,8 +112,8 @@ else {
   if (appImage) {
     try {
       const entry = keepLinuxEntry(appImage, ebHost.app.identifier());
-      if (entry.kind === "skipped") console.error(`Channels: no desktop entry written: ${entry.why}`);
-      else if (entry.wrote.length) console.error(`Channels: the desktop entry now starts ${appImage}: wrote ${entry.wrote.join(", ")}`);
+      if (entry.kind === "skipped") console.log(`Channels: no desktop entry written: ${entry.why}`);
+      else if (entry.wrote.length) console.log(`Channels: the desktop entry now starts ${appImage}: wrote ${entry.wrote.join(", ")}`);
     } catch (e) {
       // A home that can't take the entry still runs the app; main.log keeps why.
       logMainError(e);

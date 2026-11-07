@@ -17,6 +17,45 @@ const bundle = appRoot(exe);
 const root = mkdtempSync(join(tmpdir(), "kiwi-smoke-eb-"));
 const problems: string[] = [];
 const later = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+const SPELLED = "hello world ";
+const MISSPELLED = "helo wrold thsi ";
+
+async function spellingMarks(d: Driver): Promise<{ empty: number; right: number; wrong: number } | string> {
+  const xdo = (...args: string[]) => spawnSync("xdotool", ["search", "--sync", "--onlyvisible", "--limit", "1", "--name", "^Channels$", ...args], { encoding: "utf8", timeout: 20_000 });
+  const geometry = Object.fromEntries(
+    (xdo("getwindowgeometry", "--shell").stdout ?? "")
+      .split("\n")
+      .map((l) => l.split("="))
+      .filter((kv) => kv.length === 2),
+  );
+  const area = ["X", "Y", "WIDTH", "HEIGHT"].map((k) => String(Number(geometry[k] ?? NaN)));
+  if (area.some((v) => v === "NaN")) return `no window geometry from xdotool: ${JSON.stringify(geometry)}`;
+  const red = () => Number(spawnSync("python3", [join(import.meta.dirname, "red-pixels.py"), ...area], { encoding: "utf8", timeout: 30_000 }).stdout.trim());
+  const ready = await d.evaluate(() => {
+    const t = document.querySelector<HTMLTextAreaElement>(".main .composer textarea");
+    if (!t) return "no composer";
+    t.style.caretColor = "transparent";
+    t.focus();
+    return t.value === "" ? "ready" : `the composer already holds ${JSON.stringify(t.value)}`;
+  }, null);
+  if (ready !== "ready") return ready;
+  const empty = red();
+  xdo("windowfocus", "--sync", "type", "--delay", "40", SPELLED);
+  await later(1_500);
+  const right = red();
+  xdo("windowfocus", "--sync", "type", "--delay", "40", MISSPELLED);
+  await later(1_500);
+  const wrong = red();
+  xdo("windowfocus", "--sync", "key", "--clearmodifiers", "ctrl+a", "BackSpace");
+  await d.evaluate(() => {
+    const t = document.querySelector<HTMLTextAreaElement>(".main .composer textarea");
+    if (t) t.style.caretColor = "";
+    return true;
+  }, null);
+  if ([empty, right, wrong].some((n) => !Number.isFinite(n) || n < 0)) return `the screen couldn't be read: ${empty}, ${right}, ${wrong}`;
+  return { empty, right, wrong };
+}
 const pids = (pattern: string): number[] => spawnSync("pgrep", ["-f", pattern], { encoding: "utf8" }).stdout.split("\n").filter(Boolean).map(Number);
 const alive = (): number[] => [...pids(bundle), ...pids(root)];
 const linux = process.platform === "linux";
@@ -193,6 +232,11 @@ try {
     const reset = await until("Ctrl+0 reaching the page", 5_000, () => scale().then((v) => (v === "" ? "reset" : null))).catch(() => null);
     if (bigger && reset) console.log(`Ctrl+= then Ctrl+0 (libkiwi-shell's shortcuts; Electrobun has no app menu on Linux): the page's text scale went to ${bigger}, then back`);
     else problems.push(`Ctrl+= then Ctrl+0 gave the page's --text-scale ${JSON.stringify(bigger)}, then ${JSON.stringify(reset)} (it was ${JSON.stringify(was)})`);
+    const marks = await spellingMarks(d);
+    if (typeof marks === "string") problems.push(`spell check underlining a misspelled word: ${marks}`);
+    else if (marks.wrong - marks.right >= 20)
+      console.log(`spell check underlines: typing "${MISSPELLED.trim()}" drew ${marks.wrong - marks.right} red marker pixels, and "${SPELLED.trim()}" drew ${marks.right - marks.empty}`);
+    else problems.push(`spell check drew no marks under "${MISSPELLED.trim()}": red pixels ${marks.empty} empty, ${marks.right} after "${SPELLED.trim()}", ${marks.wrong} after it`);
   }
   if (linux) {
     await d.main("closeWindow");
