@@ -218,12 +218,6 @@ extension AppModel {
         return room.place == spot.place ? room : room.showing(spot.place, feeds[spot.id])
     }
 
-    func visit(_ spot: Spot) {
-        visited.removeAll { $0 == spot }
-        visited.insert(spot, at: 0)
-        if visited.count > 12 { visited.removeLast() }
-    }
-
     func post(_ spot: Spot, _ body: String, re: Int?) {
         let item = Pending(id: UUID(), body: body, re: re, at: .now)
         pending[spot.id, default: []].append(item)

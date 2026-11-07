@@ -62,7 +62,6 @@ final class AppModel {
     var feeds: [String: Feed] = [:]
     var pending: [String: [Pending]] = [:]
     var sentAs: [Int: UUID] = [:]
-    var visited: [Spot] = []
 
     @ObservationIgnored let engine = Engine()
     @ObservationIgnored private var booted = false

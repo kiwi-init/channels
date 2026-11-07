@@ -3,16 +3,13 @@ import UIKit
 
 struct ConversationScreen: View {
     @Environment(AppModel.self) private var model
-    @Environment(\.dismiss) private var dismiss
     @State private var spot: Spot
-    @State private var previous: Spot?
     @State private var details = ConversationScreen.opensDetails
     @State private var replyTo: MessageView?
     @State private var answering: AskView?
     @State private var sendingBack: ReviewView?
     @State private var position = ScrollPosition(edge: .bottom)
     @State private var follow = Follow()
-    @State private var toLead = true
     @FocusState private var typing: Bool
 
     init(start: Spot) {
@@ -45,21 +42,21 @@ struct ConversationScreen: View {
                     typing = true
                 }
                 .id(spot.id)
-                .transition(
-                    .asymmetric(insertion: .move(edge: toLead ? .trailing : .leading), removal: .move(edge: toLead ? .leading : .trailing))
-                )
-                .overlay(alignment: .top) {
-                    GeometryReader { geo in
-                        LinearGradient(stops: fade(under: geo.safeAreaInsets.top), startPoint: .top, endPoint: .bottom)
-                            .frame(height: geo.safeAreaInsets.top + 30)
-                            .offset(y: -geo.safeAreaInsets.top)
-                    }
-                    .allowsHitTesting(false)
-                }
-                .safeAreaInset(edge: .top, spacing: 0) { header(room) }
                 .bar(.bottom) {
                     Dock(room: room, spot: spot, replyTo: $replyTo, answering: $answering, sendingBack: $sendingBack, typing: $typing, follow: follow) {
                         withAnimation(Motion.ease) { position.scrollTo(edge: .bottom) }
+                    }
+                }
+                .navigationTitle(room.spotTitle(spot.place))
+                .toolbar {
+                    ToolbarItem(placement: .principal) {
+                        Button {
+                            details = true
+                        } label: {
+                            TitlePill(room: room, place: room.placeView(spot.place), fresh: false)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityHint("Shows the details")
                     }
                 }
                 .navigationDestination(isPresented: $details) {
@@ -75,9 +72,9 @@ struct ConversationScreen: View {
             }
         }
         .background(Tone.canvas)
-        .toolbar(.hidden, for: .navigationBar)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.visible, for: .navigationBar)
         .task(id: spot) {
-            model.visit(spot)
             follow = Follow()
             await model.open(spot.code, place: spot.place == model.rooms[spot.code]?.sideKey ? "main" : spot.place)
         }
@@ -89,114 +86,10 @@ struct ConversationScreen: View {
 
     private func switchTo(_ next: Spot) {
         guard next != spot else { return }
-        Haptic.tap()
-        previous = spot
         replyTo = nil
         answering = nil
         sendingBack = nil
-        toLead = !next.general
-        withAnimation(.spring(duration: 0.34, bounce: 0.08)) { spot = next }
-    }
-
-    private func header(_ room: RoomView) -> some View {
-        let other = room.other(than: spot)
-        let elsewhere = model.rows(.unread).contains { $0.spot != spot && $0.spot != other }
-        return ZStack {
-            HStack {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(Tone.ink)
-                    .frame(width: 44, height: 44)
-                    .glassCircle()
-                    .overlay(alignment: .topTrailing) {
-                        if elsewhere {
-                            Circle().fill(Tone.accent).frame(width: 10, height: 10).overlay(Circle().stroke(Tone.canvas, lineWidth: 2))
-                        }
-                    }
-                    .overlay {
-                        HoldButton(label: "Back", hint: "Touch and hold for your other channels") {
-                            dismiss()
-                        } menu: {
-                            backMenu()
-                        }
-                    }
-                Spacer()
-                if let other { flip(room, to: other) }
-            }
-            Button {
-                Haptic.tap()
-                details = true
-            } label: {
-                TitlePill(room: room, place: room.placeView(spot.place), fresh: false)
-            }
-            .buttonStyle(.plain)
-            .frame(maxWidth: 220)
-            .accessibilityHint("Shows the channel's details")
-        }
-        .padding(.horizontal, 12)
-        .padding(.top, 2)
-        .padding(.bottom, 6)
-    }
-
-    private func flip(_ room: RoomView, to other: Spot) -> some View {
-        let asks = !room.asks(in: other.place).isEmpty || (other.general && !(room.reviews.isEmpty && room.open.isEmpty))
-        let fresh = model.unread(other)
-        return Button {
-            switchTo(other)
-        } label: {
-            Group {
-                if other.general {
-                    ChannelAvatar(room: room, size: 34)
-                } else if let lead = room.lead {
-                    Face(name: lead, member: room.member(lead), size: 34)
-                }
-            }
-            .frame(width: 44, height: 44)
-            .glassCircle()
-            .overlay(alignment: .topTrailing) {
-                if asks || fresh {
-                    Circle().fill(asks ? Tone.decide : Tone.accent).frame(width: 11, height: 11).overlay(Circle().stroke(Tone.canvas, lineWidth: 2))
-                        .offset(x: 1, y: -1)
-                }
-            }
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(other.general ? "Open # general" : "Open your chat with \(room.spotTitle(other.place))")
-        .accessibilityValue(asks ? "needs you" : fresh ? "unread" : "")
-    }
-
-    private func item(_ row: Row, prefix: String? = nil) -> HoldItem {
-        HoldItem(title: row.fullTitle, subtitle: prefix.map { "\($0) · \(row.line)" } ?? row.line, image: MenuArt.row(row)) {
-            switchTo(row.spot)
-        }
-    }
-
-    private func backMenu() -> [HoldSection] {
-        var used: Set<Spot> = [spot]
-        var sections: [HoldSection] = []
-        if let last = previous ?? model.visited.first(where: { $0 != spot }), let row = model.row(last) {
-            used.insert(last)
-            sections.append(HoldSection(items: [item(row, prefix: "Previous")]))
-        }
-        func take(_ rows: [Row], _ count: Int) -> [HoldItem] {
-            let picked = Array(rows.filter { !used.contains($0.spot) }.prefix(count))
-            picked.forEach { used.insert($0.spot) }
-            return picked.map { item($0) }
-        }
-        sections.append(HoldSection(title: "Needs You", items: take(model.rows(.needs), 3)))
-        sections.append(HoldSection(title: "Unread", items: take(model.rows(.unread), 3)))
-        sections.append(HoldSection(title: "Recent", items: take(model.rows(.all), 6)))
-        return sections
-    }
-
-    private func fade(under top: CGFloat) -> [Gradient.Stop] {
-        let solid = top / (top + 30)
-        return [
-            .init(color: Tone.canvas, location: 0),
-            .init(color: Tone.canvas, location: solid),
-            .init(color: Tone.canvas.opacity(0.6), location: solid + (1 - solid) * 0.4),
-            .init(color: Tone.canvas.opacity(0), location: 1),
-        ]
+        spot = next
     }
 }
 
@@ -205,7 +98,7 @@ struct TitlePill: View {
     let place: PlaceView?
     let fresh: Bool
     var body: some View {
-        label.glassCapsule().contentShape(Capsule())
+        label.contentShape(Rectangle())
     }
 
     private var label: some View {
@@ -215,7 +108,7 @@ struct TitlePill: View {
             }
             VStack(spacing: 0) {
                 HStack(spacing: 3) {
-                    Text(title).type(.ui, .semibold).foregroundStyle(Tone.ink).lineLimit(1)
+                    Text(title).type(.title).foregroundStyle(Tone.ink).lineLimit(1)
                     Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)).foregroundStyle(Tone.ink3)
                 }
                 status
@@ -224,7 +117,6 @@ struct TitlePill: View {
                 Dot(color: Tone.accent, size: 8)
             }
         }
-        .padding(.horizontal, 16)
         .frame(minHeight: 44)
     }
 
