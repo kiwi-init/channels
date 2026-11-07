@@ -1,0 +1,196 @@
+import { useCallback, useLayoutEffect, useRef } from "react"
+
+const NEAR_BOTTOM = 48
+
+interface Anchor {
+  el: Element
+  seq: number
+  top: number
+  at: number
+}
+
+function anchorIn(box: HTMLElement, list: HTMLElement): Anchor | null {
+  const rows = list.querySelectorAll<HTMLElement>(":scope > [data-seq]")
+  const top = box.getBoundingClientRect().top
+  let lo = 0
+  let hi = rows.length - 1
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1
+    if ((rows[mid]?.getBoundingClientRect().bottom ?? 0) > top) hi = mid
+    else lo = mid + 1
+  }
+  const el = rows[lo]
+  const seq = Number(el?.dataset.seq)
+  return el && Number.isSafeInteger(seq) ? { el, seq, top: el.getBoundingClientRect().top - top, at: box.scrollTop } : null
+}
+
+const gapIn = (box: HTMLElement): number => box.scrollHeight - box.scrollTop - box.clientHeight
+
+const laidOut = (el: Element): boolean => el.isConnected && el.getClientRects().length > 0
+
+function docIn(box: HTMLElement, list: HTMLElement): Anchor | null {
+  const el = list.querySelector(".thread-doc")
+  if (!el) return null
+  const view = box.getBoundingClientRect()
+  const at = el.getBoundingClientRect()
+  return at.bottom > view.top && at.top < view.bottom ? { el, seq: Number.NaN, top: at.top - view.top, at: box.scrollTop } : null
+}
+
+function anchorRow(list: HTMLElement, seq: number): Element | null {
+  let found: Element | null = null
+  let best = -1
+  for (const row of list.querySelectorAll<HTMLElement>(":scope > [data-seq]")) {
+    const at = Number(row.dataset.seq)
+    if (at <= seq && at > best) {
+      best = at
+      found = row
+    }
+  }
+  return found
+}
+
+export function useStick(following = true, still = false) {
+  const scroller = useRef<HTMLDivElement>(null)
+  const content = useRef<HTMLDivElement>(null)
+  const spacer = useRef<HTMLDivElement>(null)
+  const stuck = useRef(true)
+  const live = useRef(following)
+  useLayoutEffect(() => {
+    live.current = following
+  }, [following])
+  const anchor = useRef<Anchor | null>(null)
+  const height = useRef(0)
+  const held = useRef(false)
+  const touched = useRef(false)
+  const room = useRef(0)
+  const seen = useRef(Number.NaN)
+
+  const correct = useCallback(() => {
+    const box = scroller.current
+    const list = content.current
+    if (!box || !list) return
+    height.current = list.offsetHeight
+    if (stuck.current && !(still && anchor.current)) {
+      box.scrollTop = box.scrollHeight
+      return
+    }
+    const a = anchor.current
+    if (!a) return
+    if (still && a.el.isConnected && !laidOut(a.el)) {
+      anchor.current = null
+      box.scrollTop = stuck.current ? box.scrollHeight : a.at
+      return
+    }
+    const el = a.el.isConnected ? a.el : anchorRow(list, a.seq)
+    if (!el) {
+      anchor.current = null
+      if (stuck.current) box.scrollTop = box.scrollHeight
+      return
+    }
+    const top = box.getBoundingClientRect().top
+    const clamped = still && box.scrollTop < a.at && box.scrollTop >= box.scrollHeight - box.clientHeight - 0.5
+    const shift = el.getBoundingClientRect().top - top - (clamped ? a.top : a.top - (box.scrollTop - a.at))
+    const short = still ? box.scrollTop + shift - (box.scrollHeight - box.clientHeight) : 0
+    if (short > 0.5) {
+      room.current += short
+      if (spacer.current) spacer.current.style.height = `${room.current}px`
+    }
+    if (Math.abs(shift) > 0.5) box.scrollTop += shift
+    const gap = box.scrollHeight - box.clientHeight - box.scrollTop
+    if (still && stuck.current && gap > 0.5 && gap < NEAR_BOTTOM) box.scrollTop = box.scrollHeight
+    anchor.current = { el, seq: a.seq, top: el.getBoundingClientRect().top - top, at: box.scrollTop }
+  }, [still])
+
+  const settle = useCallback(() => {
+    const box = scroller.current
+    const list = content.current
+    if (!box || !list) return
+    if (still && box.scrollTop < seen.current - 0.5 && gapIn(box) > 0.5) stuck.current = false
+    const from = box.scrollTop
+    correct()
+    if (box.scrollTop !== from) seen.current = box.scrollTop
+  }, [correct, still])
+
+  const remember = useCallback(() => {
+    const box = scroller.current
+    const list = content.current
+    if (!box || !list) return
+    if (height.current && list.offsetHeight !== height.current) settle()
+    const hidden = box.scrollHeight - box.scrollTop - box.clientHeight
+    if (room.current > 0 && hidden > 0.5) {
+      room.current = Math.max(0, room.current - hidden)
+      if (spacer.current) spacer.current.style.height = room.current ? `${room.current}px` : ""
+    }
+    const gap = gapIn(box)
+    const up = box.scrollTop < seen.current - 0.5
+    const down = box.scrollTop > seen.current + 0.5
+    const near = !still || gap <= 0.5 ? gap < NEAR_BOTTOM : gap < NEAR_BOTTOM && !up && (stuck.current || down)
+    stuck.current = live.current && !held.current && near
+    anchor.current = (still && touched.current ? docIn(box, list) : null) ?? (stuck.current ? null : anchorIn(box, list))
+    height.current = list.offsetHeight
+    seen.current = box.scrollTop
+  }, [settle, still])
+
+  useLayoutEffect(() => {
+    const box = scroller.current
+    const list = content.current
+    if (!box || !list) return
+    const watch = new ResizeObserver(settle)
+    watch.observe(list)
+    watch.observe(box)
+    return () => watch.disconnect()
+  }, [settle])
+
+  useLayoutEffect(() => {
+    const box = scroller.current
+    if (!box || !still) return
+    const touch = () => {
+      if (touched.current) return
+      touched.current = true
+      remember()
+    }
+    const kinds = ["wheel", "pointerdown", "keydown", "touchstart"] as const
+    for (const kind of kinds) box.addEventListener(kind, touch, { passive: true })
+    return () => {
+      for (const kind of kinds) box.removeEventListener(kind, touch)
+    }
+  }, [remember, still])
+
+  const toBottom = useCallback((smooth: boolean) => {
+    const box = scroller.current
+    if (!box) return
+    stuck.current = true
+    anchor.current = null
+    if (room.current) {
+      room.current = 0
+      if (spacer.current) spacer.current.style.height = ""
+    }
+    box.scrollTo({ top: box.scrollHeight, behavior: smooth && !matchMedia("(prefers-reduced-motion: reduce)").matches ? "smooth" : "auto" })
+  }, [])
+
+  const toOffset = useCallback((top: number) => {
+    const box = scroller.current
+    if (box) box.scrollTop = top
+  }, [])
+
+  const unstick = useCallback(() => {
+    stuck.current = false
+    anchor.current = null
+  }, [])
+
+  const hold = useCallback(
+    (on: boolean) => {
+      if (held.current === on) return
+      held.current = on
+      if (on) {
+        const box = scroller.current
+        const list = content.current
+        stuck.current = false
+        anchor.current = box && list ? anchorIn(box, list) : null
+      } else remember()
+    },
+    [remember]
+  )
+
+  return { scroller, content, spacer, stuck, live, remember, settle, toBottom, toOffset, unstick, hold }
+}
