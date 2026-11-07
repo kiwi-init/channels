@@ -671,7 +671,7 @@ function webApp(app: WebApp): (pathname: string) => Response {
     "x-content-type-options": "nosniff",
   };
   const scene = { ...security, "content-security-policy": "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; frame-ancestors 'self'" };
-  const policyFor = (rel: string) => (rel.startsWith("/afk/") ? scene : security);
+  const policyFor = (rel: string) => (/^\/afk\/scene(\.html)?$/.test(rel) ? scene : security);
   const isFile = (p: string) => existsSync(p) && statSync(p).isFile();
 
   return (pathname) => {

@@ -37,15 +37,16 @@ alone at `/preview/<name>`.
   else gets the release page), fills in the `curl … | sh -s -- join <code>`
   line, and the copy buttons. There is no inline script, so the CSP stays
   `script-src 'self'`.
-- The landing's background is the AFK scene, `/afk/scene.html`, in an
+- The landing's background is the AFK scene, `/afk/scene` (`afk/scene.html`), in an
   `<iframe sandbox="allow-scripts">`. `app.js` paints a sky for the hour behind
   it and sends the scene `{ kiwi: "afk", type: "state", at, needs: 0, still }`
   when it loads; the frame fades in once the scene posts
   `{ kiwi: "afk", type: "ready" }`, and is taken down if that doesn't come
   within 5 seconds of loading. The sky's hour also sets `data-sky` on the body,
   so the text over it stays dark by day and light at night in either theme.
-  `_headers` gives `/afk/*` its own CSP: inline script, no network, framed only
-  by this site.
+  `_headers` gives `/afk/scene*` its own CSP: inline script, no network, framed
+  only by this site. The frame asks for `/afk/scene`, not `scene.html`: Cloudflare
+  redirects `.html` addresses to the bare one.
 - `theme.css`, `theme.js` — the colours both the landing and the docs use:
   Cinder Peak in dark and Channels Light in light, through `light-dark()`, plus
   the figures' palette (`.iso`). The docs header's System, Light and Dark buttons

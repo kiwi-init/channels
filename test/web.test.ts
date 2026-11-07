@@ -13,6 +13,7 @@ writeFileSync(join(dist, "assets", "index-abc123.js"), "console.log(1)");
 writeFileSync(join(dist, "install.sh"), "#!/bin/sh\necho hi\n");
 mkdirSync(join(dist, "afk"));
 writeFileSync(join(dist, "afk", "scene.html"), "<!doctype html><title>scene</title>");
+writeFileSync(join(dist, "afk", "index.html"), "<!doctype html><title>studio</title>");
 writeFileSync(join(dist, "_headers"), "/*\n  X-Test: 1\n");
 writeFileSync(join(tmp, "secret.txt"), "outside the dashboard");
 
@@ -54,12 +55,16 @@ describe("dashboard on the Bun relay", () => {
   });
 
   test("the AFK scene may run inline script and be framed by the site, but reach nothing", async () => {
-    const scene = (await fetch(`${relay}/afk/scene.html`)).headers.get("content-security-policy") ?? "";
-    expect(scene).toContain("script-src 'unsafe-inline'");
-    expect(scene).toContain("frame-ancestors 'self'");
-    expect(scene).toStartWith("default-src 'none';");
-    expect(scene).not.toContain("connect-src");
-    expect((await fetch(`${relay}/`)).headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
+    for (const path of ["/afk/scene", "/afk/scene.html"]) {
+      const res = await fetch(relay + path);
+      expect(await res.text()).toContain("<title>scene</title>");
+      const scene = res.headers.get("content-security-policy") ?? "";
+      expect(scene).toContain("script-src 'unsafe-inline'");
+      expect(scene).toContain("frame-ancestors 'self'");
+      expect(scene).toStartWith("default-src 'none';");
+      expect(scene).not.toContain("connect-src");
+    }
+    for (const path of ["/", "/afk/"]) expect((await fetch(relay + path)).headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
   });
 
   test("a missing file is a 404, not the app", async () => {

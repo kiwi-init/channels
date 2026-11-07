@@ -67,7 +67,7 @@ function startScene() {
   if (!box) return;
   paintSky(box, new Date());
   const frame = document.createElement("iframe");
-  frame.src = "/afk/scene.html";
+  frame.src = "/afk/scene";
   frame.title = "";
   frame.tabIndex = -1;
   frame.setAttribute("sandbox", "allow-scripts");

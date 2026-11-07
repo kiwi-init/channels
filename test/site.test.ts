@@ -157,7 +157,7 @@ test("Windows, phones and ARM Linux keep the button on the release page", async 
 test("the landing frames the AFK scene in a sandbox and sends it the clock", () => {
   const page = load("/", "", undefined, true);
   const frame = page.frame!;
-  expect(frame.src).toBe("/afk/scene.html");
+  expect(frame.src).toBe("/afk/scene");
   expect(frame.attrs.sandbox).toBe("allow-scripts");
   expect(page.scene!.props["--sky-top"]).toMatch(/^rgb\(/);
   expect(["day", "night"]).toContain(page.body.dataset.sky!);
