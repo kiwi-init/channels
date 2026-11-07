@@ -32,8 +32,7 @@ strings_in() { sed -n -E 's/^ +string "(.*)"$/\1/p' | tr '\n' ',' | sed 's/,$//'
 alive() { [ -n "$1" ] && ps -o stat= -p "$1" 2> /dev/null | grep -q '^[^Z]'; }
 stop() { alive "$1" || return 0; kill -TERM "$1"; for _ in $(seq 1 50); do alive "$1" || return 0; sleep 0.1; done; }
 
-daemon=$(command -v ksecretd || ls /usr/libexec/ksecretd /usr/lib/*/libexec/ksecretd 2> /dev/null | head -n 1)
-[ -n "$daemon" ] || { bad "no ksecretd (KWallet 6's wallet daemon) on this system"; exit 1; }
+daemon=$(command -v ksecretd) || { bad "no ksecretd (KWallet 6's wallet daemon) on this system"; exit 1; }
 logs=$(mktemp -d)
 store_home=$(mktemp -d)
 wallets="$HOME/.local/share/kwalletd"
@@ -69,6 +68,8 @@ opened=$(grep -m1 -E "opened by PAM" "$logs/wallet-first.log")
 if [ -n "$opened" ]; then ok "it made the wallet kdewallet and opened it with the login password's hash, with no prompt: $opened"; else bad "the wallet wasn't opened at login: $(grep -m1 PAM "$logs/wallet-first.log")"; fi
 
 (cd "$repo" && bun desktop/scripts/linux-store-check.ts keyring "$store_home") || failed=1
+owner=$(secrets_owner)
+if [ "$(echo "$owner" | awk '{ print $3 }')" = "$first" ]; then ok "the same ksecretd answered for org.freedesktop.secrets all through the first start: $owner"; else bad "org.freedesktop.secrets changed hands during the first start: $owner"; fi
 
 handle=$(kwallet open string:kdewallet int64:0 "string:$app" | reply)
 if [ -n "$handle" ] && [ "$handle" -ge 0 ] 2> /dev/null; then
@@ -116,8 +117,7 @@ fi
 (cd "$repo" && bun desktop/scripts/linux-store-check.ts reopen "$store_home") || failed=1
 
 after=$(secrets_owner)
-if [ "$(echo "$after" | awk '{ print $3 }')" = "$second" ]; then ok "and the same ksecretd answered for org.freedesktop.secrets throughout: $after"; else bad "org.freedesktop.secrets changed hands during the check: $after"; fi
-if pgrep -x gnome-keyring-d > /dev/null; then info "a gnome-keyring-daemon runs on this computer (another step's), but not for this session bus"; fi
+if [ "$(echo "$after" | awk '{ print $3 }')" = "$second" ]; then ok "the same ksecretd answered for org.freedesktop.secrets all through the later start: $after"; else bad "org.freedesktop.secrets changed hands during the later start: $after"; fi
 
 stop "$(pid_of "$(owner_of org.kde.kwalletd6)")"
 stop "$second"
