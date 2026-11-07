@@ -3,31 +3,14 @@ import "~/styles/calm.css"
 import { useEffect, useMemo, useRef, useState, type AnimationEvent } from "react"
 
 import { hideCalm } from "~/calm/idle"
+import { MapView } from "~/calm/map"
 import type { Meadow } from "~/calm/meadow"
-import { calmRows, type CalmRow } from "~/calm/rows"
-import { Settle, useStill } from "~/calm/settle"
-import { Count, cx } from "~/kit/bits"
+import { calmRows } from "~/calm/rows"
+import { useStill } from "~/calm/settle"
+import { cx } from "~/kit/bits"
 import { useApp } from "~/nav"
 
 const SWALLOWED = ["keydown", "keyup", "wheel", "pointerdown", "contextmenu"] as const
-
-function Row({ row, still, open }: { row: CalmRow; still: boolean; open: (code: string) => void }) {
-  const needs = row.needs > 0
-  const label = `${row.title}${needs ? `, ${row.needs} ${row.needs === 1 ? "needs" : "need"} you` : ""}, ${row.line ?? "quiet"}`
-  return (
-    <li>
-      <button type="button" className={cx("rest-row", needs && "is-news")} aria-label={label} onClick={() => open(row.code)}>
-        <span className="rest-mark">{needs ? <Count n={row.needs} loud /> : "·"}</span>
-        <span className="rest-name">
-          <Settle text={row.title} still={still} />
-        </span>
-        <span className={cx("rest-line", !row.line && "is-quiet")}>
-          <Settle text={row.line ?? "quiet"} still={still} />
-        </span>
-      </button>
-    </li>
-  )
-}
 
 export function Calm() {
   const { app, go } = useApp()
@@ -38,13 +21,12 @@ export function Calm() {
   const stage = useRef<HTMLDivElement>(null)
   const meadow = useRef<Meadow | null>(null)
   const latest = useRef({ rows, still, leaving })
-  const total = rows.reduce((a, r) => a + r.needs, 0)
 
   useEffect(() => {
     const was = document.activeElement instanceof HTMLElement ? document.activeElement : null
     box.current?.focus({ preventScroll: true })
     const swallow = (e: Event): void => {
-      if (e.type === "pointerdown" && e.target instanceof Element && e.target.closest(".rest-row")) return
+      if (e.type === "pointerdown" && e.target instanceof Element && e.target.closest("[data-afk-open]")) return
       e.preventDefault()
       e.stopImmediatePropagation()
       if (e.type !== "keyup") setLeaving(true)
@@ -90,8 +72,9 @@ export function Calm() {
     if (leaving) meadow.current?.freeze()
   }, [leaving])
 
-  const open = (code: string): void => {
+  const open = (code: string, needs: boolean): void => {
     go({ to: "channel", code })
+    if (needs) go({ to: "tab", tab: "needs" })
     setLeaving(true)
   }
   const ended = (e: AnimationEvent<HTMLDivElement>): void => {
@@ -101,20 +84,7 @@ export function Calm() {
   return (
     <div ref={box} className={cx("rest", leaving && "is-leaving")} role="dialog" aria-modal="true" aria-label="Calm" tabIndex={-1} onAnimationEnd={ended}>
       <div ref={stage} className="rest-back" aria-hidden="true" />
-      <section className="rest-glance" aria-label="What needs you">
-        {total > 0 ? (
-          <p className="rest-count">
-            Needs you <Count n={total} loud />
-          </p>
-        ) : (
-          <p className="rest-calm">Nothing needs you. Enjoy your time, or go worry about something else.</p>
-        )}
-        <ul className="rest-list" aria-label="Channels">
-          {rows.map((r) => (
-            <Row key={r.code} row={r} still={still} open={open} />
-          ))}
-        </ul>
-      </section>
+      <MapView open={open} />
     </div>
   )
 }

@@ -27,139 +27,147 @@
   pointer-events: none;
 }
 
-.rest-glance {
+.rest-map {
+  --on: rgb(255 255 255 / 0.96);
+  --on-2: rgb(255 255 255 / 0.86);
+  --on-3: rgb(255 255 255 / 0.72);
+  --on-shade: 0 1px 2px rgb(0 0 0 / 0.6), 0 0 12px rgb(0 0 0 / 0.5);
+
   position: absolute;
-  bottom: max(7vh, 24px);
-  left: max(5vw, 16px);
-  display: grid;
-  gap: 16px;
-  width: max-content;
-  max-width: min(780px, calc(100vw - 2 * max(5vw, 16px)));
+  inset: 0;
+  color: var(--on);
+  text-shadow: var(--on-shade);
+  pointer-events: none;
   animation: rest-rise 1.2s 0.6s var(--ease) both;
 }
 
-.rest-count,
-.rest-calm,
-.rest-list {
-  margin: 0;
-  background: var(--float);
-  box-shadow: var(--shadow-float);
+.rest-map[data-sky="day"] {
+  --on: rgb(24 18 16 / 0.96);
+  --on-2: rgb(24 18 16 / 0.86);
+  --on-3: rgb(24 18 16 / 0.72);
+  --on-shade: 0 0 1px rgb(255 255 255 / 0.6), 0 0 12px rgb(255 255 255 / 0.7);
 }
 
-.rest-count,
-.rest-calm {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  justify-self: start;
-  height: var(--ctl);
-  padding: 0 12px;
-  border-radius: var(--r-ctl);
-  font: 600 var(--t-ui) var(--ui);
-  white-space: nowrap;
+.rest-spot {
+  position: absolute;
+  width: 0;
+  height: 0;
 }
 
-.rest-count {
-  color: var(--decide);
-}
-
-.rest-calm {
-  gap: 10px;
-  color: var(--ink-2);
-  font-weight: 500;
-}
-
-.rest-calm::before {
-  width: 8px;
-  height: 8px;
-  border: 1.5px solid currentcolor;
+.rest-spot-pin {
+  position: absolute;
+  top: -6px;
+  left: -6px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
+  background: var(--on-3);
+  box-shadow:
+    0 0 0 2px rgb(255 255 255 / 0.9),
+    0 1px 6px rgb(0 0 0 / 0.35);
+}
+
+.rest-spot.is-needs .rest-spot-pin {
+  background: var(--alert);
+}
+
+.rest-spot.is-needs .rest-spot-pin::after {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--alert);
   content: "";
+  animation: rest-pulse 2.4s var(--ease) 8;
 }
 
-.rest-list {
-  display: grid;
-  justify-self: start;
-  gap: 2px;
-  min-width: 300px;
-  padding: 4px;
-  border-radius: var(--r-card);
-  list-style: none;
+.rest-spot-stem {
+  position: absolute;
+  bottom: 8px;
+  left: -0.5px;
+  width: 1px;
+  height: 56px;
+  background: var(--on-2);
 }
 
-.rest-row {
+.rest-spot-label {
+  position: absolute;
+  bottom: 64px;
+  left: -32px;
   display: grid;
-  grid-template-columns: 3ch minmax(0, 18ch) minmax(0, 1fr);
-  align-items: baseline;
-  column-gap: 12px;
-  width: 100%;
-  margin: 0;
-  padding: 6px 10px;
+  justify-items: start;
+  gap: 4px;
+  width: max-content;
+  max-width: 24rem;
+  padding: 24px 32px;
   border: 0;
-  border-radius: var(--r-row);
-  background: transparent;
-  color: var(--ink-2);
+  border-radius: var(--r-card);
+  background: none;
+  color: var(--on);
   font: 400 var(--t-ui) var(--ui);
   text-align: left;
+  text-shadow: var(--on-shade);
   cursor: pointer;
-  transition: background 0.2s;
+  pointer-events: auto;
 }
 
-.rest-row:hover {
-  background: var(--wash-2);
+.rest-spot-label:focus-visible {
+  outline: 2px solid var(--on);
+  outline-offset: -16px;
 }
 
-.rest-row:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+.rest-spot-label b {
+  font: 600 var(--t-title) var(--ui);
 }
 
-.rest-row > span {
-  min-width: 0;
+.rest-spot-counts {
+  color: var(--on-2);
+  font-size: var(--t-stamp);
+}
+
+.rest-spot.is-needs .rest-spot-counts {
+  color: var(--on);
+  font-weight: 600;
+}
+
+.rest-spot-line {
+  max-width: 20rem;
   overflow: hidden;
+  color: var(--on-2);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.rest-mark {
-  color: var(--ink-3);
-  font-family: var(--mono);
-  font-variant-numeric: tabular-nums;
+.rest-spot-crew {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
 }
 
-.rest-name {
-  color: var(--ink);
-  font-weight: 500;
+.rest-spot-face > .av {
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.45));
 }
 
-.rest-line.is-quiet {
-  color: var(--ink-3);
-}
-
-.rest-row.is-news {
-  color: var(--ink);
-}
-
-.rest-mark .count {
-  font-family: var(--ui);
-}
-
-.rest-row.is-news .rest-name {
-  font-weight: 600;
-}
-
-.rest-row.is-news .rest-line:not(.is-quiet) {
-  color: var(--decide);
+.rest-map[data-sky="day"] .rest-spot-face .av-face {
+  color: var(--on);
 }
 
 @container (max-width: 40rem) {
-  .rest-row {
-    grid-template-columns: 3ch minmax(0, 1fr);
-    row-gap: 2px;
+  .rest-spot-line,
+  .rest-spot-crew {
+    display: none;
+  }
+}
+
+@keyframes rest-pulse {
+  from {
+    opacity: 0.6;
+    transform: scale(1);
   }
 
-  .rest-line {
-    grid-column: 2;
+  to {
+    opacity: 0;
+    transform: scale(3);
   }
 }
 
