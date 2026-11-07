@@ -59,6 +59,17 @@ const submitIn = (label: string): boolean => {
   return true;
 };
 
+const SPECS_ONLY = '[role="dialog"] button[role="switch"][aria-label="Tasks only from approved specs"]';
+
+const switchIs = (selector: string): string | null => document.querySelector(selector)?.getAttribute("aria-checked") ?? null;
+
+const flip = (selector: string): boolean => {
+  const b = document.querySelector<HTMLButtonElement>(selector);
+  if (!b || b.disabled) return false;
+  b.click();
+  return true;
+};
+
 const tabButton = (title: string): { pressed: string | null; alert: string | null } | null => {
   const b = [...document.querySelectorAll<HTMLButtonElement>("nav.tabs button")].find((e) => (e.firstChild?.textContent ?? "").trim() === title);
   return b ? { pressed: b.getAttribute("aria-pressed"), alert: b.querySelector(".tab-red")?.getAttribute("aria-label") ?? null } : null;
@@ -233,6 +244,9 @@ try {
   check(!(await d.evaluate(tabButton, "GitHub", 2_000)), "a channel with no repos shows no GitHub tab, as on main");
 
   await step("the channel's settings", 10_000, () => d.evaluate(clickLabelEnding, { selector: "button", ending: ": channel settings" }, 2_000));
+  await step("a fresh channel takes tasks only from approved specs", 15_000, async () => (await d.evaluate(switchIs, SPECS_ONLY, 2_000)) === "true");
+  await step("tasks from any person's message, picked", 10_000, () => d.evaluate(flip, SPECS_ONLY, 2_000));
+  await step("tasks from any person's message, saved", 15_000, async () => (await d.evaluate(switchIs, SPECS_ONLY, 2_000)) === "false");
   await step("the settings' GitHub section", 10_000, () => d.evaluate(clickText, { selector: '[role="dialog"] .modal-seg button', text: "GitHub" }, 2_000));
   await step("the repo, typed", 10_000, () => d.evaluate(fillIn, { selector: '[role="dialog"] input[aria-label="Add a repo"]', value: REPO }, 2_000));
   await step("Add", 10_000, () => d.evaluate(submitIn, "Add a repo", 2_000));
