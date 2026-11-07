@@ -38,7 +38,8 @@ export type Ask =
   | { op: "approveSpec"; code: string; ask: number; v: number }
   | { op: "open"; code: string; place: string }
   | { op: "marks"; code: string; marks: Record<string, number>; write: boolean }
-  | { op: "nudge" };
+  | { op: "nudge" }
+  | { op: "push"; token: string; sandbox: boolean };
 
 export interface Picture {
   name: string;
