@@ -12,7 +12,7 @@ final class TourTests: XCTestCase {
         app.launchEnvironment["CHANNELS_FIXTURE"] = try String(contentsOf: url, encoding: .utf8)
         app.launchArguments = ["-shot", "tour"]
         app.launch()
-        try await Task.sleep(for: .seconds(6))
+        try await drawn()
         snap("open")
 
         app.swipeUp()
@@ -84,7 +84,7 @@ final class TourTests: XCTestCase {
         app.launchEnvironment["CHANNELS_FIXTURE"] = try String(contentsOf: url, encoding: .utf8)
         app.launchArguments = ["-shot", "tour"]
         app.launch()
-        try await Task.sleep(for: .seconds(6))
+        try await drawn()
         print("TOUR TREE\n\(app.debugDescription)")
         snap("untouched")
     }
@@ -98,10 +98,17 @@ final class TourTests: XCTestCase {
             app.launchEnvironment["CHANNELS_FIXTURE"] = try String(contentsOf: url, encoding: .utf8)
             app.launchArguments = ["-shot", shot]
             app.launch()
-            try await Task.sleep(for: .seconds(6))
+            try await drawn()
             snap("shot \(shot)")
             app.terminate()
         }
+    }
+
+    @MainActor
+    private func drawn() async throws {
+        let shown = app.navigationBars.firstMatch.waitForExistence(timeout: 40) || app.buttons["Needs You"].waitForExistence(timeout: 5)
+        if !shown { print("TOUR nothing drew within 45 s") }
+        try await Task.sleep(for: .seconds(1))
     }
 
     @MainActor
