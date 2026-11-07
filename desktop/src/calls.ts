@@ -101,6 +101,8 @@ export function makeBridge(t: BridgeTransport): KiwiBridge {
     getUiUpdate: () => t.call("getUiUpdate"),
     onUiUpdate: (cb) => t.listen("uiUpdate", cb),
     applyUi: () => t.call("applyUi"),
+    afkScene: () => t.call("afkScene"),
+    keepAfkScene: (html) => t.call("keepAfkScene", html),
     onDeepLink: (cb) => t.listen("deepLink", cb),
     onTextStep: (cb) => t.listen("textStep", cb),
     onFrost: (cb) => t.listen("frost", cb),

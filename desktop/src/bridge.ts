@@ -370,6 +370,11 @@ export interface MachineView {
 
 export type FromMachine<T> = { ok: true; value: T } | { ok: false; detail: string };
 
+export interface AfkScene {
+  html: string | null;
+  first: boolean;
+}
+
 export interface KiwiBridge {
   /** The relay URL injected at load (query param, else the default). */
   readonly relayUrl: string;
@@ -455,6 +460,8 @@ export interface KiwiBridge {
   onUiUpdate(cb: (u: UiUpdateView | null) => void): () => void;
   /** Swap to the waiting UI now: the page reloads into it. */
   applyUi(): Promise<void>;
+  afkScene(): Promise<AfkScene | null>;
+  keepAfkScene(html: string): Promise<string | null>;
   /** The kiwi://join/<code> link waiting to be opened, if any; taking it clears it. */
   getDeepLink(): Promise<string | null>;
   /** A link came in while the app runs (it waits for getDeepLink too, so it's opened once). */

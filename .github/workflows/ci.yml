@@ -243,6 +243,9 @@ jobs:
       - name: AFK meadow, the AFK scene draws and moves, follows the clock, rests while hidden, holds still for reduced motion and reuses its renderer, in WebKit
         if: ${{ !cancelled() && matrix.part == 'view' }}
         run: bun scripts/ui-afk-meadow.ts
+      - name: AFK scene, a scene file runs in the app's frame, the default draws, a scene can't reach the network or the page, it hears the app's state and a broken one leaves the plain sky, in WebKit
+        if: ${{ !cancelled() && matrix.part == 'view' }}
+        run: bun scripts/ui-afk-scene.ts
       - name: doc image order, a line sent with an image from the composer stays above the lines sent after it
         if: ${{ !cancelled() && matrix.part == 'send' }}
         run: bun scripts/ui-doc-image-order.ts
@@ -504,6 +507,17 @@ jobs:
         if: ${{ !cancelled() }}
         timeout-minutes: 10
         run: bun desktop/scripts/eb-ui-check.ts desktop/release-eb/build/dev-macos-*/*.app
+      - name: AFK reads its scene from ~/.kiwi/afk/scene.html in a sandboxed frame, a swapped file shows next time and a deleted one gives the plain sky (T26)
+        if: ${{ !cancelled() }}
+        timeout-minutes: 5
+        run: bun desktop/scripts/eb-afk-check.ts desktop/release-eb/build/dev-macos-*/*.app /tmp/kiwi-afk-shots
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: afk-shots
+          path: /tmp/kiwi-afk-shots
+          if-no-files-found: ignore
+          overwrite: true
 
   desktop-linux:
     name: desktop / linux, ${{ matrix.os }}

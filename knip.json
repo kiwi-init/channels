@@ -21,6 +21,7 @@
     "swaymsg",
     "grim",
     "plutil",
+    "screencapture",
     "secret-tool",
     "readelf"
   ],

@@ -26,6 +26,7 @@ describe("the page gets a CSP (T184)", () => {
     expect(d.get("connect-src")).toEqual(expect.arrayContaining(["'self'", "https://channels.kiwiinit.com", "wss://channels.kiwiinit.com"]));
     expect(d.get("object-src")).toEqual(["'none'"]);
     expect(d.get("frame-ancestors")).toEqual(["'none'"]);
+    expect(d.get("frame-src")).toEqual(["views://internal/afk-frame.html"]);
     expect(d.get("form-action")).toEqual(["'none'"]);
     expect(d.get("media-src")).toEqual(["'self'", "blob:"]);
     expect(csp("http://localhost:8787")).toContain("ws://localhost:8787");
