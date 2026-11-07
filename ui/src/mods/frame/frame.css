@@ -34,11 +34,11 @@ button.mod-row:hover {
   font: var(--t-meta) / 1.4 var(--sans);
 }
 
-:root[data-surface="idle"] body {
+:root[data-surface="afk"] body {
   overflow: hidden;
 }
 
-:root[data-surface="idle"] #root {
+:root[data-surface="afk"] #root {
   padding: 0;
 }
 

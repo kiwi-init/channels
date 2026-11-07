@@ -49,6 +49,8 @@ type Problem = Table["problems"][number]
 let mods: ModCommand[] = []
 let read: KeyBindingsView | null = null
 
+const RENAMED: Readonly<Record<string, string>> = { "app.calm": "app.afk" }
+
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v)
 
 function fromFile(raw: unknown, ids: ReadonlySet<string>, problems: Problem[]): Map<string, string[]> {
@@ -58,7 +60,8 @@ function fromFile(raw: unknown, ids: ReadonlySet<string>, problems: Problem[]): 
     problems.push({ id: "keys.json", why: "isn't a JSON object of command ids and keys" })
     return picked
   }
-  for (const [id, v] of Object.entries(raw)) {
+  for (const [given, v] of Object.entries(raw)) {
+    const id = RENAMED[given] ?? given
     const list = v === null || v === "" ? [] : typeof v === "string" ? [v] : Array.isArray(v) && v.every((s) => typeof s === "string") ? (v as string[]) : null
     if (!list) problems.push({ id, why: 'needs a key like "mod+shift+k", a list of keys, or null' })
     else if (!ids.has(id)) problems.push({ id, why: "isn't a command" })

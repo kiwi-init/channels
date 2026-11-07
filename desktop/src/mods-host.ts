@@ -1,6 +1,6 @@
 import { bundleMod } from "@kiwi/core/node/mod-bundle.ts";
 import { readModIcon, type IconType } from "@kiwi/core/node/mod-icon.ts";
-import { checkManifest, needRoom, type ModManifest, type ModSetting } from "@kiwi/core/node/mod-manifest.ts";
+import { afkNeed, checkManifest, needRoom, type ModManifest, type ModSetting } from "@kiwi/core/node/mod-manifest.ts";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -129,8 +129,9 @@ function readModsFile(file: string): ModsFile {
   return {
     approved: entries(raw["approved"], (a) => {
       if (!strings(a["needs"]) || typeof a["source"] !== "string") return null;
-      const rooms = roomsFor(a["needs"], a["rooms"]);
-      return { needs: a["needs"], source: a["source"], ...(rooms.length ? { rooms } : {}) };
+      const needs = a["needs"].map(afkNeed);
+      const rooms = roomsFor(needs, a["rooms"]);
+      return { needs, source: a["source"], ...(rooms.length ? { rooms } : {}) };
     }),
     off: entries<Off>(raw["off"], (o) =>
       o["by"] === "you" ? { by: "you" } : o["by"] === "crash" && typeof o["why"] === "string" && typeof o["hash"] === "string" ? { by: "crash", why: o["why"], hash: o["hash"] } : null,

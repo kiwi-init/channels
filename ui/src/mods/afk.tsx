@@ -1,4 +1,4 @@
-import "~/styles/rest.css"
+import "~/styles/afk.css"
 
 import { useEffect, useRef, type AnimationEvent } from "react"
 
@@ -11,7 +11,7 @@ const unframe = (): void => {
   if (document.activeElement instanceof HTMLIFrameElement) window.focus()
 }
 
-export interface RestProps {
+export interface AfkProps {
   name: string
   leaving: boolean
   meadow: boolean
@@ -23,7 +23,7 @@ export interface RestProps {
   gone: () => void
 }
 
-export function Rest({ name, leaving, meadow, alert, still, slot, frame, leave, gone }: RestProps) {
+export function Afk({ name, leaving, meadow, alert, still, slot, frame, leave, gone }: AfkProps) {
   const box = useRef<HTMLDivElement>(null)
   const stage = useRef<HTMLDivElement>(null)
   const scene = useRef<Meadow | null>(null)
@@ -112,15 +112,15 @@ export function Rest({ name, leaving, meadow, alert, still, slot, frame, leave, 
   }, [leaving])
 
   const ended = (e: AnimationEvent<HTMLDivElement>): void => {
-    if (e.target !== e.currentTarget || e.animationName !== "rest-out") return
+    if (e.target !== e.currentTarget || e.animationName !== "afk-out") return
     unframe()
     box.current?.focus({ preventScroll: true })
     gone()
   }
 
   return (
-    <div ref={box} className={cx("rest", leaving && "is-leaving")} role="dialog" aria-modal="true" aria-label={name} tabIndex={-1} onAnimationEnd={ended}>
-      <div ref={stage} className="rest-back" aria-hidden="true" />
+    <div ref={box} className={cx("afk", leaving && "is-leaving")} role="dialog" aria-modal="true" aria-label={name} tabIndex={-1} onAnimationEnd={ended}>
+      <div ref={stage} className="afk-back" aria-hidden="true" />
     </div>
   )
 }

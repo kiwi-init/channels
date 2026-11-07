@@ -3,18 +3,18 @@ import { useEffect } from "react"
 const MINUTE = 60_000
 const INPUT = ["pointermove", "pointerdown", "keydown", "wheel", "touchstart"] as const
 
-export function untilIdle(lastInput: number, now: number, wait: number): number {
+export function untilAfk(lastInput: number, now: number, wait: number): number {
   return Math.max(0, lastInput + wait - now)
 }
 
-export function useIdleWait(minutes: number, paused: boolean, away: () => void): void {
+export function useAfkWait(minutes: number, paused: boolean, away: () => void): void {
   useEffect(() => {
     if (!minutes || paused) return
     const wait = minutes * MINUTE
     let last = performance.now()
     let timer = 0
     const check = (): void => {
-      const left = untilIdle(last, performance.now(), wait)
+      const left = untilAfk(last, performance.now(), wait)
       if (left > 0) timer = window.setTimeout(check, left)
       else if (document.querySelector("dialog[open]")) timer = window.setTimeout(check, wait)
       else away()

@@ -33,7 +33,7 @@ A mod is a folder with a `mod.json` and an `index.tsx`. The desktop app builds i
   - `command`: actions in ⌘K. `message-action`: actions on a message.
   - `github`: the open channel's repos, pull requests and issues, read-only, with no token.
   - `terminal`: this computer's agents in tmux and Rex.
-  - `idle`: the whole window while the person is away. `channels`: their channels, what needs them and each one's last line.
+  - `afk`: the whole window while the person is away (AFK). `channels`: their channels, what needs them and each one's last line.
   - `post:#<room>`: post as the person into that room, only in the channels they tick when they allow it. Each post ends with a line naming the mod; one every 2 seconds.
   - `read:#<room>`: read that room's last 50 messages and new ones, only in the channels the person ticks. Never DMs, other rooms or events.
   - `render:<kind>`: draws `X.<kind>.html` attachments in chat.
@@ -57,7 +57,7 @@ Everything comes from `@kiwi/mod`, plus React.
 | `useGithub()`, `github()` | With `github`: `{ repos, prs, issues, tasks }` for the open channel, or null while it loads |
 | `show(target)`, `useShowing()`, `onShow(run)` | With `panel`: open the panel on a pull request or issue, and follow what it shows |
 | `open(to)` | With `github`: open a task, Settings or the chat. With `channels`: open a channel |
-| `idle({ after, backdrop, render })`, `leave()` | With `idle`: the whole window after `after` minutes away, or on ⌘T. No key reaches it; a click can only open a channel or `leave()` |
+| `afk({ after, backdrop, render })`, `leave()` | With `afk`: the whole window after `after` minutes away, or on ⌘T. No key reaches it; a click can only open a channel or `leave()` |
 | `useChannels()`, `channels()` | With `channels`: `{ code, title, needs, last, line }` for each channel, the ones that need the person first |
 | `useRooms()`, `rooms()` | With `read:#<room>` or `post:#<room>`: `{ channel, title, room }` for each channel's room the person ticked |
 | `post({ channel, room, text })` | With `post:#<room>`: post into a ticked room; one every 2 s; refused anywhere else |

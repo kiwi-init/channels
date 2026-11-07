@@ -29,7 +29,7 @@ export interface Table {
 
 export const DEFAULT_KEYS: Readonly<Partial<Record<AppCommand, string>>> = {
   "app.palette": "mod+k",
-  "app.calm": "mod+t",
+  "app.afk": "mod+t",
   "view.sidebar": "mod+\\",
   "chat.search": "mod+f",
   "nav.back": "mod+[",

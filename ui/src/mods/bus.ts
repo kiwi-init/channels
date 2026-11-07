@@ -13,12 +13,12 @@ interface Host {
   github: (data: ModGithub | null) => void
   show: (name: string, target: ModTarget, url: string | null) => boolean
   showTab: (name: string, target: ModTarget) => boolean
-  rest: () => boolean
+  afk: () => boolean
 }
 
 let tabs: readonly ModTabInfo[] = []
 let wantsGithub = false
-let idleOn = false
+let afkOn = false
 let host: Host | null = null
 let github: ModGithub | null = null
 const listeners = new Set<() => void>()
@@ -33,11 +33,11 @@ export function hostMods(next: Host | null): void {
   next?.github(github)
 }
 
-export function publishTabs(next: readonly ModTabInfo[], github: boolean, idle: boolean): void {
-  const same = JSON.stringify(next) === JSON.stringify(tabs) && github === wantsGithub && idle === idleOn
+export function publishTabs(next: readonly ModTabInfo[], github: boolean, afk: boolean): void {
+  const same = JSON.stringify(next) === JSON.stringify(tabs) && github === wantsGithub && afk === afkOn
   tabs = next
   wantsGithub = github
-  idleOn = idle
+  afkOn = afk
   if (!same) for (const l of listeners) l()
 }
 
@@ -45,9 +45,9 @@ export const useModTabs = (): readonly ModTabInfo[] => useSyncExternalStore(subs
 
 export const useWantsGithub = (): boolean => useSyncExternalStore(subscribe, () => wantsGithub)
 
-export const useIdleMod = (): boolean => useSyncExternalStore(subscribe, () => idleOn)
+export const useAfkMod = (): boolean => useSyncExternalStore(subscribe, () => afkOn)
 
-export const restInMod = (): boolean => host?.rest() ?? false
+export const afkInMod = (): boolean => host?.afk() ?? false
 
 export function shareGithub(data: ModGithub | null): void {
   github = data

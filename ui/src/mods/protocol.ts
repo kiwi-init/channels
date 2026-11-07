@@ -47,7 +47,7 @@ export const LOOK = [
   "c-brown",
 ]
 
-export type Surface = "main" | "sidebar" | "tab" | "idle" | "render"
+export type Surface = "main" | "sidebar" | "tab" | "afk" | "render"
 
 export type ModTarget = { kind: "pr" | "issue"; repo: string; number: number } | { kind: "view"; view: string }
 
@@ -61,7 +61,7 @@ export interface ModChannel {
   line: string | null
 }
 
-export const IDLE_MAX_MINUTES = 120
+export const AFK_MAX_MINUTES = 120
 
 export type ModPerson = Pick<Person, "name" | "kind" | "harness" | "presence" | "color" | "picture" | "face" | "activity" | "load" | "red" | "doneAt">
 
@@ -163,7 +163,7 @@ export type ToFrame =
   | { kiwi: typeof MOD_PROTOCOL; type: "show"; target: ModTarget }
   | { kiwi: typeof MOD_PROTOCOL; type: "showing"; target: ModTarget | null }
   | { kiwi: typeof MOD_PROTOCOL; type: "channels"; list: ModChannel[] }
-  | { kiwi: typeof MOD_PROTOCOL; type: "rest"; shown: boolean }
+  | { kiwi: typeof MOD_PROTOCOL; type: "away"; shown: boolean }
   | { kiwi: typeof MOD_PROTOCOL; type: "rooms"; list: ModRoomGrant[] }
   | { kiwi: typeof MOD_PROTOCOL; type: "messages"; channel: string; room: string; list: ModRoomMessage[] }
 
@@ -183,7 +183,7 @@ export type FromFrame =
   | { kiwi: typeof MOD_PROTOCOL; type: "tab"; title: string; shown: boolean; alert: string | null; hint: string | null }
   | { kiwi: typeof MOD_PROTOCOL; type: "open"; to: ModOpen }
   | { kiwi: typeof MOD_PROTOCOL; type: "channel"; code: string }
-  | { kiwi: typeof MOD_PROTOCOL; type: "idle"; after: number; backdrop: "meadow" | null }
+  | { kiwi: typeof MOD_PROTOCOL; type: "afk"; after: number; backdrop: "meadow" | null }
   | { kiwi: typeof MOD_PROTOCOL; type: "leave" }
   | { kiwi: typeof MOD_PROTOCOL; type: "show"; target: ModTarget }
   | { kiwi: typeof MOD_PROTOCOL; type: "copy"; text: string; note: string | null }
@@ -220,17 +220,17 @@ const GATED: { readonly [K in FromFrame["type"]]?: readonly [need: string, from:
   tab: ["tab", ["tab"]],
   open: ["github", ANY],
   show: ["panel", ANY],
-  channel: ["channels", [...ANY, "idle"]],
-  idle: ["idle", ["idle"]],
-  leave: ["idle", ["idle"]],
+  channel: ["channels", [...ANY, "afk"]],
+  afk: ["afk", ["afk"]],
+  leave: ["afk", ["afk"]],
 }
 
 const RUNNING: ReadonlySet<FromFrame["type"]> = new Set(["storage", "toast", "copy", "link"])
 
-const FROM_IDLE: ReadonlySet<FromFrame["type"]> = new Set(["hello", "ready", "error", "idle", "leave", "channel"])
+const FROM_AFK: ReadonlySet<FromFrame["type"]> = new Set(["hello", "ready", "error", "afk", "leave", "channel"])
 
 export function heeded(type: FromFrame["type"], from: Surface, mod: { state: string; needs: readonly string[] } | undefined): boolean {
-  if (from === "idle" && !FROM_IDLE.has(type)) return false
+  if (from === "afk" && !FROM_AFK.has(type)) return false
   if (RUNNING.has(type)) return !!mod && mod.state === "on"
   if (type === "post") return ANY.includes(from) && !!mod && mod.state === "on" && mod.needs.some((n) => n.startsWith("post:"))
   const gate = GATED[type]
@@ -311,10 +311,10 @@ export function fromFrame(data: unknown): FromFrame | null {
       if (typeof id !== "number" || !Number.isSafeInteger(id) || !short(code, 64) || !short(room, 33) || typeof text !== "string" || text.length > POST_CHARS) return null
       return { kiwi: MOD_PROTOCOL, type: "post", id, code, room: room.replace(/^#/, ""), text }
     }
-    case "idle": {
+    case "afk": {
       const after = m["after"]
-      if (typeof after !== "number" || !Number.isInteger(after) || after < 0 || after > IDLE_MAX_MINUTES) return null
-      return { kiwi: MOD_PROTOCOL, type: "idle", after, backdrop: m["backdrop"] === "meadow" ? "meadow" : null }
+      if (typeof after !== "number" || !Number.isInteger(after) || after < 0 || after > AFK_MAX_MINUTES) return null
+      return { kiwi: MOD_PROTOCOL, type: "afk", after, backdrop: m["backdrop"] === "meadow" ? "meadow" : null }
     }
     case "leave":
       return { kiwi: MOD_PROTOCOL, type: "leave" }

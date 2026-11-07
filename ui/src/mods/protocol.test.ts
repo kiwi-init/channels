@@ -132,11 +132,11 @@ describe("a mod frame's messages", () => {
     expect(fromFrame({ kiwi: k, type: "post", id: "3", code: "dev", room: "ops", text: "hi" })).toBeNull()
   })
 
-  test("only a running mod that asked to post in some room may send a post, and never from its idle or drawing frame (T6837)", () => {
+  test("only a running mod that asked to post in some room may send a post, and never from its AFK or drawing frame (T6837)", () => {
     const poster = { state: "on", needs: ["post:#general"] }
     expect(heeded("post", "main", poster)).toBe(true)
     expect(heeded("post", "sidebar", poster)).toBe(true)
-    expect(heeded("post", "idle", poster)).toBe(false)
+    expect(heeded("post", "afk", poster)).toBe(false)
     expect(heeded("post", "render", poster)).toBe(false)
     expect(heeded("post", "main", { state: "asks", needs: ["post:#general"] })).toBe(false)
     expect(heeded("post", "main", { state: "on", needs: ["read:#general", "panel"] })).toBe(false)
@@ -269,28 +269,28 @@ describe("what a mod's frame may do", () => {
     for (const type of ["hello", "ready", "error", "fetch", "copy", "link"] as const) expect(heeded(type, "sidebar", mod([]))).toBe(true)
   })
 
-  test("an idle frame can only say what it draws, open a channel with channels, and leave: no links, copies, toasts, storage, fetches or panels (T8257)", () => {
-    const calm = mod(["idle", "channels", "panel", "github", "command", "net:example.com"])
-    for (const type of ["hello", "ready", "error", "idle", "leave", "channel"] as const) expect(heeded(type, "idle", calm)).toBe(true)
-    for (const type of ["link", "copy", "toast", "storage", "fetch", "open", "show", "panel", "commands", "tab", "terminal"] as const) expect(heeded(type, "idle", calm)).toBe(false)
+  test("an AFK frame can only say what it draws, open a channel with channels, and leave: no links, copies, toasts, storage, fetches or panels (T8257)", () => {
+    const afk = mod(["afk", "channels", "panel", "github", "command", "net:example.com"])
+    for (const type of ["hello", "ready", "error", "afk", "leave", "channel"] as const) expect(heeded(type, "afk", afk)).toBe(true)
+    for (const type of ["link", "copy", "toast", "storage", "fetch", "open", "show", "panel", "commands", "tab", "terminal"] as const) expect(heeded(type, "afk", afk)).toBe(false)
   })
 
-  test("idle and leave need idle, from the idle frame only, and opening a channel needs channels (T8257)", () => {
-    expect(heeded("idle", "idle", mod(["channels"]))).toBe(false)
-    expect(heeded("idle", "main", mod(["idle"]))).toBe(false)
-    expect(heeded("leave", "main", mod(["idle"]))).toBe(false)
-    expect(heeded("leave", "idle", mod(["idle"], "asks"))).toBe(false)
+  test("afk and leave need afk, from the AFK frame only, and opening a channel needs channels (T8257)", () => {
+    expect(heeded("afk", "afk", mod(["channels"]))).toBe(false)
+    expect(heeded("afk", "main", mod(["afk"]))).toBe(false)
+    expect(heeded("leave", "main", mod(["afk"]))).toBe(false)
+    expect(heeded("leave", "afk", mod(["afk"], "asks"))).toBe(false)
     expect(heeded("channel", "main", mod(["channels"]))).toBe(true)
-    expect(heeded("channel", "main", mod(["github", "idle"]))).toBe(false)
-    expect(heeded("channel", "idle", mod(["idle"]))).toBe(false)
+    expect(heeded("channel", "main", mod(["github", "afk"]))).toBe(false)
+    expect(heeded("channel", "afk", mod(["afk"]))).toBe(false)
   })
 })
 
-describe("the idle and channels messages (T8257)", () => {
-  test("an idle frame asks for a wait of 0 to 120 whole minutes, and only the meadow as its backdrop", () => {
-    expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "idle", after: 3, backdrop: "meadow" })).toEqual({ kiwi: MOD_PROTOCOL, type: "idle", after: 3, backdrop: "meadow" })
-    expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "idle", after: 0, backdrop: "https://example.com/x.png" })).toEqual({ kiwi: MOD_PROTOCOL, type: "idle", after: 0, backdrop: null })
-    for (const after of [-1, 1.5, 121, "3", null]) expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "idle", after, backdrop: null })).toBeNull()
+describe("the afk and channels messages (T8257)", () => {
+  test("an AFK frame asks for a wait of 0 to 120 whole minutes, and only the meadow as its backdrop", () => {
+    expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "afk", after: 3, backdrop: "meadow" })).toEqual({ kiwi: MOD_PROTOCOL, type: "afk", after: 3, backdrop: "meadow" })
+    expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "afk", after: 0, backdrop: "https://example.com/x.png" })).toEqual({ kiwi: MOD_PROTOCOL, type: "afk", after: 0, backdrop: null })
+    for (const after of [-1, 1.5, 121, "3", null]) expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "afk", after, backdrop: null })).toBeNull()
     expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "leave", extra: 1 })).toEqual({ kiwi: MOD_PROTOCOL, type: "leave" })
   })
 

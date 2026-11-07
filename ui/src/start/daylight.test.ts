@@ -4,7 +4,7 @@ import { daylight, moonPhase } from "~/start/daylight"
 
 const at = (h: number, m = 0): Date => new Date(2026, 10, 5, h, m)
 
-describe("the idle sky follows the person's clock", () => {
+describe("the AFK sky follows the person's clock", () => {
   test("the sun rises on the left at 6, stands highest at noon and sets on the right at 18", () => {
     expect(daylight(at(6)).sun.y).toBeCloseTo(0, 5)
     expect(daylight(at(6)).sun.x).toBeCloseTo(-1, 5)

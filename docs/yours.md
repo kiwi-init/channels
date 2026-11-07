@@ -47,7 +47,7 @@ Save it as `~/.kiwi/themes/ember.json` and it shows in **Settings → Appearance
 {
   "app.palette": ["mod+k", "mod+p"],
   "view.sidebar": "mod+shift+l",
-  "app.calm": null
+  "app.afk": null
 }
 ```
 
@@ -59,7 +59,7 @@ Save it as `~/.kiwi/themes/ember.json` and it shows in **Settings → Appearance
 | Command | Id | Mac | Linux |
 | --- | --- | --- | --- |
 | Find anything | `app.palette` | ⌘K | Ctrl+K |
-| Calm | `app.calm` | ⌘T | Ctrl+T |
+| AFK | `app.afk` | ⌘T | Ctrl+T |
 | Toggle sidebar | `view.sidebar` | ⌘\ | Ctrl+\ |
 | Search this channel | `chat.search` | ⌘F | Ctrl+F |
 | Go back | `nav.back` | ⌘[ | Ctrl+[ |

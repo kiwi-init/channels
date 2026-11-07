@@ -13,7 +13,7 @@ const WORDS: Record<string, string> = {
   command: "Commands in ⌘K",
   "message-action": "Items in a message's menu, which send it that message when you pick one",
   terminal: "Show your agents' terminals and mark the ones that need you",
-  idle: "Covers the whole window while you're away; a key or a click brings the app back",
+  afk: "Covers the whole window while you're away (AFK); a key or a click brings the app back",
   channels: "Sees every channel's name, how many need you, and its last line",
 }
 

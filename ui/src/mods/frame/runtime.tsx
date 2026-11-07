@@ -18,7 +18,7 @@ import { Icon } from "~/mods/frame/glyphs"
 import { Action, Actions, Detail, Empty, Form, List, useFetch } from "~/mods/frame/kit"
 import { copy, failed, modFetch, openUrl, post, replied, request, storage, Toast } from "~/mods/frame/wire"
 import {
-  IDLE_MAX_MINUTES,
+  AFK_MAX_MINUTES,
   MOD_PROTOCOL,
   type ModChannel,
   type ModGithub,
@@ -57,7 +57,7 @@ let roomList: ModRoomGrant[] = []
 const heardRooms = new Map<string, ModRoomMessage[]>()
 const NONE: ModRoomMessage[] = []
 let still = false
-let rests = 0
+let shownAfk = 0
 let showing: ModTarget | null = null
 let tabState: { title: string; shown: boolean; alert: string | null; hint: string | null } | null = null
 const watchers = new Set<() => void>()
@@ -76,17 +76,17 @@ const watch = (w: () => void): (() => void) => {
 
 function mount(): void {
   const View = view
-  if (View && surface !== "idle") root.render(<View />)
+  if (View && surface !== "afk") root.render(<View />)
 }
 
-function rest(shown: boolean): void {
+function away(shown: boolean): void {
   const View = view
-  if (surface !== "idle") return
-  rests++
-  root.render(shown && View ? <View key={rests} /> : null)
+  if (surface !== "afk") return
+  shownAfk++
+  root.render(shown && View ? <View key={shownAfk} /> : null)
 }
 
-const minutes = (after: unknown): number => Math.min(IDLE_MAX_MINUTES, Math.max(0, Math.round(Number(after) || 0)))
+const minutes = (after: unknown): number => Math.min(AFK_MAX_MINUTES, Math.max(0, Math.round(Number(after) || 0)))
 
 function asked(need: string, call: string): void {
   if (!needs.has(need)) throw new Error(`${call}() needs "${need}" in mod.json's needs`)
@@ -209,15 +209,15 @@ const api = {
     asked("github", "open")
     post({ type: "open", to })
   },
-  idle({ after, backdrop = null, render }: { after: number | null; backdrop?: "meadow" | null; render: ComponentType }): void {
-    asked("idle", "idle")
-    if (surface !== "idle") return
+  afk({ after, backdrop = null, render }: { after: number | null; backdrop?: "meadow" | null; render: ComponentType }): void {
+    asked("afk", "afk")
+    if (surface !== "afk") return
     view = render
-    post({ type: "idle", after: minutes(after), backdrop: backdrop === "meadow" ? "meadow" : null })
+    post({ type: "afk", after: minutes(after), backdrop: backdrop === "meadow" ? "meadow" : null })
   },
   leave(): void {
-    asked("idle", "leave")
-    if (surface === "idle") post({ type: "leave" })
+    asked("afk", "leave")
+    if (surface === "afk") post({ type: "leave" })
   },
   useStill(): boolean {
     return React.useSyncExternalStore(watch, () => still)
@@ -320,7 +320,7 @@ Object.assign(globalThis, {
     "react/jsx-dev-runtime": jsxRuntime,
     "react-dom": ReactDOM,
     "react-dom/client": ReactDOMClient,
-    "@kiwi/mod": api,
+    "@kiwi/mod": { ...api, idle: api.afk },
   },
 })
 
@@ -331,14 +331,14 @@ function draw(shown: Shown | undefined, dark: boolean): void {
   if (node !== undefined && node !== null) root.render(node)
 }
 
-function theme(vars: Record<string, string>, dark: boolean, calm: boolean): void {
+function theme(vars: Record<string, string>, dark: boolean, quiet: boolean): void {
   const s = document.documentElement.style
   for (const [k, v] of Object.entries(vars)) if (k.startsWith("--")) s.setProperty(k, v)
   document.documentElement.dataset["theme"] = dark ? "dark" : "light"
-  if (calm) document.documentElement.dataset["motion"] = "reduced"
+  if (quiet) document.documentElement.dataset["motion"] = "reduced"
   else delete document.documentElement.dataset["motion"]
-  if (calm !== still) {
-    still = calm
+  if (quiet !== still) {
+    still = quiet
     told()
   }
 }
@@ -391,7 +391,7 @@ addEventListener("message", (e) => {
   } else if (m.type === "messages") {
     if (needs.has(`read:${m.room}`) || needs.has(`read:#${m.room}`)) heardRooms.set(`${m.channel}\n${m.room}`, m.list)
     told()
-  } else if (m.type === "rest") rest(m.shown)
+  } else if (m.type === "away") away(m.shown)
   else if (m.type === "github") {
     github = needs.has("github") ? m.data : null
     told()

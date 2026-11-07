@@ -1,8 +1,8 @@
 import { isAppPrefix } from "../mod-names.ts";
 
-const MOD_NEEDS_OFFERED = ["panel", "sidebar", "tab", "command", "message-action", "terminal", "github", "idle", "channels", "read", "post", "net", "render"] as const;
+const MOD_NEEDS_OFFERED = ["panel", "sidebar", "tab", "command", "message-action", "terminal", "github", "afk", "channels", "read", "post", "net", "render"] as const;
 
-const NEED_KINDS = ["panel", "sidebar", "tab", "command", "message-action", "terminal", "github", "idle", "channels", "read", "post", "net", "render"] as const;
+const NEED_KINDS = ["panel", "sidebar", "tab", "command", "message-action", "terminal", "github", "afk", "channels", "read", "post", "net", "render"] as const;
 
 const NAME = /^[a-z0-9][a-z0-9-]{0,62}$/;
 const VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
@@ -44,6 +44,8 @@ export interface ModSetting {
 
 export type ModCheck = { ok: true; manifest: ModManifest } | { ok: false; why: string };
 
+export const afkNeed = (need: string): string => (need === "idle" ? "afk" : need);
+
 export function needKind(need: string): (typeof NEED_KINDS)[number] | null {
   const colon = need.indexOf(":");
   const kind = colon < 0 ? need : need.slice(0, colon);
@@ -56,7 +58,7 @@ export function needKind(need: string): (typeof NEED_KINDS)[number] | null {
     case "message-action":
     case "terminal":
     case "github":
-    case "idle":
+    case "afk":
     case "channels":
       return rest === null ? kind : null;
     case "read":
@@ -119,7 +121,7 @@ export function checkManifest(raw: unknown, folder: string, contract: string | n
   const listed = settings === undefined ? null : checkSettings(settings);
   if (listed && !listed.ok) return listed;
   if (needs !== undefined && (!Array.isArray(needs) || needs.some((n) => typeof n !== "string"))) return { ok: false, why: "mod.json's needs must be a list of strings" };
-  const list = [...new Set((needs ?? []) as string[])];
+  const list = [...new Set(((needs ?? []) as string[]).map(afkNeed))];
   for (const need of list) {
     const kind = needKind(need);
     if (!kind) return { ok: false, why: `it asks for "${need}", which isn't a capability` };
