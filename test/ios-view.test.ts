@@ -88,6 +88,28 @@ describe("the phone's room view", () => {
     expect(room.latestIn).toBe("task:2");
   });
 
+  test("places lists #general, then the lead chat, then every other thread newest first", () => {
+    const places = view(log, "jow").places;
+    expect(places.map((p) => [p.key, p.kind, p.title])).toEqual([
+      ["main", "main", "channels-dev"],
+      ["dm:jow~lead", "dm", "lead"],
+      ["task:2", "task", "T2 Gate the feel numbers in CI"],
+      ["task:6", "task", "T6 Open to any reviewer"],
+      ["task:3", "task", "T3 Panels slide over the page"],
+    ]);
+    expect(places[2]?.last?.body).toBe("T2 is green and waits for your OK.");
+    expect(places[3]?.last).toBeNull();
+    expect(places.every((p) => !p.done)).toBe(true);
+  });
+
+  test("a done task's thread stays marked done until a compact archives it", async () => {
+    const drafts = [ev("lead", { op: "task.add", title: "Old work", owner: "dev" }), say("dev", "Finished.", { task: 1 }), ev("dev", { op: "task.update", task: 1, state: "done" })];
+    const done = view(await signedLog(drafts), "jow").places.find((p) => p.key === "task:1");
+    expect(done?.done).toBe(true);
+    const compacted = view(await signedLog([...drafts, ev("jow", { op: "compact", summary: "Old work is done.", through: 3 })]), "jow").places;
+    expect(compacted.map((p) => p.key)).toEqual(["main", "dm:jow~lead"]);
+  });
+
   test("with nothing past #general, the latest line is #general's", async () => {
     const room = view(await signedLog([say("lead", "Board is up."), say("jow", "thanks")]), "jow");
     expect(room.latest?.body).toBe("thanks");

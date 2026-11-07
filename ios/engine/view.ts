@@ -139,9 +139,10 @@ export function roomView(r: RoomInput): RoomView {
     (seq) => state.trust.get(seq),
   );
   const latestIn = latest ? keyOf(latest) : "main";
+  const rank = (key: string) => (key === "main" ? 0 : key === sideKey ? 1 : 2);
   const placeView = (key: string): PlaceView | null => {
     const p = placeFromKey(key);
-    if (!p) return null;
+    if (!p || (p.kind === "task" && key !== here && state.tasks.get(p.task)?.archived)) return null;
     const last = lastIn.get(key);
     const summary = state.places.get(key);
     const withMe = p.kind !== "dm" || p.with.includes(root);
@@ -162,13 +163,18 @@ export function roomView(r: RoomInput): RoomView {
       task: p.kind === "task" ? p.task : null,
       lastSeq: summary?.last ?? last?.seq ?? 0,
       last: last ? messageView(last, undefined) : null,
+      count: summary?.count ?? 0,
+      done: p.kind === "task" && (!!summary?.done || state.tasks.get(p.task)?.state === "done"),
     };
   };
-  const placeKeys = ["main", ...(sideKey ? [sideKey] : []), ...(here !== "main" ? [here] : [])];
-  const places = [...new Set(placeKeys)].flatMap((k) => {
-    const v = placeView(k);
-    return v ? [v] : [];
-  });
+  const others = [...state.places.keys(), ...lastIn.keys()].filter((k) => k !== "main" && k !== sideKey);
+  const placeKeys = ["main", ...(sideKey ? [sideKey] : []), ...(here !== "main" ? [here] : []), ...others];
+  const places = [...new Set(placeKeys)]
+    .flatMap((k) => {
+      const v = placeView(k);
+      return v ? [v] : [];
+    })
+    .sort((a, b) => rank(a.key) - rank(b.key) || b.lastSeq - a.lastSeq);
   const tasks: TaskView[] = [...state.tasks.values()]
     .filter((t) => !t.archived)
     .sort((a, b) => b.updatedAt - a.updatedAt)
