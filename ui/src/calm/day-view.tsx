@@ -1,23 +1,11 @@
 import { useMemo } from "react"
 
-import { channelLanes, dayStart, HOUR, homeLanes, type Lane } from "~/calm/day"
+import { channelLanes, dayWindow, HOUR, homeLanes } from "~/calm/day"
 import type { CalmRow } from "~/calm/rows"
 import { takeTurns } from "~/home"
 import { Avatar, Count, cx } from "~/kit/bits"
-import { ago, clock, useNow } from "~/kit/time"
+import { clock, useNow } from "~/kit/time"
 import { useApp } from "~/nav"
-
-const hourOf = (at: number): string => new Date(at).toLocaleTimeString([], { hour: "numeric" })
-
-function whenOf({ tone, live, since }: Lane["now"], now: number): string {
-  const was = since ? ago(since, now) : null
-  const back = was === "now" ? "just now" : was && `${was} ago`
-  if (tone === "ask") return back ?? ""
-  if (tone === "doing") return live ? [live, was !== "now" && was].filter(Boolean).join(" · ") : back ? `started ${back}` : ""
-  if (tone === "review") return was ? `in review · ${was}` : "in review"
-  if (tone === "done") return back ? `landed ${back}` : "landed"
-  return ""
-}
 
 export function DayView({ since, rows, open: openIt }: { since: number; rows: readonly CalmRow[]; open: (code: string, needs: boolean) => void }) {
   const { app } = useApp()
@@ -29,69 +17,79 @@ export function DayView({ since, rows, open: openIt }: { since: number; rows: re
   const busiest = [...app.home].filter((h) => !h.loading && members.some((t) => t.code === h.code)).sort((a, b) => b.working - a.working || b.asks.length - a.asks.length)[0]
   const home = open ? byCode.get(open.code) : busiest
   const title = open?.title ?? home?.title ?? null
-  const start = dayStart(since, now)
+  const { start, end } = dayWindow(since, now)
   const lanes = useMemo(() => (open ? channelLanes(open, start, now) : home ? homeLanes(home, start, now) : []), [open, home, start, now])
-  const landed = lanes.flatMap((l) => l.spans).filter((s) => s.state === "done" && s.to >= since).length
-  const x = (t: number): string => `${(((Math.min(Math.max(t, start), now) - start) / (now - start)) * 100).toFixed(3)}%`
+  const landed = lanes.flatMap((l) => l.spans).filter((s) => s.state === "done").length
+  const x = (t: number): string => `${(((Math.min(Math.max(t, start), end) - start) / (end - start)) * 100).toFixed(3)}%`
   const hours: number[] = []
-  for (let h = start + HOUR; h < now - (now - start) / 8; h += HOUR) hours.push(h)
+  for (let h = start; h <= end; h += HOUR) if (Math.abs(h - now) > (end - start) / 25) hours.push(h)
   const first = asks[0]
   const others = rows.filter((r) => r.code !== (open?.code ?? home?.code)).slice(0, 4)
   return (
     <section className="rest-day" aria-label="While you were away">
       {first && (
         <button type="button" className="rest-day-needs" data-afk-open onClick={() => openIt(first.tile.code, true)}>
-          <Count n={asks.length} loud />
-          <b>{asks.length === 1 ? "needs you" : "need you"}</b>
+          <span className="rest-day-needs-head">
+            <Count n={asks.length} loud />
+            {asks.length === 1 ? "needs you" : "need you"}
+          </span>
           <span className="rest-day-needs-first">
             {first.ask.what}: {first.ask.text}
           </span>
           {asks.length > 1 && <span className="rest-day-needs-more">and {asks.length - 1} more</span>}
         </button>
       )}
+      {title && (
+        <header className="rest-day-head">
+          <h2 className="rest-day-title">
+            {title} since <span className="mono">{clock(since)}</span>
+          </h2>
+          <p className="rest-day-sum">
+            <span className="is-live">{landed} landed</span>
+            <span className="is-doing">{home?.working ?? 0} working</span>
+          </p>
+        </header>
+      )}
       {lanes.length > 0 && (
-        <ol className="rest-day-lanes">
-          <li className="rest-day-row rest-day-axis" aria-hidden="true">
-            <b>{title}</b>
-            <span className="rest-day-hours mono">
-              {hours.map((h) => (
-                <span key={h} style={{ left: x(h) }}>
-                  {hourOf(h)}
-                </span>
-              ))}
-              <span className="is-now">now</span>
+        <div className="rest-day-grid">
+          <div className="rest-day-axis" aria-hidden="true">
+            {hours.map((h) => (
+              <span key={h} className="mono" style={{ left: x(h) }}>
+                {clock(h)}
+              </span>
+            ))}
+            <span className="rest-day-now mono" style={{ left: x(now) }}>
+              now
             </span>
-            <span className="mono">
-              away since {clock(since)}
-              {landed > 0 && ` · ${landed} landed`}
-            </span>
-          </li>
-          {lanes.map((l) => {
-            const when = whenOf(l.now, now)
-            return (
-              <li key={l.name} className={cx("rest-day-row", `is-${l.now.tone}`)}>
-                <span className="rest-day-who">
-                  <Avatar person={l.face} size="sm" />
-                  <span className="rest-day-nick">{l.nick}</span>
-                </span>
-                <span className="rest-day-track" aria-hidden="true">
-                  <span className="rest-day-past">
-                    {l.spans.map((s) => (
-                      <span key={s.task} className={cx("rest-day-span", `is-${s.state}`)} style={{ left: x(s.from), width: `calc(${x(s.to)} - ${x(s.from)})` }} />
-                    ))}
-                    {l.now.tone === "ask" && l.now.since && <span className="rest-day-span is-waiting" style={{ left: x(l.now.since), width: `calc(100% - ${x(l.now.since)})` }} />}
+          </div>
+          {lanes.map((l) => (
+            <div key={l.name} className={cx("rest-day-lane", l.asks.length > 0 && "is-asking")}>
+              <span className="rest-day-who">
+                <Avatar person={l.face} size="sm" />
+                <b>{l.nick}</b>
+              </span>
+              <span className="rest-day-track">
+                <span className="rest-day-track-now" style={{ left: x(now) }} />
+                {l.spans.map((s) => (
+                  <span key={s.task} title={`T${s.task} ${s.title}`}>
+                    <span className={cx("rest-day-span", `is-${s.state}`)} style={{ left: x(s.from), width: `calc(${x(s.to)} - ${x(s.from)})` }}>
+                      <span className="rest-day-span-id mono">T{s.task}</span>
+                    </span>
+                    {s.until && <span className="rest-day-span is-ahead" style={{ left: x(s.to), width: `calc(${x(s.until)} - ${x(s.to)})` }} />}
+                    {s.until && (
+                      <span className="rest-day-eta mono" style={{ left: x(s.until) }}>
+                        ≈ {clock(s.until)}
+                      </span>
+                    )}
                   </span>
-                  {l.now.tone !== "done" && l.now.tone !== "rest" && <span className="rest-day-dot" />}
-                </span>
-                <span className="rest-day-what">
-                  {l.now.label && <b>{l.now.label}</b>}
-                  <span className="rest-day-text">{l.now.text}</span>
-                  {when && <span className="rest-day-when mono">{when}</span>}
-                </span>
-              </li>
-            )
-          })}
-        </ol>
+                ))}
+                {l.asks.map((at) => (
+                  <span key={at} className="rest-day-wait" style={{ left: x(at), width: `calc(${x(now)} - ${x(at)})` }} title="Waiting on you" />
+                ))}
+              </span>
+            </div>
+          ))}
+        </div>
       )}
       {others.length > 0 && (
         <nav className="rest-day-also" aria-label="Other channels">

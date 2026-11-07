@@ -64,8 +64,8 @@ try {
       check("a key fades it out", (await page.locator(".rest").count()) === 0);
       await page.goto(`http://127.0.0.1:${server.port}/?shot=calm`);
       await page.waitForTimeout(2600);
-      const shown = await page.locator(".rest-day-row").count();
-      check(`it shows what each agent is doing, one line each (${shown - 1})`, shown > 2);
+      const shown = await page.locator(".rest-day-lane").count();
+      check(`it shows what each agent is doing, one lane each (${shown})`, shown > 1);
       const current = () => page.evaluate(() => document.querySelector('nav[aria-label="Channels"] button.tile[aria-current="page"]')?.getAttribute("aria-label")?.split(",")[0] ?? "");
       const target = page.locator(".rest-day-also button").first();
       const name = (await target.locator("span").first().textContent()) ?? "";
@@ -98,7 +98,7 @@ try {
         const seen = new Set<string>();
         Object.assign(window, { calmNames: seen });
         const look = (): void => {
-          const names = [...document.querySelectorAll(".rest-day-nick")].map((n) => n.textContent ?? "");
+          const names = [...document.querySelectorAll(".rest-day-who b")].map((n) => n.textContent ?? "");
           if (names.length) seen.add(JSON.stringify(names));
           requestAnimationFrame(look);
         };

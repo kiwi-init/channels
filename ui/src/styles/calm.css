@@ -33,12 +33,10 @@
   bottom: 0;
   left: 0;
   display: grid;
-  grid-template-columns: minmax(0, 60rem);
-  gap: 20px;
+  gap: 16px;
   padding: 64px max(5vw, 16px) max(5vh, 24px);
-  background: linear-gradient(to top, color-mix(in srgb, var(--bg) 72%, transparent) calc(100% - 64px), transparent);
+  background: linear-gradient(to top, color-mix(in srgb, var(--bg) 74%, transparent) calc(100% - 96px), transparent);
   color: var(--ink);
-  font: 400 var(--t-ui) var(--ui);
   pointer-events: none;
   animation: rest-rise 1.2s 0.6s var(--ease) both;
 }
@@ -46,7 +44,7 @@
 .rest-day-needs {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
   justify-self: start;
   min-width: 0;
   max-width: 100%;
@@ -55,12 +53,12 @@
   border: 0;
   border-radius: var(--r-ctl);
   background: var(--decide-wash);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--decide) 40%, transparent);
   color: var(--ink);
-  font: inherit;
+  font: 400 var(--t-ui) var(--ui);
   text-align: left;
   cursor: pointer;
   pointer-events: auto;
-  transition: background 0.2s var(--ease);
 }
 
 .rest-day-needs:hover {
@@ -72,9 +70,11 @@
   outline-offset: 2px;
 }
 
-.rest-day-needs > b {
+.rest-day-needs-head {
+  display: inline-flex;
   flex: none;
-  margin-right: 4px;
+  align-items: center;
+  gap: 6px;
   color: var(--decide);
   font-weight: 600;
 }
@@ -91,52 +91,81 @@
   color: var(--ink-2);
 }
 
-.rest-day-lanes {
-  --cols: 8rem minmax(0, 1fr) minmax(0, 2fr);
-
-  display: grid;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+.rest-day-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
 }
 
-.rest-day-row {
-  display: grid;
-  grid-template-columns: var(--cols);
-  align-items: center;
+.rest-day-title {
+  margin: 0;
+  font: 600 var(--t-display) var(--ui);
+  letter-spacing: -0.01em;
+}
+
+.rest-day-title .mono {
+  font-weight: 500;
+}
+
+.rest-day-sum {
+  display: flex;
   gap: 20px;
-  height: 2rem;
-  white-space: nowrap;
+  margin: 0;
+  color: var(--ink-2);
+  font: 500 var(--t-ui) var(--ui);
+}
+
+.rest-day-sum span::before {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 8px;
+  border-radius: 50%;
+  content: "";
+}
+
+.rest-day-sum .is-live::before {
+  background: var(--live);
+}
+
+.rest-day-sum .is-doing::before {
+  background: var(--doing);
+}
+
+.rest-day-grid {
+  --who: 9rem;
+
+  display: grid;
 }
 
 .rest-day-axis {
-  height: 1.5rem;
-  color: var(--ink-3);
-  font-size: var(--t-meta);
-}
-
-.rest-day-axis > b {
-  overflow: hidden;
-  color: var(--ink);
-  font: 600 var(--t-ui) var(--ui);
-  text-overflow: ellipsis;
-}
-
-.rest-day-hours {
   position: relative;
-  height: 100%;
-  font-size: var(--t-stamp);
+  height: 20px;
+  margin-left: calc(var(--who) + 12px);
 }
 
-.rest-day-hours span {
+.rest-day-axis span {
   position: absolute;
-  top: 50%;
-  transform: translate(-50%, -50%);
+  top: 0;
+  color: var(--ink-3);
+  font-size: var(--t-stamp);
+  white-space: nowrap;
+  transform: translateX(-50%);
 }
 
-.rest-day-hours .is-now {
-  left: 100%;
-  color: var(--ink-2);
+.rest-day-axis .rest-day-now {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.rest-day-lane {
+  display: grid;
+  grid-template-columns: var(--who) minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  height: 32px;
 }
 
 .rest-day-who {
@@ -144,12 +173,18 @@
   align-items: center;
   gap: 8px;
   min-width: 0;
+  font: 400 var(--t-ui) var(--ui);
 }
 
-.rest-day-nick {
+.rest-day-who b {
   overflow: hidden;
-  font-weight: 500;
+  font-weight: 600;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rest-day-lane.is-asking .rest-day-who b {
+  color: var(--decide);
 }
 
 .rest-day-track {
@@ -157,13 +192,7 @@
   height: 100%;
 }
 
-.rest-day-past {
-  position: absolute;
-  inset: 0;
-  mask-image: linear-gradient(to right, transparent, #000 48px);
-}
-
-.rest-day-past::before {
+.rest-day-track::before {
   position: absolute;
   top: 50%;
   right: 0;
@@ -173,27 +202,24 @@
   content: "";
 }
 
+.rest-day-track-now {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 1px;
+  background: var(--ink-3);
+}
+
 .rest-day-span {
   position: absolute;
-  top: calc(50% - 1px);
-  min-width: 2px;
-  height: 2px;
+  top: calc(50% - 3px);
+  min-width: 4px;
+  height: 6px;
   border-radius: var(--r-tick);
 }
 
 .rest-day-span.is-done {
-  background: var(--ink-3);
-}
-
-.rest-day-span.is-done::after {
-  position: absolute;
-  top: -2px;
-  right: -3px;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
   background: var(--live);
-  content: "";
 }
 
 .rest-day-span.is-doing {
@@ -208,55 +234,47 @@
   background: var(--decide);
 }
 
-.rest-day-dot {
-  position: absolute;
-  top: calc(50% - 4px);
-  right: -4px;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
+.rest-day-span.is-ahead {
+  background: repeating-linear-gradient(90deg, var(--doing) 0 4px, transparent 4px 8px);
+  opacity: 0.7;
 }
 
-.rest-day-row.is-ask .rest-day-dot {
+.rest-day-span-id {
+  position: absolute;
+  bottom: 8px;
+  left: 0;
+  color: var(--ink-3);
+  font-size: var(--t-stamp);
+  white-space: nowrap;
+}
+
+.rest-day-eta {
+  position: absolute;
+  top: calc(50% + 4px);
+  color: var(--ink-2);
+  font-size: var(--t-stamp);
+  white-space: nowrap;
+  transform: translateX(-100%);
+}
+
+.rest-day-wait {
+  position: absolute;
+  top: calc(50% - 1px);
+  height: 2px;
+  border-radius: var(--r-tick);
   background: var(--decide);
 }
 
-.rest-day-row.is-doing .rest-day-dot {
-  background: var(--doing);
-}
-
-.rest-day-row.is-review .rest-day-dot {
-  background: var(--review);
-}
-
-.rest-day-what {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  min-width: 0;
-}
-
-.rest-day-what > b {
-  flex: none;
-  color: var(--decide);
-  font-weight: 600;
-}
-
-.rest-day-text {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.rest-day-row.is-done .rest-day-text,
-.rest-day-row.is-rest .rest-day-text {
-  color: var(--ink-2);
-}
-
-.rest-day-when {
-  flex: none;
-  color: var(--ink-3);
-  font-size: var(--t-meta);
+.rest-day-wait::before {
+  position: absolute;
+  top: -4px;
+  left: -5px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--decide);
+  box-shadow: 0 0 0 2px var(--bg);
+  content: "";
 }
 
 .rest-day-also {
@@ -300,13 +318,13 @@
 }
 
 @container (max-width: 40rem) {
-  .rest-day-lanes {
-    --cols: 1.5rem minmax(0, 1fr);
+  .rest-day-grid {
+    --who: 2rem;
   }
 
-  .rest-day-axis,
-  .rest-day-nick,
-  .rest-day-track {
+  .rest-day-who b,
+  .rest-day-span-id,
+  .rest-day-eta {
     display: none;
   }
 }

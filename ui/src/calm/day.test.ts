@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 
-import { channelLanes, dayStart, HOUR, homeLanes } from "~/calm/day"
-import type { HomeAgent, Person, QuestionAsk, Task } from "~/model"
+import { channelLanes, dayWindow, HOUR, homeLanes } from "~/calm/day"
+import type { HomeAgent, Person, Task } from "~/model"
 import { wrote } from "~/words"
 
 const NOW = Date.UTC(2026, 10, 7, 11, 0)
@@ -28,13 +28,14 @@ const task = (id: number, owner: string, status: Task["status"], from: number, o
 const channel = (people: Person[], tasks: Task[]) => ({ people, tasks, asks: [], nicknames: new Map<string, string>() })
 
 describe("the AFK day", () => {
-  test("the trail starts on the hour, three hours back or when you left if that was earlier", () => {
-    expect(dayStart(NOW - 10 * MIN, NOW)).toBe(NOW - 3 * HOUR)
-    expect(dayStart(NOW - 5 * HOUR - 20 * MIN, NOW)).toBe(NOW - 5 * HOUR)
+  test("the window starts on the hour at least four hours back and ends an hour ahead", () => {
+    const { start, end } = dayWindow(NOW - 10 * MIN, NOW)
+    expect(start).toBe(NOW - 4 * HOUR)
+    expect(end).toBe(NOW + HOUR)
   })
 
-  test("a lane per agent with work, busy ones first; done work ends when it landed and says so, work in flight runs to now", () => {
-    const start = NOW - 3 * HOUR
+  test("a lane per agent with work, newest first; done work ends when it landed, work in flight runs to now and past it", () => {
+    const start = NOW - 4 * HOUR
     const lanes = channelLanes(
       channel(
         [agent("win"), agent("pixel"), agent("idle"), agent("jow", { kind: "human" })],
@@ -54,22 +55,13 @@ describe("the AFK day", () => {
     )
     expect(lanes.map((l) => l.name)).toEqual(["win", "pixel"])
     expect(lanes[1]!.spans[0]).toMatchObject({ task: 1, state: "done", from: NOW - 3 * HOUR, to: NOW - 2 * HOUR })
-    expect(lanes[1]!.now).toEqual({ tone: "done", text: "Task 1", since: NOW - 2 * HOUR })
-    expect(lanes[0]!.spans[0]).toMatchObject({ task: 2, state: "doing", to: NOW })
-    expect(lanes[0]!.now).toEqual({ tone: "doing", text: "Task 2", since: NOW - 30 * MIN })
+    const doing = lanes[0]!.spans[0]!
+    expect(doing).toMatchObject({ task: 2, state: "doing", to: NOW })
+    expect(doing.until).toBeGreaterThan(NOW)
   })
 
-  test("an agent that asked you something leads with the ask, whatever it was doing", () => {
-    const ask: QuestionAsk = { kind: "question", id: "q1", from: "flint", at: NOW - 12 * MIN, text: wrote("Merge the relay change?"), label: "", options: [], holds: [] }
-    const lanes = channelLanes({ ...channel([agent("win"), agent("flint")], [task(1, "win", "doing", NOW - HOUR), task(2, "flint", "doing", NOW - HOUR)]), asks: [ask] }, NOW - 3 * HOUR, NOW)
-    expect(lanes.map((l) => [l.name, l.now.tone, l.now.label, l.now.text])).toEqual([
-      ["flint", "ask", "Asks you", "Merge the relay change?"],
-      ["win", "doing", undefined, "Task 1"],
-    ])
-  })
-
-  test("work that ended before the trail stays off it, and work begun before it keeps its real start", () => {
-    const start = NOW - 3 * HOUR
+  test("work that ended before the window stays off it, and work begun before it starts at its edge", () => {
+    const start = NOW - 4 * HOUR
     const lanes = channelLanes(
       channel(
         [agent("old"), agent("long")],
@@ -79,19 +71,19 @@ describe("the AFK day", () => {
       NOW
     )
     expect(lanes.map((l) => l.name)).toEqual(["long"])
-    expect(lanes[0]!.spans[0]!.from).toBe(NOW - 9 * HOUR)
+    expect(lanes[0]!.spans[0]!.from).toBe(start)
   })
 
-  test("with only a channel's summary, waiting agents ask and working ones carry their task", () => {
+  test("with only a channel's summary, working agents get a lane and waiting ones a mark", () => {
     const agents: HomeAgent[] = [
       { name: "win", nick: "win", state: "working", doing: "running Bash", since: NOW - 20 * MIN, task: { id: 4, title: "Tag it" } },
       { name: "flint", nick: "flint", state: "waiting", doing: "waiting", since: NOW - 5 * MIN, task: null },
       { name: "sumi", nick: "sumi", state: "idle", doing: "idle", task: null },
     ]
-    const lanes = homeLanes({ agents }, NOW - 3 * HOUR, NOW)
-    expect(lanes.map((l) => [l.name, l.spans.length, l.now.tone, l.now.label ?? l.now.text])).toEqual([
-      ["flint", 0, "ask", "Waiting for you"],
-      ["win", 1, "doing", "Tag it"],
+    const lanes = homeLanes({ agents }, NOW - 4 * HOUR, NOW)
+    expect(lanes.map((l) => [l.name, l.spans.length, l.asks.length])).toEqual([
+      ["win", 1, 0],
+      ["flint", 0, 1],
     ])
   })
 })
