@@ -22,9 +22,7 @@
     "grim",
     "plutil",
     "secret-tool",
-    "readelf",
-    "screencapture",
-    "import"
+    "readelf"
   ],
   "workspaces": {
     ".": {

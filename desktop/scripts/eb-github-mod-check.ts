@@ -1,5 +1,4 @@
-import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -8,7 +7,7 @@ import { GITHUB_WEBHOOK_PATH } from "../../src/relay/github.ts";
 import { devHumanAuth } from "../../src/relay/human.ts";
 import { daemonStop } from "../src/daemon-client.ts";
 import { DEFAULT_MODS } from "../src/mods-default.ts";
-import { appExecutable, attach, launch, stop, testEnv, until, type Driver } from "./eb-drive.ts";
+import { appExecutable, attach, launch, screenshot, stop, testEnv, until, type Driver } from "./eb-drive.ts";
 import { fillIn, firstChannel } from "./eb-first-run.ts";
 
 if (!process.argv[2]) {
@@ -140,11 +139,7 @@ async function answers(d: Driver, why: string): Promise<number> {
 }
 
 async function shot(name: string): Promise<void> {
-  if (!shots) return;
-  mkdirSync(shots, { recursive: true });
-  const file = join(shots, `${name}.png`);
-  const r = process.platform === "darwin" ? spawnSync("screencapture", ["-x", file], { stdio: "ignore" }) : spawnSync("import", ["-window", "root", file], { stdio: "ignore" });
-  console.log(r.status === 0 && existsSync(file) ? `shot ${file}` : `no shot for ${name} here`);
+  screenshot(shots, name);
 }
 
 function files(dir: string): string[] {

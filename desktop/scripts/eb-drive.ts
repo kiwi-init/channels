@@ -1,4 +1,4 @@
-import { execFileSync, spawn, type ChildProcess } from "node:child_process";
+import { execFileSync, spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { existsSync, mkdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
@@ -60,6 +60,16 @@ export function testEnv(root: string, socket: string, relay: string, extra: Node
   const env: NodeJS.ProcessEnv = { ...process.env, HOME: home, CFFIXED_USER_HOME: home, ...linux, KIWI_HOME: join(root, ".kiwi"), KIWI_EB_DRIVER: socket, KIWI_EB_RELAY: relay, ...extra };
   for (const name of ["BUN_OPTIONS", "BUN_INSPECT", "NODE_OPTIONS"]) if (!(name in extra)) delete env[name];
   return env;
+}
+
+export function screenshot(dir: string | null, name: string): void {
+  if (!dir) return;
+  mkdirSync(dir, { recursive: true });
+  const file = join(dir, `${name}.png`);
+  const wayland = !!process.env["WAYLAND_DISPLAY"] && !process.env["DISPLAY"];
+  const [cmd, args] = process.platform === "darwin" ? ["screencapture", ["-x", file]] : wayland ? ["grim", [file]] : ["import", ["-window", "root", file]];
+  const r = spawnSync(cmd, args, { stdio: "ignore" });
+  console.log(r.status === 0 && existsSync(file) ? `shot ${file}` : `no shot for ${name} here`);
 }
 
 export function appRoot(exe: string): string {

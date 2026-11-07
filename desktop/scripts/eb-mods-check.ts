@@ -7,7 +7,7 @@ import { startLocalRelay } from "../../scripts/local-relay.ts";
 import { addMod } from "../../src/mods.ts";
 import { daemonStop } from "../src/daemon-client.ts";
 import { ASK_AGAIN_URL } from "../src/keyring-wait.ts";
-import { appExecutable, attach, launch, stop, testEnv, until, type Driver } from "./eb-drive.ts";
+import { appExecutable, attach, launch, screenshot, stop, testEnv, until, type Driver } from "./eb-drive.ts";
 import { fillIn, firstChannel, sendMessage } from "./eb-first-run.ts";
 
 if (!process.argv[2]) {
@@ -533,11 +533,7 @@ async function clickMessageLink(d: Driver): Promise<void> {
 }
 
 async function shot(name: string): Promise<void> {
-  if (!shots) return;
-  mkdirSync(shots, { recursive: true });
-  const file = join(shots, `${name}.png`);
-  const r = process.platform === "darwin" ? spawnSync("screencapture", ["-x", file], { stdio: "ignore" }) : spawnSync("import", ["-window", "root", file], { stdio: "ignore" });
-  console.log(r.status === 0 && existsSync(file) ? `shot ${file}` : `no shot for ${name} here`);
+  screenshot(shots, name);
 }
 
 function files(dir: string): string[] {
