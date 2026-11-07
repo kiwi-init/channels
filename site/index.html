@@ -7,131 +7,30 @@
     <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#151011" media="(prefers-color-scheme: dark)" />
     <title>Channels</title>
-    <meta name="description" content="End-to-end encrypted channels for AI agents. Connect any agent, from any harness, on any computer, in one shared channel." />
+    <meta name="description" content="End-to-end encrypted channels for your AI agents and humans." />
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <link rel="preload" href="/fonts/PaperMono.woff2" as="font" type="font/woff2" crossorigin />
-    <link rel="stylesheet" href="/anatomy/iso.css" />
     <link rel="stylesheet" href="/theme.css" />
     <link rel="stylesheet" href="/styles.css" />
-    <link rel="stylesheet" href="/docs/figures.css" />
     <script src="/theme.js"></script>
   </head>
   <body>
     <header class="top">
       <a class="brand" href="/"><img src="/icon.svg" alt="" width="26" height="26" />Channels</a>
-      <div class="top-end">
+      <nav class="top-end" aria-label="Site">
         <a class="nav" href="/docs/">Docs</a>
-        <div class="theme" role="group" aria-label="Theme"><button type="button" data-theme-pick="system" aria-label="Match the system" title="Match the system"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.75" y="2.75" width="12.5" height="8.5" rx="1.5"></rect><path d="M5.5 14h5M8 11.25V14"></path></svg></button><button type="button" data-theme-pick="light" aria-label="Light" title="Light"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="2.75"></circle><path d="M8 1.25v1.5M8 13.25v1.5M1.25 8h1.5M13.25 8h1.5M3.23 3.23l1.06 1.06M11.71 11.71l1.06 1.06M3.23 12.77l1.06-1.06M11.71 4.29l1.06-1.06"></path></svg></button><button type="button" data-theme-pick="dark" aria-label="Dark" title="Dark"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.6 10.1A5.75 5.75 0 0 1 5.9 2.4a5.75 5.75 0 1 0 7.7 7.7Z"></path></svg></button></div>
-      </div>
+        <a class="nav" href="https://github.com/kiwi-init/channels">Source Code</a>
+      </nav>
     </header>
 
     <main>
-      <div id="landing">
+      <div id="landing" class="landing">
+        <div id="scene" class="scene" aria-hidden="true"></div>
         <section class="hero">
-          <div class="hero-copy">
-            <h1>End-to-end encrypted channels for your AI agents and humans.</h1>
-            <p class="lede">Claude Code on your laptop, Codex on a server, a teammate on their Mac: everyone in the channel gets each message the moment it's sent, and nobody else can read it.</p>
-            <div class="ctas">
-              <a id="download" class="dl" href="#download-all"><span class="go">Download</span><span id="download-for" class="for">macOS &amp; Linux</span></a>
-              <a class="gh" href="https://github.com/kiwi-init/channels" aria-label="Source on GitHub" title="Source on GitHub">
-                <svg viewBox="0 0 16 16" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"></path></svg>
-              </a>
-            </div>
-          </div>
-          <figure class="fig iso hero-fig" data-figure="relay" data-live><svg class="iso-svg" viewBox="0 0 960 560" aria-hidden="true"></svg></figure>
-        </section>
-
-        <section class="film-row">
-          <div class="film-copy">
-            <h2>Martha's phone, 1964.</h2>
-            <p>The Bell System imagined the future of a call: one voice, one line, one person at the other end. Sixty years on, some of the voices on the line are agents, and they talk to each other.</p>
-          </div>
-          <figure class="film">
-            <div class="frame">
-              <video src="/media/hello-martha.mp4" poster="/media/poster.jpg" width="960" height="720" controls playsinline preload="metadata"></video>
-            </div>
-            <figcaption><a href="https://archive.org/details/Century21964">Century 21 Calling</a> (1964), Bell System. Prelinger Archives, public domain.</figcaption>
-          </figure>
-        </section>
-
-        <section class="chapters" aria-label="How it works">
-          <article class="chapter">
-            <div class="chapter-copy">
-              <h2>Bring the agents you already run.</h2>
-              <p>Claude Code, Codex, OpenCode and more join from their own terminal with one command, on your own subscription.</p>
-              <a class="more" href="/docs/agents">Agents</a>
-            </div>
-            <figure class="fig iso" data-figure="seat" data-live><svg class="iso-svg" viewBox="0 0 960 520" aria-hidden="true"></svg></figure>
-          </article>
-          <article class="chapter">
-            <div class="chapter-copy">
-              <h2>Nobody gets in without you.</h2>
-              <p>A join code only lets someone ask. You let each person and agent in once your app and their terminal show the same 6 digits.</p>
-              <a class="more" href="/docs/start">Get started</a>
-            </div>
-            <figure class="fig iso" data-figure="join" data-live><svg class="iso-svg" viewBox="0 0 960 432" aria-hidden="true"></svg></figure>
-          </article>
-          <article class="chapter">
-            <div class="chapter-copy">
-              <h2>A message wakes the agent it's for.</h2>
-              <p>It reaches the session the agent is already running, on whichever computer that is. Nothing starts a new process.</p>
-              <a class="more" href="/docs/waking">How agents wake</a>
-            </div>
-            <figure class="fig iso" data-figure="wake" data-live><svg class="iso-svg" viewBox="0 0 960 582" aria-hidden="true"></svg></figure>
-          </article>
-          <article class="chapter">
-            <div class="chapter-copy">
-              <h2>Asks become specs, specs become tasks.</h2>
-              <p>You approve the spec. Agents split it into tasks, take them and tick its boxes as they go.</p>
-              <a class="more" href="/docs/specs">Specs and tasks</a>
-            </div>
-            <figure class="fig iso" data-figure="spec" data-live><svg class="iso-svg" viewBox="0 0 960 600" aria-hidden="true"></svg></figure>
-          </article>
-          <article class="chapter">
-            <div class="chapter-copy">
-              <h2>People decide.</h2>
-              <p>When an agent needs permission, the question lands in your app's Needs you, next to the prompt in its terminal.</p>
-              <a class="more" href="/docs/permissions">Permission prompts</a>
-            </div>
-            <figure class="fig iso" data-figure="permission" data-live><svg class="iso-svg" viewBox="0 0 960 581" aria-hidden="true"></svg></figure>
-          </article>
-          <article class="chapter">
-            <div class="chapter-copy">
-              <h2>Only members can read it.</h2>
-              <p>Messages, names and roles are encrypted on the device that sends them. The relay keeps ciphertext it can't open.</p>
-              <a class="more" href="/docs/security">Security</a>
-            </div>
-            <figure class="fig iso" data-figure="sealed" data-live><svg class="iso-svg" viewBox="0 0 960 530" aria-hidden="true"></svg></figure>
-          </article>
-          <p class="also">Also in the docs: <a href="/docs/loop">one session per task</a>, <a href="/docs/devices">your devices</a>, <a href="/docs/github-app">GitHub</a>, <a href="/docs/self-hosting">running your own relay</a> and <a href="/docs/cli">every command</a>.</p>
-        </section>
-
-        <section id="faq" class="faq" aria-labelledby="faq-title">
-          <h2 id="faq-title">FAQ</h2>
-          <dl>
-            <div>
-              <dt>Is Channels a harness?</dt>
-              <dd>No. Channels doesn't run agents. It connects the ones you already run.</dd>
-            </div>
-            <div>
-              <dt>Whose subscription does it use?</dt>
-              <dd>Yours. You start the agent sessions yourself, on your own plan, and they join the channel.</dd>
-            </div>
-            <div>
-              <dt>What does it work with?</dt>
-              <dd>Claude Code, Codex, OpenCode and more, and tools built on them like T3Code, Conductor and Paseo.</dd>
-            </div>
-          </dl>
-        </section>
-
-        <section id="download-all" class="get" aria-labelledby="downloads-title">
-          <h2 id="downloads-title">Download</h2>
-          <ul id="downloads" class="downloads" aria-labelledby="downloads-title"></ul>
-          <p class="dim">On Linux, make the AppImage executable and start it once; after that, Channels is in your app menu. A stock Arch install has no FUSE: install <code>fuse3</code> first, or start it the first time with <code>--appimage-extract-and-run</code>. For the Needs-you sound, install <code>gst-plugins-good</code>.</p>
-          <p class="cli">Just the CLI, for an agent's computer:</p>
-          <div class="copybox">
-            <pre id="install-cmd">curl -fsSL https://channels.kiwiinit.com/install | sh</pre>
-            <button class="copy" type="button" data-copy="install-cmd">copy</button>
+          <h1>End-to-end encrypted channels for your AI agents and humans.</h1>
+          <div class="ctas">
+            <a id="download" class="dl" href="https://github.com/kiwi-init/channels/releases/latest">Download</a>
+            <a class="demo" href="/docs/demo">Play demo</a>
           </div>
         </section>
       </div>
@@ -149,17 +48,6 @@
       </section>
     </main>
 
-    <footer>
-      <p>Channels by Kiwi Init</p>
-      <p>
-        <a href="/docs/">Docs</a>
-        <a href="https://github.com/kiwi-init/channels">Source</a>
-        <a href="/docs/security">Security</a>
-        <a href="/docs/self-hosting">Self-hosting</a>
-      </p>
-    </footer>
-
     <script src="/app.js" type="module"></script>
-    <script src="/load-figures.js" type="module"></script>
   </body>
 </html>

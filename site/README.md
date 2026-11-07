@@ -1,7 +1,7 @@
 # The relay's static site
 
-The relay serves this folder in place of the old dashboard: a landing page (Cinder
-Peak, full width, plain HTML) with the desktop app's downloads, the docs at
+The relay serves this folder in place of the old dashboard: a landing page (the
+AFK scene behind one line and two buttons, plain HTML), the docs at
 `/docs/`, invite pages (`/join/<code>`, which open the app through
 `kiwi://join/<code>`), and the install scripts.
 
@@ -11,7 +11,8 @@ Peak, full width, plain HTML) with the desktop app's downloads, the docs at
 into `docs/` here (ignored by git). Wrangler runs it before every deploy and
 `wrangler dev` (its `build` in `wrangler.jsonc`), and the Docker image runs it
 too. `bun scripts/docs-site.ts --serve` builds on every page load and serves the
-site on http://127.0.0.1:4400, with one figure alone at `/preview/<name>`.
+site on http://127.0.0.1:4400, with `_headers` applied per path and one figure
+alone at `/preview/<name>`.
 
 - A page's front matter has `description`, `group` (its heading in the side
   list) and `order`; its `# title` names it. Links to another page (`agents.md`)
@@ -30,19 +31,24 @@ site on http://127.0.0.1:4400, with one figure alone at `/preview/<name>`.
 
 - `index.html`, `styles.css`, `app.js` — hand-written static files, no build
   step. `app.js` routes between the landing page and the invite page
-  (`/#<code>`, which is what the renderer produces, and `/join/<code>`), picks
-  the header's Download for the visitor's OS and chip (client hints where the
-  browser gives them; Safari can't tell a Mac's chip, so Apple silicon), fills
-  in the download links and the `curl … | sh -s -- join <code>` line, and the
-  copy buttons. There is no inline script, so the CSP stays `script-src 'self'`.
-- `load-figures.js` — the landing's figures. Each `<figure data-figure>` holds an
-  empty SVG at the figure's size; when it nears the screen this fetches the
-  built SVG from `/docs/figures/<name>.svg`, puts it in and imports the figure's
-  `live.js`. The docs build fails when a figure's size there drifts from the
-  one it builds.
+  (`/#<code>`, which is what the renderer produces, and `/join/<code>`), points
+  Download at the file for the visitor's OS and chip (client hints where the
+  browser gives them; Safari can't tell a Mac's chip, so Apple silicon; anyone
+  else gets the release page), fills in the `curl … | sh -s -- join <code>`
+  line, and the copy buttons. There is no inline script, so the CSP stays
+  `script-src 'self'`.
+- The landing's background is the AFK scene, `/afk/scene.html`, in an
+  `<iframe sandbox="allow-scripts">`. `app.js` paints a sky for the hour behind
+  it and sends the scene `{ kiwi: "afk", type: "state", at, needs: 0, still }`
+  when it loads; the frame fades in once the scene posts
+  `{ kiwi: "afk", type: "ready" }`, and is taken down if that doesn't come
+  within 5 seconds of loading. The sky's hour also sets `data-sky` on the body,
+  so the text over it stays dark by day and light at night in either theme.
+  `_headers` gives `/afk/*` its own CSP: inline script, no network, framed only
+  by this site.
 - `theme.css`, `theme.js` — the colours both the landing and the docs use:
   Cinder Peak in dark and Channels Light in light, through `light-dark()`, plus
-  the figures' palette (`.iso`). The header's System, Light and Dark buttons
+  the figures' palette (`.iso`). The docs header's System, Light and Dark buttons
   set `data-theme` on the page and keep the choice in `localStorage`; with no
   choice the page follows the system. `?theme=light` or `?theme=dark` shows one
   page in that theme without keeping it.
@@ -54,10 +60,6 @@ site on http://127.0.0.1:4400, with one figure alone at `/preview/<name>`.
 - `icon.svg` — the site icon.
 - `fonts/` — Paper Mono (`PaperMono.woff2`, SIL OFL 1.1 in `PaperMono-OFL.txt`),
   for the pages' labels and headings; body text is the system's SF Pro.
-- `media/` — the landing page's video (`hello-martha.mp4`, a cut of Century 21
-  Calling, 1964, Prelinger Archives, public domain) and its poster frame. Static
-  assets on Workers top out at 25 MiB a file, so a longer cut goes to the
-  release or another host instead.
 
 ## Download links
 

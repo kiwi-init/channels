@@ -11,6 +11,8 @@ mkdirSync(join(dist, "assets"), { recursive: true });
 writeFileSync(join(dist, "index.html"), "<!doctype html><title>app</title>");
 writeFileSync(join(dist, "assets", "index-abc123.js"), "console.log(1)");
 writeFileSync(join(dist, "install.sh"), "#!/bin/sh\necho hi\n");
+mkdirSync(join(dist, "afk"));
+writeFileSync(join(dist, "afk", "scene.html"), "<!doctype html><title>scene</title>");
 writeFileSync(join(dist, "_headers"), "/*\n  X-Test: 1\n");
 writeFileSync(join(tmp, "secret.txt"), "outside the dashboard");
 
@@ -49,6 +51,15 @@ describe("dashboard on the Bun relay", () => {
     expect(res.headers.get("cache-control")).toContain("immutable");
     const sh = await fetch(`${relay}/install.sh`);
     expect(sh.headers.get("content-type")).toBe("text/plain; charset=utf-8");
+  });
+
+  test("the AFK scene may run inline script and be framed by the site, but reach nothing", async () => {
+    const scene = (await fetch(`${relay}/afk/scene.html`)).headers.get("content-security-policy") ?? "";
+    expect(scene).toContain("script-src 'unsafe-inline'");
+    expect(scene).toContain("frame-ancestors 'self'");
+    expect(scene).toStartWith("default-src 'none';");
+    expect(scene).not.toContain("connect-src");
+    expect((await fetch(`${relay}/`)).headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
   });
 
   test("a missing file is a 404, not the app", async () => {
