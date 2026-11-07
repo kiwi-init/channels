@@ -93,6 +93,7 @@ struct Dock: View {
     @State private var choosing = false
     @State private var attached: [Attached] = []
     @State private var drafting: Spot?
+    @State private var sent: (text: String, at: Date)?
 
     private var here: PlaceView? { room.placeView(spot.place) }
     private var hasText: Bool { !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
@@ -145,6 +146,15 @@ struct Dock: View {
             model.keep(Draft(text: draft, attached: attached), old.code, old.place)
             error = nil
             restore(new)
+        }
+        .onChange(of: draft) { _, now in
+            guard let sent else { return }
+            guard Date.now.timeIntervalSince(sent.at) < 1 else {
+                self.sent = nil
+                return
+            }
+            let back = now.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !back.isEmpty && sent.text.contains(back) { draft = "" }
         }
         .onChange(of: picked) { _, items in
             guard !items.isEmpty else { return }
@@ -331,12 +341,18 @@ struct Dock: View {
         }
     }
 
+    private func clear(sent text: String, _ key: Spot) {
+        draft = ""
+        sent = (text, .now)
+        model.keep(Draft(), key.code, key.place)
+    }
+
     private func send() {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard canSend else { return }
         if attached.isEmpty && answering == nil && sendingBack == nil {
             model.post(spot, text, re: replyTo?.seq)
-            draft = ""
+            clear(sent: text, spot)
             replyTo = nil
             error = nil
             Haptic.tap()
@@ -360,7 +376,7 @@ struct Dock: View {
                     try await model.send(from, text, re: replyTo?.seq, pictures: pictures)
                 }
                 if drafting == from {
-                    if draft.trimmingCharacters(in: .whitespacesAndNewlines) == text { draft = "" }
+                    if draft.trimmingCharacters(in: .whitespacesAndNewlines) == text { clear(sent: text, from) }
                     attached = []
                     replyTo = nil
                 } else {
