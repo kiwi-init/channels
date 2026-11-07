@@ -92,6 +92,16 @@ declare module "@kiwi/mod" {
   export function channels(): Channel[] | null
   export function useChannels(): Channel[] | null
 
+  export interface Room {
+    channel: string
+    title: string
+    room: string
+  }
+
+  export function post(message: { channel: string; room: string; text: string }): Promise<void>
+  export function rooms(): Room[]
+  export function useRooms(): Room[]
+
   export type Target = { kind: "pr" | "issue"; repo: string; number: number } | { kind: "view"; view: string }
 
   export function show(target: Target): void
