@@ -7,6 +7,10 @@ import type { Meadow } from "~/start/meadow"
 
 const SWALLOWED = ["keydown", "keyup", "wheel", "pointerdown", "contextmenu"] as const
 
+const unframe = (): void => {
+  if (document.activeElement instanceof HTMLIFrameElement) window.focus()
+}
+
 export interface RestProps {
   name: string
   leaving: boolean
@@ -36,7 +40,10 @@ export function Rest({ name, leaving, meadow, alert, still, slot, frame, leave, 
 
   useEffect(() => {
     const was = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    const hold = (): void => box.current?.focus({ preventScroll: true })
+    const hold = (): void => {
+      unframe()
+      box.current?.focus({ preventScroll: true })
+    }
     const keep = (): void => {
       if (document.activeElement !== box.current) hold()
     }
@@ -62,8 +69,8 @@ export function Rest({ name, leaving, meadow, alert, still, slot, frame, leave, 
       window.removeEventListener("blur", later)
       document.removeEventListener("focusin", later, true)
       el?.removeEventListener("focusout", later)
-      frame()?.blur()
-      if (was?.isConnected && was !== document.body) was.focus({ preventScroll: true })
+      unframe()
+      if (was?.isConnected && was !== document.body && was !== frame()) was.focus({ preventScroll: true })
     }
   }, [frame, leave])
 
@@ -97,6 +104,7 @@ export function Rest({ name, leaving, meadow, alert, still, slot, frame, leave, 
 
   const ended = (e: AnimationEvent<HTMLDivElement>): void => {
     if (e.target !== e.currentTarget || e.animationName !== "rest-out") return
+    unframe()
     box.current?.focus({ preventScroll: true })
     gone()
   }

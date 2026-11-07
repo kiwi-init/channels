@@ -104,6 +104,27 @@ const pageNow = (): Record<string, unknown> => ({
   focus: `${document.hasFocus()} ${document.activeElement?.tagName ?? "none"} ${document.activeElement?.getAttribute("title") ?? document.activeElement?.className ?? ""}`,
 });
 
+const traceFocus = (): void => {
+  const w = window as unknown as { focusTrace?: string[] };
+  const t0 = performance.now();
+  const log = (what: string): void => {
+    const a = document.activeElement;
+    w.focusTrace?.push(
+      `${Math.round(performance.now() - t0)} ${what} ${a?.tagName ?? "none"}${a?.getAttribute("title") ? ` ${a.getAttribute("title")}` : a?.className ? ` .${String(a.className).split(" ")[0]}` : ""}`,
+    );
+  };
+  w.focusTrace = [];
+  for (const type of ["blur", "focus"]) window.addEventListener(type, () => log(`window ${type}`), true);
+  for (const type of ["focusin", "focusout"]) document.addEventListener(type, () => log(type), true);
+  let n = 0;
+  const every = setInterval(() => {
+    log("sample");
+    if (++n >= 40) clearInterval(every);
+  }, 100);
+};
+
+const focusTrace = (): string[] => (window as unknown as { focusTrace?: string[] }).focusTrace ?? [];
+
 let driver: Driver | null = null;
 
 const step = (what: string, ms: number, act: () => Promise<boolean>) =>
@@ -219,6 +240,7 @@ try {
   await step("Calm, from Home", 15_000, async () => !!(await d.evaluate(restNow, null, 2_000)).frame);
   await later(3_000);
   const glance = Math.max(0.07 * size.height, 24);
+  await d.evaluate(traceFocus, null, 2_000);
   clickAt(...at(Math.max(0.05 * size.width, 16) + 80, size.height - glance - 4 - 14));
   const opened = await until("the channel, from Calm's row", 10_000, async () => {
     const [rest, on] = await Promise.all([d.evaluate(restNow, null, 2_000), d.evaluate(current, null, 2_000)]);
@@ -234,7 +256,8 @@ try {
   const again = await until("Calm, for a click on the sky", 15_000, async () => ((await d.evaluate(restNow, null, 2_000)).frame ? true : null)).catch(() => null);
   if (!again) {
     console.log(`after the row click, ⌘T did nothing: ${JSON.stringify(await d.evaluate(pageNow, null, 2_000).catch(String))}`);
-    await d.evaluate(() => void window.dispatchEvent(new KeyboardEvent("keydown", { key: "t", code: "KeyT", metaKey: true, bubbles: true, cancelable: true })), null, 2_000);
+    console.log(`focus since the row click:\n  ${(await d.evaluate(focusTrace, null, 2_000).catch(() => [] as string[])).join("\n  ")}`);
+    await d.evaluate(() => void document.dispatchEvent(new KeyboardEvent("keydown", { key: "t", code: "KeyT", metaKey: true, bubbles: true, cancelable: true })), null, 2_000);
     await later(1_500);
     console.log(`a ⌘T sent inside the page: ${JSON.stringify(await d.evaluate(restNow, null, 2_000))}`);
   }
