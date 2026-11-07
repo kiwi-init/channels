@@ -126,7 +126,21 @@ extension RoomView {
     func spotTitle(_ key: String) -> String {
         guard key != "main" else { return title }
         if key == sideKey, let lead { return display(lead) }
-        return placeView(key)?.title ?? title
+        if let title = placeView(key)?.title { return title }
+        if let id = taskIn(key) { return "\(taskLabel(id)) \(tasks.first { $0.id == id }?.title ?? "")".trimmingCharacters(in: .whitespaces) }
+        if let other = dmWith(key) { return display(other) }
+        return title
+    }
+
+    func taskIn(_ key: String) -> Int? {
+        key.hasPrefix("task:") ? Int(key.dropFirst(5)) : nil
+    }
+
+    func dmWith(_ key: String) -> String? {
+        guard key.hasPrefix("dm:") else { return nil }
+        let pair = key.dropFirst(3).split(separator: "~").map(String.init)
+        guard pair.count == 2, pair.contains(where: isMe) else { return nil }
+        return pair.first { !isMe($0) }
     }
 }
 
