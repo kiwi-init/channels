@@ -33,9 +33,20 @@
   bottom: 0;
   left: 0;
   display: grid;
+  grid-template-columns: minmax(0, 1040px);
   gap: 16px;
-  padding: 64px max(5vw, 16px) max(5vh, 24px);
-  background: linear-gradient(to top, color-mix(in srgb, var(--bg) 74%, transparent) calc(100% - 96px), transparent);
+  padding: 160px max(5vw, 16px) max(5vh, 24px);
+  background: linear-gradient(
+    to top,
+    color-mix(in srgb, var(--bg) 76%, transparent) 0%,
+    color-mix(in srgb, var(--bg) 72%, transparent) 34%,
+    color-mix(in srgb, var(--bg) 62%, transparent) 52%,
+    color-mix(in srgb, var(--bg) 46%, transparent) 66%,
+    color-mix(in srgb, var(--bg) 29%, transparent) 77%,
+    color-mix(in srgb, var(--bg) 15%, transparent) 86%,
+    color-mix(in srgb, var(--bg) 5%, transparent) 94%,
+    transparent 100%
+  );
   color: var(--ink);
   pointer-events: none;
   animation: rest-rise 1.2s 0.6s var(--ease) both;
@@ -48,21 +59,27 @@
   justify-self: start;
   min-width: 0;
   max-width: 100%;
-  height: var(--ctl);
-  padding: 0 12px 0 6px;
+  height: calc(var(--ctl) + 10px);
+  padding: 0 16px 0 8px;
   border: 0;
   border-radius: var(--r-ctl);
-  background: var(--decide-wash);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--decide) 40%, transparent);
-  color: var(--ink);
-  font: 400 var(--t-ui) var(--ui);
+  background: var(--decide);
+  box-shadow: 0 6px 24px -8px color-mix(in srgb, var(--decide) 70%, transparent);
+  color: var(--on-ink);
+  font: 500 var(--t-ui) var(--ui);
   text-align: left;
   cursor: pointer;
   pointer-events: auto;
+  transition: background var(--fast);
 }
 
 .rest-day-needs:hover {
-  background: color-mix(in srgb, var(--decide) 20%, transparent);
+  background: color-mix(in srgb, var(--decide) 88%, var(--on-ink));
+}
+
+.rest-day-needs .count.is-loud {
+  background: var(--on-ink);
+  color: var(--decide);
 }
 
 .rest-day-needs:focus-visible {
@@ -74,8 +91,7 @@
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: 6px;
-  color: var(--decide);
+  gap: 8px;
   font-weight: 600;
 }
 
@@ -88,7 +104,7 @@
 
 .rest-day-needs-more {
   flex: none;
-  color: var(--ink-2);
+  color: color-mix(in srgb, var(--on-ink) 72%, var(--decide));
 }
 
 .rest-day-head {
