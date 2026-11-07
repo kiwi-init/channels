@@ -1,11 +1,18 @@
 import { useMemo } from "react"
 
-import { channelLanes, dayWindow, HOUR, homeLanes } from "~/calm/day"
+import { channelLanes, dayWindow, HOUR, homeLanes, type Lane } from "~/calm/day"
 import type { CalmRow } from "~/calm/rows"
 import { takeTurns } from "~/home"
 import { Avatar, Count, cx } from "~/kit/bits"
 import { clock, useNow } from "~/kit/time"
 import { useApp } from "~/nav"
+
+function named(l: Lane, room: number): Lane["spans"][number] | undefined {
+  const fits = l.spans.filter((s) => s.to - s.from >= room)
+  return fits.filter((s) => s.state !== "done").at(-1) ?? fits.at(-1)
+}
+
+const hourOf = (at: number): string => new Date(at).toLocaleTimeString([], { hour: "numeric" })
 
 export function DayView({ since, rows, open: openIt }: { since: number; rows: readonly CalmRow[]; open: (code: string, needs: boolean) => void }) {
   const { app } = useApp()
@@ -22,7 +29,7 @@ export function DayView({ since, rows, open: openIt }: { since: number; rows: re
   const landed = lanes.flatMap((l) => l.spans).filter((s) => s.state === "done").length
   const x = (t: number): string => `${(((Math.min(Math.max(t, start), end) - start) / (end - start)) * 100).toFixed(3)}%`
   const hours: number[] = []
-  for (let h = start; h <= end; h += HOUR) if (Math.abs(h - now) > (end - start) / 25) hours.push(h)
+  for (let h = start; h <= end; h += HOUR) if (Math.abs(h - now) > (end - start) / 12) hours.push(h)
   const first = asks[0]
   const others = rows.filter((r) => r.code !== (open?.code ?? home?.code)).slice(0, 4)
   return (
@@ -55,7 +62,7 @@ export function DayView({ since, rows, open: openIt }: { since: number; rows: re
           <div className="rest-day-axis" aria-hidden="true">
             {hours.map((h) => (
               <span key={h} className="mono" style={{ left: x(h) }}>
-                {clock(h)}
+                {hourOf(h)}
               </span>
             ))}
             <span className="rest-day-now mono" style={{ left: x(now) }}>
@@ -63,7 +70,7 @@ export function DayView({ since, rows, open: openIt }: { since: number; rows: re
             </span>
           </div>
           {lanes.map((l) => (
-            <div key={l.name} className={cx("rest-day-lane", l.asks.length > 0 && "is-asking")}>
+            <div key={l.name} className="rest-day-lane">
               <span className="rest-day-who">
                 <Avatar person={l.face} size="sm" />
                 <b>{l.nick}</b>
@@ -71,16 +78,8 @@ export function DayView({ since, rows, open: openIt }: { since: number; rows: re
               <span className="rest-day-track">
                 <span className="rest-day-track-now" style={{ left: x(now) }} />
                 {l.spans.map((s) => (
-                  <span key={s.task} title={`T${s.task} ${s.title}`}>
-                    <span className={cx("rest-day-span", `is-${s.state}`)} style={{ left: x(s.from), width: `calc(${x(s.to)} - ${x(s.from)})` }}>
-                      <span className="rest-day-span-id mono">T{s.task}</span>
-                    </span>
-                    {s.until && <span className="rest-day-span is-ahead" style={{ left: x(s.to), width: `calc(${x(s.until)} - ${x(s.to)})` }} />}
-                    {s.until && (
-                      <span className="rest-day-eta mono" style={{ left: x(s.until) }}>
-                        ≈ {clock(s.until)}
-                      </span>
-                    )}
+                  <span key={s.task} className={cx("rest-day-span", `is-${s.state}`)} style={{ left: x(s.from), width: `calc(${x(s.to)} - ${x(s.from)})` }} title={`T${s.task} ${s.title}`}>
+                    {s === named(l, (end - start) / 8) && <span className="rest-day-span-name">{s.title}</span>}
                   </span>
                 ))}
                 {l.asks.map((at) => (

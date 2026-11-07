@@ -28,13 +28,13 @@ const task = (id: number, owner: string, status: Task["status"], from: number, o
 const channel = (people: Person[], tasks: Task[]) => ({ people, tasks, asks: [], nicknames: new Map<string, string>() })
 
 describe("the AFK day", () => {
-  test("the window starts on the hour at least four hours back and ends an hour ahead", () => {
+  test("the window starts on the hour at least four hours back and ends just past now", () => {
     const { start, end } = dayWindow(NOW - 10 * MIN, NOW)
     expect(start).toBe(NOW - 4 * HOUR)
-    expect(end).toBe(NOW + HOUR)
+    expect(end).toBe(NOW + 15 * MIN)
   })
 
-  test("a lane per agent with work, newest first; done work ends when it landed, work in flight runs to now and past it", () => {
+  test("a lane per agent with work, newest first; done work ends when it landed, work in flight runs to now", () => {
     const start = NOW - 4 * HOUR
     const lanes = channelLanes(
       channel(
@@ -55,9 +55,7 @@ describe("the AFK day", () => {
     )
     expect(lanes.map((l) => l.name)).toEqual(["win", "pixel"])
     expect(lanes[1]!.spans[0]).toMatchObject({ task: 1, state: "done", from: NOW - 3 * HOUR, to: NOW - 2 * HOUR })
-    const doing = lanes[0]!.spans[0]!
-    expect(doing).toMatchObject({ task: 2, state: "doing", to: NOW })
-    expect(doing.until).toBeGreaterThan(NOW)
+    expect(lanes[0]!.spans[0]).toMatchObject({ task: 2, state: "doing", to: NOW })
   })
 
   test("work that ended before the window stays off it, and work begun before it starts at its edge", () => {

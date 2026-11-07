@@ -111,8 +111,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  justify-content: space-between;
-  gap: 16px;
+  gap: 8px 24px;
 }
 
 .rest-day-title {
@@ -159,6 +158,7 @@
 .rest-day-axis {
   position: relative;
   height: 20px;
+  margin-bottom: 8px;
   margin-left: calc(var(--who) + 12px);
 }
 
@@ -199,10 +199,6 @@
   white-space: nowrap;
 }
 
-.rest-day-lane.is-asking .rest-day-who b {
-  color: var(--decide);
-}
-
 .rest-day-track {
   position: relative;
   height: 100%;
@@ -238,39 +234,50 @@
   background: var(--live);
 }
 
+.rest-day-span:not(.is-done) {
+  top: calc(50% - 1px);
+  height: 2px;
+  background: var(--tone);
+}
+
+.rest-day-span:not(.is-done)::after {
+  position: absolute;
+  top: -2px;
+  right: 0;
+  width: min(100%, 16px);
+  height: 6px;
+  border-radius: var(--r-tick);
+  background: var(--tone);
+  content: "";
+}
+
+.rest-day-span-name {
+  position: absolute;
+  right: 24px;
+  bottom: 8px;
+  left: 0;
+  overflow: hidden;
+  color: var(--ink-2);
+  font-size: var(--t-meta);
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rest-day-span:not(.is-done) .rest-day-span-name {
+  bottom: 6px;
+}
+
 .rest-day-span.is-doing {
-  background: var(--doing);
+  --tone: var(--doing);
 }
 
 .rest-day-span.is-review {
-  background: var(--review);
+  --tone: var(--review);
 }
 
 .rest-day-span.is-waiting {
-  background: var(--decide);
-}
-
-.rest-day-span.is-ahead {
-  background: repeating-linear-gradient(90deg, var(--doing) 0 4px, transparent 4px 8px);
-  opacity: 0.7;
-}
-
-.rest-day-span-id {
-  position: absolute;
-  bottom: 8px;
-  left: 0;
-  color: var(--ink-3);
-  font-size: var(--t-stamp);
-  white-space: nowrap;
-}
-
-.rest-day-eta {
-  position: absolute;
-  top: calc(50% + 4px);
-  color: var(--ink-2);
-  font-size: var(--t-stamp);
-  white-space: nowrap;
-  transform: translateX(-100%);
+  --tone: var(--decide);
 }
 
 .rest-day-wait {
@@ -338,9 +345,7 @@
     --who: 2rem;
   }
 
-  .rest-day-who b,
-  .rest-day-span-id,
-  .rest-day-eta {
+  .rest-day-who b {
     display: none;
   }
 }

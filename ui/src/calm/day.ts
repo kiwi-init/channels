@@ -1,13 +1,13 @@
 import type { Channel, HomeChannel, Person, Task } from "~/model"
 import { nickname } from "~/names"
+import { openAsks } from "~/needs/open"
 import { wordsPlain } from "~/words"
 
 const MINUTE = 60_000
 export const HOUR = 60 * MINUTE
 const BEFORE = 4 * HOUR
-const AHEAD = HOUR
+const AHEAD = 15 * MINUTE
 const LANES = 7
-const USUAL = 35 * MINUTE
 const SOON = 5 * MINUTE
 
 type SpanState = "done" | "doing" | "review" | "waiting"
@@ -18,7 +18,6 @@ interface Span {
   from: number
   to: number
   state: SpanState
-  until?: number
 }
 
 type Face = Pick<Person, "name" | "kind" | "harness" | "presence" | "color" | "picture" | "face" | "activity">
@@ -52,20 +51,10 @@ function stateOf(t: Task): SpanState | null {
   return null
 }
 
-function usual(tasks: readonly Task[]): number {
-  const took = tasks
-    .filter((t) => t.status === "done" && !t.cancelled)
-    .map((t) => endedAt(t) - begunAt(t))
-    .filter((d) => d > MINUTE && d < 8 * HOUR)
-    .sort((a, b) => a - b)
-  return took.length ? took[Math.floor(took.length / 2)]! : USUAL
-}
-
 const latest = (l: Lane): number => Math.max(0, ...l.spans.map((s) => s.to), ...l.asks)
 
 export function channelLanes(ch: Pick<Channel, "people" | "tasks" | "asks" | "nicknames">, start: number, now: number): Lane[] {
-  const typical = usual(ch.tasks)
-  const asks = ch.asks.flatMap((a) => (a.kind === "question" || a.kind === "permission" ? [{ from: a.from, at: a.at }] : []))
+  const asks = openAsks(ch).flatMap((a) => (a.kind === "question" || a.kind === "permission" ? [{ from: a.from, at: a.at }] : []))
   return ch.people
     .filter((p) => p.kind === "agent" && !p.you && !p.left)
     .map((face): Lane => {
@@ -77,8 +66,7 @@ export function channelLanes(ch: Pick<Channel, "people" | "tasks" | "asks" | "ni
           const from = begunAt(t)
           const to = state === "done" ? endedAt(t) : now
           if (to < start) return []
-          const until = state === "doing" ? Math.max(now + SOON, from + typical) : undefined
-          return [{ task: t.id, title: wordsPlain(t.title, ch.nicknames), from: Math.max(from, start), to, state, ...(until ? { until } : {}) }]
+          return [{ task: t.id, title: wordsPlain(t.title, ch.nicknames), from: Math.max(from, start), to, state }]
         })
       return { name: face.name, nick: nickname(ch, face.name), face, spans, asks: asks.filter((a) => a.from === face.name).map((a) => Math.max(a.at, start)) }
     })
@@ -94,7 +82,7 @@ export function homeLanes(home: Pick<HomeChannel, "agents">, start: number, now:
       const from = Math.max(a.since ?? now - SOON, start)
       const face: Face = { name: a.name, kind: "agent", presence: "online" }
       if (a.state === "waiting") return { name: a.name, nick: a.nick, face, spans: [], asks: [from] }
-      const spans: Span[] = a.task ? [{ task: a.task.id, title: a.task.title, from, to: now, state: "doing", until: Math.max(now + SOON, from + USUAL) }] : []
+      const spans: Span[] = a.task ? [{ task: a.task.id, title: a.task.title, from, to: now, state: "doing" }] : []
       return { name: a.name, nick: a.nick, face, spans, asks: [] }
     })
     .filter((l) => l.spans.length || l.asks.length)
