@@ -107,7 +107,7 @@ if [ -z "$gone" ]; then ok "with ksecretd stopped, nothing answers for org.freed
 
 second=$(login second)
 owner=$(secrets_owner)
-if [ "$(echo "$owner" | awk '{ print $3 }')" = "$second" ] && [ "$second" != "$first" ] && grep -q "opened by PAM" "$logs/wallet-second.log"; then
+if [ -n "$size" ] && [ "$(echo "$owner" | awk '{ print $3 }')" = "$second" ] && [ "$second" != "$first" ] && grep -q "opened by PAM" "$logs/wallet-second.log"; then
   ok "a second login's ksecretd opened the saved kdewallet with the same password: $owner"
 else
   bad "a second login didn't open kdewallet: $owner; it said: $(grep -m2 -E 'PAM|rror' "$logs/wallet-second.log" | tr '\n' ' ' | cut -c1-300)"
@@ -121,6 +121,12 @@ if pgrep -x gnome-keyring-d > /dev/null; then info "a gnome-keyring-daemon runs 
 
 stop "$(pid_of "$(owner_of org.kde.kwalletd6)")"
 stop "$second"
+if [ "$failed" != 0 ]; then
+  for log in "$logs"/wallet-*.log; do
+    echo "--- $(basename "$log")"
+    tail -n 20 "$log"
+  done
+fi
 rm -rf "$logs" "$store_home"
 if [ "$failed" = 0 ]; then echo "linux-kwallet-check: the store is sealed under a key KDE's wallet keeps, and opens again after the wallet restarts"; fi
 exit "$failed"

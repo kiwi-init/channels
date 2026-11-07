@@ -19,12 +19,12 @@ jobs:
           sudo apt-get update -q
           apt-cache policy kwallet6 libkf6wallet6 libkf6wallet-bin libpam-kwallet5 libpam-kwallet6 qt6-qpa-plugins | grep -E '^[a-z]|Installed|Candidate'
           ls /usr/lib/x86_64-linux-gnu/qt6/plugins/platforms/ || echo "no qt6 platforms dir"
-          sudo apt-get install -y --no-install-recommends kwallet6 libsecret-tools dbus libglib2.0-bin gnome-keyring
+          sudo apt-get install -y --no-install-recommends kwallet6 libqca-qt6-plugins libsecret-tools dbus libglib2.0-bin gnome-keyring
           dpkg -L kwallet6 | grep -vE '/share/(locale|doc|man)/' | grep -E 'bin/|libexec|dbus-1|/lib/'
           ls /usr/lib/x86_64-linux-gnu/qt6/plugins/platforms/ || echo "no qt6 platforms dir"
           grep -l -E 'secrets|kwallet|ksecret' /usr/share/dbus-1/services/* || true
           for f in $(grep -l -E 'secrets|kwallet|ksecret' /usr/share/dbus-1/services/*); do echo "== $f"; cat "$f"; done
-      - name: KWallet, with only kwallet6 installed
+      - name: KWallet, with kwallet6 and QCA's plugins, no Qt platform plugins
         continue-on-error: true
         timeout-minutes: 5
         run: bash desktop/scripts/linux-kwallet-check.sh
