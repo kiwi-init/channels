@@ -1,4 +1,4 @@
-.rest {
+.afk {
   --meadow-haze: #6f8256;
 
   position: fixed;
@@ -13,21 +13,21 @@
   -webkit-app-region: no-drag;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-  animation: rest-in 2s var(--ease) both;
+  animation: afk-in 2s var(--ease) both;
 }
 
-.rest.is-leaving {
+.afk.is-leaving {
   pointer-events: none;
-  animation: rest-out 0.5s var(--ease) both;
+  animation: afk-out 0.5s var(--ease) both;
 }
 
-.rest-back {
+.afk-back {
   position: absolute;
   inset: 0;
   pointer-events: none;
 }
 
-.rest-map {
+.afk-map {
   --on: rgb(255 255 255 / 0.96);
   --on-2: rgb(255 255 255 / 0.86);
   --on-3: rgb(255 255 255 / 0.72);
@@ -38,23 +38,23 @@
   color: var(--on);
   text-shadow: var(--on-shade);
   pointer-events: none;
-  animation: rest-rise 1.2s 0.6s var(--ease) both;
+  animation: afk-rise 1.2s 0.6s var(--ease) both;
 }
 
-.rest-map[data-sky="day"] {
+.afk-map[data-sky="day"] {
   --on: rgb(24 18 16 / 0.96);
   --on-2: rgb(24 18 16 / 0.86);
   --on-3: rgb(24 18 16 / 0.72);
   --on-shade: 0 0 1px rgb(255 255 255 / 0.6), 0 0 12px rgb(255 255 255 / 0.7);
 }
 
-.rest-spot {
+.afk-spot {
   position: absolute;
   width: 0;
   height: 0;
 }
 
-.rest-spot-pin {
+.afk-spot-pin {
   position: absolute;
   top: -6px;
   left: -6px;
@@ -67,20 +67,20 @@
     0 1px 6px rgb(0 0 0 / 0.35);
 }
 
-.rest-spot.is-needs .rest-spot-pin {
+.afk-spot.is-needs .afk-spot-pin {
   background: var(--alert);
 }
 
-.rest-spot.is-needs .rest-spot-pin::after {
+.afk-spot.is-needs .afk-spot-pin::after {
   position: absolute;
   inset: 0;
   border-radius: 50%;
   background: var(--alert);
   content: "";
-  animation: rest-pulse 2.4s var(--ease) 8;
+  animation: afk-pulse 2.4s var(--ease) 8;
 }
 
-.rest-spot-stem {
+.afk-spot-stem {
   position: absolute;
   bottom: 8px;
   left: -0.5px;
@@ -89,7 +89,7 @@
   background: var(--on-2);
 }
 
-.rest-spot-label {
+.afk-spot-label {
   position: absolute;
   bottom: 64px;
   left: -32px;
@@ -110,26 +110,26 @@
   pointer-events: auto;
 }
 
-.rest-spot-label:focus-visible {
+.afk-spot-label:focus-visible {
   outline: 2px solid var(--on);
   outline-offset: -16px;
 }
 
-.rest-spot-label b {
+.afk-spot-label b {
   font: 600 var(--t-title) var(--ui);
 }
 
-.rest-spot-counts {
+.afk-spot-counts {
   color: var(--on-2);
   font-size: var(--t-stamp);
 }
 
-.rest-spot.is-needs .rest-spot-counts {
+.afk-spot.is-needs .afk-spot-counts {
   color: var(--on);
   font-weight: 600;
 }
 
-.rest-spot-line {
+.afk-spot-line {
   max-width: 20rem;
   overflow: hidden;
   color: var(--on-2);
@@ -137,29 +137,29 @@
   white-space: nowrap;
 }
 
-.rest-spot-crew {
+.afk-spot-crew {
   display: flex;
   align-items: center;
   gap: 6px;
   margin-top: 4px;
 }
 
-.rest-spot-face > .av {
+.afk-spot-face > .av {
   filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.45));
 }
 
-.rest-map[data-sky="day"] .rest-spot-face .av-face {
+.afk-map[data-sky="day"] .afk-spot-face .av-face {
   color: var(--on);
 }
 
 @container (max-width: 40rem) {
-  .rest-spot-line,
-  .rest-spot-crew {
+  .afk-spot-line,
+  .afk-spot-crew {
     display: none;
   }
 }
 
-@keyframes rest-pulse {
+@keyframes afk-pulse {
   from {
     opacity: 0.6;
     transform: scale(1);
@@ -171,19 +171,19 @@
   }
 }
 
-@keyframes rest-in {
+@keyframes afk-in {
   from {
     opacity: 0;
   }
 }
 
-@keyframes rest-out {
+@keyframes afk-out {
   to {
     opacity: 0;
   }
 }
 
-@keyframes rest-rise {
+@keyframes afk-rise {
   from {
     opacity: 0;
     transform: translateY(8px);

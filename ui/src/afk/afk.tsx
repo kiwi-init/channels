@@ -1,20 +1,20 @@
-import "~/styles/calm.css"
+import "~/styles/afk.css"
 
 import { useEffect, useMemo, useRef, useState, type AnimationEvent } from "react"
 
-import { hideCalm } from "~/calm/idle"
-import { MapView } from "~/calm/map"
-import type { Meadow } from "~/calm/meadow"
-import { calmRows } from "~/calm/rows"
-import { useStill } from "~/calm/settle"
+import { hideAfk } from "~/afk/wait"
+import { MapView } from "~/afk/map"
+import type { Meadow } from "~/afk/meadow"
+import { afkRows } from "~/afk/rows"
+import { useStill } from "~/afk/settle"
 import { cx } from "~/kit/bits"
 import { useApp } from "~/nav"
 
 const SWALLOWED = ["keydown", "keyup", "wheel", "pointerdown", "contextmenu"] as const
 
-export function Calm() {
+export function Afk() {
   const { app, go } = useApp()
-  const rows = useMemo(() => calmRows(app.channels, app.home), [app.channels, app.home])
+  const rows = useMemo(() => afkRows(app.channels, app.home), [app.channels, app.home])
   const still = useStill()
   const [leaving, setLeaving] = useState(false)
   const box = useRef<HTMLDivElement>(null)
@@ -44,7 +44,7 @@ export function Calm() {
 
   useEffect(() => {
     let gone = false
-    void import("~/calm/meadow")
+    void import("~/afk/meadow")
       .then(({ startMeadow }) => {
         if (gone || !stage.current) return null
         return startMeadow(stage.current, latest.current.still)
@@ -78,12 +78,12 @@ export function Calm() {
     setLeaving(true)
   }
   const ended = (e: AnimationEvent<HTMLDivElement>): void => {
-    if (e.target === e.currentTarget && e.animationName === "rest-out") hideCalm()
+    if (e.target === e.currentTarget && e.animationName === "afk-out") hideAfk()
   }
 
   return (
-    <div ref={box} className={cx("rest", leaving && "is-leaving")} role="dialog" aria-modal="true" aria-label="Calm" tabIndex={-1} onAnimationEnd={ended}>
-      <div ref={stage} className="rest-back" aria-hidden="true" />
+    <div ref={box} className={cx("afk", leaving && "is-leaving")} role="dialog" aria-modal="true" aria-label="AFK" tabIndex={-1} onAnimationEnd={ended}>
+      <div ref={stage} className="afk-back" aria-hidden="true" />
       <MapView open={open} />
     </div>
   )

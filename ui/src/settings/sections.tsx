@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react"
 
-import { CALM_MINUTES } from "~/calm/idle"
+import { AFK_MINUTES } from "~/afk/wait"
 import { IconButton } from "~/kit/bits"
 import { Toggle } from "~/kit/form"
 import { setDebugOptions, useDebugOptions } from "~/kit/debug"
@@ -137,7 +137,7 @@ const MOTION = [
   ["reduced", "Reduced"],
 ] as const
 
-const CALM = CALM_MINUTES.map((m): readonly [number, string] => [m, m ? `${m} min` : "Off"])
+const AFK = AFK_MINUTES.map((m): readonly [number, string] => [m, m ? `${m} min` : "Off"])
 
 export function AppearanceSection() {
   const { app } = useApp()
@@ -158,8 +158,8 @@ export function AppearanceSection() {
         <Row label="Motion">
           <Seg label="Motion" value={prefs.reduceMotion ? "reduced" : "full"} options={MOTION} onChange={(m) => set({ reduceMotion: m === "reduced" })} />
         </Row>
-        <Row label="Calm" hint="After this long without the mouse or keys, a quiet sky shows every channel.">
-          <Seg<number> label="Calm" value={prefs.calm} options={CALM} onChange={(calm) => set({ calm })} />
+        <Row label="AFK" hint="After this long without the mouse or keys, the AFK scene shows every channel.">
+          <Seg<number> label="AFK" value={prefs.afk} options={AFK} onChange={(afk) => set({ afk })} />
         </Row>
       </Group>
       <Themes />

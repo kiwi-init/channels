@@ -1,6 +1,6 @@
 import type { ChannelTile, HomeChannel } from "~/model"
 
-export interface CalmRow {
+export interface AfkRow {
   code: string
   title: string
   needs: number
@@ -22,7 +22,7 @@ function lineOf(home: HomeChannel | undefined): string | null {
   return null
 }
 
-export function calmRows(tiles: readonly ChannelTile[], home: readonly HomeChannel[]): CalmRow[] {
+export function afkRows(tiles: readonly ChannelTile[], home: readonly HomeChannel[]): AfkRow[] {
   const byCode = new Map(home.map((h) => [h.code, h]))
   return tiles
     .filter((t) => t.state === "member" && (!t.muted || t.needsYou > 0))

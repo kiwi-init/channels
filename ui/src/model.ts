@@ -719,7 +719,7 @@ export interface Prefs {
   lightTheme: string
   customThemes: CustomTheme[]
   folders: Folder[]
-  calm: number
+  afk: number
 }
 
 export interface SendExtras {
