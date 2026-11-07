@@ -11,7 +11,18 @@ if (!out) throw new Error("usage: bun ios/scripts/fixture.ts OUT.json");
 
 const people = { jow: "human", lead: "agent", dev: "agent" } as const;
 const ids = Object.fromEntries(await Promise.all(Object.keys(people).map(async (n) => [n, await generateIdentity(n)] as const)));
-const roster: Roster = Object.entries(people).map(([name, kind]) => ({ name, pk: ids[name]!.pk, owner: name === "jow", at: 0, active: true, kind, ...(name === "lead" ? { role: "lead" } : {}) }));
+const roster: Roster = Object.entries(people).map(([name, kind]) => ({
+  name,
+  pk: ids[name]!.pk,
+  owner: name === "jow",
+  at: 0,
+  active: true,
+  kind,
+  ...(name === "lead" ? { role: "lead" } : {}),
+  ...(kind === "agent" ? { runs: { harness: "claude-code", model: "claude-opus-5-5" } } : {}),
+  ...(name === "jow" ? { color: "teal" as const } : name === "dev" ? { color: "violet" as const } : {}),
+  ...(name === "dev" ? { persona: { name: "Builder", role: "builder", capabilities: [], areas: [], instructions: "" } } : {}),
+}));
 
 const long = (n: number) =>
   [
@@ -50,5 +61,44 @@ const room = roomView({
   state: fold(log, roster, Date.now()),
   online: new Map(),
   place: "main",
+  needs: [
+    {
+      kind: "spec",
+      id: "spec:9:approve:2",
+      at: Date.now() - 50 * 60_000,
+      ask: 9,
+      v: 2,
+      changed: false,
+      title: "The iPhone app is your away-from-desk Needs you",
+      text: "- Allow or deny tool permissions\n- Let in join requests after comparing the code\n- Approve specs that are ready",
+      by: "lead",
+    },
+    {
+      kind: "permission",
+      id: "permission-1",
+      from: "dev",
+      at: Date.now() - 3 * 60_000,
+      title: "Run a command",
+      summary: "Push the branch so CI can run",
+      code: "git push -u origin Channels9-ios-ui",
+      cwd: null,
+      canAllow: true,
+      allower: null,
+      expiresAt: null,
+      task: 12,
+    },
+    {
+      kind: "join",
+      id: "join-1",
+      at: Date.now() - 60_000,
+      name: "eager-heron",
+      who: "agent",
+      runs: "Claude Code · claude-opus-5-5",
+      machine: "macOS arm64",
+      sponsor: null,
+      code: "369329",
+      pinned: false,
+    },
+  ],
 });
 writeFileSync(out, JSON.stringify(room));

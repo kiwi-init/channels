@@ -45,9 +45,12 @@ final class AppModel {
     var rooms: [String: RoomView] = [:]
     var linking: Linking = .idle
     var relinkAsked = false
+    var path: [Spot] = []
+    var inSettings = false
     var enrolled = false
     var joining = 0
     var unsaved: String?
+    private let push = PushTags()
     private let github = GitHubSheet()
 
     var relinking: Bool {
@@ -153,6 +156,7 @@ final class AppModel {
     }
 
     func awake() async {
+        if phase == .ready, push.stale(Set(rooms.keys)), let token = push.token { await registerPush(token) }
         if shut {
             await resume()
         } else if let keeping {
@@ -179,8 +183,11 @@ final class AppModel {
         }
         held(object)
         do {
-            try await engine.ask(["op": "start", "saved": object])
+            let codes = (object["seats"] as? [[String: Any]] ?? []).compactMap { $0["code"] as? String }
+            try await engine.ask(["op": "start", "saved": object, "kept": Kept.load(codes)])
             phase = .ready
+            PushDelegate.onToken = { [weak self] token in Task { await self?.registerPush(token) } }
+            Task { await PushTags.ask() }
         } catch {
             phase = .broken(error.localizedDescription)
         }
@@ -204,7 +211,10 @@ final class AppModel {
             if let before = rooms[room.code], before.connection == .live {
                 let known = Set(before.asks.map(\.seq))
                 let reviewed = Set(before.reviews.map(\.task))
-                if room.asks.contains(where: { !known.contains($0.seq) }) || room.reviews.contains(where: { !reviewed.contains($0.task) }) {
+                let seen = Set(before.open.map(\.id))
+                if room.asks.contains(where: { !known.contains($0.seq) }) || room.reviews.contains(where: { !reviewed.contains($0.task) })
+                    || room.open.contains(where: { !seen.contains($0.id) })
+                {
                     UINotificationFeedbackGenerator().notificationOccurred(.warning)
                 }
             }
@@ -219,6 +229,9 @@ final class AppModel {
             if room.connection == .live { pullOnce(room.code) }
         case .gone(let code):
             rooms[code] = nil
+            Kept.drop(code)
+        case .kept(let code, let sealed):
+            Kept.save(code, sealed)
         case .log:
             return
         case .removed(let by):
@@ -273,6 +286,21 @@ final class AppModel {
         try? await engine.ask(["op": "enrollCancel"])
     }
 
+    private func registerPush(_ token: String) async {
+        #if DEBUG
+            let sandbox = true
+        #else
+            let sandbox = false
+        #endif
+        do {
+            let seats = try await engine.ask(["op": "push", "token": token, "sandbox": sandbox], as: [PushSeat].self)
+            push.take(seats, token: token)
+            for seat in seats where !seat.ok { NSLog("push: \(seat.label) refused: \(seat.error ?? "")") }
+        } catch {
+            NSLog("push: couldn't register: \(error.localizedDescription)")
+        }
+    }
+
     func cancelLink() async {
         github.close()
         linking = .idle
@@ -316,6 +344,18 @@ final class AppModel {
 
     func sendBack(_ code: String, task: Int, why: String) async throws {
         try await engine.ask(["op": "sendBack", "code": code, "task": task, "why": why])
+    }
+
+    func allow(_ code: String, id: String, allow: Bool) async throws {
+        try await engine.ask(["op": "allow", "code": code, "id": id, "allow": allow])
+    }
+
+    func letIn(_ code: String, id: String) async throws {
+        try await engine.ask(["op": "letIn", "code": code, "id": id])
+    }
+
+    func approveSpec(_ code: String, ask: Int, v: Int) async throws {
+        try await engine.ask(["op": "approveSpec", "code": code, "ask": ask, "v": v])
     }
 
     func nudge() {
@@ -395,6 +435,8 @@ final class AppModel {
 
     func unlink() {
         Vault.wipe()
+        Kept.wipe()
+        push.forget()
         keeping = nil
         unsaved = nil
         rooms = [:]

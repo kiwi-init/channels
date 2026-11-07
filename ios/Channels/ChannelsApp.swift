@@ -2,9 +2,14 @@ import SwiftUI
 
 @main
 struct ChannelsApp: App {
+    @UIApplicationDelegateAdaptor(PushDelegate.self) private var push
     @State private var model = AppModel()
     @State private var lock = Lock()
     @Environment(\.scenePhase) private var scene
+
+    init() {
+        _ = ThemeStore.shared
+    }
 
     var body: some Scene {
         WindowGroup {
@@ -41,6 +46,7 @@ struct ChannelsApp: App {
 
 struct RootView: View {
     @Environment(AppModel.self) private var model
+    private var theme: ThemeStore { ThemeStore.shared }
 
     private var relinking: Binding<Bool> {
         Binding(
@@ -64,6 +70,8 @@ struct RootView: View {
                 Centered(title: "Channels can't start", detail: why)
             }
         }
+        .id(theme.key)
+        .preferredColorScheme(theme.appearance.scheme)
         .background(alignment: .topLeading) {
             EngineHost(engine: model.engine)
                 .frame(width: 1, height: 1)

@@ -15,6 +15,7 @@ struct MemberView: Codable, Sendable, Hashable, Identifiable {
     let display: String
     let kind: String
     let role: String?
+    var face: String? = nil
     let owner: Bool
     let lead: Bool
     let color: String?
@@ -111,6 +112,43 @@ struct ReviewView: Codable, Sendable, Hashable, Identifiable {
     var date: Date { Date(timeIntervalSince1970: at / 1000) }
 }
 
+struct NeedView: Codable, Sendable, Hashable, Identifiable {
+    let kind: String
+    let id: String
+    let at: Double
+    let from: String?
+    let title: String?
+    let summary: String?
+    let code: String?
+    let cwd: String?
+    let canAllow: Bool?
+    let allower: String?
+    let expiresAt: Double?
+    let task: Int?
+    let name: String?
+    let who: String?
+    let runs: String?
+    let machine: String?
+    let sponsor: String?
+    let pinned: Bool?
+    let ask: Int?
+    let v: Int?
+    let changed: Bool?
+    let text: String?
+    let by: String?
+
+    var date: Date { Date(timeIntervalSince1970: at / 1000) }
+    var asker: String? { from ?? by }
+
+    var line: String {
+        switch kind {
+        case "permission": "Allow \(title ?? "a tool")?"
+        case "join": "\(name ?? "Someone") wants to join"
+        default: "Approve the spec of #\(ask ?? 0)"
+        }
+    }
+}
+
 struct PlaceView: Codable, Sendable, Hashable, Identifiable {
     let key: String
     let kind: String
@@ -120,6 +158,8 @@ struct PlaceView: Codable, Sendable, Hashable, Identifiable {
     let task: Int?
     let lastSeq: Int
     let last: MessageView?
+    var count: Int? = nil
+    var done: Bool? = nil
 
     var id: String { key }
 }
@@ -153,6 +193,7 @@ struct RoomView: Codable, Sendable, Hashable, Identifiable {
     let tasks: [TaskView]
     let asks: [AskView]
     let reviews: [ReviewView]
+    var needs: [NeedView]? = nil
     let last: MessageView?
     let latest: MessageView?
     let latestIn: String

@@ -3,29 +3,6 @@ import PhotosUI
 import SwiftUI
 import UIKit
 
-struct GlassGroup<Content: View>: View {
-    var spacing: CGFloat = 10
-    @ViewBuilder let content: Content
-
-    var body: some View {
-        if #available(iOS 26.0, *) {
-            GlassEffectContainer(spacing: spacing) { content }
-        } else {
-            content
-        }
-    }
-}
-
-extension View {
-    @ViewBuilder func glassID(_ id: String, in space: Namespace.ID) -> some View {
-        if #available(iOS 26.0, *) {
-            self.glassEffectID(id, in: space)
-        } else {
-            self
-        }
-    }
-}
-
 struct Attached: Identifiable {
     let id = UUID()
     let image: UIImage
@@ -85,7 +62,6 @@ struct Dock: View {
     let follow: Follow
     let jump: () -> Void
     @Environment(AppModel.self) private var model
-    @Namespace private var glass
     @State private var draft = ""
     @State private var sending = false
     @State private var error: String?
@@ -93,6 +69,7 @@ struct Dock: View {
     @State private var choosing = false
     @State private var attached: [Attached] = []
     @State private var drafting: Spot?
+    @State private var sent: (text: String, at: Date)?
 
     private var here: PlaceView? { room.placeView(spot.place) }
     private var hasText: Bool { !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
@@ -121,11 +98,9 @@ struct Dock: View {
             } else if let replyTo {
                 bar("arrowshape.turn.up.left.fill", Tone.accent, room.display(replyTo.from), replyTo.plain) { self.replyTo = nil }
             }
-            GlassGroup(spacing: 12) {
-                HStack(alignment: .bottom, spacing: 8) {
-                    plus.glassID("plus", in: glass)
-                    field.glassID("field", in: glass)
-                }
+            HStack(alignment: .bottom, spacing: 8) {
+                plus
+                field
             }
         }
         .padding(.horizontal, 12)
@@ -145,6 +120,15 @@ struct Dock: View {
             model.keep(Draft(text: draft, attached: attached), old.code, old.place)
             error = nil
             restore(new)
+        }
+        .onChange(of: draft) { _, now in
+            guard let sent else { return }
+            guard Date.now.timeIntervalSince(sent.at) < 1 else {
+                self.sent = nil
+                return
+            }
+            let back = now.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !back.isEmpty && sent.text.contains(back) { draft = "" }
         }
         .onChange(of: picked) { _, items in
             guard !items.isEmpty else { return }
@@ -331,12 +315,18 @@ struct Dock: View {
         }
     }
 
+    private func clear(sent text: String, _ key: Spot) {
+        draft = ""
+        sent = (text, .now)
+        model.keep(Draft(), key.code, key.place)
+    }
+
     private func send() {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard canSend else { return }
         if attached.isEmpty && answering == nil && sendingBack == nil {
             model.post(spot, text, re: replyTo?.seq)
-            draft = ""
+            clear(sent: text, spot)
             replyTo = nil
             error = nil
             Haptic.tap()
@@ -360,7 +350,7 @@ struct Dock: View {
                     try await model.send(from, text, re: replyTo?.seq, pictures: pictures)
                 }
                 if drafting == from {
-                    if draft.trimmingCharacters(in: .whitespacesAndNewlines) == text { draft = "" }
+                    if draft.trimmingCharacters(in: .whitespacesAndNewlines) == text { clear(sent: text, from) }
                     attached = []
                     replyTo = nil
                 } else {

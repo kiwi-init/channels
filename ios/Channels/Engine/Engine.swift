@@ -23,6 +23,7 @@ enum Push {
     case gone(String)
     case log(String)
     case removed(String)
+    case kept(String, Data)
 }
 
 @MainActor
@@ -148,6 +149,10 @@ final class Engine: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
             }
         case "removed":
             onPush(.removed(object["by"] as? String ?? "another device"))
+        case "kept":
+            if let code = object["code"] as? String, let sealed = object["sealed"], let blob = try? JSONSerialization.data(withJSONObject: sealed) {
+                onPush(.kept(code, blob))
+            }
         default:
             return
         }

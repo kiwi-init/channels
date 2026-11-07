@@ -8,17 +8,22 @@ struct Line: Identifiable {
         case bubble(MessageView, first: Bool, last: Bool)
         case ask(AskView)
         case review(ReviewView)
+        case need(NeedView)
         case pending(Pending)
     }
 
     let id: String
     let kind: Kind
 
-    static func build(_ messages: [MessageView], asks: [AskView] = [], reviews: [ReviewView] = [], pending: [Pending] = [], sentAs: [Int: UUID] = [:]) -> [Line] {
+    static func build(
+        _ messages: [MessageView], asks: [AskView] = [], reviews: [ReviewView] = [], needs: [NeedView] = [], pending: [Pending] = [], sentAs: [Int: UUID] = [:]
+    ) -> [Line] {
         var out: [Line] = []
         var prev: MessageView?
         var lastAt: MessageView?
-        let held = asks.map { (at: $0.at, line: Line(id: "a\($0.seq)", kind: .ask($0))) } + reviews.map { (at: $0.at, line: Line(id: "r\($0.task)", kind: .review($0))) }
+        let held =
+            asks.map { (at: $0.at, line: Line(id: "a\($0.seq)", kind: .ask($0))) } + reviews.map { (at: $0.at, line: Line(id: "r\($0.task)", kind: .review($0))) }
+            + needs.map { (at: $0.at, line: Line(id: "n\($0.id)", kind: .need($0))) }
         var waiting = held.sorted { $0.at < $1.at }[...]
         let answers = Set(messages.compactMap { m in m.chosen.map { "\($0.by)|\($0.choice)" } })
         for m in messages where !m.choices.isEmpty || !answers.contains("\(m.from)|\(m.body)") {
@@ -66,6 +71,7 @@ struct Conversation: View {
     var typing: FocusState<Bool>.Binding
     var elsewhere: [AskView] = []
     var reviews: [ReviewView] = []
+    var needs: [NeedView] = []
     var answer: (AskView) -> Void = { _ in }
     var sendBack: (ReviewView) -> Void = { _ in }
     @Environment(AppModel.self) private var model
@@ -90,7 +96,7 @@ struct Conversation: View {
                     Intro(room: room)
                 }
                 ForEach(
-                    Line.build(room.messages, asks: elsewhere, reviews: reviews, pending: model.pending["\(room.code)|\(room.place)"] ?? [], sentAs: model.sentAs)
+                    Line.build(room.messages, asks: elsewhere, reviews: reviews, needs: needs, pending: model.pending["\(room.code)|\(room.place)"] ?? [], sentAs: model.sentAs)
                 ) { line in
                     LineView(line: line, room: room, reveal: reveal, solo: solo) { m in
                         replyTo = m
@@ -216,6 +222,8 @@ struct LineView: View {
             AskLine(ask: ask, room: room) { answer(ask.seq) }
         case .review(let review):
             ReviewLine(review: review, room: room) { sendBack(review) }
+        case .need(let need):
+            NeedLine(need: need, room: room)
         case .pending(let item):
             PendingBubble(item: item, spot: Spot(code: room.code, place: room.place))
         case .time(let date):
@@ -266,7 +274,7 @@ struct PendingBubble: View {
                 .accessibilityLabel("Not delivered")
             }
             VStack(alignment: .trailing, spacing: 3) {
-                Markdown(text: item.body, ink: .white, link: .white, code: .white.opacity(0.18), underline: true)
+                Markdown(text: item.body, ink: Tone.onInk, link: Tone.onInk, code: Tone.onInk.opacity(0.18), underline: true)
                     .padding(.horizontal, 13)
                     .padding(.vertical, 8)
                     .background {
@@ -412,9 +420,9 @@ struct Bubble: View {
     @State private var tapback = false
 
     private var fill: Color { message.mine ? Tone.bubbleMine : Tone.bubbleThem }
-    private var ink: Color { message.mine ? .white : Tone.ink }
-    private var link: Color { message.mine ? .white : Tone.accent }
-    private var wash: Color { message.mine ? .white.opacity(0.18) : Tone.wash2 }
+    private var ink: Color { message.mine ? Tone.onInk : Tone.ink }
+    private var link: Color { message.mine ? Tone.onInk : Tone.accent }
+    private var wash: Color { message.mine ? Tone.onInk.opacity(0.18) : Tone.wash2 }
     private var onlyPictures: Bool { message.images > 0 && message.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
     var body: some View {
@@ -805,7 +813,7 @@ struct PollCard: View {
                 .padding(.horizontal, chosen ? 8 : 0)
                 .background {
                     if chosen {
-                        RoundedRectangle(cornerRadius: 12, style: .continuous).fill(.clear).prism(RoundedRectangle(cornerRadius: 12, style: .continuous), band: 0.5)
+                        RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Tone.accentWash)
                     }
                 }
                 .padding(.horizontal, chosen ? -8 : 0)

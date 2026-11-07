@@ -6,10 +6,12 @@ struct Face: View {
     let member: MemberView?
     var size: CGFloat = 32
 
-    private var initials: String {
-        let words = (member?.display ?? name).split(whereSeparator: { $0 == " " || $0 == "-" || $0 == "_" || $0 == "." })
-        let letters = words.prefix(2).compactMap(\.first).map { String($0).uppercased() }
-        return letters.joined().isEmpty ? "?" : letters.joined()
+    private var letter: String {
+        (member?.display ?? name).first.map { String($0).uppercased() } ?? "?"
+    }
+
+    private var tint: Color? {
+        member?.color.map(Tone.member)
     }
 
     var body: some View {
@@ -31,35 +33,47 @@ struct Face: View {
         .accessibilityHidden(true)
     }
 
-    @ViewBuilder private var agent: some View {
-        ZStack {
-            Circle().fill(LinearGradient(colors: [Tone.faceTop, Tone.faceBottom], startPoint: .top, endPoint: .bottom))
+    private var role: String {
+        member?.face.flatMap { Faces.eyes[$0] == nil ? nil : $0 } ?? "default"
+    }
+
+    private var agent: some View {
+        let eyes = Faces.eyes[role] ?? Faces.fallback
+        let unit = size / 100
+        let badge = size * 0.35
+        return ZStack(alignment: .topLeading) {
+            Image("face-\(role)")
+                .resizable()
+                .renderingMode(.template)
+                .foregroundStyle(tint ?? Tone.ink)
+                .frame(width: size, height: size)
+            ForEach([-1.0, 1.0], id: \.self) { side in
+                Ellipse()
+                    .fill(Tone.canvas)
+                    .frame(width: 8.6 * eyes.scale * unit, height: 10.6 * eyes.scale * unit)
+                    .position(x: (eyes.x + side * eyes.spacing / 2) * unit, y: eyes.y * unit)
+            }
             if let harness = member?.harness, UIImage(named: "harness-\(harness)") != nil {
                 Image("harness-\(harness)")
                     .resizable()
                     .renderingMode(member?.mono == true ? .template : .original)
                     .foregroundStyle(Tone.ink)
                     .scaledToFit()
-                    .frame(width: size * 0.56, height: size * 0.56)
-            } else {
-                Image(systemName: "terminal")
-                    .font(.system(size: size * 0.4, weight: .medium))
-                    .foregroundStyle(Tone.ink2)
+                    .frame(width: badge, height: badge)
+                    .padding(size * 0.03)
+                    .background(Circle().fill(Tone.canvas))
+                    .offset(x: -size * 0.06, y: -size * 0.06)
             }
         }
         .frame(width: size, height: size)
     }
 
     private var person: some View {
-        let tone = member?.color.flatMap { Palette.fills[$0] }
-        let top = tone.map { Color(hex: $0.fill) } ?? Tone.avatarTop
-        let bottom = tone.map { Color(hex: $0.fill).mix(with: .black, by: 0.28) } ?? Tone.avatarBottom
-        let ink = tone.map { Color(hex: $0.ink) } ?? .white
-        return Text(initials)
-            .font(.system(size: (size * (initials.count > 1 ? 0.4 : 0.46)).rounded(), weight: .semibold, design: .rounded))
-            .foregroundStyle(ink)
+        Text(letter)
+            .font(.system(size: (size * 0.42).rounded(), weight: .semibold))
+            .foregroundStyle(tint ?? Tone.ink2)
             .frame(width: size, height: size)
-            .background(Circle().fill(LinearGradient(colors: [top, bottom], startPoint: .top, endPoint: .bottom)))
+            .background(Circle().fill(tint.map { $0.opacity(0.18) } ?? Tone.raised))
     }
 }
 
@@ -80,31 +94,38 @@ extension View {
 
     @ViewBuilder func glass(_ radius: CGFloat) -> some View {
         if #available(iOS 26.0, *) {
-            self.glassEffect(.regular, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
+            self.glassEffect(.regular.tint(Tone.glassTint), in: RoundedRectangle(cornerRadius: radius, style: .continuous))
         } else {
             self
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(Tone.glassEdge, lineWidth: 0.5))
+                .background(Tone.raised, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(Tone.line, lineWidth: 0.5))
         }
+    }
+
+    func grouped() -> some View {
+        self
+            .listStyle(.insetGrouped)
+            .scrollContentBackground(.hidden)
+            .background(Tone.canvas)
     }
 
     @ViewBuilder func glassCapsule() -> some View {
         if #available(iOS 26.0, *) {
-            self.glassEffect(.regular.interactive(), in: Capsule())
+            self.glassEffect(.regular.tint(Tone.glassTint).interactive(), in: Capsule())
         } else {
             self
-                .background(.ultraThinMaterial, in: Capsule())
-                .overlay(Capsule().strokeBorder(Tone.glassEdge, lineWidth: 0.5))
+                .background(Tone.raised, in: Capsule())
+                .overlay(Capsule().strokeBorder(Tone.line, lineWidth: 0.5))
         }
     }
 
     @ViewBuilder func glassCircle() -> some View {
         if #available(iOS 26.0, *) {
-            self.glassEffect(.regular.interactive(), in: Circle())
+            self.glassEffect(.regular.tint(Tone.glassTint).interactive(), in: Circle())
         } else {
             self
-                .background(.ultraThinMaterial, in: Circle())
-                .overlay(Circle().strokeBorder(Tone.glassEdge, lineWidth: 0.5))
+                .background(Tone.raised, in: Circle())
+                .overlay(Circle().strokeBorder(Tone.line, lineWidth: 0.5))
         }
     }
 }

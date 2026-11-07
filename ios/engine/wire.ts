@@ -20,7 +20,7 @@ export interface EnrollStart {
 }
 
 export type Ask =
-  | { op: "start"; saved: Saved }
+  | { op: "start"; saved: Saved; kept?: Record<string, unknown> }
   | { op: "enrollBegin"; relay: string; label: string; os: string; user?: string; waitMs?: number }
   | { op: "enrollAsk" }
   | { op: "enrollWait" }
@@ -33,9 +33,13 @@ export type Ask =
   | { op: "react"; code: string; seq: number; emoji: string | null }
   | { op: "approve"; code: string; task: number }
   | { op: "sendBack"; code: string; task: number; why: string }
+  | { op: "allow"; code: string; id: string; allow: boolean }
+  | { op: "letIn"; code: string; id: string }
+  | { op: "approveSpec"; code: string; ask: number; v: number }
   | { op: "open"; code: string; place: string }
   | { op: "marks"; code: string; marks: Record<string, number>; write: boolean }
-  | { op: "nudge" };
+  | { op: "nudge" }
+  | { op: "push"; token: string; sandbox: boolean };
 
 export interface Picture {
   name: string;
@@ -53,6 +57,7 @@ export type Push =
   | { type: "gone"; code: string }
   | { type: "log"; line: string }
   | { type: "removed"; by: string }
+  | { type: "kept"; code: string; sealed: unknown }
   | { type: "fetch"; id: number; url: string; body: string };
 
 export type Connection = "connecting" | "live" | "reconnecting";
@@ -62,6 +67,7 @@ export interface MemberView {
   display: string;
   kind: "human" | "agent" | "computer";
   role: string | null;
+  face: string | null;
   owner: boolean;
   lead: boolean;
   color: string | null;
@@ -137,6 +143,35 @@ export interface ReviewView {
   at: number;
 }
 
+export type NeedView =
+  | {
+      kind: "permission";
+      id: string;
+      from: string;
+      at: number;
+      title: string;
+      summary: string | null;
+      code: string;
+      cwd: string | null;
+      canAllow: boolean;
+      allower: string | null;
+      expiresAt: number | null;
+      task: number | null;
+    }
+  | {
+      kind: "join";
+      id: string;
+      at: number;
+      name: string;
+      who: "human" | "agent";
+      runs: string | null;
+      machine: string | null;
+      sponsor: string | null;
+      code: string;
+      pinned: boolean;
+    }
+  | { kind: "spec"; id: string; at: number; ask: number; v: number; changed: boolean; title: string; text: string; by: string };
+
 export interface PlaceView {
   key: string;
   kind: "main" | "dm" | "task";
@@ -146,6 +181,8 @@ export interface PlaceView {
   task: number | null;
   lastSeq: number;
   last: MessageView | null;
+  count: number;
+  done: boolean;
 }
 
 export type IconView = { kind: "robot"; robot: string } | { kind: "emoji"; emoji: string } | { kind: "image"; mime: string; data: string };
@@ -171,6 +208,7 @@ export interface RoomView {
   tasks: TaskView[];
   asks: AskView[];
   reviews: ReviewView[];
+  needs: NeedView[];
   last: MessageView | null;
   latest: MessageView | null;
   latestIn: string;

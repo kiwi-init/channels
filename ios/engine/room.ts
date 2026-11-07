@@ -1,6 +1,7 @@
 import { ChannelGone, type RoomsSetting, type SendOptions } from "@kiwi/core/client.ts";
-import type { Member } from "@kiwi/core/membership.ts";
+import type { JoinRequest, Member } from "@kiwi/core/membership.ts";
 import type { ChannelIcon, Message } from "@kiwi/core/protocol.ts";
+import { permissionReply } from "@kiwi/core/permission.ts";
 import { wakeList } from "@kiwi/core/phone-wake.ts";
 import { rootOf } from "@kiwi/core/room-rules.ts";
 import { fold, MAIN, placeFromKey, taskId, type ChannelState, type FoldBase, type GuardFloor, type Task } from "@kiwi/core/state.ts";
@@ -14,8 +15,9 @@ import { trimmed } from "@kiwi/channel/trim.ts";
 import { approveTask, sendBackTask, type TaskSend } from "@kiwi/channel/task-actions.ts";
 import { closedDigest } from "@kiwi/channel/task-digest.ts";
 import { TEND_SAFETY_MS, tendOwned } from "@kiwi/app/approval-tend.ts";
+import { ALLOW_ONCE, DENY } from "@kiwi/app/permission-settled.ts";
 import { leadChatKey, roomView } from "./view.ts";
-import type { Connection, Picture, RoomView } from "./wire.ts";
+import type { Connection, NeedView, Picture, RoomView } from "./wire.ts";
 
 const WINDOW = 400;
 const KEEP = 1_500;
@@ -30,17 +32,21 @@ const merged = (prev: readonly Message[], more: readonly Message[]): Message[] =
 
 const errorText = (e: WireError): string => (e.kind === "gone" ? `the channel was ${e.why}` : e.message);
 
+type NeedsOf = (state: ChannelState, messages: readonly Message[], me: string, owner: boolean, requests: readonly JoinRequest[], roster: readonly Member[], now: number) => NeedView[];
+
 interface RoomHooks {
   emit: (room: RoomView) => void;
   lost: (code: string) => void;
   person: () => string | null;
   log: (line: string) => void;
   devices: (links: unknown) => void;
+  needs?: NeedsOf;
 }
 
 export class Room {
   private messages: Message[] = [];
   private roster: Member[] = [];
+  private requests: JoinRequest[] = [];
   private base: FoldBase | null = null;
   private guard: GuardFloor | null = null;
   private rooms: RoomsSetting | null = null;
@@ -218,6 +224,45 @@ export class Room {
     return this.post(sendBackTask(this.reviewing(id), why));
   }
 
+  async allow(id: string, allow: boolean): Promise<number> {
+    const m = this.messages.find((x) => x.seq === Number(id));
+    if (!m || !this.state) throw new Error("that request is gone");
+    const perm = permissionReply(m, allow, this.state);
+    if (!perm) throw new Error("this one can only be answered in the terminal");
+    return this.keyring.call(this.code, "send", allow ? ALLOW_ONCE : DENY, { to: [m.from], re: [m.seq], kind: "msg", side: true, perm });
+  }
+
+  async letIn(id: string): Promise<void> {
+    if (!this.isOwner) throw new Error("only the channel's owner lets people in");
+    const person = this.hooks.person();
+    const req = this.requests.find((r) => r.id === id);
+    if (!req) throw new Error("that join request isn't waiting any more");
+    if (req.pin) throw new Error(`${req.display || req.name} was invited with a personality: let them in on your computer`);
+    try {
+      await this.keyring.call(this.code, "approve", req, {}, person ? { person } : undefined);
+    } finally {
+      await Promise.all([this.refreshRequests(), this.refreshRoster()]);
+    }
+  }
+
+  async approveSpec(ask: number, v: number): Promise<number> {
+    const spec = this.state?.specs.get(ask);
+    if (!spec) throw new Error(`#${ask} has no spec`);
+    if (spec.v !== v) throw new Error("the spec changed while you read it: read it again, then approve");
+    return this.keyring.call(this.code, "send", `approved the spec of #${ask}`, { kind: "event", ev: { op: "spec.approve", ask, v } });
+  }
+
+  private async refreshRequests(): Promise<void> {
+    if (!this.isOwner) return;
+    const person = this.hooks.person();
+    try {
+      this.requests = await this.keyring.call(this.code, "requests", person ? { person } : {});
+      this.schedule();
+    } catch {
+      // A failed look at join requests keeps the last list: the next Request or Open event asks again.
+    }
+  }
+
   private reviewing(id: number): Task {
     const task = this.state?.tasks.get(id);
     if (!task || task.state !== "review") throw new Error(`${taskId(id)} isn't waiting for a review any more`);
@@ -292,11 +337,13 @@ export class Room {
         this.connection = "live";
         this.error = null;
         if (ev.kind !== "page") void this.refreshRoster();
+        void this.refreshRequests();
         void this.keyring.presence(this.code, { client: "probe", query: true }).catch(() => {});
         this.kick();
         break;
       case "Request":
         this.kick();
+        void this.refreshRequests();
         return;
       case "Message":
         if (ev.message.sigOk && ev.message.kind === "event" && ev.message.ev?.op === "devices") this.hooks.devices(ev.message.ev.links);
@@ -311,6 +358,7 @@ export class Room {
         break;
       case "Roster":
         void this.refreshRoster();
+        void this.refreshRequests();
         this.kick();
         break;
       case "Info":
@@ -369,6 +417,7 @@ export class Room {
         state: this.state,
         online: onlineByName(this.heard, keyOf, now),
         place: this.place,
+        needs: this.hooks.needs?.(this.state, this.messages, this.me, this.isOwner, this.requests, admitted, now) ?? [],
       }),
     );
   }

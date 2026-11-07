@@ -30,50 +30,50 @@ extension Color {
 }
 
 enum Tone {
-    static let canvas = Color(Shade(0xffffff), Shade(0x000000))
-    static let rail = Color(Shade(0xf2f2f5), Shade(0x000000))
-    static let ink = Color(Shade(0x0f0f11), Shade(0xf3f3f5))
-    static let ink2 = Color(Shade(0x4a4a52), Shade(0xbcbcc3))
-    static let ink3 = Color(Shade(0x6b6b73), Shade(0x8f8f97))
-    static let line = Color(Shade(0x0f0f11, 0.08), Shade(0xffffff, 0.08))
-    static let wash = Color(Shade(0x0f0f11, 0.045), Shade(0xffffff, 0.055))
-    static let wash2 = Color(Shade(0x0f0f11, 0.075), Shade(0xffffff, 0.09))
-    static let edgeStrong = Color(Shade(0x0f0f11, 0.14), Shade(0xffffff, 0.14))
-    static let pick = Color(Shade(0x0f0f11, 0.07), Shade(0xffffff, 0.08))
-    static let segment = Color(Shade(0xffffff), Shade(0x3a3a3c))
-    static let accent = Color(Shade(0x007aff), Shade(0x0a84ff))
-    static let accentWash = Color(Shade(0x007aff, 0.1), Shade(0x0a84ff, 0.18))
-    static let alert = Color(Shade(0xd1342a), Shade(0xff6259))
-    static let alertFill = Color(Shade(0xd1342a), Shade(0xd1342a))
-    static let decide = Color(Shade(0xa35a00), Shade(0xf5b041))
-    static let decideWash = Color(Shade(0xd67d00, 0.12), Shade(0xf5b041, 0.14))
-    static let live = Color(Shade(0x1f9a55), Shade(0x32d074))
-    static let doing = Color(Shade(0x2f6fe4), Shade(0x5b9bff))
-    static let bubbleThem = Color(Shade(0xe9e9eb), Shade(0x262628))
-    static let bubbleMine = Color(Shade(0x007aff), Shade(0x0b84fe))
-    static let faceTop = Color(Shade(0xf2f2f4), Shade(0x323236))
-    static let faceBottom = Color(Shade(0xe4e4e8), Shade(0x26262a))
-    static let avatarTop = Color(Shade(0xa8a8b0), Shade(0x78787f))
-    static let avatarBottom = Color(Shade(0x8a8a92), Shade(0x55555c))
-    static let glassFill = Color(Shade(0xffffff, 0.64), Shade(0x28282c, 0.52))
-    static let glassRim = Color(Shade(0xffffff, 0.95), Shade(0xffffff, 0.11))
-    static let glassEdge = Color(Shade(0x0f0f11, 0.07), Shade(0xffffff, 0.07))
-    static let popEdge = Color(Shade(0x0f0f11, 0.08), Shade(0xffffff, 0.09))
-    static let popShade = Color(Shade(0x0f0f11, 0.16), Shade(0x000000, 0.65))
+    static var canvas: Color { Palettes.color("bg", light: Shade(0xffffff), dark: Shade(0x151011)) }
+    static var rail: Color { Palettes.color("bg-2", light: Shade(0xf7f7f8), dark: Shade(0x1c1718)) }
+    static var raised: Color { Palettes.color("bg-3", light: Shade(0xefeff1), dark: Shade(0x252021)) }
+    static var ink: Color { Palettes.color("ink", light: Shade(0x18181b), dark: Shade(0xddccc6)) }
+    static var ink2: Color { Palettes.color("ink-2", light: Shade(0x56565e), dark: Shade(0xa39591)) }
+    static var ink3: Color { Palettes.color("ink-3", light: Shade(0x6c6c74), dark: Shade(0x8a7e7b)) }
+    static var onInk: Color { Palettes.color("on-ink", light: Shade(0xffffff), dark: Shade(0x151011)) }
+    static var line: Color { Palettes.color("line", light: Shade(0x000000, 0.06), dark: Shade(0xddccc6, 0.075)) }
+    static var wash: Color { Palettes.color("wash", light: Shade(0x000000, 0.035), dark: Shade(0xddccc6, 0.056)) }
+    static var wash2: Color { Palettes.color("wash-2", light: Shade(0x000000, 0.06), dark: Shade(0xddccc6, 0.1)) }
+    static var edgeStrong: Color { Palettes.color("line-3", light: Shade(0x000000, 0.13), dark: Shade(0xddccc6, 0.162)) }
+    static var pick: Color { Palettes.color("wash-2", light: Shade(0x000000, 0.06), dark: Shade(0xddccc6, 0.1)) }
+    static var segment: Color { Palettes.color("bg-3", light: Shade(0xffffff), dark: Shade(0x252021)) }
+    static var accent: Color { Palettes.color("accent", light: Shade(0x1a56db), dark: Shade(0xff6b4a)) }
+    static var accentWash: Color { Palettes.color("accent-wash", light: Shade(0x1a56db, 0.08), dark: Shade(0xff6b4a, 0.14)) }
+    static var alert: Color { Palettes.color("alert", light: Shade(0xd1342a), dark: Shade(0xf25c4a)) }
+    static var alertFill: Color { Palettes.color("alert", light: Shade(0xd1342a), dark: Shade(0xf25c4a)) }
+    static var decide: Color { Palettes.color("decide", light: Shade(0xa35a00), dark: Shade(0xf0a04f)) }
+    static var decideWash: Color { Palettes.color("decide-wash", light: Shade(0xa35a00, 0.1), dark: Shade(0xf0a04f, 0.12)) }
+    static var live: Color { Palettes.color("live", light: Shade(0x1f9a55), dark: Shade(0x97ad72)) }
+    static var doing: Color { Palettes.color("doing", light: Shade(0x2f6fe4), dark: Shade(0x9188c4)) }
+    static var bubbleThem: Color { Palettes.color("bg-3", light: Shade(0xefeff1), dark: Shade(0x252021)) }
+    static var bubbleMine: Color { Palettes.color("ink", light: Shade(0x18181b), dark: Shade(0xddccc6)) }
+    static var popEdge: Color { Palettes.color("line-2", light: Shade(0x000000, 0.08), dark: Shade(0xddccc6, 0.11)) }
+    static func member(_ name: String) -> Color {
+        let fill = Palette.fills[name] ?? 0x8a7e7b
+        return Palettes.color("c-\(name)", light: Shade(fill), dark: Shade(fill))
+    }
+    static var glassTint: Color { raised.opacity(0.6) }
+    static let popShade = Color(Shade(0x000000, 0.16), Shade(0x000000, 0.55))
 }
 
 enum Palette {
-    static let fills: [String: (fill: UInt32, ink: UInt32)] = [
-        "red": (0xf0605d, 0xffffff),
-        "orange": (0xff9a3c, 0xffffff),
-        "yellow": (0xf5c542, 0x1a1a1a),
-        "green": (0x3fbf74, 0xffffff),
-        "teal": (0x2fb8b0, 0xffffff),
-        "blue": (0x4a8df0, 0xffffff),
-        "indigo": (0x6f74f2, 0xffffff),
-        "violet": (0x9a63f0, 0xffffff),
-        "pink": (0xf2559a, 0xffffff),
-        "brown": (0xb08463, 0xffffff),
+    static let fills: [String: UInt32] = [
+        "red": 0xf0605d,
+        "orange": 0xff9a3c,
+        "yellow": 0xf5c542,
+        "green": 0x3fbf74,
+        "teal": 0x2fb8b0,
+        "blue": 0x4a8df0,
+        "indigo": 0x6f74f2,
+        "violet": 0x9a63f0,
+        "pink": 0xf2559a,
+        "brown": 0xb08463,
     ]
 }
 
