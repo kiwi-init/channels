@@ -2,11 +2,17 @@ import SwiftUI
 
 struct RouteScreen: View {
     let route: Route
+    @Environment(AppModel.self) private var model
 
     var body: some View {
         switch route {
         case .place(let spot): ConversationScreen(start: spot)
         case .tasks(let code): TasksScreen(code: code)
+        case .details(let code, let place):
+            DetailsScreen(code: code, current: place) { key in
+                model.path.removeAll()
+                model.open(.place(Spot(code: code, place: key)))
+            }
         }
     }
 }

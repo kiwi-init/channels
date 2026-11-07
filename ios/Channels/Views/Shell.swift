@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 enum Drawer: Equatable {
     case closed, left, right
@@ -30,6 +31,7 @@ extension AppModel {
         switch showing {
         case .place(let spot): spot.code
         case .tasks(let code): code
+        case .details(let code, _): code
         case nil: nil
         }
     }
@@ -48,6 +50,7 @@ struct Shell: View {
     @State private var drag: CGFloat = 0
     @State private var search = false
     @State private var settings = false
+    @State private var axis: Axis?
 
     private static let peek: CGFloat = 64
     private static let members: CGFloat = 300
@@ -72,11 +75,13 @@ struct Shell: View {
                     }
                     .frame(width: left)
                     .transition(.identity)
+                    .simultaneousGesture(swipe(left: left))
                 }
                 if x < 0, let code = model.frontCode, let room = model.rooms[code] {
                     MembersPane(room: room)
                         .frame(width: Self.members)
                         .frame(maxWidth: .infinity, alignment: .trailing)
+                        .simultaneousGesture(swipe(left: left))
                 }
                 front
                     .frame(width: width)
@@ -118,6 +123,7 @@ struct Shell: View {
                 switch model.showing {
                 case .place(let spot): ConversationScreen(start: spot).id(spot.id)
                 case .tasks(let code): TasksScreen(code: code)
+                case .details(let code, let place): RouteScreen(route: .details(code, place))
                 case nil:
                     ContentUnavailableView {
                         Label(model.joining > 0 ? "Waiting to Be Let In" : "No Channels", systemImage: "bubble.left.and.bubble.right")
@@ -150,14 +156,24 @@ struct Shell: View {
     }
 
     private func swipe(left: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 18)
+        DragGesture(minimumDistance: 14)
             .onChanged { value in
-                guard model.path.isEmpty, abs(value.translation.width) > abs(value.translation.height) * 1.4 else { return }
+                if axis == nil {
+                    axis = abs(value.translation.width) > abs(value.translation.height) * 1.4 ? .horizontal : .vertical
+                    if axis == .horizontal && model.drawer == .closed {
+                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                    }
+                }
+                guard axis == .horizontal, model.path.isEmpty else { return }
                 if model.drawer == .closed && value.translation.width < 0 && model.frontCode == nil { return }
                 drag = value.translation.width
             }
             .onEnded { value in
-                guard drag != 0 else { return }
+                defer { axis = nil }
+                guard axis == .horizontal, drag != 0 else {
+                    drag = 0
+                    return
+                }
                 let moved = value.predictedEndTranslation.width
                 let next: Drawer =
                     switch model.drawer {
@@ -165,6 +181,7 @@ struct Shell: View {
                     case .left: moved < -left * 0.3 ? .closed : .left
                     case .right: moved > Self.members * 0.3 ? .closed : .right
                     }
+                if next != model.drawer { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
                 withAnimation(.spring(duration: 0.32, bounce: 0.04)) {
                     model.drawer = next
                     drag = 0
