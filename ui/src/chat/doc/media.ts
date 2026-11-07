@@ -1,10 +1,10 @@
-import { MAX_FILE_BYTES, MAX_IMAGE_BYTES, RASTER_MIMES } from "@kiwi/core/protocol.ts"
+import { RASTER_MIMES } from "@kiwi/core/protocol.ts"
 import type { BlockMedia } from "@kiwi/core/doc/blocks.ts"
 import type { Node } from "prosemirror-model"
 import type { NodeView } from "prosemirror-view"
 
 import { bytesOf, sizeText } from "~/chat/doc/bytes"
-import { fileNode, fileOf, imageNode, imageOf } from "~/chat/doc/schema"
+import { fileOf, imageOf } from "~/chat/doc/schema"
 import type { DocFile, DocImage, Upload } from "~/model"
 
 export interface DocMedia {
@@ -15,42 +15,6 @@ export interface DocMedia {
 }
 
 const RASTER = new Set<string>(RASTER_MIMES)
-const AT_ONCE = 8
-
-function pastedName(file: File): string {
-  if (file.name) return file.name
-  const ext = file.type === "image/jpeg" ? "jpg" : (file.type.split("/")[1] ?? "bin")
-  return `pasted.${ext}`
-}
-
-const readBase64 = (blob: Blob): Promise<string> => import("@kiwi/app/compress-image.ts").then((m) => m.readBase64(blob))
-
-async function imageUpload(file: File, name: string): Promise<Upload> {
-  if (file.size <= MAX_IMAGE_BYTES) return { name, mime: file.type, data: await readBase64(file) }
-  const { compressImage, renamed } = await import("@kiwi/app/compress-image.ts")
-  const done = await compressImage(file, MAX_IMAGE_BYTES)
-  if (!done) throw new Error(`${name} couldn't be read`)
-  return { ...done, name: renamed(name, done.mime) }
-}
-
-export async function uploadAll(files: readonly File[], media: DocMedia, refused: (why: string) => void): Promise<Node[]> {
-  if (files.length > AT_ONCE) refused(`Up to ${AT_ONCE} at once; the rest were left out`)
-  const done = await Promise.all(
-    files.slice(0, AT_ONCE).map(async (file): Promise<Node | null> => {
-      const name = pastedName(file)
-      try {
-        if (RASTER.has(file.type)) return imageNode(await media.putImage(await imageUpload(file, name)))
-        if (file.size === 0) throw new Error(`${name} is empty`)
-        if (file.size > MAX_FILE_BYTES) throw new Error(`${name} is ${sizeText(file.size)}; a file is at most ${sizeText(MAX_FILE_BYTES)}`)
-        return fileNode(await media.putFile({ name, mime: file.type || "application/octet-stream", data: await readBase64(file) }))
-      } catch (e) {
-        refused(e instanceof Error && e.message ? e.message : `${name} couldn't be added`)
-        return null
-      }
-    })
-  )
-  return done.filter((n): n is Node => n !== null)
-}
 
 export const putAll = (files: readonly Upload[], media: DocMedia): Promise<BlockMedia[]> =>
   Promise.all(files.map(async (u): Promise<BlockMedia> => (RASTER.has(u.mime) ? { image: await media.putImage(u) } : { file: await media.putFile(u) })))

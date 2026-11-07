@@ -100,20 +100,6 @@ export function startBlock(state: EditorState, me: string, now: number, posted: 
   return inside(tr, at)
 }
 
-export function backInDraft(state: EditorState, me: string, id: string, made: Made = anyMade): Transaction | null {
-  const all = blocks(state.doc)
-  const at = all.findIndex((b) => attrsOf(b.node).id === id)
-  const it = all[at]
-  if (!it || attrsOf(it.node).author !== me) return null
-  const here = blockAt(state)
-  const a = here ? attrsOf(here.node) : null
-  const typing = !!here && !!a && here.index !== at && a.author === me && a.kind === "text" && !isEmpty(here.node) && !isSent(here.node)
-  const gone = all.slice(at + 1).filter((b) => isEmpty(b.node) && attrsOf(b.node).author === me && made(attrsOf(b.node).id))
-  const tr = state.tr.setMeta("addToHistory", false)
-  for (const b of gone.reverse()) tr.delete(b.pos, b.pos + b.node.nodeSize)
-  return typing ? tr : atEnd(tr, it)
-}
-
 export function replyIn(state: EditorState, me: string, now: number, re: number, quote: string | null, posted: (block: string) => boolean = () => false, made: Made = anyMade): Transaction {
   const tr = startBlock(state, me, now, posted, made)
   const here = blocks(tr.doc)[tr.selection.$from.index(0)]
@@ -168,24 +154,6 @@ export function dropEmptyOwn(state: EditorState, me: string, keep: number | null
   const tr = state.tr.setMeta("addToHistory", false)
   for (const b of gone.reverse()) tr.delete(b.pos, b.pos + b.node.nodeSize)
   return tr
-}
-
-export function attach(state: EditorState, me: string, now: number, nodes: readonly Node[], made: Made = anyMade): Transaction | null {
-  if (!nodes.length) return null
-  const here = blockAt(state)
-  const own = here && attrsOf(here.node).author === me && attrsOf(here.node).kind === "text" && !isSent(here.node) ? here : null
-  const tr = own ? state.tr : startBlock(state, me, now, undefined, made).setMeta("addToHistory", true)
-  const index = own ? own.index : tr.selection.$from.index(0)
-  const node = tr.doc.child(index)
-  let pos = 0
-  for (let i = 0; i < index; i++) pos += tr.doc.child(i).nodeSize
-  const block = { pos }
-  const last = node.lastChild
-  const blank = last && last.type === schema.nodes.paragraph && last.content.size === 0
-  const at = blank ? block.pos + node.nodeSize - 1 - last.nodeSize : block.pos + node.nodeSize - 1
-  tr.insert(at, [...nodes, ...(blank ? [] : [schema.nodes.paragraph.create()])])
-  const after = at + nodes.reduce((n, x) => n + x.nodeSize, 0) + 1
-  return tr.setSelection(TextSelection.create(tr.doc, after)).scrollIntoView()
 }
 
 function atBlockStart(state: EditorState): boolean {

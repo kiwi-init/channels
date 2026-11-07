@@ -3,25 +3,8 @@ import { GIVEN_BACK } from "@kiwi/core/doc/blocks.ts"
 import type { Node } from "prosemirror-model"
 import { EditorState, TextSelection } from "prosemirror-state"
 
-import {
-  atBlockEnd,
-  attach,
-  backInDraft,
-  blockAfter,
-  blockAt,
-  caretAway,
-  joinBack,
-  joinForward,
-  blocks,
-  continues,
-  dropEmptyOwn,
-  emptyHidden,
-  makeBlock,
-  replyIn,
-  startBlock,
-  unreply,
-} from "~/chat/doc/blocks"
-import { attrsOf, imageNode, schema } from "~/chat/doc/schema"
+import { atBlockEnd, blockAfter, blockAt, caretAway, joinBack, joinForward, blocks, continues, dropEmptyOwn, emptyHidden, makeBlock, replyIn, startBlock, unreply } from "~/chat/doc/blocks"
+import { attrsOf, schema } from "~/chat/doc/schema"
 
 const T = 1_700_000_000_000
 
@@ -147,34 +130,6 @@ describe("a run of blocks", () => {
   })
 })
 
-describe("dropping an image into the doc", () => {
-  const shot = imageNode({ name: "shot.png", mime: "image/png", ref: { id: "a".repeat(64), key: "k".repeat(43), size: 10 } })
-  const kinds = (b: Node | undefined) => (b ? Array.from({ length: b.childCount }, (_, i) => b.child(i).type.name) : [])
-
-  test("lands at the end of your block, with a line after it to keep typing on", () => {
-    const s = caretAtEnd(stateOf(makeBlock("text", "jow", T, "look")), 0)
-    const next = s.apply(attach(s, "jow", T + 1, [shot])!)
-    expect(kinds(next.doc.child(0))).toEqual(["paragraph", "image", "paragraph"])
-    expect(next.selection.$from.parent.type.name).toBe("paragraph")
-    expect(next.selection.$from.index(1)).toBe(2)
-  })
-
-  test("in someone else's block, it starts a block of yours instead of writing into theirs", () => {
-    const s = caretAtEnd(stateOf(makeBlock("text", "maya", T, "hi")), 0)
-    const next = s.apply(attach(s, "jow", T + 1, [shot])!)
-    expect(texts(next)).toEqual(["maya:hi", "jow:[image: shot.png]"])
-    expect(kinds(next.doc.child(1))).toEqual(["image", "paragraph"])
-  })
-
-  test("dropped while you're in someone else's block, it joins your unsent line instead of sending it early (T1464)", () => {
-    const s = caretAtEnd(stateOf(makeBlock("text", "jow", T, "look"), makeBlock("text", "maya", T + 1, "hi")), 1)
-    const next = s.apply(attach(s, "jow", T + 2, [shot])!)
-    expect(next.doc.childCount).toBe(2)
-    expect(kinds(next.doc.child(0))).toEqual(["paragraph", "image", "paragraph"])
-    expect(next.selection.$from.index(0)).toBe(0)
-  })
-})
-
 describe("joining blocks like paragraphs", () => {
   const caretAtStart = (state: EditorState, index: number): EditorState => {
     const b = blocks(state.doc)[index]
@@ -270,35 +225,12 @@ describe("Reply and Quote on a message land in your draft in the doc (T1402)", (
 })
 
 describe("a line given back to you as a draft (T1678)", () => {
-  test("drops your empty blocks after it and puts the caret at its end, so typing goes on in it", () => {
-    const line = back(makeBlock("text", "jow", T, "ship it"))
-    const s = caretAtEnd(stateOf(line, makeBlock("text", "maya", T + 1, "hers"), makeBlock("text", "jow", T + 2)), 2)
-    const tr = backInDraft(s, "jow", attrsOf(line).id)
-    if (!tr) throw new Error("no transaction")
-    const next = s.apply(tr)
-    expect(texts(next)).toEqual(["jow:ship it", "maya:hers"])
-    expect(blockAt(next)?.index).toBe(0)
-    expect(next.selection.$from.parentOffset).toBe("ship it".length)
-  })
-
-  test("leaves the caret in the line you're already typing, and your next start goes there, not back", () => {
-    const line = back(makeBlock("text", "jow", T, "ship it"))
-    const s = caretAtEnd(stateOf(line, makeBlock("text", "jow", T + 1, "next line")), 1)
-    const tr = backInDraft(s, "jow", attrsOf(line).id)
-    if (!tr) throw new Error("no transaction")
-    const next = s.apply(tr)
-    expect(texts(next)).toEqual(["jow:ship it", "jow:next line"])
-    expect(blockAt(next)?.index).toBe(1)
-    expect(blockAt(next.apply(startBlock(next, "jow", T + 3)))?.index).toBe(1)
-  })
-
-  test("starting to write lands in it while only your empty blocks follow it; someone else's line is never yours to give back", () => {
+  test("starting to write lands in it while only your empty blocks follow it", () => {
     const line = back(makeBlock("text", "jow", T, "ship it"))
     const s = stateOf(line, makeBlock("text", "maya", T + 1, "hers"), makeBlock("text", "jow", T + 2))
     const next = s.apply(startBlock(s, "jow", T + 3))
     expect(blockAt(next)?.index).toBe(0)
     expect(texts(next)).toEqual(["jow:ship it", "maya:hers", "jow:"])
-    expect(backInDraft(s, "maya", attrsOf(line).id)).toBeNull()
   })
 })
 
