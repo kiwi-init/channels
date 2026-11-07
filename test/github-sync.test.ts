@@ -192,7 +192,7 @@ describe("the owner's app fills the GitHub tab with what a linked repo already h
 });
 
 describe("what a sync adds to what the channel already knows", () => {
-  const empty = (): ChannelState["github"] => ({ prs: new Map(), checks: new Map(), issues: new Map(), rules: new Map(), releases: new Map() });
+  const empty = (): ChannelState["github"] => ({ prs: new Map(), checks: new Map(), issues: new Map(), rules: new Map(), releases: new Map(), runs: new Map() });
   const note = (n: Partial<GithubNote>): GithubNote => ({ event: "pull_request", repo: "o/r", at: 1, action: GITHUB_SYNCED, ...n });
 
   test("keeps what's new or different, drops what's the same, and never steps back to an older run", () => {

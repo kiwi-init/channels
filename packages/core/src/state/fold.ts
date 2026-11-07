@@ -26,7 +26,7 @@ import { rootOf, sentTo } from "../room-rules.ts";
 import { askHeadOf, askOfMessage, fileTask } from "./asks.ts";
 import { cancelledWithSpec, closesOnItsOwn, foldSpec, noteSpecComment, specGate } from "./specs.ts";
 import { closeCancelled, taskId } from "./tasks.ts";
-import { linkSafe, prKey, releasesFrom, repoKey } from "./github.ts";
+import { linkSafe, prKey, releasesFrom, repoKey, runKey } from "./github.ts";
 import { reposOf } from "./repos.ts";
 import { roomName } from "./rooms.ts";
 import { settle } from "./leases.ts";
@@ -370,6 +370,7 @@ function folding(
       issues: new Map(from?.github?.issues?.map((i) => [prKey(i.repo, i.number), linkSafe(i)])),
       rules: new Map(from?.github?.rules?.map((r) => [repoKey(r.repo), r])),
       releases: releasesFrom(from?.github?.releases),
+      runs: new Map(from?.github?.runs?.map((r) => [runKey(r.repo, r.run), r])),
     },
     hold: from?.hold ?? null,
     githubWrite: from?.githubWrite ?? null,
@@ -708,6 +709,7 @@ function folding(
         issues: [...ctx.github.issues.values()].filter((i) => i.state === "open" || !closedLongAgo(i.at, hw) || taskIssues.has(prKey(i.repo, i.number))),
         rules: [...ctx.github.rules.values()],
         releases: [...ctx.github.releases.values()].flat(),
+        runs: [...ctx.github.runs.values()],
       },
       hold: ctx.hold,
       githubWrite: ctx.githubWrite,

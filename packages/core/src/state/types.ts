@@ -1,7 +1,7 @@
 import type { Authors } from "./authors.ts";
 import type { Member as MemberRecord, Runs } from "../membership.ts";
 import type { Card, Color, IssueRef, Landing, MemberPicture, Merger, Message, SpecVerdict, TaskState, Trust, Verdict } from "../protocol.ts";
-import type { GithubCheck, GithubIssue, GithubPr, GithubRelease, GithubRules, GithubState } from "./github.ts";
+import type { GithubCheck, GithubIssue, GithubPr, GithubRelease, GithubRules, GithubRun, GithubState } from "./github.ts";
 import type { Persona } from "../personality.ts";
 import type { Power } from "../protocol.ts";
 import type { RoomMember, RoomMeta, RoomSeal } from "../room-rules.ts";
@@ -126,7 +126,7 @@ export interface Task {
   updatedAt: number;
   notes: TaskNote[];
   proof?: TaskProof[];
-  run?: { id: string; seq: number; by: string; reportedStart?: number };
+  run?: { id: string; seq: number; by: string; reportedStart?: number; start?: GithubRun };
   review?: string;
   approvedBy?: string;
   cancelled?: boolean;
@@ -314,7 +314,7 @@ export interface FoldBase {
   lead: string | null;
   charter: Charter | null;
   repos?: string[];
-  github?: { prs: GithubPr[]; checks: [string, GithubCheck[]][]; issues?: GithubIssue[]; rules?: GithubRules[]; releases?: GithubRelease[] };
+  github?: { prs: GithubPr[]; checks: [string, GithubCheck[]][]; issues?: GithubIssue[]; rules?: GithubRules[]; releases?: GithubRelease[]; runs?: GithubRun[] };
   hold: Hold | null;
   voice?: boolean;
   githubWrite?: number | null;

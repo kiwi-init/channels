@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { cleanGithubNote, type GithubNote } from "@kiwi/core/protocol.ts";
 import { prKey } from "@kiwi/core/state.ts";
-import { applyGithub, prChecks, type GithubState } from "@kiwi/core/state/github.ts";
+import { applyGithub, prChecks, runStart, type GithubState } from "@kiwi/core/state/github.ts";
 import { heldBefore, inOrderOfHappening, trustedAt } from "@kiwi/core/state/times.ts";
 import { githubItem, syncNotes } from "../src/relay/github.ts";
 
@@ -10,7 +10,7 @@ const HEAD_B = "b".repeat(40);
 const MERGE = "m".repeat(40);
 const T = (iso: string): number => Date.parse(iso);
 
-const fresh = (): GithubState => ({ prs: new Map(), checks: new Map(), issues: new Map(), rules: new Map(), releases: new Map() });
+const fresh = (): GithubState => ({ prs: new Map(), checks: new Map(), issues: new Map(), rules: new Map(), releases: new Map(), runs: new Map() });
 const pr = (over: Partial<GithubNote>): GithubNote => ({ event: "pull_request", repo: "o/r", number: 7, state: "open", at: 999, ...over });
 
 describe("a GitHub event keeps when it happened on GitHub, not only when it reached the relay (#623 §5)", () => {
@@ -71,6 +71,34 @@ describe("a GitHub event keeps when it happened on GitHub, not only when it reac
     expect(wf).toMatchObject({ happened: T("2026-11-06T09:58:00Z") });
     const push = githubItem("push", { ref: "refs/heads/T7", after: HEAD_B, repository: { full_name: "o/r", pushed_at: 1_794_000_000 } }, 5);
     expect(push).toMatchObject({ happened: 1_794_000_000_000 });
+  });
+
+  test("a workflow run carries its run-name and its earliest start, even once it completed (T2183)", () => {
+    const run = (action: string, run_started_at: string, extra: Record<string, unknown> = {}) =>
+      githubItem(
+        "workflow_run",
+        {
+          action,
+          repository: { full_name: "o/r" },
+          workflow_run: { id: 9, name: "Deploy", display_title: "job-1", head_sha: HEAD_A, created_at: "2026-11-06T09:40:00Z", run_started_at, ...extra },
+        },
+        5,
+      );
+    expect(run("requested", "2026-11-06T09:40:00Z", { status: "queued" })).toMatchObject({ title: "job-1", started: T("2026-11-06T09:40:00Z") });
+    const rerun = run("completed", "2026-11-06T10:20:00Z", { status: "completed", conclusion: "success", run_attempt: 2, updated_at: "2026-11-06T10:30:00Z" });
+    expect(rerun).toMatchObject({ title: "job-1", started: T("2026-11-06T09:40:00Z"), happened: T("2026-11-06T10:30:00Z") });
+    expect(cleanGithubNote(rerun)).toMatchObject({ title: "job-1", started: T("2026-11-06T09:40:00Z") });
+    expect(cleanGithubNote({ ...rerun, started: -1 })).toBeNull();
+  });
+
+  test("the earliest start GitHub reports for a run stays, with the first run-name, found by name or by id (T2183)", () => {
+    const g = fresh();
+    const note = (started: number, title?: string): GithubNote => ({ event: "workflow_run", repo: "o/r", run: 9, name: "Deploy", sha: HEAD_A, at: 999, started, ...(title ? { title } : {}) });
+    applyGithub(g, [note(T("2026-11-06T10:20:00Z"), "job-1"), note(T("2026-11-06T09:40:00Z")), note(T("2026-11-06T10:30:00Z"), "job-2")], 1);
+    expect([...g.runs.values()]).toEqual([{ repo: "o/r", run: 9, title: "job-1", started: T("2026-11-06T09:40:00Z") }]);
+    expect(runStart(g, "job-1")?.run).toBe(9);
+    expect(runStart(g, "9")?.title).toBe("job-1");
+    expect(runStart(g, "job-2")).toBeUndefined();
   });
 
   test("an event without a time GitHub vouches for has none, so it counts as late", () => {

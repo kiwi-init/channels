@@ -8,6 +8,7 @@ import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
 import { cleanGithubNote, type GithubNote } from "@kiwi/core/protocol.ts";
 import { fold, prKey, type FoldBase, type Roster } from "@kiwi/core/state.ts";
 import { applyGithub, type GithubState } from "@kiwi/core/state/github.ts";
+import { omit } from "@kiwi/core/omit.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { githubItem, githubLinks, githubRepos, GITHUB_WEBHOOK_PATH } from "../src/relay/github.ts";
 import { devHumanAuth } from "../src/relay/human.ts";
@@ -219,7 +220,7 @@ describe("what's kept of an event", () => {
     expect(note).toMatchObject({ additions: 30, deletions: 0, files: 2 });
     expect(cleanGithubNote({ event: "pull_request", repo: "o/r", additions: -1, at: 1 })).toBeNull();
     expect(cleanGithubNote({ event: "pull_request", repo: "o/r", deletions: 1.5, at: 1 })).toBeNull();
-    const g: GithubState = { prs: new Map(), checks: new Map(), issues: new Map(), rules: new Map(), releases: new Map() };
+    const g: GithubState = { prs: new Map(), checks: new Map(), issues: new Map(), rules: new Map(), releases: new Map(), runs: new Map() };
     applyGithub(g, [note!], 5);
     expect(g.prs.get(prKey("o/r", 7))).toMatchObject({ additions: 30, deletions: 0, files: 2 });
   });
@@ -270,6 +271,27 @@ describe("what's kept of an event", () => {
     expect(g.prs.get(prKey("o/r", 7))?.url).toBeUndefined();
     expect(g.issues.get(prKey("o/r", 8))?.url).toBeUndefined();
     expect([...g.checks.values()].flatMap((runs) => [...runs.values()]).map((r) => r.url)).toEqual([undefined]);
+  });
+
+  test("a snapshot keeps each workflow run's GitHub start, and one saved before runs were kept loads with none (T2183)", async () => {
+    const lead = await generateIdentity("lead");
+    const roster: Roster = [{ name: "lead", pk: lead.pk, owner: true, at: 0, active: true, kind: "human" }];
+    const items: GithubNote[] = [{ event: "workflow_run", repo: "O/r", run: 9, name: "Deploy", title: "job-1", sha: "a".repeat(40), status: "queued", at: 1, started: 5 }];
+    const kept: { base?: FoldBase } = {};
+    fold(
+      [{ v: 1, id: "m1", from: "lead", pk: lead.pk, sigOk: true, kind: "event", body: "GitHub", ts: 1, rts: 1, seq: 1, ev: { op: "github", items } }],
+      roster,
+      2,
+      null,
+      null,
+      null,
+      (b) => (kept.base = b),
+    );
+    const base = kept.base;
+    if (!base?.github) throw new Error("the fold kept no GitHub state");
+    expect([...fold([], roster, 3, null, null, base).github.runs.values()]).toEqual([{ repo: "O/r", run: 9, title: "job-1", started: 5 }]);
+    const before = omit(base.github, "runs");
+    expect(fold([], roster, 3, null, null, { ...base, github: before }).github.runs.size).toBe(0);
   });
 
   test("repos are owner/name, lowercased, at most 20; links say what was added and removed", () => {

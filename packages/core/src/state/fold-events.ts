@@ -17,7 +17,7 @@ import {
 import { free, take } from "./leases.ts";
 import { unnamedTasks } from "./compact.ts";
 import { leadCheckpointKeyRefusal } from "./lead.ts";
-import { addRelease, applyGithub, dropRelease, prKey, repoKey, type GithubState } from "./github.ts";
+import { addRelease, applyGithub, dropRelease, prKey, repoKey, runStart, type GithubState } from "./github.ts";
 import { prLinks, prOfTask, taskOfBranch } from "../prs.ts";
 import { recordedRuns } from "../review-check.ts";
 import { sameHead } from "../stage.ts";
@@ -35,6 +35,13 @@ import { roomName } from "./rooms.ts";
 import { currentState, landerOf, landingRefusal, landingReopens, newRun, openRound, reviewClaimRefusal, reviewMoveRefusal, revisedOut, runRefusal, taskId, verdictRefusal, worked } from "./tasks.ts";
 import type { Charter, Compact, Fact, FoldMember, Hold, Lease, Nickname, PersonaLead, Room, SecretRoom, Task } from "./types.ts";
 import { dmPair, inRoom, leaveSeal, rootOf, selfOnly, type RoomMember } from "../room-rules.ts";
+
+function startRuns(c: { github: GithubState }, tasks: ReadonlyMap<number, Task>): void {
+  for (const t of tasks.values()) {
+    const start = t.run && !t.archived ? runStart(c.github, t.run.id) : undefined;
+    if (t.run && start && (!t.run.start || start.started < t.run.start.started)) t.run.start = start;
+  }
+}
 
 const trustOnly = (what: string): string => `only the owner, or a person they fully trust, ${what}`;
 
@@ -297,6 +304,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       }
       const heads = new Map([...c.github.prs].map(([key, pr]) => [key, pr.sha]));
       applyGithub(c.github, ev.items, m.seq);
+      if (ev.items.some((i) => i.event === "workflow_run" && i.started !== undefined)) startRuns(c, tasks);
       for (const [key, pr] of c.github.prs) {
         if (!pr.sha || pr.state !== "open" || heads.get(key) === pr.sha) continue;
         for (const t of tasks.values()) {
@@ -678,8 +686,10 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
         });
       if (ev.proof && !task.proof?.some((p) => p.url === ev.proof!.url) && (task.proof?.length ?? 0) < PROOF_MAX)
         task.proof = [...(task.proof ?? []), { seq: m.seq, by: m.from, ts: at, url: ev.proof.url, ...(ev.proof.label ? { label: ev.proof.label } : {}) }];
-      if (ev.run && task.run?.id !== ev.run.id) task.run = { id: ev.run.id, seq: m.seq, by: m.from, ...(ev.run.started !== undefined ? { reportedStart: ev.run.started } : {}) };
-      else if (ev.run?.started !== undefined && task.run) task.run.reportedStart ??= ev.run.started;
+      if (ev.run && task.run?.id !== ev.run.id) {
+        const start = runStart(c.github, ev.run.id);
+        task.run = { id: ev.run.id, seq: m.seq, by: m.from, ...(ev.run.started !== undefined ? { reportedStart: ev.run.started } : {}), ...(start ? { start } : {}) };
+      } else if (ev.run?.started !== undefined && task.run) task.run.reportedStart ??= ev.run.started;
       if (ev.areas?.length) task.areas = [...new Set(ev.areas)];
       if (ev.owner === null && task.state === "doing") task.state = "todo";
       task.updatedAt = at;

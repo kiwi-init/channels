@@ -70,20 +70,47 @@ export interface GithubRelease {
   seq: number;
 }
 
+export interface GithubRun {
+  repo: string;
+  run: number;
+  title?: string;
+  started: number;
+}
+
 export interface GithubState {
   prs: Map<string, GithubPr>;
   checks: Map<string, Map<string, GithubCheck>>;
   issues: Map<string, GithubIssue>;
   rules: Map<string, GithubRules>;
   releases: Map<string, GithubRelease[]>;
+  runs: Map<string, GithubRun>;
 }
 
 const MAX_RELEASES = 30;
 
 const MAX_SHAS = 300;
 
+const MAX_RUNS = 500;
+
 export const prKey = (repo: string, number: number): string => `${repo.toLowerCase()}#${number}`;
 export const shaKey = (repo: string, sha: string): string => `${repo.toLowerCase()}@${sha}`;
+export const runKey = (repo: string, run: number): string => `${repo.toLowerCase()}/${run}`;
+
+function addRun(g: GithubState, i: GithubNote): void {
+  if (i.event !== "workflow_run" || !i.run || i.started === undefined) return;
+  const key = runKey(i.repo, i.run);
+  const was = g.runs.get(key);
+  const title = was?.title ?? i.title;
+  g.runs.delete(key);
+  g.runs.set(key, { repo: i.repo, run: i.run, started: Math.min(i.started, was?.started ?? i.started), ...(title ? { title } : {}) });
+  for (const old of [...g.runs.keys()].slice(0, Math.max(0, g.runs.size - MAX_RUNS))) g.runs.delete(old);
+}
+
+export function runStart(g: GithubState, id: string): GithubRun | undefined {
+  let first: GithubRun | undefined;
+  for (const r of g.runs.values()) if ((r.title === id || String(r.run) === id) && (!first || r.started < first.started)) first = r;
+  return first;
+}
 
 function behind(i: GithubNote, was: GithubCheck): boolean {
   const order = i.run && was.run ? i.run - was.run || (i.attempt ?? 1) - (was.attempt ?? 1) : 0;
@@ -120,6 +147,7 @@ const stalePr = (i: GithubNote, was: GithubPr | undefined): boolean => (was?.sta
 
 export function applyGithub(g: GithubState, items: readonly GithubNote[], seq: number): void {
   for (const i of items) {
+    addRun(g, i);
     if (i.event === "pull_request" && i.number) {
       const key = prKey(i.repo, i.number);
       const was = g.prs.get(key);

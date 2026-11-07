@@ -36,7 +36,7 @@ function blank(): ChannelState {
     compact: null,
     compactProposal: null,
     repos: [],
-    github: { prs: new Map(), checks: new Map(), issues: new Map(), rules: new Map(), releases: new Map() },
+    github: { prs: new Map(), checks: new Map(), issues: new Map(), rules: new Map(), releases: new Map(), runs: new Map() },
     hold: null,
     githubWrite: null,
     branchPrefix: null,
