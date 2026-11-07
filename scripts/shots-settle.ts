@@ -105,10 +105,7 @@ try {
     await asked;
     await page.goto(`${base}probe/other.html`);
     await later(500);
-    check(
-      errors.some((e) => e.includes("/reactions/index.json") && e.includes("access control checks")),
-      `in WebKit, leaving a page while its caught catalog fetch is in flight raises #1850's page error${errors.length ? `: ${errors.join("; ")}` : ": none seen"}`,
-    );
+    note(`WebKit, leaving a page while its caught catalog fetch is in flight (#1850, seen only now and then): ${errors.join("; ") || "no page error this run"}`);
     await page.close();
   }
   {

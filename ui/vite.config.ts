@@ -1,9 +1,20 @@
 import { resolve } from "node:path"
 import react from "@vitejs/plugin-react"
-import { defineConfig } from "vite"
+import { defineConfig, type Plugin } from "vite"
+import { slimIcon } from "./src/kit/slim-icons.ts"
+
+function compactIcons(): Plugin {
+  return {
+    name: "compact-icons",
+    transform(code, id) {
+      if (!id.includes("/@hugeicons/core-free-icons/dist/esm/")) return null
+      return { code: slimIcon(code), map: null }
+    },
+  }
+}
 
 export default defineConfig(({ mode }) => ({
-  plugins: [react()],
+  plugins: [react(), compactIcons()],
   define: { __DEV__: "false", ...(mode === "harness" ? { "import.meta.env.DEV": "true" } : {}) },
   resolve: {
     alias: {
