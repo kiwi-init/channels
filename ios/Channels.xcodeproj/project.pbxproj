@@ -278,6 +278,7 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
+				CODE_SIGN_ENTITLEMENTS = Channels/Channels.entitlements;
 				INFOPLIST_FILE = Channels/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Channels;
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Channels asks for Face ID before it shows your channels, and before it starts an agent that acts without asking.";
@@ -431,6 +432,7 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
+				CODE_SIGN_ENTITLEMENTS = Channels/Channels.entitlements;
 				INFOPLIST_FILE = Channels/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Channels;
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Channels asks for Face ID before it shows your channels, and before it starts an agent that acts without asking.";

@@ -12,6 +12,7 @@ import { Keyring } from "../../desktop/src/keyring.ts";
 import { personMachines, type Asker, type PairedComputer } from "../../desktop/src/remote.ts";
 import { acceptSeat, withAccess } from "../../desktop/src/seats.ts";
 import { needsOf } from "./needs.ts";
+import { registerPush } from "./push.ts";
 import { Room } from "./room.ts";
 import type { Ask, EnrollStart, Fetched, Push, Reply, RoomView, Saved } from "./wire.ts";
 
@@ -520,6 +521,8 @@ async function handle(ask: Ask): Promise<unknown> {
       keyring?.nudge();
       for (const r of rooms.values()) r.nudge();
       return null;
+    case "push":
+      return saved ? registerPush(saved.relay, seats(), ask.token, ask.sandbox) : [];
   }
 }
 

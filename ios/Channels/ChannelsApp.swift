@@ -2,6 +2,7 @@ import SwiftUI
 
 @main
 struct ChannelsApp: App {
+    @UIApplicationDelegateAdaptor(PushDelegate.self) private var push
     @State private var model = AppModel()
     @State private var lock = Lock()
     @Environment(\.scenePhase) private var scene
