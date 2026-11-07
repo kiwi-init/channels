@@ -4,7 +4,7 @@ import UIKit
 struct Line: Identifiable {
     enum Kind {
         case time(Date)
-        case event(MessageView)
+        case event(MessageView, earlier: [MessageView])
         case bubble(MessageView, first: Bool, last: Bool)
         case ask(AskView)
         case review(ReviewView)
@@ -40,7 +40,11 @@ struct Line: Identifiable {
                 prev = nil
             }
             if m.event {
-                out.append(Line(id: "e\(m.seq)", kind: .event(m)))
+                if let lastLine = out.last, case .event(let p, let earlier) = lastLine.kind {
+                    out[out.count - 1] = Line(id: lastLine.id, kind: .event(m, earlier: earlier + [p]))
+                    continue
+                }
+                out.append(Line(id: "e\(m.seq)", kind: .event(m, earlier: [])))
                 prev = nil
                 continue
             }
@@ -150,6 +154,40 @@ struct Conversation: View {
                 withAnimation(Motion.ease) { position.scrollTo(edge: .bottom) }
             }
         }
+    }
+}
+
+struct EventRun: View {
+    let latest: MessageView
+    let earlier: [MessageView]
+    let room: RoomView
+    @State private var open = false
+
+    var body: some View {
+        VStack(spacing: 2) {
+            if open {
+                ForEach(earlier, id: \.seq) { line($0) }
+            }
+            line(latest, more: open ? 0 : earlier.count)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 32)
+        .padding(.vertical, 4)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            guard !earlier.isEmpty else { return }
+            withAnimation(Motion.ease) { open.toggle() }
+        }
+        .accessibilityAddTraits(earlier.isEmpty ? [] : .isButton)
+        .accessibilityHint(earlier.isEmpty ? "" : open ? "Hides the earlier updates" : "Shows \(earlier.count) earlier updates")
+    }
+
+    private func line(_ m: MessageView, more: Int = 0) -> some View {
+        (Text("\(room.display(m.from)) \(m.body)") + Text(more > 0 ? "  · \(more) more" : "").foregroundStyle(Tone.ink2))
+            .type(.meta)
+            .foregroundStyle(Tone.ink3)
+            .multilineTextAlignment(.center)
+            .lineLimit(2)
     }
 }
 
@@ -269,15 +307,8 @@ struct LineView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.top, 14)
                 .padding(.bottom, 6)
-        case .event(let m):
-            Text("\(room.display(m.from)) \(m.body)")
-                .type(.meta)
-                .foregroundStyle(Tone.ink3)
-                .multilineTextAlignment(.center)
-                .lineLimit(2)
-                .frame(maxWidth: .infinity)
-                .padding(.horizontal, 32)
-                .padding(.vertical, 4)
+        case .event(let m, let earlier):
+            EventRun(latest: m, earlier: earlier, room: room)
         case .bubble(let m, let first, let last):
             BubbleRow(message: m, first: first, last: last, room: room, solo: solo, reply: reply, jump: jump, answer: answer)
         }
