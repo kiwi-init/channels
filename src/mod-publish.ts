@@ -226,11 +226,10 @@ export async function publishMod(o: PublishOptions): Promise<Published> {
   const made = await call("POST", `/repos/${repo}/git/refs`, { ref: `refs/heads/${branch}`, sha: head }, [422]);
   if (made.status === 422) await call("PATCH", `/repos/${repo}/git/refs/heads/${branch}`, { sha: head, force: true });
 
-  const open = (await call<{ number: number; html_url: string }[]>("GET", `/repos/${MODS_REPO}/pulls?state=open&head=${encodeURIComponent(`${owner}:${branch}`)}`)).json;
-  if (open[0]) return { name: report.name, version: manifest.version, report, commit, hash, files, repo, branch, url: open[0].html_url, number: open[0].number, opened: false };
   const asks = manifest.needs.length ? manifest.needs.map((n) => `\`${n}\``).join(", ") : "nothing";
+  const title = `${report.name} ${manifest.version}`;
   const body = [
-    `**${report.name} ${manifest.version}:** ${does}`,
+    `**${title}:** ${does}`,
     "",
     `- **Asks for:** ${asks}`,
     `- **Pinned at** ${commit}: ${files.length} file${files.length === 1 ? "" : "s"}, folder hash \`${hash}\``,
@@ -238,9 +237,14 @@ export async function publishMod(o: PublishOptions): Promise<Published> {
     "",
     `Opened with \`kiwi mod publish\`. Running it again moves this pull request to the new version.`,
   ].join("\n");
+  const open = (await call<{ number: number; html_url: string }[]>("GET", `/repos/${MODS_REPO}/pulls?state=open&head=${encodeURIComponent(`${owner}:${branch}`)}`)).json;
+  if (open[0]) {
+    await call("PATCH", `/repos/${MODS_REPO}/pulls/${open[0].number}`, { title, body });
+    return { name: report.name, version: manifest.version, report, commit, hash, files, repo, branch, url: open[0].html_url, number: open[0].number, opened: false };
+  }
   const pr = (
     await call<{ number: number; html_url: string }>("POST", `/repos/${MODS_REPO}/pulls`, {
-      title: `${report.name} ${manifest.version}`,
+      title,
       head: `${owner}:${branch}`,
       base: upstream.default_branch,
       body,

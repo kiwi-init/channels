@@ -131,6 +131,13 @@ function fakeGitHub(o: { login: string; push: boolean; catalog: unknown; folders
           200,
           pulls.filter((p) => p.head === url.searchParams.get("head")),
         );
+      const pull = /^pulls\/(\d+)$/.exec(tail);
+      if (repo === MODS_REPO && pull && req.method === "PATCH") {
+        const pr = pulls.find((p) => p.number === Number(pull[1]));
+        if (!pr) return json(404, { message: "Not Found" });
+        Object.assign(pr.body, body);
+        return json(200, pr);
+      }
       if (repo === MODS_REPO && tail === "pulls" && req.method === "POST") {
         const pr = { number: 7 + pulls.length, head: String(body!["head"]), html_url: `https://github.com/${MODS_REPO}/pull/${7 + pulls.length}`, body: body! };
         pulls.push(pr);
@@ -231,6 +238,8 @@ describe("kiwi mod publish", () => {
       expect(again.opened).toBe(false);
       expect(again.url).toBe(p.url);
       expect(gh.pulls).toHaveLength(1);
+      expect(gh.pulls[0]!.body).toMatchObject({ title: "standup-notes 0.2.0", head: "ada:publish-standup-notes" });
+      expect(String(gh.pulls[0]!.body["body"])).toContain(again.commit);
       expect(gh.calls.some((c) => c.method === "PATCH" && c.path === "/repos/ada/mods/git/refs/heads/publish-standup-notes" && c.body?.["force"] === true)).toBe(true);
       expect(gh.pathsAt(again.commit)).toEqual(["mods.json", "standup-notes/icon.svg", "standup-notes/index.tsx", "standup-notes/mod.json"]);
       const moved = JSON.parse(gh.read(gh.refs.get("ada/mods:heads/publish-standup-notes")!, "mods.json")!.toString()) as { mods: Record<string, unknown>[] };
