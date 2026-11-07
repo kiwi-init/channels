@@ -8,7 +8,17 @@ const msg = (seq: number, room: string | undefined, body: string, extra: Partial
   ({ v: 1, id: `m${seq}`, from: "ana", kind: "msg", body, ts: seq * 1000, rts: seq * 1000 + 1, seq, sigOk: true, ...(room ? { room } : {}), ...extra }) as unknown as Message
 
 const stateWith = (over: Partial<Record<"rooms" | "roomOf" | "trust" | "deleted" | "edits", Map<unknown, unknown>>> = {}): ChannelState =>
-  ({ rooms: new Map([["ops", { id: "ops" }], ["dm-ana-bo", { id: "dm-ana-bo", dm: true }]]), roomOf: new Map(), trust: new Map(), deleted: new Map(), edits: new Map(), ...over }) as unknown as ChannelState
+  ({
+    rooms: new Map([
+      ["ops", { id: "ops" }],
+      ["dm-ana-bo", { id: "dm-ana-bo", dm: true }],
+    ]),
+    roomOf: new Map(),
+    trust: new Map(),
+    deleted: new Map(),
+    edits: new Map(),
+    ...over,
+  }) as unknown as ChannelState
 
 describe("what a mod reads in a room (T8545)", () => {
   test("only that room's messages, oldest first, with author, text and the relay's time", () => {

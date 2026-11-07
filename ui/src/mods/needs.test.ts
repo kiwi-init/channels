@@ -65,7 +65,15 @@ describe("a mod's rooms (T6837)", () => {
   })
 
   test("the host reads each channel's picked rooms once, for every mod that may read them (T8545)", () => {
-    const reader = { name: "reader", state: "on", needs: ["read:general", "read:ops"], rooms: [{ code: "dev", room: "general" }, { code: "ops-team", room: "ops" }] }
+    const reader = {
+      name: "reader",
+      state: "on",
+      needs: ["read:general", "read:ops"],
+      rooms: [
+        { code: "dev", room: "general" },
+        { code: "ops-team", room: "ops" },
+      ],
+    }
     expect(readWanted([poster, reader, { ...reader, name: "off", state: "off", rooms: [{ code: "x", room: "general" }] }])).toEqual(
       new Map([
         ["ops-team", ["ops"]],
@@ -81,4 +89,3 @@ describe("a mod's rooms (T6837)", () => {
     expect(sameMessages(undefined, [])).toBe(false)
   })
 })
-
