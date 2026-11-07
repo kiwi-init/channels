@@ -501,6 +501,8 @@ export interface KiwiBridge {
   modTerminalFocus(name: string, seat: string): Promise<void>;
   modTerminalMark(name: string, seat: string, mark: ModTerminalMark | null): Promise<void>;
   setModSetting(name: string, id: string, value: ModSettingValue): Promise<ModView[]>;
+  modCatalog(fresh?: boolean): Promise<ModCatalog>;
+  installMod(name: string, needs: string[]): Promise<ModView[]>;
 }
 
 export interface ModView {
@@ -534,6 +536,22 @@ export interface ModSettingView {
   required?: boolean;
   value?: ModSettingValue;
   set?: boolean;
+}
+
+export interface CatalogMod {
+  name: string;
+  does: string;
+  needs: string[];
+  commit: string;
+  source: string;
+  installed: boolean;
+  author?: string;
+  icon?: ModIcon;
+}
+
+export interface ModCatalog {
+  mods: CatalogMod[];
+  why: string | null;
 }
 
 export interface ModIcon {

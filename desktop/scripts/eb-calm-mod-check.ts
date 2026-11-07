@@ -278,7 +278,7 @@ try {
   await d.evaluate(() => (window as unknown as { kiwi: { removeMod(n: string, f: boolean): Promise<unknown> } }).kiwi.removeMod("calm", true), null, 15_000);
   const probe = join(root, ".kiwi", "mods", "zz-probe");
   mkdirSync(probe, { recursive: true });
-  writeFileSync(join(probe, "mod.json"), JSON.stringify({ name: "zz-probe", version: "1.0.0", shell: "^3.13", needs: ["idle", "channels"] }));
+  writeFileSync(join(probe, "mod.json"), JSON.stringify({ name: "zz-probe", version: "1.0.0", shell: "^3.14", needs: ["idle", "channels"] }));
   writeFileSync(join(probe, "index.tsx"), PROBE);
   const probed = await until("the probe mod, approved", 60_000, async () => {
     const list = await d.evaluate(() => (window as unknown as { kiwi: { approveMod(n: string, needs: string[]): Promise<Mod[]> } }).kiwi.approveMod("zz-probe", ["idle", "channels"]), null, 10_000);
