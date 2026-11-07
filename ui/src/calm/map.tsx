@@ -81,7 +81,7 @@ export function MapView({ open }: { open: (code: string, needs: boolean) => void
               )}
             </button>
             <span className="rest-spot-stem" aria-hidden="true" />
-            <span className="rest-spot-pin" aria-hidden="true" />
+            <span key={pin.home.asks.length} className="rest-spot-pin" aria-hidden="true" />
           </div>
         )
       })}

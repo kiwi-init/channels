@@ -77,7 +77,7 @@
   border-radius: 50%;
   background: var(--alert);
   content: "";
-  animation: rest-pulse 2.4s var(--ease) infinite;
+  animation: rest-pulse 2.4s var(--ease) 8;
 }
 
 .rest-spot-stem {
