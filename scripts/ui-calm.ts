@@ -41,7 +41,7 @@ try {
       await page.evaluate(() => document.fonts.ready);
       await page.waitForTimeout(3600);
       if (out) await page.screenshot({ path: join(out, `calm-${label}-${theme}.png`) });
-      await page.locator(".rest-day-needs").hover();
+      await page.locator(".rest-card .calm-ask").first().hover();
       await page.waitForTimeout(400);
       if (out) await page.screenshot({ path: join(out, `calm-${label}-${theme}-hover.png`) });
     }
@@ -64,20 +64,30 @@ try {
       check("a key fades it out", (await page.locator(".rest").count()) === 0);
       await page.goto(`http://127.0.0.1:${server.port}/?shot=calm`);
       await page.waitForTimeout(2600);
-      const shown = await page.locator(".rest-day-lane").count();
-      check(`it shows what each agent is doing, one lane each (${shown})`, shown > 1);
+      const agents = await page.locator(".rest-card .calm-agent").count();
+      check(`it shows Home's own rows: what needs you and what each agent is doing (${agents} agents)`, (await page.locator(".rest-card .calm-ask").count()) > 0 && agents > 1);
       const current = () => page.evaluate(() => document.querySelector('nav[aria-label="Channels"] button.tile[aria-current="page"]')?.getAttribute("aria-label")?.split(",")[0] ?? "");
-      const target = page.locator(".rest-day-also button").first();
-      const name = (await target.locator("span").first().textContent()) ?? "";
-      await target.click();
+      const asksBefore = Number((await page.locator(".rest-card .calm-head .num").textContent()) ?? "0");
+      await page.locator(".rest-card .calm-act").first().click();
       await page.waitForTimeout(900);
-      check(`a click on another channel (${name}) opens it and the sky goes`, (await current()) === name && (await page.locator(".rest").count()) === 0);
+      const asksAfter = Number((await page.locator(".rest-card .calm-head .num").textContent()) ?? "0");
+      check(`an answer from it lands and it stays (${asksBefore} → ${asksAfter} waiting)`, (await page.locator(".rest").count()) === 1 && asksAfter === asksBefore - 1);
+      await page.locator(".rest-card .calm-chan").nth(1).click();
+      await page.waitForTimeout(900);
+      check(`a click on a channel opens it and the sky goes (${await current()})`, (await current()) !== "" && (await page.locator(".rest").count()) === 0);
       await page.goto(`http://127.0.0.1:${server.port}/?shot=calm`);
       await page.waitForTimeout(2600);
-      await page.locator(".rest-day-needs").click();
+      await page.locator(".rest-card .calm-ask-body").first().click();
       await page.waitForTimeout(900);
       const pressed = await page.locator('button.is-needs[aria-pressed="true"]').count();
       check(`a click on what needs you opens its channel's Needs (${await current()}) and the sky goes`, pressed === 1 && (await page.locator(".rest").count()) === 0);
+      await page.goto(`http://127.0.0.1:${server.port}/?shot=calm`);
+      await page.waitForTimeout(2600);
+      await page.locator(".rest-card .calm-chan-row .calm-act").first().click();
+      await page.keyboard.type("hi");
+      await page.waitForTimeout(300);
+      const typed2 = await page.locator(".rest-card .calm-note textarea").inputValue();
+      check(`a note to a lead can be typed from it (${JSON.stringify(typed2)})`, typed2 === "hi" && (await page.locator(".rest").count()) === 1);
       await page.goto(`http://127.0.0.1:${server.port}/?shot=calm`);
       await page.waitForTimeout(2600);
       await page.mouse.move(10, 10);
@@ -98,7 +108,7 @@ try {
         const seen = new Set<string>();
         Object.assign(window, { calmNames: seen });
         const look = (): void => {
-          const names = [...document.querySelectorAll(".rest-day-who b")].map((n) => n.textContent ?? "");
+          const names = [...document.querySelectorAll(".rest-card .calm-agent-name")].map((n) => n.textContent ?? "");
           if (names.length) seen.add(JSON.stringify(names));
           requestAnimationFrame(look);
         };
