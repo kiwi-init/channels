@@ -45,8 +45,8 @@ final class AppModel {
     var rooms: [String: RoomView] = [:]
     var linking: Linking = .idle
     var relinkAsked = false
-    var path: [Spot] = []
-    var inSettings = false
+    var path: [Route] = []
+    var tab: AppTab = .home
     var enrolled = false
     var joining = 0
     var unsaved: String?

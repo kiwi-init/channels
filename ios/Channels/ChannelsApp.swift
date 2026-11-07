@@ -62,7 +62,7 @@ struct RootView: View {
             case .unlinked:
                 LinkView()
             case .ready:
-                ConversationList()
+                RootTabs()
                     .sheet(isPresented: relinking) {
                         LinkView().presentationDragIndicator(.visible)
                     }
