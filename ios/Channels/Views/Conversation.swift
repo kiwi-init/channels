@@ -21,7 +21,8 @@ struct Line: Identifiable {
         var out: [Line] = []
         var prev: MessageView?
         var lastAt: MessageView?
-        let held = asks.map { (at: $0.at, line: Line(id: "a\($0.seq)", kind: .ask($0))) } + reviews.map { (at: $0.at, line: Line(id: "r\($0.task)", kind: .review($0))) }
+        let held =
+            asks.map { (at: $0.at, line: Line(id: "a\($0.seq)", kind: .ask($0))) } + reviews.map { (at: $0.at, line: Line(id: "r\($0.task)", kind: .review($0))) }
             + needs.map { (at: $0.at, line: Line(id: "n\($0.id)", kind: .need($0))) }
         var waiting = held.sorted { $0.at < $1.at }[...]
         let answers = Set(messages.compactMap { m in m.chosen.map { "\($0.by)|\($0.choice)" } })

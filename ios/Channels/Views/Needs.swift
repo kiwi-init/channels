@@ -5,7 +5,7 @@ struct NeedLine: View {
     let need: NeedView
     let room: RoomView
 
-    private var where_: String? {
+    private var taskWhere: String? {
         need.task.map { "in \(taskLabel($0))" }
     }
 
@@ -17,7 +17,7 @@ struct NeedLine: View {
                 Color.clear.frame(width: 30, height: 30)
             }
             VStack(alignment: .leading, spacing: 3) {
-                let head = [need.kind == "join" ? nil : need.asker.map { room.display($0) }, where_].compactMap { $0 }
+                let head = [need.kind == "join" ? nil : need.asker.map { room.display($0) }, taskWhere].compactMap { $0 }
                 if !head.isEmpty {
                     Text(head.joined(separator: " · "))
                         .type(.meta)
