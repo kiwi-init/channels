@@ -5,6 +5,12 @@ enum Drawer: Equatable {
     case closed, left, right
 }
 
+enum Drawers {
+    static var motion: Animation? {
+        UIAccessibility.isReduceMotionEnabled ? nil : .spring(duration: 0.32, bounce: 0.04)
+    }
+}
+
 enum Pane: Hashable {
     case channel(String)
     case needs
@@ -19,7 +25,7 @@ extension AppModel {
             UserDefaults.standard.set("\(spot.code)|\(spot.place)", forKey: "front")
         }
         if case .tasks(let code) = route { pane = .channel(code) }
-        withAnimation(.spring(duration: 0.32, bounce: 0.04)) { drawer = .closed }
+        withAnimation(Drawers.motion) { drawer = .closed }
     }
 
     static func savedFront() -> Route? {
@@ -87,6 +93,7 @@ struct Shell: View {
                         .simultaneousGesture(swipe(left: left))
                 }
                 front
+                    .accessibilityHidden(model.drawer != .closed)
                     .disabled(abs(drag) > 30)
                     .frame(width: width)
                     .background(Tone.canvas.ignoresSafeArea())
@@ -98,10 +105,15 @@ struct Shell: View {
                                 .frame(width: model.drawer == .left ? Self.peek : width - Self.members)
                                 .frame(maxWidth: .infinity, alignment: model.drawer == .left ? .trailing : .leading)
                                 .onTapGesture { close() }
+                                .accessibilityElement()
+                                .accessibilityLabel(model.drawer == .left ? "Close Channels" : "Close Members")
+                                .accessibilityAddTraits(.isButton)
+                                .accessibilityAction { close() }
                         }
                     }
                     .simultaneousGesture(swipe(left: left))
             }
+            .accessibilityAction(.escape) { close() }
         }
         .sheet(isPresented: $search) {
             SearchScreen()
@@ -144,7 +156,7 @@ struct Shell: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
-                        withAnimation(.spring(duration: 0.32, bounce: 0.04)) { model.drawer = .left }
+                        withAnimation(Drawers.motion) { model.drawer = .left }
                     } label: {
                         Image(systemName: "line.3.horizontal")
                             .overlay(alignment: .topTrailing) {
@@ -154,6 +166,16 @@ struct Shell: View {
                             }
                     }
                     .accessibilityLabel("Channels")
+                }
+                if model.frontCode != nil {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button {
+                            withAnimation(Drawers.motion) { model.drawer = .right }
+                        } label: {
+                            Image(systemName: "person.2")
+                        }
+                        .accessibilityLabel("Members")
+                    }
                 }
             }
             .navigationDestination(for: Route.self) { RouteScreen(route: $0) }
@@ -190,7 +212,7 @@ struct Shell: View {
                     case .right: moved > Self.members * 0.3 ? .closed : .right
                     }
                 if next != model.drawer { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
-                withAnimation(.spring(duration: 0.32, bounce: 0.04)) {
+                withAnimation(Drawers.motion) {
                     model.drawer = next
                     drag = 0
                 }
@@ -200,11 +222,11 @@ struct Shell: View {
     private func settle() {
         guard !touching, drag != 0 || axis != nil else { return }
         axis = nil
-        withAnimation(.spring(duration: 0.32, bounce: 0.04)) { drag = 0 }
+        withAnimation(Drawers.motion) { drag = 0 }
     }
 
     private func close() {
-        withAnimation(.spring(duration: 0.32, bounce: 0.04)) { model.drawer = .closed }
+        withAnimation(Drawers.motion) { model.drawer = .closed }
     }
 
     private func start() {
@@ -264,6 +286,11 @@ struct Rail: View {
                             ChannelAvatar(room: room, size: 46)
                         }
                         .overlay(alignment: .bottomTrailing) { Count(n: needs) }
+                        .contextMenu {
+                            Button("Mark All as Read", systemImage: "envelope.open") {
+                                for place in room.places where place.withMe { model.markRead(Spot(code: room.code, place: place.key)) }
+                            }
+                        }
                     }
                 }
                 .padding(.vertical, 8)
@@ -280,7 +307,11 @@ struct Rail: View {
                 Button {
                     settings = true
                 } label: {
-                    Face(name: model.person, member: nil, size: 40)
+                    if let me = model.channels.first.flatMap({ $0.member($0.me) }) {
+                        Face(name: me.name, member: me, size: 40)
+                    } else {
+                        Image(systemName: "person.crop.circle.fill").font(.system(size: 36)).foregroundStyle(Tone.ink3).frame(width: 46, height: 46)
+                    }
                 }
                 .accessibilityLabel("You")
             }
@@ -300,7 +331,10 @@ struct RailButton<Face: View>: View {
     @ViewBuilder let face: () -> Face
 
     var body: some View {
-        Button(action: pick) {
+        Button {
+            if !on { UISelectionFeedbackGenerator().selectionChanged() }
+            pick()
+        } label: {
             face()
                 .clipShape(RoundedRectangle(cornerRadius: on ? 16 : 23, style: .continuous))
                 .animation(.snappy(duration: 0.2), value: on)
@@ -423,6 +457,18 @@ struct MembersPane: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .contentMargins(.top, 4, for: .scrollContent)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Members").font(.headline).foregroundStyle(Tone.ink)
+                Text(room.title).font(.caption).foregroundStyle(Tone.ink3).lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 18)
+            .padding(.top, 14)
+            .padding(.bottom, 12)
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isHeader)
+        }
     }
 
     private func detail(_ member: MemberView) -> String? {

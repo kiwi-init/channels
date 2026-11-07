@@ -46,6 +46,7 @@ struct ChannelSection: View {
             }
             .sideRow(on: model.showing == .place(main))
             .swipeActions(edge: .leading) { readToggle(main) }
+            .contextMenu { readToggle(main) }
             Button {
                 model.open(.tasks(room.code))
             } label: {
@@ -68,6 +69,7 @@ struct ChannelSection: View {
                 }
                 .sideRow(on: model.showing == .place(spot))
                 .swipeActions(edge: .leading) { readToggle(spot) }
+                .contextMenu { readToggle(spot) }
             }
         }
         .buttonStyle(.plain)
