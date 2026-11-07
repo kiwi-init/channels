@@ -1,9 +1,11 @@
 import "~/styles/afk.css"
 
-import { useEffect, useRef, type AnimationEvent } from "react"
+import { bridge } from "@kiwi/secrets/secrets.ts"
+import { useEffect, useRef, useState, type AnimationEvent } from "react"
 
 import { cx } from "~/kit/bits"
-import type { Meadow } from "~/start/meadow"
+import { MOD_PROTOCOL } from "~/mods/protocol"
+import { daylight, type Rgb } from "~/start/daylight"
 
 const SWALLOWED = ["keydown", "keyup", "wheel", "pointerdown", "contextmenu"] as const
 
@@ -11,11 +13,27 @@ const unframe = (): void => {
   if (document.activeElement instanceof HTMLIFrameElement) window.focus()
 }
 
+const FRAME_URL = "views://internal/mod-frame.html#afk-scene"
+const READY_MS = 8_000
+
+const css = (c: Rgb): string => `rgb(${c.map((v) => Math.round(v * 255)).join(" ")})`
+
+async function sceneHtml(): Promise<string | null> {
+  const b = bridge()
+  if (typeof b?.afkScene !== "function") return null
+  const got = await b.afkScene()
+  if (got.html !== null || !got.first || typeof b.keepAfkScene !== "function") return got.html
+  const made = await fetch(new URL("afk-scene.html", location.href))
+    .then((r) => (r.ok ? r.text() : null))
+    .catch(() => null)
+  return made === null ? null : b.keepAfkScene(made)
+}
+
 export interface AfkProps {
   name: string
   leaving: boolean
-  meadow: boolean
-  alert: boolean
+  scene: boolean
+  needs: number
   still: boolean
   slot: (el: HTMLElement | null) => void
   frame: () => HTMLIFrameElement | null
@@ -23,15 +41,12 @@ export interface AfkProps {
   gone: () => void
 }
 
-export function Afk({ name, leaving, meadow, alert, still, slot, frame, leave, gone }: AfkProps) {
+export function Afk({ name, leaving, scene, needs, still, slot, frame, leave, gone }: AfkProps) {
   const box = useRef<HTMLDivElement>(null)
-  const stage = useRef<HTMLDivElement>(null)
-  const scene = useRef<Meadow | null>(null)
-  const latest = useRef({ alert, still, leaving })
-
-  useEffect(() => {
-    latest.current = { alert, still, leaving }
-  })
+  const sceneFrame = useRef<HTMLIFrameElement>(null)
+  const [html, setHtml] = useState<string | null>(null)
+  const [ready, setReady] = useState(false)
+  const [sky] = useState(() => daylight(new Date()).look)
 
   useEffect(() => {
     slot(box.current)
@@ -84,32 +99,46 @@ export function Afk({ name, leaving, meadow, alert, still, slot, frame, leave, g
   }, [frame, leave])
 
   useEffect(() => {
-    if (!meadow) return
+    if (!scene) return
     let off = false
-    void import("~/start/meadow")
-      .then(({ startMeadow }) => (off || !stage.current ? null : startMeadow(stage.current, latest.current.still)))
-      .then((m) => {
-        if (!m) return
-        if (off) return m.dispose()
-        scene.current = m
-        m.setAlert(latest.current.alert)
-        if (latest.current.leaving) m.freeze()
+    sceneHtml()
+      .then((got) => {
+        if (!off) setHtml(got)
       })
       .catch(() => {
-        // A scene that can't start leaves the haze, and the mod's frame over it still reads.
+        // A scene file that can't be read leaves the plain sky.
       })
     return () => {
       off = true
-      scene.current?.dispose()
-      scene.current = null
     }
-  }, [meadow])
+  }, [scene])
 
-  useEffect(() => scene.current?.setAlert(alert), [alert])
-  useEffect(() => scene.current?.setStill(still), [still])
   useEffect(() => {
-    if (leaving) scene.current?.freeze()
-  }, [leaving])
+    if (html === null) return
+    const heard = (e: MessageEvent): void => {
+      const m = e.data as { kiwi?: unknown; type?: unknown } | null
+      if (e.source && e.source === sceneFrame.current?.contentWindow && m?.kiwi === "afk" && m.type === "ready") setReady(true)
+    }
+    addEventListener("message", heard)
+    return () => removeEventListener("message", heard)
+  }, [html])
+
+  useEffect(() => {
+    if (html === null || ready) return
+    const late = window.setTimeout(() => setHtml(null), READY_MS)
+    return () => window.clearTimeout(late)
+  }, [html, ready])
+
+  useEffect(() => {
+    sceneFrame.current?.contentWindow?.postMessage({ kiwi: "afk", type: "state", at: Date.now(), needs, still }, "*")
+  }, [needs, still, ready])
+
+  const boot = (): void => {
+    const to = sceneFrame.current?.contentWindow
+    if (html === null || !to) return
+    to.postMessage({ kiwi: MOD_PROTOCOL, type: "scene", html }, "*")
+    to.postMessage({ kiwi: "afk", type: "state", at: Date.now(), needs, still }, "*")
+  }
 
   const ended = (e: AnimationEvent<HTMLDivElement>): void => {
     if (e.target !== e.currentTarget || e.animationName !== "afk-out") return
@@ -119,8 +148,20 @@ export function Afk({ name, leaving, meadow, alert, still, slot, frame, leave, g
   }
 
   return (
-    <div ref={box} className={cx("afk", leaving && "is-leaving")} role="dialog" aria-modal="true" aria-label={name} tabIndex={-1} onAnimationEnd={ended}>
-      <div ref={stage} className="afk-back" aria-hidden="true" />
+    <div
+      ref={box}
+      className={cx("afk", leaving && "is-leaving")}
+      style={{ background: `linear-gradient(${css(sky.top)}, ${css(sky.low)} 70%, ${css(sky.haze)})` }}
+      data-scene={html === null ? "plain" : ready ? "ready" : "starting"}
+      role="dialog"
+      aria-modal="true"
+      aria-label={name}
+      tabIndex={-1}
+      onAnimationEnd={ended}
+    >
+      {html !== null && (
+        <iframe ref={sceneFrame} className={cx("afk-back", ready && "is-ready")} src={FRAME_URL} sandbox="allow-scripts" title="AFK scene" tabIndex={-1} aria-hidden="true" onLoad={boot} />
+      )}
     </div>
   )
 }

@@ -57,7 +57,7 @@ Everything comes from `@kiwi/mod`, plus React.
 | `useGithub()`, `github()` | With `github`: `{ repos, prs, issues, tasks }` for the open channel, or null while it loads |
 | `show(target)`, `useShowing()`, `onShow(run)` | With `panel`: open the panel on a pull request or issue, and follow what it shows |
 | `open(to)` | With `github`: open a task, Settings or the chat. With `channels`: open a channel |
-| `afk({ after, backdrop, render })`, `leave()` | With `afk`: the whole window after `after` minutes away, or on ⌘T. No key reaches it; a click can only open a channel or `leave()` |
+| `afk({ after, backdrop, render })`, `leave()` | With `afk`: the whole window after `after` minutes away, or on ⌘T, over the person's AFK scene with `backdrop: "scene"`. No key reaches it; a click can only open a channel or `leave()` |
 | `useChannels()`, `channels()` | With `channels`: `{ code, title, needs, last, line }` for each channel, the ones that need the person first |
 | `useRooms()`, `rooms()` | With `read:#<room>` or `post:#<room>`: `{ channel, title, room }` for each channel's room the person ticked |
 | `post({ channel, room, text })` | With `post:#<room>`: post into a ticked room; one every 2 s; refused anywhere else |

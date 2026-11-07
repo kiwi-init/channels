@@ -1,11 +1,8 @@
 .afk {
-  --meadow-haze: #6f8256;
-
   position: fixed;
   inset: 0;
   z-index: 80;
   overflow: hidden;
-  background: var(--meadow-haze);
   outline: none;
   cursor: default;
   -webkit-app-region: no-drag;
@@ -20,7 +17,16 @@
 .afk-back {
   position: absolute;
   inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  opacity: 0;
   pointer-events: none;
+  transition: opacity 1.2s var(--ease);
+}
+
+.afk-back.is-ready {
+  opacity: 1;
 }
 
 @keyframes afk-in {

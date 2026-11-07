@@ -62,6 +62,7 @@
         "src/chat/no-elk.ts",
         "src/chat/doc/screen-selection.page.ts",
         "src/start/meadow.page.ts",
+        "src/afk/scene.ts",
         "src/mods/frame/runtime.tsx",
         "src/mods/frame/no-mermaid.ts",
         "src/mods/frame/outside.ts",

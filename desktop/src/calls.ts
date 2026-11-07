@@ -134,6 +134,8 @@ export function makeBridge(t: BridgeTransport): KiwiBridge {
     modStorePage: (name) => t.call("modStorePage", name),
     createMod: (name, start) => t.call("createMod", name, start),
     openModFolder: (name) => t.call("openModFolder", name),
+    afkScene: () => t.call("afkScene"),
+    keepAfkScene: (html) => t.call("keepAfkScene", html),
     onAccent: (cb) => t.listen("accent", cb),
     folderThemes: () => t.call("folderThemes"),
     onFolderThemes: (cb) => t.listen("folderThemes", cb),

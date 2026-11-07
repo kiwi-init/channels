@@ -234,6 +234,9 @@ jobs:
       - name: AFK meadow, the AFK scene draws and moves, follows the clock, rests while hidden, holds still for reduced motion and reuses its renderer, in WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-afk-meadow.ts
+      - name: AFK scene file, the default scene draws in the mods' frame, hears the app, can't reach the network or the app, and a swapped file runs in its place, in WebKit
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-afk-scene.ts
       - name: doc image order, a line sent with an image from the composer stays above the lines sent after it
         if: ${{ !cancelled() }}
         run: bun scripts/ui-doc-image-order.ts

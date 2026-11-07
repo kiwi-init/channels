@@ -62,7 +62,7 @@ function clickAt(x: number, y: number): void {
 
 const view = (): { width: number; height: number } => ({ width: innerWidth, height: innerHeight });
 
-const afkNow = (): { shown: boolean; leaving: boolean; label: string | null; frame: string | null } => {
+const afkNow = (): { shown: boolean; leaving: boolean; label: string | null; frame: string | null; scene: string | null } => {
   const afk = document.querySelector<HTMLElement>(".afk");
   const f = [...document.querySelectorAll("iframe")].find((e) => e.title.endsWith(" while you're away"));
   const r = f?.getBoundingClientRect();
@@ -70,6 +70,7 @@ const afkNow = (): { shown: boolean; leaving: boolean; label: string | null; fra
     shown: !!afk,
     leaving: !!afk?.classList.contains("is-leaving"),
     label: afk?.getAttribute("aria-label") ?? null,
+    scene: afk?.dataset["scene"] ?? null,
     frame: f && r && f.style.visibility !== "hidden" ? `${f.title} ${Math.round(r.left)},${Math.round(r.top)} ${Math.round(r.width)}x${Math.round(r.height)} z${f.style.zIndex}` : null,
   };
 };
@@ -214,6 +215,10 @@ try {
   console.log(`after ⌘T: ${JSON.stringify(shown)}`);
   check(shown?.label === "afk", "⌘T shows AFK, the afk mod's frame over the meadow");
   check(!!shown?.frame?.includes(`0,0 ${size.width}x${size.height}`), `the mod's frame covers the whole window (${shown?.frame})`);
+  const drawn = await until("the AFK scene, ready", 30_000, async () => ((await d.evaluate(afkNow, null, 2_000)).scene === "ready" ? true : null)).catch(() => null);
+  const sceneFile = join(root, ".kiwi", "afk", "scene.html");
+  check(existsSync(sceneFile) && readFileSync(sceneFile, "utf8").includes("<script>"), "on the first AFK the app writes its default scene to ~/.kiwi/afk/scene.html");
+  check(!!drawn, `that file draws behind the mod's frame (the scene says ${(await d.evaluate(afkNow, null, 2_000)).scene})`);
   await later(3_600);
   await shot("afk-light");
   dark(true);
@@ -275,6 +280,20 @@ try {
   press("x");
   await step("AFK, gone after the wait check", 10_000, async () => !(await d.evaluate(afkNow, null, 2_000)).shown);
 
+  writeFileSync(sceneFile, `<!doctype html><style>body{background:rgb(40 90 200)}</style><script>parent.postMessage({ kiwi: "afk", type: "ready" }, "*")</script>`);
+  press("t", true);
+  const swapped = await until("a swapped AFK scene, ready", 15_000, async () => ((await d.evaluate(afkNow, null, 2_000)).scene === "ready" ? true : null)).catch(() => null);
+  check(!!swapped, "a scene file swapped in shows the next time AFK starts, with no rebuild");
+  await shot("afk-swapped");
+  press("x");
+  await step("AFK, gone after the swapped scene", 10_000, async () => !(await d.evaluate(afkNow, null, 2_000)).shown);
+  rmSync(sceneFile);
+  press("t", true);
+  const plain = await until("AFK with no scene file", 15_000, async () => ((await d.evaluate(afkNow, null, 2_000)).scene === "plain" ? true : null)).catch(() => null);
+  check(!!plain, "with the file deleted, AFK shows a plain sky, and the app doesn't write it again");
+  check(!existsSync(sceneFile), "the deleted scene file stays deleted");
+  press("x");
+  await step("AFK, gone after the plain sky", 10_000, async () => !(await d.evaluate(afkNow, null, 2_000)).shown);
   await d.evaluate(() => (window as unknown as { kiwi: { removeMod(n: string, f: boolean): Promise<unknown> } }).kiwi.removeMod("afk", true), null, 15_000);
   const probe = join(root, ".kiwi", "mods", "zz-probe");
   mkdirSync(probe, { recursive: true });

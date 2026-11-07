@@ -287,8 +287,9 @@ describe("what a mod's frame may do", () => {
 })
 
 describe("the afk and channels messages (T8257)", () => {
-  test("an AFK frame asks for a wait of 0 to 120 whole minutes, and only the meadow as its backdrop", () => {
-    expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "afk", after: 3, backdrop: "meadow" })).toEqual({ kiwi: MOD_PROTOCOL, type: "afk", after: 3, backdrop: "meadow" })
+  test("an AFK frame asks for a wait of 0 to 120 whole minutes, and only the person's AFK scene as its backdrop", () => {
+    expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "afk", after: 3, backdrop: "scene" })).toEqual({ kiwi: MOD_PROTOCOL, type: "afk", after: 3, backdrop: "scene" })
+    expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "afk", after: 3, backdrop: "meadow" })).toEqual({ kiwi: MOD_PROTOCOL, type: "afk", after: 3, backdrop: "scene" })
     expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "afk", after: 0, backdrop: "https://example.com/x.png" })).toEqual({ kiwi: MOD_PROTOCOL, type: "afk", after: 0, backdrop: null })
     for (const after of [-1, 1.5, 121, "3", null]) expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "afk", after, backdrop: null })).toBeNull()
     expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "leave", extra: 1 })).toEqual({ kiwi: MOD_PROTOCOL, type: "leave" })

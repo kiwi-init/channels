@@ -164,6 +164,7 @@ export type ToFrame =
   | { kiwi: typeof MOD_PROTOCOL; type: "showing"; target: ModTarget | null }
   | { kiwi: typeof MOD_PROTOCOL; type: "channels"; list: ModChannel[] }
   | { kiwi: typeof MOD_PROTOCOL; type: "away"; shown: boolean }
+  | { kiwi: typeof MOD_PROTOCOL; type: "scene"; html: string }
   | { kiwi: typeof MOD_PROTOCOL; type: "rooms"; list: ModRoomGrant[] }
   | { kiwi: typeof MOD_PROTOCOL; type: "messages"; channel: string; room: string; list: ModRoomMessage[] }
 
@@ -183,7 +184,7 @@ export type FromFrame =
   | { kiwi: typeof MOD_PROTOCOL; type: "tab"; title: string; shown: boolean; alert: string | null; hint: string | null }
   | { kiwi: typeof MOD_PROTOCOL; type: "open"; to: ModOpen }
   | { kiwi: typeof MOD_PROTOCOL; type: "channel"; code: string }
-  | { kiwi: typeof MOD_PROTOCOL; type: "afk"; after: number; backdrop: "meadow" | null }
+  | { kiwi: typeof MOD_PROTOCOL; type: "afk"; after: number; backdrop: "scene" | null }
   | { kiwi: typeof MOD_PROTOCOL; type: "leave" }
   | { kiwi: typeof MOD_PROTOCOL; type: "show"; target: ModTarget }
   | { kiwi: typeof MOD_PROTOCOL; type: "copy"; text: string; note: string | null }
@@ -314,7 +315,7 @@ export function fromFrame(data: unknown): FromFrame | null {
     case "afk": {
       const after = m["after"]
       if (typeof after !== "number" || !Number.isInteger(after) || after < 0 || after > AFK_MAX_MINUTES) return null
-      return { kiwi: MOD_PROTOCOL, type: "afk", after, backdrop: m["backdrop"] === "meadow" ? "meadow" : null }
+      return { kiwi: MOD_PROTOCOL, type: "afk", after, backdrop: m["backdrop"] === "scene" || m["backdrop"] === "meadow" ? "scene" : null }
     }
     case "leave":
       return { kiwi: MOD_PROTOCOL, type: "leave" }

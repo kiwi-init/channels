@@ -86,7 +86,7 @@ Everything comes from `@kiwi/mod`, plus React:
 | `useGithub()` | With `github`: the open channel's repos, pull requests, issues and the tasks they link, read-only. No token reaches the mod. |
 | `show(target)`, `useShowing()`, `onShow(run)` | Open the mod's panel on `{ kind: "pr" \| "issue", repo, number }`; what it shows now; what the app asked it to show, like a task's pull request card |
 | `open({ kind: "task", id })` | With `github`: open a task, the channel's settings (`{ kind: "settings" }`) or the chat (`{ kind: "chat" }`). With `channels`: open a channel (`{ kind: "channel", code }`). |
-| `afk({ after, backdrop, render })` | With `afk`: the mod's view over the whole window once you've been away `after` minutes (`0` waits for ⌘T only). `backdrop: "meadow"` puts the app's meadow behind it. See [While you're away (AFK)](#while-youre-away-afk). |
+| `afk({ after, backdrop, render })` | With `afk`: the mod's view over the whole window once you've been away `after` minutes (`0` waits for ⌘T only). `backdrop: "scene"` puts the person's AFK scene behind it. See [While you're away (AFK)](#while-youre-away-afk). |
 | `leave()` | With `afk`: put the app back |
 | `useChannels()`, `channels()` | With `channels`: your channels, the ones that need you first, each with its `code`, `title`, `needs` (how many need you), `last` and one `line` |
 | `useRooms()`, `rooms()` | With `read:#<room>` or `post:#<room>`: the channels' rooms you ticked for it, each with its `channel` code, the channel's `title` and the `room` |
@@ -201,9 +201,20 @@ A mod with `afk` draws what shows over the whole window while you're away (AFK),
 - **No key reaches it.** Any key puts the app back, and the key goes nowhere else.
 - **A click stays in it,** and it can do only two things from there: open a channel with `open({ kind: "channel", code })`, or `leave()`. Links, copying, toasts and storage don't work in it.
 
+### The AFK scene
+
+What shows behind an `afk` mod with `backdrop: "scene"` is a file: `~/.kiwi/afk/scene.html`. On the first AFK the app writes its own scene there, the meadow that follows your clock. Swap the file and the next AFK shows yours, with no rebuild. Delete it and AFK shows a plain sky, and the app doesn't write it again.
+
+A scene is one self-contained HTML page:
+
+- **Scripts are inline and classic:** no `type="module"`, no `src`, no imports. Styles go in `<style>`. It runs in the mods' sandboxed frame, so it can't reach the network, the app or your channels.
+- **It says when it draws:** after its first frame, `parent.postMessage({ kiwi: "afk", type: "ready" }, "*")`. Until then, and if that never comes within 8 seconds, AFK keeps a plain sky.
+- **It hears the app:** `{ kiwi: "afk", type: "state", at, needs, still }`. `at` is the clock to draw (epoch milliseconds), `needs` how many things need you, `still` that you want less motion. The app sends it when the scene starts, again once it's ready, and on every change.
+- **Up to 8 MB.**
+
 ## The GitHub tab and AFK are mods
 
-The channel's GitHub tab is the `github` mod from [kiwi-init/mods](https://github.com/kiwi-init/mods), and AFK, the meadow with your channels that shows while you're away, is its `afk` mod. **Settings → Mods → afk** sets how long it waits. The app installs both the first time it starts, already turned on, and never again: remove one and it stays removed. It needs no `git`: the app downloads the files it was built with from `raw.githubusercontent.com` at one pinned commit, and refuses them unless they hash to the folder it pinned. **Settings → Mods** says why, if it couldn't be installed, and the app tries again on its next start.
+The channel's GitHub tab is the `github` mod from [kiwi-init/mods](https://github.com/kiwi-init/mods), and AFK, your channels over [the AFK scene](#the-afk-scene) while you're away, is its `afk` mod. **Settings → Mods → afk** sets how long it waits. The app installs both the first time it starts, already turned on, and never again: remove one and it stays removed. It needs no `git`: the app downloads the files it was built with from `raw.githubusercontent.com` at one pinned commit, and refuses them unless they hash to the folder it pinned. **Settings → Mods** says why, if it couldn't be installed, and the app tries again on its next start.
 
 ## Turning one on
 

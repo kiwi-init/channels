@@ -1,6 +1,8 @@
+import { writeFileSync } from "node:fs"
 import { resolve } from "node:path"
 import react from "@vitejs/plugin-react"
 import { build, defineConfig, type Plugin, type UserConfig } from "vite"
+import { afkSceneHtml } from "./afk-scene.build.ts"
 import { slimIcon } from "./src/kit/slim-icons.ts"
 
 function compactIcons(): Plugin {
@@ -49,8 +51,16 @@ const modFrame = (): Plugin => ({
   },
 })
 
+const afkScene = (): Plugin => ({
+  name: "kiwi-afk-scene",
+  apply: "build",
+  async closeBundle() {
+    writeFileSync(resolve(import.meta.dirname, "dist/afk-scene.html"), await afkSceneHtml())
+  },
+})
+
 export default defineConfig(({ mode }) => ({
-  plugins: [react(), compactIcons(), modFrame()],
+  plugins: [react(), compactIcons(), modFrame(), afkScene()],
   define: { __DEV__: "false", ...(mode === "harness" ? { "import.meta.env.DEV": "true" } : {}) },
   ...shared,
   server: {

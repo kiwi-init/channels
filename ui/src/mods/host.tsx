@@ -81,7 +81,7 @@ const state = {
   showing: new Map<string, ModTarget>(),
   pending: new Map<string, Waiting[]>(),
   channels: [] as ModChannel[],
-  afks: new Map<string, { after: number; backdrop: "meadow" | null }>(),
+  afks: new Map<string, { after: number; backdrop: "scene" | null }>(),
   away: null as { name: string; leaving: boolean } | null,
 }
 let app: { go: (g: Go) => void; panel: Panel | null } | null = null
@@ -169,7 +169,7 @@ export const modTabs = (): { name: string; title: string; alert: string | null; 
 
 const framesOf = (name: string): Frame[] => [...frames.values()].filter((f) => f.name === name)
 
-function afkMod(): { name: string; after: number; backdrop: "meadow" | null } | null {
+function afkMod(): { name: string; after: number; backdrop: "scene" | null } | null {
   for (const { mod } of given("afk")) {
     const asked = state.afks.get(mod.name)
     if (asked && frames.get(keyOf(mod.name, "afk"))?.ready) return { name: mod.name, ...asked }
@@ -754,8 +754,8 @@ export function ModsLayer() {
         <Afk
           name={away.name}
           leaving={away.leaving}
-          meadow={state.afks.get(away.name)?.backdrop === "meadow"}
-          alert={state.channels.some((c) => c.needs > 0)}
+          scene={state.afks.get(away.name)?.backdrop === "scene"}
+          needs={state.channels.reduce((n, c) => n + c.needs, 0)}
           still={still}
           slot={awaySlot}
           frame={awayFrame}

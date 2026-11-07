@@ -507,6 +507,8 @@ export interface KiwiBridge {
   modStorePage(name: string): Promise<ModStorePage>;
   createMod(name: string, start: ModStart): Promise<ModView[]>;
   openModFolder(name: string): Promise<ModOpened>;
+  afkScene(): Promise<AfkScene>;
+  keepAfkScene(html: string): Promise<string | null>;
 }
 
 export interface ModView {
@@ -567,6 +569,11 @@ export interface ModShot {
 }
 
 type ModStart = "panel" | "command" | "tab" | "figure";
+
+export interface AfkScene {
+  html: string | null;
+  first: boolean;
+}
 
 interface ModOpened {
   editor: string | null;

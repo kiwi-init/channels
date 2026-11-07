@@ -77,7 +77,7 @@ declare module "@kiwi/mod" {
   export function showTab(next: { shown?: boolean; alert?: string | null; hint?: string | null }): void
   export function title(title: string): void
   export function copy(text: string, note?: string): void
-  export function afk(view: { after: number | null; backdrop?: "meadow" | null; render: ComponentType }): void
+  export function afk(view: { after: number | null; backdrop?: "scene" | null; render: ComponentType }): void
   export function leave(): void
   export function useStill(): boolean
 

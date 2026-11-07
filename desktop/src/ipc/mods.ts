@@ -7,6 +7,7 @@ import type { ModCreated, ModStart } from "../../../src/mods.ts";
 import type { ModInstalled, ModUpdate, ModUpdates, ModView } from "../bridge.ts";
 import type { Serves } from "../calls.ts";
 import { childEnv, sessionEnv } from "../child-env.ts";
+import { afkScene, keepAfkScene } from "../afk-scene.ts";
 import { kiwiHome } from "../daemon-client.ts";
 import type { Host } from "../host.ts";
 import { modsCatalog, type ModsCatalog } from "../mods-catalog.ts";
@@ -162,7 +163,10 @@ export function modsCalls(
   | "modStorePage"
   | "createMod"
   | "openModFolder"
+  | "afkScene"
+  | "keepAfkScene"
 > {
+  const sceneHome = () => ({ home: kiwiHome(), record: path.join(host.app.path("data"), "afk-scene.json") });
   let mods: ModsHost | null = null;
   let started: Promise<ModsHost> | null = null;
   let failed: ModView[] = [];
@@ -286,5 +290,7 @@ export function modsCalls(
       if (!(typeof KIWI_EB_TEST !== "undefined" && KIWI_EB_TEST)) spawn(bin, args, { detached: true, stdio: "ignore", env: childEnv() }).unref();
       return { editor: o.editor, dir: dir.startsWith(os.homedir()) ? `~${dir.slice(os.homedir().length)}` : dir };
     },
+    afkScene: async () => afkScene(sceneHome()),
+    keepAfkScene: async (html) => keepAfkScene(sceneHome(), String(html)),
   };
 }

@@ -16,6 +16,7 @@ import { Track } from "~/kit/glide"
 import { ago } from "~/kit/time"
 import { Icon } from "~/mods/frame/glyphs"
 import { Action, Actions, Detail, Empty, Form, List, useFetch } from "~/mods/frame/kit"
+import { runScene } from "~/mods/frame/scene"
 import { copy, failed, modFetch, openUrl, post, replied, request, storage, Toast } from "~/mods/frame/wire"
 import {
   AFK_MAX_MINUTES,
@@ -209,11 +210,11 @@ const api = {
     asked("github", "open")
     post({ type: "open", to })
   },
-  afk({ after, backdrop = null, render }: { after: number | null; backdrop?: "meadow" | null; render: ComponentType }): void {
+  afk({ after, backdrop = null, render }: { after: number | null; backdrop?: string | null; render: ComponentType }): void {
     asked("afk", "afk")
     if (surface !== "afk") return
     view = render
-    post({ type: "afk", after: minutes(after), backdrop: backdrop === "meadow" ? "meadow" : null })
+    post({ type: "afk", after: minutes(after), backdrop: backdrop === "scene" || backdrop === "meadow" ? "scene" : null })
   },
   leave(): void {
     asked("afk", "leave")
@@ -365,7 +366,12 @@ addEventListener("message", (e) => {
   if (e.source !== parent) return
   const m = e.data as ToFrame | null
   if (!m || m.kiwi !== MOD_PROTOCOL) return
-  if (m.type === "boot") {
+  if (m.type === "scene") {
+    if (booted) return
+    booted = true
+    document.documentElement.dataset["surface"] = "scene"
+    runScene(m.html)
+  } else if (m.type === "boot") {
     if (booted) return
     booted = true
     surface = m.surface

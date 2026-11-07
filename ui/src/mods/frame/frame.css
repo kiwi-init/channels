@@ -235,3 +235,8 @@ select.input {
   justify-content: center;
   margin-top: 0;
 }
+
+:root[data-surface="scene"] body {
+  overflow: hidden;
+  margin: 0;
+}
