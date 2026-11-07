@@ -5,11 +5,11 @@ import { bridge } from "@kiwi/secrets/secrets.ts"
 import type { ModDetails, ModUpdate, ModView } from "../../../desktop/src/bridge.ts"
 import { sizeText } from "~/chat/doc/bytes"
 import { Icon } from "~/kit/icons"
-import { runningMod } from "~/mods/host"
+import { runningMod, type RunningMod } from "~/mods/host"
 import { ModIcon } from "~/mods/icon"
 import { asksRooms, needWords, RoomPicker } from "~/mods/needs"
 import { modReads } from "~/mods/served"
-import { useApp } from "~/nav"
+import { useApp, type Go } from "~/nav"
 import { Group, Row } from "~/settings/controls"
 import { ModSettings } from "~/settings/mod-settings"
 
@@ -35,6 +35,13 @@ function useDetails(mod: ModView): ModDetails | null {
     }
   }, [mod.name, key])
   return got?.details ?? null
+}
+
+const opening = (mod: ModView, run: RunningMod | undefined): Go | null => {
+  if (mod.state !== "on" || !run || run.failed) return null
+  if (run.tab?.shown) return { to: "tab", tab: `mod:${mod.name}` }
+  if (run.title) return { to: "panel", panel: { kind: "mod", name: mod.name } }
+  return run.side ? { to: "back" } : null
 }
 
 type Manage = { busy: boolean; update: ModUpdate | undefined; onUpdate: (() => void) | undefined; removeWhy: string; onRemove: () => void }
@@ -64,7 +71,7 @@ function ModRooms({ mod }: { mod: ModView }) {
 }
 
 export function ModDetailsPage({ mod, manage }: { mod: ModView; manage?: Manage }) {
-  const { go, toast } = useApp()
+  const { app, nav, go, toast } = useApp()
   const open = modReads().openModFolder
   const openFolder = open
     ? () =>
@@ -76,6 +83,15 @@ export function ModDetailsPage({ mod, manage }: { mod: ModView; manage?: Manage 
   const d = useDetails(mod)
   const run = runningMod(mod.name)
   const local = mod.source === "local"
+  const opens = opening(mod, run)
+  const into = nav.channel ?? app.channels.find((c) => c.state === "member")?.code ?? null
+  const openMod =
+    opens && into
+      ? () => {
+          go(nav.channel === into ? { to: "back" } : { to: "channel", code: into })
+          go(opens)
+        }
+      : null
   const adds: (readonly [string, string])[] = [
     ...(run?.title ? [["Panel", run.title] as const] : []),
     ...(run?.side ? [["Sidebar section", run.side.title] as const] : []),
@@ -99,6 +115,13 @@ export function ModDetailsPage({ mod, manage }: { mod: ModView; manage?: Manage 
               {d?.author && `by ${d.author}`}
             </p>
           </div>
+          {openMod && (
+            <div className="mod-head-act">
+              <button type="button" className="btn is-primary is-small" onClick={openMod}>
+                Open
+              </button>
+            </div>
+          )}
         </div>
       </header>
       <Group hint={mod.state === "on" ? undefined : mod.why}>
