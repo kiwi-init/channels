@@ -90,6 +90,7 @@ Each install and each update then runs `kiwi cleanup`, which removes what older 
 | `kiwi mod remove <name> [--force]` | Delete it; a link loses just the link |
 | `kiwi mod dev <name>` | Create, link or open a mod and rebuild it on every save. See [Mods](mods.md) |
 | `kiwi mod check [name]` | Check a mod, or the one in this folder: its `mod.json`, its types (with the `typescript` in its `node_modules`) and one bundle, each problem with its file and line |
+| `kiwi mod publish [name]` | Check a mod, then open the pull request to kiwi-init/mods that pins it for **From Kiwi**; again for a new version. Signs in as `gh` does, or with `GH_TOKEN`. See [Mods](mods.md#putting-a-mod-in-from-kiwi) |
 | `kiwi skill [name]` | The skills agents get: `mods` and `anatomy` built in, plus those mods give. Prints one with the paths to its files, kept in `~/.kiwi/skills` |
 
 ## Options and environment

@@ -209,3 +209,5 @@ Needs `["render:figure"]`. The page comes from whoever sent the message, so its 
 ## Done means
 
 `kiwi mod check <name>` says the mod checks out, and you tell the person its name, what it asks for in `needs`, and how to open it (⌘K, then its title).
+
+Publishing shares the person's code with everyone, so do it only when they ask. Give `mod.json` a `description` (one line on what it does), then run `kiwi mod publish <name>`: it opens the pull request that puts the mod in **From Kiwi**, and you give them its link.

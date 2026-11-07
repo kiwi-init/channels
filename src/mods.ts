@@ -421,6 +421,11 @@ const STARTER_TSCONFIG = {
 
 const json = (v: unknown): string => `${JSON.stringify(v, null, 2)}\n`;
 
+export const SCAFFOLD = {
+  "tsconfig.json": json(STARTER_TSCONFIG),
+  "package.json": json({ private: true, devDependencies: { "@types/react": "^19.3.0", typescript: "^7.0.2" } }),
+} as const;
+
 function freshTypes(dir: string): void {
   const file = join(dir, KIT_TYPES_FILE);
   if (existsSync(file) && readFileSync(file, "utf8") !== KIT_TYPES) writeFileSync(file, KIT_TYPES);
@@ -439,8 +444,8 @@ function starter(dir: string, name: string): void {
   writeFileSync(join(dir, "mod.json"), json({ name, version: "0.1.0", shell: STARTER_SHELL, needs: ["panel"], icon: "icon.svg" }));
   writeFileSync(join(dir, "icon.svg"), STARTER_ICON);
   writeFileSync(join(dir, KIT_TYPES_FILE), KIT_TYPES);
-  writeFileSync(join(dir, "tsconfig.json"), json(STARTER_TSCONFIG));
-  writeFileSync(join(dir, "package.json"), json({ private: true, devDependencies: { "@types/react": "^19.3.0", typescript: "^7.0.2" } }));
+  writeFileSync(join(dir, "tsconfig.json"), SCAFFOLD["tsconfig.json"]);
+  writeFileSync(join(dir, "package.json"), SCAFFOLD["package.json"]);
   writeFileSync(join(dir, ".gitignore"), "node_modules\n");
   writeFileSync(
     join(dir, "index.tsx"),
@@ -629,7 +634,7 @@ export async function checkMod(home: string, only: string | null, cwd: string): 
     added.push(KIT_TYPES_FILE);
   }
   if (!existsSync(join(dir, "tsconfig.json"))) {
-    writeFileSync(join(dir, "tsconfig.json"), json(STARTER_TSCONFIG));
+    writeFileSync(join(dir, "tsconfig.json"), SCAFFOLD["tsconfig.json"]);
     added.push("tsconfig.json");
   }
   const types = typeCheck(dir);

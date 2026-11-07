@@ -1,12 +1,15 @@
 import * as Effect from "effect/Effect";
+import { spawnSync } from "node:child_process";
 import { watch } from "node:fs";
 import { homedir } from "node:os";
 import { home } from "../../config/paths.ts";
+import { publishMod } from "../../mod-publish.ts";
 import { addMod, checkMod, devRound, listMods, modsDir, nudgeApp, removeMod, startDev, updateMods, type DevStart, type ModCheckReport, type ModInfo } from "../../mods.ts";
 import { args, opt } from "../args.ts";
 import { type Command, die, out, Quit } from "../context.ts";
 
-const USAGE = "usage: kiwi mod add <repo>[#ref] · kiwi mod update [name] [--yes] · kiwi mod list [--json] · kiwi mod remove <name> [--force] · kiwi mod dev <name> · kiwi mod check [name]";
+const USAGE =
+  "usage: kiwi mod add <repo>[#ref] · kiwi mod update [name] [--yes] · kiwi mod list [--json] · kiwi mod remove <name> [--force] · kiwi mod dev <name> · kiwi mod check [name] · kiwi mod publish [name]";
 
 const tilde = (p: string): string => (p.startsWith(homedir()) ? `~${p.slice(homedir().length)}` : p);
 
@@ -82,6 +85,13 @@ function report(r: ModCheckReport): number {
   return 0;
 }
 
+function githubToken(): string | null {
+  const set = process.env.GH_TOKEN?.trim() || process.env.GITHUB_TOKEN?.trim();
+  if (set) return set;
+  const gh = spawnSync("gh", ["auth", "token"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+  return gh.status === 0 && gh.stdout.trim() ? gh.stdout.trim() : null;
+}
+
 const run = <A>(f: () => A) => Effect.try({ try: f, catch: (err) => new Quit({ message: err instanceof Error ? err.message : String(err), code: 1 }) });
 
 export const modCommands: Record<string, Command> = {
@@ -133,6 +143,20 @@ export const modCommands: Record<string, Command> = {
           catch: (err) => new Quit({ message: err instanceof Error ? err.message : String(err), code: 1 }),
         });
         return report(r);
+      }
+      if (sub === "publish") {
+        if (args[3]) return yield* die("usage: kiwi mod publish [name]: check a mod, then open the pull request that puts it in From Kiwi, or move it to this version");
+        const token = githubToken();
+        if (!token) return yield* die("kiwi mod publish opens a pull request on GitHub: sign in with gh auth login, or set GH_TOKEN");
+        const p = yield* Effect.tryPromise({
+          try: () => publishMod({ home: at, only: args[2] ?? null, cwd: process.cwd(), token }),
+          catch: (err) => new Quit({ message: err instanceof Error ? err.message : String(err), code: 1 }),
+        });
+        out(`checked ${p.name} ${p.version}${p.report.types.ran ? "" : `; types not checked: ${p.report.types.why}`}`);
+        out(`pinned ${p.files.length} file${p.files.length === 1 ? "" : "s"} at ${p.commit.slice(0, 7)} on ${p.repo}, folder hash ${p.hash.slice(0, 12)}`);
+        out(`${p.opened ? "opened" : "moved"} ${p.url}`);
+        out("once it's reviewed and merged, it's in From Kiwi for everyone; kiwi mod publish again moves it to a new version");
+        return;
       }
       if (sub === "dev") {
         const name = args[2];
