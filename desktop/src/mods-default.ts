@@ -15,6 +15,14 @@ export const DEFAULT_MODS: readonly Pinned[] = [
     hash: "124adf9c7a7f821bbd5a9b353bd897d16f5763b822fc72cfb305474526c7f19a",
     files: ["github.css", "groups.ts", "health.ts", "index.tsx", "mod.json", "panel.tsx", "parts.tsx", "types.ts", "view.tsx"],
   },
+  {
+    name: "calm",
+    repo: "kiwi-init/mods",
+    path: "calm",
+    commit: "12640801954c2ef8e7a214d45ab431101138146c",
+    hash: "6f729c7a49961504f4b48c952f420873df08a9b9e4598180f73c0b339c538b35",
+    files: ["calm.css", "calm.tsx", "icon.svg", "index.tsx", "mod.json", "settle.tsx"],
+  },
 ];
 
 export interface DefaultsOptions extends PinnedOptions {

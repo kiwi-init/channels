@@ -10,7 +10,6 @@ export interface Shot {
   prefs?: Partial<Prefs>
   docs?: number
   streams?: boolean
-  calm?: true
   onboarding?: true
   folder?: FolderThemesView
   keys?: unknown
@@ -35,8 +34,6 @@ const layout = (pick: string, nav: Partial<Nav> = { panel: { kind: "task", task:
 export const SHOTS: Record<string, Shot> = {
   channel: kiwi(),
   home: { scenario: "full", channel: null },
-  calm: { scenario: "full", channel: "kiwi", calm: true },
-  "calm-still": { scenario: "full", channel: "kiwi", calm: true, prefs: { reduceMotion: true } },
   "long-feed": { scenario: "long", channel: "kiwi" },
   opening: { scenario: "opening", channel: "kiwi" },
   "opening-tasks": { scenario: "opening", channel: "kiwi", nav: { tab: "tasks" } },

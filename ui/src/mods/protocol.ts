@@ -47,11 +47,21 @@ export const LOOK = [
   "c-brown",
 ]
 
-export type Surface = "main" | "sidebar" | "tab" | "render"
+export type Surface = "main" | "sidebar" | "tab" | "idle" | "render"
 
 export type ModTarget = { kind: "pr" | "issue"; repo: string; number: number } | { kind: "view"; view: string }
 
 export type ModOpen = { kind: "task"; id: number } | { kind: "settings" } | { kind: "chat" }
+
+export interface ModChannel {
+  code: string
+  title: string
+  needs: number
+  last: number
+  line: string | null
+}
+
+export const IDLE_MAX_MINUTES = 120
 
 export type ModPerson = Pick<Person, "name" | "kind" | "harness" | "presence" | "color" | "picture" | "face" | "activity" | "load" | "red" | "doneAt">
 
@@ -127,6 +137,7 @@ export type ToFrame =
       settings: Record<string, string | boolean | null>
       theme: Record<string, string>
       dark: boolean
+      still: boolean
     }
   | {
       kiwi: typeof MOD_PROTOCOL
@@ -137,9 +148,10 @@ export type ToFrame =
       code: string
       theme: Record<string, string>
       dark: boolean
+      still: boolean
       shown: Shown
     }
-  | { kiwi: typeof MOD_PROTOCOL; type: "theme"; theme: Record<string, string>; dark: boolean }
+  | { kiwi: typeof MOD_PROTOCOL; type: "theme"; theme: Record<string, string>; dark: boolean; still: boolean }
   | { kiwi: typeof MOD_PROTOCOL; type: "command"; id: string }
   | { kiwi: typeof MOD_PROTOCOL; type: "action"; id: string; message: ModMessage }
   | { kiwi: typeof MOD_PROTOCOL; type: "terminals"; list: ModTerminal[] }
@@ -150,6 +162,8 @@ export type ToFrame =
   | { kiwi: typeof MOD_PROTOCOL; type: "github"; data: ModGithub | null }
   | { kiwi: typeof MOD_PROTOCOL; type: "show"; target: ModTarget }
   | { kiwi: typeof MOD_PROTOCOL; type: "showing"; target: ModTarget | null }
+  | { kiwi: typeof MOD_PROTOCOL; type: "channels"; list: ModChannel[] }
+  | { kiwi: typeof MOD_PROTOCOL; type: "rest"; shown: boolean }
 
 export type FromFrame =
   | { kiwi: typeof MOD_PROTOCOL; type: "hello" }
@@ -166,6 +180,9 @@ export type FromFrame =
   | ({ kiwi: typeof MOD_PROTOCOL; type: "terminal"; id: number } & TerminalOp)
   | { kiwi: typeof MOD_PROTOCOL; type: "tab"; title: string; shown: boolean; alert: string | null; hint: string | null }
   | { kiwi: typeof MOD_PROTOCOL; type: "open"; to: ModOpen }
+  | { kiwi: typeof MOD_PROTOCOL; type: "channel"; code: string }
+  | { kiwi: typeof MOD_PROTOCOL; type: "idle"; after: number; backdrop: "meadow" | null }
+  | { kiwi: typeof MOD_PROTOCOL; type: "leave" }
   | { kiwi: typeof MOD_PROTOCOL; type: "show"; target: ModTarget }
   | { kiwi: typeof MOD_PROTOCOL; type: "copy"; text: string; note: string | null }
   | { kiwi: typeof MOD_PROTOCOL; type: "link"; url: string }
@@ -184,11 +201,17 @@ const GATED: { readonly [K in FromFrame["type"]]?: readonly [need: string, from:
   tab: ["tab", ["tab"]],
   open: ["github", ANY],
   show: ["panel", ANY],
+  channel: ["channels", [...ANY, "idle"]],
+  idle: ["idle", ["idle"]],
+  leave: ["idle", ["idle"]],
 }
 
 const RUNNING: ReadonlySet<FromFrame["type"]> = new Set(["storage", "toast", "copy", "link"])
 
+const FROM_IDLE: ReadonlySet<FromFrame["type"]> = new Set(["hello", "ready", "error", "idle", "leave", "channel"])
+
 export function heeded(type: FromFrame["type"], from: Surface, mod: { state: string; needs: readonly string[] } | undefined): boolean {
+  if (from === "idle" && !FROM_IDLE.has(type)) return false
   if (RUNNING.has(type)) return !!mod && mod.state === "on"
   const gate = GATED[type]
   return !gate || (gate[1].includes(from) && !!mod && mod.state === "on" && mod.needs.includes(gate[0]))
@@ -261,6 +284,15 @@ export function fromFrame(data: unknown): FromFrame | null {
       const to = opened(m["to"])
       return to ? { kiwi: MOD_PROTOCOL, type: "open", to } : null
     }
+    case "channel":
+      return short(m["code"], 64) ? { kiwi: MOD_PROTOCOL, type: "channel", code: m["code"] } : null
+    case "idle": {
+      const after = m["after"]
+      if (typeof after !== "number" || !Number.isInteger(after) || after < 0 || after > IDLE_MAX_MINUTES) return null
+      return { kiwi: MOD_PROTOCOL, type: "idle", after, backdrop: m["backdrop"] === "meadow" ? "meadow" : null }
+    }
+    case "leave":
+      return { kiwi: MOD_PROTOCOL, type: "leave" }
     case "show": {
       const t = target(m["target"])
       return t ? { kiwi: MOD_PROTOCOL, type: "show", target: t } : null

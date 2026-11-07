@@ -18,7 +18,9 @@ import { Icon } from "~/mods/frame/glyphs"
 import { Action, Actions, Detail, Empty, Form, List, useFetch } from "~/mods/frame/kit"
 import { copy, failed, modFetch, openUrl, post, replied, request, storage, Toast } from "~/mods/frame/wire"
 import {
+  IDLE_MAX_MINUTES,
   MOD_PROTOCOL,
+  type ModChannel,
   type ModGithub,
   type ModMessage,
   type ModOpen,
@@ -48,6 +50,9 @@ const box = document.getElementById("root") ?? document.body.appendChild(documen
 const root = ReactDOMClient.createRoot(box)
 let sized: ResizeObserver | null = null
 let github: ModGithub | null = null
+let channelList: ModChannel[] | null = null
+let still = false
+let rests = 0
 let showing: ModTarget | null = null
 let tabState: { title: string; shown: boolean; alert: string | null; hint: string | null } | null = null
 const watchers = new Set<() => void>()
@@ -66,8 +71,17 @@ const watch = (w: () => void): (() => void) => {
 
 function mount(): void {
   const View = view
-  if (View) root.render(<View />)
+  if (View && surface !== "idle") root.render(<View />)
 }
+
+function rest(shown: boolean): void {
+  const View = view
+  if (surface !== "idle") return
+  rests++
+  root.render(shown && View ? <View key={rests} /> : null)
+}
+
+const minutes = (after: unknown): number => Math.min(IDLE_MAX_MINUTES, Math.max(0, Math.round(Number(after) || 0)))
 
 function asked(need: string, call: string): void {
   if (!needs.has(need)) throw new Error(`${call}() needs "${need}" in mod.json's needs`)
@@ -177,9 +191,35 @@ const api = {
     asked("github", "useGithub")
     return React.useSyncExternalStore(watch, () => github)
   },
-  open(to: ModOpen): void {
+  open(to: ModOpen | { kind: "channel"; code: string }): void {
+    if (to.kind === "channel") {
+      asked("channels", "open")
+      post({ type: "channel", code: String(to.code) })
+      return
+    }
     asked("github", "open")
     post({ type: "open", to })
+  },
+  idle({ after, backdrop = null, render }: { after: number | null; backdrop?: "meadow" | null; render: ComponentType }): void {
+    asked("idle", "idle")
+    if (surface !== "idle") return
+    view = render
+    post({ type: "idle", after: minutes(after), backdrop: backdrop === "meadow" ? "meadow" : null })
+  },
+  leave(): void {
+    asked("idle", "leave")
+    if (surface === "idle") post({ type: "leave" })
+  },
+  useStill(): boolean {
+    return React.useSyncExternalStore(watch, () => still)
+  },
+  channels(): ModChannel[] | null {
+    asked("channels", "channels")
+    return channelList
+  },
+  useChannels(): ModChannel[] | null {
+    asked("channels", "useChannels")
+    return React.useSyncExternalStore(watch, () => channelList)
   },
   show(target: ModTarget): void {
     asked("panel", "show")
@@ -261,10 +301,16 @@ function draw(shown: Shown | undefined, dark: boolean): void {
   if (node !== undefined && node !== null) root.render(node)
 }
 
-function theme(vars: Record<string, string>, dark: boolean): void {
+function theme(vars: Record<string, string>, dark: boolean, calm: boolean): void {
   const s = document.documentElement.style
   for (const [k, v] of Object.entries(vars)) if (k.startsWith("--")) s.setProperty(k, v)
   document.documentElement.dataset["theme"] = dark ? "dark" : "light"
+  if (calm) document.documentElement.dataset["motion"] = "reduced"
+  else delete document.documentElement.dataset["motion"]
+  if (calm !== still) {
+    still = calm
+    told()
+  }
 }
 
 const linkOf = (e: MouseEvent): string | null => {
@@ -296,7 +342,7 @@ addEventListener("message", (e) => {
     needs = new Set(m.needs)
     values = Object.freeze(m.surface === "render" ? {} : { ...m.settings })
     document.documentElement.dataset["surface"] = surface
-    theme(m.theme, m.dark)
+    theme(m.theme, m.dark, m.still === true)
     try {
       new Function(m.code)()
       if (m.surface === "render") draw(m.shown, m.dark)
@@ -304,7 +350,11 @@ addEventListener("message", (e) => {
     } catch (err) {
       failed(err)
     }
-  } else if (m.type === "theme") theme(m.theme, m.dark)
+  } else if (m.type === "theme") theme(m.theme, m.dark, m.still === true)
+  else if (m.type === "channels") {
+    channelList = needs.has("channels") ? m.list : null
+    told()
+  } else if (m.type === "rest") rest(m.shown)
   else if (m.type === "github") {
     github = needs.has("github") ? m.data : null
     told()

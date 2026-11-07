@@ -33,11 +33,3 @@ test("every other saved theme stays, and a new install starts on Cinder Peak wit
   expect(fresh.m.has("ui.prefs")).toBe(false)
   expect([fresh.m.get("ui.prefs.oled"), fresh.m.get("ui.prefs.cinder")]).toEqual(["1", "1"])
 })
-
-test("Calm waits 3 minutes unless a kept choice says otherwise, and only takes Off, 1, 3, 5 or 10", () => {
-  expect(readPrefs(storeOf({})).calm).toBe(3)
-  expect(readPrefs(storeOf({ "ui.prefs": JSON.stringify({ calm: 0 }) })).calm).toBe(0)
-  expect(readPrefs(storeOf({ "ui.prefs": JSON.stringify({ calm: 10 }) })).calm).toBe(10)
-  expect(readPrefs(storeOf({ "ui.prefs": JSON.stringify({ calm: 7 }) })).calm).toBe(3)
-  expect(readPrefs(storeOf({ "ui.prefs": JSON.stringify({ calm: "5" }) })).calm).toBe(3)
-})

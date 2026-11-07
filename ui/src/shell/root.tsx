@@ -1,6 +1,5 @@
 import { Suspense, useEffect, useLayoutEffect, useMemo } from "react"
 
-import { useCalmShown, useIdle } from "~/calm/idle"
 import { useAppCommands } from "~/commands/app"
 import { Boundary } from "~/kit/boundary"
 import { later } from "~/kit/later"
@@ -25,7 +24,6 @@ const EnrollDialog = later(() => import("~/settings/enroll").then((m) => m.Enrol
 const JoinDialog = later(() => import("~/start/join").then((m) => m.JoinDialog))
 const NewRoomDialog = later(() => import("~/shell/new-room").then((m) => m.NewRoomDialog))
 const Welcome = later(() => import("~/start/welcome").then((m) => m.Welcome))
-const Calm = later(() => import("~/calm/calm").then((m) => m.Calm))
 const AppCommands = later(() => import("~/commands/app-more").then((m) => m.AppCommands))
 const Palette = later(() => import("~/palette/palette").then((m) => m.Palette))
 const ModsLayer = later(() => import("~/mods/host").then((m) => m.ModsLayer))
@@ -100,20 +98,9 @@ export function Root({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => voi
         )}
         <ContextMenus />
         <Toasts toasts={toasts} onDismiss={dismissToast} />
-        <CalmWatch minutes={app.prefs.calm} />
       </ActContext>
     </AppContext>
   )
-}
-
-function CalmWatch({ minutes }: { minutes: number }) {
-  const shown = useCalmShown()
-  useIdle(minutes, shown)
-  return shown ? (
-    <Suspense fallback={null}>
-      <Calm />
-    </Suspense>
-  ) : null
 }
 
 function useTheme(app: App) {

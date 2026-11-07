@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 
-import { showCalm } from "~/calm/idle"
 import { showFolder } from "~/theme/folder"
 import { rememberOnboarded } from "~/start/onboarded"
 import { DEMO_PREFS } from "~/demo/data"
@@ -28,7 +27,6 @@ export const demoPrefs: Prefs = { ...DEMO_PREFS, ...look }
 const seeded = shot?.nav?.where
 if (shot?.docs !== undefined && shot.channel && seeded && seeded.kind !== "dm" && seeded.kind !== "theirs") seedThreadDoc(shot.channel, docThread(seeded), shot.docs, shot.streams)
 
-if (shot?.calm) showCalm()
 if (shot?.mods) showDemoMods(shot.mods === "ask")
 if (shot?.folder) showFolder(shot.folder)
 if (shot?.layouts) {

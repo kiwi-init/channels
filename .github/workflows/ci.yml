@@ -403,9 +403,9 @@ jobs:
       - name: ui rooms are flat in Chromium and WebKit, a reply shows inline with its quote and nothing opens a thread
         if: ${{ !cancelled() }}
         run: bun scripts/ui-flat-rooms.ts --dist ui/dist && bun scripts/ui-flat-rooms.ts --dist ui/dist --webkit
-      - name: ui Calm covers the window, a key or a click on the sky dismisses it without reaching the app, a mouse move keeps it, a channel click opens that channel, and the app's own Reduce motion keeps it still, in Chromium and WebKit
+      - name: ui the onboarding's meadow holds still with the app's Reduce motion, in Chromium and WebKit
         if: ${{ !cancelled() }}
-        run: bun scripts/ui-calm.ts --dist ui/dist && bun scripts/ui-calm.ts --dist ui/dist --webkit
+        run: bun scripts/ui-onboarding-still.ts --dist ui/dist && bun scripts/ui-onboarding-still.ts --dist ui/dist --webkit
       - name: ui portrait window in WebKit is one tall page, agents, tasks and chat in view, and landscape is unchanged
         if: ${{ !cancelled() }}
         run: bun scripts/ui-tall-page.ts --dist ui/dist
@@ -514,6 +514,17 @@ jobs:
         with:
           name: github-mod-check-mac
           path: ${{ runner.temp }}/github-mod-check/*.png
+          if-no-files-found: ignore
+      - name: Calm is a mod the app installs on first start; ⌘T and a minute away show it, no key reaches its frame, and a row opens its channel (T8257)
+        if: ${{ !cancelled() }}
+        timeout-minutes: 10
+        run: bun desktop/scripts/eb-calm-mod-check.ts desktop/release-eb/build/dev-macos-*/*.app "$RUNNER_TEMP/calm-mod-check"
+      - name: the Calm mod check's screenshots
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: calm-mod-check-mac
+          path: ${{ runner.temp }}/calm-mod-check/*.png
           if-no-files-found: ignore
       - name: the window opens where it was left, at the size it was left, five times after a quit right after a move (T7485)
         if: ${{ !cancelled() }}

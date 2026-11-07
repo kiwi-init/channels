@@ -52,6 +52,12 @@ describe("the UI contract", () => {
     expect(Bun.semver.satisfies(UI_CONTRACT, range)).toBe(true);
   });
 
+  test("a desktop without the Calm mod's default install keeps its own UI, and with it Calm (T8257)", () => {
+    const range = `^${UI_REQUIRES}`;
+    for (const old of ["3.11.0", "3.12.0", "3.13.0"]) expect(Bun.semver.satisfies(old, range)).toBe(false);
+    expect(Bun.semver.satisfies(UI_CONTRACT, range)).toBe(true);
+  });
+
   test("within a major version, every later surface keeps all the names of the earlier ones", () => {
     const versions = Object.keys(UI_SURFACES).sort(newer);
     for (const [i, later] of versions.entries())

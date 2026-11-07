@@ -248,6 +248,36 @@ describe("what a mod's frame may do", () => {
   test("what needs no capability always comes through", () => {
     for (const type of ["hello", "ready", "error", "fetch", "copy", "link"] as const) expect(heeded(type, "sidebar", mod([]))).toBe(true)
   })
+
+  test("an idle frame can only say what it draws, open a channel with channels, and leave: no links, copies, toasts, storage, fetches or panels (T8257)", () => {
+    const calm = mod(["idle", "channels", "panel", "github", "command", "net:example.com"])
+    for (const type of ["hello", "ready", "error", "idle", "leave", "channel"] as const) expect(heeded(type, "idle", calm)).toBe(true)
+    for (const type of ["link", "copy", "toast", "storage", "fetch", "open", "show", "panel", "commands", "tab", "terminal"] as const) expect(heeded(type, "idle", calm)).toBe(false)
+  })
+
+  test("idle and leave need idle, from the idle frame only, and opening a channel needs channels (T8257)", () => {
+    expect(heeded("idle", "idle", mod(["channels"]))).toBe(false)
+    expect(heeded("idle", "main", mod(["idle"]))).toBe(false)
+    expect(heeded("leave", "main", mod(["idle"]))).toBe(false)
+    expect(heeded("leave", "idle", mod(["idle"], "asks"))).toBe(false)
+    expect(heeded("channel", "main", mod(["channels"]))).toBe(true)
+    expect(heeded("channel", "main", mod(["github", "idle"]))).toBe(false)
+    expect(heeded("channel", "idle", mod(["idle"]))).toBe(false)
+  })
+})
+
+describe("the idle and channels messages (T8257)", () => {
+  test("an idle frame asks for a wait of 0 to 120 whole minutes, and only the meadow as its backdrop", () => {
+    expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "idle", after: 3, backdrop: "meadow" })).toEqual({ kiwi: MOD_PROTOCOL, type: "idle", after: 3, backdrop: "meadow" })
+    expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "idle", after: 0, backdrop: "https://example.com/x.png" })).toEqual({ kiwi: MOD_PROTOCOL, type: "idle", after: 0, backdrop: null })
+    for (const after of [-1, 1.5, 121, "3", null]) expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "idle", after, backdrop: null })).toBeNull()
+    expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "leave", extra: 1 })).toEqual({ kiwi: MOD_PROTOCOL, type: "leave" })
+  })
+
+  test("a channel to open is a short code and nothing else", () => {
+    expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "channel", code: "cold" })).toEqual({ kiwi: MOD_PROTOCOL, type: "channel", code: "cold" })
+    for (const code of ["", "x".repeat(65), 7, null]) expect(fromFrame({ kiwi: MOD_PROTOCOL, type: "channel", code })).toBeNull()
+  })
 })
 
 test("a mod's frame gets every color of the person's theme", () => {
