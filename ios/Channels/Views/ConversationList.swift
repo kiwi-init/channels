@@ -260,7 +260,7 @@ struct ConversationList: View {
                 .padding(.leading, 12)
                 .padding(.trailing, 16)
                 .frame(height: 48)
-                .raisedCapsule()
+                .glassCapsule()
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 6)

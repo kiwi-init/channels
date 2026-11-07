@@ -929,13 +929,13 @@ struct Viewer: View {
                 Button {
                     dismiss()
                 } label: {
-                    Image(systemName: "xmark").font(.system(size: 17, weight: .semibold)).foregroundStyle(.white).frame(width: 44, height: 44).raisedCircle()
+                    Image(systemName: "xmark").font(.system(size: 17, weight: .semibold)).foregroundStyle(.white).frame(width: 44, height: 44).glassCircle()
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Close")
                 Spacer()
                 ShareLink(item: Image(uiImage: image), preview: SharePreview("Picture", image: Image(uiImage: image))) {
-                    Image(systemName: "square.and.arrow.up").font(.system(size: 17, weight: .semibold)).foregroundStyle(.white).frame(width: 44, height: 44).raisedCircle()
+                    Image(systemName: "square.and.arrow.up").font(.system(size: 17, weight: .semibold)).foregroundStyle(.white).frame(width: 44, height: 44).glassCircle()
                 }
                 .accessibilityLabel("Share")
             }

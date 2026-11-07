@@ -56,6 +56,7 @@ enum Tone {
     static var avatarTop: Color { Palettes.color("ink-3", light: Shade(0x8a8a92), dark: Shade(0x4a403e)) }
     static var avatarBottom: Color { Palettes.color("ink-3", light: Shade(0x8a8a92), dark: Shade(0x4a403e)) }
     static var popEdge: Color { Palettes.color("line-2", light: Shade(0x000000, 0.08), dark: Shade(0xddccc6, 0.11)) }
+    static var glassTint: Color { raised.opacity(0.6) }
     static let popShade = Color(Shade(0x000000, 0.16), Shade(0x000000, 0.55))
 }
 
