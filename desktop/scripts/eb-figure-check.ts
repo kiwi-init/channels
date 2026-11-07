@@ -138,7 +138,7 @@ const PAGE = (n: number, probe: boolean) =>
   `<!doctype html><html><head><meta charset="utf-8"><title>Figure ${n}</title><style>body{margin:0;background:#202020;color:#ddd;font:14px sans-serif}</style></head><body><svg viewBox="0 0 200 80"><rect width="200" height="80" rx="6" fill="#3a3a3a"/><circle cx="100" cy="40" r="30" fill="none" stroke="#999" stroke-width="2"/><line id="needle" x1="100" y1="40" x2="100" y2="14" stroke="#ffcc33" stroke-width="3"/><text x="8" y="72" fill="#ffcc33" font-size="10">live ${n}</text></svg><script type="module">${DRAW(n)}${probe ? PROBE : ""}</script></body></html>`;
 
 const FILES = [1, 2, 3, 4].flatMap((n) => [
-  { name: `gauge${n}.figure.html`, type: "text/html", text: PAGE(n, n === 1) },
+  { name: `gauge${n}.figure.html`, type: "text/html", text: PAGE(n, true) },
   { name: `gauge${n}.figure.svg`, type: "image/svg+xml", text: SNAPSHOT(n) },
 ]);
 
