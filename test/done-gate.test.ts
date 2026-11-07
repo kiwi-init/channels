@@ -1,11 +1,11 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 import type { CheckArtifact, CheckAsk } from "@kiwi/core/checks.ts";
-import { doneGate, inRange, landingsDue, RUN_CLOSES } from "@kiwi/core/done-gate.ts";
+import { doneGate, inRange, landingsDue, runBlind, runStarts } from "@kiwi/core/done-gate.ts";
 import { landingWaits } from "@kiwi/core/prs.ts";
 import { shipGate } from "@kiwi/core/ship-gate.ts";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 import { PROTOCOL_VERSION, wellFormed, type Event, type Kind, type Message, type Payload } from "@kiwi/core/protocol.ts";
-import { fold, type Roster } from "@kiwi/core/state.ts";
+import { fold, type FoldBase, type Roster } from "@kiwi/core/state.ts";
 
 const T0 = 1_760_000_000_000;
 const R = "o/r";
@@ -267,8 +267,23 @@ describe("the done gate (#623 §5)", () => {
   describe("run tasks (T1269)", () => {
     const job = (id: string): CheckArtifact => ({ kind: "run", id });
     const runCheck = (phase: CheckAsk["phase"], id: string): CheckAsk => ({ phase, decider: "jow", artifact: job(id) });
-    async function runTask() {
+    async function crowd(c: Awaited<ReturnType<typeof channel>>, first: number, count: number, started: number) {
+      for (let done = 0; done < count; done += 50)
+        await c.github(
+          Array.from({ length: Math.min(50, count - done) }, (_, k) => ({
+            event: "workflow_run",
+            run: first + done + k,
+            name: "CI",
+            title: `ci-${first + done + k}`,
+            sha: S1,
+            status: "completed",
+            started,
+          })),
+        );
+    }
+    async function runTask(seen = 0) {
       const c = await channel("run");
+      await crowd(c, 1, seen, at(0));
       const t = await c.task();
       const declare = (id: string, started?: number) => c.ev("ann", { op: "task.update", task: t, run: { id, ...(started !== undefined ? { started } : {}) } });
       const approveRun = async (id: string) => {
@@ -283,26 +298,26 @@ describe("the done gate (#623 §5)", () => {
       return { c, t, declare, approveRun, passed, gate };
     }
 
-    test("a run approved at its declared id, cleared before it started and confirmed after, still waits for a person: its reported start isn't verified", async () => {
-      const r = await runTask();
+    test("a run approved at its declared id, cleared before it started and confirmed after, still waits with only the start its runner reports", async () => {
+      const r = await runTask(1);
       await r.declare("job-1");
       await r.approveRun("job-1");
       expect(shipGate(r.c.state(), r.c.state().tasks.get(r.t)!)).toEqual({ open: false, rejected: false, missing: ["a pre-ship check passed for run job-1"] });
       await r.passed("pre-ship", "job-1");
       expect(shipGate(r.c.state(), r.c.state().tasks.get(r.t)!)).toEqual({ open: true });
-      expect(r.gate()).toEqual({ kind: "waiting", why: RUN_CLOSES });
+      expect(r.gate()).toEqual({ kind: "waiting", why: runStarts("job-1") });
       await r.declare("job-1", at(r.c.log.length) + 500);
       await r.passed("post", "job-1");
-      expect(r.gate()).toEqual({ kind: "waiting", why: RUN_CLOSES });
+      expect(r.gate()).toEqual({ kind: "waiting", why: runStarts("job-1") });
       expect(landingsDue({ ...r.c.state(), tasks: r.c.state().tasks })).toEqual([]);
       const landed = await r.c.land("jow", r.t, job("job-1"));
-      expect(r.c.state().rejected.get(landed.seq)).toBe(`T${r.t} hasn't landed: it waits for ${RUN_CLOSES}`);
+      expect(r.c.state().rejected.get(landed.seq)).toBe(`T${r.t} hasn't landed: it waits for ${runStarts("job-1")}`);
       await r.c.ev("jow", { op: "task.update", task: r.t, state: "done", close: "job-1 ran clean, checked by hand" });
       expect(r.c.state().tasks.get(r.t)!).toMatchObject({ state: "done", closedWith: "job-1 ran clean, checked by hand" });
     });
 
     test("a reported start later than the real one can't turn a late pre-ship pass into a landing", async () => {
-      const r = await runTask();
+      const r = await runTask(1);
       await r.declare("job-1");
       await r.approveRun("job-1");
       const ask = await r.c.say("ann", "blocking", "Is the run good?", { to: ["jow"], esc: true, choices: ["A: good", "B: not yet"], holds: [r.t], check: runCheck("pre-ship", "job-1") });
@@ -311,7 +326,7 @@ describe("the done gate (#623 §5)", () => {
       expect(answer.rts!).toBeGreaterThan(realStart);
       await r.declare("job-1", at(r.c.log.length) + 500);
       await r.passed("post", "job-1");
-      expect(r.gate()).toEqual({ kind: "waiting", why: RUN_CLOSES });
+      expect(r.gate()).toEqual({ kind: "waiting", why: runStarts("job-1") });
       expect(landingsDue({ ...r.c.state(), tasks: r.c.state().tasks })).toEqual([]);
     });
 
@@ -328,15 +343,15 @@ describe("the done gate (#623 §5)", () => {
     });
 
     test("case 7: a run confirmation quoting a different run id doesn't count", async () => {
-      const r = await runTask();
+      const r = await runTask(1);
       await r.declare("job-1");
       await r.approveRun("job-1");
       await r.passed("pre-ship", "job-1");
       await r.declare("job-1", at(r.c.log.length) + 500);
       await r.passed("post", "job-2");
-      expect(r.gate()).toEqual({ kind: "waiting", why: RUN_CLOSES });
+      expect(r.gate()).toEqual({ kind: "waiting", why: runStarts("job-1") });
       const wrong = await r.c.land("jow", r.t, job("job-2"));
-      expect(r.c.state().rejected.get(wrong.seq)).toBe(`T${r.t} hasn't landed: it waits for ${RUN_CLOSES}`);
+      expect(r.c.state().rejected.get(wrong.seq)).toBe(`T${r.t} hasn't landed: it waits for ${runStarts("job-1")}`);
       expect(r.c.state().tasks.get(r.t)!.state).toBe("landing");
     });
 
@@ -414,6 +429,200 @@ describe("the done gate (#623 §5)", () => {
       expect(wellFormed({ ...base, ev: { op: "task.update", task: 3, run: { id: "job-1", started: -1 } } })).toBe(false);
       expect(wellFormed({ ...base, ev: { op: "task.update", task: 3, run: { id: "job-1", extra: 1 } } })).toBe(false);
       expect(wellFormed({ ...base, ev: { op: "task.update", task: 3, at: `run:${"j".repeat(200)}` } })).toBe(true);
+    });
+
+    describe("GitHub's start for the declared run (T2183)", () => {
+      const workflow = (r: Awaited<ReturnType<typeof runTask>>, run: number, title: string, started: number, from = "jow") =>
+        r.c.ev(from, {
+          op: "github",
+          items: [{ event: "workflow_run", repo: R, at: at(r.c.log.length + 1), action: "requested", run, name: "deploy", title, status: "queued", sha: S1, happened: started, started }],
+        } as Event);
+      const now = (r: Awaited<ReturnType<typeof runTask>>) => at(r.c.log.length);
+      async function cleared() {
+        const r = await runTask(1);
+        await r.declare("job-1");
+        await r.approveRun("job-1");
+        await r.passed("pre-ship", "job-1");
+        return r;
+      }
+
+      test("a workflow run named for the declared id, started after the approval and the pre-ship pass, lands on a post check answered after it, once", async () => {
+        const r = await cleared();
+        const started = now(r) + 500;
+        await workflow(r, 4242, "job-1", started);
+        expect(r.c.state().tasks.get(r.t)!.run?.start).toMatchObject({ repo: R, run: 4242, title: "job-1", started });
+        expect(r.gate()).toEqual({ kind: "waiting", why: "a passed post check at run job-1, answered after it started" });
+        await r.passed("post", "job-1");
+        expect(r.gate()).toEqual({ kind: "landed", artifact: job("job-1") });
+        expect(landingsDue({ ...r.c.state(), tasks: r.c.state().tasks }).map((d) => d.key)).toEqual([`T${r.t}:run:job-1`]);
+        await r.c.land("jow", r.t, job("job-1"));
+        const again = await r.c.land("ann", r.t, job("job-1"));
+        const t = r.c.state().tasks.get(r.t)!;
+        expect(t).toMatchObject({ state: "done", landed: { key: `T${r.t}:run:job-1`, by: "jow" } });
+        expect(r.c.state().rejected.get(again.seq)).toBeUndefined();
+        expect(t.notes.filter((n) => n.text.startsWith("landed:"))).toHaveLength(1);
+      });
+
+      test("a post check answered before GitHub's start doesn't confirm the run", async () => {
+        const r = await cleared();
+        await r.passed("post", "job-1");
+        await workflow(r, 4242, "job-1", now(r) + 500);
+        expect(r.gate()).toEqual({ kind: "waiting", why: "a passed post check at run job-1, answered after it started" });
+        const forced = await r.c.land("jow", r.t, job("job-1"));
+        expect(r.c.state().rejected.get(forced.seq)).toStartWith(`T${r.t} hasn't landed`);
+      });
+
+      test("the earliest start under the name counts: an earlier run is a bypass, whatever order GitHub's news comes in", async () => {
+        const r = await runTask(1);
+        const early = now(r) + 500;
+        await r.declare("job-1");
+        await r.approveRun("job-1");
+        await r.passed("pre-ship", "job-1");
+        await workflow(r, 4243, "job-1", now(r) + 500);
+        await workflow(r, 4242, "job-1", early);
+        await r.passed("post", "job-1");
+        expect(r.c.state().tasks.get(r.t)!.run?.start).toMatchObject({ run: 4242, started: early });
+        expect(r.gate()?.kind).toBe("bypassed");
+        expect(r.gate()).toMatchObject({ missing: expect.arrayContaining(["an approval before the run"]) });
+        expect(landingsDue({ ...r.c.state(), tasks: r.c.state().tasks })).toEqual([]);
+      });
+
+      test("a run declared by GitHub's numeric id after it started is found, and shows as a bypass", async () => {
+        const r = await runTask(1);
+        await workflow(r, 4242, "Deploy", now(r) + 500);
+        await r.declare("4242");
+        await r.approveRun("4242");
+        await r.passed("pre-ship", "4242");
+        expect(r.c.state().tasks.get(r.t)!.run?.start).toMatchObject({ run: 4242 });
+        expect(r.gate()).toEqual({ kind: "bypassed", missing: ["an approval before the run", "a pre-ship check passed before the run"] });
+      });
+
+      test("no start comes from a run under another name, a CI job with the same id, or GitHub news from anyone but the owner's app", async () => {
+        const r = await cleared();
+        await workflow(r, 4242, "job-2", now(r) + 500);
+        await r.c.ci(S1, 1, undefined, now(r) + 500);
+        await r.c.github([{ event: "check_run", run: 4243, name: "job-1", status: "in_progress", sha: S1, happened: now(r) + 500, started: now(r) + 500 }]);
+        const forged = await workflow(r, 4244, "job-1", now(r) + 500, "ann");
+        expect(r.c.state().rejected.get(forged.seq)).toBe("only the owner's app posts GitHub's news");
+        expect(r.c.state().tasks.get(r.t)!.run?.start).toBeUndefined();
+        expect(r.gate()).toEqual({ kind: "waiting", why: runStarts("job-1") });
+      });
+
+      test("a reported start earlier than GitHub's still shows the bypass it reveals", async () => {
+        const r = await runTask(1);
+        await r.declare("job-1");
+        const claimed = now(r);
+        await r.approveRun("job-1");
+        await r.passed("pre-ship", "job-1");
+        await r.declare("job-1", claimed);
+        await workflow(r, 4242, "job-1", now(r) + 500);
+        await r.passed("post", "job-1");
+        expect(r.gate()).toMatchObject({ kind: "bypassed", missing: expect.arrayContaining(["an approval before the run"]) });
+      });
+
+      test("another run declared by a person drops the old run's start and finds the new one's", async () => {
+        const r = await cleared();
+        await workflow(r, 4242, "job-1", now(r) + 500);
+        await r.c.ev("jow", { op: "task.update", task: r.t, run: { id: "job-2" } });
+        expect(r.c.state().tasks.get(r.t)!.run).toMatchObject({ id: "job-2" });
+        expect(r.c.state().tasks.get(r.t)!.run?.start).toBeUndefined();
+      });
+
+      async function landed(r: Awaited<ReturnType<typeof runTask>>) {
+        await workflow(r, 4243, "job-1", now(r) + 500);
+        await r.passed("post", "job-1");
+        await r.c.land("jow", r.t, job("job-1"));
+        expect(r.c.state().tasks.get(r.t)!.state).toBe("done");
+      }
+
+      test("an earlier run under the name, reported after the task landed, sends it back to landing with the bypass, live and from a snapshot", async () => {
+        const r = await runTask(1);
+        const early = now(r) + 500;
+        await r.declare("job-1");
+        await r.approveRun("job-1");
+        await r.passed("pre-ship", "job-1");
+        await landed(r);
+        const kept: { base?: FoldBase } = {};
+        fold(r.c.log, roster, at(10_000), null, null, null, (b) => (kept.base = b));
+        if (!kept.base) throw new Error("the fold kept no base");
+        const n = kept.base.n;
+        await workflow(r, 4242, "job-1", early);
+        const live = r.c.state();
+        const replayed = fold(r.c.log.slice(n), roster, at(10_000), null, null, kept.base);
+        for (const s of [live, replayed]) {
+          const t = s.tasks.get(r.t)!;
+          expect(t.state).toBe("landing");
+          expect(t.landed).toBeUndefined();
+          expect(t.run?.start?.started).toBe(early);
+          expect(doneGate(s, t)).toMatchObject({ kind: "bypassed", missing: expect.arrayContaining(["an approval before the run"]) });
+          expect(t.notes.at(-1)?.text).toBe(`GitHub reports run 4242 for job-1, started earlier: its landing at run job-1 no longer holds, so it's back to landing`);
+          expect(landingsDue({ ...s, tasks: s.tasks })).toEqual([]);
+        }
+      });
+
+      test("an earlier run that still started after the gate opened leaves the landing alone", async () => {
+        const r = await cleared();
+        const opened = now(r) + 100;
+        await landed(r);
+        await workflow(r, 4244, "job-1", opened);
+        const t = r.c.state().tasks.get(r.t)!;
+        expect(t).toMatchObject({ state: "done", run: { start: { run: 4244, started: opened } } });
+        expect(t.landed?.key).toBe(`T${r.t}:run:job-1`);
+      });
+
+      test("a task a person closed with a reason stays closed when an earlier run turns up", async () => {
+        const r = await runTask(1);
+        const early = now(r) + 500;
+        await r.declare("job-1");
+        await r.approveRun("job-1");
+        await r.c.ev("jow", { op: "task.update", task: r.t, state: "done", close: "ran by hand" });
+        await workflow(r, 4242, "job-1", early);
+        expect(r.c.state().tasks.get(r.t)!).toMatchObject({ state: "done", closedWith: "ran by hand" });
+      });
+
+      test("runs forgotten since the task was created keep it from landing, even after a snapshot: an earlier run under the name could be among them", async () => {
+        const r = await runTask(1);
+        await workflow(r, 4242, "job-1", now(r) + 500);
+        await crowd(r.c, 5000, 500, now(r) + 500);
+        await r.declare("job-1");
+        await r.approveRun("job-1");
+        await r.passed("pre-ship", "job-1");
+        await workflow(r, 4243, "job-1", now(r) + 500);
+        await r.passed("post", "job-1");
+        expect(r.c.state().tasks.get(r.t)!.run).toMatchObject({ blind: true, start: { run: 4243 } });
+        expect(r.gate()).toEqual({ kind: "waiting", why: runBlind("job-1") });
+        const forced = await r.c.land("jow", r.t, job("job-1"));
+        expect(r.c.state().rejected.get(forced.seq)).toBe(`T${r.t} hasn't landed: it waits for ${runBlind("job-1")}`);
+        const kept: { base?: FoldBase } = {};
+        fold(r.c.log, roster, at(10_000), null, null, null, (b) => (kept.base = b));
+        if (!kept.base) throw new Error("the fold kept no base");
+        expect(kept.base.github?.runsForgotten).toBeGreaterThan(r.t);
+        const n = kept.base.n;
+        await r.c.ev("jow", { op: "task.update", task: r.t, run: { id: "job-2" } });
+        const replayed = fold(r.c.log.slice(n), roster, at(10_000), null, null, kept.base);
+        expect(replayed.tasks.get(r.t)!.run).toMatchObject({ id: "job-2", blind: true });
+      });
+
+      test("runs forgotten from before the task was created don't hold it back", async () => {
+        const r = await runTask(501);
+        expect(r.c.state().github.runsForgotten).toBeLessThan(r.t);
+        await r.declare("job-1");
+        await r.approveRun("job-1");
+        await r.passed("pre-ship", "job-1");
+        await workflow(r, 4243, "job-1", now(r) + 500);
+        await r.passed("post", "job-1");
+        expect(r.gate()).toEqual({ kind: "landed", artifact: job("job-1") });
+      });
+
+      test("a task created before Kiwi held any GitHub run start can't land by itself", async () => {
+        const r = await runTask();
+        await r.declare("job-1");
+        await r.approveRun("job-1");
+        await r.passed("pre-ship", "job-1");
+        await workflow(r, 4243, "job-1", now(r) + 500);
+        await r.passed("post", "job-1");
+        expect(r.gate()).toEqual({ kind: "waiting", why: runBlind("job-1") });
+      });
     });
   });
 

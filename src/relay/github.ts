@@ -59,6 +59,10 @@ const int = (x: unknown): number | undefined => (typeof x === "number" && Number
 const count = (x: unknown): number | undefined => (typeof x === "number" && Number.isSafeInteger(x) && x >= 0 ? x : undefined);
 const defined = (o: GithubItem): GithubItem => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as GithubItem;
 const when = (x: unknown): number | undefined => (typeof x === "string" ? Date.parse(x) || undefined : undefined);
+const earliest = (...xs: (number | undefined)[]): number | undefined => {
+  const known = xs.filter((x) => x !== undefined);
+  return known.length ? Math.min(...known) : undefined;
+};
 const seconds = (x: unknown): number | undefined => (typeof x === "number" && Number.isSafeInteger(x) && x > 0 ? x * 1000 : when(x));
 
 export function githubItem(event: string, payload: unknown, now: number): GithubItem | null {
@@ -133,6 +137,8 @@ export function githubItem(event: string, payload: unknown, now: number): Github
       sha: str(run.head_sha, 40),
       branch: str(run.head_branch),
       happened: run.status === "completed" ? when(run.updated_at) : when(run.run_started_at),
+      title: str(run.display_title),
+      started: earliest(when(run.created_at), when(run.run_started_at)),
     });
   }
   const ref = str(p.ref);
