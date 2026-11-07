@@ -1,6 +1,9 @@
 import {
+  AdditiveBlending,
   BackSide,
+  CanvasTexture,
   Color,
+  CustomBlending,
   DoubleSide,
   HalfFloatType,
   InstancedBufferAttribute,
@@ -10,6 +13,8 @@ import {
   MeshBasicNodeMaterial,
   NoBlending,
   NodeMaterial,
+  OneFactor,
+  OneMinusSrcAlphaFactor,
   PerspectiveCamera,
   PlaneGeometry,
   QuadMesh,
@@ -32,11 +37,13 @@ import {
   cameraPosition,
   color,
   cos,
+  exp,
   float,
   floor,
   fract,
   hash,
   instancedBufferAttribute,
+  instancedDynamicBufferAttribute,
   mix,
   mx_fractal_noise_float,
   normalize,
@@ -57,6 +64,7 @@ import {
   vec4,
 } from "three/tsl"
 
+import { ADVANCE, BASE64, planRun, poseGlyph, runFocus, runGap, type Pose, type Rand, type Run, type Source } from "~/afk/cipher"
 import { daylight, type Rgb } from "~/afk/daylight"
 import { freshPace, paced, SLOW_HOLD_MS } from "~/afk/pace"
 
@@ -77,6 +85,39 @@ let clockAhead = 0
 const clock = (): Date => new Date(Date.now() + clockAhead)
 
 const STILL_EVERY = 60_000
+const MAX_GLYPHS = 20
+const ATLAS_COLS = 13
+const ATLAS_ROWS = 5
+const CELL_W = 56
+const CELL_H = 72
+const SOFT_NEAR = 5.5
+const SOFT_FAR = 15
+
+const seeded =
+  (s: number): Rand =>
+  () =>
+    (s = (s * 16807) % 2147483647) / 2147483647
+
+function glyphAtlas(): CanvasTexture {
+  const canvas = document.createElement("canvas")
+  canvas.width = ATLAS_COLS * CELL_W
+  canvas.height = ATLAS_ROWS * CELL_H * 2
+  const g = canvas.getContext("2d")
+  if (g) {
+    const away = canvas.height * 2
+    g.fillStyle = "#fff"
+    g.shadowColor = "#fff"
+    g.shadowOffsetY = away
+    g.font = `600 ${Math.round(CELL_H * 0.5)}px ui-monospace, Menlo, monospace`
+    g.textAlign = "center"
+    g.textBaseline = "middle"
+    for (const [half, soft] of [SOFT_NEAR, SOFT_FAR].entries()) {
+      g.shadowBlur = soft
+      for (let i = 0; i < BASE64.length; i++) g.fillText(BASE64.charAt(i), ((i % ATLAS_COLS) + 0.5) * CELL_W, (Math.floor(i / ATLAS_COLS) + half * ATLAS_ROWS + 0.55) * CELL_H - away)
+    }
+  }
+  return new CanvasTexture(canvas)
+}
 
 let engine: Promise<Engine | null> | null = null
 
@@ -369,6 +410,116 @@ async function build(): Promise<Engine | null> {
     scene.add(mesh)
   }
 
+  const outScene = new Scene()
+  const airLit = (tint: Node<"vec3">, wp: Node<"vec3">) => {
+    const view = normalize(wp.sub(cameraPosition))
+    const sun = pow(view.dot(uSunDir).max(0), 5.0).mul(uSunShow)
+    const moon = pow(view.dot(uMoonDir).max(0), 8.0).mul(uMoonShow)
+    const col = tint
+      .mul(uLight)
+      .mul(uNight.mul(0.45).add(1.0))
+      .add(uGlow.mul(sun.mul(0.45).add(0.12)))
+      .add(C.moon.mul(moon.mul(0.12)))
+    const hazed = mix(col, uHaze, fogOf(wp).mul(0.75))
+    return mix(hazed, hazed.mul(vec3(1.05, 0.98, 0.86)).add(vec3(0.02, 0.012, 0.0)), uAlert.mul(0.75))
+  }
+  const airMaterial = (): SpriteNodeMaterial => {
+    const m = new SpriteNodeMaterial()
+    m.transparent = true
+    m.blending = AdditiveBlending
+    m.depthTest = false
+    m.depthWrite = false
+    return m
+  }
+
+  {
+    const P = small ? 22 : 36
+    const a = new Float32Array(P * 4)
+    const b = new Float32Array(P * 4)
+    for (let i = 0; i < P; i++) {
+      const d = 1.6 + 6 * Math.pow(rand(), 1.3)
+      a.set([rand(), 0.5 + d * (rand() * 0.42 - 0.2), 1.3 - d, rand()], i * 4)
+      b.set([0.03 + rand() * 0.03 + Math.max(0, 2.6 - d) * 0.03, 0.03 + rand() * 0.05, 0.1 + rand() * 0.14, rand()], i * 4)
+    }
+    const p = instancedBufferAttribute<"vec4">(new InstancedBufferAttribute(a, 4))
+    const q = instancedBufferAttribute<"vec4">(new InstancedBufferAttribute(b, 4))
+    const span = float(1.3).sub(p.z).mul(0.9).add(0.3)
+    const f = fract(p.x.add(uTime.mul(q.y).div(span.mul(2))))
+    const wp = vec3(
+      f.mul(2).sub(1).mul(span),
+      p.y.add(sin(uTime.mul(0.37).add(p.w.mul(6.283))).mul(0.05)).add(sin(uTime.mul(0.93).add(p.w.mul(17.0))).mul(0.015)),
+      p.z.add(sin(uTime.mul(0.21).add(p.w.mul(11.0))).mul(0.12))
+    )
+    const m = airMaterial()
+    m.positionNode = wp
+    m.scaleNode = q.x
+    m.colorNode = airLit(mix(C.cream, C.yolk, q.w.mul(0.5).add(0.2)), wp)
+    const c = uv().sub(0.5)
+    m.opacityNode = exp(c.dot(c).mul(-22.0))
+      .mul(q.z)
+      .mul(smoothstep(0.0, 0.08, f))
+      .mul(smoothstep(1.0, 0.92, f))
+    const pollen = new Sprite(m)
+    pollen.count = P
+    pollen.frustumCulled = false
+    outScene.add(pollen)
+  }
+
+  const gPos = new Float32Array(MAX_GLYPHS * 4)
+  const gChar = new Float32Array(MAX_GLYPHS * 4)
+  const gTint = new Float32Array(MAX_GLYPHS * 4)
+  const gLens = new Float32Array(MAX_GLYPHS * 4)
+  const gPosAttr = new InstancedBufferAttribute(gPos, 4)
+  const gCharAttr = new InstancedBufferAttribute(gChar, 4)
+  const gTintAttr = new InstancedBufferAttribute(gTint, 4)
+  const gLensAttr = new InstancedBufferAttribute(gLens, 4)
+  const glyphs = (() => {
+    const atlas = glyphAtlas()
+    const pos = instancedDynamicBufferAttribute<"vec4">(gPosAttr)
+    const ch = instancedDynamicBufferAttribute<"vec4">(gCharAttr)
+    const tint = instancedDynamicBufferAttribute<"vec4">(gTintAttr)
+    const lens = instancedDynamicBufferAttribute<"vec4">(gLensAttr)
+    const rows = ATLAS_ROWS * 2
+    const cell = (i: Node<"float">, half: number) => {
+      const idx = floor(i.add(0.5))
+      const row = floor(idx.add(0.5).div(ATLAS_COLS))
+      return vec2(
+        idx.sub(row.mul(ATLAS_COLS)).add(uv().x).div(ATLAS_COLS),
+        float(rows - 1 - half * ATLAS_ROWS)
+          .sub(row)
+          .add(uv().y)
+          .div(rows)
+      )
+    }
+    const pair = (half: number, b: Node<"float">) => mix(texture(atlas, cell(ch.x, half)).bias(b).a, texture(atlas, cell(ch.y, half)).bias(b).a, ch.z)
+    const p = uv()
+      .sub(0.5)
+      .mul(vec2(CELL_W / CELL_H, 1))
+    const edge = smoothstep(0.5, 0.38, abs(uv().x.sub(0.5))).mul(smoothstep(0.5, 0.4, abs(uv().y.sub(0.5))))
+    const shape = smoothstep(0.1, 0.8, ch.w)
+    const soft = lens.x.add(ch.w.oneMinus().mul(3.0))
+    const body = mix(pair(1, soft), pair(0, soft), lens.z).mul(edge).mul(shape).mul(tint.w)
+    const glow = mix(exp(p.dot(p).mul(-55.0)).mul(0.7), pair(1, soft.add(1.2)).mul(edge), shape).mul(tint.w)
+    const lit = airLit(tint.rgb, pos.xyz)
+    const m = new SpriteNodeMaterial()
+    m.transparent = true
+    m.blending = CustomBlending
+    m.blendSrc = OneFactor
+    m.blendDst = OneMinusSrcAlphaFactor
+    m.depthTest = false
+    m.depthWrite = false
+    m.positionNode = pos.xyz
+    m.scaleNode = vec2(pos.w.mul(CELL_W / CELL_H), pos.w)
+    m.rotationNode = lens.y
+    m.colorNode = lit.mul(body.mul(mix(0.34, 1.35, uNight)).add(glow.mul(mix(0.35, 0.7, uNight))))
+    m.opacityNode = body.mul(mix(1.35, 0.3, uNight))
+    const s = new Sprite(m)
+    s.count = MAX_GLYPHS
+    s.frustumCulled = false
+    outScene.add(s)
+    return s
+  })()
+
   const rayDir = (suv: Node<"vec2">) => normalize(uFwd.add(uRight.mul(suv.x.mul(2).sub(1).mul(uTan).mul(uAspect))).add(uUp.mul(suv.y.mul(-2).add(1).mul(uTan))))
 
   {
@@ -466,7 +617,14 @@ async function build(): Promise<Engine | null> {
       .mul(0.012)
     return vec4(col.add(grain), 1.0)
   })()
-  const quadOut = new QuadMesh(matOut)
+  matOut.vertexNode = vec4(positionGeometry.xy, 0.0, 1.0)
+  matOut.depthTest = false
+  matOut.depthWrite = false
+  matOut.side = DoubleSide
+  const quadOut = new Mesh(new PlaneGeometry(2, 2), matOut)
+  quadOut.frustumCulled = false
+  quadOut.renderOrder = -1
+  outScene.add(quadOut)
 
   let host: HTMLElement | null = null
   let alert = 0
@@ -481,6 +639,8 @@ async function build(): Promise<Engine | null> {
   let lastNow = 0
   let stillTimer = 0
   const scratch = new Vector3()
+  const aimDir = new Vector3()
+  const aimFwd = new Vector3()
 
   const linear = (c: number): number => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4))
   const setRgb = (u: { value: Vector3 }, c: Rgb): void => {
@@ -535,6 +695,101 @@ async function build(): Promise<Engine | null> {
     uAspect.value = camera.aspect
   }
 
+  interface Flight {
+    run: Run
+    at: number
+    x: number
+    y: number
+    z: number
+    h: number
+    vx: number
+    vy: number
+    blur: number
+    peak: number
+    tints: [Color, Color]
+    phase: number
+  }
+
+  const POLLEN_TINTS = [new Color(0xfff5e6).lerp(new Color(0xf2b63c), 0.4), new Color(0xfff5e6).lerp(new Color(0xf2b63c), 0.65)]
+  const pose: Pose = { x: 0, y: 0, z: 0, a: 0, b: 0, mix: 0, form: 0, alpha: 0 }
+  const tone = new Color()
+  let flight: Flight | null = null
+  let nextRun = 3 + Math.random() * 9
+
+  const launch = (r: Rand, at: number, source: Source): Flight => {
+    const run = planRun(r, source)
+    const n = run.glyphs.length
+    const depth = 2.6 + r() * 2.6
+    const span = 0.12 + r() * 0.06
+    const hs = Math.max(0.045, Math.min(0.075, (span * camera.aspect) / (n * ADVANCE)))
+    const tan = Math.tan(MathUtils.degToRad(camera.fov / 2))
+    const h = hs * 2 * tan * depth
+    const w = (n * ADVANCE * hs) / camera.aspect
+    const sx = 0.12 + w / 2 + r() * Math.max(0, 0.76 - w)
+    const sy = Math.min(sx < 0.55 ? 0.54 : 0.68, (source === "air" ? 0.48 : 0.54) + r() * 0.14)
+    aimDir
+      .set(sx * 2 - 1, 1 - sy * 2, 0.5)
+      .unproject(camera)
+      .sub(camera.position)
+      .normalize()
+    camera.getWorldDirection(aimFwd)
+    const reach = depth / Math.max(0.1, aimDir.dot(aimFwd))
+    const pick = (): Color => POLLEN_TINTS[Math.floor(r() * POLLEN_TINTS.length)] ?? tone
+    return {
+      run,
+      at,
+      x: camera.position.x + aimDir.x * reach,
+      y: camera.position.y + aimDir.y * reach,
+      z: camera.position.z + aimDir.z * reach,
+      h,
+      vx: 0.035 + r() * 0.03,
+      vy: (r() - 0.5) * 0.01,
+      blur: 0.4 + Math.abs(depth - 3.4) * 0.35,
+      peak: 0.55,
+      tints: [pick(), pick()],
+      phase: r() * Math.PI * 2,
+    }
+  }
+
+  const drawFlight = (f: Flight, t: number, fade: number): void => {
+    const local = t - f.at
+    const gs = f.run.glyphs
+    const focus = runFocus(f.run, local)
+    for (let i = 0; i < gs.length; i++) {
+      const g = gs[i]
+      if (!g) continue
+      poseGlyph(g, local, pose)
+      const o = i * 4
+      const wave = Math.sin(local * 1.3 - i * 0.6 + f.phase)
+      tone.copy(f.tints[0]).lerp(f.tints[1], g.tint)
+      gPos.set([f.x + pose.x * f.h + f.vx * local, f.y + pose.y * f.h + f.vy * local + wave * 0.12 * f.h, f.z + pose.z * f.h, f.h * g.scale], o)
+      gChar.set([pose.a, pose.b, pose.mix, pose.form], o)
+      gTint.set([tone.r, tone.g, tone.b, pose.alpha * f.peak * g.ink * fade], o)
+      gLens.set([f.blur, g.rot + wave * 0.06, focus, 0], o)
+    }
+    gPosAttr.needsUpdate = true
+    gCharAttr.needsUpdate = true
+    gTintAttr.needsUpdate = true
+    gLensAttr.needsUpdate = true
+    glyphs.count = gs.length
+    glyphs.visible = true
+  }
+
+  const cipherStep = (): void => {
+    if (flight && simClock - flight.at > flight.run.end) flight = null
+    if (!flight && simClock >= nextRun) {
+      flight = launch(Math.random, simClock, Math.random() < 0.6 ? "air" : "bloom")
+      nextRun = simClock + runGap(Math.random)
+    }
+    if (flight) drawFlight(flight, simClock, 1)
+    else glyphs.visible = false
+  }
+
+  const cipherStill = (): void => {
+    const trace = launch(seeded(55555), 0, "air")
+    drawFlight(trace, (trace.run.glyphs[0]?.leave ?? 0) + 0.3, 1)
+  }
+
   const render = (): void => {
     renderer.setRenderTarget(rtScene)
     renderer.setClearColor(hazeClear, 0)
@@ -542,7 +797,7 @@ async function build(): Promise<Engine | null> {
     renderer.setRenderTarget(rtBlur)
     quadBlur.render(renderer)
     renderer.setRenderTarget(null)
-    quadOut.render(renderer)
+    renderer.render(outScene, camera)
   }
 
   const frame = (dt: number): void => {
@@ -552,6 +807,7 @@ async function build(): Promise<Engine | null> {
     uAlert.value += (alert - uAlert.value) * (1 - Math.exp(-dt * 1.5))
     updateSky(clock())
     updateCamera(simClock)
+    cipherStep()
     render()
   }
 
@@ -595,6 +851,7 @@ async function build(): Promise<Engine | null> {
     uAlert.value = alert
     updateSky(clock())
     updateCamera(0)
+    cipherStill()
     render()
   }
 
@@ -641,10 +898,11 @@ async function build(): Promise<Engine | null> {
     renderer.setRenderTarget(rtBlur)
     await renderer.compileAsync(quadBlur, quadBlur.camera)
     renderer.setRenderTarget(null)
-    await renderer.compileAsync(quadOut, quadOut.camera)
+    await renderer.compileAsync(outScene, camera)
   } catch {
     // Compiling ahead only saves the first frames; drawing compiles whatever is left.
   }
+  glyphs.visible = false
 
   return {
     attach(stage, still0) {
