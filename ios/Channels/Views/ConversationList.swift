@@ -3,10 +3,8 @@ import SwiftUI
 
 struct ConversationList: View {
     @Environment(AppModel.self) private var model
-    @State private var path: [Spot] = []
     @State private var filter = Filter.all
     @State private var search = ""
-    @State private var settings = false
     @FocusState private var searching: Bool
 
     private var query: String { search.trimmingCharacters(in: .whitespaces).lowercased() }
@@ -32,7 +30,7 @@ struct ConversationList: View {
     }
 
     var body: some View {
-        NavigationStack(path: $path) {
+        NavigationStack(path: Binding(get: { model.path }, set: { model.path = $0 })) {
             List {
                 if let unsaved = model.unsaved {
                     Text(unsaved)
@@ -65,7 +63,7 @@ struct ConversationList: View {
                 }
                 ForEach(rows) { row in
                     Button {
-                        path.append(row.spot)
+                        model.path.append(row.spot)
                     } label: {
                         ConversationRowView(row: row)
                     }
@@ -75,7 +73,7 @@ struct ConversationList: View {
                     .listRowBackground(Tone.canvas)
                     .swipeActions(edge: .leading, allowsFullSwipe: true) { leading(row) }
                     .contextMenu {
-                        RowMenu(row: row) { path.append($0) }
+                        RowMenu(row: row) { model.path.append($0) }
                     } preview: {
                         RowPeek(row: row)
                     }
@@ -91,7 +89,7 @@ struct ConversationList: View {
                         .listRowBackground(Tone.canvas)
                     ForEach(hits, id: \.1.seq) { row, message in
                         Button {
-                            path.append(row.spot)
+                            model.path.append(row.spot)
                         } label: {
                             Hit(row: row, message: message, query: query)
                         }
@@ -112,19 +110,19 @@ struct ConversationList: View {
             .navigationDestination(for: Spot.self) { spot in
                 ConversationScreen(start: spot)
             }
-            .navigationDestination(isPresented: $settings) {
+            .navigationDestination(isPresented: Binding(get: { model.inSettings }, set: { model.inSettings = $0 })) {
                 SettingsScreen()
             }
             .bar(.bottom) { dock }
         }
         #if DEBUG
             .onChange(of: model.channels.first?.code, initial: true) { _, code in
-                guard let code, path.isEmpty, let shot = UserDefaults.standard.string(forKey: "shot") else { return }
+                guard let code, model.path.isEmpty, let shot = UserDefaults.standard.string(forKey: "shot") else { return }
                 if let text = UserDefaults.standard.string(forKey: "draft") { model.keep(Draft(text: text), code, "main") }
                 switch shot {
-                case "settings": settings = true
+                case "settings": model.inSettings = true
                 case "list": break
-                default: path = [Spot(code: code, place: UserDefaults.standard.string(forKey: "place") ?? "main")]
+                default: model.path = [Spot(code: code, place: UserDefaults.standard.string(forKey: "place") ?? "main")]
                 }
             }
         #endif
@@ -142,7 +140,7 @@ struct ConversationList: View {
         ToolbarItem(placement: .topBarLeading) {
             Menu {
                 Button {
-                    settings = true
+                    model.inSettings = true
                 } label: {
                     Label(model.person.isEmpty ? "Settings" : "Settings · \(model.person)", systemImage: "gear")
                 }
@@ -216,13 +214,13 @@ struct ConversationList: View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 18) {
             ForEach(model.pins()) { row in
                 Button {
-                    path.append(row.spot)
+                    model.path.append(row.spot)
                 } label: {
                     PinCell(row: row)
                 }
                 .buttonStyle(.plain)
                 .contextMenu {
-                    RowMenu(row: row) { path.append($0) }
+                    RowMenu(row: row) { model.path.append($0) }
                 } preview: {
                     RowPeek(row: row)
                 }
@@ -638,6 +636,7 @@ struct SettingsScreen: View {
                 }
             }
             .listRowBackground(Tone.raised)
+            AppearanceSection()
             if !model.enrolled {
                 Section {
                     Button {
