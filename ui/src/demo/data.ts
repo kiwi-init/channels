@@ -49,7 +49,7 @@ export const DEMO_PREFS: Prefs = {
   lightTheme: "channels-light",
   customThemes: [],
   folders: [],
-  calm: 3,
+  afk: 3,
 }
 
 export const DEMO_TILES: ChannelTile[] = [

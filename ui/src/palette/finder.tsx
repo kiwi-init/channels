@@ -8,7 +8,7 @@ import type { App, Channel, Task, TaskStatus, Theme, Where } from "~/model"
 import { useApp, type Go, type Nav, type Panel } from "~/nav"
 import { nickname, onePerPerson, shown } from "~/names"
 import { SIDEBAR_KEYS } from "@kiwi/app/sidebar-hidden.ts"
-import { showCalm } from "~/calm/idle"
+import { showAfk } from "~/afk/wait"
 import { toggleSide } from "~/shell/side"
 import { statusOf } from "~/shell/sidebar"
 import { wordsPlain } from "~/words"
@@ -326,15 +326,15 @@ function collect(app: App, nav: Nav, go: (go: Go) => void, debug: boolean): Item
       run: () => go({ to: "settings" }),
     },
     {
-      id: "action:calm",
+      id: "action:afk",
       group: "Actions",
-      label: "Calm",
-      keys: ["idle"],
+      label: "AFK",
+      keys: ["away", "screensaver", "calm", "idle"],
       lead: <Icon name="moon" size={14} />,
       meta: <kbd className="palette-kbd">⌘T</kbd>,
       run: () => {
         close()
-        showCalm()
+        showAfk()
       },
     }
   )

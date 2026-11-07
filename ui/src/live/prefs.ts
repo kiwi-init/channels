@@ -2,12 +2,12 @@ import { useMemo, useSyncExternalStore } from "react"
 
 import { setAccessibilityOption, useAccessibilityOption } from "@kiwi/app/accessibility.ts"
 import { setAppearance, setTextFont, setTextSize, useAppearance, useTextFont, useTextSize, type TextSize } from "@kiwi/app/theme.ts"
-import { calmMinutes, DEFAULT_CALM } from "~/calm/idle"
+import { afkMinutes, DEFAULT_AFK } from "~/afk/wait"
 import type { CustomTheme, Prefs } from "~/model"
 import { cleanFolders } from "~/shell/rail-items"
 import { cleanThemes, deletedTheme, movedDark, savedTheme, type ThemePrefs } from "~/theme/themes"
 
-type Own = Pick<Prefs, "muted" | "enterSends" | "darkTheme" | "lightTheme" | "customThemes" | "folders" | "calm">
+type Own = Pick<Prefs, "muted" | "enterSends" | "darkTheme" | "lightTheme" | "customThemes" | "folders" | "afk">
 
 const KEY = "ui.prefs"
 const MOVED = "ui.prefs.oled"
@@ -19,7 +19,7 @@ const DEFAULTS: Own = {
   lightTheme: "channels-light",
   customThemes: [],
   folders: [],
-  calm: DEFAULT_CALM,
+  afk: DEFAULT_AFK,
 }
 const SIZES: readonly TextSize[] = ["small", "default", "large", "larger", "largest"]
 const listeners = new Set<() => void>()
@@ -28,7 +28,7 @@ let own: Own | null = null
 type Store = Pick<Storage, "getItem" | "setItem">
 
 export function readPrefs(store: Store): Own {
-  const raw = JSON.parse(store.getItem(KEY) ?? "{}") as Partial<Own>
+  const raw = JSON.parse(store.getItem(KEY) ?? "{}") as Partial<Own> & { calm?: unknown }
   const moved = { oled: store.getItem(MOVED) === "1", cinder: store.getItem(CINDER) === "1" }
   const read: Own = {
     muted: Array.isArray(raw.muted) ? [...new Set(raw.muted.filter((k): k is string => typeof k === "string" && !!k))].slice(0, 500) : [],
@@ -37,7 +37,7 @@ export function readPrefs(store: Store): Own {
     lightTheme: typeof raw.lightTheme === "string" ? raw.lightTheme : DEFAULTS.lightTheme,
     customThemes: cleanThemes(raw.customThemes),
     folders: cleanFolders(raw.folders),
-    calm: calmMinutes(raw.calm),
+    afk: afkMinutes(raw.afk ?? raw.calm),
   }
   if (!moved.oled || !moved.cinder) {
     try {
@@ -100,7 +100,7 @@ export function setPrefs(p: Partial<Prefs>): void {
   if (Object.keys(changed).length) writeOwn({ ...readOwn(), ...changed })
 }
 
-const OWN_KEYS = ["muted", "enterSends", "darkTheme", "lightTheme", "customThemes", "folders", "calm"] as const satisfies readonly (keyof Own)[]
+const OWN_KEYS = ["muted", "enterSends", "darkTheme", "lightTheme", "customThemes", "folders", "afk"] as const satisfies readonly (keyof Own)[]
 
 export const saveTheme = (theme: CustomTheme): void => writeOwn({ ...readOwn(), ...savedTheme(readOwn(), theme) })
 

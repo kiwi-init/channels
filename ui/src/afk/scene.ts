@@ -1,4 +1,4 @@
-import { startMeadow, type Meadow } from "~/calm/meadow"
+import { startMeadow, type Meadow } from "~/afk/meadow"
 
 interface State {
   at: number
