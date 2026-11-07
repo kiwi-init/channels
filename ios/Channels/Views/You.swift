@@ -5,6 +5,7 @@ struct SettingsScreen: View {
     @Environment(AppModel.self) private var model
     @State private var confirm = false
     @State private var guarded = SettingsScreen.lockWords()
+    @AppStorage(Lock.offKey) private var lockOff = false
 
     private var relayHost: String {
         URL(string: model.relay)?.host() ?? model.relay
@@ -15,17 +16,15 @@ struct SettingsScreen: View {
         return "\(info?["CFBundleShortVersionString"] as? String ?? "") (\(info?["CFBundleVersion"] as? String ?? ""))"
     }
 
-    private static func lockWords() -> String {
+    private static func lockWords() -> String? {
         let context = LAContext()
-        guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: nil) else { return "Off, no passcode" }
-        let how =
-            switch context.biometryType {
-            case .faceID: "Face ID"
-            case .touchID: "Touch ID"
-            case .opticID: "Optic ID"
-            default: "Passcode"
-            }
-        return "\(how), after 30 s"
+        guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: nil) else { return nil }
+        switch context.biometryType {
+        case .faceID: return "Face ID"
+        case .touchID: return "Touch ID"
+        case .opticID: return "Optic ID"
+        default: return "Passcode"
+        }
     }
 
     var body: some View {
@@ -52,10 +51,16 @@ struct SettingsScreen: View {
                 } label: {
                     Setting(symbol: "antenna.radiowaves.left.and.right", tint: Tone.doing, title: "Relay")
                 }
-                LabeledContent {
-                    Text(guarded)
-                } label: {
-                    Setting(symbol: "lock.fill", tint: Tone.ink3, title: "Lock")
+                if let guarded {
+                    Toggle(isOn: Binding(get: { !lockOff }, set: { lockOff = !$0 })) {
+                        Setting(symbol: "lock.fill", tint: Tone.ink3, title: "Lock with \(guarded)")
+                    }
+                } else {
+                    LabeledContent {
+                        Text("Off, no passcode")
+                    } label: {
+                        Setting(symbol: "lock.fill", tint: Tone.ink3, title: "Lock")
+                    }
                 }
             }
             .listRowBackground(Tone.raised)
