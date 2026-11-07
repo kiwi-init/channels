@@ -1,0 +1,896 @@
+.afk-design {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.afk-design [data-afk-keep],
+.afk-design .afk-float {
+  pointer-events: auto;
+}
+
+.afk-float {
+  background: var(--float);
+  box-shadow: var(--shadow-float);
+  color: var(--ink);
+}
+
+.afk-meta {
+  color: var(--ink-3);
+  font-size: var(--t-stamp);
+  letter-spacing: -0.01em;
+}
+
+.afk-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--ink-2);
+  font: 600 var(--t-meta) var(--ui);
+}
+
+.afk-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: var(--line-3);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.afk-link:hover {
+  text-decoration-color: currentcolor;
+}
+
+.afk-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.afk-acts .btn {
+  background: var(--wash-2);
+}
+
+.afk-acts .btn:hover {
+  background: var(--line-3);
+}
+
+.afk-more {
+  margin: 0;
+  color: var(--ink-3);
+  font: 400 var(--t-ui) var(--ui);
+}
+
+.afk-picker {
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--r-ctl);
+  transform: translateX(-50%);
+}
+
+.afk-picker button {
+  height: calc(var(--ctl) - 4px);
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--r-row);
+  background: transparent;
+  color: var(--ink-2);
+  font: 500 var(--t-ui) var(--ui);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.afk-picker button .mono {
+  color: var(--ink-3);
+  font-size: var(--t-stamp);
+}
+
+.afk-picker button[aria-pressed="true"] {
+  background: var(--wash-2);
+  color: var(--ink);
+}
+
+.afk-reply {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 2px 2px 12px;
+  border-radius: var(--r-ctl);
+  background: var(--bg-3);
+}
+
+.afk-reply textarea {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--ink);
+  font: 400 var(--t-ui) / 1.5 var(--ui);
+  resize: none;
+}
+
+.afk-reply textarea::placeholder {
+  color: var(--ink-3);
+}
+
+.afk-send {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--wash-2);
+  color: var(--ink-3);
+}
+
+.afk-send.is-ready {
+  background: var(--ink);
+  color: var(--on-ink);
+  cursor: pointer;
+}
+
+.afk-letter {
+  position: absolute;
+  bottom: max(6vh, 24px);
+  left: max(5vw, 16px);
+  display: grid;
+  gap: 12px;
+  width: min(34rem, calc(100vw - 32px));
+  max-height: calc(100vh - 120px);
+  padding: 24px 24px 16px;
+  overflow: auto;
+  border-radius: var(--r-win);
+}
+
+.afk-stamp {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: var(--t-stamp);
+}
+
+.afk-letter-title {
+  margin: 0 0 4px;
+  font: 600 var(--t-display) var(--ui);
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+.afk-letter-p,
+.afk-ask-text {
+  margin: 0;
+  color: var(--ink-2);
+  font: 400 var(--t-body) / 1.47 var(--ui);
+  text-wrap: pretty;
+}
+
+.afk-letter-p b,
+.afk-ask-text b {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.afk-letter-p .mono {
+  color: var(--ink-3);
+  font-size: var(--t-ui);
+}
+
+.afk-letter .afk-head {
+  margin-top: 8px;
+}
+
+.afk-letter .afk-head .num,
+.afk-crew-asks .afk-head .num {
+  color: var(--decide);
+}
+
+.afk-letter-asks,
+.afk-crew-asks ol {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.afk-letter-asks li,
+.afk-crew-asks li {
+  display: grid;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.afk-crew-asks li:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.afk-ask-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.afk-sign {
+  margin: 4px 0 0;
+  color: var(--ink-3);
+  font: 400 var(--t-ui) var(--ui);
+}
+
+.afk-sign::before {
+  content: "— ";
+}
+
+.afk-corner {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--ctl);
+  margin: 0;
+  padding: 0 12px;
+  border-radius: var(--r-ctl);
+  color: var(--decide);
+  font: 600 var(--t-ui) var(--ui);
+}
+
+.afk-captions {
+  position: absolute;
+  bottom: max(8vh, 32px);
+  left: 50%;
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  width: min(44rem, calc(100vw - 32px));
+  transform: translateX(-50%);
+}
+
+.afk-ticks {
+  display: flex;
+  gap: 4px;
+  margin: 0;
+  padding: 2px 4px;
+  border-radius: 999px;
+  background: var(--float);
+  box-shadow: var(--shadow-float);
+  list-style: none;
+}
+
+.afk-ticks li {
+  width: 12px;
+  height: 3px;
+  border-radius: var(--r-tick);
+  background: var(--line-3);
+  transition:
+    width var(--slow) var(--ease),
+    background var(--slow) var(--ease);
+}
+
+.afk-ticks li.is-decide {
+  background: color-mix(in srgb, var(--decide) 45%, transparent);
+}
+
+.afk-ticks li.is-on {
+  width: 24px;
+  background: var(--ink);
+}
+
+.afk-ticks li.is-decide.is-on {
+  background: var(--decide);
+}
+
+.afk-caption {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  padding: 16px 20px;
+  border-radius: var(--r-card);
+  animation: afk-caption-in 0.9s var(--ease) both;
+}
+
+.afk-caption-lead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  font: 600 var(--t-ui) var(--ui);
+}
+
+.afk-caption-lead .afk-meta {
+  min-width: 0;
+  margin-left: auto;
+  overflow: hidden;
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.afk-caption.is-decide .afk-caption-lead b {
+  color: var(--decide);
+}
+
+.afk-tone {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ink-3);
+}
+
+.afk-caption.is-decide .afk-tone {
+  background: var(--decide);
+}
+
+.afk-caption.is-live .afk-tone {
+  background: var(--live);
+}
+
+.afk-caption-text {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font: 400 var(--t-title) / 1.45 var(--ui);
+  text-wrap: pretty;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+@keyframes afk-caption-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+.afk-crew-asks {
+  position: absolute;
+  top: max(10vh, 72px);
+  left: max(5vw, 16px);
+  display: grid;
+  gap: 12px;
+  width: min(26rem, calc(100vw - 32px));
+  padding: 16px;
+  border-radius: var(--r-card);
+}
+
+.afk-crew-asks .afk-ask-text {
+  font-size: var(--t-ui);
+}
+
+.afk-ask-body {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: var(--ink-2);
+  font: 400 var(--t-ui) / 1.45 var(--ui);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.afk-crew {
+  position: absolute;
+  right: max(5vw, 16px);
+  bottom: max(6vh, 24px);
+  left: max(5vw, 16px);
+  display: grid;
+  gap: 16px;
+  padding: 16px 12px 12px;
+  border-radius: var(--r-card);
+}
+
+.afk-crew-group {
+  display: grid;
+  gap: 6px;
+}
+
+.afk-crew-group + .afk-crew-group {
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.afk-crew-group .afk-head {
+  gap: 10px;
+  padding: 0 8px;
+  color: var(--ink);
+  font-size: var(--t-ui);
+}
+
+.afk-crew-group .afk-head .afk-meta {
+  font-weight: 400;
+}
+
+.afk-crew-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.afk-member {
+  display: grid;
+  grid-template-rows: auto auto auto;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 1px 10px;
+  width: 100%;
+  padding: 8px;
+  border: 0;
+  border-radius: var(--r-row);
+  background: transparent;
+  color: var(--ink);
+  font: 400 var(--t-ui) var(--ui);
+  text-align: left;
+  cursor: pointer;
+}
+
+.afk-member:hover {
+  background: var(--wash);
+}
+
+.afk-member > .av {
+  grid-row: 1 / 4;
+}
+
+.afk-member-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-weight: 600;
+}
+
+.afk-member-task,
+.afk-member-doing {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.afk-member-task {
+  color: var(--ink-2);
+}
+
+.afk-member-doing {
+  color: var(--ink-3);
+  font-size: var(--t-stamp);
+}
+
+.afk-member.is-waiting .afk-member-task {
+  color: var(--decide);
+}
+
+.afk-member.is-idle .afk-member-name {
+  color: var(--ink-2);
+  font-weight: 500;
+}
+
+.afk-day {
+  position: absolute;
+  right: max(5vw, 16px);
+  bottom: max(6vh, 24px);
+  left: max(5vw, 16px);
+  display: grid;
+  gap: 12px;
+  padding: 16px 20px 20px;
+  border-radius: var(--r-card);
+}
+
+.afk-day-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.afk-day-title {
+  margin: 0;
+  font: 600 var(--t-title) var(--ui);
+}
+
+.afk-day-title .mono {
+  font-weight: 500;
+}
+
+.afk-day-sum {
+  display: flex;
+  gap: 16px;
+  margin: 0;
+  color: var(--ink-2);
+  font: 400 var(--t-ui) var(--ui);
+}
+
+.afk-day-sum span::before {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: currentcolor;
+  content: "";
+  vertical-align: 2px;
+}
+
+.afk-day-sum .is-live::before {
+  background: var(--live);
+}
+
+.afk-day-sum .is-decide::before {
+  background: var(--decide);
+}
+
+.afk-day-sum .is-doing::before {
+  background: var(--doing);
+}
+
+.afk-day-grid {
+  --who: 9rem;
+
+  display: grid;
+}
+
+.afk-day-axis {
+  position: relative;
+  height: 20px;
+  margin-left: calc(var(--who) + 12px);
+}
+
+.afk-day-axis span {
+  position: absolute;
+  top: 0;
+  color: var(--ink-3);
+  font-size: var(--t-stamp);
+  transform: translateX(-50%);
+}
+
+.afk-day-axis .afk-day-now {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.afk-lane {
+  display: grid;
+  grid-template-columns: var(--who) minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  height: 32px;
+}
+
+.afk-lane-who {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font: 400 var(--t-ui) var(--ui);
+}
+
+.afk-lane-who b {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.afk-track {
+  position: relative;
+  height: 100%;
+}
+
+.afk-track::before {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  left: 0;
+  height: 1px;
+  background: var(--line);
+  content: "";
+}
+
+.afk-track-now {
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  width: 1px;
+  background: var(--ink-3);
+}
+
+.afk-span {
+  position: absolute;
+  top: calc(50% - 3px);
+  min-width: 3px;
+  height: 6px;
+  border-radius: var(--r-tick);
+}
+
+.afk-span.is-done {
+  background: var(--live);
+}
+
+.afk-span.is-doing {
+  background: var(--doing);
+}
+
+.afk-span.is-review {
+  background: var(--review);
+}
+
+.afk-span.is-waiting {
+  background: var(--decide);
+}
+
+.afk-span.is-ahead {
+  background: repeating-linear-gradient(90deg, var(--doing) 0 4px, transparent 4px 8px);
+  opacity: 0.6;
+}
+
+.afk-span-id {
+  position: absolute;
+  bottom: 8px;
+  left: 0;
+  color: var(--ink-3);
+  font-size: var(--t-stamp);
+  white-space: nowrap;
+}
+
+.afk-eta {
+  position: absolute;
+  top: calc(50% + 4px);
+  color: var(--doing);
+  font-size: var(--t-stamp);
+  white-space: nowrap;
+  transform: translateX(-100%);
+}
+
+.afk-wait {
+  position: absolute;
+  top: 50%;
+  height: 1px;
+  background: var(--decide);
+}
+
+.afk-wait::before {
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--decide);
+  content: "";
+}
+
+.afk-goals {
+  position: absolute;
+  top: 50%;
+  right: max(5vw, 16px);
+  display: grid;
+  gap: 16px;
+  width: min(27rem, calc(100vw - 32px));
+  max-height: calc(100vh - 140px);
+  padding: 20px;
+  overflow: auto;
+  border-radius: var(--r-card);
+  transform: translateY(-50%);
+}
+
+.afk-goals-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 0;
+  font: 600 var(--t-title) var(--ui);
+}
+
+.afk-goals-title .afk-meta {
+  font-weight: 400;
+}
+
+.afk-goal-list {
+  display: grid;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.afk-goal {
+  display: grid;
+  gap: 8px;
+}
+
+.afk-goal + .afk-goal {
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.afk-goal-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+  font: 400 var(--t-body) var(--ui);
+}
+
+.afk-goal-head b {
+  font-weight: 600;
+}
+
+.afk-goal-head .afk-meta {
+  white-space: nowrap;
+}
+
+.afk-segs {
+  display: flex;
+  gap: 2px;
+  height: 4px;
+}
+
+.afk-seg {
+  flex: 1;
+  border-radius: var(--r-tick);
+  background: var(--line-3);
+}
+
+.afk-seg.is-done {
+  background: var(--live);
+}
+
+.afk-seg.is-doing {
+  background: var(--doing);
+}
+
+.afk-seg.is-review,
+.afk-seg.is-landing {
+  background: var(--review);
+}
+
+.afk-seg.is-waiting {
+  background: var(--decide);
+}
+
+.afk-goal-next {
+  margin: 0;
+  overflow: hidden;
+  color: var(--ink-3);
+  font: 400 var(--t-ui) / 1.45 var(--ui);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.afk-goal-next.is-decide {
+  color: var(--decide);
+}
+
+.afk-goal-next.is-doing {
+  color: var(--ink-2);
+}
+
+.afk-map {
+  position: absolute;
+  inset: 0;
+}
+
+.afk-spot {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+
+.afk-spot-pin {
+  position: absolute;
+  top: -8px;
+  left: -8px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--float);
+  box-shadow: var(--shadow-float);
+}
+
+.afk-spot-pin::after {
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  background: var(--ink-3);
+  content: "";
+}
+
+.afk-spot.is-decide .afk-spot-pin::after {
+  background: var(--decide);
+}
+
+.afk-spot.is-doing .afk-spot-pin::after {
+  background: var(--doing);
+}
+
+.afk-spot.is-live .afk-spot-pin::after {
+  background: var(--live);
+}
+
+.afk-spot-stem {
+  position: absolute;
+  bottom: 8px;
+  left: -1px;
+  width: 2px;
+  height: 64px;
+  border-radius: var(--r-tick);
+  background: var(--float);
+}
+
+.afk-spot-label {
+  position: absolute;
+  bottom: 72px;
+  left: -20px;
+  display: grid;
+  gap: 2px;
+  width: max-content;
+  max-width: 20rem;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: var(--r-ctl);
+  font: 400 var(--t-ui) var(--ui);
+  text-align: left;
+  cursor: pointer;
+}
+
+.afk-spot-label b {
+  font-weight: 600;
+}
+
+.afk-spot.is-decide .afk-spot-label .afk-meta {
+  color: var(--decide);
+}
+
+.afk-spot-line {
+  max-width: 18rem;
+  overflow: hidden;
+  color: var(--ink-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.afk-spot-face {
+  position: absolute;
+  top: -10px;
+  left: -10px;
+  border-radius: 6px;
+}
+
+.afk-spot-face > .av {
+  background: var(--float);
+  box-shadow: 0 0 0 2px var(--float);
+}
+
+.afk-spot-face.is-working > .av {
+  box-shadow:
+    0 0 0 2px var(--float),
+    0 0 0 4px var(--doing);
+}
+
+.afk-spot-face.is-waiting > .av {
+  box-shadow:
+    0 0 0 2px var(--float),
+    0 0 0 4px var(--decide);
+}

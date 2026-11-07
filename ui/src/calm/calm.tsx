@@ -2,6 +2,8 @@ import "~/styles/calm.css"
 
 import { useEffect, useMemo, useRef, useState, type AnimationEvent } from "react"
 
+import { Designs } from "~/calm/designs/designs"
+import { designOf, type Design } from "~/calm/designs/shared"
 import { hideCalm } from "~/calm/idle"
 import type { Meadow } from "~/calm/meadow"
 import { calmRows, type CalmRow } from "~/calm/rows"
@@ -39,12 +41,20 @@ export function Calm() {
   const meadow = useRef<Meadow | null>(null)
   const latest = useRef({ rows, still, leaving })
   const total = rows.reduce((a, r) => a + r.needs, 0)
+  const [design, setDesign] = useState<Design | null>(() => designOf(location.search))
+  const [since] = useState(() => Date.now() - Math.max(1, app.prefs.calm) * 60_000)
+  const pick = (d: Design): void => {
+    const url = new URL(location.href)
+    url.searchParams.set("afk", d)
+    history.replaceState(history.state, "", url)
+    setDesign(d)
+  }
 
   useEffect(() => {
     const was = document.activeElement instanceof HTMLElement ? document.activeElement : null
     box.current?.focus({ preventScroll: true })
     const swallow = (e: Event): void => {
-      if (e.type === "pointerdown" && e.target instanceof Element && e.target.closest(".rest-row")) return
+      if (e.target instanceof Element && e.target.closest(".rest-row, [data-afk-keep]")) return
       e.preventDefault()
       e.stopImmediatePropagation()
       if (e.type !== "keyup") setLeaving(true)
@@ -101,20 +111,24 @@ export function Calm() {
   return (
     <div ref={box} className={cx("rest", leaving && "is-leaving")} role="dialog" aria-modal="true" aria-label="Calm" tabIndex={-1} onAnimationEnd={ended}>
       <div ref={stage} className="rest-back" aria-hidden="true" />
-      <section className="rest-glance" aria-label="What needs you">
-        {total > 0 ? (
-          <p className="rest-count">
-            Needs you <Count n={total} loud />
-          </p>
-        ) : (
-          <p className="rest-calm">Nothing needs you. Enjoy your time, or go worry about something else.</p>
-        )}
-        <ul className="rest-list" aria-label="Channels">
-          {rows.map((r) => (
-            <Row key={r.code} row={r} still={still} open={open} />
-          ))}
-        </ul>
-      </section>
+      {design ? (
+        <Designs design={design} pick={pick} open={open} still={still} since={since} />
+      ) : (
+        <section className="rest-glance" aria-label="What needs you">
+          {total > 0 ? (
+            <p className="rest-count">
+              Needs you <Count n={total} loud />
+            </p>
+          ) : (
+            <p className="rest-calm">Nothing needs you. Enjoy your time, or go worry about something else.</p>
+          )}
+          <ul className="rest-list" aria-label="Channels">
+            {rows.map((r) => (
+              <Row key={r.code} row={r} still={still} open={open} />
+            ))}
+          </ul>
+        </section>
+      )}
     </div>
   )
 }
