@@ -899,6 +899,33 @@ const confirmIt = (action: string): boolean => {
   return !!b;
 };
 
+async function openFromPage(d: Driver): Promise<void> {
+  await step("back to the channel", 10_000, () => d.evaluate(() => (document.querySelector<HTMLElement>(".set-back")?.click(), !document.querySelector(".set-nav")), null, 2_000));
+  await step("no panel beside the chat", 10_000, () =>
+    d.evaluate(
+      () => {
+        const close = document.querySelector<HTMLElement>('.panel button[aria-label="Close"]');
+        close?.click();
+        return !close && !document.querySelector(".panel .mod-slot");
+      },
+      null,
+      2_000,
+    ),
+  );
+  await settingsMods(d, "probe-mod");
+  await step("probe-mod's page", 10_000, () => d.evaluate(clickText, { selector: ".set-main .mod-open", text: "probe-mod" }, 2_000));
+  await step("its Open", 10_000, () => d.evaluate(clickText, { selector: ".set-main .mod-head-act button", text: "Open" }, 2_000));
+  const opened = await until("probe-mod's panel, from its page", 15_000, async () => {
+    const t = await d.evaluate(topAt, ".panel .mod-slot", 2_000);
+    return t.top === "frame probe-mod" ? t : null;
+  }).catch(() => null);
+  const left = await d.evaluate(() => !document.querySelector(".set-nav"), null, 2_000);
+  console.log(`after Open: ${JSON.stringify({ opened, left })}`);
+  check(!!opened && left, "Open on a mod's page in Settings → Mods leaves settings and shows its panel beside the chat");
+  await shot("mod-open-from-settings");
+  await settingsMods(d, "probe-mod");
+}
+
 async function settingsMods(d: Driver, shows: string): Promise<void> {
   await step("Settings", 10_000, () =>
     d.evaluate(() => (document.querySelector<HTMLElement>(".set-nav") ? true : (document.querySelector<HTMLElement>('[aria-label="Settings"]')?.click(), false)), null, 2_000),
@@ -1410,6 +1437,7 @@ try {
   await step("its details page says what it may do", 10_000, () => d.evaluate(() => (document.querySelector(".set-main")?.textContent ?? "").includes("What it may do"), null, 2_000));
   await later(500);
   await shot("settings-mod-details");
+  await openFromPage(d);
   notesVersion("1.0.0", []);
   addMod(join(root, ".kiwi"), NOTES);
   const notes = async () => (await modsNow(d)).find((m) => m.name === "notes-mod") ?? null;
