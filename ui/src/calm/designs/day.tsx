@@ -100,7 +100,7 @@ export function Day({ since }: { since: number }) {
   const needs = here?.asks.length ?? 0
   const working = here?.working ?? 0
   return (
-    <section className="afk-day afk-float" aria-label="Your day">
+    <section className="afk-day" aria-label="Your day">
       <header className="afk-day-head">
         <h2 className="afk-day-title">
           {ch.title} since <span className="mono">{clock(since)}</span>
@@ -113,11 +113,13 @@ export function Day({ since }: { since: number }) {
       </header>
       <div className="afk-day-grid">
         <div className="afk-day-axis" aria-hidden="true">
-          {hours.map((h) => (
-            <span key={h} className="mono" style={{ left: x(h) }}>
-              {clock(h)}
-            </span>
-          ))}
+          {hours
+            .filter((h) => Math.abs(h - now) > (end - start) / 25)
+            .map((h) => (
+              <span key={h} className="mono" style={{ left: x(h) }}>
+                {clock(h)}
+              </span>
+            ))}
           <span className="afk-day-now mono" style={{ left: x(now) }}>
             now
           </span>

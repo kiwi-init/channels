@@ -4,22 +4,12 @@ import { plural, useAway } from "~/calm/designs/shared"
 import { Avatar, cx } from "~/kit/bits"
 
 const SPOTS = [
-  { x: 27, y: 66 },
-  { x: 63, y: 58 },
-  { x: 82, y: 74 },
-  { x: 45, y: 80 },
+  { x: 22, y: 70 },
+  { x: 58, y: 62 },
+  { x: 80, y: 78 },
+  { x: 40, y: 86 },
 ] as const
-const RING = [
-  [-46, 10],
-  [46, 10],
-  [-80, 34],
-  [80, 34],
-  [-28, 44],
-  [28, 44],
-  [0, 58],
-  [-60, 62],
-  [60, 62],
-] as const
+const CREW_SHOWN = 8
 
 export function MapView({ open }: { open: (code: string) => void }) {
   const away = useAway()
@@ -39,7 +29,7 @@ export function MapView({ open }: { open: (code: string) => void }) {
               : null
         return (
           <div key={p.tile.code} className={cx("afk-spot", `is-${tone}`)} style={{ left: `${spot.x}%`, top: `${spot.y}%` } as CSSProperties}>
-            <button type="button" className="afk-spot-label afk-float" data-afk-keep="" onClick={() => open(p.tile.code)}>
+            <button type="button" className="afk-spot-label" data-afk-keep="" onClick={() => open(p.tile.code)}>
               <b>{p.tile.title}</b>
               <span className="afk-meta mono">
                 {[needs ? plural(needs, "needs you", "need you") : null, p.home.working ? `${p.home.working} working` : null, p.home.doneToday ? `${p.home.doneToday} done` : null]
@@ -47,19 +37,23 @@ export function MapView({ open }: { open: (code: string) => void }) {
                   .join(" · ") || "quiet"}
               </span>
               {line && <span className="afk-spot-line">{line}</span>}
+              {crew.length > 0 && (
+                <span className="afk-spot-crew">
+                  {crew.slice(0, CREW_SHOWN).map((a) => (
+                    <span
+                      key={a.agent.name}
+                      className={cx("afk-spot-face", `is-${a.agent.state}`)}
+                      title={`${a.agent.nick} · ${a.agent.task ? `T${a.agent.task.id} ${a.agent.task.title}` : a.agent.doing}`}
+                    >
+                      <Avatar person={a.person} size="sm" />
+                    </span>
+                  ))}
+                  {crew.length > CREW_SHOWN && <span className="afk-meta mono">+{crew.length - CREW_SHOWN}</span>}
+                </span>
+              )}
             </button>
             <span className="afk-spot-stem" aria-hidden="true" />
             <span className="afk-spot-pin" aria-hidden="true" />
-            {crew.slice(0, RING.length).map((a, j) => (
-              <span
-                key={a.agent.name}
-                className={cx("afk-spot-face", `is-${a.agent.state}`)}
-                style={{ transform: `translate(${RING[j]![0]}px, ${RING[j]![1]}px)` }}
-                title={`${a.agent.nick} · ${a.agent.task ? `T${a.agent.task.id} ${a.agent.task.title}` : a.agent.doing}`}
-              >
-                <Avatar person={a.person} size="sm" />
-              </span>
-            ))}
           </div>
         )
       })}

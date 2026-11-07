@@ -485,201 +485,6 @@
   font-weight: 500;
 }
 
-.afk-day {
-  position: absolute;
-  right: max(5vw, 16px);
-  bottom: max(6vh, 24px);
-  left: max(5vw, 16px);
-  display: grid;
-  gap: 12px;
-  padding: 16px 20px 20px;
-  border-radius: var(--r-card);
-}
-
-.afk-day-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.afk-day-title {
-  margin: 0;
-  font: 600 var(--t-title) var(--ui);
-}
-
-.afk-day-title .mono {
-  font-weight: 500;
-}
-
-.afk-day-sum {
-  display: flex;
-  gap: 16px;
-  margin: 0;
-  color: var(--ink-2);
-  font: 400 var(--t-ui) var(--ui);
-}
-
-.afk-day-sum span::before {
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  margin-right: 6px;
-  border-radius: 50%;
-  background: currentcolor;
-  content: "";
-  vertical-align: 2px;
-}
-
-.afk-day-sum .is-live::before {
-  background: var(--live);
-}
-
-.afk-day-sum .is-decide::before {
-  background: var(--decide);
-}
-
-.afk-day-sum .is-doing::before {
-  background: var(--doing);
-}
-
-.afk-day-grid {
-  --who: 9rem;
-
-  display: grid;
-}
-
-.afk-day-axis {
-  position: relative;
-  height: 20px;
-  margin-left: calc(var(--who) + 12px);
-}
-
-.afk-day-axis span {
-  position: absolute;
-  top: 0;
-  color: var(--ink-3);
-  font-size: var(--t-stamp);
-  transform: translateX(-50%);
-}
-
-.afk-day-axis .afk-day-now {
-  color: var(--ink);
-  font-weight: 600;
-}
-
-.afk-lane {
-  display: grid;
-  grid-template-columns: var(--who) minmax(0, 1fr);
-  align-items: center;
-  gap: 12px;
-  height: 32px;
-}
-
-.afk-lane-who {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  font: 400 var(--t-ui) var(--ui);
-}
-
-.afk-lane-who b {
-  overflow: hidden;
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.afk-track {
-  position: relative;
-  height: 100%;
-}
-
-.afk-track::before {
-  position: absolute;
-  top: 50%;
-  right: 0;
-  left: 0;
-  height: 1px;
-  background: var(--line);
-  content: "";
-}
-
-.afk-track-now {
-  position: absolute;
-  top: -1px;
-  bottom: -1px;
-  width: 1px;
-  background: var(--ink-3);
-}
-
-.afk-span {
-  position: absolute;
-  top: calc(50% - 3px);
-  min-width: 3px;
-  height: 6px;
-  border-radius: var(--r-tick);
-}
-
-.afk-span.is-done {
-  background: var(--live);
-}
-
-.afk-span.is-doing {
-  background: var(--doing);
-}
-
-.afk-span.is-review {
-  background: var(--review);
-}
-
-.afk-span.is-waiting {
-  background: var(--decide);
-}
-
-.afk-span.is-ahead {
-  background: repeating-linear-gradient(90deg, var(--doing) 0 4px, transparent 4px 8px);
-  opacity: 0.6;
-}
-
-.afk-span-id {
-  position: absolute;
-  bottom: 8px;
-  left: 0;
-  color: var(--ink-3);
-  font-size: var(--t-stamp);
-  white-space: nowrap;
-}
-
-.afk-eta {
-  position: absolute;
-  top: calc(50% + 4px);
-  color: var(--doing);
-  font-size: var(--t-stamp);
-  white-space: nowrap;
-  transform: translateX(-100%);
-}
-
-.afk-wait {
-  position: absolute;
-  top: 50%;
-  height: 1px;
-  background: var(--decide);
-}
-
-.afk-wait::before {
-  position: absolute;
-  top: -4px;
-  left: -4px;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--decide);
-  content: "";
-}
-
 .afk-goals {
   position: absolute;
   top: 50%;
@@ -787,6 +592,258 @@
   color: var(--ink-2);
 }
 
+.afk-design.is-day,
+.afk-design.is-map {
+  --on: rgb(255 255 255 / 0.96);
+  --on-2: rgb(255 255 255 / 0.8);
+  --on-3: rgb(255 255 255 / 0.64);
+  --on-line: rgb(255 255 255 / 0.3);
+  --on-shade: 0 1px 2px rgb(0 0 0 / 0.5), 0 0 16px rgb(0 0 0 / 0.3);
+
+  color: var(--on);
+  text-shadow: var(--on-shade);
+}
+
+.afk-design.is-day[data-sky="day"],
+.afk-design.is-map[data-sky="day"] {
+  --on: rgb(24 18 16 / 0.94);
+  --on-2: rgb(24 18 16 / 0.74);
+  --on-3: rgb(24 18 16 / 0.58);
+  --on-line: rgb(24 18 16 / 0.2);
+  --on-shade: 0 0 1px rgb(255 255 255 / 0.5), 0 0 14px rgb(255 255 255 / 0.6);
+  --on-glow: rgb(255 255 255 / 0.5);
+}
+
+.afk-design[data-sky="day"] .afk-lane-who .av-face,
+.afk-design[data-sky="day"] .afk-spot-face .av-face {
+  color: var(--on);
+}
+
+.afk-design.is-day[data-sky="night"],
+.afk-design.is-map[data-sky="night"] {
+  --on-glow: rgb(0 0 0 / 0.42);
+}
+
+.afk-design.is-day::before {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 50vh;
+  background: linear-gradient(to top, var(--on-glow), transparent);
+  content: "";
+}
+
+.afk-design.is-day .afk-picker,
+.afk-design.is-map .afk-picker {
+  text-shadow: none;
+}
+
+.afk-day {
+  position: absolute;
+  right: max(5vw, 16px);
+  bottom: max(5vh, 24px);
+  left: max(5vw, 16px);
+  display: grid;
+  gap: 16px;
+}
+
+.afk-day-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.afk-day-title {
+  margin: 0;
+  font: 600 var(--t-display) var(--ui);
+  letter-spacing: -0.01em;
+}
+
+.afk-day-title .mono {
+  font-weight: 500;
+}
+
+.afk-day-sum {
+  display: flex;
+  gap: 20px;
+  margin: 0;
+  color: var(--on-2);
+  font: 500 var(--t-ui) var(--ui);
+}
+
+.afk-day-sum span::before {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 8px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.25);
+  content: "";
+  vertical-align: 0;
+}
+
+.afk-day-sum .is-live::before {
+  background: var(--live);
+}
+
+.afk-day-sum .is-decide::before {
+  background: var(--decide);
+}
+
+.afk-day-sum .is-doing::before {
+  background: var(--doing);
+}
+
+.afk-day-grid {
+  --who: 9rem;
+
+  display: grid;
+}
+
+.afk-day-axis {
+  position: relative;
+  height: 20px;
+  margin-left: calc(var(--who) + 12px);
+}
+
+.afk-day-axis span {
+  position: absolute;
+  top: 0;
+  color: var(--on-3);
+  font-size: var(--t-stamp);
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+
+.afk-day-axis .afk-day-now {
+  color: var(--on);
+  font-weight: 600;
+}
+
+.afk-lane {
+  display: grid;
+  grid-template-columns: var(--who) minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  height: 32px;
+}
+
+.afk-lane-who {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font: 400 var(--t-ui) var(--ui);
+}
+
+.afk-lane-who .av {
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.45));
+}
+
+.afk-lane-who b {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.afk-track {
+  position: relative;
+  height: 100%;
+}
+
+.afk-track::before {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  left: 0;
+  height: 1px;
+  background: var(--on-line);
+  content: "";
+}
+
+.afk-track-now {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 1px;
+  background: var(--on-2);
+}
+
+.afk-span {
+  position: absolute;
+  top: calc(50% - 3px);
+  min-width: 4px;
+  height: 6px;
+  border-radius: var(--r-tick);
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.2),
+    0 1px 4px rgb(0 0 0 / 0.3);
+}
+
+.afk-span.is-done {
+  background: var(--live);
+}
+
+.afk-span.is-doing {
+  background: var(--doing);
+}
+
+.afk-span.is-review {
+  background: var(--review);
+}
+
+.afk-span.is-waiting {
+  background: var(--decide);
+}
+
+.afk-span.is-ahead {
+  background: repeating-linear-gradient(90deg, var(--on-2) 0 4px, transparent 4px 8px);
+  box-shadow: none;
+}
+
+.afk-span-id {
+  position: absolute;
+  bottom: 8px;
+  left: 0;
+  color: var(--on-3);
+  font-size: var(--t-stamp);
+  white-space: nowrap;
+}
+
+.afk-eta {
+  position: absolute;
+  top: calc(50% + 4px);
+  color: var(--on-2);
+  font-size: var(--t-stamp);
+  white-space: nowrap;
+  transform: translateX(-100%);
+}
+
+.afk-wait {
+  position: absolute;
+  top: calc(50% - 1px);
+  height: 2px;
+  border-radius: var(--r-tick);
+  background: var(--decide);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.3);
+}
+
+.afk-wait::before {
+  position: absolute;
+  top: -4px;
+  left: -5px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--decide);
+  box-shadow: 0 0 0 2px rgb(255 255 255 / 0.85);
+  content: "";
+}
+
 .afk-map {
   position: absolute;
   inset: 0;
@@ -800,97 +857,96 @@
 
 .afk-spot-pin {
   position: absolute;
-  top: -8px;
-  left: -8px;
-  width: 16px;
-  height: 16px;
+  top: -6px;
+  left: -6px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
-  background: var(--float);
-  box-shadow: var(--shadow-float);
+  background: var(--on-3);
+  box-shadow:
+    0 0 0 2px rgb(255 255 255 / 0.9),
+    0 1px 6px rgb(0 0 0 / 0.35);
 }
 
-.afk-spot-pin::after {
-  position: absolute;
-  inset: 4px;
-  border-radius: 50%;
-  background: var(--ink-3);
-  content: "";
-}
-
-.afk-spot.is-decide .afk-spot-pin::after {
+.afk-spot.is-decide .afk-spot-pin {
   background: var(--decide);
 }
 
-.afk-spot.is-doing .afk-spot-pin::after {
+.afk-spot.is-doing .afk-spot-pin {
   background: var(--doing);
 }
 
-.afk-spot.is-live .afk-spot-pin::after {
+.afk-spot.is-live .afk-spot-pin {
   background: var(--live);
 }
 
 .afk-spot-stem {
   position: absolute;
   bottom: 8px;
-  left: -1px;
-  width: 2px;
-  height: 64px;
-  border-radius: var(--r-tick);
-  background: var(--float);
+  left: -0.5px;
+  width: 1px;
+  height: 56px;
+  background: var(--on-2);
 }
 
 .afk-spot-label {
   position: absolute;
-  bottom: 72px;
-  left: -20px;
+  bottom: 64px;
+  left: -32px;
   display: grid;
-  gap: 2px;
+  justify-items: start;
+  gap: 4px;
   width: max-content;
-  max-width: 20rem;
-  padding: 10px 12px;
+  max-width: 24rem;
+  padding: 24px 32px;
   border: 0;
-  border-radius: var(--r-ctl);
+  border-radius: var(--r-card);
+  background: radial-gradient(farthest-side, var(--on-glow) 40%, transparent);
+  color: var(--on);
   font: 400 var(--t-ui) var(--ui);
   text-align: left;
+  text-shadow: var(--on-shade);
   cursor: pointer;
 }
 
 .afk-spot-label b {
-  font-weight: 600;
+  font: 600 var(--t-title) var(--ui);
+}
+
+.afk-spot-label .afk-meta {
+  color: var(--on-2);
 }
 
 .afk-spot.is-decide .afk-spot-label .afk-meta {
-  color: var(--decide);
+  color: var(--on);
+  font-weight: 600;
 }
 
 .afk-spot-line {
-  max-width: 18rem;
+  max-width: 20rem;
   overflow: hidden;
-  color: var(--ink-2);
+  color: var(--on-2);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.afk-spot-face {
-  position: absolute;
-  top: -10px;
-  left: -10px;
-  border-radius: 6px;
+.afk-spot-crew {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
 }
 
 .afk-spot-face > .av {
-  background: var(--float);
-  box-shadow: 0 0 0 2px var(--float);
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.45));
 }
 
-.afk-spot-face.is-working > .av {
-  box-shadow:
-    0 0 0 2px var(--float),
-    0 0 0 4px var(--doing);
+.afk-spot-face.is-working > .av,
+.afk-spot-face.is-waiting > .av {
+  border-radius: 6px;
+  box-shadow: 0 2px 0 -0.5px var(--doing);
 }
 
 .afk-spot-face.is-waiting > .av {
-  box-shadow:
-    0 0 0 2px var(--float),
-    0 0 0 4px var(--decide);
+  box-shadow: 0 2px 0 -0.5px var(--decide);
 }
