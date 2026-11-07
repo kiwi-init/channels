@@ -1,10 +1,10 @@
 import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { briefText } from "../src/brief.ts";
-import { ModError } from "../src/mods.ts";
+import { ModError, startDev } from "../src/mods.ts";
 import { DEFAULT_SKILLS, fetched, listSkills, skillHome, skillsIn, skillText } from "../src/skills.ts";
 import { kiwiCmd } from "./owner.ts";
 
@@ -50,7 +50,7 @@ describe("skills in mods (T6868)", () => {
   test("mod.json's skills are a path inside the mod or a git source pinned to a full commit; anything else is refused", () => {
     expect(skillsIn({ name: "x" }, "x")).toEqual([]);
     expect(skillsIn({ skills: [{ name: "inner", about: " a skill ", path: "skills/inner/" }] }, "x")).toEqual([
-      { name: "inner", about: "a skill", note: null, mod: "x", path: "skills/inner/", source: null, ref: null },
+      { name: "inner", about: "a skill", note: null, mod: "x", path: "skills/inner/", source: null, ref: null, builtin: false },
     ]);
     expect(skillsIn({ skills: [{ name: "inner", about: "a skill", note: "Send it with kiwi send.", path: "inner" }] }, "x")[0]?.note).toBe("Send it with kiwi send.");
     const why = (skills: unknown) => {
@@ -82,7 +82,7 @@ describe("skills in mods (T6868)", () => {
     modWith(home, "zines", [{ name: "zine", about: "folded zines", path: "skills/zine" }]);
     mkdirSync(join(home, "mods", "broken"));
     writeFileSync(join(home, "mods", "broken", "mod.json"), "{ not json");
-    expect(listSkills(home).map((s) => `${s.mod}/${s.name}`)).toEqual(["anatomy/anatomy", "zines/zine"]);
+    expect(listSkills(home).map((s) => `${s.mod}/${s.name}`)).toEqual(["anatomy/anatomy", "channels/mods", "zines/zine"]);
   });
 
   test("kiwi skill fetches the pinned commit once into ~/.kiwi/skills, prints SKILL.md with paths to its files, and works offline after", () => {
@@ -143,6 +143,32 @@ describe("skills in mods (T6868)", () => {
     const brief = briefText({ alias: "dev", agent: "otter", mc: "kiwi", listen: "", skills: [{ name: "anatomy", about: "interactive figures" }] });
     expect(brief).toContain("Skills: anatomy (interactive figures): `kiwi skill NAME`.");
     expect(briefText({ alias: "dev", agent: "otter", mc: "kiwi", listen: "" })).not.toContain("Skills:");
+  });
+
+  test("the mods skill is built into Channels: no network, SKILL.md and the kit's types side by side, and a stale copy written again", () => {
+    const home = scratch("home");
+    const mods = listSkills(home).find((s) => s.name === "mods")!;
+    expect(mods).toMatchObject({ builtin: true, source: null, path: null });
+    expect(fetched(home, mods)).toBe(true);
+    const dir = skillHome(home, mods);
+    expect(dir).toBe(join(home, "skills", "mods"));
+    expect(readdirSync(dir).sort()).toEqual(["SKILL.md", "kiwi-mod.d.ts"]);
+    expect(readFileSync(join(dir, "kiwi-mod.d.ts"), "utf8")).toBe(readFileSync(join(import.meta.dir, "../ui/src/mods/frame/kiwi-mod.d.ts"), "utf8"));
+    writeFileSync(join(dir, "SKILL.md"), "stale");
+    const text = skillText(mods, skillHome(home, mods));
+    expect(text.startsWith(`Skill "mods", from Channels itself. Its files are in ${dir}`)).toBe(true);
+    expect(text).toContain("kiwi mod check <name>");
+    expect(readFileSync(join(dir, "SKILL.md"), "utf8")).toBe(readFileSync(join(import.meta.dir, "../src/mods-skill.txt"), "utf8"));
+  });
+
+  test("every tsx example in the mods skill type-checks against the kit's types", () => {
+    const blocks = [...readFileSync(join(import.meta.dir, "../src/mods-skill.txt"), "utf8").matchAll(/```tsx\n([\s\S]*?)```/g)].map((m) => m[1]!);
+    expect(blocks.length).toBeGreaterThanOrEqual(5);
+    const { dir } = startDev(scratch("examples"), "skill-examples", scratch("cwd"));
+    symlinkSync(join(import.meta.dir, "../ui/node_modules"), join(dir, "node_modules"));
+    rmSync(join(dir, "index.tsx"));
+    blocks.forEach((code, i) => writeFileSync(join(dir, `example-${i}.tsx`), code));
+    execFileSync(join(import.meta.dir, "../node_modules/.bin/tsrs"), ["--noEmit", "-p", dir], { stdio: ["ignore", "pipe", "pipe"] });
   });
 
   test("kiwi skill lists the skills and prints one", async () => {

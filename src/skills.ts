@@ -1,7 +1,8 @@
 import { randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { isAbsolute, join, normalize } from "node:path";
-import { git, type Git, ModError, modsDir, parseSource } from "./mods.ts";
+import MODS_SKILL from "./mods-skill.txt" with { type: "text" };
+import { git, type Git, KIT_TYPES, KIT_TYPES_FILE, ModError, modsDir, parseSource } from "./mods.ts";
 
 const NAME = /^[a-z0-9][a-z0-9-]{0,62}$/;
 const COMMIT = /^[0-9a-f]{40}$/;
@@ -18,7 +19,12 @@ export interface Skill {
   path: string | null;
   source: string | null;
   ref: string | null;
+  builtin: boolean;
 }
+
+const BUILT_IN: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  mods: { [SKILL_FILE]: MODS_SKILL, [KIT_TYPES_FILE]: KIT_TYPES },
+};
 
 export const DEFAULT_SKILLS: readonly Skill[] = [
   {
@@ -29,6 +35,17 @@ export const DEFAULT_SKILLS: readonly Skill[] = [
     path: null,
     source: "github.com/wheresryan22/anatomy",
     ref: "1482e8469b0a9e0d8cc18ea2740a01423d29ae80",
+    builtin: false,
+  },
+  {
+    name: "mods",
+    about: "make Channels mods: panels, commands, tabs and attachment drawers",
+    note: "Check one with `kiwi mod check NAME` before you hand it over.",
+    mod: "channels",
+    path: null,
+    source: null,
+    ref: null,
+    builtin: true,
   },
 ];
 
@@ -50,12 +67,12 @@ export function skillsIn(raw: unknown, mod: string): Skill[] {
     if (path !== undefined) {
       if (source !== undefined || ref !== undefined) throw new ModError(`skill ${name}: give a path or a source, not both`);
       if (typeof path !== "string" || !path || isAbsolute(path) || normalize(path).split(/[\\/]/).includes("..")) throw new ModError(`skill ${name}: path is a folder inside the mod`);
-      return { name, about: about.trim(), note: told, mod, path: normalize(path), source: null, ref: null };
+      return { name, about: about.trim(), note: told, mod, path: normalize(path), source: null, ref: null, builtin: false };
     }
     if (typeof source !== "string") throw new ModError(`skill ${name}: give a path inside the mod, or a source and a ref`);
     if (parseSource(source).ref !== null) throw new ModError(`skill ${name}: put the commit in ref, not after # in the source`);
     if (typeof ref !== "string" || !COMMIT.test(ref)) throw new ModError(`skill ${name}: ref is the full 40-character commit it's pinned to`);
-    return { name, about: about.trim(), note: told, mod, path: null, source, ref };
+    return { name, about: about.trim(), note: told, mod, path: null, source, ref, builtin: false };
   });
 }
 
@@ -92,12 +109,25 @@ function headOf(dir: string, run: Git): string | null {
 }
 
 export function fetched(home: string, skill: Skill, run: Git = git): boolean {
-  if (skill.path !== null) return true;
+  if (skill.path !== null || skill.builtin) return true;
   const at = join(skillsDir(home), skill.name);
   return existsSync(join(at, SKILL_FILE)) && headOf(at, run) === skill.ref;
 }
 
+function builtinHome(home: string, skill: Skill): string {
+  const files = BUILT_IN[skill.name];
+  if (!files) throw new ModError(`skill ${skill.name}: Channels has no such skill built in`);
+  const at = join(skillsDir(home), skill.name);
+  mkdirSync(at, { recursive: true });
+  for (const [file, text] of Object.entries(files)) {
+    const to = join(at, file);
+    if (!existsSync(to) || readFileSync(to, "utf8") !== text) writeFileSync(to, text);
+  }
+  return at;
+}
+
 export function skillHome(home: string, skill: Skill, run: Git = git): string {
+  if (skill.builtin) return builtinHome(home, skill);
   if (skill.path !== null) {
     const dir = join(modsDir(home), skill.mod, skill.path);
     if (!existsSync(join(dir, SKILL_FILE))) throw new ModError(`skill ${skill.name}: the ${skill.mod} mod has no ${join(skill.path, SKILL_FILE)}`);
@@ -141,6 +171,6 @@ export function skillText(skill: Skill, dir: string): string {
       if (clean.split("/").includes("..") || !existsSync(join(dir, clean))) return whole;
       return `${lead}${join(dir, clean)}`;
     });
-  const from = skill.source ? `${skill.source} at ${short(skill.ref!)}` : `the ${skill.mod} mod`;
+  const from = skill.builtin ? "Channels itself" : skill.source ? `${skill.source} at ${short(skill.ref!)}` : `the ${skill.mod} mod`;
   return `Skill "${skill.name}", from ${from}. Its files are in ${dir}, and the paths below point there.${skill.note ? ` ${skill.note}` : ""}\n\n${body.trim()}\n`;
 }
