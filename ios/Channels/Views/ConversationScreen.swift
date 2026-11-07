@@ -94,6 +94,7 @@ struct ConversationScreen: View {
         .background(Tone.canvas)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
+        .toolbar(.hidden, for: .tabBar)
         .task(id: spot) {
             follow = Follow()
             await model.open(spot.code, place: spot.place == model.rooms[spot.code]?.sideKey ? "main" : spot.place)
@@ -272,14 +273,6 @@ struct ChannelAvatar: View {
 }
 
 extension View {
-    @ViewBuilder func softEdges() -> some View {
-        if #available(iOS 26.0, *) {
-            self.scrollEdgeEffectHidden(true, for: .all)
-        } else {
-            self
-        }
-    }
-
     @ViewBuilder func bar<Content: View>(_ edge: VerticalEdge, @ViewBuilder content: () -> Content) -> some View {
         if #available(iOS 26.0, *) {
             self.safeAreaBar(edge: edge, spacing: 0, content: content)
