@@ -50,7 +50,7 @@ struct ConversationScreen: View {
                 )
                 .overlay(alignment: .top) {
                     GeometryReader { geo in
-                        LinearGradient(stops: fade, startPoint: .top, endPoint: .bottom)
+                        LinearGradient(stops: fade(under: geo.safeAreaInsets.top), startPoint: .top, endPoint: .bottom)
                             .frame(height: geo.safeAreaInsets.top + 30)
                             .offset(y: -geo.safeAreaInsets.top)
                     }
@@ -189,11 +189,12 @@ struct ConversationScreen: View {
         return sections
     }
 
-    private var fade: [Gradient.Stop] {
-        [
+    private func fade(under top: CGFloat) -> [Gradient.Stop] {
+        let solid = top / (top + 30)
+        return [
             .init(color: Tone.canvas, location: 0),
-            .init(color: Tone.canvas.opacity(0.95), location: 0.62),
-            .init(color: Tone.canvas.opacity(0.55), location: 0.82),
+            .init(color: Tone.canvas, location: solid),
+            .init(color: Tone.canvas.opacity(0.6), location: solid + (1 - solid) * 0.4),
             .init(color: Tone.canvas.opacity(0), location: 1),
         ]
     }
