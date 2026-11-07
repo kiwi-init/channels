@@ -124,6 +124,7 @@ struct Conversation: View {
         .scrollPosition($position)
         .defaultScrollAnchor(.bottom)
         .scrollDismissesKeyboard(.interactively)
+        .softTop()
         .onScrollGeometryChange(for: Bool.self) { geo in
             geo.visibleRect.maxY >= geo.contentSize.height - 60
         } action: { _, near in

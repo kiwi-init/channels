@@ -16,38 +16,51 @@ struct NeedsScreen: View {
     var body: some View {
         List {
             ForEach(rooms, id: \.code) { room in
-                Section(room.title) {
-                    ForEach(room.open) { need in
-                        NavigationLink {
-                            NeedDetail(need: need, room: room, open: open)
-                        } label: {
-                            NeedsRow(face: need.kind == "join" ? nil : need.from, room: room, kind: NeedText.label(need), text: NeedText.title(need), at: need.at)
-                        }
+                Text(room.title)
+                    .type(.meta, .semibold)
+                    .foregroundStyle(Tone.ink3)
+                    .padding(.top, 10)
+                    .bare()
+                ForEach(room.open) { need in
+                    NavigationLink {
+                        NeedDetail(need: need, room: room, open: open)
+                    } label: {
+                        NeedsRow(face: need.kind == "join" ? nil : need.from, room: room, kind: NeedText.label(need), text: NeedText.title(need), at: need.at)
                     }
-                    ForEach(room.asks) { ask in
-                        NavigationLink {
-                            AskDetail(ask: ask, room: room, open: open)
-                        } label: {
-                            NeedsRow(face: ask.from, room: room, kind: NeedText.asked(ask, room), text: ask.plain, at: ask.at)
-                        }
+                    .bare()
+                }
+                ForEach(room.asks) { ask in
+                    NavigationLink {
+                        AskDetail(ask: ask, room: room, open: open)
+                    } label: {
+                        NeedsRow(face: ask.from, room: room, kind: NeedText.asked(ask, room), text: ask.plain, at: ask.at)
                     }
-                    ForEach(room.reviews) { review in
-                        NavigationLink {
-                            ReviewDetail(review: review, room: room, open: open)
-                        } label: {
-                            NeedsRow(face: review.by, room: room, kind: "Review \(taskLabel(review.task))", text: review.title, at: review.at)
-                        }
+                    .bare()
+                }
+                ForEach(room.reviews) { review in
+                    NavigationLink {
+                        ReviewDetail(review: review, room: room, open: open)
+                    } label: {
+                        NeedsRow(face: review.by, room: room, kind: "Review \(taskLabel(review.task))", text: review.title, at: review.at)
                     }
+                    .bare()
                 }
             }
         }
         .listStyle(.plain)
+        .scrollContentBackground(.hidden)
         .overlay {
             if rooms.isEmpty {
                 ContentUnavailableView("Nothing needs you", systemImage: "checkmark.circle", description: Text("Questions, permissions and reviews for you show up here."))
             }
         }
         .navigationTitle("Needs You")
+    }
+}
+
+extension View {
+    func bare() -> some View {
+        listRowBackground(Color.clear).listRowSeparator(.hidden)
     }
 }
 
