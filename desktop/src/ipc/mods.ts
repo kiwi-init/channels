@@ -138,6 +138,7 @@ export function modsCalls(
   | "mods"
   | "modBundle"
   | "approveMod"
+  | "setModRooms"
   | "modFetch"
   | "modFailed"
   | "setModOn"
@@ -211,7 +212,8 @@ export function modsCalls(
   return {
     mods: async () => withFailed((await ready()).list()),
     modBundle: async (name) => (await ready()).bundle(String(name)),
-    approveMod: async (name, needs) => (await ready()).approve(String(name), needs),
+    approveMod: async (name, needs, rooms) => (await ready()).approve(String(name), needs, Array.isArray(rooms) ? rooms : []),
+    setModRooms: async (name, rooms) => (await ready()).setRooms(String(name), Array.isArray(rooms) ? rooms : []),
     modFetch: async (name, req) => (await ready()).fetch(String(name), req),
     modFailed: async (name, hash, why) => (await ready()).failed(String(name), String(hash), String(why)),
     setModOn: async (name, on) => (await ready()).setOn(String(name), on === true),

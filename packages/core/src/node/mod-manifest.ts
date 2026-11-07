@@ -1,13 +1,13 @@
 import { isAppPrefix } from "../mod-names.ts";
 
-const MOD_NEEDS_OFFERED = ["panel", "sidebar", "tab", "command", "message-action", "terminal", "github", "idle", "channels", "net", "render"] as const;
+const MOD_NEEDS_OFFERED = ["panel", "sidebar", "tab", "command", "message-action", "terminal", "github", "idle", "channels", "post", "net", "render"] as const;
 
 const NEED_KINDS = ["panel", "sidebar", "tab", "command", "message-action", "terminal", "github", "idle", "channels", "read", "post", "net", "render"] as const;
 
 const NAME = /^[a-z0-9][a-z0-9-]{0,62}$/;
 const VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 const HOST = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{0,61}[a-z0-9]$/;
-const ROOM = /^#?[a-z0-9][a-z0-9-]{0,63}$/;
+const ROOM = /^#?[a-z0-9][a-z0-9-]{0,31}$/;
 const RENDER_KIND = /^[a-z][a-z0-9]{0,31}$/;
 const ICON = /^(?:[\w-][\w.-]*\/)*[\w-][\w.-]*\.(?:svg|png)$/i;
 const AUTHOR_CHARS = 100;
@@ -69,6 +69,11 @@ export function needKind(need: string): (typeof NEED_KINDS)[number] | null {
     default:
       return null;
   }
+}
+
+export function needRoom(need: string): string | null {
+  const kind = needKind(need);
+  return kind === "read" || kind === "post" ? need.slice(kind.length + 1).replace(/^#/, "") : null;
 }
 
 export function netHosts(needs: readonly string[]): string[] {
