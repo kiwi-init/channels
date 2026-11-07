@@ -94,6 +94,7 @@ const GLYPHS = {
 export type IconName = keyof typeof GLYPHS
 
 const STROKE = 1.8
+const ROUND = { stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: "1.5" } as const
 
 export function Icon({ name, size = 16, label }: { name: IconName; size?: number; label?: string }) {
   return <GlyphIcon glyph={GLYPHS[name]} size={size} label={label} />
@@ -112,7 +113,10 @@ export function GlyphIcon({ glyph, size = 16, label }: { glyph: Glyph; size?: nu
       aria-label={label}
       aria-hidden={label ? undefined : true}
     >
-      {glyph.map(([tag, attrs], i) => createElement(tag, { ...attrs, ...("strokeWidth" in attrs ? { strokeWidth: STROKE } : {}), key: i }))}
+      {glyph.map(([tag, glyphAttrs], i) => {
+        const attrs = "stroke" in glyphAttrs || "fill" in glyphAttrs ? glyphAttrs : { ...glyphAttrs, ...ROUND }
+        return createElement(tag, { ...attrs, ...("strokeWidth" in attrs ? { strokeWidth: STROKE } : {}), key: i })
+      })}
     </svg>
   )
 }
