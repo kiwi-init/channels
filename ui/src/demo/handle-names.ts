@@ -11,4 +11,8 @@ export const DEMO_AGENT_HANDLES = [
   "plucky-wren",
   "mellow-yak",
   "nimble-gecko",
+  "sunny-heron",
+  "brisk-marten",
+  "witty-crane",
+  "gentle-bison",
 ] as const
