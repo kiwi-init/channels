@@ -48,7 +48,7 @@ function entryOf(raw: unknown): { ok: true; entry: CatalogEntry } | { ok: false;
   if (icon !== undefined && (typeof icon !== "string" || !ICON.test(icon) || !files.includes(icon))) return fail("its icon isn't one of its .svg or .png files");
   const author = m["author"] === undefined ? undefined : oneLine(m["author"], 100);
   if (author === null) return fail("its author isn't a name on one line");
-  return { ok: true, entry: { name, does, needs: [...needs].sort(), commit, hash, files: [...files], ...(icon ? { icon } : {}), ...(author ? { author } : {}) } };
+  return { ok: true, entry: { name, does, needs: [...needs], commit, hash, files: [...files], ...(icon ? { icon } : {}), ...(author ? { author } : {}) } };
 }
 
 export function readCatalog(raw: unknown): Catalog {

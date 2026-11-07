@@ -83,7 +83,7 @@ export function FromKiwi({ installed }: { installed: ReadonlySet<string> }) {
             </span>
             <div className="set-row-ctl">
               {have ? (
-                <span className="set-note">Installed</span>
+                <span className="mod-installed">Installed</span>
               ) : (
                 <button type="button" className="btn is-quiet is-small" disabled={busy === m.name} onClick={() => setAsking(m)}>
                   Install

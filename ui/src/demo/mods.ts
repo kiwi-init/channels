@@ -85,7 +85,7 @@ const CATALOG: CatalogMod[] = [
   {
     name: "github",
     does: "Your pull requests, reviews and checks, in a panel beside the chat",
-    needs: ["github", "panel", "tab"],
+    needs: ["tab", "panel", "github"],
     commit: "fef9c2d6fc23f8cce1d0986541362457e3f7e7d7",
     source: "github.com/kiwi-init/mods/github",
     installed: false,
@@ -96,7 +96,7 @@ const CATALOG: CatalogMod[] = [
   {
     name: "release-radar",
     does: "New releases of what you depend on, with notes drafted from them",
-    needs: ["command", "message-action", "net:api.github.com", "panel", "sidebar"],
+    needs: ["panel", "sidebar", "command", "message-action", "net:api.github.com"],
     commit: "3f9a2c1d8e7b6a5f4e3d2c1b0a9f8e7d6c5b4a39",
     source: "github.com/kiwi-init/mods/release-radar",
     installed: true,
@@ -105,7 +105,7 @@ const CATALOG: CatalogMod[] = [
   {
     name: "terminals",
     does: "Your tmux and Rex terminals, one tap from the task that runs in them",
-    needs: ["panel", "terminal"],
+    needs: ["terminal", "command", "message-action"],
     commit: "0b4d9e2f7a1c3b5d6e8f0a2c4e6b8d0f1a3c5e7b",
     source: "github.com/kiwi-init/mods/terminals",
     installed: false,

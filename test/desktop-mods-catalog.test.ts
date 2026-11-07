@@ -99,7 +99,7 @@ describe("the vouched catalog from kiwi-init/mods (T7363)", () => {
       {
         name: "notes",
         does: "keeps notes beside the chat",
-        needs: ["net:api.example.com", "panel"],
+        needs: ["panel", "net:api.example.com"],
         commit: COMMIT,
         source: "github.com/kiwi-init/mods/notes",
         installed: false,
