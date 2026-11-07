@@ -54,10 +54,10 @@ function setup(files: Record<string, string> = github) {
 }
 
 describe("the mods that come with the app (T6270)", () => {
-  test("the app pins the GitHub and Calm mods from kiwi-init/mods, each at one commit, its files and one folder hash", () => {
+  test("the app pins the GitHub and AFK mods from kiwi-init/mods, each at one commit, its files and one folder hash", () => {
     expect(DEFAULT_MODS.map((p) => [p.name, p.repo, p.path])).toEqual([
       ["github", "kiwi-init/mods", "github"],
-      ["calm", "kiwi-init/mods", "calm"],
+      ["afk", "kiwi-init/mods", "afk"],
     ]);
     for (const p of DEFAULT_MODS) {
       expect(p.commit).toMatch(/^[0-9a-f]{40}$/);
@@ -157,5 +157,54 @@ describe("the mods that come with the app (T6270)", () => {
     expect(off?.state).toBe("off");
     expect(existsSync(join(opts.folder, "github"))).toBe(false);
     expect(existsSync(opts.approvals)).toBe(false);
+  });
+
+  test("Calm, installed by default before AFK, gives way to the afk mod and hands it its wait; a calm of the person's own stays", async () => {
+    const files = {
+      "mod.json": JSON.stringify({ name: "afk", version: "1.0.0", shell: "^3.19", needs: ["afk", "channels"] }),
+      "index.tsx": `import { afk } from "@kiwi/mod"\nafk({ after: 3, render: () => null })\n`,
+    };
+    const before = async (by: string) => {
+      const root = mkdtempSync(join(tmpdir(), "kiwi-mods-afk-"));
+      roots.push(root);
+      const source = join(root, "source");
+      mkdirSync(source, { recursive: true });
+      for (const [file, text] of Object.entries(files)) writeFileSync(join(source, file), text);
+      const pin: Pinned = { name: "afk", repo: "kiwi-init/mods", path: "afk", commit: COMMIT, hash: folderHash(source), files: Object.keys(files) };
+      const prefix = `https://raw.githubusercontent.com/kiwi-init/mods/${COMMIT}/afk/`;
+      const request = (async (input: string | URL | Request) => {
+        const url = String(input);
+        return url.startsWith(prefix) ? new Response(readFileSync(join(source, decodeURIComponent(url.slice(prefix.length))))) : new Response("nope", { status: 404 });
+      }) as typeof fetch;
+      const opts = { folder: join(root, ".kiwi", "mods"), approvals: join(root, "data", "mods.json"), record: join(root, "data", "mods-defaults.json"), contract: "3.19.0", pins: [pin], request };
+      const calm = join(opts.folder, "calm");
+      mkdirSync(calm, { recursive: true });
+      writeFileSync(join(calm, "mod.json"), JSON.stringify({ name: "calm", version: "1.0.0", shell: "^3.14", needs: ["idle", "channels"] }));
+      mkdirSync(join(root, "data"), { recursive: true });
+      writeFileSync(opts.record, JSON.stringify({ installed: { calm: by } }));
+      writeFileSync(
+        opts.approvals,
+        JSON.stringify({
+          approved: { calm: { needs: ["channels", "idle"], source: "github.com/kiwi-init/mods/calm" } },
+          off: {},
+          values: { calm: { source: "github.com/kiwi-init/mods/calm", set: { after: "10 min" }, rev: 2 } },
+          unsettledStarts: 0,
+        }),
+      );
+      expect(await installDefaults(opts)).toEqual([]);
+      return { opts, pin, calm, approvals: JSON.parse(readFileSync(opts.approvals, "utf8")) };
+    };
+
+    const theirs = await before("theirs");
+    expect(existsSync(theirs.calm)).toBe(true);
+    expect(theirs.approvals.values.calm.set).toEqual({ after: "10 min" });
+
+    const ours = await before("1".repeat(40));
+    expect(existsSync(ours.calm)).toBe(false);
+    expect(folderHash(join(ours.opts.folder, "afk"))).toBe(ours.pin.hash);
+    expect(JSON.parse(readFileSync(ours.opts.record, "utf8"))).toEqual({ installed: { afk: COMMIT } });
+    expect(ours.approvals.approved.calm).toBeUndefined();
+    expect(ours.approvals.approved.afk).toEqual({ needs: ["afk", "channels"], source: "github.com/kiwi-init/mods/afk" });
+    expect(ours.approvals.values).toEqual({ afk: { source: "github.com/kiwi-init/mods/afk", set: { after: "10 min" }, rev: 1 } });
   });
 });

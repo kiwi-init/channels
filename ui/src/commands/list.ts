@@ -5,7 +5,7 @@ export const APP = [
   { id: "app.new-mod", title: "New mod" },
   { id: "app.computers", title: "Your computers" },
   { id: "app.settings", title: "Settings" },
-  { id: "app.calm", title: "Calm" },
+  { id: "app.afk", title: "AFK" },
   { id: "view.sidebar", title: "Toggle sidebar" },
   { id: "chat.search", title: "Search this channel" },
   { id: "nav.back", title: "Go back" },

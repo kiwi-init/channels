@@ -60,8 +60,8 @@ describe("the channels a mod with the channels need sees", () => {
 
   test("only a mod that's on and asked for channels gets them; any other gets nothing", () => {
     const list = modChannels([tile("here")], [])
-    expect(channelsFor({ state: "on", needs: ["idle", "channels"] }, list)).toBe(list)
-    expect(channelsFor({ state: "on", needs: ["idle", "panel"] }, list)).toBeNull()
+    expect(channelsFor({ state: "on", needs: ["afk", "channels"] }, list)).toBe(list)
+    expect(channelsFor({ state: "on", needs: ["afk", "panel"] }, list)).toBeNull()
     expect(channelsFor({ state: "asks", needs: ["channels"] }, list)).toBeNull()
     expect(channelsFor({ state: "off", needs: ["channels"] }, list)).toBeNull()
     expect(channelsFor(undefined, list)).toBeNull()

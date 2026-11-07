@@ -1,4 +1,4 @@
-.rest {
+.afk {
   --meadow-haze: #6f8256;
 
   position: fixed;
@@ -9,27 +9,27 @@
   outline: none;
   cursor: default;
   -webkit-app-region: no-drag;
-  animation: rest-in 2s var(--ease) both;
+  animation: afk-in 2s var(--ease) both;
 }
 
-.rest.is-leaving {
+.afk.is-leaving {
   pointer-events: none;
-  animation: rest-out 0.5s var(--ease) both;
+  animation: afk-out 0.5s var(--ease) both;
 }
 
-.rest-back {
+.afk-back {
   position: absolute;
   inset: 0;
   pointer-events: none;
 }
 
-@keyframes rest-in {
+@keyframes afk-in {
   from {
     opacity: 0;
   }
 }
 
-@keyframes rest-out {
+@keyframes afk-out {
   to {
     opacity: 0;
   }

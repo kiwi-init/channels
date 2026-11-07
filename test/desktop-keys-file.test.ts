@@ -34,8 +34,8 @@ describe("~/.kiwi/keys.json", () => {
 
   test("the file's JSON goes to the page as it is: the page checks each entry", () => {
     const at = home();
-    fs.writeFileSync(path.join(at, "keys.json"), JSON.stringify({ "app.palette": "mod+p", "app.calm": null }));
-    expect(readKeys(at)).toEqual({ file: path.join(at, "keys.json"), present: true, keys: { "app.palette": "mod+p", "app.calm": null } });
+    fs.writeFileSync(path.join(at, "keys.json"), JSON.stringify({ "app.palette": "mod+p", "app.afk": null }));
+    expect(readKeys(at)).toEqual({ file: path.join(at, "keys.json"), present: true, keys: { "app.palette": "mod+p", "app.afk": null } });
   });
 
   test("a file that isn't JSON or is too big says why and binds nothing", () => {

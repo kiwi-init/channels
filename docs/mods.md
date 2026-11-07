@@ -66,7 +66,7 @@ Open a channel, press ⌘K and pick **Standup Notes** under Mods. Run `kiwi mod 
 | `name` | Lowercase letters, digits and dashes, the same as the folder's name. `app`, `nav`, `view`, `chat` and `debug` are taken. |
 | `version` | A version like `1.0.0` |
 | `shell` | The app versions it works with, like `^3.6`. An app it doesn't fit leaves it off and says why. |
-| `needs` | What it asks you for: `panel`, `tab`, `command`, `terminal`, `github`, `idle`, `channels`, `read:#<room>` and `post:#<room>` for each room it reads or posts in, `render:<kind>`, and `net:<host>` for each web host it talks to |
+| `needs` | What it asks you for: `panel`, `tab`, `command`, `terminal`, `github`, `afk`, `channels`, `read:#<room>` and `post:#<room>` for each room it reads or posts in, `render:<kind>`, and `net:<host>` for each web host it talks to |
 | `icon` | Optional: an `.svg` or `.png` in its folder, up to 64 KB. The app shows it as a picture, so an SVG's scripts never run. Without one, the mod gets its first letter. |
 | `description` | Optional: one line, up to 200 characters, on what it does. `kiwi mod publish` needs it, and **From Kiwi** shows it. |
 | `author` | Optional: who made it, up to 100 characters |
@@ -86,8 +86,8 @@ Everything comes from `@kiwi/mod`, plus React:
 | `useGithub()` | With `github`: the open channel's repos, pull requests, issues and the tasks they link, read-only. No token reaches the mod. |
 | `show(target)`, `useShowing()`, `onShow(run)` | Open the mod's panel on `{ kind: "pr" \| "issue", repo, number }`; what it shows now; what the app asked it to show, like a task's pull request card |
 | `open({ kind: "task", id })` | With `github`: open a task, the channel's settings (`{ kind: "settings" }`) or the chat (`{ kind: "chat" }`). With `channels`: open a channel (`{ kind: "channel", code }`). |
-| `idle({ after, backdrop, render })` | With `idle`: the mod's view over the whole window once you've been away `after` minutes (`0` waits for ⌘T only). `backdrop: "meadow"` puts the app's meadow behind it. See [While you're away](#while-youre-away). |
-| `leave()` | With `idle`: put the app back |
+| `afk({ after, backdrop, render })` | With `afk`: the mod's view over the whole window once you've been away `after` minutes (`0` waits for ⌘T only). `backdrop: "meadow"` puts the app's meadow behind it. See [While you're away (AFK)](#while-youre-away-afk). |
+| `leave()` | With `afk`: put the app back |
 | `useChannels()`, `channels()` | With `channels`: your channels, the ones that need you first, each with its `code`, `title`, `needs` (how many need you), `last` and one `line` |
 | `useRooms()`, `rooms()` | With `read:#<room>` or `post:#<room>`: the channels' rooms you ticked for it, each with its `channel` code, the channel's `title` and the `room` |
 | `post({ channel, room, text })` | With `post:#<room>`: post `text` as you into a room you ticked, at most once every 2 seconds. It ends with a line saying which mod sent it. A room you didn't tick is refused. See [Posting in your rooms](#posting-in-your-rooms). |
@@ -193,17 +193,17 @@ A mod that lists `read:#ops` (or any room) sees that room's messages, but only i
 - It never sees another room, a direct message, a channel you didn't tick, task events, or a message whose signature doesn't check out.
 - Untick a room and its messages leave the mod too.
 
-## While you're away
+## While you're away (AFK)
 
-A mod with `idle` draws what shows over the whole window while you're away, like Calm does. The app keeps the clock and the keyboard:
+A mod with `afk` draws what shows over the whole window while you're away (AFK), like the `afk` mod does. The app keeps the clock and the keyboard:
 
 - **It shows** after `after` minutes without the mouse or keys, or on ⌘T, and never while a dialog is open.
 - **No key reaches it.** Any key puts the app back, and the key goes nowhere else.
 - **A click stays in it,** and it can do only two things from there: open a channel with `open({ kind: "channel", code })`, or `leave()`. Links, copying, toasts and storage don't work in it.
 
-## The GitHub tab and Calm are mods
+## The GitHub tab and AFK are mods
 
-The channel's GitHub tab is the `github` mod from [kiwi-init/mods](https://github.com/kiwi-init/mods), and Calm, the meadow with your channels that shows while you're away, is its `calm` mod. **Settings → Mods → calm** sets how long it waits. The app installs both the first time it starts, already turned on, and never again: remove one and it stays removed. It needs no `git`: the app downloads the files it was built with from `raw.githubusercontent.com` at one pinned commit, and refuses them unless they hash to the folder it pinned. **Settings → Mods** says why, if it couldn't be installed, and the app tries again on its next start.
+The channel's GitHub tab is the `github` mod from [kiwi-init/mods](https://github.com/kiwi-init/mods), and AFK, the meadow with your channels that shows while you're away, is its `afk` mod. **Settings → Mods → afk** sets how long it waits. The app installs both the first time it starts, already turned on, and never again: remove one and it stays removed. It needs no `git`: the app downloads the files it was built with from `raw.githubusercontent.com` at one pinned commit, and refuses them unless they hash to the folder it pinned. **Settings → Mods** says why, if it couldn't be installed, and the app tries again on its next start.
 
 ## Turning one on
 

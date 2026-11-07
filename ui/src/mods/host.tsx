@@ -7,11 +7,11 @@ import type { MOD_MENU as MENU_EVENT, ModMenuAsk } from "~/chat/menus"
 import { addCommands } from "~/commands/rebind"
 import { bootFailed, bootGone, bootStarted } from "~/mods/boot"
 import { hostMods, publishTabs } from "~/mods/bus"
-import { carryCalm } from "~/mods/carry-calm"
+import { afkView, carryAfk } from "~/mods/carry-afk"
 import { channelsFor, modChannels } from "~/mods/channels"
 import { asksRooms, grantsOf, mayPost, mayRead, pacer, postBody, readWanted, sameMessages } from "~/mods/needs"
-import { useIdleWait } from "~/mods/idle"
-import { Rest } from "~/mods/rest"
+import { useAfkWait } from "~/mods/afk-wait"
+import { Afk } from "~/mods/afk"
 import { useApp, type Go, type Panel } from "~/nav"
 import { openOutside } from "~/kit/outside"
 import { openLinksOutside } from "~/kit/outside-links"
@@ -81,8 +81,8 @@ const state = {
   showing: new Map<string, ModTarget>(),
   pending: new Map<string, Waiting[]>(),
   channels: [] as ModChannel[],
-  idles: new Map<string, { after: number; backdrop: "meadow" | null }>(),
-  resting: null as { name: string; leaving: boolean } | null,
+  afks: new Map<string, { after: number; backdrop: "meadow" | null }>(),
+  away: null as { name: string; leaving: boolean } | null,
 }
 let app: { go: (g: Go) => void; panel: Panel | null } | null = null
 
@@ -116,7 +116,7 @@ const changed = (): void => {
   publishTabs(
     modTabs(),
     state.mods.some((m) => m.state === "on" && m.needs.includes("github")),
-    idleMod() !== null
+    afkMod() !== null
   )
 }
 
@@ -169,34 +169,34 @@ export const modTabs = (): { name: string; title: string; alert: string | null; 
 
 const framesOf = (name: string): Frame[] => [...frames.values()].filter((f) => f.name === name)
 
-function idleMod(): { name: string; after: number; backdrop: "meadow" | null } | null {
-  for (const { mod } of given("idle")) {
-    const asked = state.idles.get(mod.name)
-    if (asked && frames.get(keyOf(mod.name, "idle"))?.ready) return { name: mod.name, ...asked }
+function afkMod(): { name: string; after: number; backdrop: "meadow" | null } | null {
+  for (const { mod } of given("afk")) {
+    const asked = state.afks.get(mod.name)
+    if (asked && frames.get(keyOf(mod.name, "afk"))?.ready) return { name: mod.name, ...asked }
   }
   return null
 }
 
-function restNow(): boolean {
-  const pick = idleMod()
-  if (!pick || state.resting) return false
-  state.resting = { name: pick.name, leaving: false }
-  send(frames.get(keyOf(pick.name, "idle")), { kiwi: MOD_PROTOCOL, type: "rest", shown: true })
+function afkNow(): boolean {
+  const pick = afkMod()
+  if (!pick || state.away) return false
+  state.away = { name: pick.name, leaving: false }
+  send(frames.get(keyOf(pick.name, "afk")), { kiwi: MOD_PROTOCOL, type: "away", shown: true })
   changed()
   return true
 }
 
-function leaveRest(): void {
-  if (!state.resting || state.resting.leaving) return
-  state.resting = { ...state.resting, leaving: true }
+function leaveAfk(): void {
+  if (!state.away || state.away.leaving) return
+  state.away = { ...state.away, leaving: true }
   changed()
 }
 
-function restGone(): void {
-  const was = state.resting
+function afkGone(): void {
+  const was = state.away
   if (!was) return
-  state.resting = null
-  send(frames.get(keyOf(was.name, "idle")), { kiwi: MOD_PROTOCOL, type: "rest", shown: false })
+  state.away = null
+  send(frames.get(keyOf(was.name, "afk")), { kiwi: MOD_PROTOCOL, type: "away", shown: false })
   changed()
 }
 
@@ -207,7 +207,7 @@ function sendChannels(f: Frame): void {
 
 function sendRooms(f: Frame): void {
   const mod = modNamed(f.name)
-  if (!mod || f.surface === "render" || f.surface === "idle" || !asksRooms(mod.needs).length) return
+  if (!mod || f.surface === "render" || f.surface === "afk" || !asksRooms(mod.needs).length) return
   send(f, { kiwi: MOD_PROTOCOL, type: "rooms", list: grantsOf(mod, (code) => state.channels.find((c) => c.code === code)?.title ?? null) })
 }
 
@@ -217,7 +217,7 @@ const heardRooms = new Map<string, ModRoomMessage[]>()
 
 function sendHeard(f: Frame, code: string, room: string): void {
   const list = heardRooms.get(`${code}\n${room}`)
-  if (!list || f.surface === "render" || f.surface === "idle" || !mayRead(modNamed(f.name), code, room)) return
+  if (!list || f.surface === "render" || f.surface === "afk" || !mayRead(modNamed(f.name), code, room)) return
   send(f, { kiwi: MOD_PROTOCOL, type: "messages", channel: code, room, list })
 }
 
@@ -240,7 +240,7 @@ function setChannels(list: ModChannel[]): void {
   state.channels = list
   for (const f of frames.values()) sendChannels(f)
   for (const f of frames.values()) sendRooms(f)
-  if (state.resting) changed()
+  if (state.away) changed()
 }
 
 function sendGithub(f: Frame): void {
@@ -418,21 +418,21 @@ async function onMessage(e: MessageEvent): Promise<void> {
       bootGone(keyOf(name, surface))
       f.ready = true
       if (surface === "main") update(name, { failed: null })
-      if (surface === "idle") changed()
+      if (surface === "afk") changed()
       flush(f)
       return
-    case "idle":
-      state.idles.set(name, { after: m.after, backdrop: m.backdrop })
+    case "afk":
+      state.afks.set(name, { after: m.after, backdrop: m.backdrop })
       changed()
       return
     case "leave":
-      if (state.resting?.name === name) leaveRest()
+      if (state.away?.name === name) leaveAfk()
       return
     case "channel":
-      if (surface === "idle" && state.resting?.name !== name) return
+      if (surface === "afk" && state.away?.name !== name) return
       if (!state.channels.some((c) => c.code === m.code)) return
       app?.go({ to: "channel", code: m.code })
-      if (surface === "idle") leaveRest()
+      if (surface === "afk") leaveAfk()
       return
     case "tab":
       update(name, { tab: { title: m.title, shown: m.shown, alert: m.alert, hint: m.hint } })
@@ -593,11 +593,11 @@ function place(f: HTMLIFrameElement, el: HTMLElement | null, motion = ""): void 
 }
 
 function surfacesOf(m: ModView): Surface[] {
-  return ["main", ...(m.needs.includes("sidebar") ? (["sidebar"] as const) : []), ...(m.needs.includes("tab") ? (["tab"] as const) : []), ...(m.needs.includes("idle") ? (["idle"] as const) : [])]
+  return ["main", ...(m.needs.includes("sidebar") ? (["sidebar"] as const) : []), ...(m.needs.includes("tab") ? (["tab"] as const) : []), ...(m.needs.includes("afk") ? (["afk"] as const) : [])]
 }
 
-const restMotion = (f: Frame): string =>
-  f.surface !== "idle" || !state.resting ? "" : state.resting.leaving ? ";animation:rest-out 0.5s var(--ease) both;pointer-events:none" : ";animation:rest-in 2s var(--ease) both"
+const awayMotion = (f: Frame): string =>
+  f.surface !== "afk" || !state.away ? "" : state.away.leaving ? ";animation:afk-out 0.5s var(--ease) both;pointer-events:none" : ";animation:afk-in 2s var(--ease) both"
 
 function startFrames(layer: HTMLElement): void {
   const want = new Map<string, { name: string; surface: Surface; hash: string; rev: string }>()
@@ -610,9 +610,9 @@ function startFrames(layer: HTMLElement): void {
       bootGone(key)
       if (f.surface === "sidebar") update(f.name, { side: null })
       else if (f.surface === "tab") update(f.name, { tab: null })
-      else if (f.surface === "idle") {
-        state.idles.delete(f.name)
-        if (state.resting?.name === f.name) state.resting = null
+      else if (f.surface === "afk") {
+        state.afks.delete(f.name)
+        if (state.away?.name === f.name) state.away = null
         changed()
       } else {
         state.running.delete(f.name)
@@ -625,8 +625,8 @@ function startFrames(layer: HTMLElement): void {
     openLinksOutside()
     const el = document.createElement("iframe")
     el.setAttribute("sandbox", "allow-scripts")
-    el.title = surface === "main" ? name : surface === "tab" ? `${name}'s tab` : surface === "idle" ? `${name} while you're away` : `${name} in the sidebar`
-    if (surface === "idle") el.tabIndex = -1
+    el.title = surface === "main" ? name : surface === "tab" ? `${name}'s tab` : surface === "afk" ? `${name} while you're away` : `${name} in the sidebar`
+    if (surface === "afk") el.tabIndex = -1
     el.dataset["hash"] = hash
     el.dataset["rev"] = rev
     place(el, null)
@@ -642,9 +642,9 @@ export function ModsLayer() {
   const layer = useRef<HTMLDivElement>(null)
   const { go, nav, app: current } = useApp()
   const still = useStill()
-  const idle = idleMod()
+  const afk = afkMod()
   const wanted = readWanted(state.mods)
-  useIdleWait(idle?.after ?? 0, state.resting !== null, restNow)
+  useAfkWait(afk?.after ?? 0, state.away !== null, afkNow)
   useEffect(() => setChannels(modChannels(current.channels, current.home)), [current.channels, current.home])
   useEffect(() => {
     const l = look()
@@ -659,15 +659,15 @@ export function ModsLayer() {
     scheme.addEventListener("change", resend)
     return () => scheme.removeEventListener("change", resend)
   }, [])
-  const resting = state.resting
-  const restName = resting?.name ?? null
-  const restSlot = useCallback(
+  const away = state.away
+  const awayName = away?.name ?? null
+  const awaySlot = useCallback(
     (el: HTMLElement | null) => {
-      if (restName) showModIn(restName, el, "idle")
+      if (awayName) showModIn(awayName, el, "afk")
     },
-    [restName]
+    [awayName]
   )
-  const restFrame = useCallback(() => (restName ? (frames.get(keyOf(restName, "idle"))?.el ?? null) : null), [restName])
+  const awayFrame = useCallback(() => (awayName ? (frames.get(keyOf(awayName, "afk"))?.el ?? null) : null), [awayName])
   const [sides, setSides] = useState(sidesAnchor)
   const [foot, setFoot] = useState(() => document.querySelector(".rail-foot"))
   useEffect(() => {
@@ -677,7 +677,7 @@ export function ModsLayer() {
   useModsVersion()
   useEffect(() => {
     app = { go, panel: null }
-    hostMods({ github: setGithub, show: showIn, showTab: showTabIn, rest: restNow })
+    hostMods({ github: setGithub, show: showIn, showTab: showTabIn, afk: afkNow })
     return () => {
       app = null
       hostMods(null)
@@ -691,10 +691,11 @@ export function ModsLayer() {
     const b = bridge()
     if (!b || typeof b.mods !== "function") return
     let live = true
-    const take = (list: ModView[]) => {
+    const take = (given: ModView[]) => {
+      const list = given.map(afkView)
       if (!live) return
-      const after = list.some((m) => m.name === "calm") ? carryCalm(localStorage) : null
-      if (after) void b.setModSetting("calm", "after", after).catch(() => null)
+      const after = list.some((m) => m.name === "afk") ? carryAfk(localStorage) : null
+      if (after) void b.setModSetting("afk", "after", after).catch(() => null)
       state.mods = list
       if (layer.current) startFrames(layer.current)
       for (const f of frames.values()) if (f.ready) sendRooms(f)
@@ -723,7 +724,7 @@ export function ModsLayer() {
   }, [])
   useEffect(() => {
     const sync = () => {
-      for (const [key, f] of frames) place(f.el, slots.get(key) ?? null, restMotion(f))
+      for (const [key, f] of frames) place(f.el, slots.get(key) ?? null, awayMotion(f))
     }
     sync()
     const ro = new ResizeObserver(sync)
@@ -749,17 +750,17 @@ export function ModsLayer() {
   return (
     <>
       <div ref={layer} className="mods-layer" style={{ display: "contents" }} />
-      {resting && (
-        <Rest
-          name={resting.name}
-          leaving={resting.leaving}
-          meadow={state.idles.get(resting.name)?.backdrop === "meadow"}
+      {away && (
+        <Afk
+          name={away.name}
+          leaving={away.leaving}
+          meadow={state.afks.get(away.name)?.backdrop === "meadow"}
           alert={state.channels.some((c) => c.needs > 0)}
           still={still}
-          slot={restSlot}
-          frame={restFrame}
-          leave={leaveRest}
-          gone={restGone}
+          slot={awaySlot}
+          frame={awayFrame}
+          leave={leaveAfk}
+          gone={afkGone}
         />
       )}
       {foot &&

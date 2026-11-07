@@ -89,12 +89,19 @@ describe("the command table", () => {
 
 describe("keys.json", () => {
   test("it moves a key, adds a second one, or turns one off", () => {
-    setKeysFile(file({ "app.palette": ["mod+p", "mod+shift+p"], "app.calm": null }))
+    setKeysFile(file({ "app.palette": ["mod+p", "mod+shift+p"], "app.afk": null }))
     const t = commandTable()
     expect(t.keys.get("app.palette")).toEqual(["mod+p", "mod+shift+p"])
-    expect(t.keys.get("app.calm")).toBeUndefined()
+    expect(t.keys.get("app.afk")).toBeUndefined()
     bindAll()
     expect(key({ metaKey: true, key: "k", code: "KeyK" }).prevented).toBe(false)
+  })
+
+  test("a keys.json from before AFK still moves its key: app.calm is app.afk", () => {
+    setKeysFile(file({ "app.calm": "mod+shift+a" }))
+    const t = commandTable()
+    expect(t.keys.get("app.afk")).toEqual(["mod+shift+a"])
+    expect(t.problems).toEqual([])
   })
 
   test("a key it gives away leaves the command that had it", () => {
@@ -104,11 +111,11 @@ describe("keys.json", () => {
   })
 
   test("each bad entry is skipped with its reason, and the good ones still apply", () => {
-    setKeysFile(file({ "app.nope": "mod+j", "app.calm": "mod+kk", "app.join": 7, "app.settings": "mod+j", "app.computers": "mod+j" }))
+    setKeysFile(file({ "app.nope": "mod+j", "app.afk": "mod+kk", "app.join": 7, "app.settings": "mod+j", "app.computers": "mod+j" }))
     const t = commandTable()
     expect(t.problems).toEqual([
       { id: "app.nope", why: "isn't a command" },
-      { id: "app.calm", why: '"mod+kk" isn\'t a key like "mod+shift+k"' },
+      { id: "app.afk", why: '"mod+kk" isn\'t a key like "mod+shift+k"' },
       { id: "app.join", why: 'needs a key like "mod+shift+k", a list of keys, or null' },
       { id: "app.computers", why: expect.stringContaining("is already app.settings's in keys.json") },
     ])

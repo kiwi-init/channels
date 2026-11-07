@@ -128,8 +128,8 @@ try {
     await shows(d, "built-in");
     console.log("nothing published: the built-in UI");
     const gpu = await meadowDraws(d);
-    if (gpu === "nothing") problems.push("the packaged app has neither WebGPU nor WebGL 2, so the Calm meadow can't draw");
-    console.log(`the Calm meadow draws with ${gpu} in the packaged app`);
+    if (gpu === "nothing") problems.push("the packaged app has neither WebGPU nor WebGL 2, so the AFK meadow can't draw");
+    console.log(`the AFK meadow draws with ${gpu} in the packaged app`);
   });
 
   const old = publish("old", undefined, `^${UI_REQUIRES.split(".")[0]}.0.0`);

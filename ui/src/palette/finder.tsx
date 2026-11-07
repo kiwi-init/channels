@@ -32,7 +32,7 @@ const LOOKS: Record<string, { icon: IconName | Glyph; words: string[]; late?: tr
   "app.new-mod": { icon: PuzzleIcon, words: ["make", "create", "extension", "plugin", "panel", "command"] },
   "app.computers": { icon: "computer", words: ["phones", "devices", "machines"] },
   "app.settings": { icon: "gear", words: ["preferences", "account"] },
-  "app.calm": { icon: Moon02Icon, words: ["idle"] },
+  "app.afk": { icon: Moon02Icon, words: ["away", "screensaver"] },
   "view.sidebar": { icon: "sidebar", words: ["hide", "show", "rooms", "people"] },
   "chat.search": { icon: "search", words: ["find", "messages"] },
   "nav.back": { icon: "back", words: ["history", "previous"] },
