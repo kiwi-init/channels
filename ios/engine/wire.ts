@@ -33,6 +33,9 @@ export type Ask =
   | { op: "react"; code: string; seq: number; emoji: string | null }
   | { op: "approve"; code: string; task: number }
   | { op: "sendBack"; code: string; task: number; why: string }
+  | { op: "allow"; code: string; id: string; allow: boolean }
+  | { op: "letIn"; code: string; id: string }
+  | { op: "approveSpec"; code: string; ask: number; v: number }
   | { op: "open"; code: string; place: string }
   | { op: "marks"; code: string; marks: Record<string, number>; write: boolean }
   | { op: "nudge" };
@@ -137,6 +140,35 @@ export interface ReviewView {
   at: number;
 }
 
+export type NeedView =
+  | {
+      kind: "permission";
+      id: string;
+      from: string;
+      at: number;
+      title: string;
+      summary: string | null;
+      code: string;
+      cwd: string | null;
+      canAllow: boolean;
+      allower: string | null;
+      expiresAt: number | null;
+      task: number | null;
+    }
+  | {
+      kind: "join";
+      id: string;
+      at: number;
+      name: string;
+      who: "human" | "agent";
+      runs: string | null;
+      machine: string | null;
+      sponsor: string | null;
+      code: string;
+      pinned: boolean;
+    }
+  | { kind: "spec"; id: string; at: number; ask: number; v: number; changed: boolean; title: string; text: string; by: string };
+
 export interface PlaceView {
   key: string;
   kind: "main" | "dm" | "task";
@@ -171,6 +203,7 @@ export interface RoomView {
   tasks: TaskView[];
   asks: AskView[];
   reviews: ReviewView[];
+  needs: NeedView[];
   last: MessageView | null;
   latest: MessageView | null;
   latestIn: string;

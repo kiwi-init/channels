@@ -32,7 +32,7 @@ struct ConversationScreen: View {
             if let room = model.shown(spot) {
                 Conversation(
                     room: room, replyTo: $replyTo, position: $position, follow: $follow, typing: $typing, elsewhere: spot.general ? room.elsewhere() : [],
-                    reviews: spot.general ? room.reviews : []
+                    reviews: spot.general ? room.reviews : [], needs: spot.general ? room.open : []
                 ) { ask in
                     replyTo = nil
                     sendingBack = nil
@@ -139,7 +139,7 @@ struct ConversationScreen: View {
     }
 
     private func flip(_ room: RoomView, to other: Spot) -> some View {
-        let asks = !room.asks(in: other.place).isEmpty || (other.general && !room.reviews.isEmpty)
+        let asks = !room.asks(in: other.place).isEmpty || (other.general && !(room.reviews.isEmpty && room.open.isEmpty))
         let fresh = model.unread(other)
         return Button {
             switchTo(other)
@@ -242,7 +242,7 @@ struct TitlePill: View {
     }
 
     @ViewBuilder private var status: some View {
-        let needs = place?.kind == "main" ? room.asks.count + room.reviews.count : 0
+        let needs = place?.kind == "main" ? room.asks.count + room.reviews.count + room.open.count : 0
         let parts: [String] = [
             place?.kind == "dm" ? (busy ?? (other?.here == true ? "here" : "away")) : nil,
             room.connection == .connecting ? "Connecting…" : nil,

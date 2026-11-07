@@ -81,7 +81,8 @@ beforeAll(async () => {
     const got = await personMachines({ signer: person, person: person.pk, relay });
     return got.ok && got.value.some((c) => c.key === machine.pk && c.online);
   });
-  await import("../ios/engine/main.ts");
+  const engine = "../ios/engine/main.ts";
+  await import(engine);
   kiwi().listen((p) => pushes.push(p));
   const seat: ChannelIdentityView = {
     label: "studio work",

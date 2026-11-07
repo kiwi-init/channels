@@ -12,7 +12,7 @@ import { knownHarness, monoHarness } from "@kiwi/app/harness.ts";
 import { named, namedMarkdown } from "@kiwi/app/mentions.ts";
 import { lastPreview } from "@kiwi/app/preview.ts";
 import { reviewsFor } from "@kiwi/channel/task-actions.ts";
-import type { AskView, Connection, IconView, MemberView, MessageView, PlaceView, ReviewView, RoomView, TaskView } from "./wire.ts";
+import type { AskView, Connection, IconView, MemberView, MessageView, NeedView, PlaceView, ReviewView, RoomView, TaskView } from "./wire.ts";
 
 const SHOWN = 300;
 const QUOTE_CHARS = 140;
@@ -32,6 +32,7 @@ export interface RoomInput {
   state: ChannelState;
   online: ReadonlyMap<string, Online>;
   place: string;
+  needs?: NeedView[];
 }
 
 const iconView = (icon: ChannelIcon | null, title: string): IconView => icon ?? { kind: "robot", robot: ROBOT_FACES[avatarIndex(title.trim().toLowerCase(), ROBOT_FACES.length)]! };
@@ -79,7 +80,11 @@ export function roomView(r: RoomInput): RoomView {
   const bySeq = new Map(r.messages.map((m) => [m.seq, m]));
   const repliesTo = new Map<number, Message[]>();
   for (const m of r.messages) for (const seq of m.re ?? []) repliesTo.set(seq, [...(repliesTo.get(seq) ?? []), m]);
-  const { decisions, escalations, questions } = asksFor(heldAsks(state), me, answersDecisions(state.members, me));
+  const { decisions, escalations, questions } = asksFor(
+    heldAsks(state).filter((m) => !m.permission),
+    me,
+    answersDecisions(state.members, me),
+  );
   const waiting = new Set([...decisions, ...escalations].map((m) => m.seq));
   const here = placeFromKey(r.place) ? r.place : "main";
   const visible = r.messages.filter((m) => shownIn(m, state, here));
@@ -223,6 +228,7 @@ export function roomView(r: RoomInput): RoomView {
     tasks,
     asks,
     reviews,
+    needs: r.needs ?? [],
     last: lastChat ? messageView(lastChat, undefined) : null,
     latest: latest ? messageView(latest, undefined) : null,
     latestIn,

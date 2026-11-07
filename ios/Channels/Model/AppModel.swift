@@ -193,7 +193,10 @@ final class AppModel {
             if let before = rooms[room.code], before.connection == .live {
                 let known = Set(before.asks.map(\.seq))
                 let reviewed = Set(before.reviews.map(\.task))
-                if room.asks.contains(where: { !known.contains($0.seq) }) || room.reviews.contains(where: { !reviewed.contains($0.task) }) {
+                let seen = Set(before.open.map(\.id))
+                if room.asks.contains(where: { !known.contains($0.seq) }) || room.reviews.contains(where: { !reviewed.contains($0.task) })
+                    || room.open.contains(where: { !seen.contains($0.id) })
+                {
                     UINotificationFeedbackGenerator().notificationOccurred(.warning)
                 }
             }
@@ -298,6 +301,18 @@ final class AppModel {
 
     func sendBack(_ code: String, task: Int, why: String) async throws {
         try await engine.ask(["op": "sendBack", "code": code, "task": task, "why": why])
+    }
+
+    func allow(_ code: String, id: String, allow: Bool) async throws {
+        try await engine.ask(["op": "allow", "code": code, "id": id, "allow": allow])
+    }
+
+    func letIn(_ code: String, id: String) async throws {
+        try await engine.ask(["op": "letIn", "code": code, "id": id])
+    }
+
+    func approveSpec(_ code: String, ask: Int, v: Int) async throws {
+        try await engine.ask(["op": "approveSpec", "code": code, "ask": ask, "v": v])
     }
 
     func nudge() {

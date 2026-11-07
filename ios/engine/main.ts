@@ -11,6 +11,7 @@ import { createEnrollee, type Enrollee } from "../../desktop/src/devices.ts";
 import { Keyring } from "../../desktop/src/keyring.ts";
 import { personMachines, type Asker, type PairedComputer } from "../../desktop/src/remote.ts";
 import { acceptSeat, withAccess } from "../../desktop/src/seats.ts";
+import { needsOf } from "./needs.ts";
 import { Room } from "./room.ts";
 import type { Ask, EnrollStart, Fetched, Push, Reply, Saved } from "./wire.ts";
 
@@ -134,6 +135,7 @@ function openRoom(ring: Keyring, seat: ChannelIdentityView): void {
     person: personPk,
     log: (line) => post({ type: "log", line }),
     devices: heardList,
+    needs: needsOf,
   });
   rooms.set(code, room);
   void room.start();
@@ -456,6 +458,13 @@ async function handle(ask: Ask): Promise<unknown> {
       return room(ask.code).approve(ask.task);
     case "sendBack":
       return room(ask.code).sendBack(ask.task, ask.why);
+    case "allow":
+      return room(ask.code).allow(ask.id, ask.allow);
+    case "letIn":
+      await room(ask.code).letIn(ask.id);
+      return null;
+    case "approveSpec":
+      return room(ask.code).approveSpec(ask.ask, ask.v);
     case "open":
       room(ask.code).open(ask.place);
       return null;

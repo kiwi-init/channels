@@ -28,7 +28,8 @@ const pushes: Push[] = [];
 beforeAll(async () => {
   server = startRelay({ port: 0, hostname: "127.0.0.1", dataDir, human: devHumanAuth() });
   relay = server.url.origin;
-  await import("../ios/engine/main.ts");
+  const entry = "../ios/engine/main.ts";
+  await import(entry);
   engine = (globalThis as unknown as { kiwi: Engine }).kiwi;
   engine.listen((p) => void pushes.push(p));
 });
