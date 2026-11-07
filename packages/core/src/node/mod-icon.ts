@@ -34,7 +34,10 @@ export function readModIcon(dir: string, icon: string): ModIconFile {
   const st = fs.statSync(real);
   if (!st.isFile()) return { ok: false, why: `its icon ${icon} isn't a file` };
   if (st.size > ICON_BYTES) return { ok: false, why: `its icon ${icon} is over 64 KB` };
-  const bytes = new Uint8Array(fs.readFileSync(real));
+  return iconFromBytes(icon, new Uint8Array(fs.readFileSync(real)));
+}
+
+export function iconFromBytes(icon: string, bytes: Uint8Array): ModIconFile {
   if (bytes.byteLength > ICON_BYTES) return { ok: false, why: `its icon ${icon} is over 64 KB` };
   if (/\.png$/i.test(icon)) return PNG.every((b, i) => bytes[i] === b) ? { ok: true, type: "image/png", bytes } : { ok: false, why: `its icon ${icon} isn't a PNG` };
   return svgRoot(new TextDecoder().decode(bytes)) ? { ok: true, type: "image/svg+xml", bytes } : { ok: false, why: `its icon ${icon} isn't an SVG` };

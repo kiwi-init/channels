@@ -1,6 +1,6 @@
 import { bridge, type KiwiBridge } from "@kiwi/secrets/secrets.ts"
 
-type ModReads = Pick<KiwiBridge, "modIcon" | "modDetails" | "modsInstalled" | "modUpdates" | "updateMod" | "removeMod" | "setModSetting">
+type ModReads = Pick<KiwiBridge, "modIcon" | "modDetails" | "modsInstalled" | "modUpdates" | "updateMod" | "removeMod" | "setModSetting" | "modCatalog" | "installMod">
 
 let shown: Partial<ModReads> | null = null
 
@@ -21,5 +21,7 @@ export function modReads(): Partial<ModReads> {
     ...(typeof b?.updateMod === "function" ? { updateMod: (name: string) => b.updateMod(name) } : {}),
     ...(typeof b?.removeMod === "function" ? { removeMod: (name: string, force: boolean) => b.removeMod(name, force) } : {}),
     ...(typeof b?.setModSetting === "function" ? { setModSetting: (name: string, id: string, value: string | boolean | null) => b.setModSetting(name, id, value) } : {}),
+    ...(typeof b?.modCatalog === "function" ? { modCatalog: (fresh?: boolean) => b.modCatalog(fresh) } : {}),
+    ...(typeof b?.installMod === "function" ? { installMod: (name: string, needs: string[]) => b.installMod(name, needs) } : {}),
   }
 }

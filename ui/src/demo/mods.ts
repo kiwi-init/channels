@@ -1,4 +1,4 @@
-import type { ModDetails, ModIcon, ModInstalled, ModUpdate, ModView } from "../../../desktop/src/bridge.ts"
+import type { CatalogMod, ModDetails, ModIcon, ModInstalled, ModUpdate, ModView } from "../../../desktop/src/bridge.ts"
 import { askLater, showMods } from "~/mods/host"
 import { showModReads } from "~/mods/served"
 
@@ -81,6 +81,37 @@ const INSTALLED: ModInstalled[] = [
   { name: "weather", source: "github.com/ana-lima/weather-mod", commit: "b81e4d0", local: false, link: null, changed: false },
 ]
 
+const CATALOG: CatalogMod[] = [
+  {
+    name: "github",
+    does: "Your pull requests, reviews and checks, in a panel beside the chat",
+    needs: ["tab", "panel", "github"],
+    commit: "fef9c2d6fc23f8cce1d0986541362457e3f7e7d7",
+    source: "github.com/kiwi-init/mods/github",
+    installed: false,
+    icon: svg(
+      '<rect width="64" height="64" rx="14" fill="#24292f"/><circle cx="22" cy="20" r="5" fill="none" stroke="#fff" stroke-width="4"/><circle cx="22" cy="44" r="5" fill="none" stroke="#fff" stroke-width="4"/><circle cx="42" cy="28" r="5" fill="none" stroke="#fff" stroke-width="4"/><path d="M22 25v14M42 33c0 6-8 6-16 9" fill="none" stroke="#fff" stroke-width="4"/>'
+    ),
+  },
+  {
+    name: "release-radar",
+    does: "New releases of what you depend on, with notes drafted from them",
+    needs: ["panel", "sidebar", "command", "message-action", "net:api.github.com"],
+    commit: "3f9a2c1d8e7b6a5f4e3d2c1b0a9f8e7d6c5b4a39",
+    source: "github.com/kiwi-init/mods/release-radar",
+    installed: true,
+    icon: ICONS["release-radar"]!,
+  },
+  {
+    name: "terminals",
+    does: "Your tmux and Rex terminals, one tap from the task that runs in them",
+    needs: ["terminal", "command", "message-action"],
+    commit: "0b4d9e2f7a1c3b5d6e8f0a2c4e6b8d0f1a3c5e7b",
+    source: "github.com/kiwi-init/mods/terminals",
+    installed: false,
+  },
+]
+
 const RADAR_UPDATE: ModUpdate = { name: "release-radar", from: "1.4.0", to: "1.5.0", commits: 3, added: [], dropped: [] }
 
 export function showDemoMods(ask: boolean): void {
@@ -92,6 +123,8 @@ export function showDemoMods(ask: boolean): void {
     modUpdates: () => Promise.resolve({ changes: [RADAR_UPDATE], skipped: [] }),
     updateMod: () => Promise.resolve(MODS),
     removeMod: () => Promise.resolve(MODS),
+    modCatalog: () => Promise.resolve({ mods: CATALOG, why: null }),
+    installMod: () => Promise.resolve(MODS),
   })
   showMods(MODS, [
     {
