@@ -12,7 +12,7 @@ export function Glance() {
   const tiles = app.channels.filter((t) => t.state === "member")
   return (
     <div className="rest-card calm" data-afk-keep>
-      <Waiting tiles={tiles} home={app.home} most={1} now={now} />
+      <Waiting tiles={tiles} home={app.home} most={1} now={now} loud />
       {tiles.slice(0, CHANNELS).map((t) => (
         <ChannelPart key={t.code} tile={t} summary={byCode.get(t.code)} now={now} most={AGENTS} />
       ))}

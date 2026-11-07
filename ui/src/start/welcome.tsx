@@ -2,7 +2,7 @@ import "~/styles/start.css"
 import { useEffect, useState, type KeyboardEvent } from "react"
 
 import { takeTurns } from "~/home"
-import { cx } from "~/kit/bits"
+import { Count, cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { ago, useNow } from "~/kit/time"
 import type { ChannelTile, HomeAgent, HomeAsk, HomeChannel } from "~/model"
@@ -52,7 +52,7 @@ function Starts({ quiet }: { quiet?: true }) {
 
 const ASKS_SHOWN = 4
 
-export function Waiting({ tiles, home, most, now }: { tiles: readonly ChannelTile[]; home: readonly HomeChannel[]; most: number; now: number }) {
+export function Waiting({ tiles, home, most, now, loud }: { tiles: readonly ChannelTile[]; home: readonly HomeChannel[]; most: number; now: number; loud?: true }) {
   const [all, setAll] = useState(false)
   const byCode = new Map(home.map((h) => [h.code, h]))
   const asks = takeTurns(tiles.filter((t) => t.state === "member").map((t) => (byCode.get(t.code)?.asks ?? []).map((ask) => ({ tile: t, ask }))))
@@ -60,9 +60,7 @@ export function Waiting({ tiles, home, most, now }: { tiles: readonly ChannelTil
   const shown = all ? asks : asks.slice(0, most)
   return (
     <section className="calm-sec" aria-label="Waiting on you">
-      <h2 className="calm-head">
-        Waiting on you <span className="num">{asks.length}</span>
-      </h2>
+      <h2 className="calm-head">Waiting on you {loud ? <Count n={asks.length} loud /> : <span className="num">{asks.length}</span>}</h2>
       <ol className="calm-list">
         {shown.map(({ tile, ask }) => (
           <AskRow key={`${tile.code}:${ask.id}`} tile={tile} ask={ask} now={now} />
