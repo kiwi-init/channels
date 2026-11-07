@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+import { lazy, Suspense, useCallback, useEffect, useState } from "react"
 
 import { bridge } from "@kiwi/secrets/secrets.ts"
 import type { ModInstalled, ModUpdate, ModView } from "../../../desktop/src/bridge.ts"
@@ -13,6 +13,8 @@ import { Confirm, Group, Row } from "~/settings/controls"
 import { ModDetailsPage } from "~/settings/mod-details"
 import { FromKiwi } from "~/settings/mods-catalog"
 import { Page } from "~/settings/sections"
+
+const ModStore = lazy(() => import("~/settings/mod-store"))
 
 const wanted = (m: ModView): boolean => m.state === "on" || m.off === "safe"
 
@@ -173,6 +175,12 @@ export function ModsSection() {
       </>
     )
   }
+  if (nav.mod)
+    return (
+      <Suspense fallback={null}>
+        <ModStore name={nav.mod} />
+      </Suspense>
+    )
   return (
     <Page title="Mods" lede="Each one runs in its own frame, away from your keys and messages.">
       {mods.some((m) => m.state === "asks") && (

@@ -106,8 +106,9 @@ function pinIn(catalog: unknown, pin: CatalogPin): { mods: unknown[] } & Record<
   const all = catalog && typeof catalog === "object" && !Array.isArray(catalog) ? { ...(catalog as Record<string, unknown>) } : {};
   const mods = Array.isArray(all["mods"]) ? [...(all["mods"] as unknown[])] : [];
   const at = mods.findIndex((m) => !!m && typeof m === "object" && (m as { name?: unknown }).name === pin.name);
-  if (at < 0) mods.push(pin);
-  else mods[at] = pin;
+  const was = at < 0 ? undefined : (mods[at] as { category?: unknown });
+  if (!was) mods.push(pin);
+  else mods[at] = typeof was.category === "string" ? { ...pin, category: was.category } : pin;
   return { ...all, mods };
 }
 

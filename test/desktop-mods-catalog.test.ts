@@ -23,7 +23,7 @@ const notes = {
   "icon.svg": ICON,
 };
 
-function setup(files: Record<string, string> = notes, entry: Record<string, unknown> = {}) {
+function setup(files: Record<string, string | Uint8Array> = notes, entry: Record<string, unknown> = {}) {
   const root = mkdtempSync(join(tmpdir(), "kiwi-mods-catalog-"));
   roots.push(root);
   const source = join(root, "source");
@@ -56,7 +56,7 @@ function setup(files: Record<string, string> = notes, entry: Record<string, unkn
     if (down) throw new Error("offline");
     if (url === "https://raw.githubusercontent.com/kiwi-init/mods/main/mods.json") return new Response(JSON.stringify(index));
     const prefix = `https://raw.githubusercontent.com/kiwi-init/mods/${COMMIT}/notes/`;
-    if (url.startsWith(prefix)) {
+    if (url.startsWith(prefix) && existsSync(join(source, decodeURIComponent(url.slice(prefix.length))))) {
       const body = new Uint8Array(readFileSync(join(source, decodeURIComponent(url.slice(prefix.length)))));
       return new Response(tamper ? tamper(url, body) : body);
     }
@@ -141,5 +141,73 @@ describe("the vouched catalog from kiwi-init/mods (T7363)", () => {
     const { catalog, goOffline } = setup();
     goOffline();
     expect(await catalog.list()).toEqual({ mods: [], why: "Channels couldn't read the catalog: offline" });
+  });
+});
+
+describe("store pages for catalog mods (T7404)", () => {
+  const png = (bytes = 24) => new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, ...new Array<number>(bytes - 8).fill(1)]);
+  const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]);
+  const webp = new Uint8Array([...Buffer.from("RIFF"), 0, 0, 0, 0, ...Buffer.from("WEBP"), 1, 2]);
+
+  test("a page brings mod.json's version at the pin, the README and media/ screenshots; a missing, oversized or mislabeled one is left out, saying why", async () => {
+    const files = {
+      ...notes,
+      "README.md": "# Notes\n\nKeeps notes beside the chat.\n",
+      "media/1-panel.png": png(),
+      "media/2-dark.jpg": jpeg,
+      "media/3-wide.webp": webp,
+      "media/4-huge.png": png(1_000_001),
+      "media/5-liar.png": jpeg,
+      "media/notes.txt": "not a picture",
+    };
+    const { catalog, asked } = setup(files, { category: "Productivity", files: [...Object.keys(files), "media/6-gone.png"] });
+    expect((await catalog.list()).mods.find((m) => m.name === "notes")?.category).toBe("Productivity");
+    const page = await catalog.page("notes");
+    expect(page.version).toBe("1.0.0");
+    expect(page.readme).toBe("# Notes\n\nKeeps notes beside the chat.\n");
+    expect(page.shots.map((s) => [s.name, s.type])).toEqual([
+      ["media/1-panel.png", "image/png"],
+      ["media/2-dark.jpg", "image/jpeg"],
+      ["media/3-wide.webp", "image/webp"],
+    ]);
+    expect(Buffer.from(page.shots[0]!.data, "base64")).toEqual(Buffer.from(png()));
+    expect(page.skipped).toEqual([
+      { name: "media/4-huge.png", why: "it's over 1 MB" },
+      { name: "media/5-liar.png", why: "it isn't the PNG its name says" },
+      { name: "media/6-gone.png", why: "Channels couldn't fetch it: raw.githubusercontent.com answered 404 (is the repo public?)" },
+    ]);
+    expect(asked.filter((u) => u.includes(COMMIT)).every((u) => u.startsWith(`https://raw.githubusercontent.com/kiwi-init/mods/${COMMIT}/notes/`))).toBe(true);
+    expect(asked.some((u) => u.endsWith("/media/notes.txt"))).toBe(false);
+    const before = asked.length;
+    await catalog.page("notes");
+    expect(asked.length).toBeGreaterThan(before);
+  });
+
+  test("a page with nothing missing is kept; past six screenshots, the rest are left out; a mod with no README or media still has a page", async () => {
+    const files: Record<string, string | Uint8Array> = { ...notes };
+    for (let i = 1; i <= 7; i++) files[`media/${i}.png`] = png();
+    const { catalog, asked } = setup(files);
+    const page = await catalog.page("notes");
+    expect(page.shots.map((s) => s.name)).toEqual(["media/1.png", "media/2.png", "media/3.png", "media/4.png", "media/5.png", "media/6.png"]);
+    expect(page.skipped).toEqual([{ name: "media/7.png", why: "a page shows its first 6 screenshots" }]);
+    const before = asked.length;
+    expect(await catalog.page("notes")).toEqual(page);
+    expect(asked.length).toBe(before);
+
+    const bare = setup();
+    expect(await bare.catalog.page("notes")).toEqual({ name: "notes", version: "1.0.0", readme: null, shots: [], skipped: [] });
+    await expect(bare.catalog.page("nope")).rejects.toThrow("the catalog has no mod named nope");
+  });
+
+  test("a category is a few words on one line, or the entry is skipped", () => {
+    const pin = { needs: [], commit: "c".repeat(40), hash: "d".repeat(64), files: ["mod.json"] };
+    const c = readCatalog({
+      mods: [
+        { name: "ok", does: "x", category: "Developer tools", ...pin },
+        { name: "long", does: "x", category: "x".repeat(41), ...pin },
+      ],
+    });
+    expect(c.entries.map((e) => [e.name, e.category])).toEqual([["ok", "Developer tools"]]);
+    expect(c.skipped).toEqual([{ name: "long", why: "its category isn't a few words on one line, up to 40 characters" }]);
   });
 });
