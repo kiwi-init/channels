@@ -27,7 +27,7 @@ export function Calm() {
     const was = document.activeElement instanceof HTMLElement ? document.activeElement : null
     box.current?.focus({ preventScroll: true })
     const swallow = (e: Event): void => {
-      if (e.type === "pointerdown" && e.target instanceof Element && e.target.closest(".rest-day-needs")) return
+      if (e.type === "pointerdown" && e.target instanceof Element && e.target.closest("[data-afk-open]")) return
       e.preventDefault()
       e.stopImmediatePropagation()
       if (e.type !== "keyup") setLeaving(true)
@@ -73,9 +73,9 @@ export function Calm() {
     if (leaving) meadow.current?.freeze()
   }, [leaving])
 
-  const openNeeds = (code: string): void => {
+  const open = (code: string, needs: boolean): void => {
     go({ to: "channel", code })
-    go({ to: "tab", tab: "needs" })
+    if (needs) go({ to: "tab", tab: "needs" })
     setLeaving(true)
   }
   const ended = (e: AnimationEvent<HTMLDivElement>): void => {
@@ -85,7 +85,7 @@ export function Calm() {
   return (
     <div ref={box} className={cx("rest", leaving && "is-leaving")} role="dialog" aria-modal="true" aria-label="Calm" tabIndex={-1} onAnimationEnd={ended}>
       <div ref={stage} className="rest-back" aria-hidden="true" />
-      <DayView since={since} openNeeds={openNeeds} />
+      <DayView since={since} rows={rows} open={open} />
     </div>
   )
 }

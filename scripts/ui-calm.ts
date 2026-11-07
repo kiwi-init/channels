@@ -41,8 +41,7 @@ try {
       await page.evaluate(() => document.fonts.ready);
       await page.waitForTimeout(3600);
       if (out) await page.screenshot({ path: join(out, `calm-${label}-${theme}.png`) });
-      const row = page.locator(".rest-row").first();
-      await row.hover();
+      await page.locator(".rest-day-needs").hover();
       await page.waitForTimeout(400);
       if (out) await page.screenshot({ path: join(out, `calm-${label}-${theme}-hover.png`) });
     }
@@ -65,12 +64,20 @@ try {
       check("a key fades it out", (await page.locator(".rest").count()) === 0);
       await page.goto(`http://127.0.0.1:${server.port}/?shot=calm`);
       await page.waitForTimeout(2600);
-      const target = page.locator(".rest-row").nth(1);
-      const name = (await target.locator(".rest-name").textContent()) ?? "";
+      const shown = await page.locator(".rest-day-row").count();
+      check(`it shows what each agent is doing, one line each (${shown - 1})`, shown > 2);
+      const current = () => page.evaluate(() => document.querySelector('nav[aria-label="Channels"] button.tile[aria-current="page"]')?.getAttribute("aria-label")?.split(",")[0] ?? "");
+      const target = page.locator(".rest-day-also button").first();
+      const name = (await target.locator("span").first().textContent()) ?? "";
       await target.click();
       await page.waitForTimeout(900);
-      const current = await page.evaluate(() => document.querySelector('nav[aria-label="Channels"] button.tile[aria-current="page"]')?.getAttribute("aria-label")?.split(",")[0] ?? "");
-      check(`a click on a channel (${name}) opens it and the sky goes`, current === name && (await page.locator(".rest").count()) === 0);
+      check(`a click on another channel (${name}) opens it and the sky goes`, (await current()) === name && (await page.locator(".rest").count()) === 0);
+      await page.goto(`http://127.0.0.1:${server.port}/?shot=calm`);
+      await page.waitForTimeout(2600);
+      await page.locator(".rest-day-needs").click();
+      await page.waitForTimeout(900);
+      const pressed = await page.locator('button.is-needs[aria-pressed="true"]').count();
+      check(`a click on what needs you opens its channel's Needs (${await current()}) and the sky goes`, pressed === 1 && (await page.locator(".rest").count()) === 0);
       await page.goto(`http://127.0.0.1:${server.port}/?shot=calm`);
       await page.waitForTimeout(2600);
       await page.mouse.move(10, 10);
@@ -91,7 +98,7 @@ try {
         const seen = new Set<string>();
         Object.assign(window, { calmNames: seen });
         const look = (): void => {
-          const names = [...document.querySelectorAll(".rest-row .rest-name")].map((n) => n.textContent ?? "");
+          const names = [...document.querySelectorAll(".rest-day-nick")].map((n) => n.textContent ?? "");
           if (names.length) seen.add(JSON.stringify(names));
           requestAnimationFrame(look);
         };
@@ -101,7 +108,7 @@ try {
       await still.waitForTimeout(2600);
       const motion = await still.evaluate(() => document.documentElement.dataset.motion ?? "");
       const seen = await still.evaluate(() => [...((window as unknown as { calmNames: Set<string> }).calmNames ?? [])]);
-      check(`with the app's Reduce motion on (${motion}), the channel names show whole from the first frame (${seen.join(" then ")})`, motion === "reduced" && seen.length === 1);
+      check(`with the app's Reduce motion on (${motion}), the agents' names show whole from the first frame (${seen.join(" then ")})`, motion === "reduced" && seen.length === 1);
       const scene = await still.evaluate(() => document.querySelector(".rest-back canvas")?.getAttribute("data-meadow") ?? "none");
       check(`and the meadow behind it doesn't move (${scene})`, scene !== "moving");
       await still.goto(`http://127.0.0.1:${server.port}/?shot=onboarding-still`);
