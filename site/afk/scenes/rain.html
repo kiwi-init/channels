@@ -16,12 +16,17 @@ canvas{position:fixed;left:0;top:0;width:100%;height:100%;display:block;user-sel
   "use strict";
 
   var Y0 = 0.64;
-  var WIN = [[255, 198, 132], [255, 214, 164], [255, 182, 108], [198, 216, 255], [228, 238, 255]];
-  var NEON = [[255, 112, 160], [112, 214, 206], [255, 164, 84], [176, 146, 255], [255, 104, 88]];
+  var RUN_GAP = 8;
+  var RUN_SPAN = 12;
+  var B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  var WIN = [[255, 196, 128], [255, 214, 160], [255, 178, 102], [196, 214, 255], [226, 236, 255]];
+  var NEON = [[236, 128, 160], [120, 196, 190], [240, 168, 104], [168, 150, 226], [236, 112, 96]];
+  var FACADE = [[132, 88, 72], [164, 148, 120], [86, 98, 116], [72, 104, 108], [150, 120, 96]];
+  var AWNING = [[176, 62, 52], [40, 112, 112], [196, 150, 58], [92, 70, 120]];
   var PAL = {
-    night: { top: [5, 7, 15], mid: [11, 14, 27], hor: [40, 31, 42], r0: [18, 16, 22], r1: [6, 7, 11], far: [15, 17, 28], near: [8, 9, 16], cloud: [52, 40, 54], glow: [255, 128, 58], haze: [0.07, 0.068, 0.09] },
-    dusk: { top: [26, 28, 58], mid: [74, 56, 94], hor: [196, 116, 92], r0: [54, 42, 54], r1: [20, 18, 28], far: [44, 36, 60], near: [26, 22, 40], cloud: [130, 84, 104], glow: [255, 150, 96], haze: [0.26, 0.2, 0.25] },
-    day: { top: [88, 98, 112], mid: [122, 130, 141], hor: [158, 163, 169], r0: [94, 98, 104], r1: [52, 56, 62], far: [100, 108, 120], near: [64, 72, 85], cloud: [152, 158, 166], glow: [214, 220, 228], haze: [0.46, 0.49, 0.53] }
+    night: { top: [5, 7, 15], mid: [11, 14, 28], hor: [42, 32, 44], r0: [18, 16, 22], r1: [6, 7, 11], far: [16, 18, 30], near: [8, 9, 16], cloud: [54, 42, 56], glow: [255, 128, 58], tree: [6, 8, 10], haze: [0.07, 0.068, 0.09], fac: 0.06 },
+    dusk: { top: [16, 24, 58], mid: [46, 56, 108], hor: [222, 132, 96], r0: [58, 50, 72], r1: [16, 18, 34], far: [44, 44, 80], near: [22, 22, 44], cloud: [150, 100, 120], glow: [255, 150, 96], tree: [16, 18, 30], haze: [0.14, 0.14, 0.24], fac: 0.14 },
+    day: { top: [96, 112, 134], mid: [146, 158, 172], hor: [212, 206, 196], r0: [74, 80, 88], r1: [30, 34, 40], far: [150, 160, 172], near: [86, 96, 110], cloud: [184, 190, 198], glow: [250, 240, 222], tree: [38, 62, 46], haze: [0.14, 0.15, 0.165], fac: 0.66 }
   };
 
   var VS = "attribute vec2 aPos;varying vec2 vUv;void main(){vUv=aPos*.5+.5;gl_Position=vec4(aPos,0.,1.);}";
@@ -35,6 +40,7 @@ precision mediump float;
 varying vec2 vUv;
 uniform sampler2D uSoft;
 uniform sampler2D uSharp;
+uniform sampler2D uGlyph;
 uniform vec2 uRes;
 uniform float uT;
 uniform float uDay;
@@ -44,6 +50,8 @@ uniform vec4 uCar[6];
 uniform vec2 uSig;
 uniform vec3 uSigCol;
 uniform vec3 uBea;
+uniform vec4 uRun;
+uniform vec2 uRunA;
 
 float h21(vec2 p){vec3 q=fract(vec3(p.xyx)*.1031);q+=dot(q,q.yzx+33.33);return fract((q.x+q.y)*q.z);}
 vec3 h31(float p){vec3 q=fract(vec3(p)*vec3(.1031,.103,.0973));q+=dot(q,q.yzx+33.33);return fract((q.xxy+q.yzz)*q.zyx);}
@@ -129,7 +137,8 @@ vec3 beads(vec2 p,float sc,float rate,float dens,float px){
 
 float spot(vec2 q,vec2 c,float rs,float rp,float fo){
   float d=length(q-c);
-  float b=(1.-smoothstep(rs*.82,rs,d))*(.78+.22*smoothstep(rs*.2,rs,d))*.3;
+  float r=d/rs;
+  float b=(1.-smoothstep(.84,1.,r))*(.74+.2*smoothstep(.45,.95,r)+.05*sin(r*26.))*.3;
   float k=d*d/(rp*rp);
   float pt=exp(-k)*1.2+exp(-k*.06)*.1;
   return mix(b,pt,fo);
@@ -165,26 +174,40 @@ void main(){
   float px=1./uRes.y;
   vec2 p=vec2((uv.x-.5)*asp,uv.y-.5);
   float trail=0.;
-  vec3 A=runners(p,9.,.05,.19,1.,px,trail);
-  vec3 B=runners(p+vec2(.031,0.),16.,.042,.17,2.,px,trail);
-  vec3 C=beads(p,26.,.012,.34,px);
-  vec3 D=beads(p+vec2(3.1,1.7),58.,.018,.5,px);
+  vec3 A=runners(p,6.,.05,.24,1.,px,trail);
+  vec3 B=runners(p+vec2(.031,0.),10.,.042,.2,2.,px,trail);
+  vec3 C=beads(p,15.,.012,.24,px);
+  vec3 D=beads(p+vec2(3.1,1.7),30.,.018,.06,px);
   float wipe=1.-trail;
   vec2 off=A.xy+B.xy+(C.xy+D.xy)*wipe;
   float drop=clamp(A.z+B.z+(C.z+D.z)*wipe,0.,1.);
   vec2 uvR=uv-off*vec2(1./asp,1.)*.2;
   float mist=vn(vec2(uv.x*asp*1.4+uT*.007,uv.y*2.6))*.65+vn(vec2(uv.x*asp*3.1-uT*.005,uv.y*5.2+4.))*.35;
-  vec3 soft=texture2D(uSoft,uv).rgb;
+  vec2 gq=(uv-uRun.xy)/uRun.zw;
+  float gin=step(0.,gq.x)*step(gq.x,1.)*step(0.,gq.y)*step(gq.y,1.)*step(.001,uRunA.x);
+  vec2 gc=clamp(gq,0.,1.);
+  vec3 gt=texture2D(uGlyph,gc).rgb*gin;
+  float gdx=texture2D(uGlyph,gc+vec2(.003,0.)).g*gin-gt.g;
+  float gdy=texture2D(uGlyph,gc+vec2(0.,.024)).g*gin-gt.g;
+  float er=vn(p*60.)*.55+vn(p*19.+7.)*.45;
+  float gform=smoothstep(uRunA.y-.08,uRunA.y+.08,er)*uRunA.x;
+  float gs=mix(gt.r,gt.g,.4)*gform;
+  float gh=gt.g*gform;
+  vec2 guv=uv+vec2(gdx,gdy)*vec2(1./asp,1.)*.05*gform;
+  vec3 soft=texture2D(uSoft,guv).rgb;
   vec3 fog=soft*.88+uHaze*(.32+.3*mist);
+  vec3 glow=texture2D(uSoft,vec2(uv.x,.46+(uv.y-.5)*.3)).rgb*.9+soft*.5+uHaze*.8+vec3(.012,.011,.01);
+  fog=mix(fog,fog*.82,clamp(gh-gs,0.,1.)*.4)+glow/(1.+3.*glow)*gs*mix(1.35,.6,uDay);
   vec3 crisp=texture2D(uSharp,uv).rgb;
-  vec3 lens=texture2D(uSharp,uvR).rgb;
+  vec2 lw=vec2(uv.x-off.x*.1/asp,.46+(uv.y-.5)*.3-off.y*.1);
+  vec3 lens=mix(texture2D(uSharp,uvR).rgb,texture2D(uSoft,lw).rgb*mix(1.2,.98,uDay)+uHaze*mix(.2,.05,uDay),.94);
   vec3 col=mix(fog,crisp*.96+uHaze*.12,trail*.55*(1.-drop));
-  col=mix(col,lens*1.16,drop);
+  col=mix(col,lens*1.12,drop);
   col+=lights(mix(uv,uvR,drop),drop,asp);
   float ol=clamp(length(off),0.,1.);
-  col*=1.-.3*smoothstep(.55,1.,ol)*drop;
+  col*=1.-.42*smoothstep(.5,1.,ol)*drop;
   float spec=(1.-smoothstep(0.,.32,length(off-vec2(-.32,.42))))*drop;
-  col+=spec*mix(vec3(.05,.055,.07),vec3(.3,.31,.33),uDay);
+  col+=spec*(soft*.6+uHaze*.5+mix(vec3(.02,.022,.03),vec3(.05,.055,.06),uDay));
   vec2 lq=vec2(uv.x*asp,uv.y)-vec2(asp*.84,.17);
   float halo=exp(-dot(lq,lq)*9.);
   vec2 lc=lq*vec2(1.,.72);
@@ -194,7 +217,66 @@ void main(){
   col+=warm*(drop*.4+spec*1.6)*halo*uLamp;
   vec2 vv=(uv-.5)*vec2(1.6,2.);
   col*=1.-.25*smoothstep(.4,1.6,dot(vv,vv));
-  col+=(h21(gl_FragCoord.xy)-.5)/255.;
+  gl_FragColor=vec4(col,1.);
+}
+`;
+
+  var HEAD = "#ifdef GL_FRAGMENT_PRECISION_HIGH\nprecision highp float;\n#else\nprecision mediump float;\n#endif\nvarying vec2 vUv;\n";
+
+  var FS_BLUR = HEAD + `
+uniform sampler2D uTex;
+uniform vec2 uStep;
+uniform float uSig;
+void main(){
+  vec3 a=vec3(0.);
+  float ws=0.;
+  for(int i=-8;i<=8;i++){
+    float x=float(i);
+    float w=exp(-x*x/(2.*uSig*uSig));
+    a+=texture2D(uTex,vUv+uStep*x).rgb*w;
+    ws+=w;
+  }
+  gl_FragColor=vec4(a/ws,1.);
+}
+`;
+
+  var FS_DOWN = HEAD + `
+uniform sampler2D uTex;
+uniform vec2 uStep;
+void main(){
+  vec3 a=texture2D(uTex,vUv+uStep*vec2(-1.,-1.)).rgb+texture2D(uTex,vUv+uStep*vec2(1.,-1.)).rgb+texture2D(uTex,vUv+uStep*vec2(-1.,1.)).rgb+texture2D(uTex,vUv+uStep*vec2(1.,1.)).rgb;
+  gl_FragColor=vec4(a*.25,1.);
+}
+`;
+
+  var FS_COMP = HEAD + `
+uniform sampler2D uMain;
+uniform sampler2D uBloom;
+uniform vec2 uMainRes;
+uniform vec2 uBloomRes;
+uniform float uDay;
+float h21(vec2 p){vec3 q=fract(vec3(p.xyx)*.1031);q+=dot(q,q.yzx+33.33);return fract((q.x+q.y)*q.z);}
+vec4 cubic(float v){vec4 n=vec4(1.,2.,3.,4.)-v;vec4 s=n*n*n;float x=s.x;float y=s.y-4.*s.x;float z=s.z-4.*s.y+6.*s.x;return vec4(x,y,z,6.-x-y-z)*(1./6.);}
+vec3 bic(sampler2D t,vec2 uv,vec2 res){
+  uv=uv*res-.5;
+  vec2 f=fract(uv);
+  uv-=f;
+  vec4 xc=cubic(f.x);
+  vec4 yc=cubic(f.y);
+  vec4 c=uv.xxyy+vec2(-.5,1.5).xyxy;
+  vec4 s=vec4(xc.xz+xc.yw,yc.xz+yc.yw);
+  vec4 o=(c+vec4(xc.yw,yc.yw)/s)/res.xxyy;
+  float sx=s.x/(s.x+s.y);
+  float sy=s.z/(s.z+s.w);
+  return mix(mix(texture2D(t,o.yw).rgb,texture2D(t,o.xw).rgb,sx),mix(texture2D(t,o.yz).rgb,texture2D(t,o.xz).rgb,sx),sy);
+}
+void main(){
+  vec3 m=bic(uMain,vUv,uMainRes);
+  vec3 b=bic(uBloom,vUv,uBloomRes);
+  vec3 col=mix(m,b,.12)+max(b-vec3(mix(.1,.55,uDay)),0.)*mix(.9,.5,uDay);
+  vec3 k=vec3(.82);
+  col=mix(col,k+(1.-k)*(1.-exp(-(col-k)/(1.-k))),step(k,col));
+  col+=(h21(gl_FragCoord.xy)+h21(gl_FragCoord.yx+17.)-1.)/255.;
   gl_FragColor=vec4(col,1.);
 }
 `;
@@ -206,12 +288,27 @@ void main(){
   var U = {};
   var texSoft = null;
   var texSharp = null;
+  var texGlyph = null;
+  var PB = null;
+  var PD = null;
+  var PC = null;
+  var RT = { w: 0, h: 0, S: null, T: null, Q: null, R: null };
+  var texType = 0;
   var lost = false;
   var softCv = document.createElement("canvas");
+  var softCtx = softCv.getContext("2d", { willReadFrequently: true });
   var sharpCv = document.createElement("canvas");
   var workCv = document.createElement("canvas");
   var baseCv = document.createElement("canvas");
   var baseCtx = baseCv.getContext("2d", { willReadFrequently: true });
+  var tinyCv = document.createElement("canvas");
+  var glyphCv = document.createElement("canvas");
+  glyphCv.width = 1024;
+  glyphCv.height = 128;
+  var glyphCtx = glyphCv.getContext("2d");
+  var acc = null;
+  var LIN = new Float32Array(256);
+  for (var li = 0; li < 256; li++) LIN[li] = (li / 255) * (li / 255);
   var city = makeCity();
   var cars = makeCars();
   var carBuf = new Float32Array(24);
@@ -223,11 +320,16 @@ void main(){
   var raf = 0;
   var lastTs = -1;
   var asp = 1;
+  var paintAsp = 1;
+  var aspTimer = 0;
   var look = null;
   var bgKey = "";
   var bgChecked = -1e9;
   var beacon = [0, 0, 0];
   var sentReady = false;
+  var run = null;
+  var nextRun = clock + 5 + Math.random() * 6;
+  var runUni = [0, 0, 0, 0, 0, 2];
 
   function rng(a) {
     return function () {
@@ -261,7 +363,7 @@ void main(){
   }
 
   function building(R, x, w, h, sx, sy) {
-    var b = { x: x, w: w, h: h, sx: sx, sy: sy, boost: 0.55 + R() * 1.0, win: [] };
+    var b = { x: x, w: w, h: h, sx: sx, sy: sy, boost: 0.55 + R() * 1.0, fac: FACADE[Math.floor(R() * FACADE.length)], shade: 0.85 + R() * 0.3, win: [] };
     var cols = Math.max(1, Math.floor((w - sx * 0.4) / sx));
     var rows = Math.max(1, Math.floor((h - sy * 0.6) / sy));
     var mx = (w - cols * sx) / 2;
@@ -283,7 +385,7 @@ void main(){
 
   function makeCity() {
     var R = rng(20261107);
-    var c = { far: [], mid: [], lamps: [], neon: [], shops: [], clouds: [], glow: [] };
+    var c = { far: [], mid: [], lamps: [], neon: [], shops: [], clouds: [], glow: [], near: [], trees: [], brollies: [] };
     var x = -2.3;
     while (x < 2.3) {
       var w = 0.05 + R() * 0.11;
@@ -300,25 +402,37 @@ void main(){
     }
     x = -2.3 + R() * 0.2;
     while (x < 2.3) {
-      c.lamps.push({ x: x, y: Y0 - 0.085 - R() * 0.02, r: 0.042 + R() * 0.014, col: R() < 0.7 ? [255, 158, 72] : [226, 232, 255], a: 0.75 + R() * 0.25 });
+      c.lamps.push({ x: x, y: Y0 - 0.085 - R() * 0.02, r: 0.046 + R() * 0.016, col: R() < 0.7 ? [255, 160, 74] : [226, 232, 255], a: 0.75 + R() * 0.25, ph: R() * 6 });
       x += 0.4 + R() * 0.2;
     }
     for (var i = 0; i < 11; i++) {
-      c.neon.push({ x: -2.25 + R() * 4.5, y: Y0 - 0.015 - R() * 0.05, r: 0.026 + R() * 0.016, col: NEON[Math.floor(R() * NEON.length)], a: 0.5 + R() * 0.4 });
+      c.neon.push({ x: -2.25 + R() * 4.5, y: Y0 - 0.015 - R() * 0.05, r: 0.03 + R() * 0.016, col: NEON[Math.floor(R() * NEON.length)], a: 0.5 + R() * 0.4, ph: R() * 6 });
     }
     x = -2.3;
     while (x < 2.3) {
       var sw = 0.05 + R() * 0.09;
-      c.shops.push({ x: x, w: sw, col: WIN[Math.floor(R() * 3)], a: 0.4 + R() * 0.5 });
+      c.shops.push({ x: x, w: sw, col: WIN[Math.floor(R() * 3)], a: 0.4 + R() * 0.5, aw: AWNING[Math.floor(R() * AWNING.length)], awOn: R() < 0.55 });
       x += sw + 0.05 + R() * 0.25;
     }
-    for (var g = 0; g < 96; g++) {
+    for (var g = 0; g < 115; g++) {
       var u = R();
-      var gc = u < 0.7 ? WIN[Math.floor(R() * 3)] : u < 0.93 ? WIN[3 + Math.floor(R() * 2)] : NEON[Math.floor(R() * NEON.length)];
-      c.glow.push({ x: -2.3 + R() * 4.6, y: Y0 + 0.02 - Math.pow(R(), 2) * 0.4, r: 0.022 + R() * 0.014, col: gc, a: 0.05 + Math.pow(R(), 2.2) * 0.32, t: R(), soft: R() });
+      var gc = u < 0.68 ? WIN[Math.floor(R() * 3)] : u < 0.92 ? WIN[3 + Math.floor(R() * 2)] : NEON[Math.floor(R() * NEON.length)];
+      var depth = Math.pow(R(), 1.6);
+      c.glow.push({ x: -2.3 + R() * 4.6, y: Y0 + 0.02 - Math.pow(R(), 1.8 + depth) * (0.42 - depth * 0.12), depth: depth, col: gc, a: 0.05 + Math.pow(R(), 2.2) * 0.34, t: R(), ph: R() * 6, rim: R() });
+    }
+    for (var q = 0; q < 6; q++) {
+      c.near.push({ x: -2.2 + R() * 4.4, y: 0.42 + R() * 0.42, r: 0.055 + R() * 0.04, col: R() < 0.75 ? WIN[Math.floor(R() * 3)] : WIN[3], a: 0.05 + R() * 0.06, t: R(), ph: R() * 6 });
     }
     for (var j = 0; j < 22; j++) {
-      c.clouds.push({ x: -2.3 + R() * 4.6, y: 0.04 + R() * 0.34, rx: 0.2 + R() * 0.4, ry: 0.05 + R() * 0.08, a: 0.2 + R() * 0.3 });
+      c.clouds.push({ x: -2.3 + R() * 4.6, y: 0.04 + R() * 0.34, rx: 0.2 + R() * 0.4, ry: 0.05 + R() * 0.08, a: 0.2 + R() * 0.3, dark: R() < 0.4 });
+    }
+    x = -2.3;
+    while (x < 2.3) {
+      c.trees.push({ x: x, r: 0.05 + R() * 0.045, h: 0.05 + R() * 0.05 });
+      x += 0.16 + R() * 0.34;
+    }
+    for (var b = 0; b < 16; b++) {
+      c.brollies.push({ x: -2.2 + R() * 4.4, y: Y0 + 0.012 + R() * 0.05, w: 0.022 + R() * 0.016, col: [[196, 56, 52], [226, 180, 64], [40, 58, 104], [36, 120, 118], [30, 32, 36], [150, 70, 120]][Math.floor(R() * 6)] });
     }
     return c;
   }
@@ -336,12 +450,10 @@ void main(){
   function lookAt(ms) {
     var d = new Date(isFinite(ms) ? ms : Date.now());
     var h = d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 3600;
-    var s = Math.sin(((h - 6.5) / 24) * Math.PI * 2);
-    var day = smooth(-0.06, 0.32, s);
-    var dk = 1 - Math.min(1, Math.abs(s + 0.03) / 0.2);
-    var dusk = dk * dk * (3 - 2 * dk);
+    var day = smooth(5.9, 7.9, h) * (1 - smooth(17.6, 19.4, h));
+    var dusk = smooth(4.8, 6.1, h) * (1 - smooth(6.4, 7.8, h)) + smooth(17.4, 18.9, h) * (1 - smooth(19.9, 21.2, h));
     var late = smooth(0.5, 2.5, h) * (1 - smooth(4.5, 6, h));
-    var lit = (0.44 - 0.24 * late) * (1 - day) + 0.1 * day;
+    var lit = (0.46 - 0.24 * late) * (1 - day) + 0.1 * day;
     return { day: day, dusk: dusk, lit: lit };
   }
 
@@ -349,10 +461,14 @@ void main(){
     var a = PAL.night[k];
     var b = PAL.day[k];
     var d = PAL.dusk[k];
+    if (typeof a === "number") {
+      var s = a + (b - a) * P.day;
+      return s + (d - s) * P.dusk * 0.9;
+    }
     var o = [];
     for (var i = 0; i < a.length; i++) {
       var v = a[i] + (b[i] - a[i]) * P.day;
-      o.push(v + (d[i] - v) * P.dusk * 0.8);
+      o.push(v + (d[i] - v) * P.dusk * 0.9);
     }
     return o;
   }
@@ -370,22 +486,10 @@ void main(){
     c.restore();
   }
 
-  function light(c, x, y, rs, rp, col, a, sharp, soft) {
+  function point(c, x, y, rp, col, a) {
     if (a <= 0.003) return;
-    var g;
-    var sf = soft || 0;
-    if (!sharp) {
-      g = c.createRadialGradient(x, y, 0, x, y, rs);
-      g.addColorStop(0, rgba(col, a * 0.72));
-      g.addColorStop(0.7 - 0.3 * sf, rgba(col, a * 0.84));
-      g.addColorStop(0.9 - 0.22 * sf, rgba(col, a));
-      g.addColorStop(1, rgba(col, 0));
-      c.fillStyle = g;
-      c.fillRect(x - rs, y - rs, rs * 2, rs * 2);
-      return;
-    }
     var R = rp * 6;
-    g = c.createRadialGradient(x, y, 0, x, y, R);
+    var g = c.createRadialGradient(x, y, 0, x, y, R);
     g.addColorStop(0, rgba(mix3(col, [255, 255, 255], 0.5), a * 1.5));
     g.addColorStop(0.12, rgba(col, a));
     g.addColorStop(0.4, rgba(col, a * 0.15));
@@ -394,14 +498,15 @@ void main(){
     c.fillRect(x - R, y - R, R * 2, R * 2);
   }
 
-  function drawRow(c, list, X, w, h, col, P, wa, fw, fh) {
+  function drawRow(c, list, X, w, h, col, P, wa, fw, fh, facMix) {
     var i, j, b, x0, x1;
-    c.fillStyle = css(col);
     for (i = 0; i < list.length; i++) {
       b = list[i];
       x0 = X(b.x);
       x1 = X(b.x + b.w);
       if (x1 < -2 || x0 > w + 2) continue;
+      var fc = mix3(col, b.fac, facMix);
+      c.fillStyle = css([fc[0] * b.shade, fc[1] * b.shade, fc[2] * b.shade]);
       c.fillRect(x0, (Y0 - b.h) * h, x1 - x0, (b.h + 0.004) * h);
     }
     for (i = 0; i < list.length; i++) {
@@ -414,7 +519,13 @@ void main(){
       var lim = P.lit * b.boost;
       for (j = 0; j < b.win.length; j++) {
         var wn = b.win[j];
-        if (wn.t >= lim) continue;
+        if (wn.t >= lim) {
+          if (P.day > 0.05) {
+            c.fillStyle = rgba([24, 30, 40], 0.26 * P.day * wn.a);
+            c.fillRect(X(wn.x) - ww / 2, wn.y * h - wh / 2, ww, wh);
+          }
+          continue;
+        }
         c.fillStyle = rgba(WIN[wn.c], wn.a * wa);
         c.fillRect(X(wn.x) - ww / 2, wn.y * h - wh / 2, ww, wh);
       }
@@ -434,79 +545,226 @@ void main(){
     c.globalCompositeOperation = "source-over";
     c.fillStyle = g;
     c.fillRect(0, 0, w, h);
-    glowE(c, w / 2, Y0 * h, w * 0.85, h * 0.36, tone(P, "glow"), 0.06 + 0.2 * n);
+    glowE(c, w * 0.66, h * 0.12, w * 0.55, h * 0.34, [255, 244, 222], 0.34 * P.day);
+    glowE(c, w * 0.66, h * 0.1, w * 0.18, h * 0.12, [255, 250, 236], 0.3 * P.day);
+    glowE(c, w * 0.35, Y0 * h, w * 0.9, h * 0.3, [255, 150, 104], 0.42 * P.dusk);
+    glowE(c, w / 2, Y0 * h, w * 0.85, h * 0.36, tone(P, "glow"), (0.06 + 0.2 * n) * (1 - P.dusk * 0.5));
     var cl = tone(P, "cloud");
+    var cd = mix3(tone(P, "top"), [40, 44, 56], 0.4);
     for (var i = 0; i < city.clouds.length; i++) {
       var k = city.clouds[i];
-      glowE(c, X(k.x), k.y * h, k.rx * h, k.ry * h, cl, k.a);
+      glowE(c, X(k.x), k.y * h, k.rx * h, k.ry * h, k.dark ? cd : cl, k.a * (k.dark ? 0.6 * P.day + 0.2 : 1));
     }
-    glowE(c, w / 2, (Y0 + 0.06) * h, w * 0.8, h * 0.08, tone(P, "glow"), 0.1 * n);
-    drawRow(c, city.far, X, w, h, tone(P, "far"), P, 0.15 + 0.4 * n, 0.5, 0.42);
-    drawRow(c, city.mid, X, w, h, tone(P, "near"), P, 0.3 + 0.7 * n, 0.62, 0.52);
+    glowE(c, w / 2, (Y0 + 0.06) * h, w * 0.8, h * 0.08, tone(P, "glow"), 0.1 * n + 0.12 * P.day);
+    var fm = tone(P, "fac");
+    drawRow(c, city.far, X, w, h, tone(P, "far"), P, 0.15 + 0.4 * n, 0.5, 0.42, fm * 0.35);
+    drawRow(c, city.mid, X, w, h, tone(P, "near"), P, 0.3 + 0.7 * n, 0.62, 0.52, fm);
+    var tc = tone(P, "tree");
+    for (var t = 0; t < city.trees.length; t++) {
+      var tr = city.trees[t];
+      glowE(c, X(tr.x), (Y0 - tr.h * 0.6) * h, tr.r * h * 1.2, tr.h * h, tc, 0.85);
+    }
     for (var j = 0; j < city.shops.length; j++) {
       var s = city.shops[j];
-      c.fillStyle = rgba(s.col, s.a * (0.3 + 0.6 * n));
+      c.fillStyle = rgba(s.col, s.a * (0.7 + 0.2 * n));
       c.fillRect(X(s.x), (Y0 - 0.03) * h, s.w * h, 0.028 * h);
+      if (s.awOn) {
+        c.fillStyle = rgba(s.aw, 0.25 + 0.6 * P.day);
+        c.fillRect(X(s.x) - 0.004 * h, (Y0 - 0.042) * h, (s.w + 0.008) * h, 0.013 * h);
+      }
     }
+    for (var u = 0; u < city.brollies.length; u++) {
+      var br = city.brollies[u];
+      glowE(c, X(br.x), br.y * h, br.w * h * 1.4, br.w * h * 0.55, br.col, 0.25 + 0.6 * P.day);
+    }
+    c.save();
+    c.globalAlpha = 0.22 + 0.16 * P.day;
+    c.translate(0, 2 * Y0 * h);
+    c.scale(1, -1);
+    c.drawImage(c.canvas, 0, (Y0 - 0.34) * h, w, 0.34 * h, 0, (Y0 - 0.34) * h, w, 0.34 * h);
+    c.restore();
   }
 
-  function paintLights(c, w, h, P, sharp) {
-    var a = w / h;
+  function cityLights(P, a) {
     var n = 1 - P.day;
-    var X = function (x) { return (x + a / 2) * h; };
-    var vis = 0.25 + 0.75 * n;
-    var lampOn = 1 - smooth(0.25, 0.75, P.day);
-    var i, j, b, x, la;
-    for (i = 0; i < city.mid.length; i++) {
-      b = city.mid[i];
-      if (X(b.x + b.w) < -40 || X(b.x) > w + 40) continue;
-      var lim = P.lit * b.boost;
-      for (j = 0; j < b.win.length; j++) {
-        var wn = b.win[j];
-        if (!wn.big || wn.t >= lim) continue;
-        light(c, X(wn.x), wn.y * h, 0.024 * h, 0.004 * h, WIN[wn.c], 0.22 * wn.a * vis, sharp, 0.4);
-      }
+    var vis = 0.18 + 0.82 * n;
+    var lampOn = 1 - smooth(0.3, 0.8, P.day);
+    var haze = tone(P, "mid");
+    var out = [];
+    var i, j, b;
+    function add(x, y, r, col, al, soft, rim, ring, ph, hot, rp, refl) {
+      if (al < 0.004 || Math.abs(x) > a / 2 + r * 1.5) return;
+      out.push({ x: x, y: y, r: r, col: col, a: al, soft: soft, rim: rim, ring: ring, ph: ph, hot: hot, rp: rp, refl: refl });
     }
     for (i = 0; i < city.glow.length; i++) {
       var G = city.glow[i];
       if (G.t >= P.lit * 1.8) continue;
-      x = X(G.x);
-      if (x < -0.1 * h || x > w + 0.1 * h) continue;
-      light(c, x, G.y * h, G.r * h, 0.0035 * h, G.col, G.a * vis, sharp, G.soft);
-      if (G.y > Y0 - 0.14) glowE(c, x, (Y0 + 0.1) * h, (sharp ? 0.006 : G.r * 0.5) * h, 0.09 * h, G.col, G.a * vis * 0.3);
+      var dpt = G.depth;
+      var gcol = mix3(G.col, haze, 0.38 * (1 - dpt));
+      add(G.x, G.y, 0.011 + dpt * dpt * 0.042, gcol, G.a * vis * (0.5 + 0.55 * dpt), 0.05 + dpt * 0.24, G.rim * 0.28, 0.012 + dpt * 0.026, G.ph, G.a > 0.3 ? 0.25 : 0, 0.0035, G.y > Y0 - 0.14 ? 0.3 : 0);
+    }
+    for (i = 0; i < city.mid.length; i++) {
+      b = city.mid[i];
+      var lim = P.lit * b.boost;
+      for (j = 0; j < b.win.length; j++) {
+        var wn = b.win[j];
+        if (!wn.big || wn.t >= lim) continue;
+        add(wn.x, wn.y, 0.022, WIN[wn.c], 0.2 * wn.a * vis, 0.12, 0.1, 0.03, wn.t * 20, 0, 0.004, 0);
+      }
     }
     for (i = 0; i < city.far.length; i++) {
       b = city.far[i];
       if (b.h < 0.17) continue;
-      x = X(b.x + b.w / 2);
-      if (x < -20 || x > w + 20) continue;
-      light(c, x, (Y0 - b.h - 0.006) * h, 0.009 * h, 0.003 * h, [255, 60, 48], 0.45 * n, sharp);
+      add(b.x + b.w / 2, Y0 - b.h - 0.006, 0.009, [255, 60, 48], 0.5 * n, 0.06, 0, 0, 0, 0, 0.003, 0);
     }
     for (i = 0; i < city.lamps.length; i++) {
       var L = city.lamps[i];
-      x = X(L.x);
-      if (x < -0.2 * h || x > w + 0.2 * h) continue;
-      la = L.a * lampOn * 0.42;
-      if (la < 0.01) continue;
-      if (!sharp) glowE(c, x, L.y * h, L.r * 2.8 * h, L.r * 2.8 * h, L.col, la * 0.14);
-      light(c, x, L.y * h, L.r * h, 0.005 * h, L.col, la, sharp);
-      glowE(c, x, (Y0 + 0.14) * h, (sharp ? 0.008 : L.r * 0.6) * h, 0.13 * h, L.col, la * 0.5);
+      add(L.x, L.y, L.r, L.col, L.a * lampOn * (L.col[2] > 200 ? 0.3 : 0.42), 0.1, 0.26, 0.03, L.ph, 0.3, 0.005, 1);
     }
     for (i = 0; i < city.neon.length; i++) {
       var N = city.neon[i];
-      x = X(N.x);
-      if (x < -0.2 * h || x > w + 0.2 * h) continue;
-      la = N.a * (0.35 + 0.65 * n) * 0.4;
-      if (!sharp) glowE(c, x, N.y * h, N.r * 2.4 * h, N.r * 2 * h, N.col, la * 0.12);
-      light(c, x, N.y * h, N.r * h, 0.0045 * h, N.col, la, sharp);
-      glowE(c, x, (Y0 + 0.1) * h, (sharp ? 0.007 : N.r * 0.55) * h, 0.095 * h, N.col, la * 0.45);
+      add(N.x, N.y, N.r * 0.8, N.col, N.a * (0.35 + 0.65 * n) * 0.3, 0.14, 0.2, 0.025, N.ph, 0.1, 0.0045, 0.8);
     }
-    for (i = 0; i < city.shops.length; i++) {
-      var S = city.shops[i];
-      x = X(S.x + S.w / 2);
-      if (x < -0.2 * h || x > w + 0.2 * h) continue;
-      glowE(c, x, (Y0 + 0.06) * h, S.w * 0.5 * h, 0.06 * h, S.col, S.a * 0.16 * (0.4 + 0.6 * n));
+    for (i = 0; i < city.near.length; i++) {
+      var Q = city.near[i];
+      if (Q.t >= P.lit * 1.6) continue;
+      add(Q.x, Q.y, Q.r, Q.col, Q.a * vis, 0.32, 0.18, 0.04, Q.ph, 0, 0, 0);
     }
+    return out;
+  }
+
+  function bokeh(W, H, L, X) {
+    var cx = X(L.x);
+    var cy = L.y * H;
+    var R = L.r * H;
+    var e = Math.max(1.1, L.soft * R);
+    var ca = 0.014;
+    var vx = (W / 2 - cx) / (H * 0.5);
+    var vy = (H / 2 - cy) / (H * 0.5);
+    var vd = Math.sqrt(vx * vx + vy * vy);
+    var cut = Math.max(0, vd - 0.55) * 0.55;
+    var c2x = cx + (vd > 0 ? vx / vd : 0) * cut * R;
+    var c2y = cy + (vd > 0 ? vy / vd : 0) * cut * R;
+    var halo = L.hot > 0 ? 2.4 : 1.02;
+    var ext = R * halo + 2;
+    var x0 = Math.max(0, Math.floor(cx - ext));
+    var x1 = Math.min(W - 1, Math.ceil(cx + ext));
+    var y0 = Math.max(0, Math.floor(cy - ext));
+    var y1 = Math.min(H - 1, Math.ceil(cy + ext));
+    if (x1 < x0 || y1 < y0) return;
+    var cr = LIN[Math.round(L.col[0])] * L.a * 1.7;
+    var cg = LIN[Math.round(L.col[1])] * L.a * 1.7;
+    var cb = LIN[Math.round(L.col[2])] * L.a * 1.7;
+    var ringF = 24 + (L.ph % 1) * 14;
+    for (var y = y0; y <= y1; y++) {
+      var dy = y + 0.5 - cy;
+      var dy2 = y + 0.5 - c2y;
+      var row = (y * W) * 3;
+      for (var x = x0; x <= x1; x++) {
+        var dx = x + 0.5 - cx;
+        var d = Math.sqrt(dx * dx + dy * dy);
+        var r = d / R;
+        var hv = 0;
+        if (L.hot > 0 && r > 0.8) {
+          var q = (r - 1) / (halo - 1);
+          hv = q < 1 ? L.hot * 0.06 * (1 - q) * (1 - q) : 0;
+        }
+        if (r > 1.03) {
+          if (hv > 0) {
+            var o0 = row + x * 3;
+            acc[o0] += cr * hv;
+            acc[o0 + 1] += cg * hv;
+            acc[o0 + 2] += cb * hv;
+          }
+          continue;
+        }
+        var dx2 = x + 0.5 - c2x;
+        var d2 = Math.sqrt(dx2 * dx2 + dy2 * dy2);
+        var m2 = Math.min(1, Math.max(0, (R * 1.08 - d2) / e + 0.5));
+        m2 = m2 * m2 * (3 - 2 * m2);
+        if (m2 <= 0 && hv <= 0) continue;
+        var prof = 0.7 + L.rim * Math.pow(Math.min(1, Math.max(0, (r - 0.5) / 0.47)), 2) + L.ring * Math.sin(r * ringF + L.ph) * (0.35 + 0.65 * r) + L.hot * Math.exp(-r * r * 7);
+        var mr = Math.min(1, Math.max(0, (R * (1 + ca) - d) / e + 0.5));
+        var mg = Math.min(1, Math.max(0, (R - d) / e + 0.5));
+        var mb = Math.min(1, Math.max(0, (R * (1 - ca) - d) / e + 0.5));
+        mr = mr * mr * (3 - 2 * mr) * m2;
+        mg = mg * mg * (3 - 2 * mg) * m2;
+        mb = mb * mb * (3 - 2 * mb) * m2;
+        var o = row + x * 3;
+        acc[o] += cr * (prof * mr + hv);
+        acc[o + 1] += cg * (prof * mg + hv);
+        acc[o + 2] += cb * (prof * mb + hv);
+      }
+    }
+  }
+
+  function paintSoft(P, a, lights) {
+    var H = 540;
+    var W = Math.max(8, Math.round(H * a));
+    var bh = 150;
+    var bw = Math.max(4, Math.round(bh * a));
+    baseCv.width = bw;
+    baseCv.height = bh;
+    paintBase(baseCtx, bw, bh, P);
+    blur(baseCtx, bw, bh, 5);
+    softCv.width = W;
+    softCv.height = H;
+    var c = softCtx;
+    c.drawImage(baseCv, 0, 0, W, H);
+    var X = function (x) { return (x + a / 2) * H; };
+    c.globalCompositeOperation = "lighter";
+    for (var i = 0; i < lights.length; i++) {
+      var L = lights[i];
+      if (L.refl) glowE(c, X(L.x), (Y0 + 0.13) * H, L.r * 0.55 * H, 0.12 * H, L.col, L.a * 0.42 * L.refl);
+    }
+    c.globalCompositeOperation = "source-over";
+    var img = c.getImageData(0, 0, W, H);
+    var d = img.data;
+    var N = W * H;
+    if (!acc || acc.length !== N * 3) acc = new Float32Array(N * 3);
+    for (var p = 0, q = 0; p < N; p++, q += 4) {
+      acc[p * 3] = LIN[d[q]];
+      acc[p * 3 + 1] = LIN[d[q + 1]];
+      acc[p * 3 + 2] = LIN[d[q + 2]];
+    }
+    for (var k = 0; k < lights.length; k++) bokeh(W, H, lights[k], X);
+    var K = 0.72;
+    for (var s = 0, t = 0; s < N; s++, t += 4) {
+      for (var ch = 0; ch < 3; ch++) {
+        var v = acc[s * 3 + ch];
+        if (v > K) v = K + (1 - K) * (1 - Math.exp(-(v - K) / (1 - K)));
+        d[t + ch] = Math.sqrt(v) * 255;
+      }
+      d[t + 3] = 255;
+    }
+    c.putImageData(img, 0, 0);
+  }
+
+  function paintSharp(P, a, lights, pw) {
+    var H = 512;
+    var W = Math.max(8, Math.round(H * a));
+    var bh = 256;
+    var bw = Math.max(4, Math.round(bh * a));
+    baseCv.width = bw;
+    baseCv.height = bh;
+    paintBase(baseCtx, bw, bh, P);
+    blur(baseCtx, bw, bh, 1);
+    workCv.width = W;
+    workCv.height = H;
+    var c = workCv.getContext("2d");
+    c.drawImage(baseCv, 0, 0, W, H);
+    c.globalCompositeOperation = "lighter";
+    var X = function (x) { return (x + a / 2) * H; };
+    for (var i = 0; i < lights.length; i++) {
+      var L = lights[i];
+      if (!L.rp) continue;
+      point(c, X(L.x), L.y * H, L.rp * H, L.col, Math.min(1, L.a * 1.2));
+      if (L.refl) glowE(c, X(L.x), (Y0 + 0.13) * H, 0.008 * H, 0.12 * H, L.col, L.a * 0.45 * L.refl);
+    }
+    c.globalCompositeOperation = "source-over";
+    sharpCv.width = pw;
+    sharpCv.height = 512;
+    sharpCv.getContext("2d").drawImage(workCv, 0, 0, pw, 512);
   }
 
   function boxPass(s, o, len, lines, r, step, lineStep) {
@@ -515,16 +773,16 @@ void main(){
       var base = L * lineStep;
       for (var ch = 0; ch < 3; ch++) {
         var b0 = base + ch;
-        var acc = 0;
+        var sum = 0;
         var k;
-        for (k = -r; k <= r; k++) acc += s[b0 + Math.min(Math.max(k, 0), len - 1) * step];
+        for (k = -r; k <= r; k++) sum += s[b0 + Math.min(Math.max(k, 0), len - 1) * step];
         for (k = 0; k < len; k++) {
-          o[b0 + k * step] = acc / n;
+          o[b0 + k * step] = sum / n;
           var ad = k + r + 1;
           if (ad > len - 1) ad = len - 1;
           var sb = k - r;
           if (sb < 0) sb = 0;
-          acc += s[b0 + ad * step] - s[b0 + sb * step];
+          sum += s[b0 + ad * step] - s[b0 + sb * step];
         }
       }
       for (var m = 0; m < len; m++) o[base + 3 + m * step] = 255;
@@ -541,28 +799,6 @@ void main(){
       boxPass(t, d, h, w, r, w * 4, 4);
     }
     c.putImageData(img, 0, 0);
-  }
-
-  function paintTex(out, lh, bh, br, sharp, P, a, pw, ph) {
-    var lw = Math.max(4, Math.round(lh * a));
-    var bw = Math.max(4, Math.round(bh * a));
-    baseCv.width = bw;
-    baseCv.height = bh;
-    paintBase(baseCtx, bw, bh, P);
-    blur(baseCtx, bw, bh, br);
-    var tgt = pw ? workCv : out;
-    tgt.width = lw;
-    tgt.height = lh;
-    var c = tgt.getContext("2d");
-    c.drawImage(baseCv, 0, 0, lw, lh);
-    c.globalCompositeOperation = "lighter";
-    paintLights(c, lw, lh, P, sharp);
-    c.globalCompositeOperation = "source-over";
-    if (pw) {
-      out.width = pw;
-      out.height = ph;
-      out.getContext("2d").drawImage(workCv, 0, 0, pw, ph);
-    }
   }
 
   function placeBeacon(a) {
@@ -584,10 +820,11 @@ void main(){
   }
 
   function repaint(P) {
-    var a = Math.min(4, Math.max(0.25, asp));
-    paintTex(softCv, 360, 120, 4, false, P, a, 0, 0);
+    var a = Math.min(4, Math.max(0.25, paintAsp));
+    var lights = cityLights(P, a);
+    paintSoft(P, a, lights);
     var pw = Math.min(4096, Math.max(128, Math.pow(2, Math.round(Math.log(512 * a) / Math.LN2))));
-    paintTex(sharpCv, 512, 256, 1, true, P, a, pw, 512);
+    paintSharp(P, a, lights, pw);
     placeBeacon(a);
     if (gl && !lost) {
       upload(0, texSoft, softCv, false);
@@ -602,11 +839,126 @@ void main(){
   function refreshLook() {
     var P = lookAt(sceneMs());
     look = P;
-    var key = Math.round(P.day * 50) + "|" + Math.round(P.dusk * 50) + "|" + Math.round(P.lit * 80) + "|" + asp.toFixed(3);
+    var key = Math.round(P.day * 50) + "|" + Math.round(P.dusk * 50) + "|" + Math.round(P.lit * 80) + "|" + paintAsp.toFixed(3);
     if (key !== bgKey) {
       bgKey = key;
       repaint(P);
     }
+  }
+
+  function isLetter(ch) {
+    return /[A-Za-z]/.test(ch);
+  }
+
+  function pickGlyph(chars, i) {
+    for (var tries = 0; tries < 8; tries++) {
+      var ch = B64.charAt(Math.floor(Math.random() * 64));
+      chars[i] = ch;
+      var ok = true;
+      for (var s = Math.max(0, i - 2); s <= i && s + 2 < chars.length + 1; s++) {
+        if (s + 2 < chars.length && isLetter(chars[s]) && isLetter(chars[s + 1]) && isLetter(chars[s + 2])) ok = false;
+      }
+      if (ok) return;
+    }
+    chars[i] = B64.charAt(52 + Math.floor(Math.random() * 12));
+  }
+
+  function startRun(t) {
+    var n = 6 + Math.floor(Math.random() * 15);
+    var chars = [];
+    for (var i = 0; i < n; i++) {
+      chars.push("");
+      pickGlyph(chars, i);
+    }
+    var pad = Math.random();
+    if (pad < 0.2) chars[n - 1] = "=";
+    else if (pad < 0.3) { chars[n - 1] = "="; chars[n - 2] = "="; }
+    var swaps = [];
+    var wob = [];
+    for (var k = 0; k < n; k++) {
+      swaps.push(t + 0.1 + Math.random() * 0.3);
+      wob.push([(Math.random() - 0.5) * 6, 0.62 + Math.random() * 0.38]);
+    }
+    var hgt = 0.15 + Math.random() * 0.03;
+    var wid = (hgt * 8) / Math.max(0.3, asp);
+    var used = (n / 21) * wid;
+    run = {
+      t0: t, form: 0.8 + Math.random() * 0.4, hold: 1 + Math.random(), fade: 1.3 + Math.random() * 0.6,
+      chars: chars, swaps: swaps, wob: wob, h: hgt, w: wid,
+      x: 0.1 + Math.random() * Math.max(0.01, 0.8 - used) - (wid - used) / 2,
+      y: 0.3 + Math.random() * 0.3,
+      amp: 0.75 + Math.random() * 0.25
+    };
+    drawRun(true);
+  }
+
+  function drawRun(fresh) {
+    var g = glyphCtx;
+    var n = run.chars.length;
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.globalCompositeOperation = "source-over";
+    g.shadowColor = "rgba(0,0,0,0)";
+    g.shadowBlur = 0;
+    g.shadowOffsetX = 0;
+    g.fillStyle = fresh ? "#000" : "rgba(0,0,0,0.6)";
+    g.fillRect(0, 0, 1024, 128);
+    g.font = "800 80px ui-monospace, Menlo, monospace";
+    g.textAlign = "center";
+    g.textBaseline = "middle";
+    var adv = 1024 / 21;
+    var x0 = (1024 - adv * n) / 2;
+    var i;
+    for (i = 0; i < n; i++) {
+      g.fillStyle = "rgb(" + Math.round(255 * run.wob[i][1]) + ",0,0)";
+      g.fillText(run.chars[i], x0 + (i + 0.5) * adv, 66 + run.wob[i][0]);
+    }
+    g.globalCompositeOperation = "lighter";
+    g.shadowColor = "rgb(0,255,0)";
+    g.shadowBlur = 18;
+    g.shadowOffsetX = 2048;
+    g.fillStyle = "rgb(0,0,255)";
+    for (i = 0; i < n; i++) g.fillText(run.chars[i], x0 + (i + 0.5) * adv - 2048, 66 + run.wob[i][0]);
+    g.shadowColor = "rgba(0,0,0,0)";
+    g.shadowBlur = 0;
+    g.shadowOffsetX = 0;
+    if (gl && !lost) upload(2, texGlyph, glyphCv, false);
+  }
+
+  function glyphStep(t) {
+    if (!run) {
+      if (t < nextRun - 60) nextRun = t + RUN_GAP;
+      if (t >= nextRun) startRun(t);
+      else { runUni[4] = 0; return; }
+    }
+    var e = t - run.t0;
+    var total = run.form + run.hold + run.fade;
+    if (e < 0 || e > total) {
+      run = null;
+      nextRun = t + RUN_GAP + Math.random() * RUN_SPAN;
+      runUni[4] = 0;
+      return;
+    }
+    if (e < run.form + run.hold && !st.still) {
+      var dirty = false;
+      for (var i = 0; i < run.chars.length; i++) {
+        if (t >= run.swaps[i]) {
+          if (run.chars[i] !== "=") pickGlyph(run.chars, i);
+          run.swaps[i] = t + 0.09 + Math.random() * 0.24;
+          dirty = true;
+        }
+      }
+      if (dirty) drawRun();
+    }
+    var th;
+    if (e < run.form) th = 1.1 - 1.22 * smooth(0, run.form, e);
+    else if (e < run.form + run.hold) th = -0.12;
+    else th = -0.12 + 1.25 * smooth(0, run.fade, e - run.form - run.hold);
+    runUni[0] = run.x;
+    runUni[1] = run.y;
+    runUni[2] = run.w;
+    runUni[3] = run.h;
+    runUni[4] = run.amp * (st.still ? 0.45 : 1);
+    runUni[5] = th;
   }
 
   function sigCol(t, n) {
@@ -639,7 +991,17 @@ void main(){
     var h = canvas.height;
     var hz = tone(look, "haze");
     ctx2d.globalCompositeOperation = "source-over";
-    ctx2d.drawImage(softCv, 0, 0, w, h);
+    var tw = Math.max(8, Math.round(w / 9));
+    var th = Math.max(8, Math.round(h / 9));
+    if (tinyCv.width !== tw) tinyCv.width = tw;
+    if (tinyCv.height !== th) tinyCv.height = th;
+    var tc = tinyCv.getContext("2d");
+    tc.imageSmoothingEnabled = true;
+    tc.imageSmoothingQuality = "high";
+    tc.drawImage(softCv, 0, 0, tw, th);
+    ctx2d.imageSmoothingEnabled = true;
+    ctx2d.imageSmoothingQuality = "high";
+    ctx2d.drawImage(tinyCv, 0, 0, w, h);
     ctx2d.fillStyle = rgba([hz[0] * 255, hz[1] * 255, hz[2] * 255], 0.35);
     ctx2d.fillRect(0, 0, w, h);
     if (L > 0.01) {
@@ -658,12 +1020,17 @@ void main(){
       return;
     }
     if (lost || gl.isContextLost()) return;
+    targets();
+    glyphStep(t);
     fillCars(t, n);
     var sc = sigCol(t, n);
     var hz = tone(look, "haze");
     var bb = beacon[2] ? Math.pow(0.5 + 0.5 * Math.sin(t * 1.15), 2.2) * n * 1.3 : 0;
-    gl.viewport(0, 0, canvas.width, canvas.height);
-    gl.uniform2f(U.uRes, canvas.width, canvas.height);
+    var S = RT.S;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, S.f);
+    gl.viewport(0, 0, S.w, S.h);
+    gl.useProgram(prog);
+    gl.uniform2f(U.uRes, S.w, S.h);
     gl.uniform1f(U.uT, t);
     gl.uniform1f(U.uDay, look.day);
     gl.uniform1f(U.uLamp, L);
@@ -672,7 +1039,94 @@ void main(){
     gl.uniform2f(U.uSig, 0.7, 0.4);
     gl.uniform3f(U.uSigCol, sc[0], sc[1], sc[2]);
     gl.uniform3f(U.uBea, beacon[0], beacon[1], bb);
+    gl.uniform4f(U.uRun, runUni[0], runUni[1], runUni[2], runUni[3]);
+    gl.uniform2f(U.uRunA, runUni[4], runUni[5]);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
+    var sm = S.h * 0.0075;
+    var sb = RT.Q.h * 0.034;
+    pass(PB, S, RT.T, 1 / S.w, 0, sm);
+    pass(PB, RT.T, S, 0, 1 / S.h, sm);
+    pass(PD, S, RT.Q, 1 / S.w, 1 / S.h, 0);
+    pass(PB, RT.Q, RT.R, 1 / RT.Q.w, 0, sb);
+    pass(PB, RT.R, RT.Q, 0, 1 / RT.Q.h, sb);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, canvas.width, canvas.height);
+    gl.useProgram(PC.p);
+    gl.activeTexture(gl.TEXTURE3);
+    gl.bindTexture(gl.TEXTURE_2D, S.t);
+    gl.activeTexture(gl.TEXTURE4);
+    gl.bindTexture(gl.TEXTURE_2D, RT.Q.t);
+    gl.uniform2f(PC.u.uMainRes, S.w, S.h);
+    gl.uniform2f(PC.u.uBloomRes, RT.Q.w, RT.Q.h);
+    gl.uniform1f(PC.u.uDay, look.day);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    gl.activeTexture(gl.TEXTURE3);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+  }
+
+  function pass(P, src, dst, sx, sy, sig) {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, dst.f);
+    gl.viewport(0, 0, dst.w, dst.h);
+    gl.useProgram(P.p);
+    gl.activeTexture(gl.TEXTURE3);
+    gl.bindTexture(gl.TEXTURE_2D, src.t);
+    gl.uniform2f(P.u.uStep, sx, sy);
+    if (sig) gl.uniform1f(P.u.uSig, sig);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+  }
+
+  function target(w, h) {
+    var t = gl.createTexture();
+    gl.activeTexture(gl.TEXTURE5);
+    gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, texType, null);
+    var f = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, f);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
+    var ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    return { t: t, f: f, w: w, h: h, ok: ok };
+  }
+
+  function dropTargets() {
+    ["S", "T", "Q", "R"].forEach(function (k) {
+      if (RT[k]) {
+        gl.deleteFramebuffer(RT[k].f);
+        gl.deleteTexture(RT[k].t);
+        RT[k] = null;
+      }
+    });
+    RT.w = 0;
+    RT.h = 0;
+  }
+
+  function targets() {
+    var ch = Math.max(1, window.innerHeight || document.documentElement.clientHeight || 1);
+    var hs = Math.round(Math.min(400, Math.max(180, ch / 2)));
+    var ws = Math.max(8, Math.round(hs * asp));
+    if (RT.S && RT.w === ws && RT.h === hs) return;
+    dropTargets();
+    var qw = Math.max(2, Math.round(ws / 4));
+    var qh = Math.max(2, Math.round(hs / 4));
+    RT.S = target(ws, hs);
+    RT.T = target(ws, hs);
+    RT.Q = target(qw, qh);
+    RT.R = target(qw, qh);
+    if (!(RT.S.ok && RT.T.ok && RT.Q.ok && RT.R.ok) && texType !== gl.UNSIGNED_BYTE) {
+      texType = gl.UNSIGNED_BYTE;
+      dropTargets();
+      targets();
+      return;
+    }
+    RT.w = ws;
+    RT.h = hs;
   }
 
   function step(dt, t) {
@@ -723,7 +1177,7 @@ void main(){
     var cw = Math.max(1, window.innerWidth || document.documentElement.clientWidth || 1);
     var ch = Math.max(1, window.innerHeight || document.documentElement.clientHeight || 1);
     var dpr = window.devicePixelRatio || 1;
-    var k = Math.min(dpr, Math.sqrt(900000 / (cw * ch)));
+    var k = Math.min(dpr, 1, Math.sqrt(2000000 / (cw * ch)));
     var w = Math.max(1, Math.round(cw * k));
     var h = Math.max(1, Math.round(ch * k));
     if (canvas.width !== w) canvas.width = w;
@@ -746,34 +1200,61 @@ void main(){
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([6, 8, 15, 255]));
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]));
     if (mip) gl.generateMipmap(gl.TEXTURE_2D);
     return t;
   }
 
-  function setupGL() {
+  function link(src, names) {
     var vs = compile(gl.VERTEX_SHADER, VS);
-    var fs = compile(gl.FRAGMENT_SHADER, FS);
-    if (!vs || !fs) return false;
-    prog = gl.createProgram();
-    gl.attachShader(prog, vs);
-    gl.attachShader(prog, fs);
-    gl.linkProgram(prog);
-    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return false;
-    gl.useProgram(prog);
+    var fs = compile(gl.FRAGMENT_SHADER, src);
+    if (!vs || !fs) return null;
+    var p = gl.createProgram();
+    gl.attachShader(p, vs);
+    gl.attachShader(p, fs);
+    gl.bindAttribLocation(p, 0, "aPos");
+    gl.linkProgram(p);
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) return null;
+    var u = {};
+    names.forEach(function (k) {
+      u[k] = gl.getUniformLocation(p, k);
+    });
+    return { p: p, u: u };
+  }
+
+  function setupGL() {
+    var sc = link(FS, ["uSoft", "uSharp", "uGlyph", "uRes", "uT", "uDay", "uLamp", "uHaze", "uCar", "uSig", "uSigCol", "uBea", "uRun", "uRunA"]);
+    PB = link(FS_BLUR, ["uTex", "uStep", "uSig"]);
+    PD = link(FS_DOWN, ["uTex", "uStep"]);
+    PC = link(FS_COMP, ["uMain", "uBloom", "uMainRes", "uBloomRes", "uDay"]);
+    if (!sc || !PB || !PD || !PC) return false;
+    prog = sc.p;
+    U = sc.u;
+    var hf = gl.getExtension("OES_texture_half_float");
+    var hfl = gl.getExtension("OES_texture_half_float_linear");
+    gl.getExtension("EXT_color_buffer_half_float");
+    texType = hf && hfl ? hf.HALF_FLOAT_OES : gl.UNSIGNED_BYTE;
+    RT = { w: 0, h: 0, S: null, T: null, Q: null, R: null };
     var buf = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, buf);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
-    var ap = gl.getAttribLocation(prog, "aPos");
-    gl.enableVertexAttribArray(ap);
-    gl.vertexAttribPointer(ap, 2, gl.FLOAT, false, 0, 0);
-    ["uSoft", "uSharp", "uRes", "uT", "uDay", "uLamp", "uHaze", "uCar", "uSig", "uSigCol", "uBea"].forEach(function (k) {
-      U[k] = gl.getUniformLocation(prog, k);
-    });
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+    gl.useProgram(PB.p);
+    gl.uniform1i(PB.u.uTex, 3);
+    gl.useProgram(PD.p);
+    gl.uniform1i(PD.u.uTex, 3);
+    gl.useProgram(PC.p);
+    gl.uniform1i(PC.u.uMain, 3);
+    gl.uniform1i(PC.u.uBloom, 4);
+    gl.useProgram(prog);
     gl.uniform1i(U.uSoft, 0);
     gl.uniform1i(U.uSharp, 1);
+    gl.uniform1i(U.uGlyph, 2);
     texSoft = makeTex(0, false);
     texSharp = makeTex(1, true);
+    texGlyph = makeTex(2, false);
+    if (run) drawRun(true);
     return true;
   }
 
@@ -823,13 +1304,18 @@ void main(){
       st.atPerf = performance.now();
     }
     if (typeof d.needs === "number" && isFinite(d.needs)) st.needs = Math.max(0, d.needs);
-    if ("still" in d) st.still = d.still === true;
+    if ("still" in d) {
+      var was = st.still;
+      st.still = d.still === true;
+      if (was !== st.still) resize();
+    }
     lampGoal = st.needs > 0 ? 0.7 + 0.3 * Math.min(1, (st.needs - 1) / 4) : 0;
     bgChecked = -1e9;
     update();
   }
 
   resize();
+  paintAsp = asp;
   if (!initGL()) init2D();
   if (gl) {
     canvas.addEventListener("webglcontextlost", function (e) {
@@ -848,7 +1334,12 @@ void main(){
   document.addEventListener("visibilitychange", update);
   window.addEventListener("resize", function () {
     resize();
-    bgChecked = -1e9;
+    clearTimeout(aspTimer);
+    aspTimer = setTimeout(function () {
+      paintAsp = asp;
+      bgChecked = -1e9;
+      if (!running && !document.hidden) step(-1, clock);
+    }, 180);
     if (!document.hidden) step(running ? 0 : -1, clock);
   });
 
