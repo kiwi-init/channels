@@ -13,7 +13,7 @@ import { personMachines, type Asker, type PairedComputer } from "../../desktop/s
 import { acceptSeat, withAccess } from "../../desktop/src/seats.ts";
 import { needsOf } from "./needs.ts";
 import { Room } from "./room.ts";
-import type { Ask, EnrollStart, Fetched, Push, Reply, Saved } from "./wire.ts";
+import type { Ask, EnrollStart, Fetched, Push, Reply, RoomView, Saved } from "./wire.ts";
 
 interface Handler {
   postMessage(json: string): void;
@@ -60,6 +60,11 @@ interface Enrolling {
   asked: Promise<void> | null;
 }
 const COMPUTERS_EVERY_MS = 5 * 60_000;
+const KEEP_EVERY_MS = 5_000;
+
+const live = new Set<string>();
+const warmed = new Set<string>();
+const keeping = new Map<string, { view: RoomView; timer: ReturnType<typeof setTimeout> }>();
 
 const checks = new Map<string, Signed[]>();
 const budget: SigningBudget = {
@@ -83,11 +88,15 @@ function stopAll(): void {
   joinsTimer = null;
   for (const room of rooms.values()) room.stop();
   rooms.clear();
+  for (const k of keeping.values()) clearTimeout(k.timer);
+  keeping.clear();
+  live.clear();
+  warmed.clear();
   keyring?.stopAll();
   keyring = null;
 }
 
-function start(next: Saved): number {
+function start(next: Saved, kept: Record<string, unknown> = {}): number {
   stopAll();
   saved = next;
   const ring = new Keyring({
@@ -113,6 +122,7 @@ function start(next: Saved): number {
   });
   keyring = ring;
   for (const seat of next.seats) openRoom(ring, seat);
+  void warm(ring, kept);
   watchJoins();
   if (next.person) {
     const load = () => void listComputers().catch(() => {});
@@ -130,7 +140,7 @@ function openRoom(ring: Keyring, seat: ChannelIdentityView): void {
   if (!seat.code || !seat.access || rooms.has(seat.code)) return;
   const code = seat.code;
   const room = new Room(ring, seat, {
-    emit: (view) => post({ type: "room", room: view }),
+    emit: (view) => shown(ring, view),
     lost: (gone) => post({ type: "gone", code: gone }),
     person: personPk,
     log: (line) => post({ type: "log", line }),
@@ -139,6 +149,42 @@ function openRoom(ring: Keyring, seat: ChannelIdentityView): void {
   });
   rooms.set(code, room);
   void room.start();
+}
+
+function shown(ring: Keyring, view: RoomView): void {
+  if (view.connection === "live") live.add(view.code);
+  else if (warmed.has(view.code) && !live.has(view.code) && view.messages.length === 0) return;
+  post({ type: "room", room: view });
+  if (view.connection !== "live" || view.gone) return;
+  const pending = keeping.get(view.code);
+  if (pending) {
+    pending.view = view;
+    return;
+  }
+  const timer = setTimeout(() => {
+    const latest = keeping.get(view.code)?.view ?? view;
+    keeping.delete(view.code);
+    if (keyring !== ring) return;
+    ring
+      .keep(view.code, latest)
+      .then((sealed) => {
+        if (sealed && keyring === ring) post({ type: "kept", code: view.code, sealed });
+      })
+      .catch(() => {});
+  }, KEEP_EVERY_MS);
+  keeping.set(view.code, { view, timer });
+}
+
+async function warm(ring: Keyring, kept: Record<string, unknown>): Promise<void> {
+  await Promise.all(
+    Object.entries(kept).map(async ([code, sealed]) => {
+      if (!rooms.has(code) || live.has(code)) return;
+      const view = (await ring.openKept(code, sealed).catch(() => null)) as RoomView | null;
+      if (!view || typeof view !== "object" || view.code !== code || keyring !== ring || live.has(code)) return;
+      warmed.add(code);
+      post({ type: "room", room: { ...view, connection: "connecting" } });
+    }),
+  );
 }
 
 let taking: Promise<unknown> = Promise.resolve();
@@ -432,7 +478,7 @@ async function enrollFinish(): Promise<Saved> {
 async function handle(ask: Ask): Promise<unknown> {
   switch (ask.op) {
     case "start":
-      return start(ask.saved);
+      return start(ask.saved, ask.kept ?? {});
     case "enrollBegin":
       return enrollBegin(ask.relay, ask.label, ask.os, ask.user, ask.waitMs);
     case "enrollAsk":

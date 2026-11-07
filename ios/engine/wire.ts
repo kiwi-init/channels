@@ -20,7 +20,7 @@ export interface EnrollStart {
 }
 
 export type Ask =
-  | { op: "start"; saved: Saved }
+  | { op: "start"; saved: Saved; kept?: Record<string, unknown> }
   | { op: "enrollBegin"; relay: string; label: string; os: string; user?: string; waitMs?: number }
   | { op: "enrollAsk" }
   | { op: "enrollWait" }
@@ -56,6 +56,7 @@ export type Push =
   | { type: "gone"; code: string }
   | { type: "log"; line: string }
   | { type: "removed"; by: string }
+  | { type: "kept"; code: string; sealed: unknown }
   | { type: "fetch"; id: number; url: string; body: string };
 
 export type Connection = "connecting" | "live" | "reconnecting";

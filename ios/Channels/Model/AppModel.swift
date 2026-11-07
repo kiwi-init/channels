@@ -170,7 +170,8 @@ final class AppModel {
         }
         held(object)
         do {
-            try await engine.ask(["op": "start", "saved": object])
+            let codes = (object["seats"] as? [[String: Any]] ?? []).compactMap { $0["code"] as? String }
+            try await engine.ask(["op": "start", "saved": object, "kept": Kept.load(codes)])
             phase = .ready
         } catch {
             phase = .broken(error.localizedDescription)
@@ -213,6 +214,9 @@ final class AppModel {
             if room.connection == .live { pullOnce(room.code) }
         case .gone(let code):
             rooms[code] = nil
+            Kept.drop(code)
+        case .kept(let code, let sealed):
+            Kept.save(code, sealed)
         case .log:
             return
         case .removed(let by):
@@ -394,6 +398,7 @@ final class AppModel {
 
     func unlink() {
         Vault.wipe()
+        Kept.wipe()
         keeping = nil
         unsaved = nil
         rooms = [:]
