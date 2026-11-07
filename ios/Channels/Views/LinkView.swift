@@ -50,64 +50,57 @@ struct LinkView: View {
             }
         case .signingIn(let url, let code):
             VStack(alignment: .leading, spacing: 0) {
-                if let url {
-                    Text("Sign in in Safari").type(.title, .semibold).foregroundStyle(Tone.ink)
-                    Text(code.isEmpty ? "Use the account Channels on your computer uses." : "Use the account Channels on your computer uses, and check Safari shows \(code).")
-                        .type(.ui)
-                        .foregroundStyle(Tone.ink2)
-                        .padding(.top, 6)
-                    QuietButton(title: "Open the sign-in") {
-                        if let page = URL(string: url) { UIApplication.shared.open(page) }
-                    }
-                    .padding(.top, 20)
-                    waiting("Finish signing in in Safari").padding(.top, 24)
-                } else {
-                    waiting("Signing in…")
+                Text("Sign in with GitHub").type(.title, .semibold).foregroundStyle(Tone.ink)
+                Text(code.isEmpty ? "Use the account Channels on your computer uses." : "GitHub asks for this code. It's copied: paste it there, then authorize.")
+                    .type(.ui)
+                    .foregroundStyle(Tone.ink2)
+                    .padding(.top, 6)
+                if !code.isEmpty {
+                    Text(code)
+                        .font(.mono(.title))
+                        .fontWeight(.semibold)
+                        .foregroundStyle(Tone.ink)
+                        .textSelection(.enabled)
+                        .padding(.vertical, 20)
                 }
+                if url != nil {
+                    PrimaryButton(title: "Open GitHub") { model.openGitHub() }
+                }
+                waiting("Waiting for GitHub").padding(.top, 20)
                 QuietButton(title: "Cancel") { Task { await model.cancelLink() } }
                     .padding(.top, 24)
             }
-        case .asking:
-            VStack(alignment: .leading, spacing: 0) {
-                Text("Approve this iPhone").type(.title, .semibold).foregroundStyle(Tone.ink)
-                Text("Open Channels on your computer and let this iPhone in. It then shows digits to type there.")
-                    .type(.ui)
-                    .foregroundStyle(Tone.ink2)
-                    .padding(.top, 6)
-                waiting("Waiting for your computer").padding(.top, 24)
-                QuietButton(title: "Cancel") { Task { await model.cancelLink() } }
-                    .padding(.top, 24)
-            }
-        case .approve(let digits):
-            VStack(alignment: .leading, spacing: 0) {
-                Text("Approve this iPhone").type(.title, .semibold).foregroundStyle(Tone.ink)
-                Text("Channels on your computer asks for these digits. Type them there.")
-                    .type(.ui)
-                    .foregroundStyle(Tone.ink2)
-                    .padding(.top, 6)
-                Text(spaced(digits))
-                    .font(.custom("Inter", size: 44).weight(.semibold))
-                    .monospacedDigit()
-                    .tracking(2)
-                    .foregroundStyle(Tone.ink)
-                    .padding(.vertical, 24)
-                waiting("Waiting for your computer")
-                QuietButton(title: "Cancel") { Task { await model.cancelLink() } }
-                    .padding(.top, 24)
-            }
-        case .check(let name, let fingerprint):
-            VStack(alignment: .leading, spacing: 0) {
-                Text("Is this your key, \(name)?").type(.title, .semibold).foregroundStyle(Tone.ink)
+        case .asking, .approve, .check:
+            approving
+        }
+    }
+
+    @ViewBuilder private var approving: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Approve on your computer").type(.title, .semibold).foregroundStyle(Tone.ink)
+            Text(approveHint)
+                .type(.ui)
+                .foregroundStyle(Tone.ink2)
+                .padding(.top, 6)
+            Text(shownDigits.isEmpty ? "––– –––" : spaced(shownDigits))
+                .font(.custom("Inter", size: 44).weight(.semibold))
+                .monospacedDigit()
+                .tracking(2)
+                .foregroundStyle(shownDigits.isEmpty ? Tone.ink3 : Tone.ink)
+                .padding(.vertical, 24)
+            if case .check(let name, let fingerprint, _) = model.linking {
+                Text("Your key, \(name)").type(.ui).foregroundStyle(Tone.ink2)
                 Text(fingerprint)
-                    .font(.mono(.title))
+                    .font(.mono(.body))
                     .fontWeight(.semibold)
                     .foregroundStyle(Tone.ink)
                     .textSelection(.enabled)
-                    .padding(.vertical, 20)
-                Text("Your computer shows it next to the digits and in Settings. Join only if they match: a different key means someone else answered.")
+                    .padding(.top, 4)
+                Text("Join if your computer shows the same key. A different one means someone else answered.")
                     .type(.ui)
-                    .foregroundStyle(Tone.ink2)
-                PrimaryButton(title: "It Matches, Join", busy: keeping) {
+                    .foregroundStyle(Tone.ink3)
+                    .padding(.top, 8)
+                PrimaryButton(title: "Join", busy: keeping) {
                     keeping = true
                     Task {
                         await model.keepLink()
@@ -115,9 +108,28 @@ struct LinkView: View {
                     }
                 }
                 .padding(.top, 20)
-                QuietButton(title: "It Doesn't Match") { if !keeping { Task { await model.refuseLink(fingerprint) } } }
+                QuietButton(title: "Not My Key") { if !keeping { Task { await model.refuseLink(fingerprint) } } }
                     .padding(.top, 10)
+            } else {
+                waiting("Waiting for your computer")
+                QuietButton(title: "Cancel") { Task { await model.cancelLink() } }
+                    .padding(.top, 24)
             }
+        }
+    }
+
+    private var shownDigits: String {
+        switch model.linking {
+        case .approve(let digits), .check(_, _, let digits): digits
+        default: ""
+        }
+    }
+
+    private var approveHint: String {
+        switch model.linking {
+        case .asking: "Channels on your computer asks about this iPhone. Click Continue there."
+        case .check: "Your computer took the digits."
+        default: "Type these digits there."
         }
     }
 
