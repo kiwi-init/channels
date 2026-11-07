@@ -55,7 +55,7 @@ function ModRooms({ mod }: { mod: ModView }) {
     )
   }
   return (
-    <Group title="Where it may post" hint={busy ? "Saving…" : "It reaches only the channels you tick, and only these rooms."}>
+    <Group title={`Where it may ${reachWords(mod.needs)}`} hint={busy ? "Saving…" : "It reaches only the channels you tick, and only these rooms."}>
       <div className="mod-details-rooms">
         <RoomPicker rooms={asksRooms(mod.needs)} channels={app.channels.filter((c) => c.state === "member")} value={mod.rooms ?? []} onChange={change} />
       </div>
@@ -178,4 +178,10 @@ export function ModDetailsPage({ mod, manage }: { mod: ModView; manage?: Manage 
       )}
     </>
   )
+}
+
+const reachWords = (needs: readonly string[]): string => {
+  const reads = needs.some((n) => n.startsWith("read:"))
+  const posts = needs.some((n) => n.startsWith("post:"))
+  return reads && posts ? "read and post" : reads ? "read" : "post"
 }

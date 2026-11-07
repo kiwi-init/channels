@@ -75,7 +75,7 @@ Open a channel, press ⌘K and pick **Standup Notes** under Mods. Run `kiwi mod 
 | `name` | Lowercase letters, digits and dashes, the same as the folder's name. `app`, `nav`, `view`, `chat` and `debug` are taken. |
 | `version` | A version like `1.0.0` |
 | `shell` | The app versions it works with, like `^3.6`. An app it doesn't fit leaves it off and says why. |
-| `needs` | What it asks you for: `panel`, `tab`, `command`, `terminal`, `github`, `idle`, `channels`, `post:#<room>` for each room it posts in, `render:<kind>`, and `net:<host>` for each web host it talks to |
+| `needs` | What it asks you for: `panel`, `tab`, `command`, `terminal`, `github`, `idle`, `channels`, `read:#<room>` and `post:#<room>` for each room it reads or posts in, `render:<kind>`, and `net:<host>` for each web host it talks to |
 | `icon` | Optional: an `.svg` or `.png` in its folder, up to 64 KB. The app shows it as a picture, so an SVG's scripts never run. Without one, the mod gets its first letter. |
 | `description` | Optional: one line, up to 200 characters, on what it does. `kiwi mod publish` needs it, and **From Kiwi** shows it. |
 | `author` | Optional: who made it, up to 100 characters |
@@ -98,8 +98,9 @@ Everything comes from `@kiwi/mod`, plus React:
 | `idle({ after, backdrop, render })` | With `idle`: the mod's view over the whole window once you've been away `after` minutes (`0` waits for ⌘T only). `backdrop: "meadow"` puts the app's meadow behind it. See [While you're away](#while-youre-away). |
 | `leave()` | With `idle`: put the app back |
 | `useChannels()`, `channels()` | With `channels`: your channels, the ones that need you first, each with its `code`, `title`, `needs` (how many need you), `last` and one `line` |
-| `useRooms()`, `rooms()` | With `post:#<room>`: the channels' rooms you ticked for it, each with its `channel` code, the channel's `title` and the `room` |
+| `useRooms()`, `rooms()` | With `read:#<room>` or `post:#<room>`: the channels' rooms you ticked for it, each with its `channel` code, the channel's `title` and the `room` |
 | `post({ channel, room, text })` | With `post:#<room>`: post `text` as you into a room you ticked, at most once every 2 seconds. It ends with a line saying which mod sent it. A room you didn't tick is refused. See [Posting in your rooms](#posting-in-your-rooms). |
+| `useMessages(channel, room)`, `messages(channel, room)` | With `read:#<room>`: the last 50 messages of a room you ticked, oldest first, each `{ id, author, text, at }`, and new ones as they come. See [Reading your rooms](#reading-your-rooms). |
 | `useStill()` | `true` when you asked for less motion, in your system or in the app |
 | `copy(text, note)` | Copy text, with a short note that says so |
 | `command({ id, title, run })` | An action in ⌘K. Its id for `keys.json` is `<mod>.<id>`. |
@@ -192,6 +193,14 @@ A mod that lists `post:#general` (or any room) can post there, but only in the c
 - It posts as you, and every post ends with a line saying which mod sent it.
 - At most one post every 2 seconds, up to 4,000 characters.
 - A room you didn't tick, a room it didn't list, or a channel you're not in is refused, and the mod gets the reason.
+
+## Reading your rooms
+
+A mod that lists `read:#ops` (or any room) sees that room's messages, but only in the channels you tick, the same way as posting. Its page in Settings → Mods shows them under "Where it may read".
+
+- It gets the room's last 50 messages, then each new one, with who wrote it and when. Edits show their newest text, and deleted messages leave.
+- It never sees another room, a direct message, a channel you didn't tick, task events, or a message whose signature doesn't check out.
+- Untick a room and its messages leave the mod too.
 
 ## While you're away
 
