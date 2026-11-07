@@ -1,4 +1,4 @@
-import { startMeadow, type Meadow } from "~/calm/meadow"
+import { startMeadow, type Meadow } from "~/start/meadow"
 
 let current: Meadow | null = null
 

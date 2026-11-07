@@ -1,13 +1,7 @@
 import type { ChannelTile, HomeChannel } from "~/model"
+import type { ModChannel } from "~/mods/protocol"
 
-export interface CalmRow {
-  code: string
-  title: string
-  needs: number
-  line: string | null
-}
-
-const SHOWN = 8
+const MOST = 200
 const LINE_CLIP = 90
 
 function clip(text: string): string {
@@ -22,12 +16,15 @@ function lineOf(home: HomeChannel | undefined): string | null {
   return null
 }
 
-export function calmRows(tiles: readonly ChannelTile[], home: readonly HomeChannel[]): CalmRow[] {
+export function modChannels(tiles: readonly ChannelTile[], home: readonly HomeChannel[]): ModChannel[] {
   const byCode = new Map(home.map((h) => [h.code, h]))
   return tiles
     .filter((t) => t.state === "member" && (!t.muted || t.needsYou > 0))
     .map((t, i) => ({ t, i }))
     .sort((a, b) => Number(b.t.needsYou > 0) - Number(a.t.needsYou > 0) || b.t.last - a.t.last || a.i - b.i)
-    .slice(0, SHOWN)
-    .map(({ t }) => ({ code: t.code, title: t.title, needs: t.needsYou, line: lineOf(byCode.get(t.code)) }))
+    .slice(0, MOST)
+    .map(({ t }) => ({ code: t.code, title: t.title, needs: t.needsYou, last: t.last, line: lineOf(byCode.get(t.code)) }))
 }
+
+export const channelsFor = (mod: { state: string; needs: readonly string[] } | undefined, list: ModChannel[]): ModChannel[] | null =>
+  mod?.state === "on" && mod.needs.includes("channels") ? list : null

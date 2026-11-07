@@ -77,13 +77,27 @@ declare module "@kiwi/mod" {
   export function showTab(next: { shown?: boolean; alert?: string | null; hint?: string | null }): void
   export function title(title: string): void
   export function copy(text: string, note?: string): void
+  export function idle(view: { after: number | null; backdrop?: "meadow" | null; render: ComponentType }): void
+  export function leave(): void
+  export function useStill(): boolean
+
+  export interface Channel {
+    code: string
+    title: string
+    needs: number
+    last: number
+    line: string | null
+  }
+
+  export function channels(): Channel[] | null
+  export function useChannels(): Channel[] | null
 
   export type Target = { kind: "pr" | "issue"; repo: string; number: number } | { kind: "view"; view: string }
 
   export function show(target: Target): void
   export function onShow(run: (target: Target) => void): () => void
   export function useShowing(): Target | null
-  export function open(to: { kind: "task"; id: number } | { kind: "settings" } | { kind: "chat" }): void
+  export function open(to: { kind: "task"; id: number } | { kind: "settings" } | { kind: "chat" } | { kind: "channel"; code: string }): void
 
   export type TaskStatus = "todo" | "doing" | "review" | "landing" | "done" | "waiting"
 
@@ -278,4 +292,36 @@ declare module "@kiwi/mod" {
     remove(key: string): Promise<void>
     keys(): Promise<string[]>
   }
+}
+
+declare module "*.css" {}
+
+declare module "*.svg" {
+  const url: string
+  export default url
+}
+
+declare module "*.png" {
+  const url: string
+  export default url
+}
+
+declare module "*.jpg" {
+  const url: string
+  export default url
+}
+
+declare module "*.jpeg" {
+  const url: string
+  export default url
+}
+
+declare module "*.gif" {
+  const url: string
+  export default url
+}
+
+declare module "*.webp" {
+  const url: string
+  export default url
 }

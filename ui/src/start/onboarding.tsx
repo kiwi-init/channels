@@ -2,8 +2,8 @@ import "~/styles/onboarding.css"
 
 import { useEffect, useId, useLayoutEffect, useRef, useState, type AnimationEvent } from "react"
 
-import type { Meadow } from "~/calm/meadow"
-import { Settle, useStill } from "~/calm/settle"
+import type { Meadow } from "~/start/meadow"
+import { Settle, useStill } from "~/start/settle"
 import { cx } from "~/kit/bits"
 import { rememberOnboarded } from "~/start/onboarded"
 import { PLEDGE, pledged, same } from "~/start/pledge"
@@ -59,7 +59,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
 
   useEffect(() => {
     let gone = false
-    void import("~/calm/meadow")
+    void import("~/start/meadow")
       .then(({ startMeadow }) => {
         if (gone || !stage.current) return null
         return startMeadow(stage.current, latest.current.still)
