@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
-import { asksRooms, grantsOf, mayPost, pacer, postBody, startPick } from "~/mods/rooms"
+import { asksRooms, grantsOf, mayPost, pacer, postBody, startPick } from "~/mods/needs"
 
 const poster = {
   name: "poster",
