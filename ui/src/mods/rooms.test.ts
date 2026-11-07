@@ -1,8 +1,17 @@
 import { describe, expect, test } from "bun:test"
 
-import { asksRooms, grantsOf, mayPost, pacer, postBody } from "~/mods/rooms"
+import { asksRooms, grantsOf, mayPost, pacer, postBody, startPick } from "~/mods/rooms"
 
-const poster = { name: "poster", state: "on", needs: ["post:#general", "read:ops"], rooms: [{ code: "dev", room: "general" }, { code: "ops-team", room: "ops" }, { code: "dev", room: "secret" }] }
+const poster = {
+  name: "poster",
+  state: "on",
+  needs: ["post:#general", "read:ops"],
+  rooms: [
+    { code: "dev", room: "general" },
+    { code: "ops-team", room: "ops" },
+    { code: "dev", room: "secret" },
+  ],
+}
 
 describe("a mod's rooms (T6837)", () => {
   test("the rooms it asks for, once each and without the #", () => {
@@ -30,6 +39,14 @@ describe("a mod's rooms (T6837)", () => {
   test("a post ends with a line that says which mod sent it, and an empty one sends nothing", () => {
     expect(postBody("poster", "  Build is green  ")).toBe("Build is green\n\nvia poster")
     expect(postBody("poster", " \n ")).toBeNull()
+  })
+
+  test("the picker starts with the channel you're in ticked, for each room it has", () => {
+    expect(startPick(["general", "ops", "secret"], { code: "dev", rooms: [{ id: "ops" }] })).toEqual([
+      { code: "dev", room: "general" },
+      { code: "dev", room: "ops" },
+    ])
+    expect(startPick(["general"], null)).toEqual([])
   })
 
   test("one post every 2 seconds per mod: a sooner one says how long to wait", () => {

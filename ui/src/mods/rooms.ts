@@ -36,3 +36,8 @@ export function pacer(every: number): (name: string, now: number) => number {
     return 0
   }
 }
+
+export function startPick(rooms: readonly string[], here: { code: string; rooms: readonly { id: string }[] } | null): { code: string; room: string }[] {
+  if (!here) return []
+  return rooms.filter((r) => r === "general" || here.rooms.some((x) => x.id === r)).map((room) => ({ code: here.code, room }))
+}

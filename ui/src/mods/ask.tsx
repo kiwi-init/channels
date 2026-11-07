@@ -3,11 +3,13 @@ import "~/styles/mods.css"
 import { useState } from "react"
 
 import { bridge } from "@kiwi/secrets/secrets.ts"
-import type { ModSnippet, ModView } from "../../../desktop/src/bridge.ts"
+import type { ModRoom, ModSnippet, ModView } from "../../../desktop/src/bridge.ts"
 import { Modal } from "~/kit/modal"
 import { askLater, askWaiting, useModsVersion } from "~/mods/host"
 import { ModIcon } from "~/mods/icon"
 import { needWords } from "~/mods/needs"
+import { RoomPicker } from "~/mods/room-picker"
+import { asksRooms, startPick } from "~/mods/rooms"
 import { useApp } from "~/nav"
 
 function Snippet({ snippet, into }: { snippet: ModSnippet; into: string }) {
@@ -24,7 +26,8 @@ function Snippet({ snippet, into }: { snippet: ModSnippet; into: string }) {
   )
 }
 
-function AskBody({ mod }: { mod: ModView }) {
+function AskBody({ mod, rooms }: { mod: ModView; rooms: { value: ModRoom[]; onChange: (next: ModRoom[]) => void } | null }) {
+  const { app } = useApp()
   const more = mod.approved.length > 0
   return (
     <div className="mod-ask">
@@ -38,6 +41,7 @@ function AskBody({ mod }: { mod: ModView }) {
           </li>
         ))}
       </ul>
+      {rooms && <RoomPicker rooms={asksRooms(mod.needs)} channels={app.channels.filter((c) => c.state === "member")} value={rooms.value} onChange={rooms.onChange} />}
       {mod.terminal?.tmux && <Snippet snippet={mod.terminal.tmux} into=" for tmux" />}
       {mod.terminal?.rex && <Snippet snippet={mod.terminal.rex} into=" for Rex" />}
       {mod.terminal && <p>Removing the mod takes these lines back out.</p>}
@@ -49,13 +53,16 @@ export function ModAsk() {
   useModsVersion()
   const { app, nav, go, toast } = useApp()
   const [busy, setBusy] = useState<string | null>(null)
+  const [pick, setPick] = useState<{ name: string; rooms: ModRoom[] } | null>(null)
   const mod = askWaiting()
   if (!mod || nav.dialog || nav.modal || (nav.page !== "settings" && !app.channel)) return null
+  const asked = asksRooms(mod.needs)
+  const picked = pick?.name === mod.name ? pick.rooms : startPick(asked, app.channel)
   const allow = () => {
     const b = bridge()
     if (!b) return
     setBusy(mod.name)
-    b.approveMod(mod.name, mod.needs).then(
+    b.approveMod(mod.name, mod.needs, asked.length ? picked : []).then(
       () => {
         setBusy(null)
         if (mod.needs.includes("panel") && nav.page === "channel") go({ to: "panel", panel: { kind: "mod", name: mod.name } })
@@ -86,7 +93,7 @@ export function ModAsk() {
         </>
       }
     >
-      <AskBody mod={mod} />
+      <AskBody mod={mod} rooms={asked.length ? { value: picked, onChange: (rooms) => setPick({ name: mod.name, rooms }) } : null} />
     </Modal>
   )
 }
