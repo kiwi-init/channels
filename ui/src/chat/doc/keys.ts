@@ -148,7 +148,6 @@ export interface DocKeyOpts {
   posted?: (block: string) => boolean
   commandFor?: CommandFor
   refuse?: (line: string) => boolean
-  editLast?: () => boolean
   made?: Made
   sending?: (block: string) => void
 }
@@ -164,13 +163,6 @@ function unlessRefused(me: string, refuse: (line: string) => boolean, finish: Co
     const mine = mineHere(state, me)
     if (mine && refuse(mine.textContent)) return true
     return finish(state, dispatch, view)
-  }
-}
-
-function editLast(me: string, edit: () => boolean): Command {
-  return (state) => {
-    const mine = mineHere(state, me)
-    return !!mine && state.selection.empty && isEmpty(mine) && edit()
   }
 }
 
@@ -197,7 +189,6 @@ export function docKeys(me: string, now: () => number, blur: () => void, opts: D
       Backspace: chainCommands(dropOwnEmpty(me, posted), startOfItem, join(me, joinBack, posted)),
       Delete: join(me, joinForward, posted),
       ArrowDown: unlessRefused(me, refuse, toYourLine(me, posted, opts.made ?? (() => true))),
-      ArrowUp: editLast(me, opts.editLast ?? (() => false)),
       "Ctrl-Shift-ArrowRight": wordIntoNext,
       "Alt-Shift-ArrowRight": wordIntoNext,
       Escape: chainCommands(dropReply(me), () => {

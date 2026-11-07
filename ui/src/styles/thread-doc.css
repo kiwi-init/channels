@@ -106,16 +106,6 @@
   pointer-events: none;
 }
 
-.doc-tail {
-  display: block;
-  width: 100%;
-  min-height: var(--compose-space);
-  padding: 0;
-  border: 0;
-  background: none;
-  cursor: text;
-}
-
 .thread-doc.is-read-only .doc {
   caret-color: transparent;
 }
@@ -345,24 +335,4 @@
   color: var(--accent);
   font: 500 var(--t-ui) var(--ui);
   cursor: pointer;
-}
-
-.doc-drop {
-  position: absolute;
-  inset: -8px;
-  z-index: 2;
-  display: grid;
-  align-items: end;
-  justify-items: center;
-  border-radius: var(--r-ctl);
-  background: color-mix(in srgb, var(--bg-2) 92%, transparent);
-  pointer-events: none;
-}
-
-.doc-drop span {
-  position: sticky;
-  bottom: 24px;
-  margin-bottom: 24px;
-  color: var(--accent);
-  font: 500 var(--t-ui) var(--ui);
 }
