@@ -75,9 +75,6 @@ struct Conversation: View {
     var answer: (AskView) -> Void = { _ in }
     var sendBack: (ReviewView) -> Void = { _ in }
     @Environment(AppModel.self) private var model
-    @State private var reveal: CGFloat = 0
-
-    private static let revealMax: CGFloat = 62
 
     private var solo: Bool {
         room.placeView(room.place).map { $0.kind == "dm" && $0.withMe } ?? false
@@ -98,7 +95,7 @@ struct Conversation: View {
                 ForEach(
                     Line.build(room.messages, asks: elsewhere, reviews: reviews, needs: needs, pending: model.pending["\(room.code)|\(room.place)"] ?? [], sentAs: model.sentAs)
                 ) { line in
-                    LineView(line: line, room: room, reveal: reveal, solo: solo) { m in
+                    LineView(line: line, room: room, solo: solo) { m in
                         replyTo = m
                         typing.wrappedValue = true
                     } jump: { seq in
@@ -120,17 +117,6 @@ struct Conversation: View {
         .defaultScrollAnchor(.bottom)
         .scrollDismissesKeyboard(.interactively)
         .softEdges()
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 14)
-                .onChanged { drag in
-                    let dx = drag.translation.width
-                    guard dx < 0, abs(dx) > abs(drag.translation.height) * 1.3 else { return }
-                    reveal = min(Self.revealMax, -dx * 0.7)
-                }
-                .onEnded { _ in
-                    withAnimation(.spring(duration: 0.32, bounce: 0.18)) { reveal = 0 }
-                }
-        )
         .onScrollGeometryChange(for: Bool.self) { geo in
             geo.visibleRect.maxY >= geo.contentSize.height - 60
         } action: { _, near in
@@ -224,7 +210,6 @@ struct Intro: View {
 struct LineView: View {
     let line: Line
     let room: RoomView
-    let reveal: CGFloat
     let solo: Bool
     let reply: (MessageView) -> Void
     let jump: (Int) -> Void
@@ -258,7 +243,7 @@ struct LineView: View {
                 .padding(.horizontal, 32)
                 .padding(.vertical, 4)
         case .bubble(let m, let first, let last):
-            BubbleRow(message: m, first: first, last: last, room: room, reveal: reveal, solo: solo, reply: reply, jump: jump, answer: answer)
+            BubbleRow(message: m, first: first, last: last, room: room, solo: solo, reply: reply, jump: jump, answer: answer)
         }
     }
 }
@@ -312,7 +297,6 @@ struct BubbleRow: View {
     let first: Bool
     let last: Bool
     let room: RoomView
-    let reveal: CGFloat
     let solo: Bool
     let reply: (MessageView) -> Void
     let jump: (Int) -> Void
@@ -359,8 +343,8 @@ struct BubbleRow: View {
             if !message.mine { Spacer(minLength: 40) }
         }
         .padding(.top, first ? 8 : 2)
-        .offset(x: pull - reveal)
-        .background(alignment: .leading) {
+        .offset(x: -pull)
+        .background(alignment: .trailing) {
             Image(systemName: "arrowshape.turn.up.left.fill")
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(armed ? Tone.accent : Tone.ink3)
@@ -368,19 +352,11 @@ struct BubbleRow: View {
                 .background(Tone.wash2, in: Circle())
                 .opacity(Double(min(1, pull / Self.replyAt)))
                 .scaleEffect(armed ? 1.1 : 0.85)
-                .offset(x: -36 + pull * 0.6)
-        }
-        .overlay(alignment: .trailing) {
-            Text(When.clock(message.date))
-                .type(.stamp)
-                .foregroundStyle(Tone.ink3)
-                .fixedSize()
-                .opacity(Double(reveal / 62))
-                .offset(x: 62 - reveal + 4)
+                .offset(x: 36 - pull * 0.6)
         }
         .gesture(
-            Rightward { dx in
-                pull = min(84, max(0, dx) * 0.6)
+            Leftward { dx in
+                pull = min(84, max(0, -dx) * 0.6)
                 let now = pull >= Self.replyAt
                 if now != armed {
                     armed = now
@@ -395,7 +371,7 @@ struct BubbleRow: View {
     }
 }
 
-struct Rightward: UIGestureRecognizerRepresentable {
+struct Leftward: UIGestureRecognizerRepresentable {
     let moved: (CGFloat) -> Void
     let ended: () -> Void
 
@@ -421,7 +397,7 @@ struct Rightward: UIGestureRecognizerRepresentable {
         func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
             guard let pan = recognizer as? UIPanGestureRecognizer else { return false }
             let v = pan.velocity(in: pan.view)
-            return v.x > 0 && v.x > abs(v.y) * 1.3
+            return v.x < 0 && -v.x > abs(v.y) * 1.3
         }
     }
 }

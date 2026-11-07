@@ -509,33 +509,37 @@ in text.
 
 ## 14. The iPhone app
 
-The native app in `ios/` (SwiftUI) has Apple Messages' layout: the same structure, the
-same gestures, the same speed. The owner asked for it, so on the phone it wins over §9's rows.
-Its look is the desktop's (owner's pick, 11-07): §3's tokens, no glass, no blur, no gradients.
+The native app in `ios/` (SwiftUI) is laid out like Slack or Discord on iPhone and built only
+from stock SwiftUI (owner, 11-07 #187: "no app on iphone uses this paradigms"; #196): a tab
+bar, large titles, `List` rows, the system back button, `.searchable`, swipe actions, badges.
+It carries the desktop's structure (#160): channels, then each channel's rooms, people, agents
+and tasks. The goal is that a VPS and an iPhone are enough (#165), so whatever the sidebar can
+do, the phone should reach. Its look is the desktop's: §3's tokens on stock controls.
 
-- **Two conversations per channel, nothing else.** On the phone you see each channel's
-  #general and your direct chat with its lead. Other direct threads, threads between agents
-  and task threads stay on the Mac: the lead reports in #general and answers you directly.
-  When you are the lead, there is only #general.
+- **Every place in the channel.** Rooms, direct threads (with people, with agents, between
+  others) and task threads all open on the phone, each as one conversation screen.
 - **Type, colour, faces.** SF Pro through Dynamic Type (`Step`). `Tone` carries §3's tokens
   for the theme picked in Settings > Appearance (every desktop theme; Cinder Peak and Channels
   Light by default). `bubbleMine` is ink with `onInk` text,
   `bubbleThem` the raised fill; the accent is for actions and links only. Round buttons, the
-  composer and the search capsule are flat `raised` fills with a hairline. Agents wear §12's
+  name pill, the composer and the search capsule are Liquid Glass tinted with `raised`
+  (flat `raised` with a hairline before iOS 26). Agents wear §12's
   role face (`ios/scripts/faces.ts` writes it from `ui/src/kit/characters.ts`) with the
-  harness as a top-left badge; people their initials. A channel's face is the desktop rail's:
+  harness as a top-left badge, drawn in the member colour (`c-*`) when it has one; a person is
+  one letter in a circle, in their colour on an 18% wash of it. A channel's face is the desktop rail's:
   its picture, else its title's first letter.
-- **One list, like Messages.** Every channel's #general (a group row: the channel icon, a
-  `doing` dot when an agent works) and its lead chat (the lead's face; " · onemouse" and a
-  small channel badge when you have two or more channels; always there, so you can write to
-  the lead first), newest first. A row: blue unread dot, 52pt avatar, name, Messages time and
-  chevron, two quiet lines: "Needs you:" in `decide` when a question waits on you, "Draft:"
-  in `alert`, else the last message. Pins sit on top as a 3-column grid of 80pt avatars with a
-  peek bubble. Top: an "Edit" menu (Settings, Mark All as Read), the title, a Filter menu
-  (Conversations, Needs You, Unread) with a `decide` dot when something waits on you. Bottom:
-  a search capsule (its magnifier turns into a chevron that ends search). Swipe a row
-  for Read/Unread and Pin; long-press it for a live preview and a menu that answers a waiting
-  question on the spot, opens the other conversation, pins or marks read.
+- **Tabs: Home, Needs You, Search, You.** Each tab keeps its own navigation stack.
+- **Home** is one inset-grouped `List` titled "Home", a section per channel (newest first,
+  headed by the channel's face, name and "· 2 working"): #general, then a direct thread with
+  every member (the lead first, then who is working, then the latest), then Tasks with its
+  open count. A row is the place's face, its name (semibold when unread), one quiet line (the
+  last message, or for a working agent its task) and an unread dot. Swipe for Read/Unread;
+  "Read All" in the bar when anything is unread.
+- **Needs You** lists what waits on you across channels, answered in place (Allow once, Deny,
+  Approve, Let in, an answer); its tab carries the count as a badge.
+- **Search** is `.searchable` over every conversation's name and the loaded messages.
+- **You** is Settings with a large title.
+- **Tasks** (from Home): Working, In review, To do, Done; a task opens its thread.
 - **A conversation is one screen.** Header: a round back button (a blue dot when another
   channel is unread; hold it and slide for Previous, Needs You, Unread, Recent across
   channels), the centred name pill ("2 working · 1 needs you", "working on T8",
@@ -558,7 +562,7 @@ Its look is the desktop's (owner's pick, 11-07): §3's tokens, no glass, no blur
   `decide`, the question, a row per option (a radio circle, ≥44pt) and "Something else…" in
   `accent`, which puts the composer in answer mode ("Answer win", with a bar you can cancel).
   A tap on an option fills the circle at once (medium haptic, then success); the chosen row
-  wears the Prism, the others dim, and the footer says "You chose". Your answer isn't drawn
+  takes the accent wash, the others dim, and the footer says "You chose". Your answer isn't drawn
   again as its own bubble. Which questions wait on you is the desktop's rule (`asksFor`), so
   both apps agree.
 - **Composer.** A round `+` and the field (send inside it), nothing else; `@` chips
@@ -567,12 +571,12 @@ Its look is the desktop's (owner's pick, 11-07): §3's tokens, no glass, no blur
   without a flicker. Only a failure speaks: a red "!" with Try Again and Delete, "Not
   Delivered". A draft (text and photos) stays with its conversation, in memory only.
 - **Native presentations, nothing custom.** The details push from the name pill and Settings
-  push from Edit, with the system back button. Details: the channel's icon, name and "5 people
+  push from the gear, with the system back button. Details: the channel's icon, name and "5 people
   · 2 working", tiles for the other conversation and Pin, Needs you (answer in place), the
   crew (who works on what; tap the lead to write to them), and About (charter, hold). Settings:
   iOS Settings, grouped rows with coloured symbol tiles (Channels, Relay, Lock with Face ID
   after 30 s), Link Again, Unlink This iPhone, the version.
-- No Agents view, no read receipts, no typing bubble, no "New messages" line: faces, the
+- No read receipts, no typing bubble, no "New messages" line: faces, the
   `doing` dot and "N working" carry agent state.
 
 ## 15. New-surface checklist

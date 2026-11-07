@@ -101,4 +101,23 @@ const room = roomView({
     },
   ],
 });
-writeFileSync(out, JSON.stringify(room));
+const ago = (min: number) => Date.now() - min * 60_000;
+const task = (id: number, title: string, state: "todo" | "doing" | "review" | "done", owner: string | null, min: number) => ({
+  id,
+  title,
+  state,
+  owner,
+  review: null,
+  updatedAt: ago(min),
+  createdAt: ago(min + 120),
+  last: null,
+  archived: false,
+});
+const tasks = [
+  task(12, "Composer empties after Send, every time", "doing", "dev", 2),
+  task(14, "Role faces on the iPhone", "review", "dev", 30),
+  task(15, "Search across channels", "todo", null, 90),
+  task(9, "Needs you cards on the phone", "done", "dev", 240),
+];
+const members = room.members.map((m) => (m.name === "dev" ? { ...m, activity: { state: "working", tool: "Edit", since: ago(2) }, doing: [12] } : m));
+writeFileSync(out, JSON.stringify({ ...room, tasks, members }));

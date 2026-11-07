@@ -116,15 +116,14 @@ final class GestureTests: XCTestCase {
     }
 
     @MainActor
-    func testSwipingABubbleRightReplies() async throws {
+    func testSwipingABubbleLeftReplies() async throws {
         let screen = try Screen.list()
         try await screen.enter(after: .milliseconds(800))
         let window = screen.window
-        screen.drag(from: CGPoint(x: window.width * 0.3, y: window.height * 0.42), by: CGVector(dx: 160, dy: 4), hold: 0.2)
+        screen.drag(from: CGPoint(x: window.width * 0.7, y: window.height * 0.42), by: CGVector(dx: -160, dy: 4), hold: 0.2)
         let any = screen.app.descendants(matching: .any)
         let reply = any.matching(NSPredicate(format: "placeholderValue BEGINSWITH 'Reply to'")).firstMatch
-        XCTAssertTrue(reply.waitForExistence(timeout: 3), "swiping a bubble right didn't start a reply")
-        XCTAssertTrue(any.matching(NSPredicate(format: "label == 'Back'")).firstMatch.exists, "swiping a bubble right left the conversation")
+        XCTAssertTrue(reply.waitForExistence(timeout: 3), "swiping a bubble left didn't start a reply")
     }
 
     @MainActor

@@ -2,8 +2,12 @@ import SwiftUI
 import UIKit
 
 struct NeedsScreen: View {
-    let open: (Spot) -> Void
     @Environment(AppModel.self) private var model
+
+    private func open(_ spot: Spot) {
+        model.tab = .home
+        model.path.append(.place(spot))
+    }
 
     private var rooms: [RoomView] {
         model.channels.filter { !$0.asks.isEmpty || !$0.reviews.isEmpty || !$0.open.isEmpty }
