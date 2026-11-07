@@ -34,10 +34,12 @@ struct ChannelDetails: View {
                 } header: {
                     Text("Needs you").foregroundStyle(Tone.decide)
                 }
+                .listRowBackground(Tone.raised)
             }
             Section("Crew") {
                 ForEach(crew) { person($0) }
             }
+            .listRowBackground(Tone.raised)
             if room.hold != nil || room.charter != nil {
                 Section("About") {
                     if let hold = room.hold {
@@ -47,9 +49,10 @@ struct ChannelDetails: View {
                         Text(charter).type(.ui).foregroundStyle(Tone.ink2).lineLimit(8)
                     }
                 }
+                .listRowBackground(Tone.raised)
             }
         }
-        .listStyle(.insetGrouped)
+        .grouped()
     }
 
     private var header: some View {

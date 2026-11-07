@@ -302,10 +302,12 @@ struct ChannelAvatar: View {
         Group {
             if room.icon?.kind == "image", let picture = Icons.picture(room) {
                 Image(uiImage: picture).resizable().scaledToFill().background(Tone.wash2)
-            } else if room.icon?.kind == "emoji", let emoji = room.icon?.emoji {
-                Text(emoji).font(.system(size: size * 0.52)).frame(width: size, height: size).background(Tone.wash2)
             } else {
-                Image("robot-\(room.icon?.robot ?? "blue")").resizable().scaledToFit()
+                Text(room.title.prefix(1).uppercased())
+                    .font(.system(size: size * 0.42, weight: .semibold))
+                    .foregroundStyle(Tone.ink)
+                    .frame(width: size, height: size)
+                    .background(Tone.raised)
             }
         }
         .frame(width: size, height: size)
@@ -317,7 +319,7 @@ struct ChannelAvatar: View {
 extension View {
     @ViewBuilder func softEdges() -> some View {
         if #available(iOS 26.0, *) {
-            self.scrollEdgeEffectStyle(.soft, for: .top).scrollEdgeEffectHidden(true, for: .bottom)
+            self.scrollEdgeEffectHidden(true, for: .all)
         } else {
             self
         }

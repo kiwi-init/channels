@@ -274,7 +274,7 @@ struct PendingBubble: View {
                 .accessibilityLabel("Not delivered")
             }
             VStack(alignment: .trailing, spacing: 3) {
-                Markdown(text: item.body, ink: .white, link: .white, code: .white.opacity(0.18), underline: true)
+                Markdown(text: item.body, ink: Tone.onInk, link: Tone.onInk, code: Tone.onInk.opacity(0.18), underline: true)
                     .padding(.horizontal, 13)
                     .padding(.vertical, 8)
                     .background {
@@ -420,9 +420,9 @@ struct Bubble: View {
     @State private var tapback = false
 
     private var fill: Color { message.mine ? Tone.bubbleMine : Tone.bubbleThem }
-    private var ink: Color { message.mine ? .white : Tone.ink }
-    private var link: Color { message.mine ? .white : Tone.accent }
-    private var wash: Color { message.mine ? .white.opacity(0.18) : Tone.wash2 }
+    private var ink: Color { message.mine ? Tone.onInk : Tone.ink }
+    private var link: Color { message.mine ? Tone.onInk : Tone.accent }
+    private var wash: Color { message.mine ? Tone.onInk.opacity(0.18) : Tone.wash2 }
     private var onlyPictures: Bool { message.images > 0 && message.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
     var body: some View {

@@ -509,18 +509,22 @@ in text.
 
 ## 14. The iPhone app
 
-The native app in `ios/` (SwiftUI) is Apple Messages, all the way: the same structure, the
+The native app in `ios/` (SwiftUI) has Apple Messages' layout: the same structure, the
 same gestures, the same speed. The owner asked for it, so on the phone it wins over §9's rows.
+Its look is the desktop's (owner's pick, 11-07): §3's tokens, no glass, no blur, no gradients.
 
 - **Two conversations per channel, nothing else.** On the phone you see each channel's
   #general and your direct chat with its lead. Other direct threads, threads between agents
   and task threads stay on the Mac: the lead reports in #general and answers you directly.
   When you are the lead, there is only #general.
-- **Type, colour, faces.** SF Pro through Dynamic Type (`Step`). `Tone` tokens, the dark
-  canvas true black, `bubbleMine` the accent and `bubbleThem` Messages grey. Agents wear their
-  harness logo; people their initials. A channel's face is its desktop icon, never a
-  phone-only one: the prism glass head its owner picked (one of the twelve in the
-  app's asset catalog), its emoji or its picture, and with none the head the desktop picks from its title.
+- **Type, colour, faces.** SF Pro through Dynamic Type (`Step`). `Tone` carries §3's tokens
+  for the theme picked in Settings > Appearance (every desktop theme; Cinder Peak and Channels
+  Light by default). `bubbleMine` is ink with `onInk` text,
+  `bubbleThem` the raised fill; the accent is for actions and links only. Round buttons, the
+  composer and the search capsule are flat `raised` fills with a hairline. Agents wear §12's
+  role face (`ios/scripts/faces.ts` writes it from `ui/src/kit/characters.ts`) with the
+  harness as a top-left badge; people their initials. A channel's face is the desktop rail's:
+  its picture, else its title's first letter.
 - **One list, like Messages.** Every channel's #general (a group row: the channel icon, a
   `doing` dot when an agent works) and its lead chat (the lead's face; " · onemouse" and a
   small channel badge when you have two or more channels; always there, so you can write to
@@ -529,12 +533,12 @@ same gestures, the same speed. The owner asked for it, so on the phone it wins o
   in `alert`, else the last message. Pins sit on top as a 3-column grid of 80pt avatars with a
   peek bubble. Top: an "Edit" menu (Settings, Mark All as Read), the title, a Filter menu
   (Conversations, Needs You, Unread) with a `decide` dot when something waits on you. Bottom:
-  a glass search capsule (its magnifier turns into a chevron that ends search). Swipe a row
+  a search capsule (its magnifier turns into a chevron that ends search). Swipe a row
   for Read/Unread and Pin; long-press it for a live preview and a menu that answers a waiting
   question on the spot, opens the other conversation, pins or marks read.
-- **A conversation is one screen.** Header: a glass back circle (a blue dot when another
+- **A conversation is one screen.** Header: a round back button (a blue dot when another
   channel is unread; hold it and slide for Previous, Needs You, Unread, Recent across
-  channels), the centred glass name pill ("2 working · 1 needs you", "working on T8",
+  channels), the centred name pill ("2 working · 1 needs you", "working on T8",
   "here"/"away"; a tap pushes the details), and at the trailing edge the other conversation:
   the lead's face in #general, the channel's icon in the lead chat, with a blue dot when it
   has unread messages or a `decide` dot when a question waits there. One tap slides across:
@@ -557,7 +561,7 @@ same gestures, the same speed. The owner asked for it, so on the phone it wins o
   wears the Prism, the others dim, and the footer says "You chose". Your answer isn't drawn
   again as its own bubble. Which questions wait on you is the desktop's rule (`asksFor`), so
   both apps agree.
-- **Composer.** A glass `+` and the glass field (send inside it), nothing else; `@` chips
+- **Composer.** A round `+` and the field (send inside it), nothing else; `@` chips
   while you type a name. Sending is instant: the field clears, your bubble is drawn at once
   with Messages' sent sound (silent mode mutes it), and the delivered message takes its place
   without a flicker. Only a failure speaks: a red "!" with Try Again and Delete, "Not

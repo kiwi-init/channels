@@ -3,29 +3,6 @@ import PhotosUI
 import SwiftUI
 import UIKit
 
-struct GlassGroup<Content: View>: View {
-    var spacing: CGFloat = 10
-    @ViewBuilder let content: Content
-
-    var body: some View {
-        if #available(iOS 26.0, *) {
-            GlassEffectContainer(spacing: spacing) { content }
-        } else {
-            content
-        }
-    }
-}
-
-extension View {
-    @ViewBuilder func glassID(_ id: String, in space: Namespace.ID) -> some View {
-        if #available(iOS 26.0, *) {
-            self.glassEffectID(id, in: space)
-        } else {
-            self
-        }
-    }
-}
-
 struct Attached: Identifiable {
     let id = UUID()
     let image: UIImage
@@ -85,7 +62,6 @@ struct Dock: View {
     let follow: Follow
     let jump: () -> Void
     @Environment(AppModel.self) private var model
-    @Namespace private var glass
     @State private var draft = ""
     @State private var sending = false
     @State private var error: String?
@@ -122,11 +98,9 @@ struct Dock: View {
             } else if let replyTo {
                 bar("arrowshape.turn.up.left.fill", Tone.accent, room.display(replyTo.from), replyTo.plain) { self.replyTo = nil }
             }
-            GlassGroup(spacing: 12) {
-                HStack(alignment: .bottom, spacing: 8) {
-                    plus.glassID("plus", in: glass)
-                    field.glassID("field", in: glass)
-                }
+            HStack(alignment: .bottom, spacing: 8) {
+                plus
+                field
             }
         }
         .padding(.horizontal, 12)

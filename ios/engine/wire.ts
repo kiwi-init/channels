@@ -66,6 +66,7 @@ export interface MemberView {
   display: string;
   kind: "human" | "agent" | "computer";
   role: string | null;
+  face: string | null;
   owner: boolean;
   lead: boolean;
   color: string | null;

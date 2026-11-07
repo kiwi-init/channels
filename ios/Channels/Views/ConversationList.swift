@@ -3,12 +3,9 @@ import SwiftUI
 
 struct ConversationList: View {
     @Environment(AppModel.self) private var model
-    @State private var path: [Spot] = []
     @State private var filter = Filter.all
     @State private var search = ""
-    @State private var settings = false
     @FocusState private var searching: Bool
-    @Namespace private var glass
 
     private var query: String { search.trimmingCharacters(in: .whitespaces).lowercased() }
     private var finding: Bool { searching || !query.isEmpty }
@@ -33,7 +30,7 @@ struct ConversationList: View {
     }
 
     var body: some View {
-        NavigationStack(path: $path) {
+        NavigationStack(path: Binding(get: { model.path }, set: { model.path = $0 })) {
             List {
                 if let unsaved = model.unsaved {
                     Text(unsaved)
@@ -66,7 +63,7 @@ struct ConversationList: View {
                 }
                 ForEach(rows) { row in
                     Button {
-                        path.append(row.spot)
+                        model.path.append(row.spot)
                     } label: {
                         ConversationRowView(row: row)
                     }
@@ -76,7 +73,7 @@ struct ConversationList: View {
                     .listRowBackground(Tone.canvas)
                     .swipeActions(edge: .leading, allowsFullSwipe: true) { leading(row) }
                     .contextMenu {
-                        RowMenu(row: row) { path.append($0) }
+                        RowMenu(row: row) { model.path.append($0) }
                     } preview: {
                         RowPeek(row: row)
                     }
@@ -92,7 +89,7 @@ struct ConversationList: View {
                         .listRowBackground(Tone.canvas)
                     ForEach(hits, id: \.1.seq) { row, message in
                         Button {
-                            path.append(row.spot)
+                            model.path.append(row.spot)
                         } label: {
                             Hit(row: row, message: message, query: query)
                         }
@@ -113,19 +110,19 @@ struct ConversationList: View {
             .navigationDestination(for: Spot.self) { spot in
                 ConversationScreen(start: spot)
             }
-            .navigationDestination(isPresented: $settings) {
+            .navigationDestination(isPresented: Binding(get: { model.inSettings }, set: { model.inSettings = $0 })) {
                 SettingsScreen()
             }
             .bar(.bottom) { dock }
         }
         #if DEBUG
             .onChange(of: model.channels.first?.code, initial: true) { _, code in
-                guard let code, path.isEmpty, let shot = UserDefaults.standard.string(forKey: "shot") else { return }
+                guard let code, model.path.isEmpty, let shot = UserDefaults.standard.string(forKey: "shot") else { return }
                 if let text = UserDefaults.standard.string(forKey: "draft") { model.keep(Draft(text: text), code, "main") }
                 switch shot {
-                case "settings": settings = true
+                case "settings": model.inSettings = true
                 case "list": break
-                default: path = [Spot(code: code, place: UserDefaults.standard.string(forKey: "place") ?? "main")]
+                default: model.path = [Spot(code: code, place: UserDefaults.standard.string(forKey: "place") ?? "main")]
                 }
             }
         #endif
@@ -143,7 +140,7 @@ struct ConversationList: View {
         ToolbarItem(placement: .topBarLeading) {
             Menu {
                 Button {
-                    settings = true
+                    model.inSettings = true
                 } label: {
                     Label(model.person.isEmpty ? "Settings" : "Settings · \(model.person)", systemImage: "gear")
                 }
@@ -217,13 +214,13 @@ struct ConversationList: View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 18) {
             ForEach(model.pins()) { row in
                 Button {
-                    path.append(row.spot)
+                    model.path.append(row.spot)
                 } label: {
                     PinCell(row: row)
                 }
                 .buttonStyle(.plain)
                 .contextMenu {
-                    RowMenu(row: row) { path.append($0) }
+                    RowMenu(row: row) { model.path.append($0) }
                 } preview: {
                     RowPeek(row: row)
                 }
@@ -235,7 +232,7 @@ struct ConversationList: View {
     }
 
     private var dock: some View {
-        GlassGroup(spacing: 10) {
+        Group {
             HStack(spacing: 10) {
                 HStack(spacing: 8) {
                     Button {
@@ -264,7 +261,6 @@ struct ConversationList: View {
                 .padding(.trailing, 16)
                 .frame(height: 48)
                 .glassCapsule()
-                .glassID("search", in: glass)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 6)
@@ -534,7 +530,7 @@ struct PeekBubble: View {
             }
             Text(message.body.isEmpty && message.images > 0 ? "Photo" : message.plain)
                 .type(.ui)
-                .foregroundStyle(message.mine ? .white : Tone.ink)
+                .foregroundStyle(message.mine ? Tone.onInk : Tone.ink)
                 .lineLimit(5)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 7)
@@ -639,6 +635,8 @@ struct SettingsScreen: View {
                     Setting(symbol: "lock.fill", tint: Tone.ink3, title: "Lock")
                 }
             }
+            .listRowBackground(Tone.raised)
+            AppearanceSection()
             if !model.enrolled {
                 Section {
                     Button {
@@ -650,6 +648,7 @@ struct SettingsScreen: View {
                 } footer: {
                     Text("Brings the channels you joined on your Mac since you linked.")
                 }
+                .listRowBackground(Tone.raised)
             }
             Section {
                 Button(role: .destructive) {
@@ -663,12 +662,13 @@ struct SettingsScreen: View {
                         ? "This iPhone holds its own device key and its channels' keys in its keychain. Signing out deletes them from this phone; forget it in Settings → Devices on your computer too."
                         : "This iPhone holds your person key and your channels' keys in its keychain. Unlinking deletes them from this phone.")
             }
+            .listRowBackground(Tone.raised)
             Section {
             } footer: {
                 Text("Channels \(version)").frame(maxWidth: .infinity)
             }
         }
-        .listStyle(.insetGrouped)
+        .grouped()
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
         .confirmationDialog(model.enrolled ? "Sign out of this iPhone?" : "Unlink this iPhone?", isPresented: $confirm, titleVisibility: .visible) {
@@ -694,7 +694,7 @@ struct Setting: View {
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: 30, height: 30)
-                .background(tint.gradient, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                .background(tint, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
         }
     }
 }
