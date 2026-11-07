@@ -69,6 +69,8 @@ describe("a channel that lands on merge warns until kiwi/review is required (#62
     rules: new Map([["o/r", { repo: "o/r", branch: "main", required, merge: [], seq: 1 }]]),
     releases: new Map(),
     runs: new Map(),
+    runsSince: null,
+    runsForgotten: 0,
   });
   test("only a merge channel warns, for each repo whose rules don't require it or are unknown", () => {
     expect(reviewNotRequired({ landing: "merge", repos: ["o/r", "o/other"], github: github(["ci-ok"]) })).toEqual(["o/r", "o/other"]);

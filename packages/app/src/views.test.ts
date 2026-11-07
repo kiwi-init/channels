@@ -80,6 +80,8 @@ describe("the sidebar's views", () => {
           rules: new Map(),
           releases: new Map([["o/r", [release("v1", NOW - 2 * DAY, [14]), release("v2", NOW - DAY, [13])]]]),
           runs: new Map(),
+          runsSince: null,
+          runsForgotten: 0,
         },
       },
     );

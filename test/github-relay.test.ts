@@ -220,7 +220,7 @@ describe("what's kept of an event", () => {
     expect(note).toMatchObject({ additions: 30, deletions: 0, files: 2 });
     expect(cleanGithubNote({ event: "pull_request", repo: "o/r", additions: -1, at: 1 })).toBeNull();
     expect(cleanGithubNote({ event: "pull_request", repo: "o/r", deletions: 1.5, at: 1 })).toBeNull();
-    const g: GithubState = { prs: new Map(), checks: new Map(), issues: new Map(), rules: new Map(), releases: new Map(), runs: new Map() };
+    const g: GithubState = { prs: new Map(), checks: new Map(), issues: new Map(), rules: new Map(), releases: new Map(), runs: new Map(), runsSince: null, runsForgotten: 0 };
     applyGithub(g, [note!], 5);
     expect(g.prs.get(prKey("o/r", 7))).toMatchObject({ additions: 30, deletions: 0, files: 2 });
   });
@@ -289,7 +289,7 @@ describe("what's kept of an event", () => {
     );
     const base = kept.base;
     if (!base?.github) throw new Error("the fold kept no GitHub state");
-    expect([...fold([], roster, 3, null, null, base).github.runs.values()]).toEqual([{ repo: "O/r", run: 9, title: "job-1", started: 5 }]);
+    expect([...fold([], roster, 3, null, null, base).github.runs.values()]).toEqual([{ repo: "O/r", run: 9, title: "job-1", started: 5, seq: 1 }]);
     const before = omit(base.github, "runs");
     expect(fold([], roster, 3, null, null, { ...base, github: before }).github.runs.size).toBe(0);
   });

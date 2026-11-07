@@ -17,7 +17,7 @@ import {
 import { free, take } from "./leases.ts";
 import { unnamedTasks } from "./compact.ts";
 import { leadCheckpointKeyRefusal } from "./lead.ts";
-import { addRelease, applyGithub, dropRelease, prKey, repoKey, runStart, type GithubState } from "./github.ts";
+import { addRelease, applyGithub, dropRelease, prKey, repoKey, runStart, runsUnknownSince, type GithubState } from "./github.ts";
 import { prLinks, prOfTask, taskOfBranch } from "../prs.ts";
 import { recordedRuns } from "../review-check.ts";
 import { sameHead } from "../stage.ts";
@@ -36,10 +36,26 @@ import { currentState, landerOf, landingRefusal, landingReopens, newRun, openRou
 import type { Charter, Compact, Fact, FoldMember, Hold, Lease, Nickname, PersonaLead, Room, SecretRoom, Task } from "./types.ts";
 import { dmPair, inRoom, leaveSeal, rootOf, selfOnly, type RoomMember } from "../room-rules.ts";
 
-function startRuns(c: { github: GithubState }, tasks: ReadonlyMap<number, Task>): void {
+type GateCtx = { github: GithubState; checks: ReadonlyMap<number, CheckState>; branchPrefix: string | null };
+type Mark = { seq: number; by: string; at: number };
+
+function unlandShaken(c: GateCtx, t: Task, mark: Mark, why: string): void {
+  if (t.state !== "done" || t.landed?.artifact.kind !== "run" || t.landed.artifact.id !== t.run?.id) return;
+  if (doneGate(c, { ...omit(t, "archived"), state: "landing" })?.kind === "landed") return;
+  t.state = "landing";
+  t.landed = undefined;
+  t.closedSeq = undefined;
+  t.archived = undefined;
+  t.updatedAt = mark.at;
+  t.notes.push({ seq: mark.seq, by: mark.by, ts: mark.at, text: `${why}: its landing at run ${t.run.id} no longer holds, so it's back to landing` });
+}
+
+function startRuns(c: GateCtx, tasks: ReadonlyMap<number, Task>, mark: Mark): void {
   for (const t of tasks.values()) {
-    const start = t.run && !t.archived ? runStart(c.github, t.run.id) : undefined;
-    if (t.run && start && (!t.run.start || start.started < t.run.start.started)) t.run.start = start;
+    const start = t.run ? runStart(c.github, t.run.id) : undefined;
+    if (!t.run || !start || (t.run.start && start.started >= t.run.start.started)) continue;
+    t.run.start = start;
+    unlandShaken(c, t, mark, `GitHub reports run ${start.run} for ${t.run.id}, started earlier`);
   }
 }
 
@@ -304,7 +320,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       }
       const heads = new Map([...c.github.prs].map(([key, pr]) => [key, pr.sha]));
       applyGithub(c.github, ev.items, m.seq);
-      if (ev.items.some((i) => i.event === "workflow_run" && i.started !== undefined)) startRuns(c, tasks);
+      if (ev.items.some((i) => i.event === "workflow_run" && i.started !== undefined)) startRuns(c, tasks, { seq: m.seq, by: m.from, at });
       for (const [key, pr] of c.github.prs) {
         if (!pr.sha || pr.state !== "open" || heads.get(key) === pr.sha) continue;
         for (const t of tasks.values()) {
@@ -688,8 +704,18 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
         task.proof = [...(task.proof ?? []), { seq: m.seq, by: m.from, ts: at, url: ev.proof.url, ...(ev.proof.label ? { label: ev.proof.label } : {}) }];
       if (ev.run && task.run?.id !== ev.run.id) {
         const start = runStart(c.github, ev.run.id);
-        task.run = { id: ev.run.id, seq: m.seq, by: m.from, ...(ev.run.started !== undefined ? { reportedStart: ev.run.started } : {}), ...(start ? { start } : {}) };
-      } else if (ev.run?.started !== undefined && task.run) task.run.reportedStart ??= ev.run.started;
+        task.run = {
+          id: ev.run.id,
+          seq: m.seq,
+          by: m.from,
+          ...(ev.run.started !== undefined ? { reportedStart: ev.run.started } : {}),
+          ...(start ? { start } : {}),
+          ...(runsUnknownSince(c.github, task.id) ? { blind: true as const } : {}),
+        };
+      } else if (ev.run?.started !== undefined && task.run && task.run.reportedStart === undefined) {
+        task.run.reportedStart = ev.run.started;
+        unlandShaken(c, task, { seq: m.seq, by: m.from, at }, `${m.from} reports run ${task.run.id} started earlier`);
+      }
       if (ev.areas?.length) task.areas = [...new Set(ev.areas)];
       if (ev.owner === null && task.state === "doing") task.state = "todo";
       task.updatedAt = at;

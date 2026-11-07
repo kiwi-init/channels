@@ -10,7 +10,7 @@ const HEAD_B = "b".repeat(40);
 const MERGE = "m".repeat(40);
 const T = (iso: string): number => Date.parse(iso);
 
-const fresh = (): GithubState => ({ prs: new Map(), checks: new Map(), issues: new Map(), rules: new Map(), releases: new Map(), runs: new Map() });
+const fresh = (): GithubState => ({ prs: new Map(), checks: new Map(), issues: new Map(), rules: new Map(), releases: new Map(), runs: new Map(), runsSince: null, runsForgotten: 0 });
 const pr = (over: Partial<GithubNote>): GithubNote => ({ event: "pull_request", repo: "o/r", number: 7, state: "open", at: 999, ...over });
 
 describe("a GitHub event keeps when it happened on GitHub, not only when it reached the relay (#623 §5)", () => {
@@ -95,7 +95,7 @@ describe("a GitHub event keeps when it happened on GitHub, not only when it reac
     const g = fresh();
     const note = (started: number, title?: string): GithubNote => ({ event: "workflow_run", repo: "o/r", run: 9, name: "Deploy", sha: HEAD_A, at: 999, started, ...(title ? { title } : {}) });
     applyGithub(g, [note(T("2026-11-06T10:20:00Z"), "job-1"), note(T("2026-11-06T09:40:00Z")), note(T("2026-11-06T10:30:00Z"), "job-2")], 1);
-    expect([...g.runs.values()]).toEqual([{ repo: "o/r", run: 9, title: "job-1", started: T("2026-11-06T09:40:00Z") }]);
+    expect([...g.runs.values()]).toEqual([{ repo: "o/r", run: 9, title: "job-1", started: T("2026-11-06T09:40:00Z"), seq: 1 }]);
     expect(runStart(g, "job-1")?.run).toBe(9);
     expect(runStart(g, "9")?.title).toBe("job-1");
     expect(runStart(g, "job-2")).toBeUndefined();

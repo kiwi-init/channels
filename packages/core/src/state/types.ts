@@ -126,7 +126,7 @@ export interface Task {
   updatedAt: number;
   notes: TaskNote[];
   proof?: TaskProof[];
-  run?: { id: string; seq: number; by: string; reportedStart?: number; start?: GithubRun };
+  run?: { id: string; seq: number; by: string; reportedStart?: number; start?: GithubRun; blind?: true };
   review?: string;
   approvedBy?: string;
   cancelled?: boolean;
@@ -314,7 +314,16 @@ export interface FoldBase {
   lead: string | null;
   charter: Charter | null;
   repos?: string[];
-  github?: { prs: GithubPr[]; checks: [string, GithubCheck[]][]; issues?: GithubIssue[]; rules?: GithubRules[]; releases?: GithubRelease[]; runs?: GithubRun[] };
+  github?: {
+    prs: GithubPr[];
+    checks: [string, GithubCheck[]][];
+    issues?: GithubIssue[];
+    rules?: GithubRules[];
+    releases?: GithubRelease[];
+    runs?: GithubRun[];
+    runsSince?: number | null;
+    runsForgotten?: number;
+  };
   hold: Hold | null;
   voice?: boolean;
   githubWrite?: number | null;

@@ -126,7 +126,8 @@ Agents
                                                  (2026-11-06T10:00:00Z); Kiwi can't verify a reported start, so it only
                                                  shows a bypass. A GitHub Actions run whose run-name is the ID (or whose
                                                  run id it is) gives a start Kiwi trusts: after a post check passed at
-                                                 that run, the task lands. Otherwise a person or the lead closes it
+                                                 that run, the task lands, if Kiwi holds every GitHub run since the
+                                                 task was created. Otherwise a person or the lead closes it
      task checkpoint T7 --file note.md           where your work on it stands (branch, last commit, done, next, traps):
                                                  a new session of yours starts from it
         --fresh                                  in a kiwi loop session: end your turn after, and the loop starts a

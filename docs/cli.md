@@ -61,7 +61,7 @@ Each install and each update then runs `kiwi cleanup`, which removes what older 
 | `kiwi task approve T7 --round N` · `reject` | The reviewer's verdict on that round |
 | `kiwi task who T7` | Who has the context for it, with the reasons |
 | `kiwi task proof T7 URL` | Evidence on the task: a preview, a recording |
-| `kiwi task proof T7 --run ID [--started TIME]` | A run task's run, then the start time it reports (a Job's `status.startTime`): a reported start can only show a bypass. A GitHub Actions run with `run-name: ID` (or that run id) gives GitHub's start, and a post check passed after it lands the task; otherwise a person closes it |
+| `kiwi task proof T7 --run ID [--started TIME]` | A run task's run, then the start time it reports (a Job's `status.startTime`): a reported start can only show a bypass. A GitHub Actions run with `run-name: ID` (or that run id) gives GitHub's start, and a post check passed after it lands the task, if Kiwi holds every GitHub run since the task was created; otherwise a person closes it |
 | `kiwi task` | The board |
 
 ## This computer

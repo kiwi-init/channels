@@ -55,6 +55,9 @@ export const runStarts = (id: string): string =>
 
 const runPost = (id: string): string => `a passed post check at run ${id}, answered after it started`;
 
+export const runBlind = (id: string): string =>
+  `a person or the lead to close it with a reason: Kiwi doesn't hold every GitHub run since the task was created, so it can't rule out an earlier run ${id}`;
+
 function confirmedAfter(view: GateView, t: Task, id: string, started: number): boolean {
   return [...view.checks.values()].some((c) => c.phase === "post" && c.holds.includes(t.id) && atRun(c, id) && checkPassed(c) && c.answer?.at !== undefined && c.answer.at >= started);
 }
@@ -66,6 +69,7 @@ function runGate(view: GateView, t: Task, landing: boolean): DoneGate | undefine
   const missing = [...new Set(starts.flatMap((started) => heldAtRun(view, t, run.id, started)))];
   if (missing.length) return { kind: "bypassed", missing };
   if (!landing) return undefined;
+  if (run.blind) return { kind: "waiting", why: runBlind(run.id) };
   if (!run.start) return { kind: "waiting", why: runStarts(run.id) };
   return confirmedAfter(view, t, run.id, run.start.started) ? { kind: "landed", artifact: { kind: "run", id: run.id } } : { kind: "waiting", why: runPost(run.id) };
 }
