@@ -57,12 +57,12 @@ import {
   vec4,
 } from "three/tsl"
 
-import { daylight, type Rgb } from "~/calm/daylight"
-import { freshPace, paced, SLOW_HOLD_MS } from "~/calm/pace"
-import type { CalmRow } from "~/calm/rows"
+import { daylight, type Rgb } from "~/afk/daylight"
+import { freshPace, paced, SLOW_HOLD_MS } from "~/afk/pace"
+import type { AfkRow } from "~/afk/rows"
 
 export interface Meadow {
-  setRows(rows: readonly CalmRow[]): void
+  setRows(rows: readonly AfkRow[]): void
   setStill(still: boolean): void
   freeze(): void
   dispose(): void

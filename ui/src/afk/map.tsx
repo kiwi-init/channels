@@ -1,6 +1,6 @@
 import { useMemo, type CSSProperties } from "react"
 
-import { daylight, type Daylight, type Rgb } from "~/calm/daylight"
+import { daylight, type Daylight, type Rgb } from "~/afk/daylight"
 import { Avatar, cx } from "~/kit/bits"
 import { useNow } from "~/kit/time"
 import type { ChannelTile, HomeAgent, HomeChannel } from "~/model"
@@ -58,30 +58,30 @@ export function MapView({ open }: { open: (code: string, needs: boolean) => void
   const faceOf = (pin: Pin, a: HomeAgent) =>
     (app.channel?.code === pin.tile.code ? app.channel.people.find((p) => p.name === a.name) : undefined) ?? { name: a.name, kind: "agent" as const, presence: "online" as const }
   return (
-    <div className="rest-map" data-sky={sky}>
+    <div className="afk-map" data-sky={sky}>
       {pins.map((pin, i) => {
         const spot = SPOTS[i]!
         const needs = pin.home.asks.length > 0
         const line = lineOf(pin.home)
         return (
-          <div key={pin.tile.code} className={cx("rest-spot", needs && "is-needs")} style={{ left: `${spot.x}%`, top: `${spot.y}%` } as CSSProperties}>
-            <button type="button" className="rest-spot-label" data-afk-open onClick={() => open(pin.tile.code, needs)}>
+          <div key={pin.tile.code} className={cx("afk-spot", needs && "is-needs")} style={{ left: `${spot.x}%`, top: `${spot.y}%` } as CSSProperties}>
+            <button type="button" className="afk-spot-label" data-afk-open onClick={() => open(pin.tile.code, needs)}>
               <b>{pin.tile.title}</b>
-              <span className="rest-spot-counts">{countsOf(pin.home)}</span>
-              {line && <span className="rest-spot-line">{line}</span>}
+              <span className="afk-spot-counts">{countsOf(pin.home)}</span>
+              {line && <span className="afk-spot-line">{line}</span>}
               {pin.crew.length > 0 && (
-                <span className="rest-spot-crew">
+                <span className="afk-spot-crew">
                   {pin.crew.slice(0, FACES).map((a) => (
-                    <span key={a.name} className="rest-spot-face" title={`${a.nick} · ${a.task ? a.task.title : a.doing}`}>
+                    <span key={a.name} className="afk-spot-face" title={`${a.nick} · ${a.task ? a.task.title : a.doing}`}>
                       <Avatar person={faceOf(pin, a)} size="sm" />
                     </span>
                   ))}
-                  {pin.crew.length > FACES && <span className="rest-spot-counts">+{pin.crew.length - FACES}</span>}
+                  {pin.crew.length > FACES && <span className="afk-spot-counts">+{pin.crew.length - FACES}</span>}
                 </span>
               )}
             </button>
-            <span className="rest-spot-stem" aria-hidden="true" />
-            <span key={pin.home.asks.length} className="rest-spot-pin" aria-hidden="true" />
+            <span className="afk-spot-stem" aria-hidden="true" />
+            <span key={pin.home.asks.length} className="afk-spot-pin" aria-hidden="true" />
           </div>
         )
       })}

@@ -1,6 +1,6 @@
 import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo } from "react"
 
-import { showCalm, useCalmShown, useIdle } from "~/calm/idle"
+import { showAfk, useAfkShown, useAfkWait } from "~/afk/wait"
 import { Boundary } from "~/kit/boundary"
 import { later } from "~/kit/later"
 import { Toasts, useToasts } from "~/kit/toasts"
@@ -22,7 +22,7 @@ const EnrollDialog = later(() => import("~/settings/enroll").then((m) => m.Enrol
 const JoinDialog = later(() => import("~/start/join").then((m) => m.JoinDialog))
 const NewRoomDialog = later(() => import("~/shell/new-room").then((m) => m.NewRoomDialog))
 const Welcome = later(() => import("~/start/welcome").then((m) => m.Welcome))
-const Calm = later(() => import("~/calm/calm").then((m) => m.Calm))
+const Afk = later(() => import("~/afk/afk").then((m) => m.Afk))
 
 export function Root({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => void }) {
   const [toasts, toast, dismissToast] = useToasts()
@@ -33,7 +33,7 @@ export function Root({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => voi
     useCallback(() => {
       if (nav.dialog === "palette") go({ to: "dialog", dialog: null })
       else if (document.querySelector("dialog[open]")) return
-      showCalm()
+      showAfk()
     }, [go, nav.dialog])
   )
   useHistoryKeys(go, !!nav.modal)
@@ -93,18 +93,18 @@ export function Root({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => voi
         <Palette />
         <ContextMenus />
         <Toasts toasts={toasts} onDismiss={dismissToast} />
-        <CalmWatch minutes={app.prefs.calm} />
+        <AfkWatch minutes={app.prefs.afk} />
       </ActContext>
     </AppContext>
   )
 }
 
-function CalmWatch({ minutes }: { minutes: number }) {
-  const shown = useCalmShown()
-  useIdle(minutes, shown)
+function AfkWatch({ minutes }: { minutes: number }) {
+  const shown = useAfkShown()
+  useAfkWait(minutes, shown)
   return shown ? (
     <Suspense fallback={null}>
-      <Calm />
+      <Afk />
     </Suspense>
   ) : null
 }
@@ -122,7 +122,7 @@ function useHistoryKeys(go: (go: Go) => void, modal: boolean) {
   }, [go, modal])
 }
 
-function usePaletteKey(toggle: () => void, calm: () => void) {
+function usePaletteKey(toggle: () => void, afk: () => void) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey)) return
@@ -132,12 +132,12 @@ function usePaletteKey(toggle: () => void, calm: () => void) {
         toggle()
       } else if (key === "t" && !e.altKey && !e.shiftKey) {
         e.preventDefault()
-        calm()
+        afk()
       }
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
-  }, [toggle, calm])
+  }, [toggle, afk])
 }
 
 function useTheme(app: App) {

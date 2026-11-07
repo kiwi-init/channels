@@ -24,7 +24,7 @@ const feed = (log: Wire[]) => {
 }
 
 describe("a room's badge counts only what the room shows (#1779)", () => {
-  const ask = msg(1, "jow", "an onboarding over the Calm scene")
+  const ask = msg(1, "jow", "an onboarding over the AFK scene")
   const spec = ev(2, "dev", { op: "spec.set", ask: 1, text: "# Onboarding\n\n## Done when\n- [ ] it shows" })
 
   test("a reply in a spec's thread raises no badge, since the room doesn't show it", () => {
