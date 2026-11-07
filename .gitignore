@@ -35,5 +35,6 @@ desktop/.ui-dev/
 # scripts/ui-doc-fuzz.ts: its trace, written where it runs
 doc-fuzz-*.txt
 
-# scripts/docs-site.ts: the docs pages, built from docs/
+# scripts/docs-site.ts: the docs pages, built from docs/, and the app in demo mode, built from ui/
 site/docs/
+site/demo/
