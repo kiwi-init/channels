@@ -51,7 +51,7 @@ struct LinkView: View {
         case .signingIn(let url, let code):
             VStack(alignment: .leading, spacing: 0) {
                 Text("Sign in with GitHub").type(.title, .semibold).foregroundStyle(Tone.ink)
-                Text(code.isEmpty ? "Use the account Channels on your computer uses." : "GitHub asks for this code. It's copied: paste it there, then authorize.")
+                Text(code.isEmpty ? "Use the account Channels on your computer uses." : "GitHub asks for this code. The button copies it: paste it there, then authorize.")
                     .type(.ui)
                     .foregroundStyle(Tone.ink2)
                     .padding(.top, 6)
@@ -64,7 +64,7 @@ struct LinkView: View {
                         .padding(.vertical, 20)
                 }
                 if url != nil {
-                    PrimaryButton(title: "Open GitHub") { model.openGitHub() }
+                    PrimaryButton(title: code.isEmpty ? "Open GitHub" : "Copy Code and Open GitHub") { model.openGitHub() }
                 }
                 waiting("Waiting for GitHub").padding(.top, 20)
                 QuietButton(title: "Cancel") { Task { await model.cancelLink() } }

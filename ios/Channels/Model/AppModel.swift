@@ -237,7 +237,6 @@ final class AppModel {
             if let user = UserDefaults.standard.string(forKey: "devUser") { ask["user"] = user }
             let started = try await engine.ask(ask, as: EnrollStart.self)
             linking = .signingIn(url: started.url, code: started.code)
-            openGitHub()
             _ = try await engine.ask(["op": "enrollAsk"])
             github.close()
             linking = .asking
