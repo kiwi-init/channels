@@ -1,4 +1,4 @@
-import { spawn, spawnSync } from "node:child_process";
+import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
@@ -7,8 +7,9 @@ import { startLocalRelay } from "../../scripts/local-relay.ts";
 import { addMod } from "../../src/mods.ts";
 import { daemonStop } from "../src/daemon-client.ts";
 import { ASK_AGAIN_URL } from "../src/keyring-wait.ts";
-import { appExecutable, attach, launch, stop, testEnv, until, type Driver } from "./eb-drive.ts";
+import { appExecutable, attach, launch, screenshot, stop, testEnv, until, type Driver } from "./eb-drive.ts";
 import { fillIn, firstChannel, sendMessage } from "./eb-first-run.ts";
+import { tiling } from "./tiling.ts";
 
 if (!process.argv[2]) {
   console.error("usage: bun desktop/scripts/eb-mods-check.ts <the app built with CHANNELS_EB_TEST=1> [screenshot dir]");
@@ -341,27 +342,46 @@ async function letBotIn(d: Driver): Promise<void> {
 
 async function whileAway(d: Driver, palette: () => Promise<boolean>): Promise<void> {
   await letBotIn(d);
-  const away = [
-    {
-      how: "with another app in front",
-      put: async () => {
-        spawnSync("open", ["-a", "Finder", root]);
-        return until("another app in front", 10_000, async () => (front().includes("Channels") ? null : true)).catch(() => false);
-      },
-    },
-    {
-      how: "minimized",
-      put: async () => {
-        await d.main("minimizeForTest");
-        const shown = await until("the window minimized", 10_000, async () => {
-          const w = (await d.main("window")) as { minimized?: unknown };
-          return w.minimized === true ? w : null;
-        }).catch(async () => d.main("window"));
-        console.log(`minimized: the window says ${JSON.stringify(shown)}`);
-        return (shown as { minimized?: unknown }).minimized === true;
-      },
-    },
-  ];
+  const helpers: ChildProcess[] = [];
+  const away = desk
+    ? [
+        {
+          how: "with another window focused",
+          put: async () => {
+            helpers.push(desk.open("kiwi-away"));
+            return until("another window focused", 15_000, async () => (desk.focused() === "kiwi-away" ? true : null)).catch(() => false);
+          },
+        },
+        {
+          how: "on another workspace",
+          put: async () => {
+            for (const h of helpers) h.kill();
+            desk.workspace(2);
+            return until("an empty workspace in front", 10_000, async () => (desk.focused() === "" ? true : null)).catch(() => false);
+          },
+        },
+      ]
+    : [
+        {
+          how: "with another app in front",
+          put: async () => {
+            spawnSync("open", ["-a", "Finder", root]);
+            return until("another app in front", 10_000, async () => (front().includes("Channels") ? null : true)).catch(() => false);
+          },
+        },
+        {
+          how: "minimized",
+          put: async () => {
+            await d.main("minimizeForTest");
+            const shown = await until("the window minimized", 10_000, async () => {
+              const w = (await d.main("window")) as { minimized?: unknown };
+              return w.minimized === true ? w : null;
+            }).catch(async () => d.main("window"));
+            console.log(`minimized: the window says ${JSON.stringify(shown)}`);
+            return (shown as { minimized?: unknown }).minimized === true;
+          },
+        },
+      ];
   for (const { how, put } of away) {
     check(await put(), `the window can be put away, ${how}${front()}`);
     await later(10_000);
@@ -389,6 +409,11 @@ async function whileAway(d: Driver, palette: () => Promise<boolean>): Promise<vo
     console.log(`${how}: the mod's frame answered its command ${answered ?? "never"} ms after it was picked${front()}`);
     check(answered !== null, `a mod's frame answers ${how}`);
   }
+  if (desk) {
+    for (const h of helpers) h.kill();
+    desk.workspace(1);
+    return;
+  }
   await d.main("unminimizeForTest");
   await d.main("activate");
 }
@@ -403,7 +428,10 @@ const pageNow = (): Record<string, unknown> => ({
   text: document.body.innerText.slice(0, 1_500),
 });
 
+const desk = tiling();
+
 function front(): string {
+  if (desk) return `; in front: ${desk.focused() || "nothing"}`;
   if (process.platform !== "darwin") return "";
   const asn = (spawnSync("lsappinfo", ["front"], { encoding: "utf8" }).stdout ?? "").trim();
   const info = asn ? (spawnSync("lsappinfo", ["info", "-only", "name", asn], { encoding: "utf8" }).stdout ?? "") : "";
@@ -533,11 +561,7 @@ async function clickMessageLink(d: Driver): Promise<void> {
 }
 
 async function shot(name: string): Promise<void> {
-  if (!shots) return;
-  mkdirSync(shots, { recursive: true });
-  const file = join(shots, `${name}.png`);
-  const r = process.platform === "darwin" ? spawnSync("screencapture", ["-x", file], { stdio: "ignore" }) : spawnSync("import", ["-window", "root", file], { stdio: "ignore" });
-  console.log(r.status === 0 && existsSync(file) ? `shot ${file}` : `no shot for ${name} here`);
+  screenshot(shots, name);
 }
 
 function files(dir: string): string[] {
@@ -556,12 +580,15 @@ const outsideStore = (secret: string): string[] => holding(secret).filter((f) =>
 async function kitMod(d: Driver, palette: () => Promise<boolean>): Promise<void> {
   writeKitMod(1);
   const kit = async () => (await heard(d)).filter((m) => m["kit"] === true);
-  await until("Set up kit-mod in ⌘K", 30_000, async () => {
+  const asking = () => d.evaluate(() => (document.querySelector('dialog[open][aria-label="kit-mod asks to run"]') ? true : null), null, 2_000).catch(() => null);
+  await until("kit-mod's ask, by itself or from ⌘K", 30_000, async () => {
+    if (await asking()) return true;
     await palette();
     await d.evaluate(fillIn, { selector: ".palette-input", value: "kit-mod" }, 2_000).catch(() => false);
-    return (await d.evaluate(clickText, { selector: ".palette-item", text: "Set up kit-mod" }, 2_000).catch(() => false)) ? true : null;
+    await d.evaluate(clickText, { selector: ".palette-item", text: "Set up kit-mod" }, 2_000).catch(() => false);
+    return asking();
   });
-  await step("Turn on the kit mod", 10_000, () => d.evaluate(clickText, { selector: ".panel button", text: "Turn on" }, 2_000));
+  await step("Allow the kit mod", 10_000, () => d.evaluate(clickText, { selector: 'dialog[open][aria-label="kit-mod asks to run"] .modal-foot button', text: "Allow" }, 2_000));
   const first = await until("the kit mod's first visit", 30_000, async () => (await kit()).find((m) => "visits" in m || "storageFailed" in m) ?? null).catch(() => null);
   console.log(`the kit mod: ${JSON.stringify(first)}`);
   check(first?.["visits"] === 1, "a mod built only from the kit runs and keeps a value in its own storage");
@@ -643,7 +670,7 @@ writeFileSync(TMUX_CONF, TMUX_BEFORE);
 let app = launch(exe, testEnv(root, join(root, "driver.sock"), RELAY, TERMINAL_ENV));
 try {
   const d = await attach(join(root, "driver.sock"));
-  await firstChannel(d, 0);
+  await firstChannel(d, 0, { shots, home: join(root, "home") });
   await d.evaluate(
     () => {
       const w = window as unknown as { __modHeard?: unknown[]; __modQuiet?: unknown; __modTypes?: Record<string, number> };
@@ -898,7 +925,7 @@ try {
   check(!opens.some((u) => /forged|mod-self-nav/.test(u)), "nothing the mod forged or navigated to opened in the browser");
   check(app.exitCode === null && app.signalCode === null, "the app is still running after the mod's forged events");
   await kitMod(d, palette);
-  if (process.platform === "darwin") await whileAway(d, palette);
+  if (process.platform === "darwin" || desk) await whileAway(d, palette);
   writeCrashMod();
   const crashed = await until("crash-mod switched off", 30_000, async () => (await modsNow(d)).find((m) => m.name === "crash-mod" && m.state === "off") ?? null).catch(() => null);
   console.log(`crash-mod: ${JSON.stringify(crashed)}`);

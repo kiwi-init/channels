@@ -132,7 +132,7 @@ try {
       (v) => v === "views://internal/index.html",
     );
   }
-  await firstChannel(d, 1).then(
+  await firstChannel(d, 1, { home: join(root, "home") }).then(
     () => console.log("first run: a person, a channel and a message sent and in the conversation, on the local relay"),
     (e: Error) => problems.push(`first run: ${e.message}`),
   );

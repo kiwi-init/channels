@@ -131,14 +131,25 @@ export type ToFrame =
       kiwi: typeof MOD_PROTOCOL
       type: "boot"
       name: string
-      surface: Surface
+      surface: Exclude<Surface, "render">
       needs: string[]
       code: string
       settings: Record<string, string | boolean | null>
       theme: Record<string, string>
       dark: boolean
       still: boolean
-      shown?: Shown
+    }
+  | {
+      kiwi: typeof MOD_PROTOCOL
+      type: "boot"
+      name: string
+      surface: "render"
+      needs: string[]
+      code: string
+      theme: Record<string, string>
+      dark: boolean
+      still: boolean
+      shown: Shown
     }
   | { kiwi: typeof MOD_PROTOCOL; type: "theme"; theme: Record<string, string>; dark: boolean; still: boolean }
   | { kiwi: typeof MOD_PROTOCOL; type: "command"; id: string }

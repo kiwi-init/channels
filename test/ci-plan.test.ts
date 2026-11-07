@@ -36,10 +36,10 @@ describe("which jobs CI runs (T5174)", () => {
     for (const title of ["kiwi 2026.11", "Docs: kiwi 2026.11.1", "kiwi 2026.11.10 and more"]) expect(picked(plan({ EVENT: "pull_request", TITLE: title }))).toEqual(["static", "test-unit"]);
   });
 
-  test("a dispatch runs the jobs it names, and a push to main runs them all but the phone jobs", () => {
+  test("a dispatch runs the jobs it names, and a push to main runs them all but the phone jobs and tiling", () => {
     expect(picked(plan({ EVENT: "workflow_dispatch", JOBS: "cli-macos,build" }))).toEqual(["build", "cli-macos"]);
     const push = plan({ EVENT: "push" });
-    expect(Object.keys(push).filter((k) => !push[k])).toEqual(["ios", "android"]);
+    expect(Object.keys(push).filter((k) => !push[k])).toEqual(["ios", "android", "tiling"]);
     expect(picked(plan({ EVENT: "workflow_dispatch", JOBS: "" }))).toEqual(picked(push));
   });
 

@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       jobs:
-        description: "Only these jobs, comma-separated (static, test-unit, test-flows, build, doc, fuzz, shots, desktop-mac, desktop-linux, desktop-distros, cli-macos, and the phone jobs ios, android); empty runs everything but the phone jobs"
+        description: "Only these jobs, comma-separated (static, test-unit, test-flows, build, doc, fuzz, shots, desktop-mac, desktop-linux, desktop-distros, cli-macos; and only when named: the phone jobs ios, android, and tiling, the mods checks under sway and Hyprland, which brings desktop-linux); empty runs everything but those"
         required: false
         default: ""
       update_from:
@@ -39,7 +39,8 @@ jobs:
   # Which jobs run: a pull request runs repo / static and test / unit (a release's stamp PR, titled
   # "kiwi YYYY.M.PATCH", also cli / macos: the release's Mac tests and packing); a dispatch runs the jobs it
   # names (all when it names none); a push to main and a merge group run everything. The phone jobs (ios,
-  # android) are retired for now: they run only when a dispatch names them.
+  # android) are retired for now, and tiling (the mods checks under sway and Hyprland) is on demand: they run
+  # only when a dispatch names them.
   plan:
     runs-on: ubuntu-latest
     timeout-minutes: 2
@@ -54,13 +55,15 @@ jobs:
         run: |
           all="static test-unit test-flows build doc fuzz shots desktop-mac desktop-linux desktop-distros cli-macos"
           phones="ios android"
+          asked="tiling"
           case "$EVENT" in
             pull_request) pick="static test-unit"; if echo "$TITLE" | grep -qE '^kiwi [0-9]{4}\.[0-9]{1,2}\.[0-9]+(-rc\.[0-9]+)?$'; then pick="$pick cli-macos"; fi ;;
             workflow_dispatch) pick=$(echo "${JOBS:-$all}" | tr ',' ' ') ;;
             *) pick="$all" ;;
           esac
-          for j in $pick; do case " $all $phones " in *" $j "*) ;; *) echo "no job named $j; the jobs are: $all $phones"; exit 1 ;; esac; done
-          json=$(for j in $all $phones; do case " $pick " in *" $j "*) v=true ;; *) v=false ;; esac; printf '"%s":%s,' "$j" "$v"; done)
+          for j in $pick; do case " $all $phones $asked " in *" $j "*) ;; *) echo "no job named $j; the jobs are: $all $phones $asked"; exit 1 ;; esac; done
+          case " $pick " in *" tiling "*) pick="$pick desktop-linux" ;; esac
+          json=$(for j in $all $phones $asked; do case " $pick " in *" $j "*) v=true ;; *) v=false ;; esac; printf '"%s":%s,' "$j" "$v"; done)
           echo "run={${json%,}}" >> "$GITHUB_OUTPUT"
 
   # Types, lint, format, unused code and action pins.
@@ -684,6 +687,17 @@ jobs:
           found=$(ls -d desktop/release-eb/build/dev-linux-*/*/bin/electrobun-launcher)
           [ "$(echo "$found" | wc -l)" = 1 ] || { echo "expected one test build, found: $found"; exit 1; }
           echo "path=$(dirname "$(dirname "$found")")" >> "$GITHUB_OUTPUT"
+      - name: the test build, for the checks on sway and Hyprland
+        if: ${{ !cancelled() && matrix.drive && fromJSON(needs.plan.outputs.run)['tiling'] }}
+        run: tar -C "${{ steps.test-app.outputs.path }}" -czf "$RUNNER_TEMP/linux-test-app.tgz" .
+      - if: ${{ !cancelled() && matrix.drive && fromJSON(needs.plan.outputs.run)['tiling'] }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: linux-test-app
+          path: ${{ runner.temp }}/linux-test-app.tgz
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
       - name: no test driver in the release build (the extracted AppImage)
         if: ${{ !cancelled() && matrix.drive }}
         run: bun desktop/scripts/eb-driver-check.ts desktop/release-eb "$APP"
@@ -740,7 +754,7 @@ jobs:
           if [ "$code" -ne 0 ]; then
             echo "::group::weston's log"; cat "$RUNNER_TEMP/weston.log"; echo "::endgroup::"
             echo "::group::the test app alone in this session, for 20 s"
-            mkdir -p "$RUNNER_TEMP/wayland-home" && HOME="$RUNNER_TEMP/wayland-home" session timeout 20 "${{ steps.test-app.outputs.path }}/bin/electrobun-launcher" > "$RUNNER_TEMP/wayland-app.log" 2>&1 || echo "exited $?"
+            mkdir -p "$RUNNER_TEMP/wayland-home" && HOME="$RUNNER_TEMP/wayland-home" CFFIXED_USER_HOME="$RUNNER_TEMP/wayland-home" session timeout 20 "${{ steps.test-app.outputs.path }}/bin/electrobun-launcher" > "$RUNNER_TEMP/wayland-app.log" 2>&1 || echo "exited $?"
             tail -n 120 "$RUNNER_TEMP/wayland-app.log"
             echo "::endgroup::"
           fi
@@ -767,7 +781,7 @@ jobs:
           if [ "$code" -ne 0 ]; then
             echo "::group::weston's log"; cat "$RUNNER_TEMP/weston-native.log"; echo "::endgroup::"
             echo "::group::the test app alone in this session, for 20 s"
-            mkdir -p "$RUNNER_TEMP/wayland-native-home" && HOME="$RUNNER_TEMP/wayland-native-home" session timeout 20 "${{ steps.test-app.outputs.path }}/bin/electrobun-launcher" > "$RUNNER_TEMP/wayland-native-app.log" 2>&1 || echo "exited $?"
+            mkdir -p "$RUNNER_TEMP/wayland-native-home" && HOME="$RUNNER_TEMP/wayland-native-home" CFFIXED_USER_HOME="$RUNNER_TEMP/wayland-native-home" session timeout 20 "${{ steps.test-app.outputs.path }}/bin/electrobun-launcher" > "$RUNNER_TEMP/wayland-native-app.log" 2>&1 || echo "exited $?"
             tail -n 120 "$RUNNER_TEMP/wayland-native-app.log"
             echo "::endgroup::"
           fi
@@ -876,6 +890,39 @@ jobs:
         with:
           name: distro-check-${{ matrix.distro }}
           path: ${{ runner.temp }}/distro-check
+          if-no-files-found: warn
+          retention-days: 3
+
+  desktop-tiling:
+    name: desktop / tiling, ${{ matrix.compositor }}
+    needs: [plan, desktop-linux]
+    if: ${{ !cancelled() && fromJSON(needs.plan.outputs.run)['tiling'] }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        compositor: [sway, hyprland]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: linux-test-app
+          path: ${{ runner.temp }}
+      - name: vkms, the virtual display Hyprland draws through on a runner with no GPU
+        if: ${{ matrix.compositor == 'hyprland' }}
+        run: sudo modprobe vkms
+      - name: mods and figures on a stock Arch under headless ${{ matrix.compositor }}, natively on Wayland, with screenshots
+        timeout-minutes: 25
+        run: docker run --rm --privileged -v /dev:/dev -v "$PWD:/repo" -v "$(command -v bun):/usr/local/bin/bun:ro" -v "$RUNNER_TEMP:/out" -e CI archlinux:latest bash /repo/desktop/scripts/tiling-check/arch.sh ${{ matrix.compositor }} /out/linux-test-app.tgz /out/tiling-check
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: tiling-check-${{ matrix.compositor }}
+          path: |
+            ${{ runner.temp }}/tiling-check/**/*.png
+            ${{ runner.temp }}/tiling-check/*.log
           if-no-files-found: warn
           retention-days: 3
 
@@ -1005,7 +1052,7 @@ jobs:
   # The one check to require: passes when every job the plan ran passed and the rest were skipped.
   ci-ok:
     name: ci-ok
-    needs: [plan, static, test-unit, test-flows, build, doc, fuzz, shots, desktop-mac, desktop-linux, desktop-distros, cli-macos, ios, android]
+    needs: [plan, static, test-unit, test-flows, build, doc, fuzz, shots, desktop-mac, desktop-linux, desktop-distros, desktop-tiling, cli-macos, ios, android]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 2
