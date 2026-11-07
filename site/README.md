@@ -17,6 +17,12 @@ alone at `/preview/<name>`.
 - A page's front matter has `description`, `group` (its heading in the side
   list) and `order`; its `# title` names it. Links to another page (`agents.md`)
   become `/docs/agents`; links to anything else in the repo go to GitHub.
+- `<!-- demo -->` on a line of its own places the real app in demo mode, in a
+  frame (the first page, `docs/index.md`). The build makes it with Vite from
+  `ui/` (`VITE_KIWI_DEMO=1`, base `/demo/`) into `demo/` here (ignored by git);
+  `--serve` builds it once at start, and a build without `ui/` (the Docker
+  image) says where to play it instead. `docs.js` loads the frame in the page's
+  theme. `_headers` gives `/demo/*` the app's own CSP, framed by this site only.
 - `<!-- figure: <name> -->` on a line of its own places a figure. The build
   imports `figures/<name>/build.js` and puts its SVG inline, on the page with no
   card or caption; `figures/<name>/live.js`, when there is one, is the page's
