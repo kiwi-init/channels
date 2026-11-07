@@ -53,7 +53,7 @@ struct ConversationScreen: View {
                         Button {
                             details = true
                         } label: {
-                            TitlePill(room: room, place: room.placeView(spot.place), fresh: false)
+                            TitlePill(room: room, place: room.placeView(spot.place), fresh: false, key: spot.place)
                         }
                         .buttonStyle(.plain)
                         .accessibilityHint("Shows the details")
@@ -118,6 +118,7 @@ struct TitlePill: View {
     let room: RoomView
     let place: PlaceView?
     let fresh: Bool
+    var key: String?
     var body: some View {
         label.contentShape(Rectangle())
     }
@@ -142,7 +143,7 @@ struct TitlePill: View {
     }
 
     private var title: String {
-        room.spotTitle(place?.key ?? "main")
+        room.spotTitle(key ?? place?.key ?? "main")
     }
 
     private var other: MemberView? {
