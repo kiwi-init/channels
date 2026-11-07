@@ -53,8 +53,6 @@ enum Tone {
     static var doing: Color { Palettes.color("doing", light: Shade(0x2f6fe4), dark: Shade(0x9188c4)) }
     static var bubbleThem: Color { Palettes.color("bg-3", light: Shade(0xefeff1), dark: Shade(0x252021)) }
     static var bubbleMine: Color { Palettes.color("ink", light: Shade(0x18181b), dark: Shade(0xddccc6)) }
-    static var faceTop: Color { Palettes.color("bg-3", light: Shade(0xefeff1), dark: Shade(0x252021)) }
-    static var faceBottom: Color { Palettes.color("bg-3", light: Shade(0xefeff1), dark: Shade(0x252021)) }
     static var avatarTop: Color { Palettes.color("ink-3", light: Shade(0x8a8a92), dark: Shade(0x4a403e)) }
     static var avatarBottom: Color { Palettes.color("ink-3", light: Shade(0x8a8a92), dark: Shade(0x4a403e)) }
     static var popEdge: Color { Palettes.color("line-2", light: Shade(0x000000, 0.08), dark: Shade(0xddccc6, 0.11)) }
