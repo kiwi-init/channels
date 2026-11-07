@@ -34,6 +34,14 @@ button.mod-row:hover {
   font: var(--t-meta) / 1.4 var(--sans);
 }
 
+:root[data-surface="idle"] body {
+  overflow: hidden;
+}
+
+:root[data-surface="idle"] #root {
+  padding: 0;
+}
+
 :root[data-surface="sidebar"] body {
   overflow-x: hidden;
 }
