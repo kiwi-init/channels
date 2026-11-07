@@ -94,7 +94,7 @@ const strings = (v: unknown): v is string[] => Array.isArray(v) && v.every((n) =
 const CHANNEL_CODE = /^[A-Za-z0-9_-]{1,64}$/;
 const MAX_ROOMS = 200;
 
-export function roomsFor(needs: readonly string[], rooms: unknown): ModRoom[] {
+function roomsFor(needs: readonly string[], rooms: unknown): ModRoom[] {
   const asked = new Set(needs.flatMap((n) => needRoom(n) ?? []));
   const out: ModRoom[] = [];
   if (!Array.isArray(rooms)) return out;

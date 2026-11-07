@@ -32,6 +32,7 @@ const { relay, port } = await startLocalRelay(join(root, "relay"), null, { rateL
 const RELAY = `http://127.0.0.1:${port}`;
 const folder = join(root, ".kiwi", "mods", "probe-mod");
 const quietFolder = join(root, ".kiwi", "mods", "quiet-mod");
+const posterFolder = join(root, ".kiwi", "mods", "poster-probe");
 const terminalFolder = join(root, ".kiwi", "mods", "terminal-mod");
 const TMUX_CONF = join(root, "home", ".tmux.conf");
 const REX_INIT = join(root, "home", ".config", "rex", "init.lua");
@@ -108,6 +109,79 @@ function writeSettingsMod(): void {
   ];
   writeFileSync(join(settingsFolder, "mod.json"), JSON.stringify({ name: "settings-mod", version: "1.0.0", shell: "^3.3", needs: [], settings }));
   writeFileSync(join(settingsFolder, "index.tsx"), `import { settings } from "@kiwi/mod"\nparent.postMessage({ kiwiProbe: { settingsMod: settings() } }, "*")\n`);
+}
+
+function writePosterMod(): void {
+  mkdirSync(posterFolder, { recursive: true });
+  writeFileSync(join(posterFolder, "mod.json"), JSON.stringify({ name: "poster-probe", version: "1.0.0", shell: "^3.15", needs: ["post:#general"] }));
+  writeFileSync(
+    join(posterFolder, "index.tsx"),
+    `import { post, rooms } from "@kiwi/mod"
+
+const tried = (m: { channel: string; room: string; text: string }) => post(m).then(() => "ok", (e: unknown) => (e instanceof Error ? e.message : String(e)))
+const pause = (ms: number) => new Promise((r) => setTimeout(r, ms))
+let started = false
+setInterval(async () => {
+  const list = rooms()
+  if (started || !list.length) return
+  started = true
+  const here = list[0]
+  const first = await tried({ channel: here.channel, room: here.room, text: "hello from the poster probe" })
+  const soon = await tried({ channel: here.channel, room: here.room, text: "a second post too soon" })
+  await pause(2_100)
+  const otherRoom = await tried({ channel: here.channel, room: "secret", text: "a post into a room it never asked for" })
+  const otherChannel = await tried({ channel: "not-one-of-mine", room: "general", text: "a post into a channel it wasn't given" })
+  parent.postMessage({ kiwiProbe: { poster: { rooms: list, first, soon, otherRoom, otherChannel } } }, "*")
+}, 300)
+`,
+  );
+}
+
+async function posts(d: Driver): Promise<void> {
+  writePosterMod();
+  await d.evaluate(() => (document.querySelector<HTMLElement>(".rail-mods")?.click(), true), null, 2_000);
+  await step("the channel, for the posting mod", 10_000, () => d.evaluate(() => !!document.querySelector(".chan") && !document.querySelector('.rail-mods[aria-current="page"]'), null, 2_000));
+  const ask = await until("poster-probe's ask, by itself", 30_000, () =>
+    d.evaluate(
+      () => {
+        const box = document.querySelector('dialog[open][aria-label="poster-probe asks to run"]');
+        if (!box) return null;
+        const here = document.querySelector('nav[aria-label="Channels"] button[aria-current="page"]')?.getAttribute("aria-label") ?? null;
+        const ticked = [...box.querySelectorAll(".mod-room")].filter((l) => l.querySelector("input")?.checked).map((l) => l.textContent?.trim() ?? "");
+        const offered = box.querySelectorAll(".mod-room").length;
+        return { here, ticked, offered, words: box.querySelector(".mod-needs")?.textContent ?? "" };
+      },
+      null,
+      2_000,
+    ),
+  ).catch(() => null);
+  console.log(`poster-probe's ask: ${JSON.stringify(ask)}`);
+  check(!!ask && ask.words.includes("Post in #general") && ask.offered >= 1, "a mod that asks to post in #general lists your channels with #general in its ask");
+  check(!!ask?.here && JSON.stringify(ask.ticked) === JSON.stringify([ask.here]), "the channel you're in starts ticked, and only it");
+  await later(300);
+  await shot("mod-asks-rooms");
+  await step("Allow, for the posting mod", 10_000, () => d.evaluate(clickText, { selector: "dialog[open] .modal-foot button", text: "Allow" }, 2_000));
+  const said = await until("poster-probe's report", 30_000, async () => ((await heard(d)).find((m) => "poster" in m)?.["poster"] as Record<string, unknown> | undefined) ?? null).catch(() => null);
+  console.log(`poster-probe saw: ${JSON.stringify(said)}`);
+  const granted = (said?.["rooms"] ?? []) as { channel: string; title: string; room: string }[];
+  check(granted.length === 1 && granted[0]?.room === "general" && granted[0]?.title === ask?.here, "the mod is told only the room you ticked, with its channel's title");
+  check(said?.["first"] === "ok", "it posts into #general of the channel you ticked");
+  check(String(said?.["soon"]).includes("at most once every 2 seconds"), "a second post within 2 s is refused");
+  check(String(said?.["otherRoom"]).includes("may not post"), "a post into a room it never asked for is refused");
+  check(String(said?.["otherChannel"]).includes("may not post"), "a post into a channel you didn't tick is refused");
+  const landed = await until("the mod's post in the channel", 15_000, () =>
+    d.evaluate(
+      () => {
+        const text = document.querySelector(".chan")?.textContent ?? "";
+        return text.includes("hello from the poster probe") ? text : null;
+      },
+      null,
+      2_000,
+    ),
+  ).catch(() => null);
+  check(!!landed && landed.includes("via poster-probe"), "its post lands in the channel, ending with “via poster-probe”");
+  check(!!landed && !/too soon|never asked for|wasn't given/.test(landed), "no refused post reaches the channel");
+  await shot("mod-posted");
 }
 
 function writeQuietMod(): void {
@@ -1131,6 +1205,7 @@ try {
   ).catch(() => null);
   check(!!back, "the page goes back to the Mods list, without its row");
   await fromKiwi(d);
+  await posts(d);
   d.close();
   await stop(app);
   writeFileSync(join(root, ".kiwi", "mods", ".safe-mode"), "");

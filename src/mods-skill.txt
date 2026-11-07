@@ -34,6 +34,7 @@ A mod is a folder with a `mod.json` and an `index.tsx`. The desktop app builds i
   - `github`: the open channel's repos, pull requests and issues, read-only, with no token.
   - `terminal`: this computer's agents in tmux and Rex.
   - `idle`: the whole window while the person is away. `channels`: their channels, what needs them and each one's last line.
+  - `post:#<room>`: post as the person into that room, only in the channels they tick when they allow it. Each post ends with a line naming the mod; one every 2 seconds.
   - `render:<kind>`: draws `X.<kind>.html` attachments in chat.
   - `net:<host>`: each exact host it fetches, like `net:api.linear.app`. No wildcards, https only.
 - **`icon`:** optional, an `.svg` or `.png` in the folder, up to 64 KB.
@@ -57,6 +58,8 @@ Everything comes from `@kiwi/mod`, plus React.
 | `open(to)` | With `github`: open a task, Settings or the chat. With `channels`: open a channel |
 | `idle({ after, backdrop, render })`, `leave()` | With `idle`: the whole window after `after` minutes away, or on ⌘T. No key reaches it; a click can only open a channel or `leave()` |
 | `useChannels()`, `channels()` | With `channels`: `{ code, title, needs, last, line }` for each channel, the ones that need the person first |
+| `useRooms()`, `rooms()` | With `post:#<room>`: `{ channel, title, room }` for each channel's room the person ticked |
+| `post({ channel, room, text })` | With `post:#<room>`: post into a ticked room; one every 2 s; refused anywhere else |
 | `useStill()` | `true` when the person wants less motion |
 | `useFetch(url, options)` | `{ data, error, isLoading, revalidate }`, JSON by default |
 | `fetch(url, init)` | The only network: https, listed hosts only, no cookies, no redirects |
