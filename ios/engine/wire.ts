@@ -78,6 +78,7 @@ export interface MemberView {
   harness: string | null;
   mono: boolean;
   doing: number[];
+  person: string;
 }
 
 interface QuoteView {
