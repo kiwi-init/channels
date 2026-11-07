@@ -38,7 +38,7 @@ export function Rest({ name, leaving, meadow, alert, still, slot, frame, leave, 
     const was = document.activeElement instanceof HTMLElement ? document.activeElement : null
     const hold = (): void => box.current?.focus({ preventScroll: true })
     const keep = (): void => {
-      if (document.activeElement === frame()) hold()
+      if (document.activeElement !== box.current) hold()
     }
     const later = (): void => {
       keep()
@@ -62,9 +62,8 @@ export function Rest({ name, leaving, meadow, alert, still, slot, frame, leave, 
       window.removeEventListener("blur", later)
       document.removeEventListener("focusin", later, true)
       el?.removeEventListener("focusout", later)
-      const f = frame()
-      if (f && document.activeElement === f) f.blur()
-      if (was?.isConnected) was.focus({ preventScroll: true })
+      frame()?.blur()
+      if (was?.isConnected && was !== document.body) was.focus({ preventScroll: true })
     }
   }, [frame, leave])
 
@@ -97,7 +96,9 @@ export function Rest({ name, leaving, meadow, alert, still, slot, frame, leave, 
   }, [leaving])
 
   const ended = (e: AnimationEvent<HTMLDivElement>): void => {
-    if (e.target === e.currentTarget && e.animationName === "rest-out") gone()
+    if (e.target !== e.currentTarget || e.animationName !== "rest-out") return
+    box.current?.focus({ preventScroll: true })
+    gone()
   }
 
   return (

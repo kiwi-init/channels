@@ -101,6 +101,7 @@ const pageNow = (): Record<string, unknown> => ({
   dialog: (document.querySelector('[role="dialog"]')?.textContent ?? null)?.slice(0, 300),
   frames: [...document.querySelectorAll("iframe")].map((f) => `${f.title} ${f.style.width}x${f.style.height} ${f.style.visibility || "shown"}`),
   current: document.querySelector('nav[aria-label="Channels"] button[aria-current="page"]')?.getAttribute("aria-label") ?? null,
+  focus: `${document.hasFocus()} ${document.activeElement?.tagName ?? "none"} ${document.activeElement?.getAttribute("title") ?? document.activeElement?.className ?? ""}`,
 });
 
 let driver: Driver | null = null;
@@ -228,7 +229,16 @@ try {
   });
   check(!!opened, `a click on a channel's row (${channel}) opens it, through the mod's open(), and Calm goes`);
 
+  await later(1_000);
   press("t", true);
+  const again = await until("Calm, for a click on the sky", 15_000, async () => ((await d.evaluate(restNow, null, 2_000)).frame ? true : null)).catch(() => null);
+  if (!again) {
+    console.log(`after the row click, ⌘T did nothing: ${JSON.stringify(await d.evaluate(pageNow, null, 2_000).catch(String))}`);
+    await d.evaluate(() => void window.dispatchEvent(new KeyboardEvent("keydown", { key: "t", code: "KeyT", metaKey: true, bubbles: true, cancelable: true })), null, 2_000);
+    await later(1_500);
+    console.log(`a ⌘T sent inside the page: ${JSON.stringify(await d.evaluate(restNow, null, 2_000))}`);
+  }
+  check(!!again, "after a row click, ⌘T shows it again: no focus is left in its hidden frame");
   await step("Calm, for a click on the sky", 15_000, async () => !!(await d.evaluate(restNow, null, 2_000)).frame);
   await later(1_000);
   clickAt(...at(size.width / 2, 80));
