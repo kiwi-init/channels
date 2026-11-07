@@ -49,14 +49,21 @@ export function Rest({ name, leaving, meadow, alert, still, slot, frame, leave, 
       e.stopImmediatePropagation()
       if (e.type !== "keyup") leave()
     }
+    const el = box.current
     hold()
+    const every = window.setInterval(keep, 50)
     for (const type of SWALLOWED) window.addEventListener(type, swallow, { capture: true, passive: false })
     window.addEventListener("blur", later)
     document.addEventListener("focusin", later, true)
+    el?.addEventListener("focusout", later)
     return () => {
+      window.clearInterval(every)
       for (const type of SWALLOWED) window.removeEventListener(type, swallow, { capture: true })
       window.removeEventListener("blur", later)
       document.removeEventListener("focusin", later, true)
+      el?.removeEventListener("focusout", later)
+      const f = frame()
+      if (f && document.activeElement === f) f.blur()
       if (was?.isConnected) was.focus({ preventScroll: true })
     }
   }, [frame, leave])

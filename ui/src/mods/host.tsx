@@ -594,6 +594,15 @@ export function ModsLayer() {
     const l = look()
     for (const f of frames.values()) send(f, { kiwi: MOD_PROTOCOL, type: "theme", ...l })
   }, [still])
+  useEffect(() => {
+    const scheme = matchMedia("(prefers-color-scheme: dark)")
+    const resend = (): void => {
+      const l = look()
+      for (const f of frames.values()) send(f, { kiwi: MOD_PROTOCOL, type: "theme", ...l })
+    }
+    scheme.addEventListener("change", resend)
+    return () => scheme.removeEventListener("change", resend)
+  }, [])
   const resting = state.resting
   const restName = resting?.name ?? null
   const restSlot = useCallback(
