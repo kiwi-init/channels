@@ -83,21 +83,22 @@ struct ConversationScreen: View {
 
     private func needs(_ room: RoomView) -> [NeedView] {
         if spot.general { return room.open }
-        guard let place = room.placeView(spot.place) else { return [] }
-        if let task = place.task { return room.open.filter { $0.task == task } }
-        if let other = room.other(in: place) { return room.open.filter { $0.from == other } }
+        let place = room.placeView(spot.place)
+        if let task = place?.task ?? room.taskIn(spot.place) { return room.open.filter { $0.task == task } }
+        if let other = place.flatMap({ room.other(in: $0) }) ?? room.dmWith(spot.place) { return room.open.filter { $0.from == other } }
         return []
     }
 
     private func reviews(_ room: RoomView) -> [ReviewView] {
         if spot.general { return room.reviews }
-        guard let task = room.placeView(spot.place)?.task else { return [] }
+        guard let task = room.placeView(spot.place)?.task ?? room.taskIn(spot.place) else { return [] }
         return room.reviews.filter { $0.task == task }
     }
 
     private func worker(_ room: RoomView) -> MemberView? {
-        guard let place = room.placeView(spot.place) else { return nil }
-        let name = place.task.flatMap { id in room.tasks.first { $0.id == id }?.owner } ?? room.other(in: place)
+        let place = room.placeView(spot.place)
+        let task = place?.task ?? room.taskIn(spot.place)
+        let name = task.flatMap { id in room.tasks.first { $0.id == id }?.owner } ?? place.flatMap { room.other(in: $0) } ?? room.dmWith(spot.place)
         return name.flatMap { room.member($0) }.flatMap { $0.isAgent ? $0 : nil }
     }
 
