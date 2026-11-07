@@ -18,13 +18,14 @@
     "gdbus",
     "pgrep",
     "xdotool",
+    "screencapture",
+    "import",
     "swaymsg",
     "grim",
     "plutil",
     "secret-tool",
     "readelf",
-    "screencapture",
-    "import"
+    "foot"
   ],
   "workspaces": {
     ".": {

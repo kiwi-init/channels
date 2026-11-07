@@ -1,11 +1,10 @@
-import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { startLocalRelay } from "../../scripts/local-relay.ts";
 import { daemonStop } from "../src/daemon-client.ts";
-import { appExecutable, attach, launch, stop, testEnv, until, type Driver } from "./eb-drive.ts";
+import { appExecutable, attach, launch, screenshot, stop, testEnv, until, type Driver } from "./eb-drive.ts";
 import { firstChannel, sendMessage } from "./eb-first-run.ts";
 
 if (!process.argv[2]) {
@@ -202,11 +201,7 @@ type Said = Record<string, unknown>;
 const heard = (d: Driver): Promise<Said[]> => d.evaluate(() => ((window as unknown as { __modHeard?: Said[] }).__modHeard ?? []) as Said[], null, 3_000);
 
 async function shot(name: string): Promise<void> {
-  if (!shots) return;
-  mkdirSync(shots, { recursive: true });
-  const file = join(shots, `${name}.png`);
-  const r = process.platform === "darwin" ? spawnSync("screencapture", ["-x", file], { stdio: "ignore" }) : spawnSync("import", ["-window", "root", file], { stdio: "ignore" });
-  console.log(r.status === 0 && existsSync(file) ? `shot ${file}` : `no shot for ${name} here`);
+  screenshot(shots, name);
 }
 
 function files(dir: string): string[] {
