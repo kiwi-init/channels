@@ -230,10 +230,10 @@ struct Intro: View {
     private var place: PlaceView? { room.placeView(room.place) }
     private var person: String? {
         if room.place == room.sideKey { return room.lead }
-        return place.flatMap { room.other(in: $0) }
+        return place.flatMap { room.other(in: $0) } ?? room.dmWith(room.place)
     }
     private var task: TaskView? {
-        guard let id = place?.task else { return nil }
+        guard let id = place?.task ?? room.taskIn(room.place) else { return nil }
         return room.tasks.first { $0.id == id }
     }
 
