@@ -117,6 +117,34 @@ describe("the phone's room view", () => {
   });
 });
 
+describe("one person, several seats", () => {
+  test("a person's desktop and phone seats share a person; an agent is its own", async () => {
+    const phone = await generateIdentity("jow-2");
+    const people: Roster = [...roster, { name: "jow-2", pk: phone.pk, owner: false, at: 0, active: true, kind: "human", sponsor: { name: "Jow", handle: "jow", user: "u1" } }];
+    const log = await signedLog([say("lead", "hi")]);
+    const room = roomView({
+      code: "code",
+      title: "c",
+      icon: null,
+      me: "jow-2",
+      isOwner: false,
+      connection: "live",
+      gone: null,
+      error: null,
+      head: log.length,
+      whole: true,
+      messages: log,
+      state: fold(log, people, T0 + 60_000),
+      online: new Map(),
+      place: "main",
+    });
+    const person = (name: string) => room.members.find((m) => m.name === name)?.person;
+    expect(person("jow")).toBe("person:u1");
+    expect(person("jow-2")).toBe("person:u1");
+    expect(person("lead")).not.toBe(person("dev"));
+  });
+});
+
 describe("names in the phone's room view (#1251)", () => {
   const named = (log: Message[], nick = "Earnest Heron"): RoomView => {
     const people: Roster = roster.map((r) => (r.name === "dev" ? { ...r, display: nick } : r));

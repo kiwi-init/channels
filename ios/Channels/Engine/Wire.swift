@@ -26,6 +26,7 @@ struct MemberView: Codable, Sendable, Hashable, Identifiable {
     let harness: String?
     let mono: Bool
     let doing: [Int]
+    var person: String? = nil
 
     var id: String { name }
     var isAgent: Bool { kind == "agent" }
@@ -217,6 +218,30 @@ struct RoomView: Codable, Sendable, Hashable, Identifiable {
 
     func member(_ name: String) -> MemberView? {
         members.first { $0.name == name }
+    }
+
+    func isMe(_ name: String) -> Bool {
+        guard name != me else { return true }
+        guard let mine = member(me)?.person, let theirs = member(name)?.person else { return false }
+        return mine == theirs
+    }
+
+    var people: [MemberView] {
+        var out: [MemberView] = []
+        var at: [String: Int] = [:]
+        for m in members {
+            guard let person = m.person else {
+                out.append(m)
+                continue
+            }
+            if let i = at[person] {
+                if m.name == me || (out[i].name != me && m.here && !out[i].here) { out[i] = m }
+            } else {
+                at[person] = out.count
+                out.append(m)
+            }
+        }
+        return out
     }
 
     func display(_ name: String) -> String {

@@ -1,5 +1,5 @@
 import { ignored, isQuiet, ROBOT_FACES, type ChannelIcon, type Message } from "@kiwi/core/protocol.ts";
-import { rootOf } from "@kiwi/core/room-rules.ts";
+import { personOf, rootOf } from "@kiwi/core/room-rules.ts";
 import { answersDecisions, decidersOf, dmPlace, MAIN, openRound, placeFromKey, placeKey, taskId, type ChannelState } from "@kiwi/core/state.ts";
 import { inGeneral } from "@kiwi/core/state/places.ts";
 import type { FoldMember } from "@kiwi/core/state/types.ts";
@@ -62,6 +62,7 @@ function memberView(m: FoldMember, state: ChannelState, online: ReadonlyMap<stri
     harness,
     mono: harness !== null && monoHarness(harness),
     doing: [...state.tasks.values()].filter((t) => t.owner === m.name && t.state === "doing").map((t) => t.id),
+    person: personOf(m, [...state.members.values()]),
   };
 }
 
