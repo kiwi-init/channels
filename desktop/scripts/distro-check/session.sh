@@ -92,6 +92,7 @@ sleep 15
 shot=$(cd "$logs" && timeout 10 weston-screenshooter > /dev/null 2>&1; ls -t wayland-screenshot-*.png 2> /dev/null | head -n 1)
 if [ -n "$shot" ]; then mv "$logs/$shot" "$logs/$tag-window.png"; info "screenshot: $tag-window.png"; else info "no screenshot: weston-screenshooter didn't write one"; fi
 if kill -0 "$pid" 2> /dev/null; then ok "still running 15 s later"; else bad "the app exited: $(tail -n 5 "$logs/$tag-app.log" | tr '\n' ' ' | cut -c1-300)"; fi
+for p in $(ps -e -o pid=,sid= | awk -v s="$pid" '$2 == s { print $1 }'); do echo "$p $(readlink "/proc/$p/exe" 2> /dev/null) $(tr '\0' ' ' < "/proc/$p/cmdline" 2> /dev/null | cut -c1-200)"; done > "$logs/$tag-procs.log"
 
 if [ "$tag" = kwallet ]; then
   chatter='Launcher starting on|^Current directory:|^Spawning: |Setting LD_PRELOAD|Child process spawned with PID|\[LAUNCHER\] |ELECTROBUN NATIVE WRAPPER|setJSUtils called|^GlobalShortcut: |Application menus are not supported|GTK WebKit: Applied|setWebviewHTMLContent: |getWebviewHTMLContent: Retrieved'
