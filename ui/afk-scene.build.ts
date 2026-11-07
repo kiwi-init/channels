@@ -3,7 +3,7 @@ import { build, type Rollup } from "vite"
 
 const inline = (code: string): string => code.replaceAll("</script", "<\\/script").replaceAll("<!--", "<\\!--")
 
-export async function afkSceneHtml(): Promise<string> {
+async function iife(entry: string, name: string): Promise<string> {
   const out = await build({
     configFile: false,
     root: import.meta.dirname,
@@ -14,12 +14,19 @@ export async function afkSceneHtml(): Promise<string> {
       write: false,
       copyPublicDir: false,
       minify: true,
-      lib: { entry: resolve(import.meta.dirname, "src/afk/scene.ts"), formats: ["iife"], name: "kiwiAfkScene", fileName: () => "afk-scene.js" },
+      lib: { entry: resolve(import.meta.dirname, entry), formats: ["iife"], name, fileName: () => `${name}.js` },
     },
   })
   const outputs = (Array.isArray(out) ? out : [out]) as Rollup.RollupOutput[]
   const chunk = outputs.flatMap((o) => o.output).find((o): o is Rollup.OutputChunk => o.type === "chunk")
-  if (!chunk) throw new Error("the AFK scene built no script")
+  if (!chunk) throw new Error(`${entry} built no script`)
+  return chunk.code
+}
+
+export const afkFrameJs = (): Promise<string> => iife("src/afk/frame.ts", "kiwiAfkFrame")
+
+export async function afkSceneHtml(): Promise<string> {
+  const code = await iife("src/afk/scene.ts", "kiwiAfkScene")
   return `<!doctype html>
 <html>
   <head>
@@ -29,7 +36,7 @@ export async function afkSceneHtml(): Promise<string> {
     <style>html,body{margin:0;height:100%;overflow:hidden;background:transparent}</style>
   </head>
   <body>
-    <script>${inline(chunk.code)}</script>
+    <script>${inline(code)}</script>
   </body>
 </html>
 `

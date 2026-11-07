@@ -41,7 +41,7 @@ export function normalizeRelay(url: string): string | null {
  * The Content-Security-Policy for the app's page: the hosted app's (ui/public/_headers),
  * with the relay this app talks to, over HTTP and its WebSocket, as the only place to connect. Not
  * GitHub: in the app, sign-in runs in main (the device flow), never in the page. No eval (only
- * WebAssembly compiles: the message renderer's parser is wasm), no inline script, nothing framed, no
+ * WebAssembly compiles: the message renderer's parser is wasm), no inline script, nothing framed but the AFK scene's sandbox, no
  * form posts: script that got in some other way can't phone anywhere else.
  */
 export function csp(relay: string): string {
@@ -59,6 +59,7 @@ export function csp(relay: string): string {
     "object-src 'none'",
     "base-uri 'none'",
     "form-action 'none'",
+    "frame-src views://internal/afk-frame.html",
     "frame-ancestors 'none'",
     "worker-src 'self'",
   ].join("; ");

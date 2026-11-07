@@ -1,5 +1,6 @@
 import type { Handlers } from "../calls.ts";
 import type { Host } from "../host.ts";
+import { afkCalls } from "./afk.ts";
 import { daemonCalls } from "./daemon.ts";
 import { devicesCalls, storeDeviceHost } from "./devices.ts";
 import { githubCalls } from "./github.ts";
@@ -26,5 +27,6 @@ export function handlers(host: Host): Handlers {
     ...hooksCalls(),
     ...machineCalls(),
     ...uiCalls(),
+    ...afkCalls(host),
   };
 }

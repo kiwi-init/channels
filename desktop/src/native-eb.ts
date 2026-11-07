@@ -2,7 +2,7 @@ import { dlopen, FFIType, JSCallback, ptr, suffix, type Pointer } from "bun:ffi"
 import fs from "node:fs";
 import path from "node:path";
 
-import { PAGE_URL } from "./eb-page.ts";
+import { AFK_FRAME_URL, PAGE_URL } from "./eb-page.ts";
 import { linuxWallpaper } from "./wallpaper-path.ts";
 
 export const mac = process.platform === "darwin";
@@ -135,6 +135,8 @@ let shortcuts: JSCallback | null = null;
 
 const guards = dlopen(shellPath, { kiwi_guard_downloads: { args: [], returns: FFIType.bool }, kiwi_allow_only: { args: [FFIType.ptr], returns: FFIType.bool } }).symbols;
 
+const frames = mac ? dlopen(shellPath, { kiwi_allow_frame: { args: [FFIType.ptr], returns: FFIType.bool }, kiwi_main_frame_messages: { args: [], returns: FFIType.bool } }).symbols : null;
+
 const core = dlopen(path.join(binDir, `libElectrobunCore.${suffix}`), {
   setWebviewHTMLContent: { args: [FFIType.u32, FFIType.ptr], returns: FFIType.void },
   updatePreloadScriptToWebView: { args: [FFIType.u32, FFIType.ptr, FFIType.ptr, FFIType.bool], returns: FFIType.void },
@@ -145,6 +147,8 @@ export const cString = (s: string): Uint8Array<ArrayBuffer> => new TextEncoder()
 const PRELOAD_ID = cString("electrobun_custom_preload_script");
 
 const PAGE_ONLY = cString(PAGE_URL);
+
+const AFK_FRAME = cString(AFK_FRAME_URL);
 
 const committedBuffer = new Uint8Array(4096);
 
@@ -161,6 +165,8 @@ export function missingGuard(): string | null {
   if (!shell.kiwi_deny_permissions()) return "the web view's permission handler wasn't found; not opening a window that could grant the microphone";
   if (!guards.kiwi_guard_downloads()) return "the web view's download handler wasn't found; not opening a window that could save any file into Downloads";
   if (!guards.kiwi_allow_only(PAGE_ONLY)) return "the web view's navigation handler wasn't found; not opening a window whose page could navigate away";
+  if (frames && !frames.kiwi_allow_frame(AFK_FRAME)) return "the web view's navigation handler didn't take the AFK scene's frame; not opening a window that couldn't hold it safely";
+  if (frames && !frames.kiwi_main_frame_messages()) return "the web view's message handler wasn't found; not opening a window whose frames could post as its page";
   if (!shell.kiwi_watch_commits()) return "the web view's navigation delegate wasn't found; not opening a window that would trust a page it can't see";
   return null;
 }
