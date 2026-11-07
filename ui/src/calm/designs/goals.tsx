@@ -27,7 +27,7 @@ function titleOf(g: TaskGroup): string | null {
   return null
 }
 
-function goalsOf(ch: Channel, now: number): Goal[] {
+function goalsOf(ch: Channel): Goal[] {
   const typical = usual(ch.tasks)
   return ch.taskGroups.flatMap((g): Goal[] => {
     const title = titleOf(g)
@@ -51,7 +51,7 @@ function goalsOf(ch: Channel, now: number): Goal[] {
         : todo
           ? { tone: "quiet" as const, text: `Next: ${name(todo)}` }
           : null
-    return [{ key: g.key, title, tasks, done, left: now ? left : 0, next }]
+    return [{ key: g.key, title, tasks, done, left, next }]
   })
 }
 
@@ -65,7 +65,7 @@ export function Goals({ open }: { open: (code: string) => void }) {
   const { app } = useApp()
   const away = useAway()
   const ch = app.channel
-  const goals = useMemo(() => (ch ? goalsOf(ch, Date.now()) : []), [ch])
+  const goals = useMemo(() => (ch ? goalsOf(ch) : []), [ch])
   const others = away.pairs.filter((p) => p.tile.code !== ch?.code)
   return (
     <section className="afk-goals afk-float" aria-label="Goals">
