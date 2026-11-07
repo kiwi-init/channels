@@ -109,7 +109,7 @@ struct Dock: View {
         .animation(.snappy(duration: 0.25), value: mentionable.map(\.name))
         .overlay(alignment: .topTrailing) {
             if !follow.atBottom {
-                jumpButton.padding(.trailing, 14).offset(y: -40).transition(.scale(scale: 0.5).combined(with: .opacity))
+                jumpButton.padding(.trailing, 9).offset(y: -35).transition(.scale(scale: 0.5).combined(with: .opacity))
             }
         }
         .animation(.snappy(duration: 0.25), value: follow.atBottom)
@@ -203,8 +203,12 @@ struct Dock: View {
             Spacer()
             Button(action: cancel) {
                 Image(systemName: "xmark.circle.fill").font(.system(size: 17)).foregroundStyle(Tone.ink3)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .padding(.vertical, -12)
+            .padding(.trailing, -12)
             .accessibilityLabel("Cancel")
         }
         .padding(.horizontal, 14)
@@ -230,6 +234,8 @@ struct Dock: View {
                         .offset(x: 4, y: -4)
                 }
             }
+            .padding(5)
+            .contentShape(Circle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(follow.unseen > 0 ? "\(follow.unseen) new, jump to the latest" : "Jump to the latest")
@@ -252,9 +258,11 @@ struct Dock: View {
                                     .font(.system(size: 18))
                                     .symbolRenderingMode(.palette)
                                     .foregroundStyle(.white, .black.opacity(0.55))
+                                    .padding(3)
+                                    .frame(width: 44, height: 44, alignment: .topTrailing)
+                                    .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
-                            .padding(3)
                         }
                 }
             }
@@ -275,11 +283,11 @@ struct Dock: View {
             .foregroundStyle(.white)
             .frame(width: 32, height: 32)
             .background(Tone.accent, in: Circle())
+            .padding(6)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .disabled(!canSend)
-        .padding(.trailing, 6)
-        .padding(.bottom, 6)
         .transition(.scale.combined(with: .opacity))
         .accessibilityLabel("Send")
     }

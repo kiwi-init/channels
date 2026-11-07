@@ -39,15 +39,12 @@ struct ConversationScreen: View {
                     }
                 }
                 .navigationTitle(room.spotTitle(spot.place))
-                .toolbar {
-                    ToolbarItem(placement: .principal) {
-                        Button {
-                            model.path.append(.details(room.code, spot.place))
-                        } label: {
-                            TitlePill(room: room, place: room.placeView(spot.place), fresh: false, key: spot.place)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityHint("Shows the details")
+                .subtitle(room.status(of: spot.place))
+                .toolbarTitleMenu {
+                    Button("Details", systemImage: "info.circle") { model.path.append(.details(room.code, spot.place)) }
+                    Button("Tasks", systemImage: "checklist") { model.path.append(.tasks(room.code)) }
+                    if spot.place != "main" {
+                        Button("#general", systemImage: "number") { model.path.append(.place(Spot(code: room.code))) }
                     }
                 }
                 .onAppear(perform: seen)
@@ -92,63 +89,21 @@ struct ConversationScreen: View {
     }
 }
 
-struct TitlePill: View {
-    let room: RoomView
-    let place: PlaceView?
-    let fresh: Bool
-    var key: String?
-    var body: some View {
-        label.contentShape(Rectangle())
-    }
-
-    private var label: some View {
-        HStack(spacing: 7) {
-            if let place, place.kind == "dm", let other = room.other(in: place) {
-                Face(name: other, member: room.member(other), size: 26)
-            }
-            VStack(spacing: 0) {
-                HStack(spacing: 3) {
-                    Text(title).type(.title).foregroundStyle(Tone.ink).lineLimit(1)
-                    Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)).foregroundStyle(Tone.ink3)
-                }
-                status
-            }
-            if fresh {
-                Dot(color: Tone.accent, size: 8)
-            }
-        }
-        .frame(minHeight: 44)
-    }
-
-    private var title: String {
-        room.spotTitle(key ?? place?.key ?? "main")
-    }
-
-    private var other: MemberView? {
-        guard let place, let name = room.other(in: place) else { return nil }
-        return room.member(name)
-    }
-
-    private var busy: String? {
-        guard let other, other.working else { return nil }
-        return other.doing.first.map { "working on \(taskLabel($0))" } ?? "working"
-    }
-
-    @ViewBuilder private var status: some View {
-        let needs = place?.kind == "main" ? room.asks.count + room.reviews.count + room.open.count : 0
+extension RoomView {
+    func status(of key: String) -> String? {
+        let place = placeView(key)
+        let main = key == "main"
+        let other = (place.flatMap { self.other(in: $0) } ?? dmWith(key)).flatMap { member($0) }
+        let busy = other.flatMap { o in o.working ? (o.doing.first.map { "working on \(taskLabel($0))" } ?? "working") : nil }
+        let needs = main ? asks.count + reviews.count + open.count : 0
         let parts: [String] = [
-            place?.kind == "dm" ? (busy ?? (other?.here == true ? "here" : "away")) : nil,
-            room.connection == .connecting ? "Connecting…" : nil,
-            room.connection == .reconnecting ? "Reconnecting…" : nil,
-            place?.kind == "main" && room.working > 0 ? "\(room.working) working" : nil,
+            key.hasPrefix("dm:") ? (busy ?? (other?.here == true ? "here" : "away")) : nil,
+            connection == .connecting ? "Connecting…" : nil,
+            connection == .reconnecting ? "Reconnecting…" : nil,
+            main && working > 0 ? "\(working) working" : nil,
             needs > 0 ? "\(needs) \(needs == 1 ? "needs" : "need") you" : nil,
         ].compactMap { $0 }
-        if !parts.isEmpty {
-            HStack(spacing: 4) {
-                if (place?.kind == "main" && room.working > 0) || busy != nil { Dot(color: Tone.doing, size: 5) }
-                Text(parts.joined(separator: " · ")).type(.stamp, .medium).foregroundStyle(needs > 0 ? Tone.decide : Tone.ink3).lineLimit(1)
-            }
-        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 }
 
@@ -211,6 +166,14 @@ struct ChannelAvatar: View {
 }
 
 extension View {
+    @ViewBuilder func subtitle(_ text: String?) -> some View {
+        if #available(iOS 26.0, *), let text {
+            self.navigationSubtitle(text)
+        } else {
+            self
+        }
+    }
+
     @ViewBuilder func softBars() -> some View {
         if #available(iOS 26.0, *) {
             self.scrollEdgeEffectStyle(.soft, for: .all)
