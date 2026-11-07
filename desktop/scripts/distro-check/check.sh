@@ -94,7 +94,7 @@ entry_check() {
   case "$handler" in *channels-desktop.desktop*) ok "kiwi:// links open it: $handler" ;; *) bad "kiwi:// doesn't open channels-desktop.desktop: $handler" ;; esac
 }
 mounted() {
-  if grep -q "$2" "$out/logs/$1-app.log"; then ok "$3"; else bad "$3 didn't happen: $(grep -m1 'Current directory' "$out/logs/$1-app.log")"; fi
+  if grep -q "$2" "$out/logs/$1-procs.log"; then ok "$3"; else bad "$3 didn't happen, the app's processes: $(head -n 4 "$out/logs/$1-procs.log" | tr '\n' ';' | cut -c1-300)"; fi
 }
 lib_test() {
   local name=$1
