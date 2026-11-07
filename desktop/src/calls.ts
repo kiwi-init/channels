@@ -128,6 +128,8 @@ export function makeBridge(t: BridgeTransport): KiwiBridge {
     modTerminalFocus: (name, seat) => t.call("modTerminalFocus", name, seat),
     modTerminalMark: (name, seat, mark) => t.call("modTerminalMark", name, seat, mark),
     setModSetting: (name, id, value) => t.call("setModSetting", name, id, value),
+    modCatalog: (fresh) => t.call("modCatalog", fresh),
+    installMod: (name, needs) => t.call("installMod", name, needs),
     onAccent: (cb) => t.listen("accent", cb),
     folderThemes: () => t.call("folderThemes"),
     onFolderThemes: (cb) => t.listen("folderThemes", cb),

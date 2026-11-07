@@ -4,7 +4,8 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { DEFAULT_MODS, installDefaults, type Pinned } from "../desktop/src/mods-default.ts";
+import { DEFAULT_MODS, installDefaults } from "../desktop/src/mods-default.ts";
+import type { Pinned } from "../desktop/src/mods-pinned.ts";
 import { modsHost } from "../desktop/src/mods-host.ts";
 
 const roots: string[] = [];

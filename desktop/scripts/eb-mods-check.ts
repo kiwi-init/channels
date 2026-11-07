@@ -3,6 +3,8 @@ import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, 
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 
+import { folderHash } from "@kiwi/core/node/mod-folder.ts";
+
 import { startLocalRelay } from "../../scripts/local-relay.ts";
 import { addMod } from "../../src/mods.ts";
 import { daemonStop } from "../src/daemon-client.ts";
@@ -33,7 +35,46 @@ const terminalFolder = join(root, ".kiwi", "mods", "terminal-mod");
 const TMUX_CONF = join(root, "home", ".tmux.conf");
 const REX_INIT = join(root, "home", ".config", "rex", "init.lua");
 const TMUX_BEFORE = "set -g mouse on\nbind r source-file ~/.tmux.conf";
-const TERMINAL_ENV = { KIWI_TMUX_CONF: TMUX_CONF, REX_CONFIG: REX_INIT, XDG_CONFIG_HOME: join(root, "home", ".config") };
+const CATALOG_COMMIT = "c".repeat(40);
+const catalogSource = join(root, "catalog");
+const catalogFiles: Record<string, Record<string, string>> = {
+  "catalog-mod": {
+    "mod.json": JSON.stringify({ name: "catalog-mod", version: "1.0.0", shell: "^3.3", needs: ["panel"] }),
+    "index.tsx": `import { panel } from "@kiwi/mod"\npanel({ title: "Catalog", render: () => null })\n`,
+  },
+  "tampered-mod": {
+    "mod.json": JSON.stringify({ name: "tampered-mod", version: "1.0.0", shell: "^3.3", needs: [] }),
+    "index.tsx": `parent.postMessage({ kiwiProbe: { tamperedRan: true } }, "*")\n`,
+  },
+};
+for (const [name, files] of Object.entries(catalogFiles))
+  for (const [file, text] of Object.entries(files)) {
+    mkdirSync(join(catalogSource, name), { recursive: true });
+    writeFileSync(join(catalogSource, name, file), text);
+  }
+const catalogIndex = {
+  mods: Object.entries(catalogFiles).map(([name, files]) => ({
+    name,
+    does: name === "catalog-mod" ? "Shows that the catalog installs" : "Is served changed after it was vouched for",
+    needs: JSON.parse(files["mod.json"]!).needs as string[],
+    commit: CATALOG_COMMIT,
+    hash: folderHash(join(catalogSource, name)),
+    files: Object.keys(files),
+  })),
+};
+writeFileSync(join(catalogSource, "tampered-mod", "index.tsx"), `parent.postMessage({ kiwiProbe: { tamperedRan: "changed" } }, "*")\n`);
+const catalogServer = Bun.serve({
+  port: 0,
+  hostname: "127.0.0.1",
+  fetch(req) {
+    const path = decodeURIComponent(new URL(req.url).pathname);
+    if (path === "/kiwi-init/mods/main/mods.json") return Response.json(catalogIndex);
+    const prefix = `/kiwi-init/mods/${CATALOG_COMMIT}/`;
+    const rel = path.startsWith(prefix) ? path.slice(prefix.length) : "";
+    return rel && !rel.split("/").includes("..") && existsSync(join(catalogSource, rel)) ? new Response(readFileSync(join(catalogSource, rel))) : new Response("nope", { status: 404 });
+  },
+});
+const TERMINAL_ENV = { KIWI_TMUX_CONF: TMUX_CONF, REX_CONFIG: REX_INIT, XDG_CONFIG_HOME: join(root, "home", ".config"), KIWI_EB_MODS_RAW: `http://127.0.0.1:${catalogServer.port}` };
 
 function writeTerminalMod(): void {
   mkdirSync(join(terminalFolder, "terminal"), { recursive: true });
@@ -475,6 +516,47 @@ const inRow = ({ mod, control }: { mod: string; control: string }): boolean => {
   el.click();
   return true;
 };
+
+const catalogInstall = (name: string): boolean => {
+  const row = [...document.querySelectorAll<HTMLElement>(".mod-catalog-row")].find((r) => r.querySelector(".set-row-label")?.textContent === name);
+  const el = row && [...row.querySelectorAll<HTMLButtonElement>("button")].find((b) => (b.textContent ?? "").trim() === "Install");
+  if (!el || el.disabled) return false;
+  el.click();
+  return true;
+};
+
+async function fromKiwi(d: Driver): Promise<void> {
+  const installed = (name: string) =>
+    d.evaluate((n) => [...document.querySelectorAll(".mod-catalog-row")].some((r) => r.querySelector(".set-row-label")?.textContent === n && (r.textContent ?? "").includes("Installed")), name, 2_000);
+  await step("Settings → About", 10_000, () => d.evaluate(clickText, { selector: ".set-nav .side-row", text: "About" }, 2_000));
+  await step("Settings → Mods", 10_000, () => d.evaluate(clickText, { selector: ".set-nav .side-row", text: "Mods" }, 2_000));
+  await step("From Kiwi lists the catalog's mods", 15_000, () =>
+    d.evaluate(() => [...document.querySelectorAll(".mod-catalog-row .set-row-label")].map((l) => l.textContent).join(" ") === "catalog-mod tampered-mod", null, 2_000),
+  );
+  await shot("settings-mods-from-kiwi");
+  await step("catalog-mod's Install", 10_000, () => d.evaluate(catalogInstall, "catalog-mod", 2_000));
+  await step("its ask says what it asks for", 10_000, () =>
+    d.evaluate(() => (document.querySelector('dialog[open][aria-label="Install catalog-mod"] .mod-needs')?.textContent ?? "").length > 0, null, 2_000),
+  );
+  await later(300);
+  await shot("mod-install-ask");
+  await step("Allow, in its ask", 10_000, () => d.evaluate(clickText, { selector: 'dialog[open][aria-label="Install catalog-mod"] .modal-foot button', text: "Allow" }, 2_000));
+  const on = await until("catalog-mod on", 30_000, async () => ((await modsNow(d)).find((m) => m.name === "catalog-mod")?.state === "on" ? true : null)).catch(() => null);
+  check(!!on, "one Install and one Allow put a catalog mod in and turn it on, without a restart");
+  const sources = JSON.parse(readFileSync(join(root, ".kiwi", "mods", ".sources.json"), "utf8")) as Record<string, { commit?: string }>;
+  check(sources["catalog-mod"]?.commit === CATALOG_COMMIT, "it is kept at the commit the catalog pins");
+  check((await until("catalog-mod Installed", 10_000, async () => ((await installed("catalog-mod")) ? true : null)).catch(() => false)) === true, "its row in From Kiwi says Installed");
+  await step("tampered-mod's Install", 10_000, () => d.evaluate(catalogInstall, "tampered-mod", 2_000));
+  await step("Allow, in tampered-mod's ask", 10_000, () => d.evaluate(clickText, { selector: 'dialog[open][aria-label="Install tampered-mod"] .modal-foot button', text: "Allow" }, 2_000));
+  const why = await until("the refusal", 15_000, () =>
+    d.evaluate(() => [...document.querySelectorAll(".toasts .toast")].map((t) => t.textContent ?? "").find((t) => t.includes("the copy the catalog vouches for")) ?? null, null, 2_000),
+  ).catch(() => null);
+  console.log(`tampered-mod: ${JSON.stringify(why)}`);
+  await shot("mod-install-refused");
+  check(!!why, "a download that isn't the vouched copy is refused, and the person sees why");
+  check(!existsSync(join(root, ".kiwi", "mods", "tampered-mod")) && !(await modsNow(d)).some((m) => m.name === "tampered-mod"), "nothing of the tampered mod is left on disk or in the list");
+  check(!(await heard(d)).some((m) => m["tamperedRan"]), "the tampered code never ran");
+}
 
 const confirmIt = (action: string): boolean => {
   const b = [...document.querySelectorAll<HTMLButtonElement>("dialog[open] .modal-foot button")].find((x) => (x.textContent ?? "").trim() === action);
@@ -980,6 +1062,7 @@ try {
     ),
   ).catch(() => null);
   check(!!back, "the page goes back to the Mods list, without its row");
+  await fromKiwi(d);
   d.close();
   await stop(app);
   writeFileSync(join(root, ".kiwi", "mods", ".safe-mode"), "");
@@ -1012,6 +1095,7 @@ try {
   await daemonStop(join(root, ".kiwi"), 2_000).catch(() => false);
   await daemonStop(join(botHome, "home"), 2_000).catch(() => false);
   relay.kill();
+  void catalogServer.stop(true);
   for (const f of files(join(root, "home"))) {
     if (!/main\.log$/.test(f)) continue;
     const lines = readFileSync(f, "utf8")

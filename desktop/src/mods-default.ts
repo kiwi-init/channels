@@ -1,21 +1,10 @@
-import { copiesIn, folderHash, keepCopyIn } from "@kiwi/core/node/mod-folder.ts";
-import { checkManifest } from "@kiwi/core/node/mod-manifest.ts";
-import { randomBytes } from "node:crypto";
+import { copiesIn } from "@kiwi/core/node/mod-folder.ts";
 import fs from "node:fs";
 import path from "node:path";
 
 import type { ModView } from "./bridge.ts";
 import { errorText, writePrivate } from "./guard.ts";
-import { preApprove } from "./mods-host.ts";
-
-export interface Pinned {
-  name: string;
-  repo: string;
-  path: string;
-  commit: string;
-  hash: string;
-  files: readonly string[];
-}
+import { installPinned, sourceOf, type Pinned, type PinnedOptions } from "./mods-pinned.ts";
 
 export const DEFAULT_MODS: readonly Pinned[] = [
   {
@@ -28,19 +17,10 @@ export const DEFAULT_MODS: readonly Pinned[] = [
   },
 ];
 
-export interface DefaultsOptions {
-  folder: string;
-  approvals: string;
+export interface DefaultsOptions extends PinnedOptions {
   record: string;
-  contract: string;
   pins?: readonly Pinned[];
-  request?: typeof fetch;
 }
-
-const FILES = 200;
-const FILE_BYTES = 1_000_000;
-const ALL_BYTES = 8_000_000;
-const FETCH_MS = 30_000;
 
 function readRecord(file: string): Record<string, string> {
   try {
@@ -53,46 +33,8 @@ function readRecord(file: string): Record<string, string> {
   }
 }
 
-async function get(request: typeof fetch, url: string): Promise<Response> {
-  const res = await request(url, { signal: AbortSignal.timeout(FETCH_MS), headers: { "user-agent": "kiwi-channels" } });
-  if (!res.ok) throw new Error(`${new URL(url).hostname} answered ${res.status}${res.status === 404 ? " (is the repo public?)" : ""}`);
-  return res;
-}
-
-async function download(pin: Pinned, into: string, request: typeof fetch): Promise<void> {
-  if (!pin.files.length || pin.files.length > FILES) throw new Error(`the pin lists ${pin.files.length} files`);
-  let total = 0;
-  for (const rel of pin.files) {
-    if (rel.split("/").some((p) => !p || p === "." || p === "..")) throw new Error(`${rel} isn't a plain path`);
-    const bytes = new Uint8Array(
-      await (await get(request, `https://raw.githubusercontent.com/${pin.repo}/${pin.commit}/${`${pin.path}/${rel}`.split("/").map(encodeURIComponent).join("/")}`)).arrayBuffer(),
-    );
-    total += bytes.byteLength;
-    if (bytes.byteLength > FILE_BYTES || total > ALL_BYTES) throw new Error("the folder is too big");
-    const at = path.join(into, rel);
-    fs.mkdirSync(path.dirname(at), { recursive: true });
-    fs.writeFileSync(at, bytes);
-  }
-}
-
-const sourceOf = (pin: Pinned): string => `github.com/${pin.repo}/${pin.path}`;
-
 async function installOne(pin: Pinned, o: DefaultsOptions): Promise<void> {
-  const at = path.join(o.folder, pin.name);
-  fs.mkdirSync(o.folder, { recursive: true });
-  const staged = path.join(o.folder, `.${pin.name}.placing-${randomBytes(6).toString("hex")}`);
-  try {
-    await download(pin, staged, o.request ?? fetch);
-    if (folderHash(staged) !== pin.hash) throw new Error("the download isn't the copy this app was built with");
-    const checked = checkManifest(JSON.parse(fs.readFileSync(path.join(staged, "mod.json"), "utf8")), pin.name, o.contract);
-    if (!checked.ok) throw new Error(checked.why);
-    if (fs.lstatSync(at, { throwIfNoEntry: false })) return;
-    preApprove(o.approvals, pin.name, checked.manifest.needs, sourceOf(pin));
-    fs.renameSync(staged, at);
-    keepCopyIn(o.folder, pin.name, { source: sourceOf(pin), url: `https://github.com/${pin.repo}.git`, path: pin.path, ref: null, commit: pin.commit, hash: pin.hash });
-  } finally {
-    fs.rmSync(staged, { recursive: true, force: true });
-  }
+  await installPinned(pin, o, "the copy this app was built with", (manifest) => manifest.needs);
 }
 
 /** Installs the mods that come with the app, once each, already approved; returns the ones that failed, as mods that are off and say why. */

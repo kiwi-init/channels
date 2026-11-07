@@ -8,6 +8,7 @@ import type { Serves } from "../calls.ts";
 import { childEnv, sessionEnv } from "../child-env.ts";
 import { kiwiHome } from "../daemon-client.ts";
 import type { Host } from "../host.ts";
+import { modsCatalog, type ModsCatalog } from "../mods-catalog.ts";
 import { installDefaults } from "../mods-default.ts";
 import { modsHost, type ModsHost, type ModSecrets } from "../mods-host.ts";
 import { inModsWorker } from "../mods-run.ts";
@@ -129,6 +130,8 @@ const sealedSecrets: ModSecrets = {
   },
 };
 
+declare const KIWI_EB_TEST: boolean;
+
 export function modsCalls(
   host: Host,
 ): Serves<
@@ -149,6 +152,8 @@ export function modsCalls(
   | "modTerminalFocus"
   | "modTerminalMark"
   | "setModSetting"
+  | "modCatalog"
+  | "installMod"
 > {
   let mods: ModsHost | null = null;
   let started: Promise<ModsHost> | null = null;
@@ -193,6 +198,10 @@ export function modsCalls(
     host.app.onQuit(() => mods?.stop());
     return started;
   };
+  let catalog: ModsCatalog | null = null;
+  const testRaw = typeof KIWI_EB_TEST !== "undefined" && KIWI_EB_TEST ? process.env["KIWI_EB_MODS_RAW"] : undefined;
+  const catalogOf = (): ModsCatalog =>
+    (catalog ??= modsCatalog({ folder: path.join(kiwiHome(), "mods"), approvals: path.join(host.app.path("data"), "mods.json"), contract: UI_CONTRACT, ...(testRaw ? { raw: testRaw } : {}) }));
   const allowed = async (name: unknown): Promise<void> => {
     const m = (await ready()).list().find((v) => v.name === name);
     if (m?.state !== "on" || !m.needs.includes("terminal") || !m.approved.includes("terminal"))
@@ -238,5 +247,15 @@ export function modsCalls(
       await terminals.mark(seat, mark);
     },
     setModSetting: async (name, id, value) => (await ready()).setSetting(String(name), String(id), value),
+    modCatalog: async (fresh) => {
+      await ready();
+      return catalogOf().list(fresh === true);
+    },
+    installMod: async (name, needs) => {
+      const h = await ready();
+      await catalogOf().install(String(name), Array.isArray(needs) ? needs.map(String) : []);
+      await h.rescan();
+      return h.list();
+    },
   };
 }

@@ -126,6 +126,10 @@ img.mod-icon {
   cursor: pointer;
 }
 
+.mod-catalog-row .mod-open {
+  cursor: default;
+}
+
 .mod-open-more {
   display: flex;
   margin-left: auto;

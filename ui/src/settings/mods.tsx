@@ -11,6 +11,7 @@ import { modReads } from "~/mods/served"
 import { useApp } from "~/nav"
 import { Confirm, Group, Row } from "~/settings/controls"
 import { ModDetailsPage } from "~/settings/mod-details"
+import { FromKiwi } from "~/settings/mods-catalog"
 import { Page } from "~/settings/sections"
 
 const wanted = (m: ModView): boolean => m.state === "on" || m.off === "safe"
@@ -227,6 +228,7 @@ export function ModsSection() {
           />
         )}
       </Group>
+      <FromKiwi installed={new Set(mods.map((m) => m.name))} />
       {confirms}
     </Page>
   )
