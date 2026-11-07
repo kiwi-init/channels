@@ -8,19 +8,16 @@ import { Decoration, DecorationSet, EditorView, type NodeView } from "prosemirro
 import { yCursorPlugin, ySyncPlugin, ySyncPluginKey, yUndoPlugin } from "y-prosemirror"
 import * as Y from "yjs"
 
-import { attach, backInDraft, blockAt, caretAway, continues, dropEmptyOwn, emptyHidden, isEmpty, noteMade, startBlock, unreply, type Made } from "~/chat/doc/blocks"
+import { blockAt, caretAway, continues, dropEmptyOwn, emptyHidden, isEmpty, noteMade, unreply, type Made } from "~/chat/doc/blocks"
 import { caretShown } from "~/chat/doc/carets"
-import { onGiveBack } from "~/chat/doc/give-back"
 import { writeOwnLinesOnly } from "~/chat/doc/own-writes"
 import { keepScreenSelection, withScreenSelection } from "~/chat/doc/screen-selection"
-import { attachTo, attachToDoc, startUpload, uploadTarget } from "~/chat/doc/uploads"
 import { docKeys, type CommandFor } from "~/chat/doc/keys"
 import { docTag, holdDoc, LiveDoc, type Shared } from "~/chat/doc/live"
 import { noteTyping, setTypingFocus, tracingTyping, type TypingFocus } from "~/kit/typing-hook"
 import { linksPlugin } from "~/chat/doc/links"
 import { fileDrag, takeDropped } from "@kiwi/app/dropped.ts"
-import { emptyPaste, takePasted } from "@kiwi/app/pasted.ts"
-import { fileView, filesIn, imageView, putAll, uploadAll, type DocMedia } from "~/chat/doc/media"
+import { fileView, filesIn, imageView, putAll, type DocMedia } from "~/chat/doc/media"
 import { blocksOf, mediaOfBlock, richBlocks } from "@kiwi/core/doc/blocks.ts"
 import { docFeed, oldestAt, setDocFeed } from "~/chat/doc/finished"
 import { postedBlocks } from "~/chat/doc/posted"
@@ -30,7 +27,6 @@ import { dismiss, menuKey, suggestPlugin, type Query } from "~/chat/doc/suggest"
 import { frameOf, menuPlace, type Caret, type Place } from "~/chat/doc/menu-place"
 import { matchCommands, parseCommand, type Command } from "~/chat/commands"
 import { tooLong } from "~/chat/drafts"
-import { startEditing } from "~/chat/editing"
 import { withNames } from "~/chat/linked"
 import { peopleMatches, taskMatches } from "~/chat/matches"
 import { withExcerpt } from "~/chat/quote"
@@ -45,7 +41,7 @@ import { announce } from "~/kit/toasts"
 import type { BlockFiles, Channel, Message, Person, QuestionAsk, Task, Where } from "~/model"
 import { nickname, Shown } from "~/names"
 import { wordsRaw } from "~/words"
-import { sameWhere, useAct, useApp } from "~/nav"
+import { useAct, useApp } from "~/nav"
 
 const QuestionCard = lazy(() => import("~/chat/question-card"))
 
@@ -364,7 +360,6 @@ function shareSelection(view: EditorView, shared: Shared, me: string): void {
 }
 
 interface ViewOpts {
-  editable: () => boolean
   name: (handle: string) => string
   onQuery: (q: Query | null, v: EditorView) => void
   onKey: (e: KeyboardEvent) => boolean
@@ -374,25 +369,9 @@ interface ViewOpts {
   media: () => DocMedia | null
   command: CommandFor
   refuse: (line: string) => boolean
-  editLast: () => boolean
 }
 
 const openImage = (url: string) => void window.open(url, "_blank", "noopener,noreferrer")
-
-function takeFiles(view: EditorView, doc: Y.Doc, me: string, media: DocMedia | null, editable: boolean, files: readonly File[], made: Made): boolean {
-  if (!files.length || !media || !editable) return false
-  const target = uploadTarget(view.state, me, Date.now(), made)
-  if (target.tr) view.dispatch(target.tr)
-  const done = startUpload(target.id)
-  void uploadAll(files, media, (why) => announce(why, "error"))
-    .then((nodes) => {
-      if (view.isDestroyed) return void attachToDoc(doc, me, target.id, nodes)
-      const tr = attachTo(view.state, me, target.id, nodes) ?? attach(view.state, me, Date.now(), nodes, made)
-      if (tr) view.dispatch(tr)
-    })
-    .finally(done)
-  return true
-}
 
 function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, feet: Heads, opts: ViewOpts): { view: EditorView; stop: () => void } {
   const seen = new Map<number, { key: string; at: number }>()
@@ -427,7 +406,6 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
           made: (block) => opts.drafts.current.made(block),
           commandFor: opts.command,
           refuse: opts.refuse,
-          editLast: opts.editLast,
           sending: (block) => shared.made.add(block),
         }
       ),
@@ -441,38 +419,13 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
   const own = writeOwnLinesOnly(state, () => (view.isDestroyed ? null : view))
   const view: EditorView = new EditorView(mount, {
     state,
-    editable: opts.editable,
+    editable: () => false,
     attributes: { class: "doc", role: "textbox", "aria-multiline": "true", "aria-label": "Thread" },
     nodeViews: {
       block: (node) => new BlockView(node, heads, feet, shown),
       mention: mentionView(opts.name),
       image: imageView(opts.media, openImage),
       file: fileView(opts.media),
-    },
-    handlePaste: (v, e) => {
-      const dt = e.clipboardData
-      if (takeFiles(v, shared.doc, me, opts.media(), opts.editable(), filesIn(dt), opts.drafts.current.made)) {
-        e.preventDefault()
-        return true
-      }
-      if (!dt || !emptyPaste(dt) || !opts.media() || !opts.editable()) return false
-      e.preventDefault()
-      void takePasted(dt).then((f) => f && takeFiles(v, shared.doc, me, opts.media(), opts.editable(), [f], opts.drafts.current.made))
-      return true
-    },
-    handleDrop: (v, e) => {
-      const dt = e.dataTransfer
-      if (takeFiles(v, shared.doc, me, opts.media(), opts.editable(), filesIn(dt), opts.drafts.current.made)) {
-        e.preventDefault()
-        return true
-      }
-      if (!dt || !fileDrag(dt) || !opts.media() || !opts.editable()) return false
-      e.preventDefault()
-      void takeDropped(dt).then(({ files, refused }) => {
-        for (const why of refused) announce(why, "error")
-        takeFiles(v, shared.doc, me, opts.media(), opts.editable(), files, opts.drafts.current.made)
-      })
-      return true
     },
     dispatchTransaction(this: EditorView, sent) {
       if (this.isDestroyed) return
@@ -602,13 +555,6 @@ function Suggest({ channel, query, options, pick, at, onPick }: { channel: Chann
   )
 }
 
-function typedAnywhere(e: KeyboardEvent): boolean {
-  if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || e.isComposing || [...e.key].length !== 1) return false
-  const t = e.target
-  if (!(t instanceof HTMLElement)) return true
-  return !t.closest("input, textarea, select, [contenteditable='true'], dialog, [role='dialog'], [role='menu'], .ProseMirror")
-}
-
 const within = (r: DOMRect, x: number, y: number): boolean => x >= r.left && x <= r.right && y >= r.top && y <= r.bottom
 
 function filesOf(doc: Y.Doc, block: string): BlockFiles {
@@ -639,8 +585,6 @@ function ThreadDoc({ channel, where, thread, shared, hold, media = null }: { cha
     (on) => onWriterFloor(shared.doc, on),
     () => writerFloor(shared.doc) > DOC_LEVEL
   )
-  const readOnly = true
-  const canWrite = useRef(!readOnly)
   const latest = useRef(channel)
   const holdRef = useRef(hold)
   const drafts = useRef<Drafts>({ posted: () => false, inFeed: () => false, made: (block) => shared.made.has(block), version: 0 })
@@ -667,10 +611,8 @@ function ThreadDoc({ channel, where, thread, shared, hold, media = null }: { cha
   const mediaRef = useRef(media)
   const [query, setQuery] = useState<{ q: Query; at: Caret } | null>(null)
   const [pick, setPick] = useState(0)
-  const [dropping, setDropping] = useState(false)
   const commands = useCommands(channel)
   const commandsRef = useRef(commands)
-  const whereRef = useRef(where)
   const options = optionsFor(channel, commands, query?.q ?? null)
   const keys = useRef<(e: KeyboardEvent) => boolean>(() => false)
 
@@ -681,14 +623,10 @@ function ThreadDoc({ channel, where, thread, shared, hold, media = null }: { cha
   }
 
   useLayoutEffect(() => {
-    const changed = canWrite.current !== !readOnly
-    canWrite.current = !readOnly
     latest.current = channel
     holdRef.current = hold
     mediaRef.current = media
     commandsRef.current = commands
-    whereRef.current = where
-    if (changed) view.current?.setProps({})
   })
 
   useLayoutEffect(() => {
@@ -718,7 +656,6 @@ function ThreadDoc({ channel, where, thread, shared, hold, media = null }: { cha
     const el = mount.current
     if (!el) return
     const built = makeView(el, shared, me, heads, feet, {
-      editable: () => canWrite.current,
       name: (handle) => nickname(latest.current, handle),
       onQuery: (q, v) => {
         setPick(0)
@@ -737,13 +674,6 @@ function ThreadDoc({ channel, where, thread, shared, hold, media = null }: { cha
         if (why) announce(why, "error")
         return !!why
       },
-      editLast: () => {
-        const c = latest.current
-        const last = c.messages.findLast((m) => m.canChange && m.inThread === undefined && sameWhere(m.where, whereRef.current))
-        if (!last) return false
-        startEditing(c.code, last.seq)
-        return true
-      },
       command: (line) => {
         const found = parseCommand(commandsRef.current, line)
         return found ? () => found.command.run(found.args) : null
@@ -753,10 +683,6 @@ function ThreadDoc({ channel, where, thread, shared, hold, media = null }: { cha
     view.current = v
     noteTyping(() => ({ what: "editor mounted" }))
     const unfocus = setTypingFocus(() => focusOf(v, shared.doc))
-    if (canWrite.current && !document.activeElement?.closest("input, textarea, [contenteditable='true']")) {
-      v.dispatch(startBlock(v.state, me, Date.now(), drafts.current.posted, drafts.current.made))
-      v.focus()
-    }
     return () => {
       const tidy = dropEmptyOwn(v.state, me, null, drafts.current.made)
       noteTyping(() => ({ what: "editor unmounted", count: tidy?.steps.length ?? 0 }))
@@ -768,64 +694,29 @@ function ThreadDoc({ channel, where, thread, shared, hold, media = null }: { cha
     }
   }, [shared, me, heads, feet])
 
-  useEffect(
-    () =>
-      onGiveBack((id) => {
-        const v = view.current
-        const tr = v && canWrite.current ? backInDraft(v.state, me, id, drafts.current.made) : null
-        if (!v || !tr) return
-        noteTyping(() => ({ what: "back to draft", block: id }))
-        v.dispatch(tr.scrollIntoView())
-        const here = blockAt(v.state)
-        if (here && attrsOf(here.node).id === id) v.focus()
-      }),
-    [me]
-  )
-
   useEffect(() => {
     shared.awareness.setLocalStateField("user", { name: nickname(channel, me), color: you?.color ?? "blue" })
   }, [shared, channel, me, you?.color])
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const v = view.current
-      if (!v || !canWrite.current || !typedAnywhere(e) || document.querySelector("dialog[open]")) return
-      v.dispatch(startBlock(v.state, me, Date.now(), drafts.current.posted, drafts.current.made).scrollIntoView())
-      v.focus()
-    }
-    window.addEventListener("keydown", onKey)
-    return () => window.removeEventListener("keydown", onKey)
-  }, [me])
-
-  useEffect(() => {
-    let off: ReturnType<typeof setTimeout> | null = null
     const onDrag = (e: DragEvent) => {
       const dt = e.dataTransfer
       if (!dt || !fileDrag(dt)) return
       const taken = e.defaultPrevented
       e.preventDefault()
-      const v = view.current
       const el = box.current
-      const over = !!el && within(el.getBoundingClientRect(), e.clientX, e.clientY)
-      if (off) clearTimeout(off)
-      setDropping(e.type !== "drop" && over && canWrite.current && !!mediaRef.current)
-      off = setTimeout(() => setDropping(false), 250)
-      if (e.type !== "drop" || taken || !v || !el || !over) return
-      const files = filesIn(dt)
-      if (takeFiles(v, shared.doc, me, mediaRef.current, canWrite.current, files, drafts.current.made) || files.length) return
-      void takeDropped(dt).then(({ files: dropped, refused }) => {
+      if (e.type !== "drop" || taken || !view.current || !el || !within(el.getBoundingClientRect(), e.clientX, e.clientY) || filesIn(dt).length) return
+      void takeDropped(dt).then(({ refused }) => {
         for (const why of refused) announce(why, "error")
-        takeFiles(v, shared.doc, me, mediaRef.current, canWrite.current, dropped, drafts.current.made)
       })
     }
     window.addEventListener("dragover", onDrag)
     window.addEventListener("drop", onDrag)
     return () => {
-      if (off) clearTimeout(off)
       window.removeEventListener("dragover", onDrag)
       window.removeEventListener("drop", onDrag)
     }
-  }, [me, shared])
+  }, [])
 
   const place =
     where.kind === "room"
@@ -837,15 +728,8 @@ function ThreadDoc({ channel, where, thread, shared, hold, media = null }: { cha
           : ""
   const prompt = where.kind === "dm" ? `Write to ${place}` : `Write in ${place}`
 
-  const write = () => {
-    const v = view.current
-    if (!v || !canWrite.current) return
-    v.dispatch(startBlock(v.state, me, Date.now(), drafts.current.posted, drafts.current.made).scrollIntoView())
-    v.focus()
-  }
-
   return (
-    <div ref={box} className={cx("thread-doc", readOnly && "is-read-only")} style={{ "--place": JSON.stringify(`${prompt} · ${SEND_KEYS} sends`) } as CSSProperties}>
+    <div ref={box} className="thread-doc is-read-only" style={{ "--place": JSON.stringify(`${prompt} · ${SEND_KEYS} sends`) } as CSSProperties}>
       {tooOld && (
         <p className="doc-old">
           A newer Channels writes here. You can read; typing comes back with the new look.
@@ -857,12 +741,6 @@ function ThreadDoc({ channel, where, thread, shared, hold, media = null }: { cha
         </p>
       )}
       <div ref={mount} />
-      {dropping && (
-        <div className="doc-drop" aria-hidden="true">
-          <span>Drop to add it here</span>
-        </div>
-      )}
-      {!readOnly && <button type="button" className="doc-tail" aria-label={prompt} onMouseDown={(e) => e.preventDefault()} onClick={write} />}
       {query && (
         <Suggest
           channel={channel}

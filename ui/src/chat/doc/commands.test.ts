@@ -54,7 +54,7 @@ function doc(text: string, author = "jow", extra: DocKeyOpts = {}) {
     if (made) views.push(made)
   }
   const press = (key: string, mod = false) => {
-    const e = { key, keyCode: key === "Enter" ? 13 : key === "ArrowUp" ? 38 : 0, shiftKey: false, altKey: false, ctrlKey: mod && !MAC, metaKey: mod && MAC } as KeyboardEvent
+    const e = { key, keyCode: key === "Enter" ? 13 : 0, shiftKey: false, altKey: false, ctrlKey: mod && !MAC, metaKey: mod && MAC } as KeyboardEvent
     return state.plugins.some((p) => p.props.handleKeyDown?.call(p, view, e) === true)
   }
   const typeText = (s: string) => host.dispatch(state.tr.insertText(s))
@@ -118,21 +118,7 @@ describe("slash commands run from the thread doc (T1408)", () => {
   })
 })
 
-describe("the doc keeps the composer's ↑ and too-long check (T1418)", () => {
-  test("↑ on your empty line edits your last message; on a line with words it doesn't", () => {
-    let edits = 0
-    const editLast = () => ++edits > 0
-    expect(doc("", "jow", { editLast }).press("ArrowUp")).toBe(true)
-    expect(edits).toBe(1)
-    expect(doc("half a thought", "jow", { editLast }).press("ArrowUp")).toBe(false)
-    expect(doc("", "maya", { editLast }).press("ArrowUp")).toBe(false)
-    expect(edits).toBe(1)
-  })
-
-  test("↑ with nothing of yours to edit moves as usual", () => {
-    expect(doc("", "jow", { editLast: () => false }).press("ArrowUp")).toBe(false)
-  })
-
+describe("the doc keeps the composer's too-long check (T1418)", () => {
   test("⌘/Ctrl+Enter on a line that's too long keeps it as your draft instead of posting it", () => {
     const refused: string[] = []
     const refuse = (line: string) => line.length > 10 && refused.push(line) > 0

@@ -7,14 +7,14 @@ import type { EditorView } from "prosemirror-view"
 import { ySyncPlugin } from "y-prosemirror"
 
 import type { DocEvent } from "../../../../desktop/src/bridge.ts"
-import { backInDraft, blockAfter, blockAt, blocks, startBlock } from "~/chat/doc/blocks"
+import { blockAfter, blocks, startBlock } from "~/chat/doc/blocks"
 import { docFeed } from "~/chat/doc/finished"
 import { giveBackBlock, onGiveBack } from "~/chat/doc/give-back"
 import type { Pending } from "~/live/map"
 import { unsentBlock } from "~/live/unsent"
 import { LiveDoc } from "~/chat/doc/live"
 import { postFinished, type Finished } from "~/chat/doc/post"
-import { attrsOf, FRAGMENT, isBack, isSent, schema } from "~/chat/doc/schema"
+import { FRAGMENT, isBack, isSent, schema } from "~/chat/doc/schema"
 
 const REMOTE = Symbol("remote")
 const wait = (ms: number) => new Promise((done) => setTimeout(done, ms))
@@ -334,33 +334,6 @@ describe("Back to draft keeps the line in the doc, so it's never resent (T1678)"
     expect(posts).toEqual(["ship it", "next line", "third", "ship it"])
     expect(inDoc(doc, id)).toBe(false)
     expect(blocksOf(doc).find((b) => b.id === id)).toMatchObject({ sent: true, posted: true })
-    posting.stop()
-  })
-
-  test("the editor drops the empty block Enter made and puts the caret back in the line, which posts once more on Enter", async () => {
-    const doc = new Y.Doc()
-    const posts: string[] = []
-    const posting = postFinished(doc, { me: "jow", local: (o) => o !== REMOTE }, (f) => posts.push(f.text))
-    const ed = bound(doc)
-    const off = onGiveBack((block) => ed.dispatch(backInDraft(ed.state(), "jow", block)))
-    ed.dispatch(startBlock(ed.state(), "jow", 1))
-    ed.dispatch(ed.state().tr.insertText("ship it"))
-    ed.dispatch(blockAfter(ed.state(), "jow", 2))
-    await wait(0)
-    const id = blocksOf(doc)[0]!.id
-    giveBackBlock(id)
-    expect(blocksOf(doc).map((b) => b.text)).toEqual(["ship it"])
-    const here = blockAt(ed.state())
-    expect(here && attrsOf(here.node).id).toBe(id)
-    ed.dispatch(startBlock(ed.state(), "jow", 3))
-    expect(blockAt(ed.state())?.index).toBe(0)
-    ed.dispatch(ed.state().tr.insertText(" now"))
-    await wait(50)
-    expect(posts).toEqual(["ship it"])
-    ed.dispatch(blockAfter(ed.state(), "jow", 4))
-    await wait(0)
-    expect(posts).toEqual(["ship it", "ship it now"])
-    off()
     posting.stop()
   })
 
