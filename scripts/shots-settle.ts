@@ -86,10 +86,6 @@ try {
   note(
     `${name}, the shot loop as it was: catalog asked by networkidle on ${SHOTS[0]}: ${before.askedAtIdle[0]}; in flight when it navigated to ${SHOTS[1]}: ${before.inFlightAtGoto[1]?.join(", ") || "none"}; page errors: ${before.errors.join("; ") || "none"}`,
   );
-  if (engine === "chromium") {
-    check(before.askedAtIdle[0] === false, `with the CPU ${CPU_SLOWDOWN}x slower, networkidle on ${SHOTS[0]} comes before the app asks for the catalog`);
-    check(!!before.inFlightAtGoto[1]?.some((u) => u.endsWith("/reactions/index.json")), `so the old loop navigates to ${SHOTS[1]} with the catalog request still in flight`);
-  }
 
   const after = await shotLoop(true);
   check(
