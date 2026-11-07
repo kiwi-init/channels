@@ -145,7 +145,7 @@ struct Dock: View {
                 .font(.system(size: 19, weight: .medium))
                 .foregroundStyle(Tone.ink)
                 .frame(width: 44, height: 44)
-                .raisedCircle()
+                .glassCircle()
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Add photos")
@@ -166,7 +166,7 @@ struct Dock: View {
             }
         }
         .frame(minHeight: 44)
-        .raised(22)
+        .glass(22)
     }
 
     private var mentions: some View {
@@ -183,7 +183,7 @@ struct Dock: View {
                         .padding(.leading, 6)
                         .padding(.trailing, 12)
                         .padding(.vertical, 6)
-                        .raisedCapsule()
+                        .glassCapsule()
                     }
                     .buttonStyle(.plain)
                 }
@@ -209,7 +209,7 @@ struct Dock: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
-        .raised(18)
+        .glass(18)
     }
 
     private var jumpButton: some View {
@@ -219,7 +219,7 @@ struct Dock: View {
                     .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(Tone.ink)
                     .frame(width: 34, height: 34)
-                    .raisedCircle()
+                    .glassCircle()
                 if follow.unseen > 0 {
                     Text("\(follow.unseen)")
                         .type(.stamp, .bold)
