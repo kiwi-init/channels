@@ -226,8 +226,8 @@ async function reads(d: Driver): Promise<void> {
     ),
   );
   await step("Create room", 15_000, () => d.evaluate(clickText, { selector: "dialog[open] button", text: "Create room" }, 2_000));
-  await step("#ops in the channel", 20_000, () => d.evaluate(() => [...document.querySelectorAll('nav[aria-label="Views"] button')].some((b) => (b.textContent ?? "").includes("ops")), null, 2_000));
-  await step("back to #general, for the reading mod", 10_000, () => d.evaluate(clickText, { selector: 'nav[aria-label="Views"] button', text: "general" }, 2_000));
+  await step("#ops in the channel", 20_000, () => d.evaluate(() => [...document.querySelectorAll('section[aria-label="Rooms"] .side-label')].some((l) => l.textContent === "ops"), null, 2_000));
+  await step("back to #general, for the reading mod", 10_000, () => d.evaluate(clickText, { selector: 'section[aria-label="Rooms"] button', text: "general" }, 2_000));
   await bot(["-c", "mods", "--as", "bot", "send", "general, before the reader"]);
   await bot(["-c", "mods", "--as", "bot", "send", "--to", "#ops", "ops, before the reader"]);
   writeReaderMod();
