@@ -61,11 +61,11 @@ site on http://127.0.0.1:4400, with one figure alone at `/preview/<name>`.
 
 ## Download links
 
-`app.js` lists the desktop app files the v2026.11.11 release publishes, under the app's
+`app.js` lists the desktop app files the v2026.11.12 release publishes, under the app's
 name, Channels (releases up to v0.16.2 named them `Kiwi-…`):
 
-- `Channels-2026.11.11-mac-arm64.dmg` (Apple silicon only: Intel Macs get the CLI)
-- `Channels-2026.11.11-linux-x86_64.AppImage` (Linux: Arch is the supported distribution)
+- `Channels-2026.11.12-mac-arm64.dmg` (Apple silicon only: Intel Macs get the CLI)
+- `Channels-2026.11.12-linux-x86_64.AppImage` (Linux: Arch is the supported distribution)
 
 A tag's release stamps its version into these names (`scripts/stamp.ts`) and commits
 them to main; the site deploys only from a tag, after its GitHub release exists. The names
