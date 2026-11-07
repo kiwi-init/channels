@@ -193,10 +193,12 @@ struct ChannelAvatar: View {
             if room.icon?.kind == "image", let picture = Icons.picture(room) {
                 Image(uiImage: picture).resizable().scaledToFill().background(Tone.wash2)
             } else {
+                let tint = Tone.member(Palette.tint(for: room.code))
                 Text(room.title.prefix(1).uppercased())
                     .font(.system(size: size * 0.42, weight: .semibold))
-                    .foregroundStyle(Tone.ink)
+                    .foregroundStyle(tint)
                     .frame(width: size, height: size)
+                    .background(tint.opacity(0.18))
                     .background(Tone.raised)
             }
         }

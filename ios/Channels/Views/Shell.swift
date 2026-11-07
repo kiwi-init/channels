@@ -85,6 +85,9 @@ struct Shell: View {
                 }
                 front
                     .frame(width: width)
+                    .overlay {
+                        Tone.rail.opacity(0.6 * min(1, abs(x) / 120)).allowsHitTesting(false).ignoresSafeArea()
+                    }
                     .clipShape(RoundedRectangle(cornerRadius: x == 0 ? 0 : 24, style: .continuous))
                     .shadow(color: .black.opacity(x == 0 ? 0 : 0.25), radius: 18)
                     .offset(x: x)
@@ -234,11 +237,11 @@ struct Rail: View {
                     RailButton(on: model.pane == .needs, news: false, label: "Needs You") {
                         model.pane = .needs
                     } face: {
-                        Image(systemName: "tray.fill")
+                        Image(systemName: model.pane == .needs ? "tray.fill" : "tray")
                             .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(model.waiting > 0 ? Tone.onInk : Tone.ink2)
+                            .foregroundStyle(model.pane == .needs ? Tone.ink : Tone.ink2)
                             .frame(width: 46, height: 46)
-                            .background(model.waiting > 0 ? Tone.decide : Tone.raised, in: Circle())
+                            .background(model.pane == .needs ? Tone.wash2 : Tone.raised)
                     }
                     .overlay(alignment: .bottomTrailing) { Count(n: model.waiting) }
                     Rectangle().fill(Tone.line).frame(width: 30, height: 1)
@@ -260,7 +263,7 @@ struct Rail: View {
                     search = true
                 } label: {
                     Image(systemName: "magnifyingglass").font(.system(size: 18, weight: .semibold)).foregroundStyle(Tone.ink2).frame(width: 46, height: 46)
-                        .background(Tone.raised, in: Circle())
+                        .background(Tone.raised, in: RoundedRectangle(cornerRadius: 23, style: .continuous))
                 }
                 .accessibilityLabel("Search")
                 Button {
@@ -333,20 +336,13 @@ struct SidePane: View {
             case .channel(let code):
                 if let room = model.rooms[code] {
                     List {
-                        ChannelSection(room: room, titled: false)
+                        ChannelSection(room: room)
                     }
-                    .listStyle(.insetGrouped)
+                    .listStyle(.plain)
                     .scrollContentBackground(.hidden)
-                    .safeAreaInset(edge: .top) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(room.title).font(.title3.weight(.bold)).foregroundStyle(Tone.ink).lineLimit(1)
-                            if room.working > 0 {
-                                Text("\(room.working) working").font(.subheadline).foregroundStyle(Tone.ink3)
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 20)
-                        .padding(.top, 10)
+                    .contentMargins(.top, 6, for: .scrollContent)
+                    .safeAreaInset(edge: .top, spacing: 0) {
+                        SideHeader(room: room)
                     }
                 } else {
                     Color.clear
@@ -357,40 +353,73 @@ struct SidePane: View {
     }
 }
 
+struct SideHeader: View {
+    let room: RoomView
+
+    var body: some View {
+        HStack(spacing: 10) {
+            ChannelAvatar(room: room, size: 30)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(room.title).font(.headline).foregroundStyle(Tone.ink).lineLimit(1)
+                if room.working > 0 {
+                    Text("\(room.working) working").font(.caption).foregroundStyle(Tone.ink3)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 18)
+        .padding(.top, 14)
+        .padding(.bottom, 12)
+        .overlay(alignment: .bottom) { Rectangle().fill(Tone.line).frame(height: 1) }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
+    }
+}
+
 struct MembersPane: View {
     let room: RoomView
     @Environment(AppModel.self) private var model
 
     private var crew: [MemberView] {
-        room.members.filter { $0.kind != "computer" }
-            .sorted { ($0.lead ? 0 : $0.working ? 1 : 2, $0.display) < ($1.lead ? 0 : $1.working ? 1 : 2, $1.display) }
+        room.people.filter { $0.kind != "computer" }
+            .sorted { ($0.lead ? 0 : 1, $0.display) < ($1.lead ? 0 : 1, $1.display) }
+    }
+
+    private var groups: [(String, [MemberView])] {
+        let working = crew.filter { $0.working }
+        let online = crew.filter { !$0.working && ($0.here || room.isMe($0.name)) }
+        let offline = crew.filter { !$0.working && !$0.here && !room.isMe($0.name) }
+        return [("Working", working), ("Online", online), ("Offline", offline)].filter { !$0.1.isEmpty }
     }
 
     var body: some View {
         List {
-            Section("Members · \(crew.count)") {
-                ForEach(crew) { member in
+            ForEach(groups, id: \.0) { group in
+                SideHeading(title: "\(group.0) — \(group.1.count)")
+                ForEach(group.1) { member in
                     Button {
-                        if member.name != room.me { model.open(.place(Spot(code: room.code, place: room.dmKey(with: member.name)))) }
+                        if !room.isMe(member.name) { model.open(.place(Spot(code: room.code, place: room.dmKey(with: member.name)))) }
                     } label: {
                         PlaceLabel(title: member.display, detail: detail(member), unread: false) {
                             Face(name: member.name, member: member, size: 28)
                         }
+                        .opacity(group.0 == "Offline" ? 0.55 : 1)
                     }
                     .buttonStyle(.plain)
+                    .sideRow(on: false)
                 }
             }
-            .listRowBackground(Tone.raised)
         }
-        .listStyle(.insetGrouped)
+        .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        .background(Tone.canvas)
+        .contentMargins(.top, 4, for: .scrollContent)
+        .background(Tone.canvas, in: UnevenRoundedRectangle(topTrailingRadius: 20, style: .continuous))
     }
 
-    private func detail(_ member: MemberView) -> String {
-        if member.name == room.me { return "You" }
+    private func detail(_ member: MemberView) -> String? {
+        if room.isMe(member.name) { return "You" }
         if member.working, let id = member.doing.first, let task = room.tasks.first(where: { $0.id == id }) { return "\(taskLabel(task.id)) \(task.title)" }
-        if member.lead { return "Lead" }
-        return member.isAgent ? (member.here ? "Idle" : "Offline") : (member.here ? "Online" : "Away")
+        if member.working { return member.activity?.tool ?? "Working" }
+        return member.lead ? "Lead" : nil
     }
 }

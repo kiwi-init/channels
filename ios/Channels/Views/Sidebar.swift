@@ -19,11 +19,10 @@ struct RouteScreen: View {
 
 struct ChannelSection: View {
     let room: RoomView
-    var titled = true
     @Environment(AppModel.self) private var model
 
     private var directs: [MemberView] {
-        let others = room.members.filter { $0.name != room.me && $0.kind != "computer" }
+        let others = room.people.filter { !room.isMe($0.name) && $0.kind != "computer" }
         let last = { (m: MemberView) in room.placeView(room.dmKey(with: m.name))?.last?.at ?? 0 }
         return others.sorted { a, b in
             if a.lead != b.lead { return a.lead }
@@ -36,15 +35,28 @@ struct ChannelSection: View {
     private var open: Int { room.tasks.filter { $0.state != "done" && !$0.archived }.count }
 
     var body: some View {
-        Section {
+        Group {
+            let main = Spot(code: room.code)
             Button {
-                model.open(.place(Spot(code: room.code)))
+                model.open(.place(main))
             } label: {
-                PlaceLabel(title: "general", detail: line(room.placeView("main")?.last ?? room.last), unread: model.unread(Spot(code: room.code))) {
+                PlaceLabel(title: "general", detail: line(room.placeView("main")?.last ?? room.last), unread: model.unread(main)) {
                     Image(systemName: "number").foregroundStyle(Tone.ink2)
                 }
             }
-            .swipeActions(edge: .leading) { readToggle(Spot(code: room.code)) }
+            .sideRow(on: model.showing == .place(main))
+            .swipeActions(edge: .leading) { readToggle(main) }
+            Button {
+                model.open(.tasks(room.code))
+            } label: {
+                PlaceLabel(title: "Tasks", detail: open > 0 ? "\(open) open" : nil, unread: false) {
+                    Image(systemName: "checklist").foregroundStyle(Tone.ink2)
+                }
+            }
+            .sideRow(on: model.showing == .tasks(room.code))
+            if !directs.isEmpty {
+                SideHeading(title: "Direct")
+            }
             ForEach(directs) { member in
                 let spot = Spot(code: room.code, place: room.dmKey(with: member.name))
                 Button {
@@ -54,31 +66,11 @@ struct ChannelSection: View {
                         Face(name: member.name, member: member, size: 28)
                     }
                 }
+                .sideRow(on: model.showing == .place(spot))
                 .swipeActions(edge: .leading) { readToggle(spot) }
             }
-            Button {
-                model.open(.tasks(room.code))
-            } label: {
-                Label("Tasks", systemImage: "checklist")
-                    .foregroundStyle(Tone.ink)
-                    .badge(open)
-            }
-        } header: {
-            if titled {
-                header
-            }
         }
-        .listRowBackground(Tone.raised)
-    }
-
-    private var header: some View {
-        HStack(spacing: 8) {
-            ChannelAvatar(room: room, size: 20)
-            Text(room.title)
-            if room.working > 0 {
-                Text("· \(room.working) working").foregroundStyle(Tone.ink3)
-            }
-        }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder private func readToggle(_ spot: Spot) -> some View {
@@ -107,6 +99,37 @@ struct ChannelSection: View {
         guard let last else { return nil }
         let body = last.body.isEmpty && last.images > 0 ? "Photo" : last.plain.replacingOccurrences(of: "\n", with: " ")
         return "\(last.mine ? "You" : room.display(last.from)): \(body)"
+    }
+}
+
+struct SideHeading: View {
+    let title: String
+
+    var body: some View {
+        Text(title)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(Tone.ink3)
+            .textCase(.uppercase)
+            .padding(.top, 14)
+            .listRowInsets(EdgeInsets(top: 0, leading: 18, bottom: 2, trailing: 18))
+            .listRowSeparator(.hidden)
+            .listRowBackground(Color.clear)
+            .accessibilityAddTraits(.isHeader)
+    }
+}
+
+extension View {
+    func sideRow(on: Bool) -> some View {
+        self
+            .listRowInsets(EdgeInsets(top: 6, leading: 18, bottom: 6, trailing: 18))
+            .listRowSeparator(.hidden)
+            .listRowBackground(
+                RoundedRectangle(cornerRadius: Radius.ctl, style: .continuous)
+                    .fill(on ? Tone.wash2 : Color.clear)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 1)
+            )
+            .accessibilityAddTraits(on ? .isSelected : [])
     }
 }
 
