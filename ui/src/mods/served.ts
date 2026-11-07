@@ -1,9 +1,8 @@
 import { bridge, type KiwiBridge } from "@kiwi/secrets/secrets.ts"
-import type { ModStart } from "../../../desktop/src/bridge.ts"
 
 type ModReads = Pick<
   KiwiBridge,
-  "modIcon" | "modDetails" | "modsInstalled" | "modUpdates" | "updateMod" | "removeMod" | "setModSetting" | "modCatalog" | "installMod" | "modStorePage" | "createMod" | "openModFolder"
+  "modIcon" | "modDetails" | "modsInstalled" | "modUpdates" | "updateMod" | "removeMod" | "setModSetting" | "modCatalog" | "installMod" | "modStorePage" | "openModFolder"
 >
 
 let shown: Partial<ModReads> | null = null
@@ -28,7 +27,6 @@ export function modReads(): Partial<ModReads> {
     ...(typeof b?.modCatalog === "function" ? { modCatalog: (fresh?: boolean) => b.modCatalog(fresh) } : {}),
     ...(typeof b?.installMod === "function" ? { installMod: (name: string, needs: string[]) => b.installMod(name, needs) } : {}),
     ...(typeof b?.modStorePage === "function" ? { modStorePage: (name: string) => b.modStorePage(name) } : {}),
-    ...(typeof b?.createMod === "function" ? { createMod: (name: string, start: ModStart) => b.createMod(name, start) } : {}),
     ...(typeof b?.openModFolder === "function" ? { openModFolder: (name: string) => b.openModFolder(name) } : {}),
   }
 }

@@ -2,6 +2,8 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "ignoreBinaries": [
     "gsettings",
+    "pbpaste",
+    "xclip",
     "xdg-user-dir",
     "weston-screenshooter",
     "iconutil",

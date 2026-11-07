@@ -206,7 +206,6 @@ export function showDemoMods(ask: boolean): void {
     modCatalog: () => Promise.resolve({ mods: CATALOG, why: null }),
     installMod: () => Promise.resolve(MODS),
     modStorePage: (name) => (name === "github" ? Promise.resolve(githubPage()) : Promise.resolve({ name, version: "1.0.0", readme: null, shots: [], skipped: [] })),
-    createMod: () => Promise.resolve(MODS),
     openModFolder: (name) => Promise.resolve({ editor: "Zed", dir: `~/.kiwi/mods/${name}` }),
   })
   showMods(MODS, [
