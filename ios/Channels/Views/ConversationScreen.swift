@@ -74,7 +74,6 @@ struct ConversationScreen: View {
         .background(Tone.canvas)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
-        .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
         .task(id: spot) {
             follow = Follow()
@@ -233,9 +232,9 @@ struct ChannelAvatar: View {
 }
 
 extension View {
-    @ViewBuilder func softTop() -> some View {
+    @ViewBuilder func softBars() -> some View {
         if #available(iOS 26.0, *) {
-            self.scrollEdgeEffectStyle(.soft, for: .top)
+            self.scrollEdgeEffectStyle(.soft, for: .all)
         } else {
             self
         }
