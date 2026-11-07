@@ -41,7 +41,7 @@ struct NeedsScreen: View {
                 }
             }
         }
-        .listStyle(.insetGrouped)
+        .listStyle(.plain)
         .overlay {
             if rooms.isEmpty {
                 ContentUnavailableView("Nothing needs you", systemImage: "checkmark.circle", description: Text("Questions, permissions and reviews for you show up here."))
@@ -61,17 +61,18 @@ private struct NeedsRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             if let face {
-                Face(name: face, member: room.member(face), size: 36)
+                Face(name: face, member: room.member(face), size: 30)
             } else {
-                ChannelAvatar(room: room, size: 36)
+                ChannelAvatar(room: room, size: 30)
             }
             VStack(alignment: .leading, spacing: 2) {
                 HStack {
                     Text(kind).type(.meta, .semibold).foregroundStyle(Tone.decide).lineLimit(1)
                     Spacer(minLength: 8)
-                    Text(Date(timeIntervalSince1970: at / 1000), format: .relative(presentation: .numeric, unitsStyle: .narrow))
+                    Text(When.short(Date(timeIntervalSince1970: at / 1000)))
                         .type(.meta)
                         .foregroundStyle(Tone.ink3)
+                        .fixedSize()
                 }
                 Text(text).type(.ui).foregroundStyle(Tone.ink).lineLimit(3)
             }
@@ -84,7 +85,7 @@ enum NeedText {
     static func label(_ need: NeedView) -> String {
         switch need.kind {
         case "permission": "Permission"
-        case "join": need.who == "human" ? "A person wants to join" : "An agent wants to join"
+        case "join": "Wants to join"
         default: need.changed == true ? "Spec changed" : "Spec"
         }
     }
