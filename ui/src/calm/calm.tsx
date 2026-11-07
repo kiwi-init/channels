@@ -2,8 +2,8 @@ import "~/styles/calm.css"
 
 import { useEffect, useMemo, useRef, useState, type AnimationEvent } from "react"
 
-import { DayView } from "~/calm/day-view"
 import { hideCalm } from "~/calm/idle"
+import { MapView } from "~/calm/map"
 import type { Meadow } from "~/calm/meadow"
 import { calmRows } from "~/calm/rows"
 import { useStill } from "~/calm/settle"
@@ -21,7 +21,6 @@ export function Calm() {
   const stage = useRef<HTMLDivElement>(null)
   const meadow = useRef<Meadow | null>(null)
   const latest = useRef({ rows, still, leaving })
-  const [since] = useState(() => Date.now() - Math.max(1, app.prefs.calm) * 60_000)
 
   useEffect(() => {
     const was = document.activeElement instanceof HTMLElement ? document.activeElement : null
@@ -85,7 +84,7 @@ export function Calm() {
   return (
     <div ref={box} className={cx("rest", leaving && "is-leaving")} role="dialog" aria-modal="true" aria-label="Calm" tabIndex={-1} onAnimationEnd={ended}>
       <div ref={stage} className="rest-back" aria-hidden="true" />
-      <DayView since={since} rows={rows} open={open} />
+      <MapView open={open} />
     </div>
   )
 }

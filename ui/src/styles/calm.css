@@ -27,325 +27,149 @@
   pointer-events: none;
 }
 
-.rest-day {
+.rest-map {
+  --on: rgb(255 255 255 / 0.96);
+  --on-2: rgb(255 255 255 / 0.8);
+  --on-3: rgb(255 255 255 / 0.64);
+  --on-shade: 0 1px 2px rgb(0 0 0 / 0.5), 0 0 16px rgb(0 0 0 / 0.3);
+  --on-glow: rgb(0 0 0 / 0.42);
+
   position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 880px);
-  gap: 16px;
-  padding: 64px max(5vw, 16px) max(5vh, 24px);
-  isolation: isolate;
-  color: var(--ink);
+  inset: 0;
+  color: var(--on);
+  text-shadow: var(--on-shade);
   pointer-events: none;
   animation: rest-rise 1.2s 0.6s var(--ease) both;
 }
 
-.rest-day::before {
-  position: absolute;
-  inset: -96px 0 0;
-  z-index: -1;
-  background: linear-gradient(
-    to right,
-    color-mix(in srgb, var(--bg) 72%, transparent) 0,
-    color-mix(in srgb, var(--bg) 72%, transparent) min(960px, 68%),
-    color-mix(in srgb, var(--bg) 56%, transparent) calc(min(960px, 68%) + 64px),
-    color-mix(in srgb, var(--bg) 32%, transparent) calc(min(960px, 68%) + 144px),
-    color-mix(in srgb, var(--bg) 12%, transparent) calc(min(960px, 68%) + 224px),
-    transparent calc(min(960px, 68%) + 320px)
-  );
-  mask-image: linear-gradient(to bottom, transparent, rgb(0 0 0 / 0.12) 40px, rgb(0 0 0 / 0.4) 80px, rgb(0 0 0 / 0.75) 120px, #000 160px);
-  content: "";
-  pointer-events: none;
+.rest-map[data-sky="day"] {
+  --on: rgb(24 18 16 / 0.94);
+  --on-2: rgb(24 18 16 / 0.74);
+  --on-3: rgb(24 18 16 / 0.58);
+  --on-shade: 0 0 1px rgb(255 255 255 / 0.5), 0 0 14px rgb(255 255 255 / 0.6);
+  --on-glow: rgb(255 255 255 / 0.5);
 }
 
-.rest-day-needs {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  justify-self: start;
-  min-width: 0;
-  max-width: 100%;
-  height: var(--ctl);
-  padding: 0 12px 0 6px;
+.rest-spot {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+
+.rest-spot-pin {
+  position: absolute;
+  top: -6px;
+  left: -6px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--on-3);
+  box-shadow:
+    0 0 0 2px rgb(255 255 255 / 0.9),
+    0 1px 6px rgb(0 0 0 / 0.35);
+}
+
+.rest-spot.is-needs .rest-spot-pin {
+  background: var(--alert);
+}
+
+.rest-spot.is-needs .rest-spot-pin::after {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--alert);
+  content: "";
+  animation: rest-pulse 2.4s var(--ease) infinite;
+}
+
+.rest-spot-stem {
+  position: absolute;
+  bottom: 8px;
+  left: -0.5px;
+  width: 1px;
+  height: 56px;
+  background: var(--on-2);
+}
+
+.rest-spot-label {
+  position: absolute;
+  bottom: 64px;
+  left: -32px;
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+  width: max-content;
+  max-width: 24rem;
+  padding: 24px 32px;
   border: 0;
-  border-radius: var(--r-ctl);
-  background: var(--float);
-  box-shadow: var(--shadow-float);
-  color: var(--ink);
+  border-radius: var(--r-card);
+  background: radial-gradient(farthest-side, var(--on-glow) 40%, transparent);
+  color: var(--on);
   font: 400 var(--t-ui) var(--ui);
   text-align: left;
+  text-shadow: var(--on-shade);
   cursor: pointer;
   pointer-events: auto;
-  transition: background var(--fast);
 }
 
-.rest-day-needs:hover {
-  background: color-mix(in srgb, var(--float) 90%, var(--ink));
+.rest-spot-label:focus-visible {
+  outline: 2px solid var(--on);
+  outline-offset: -16px;
 }
 
-.rest-day-needs:focus-visible {
-  outline: 2px solid var(--ink);
-  outline-offset: 2px;
+.rest-spot-label b {
+  font: 600 var(--t-title) var(--ui);
 }
 
-.rest-day-needs-head {
-  display: inline-flex;
-  flex: none;
+.rest-spot-counts {
+  color: var(--on-2);
+  font-size: var(--t-stamp);
+}
+
+.rest-spot.is-needs .rest-spot-counts {
+  color: var(--on);
+  font-weight: 600;
+}
+
+.rest-spot-line {
+  max-width: 20rem;
+  overflow: hidden;
+  color: var(--on-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rest-spot-crew {
+  display: flex;
   align-items: center;
   gap: 6px;
-  color: var(--decide);
-  font-weight: 600;
+  margin-top: 4px;
 }
 
-.rest-day-needs-first {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.rest-spot-face > .av {
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.45));
 }
 
-.rest-day-needs-more {
-  flex: none;
-  color: var(--ink-2);
-}
-
-.rest-day-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 8px 24px;
-}
-
-.rest-day-title {
-  margin: 0;
-  font: 600 var(--t-display) var(--ui);
-  letter-spacing: -0.01em;
-}
-
-.rest-day-title .mono {
-  font-weight: 500;
-}
-
-.rest-day-sum {
-  margin: 0;
-  color: var(--ink-2);
-  font: 400 var(--t-ui) var(--ui);
-}
-
-.rest-day-grid {
-  --who: 9rem;
-
-  display: grid;
-}
-
-.rest-day-axis {
-  position: relative;
-  height: 20px;
-  margin-bottom: 8px;
-  margin-left: calc(var(--who) + 12px);
-}
-
-.rest-day-axis span {
-  position: absolute;
-  top: 0;
-  color: var(--ink-3);
-  font-size: var(--t-stamp);
-  white-space: nowrap;
-  transform: translateX(-50%);
-}
-
-.rest-day-axis .rest-day-now {
-  color: var(--ink);
-  font-weight: 600;
-}
-
-.rest-day-lane {
-  display: grid;
-  grid-template-columns: var(--who) minmax(0, 1fr);
-  align-items: center;
-  gap: 12px;
-  height: 40px;
-}
-
-.rest-day-who {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  font: 400 var(--t-ui) var(--ui);
-}
-
-.rest-day-who b {
-  overflow: hidden;
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.rest-day-track {
-  position: relative;
-  height: 100%;
-}
-
-.rest-day-track::before {
-  position: absolute;
-  top: 50%;
-  right: 0;
-  left: 0;
-  height: 1px;
-  background: var(--line-2);
-  content: "";
-}
-
-.rest-day-track-now {
-  position: absolute;
-  top: -2px;
-  bottom: -2px;
-  width: 1px;
-  background: var(--ink-3);
-}
-
-.rest-day-span {
-  position: absolute;
-  top: calc(50% - 3px);
-  min-width: 4px;
-  height: 6px;
-  border-radius: var(--r-tick);
-}
-
-.rest-day-span.is-done {
-  background: var(--ink-2);
-}
-
-.rest-day-span:not(.is-done) {
-  --head: var(--ink);
-
-  top: calc(50% - 1px);
-  height: 2px;
-  background: var(--ink-3);
-}
-
-.rest-day-span:not(.is-done)::after {
-  position: absolute;
-  top: -2px;
-  right: 0;
-  width: min(100%, 16px);
-  height: 6px;
-  border-radius: var(--r-tick);
-  background: var(--head);
-  content: "";
-}
-
-.rest-day-span-name {
-  position: absolute;
-  right: 24px;
-  bottom: 8px;
-  left: 0;
-  overflow: hidden;
-  color: var(--ink-2);
-  font-size: var(--t-meta);
-  line-height: 1.2;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.rest-day-span:not(.is-done) .rest-day-span-name {
-  bottom: 6px;
-}
-
-.rest-day-span.is-waiting {
-  --head: var(--decide);
-
-  background: var(--decide);
-}
-
-.rest-day-wait {
-  position: absolute;
-  top: calc(50% - 1px);
-  height: 2px;
-  border-radius: var(--r-tick);
-  background: var(--decide);
-}
-
-.rest-day-wait::before {
-  position: absolute;
-  top: -4px;
-  left: -5px;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--decide);
-  box-shadow: 0 0 0 2px var(--bg);
-  content: "";
-}
-
-.rest-day-asked {
-  position: absolute;
-  bottom: calc(50% + 6px);
-  max-width: 60%;
-  overflow: hidden;
-  color: var(--ink-2);
-  font-size: var(--t-meta);
-  line-height: 1.2;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.rest-day-rest {
-  margin: 4px 0 0;
-  color: var(--ink-3);
-  font-size: var(--t-meta);
-}
-
-.rest-day-also {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 24px;
-  font-size: var(--t-meta);
-}
-
-.rest-day-also button {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 8px;
-  height: 1.5rem;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--ink-2);
-  font: inherit;
-  cursor: pointer;
-  pointer-events: auto;
-  transition: color 0.2s var(--ease);
-}
-
-.rest-day-also button:hover {
-  color: var(--ink);
-}
-
-.rest-day-also button:focus-visible {
-  border-radius: var(--r-tick);
-  outline: 2px solid var(--ink);
-  outline-offset: 2px;
-}
-
-.rest-day-also .mono {
-  color: var(--ink-3);
-}
-
-.rest-day-also .is-ask {
-  color: var(--decide);
+.rest-map[data-sky="day"] .rest-spot-face .av-face {
+  color: var(--on);
 }
 
 @container (max-width: 40rem) {
-  .rest-day-grid {
-    --who: 2rem;
+  .rest-spot-line,
+  .rest-spot-crew {
+    display: none;
+  }
+}
+
+@keyframes rest-pulse {
+  from {
+    opacity: 0.6;
+    transform: scale(1);
   }
 
-  .rest-day-who b {
-    display: none;
+  to {
+    opacity: 0;
+    transform: scale(3);
   }
 }
 

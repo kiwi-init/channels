@@ -41,7 +41,7 @@ try {
       await page.evaluate(() => document.fonts.ready);
       await page.waitForTimeout(3600);
       if (out) await page.screenshot({ path: join(out, `calm-${label}-${theme}.png`) });
-      await page.locator(".rest-day-needs").hover();
+      await page.locator(".rest-spot-label").first().hover();
       await page.waitForTimeout(400);
       if (out) await page.screenshot({ path: join(out, `calm-${label}-${theme}-hover.png`) });
     }
@@ -64,20 +64,28 @@ try {
       check("a key fades it out", (await page.locator(".rest").count()) === 0);
       await page.goto(`http://127.0.0.1:${server.port}/?shot=calm`);
       await page.waitForTimeout(2600);
-      const shown = await page.locator(".rest-day-lane").count();
-      check(`it shows what each agent is doing, one lane each (${shown})`, shown > 1);
+      const pins = await page.locator(".rest-spot").count();
+      check(`each channel is a pin on the scene (${pins})`, pins > 1);
+      const pulse = (sel: string) =>
+        page
+          .locator(sel)
+          .first()
+          .evaluate((el) => getComputedStyle(el, "::after").animationName);
+      const loud = await pulse(".rest-spot.is-needs .rest-spot-pin");
+      const quiet = await pulse(".rest-spot:not(.is-needs) .rest-spot-pin");
+      check(`a pin that needs you pulses (${loud}) and a quiet one doesn't (${quiet})`, loud === "rest-pulse" && quiet === "none");
       const current = () => page.evaluate(() => document.querySelector('nav[aria-label="Channels"] button.tile[aria-current="page"]')?.getAttribute("aria-label")?.split(",")[0] ?? "");
-      const target = page.locator(".rest-day-also button").first();
-      const name = (await target.locator("span").first().textContent()) ?? "";
+      const target = page.locator(".rest-spot:not(.is-needs) .rest-spot-label").first();
+      const name = (await target.locator("b").textContent()) ?? "";
       await target.click();
       await page.waitForTimeout(900);
-      check(`a click on another channel (${name}) opens it and the sky goes`, (await current()) === name && (await page.locator(".rest").count()) === 0);
+      check(`a click on a quiet channel (${name}) opens it and the sky goes`, (await current()) === name && (await page.locator(".rest").count()) === 0);
       await page.goto(`http://127.0.0.1:${server.port}/?shot=calm`);
       await page.waitForTimeout(2600);
-      await page.locator(".rest-day-needs").click();
+      await page.locator(".rest-spot.is-needs .rest-spot-label").first().click();
       await page.waitForTimeout(900);
       const pressed = await page.locator('button.is-needs[aria-pressed="true"]').count();
-      check(`a click on what needs you opens its channel's Needs (${await current()}) and the sky goes`, pressed === 1 && (await page.locator(".rest").count()) === 0);
+      check(`a click on a channel that needs you opens its Needs (${await current()}) and the sky goes`, pressed === 1 && (await page.locator(".rest").count()) === 0);
       await page.goto(`http://127.0.0.1:${server.port}/?shot=calm`);
       await page.waitForTimeout(2600);
       await page.mouse.move(10, 10);
@@ -98,7 +106,7 @@ try {
         const seen = new Set<string>();
         Object.assign(window, { calmNames: seen });
         const look = (): void => {
-          const names = [...document.querySelectorAll(".rest-day-who b")].map((n) => n.textContent ?? "");
+          const names = [...document.querySelectorAll(".rest-spot-label b")].map((n) => n.textContent ?? "");
           if (names.length) seen.add(JSON.stringify(names));
           requestAnimationFrame(look);
         };
@@ -108,7 +116,7 @@ try {
       await still.waitForTimeout(2600);
       const motion = await still.evaluate(() => document.documentElement.dataset.motion ?? "");
       const seen = await still.evaluate(() => [...((window as unknown as { calmNames: Set<string> }).calmNames ?? [])]);
-      check(`with the app's Reduce motion on (${motion}), the agents' names show whole from the first frame (${seen.join(" then ")})`, motion === "reduced" && seen.length === 1);
+      check(`with the app's Reduce motion on (${motion}), the channel names show whole from the first frame (${seen.join(" then ")})`, motion === "reduced" && seen.length === 1);
       const scene = await still.evaluate(() => document.querySelector(".rest-back canvas")?.getAttribute("data-meadow") ?? "none");
       check(`and the meadow behind it doesn't move (${scene})`, scene !== "moving");
       await still.goto(`http://127.0.0.1:${server.port}/?shot=onboarding-still`);
