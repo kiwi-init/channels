@@ -51,6 +51,7 @@ struct Shell: View {
     @State private var search = false
     @State private var settings = false
     @State private var axis: Axis?
+    @GestureState private var touching = false
 
     private static let peek: CGFloat = 64
     private static let members: CGFloat = 300
@@ -72,6 +73,7 @@ struct Shell: View {
                     HStack(spacing: 0) {
                         Rail(search: $search, settings: $settings)
                         SidePane()
+                            .disabled(axis == .horizontal)
                     }
                     .frame(width: left)
                     .transition(.identity)
@@ -79,11 +81,13 @@ struct Shell: View {
                 }
                 if x < 0, let code = model.frontCode, let room = model.rooms[code] {
                     MembersPane(room: room)
+                        .disabled(axis == .horizontal)
                         .frame(width: Self.members)
                         .frame(maxWidth: .infinity, alignment: .trailing)
                         .simultaneousGesture(swipe(left: left))
                 }
                 front
+                    .disabled(axis == .horizontal)
                     .frame(width: width)
                     .overlay {
                         Tone.rail.opacity(0.6 * min(1, abs(x) / 120)).allowsHitTesting(false).ignoresSafeArea()
@@ -118,6 +122,7 @@ struct Shell: View {
             }
         }
         .onAppear(perform: start)
+        .onChange(of: touching) { _, _ in settle() }
         .onChange(of: model.channels.first?.code) { _, _ in start() }
     }
 
@@ -161,6 +166,7 @@ struct Shell: View {
 
     private func swipe(left: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: 14)
+            .updating($touching) { _, touching, _ in touching = true }
             .onChanged { value in
                 if axis == nil {
                     axis = abs(value.translation.width) > abs(value.translation.height) * 1.4 ? .horizontal : .vertical
@@ -168,17 +174,19 @@ struct Shell: View {
                         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                     }
                 }
-                guard axis == .horizontal, model.path.isEmpty else { return }
-                if model.drawer == .closed && value.translation.width < 0 && model.frontCode == nil { return }
+                guard axis == .horizontal else { return }
+                if model.drawer == .closed && (!model.path.isEmpty || (value.translation.width < 0 && model.frontCode == nil)) { return }
                 drag = value.translation.width
             }
             .onEnded { value in
                 defer { axis = nil }
-                guard axis == .horizontal, drag != 0 else {
-                    drag = 0
+                guard axis == .horizontal else { return }
+                let moved = value.predictedEndTranslation.width
+                if model.drawer == .closed && !model.path.isEmpty {
+                    if moved > 120 && value.startLocation.x > 30 { model.path.removeLast() }
                     return
                 }
-                let moved = value.predictedEndTranslation.width
+                guard drag != 0 else { return }
                 let next: Drawer =
                     switch model.drawer {
                     case .closed: moved > left * 0.35 ? .left : moved < -Self.members * 0.35 ? .right : .closed
@@ -191,6 +199,12 @@ struct Shell: View {
                     drag = 0
                 }
             }
+    }
+
+    private func settle() {
+        guard !touching, drag != 0 || axis != nil else { return }
+        axis = nil
+        withAnimation(.spring(duration: 0.32, bounce: 0.04)) { drag = 0 }
     }
 
     private func close() {
