@@ -33,6 +33,7 @@ const RELAY = `http://127.0.0.1:${port}`;
 const folder = join(root, ".kiwi", "mods", "probe-mod");
 const quietFolder = join(root, ".kiwi", "mods", "quiet-mod");
 const posterFolder = join(root, ".kiwi", "mods", "poster-probe");
+const readerFolder = join(root, ".kiwi", "mods", "reader-probe");
 const terminalFolder = join(root, ".kiwi", "mods", "terminal-mod");
 const TMUX_CONF = join(root, "home", ".tmux.conf");
 const REX_INIT = join(root, "home", ".config", "rex", "init.lua");
@@ -182,6 +183,105 @@ async function posts(d: Driver): Promise<void> {
   check(!!landed && landed.includes("via poster-probe"), "its post lands in the channel, ending with “via poster-probe”");
   check(!!landed && !/too soon|never asked for|wasn't given/.test(landed), "no refused post reaches the channel");
   await shot("mod-posted");
+}
+
+function writeReaderMod(): void {
+  mkdirSync(readerFolder, { recursive: true });
+  writeFileSync(join(readerFolder, "mod.json"), JSON.stringify({ name: "reader-probe", version: "1.0.0", shell: "^3.18", needs: ["read:#general", "read:#ops"] }));
+  writeFileSync(
+    join(readerFolder, "index.tsx"),
+    `import { messages, rooms } from "@kiwi/mod"
+
+let last = ""
+setInterval(() => {
+  const list = rooms()
+  const here = list[0]?.channel ?? ""
+  const lines = (room: string) => (here ? messages(here, room).map((m) => m.author + ": " + m.text) : [])
+  const reader = { rooms: list, general: lines("general"), ops: lines("ops") }
+  const said = JSON.stringify(reader)
+  if (said === last) return
+  last = said
+  parent.postMessage({ kiwiProbe: { reader } }, "*")
+}, 300)
+`,
+  );
+}
+
+async function reads(d: Driver): Promise<void> {
+  if (!botIn) await letBotIn(d);
+  await step("New room", 10_000, () =>
+    d.evaluate(() => (document.querySelector<HTMLElement>('button[aria-label="New room"]')?.click(), !!document.querySelector('dialog[open][aria-label="New room"]')), null, 2_000),
+  );
+  await step("the room's name", 10_000, () =>
+    d.evaluate(
+      () => {
+        const input = document.querySelector<HTMLInputElement>('dialog[open] input[aria-label="Room name"]');
+        if (!input) return false;
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, "ops");
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        return true;
+      },
+      null,
+      2_000,
+    ),
+  );
+  await step("Create room", 15_000, () => d.evaluate(clickText, { selector: "dialog[open] button", text: "Create room" }, 2_000));
+  await step("#ops in the channel", 20_000, () => d.evaluate(() => [...document.querySelectorAll('section[aria-label="Rooms"] .side-label')].some((l) => l.textContent === "ops"), null, 2_000));
+  await step("back to #general, for the reading mod", 10_000, () => d.evaluate(clickText, { selector: 'section[aria-label="Rooms"] button', text: "general" }, 2_000));
+  await bot(["-c", "mods", "--as", "bot", "send", "general, before the reader"]);
+  await bot(["-c", "mods", "--as", "bot", "send", "--to", "#ops", "ops, before the reader"]);
+  writeReaderMod();
+  const ask = await until("reader-probe's ask", 30_000, () =>
+    d.evaluate(
+      () => {
+        const box = document.querySelector('dialog[open][aria-label="reader-probe asks to run"]');
+        if (!box) return null;
+        const groups = [...box.querySelectorAll("fieldset.mod-room-group")].map((g) => ({
+          room: g.querySelector("legend")?.textContent ?? "",
+          ticked: [...g.querySelectorAll("input")].filter((i) => (i as HTMLInputElement).checked).length,
+        }));
+        return { groups, words: box.querySelector(".mod-needs")?.textContent ?? "" };
+      },
+      null,
+      2_000,
+    ),
+  ).catch(() => null);
+  console.log(`reader-probe's ask: ${JSON.stringify(ask)}`);
+  check(!!ask && ask.words.includes("Read #general") && ask.words.includes("Read #ops"), "a mod that asks to read #general and #ops names both rooms in its ask");
+  await step("untick #ops", 10_000, () =>
+    d.evaluate(
+      () => {
+        const ops = [...document.querySelectorAll("dialog[open] fieldset.mod-room-group")].find((g) => g.querySelector("legend")?.textContent === "#ops in");
+        const box = ops?.querySelector<HTMLInputElement>("input");
+        if (box?.checked) box.click();
+        return !!box && !box.checked;
+      },
+      null,
+      2_000,
+    ),
+  );
+  await later(300);
+  await shot("mod-asks-read");
+  await step("Allow, for the reading mod", 10_000, () => d.evaluate(clickText, { selector: "dialog[open] .modal-foot button", text: "Allow" }, 2_000));
+  const report = (): Promise<{ rooms: { room: string }[]; general: string[]; ops: string[] } | null> =>
+    heard(d).then((all) => (all.filter((m) => "reader" in m).at(-1)?.["reader"] as { rooms: { room: string }[]; general: string[]; ops: string[] } | undefined) ?? null);
+  const before = await until("the reader's history of #general", 30_000, async () => {
+    const r = await report();
+    return r?.general.includes("bot: general, before the reader") ? r : null;
+  }).catch(() => report());
+  console.log(`reader-probe saw first: ${JSON.stringify(before)}`);
+  check(JSON.stringify(before?.rooms.map((r) => r.room)) === JSON.stringify(["general"]), "the reading mod is told only the room you left ticked");
+  check(!!before?.general.includes("bot: general, before the reader"), "it gets #general's messages from before you allowed it");
+  await bot(["-c", "mods", "--as", "bot", "send", "general, after the reader"]);
+  await bot(["-c", "mods", "--as", "bot", "send", "--to", "#ops", "ops, after the reader"]);
+  const after = await until("the reader's live #general", 30_000, async () => {
+    const r = await report();
+    return r?.general.includes("bot: general, after the reader") ? r : null;
+  }).catch(() => report());
+  console.log(`reader-probe saw then: ${JSON.stringify(after)}`);
+  check(!!after?.general.includes("bot: general, after the reader"), "a new message in #general reaches it as it comes");
+  const leaked = (await heard(d)).some((m) => JSON.stringify(m["reader"] ?? "").includes("ops, "));
+  check(!leaked && !!after && after.ops.length === 0, "nothing from #ops, the room you unticked, ever reaches it");
 }
 
 function writeQuietMod(): void {
@@ -456,7 +556,10 @@ async function letBotIn(d: Driver): Promise<void> {
     if (r !== true) throw new Error(`the bot couldn't join: ${r}`);
   });
   await step("back to #general", 10_000, () => d.evaluate(clickText, { selector: 'nav[aria-label="Views"] button', text: "general" }, 2_000));
+  botIn = true;
 }
+
+let botIn = false;
 
 async function whileAway(d: Driver, palette: () => Promise<boolean>): Promise<void> {
   await letBotIn(d);
@@ -1279,6 +1382,7 @@ try {
   check(!!back, "the page goes back to the Mods list, without its row");
   await fromKiwi(d);
   await posts(d);
+  await reads(d);
   await newMod(d, palette, process.platform === "darwin" || !!desk);
   d.close();
   await stop(app);

@@ -102,6 +102,16 @@ declare module "@kiwi/mod" {
   export function rooms(): Room[]
   export function useRooms(): Room[]
 
+  export interface RoomMessage {
+    id: number
+    author: string
+    text: string
+    at: number
+  }
+
+  export function messages(channel: string, room: string): RoomMessage[]
+  export function useMessages(channel: string, room: string): RoomMessage[]
+
   export type Target = { kind: "pr" | "issue"; repo: string; number: number } | { kind: "view"; view: string }
 
   export function show(target: Target): void

@@ -23,6 +23,7 @@ import {
   type ModChannel,
   type ModGithub,
   type ModRoomGrant,
+  type ModRoomMessage,
   type ModMessage,
   type ModOpen,
   type ModTarget,
@@ -53,6 +54,8 @@ let sized: ResizeObserver | null = null
 let github: ModGithub | null = null
 let channelList: ModChannel[] | null = null
 let roomList: ModRoomGrant[] = []
+const heardRooms = new Map<string, ModRoomMessage[]>()
+const NONE: ModRoomMessage[] = []
 let still = false
 let rests = 0
 let showing: ModTarget | null = null
@@ -239,6 +242,15 @@ const api = {
     askedRoom(["post", "read"], "useRooms")
     return React.useSyncExternalStore(watch, () => roomList)
   },
+  messages(channel: string, room: string): ModRoomMessage[] {
+    askedRoom(["read"], "messages")
+    return heardRooms.get(`${channel}\n${String(room).replace(/^#/, "")}`) ?? NONE
+  },
+  useMessages(channel: string, room: string): ModRoomMessage[] {
+    askedRoom(["read"], "useMessages")
+    const key = `${channel}\n${String(room).replace(/^#/, "")}`
+    return React.useSyncExternalStore(watch, () => heardRooms.get(key) ?? NONE)
+  },
   show(target: ModTarget): void {
     asked("panel", "show")
     post({ type: "show", target })
@@ -374,6 +386,10 @@ addEventListener("message", (e) => {
     told()
   } else if (m.type === "rooms") {
     roomList = m.list
+    for (const key of [...heardRooms.keys()]) if (!roomList.some((g) => key === `${g.channel}\n${g.room}`)) heardRooms.delete(key)
+    told()
+  } else if (m.type === "messages") {
+    if (needs.has(`read:${m.room}`) || needs.has(`read:#${m.room}`)) heardRooms.set(`${m.channel}\n${m.room}`, m.list)
     told()
   } else if (m.type === "rest") rest(m.shown)
   else if (m.type === "github") {

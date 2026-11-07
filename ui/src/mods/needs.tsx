@@ -3,7 +3,7 @@ import { useEffect, useState } from "react"
 import type { ModRoom } from "../../../desktop/src/bridge.ts"
 import { cx } from "~/kit/bits"
 import type { ChannelTile } from "~/model"
-import type { ModRoomGrant } from "~/mods/protocol"
+import type { ModRoomGrant, ModRoomMessage } from "~/mods/protocol"
 
 const WORDS: Record<string, string> = {
   panel: "A panel beside the chat",
@@ -99,9 +99,21 @@ const roomOf = (need: string, kind: "post" | "read"): string | null => (need.sta
 
 export const asksRooms = (needs: readonly string[]): string[] => [...new Set(needs.flatMap((n) => roomOf(n, "post") ?? roomOf(n, "read") ?? []))]
 
-export function mayPost(mod: Granted | undefined, code: string, room: string): boolean {
-  if (mod?.state !== "on" || !mod.needs.some((n) => roomOf(n, "post") === room)) return false
-  return !!mod.rooms?.some((r) => r.code === code && r.room === room)
+const mayUse = (kind: "post" | "read", mod: Granted | undefined, code: string, room: string): boolean =>
+  mod?.state === "on" && mod.needs.some((n) => roomOf(n, kind) === room) && !!mod.rooms?.some((r) => r.code === code && r.room === room)
+
+export const mayPost = (mod: Granted | undefined, code: string, room: string): boolean => mayUse("post", mod, code, room)
+
+export const mayRead = (mod: Granted | undefined, code: string, room: string): boolean => mayUse("read", mod, code, room)
+
+export function readWanted(mods: readonly Granted[]): Map<string, string[]> {
+  const wanted = new Map<string, string[]>()
+  for (const mod of mods)
+    for (const r of mod.rooms ?? []) {
+      const rooms = wanted.get(r.code) ?? []
+      if (mayRead(mod, r.code, r.room) && !rooms.includes(r.room)) wanted.set(r.code, [...rooms, r.room].sort())
+    }
+  return wanted
 }
 
 export function grantsOf(mod: Granted | undefined, titleOf: (code: string) => string | null): ModRoomGrant[] {
@@ -129,3 +141,6 @@ export function startPick(rooms: readonly string[], here: { code: string; rooms:
   if (!here) return []
   return rooms.filter((r) => r === "general" || here.rooms.some((x) => x.id === r)).map((room) => ({ code: here.code, room }))
 }
+
+export const sameMessages = (a: readonly ModRoomMessage[] | undefined, b: readonly ModRoomMessage[]): boolean =>
+  !!a && a.length === b.length && a.every((m, i) => m.id === b[i]!.id && m.text === b[i]!.text)

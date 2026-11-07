@@ -22,9 +22,8 @@ describe("a mod's mod.json", () => {
     expect(checkManifest({ ...base, name: "Linear" }, "Linear", "3.3.0").ok).toBe(false);
   });
 
-  test("a capability that doesn't exist, or that this app doesn't offer yet, is refused by name", () => {
+  test("a capability that doesn't exist is refused by name", () => {
     expect(checkManifest({ ...base, needs: ["keys"] }, "linear-panel", "3.3.0")).toEqual({ ok: false, why: 'it asks for "keys", which isn\'t a capability' });
-    expect(checkManifest({ ...base, needs: ["read:#general"] }, "linear-panel", "3.3.0")).toEqual({ ok: false, why: 'it needs "read:#general", which this app doesn\'t offer yet' });
     expect(checkManifest({ ...base, needs: ["net:http://x.com"] }, "linear-panel", "3.3.0").ok).toBe(false);
     expect(checkManifest({ ...base, needs: ["net:*.linear.app"] }, "linear-panel", "3.3.0").ok).toBe(false);
     expect(checkManifest({ ...base, needs: "panel" }, "linear-panel", "3.3.0").ok).toBe(false);
@@ -36,6 +35,11 @@ describe("a mod's mod.json", () => {
     expect(needRoom("post:#general")).toBe("general");
     expect(needRoom("read:ops")).toBe("ops");
     expect(needRoom("panel")).toBeNull();
+  });
+
+  test("reading a room is offered too (T8545)", () => {
+    expect(checkManifest({ ...base, needs: ["read:#general", "read:ops"] }, "linear-panel", "3.3.0")).toEqual({ ok: true, manifest: { ...base, needs: ["read:#general", "read:ops"] } });
+    expect(checkManifest({ ...base, needs: ["read:#Ops!"] }, "linear-panel", "3.3.0").ok).toBe(false);
   });
 
   test("a sidebar section and message actions are offered", () => {

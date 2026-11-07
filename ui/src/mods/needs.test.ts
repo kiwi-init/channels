@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
-import { asksRooms, grantsOf, mayPost, pacer, postBody, startPick } from "~/mods/needs"
+import { asksRooms, grantsOf, mayPost, mayRead, pacer, postBody, readWanted, sameMessages, startPick } from "~/mods/needs"
 
 const poster = {
   name: "poster",
@@ -55,5 +55,37 @@ describe("a mod's rooms (T6837)", () => {
     expect(tooSoon("poster", 11_500)).toBe(500)
     expect(tooSoon("other", 11_500)).toBe(0)
     expect(tooSoon("poster", 12_000)).toBe(0)
+  })
+
+  test("it reads only a picked room it asked to read, never one it may only post in (T8545)", () => {
+    expect(mayRead(poster, "ops-team", "ops")).toBe(true)
+    expect(mayRead(poster, "dev", "general")).toBe(false)
+    expect(mayRead(poster, "dev", "secret")).toBe(false)
+    expect(mayRead({ ...poster, state: "off" }, "ops-team", "ops")).toBe(false)
+  })
+
+  test("the host reads each channel's picked rooms once, for every mod that may read them (T8545)", () => {
+    const reader = {
+      name: "reader",
+      state: "on",
+      needs: ["read:general", "read:ops"],
+      rooms: [
+        { code: "dev", room: "general" },
+        { code: "ops-team", room: "ops" },
+      ],
+    }
+    expect(readWanted([poster, reader, { ...reader, name: "off", state: "off", rooms: [{ code: "x", room: "general" }] }])).toEqual(
+      new Map([
+        ["ops-team", ["ops"]],
+        ["dev", ["general"]],
+      ])
+    )
+  })
+
+  test("a room's list is sent again only when a message comes, goes or changes (T8545)", () => {
+    const one = [{ id: 1, author: "ana", text: "hi", at: 1 }]
+    expect(sameMessages(one, [{ ...one[0]! }])).toBe(true)
+    expect(sameMessages(one, [{ ...one[0]!, text: "hi!" }])).toBe(false)
+    expect(sameMessages(undefined, [])).toBe(false)
   })
 })
