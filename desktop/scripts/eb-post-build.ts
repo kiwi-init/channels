@@ -148,6 +148,8 @@ execFileSync(
   { stdio: "inherit" },
 );
 execFileSync("plutil", ["-replace", "CFBundleExecutable", "-string", "kiwi-launcher", path.join(contents, "Info.plist")]);
+fs.copyFileSync(path.join(desktop, "build", "Assets.car"), path.join(contents, "Resources", "Assets.car"));
+execFileSync("plutil", ["-replace", "CFBundleIconName", "-string", "channels", path.join(contents, "Info.plist")]);
 const bundleVersion = execFileSync("plutil", ["-extract", "CFBundleVersion", "raw", path.join(contents, "Info.plist")], { encoding: "utf8" }).trim();
 execFileSync("plutil", ["-replace", "CFBundleShortVersionString", "-string", shortVersion(bundleVersion), path.join(contents, "Info.plist")]);
 

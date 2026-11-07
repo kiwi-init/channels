@@ -100,10 +100,14 @@ bun run typecheck:eb                                  # fetches the devkit into 
   entry extracts and runs it.
 - `src/move.ts` — moves a download over the file it replaces, across filesystems too (the
   AppImage update).
-- `build/icon.svg` — the app icon, and `build/tray.svg` — its one-color tray mark.
-  `bun desktop/scripts/icons.ts` (on a Mac) makes every app size (`build/icon.icns`,
-  `build/icons/NxN.png` for Linux and the window), the macOS tray template PNGs (`@2x`,
-  drawn at 16 points), and Linux's `assets/channels-tray-symbolic.svg`. On Linux,
+- `build/channels.icon` — the app icon, made in Apple's Icon Composer, and `build/tray.svg`
+  — its one-color tray mark. `bun desktop/scripts/icons.ts` (on a Mac with Icon Composer;
+  `ICTOOL` points at its `ictool` if it isn't in `/Applications`) makes `build/Assets.car`
+  (macOS 26 draws it as Liquid Glass, with its dark, clear and tinted looks; the app carries
+  it with `CFBundleIconName`), the fallback `build/icon.icns` for older macOS and
+  `build/icons/NxN.png` for Linux and the window (the Default look, inset to the Mac icon
+  grid), the macOS tray template PNGs (`@2x`, drawn at 16 points), and Linux's
+  `assets/channels-tray-symbolic.svg`. On Linux,
   `native/linux/kiwi-shell.c` names the program `channels-desktop`, so Wayland matches the
   window's app_id to `channels-desktop.desktop` and finds its icon.
 
