@@ -503,6 +503,7 @@ export interface KiwiBridge {
   setModSetting(name: string, id: string, value: ModSettingValue): Promise<ModView[]>;
   modCatalog(fresh?: boolean): Promise<ModCatalog>;
   installMod(name: string, needs: string[]): Promise<ModView[]>;
+  modStorePage(name: string): Promise<ModStorePage>;
 }
 
 export interface ModView {
@@ -546,7 +547,22 @@ export interface CatalogMod {
   source: string;
   installed: boolean;
   author?: string;
+  category?: string;
   icon?: ModIcon;
+}
+
+export interface ModShot {
+  name: string;
+  type: "image/png" | "image/jpeg" | "image/webp";
+  data: string;
+}
+
+export interface ModStorePage {
+  name: string;
+  version: string | null;
+  readme: string | null;
+  shots: ModShot[];
+  skipped: { name: string; why: string }[];
 }
 
 export interface ModCatalog {

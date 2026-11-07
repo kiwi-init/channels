@@ -1,4 +1,4 @@
-import type { CatalogMod, ModDetails, ModIcon, ModInstalled, ModUpdate, ModView } from "../../../desktop/src/bridge.ts"
+import type { CatalogMod, ModDetails, ModIcon, ModInstalled, ModStorePage, ModUpdate, ModView } from "../../../desktop/src/bridge.ts"
 import { askLater, showMods } from "~/mods/host"
 import { showModReads } from "~/mods/served"
 
@@ -89,6 +89,8 @@ const CATALOG: CatalogMod[] = [
     commit: "fef9c2d6fc23f8cce1d0986541362457e3f7e7d7",
     source: "github.com/kiwi-init/mods/github",
     installed: false,
+    author: "Kiwi",
+    category: "Developer tools",
     icon: svg(
       '<rect width="64" height="64" rx="14" fill="#24292f"/><circle cx="22" cy="20" r="5" fill="none" stroke="#fff" stroke-width="4"/><circle cx="22" cy="44" r="5" fill="none" stroke="#fff" stroke-width="4"/><circle cx="42" cy="28" r="5" fill="none" stroke="#fff" stroke-width="4"/><path d="M22 25v14M42 33c0 6-8 6-16 9" fill="none" stroke="#fff" stroke-width="4"/>'
     ),
@@ -112,6 +114,84 @@ const CATALOG: CatalogMod[] = [
   },
 ]
 
+const GITHUB_README = [
+  "# GitHub",
+  "",
+  "The channel's **GitHub** tab: the pull requests, issues and checks of the repos the channel works on, and a panel for each one beside the chat.",
+  "",
+  "## What it shows",
+  "",
+  "- Pull requests waiting on you first, then the ones you opened",
+  "- Checks as they run, with the failing step one click away",
+  "- Issues by label, with who's on each",
+  "",
+  "It reads GitHub with the token you signed in with, and writes nothing.",
+  "",
+].join("\n")
+
+function drawn(rows: { dot: string; width: number }[], panel: boolean): string {
+  const c = document.createElement("canvas")
+  c.width = 960
+  c.height = 600
+  const g = c.getContext("2d")
+  if (!g) return ""
+  const box = (x: number, y: number, w: number, h: number, r: number, fill: string) => {
+    g.fillStyle = fill
+    g.beginPath()
+    g.roundRect(x, y, w, h, r)
+    g.fill()
+  }
+  box(0, 0, 960, 600, 0, "#161514")
+  box(0, 0, 960, 56, 0, "#1d1b1a")
+  box(32, 20, 120, 16, 8, "#4a4644")
+  box(176, 20, 80, 16, 8, "#2e2b2a")
+  box(272, 20, 80, 16, 8, "#2e2b2a")
+  const left = panel ? 560 : 896
+  rows.forEach((r, i) => {
+    const y = 88 + i * 72
+    box(32, y, left, 56, 10, "#1f1d1c")
+    g.fillStyle = r.dot
+    g.beginPath()
+    g.arc(60, y + 28, 7, 0, Math.PI * 2)
+    g.fill()
+    box(84, y + 14, r.width, 12, 6, "#8a8481")
+    box(84, y + 34, r.width * 0.55, 8, 4, "#4a4644")
+  })
+  if (panel) {
+    box(616, 88, 312, 480, 14, "#1f1d1c")
+    box(640, 112, 180, 14, 7, "#a19a97")
+    ;["#3fb950", "#3fb950", "#d29922", "#f85149"].forEach((dot, i) => {
+      g.fillStyle = dot
+      g.beginPath()
+      g.arc(652, 168 + i * 44, 6, 0, Math.PI * 2)
+      g.fill()
+      box(672, 162 + i * 44, 200 - i * 24, 12, 6, "#6d6764")
+    })
+  }
+  return c.toDataURL("image/png").replace(/^data:image\/png;base64,/, "")
+}
+
+function githubPage(): ModStorePage {
+  const pulls = [
+    { dot: "#3fb950", width: 420 },
+    { dot: "#a371f7", width: 360 },
+    { dot: "#3fb950", width: 480 },
+    { dot: "#d29922", width: 300 },
+    { dot: "#3fb950", width: 390 },
+    { dot: "#a371f7", width: 340 },
+  ]
+  return {
+    name: "github",
+    version: "2.3.0",
+    readme: GITHUB_README,
+    shots: [
+      { name: "media/1-pulls.png", type: "image/png", data: drawn(pulls, false) },
+      { name: "media/2-checks.png", type: "image/png", data: drawn(pulls.slice(0, 5), true) },
+    ],
+    skipped: [{ name: "media/3-full-window.png", why: "it's over 1 MB" }],
+  }
+}
+
 const RADAR_UPDATE: ModUpdate = { name: "release-radar", from: "1.4.0", to: "1.5.0", commits: 3, added: [], dropped: [] }
 
 export function showDemoMods(ask: boolean): void {
@@ -125,6 +205,7 @@ export function showDemoMods(ask: boolean): void {
     removeMod: () => Promise.resolve(MODS),
     modCatalog: () => Promise.resolve({ mods: CATALOG, why: null }),
     installMod: () => Promise.resolve(MODS),
+    modStorePage: (name) => (name === "github" ? Promise.resolve(githubPage()) : Promise.resolve({ name, version: "1.0.0", readme: null, shots: [], skipped: [] })),
   })
   showMods(MODS, [
     {

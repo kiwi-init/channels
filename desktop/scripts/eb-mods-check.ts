@@ -1,7 +1,7 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 
 import { folderHash } from "@kiwi/core/node/mod-folder.ts";
 
@@ -38,10 +38,13 @@ const REX_INIT = join(root, "home", ".config", "rex", "init.lua");
 const TMUX_BEFORE = "set -g mouse on\nbind r source-file ~/.tmux.conf";
 const CATALOG_COMMIT = "c".repeat(40);
 const catalogSource = join(root, "catalog");
-const catalogFiles: Record<string, Record<string, string>> = {
+const catalogFiles: Record<string, Record<string, string | Uint8Array>> = {
   "catalog-mod": {
     "mod.json": JSON.stringify({ name: "catalog-mod", version: "1.0.0", shell: "^3.3", needs: ["panel"] }),
     "index.tsx": `import { panel } from "@kiwi/mod"\npanel({ title: "Catalog", render: () => null })\n`,
+    "README.md": "# Catalog mod\n\nIt shows that a store page reads its README.\n",
+    "media/1-panel.png": Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64"),
+    "media/2-liar.png": "not a picture",
   },
   "tampered-mod": {
     "mod.json": JSON.stringify({ name: "tampered-mod", version: "1.0.0", shell: "^3.3", needs: [] }),
@@ -50,14 +53,14 @@ const catalogFiles: Record<string, Record<string, string>> = {
 };
 for (const [name, files] of Object.entries(catalogFiles))
   for (const [file, text] of Object.entries(files)) {
-    mkdirSync(join(catalogSource, name), { recursive: true });
+    mkdirSync(dirname(join(catalogSource, name, file)), { recursive: true });
     writeFileSync(join(catalogSource, name, file), text);
   }
 const catalogIndex = {
   mods: Object.entries(catalogFiles).map(([name, files]) => ({
     name,
     does: name === "catalog-mod" ? "Shows that the catalog installs" : "Is served changed after it was vouched for",
-    needs: JSON.parse(files["mod.json"]!).needs as string[],
+    needs: JSON.parse(String(files["mod.json"])).needs as string[],
     commit: CATALOG_COMMIT,
     hash: folderHash(join(catalogSource, name)),
     files: Object.keys(files),
@@ -567,6 +570,42 @@ async function fromKiwi(d: Driver): Promise<void> {
     throw e;
   });
   await shot("settings-mods-from-kiwi");
+  await step("catalog-mod's row opens its page", 10_000, () =>
+    d.evaluate(
+      () => {
+        const row = [...document.querySelectorAll<HTMLElement>(".mod-catalog-row")].find((r) => r.querySelector(".set-row-label")?.textContent === "catalog-mod");
+        const open = row?.querySelector<HTMLButtonElement>(".mod-open");
+        open?.click();
+        return !!open;
+      },
+      null,
+      2_000,
+    ),
+  );
+  const store = await until("its store page", 20_000, () =>
+    d.evaluate(
+      () => {
+        const readme = document.querySelector(".mod-readme")?.textContent ?? "";
+        const shots = [...document.querySelectorAll<HTMLImageElement>("img.mod-shot")];
+        if (!readme.includes("reads its README") || !shots.length || !shots.every((i) => i.complete)) return null;
+        return {
+          title: document.querySelector(".mod-head .set-title")?.textContent,
+          meta: document.querySelector(".mod-head-text .set-lede")?.textContent,
+          shots: shots.map((i) => ({ alt: i.alt, w: i.naturalWidth })),
+          skipped: document.querySelector('.set-group[aria-label="Screenshots"] .set-group-hint')?.textContent,
+          install: [...document.querySelectorAll(".mod-head-act button")].some((b) => b.textContent === "Install"),
+        };
+      },
+      null,
+      2_000,
+    ),
+  ).catch(() => null);
+  console.log(`catalog-mod's page: ${JSON.stringify(store)}`);
+  await shot("mod-store-page");
+  check(store?.title === "catalog-mod" && store.meta === "1.0.0" && store.install, "a From Kiwi row opens its page with its version and Install");
+  check(store?.shots.length === 1 && store.shots[0]!.w === 1, "its page shows the screenshot from its media folder");
+  check(store?.skipped === "2-liar.png: it isn't the PNG its name says", "a screenshot that isn't a picture is left out, and its page says why");
+  await step("back to Mods", 10_000, () => d.evaluate(clickText, { selector: ".mod-head-back", text: "Mods" }, 2_000));
   await step("catalog-mod's Install", 10_000, () => d.evaluate(catalogInstall, "catalog-mod", 2_000));
   await step("its ask says what it asks for", 10_000, () =>
     d.evaluate(() => (document.querySelector('dialog[open][aria-label="Install catalog-mod"] .mod-needs')?.textContent ?? "").length > 0, null, 2_000),

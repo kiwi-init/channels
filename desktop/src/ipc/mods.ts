@@ -154,6 +154,7 @@ export function modsCalls(
   | "setModSetting"
   | "modCatalog"
   | "installMod"
+  | "modStorePage"
 > {
   let mods: ModsHost | null = null;
   let started: Promise<ModsHost> | null = null;
@@ -256,6 +257,10 @@ export function modsCalls(
       await catalogOf().install(String(name), Array.isArray(needs) ? needs.map(String) : []);
       await h.rescan();
       return h.list();
+    },
+    modStorePage: async (name) => {
+      await ready();
+      return catalogOf().page(String(name));
     },
   };
 }

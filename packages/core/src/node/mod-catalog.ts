@@ -9,6 +9,7 @@ export interface CatalogEntry {
   files: string[];
   icon?: string;
   author?: string;
+  category?: string;
 }
 
 export interface Catalog {
@@ -21,6 +22,7 @@ const COMMIT = /^[0-9a-f]{40}$/;
 const HASH = /^[0-9a-f]{64}$/;
 const ICON = /\.(?:svg|png)$/i;
 const DOES_CHARS = 200;
+const CATEGORY_CHARS = 40;
 const MAX_FILES = 200;
 const MAX_ENTRIES = 500;
 
@@ -48,7 +50,12 @@ function entryOf(raw: unknown): { ok: true; entry: CatalogEntry } | { ok: false;
   if (icon !== undefined && (typeof icon !== "string" || !ICON.test(icon) || !files.includes(icon))) return fail("its icon isn't one of its .svg or .png files");
   const author = m["author"] === undefined ? undefined : oneLine(m["author"], 100);
   if (author === null) return fail("its author isn't a name on one line");
-  return { ok: true, entry: { name, does, needs: [...needs], commit, hash, files: [...files], ...(icon ? { icon } : {}), ...(author ? { author } : {}) } };
+  const category = m["category"] === undefined ? undefined : oneLine(m["category"], CATEGORY_CHARS);
+  if (category === null) return fail(`its category isn't a few words on one line, up to ${CATEGORY_CHARS} characters`);
+  return {
+    ok: true,
+    entry: { name, does, needs: [...needs], commit, hash, files: [...files], ...(icon ? { icon } : {}), ...(author ? { author } : {}), ...(category ? { category } : {}) },
+  };
 }
 
 export function readCatalog(raw: unknown): Catalog {

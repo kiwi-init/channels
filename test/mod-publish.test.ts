@@ -255,13 +255,13 @@ describe("kiwi mod publish", () => {
     }
   });
 
-  test("with push access: the branch goes on kiwi-init/mods itself, a mod's old files go, and its entry moves in place", async () => {
+  test("with push access: the branch goes on kiwi-init/mods itself, a mod's old files go, and its entry moves in place with its category", async () => {
     const home = scratch("home");
     standup(home);
     const gh = fakeGitHub({
       login: "jow",
       push: true,
-      catalog: { mods: [{ name: "standup-notes", does: "old", add: "kiwi mod add github.com/kiwi-init/mods/standup-notes", needs: [] }, ...CATALOG.mods] },
+      catalog: { mods: [{ name: "standup-notes", does: "old", add: "kiwi mod add github.com/kiwi-init/mods/standup-notes", needs: [], category: "Notes" }, ...CATALOG.mods] },
       folders: { "standup-notes/old.ts": "export {}\n", "standup-notes/mod.json": "{}", "github/index.tsx": "export {}\n" },
     });
     try {
@@ -271,7 +271,7 @@ describe("kiwi mod publish", () => {
       expect(gh.pathsAt(p.commit)).toEqual(["github/index.tsx", "mods.json", "standup-notes/icon.svg", "standup-notes/index.tsx", "standup-notes/mod.json", "standup-notes/parts/list.ts"]);
       const catalog = JSON.parse(gh.read(gh.refs.get(`${CATALOG_REPO}:heads/publish-standup-notes`)!, "mods.json")!.toString()) as { mods: Record<string, unknown>[] };
       expect(catalog.mods.map((m) => m["name"])).toEqual(["standup-notes", "github", "anatomy"]);
-      expect(catalog.mods[0]).toMatchObject({ does: "keeps the day's standup notes beside the chat", commit: p.commit, author: "jow" });
+      expect(catalog.mods[0]).toMatchObject({ does: "keeps the day's standup notes beside the chat", commit: p.commit, author: "jow", category: "Notes" });
       expect(gh.pulls[0]!.body).toMatchObject({ head: "kiwi-init:publish-standup-notes" });
       expect(gh.pulls[0]!.body["maintainer_can_modify"]).toBeUndefined();
     } finally {

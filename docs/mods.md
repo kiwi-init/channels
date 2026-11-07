@@ -289,3 +289,14 @@ A repo can hold several mods, one per folder: `kiwi mod add github.com/kiwi-init
 4. It opens the pull request from your fork, or from a branch on kiwi-init/mods if you can push there.
 
 It signs in to GitHub as `gh` does (`gh auth login`), or with `GH_TOKEN`. We review the code at the pinned commit. Once the pull request is merged, **Install** in **From Kiwi** fetches exactly that copy and refuses any other. Running it again moves the same pull request, or opens a new one after a merge.
+
+A reviewer can add a `category` to the entry, a few words like `Developer tools`. A new version keeps it.
+
+### Its page in From Kiwi
+
+Each mod in **From Kiwi** opens a page with its version, author, category, what it asks for, its `README.md` and its screenshots, and **Install**. Channels reads them from the pinned commit, so the page shows what you'd install.
+
+- **Screenshots:** PNG, JPEG or WebP files in a `media/` folder, shown in name order: `media/1-panel.png` comes before `media/2-settings.png`. A page shows the first 6, each up to 1 MB.
+- **README:** up to 64 KB. An image in it shows as its alt text, or as a link when it's on the web, so screenshots go in `media/`.
+
+A screenshot that's too big, isn't the type its name says, or doesn't load is left out, and the page says which one and why.

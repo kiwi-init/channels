@@ -126,10 +126,6 @@ img.mod-icon {
   cursor: pointer;
 }
 
-.mod-catalog-row .mod-open {
-  cursor: default;
-}
-
 .mod-installed {
   color: var(--ink-3);
   font-size: var(--t-meta);
@@ -171,6 +167,29 @@ img.mod-icon {
 
 .mod-readme {
   padding-top: 12px;
+}
+
+.mod-head-act {
+  margin-left: auto;
+}
+
+.mod-store-does {
+  margin-top: 16px;
+}
+
+.mod-shots {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+  padding: 12px 0;
+}
+
+.mod-shot {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--r-ctl);
 }
 
 .rail-mods {
