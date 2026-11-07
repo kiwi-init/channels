@@ -22,7 +22,7 @@ enum Linking: Equatable {
     case signingIn(url: String?, code: String)
     case asking
     case approve(String)
-    case check(name: String, fingerprint: String)
+    case check(name: String, fingerprint: String, digits: String)
     case failed(String)
 }
 
@@ -53,6 +53,7 @@ final class AppModel {
     var joining = 0
     var unsaved: String?
     private let push = PushTags()
+    private let github = GitHubSheet()
 
     var relinking: Bool {
         phase == .ready && (relinkAsked || linking != .idle)
@@ -116,8 +117,18 @@ final class AppModel {
                 phase = .ready
                 return
             }
+            switch UserDefaults.standard.string(forKey: "link") {
+            case "github": linking = .signingIn(url: "https://github.com/login/device", code: "4F2A-9C1B")
+            case "asking": linking = .asking
+            case "digits": linking = .approve("482915")
+            case "check": linking = .check(name: "Jow", fingerprint: "3fa2 91c0 7be4 d518 0c6a", digits: "482915")
+            default: break
+            }
         #endif
         await resume()
+        #if DEBUG
+            if phase == .unlinked, UserDefaults.standard.string(forKey: "link") == "start" { await signIn() }
+        #endif
     }
 
     private func recover() async {
@@ -240,16 +251,22 @@ final class AppModel {
             if let user = UserDefaults.standard.string(forKey: "devUser") { ask["user"] = user }
             let started = try await engine.ask(ask, as: EnrollStart.self)
             linking = .signingIn(url: started.url, code: started.code)
-            if let url = started.url.flatMap(URL.init(string:)) { await UIApplication.shared.open(url) }
             _ = try await engine.ask(["op": "enrollAsk"])
+            github.close()
             linking = .asking
             let shown = try await engine.ask(["op": "enrollWait"], as: EnrollDigits.self)
             linking = .approve(shown.digits)
             let person = try await engine.ask(["op": "enrollCheck"], as: EnrollPerson.self)
-            linking = .check(name: person.name, fingerprint: person.fingerprint)
+            linking = .check(name: person.name, fingerprint: person.fingerprint, digits: shown.digits)
         } catch {
+            github.close()
             if linking != .idle { linking = .failed(error.localizedDescription) }
         }
+    }
+
+    func openGitHub() {
+        guard case .signingIn(let url, let code) = linking, let page = url.flatMap(URL.init(string:)) else { return }
+        github.open(page, code: code)
     }
 
     func keepLink() async {
@@ -286,6 +303,7 @@ final class AppModel {
     }
 
     func cancelLink() async {
+        github.close()
         linking = .idle
         relinkAsked = false
         try? await engine.ask(["op": "enrollCancel"])
