@@ -73,7 +73,7 @@ struct Shell: View {
                     HStack(spacing: 0) {
                         Rail(search: $search, settings: $settings)
                         SidePane()
-                            .disabled(axis == .horizontal)
+                            .disabled(abs(drag) > 30)
                     }
                     .frame(width: left)
                     .transition(.identity)
@@ -81,13 +81,13 @@ struct Shell: View {
                 }
                 if x < 0, let code = model.frontCode, let room = model.rooms[code] {
                     MembersPane(room: room)
-                        .disabled(axis == .horizontal)
+                        .disabled(abs(drag) > 30)
                         .frame(width: Self.members)
                         .frame(maxWidth: .infinity, alignment: .trailing)
                         .simultaneousGesture(swipe(left: left))
                 }
                 front
-                    .disabled(axis == .horizontal)
+                    .disabled(abs(drag) > 30)
                     .frame(width: width)
                     .background(Tone.canvas.ignoresSafeArea())
                     .offset(x: x)
