@@ -240,8 +240,12 @@ async function watchOnce(browser: Browser, loop: number): Promise<string | null>
     await page.waitForTimeout(300);
     await page.mouse.wheel(0, -READ_UP);
     await page.waitForTimeout(500);
+    const below = await page.evaluate(() => {
+      const feed = document.querySelector(".feed");
+      return feed ? feed.scrollHeight - feed.scrollTop - feed.clientHeight : 0;
+    });
     const ys: number[] = [];
-    for (let i = 0; i < LOOKS; i++) {
+    for (let i = 0; below >= READ_UP / 2 && i < LOOKS; i++) {
       await page.waitForTimeout(LOOK_MS);
       ys.push(
         await page.evaluate(
@@ -250,7 +254,12 @@ async function watchOnce(browser: Browser, loop: number): Promise<string | null>
       );
     }
     const n = moves(ys);
-    const why = n <= MOVES_ALLOWED ? null : `the doc moved ${n} times in ${(LOOKS * LOOK_MS) / 1000} s: ${[...new Set(ys)].join(" → ")}`;
+    const why =
+      below < READ_UP / 2
+        ? `the read never left the bottom: ${Math.round(below)} px below the view after scrolling ${READ_UP} px up`
+        : n <= MOVES_ALLOWED
+          ? null
+          : `the doc moved ${n} times in ${(LOOKS * LOOK_MS) / 1000} s: ${[...new Set(ys)].join(" → ")}`;
     if (tracing && (why || loop === 1)) {
       const steps = await page.evaluate((since) => (window.stillTrace ?? []).filter((s) => s.t >= since), from);
       console.log(`--- settle trace, loop ${loop} (${why ? "moved" : "still"}), ${steps.length} steps, ms from the first wheel:`);

@@ -126,7 +126,7 @@ const feed = (): Feed => {
   return current
 }
 
-const container = {
+const container = () => ({
   nodeType: 1,
   tagName: "DIV",
   nodeName: "DIV",
@@ -134,7 +134,7 @@ const container = {
   addEventListener() {},
   removeEventListener() {},
   ownerDocument: { addEventListener() {}, removeEventListener() {}, defaultView: { HTMLIFrameElement: class {}, document: { activeElement: null } } },
-}
+})
 
 const saved = { window: Reflect.get(globalThis, "window"), observer: Reflect.get(globalThis, "ResizeObserver"), act: Reflect.get(globalThis, "IS_REACT_ACT_ENVIRONMENT") }
 
@@ -176,7 +176,7 @@ async function mount(f: Feed, following: boolean, still: boolean): Promise<{ sti
     stick = s
     return null
   }
-  const root = createRoot(container as unknown as HTMLElement)
+  const root = createRoot(container() as unknown as HTMLElement)
   await act(async () => root.render(<Probe />))
   if (!stick) throw new Error("the hook did not render")
   return { stick, root }
@@ -212,5 +212,88 @@ describe("useStick in a thread doc", () => {
     }
     expect(Math.abs(f.docTop - before)).toBeLessThan(4)
     await act(async () => root.unmount())
+  })
+
+  test("a doc line that grows while you start scrolling up from the bottom does not pull you back down", async () => {
+    const f = new Feed(100)
+    const { stick, root } = await mount(f, true, true)
+    f.scrollTo(f.max)
+    stick.remember()
+    userScroll(f, stick, -17)
+    const reading = f.top
+    docLine(f)
+    expect(f.top).toBe(reading)
+    userScroll(f, stick, -183)
+    const before = f.docTop
+    for (let i = 0; i < 8; i++) docLine(f)
+    expect(f.docTop).toBe(before)
+    await act(async () => root.unmount())
+  })
+
+  test("a line that arrives while you start scrolling up from the bottom does not pull you back down", async () => {
+    const f = new Feed(100)
+    const { stick, root } = await mount(f, true, true)
+    f.scrollTo(f.max)
+    stick.remember()
+    userScroll(f, stick, -17)
+    const before = f.docTop
+    arrive(f, stick, 101, 52.8)
+    expect(Math.abs(f.docTop - before)).toBeLessThan(1)
+    stick.remember()
+    docLine(f)
+    expect(Math.abs(f.docTop - before)).toBeLessThan(1)
+    expect(f.max - f.top).toBeGreaterThan(8)
+    await act(async () => root.unmount())
+  })
+
+  test("the scroll you make between a line's arrival and its correction is kept", async () => {
+    const f = new Feed(100)
+    const { stick, root } = await mount(f, true, true)
+    f.scrollTo(f.max)
+    userScroll(f, stick, -200)
+    const before = f.docTop
+    f.rows.push({ seq: 101, h: 52.8 })
+    f.scrollTo(f.top - 30)
+    stick.settle()
+    f.resized()
+    expect(Math.abs(f.docTop - (before + 30))).toBeLessThan(1)
+    await act(async () => root.unmount())
+  })
+
+  test("sitting at the bottom, you follow the doc as it grows", async () => {
+    const f = new Feed(100)
+    const { stick, root } = await mount(f, true, true)
+    f.scrollTo(f.max)
+    stick.remember()
+    for (let i = 0; i < 5; i++) {
+      docLine(f)
+      expect(f.top).toBe(f.max)
+    }
+    await act(async () => root.unmount())
+  })
+
+  test("held, or reading an older window, the bottom does not pull you along", async () => {
+    for (const how of ["held", "behind"] as const) {
+      const f = new Feed(100)
+      const { stick, root } = await mount(f, how === "held", true)
+      f.scrollTo(f.max)
+      f.fire("wheel")
+      stick.remember()
+      if (how === "held") stick.hold(true)
+      const before = f.docTop
+      for (let i = 0; i < 3; i++) docLine(f)
+      expect(f.docTop).toBe(before)
+      await act(async () => root.unmount())
+    }
+  })
+
+  test("unmounting stops watching the feed", async () => {
+    const f = new Feed(100)
+    const { root } = await mount(f, true, true)
+    expect(f.observers.size).toBe(1)
+    expect(f.listeners.get("wheel")?.size).toBe(1)
+    await act(async () => root.unmount())
+    expect(f.observers.size).toBe(0)
+    for (const set of f.listeners.values()) expect(set.size).toBe(0)
   })
 })

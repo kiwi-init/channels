@@ -24,6 +24,8 @@ function anchorIn(box: HTMLElement, list: HTMLElement): Anchor | null {
   return el && Number.isSafeInteger(seq) ? { el, seq, top: el.getBoundingClientRect().top - top, at: box.scrollTop } : null
 }
 
+const gapIn = (box: HTMLElement): number => box.scrollHeight - box.scrollTop - box.clientHeight
+
 const laidOut = (el: Element): boolean => el.isConnected && el.getClientRects().length > 0
 
 function docIn(box: HTMLElement, list: HTMLElement): Anchor | null {
@@ -61,11 +63,9 @@ export function useStick(following = true, still = false) {
   const held = useRef(false)
   const touched = useRef(false)
   const room = useRef(0)
+  const seen = useRef(Number.NaN)
 
-  const settle = useCallback(() => {
-    const box = scroller.current
-    const list = content.current
-    if (!box || !list) return
+  const correct = useCallback((box: HTMLElement, list: HTMLElement) => {
     height.current = list.offsetHeight
     if (stuck.current && !(still && anchor.current)) {
       box.scrollTop = box.scrollHeight
@@ -98,6 +98,16 @@ export function useStick(following = true, still = false) {
     anchor.current = { el, seq: a.seq, top: el.getBoundingClientRect().top - top, at: box.scrollTop }
   }, [still])
 
+  const settle = useCallback(() => {
+    const box = scroller.current
+    const list = content.current
+    if (!box || !list) return
+    if (still && box.scrollTop < seen.current - 0.5 && gapIn(box) > 0.5) stuck.current = false
+    const from = box.scrollTop
+    correct(box, list)
+    if (box.scrollTop !== from) seen.current = box.scrollTop
+  }, [correct, still])
+
   const remember = useCallback(() => {
     const box = scroller.current
     const list = content.current
@@ -108,9 +118,14 @@ export function useStick(following = true, still = false) {
       room.current = Math.max(0, room.current - hidden)
       if (spacer.current) spacer.current.style.height = room.current ? `${room.current}px` : ""
     }
-    stuck.current = live.current && !held.current && box.scrollHeight - box.scrollTop - box.clientHeight < NEAR_BOTTOM
+    const gap = gapIn(box)
+    const up = box.scrollTop < seen.current - 0.5
+    const down = box.scrollTop > seen.current + 0.5
+    const near = !still || gap <= 0.5 ? gap < NEAR_BOTTOM : gap < NEAR_BOTTOM && !up && (stuck.current || down)
+    stuck.current = live.current && !held.current && near
     anchor.current = (still && touched.current ? docIn(box, list) : null) ?? (stuck.current ? null : anchorIn(box, list))
     height.current = list.offsetHeight
+    seen.current = box.scrollTop
   }, [settle, still])
 
   useLayoutEffect(() => {
