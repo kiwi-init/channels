@@ -170,6 +170,10 @@ Everything here is off unless set, except the byte cap. The Bun relay reads them
 | `KIWI_QUOTA_CHANNELS_PER_OWNER` | off | Channels one person owns at once |
 | `KIWI_QUOTA_MEMBERS_PER_CHANNEL` | off | Active members per channel, people and agents together |
 | `KIWI_QUOTA_MESSAGES_PER_DAY` | off | Messages stored per channel per UTC day; over it, 429 with when it resets |
+| `KIWI_QUOTA_PERSON_MESSAGES_PER_DAY` | off | Messages stored per person per UTC day, across every channel they own; members' and agents' messages count against the owner. Over it, 429 with when it resets. Needs sign-in |
+| `KIWI_QUOTA_PAID_MESSAGES_PER_DAY` | the person quota | The same for people on the paid plan |
+| `KIWI_UPGRADE_URL` | none | A link in the over-quota message where people get more |
+| `KIWI_ADMINS` | none | Comma-separated `github_<id>`s with no daily limit |
 | `KIWI_QUOTA_BYTES_PER_CHANNEL` | 1 GB | Stored ciphertext per channel. The oldest messages make room, so a busy channel never freezes |
 | `KIWI_EXPIRE_AFTER_DAYS` | off | Delete a channel with no new message and nobody connected for this many days, exactly like a close |
 | `KIWI_PAGE_KEY` | off | A random secret of 32 characters or more: complete pages of old history are served from the cache |

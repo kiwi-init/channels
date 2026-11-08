@@ -1,6 +1,7 @@
 import * as Context from "effect/Context";
 import type { GoneHow } from "@kiwi/core/protocol.ts";
 import type { GithubLink } from "../github.ts";
+import type { Lease, LeaseAsk, Person } from "../people.ts";
 import type { Wake } from "../push.ts";
 
 export interface Effects {
@@ -18,6 +19,7 @@ export interface Effects {
   github?: GithubLink[];
   push?: { room: string; wakes: Wake[] };
   expireAt?: number;
+  lease?: { user: string; ask: LeaseAsk };
 }
 
 export interface DirectoryEntry {
@@ -41,6 +43,8 @@ export class Directory extends Context.Service<
     list(user: string): Promise<DirectoryEntry[]>;
     reserve(user: string, room: string, most: number): Promise<boolean>;
     release(user: string, room: string): Promise<void>;
+    person(user: string): Promise<Person>;
+    lease(user: string, ask: LeaseAsk): Promise<Lease>;
   }
 >()("kiwi/relay/Directory") {}
 

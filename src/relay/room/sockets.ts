@@ -7,7 +7,7 @@ import { RoomStore } from "./db.ts";
 import type { Effects } from "./directory.ts";
 import { docAppend, docBacklog, docSnap } from "./docs.ts";
 import { allow, DOC_SUBS_PER_MINUTE, DOC_UPDATES_PER_MINUTE, EPHEMERAL_PER_MINUTE, MESSAGES_PER_MINUTE, MORE_PER_MINUTE, READS_PER_MINUTE, take } from "./limits.ts";
-import { append, markRead, touch } from "./messages.ts";
+import { append, leaseWant, markRead, touch } from "./messages.ts";
 import { wakesFor } from "./push.ts";
 
 export const frame = (f: ServerFrame) => JSON.stringify(f);
@@ -89,7 +89,7 @@ export const onClientFrame = Effect.fn("Room.onClientFrame")(function* (raw: str
   const stored = yield* Effect.exit(append(send.iv, send.ct, Number(send.e ?? 0), sender, {}, send.cid));
   if (stored._tag === "Failure") {
     counted.refund();
-    return { reply: frame({ t: "err", error: socketError(stored.cause), id: send.id }) } satisfies Effects;
+    return { reply: frame({ t: "err", error: socketError(stored.cause), id: send.id }), ...(yield* leaseWant) } satisfies Effects;
   }
   const e = stored.value;
   if ("repeat" in e) {
@@ -105,7 +105,14 @@ export const onClientFrame = Effect.fn("Room.onClientFrame")(function* (raw: str
     ),
   );
   const reply = frame({ t: "ack", id: send.id, seq: e.seq, ts: e.ts });
-  const fx: Effects = { ...(echo ? { broadcast: [msgFrame(e)] } : { others: msgFrame(e) }), ...watchFrame(e), ...wakesFor(db, send.wake, sender, e.seq), reply, expireAt: expireAt ?? undefined };
+  const fx: Effects = {
+    ...(echo ? { broadcast: [msgFrame(e)] } : { others: msgFrame(e) }),
+    ...watchFrame(e),
+    ...wakesFor(db, send.wake, sender, e.seq),
+    reply,
+    expireAt: expireAt ?? undefined,
+    ...(yield* leaseWant),
+  };
   return fx;
 });
 

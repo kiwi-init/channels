@@ -24,12 +24,13 @@ import { githubLinks, githubRepos, type GithubItem } from "./github.ts";
 import { GithubApp, GithubPush, type GithubReply } from "./github-app.ts";
 import { githubReviewHost, reviewStatus } from "./review-host.ts";
 import { Human, HUMAN_HEADER } from "./human.ts";
-import { betaMessage, inBeta, Policy } from "./policy.ts";
+import { betaMessage, BLOCKED_CREATE, inBeta, Policy } from "./policy.ts";
 import { offerPages, PAGE_PATH, servePage } from "./pages.ts";
 import {
   allow,
   take,
   append,
+  leaseNow,
   approve,
   authenticate,
   ASKS_PER_MINUTE,
@@ -317,6 +318,7 @@ const routes: RoomRoute[] = [
         const people = yield* Directory;
         // During a private beta only listed people create channels; anyone may still join one.
         if (user && !(yield* inBeta(user))) return yield* new Forbidden({ message: betaMessage(policy) });
+        if (user && policy.personMessagesPerDay && (yield* Effect.promise(() => people.person(user))).blocked) return yield* new Forbidden({ message: BLOCKED_CREATE });
         const most = policy.channelsPerOwner;
         const { roomId } = yield* RoomStore;
         // One step in the owner's own store counts their channels and holds a slot for this one, so
@@ -419,6 +421,7 @@ const routes: RoomRoute[] = [
         if (b.slot !== undefined && !wellFormedSlot(b.slot)) return yield* Effect.andThen(Effect.sync(counted.refund), new BadRequest({ message: "bad slot" }));
         if (b.free !== undefined && !wellFormedFreed(b.free)) return yield* Effect.andThen(Effect.sync(counted.refund), new BadRequest({ message: "bad slots to free" }));
         if (b.cid !== undefined && !wellFormedSendId(b.cid)) return yield* Effect.andThen(Effect.sync(counted.refund), new BadRequest({ message: "bad send id" }));
+        yield* leaseNow;
         const e = yield* append(b.iv as string, b.ct as string, Number(b.e ?? 0), me, { ...(b.slot ? { take: b.slot } : {}), ...(b.free ? { free: b.free } : {}) }, b.cid, tickets).pipe(
           Effect.tapError(() => Effect.sync(counted.refund)),
         );
