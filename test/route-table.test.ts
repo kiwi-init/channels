@@ -62,7 +62,7 @@ test("every route declares its check", () => {
   ]);
 });
 
-test("0.11: the signed-in person routes, machine links, pairing, seats and usage are gone, and so is the account move (T216)", async () => {
+test("0.11: the signed-in person routes, machine links, pairing and seats are gone, and so is the account move (T216)", async () => {
   const { startRelay } = await import("../src/relay/bun.ts");
   const { mkdtempSync, rmSync } = await import("node:fs");
   const { tmpdir } = await import("node:os");
@@ -72,7 +72,6 @@ test("0.11: the signed-in person routes, machine links, pairing, seats and usage
   try {
     for (const [method, path] of [
       ["GET", "/v1/me/channels"],
-      ["GET", "/v1/me/usage"],
       ["GET", "/v1/me/vault"],
       ["POST", "/v1/me/devices/transfers"],
       ["GET", "/v1/me/machines"],

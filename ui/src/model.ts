@@ -847,6 +847,18 @@ export interface Actions {
   setContextLine(on: boolean): void
   computerSettings(id: string): Promise<[string, string[]][]>
   launchedFrom(ids: string[]): Promise<LaunchedAgent[]>
+  myUsage(): Promise<Usage | null>
+}
+
+/** Today's stored messages in the channels you own, against your plan's limit (null: no limit). */
+export interface Usage {
+  plan: "free" | "paid" | "unlimited"
+  blocked: boolean
+  used: number
+  limit: number | null
+  channels: number
+  resetsAt: number
+  upgradeUrl: string | null
 }
 
 export type Finding = { ok: true; what: string } | { ok: false; what: string; how: string }

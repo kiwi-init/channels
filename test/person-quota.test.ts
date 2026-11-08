@@ -218,3 +218,26 @@ describe("admins", () => {
     expect((await fetch(`${relay}/v1/admin/people`)).status).toBe(401);
   });
 });
+
+describe("today's use", () => {
+  test("a signed-in person reads their plan, today's count, the limit and when it resets", async () => {
+    const clock = { now: Date.UTC(2026, 10, 8, 21, 0) };
+    const { relay } = relayWith({ personMessagesPerDay: 5, paidMessagesPerDay: 50, upgradeUrl: "https://kiwi.test/upgrade", admins: ["github_1"] }, clock);
+    const ch = await channelOf(relay, "bob");
+    await ch.send("1");
+    await ch.send("2");
+    const read = async (login: string) => (await fetch(`${relay}/v1/me/usage`, { headers: { "x-human-token": token(login) } })).json();
+    const bob = (await read("bob")) as { used: number };
+    expect(bob).toMatchObject({ plan: "free", blocked: false, limit: 5, channels: 1, resetsAt: Date.UTC(2026, 10, 9), upgradeUrl: "https://kiwi.test/upgrade" });
+    expect(bob.used).toBeGreaterThanOrEqual(1);
+    expect(bob.used).toBeLessThanOrEqual(2);
+    expect(await read("alice")).toMatchObject({ plan: "unlimited", limit: null, used: 0 });
+    expect((await fetch(`${relay}/v1/me/usage`)).status).toBe(401);
+  });
+
+  test("with no quota configured there's no limit to show", async () => {
+    const { relay } = relayWith({});
+    await channelOf(relay, "bob");
+    expect(await (await fetch(`${relay}/v1/me/usage`, { headers: { "x-human-token": token("bob") } })).json()).toMatchObject({ limit: null });
+  });
+});

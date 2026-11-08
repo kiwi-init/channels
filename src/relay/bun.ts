@@ -342,6 +342,7 @@ export function startRelay(
   };
   const admin: PeopleAdmin = {
     people: async () => book.people(utcDay(clock())),
+    summary: async (user) => book.summary(user, utcDay(clock()), ownedCount(user), clock()),
     set: async (user, change) => {
       book.setPerson(user, { ...book.person(user), ...change });
       noteOf(user);
@@ -511,7 +512,7 @@ export function startRelay(
         if (machine instanceof Response) return machine;
         const person = await onPersonHttp(req, personMachines, { now: clock });
         if (person) return person;
-        const admined = await onAdminHttp(req, human, policy, admin);
+        const admined = await onAdminHttp(req, human, policy, admin, clock());
         if (admined) return admined;
         if (isAccountPath(url.pathname)) {
           if (req.method === "OPTIONS") return corsPreflight();

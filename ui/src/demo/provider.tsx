@@ -948,6 +948,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
           )
         ),
       checkComputer: () => new Promise((done) => setTimeout(() => done(FINDINGS), 400)),
+      myUsage: async () => ({ plan: "free", blocked: false, used: 412, limit: 500, channels: 2, resetsAt: Date.now() + 5 * 3_600_000, upgradeUrl: "https://channels.kiwiinit.com/upgrade" }),
     }
   }, [])
 

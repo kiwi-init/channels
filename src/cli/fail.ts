@@ -20,6 +20,7 @@ export const fail = (cause: Cause.Cause<unknown>) =>
       return stop(goneText(err, acting.alias, acting.name), 4);
     }
     if (err instanceof Unreachable) return stop(`can't reach the relay${err.url ? ` at ${err.url}` : ""} (${reason(err)}): check your network and whether the relay is up, then try again`);
+    if (err instanceof RelayError && err.status === 429 && err.retryAfter === null) return stop(err.message);
     if (err instanceof RelayError && err.status === 429) return stop(`the relay is limiting this computer (${err.message}): try again in ${err.retryAfter ?? 60}s`);
     if (err instanceof RelayError && err.status >= 500) return stop(`the relay failed (${err.status}: ${err.message}): it's having trouble, try again in a minute`);
     if (err instanceof RelayError) return stop(`relay: ${err.message}`);
