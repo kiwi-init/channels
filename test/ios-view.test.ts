@@ -228,4 +228,35 @@ describe("a phone on a second seat of its person (T1372)", () => {
     expect(side?.key).toBe("dm:jow~lead");
     expect(side?.lastSeq).toBe(2);
   });
+
+  test("its DMs are titled with the other side and the desktop's words read as its own", async () => {
+    ids["jow-2"] ??= await generateIdentity("jow-2");
+    const sponsor = { user: "p-jow", name: "Jow", handle: "jow" };
+    const was = roster;
+    roster = [{ ...was[0]!, sponsor }, { name: "jow-2", pk: ids["jow-2"]!.pk, owner: false, at: 0, active: true, kind: "human", sponsor }, ...was.slice(1)];
+    const log = await signedLog([say("lead", "Only for you.", { to: ["jow"], dm: true }), say("jow", "From the Mac.", { to: ["lead"], dm: true })]);
+    const room = roomView({
+      code: "code",
+      title: "c",
+      icon: null,
+      me: "jow-2",
+      isOwner: false,
+      connection: "live",
+      gone: null,
+      error: null,
+      head: log.length,
+      whole: true,
+      messages: log,
+      state: fold(log, roster, T0 + log.length * 60_000),
+      online: new Map(),
+      place: "dm:jow~lead",
+    });
+    roster = was;
+    expect(room.root).toBe("jow");
+    expect(room.places.find((p) => p.key === "dm:jow~lead")?.title).toBe("lead");
+    expect(room.messages.map((m) => [m.from, m.mine])).toEqual([
+      ["lead", false],
+      ["jow", true],
+    ]);
+  });
 });
