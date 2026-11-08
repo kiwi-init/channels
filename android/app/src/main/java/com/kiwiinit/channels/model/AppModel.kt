@@ -28,6 +28,7 @@ import com.kiwiinit.channels.engine.MessageView
 import com.kiwiinit.channels.engine.Push
 import com.kiwiinit.channels.engine.RoomView
 import com.kiwiinit.channels.engine.wire
+import java.io.File
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
@@ -96,7 +97,9 @@ data class Feed(val messages: List<MessageView>, val whole: Boolean)
 class AppModel(private val app: Application) {
     private val scope = MainScope()
     private val prefs = app.getSharedPreferences("channels", Context.MODE_PRIVATE)
-    private val pictures = LruCache<String, ImageBitmap>(48)
+    private val pictures = object : LruCache<String, ImageBitmap>((Runtime.getRuntime().maxMemory() / 8).toInt()) {
+        override fun sizeOf(key: String, value: ImageBitmap): Int = value.width * value.height * 4
+    }
     private var booted = false
 
     val vault = Vault(app)
@@ -129,6 +132,7 @@ class AppModel(private val app: Application) {
     val seen = mutableStateMapOf<String, Int>().apply { putAll(counts("seen")) }
     val placeSeen = mutableStateMapOf<String, Int>().apply { putAll(counts("placeSeen")) }
     val pinned = mutableStateListOf<String>().apply { addAll(names("pinned")) }
+    private val heldUnread = mutableStateListOf<String>().apply { addAll(names("heldUnread")) }
     val drafts = mutableStateMapOf<String, Draft>()
     val feeds = mutableStateMapOf<String, Feed>()
     val pending = mutableStateMapOf<String, List<Pending>>()
@@ -146,8 +150,8 @@ class AppModel(private val app: Application) {
         booted = true
         scope.launch {
             if (!startEngine()) return@launch
-            val saved = vault.load()
-            if (saved == null) phase = Phase.Unlinked else begin(saved)
+            val saved = opened() ?: return@launch
+            if (saved.isEmpty()) phase = Phase.Unlinked else begin(saved)
         }
         scope.launch {
             while (true) {
@@ -173,12 +177,22 @@ class AppModel(private val app: Application) {
         val old = engine ?: return
         engine = null
         old.destroy()
+        for ((code, room) in rooms.toMap()) if (room.connection == Connection.Live) rooms[code] = room.copy(connection = Connection.Reconnecting)
         scope.launch {
             if (!startEngine()) return@launch
-            val saved = vault.load() ?: return@launch
-            begin(saved)
+            val saved = keeping ?: opened() ?: return@launch
+            if (saved.isNotEmpty()) begin(saved)
         }
     }
+
+    private fun opened(): ByteArray? =
+        try {
+            vault.load() ?: ByteArray(0)
+        } catch (e: VaultException) {
+            // The keys are still on the phone but the keystore didn't open them this time: say so rather than link again over them.
+            phase = Phase.Broken("Channels couldn't open your sign-in: ${e.message}. Close Channels and open it again.")
+            null
+        }
 
     private suspend fun begin(saved: ByteArray) {
         val obj = try {
@@ -247,6 +261,7 @@ class AppModel(private val app: Application) {
     fun fresh(room: RoomView, key: String): Boolean {
         val place = room.placeView(key) ?: return false
         val last = place.last ?: return false
+        if ("${room.code}|$key" in heldUnread) return true
         if (last.mine) return false
         val mark = if (key == "main") seen[room.code] ?: 0 else placeSeen["${room.code}|$key"] ?: 0
         return place.lastSeq > mark
@@ -537,6 +552,20 @@ class AppModel(private val app: Application) {
         keeping = null
         unsaved = null
         rooms.clear()
+        feeds.clear()
+        drafts.clear()
+        pending.clear()
+        sentAs.clear()
+        visited.clear()
+        pictures.evictAll()
+        seen.clear()
+        placeSeen.clear()
+        pinned.clear()
+        heldUnread.clear()
+        wroteMarks.clear()
+        pulledMarks.clear()
+        prefs.edit { clear() }
+        File(app.cacheDir, "shared").deleteRecursively()
         person = ""
         enrolled = false
         waiting = 0
@@ -576,6 +605,7 @@ class AppModel(private val app: Application) {
     }
 
     fun markRead(spot: Spot) {
+        if (heldUnread.remove(spot.id)) saveHeldUnread()
         val room = rooms[spot.code] ?: return
         val top = room.placeView(spot.place)?.lastSeq ?: return
         if (spot.general) {
@@ -592,14 +622,13 @@ class AppModel(private val app: Application) {
     fun markUnread(spot: Spot) {
         val room = rooms[spot.code] ?: return
         val last = room.placeView(spot.place)?.last ?: return
-        if (last.mine) return
-        if (spot.general) {
-            seen[spot.code] = last.seq - 1
-            saveCounts("seen", seen)
-        } else {
-            placeSeen[spot.id] = last.seq - 1
-            saveCounts("placeSeen", placeSeen)
-        }
+        if (last.mine || spot.id in heldUnread) return
+        heldUnread += spot.id
+        saveHeldUnread()
+    }
+
+    private fun saveHeldUnread() {
+        prefs.edit { putString("heldUnread", wire.encodeToString(ListSerializer(String.serializer()), heldUnread.toList())) }
     }
 
     fun markAllRead() {
@@ -695,6 +724,14 @@ class AppModel(private val app: Application) {
             // Not a picture the engine could have sent: it shows as unavailable.
             return null
         }
-        return BitmapFactory.decodeByteArray(raw, 0, raw.size)?.asImageBitmap()
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(raw, 0, raw.size, bounds)
+        var sample = 1
+        while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= PICTURE_SIDE) sample *= 2
+        return BitmapFactory.decodeByteArray(raw, 0, raw.size, BitmapFactory.Options().apply { inSampleSize = sample })?.asImageBitmap()
+    }
+
+    private companion object {
+        const val PICTURE_SIDE = 2048
     }
 }

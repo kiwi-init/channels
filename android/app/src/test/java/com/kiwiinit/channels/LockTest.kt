@@ -5,14 +5,16 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotFocused
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -63,18 +65,24 @@ class LockTest {
     }
 
     @Test
-    fun lockingPutsTheKeyboardAway() {
+    fun lockingPutsTheKeyboardAwayAndHidesWhatsBehind() {
         compose.setContent {
             ChannelsTheme {
                 Guarded(locked.value, unlock = {}) {
-                    var text by remember { mutableStateOf("") }
+                    var text by rememberSaveable { mutableStateOf("") }
                     BasicTextField(text, { text = it })
                 }
             }
         }
         compose.onNode(hasSetTextAction()).performClick().assertIsFocused()
+        compose.onNode(hasSetTextAction()).performTextInput("half a thought")
         locked.value = true
         compose.waitForIdle()
+        compose.onAllNodes(hasSetTextAction()).assertCountEquals(0)
+        compose.onNodeWithText("Channels is locked").assertExists()
+        locked.value = false
+        compose.waitForIdle()
         compose.onNode(hasSetTextAction()).assertIsNotFocused()
+        compose.onNodeWithText("half a thought").assertExists()
     }
 }

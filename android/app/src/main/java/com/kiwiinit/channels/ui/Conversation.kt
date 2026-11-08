@@ -151,9 +151,14 @@ sealed interface Line {
             var lastAt: MessageView? = null
             val held: List<Pair<Double, Line>> = asks.map { it.at to Ask("a${it.seq}", it) } + reviews.map { it.at to Review("r${it.task}", it) }
             val waiting = ArrayDeque(held.sortedBy { it.first })
-            val answers = messages.mapNotNull { m -> m.chosen?.let { "${it.by}|${it.choice}" } }.toSet()
+            val answers = mutableMapOf<String, ArrayDeque<Int>>()
+            for (m in messages) m.chosen?.let { answers.getOrPut("${it.by}|${it.choice}") { ArrayDeque() } += m.seq }
             for (m in messages) {
-                if (m.choices.isEmpty() && "${m.from}|${m.body}" in answers) continue
+                val polls = answers["${m.from}|${m.body}"]
+                if (m.choices.isEmpty() && polls != null && polls.isNotEmpty() && polls.first() < m.seq) {
+                    polls.removeFirst()
+                    continue
+                }
                 while (waiting.isNotEmpty() && waiting.first().first < m.at) {
                     out += waiting.removeFirst().second
                     prev = null

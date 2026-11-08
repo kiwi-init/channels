@@ -31,7 +31,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -66,7 +68,7 @@ fun Root(model: AppModel, unlock: () -> Unit) {
     LaunchedEffect(model) { model.buzz.collect { view.buzz(it) } }
     Surface(Modifier.fillMaxSize()) {
         Box(Modifier.fillMaxSize()) {
-            model.engine?.let { EngineHost(it) }
+            model.engine?.let { key(it) { EngineHost(it) } }
             when (val phase = model.phase) {
                 Phase.Starting -> Unit
                 Phase.Unlinked -> LinkScreen(model)
@@ -79,9 +81,9 @@ fun Root(model: AppModel, unlock: () -> Unit) {
 
 @Composable
 internal fun Guarded(locked: Boolean, unlock: () -> Unit, content: @Composable () -> Unit) {
+    val kept = rememberSaveableStateHolder()
     Box(Modifier.fillMaxSize()) {
-        content()
-        if (locked) Locked(unlock)
+        if (locked) Locked(unlock) else kept.SaveableStateProvider("unlocked") { content() }
     }
 }
 

@@ -8,6 +8,7 @@ import java.io.File
 import java.io.IOException
 import java.security.GeneralSecurityException
 import java.security.KeyStore
+import java.security.ProviderException
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
@@ -34,6 +35,9 @@ class Vault(context: Context) {
         } catch (e: IOException) {
             // An unreadable file is the same as none: this phone links again.
             null
+        } catch (e: ProviderException) {
+            // The keystore failed this time, not for good: the keys stay and the caller says so.
+            throw VaultException("the keystore didn't answer (${e.message ?: "no reason given"})", e)
         }
     }
 
@@ -58,6 +62,10 @@ class Vault(context: Context) {
             // The disk refused: the old file stays whole and the caller says so.
             file.failWrite(out)
             throw VaultException("the disk refused it (${e.message ?: "no reason given"})", e)
+        } catch (e: ProviderException) {
+            // The keystore failed this time: the old file stays whole and the caller says so.
+            file.failWrite(out)
+            throw VaultException("the keystore refused it (${e.message ?: "no reason given"})", e)
         }
     }
 
@@ -68,6 +76,8 @@ class Vault(context: Context) {
         } catch (e: GeneralSecurityException) {
             // The file is gone already; a key left behind opens nothing.
         } catch (e: IOException) {
+            // The file is gone already; a key left behind opens nothing.
+        } catch (e: ProviderException) {
             // The file is gone already; a key left behind opens nothing.
         }
     }
