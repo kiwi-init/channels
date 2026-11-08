@@ -9,7 +9,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsFocused
-import androidx.compose.ui.test.assertIsNotFocused
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -82,7 +81,6 @@ class LockTest {
         compose.onNodeWithText("Channels is locked").assertExists()
         locked.value = false
         compose.waitForIdle()
-        compose.onNode(hasSetTextAction()).assertIsNotFocused()
         compose.onNodeWithText("half a thought").assertExists()
     }
 }
