@@ -45,6 +45,7 @@ export function PeopleSection({ people }: { people: AdminPerson[] }) {
             hint={<span className="set-mono">{`${plural(p.used, "message")} today · ${plural(p.channels, "channel")} · ${active(p.seen)}`}</span>}
           >
             <Seg label={`Plan for ${p.login ?? p.user}`} value={p.plan} options={PLANS} onChange={(plan) => change(p, { plan })} />
+            <span className="set-row-hint">Block</span>
             <Toggle label={`Block ${p.login ?? p.user}`} on={p.blocked} onChange={(blocked) => change(p, { blocked })} />
           </Row>
         ))}
