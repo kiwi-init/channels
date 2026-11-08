@@ -144,6 +144,7 @@ function owned(env: Env): Owned {
         reserve: async (user, room, most) => ((await (await post(user, "reserve", { room, most })).json()) as { ok: boolean }).ok,
         release: async (user, room) => void (await post(user, "release", { room })),
         person: async (user) => (await (await post(user, "person", { user })).json()) as Person,
+        seen: async (user, login) => void (await post(user, "seen", { user, login })),
         lease: async (user, ask) => (await (await post(user, "lease", { user, ask })).json()) as Lease,
       },
     };
@@ -399,6 +400,12 @@ export class Owners extends DurableObject<Env> {
       const got = this.book.lease(user, ask);
       this.note(user, entries().filter((e) => e.owner).length);
       return Response.json(got);
+    }
+    if (req.method === "POST" && path === "/seen") {
+      const { user, login } = (await req.json()) as { user: string; login: string };
+      this.book.setLogin(user, login);
+      this.note(user, entries().filter((e) => e.owner).length);
+      return Response.json({ ok: true });
     }
     if (req.method === "POST" && path === "/set") {
       const { user, change } = (await req.json()) as { user: string; change: Partial<Person> };

@@ -370,6 +370,10 @@ export function startRelay(
         if (row && releasable(JSON.parse(row.entry) as DirectoryEntry)) people.query("DELETE FROM owned WHERE user = ? AND room = ?").run(user, room);
       },
       person: async (user: string) => book.person(user),
+      seen: async (user: string, login: string) => {
+        book.setLogin(user, login);
+        noteOf(user);
+      },
       lease: async (user: string, ask: LeaseAsk) => leaseNoted(user, ask),
     }),
     clockLayer(opts.now),

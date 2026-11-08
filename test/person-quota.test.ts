@@ -165,7 +165,14 @@ describe("over a socket", () => {
         Layer.succeed(GithubApp, null),
         Layer.succeed(GithubPush, null),
         Layer.succeed(Policy, { ...OPEN_POLICY, personMessagesPerDay: 30, noRateLimits: true }),
-        Layer.succeed(Directory, { list: async () => [], reserve: async () => true, release: async () => {}, person: async (u) => book.person(u), lease: async (u, a) => book.lease(u, a) }),
+        Layer.succeed(Directory, {
+          list: async () => [],
+          reserve: async () => true,
+          release: async () => {},
+          person: async (u) => book.person(u),
+          seen: async () => {},
+          lease: async (u, a) => book.lease(u, a),
+        }),
       ),
     );
     const room = () => new RoomDb(sql, roomId);
@@ -194,8 +201,8 @@ describe("admins", () => {
     await bobs.send("1");
     await bobs.send("2");
     await expect(bobs.send("3")).rejects.toMatchObject({ status: 429 });
-    const list = (await (await as(relay, "alice", "/v1/admin/people")).json()) as { people: { user: string; plan: string; used: number; channels: number; blocked: boolean }[] };
-    expect(list.people.find((p) => p.user === "github_2")).toMatchObject({ plan: "free", used: 2, channels: 1, blocked: false });
+    const list = (await (await as(relay, "alice", "/v1/admin/people")).json()) as { people: { user: string; login: string | null; plan: string; used: number; channels: number; blocked: boolean }[] };
+    expect(list.people.find((p) => p.user === "github_2")).toMatchObject({ login: "bob", plan: "free", used: 2, channels: 1, blocked: false });
     const set = await as(relay, "alice", "/v1/admin/people/github_2", { method: "PUT", body: JSON.stringify({ plan: "unlimited" }) });
     expect(await set.json()).toMatchObject({ user: "github_2", plan: "unlimited", blocked: false });
     const blocked = await as(relay, "alice", "/v1/admin/people/github_2", { method: "PUT", body: JSON.stringify({ blocked: true }) });

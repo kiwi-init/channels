@@ -44,6 +44,7 @@ export class Directory extends Context.Service<
     reserve(user: string, room: string, most: number): Promise<boolean>;
     release(user: string, room: string): Promise<void>;
     person(user: string): Promise<Person>;
+    seen(user: string, login: string): Promise<void>;
     lease(user: string, ask: LeaseAsk): Promise<Lease>;
   }
 >()("kiwi/relay/Directory") {}
