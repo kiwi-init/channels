@@ -16,7 +16,7 @@ import { approveTask, sendBackTask, type TaskSend } from "@kiwi/channel/task-act
 import { closedDigest } from "@kiwi/channel/task-digest.ts";
 import { TEND_SAFETY_MS, tendOwned } from "@kiwi/app/approval-tend.ts";
 import { ALLOW_ONCE, DENY } from "@kiwi/app/permission-settled.ts";
-import { leadChatKey, roomView } from "./view.ts";
+import { isRoomKey, leadChatKey, roomKeysFor, roomOfKey, roomView } from "./view.ts";
 import type { Connection, NeedView, Picture, RoomView } from "./wire.ts";
 
 const WINDOW = 400;
@@ -144,7 +144,7 @@ export class Room {
   }
 
   open(place: string): void {
-    this.place = placeFromKey(place) ? place : "main";
+    this.place = placeFromKey(place) || isRoomKey(place) ? place : "main";
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
     this.flush();
@@ -154,7 +154,14 @@ export class Room {
     const names = this.roster.filter((m) => m.active && !m.unverified).map((m) => m.name);
     const named = [...body.matchAll(/(^|\s)@([A-Za-z0-9_.-]+)/g)].map((x) => x[2]!).filter((n) => names.includes(n) && n !== this.me);
     const replyTo = re === null ? undefined : this.messages.find((m) => m.seq === re);
-    const where = placeFromKey(at ?? this.place) ?? MAIN;
+    const key = at ?? this.place;
+    if (isRoomKey(key)) {
+      const room = this.state ? roomOfKey(this.state, this.me, key) : null;
+      if (!room) throw new Error("that room isn't open to you here any more");
+      const to = named.length ? named : replyTo && replyTo.from !== this.me ? [replyTo.from] : undefined;
+      return this.sendWoken(body, { kind: "msg", room: room.id, ...(to ? { to } : {}), ...(re !== null ? { re: [re] } : {}), ...(imgs.length ? { imgs: [...imgs] } : {}) });
+    }
+    const where = placeFromKey(key) ?? MAIN;
     if (where.kind === "dm") {
       const root = this.state ? rootOf(this.me, this.state.members) : this.me;
       if (!where.with.includes(root)) throw new Error("this conversation is between two others: you can read along");
@@ -175,7 +182,7 @@ export class Room {
     const state = this.state;
     if (!state) return {};
     const side = leadChatKey(state, this.me);
-    const keys = side ? ["main", side] : ["main"];
+    const keys = ["main", ...(side ? [side] : []), ...roomKeysFor(state, this.me)];
     const mine = Object.fromEntries(
       keys.flatMap((k) => {
         const v = local[k];
