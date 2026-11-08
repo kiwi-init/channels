@@ -31,8 +31,9 @@ import {
   type MachineStore,
   type PersonMachinesStore,
 } from "./machine.ts";
-import { allow as allowPerMinute } from "./room/limits.ts";
+import { allow as allowPerMinute, utcDay } from "./room/limits.ts";
 import { clientAddress, parseTrustProxy, trustProxyFromArgs, trustProxyHint, trustsAProxy, untrustedProxy, writeAllowed, type TrustProxy } from "./address.ts";
+import { onAdminHttp, type PeopleAdmin } from "./admin.ts";
 import { PeopleBook, type LeaseAsk } from "./people.ts";
 import { Policy, policyFrom, type RelayPolicy, type RoomPolicy } from "./policy.ts";
 import {
@@ -332,6 +333,21 @@ export function startRelay(
     all: <T>(q: string, ...p: SqlParam[]) => people.query(q).all(...p) as T[],
     transaction: <T>(work: () => T): T => people.transaction(work)(),
   });
+  const ownedCount = (user: string) => (people.query("SELECT COUNT(*) AS n FROM owned WHERE user = ?").get(user) as { n: number }).n;
+  const noteOf = (user: string) => book.note(book.summary(user, utcDay(clock()), ownedCount(user), clock()));
+  const leaseNoted = (user: string, ask: LeaseAsk) => {
+    const got = book.lease(user, ask);
+    noteOf(user);
+    return got;
+  };
+  const admin: PeopleAdmin = {
+    people: async () => book.people(utcDay(clock())),
+    set: async (user, change) => {
+      book.setPerson(user, { ...book.person(user), ...change });
+      noteOf(user);
+      return book.summary(user, utcDay(clock()), ownedCount(user), clock());
+    },
+  };
   const listOf = (user: string) => (people.query("SELECT entry FROM owned WHERE user = ?").all(user) as { entry: string }[]).map((r) => JSON.parse(r.entry) as DirectoryEntry);
 
   // What every room runs with. `now` (tests) is the clock the room reads.
@@ -354,7 +370,7 @@ export function startRelay(
         if (row && releasable(JSON.parse(row.entry) as DirectoryEntry)) people.query("DELETE FROM owned WHERE user = ? AND room = ?").run(user, room);
       },
       person: async (user: string) => book.person(user),
-      lease: async (user: string, ask: LeaseAsk) => book.lease(user, ask),
+      lease: async (user: string, ask: LeaseAsk) => leaseNoted(user, ask),
     }),
     clockLayer(opts.now),
   );
@@ -414,7 +430,7 @@ export function startRelay(
     }
     if (fx.lease) {
       const { user, ask } = fx.lease;
-      runRoomSync(relay, storeFor(roomId, false), leaseTake(book.lease(user, ask), ask.day));
+      runRoomSync(relay, storeFor(roomId, false), leaseTake(leaseNoted(user, ask), ask.day));
     }
     for (const u of fx.directory ?? []) {
       if (u.entry) people.query("INSERT OR REPLACE INTO owned (user, room, entry) VALUES (?, ?, ?)").run(u.user, u.room, JSON.stringify(u.entry));
@@ -491,6 +507,8 @@ export function startRelay(
         if (machine instanceof Response) return machine;
         const person = await onPersonHttp(req, personMachines, { now: clock });
         if (person) return person;
+        const admined = await onAdminHttp(req, human, policy, admin);
+        if (admined) return admined;
         if (isAccountPath(url.pathname)) {
           if (req.method === "OPTIONS") return corsPreflight();
           const user = await accountUser(req, human);

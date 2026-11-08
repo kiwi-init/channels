@@ -183,3 +183,31 @@ describe("over a socket", () => {
     expect(refused).toContain("used today's 30 messages");
   });
 });
+
+describe("admins", () => {
+  const as = (relay: string, login: string, path: string, init: RequestInit = {}) =>
+    fetch(`${relay}${path}`, { ...init, headers: { "x-human-token": token(login), "content-type": "application/json", ...init.headers } });
+
+  test("an admin lists people with plan and today's use, and sets a plan or a block", async () => {
+    const { relay } = relayWith({ personMessagesPerDay: 2, admins: ["github_1"] });
+    const bobs = await channelOf(relay, "bob");
+    await bobs.send("1");
+    await bobs.send("2");
+    await expect(bobs.send("3")).rejects.toMatchObject({ status: 429 });
+    const list = (await (await as(relay, "alice", "/v1/admin/people")).json()) as { people: { user: string; plan: string; used: number; channels: number; blocked: boolean }[] };
+    expect(list.people.find((p) => p.user === "github_2")).toMatchObject({ plan: "free", used: 2, channels: 1, blocked: false });
+    const set = await as(relay, "alice", "/v1/admin/people/github_2", { method: "PUT", body: JSON.stringify({ plan: "unlimited" }) });
+    expect(await set.json()).toMatchObject({ user: "github_2", plan: "unlimited", blocked: false });
+    const blocked = await as(relay, "alice", "/v1/admin/people/github_2", { method: "PUT", body: JSON.stringify({ blocked: true }) });
+    expect(await blocked.json()).toMatchObject({ plan: "unlimited", blocked: true });
+    await expect(channelOf(relay, "bob")).rejects.toMatchObject({ status: 403 });
+    expect((await as(relay, "alice", "/v1/admin/people/github_2", { method: "PUT", body: JSON.stringify({ plan: "gold" }) })).status).toBe(400);
+  });
+
+  test("anyone else is refused, signed in or not", async () => {
+    const { relay } = relayWith({ personMessagesPerDay: 2, admins: ["github_1"] });
+    expect((await as(relay, "bob", "/v1/admin/people")).status).toBe(403);
+    expect((await as(relay, "bob", "/v1/admin/people/github_2", { method: "PUT", body: JSON.stringify({ plan: "unlimited" }) })).status).toBe(403);
+    expect((await fetch(`${relay}/v1/admin/people`)).status).toBe(401);
+  });
+});

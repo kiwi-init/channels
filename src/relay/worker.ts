@@ -10,7 +10,8 @@ import * as Layer from "effect/Layer";
 import { CLOSE_CLOSED, CLOSE_REMOVED, GONE_WORDS, PING, PONG } from "@kiwi/core/protocol.ts";
 import { ChannelGone, NotFound, Refused, TooMany, UpdateRequired } from "./failures.ts";
 import { githubHumanAuth, Human, NO_ONE, type HumanAuth } from "./human.ts";
-import { PeopleBook, type Lease, type LeaseAsk, type Person } from "./people.ts";
+import { isAdminPath, onAdminHttp, type PeopleAdmin } from "./admin.ts";
+import { PeopleBook, type Lease, type LeaseAsk, type Person, type PersonRow } from "./people.ts";
 import { pageSecret, Policy, policyFrom, type RelayPolicy } from "./policy.ts";
 import { edgePage, PAGE_PATH, type PageCache } from "./pages.ts";
 import {
@@ -63,7 +64,7 @@ import {
 import { ACCOUNT_ASKS_PER_MINUTE, accountUser, isAccountPath, onAccountHttp, sameEnrollment, sameFresh, type AccountStore, type FreshRecord } from "./account.ts";
 import { ENROLL_TTL_MS, type Enrollment } from "@kiwi/core/enroll.ts";
 import type { DeviceLink } from "@kiwi/core/devices.ts";
-import { allow as allowPerMinute } from "./room/limits.ts";
+import { allow as allowPerMinute, utcDay } from "./room/limits.ts";
 import { makeRelay, onHttp, runRoom, runRoomSync, type Relay } from "./route.ts";
 import { GithubApp, githubAppFrom, GithubPush, githubPushFrom } from "./github-app.ts";
 import { pusherFrom, type Pusher } from "./push.ts";
@@ -79,6 +80,7 @@ interface Env {
   MACHINES: DurableObjectNamespace<MachineInbox>;
   PERSON_MACHINES: DurableObjectNamespace<PersonMachines>;
   ACCOUNTS: DurableObjectNamespace<Account>;
+  PEOPLE: DurableObjectNamespace<People>;
   /** 20 mailbox writes per minute per client address (computer asks and enrolments). */
   MAILBOX_WRITES: RateLimit;
   /** 60 machine registrations and inbox writes per minute per client address. */
@@ -119,6 +121,14 @@ function human(env: Env): HumanAuth | null {
 
 type Owned = ChannelLists["Service"];
 let peopleOf: { env: Env; owned: Owned } | undefined;
+const PEOPLE_INDEX = "all";
+
+function admin(env: Env): PeopleAdmin {
+  return {
+    people: async () => (await env.PEOPLE.get(env.PEOPLE.idFromName(PEOPLE_INDEX)).fetch("https://people/")).json(),
+    set: async (user, change) => (await env.OWNERS.get(env.OWNERS.idFromName(user)).fetch("https://owners/set", { method: "POST", body: JSON.stringify({ user, change }) })).json(),
+  };
+}
 /**
  * The owned-channel counts rooms read for the quota: each person's Owners object, reached through
  * this isolate's cached fetchers. Built once per isolate, like the verifier above.
@@ -347,6 +357,20 @@ function githubRoutes(env: Env): GithubRoutes {
 export class Owners extends DurableObject<Env> {
   private readonly book: PeopleBook;
 
+  private note(user: string, channels: number): PersonRow {
+    const row = this.book.summary(user, utcDay(Date.now()), channels, Date.now());
+    const index = this.env.PEOPLE.get(this.env.PEOPLE.idFromName(PEOPLE_INDEX));
+    this.ctx.waitUntil(
+      index
+        .fetch("https://people/note", { method: "POST", body: JSON.stringify(row) })
+        .then(() => undefined)
+        .catch(() => {
+          // The admins' list is a summary: the next lease writes it again.
+        }),
+    );
+    return row;
+  }
+
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS owned (room TEXT PRIMARY KEY, entry TEXT NOT NULL)");
@@ -372,7 +396,14 @@ export class Owners extends DurableObject<Env> {
     if (req.method === "POST" && path === "/person") return Response.json(this.book.person(((await req.json()) as { user: string }).user));
     if (req.method === "POST" && path === "/lease") {
       const { user, ask } = (await req.json()) as { user: string; ask: LeaseAsk };
-      return Response.json(this.book.lease(user, ask));
+      const got = this.book.lease(user, ask);
+      this.note(user, entries().filter((e) => e.owner).length);
+      return Response.json(got);
+    }
+    if (req.method === "POST" && path === "/set") {
+      const { user, change } = (await req.json()) as { user: string; change: Partial<Person> };
+      this.book.setPerson(user, { ...this.book.person(user), ...change });
+      return Response.json(this.note(user, entries().filter((e) => e.owner).length));
     }
     if (req.method === "POST" && path === "/release") {
       const { room } = (await req.json()) as { room: string };
@@ -386,6 +417,27 @@ export class Owners extends DurableObject<Env> {
       return Response.json({ ok: true });
     }
     return Response.json(entries());
+  }
+}
+
+/** Every signed-in person this relay has counted: plan, blocked, today's messages and owned channels, for its admins. */
+export class People extends DurableObject<Env> {
+  private readonly book: PeopleBook;
+
+  constructor(ctx: DurableObjectState, env: Env) {
+    super(ctx, env);
+    this.book = new PeopleBook({
+      run: (q, ...p) => void ctx.storage.sql.exec(q, ...p),
+      all: <T>(q: string, ...p: SqlParam[]) => ctx.storage.sql.exec(q, ...p).toArray() as T[],
+    });
+  }
+
+  override async fetch(req: Request): Promise<Response> {
+    if (req.method === "POST") {
+      this.book.note((await req.json()) as PersonRow);
+      return Response.json({ ok: true });
+    }
+    return Response.json(this.book.people(utcDay(Date.now())));
   }
 }
 
@@ -727,6 +779,7 @@ export default {
       if (signed instanceof Response) return signed;
       return env.MACHINES.get(env.MACHINES.idFromName(signed.mpk)).fetch(req);
     }
+    if (isAdminPath(url.pathname)) return (await onAdminHttp(req, human(env), policyFrom(env as unknown as Record<string, string | undefined>), admin(env)))!;
     if (isAccountPath(url.pathname)) {
       const ip = req.headers.get("cf-connecting-ip");
       if ((req.method === "PUT" || req.method === "POST") && ip && !(await env.MACHINE_WRITES.limit({ key: `account:${ip}` })).success) {
