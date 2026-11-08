@@ -126,6 +126,7 @@ const PEOPLE_INDEX = "all";
 function admin(env: Env): PeopleAdmin {
   return {
     people: async () => (await env.PEOPLE.get(env.PEOPLE.idFromName(PEOPLE_INDEX)).fetch("https://people/")).json(),
+    summary: async (user) => (await env.OWNERS.get(env.OWNERS.idFromName(user)).fetch("https://owners/summary", { method: "POST", body: JSON.stringify({ user }) })).json(),
     set: async (user, change) => (await env.OWNERS.get(env.OWNERS.idFromName(user)).fetch("https://owners/set", { method: "POST", body: JSON.stringify({ user, change }) })).json(),
   };
 }
@@ -400,6 +401,10 @@ export class Owners extends DurableObject<Env> {
       const got = this.book.lease(user, ask);
       this.note(user, entries().filter((e) => e.owner).length);
       return Response.json(got);
+    }
+    if (req.method === "POST" && path === "/summary") {
+      const { user } = (await req.json()) as { user: string };
+      return Response.json(this.book.summary(user, utcDay(Date.now()), entries().filter((e) => e.owner).length, Date.now()));
     }
     if (req.method === "POST" && path === "/seen") {
       const { user, login } = (await req.json()) as { user: string; login: string };

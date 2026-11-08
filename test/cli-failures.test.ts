@@ -43,3 +43,8 @@ test("a relay that fails or limits says so once, with when to try again", () => 
   expect(failWith(`new RelayError(429, "too many messages; wait a minute", "TooMany", "30")`)).toBe("kiwi: the relay is limiting this computer (too many messages; wait a minute): try again in 30s");
   expect(failWith(`new RelayError(403, "only the owner can do that")`)).toBe("kiwi: relay: only the owner can do that");
 });
+
+test("a daily quota says so in its own words, with no try-again time", () => {
+  const over = "this channel's owner has used today's 500 messages; more can be sent after 00:00 UTC (in 3h 10m), or get more at https://channels.kiwiinit.com/upgrade";
+  expect(failWith(`new RelayError(429, ${JSON.stringify(over)}, "TooMany")`)).toBe(`kiwi: ${over}`);
+});

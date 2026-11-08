@@ -1,14 +1,14 @@
 import { useEffect, useState, type ReactNode } from "react"
 
 import { AFK_MINUTES } from "~/afk/wait"
-import { IconButton } from "~/kit/bits"
+import { cx, IconButton } from "~/kit/bits"
 import { Toggle } from "~/kit/form"
 import { setDebugOptions, useDebugOptions } from "~/kit/debug"
 import { Icon } from "~/kit/icons"
 import type { TextFont } from "@kiwi/app/theme.ts"
 import { personFingerprint } from "@kiwi/core/fingerprint.ts"
 import { KEYS_UNSEALED } from "@kiwi/secrets/keys-at-rest.ts"
-import type { Account, Prefs, Theme, UpdateCheck } from "~/model"
+import type { Account, Prefs, Theme, UpdateCheck, Usage } from "~/model"
 import { updateFound } from "~/settings/update-check"
 import { useApp } from "~/nav"
 import { Confirm, Group, InlineEdit, Row, Seg } from "~/settings/controls"
@@ -85,6 +85,7 @@ export function AccountSection() {
           </Row>
         )}
         {account.personPk && <LoginKey pk={account.personPk} />}
+        <UsageRow />
       </Group>
       {account.keysUnsealed && (
         <p className="set-fine set-warning" role="note">
@@ -108,6 +109,32 @@ export function AccountSection() {
         }}
       />
     </Page>
+  )
+}
+
+const NEAR = 0.8
+
+function UsageRow() {
+  const { app } = useApp()
+  const [usage, setUsage] = useState<(Usage & { hours: number }) | null>(null)
+  useEffect(() => {
+    let live = true
+    void app.actions.myUsage().then((u) => live && setUsage(u && { ...u, hours: Math.max(1, Math.round((u.resetsAt - Date.now()) / 3_600_000)) }))
+    return () => {
+      live = false
+    }
+  }, [app.actions])
+  if (!usage || usage.limit === null) return null
+  const near = usage.used >= usage.limit * NEAR
+  return (
+    <Row label="Messages today" hint={`In the channels you own, agents' included. Resets in ${usage.hours}h.`}>
+      <span className={cx("set-value set-mono", near && "is-near")}>{`${usage.used.toLocaleString()} of ${usage.limit.toLocaleString()}`}</span>
+      {near && usage.upgradeUrl && (
+        <OutsideLink className="btn is-primary is-small" href={usage.upgradeUrl}>
+          Get more
+        </OutsideLink>
+      )}
+    </Row>
   )
 }
 

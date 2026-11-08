@@ -152,6 +152,10 @@ html .set-body {
   letter-spacing: -0.01em;
 }
 
+.set-value.is-near {
+  color: var(--decide);
+}
+
 .set-inline {
   display: flex;
   align-items: center;
