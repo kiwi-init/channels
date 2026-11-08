@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useState } from "react"
 
 import { Toggle } from "~/kit/form"
 import { announce } from "~/kit/toasts"
@@ -25,7 +25,6 @@ function active(at: number): string {
 export function PeopleSection({ people }: { people: AdminPerson[] }) {
   const { app } = useApp()
   const [list, setList] = useState(people)
-  useEffect(() => setList(people), [people])
   const change = (who: AdminPerson, next: { plan?: PersonPlan; blocked?: boolean }) => {
     setList((l) => l.map((p) => (p.user === who.user ? { ...p, ...next } : p)))
     app.actions.setAdminPerson(who.user, next).then(
