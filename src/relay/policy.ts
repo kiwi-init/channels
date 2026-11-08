@@ -27,6 +27,10 @@ export interface RelayPolicy {
   membersPerChannel: number | null;
   /** Messages stored per channel per UTC day. */
   messagesPerDay: number | null;
+  personMessagesPerDay: number | null;
+  paidMessagesPerDay: number | null;
+  upgradeUrl: string | null;
+  admins: string[];
   /** Ciphertext bytes a channel may hold across its retained messages. */
   bytesPerChannel: number;
   /** Delete a channel after this many days with no new message and nobody connected. */
@@ -45,6 +49,10 @@ export const OPEN_POLICY: RelayPolicy = {
   channelsPerOwner: null,
   membersPerChannel: null,
   messagesPerDay: null,
+  personMessagesPerDay: null,
+  paidMessagesPerDay: null,
+  upgradeUrl: null,
+  admins: [],
   bytesPerChannel: SAFETY_BYTES_PER_CHANNEL,
   expireAfterDays: null,
   pageKey: null,
@@ -75,6 +83,13 @@ export function policyFrom(env: Record<string, string | undefined>): RelayPolicy
     channelsPerOwner: positive(env.KIWI_QUOTA_CHANNELS_PER_OWNER),
     membersPerChannel: positive(env.KIWI_QUOTA_MEMBERS_PER_CHANNEL),
     messagesPerDay: positive(env.KIWI_QUOTA_MESSAGES_PER_DAY),
+    personMessagesPerDay: positive(env.KIWI_QUOTA_PERSON_MESSAGES_PER_DAY),
+    paidMessagesPerDay: positive(env.KIWI_QUOTA_PAID_MESSAGES_PER_DAY),
+    upgradeUrl: env.KIWI_UPGRADE_URL?.trim() || null,
+    admins: (env.KIWI_ADMINS ?? "")
+      .split(",")
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean),
     bytesPerChannel: positive(env.KIWI_QUOTA_BYTES_PER_CHANNEL) ?? SAFETY_BYTES_PER_CHANNEL,
     expireAfterDays: positive(env.KIWI_EXPIRE_AFTER_DAYS),
     pageKey: pageSecret(env.KIWI_PAGE_KEY),
@@ -101,3 +116,5 @@ export const inBeta = Effect.fn("Policy.inBeta")(function* (user: string) {
 export function betaMessage(policy: RelayPolicy): string {
   return `Channels is in private beta, so creating channels is invite-only for now${policy.waitlistUrl ? `. Join the waitlist at ${policy.waitlistUrl}` : ""}. You can still join channels you're invited to.`;
 }
+
+export const BLOCKED_CREATE = "your account is blocked on this relay, so you can't create channels";

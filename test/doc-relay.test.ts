@@ -39,7 +39,13 @@ const relayCtx = makeRelay(
     Layer.succeed(GithubApp, null),
     Layer.succeed(GithubPush, githubPushFrom()),
     Layer.succeed(Policy, { ...OPEN_POLICY, noRateLimits: true }),
-    Layer.succeed(Directory, { list: async () => [], reserve: async () => true, release: async () => {} }),
+    Layer.succeed(Directory, {
+      list: async () => [],
+      reserve: async () => true,
+      release: async () => {},
+      person: async () => ({ plan: "free" as const, blocked: false }),
+      lease: async () => ({ grant: 0, plan: "free" as const, limit: null, remaining: null, blocked: false }),
+    }),
   ),
 );
 
@@ -139,7 +145,13 @@ describe("the relay stores and relays sealed doc updates (T491)", () => {
           Layer.succeed(GithubApp, null),
           Layer.succeed(GithubPush, githubPushFrom()),
           Layer.succeed(Policy, OPEN_POLICY),
-          Layer.succeed(Directory, { list: async () => [], reserve: async () => true, release: async () => {} }),
+          Layer.succeed(Directory, {
+            list: async () => [],
+            reserve: async () => true,
+            release: async () => {},
+            person: async () => ({ plan: "free" as const, blocked: false }),
+            lease: async () => ({ grant: 0, plan: "free" as const, limit: null, remaining: null, blocked: false }),
+          }),
         ),
       );
       const looper = "l".repeat(43);

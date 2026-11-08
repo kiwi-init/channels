@@ -10,6 +10,7 @@ import * as Layer from "effect/Layer";
 import { CLOSE_CLOSED, CLOSE_REMOVED, GONE_WORDS, PING, PONG } from "@kiwi/core/protocol.ts";
 import { ChannelGone, NotFound, Refused, TooMany, UpdateRequired } from "./failures.ts";
 import { githubHumanAuth, Human, NO_ONE, type HumanAuth } from "./human.ts";
+import { PeopleBook, type Lease, type LeaseAsk, type Person } from "./people.ts";
 import { pageSecret, Policy, policyFrom, type RelayPolicy } from "./policy.ts";
 import { edgePage, PAGE_PATH, type PageCache } from "./pages.ts";
 import {
@@ -41,6 +42,7 @@ import {
   type Effects,
   type Sql,
   type SqlParam,
+  leaseTake,
 } from "./room.ts";
 import { corsPreflight, onMailboxHttp, sqlMailboxStore, withCors } from "./mailbox.ts";
 import {
@@ -131,6 +133,8 @@ function owned(env: Env): Owned {
         list: async (user) => (await at(user).fetch("https://owners/")).json(),
         reserve: async (user, room, most) => ((await (await post(user, "reserve", { room, most })).json()) as { ok: boolean }).ok,
         release: async (user, room) => void (await post(user, "release", { room })),
+        person: async (user) => (await (await post(user, "person", { user })).json()) as Person,
+        lease: async (user, ask) => (await (await post(user, "lease", { user, ask })).json()) as Lease,
       },
     };
   }
@@ -264,6 +268,16 @@ export class Channel extends DurableObject<Env> {
     if (fx.directory?.length) {
       await Promise.allSettled(fx.directory.map((u) => this.env.OWNERS.get(this.env.OWNERS.idFromName(u.user)).fetch("https://owners/apply", { method: "POST", body: JSON.stringify(u) })));
     }
+    if (fx.lease) {
+      const { user, ask } = fx.lease;
+      const got = await owned(this.env)
+        .lease(user, ask)
+        .catch(() => {
+          // The owner's store is out of reach: the room keeps its credit and asks again later.
+          return null;
+        });
+      runRoomSync(this.relay, this.store(ask.room), leaseTake(got, ask.day));
+    }
     if (fx.wipe) {
       requestsGone(this.sql);
       // Closing leaves no breadcrumbs: every row and table goes, alarms included.
@@ -331,9 +345,16 @@ function githubRoutes(env: Env): GithubRoutes {
 
 /** One signed-in person's owned channels: room ids and join codes only, for the quota on POST /create. */
 export class Owners extends DurableObject<Env> {
+  private readonly book: PeopleBook;
+
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS owned (room TEXT PRIMARY KEY, entry TEXT NOT NULL)");
+    this.book = new PeopleBook({
+      run: (q, ...p) => void ctx.storage.sql.exec(q, ...p),
+      all: <T>(q: string, ...p: SqlParam[]) => ctx.storage.sql.exec(q, ...p).toArray() as T[],
+      transaction: <T>(work: () => T): T => ctx.storage.transactionSync(work),
+    });
   }
 
   override async fetch(req: Request): Promise<Response> {
@@ -347,6 +368,11 @@ export class Owners extends DurableObject<Env> {
       for (const r of stale) sql.exec("DELETE FROM owned WHERE room = ?", r);
       if (ok && !entries().some((e) => e.room === room)) sql.exec("INSERT INTO owned (room, entry) VALUES (?, ?)", room, JSON.stringify(holdEntry(room, Date.now())));
       return Response.json({ ok });
+    }
+    if (req.method === "POST" && path === "/person") return Response.json(this.book.person(((await req.json()) as { user: string }).user));
+    if (req.method === "POST" && path === "/lease") {
+      const { user, ask } = (await req.json()) as { user: string; ask: LeaseAsk };
+      return Response.json(this.book.lease(user, ask));
     }
     if (req.method === "POST" && path === "/release") {
       const { room } = (await req.json()) as { room: string };

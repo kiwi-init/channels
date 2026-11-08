@@ -33,6 +33,7 @@ import {
 } from "./machine.ts";
 import { allow as allowPerMinute } from "./room/limits.ts";
 import { clientAddress, parseTrustProxy, trustProxyFromArgs, trustProxyHint, trustsAProxy, untrustedProxy, writeAllowed, type TrustProxy } from "./address.ts";
+import { PeopleBook, type LeaseAsk } from "./people.ts";
 import { Policy, policyFrom, type RelayPolicy, type RoomPolicy } from "./policy.ts";
 import {
   Directory,
@@ -62,6 +63,7 @@ import {
   type Effects,
   type Sql,
   type SqlParam,
+  leaseTake,
 } from "./room.ts";
 import { makeRelay, onHttp, runRoom, runRoomSync } from "./route.ts";
 import { GITHUB_QUEUE_MAX, GITHUB_QUEUE_TTL_MS, onGithubHttp, type GithubRoutes } from "./github.ts";
@@ -325,6 +327,11 @@ export function startRelay(
   };
   /** Creates in flight, by room: a refused one removes the file only when no other create of that id is still running. */
   const creating = new Map<string, number>();
+  const book = new PeopleBook({
+    run: (q, ...p) => void people.query(q).run(...p),
+    all: <T>(q: string, ...p: SqlParam[]) => people.query(q).all(...p) as T[],
+    transaction: <T>(work: () => T): T => people.transaction(work)(),
+  });
   const listOf = (user: string) => (people.query("SELECT entry FROM owned WHERE user = ?").all(user) as { entry: string }[]).map((r) => JSON.parse(r.entry) as DirectoryEntry);
 
   // What every room runs with. `now` (tests) is the clock the room reads.
@@ -346,6 +353,8 @@ export function startRelay(
         const row = people.query("SELECT entry FROM owned WHERE user = ? AND room = ?").get(user, room) as { entry: string } | null;
         if (row && releasable(JSON.parse(row.entry) as DirectoryEntry)) people.query("DELETE FROM owned WHERE user = ? AND room = ?").run(user, room);
       },
+      person: async (user: string) => book.person(user),
+      lease: async (user: string, ask: LeaseAsk) => book.lease(user, ask),
     }),
     clockLayer(opts.now),
   );
@@ -402,6 +411,10 @@ export function startRelay(
     for (const l of fx.github ?? []) {
       if (l.on) people.query("INSERT OR IGNORE INTO github_routes (repo, room) VALUES (?, ?)").run(l.repo, l.room);
       else people.query("DELETE FROM github_routes WHERE repo = ? AND room = ?").run(l.repo, l.room);
+    }
+    if (fx.lease) {
+      const { user, ask } = fx.lease;
+      runRoomSync(relay, storeFor(roomId, false), leaseTake(book.lease(user, ask), ask.day));
     }
     for (const u of fx.directory ?? []) {
       if (u.entry) people.query("INSERT OR REPLACE INTO owned (user, room, entry) VALUES (?, ?, ?)").run(u.user, u.room, JSON.stringify(u.entry));

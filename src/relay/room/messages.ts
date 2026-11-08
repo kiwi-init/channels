@@ -2,15 +2,98 @@ import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import { blobId } from "@kiwi/core/crypto.ts";
 import { MAX_BLOB_BYTES, MAX_CT_LENGTH, type Envelope, type ReadMark, type SlotTake } from "@kiwi/core/protocol.ts";
-import { BadRequest, Conflict, Fenced, ReadOnly, Taken, TooLarge, TooMany } from "../failures.ts";
-import { Policy } from "../policy.ts";
+import { BadRequest, Conflict, Fenced, Forbidden, ReadOnly, Taken, TooLarge, TooMany } from "../failures.ts";
+import { Policy, type RoomPolicy } from "../policy.ts";
 import { fits, StoredEnvelope } from "../schema.ts";
 import { readMeta } from "./auth.ts";
-import { RoomStore, type RoomServices } from "./db.ts";
-import type { Effects } from "./directory.ts";
+import { RoomStore, type RoomDb, type RoomServices } from "./db.ts";
+import { LEASE_BATCH, type Lease, type LeaseAsk } from "../people.ts";
+import { Directory, type Effects } from "./directory.ts";
 import { formatBytes, untilUtcMidnight, utcDay } from "./limits.ts";
 
 export const READ_ONLY = "the owner lets you only read in this channel";
+const OWNER_BLOCKED = "this channel's owner is blocked on this relay, so nothing new can be posted here";
+const LEASE_KEY = "person_lease";
+const ASK_AGAIN_MS = 2_000;
+const ASK_OVER_MS = 60_000;
+const LOW = LEASE_BATCH / 4;
+
+interface LeaseState {
+  day: string;
+  left: number;
+  over: boolean;
+  blocked: boolean;
+  limit: number | null;
+  asked: number;
+}
+
+function personOverMessage(limit: number | null, ts: number, upgradeUrl: string | null): string {
+  const upgrade = upgradeUrl ? `, or get more at ${upgradeUrl}` : "";
+  return `this channel's owner has used today's ${limit ?? 0} messages; more can be sent after 00:00 UTC (in ${untilUtcMidnight(ts)})${upgrade}`;
+}
+
+const stateOf = (db: RoomDb, day: string): LeaseState => {
+  const raw = db.get(LEASE_KEY);
+  const s = raw ? (JSON.parse(raw) as LeaseState) : null;
+  return s?.day === day ? s : { day, left: 0, over: false, blocked: false, limit: null, asked: 0 };
+};
+
+const quotaOwner = (db: RoomDb, policy: RoomPolicy): string | null => (policy.personMessagesPerDay ? (db.ownerUser() ?? null) : null);
+
+const checkLease = (db: RoomDb, policy: RoomPolicy, day: string, ts: number) =>
+  Effect.gen(function* () {
+    if (!quotaOwner(db, policy)) return;
+    const s = stateOf(db, day);
+    if (s.blocked) return yield* new Forbidden({ message: OWNER_BLOCKED });
+    if (s.over || s.left <= -LEASE_BATCH) return yield* new TooMany({ message: personOverMessage(s.limit ?? policy.personMessagesPerDay, ts, policy.upgradeUrl) });
+  });
+
+export const leaseWant: Effect.Effect<Effects, never, RoomServices> = Effect.gen(function* () {
+  const db = yield* RoomStore;
+  const policy = yield* Policy;
+  const owner = quotaOwner(db, policy);
+  const free = policy.personMessagesPerDay;
+  if (!owner || !free) return {};
+  const ts = yield* Clock.currentTimeMillis;
+  const day = utcDay(ts);
+  const s = stateOf(db, day);
+  if (ts - s.asked < (s.over || s.blocked ? ASK_OVER_MS : ASK_AGAIN_MS)) return {};
+  if (!s.over && !s.blocked && s.left > LOW) return {};
+  db.set(LEASE_KEY, JSON.stringify({ ...s, asked: ts }));
+  const ask: LeaseAsk = { room: db.roomId, day, used: db.messagesOn(ts), free, paid: policy.paidMessagesPerDay, admin: policy.admins.includes(owner.toLowerCase()) };
+  return { lease: { user: owner, ask } };
+});
+
+export const leaseTake = (got: Lease | null, day: string) =>
+  Effect.gen(function* () {
+    const db = yield* RoomStore;
+    if (!got || !db.exists()) return;
+    const s = stateOf(db, day);
+    const left = s.left + got.grant;
+    const over = left <= 0 && (got.grant === 0 || got.remaining === 0);
+    db.set(LEASE_KEY, JSON.stringify({ ...s, left, over, blocked: got.blocked, limit: got.limit, asked: over || got.blocked ? s.asked : 0 } satisfies LeaseState));
+  });
+
+export const leaseNow: Effect.Effect<void, never, RoomServices | Directory> = Effect.gen(function* () {
+  const want = yield* leaseWant;
+  if (!want.lease) return;
+  const { user, ask } = want.lease;
+  const people = yield* Directory;
+  const got = yield* Effect.promise(() =>
+    people.lease(user, ask).catch(() => {
+      // The owner's store is out of reach: keep the channel going on its credit and ask again later.
+      return null;
+    }),
+  );
+  yield* leaseTake(got, ask.day);
+});
+
+const spendLease = (db: RoomDb, policy: RoomPolicy, day: string) => {
+  if (!quotaOwner(db, policy)) return;
+  const s = stateOf(db, day);
+  db.set(LEASE_KEY, JSON.stringify({ ...s, left: s.left - 1 }));
+};
+
 const SEND_MEMORY_MS = 3_600_000;
 export const TICKET_TTL_MS = 120_000;
 export const MAX_TICKETS = 10;
@@ -45,6 +128,7 @@ export const append = Effect.fn("Room.append")(function* (iv: string, ct: string
   if (perDay && today >= perDay) {
     return yield* new TooMany({ message: `this channel has stored ${perDay} messages today, its daily limit; more can be sent after 00:00 UTC (in ${untilUtcMidnight(ts)})` });
   }
+  yield* checkLease(db, policy, day, ts);
 
   const cap = policy.bytesPerChannel;
   if (ct.length > cap) return yield* new TooLarge({ message: `that message is bigger than this channel may hold (${formatBytes(cap)})` });
@@ -65,6 +149,7 @@ export const append = Effect.fn("Room.append")(function* (iv: string, ct: string
     if (bytes + ct.length > cap) bytes -= db.dropSnapshot();
 
     db.insert(seq, ts, iv, ct, e);
+    spendLease(db, policy, day);
     if (tickets.length) db.deliverTickets(tickets, seq);
     if (slots.free?.length) db.freeSlots(slots.free, sender);
     if (slots.take) db.takeSlot(slots.take.id, sender, seq, ts + slots.take.ttl, ts);

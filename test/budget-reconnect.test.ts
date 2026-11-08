@@ -218,7 +218,13 @@ test("the relay answers a member's page asks only so often", async () => {
         Layer.succeed(GithubApp, null),
         Layer.succeed(GithubPush, githubPushFrom()),
         Layer.succeed(Policy, OPEN_POLICY),
-        Layer.succeed(Directory, { list: async () => [], reserve: async () => true, release: async () => {} }),
+        Layer.succeed(Directory, {
+          list: async () => [],
+          reserve: async () => true,
+          release: async () => {},
+          person: async () => ({ plan: "free" as const, blocked: false }),
+          lease: async () => ({ grant: 0, plan: "free" as const, limit: null, remaining: null, blocked: false }),
+        }),
       ),
     );
     const ask = () => runRoomSync(ctx, new RoomDb(sql, seed.access.roomId), onClientFrame(JSON.stringify({ t: "more", since: seed.head - 1 }), seed.owner.pk)).reply;
