@@ -131,10 +131,12 @@ final class Engine: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
         case "saved":
             if let saved = object["saved"], let blob = try? JSONSerialization.data(withJSONObject: saved) { onPush(.saved(blob)) }
         case "room":
-            if let room = object["room"], let blob = try? JSONSerialization.data(withJSONObject: room),
-                let view = try? decoder.decode(RoomView.self, from: blob)
-            {
-                onPush(.room(view))
+            guard let room = object["room"], let blob = try? JSONSerialization.data(withJSONObject: room) else { return }
+            do {
+                onPush(.room(try decoder.decode(RoomView.self, from: blob)))
+            } catch {
+                logger.error("engine: a room view didn't decode: \(String(describing: error), privacy: .public)")
+                onPush(.log("a room view didn't decode: \(error)"))
             }
         case "gone":
             if let code = object["code"] as? String { onPush(.gone(code)) }
