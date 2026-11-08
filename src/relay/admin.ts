@@ -3,7 +3,7 @@ import { BadRequest, Forbidden, NotFound } from "./failures.ts";
 import type { HumanAuth } from "./human.ts";
 import { corsPreflight, withCors } from "./mailbox.ts";
 import { limitOf, PLANS, type Person, type PersonRow, type Plan } from "./people.ts";
-import type { RelayPolicy } from "./policy.ts";
+import { upgradeFor, type RelayPolicy } from "./policy.ts";
 import { errorResponse } from "./room/http.ts";
 
 export interface PeopleAdmin {
@@ -64,7 +64,15 @@ export async function onAdminHttp(req: Request, human: HumanAuth | null, policy:
     const free = policy.personMessagesPerDay;
     const admin = policy.admins.includes(user.toLowerCase());
     const limit = free ? limitOf(row.plan, { free, paid: policy.paidMessagesPerDay, admin }) : null;
-    const usage: Usage = { plan: admin ? "unlimited" : row.plan, blocked: row.blocked, used: row.used, limit, channels: row.channels, resetsAt: nextUtcMidnight(now), upgradeUrl: policy.upgradeUrl };
+    const usage: Usage = {
+      plan: admin ? "unlimited" : row.plan,
+      blocked: row.blocked,
+      used: row.used,
+      limit,
+      channels: row.channels,
+      resetsAt: nextUtcMidnight(now),
+      upgradeUrl: upgradeFor(policy.upgradeUrl, user),
+    };
     return withCors(Response.json(usage));
   }
   if (!policy.admins.includes(user.toLowerCase())) return refuse(new Forbidden({ message: NOT_ADMIN }));

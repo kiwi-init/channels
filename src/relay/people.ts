@@ -54,6 +54,7 @@ export class PeopleBook {
     sql.run(
       "CREATE TABLE IF NOT EXISTS person_index (user TEXT PRIMARY KEY, login TEXT, plan TEXT NOT NULL, blocked INTEGER NOT NULL, day TEXT NOT NULL, used INTEGER NOT NULL, channels INTEGER NOT NULL, seen INTEGER NOT NULL)",
     );
+    sql.run("CREATE TABLE IF NOT EXISTS stripe_customers (customer TEXT PRIMARY KEY, user TEXT NOT NULL)");
     sql.run("CREATE TABLE IF NOT EXISTS person_usage (user TEXT NOT NULL, room TEXT NOT NULL, day TEXT NOT NULL, used INTEGER NOT NULL, granted INTEGER NOT NULL, PRIMARY KEY (user, room))");
   }
 
@@ -128,5 +129,13 @@ export class PeopleBook {
         "SELECT user, login, plan, blocked, day, used, channels, seen FROM person_index ORDER BY seen DESC",
       )
       .map((r) => ({ ...r, plan: PLANS.find((p) => p === r.plan) ?? "free", blocked: r.blocked === 1, used: r.day === day ? r.used : 0 }));
+  }
+
+  customer(customer: string): string | null {
+    return this.sql.all<{ user: string }>("SELECT user FROM stripe_customers WHERE customer = ?", customer)[0]?.user ?? null;
+  }
+
+  linkCustomer(customer: string, user: string): void {
+    this.sql.run("INSERT OR REPLACE INTO stripe_customers (customer, user) VALUES (?, ?)", customer, user);
   }
 }

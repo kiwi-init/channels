@@ -11,6 +11,7 @@ import { CLOSE_CLOSED, CLOSE_REMOVED, GONE_WORDS, PING, PONG } from "@kiwi/core/
 import { ChannelGone, NotFound, Refused, TooMany, UpdateRequired } from "./failures.ts";
 import { githubHumanAuth, Human, NO_ONE, type HumanAuth } from "./human.ts";
 import { isAdminPath, onAdminHttp, type PeopleAdmin } from "./admin.ts";
+import { onStripeHttp, STRIPE_PATH, type StripeBook } from "./stripe.ts";
 import { PeopleBook, type Lease, type LeaseAsk, type Person, type PersonRow } from "./people.ts";
 import { pageSecret, Policy, policyFrom, type RelayPolicy } from "./policy.ts";
 import { edgePage, PAGE_PATH, type PageCache } from "./pages.ts";
@@ -81,6 +82,7 @@ interface Env {
   PERSON_MACHINES: DurableObjectNamespace<PersonMachines>;
   ACCOUNTS: DurableObjectNamespace<Account>;
   PEOPLE: DurableObjectNamespace<People>;
+  STRIPE_WEBHOOK_SECRET?: string;
   /** 20 mailbox writes per minute per client address (computer asks and enrolments). */
   MAILBOX_WRITES: RateLimit;
   /** 60 machine registrations and inbox writes per minute per client address. */
@@ -122,6 +124,16 @@ function human(env: Env): HumanAuth | null {
 type Owned = ChannelLists["Service"];
 let peopleOf: { env: Env; owned: Owned } | undefined;
 const PEOPLE_INDEX = "all";
+
+function stripeBook(env: Env): StripeBook {
+  const index = () => env.PEOPLE.get(env.PEOPLE.idFromName(PEOPLE_INDEX));
+  return {
+    person: (user) => owned(env).person(user),
+    setPlan: async (user, plan) => void (await admin(env).set(user, { plan })),
+    customer: async (customer) => ((await (await index().fetch("https://people/customer", { method: "POST", body: JSON.stringify({ customer }) })).json()) as { user: string | null }).user,
+    linkCustomer: async (customer, user) => void (await index().fetch("https://people/link", { method: "POST", body: JSON.stringify({ customer, user }) })),
+  };
+}
 
 function admin(env: Env): PeopleAdmin {
   return {
@@ -445,6 +457,13 @@ export class People extends DurableObject<Env> {
   }
 
   override async fetch(req: Request): Promise<Response> {
+    const path = new URL(req.url).pathname;
+    if (req.method === "POST" && path === "/customer") return Response.json({ user: this.book.customer(((await req.json()) as { customer: string }).customer) });
+    if (req.method === "POST" && path === "/link") {
+      const { customer, user } = (await req.json()) as { customer: string; user: string };
+      this.book.linkCustomer(customer, user);
+      return Response.json({ ok: true });
+    }
     if (req.method === "POST") {
       this.book.note((await req.json()) as PersonRow);
       return Response.json({ ok: true });
@@ -791,6 +810,7 @@ export default {
       if (signed instanceof Response) return signed;
       return env.MACHINES.get(env.MACHINES.idFromName(signed.mpk)).fetch(req);
     }
+    if (url.pathname === STRIPE_PATH) return (await onStripeHttp(req, env.STRIPE_WEBHOOK_SECRET, stripeBook(env)))!;
     if (isAdminPath(url.pathname)) return (await onAdminHttp(req, human(env), policyFrom(env as unknown as Record<string, string | undefined>), admin(env)))!;
     if (isAccountPath(url.pathname)) {
       const ip = req.headers.get("cf-connecting-ip");

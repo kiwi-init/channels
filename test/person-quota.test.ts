@@ -12,7 +12,8 @@ import { githubHumanAuth, Human } from "../src/relay/human.ts";
 import { Directory, leaseTake, onClientFrame, RoomDb, type Sql } from "../src/relay/room.ts";
 import { makeRelay, runRoomSync } from "../src/relay/route.ts";
 import { grantFor, LEASE_BATCH, limitOf, PeopleBook, type Plan } from "../src/relay/people.ts";
-import { OPEN_POLICY, Policy, policyFrom, type RelayPolicy } from "../src/relay/policy.ts";
+import { OPEN_POLICY, Policy, policyFrom, upgradeFor, type RelayPolicy } from "../src/relay/policy.ts";
+import { stripeSignature } from "../src/relay/stripe.ts";
 
 setDefaultTimeout(30_000);
 
@@ -33,10 +34,12 @@ afterAll(() => {
   for (const d of dirs) rmSync(d, { recursive: true, force: true });
 });
 
+const STRIPE_SECRET = "whsec_test";
+
 function relayWith(policy: Partial<RelayPolicy>, clock = { now: Date.UTC(2026, 10, 8, 23, 50) }) {
   const dataDir = mkdtempSync(join(tmpdir(), "kiwi-person-quota-"));
   dirs.push(dataDir);
-  const server = startRelay({ port: 0, hostname: "127.0.0.1", dataDir, human, policy: { ...OPEN_POLICY, ...policy }, now: () => clock.now });
+  const server = startRelay({ port: 0, hostname: "127.0.0.1", dataDir, human, stripeWebhookSecret: STRIPE_SECRET, policy: { ...OPEN_POLICY, ...policy }, now: () => clock.now });
   servers.push(server);
   return { relay: server.url.origin, dataDir, clock };
 }
@@ -100,7 +103,7 @@ describe("messages per person per day", () => {
     await one.send("a");
     await one.send("b");
     await two.send("c");
-    const over = { status: 429, message: expect.stringMatching(/used today's 3 messages.*00:00 UTC \(in 10m\).*kiwi\.test\/upgrade/) };
+    const over = { status: 429, message: expect.stringMatching(/used today's 3 messages.*00:00 UTC \(in 10m\).*kiwi\.test\/upgrade\?client_reference_id=github_1/) };
     await expect(two.send("one too many")).rejects.toMatchObject(over);
     await expect(one.send("here too")).rejects.toMatchObject(over);
     for (let i = 0; i < 3; i++) await bobs.send(`bob ${i}`);
@@ -228,7 +231,7 @@ describe("today's use", () => {
     await ch.send("2");
     const read = async (login: string) => (await fetch(`${relay}/v1/me/usage`, { headers: { "x-human-token": token(login) } })).json();
     const bob = (await read("bob")) as { used: number };
-    expect(bob).toMatchObject({ plan: "free", blocked: false, limit: 5, channels: 1, resetsAt: Date.UTC(2026, 10, 9), upgradeUrl: "https://kiwi.test/upgrade" });
+    expect(bob).toMatchObject({ plan: "free", blocked: false, limit: 5, channels: 1, resetsAt: Date.UTC(2026, 10, 9), upgradeUrl: "https://kiwi.test/upgrade?client_reference_id=github_2" });
     expect(bob.used).toBeGreaterThanOrEqual(1);
     expect(bob.used).toBeLessThanOrEqual(2);
     expect(await read("alice")).toMatchObject({ plan: "unlimited", limit: null, used: 0 });
@@ -239,5 +242,56 @@ describe("today's use", () => {
     const { relay } = relayWith({});
     await channelOf(relay, "bob");
     expect(await (await fetch(`${relay}/v1/me/usage`, { headers: { "x-human-token": token("bob") } })).json()).toMatchObject({ limit: null });
+  });
+});
+
+describe("Stripe", () => {
+  const hook = async (relay: string, clock: { now: number }, event: object, secret = STRIPE_SECRET, at = Math.floor(clock.now / 1000)) => {
+    const body = JSON.stringify(event);
+    return fetch(`${relay}/v1/stripe/webhook`, { method: "POST", headers: { "stripe-signature": `t=${at},v1=${await stripeSignature(secret, body, at)}` }, body });
+  };
+  const usage = async (relay: string, login: string) => (await (await fetch(`${relay}/v1/me/usage`, { headers: { "x-human-token": token(login) } })).json()) as { plan: string; limit: number };
+
+  test("a paid checkout moves the person to paid; a lapsed or cancelled subscription moves them back", async () => {
+    const clock = { now: Date.UTC(2026, 10, 8, 12) };
+    const { relay } = relayWith({ personMessagesPerDay: 5, paidMessagesPerDay: 50 }, clock);
+    await channelOf(relay, "bob");
+    const paid = await hook(relay, clock, { type: "checkout.session.completed", data: { object: { client_reference_id: "github_2", customer: "cus_1", payment_status: "paid" } } });
+    expect(await paid.json()).toEqual({ ok: true, did: "paid" });
+    expect(await usage(relay, "bob")).toMatchObject({ plan: "paid", limit: 50 });
+    await hook(relay, clock, { type: "customer.subscription.updated", data: { object: { customer: "cus_1", status: "past_due" } } });
+    expect(await usage(relay, "bob")).toMatchObject({ plan: "free", limit: 5 });
+    await hook(relay, clock, { type: "customer.subscription.updated", data: { object: { customer: "cus_1", status: "active" } } });
+    expect((await usage(relay, "bob")).plan).toBe("paid");
+    await hook(relay, clock, { type: "customer.subscription.deleted", data: { object: { customer: "cus_1", status: "canceled" } } });
+    expect((await usage(relay, "bob")).plan).toBe("free");
+  });
+
+  test("Stripe never lowers an unlimited person, and ignores what it doesn't know", async () => {
+    const clock = { now: Date.UTC(2026, 10, 8, 12) };
+    const { relay, dataDir } = relayWith({ personMessagesPerDay: 5 }, clock);
+    setPlan(dataDir, "github_3", "unlimited");
+    await hook(relay, clock, { type: "checkout.session.completed", data: { object: { client_reference_id: "github_3", customer: "cus_3", payment_status: "paid" } } });
+    await hook(relay, clock, { type: "customer.subscription.deleted", data: { object: { customer: "cus_3" } } });
+    expect((await usage(relay, "carol")).plan).toBe("unlimited");
+    expect(await (await hook(relay, clock, { type: "invoice.paid", data: { object: {} } })).json()).toEqual({ ok: true, did: "ignored" });
+    expect(await (await hook(relay, clock, { type: "customer.subscription.deleted", data: { object: { customer: "cus_nobody" } } })).json()).toEqual({ ok: true, did: "unknown customer" });
+    expect(await (await hook(relay, clock, { type: "checkout.session.completed", data: { object: { client_reference_id: "alice" } } })).json()).toEqual({ ok: true, did: "no person on the session" });
+  });
+
+  test("a bad or stale signature is refused and changes nothing", async () => {
+    const clock = { now: Date.UTC(2026, 10, 8, 12) };
+    const { relay } = relayWith({ personMessagesPerDay: 5 }, clock);
+    await channelOf(relay, "bob");
+    const event = { type: "checkout.session.completed", data: { object: { client_reference_id: "github_2", payment_status: "paid" } } };
+    expect((await hook(relay, clock, event, "whsec_wrong")).status).toBe(401);
+    expect((await hook(relay, clock, event, STRIPE_SECRET, Math.floor(clock.now / 1000) - 600)).status).toBe(401);
+    expect((await fetch(`${relay}/v1/stripe/webhook`, { method: "POST", body: JSON.stringify(event) })).status).toBe(401);
+    expect((await usage(relay, "bob")).plan).toBe("free");
+  });
+
+  test("upgrade links carry who's paying", () => {
+    expect(upgradeFor("https://buy.stripe.com/abc", "github_9")).toBe("https://buy.stripe.com/abc?client_reference_id=github_9");
+    expect(upgradeFor(null, "github_9")).toBeNull();
   });
 });
