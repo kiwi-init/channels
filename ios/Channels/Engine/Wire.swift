@@ -178,6 +178,7 @@ struct RoomView: Codable, Sendable, Hashable, Identifiable {
     let title: String
     let icon: IconView?
     let me: String
+    var root: String? = nil
     let isOwner: Bool
     let connection: Connection
     let gone: String?
@@ -202,17 +203,18 @@ struct RoomView: Codable, Sendable, Hashable, Identifiable {
     let places: [PlaceView]
 
     var id: String { code }
+    var base: String { root ?? me }
 
     func placeView(_ key: String) -> PlaceView? {
         places.first { $0.key == key }
     }
 
     func other(in place: PlaceView) -> String? {
-        place.kind == "dm" && place.withMe ? place.with.first { $0 != me } : nil
+        place.kind == "dm" && place.withMe ? place.with.first { $0 != base } : nil
     }
 
     func dmKey(with name: String) -> String {
-        let pair = [me, name].sorted()
+        let pair = [base, name].sorted()
         return "dm:\(pair[0])~\(pair[1])"
     }
 

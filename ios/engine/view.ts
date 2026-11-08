@@ -88,6 +88,8 @@ export function roomView(r: RoomInput): RoomView {
     answersDecisions(state.members, me),
   );
   const waiting = new Set([...decisions, ...escalations].map((m) => m.seq));
+  const root = rootOf(me, state.members);
+  const myself = (name: string) => name === me || rootOf(name, state.members) === root;
   const here = placeFromKey(r.place) ? r.place : "main";
   const visible = r.messages.filter((m) => shownIn(m, state, here));
   const general = here === "main" ? visible : r.messages.filter((m) => shownIn(m, state, "main"));
@@ -110,7 +112,7 @@ export function roomView(r: RoomInput): RoomView {
       shown: said(m.body),
       plain: plain(m.body),
       event: m.kind === "event",
-      mine: m.from === me,
+      mine: myself(m.from),
       quote: quoted && quoted.kind !== "event" ? { seq: quoted.seq, from: quoted.from, words: oneLine(plain(quoted.body), QUOTE_CHARS) } : null,
       choices: m.choices ?? [],
       chosen: chosen ? { choice: chosen.choice, by: chosen.by } : null,
@@ -122,7 +124,6 @@ export function roomView(r: RoomInput): RoomView {
   };
 
   const messages = shown.map((m, i) => messageView(m, i > 0 ? shown[i - 1] : visible[visible.length - shown.length - 1]));
-  const root = rootOf(me, state.members);
   const sideKey = leadChatKey(state, me);
   const sideAll = sideKey ? r.messages.filter((m) => shownIn(m, state, sideKey)) : [];
   const sideShown = sideAll.slice(-SHOWN);
@@ -153,7 +154,7 @@ export function roomView(r: RoomInput): RoomView {
         : p.kind === "task"
           ? `${taskId(p.task)} ${state.tasks.get(p.task)?.title ?? ""}`.trim()
           : withMe
-            ? nameOf(p.with.find((n) => n !== me) ?? me)
+            ? nameOf(p.with.find((n) => n !== root) ?? root)
             : p.with.map(nameOf).join(" & ");
     return {
       key,
@@ -220,6 +221,7 @@ export function roomView(r: RoomInput): RoomView {
     title: r.title,
     icon: iconView(r.icon, r.title),
     me,
+    root,
     isOwner: r.isOwner,
     connection: r.connection,
     gone: r.gone,

@@ -193,6 +193,7 @@ export interface RoomView {
   title: string;
   icon: IconView;
   me: string;
+  root: string;
   isOwner: boolean;
   connection: Connection;
   gone: "removed" | "closed" | null;

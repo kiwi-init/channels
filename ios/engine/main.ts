@@ -142,7 +142,7 @@ function openRoom(ring: Keyring, seat: ChannelIdentityView): void {
   const code = seat.code;
   const room = new Room(ring, seat, {
     emit: (view) => shown(ring, view),
-    lost: (gone) => post({ type: "gone", code: gone }),
+    lost: (gone) => drop(gone),
     person: personPk,
     log: (line) => post({ type: "log", line }),
     devices: heardList,
@@ -150,6 +150,17 @@ function openRoom(ring: Keyring, seat: ChannelIdentityView): void {
   });
   rooms.set(code, room);
   void room.start();
+}
+
+function drop(code: string): void {
+  rooms.get(code)?.stop();
+  rooms.delete(code);
+  const pending = keeping.get(code);
+  if (pending) clearTimeout(pending.timer);
+  keeping.delete(code);
+  live.delete(code);
+  warmed.delete(code);
+  post({ type: "gone", code });
 }
 
 function shown(ring: Keyring, view: RoomView): void {
