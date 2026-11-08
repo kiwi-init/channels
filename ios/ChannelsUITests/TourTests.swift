@@ -19,6 +19,17 @@ final class TourTests: XCTestCase {
         snap("general")
         app.swipeDown()
         snap("general scrolled up")
+        let latest = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'jump to the latest'")).firstMatch
+        if latest.waitForExistence(timeout: 2) {
+            latest.tap()
+            try await Task.sleep(for: .milliseconds(800))
+            snap("jumped to latest")
+        } else {
+            print("TOUR no jump arrow")
+        }
+        app.scrollViews.firstMatch.swipeLeft(velocity: .slow)
+        try await Task.sleep(for: .milliseconds(600))
+        snap("swiped to reply")
         back()
 
         let leadRow = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'lead'")).firstMatch

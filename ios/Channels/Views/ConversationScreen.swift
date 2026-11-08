@@ -35,11 +35,18 @@ struct ConversationScreen: View {
                     typing = true
                 }
                 .id(spot.id)
+                .overlay(alignment: .bottomTrailing) {
+                    if !follow.atBottom {
+                        JumpButton(follow: follow) { follow.jumps += 1 }
+                            .padding(.trailing, 16)
+                            .padding(.bottom, 4)
+                            .transition(.scale(scale: 0.5).combined(with: .opacity))
+                    }
+                }
+                .animation(.snappy(duration: 0.25), value: follow.atBottom)
                 .bar(.bottom) {
                     if talks(room) || answering != nil || sendingBack != nil {
-                        Dock(room: room, spot: spot, replyTo: $replyTo, answering: $answering, sendingBack: $sendingBack, typing: $typing, follow: follow) {
-                            follow.jumps += 1
-                        }
+                        Dock(room: room, spot: spot, replyTo: $replyTo, answering: $answering, sendingBack: $sendingBack, typing: $typing)
                     }
                 }
                 .navigationTitle(room.spotTitle(spot.place))

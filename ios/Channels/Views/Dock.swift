@@ -59,8 +59,6 @@ struct Dock: View {
     @Binding var answering: AskView?
     @Binding var sendingBack: ReviewView?
     var typing: FocusState<Bool>.Binding
-    let follow: Follow
-    let jump: () -> Void
     @Environment(AppModel.self) private var model
     @State private var draft = ""
     @State private var sending = false
@@ -108,12 +106,6 @@ struct Dock: View {
         .padding(.top, 6)
         .padding(.bottom, 6)
         .animation(.snappy(duration: 0.25), value: mentionable.map(\.name))
-        .overlay(alignment: .topTrailing) {
-            if !follow.atBottom {
-                jumpButton.padding(.trailing, 9).offset(y: -35).transition(.scale(scale: 0.5).combined(with: .opacity))
-            }
-        }
-        .animation(.snappy(duration: 0.25), value: follow.atBottom)
         .photosPicker(isPresented: $choosing, selection: $picked, maxSelectionCount: 4, matching: .images)
         .onAppear { restore(spot) }
         .onDisappear { model.keep(Draft(text: draft, attached: attached), spot.code, spot.place) }
@@ -215,31 +207,6 @@ struct Dock: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
         .glass(18)
-    }
-
-    private var jumpButton: some View {
-        Button(action: jump) {
-            ZStack(alignment: .topTrailing) {
-                Image(systemName: "arrow.down")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(Tone.ink)
-                    .frame(width: 34, height: 34)
-                    .glassCircle()
-                if follow.unseen > 0 {
-                    Text("\(follow.unseen)")
-                        .type(.stamp, .bold)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 5)
-                        .frame(minWidth: 18, minHeight: 18)
-                        .background(Tone.accent, in: Capsule())
-                        .offset(x: 4, y: -4)
-                }
-            }
-            .padding(5)
-            .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(follow.unseen > 0 ? "\(follow.unseen) new, jump to the latest" : "Jump to the latest")
     }
 
     private var tray: some View {
@@ -384,5 +351,35 @@ struct Dock: View {
             }
             sending = false
         }
+    }
+}
+
+struct JumpButton: View {
+    let follow: Follow
+    let jump: () -> Void
+
+    var body: some View {
+        Button(action: jump) {
+            ZStack(alignment: .topTrailing) {
+                Image(systemName: "arrow.down")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(Tone.ink)
+                    .frame(width: 34, height: 34)
+                    .glassCircle()
+                if follow.unseen > 0 {
+                    Text("\(follow.unseen)")
+                        .type(.stamp, .bold)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 5)
+                        .frame(minWidth: 18, minHeight: 18)
+                        .background(Tone.accent, in: Capsule())
+                        .offset(x: 4, y: -4)
+                }
+            }
+            .padding(5)
+            .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(follow.unseen > 0 ? "\(follow.unseen) new, jump to the latest" : "Jump to the latest")
     }
 }
