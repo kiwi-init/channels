@@ -63,6 +63,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -95,7 +96,7 @@ import com.kiwiinit.channels.model.oneLine
 import com.kiwiinit.channels.model.other
 import com.kiwiinit.channels.model.rows
 import com.kiwiinit.channels.model.spotTitle
-import com.kiwiinit.channels.model.waiting
+import com.kiwiinit.channels.model.needing
 import com.kiwiinit.channels.theme.Tone
 import kotlin.math.abs
 import kotlinx.coroutines.launch
@@ -200,7 +201,7 @@ fun ConversationList(model: AppModel, open: (Spot) -> Unit, settings: () -> Unit
                     items(Filter.entries.toList(), key = { it.name }) { f ->
                         val count = when (f) {
                             Filter.All -> 0
-                            Filter.Needs -> model.waiting
+                            Filter.Needs -> model.needing
                             Filter.Unread -> model.rows(Filter.Unread).size
                         }
                         FilterChip(
@@ -335,6 +336,7 @@ private fun SwipeRow(model: AppModel, row: ConversationRow, modifier: Modifier, 
     var menu by remember { mutableStateOf(false) }
     val pinned = model.isPinned(row.spot)
     val reach = 96f
+    val now by rememberUpdatedState(row)
     Box(modifier.fillMaxWidth()) {
         Row(Modifier.matchParentSize(), verticalAlignment = Alignment.CenterVertically) {
             Box(
@@ -371,9 +373,9 @@ private fun SwipeRow(model: AppModel, row: ConversationRow, modifier: Modifier, 
                             if (abs(at) >= reach) {
                                 view.buzz(Buzz.Tap)
                                 if (at > 0) {
-                                    if (row.unread) model.markRead(row.spot) else model.markUnread(row.spot)
+                                    if (now.unread) model.markRead(now.spot) else model.markUnread(now.spot)
                                 } else {
-                                    model.togglePin(row.spot)
+                                    model.togglePin(now.spot)
                                 }
                             }
                             scope.launch { shift.animateTo(0f, spring(dampingRatio = 0.75f, stiffness = 500f)) }

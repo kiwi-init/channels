@@ -140,6 +140,7 @@ data class RoomView(
     val title: String,
     val icon: IconView? = null,
     val me: String,
+    val root: String? = null,
     val isOwner: Boolean = false,
     val connection: Connection = Connection.Connecting,
     val gone: String? = null,
@@ -164,7 +165,7 @@ data class RoomView(
 ) {
     fun placeView(key: String): PlaceView? = places.firstOrNull { it.key == key }
 
-    fun other(place: PlaceView): String? = if (place.kind == "dm" && place.withMe) place.with.firstOrNull { it != me } else null
+    fun other(place: PlaceView): String? = if (place.kind == "dm" && place.withMe) place.with.firstOrNull { it != (root ?: me) } else null
 
     fun member(name: String): MemberView? = members.firstOrNull { it.name == name }
 

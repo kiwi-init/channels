@@ -141,4 +141,4 @@ fun AppModel.rows(filter: Filter = Filter.All): List<Row> {
 
 fun AppModel.row(spot: Spot): Row? = rows(Filter.All).firstOrNull { it.spot == spot }
 
-val AppModel.waiting: Int get() = channels.sumOf { it.asks.size + it.reviews.size }
+val AppModel.needing: Int get() = channels.sumOf { it.asks.size + it.reviews.size }
