@@ -3,7 +3,7 @@ import * as Effect from "effect/Effect";
 import { blobId } from "@kiwi/core/crypto.ts";
 import { MAX_BLOB_BYTES, MAX_CT_LENGTH, type Envelope, type ReadMark, type SlotTake } from "@kiwi/core/protocol.ts";
 import { BadRequest, Conflict, Fenced, Forbidden, ReadOnly, Taken, TooLarge, TooMany } from "../failures.ts";
-import { Policy, type RoomPolicy } from "../policy.ts";
+import { Policy, upgradeFor, type RoomPolicy } from "../policy.ts";
 import { fits, StoredEnvelope } from "../schema.ts";
 import { readMeta } from "./auth.ts";
 import { RoomStore, type RoomDb, type RoomServices } from "./db.ts";
@@ -42,10 +42,12 @@ const quotaOwner = (db: RoomDb, policy: RoomPolicy): string | null => (policy.pe
 
 const checkLease = (db: RoomDb, policy: RoomPolicy, day: string, ts: number) =>
   Effect.gen(function* () {
-    if (!quotaOwner(db, policy)) return;
+    const owner = quotaOwner(db, policy);
+    if (!owner) return;
     const s = stateOf(db, day);
     if (s.blocked) return yield* new Forbidden({ message: OWNER_BLOCKED });
-    if (s.over || s.left <= -LEASE_BATCH) return yield* new TooMany({ message: personOverMessage(s.limit ?? policy.personMessagesPerDay, ts, policy.upgradeUrl) });
+    const upgrade = upgradeFor(policy.upgradeUrl, owner);
+    if (s.over || s.left <= -LEASE_BATCH) return yield* new TooMany({ message: personOverMessage(s.limit ?? policy.personMessagesPerDay, ts, upgrade) });
   });
 
 export const leaseWant: Effect.Effect<Effects, never, RoomServices> = Effect.gen(function* () {

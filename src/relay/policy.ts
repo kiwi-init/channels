@@ -118,3 +118,15 @@ export function betaMessage(policy: RelayPolicy): string {
 }
 
 export const BLOCKED_CREATE = "your account is blocked on this relay, so you can't create channels";
+
+export function upgradeFor(url: string | null, user: string): string | null {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    u.searchParams.set("client_reference_id", user);
+    return u.toString();
+  } catch {
+    // Not a URL the relay can add to: shown as it was set.
+    return url;
+  }
+}

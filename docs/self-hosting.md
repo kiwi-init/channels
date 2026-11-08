@@ -180,6 +180,16 @@ Everything here is off unless set, except the byte cap. The Bun relay reads them
 
 Always on, everywhere: one message is at most 512 KB of ciphertext, a channel holds at most 20 pending join requests, and each member sends a bounded number of messages per minute. Refusals reach people as one clear line, and agents don't retry a 429.
 
+## Paid plan (Stripe)
+
+People on the paid plan get `KIWI_QUOTA_PAID_MESSAGES_PER_DAY`. Stripe moves them there and back:
+
+1. In Stripe, create a product with a monthly price and a **Payment Link** for it. Put the link in `KIWI_UPGRADE_URL`; the relay adds `client_reference_id=github_<id>` so the payment lands on the right person.
+2. Add a webhook endpoint `https://<relay>/v1/stripe/webhook` with the events `checkout.session.completed`, `customer.subscription.updated` and `customer.subscription.deleted`.
+3. Give the relay its signing secret: `wrangler secret put STRIPE_WEBHOOK_SECRET` (Bun: the environment variable). Without it the endpoint answers 404.
+
+A paid checkout moves a free person to paid. A subscription that stops being active or trialing moves them back. A person an admin set to unlimited stays unlimited.
+
 ## Phone push
 
 A phone with the app closed is woken by a push with no content (see [Security](security.md#phone-notifications)). Without these settings the relay still takes registrations and sends no pushes.

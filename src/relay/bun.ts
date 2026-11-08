@@ -34,6 +34,7 @@ import {
 import { allow as allowPerMinute, utcDay } from "./room/limits.ts";
 import { clientAddress, parseTrustProxy, trustProxyFromArgs, trustProxyHint, trustsAProxy, untrustedProxy, writeAllowed, type TrustProxy } from "./address.ts";
 import { onAdminHttp, type PeopleAdmin } from "./admin.ts";
+import { onStripeHttp, type StripeBook } from "./stripe.ts";
 import { PeopleBook, type LeaseAsk } from "./people.ts";
 import { Policy, policyFrom, type RelayPolicy, type RoomPolicy } from "./policy.ts";
 import {
@@ -106,6 +107,7 @@ export function startRelay(
     hostname?: string;
     dataDir?: string;
     human?: HumanAuth | null;
+    stripeWebhookSecret?: string;
     policy?: RelayPolicy;
     web?: WebApp | null;
     now?: () => number;
@@ -349,6 +351,12 @@ export function startRelay(
       return book.summary(user, utcDay(clock()), ownedCount(user), clock());
     },
   };
+  const stripeBook: StripeBook = {
+    person: async (user) => book.person(user),
+    setPlan: async (user, plan) => void (await admin.set(user, { plan })),
+    customer: async (c) => book.customer(c),
+    linkCustomer: async (c, user) => book.linkCustomer(c, user),
+  };
   const listOf = (user: string) => (people.query("SELECT entry FROM owned WHERE user = ?").all(user) as { entry: string }[]).map((r) => JSON.parse(r.entry) as DirectoryEntry);
 
   // What every room runs with. `now` (tests) is the clock the room reads.
@@ -512,6 +520,8 @@ export function startRelay(
         if (machine instanceof Response) return machine;
         const person = await onPersonHttp(req, personMachines, { now: clock });
         if (person) return person;
+        const paid = await onStripeHttp(req, opts.stripeWebhookSecret ?? process.env.STRIPE_WEBHOOK_SECRET, stripeBook, clock());
+        if (paid) return paid;
         const admined = await onAdminHttp(req, human, policy, admin, clock());
         if (admined) return admined;
         if (isAccountPath(url.pathname)) {
