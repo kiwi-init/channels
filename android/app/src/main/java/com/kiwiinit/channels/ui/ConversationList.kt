@@ -12,18 +12,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -34,7 +30,6 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.MarkEmailRead
 import androidx.compose.material.icons.filled.MarkEmailUnread
-import androidx.compose.material.icons.filled.PanTool
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material3.DropdownMenu
@@ -76,20 +71,17 @@ import com.kiwiinit.channels.model.Filter
 import com.kiwiinit.channels.model.Row as ConversationRow
 import com.kiwiinit.channels.model.Spot
 import com.kiwiinit.channels.model.TaskCounts
-import com.kiwiinit.channels.model.needing
-import com.kiwiinit.channels.model.oneLine
 import com.kiwiinit.channels.model.other
 import com.kiwiinit.channels.model.rows
 import com.kiwiinit.channels.model.section
 import com.kiwiinit.channels.model.spotTitle
-import com.kiwiinit.channels.model.taskLabel
 import com.kiwiinit.channels.theme.Tone
 import kotlin.math.abs
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ConversationList(model: AppModel, open: (Spot) -> Unit, needs: () -> Unit, tasks: (String) -> Unit, settings: () -> Unit) {
+fun ConversationList(model: AppModel, open: (Spot) -> Unit, tasks: (String) -> Unit, settings: () -> Unit) {
     val tone = Tone.current
     var refreshing by remember { mutableStateOf(false) }
     val channels = model.channels
@@ -103,26 +95,15 @@ fun ConversationList(model: AppModel, open: (Spot) -> Unit, needs: () -> Unit, t
     }
 
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
-        Row(
-            Modifier.fillMaxWidth().statusBarsPadding().padding(start = 20.dp, end = 12.dp, top = 8.dp, bottom = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text("Channels", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-            Account(model, settings)
-        }
+        BigTitle("Chats") { Account(model, settings) }
         PullToRefreshBox(isRefreshing = refreshing, onRefresh = { refreshing = true }, modifier = Modifier.weight(1f).fillMaxWidth()) {
-            val bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-            LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(top = 4.dp, bottom = 24.dp + bottom)) {
+            LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(top = 4.dp, bottom = 16.dp)) {
                 model.unsaved?.let { why ->
                     item(key = "unsaved") {
                         Text(why, style = MaterialTheme.typography.bodyMedium, color = tone.alert, modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp))
                     }
                 }
                 if (channels.isEmpty()) item(key = "empty") { Empty(model) }
-                val waiting = model.needing
-                if (waiting > 0) {
-                    item(key = "needs") { NeedsRow(model, waiting, needs) }
-                }
                 for (room in channels) {
                     item(key = "head-${room.code}") { ChannelHeader(room) }
                     items(model.section(room, false), key = { it.id }) { row ->
@@ -147,21 +128,12 @@ private fun ChannelHeader(room: RoomView) {
 }
 
 @Composable
-private fun NeedsRow(model: AppModel, count: Int, open: () -> Unit) {
-    val tone = Tone.current
-    val first = model.channels.firstNotNullOfOrNull { room -> room.asks.firstOrNull()?.plain ?: room.reviews.firstOrNull()?.let { "${taskLabel(it.task)} ${it.title}" } }
-    PlainRow("Needs you", first?.oneLine() ?: "", open, badge = { Text("$count", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = tone.decide) }) {
-        Disc(Icons.Filled.PanTool, 52.dp, tint = tone.decide)
-    }
-}
-
-@Composable
 private fun TasksRow(room: RoomView, open: () -> Unit) {
     PlainRow("Tasks", TaskCounts.of(room).line, open) { Disc(Icons.Filled.Checklist, 52.dp) }
 }
 
 @Composable
-private fun PlainRow(title: String, line: String, open: () -> Unit, badge: @Composable () -> Unit = {}, icon: @Composable () -> Unit) {
+private fun PlainRow(title: String, line: String, open: () -> Unit, icon: @Composable () -> Unit) {
     val tone = Tone.current
     Row(
         Modifier.fillMaxWidth().clickable(onClick = open).heightIn(min = 76.dp).padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 10.dp),
@@ -170,10 +142,7 @@ private fun PlainRow(title: String, line: String, open: () -> Unit, badge: @Comp
         icon()
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium, maxLines = 1, modifier = Modifier.weight(1f))
-                badge()
-            }
+            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium, maxLines = 1)
             if (line.isNotEmpty()) Text(line, style = MaterialTheme.typography.bodyMedium, color = tone.ink3, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
         }
     }

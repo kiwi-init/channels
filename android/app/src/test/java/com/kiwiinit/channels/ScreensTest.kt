@@ -11,9 +11,9 @@ import com.kiwiinit.channels.model.AppModel
 import com.kiwiinit.channels.model.Linking
 import com.kiwiinit.channels.model.Spot
 import com.kiwiinit.channels.theme.ChannelsTheme
-import com.kiwiinit.channels.ui.ConversationList
 import com.kiwiinit.channels.ui.ConversationScreen
-import com.kiwiinit.channels.ui.NeedsScreen
+import com.kiwiinit.channels.ui.Home
+import com.kiwiinit.channels.ui.Tab
 import com.kiwiinit.channels.ui.TasksScreen
 import com.kiwiinit.channels.ui.LinkScreen
 import com.kiwiinit.channels.ui.SettingsScreen
@@ -48,7 +48,7 @@ class ScreensTest {
     fun check() = shoot("check") { LinkScreen(it, linking = Linking.Check("Jow", "3f9a 0c41 77e2 b8d5 1a06")) }
 
     @Test
-    fun list() = shoot("list") { ConversationList(it, open = {}, needs = {}, tasks = {}, settings = {}) }
+    fun list() = shoot("list") { Home(it, open = {}, tasks = {}, settings = {}) }
 
     @Test
     fun general() = shoot("general") { ConversationScreen(it, Spot(DEV), back = {}) }
@@ -57,10 +57,10 @@ class ScreensTest {
     fun leadChat() = shoot("lead-chat") { ConversationScreen(it, Spot(DEV, LEAD_CHAT), back = {}) }
 
     @Test
-    fun needs() = shoot("needs") { NeedsScreen(it) {} }
+    fun needs() = shoot("needs") { Home(it, open = {}, tasks = {}, settings = {}, first = Tab.Needs) }
 
     @Test
-    fun needsReview() = shoot("needs-review", { it.rooms[DEV] = it.rooms.getValue(DEV).copy(asks = emptyList()) }) { NeedsScreen(it) {} }
+    fun needsReview() = shoot("needs-review", { it.rooms[DEV] = it.rooms.getValue(DEV).copy(asks = emptyList()) }) { Home(it, open = {}, tasks = {}, settings = {}, first = Tab.Needs) }
 
     @Test
     fun tasks() = shoot("tasks") { TasksScreen(it, DEV, open = {}, back = {}) }

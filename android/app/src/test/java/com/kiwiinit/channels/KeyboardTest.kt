@@ -20,7 +20,7 @@ import androidx.core.view.WindowInsetsCompat
 import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
 import com.kiwiinit.channels.model.AppModel
 import com.kiwiinit.channels.theme.ChannelsTheme
-import com.kiwiinit.channels.ui.NeedsScreen
+import com.kiwiinit.channels.ui.NeedsList
 import kotlin.math.roundToInt
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -43,7 +43,7 @@ class KeyboardTest {
 
     @Test
     fun answerInNeedsStaysAboveTheKeyboard() {
-        show { NeedsScreen(it) {} }
+        show { NeedsList(it) }
         compose.onAllNodesWithText("Something else")[1].performScrollTo().performClick()
         compose.onNode(hasSetTextAction()).performClick()
         aboveKeyboard(compose.onNode(hasSetTextAction()), keyboard())
@@ -51,7 +51,7 @@ class KeyboardTest {
 
     @Test
     fun sendBackInNeedsStaysAboveTheKeyboard() {
-        show { NeedsScreen(it) {} }
+        show { NeedsList(it) }
         compose.onNodeWithText("Send back").performScrollTo().performClick()
         compose.onNode(hasSetTextAction()).performClick()
         aboveKeyboard(compose.onNode(hasSetTextAction()), keyboard())

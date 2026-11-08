@@ -75,10 +75,11 @@ private fun Screen(title: String, back: () -> Unit, content: @Composable (Paddin
 }
 
 @Composable
-fun NeedsScreen(model: AppModel, back: () -> Unit) {
+fun NeedsList(model: AppModel) {
     val many = model.channels.size > 1
-    Screen("Needs you", back) { padding ->
-        LazyColumn(Modifier.fillMaxSize().imePadding(), contentPadding = padding) {
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
+        BigTitle("Needs you")
+        LazyColumn(Modifier.fillMaxSize().imePadding(), contentPadding = PaddingValues(top = 4.dp, bottom = 16.dp)) {
             if (model.channels.none { it.asks.isNotEmpty() || it.reviews.isNotEmpty() }) {
                 item(key = "none") { Centered("Nothing needs you", "Questions, decisions and reviews show up here.", Modifier.padding(top = 80.dp)) }
             }

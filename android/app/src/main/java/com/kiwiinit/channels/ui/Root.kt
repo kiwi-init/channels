@@ -104,7 +104,7 @@ private fun Ready(model: AppModel) {
         popExitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.End, slide) + fadeOut(tween(220)) },
     ) {
         composable("list") {
-            ConversationList(model, open = { nav.navigate(chat(it)) }, needs = { nav.navigate("needs") }, tasks = { nav.navigate("tasks/${Uri.encode(it)}") }, settings = { nav.navigate("settings") })
+            Home(model, open = { nav.navigate(chat(it)) }, tasks = { nav.navigate("tasks/${Uri.encode(it)}") }, settings = { nav.navigate("settings") })
         }
         composable(
             "chat/{code}/{place}",
@@ -113,9 +113,6 @@ private fun Ready(model: AppModel) {
             val code = entry.arguments?.getString("code") ?: ""
             val place = entry.arguments?.getString("place") ?: "main"
             ConversationScreen(model = model, start = Spot(code, place), back = { nav.popBackStack() })
-        }
-        composable("needs") {
-            NeedsScreen(model) { nav.popBackStack() }
         }
         composable("tasks/{code}", arguments = listOf(navArgument("code") { type = NavType.StringType })) { entry ->
             TasksScreen(model, entry.arguments?.getString("code") ?: "", open = { nav.navigate(chat(it)) }, back = { nav.popBackStack() })
