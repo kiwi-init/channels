@@ -55,6 +55,13 @@ struct ConversationScreen: View {
         .onAppear {
             visible = true
             seen()
+            if model.focusNext == spot {
+                model.focusNext = nil
+                Task {
+                    try? await Task.sleep(for: .milliseconds(350))
+                    typing = true
+                }
+            }
         }
         .onDisappear { visible = false }
         .onChange(of: scene) { _, _ in seen() }

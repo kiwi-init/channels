@@ -3,6 +3,10 @@ import SwiftUI
 enum Route: Hashable {
     case place(Spot)
     case tasks(String)
+}
+
+enum AppTab: Hashable {
+    case chats
     case needs
 }
 

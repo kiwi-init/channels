@@ -21,7 +21,13 @@ final class TourTests: XCTestCase {
         snap("general scrolled up")
         back()
 
-        tapFirst("lead")
+        let leadRow = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'lead'")).firstMatch
+        if leadRow.waitForExistence(timeout: 2) {
+            leadRow.tap()
+            try await Task.sleep(for: .milliseconds(700))
+        } else {
+            print("TOUR no lead row")
+        }
         snap("lead chat")
         let field = app.textViews.firstMatch.exists ? app.textViews.firstMatch : app.textFields.firstMatch
         if field.waitForExistence(timeout: 2) {
@@ -32,12 +38,20 @@ final class TourTests: XCTestCase {
         }
         back()
 
+        let general = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'general'")).firstMatch
+        if general.waitForExistence(timeout: 2) {
+            general.press(forDuration: 1.0)
+            snap("peek")
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.68)).tap()
+            try await Task.sleep(for: .milliseconds(700))
+        }
+
         tapFirst("Needs You")
-        snap("needs")
+        snap("needs tab")
         tapFirst("Run a command")
         snap("need form")
         back()
-        back()
+        tapFirst("Chats")
 
         tapFirst("Tasks")
         snap("tasks")

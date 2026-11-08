@@ -6,18 +6,6 @@ struct ChannelList: View {
 
     var body: some View {
         List {
-            if model.waiting > 0 {
-                Button {
-                    model.go(.needs)
-                } label: {
-                    ConvoRow(title: "Needs You", line: needsLine, at: nil, unread: false) {
-                        Image(systemName: "hand.raised.fill").foregroundStyle(Tone.decide).iconDisc(Tone.decideWash)
-                    } badge: {
-                        Text("\(model.waiting)").type(.meta, .semibold).foregroundStyle(Tone.decide)
-                    }
-                }
-                .flatRow()
-            }
             ForEach(model.channels, id: \.code) { room in
                 Section {
                     ChannelRows(room: room)
@@ -29,6 +17,10 @@ struct ChannelList: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .background(Tone.canvas)
+        .refreshable { await model.refresh() }
+        .scrollDismissesKeyboard(.interactively)
+        .bar(.bottom) { QuickSend() }
+        .animation(Motion.ease, value: model.waiting)
         .overlay {
             if model.channels.isEmpty {
                 ContentUnavailableView {
@@ -57,13 +49,6 @@ struct ChannelList: View {
                 .accessibilityLabel("You")
             }
         }
-    }
-
-    private var needsLine: String {
-        let first = model.channels.lazy.compactMap { room in
-            room.open.first.map(NeedText.title) ?? room.asks.first?.plain ?? room.reviews.first.map { "\(taskLabel($0.task)) \($0.title)" }
-        }.first
-        return (first ?? "").replacingOccurrences(of: "\n", with: " ")
     }
 }
 
@@ -94,17 +79,25 @@ struct ChannelRows: View {
     var body: some View {
         Group {
             if let spot = room.leadSpot, let lead = room.lead {
+                let member = room.member(lead)
                 Button {
                     model.go(.place(spot))
                 } label: {
                     let last = room.placeView(spot.place)?.last
-                    ConvoRow(title: room.display(lead), line: leadLine(last), at: last?.date, unread: model.unread(spot)) {
-                        Face(name: lead, member: room.member(lead), size: 44)
+                    ConvoRow(
+                        title: room.display(lead), line: leadLine(last), at: last?.date, unread: model.unread(spot), live: live(member),
+                        since: member?.working == true ? member?.activity?.since.map { Date(timeIntervalSince1970: $0 / 1000) } : nil
+                    ) {
+                        Face(name: lead, member: member, size: 44)
                     }
                 }
                 .flatRow()
                 .swipeActions(edge: .leading) { ReadToggle(spot: spot) }
-                .contextMenu { ReadToggle(spot: spot) }
+                .contextMenu {
+                    RowMenu(spot: spot)
+                } preview: {
+                    PeekView(spot: spot).environment(model)
+                }
             }
             ForEach(rooms, id: \.self) { spot in
                 Button {
@@ -117,18 +110,34 @@ struct ChannelRows: View {
                 }
                 .flatRow()
                 .swipeActions(edge: .leading) { ReadToggle(spot: spot) }
-                .contextMenu { ReadToggle(spot: spot) }
+                .contextMenu {
+                    RowMenu(spot: spot)
+                } preview: {
+                    PeekView(spot: spot).environment(model)
+                }
             }
             Button {
                 model.go(.tasks(room.code))
             } label: {
-                ConvoRow(title: "Tasks", line: TaskCounts(room.tasks).line, at: nil, unread: false) {
+                let counts = TaskCounts(room.tasks)
+                ConvoRow(title: "Tasks", line: counts.line, at: nil, unread: false) {
                     Image(systemName: "checklist").foregroundStyle(Tone.ink2).iconDisc(Tone.raised)
+                } badge: {
+                    EmptyView()
+                } below: {
+                    if counts.total > 0 { ProgressStrip(counts: counts).padding(.top, 5) }
                 }
             }
             .flatRow()
         }
         .buttonStyle(.plain)
+    }
+
+    private func live(_ member: MemberView?) -> String? {
+        guard let member, member.working else { return nil }
+        let task = member.doing.first.map { id in room.tasks.first { $0.id == id }.map { "\(taskLabel(id)) \($0.title)" } ?? taskLabel(id) }
+        let tool = member.activity?.tool.flatMap { $0.isEmpty ? nil : $0 }
+        return [task.map { "Working on \($0)" } ?? "Working", tool].compactMap { $0 }.joined(separator: " · ")
     }
 
     private func leadLine(_ last: MessageView?) -> String {
@@ -151,13 +160,17 @@ struct TaskCounts {
     let working: Int
     let review: Int
     let todo: Int
+    let done: Int
 
     init(_ tasks: [TaskView]) {
         let live = tasks.filter { !$0.archived }
         working = live.count { $0.state == "doing" }
         review = live.count { $0.state == "review" }
         todo = live.count { $0.state == "todo" }
+        done = live.count { $0.state == "done" }
     }
+
+    var total: Int { working + review + todo + done }
 
     var line: String {
         let parts = [working > 0 ? "\(working) working" : nil, review > 0 ? "\(review) in review" : nil, todo > 0 ? "\(todo) to do" : nil].compactMap { $0 }
@@ -184,21 +197,30 @@ struct ReadToggle: View {
     }
 }
 
-struct ConvoRow<Icon: View, Badge: View>: View {
+struct ConvoRow<Icon: View, Badge: View, Below: View>: View {
     let title: String
     let line: String
     let at: Date?
     let unread: Bool
+    var live: String?
+    var since: Date?
     @ViewBuilder let icon: () -> Icon
     @ViewBuilder let badge: () -> Badge
+    @ViewBuilder let below: () -> Below
 
-    init(title: String, line: String, at: Date?, unread: Bool, @ViewBuilder icon: @escaping () -> Icon, @ViewBuilder badge: @escaping () -> Badge = { EmptyView() }) {
+    init(
+        title: String, line: String, at: Date?, unread: Bool, live: String? = nil, since: Date? = nil, @ViewBuilder icon: @escaping () -> Icon,
+        @ViewBuilder badge: @escaping () -> Badge = { EmptyView() }, @ViewBuilder below: @escaping () -> Below = { EmptyView() }
+    ) {
         self.title = title
         self.line = line
         self.at = at
         self.unread = unread
+        self.live = live
+        self.since = since
         self.icon = icon
         self.badge = badge
+        self.below = below
     }
 
     var body: some View {
@@ -214,7 +236,21 @@ struct ConvoRow<Icon: View, Badge: View>: View {
                     }
                     badge()
                 }
-                Text(line).font(.subheadline).foregroundStyle(Tone.ink3).lineLimit(2)
+                if let live {
+                    HStack(spacing: 6) {
+                        Pulse()
+                        Text(live).font(.subheadline).foregroundStyle(Tone.doing).lineLimit(1)
+                        if let since {
+                            TimelineView(.periodic(from: .now, by: 1)) { context in
+                                Text(When.elapsed(from: since, to: context.date)).font(.subheadline.monospacedDigit()).foregroundStyle(Tone.ink3)
+                            }
+                            .fixedSize()
+                        }
+                    }
+                } else {
+                    Text(line).font(.subheadline).foregroundStyle(Tone.ink3).lineLimit(2)
+                }
+                below()
             }
         }
         .contentShape(Rectangle())
@@ -237,5 +273,85 @@ extension View {
             .font(.system(size: 18, weight: .semibold))
             .frame(width: 44, height: 44)
             .background(Circle().fill(fill))
+    }
+}
+
+struct Pulse: View {
+    @Environment(\.accessibilityReduceMotion) private var still
+
+    var body: some View {
+        if still {
+            Circle().fill(Tone.doing).frame(width: 7, height: 7)
+        } else {
+            Circle().fill(Tone.doing).frame(width: 7, height: 7)
+                .phaseAnimator([0.35, 1.0]) { dot, phase in
+                    dot.opacity(phase).scaleEffect(0.8 + phase * 0.2)
+                } animation: { _ in
+                    .easeInOut(duration: 0.9)
+                }
+        }
+    }
+}
+
+struct ProgressStrip: View {
+    let counts: TaskCounts
+
+    var body: some View {
+        GeometryReader { geo in
+            HStack(spacing: 2) {
+                ForEach(parts, id: \.0) { part in
+                    Capsule().fill(part.1).frame(width: max(4, geo.size.width * CGFloat(part.2) / CGFloat(max(1, counts.total)) - 2))
+                }
+            }
+        }
+        .frame(height: 4)
+        .accessibilityHidden(true)
+    }
+
+    private var parts: [(String, Color, Int)] {
+        [("done", Tone.live, counts.done), ("review", Tone.decide, counts.review), ("doing", Tone.doing, counts.working), ("todo", Tone.wash2, counts.todo)]
+            .filter { $0.2 > 0 }
+    }
+}
+
+struct RowMenu: View {
+    let spot: Spot
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        Button("Reply", systemImage: "arrowshape.turn.up.left") {
+            model.focusNext = spot
+            model.go(.place(spot))
+        }
+        ReadToggle(spot: spot)
+    }
+}
+
+struct PeekView: View {
+    let spot: Spot
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        let room = model.shown(spot)
+        let messages = Array((room?.messages ?? []).filter { !$0.event }.suffix(8))
+        VStack(alignment: .leading, spacing: 0) {
+            Text(room?.spotTitle(spot.place) ?? "").font(.headline).foregroundStyle(Tone.ink).padding(.bottom, 8)
+            if let room, !messages.isEmpty {
+                Spacer(minLength: 0)
+                ForEach(Array(messages.enumerated()), id: \.element.seq) { index, m in
+                    let first = index == 0 || messages[index - 1].from != m.from
+                    let last = index == messages.count - 1 || messages[index + 1].from != m.from
+                    BubbleRow(message: m, first: first, last: last, room: room, solo: spot.place == room.sideKey, reply: { _ in }, jump: { _ in }, answer: { _ in })
+                }
+            } else {
+                Spacer(minLength: 0)
+                Text("Open it to load the messages").font(.subheadline).foregroundStyle(Tone.ink3).frame(maxWidth: .infinity)
+                Spacer(minLength: 0)
+            }
+        }
+        .padding(14)
+        .frame(width: 340, height: 440, alignment: .bottom)
+        .clipped()
+        .background(Tone.canvas)
     }
 }

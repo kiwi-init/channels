@@ -6,6 +6,7 @@ extension AppModel {
     }
 
     func jump(_ route: Route) {
+        tab = .chats
         path = [route]
     }
 }
@@ -15,9 +16,19 @@ struct Shell: View {
     @State private var settings = false
 
     var body: some View {
-        NavigationStack(path: Binding(get: { model.path }, set: { model.path = $0 })) {
-            ChannelList(settings: $settings)
-                .navigationDestination(for: Route.self) { RouteScreen(route: $0) }
+        TabView(selection: Binding(get: { model.tab }, set: { model.tab = $0 })) {
+            Tab("Chats", systemImage: "bubble.left.and.bubble.right.fill", value: AppTab.chats) {
+                NavigationStack(path: Binding(get: { model.path }, set: { model.path = $0 })) {
+                    ChannelList(settings: $settings)
+                        .navigationDestination(for: Route.self) { RouteScreen(route: $0).toolbar(.hidden, for: .tabBar) }
+                }
+            }
+            Tab("Needs You", systemImage: "hand.raised.fill", value: AppTab.needs) {
+                NavigationStack {
+                    NeedsScreen()
+                }
+            }
+            .badge(model.waiting)
         }
         .sheet(isPresented: $settings) {
             NavigationStack {
@@ -46,7 +57,7 @@ struct Shell: View {
             let place = UserDefaults.standard.string(forKey: "place") ?? "main"
             switch shot {
             case "channel", "conversation": model.path = [.place(Spot(code: first.code, place: place))]
-            case "needs": model.path = [.needs]
+            case "needs": model.tab = .needs
             case "board", "tasks": model.path = [.tasks(first.code)]
             case "settings": settings = true
             default: break
@@ -62,7 +73,6 @@ struct RouteScreen: View {
         switch route {
         case .place(let spot): ConversationScreen(start: spot)
         case .tasks(let code): TasksScreen(code: code)
-        case .needs: NeedsScreen()
         }
     }
 }

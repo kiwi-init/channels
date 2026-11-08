@@ -46,6 +46,8 @@ final class AppModel {
     var linking: Linking = .idle
     var relinkAsked = false
     var path: [Route] = []
+    var tab: AppTab = .chats
+    var focusNext: Spot?
     var enrolled = false
     var joining = 0
     var unsaved: String?
@@ -232,6 +234,11 @@ final class AppModel {
                     || room.open.contains(where: { !seen.contains($0.id) })
                 {
                     UINotificationFeedbackGenerator().notificationOccurred(.warning)
+                } else {
+                    let open = Set(before.tasks.filter { $0.state != "done" }.map(\.id))
+                    if room.tasks.contains(where: { $0.state == "done" && open.contains($0.id) }) {
+                        UINotificationFeedbackGenerator().notificationOccurred(.success)
+                    }
                 }
             }
             feeds["\(room.code)|\(room.place)"] = Feed(messages: room.messages, whole: room.whole)
@@ -395,12 +402,14 @@ final class AppModel {
     }
 
     func nudge() {
-        Task {
-            do {
-                try await engine.ask(["op": "nudge"])
-            } catch {
-                Trouble.note("nudge", error)
-            }
+        Task { await refresh() }
+    }
+
+    func refresh() async {
+        do {
+            try await engine.ask(["op": "nudge"])
+        } catch {
+            Trouble.note("nudge", error)
         }
     }
 
