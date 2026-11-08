@@ -72,6 +72,7 @@ final class AppModel {
     @ObservationIgnored private let pictures = NSCache<NSString, UIImage>()
     @ObservationIgnored private var wroteMarks: [String: [String: Int]] = [:]
     @ObservationIgnored private var pulledMarks: Set<String> = []
+    @ObservationIgnored var keptUnread: Set<String> = []
     @ObservationIgnored private var front = true
     @ObservationIgnored private var leaving: UIBackgroundTaskIdentifier = .invalid
 
@@ -460,6 +461,7 @@ final class AppModel {
         var main = false
         var side = false
         for (key, mark) in merged where keys.contains(key) {
+            if keptUnread.contains("\(code)|\(key)") { continue }
             if key == "main" {
                 if mark > (seen[code] ?? 0) {
                     seen[code] = mark

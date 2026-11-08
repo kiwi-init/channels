@@ -183,6 +183,7 @@ extension AppModel {
     }
 
     func markRead(_ spot: Spot) {
+        keptUnread.remove(spot.id)
         guard let room = rooms[spot.code], let top = room.placeView(spot.place)?.lastSeq else { return }
         if spot.general {
             guard top > (seen[spot.code] ?? 0) else { return }
@@ -202,6 +203,7 @@ extension AppModel {
 
     func markUnread(_ spot: Spot) {
         guard canMarkUnread(spot), let last = rooms[spot.code]?.placeView(spot.place)?.last else { return }
+        keptUnread.insert(spot.id)
         if spot.general {
             seen[spot.code] = last.seq - 1
             UserDefaults.standard.set(seen, forKey: "seen")
