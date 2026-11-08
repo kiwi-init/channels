@@ -13,13 +13,12 @@ extension AppModel {
 
 struct Shell: View {
     @Environment(AppModel.self) private var model
-    @State private var settings = false
 
     var body: some View {
         TabView(selection: Binding(get: { model.tab }, set: { model.tab = $0 })) {
             Tab("Chats", systemImage: "bubble.left.and.bubble.right.fill", value: AppTab.chats) {
                 NavigationStack(path: Binding(get: { model.path }, set: { model.path = $0 })) {
-                    ChannelList(settings: $settings)
+                    ChannelList()
                         .navigationDestination(for: Route.self) { RouteScreen(route: $0).toolbar(.hidden, for: .tabBar) }
                 }
             }
@@ -29,15 +28,10 @@ struct Shell: View {
                 }
             }
             .badge(model.waiting)
-        }
-        .sheet(isPresented: $settings) {
-            NavigationStack {
-                SettingsScreen()
-                    .toolbar {
-                        ToolbarItem(placement: .topBarTrailing) {
-                            Button("Done") { settings = false }
-                        }
-                    }
+            Tab("You", systemImage: "person.crop.circle.fill", value: AppTab.you) {
+                NavigationStack {
+                    SettingsScreen()
+                }
             }
         }
         .alert("Sign-in not saved", isPresented: Binding(get: { model.unsaved != nil }, set: { if !$0 { model.unsaved = nil } })) {
@@ -59,7 +53,7 @@ struct Shell: View {
             case "channel", "conversation": model.path = [.place(Spot(code: first.code, place: place))]
             case "needs": model.tab = .needs
             case "board", "tasks": model.path = [.tasks(first.code)]
-            case "settings": settings = true
+            case "settings": model.tab = .you
             default: break
             }
         }

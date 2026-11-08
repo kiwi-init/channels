@@ -8,6 +8,7 @@ enum Route: Hashable {
 enum AppTab: Hashable {
     case chats
     case needs
+    case you
 }
 
 struct TasksScreen: View {

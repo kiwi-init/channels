@@ -1,7 +1,6 @@
 import SwiftUI
 
 struct ChannelList: View {
-    @Binding var settings: Bool
     @Environment(AppModel.self) private var model
 
     var body: some View {
@@ -35,20 +34,6 @@ struct ChannelList: View {
             }
         }
         .navigationTitle("Channels")
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    settings = true
-                } label: {
-                    if let me = model.channels.first.flatMap({ $0.member($0.me) }) {
-                        Face(name: me.name, member: me, size: 32)
-                    } else {
-                        Image(systemName: "person.crop.circle")
-                    }
-                }
-                .accessibilityLabel("You")
-            }
-        }
     }
 }
 
