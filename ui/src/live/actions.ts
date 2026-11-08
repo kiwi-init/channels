@@ -13,7 +13,6 @@ import { appCan } from "~/live/app-can"
 import { setNewMemberPowers, setNewMemberScopes } from "~/live/defaults"
 import { deleteTheme, saveTheme, setPrefs } from "~/live/prefs"
 import { checkComputer, computerSettings, setContextLine, setHooks } from "~/live/computer"
-import { adminPeople, setAdminPerson } from "~/live/admin"
 import { markSeenIn, seenIn } from "@kiwi/app/threads.ts"
 import { followKey, followMark } from "~/live/threads"
 import { lastIn, seenKeyOf } from "~/live/seen-place"
@@ -208,8 +207,6 @@ export function makeActions(): Actions {
     setHold: (code, on, note) => attempt(on ? "Agents not paused" : "Agents not resumed", async () => (await manage()).setHold(code, on, note)),
     askCompact: (code) => attempt("Not asked", async () => (await rare()).askCompact(code)),
     approveCompact: (code, proposal) => attempt("Not compacted", async () => (await rare()).approveCompact(code, proposal)),
-    adminPeople,
-    setAdminPerson,
     myRepos: async () => {
       const b = bridge()
       if (!b) return []

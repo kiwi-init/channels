@@ -134,7 +134,6 @@ export const SHOTS: Record<string, Shot> = {
   "settings-update-downloading": { scenario: "update-downloading", channel: "kiwi", nav: { page: "settings", section: "about" } },
   "settings-update-blocked": { scenario: "update-blocked", channel: "kiwi", nav: { page: "settings", section: "about" } },
   "settings-about": kiwi({ page: "settings", section: "about" }),
-  "settings-people": { scenario: "admin", channel: "kiwi", nav: { page: "settings", section: "people" } },
   "channel-settings-guest": { scenario: "full", channel: "studio", nav: { modal: { kind: "channel" } } },
   "agent-manager": { scenario: "full", channel: "studio", nav: { modal: { kind: "person", name: "quill" } } },
   "agent-yours-trusted": { scenario: "full", channel: "studio", nav: { modal: { kind: "person", name: "pip" } } },

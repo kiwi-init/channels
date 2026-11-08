@@ -847,21 +847,6 @@ export interface Actions {
   setContextLine(on: boolean): void
   computerSettings(id: string): Promise<[string, string[]][]>
   launchedFrom(ids: string[]): Promise<LaunchedAgent[]>
-  adminPeople(): Promise<AdminPerson[] | null>
-  setAdminPerson(user: string, change: { plan?: PersonPlan; blocked?: boolean }): Promise<AdminPerson | null>
-}
-
-export type PersonPlan = "free" | "paid" | "unlimited"
-
-/** A signed-in person as this relay's admins see them: plan, block and today's stored messages. */
-export interface AdminPerson {
-  user: string
-  login: string | null
-  plan: PersonPlan
-  blocked: boolean
-  used: number
-  channels: number
-  seen: number
 }
 
 export type Finding = { ok: true; what: string } | { ok: false; what: string; how: string }

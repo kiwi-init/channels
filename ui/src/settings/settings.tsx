@@ -1,5 +1,5 @@
 import { PaintBoardIcon } from "@hugeicons/core-free-icons"
-import { useEffect, useState } from "react"
+import { useEffect } from "react"
 
 import { cx } from "~/kit/bits"
 import { useGlide } from "~/kit/glide"
@@ -7,9 +7,7 @@ import { GlyphIcon, Icon, type Glyph, type IconName } from "~/kit/icons"
 import { useApp, type Section } from "~/nav"
 import { AgentsSection } from "~/settings/agents"
 import { ComputersSection } from "~/settings/computers"
-import { PeopleSection } from "~/settings/people"
 import { AboutSection, AccountSection, AppearanceSection } from "~/settings/sections"
-import type { AdminPerson } from "~/model"
 import { useSideways } from "~/kit/sideways"
 import { SideCards } from "~/shell/updates"
 
@@ -18,21 +16,12 @@ const SECTIONS: readonly (readonly [Section, string, IconName | Glyph])[] = [
   ["appearance", "Appearance", PaintBoardIcon],
   ["computers", "Computers and phones", "devices"],
   ["agents", "Agents", "agent"],
-  ["people", "People", "people"],
   ["about", "About", "info"],
 ]
 
 export function Settings() {
   const navRef = useGlide<HTMLElement>(".side-row.is-on")
-  const { app, nav, go } = useApp()
-  const [people, setPeople] = useState<AdminPerson[] | null>(null)
-  useEffect(() => {
-    let live = true
-    void app.actions.adminPeople().then((p) => live && setPeople(p))
-    return () => {
-      live = false
-    }
-  }, [app.actions])
+  const { nav, go } = useApp()
   useSideways(navRef, nav.section)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -55,7 +44,7 @@ export function Settings() {
       </header>
       <nav ref={navRef} className="set-nav" aria-label="Settings sections">
         <ul>
-          {SECTIONS.filter(([id]) => id !== "people" || people).map(([id, label, icon]) => {
+          {SECTIONS.map(([id, label, icon]) => {
             const on = nav.section === id
             return (
               <li key={id}>
@@ -71,14 +60,14 @@ export function Settings() {
       </nav>
       <main className="set-main">
         <div className="set-body" key={nav.section}>
-          <Current section={nav.section} people={people} />
+          <Current section={nav.section} />
         </div>
       </main>
     </div>
   )
 }
 
-function Current({ section, people }: { section: Section; people: AdminPerson[] | null }) {
+function Current({ section }: { section: Section }) {
   switch (section) {
     case "account":
       return <AccountSection />
@@ -88,8 +77,6 @@ function Current({ section, people }: { section: Section; people: AdminPerson[] 
       return <ComputersSection />
     case "agents":
       return <AgentsSection />
-    case "people":
-      return people ? <PeopleSection people={people} /> : <AccountSection />
     case "about":
       return <AboutSection />
   }

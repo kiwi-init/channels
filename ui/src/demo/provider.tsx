@@ -11,7 +11,7 @@ import { longFeed } from "~/demo/long"
 import { demoAround, demoFetchOlder, demoOlder } from "~/demo/older"
 import { withSpecs } from "~/demo/specs"
 import { homeOf, saidIn } from "~/home"
-import type { Account, Actions, AdminPerson, App, Enrolling, Finding, GithubSignIn, ThisComputer, Channel, ChannelTile, GoneChannel, Message, Prefs, Spec, Task } from "~/model"
+import type { Account, Actions, App, Enrolling, Finding, GithubSignIn, ThisComputer, Channel, ChannelTile, GoneChannel, Message, Prefs, Spec, Task } from "~/model"
 import { deletedTheme, savedTheme } from "~/theme/themes"
 import { announce } from "~/kit/toasts"
 import { demoDocs, openDemoDoc } from "~/demo/doc-hub"
@@ -268,15 +268,6 @@ function withCompact(c: Channel, approved: boolean): Channel {
   }
 }
 
-const HOUR = 3_600_000
-let demoPeople: AdminPerson[] = [
-  { user: "github_1", login: "jow", plan: "unlimited", blocked: false, used: 2140, channels: 4, seen: Date.now() - 0.1 * HOUR },
-  { user: "github_2", login: "harry", plan: "paid", blocked: false, used: 812, channels: 2, seen: Date.now() - 0.6 * HOUR },
-  { user: "github_3", login: "olivia-dev", plan: "free", blocked: false, used: 498, channels: 1, seen: Date.now() - 2 * HOUR },
-  { user: "github_4", login: "rodrigo", plan: "free", blocked: false, used: 37, channels: 1, seen: Date.now() - 26 * HOUR },
-  { user: "github_5", login: null, plan: "free", blocked: true, used: 0, channels: 3, seen: Date.now() - 70 * HOUR },
-]
-
 export type Scenario =
   | "full"
   | "compact"
@@ -321,7 +312,6 @@ export type Scenario =
   | "spec-changed"
   | "forgotten-computer"
   | "member"
-  | "admin"
 
 function initial(scenario: Scenario, look: Partial<Prefs>): State {
   const prefs = { ...DEMO_PREFS, ...look }
@@ -958,15 +948,8 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
           )
         ),
       checkComputer: () => new Promise((done) => setTimeout(() => done(FINDINGS), 400)),
-      adminPeople: async () => (scenario === "admin" ? demoPeople : null),
-      setAdminPerson: async (user, change) => {
-        const i = demoPeople.findIndex((p) => p.user === user)
-        if (i < 0) return null
-        demoPeople = demoPeople.map((p, j) => (j === i ? { ...p, ...change } : p))
-        return demoPeople[i]!
-      },
     }
-  }, [scenario])
+  }, [])
 
   const home = useMemo(() => [...state.channels.values()].map((c) => homeOf(c, saidIn(c.messages))), [state.channels])
 

@@ -16,7 +16,7 @@ type ModalView = { kind: "person"; name: string } | { kind: "channel"; tab?: Cha
 
 type Dialog = "new-channel" | "new-room" | "join" | "palette" | null
 
-export type Section = "account" | "appearance" | "computers" | "agents" | "people" | "about"
+export type Section = "account" | "appearance" | "computers" | "agents" | "about"
 
 interface Place {
   channel: string
