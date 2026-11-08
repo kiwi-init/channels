@@ -131,7 +131,6 @@ class AppModel(private val app: Application) {
     val rooms = mutableStateMapOf<String, RoomView>()
     val seen = mutableStateMapOf<String, Int>().apply { putAll(counts("seen")) }
     val placeSeen = mutableStateMapOf<String, Int>().apply { putAll(counts("placeSeen")) }
-    val pinned = mutableStateListOf<String>().apply { addAll(names("pinned")) }
     private val heldUnread = mutableStateListOf<String>().apply { addAll(names("heldUnread")) }
     val drafts = mutableStateMapOf<String, Draft>()
     val feeds = mutableStateMapOf<String, Feed>()
@@ -273,14 +272,14 @@ class AppModel(private val app: Application) {
         if (draft.isEmpty) drafts.remove(spot.id) else drafts[spot.id] = draft
     }
 
-    fun open(code: String) {
+    fun open(spot: Spot) {
         scope.launch {
             try {
                 ask(
                     buildJsonObject {
                         put("op", "open")
-                        put("code", code)
-                        put("place", "main")
+                        put("code", spot.code)
+                        put("place", if (spot.place == rooms[spot.code]?.sideKey) "main" else spot.place)
                     },
                 )
             } catch (e: EngineException) {
@@ -506,7 +505,7 @@ class AppModel(private val app: Application) {
     private suspend fun syncMarks(code: String, write: Boolean) {
         val room = rooms[code] ?: return
         if (room.gone != null) return
-        val keys = listOf("main") + listOfNotNull(room.sideKey)
+        val keys = listOf("main") + listOfNotNull(room.sideKey) + room.roomPlaces.map { it.key }
         val local = marksOf(code, keys, seen, placeSeen)
         if (write && (local.isEmpty() || wroteMarks[code] == local)) return
         val merged = try {
@@ -560,7 +559,6 @@ class AppModel(private val app: Application) {
         pictures.evictAll()
         seen.clear()
         placeSeen.clear()
-        pinned.clear()
         heldUnread.clear()
         wroteMarks.clear()
         pulledMarks.clear()
@@ -590,13 +588,6 @@ class AppModel(private val app: Application) {
                 // The keys are gone from this phone already; the engine stops with the app.
             }
         }
-    }
-
-    fun isPinned(spot: Spot): Boolean = spot.id in pinned
-
-    fun togglePin(spot: Spot) {
-        if (!pinned.remove(spot.id)) pinned.add(spot.id)
-        prefs.edit { putString("pinned", wire.encodeToString(ListSerializer(String.serializer()), pinned.toList())) }
     }
 
     fun unread(spot: Spot): Boolean {
@@ -638,7 +629,7 @@ class AppModel(private val app: Application) {
     fun shown(spot: Spot): RoomView? {
         val room = rooms[spot.code] ?: return null
         if (spot.place == room.sideKey) return room.showing(spot.place, Feed(room.side ?: emptyList(), room.whole))
-        return if (room.place == "main") room else room.showing("main", feeds[spot.id])
+        return if (room.place == spot.place) room else room.showing(spot.place, feeds[spot.id])
     }
 
     fun visit(spot: Spot) {

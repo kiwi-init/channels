@@ -7,14 +7,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -22,10 +20,6 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.automirrored.outlined.Chat
-import androidx.compose.material.icons.filled.PushPin
-import androidx.compose.material.icons.filled.Tag
-import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
@@ -45,118 +39,105 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.kiwiinit.channels.engine.AskView
 import com.kiwiinit.channels.engine.EngineException
-import com.kiwiinit.channels.engine.MemberView
 import com.kiwiinit.channels.engine.ReviewView
 import com.kiwiinit.channels.engine.RoomView
+import com.kiwiinit.channels.engine.TaskView
 import com.kiwiinit.channels.model.AppModel
 import com.kiwiinit.channels.model.Buzz
 import com.kiwiinit.channels.model.Spot
-import com.kiwiinit.channels.model.other
-import com.kiwiinit.channels.model.spotTitle
+import com.kiwiinit.channels.model.oneLine
 import com.kiwiinit.channels.model.taskLabel
 import com.kiwiinit.channels.theme.Tone
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DetailsScreen(model: AppModel, code: String, current: String, back: () -> Unit, choose: (String) -> Unit) {
-    val room = model.rooms[code]
+private fun Screen(title: String, back: () -> Unit, content: @Composable (PaddingValues) -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(room?.spotTitle(current) ?: "Details", maxLines = 1) },
+                title = { Text(title, maxLines = 1) },
                 navigationIcon = {
                     IconButton(onClick = back) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
             )
         },
-    ) { padding ->
-        if (room == null) {
-            Centered("This channel is gone", "Its owner closed it, or this phone was removed from it.", Modifier.padding(padding))
-        } else {
-            ChannelDetails(model, room, current, choose, PaddingValues(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding() + 24.dp))
+    ) { padding -> content(PaddingValues(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding() + 24.dp)) }
+}
+
+@Composable
+fun NeedsScreen(model: AppModel, back: () -> Unit) {
+    val many = model.channels.size > 1
+    Screen("Needs you", back) { padding ->
+        LazyColumn(Modifier.fillMaxSize().imePadding(), contentPadding = padding) {
+            if (model.channels.none { it.asks.isNotEmpty() || it.reviews.isNotEmpty() }) {
+                item(key = "none") { Centered("Nothing needs you", "Questions, decisions and reviews show up here.", Modifier.padding(top = 80.dp)) }
+            }
+            for (room in model.channels) {
+                if (room.asks.isEmpty() && room.reviews.isEmpty()) continue
+                if (many) item(key = "head-${room.code}") { Header(room.title, Tone.current.ink3) }
+                items(room.asks, key = { "ask-${room.code}-${it.seq}" }) { ask -> Card { NeedsYouRow(model, room, ask) } }
+                items(room.reviews, key = { "review-${room.code}-${it.task}" }) { review -> Card { ReviewRow(model, room, review) } }
+            }
         }
     }
 }
 
 @Composable
-private fun ChannelDetails(model: AppModel, room: RoomView, current: String, choose: (String) -> Unit, padding: PaddingValues) {
-    val tone = Tone.current
-    val view = LocalView.current
-    val spot = Spot(room.code, current)
-    val pinned = model.isPinned(spot)
-    val lead = room.members.filter { it.lead }
-    val rest = room.members.filter { !it.lead && it.name != room.me }.sortedWith(compareBy<MemberView>({ if (it.working) 0 else 1 }, { it.display }))
-    val me = room.members.filter { it.name == room.me && !it.lead }
-    val crew = lead + rest + me
-    val count = "${room.members.size} ${if (room.members.size == 1) "person" else "people"}"
-    val summary = if (room.working > 0) "$count · ${room.working} working" else count
-    LazyColumn(Modifier.fillMaxSize().imePadding(), contentPadding = padding) {
-        item(key = "head") {
-            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                ChannelAvatar(room, 96.dp)
-                Text(
-                    room.title,
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = 12.dp),
-                )
-                Text(summary, style = MaterialTheme.typography.bodyMedium, color = tone.ink3, modifier = Modifier.padding(top = 2.dp))
-                Row(Modifier.fillMaxWidth().padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    val other = room.other(spot)
-                    if (other != null) {
-                        Action(
-                            if (other.general) Icons.Filled.Tag else Icons.AutoMirrored.Outlined.Chat,
-                            if (other.general) "# general" else room.spotTitle(other.place),
-                            Modifier.weight(1f),
-                        ) { choose(other.place) }
-                    }
-                    Action(if (pinned) Icons.Outlined.PushPin else Icons.Filled.PushPin, if (pinned) "Unpin" else "Pin", Modifier.weight(1f)) {
-                        view.buzz(Buzz.Tap)
-                        model.togglePin(spot)
-                    }
-                }
-            }
+fun TasksScreen(model: AppModel, code: String, open: (Spot) -> Unit, back: () -> Unit) {
+    val room = model.rooms[code]
+    Screen(room?.let { "Tasks · ${it.title}" } ?: "Tasks", back) { padding ->
+        if (room == null) {
+            Centered("This channel is gone", "Its owner closed it, or this phone was removed from it.", Modifier.padding(padding))
+            return@Screen
         }
-        if (room.asks.isNotEmpty() || room.reviews.isNotEmpty()) {
-            item(key = "needs") { Header("Needs you", tone.decide) }
-            items(room.asks, key = { "ask-${it.seq}" }) { ask -> Card { NeedsYouRow(model, room, ask) } }
-            items(room.reviews, key = { "review-${it.task}" }) { review -> Card { ReviewRow(model, room, review) } }
-        }
-        item(key = "crew") { Header("Crew", tone.ink3) }
-        item(key = "crew-list") {
-            Card {
-                crew.forEachIndexed { i, m ->
-                    Person(room, m) { room.sideKey?.let(choose) }
-                    if (i < crew.size - 1) Box(Modifier.fillMaxWidth().padding(start = 64.dp).heightIn(min = 1.dp).background(tone.line))
-                }
-            }
-        }
-        if (room.hold != null || room.charter != null) {
-            item(key = "about") { Header("About", tone.ink3) }
-            item(key = "about-card") {
-                Card {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        room.hold?.let {
-                            Text(if (it.isEmpty()) "On hold" else "On hold: $it", style = MaterialTheme.typography.bodyMedium, color = tone.decide)
+        val live = room.tasks.filter { !it.archived }
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = padding) {
+            if (live.isEmpty()) item(key = "none") { Centered("Nothing open", "Tasks your lead hands out show up here.", Modifier.padding(top = 80.dp)) }
+            for ((state, title) in TASK_STATES) {
+                val these = live.filter { it.state == state }
+                if (these.isEmpty()) continue
+                item(key = "head-$state") { Header("$title · ${these.size}", if (state == "review") Tone.current.decide else Tone.current.ink3) }
+                item(key = "list-$state") {
+                    Card {
+                        these.forEachIndexed { i, task ->
+                            TaskRow(room, task) { open(Spot(room.code, "task:${task.id}")) }
+                            if (i < these.size - 1) Box(Modifier.fillMaxWidth().padding(start = 16.dp).heightIn(min = 1.dp).background(Tone.current.line))
                         }
-                        room.charter?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = tone.ink2, maxLines = 8) }
                     }
                 }
             }
         }
+    }
+}
+
+private val TASK_STATES = listOf("doing" to "Working", "review" to "In review", "todo" to "To do", "done" to "Done")
+
+@Composable
+private fun TaskRow(room: RoomView, task: TaskView, open: () -> Unit) {
+    val tone = Tone.current
+    Column(Modifier.fillMaxWidth().clickable(onClick = open).padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(
+            buildAnnotatedString {
+                withStyle(SpanStyle(color = tone.ink3)) { append(taskLabel(task.id)) }
+                append(" ${task.title}")
+            },
+            style = MaterialTheme.typography.bodyLarge,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        val who = task.owner?.let { room.display(it) }
+        val line = listOfNotNull(who, task.last?.oneLine()).joinToString(" · ")
+        if (line.isNotEmpty()) Text(line, style = MaterialTheme.typography.bodySmall, color = if (task.state == "doing") tone.doing else tone.ink3, maxLines = 2, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -179,59 +160,6 @@ private fun Card(content: @Composable () -> Unit) {
             .background(MaterialTheme.colorScheme.surfaceContainer),
     ) {
         content()
-    }
-}
-
-@Composable
-private fun Action(icon: ImageVector, title: String, modifier: Modifier, tap: () -> Unit) {
-    Column(
-        modifier.heightIn(min = 64.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainer)
-            .clickable(onClick = tap)
-            .padding(vertical = 10.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-        Text(
-            title,
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.primary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = 4.dp, start = 8.dp, end = 8.dp),
-        )
-    }
-}
-
-@Composable
-private fun Person(room: RoomView, m: MemberView, chat: () -> Unit) {
-    val tone = Tone.current
-    val canChat = m.lead && m.name != room.me && room.sideKey != null
-    val what = if (m.lead) "Lead" else if (m.owner) "Owner" else if (m.isAgent) "Agent" else "Person"
-    val now = if (m.working) {
-        val task = m.doing.firstOrNull()?.let { id -> room.tasks.firstOrNull { it.id == id } }
-        task?.let { "working on ${taskLabel(it.id)} ${it.title}" } ?: "working"
-    } else if (m.here) {
-        "here"
-    } else {
-        "away"
-    }
-    Row(
-        Modifier.fillMaxWidth().then(if (canChat) Modifier.clickable(onClick = chat) else Modifier).padding(horizontal = 16.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Face(m.name, m, 36.dp)
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(m.display, style = MaterialTheme.typography.bodyLarge, maxLines = 1)
-                if (m.name == room.me) Text("you", style = MaterialTheme.typography.labelMedium, color = tone.ink3)
-            }
-            Text("$what · $now", style = MaterialTheme.typography.bodySmall, color = if (m.working) tone.doing else tone.ink3, maxLines = 1)
-        }
-        if (canChat) Icon(Icons.AutoMirrored.Outlined.Chat, contentDescription = "Message", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
     }
 }
 

@@ -13,7 +13,8 @@ import com.kiwiinit.channels.model.Spot
 import com.kiwiinit.channels.theme.ChannelsTheme
 import com.kiwiinit.channels.ui.ConversationList
 import com.kiwiinit.channels.ui.ConversationScreen
-import com.kiwiinit.channels.ui.DetailsScreen
+import com.kiwiinit.channels.ui.NeedsScreen
+import com.kiwiinit.channels.ui.TasksScreen
 import com.kiwiinit.channels.ui.LinkScreen
 import com.kiwiinit.channels.ui.SettingsScreen
 import org.junit.Rule
@@ -47,19 +48,25 @@ class ScreensTest {
     fun check() = shoot("check") { LinkScreen(it, linking = Linking.Check("Jow", "3f9a 0c41 77e2 b8d5 1a06")) }
 
     @Test
-    fun list() = shoot("list") { ConversationList(it, open = {}, settings = {}) }
+    fun list() = shoot("list") { ConversationList(it, open = {}, needs = {}, tasks = {}, settings = {}) }
 
     @Test
-    fun general() = shoot("general") { ConversationScreen(it, Spot(DEV), chosen = null, consumeChosen = {}, back = {}, details = {}) }
+    fun general() = shoot("general") { ConversationScreen(it, Spot(DEV), back = {}) }
 
     @Test
-    fun leadChat() = shoot("lead-chat") { ConversationScreen(it, Spot(DEV, LEAD_CHAT), chosen = null, consumeChosen = {}, back = {}, details = {}) }
+    fun leadChat() = shoot("lead-chat") { ConversationScreen(it, Spot(DEV, LEAD_CHAT), back = {}) }
 
     @Test
-    fun details() = shoot("details") { DetailsScreen(it, DEV, "main", back = {}, choose = {}) }
+    fun needs() = shoot("needs") { NeedsScreen(it) {} }
 
     @Test
-    fun detailsReview() = shoot("details-review", { it.rooms[DEV] = it.rooms.getValue(DEV).copy(asks = emptyList()) }) { DetailsScreen(it, DEV, "main", back = {}, choose = {}) }
+    fun needsReview() = shoot("needs-review", { it.rooms[DEV] = it.rooms.getValue(DEV).copy(asks = emptyList()) }) { NeedsScreen(it) {} }
+
+    @Test
+    fun tasks() = shoot("tasks") { TasksScreen(it, DEV, open = {}, back = {}) }
+
+    @Test
+    fun room() = shoot("room") { ConversationScreen(it, Spot(DEV, DESIGN_ROOM), back = {}) }
 
     @Test
     fun settings() = shoot("settings") { SettingsScreen(it) {} }
