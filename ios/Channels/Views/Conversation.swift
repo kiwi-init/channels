@@ -25,8 +25,16 @@ struct Line: Identifiable {
             asks.map { (at: $0.at, line: Line(id: "a\($0.seq)", kind: .ask($0))) } + reviews.map { (at: $0.at, line: Line(id: "r\($0.task)", kind: .review($0))) }
             + needs.map { (at: $0.at, line: Line(id: "n\($0.id)", kind: .need($0))) }
         var waiting = held.sorted { $0.at < $1.at }[...]
-        let answers = Set(messages.compactMap { m in m.chosen.map { "\($0.by)|\($0.choice)" } })
-        for m in messages where !m.choices.isEmpty || !answers.contains("\(m.from)|\(m.body)") {
+        var answers: [String: [Int]] = [:]
+        for m in messages {
+            if let c = m.chosen { answers["\(c.by)|\(c.choice)", default: []].append(m.seq) }
+        }
+        for m in messages {
+            let key = "\(m.from)|\(m.body)"
+            if m.choices.isEmpty, let poll = answers[key]?.firstIndex(where: { $0 < m.seq }) {
+                answers[key]?.remove(at: poll)
+                continue
+            }
             while let next = waiting.first, next.at < m.at {
                 out.append(next.line)
                 waiting.removeFirst()
@@ -94,13 +102,16 @@ struct Conversation: View {
                     Intro(room: room)
                 }
                 ForEach(
-                    Line.build(room.messages, asks: elsewhere, reviews: reviews, needs: needs, pending: model.pending["\(room.code)|\(room.place)"] ?? [], sentAs: model.sentAs)
+                    Line.build(
+                        room.messages, asks: elsewhere, reviews: reviews, needs: needs, pending: model.pending["\(room.code)|\(room.place)"] ?? [],
+                        sentAs: model.sentAs[room.code] ?? [:])
                 ) { line in
                     LineView(line: line, room: room, solo: solo) { m in
                         replyTo = m
                         typing.wrappedValue = true
                     } jump: { seq in
-                        withAnimation(Motion.ease) { position.scrollTo(id: "b\(seq)", anchor: .center) }
+                        let id = model.sentAs[room.code]?[seq].map { "p\($0)" } ?? "b\(seq)"
+                        withAnimation(Motion.ease) { position.scrollTo(id: id, anchor: .center) }
                     } answer: { seq in
                         if let ask = room.asks.first(where: { $0.seq == seq }) { answer(ask) }
                     } sendBack: { review in
@@ -433,7 +444,14 @@ struct Bubble: View {
                         Tapbacks(current: message.myReaction) { emoji in
                             tapback = false
                             Haptic.tap()
-                            Task { try? await model.react(room.code, seq: message.seq, emoji: emoji == message.myReaction ? nil : emoji) }
+                            Task {
+                                do {
+                                    try await model.react(room.code, seq: message.seq, emoji: emoji == message.myReaction ? nil : emoji)
+                                } catch {
+                                    Trouble.note("react", error)
+                                    UINotificationFeedbackGenerator().notificationOccurred(.error)
+                                }
+                            }
                         }
                         .presentationCompactAdaptation(.popover)
                     }
@@ -916,6 +934,15 @@ struct Viewer: View {
 }
 
 struct Prose: View {
+    static let links: NSDataDetector? = {
+        do {
+            return try NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
+        } catch {
+            Trouble.note("link detector", error)
+            return nil
+        }
+    }()
+
     let text: String
     var ink: Color = Tone.ink
     var link: Color = Tone.accent
@@ -946,13 +973,17 @@ struct Prose: View {
 
     private func inline(_ s: String) -> AttributedString {
         let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace, failurePolicy: .returnPartiallyParsedIfPossible)
-        var out = (try? AttributedString(markdown: s, options: options)) ?? AttributedString(s)
+        var out: AttributedString
+        do {
+            out = try AttributedString(markdown: s, options: options)
+        } catch {
+            Trouble.note("markdown", error)
+            out = AttributedString(s)
+        }
         let plain = String(out.characters)
-        if let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) {
-            for match in detector.matches(in: plain, range: NSRange(plain.startIndex..., in: plain)) {
-                guard let url = match.url, let range = Range(match.range, in: plain), let found = out.range(of: String(plain[range])) else { continue }
-                if out[found].link == nil { out[found].link = url }
-            }
+        for match in Prose.links?.matches(in: plain, range: NSRange(plain.startIndex..., in: plain)) ?? [] {
+            guard let url = match.url, let range = Range(match.range, in: plain), let found = out.range(of: String(plain[range])) else { continue }
+            if out[found].link == nil { out[found].link = url }
         }
         if underline {
             for run in out.runs where run.link != nil { out[run.range].underlineStyle = .single }

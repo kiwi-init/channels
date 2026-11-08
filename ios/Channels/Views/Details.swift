@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct ChannelDetails: View {
     let room: RoomView
@@ -14,7 +15,6 @@ struct ChannelDetails: View {
     }
 
     private var spot: Spot { Spot(code: room.code, place: current) }
-    private var pinned: Bool { model.isPinned(spot) }
 
     private var summary: String {
         let count = "\(room.members.count) \(room.members.count == 1 ? "person" : "people")"
@@ -60,23 +60,15 @@ struct ChannelDetails: View {
             ChannelAvatar(room: room, size: 96).padding(.bottom, 8)
             Text(room.title).font(.title2.weight(.bold)).foregroundStyle(Tone.ink).multilineTextAlignment(.center)
             Text(summary).type(.ui).foregroundStyle(Tone.ink3)
-            HStack(spacing: 10) {
-                if let other = room.other(than: spot) {
-                    Button {
-                        choose(other.place)
-                    } label: {
-                        Action(symbol: other.general ? "number" : "bubble.left.fill", title: other.general ? "# general" : room.spotTitle(other.place))
-                    }
-                }
+            if let other = room.other(than: spot) {
                 Button {
-                    Haptic.tap()
-                    withAnimation(Motion.ease) { model.togglePin(spot) }
+                    choose(other.place)
                 } label: {
-                    Action(symbol: pinned ? "pin.slash.fill" : "pin.fill", title: pinned ? "Unpin" : "Pin")
+                    Action(symbol: other.general ? "number" : "bubble.left.fill", title: other.general ? "# general" : room.spotTitle(other.place))
                 }
+                .buttonStyle(.plain)
+                .padding(.top, 16)
             }
-            .buttonStyle(.plain)
-            .padding(.top, 16)
         }
         .frame(maxWidth: .infinity)
     }
@@ -144,6 +136,7 @@ struct NeedsYouRow: View {
     @State private var sending: String?
     @State private var replying = false
     @State private var text = ""
+    @State private var failed: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -186,6 +179,9 @@ struct NeedsYouRow: View {
             }
             .buttonStyle(.plain)
             .padding(.top, 2)
+            if let failed {
+                Text("Not sent: \(failed)").type(.meta).foregroundStyle(Tone.alert)
+            }
         }
         .padding(.vertical, 4)
     }
@@ -211,12 +207,18 @@ struct NeedsYouRow: View {
         let said = words.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !said.isEmpty else { return }
         sending = said
+        failed = nil
         Haptic.tap()
         Task {
-            try? await model.answer(room.code, seq: ask.seq, text: said)
+            do {
+                try await model.answer(room.code, seq: ask.seq, text: said)
+                text = ""
+                replying = false
+            } catch {
+                failed = error.localizedDescription
+                UINotificationFeedbackGenerator().notificationOccurred(.error)
+            }
             sending = nil
-            text = ""
-            replying = false
         }
     }
 }

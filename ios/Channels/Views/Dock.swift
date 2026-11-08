@@ -73,7 +73,8 @@ struct Dock: View {
 
     private var here: PlaceView? { room.placeView(spot.place) }
     private var hasText: Bool { !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-    private var canSend: Bool { !sending && room.connection == .live && (hasText || !attached.isEmpty) }
+    private var deciding: Bool { answering != nil || sendingBack != nil }
+    private var canSend: Bool { !sending && room.connection == .live && (hasText || (!deciding && !attached.isEmpty)) }
 
     private var mention: String? {
         guard let token = draft.split(separator: " ", omittingEmptySubsequences: false).last, token.hasPrefix("@") else { return nil }
@@ -317,10 +318,20 @@ struct Dock: View {
     }
 
     private func load(_ items: [PhotosPickerItem]) async {
+        var lost = 0
         for item in items {
-            guard let data = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: data), let jpeg = Shrink.jpeg(image) else { continue }
-            attached.append(Attached(image: image, data: jpeg))
+            do {
+                guard let data = try await item.loadTransferable(type: Data.self), let image = UIImage(data: data), let jpeg = Shrink.jpeg(image) else {
+                    lost += 1
+                    continue
+                }
+                attached.append(Attached(image: image, data: jpeg))
+            } catch {
+                Trouble.note("photo picker", error)
+                lost += 1
+            }
         }
+        if lost > 0 { error = lost == 1 ? "a photo couldn't be added" : "\(lost) photos couldn't be added" }
     }
 
     private func clear(sent text: String, _ key: Spot) {
@@ -348,15 +359,18 @@ struct Dock: View {
         let pictures = attached.enumerated().map { i, a in Outgoing(name: "photo-\(i + 1).jpg", mime: "image/jpeg", data: a.data.base64EncodedString()) }
         Task {
             do {
-                if pictures.isEmpty, let review = sendingBack {
+                var body = text
+                if let review = sendingBack {
                     try await model.sendBack(from.code, task: review.task, why: text)
                     sendingBack = nil
-                } else if pictures.isEmpty, let ask = answering {
+                    body = ""
+                } else if let ask = answering {
                     try await model.answer(from.code, seq: ask.seq, text: text)
                     answering = nil
-                } else {
-                    try await model.send(from, text, re: replyTo?.seq, pictures: pictures)
+                    body = ""
                 }
+                if body.isEmpty, drafting == from, draft.trimmingCharacters(in: .whitespacesAndNewlines) == text { clear(sent: text, from) }
+                if !pictures.isEmpty { try await model.send(from, body, re: replyTo?.seq, pictures: pictures) }
                 if drafting == from {
                     if draft.trimmingCharacters(in: .whitespacesAndNewlines) == text { clear(sent: text, from) }
                     attached = []
@@ -365,6 +379,7 @@ struct Dock: View {
                     model.keep(Draft(), from.code, from.place)
                 }
             } catch {
+                Trouble.note("send from the composer", error)
                 self.error = error.localizedDescription
             }
             sending = false

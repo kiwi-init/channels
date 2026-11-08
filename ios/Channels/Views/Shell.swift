@@ -5,6 +5,7 @@ enum Drawer: Equatable {
     case closed, left, right
 }
 
+@MainActor
 enum Drawers {
     static var motion: Animation? {
         UIAccessibility.isReduceMotionEnabled ? nil : .spring(duration: 0.32, bounce: 0.04)
@@ -130,7 +131,12 @@ struct Shell: View {
         }
         .onAppear(perform: start)
         .onChange(of: touching) { _, _ in settle() }
-        .onChange(of: model.channels.first?.code) { _, _ in start() }
+        .onChange(of: model.channels.map(\.code)) { _, _ in start() }
+        .alert("Sign-in not saved", isPresented: Binding(get: { model.unsaved != nil }, set: { if !$0 { model.unsaved = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(model.unsaved ?? "")
+        }
     }
 
     private var front: some View {
@@ -230,7 +236,9 @@ struct Shell: View {
     }
 
     private func start() {
-        guard model.showing == nil, let first = model.channels.first else { return }
+        if let code = model.frontCode, model.rooms[code] != nil { return }
+        guard let first = model.channels.first else { return }
+        model.path = []
         if let saved = AppModel.savedFront(), case .place(let spot) = saved, model.rooms[spot.code] != nil {
             model.showing = saved
             model.pane = .channel(spot.code)

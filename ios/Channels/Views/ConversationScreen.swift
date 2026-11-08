@@ -9,7 +9,9 @@ struct ConversationScreen: View {
     @State private var sendingBack: ReviewView?
     @State private var position = ScrollPosition(edge: .bottom)
     @State private var follow = Follow()
+    @State private var visible = false
     @FocusState private var typing: Bool
+    @Environment(\.scenePhase) private var scene
 
     init(start: Spot) {
         _spot = State(initialValue: start)
@@ -47,7 +49,6 @@ struct ConversationScreen: View {
                         Button("#general", systemImage: "number") { model.path.append(.place(Spot(code: room.code))) }
                     }
                 }
-                .onAppear(perform: seen)
                 .onChange(of: room.placeView(spot.place)?.lastSeq) { _, _ in seen() }
             } else {
                 Centered(title: "This channel is gone", detail: "Its owner closed it, or this phone was removed from it.")
@@ -56,7 +57,13 @@ struct ConversationScreen: View {
         .background(Tone.canvas)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
-        .toolbar(.hidden, for: .tabBar)
+        .onAppear {
+            visible = true
+            seen()
+        }
+        .onDisappear { visible = false }
+        .onChange(of: scene) { _, _ in seen() }
+        .onChange(of: model.drawer) { _, _ in seen() }
         .task(id: spot) {
             follow = Follow()
             await model.open(spot.code, place: spot.place == model.rooms[spot.code]?.sideKey ? "main" : spot.place)
@@ -85,6 +92,7 @@ struct ConversationScreen: View {
     }
 
     private func seen() {
+        guard visible, scene == .active, model.drawer == .closed else { return }
         model.markRead(spot)
     }
 }

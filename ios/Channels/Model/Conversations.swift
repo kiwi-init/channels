@@ -177,22 +177,6 @@ extension AppModel {
 
     var waiting: Int { channels.reduce(0) { $0 + $1.asks.count + $1.reviews.count + $1.open.count } }
 
-    func isPinned(_ spot: Spot) -> Bool { pinned.contains(spot.id) }
-
-    func togglePin(_ spot: Spot) {
-        if isPinned(spot) {
-            pinned.removeAll { $0 == spot.id }
-        } else {
-            pinned.append(spot.id)
-        }
-        UserDefaults.standard.set(pinned, forKey: "pinned")
-    }
-
-    func pins() -> [Row] {
-        let all = rows(.all)
-        return pinned.compactMap { id in all.first { $0.id == id } }
-    }
-
     func unread(_ spot: Spot) -> Bool {
         guard let room = rooms[spot.code] else { return false }
         return fresh(room, spot.place)
@@ -211,8 +195,13 @@ extension AppModel {
         }
     }
 
+    func canMarkUnread(_ spot: Spot) -> Bool {
+        guard let last = rooms[spot.code]?.placeView(spot.place)?.last else { return false }
+        return !last.mine
+    }
+
     func markUnread(_ spot: Spot) {
-        guard let room = rooms[spot.code], let last = room.placeView(spot.place)?.last, !last.mine else { return }
+        guard canMarkUnread(spot), let last = rooms[spot.code]?.placeView(spot.place)?.last else { return }
         if spot.general {
             seen[spot.code] = last.seq - 1
             UserDefaults.standard.set(seen, forKey: "seen")
@@ -251,11 +240,15 @@ extension AppModel {
     private func deliver(_ item: Pending, _ spot: Spot) {
         Task {
             do {
-                let seq = try await send(spot, item.body, re: item.re)
-                sentAs[seq] = item.id
+                guard let seq = try await send(spot, item.body, re: item.re) else {
+                    pending[spot.id]?.removeAll { $0.id == item.id }
+                    return
+                }
+                sentAs[spot.code, default: [:]][seq] = item.id
                 if let at = pending[spot.id]?.firstIndex(where: { $0.id == item.id }) { pending[spot.id]?[at].seq = seq }
                 settle(spot.code)
             } catch {
+                Trouble.note("send", error)
                 if let at = pending[spot.id]?.firstIndex(where: { $0.id == item.id }) { pending[spot.id]?[at].failed = true }
                 UINotificationFeedbackGenerator().notificationOccurred(.error)
             }

@@ -77,14 +77,16 @@ struct ChannelSection: View {
 
     @ViewBuilder private func readToggle(_ spot: Spot) -> some View {
         let unread = model.unread(spot)
-        Button {
-            withAnimation(Motion.ease) {
-                if unread { model.markRead(spot) } else { model.markUnread(spot) }
+        if unread || model.canMarkUnread(spot) {
+            Button {
+                withAnimation(Motion.ease) {
+                    if unread { model.markRead(spot) } else { model.markUnread(spot) }
+                }
+            } label: {
+                Label(unread ? "Read" : "Unread", systemImage: unread ? "envelope.open" : "envelope.badge")
             }
-        } label: {
-            Label(unread ? "Read" : "Unread", systemImage: unread ? "envelope.open" : "envelope.badge")
+            .tint(Tone.accent)
         }
-        .tint(Tone.accent)
     }
 
     private func status(_ member: MemberView, _ spot: Spot) -> String? {

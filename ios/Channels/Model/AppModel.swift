@@ -59,12 +59,11 @@ final class AppModel {
         phase == .ready && (relinkAsked || linking != .idle)
     }
     var seen: [String: Int] = UserDefaults.standard.dictionary(forKey: "seen") as? [String: Int] ?? [:]
-    var pinned: [String] = (UserDefaults.standard.stringArray(forKey: "pinned") ?? []).map { $0.contains("|") ? $0 : "\($0)|main" }
     var placeSeen: [String: Int] = UserDefaults.standard.dictionary(forKey: "placeSeen") as? [String: Int] ?? [:]
     var drafts: [String: Draft] = [:]
     var feeds: [String: Feed] = [:]
     var pending: [String: [Pending]] = [:]
-    var sentAs: [Int: UUID] = [:]
+    var sentAs: [String: [Int: UUID]] = [:]
 
     @ObservationIgnored let engine = Engine()
     @ObservationIgnored private var booted = false
@@ -95,7 +94,11 @@ final class AppModel {
     }
 
     func open(_ code: String, place: String) async {
-        try? await engine.ask(["op": "open", "code": code, "place": place])
+        do {
+            try await engine.ask(["op": "open", "code": code, "place": place])
+        } catch {
+            Trouble.note("open \(place)", error)
+        }
     }
 
     func boot() async {
@@ -112,10 +115,15 @@ final class AppModel {
             return
         }
         #if DEBUG
-            if let json = ProcessInfo.processInfo.environment["CHANNELS_FIXTURE"], let room = try? JSONDecoder().decode(RoomView.self, from: Data(json.utf8)) {
-                rooms[room.code] = room
-                phase = .ready
-                return
+            if let json = ProcessInfo.processInfo.environment["CHANNELS_FIXTURE"] {
+                do {
+                    let room = try JSONDecoder().decode(RoomView.self, from: Data(json.utf8))
+                    rooms[room.code] = room
+                    phase = .ready
+                    return
+                } catch {
+                    Trouble.note("CHANNELS_FIXTURE", error)
+                }
             }
             switch UserDefaults.standard.string(forKey: "link") {
             case "github": linking = .signingIn(url: "https://github.com/login/device", code: "4F2A-9C1B")
@@ -178,7 +186,12 @@ final class AppModel {
     }
 
     private func start(_ saved: Data) async {
-        guard let object = try? JSONSerialization.jsonObject(with: saved) as? [String: Any] else {
+        let object: [String: Any]
+        do {
+            guard let parsed = try JSONSerialization.jsonObject(with: saved) as? [String: Any] else { throw EngineError.garbled }
+            object = parsed
+        } catch {
+            Trouble.note("saved sign-in unreadable", error)
             phase = .unlinked
             return
         }
@@ -207,7 +220,11 @@ final class AppModel {
         switch push {
         case .saved(let data):
             store(data)
-            if let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] { held(object) }
+            do {
+                if let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] { held(object) }
+            } catch {
+                Trouble.note("saved push unreadable", error)
+            }
         case .room(let room):
             if let before = rooms[room.code], before.connection == .live {
                 let known = Set(before.asks.map(\.seq))
@@ -274,6 +291,7 @@ final class AppModel {
             let data = try await engine.ask(["op": "enrollFinish"])
             store(data)
             linking = .idle
+            relinkAsked = false
             rooms = [:]
             await start(data)
         } catch {
@@ -284,7 +302,7 @@ final class AppModel {
     func refuseLink(_ fingerprint: String) async {
         linking = .failed(
             "Kept nothing. If your computer never showed \(fingerprint), someone else answered this iPhone. Your computer may still list it under Devices: remove it there.")
-        try? await engine.ask(["op": "enrollCancel"])
+        await cancelEnroll()
     }
 
     private func registerPush(_ token: String) async {
@@ -296,9 +314,9 @@ final class AppModel {
         do {
             let seats = try await engine.ask(["op": "push", "token": token, "sandbox": sandbox], as: [PushSeat].self)
             push.take(seats, token: token)
-            for seat in seats where !seat.ok { NSLog("push: \(seat.label) refused: \(seat.error ?? "")") }
+            for seat in seats where !seat.ok { Trouble.note("push: \(seat.label) refused: \(seat.error ?? "")") }
         } catch {
-            NSLog("push: couldn't register: \(error.localizedDescription)")
+            Trouble.note("push: couldn't register", error)
         }
     }
 
@@ -306,29 +324,48 @@ final class AppModel {
         github.close()
         linking = .idle
         relinkAsked = false
-        try? await engine.ask(["op": "enrollCancel"])
+        await cancelEnroll()
+    }
+
+    private func cancelEnroll() async {
+        do {
+            try await engine.ask(["op": "enrollCancel"])
+        } catch {
+            Trouble.note("enrollCancel", error)
+        }
     }
 
     @discardableResult
-    func send(_ spot: Spot, _ body: String, re: Int?, pictures: [Outgoing] = []) async throws -> Int {
+    func send(_ spot: Spot, _ body: String, re: Int?, pictures: [Outgoing] = []) async throws -> Int? {
         var ask: [String: Any] = [
             "op": "send", "code": spot.code, "place": spot.place, "body": body, "imgs": pictures.map { ["name": $0.name, "mime": $0.mime, "data": $0.data] },
         ]
         ask["re"] = re ?? NSNull()
         let data = try await engine.ask(ask)
-        return (try? JSONDecoder().decode(Int.self, from: data)) ?? 0
+        do {
+            return try JSONDecoder().decode(Int.self, from: data)
+        } catch {
+            Trouble.note("send: no seq back", error)
+            return nil
+        }
     }
 
     func image(_ code: String, seq: Int, index: Int) async -> UIImage? {
         let key = "\(code)/\(seq)/\(index)" as NSString
         if let hit = pictures.object(forKey: key) { return hit }
-        guard let data = try? await engine.ask(["op": "image", "code": code, "seq": seq, "index": index]),
-            let text = try? JSONDecoder().decode(String?.self, from: data),
-            let raw = Data(base64Encoded: text),
-            let image = UIImage(data: raw)
-        else { return nil }
-        pictures.setObject(image, forKey: key)
-        return image
+        do {
+            let data = try await engine.ask(["op": "image", "code": code, "seq": seq, "index": index])
+            guard let text = try JSONDecoder().decode(String?.self, from: data) else { return nil }
+            guard let raw = Data(base64Encoded: text), let image = UIImage(data: raw) else {
+                Trouble.note("image \(key): not a picture")
+                return nil
+            }
+            pictures.setObject(image, forKey: key)
+            return image
+        } catch {
+            Trouble.note("image \(key)", error)
+            return nil
+        }
     }
 
     func react(_ code: String, seq: Int, emoji: String?) async throws {
@@ -360,7 +397,13 @@ final class AppModel {
     }
 
     func nudge() {
-        Task { try? await engine.ask(["op": "nudge"]) }
+        Task {
+            do {
+                try await engine.ask(["op": "nudge"])
+            } catch {
+                Trouble.note("nudge", error)
+            }
+        }
     }
 
     func cameToFront() {
@@ -407,7 +450,13 @@ final class AppModel {
         let keys = ["main"] + (room.sideKey.map { [$0] } ?? [])
         let local = marks(code, keys)
         if write && (local.isEmpty || wroteMarks[code] == local) { return }
-        guard let merged = try? await engine.ask(["op": "marks", "code": code, "marks": local, "write": write], as: [String: Int].self) else { return }
+        let merged: [String: Int]
+        do {
+            merged = try await engine.ask(["op": "marks", "code": code, "marks": local, "write": write], as: [String: Int].self)
+        } catch {
+            Trouble.note("marks \(code)", error)
+            return
+        }
         var main = false
         var side = false
         for (key, mark) in merged where keys.contains(key) {
@@ -441,10 +490,25 @@ final class AppModel {
         keeping = nil
         unsaved = nil
         rooms = [:]
+        feeds = [:]
+        drafts = [:]
+        pending = [:]
+        sentAs = [:]
+        path = []
+        showing = nil
+        drawer = .closed
+        pane = .needs
         person = ""
         enrolled = false
         joining = 0
         phase = .unlinked
-        Task { try? await engine.ask(["op": "start", "saved": ["relay": relay, "person": NSNull(), "seats": []]]) }
+        let relay = relay
+        Task {
+            do {
+                try await engine.ask(["op": "start", "saved": ["relay": relay, "person": NSNull(), "seats": []]])
+            } catch {
+                Trouble.note("start after unlink", error)
+            }
+        }
     }
 }

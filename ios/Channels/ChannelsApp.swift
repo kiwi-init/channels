@@ -5,6 +5,7 @@ struct ChannelsApp: App {
     @UIApplicationDelegateAdaptor(PushDelegate.self) private var push
     @State private var model = AppModel()
     @State private var lock = Lock()
+    @State private var cover = LockCover()
     @Environment(\.scenePhase) private var scene
 
     init() {
@@ -15,9 +16,11 @@ struct ChannelsApp: App {
         WindowGroup {
             RootView()
                 .environment(model)
-                .overlay {
-                    if lock.locked && model.phase == .ready {
-                        Locked { Task { await lock.unlock() } }
+                .onChange(of: lock.locked && model.phase == .ready, initial: true) { _, shut in
+                    if shut {
+                        cover.show { Task { await lock.unlock() } }
+                    } else {
+                        cover.hide()
                     }
                 }
                 .task { await model.boot() }
