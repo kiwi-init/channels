@@ -38,7 +38,7 @@ struct ConversationScreen: View {
                 .bar(.bottom) {
                     if talks(room) || answering != nil || sendingBack != nil {
                         Dock(room: room, spot: spot, replyTo: $replyTo, answering: $answering, sendingBack: $sendingBack, typing: $typing, follow: follow) {
-                            withAnimation(Motion.ease) { position.scrollTo(edge: .bottom) }
+                            follow.jumps += 1
                         }
                     }
                 }

@@ -69,6 +69,7 @@ struct Line: Identifiable {
 struct Follow {
     var atBottom = true
     var unseen = 0
+    var jumps = 0
 }
 
 struct Conversation: View {
@@ -90,76 +91,81 @@ struct Conversation: View {
     }
 
     var body: some View {
-        ScrollView {
-            LazyVStack(spacing: 0) {
-                if !room.whole && !room.messages.isEmpty {
-                    Text("Earlier messages aren't on this phone")
-                        .type(.meta)
-                        .foregroundStyle(Tone.ink3)
-                        .padding(.vertical, 14)
-                }
-                if room.whole || (room.messages.isEmpty && room.connection == .live) {
-                    Intro(room: room)
-                }
-                ForEach(
-                    Line.build(
-                        room.messages, asks: elsewhere, reviews: reviews, needs: needs, pending: model.pending["\(room.code)|\(room.place)"] ?? [],
-                        sentAs: model.sentAs[room.code] ?? [:])
-                ) { line in
-                    LineView(line: line, room: room, solo: solo) { m in
-                        replyTo = m
-                        typing.wrappedValue = true
-                    } jump: { seq in
-                        let id = model.sentAs[room.code]?[seq].map { "p\($0)" } ?? "b\(seq)"
-                        withAnimation(Motion.ease) { position.scrollTo(id: id, anchor: .center) }
-                    } answer: { seq in
-                        if let ask = room.asks.first(where: { $0.seq == seq }) { answer(ask) }
-                    } sendBack: { review in
-                        sendBack(review)
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    if !room.whole && !room.messages.isEmpty {
+                        Text("Earlier messages aren't on this phone")
+                            .type(.meta)
+                            .foregroundStyle(Tone.ink3)
+                            .padding(.vertical, 14)
                     }
-                    .id(line.id)
-                    .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity), removal: .opacity))
+                    if room.whole || (room.messages.isEmpty && room.connection == .live) {
+                        Intro(room: room)
+                    }
+                    ForEach(
+                        Line.build(
+                            room.messages, asks: elsewhere, reviews: reviews, needs: needs, pending: model.pending["\(room.code)|\(room.place)"] ?? [],
+                            sentAs: model.sentAs[room.code] ?? [:])
+                    ) { line in
+                        LineView(line: line, room: room, solo: solo) { m in
+                            replyTo = m
+                            typing.wrappedValue = true
+                        } jump: { seq in
+                            let id = model.sentAs[room.code]?[seq].map { "p\($0)" } ?? "b\(seq)"
+                            withAnimation(Motion.ease) { position.scrollTo(id: id, anchor: .center) }
+                        } answer: { seq in
+                            if let ask = room.asks.first(where: { $0.seq == seq }) { answer(ask) }
+                        } sendBack: { review in
+                            sendBack(review)
+                        }
+                        .id(line.id)
+                        .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity), removal: .opacity))
+                    }
+                    if let worker, worker.working {
+                        WorkingRow(member: worker, room: room).id("working")
+                    }
+                    Color.clear.frame(height: 6).id("bottom")
                 }
-                if let worker, worker.working {
-                    WorkingRow(member: worker, room: room).id("working")
+                .scrollTargetLayout()
+                .padding(.horizontal, 12)
+            }
+            .scrollPosition($position)
+            .defaultScrollAnchor(.bottom)
+            .scrollDismissesKeyboard(.interactively)
+            .softBars()
+            .onScrollGeometryChange(for: Bool.self) { geo in
+                geo.visibleRect.maxY >= geo.contentSize.height - 60
+            } action: { _, near in
+                follow.atBottom = near
+                if near { follow.unseen = 0 }
+            }
+            .onChange(of: model.pending["\(room.code)|\(room.place)"]?.count ?? 0) { old, now in
+                guard now > old else { return }
+                withAnimation(Motion.sent) { proxy.scrollTo("bottom", anchor: .bottom) }
+            }
+            .onChange(of: room.messages.last?.seq) { old, _ in
+                guard old != nil, let last = room.messages.last else { return }
+                if follow.atBottom || last.mine {
+                    withAnimation(Motion.ease) { proxy.scrollTo("bottom", anchor: .bottom) }
+                } else if !last.event {
+                    follow.unseen += 1
                 }
-                Color.clear.frame(height: 6).id("bottom")
             }
-            .scrollTargetLayout()
-            .padding(.horizontal, 12)
-        }
-        .scrollPosition($position)
-        .defaultScrollAnchor(.bottom)
-        .scrollDismissesKeyboard(.interactively)
-        .softBars()
-        .onScrollGeometryChange(for: Bool.self) { geo in
-            geo.visibleRect.maxY >= geo.contentSize.height - 60
-        } action: { _, near in
-            follow.atBottom = near
-            if near { follow.unseen = 0 }
-        }
-        .onChange(of: model.pending["\(room.code)|\(room.place)"]?.count ?? 0) { old, now in
-            guard now > old else { return }
-            withAnimation(Motion.sent) { position.scrollTo(edge: .bottom) }
-        }
-        .onChange(of: room.messages.last?.seq) { old, _ in
-            guard old != nil, let last = room.messages.last else { return }
-            if follow.atBottom || last.mine {
-                withAnimation(Motion.ease) { position.scrollTo(edge: .bottom) }
-            } else if !last.event {
-                follow.unseen += 1
+            .task(id: room.messages.isEmpty) {
+                guard !room.messages.isEmpty else { return }
+                try? await Task.sleep(for: .milliseconds(120))
+                proxy.scrollTo("bottom", anchor: .bottom)
             }
-        }
-        .task(id: room.messages.isEmpty) {
-            guard !room.messages.isEmpty else { return }
-            try? await Task.sleep(for: .milliseconds(120))
-            position.scrollTo(edge: .bottom)
-        }
-        .onChange(of: typing.wrappedValue) { _, now in
-            guard now else { return }
-            Task {
-                try? await Task.sleep(for: .milliseconds(250))
-                withAnimation(Motion.ease) { position.scrollTo(edge: .bottom) }
+            .onChange(of: follow.jumps) {
+                withAnimation(Motion.ease) { proxy.scrollTo("bottom", anchor: .bottom) }
+            }
+            .onChange(of: typing.wrappedValue) { _, now in
+                guard now else { return }
+                Task {
+                    try? await Task.sleep(for: .milliseconds(250))
+                    withAnimation(Motion.ease) { proxy.scrollTo("bottom", anchor: .bottom) }
+                }
             }
         }
     }
@@ -349,7 +355,10 @@ struct BubbleRow: View {
     let reply: (MessageView) -> Void
     let jump: (Int) -> Void
     let answer: (Int) -> Void
+    @State private var pull: CGFloat = 0
+    @State private var armed = false
 
+    private static let replyAt: CGFloat = 56
     private let avatar: CGFloat = 30
 
     var body: some View {
@@ -388,6 +397,62 @@ struct BubbleRow: View {
             if !message.mine { Spacer(minLength: 40) }
         }
         .padding(.top, first ? 8 : 2)
+        .offset(x: -pull)
+        .background(alignment: .trailing) {
+            Image(systemName: "arrowshape.turn.up.left.fill")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(armed ? Tone.accent : Tone.ink3)
+                .frame(width: 30, height: 30)
+                .background(Tone.wash2, in: Circle())
+                .opacity(Double(min(1, pull / Self.replyAt)))
+                .scaleEffect(armed ? 1.1 : 0.85)
+                .offset(x: 36 - pull * 0.6)
+        }
+        .gesture(
+            Leftward { dx in
+                pull = min(84, max(0, -dx) * 0.6)
+                let now = pull >= Self.replyAt
+                if now != armed {
+                    armed = now
+                    if now { Haptic.tap() }
+                }
+            } ended: {
+                if armed { reply(message) }
+                armed = false
+                withAnimation(.spring(duration: 0.3, bounce: 0.2)) { pull = 0 }
+            }
+        )
+    }
+}
+
+struct Leftward: UIGestureRecognizerRepresentable {
+    let moved: (CGFloat) -> Void
+    let ended: () -> Void
+
+    func makeCoordinator(converter: CoordinateSpaceConverter) -> Only {
+        Only()
+    }
+
+    func makeUIGestureRecognizer(context: Context) -> UIPanGestureRecognizer {
+        let pan = UIPanGestureRecognizer()
+        pan.delegate = context.coordinator
+        return pan
+    }
+
+    func handleUIGestureRecognizerAction(_ pan: UIPanGestureRecognizer, context: Context) {
+        switch pan.state {
+        case .began, .changed: moved(pan.translation(in: pan.view).x)
+        case .ended, .cancelled, .failed: ended()
+        default: break
+        }
+    }
+
+    final class Only: NSObject, UIGestureRecognizerDelegate {
+        func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
+            guard let pan = recognizer as? UIPanGestureRecognizer else { return false }
+            let v = pan.velocity(in: pan.view)
+            return v.x < 0 && -v.x > abs(v.y) * 1.3
+        }
     }
 }
 
