@@ -175,7 +175,7 @@ export type NeedView =
 
 export interface PlaceView {
   key: string;
-  kind: "main" | "dm" | "task";
+  kind: "main" | "dm" | "task" | "room";
   title: string;
   with: string[];
   withMe: boolean;
