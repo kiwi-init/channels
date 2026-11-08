@@ -2,6 +2,7 @@
 
 exports[`the relay's error texts are exactly these 1`] = `
 [
+  "400 a change takes {plan: \${PLANS.join(" | ")}} and/or {blocked: true | false}",
   "400 a machine registers with a device list that lists it as a current computer",
   "400 a machine registers with its own cert",
   "400 a member's key can't be a delegate",
@@ -103,6 +104,7 @@ exports[`the relay's error texts are exactly these 1`] = `
   "403 only the owner's app turns kiwi/review green; a member posts waiting or rejected",
   "403 only the person key or an app that approves devices publishes their list",
   "403 only the person or one of their current approving devices lists their computers",
+  "403 only this relay's admins can see and change people",
   "403 page capability expired or invalid; read /messages instead",
   "403 the owner lets you only read in this channel",
   "403 this channel's owner is blocked on this relay, so nothing new can be posted here",

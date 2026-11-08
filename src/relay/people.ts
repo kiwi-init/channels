@@ -24,9 +24,18 @@ export interface Lease {
   blocked: boolean;
 }
 
+export interface PersonRow extends Person {
+  user: string;
+  login: string | null;
+  day: string;
+  used: number;
+  channels: number;
+  seen: number;
+}
+
 export const LEASE_BATCH = 20;
 
-const PLANS: readonly Plan[] = ["free", "paid", "unlimited"];
+export const PLANS: readonly Plan[] = ["free", "paid", "unlimited"];
 
 export function limitOf(plan: Plan, ask: Pick<LeaseAsk, "free" | "paid" | "admin">): number | null {
   if (plan === "unlimited" || ask.admin) return null;
@@ -41,7 +50,10 @@ export function grantFor(granted: number, limit: number | null): number {
 
 export class PeopleBook {
   constructor(private readonly sql: Sql) {
-    sql.run("CREATE TABLE IF NOT EXISTS person_plans (user TEXT PRIMARY KEY, plan TEXT NOT NULL, blocked INTEGER NOT NULL DEFAULT 0)");
+    sql.run("CREATE TABLE IF NOT EXISTS person_plans (user TEXT PRIMARY KEY, plan TEXT NOT NULL, blocked INTEGER NOT NULL DEFAULT 0, login TEXT)");
+    sql.run(
+      "CREATE TABLE IF NOT EXISTS person_index (user TEXT PRIMARY KEY, login TEXT, plan TEXT NOT NULL, blocked INTEGER NOT NULL, day TEXT NOT NULL, used INTEGER NOT NULL, channels INTEGER NOT NULL, seen INTEGER NOT NULL)",
+    );
     sql.run("CREATE TABLE IF NOT EXISTS person_usage (user TEXT NOT NULL, room TEXT NOT NULL, day TEXT NOT NULL, used INTEGER NOT NULL, granted INTEGER NOT NULL, PRIMARY KEY (user, room))");
   }
 
@@ -58,6 +70,14 @@ export class PeopleBook {
       next.plan,
       next.blocked ? 1 : 0,
     );
+  }
+
+  setLogin(user: string, login: string): void {
+    this.sql.run("INSERT INTO person_plans (user, plan, blocked, login) VALUES (?, 'free', 0, ?) ON CONFLICT (user) DO UPDATE SET login = excluded.login", user, login);
+  }
+
+  loginOf(user: string): string | null {
+    return this.sql.all<{ login: string | null }>("SELECT login FROM person_plans WHERE user = ?", user)[0]?.login ?? null;
   }
 
   usedOn(user: string, day: string): number {
@@ -82,5 +102,31 @@ export class PeopleBook {
       return { grant, plan, limit, remaining: limit === null ? null : Math.max(0, limit - granted - grant), blocked };
     };
     return this.sql.transaction ? this.sql.transaction(work) : work();
+  }
+
+  summary(user: string, day: string, channels: number, seen: number): PersonRow {
+    return { user, login: this.loginOf(user), ...this.person(user), day, used: this.usedOn(user, day), channels, seen };
+  }
+
+  note(row: PersonRow): void {
+    this.sql.run(
+      "INSERT INTO person_index (user, login, plan, blocked, day, used, channels, seen) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (user) DO UPDATE SET login = COALESCE(excluded.login, login), plan = excluded.plan, blocked = excluded.blocked, day = excluded.day, used = excluded.used, channels = excluded.channels, seen = MAX(seen, excluded.seen)",
+      row.user,
+      row.login,
+      row.plan,
+      row.blocked ? 1 : 0,
+      row.day,
+      row.used,
+      row.channels,
+      row.seen,
+    );
+  }
+
+  people(day: string): PersonRow[] {
+    return this.sql
+      .all<{ user: string; login: string | null; plan: string; blocked: number; day: string; used: number; channels: number; seen: number }>(
+        "SELECT user, login, plan, blocked, day, used, channels, seen FROM person_index ORDER BY seen DESC",
+      )
+      .map((r) => ({ ...r, plan: PLANS.find((p) => p === r.plan) ?? "free", blocked: r.blocked === 1, used: r.day === day ? r.used : 0 }));
   }
 }

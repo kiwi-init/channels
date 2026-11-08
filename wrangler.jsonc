@@ -15,7 +15,8 @@
       { "name": "REPOS", "class_name": "Repos" },
       { "name": "MACHINES", "class_name": "MachineInbox" },
       { "name": "PERSON_MACHINES", "class_name": "PersonMachines" },
-      { "name": "ACCOUNTS", "class_name": "Account" }
+      { "name": "ACCOUNTS", "class_name": "Account" },
+      { "name": "PEOPLE", "class_name": "People" }
     ]
   },
   // SQLite-backed Durable Objects are the ones available on the Workers Free plan.
@@ -35,7 +36,9 @@
     { "tag": "v9", "new_sqlite_classes": ["MachineInbox"] },
     { "tag": "v10", "new_sqlite_classes": ["PersonMachines"] },
     // Linked devices: one object per signed-in person, holding their device list and enrollment ask.
-    { "tag": "v11", "new_sqlite_classes": ["Account"] }
+    { "tag": "v11", "new_sqlite_classes": ["Account"] },
+    // The admins' list of signed-in people: plan, blocked, today's messages and owned channels.
+    { "tag": "v12", "new_sqlite_classes": ["People"] }
   ],
   // The public site (site/): landing page, invite links, install scripts.
   // Static assets are free and don't count as Worker requests.

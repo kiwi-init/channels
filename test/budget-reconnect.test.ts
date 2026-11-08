@@ -223,6 +223,7 @@ test("the relay answers a member's page asks only so often", async () => {
           reserve: async () => true,
           release: async () => {},
           person: async () => ({ plan: "free" as const, blocked: false }),
+          seen: async () => {},
           lease: async () => ({ grant: 0, plan: "free" as const, limit: null, remaining: null, blocked: false }),
         }),
       ),

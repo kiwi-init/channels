@@ -49,6 +49,7 @@ const relayCtx = makeRelay(
       reserve: async () => true,
       release: async () => {},
       person: async () => ({ plan: "free" as const, blocked: false }),
+      seen: async () => {},
       lease: async () => ({ grant: 0, plan: "free" as const, limit: null, remaining: null, blocked: false }),
     }),
   ),

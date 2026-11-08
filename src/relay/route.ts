@@ -23,7 +23,7 @@ import { answer, buildContext, describeRoutes, dispatch, incoming, json, readCap
 import { githubLinks, githubRepos, type GithubItem } from "./github.ts";
 import { GithubApp, GithubPush, type GithubReply } from "./github-app.ts";
 import { githubReviewHost, reviewStatus } from "./review-host.ts";
-import { Human, HUMAN_HEADER } from "./human.ts";
+import { Human, HUMAN_HEADER, profileOf } from "./human.ts";
 import { betaMessage, BLOCKED_CREATE, inBeta, Policy } from "./policy.ts";
 import { offerPages, PAGE_PATH, servePage } from "./pages.ts";
 import {
@@ -331,6 +331,13 @@ const routes: RoomRoute[] = [
           const b = yield* json<CreateBody>();
           yield* create(signer, b, user);
         }).pipe(Effect.onError(() => (quota ? Effect.promise(() => people.release(quota.user, roomId)) : Effect.void)));
+        const login = user ? (yield* profileOf(user))?.login : undefined;
+        if (user && login)
+          yield* Effect.promise(() =>
+            people.seen(user, login).catch(() => {
+              // Only the admins' list shows the login: the create stands without it.
+            }),
+          );
         const updates = user ? yield* directory : undefined;
         return { data: { head: 0 }, fx: { ...(updates ? { directory: updates } : {}), expireAt: (yield* touch) ?? undefined } };
       }),
