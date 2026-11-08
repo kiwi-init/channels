@@ -99,7 +99,9 @@ final class Engine: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
         } else {
             answer["error"] = "this app only makes its sign-in calls"
         }
-        guard let blob = try? JSONSerialization.data(withJSONObject: answer), let json = String(data: blob, encoding: .utf8) else { return }
+        guard let blob = try? JSONSerialization.data(withJSONObject: answer), let json = String(data: blob, encoding: .utf8) else {
+            return dropped("the sign-in answer for fetch \(id): it isn't JSON")
+        }
         do {
             _ = try await web.callAsyncJavaScript("kiwi.fetched(json)", arguments: ["json": json], in: nil, contentWorld: .page)
         } catch {
@@ -125,39 +127,47 @@ final class Engine: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
     }
 
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
-        guard let text = message.body as? String, let data = text.data(using: .utf8) else { return }
-        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let type = object["type"] as? String else { return }
+        guard let text = message.body as? String, let data = text.data(using: .utf8),
+            let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any], let type = object["type"] as? String
+        else { return dropped("a push that isn't JSON with a type") }
         switch type {
         case "saved":
-            if let saved = object["saved"], let blob = try? JSONSerialization.data(withJSONObject: saved) { onPush(.saved(blob)) }
+            guard let saved = object["saved"], let blob = try? JSONSerialization.data(withJSONObject: saved) else { return dropped("a saved push without keys") }
+            onPush(.saved(blob))
         case "room":
-            guard let room = object["room"], let blob = try? JSONSerialization.data(withJSONObject: room) else { return }
+            guard let room = object["room"], let blob = try? JSONSerialization.data(withJSONObject: room) else { return dropped("a room push without a room") }
             do {
                 onPush(.room(try decoder.decode(RoomView.self, from: blob)))
             } catch {
-                logger.error("engine: a room view didn't decode: \(String(describing: error), privacy: .public)")
-                onPush(.log("a room view didn't decode: \(error)"))
+                dropped("a room view that didn't decode: \(error)")
             }
         case "gone":
-            if let code = object["code"] as? String { onPush(.gone(code)) }
+            guard let code = object["code"] as? String else { return dropped("a gone push without a code") }
+            onPush(.gone(code))
         case "log":
-            if let line = object["line"] as? String {
-                logger.info("\(line, privacy: .public)")
-                onPush(.log(line))
-            }
+            guard let line = object["line"] as? String else { return dropped("a log push without a line") }
+            logger.info("\(line, privacy: .public)")
+            onPush(.log(line))
         case "fetch":
-            if let id = object["id"] as? Int, let url = object["url"] as? String, let body = object["body"] as? String {
-                Task { await fetchForEngine(id, url, body) }
+            guard let id = object["id"] as? Int, let url = object["url"] as? String, let body = object["body"] as? String else {
+                return dropped("a fetch push without an id, url or body")
             }
+            Task { await fetchForEngine(id, url, body) }
         case "removed":
             onPush(.removed(object["by"] as? String ?? "another device"))
         case "kept":
-            if let code = object["code"] as? String, let sealed = object["sealed"], let blob = try? JSONSerialization.data(withJSONObject: sealed) {
-                onPush(.kept(code, blob))
+            guard let code = object["code"] as? String, let sealed = object["sealed"], let blob = try? JSONSerialization.data(withJSONObject: sealed) else {
+                return dropped("a kept push without a code or sealed view")
             }
+            onPush(.kept(code, blob))
         default:
-            return
+            dropped("a push of unknown type \(type)")
         }
+    }
+
+    private func dropped(_ what: String) {
+        logger.error("engine: dropped \(what, privacy: .public)")
+        onPush(.log("dropped \(what)"))
     }
 }
 
